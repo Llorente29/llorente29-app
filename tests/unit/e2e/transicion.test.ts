@@ -75,7 +75,10 @@ describe('la transición: el clon y la e2e de antes', () => {
     const wf = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
     const ap = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
     const sh = readFileSync(SCRIPT, 'utf8')
-    expect(wf.indexOf('scripts/e2e/carril.sh coger')).toBeLessThan(wf.indexOf('scripts/e2e/carril.sh plantilla-coger'))
+    // Desde el 26/10 el (4202,0) de la e2e es la barrera del clon (barrera-entrar), no el carril.
+    expect(wf.indexOf('scripts/e2e/carril.sh coger')).toBeLessThan(wf.indexOf('scripts/e2e/carril.sh barrera-entrar'))
+    expect(wf.indexOf('scripts/e2e/carril.sh barrera-entrar')).toBeLessThan(wf.indexOf('scripts/e2e/carril.sh plantilla-coger'))
+    expect(wf.indexOf('scripts/e2e/carril.sh clonar')).toBeLessThan(wf.indexOf('scripts/e2e/carril.sh barrera-salir'))
     expect(wf.indexOf('scripts/e2e/carril.sh plantilla-coger')).toBeLessThan(wf.indexOf('scripts/e2e/carril.sh clonar'))
     expect(ap.indexOf('scripts/e2e/carril.sh migrar-coger')).toBeLessThan(ap.indexOf('scripts/e2e/cerrojo.sh coger'))
     // El clon lo suelta al acabar, bien o mal; soltar (if: always()) también.

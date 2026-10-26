@@ -70,7 +70,7 @@ describe('la e2e de un push corre solo su área', () => {
 // Contra los 40 últimos PR fusionados en main (fixtures/prs-reales.json).
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { queCorre, deLoComun, LO_COMUN, ETIQUETA_ENTERA, ZONAS_POR_FICHERO, zonasTocadas } from '../../../scripts/e2e/area.mjs'
+import { queCorre, deLoComun, LO_COMUN, ETIQUETA_ENTERA, ZONAS_POR_FICHERO, zonasTocadas, HUMO } from '../../../scripts/e2e/area.mjs'
 
 const PRS = JSON.parse(readFileSync(join(__dirname, 'fixtures/prs-reales.json'), 'utf8')).prs as { commit: string; titulo: string; ficheros: string[]; comun: boolean }[]
 
@@ -82,11 +82,14 @@ describe('la entera, solo si el PR toca lo común (los 40 últimos PR de main)',
     expect(PRS).toHaveLength(40)
     expect(PRS.filter((p) => p.comun)).toHaveLength(13)
   })
-  it('la cabecera de pestañas (#258) y el ancho (#263), la entera; el recuadro del plazo (#265), solo su zona', () => {
+  // Julio, 26/10: la entera ya no corre en ningún PR. Lo común lleva su zona y la rápida de pantallas.
+  it('la cabecera de pestañas (#258) y el ancho (#263), su zona y la rápida; el recuadro del plazo (#265), solo su zona', () => {
     const de = (t: string) => PRS.find((p) => p.titulo.includes(t))!
-    expect(queCorre('conta/s01f-pestanas', { cambiados: de('(#258)').ficheros })).toMatchObject({ entera: true })
-    // C10: el diseño de la contabilidad es lo común de Sumied (la entera de Sumied).
-    expect(queCorre('conta/s01g-ancho', { cambiados: de('(#263)').ficheros }).porque).toMatch(/toca lo común de Sumied: src\/modules\/conta\/diseno\//)
+    const pestanas = queCorre('conta/s01f-pestanas', { cambiados: de('(#258)').ficheros })
+    expect(pestanas).toMatchObject({ entera: false })
+    expect(pestanas.pruebas).toContain(HUMO)
+    expect(pestanas.pruebas).toContain('tests/e2e/conta/s01f')
+    expect(queCorre('conta/s01g-ancho', { cambiados: de('(#263)').ficheros }).porque).toMatch(/la rápida de pantallas, porque toca lo común: src\/modules\/conta\/diseno\//)
     const plazo = queCorre('conta/i01b-plazo', { cambiados: de('(#265)').ficheros })
     expect(plazo.entera).toBe(false)
     expect(plazo.pruebas).toEqual(pruebasDelPush('conta/i01b-plazo'))
@@ -125,8 +128,11 @@ describe('las zonas por fichero', () => {
     expect(r.pruebas).toContain('tests/e2e/inventario')
     expect(new Set(r.pruebas).size).toBe(r.pruebas.length)
   })
-  it('lo común sigue mandando: la entera', () => {
-    expect(queCorre('conta/x', { cambiados: ['src/modules/supply/a.ts', 'src/App.tsx'] }).entera).toBe(true)
+  it('lo común no pide la entera: añade la rápida a la zona', () => {
+    const r = queCorre('conta/x', { cambiados: ['src/modules/supply/a.ts', 'src/App.tsx'] })
+    expect(r.entera).toBe(false)
+    expect(r.pruebas).toContain(HUMO)
+    expect(r.pruebas).toContain('tests/e2e/inventario')
   })
   it('cada zona nombra una carpeta de pruebas que existe', () => {
     for (const z of ZONAS_POR_FICHERO) expect(existsSync(z.pruebas), z.pruebas).toBe(true)
@@ -135,20 +141,22 @@ describe('las zonas por fichero', () => {
 })
 
 
-// W04 (Julio, 22/10): pedidos, cocina o reparto → todo. Contra los 40 últimos PR de main.
-describe('pedidos, cocina o reparto: la entera', () => {
-  it('de los 40 PR reales, solo uno toca pedidos (el relevo del secreto del W02), y ese corre la entera', () => {
+// W04 (Julio, 22/10): pedidos, cocina o reparto → todo; desde el 26/10, la corta
+// (la entera ya no corre en ningún PR). Contra los 40 últimos PR de main.
+describe('pedidos, cocina o reparto: la corta', () => {
+  it('de los 40 PR reales, solo uno toca pedidos (el relevo del secreto del W02), y ese corre la corta', () => {
     const tocan = PRS.filter((p) => dePedidos(p.ficheros).length > 0)
     expect(tocan.map((p) => p.titulo.slice(0, 40))).toEqual(['W02 · Secretos fuera del código antes de'])
-    // C10: pedidos es la entera de Folvy; lo que toque de Sumied, su zona.
     const r = queCorre('conta/w02-secretos', { cambiados: tocan[0].ficheros })
-    expect(r.entera).toBe(true)
-    for (const f of suiteFolvy()) expect(r.pruebas).toContain(f)
-    expect(r.porque).toMatch(/toca pedidos, cocina o reparto: /)
+    expect(r.entera).toBe(false)
+    for (const f of CORTA) expect(r.pruebas).toContain(f)
+    expect(r.porque).toMatch(/la corta, porque toca pedidos, cocina o reparto: /)
   })
-  it('una pantalla de pedidos, la cocina, una función de HubRise y las e2e de reparto piden la entera', () => {
+  it('una pantalla de pedidos, la cocina, una función de HubRise y las e2e de reparto llevan la corta, no la entera', () => {
     for (const f of ['src/modules/orders/pages/OrdersPage.tsx', 'src/modules/kitchen/x.tsx', 'supabase/functions/hubrise-webhook/index.ts', 'tests/e2e/reparto/quien-reparte.spec.ts']) {
-      expect(queCorre('conta/c06c-x', { cambiados: [f] }).entera, f).toBe(true)
+      const r = queCorre('conta/c06c-x', { cambiados: [f] })
+      expect(r.entera, f).toBe(false)
+      for (const c of CORTA) expect(r.propias, f).toContain(c)
     }
     expect(queCorre('conta/c06c-x', { cambiados: ['src/modules/conta/libro/DetalleDiez.tsx'] }).entera).toBe(false)
   })
@@ -170,20 +178,32 @@ describe('Sumied y Folvy, separados (C10, 23/10)', () => {
     expect(r.entera).toBe(false)
     for (const p of r.pruebas) expect(p.startsWith('tests/e2e/conta')).toBe(true)
     const c = queCorre('conta/s09-x', { cambiados: ['src/modules/conta/diseno/Boton.tsx'] })
-    expect(c).toMatchObject({ entera: true, pruebas: ['tests/e2e/conta'] })
+    expect(c.entera).toBe(false)
+    expect(c.pruebas).toEqual([...COMUN, HUMO])
   })
   it('un cambio solo de Folvy no lanza las de Sumied', () => {
     const k = queCorre('conta/c08b-catalogo-perdido', { cambiados: ['src/modules/kitchen/pages/KitchenMenuPage.tsx', 'supabase/functions/hubrise-brand-connect/index.ts'] })
-    expect(k.entera).toBe(true)
-    expect(k.pruebas).toEqual(suiteFolvy())
+    expect(k.entera).toBe(false)
+    expect(k.pruebas).toEqual(CORTA)
     const sinZona = queCorre('reparto-x', { cambiados: ['src/pages/AlgoDeFolvy.tsx'] })
     expect(sinZona.pruebas).toEqual(suiteFolvy())
   })
-  it('lo común lanza las dos (la entera, sin acotar)', () => {
-    for (const f of ['src/App.tsx', 'package.json', 'playwright.config.ts', '.github/workflows/e2e-staging-conta.yml']) {
-      expect(queCorre('conta/x', { cambiados: [f] }), f).toMatchObject({ entera: true, pruebas: [] })
+  it('lo común: la zona, la rápida de pantallas y nada de la entera (Julio, 26/10)', () => {
+    for (const f of ['src/App.tsx', 'package.json', 'playwright.config.ts', '.github/workflows/e2e-staging-conta.yml', 'src/modules/conta/module.tsx']) {
+      const r = queCorre('conta/x', { cambiados: [f] })
+      expect(r.entera, f).toBe(false)
+      expect(r.pruebas, f).toEqual([...COMUN, HUMO])
+      // La rápida y el juego común no son de la zona: un fallo por tiempo en ellas no bloquea.
+      expect(r.propias, f).toEqual([])
     }
-    expect(queCorre('conta/x', { cambiados: ['src/modules/conta/diseno/a.tsx', 'src/modules/orders/b.tsx'] })).toMatchObject({ entera: true, pruebas: [] })
+    const ambos = queCorre('conta/x', { cambiados: ['src/modules/conta/diseno/a.tsx', 'src/modules/orders/b.tsx'] })
+    expect(ambos.entera).toBe(false)
+    expect(ambos.pruebas).toEqual([...CORTA, ...COMUN, HUMO])
+  })
+  it('la rápida existe y la etiqueta sigue siendo la única forma de pedir la entera en un PR', () => {
+    expect(existsSync(HUMO)).toBe(true)
+    for (const p of PRS) expect(queCorre('conta/x', { cambiados: p.ficheros }).entera, p.titulo).toBe(false)
+    expect(queCorre('conta/x', { cambiados: ['src/App.tsx'], etiquetas: [ETIQUETA_ENTERA] }).entera).toBe(true)
   })
   it('lo común de Sumied y el de los dos no se pisan, y qué es de cada producto', () => {
     for (const p of LO_COMUN_SUMIED) expect(LO_COMUN_AMBOS).not.toContain(p)
