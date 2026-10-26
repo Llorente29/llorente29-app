@@ -117,7 +117,21 @@ función que la escribe.
   - el asiento previo sale como en staging;
   - la frase del PDF lleva su artículo.
 - **e2e** (`tests/e2e/conta/v03/verifactu.spec.ts`), en ordenador y móvil, con la
-  cuenta D (Asesoría de Prueba Oeste, **no** de hostelería). *(el run, abajo)*
+  cuenta D (Asesoría de Prueba Oeste, **no** de hostelería). La entera de Sumied
+  (toca lo común: los tokens del morado) sobre `8cfd66a5`,
+  [run 40268812432](https://github.com/Llorente29/llorente29-app/actions/runs/40268812432):
+  503 en verde y 6 en rojo, las 6 de Bancos (`b01`), con `bank_casar: DELETE
+  requires a WHERE clause`. No es de esta rama (no toca Bancos, y `bank_casar` es
+  idéntica en staging y en producción); en la noche de `main` del 25/10 pasaron.
+  La V03:
+  - el alta (tablero 25) y la rechazada (26 y 27), en verde en los dos tamaños:
+    4 pruebas, 18,9 s (ya en `tests/e2e/tiempos.json`);
+  - «sin IVA a Suiza, emitiendo de verdad» se salta y lo dice: staging aún no
+    tiene la 0146.
+- **Capturas**: en el artefacto «capturas» del run (tablero-25, tablero-25-otros-programas,
+  tablero-26, tablero-27 y sin-iva-*, en `docs/conta/capturas/v03`). Desde esta
+  sesión no se pueden bajar al repositorio: la red del entorno no llega al
+  almacén de artefactos de GitHub.
 
 ## Lo que queda abierto
 
