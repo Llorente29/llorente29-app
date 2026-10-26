@@ -35,7 +35,9 @@ describe('la entera en trozos', () => {
     // 25/10 (V02, entrega 1): entra v02/puerta, nueva y sin medir: son 8. La mide la entera de su PR.
     // 25/10 (PC01 · E1, al traer main con la V02): entra pc01/cobros-y-pagos, nueva y sin medir: son 9. La mide la entera de la noche.
     // 26/10 (V03 · E2): entra v03/verifactu y la mide la entera de su PR (40268812432, tiempos.json): siguen 9.
-    expect(sin.length).toBeLessThan(10)
+    // 26/10 (V02 · Pantallas): entra v02/liquidaciones, nueva y sin medir: son 10. La mide la entera de su PR.
+    // 26/10 (V03 · E2, al traer main con la V02 · Pantallas): las dos juntas, v03/verifactu medida y v02/liquidaciones sin medir: son 10 (contadas con tiempos.json de las dos).
+    expect(sin.length).toBeLessThan(11)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {

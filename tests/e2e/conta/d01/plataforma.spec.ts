@@ -3,9 +3,8 @@
 //
 // D07 (Julio, 23/10, camino B) · Uber fuera de «Facturas recibidas». V01 ·
 // Entrega 3 (24/10): sus liquidaciones ya no están en Compras › Liquidaciones,
-// sino en Ventas › Liquidaciones › Plataformas, por periodo, plataforma y
-// local (ventas, comisión, otros, pagan, banco y su factura), y cada fila abre
-// su ficha. Contra staging-conta, cuenta A, en los dos tamaños.
+// sino en Ventas › Liquidaciones (V02: los tableros 28 y 29). Contra
+// staging-conta, cuenta A, en los dos tamaños.
 //
 // Datos: las liquidaciones de Uber de la cuenta A de staging. Se mira lo que
 // hay (regla 31): el 23/10 eran 6; el 24/10, una sola, del 22 al 28/12/2025, y
@@ -14,7 +13,7 @@
 import { test, expect } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
 
-test('D07 · Ventas › Liquidaciones enseña las de plataforma, con ventas, comisión y lo que pagan; la ficha de una, con la de referencia dicha', async ({ page }) => {
+test('D07 · Compras › Liquidaciones dice que las de plataforma están en Ventas, y Ventas › Liquidaciones abre', async ({ page }) => {
   test.setTimeout(90_000)
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(e.message))
@@ -24,18 +23,12 @@ test('D07 · Ventas › Liquidaciones enseña las de plataforma, con ventas, com
   await page.goto('/conta/compras/liquidaciones?tipo=plataforma')
   await expect(page.locator('[data-prueba="liquidaciones-en-ventas"]')).toBeVisible({ timeout: 30_000 })
 
-  await page.goto('/conta/ventas/liquidaciones?desde=todas')
+  // V02 · Pantallas: Ventas › Liquidaciones es la de los tableros 28 y 29 (su e2e, en
+  // v02/liquidaciones.spec.ts). Aquí, que abre con su banda y sin errores; la ficha de
+  // una de plataforma, por local, la abre v01/liquidaciones.spec.ts.
+  await page.goto('/conta/ventas/liquidaciones')
   await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-prueba="banda-liquidaciones"] h2')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('alert')).toHaveCount(0)
-  // Las de Uber (en la tabla y en la tarjeta del móvil).
-  const uber = page.getByText(/^Uber( Eats)? · /)
-  await expect(uber.first()).toBeVisible({ timeout: 30_000 })
-
-  // La ficha de una: lo que liquida, comparado con tus cierres, sus diferencias y sus liquidaciones.
-  await uber.first().click()
-  const ficha = page.locator('[data-prueba="ficha-liquidacion-plataforma"]')
-  await expect(ficha).toBeVisible({ timeout: 30_000 })
-  for (const t of ['Lo que liquida', 'Comparado con tus cierres', 'Diferencias']) await expect(ficha.getByRole('region', { name: new RegExp(`^${t}`) })).toBeVisible()
-  await expect(ficha.getByRole('table', { name: 'Liquidaciones' })).toBeVisible()
   expect(errores).toEqual([])
 })

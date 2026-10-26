@@ -201,7 +201,7 @@ test('A (hostelería): la barra con Contabilidad abierta, la cabecera de 56 px y
   expect(errores).toEqual([])
 })
 
-test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esqueleto', async ({ page }) => {
+test('D (sin hostelería): nada de hostelería en el esqueleto; Liquidaciones, en Ventas, como para todos', async ({ page }) => {
   const errores: string[] = []
   await entrarComo(page, CUENTA_D.email)
   vigilar(page, errores)
@@ -213,10 +213,10 @@ test('D (sin hostelería): ni Liquidaciones ni nada de hostelería en el esquele
   await cerrarCajon(page)
   // La misma barra que A: el esqueleto es uno; lo que cambia es lo de hostelería.
   if (lado(page) === 'ordenador') await expect(barra(page).locator('.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Contactos', 'Favoritos', 'Ajustes'])
-  // Ni por la dirección: una liquidación no marca ninguna página. V01 · Entrega 3: la del
-  // socio vive en Ventas › Liquidaciones (solo hostelería): en D, Ventas, sin página marcada.
+  // V02 · Pantallas (tableros 28 y 29): Ventas › Liquidaciones es de todos (el datáfono,
+  // Amazon, Stripe…). Por la dirección de una liquidación, la página marcada es esa, la única.
   await page.goto('/conta/compras/liquidacion/nueva')
-  await expect((await paginas(page, 'Ventas')).locator('[aria-current="page"]')).toHaveCount(0)
+  await expect((await paginas(page, 'Ventas')).locator('[aria-current="page"]')).toHaveText(['Liquidaciones'])
   await cerrarCajon(page)
   await page.goto('/conta/compras')
   // Paso 3: dentro de las pantallas, tampoco (inventario del paso 1, §3). Se mira con la red quieta:

@@ -118,10 +118,12 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   })
   it('S02 · las páginas del mapa: Ventas (V01: Facturas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
     // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
-    // V01 · Entrega 3: y Liquidaciones (las de plataforma y las del socio de marca), en el mismo bloque.
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series', 'Cierres del día', 'Liquidaciones'])
+    // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te pagan quienes
+    // cobran por ti), encima del bloque «Hostelería»; sin hostelería, sin plataformas.
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series', 'Liquidaciones', 'Cierres del día'])
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
+    const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
+    expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
     expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual(['Empleados', 'Nóminas', 'Seguros sociales', 'Fichajes y ausencias', 'Portal del empleado'])
   })
   // S02 · PR 2 (decisión 5 de Julio): la emitida pasa a Facturación › Facturas
@@ -130,7 +132,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
     expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'contactos', 'ajustes'])
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
-    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas'])
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'liquidacionesVentas'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y

@@ -463,6 +463,12 @@ jobs:
             : > /tmp/cuentas-ensayo-atras.csv; j=0
             while IFS= read -r c; do j=$((j+1)); sed "s#^#$(basename "$c" .sql),#" "/tmp/cuentas-atras-$j.csv" >> /tmp/cuentas-ensayo-atras.csv; done < /tmp/cuentas.txt
             node scripts/conta/produccion/cuentas-comparar.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv "Antes de la tanda" "Tanda y vuelta atrás" > /tmp/cuentas-atras.md || igual=0
+            # W06 (26/10): la misma tabla, TAMBIÉN al registro del job, que es lo único
+            # que se lee desde una sesión (el #241 no se pudo leer). Por la puerta de
+            # salida (D01 R2): cada medida por su fila en la cuenta («<cuenta>.<n>»),
+            # con antes y después si son números o huellas, y «distinta 1» si no
+            # coincide. Solo añade salida: no cambia lo que se compara ni cuándo para.
+            node scripts/conta/produccion/cuentas-salida.mjs /tmp/cuentas-antes.csv /tmp/cuentas-ensayo-atras.csv | node scripts/conta/salida-segura.mjs || true
           fi
           if [ "$rc" -eq 0 ] && [ -z "$sin" ] && [ "$igual" -eq 1 ]; then
             { echo "## Ensayo de la vuelta atrás: **funcionaría, y deja todo como estaba**"; echo; echo "La tanda y sus .down.sql en orden inverso, en una transacción, y ROLLBACK. Lo que la tanda declara que cuenta sale igual que antes:"; echo

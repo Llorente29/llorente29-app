@@ -36,3 +36,4 @@ import '../diseno/diseno.css'
 import '../marco/marco.css' // S02 · el marco del patrón único (barra, cabecera, encabezado)
 import '../diseno/plantillas/plantillas.css' // S02 · las seis plantillas
 import './puerta.css' // V02 · Inicio › Documentos, la puerta
+import './liquidaciones.css' // V02 · Ventas › Liquidaciones (tableros 28 y 29)

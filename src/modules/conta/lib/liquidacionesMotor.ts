@@ -6,7 +6,8 @@
 // leen, se nombran y se cuentan para las cifras de arriba. Sin React.
 //
 // Una fila = un intermediario (Uber, Glovo, Just Eat, el datáfono, Stripe…), un
-// local (si lo hay) y un periodo, con sus cuatro piezas: lo vendido, la
+// local (si lo hay), una marca (la tienda de la plataforma, si la hay) y un
+// periodo, con sus cuatro piezas: lo vendido (los pedidos de esa tienda), la
 // liquidación, su factura de comisión y el cobro en el banco.
 
 export type EstadoLiquidacion = 'cuadra' | 'esperando_liquidacion' | 'falta_liquidacion' | 'falta_factura' | 'esperando_cobro' | 'diferencia'
@@ -18,6 +19,8 @@ export interface LiquidacionDeFila {
   origen: string
   pedidos: number | null
   ventas: number
+  /** Lo que suman sus pedidos, con las promociones: lo que se compara con la caja. */
+  pedidosTotal: number
   comision: number
   neto: number | null
   cobrado: number | null
@@ -42,14 +45,16 @@ export interface FilaMotor {
   canalId: string | null
   localId: string | null
   local: string | null
+  marcaId: string | null
+  marca: string | null
   desde: string
   hasta: string
   estado: EstadoLiquidacion
   cerrada: boolean
   diferencia: number | null
   frase: string
-  vendido: { via: 'cierres' | 'facturas' | 'liquidacion'; total: number | null }
-  liquidacion: { n: number; ventas: number; comision: number; pagan: number | null; otros: number | null; referencia: boolean }
+  vendido: { via: 'pedidos' | 'facturas' | 'liquidacion'; total: number | null; pedidos: number | null }
+  liquidacion: { n: number; ventas: number; pedidosTotal: number; comision: number; pagan: number | null; otros: number | null; referencia: boolean }
   faltanFacturas: number
   cobro: { esperado: number | null; llegado: number | null; porCobrar: number }
   liquidaciones: LiquidacionDeFila[]
@@ -68,20 +73,21 @@ const ESTADOS: readonly EstadoLiquidacion[] = ['cuadra', 'esperando_liquidacion'
 /** Una fila del motor, tal como la devuelve la base. */
 export function filaMotor(x: J): FilaMotor {
   const p = (x.piezas ?? {}) as J
-  const v = (p.vendido ?? {}) as J; const l = (p.liquidacion ?? {}) as J; const f = (p.factura ?? {}) as J; const c = (p.cobro ?? {}) as J
+  const v = (p.vendido ?? {}) as J; const vp = (v.pedidos ?? {}) as J; const l = (p.liquidacion ?? {}) as J; const f = (p.factura ?? {}) as J; const c = (p.cobro ?? {}) as J
   const estado = ESTADOS.includes(x.estado as EstadoLiquidacion) ? (x.estado as EstadoLiquidacion) : 'diferencia'
   return {
     clave: String(x.clave), intermediarioId: s(x.intermediario_id), intermediario: String(x.intermediario ?? x.canal ?? 'Intermediario'),
-    canalId: s(x.canal_id), localId: s(x.local_id), local: s(x.local), desde: String(x.desde).slice(0, 10), hasta: String(x.hasta).slice(0, 10),
+    canalId: s(x.canal_id), localId: s(x.local_id), local: s(x.local), marcaId: s(x.marca_id), marca: s(x.marca), desde: String(x.desde).slice(0, 10), hasta: String(x.hasta).slice(0, 10),
     estado, cerrada: x.cerrada === true, diferencia: nn(x.diferencia), frase: String(x.frase ?? ''),
-    vendido: { via: v.via === 'facturas' || v.via === 'liquidacion' ? v.via : 'cierres', total: nn(v.total) },
-    liquidacion: { n: n(l.n), ventas: n(l.ventas), comision: n(l.comision), pagan: nn(l.pagan), otros: nn(l.otros), referencia: l.referencia === true },
+    vendido: { via: v.via === 'facturas' || v.via === 'liquidacion' ? v.via : 'pedidos', total: nn(v.total), pedidos: nn(vp.pedidos) },
+    liquidacion: { n: n(l.n), ventas: n(l.ventas), pedidosTotal: l.pedidos_total === undefined ? n(l.ventas) : n(l.pedidos_total), comision: n(l.comision), pagan: nn(l.pagan), otros: nn(l.otros), referencia: l.referencia === true },
     faltanFacturas: n(f.faltan),
     cobro: { esperado: nn(c.esperado), llegado: nn(c.llegado), porCobrar: n(c.por_cobrar) },
     liquidaciones: ((x.liquidaciones ?? []) as J[]).map((q) => {
       const fac = q.factura as J | null
       return {
-        id: String(q.id), tienda: s(q.tienda), ref: s(q.ref), origen: String(q.origen ?? ''), pedidos: nn(q.pedidos), ventas: n(q.ventas), comision: n(q.comision),
+        id: String(q.id), tienda: s(q.tienda), ref: s(q.ref), origen: String(q.origen ?? ''), pedidos: nn(q.pedidos), ventas: n(q.ventas),
+        pedidosTotal: q.pedidos_total === undefined ? n(q.ventas) : n(q.pedidos_total), comision: n(q.comision),
         neto: nn(q.neto), cobrado: nn(q.cobrado), cobradoEl: s(q.cobrado_el), referencia: q.referencia === true, porAclarar: s(q.por_aclarar),
         aFacturar: nn(q.a_facturar), factura: fac ? { id: String(fac.id), numero: s(fac.numero), total: nn(fac.total) } : null,
         casadaEnBanco: q.casada_en_banco === true, facturasCobradas: s(q.facturas_cobradas), facturasNota: s(q.facturas_nota),

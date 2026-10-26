@@ -1,0 +1,86 @@
+/* src/modules/conta/estilo/liquidaciones.css
+ * V02 · Pantallas · Ventas › Liquidaciones (tableros 28 y 29). La banda, los
+ * círculos y los botones son los de la puerta (puerta.css, .cxdo); aquí, lo
+ * que es solo de esta pantalla: el rojo de la barra, las píldoras de las
+ * cuatro piezas, la tarjeta de cada liquidación y la columna de la derecha.
+ */
+.cxlq {
+  --cxlq-mal: #E8604C;          /* La barra y la leyenda: no cuadran */
+  --cxlq-ok-fondo: #EAF6EE;     /* Píldora: está */
+  --cxlq-ok: #23794A;
+}
+
+/* La banda */
+.cxlq-barra-mal { background: var(--cxlq-mal); }
+.cxlq-leyenda li[data-tono='mal']::before { background: var(--cxlq-mal); }
+.cxlq-pagado { flex-basis: 320px; gap: var(--s-1); }
+.cxlq-pagado .cxdo-banda-boton { margin-top: var(--s-3); }
+.cxlq-pagado-cifra { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); line-height: 1.1; color: var(--s-sobre-accion); }
+
+/* La tienda que ha cambiado */
+.cxlq-cambio {
+  display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4) var(--s-5);
+  background: var(--s-accion-suave); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.cxlq-cambio-texto { flex: 1; min-width: 0; }
+.cxlq-cambio-titulo { margin: 0; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cxlq-cambio-dato { margin: 2px 0 0; font-size: var(--s-t-s); color: var(--s-apoyo); overflow-wrap: anywhere; }
+.cxlq-cambio-botones { display: flex; gap: var(--s-2); flex-wrap: wrap; }
+
+/* Este mes y la columna de la derecha */
+.cxlq-columnas { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 320px); gap: var(--s-4); align-items: start; }
+.cxlq-lado { display: flex; flex-direction: column; gap: var(--s-4); }
+.cxlq-tarjeta { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-4) var(--s-5); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.cxlq-tarjeta:last-child { border-bottom: none; }
+.cxlq-tarjeta-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.cxlq-tarjeta-quien { margin: 0; color: var(--s-apoyo); }
+.cxlq-tarjeta-quien strong { color: var(--s-tinta); }
+.cxlq-piezas { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.cxlq-pieza {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: var(--s-radio-pildora);
+  font-size: var(--s-t-xs); font-weight: var(--s-peso-medio); background: var(--cxlq-ok-fondo); color: var(--cxlq-ok);
+}
+.cxlq-pieza[data-tono='falta'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+.cxlq-pieza[data-tono='mal'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.cxlq-frase { margin: 0; font-size: var(--s-t-s); color: var(--s-apoyo); }
+.cxlq-tarjeta-cifra { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-1); min-width: 120px; }
+.cxlq-tarjeta-cifra strong { font-size: var(--s-t-l); color: var(--s-tinta); }
+.cxlq-estado { padding: 3px 10px; border-radius: var(--s-radio-pildora); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte); white-space: nowrap; background: var(--cxlq-ok-fondo); color: var(--cxlq-ok); }
+.cxlq-estado[data-situacion='falta'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+.cxlq-estado[data-situacion='no_cuadra'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.cxlq-tarjeta-botones { flex: none; display: flex; align-items: center; gap: var(--s-1); }
+.cxlq-menu-enlace { padding: var(--s-2) var(--s-4); color: var(--s-tinta); text-decoration: none; }
+.cxlq-menu-enlace:hover, .cxlq-menu-enlace:focus-visible { outline: none; background: var(--s-accion-suave); }
+.cxlq-cuando-dia { flex: none; font-weight: var(--s-peso-fuerte); color: var(--s-tinta); font-size: var(--s-t-s); text-align: right; }
+.cxlq-enlace-nombre { text-decoration: none; }
+.cxlq-enlace-nombre:hover { text-decoration: underline; }
+.cxlq-amano {
+  display: flex; flex-direction: column; align-items: flex-start; gap: var(--s-2); padding: var(--s-4) var(--s-5);
+  border: var(--s-linea) dashed var(--s-borde-control); border-radius: var(--s-radio-bloque); background: var(--s-superficie);
+}
+.cxlq-amano-titulo { margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cxlq-amano-frase { margin: 0; font-size: var(--s-t-s); color: var(--s-apoyo); }
+
+/* Los diálogos */
+.cxlq-detalle { display: grid; grid-template-columns: max-content 1fr; gap: var(--s-2) var(--s-4); margin: 0 0 var(--s-3); }
+.cxlq-detalle dt { font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.cxlq-detalle dd { margin: 0; color: var(--s-apoyo); }
+.cxlq-liqs { margin: 0 0 var(--s-3); padding-left: var(--s-5); font-size: var(--s-t-s); color: var(--s-apoyo); }
+.cxlq-resolver { display: flex; flex-direction: column; gap: var(--s-2); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-campo); padding: var(--s-3) var(--s-4); }
+.cxlq-resolver legend { font-weight: var(--s-peso-fuerte); padding: 0 var(--s-1); }
+.cxlq-opcion { display: flex; gap: var(--s-2); align-items: center; min-height: 32px; }
+.cxlq-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-3); }
+
+/* El móvil */
+.cxlq[data-movil] .cxlq-columnas { grid-template-columns: minmax(0, 1fr); }
+.cxlq[data-movil] .cxlq-tarjeta { flex-wrap: wrap; padding: var(--s-3) var(--s-4); }
+.cxlq[data-movil] .cxlq-tarjeta-cuerpo { flex-basis: calc(100% - 56px); }
+.cxlq[data-movil] .cxlq-tarjeta-cifra { flex: 1; align-items: flex-start; margin-left: 52px; min-width: 0; }
+.cxlq[data-movil] .cxlq-pagado { flex: none; }
+.cxlq[data-movil] .cxlq-cambio { flex-wrap: wrap; }
+.cxlq[data-movil] .cxlq-pagado-cifra { font-size: var(--s-t-xl); }
+
+@media (max-width: 900px) {
+  .cxlq-columnas { grid-template-columns: minmax(0, 1fr); }
+  .cxlq-cambio { flex-wrap: wrap; }
+}

@@ -36,6 +36,22 @@ name: Aplicar SQL en staging-conta
 # Así staging es como producción por construcción, y W03 (17 funciones con su
 # md5, que tapaba lo que el manifiesto entero dejaba fuera de orden) se fue.
 #
+# W06 (Julio, 26/10): DESDE UNA RAMA, LO MISMO QUE EL ENSAYO DE PRODUCCIÓN. Dos
+# veces (el #230 y el #241) el ensayo de producción paró una tanda en verde en
+# staging. Ahora, si la rama tiene tanda de producción
+# (supabase/produccion/tandas/<producto>/<rama>/aplicar.txt), staging la
+# cuenta antes, la aplica, la deshace con sus .down.sql, la cuenta después y
+# compara, todo en ROLLBACK: las cuentas que declara («cuenta:») y además las
+# DEFINICIONES de la base entera (huella de cada función, cada índice, cada
+# columna, cada almacén de Storage…). Si algo no vuelve, para, con la tabla de
+# lo que cambia en el registro del job y en una anotación (scripts/conta/
+# staging/compara.sh). Lo que va de verdad (W05) queda registrado en
+# w06_staging (scripts/conta/staging/de-verdad.sh) para que el push siguiente
+# compare desde como estaba antes. El modo «compara-prueba» lo prueba con una
+# tanda de vueltas atrás rotas a propósito (supabase/staging/compara-prueba/).
+# El manifiesto fijo de antes del C10 (supabase/staging/tanda-de-produccion.txt)
+# ya no es lo que se usa para esto: solo lo usan «real-con-fallo» y «real».
+#
 # LO QUE NO PUEDE HACER: TOCAR PRODUCCIÓN
 # Usa un único secreto de base de datos, STAGING_CONTA_DB_URL, y tres guardas
 # antes de aplicar nada:
@@ -73,6 +89,10 @@ on:
       - 'supabase/seeds/conta/**'
       - 'supabase/seeds/reparto/**'
       - 'scripts/conta/staging-tanda.mjs'
+      # W06: la tanda de producción de la rama, lo que cuenta y el comparador.
+      - 'supabase/produccion/tandas/**'
+      - 'scripts/conta/produccion/cuentas/**'
+      - 'scripts/conta/staging/**'
   # C04 R4 · A mano, desde la rama: el modo «ensayo-de-vuelta-atras» aplica la
   # tanda de ejemplo de supabase/staging/ensayo-vuelta-atras/ con su registro,
   # FUERZA que la comprobación de después falle y deja que deshacer.sh —el de
@@ -87,9 +107,9 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'aplicar (el manifiesto), ensayo-de-vuelta-atras, real-con-fallo o real (la tanda de producción)'
+        description: 'aplicar (el manifiesto y, desde una rama, la comparación de su tanda), ensayo-de-vuelta-atras, real-con-fallo, real (la tanda de producción) o compara-prueba (W06: vueltas atrás rotas a propósito)'
         type: choice
-        options: ['aplicar', 'ensayo-de-vuelta-atras', 'real-con-fallo', 'real']
+        options: ['aplicar', 'ensayo-de-vuelta-atras', 'real-con-fallo', 'real', 'compara-prueba']
         default: 'aplicar'
 
 # Dos tandas a la vez sobre la misma base se pisan. Se encolan.
@@ -143,11 +163,20 @@ jobs:
 
       - name: Leer y validar el manifiesto
         id: manifiesto
-        if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
         env:
           ANTES: ${{ github.event.before }}
         run: |
           set -euo pipefail
+          # W06: desde una rama, ¿tiene tanda de producción? Entonces se compara (abajo).
+          if [ "$GITHUB_REF_NAME" != main ]; then
+            set +e; d=$(node scripts/conta/produccion/tanda.mjs carpeta "$GITHUB_REF_NAME"); rc=$?; set -e
+            case "$rc" in
+              0) echo "TANDA_PROD=$d" >> "$GITHUB_ENV"; echo "La rama tiene tanda de producción: $d (se compara como el ensayo de producción)." ;;
+              1) echo "La rama no tiene tanda de producción: no hay nada que comparar como el ensayo." ;;
+              *) echo "::error::La tanda de la rama no se puede leer (¿está en los dos productos?)."; exit 1 ;;
+            esac
+          fi
           # W04: qué pasa y cómo (arriba, «QUÉ PASA»).
           if [ "$GITHUB_REF_NAME" = main ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             QUE='el manifiesto ENTERO, de verdad (a mano desde main)'; ENSAYO=0
@@ -190,7 +219,7 @@ jobs:
           node-version: 22
 
       - name: Instalar psql 17
-        if: env.NADA != '1'
+        if: env.NADA != '1' || env.TANDA_PROD != '' || inputs.modo == 'compara-prueba'
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -200,7 +229,7 @@ jobs:
           /usr/lib/postgresql/17/bin/psql --version
 
       - name: Guarda 3 · al otro lado no hay producción
-        if: env.NADA != '1'
+        if: env.NADA != '1' || env.TANDA_PROD != '' || inputs.modo == 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -226,7 +255,7 @@ jobs:
       # e2e de antes (sin carril), también el cerrojo de antes, e2e.cerrojo.
       # W04: solo lo que se queda de verdad coge el cerrojo; un ensayo en ROLLBACK no.
       - name: Cerrojo de migrar · esperar a que acaben las e2e en marcha
-        if: env.NADA != '1' && env.ENSAYO != '1'
+        if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
@@ -275,6 +304,19 @@ jobs:
           done < /tmp/tanda.txt
           exit "$fallo"
 
+      # W06: la tanda de producción de la rama, como el ensayo de producción
+      # (arriba, «W06»). Antes de W05: si no vuelve, no va nada de verdad.
+      - name: Comparar como el ensayo de producción (la tanda de la rama, en ROLLBACK)
+        if: env.TANDA_PROD != '' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          export PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-compara-${GITHUB_RUN_ID}"
+          export INFORME="$GITHUB_STEP_SUMMARY"
+          bash scripts/conta/staging/compara.sh "$TANDA_PROD/aplicar.txt" '^supabase/migrations/[A-Za-z0-9_./-]+\.sql$' "$GITHUB_REF_NAME"
+
       # W05: lo que solo añade, de verdad desde la rama (arriba, «QUÉ PASA»).
       - name: Lo que solo añade, de verdad (desde la rama)
         if: env.NADA != '1' && env.ENSAYO == '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
@@ -308,15 +350,17 @@ jobs:
             fi
           done < /tmp/anaden.txt
           # De verdad, con el cerrojo (espera a las e2e en marcha), fichero a fichero.
+          # W06: con su registro en w06_staging (qué fue y cómo estaba antes), para
+          # que la comparación del push siguiente parta de como estaba.
           scripts/e2e/carril.sh migrar-coger
           scripts/e2e/cerrojo.sh coger
+          PSQL="$PSQL" bash scripts/conta/staging/de-verdad.sh "$GITHUB_REF_NAME" $(cat /tmp/anaden.txt)
           while IFS= read -r f; do
-            "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -f "$f"
-            echo "- \`$f\`: **solo añade: aplicado de verdad** (se puede pasar otra vez)." >> "$GITHUB_STEP_SUMMARY"
+            echo "- \`$f\`: **solo añade: aplicado de verdad** (se puede pasar otra vez; registrado en w06_staging)." >> "$GITHUB_STEP_SUMMARY"
           done < /tmp/anaden.txt
 
       - name: Aplicar, fichero a fichero
-        if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -384,6 +428,38 @@ jobs:
           export PGAPPNAME="gha-staging-conta-${MODO}-${GITHUB_RUN_ID}"
           export INFORME="$GITHUB_STEP_SUMMARY"
           bash scripts/conta/produccion/real-en-staging.sh "$MODO"
+
+      # W06 · La prueba del comparador: la misma tanda con una vuelta atrás buena
+      # y cuatro rotas a propósito. En verde solo si la buena sale en verde y las
+      # cuatro rotas en rojo. Todo en ROLLBACK: staging no cambia.
+      - name: Prueba del comparador (una vuelta atrás buena y cuatro rotas)
+        if: inputs.modo == 'compara-prueba'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -uo pipefail
+          export PSQL=/usr/lib/postgresql/17/bin/psql
+          export PGAPPNAME="gha-staging-conta-compara-prueba-${GITHUB_RUN_ID}"
+          export COMPARA_PREVIO=supabase/staging/compara-prueba/previo.sql
+          export COMPARA_SIN_ANOTAR=1
+          # El shell de Actions corre con -e: aquí un rojo es lo esperado y no puede cortar el bucle.
+          set +e
+          D=supabase/staging/compara-prueba
+          { echo "## W06 · Prueba del comparador"; echo; echo "| Vuelta atrás | Tiene que salir | Sale | |"; echo "|---|---|---|---|"; } > /tmp/prueba.md
+          mal=0
+          for caso in buena rota-indice rota-columna rota-almacen rota-funcion; do
+            echo "::group::$caso"
+            VUELTA_ATRAS_DIR="$D/$caso" INFORME=/dev/null bash scripts/conta/staging/compara.sh "$D/aplicar.txt" '^supabase/staging/compara-prueba/[A-Za-z0-9_./-]+\.sql$'
+            rc=$?
+            echo "::endgroup::"
+            [ "$caso" = buena ] && quiere=0 || quiere=1
+            sale=$([ "$rc" -eq 0 ] && echo verde || echo rojo); tiene=$([ "$quiere" -eq 0 ] && echo verde || echo rojo)
+            if [ "$rc" -eq "$quiere" ]; then ok=bien; else ok='**MAL**'; mal=1; fi
+            echo "| \`$caso\` | $tiene | $sale | $ok |" >> /tmp/prueba.md
+          done
+          cat /tmp/prueba.md | tee -a "$GITHUB_STEP_SUMMARY"
+          if [ "$mal" -ne 0 ]; then echo "::error title=Prueba del comparador::Alguna vuelta atrás no sale como debe (ver la tabla)."; exit 1; fi
+          echo "La buena en verde y las cuatro rotas en rojo."
 
       - name: Cerrojo de migrar · soltarlo (pase lo que pase)
         if: always()

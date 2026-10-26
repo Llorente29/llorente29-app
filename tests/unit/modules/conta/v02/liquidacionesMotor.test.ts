@@ -3,7 +3,8 @@
 // V02 · Entrega 2 · Leer las filas del motor (conta_liquidaciones) y nombrar sus
 // estados con las palabras de la calle. La fila de ejemplo es la que dio el
 // motor en la prueba de la tanda (la semana de Uber de Norte Centro, con su
-// liquidación y sin su factura de comisión).
+// liquidación y sin su factura de comisión), con la forma de la 0125: por tienda
+// (marca), lo vendido por sus pedidos y lo que suman los pedidos de la liquidación.
 
 import { describe, expect, it } from 'vitest'
 import { cifrasMotor, filaMotor, nombreEstado, TONO, type FilaMotor } from '@/modules/conta/lib/liquidacionesMotor'
@@ -14,13 +15,13 @@ const FILA = {
   estado: 'falta_factura',
   piezas: {
     cobro: { llegado: null, esperado: 70, por_cobrar: 1 }, factura: { faltan: 1 },
-    vendido: { via: 'cierres', total: 100, cedidas: { total: 0, pedidos: 0 }, cierres: { dias: 1, total: 100, por_validar: 0 }, facturas: { n: 0, total: 0 } },
-    liquidacion: { n: 1, otros: 0.0, pagan: 70, ventas: 100, comision: 30, referencia: false },
+    vendido: { via: 'pedidos', total: 100, pedidos: { dias: 1, total: 100, pedidos: 4 }, facturas: null },
+    liquidacion: { n: 1, otros: 0.0, pagan: 70, ventas: 135, pedidos_total: 100, comision: 30, referencia: false },
   },
-  cerrada: false, canal_id: 'e0200000-0000-4000-8000-00000000a0c2', local_id: 'c01a0000-0000-4000-8000-0000000000a2', diferencia: null, resoluciones: [],
+  cerrada: false, canal_id: 'e0200000-0000-4000-8000-00000000a0c2', local_id: 'c01a0000-0000-4000-8000-0000000000a2', marca_id: 'e0200000-0000-4000-8000-00000000a0b1', marca: 'Burger Prueba', diferencia: null, resoluciones: [],
   intermediario: 'Reparto Rápido Inventado',
   liquidaciones: [{ id: 'b3aeaf71-fc9b-49cf-a4a1-cf4d62742174', ref: null, neto: 70, fecha: '2026-10-05', origen: 'correo_uber',
-    tienda: 'Burger Prueba V02L (Calle Prueba Liquidaciones 1, Madrid, ES, 28001)', ventas: 100, cobrado: null, factura: null, pedidos: 4, comision: 30,
+    tienda: 'Burger Prueba V02L (Calle Prueba Liquidaciones 1, Madrid, ES, 28001)', ventas: 135, pedidos_total: 100, cobrado: null, factura: null, pedidos: 4, comision: 30,
     a_facturar: 30, cobrado_el: null, referencia: false, por_aclarar: null, facturas_nota: null, casada_en_banco: false, facturas_cobradas: null }],
   intermediario_id: '1e4057a7-8e30-4398-8797-c17b6c6be49c', reclamado_sin_llegar: 0,
 }
@@ -30,9 +31,9 @@ describe('el motor, en el navegador', () => {
 
   it('lee la fila con sus cuatro piezas', () => {
     expect([f.intermediario, f.local, f.desde, f.hasta, f.estado, f.cerrada]).toEqual(['Reparto Rápido Inventado', 'Norte Centro', '2026-09-28', '2026-10-04', 'falta_factura', false])
-    expect([f.vendido.via, f.vendido.total, f.liquidacion.ventas, f.liquidacion.comision, f.liquidacion.pagan, f.faltanFacturas, f.cobro.esperado, f.cobro.llegado])
-      .toEqual(['cierres', 100, 100, 30, 70, 1, 70, null])
-    expect(f.liquidaciones[0]).toMatchObject({ origen: 'correo_uber', aFacturar: 30, factura: null, casadaEnBanco: false })
+    expect([f.marca, f.vendido.via, f.vendido.total, f.vendido.pedidos, f.liquidacion.ventas, f.liquidacion.pedidosTotal, f.liquidacion.comision, f.liquidacion.pagan, f.faltanFacturas, f.cobro.esperado, f.cobro.llegado])
+      .toEqual(['Burger Prueba', 'pedidos', 100, 4, 135, 100, 30, 70, 1, 70, null])
+    expect(f.liquidaciones[0]).toMatchObject({ origen: 'correo_uber', ventas: 135, pedidosTotal: 100, aFacturar: 30, factura: null, casadaEnBanco: false })
   })
 
   it('los estados, con las palabras de la calle; la diferencia lleva su importe', () => {
