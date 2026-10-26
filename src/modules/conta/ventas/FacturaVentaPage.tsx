@@ -52,8 +52,11 @@ import {
   ETIQUETAS_BORRADOR, NOMBRE_CORRECCION, NOMBRE_ESTADO, asientoPrevio, cifrasDe, cifrasGuardadas, diferenciaDe, textoTraspaso, estadoDe, faltaParaEmitir, lineaVacia, lineasLeidas, textoDeNumero, venceCon,
   type BorradorVenta, type LineaEnEdicion,
 } from '@/modules/conta/lib/facturasVenta'
+import { MENCION_SIN_IVA, porqueNoVale, zonaDelCliente } from '@/modules/conta/lib/ventasSinIva'
+import { BandaPruebas } from '@/modules/conta/verifactu/BandaPruebas'
+import { HaciendaDeFactura } from '@/modules/conta/verifactu/HaciendaDeFactura'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
-import { BloqueCobro, DialogoClienteNuevo, DialogoCobro, DialogoCorregir, DialogoEmitir, LineasEditables, LineasLeer, Totales } from './FacturaVentaBloques'
+import { BloqueCobro, DialogoClienteNuevo, DialogoCobro, DialogoCorregir, DialogoEmitir, LineasEditables, LineasLeer, PorqueSinIva, Totales } from './FacturaVentaBloques'
 
 const importeEs = (n: number) => textoDeNumero(n)
 
@@ -61,11 +64,11 @@ function borradorDe(f: FacturaGuardada | null, hoy: string, c: Catalogos | null)
   const tipo = c?.tipos.find((t) => t.tipo === 21)?.id ?? c?.tipos[0]?.id ?? ''
   const cuenta = c?.cuentas.find((x) => x.code.startsWith('705'))?.id ?? c?.cuentas[0]?.id ?? ''
   if (!f) {
-    return { clienteId: null, fecha: hoy, vence: null, serie: 'F', formaCobroId: null, localId: null, notas: '', correo: '', retencionId: null, motivo: '', lineas: [lineaVacia(tipo, cuenta)] }
+    return { clienteId: null, fecha: hoy, vence: null, serie: 'F', formaCobroId: null, localId: null, notas: '', correo: '', retencionId: null, motivo: '', lineas: [lineaVacia(tipo, cuenta)], porque: null }
   }
   return {
     clienteId: f.clienteId, fecha: f.fecha, vence: f.vence, serie: f.serie, formaCobroId: f.formaCobroId, localId: f.localId, notas: f.notas ?? '',
-    correo: f.correo ?? '', retencionId: f.retencionId, motivo: f.corrige?.motivo ?? '',
+    correo: f.correo ?? '', retencionId: f.retencionId, motivo: f.corrige?.motivo ?? '', porque: f.porque,
     lineas: f.lineas.length
       ? f.lineas.map((l): LineaEnEdicion => ({ concepto: l.concepto, cantidad: textoDeNumero(l.cantidad, 3).replace(/,00$/, ''), precio: importeEs(l.precio), descuento: l.descuento ? textoDeNumero(l.descuento, 0) : '', tipoId: l.tipoId, cuentaId: l.cuentaId }))
       : (f.corrige?.tipo === 'anular' ? [] : [lineaVacia(tipo, cuenta)]),
@@ -153,7 +156,16 @@ export default function FacturaVentaPage() {
     ? diferenciaDe(corrige.tipo === 'anular' ? cifrasDe([], false, retPct) : corrige.tipo === 'datos' ? cifrasViejas : cifrasNuevas, cifrasViejas)
     : cifrasNuevas
   const cliente = cat?.clientes.find((c) => c.id === b.clienteId) ?? null
-  const falta = editable ? [...faltaParaEmitir({ clienteId: deCierre ? 'cierre' : b.clienteId, nif: deCierre ? 'consumidor final' : cliente?.nif ?? null, lineas: corrige?.tipo === 'anular' || corrige?.tipo === 'datos' ? [{ concepto: 'x', tipoId: 'x', cuentaId: 'x' }] : b.lineas.filter((l) => l.concepto.trim() || l.precio.trim()).map((l) => ({ concepto: l.concepto, tipoId: l.tipoId, cuentaId: l.cuentaId })) }), ...leidas.mal] : []
+  // V03 E2 · Una línea sin IVA necesita su porqué, según dónde está el cliente
+  // (tablero 27). La rectificativa lo hereda de la que corrige: no se elige.
+  const zona = zonaDelCliente(cliente?.pais ?? f?.cliente.pais)
+  const haySinIva = !corrige && leidas.sinIva
+  const noVale = haySinIva ? porqueNoVale(b.porque, zona) : null
+  // La emitida, con su porqué si tiene líneas sin IVA; la rectificativa, el de la que corrige.
+  const porqueLeido = f?.porque && f.lineas.some((l) => l.tipo === 0) ? f.porque : null
+  const porqueHeredado = corrige ? f?.porque ?? original.datos?.porque ?? null : null
+  const falta = editable ? [...faltaParaEmitir({ clienteId: deCierre ? 'cierre' : b.clienteId, nif: deCierre ? 'consumidor final' : cliente?.nif ?? null, lineas: corrige?.tipo === 'anular' || corrige?.tipo === 'datos' ? [{ concepto: 'x', tipoId: 'x', cuentaId: 'x' }] : b.lineas.filter((l) => l.concepto.trim() || l.precio.trim()).map((l) => ({ concepto: l.concepto, tipoId: l.tipoId, cuentaId: l.cuentaId })),
+    sinIva: { hay: haySinIva, porque: b.porque, noVale } }), ...leidas.mal] : []
 
   const que = corrige ? 'la rectificativa' : 'la factura'
   const donde = f?.numero ?? (cliente ? `la factura de ${cliente.nombre}` : 'la factura nueva')
@@ -168,6 +180,7 @@ export default function FacturaVentaPage() {
       const r = await guardarBorrador(companyId, facturaId ?? null, {
         clienteId: b.clienteId, fecha: b.fecha, vence: b.vence, serie: b.serie, formaCobroId: b.formaCobroId, localId: b.localId,
         notas: b.notas.trim() || null, correo: b.correo.trim() || null, retencionId: b.retencionId, recargo: false, motivo: b.motivo.trim() || null,
+        porque: corrige ? undefined : haySinIva ? b.porque : null,
       }, leidas.lineas, userName)
       ed.reiniciar(b)
       const hecho: MensajeGuardado = { tono: 'ok', texto: `Guardado el borrador: ${r.lineas} ${r.lineas === 1 ? 'línea' : 'líneas'}, ${eurosExactos(r.total)}.` }
@@ -257,6 +270,9 @@ export default function FacturaVentaPage() {
   }
 
   // ── El PDF de la derecha: el guardado, o cómo quedará el borrador ─────────────
+  // V03 E2: por qué va sin IVA (el elegido; en una rectificativa, el de la que corrige).
+  const porqueVista = corrige ? porqueHeredado : haySinIva ? b.porque : null
+  const mencionVista = porqueVista && leidas.sinIva ? MENCION_SIN_IVA[porqueVista] : null
   const datosVista: DatosFacturaPdf | null = useMemo(() => {
     if (!empresa.datos || !editable) return null
     const c = cliente
@@ -268,8 +284,9 @@ export default function FacturaVentaPage() {
       porTipo: cifras.porTipo, base: cifras.base, iva: cifras.iva, recargo: 0,
       retencion: cifras.retencion ? { pct: retPct, importe: cifras.retencion } : null, total: cifras.total, notas: b.notas.trim() || null,
       rectifica: corrige ? { numero: corrige.numero ?? '', motivo: b.motivo || corrige.motivo || '', que: NOMBRE_CORRECCION[corrige.tipo].titulo.toLowerCase() } : null,
+      sinIva: mencionVista,
     }
-  }, [empresa.datos, editable, cliente, corrige, b, cat, f, leidas.lineas, cifras, retPct])
+  }, [empresa.datos, editable, cliente, corrige, b, cat, f, leidas.lineas, cifras, retPct, mencionVista])
   const vistaUrl = useMemo(() => {
     if (!datosVista) return null
     try { return URL.createObjectURL(new Blob([facturaVentaPdf(jsPDF, datosVista) as BlobPart], { type: 'application/pdf' })) } catch { return null }
@@ -425,6 +442,9 @@ export default function FacturaVentaPage() {
         {!sinLineas && (editable && !soloCliente
           ? <LineasEditables lineas={b.lineas} catalogos={cat} alCambiar={(ls) => ed.poner('lineas', ls)} soloImportes={corrige?.tipo === 'importes'} />
           : <LineasLeer lineas={editable ? leidas.lineas : (f?.lineas ?? []).map((l) => ({ ...l, recargo: null }))} debiaSer={!!corrige && corrige.tipo !== 'datos'} />)}
+        {editable && haySinIva && <PorqueSinIva zona={zona} porque={b.porque} noVale={noVale} alElegir={(p) => ed.poner('porque', p)} />}
+        {!editable && porqueLeido && <p className="s-apoyo" data-prueba="porque-sin-iva-leer">Sin IVA: {MENCION_SIN_IVA[porqueLeido]}</p>}
+        {editable && porqueHeredado && <p className="s-apoyo">Sin IVA, como la que corrige: {MENCION_SIN_IVA[porqueHeredado]}</p>}
         {editable && !corrige && (conRetencion || b.retencionId ? (
           <Campo etiqueta="Retención (IRPF)" ayuda="La que te hace el cliente: va a la 473, como pago a cuenta tuyo.">
             {(p) => <Selector {...p} valor={b.retencionId ?? ''} alCambiar={(v) => ed.poner('retencionId', v || null)} opciones={[{ valor: '', texto: 'Sin retención' }, ...cat.retenciones.map((r) => ({ valor: r.id, texto: r.nombre }))]} />}
@@ -436,6 +456,11 @@ export default function FacturaVentaPage() {
         {editable && falta.length > 0 && <p className="s-apoyo" data-prueba="falta-para-emitir">Para emitirla falta {falta.join(', ')}.</p>}
       </BloqueFicha>
 
+      {/* V03 E2 · Con Hacienda (tablero 27): la rechazada, «Corregir y reenviar» y cómo va. */}
+      {f && f.estado !== 'borrador' && accountId && (
+        <HaciendaDeFactura accountId={accountId} quien={userName ?? null}
+          factura={{ id: f.id, numero: f.numero, emitidaEl: f.emitidaEl, porque: f.porque, sinIva: f.lineas.some((l) => l.tipo === 0), pais: f.cliente.pais }} />
+      )}
       {f && f.estado !== 'borrador' && <BloqueCobro total={f.total} cobros={f.cobros} anulada={f.estado === 'anulada'} alRegistrar={botonCobro ? () => setDialogo('cobro') : null} />}
 
       <AsientoQueSeCrea titulo={f?.entryId ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}
@@ -459,6 +484,7 @@ export default function FacturaVentaPage() {
 
   return (
     <div className="s-pagina" data-prueba="ficha-venta" data-estado={estado}>
+      <BandaPruebas />
       <EncabezadoPagina titulo={titulo} estado={{ texto: est.texto, tono: est.tono }} frase={frase}
         migasExtra={[{ etiqueta: f?.numero ?? (nueva ? 'Nueva' : 'Borrador') }]}
         principal={principal} secundarios={secundarios} masAcciones={mas} />

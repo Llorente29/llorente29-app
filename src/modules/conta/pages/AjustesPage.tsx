@@ -28,6 +28,7 @@ import { ApartadoCorte } from '@/modules/conta/empresa/ApartadoCorte'
 import { ApartadoEnviarDiez } from '@/modules/conta/empresa/ApartadoEnviarDiez'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelDia'
+import { VerifactuAjustes } from '@/modules/conta/verifactu/VerifactuAjustes'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
@@ -58,6 +59,8 @@ function Entrada({ id }: { id: string }) {
   const conTitulo = !['impuestos', 'socios', 'ejercicio', 'folvy'].includes(id)
   const cabeza = movil ? <CabeceraEntradaMovil titulo={titulo} /> : conTitulo ? <TituloPanel titulo={titulo} /> : null
 
+  // V03 E2 · Verifactu (tablero 25): lleva su propio título y no necesita los datos de la empresa de Ajustes.
+  if (id === 'verifactu') return <>{movil && cabeza}<VerifactuAjustes /></>
   if (e.hueco) {
     return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Aún no." explicacion={e.hueco} /></div></>
   }

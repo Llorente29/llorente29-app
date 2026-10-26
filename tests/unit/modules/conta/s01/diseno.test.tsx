@@ -47,7 +47,7 @@ describe('los contrastes, marca a marca', () => {
         }
       })
       it('los chips: su texto sobre su fondo ≥ 4,5:1', () => {
-        for (const [t, f] of [['--s-ok', '--s-ok-fondo'], ['--s-duda', '--s-duda-fondo'], ['--s-falta', '--s-falta-fondo'], ['--s-accion', '--s-accion-suave'], ['--s-tinta', '--s-neutro-fondo']]) {
+        for (const [t, f] of [['--s-ok', '--s-ok-fondo'], ['--s-duda', '--s-duda-fondo'], ['--s-falta', '--s-falta-fondo'], ['--s-accion', '--s-accion-suave'], ['--s-tinta', '--s-neutro-fondo'], ['--s-prueba', '--s-prueba-fondo'], ['--s-superficie', '--s-prueba']]) {
           expect(contraste(v[t], v[f]), `${t} sobre ${f}`).toBeGreaterThanOrEqual(4.5)
         }
       })

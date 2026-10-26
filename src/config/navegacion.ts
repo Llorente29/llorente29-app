@@ -316,6 +316,13 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     ],
   },
   {
+    // V03 E2 · Ajustes › Facturación › Verifactu (tablero 25).
+    grupo: 'Facturación',
+    entradas: [
+      { id: 'verifactu', etiqueta: 'Verifactu', ruta: 'ajustes/verifactu' },
+    ],
+  },
+  {
     grupo: 'Acceso y avisos',
     entradas: [
       { id: 'personas', etiqueta: 'Personas y asesor', ruta: 'ajustes/personas', hueco: 'Quién entra y qué ve, y el acceso de tu asesor, llegan en un encargo propio.' },

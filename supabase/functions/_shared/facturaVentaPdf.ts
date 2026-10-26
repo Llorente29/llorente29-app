@@ -14,6 +14,9 @@
 // pruebas, además, «PRUEBA» y una nota al pie: no vale ante Hacienda. Sin
 // registro (Verifactu apagado, traídas de Diez, anteriores a pasar a real), sin QR.
 //
+// V03 · E2: una factura con líneas sin IVA lleva la frase de por qué, con su
+// artículo (RD 1619/2012, art. 6.1.j), encima de las notas.
+//
 // Si las cifras no cuadran con las líneas, NO hay PDF: lanza y dice qué (un
 // documento que no cuadra con su factura es peor que ninguno).
 //
@@ -41,6 +44,8 @@ export interface DatosFacturaPdf {
   rectifica: { numero: string; motivo: string; que: string } | null
   /** V03: el QR de su registro de Verifactu (la matriz de módulos, ya calculada), o nada. */
   verifactu?: { modulos: boolean[][]; prueba: boolean } | null
+  /** V03 E2: por qué va sin IVA, con su artículo (lib/ventasSinIva.ts, MENCION_SIN_IVA), o nada. */
+  sinIva?: string | null
 }
 
 /** V03: el lado del QR en mm (entre 30 y 40, §6; el mismo que QR_MM.elegido de qr.ts) y sus leyendas. */
@@ -177,6 +182,11 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   color(GRIS); letra('normal', 9)
   const cobro = [d.vence ? `Vence el ${fecha(d.vence)}` : null, d.formaCobro ? `Forma de cobro: ${d.formaCobro}` : null].filter(Boolean).join(' · ')
   if (cobro) { relleno(SUAVE); doc.rect(M, y, ANCHO, 9, 'F'); color(AZUL); doc.text(cobro, M + 3, y + 5.8); y += 13 }
+  if (d.sinIva) {
+    const t = doc.splitTextToSize(d.sinIva, ANCHO)
+    color(TINTA); letra('bold', 9); doc.text(t, M, y); y += 4.5 * t.length + 2
+    letra('normal', 9)
+  }
   if (d.notas) { color(GRIS); doc.text(doc.splitTextToSize(d.notas, ANCHO), M, y) }
   if (vf?.prueba) {
     doc.setTextColor(200, 30, 30); letra('normal', 8)
