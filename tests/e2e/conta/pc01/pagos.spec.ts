@@ -175,6 +175,17 @@ test('Pagos: cifras, sin vencimiento, pestañas; pagar una (la domiciliada no en
   await expect(page.getByRole('checkbox', { name: /^Marcar Distribuciones/ })).toBeVisible()
   await expect(page.getByRole('checkbox', { name: /^Marcar Inmuebles/ })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Buscar un pago' }).fill('')
+  // De vuelta en «Por pagar» y sin buscar: las seis que quedan, también la domiciliada. Si no, el
+  // registro dice dónde está la pantalla y qué enseña (e2e 945 y la de la zona: no se veía la fila).
+  try {
+    await expect(pestanas.getByRole('tab', { name: /Por pagar/ })).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
+    await expect(page.getByRole('searchbox', { name: 'Buscar un pago' })).toHaveValue('')
+    await expect(page.getByRole('checkbox', { name: /^Marcar Inmuebles/ })).toBeVisible({ timeout: 15_000 })
+  } catch (e) {
+    console.log(`[diagnóstico pagos] dirección: ${page.url()}`)
+    console.log(`[diagnóstico pagos] lista:\n${await page.locator('.pg-caja').ariaSnapshot().catch((x: Error) => x.message)}`)
+    throw e
+  }
 
   // Marcar la transferencia vencida y la domiciliada: la barra dice cuál no entra y por qué.
   await page.getByRole('checkbox', { name: /^Marcar Distribuciones Cárnicas/ }).check()
