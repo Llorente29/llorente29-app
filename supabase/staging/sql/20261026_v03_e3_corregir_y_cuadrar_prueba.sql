@@ -340,7 +340,9 @@ begin
     jsonb_build_object('num_serie', rg.num_serie, 'fecha', rg.fecha_expedicion, 'tipo_factura', 'F1', 'cuota_total', rg.cuota_total, 'importe_total', rg.importe_total + 5, 'huella', rg.huella, 'estado', 'Correcto'),
     jsonb_build_object('num_serie', 'TPV-0001', 'fecha', v_hoy, 'tipo_factura', 'F2', 'cuota_total', 2.10, 'importe_total', 12.10, 'huella', repeat('A', 64), 'estado', 'Correcto')
   ), true);
-  r := public.verifactu_cuadre_ver((select v::uuid from _v where clave = 'empresa'), null, v_c);
+  -- Con la clave de servicio no hay usuario: se lee de la tabla (verifactu_cuadre_ver,
+  -- la del usuario, se mira justo después, como usuario).
+  r := (select jsonb_build_object('estado', estado, 'paginas', paginas, 'resultado', resultado) from public.verifactu_cuadre where id = v_c);
   if r->>'estado' <> 'hecho' or (r->>'paginas')::int <> 2 then raise exception 'PRUEBA V03 E3 · 5: el cuadre no queda hecho (%).', r; end if;
   r := r->'resultado';
   if (r->>'ok')::boolean or (r->>'hacienda')::int <> 4 or (r->>'cuadran')::int <> 2
@@ -373,6 +375,17 @@ begin
   if public.verifactu_cuadre_tomar('pruebas') is not null then raise exception 'PRUEBA V03 E3 · 5: queda algo por tomar (el de hace 2 minutos sigue consultándose).'; end if;
   raise notice '5 · un fallo queda dicho, con su texto; un atascado de más de 10 minutos se vuelve a tomar y uno de 2, no';
 end $$;
+-- Lo que ve el usuario de A: el mismo cuadre, hecho, con su resultado.
+select set_config('request.jwt.claims', json_build_object('sub', (select v from _v where clave = 'usuario'), 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare r jsonb := public.verifactu_cuadre_ver((select v::uuid from _v where clave = 'empresa'), null, (select v::uuid from _v where clave = 'cuadre'));
+begin
+  if r->>'estado' is distinct from 'hecho' or r->'resultado'->>'mes' is null then raise exception 'PRUEBA V03 E3 · 5: el usuario no ve su cuadre hecho (%).', r; end if;
+  raise notice '5 · el usuario de A ve su cuadre hecho, con su resultado';
+end $$;
+reset role;
+select set_config('request.jwt.claims', '', true);
 do $$
 declare f text;
 begin
