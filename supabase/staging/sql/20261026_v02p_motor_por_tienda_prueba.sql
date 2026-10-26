@@ -5,8 +5,8 @@
 -- public.conta_liquidacion_resolver_tienda), con \i dentro de la transacción y
 -- ROLLBACK: staging no cambia. En la empresa de la cuenta A que tiene tiendas.
 --
---   (Empieza con la foto de lo que hay; si la 0125 ya estuviera, para: la foto
---   no serviría para comprobar la vuelta atrás.)
+--   (Empieza deshaciendo la 0125, que el workflow aplica antes: lo que queda
+--   tiene que ser lo de producción sin ella, medido y escrito aquí.)
 --   0. Lo de antes: la huella de las dos funciones. Los datos: dos marcas con
 --      pedidos de Uber la misma semana en Norte Centro (100 € y 60 €), la tienda
 --      de la primera con su marca, y el corte.
@@ -31,6 +31,9 @@ do $$ begin
 end $$;
 set local statement_timeout = '120s';
 
+-- El workflow aplica la 0125 antes de esta prueba: se empieza deshaciéndola.
+\i supabase/vuelta-atras/20261026T0125_v02p_motor_por_tienda.down.sql
+
 create temp table _p (clave text primary key, v text) on commit drop;
 grant select, insert, update on _p to authenticated;
 -- Lo de antes, para compararlo después de la vuelta atrás como el ensayo de
@@ -46,14 +49,26 @@ insert into _p select 'columnas', string_agg(column_name || ' ' || data_type || 
 insert into _p select 'resolutores', string_agg(p.oid::regprocedure::text, ', ' order by p.oid::regprocedure::text)
   from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname like 'conta\_liquidacion\_resolver%';
 
--- Solo si la 0125 ya estuviera (lo de antes de la foto no se toca nunca): la
--- foto del «antes» es la de lo que hay, no la de después de una vuelta atrás.
-select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion' and column_name = 'brand_id')
-    or to_regproc('public.conta_liquidacion_resolver_tienda') is not null as ya_esta \gset
-\if :ya_esta
-  \echo 'La 0125 ya estaba en esta base: la prueba para, porque la foto de antes no serviría para comprobar la vuelta atrás.'
-  select 1/0 as la_0125_ya_estaba_y_la_foto_no_vale;
-\endif
+-- La foto, deshecha la 0125, tiene que ser lo que hay en PRODUCCIÓN sin ella
+-- (medido el 26/10 a las 07:10 UTC): si la vuelta atrás no lo devuelve exacto,
+-- se ve aquí y no en el ensayo de producción (el #241).
+do $$
+declare v_mal text := '';
+begin
+  if (select left(md5(prosrc), 8) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'conta_liquidaciones') is distinct from '57774b89' then v_mal := v_mal || ' el motor (57774b89);'; end if;
+  if (select left(md5(prosrc), 8) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'conta_liquidacion_resolver') is distinct from '8b9ed86d' then v_mal := v_mal || ' el resolutor de antes (8b9ed86d);'; end if;
+  if (select left(md5(prosrc), 8) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'conta_liquidacion_registrar') is distinct from '7e8996c5' then v_mal := v_mal || ' el registrar (7e8996c5);'; end if;
+  if (select indexdef from pg_indexes where schemaname = 'public' and indexname = 'conta_liquidacion_resolucion_uq') is distinct from
+     'CREATE UNIQUE INDEX conta_liquidacion_resolucion_uq ON public.conta_liquidacion_resolucion USING btree (company_id, channel_id, COALESCE(location_id, ''00000000-0000-0000-0000-000000000000''::uuid), period_from, period_to, COALESCE(sale_id, ''00000000-0000-0000-0000-000000000000''::uuid))' then
+    v_mal := v_mal || ' el índice conta_liquidacion_resolucion_uq;'; end if;
+  if (select indexdef from pg_indexes where schemaname = 'public' and indexname = 'conta_liquidacion_resolucion_contacto_uq') is distinct from
+     'CREATE UNIQUE INDEX conta_liquidacion_resolucion_contacto_uq ON public.conta_liquidacion_resolucion USING btree (company_id, party_id, COALESCE(location_id, ''00000000-0000-0000-0000-000000000000''::uuid), period_from, period_to, COALESCE(sale_id, ''00000000-0000-0000-0000-000000000000''::uuid)) WHERE (channel_id IS NULL)' then
+    v_mal := v_mal || ' el índice conta_liquidacion_resolucion_contacto_uq;'; end if;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion' and column_name = 'brand_id') then v_mal := v_mal || ' la columna brand_id sigue;'; end if;
+  if (select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname like 'conta\_liquidacion\_resolver%') <> 1 then v_mal := v_mal || ' no hay un solo resolutor;'; end if;
+  if v_mal <> '' then raise exception 'PRUEBA V02P 0: deshecha la 0125, no queda como producción:%', v_mal; end if;
+  raise notice '0 · deshecha la 0125, queda como producción: las tres huellas, los dos índices, sin la marca y un solo resolutor';
+end $$;
 
 -- 0 · Los datos (como postgres).
 do $$
