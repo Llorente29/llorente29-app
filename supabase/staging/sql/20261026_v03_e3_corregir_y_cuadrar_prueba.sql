@@ -207,9 +207,15 @@ begin
         (select id from public.company_account where company_id = v_f.company_id and code like '477%')) <> 0 then
     raise exception 'PRUEBA V03 E3 · 3: la 477 no queda a cero entre el asiento y su contrasiento.';
   end if;
-  select coalesce(sum(tax_amount), 0) into v_iva from public.vat_book_entry where entry_id in (v_orig.id, v_con.id);
-  if v_iva <> 0 or not exists (select 1 from public.vat_book_entry where entry_id = v_con.id) then
-    raise exception 'PRUEBA V03 E3 · 3: el libro de IVA no queda a cero (%).', v_iva;
+  -- El libro sigue al asiento (journal_entry_libro_registro, C05): el
+  -- contrasiento no apunta nada y los apuntes de la factura quedan anulados
+  -- por él, así que lo vivo del libro para esa factura es cero.
+  select coalesce(sum(tax_amount) filter (where voided_at is null), 0) into v_iva from public.vat_book_entry where entry_id in (v_orig.id, v_con.id);
+  if v_iva <> 0 or exists (select 1 from public.vat_book_entry where entry_id = v_con.id)
+     or not exists (select 1 from public.vat_book_entry where entry_id = v_orig.id)
+     or exists (select 1 from public.vat_book_entry where entry_id = v_orig.id and (voided_at is null or voided_by_entry_id is distinct from v_con.id)) then
+    raise exception 'PRUEBA V03 E3 · 3: el libro de IVA no queda a cero (vivo %; %).', v_iva,
+      (select json_agg(json_build_object('entry', entry_id, 'cuota', tax_amount, 'anulado', voided_at, 'por', voided_by_entry_id)) from public.vat_book_entry where entry_id in (v_orig.id, v_con.id));
   end if;
   if x.tipo <> 'anulacion' or x.invoice_id <> d or x.sin_registro_previo or x.anterior_id <> v_ult or x.huella <> public._verifactu_sha256(x.cadena_huella)
      or x.alta_id <> (select id from public.verifactu_registro where invoice_id = d and tipo = 'alta' order by generado_at limit 1)
@@ -348,15 +354,24 @@ begin
     r->>'cuadran', r->>'en_camino', rf.num_serie, rg.num_serie;
   -- Un fallo: otro mes, tomado y fallado.
   insert into public.verifactu_cuadre (account_id, company_id, pedido_por_account, entorno, nif_emisor, nombre_emisor, ejercicio, periodo, pedido_por_nombre)
-  select account_id, company_id, account_id, 'pruebas', 'B28000016', 'Taberna de Prueba Norte', 2026, '09', 'Prueba V03 E3'
-    from public.company where id = (select v::uuid from _v where clave = 'empresa');
+  select c.account_id, c.id, c.account_id, 'pruebas', 'B28000016', 'Taberna de Prueba Norte', 2026, '09', 'Prueba V03 E3'
+    from public.company c where c.id = (select v::uuid from _v where clave = 'empresa');
   t := public.verifactu_cuadre_tomar('pruebas');
   perform public.verifactu_cuadre_fallo((t->>'cuadre_id')::uuid, 'Hacienda no contesta (prueba E3)');
   if (select estado || ' · ' || error from public.verifactu_cuadre where id = (t->>'cuadre_id')::uuid) <> 'fallo · Hacienda no contesta (prueba E3)' then
     raise exception 'PRUEBA V03 E3 · 5: el fallo no queda dicho.';
   end if;
-  if public.verifactu_cuadre_tomar('pruebas') is not null then raise exception 'PRUEBA V03 E3 · 5: queda algo por tomar.'; end if;
-  raise notice '5 · un fallo queda dicho, con su texto';
+  -- Uno que se quedó «consultando» (la función murió a mitad): pasados 10
+  -- minutos se vuelve a tomar; antes, no.
+  insert into public.verifactu_cuadre (account_id, company_id, pedido_por_account, entorno, nif_emisor, nombre_emisor, ejercicio, periodo, pedido_por_nombre, estado, empezado_at)
+  select c.account_id, c.id, c.account_id, 'pruebas', 'B28000016', 'Taberna de Prueba Norte', 2026, x.p, 'Prueba V03 E3', 'consultando', now() - x.hace
+    from public.company c, (values ('08', interval '15 minutes'), ('07', interval '2 minutes')) x(p, hace)
+   where c.id = (select v::uuid from _v where clave = 'empresa');
+  t := public.verifactu_cuadre_tomar('pruebas');
+  if t->>'periodo' is distinct from '08' then raise exception 'PRUEBA V03 E3 · 5: el atascado no se vuelve a tomar (%).', t; end if;
+  perform public.verifactu_cuadre_fallo((t->>'cuadre_id')::uuid, 'Prueba E3');
+  if public.verifactu_cuadre_tomar('pruebas') is not null then raise exception 'PRUEBA V03 E3 · 5: queda algo por tomar (el de hace 2 minutos sigue consultándose).'; end if;
+  raise notice '5 · un fallo queda dicho, con su texto; un atascado de más de 10 minutos se vuelve a tomar y uno de 2, no';
 end $$;
 do $$
 declare f text;

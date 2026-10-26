@@ -543,7 +543,11 @@ create or replace function public.verifactu_cuadre_tomar(p_entorno text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_c public.verifactu_cuadre;
 begin
-  select * into v_c from public.verifactu_cuadre where entorno = p_entorno and estado = 'pedido' order by pedido_at limit 1 for update skip locked;
+  -- También el que lleva más de 10 minutos «consultando»: la función murió a
+  -- mitad (tiempo agotado) y, si no, se quedaría así para siempre.
+  select * into v_c from public.verifactu_cuadre
+   where entorno = p_entorno and (estado = 'pedido' or (estado = 'consultando' and empezado_at < now() - interval '10 minutes'))
+   order by pedido_at limit 1 for update skip locked;
   if v_c.id is null then return null; end if;
   update public.verifactu_cuadre set estado = 'consultando', empezado_at = now(), paginas = 0, error = null where id = v_c.id;
   delete from public.verifactu_cuadre_hacienda where cuadre_id = v_c.id;
@@ -688,7 +692,8 @@ create or replace function public.verifactu_despertar_cuadre()
 returns void language plpgsql security definer set search_path = public as $$
 declare v_secreto text;
 begin
-  if not exists (select 1 from public.verifactu_cuadre where entorno = 'real' and estado = 'pedido') then return; end if;
+  if not exists (select 1 from public.verifactu_cuadre where entorno = 'real'
+                   and (estado = 'pedido' or (estado = 'consultando' and empezado_at < now() - interval '10 minutes'))) then return; end if;
   select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
   if v_secreto is null then
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-verifactu.' using errcode = '55000';
