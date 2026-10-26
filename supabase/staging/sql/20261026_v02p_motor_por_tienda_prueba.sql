@@ -1,8 +1,8 @@
 -- supabase/staging/sql/20261026_v02p_motor_por_tienda_prueba.sql
 --
 -- SOLO STAGING. Prueba de 20261026T0125_v02p_motor_por_tienda (cambia:
--- public.conta_liquidaciones, public.conta_liquidacion_resolver y
--- public.conta_liquidacion_resolucion), con \i dentro de la transacción y
+-- public.conta_liquidaciones y public.conta_liquidacion_resolucion; añade
+-- public.conta_liquidacion_resolver_tienda), con \i dentro de la transacción y
 -- ROLLBACK: staging no cambia. En la empresa de la cuenta A que tiene tiendas.
 --
 --   (Empieza con su vuelta atrás, por si ya estuviera.)
@@ -113,11 +113,11 @@ begin
   raise notice '3 · la de antes del corte: %', v_f->>'frase';
   -- 4 · Dos tiendas del mismo local y semana se resuelven por separado.
   v_rol := (select (x->>'intermediario_id')::uuid from jsonb_array_elements(v_m) x where (x->>'desde')::date = v_w limit 1);
-  v_r := public.conta_liquidacion_resolver(v_e, v_rol, v_centro, 'e0200000-0000-4000-8000-00000000a0b1', v_w, v_w + 6, 'reclamacion', 2, 'Marca 1: lo reclamo.', null, null, 'Prueba V02P');
-  v_r := public.conta_liquidacion_resolver(v_e, v_rol, v_centro, 'e0200000-0000-4000-8000-00000000a0b2', v_w, v_w + 6, 'reclamacion', 3, 'Marca 2: lo reclamo.', null, null, 'Prueba V02P');
+  v_r := public.conta_liquidacion_resolver_tienda(v_e, v_rol, v_centro, 'e0200000-0000-4000-8000-00000000a0b1', v_w, v_w + 6, 'reclamacion', 2, 'Marca 1: lo reclamo.', null, null, 'Prueba V02P');
+  v_r := public.conta_liquidacion_resolver_tienda(v_e, v_rol, v_centro, 'e0200000-0000-4000-8000-00000000a0b2', v_w, v_w + 6, 'reclamacion', 3, 'Marca 2: lo reclamo.', null, null, 'Prueba V02P');
   if v_r->>'texto' not like '%hasta que llegue%' then raise exception 'PRUEBA V02P 4: la segunda resolución no dice lo que ha hecho (%).', v_r; end if;
   begin
-    perform public.conta_liquidacion_resolver(v_e, v_rol, v_centro, 'e0200000-0000-4000-8000-00000000a0b2', v_w, v_w + 6, 'reclamacion', 3, 'Otra vez.', null, null, 'Prueba V02P');
+    perform public.conta_liquidacion_resolver_tienda(v_e, v_rol, v_centro, 'e0200000-0000-4000-8000-00000000a0b2', v_w, v_w + 6, 'reclamacion', 3, 'Otra vez.', null, null, 'Prueba V02P');
     raise exception 'PRUEBA V02P 4: deja resolver dos veces la misma tienda.';
   exception when unique_violation then null;
   end;
@@ -137,7 +137,7 @@ do $$ begin
     raise exception 'PRUEBA V02P 5: conta_liquidaciones o conta_liquidacion_resolver no vuelven como estaban.';
   end if;
   if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion' and column_name = 'brand_id')
-     or to_regprocedure('public.conta_liquidacion_resolver(uuid,uuid,uuid,uuid,date,date,text,numeric,text,date,jsonb,text)') is not null then
+     or to_regprocedure('public.conta_liquidacion_resolver_tienda(uuid,uuid,uuid,uuid,date,date,text,numeric,text,date,jsonb,text)') is not null then
     raise exception 'PRUEBA V02P 5: la vuelta atrás se deja la marca o el resolutor nuevo.';
   end if;
   raise notice '5 · la vuelta atrás: todo como estaba';

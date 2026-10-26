@@ -1,5 +1,5 @@
-# V02 · Pantallas · El motor por tienda. La 0125 cambia el motor y resolver
-# (DROP + CREATE con p_marca), añade brand_id a las diferencias resueltas y
+# V02 · Pantallas · El motor por tienda. La 0125 cambia el motor, añade el
+# resolutor por tienda y brand_id a las diferencias resueltas, y
 # rehace sus dos índices únicos con el mismo nombre: desde la rama, en ROLLBACK.
 # Su prueba (ROLLBACK): la liquidación de una tienda contra lo que vendieron sus
 # pedidos con promociones, la otra marca aparte sin liquidación, lo de antes del

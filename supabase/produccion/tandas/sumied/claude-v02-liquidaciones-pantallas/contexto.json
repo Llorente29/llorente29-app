@@ -1,8 +1,8 @@
 {
-  "_que": "V02 · Pantallas · El motor por tienda · contexto de producción de la tanda (0125: cambia el motor y resolver, y rehace dos índices), medido en SOLO LECTURA el 26/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existe la tabla que se toca (conta_liquidacion_resolucion, 0 filas) y sus dos índices únicos (0 filas), el motor (misma firma) y resolver con 11 argumentos (la única firma: se borra y se crea la de 12). Nada en el historial; nada en el camino del pedido.",
-  "medido": "2026-10-26T00:55Z",
+  "_que": "V02 · Pantallas · El motor por tienda · contexto de producción de la tanda (0125: cambia el motor, añade el resolutor por tienda y brand_id, y rehace dos índices), medido en SOLO LECTURA el 26/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existe la tabla que se toca (conta_liquidacion_resolucion, 0 filas) y sus dos índices únicos (0 filas), y el motor (misma firma, sin otras). No existe el resolutor por tienda. Nada en el historial; nada en el camino del pedido.",
+  "medido": "2026-10-26T01:15Z",
   "tanda": {
-    "supabase/migrations/20261026T0125_v02p_motor_por_tienda.sql": "b420678007c6e92b6048965e129a5e9a"
+    "supabase/migrations/20261026T0125_v02p_motor_por_tienda.sql": "4765420a9be9c6e53ab9d0c70492154f"
   },
-  "contexto": {"tablas":["public.conta_liquidacion_resolucion","public.conta_liquidacion_resolucion_contacto_uq","public.conta_liquidacion_resolucion_uq"],"funciones":["public.conta_liquidacion_resolver(uuid,uuid,uuid,date,date,text,numeric,text,date,jsonb,text)","public.conta_liquidaciones(uuid,date,date)"],"filas":{"public.conta_liquidacion_resolucion":0,"public.conta_liquidacion_resolucion_contacto_uq":0,"public.conta_liquidacion_resolucion_uq":0},"otras":{"public.conta_liquidacion_resolver(uuid,uuid,uuid,uuid,date,date,text,numeric,text,date,jsonb,text)":["public.conta_liquidacion_resolver(uuid,uuid,uuid,date,date,text,numeric,text,date,jsonb,text)"]},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+  "contexto": {"tablas":["public.conta_liquidacion_resolucion","public.conta_liquidacion_resolucion_contacto_uq","public.conta_liquidacion_resolucion_uq"],"funciones":["public.conta_liquidaciones(uuid,date,date)"],"filas":{"public.conta_liquidacion_resolucion":0,"public.conta_liquidacion_resolucion_contacto_uq":0,"public.conta_liquidacion_resolucion_uq":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }

@@ -1,9 +1,9 @@
 -- supabase/vuelta-atras/20261026T0125_v02p_motor_por_tienda.down.sql
 --
 -- Vuelta atrás de 20261026T0125_v02p_motor_por_tienda. Deja todo como lo dejó
--- la tanda del #332 (2253 y 2254): el motor por local y el resolutor sin marca
--- (sus cuerpos, copiados de la 2253), los dos índices sin la marca (los de la
--- 1650 del V01 y la 2254) y sin la columna brand_id. PARA si ya hay alguna
+-- la tanda del #332 (2253 y 2254): el motor por local (su cuerpo, copiado de la
+-- 2253), sin el resolutor por tienda (el de antes no se tocó), los dos índices
+-- sin la marca (los de la 1650 del V01 y la 2254) y sin la columna brand_id. PARA si ya hay alguna
 -- diferencia resuelta con su marca: no se pierde en silencio.
 
 do $$ begin
@@ -13,60 +13,7 @@ do $$ begin
   end if;
 end $$;
 
-drop function if exists public.conta_liquidacion_resolver(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text);
-create or replace function public.conta_liquidacion_resolver(p_company uuid, p_intermediario uuid, p_local uuid, p_desde date, p_hasta date,
-  p_tipo text, p_importe numeric, p_frase text, p_fecha date default null, p_lineas jsonb default null, p_quien_nombre text default null)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_acc uuid; v_r public.party_role; v_res jsonb; v_id uuid; v_nombre text;
-begin
-  select account_id into v_acc from public.company where id = p_company;
-  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
-  select * into v_r from public.party_role where id = p_intermediario and account_id = v_acc and role = 'platform';
-  if v_r.id is null then raise exception 'Ese intermediario no es de la cuenta.' using errcode = '23514'; end if;
-  select name into v_nombre from public.party where id = v_r.party_id;
-  if v_r.channel_id is not null then
-    -- Con canal: el camino del V01, que valida, hace el asiento y lo guarda.
-    v_res := public.conta_plataforma_resolver(p_company, v_r.channel_id, p_local, p_desde, p_hasta, null, p_tipo, p_importe, p_frase, p_fecha, p_lineas, p_quien_nombre);
-    update public.conta_liquidacion_resolucion set party_id = v_r.party_id where id = (v_res->>'id')::uuid;
-  else
-    -- Sin canal (Stripe, Amazon…): lo mismo, por su contacto. channel_id admite
-    -- vacío desde la 2254.
-    if p_tipo not in ('gasto', 'reclamacion') then raise exception 'Una diferencia se resuelve como gasto o como reclamación.' using errcode = '22023'; end if;
-    if btrim(coalesce(p_frase, '')) = '' then raise exception 'Escribe en una frase por qué.' using errcode = '22023'; end if;
-    if p_importe is null or p_importe = 0 then raise exception 'La diferencia tiene que tener importe.' using errcode = '22023'; end if;
-    if not public.current_user_is_admin_or_manager_of(v_acc) then
-      raise exception 'Solo un administrador o un encargado de la cuenta resuelve diferencias.' using errcode = '42501';
-    end if;
-    if exists (select 1 from public.conta_liquidacion_resolucion x where x.company_id = p_company and x.channel_id is null and x.party_id = v_r.party_id
-                  and x.location_id is not distinct from p_local and x.period_from = p_desde and x.period_to = p_hasta and x.sale_id is null) then
-      raise exception 'Esa diferencia ya está resuelta.' using errcode = '23505';
-    end if;
-    if p_tipo = 'gasto' then
-      if p_lineas is null or jsonb_typeof(p_lineas) <> 'array' or jsonb_array_length(p_lineas) < 2 then raise exception 'Un gasto lleva su asiento.' using errcode = '22023'; end if;
-      v_res := public._journal_entry_proponer(p_company,
-        jsonb_build_object('series', 1, 'fecha', coalesce(p_fecha, p_hasta), 'source_type', 'manual',
-          'concepto', 'Diferencia de la liquidación de ' || coalesce(v_nombre, 'tu intermediario') || ' (' || to_char(p_desde, 'DD/MM') || '–' || to_char(p_hasta, 'DD/MM/YYYY') || '): ' || btrim(p_frase),
-          'confianza', 'seguro', 'porque', 'Diferencia resuelta como gasto en Ventas › Liquidaciones.'),
-        p_lineas, null, coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor()), auth.uid());
-      v_res := jsonb_build_object('asiento', (v_res->>'id')::uuid, 'numero_asiento',
-        public.journal_entry_validar((v_res->>'id')::uuid, coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor()))->'numero');
-    else
-      v_res := '{}'::jsonb;
-    end if;
-    insert into public.conta_liquidacion_resolucion (account_id, company_id, channel_id, party_id, location_id, period_from, period_to, kind, importe, frase,
-                                                     entry_id, created_by, created_by_name)
-    values (v_acc, p_company, null, v_r.party_id, p_local, p_desde, p_hasta, p_tipo, round(p_importe, 2), btrim(p_frase),
-            (v_res->>'asiento')::uuid, auth.uid(), coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor()))
-    returning id into v_id;
-    v_res := v_res || jsonb_build_object('id', v_id);
-  end if;
-  return v_res || jsonb_build_object('texto',
-    case when p_tipo = 'reclamacion' then 'Apuntado: reclamas ' || public.conta_euros_exactos(abs(p_importe)) || ' a ' || coalesce(v_nombre, 'tu intermediario') || '. Te lo recuerdo hasta que llegue.'
-         else 'Apuntado como gasto: ' || public.conta_euros_exactos(abs(p_importe)) || coalesce(', asiento ' || (v_res->>'numero_asiento'), '') || '.' end);
-end $$;
-revoke all on function public.conta_liquidacion_resolver(uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) from public, anon;
-grant execute on function public.conta_liquidacion_resolver(uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) to authenticated;
-comment on function public.conta_liquidacion_resolver(uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) is 'V02 · E2. Resolver una diferencia de una liquidación en una frase: «Es un gasto» o «Lo reclamo» (se recuerda hasta que llegue).';
+drop function if exists public.conta_liquidacion_resolver_tienda(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text);
 
 create or replace function public.conta_liquidaciones(p_company uuid, p_desde date default null, p_hasta date default null)
 returns jsonb language plpgsql stable security definer set search_path = public as $$

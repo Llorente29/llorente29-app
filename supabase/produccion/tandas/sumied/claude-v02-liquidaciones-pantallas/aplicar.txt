@@ -8,11 +8,12 @@
 #   Medido en Foodint solo leyendo: de 10 «diferencias» falsas (47.262 €) a 3 de
 #   verdad. conta_liquidacion_resolucion gana brand_id (0 filas) y sus dos
 #   índices únicos se rehacen con la marca y EL MISMO NOMBRE;
-#   conta_liquidacion_resolver gana p_marca (DROP + CREATE, regla 2).
+#   conta_liquidacion_resolver_tienda (nueva) resuelve la de una tienda, con su
+#   marca; la de antes no se toca (el front publicado la nombra).
 #   No está en el camino del pedido: el motor solo LEE pedidos.
 #   El analizador dice AUTORIZO: borra y rehace los dos índices únicos de una
-#   tabla con 0 filas, que nadie más usa. Lo demás es «cambia», declarado y con
-#   su prueba de staging.
+#   tabla con 0 filas, que nadie más usa. El motor es «cambia», declarado y con
+#   su prueba de staging; lo demás añade.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta (para si alguna diferencia resuelta ya tiene marca).

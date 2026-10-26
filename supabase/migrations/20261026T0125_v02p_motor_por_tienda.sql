@@ -7,7 +7,6 @@
 -- no existen (47.262 € en 10 filas). Las tres plataformas liquidan por tienda.
 --
 -- cambia: public.conta_liquidaciones · prueba: supabase/staging/sql/20261026_v02p_motor_por_tienda_prueba.sql
--- cambia: public.conta_liquidacion_resolver · prueba: supabase/staging/sql/20261026_v02p_motor_por_tienda_prueba.sql
 -- cambia: public.conta_liquidacion_resolucion · prueba: supabase/staging/sql/20261026_v02p_motor_por_tienda_prueba.sql
 --
 --   1. conta_liquidaciones (misma firma): una fila por intermediario, local,
@@ -22,9 +21,12 @@
 --      nombre, la incluyen (la tabla tiene 0 filas). Antes, resolver la de una marca habría resuelto la de las
 --      demás marcas del mismo local y semana, y el índice no dejaba resolver la
 --      segunda.
---   3. conta_liquidacion_resolver gana p_marca: DROP + CREATE (regla 2: nunca
---      una sobrecarga). Guarda la diferencia él mismo (gasto con su asiento, o
---      reclamación), por canal o por contacto. No la llama ninguna pantalla todavía.
+--   3. conta_liquidacion_resolver_tienda (NUEVA): resolver la diferencia de una
+--      tienda, con su marca. Guarda la diferencia ella misma (gasto con su
+--      asiento, o reclamación), por canal o por contacto. La de antes,
+--      conta_liquidacion_resolver (sin marca), no se toca: añadir un parámetro
+--      sería DROP + CREATE (regla 2) y el front publicado la nombra; nadie la
+--      llama ya desde una pantalla.
 --   4. Lo vendido se compara con lo que SUMAN LOS PEDIDOS de la liquidación, no
 --      con sus «ventas» (que son a precio de carta, antes de promociones). Medido
 --      en las 12 liquidaciones de Uber de Foodint desde julio: ventas + promociones
@@ -51,8 +53,7 @@ create unique index conta_liquidacion_resolucion_contacto_uq on public.conta_liq
   where channel_id is null;
 
 -- 3 · Resolver una diferencia de una tienda ------------------------------------------------------
-drop function if exists public.conta_liquidacion_resolver(uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text);
-create or replace function public.conta_liquidacion_resolver(p_company uuid, p_intermediario uuid, p_local uuid, p_marca uuid, p_desde date, p_hasta date,
+create or replace function public.conta_liquidacion_resolver_tienda(p_company uuid, p_intermediario uuid, p_local uuid, p_marca uuid, p_desde date, p_hasta date,
   p_tipo text, p_importe numeric, p_frase text, p_fecha date default null, p_lineas jsonb default null, p_quien_nombre text default null)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_acc uuid; v_r public.party_role; v_res jsonb := '{}'::jsonb; v_id uuid; v_nombre text; v_canal text; v_entry uuid; v_num jsonb;
@@ -97,9 +98,9 @@ begin
     case when p_tipo = 'reclamacion' then 'Apuntado: reclamas ' || public.conta_euros_exactos(abs(p_importe)) || ' a ' || coalesce(v_nombre, 'tu intermediario') || '. Te lo recuerdo hasta que llegue.'
          else 'Apuntado como gasto: ' || public.conta_euros_exactos(abs(p_importe)) || coalesce(', asiento ' || v_num::text, '') || '.' end);
 end $$;
-revoke all on function public.conta_liquidacion_resolver(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) from public, anon;
-grant execute on function public.conta_liquidacion_resolver(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) to authenticated;
-comment on function public.conta_liquidacion_resolver(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) is 'V02 · E2. Resolver la diferencia de la liquidación de una tienda (intermediario, local, marca y periodo) en una frase: «Es un gasto» (con su asiento) o «Lo reclamo» (se recuerda hasta que llegue).';
+revoke all on function public.conta_liquidacion_resolver_tienda(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) from public, anon;
+grant execute on function public.conta_liquidacion_resolver_tienda(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) to authenticated;
+comment on function public.conta_liquidacion_resolver_tienda(uuid, uuid, uuid, uuid, date, date, text, numeric, text, date, jsonb, text) is 'V02 · E2. Resolver la diferencia de la liquidación de una tienda (intermediario, local, marca y periodo) en una frase: «Es un gasto» (con su asiento) o «Lo reclamo» (se recuerda hasta que llegue).';
 
 -- 1 · El motor, por tienda -----------------------------------------------------------------------
 create or replace function public.conta_liquidaciones(p_company uuid, p_desde date default null, p_hasta date default null)

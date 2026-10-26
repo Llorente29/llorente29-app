@@ -158,15 +158,17 @@ export const PRODUCTOS: Producto[] = [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
       { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
+      // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te
+      // pagan quienes cobran por ti: plataformas, el datáfono, Amazon, Stripe…),
+      // encima del bloque «Hostelería». La ficha de la del socio de marca (y la de
+      // subir sus documentos) sigue en compras/liquidacion/….
+      {
+        id: 'liquidacionesVentas', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidacionesVentas,
+        prefijos: [R.liquidacionesVentas, `${R.compras}/liquidacion`],
+      },
       // V01 · Entrega 2: el bloque «Hostelería», solo con «Vendo en hostelería».
       // «Ventas» a secas (lo de antes) lleva aquí.
       { id: 'cierres', etiqueta: 'Cierres del día', icono: 'cierre', ruta: R.cierres, prefijos: [R.cierres, R.ventas], solo: 'hosteleria', bloque: 'Hostelería' },
-      // V01 · Entrega 3: las de plataforma y las de los socios de marca. La ficha
-      // de la del socio (y la de subir sus documentos) sigue en compras/liquidacion/….
-      {
-        id: 'liquidacionesVentas', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidacionesVentas,
-        prefijos: [R.liquidacionesVentas, `${R.compras}/liquidacion`], solo: 'hosteleria', bloque: 'Hostelería',
-      },
     ],
   },
   {

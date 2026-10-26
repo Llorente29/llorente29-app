@@ -6,8 +6,8 @@
 --
 -- Lo que tiene que cambiar:
 --   · la marca de una diferencia resuelta, de «no existe» a 0 (columna nueva, vacía);
---   · las firmas de conta_liquidacion_resolver: sigue habiendo UNA (regla 2),
---     de 11 argumentos a 12;
+--   · los resolutores: el de antes (conta_liquidacion_resolver, 11 argumentos,
+--     sin tocar: su huella, igual) y el nuevo por tienda (…_tienda, 12);
 --   · la huella de conta_liquidaciones (el motor).
 -- Lo demás, IGUAL: la tanda no toca ninguna liquidación, tienda, diferencia,
 -- cobro ni asiento, ni el registrar del #332 (su huella, igual).
@@ -23,8 +23,9 @@ select clave, valor from (
   select 3, 'diferencias resueltas con su marca (base entera)',
     case when not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_liquidacion_resolucion' and column_name = 'brand_id') then 'no existe'
          else (xpath('/row/n/text()', query_to_xml('select count(*) n from public.conta_liquidacion_resolucion where brand_id is not null', false, true, '')))[1]::text end union all
-  select 4, 'firmas de conta_liquidacion_resolver (cuántas, y sus argumentos)',
-    (select count(*) || ' (' || string_agg(p.pronargs::text, ', ') || ')' from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_liquidacion_resolver') union all
+  select 4, 'resolutores (el de antes: huella · el de la tienda: argumentos)',
+    (select coalesce((select left(md5(p.prosrc), 8) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_liquidacion_resolver'), 'no existe') || ' · ' ||
+            coalesce((select p.pronargs::text from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_liquidacion_resolver_tienda'), 'no existe')) union all
   select 5, 'huella de conta_liquidaciones (el motor)',
     (select left(md5(p.prosrc), 8) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = 'conta_liquidaciones') union all
   select 6, 'huella de conta_liquidacion_registrar (no se toca)',
