@@ -72,6 +72,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
     // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
+    // PC01 · Entrega 2: Compras › Pagos (la lista, las remesas y la ficha de una) y «Repartidores», el nombre nuevo de Liquidaciones.
+    repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -159,11 +161,11 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro'])
     expect(pestanasVisibles(c, CON_DIEZ).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro', 'Importar'])
   })
-  it('S02 · Compras y gastos: Facturas recibidas · Tickets · Pagos · Liquidaciones; Liquidaciones solo con hostelería; Tickets y Pagos, cuando tengan pantalla', () => {
+  it('PC01 · Compras y gastos: Facturas recibidas · Tickets · Pagos · Repartidores; Repartidores solo con hostelería; Tickets, cuando tenga pantalla', () => {
     const c = PRODUCTOS.find((p) => p.id === 'compras')!
-    expect(c.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas recibidas', 'Tickets', 'Pagos', 'Liquidaciones'])
-    expect(pestanasVisibles(c, NADA).map((t) => t.id)).toEqual(['recibidas'])
-    expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'liquidaciones'])
+    expect(c.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas recibidas', 'Tickets', 'Pagos', 'Repartidores'])
+    expect(pestanasVisibles(c, NADA).map((t) => t.id)).toEqual(['recibidas', 'pagos'])
+    expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'pagos', 'liquidaciones'])
     expect(c.ruta).toBe(CONTA.rutas.documentos)
   })
   it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
@@ -287,7 +289,7 @@ describe('Favoritos', () => {
   it('regla 7: lo que en esta empresa no se puede abrir sale, y lo dice; lo que ya no existe, también', () => {
     const f = favoritosDe(['ir.compras.liquidaciones', 'asiento.expedida', 'algo.viejo'], NADA)
     expect(f.map((x) => [x.id, x.orden?.etiqueta ?? null, x.disponible])).toEqual([
-      ['ir.compras.liquidaciones', 'Compras y gastos › Liquidaciones', false],
+      ['ir.compras.liquidaciones', 'Compras y gastos › Repartidores', false],
       ['asiento.expedida', 'Nueva factura', true],
       ['algo.viejo', null, false],
     ])

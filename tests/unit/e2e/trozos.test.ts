@@ -35,7 +35,8 @@ describe('la entera en trozos', () => {
     // 25/10 (V02, entrega 1): entra v02/puerta, nueva y sin medir: son 8. La mide la entera de su PR.
     // 25/10 (PC01 · E1, al traer main con la V02): entra pc01/cobros-y-pagos, nueva y sin medir: son 9. La mide la entera de la noche.
     // 26/10 (V02 · Pantallas): entra v02/liquidaciones, nueva y sin medir: son 10. La mide la entera de su PR.
-    expect(sin.length).toBeLessThan(11)
+    // 26/10 (PC01 · E2): entra pc01/pagos, nueva y sin medir: son 11. La mide la entera de su PR.
+    expect(sin.length).toBeLessThan(12)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -94,7 +95,9 @@ describe('la entera en trozos', () => {
     // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de su PR.
     // 25/10 (PC01 · E1, al traer main con la V02): las dos juntas, pc01/cobros-y-pagos y v02/puerta,
     // sin medir. El reparto estimado da 18,30 (media 18,27): el techo se queda en 18,5 min. Lo mide la entera de la noche.
-    expect(Math.max(...seg) / 60).toBeLessThan(18.5)
+    // 26/10 (PC01 · E2): entra pc01/pagos, sin medir (cuenta como la mediana). El reparto estimado
+    // da 18,61: el techo pasa a 19 min. Lo mide la entera de su PR.
+    expect(Math.max(...seg) / 60).toBeLessThan(19)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

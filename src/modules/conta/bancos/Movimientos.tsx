@@ -55,6 +55,7 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
+import { casarRemesa, remesasParaCasar } from '@/modules/conta/services/pagosService'
 import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import { PorValidar } from '@/modules/conta/bancos/PorValidar'
@@ -107,7 +108,7 @@ export function Movimientos() {
   const vispera = fechaCorte ? new Date(Date.parse(`${fechaCorte}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : null
   const lectura = useLeerConservando(banco ? async () => {
     const cuentas = banco.cuenta ? [banco.cuenta] : []
-    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente] = await Promise.all([
+    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente, remesas] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, cuentas),
       vispera && corte >= (fechaCorte ?? '') ? saldosContables(companyId, vispera, cuentas) : Promise.resolve(null),
@@ -118,10 +119,12 @@ export function Movimientos() {
       leerEsperan(companyId, desde, hasta).catch((e: unknown) => { console.warn('[bancos] no se pudo leer lo que espera', e); return new Map() }),
       // S02 · PR 3: la fila de este banco en conta_saldo_bancos, la misma que lee el Inicio.
       leerSaldoBancosSiEsta(companyId, corte),
+      // PC01 · E2: las remesas de pagos que esperan su cargo (Compras › Pagos), para casar un cargo con ellas.
+      remesasParaCasar(companyId).catch((e: unknown) => { console.warn('[bancos] no se pudieron leer las remesas que esperan su cargo', e); return [] }),
     ])
     const espera = new Map<string, string>([...esperan].map(([id, ms]) => [id, ms[0]?.motivo || 'La base no lo validaría todavía.']))
     const fila = unaFuente?.find((f) => (banco.cuenta && f.cuenta === banco.cuenta) || f.treasuryAccountId === banco.id) ?? null
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila }
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila, remesas }
   } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -275,7 +278,7 @@ export function Movimientos() {
   const total = cuadre.cuenta.casados + cuadre.cuenta.confirmar + cuadre.cuenta.aclarar
   const ancho = (n: number) => `${total ? (n / total) * 100 : 0}%`
   const panel = elegidoM && (
-    <PanelMovimiento key={elegidoM.id} m={elegidoM} facturas={lectura.datos.facturas} cuenta572={banco.cuenta} nombres={ctx.datos.nombres}
+    <PanelMovimiento key={elegidoM.id} m={elegidoM} facturas={lectura.datos.facturas} remesas={lectura.datos.remesas} cuenta572={banco.cuenta} nombres={ctx.datos.nombres}
       otrosBancos={ctx.datos.bancos.filter((b) => b.id !== banco.id).map((b) => ({ id: b.id, nombre: b.nombre, cuenta: b.cuenta }))}
       cuentasDiferencia={{ c626: hoja(ctx.datos.nombres, '626', '62600000'), c669: hoja(ctx.datos.nombres, '669', '66900000'), c769: hoja(ctx.datos.nombres, '769', '76900000') }}
       ocupado={ocupado === elegidoM.id}
@@ -284,6 +287,7 @@ export function Movimientos() {
         await nucleo.confirmar(elegidoM.id, porque, d, 'probable', null)
         hecho(`Casado: ${que} (${quien(elegidoM)}). Su asiento espera en «Por validar».`)
       })}
+      alCasarRemesa={(remesaId, lineas) => con(elegidoM.id, async () => { hecho((await casarRemesa(elegidoM.id, remesaId, lineas)).frase) })}
       alDeshacer={() => deshacer(elegidoM)}
       alVerAsiento={() => elegidoM.casado?.asientoId && navegar(rutaAsiento(elegidoM.casado.asientoId))}
       alBuscarFactura={() => setDialogo({ que: 'factura', m: elegidoM })}

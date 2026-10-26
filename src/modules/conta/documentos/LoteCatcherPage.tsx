@@ -74,7 +74,7 @@ export default function LoteCatcherPage() {
         <>
           <div className="cxr-seccion">
             <div>
-              <Migas migas={[{ etiqueta: 'Liquidaciones', ruta: rutaLiquidaciones() }, { etiqueta: 'Quincena de Catcher' }]} />
+              <Migas migas={[{ etiqueta: 'Repartidores', ruta: rutaLiquidaciones() }, { etiqueta: 'Quincena de Catcher' }]} />
               <h2>{d.lote.etiqueta}</h2>
             </div>
             <div className="cxr-herramientas">
