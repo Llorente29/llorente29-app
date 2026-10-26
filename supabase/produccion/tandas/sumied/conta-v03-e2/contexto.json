@@ -1,6 +1,6 @@
 {
-  "_que": "V03 · E2 · contexto de producción de la tanda (0146, 0218 y 0226), medido en SOLO LECTURA el 26/10 con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow (01:50Z): existen las cuatro funciones que cambia la 0146, con una sola firma cada una; no existen verifactu_reenviar ni verifactu_otros_programas; verifactu_empresa existe con 0 filas (la 0226 le añade una columna que admite nulos); nada en el camino del pedido; nada en el historial.",
-  "medido": "2026-10-26T01:50Z",
+  "_que": "V03 · E2 · contexto de producción de la tanda (0146, 0218 y 0226), medido en SOLO LECTURA el 26/10 a las 09:11Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow, después de aplicarse el #334 y el #336 (la primera medida, a las 01:50Z, salió igual): existen las cuatro funciones que cambia la 0146, con una sola firma cada una y la huella de partida (04a94c4a, 99be8350, ddc58afc, c8d6c254: ni el #334 ni el #336 las tocaron); no existen verifactu_reenviar ni verifactu_otros_programas; verifactu_empresa existe con 0 filas; nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-26T09:11Z",
   "tanda": {
     "supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql": "dbf16f0fe1306b73a92a9332b08122aa",
     "supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql": "94ee61e7183b15123597b9dfbab74fd2",
