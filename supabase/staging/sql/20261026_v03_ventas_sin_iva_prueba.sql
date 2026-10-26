@@ -23,7 +23,9 @@
 --   5. El validador: un apunte sin IVA cuyo importe no es su base no se valida.
 --   6. Verifactu en pruebas: la de Suiza N2 escribe su alta con el desglose N2
 --      (sin tipo ni cuota) y el importe sin IVA.
---   7. La vuelta atrás: las cuatro con el md5 del principio.
+--   8. «Corregir y reenviar» (0218): la rechazada se subsana (Subsanacion S,
+--      RechazoPrevio S), encadenada, con el porqué y el libro cambiados.
+--   7. La vuelta atrás: las cuatro con el md5 del principio, y sin la 0218.
 
 \set ON_ERROR_STOP 1
 begin;
@@ -36,6 +38,7 @@ set local statement_timeout = '180s';
 
 -- El ensayo aplica la 0146 delante de esta prueba, en la misma transacción:
 -- primero su vuelta atrás (y la 0 comprueba que deja lo de producción).
+\i supabase/vuelta-atras/20261026T0218_v03_verifactu_reenviar.down.sql
 \i supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
 
 create temp table _v (clave text primary key, v text) on commit drop;
@@ -81,6 +84,7 @@ end $$;
 reset role;
 
 \i supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
+\i supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql
 
 -- 1 a 4 · Como usuario de A.
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
@@ -210,7 +214,7 @@ begin
   select a.code into v_cta430 from public.journal_line l join public.company_account a on a.id = l.company_account_id
    where l.entry_id = (select v::uuid from _v where clave = 'e2_asiento') and a.code like '43%' limit 1;
   v_r := public._journal_entry_proponer((select v::uuid from _v where clave = 'empresa'),
-    jsonb_build_object('series', 1, 'fecha', (now() at time zone 'Europe/Madrid')::date, 'concepto', 'Prueba V03 E2 · base mal', 'confianza', 'seguro', 'porque', 'Prueba V03 E2'),
+    jsonb_build_object('series', 1, 'source_type', 'manual', 'fecha', (now() at time zone 'Europe/Madrid')::date, 'concepto', 'Prueba V03 E2 · base mal', 'confianza', 'seguro', 'porque', 'Prueba V03 E2'),
     jsonb_build_array(
       jsonb_build_object('cuenta', v_cta430, 'debe', 100, 'comun', true),
       jsonb_build_object('cuenta', '70500000', 'haber', 100, 'comun', true,
@@ -247,10 +251,61 @@ begin
     raise exception 'PRUEBA V03 E2 · 6: el alta no es la de una N2 (%).', row_to_json(v_reg);
   end if;
   raise notice '6 · en pruebas: alta % con el desglose N2 sin tipo ni cuota, 2.150,00 y el cliente como IDOtro 04', v_reg.num_serie;
+  insert into _v values ('vf6', v_f::text), ('vf6_alta', v_reg.id::text);
+  -- Lo que no está rechazado no se reenvía.
+  begin
+    perform public.verifactu_reenviar(v_f, null, 'Prueba V03 E2');
+    raise exception 'PRUEBA V03 E2 · 8: se reenvía un alta que no está rechazada.';
+  exception when check_violation then null;
+  end;
 end $$;
 reset role;
 
--- 7 · La vuelta atrás.
+-- 8 · «Corregir y reenviar» (0218): Hacienda rechaza el alta de la 6 (como
+-- superusuario: es lo que escribe la respuesta) y se reenvía diciendo que era
+-- una exportación: subsanación S con RechazoPrevio S, encadenada, el porqué y
+-- el libro cambiados; reenviar otra vez no vale (ya no está rechazada).
+update public.verifactu_registro set estado = 'incorrecto', codigo_error = 1195, descripcion_error = 'Prueba V03 E2: rechazo inventado', respondido_at = now()
+ where id = (select v::uuid from _v where clave = 'vf6_alta');
+set local role authenticated;
+do $$
+declare
+  v_f uuid := (select v::uuid from _v where clave = 'vf6'); v_alta uuid := (select v::uuid from _v where clave = 'vf6_alta');
+  r jsonb; v_reg public.verifactu_registro; v_ultima text; v_msg text;
+begin
+  r := public.verifactu_reenviar(v_f, jsonb_build_object('exenta', 'E2'), 'Prueba V03 E2');
+  select * into v_reg from public.verifactu_registro where id = (r->>'registro_id')::uuid;
+  if v_reg.id is null or not v_reg.subsanacion or v_reg.rechazo_previo <> 'S' or v_reg.estado <> 'pendiente'
+     or v_reg.num_serie <> (select num_serie from public.verifactu_registro where id = v_alta)
+     or v_reg.anterior_id <> v_alta or v_reg.huella_anterior <> (select huella from public.verifactu_registro where id = v_alta)
+     or v_reg.desglose->0->>'exenta' <> 'E2' or v_reg.desglose->0->>'clave_regimen' <> '02' or v_reg.desglose->0 ? 'calificacion'
+     or v_reg.huella <> public._verifactu_sha256(v_reg.cadena_huella) then
+    raise exception 'PRUEBA V03 E2 · 8: la subsanación no es la que debe (%).', row_to_json(v_reg);
+  end if;
+  if (select exenta from public.verifactu_operacion where invoice_id = v_f) is distinct from 'E2'
+     or (select estado from public.verifactu_factura_estado where invoice_id = v_f) <> 'pendiente' then
+    raise exception 'PRUEBA V03 E2 · 8: el porqué o el estado de la factura no han cambiado.';
+  end if;
+  begin
+    perform public.verifactu_reenviar(v_f, null, 'Prueba V03 E2');
+    raise exception 'PRUEBA V03 E2 · 8: se reenvía dos veces.';
+  exception when check_violation then v_msg := sqlerrm;
+  end;
+  raise notice '8 · reenviada %: subsanación S con RechazoPrevio S, encadenada tras la rechazada, E2 con clave 02; otra vez no: «%»', v_reg.num_serie, v_msg;
+end $$;
+reset role;
+do $$
+declare v_entry uuid := (select entry_id from public.customer_invoice where id = (select v::uuid from _v where clave = 'vf6'));
+begin
+  if (select string_agg(coalesce(qualification, '') || '/' || coalesce(exempt_cause, '') || '/' || operation_key, ',') from public.vat_book_entry where entry_id = v_entry) <> '/E2/02' then
+    raise exception 'PRUEBA V03 E2 · 8: el libro de la reenviada no dice E2 (%).',
+      (select string_agg(coalesce(qualification, '') || '/' || coalesce(exempt_cause, '') || '/' || operation_key, ',') from public.vat_book_entry where entry_id = v_entry);
+  end if;
+  raise notice '8 · su libro: E2 con clave 02';
+end $$;
+
+-- 7 · La vuelta atrás (de las dos, en orden inverso).
+\i supabase/vuelta-atras/20261026T0218_v03_verifactu_reenviar.down.sql
 \i supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
 do $$
 declare v_md5 text;
@@ -263,6 +318,7 @@ begin
         and pronamespace = 'public'::regnamespace) <> 4 then
     raise exception 'PRUEBA V03 E2 · 7: hay sobrecargas.';
   end if;
+  if to_regprocedure('public.verifactu_reenviar(uuid,jsonb,text)') is not null then raise exception 'PRUEBA V03 E2 · 7: la vuelta atrás de la 0218 deja la función.'; end if;
   raise notice '7 · la vuelta atrás: las cuatro, con el md5 del principio y sin sobrecargas';
 end $$;
 rollback;

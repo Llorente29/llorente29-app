@@ -10,9 +10,14 @@
 #      su prueba de staging. No toca datos. No está en el camino del pedido.
 #      En producción no hay ningún apunte exento ni no sujeto (26/10): nada de
 #      lo que existe cambia.
+#   2. 0218 — AÑADE verifactu_reenviar («Corregir y reenviar», tablero 27): el
+#      alta rechazada de una factura se subsana con un registro nuevo
+#      (Subsanacion S, RechazoPrevio S), encadenado; si viene, con el porqué de
+#      la venta sin IVA y su libro (con el mes abierto). No toca datos.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
+supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql
 cuenta: scripts/conta/produccion/cuentas/v03-ventas-sin-iva.sql

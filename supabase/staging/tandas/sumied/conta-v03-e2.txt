@@ -6,6 +6,8 @@
 # emite con su asiento validado (la 70x partida, una sola 477) y su libro (N2
 # cuota 0 → 120); E2 → 60 con clave 02; E1 sin casilla; «exportación» a España
 # no; la rectificativa hereda el porqué; el validador para una base mal; en
-# pruebas, el alta N2; y la vuelta atrás deja las cuatro como estaban.
+# pruebas, el alta N2; la 0218 (añade): la rechazada se reenvía como
+# subsanación encadenada; y la vuelta atrás deja las cuatro como estaban.
 supabase/migrations/20261026T0146_v03_ventas_sin_iva.sql
+supabase/migrations/20261026T0218_v03_verifactu_reenviar.sql
 supabase/staging/sql/20261026_v03_ventas_sin_iva_prueba.sql
