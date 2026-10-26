@@ -40,12 +40,51 @@ const cuerpo = (r: Route) => (r.request().postDataJSON() ?? {}) as Record<string
 const ahora = () => new Date().toISOString()
 const MES = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit' }).format(new Date())
 
-/** D en pruebas, con su última emitida «recibida» por Hacienda. */
+type Emitida = { id: string; number_text: string; company_id: string; issue_date: string }
+const leerEmitidas = async () => (await rest<Emitida[]>(await pedirSesion(CUENTA_D.email), 'GET',
+  `customer_invoice?select=id,number_text,company_id,issue_date&account_id=eq.${CUENTA_D.id}&status=eq.emitida&order=issued_at.desc&limit=5`)).datos
+
+/**
+ * En el carril, D empieza sin ninguna emitida: se emite una de verdad, por el
+ * mismo camino que «sin IVA a Suiza» de verifactu.spec.ts (ese fichero corre
+ * después de este). Antes de poner ninguna simulación.
+ */
+async function emitirUnaDeD(page: Page) {
+  test.setTimeout(180_000)
+  const s = await entrarComo(page, CUENTA_D.email)
+  await page.goto('/conta/ajustes/ejercicio')
+  const ano = new Date().getFullYear()
+  const abrir = page.getByRole('button', { name: `Abrir el ejercicio ${ano}` })
+  await abrir.waitFor({ timeout: 20_000 }).catch(() => undefined)
+  if (await abrir.count()) {
+    await abrir.click()
+    await expect(page.getByText(`Abierto el ejercicio ${ano}.`)).toBeVisible({ timeout: 30_000 })
+  }
+  const alta = await rest<{ party_id: string }>(s, 'POST', 'rpc/party_save_customer', {
+    p_account: CUENTA_D.id, p_party: null, p_nombre: `Alpen Gastro AG e2e E3 ${Date.now().toString(36)}`, p_nif: 'CHE123456789', p_datos: { countryCode: 'CH' }, p_quien_nombre: 'e2e V03 E3',
+  })
+  expect(alta.status, JSON.stringify(alta.datos)).toBe(200)
+  await page.goto(`/conta/ventas/facturas/nueva?cliente=${alta.datos.party_id}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Nueva factura' })).toBeVisible({ timeout: 30_000 })
+  await page.getByLabel('Concepto de la línea 1').fill('Asesoría de cocina')
+  await page.getByLabel('Precio de la línea 1').fill('2150')
+  await page.getByLabel('IVA de la línea 1').selectOption({ label: 'Sin IVA' })
+  await page.locator('[data-prueba="porque-sin-iva"]').getByRole('radio', { name: /Un servicio a una empresa/ }).check()
+  await page.getByRole('button', { name: /Guardar cambios/ }).click()
+  await expect(page).toHaveURL(/\/conta\/ventas\/facturas\/[0-9a-f-]{36}$/, { timeout: 30_000 })
+  await page.getByRole('button', { name: 'Emitir', exact: true }).first().click()
+  await page.getByRole('dialog', { name: 'Emitir la factura' }).getByRole('button', { name: 'Emitir' }).click()
+  await expect(page.locator('[data-prueba="resultado-emitir"]')).toContainText(/Emitida la F-\d{4}\/\d+/, { timeout: 60_000 })
+}
+
+/** D en pruebas, con su última emitida «recibida» por Hacienda (en el carril, si no tiene, se emite una). */
 async function emitidaDeD(page: Page) {
-  const s = await pedirSesion(CUENTA_D.email)
-  const emitidas = await rest<{ id: string; number_text: string; company_id: string; issue_date: string }[]>(s, 'GET',
-    `customer_invoice?select=id,number_text,company_id,issue_date&account_id=eq.${CUENTA_D.id}&status=eq.emitida&order=issued_at.desc&limit=5`)
-  const f = emitidas.datos[0]
+  let emitidas = await leerEmitidas()
+  if (!emitidas.length && CARRIL !== null) {
+    await emitirUnaDeD(page)
+    emitidas = await leerEmitidas()
+  }
+  const f = emitidas[0]
   if (!f) return null
   const hace = new Date(Date.now() - 3 * 3600_000).toISOString()
   await page.route(/\/rest\/v1\/verifactu_empresa\b/, (r) => json(r, [{ company_id: f.company_id, account_id: CUENTA_D.id, modo: 'pruebas', via: 'colaborador', certificate_id: null, pruebas_desde: hace, real_desde: null, real_serie: null, real_obliga_hasta: null, otros_programas: [] }]))
@@ -53,7 +92,7 @@ async function emitidaDeD(page: Page) {
     codigo_error: null, descripcion_error: null, generado_at: hace, respondido_at: hace, intentos: 1, proximo_intento_at: hace, url_qr: null })
   await page.route(/\/rest\/v1\/verifactu_factura_estado\b/, (r) => {
     const una = /invoice_id=eq\.([0-9a-f-]{36})/.exec(r.request().url())?.[1]
-    return json(r, una ? [fila(una)] : emitidas.datos.map((x) => fila(x.id)))
+    return json(r, una ? [fila(una)] : emitidas.map((x) => fila(x.id)))
   })
   return { ...f, hace }
 }
@@ -61,7 +100,7 @@ async function emitidaDeD(page: Page) {
 test('«Me he equivocado en…»: cada camino dice antes qué pasa, y después qué ha pasado', async ({ page }) => {
   const errores = vigilar(page)
   const f = await emitidaDeD(page)
-  test.skip(!f, 'D no tiene ninguna emitida (la crea «sin IVA a Suiza» o la V01, en su carril).')
+  test.skip(!f, 'Fuera del carril, D no tiene ninguna emitida y aquí no se escribe.')
   const { id, number_text: num, hace } = f!
   await page.route(/\/rest\/v1\/verifactu_registro\b/, (r) => json(r, [{ id: `r-${id}`, tipo: 'alta', subsanacion: false, estado: 'correcto', generado_at: hace, respondido_at: hace, codigo_error: null, descripcion_error: null, envio_id: null }]))
   const pedidos: Record<string, unknown>[] = []
@@ -144,7 +183,7 @@ const DESCUADRE = {
 test('«Comprobar con Hacienda» en Facturas › Más: esperando y el resultado, con qué hacer', async ({ page }) => {
   const errores = vigilar(page)
   const f = await emitidaDeD(page)
-  test.skip(!f, 'D no tiene ninguna emitida.')
+  test.skip(!f, 'Fuera del carril, D no tiene ninguna emitida y aquí no se escribe.')
   let vez = 0
   await page.route(/\/rest\/v1\/rpc\/verifactu_cuadre_ver\b/, (r) => {
     const b = cuerpo(r)
@@ -178,7 +217,7 @@ test('«Comprobar con Hacienda» en Facturas › Más: esperando y el resultado,
 test('Ajustes › Verifactu: comprobar la cadena y exportar los registros', async ({ page }) => {
   const errores = vigilar(page)
   const f = await emitidaDeD(page)
-  test.skip(!f, 'D no tiene ninguna emitida.')
+  test.skip(!f, 'Fuera del carril, D no tiene ninguna emitida y aquí no se escribe.')
   await page.route(/\/rest\/v1\/rpc\/verifactu_comprobar_cadena\b/, (r) => json(r, {
     ok: false, registros: 3, problemas: 1, comprobada_at: ahora(), frase: 'La cadena tiene 1 problema en 3 registros: abajo, cuál y dónde.',
     cadenas: [{ entorno: 'pruebas', nif: 'B12345682', registros: 3, de_otras_empresas: 0, desde: f!.hace, hasta: ahora(), ok: false, problemas_total: 1,
@@ -233,7 +272,7 @@ test('el despacho: «Comprobar con Hacienda» de un cliente con Verifactu', asyn
   })
   await entrarComo(page, correoDePrueba('p01.laura@p01-prueba.test'))
   await page.goto('/conta/impuestos/clientes?marca=sumied')
-  await expect(page.getByRole('heading', { name: 'Impuestos de tus clientes' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { name: 'Impuestos de tus clientes', exact: true })).toBeVisible({ timeout: 30_000 })
   await page.locator('[data-prueba="despacho-comprobar-hacienda"]').click()
   const dialogo = page.getByRole('dialog', { name: 'Comprobar con Hacienda' })
   await expect(dialogo.getByLabel('Empresa')).toBeVisible()
