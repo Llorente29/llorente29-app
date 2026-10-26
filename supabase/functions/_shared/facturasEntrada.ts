@@ -70,6 +70,7 @@
 //     riders) o sin saber.
 
 import { esResumenUber, leerResumenUber, NoEsResumenUber, paraRegistrar, trozos, type ResumenUber } from './liquidacionUber.ts'
+import { esLiquidacionJustEat, leerLiquidacionJustEat, paraRegistrarJustEat } from './liquidacionJustEat.ts'
 import { queDiceElContenido, queDiceElNombre, type QueEs } from './queEs.ts'
 
 export { queDiceElContenido, queDiceElNombre, type QueEs }
@@ -228,7 +229,7 @@ export const rutaEntrada = (accountId: string, emailId: string, i: number, nombr
 
 export type ClaseDireccion = 'facturas' | 'liquidaciones' | 'documentos'
 export type Destino = { companyId: string; accountId: string; activa: boolean; tipo?: ClaseDireccion }
-export type DatosLiquidacion = ReturnType<typeof paraRegistrar>
+export type DatosLiquidacion = ReturnType<typeof paraRegistrar> | ReturnType<typeof paraRegistrarJustEat>
 export interface PuertoEntrada {
   /** La empresa de una dirección de facturas, o null. */
   destino(localPart: string, dominio: string): Promise<Destino | null>
@@ -404,13 +405,21 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
   cuerpoYa?: { html: string | null; text: string | null }): Promise<ResultadoEntrada> {
   if (!p.liquidacion) throw new Error('La función no sabe registrar liquidaciones.')
   const cuerpo = cuerpoYa ?? (c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : { html: null, text: null })
+  // V02 · E2: una liquidación de Just Eat (factura, estado de cuenta y pedidos en el correo).
+  if (esLiquidacionJustEat({ from: c.from, subject: c.subject }, trozos(cuerpo))) {
+    const je = leerLiquidacionJustEat({ from: c.from, subject: c.subject, html: cuerpo.html, text: cuerpo.text })
+    const r = await p.liquidacion({ companyId: destino.companyId, datos: paraRegistrarJustEat(je, { emailId: c.email_id }) })
+    await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
+      detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: je.avisos.length, plataforma: 'justeat' } })
+    return { resultado: 'liquidacion', texto: r.texto, llegadas: [] }
+  }
   let resumen: ResumenUber
   try {
     resumen = leerResumenUber({ subject: c.subject, html: cuerpo.html, text: cuerpo.text })
   } catch (x) {
     if (!(x instanceof NoEsResumenUber)) throw x
     await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'no_es_liquidacion', detalle: { motivo: x.message } })
-    return { resultado: 'no_es_liquidacion', texto: `${x.message} Queda apuntado y no se lee: por ahora solo se leen los resúmenes de pagos de Uber Eats.`, llegadas: [] }
+    return { resultado: 'no_es_liquidacion', texto: `${x.message} Queda apuntado y no se lee: por ahora se leen los resúmenes de pagos de Uber Eats y las liquidaciones de Just Eat.`, llegadas: [] }
   }
   // El resumen del mes, si viene: se guarda con la liquidación.
   let adjunto: { ruta: string; nombre: string; sha256: string } | null = null
@@ -482,6 +491,8 @@ export function clasificarDocumentos(xs: readonly AdjuntoResend[]): Clasificados
 
 /** ¿Puede ser un resumen de pagos de Uber Eats? (Para pedir el cuerpo solo cuando hace falta.) */
 const pareceDeUber = (c: Pick<CorreoResend, 'from' | 'subject'>) => /uber/i.test(`${c.from ?? ''} ${c.subject ?? ''}`)
+/** ¿Puede ser una liquidación de Just Eat? (V02 · E2) */
+const pareceDeJustEat = (c: Pick<CorreoResend, 'from' | 'subject'>) => /just-?eat|justeat/i.test(`${c.from ?? ''} ${c.subject ?? ''}`)
 
 const QUE: Record<QueEs, string> = {
   factura: 'una factura', ticket: 'un ticket', liquidacion: 'una liquidación', extracto: 'un extracto del banco',
@@ -490,10 +501,12 @@ const QUE: Record<QueEs, string> = {
 
 async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: string },
   base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada): Promise<ResultadoEntrada> {
-  // 1 · Un resumen de pagos de Uber: es una liquidación, por su camino.
-  if (pareceDeUber(c) && p.liquidacion) {
+  // 1 · Un resumen de pagos de Uber o una liquidación de Just Eat: es una liquidación, por su camino.
+  if ((pareceDeUber(c) || pareceDeJustEat(c)) && p.liquidacion) {
     const cuerpo = c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id).catch(() => null) : null
-    if (cuerpo && esResumenUber({ subject: c.subject }, trozos(cuerpo))) return recibirLiquidacion(c, dest, base, p, cuerpo)
+    if (cuerpo && (esResumenUber({ subject: c.subject }, trozos(cuerpo)) || esLiquidacionJustEat({ from: c.from, subject: c.subject }, trozos(cuerpo)))) {
+      return recibirLiquidacion(c, dest, base, p, cuerpo)
+    }
   }
 
   // 2 · Lo que la base sabe del remitente.
