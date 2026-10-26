@@ -318,7 +318,8 @@ test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada
   const pasos = page.getByRole('list', { name: 'En qué punto está la remesa' }).getByRole('listitem')
   await expect(pasos.nth(3)).toHaveAttribute('data-hecho', 'si')
   await expect(page.locator('[data-prueba="validado-solo"]')).toHaveText('Asiento validado solo: el cargo cuadra con la remesa')
-  await expect(page.getByText('Validado solo: el cargo cuadra con la remesa')).toBeVisible()
+  // Y en los datos de la remesa, «Su asiento» (el paso de arriba dice «Asiento validado solo…»).
+  await expect(page.getByText('Validado solo: el cargo cuadra con la remesa', { exact: true })).toBeVisible()
   if (!movil) await expect(page.getByRole('button', { name: 'Confirmar el IBAN' })).toHaveCount(0)
   await alLado(page, 'remesa-pagada', 'pagos-2', 16)
   expect(errores).toEqual([])
