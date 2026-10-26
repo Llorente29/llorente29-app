@@ -1,0 +1,23 @@
+{
+  "_que": "PC01 · arreglo urgente · contexto de producción de la tanda (0642), medido en SOLO LECTURA el 26/10 a las 06:40Z con consultas a pg_proc, pg_trigger y cron.job (no con la consulta sql-contexto entera: el conector de Supabase se quedó esperando una confirmación). Existen las tres funciones que cambia, con una sola firma cada una; ninguna en el camino del pedido (CAMINO_FUNCIONES del workflow) ni la dispara una tabla del camino (sus disparadores son de channel_settlement, customer_invoice y platform_store); ningún cron las llama; nada en el historial.",
+  "medido": "2026-10-26T06:40Z",
+  "tanda": {
+    "supabase/migrations/20261026T0642_pc01_sin_delete_sin_where.sql": "d7aca22ec71e06e011aa4e0d167056bd"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public._compras_fin_de_mes(uuid,date)",
+      "public._conta_liquidacion_cobros(uuid)",
+      "public.recost_sales_for_product(uuid,text,integer,boolean)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

@@ -1,0 +1,9 @@
+# PC01 · arreglo urgente (respuesta 6 de Julio, 26/10). La 0642 cambia en
+# caliente tres funciones que vaciaban sus temporales con «delete» sin «where»
+# (safeupdate, que carga la app, las para): desde la rama, en ROLLBACK.
+# Su prueba (ROLLBACK): con safeupdate cargado como en la app, hoy fallan
+# marcar cobrada una liquidación, compras_fin_de_mes y recost_sales_for_product;
+# con la 0642 pasan; la vuelta atrás las deja como en producción y vuelven a
+# fallar.
+supabase/migrations/20261026T0642_pc01_sin_delete_sin_where.sql
+supabase/staging/sql/20261026_pc01_sin_delete_sin_where_prueba.sql

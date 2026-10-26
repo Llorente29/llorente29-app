@@ -43,6 +43,17 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/pr/revisar-pr.mjs "$BASE" "$HEAD"
+      # PC01 (26/10): ninguna migración nueva o cambiada trae un DELETE o un
+      # UPDATE sin WHERE. La app pasa por safeupdate (rol authenticator) y los
+      # para, también dentro de una función o de un disparador; las pruebas de
+      # staging corren como postgres y no lo ven. Se salta solo con
+      # «-- sin where: <por qué>» en la línea o en la de encima.
+      - name: Ningún DELETE ni UPDATE sin WHERE (PC01)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/sql-sin-where.mjs "$BASE" "$HEAD"
+
       # C10 (23/10): el nombre de cada migración nueva, en su formato y sin
       # repetir en main ni en los demás PR abiertos.
       - name: Cada PR edita solo su tanda (C10)
