@@ -87,13 +87,27 @@ certificado** (la AEAT solo acepta registros del obligado o de quien le
 representa). La prepara la función en su propia cuenta de staging; el NIF no se
 escribe en el repositorio.
 
-## Lo que falta en la E1
+## El candado (respuesta 3 de Julio, 26/10)
 
-- La conexión con certificado: esperando los secretos de staging.
-- Las 25 facturas contra la AEAT de pruebas (`pruebasAeat.ts`: 24 altas con
-  una R4 y una a Suiza, y una anulación) y su workflow
-  (`verifactu-pruebas-staging.yml`): hechos y sin lanzar, esperando el
-  certificado.
-- «No se envía» en las pantallas (es de la E2: la vista ya lo da).
+El certificado de pruebas tardará unos días: el de Llorente29 es de Uanataca y
+no deja sacar la clave privada (no se puede exportar a .p12). Julio pedirá uno
+exportable. Mientras tanto, la E1 se cierra **sin probar contra la AEAT de
+pruebas**, y para que eso sea seguro, la 2351 pone un candado: **ninguna empresa
+pasa a «pruebas» ni a «real» sin una prueba de conexión correcta con la AEAT
+apuntada** (`verifactu_conexion`; la comprueba `verifactu_modo`). En pruebas la
+apunta `conta-verifactu` (accion «probar_conexion», una consulta con el
+certificado de pruebas); la de real, con el NIF de cada empresa, la dará
+«Comprobar con Hacienda» (E3). Hoy no hay ninguna apuntada: nadie puede
+encender Verifactu.
+
+## Lo que queda
+
+- **Contra la AEAT de pruebas**, en cuanto esté el certificado: la sonda, y
+  después `[verifactu-pruebas]` (conexión → si sale bien, las 25 → envío). Si la
+  AEAT rechaza el certificado, se para y se propone. Lo que salga se arregla en
+  la entrega en la que se esté. Con un certificado personal exportable de Julio
+  se puede probar la conexión, aunque las facturas salgan con otro NIF.
+- **E2** (`conta/v03-e2`): las pantallas de los tableros 25, 26 y 27 (con
+  «No se envía» y el candado dicho en pantalla) y las ventas sin IVA.
 - Por confirmar con la primera respuesta real: el texto exacto de un Fault (el
   lector busca «Codigo[4xxx]» y, si no, cualquier 4xxx).
