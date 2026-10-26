@@ -26,11 +26,10 @@ const hora = (iso: string | null) => {
   return `${p('day')}/${p('month')} ${p('hour')}:${p('minute')}`
 }
 
-export function HaciendaDeFactura({ accountId, factura, quien, alCambiar }: {
+export function HaciendaDeFactura({ accountId, factura, quien }: {
   accountId: string
   factura: { id: string; numero: string | null; emitidaEl: string | null; porque: Porque | null; sinIva: boolean; pais: string | null }
   quien: string | null
-  alCambiar: () => void
 }) {
   const [vuelta, setVuelta] = useState(0)
   const h = useLeer(() => historiaHacienda(accountId, factura.id), `${accountId}:${factura.id}:hacienda:${vuelta}`)
@@ -39,7 +38,9 @@ export function HaciendaDeFactura({ accountId, factura, quien, alCambiar }: {
   const [ocupado, setOcupado] = useState(false)
   if (h.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer cómo va con Hacienda: {h.error}</p>
   const d = h.datos
-  if (!d || d.registros.length === 0) return null
+  const avisoReenvio = aviso && <p className="s-aviso-lista" data-tono={aviso.ok ? 'ok' : 'falta'} role="status" data-prueba="aviso-reenvio">{aviso.texto}</p>
+  // Mientras vuelve a leer (después de reenviar), el aviso sigue a la vista (regla 8).
+  if (!d || d.registros.length === 0) return avisoReenvio || null
   const e = d.estado
   const rechazada = e?.estado === 'incorrecto'
   const r = rechazada ? porQueRechazo(e.codigo, e.descripcion) : null
@@ -51,7 +52,7 @@ export function HaciendaDeFactura({ accountId, factura, quien, alCambiar }: {
     void reenviarAHacienda(factura.id, cambia ? aTipoVenta(porque) : null, quien)
       .then((x) => {
         setAviso({ ok: true, texto: `Reenviada la ${x.num_serie} a Hacienda: sale en el próximo envío. Tu cliente no nota nada: su factura no cambia.` })
-        setVuelta((v) => v + 1); alCambiar()
+        setVuelta((v) => v + 1)
       })
       .catch((err) => setAviso({ ok: false, texto: msg(err) }))
       .finally(() => setOcupado(false))
@@ -79,7 +80,7 @@ export function HaciendaDeFactura({ accountId, factura, quien, alCambiar }: {
           </div>
         </Tarjeta>
       )}
-      {aviso && <p className="s-aviso-lista" data-tono={aviso.ok ? 'ok' : 'falta'} role="status" data-prueba="aviso-reenvio">{aviso.texto}</p>}
+      {avisoReenvio}
       <Tarjeta titulo="Cómo va con Hacienda">
         <ol className="cxvf-linea" data-prueba="como-va-con-hacienda">
           {pasos.map((p, i) => (

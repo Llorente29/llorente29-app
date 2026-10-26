@@ -458,7 +458,7 @@ export default function FacturaVentaPage() {
 
       {/* V03 E2 · Con Hacienda (tablero 27): la rechazada, «Corregir y reenviar» y cómo va. */}
       {f && f.estado !== 'borrador' && accountId && (
-        <HaciendaDeFactura accountId={accountId} quien={userName ?? null} alCambiar={() => setVuelta((x) => x + 1)}
+        <HaciendaDeFactura accountId={accountId} quien={userName ?? null}
           factura={{ id: f.id, numero: f.numero, emitidaEl: f.emitidaEl, porque: f.porque, sinIva: f.lineas.some((l) => l.tipo === 0), pais: f.cliente.pais }} />
       )}
       {f && f.estado !== 'borrador' && <BloqueCobro total={f.total} cobros={f.cobros} anulada={f.estado === 'anulada'} alRegistrar={botonCobro ? () => setDialogo('cobro') : null} />}

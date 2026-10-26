@@ -91,7 +91,26 @@ función que la escribe.
 
 ## Lo probado
 
-- **Staging, en ROLLBACK** (`supabase/staging/sql/20261026_v03_ventas_sin_iva_prueba.sql`): *(las líneas, abajo)*
+- **Staging, en ROLLBACK** (`supabase/staging/sql/20261026_v03_ventas_sin_iva_prueba.sql`),
+  [run 584](https://github.com/Llorente29/llorente29-app/actions/runs/40263364430) en verde. Sus líneas, tal cual:
+
+  ```
+  0 · las cuatro, con el md5 de producción
+  0 · antes, guardar rechaza la línea exenta: «La línea 1: «Exento o 0 %» aún no se puede facturar aquí (solo IVA general, reducido o superreducido).»
+  1 · sin el porqué no se emite: «Es un cliente de CH, fuera de la UE: dime qué le has vendido (un servicio a una empresa o mercancía que sale de España).»
+  1 · F-2026/000001 emitida: 430 2.271, 705 2.150 sin IVA (con su tipo, base y libro), 705 100, 477 21; validado
+  3 · exportación a España no: «Una exportación es una venta a fuera de la UE: este cliente es de España.»
+  libro · N2 2.150 cuota 0 → 120; S1 100 → 07/09; E2 450 clave 02 → 60; E1 300 sin casilla; la rectificativa R4, en negativo con cuota 0
+  5 · No se valida: apunte 2 (70500000): un apunte sin IVA es su base: el importe 100.00 no es la base 90.00.
+  6 · en pruebas: alta F-2026/000004 con el desglose N2 sin tipo ni cuota, 2.150,00 y el cliente como IDOtro 04
+  8 · reenviada F-2026/000004: subsanación S con RechazoPrevio S, encadenada tras la rechazada, E2 con clave 02; otra vez no: «La F-2026/000004 no está rechazada por Hacienda (está esperando a enviarse): no hay nada que reenviar.»
+  8 · su libro: E2 con clave 02
+  9 · otros programas: excel y tpv, sin repetir; «fax» no: «Los otros programas son: tpv, tienda, excel u otro.»
+  7 · la vuelta atrás: las cuatro, con el md5 del principio y sin sobrecargas
+  ```
+
+  En el mismo run, la 0218 y la 0226 (solo añaden) entraron **de verdad** en staging
+  (W05); la 0146 no (cambia en caliente: solo en ROLLBACK hasta la tanda).
 - **Unitarias** (`tests/unit/modules/conta/v03/ventasSinIva.test.ts` y `estado.test.ts`):
   - la UE se lee de la base, de `_verifactu_es_ue`;
   - cada código de rechazo se ata a su texto en la lista oficial;
