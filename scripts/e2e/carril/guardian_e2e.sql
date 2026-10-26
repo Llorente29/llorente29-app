@@ -1,17 +1,14 @@
 -- scripts/e2e/carril/guardian_e2e.sql — lo corre carril.sh coger en segundo
--- plano y se queda dormido: mientras viva esta conexión, la e2e tiene su carril
--- y nadie migra staging. Cada línea que escribe la lee carril.sh.
+-- plano y se queda dormido: mientras viva esta conexión, la e2e tiene su carril.
+-- Ya no coge la barrera de migrar (4202,0): esa la coge cada fichero de
+-- pruebas mientras corre (guardian_barrera.sql; V03, respuesta 6, 26/10).
+-- Cada línea que escribe la lee carril.sh.
 -- Supavisor no pasa el application_name: se pone aquí, para saber de quién es.
 set application_name = :'quien';
 set statement_timeout = 0;
 set lock_timeout = :'espera';
 -- El proceso en el servidor: carril.sh lo termina al soltar (ver el final).
 select 'pid ' || pg_backend_pid();
-select 'migrar-espera';
--- Compartido: entran todas las e2e a la vez; quien migra (exclusivo) espera a
--- que acaben, y mientras espera no entra ninguna nueva.
-select pg_advisory_lock_shared(4202, 0);
-select 'migrar-libre';
 -- El primer carril libre de 1 a :max. Si están todos cogidos, ESPERA su turno
 -- (cada 15 s, hasta :'espera') en vez de fallar: con el tope bajo (2 en la
 -- Micro, W02 17/10) el tercer trozo espera a que acabe uno, no cae en rojo.

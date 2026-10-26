@@ -98,7 +98,10 @@ describe('el cerrojo de las e2e', () => {
     expect(coger).toBeLessThan(ap.indexOf('- name: Aplicar, fichero a fichero'))
     const soltar = ap.slice(ap.indexOf('- name: Cerrojo de migrar · soltarlo'))
     expect(soltar.slice(0, 400)).toMatch(/if: always\(\)[\s\S]*scripts\/e2e\/cerrojo\.sh soltar/)
-    expect(ap).not.toMatch(/CERROJO_INTENTOS/) // por defecto: 120 × 30 s
+    // Como mucho 15 min (30 × 30 s): con la barrera de migrar cogida, cada
+    // minuto aquí para a todas las e2e (V03, respuesta 6, 26/10).
+    expect(ap.match(/CERROJO_INTENTOS: '30'/g)).toHaveLength(2)
+    expect(ap).not.toMatch(/CERROJO_INTENTOS: '(?!30')/)
     const e2e = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
     expect(e2e).not.toContain('scripts/e2e/cerrojo.sh coger')
   })

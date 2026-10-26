@@ -1,6 +1,7 @@
 -- scripts/e2e/carril/guardian_migrar.sql — lo corre carril.sh migrar-coger
--- (aplicar-staging-conta) en segundo plano: espera a que acaben las e2e de
--- carril que están tocando staging y, mientras viva, no deja empezar ninguna.
+-- (aplicar-staging-conta) en segundo plano: espera a que acaben los ficheros
+-- de prueba que están corriendo (cada uno tiene la barrera compartida) y,
+-- mientras viva, no deja empezar ninguno.
 -- Supavisor no pasa el application_name: se pone aquí, para saber de quién es.
 set application_name = :'quien';
 set statement_timeout = 0;
