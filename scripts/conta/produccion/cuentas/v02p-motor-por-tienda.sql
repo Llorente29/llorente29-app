@@ -12,9 +12,9 @@
 -- Lo demás, IGUAL: la tanda no toca ninguna liquidación, tienda, diferencia,
 -- cobro ni asiento, ni el registrar del #332 (su huella, igual).
 --
--- Medido en producción el 26/10 a las 00:55 UTC, antes (la 1 puede crecer sola:
--- siguen llegando los correos de Uber):
---   267 · 0 · no existe · 1 (11) · 57774b89 · 7e8996c5 · 9 / 9 · 15218
+-- Medido en producción el 26/10 a las 02:05 UTC, antes (la 1 y la 8 pueden
+-- crecer solas: siguen llegando correos de Uber y asientos de otros caminos):
+--   267 · 0 · no existe · 8b9ed86d · no existe · 57774b89 · 7e8996c5 · 9 / 9 · 15223
 select clave, valor from (
   select 1 o, 'liquidaciones de Foodint' clave,
     (select count(*) from public.channel_settlement where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')::text valor union all
