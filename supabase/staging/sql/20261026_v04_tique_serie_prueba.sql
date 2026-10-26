@@ -128,6 +128,17 @@ end $$;
 reset role;
 select set_config('request.jwt.claims', '', true);
 
+-- La empresa del local de la tablet, como en Foodint (location_company). En
+-- staging la cuenta A no tiene CIF ni el local empresa (medido el 27/10): sin
+-- esto, la propia cae a la cuenta y sale sin NIF. El NIF va con «ES» delante
+-- para ver que el tique lo imprime sin él.
+insert into public.company (account_id, legal_name, tax_id)
+values ('c01a0000-0000-4000-8000-00000000000a', 'Norte Prueba V04, S.L.', 'ESB12345674');
+insert into public.location_company (location_id, company_id, account_id, source)
+select (select v::uuid from _v where clave = 'local'), c.id, c.account_id, 'manual'
+from public.company c where c.account_id = 'c01a0000-0000-4000-8000-00000000000a' and c.legal_name = 'Norte Prueba V04, S.L.'
+on conflict (location_id) do update set company_id = excluded.company_id;
+
 -- ── 2 y 3 · Imprimir, reimprimir, cerrar y cancelar (como la tablet: anon) ──
 set local role anon;
 do $$
@@ -135,7 +146,7 @@ declare t text := (select v from _v where clave = 'token'); a jsonb; b jsonb; c 
 begin
   a := public.fiscal_for_print(t, (select id from _s where clave = 'p1'));
   if a->>'ticketNumber' <> 'PN' || v_aa || '-000001' or a->>'issuerKind' <> 'propia' or not (a->>'serie')::boolean
-     or a->>'legalName' is null or a->>'taxId' is null or a ? 'address' and a->>'address' is not null then
+     or a->>'legalName' is distinct from 'Norte Prueba V04, S.L.' or a->>'taxId' is distinct from 'B12345674' or a ? 'address' and a->>'address' is not null then
     raise exception 'PRUEBA V04 · 2: el primer tique de una propia (%).', a;
   end if;
   perform public.reprint_order_by_token(t, (select id from _s where clave = 'p1'), 'bag');
