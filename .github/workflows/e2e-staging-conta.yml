@@ -36,7 +36,7 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 #
 # LA ENTERA, EN TROZOS A LA VEZ (W02, paso 1c)
 # Con «pruebas» vacío, con una carpeta (también «tests/e2e/conta»: V03,
-# respuesta 6, 26/10) y en un push que pide la entera, la suite se reparte
+# respuesta 6, 26/10) y en un push con la etiqueta «e2e-entera», la suite se reparte
 # en 2 trozos (4 a mano con «trozos»: la Micro de staging no los aguanta) (scripts/e2e/trozos.mjs: fichero a fichero, del más lento al más
 # rápido, al trozo que menos lleva), cada uno en su runner y en su carril. El
 # job «entera» los junta: comprueba que entre todos están TODOS los ficheros,
@@ -52,17 +52,19 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # por diseño (las lleva cualquier navegador que abra la app) y no dan acceso a
 # nada que la RLS no permita. No sirven para producción.
 #
-# QUÉ PRUEBAS LLEVA CADA PR · UN CRITERIO POR RIESGO (W04, Julio, 22/10)
-#   · solo pantallas: build, unitarias y la e2e de la ZONA de la rama en cada
-#     push (scripts/e2e/area.mjs);
-#   · lo común (marco, cabecera, barra, diseño compartido, el arranque de la
-#     app y lo que mueve todas las pruebas: LO_COMUN) → la ENTERA en el push;
-#   · pedidos, cocina o reparto (PEDIDOS en area.mjs) → todo: la ENTERA en el
-#     push, que lleva la corta;
-#   · con tanda: lo de su riesgo, más su prueba de staging en ROLLBACK, el
-#     ensayo y el real en producción (W01); la entera, la de la noche;
-#   · la etiqueta «e2e-entera» la pide siempre (e2e-etiqueta.yml la lanza);
-#   · y CADA NOCHE sobre main (abajo).
+# QUÉ PRUEBAS LLEVA CADA PR (Julio, 26/10; antes W04, 22/10): LA ENTERA NO
+# CORRE EN NINGÚN PR, NUNCA. Solo de noche sobre main, y con la etiqueta
+# «e2e-entera» si Julio la pide. En cada push (scripts/e2e/area.mjs):
+#   · la zona de la rama (y la de lo que toca) y cada .spec.ts que cambia el PR;
+#   · si toca lo común (el marco, el menú, module.tsx, el arranque…), además la
+#     rápida de pantallas (tests/e2e/conta/humo: cada pantalla de Sumied una vez,
+#     en los dos tamaños, ≤ 10 min);
+#   · si toca pedidos, cocina o reparto, además la corta;
+#   · con tanda: además su prueba de staging en ROLLBACK, el ensayo y el real (W01).
+# Un fallo POR TIEMPO en una prueba que no es de la zona del PR (el juego común,
+# la rápida) no bloquea fusionar: se apunta en el run y lo mira la de la noche
+# (scripts/e2e/por-fichero.sh). En la zona, todo fallo bloquea.
+# Detalle y porqué: docs/conta/pruebas_de_un_pr.md.
 #
 # LA ENTERA DE LA NOCHE (Julio, 21/10): a las 03:00 de Madrid, en verano y en
 # invierno (dos disparos UTC, 01:00 y 02:00, y el plan deja correr solo el que
@@ -88,8 +90,8 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 #     nombre (conta/c02c-* → c02c), con el juego común (el marco y el arranque
 #     del C00, y la RLS entre cuentas); reparto-** → tests/e2e/reparto; una
 #     rama sin área (conta/w02-…), solo el juego común. Y, además, cada
-#     fichero .spec.ts que cambia el PR (V03, respuesta 6, 26/10). La suite entera, solo
-#     si toca lo común, pedidos, cocina o reparto, o lleva la etiqueta (arriba).
+#     fichero .spec.ts que cambia el PR (V03, respuesta 6, 26/10). La suite entera,
+#     nunca en un push: solo con la etiqueta (arriba).
 #   · la SUITE ENTERA también corre a mano (workflow_dispatch con «pruebas»
 #     vacío), cuando se quiera; ya no se pide antes de una tanda (W04).
 #   · el frente sigue saliendo de la rama: decide qué carpeta corre en un push
@@ -212,6 +214,8 @@ jobs:
     outputs:
       frente: ${{ steps.frente.outputs.frente }}
       pruebas: ${{ steps.frente.outputs.pruebas }}
+      propias: ${{ steps.frente.outputs.propias }}
+      zona: ${{ steps.frente.outputs.zona }}
       trozos: ${{ steps.frente.outputs.trozos }}
       n: ${{ steps.frente.outputs.n }}
       toca: ${{ steps.hora.outputs.toca }}
@@ -267,10 +271,9 @@ jobs:
           if [ -n "${FRENTE_PEDIDO:-}" ]; then
             case "$FRENTE_PEDIDO" in a|b|c|d) FRENTE="$FRENTE_PEDIDO" ;; *) echo "::error::«frente» tiene que ser a, b, c o d (o nada)."; exit 1 ;; esac
           fi
-          # En un PUSH (W04, Julio, 22/10): un criterio por riesgo. Solo
-          # pantallas, la zona de la rama, en un trozo; la ENTERA si el PR toca
-          # lo común (LO_COMUN en scripts/e2e/area.mjs), pedidos, cocina o
-          # reparto (PEDIDOS) o lleva la etiqueta «e2e-entera».
+          # En un PUSH (Julio, 26/10): nunca la entera, salvo la etiqueta
+          # «e2e-entera». La zona, las que cambia el PR y, si toca lo común, la
+          # rápida de pantallas; si toca pedidos, la corta (scripts/e2e/area.mjs).
           if [ "$GITHUB_EVENT_NAME" = push ]; then
             git diff --name-only "origin/main...$GITHUB_SHA" > "$RUNNER_TEMP/cambiados.txt"
             ETIQUETAS=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json labels -q '[.[0].labels[]?.name] | join(",")' 2>/dev/null || true)
@@ -282,8 +285,10 @@ jobs:
               echo "### La entera${PRUEBAS:+ de ${PRUEBAS}}, porque $PORQUE" >> "$GITHUB_STEP_SUMMARY"
             else
               PRUEBAS=$(sed -n 's/^pruebas=//p' "$RUNNER_TEMP/decision.txt")
+              PROPIAS=$(sed -n 's/^propias=//p' "$RUNNER_TEMP/decision.txt"); ZONA=1
               [ -n "$PRUEBAS" ] || { echo "::error::area.mjs no ha dado pruebas para $GITHUB_REF_NAME: sería la suite entera."; exit 1; }
               echo "### La zona: $PORQUE" >> "$GITHUB_STEP_SUMMARY"
+              echo "De la zona del PR (aquí todo fallo bloquea): ${PROPIAS:-ninguna}. Las demás, por tiempo, no bloquean." >> "$GITHUB_STEP_SUMMARY"
             fi
             echo "Qué corre: $PORQUE ($(wc -l < "$RUNNER_TEMP/cambiados.txt") ficheros cambiados contra main)."
           fi
@@ -309,7 +314,7 @@ jobs:
             if [ "$GITHUB_EVENT_NAME" = push ] || [ "$SUELTOS" = 1 ]; then N=1; fi
           fi
           TROZOS=$(seq -s, 1 "$N" | sed 's/^/[/; s/$/]/')
-          { echo "frente=$FRENTE"; echo "pruebas=${PRUEBAS:-}"; echo "trozos=$TROZOS"; echo "n=$N"; } >> "$GITHUB_OUTPUT"
+          { echo "frente=$FRENTE"; echo "pruebas=${PRUEBAS:-}"; echo "propias=${PROPIAS:-}"; echo "zona=${ZONA:-0}"; echo "trozos=$TROZOS"; echo "n=$N"; } >> "$GITHUB_OUTPUT"
           echo "Frente: ${FRENTE:-ninguno} · pruebas: ${PRUEBAS:-la suite entera} · trozos: $N"
 
   trozo:
@@ -331,6 +336,9 @@ jobs:
     env:
       E2E_FRENTE: ${{ needs.plan.outputs.frente }}
       E2E_PRUEBAS: ${{ needs.plan.outputs.pruebas }}
+      # Julio, 26/10: en un push, un fallo por tiempo fuera de la zona del PR no bloquea (por-fichero.sh).
+      E2E_ZONA: ${{ needs.plan.outputs.zona }}
+      E2E_PROPIAS: ${{ needs.plan.outputs.propias }}
       TROZO: ${{ matrix.trozo }}
       TROZOS: ${{ needs.plan.outputs.n }}
       # Cuántos trozos a la vez en todo staging (ver LA COLA). Un ajuste, no código.

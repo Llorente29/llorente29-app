@@ -2,8 +2,8 @@
 // scripts/e2e/area.mjs — qué pruebas corre la e2e de un PUSH, según la rama.
 //
 // W02 (17/10, gasto de Actions). La e2e de cada push corre solo las pruebas
-// del área de la rama, en un trozo. La suite ENTERA corre en un push solo si
-// toca lo común o pedidos, cocina o reparto (abajo); si no, cada noche.
+// del área de la rama, en un trozo. La suite ENTERA ya no corre en ningún
+// push (Julio, 26/10, abajo): solo cada noche y con la etiqueta.
 // El 16/10 las e2e gastaron 2.953 min; cada push de una rama sin frente (las
 // reparto-**, las conta/c00…c05, las conta/w*) corría la suite entera en 2
 // trozos.
@@ -23,16 +23,18 @@
 //     arreglaba el PR, porque no eran de la zona de su rama).
 // Nunca vacío: vacío sería la suite entera.
 //
-// UN CRITERIO POR RIESGO (W04, Julio, 22/10, la auditoría de las reglas de pruebas):
-//   · solo pantallas → la zona de la rama (y la de lo que toca);
-//   · lo común → la entera (lo ven todas las pantallas);
-//   · pedidos, cocina o reparto (PEDIDOS, abajo) → todo: la entera, que lleva la corta.
-// La corta ya no va en cada push: no protege nada que una rama que no toca
-// pedidos pueda romper. La entera corre además cada noche sobre main
-// (e2e-staging-conta.yml, «schedule»), y con la etiqueta «e2e-entera».
+// LA ENTERA, NUNCA EN UN PR (Julio, 26/10; antes, W04 22/10, «la entera si
+// toca lo común»). Corre solo de noche sobre main y con la etiqueta
+// «e2e-entera». En un push:
+//   · la zona (arriba) y cada .spec.ts que cambia el PR;
+//   · lo común → además la rápida de pantallas (HUMO, ≤ 10 min);
+//   · pedidos, cocina o reparto (PEDIDOS) → además la corta.
+// «propias» (la zona del PR) son las que bloquean siempre; en las demás, un
+// fallo por tiempo no bloquea (scripts/e2e/por-fichero.sh). Detalle:
+// docs/conta/pruebas_de_un_pr.md.
 //
 //   node scripts/e2e/area.mjs <rama> --cambiados <fichero> --etiquetas "a,b"
-//     → entera=…, pruebas=…, porque=… (lo usa el plan del workflow)
+//     → entera=…, pruebas=…, propias=…, porque=… (lo usa el plan del workflow)
 
 import { existsSync, readdirSync } from 'node:fs'
 
@@ -189,50 +191,60 @@ export function deLoComun(cambiados) {
  * o reparto, o lleva la etiqueta; si no, la zona de la rama (y la de lo que
  * toca). «porque» va al resumen del run.
  */
+/** La prueba rápida de lo común (Julio, 26/10): abre cada pantalla de Sumied una vez, en los dos tamaños (≤ 10 min). */
+export const HUMO = 'tests/e2e/conta/humo/pantallas.spec.ts'
+
+/**
+ * Qué corre la e2e de un PUSH (Julio, 26/10: «la entera NO corre en ningún PR,
+ * nunca, solo de noche sobre main, y con la etiqueta «e2e-entera»»):
+ *   · siempre, la zona de la rama (y la de lo que toca) y cada .spec.ts que
+ *     cambia el PR;
+ *   · si toca lo común (el marco, el menú, module.tsx, el arranque…), además
+ *     la prueba rápida (HUMO);
+ *   · si toca pedidos, cocina o reparto, además la corta (CORTA);
+ *   · la entera, solo con la etiqueta.
+ * «propias» son las de la zona del PR: un fallo por TIEMPO en una que no es
+ * propia (el juego común, la rápida) no bloquea fusionar; se apunta y lo mira
+ * la de la noche (por-fichero.sh). «porque» va al resumen del run.
+ */
 export function queCorre(rama, { cambiados = [], etiquetas = [], existe = existsSync } = {}, carpetas = carpetasConta(), folvy = suiteFolvy()) {
-  const r = queCorreSinTocadas(rama, { cambiados, etiquetas }, carpetas, folvy)
-  // La entera sin acotar ya lleva todas. Si no, las que cambia el PR y no
-  // están ya dentro (una prueba borrada no se corre: ya no existe).
-  if (r.entera && !r.pruebas.length) return r
-  const tocadas = specsTocadas(cambiados, existe).filter((f) => !r.pruebas.some((p) => f === p || f.startsWith(`${p}/`)))
-  if (!tocadas.length) return r
   const muestra = (xs) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` y ${xs.length - 3} más` : '')
-  return { ...r, pruebas: [...r.pruebas, ...tocadas], porque: `${r.porque}; y las que cambia el PR: ${muestra(tocadas)}` }
+  if (etiquetas.includes(ETIQUETA_ENTERA)) {
+    return { entera: true, pruebas: [], propias: [], porque: `el PR lleva la etiqueta «${ETIQUETA_ENTERA}»` }
+  }
+  const de = (lista) => cambiados.filter((f) => lista.some((p) => f === p || f.startsWith(p)))
+  const comun = [...de(LO_COMUN_AMBOS), ...de(LO_COMUN_SUMIED)]
+  const toca = productosTocados(cambiados)
+  const pedidos = dePedidos(cambiados)
+  const zonas = zonasTocadas(cambiados)
+  const porque = []
+  const propias = []
+  const ajenas = []
+  // La zona de la rama: lo de la contabilidad si la toca (o no toca nada de Folvy); si solo toca Folvy, las de Folvy.
+  if (toca.sumied || !toca.folvy || comun.length) {
+    const zona = pruebasDeLaZona(rama, carpetas)
+    propias.push(...zona.filter((p) => !COMUN.includes(p)))
+    ajenas.push(...zona.filter((p) => COMUN.includes(p)))
+    porque.push('la zona de la rama')
+  } else if (!pedidos.length && !zonas.length) {
+    propias.push(...folvy)
+    porque.push('las de Folvy (solo toca Folvy)')
+  }
+  if (zonas.length) { propias.push(...zonas.map((z) => z.pruebas)); porque.push(`la de lo que toca (${zonas.map((z) => z.zona).join(', ')})`) }
+  if (pedidos.length) { propias.push(...CORTA); porque.push(`la corta, porque toca pedidos, cocina o reparto: ${muestra(pedidos)}`) }
+  if (comun.length) { ajenas.push(HUMO); porque.push(`la rápida de pantallas, porque toca lo común: ${muestra([...new Set(comun)])}`) }
+  // Las que cambia el PR (una prueba borrada no se corre: ya no existe), sin repetir lo que ya va dentro.
+  const dentro = (f, lista) => lista.some((p) => f === p || f.startsWith(`${p}/`))
+  const tocadas = specsTocadas(cambiados, existe).filter((f) => !dentro(f, propias) && !dentro(f, ajenas))
+  if (tocadas.length) { propias.push(...tocadas); porque.push(`las que cambia el PR: ${muestra(tocadas)}`) }
+  const unicas = (xs) => [...new Set(xs)]
+  const p = unicas(propias)
+  return { entera: false, pruebas: unicas([...p, ...ajenas]), propias: p, porque: 'sin la entera: ' + porque.join('; ') }
 }
 
 /** Los .spec.ts de tests/e2e que cambia el PR y siguen existiendo, sin repetir. */
 export function specsTocadas(cambiados, existe = existsSync) {
   return [...new Set(cambiados.filter((f) => /^tests\/e2e\/.+\.spec\.ts$/.test(f) && existe(f)))]
-}
-
-function queCorreSinTocadas(rama, { cambiados = [], etiquetas = [] } = {}, carpetas = carpetasConta(), folvy = suiteFolvy()) {
-  const muestra = (xs) => xs.slice(0, 3).join(', ') + (xs.length > 3 ? ` y ${xs.length - 3} más` : '')
-  if (etiquetas.includes(ETIQUETA_ENTERA)) {
-    return { entera: true, pruebas: [], porque: `el PR lleva la etiqueta «${ETIQUETA_ENTERA}»` }
-  }
-  const de = (lista) => cambiados.filter((f) => lista.some((p) => f === p || f.startsWith(p)))
-  const ambos = de(LO_COMUN_AMBOS)
-  if (ambos.length) return { entera: true, pruebas: [], porque: `toca lo común: ${muestra(ambos)}` }
-  const toca = productosTocados(cambiados)
-  const comunSumied = de(LO_COMUN_SUMIED)
-  const pedidos = dePedidos(cambiados)
-  const zonas = zonasTocadas(cambiados)
-  // Sumied: la entera de Sumied si toca su común; su zona si toca Sumied (o si no toca nada de Folvy); nada si solo toca Folvy.
-  const sumied = comunSumied.length ? { entera: true, pruebas: SUITE_SUMIED, porque: `toca lo común de Sumied: ${muestra(comunSumied)}` }
-    : (toca.sumied || !toca.folvy) ? { entera: false, pruebas: pruebasDeLaZona(rama, carpetas), porque: 'la zona de la rama' }
-    : null
-  // Folvy: la entera de Folvy si toca pedidos, cocina o reparto; si no, la zona de lo que toca; y si toca Folvy sin zona, su suite.
-  const extra = zonas.map((z) => z.pruebas)
-  const folvyR = pedidos.length ? { entera: true, pruebas: folvy, porque: `toca pedidos, cocina o reparto: ${muestra(pedidos)}` }
-    : extra.length ? { entera: false, pruebas: extra, porque: `la de lo que toca (${zonas.map((z) => z.zona).join(', ')})` }
-    : toca.folvy && !sumied ? { entera: false, pruebas: folvy, porque: 'las de Folvy (solo toca Folvy)' }
-    : null
-  if (sumied?.entera && folvyR?.entera) return { entera: true, pruebas: [], porque: `${sumied.porque}; y ${folvyR.porque}` }
-  const partes = [sumied, folvyR].filter(Boolean)
-  const pruebas = [...new Set(partes.flatMap((p) => p.pruebas))]
-  const entera = partes.some((p) => p.entera)
-  const porque = (entera ? '' : 'solo pantallas: ') + partes.map((p) => p.porque).join('; ')
-  return { entera, pruebas, porque }
 }
 
 /** Las carpetas de tests/e2e/conta (b01, c02c, cierre…). */
@@ -284,6 +296,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (!r.entera && !r.pruebas.length) { console.error('area.mjs: sin pruebas (sería la suite entera)'); process.exit(1) }
     console.log(`entera=${r.entera}`)
     console.log(`pruebas=${r.pruebas.join(' ')}`)
+    console.log(`propias=${r.propias.join(' ')}`)
     console.log(`porque=${r.porque}`)
   }
 }

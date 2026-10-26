@@ -366,44 +366,48 @@ dice «ninguna», falta alguien. La #181 tocó `_shared/diezCliente.ts`:
 *(14/10. La #181 se fusionó con «[skip ci]» en el mensaje: no corrió el
 despliegue y las cuatro funciones de la C06 hubo que desplegarlas a mano.)*
 
-### Qué pruebas lleva cada PR: un criterio por riesgo
+### Qué pruebas lleva cada PR: la entera, nunca en un PR
 
-> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Reglas de
-> Julio, 19/10 y 21/10, **cambiadas en el W04 (22/10)** con la auditoría de las
-> reglas de pruebas: un solo criterio por riesgo.
+> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de
+> Julio, **26/10**, que sustituye al «criterio por riesgo» del W04 (22/10).
+> Detalle: `docs/conta/pruebas_de_un_pr.md`.
 
-| Riesgo | Qué corre |
+**La entera no corre en ningún PR, nunca.** Corre solo de noche sobre `main`,
+y en un PR solo con la etiqueta **`e2e-entera`**, cuando Julio la pide.
+
+| Qué toca el PR | Qué corre en cada push (`scripts/e2e/area.mjs`) |
 |---|---|
-| **Solo pantallas** | `antes-de-subir.sh` (lint, unitarias, `npm run build` exacto) y, en cada push, la e2e de su **zona** (`scripts/e2e/area.mjs`). |
-| **Lo común** (`LO_COMUN`: el marco, la cabecera, la barra y el esqueleto, el diseño compartido, el arranque de la app y lo que mueve todas las pruebas) | La **entera** en el push, en vez de la zona. |
-| **Pedidos, cocina o reparto** (`PEDIDOS` en `area.mjs`: sus pantallas, los TPV, tickets y tablets, y las funciones de HubRise, Last.app y pedidos) | **Todo**: la entera en el push, que lleva la corta. |
-| **Sumied o Folvy** (C10, 23/10) | Un cambio solo de Sumied (contabilidad: `src/modules/conta`, `tests/e2e/conta`…) no lanza las de Folvy, y al revés. Lo común **de Sumied** (`LO_COMUN_SUMIED`: el marco y el diseño de contabilidad) lanza la entera de `tests/e2e/conta`; lo común **a los dos** (`LO_COMUN_AMBOS`: el arranque de la app, la configuración, lo que mueve todas las pruebas), las dos. |
-| **Con tanda** | Lo de su riesgo, más la prueba de staging en ROLLBACK de cada «cambia», el **ensayo** y el **real** en producción con su comprobación y su deshacer (W01). La entera es la de la noche. |
+| **Siempre** | Su **zona** (la carpeta de la rama o la de lo que toca, y el juego común) y **cada `.spec.ts` que cambia el PR**. |
+| **Lo común** (`LO_COMUN_SUMIED` y `LO_COMUN_AMBOS`: el marco, el menú, `module.tsx`, el diseño, el arranque, `package.json`…) | Además, **la rápida de pantallas** (`tests/e2e/conta/humo/pantallas.spec.ts`): cada pantalla de Sumied una vez, en ordenador y en móvil, como mucho 10 min. |
+| **Pedidos, cocina o reparto** (`PEDIDOS`) | Además, **la corta** (91 s). |
+| **Con tanda** | Además, la prueba de staging en ROLLBACK de cada «cambia», el **ensayo** y el **real** en producción con su comprobación y su deshacer (W01). |
 
+- **Un fallo por TIEMPO en una prueba que no es de la zona del PR** (el juego
+  común, la rápida) **no bloquea fusionar**: se apunta como aviso en el run y
+  lo mira la de la noche (`scripts/e2e/por-fichero.sh`).
+  - En la zona, todo fallo bloquea.
+  - Un fallo que ve otra cosa (un texto que no cuadra, un error de la página)
+    bloquea siempre.
+  - A mano y de noche, todo bloquea.
+- **Fichero a fichero** (#340): cada fichero coge la barrera de staging solo
+  mientras corre. Así una aplicación a staging entra entre dos ficheros y nunca
+  en mitad de uno.
 - **Las unitarias, también en la CI** (N1, 23/10): `unitarias.yml` corre en
   cada PR a `main` las del producto que toca (`scripts/pruebas/unitarias.mjs`).
-  Lo común —el arranque, `src/lib`, `src/config`, `_shared`, las migraciones,
-  los workflows, cualquier fichero que no sea claramente de uno— lanza las dos,
-  y una prueba que lee el otro producto es de los dos. En local,
-  `antes-de-subir.sh` las sigue corriendo enteras.
-- **La corta** (`reparto/direccion-falta` y `reparto/quien-reparte`, 91 s) ya
-  no va en cada push: va dentro de la entera cuando el PR toca pedidos, cocina
-  o reparto, y cada noche.
-- **Ya no se pide una entera antes de la tanda**, ni su «primer intento»
-  (`e2e-entera.mjs` se fue): a la tanda la protegen el analizador, el ensayo, la
-  comprobación de después y el deshacer; lo que se cuele entre zonas lo caza la
-  de la noche.
-- **La etiqueta `e2e-entera`** la pide siempre, y al ponerla se lanza en ese
-  momento (`e2e-etiqueta.yml`).
-- **Y cada noche sobre `main`**, a las 03:00 de Madrid. Si falla por staging
-  (no poder entrar, un 520, una página HTML de la base) lo repite una vez; si
-  no, o si vuelve a fallar, abre la incidencia «e2e de la noche en rojo» con
-  cada prueba, su fichero y el commit (`scripts/e2e/noche.mjs`).
+  En local, `antes-de-subir.sh` las sigue corriendo enteras.
+- **Y cada noche sobre `main`**, a las 03:00 de Madrid, la entera en 2 trozos.
+  - Si falla por staging (no poder entrar, un 520, una página HTML de la base),
+    la repite una vez.
+  - Si no es por staging, o si vuelve a fallar, abre la incidencia «e2e de la
+    noche en rojo» (`scripts/e2e/noche.mjs`).
+- **La entera lanzada a mano va siempre en 2 trozos**, también con una carpeta
+  («tests/e2e/conta»). En un trozo solo van los ficheros sueltos.
 
-*(22/10. El #281 y el C07 se llevaron 275 y más de 225 min de máquina; la
-entera antes de la tanda, 141 min y 3 pasadas, y cayó por staging lento, no por
-la tanda. Medido contra los 40 últimos PR de `main`: 13 tocan lo común y 1
-toca pedidos.)*
+*(26/10. La entera corría en casi todos los PR, porque tocar el menú o
+`module.tsx` cuenta como lo común: 74 min la del #339, que con la regla nueva
+son unos 12 min de pruebas. Las 5 que cayeron por tiempo esa mañana salieron
+en verde con staging tranquilo. Antes, el 22/10: el #281 y el C07 se llevaron
+275 y más de 225 min de máquina.)*
 
 ### Staging recibe de verdad solo lo que está en producción
 

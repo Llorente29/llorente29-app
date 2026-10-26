@@ -96,7 +96,10 @@ describe('la entera en trozos', () => {
     // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de su PR.
     // 25/10 (PC01 · E1, al traer main con la V02): las dos juntas, pc01/cobros-y-pagos y v02/puerta,
     // sin medir. El reparto estimado da 18,30 (media 18,27): el techo se queda en 18,5 min. Lo mide la entera de la noche.
-    expect(Math.max(...seg) / 60).toBeLessThan(18.5)
+    // 26/10 (la cola de staging): entra conta/humo/pantallas, la rápida de lo común, ESTIMADA en 300 s
+    // (37 pantallas × 2 tamaños × unos 4 s; tiempos.json lo dice). El reparto estimado da 19,77: el techo
+    // pasa a 20 min. Lo mide su primera pasada, y entonces se cambia la estimación por lo medido.
+    expect(Math.max(...seg) / 60).toBeLessThan(20)
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {

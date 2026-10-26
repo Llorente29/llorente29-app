@@ -45,6 +45,8 @@ function playwrightFalso() {
 if [ "$1" = merge-reports ]; then echo "merge $*" >> "${dir}/log"; exit 0; fi
 echo "test $2 salida=$E2E_SALIDA blob=$PLAYWRIGHT_BLOB_OUTPUT_FILE fuera=$E2E_SERVIDOR_FUERA guarda=$PWTEST_BLOB_DO_NOT_REMOVE" >> "${dir}/log"
 mkdir -p blob-report && touch "$PLAYWRIGHT_BLOB_OUTPUT_FILE"
+case "$2" in *tiempo*) echo "Test timeout of 60000ms exceeded." ;; esac
+case "$2" in *texto*) printf 'Timed out 15000ms waiting for expect(locator).toHaveText(expected)\nExpected string: "Pagada"\nReceived string: "Pendiente"\n' ;; esac
 case "$2" in *rojo*) exit 1 ;; esac
 `)
   chmodSync(f, 0o755)
@@ -108,6 +110,36 @@ describe('la barrera es por fichero (por-fichero.sh)', () => {
   })
 })
 
+// Julio, 26/10: «un fallo por tiempo en una prueba que no es de la zona del PR no bloquea fusionar».
+describe('fuera de la zona, el tiempo no bloquea (solo en el push)', () => {
+  const zona = { E2E_ZONA: '1', E2E_PROPIAS: 'tests/e2e/conta/b01 tests/e2e/conta/pc01/cobros-y-pagos.spec.ts' }
+  it('el juego común o la rápida, por tiempo: se apunta y el trozo sale en verde', () => {
+    const r = correr(['tests/e2e/conta/b01/motor.spec.ts', 'tests/e2e/conta/humo/pantallas-tiempo-rojo.spec.ts'], zona)
+    expect(r.status).toBe(0)
+    expect(r.stdout).toContain('::warning title=Fuera de la zona, por tiempo::tests/e2e/conta/humo/pantallas-tiempo-rojo.spec.ts')
+    expect(readFileSync(join(dir, 'resumen.md'), 'utf8')).toContain('**Por tiempo y fuera de la zona del PR (no bloquean; los mira la entera de la noche):** tests/e2e/conta/humo/pantallas-tiempo-rojo.spec.ts')
+  })
+  it('en la zona del PR, el tiempo bloquea: una carpeta suya o una prueba que cambia', () => {
+    expect(correr(['tests/e2e/conta/b01/conciliar-tiempo-rojo.spec.ts'], zona).status).toBe(1)
+    expect(correr(['tests/e2e/conta/pc01/cobros-y-pagos.spec.ts-tiempo-rojo'], { ...zona, E2E_PROPIAS: 'tests/e2e/conta/pc01/cobros-y-pagos.spec.ts-tiempo-rojo' }).status).toBe(1)
+  })
+  it('fuera de la zona, un fallo que ve otra cosa (un texto distinto) bloquea, aunque también diga «Timed out»', () => {
+    expect(correr(['tests/e2e/conta/c00/marco-texto-rojo.spec.ts'], zona).status).toBe(1)
+  })
+  it('fuera de la zona, un fallo que no es de tiempo bloquea', () => {
+    expect(correr(['tests/e2e/conta/c00/marco-rojo.spec.ts'], zona).status).toBe(1)
+  })
+  it('a mano o de noche (sin E2E_ZONA), todo bloquea', () => {
+    expect(correr(['tests/e2e/conta/humo/pantallas-tiempo-rojo.spec.ts']).status).toBe(1)
+  })
+  it('el workflow lo activa solo en la zona de un push, con las propias que da area.mjs', () => {
+    const wf = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
+    expect(wf).toContain('E2E_ZONA: ${{ needs.plan.outputs.zona }}')
+    expect(wf).toContain('E2E_PROPIAS: ${{ needs.plan.outputs.propias }}')
+    expect(wf).toContain(`PROPIAS=$(sed -n 's/^propias=//p' "$RUNNER_TEMP/decision.txt"); ZONA=1`)
+  })
+})
+
 describe('los cerrojos: quién coge qué, y cuánto espera cada uno', () => {
   const sql = (f: string) => readFileSync(`scripts/e2e/carril/${f}`, 'utf8').replace(/--[^\n]*/g, '')
   it('el carril ya no coge la barrera; el fichero la coge compartida; la aplicación, exclusiva', () => {
@@ -164,17 +196,21 @@ describe('la e2e de un push corre también las pruebas que cambia el PR', () => 
   it('el #338: el juego común y las dos que arreglaba', () => {
     const r = queCorre('conta/e2e-b01-pc01-pasos', { cambiados: PR_338, existe })
     expect(r.entera).toBe(false)
-    expect(r.pruebas).toEqual(['tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.spec.ts', ...PR_338])
-    expect(r.porque).toContain('y las que cambia el PR: tests/e2e/conta/b01/motor.spec.ts, tests/e2e/conta/pc01/cobros-y-pagos.spec.ts')
+    expect(r.pruebas).toEqual([...PR_338, 'tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.spec.ts'])
+    // Las dos que arreglaba son suyas: un fallo en ellas bloquea, sea por lo que sea.
+    expect(r.propias).toEqual(PR_338)
+    expect(r.porque).toContain('las que cambia el PR: tests/e2e/conta/b01/motor.spec.ts, tests/e2e/conta/pc01/cobros-y-pagos.spec.ts')
   })
 
   it('lo que ya está en la zona no se repite; una prueba borrada no se corre', () => {
     const r = queCorre('conta/b02-recargas', { cambiados: [...PR_338, 'tests/e2e/conta/c09/borrada.spec.ts'], existe })
-    expect(r.pruebas).toEqual(['tests/e2e/conta/b01', 'tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.spec.ts', 'tests/e2e/conta/pc01/cobros-y-pagos.spec.ts'])
+    expect(r.pruebas).toEqual(['tests/e2e/conta/b01', 'tests/e2e/conta/pc01/cobros-y-pagos.spec.ts', 'tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.spec.ts'])
   })
 
-  it('la entera sin acotar no cambia: ya lleva todas', () => {
-    expect(queCorre('conta/x', { cambiados: ['src/App.tsx', ...PR_338], existe })).toMatchObject({ entera: true, pruebas: [] })
+  it('con lo común: la zona, las que cambia el PR y la rápida; nunca la entera', () => {
+    const r = queCorre('conta/x', { cambiados: ['src/App.tsx', ...PR_338], existe })
+    expect(r.entera).toBe(false)
+    expect(r.pruebas).toEqual([...PR_338, 'tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.spec.ts', 'tests/e2e/conta/humo/pantallas.spec.ts'])
   })
 
   it('solo .spec.ts de tests/e2e: los ayudantes y las unitarias no', () => {
