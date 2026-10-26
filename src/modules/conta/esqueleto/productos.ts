@@ -172,19 +172,22 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    // S02 · Facturas recibidas · Tickets · Pagos · Liquidaciones. Tickets y Pagos aún sin pantalla.
+    // S02 · Facturas recibidas · Tickets · Pagos · Repartidores. Tickets aún sin pantalla (otro encargo).
     // «Por revisar» (las recepciones de Cocina que esperan factura, compras/) cuelga de
     // Facturas recibidas: es de donde salen esas facturas.
     id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.documentos, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos, R.compras] },
       { id: 'tickets', etiqueta: 'Tickets', icono: 'documento', ruta: null, prefijos: [] },
-      { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: null, prefijos: [] },
+      // PC01 · E2 · Pagos (tableros 15 y 16): la lista, sus remesas y la ficha de una.
+      { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: R.pagos, prefijos: [R.pagos] },
       // S02 · PR 3: las quincenas de Catcher (y la ficha de una). V01 · Entrega 3: las
       // de plataforma y las mensuales de los socios de marca, en Ventas › Liquidaciones.
+      // PC01 · E2 (Julio, 26/10): se llama «Repartidores» (la quincena de los riders), para
+      // no confundirse con Ventas › Liquidaciones; la dirección de antes redirige.
       {
-        id: 'liquidaciones', etiqueta: 'Liquidaciones', icono: 'liquidaciones', ruta: R.liquidaciones,
-        prefijos: [R.liquidaciones, `${R.documentos}/catcher`], solo: 'hosteleria',
+        id: 'liquidaciones', etiqueta: 'Repartidores', icono: 'liquidaciones', ruta: R.repartidores,
+        prefijos: [R.repartidores, R.liquidaciones, `${R.documentos}/catcher`], solo: 'hosteleria',
       },
     ],
   },

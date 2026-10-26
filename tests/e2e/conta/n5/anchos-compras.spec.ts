@@ -77,9 +77,9 @@ for (const ancho of ANCHOS) {
     await sinDesplazamientoLateral(page, `la ficha a ${ancho}`)
     await page.screenshot({ path: `${DIR}/ficha-${ancho}.png` })
 
-    // 3 · Liquidaciones.
-    await page.goto('/conta/compras/liquidaciones')
-    await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
+    // 3 · Repartidores (antes «Liquidaciones»).
+    await page.goto('/conta/compras/repartidores')
+    await expect(page.getByRole('heading', { level: 1, name: 'Repartidores' })).toBeVisible({ timeout: 30_000 })
     await expect(page.locator('[data-fila]').first()).toBeVisible({ timeout: 30_000 })
     await sinDesplazamientoLateral(page, `Liquidaciones a ${ancho}`)
     await page.screenshot({ path: `${DIR}/liquidaciones-${ancho}.png` })

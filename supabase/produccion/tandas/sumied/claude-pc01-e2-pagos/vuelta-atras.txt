@@ -1,0 +1,2 @@
+# PC01 · Entrega 2 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261026T0915_pc01e2_remesas_de_pagos.down.sql

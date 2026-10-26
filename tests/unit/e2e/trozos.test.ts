@@ -37,7 +37,9 @@ describe('la entera en trozos', () => {
     // 26/10 (V03 · E2): entra v03/verifactu y la mide la entera de su PR (40268812432, tiempos.json): siguen 9.
     // 26/10 (V02 · Pantallas): entra v02/liquidaciones, nueva y sin medir: son 10. La mide la entera de su PR.
     // 26/10 (V03 · E2, al traer main con la V02 · Pantallas): las dos juntas, v03/verifactu medida y v02/liquidaciones sin medir: son 10 (contadas con tiempos.json de las dos).
-    expect(sin.length).toBeLessThan(11)
+    // 26/10 (PC01 · E2, al traer main con la V03 · E2): entra pc01/pagos, nueva y sin medir: son 11. La mide la entera de su PR.
+    // 26/10 (PC01 · E2, al traer main con la cola de staging): contadas las dos ramas, siguen 11 sin medir. La mide la entera de la noche.
+    expect(sin.length).toBeLessThan(12)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -98,6 +100,9 @@ describe('la entera en trozos', () => {
     // sin medir. El reparto estimado da 18,30 (media 18,27): el techo se queda en 18,5 min. Lo mide la entera de la noche.
     // 26/10 (la cola de staging): entra conta/humo/pantallas, la rápida de lo común, medida: 67,3 s
     // (e2e 40328678034). El reparto estimado da 18,81: el techo pasa a 19 min. Lo mide la entera de la noche.
+    // 26/10 (PC01 · E2, al traer main con la cola de staging): las dos juntas, conta/humo/pantallas medida y
+    // pc01/pagos sin medir (cuenta como la mediana). Contadas las dos: el reparto estimado da 18,98 (media 18,96): el
+    // techo se queda en 19 min. Lo mide la entera de la noche.
     expect(Math.max(...seg) / 60).toBeLessThan(19)
   })
 

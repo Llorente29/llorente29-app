@@ -481,6 +481,19 @@ const NUMERACION: DefinicionTabla = {
   vacia: `Aún no tienes series. La numeración se usará cuando emitas facturas desde ${MARCA.nombre}.`,
 }
 
+/**
+ * PC01 · E2 (respuesta 7) · El sufijo del banco: tres cifras que el banco pone
+ * detrás del NIF del ordenante en los ficheros de transferencias. Sin poner, el
+ * de serie, «000». Solo se manda a la base si se ha cambiado (o ya tenía uno):
+ * así guardar una cuenta no depende de la columna donde no se usa.
+ */
+export function sufijoParaLaBase(v: Valores): Record<string, string | null> {
+  const sufijo = (v.sepa_suffix ?? '').trim() || '000'
+  const antes = (v._sufijo_antes ?? '').trim()
+  if (sufijo === '000' && antes === '') return {}
+  return { sepa_suffix: sufijo === '000' ? null : sufijo }
+}
+
 const BANCOS: DefinicionTabla = {
   id: 'bancos-y-cajas', titulo: 'Bancos y cajas', singular: 'banco o caja', columnaTitulo: 'Cuenta',
   tablasBd: ['treasury_account'], claveAjuste: null, conSerie: false, conVigencia: false, soloLectura: false, deEmpresa: true,
@@ -494,6 +507,7 @@ const BANCOS: DefinicionTabla = {
     { etiqueta: 'Tipo', valor: (f) => CAJA[txt(d(f, 'kind'))] ?? null },
     { etiqueta: 'IBAN', valor: (f) => (d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : null) },
     { etiqueta: 'BIC', valor: (f) => oNada(txt(d(f, 'bic'))) },
+    { etiqueta: 'Sufijo del banco', valor: (f) => (d(f, 'kind') === 'bank' ? txt(d(f, 'sepa_suffix')) || '000' : null) },
     { etiqueta: 'Cuenta', valor: (f, ctx) => cuentaTexto(f, 'pgc_hint', ctx) },
     { etiqueta: 'La que se usa si no eliges', valor: (f) => (d(f, 'is_default') ? 'Sí' : 'No') },
   ],
@@ -503,6 +517,8 @@ const BANCOS: DefinicionTabla = {
     { clave: 'name', etiqueta: 'Nombre', tipo: 'texto', obligatorio: true, ayuda: '«Cuenta del Santander», «Caja del local».' },
     { clave: 'iban', etiqueta: 'IBAN', tipo: 'iban', ayuda: 'Obligatorio si es una cuenta del banco.' },
     { clave: 'bic', etiqueta: 'BIC', tipo: 'texto' },
+    { clave: 'sepa_suffix', etiqueta: 'Sufijo del banco', tipo: 'texto', porDefecto: '000',
+      ayuda: 'Tres cifras que tu banco pone detrás de tu NIF en los ficheros de transferencias. Si no te ha dado otro, «000».' },
     { clave: 'pgc_hint', etiqueta: 'Cuenta', tipo: 'texto', porDefecto: '572' },
     { clave: 'is_default', etiqueta: 'Es la que se usa si no eliges', tipo: 'siNo', porDefecto: 'no' },
   ],
@@ -511,16 +527,18 @@ const BANCOS: DefinicionTabla = {
     const iban = (v.iban ?? '').trim()
     if (v.kind === 'bank' && iban === '') fallos.iban = 'Una cuenta del banco lleva su IBAN.'
     if (iban !== '') { const r = validarIban(iban); if (!r.ok) fallos.iban = r.motivo }
+    if (!/^\d{3}$/.test((v.sepa_suffix ?? '').trim() || '000')) fallos.sepa_suffix = 'El sufijo del banco son tres cifras, como «000».'
     comprobarCuentas(v, ['pgc_hint'], fallos)
     return fallos
   },
   aBase: (v) => ({
     kind: v.kind, name: v.name.trim(), iban: nulo(v.iban) === null ? null : normalizarIban(v.iban), bic: nulo(v.bic),
-    pgc_hint: nulo(v.pgc_hint), is_default: siNo(v.is_default),
+    pgc_hint: nulo(v.pgc_hint), is_default: siNo(v.is_default), ...sufijoParaLaBase(v),
   }),
   aValores: (f) => ({
     kind: txt(d(f, 'kind')), name: txt(d(f, 'name')), iban: d(f, 'iban') ? formatearIban(txt(d(f, 'iban'))) : '', bic: txt(d(f, 'bic')),
     pgc_hint: txt(d(f, 'pgc_hint')), is_default: d(f, 'is_default') ? 'si' : 'no',
+    sepa_suffix: txt(d(f, 'sepa_suffix')) || '000', _sufijo_antes: txt(d(f, 'sepa_suffix')),
   }),
   buscable: (f) => `${txt(d(f, 'name'))} ${txt(d(f, 'iban'))} ${CAJA[txt(d(f, 'kind'))] ?? ''}`,
   vacia: 'Aún no has puesto tus bancos ni tus cajas.',

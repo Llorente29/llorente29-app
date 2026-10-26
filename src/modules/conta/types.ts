@@ -93,6 +93,8 @@ export interface FacturaParaCifras {
   grandTotal: number | null
   dueDate: string | null       // 'YYYY-MM-DD'
   paidAt: string | null        // 'YYYY-MM-DD'
+  /** PC01 · E2 · Lo pagado con asiento (conta_recibida_pago). Sin él, se cuenta como si nada (lo de antes). */
+  pagado?: number
 }
 
 export const ROLE_LABEL: Record<ContactRole, string> = {

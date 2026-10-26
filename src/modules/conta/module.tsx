@@ -45,6 +45,9 @@ import VentasPage from '@/modules/conta/ventas/VentasPage'
 import CierresPage from '@/modules/conta/ventas/CierresPage'
 import CierrePage from '@/modules/conta/ventas/CierrePage'
 import LiquidacionesVentasPage from '@/modules/conta/ventas/LiquidacionesVentasPage'
+import PagosPage from '@/modules/conta/compras/PagosPage'
+import RemesaPagosPage from '@/modules/conta/compras/RemesaPagosPage'
+import RemesasPagosPage from '@/modules/conta/compras/RemesasPagosPage'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
 import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
@@ -141,8 +144,14 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.documentos, element: enMarco(<DocumentosPage />, '¿Qué facturas me faltan este mes?', true) },
     { path: CONTA.rutas.revisarFactura, element: enMarco(<RevisarFacturaPage />, '¿A qué cuenta va esta factura?', true) },
     { path: CONTA.rutas.loteCatcher, element: enMarco(<LoteCatcherPage />, '¿Cuadra la quincena de Catcher?', true) },
-    // S02 · PR 3: Compras y gastos › Liquidaciones, todas en una lista.
-    { path: CONTA.rutas.liquidaciones, element: enMarco(<LiquidacionesPage />, '¿Qué liquidaciones me faltan?', true) },
+    // S02 · PR 3: Compras y gastos › Liquidaciones, todas en una lista. PC01 · E2 (Julio, 26/10): se
+    // llama «Repartidores» (la quincena de los riders); la dirección de antes lleva allí, con sus filtros.
+    { path: CONTA.rutas.repartidores, element: enMarco(<LiquidacionesPage />, '¿Cuadra la quincena de los repartidores?', true) },
+    { path: CONTA.rutas.liquidaciones, element: <LlevarAVentas a={CONTA.rutas.repartidores} /> },
+    // PC01 · E2 · Compras y gastos › Pagos (tablero 15), sus remesas y la ficha de una (tablero 16).
+    { path: CONTA.rutas.pagos, element: enMarco(<PagosPage />, '¿Qué tengo que pagar esta semana?', true) },
+    { path: CONTA.rutas.remesasPagos, element: enMarco(<RemesasPagosPage />, '¿Qué remesas esperan su cargo?', true) },
+    { path: CONTA.rutas.remesaPagos, element: enMarco(<RemesaPagosPage />, '¿Por qué esta remesa está parada?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },

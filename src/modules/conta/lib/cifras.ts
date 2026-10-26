@@ -18,14 +18,19 @@ export function cuenta(f: FacturaParaCifras): boolean {
 }
 
 export function estaPagada(f: FacturaParaCifras): boolean {
-  return f.paidAt !== null || f.status === 'pagada'
+  return f.paidAt !== null || f.status === 'pagada' || (f.pagado !== undefined && pendienteDe(f) < 0.005)
+}
+
+/** PC01 · E2 · Lo que queda por pagar de una factura: su total menos lo pagado con asiento (conta_recibida_pago). */
+export function pendienteDe(f: FacturaParaCifras): number {
+  return Math.max(0, Math.round(((f.grandTotal ?? 0) - (f.pagado ?? 0)) * 100) / 100)
 }
 
 export interface CifrasFicha {
   /** Suma de grand_total del año natural. null = ninguna factura aprobada este año. */
   compradoEsteAnio: number | null
   facturasEsteAnio: number
-  /** Suma de las aprobadas sin pagar. null = no hay ninguna factura aprobada (nunca). */
+  /** Lo que queda por pagar de las aprobadas (lo pagado en parte, descontado). null = no hay ninguna factura aprobada (nunca). */
   leDebes: number | null
   /** El vencimiento más cercano de las no pagadas. null = no hay nada pendiente. */
   proximoPago: { fecha: string; importe: number; facturas: number } | null
@@ -49,7 +54,7 @@ export function calcularCifras(facturas: FacturaParaCifras[], hoy: string): Cifr
     const mismas = conVencimiento.filter((f) => f.dueDate === fecha)
     proximoPago = {
       fecha,
-      importe: redondea(mismas.reduce((s, f) => s + (f.grandTotal ?? 0), 0)),
+      importe: redondea(mismas.reduce((s, f) => s + pendienteDe(f), 0)),
       facturas: mismas.length,
     }
   }
@@ -57,7 +62,8 @@ export function calcularCifras(facturas: FacturaParaCifras[], hoy: string): Cifr
   return {
     compradoEsteAnio: delAnio.length === 0 ? null : redondea(delAnio.reduce((s, f) => s + (f.grandTotal ?? 0), 0)),
     facturasEsteAnio: delAnio.length,
-    leDebes: validas.length === 0 ? null : redondea(pendientes.reduce((s, f) => s + (f.grandTotal ?? 0), 0)),
+    // PC01 · E2: lo que queda por pagar, con lo pagado en parte descontado (conta_recibida_pago).
+    leDebes: validas.length === 0 ? null : redondea(pendientes.reduce((s, f) => s + pendienteDe(f), 0)),
     proximoPago,
     hayFacturas: validas.length > 0,
   }
