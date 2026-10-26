@@ -1,0 +1,16 @@
+# PC01 · Entrega 2 · Compras › Pagos (Julio, 26/10). Rama claude/pc01-e2-pagos.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0915 — AÑADE las remesas de pagos (conta_pago_remesa, su línea y su
+#      historial), su estado calculado (dos vistas), las funciones de Compras ›
+#      Pagos (preparar la remesa, «Ya la he pagado», confirmar el IBAN, sacar,
+#      rechazado, los datos del fichero SEPA, casar el cargo del banco, «Ponerles
+#      vencimiento», la lista y la ficha) y un disparador nuevo en supplier que
+#      apunta cuándo cambia el IBAN de la ficha (para el antifraude): eso CAMBIA en
+#      caliente supplier, declarado en su cabecera con su prueba de staging (no
+#      está en el camino del pedido: sin autorizo). No toca datos.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/pc01-e2.sql
+supabase/migrations/20261026T0915_pc01e2_remesas_de_pagos.sql

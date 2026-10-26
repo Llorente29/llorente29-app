@@ -1,0 +1,7 @@
+# PC01 · Entrega 2 · Compras › Pagos. La 0915 solo añade (y se puede pasar dos
+# veces): desde la rama, de verdad (W05). Su prueba (ROLLBACK): lo que no entra
+# en una remesa, prepararla con un IBAN por confirmar, confirmarlo, el fichero,
+# un pago rechazado, casar el cargo del banco (400 contra 572) y deshacerlo, el
+# antifraude, «Ya la he pagado» parcial, «Ponerles vencimiento» y la vuelta atrás.
+supabase/migrations/20261026T0915_pc01e2_remesas_de_pagos.sql
+supabase/staging/sql/20261026_pc01e2_remesas_prueba.sql

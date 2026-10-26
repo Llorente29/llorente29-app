@@ -1,0 +1,38 @@
+-- supabase/vuelta-atras/20261026T0915_pc01e2_remesas_de_pagos.down.sql
+--
+-- Vuelta atrás de la 0915 (PC01 · E2), que solo añade: se quita todo lo que
+-- crea, en orden inverso. Las tablas se van con sus filas (las remesas
+-- preparadas); los pagos ya casados en Bancos NO se tocan: viven en
+-- supplier_invoice_payment y bank_match_item, que son del E1, con su asiento.
+-- Las columnas iban_previous / iban_changed_* de supplier son del C01b y se
+-- quedan; solo se va el disparador que las rellenaba al cambiar la ficha.
+-- Se puede pasar dos veces (todo «if exists»).
+
+drop function if exists public.conta_remesas_lista(uuid);
+drop function if exists public.conta_remesa_ficha(uuid);
+drop function if exists public.conta_pagos_lista(uuid, date);
+drop function if exists public.conta_recibidas_poner_vencimiento(uuid, jsonb);
+drop function if exists public.conta_remesas_para_casar(uuid);
+drop function if exists public.conta_remesa_casar(uuid, uuid, uuid[]);
+drop function if exists public.conta_remesa_descargada(uuid, text, integer);
+drop function if exists public.conta_remesa_fichero_datos(uuid);
+drop function if exists public.conta_remesa_linea_rechazada(uuid, text);
+drop function if exists public.conta_remesa_linea_sacar(uuid);
+drop function if exists public.conta_remesa_iban_confirmar(uuid);
+drop function if exists public._pc01e2_linea(uuid);
+drop function if exists public.conta_pago_a_mano(uuid, uuid, uuid, date, numeric);
+drop function if exists public.conta_remesa_pagos_crear(uuid, uuid, date, jsonb);
+drop trigger if exists pc01e2_proveedor_iban_cambiado on public.supplier;
+drop function if exists public._pc01e2_proveedor_iban_cambiado();
+drop function if exists public._pc01e2_iban_como_esta(uuid, text);
+drop function if exists public._pc01e2_en_remesa(uuid);
+drop function if exists public._pc01e2_cuenta_proveedor(uuid, uuid);
+drop function if exists public._pc01e2_codigo(uuid, date);
+drop function if exists public._pc01e2_evento(uuid, uuid, uuid, text);
+drop function if exists public._pc01e2_iban(text);
+drop function if exists public._pc01e2_empresa(uuid);
+drop view if exists public.conta_pago_remesa_estado;
+drop view if exists public.conta_pago_remesa_linea_estado;
+drop table if exists public.conta_pago_remesa_evento;
+drop table if exists public.conta_pago_remesa_linea;
+drop table if exists public.conta_pago_remesa;
