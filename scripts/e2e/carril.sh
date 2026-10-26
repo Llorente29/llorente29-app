@@ -166,9 +166,9 @@ coger() {
   fi
   echo "$n" > "$CARRIL_DIR/numero"
   if grep -q '^carril-espera' "$CARRIL_DIR/guardian.log"; then
-    echo "Carril $n cogido tras $(( $(date +%s) - t0 )) s en cola: estaban los $MAX cogidos (${CARRIL_YO:-?})."
+    echo "::notice title=Espera al carril::Carril $n cogido tras $(( $(date +%s) - t0 )) s en cola: estaban los $MAX cogidos (${CARRIL_YO:-?})."
   else
-    echo "Carril $n cogido en $(( $(date +%s) - t0 )) s (${CARRIL_YO:-?})."
+    echo "::notice title=Espera al carril::Carril $n cogido en $(( $(date +%s) - t0 )) s (${CARRIL_YO:-?})."
   fi
 }
 
@@ -266,7 +266,7 @@ migrar_coger() {
   local otros; otros=$(quien_hay)
   [ -n "$otros" ] && echo "Esperando a que acaben: $otros"
   esperar_linea 'migrar-cogido' > /dev/null || { echo "::error::Sin el cerrojo de migrar en ${MIGRAR_MIN} min. Lo tienen: $(quien_hay)"; matar_guardian; exit 1; }
-  echo "Cerrojo de migrar cogido (esperado $(( $(date +%s) - t0 )) s): ningún fichero de prueba está corriendo en staging."
+  echo "::notice title=Espera de la aplicación::Cerrojo de migrar cogido tras $(( $(date +%s) - t0 )) s: ningún fichero de prueba está corriendo en staging."
 }
 
 migrar_soltar() { matar_guardian; echo "Cerrojo de migrar soltado."; }

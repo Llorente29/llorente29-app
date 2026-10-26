@@ -136,6 +136,16 @@ for f in filas:
     print(f"| {f['fichero']} | {f['espera_s']} | {f['duracion_s']} | {f['resultado']} |")
 PY
 
+# Las esperas, también como aviso del run: se ven en su portada y por la API.
+python3 - "$TSV" <<'PY2'
+import sys, csv
+filas = list(csv.DictReader(open(sys.argv[1]), delimiter='\t'))
+num = lambda v: int(v) if v.isdigit() else 0
+mayor = max(filas, key=lambda f: num(f['espera_s']), default=None)
+total = sum(num(f['espera_s']) for f in filas)
+detalle = '; '.join(f"{f['fichero'].removeprefix('tests/e2e/')} {f['espera_s']} s" for f in filas if num(f['espera_s']) >= 5)
+print(f"::notice title=Esperas a la barrera::{len(filas)} ficheros, total {total} s, la mayor {mayor['espera_s'] if mayor else 0} s{' (' + detalle + ')' if detalle else ''}.")
+PY2
 if [ "$fallos" -gt 0 ]; then echo "::error::$fallos de ${#FICHEROS[@]} ficheros en rojo."; exit 1; fi
 if [ "$avisos" -gt 0 ]; then echo "$avisos fuera de la zona por tiempo: apuntados, no bloquean."; fi
 echo "Los ${#FICHEROS[@]} ficheros en verde."
