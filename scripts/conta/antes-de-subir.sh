@@ -60,6 +60,10 @@ npm run build
 
 paso '7/10 · SQL: el fichero entero y como usuario (C04b R7); la tanda cuenta y no deja huecos (R9)'
 node scripts/conta/antes-de-subir-sql.mjs
+# PC01 (26/10): ninguna migración nueva o cambiada trae un DELETE o un UPDATE
+# sin WHERE. La app pasa por safeupdate y los para, también dentro de una
+# función; las pruebas de staging corren como postgres y no lo ven.
+node scripts/conta/sql-sin-where.mjs
 
 paso '8/10 · la tanda de producción, analizada contra el contexto REAL de producción (R11)'
 # Antes de dar datos de lanzamiento a Julio: el analizador con el contexto real,

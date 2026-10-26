@@ -1,0 +1,3 @@
+# PC01 · arreglo urgente · vuelta atrás: las tres funciones como en producción
+# el 26/10 (vuelve a romper lo que se llama desde la app).
+supabase/vuelta-atras/20261026T0642_pc01_sin_delete_sin_where.down.sql

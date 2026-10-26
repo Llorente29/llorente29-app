@@ -5,3 +5,8 @@
 # antiguo, LF en lo que toco el replace). Normalizarlos rompe el md5 con el
 # que se verifica contra produccion. Se trata como binario.
 supabase/migrations/20260827163135_adapt_hubrise_order_usa_hubrise_street_line.sql -text
+
+# PC01 (26/10): la vuelta atrás de la 0642 devuelve recost_sales_for_product con
+# sus saltos CRLF, como está en producción (md5 e117089e…). Normalizarlos cambia
+# su huella y la prueba de staging no vería «lo de producción». Como binario.
+supabase/vuelta-atras/20261026T0642_pc01_sin_delete_sin_where.down.sql -text
