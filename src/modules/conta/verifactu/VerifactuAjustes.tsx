@@ -37,10 +37,14 @@ export function VerifactuAjustes() {
   const { activa } = useEmpresas()
   const [vuelta, setVuelta] = useState(0)
   const datos = useLeer(accountId && activa ? () => leerVerifactu(accountId, activa.id, activa.nif) : null, `${accountId}:${activa?.id}:verifactu:${vuelta}`)
+  // Lo último leído: al volver a leer (después de guardar) la pantalla no se
+  // desmonta, y cada paso conserva su aviso a la vista (regla 8).
+  const [ultimo, setUltimo] = useState<DatosVerifactu | null>(null)
+  if (datos.datos && datos.datos !== ultimo) setUltimo(datos.datos)
   if (!activa) return <p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí sale su Verifactu.</p>
   if (datos.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer Verifactu: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>
-  if (!datos.datos) return <div className="s-lista" aria-busy="true" aria-label="Cargando Verifactu"><div className="s-lista-cargando" /></div>
-  const d = datos.datos
+  const d = datos.datos ?? ultimo
+  if (!d) return <div className="s-lista" aria-busy="true" aria-label="Cargando Verifactu"><div className="s-lista-cargando" /></div>
   const recargar = () => setVuelta((x) => x + 1)
   return (
     <div className="cxvf-alta" data-prueba="verifactu-alta">
