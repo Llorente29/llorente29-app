@@ -124,6 +124,11 @@ describe('los workflows', () => {
 
   it('la prueba del comparador: la buena en verde y las cuatro rotas en rojo', () => {
     expect(staging).toContain("for caso in buena rota-indice rota-columna rota-almacen rota-funcion")
+    // En compara-prueba no corre nada que aplique el manifiesto (el run 40288911959 cayó en «Aplicar, fichero a fichero»).
+    for (const paso of ['- name: Aplicar, fichero a fichero', '- name: Cerrojo de migrar · esperar', '- name: Comparar como el ensayo de producción']) {
+      const i = staging.indexOf(paso)
+      expect(staging.slice(i, staging.indexOf('\n', staging.indexOf('if:', i)))).toContain("inputs.modo != 'compara-prueba'")
+    }
     for (const c of ['buena', 'rota-indice', 'rota-columna', 'rota-almacen', 'rota-funcion']) {
       expect(readdirSync(`supabase/staging/compara-prueba/${c}`)).toEqual(['20261026T1500_w06_prueba.down.sql'])
     }

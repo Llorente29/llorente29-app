@@ -360,7 +360,7 @@ jobs:
           done < /tmp/anaden.txt
 
       - name: Aplicar, fichero a fichero
-        if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
+        if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
