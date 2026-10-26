@@ -32,7 +32,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
-import { diaMes, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { diaMesCorto, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { bancos } from '@/modules/conta/services/bancosService'
 import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
@@ -54,9 +54,9 @@ function opcionesVence(hoy: string): { valor: string; texto: string }[] {
   const finMes = (() => { const x = new Date(`${hoy}T12:00:00Z`); return new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).toISOString().slice(0, 10) })()
   return [
     { valor: '', texto: 'Cuando sea' },
-    { valor: mas(7), texto: `Hasta el ${diaMes(mas(7))}` },
-    { valor: mas(20), texto: `Hasta el ${diaMes(mas(20))}` },
-    { valor: finMes, texto: `Hasta el ${diaMes(finMes)}` },
+    { valor: mas(7), texto: `Hasta el ${diaMesCorto(mas(7))}` },
+    { valor: mas(20), texto: `Hasta el ${diaMesCorto(mas(20))}` },
+    { valor: finMes, texto: `Hasta el ${diaMesCorto(finMes)}` },
   ]
 }
 
@@ -135,7 +135,7 @@ export default function PagosPage() {
     { id: 'vence', titulo: 'Vence', ancho: '84px', minimo: 72, celda: (f) => {
       const e = estadoPago(f)
       if (!f.vence) return <span className="pg-vence-sin">{e === 'pagada' ? '—' : 'sin fecha'}</span>
-      return <span className={e === 'vencida' ? 'pg-vence-rojo' : undefined}>{diaMes(f.vence)}</span>
+      return <span className={e === 'vencida' ? 'pg-vence-rojo' : undefined}>{diaMesCorto(f.vence)}</span>
     } },
     { id: 'proveedor', titulo: 'Proveedor', celda: (f) => f.proveedor, minimo: 160 },
     { id: 'factura', titulo: 'Factura', celda: (f) => f.numero ?? 'sin número', prioridad: 3, minimo: 110 },
@@ -149,7 +149,7 @@ export default function PagosPage() {
     return (
       <span className="pg-tarjeta">
         <span className="pg-tarjeta-fila"><strong>{f.proveedor}</strong><strong className="s-cifra">{eurosExactos(f.pendiente)}</strong></span>
-        <span className="pg-tarjeta-fila cx-ayuda"><span>{f.numero ?? 'sin número'} · {f.vence ? `vence ${diaMes(f.vence)}` : 'sin fecha'}</span><Chip tono={c.tono}>{c.texto}</Chip></span>
+        <span className="pg-tarjeta-fila cx-ayuda"><span>{f.numero ?? 'sin número'} · {f.vence ? `vence ${diaMesCorto(f.vence)}` : 'sin fecha'}</span><Chip tono={c.tono}>{c.texto}</Chip></span>
       </span>
     )
   }

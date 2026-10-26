@@ -13,7 +13,7 @@
 import { useState } from 'react'
 import { Boton, Campo, Dialogo, Fecha, Importe, Selector, Texto } from '@/modules/conta/diseno'
 import { importeDeTexto, textoDeImporte } from '@/modules/conta/diseno/valores'
-import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
+import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import { libre, type FilaPago } from '@/modules/conta/lib/pagos'
 import type { BancoFolvy } from '@/modules/conta/services/bancosService'
 import { pagoAMano, pagoRechazado, ponerVencimiento } from '@/modules/conta/services/pagosService'
@@ -115,7 +115,7 @@ export function DialogoRechazado({ linea, alCerrar }: { linea: { id: string; pro
   }
   return (
     <Dialogo titulo="El banco lo ha rechazado" alCerrar={() => alCerrar(null)}
-      explicacion={<>El pago de {eurosExactos(linea.importe)} a {linea.proveedor} (factura {linea.numero ?? 'sin número'}{linea.vence ? `, vence ${diaMes(linea.vence)}` : ''}) vuelve a «Por pagar» con el motivo. Los demás pagos de la remesa siguen su curso.</>}
+      explicacion={<>El pago de {eurosExactos(linea.importe)} a {linea.proveedor} (factura {linea.numero ?? 'sin número'}{linea.vence ? `, vence ${diaMesCorto(linea.vence)}` : ''}) vuelve a «Por pagar» con el motivo. Los demás pagos de la remesa siguen su curso.</>}
       acciones={<>
         <Boton onClick={() => alCerrar(null)}>Cancelar</Boton>
         <Boton variante="principal" onClick={() => void guardar()} disabled={ocupado}>{ocupado ? 'Apuntando…' : 'Apuntar el rechazo'}</Boton>

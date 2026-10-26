@@ -10,7 +10,7 @@ import { rutaPagos, rutaRemesaPagos } from '@/config/navegacion'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
+import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { BotonEnlace, Chip } from '@/modules/conta/diseno'
 import { TablaLista, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
@@ -28,7 +28,7 @@ export default function RemesasPagosPage() {
   const columnas: ColumnaLista<RemesaResumen>[] = [
     { id: 'codigo', titulo: 'Remesa', celda: (r) => r.codigo, minimo: 110 },
     { id: 'tipo', titulo: 'Qué es', celda: (r) => (r.aMano ? 'Pago a mano' : 'Transferencias'), prioridad: 3, minimo: 120 },
-    { id: 'fecha', titulo: 'Fecha de pago', celda: (r) => diaMes(r.fechaPago), minimo: 100 },
+    { id: 'fecha', titulo: 'Fecha de pago', celda: (r) => diaMesCorto(r.fechaPago), minimo: 100 },
     { id: 'banco', titulo: 'Desde', celda: (r) => r.banco, prioridad: 2, minimo: 120 },
     { id: 'pagos', titulo: 'Pagos', cifra: true, celda: (r) => `${r.pagadas} de ${r.vivas}`, prioridad: 2, minimo: 70 },
     { id: 'total', titulo: 'Total', cifra: true, celda: (r) => eurosExactos(r.total).replace(' €', ''), minimo: 90 },
@@ -48,7 +48,7 @@ export default function RemesasPagosPage() {
           tarjeta={(r) => (
             <span className="pg-tarjeta">
               <span className="pg-tarjeta-fila"><strong>{r.codigo}</strong><strong className="s-cifra">{eurosExactos(r.total)}</strong></span>
-              <span className="pg-tarjeta-fila cx-ayuda"><span>{r.aMano ? 'Pago a mano' : 'Transferencias'} · {diaMes(r.fechaPago)}</span><Chip tono={TONO[r.estado]}>{NOMBRE_ESTADO_REMESA[r.estado]}</Chip></span>
+              <span className="pg-tarjeta-fila cx-ayuda"><span>{r.aMano ? 'Pago a mano' : 'Transferencias'} · {diaMesCorto(r.fechaPago)}</span><Chip tono={TONO[r.estado]}>{NOMBRE_ESTADO_REMESA[r.estado]}</Chip></span>
             </span>
           )}
           vacio={<p className="s-lista-vacia">Aún no hay remesas. Se preparan en Pagos, marcando las facturas y «Pagar».</p>} />

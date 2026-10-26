@@ -22,7 +22,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useParams } from 'react-router-dom'
 import { rutaRemesasPagos } from '@/config/navegacion'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
+import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { Boton, Chip, textoDeImporte } from '@/modules/conta/diseno'
 import { AsientoQueSeCrea, BloqueFicha } from '@/modules/conta/diseno/plantillas'
@@ -95,7 +95,7 @@ export default function RemesaPagosPage() {
   const porConfirmar = r.pagos.filter((p) => p.estado === 'por_confirmar')
   const primera = porConfirmar[0] ?? null
   const vivos = r.pagos.filter((p) => p.estado !== 'sacada')
-  const titulo = r.aMano ? `Pago a mano · ${diaMes(r.fechaPago)}` : `Remesa de transferencias · ${diaMes(r.fechaPago)}`
+  const titulo = r.aMano ? `Pago a mano · ${diaMesCorto(r.fechaPago)}` : `Remesa de transferencias · ${diaMesCorto(r.fechaPago)}`
 
   const principal = !r.aMano && primera
     ? <Boton variante="principal" disabled={ocupado} onClick={() => void hacer(() => confirmarIban(primera.id))}>Confirmar el IBAN</Boton>
@@ -156,7 +156,7 @@ export default function RemesaPagosPage() {
                       )}
                     </td>
                     <td>{p.numero ?? 'sin número'}{p.motivo && <span className="cx-ayuda"> · {p.motivo}</span>}</td>
-                    <td className={p.vence && p.vence < r.fechaPago ? 'pg-vence-rojo' : undefined}>{p.vence ? diaMes(p.vence) : '—'}</td>
+                    <td className={p.vence && p.vence < r.fechaPago ? 'pg-vence-rojo' : undefined}>{p.vence ? diaMesCorto(p.vence) : '—'}</td>
                     <td className="pg-num">
                       {eurosExactos(p.importe).replace(' €', '')}
                       {r.estado === 'en_banco' && p.estado === 'pendiente' && (
