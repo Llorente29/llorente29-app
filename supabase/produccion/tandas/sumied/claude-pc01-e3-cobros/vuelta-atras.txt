@@ -1,0 +1,2 @@
+# PC01 · Entrega 3 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261026T2142_pc01e3_cobros_mandatos_recibos.down.sql

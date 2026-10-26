@@ -1,0 +1,267 @@
+// tests/e2e/conta/pc01/cobros.spec.ts
+//
+// PC01 · Entrega 3 · Ventas › Cobros (tablero cobros-1), la ficha de una remesa
+// de recibos (cobros-2) y la página para firmar un mandato sin cuenta, en el
+// ordenador y en el móvil.
+//
+// La base de la tanda (20261026T2142_pc01e3_cobros_mandatos_recibos) solo
+// añade, pero staging no la tiene hasta que esté en producción y se fusione
+// (W04). Por eso lo que la pantalla LEE (conta_cobros_lista,
+// conta_remesa_cobros_ficha, conta_remesas_cobros_lista,
+// conta_mandato_para_firmar) y lo que ESCRIBE (preparar la remesa, preparar
+// el mandato, firmarlo) se simula aquí con la forma de la 2142 y los casos del
+// tablero (Foodint no tiene clientes domiciliados: todo lo suyo es de
+// plataforma), con fechas de hoy para que no caduquen. Lo demás (la sesión,
+// el marco, el menú de Ventas, los bancos de la empresa) es staging y el código
+// de verdad. Las funciones las prueba su prueba de staging
+// (supabase/staging/sql/20261026_pc01e3_cobros_prueba.sql); el fichero para
+// el banco, la unitaria contra el esquema (pc01/sepaRecibos.test.ts).
+//
+//   1. Cobros: las cifras, el aviso del domiciliado sin mandato, las pestañas;
+//      marcar uno domiciliado y el que no tiene mandato: la barra dice cuál no
+//      entra y por qué; «Cobrar por remesa» prepara la remesa y abre su ficha,
+//      que lo dice (regla 8).
+//   2. La ficha con un recibo devuelto: los pasos hasta el plazo de
+//      devoluciones, el aviso del devuelto, el asiento de la devolución (430 y
+//      626 contra 572) y el mandato; «Pasar el devuelto en la próxima remesa»
+//      vuelve a Cobros con su factura marcada.
+//   3. «Enviarle el mandato para firmar» prepara el enlace y lo dice.
+//   4. La página del mandato, sin cuenta: un IBAN mal escrito no firma; con
+//      todo bien, firma y enseña la copia firmada.
+// Las capturas, al lado de su tablero (docs/conta/pc01/tableros), en el artefacto.
+
+import { readFileSync } from 'node:fs'
+import { test, expect, type Page, type Route } from '@playwright/test'
+import { CUENTA_A, entrarComo } from '../sesion'
+
+const DIR = 'docs/conta/capturas/pc01'
+const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
+
+async function alLado(page: Page, nombre: string, tablero: string) {
+  const l = lado(page)
+  await page.evaluate(() => document.fonts.ready)
+  const pantalla = await page.screenshot({ fullPage: true })
+  await page.screenshot({ path: `${DIR}/${nombre}-${l}.png`, fullPage: true })
+  const fichero = `docs/conta/pc01/tableros/${tablero}-${l}.${l === 'movil' ? 'webp' : 'png'}`
+  const imagen = readFileSync(fichero)
+  const tipo = l === 'movil' ? 'image/webp' : 'image/png'
+  const ancho = l === 'movil' ? 390 : 1440
+  const otra = await page.context().newPage()
+  await otra.setViewportSize({ width: ancho * 2 + 48, height: 900 })
+  await otra.setContent(`<body style="margin:0;padding:16px;background:#E9EEF5;font:600 14px system-ui;color:#172443">
+    <div style="display:flex;gap:16px;align-items:flex-start">
+      <figure style="margin:0;width:${ancho}px"><figcaption style="margin:0 0 8px">${tablero} (aprobado)</figcaption><img style="width:100%" src="data:${tipo};base64,${imagen.toString('base64')}"></figure>
+      <figure style="margin:0;width:${ancho}px"><figcaption style="margin:0 0 8px">La pantalla (staging)</figcaption><img style="width:100%" src="data:image/png;base64,${pantalla.toString('base64')}"></figure>
+    </div></body>`)
+  await otra.screenshot({ path: `${DIR}/al-lado-${nombre}-${l}.png`, fullPage: true })
+  await otra.close()
+}
+
+function vigilar(page: Page): string[] {
+  const errores: string[] = []
+  page.on('pageerror', (e) => { errores.push(e.message); console.log(`[error de la página] ${e.message}`) })
+  page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
+  return errores
+}
+
+const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+const dia = (d: number) => { const x = new Date(`${hoy()}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + d); return x.toISOString().slice(0, 10) }
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+const TOKEN = 'ab'.repeat(32)
+
+const fila = (x: Record<string, unknown>) => ({
+  id: 'x', party_id: 'c', cliente: 'Cliente', numero: 'A-1', fecha: dia(-20), vence: dia(6), total: 100, cobrado: 0, pendiente: 100,
+  estado: 'por_cobrar', dias_vencida: null, forma: 'direct_debit', location_id: null, local: null, mandato: 'SUM-000123', mandato_firmado: dia(-50),
+  con_mandato: true, iban4: '1332', con_cuenta: true, remesa: null, devuelto: null, ...x,
+})
+const FILAS = [
+  fila({ id: 'f-ghost', party_id: 'c-ghost', cliente: 'Ghost Kitchens Prueba SL', numero: 'A-2026/0010', vence: dia(-15), total: 1452, pendiente: 1452, estado: 'vencida', dias_vencida: 15, forma: 'transfer', con_mandato: false, mandato: null }),
+  fila({ id: 'f-club', party_id: 'c-club', cliente: 'Club Deportivo Prueba', numero: 'F-2026/0084', total: 432, pendiente: 432 }),
+  fila({ id: 'f-acad', party_id: 'c-acad', cliente: 'Academia de Baile Prueba', numero: 'A-2026/0012', total: 660, pendiente: 660, mandato: 'SUM-000131' }),
+  fila({ id: 'f-cole', party_id: 'c-cole', cliente: 'Colegio Prueba del Pilar', numero: 'A-2026/0013', total: 1248, pendiente: 1248, mandato: 'SUM-000140' }),
+  fila({ id: 'f-bar', party_id: 'c-bar', cliente: 'Bar La Esquina Prueba', numero: 'A-2026/0014', total: 385, pendiente: 385, con_mandato: false, mandato: null, mandato_firmado: null, iban4: null }),
+  fila({ id: 'f-eventos', party_id: 'c-eventos', cliente: 'Eventos Catering Prueba SL', numero: 'F-2026/0089', vence: dia(19), total: 780.5, pendiente: 780.5, forma: 'transfer', con_mandato: false, mandato: null }),
+  fila({ id: 'f-uber', party_id: 'c-uber', cliente: 'Uber Eats', numero: 'CD-2026/0412', vence: dia(4), total: 349.47, pendiente: 349.47, estado: 'esperando_liquidacion', forma: 'plataforma', con_mandato: false, mandato: null }),
+]
+
+const FICHA = (estado: 'preparada' | 'plazo') => ({
+  id: 'rc-9', codigo: 'C-2026/009', cargo: estado === 'plazo' ? dia(-25) : dia(6), estado, total: 2340, cobrado: estado === 'plazo' ? 1908 : 0,
+  por_abonar: estado === 'plazo' ? 0 : 2340, recibos_vivos: 3, cobrados: estado === 'plazo' ? 2 : 0, devueltos: estado === 'plazo' ? 1 : 0,
+  abonada_el: estado === 'plazo' ? dia(-25) : null, plazo_hasta: estado === 'plazo' ? dia(31) : null,
+  fichero_at: estado === 'plazo' ? new Date().toISOString() : null, fichero_por: estado === 'plazo' ? 'Ana Prueba' : null,
+  creada: new Date().toISOString(), creada_por: 'Ana Prueba', empresa: 'Foodint', acreedor: 'ES79000B12345678',
+  banco: { id: 'b', nombre: 'Banco de Prueba', iban4: '4417', cuenta: '57200001' }, cuenta_gastos: '62600001',
+  recibos: [
+    { id: 'l-1', factura_id: 'f-club', numero: 'F-2026/0071', fecha: dia(-30), importe: 432, estado: estado === 'plazo' ? 'devuelto' : 'pendiente', cliente: 'Club Deportivo Prueba', cliente_id: 'c-club',
+      cuenta: '43000231', iban4: '1332', iban_pais: 'ES', mandato: 'SUM-000123', firmado: dia(-53), primero: false, abonado: estado === 'plazo' ? dia(-25) : null,
+      devuelto: estado === 'plazo' ? dia(-18) : null, motivo: estado === 'plazo' ? 'sin fondos' : null, gastos: estado === 'plazo' ? 3.5 : null, pendiente: 432,
+      mandato_ficha: { ref: 'SUM-000123', firmado: `${dia(-53)}T10:00:00Z`, como: 'enlace', firmante: 'Marta Prueba', token: TOKEN },
+      ultimo_cobro: { fecha: dia(-55), estado: 'cobrado' } },
+    { id: 'l-2', factura_id: 'f-acad', numero: 'A-2026/0007', fecha: dia(-30), importe: 660, estado: estado === 'plazo' ? 'cobrado' : 'pendiente', cliente: 'Academia de Baile Prueba', cliente_id: 'c-acad',
+      cuenta: '43000232', iban4: '6789', iban_pais: 'ES', mandato: 'SUM-000131', firmado: dia(-46), primero: true, abonado: estado === 'plazo' ? dia(-25) : null,
+      devuelto: null, motivo: null, gastos: null, pendiente: estado === 'plazo' ? 0 : 660, mandato_ficha: null, ultimo_cobro: null },
+    { id: 'l-3', factura_id: 'f-cole', numero: 'A-2026/0008', fecha: dia(-30), importe: 1248, estado: estado === 'plazo' ? 'cobrado' : 'pendiente', cliente: 'Colegio Prueba del Pilar', cliente_id: 'c-cole',
+      cuenta: '43000233', iban4: '7891', iban_pais: 'ES', mandato: 'SUM-000140', firmado: dia(-44), primero: true, abonado: estado === 'plazo' ? dia(-25) : null,
+      devuelto: null, motivo: null, gastos: null, pendiente: estado === 'plazo' ? 0 : 1248, mandato_ficha: null, ultimo_cobro: null },
+  ],
+  historial: [
+    { at: new Date().toISOString(), por: 'Ana Prueba', texto: 'Prepara la remesa con 3 recibos por 2.340,00 €.' },
+    ...(estado === 'plazo' ? [{ at: new Date().toISOString(), por: 'Ana Prueba', texto: 'Club Deportivo Prueba devuelve el recibo de la F-2026/0071 (sin fondos), con 3,50 € de gastos.' }] : []),
+  ],
+})
+
+type Llamada = { f: string; cuerpo: Record<string, unknown> }
+async function simular(page: Page, ficha: 'preparada' | 'plazo' = 'preparada'): Promise<Llamada[]> {
+  const llamadas: Llamada[] = []
+  const json = (r: Route, cuerpo: unknown) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cuerpo) })
+  const apuntar = (f: string, respuesta: () => unknown) => (r: Route) => { llamadas.push({ f, cuerpo: r.request().postDataJSON() }); return json(r, respuesta()) }
+  await page.route(/\/rest\/v1\/rpc\/conta_cobros_lista(\?|$)/, (r) => json(r, {
+    filas: FILAS, cobrado_mes: 31240.55, cobradas_mes: 218, remesas: 9,
+    sin_mandato: [{ id: 'c-bar', nombre: 'Bar La Esquina Prueba', facturas: 1, pendiente: 385, correo: null, enviado: null }],
+  }))
+  await page.route(/\/rest\/v1\/rpc\/conta_remesas_cobros_lista(\?|$)/, (r) => json(r, [
+    { id: 'rc-9', codigo: 'C-2026/009', cargo: dia(-25), estado: 'plazo', total: 2340, cobrado: 1908, recibos: 3, cobrados: 2, devueltos: 1, plazo_hasta: dia(31), banco: 'Banco de Prueba' },
+  ]))
+  await page.route(/\/rest\/v1\/rpc\/conta_remesa_cobros_crear(\?|$)/, apuntar('crear', () => ({
+    remesa: 'rc-9', codigo: 'C-2026/009', recibos: 1, primeros: 0, total: 432,
+    frase: `Remesa C-2026/009 preparada: 1 recibo, 432,00 €, con cargo el ${ddmm(dia(6))}. Descarga el fichero y súbelo a la banca de Banco de Prueba.`,
+  })))
+  await page.route(/\/rest\/v1\/rpc\/conta_remesa_cobros_ficha(\?|$)/, (r) => json(r, FICHA(ficha)))
+  await page.route(/\/rest\/v1\/rpc\/conta_mandato_preparar(\?|$)/, apuntar('mandato', () => ({
+    mandato: 'm-1', ref: 'SUM-000124', token: TOKEN, enlace: `/mandato.html?t=${TOKEN}`, correo: null, caduca: dia(30),
+    frase: 'Mandato SUM-000124 de Bar La Esquina Prueba preparado: el enlace para firmarlo vale 30 días.',
+  })))
+  return llamadas
+}
+
+/** Las palabras de técnico que no salen en pantalla (encargo, diseño). */
+const TECNICAS = /\b(pain\.0|XML|SDD|payment|batch|remesa_id|null|undefined|NaN|token)\b/i
+
+test('Cobros: cifras, sin mandato, pestañas; cobrar por remesa (el que no tiene mandato no entra) y su ficha', async ({ page }) => {
+  test.setTimeout(120_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page)
+  await page.goto('/conta/ventas/cobros')
+  await expect(page.getByRole('heading', { level: 1, name: 'Cobros' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Ventas', 'Cobros'])
+
+  // Las cifras: por cobrar (todas las que quedan), vencido, la próxima remesa (3 recibos) y lo cobrado en el mes.
+  const cifras = page.locator('.pg-cifras')
+  await expect(cifras).toContainText('Próxima remesa', { timeout: 30_000 })
+  await expect(cifras).toContainText('2.340,00')
+  await expect(cifras).toContainText('3 recibos · cargo el')
+  await expect(cifras).toContainText('1.452,00')
+  await expect(cifras).toContainText('31.240,55')
+  await expect(cifras).toContainText('7 facturas')
+
+  // El aviso del domiciliado sin mandato.
+  const sinMandato = page.locator('[data-prueba="sin-mandato"]')
+  await expect(sinMandato).toContainText('Bar La Esquina Prueba paga por domiciliación y no tiene mandato firmado.')
+  await expect(sinMandato.getByRole('button', { name: 'Enviarle el mandato para firmar' })).toBeVisible()
+
+  // Las pestañas, con la de las remesas.
+  const pestanas = page.getByRole('tablist', { name: 'Estado de los cobros' })
+  for (const t of ['Por cobrar', 'Vencidas', 'Próxima remesa', 'Remesas', 'Devueltos', 'Cobrados']) await expect(pestanas.getByRole('tab', { name: new RegExp(t) })).toBeVisible()
+  await pestanas.getByRole('tab', { name: /Remesas/ }).click()
+  await expect(page.getByRole('table', { name: 'Remesas de recibos' })).toContainText('C-2026/009')
+  await pestanas.getByRole('tab', { name: /Por cobrar/ }).click()
+  await expect(pestanas.getByRole('tab', { name: /Por cobrar/ })).toHaveAttribute('aria-selected', 'true')
+
+  // Marcar el Club (domiciliado, con mandato) y el Bar (sin mandato): la barra dice cuál no entra y por qué.
+  await page.getByRole('checkbox', { name: /^Marcar Club Deportivo/ }).check()
+  await page.getByRole('checkbox', { name: /^Marcar Bar La Esquina/ }).check()
+  const barra = page.getByRole('region', { name: 'Cobrar las seleccionadas' })
+  await expect(barra).toContainText('1 recibo · 432,00 €')
+  await expect(barra).toContainText('1 no entra: Bar La Esquina Prueba no tiene mandato firmado')
+  await expect(barra.getByRole('button', { name: /Cobrar por remesa/ })).toBeEnabled()
+  expect(await page.locator('.pg-pagina').first().innerText()).not.toMatch(TECNICAS)
+  await alLado(page, 'cobros', 'cobros-1')
+
+  await barra.getByRole('button', { name: /Cobrar por remesa/ }).click()
+  await expect(page).toHaveURL(/\/conta\/ventas\/cobros\/remesas\/rc-9/, { timeout: 30_000 })
+  expect(llamadas.find((l) => l.f === 'crear')!.cuerpo.p_facturas).toEqual([{ id: 'f-club', importe: 432 }])
+  await expect(page.getByRole('heading', { level: 1, name: `Remesa de recibos · ${ddmm(dia(6))}` })).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-prueba="aviso-remesa"]')).toHaveText(`Remesa C-2026/009 preparada: 1 recibo, 432,00 €, con cargo el ${ddmm(dia(6))}. Descarga el fichero y súbelo a la banca de Banco de Prueba.`)
+  await expect(page.getByRole('button', { name: 'Descargar el fichero' }).first()).toBeVisible()
+  const pasos = page.getByRole('list', { name: 'En qué punto está la remesa' }).getByRole('listitem')
+  await expect(pasos).toHaveText([/Preparada/, /En el banco/, /Abonada/, /Plazo de devoluciones/])
+  expect(errores).toEqual([])
+})
+
+test('La ficha con un recibo devuelto: el plazo de devoluciones, su asiento y su mandato; «Pasar el devuelto en la próxima remesa»', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  await simular(page, 'plazo')
+  await page.goto('/conta/ventas/cobros/remesas/rc-9')
+  await expect(page.getByRole('heading', { level: 1, name: `Remesa de recibos · ${ddmm(dia(-25))}` })).toBeVisible({ timeout: 30_000 })
+  const pasos = page.getByRole('list', { name: 'En qué punto está la remesa' }).getByRole('listitem')
+  await expect(pasos).toHaveText([/Preparada/, /En el banco/, /Abonada/, new RegExp(`Plazo de devoluciones · hasta el ${ddmm(dia(31))}`)])
+  await expect(pasos.nth(3)).toHaveAttribute('aria-current', 'step')
+  await expect(page.locator('[data-prueba="aviso-devuelto"]')).toContainText(`Club Deportivo Prueba devolvió el recibo el ${ddmm(dia(-18))}`)
+  await expect(page.locator('[data-prueba="aviso-devuelto"]')).toContainText('motivo del banco: sin fondos')
+  await expect(page.locator('[data-prueba="aviso-devuelto"]')).toContainText('con 3,50 € de gastos de devolución')
+  await expect(page.getByText('Su asiento, la devolución')).toBeVisible()
+  for (const c of ['43000231', '62600001', '57200001']) await expect(page.getByText(c).first()).toBeVisible()
+  await expect(page.getByText('ES79000B12345678')).toBeVisible()
+  await expect(page.locator('[data-prueba="mandato"]')).toContainText('SUM-000123')
+  await expect(page.getByRole('link', { name: 'Ver el mandato firmado' })).toHaveAttribute('href', `/mandato.html?t=${TOKEN}`)
+  expect(await page.locator('.pg-pagina').innerText()).not.toMatch(TECNICAS)
+  await alLado(page, 'remesa-cobros', 'cobros-2')
+
+  await page.getByRole('button', { name: 'Pasar el devuelto en la próxima remesa' }).first().click()
+  await expect(page).toHaveURL(/\/conta\/ventas\/cobros\?pestana=proxima/, { timeout: 30_000 })
+  await expect(page.getByRole('checkbox', { name: /^Marcar Club Deportivo/ })).toBeChecked({ timeout: 30_000 })
+  await expect(page.getByRole('region', { name: 'Cobrar las seleccionadas' })).toContainText('1 recibo · 432,00 €')
+  expect(errores).toEqual([])
+})
+
+test('«Enviarle el mandato para firmar» prepara el enlace y lo dice', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page)
+  await page.goto('/conta/ventas/cobros')
+  await page.locator('[data-prueba="sin-mandato"]').getByRole('button', { name: 'Enviarle el mandato para firmar' }).click({ timeout: 30_000 })
+  const dialogo = page.getByRole('dialog', { name: 'Mandato de Bar La Esquina Prueba' })
+  await expect(dialogo).toBeVisible()
+  await dialogo.getByRole('button', { name: 'Preparar el enlace' }).click()
+  await expect(dialogo.locator('[data-prueba="mandato-preparado"]')).toContainText('Mandato SUM-000124 de Bar La Esquina Prueba preparado: el enlace para firmarlo vale 30 días. Copia el enlace y mándaselo.')
+  await expect(dialogo.getByLabel('El enlace para firmar')).toHaveValue(new RegExp(`/mandato\\.html\\?t=${TOKEN}$`))
+  expect(llamadas.find((l) => l.f === 'mandato')!.cuerpo).toEqual({ p_company: expect.any(String), p_party: 'c-bar', p_correo: null })
+  expect(errores).toEqual([])
+})
+
+test('La página del mandato, sin cuenta: un IBAN mal escrito no firma; con todo bien, firma y enseña la copia', async ({ page }) => {
+  test.setTimeout(60_000)
+  const errores = vigilar(page)
+  let firmado = false
+  const firmas: Record<string, unknown>[] = []
+  const base = { ref: 'SUM-000124', acreedor: { nombre: 'Foodint Prueba SL', identificador: 'ES79000B12345678', direccion: 'Calle de Prueba 1, 28000 Madrid' }, deudor: { nombre: 'Bar La Esquina Prueba SL', nif: 'B00000303' } }
+  await page.route(/\/rest\/v1\/rpc\/conta_mandato_para_firmar(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(
+    firmado ? { ...base, estado: 'firmado', firmado: { at: new Date().toISOString(), nombre: 'Marta Prueba', nif: null, iban: 'ES79 •••• •••• 6789' } } : { ...base, estado: 'por_firmar', firmado: null }) }))
+  await page.route(/\/rest\/v1\/rpc\/conta_mandato_firmar(\?|$)/, (r) => {
+    firmas.push(r.request().postDataJSON()); firmado = true
+    return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ frase: 'Mandato SUM-000124 firmado. Gracias: los próximos recibos se cargarán en la cuenta que termina en 6789.' }) })
+  })
+  await page.goto(`/mandato.html?t=${TOKEN}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Orden de domiciliación de adeudo directo SEPA' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('ES79000B12345678')).toBeVisible()
+  await expect(page.getByText(/las ocho semanas que siguen a la fecha de adeudo/)).toBeVisible()
+  await page.getByLabel('Nombre y apellidos de quien firma').fill('Marta Prueba')
+  await page.getByLabel('IBAN de la cuenta de cargo').fill('ES00 2100 0418 4502 0005 1332')
+  await page.getByLabel('He leído la orden de domiciliación y la acepto.').check()
+  await page.getByRole('button', { name: 'Firmar el mandato' }).click()
+  await expect(page.getByRole('alert')).toHaveText('Este IBAN no es correcto: revisa los dígitos.')
+  expect(firmas).toHaveLength(0)
+  await page.getByLabel('IBAN de la cuenta de cargo').fill('ES79 2100 0813 6101 2345 6789')
+  await expect(page.getByText('Correcto: ES79 2100 0813 6101 2345 6789')).toBeVisible()
+  await page.getByRole('button', { name: 'Firmar el mandato' }).click()
+  await expect(page.getByRole('status')).toHaveText('Mandato SUM-000124 firmado. Gracias: los próximos recibos se cargarán en la cuenta que termina en 6789.', { timeout: 30_000 })
+  await expect(page.getByText('Firmado por')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Guardar en PDF o imprimir' })).toBeVisible()
+  expect(firmas[0]).toEqual({ p_token: TOKEN, p_nombre: 'Marta Prueba', p_nif: null, p_iban: 'ES7921000813610123456789', p_acepto: true })
+  await page.screenshot({ path: `${DIR}/mandato-firmado-${lado(page)}.png`, fullPage: true })
+  expect(errores).toEqual([])
+})

@@ -121,3 +121,140 @@ export function ficheroTransferencias(d: DatosRemesaSepa): string {
 
 /** El nombre del fichero que se descarga: «remesa-R-2026-014.xml». */
 export const nombreFicheroRemesa = (codigo: string) => `remesa-${codigo.replace(/\//g, '-')}.xml`
+
+// ── PC01 · Entrega 3 · El fichero de la remesa de RECIBOS (cobros) ──────────
+// SEPA Direct Debit CORE, ISO 20022 pain.008.001.02 (el de los bancos
+// españoles para cobrar recibos domiciliados). Igual que el de pagos: sin React
+// y sin red, y lo valida contra el esquema OFICIAL una unitaria
+// (tests/fixtures/sepa/pain.008.001.02.xsd). En pantalla, «el fichero para el
+// banco».
+//
+//   · Cada recibo lleva su MANDATO (referencia y fecha de firma): sin mandato
+//     firmado no hay recibo (lo frena la base antes de llegar aquí).
+//   · El primer cobro con un mandato va como «primero» (FRST) y los demás como
+//     «recurrente» (RCUR): cada tipo en su bloque (PmtInf), como piden los bancos.
+//   · El acreedor se identifica con su IDENTIFICADOR SEPA (AT-02): ES, dos
+//     dígitos de control, el sufijo que da el banco (por defecto «000») y el NIF.
+
+export interface AcreedorSepa { nombre: string; nif: string; iban: string; bic: string | null; sufijo?: string | null }
+export interface ReciboSepa {
+  id: string
+  importe: number
+  /** Del cliente que paga. */
+  iban: string
+  bic: string | null
+  nombre: string
+  mandato: string
+  /** YYYY-MM-DD: cuándo firmó el mandato. */
+  firmado: string
+  primero: boolean
+  factura: string | null
+  fechaFactura: string | null
+}
+export interface DatosRemesaRecibos {
+  codigo: string
+  /** YYYY-MM-DD: el día que se carga a los clientes. */
+  fechaCargo: string
+  creado: string
+  acreedor: AcreedorSepa
+  recibos: readonly ReciboSepa[]
+}
+
+/** Las letras a números (A=10 … Z=35), como en el IBAN. */
+const aNumeros = (s: string) => s.toUpperCase().replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55))
+function mod97(n: string): number {
+  let r = 0
+  for (let i = 0; i < n.length; i += 7) r = Number(String(r) + n.slice(i, i + 7)) % 97
+  return r
+}
+
+/**
+ * El identificador de acreedor SEPA de una empresa española (AT-02, norma de la
+ * AEB): «ES» + 2 dígitos de control + sufijo (3) + NIF. Los dígitos de control
+ * salen del NIF y de «ES00» (sin el sufijo), módulo 97, como en el IBAN.
+ * Es la misma regla en toda Europa: el identificador de pruebas del Bundesbank,
+ * DE98ZZZ09999999999, la cumple (lo comprueba la unitaria).
+ */
+export function identificadorAcreedor(nif: string, sufijo: string | null = '000'): string {
+  const n = nif.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^ES(?=[A-Z0-9]{9}$)/, '')
+  if (!/^[A-Z0-9]{9}$/.test(n)) throw new Error('El NIF de la empresa no tiene la forma de un NIF: no se puede sacar su identificador de acreedor.')
+  const suf = (sufijo ?? '').trim() || '000'
+  if (!/^[A-Z0-9]{3}$/i.test(suf)) throw new Error('El sufijo del banco tiene que ser de tres letras o cifras.')
+  const cc = String(98 - mod97(aNumeros(`${n}ES00`))).padStart(2, '0')
+  return `ES${cc}${suf.toUpperCase()}${n}`
+}
+
+/**
+ * ¿Es un identificador de acreedor SEPA bien formado? País, dos dígitos de
+ * control (de 02 a 98, ISO 7064), tres del sufijo y el identificador nacional;
+ * el control sale del identificador nacional y del país, sin el sufijo.
+ */
+export function acreedorValido(id: string): boolean {
+  const m = /^([A-Z]{2})(\d{2})([A-Z0-9]{3})([A-Z0-9]{1,28})$/.exec(id.toUpperCase().replace(/\s/g, ''))
+  if (!m || Number(m[2]) < 2 || Number(m[2]) > 98) return false
+  if (m[1] === 'ES' && m[4].length !== 9) return false
+  return mod97(aNumeros(`${m[4]}${m[1]}${m[2]}`)) === 1
+}
+
+/** El XML del fichero de recibos. Los recibos, en el orden en que vienen, separados en «primeros» y «recurrentes». */
+export function ficheroRecibos(d: DatosRemesaRecibos): string {
+  if (d.recibos.length === 0) throw new Error('La remesa no tiene recibos.')
+  const acreedor = identificadorAcreedor(d.acreedor.nif, d.acreedor.sufijo ?? '000')
+  const centimos = (xs: readonly ReciboSepa[]) => xs.reduce((t, r) => t + Math.round(r.importe * 100), 0) / 100
+  const nombre = textoSepa(d.acreedor.nombre, 70)
+  const grupos = ([['FRST', d.recibos.filter((r) => r.primero)], ['RCUR', d.recibos.filter((r) => !r.primero)]] as const).filter(([, xs]) => xs.length > 0)
+  let n = 0
+  const bloques = grupos.map(([tipo, xs]) => {
+    const txs = xs.map((r) => {
+      n += 1
+      const concepto = textoSepa([r.factura ? `Factura ${r.factura}` : 'Recibo', r.fechaFactura ? `de ${r.fechaFactura.split('-').reverse().join('/')}` : ''].join(' '), 140)
+      return [
+        '      <DrctDbtTxInf>',
+        `        <PmtId><EndToEndId>${xml(idSepa(`${d.codigo}-${n}`))}</EndToEndId></PmtId>`,
+        `        <InstdAmt Ccy="EUR">${importeSepa(r.importe)}</InstdAmt>`,
+        `        <DrctDbtTx><MndtRltdInf><MndtId>${xml(idSepa(r.mandato))}</MndtId><DtOfSgntr>${r.firmado}</DtOfSgntr></MndtRltdInf></DrctDbtTx>`,
+        '        <DbtrAgt>', agente(r.bic, '          '), '        </DbtrAgt>',
+        `        <Dbtr><Nm>${xml(textoSepa(r.nombre, 70))}</Nm></Dbtr>`,
+        `        <DbtrAcct><Id><IBAN>${iban(r.iban)}</IBAN></Id></DbtrAcct>`,
+        `        <RmtInf><Ustrd>${xml(concepto)}</Ustrd></RmtInf>`,
+        '      </DrctDbtTxInf>',
+      ].join('\n')
+    })
+    return [
+      '    <PmtInf>',
+      `      <PmtInfId>${xml(idSepa(`${d.codigo}-${tipo}`))}</PmtInfId>`,
+      '      <PmtMtd>DD</PmtMtd>',
+      '      <BtchBookg>true</BtchBookg>',
+      `      <NbOfTxs>${xs.length}</NbOfTxs>`,
+      `      <CtrlSum>${importeSepa(centimos(xs))}</CtrlSum>`,
+      `      <PmtTpInf><SvcLvl><Cd>SEPA</Cd></SvcLvl><LclInstrm><Cd>CORE</Cd></LclInstrm><SeqTp>${tipo}</SeqTp></PmtTpInf>`,
+      `      <ReqdColltnDt>${d.fechaCargo}</ReqdColltnDt>`,
+      `      <Cdtr><Nm>${xml(nombre)}</Nm></Cdtr>`,
+      `      <CdtrAcct><Id><IBAN>${iban(d.acreedor.iban)}</IBAN></Id></CdtrAcct>`,
+      '      <CdtrAgt>', agente(d.acreedor.bic, '        '), '      </CdtrAgt>',
+      '      <ChrgBr>SLEV</ChrgBr>',
+      `      <CdtrSchmeId><Id><PrvtId><Othr><Id>${acreedor}</Id><SchmeNm><Prtry>SEPA</Prtry></SchmeNm></Othr></PrvtId></Id></CdtrSchmeId>`,
+      ...txs,
+      '    </PmtInf>',
+    ].join('\n')
+  })
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Document xmlns="urn:iso:std:iso:20022:tech:xsd:pain.008.001.02" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">',
+    '  <CstmrDrctDbtInitn>',
+    '    <GrpHdr>',
+    `      <MsgId>${xml(idSepa(`SUMIED-${d.codigo}`))}</MsgId>`,
+    `      <CreDtTm>${fechaHora(d.creado)}</CreDtTm>`,
+    `      <NbOfTxs>${d.recibos.length}</NbOfTxs>`,
+    `      <CtrlSum>${importeSepa(centimos(d.recibos))}</CtrlSum>`,
+    `      <InitgPty><Nm>${xml(nombre)}</Nm><Id><OrgId><Othr><Id>${acreedor}</Id></Othr></OrgId></Id></InitgPty>`,
+    '    </GrpHdr>',
+    ...bloques,
+    '  </CstmrDrctDbtInitn>',
+    '</Document>',
+    '',
+  ].join('\n')
+}
+
+/** El nombre del fichero de recibos que se descarga: «recibos-C-2026-009.xml». */
+export const nombreFicheroRecibos = (codigo: string) => `recibos-${codigo.replace(/\//g, '-')}.xml`

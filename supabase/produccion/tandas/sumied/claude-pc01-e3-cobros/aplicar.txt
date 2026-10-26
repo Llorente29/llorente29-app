@@ -1,0 +1,15 @@
+# PC01 · Entrega 3 · Ventas › Cobros: mandatos, remesa de recibos y devueltos
+# (encargo maestro del PC01, 26/10). Rama claude/pc01-e3-cobros. Se ensaya y se
+# aplica desde esta rama, antes de fusionar.
+#
+#   1. 2142 — SOLO AÑADE: los mandatos (con el enlace para firmarlos sin cuenta),
+#      las remesas de recibos (con su línea y su historial), su estado calculado
+#      (dos vistas) y las funciones de Ventas › Cobros (la lista, preparar la
+#      remesa, el fichero, el abono del banco, el recibo devuelto, lo que ofrece
+#      Bancos, la ficha y los mandatos). No toca datos ni nada que exista. No
+#      está en el camino del pedido: sin autorizo.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/pc01-e3.sql
+supabase/migrations/20261026T2142_pc01e3_cobros_mandatos_recibos.sql

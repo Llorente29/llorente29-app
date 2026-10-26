@@ -20,6 +20,17 @@
 .pg-aviso-ambar p { margin: 0; flex: 1; min-width: 240px; }
 .pg-aviso-ambar strong { color: var(--s-duda); }
 .pg-aviso-fila { border-radius: 0; border-left: none; border-right: none; }
+/* PC01 · E3 · El recibo devuelto (tablero cobros-2): rojo, con «Pasarlo en la próxima remesa». */
+.pg-aviso-rojo {
+  display: flex; align-items: center; gap: var(--s-4); justify-content: space-between; flex-wrap: wrap;
+  padding: var(--s-3) var(--s-5); background: var(--s-falta-fondo); border: var(--s-linea) solid var(--s-falta); border-radius: var(--s-radio-bloque);
+  color: var(--s-tinta);
+}
+.pg-aviso-rojo p { margin: 0; flex: 1; min-width: 240px; }
+.pg-aviso-rojo strong { color: var(--s-falta); }
+/* PC01 · E3 · Una fila de la lista de remesas de recibos que se abre. */
+.pg-fila-abrible { cursor: pointer; }
+.pg-fila-abrible:hover, .pg-fila-abrible:focus-visible { background: var(--s-fondo-suave, rgba(23, 36, 67, .04)); outline: none; }
 .pg-aviso-acciones { display: flex; gap: var(--s-4); flex-wrap: wrap; }
 .pg-enlace { background: none; border: none; padding: 0; color: var(--s-accion); font: inherit; font-weight: var(--s-peso-fuerte); text-decoration: underline; cursor: pointer; }
 .pg-enlace:disabled { opacity: .5; cursor: default; }

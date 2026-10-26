@@ -17,6 +17,7 @@ import type { Destino } from '@/modules/conta/lib/conciliacion'
 import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import type { RemesaParaCasar } from '@/modules/conta/services/pagosService'
 import { remesaQueSePropone } from '@/modules/conta/lib/pagos'
+import { MOTIVOS_DEVOLUCION, abonosQueCuadran, devolucionesQueCuadran, type ReciboDevolvible, type RemesaCobrosParaCasar } from '@/modules/conta/lib/cobros'
 import {
   PILDORA, asientoQueSeCrea, confirmable, destinoDelReparto, facturasDe, quienEs, repartir, textoDelBanco, type FacturaParaCasar,
 } from '@/modules/conta/lib/conciliarVista'
@@ -38,6 +39,12 @@ export interface PanelProps {
   alConfirmar: (destino: Destino, porque: string, que: string) => void
   /** PC01 · E2 · Casar este cargo con una remesa entera (lineas null) o con los pagos que carga. */
   alCasarRemesa?: (remesaId: string, lineas: string[] | null) => void
+  /** PC01 · E3 · Las remesas de recibos (Ventas › Cobros) que esperan su abono, y los recibos que aún pueden volver devueltos. */
+  cobros?: { abonos: readonly RemesaCobrosParaCasar[]; devoluciones: readonly ReciboDevolvible[] }
+  /** PC01 · E3 · Casar este abono con una remesa de recibos entera (lineas null) o con los recibos que abona. */
+  alCasarAbono?: (remesaId: string, lineas: string[] | null) => void
+  /** PC01 · E3 · Este cargo es la devolución de un recibo (con el motivo del banco). */
+  alDevuelto?: (lineaId: string, motivo: string) => void
   alDeshacer: () => void
   alVerAsiento: () => void
   alBuscarFactura: () => void
@@ -71,6 +78,12 @@ export function PanelMovimiento(p: PanelProps) {
   ])
   // Respuesta 7 · Si el cargo es lo que espera UNA sola remesa entera, Bancos la propone sola; si cuadran dos o más, se elige.
   const { propuesta: remesaPropuesta, resto: otrasEsperan } = remesaQueSePropone(esperan)
+  // PC01 · E3 · Un abono: la remesa de recibos (o un recibo suyo) que espera justo ese importe.
+  // Un cargo: el recibo cobrado del que puede ser la devolución (el recibo y hasta 30 € de gastos).
+  const abonos = !pago && p.cobros ? abonosQueCuadran(cargo, p.cobros.abonos) : []
+  const { propuesta: abonoPropuesto, resto: otrosAbonos } = remesaQueSePropone(abonos)
+  const devoluciones = pago && p.cobros ? devolucionesQueCuadran(cargo, p.cobros.devoluciones) : []
+  const [motivo, setMotivo] = useState<string>(MOTIVOS_DEVOLUCION[0])
 
   // El destino que se enseña en «Ver el asiento que se crea»: lo que está elegido, o lo que propongo.
   const destinoVisto: Destino | null = reparto && !reparto.noSePuede ? destinoDelReparto(fs, reparto) : ((m.propuesta?.destino as Destino | null | undefined) ?? null)
@@ -151,6 +164,47 @@ export function PanelMovimiento(p: PanelProps) {
             ))}
           </ul>}
           <p className="cx-ayuda">Al casarlo, las facturas quedan pagadas con su asiento (cada proveedor a su 400 contra el banco). Si el cargo es la remesa entera y sus IBAN están confirmados, el asiento se valida solo.</p>
+        </section>
+      )}
+
+      {sinCasar && !pago && abonos.length > 0 && p.alCasarAbono && (
+        <section className="cxn-bloque" aria-label="Esperando este abono" data-prueba="remesas-cobros-esperan">
+          <h4>Esperando este abono</h4>
+          {abonoPropuesto && (
+            <div className="cxn-remesa-propuesta" data-prueba="abono-propuesto">
+              <p><span className="cx-ayuda">Te propongo:</span> <strong>es el abono de la remesa de recibos {abonoPropuesto.codigo}</strong> <span className="cx-ayuda">{abonoPropuesto.apoyo}. Es lo único que espera justo este importe.</span></p>
+              <button type="button" className="cx-boton" disabled={p.ocupado} onClick={() => p.alCasarAbono!(abonoPropuesto.remesaId, null)}>{p.ocupado ? 'Casando…' : 'Sí, es esta'}</button>
+            </div>
+          )}
+          {otrosAbonos.length > 0 && <ul className="cxn-facturas">
+            {otrosAbonos.map((x) => (
+              <li key={x.clave} className="cxn-remesa">
+                <span><strong>{x.texto}</strong> <span className="cx-ayuda">{x.apoyo}</span></span>
+                <button type="button" className={abonoPropuesto ? 'cx-boton-sec' : 'cx-boton'} disabled={p.ocupado} onClick={() => p.alCasarAbono!(x.remesaId, x.lineas)}>{p.ocupado ? 'Casando…' : 'Es esto'}</button>
+              </li>
+            ))}
+          </ul>}
+          <p className="cx-ayuda">Al casarlo, las facturas quedan cobradas con su asiento (el banco contra la 430 de cada cliente). Un recibo se puede devolver durante 8 semanas: si llega la devolución, se casa aquí con su recibo.</p>
+        </section>
+      )}
+
+      {sinCasar && pago && devoluciones.length > 0 && p.alDevuelto && (
+        <section className="cxn-bloque" aria-label="¿Es un recibo devuelto?" data-prueba="devoluciones">
+          <h4>¿Es un recibo devuelto?</h4>
+          <label className="cx-ayuda">Motivo que da el banco{' '}
+            <select value={motivo} onChange={(e) => setMotivo(e.target.value)} aria-label="Motivo de la devolución">
+              {MOTIVOS_DEVOLUCION.map((x) => <option key={x} value={x}>{x}</option>)}
+            </select>
+          </label>
+          <ul className="cxn-facturas">
+            {devoluciones.map((x) => (
+              <li key={x.id} className="cxn-remesa">
+                <span><strong>{x.cliente} · {x.factura ?? 'sin número'}</strong> <span className="cx-ayuda">recibo de {eurosExactos(x.importeCent / 100)} de la remesa {x.remesa}{x.gastosCent ? `, con ${eurosExactos(x.gastosCent / 100)} de gastos` : ''}</span></span>
+                <button type="button" className="cx-boton-sec" disabled={p.ocupado} onClick={() => p.alDevuelto!(x.id, motivo)}>{p.ocupado ? 'Casando…' : 'Sí, es su devolución'}</button>
+              </li>
+            ))}
+          </ul>
+          <p className="cx-ayuda">Al casarlo, la factura vuelve a «Por cobrar» y los gastos van a la 626. Puedes pasar el recibo otra vez en la próxima remesa.</p>
         </section>
       )}
 
