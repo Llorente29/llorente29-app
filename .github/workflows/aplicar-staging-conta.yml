@@ -442,6 +442,8 @@ jobs:
           export PGAPPNAME="gha-staging-conta-compara-prueba-${GITHUB_RUN_ID}"
           export COMPARA_PREVIO=supabase/staging/compara-prueba/previo.sql
           export COMPARA_SIN_ANOTAR=1
+          # El shell de Actions corre con -e: aquí un rojo es lo esperado y no puede cortar el bucle.
+          set +e
           D=supabase/staging/compara-prueba
           { echo "## W06 · Prueba del comparador"; echo; echo "| Vuelta atrás | Tiene que salir | Sale | |"; echo "|---|---|---|---|"; } > /tmp/prueba.md
           mal=0
