@@ -30,7 +30,9 @@ export function DialogoYaLaHePagado({ empresaId, hoy, bancos, facturas, elegida,
 }) {
   const [facturaId, setFacturaId] = useState(elegida ?? facturas[0]?.id ?? '')
   const f = facturas.find((x) => x.id === facturaId) ?? null
-  const [bancoId, setBancoId] = useState(bancos[0]?.id ?? '')
+  // Sin elegir, el primero: también si los bancos llegan después de abrir el diálogo (e2e 945).
+  const [bancoElegido, setBancoId] = useState('')
+  const bancoId = bancoElegido || (bancos[0]?.id ?? '')
   const [fecha, setFecha] = useState(hoy)
   const [importe, setImporte] = useState(f ? textoDeImporte(libre(f)) : '')
   const [error, setError] = useState<string | null>(null)

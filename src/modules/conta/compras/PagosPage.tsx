@@ -25,7 +25,7 @@
 // services/pagosService.ts (todo por funciones conta_*: dueño único, N8).
 
 import { useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaPagos, rutaRemesaPagos, rutaRemesasPagos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -66,14 +66,15 @@ export default function PagosPage() {
   const { local: ejeLocal } = useAnalitica()
   const movil = useIsMobile()
   const navegar = useNavigate()
-  const { search } = useLocation()
   const [query, setQuery] = useSearchParams()
   const hoy = hoyEnMadrid()
   const [vuelta, setVuelta] = useState(0)
   const datos = useLeer(activa ? () => leerPagos(activa.id, hoy) : null, `${activa?.id}:${hoy}:${vuelta}:pagos`)
   const losBancos = useLeer(accountId && activa ? () => bancos.bancosDeLaEmpresa(accountId, activa.id) : null, `${accountId}:${activa?.id}:bancos-pagos`)
   const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
-  const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(search, c)), { replace: true })
+  // Sobre la dirección de ESE momento (setQuery con función), no la del último pintado: si se pulsa una
+  // pestaña y enseguida se escribe en el buscador, el buscador no puede devolver la pestaña de antes (e2e 945).
+  const cambiar = (c: Record<string, string | null>) => setQuery((antes) => new URLSearchParams(conCambio(antes.toString(), c)), { replace: true })
 
   const pestana = leerPestana(query.get('pestana'))
   const fl = { buscar: query.get('q') ?? '', hasta: query.get('hasta') || null, forma: (query.get('forma') || 'todas') as FormaPago | 'todas', local: query.get('local') || null }
