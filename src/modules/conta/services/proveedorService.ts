@@ -484,8 +484,13 @@ export async function listarFacturasDeLaCuenta(accountId: string): Promise<(Fact
     .eq('account_id', accountId)
     .neq('status', 'anulada')
   if (error) throw new Error(mensaje('No se pudieron cargar las facturas', error))
+  // PC01 · E2: lo pagado con asiento de cada una (conta_recibida_pago), para el «le debes» y el próximo pago con lo pagado en parte.
+  const { data: pagadas, error: errorPagos } = await from('conta_recibida_pago').select('invoice_id, pagado').eq('account_id', accountId).gt('pagado', 0)
+  if (errorPagos) throw new Error(mensaje('No se pudo leer lo pagado de las facturas', errorPagos))
+  const pagado = new Map(((pagadas as Fila[] | null) ?? []).map((r) => [String(r.invoice_id), num(r.pagado) ?? 0]))
   return ((data as Fila[] | null) ?? []).map((r) => ({
     id: r.id as string,
+    pagado: pagado.get(String(r.id)) ?? 0,
     supplierId: str(r.supplier_id),
     createdAt: r.created_at as string,
     noRepetidaConfirmada: !!r.not_duplicate_confirmed_at,

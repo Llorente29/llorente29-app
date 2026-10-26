@@ -168,9 +168,10 @@ describe('el saldo prepago, en una línea (las cifras de la 40700001 de Foodint)
 describe('el sitio de la página: la barra marca Liquidaciones en la lista, la ficha y la quincena', () => {
   it('las cuatro direcciones', () => {
     const de = (p: string) => { const d = dondeEsta(p); return d ? `${d.producto.id}.${d.pestana?.id}` : null }
-    expect(rutaLiquidaciones()).toBe(rutaConta(CONTA.rutas.liquidaciones))
-    expect(rutaLiquidaciones('catcher')).toBe(`${rutaConta(CONTA.rutas.liquidaciones)}?subir=catcher`)
-    for (const p of ['/conta/compras/liquidaciones', '/conta/documentos/catcher/q1']) {
+    // PC01 · Entrega 2: se llama «Repartidores»; la dirección vieja sigue marcando su pestaña y redirige.
+    expect(rutaLiquidaciones()).toBe(rutaConta(CONTA.rutas.repartidores))
+    expect(rutaLiquidaciones('catcher')).toBe(`${rutaConta(CONTA.rutas.repartidores)}?subir=catcher`)
+    for (const p of ['/conta/compras/repartidores', '/conta/compras/liquidaciones', '/conta/documentos/catcher/q1']) {
       expect(de(p), p).toBe('compras.liquidaciones')
     }
     // V01 · Entrega 3: la mensual del socio (y la de subir sus documentos) es de Ventas › Liquidaciones.

@@ -1,0 +1,105 @@
+/* src/modules/conta/estilo/pagos.css
+ * PC01 · Entrega 2 · Compras › Pagos (tablero 15) y la ficha de una remesa
+ * (tablero 16). La lista, las cifras, las pestañas y el asiento son las piezas
+ * comunes (plantillas); aquí, lo que es solo de estas pantallas: el rojo de
+ * «Vencido», el aviso ámbar, la barra oscura de abajo con el total y «Pagar
+ * N facturas», los pasos de la remesa, su tabla de pagos con el IBAN y la
+ * columna de la derecha. En el móvil todo baja a una columna.
+ */
+.pg-pagina { display: flex; flex-direction: column; gap: var(--s-4); }
+
+/* Cifras: «Vencido» en rojo cuando hay algo vencido (la tercera). */
+.pg-cifras[data-vencido='si'] .s-bandeja-cifra:nth-child(3) .s-bandeja-cifra-valor { color: var(--s-falta); }
+
+/* El aviso ámbar («21 facturas no tienen vencimiento»; el IBAN que cambió) */
+.pg-aviso-ambar {
+  display: flex; align-items: center; gap: var(--s-4); justify-content: space-between; flex-wrap: wrap;
+  padding: var(--s-3) var(--s-5); background: var(--s-duda-fondo); border: var(--s-linea) solid var(--s-duda); border-radius: var(--s-radio-bloque);
+  color: var(--s-tinta);
+}
+.pg-aviso-ambar p { margin: 0; flex: 1; min-width: 240px; }
+.pg-aviso-ambar strong { color: var(--s-duda); }
+.pg-aviso-fila { border-radius: 0; border-left: none; border-right: none; }
+.pg-aviso-acciones { display: flex; gap: var(--s-4); flex-wrap: wrap; }
+.pg-enlace { background: none; border: none; padding: 0; color: var(--s-accion); font: inherit; font-weight: var(--s-peso-fuerte); text-decoration: underline; cursor: pointer; }
+.pg-enlace:disabled { opacity: .5; cursor: default; }
+.pg-enlace-chico { margin-left: var(--s-3); font-size: var(--s-t-xs); font-weight: var(--s-peso-medio); }
+
+/* La caja de la lista (pestañas, filtros y tabla en un mismo bloque) */
+.pg-caja { background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); overflow: hidden; }
+.pg-caja > .s-pestanas, .pg-caja > .s-filtros { padding-left: var(--s-4); padding-right: var(--s-4); }
+.pg-pie { display: flex; justify-content: space-between; gap: var(--s-4); flex-wrap: wrap; padding: var(--s-3) var(--s-4); color: var(--s-apoyo); font-size: var(--s-t-s); }
+.pg-pie strong { color: var(--s-tinta); }
+.pg-vence-rojo { color: var(--s-falta); font-weight: var(--s-peso-fuerte); }
+.pg-vence-sin { color: var(--s-duda); font-weight: var(--s-peso-fuerte); }
+.pg-tarjeta { display: flex; flex-direction: column; gap: var(--s-1); width: 100%; }
+.pg-tarjeta-fila { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); }
+
+/* La barra de abajo: oscura, con el total, el banco, la fecha y «Pagar N facturas» */
+.pg-barra {
+  position: sticky; bottom: var(--s-3); z-index: 5;
+  display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-3) var(--s-4); background: var(--s-oscuro); color: var(--s-sobre-accion);
+  border-radius: var(--s-radio-bloque); box-shadow: var(--s-sombra);
+}
+.pg-barra-total { display: flex; flex-direction: column; gap: 2px; margin-right: auto; }
+.pg-barra-fuera { font-size: var(--s-t-xs); opacity: .8; }
+.pg-barra-campo {
+  display: inline-flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-3); min-height: var(--s-alto-control);
+  border: var(--s-linea) solid rgba(255, 255, 255, .35); border-radius: var(--s-radio-campo); color: var(--s-sobre-accion);
+}
+.pg-barra-campo span { opacity: .8; }
+.pg-barra-campo select, .pg-barra-campo input { background: transparent; border: none; color: inherit; font: inherit; font-weight: var(--s-peso-fuerte); }
+.pg-barra-campo select option { color: var(--s-tinta); }
+.pg-barra-campo input::-webkit-calendar-picker-indicator { filter: invert(1); }
+.pg-kbd { margin-left: var(--s-2); padding: 0 6px; border: var(--s-linea) solid rgba(255, 255, 255, .6); border-radius: 4px; font-size: var(--s-t-xs); font-family: inherit; }
+.pg-barra-nota { margin: calc(-1 * var(--s-2)) 0 0; }
+
+/* Los avisos de abajo (tres en Pagos, dos en la remesa) */
+.pg-notas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
+.pg-notas-dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pg-notas p { margin: 0; padding: var(--s-4); background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); color: var(--s-apoyo); font-size: var(--s-t-s); }
+.pg-notas strong { color: var(--s-tinta); }
+
+/* La remesa: los pasos */
+.pg-pasos { list-style: none; margin: 0; padding: var(--s-4) var(--s-5); display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s-3);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
+.pg-pasos li { display: flex; align-items: center; gap: var(--s-2); color: var(--s-apoyo); font-weight: var(--s-peso-medio); }
+.pg-paso-marca { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%; background: var(--s-neutro-fondo); color: var(--s-apoyo); font-size: var(--s-t-s); flex: none; }
+.pg-pasos li[data-hecho='si'] { color: var(--s-ok); }
+.pg-pasos li[data-hecho='si'] .pg-paso-marca { background: var(--s-ok-fondo); color: var(--s-ok); }
+.pg-pasos li[data-actual='si'] { color: var(--s-accion); font-weight: var(--s-peso-fuerte); }
+.pg-pasos li[data-actual='si'] .pg-paso-marca { background: var(--s-accion); color: var(--s-sobre-accion); }
+
+/* La remesa: dos columnas; la tabla de pagos con el IBAN */
+.pg-ficha { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 420px); gap: var(--s-4); align-items: start; }
+.pg-ficha-izq, .pg-ficha-der { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.pg-tabla { width: 100%; border-collapse: collapse; font-size: var(--s-t-m); }
+.pg-tabla th { text-align: left; padding: var(--s-3) var(--s-4); color: var(--s-apoyo); font-weight: var(--s-peso-medio); font-size: var(--s-t-s); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); background: var(--s-fondo); }
+.pg-tabla td { padding: var(--s-3) var(--s-4); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: middle; overflow-wrap: anywhere; }
+.pg-tabla .pg-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pg-tabla tr[data-estado='rechazada'] td, .pg-tabla tr[data-estado='sacada'] td { color: var(--s-apoyo); }
+.pg-iban-nuevo { color: var(--s-duda); font-weight: var(--s-peso-fuerte); }
+.pg-iban-ok { color: var(--s-ok); font-weight: var(--s-peso-fuerte); }
+.pg-datos { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--s-2) var(--s-4); margin: 0; }
+.pg-datos dt { color: var(--s-apoyo); }
+.pg-datos dd { margin: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+.pg-historial { margin: 0; padding-left: var(--s-5); display: flex; flex-direction: column; gap: var(--s-2); color: var(--s-tinta); }
+.pg-dialogo-campos { display: flex; flex-direction: column; gap: var(--s-3); }
+.cxn-remesa { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+/* Respuesta 7 · El paso «Pagada», cuando su asiento se validó solo */
+.pg-paso-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pg-paso-detalle { color: var(--s-ok); font-size: var(--s-t-xs); font-weight: var(--s-peso-medio); }
+/* Respuesta 7 · La remesa que Bancos propone sola (la única que espera justo este cargo). */
+.cxn-remesa-propuesta { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap;
+  padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-left: 3px solid var(--s-ok); border-radius: var(--s-radio-campo); background: var(--s-superficie); }
+.cxn-remesa-propuesta p { margin: 0; min-width: 0; }
+
+@media (max-width: 899px) {
+  .pg-notas, .pg-notas-dos { grid-template-columns: minmax(0, 1fr); }
+  .pg-ficha { grid-template-columns: minmax(0, 1fr); }
+  .pg-barra { flex-direction: column; align-items: stretch; }
+  .pg-barra-campo { justify-content: space-between; }
+  .pg-pasos { grid-template-columns: minmax(0, 1fr); }
+  .pg-tabla th:nth-child(4), .pg-tabla td:nth-child(4) { display: none; }
+}

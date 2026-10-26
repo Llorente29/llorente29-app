@@ -1,9 +1,10 @@
 // src/modules/conta/compras/LiquidacionesPage.tsx
 //
-// S02 · PR 3 · Compras y gastos › Liquidaciones, con la plantilla LISTA del
+// S02 · PR 3 · Compras y gastos › Repartidores (antes «Liquidaciones»: PC01 · E2,
+// Julio, 26/10), con la plantilla LISTA del
 // patrón único (como Facturas recibidas y Facturas emitidas).
 //
-//   · Encabezado: migas del mapa, «Liquidaciones», su frase y UN principal:
+//   · Encabezado: migas del mapa, «Repartidores», su frase y UN principal:
 //     «Subir quincena de Catcher» si la empresa trabaja con Catcher (abre la
 //     zona de subir, que antes vivía al final de Facturas recibidas). La
 //     mensual se sube desde su fila («Por llegar»): necesita su proveedor, su
@@ -65,8 +66,8 @@ export default function LiquidacionesPage() {
     ? <Boton variante="principal" icono="subir" onClick={() => cambiar({ subir: subirAbierto ? null : 'catcher' })} aria-expanded={subirAbierto}>Subir quincena de Catcher</Boton>
     : undefined
   const encabezado = (
-    <EncabezadoPagina titulo="Liquidaciones"
-      frase="Las quincenas de Catcher, cada una con su estado. Las de las plataformas y las mensuales del socio de marca están en Ventas › Liquidaciones."
+    <EncabezadoPagina titulo="Repartidores"
+      frase="Las quincenas de los repartidores (Catcher), cada una con su estado. Lo que te pagan las plataformas y el socio de marca está en Ventas › Liquidaciones."
       principal={principal} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus liquidaciones.</p></div>

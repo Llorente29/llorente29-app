@@ -1,0 +1,25 @@
+{
+  "_que": "PC01 · E2 · Compras › Pagos · contexto de producción de la tanda (0915, solo añade), medido en SOLO LECTURA el 26/10 a las 10:36Z (respuesta 7: también treasury_account) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. Existen supplier (100 filas, en la base entera), donde se añade el disparador nuevo del cambio de IBAN, y treasury_account (reltuples 0: sin estadística), donde se añade la columna del sufijo del banco, que admite nulos; nada de lo que crea la 0915. Ninguna en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-26T10:36Z",
+  "tanda": {
+    "supabase/migrations/20261026T0915_pc01e2_remesas_de_pagos.sql": "907c8ff4faa00646b18da532cf62e192"
+  },
+  "contexto": {
+    "tablas": [
+      "public.supplier",
+      "public.treasury_account"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.supplier": 100,
+      "public.treasury_account": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

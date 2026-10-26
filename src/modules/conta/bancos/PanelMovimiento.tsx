@@ -15,6 +15,8 @@ import { textoDeImporte } from '@/modules/conta/diseno'
 import { AsientoQueSeCrea } from '@/modules/conta/diseno/plantillas'
 import type { Destino } from '@/modules/conta/lib/conciliacion'
 import type { MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import type { RemesaParaCasar } from '@/modules/conta/services/pagosService'
+import { remesaQueSePropone } from '@/modules/conta/lib/pagos'
 import {
   PILDORA, asientoQueSeCrea, confirmable, destinoDelReparto, facturasDe, quienEs, repartir, textoDelBanco, type FacturaParaCasar,
 } from '@/modules/conta/lib/conciliarVista'
@@ -24,6 +26,8 @@ export interface CuentasDiferencia { c626: string; c669: string; c769: string }
 export interface PanelProps {
   m: MovimientoBanco
   facturas: readonly FacturaParaCasar[]
+  /** PC01 · E2 · Las remesas de pagos (Compras › Pagos) que esperan su cargo. */
+  remesas?: readonly RemesaParaCasar[]
   /** La 572 del banco del movimiento, y las otras cuentas tuyas (para un traspaso). */
   cuenta572: string | null
   otrosBancos: { id: string; nombre: string; cuenta: string | null }[]
@@ -32,6 +36,8 @@ export interface PanelProps {
   ocupado: boolean
   alConfirmarPropuesta: () => void
   alConfirmar: (destino: Destino, porque: string, que: string) => void
+  /** PC01 · E2 · Casar este cargo con una remesa entera (lineas null) o con los pagos que carga. */
+  alCasarRemesa?: (remesaId: string, lineas: string[] | null) => void
   alDeshacer: () => void
   alVerAsiento: () => void
   alBuscarFactura: () => void
@@ -57,6 +63,14 @@ export function PanelMovimiento(p: PanelProps) {
   const reparto = fs.length ? repartir(m, fs, p.cuentasDiferencia, cerrar) : null
   const sinCasar = m.estado !== 'casado' && m.estado !== 'ignorado'
   const pago = m.importeCent < 0
+  // PC01 · E2 · Las remesas que esperan justo este cargo: la remesa entera, o un pago suyo (el banco los carga uno a uno).
+  const cargo = Math.abs(m.importeCent)
+  const esperan = (p.remesas ?? []).flatMap((r) => [
+    ...(r.porCargarCent === cargo ? [{ clave: r.id, remesaId: r.id, codigo: r.codigo, aMano: r.aMano, lineas: null as string[] | null, texto: `${r.aMano ? 'Pago a mano' : 'Remesa'} ${r.codigo}`, apoyo: r.pagos.length === 1 ? `${r.pagos[0].proveedor} · ${r.pagos[0].factura ?? 'sin número'}` : `${r.pagos.length} pagos, del ${diaMesCorto(r.fecha)}` }] : []),
+    ...(r.pagos.length > 1 ? r.pagos.filter((x) => x.importeCent === cargo).map((x) => ({ clave: x.id, remesaId: r.id, codigo: r.codigo, aMano: r.aMano, lineas: [x.id], texto: `Un pago de la remesa ${r.codigo}`, apoyo: `${x.proveedor} · ${x.factura ?? 'sin número'}` })) : []),
+  ])
+  // Respuesta 7 · Si el cargo es lo que espera UNA sola remesa entera, Bancos la propone sola; si cuadran dos o más, se elige.
+  const { propuesta: remesaPropuesta, resto: otrasEsperan } = remesaQueSePropone(esperan)
 
   // El destino que se enseña en «Ver el asiento que se crea»: lo que está elegido, o lo que propongo.
   const destinoVisto: Destino | null = reparto && !reparto.noSePuede ? destinoDelReparto(fs, reparto) : ((m.propuesta?.destino as Destino | null | undefined) ?? null)
@@ -113,6 +127,30 @@ export function PanelMovimiento(p: PanelProps) {
           {confirmable(m) && !reparto && (
             <div className="cxn-acciones"><button type="button" className="cx-boton" disabled={p.ocupado} onClick={p.alConfirmarPropuesta}>{p.ocupado ? 'Confirmando…' : 'Sí, es esto'}</button></div>
           )}
+        </section>
+      )}
+
+      {sinCasar && pago && esperan.length > 0 && p.alCasarRemesa && (
+        <section className="cxn-bloque" aria-label="Esperando este cargo" data-prueba="remesas-esperan">
+          <h4>Esperando este cargo</h4>
+          {remesaPropuesta && (
+            <div className="cxn-remesa-propuesta" data-prueba="remesa-propuesta">
+              <p><span className="cx-ayuda">Te propongo:</span> <strong>es el cargo {remesaPropuesta.aMano ? 'del pago a mano' : 'de la remesa'} {remesaPropuesta.codigo}</strong> <span className="cx-ayuda">{remesaPropuesta.apoyo}. Es lo único que espera justo este importe.</span></p>
+              <button type="button" className="cx-boton" disabled={p.ocupado} onClick={() => p.alCasarRemesa!(remesaPropuesta.remesaId, null)}>{p.ocupado ? 'Casando…' : 'Sí, es esta'}</button>
+            </div>
+          )}
+          {!remesaPropuesta && otrasEsperan.filter((x) => x.lineas === null).length > 1 && (
+            <p className="cx-ayuda">Cuadran {otrasEsperan.filter((x) => x.lineas === null).length} remesas con este importe: elige cuál es.</p>
+          )}
+          {otrasEsperan.length > 0 && <ul className="cxn-facturas">
+            {otrasEsperan.map((x) => (
+              <li key={x.clave} className="cxn-remesa">
+                <span><strong>{x.texto}</strong> <span className="cx-ayuda">{x.apoyo}</span></span>
+                <button type="button" className={remesaPropuesta ? 'cx-boton-sec' : 'cx-boton'} disabled={p.ocupado} onClick={() => p.alCasarRemesa!(x.remesaId, x.lineas)}>{p.ocupado ? 'Casando…' : 'Es esto'}</button>
+              </li>
+            ))}
+          </ul>}
+          <p className="cx-ayuda">Al casarlo, las facturas quedan pagadas con su asiento (cada proveedor a su 400 contra el banco). Si el cargo es la remesa entera y sus IBAN están confirmados, el asiento se valida solo.</p>
         </section>
       )}
 

@@ -188,12 +188,12 @@ test('A (hostelería): la barra con Contabilidad abierta, la cabecera de 56 px y
     await expect(page.getByRole('dialog', { name: 'Menú' })).toHaveCount(0)
   }
 
-  // Compras y gastos en una empresa de hostelería: con Liquidaciones. S02: «Por
+  // Compras y gastos en una empresa de hostelería: con Pagos y Repartidores (PC01 · E2: antes «Liquidaciones»). S02: «Por
   // revisar» (/conta/compras, ahora «Recepciones del local») ya no es una página
   // de la barra: cuelga de Facturas recibidas, que es la que queda marcada.
   await page.goto('/conta/compras')
   const compras = await paginas(page, 'Compras y gastos')
-  await expect(nombres(compras)).toHaveText(['Facturas recibidas', 'Liquidaciones'])
+  await expect(nombres(compras)).toHaveText(['Facturas recibidas', 'Pagos', 'Repartidores'])
   await expect(compras.getByRole('link', { name: 'Facturas recibidas' })).toHaveAttribute('aria-current', 'page')
   await cerrarCajon(page)
   await expect(page.getByRole('heading', { level: 1, name: 'Recepciones del local' })).toBeVisible()
@@ -207,7 +207,7 @@ test('D (sin hostelería): nada de hostelería en el esqueleto; Liquidaciones, e
   vigilar(page, errores)
   await page.goto('/conta/compras')
   const tabs = await paginas(page, 'Compras y gastos')
-  await expect(nombres(tabs)).toHaveText(['Facturas recibidas'])
+  await expect(nombres(tabs)).toHaveText(['Facturas recibidas', 'Pagos'])
   // S02: lo del marco es la cabecera, la barra (o el cajón), la fila de acciones y el encabezado.
   await expect(page.locator('.s-cabecera, .s-barra, .s-cajon, .s-acciones-pagina, .s-encabezado').getByText(/Liquidaci|plataforma|Catcher|socio/i)).toHaveCount(0)
   await cerrarCajon(page)
@@ -436,7 +436,7 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
     else await page.goto('/conta/compras')
     // El enlace de «Compras y gastos» lleva a su primera página, Facturas recibidas (/conta/documentos).
     await expect(page).toHaveURL(/\/conta\/(compras|documentos)/)
-    await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Liquidaciones'])
+    await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Pagos', 'Repartidores'])
     await cerrarCajon(page)
   } finally {
     // Pase lo que pase, D vuelve a no ser de hostelería (las demás pruebas lo cuentan).
@@ -448,7 +448,7 @@ test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esque
     }
   }
   await page.goto('/conta/compras')
-  await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas'])
+  await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Pagos'])
   expect(errores).toEqual([])
 })
 

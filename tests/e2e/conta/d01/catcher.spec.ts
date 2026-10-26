@@ -86,10 +86,11 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
   await page.waitForLoadState('networkidle')
   await expect(page.getByText(/Sube la quincena de Catcher/)).toHaveCount(0)
 
-  // 1 · Compras y gastos › Liquidaciones: el saldo prepago a la vista, y «Subir
+  // 1 · Compras y gastos › Repartidores (antes «Liquidaciones»; su dirección vieja redirige): el saldo prepago a la vista, y «Subir
   // quincena de Catcher» abre la zona de arrastre; lo leído, antes de subir nada.
   await page.goto('/conta/compras/liquidaciones')
-  await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { level: 1, name: 'Repartidores' })).toBeVisible({ timeout: 30_000 })
+  await expect(page).toHaveURL(/\/conta\/compras\/repartidores/)
   const saldoArriba = page.locator('[data-prueba="saldo-prepago"]')
   await expect(saldoArriba).toContainText('Saldo prepago Catcher · 40700001.', { timeout: 30_000 })
   await expect(saldoArriba).toContainText(/Te quedan −?[\d.]+,\d\d\s€: has recargado [\d.]+,\d\d\s€ y se han pagado [\d.]+,\d\d\s€\./)
@@ -119,7 +120,7 @@ test('Cuenta A: la quincena de Catcher se sube, se cruza y deja «Por aclarar» 
 
   // 3 · La quincena (al pulsar su fila): resumen, «Por aclarar» con el G236 y las facturas por grupos.
   await fila.click()
-  await expect(page.locator('nav.cxp-migas').getByRole('link', { name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('nav.cxp-migas').getByRole('link', { name: 'Repartidores' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('heading', { name: '2.ª quincena de septiembre de 2026' })).toBeVisible({ timeout: 30_000 })
   // Lo que dice la quincena (no el aviso de staging, que también es un role=status).
   const dice = page.locator('[data-prueba="hecho-quincena"]')
