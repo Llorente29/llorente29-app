@@ -63,8 +63,26 @@ begin
   raise notice 'siembra: un canal y una liquidación sin cobrar';
 end $$;
 
--- Desde aquí, la sesión es como la de la app.
-load 'safeupdate';
+-- Desde aquí, la sesión es como la de la app. postgres no es superusuario en
+-- Supabase y solo puede cargar lo que está en $libdir/plugins/ («load
+-- 'safeupdate'» da «access to library "safeupdate" is not allowed», run 585).
+load '$libdir/plugins/safeupdate';
+
+-- Y se comprueba que está cargado: un delete sin where de una temporal para.
+create temp table _sw_cargado (a int) on commit drop;
+do $$
+declare v_msg text;
+begin
+  begin
+    delete from _sw_cargado;
+    raise exception using errcode = 'P0001', message = 'pasa';
+  exception when others then get stacked diagnostics v_msg = message_text;
+  end;
+  if v_msg not like '%DELETE requires a WHERE clause%' then
+    raise exception 'PRUEBA PC01 SIN WHERE: safeupdate no está cargado (un delete sin where dio: %). Sin él la prueba no mide nada.', v_msg;
+  end if;
+  raise notice 'safeupdate cargado, como en la app: «%»', v_msg;
+end $$;
 
 -- Las tres llamadas, cada una en su subtransacción: devuelve null si pasa, o el
 -- error con su código.
