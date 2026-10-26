@@ -34,6 +34,10 @@ do $$ begin
 end $$;
 set local statement_timeout = '180s';
 
+-- El ensayo aplica la 0146 delante de esta prueba, en la misma transacción:
+-- primero su vuelta atrás (y la 0 comprueba que deja lo de producción).
+\i supabase/vuelta-atras/20261026T0146_v03_ventas_sin_iva.down.sql
+
 create temp table _v (clave text primary key, v text) on commit drop;
 grant select, insert, update on _v to authenticated;
 insert into _v values ('cuenta', 'c01a0000-0000-4000-8000-00000000000a'), ('empresa', '3b34403a-a7d6-4a48-a8d7-737e8cababdc');

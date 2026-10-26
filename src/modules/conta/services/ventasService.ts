@@ -24,6 +24,7 @@ import { cifrasGuardadas, diezDeFactura, diferenciaDe, type EstadoCobroBase, typ
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
 import { modulosQr } from '@/modules/conta/lib/verifactu/qr'
+import { MENCION_SIN_IVA, aTipoVenta, dePorque, type PorqueSinIva } from '@/modules/conta/lib/ventasSinIva'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -127,7 +128,9 @@ export interface FacturaGuardada {
   fecha: string
   vence: string | null
   clienteId: string | null
-  cliente: { nombre: string | null; nif: string | null; calle: string | null; cp: string | null; ciudad: string | null; provincia: string | null; correo: string | null; nifComprobado: boolean }
+  cliente: { nombre: string | null; nif: string | null; pais: string | null; calle: string | null; cp: string | null; ciudad: string | null; provincia: string | null; correo: string | null; nifComprobado: boolean }
+  /** V03 E2 · Por qué va sin IVA (verifactu_operacion), si tiene líneas sin IVA. */
+  porque: PorqueSinIva | null
   localId: string | null
   formaCobroId: string | null
   notas: string | null
@@ -153,13 +156,14 @@ export interface FacturaGuardada {
 export async function leerFactura(accountId: string, id: string): Promise<FacturaGuardada | null> {
   const [f] = await leer(tabla('customer_invoice').select('*').eq('account_id', accountId).eq('id', id), 'la factura')
   if (!f) return null
-  const [lineas, eventos, cobros, rectif, original, estado] = await Promise.all([
+  const [lineas, eventos, cobros, rectif, original, estado, operacion] = await Promise.all([
     leer(tabla('customer_invoice_line').select('*').eq('account_id', accountId).eq('invoice_id', id).order('position'), 'sus líneas'),
     leer(tabla('customer_invoice_event').select('at, kind, text, by_name').eq('account_id', accountId).eq('invoice_id', id).order('at', { ascending: false }), 'su historial'),
     leer(tabla('customer_invoice_payment').select('id, paid_on, amount, method, note, created_by_name').eq('account_id', accountId).eq('invoice_id', id).order('paid_on'), 'sus cobros'),
     leer(tabla('customer_invoice').select('id, number_text, status, total').eq('account_id', accountId).eq('corrects_id', id), 'sus rectificativas'),
     f.corrects_id ? leer(tabla('customer_invoice').select('id, number_text').eq('account_id', accountId).eq('id', String(f.corrects_id)), 'la factura que corrige') : Promise.resolve([] as Fila[]),
     leer(tabla('conta_factura_cobro').select('estado').eq('account_id', accountId).eq('invoice_id', id), 'su estado de cobro'),
+    leer(tabla('verifactu_operacion').select('calificacion, exenta').eq('account_id', accountId).eq('invoice_id', id), 'por qué va sin IVA'),
   ])
   const cli = (f.customer ?? {}) as Fila
   return {
@@ -167,7 +171,8 @@ export async function leerFactura(accountId: string, id: string): Promise<Factur
     corrige: f.corrects_id ? { id: String(f.corrects_id), numero: s(original[0]?.number_text), tipo: String(f.correction_kind) as 'importes' | 'anular' | 'datos', motivo: s(f.correction_reason) } : null,
     origen: String(f.origin) as OrigenFactura, serie: String(f.series_code), numero: s(f.number_text), fecha: String(f.issue_date), vence: s(f.due_date),
     clienteId: s(f.party_id),
-    cliente: { nombre: s(cli.nombre), nif: s(cli.nif), calle: s(cli.calle), cp: s(cli.cp), ciudad: s(cli.ciudad), provincia: s(cli.provincia), correo: s(cli.correo), nifComprobado: cli.nif_comprobado === true },
+    cliente: { nombre: s(cli.nombre), nif: s(cli.nif), pais: s(cli.pais), calle: s(cli.calle), cp: s(cli.cp), ciudad: s(cli.ciudad), provincia: s(cli.provincia), correo: s(cli.correo), nifComprobado: cli.nif_comprobado === true },
+    porque: dePorque(s(operacion[0]?.calificacion), s(operacion[0]?.exenta)),
     localId: s(f.location_id), formaCobroId: s(f.payment_method_id), notas: s(f.notes), correo: s(f.email_to), retencionId: s(f.withholding_rate_id), recargo: f.surcharge === true,
     base: n(f.base), iva: n(f.tax), recargoImporte: n(f.surcharge_amount), retencion: n(f.withholding_amount), total: n(f.total),
     entryId: s(f.entry_id), pdf: f.pdf_path ? { ruta: String(f.pdf_path), bytes: f.pdf_bytes == null ? null : n(f.pdf_bytes) } : null,
@@ -193,8 +198,9 @@ export async function urlDelPdf(ruta: string): Promise<string | null> {
 // ── Lo que hace falta para escribir una ────────────────────────────────────────
 
 export interface Catalogos {
-  clientes: { id: string; nombre: string; nif: string | null; recargo: boolean; retencionId: string | null; formaCobro: string | null; dias: number | null; correo: string | null }[]
-  tipos: { id: string; nombre: string; tipo: number; recargo: number | null }[]
+  clientes: { id: string; nombre: string; nif: string | null; pais: string | null; recargo: boolean; retencionId: string | null; formaCobro: string | null; dias: number | null; correo: string | null }[]
+  /** sinIva: el tipo «Exento o 0 %» (V03 E2): la línea necesita su porqué. */
+  tipos: { id: string; nombre: string; tipo: number; recargo: number | null; sinIva: boolean }[]
   cuentas: { id: string; code: string; nombre: string }[]
   retenciones: { id: string; nombre: string; tipo: number }[]
   formas: { id: string; nombre: string; code: string }[]
@@ -204,11 +210,11 @@ export async function catalogosFactura(accountId: string, companyId: string): Pr
   const [papeles, partes, fiscales, contactos, tipos, cuentas, retenciones, formas] = await Promise.all([
     leer(tabla('party_role').select('party_id, role').eq('account_id', accountId).eq('role', 'customer'), 'los clientes'),
     leer(tabla('party').select('id, name, tax_id, archived_at').eq('account_id', accountId).is('archived_at', null).order('name'), 'los contactos'),
-    leer(tabla('customer_fiscal').select('party_id, legal_name, equivalence_surcharge, withholding_rate_id, payment_method, payment_terms_days').eq('account_id', accountId), 'los datos fiscales'),
+    leer(tabla('customer_fiscal').select('party_id, legal_name, country_code, equivalence_surcharge, withholding_rate_id, payment_method, payment_terms_days').eq('account_id', accountId), 'los datos fiscales'),
     // Los clientes no tienen correo en su ficha: se propone el de su última factura.
     leer(tabla('customer_invoice').select('party_id, email_to, created_at').eq('account_id', accountId).eq('company_id', companyId).not('email_to', 'is', null)
       .order('created_at', { ascending: false }), 'los correos de las facturas'),
-    leer(tabla('tax_rate').select('id, name, rate, surcharge_rate, treatment, company_id, valid_to').eq('treatment', 'taxed').or(`company_id.is.null,company_id.eq.${companyId}`).order('rate', { ascending: false }), 'los tipos de IVA'),
+    leer(tabla('tax_rate').select('id, name, rate, surcharge_rate, treatment, company_id, valid_to').in('treatment', ['taxed', 'exempt']).or(`company_id.is.null,company_id.eq.${companyId}`).order('rate', { ascending: false }), 'los tipos de IVA'),
     leer(tabla('company_account').select('id, code, name, plain_name').eq('company_id', companyId).like('code', '70%').order('code'), 'las cuentas de ventas'),
     leer(tabla('withholding_rate').select('id, name, rate, company_id').or(`company_id.is.null,company_id.eq.${companyId}`).order('rate', { ascending: false }), 'las retenciones'),
     leer(tabla('payment_method').select('id, name, code, company_id, account_id').or(`account_id.is.null,account_id.eq.${accountId}`).order('sort_order'), 'las formas de cobro'),
@@ -221,10 +227,10 @@ export async function catalogosFactura(accountId: string, companyId: string): Pr
   return {
     clientes: partes.filter((p) => clientesIds.has(String(p.id)) || fiscal.has(String(p.id))).map((p) => {
       const f = fiscal.get(String(p.id))
-      return { id: String(p.id), nombre: s(f?.legal_name) ?? String(p.name), nif: s(p.tax_id), recargo: f?.equivalence_surcharge === true,
+      return { id: String(p.id), nombre: s(f?.legal_name) ?? String(p.name), nif: s(p.tax_id), pais: s(f?.country_code), recargo: f?.equivalence_surcharge === true,
         retencionId: s(f?.withholding_rate_id), formaCobro: s(f?.payment_method), dias: f?.payment_terms_days == null ? null : n(f.payment_terms_days), correo: correo.get(String(p.id)) ?? null }
     }),
-    tipos: tipos.filter((t) => !t.valid_to || String(t.valid_to) >= hoy).map((t) => ({ id: String(t.id), nombre: String(t.name), tipo: n(t.rate), recargo: t.surcharge_rate == null ? null : n(t.surcharge_rate) })),
+    tipos: tipos.filter((t) => !t.valid_to || String(t.valid_to) >= hoy).map((t) => ({ id: String(t.id), nombre: String(t.name), tipo: n(t.rate), recargo: t.surcharge_rate == null ? null : n(t.surcharge_rate), sinIva: t.treatment === 'exempt' })),
     // Las de ventas: la 700 a la 705 (descuentos, devoluciones y rappels, 706 a 709, no son líneas de una factura).
     cuentas: cuentas.filter((c) => /^70[0-5]/.test(String(c.code))).map((c) => ({ id: String(c.id), code: String(c.code), nombre: s(c.plain_name) ?? String(c.name) })),
     retenciones: retenciones.map((r) => ({ id: String(r.id), nombre: String(r.name), tipo: n(r.rate) })),
@@ -246,13 +252,16 @@ export interface DatosBorrador {
   retencionId: string | null
   recargo: boolean
   motivo?: string | null
+  /** V03 E2 · El porqué de las líneas sin IVA; undefined no lo toca, null lo quita. */
+  porque?: PorqueSinIva | null
 }
 
 export async function guardarBorrador(companyId: string, id: string | null, d: DatosBorrador, lineas: readonly { concepto: string; cantidad: number; precio: number; descuento: number; tipoId: string; cuentaId: string }[], quien: string | null) {
   return rpc<{ id: string; nuevo: boolean; total: number; lineas: number }>('conta_venta_guardar', {
     p_company: companyId, p_id: id,
     p_datos: { cliente_id: d.clienteId, fecha: d.fecha, vence: d.vence, serie: d.serie, forma_cobro_id: d.formaCobroId, local_id: d.localId, notas: d.notas,
-      correo: d.correo, retencion_id: d.retencionId, recargo: d.recargo, motivo: d.motivo ?? null },
+      correo: d.correo, retencion_id: d.retencionId, recargo: d.recargo, motivo: d.motivo ?? null,
+      ...(d.porque === undefined ? {} : { tipo_venta: aTipoVenta(d.porque) }) },
     p_lineas: lineas.map((l) => ({ concepto: l.concepto, cantidad: l.cantidad, precio: l.precio, descuento: l.descuento, tipo_id: l.tipoId, cuenta_id: l.cuentaId })),
     p_quien_nombre: quien,
   })
@@ -325,6 +334,8 @@ export function datosDelPdf(empresa: DatosFacturaPdf['empresa'], f: FacturaGuard
     total: f.total,
     notas: f.notas,
     rectifica: f.rectificativa && f.corrige ? { numero: f.corrige.numero ?? '', motivo: f.corrige.motivo ?? '', que: f.corrige.tipo === 'anular' ? 'la anula entera' : f.corrige.tipo === 'datos' ? 'corrige los datos del cliente' : 'corrige los importes' } : null,
+    // V03 E2: con alguna línea sin IVA, por qué (la de la rectificativa, heredada al emitir).
+    sinIva: f.porque && f.lineas.some((l) => l.tipo === 0) ? MENCION_SIN_IVA[f.porque] : null,
   }
 }
 
