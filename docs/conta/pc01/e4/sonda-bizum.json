@@ -1,5 +1,5 @@
 {
-  "cuando": "2026-10-27T06:40:39Z",
+  "cuando": "2026-10-27T08:42:12Z",
   "desde": "función de staging-conta (sonda PC01 E4)",
   "ok": true,
   "modo_prueba": true,
@@ -10,15 +10,15 @@
   "alta_con_bizum": {
     "status": 400,
     "tipo": "invalid_request_error",
-    "codigo": "url_invalid",
-    "parametro": "business_profile[url]",
-    "mensaje": "Not a valid URL"
+    "codigo": null,
+    "parametro": null,
+    "mensaje": "You tried to create an Accounts v1 connected account using the legacy `type` field with your platform as the losses collector. Use Accounts v2, remove `type`, and set `losses_collector` to `stripe`, then retry your request. See https://docs.stripe.com/connect/risk-management/connected-accounts-with-managed-risk for a code sample."
   },
   "alta_sin_bizum": {
     "status": 400,
     "tipo": "invalid_request_error",
-    "codigo": "url_invalid",
-    "parametro": "business_profile[url]",
-    "mensaje": "Not a valid URL"
+    "codigo": null,
+    "parametro": null,
+    "mensaje": "You tried to create an Accounts v1 connected account using the legacy `type` field with your platform as the losses collector. Use Accounts v2, remove `type`, and set `losses_collector` to `stripe`, then retry your request. See https://docs.stripe.com/connect/risk-management/connected-accounts-with-managed-risk for a code sample."
   }
 }
