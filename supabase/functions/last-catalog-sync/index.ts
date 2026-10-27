@@ -145,10 +145,12 @@ async function resolveToken(sb: SupabaseClient, accountId: string, orgId: string
 //    catalogId -> {brand, channel} de MEJOR ESFUERZO (no autoritativo: ver
 //    nota en resolveLocationCatalogs). "todos los catálogos, no solo
 //    default" — una marca puede tener varios (carta base + canal). ──
-function collectBrandChannelByCatalog(brands: any[]): Map<string, { brand: string; channels: Set<string> }> {
-  const out = new Map<string, { brand: string; channels: Set<string> }>();
+function collectBrandChannelByCatalog(brands: any[]): Map<string, { brand: string; brandId: string; channels: Set<string> }> {
+  const out = new Map<string, { brand: string; brandId: string; channels: Set<string> }>();
   for (const b of brands ?? []) {
     const brandName: string = b?.name ?? "";
+    // F01: el id de la marca en este local (el mismo que external_brand_map).
+    const brandExtId: string = b?.id ? String(b.id) : "";
     const cats = b?.catalogs ?? {};
     const walk = (v: any, channel: string) => {
       if (typeof v === "string" && v) {
@@ -158,8 +160,9 @@ function collectBrandChannelByCatalog(brands: any[]): Map<string, { brand: strin
         // BURGER -> A domicilio, Glovo, Para llevar, Local". Con el primero
         // ganando, el rótulo no decía de qué canal era el catálogo sino cuál
         // salió antes, y BAILABA entre pasadas sin que nadie tocara nada.
-        const entry = out.get(v) ?? { brand: brandName, channels: new Set<string>() };
+        const entry = out.get(v) ?? { brand: brandName, brandId: brandExtId, channels: new Set<string>() };
         if (!entry.brand && brandName) entry.brand = brandName;
+        if (!entry.brandId && brandExtId) entry.brandId = brandExtId;
         entry.channels.add(channel);
         out.set(v, entry);
       } else if (v && typeof v === "object") {
@@ -184,6 +187,8 @@ function channelFromName(name: string | null | undefined): string {
 
 interface CatalogInfo {
   brand: string;
+  /** F01: el id de la marca de Last en este local, si el walk de brands[] lo da. */
+  brandId: string | null;
   /** TODOS los destinos del catálogo, ordenados. */
   channels: string[];
   /** Nombre del catálogo en Last. */
@@ -219,6 +224,7 @@ async function resolveLocationCatalogs(
       : [channelFromName(c.name)];
     catalogMap.set(String(c.id), {
       brand: mapped?.brand || (c.name ?? ""),
+      brandId: mapped?.brandId ? mapped.brandId : null,
       channels,
       // El NOMBRE del catálogo ("SMASH BROTHERS BURGER 20"). Sin esto no hay
       // forma de casar una fila del espejo con lo que se ve en el panel.
@@ -416,6 +422,8 @@ async function syncLocation(
             external_location_id: locationExtId,
             external_catalog_id: catId,
             external_brand_name: info.brand || null,
+            // F01: con él se vincula una marca nueva antes de su primera venta.
+            external_brand_id: info.brandId,
             // El primero POR ORDEN, no "el que llegara antes". Se conserva
             // porque availabilityService cuenta canales distintos con él.
             external_channel: info.channels[0] ?? null,
@@ -564,6 +572,16 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // F01: la pasada de las marcas dadas de alta. Vincula los locales nuevos de
+  // cada una en cuanto el espejo trae su id de marca, y coloca lo vendido que
+  // haya quedado sin marca (con la regla 6). No crea marcas ni platos: eso es
+  // el alta, desde la pantalla. Si falla, se dice y la sincronización vale igual.
+  let marcas: any = null;
+  if (!dryRun) {
+    const { data, error } = await sb.rpc("f01_pasada_last", { p_account: accountId });
+    marcas = error ? { error: error.message } : data;
+  }
+
   const totals = byLocation.reduce(
     (acc, r) => {
       acc.catalogs_found += r.catalogs_found;
@@ -588,6 +606,7 @@ Deno.serve(async (req: Request) => {
     locations_ok: byLocation.length,
     locations_failed: failed,
     totals,
+    marcas_de_last: marcas,
     by_location: byLocation,
     duration_ms: Date.now() - startedAt,
   });

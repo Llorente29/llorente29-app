@@ -28,8 +28,11 @@
 // Nada aquí inventa una fuente: las tres tablas existen y están pobladas.
 
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
+import { leerMarcasLast } from '@/modules/multitenancy/services/marcasLastService'
+import { avisoMarca, claveMarca, iniciales, pendientes } from '@/modules/multitenancy/lib/marcasLast'
 
-export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante'
+// F01 (27/10): «marca» = una marca nueva en las cartas de Last, antes de que venda.
+export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante' | 'marca'
 
 export interface AvisoAtencion {
   id: string
@@ -47,6 +50,15 @@ export interface AvisoAtencion {
    * destino convierte el aviso en una instrucción.
    */
   destino: string
+  /**
+   * F01 · tablero 1: el aviso con su detalle, su etiqueta y su botón. Si no
+   * lo trae, la fila dice el destino debajo y el botón es «Ver».
+   */
+  detalle?: string
+  chip?: { texto: string; tono: 'aviso' | 'mal' }
+  boton?: string
+  /** Las letras del icono (las de la marca); si no, el icono del tipo. */
+  iniciales?: string
 }
 
 type Row = Record<string, unknown>
@@ -154,7 +166,7 @@ export async function getAvisosAtencion(
   const idsLocales = [...nombreLocal.keys()]
   if (idsLocales.length === 0) return []
 
-  const [conteos, tablets, cuadrantes] = await Promise.all([
+  const [conteos, tablets, cuadrantes, marcas] = await Promise.all([
     sb.from('inventory_count').select('id, code, status, location_id, started_at')
       .eq('account_id', accountId).in('status', ESTADOS_CONTEO_VIVO),
     // Solo dispositivos ACTIVOS: uno dado de baja a propósito no es una tablet
@@ -165,6 +177,8 @@ export async function getAvisosAtencion(
       .eq('status', 'draft')
       .in('location_id', idsLocales)
       .in('week_start', [semanaActual, semanaSiguiente]),
+    // F01: las marcas nuevas de Last (solo las ve quien administra la cuenta).
+    leerMarcasLast(accountId).then((m) => ({ data: m, error: null }), (e: unknown) => ({ data: null, error: e })),
   ])
   const enAlcance = (loc: unknown) => locationId == null || loc === locationId
   const deQuien = (loc: unknown) =>
@@ -208,6 +222,27 @@ export async function getAvisosAtencion(
       ruta: `/personal/calendario?semana=${s.week_start as string}`,
       destino: 'Team · Calendario',
     })
+  }
+
+  // Primero las marcas nuevas: venden en cuanto alguien pide, y hasta el alta
+  // lo vendido no descuenta almacén. Todas, sin recortar (regla 7).
+  if (marcas.error) console.error('[atencion] marcas de Last', marcas.error)
+  else {
+    const nuevas = pendientes(marcas.data ?? []).filter((m) => locationId == null || m.locales.some((l) => l.id === locationId))
+    avisos.unshift(...nuevas.map((m): AvisoAtencion => {
+      const a = avisoMarca(m)
+      return {
+        id: `marca:${claveMarca(m)}`,
+        tipo: 'marca',
+        texto: a.titulo,
+        detalle: a.detalle,
+        chip: { texto: a.chip, tono: 'aviso' },
+        boton: 'Dar de alta',
+        iniciales: iniciales(m.nombre),
+        ruta: `/configuracion/marcas?alta=${encodeURIComponent(claveMarca(m))}`,
+        destino: 'Marcas',
+      }
+    }))
   }
 
   return avisos

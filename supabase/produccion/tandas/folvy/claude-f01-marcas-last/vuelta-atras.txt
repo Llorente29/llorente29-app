@@ -1,0 +1,7 @@
+# F01 · PR 1 · vuelta atrás, en orden inverso. La de la 1321 quita solo lo que
+# lleva su firma, y PARA si algún pedido ya apunta a un plato de El Delicioso
+# creado por la tanda. La de la 1322 PARA si quedan fichas de socio sin
+# porcentaje; la de la 1320, si hay altas hechas desde la pantalla.
+supabase/vuelta-atras/20261027T1321_f01_socios_y_el_delicioso.down.sql
+supabase/vuelta-atras/20261027T1322_f01_sembrado_y_socio.down.sql
+supabase/vuelta-atras/20261027T1320_f01_marcas_last.down.sql

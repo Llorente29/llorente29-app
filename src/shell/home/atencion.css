@@ -1,0 +1,27 @@
+/* src/shell/home/atencion.css
+ * F01 · tablero 1: «Lo que necesita tu atención», como la maqueta aprobada.
+ * Cada fila: el icono (las letras de la marca o el del tipo), el qué y el
+ * dónde, su etiqueta y UN botón. Con las variables de color de Folvy. */
+.at-bloque { margin-bottom: 18px; }
+.at-titulo { margin: 0 0 8px; font-weight: 600; font-size: 15px; color: var(--color-text-primary); }
+.at-lista { list-style: none; margin: 0; padding: 0; border: 1px solid var(--color-border-default); border-radius: 12px; overflow: hidden; background: var(--color-bg-card); }
+.at-fila { display: flex; gap: 16px; align-items: center; padding: 16px 18px; border-top: 1px solid var(--color-border-default); flex-wrap: wrap; }
+.at-fila:first-child { border-top: 0; }
+.at-ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-family: var(--font-display); flex: none; font-size: 15px; }
+.at-ico[data-tipo='marca'] { background: var(--color-accent-bg); color: var(--color-accent); }
+.at-ico[data-tipo='tablet'], .at-ico[data-tipo='cuadrante'] { background: var(--color-warning-bg); color: var(--color-warning); }
+.at-ico[data-tipo='conteo'] { background: var(--color-bg-page); color: var(--color-text-secondary); }
+.at-txt { flex: 1 1 320px; min-width: 0; }
+.at-txt b { display: block; color: var(--color-text-primary); font-weight: 600; }
+.at-txt span { color: var(--color-text-secondary); font-size: 14px; }
+.at-chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; border-radius: 99px; padding: 2px 10px; white-space: nowrap; }
+.at-chip[data-tono='aviso'] { background: var(--color-warning-bg); color: var(--color-warning); }
+.at-chip[data-tono='mal'] { background: var(--color-danger-bg); color: var(--color-danger); }
+.at-boton { font: inherit; font-weight: 600; font-size: 14px; border-radius: 9px; padding: 9px 16px; border: 1px solid var(--color-border-default); background: var(--color-bg-card); color: var(--color-text-primary); cursor: pointer; white-space: nowrap; }
+.at-boton[data-principal='si'] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-text-on-accent); }
+.at-boton:hover { filter: brightness(0.97); }
+.at-boton:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .at-fila { padding: 14px; gap: 12px; }
+  .at-boton { flex: 1 1 100%; }
+}

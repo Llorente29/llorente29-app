@@ -24,6 +24,8 @@
 import { useState } from 'react'
 import BrandsListView from '../components/brands/BrandsListView'
 import BrandDetailView from '../components/brands/BrandDetailView'
+import MarcasNuevasLast from '../components/brands/MarcasNuevasLast'
+import { useActiveAccount } from '../hooks/useActiveAccount'
 
 export default function BrandsPage() {
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null)
@@ -33,13 +35,20 @@ export default function BrandsPage() {
   // Patrón simple. Si en el futuro queremos refresh más granular,
   // pasamos un onChanged callback al detalle.
   const [listRefreshKey, setListRefreshKey] = useState(0)
+  const { activeAccountId } = useActiveAccount()
 
   if (selectedBrandId === null) {
     return (
-      <BrandsListView
-        key={listRefreshKey}
-        onSelectBrand={(id) => setSelectedBrandId(id)}
-      />
+      <>
+        {/* F01: las marcas nuevas de Last y su alta (tablero 2). */}
+        {activeAccountId && (
+          <MarcasNuevasLast accountId={activeAccountId} onAlta={() => setListRefreshKey((k) => k + 1)} />
+        )}
+        <BrandsListView
+          key={listRefreshKey}
+          onSelectBrand={(id) => setSelectedBrandId(id)}
+        />
+      </>
     )
   }
 

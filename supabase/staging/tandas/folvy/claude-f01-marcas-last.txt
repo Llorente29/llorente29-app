@@ -1,0 +1,20 @@
+# F01 · PR 1 · Marcas de Last. La 1320 solo añade y se puede pasar dos veces:
+# desde la rama, de verdad (W05), y con ella la semilla de la carta de Last de
+# prueba de la e2e (cuenta A, «Latina de Prueba»).
+supabase/migrations/20261027T1320_f01_marcas_last.sql
+supabase/seeds/folvy/seed_f01_marcas_last_staging.sql
+
+# La 1322 cambia (el sembrado de siempre, Ajustes › Facturas de los pedidos y
+# el porcentaje del socio, opcional): desde la rama, solo en ROLLBACK. Su prueba
+# (ROLLBACK): las marcas de Last (nueva, vinculada, la de una tienda sin local
+# fuera), el ensayo y el alta como el administrador de A (socio sin porcentaje,
+# locales, plataformas, vínculos, la carta con un plato con dos nombres, el
+# agua del almacén y un precio por plataforma, y lo vendido antes con la regla
+# 6), el sembrado dos veces con un plato archivado, V04, la pasada de la
+# sincronización y los cuatro caminos de la regla 10.
+supabase/migrations/20261027T1322_f01_sembrado_y_socio.sql
+supabase/staging/sql/20261027_f01_marcas_last_prueba.sql
+
+# La 1321 (el socio de las cedidas de sus facturas y El Delicioso, de Foodint):
+# en staging no hay Foodint; se pasa para ver que corre.
+supabase/migrations/20261027T1321_f01_socios_y_el_delicioso.sql

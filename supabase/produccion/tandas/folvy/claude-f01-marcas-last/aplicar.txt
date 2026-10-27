@@ -1,0 +1,29 @@
+# F01 · PR 1 · Marcas de Last: el sembrado arreglado, las marcas nuevas sin
+# esperar a una venta y el alta en una sola pantalla. Rama claude/f01-marcas-last.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1320 — SOLO AÑADE (y se puede pasar dos veces): el id de la marca de
+#      Last en el espejo, el registro de las altas (external_brand_alta) y las
+#      funciones de las marcas de Last, el sembrado de una marca, el alta y la
+#      pasada. Desde la rama va de verdad a staging (W05): la e2e lo usa.
+#   2. 1322 — CAMBIA EN CALIENTE, con su respaldo byte a byte:
+#      seed_catalog_canonical (el sembrado, por marca y matrícula) y
+#      ticket_invoice_ajustes (V04: el socio, de la ficha de la marca). Y
+#      brand_licensing_agreement.revenue_share_pct pasa a opcional. Declarado
+#      en su cabecera, con su prueba de staging. Nada en el camino del pedido.
+#   3. 1321 — CAMBIA DATOS de Foodint (y de cualquier cuenta con cedidas sin
+#      ficha): el socio de las cedidas, sacado de sus facturas de Last, y el alta
+#      de El Delicioso (sus 18 platos sin duplicar, en Alcalá y Carabanchel).
+#
+# AUTORIZO: ninguno. El encargo lo pedía para la 1321, pero el analizador la da
+# por «sigue» (sus escrituras en datos de Foodint van DENTRO de funciones, que
+# no ve) y el workflow rechaza un «autorizo» que no hace falta. Lo que cambia en
+# Foodint lo dice la cuenta de abajo, antes y después, y el ensayo lo enseña
+# antes del real.
+# Cifras de antes y de después: la cuenta de abajo, medida igual a los dos lados.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/f01-marcas-last.sql
+supabase/migrations/20261027T1320_f01_marcas_last.sql
+supabase/migrations/20261027T1322_f01_sembrado_y_socio.sql
+supabase/migrations/20261027T1321_f01_socios_y_el_delicioso.sql

@@ -29,7 +29,7 @@ import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, statS
 import { dirname, join } from 'node:path'
 import { zonasTocadas } from '../e2e/area.mjs'
 
-export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas', 'docs/inventario/capturas']
+export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas', 'docs/inventario/capturas', 'docs/marcas/capturas']
 
 /**
  * El frente de la rama: el MISMO reparto que el paso «Frente» de
@@ -66,6 +66,8 @@ export const DE_QUIEN = {
   // Autoconteo (21/10): las de inventario son de la ZONA, no de un frente. Las
   // fija una rama sin frente que toque inventario (duenoDeLaRama, abajo).
   inventario: /^docs\/inventario\/capturas\//,
+  // F01 (27/10): las marcas de Last, igual que inventario: de la ZONA.
+  marcas: /^docs\/marcas\/capturas\//,
 }
 
 /**

@@ -170,7 +170,7 @@ describe('pedidos, cocina o reparto: la corta', () => {
 
 describe('Sumied y Folvy, separados (C10, 23/10)', () => {
   it('Folvy son las carpetas de tests/e2e que no son la de la contabilidad', () => {
-    expect(suiteFolvy()).toEqual(['tests/e2e/inventario', 'tests/e2e/reparto'])
+    expect(suiteFolvy()).toEqual(['tests/e2e/inventario', 'tests/e2e/marcas', 'tests/e2e/reparto'])
     expect(SUITE_SUMIED).toEqual(['tests/e2e/conta'])
   })
   it('un cambio solo de Sumied no lanza las de Folvy', () => {
