@@ -17,6 +17,7 @@ import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { getSchedule, listShiftTemplates } from '../../../services/schedulerService'
 import { getMondayOfWeek, toISODate, type ScheduleCells } from '../../../types/scheduler'
 import { fetchEmployees } from '../../../services/supabaseSync'
+import { leerAusenciasVisibles } from '@/services/vacationsService'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -221,14 +222,9 @@ export async function resolveTodayCounters(locationId: string, dateISO: string):
   }
 
   // Quitar vacaciones/permiso aprobado que cubran hoy.
-  const { data: vac } = await sb
-    .from('vacations')
-    .select('employee_id')
-    .eq('status', 'aprobada')
-    .in('employee_id', ids)
-    .lte('start_date', dateISO)
-    .gte('end_date', dateISO)
-  const onVac = new Set((vac ?? []).map((v: { employee_id: string }) => v.employee_id))
+  // L1a: por ausencias_visibles (una baja del equipo también cuenta como ausencia).
+  const { filas: vac } = await leerAusenciasVisibles({ desde: dateISO, hasta: dateISO, employeeIds: ids })
+  const onVac = new Set(vac.filter(v => v.status === 'aprobada').map(v => v.employee_id))
   return ids.filter((id) => !onVac.has(id))
 }
 

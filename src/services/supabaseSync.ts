@@ -24,6 +24,7 @@
 import { supabase, isSupabaseEnabled } from '../lib/supabase'
 import type { Database } from '../types/database'
 import type { Location, Employee, ClockEntry, ShiftPeriod, RestPattern } from '../types'
+import { ficharEnElServidor, corregirConMotivo, esFuncionQueNoExiste, esFalloDeRed } from './fichajeServidor'
 
 // Tipos helper para inserts/updates tipados
 type EmployeeInsert = Database['public']['Tables']['employees']['Insert']
@@ -229,6 +230,19 @@ function rowToEmployee(r: EmployeeRow): Employee {
  */
 function employeeToRow(e: Employee): EmployeeInsert & { employer_ss_annual?: number | null } {
   const isUuid = e.id && e.id.length === 36 && e.id.includes('-')
+  const fila = filaDeEmpleado(e, isUuid)
+  // L1a: quien no ha leído el salario, el DNI, la fecha de nacimiento ni el
+  // coste de SS (no es el administrador) no los manda al guardar una ficha que
+  // ya existe: mandaría vacíos y los borraría.
+  if (isUuid && e.datosPrivados === 'ocultos') {
+    const { dni: _dni, birth_date: _nac, salary: _sal, employer_ss_annual: _ss, ...resto } = fila
+    void _dni; void _nac; void _sal; void _ss
+    return resto as EmployeeInsert
+  }
+  return fila
+}
+
+function filaDeEmpleado(e: Employee, isUuid: boolean | '' | undefined): EmployeeInsert & { employer_ss_annual?: number | null } {
   return {
     ...(isUuid ? { id: e.id } : {}),
     name: e.name,
@@ -285,14 +299,87 @@ export async function fetchEmployees(accountId: string | null): Promise<Employee
   const locationIds = (locs ?? []).map(l => l.id)
   if (locationIds.length === 0) return []
 
-  // Query 2: employees cuyos location_id estén en esa lista
+  // Query 2: employees cuyos location_id estén en esa lista. L1a (27/10/2026):
+  // sin el salario, el DNI, la fecha de nacimiento ni el coste de la Seguridad
+  // Social, que solo ve el administrador y llegan aparte (abajo).
   const { data, error } = await supabase
     .from('employees')
-    .select('*')
+    .select(COLUMNAS_DE_LA_FICHA)
     .in('location_id', locationIds)
     .order('name')
   if (error) { console.error('Supabase fetchEmployees (employees):', error); return null }
-  return (data as EmployeeRow[]).map(rowToEmployee)
+  const fichas = (data as unknown as EmployeeRow[]).map(rowToEmployee)
+  const privados = await leerDatosPrivadosDeEmpleados(accountId)
+  return fichas.map(e => conDatosPrivados(e, privados))
+}
+
+/**
+ * Las columnas de employees que lee cualquiera que vea la ficha (L1a). Fuera:
+ * salary, dni, birth_date, employer_ss_annual (solo el administrador, por
+ * empleados_datos_privados) y pin (vive en employee_kiosk_pin desde la 1215).
+ * Una columna nueva de employees hay que añadirla aquí para que llegue.
+ */
+export const COLUMNAS_DE_LA_FICHA = [
+  'id', 'name', 'phone', 'email', 'photo', 'position', 'department', 'contract_type', 'start_date', 'end_date',
+  'weekly_hours', 'schedule', 'active', 'notes', 'location_id', 'assigned_locations', 'weekly_schedule',
+  'availability', 'created_at', 'updated_at', 'contracted_hours_week', 'shift_code', 'shift_period', 'rest_pattern',
+  'initial_hours_balance', 'show_hours_balance', 'termination_type', 'termination_reason',
+  'termination_communicated_to_gestoria', 'trial_period_days', 'username', 'forgot_clockout_reminder', 'account_id',
+].join(', ')
+
+export interface DatosPrivadosDeEmpleado {
+  salary: number | null
+  dni: string | null
+  birthDate: string | null
+  employerSsAnnual: number | null
+}
+
+/**
+ * El salario, el DNI, la fecha de nacimiento y el coste de Seguridad Social de
+ * las personas de la cuenta. Solo el administrador los recibe: a cualquier otro
+ * la función le devuelve cero filas. Con la base de antes de la 1905 (sin la
+ * función), se leen como antes.
+ */
+export async function leerDatosPrivadosDeEmpleados(accountId: string): Promise<Map<string, DatosPrivadosDeEmpleado>> {
+  const mapa = new Map<string, DatosPrivadosDeEmpleado>()
+  if (!supabase) return mapa
+  // empleados_datos_privados es de la 1905 y aún no está en database.ts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('empleados_datos_privados', { p_account_id: accountId })
+  type Fila = { id: string; salary: number | null; dni: string | null; birth_date: string | null; employer_ss_annual: number | null }
+  let filas: Fila[] = []
+  if (error && esFuncionQueNoExiste(error)) {
+    const r = await supabase.from('employees').select('id, salary, dni, birth_date, employer_ss_annual').eq('account_id', accountId)
+    if (r.error) { console.error('Supabase leerDatosPrivadosDeEmpleados (antes de la 1905):', r.error); return mapa }
+    filas = (r.data ?? []) as unknown as Fila[]
+  } else if (error) {
+    console.error('Supabase leerDatosPrivadosDeEmpleados:', error)
+    return mapa
+  } else {
+    filas = (data ?? []) as Fila[]
+  }
+  for (const f of filas) {
+    mapa.set(f.id, {
+      salary: f.salary == null ? null : Number(f.salary),
+      dni: f.dni,
+      birthDate: f.birth_date,
+      employerSsAnnual: f.employer_ss_annual == null ? null : Number(f.employer_ss_annual),
+    })
+  }
+  return mapa
+}
+
+function conDatosPrivados(e: Employee, privados: Map<string, DatosPrivadosDeEmpleado>): Employee {
+  const p = privados.get(e.id)
+  if (!p) return { ...e, salary: 0, dni: '', birthDate: undefined, employerSsAnnual: undefined, datosPrivados: 'ocultos' }
+  return {
+    ...e,
+    salary: p.salary ?? 0,
+    dni: p.dni ?? '',
+    birthDate: p.birthDate ?? undefined,
+    employerSsAnnual: p.employerSsAnnual ?? undefined,
+    datosPrivados: 'cargados',
+  }
 }
 
 /**
@@ -340,9 +427,14 @@ export async function upsertEmployee(e: Employee): Promise<Employee | null> {
   const row = employeeToRow(e)
   // employer_ss_annual aún no está en database.ts (deuda: regenerar). El cliente
   // tipado rechaza columnas desconocidas; casteamos el row. La columna existe en BD.
-  const { data, error } = await supabase.from('employees').upsert(row as EmployeeInsert).select().single()
+  // L1a: se lee de vuelta sin las columnas privadas; las que se acaban de
+  // guardar se devuelven tal cual las mandó quien las escribió.
+  const { data, error } = await supabase.from('employees').upsert(row as EmployeeInsert).select(COLUMNAS_DE_LA_FICHA).single()
   if (error) { console.error('Supabase upsertEmployee:', error); return null }
-  return rowToEmployee(data as EmployeeRow)
+  const guardada = rowToEmployee(data as unknown as EmployeeRow)
+  return e.datosPrivados === 'ocultos'
+    ? { ...guardada, salary: 0, dni: '', birthDate: undefined, employerSsAnnual: undefined, datosPrivados: 'ocultos' }
+    : { ...guardada, salary: e.salary, dni: e.dni, birthDate: e.birthDate, employerSsAnnual: e.employerSsAnnual, datosPrivados: 'cargados' }
 }
 
 /**
@@ -373,6 +465,11 @@ interface ClockRow {
   location_id_at_clock: string | null
   photo_data_url: string | null
   voided: boolean | null
+  // L1a (1905): pueden no venir con la base de antes.
+  distance_m?: number | null
+  within_radius?: boolean | null
+  declared_at?: string | null
+  created_at?: string | null
 }
 
 function rowToClock(r: ClockRow): ClockEntry & { employeeId: string } {
@@ -391,6 +488,10 @@ function rowToClock(r: ClockRow): ClockEntry & { employeeId: string } {
     locationIdAtClock: r.location_id_at_clock || undefined,
     photoDataUrl: r.photo_data_url || undefined,
     voided: r.voided ?? false,
+    distanceM: r.distance_m ?? undefined,
+    withinRadius: r.within_radius ?? undefined,
+    declaredAt: r.declared_at || undefined,
+    createdAt: r.created_at || undefined,
     employeeId: r.employee_id,
   }
 }
@@ -451,11 +552,14 @@ export async function fetchClockEntries(accountId: string | null): Promise<{ emp
 export class ClockWriteError extends Error {
   readonly hint: string | null
   readonly code: string | null
-  constructor(message: string, hint: string | null, code: string | null) {
+  /** L1a: no ha salido por la red (sin cobertura). El portal lo guarda en el móvil y lo manda después. */
+  readonly sinRed: boolean
+  constructor(message: string, hint: string | null, code: string | null, sinRed = false) {
     super(message)
     this.name = 'ClockWriteError'
     this.hint = hint
     this.code = code
+    this.sinRed = sinRed
   }
 }
 
@@ -485,6 +589,18 @@ export function mensajeDeFalloDeFichaje(e: unknown): string {
  */
 export async function insertClockEntry(employeeId: string, entry: ClockEntry): Promise<boolean> {
   if (!supabase) return false
+  // L1a (27/10/2026). Una marca a mano es una corrección con motivo.
+  if (entry.source === 'manual') {
+    const err = await corregirConMotivo(employeeId, entry)
+    if (err) throw new ClockWriteError(err.message, err.hint, err.code)
+    return true
+  }
+  // El móvil y la tablet fichan en el servidor (fichar()). Con la base de
+  // antes de la 1905, lo de antes (abajo).
+  const r = await ficharEnElServidor(employeeId, entry)
+  if (r.tipo === 'guardado') return true
+  if (r.tipo === 'rechazado') throw new ClockWriteError(r.error.message, r.error.hint, r.error.code)
+  if (r.tipo === 'sin-red') throw new ClockWriteError(r.error.message, r.error.hint, r.error.code, true)
   const row = {
     employee_id: employeeId,
     type: entry.type,
@@ -507,7 +623,7 @@ export async function insertClockEntry(employeeId: string, entry: ClockEntry): P
     // "registrada" igual. Un rechazo del trigger o un fallo de red se leian
     // como exito, y la persona se iba a casa creyendo que habia fichado.
     console.error('Supabase insertClockEntry:', error)
-    throw new ClockWriteError(error.message, error.hint ?? null, error.code ?? null)
+    throw new ClockWriteError(error.message, error.hint ?? null, error.code ?? null, esFalloDeRed(error))
   }
   return true
 }

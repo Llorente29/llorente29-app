@@ -661,6 +661,10 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
       source: 'manual',
       address: `Manual · ${reason}${senderName ? ` · por ${senderName}` : ''}`,
       locationIdAtClock: emp.locationId || undefined,
+      // L1a (27/10): una marca a mano es una corrección con motivo
+      // (add_manual_clock_entry): queda el motivo, quién y cuándo.
+      motivo: reason,
+      actorLabel: senderName || undefined,
     }
 
     setClocking(true)

@@ -24,6 +24,7 @@
 import { supabase } from '@/lib/supabase'
 import { getSchedule, listShiftTemplates } from '@/services/schedulerService'
 import { getMondayOfWeek, toISODate, type ScheduleCells } from '@/types/scheduler'
+import { leerAusenciasVisibles } from '@/services/vacationsService'
 
 /** Minutos desde medianoche de una hora 'HH:MM' o 'HH:MM:SS'. */
 function toMin(hhmm: string): number {
@@ -97,14 +98,9 @@ export async function resolveAssignment(
 
   // 3. Disponibilidad: quitar a quien tenga vacación/permiso APROBADO ese día
   const workingIds = Array.from(byEmp.keys())
-  const { data: vac } = await sb
-    .from('vacations')
-    .select('employee_id')
-    .eq('status', 'aprobada')
-    .in('employee_id', workingIds)
-    .lte('start_date', date)
-    .gte('end_date', date)
-  const onVacation = new Set((vac || []).map((v: { employee_id: string }) => v.employee_id))
+  // L1a: por ausencias_visibles (una baja del equipo también cuenta como ausencia).
+  const { filas: vac } = await leerAusenciasVisibles({ desde: date, hasta: date, employeeIds: workingIds })
+  const onVacation = new Set(vac.filter(v => v.status === 'aprobada').map(v => v.employee_id))
   const available = workingIds.filter(id => !onVacation.has(id))
   if (available.length === 0) return null
 

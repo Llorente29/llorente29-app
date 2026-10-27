@@ -1,0 +1,17 @@
+# L1a · PR 1 · Fichar en el servidor, permisos por papel y conservación.
+#
+# Primero, las tres de la L00 que ya están en PRODUCCIÓN y nunca llegaron a
+# staging (27/10): sus manifiestos solo nombraban la prueba, así que al
+# fusionar nadie las aplicó de verdad aquí. Staging recibe lo que está en
+# producción (W04): al fusionar este PR, main las aplica, en este orden.
+supabase/migrations/20261027T1112_l00_origen_del_fichaje.sql
+supabase/migrations/20261027T1215_l00_datos_de_los_trabajadores.sql
+supabase/migrations/20261027T1647_l00_ancestros_por_cuenta.sql
+#
+# La 1905, y su prueba (ROLLBACK), que empieza por su vuelta atrás si ya está
+# aplicada (el patrón de la V04): entra como el trabajador, el encargado, el
+# administrador y otra cuenta; fichar (hora del servidor, sin cobertura, fuera
+# del radio, PIN de la tablet), las lecturas por papel, la conservación y la
+# vuelta atrás.
+supabase/migrations/20261027T1905_l1a_fichar_en_el_servidor.sql
+supabase/staging/sql/20261027_l1a_fichar_en_el_servidor_prueba.sql

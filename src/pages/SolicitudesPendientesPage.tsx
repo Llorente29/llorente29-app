@@ -7,7 +7,7 @@ import { useActiveAccount } from '../modules/multitenancy/hooks/useActiveAccount
 import { usePermissions } from '../modules/multitenancy/hooks/usePermissions'
 import { Card, Button } from '../components/ui'
 import type { VacationRequest, VacationStatus, VacationType, VacationSettings } from '../types/personal'
-import { VACATION_TYPES, ALWAYS_AVAILABLE_VACATION_TYPE } from '../types/personal'
+import { VACATION_TYPES, etiquetaDeAusencia, ALWAYS_AVAILABLE_VACATION_TYPE } from '../types/personal'
 import {
   fetchPendingVacations, fetchVacations, reviewVacation,
   fetchVacationSettings, updateDisabledRequestTypes,
@@ -146,7 +146,7 @@ export default function SolicitudesPendientesPage() {
   }
 
   function typeLabel(t: string): string {
-    return VACATION_TYPES.find(x => x.id === t)?.label || t
+    return etiquetaDeAusencia(t)
   }
 
   // Para el modal de aprobación: mostrar cuántos quedarían
