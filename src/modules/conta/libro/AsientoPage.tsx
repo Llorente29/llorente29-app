@@ -16,6 +16,11 @@
 // S01d: una expedida a mano (serie 1) lleva la tarjeta «Factura» en vez de
 // «Documento»: su PDF al lado, o «Adjuntar el PDF» si está validada y aún no
 // lo tiene. Una vez adjunta no se cambia.
+//
+// V04 · Respuesta 5 · El candado del IVA: con el 303 de su periodo presentado,
+// un asiento con IVA no ofrece «Validar» ni «Anular» (la base los para igual) y
+// lo dice con el mensaje de la base. Una recibida que llegó tarde lo avisa:
+// «El 3T ya está presentado. Esta factura se deduce en el 4T.»
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
@@ -50,6 +55,9 @@ import { esExpedidaAMano } from '@/modules/conta/lib/expedidaPdf'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { motivosParaValidar } from '@/modules/conta/services/esperanService'
 import { porQueNoSeValida, type MotivoEspera } from '@/modules/conta/lib/esperan'
+import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
+import { avisoTardia, candadoDelAsiento, mensajePresentado } from '@/modules/conta/lib/ivaPresentado'
+import { FranjaIvaPresentado, FranjaTardia } from '@/modules/conta/diseno/CandadoIva'
 
 interface Datos {
   asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
@@ -124,6 +132,9 @@ export default function AsientoPage() {
   const a = datos?.asiento ?? null
   const c = useMemo(() => (a ? cuadre(a.apuntes) : null), [a])
   const lineas = useMemo(() => (a ? lineasDeApuntes(a.apuntes) : []), [a])
+  // V04: los periodos presentados del año del asiento y del de su factura.
+  const ejercicios = useMemo(() => (a ? [a.fecha, a.fechaDocumento].filter((x): x is string => !!x).map((x) => Number(x.slice(0, 4))) : []), [a])
+  const iva = useIvaPresentado(activa?.id, ejercicios)
 
   if (error) return <ErrorConReintento mensaje={error} reintentar={recargar} />
   if (!datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando el asiento" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={44} />)}</div>
@@ -134,6 +145,9 @@ export default function AsientoPage() {
   const diez = detalleDiez(a, datos.envio, { encendido, mensual, contraasiento: datos.contra })
   const e = estadoDe(a)
   const mes = estadoMes(mesDe(a.fecha), datos.cierres)
+  // V04 · El candado del IVA: el periodo presentado que cierra este asiento, y el aviso de la recibida tardía.
+  const candado = candadoDelAsiento(a, iva.presentados)
+  const tardia = a.origen === 'supplier_invoice' ? avisoTardia(a.fechaDocumento, a.fecha, iva.presentados) : null
 
   async function hacerValidar() {
     if (!a) return
@@ -145,6 +159,7 @@ export default function AsientoPage() {
       dicho = datos?.conDiez
         ? `${validado(await validarConDocumento(a.id, userName))} Con su «Resumen de ventas» guardado en ${MARCA.nombre}.`
         : validado(await validar(a.id, userName))
+      if (tardia) dicho = `${dicho} ${tardia}`
     } catch (x) {
       setFallo(datos?.conDiez ? noSeValida(x instanceof Error ? x.message : String(x)) : x instanceof Error ? x.message : 'No se ha validado.')
       setOcupado(false)
@@ -196,15 +211,18 @@ export default function AsientoPage() {
           {/* V01 · Entrega 2: un cierre del día se valida en Ventas › Cierres del día, con su factura resumen y su PDF. */}
           {editable && a.origen === 'sales_day' && a.origenId && datos.conDiez
             ? <Link to={rutaCierre(a.origenId)} className="cx-boton">Validar en Cierres del día</Link>
-            : editable && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido && !mensual ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
+            : editable && !candado && <button type="button" className={frena ? 'cx-boton-sec' : 'cx-boton'} onClick={hacerValidar} disabled={ocupado || !c?.cuadra || mes.cerrado || !!frena} title={frena?.texto ?? undefined}>{ocupado ? (encendido && !mensual ? 'Validando y enviando…' : 'Validando…') : 'Validar asiento'}</button>}
           {/* V01 · Entrega 2: el asiento de una factura no se anula desde aquí: se corrige desde la factura. El de un cobro en efectivo, sí. */}
           {a.estado === 'validado' && datos.factura && !datos.factura.cobro
             ? <Link to={rutaFacturaVenta(datos.factura.id)} className="cx-boton-sec" title="Se corrige desde la factura, con «Corregir»">Ir a la factura {datos.factura.numero ?? ''}</Link>
-            : a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
+            : a.estado === 'validado' && a.origen !== 'reversal' && esAdmin && !candado && <button type="button" className="cx-boton-sec" onClick={() => setDialogo('anular')}>Anular</button>}
         </div>
       </header>
       <Guardado texto={hecho} />
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+      {candado && a.estado !== 'anulado' && <FranjaIvaPresentado texto={mensajePresentado(candado, editable ? 'factura' : 'corregir')} />}
+      {editable && tardia && !candado && <FranjaTardia texto={tardia} />}
+      {iva.error && <p className="cx-ayuda cxt-ambar" role="note">{iva.error}. Si su IVA ya está presentado, lo dirá al pulsar.</p>}
       {encendido && datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && frena?.franja && (
         <div className="cx-tarjeta cxd-franja" role="status" aria-label="Por qué no se valida" data-prueba="no-se-valida">

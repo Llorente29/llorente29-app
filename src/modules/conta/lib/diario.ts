@@ -64,6 +64,8 @@ export interface AsientoDiario {
   porque: string | null
   razones: Razon[]
   documento: string | null
+  /** V04 · La fecha de su factura (journal_entry.document_date): la de una recibida tardía queda en el periodo presentado. */
+  fechaDocumento?: string | null
   terceroId: string | null
   creadoPor: string | null
   creadoEn: string

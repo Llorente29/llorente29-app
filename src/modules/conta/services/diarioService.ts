@@ -31,7 +31,7 @@ const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v)
 const sinPrefijo = (e: unknown): Error => new Error((e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, ''))
 
 const CAMPOS_ASIENTO = [
-  'id, series, number, entry_date, concept, source_type, source_id, status, confidence, reason, reasons, party_id, document_ref',
+  'id, series, number, entry_date, concept, source_type, source_id, status, confidence, reason, reasons, party_id, document_ref, document_date',
   'external_program, external_series, external_number, validated_at, validated_by_name, chain_seq, prev_hash, hash',
   'reverses_entry_id, voided_by_entry_id, voided_at, voided_by_name, void_reason, created_at, created_by_name',
   'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, external_negative_side, company_account(code, name, kind, plain_name, template_code, plan), locations(name), brand(name, ownership_type), tax_rate(rate))',
@@ -60,7 +60,7 @@ function aAsiento(f: Fila): AsientoDiario {
   return {
     id: String(f.id), serie: n(f.series) as Serie, numero: f.number === null ? null : n(f.number), fecha: String(f.entry_date), concepto: String(f.concept),
     origen: String(f.source_type) as OrigenAsiento, origenId: s(f.source_id), estado: String(f.status) as EstadoAsiento,
-    confianza: s(f.confidence) as Confianza | null, porque: s(f.reason), razones, documento: s(f.document_ref), terceroId: s(f.party_id),
+    confianza: s(f.confidence) as Confianza | null, porque: s(f.reason), razones, documento: s(f.document_ref), fechaDocumento: s(f.document_date), terceroId: s(f.party_id),
     creadoPor: autorVisible(s(f.created_by_name)), creadoEn: String(f.created_at), validadoPor: autorVisible(s(f.validated_by_name)), validadoEn: s(f.validated_at),
     validadoAutomatico: esFirmaAutomatica(s(f.validated_by_name)),
     anuladoPor: autorVisible(s(f.voided_by_name)), anuladoEn: s(f.voided_at), motivoAnulacion: s(f.void_reason), anuladoCon: s(f.voided_by_entry_id), anulaA: s(f.reverses_entry_id),
