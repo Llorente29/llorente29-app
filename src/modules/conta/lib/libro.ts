@@ -226,6 +226,26 @@ export function avisoPeriodoCerrado(fechaFactura: string, fechaAsiento: string):
   return `La factura es del ${es(fechaFactura)}, en un periodo ya cerrado: se asienta el ${es(fechaAsiento)}, el primer día abierto. Conserva su fecha de factura en el libro de IVA y su IVA va al ${t}T ${fechaAsiento.slice(0, 4)}.`
 }
 
+/**
+ * V04 · Regla de Julio (27/10): una factura recibida nunca se asienta antes del
+ * día en que entró, aunque su mes esté abierto: así el asiento y su IVA caen en
+ * el mismo trimestre (su libro la registra el día que entró). `entro` es el día
+ * en Madrid (diaDeEntrada). Lo mismo hace la base al proponer (1350).
+ */
+export function fechaDeLaRecibida(fechaFactura: string, entro: string | null): { fecha: string; aviso: string | null } {
+  if (!entro || entro <= fechaFactura) return { fecha: fechaFactura, aviso: null }
+  const dm = (x: string) => `${x.slice(8, 10)}/${x.slice(5, 7)}`
+  return { fecha: entro, aviso: `Esta factura entró el ${dm(entro)}: se contabiliza el ${dm(entro)}.` }
+}
+
+/** El día (AAAA-MM-DD) en Madrid de un instante: el día en que entró una factura. */
+export function diaDeEntrada(creadaEn: string | null | undefined): string | null {
+  if (!creadaEn) return null
+  const d = new Date(creadaEn)
+  if (Number.isNaN(d.getTime())) return null
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(d)
+}
+
 // ── Regla 9 · el resultado por local suma el total ──────────────────────────
 
 export interface ApunteResultado { cuenta: string; debe: number; haber: number; localId: string | null }

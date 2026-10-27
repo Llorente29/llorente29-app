@@ -1,0 +1,3 @@
+# V04 · Respuesta 6, punto 2 · vuelta atrás: _journal_entry_proponer como en la 1233
+# (byte a byte, desde su respaldo), sin _conta_recibida_no_antes_de_entrar. No toca datos.
+supabase/vuelta-atras/20261027T1350_v04_recibida_fecha_entrada.down.sql
