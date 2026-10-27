@@ -127,6 +127,24 @@ function columnasNuevas(ops, tabla) {
 }
 
 /**
+ * Las funciones de public que el fichero LLAMA al aplicarse (fuera del cuerpo de
+ * las funciones que define) y que no crea él mismo. El analizador no sigue lo
+ * que escriben: la 2238 del S01 crea su copia (añade) y hace los asientos con
+ * public._s01_asiento_cobro(), así que «solo añade» decía que podía ir de verdad
+ * desde la rama, y no puede (S01, Respuesta 3, el ensayo #691).
+ */
+export function llamadasAlAplicar(sql) {
+  const limpio = sql.replace(/--.*$/gm, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/'(?:[^']|'')*'/g, "''")
+  // Lo que se ejecuta al aplicar: el cuerpo de cada DO y las sentencias select/perform de fuera
+  // (no el cuerpo de las funciones que define, ni las expresiones de una política o un default).
+  const dos = [...limpio.matchAll(/\bdo\s+(\$[A-Za-z_]*\$)([\s\S]*?)\1/gi)].map((m) => m[2])
+  const fuera = sinRuido(sql).split(';').map((x) => x.trim()).filter((x) => /^(select|perform)\b/i.test(x))
+  const propias = new Set([...limpio.matchAll(/\bcreate\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-z_][a-z0-9_]*)/gi)].map((m) => m[1].toLowerCase()))
+  const llamadas = [...dos, ...fuera].flatMap((t) => [...t.matchAll(/(?<!\b(?:into|references|table|from|join|update|on)\s+)\bpublic\.([a-z_][a-z0-9_]*)\s*\(/gi)].map((m) => m[1].toLowerCase()))
+  return [...new Set(llamadas.filter((f) => !propias.has(f)))].map((f) => `public.${f}()`)
+}
+
+/**
  * ¿Solo añade este fichero, contra el contexto (tablas y funciones que existen,
  * medido en staging)? null si sí; si no, el porqué de la primera operación que no.
  * Solo migraciones: una prueba de staging nunca va de verdad.
@@ -135,6 +153,8 @@ export function porQueNoSoloAnade(fichero, sql, contexto) {
   if (!/^supabase\/migrations\//.test(fichero)) return 'no es una migración: solo en ROLLBACK'
   const ops = analizarFichero(fichero, sql)
   if (!ops.length) return 'no hace nada que se pueda medir'
+  const llama = llamadasAlAplicar(sql)
+  if (llama.length) return `al aplicarse llama a ${llama.join(', ')}, que puede escribir lo que el analizador no ve`
   const tablas = new Set(contexto.tablas ?? [])
   const funciones = new Set(contexto.funciones ?? [])
   const deLaTanda = creadosPorLaTanda({ [fichero]: ops })
