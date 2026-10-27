@@ -22,7 +22,9 @@
 --      sin asiento recibe el suyo con la fecha del cobro, y se crea la cuenta
 --      «Stripe · por abonar»; su vuelta atrás lo deja EXACTAMENTE como estaba
 --      (la huella de antes y la de después, iguales) y borra la copia; y se
---      puede volver a pasar.
+--      puede volver a pasar. Si el ensayo ya la pasó, antes se mide lo que
+--      dejó y no se vuelve a pasar encima. LA GUARDA: el fichero de verdad,
+--      pasado una segunda vez dentro de un savepoint, para con su mensaje.
 --   3. El pago con Redsys: el número de pedido; el aviso de otro comercio, no;
 --      el bueno cobra 121,00 € por el motor de la E1, con «redsys», y hace su
 --      asiento ese día: «TPV del banco · por abonar» 121,00 al debe contra la
@@ -43,8 +45,8 @@
 --   8. Deshacer el casado de Stripe en Bancos: el asiento se va, el cobro
 --      vuelve a esperar su abono y «Stripe · por abonar» vuelve a 121,00.
 --   9. Lo que el E4 ya hacía, igual: la página sin datos del proveedor.
---  10. La vuelta atrás: la 2031 deja las cuatro funciones con el md5 de antes
---      (desde su respaldo, que se borra);
+--  10. La vuelta atrás: la 2031 deja las cuatro funciones con la huella de
+--      antes (md5 de pg_get_functiondef, la de su respaldo, que se borra);
 --      la 2030, sin nada suyo, tampoco la clave en Vault.
 --
 -- Nombra lo que toca, para el analizador: conta_pasarela_cuenta, journal_entry,
@@ -71,24 +73,38 @@ set local lock_timeout = '120s';
 lock table public.accounts, public.company, public.company_account, public.bank_match in share row exclusive mode;
 lock table public.conta_enlace_pago, public.treasury_account, public.journal_entry in access exclusive mode;
 
--- Lo de antes: las cuatro funciones del enlace tal como las dejó la 1121.
-create temp table _md5 (fn text primary key, antes text) on commit drop;
-insert into _md5 select p.proname, md5(p.prosrc) from pg_proc p
- where p.pronamespace = 'public'::regnamespace and p.proname in ('conta_enlace_pago_para', 'conta_enlace_pago_ver', 'conta_enlace_pago_datos', 'conta_enlace_pago_cobrado');
--- La 2031 solo va en ROLLBACK (cambia), y su vuelta atrás restaura desde el
--- respaldo que guarda ella misma: no se pasa aquí. La 2030 se quita antes solo
--- si ya estuviera en staging de verdad.
-select to_regclass('public.conta_cobro_redsys') is not null as ya_esta_la_2030 \gset
+-- El ensayo pasa ANTES, en esta misma transacción, lo que la rama añade al
+-- manifiesto (2030, 2031 y 2238). Si ya está, no se quita ni se vuelve a pasar:
+-- se prueba lo que dejó. Si no está (la prueba sola), se pasa aquí.
+select to_regclass('public.conta_cobro_redsys') is not null as ya_esta_la_2030,
+       exists (select 1 from public.funcion_respaldo where migracion = '20261027T2031_s01_enlace_con_redsys') as ya_esta_la_2031 \gset
 \if :ya_esta_la_2030
-\i supabase/vuelta-atras/20261027T2030_s01_redsys_y_abono.down.sql
-\endif
+\else
 do $$ begin
-  if to_regclass('public.conta_cobro_redsys') is not null or (select count(*) from _md5) <> 4 then
-    raise exception 'PRUEBA S01 REDSYS · 0: staging no está como antes de la 2030 (o le falta la 1121).';
+  if (select count(*) from pg_proc where pronamespace = 'public'::regnamespace
+       and proname in ('conta_enlace_pago_para', 'conta_enlace_pago_ver', 'conta_enlace_pago_datos', 'conta_enlace_pago_cobrado')) <> 4 then
+    raise exception 'PRUEBA S01 REDSYS · 0: a staging le falta la 1121 (las cuatro funciones del enlace).';
   end if;
 end $$;
 \i supabase/migrations/20261027T2030_s01_redsys_y_abono.sql
+\endif
+\if :ya_esta_la_2031
+\else
 \i supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql
+\endif
+
+-- Lo de antes: las cuatro funciones del enlace tal como estaban antes de la
+-- 2031, por la huella de su respaldo (md5 de pg_get_functiondef), la misma con
+-- la que lo compara su vuelta atrás. Así vale se haya pasado aquí o antes.
+create temp table _md5 (fn text primary key, antes text) on commit drop;
+insert into _md5 select p.proname, r.huella from public.funcion_respaldo r join pg_proc p on p.oid = to_regprocedure(r.firma)::oid
+ where r.migracion = '20261027T2031_s01_enlace_con_redsys'
+   and p.proname in ('conta_enlace_pago_para', 'conta_enlace_pago_ver', 'conta_enlace_pago_datos', 'conta_enlace_pago_cobrado');
+do $$ begin
+  if (select count(*) from _md5) <> 4 then
+    raise exception 'PRUEBA S01 REDSYS · 0: la 2031 no dejó el respaldo de las cuatro funciones del enlace (hay %).', (select count(*) from _md5);
+  end if;
+end $$;
 
 -- Las líneas de un asiento, en una frase («43009901 0.00/121.00 · …», por código).
 create or replace function pg_temp.lineas(p uuid) returns text language sql as $$
@@ -254,6 +270,30 @@ create or replace function pg_temp.huella_2238(e uuid) returns text language sql
     (select count(*) from public.conta_pasarela_cuenta where company_id = e),
     to_regclass('public.conta_s01_cobros_antes') is not null))
 $$;
+-- Si el ensayo ya pasó la 2238 en esta transacción (está su copia previa), NO
+-- se vuelve a pasar: se mide lo que dejó. Cada cobro de la copia tiene ahora un
+-- asiento vivo de cobro, que está en la copia; tantos asientos creados como
+-- cobros. Y después su vuelta atrás, para probarla con un cobro inventado.
+select to_regclass('public.conta_s01_cobros_antes') is not null as ya_esta_la_2238 \gset
+\if :ya_esta_la_2238
+do $$
+declare n_cobros int; n_asientos int; mal int;
+begin
+  select count(*) filter (where tabla = 'customer_invoice_payment'), count(*) filter (where tabla = 'journal_entry')
+    into n_cobros, n_asientos from public.conta_s01_cobros_antes;
+  select count(*) into mal from public.conta_s01_cobros_antes c
+    left join public.customer_invoice_payment p on p.id = c.id
+    left join public.journal_entry j on j.id = p.entry_id
+   where c.tabla = 'customer_invoice_payment'
+     and (j.id is null or j.source_type <> 'customer_payment' or j.status not in ('propuesto', 'borrador', 'validado')
+          or not exists (select 1 from public.conta_s01_cobros_antes k where k.tabla = 'journal_entry' and k.id = j.id));
+  if mal > 0 or n_asientos <> n_cobros then
+    raise exception 'PRUEBA S01 REDSYS · 2b: la 2238 del ensayo dejó % cobros sin su asiento (cobros %, asientos %).', mal, n_cobros, n_asientos;
+  end if;
+  raise notice '2b · la 2238 del ensayo: % cobros sin asiento, cada uno con el suyo de cobro, en la copia', n_cobros;
+end $$;
+\i supabase/vuelta-atras/20261027T2238_s01_cobros_sin_asiento.down.sql
+\endif
 do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa'); a uuid := (select v::uuid from _p where clave = 'cuenta'); t3 text; pago uuid;
 begin
@@ -282,7 +322,10 @@ begin
   if lin <> format('43009901 0.00/121.00 · %s 121.00/0.00', pas) then raise exception 'PRUEBA S01 REDSYS · 2b: el asiento fue «%».', lin; end if;
   if (select name from public.company_account where company_id = e and code = pas) <> 'Stripe · por abonar'
      or (select kind from public.treasury_account t join public.conta_pasarela_cuenta pc on pc.treasury_account_id = t.id where pc.company_id = e and pc.proveedor = 'stripe') <> 'pasarela'
-     or (select count(*) from public.conta_s01_cobros_antes) <> 3 then
+     or not exists (select 1 from public.conta_s01_cobros_antes where tabla = 'customer_invoice_payment' and id = (select v::uuid from _p where clave = 'pago3'))
+     or not exists (select 1 from public.conta_s01_cobros_antes where tabla = 'journal_entry' and id = ent)
+     or not exists (select 1 from public.conta_s01_cobros_antes k join public.conta_pasarela_cuenta pc on pc.treasury_account_id = k.id
+                     where k.tabla = 'conta_pasarela_cuenta' and pc.company_id = e and pc.proveedor = 'stripe') then
     raise exception 'PRUEBA S01 REDSYS · 2b: la cuenta de la pasarela o la copia no son las esperadas.';
   end if;
   raise notice '2b · la 2238: el cobro de antes, con su asiento del día del cobro (%), y «Stripe · por abonar» (%) creada', lin, pas;
@@ -296,8 +339,34 @@ begin
   end if;
   raise notice '2b · la vuelta atrás de la 2238: la huella de antes y la de después, iguales; sin copia';
 end $$;
--- Y otra vez con su vuelta atrás: después de deshacerla, se puede volver a pasar.
+-- Después de deshacerla se puede volver a pasar. Y pasada, LA GUARDA: una
+-- segunda vez, el fichero de verdad (no una copia de su guarda) dentro de un
+-- savepoint; tiene que parar con su mensaje sin tocar nada, y se vuelve al
+-- savepoint.
 \i supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql
+\set f2238 `cat supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql`
+select set_config('prueba_s01.f2238', :'f2238', true) is not null as cargada_la_2238 \gset
+insert into _huella select 'copia', count(*)::text from public.conta_s01_cobros_antes;
+savepoint antes_de_la_segunda;
+do $$
+declare v_err text;
+begin
+  begin
+    execute current_setting('prueba_s01.f2238');
+  exception when others then v_err := sqlerrm;
+  end;
+  if v_err is null or v_err not like 'S01 2238: ya está la copia previa (conta_s01_cobros_antes): esta tanda ya se pasó.%' then
+    raise exception 'PRUEBA S01 REDSYS · 2b: la 2238 pasada dos veces no paró en su guarda: %.', coalesce(v_err, 'sin error');
+  end if;
+  raise notice '2b · la guarda de la 2238: pasada otra vez, para con «%»', v_err;
+end $$;
+rollback to savepoint antes_de_la_segunda;
+release savepoint antes_de_la_segunda;
+do $$ begin
+  if (select count(*)::text from public.conta_s01_cobros_antes) <> (select h from _huella where paso = 'copia') then
+    raise exception 'PRUEBA S01 REDSYS · 2b: después de la guarda, la copia cambió.';
+  end if;
+end $$;
 \i supabase/vuelta-atras/20261027T2238_s01_cobros_sin_asiento.down.sql
 -- El cobro inventado de antes se quita, para que no cuente en lo que sigue.
 do $$ begin
@@ -524,7 +593,7 @@ begin
   if exists (select 1 from public.funcion_respaldo where migracion = '20261027T2031_s01_enlace_con_redsys') then
     raise exception 'PRUEBA S01 REDSYS · 10: la vuelta atrás de la 2031 deja respaldos.';
   end if;
-  select string_agg(m.fn, ', ') into dif from _md5 m join pg_proc p on p.proname = m.fn and p.pronamespace = 'public'::regnamespace where md5(p.prosrc) <> m.antes;
+  select string_agg(m.fn, ', ') into dif from _md5 m join pg_proc p on p.proname = m.fn and p.pronamespace = 'public'::regnamespace where md5(pg_get_functiondef(p.oid)) <> m.antes;
   if dif is not null then raise exception 'PRUEBA S01 REDSYS · 10: la vuelta atrás de la 2031 no deja igual: %.', dif; end if;
 end $$;
 \i supabase/vuelta-atras/20261027T2030_s01_redsys_y_abono.down.sql
