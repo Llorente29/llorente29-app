@@ -144,7 +144,7 @@ export default function KioskoFichajePage() {
       return
     }
 
-    const result = buildClockEntry(selectedEmp, activeLocation, config, position)
+    const result = buildClockEntry(selectedEmp, activeLocation, config, position, { origen: 'tablet' })
 
     // Fuera de zona: NO se bloquea. Aviso rojo muy visible + confirmación explícita.
     if (!result.withinGeofence) {
@@ -164,7 +164,7 @@ export default function KioskoFichajePage() {
     setStep('confirming')
     let entry = entryArg
     if (!entry) {
-      const r = buildClockEntry(selectedEmp, activeLocation, config, null)
+      const r = buildClockEntry(selectedEmp, activeLocation, config, null, { origen: 'tablet' })
       entry = r.entry
     }
     if (mark) entry = { ...entry, address: mark }

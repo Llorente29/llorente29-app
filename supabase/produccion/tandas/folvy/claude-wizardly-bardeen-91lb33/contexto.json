@@ -1,0 +1,25 @@
+{
+  "_que": "L00 · contexto de producción de la tanda (1112), medido en SOLO LECTURA el 27/10 a las 11:13Z con consultas a pg_proc, pg_constraint, pg_trigger y el historial. Existen public.clock_entries (2167 filas, todas las cuentas) con clock_entries_source_check (kiosko, movil, manual) y tg_clock_entry_debounce (una firma, huella 72f6807d, la usa solo el disparador trg_clock_debounce de clock_entries). Ni la tabla ni la función están en el camino del pedido; ningún cron las llama; nada de la tanda en el historial. La cuenta (l00-origen-del-fichaje.sql) a las 11:13Z: 72f6807d · 1 · no · kiosko 2144 / manual 23 / movil 0 / tablet 0.",
+  "medido": "2026-10-27T11:13Z",
+  "tanda": {
+    "supabase/migrations/20261027T1112_l00_origen_del_fichaje.sql": "36489858822a0a039b9fdbad6713a71a"
+  },
+  "contexto": {
+    "tablas": [
+      "public.clock_entries"
+    ],
+    "funciones": [
+      "public.tg_clock_entry_debounce()"
+    ],
+    "filas": {
+      "public.clock_entries": 2167
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

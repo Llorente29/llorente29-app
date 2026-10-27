@@ -357,7 +357,7 @@ interface ClockRow {
   scheduled: string | null
   rounding_applied: boolean | null
   diff_minutes: number | null
-  source: 'kiosko' | 'movil' | 'manual'
+  source: 'kiosko' | 'movil' | 'tablet' | 'manual'
   location_id_at_clock: string | null
   photo_data_url: string | null
   voided: boolean | null

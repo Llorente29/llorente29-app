@@ -97,15 +97,48 @@ export interface ClockResult {
   distanceM: number
 }
 
+// ─── EL ORIGEN DEL FICHAJE (L0, 27/10/2026) ───────────────────────────────
+// Hasta el 27/10 buildClockEntry escribía siempre source 'kiosko', también
+// cuando se fichaba desde el móvil del trabajador. Desde aquí, quien llama dice
+// desde dónde se ficha, y es obligatorio: un fichaje nuevo no puede salir sin
+// origen.
+//
+//   'movil'  — el portal del trabajador, en su propio móvil.
+//   'tablet' — la pantalla de kiosko, en la tablet del local (con PIN).
+//
+// 'kiosko' NO se escribe más: se queda con lo que significaba en las filas
+// antiguas, «tablet o móvil, sin distinguir». Por eso la tablet estrena un valor
+// propio en vez de heredar 'kiosko': un móvil con la versión vieja de la app
+// sigue escribiendo 'kiosko' hasta que se actualiza, y así nunca se lee como
+// tablet. Las filas antiguas no se reescriben.
+export type OrigenFichaje = 'movil' | 'tablet'
+
+export interface OpcionesFichaje {
+  origen: OrigenFichaje
+  photoDataUrl?: string
+  roundingToleranceMin?: number
+  calendarCtx?: CalendarContext
+}
+
+/** Cómo se registró una marca, en palabras de quien lee el registro. */
+export function etiquetaOrigen(source: ClockEntry['source'] | null | undefined): string {
+  switch (source) {
+    case 'movil': return 'Móvil del trabajador'
+    case 'tablet': return 'Tablet del local'
+    case 'manual': return 'Puesto a mano'
+    // 'kiosko' y las filas sin origen: anteriores al arreglo del 27/10/2026.
+    default: return 'Tablet o móvil (sin distinguir)'
+  }
+}
+
 export function buildClockEntry(
   employee: Employee,
   location: Location,
   config: KioskoConfig,
   position: GeolocationPosition | null,
-  photoDataUrl?: string,
-  roundingToleranceMin = 8,
-  calendarCtx?: CalendarContext,
+  opciones: OpcionesFichaje,
 ): ClockResult {
+  const { origen, photoDataUrl, roundingToleranceMin = 8, calendarCtx } = opciones
   const type = nextClockType(employee)
   const realDate = new Date()
   const realISO = realDate.toISOString()
@@ -137,7 +170,7 @@ export function buildClockEntry(
     diffMinutes: rounding.diffMin,
     lat: position?.coords.latitude,
     lng: position?.coords.longitude,
-    source: 'kiosko',
+    source: origen,
     locationIdAtClock: location.id,
     photoDataUrl,
   }
