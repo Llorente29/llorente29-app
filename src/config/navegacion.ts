@@ -253,6 +253,9 @@ export const CONTA = {
      * sigue en compras/liquidacion/:liqId, que la barra marca en Ventas).
      */
     liquidacionesVentas: 'ventas/liquidaciones',
+    /** PC01 · E3 · Ventas › Cobros (tablero cobros-1): lo que te deben tus clientes, las remesas de recibos y la ficha de una (cobros-2). */
+    cobros: 'ventas/cobros',
+    remesaCobros: 'ventas/cobros/remesas/:remesaId',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
@@ -425,6 +428,9 @@ export const rutaLiquidaciones = (subir?: 'catcher'): string => `${rutaConta(CON
 export const rutaPagos = (pestana?: string): string => `${rutaConta(CONTA.rutas.pagos)}${pestana ? `?pestana=${pestana}` : ''}`
 export const rutaRemesasPagos = (): string => rutaConta(CONTA.rutas.remesasPagos)
 export const rutaRemesaPagos = (remesaId: string): string => rutaConta(CONTA.rutas.remesaPagos, { remesaId })
+/** PC01 · E3 · Ventas › Cobros, con su pestaña si se dice; y la ficha de una remesa de recibos. */
+export const rutaCobros = (pestana?: string): string => `${rutaConta(CONTA.rutas.cobros)}${pestana ? `?pestana=${pestana}` : ''}`
+export const rutaRemesaCobros = (remesaId: string): string => rutaConta(CONTA.rutas.remesaCobros, { remesaId })
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
 /** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
 export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))

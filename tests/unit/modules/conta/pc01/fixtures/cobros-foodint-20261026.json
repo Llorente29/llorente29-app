@@ -1,0 +1,718 @@
+{
+ "_que": "Las 89 emitidas por cobrar de Foodint (cuenta 51ad1792…), medidas en producción en SOLO LECTURA el 26/10 (conta_factura_cobro, status emitida, total > 0, estado distinto de cobrada). Sin nombres ni números: solo estado, pendiente, total, vencimiento y días vencida. Todas de plataforma. Medida aparte, con otra consulta: esperando_liquidacion 50 facturas 11139.58 €, falta_liquidacion 39 facturas 7969.05 € (19108.63 € en total).",
+ "hoy": "2026-10-26",
+ "filas": [
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 15.8,
+   "total": 15.8,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 89.24,
+   "total": 89.24,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 106.96,
+   "total": 106.96,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 155.42,
+   "total": 155.42,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 179.94,
+   "total": 179.94,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 291.5,
+   "total": 291.5,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 296.38,
+   "total": 296.38,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 430.56,
+   "total": 430.56,
+   "vence": "2026-10-10",
+   "dias_vencida": 16,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 11.9,
+   "total": 11.9,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 48.5,
+   "total": 48.5,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 60.6,
+   "total": 60.6,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 80.8,
+   "total": 80.8,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 104.9,
+   "total": 104.9,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 155.76,
+   "total": 155.76,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 167.47,
+   "total": 167.47,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 187.46,
+   "total": 207.35,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 256.8,
+   "total": 256.8,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 263.04,
+   "total": 348.24,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 311.15,
+   "total": 311.15,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 454.47,
+   "total": 516.36,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 496.36,
+   "total": 496.36,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 701.18,
+   "total": 701.18,
+   "vence": "2026-10-17",
+   "dias_vencida": 9,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 14.6,
+   "total": 59.92,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 15.9,
+   "total": 15.9,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 15.9,
+   "total": 15.9,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 17.89,
+   "total": 17.89,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 22.59,
+   "total": 22.59,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 26.65,
+   "total": 26.65,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 28.51,
+   "total": 28.51,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 56.93,
+   "total": 56.93,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 58.2,
+   "total": 125.8,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 58.44,
+   "total": 58.44,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 263.63,
+   "total": 263.63,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 266.98,
+   "total": 266.98,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 277.25,
+   "total": 277.25,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 382.06,
+   "total": 382.06,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 510.28,
+   "total": 510.28,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 525.93,
+   "total": 525.93,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "falta_liquidacion",
+   "pendiente": 561.12,
+   "total": 561.12,
+   "vence": "2026-10-24",
+   "dias_vencida": 2,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 17.2,
+   "total": 17.2,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 40.3,
+   "total": 40.3,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 54.33,
+   "total": 54.33,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 59.8,
+   "total": 59.8,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 77.23,
+   "total": 77.23,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 98.1,
+   "total": 98.1,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 164.5,
+   "total": 164.5,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 349.47,
+   "total": 349.47,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 349.9,
+   "total": 349.9,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 552.3,
+   "total": 552.3,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 599.2,
+   "total": 599.2,
+   "vence": "2026-10-31",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 17.89,
+   "total": 17.89,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 18.99,
+   "total": 18.99,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 27.71,
+   "total": 27.71,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 31.15,
+   "total": 31.15,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 37.31,
+   "total": 37.31,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 67.45,
+   "total": 67.45,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 78.5,
+   "total": 78.5,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 90.4,
+   "total": 90.4,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 93.57,
+   "total": 93.57,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 115.29,
+   "total": 115.29,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 149.8,
+   "total": 149.8,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 149.82,
+   "total": 149.82,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 176.83,
+   "total": 176.83,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 217.11,
+   "total": 217.11,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 223.85,
+   "total": 223.85,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 254.89,
+   "total": 254.89,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 266.55,
+   "total": 266.55,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 309.38,
+   "total": 309.38,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 326.11,
+   "total": 326.11,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 360.42,
+   "total": 360.42,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 397.19,
+   "total": 397.19,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 428.15,
+   "total": 428.15,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 479.34,
+   "total": 479.34,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 555.06,
+   "total": 555.06,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 614.85,
+   "total": 614.85,
+   "vence": "2026-11-09",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 24.9,
+   "total": 24.9,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 40.98,
+   "total": 40.98,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 44.2,
+   "total": 44.2,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 47.3,
+   "total": 47.3,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 50.03,
+   "total": 50.03,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 246.86,
+   "total": 246.86,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 288.77,
+   "total": 288.77,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 327.3,
+   "total": 327.3,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 340.42,
+   "total": 340.42,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 347.24,
+   "total": 347.24,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 358.02,
+   "total": 358.02,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 383.66,
+   "total": 383.66,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 386.9,
+   "total": 386.9,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  },
+  {
+   "estado": "esperando_liquidacion",
+   "pendiente": 403.06,
+   "total": 403.06,
+   "vence": "2026-11-25",
+   "dias_vencida": null,
+   "de_plataforma": true
+  }
+ ]
+}

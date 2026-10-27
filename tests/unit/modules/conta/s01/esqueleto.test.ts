@@ -74,6 +74,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
     // PC01 · Entrega 2: Compras › Pagos (la lista, las remesas y la ficha de una) y «Repartidores», el nombre nuevo de Liquidaciones.
     repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
+    // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
+    cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -134,7 +136,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
     expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'contactos', 'ajustes'])
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
-    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'liquidacionesVentas'])
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y

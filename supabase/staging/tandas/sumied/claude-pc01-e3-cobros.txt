@@ -1,0 +1,8 @@
+# PC01 · Entrega 3 · Ventas › Cobros. La 2142 solo añade (y se puede pasar dos
+# veces): desde la rama, de verdad (W05). Su prueba (ROLLBACK): la lista, lo
+# que no entra en una remesa, el mandato firmado con el enlace sin cuenta, la
+# remesa y su fichero, el abono (572 contra las 430), el devuelto (430 y 626
+# contra 572) y deshacerlo, otra remesa recurrente, lo que ofrece Bancos y la
+# vuelta atrás.
+supabase/migrations/20261026T2142_pc01e3_cobros_mandatos_recibos.sql
+supabase/staging/sql/20261026_pc01e3_cobros_prueba.sql

@@ -150,13 +150,14 @@ export const PRODUCTOS: Producto[] = [
   {
     // V01 (Julio, 24/10) · Ventas sustituye a Facturación: Facturas (luego
     // Presupuestos y Cobros) y, solo si vende en hostelería, Cierres del día y
-    // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona: Cobros y
-    // Series, aún sin pantalla, no salen. El id sigue siendo 'facturacion' (el
+    // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona: Series, aún
+    // sin pantalla, no sale. El id sigue siendo 'facturacion' (el
     // interruptor, los favoritos y las preferencias guardadas lo usan).
     id: 'facturacion', etiqueta: 'Ventas', icono: 'facturacion', ruta: R.facturasVenta, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
-      { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: null, prefijos: [] },
+      // PC01 · E3 · Cobros (tableros cobros-1 y cobros-2): lo que te deben, las remesas de recibos y los devueltos.
+      { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: R.cobros, prefijos: [R.cobros] },
       { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
       // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te
       // pagan quienes cobran por ti: plataformas, el datáfono, Amazon, Stripe…),

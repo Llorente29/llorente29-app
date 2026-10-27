@@ -56,6 +56,7 @@ import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
 import { casarRemesa, remesasParaCasar } from '@/modules/conta/services/pagosService'
+import { casarAbono, cobrosParaCasar, reciboDevuelto } from '@/modules/conta/services/cobrosService'
 import { PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import { PorValidar } from '@/modules/conta/bancos/PorValidar'
@@ -108,7 +109,7 @@ export function Movimientos() {
   const vispera = fechaCorte ? new Date(Date.parse(`${fechaCorte}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : null
   const lectura = useLeerConservando(banco ? async () => {
     const cuentas = banco.cuenta ? [banco.cuenta] : []
-    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente, remesas] = await Promise.all([
+    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente, remesas, cobros] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, cuentas),
       vispera && corte >= (fechaCorte ?? '') ? saldosContables(companyId, vispera, cuentas) : Promise.resolve(null),
@@ -121,10 +122,12 @@ export function Movimientos() {
       leerSaldoBancosSiEsta(companyId, corte),
       // PC01 · E2: las remesas de pagos que esperan su cargo (Compras › Pagos), para casar un cargo con ellas.
       remesasParaCasar(companyId).catch((e: unknown) => { console.warn('[bancos] no se pudieron leer las remesas que esperan su cargo', e); return [] }),
+      // PC01 · E3: las remesas de recibos que esperan su abono y los recibos que pueden volver devueltos (Ventas › Cobros).
+      cobrosParaCasar(companyId).catch((e: unknown) => { console.warn('[bancos] no se pudieron leer los cobros que esperan el banco', e); return { abonos: [], devoluciones: [] } }),
     ])
     const espera = new Map<string, string>([...esperan].map(([id, ms]) => [id, ms[0]?.motivo || 'La base no lo validaría todavía.']))
     const fila = unaFuente?.find((f) => (banco.cuenta && f.cuenta === banco.cuenta) || f.treasuryAccountId === banco.id) ?? null
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila, remesas }
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila, remesas, cobros }
   } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -278,7 +281,7 @@ export function Movimientos() {
   const total = cuadre.cuenta.casados + cuadre.cuenta.confirmar + cuadre.cuenta.aclarar
   const ancho = (n: number) => `${total ? (n / total) * 100 : 0}%`
   const panel = elegidoM && (
-    <PanelMovimiento key={elegidoM.id} m={elegidoM} facturas={lectura.datos.facturas} remesas={lectura.datos.remesas} cuenta572={banco.cuenta} nombres={ctx.datos.nombres}
+    <PanelMovimiento key={elegidoM.id} m={elegidoM} facturas={lectura.datos.facturas} remesas={lectura.datos.remesas} cobros={lectura.datos.cobros} cuenta572={banco.cuenta} nombres={ctx.datos.nombres}
       otrosBancos={ctx.datos.bancos.filter((b) => b.id !== banco.id).map((b) => ({ id: b.id, nombre: b.nombre, cuenta: b.cuenta }))}
       cuentasDiferencia={{ c626: hoja(ctx.datos.nombres, '626', '62600000'), c669: hoja(ctx.datos.nombres, '669', '66900000'), c769: hoja(ctx.datos.nombres, '769', '76900000') }}
       ocupado={ocupado === elegidoM.id}
@@ -288,6 +291,8 @@ export function Movimientos() {
         hecho(`Casado: ${que} (${quien(elegidoM)}). Su asiento espera en «Por validar».`)
       })}
       alCasarRemesa={(remesaId, lineas) => con(elegidoM.id, async () => { hecho((await casarRemesa(elegidoM.id, remesaId, lineas)).frase) })}
+      alCasarAbono={(remesaId, lineas) => con(elegidoM.id, async () => { hecho((await casarAbono(elegidoM.id, remesaId, lineas)).frase) })}
+      alDevuelto={(lineaId, motivo) => con(elegidoM.id, async () => { hecho((await reciboDevuelto(lineaId, elegidoM.id, motivo)).frase) })}
       alDeshacer={() => deshacer(elegidoM)}
       alVerAsiento={() => elegidoM.casado?.asientoId && navegar(rutaAsiento(elegidoM.casado.asientoId))}
       alBuscarFactura={() => setDialogo({ que: 'factura', m: elegidoM })}

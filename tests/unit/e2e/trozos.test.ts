@@ -40,8 +40,9 @@ describe('la entera en trozos', () => {
     // 26/10 (PC01 · E2, al traer main con la V03 · E2): entra pc01/pagos, nueva y sin medir: son 11. La mide la entera de su PR.
     // 26/10 (PC01 · E2, al traer main con la cola de staging): contadas las dos ramas, siguen 11 sin medir. La mide la entera de la noche.
     // 26/10 (V03 · E3, al traer main con la PC01 · E2): entra v03/corregir-y-cuadrar, nueva y sin medir: son 12. La mide la entera de la noche.
-    // 26/10 (V04 · PR 1): entra conta/v04/tique, nueva y sin medir: son 13. La mide la entera de la noche.
-    expect(sin.length).toBeLessThan(14)
+    // 26/10 (PC01 · E3): entra pc01/cobros, nueva y sin medir: son 13. La mide la entera de la noche.
+    // 26/10 (V04 · PR 1, al traer main con la PC01 · E3): entra conta/v04/tique, nueva y sin medir: son 14. La mide la entera de la noche.
+    expect(sin.length).toBeLessThan(15)
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
