@@ -171,6 +171,13 @@ export const ZONAS_POR_FICHERO = [
     capturas: 'docs/inventario/capturas',
     ficheros: ['src/modules/supply/', 'src/pages/trabajador/', 'tests/e2e/inventario/', 'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql'],
   },
+  {
+    // F01 (27/10): las marcas de Last (el aviso de Inicio y el alta en Marcas).
+    zona: 'marcas',
+    pruebas: 'tests/e2e/marcas',
+    capturas: 'docs/marcas/capturas',
+    ficheros: ['src/modules/multitenancy/', 'tests/e2e/marcas/', 'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql'],
+  },
 ]
 
 /** Las zonas que tocan unos ficheros cambiados, en el orden de la tabla. */

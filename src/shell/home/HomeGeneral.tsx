@@ -37,7 +37,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { LayoutGrid, RotateCcw, ChevronUp, ChevronDown, X, Check, AlertTriangle, MapPin, ClipboardList, TabletSmartphone, CalendarClock, Sparkles, Plus } from 'lucide-react'
+import { LayoutGrid, RotateCcw, ChevronUp, ChevronDown, X, Check, AlertTriangle, MapPin, ClipboardList, TabletSmartphone, CalendarClock, Sparkles, Plus, Tag } from 'lucide-react'
+import './atencion.css'
 
 import { useIsMobile } from '../useIsMobile'
 import { useApp } from '../../context/AppContext'
@@ -86,6 +87,7 @@ const ICONO_AVISO: Record<TipoAviso, typeof ClipboardList> = {
   conteo: ClipboardList,
   tablet: TabletSmartphone,
   cuadrante: CalendarClock,
+  marca: Tag,
 }
 
 /** De dónde viene el mosaico que se está viendo. Se dice, no se adivina. */
@@ -124,6 +126,24 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [avisos, setAvisos] = useState<AvisoAtencion[]>([])
+  // F01 · Respuesta 1: «No la uso», con su confirmación en una línea y su resultado.
+  const [confirmando, setConfirmando] = useState<string | null>(null)
+  const [ocultando, setOcultando] = useState(false)
+  const [hechoAtencion, setHechoAtencion] = useState<{ ok: boolean; texto: string } | null>(null)
+  const confirmarSecundaria = async (a: AvisoAtencion) => {
+    if (!a.secundaria) return
+    setOcultando(true)
+    try {
+      const frase = await a.secundaria.hacer()
+      setAvisos((xs) => xs.filter((x) => x.id !== a.id))
+      setHechoAtencion({ ok: true, texto: frase })
+      setConfirmando(null)
+    } catch (e) {
+      setHechoAtencion({ ok: false, texto: `No se ha guardado: ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setOcultando(false)
+    }
+  }
   const [cajonAbierto, setCajonAbierto] = useState(false)
   const [guardando, setGuardando] = useState(false)
 
@@ -283,35 +303,56 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
 
   return (
     <HomeMetricsProvider accountId={activeAccountId} locationId={resolvedLocationId}>
-      {/* ══ FRANJA DE ATENCIÓN ══
-          Una franja, no cinco banners. Solo si hay algo: sin avisos no se
+      {/* ══ LO QUE NECESITA TU ATENCIÓN ══ (F01, tablero 1)
+          Un bloque, no cinco banners. Solo si hay algo: sin avisos no se
           pinta nada, y no existe el caso «todo bien».
           Regla 7: se listan TODOS. Si hay cinco, dice cinco — nunca «y 3 más»,
-          porque la franja ordena y etiqueta, no decide qué existe. */}
-      {avisos.length > 0 && (
-        <div className="mb-4 rounded-xl border border-warning/40 bg-warning-bg overflow-hidden">
-          <div className="px-4 py-2 border-b border-warning/25 flex items-center gap-2">
-            <AlertTriangle size={15} className="text-warning shrink-0" />
-            <span className="text-[12px] font-bold uppercase tracking-wide text-text-primary">
-              {avisos.length === 1 ? 'Una cosa pide atención' : `${avisos.length} cosas piden atención`}
-            </span>
-          </div>
-          <ul className="divide-y divide-warning/20">
+          porque la franja ordena y etiqueta, no decide qué existe.
+          Cada fila: qué pasa, dónde, su etiqueta y UN botón al sitio donde se
+          resuelve. Las marcas nuevas de Last van primero. */}
+      {(avisos.length > 0 || hechoAtencion) && (
+        <section className="at-bloque" aria-labelledby="at-titulo" data-prueba="atencion">
+          <p id="at-titulo" className="at-titulo">Lo que necesita tu atención</p>
+          {hechoAtencion && (
+            <p className="at-hecho" role={hechoAtencion.ok ? 'status' : 'alert'} data-tono={hechoAtencion.ok ? 'ok' : 'mal'}>{hechoAtencion.texto}</p>
+          )}
+          <ul className="at-lista">
             {avisos.map(a => {
               const Icono = ICONO_AVISO[a.tipo]
               return (
-                <li key={a.id}>
-                  <button type="button" onClick={() => navigate(a.ruta)}
-                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-left hover:bg-warning/10 transition-colors">
-                    <Icono size={15} className="text-text-secondary shrink-0" />
-                    <span className="text-[13.5px] text-text-primary flex-1 min-w-0">{a.texto}</span>
-                    <span className="text-[12px] font-semibold text-accent shrink-0">→ {a.destino}</span>
+                <li key={a.id} className="at-fila" data-tipo={a.tipo} data-apagada={a.apagado ? 'si' : undefined}>
+                  <div className="at-ico" data-tipo={a.tipo} aria-hidden>
+                    {a.iniciales ?? <Icono size={18} />}
+                  </div>
+                  <div className="at-txt">
+                    <b>{a.texto}</b>
+                    <span>{a.detalle ?? a.destino}</span>
+                  </div>
+                  {a.chip && <span className="at-chip" data-tono={a.chip.tono}>{a.chip.texto}</span>}
+                  <button type="button" className="at-boton" data-principal={a.tipo === 'marca' && !a.apagado ? 'si' : 'no'}
+                    onClick={() => navigate(a.ruta)} aria-label={`${a.boton ?? 'Ver'}: ${a.texto}`}>
+                    {a.boton ?? 'Ver'}
                   </button>
+                  {a.secundaria && (
+                    <button type="button" className="at-boton" data-principal="no" disabled={ocultando}
+                      onClick={() => { setConfirmando(a.id); setHechoAtencion(null) }} aria-label={`${a.secundaria.texto}: ${a.texto}`}>
+                      {a.secundaria.texto}
+                    </button>
+                  )}
+                  {a.secundaria && confirmando === a.id && (
+                    <div className="at-confirmar" role="group" aria-label={`Confirmar: ${a.secundaria.texto}`}>
+                      <span>{a.secundaria.confirmar}</span>
+                      <button type="button" className="at-boton" data-principal="no" disabled={ocultando}
+                        onClick={() => void confirmarSecundaria(a)}>{ocultando ? 'Guardando…' : 'Sí, no la uso'}</button>
+                      <button type="button" className="at-boton" data-principal="no" disabled={ocultando}
+                        onClick={() => setConfirmando(null)}>Cancelar</button>
+                    </div>
+                  )}
                 </li>
               )
             })}
           </ul>
-        </div>
+        </section>
       )}
 
       {/* ══ FRANJA DE PROCEDENCIA ══
