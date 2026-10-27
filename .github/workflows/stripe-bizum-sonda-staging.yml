@@ -107,14 +107,17 @@ jobs:
           jq -r '"@@ # bizum",
             "@@ ok \(if .ok then 1 else 0 end)",
             (if .error then "@@ error.\(.error | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end),
-            "@@ alta_con_bizum \(if .alta_con_bizum.ok then 1 else 0 end)",
-            "@@ capacidad_bizum_activa \(if .capacidades.bizum_payments == "active" then 1 else 0 end)",
-            "@@ cobro_bizum_aceptado \(if .cobro_bizum.ok then 1 else 0 end)",
-            "@@ cobro_bizum_pagado \(if .cargo.pagado then 1 else 0 end)",
-            "@@ automaticos_con_bizum \(if .automaticos.bizum then 1 else 0 end)",
-            "@@ sesion_bizum \(if .sesion_bizum.ok then 1 else 0 end)",
-            "@@ sesion_tarjeta_y_bizum \(if .sesion_tarjeta_y_bizum.ok then 1 else 0 end)",
-            "@@ cuenta_borrada \(if .cuenta_borrada then 1 else 0 end)"' /tmp/sonda/r.json | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+            "@@ alta_con_bizum_creada \(if (.altas.con_bizum.v1.creada or .altas.con_bizum.v2.creada) then 1 else 0 end)",
+            "@@ alta_con_bizum_por_v2 \(if .altas.con_bizum.v2.creada then 1 else 0 end)",
+            "@@ alta_sin_bizum_creada \(if (.altas.sin_bizum.v1.creada or .altas.sin_bizum.v2.creada) then 1 else 0 end)",
+            "@@ capacidad_bizum_activa \(if ((.altas.con_bizum.capacidades.bizum | objects | .bizum_payments) // "") == "active" then 1 else 0 end)",
+            "@@ capacidad_bizum_pendiente \(if ((.altas.con_bizum.capacidades.bizum | objects | .bizum_payments) // "") == "pending" then 1 else 0 end)",
+            "@@ cobro_bizum_aceptado \(if .cobros.cobro_bizum.ok then 1 else 0 end)",
+            "@@ cobro_bizum_pagado \(if .cobros.cargo.pagado then 1 else 0 end)",
+            "@@ automaticos_con_bizum \(if .cobros.automaticos.bizum then 1 else 0 end)",
+            "@@ sesion_bizum \(if .cobros.sesion_bizum.ok then 1 else 0 end)",
+            "@@ sesion_tarjeta_y_bizum \(if .cobros.sesion_tarjeta_y_bizum.ok then 1 else 0 end)",
+            "@@ cuentas_borradas \([.borradas[]? | select(.borrada or .cerrada)] | length)"' /tmp/sonda/r.json | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
           # A la rama, entero: lo que contesta Stripe (sin la clave; identificadores tapados).
           A=docs/conta/pc01/e4; mkdir -p "$A"
           jq --arg cuando "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{cuando: $cuando, desde: "función de staging-conta (sonda PC01 E4)"} + .' /tmp/sonda/r.json \
