@@ -16,11 +16,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Boton, Campo, Chip, Dialogo, Selector, Texto } from '@/modules/conta/diseno'
 import { fechaLarga, eurosExactos } from '@/modules/conta/lib/formato'
-import { nuevaPresentacion } from '@/modules/conta/lib/ivaPresentado'
+import { diaMesMadrid, nuevaPresentacion } from '@/modules/conta/lib/ivaPresentado'
 import { apuntarNuevaPresentacion, leerReaperturas, puedeReabrir, reabrir, type Presentacion, type Reapertura } from '@/modules/conta/services/reaperturaIvaService'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
-const dm = (iso: string | null) => (iso ? new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(iso)) : '—')
+const dm = (iso: string | null) => (iso ? diaMesMadrid(iso) : '—')
 
 /** El trimestre siguiente, para «Se deduce en el 4T sin reabrir». */
 function siguiente(trimestre: string): string {

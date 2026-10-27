@@ -6,7 +6,7 @@
 // medido en solo lectura el 27/10) reabierto como lo devuelve conta_iva_presentados (1408).
 
 import { describe, expect, it } from 'vitest'
-import { candadoDelAsiento, mesPresentado, mesReabierto, presentadoDe, textoMarcaReapertura, textoReabierto, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
+import { candadoDelAsiento, diaMesMadrid, mesPresentado, mesReabierto, presentadoDe, textoMarcaReapertura, textoReabierto, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
 import { aPeriodo } from '@/modules/conta/services/ivaPresentadoService'
 
 const T3 = { periodo: '3T', ejercicio: 2026, desde: '2026-07-01', hasta: '2026-09-30', presentado: '2026-10-20T06:57:01+00:00', nombre: '3T de 2026', siguiente: '4T' }
@@ -25,6 +25,13 @@ describe('reabierto para corregir, en las pantallas', () => {
     expect(mesReabierto('2026-09', [reabierto])?.reabierto?.secuencia).toBe(2)
     expect(mesReabierto('2026-09', [cerrado])).toBeNull()
     expect(textoReabierto(reabierto.reabierto!)).toBe('Reabierto para corregir, sin presentar · complementaria nº 2')
+  })
+
+  it('el día y el mes, siempre con dos cifras (la e2e 980 vio «20/7» en el diálogo)', () => {
+    expect(diaMesMadrid('2026-07-20T08:06:28+00:00')).toBe('20/07')
+    expect(diaMesMadrid('2026-01-05T08:00:00+00:00')).toBe('05/01')
+    // A las 23:30 UTC del 30/09 ya es el 01/10 en Madrid.
+    expect(diaMesMadrid('2026-09-30T23:30:00Z')).toBe('01/10')
   })
 
   it('la marca del diario: quién, cuándo, el motivo y la nueva presentación', () => {

@@ -67,12 +67,16 @@ export function trimestrePresentado(ejercicio: number, trimestre: number, lista:
   return deCada.every(Boolean) ? deCada[2] : null
 }
 
-/** La fecha de presentación, como la escribe la base: «20/10». */
-export function diaPresentado(p: PeriodoPresentado): string {
-  const d = new Date(p.presentado)
-  const f = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).formatToParts(d)
+/** El día y el mes en Madrid de un instante, siempre con dos cifras: «20/07». */
+export function diaMesMadrid(iso: string): string {
+  const f = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).formatToParts(new Date(iso))
   const v = (t: string) => (f.find((x) => x.type === t)?.value ?? '').padStart(2, '0')
   return `${v('day')}/${v('month')}`
+}
+
+/** La fecha de presentación, como la escribe la base: «20/10». */
+export function diaPresentado(p: PeriodoPresentado): string {
+  return diaMesMadrid(p.presentado)
 }
 
 const del = (p: PeriodoPresentado) => (esTrimestre(p.periodo) ? `del ${p.nombre}` : `de ${p.nombre}`)
@@ -143,7 +147,7 @@ export function textoMarcaReapertura(marcas: readonly MarcaAsiento[]): string {
   if (!marcas.length) return ''
   const orden = [...marcas].sort((x, y) => x.en.localeCompare(y.en))
   const m = orden[orden.length - 1]
-  const dia = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).format(new Date(m.en))
+  const dia = diaMesMadrid(m.en)
   const acciones = [...new Set(orden.map((x) => x.accion))].map((x) => (x === 'libro' ? 'su libro de IVA' : x))
   return `${ACCION[m.accion] ?? m.accion} con el ${m.periodo} de ${m.ejercicio} reabierto para corregir: ${m.por ?? 'alguien'} el ${dia} · «${m.motivo}» · va en la ${nuevaPresentacion({ tipo: m.tipo, secuencia: m.secuencia })}.${acciones.length > 1 ? ` (${acciones.join(', ')})` : ''}`
 }
