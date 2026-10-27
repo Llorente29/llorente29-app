@@ -17,6 +17,8 @@
 //   · employee_clock_status(p_employee_id)  — tarjeta «En cocina ahora»
 //   · compras_camino_de(p_recepcion)        — la frase al confirmar una recepción (compras, N21)
 //   · supplier_invoice_repetida(…)          — «¿ya está esta factura?» al escanear (supply, D01)
+//   · fiscal_for_preview(p_sale_id)         — lo fiscal del tique en «Ver tiques» (pedidos, V04)
+//   · ticket_invoice_ajustes / ticket_invoice_code_set — Ajustes › Facturas de los pedidos (V04)
 //
 // Cuando se regenere el fichero de tipos: quitar la llamada de arriba, borrar
 // este fichero, y el compilador señalará solo lo que falte.

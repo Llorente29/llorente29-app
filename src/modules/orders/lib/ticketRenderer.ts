@@ -27,6 +27,7 @@ import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from './passCode'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
 import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket'
+import { lineasFiscales, type FiscalTique } from '@/native/print/fiscalTique'
 
 // ── Modelo intermedio ───────────────────────────────────────────────────────
 
@@ -186,16 +187,18 @@ function modifierLines(
 
 // ── 1. Ticket de bolsa / cliente ────────────────────────────────────────────
 
-export function renderBagTicket(order: OrderFeedItem, fiscal?: { legalName?: string; taxId?: string; address?: string }): TicketDoc {
+export function renderBagTicket(order: OrderFeedItem, fiscal?: FiscalTique | null): TicketDoc {
   const b: TicketBlock[] = []
 
   // Cabecera de marca (logo = capa 2; aquí el nombre en texto grande)
   b.push({ kind: 'text', text: order.brand ?? 'Folvy', align: 'center', bold: true, size: 2 })
-  if (fiscal?.legalName) b.push({ kind: 'text', text: fiscal.legalName, align: 'center', bold: true })
-  if (fiscal?.taxId)     b.push({ kind: 'text', text: fiscal.taxId, align: 'center', muted: true })
-  if (fiscal?.address)   b.push({ kind: 'text', text: fiscal.address, align: 'center', muted: true })
   b.push({ kind: 'space' })
   b.push({ kind: 'text', text: fmtDate(order.entro_at), align: 'center', muted: true })
+  // V04 · Lo fiscal, debajo de la fecha, como en el papel (fiscalTique.ts).
+  const fis = lineasFiscales(fiscal, order)
+  if (fis.emisor)    b.push({ kind: 'text', text: fis.emisor, align: 'center', bold: true })
+  if (fis.direccion) b.push({ kind: 'text', text: fis.direccion, align: 'center', muted: true })
+  if (fis.numero)    b.push({ kind: 'row', left: 'Factura Simplificada', right: fis.numero })
 
   // Código de pedido (protagonista): nº real de plataforma con el canal delante.
   b.push({ kind: 'space' })

@@ -8,8 +8,8 @@ import { passCode } from '@/modules/orders/lib/passCode';
 import { direccionParaMostrar } from '@/lib/direccionEntrega';
 import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket';
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente';
+import { lineasFiscales } from './fiscalTique';
 
-function ticketNumber(order: any) { return order.external_tab_ref ?? order.external_ref ?? '—'; }
 // CÓDIGO DE PASE (lo que canta el repartidor): Glovo → pos_short_code; Uber →
 // platform_order_code completo; propio/otros → pos_short_code. Lógica única en passCode.ts.
 function pickupCode(order: any) {
@@ -129,12 +129,13 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
   } else {
     b.push({ kind: 'text', text: order.brand ?? 'Folvy', align: 'center', bold: true, size: 3 });
   }
-  if (fiscal?.legalName) b.push({ kind: 'text', text: fiscal.legalName, align: 'center', bold: true });
-  if (fiscal?.taxId)     b.push({ kind: 'text', text: fiscal.taxId, align: 'center' });
-  if (fiscal?.address)   b.push({ kind: 'text', text: fiscal.address, align: 'center' });
+  // V04 · Lo fiscal, debajo de la fecha (fiscalTique.ts).
+  const fis = lineasFiscales(fiscal, order);
   b.push({ kind: 'space' });
   b.push({ kind: 'text', text: fmtDate(order.entro_at), align: 'center' });
-  b.push({ kind: 'row', left: 'Factura Simplificada', right: fiscal?.ticketNumber ?? ticketNumber(order) });
+  if (fis.emisor)    b.push({ kind: 'text', text: fis.emisor, align: 'center', bold: true });
+  if (fis.direccion) b.push({ kind: 'text', text: fis.direccion, align: 'center' });
+  if (fis.numero)    b.push({ kind: 'row', left: 'Factura Simplificada', right: fis.numero });
   b.push({ kind: 'space' });
   b.push({ kind: 'invertBanner', text: pickupCode(order), size: 4 });
   b.push({ kind: 'space' });

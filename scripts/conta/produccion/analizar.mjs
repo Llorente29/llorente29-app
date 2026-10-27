@@ -451,6 +451,9 @@ export function categoria(o, ctx) {
  *   usos(o)             quién usa todavía lo que se borra o renombra (base y front)
  *   expandeEnLaTanda(o) la tanda añade o cambia la misma tabla que esto contrae
  *   pareceAplicado      todo lo que crea ya existía y no está en el historial
+ *   respaldo(o)         una función que ya existe y se reemplaza: si la
+ *                       migración la guarda (_respaldar_funcion) antes de
+ *                       cambiarla y su .down.sql la restaura (_restaurar_funcion)
  */
 export function veredicto(ops, ctx) {
   let estado = 'sigue'
@@ -471,6 +474,14 @@ export function veredicto(ops, ctx) {
       else if (!(ctx.pruebaCubre ?? pruebaCubre)(decl.prueba, o.objeto)) { sube('bloquea'); necesita.push(`la prueba \`${decl.prueba}\` no existe o no nombra ${corto(o.objeto)}`) }
       else if (enCamino) { sube('autorizo'); necesita.push('camino del pedido: autorizo') }
       else necesita.push(`declarado, prueba \`${decl.prueba}\``)
+      // Respuesta 1 al V04 (27/10): la vuelta atrás de una función que ya
+      // existe no la copia a mano, la restaura del respaldo. Una copia escrita
+      // en el repositorio lleva \n, y la de producción puede llevar \r\n: la
+      // huella del ensayo sale distinta y para (ensayo #256, fiscal_for_print).
+      const r = o.tipo === 'funcion' && o.accion === 'reemplaza' ? ctx.respaldo?.(o) : null
+      if (r && !r.guarda) { sube('bloquea'); necesita.push(`la migración no guarda la de antes: \`select public._respaldar_funcion('${o.objeto}', '<versión>')\` antes de cambiarla (una copia a mano cambia la huella si la de producción lleva \\r\\n)`) }
+      if (r && !r.restaura) { sube('bloquea'); necesita.push(`su vuelta atrás (\`${r.down}\`) no la restaura del respaldo: \`select public._restaurar_funcion('${o.objeto}', '<versión>')\``) }
+      if (r && r.guarda && r.restaura) necesita.push('la de antes, guardada y restaurada byte a byte (funcion_respaldo)')
     }
     if (c.cat === 'destruye') {
       sube('autorizo'); necesita.push('autorizo')
@@ -617,6 +628,39 @@ select json_build_object(
                  from supabase_migrations.schema_migrations where version in (${versiones.length ? versiones.map(lit).join(',') : 'null'})))`
 }
 
+// ── El respaldo de una función que cambia en caliente (Respuesta 1 al V04) ──
+// La migración guarda la definición de antes, tal cual (pg_get_functiondef),
+// ANTES de reemplazarla; su .down.sql la vuelve a ejecutar desde ahí. Las dos
+// llamadas nombran la firma tal como la escribe el analizador
+// («public.f(text,uuid)»), con o sin espacios.
+const sinEspacios = (x) => String(x).replace(/\s+/g, '').toLowerCase()
+const llamada = (texto, fn, firmaObj) => {
+  const t = sinEspacios(String(texto).replace(/--.*$/gm, ''))
+  const f = sinEspacios(firmaObj)
+  const conPublic = f.startsWith('public.') ? f : `public.${f}`
+  return [conPublic, conPublic.replace(/^public\./, '')].map((x) => t.indexOf(`${fn}('${x}'`)).filter((i) => i >= 0).sort((a, b) => a - b)[0] ?? -1
+}
+export const rutaDown = (f) => `supabase/vuelta-atras/${versionDe(f)}.down.sql`
+// Desde la 2309 del V04, que es la primera que se escribe así. Las que ya
+// estaban en main el 26/10 se aplicaron con su vuelta atrás copiada a mano, y
+// no se les pide: van congeladas en respaldo-antiguas.txt. No vale comparar
+// nombres, porque la secuencia de antes lleva fechas de diciembre
+// (20261206T0770…).
+const ANTIGUAS = new Set(
+  (leerSiExiste(new URL('./respaldo-antiguas.txt', import.meta.url)) ?? '').split('\n').map((x) => x.trim()).filter((x) => x && !x.startsWith('#')),
+)
+export function respaldoDe(f, o, leer = leerSiExiste) {
+  if (ANTIGUAS.has(versionDe(f))) return null
+  const texto = leer(f) ?? ''
+  const down = rutaDown(f)
+  const i = llamada(texto, '_respaldar_funcion', o.objeto)
+  // Y antes del create or replace de esa función, no después.
+  const nombre = sinEspacios(base(o.objeto)).replace(/^public\./, '')
+  const t = sinEspacios(String(texto).replace(/--.*$/gm, ''))
+  const j = Math.min(...[`createorreplacefunctionpublic.${nombre}(`, `createorreplacefunction${nombre}(`].map((x) => t.indexOf(x)).filter((k) => k >= 0), Infinity)
+  return { guarda: i >= 0 && i < j, restaura: llamada(leer(down) ?? '', '_restaurar_funcion', o.objeto) >= 0, down }
+}
+
 // ── El informe de la tanda, con el veredicto de cada fichero ────────────────
 export function informe(ficheros, contexto, usosFront = {}, leer = leerSiExiste) {
   const exTablas = new Set(contexto.tablas ?? [])
@@ -674,7 +718,7 @@ export function informe(ficheros, contexto, usosFront = {}, leer = leerSiExiste)
     const ops = porFichero[f]
     const creaciones = ops.filter((o) => o.accion === 'crea' && ['tabla', 'vista', 'funcion'].includes(o.tipo))
     const pareceAplicado = creaciones.length > 0 && creaciones.every((o) => existiaAntes(o))
-    const v = veredicto(ops, { ...ctxBase, cabecera: cabecera(leer(f) ?? ''), pruebaCubre: (r, obj) => pruebaCubre(r, obj, leer), pareceAplicado })
+    const v = veredicto(ops, { ...ctxBase, cabecera: cabecera(leer(f) ?? ''), pruebaCubre: (r, obj) => pruebaCubre(r, obj, leer), pareceAplicado, respaldo: (o) => respaldoDe(f, o, leer) })
     salida.ficheros[f] = v.estado
     if (decidir(ops, existe).tocaVatRateFor) salida.vatRateFor.push(f)
     const nuevos = [...new Set(ops.filter((o) => o.accion === 'crea' && !existe(o)).map((o) => `${o.tipo} \`${o.objeto}\``))]

@@ -1,0 +1,10 @@
+# V04 · PR 1 · El tique de la bolsa: el número y quién factura. La 2309 cambia
+# en caliente fiscal_for_print: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos (regla 10): imprimir y reimprimir una
+# propia (su número, el mismo al reimprimir, el siguiente después), cerrar y
+# cancelar después de imprimir (el número sigue), la cedida con la factura de
+# Last y sin ella (sin la línea, con aviso), el local sin código (como antes),
+# la serie llena (la impresión no falla, y avisa), el código que no se cambia,
+# la vista previa que no numera, los permisos y la vuelta atrás.
+supabase/migrations/20261026T2309_v04_tique_serie_y_quien_factura.sql
+supabase/staging/sql/20261026_v04_tique_serie_prueba.sql

@@ -131,8 +131,10 @@ jobs:
       # EL CAMINO DEL PEDIDO, lista explícita (expresiones sobre el nombre con
       # esquema). Solo cuenta lo que EXISTE en producción: una tabla que crea la
       # tanda no está en el camino. Ampliarla es cambiar esta línea, a la vista.
+      # fiscal_for_print, desde el 27/10 (Respuesta 1 al V04): la tablet la
+      # llama al imprimir cada bolsa.
       CAMINO_TABLAS: '^public\.(sale|sale_.*|sales_.*|order_.*|delivery_.*|dispatch_.*|courier.*|brand_delivery_policy|kds_.*|kitchen_.*|pase_.*|stock_.*|recipe_.*|modifier_.*)$'
-      CAMINO_FUNCIONES: '^public\.(_?sale_.*|tg_sale.*|compute_sale.*|_?consum.*|resolve_(dispatch|delivery).*|dispatch.*|delivery.*|courier.*|orders_feed.*|kds_.*|kitchen_.*|pase_.*|_?stock_.*|recipe_.*|modifier_.*|hubrise.*|lastapp.*)(\(|$)'
+      CAMINO_FUNCIONES: '^public\.(_?sale_.*|tg_sale.*|compute_sale.*|_?consum.*|resolve_(dispatch|delivery).*|dispatch.*|delivery.*|courier.*|orders_feed.*|kds_.*|kitchen_.*|pase_.*|_?stock_.*|recipe_.*|modifier_.*|hubrise.*|lastapp.*|fiscal_for_print)(\(|$)'
     steps:
       - uses: actions/checkout@v4
 

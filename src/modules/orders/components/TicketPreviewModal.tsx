@@ -6,12 +6,19 @@
 //
 // El QR se pinta con la librería qrcode (ya instalada) -> dataURL. En la
 // impresora real será el comando ESC/POS nativo (capa de transporte, después).
+//
+// V04 · Lo fiscal (quién factura y el número de la factura simplificada) lo
+// pide aquí a la base, con fiscal_for_preview: solo lee, así que mirar un tique
+// no gasta número. Antes no se pedía, y la vista previa salía sin el nombre ni
+// el NIF de quien factura y con el código del pedido como número.
 
 import { useEffect, useMemo, useState } from 'react'
 import { X, Printer, Loader2, Check, AlertCircle } from 'lucide-react'
 import QRCode from 'qrcode'
 import type { OrderFeedItem } from '../services/ordersFeedService'
 import { renderBagImage } from '@/native/print/ticketImage'
+import type { FiscalTique } from '@/native/print/fiscalTique'
+import { fiscalParaVistaPrevia } from '../services/fiscalTiqueService'
 import {
   renderBagTicket, renderKitchenTicket, renderLabels,
   type TicketDoc, type TicketBlock,
@@ -19,7 +26,8 @@ import {
 
 interface Props {
   order: OrderFeedItem
-  fiscal?: { legalName?: string; taxId?: string; address?: string }
+  /** Si no se da, se pide a la base (fiscal_for_preview). */
+  fiscal?: FiscalTique | null
   onClose: () => void
   /** Reimprime el pedido. docType = solo ese documento. Devuelve el nº de jobs. */
   onReprint?: (saleId: string, docType?: string) => Promise<number>
@@ -29,7 +37,15 @@ type Tab = 'bag' | 'kitchen' | 'labels'
 
 const TAB_LABEL: Record<Tab, string> = { bag: 'bolsa', kitchen: 'cocina', labels: 'pegatinas' }
 
-export default function TicketPreviewModal({ order, fiscal, onClose, onReprint }: Props) {
+export default function TicketPreviewModal({ order, fiscal: fiscalDado, onClose, onReprint }: Props) {
+  const [fiscalLeido, setFiscalLeido] = useState<FiscalTique | null>(null)
+  useEffect(() => {
+    if (fiscalDado !== undefined) return
+    let vivo = true
+    void fiscalParaVistaPrevia(order.sale_id).then((f) => { if (vivo) setFiscalLeido(f) })
+    return () => { vivo = false }
+  }, [fiscalDado, order.sale_id])
+  const fiscal = fiscalDado ?? fiscalLeido
   const [tab, setTab] = useState<Tab>('bag')
   const [reprinting, setReprinting] = useState(false)
   const [reprintMsg, setReprintMsg] = useState<{ ok: boolean; text: string } | null>(null)

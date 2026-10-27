@@ -1,0 +1,23 @@
+{
+ "_que": "V04 · PR 1 · contexto de producción de la tanda (2309), medido en SOLO LECTURA el 26/10 a las 23:37Z (Respuesta 1) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow, que desde la Respuesta 1 incluye fiscal_for_print. De lo que toca la 2309 solo existe fiscal_for_print(text,uuid) (la que cambia en caliente, sin otra firma, huella 6efe86f5 con sus \\r\\n), y es camino del pedido; ninguna de sus tablas (tampoco funcion_respaldo) ni las funciones del respaldo; nada en el historial.",
+ "medido": "2026-10-26T23:37Z",
+ "tanda": {
+  "supabase/migrations/20261026T2309_v04_tique_serie_y_quien_factura.sql": "963956a26a498304efd473256000ceab"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.fiscal_for_print(text,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": [
+    "public.fiscal_for_print(text,uuid)"
+   ]
+  },
+  "usos": {},
+  "registro": []
+ }
+}
