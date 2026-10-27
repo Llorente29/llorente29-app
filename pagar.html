@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Pagar la factura</title>
+    <style>
+      :root { --tinta: #172443; --suave: #5B6476; --linea: #D9DEE7; --azul: #1F5FD1; --verde: #166B3A; --rojo: #B42318; --fondo: #F5F7FA; }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--fondo); color: var(--tinta); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      main { max-width: 520px; margin: 0 auto; padding: 24px 16px 48px; }
+      h1 { font-size: 22px; margin: 0 0 4px; }
+      .sub { color: var(--suave); margin: 0 0 20px; }
+      .caja { background: #fff; border: 1px solid var(--linea); border-radius: 12px; padding: 18px; margin: 0 0 16px; }
+      .empresa { border-bottom: 3px solid var(--marca, var(--tinta)); padding-bottom: 10px; margin: 0 0 16px; font-weight: 700; font-size: 18px; }
+      dl { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 0; }
+      dt { color: var(--suave); } dd { margin: 0; overflow-wrap: anywhere; }
+      .importe { font-size: 30px; font-weight: 700; margin: 14px 0 4px; }
+      .metodos { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; padding: 0; list-style: none; }
+      .metodos li { border: 1px solid var(--linea); border-radius: 8px; padding: 6px 10px; font-weight: 600; font-size: 14px; }
+      button { width: 100%; margin-top: 18px; padding: 14px; font-size: 16px; font-weight: 600; color: #fff; background: var(--marca, var(--azul)); border: 0; border-radius: 10px; cursor: pointer; }
+      button:disabled { opacity: .55; cursor: default; }
+      .aviso { padding: 12px 14px; border-radius: 10px; margin: 0 0 16px; }
+      .aviso[data-tono=bien] { background: #E7F5EC; color: var(--verde); }
+      .aviso[data-tono=mal] { background: #FDECEA; color: var(--rojo); }
+      .ayuda { font-size: 13px; color: var(--suave); margin-top: 10px; }
+      @media (max-width: 480px) { dl { grid-template-columns: 1fr; } dt { margin-top: 6px; } }
+    </style>
+  </head>
+  <body>
+    <main id="pagar" aria-live="polite"><p class="sub">Cargando la factura…</p></main>
+    <script type="module" src="/src/publicas/pagar.ts"></script>
+  </body>
+</html>

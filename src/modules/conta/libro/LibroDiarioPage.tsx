@@ -57,6 +57,9 @@ import { MARCA } from '../cuenta/marca'
 import { EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, enviarADiez, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
+import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
+import { candadoDelAsiento, mesPresentado, textosCandado } from '@/modules/conta/lib/ivaPresentado'
+import { CandadoIva } from '@/modules/conta/diseno/CandadoIva'
 import { leerEnviosDiez, useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { detalleDiez, type DetalleDiez, type EnvioAsiento } from '@/modules/conta/lib/enDiez'
 import { DetalleDiezPieza } from '@/modules/conta/libro/DetalleDiez'
@@ -205,6 +208,9 @@ export default function LibroDiarioPage() {
   const [vista, setVista] = useState<'esperan' | null>(null)
 
   const visibles = useMemo(() => (datos ? filtrosVisibles(datos.asientos) : []), [datos])
+  // V04 · El candado del IVA: los periodos presentados del ejercicio (el mes lo lleva, y lo que cierra no se ofrece validar).
+  const ejerciciosIva = useMemo(() => (datos?.ejercicio ? [...new Set([Number(datos.ejercicio.inicio.slice(0, 4)), Number(datos.ejercicio.fin.slice(0, 4))])] : []), [datos])
+  const iva = useIvaPresentado(activa?.id, ejerciciosIva)
   const pedido = params.get('ver') as FiltroDiario | null
   const filtro: FiltroDiario = visibles.some((f) => f.id === pedido) ? pedido! : 'todos'
   const campos = useMemo(() => (datos ? camposDelLibro(datos.asientos, analitica.local) : []), [datos, analitica.local])
@@ -221,6 +227,8 @@ export default function LibroDiarioPage() {
       if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
       // M01: lo propuesto que la validación pararía espera; no se ofrece validar y enviar.
       if (a.estado === 'propuesto' && datos.esperan.has(a.id)) return []
+      // V04: con el IVA de su periodo presentado no se valida (la base lo para): no se ofrece.
+      if (a.estado === 'propuesto' && candadoDelAsiento(a, iva.presentados)) return []
       return [{ id: a.id, concepto: a.concepto, fecha: a.fecha, estado: a.estado, cobro: cobroDe(a.apuntes), estadoDiez: e, noSeEnvia: motivoSinPatron(datos.conDiez.get(a.id)!.canal) }]
     }).sort((x, y) => x.fecha.localeCompare(y.fecha) || x.concepto.localeCompare(y.concepto))
     : []
@@ -378,7 +386,7 @@ export default function LibroDiarioPage() {
   // S01e: las columnas fijas, a lo que de verdad ocupan («General 1.287», «12.345,67 €»,
   // «Hecho por Folvy»): lo que sobra va al concepto, que antes se cortaba con sitio al lado.
   const columnas: ColumnaDensa<AsientoDiario>[] = datos ? [
-    { id: 'fecha', titulo: 'Fecha', ancho: '56px', celda: (a) => <span className="cxd-fecha">{diaMesCorto(a.fecha)}</span>, exportar: (a) => a.fecha },
+    { id: 'fecha', titulo: 'Fecha', ancho: '72px', celda: (a) => { const p = candadoDelAsiento(a, iva.presentados); return <span className="cxd-fecha">{diaMesCorto(a.fecha)}{p && <> <CandadoIva {...textosCandado(p)} corto /></>}</span> }, exportar: (a) => a.fecha },
     { id: 'numero', titulo: 'Nº', ancho: '104px', celda: (a) => <span className="cxd-num">{numeroVisible(a)}</span>, exportar: (a) => numeroVisible(a), pesoPdf: 1.3 },
     // C07: con «Enviar a Diez» apagado, sin columna de Diez.
     ...(encendido ? [{
@@ -470,7 +478,7 @@ export default function LibroDiarioPage() {
           {/* El mes, en una línea: las cifras de N11, en pequeño (lo que espera revisión va en «Te toca hoy»). */}
           <dl className="cxd-resumen" aria-label={`Cómo va ${nombreMes(datos.mes)}`}>
             <div><dt>Asientos en {nombreMes(datos.mes)}</dt><dd className="cxd-resumen-cifra">{miles(c.asientosMes)}</dd><dd className="cxd-resumen-apoyo">{c.apoyoAsientos}</dd></div>
-            <div><dt>{capital(nombreMes(datos.mes))}</dt><dd className="cxd-resumen-cifra">{c.mes.texto}</dd><dd className={c.mes.cerrado ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo cxt-verde'}>{c.mes.cerrado && sinValidarTexto ? `${c.mes.apoyo} · ${sinValidarTexto}` : c.mes.apoyo}</dd></div>
+            <div><dt>{capital(nombreMes(datos.mes))}</dt><dd className="cxd-resumen-cifra">{c.mes.texto}{(() => { const p = mesPresentado(datos.mes, iva.presentados); return p ? <> <CandadoIva {...textosCandado(p)} /></> : null })()}</dd><dd className={c.mes.cerrado ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo cxt-verde'}>{c.mes.cerrado && sinValidarTexto ? `${c.mes.apoyo} · ${sinValidarTexto}` : c.mes.apoyo}</dd></div>
             <div><dt>Resultado de {nombreMes(datos.mes)}</dt>
               <dd className="cxd-resumen-cifra">{c.resultado === null ? '—' : `${c.resultado >= 0 ? '+' : ''}${euros(c.resultado)}`}</dd>
               <dd className={datos.resultadoError ? 'cxd-resumen-apoyo cxt-ambar' : 'cxd-resumen-apoyo'}>{datos.resultadoError ? `No se ha podido calcular: ${datos.resultadoError}` : c.apoyoResultado}</dd></div>

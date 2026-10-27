@@ -1,0 +1,4 @@
+# V04 · Respuesta 5 · PR 1 · vuelta atrás del candado del IVA: _journal_entry_proponer
+# como estaba (byte a byte, desde su respaldo), sin los tres disparadores ni las
+# funciones nuevas. No toca datos.
+supabase/vuelta-atras/20261027T1233_v04_iva_presentado_candado.down.sql

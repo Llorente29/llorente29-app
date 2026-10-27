@@ -1,12 +1,18 @@
 // src/pages/trabajador/MisDocumentos.tsx
-import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, FileText, Plus } from 'lucide-react'
+//
+// L00 · Respuesta 1 (27/10/2026): solo lectura. El almacén de los contratos y
+// las nóminas es privado: el trabajador ve y abre lo suyo, con un enlace que
+// caduca en pocos minutos, y no sube ni borra (solo el administrador). La
+// subida de antes ya fallaba: la tabla `documents` solo deja escribir al
+// administrador.
+import { useState, useEffect } from 'react'
+import { ArrowLeft, FileText } from 'lucide-react'
 import { Card } from '../../components/ui'
 import { fmtInt } from '../../lib/format'
 import type { Employee } from '../../types'
 import type { DocumentFile } from '../../types/personal'
 import { DOCUMENT_TYPES } from '../../types/personal'
-import { fetchDocuments, uploadDocument, getDocumentUrl, deleteDocument } from '../../services/documentsService'
+import { fetchDocuments, abrirDocumento } from '../../services/documentsService'
 
 interface Props {
   employee: Employee
@@ -16,12 +22,8 @@ interface Props {
 export default function MisDocumentos({ employee, onBack }: Props) {
   const [docs, setDocs] = useState<DocumentFile[]>([])
   const [loading, setLoading] = useState(true)
-  const [showUpload, setShowUpload] = useState(false)
-  const [uploadType, setUploadType] = useState('baja_medica')
-  const [uploadNotes, setUploadNotes] = useState('')
-  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [abriendo, setAbriendo] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -32,33 +34,16 @@ export default function MisDocumentos({ employee, onBack }: Props) {
 
   useEffect(() => { load() }, [employee.id])
 
-  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setUploading(true); setError('')
+  async function handleDownload(doc: DocumentFile) {
+    setError('')
+    setAbriendo(doc.id)
     try {
-      await uploadDocument(employee.id, file, uploadType, employee.id, 'trabajador', uploadNotes)
-      await load()
-      setShowUpload(false)
-      setUploadNotes('')
+      await abrirDocumento(doc.filePath)
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Error desconocido')
+      setError(err instanceof Error ? err.message : 'No se ha podido abrir el documento.')
     } finally {
-      setUploading(false)
-      e.target.value = ''
+      setAbriendo(null)
     }
-  }
-
-  function handleDownload(doc: DocumentFile) {
-    const url = getDocumentUrl(doc.filePath)
-    if (url) window.open(url, '_blank')
-  }
-
-  async function handleDelete(doc: DocumentFile) {
-    if (doc.uploadedRole !== 'trabajador') return // solo puede borrar lo suyo
-    if (!confirm(`¿Eliminar "${doc.name}"?`)) return
-    await deleteDocument(doc)
-    await load()
   }
 
   function typeLabel(typeId: string): { label: string; icon: string } {
@@ -77,13 +62,13 @@ export default function MisDocumentos({ employee, onBack }: Props) {
             <p className="text-xs text-text-secondary uppercase tracking-wide">Mis documentos</p>
             <p className="font-bold text-text-primary">{employee.name.split(' ')[0]}</p>
           </div>
-          <button
-            onClick={() => setShowUpload(true)}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-accent text-text-on-accent text-xs font-medium hover:bg-accent-hover transition-base"
-          >
-            <Plus size={12} /> Subir
-          </button>
         </div>
+
+        {error && (
+          <Card className="p-3 mb-3">
+            <p role="alert" className="text-sm text-danger">{error}</p>
+          </Card>
+        )}
 
         {loading ? (
           <Card className="p-6 text-center">
@@ -108,23 +93,12 @@ export default function MisDocumentos({ employee, onBack }: Props) {
                       <p className="text-xs text-text-secondary mt-0.5">
                         {t.label} · {fmtInt(doc.fileSizeKb)} KB · {new Date(doc.createdAt).toLocaleDateString('es-ES')}
                       </p>
-                      {doc.uploadedRole === 'trabajador' && (
-                        <p className="text-[10px] text-accent font-medium mt-0.5">Subido por ti</p>
-                      )}
                       {doc.notes && <p className="text-xs text-text-secondary mt-1 italic">{doc.notes}</p>}
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <button onClick={() => handleDownload(doc)}
-                        className="text-xs px-2 py-1 rounded bg-accent-bg text-accent hover:opacity-90 transition-base">
-                        Ver
-                      </button>
-                      {doc.uploadedRole === 'trabajador' && (
-                        <button onClick={() => handleDelete(doc)}
-                          className="text-xs px-2 py-1 rounded bg-danger-bg text-danger hover:bg-danger-bg">
-                          Borrar
-                        </button>
-                      )}
-                    </div>
+                    <button onClick={() => handleDownload(doc)} disabled={abriendo === doc.id}
+                      className="text-xs px-2 py-1 rounded bg-accent-bg text-accent hover:opacity-90 disabled:opacity-50 transition-base">
+                      {abriendo === doc.id ? 'Abriendo…' : 'Ver'}
+                    </button>
                   </div>
                 </Card>
               )
@@ -132,49 +106,9 @@ export default function MisDocumentos({ employee, onBack }: Props) {
           </div>
         )}
 
-        {/* Modal de subida */}
-        {showUpload && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center">
-            <div className="bg-card rounded-t-3xl sm:rounded-2xl w-full max-w-md p-5 max-h-[90vh] overflow-y-auto">
-              <p className="font-bold text-lg mb-4">Subir documento</p>
-
-              <label className="text-xs text-text-secondary block mb-1">Tipo</label>
-              <select value={uploadType} onChange={e => setUploadType(e.target.value)}
-                className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary mb-3">
-                {DOCUMENT_TYPES.map(t => (
-                  <option key={t.id} value={t.id}>{t.icon} {t.label}</option>
-                ))}
-              </select>
-
-              <label className="text-xs text-text-secondary block mb-1">Notas (opcional)</label>
-              <textarea value={uploadNotes} onChange={e => setUploadNotes(e.target.value)}
-                placeholder="Ej: Baja desde el 10 al 15 de mayo"
-                className="w-full border border-border-default rounded-lg px-3 py-2 text-sm mb-3 h-20 resize-none" />
-
-              <input ref={fileInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp"
-                onChange={handleUpload} className="hidden" />
-
-              {error && <p className="text-sm text-danger mb-2">{error}</p>}
-
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                className="w-full py-3 rounded-xl bg-accent text-text-on-accent font-medium hover:bg-accent-hover disabled:opacity-50 transition-base"
-              >
-                {uploading ? 'Subiendo...' : 'Elegir archivo y subir'}
-              </button>
-
-              <button onClick={() => { setShowUpload(false); setError(''); setUploadNotes('') }}
-                className="w-full py-2 mt-2 text-sm text-text-secondary hover:text-text-primary">
-                Cancelar
-              </button>
-
-              <p className="text-[10px] text-text-secondary text-center mt-3">
-                PDF, JPG, PNG o WEBP. Máximo 5 MB.
-              </p>
-            </div>
-          </div>
-        )}
+        <p className="text-xs text-text-secondary text-center mt-4">
+          ¿Tienes que entregar un documento, como un parte de baja? Dáselo a tu encargado: él lo sube a tu ficha.
+        </p>
       </div>
     </div>
   )

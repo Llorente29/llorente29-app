@@ -93,10 +93,38 @@ export async function uploadDocument(
   return rowToDocument(data as DocRow)
 }
 
-export function getDocumentUrl(filePath: string): string | null {
-  if (!supabase) return null
-  const { data } = supabase.storage.from(BUCKET).getPublicUrl(filePath)
-  return data.publicUrl
+/** Minutos que vale el enlace a un PDF (L00, 27/10/2026: el almacén es privado). */
+export const MINUTOS_ENLACE_DOCUMENTO = 5
+
+/**
+ * Enlace firmado, de pocos minutos, a un documento del almacén. Desde el
+ * 27/10/2026 (L00) el almacén employee-documents es privado: ya no hay enlace
+ * público. Lo puede pedir quien puede leerlo (el administrador o el encargado
+ * de la cuenta, o el trabajador si es suyo): si no, Storage lo rechaza y aquí
+ * se lanza el error para que la pantalla lo diga.
+ */
+export async function getDocumentUrl(filePath: string): Promise<string> {
+  if (!supabase) throw new Error('Sin conexión con el servidor.')
+  const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(filePath, MINUTOS_ENLACE_DOCUMENTO * 60)
+  if (error || !data?.signedUrl) throw new Error('No se ha podido abrir el documento' + (error?.message ? `: ${error.message}` : '.'))
+  return data.signedUrl
+}
+
+/**
+ * Abre un documento en otra pestaña. La pestaña se abre ANTES de pedir el
+ * enlace (en el mismo toque), porque un navegador bloquea la que se abre
+ * después de esperar a la red. Si el enlace falla, se cierra y se lanza.
+ */
+export async function abrirDocumento(filePath: string): Promise<void> {
+  const ventana = typeof window !== 'undefined' ? window.open('', '_blank') : null
+  try {
+    const url = await getDocumentUrl(filePath)
+    if (ventana) ventana.location.href = url
+    else window.location.href = url
+  } catch (e) {
+    ventana?.close()
+    throw e
+  }
 }
 
 export async function deleteDocument(doc: DocumentFile): Promise<boolean> {

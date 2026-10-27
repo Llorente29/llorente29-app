@@ -1,8 +1,11 @@
 // tests/e2e/conta/pc01/cobros.spec.ts
 //
-// PC01 · Entrega 3 · Ventas › Cobros (tablero cobros-1), la ficha de una remesa
-// de recibos (cobros-2) y la página para firmar un mandato sin cuenta, en el
-// ordenador y en el móvil.
+// PC01 · Entregas 3 y 4 · Ventas › Cobros (tablero cobros-1), la ficha de una
+// remesa de recibos (cobros-2) y la página para firmar un mandato sin cuenta, en
+// el ordenador y en el móvil. E4: la columna y el diálogo «Recordatorios»,
+// Ajustes › Cobros y el mandato que sale desde Sumied (conta-mandato-enviar y
+// conta-recordatorios, simuladas: la base de la 0641 y las dos funciones no
+// están en staging hasta su tanda y su fusión).
 //
 // La base de la tanda (20261026T2142_pc01e3_cobros_mandatos_recibos) solo
 // añade, pero staging no la tiene hasta que esté en producción y se fusione
@@ -25,9 +28,13 @@
 //      devoluciones, el aviso del devuelto, el asiento de la devolución (430 y
 //      626 contra 572) y el mandato; «Pasar el devuelto en la próxima remesa»
 //      vuelve a Cobros con su factura marcada.
-//   3. «Enviarle el mandato para firmar» prepara el enlace y lo dice.
+//   3. «Enviarle el mandato para firmar» (E4): lo manda Sumied y lo dice; sin
+//      correo, prepara el enlace para copiarlo.
 //   4. La página del mandato, sin cuenta: un IBAN mal escrito no firma; con
 //      todo bien, firma y enseña la copia firmada.
+//   5. (E4) «Recordatorios»: los días, los últimos, apagar a un cliente y
+//      mandarte una prueba.
+//   6. (E4) Ajustes › Cobros: los días en palabras, lo que no vale, guardar.
 // Las capturas, al lado de su tablero (docs/conta/pc01/tableros), en el artefacto.
 
 import { readFileSync } from 'node:fs'
@@ -131,6 +138,31 @@ async function simular(page: Page, ficha: 'preparada' | 'plazo' = 'preparada'): 
     mandato: 'm-1', ref: 'SUM-000124', token: TOKEN, enlace: `/mandato.html?t=${TOKEN}`, correo: null, caduca: dia(30),
     frase: 'Mandato SUM-000124 de Bar La Esquina Prueba preparado: el enlace para firmarlo vale 30 días.',
   })))
+  // E4 · Los recordatorios (la 0641) y las dos funciones de correo.
+  const dom = { enviados: 0, ultimo: null, proximo: null, sin: 'domiciliada', no_salio: null }
+  await page.route(/\/rest\/v1\/rpc\/conta_recordatorios_resumen(\?|$)/, (r) => json(r, {
+    activos: true, dias: [-3, 0, 7, 15], cambiado: null, hoy: hoy(),
+    clientes_apagados: [{ id: 'c-otro', nombre: 'Cliente Apagado Prueba', por: 'Ana Prueba', at: new Date().toISOString() }],
+    facturas: [
+      { id: 'f-ghost', enviados: 3, ultimo: dia(-8), proximo: dia(0), sin: null, no_salio: null },
+      { id: 'f-eventos', enviados: 0, ultimo: null, proximo: dia(16), sin: null, no_salio: null },
+      { id: 'f-uber', enviados: 0, ultimo: null, proximo: null, sin: 'plataforma', no_salio: null },
+      ...['f-club', 'f-acad', 'f-cole', 'f-bar'].map((id) => ({ id, ...dom })),
+    ],
+    ultimos: [
+      { at: `${dia(-8)}T07:00:00Z`, factura: 'A-2026/0010', factura_id: 'f-ghost', cliente: 'Ghost Kitchens Prueba SL', para: 'pagos@ghost.example', enviado: true, motivo: null, dia: 7 },
+      { at: `${dia(-15)}T07:00:00Z`, factura: 'A-2026/0010', factura_id: 'f-ghost', cliente: 'Ghost Kitchens Prueba SL', para: 'pagos@ghost.example', enviado: true, motivo: null, dia: 0 },
+    ],
+  }))
+  await page.route(/\/rest\/v1\/rpc\/conta_recordatorios_cliente(\?|$)/, apuntar('cliente', () => ({ frase: 'A Eventos Catering Prueba SL ya no se le mandan recordatorios.' })))
+  await page.route(/\/rest\/v1\/rpc\/conta_cobro_ajustes_guardar(\?|$)/, apuntar('ajustes', () => ({ frase: 'Guardado: los recordatorios se mandan 5 días antes, el día que vence, a los 30 días.' })))
+  await page.route(/\/functions\/v1\/conta-mandato-enviar(\?|$)/, apuntar('enviar', () => ({ enviado: true, texto: 'Enviado el mandato SUM-000124 a admin@bar-prueba.example. Cuando lo firme, su ficha queda domiciliada con su IBAN.' })))
+  await page.route(/\/functions\/v1\/conta-recordatorios(\?|$)/, apuntar('prueba', () => ({ enviado: true, texto: 'Prueba mandada a julio@prueba.example: el recordatorio de la A-2026/0010, tal como lo recibiría el cliente.' })))
+  // E4 · Cómo te pagan (la 1121) y el alta en Stripe (conta-stripe), con la tarjeta activa y Bizum por terminar.
+  await page.route(/\/rest\/v1\/rpc\/conta_cobro_stripe_leer(\?|$)/, (r) => json(r, { tarjeta: 'activo', bizum: 'falta_alta', bizum_encendido: false, pendiente: 3, modo: 'prueba', leido: new Date().toISOString(), desde: new Date().toISOString() }))
+  await page.route(/\/rest\/v1\/rpc\/conta_enlaces_pago_resumen(\?|$)/, (r) => json(r, [{ id: 'f-eventos', aperturas: 2, abierto: new Date().toISOString() }]))
+  await page.route(/\/functions\/v1\/conta-stripe(\?|$)/, apuntar('stripe', () => ({ ok: true, url: 'https://stripe-prueba.example/alta', texto: 'Te llevo al alta de Stripe.' })))
+  await page.route('https://stripe-prueba.example/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Alta de Stripe (simulada)</title><h1>Alta de Stripe (simulada)</h1>' }))
   return llamadas
 }
 
@@ -175,6 +207,18 @@ test('Cobros: cifras, sin mandato, pestañas; cobrar por remesa (el que no tiene
   await expect(barra).toContainText('1 recibo · 432,00 €')
   await expect(barra).toContainText('1 no entra: Bar La Esquina Prueba no tiene mandato firmado')
   await expect(barra.getByRole('button', { name: /Cobrar por remesa/ })).toBeEnabled()
+  // E4 · La columna «Recordatorios», como en el tablero (en el móvil, la tarjeta no la lleva).
+  if (lado(page) === 'ordenador') {
+    const tabla = page.getByRole('table', { name: /^Cobros · / })
+    await expect(tabla).toContainText(`3 enviados · próximo ${ddmm(dia(0))}`)
+    await expect(tabla).toContainText('no hacen falta')
+    await expect(tabla).toContainText('con enlace · abierta 2 veces')
+  }
+  // E4 · Cómo te pagan: la tarjeta activa y el aviso de Bizum, con su botón.
+  const como = page.locator('[data-prueba="como-te-pagan"]').first()
+  await expect(como.locator('[data-prueba="aviso-bizum"]')).toHaveText('Bizum: falta terminar el alta en Stripe.')
+  await expect(como.getByRole('list', { name: 'Métodos de pago' }).getByRole('listitem')).toHaveText([/Tarjeta\s*Activo/, /Bizum\s*Falta tu alta en Stripe/])
+  await expect(page.locator('.pg-notas')).toContainText('Recordatorios que se mandan solos: 3 días antes, el día que vence y a los 7 y 15 días')
   expect(await page.locator('.pg-pagina').first().innerText()).not.toMatch(TECNICAS)
   await alLado(page, 'cobros', 'cobros-1')
 
@@ -217,19 +261,91 @@ test('La ficha con un recibo devuelto: el plazo de devoluciones, su asiento y su
   expect(errores).toEqual([])
 })
 
-test('«Enviarle el mandato para firmar» prepara el enlace y lo dice', async ({ page }) => {
+test('«Enviarle el mandato para firmar» lo manda Sumied y lo dice; sin correo, da el enlace', async ({ page }) => {
   test.setTimeout(90_000)
   const errores = vigilar(page)
   await entrarComo(page, CUENTA_A.email)
   const llamadas = await simular(page)
   await page.goto('/conta/ventas/cobros')
   await page.locator('[data-prueba="sin-mandato"]').getByRole('button', { name: 'Enviarle el mandato para firmar' }).click({ timeout: 30_000 })
-  const dialogo = page.getByRole('dialog', { name: 'Mandato de Bar La Esquina Prueba' })
+  let dialogo = page.getByRole('dialog', { name: 'Mandato de Bar La Esquina Prueba' })
   await expect(dialogo).toBeVisible()
+  await dialogo.getByLabel('Su correo').fill('admin@bar-prueba.example')
+  await dialogo.getByRole('button', { name: 'Preparar y mandar' }).click()
+  await expect(dialogo.locator('[data-prueba="mandato-preparado"]')).toContainText('Mandato SUM-000124 de Bar La Esquina Prueba preparado: el enlace para firmarlo vale 30 días. Enviado el mandato SUM-000124 a admin@bar-prueba.example.')
+  expect(llamadas.find((l) => l.f === 'enviar')!.cuerpo).toEqual({ mandato: 'm-1', para: 'admin@bar-prueba.example', origen: expect.stringMatching(/^https?:\/\//) })
+  await dialogo.getByRole('button', { name: 'Hecho' }).click()
+
+  // Sin correo: prepara el enlace, no llama al envío, y lo dice.
+  await page.locator('[data-prueba="sin-mandato"]').getByRole('button', { name: 'Enviarle el mandato para firmar' }).click()
+  dialogo = page.getByRole('dialog', { name: 'Mandato de Bar La Esquina Prueba' })
   await dialogo.getByRole('button', { name: 'Preparar el enlace' }).click()
-  await expect(dialogo.locator('[data-prueba="mandato-preparado"]')).toContainText('Mandato SUM-000124 de Bar La Esquina Prueba preparado: el enlace para firmarlo vale 30 días. Copia el enlace y mándaselo.')
+  await expect(dialogo.locator('[data-prueba="mandato-preparado"]')).toContainText('preparado: el enlace para firmarlo vale 30 días. Copia el enlace y mándaselo.')
   await expect(dialogo.getByLabel('El enlace para firmar')).toHaveValue(new RegExp(`/mandato\\.html\\?t=${TOKEN}$`))
-  expect(llamadas.find((l) => l.f === 'mandato')!.cuerpo).toEqual({ p_company: expect.any(String), p_party: 'c-bar', p_correo: null })
+  expect(llamadas.filter((l) => l.f === 'enviar')).toHaveLength(1)
+  expect(errores).toEqual([])
+})
+
+test('«Recordatorios»: los días, los últimos, apagar a un cliente y mandarte una prueba', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page)
+  await page.goto('/conta/ventas/cobros')
+  await page.getByRole('button', { name: 'Recordatorios', exact: true }).click({ timeout: 30_000 })
+  const dialogo = page.getByRole('dialog', { name: 'Recordatorios' })
+  await expect(dialogo).toContainText('Se mandan solos, 3 días antes, el día que vence y a los 7 y 15 días')
+  await expect(dialogo).toContainText('Ghost Kitchens Prueba SL · A-2026/0010')
+  await expect(dialogo).toContainText('mandado a pagos@ghost.example')
+  await expect(dialogo).toContainText('Cliente Apagado Prueba')
+  await expect(dialogo.getByRole('link', { name: /Ajustes › Cobros/ })).toBeVisible()
+  expect(await dialogo.innerText()).not.toMatch(TECNICAS)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/recordatorios-${lado(page)}.png`, fullPage: true })
+
+  await dialogo.getByLabel('Apagar los de un cliente').selectOption({ label: 'Eventos Catering Prueba SL' })
+  await expect(dialogo.getByRole('status')).toHaveText('A Eventos Catering Prueba SL ya no se le mandan recordatorios.')
+  expect(llamadas.find((l) => l.f === 'cliente')!.cuerpo).toEqual({ p_company: expect.any(String), p_party: 'c-eventos', p_apagar: true })
+
+  await dialogo.getByLabel('A este correo').fill('julio@prueba.example')
+  await dialogo.getByRole('button', { name: 'Mandar la prueba' }).click()
+  await expect(dialogo.getByRole('status')).toHaveText('Prueba mandada a julio@prueba.example: el recordatorio de la A-2026/0010, tal como lo recibiría el cliente.')
+  expect(llamadas.find((l) => l.f === 'prueba')!.cuerpo).toEqual({ factura: 'f-ghost', para: 'julio@prueba.example' })
+  expect(errores).toEqual([])
+})
+
+test('Ajustes › Cobros: los días en palabras mientras se escriben, lo que no vale, y guardar lo dice', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page)
+  await page.goto('/conta/ajustes/cobros')
+  const ajustes = page.locator('[data-prueba="ajustes-cobros"]')
+  await expect(ajustes.getByLabel('Qué días')).toHaveValue('-3, 0, 7, 15', { timeout: 30_000 })
+  // E4 · Cómo te pagan: tarjeta y Bizum, su estado en palabras y un solo botón al alta de Stripe.
+  const como = ajustes.locator('[data-prueba="como-te-pagan"]')
+  await expect(como.getByRole('list', { name: 'Métodos de pago' }).getByRole('listitem')).toHaveText([/Tarjeta\s*Activo/, /Bizum\s*Falta tu alta en Stripe/])
+  await expect(page.getByRole('button', { name: 'Terminar tu alta en Stripe' })).toHaveCount(1)
+  expect(await como.innerText()).not.toMatch(/\b(capacidad|capability|v2|Connect)\b/i)
+  await expect(ajustes).toContainText('Así: 3 días antes, el día que vence y a los 7 y 15 días.')
+  await expect(ajustes).toContainText('Cliente Apagado Prueba')
+  await expect(ajustes.getByRole('button', { name: 'Guardar' })).toBeDisabled()
+  await ajustes.getByLabel('Qué días').fill('-3, 120')
+  await expect(ajustes).toContainText('Cada día, entre 30 antes de vencer (-30) y 90 después.')
+  await expect(ajustes.getByRole('button', { name: 'Guardar' })).toBeDisabled()
+  await ajustes.getByLabel('Qué días').fill('30, -5, 0')
+  await expect(ajustes).toContainText('Así: 5 días antes, el día que vence y a los 30 días.')
+  expect(await ajustes.innerText()).not.toMatch(TECNICAS)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/ajustes-cobros-${lado(page)}.png`, fullPage: true })
+  await ajustes.getByRole('button', { name: 'Guardar' }).click()
+  await expect(ajustes.getByRole('status').last()).toHaveText('Guardado: los recordatorios se mandan 5 días antes, el día que vence, a los 30 días.')
+  expect(llamadas.find((l) => l.f === 'ajustes')!.cuerpo).toEqual({ p_company: expect.any(String), p_recordatorios: true, p_dias: [-5, 0, 30] })
+
+  // El botón lleva al alta de Stripe (simulada).
+  await page.getByRole('button', { name: 'Terminar tu alta en Stripe' }).click()
+  await expect(page.getByRole('heading', { name: 'Alta de Stripe (simulada)' })).toBeVisible({ timeout: 30_000 })
+  expect(llamadas.find((l) => l.f === 'stripe')!.cuerpo).toEqual({ empresa: expect.any(String), accion: 'alta', origen: expect.stringMatching(/^https?:\/\//) })
   expect(errores).toEqual([])
 })
 
@@ -265,3 +381,31 @@ test('La página del mandato, sin cuenta: un IBAN mal escrito no firma; con todo
   await page.screenshot({ path: `${DIR}/mandato-firmado-${lado(page)}.png`, fullPage: true })
   expect(errores).toEqual([])
 })
+
+test('La página de pago, sin cuenta: la factura, lo pendiente, tarjeta y Bizum; «Pagar» va a Stripe; a la vuelta lo dice', async ({ page }) => {
+  test.setTimeout(60_000)
+  const errores = vigilar(page)
+  const pagos: Record<string, unknown>[] = []
+  const ver = { estado: 'abierto', empresa: 'Foodint Prueba SL', color: '#1E63C9', factura: 'F-2026/0089', fecha: dia(-20), vence: dia(19), total: 780.5, pendiente: 780.5, metodos: ['tarjeta', 'bizum'], pagado: null }
+  await page.route(/\/rest\/v1\/rpc\/conta_enlace_pago_ver(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ver) }))
+  await page.route(/\/functions\/v1\/conta-pago(\?|$)/, (r) => { pagos.push(r.request().postDataJSON()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'https://stripe-prueba.example/pago' }) }) })
+  await page.route('https://stripe-prueba.example/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Pago de Stripe (simulado)</title><h1>Pago de Stripe (simulado)</h1>' }))
+  await page.goto(`/pagar.html?t=${TOKEN}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Pagar la factura' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Foodint Prueba SL', { exact: true })).toBeVisible()
+  await expect(page.getByText('F-2026/0089', { exact: true })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Puedes pagar con' }).getByRole('listitem')).toHaveText(['Tarjeta', 'Bizum'])
+  await expect(page.getByText('Pagas en la página segura de Stripe, con tarjeta y Bizum.')).toBeVisible()
+  expect(await page.locator('main').innerText()).not.toMatch(TECNICAS)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/pagar-${lado(page)}.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Pagar 780,50 €' }).click()
+  await expect(page.getByRole('heading', { name: 'Pago de Stripe (simulado)' })).toBeVisible({ timeout: 30_000 })
+  expect(pagos).toEqual([{ token: TOKEN, origen: expect.stringMatching(/^https?:\/\//) }])
+
+  // A la vuelta, aún sin el aviso de Stripe: lo está confirmando.
+  await page.goto(`/pagar.html?t=${TOKEN}&vuelta=ok`)
+  await expect(page.getByRole('status')).toHaveText('Pago recibido: Stripe lo está confirmando. Si has pagado con Bizum, termina de aceptarlo en el móvil. No hace falta que hagas nada más.')
+  expect(errores).toEqual([])
+})
+
