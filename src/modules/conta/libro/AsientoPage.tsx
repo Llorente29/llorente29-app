@@ -58,6 +58,8 @@ import { porQueNoSeValida, type MotivoEspera } from '@/modules/conta/lib/esperan
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
 import { avisoTardia, candadoDelAsiento, mensajePresentado } from '@/modules/conta/lib/ivaPresentado'
 import { FranjaIvaPresentado, FranjaTardia } from '@/modules/conta/diseno/CandadoIva'
+import { marcasDelAsiento, type MarcaReapertura } from '@/modules/conta/services/reaperturaIvaService'
+import { textoMarcaReapertura } from '@/modules/conta/lib/ivaPresentado'
 
 interface Datos {
   asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
@@ -135,6 +137,14 @@ export default function AsientoPage() {
   // V04: los periodos presentados del año del asiento y del de su factura.
   const ejercicios = useMemo(() => (a ? [a.fecha, a.fechaDocumento].filter((x): x is string => !!x).map((x) => Number(x.slice(0, 4))) : []), [a])
   const iva = useIvaPresentado(activa?.id, ejercicios)
+  // V04 (1408): lo que se hizo con este asiento mientras su periodo estaba reabierto para corregir.
+  const [marcas, setMarcas] = useState<{ id: string; lista: MarcaReapertura[] } | null>(null)
+  useEffect(() => {
+    if (!a || !accountId) return
+    let vivo = true
+    marcasDelAsiento(accountId, a.id).then((m) => { if (vivo) setMarcas({ id: a.id, lista: m }) }, () => { if (vivo) setMarcas({ id: a.id, lista: [] }) })
+    return () => { vivo = false }
+  }, [a, accountId])
 
   if (error) return <ErrorConReintento mensaje={error} reintentar={recargar} />
   if (!datos) return <div className="cx-tarjeta" aria-busy="true" aria-label="Cargando el asiento" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{[0, 1, 2, 3].map((i) => <Hueso key={i} alto={44} />)}</div>
@@ -222,6 +232,11 @@ export default function AsientoPage() {
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {candado && a.estado !== 'anulado' && <FranjaIvaPresentado texto={mensajePresentado(candado, editable ? 'factura' : 'corregir')} />}
       {editable && tardia && !candado && <FranjaTardia texto={tardia} />}
+      {marcas?.id === a.id && marcas.lista.length > 0 && (
+        <div className="cx-tarjeta cxd-franja cx-franja-reabierto" role="note" data-prueba="marca-reapertura">
+          <span>{textoMarcaReapertura(marcas.lista)}</span>
+        </div>
+      )}
       {iva.error && <p className="cx-ayuda cxt-ambar" role="note">{iva.error}. Si su IVA ya está presentado, lo dirá al pulsar.</p>}
       {encendido && datos.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo está con Diez: {datos.conDiezError}</p>}
       {editable && frena?.franja && (
