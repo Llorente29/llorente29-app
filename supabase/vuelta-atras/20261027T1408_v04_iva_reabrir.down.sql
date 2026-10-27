@@ -10,8 +10,10 @@
 
 select public._conta_iva_reabrir_se_puede_deshacer();
 
--- Los cerrojos de las cuatro tablas, de golpe y al principio (como la migración).
+-- Los cerrojos, de golpe y al principio y en el mismo orden que la migración:
+-- accounts y company (las claves ajenas de las tablas que se borran) y las cuatro con disparador.
 set local lock_timeout = '20s';
+lock table public.accounts, public.company in share row exclusive mode;
 lock table public.tax_return, public.journal_entry, public.journal_line, public.vat_book_entry in access exclusive mode;
 
 select public._restaurar_funcion('public.conta_iva_presentados(uuid,int)', '20261027T1408_v04_iva_reabrir');
