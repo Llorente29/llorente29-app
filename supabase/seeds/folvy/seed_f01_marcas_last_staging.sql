@@ -42,8 +42,12 @@ begin
   end if;
 
   if not exists (select 1 from public.external_integration where account_id = a_cuenta and source = 'lastapp' and external_org_id = org) then
-    insert into public.external_integration (account_id, source, external_org_id, organization_name, ownership_type, is_active)
-    values (a_cuenta, 'lastapp', org, 'Cocinas de Prueba', 'licensed', true);
+    -- Una integración de Last pide el NOMBRE del secreto de su token
+    -- (external_integration_source_shape_chk). Este no tiene secreto detrás:
+    -- ninguna prueba ni la e2e llaman a Last, y en staging no hay ningún
+    -- proceso programado que recorra las integraciones de Last (medido el 27/10).
+    insert into public.external_integration (account_id, source, external_org_id, organization_name, ownership_type, is_active, token_secret_name)
+    values (a_cuenta, 'lastapp', org, 'Cocinas de Prueba', 'licensed', true, 'e2e_last_token_prueba');
   end if;
   insert into public.external_location_map (account_id, source, external_location_id, location_id, is_active)
   select a_cuenta, 'lastapp', x.ext, x.loc, true
