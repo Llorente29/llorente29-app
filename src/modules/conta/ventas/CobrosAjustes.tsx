@@ -6,7 +6,7 @@
 //     palabras mientras se escribe;
 //   · los clientes a los que no se les mandan, con «Volver a mandarle» (se
 //     apagan desde Ventas › Cobros › Recordatorios);
-//   · aquí irá también cómo se cobra con el enlace de pago (punto 2), cuando llegue.
+//   · «Cómo te pagan» (E4, punto 2): tarjeta y Bizum por Stripe (ComoTePagan).
 // Guardar confirma o falla en pantalla, con la frase de la base (regla 8).
 
 import { useState } from 'react'
@@ -17,6 +17,7 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { Boton, Campo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { leerDias, textoDias } from '@/modules/conta/lib/cobros'
 import { guardarAjustesCobro, leerRecordatorios, recordatoriosCliente } from '@/modules/conta/services/cobrosService'
+import { ComoTePagan } from './ComoTePagan'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -61,6 +62,7 @@ export function CobrosAjustes() {
 
   return (
     <div className="pg-dialogo-campos" data-prueba="ajustes-cobros">
+      {activa && <ComoTePagan empresaId={activa.id} />}
       <Tarjeta titulo="Recordatorios"
         apoyo="Se mandan solos a las facturas por cobrar que no se cobran por remesa ni por una plataforma, con el nombre de tu empresa y la factura en PDF. Se paran solos cuando cobras."
         accion={<Boton variante="principal" onClick={() => void guardar()} disabled={ocupado || !cambiado || problema !== null}>{ocupado ? 'Guardando…' : 'Guardar'}</Boton>}>

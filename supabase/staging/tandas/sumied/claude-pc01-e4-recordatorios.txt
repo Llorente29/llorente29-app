@@ -6,3 +6,11 @@
 # los ajustes y el despertador fuera de las 9, y la vuelta atrás.
 supabase/migrations/20261027T0641_pc01e4_recordatorios.sql
 supabase/staging/sql/20261027_pc01e4_recordatorios_prueba.sql
+
+# La 1121 (cobrar con tarjeta y Bizum) solo añade y se puede pasar dos veces.
+# Su prueba (ROLLBACK): la cuenta de Stripe y su estado, el enlace de una
+# factura (solo si la empresa cobra con tarjeta), la página sin cuenta, la
+# sesión y el cobro por el aviso de Stripe (una vez, sin pasarse de lo
+# pendiente), los permisos y la vuelta atrás.
+supabase/migrations/20261027T1121_pc01e4_enlace_pago.sql
+supabase/staging/sql/20261027_pc01e4_enlace_pago_prueba.sql

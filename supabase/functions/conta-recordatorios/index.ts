@@ -16,6 +16,8 @@
 //
 // Sale de sumied.com con el nombre y la marca de la empresa, las respuestas van
 // a su correo y lleva el PDF de la factura si lo tiene (_shared/cobroCorreos.ts).
+// Si la empresa cobra con tarjeta (y Bizum), lleva el enlace de pago
+// (conta_enlace_pago_para): pagar.html, y de ahí a la página de pago de Stripe.
 // EL FRENO: «recordatorio_cobro» está cerrado hasta que Julio lo abra en
 // CORREO_MARCA_ABIERTOS; cerrado, no se manda nada.
 //
@@ -34,6 +36,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const BUCKET = "conta-documentos";
+/** Desde dónde se paga (la página pagar.html de la app de Sumied). */
+const ENLACES = "https://app.sumied.com";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -80,9 +84,17 @@ async function mandar(srv: SupabaseClient, marca: { color: string | null; logo: 
     const { data: pdf } = await srv.storage.from(BUCKET).download(d.pdf);
     if (pdf) adjuntos.push({ filename: nombreFacturaPdf(d.numero), content: base64(new Uint8Array(await pdf.arrayBuffer())) });
   }
+  // El enlace de pago (tarjeta y, si está activo, Bizum), si la empresa cobra así.
+  let enlacePago: string | null = null, conBizum = false;
+  const { data: token } = await srv.rpc("conta_enlace_pago_para", { p_invoice: d.factura });
+  if (typeof token === "string" && /^[0-9a-f]{64}$/.test(token)) {
+    enlacePago = `${ENLACES}/pagar.html?t=${token}`;
+    const { data: pago } = await srv.rpc("conta_enlace_pago_datos", { p_token: token });
+    conBizum = (pago as { bizum?: string } | null)?.bizum === "activo";
+  }
   const c = correoRecordatorio({
     empresa: d.empresa, color: marca.color, logo: marca.logo, cliente: d.cliente || "cliente", numero: d.numero, fecha: d.fecha,
-    vence: d.vence, hoy: d.hoy, total: Number(d.total), pendiente: Number(d.pendiente), enlacePago: null, conPdf: adjuntos.length > 0,
+    vence: d.vence, hoy: d.hoy, total: Number(d.total), pendiente: Number(d.pendiente), enlacePago, conBizum, conPdf: adjuntos.length > 0,
   });
   const responder = correoValido(d.empresa_correo);
   const res = await fetch("https://api.resend.com/emails", {

@@ -1,2 +1,3 @@
 # PC01 · Entrega 4 · recordatorios · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261027T1121_pc01e4_enlace_pago.down.sql
 supabase/vuelta-atras/20261027T0641_pc01e4_recordatorios.down.sql

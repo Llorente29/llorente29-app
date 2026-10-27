@@ -7,7 +7,8 @@
 import { supabase } from '@/lib/supabase'
 import { rpc } from '@/modules/conta/services/bd'
 import {
-  filaCobro, type EstadoRemesaCobros, type FilaCobro, type RecordatoriosFactura, type RemesaCobrosParaCasar, type ReciboDevolvible, type SinRecordatorio,
+  filaCobro, type CobroStripe, type EstadoMetodoPago, type EstadoRemesaCobros, type FilaCobro, type RecordatoriosFactura, type RemesaCobrosParaCasar,
+  type ReciboDevolvible, type SinRecordatorio,
 } from '@/modules/conta/lib/cobros'
 import type { DatosRemesaRecibos } from '@/modules/conta/lib/sepa'
 
@@ -221,3 +222,40 @@ export const enviarMandato = (mandatoId: string, para: string) =>
 /** Manda a un correo la prueba del recordatorio de una factura (no cuenta como recordatorio). */
 export const probarRecordatorio = (facturaId: string, para: string) =>
   correoPorFuncion('conta-recordatorios', { factura: facturaId, para }, 'la prueba')
+
+// ── PC01 · Entrega 4 · Cómo te pagan: tarjeta y Bizum, por Stripe ──────────
+
+export async function leerCobroStripe(companyId: string): Promise<CobroStripe | null> {
+  const d = await rpc<Fila | null>('conta_cobro_stripe_leer', { p_company: companyId })
+  if (!d) return null
+  return { tarjeta: String(d.tarjeta) as EstadoMetodoPago, bizum: String(d.bizum) as EstadoMetodoPago, bizumEncendido: d.bizum_encendido === true,
+    pendiente: num(d.pendiente), modo: d.modo === 'real' ? 'real' : 'prueba' }
+}
+
+/** Los enlaces de pago abiertos de la empresa, por factura (la columna «Recordatorios»). */
+export async function leerEnlacesPago(companyId: string): Promise<Map<string, { aperturas: number }>> {
+  const d = await rpc<Fila[]>('conta_enlaces_pago_resumen', { p_company: companyId })
+  return new Map((d ?? []).map((x) => [String(x.id), { aperturas: num(x.aperturas) }]))
+}
+
+export interface ResultadoStripe { ok: boolean; texto: string; url: string | null }
+
+/** El alta en Stripe («alta»: el enlace a su formulario) o volver a mirar su estado («estado»). Nunca lanza. */
+export async function cobroStripe(companyId: string, accion: 'alta' | 'estado'): Promise<ResultadoStripe> {
+  const que = accion === 'alta' ? 'No se ha abierto el alta en Stripe' : 'No se ha leído tu alta en Stripe'
+  if (!supabase) return { ok: false, texto: `${que}: no hay conexión con la base.`, url: null }
+  const { data, error } = await supabase.functions.invoke('conta-stripe', { body: { empresa: companyId, accion, origen: typeof window === 'undefined' ? null : window.location.origin } })
+  if (!error && data && typeof data === 'object' && 'texto' in data) {
+    const d = data as Fila
+    return { ok: d.ok === true, texto: String(d.texto), url: typeof d.url === 'string' ? d.url : null }
+  }
+  const ctx = (error as { context?: Response } | null)?.context
+  if (ctx && typeof ctx.json === 'function') {
+    const cuerpo = await ctx.clone().json().catch(() => null) as Fila | null
+    if (cuerpo?.texto) return { ok: false, texto: String(cuerpo.texto), url: null }
+    const motivo = str(cuerpo?.error) ?? (ctx.status === 404 ? 'aún no está publicado en este entorno' : `la función ha contestado ${ctx.status}`)
+    return { ok: false, texto: `${que}: ${motivo}.`, url: null }
+  }
+  return { ok: false, texto: `${que}: ${error ? error.message : 'no ha contestado'}.`, url: null }
+}
+

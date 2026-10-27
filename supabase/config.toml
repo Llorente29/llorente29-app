@@ -143,6 +143,22 @@ verify_jwt = true
 [functions.conta-recordatorios]
 verify_jwt = false
 
+# PC01 E4 (27/10) · el cobro con tarjeta y Bizum por Stripe.
+# conta-stripe: el alta del restaurante y su estado; la llaman Ajustes y Cobros
+# con la sesión de quien pulsa (verify_jwt = true).
+[functions.conta-stripe]
+verify_jwt = true
+
+# conta-pago: de la página pagar.html (sin cuenta, con el token del enlace) a la
+# página de pago de Stripe. verify_jwt = false.
+[functions.conta-pago]
+verify_jwt = false
+
+# conta-stripe-webhook: los avisos de Stripe (Connect). verify_jwt = false: la
+# seguridad la da su firma (STRIPE_SUMIED_WEBHOOK_SECRET).
+[functions.conta-stripe-webhook]
+verify_jwt = false
+
 # C07 (22/10): el servidor manda a Diez lo que se queda atrás. La despierta el
 # cron conta-diez-despertar con x-cron-secret (CRON_SECRET), sin sesión.
 [functions.conta-diez-cola]

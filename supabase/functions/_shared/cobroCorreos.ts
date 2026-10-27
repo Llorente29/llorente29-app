@@ -54,8 +54,10 @@ export interface DatosRecordatorio extends Marca {
   hoy: string
   total: number
   pendiente: number
-  /** El enlace para pagar con tarjeta o Bizum (punto 2), o null mientras no exista. */
+  /** El enlace para pagar con tarjeta (y Bizum, si está activo), o null si la empresa no cobra así. */
   enlacePago?: string | null
+  /** ¿El enlace deja pagar con Bizum? Solo si está activo (Respuesta 10: no se enseña lo que no funciona). */
+  conBizum?: boolean
   conPdf: boolean
 }
 
@@ -76,7 +78,7 @@ export function correoRecordatorio(d: DatosRecordatorio): Correo {
     '',
     `Te recordamos que la factura ${d.numero} del ${fecha(d.fecha)}, por ${euros(d.total)} €, ${v.frase}.`
       + (parte ? ` Quedan pendientes ${euros(d.pendiente)} €.` : ''),
-    d.enlacePago ? 'Puedes pagarla ahora con tarjeta o Bizum desde el botón de abajo.' : 'Si ya la has pagado, gracias: no hace falta que hagas nada.',
+    d.enlacePago ? `Puedes pagarla ahora con ${d.conBizum ? 'tarjeta o Bizum' : 'tarjeta'} desde el botón de abajo.` : 'Si ya la has pagado, gracias: no hace falta que hagas nada.',
     ...(d.conPdf ? ['Te la adjuntamos otra vez en PDF.'] : []),
     ...(d.enlacePago ? ['Si ya la has pagado, gracias: no hace falta que hagas nada.'] : []),
     'Para cualquier duda, responde a este correo.',

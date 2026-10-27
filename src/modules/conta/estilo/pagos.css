@@ -102,6 +102,13 @@
 .pg-dialogo-nota { margin: 0; color: var(--s-apoyo); }
 .pg-lista-simple { margin: 0; padding-left: var(--s-5); display: flex; flex-direction: column; gap: var(--s-2); color: var(--s-tinta); overflow-wrap: anywhere; }
 .pg-dias { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+/* PC01 E4 · Cómo te pagan: tarjeta y Bizum, con su logo y su estado */
+.pg-metodos-pago { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.pg-metodo-pago { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.pg-metodo-pago:last-child { border-bottom: 0; }
+.pg-metodo-nombre { flex: 1; min-width: 0; font-weight: var(--s-peso-medio); color: var(--s-tinta); }
+.pg-logo-pago { flex: none; color: var(--s-tinta); }
+.pg-aviso-bizum { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; }
 .cxn-remesa { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
 /* Respuesta 7 · El paso «Pagada», cuando su asiento se validó solo */
 .pg-paso-texto { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

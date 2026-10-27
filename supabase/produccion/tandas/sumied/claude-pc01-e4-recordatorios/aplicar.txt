@@ -7,8 +7,13 @@
 #      las funciones que los preparan, apuntan y resumen, y el cron de cada hora
 #      que despierta a conta-recordatorios a las 9 de Madrid. No toca datos ni
 #      nada que exista. No está en el camino del pedido: sin autorizo.
+#   2. 1121 — SOLO AÑADE: cobrar con tarjeta y Bizum por Stripe (Respuesta 10):
+#      la cuenta de Stripe de cada empresa y su estado, los enlaces de pago y el
+#      cobro cuando Stripe lo confirma (por el motor de la E1). No toca datos ni
+#      nada que exista. No está en el camino del pedido: sin autorizo.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/pc01-e4.sql
 supabase/migrations/20261027T0641_pc01e4_recordatorios.sql
+supabase/migrations/20261027T1121_pc01e4_enlace_pago.sql

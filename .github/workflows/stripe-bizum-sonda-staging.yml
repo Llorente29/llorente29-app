@@ -24,12 +24,13 @@ name: PC01 · E4 · Sonda de Bizum con Stripe Connect en staging-conta
 # salida-segura · variables del repositorio: N N_FN N_SEC N_KEY
 # (recuentos: cuántos secretos o funciones con ese nombre hay; nunca su valor)
 #
-# CUÁNDO: un push a claude/pc01-e4-recordatorios cuyo mensaje EMPIECE por «[stripe-sonda]».
-# O a mano (Actions › esta sonda › Run workflow, rama claude/pc01-e4-recordatorios).
+# CUÁNDO: solo a mano (Actions › esta sonda › Run workflow). APAGADA desde la
+# Respuesta 10 al PC01 (27/10): ya contestó (docs/conta/pc01/e4/sonda-bizum.json,
+# 11:17Z: Bizum sí, con el alta v2, pidiéndolo aparte y encendiéndolo). Se
+# queda como prueba por si Stripe cambia algo: lanzarla vuelve a crear una
+# cuenta de prueba, le pide Bizum, cobra con Bizum y la borra.
 
 on:
-  push:
-    branches: ['claude/pc01-e4-recordatorios']
   workflow_dispatch:
 
 concurrency:
@@ -41,7 +42,7 @@ permissions:
 
 jobs:
   sonda:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[stripe-sonda]')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

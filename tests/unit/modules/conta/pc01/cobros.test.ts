@@ -167,6 +167,12 @@ describe('la columna «Recordatorios» (E4), como en el tablero', () => {
     expect(textoRecordatorios(r({ sin: 'sin_correo' }))).toBe('sin correo del cliente')
     expect(textoRecordatorios(undefined)).toBe('—')
   })
+  it('con enlace de pago (E4), como en el tablero: «con enlace · abierta 2 veces»', () => {
+    expect(textoRecordatorios(r({ proximo: '2026-11-11' }), { aperturas: 2 })).toBe('con enlace · abierta 2 veces')
+    expect(textoRecordatorios(r({}), { aperturas: 1 })).toBe('con enlace · abierta 1 vez')
+    expect(textoRecordatorios(undefined, { aperturas: 0 })).toBe('con enlace · sin abrir')
+    expect(textoRecordatorios(r({ sin: 'domiciliada' }), { aperturas: 3 })).toBe('no hacen falta')
+  })
   it('las 89 por cobrar REALES de Foodint son de plataforma: «no hacen falta» en todas (0 recordatorios, como se midió en producción)', () => {
     const filas = (foodint as { filas: Record<string, unknown>[] }).filas
     expect(filas).toHaveLength(89)

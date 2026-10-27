@@ -43,8 +43,11 @@ describe('el recordatorio', () => {
     expect(c.texto).not.toContain('PDF')
   })
 
-  it('con enlace de pago (punto 2, cuando llegue): el botón con lo pendiente', () => {
-    const c = correoRecordatorio({ ...base, vence: '2026-11-01', hoy: '2026-11-01', enlacePago: 'https://app.sumied.com/pagar.html?t=abc' })
+  it('con enlace de pago: el botón con lo pendiente; Bizum, solo si está activo', () => {
+    const solo = correoRecordatorio({ ...base, vence: '2026-11-01', hoy: '2026-11-01', enlacePago: 'https://app.sumied.com/pagar.html?t=abc' })
+    expect(solo.texto).toContain('Puedes pagarla ahora con tarjeta desde el botón de abajo.')
+    expect(solo.texto).not.toContain('Bizum')
+    const c = correoRecordatorio({ ...base, vence: '2026-11-01', hoy: '2026-11-01', enlacePago: 'https://app.sumied.com/pagar.html?t=abc', conBizum: true })
     expect(c.html).toContain('href="https://app.sumied.com/pagar.html?t=abc"')
     expect(c.html).toContain('Pagar 1.452,00 €')
     expect(c.texto).toContain('Pagar: https://app.sumied.com/pagar.html?t=abc')

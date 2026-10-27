@@ -158,6 +158,11 @@ async function simular(page: Page, ficha: 'preparada' | 'plazo' = 'preparada'): 
   await page.route(/\/rest\/v1\/rpc\/conta_cobro_ajustes_guardar(\?|$)/, apuntar('ajustes', () => ({ frase: 'Guardado: los recordatorios se mandan 5 días antes, el día que vence, a los 30 días.' })))
   await page.route(/\/functions\/v1\/conta-mandato-enviar(\?|$)/, apuntar('enviar', () => ({ enviado: true, texto: 'Enviado el mandato SUM-000124 a admin@bar-prueba.example. Cuando lo firme, su ficha queda domiciliada con su IBAN.' })))
   await page.route(/\/functions\/v1\/conta-recordatorios(\?|$)/, apuntar('prueba', () => ({ enviado: true, texto: 'Prueba mandada a julio@prueba.example: el recordatorio de la A-2026/0010, tal como lo recibiría el cliente.' })))
+  // E4 · Cómo te pagan (la 1121) y el alta en Stripe (conta-stripe), con la tarjeta activa y Bizum por terminar.
+  await page.route(/\/rest\/v1\/rpc\/conta_cobro_stripe_leer(\?|$)/, (r) => json(r, { tarjeta: 'activo', bizum: 'falta_alta', bizum_encendido: false, pendiente: 3, modo: 'prueba', leido: new Date().toISOString(), desde: new Date().toISOString() }))
+  await page.route(/\/rest\/v1\/rpc\/conta_enlaces_pago_resumen(\?|$)/, (r) => json(r, [{ id: 'f-eventos', aperturas: 2, abierto: new Date().toISOString() }]))
+  await page.route(/\/functions\/v1\/conta-stripe(\?|$)/, apuntar('stripe', () => ({ ok: true, url: 'https://stripe-prueba.example/alta', texto: 'Te llevo al alta de Stripe.' })))
+  await page.route('https://stripe-prueba.example/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Alta de Stripe (simulada)</title><h1>Alta de Stripe (simulada)</h1>' }))
   return llamadas
 }
 
@@ -207,7 +212,12 @@ test('Cobros: cifras, sin mandato, pestañas; cobrar por remesa (el que no tiene
     const tabla = page.getByRole('table', { name: /^Cobros · / })
     await expect(tabla).toContainText(`3 enviados · próximo ${ddmm(dia(0))}`)
     await expect(tabla).toContainText('no hacen falta')
+    await expect(tabla).toContainText('con enlace · abierta 2 veces')
   }
+  // E4 · Cómo te pagan: la tarjeta activa y el aviso de Bizum, con su botón.
+  const como = page.locator('[data-prueba="como-te-pagan"]').first()
+  await expect(como.locator('[data-prueba="aviso-bizum"]')).toHaveText('Bizum: falta terminar el alta en Stripe.')
+  await expect(como.getByRole('list', { name: 'Métodos de pago' }).getByRole('listitem')).toHaveText([/Tarjeta\s*Activo/, /Bizum\s*Falta tu alta en Stripe/])
   await expect(page.locator('.pg-notas')).toContainText('Recordatorios que se mandan solos: 3 días antes, el día que vence y a los 7 y 15 días')
   expect(await page.locator('.pg-pagina').first().innerText()).not.toMatch(TECNICAS)
   await alLado(page, 'cobros', 'cobros-1')
@@ -312,6 +322,11 @@ test('Ajustes › Cobros: los días en palabras mientras se escriben, lo que no 
   await page.goto('/conta/ajustes/cobros')
   const ajustes = page.locator('[data-prueba="ajustes-cobros"]')
   await expect(ajustes.getByLabel('Qué días')).toHaveValue('-3, 0, 7, 15', { timeout: 30_000 })
+  // E4 · Cómo te pagan: tarjeta y Bizum, su estado en palabras y un solo botón al alta de Stripe.
+  const como = ajustes.locator('[data-prueba="como-te-pagan"]')
+  await expect(como.getByRole('list', { name: 'Métodos de pago' }).getByRole('listitem')).toHaveText([/Tarjeta\s*Activo/, /Bizum\s*Falta tu alta en Stripe/])
+  await expect(page.getByRole('button', { name: 'Terminar tu alta en Stripe' })).toHaveCount(1)
+  expect(await como.innerText()).not.toMatch(/\b(capacidad|capability|v2|Connect)\b/i)
   await expect(ajustes).toContainText('Así: 3 días antes, el día que vence y a los 7 y 15 días.')
   await expect(ajustes).toContainText('Cliente Apagado Prueba')
   await expect(ajustes.getByRole('button', { name: 'Guardar' })).toBeDisabled()
@@ -324,8 +339,13 @@ test('Ajustes › Cobros: los días en palabras mientras se escriben, lo que no 
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/ajustes-cobros-${lado(page)}.png`, fullPage: true })
   await ajustes.getByRole('button', { name: 'Guardar' }).click()
-  await expect(ajustes.getByRole('status')).toHaveText('Guardado: los recordatorios se mandan 5 días antes, el día que vence, a los 30 días.')
+  await expect(ajustes.getByRole('status').last()).toHaveText('Guardado: los recordatorios se mandan 5 días antes, el día que vence, a los 30 días.')
   expect(llamadas.find((l) => l.f === 'ajustes')!.cuerpo).toEqual({ p_company: expect.any(String), p_recordatorios: true, p_dias: [-5, 0, 30] })
+
+  // El botón lleva al alta de Stripe (simulada).
+  await page.getByRole('button', { name: 'Terminar tu alta en Stripe' }).click()
+  await expect(page.getByRole('heading', { name: 'Alta de Stripe (simulada)' })).toBeVisible({ timeout: 30_000 })
+  expect(llamadas.find((l) => l.f === 'stripe')!.cuerpo).toEqual({ empresa: expect.any(String), accion: 'alta', origen: expect.stringMatching(/^https?:\/\//) })
   expect(errores).toEqual([])
 })
 
@@ -361,3 +381,31 @@ test('La página del mandato, sin cuenta: un IBAN mal escrito no firma; con todo
   await page.screenshot({ path: `${DIR}/mandato-firmado-${lado(page)}.png`, fullPage: true })
   expect(errores).toEqual([])
 })
+
+test('La página de pago, sin cuenta: la factura, lo pendiente, tarjeta y Bizum; «Pagar» va a Stripe; a la vuelta lo dice', async ({ page }) => {
+  test.setTimeout(60_000)
+  const errores = vigilar(page)
+  const pagos: Record<string, unknown>[] = []
+  const ver = { estado: 'abierto', empresa: 'Foodint Prueba SL', color: '#1E63C9', factura: 'F-2026/0089', fecha: dia(-20), vence: dia(19), total: 780.5, pendiente: 780.5, metodos: ['tarjeta', 'bizum'], pagado: null }
+  await page.route(/\/rest\/v1\/rpc\/conta_enlace_pago_ver(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ver) }))
+  await page.route(/\/functions\/v1\/conta-pago(\?|$)/, (r) => { pagos.push(r.request().postDataJSON()); return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, url: 'https://stripe-prueba.example/pago' }) }) })
+  await page.route('https://stripe-prueba.example/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Pago de Stripe (simulado)</title><h1>Pago de Stripe (simulado)</h1>' }))
+  await page.goto(`/pagar.html?t=${TOKEN}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Pagar la factura' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Foodint Prueba SL')).toBeVisible()
+  await expect(page.getByText('F-2026/0089')).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Puedes pagar con' }).getByRole('listitem')).toHaveText(['Tarjeta', 'Bizum'])
+  await expect(page.getByText('Pagas en la página segura de Stripe, con tarjeta y Bizum.')).toBeVisible()
+  expect(await page.locator('main').innerText()).not.toMatch(TECNICAS)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/pagar-${lado(page)}.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Pagar 780,50 €' }).click()
+  await expect(page.getByRole('heading', { name: 'Pago de Stripe (simulado)' })).toBeVisible({ timeout: 30_000 })
+  expect(pagos).toEqual([{ token: TOKEN, origen: expect.stringMatching(/^https?:\/\//) }])
+
+  // A la vuelta, aún sin el aviso de Stripe: lo está confirmando.
+  await page.goto(`/pagar.html?t=${TOKEN}&vuelta=ok`)
+  await expect(page.getByRole('status')).toHaveText('Pago recibido: Stripe lo está confirmando. Si has pagado con Bizum, termina de aceptarlo en el móvil. No hace falta que hagas nada más.')
+  expect(errores).toEqual([])
+})
+

@@ -254,8 +254,12 @@ export interface RecordatoriosFactura { id: string; enviados: number; ultimo: st
 
 const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 
-/** La columna «Recordatorios» de Cobros, como en el tablero: «3 enviados · próximo 01/11», «no hacen falta»… */
-export function textoRecordatorios(r: RecordatoriosFactura | null | undefined): string {
+/** La columna «Recordatorios» de Cobros, como en el tablero: «3 enviados · próximo 01/11», «no hacen falta», «con enlace · abierta 2 veces»… */
+export function textoRecordatorios(r: RecordatoriosFactura | null | undefined, enlace?: { aperturas: number } | null): string {
+  if (enlace && (!r || r.sin === null || r.sin === 'cliente' || r.sin === 'apagados' || r.sin === 'sin_correo')) {
+    const n = enlace.aperturas
+    return `con enlace · ${n === 0 ? 'sin abrir' : `abierta ${n} ${n === 1 ? 'vez' : 'veces'}`}`
+  }
   if (!r) return '—'
   const enviados = r.enviados ? `${r.enviados} ${r.enviados === 1 ? 'enviado' : 'enviados'}` : null
   switch (r.sin) {
@@ -288,5 +292,33 @@ export function leerDias(texto: string): number[] | null {
   const xs = texto.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean)
   if (!xs.length || xs.some((x) => !/^[-+]?\d{1,3}$/.test(x))) return null
   return [...new Set(xs.map(Number))].sort((a, b) => a - b)
+}
+
+// ── PC01 · Entrega 4 · Cómo te pagan: tarjeta y Bizum, por Stripe ──────────
+
+/** El estado de un método de pago, como lo guarda la base (conta_cobro_stripe). */
+export type EstadoMetodoPago = 'activo' | 'falta_alta' | 'revisando'
+export interface CobroStripe { tarjeta: EstadoMetodoPago; bizum: EstadoMetodoPago; bizumEncendido: boolean; pendiente: number; modo: 'prueba' | 'real' }
+
+/** El estado en palabras de la calle (nada de «capacidad», «v2» ni «Connect»). */
+export function textoMetodoPago(e: EstadoMetodoPago | null): string {
+  if (e === 'activo') return 'Activo'
+  if (e === 'revisando') return 'Stripe está revisando'
+  return 'Falta tu alta en Stripe'
+}
+
+/** El único botón de «Cómo te pagan»: lleva al alta de Stripe; con todo activo, no hace falta. */
+export function botonAltaStripe(c: CobroStripe | null): string | null {
+  if (!c) return 'Darte de alta en Stripe'
+  if (c.tarjeta === 'activo' && c.bizum === 'activo') return null
+  if (c.tarjeta === 'falta_alta' || c.bizum === 'falta_alta') return 'Terminar tu alta en Stripe'
+  return 'Ver tu alta en Stripe'
+}
+
+/** La frase de Bizum para la ficha de Cobros mientras no esté activo. Null si lo está. */
+export function avisoBizum(c: CobroStripe | null): string | null {
+  if (c?.bizum === 'activo') return null
+  if (c?.bizum === 'revisando') return 'Bizum: Stripe está revisando tu alta.'
+  return 'Bizum: falta terminar el alta en Stripe.'
 }
 
