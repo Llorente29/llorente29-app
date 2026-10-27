@@ -28,6 +28,10 @@
 //     sk_test_ o rk_test_. Nada de lo que hace mueve dinero de verdad.
 //   · Escribir la clave en ningún sitio: solo registra { sonda, paso, status }.
 //
+// Historia: el run de las 06:40Z del 27/10 no llegó al cobro: Stripe rechazó
+// el alta de prueba por business_profile[url] («Not a valid URL»). La web no es
+// obligatoria y se quitó (1245193a).
+//
 // El workflow la copia a supabase/functions/stripe-bizum-sonda/ dentro del
 // runner, la llama una vez y la borra. No vive en main.
 
