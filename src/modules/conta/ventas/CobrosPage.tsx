@@ -33,6 +33,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMesCorto, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
@@ -84,7 +85,9 @@ export default function CobrosPage() {
   const cambiar = (c: Record<string, string | null>) => setQuery((antes) => new URLSearchParams(conCambio(antes.toString(), c)), { replace: true })
 
   const pestana = leerPestana(query.get('pestana'))
-  const recordatorios = useLeer(activa ? () => leerRecordatorios(activa.id) : null, `${activa?.id}:${vuelta}:recordatorios`)
+  // Conservando lo leído mientras relee: si volviera a null, se cerraría el diálogo «Recordatorios»
+  // y con él la frase que confirma lo que se acaba de cambiar (regla 8; lo cazó la e2e #975).
+  const recordatorios = useLeerConservando(activa ? () => leerRecordatorios(activa.id) : null, activa?.id ?? '', `${vuelta}:recordatorios`)
   const enlaces = useLeer(activa ? () => leerEnlacesPago(activa.id) : null, `${activa?.id}:${vuelta}:enlaces-pago`)
   const remesas = useLeer(activa && pestana === 'remesas' ? () => leerRemesasCobros(activa.id) : null, `${activa?.id}:${vuelta}:${pestana === 'remesas' ? 'con' : 'sin'}:remesas-cobros`)
   const fl = { buscar: query.get('q') ?? '', hasta: query.get('hasta') || null, forma: (query.get('forma') || 'todas') as FormaCobro | 'todas', local: query.get('local') || null }
@@ -262,7 +265,7 @@ export default function CobrosPage() {
 
       {verRecordatorios && activa && recordatorios.datos && (
         <DialogoRecordatorios empresaId={activa.id} datos={recordatorios.datos} filas={todas}
-          alCerrar={() => setVerRecordatorios(false)} alCambiar={() => setVuelta((v) => v + 1)} />
+          alCerrar={() => setVerRecordatorios(false)} alCambiar={() => recordatorios.recargar()} />
       )}
       {mandatoA && activa && (
         <DialogoMandato empresaId={activa.id} cliente={mandatoA}

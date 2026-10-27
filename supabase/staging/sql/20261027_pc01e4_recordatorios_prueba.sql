@@ -219,6 +219,18 @@ begin
   raise notice '5 · con los días nuevos toca el -5; apagados, no toca nada';
 end $$;
 reset role;
+-- Se vuelven a encender (como el administrador), con los días de antes: el paso 6 necesita una factura con recordatorios.
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare x jsonb := public.conta_cobro_ajustes_guardar((select v::uuid from _p where clave = 'empresa'), true, '{-3,0,7,15}'::integer[]);
+begin
+  if x->>'frase' <> 'Guardado: los recordatorios se mandan 3 días antes, el día que vence, a los 7 días, a los 15 días.' then
+    raise exception 'PRUEBA PC01 E4 · 5: encenderlos otra vez dijo %.', x;
+  end if;
+  raise notice '5 · y encendidos otra vez, con los días de antes';
+end $$;
+reset role;
 
 -- ── 6 · Una prueba a un correo ──────────────────────────────────────────────
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
