@@ -98,10 +98,13 @@ begin
     (b_brillo, b_cuenta, 'Limpiezas Brillo', null,        null,                         null,          null,                          'Semillas C01');
 
   insert into supplier_invoice (account_id, supplier_id, location_id, invoice_number, invoice_date, status,
-    tax_base_total, tax_total, grand_total, created_by_name, approved_at, approved_by, approved_by_name)
+    tax_base_total, tax_total, grand_total, created_by_name, approved_at, approved_by, approved_by_name, created_at)
   values
-    (a_cuenta, a_ruiz,   a_local, 'F-2026-0915', date '2026-09-24', 'aprobada', 1166.50, 116.65, 1283.15, 'Semillas C01', now(), a_user, 'Admin Norte'),
-    (b_cuenta, b_carnes, b_local, 'S-118',       date '2026-09-20', 'aprobada',  420.00,  42.00,  462.00, 'Semillas C01', now(), b_user, 'Admin Sur');
+    -- V04 (27/10): cada factura entra el día de su fecha. Si entrara el día que
+    -- se pasa la semilla, su libro la registraría ese día (D07, 0850) y su
+    -- asiento (seed_c04, el 24/09) quedaría en otro trimestre que su IVA.
+    (a_cuenta, a_ruiz,   a_local, 'F-2026-0915', date '2026-09-24', 'aprobada', 1166.50, 116.65, 1283.15, 'Semillas C01', now(), a_user, 'Admin Norte', timestamptz '2026-09-24 09:00:00+02'),
+    (b_cuenta, b_carnes, b_local, 'S-118',       date '2026-09-20', 'aprobada',  420.00,  42.00,  462.00, 'Semillas C01', now(), b_user, 'Admin Sur',   timestamptz '2026-09-20 09:00:00+02');
 
   -- El módulo de contabilidad, solo para A.
   insert into feature_flags (account_id, feature_key, enabled, source)
