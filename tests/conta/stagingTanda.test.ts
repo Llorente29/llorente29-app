@@ -5,7 +5,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
-import { lineas, nuevas, porQueNoSeEnsaya, llevaSuTransaccion, sesiones, MANIFIESTO } from '../../scripts/conta/staging-tanda.mjs'
+import { lineas, nuevas, porQueNoSeEnsaya, llevaSuTransaccion, sesiones, MANIFIESTO, RUTA_STAGING, rutaNoAdmitida, ruta, textoDelManifiesto } from '../../scripts/conta/staging-tanda.mjs'
 
 const enCommit = (ref: string) => execFileSync('git', ['show', `${ref}:${MANIFIESTO}`], { encoding: 'utf8' })
 
@@ -133,5 +133,59 @@ end $$;`
     for (const sql of ['drop table public.company;', 'update public.company set color = null;', 'alter table public.company alter column legal_name set not null;']) {
       expect(porQueNoSoloAnade('supabase/migrations/x.sql', sql, conCompany), sql).not.toBeNull()
     }
+  })
+})
+
+// F01, respuesta 4 (27/10): el #358 se fusionó con una semilla de Folvy que el
+// workflow de staging no admitía, y el run de main de después (#677) cayó entero.
+describe('qué rutas admite el manifiesto de staging (una sola regla)', () => {
+  it('las semillas de Folvy, de contabilidad y de reparto, las migraciones y las pruebas, sí; lo demás y «..», no', () => {
+    for (const f of [
+      'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql',
+      'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql',
+      'supabase/seeds/reparto/x.sql',
+      'supabase/migrations/20261027T1320_f01_marcas_last.sql',
+      'supabase/staging/sql/20261027_f01_marcas_last_prueba.sql',
+    ]) expect(rutaNoAdmitida(f)).toBeNull()
+    for (const f of ['supabase/seeds/x.sql', 'supabase/functions/a/index.ts', 'supabase/seeds/folvy/../../x.sql', 'supabase/seeds/folvy/x.txt']) {
+      expect(rutaNoAdmitida(f)).not.toBeNull()
+    }
+  })
+  it('el #677: el manifiesto de main tras fusionar el #358 nombraba la semilla de Folvy, y ahora pasa', () => {
+    const lineasDe358 = lineas(execFileSync('git', ['show', '45024cad:supabase/staging/tandas/folvy/claude-f01-marcas-last.txt'], { encoding: 'utf8' }))
+    expect(lineasDe358).toContain('supabase/seeds/folvy/seed_f01_marcas_last_staging.sql')
+    expect(lineasDe358.filter((f) => rutaNoAdmitida(f))).toEqual([])
+  })
+  it('todo el manifiesto de hoy (el cerrado y las tandas de cada rama) lo admite el workflow', () => {
+    expect(lineas(textoDelManifiesto()).map(ruta).filter((f) => rutaNoAdmitida(f))).toEqual([])
+  })
+  it('el workflow que aplica y el que revisa el PR usan esta regla, y no una suya', () => {
+    const aplicar = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
+    expect(aplicar).toContain('node scripts/conta/staging-tanda.mjs rutas $(cat /tmp/tanda.txt)')
+    expect(aplicar).toContain("- 'supabase/seeds/folvy/**'")
+    expect(aplicar).not.toMatch(/grep -qE '\^supabase\/\(migrations/)
+    const pr = readFileSync('.github/workflows/pr-a-main.yml', 'utf8')
+    expect(pr).toContain('node scripts/conta/staging-tanda.mjs nuevas "$BASE"')
+    expect(pr).toContain('node scripts/conta/staging-tanda.mjs rutas')
+    expect(RUTA_STAGING.source).toContain('seeds\\/folvy')
+  })
+})
+
+describe('«otra vez:»: lo que entró en el manifiesto y su run no aplicó', () => {
+  it('una línea que ya estaba no es nueva; con «otra vez:» sí, y pasa su ruta una sola vez', () => {
+    expect(nuevas('a.sql\n', 'a.sql\n')).toEqual([])
+    expect(nuevas('a.sql\n', 'a.sql\notra vez: a.sql\n')).toEqual(['a.sql'])
+    expect(nuevas('', 'otra vez: a.sql\na.sql\n')).toEqual(['a.sql'])
+    expect(nuevas('a.sql\notra vez: a.sql\n', 'a.sql\notra vez: a.sql\n')).toEqual([])
+    expect(ruta('otra vez:   supabase/x.sql')).toBe('supabase/x.sql')
+  })
+  it('la tanda de esta rama pasa lo del #358 que no llegó, en el orden de su manifiesto y sin su prueba', () => {
+    const t = readFileSync('supabase/staging/tandas/folvy/claude-f01-a-staging.txt', 'utf8')
+    expect(nuevas(textoDelManifiesto('45024cad'), `${textoDelManifiesto('45024cad')}\n${t}`)).toEqual([
+      'supabase/migrations/20261027T1320_f01_marcas_last.sql',
+      'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql',
+      'supabase/migrations/20261027T1322_f01_sembrado_y_socio.sql',
+      'supabase/migrations/20261027T1321_f01_socios_y_el_delicioso.sql',
+    ])
   })
 })
