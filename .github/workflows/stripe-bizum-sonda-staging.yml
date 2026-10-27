@@ -1,0 +1,155 @@
+name: PC01 · E4 · Sonda de Bizum con Stripe Connect en staging-conta
+
+# QUÉ HACE (PC01 · E4 · punto 3, 26/10)
+# La pregunta del encargo antes de construir el enlace de pago: ¿Bizum funciona
+# con Stripe Connect en una cuenta conectada española, en modo de PRUEBA?
+# La sesión de trabajo no llega a api.stripe.com; una función de staging, sí.
+#
+# En un solo run, y SOLO en staging-conta (oseymswjlzplqoxrfjzi):
+#   1. guardas: staging y no producción; la sonda solo habla con api.stripe.com,
+#      para si la clave no es de prueba y tiene la guarda de producción;
+#   2. ¿tiene staging STRIPE_SECRET_KEY? Solo se mira el NOMBRE. Si no está, lo
+#      dice y para en verde: la pone Julio (una clave sk_test_);
+#   3. un token de un solo run como secreto de la función, y la despliega
+#      (supabase/staging/sondas/stripe-bizum, copiada a supabase/functions/ dentro del runner);
+#   4. la llama UNA vez: crea una cuenta conectada de prueba (España, Accounts
+#      v2, panel completo, Stripe cubre las pérdidas), le pide Bizum aparte, mira
+#      sus capacidades y sus métodos de pago, intenta cobrar con Bizum, prueba la
+#      sesión de pago y borra o cierra la cuenta (Respuesta 9 al PC01);
+#   5. guarda lo que contesta Stripe (estados, códigos y textos de error de
+#      Stripe; sin la clave y con los identificadores tapados) en la rama, en
+#      docs/conta/pc01/e4/sonda-bizum.json, y al resumen solo números (D01 R2);
+#   6. pase lo que pase, borra la función y su token. STRIPE_SECRET_KEY NO se toca.
+#
+# salida-segura · variables del repositorio: N N_FN N_SEC N_KEY
+# (recuentos: cuántos secretos o funciones con ese nombre hay; nunca su valor)
+#
+# CUÁNDO: solo a mano (Actions › esta sonda › Run workflow). APAGADA desde la
+# Respuesta 10 al PC01 (27/10): ya contestó (docs/conta/pc01/e4/sonda-bizum.json,
+# 11:17Z: Bizum sí, con el alta v2, pidiéndolo aparte y encendiéndolo). Se
+# queda como prueba por si Stripe cambia algo: lanzarla vuelve a crear una
+# cuenta de prueba, le pide Bizum, cobra con Bizum y la borra.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: stripe-bizum-sonda-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sonda:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      REF: oseymswjlzplqoxrfjzi
+      PROD_REF: xzmpnchlguibclvxyynt
+      FN: stripe-bizum-sonda
+      SRC: supabase/staging/sondas/stripe-bizum/index.ts
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Guardas · staging y no producción; solo Stripe y solo en prueba
+        env:
+          TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "${TOKEN:-}" ] || { echo "::error::Falta SUPABASE_ACCESS_TOKEN."; exit 1; }
+          [ "$REF" != "$PROD_REF" ] || { echo "::error::El ref es el de producción. Abortado."; exit 1; }
+          grep -qF 'const PRODUCCION_REF = "xzmpnchlguibclvxyynt";' "$SRC" || { echo "::error::La sonda no tiene la guarda de producción."; exit 1; }
+          grep -qF 'const SOLO_PRUEBA = /^(sk|rk)_test_/;' "$SRC" || { echo "::error::La sonda no exige una clave de prueba."; exit 1; }
+          # Solo habla con la API de Stripe (y con la página de prueba a la que la manda Stripe).
+          ! grep -noE 'https://[a-z0-9.-]+' "$SRC" | grep -vE 'https://(api\.stripe\.com|example\.com)$' \
+            || { echo "::error::La sonda nombra un dominio que no es el de Stripe."; exit 1; }
+
+      - name: ¿Tiene staging la clave de Stripe? (solo el nombre)
+        id: clave
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" > /tmp/secretos.json
+          N=$(jq '[.[] | select(.name=="STRIPE_SECRET_KEY")] | length' /tmp/secretos.json)
+          rm -f /tmp/secretos.json
+          echo "hay=$N" >> "$GITHUB_OUTPUT"
+          { echo "@@ # clave"; echo "@@ staging_tiene_stripe_secret_key $N"; } | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          [ "$N" = "1" ] || echo "::warning::staging no tiene STRIPE_SECRET_KEY: la sonda no se despliega. Hace falta una clave sk_test_ de la plataforma."
+
+      - name: Token y despliegue en staging-conta
+        if: steps.clave.outputs.hay == '1'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/sonda
+          TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"; printf '%s' "$TOK" > /tmp/sonda/token
+          supabase secrets set --project-ref "$REF" "STRIPE_BIZUM_SONDA_TOKEN=$TOK" > /dev/null
+          mkdir -p "supabase/functions/$FN"
+          cp "$SRC" "supabase/functions/$FN/index.ts"
+          supabase functions deploy "$FN" --project-ref "$REF" --no-verify-jwt > "$RUNNER_TEMP/despliegue.txt" 2>&1
+          echo "Sonda desplegada en staging-conta."
+
+      - name: La prueba · cuenta conectada española, cobro con Bizum, sesión de pago
+        if: steps.clave.outputs.hay == '1'
+        run: |
+          set -euo pipefail
+          sleep 5
+          curl -sS --max-time 120 -H "x-stripe-sonda: $(cat /tmp/sonda/token)" "https://$REF.supabase.co/functions/v1/$FN" > /tmp/sonda/r.json || echo '{"ok":false,"error":"curl"}' > /tmp/sonda/r.json
+          # Al resumen, solo números y claves que escribe el código (D01 R2).
+          jq -r '"@@ # bizum",
+            "@@ ok \(if .ok then 1 else 0 end)",
+            (if .error then "@@ error.\(.error | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end),
+            "@@ plataforma_bizum_activa \(if (.plataforma.capacidades_bizum.bizum_payments // "") == "active" then 1 else 0 end)",
+            "@@ alta_creada \(if .alta.creada then 1 else 0 end)",
+            "@@ alta_intentos \((.alta.intentos // []) | length)",
+            "@@ pedir_bizum_aceptado \(if .pedir_bizum.ok then 1 else 0 end)",
+            "@@ bizum_activa \(if (.bizum_despues.estado // "") == "active" then 1 else 0 end)",
+            "@@ bizum_pendiente \(if (.bizum_despues.estado // "") == "pending" then 1 else 0 end)",
+            "@@ bizum_inactiva \(if (.bizum_despues.estado // "") == "inactive" then 1 else 0 end)",
+            "@@ configuraciones_con_bizum \([(.configuraciones | arrays | .[]) | select(.bizum | objects)] | length)",
+            "@@ cobro_bizum_aceptado \(if .cobros.cobro_bizum.ok then 1 else 0 end)",
+            "@@ cobro_bizum_pagado \(if .cobros.cargo.pagado then 1 else 0 end)",
+            "@@ automaticos_con_bizum \(if .cobros.automaticos.bizum then 1 else 0 end)",
+            "@@ sesion_bizum \(if .cobros.sesion_bizum.ok then 1 else 0 end)",
+            "@@ sesion_tarjeta_y_bizum \(if .cobros.sesion_tarjeta_y_bizum.ok then 1 else 0 end)",
+            "@@ cuenta_borrada_o_cerrada \(if (.borrada.borrada or .borrada.cerrada) then 1 else 0 end)"' /tmp/sonda/r.json | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          # A la rama, entero: lo que contesta Stripe (sin la clave; identificadores tapados).
+          A=docs/conta/pc01/e4; mkdir -p "$A"
+          jq --arg cuando "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{cuando: $cuando, desde: "función de staging-conta (sonda PC01 E4)"} + .' /tmp/sonda/r.json \
+            | sed -E 's/(acct|pi|pm|cs|ch|pa_nonce|src)_[A-Za-z0-9_]{6,}/\1_…/g; s/(sk|rk|pk)_(test|live)_[A-Za-z0-9]+/\1_…/g' > "$A/sonda-bizum.json"
+          git config user.name "github-actions[bot]"; git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$A"
+          if git diff --cached --quiet; then echo "Nada nuevo que guardar."; else
+            git commit -q -m "PC01 · E4 · Lo que contesta Stripe a la sonda de Bizum (modo de prueba, staging)"
+            git push -q origin "HEAD:${GITHUB_REF#refs/heads/}"; echo "Guardado en la rama."
+          fi
+
+      - name: Limpieza · la función y su token (pase lo que pase)
+        if: always()
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -uo pipefail
+          supabase functions delete "$FN" --project-ref "$REF" || true
+          supabase secrets unset --project-ref "$REF" STRIPE_BIZUM_SONDA_TOKEN || true
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/functions" > /tmp/funciones.json || echo '[]' > /tmp/funciones.json
+          curl -sS -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/secrets" > /tmp/secretos.json || echo '[]' > /tmp/secretos.json
+          N_FN=$(jq --arg s "$FN" '[.[] | select(.slug==$s)] | length' /tmp/funciones.json)
+          N_SEC=$(jq '[.[] | select(.name=="STRIPE_BIZUM_SONDA_TOKEN")] | length' /tmp/secretos.json)
+          N_KEY=$(jq '[.[] | select(.name=="STRIPE_SECRET_KEY")] | length' /tmp/secretos.json)
+          rm -f /tmp/secretos.json
+          { echo "@@ # limpieza"
+            echo "@@ funciones_de_la_sonda_que_quedan $N_FN"
+            echo "@@ tokens_de_la_sonda_que_quedan $N_SEC"
+            echo "@@ stripe_secret_key_no_se_toca $N_KEY"; } | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+          [ "$N_FN" = "0" ] && [ "$N_SEC" = "0" ] || { echo "::error::No se ha limpiado todo."; exit 1; }

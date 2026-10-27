@@ -323,6 +323,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     grupo: 'Facturación',
     entradas: [
       { id: 'verifactu', etiqueta: 'Verifactu', ruta: 'ajustes/verifactu' },
+      // PC01 E4 · Ajustes › Cobros: los recordatorios (y, cuando llegue, el enlace de pago).
+      { id: 'cobros', etiqueta: 'Cobros', ruta: 'ajustes/cobros' },
     ],
   },
   {
