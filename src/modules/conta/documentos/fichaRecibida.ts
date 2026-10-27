@@ -25,6 +25,7 @@
 import { cent, cuotaIva, deCent } from '@/modules/conta/lib/libro'
 import { leerImporteEs } from '@/modules/conta/lib/recibidaAMano'
 import { eurosExactos, porcentaje } from '@/modules/conta/lib/formato'
+import { diaMesMadrid } from '@/modules/conta/lib/ivaPresentado'
 
 // ── El borrador ──────────────────────────────────────────────────────────────
 
@@ -676,11 +677,10 @@ export function historialDe(d: DatosHistorial): HechoHistorial[] {
   return h.sort((a, b) => (a.cuando < b.cuando ? -1 : a.cuando > b.cuando ? 1 : 0))
 }
 
-/** «19/10 · …»: el día en Madrid. */
+/** «19/10 · …»: el día en Madrid, siempre con dos cifras (diaMesMadrid, el mismo de Impuestos). */
 export function diaDeHecho(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso.slice(8, 10) + '/' + iso.slice(5, 7)
-  return new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).format(d)
+  if (Number.isNaN(new Date(iso).getTime())) return iso.slice(8, 10) + '/' + iso.slice(5, 7)
+  return diaMesMadrid(iso)
 }
 
 /** El PDF que guardó su lectura (goods_receipt_ai_session.input_files): la primera ruta de receipt-uploads. */
