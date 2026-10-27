@@ -1,0 +1,5 @@
+# L00 · Respuesta 1 · vuelta atrás: todo como el 27/10, INCLUIDO el almacén
+# público con anon_all y el PIN en employees. Solo la auditoría sigue
+# admitiendo «create» (quitarlo obligaría a borrar rastro). Si se usa, volver a
+# cerrar el almacén a mano en cuanto se sepa por qué.
+supabase/vuelta-atras/20261027T1215_l00_datos_de_los_trabajadores.down.sql

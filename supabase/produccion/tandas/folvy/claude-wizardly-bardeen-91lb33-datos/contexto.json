@@ -1,0 +1,16 @@
+{
+  "_que": "L00 · Respuesta 1 · contexto de producción de la tanda (1215), medido en SOLO LECTURA el 27/10 a las 12:11Z con consultas a pg_class, pg_proc, pg_policies y el historial. Existen las once tablas que toca (storage.buckets y storage.objects; employees ~11 filas según reltuples, clock_entries 2168, clock_entry_audit ~600, documents 29, vacations 10, payroll_cost 13, payroll_inbox 13, employee_notifications 99, monthly_balance_closures 3, clock_correction_request) y employee_clock_status (una firma, huella 63df15da); no existe ninguna de las siete funciones nuevas ni employee_kiosk_pin. Nada en el camino del pedido (CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). Nada de la tanda en el historial. La cuenta (l00-datos-de-los-trabajadores.sql) a las 12:0xZ: sí · anon_all_employee_documents · 35 · 10 · no · 20 · no existe · (ninguno) · 63df15da · 4 · no existe.",
+  "medido": "2026-10-27T12:11Z",
+  "tanda": {
+    "supabase/migrations/20261027T1215_l00_datos_de_los_trabajadores.sql": "bdccb41535ff352b87896ad3ffa85e8a"
+  },
+  "contexto": {
+    "tablas": ["public.clock_correction_request", "public.clock_entries", "public.clock_entry_audit", "public.documents", "public.employee_notifications", "public.employees", "public.monthly_balance_closures", "public.payroll_cost", "public.payroll_inbox", "public.vacations", "storage.buckets", "storage.objects"],
+    "funciones": ["public.employee_clock_status(uuid)"],
+    "filas": {"public.clock_entries": 2168, "public.clock_entry_audit": 600, "public.documents": 29, "public.employees": 22, "public.vacations": 15, "public.payroll_cost": 13, "public.payroll_inbox": 13, "public.employee_notifications": 99, "public.monthly_balance_closures": 9, "storage.objects": 3020},
+    "otras": {},
+    "camino": {"tablas": [], "funciones": []},
+    "usos": {},
+    "registro": []
+  }
+}

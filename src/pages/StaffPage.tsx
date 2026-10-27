@@ -37,6 +37,7 @@ import { toISODate } from '../types/scheduler'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
 import { fetchRegistroJornadaMensual, fetchRegistroJornadaTotales } from '../services/registroJornadaService'
 import { generateRegistroJornadaPdf } from '../services/registroJornadaPdfService'
+import { conPinDeKiosko } from '../services/kioskoPinService'
 import {
   BarChart3, Users, AlertTriangle, Search, LogOut, Trash2, RefreshCw,
   Camera, LogIn, Square, Mail, X, ShieldCheck, Calendar, Sun, Moon, Ban,
@@ -426,6 +427,15 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   addClockEntry: (employeeId: string, entry: ClockEntry) => Promise<void>
 }) {
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
+  // L00 (27/10/2026): el PIN ya no llega al cliente; solo si lo tiene.
+  const [tienePin, setTienePin] = useState<boolean | null>(null)
+  useEffect(() => {
+    let cancel = false
+    conPinDeKiosko([employee])
+      .then(s => { if (!cancel) setTienePin(s.has(employee.id)) })
+      .catch(() => { if (!cancel) setTienePin(null) })
+    return () => { cancel = true }
+  }, [employee.id])
   const [staffRoles, setStaffRoles] = useState<StaffRole[]>([])
   useEffect(() => {
     if (!accountId) return
@@ -795,11 +805,14 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               </div>
             </div>
             <div>
-              <Label>PIN (4 dígitos)</Label>
+              <Label>PIN del kiosko (4 dígitos)</Label>
               <Input className="mt-1" type="text" inputMode="numeric" maxLength={4}
                 value={emp.pin || ''}
                 onChange={e => update('pin', e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="0000" />
+                placeholder={tienePin ? 'Tiene PIN · escribe uno nuevo para cambiarlo' : tienePin === false ? 'Sin PIN · escribe 4 dígitos' : '4 dígitos'} />
+              <p className="text-[11px] text-text-secondary mt-1">
+                El PIN no se enseña: se guarda aparte y lo comprueba el servidor al fichar en la tablet.
+              </p>
             </div>
             <div className="col-span-2">
               {emp.active ? (

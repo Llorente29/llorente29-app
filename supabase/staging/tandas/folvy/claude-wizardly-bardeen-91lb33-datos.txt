@@ -1,0 +1,10 @@
+# L00 · Respuesta 1 · cerrar los datos de los trabajadores. La 1215 cambia
+# políticas, el almacén, disparadores y employee_clock_status: desde la rama,
+# solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos (regla 10), entrando como el
+# trabajador, el encargado y el administrador de la cuenta A: lo que ve y lo
+# que no cada uno, fichar (hora del servidor, solo por sí mismo, rastro), el
+# PIN en el servidor, los PDF por persona, la corrección manual sin rastro
+# doble, una sola firma, y la vuelta atrás.
+supabase/migrations/20261027T1215_l00_datos_de_los_trabajadores.sql
+supabase/staging/sql/20261027_l00_datos_de_los_trabajadores_prueba.sql
