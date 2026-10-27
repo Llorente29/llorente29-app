@@ -1,0 +1,24 @@
+{
+  "cuando": "2026-10-27T06:40:39Z",
+  "desde": "función de staging-conta (sonda PC01 E4)",
+  "ok": true,
+  "modo_prueba": true,
+  "plataforma": {
+    "pais": "ES",
+    "moneda": "eur"
+  },
+  "alta_con_bizum": {
+    "status": 400,
+    "tipo": "invalid_request_error",
+    "codigo": "url_invalid",
+    "parametro": "business_profile[url]",
+    "mensaje": "Not a valid URL"
+  },
+  "alta_sin_bizum": {
+    "status": 400,
+    "tipo": "invalid_request_error",
+    "codigo": "url_invalid",
+    "parametro": "business_profile[url]",
+    "mensaje": "Not a valid URL"
+  }
+}
