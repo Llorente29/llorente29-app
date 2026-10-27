@@ -1,0 +1,21 @@
+{
+  "_que": "L00 · Respuesta 6 · contexto de producción de la tanda (1647), medido en SOLO LECTURA el 27/10 a las 16:50 UTC con la consulta del analizador (sql-contexto). Existe public.kitchen_ancestors_of(uuid), una sola firma, huella de prosrc eef6dc15 (la misma en staging). No está en el camino del pedido (ningún disparador ni cron la usa); nada de la tanda en el historial.",
+  "medido": "2026-10-27T16:50Z",
+  "tanda": {
+    "supabase/migrations/20261027T1647_l00_ancestros_por_cuenta.sql": "900320087a6874ea4d4c581e52628912"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.kitchen_ancestors_of(uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

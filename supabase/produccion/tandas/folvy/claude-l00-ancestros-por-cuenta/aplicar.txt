@@ -1,0 +1,14 @@
+# L00 · Respuesta 6 · Un trabajador que recibe un albarán recalcula el coste de
+# los platos (27/10/2026). Rama claude/l00-ancestros-por-cuenta. Se ensaya y se
+# aplica desde esta rama, antes de fusionar.
+#
+#   1. 1647 — kitchen_ancestors_of pide ser de la cuenta del artículo
+#      (belongs_to_account), como kitchen_recompute_item, en vez de ser
+#      administrador o encargado. CAMBIA en caliente, con la misma firma y con
+#      respaldo (_respaldar_funcion). No toca datos ni el camino del pedido.
+#      · Sin front: el portal ya llama a la función; desde la tanda, la
+#        cascada de coste de una recepción hecha por un trabajador sale entera.
+#
+# Sin aplicar: lo lanza Julio.
+supabase/migrations/20261027T1647_l00_ancestros_por_cuenta.sql
+cuenta: scripts/conta/produccion/cuentas/l00-ancestros-por-cuenta.sql

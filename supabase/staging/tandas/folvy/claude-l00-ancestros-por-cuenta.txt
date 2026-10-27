@@ -1,0 +1,9 @@
+# L00 · Respuesta 6 · kitchen_ancestors_of, de la cuenta. La 1647 cambia una
+# función en caliente: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por el camino de la recepción (regla 10): el trabajador
+# de la cuenta A hace la cascada entera (ancestros y recálculo), el encargado
+# igual que antes, la cuenta B y una sesión sin cuenta sin acceso, una sola
+# firma y la vuelta atrás.
+# La migración NO va en esta lista: la prueba la aplica con «\i» después de
+# medir lo de antes (paso 0).
+supabase/staging/sql/20261027_l00_ancestros_por_cuenta_prueba.sql
