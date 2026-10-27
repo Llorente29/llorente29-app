@@ -30,17 +30,18 @@
 6. **Las nóminas de la gestoría no entran desde el 04/08.** Solo se leyeron dos
    tandas (junio y julio, 13 nóminas, todas bien). Ninguna separa el IRPF de la
    Seguridad Social del trabajador [Q16, Q17].
-7. **El origen del fichaje ya se guarda bien** con el PR del arreglo. Lo antiguo
-   no se toca. De los 1.478 fichajes antiguos de Foodint, 429 son del móvil
-   seguro; el resto, sin distinguir [Q14].
+7. **En Foodint se ficha desde el móvil, en el portal.** La etiqueta `kiosko`
+   que llevan casi todos los fichajes miente: `buildClockEntry` la escribía
+   también desde el móvil. Lo dice Julio, y lo confirman los datos: en 30 días,
+   345 fichajes con GPS desde 18 puntos distintos, de 5 personas, y ninguna
+   tablet de Foodint en modo kiosko [Q14, Q21]. El PR del arreglo guarda ya el
+   origen de verdad (`movil` o `tablet`); lo antiguo no se reescribe.
 
-**Lo que no he podido leer:** `sumied_laboral_estudio.md` y
-`sumied_laboral_inventario.md` no están en el repositorio (en ninguna rama) ni
-en Drive. Viven en el proyecto de claude.ai, que desde esta sesión no se ve. He
-trabajado con la página «Laboral y Mi portal», que resume el estudio. Por eso la
-columna «Funciones del inventario» del §1 dice **la función con palabras y no su
-número** (8.3, 2.38…). Con el inventario delante, casarla es media hora: va como
-primera tarea de la L1.
+**El inventario.** La columna «Función del inventario» del §1 lleva el número
+de cada función en `sumied_laboral_inventario.md` (27/10), casado con el
+inventario delante. Lo que Folvy hace y el inventario no numera va marcado
+«**Sin número propio**», y está junto al final del §1, para que no se pierda
+al construir la L1.
 
 ---
 
@@ -60,52 +61,52 @@ aparte. Folvy Interno (la plantilla) y Kitchen Grill no tienen nada.
 
 | Pieza | Qué hace | Uso en 60 días [Q1] | Función del inventario | Propuesta |
 |---|---|---|---|---|
-| **Empleados** (`StaffPage`, 2.865 líneas) | Lista y ficha con pestañas (Datos, Fichajes, Bolsa, Docs, Acceso). Desde la ficha, el encargado ficha a mano por otro, corrige «¿salida sin fichar?» y da acceso al portal | Fichas tocadas en Foodint: 0. Altas: 11 (Casa Lola, la carga) | Alta y ficha de la persona; acceso al portal; corrección de fichajes | **Se rehace** como «Equipo» y «La ficha de una persona» (maquetas 3 y 4). Se aprovechan la lógica de acceso (`manage-employee`) y la corrección vía `add_manual_clock_entry` |
-| **Ahora mismo** | Quién está trabajando en cada local, contra el cuadrante publicado | Solo lee | Presencia en tiempo real | **Se aprovecha** su cálculo para la banda de «Equipo» («Trabajando ahora», «Sin fichar y les toca») |
-| **Control horario** (`FichajesGlobal`) | Todas las marcas, con filtros; añadir, editar y anular con motivo; historial de cambios; resolver peticiones | 20 correcciones del administrador y 6 peticiones resueltas (Foodint) | Registro de jornada; corrección con rastro; peticiones | **Se aprovecha** el motor (las RPC con motivo y la auditoría). **Se rehace** la pantalla como «Registro de jornada» (maqueta 5) |
-| **Recordatorios de fichaje** | Informe de los avisos de WhatsApp enviados, con Excel | Solo lee | Aviso de olvido; prueba de la desconexión digital | **Se rehace** dentro de «Registro de jornada»: hoy enseña avisos que en su mayoría son falsos (§3) |
-| **Kiosko de fichaje** | La tablet del local: elegir persona, PIN y fichar, con GPS | No se puede saber: hasta hoy guardaba lo mismo que el móvil (§4) | Fichar en la tablet del local | **Se aprovecha**, con el origen ya arreglado. El PIN se guarda en claro y lo ven todos (§6) |
-| **Solicitudes** | Aprobar o rechazar vacaciones y ausencias | 2 revisadas (1 Foodint, 1 Casa Lola). En Foodint hay 3 esperando, dos de ellas desde hace 15 días [Q18] | Ausencias: aprobar | **Se rehace** como «peticiones esperando» de «Equipo» (maqueta 3) |
-| **Turnos abiertos** | Publicar un turno libre y asignarlo a quien lo pida | 0 (0 en toda su vida) | Turnos abiertos | **Sobra** como pantalla aparte: no lo ha usado nadie. La función se queda dentro del cuadrante |
-| **Cambios de turno** | Aprobar cambios entre compañeros | 0 (2 en toda su vida) | Cambios de turno | **Se aprovecha** como fila de «peticiones esperando» |
-| **Calendario** (2.926 líneas) | El cuadrante semanal: generar, editar y publicar, con aviso a cada persona | 16 cuadrantes publicados (10 Foodint, 6 Casa Lola) y 67 avisos de «horario publicado» | Cuadrante y publicación | **Se aprovecha**. Es lo más usado de la empresa y las maquetas no lo tocan |
-| **Disponibilidad** | Qué días puede trabajar cada uno, deducido del historial | 9 filas (83 en total) | Disponibilidad | **Se aprovecha**, dentro de la ficha (pestaña «Tiempo») |
-| **Plantilla** | Horas y coste por persona, y el PDF mensual del registro de jornada | Solo lee | Coste de personal; registro mensual en PDF | **Se rehace**: el PDF pasa al informe de la Inspección (§2); el coste, a la ficha |
-| **Plantilla de turnos** | Qué turnos abre cada local y cuánta gente necesita | 30 turnos tocados (26 Foodint) | Necesidades de personal por turno | **Se aprovecha**, fuera de Laboral (es de operación, no de laboral) |
-| **Informes** (de Team) | Panel de demanda por hora, ventas por local y horas trabajadas | Solo lee | Personal sobre ventas | **Se aprovecha** su cálculo para el KPI «Personal sobre ventas» de «Equipo» |
-| **Nóminas** | Subir el PDF, leerlo con IA, casarlo por DNI y bandeja de revisión | 0 (13 en total, la última el 04/08) | Nóminas de la gestoría | **Se rehace** como «Nóminas del mes» (maqueta 7), sobre el mismo extractor (§5) |
-| **Informes Gestoría** (`InformesPage`) | **No es de personal**: es el generador de informes de ventas. El menú lo llama «Informes Gestoría» | Solo lee | — | **Sobra en este menú.** La exportación a la gestoría de verdad está en «Bolsa de horas» |
-| **Bolsa de horas** | Horas planificadas, fichadas y ausencias; cierres de mes; exportación a la gestoría | 0 cierres (9 en total) | Bolsa de horas; exportar a la gestoría | **Se aprovecha** el motor; la pantalla va a la ficha (pestaña «Tiempo») |
-| **Formación** | Cursos, intentos, firma y diploma | 115 cursos asignados y 21 intentos | Formación obligatoria (APPCC, alérgenos…) | **Se aprovecha** tal cual. No es de la L1 |
-| **Predicción de personal** (`/ventas/prediccion`) | Predice personal por semana desde un análisis de ventas guardado en el navegador | No está en el menú; guarda en `localStorage`; 0 medible | Previsión de personal | **Sobra**: no se llega desde el menú y no guarda nada en la base |
+| **Empleados** (`StaffPage`, 2.865 líneas) | Lista y ficha con pestañas (Datos, Fichajes, Bolsa, Docs, Acceso). Desde la ficha, el encargado ficha a mano por otro, corrige «¿salida sin fichar?» y da acceso al portal | Fichas tocadas en Foodint: 0. Altas: 11 (Casa Lola, la carga) | 2.1 alta de la persona · 9.17 ficha 360 · 10.12 acceso y permisos · 8.3 corrección de fichajes · 2.36 documentos | **Se rehace** como «Equipo» y «La ficha de una persona» (maquetas 3 y 4). Se aprovechan la lógica de acceso (`manage-employee`) y la corrección vía `add_manual_clock_entry` |
+| **Ahora mismo** | Quién está trabajando en cada local, contra el cuadrante publicado | Solo lee | 8.1 y 8.7, de lejos. **Sin número propio:** quién está trabajando ahora frente al cuadrante | **Se aprovecha** su cálculo para la banda de «Equipo» («Trabajando ahora», «Sin fichar y les toca») |
+| **Control horario** (`FichajesGlobal`) | Todas las marcas, con filtros; añadir, editar y anular con motivo; historial de cambios; resolver peticiones | 20 correcciones del administrador y 6 peticiones resueltas (Foodint) | 8.1 registro diario · 8.3 correcciones con rastro · 3.24 incidencias desde el fichaje · 8.9 (lo que hoy da para el informe) | **Se aprovecha** el motor (las RPC con motivo y la auditoría). **Se rehace** la pantalla como «Registro de jornada» (maqueta 5) |
+| **Recordatorios de fichaje** | Informe de los avisos de WhatsApp enviados, con Excel | Solo lee | 8.4 aviso de olvido · 11.8 desconexión digital | **Se rehace** dentro de «Registro de jornada»: hoy enseña avisos que en su mayoría son falsos (§3) |
+| **Kiosko de fichaje** | La tablet del local: elegir persona, PIN y fichar, con GPS | **En Foodint no se usa:** se ficha desde el móvil (§4) [Q21]. Hasta el arreglo, el kiosko y el móvil guardaban la misma etiqueta | 8.2 (la tablet del local) | **Se aprovecha**, con el origen ya arreglado. El PIN se guarda en claro y lo ven todos (§6) |
+| **Solicitudes** | Aprobar o rechazar vacaciones y ausencias | 2 revisadas (1 Foodint, 1 Casa Lola). En Foodint hay 3 esperando, dos de ellas desde hace 15 días [Q18] | 8.12 aprobar ausencias · 3.11, 3.12 y 3.13 (permisos, vacaciones) · 9.9 saldo | **Se rehace** como «peticiones esperando» de «Equipo» (maqueta 3) |
+| **Turnos abiertos** | Publicar un turno libre y asignarlo a quien lo pida | 0 (0 en toda su vida) | 1.10 y 8.7. **Sin número propio:** publicar un turno libre | **Sobra** como pantalla aparte: no lo ha usado nadie. La función se queda dentro del cuadrante |
+| **Cambios de turno** | Aprobar cambios entre compañeros | 0 (2 en toda su vida) | 1.10 y 8.7. **Sin número propio:** el cambio entre compañeros | **Se aprovecha** como fila de «peticiones esperando» |
+| **Calendario** (2.926 líneas) | El cuadrante semanal: generar, editar y publicar, con aviso a cada persona | 16 cuadrantes publicados (10 Foodint, 6 Casa Lola) y 67 avisos de «horario publicado» | 1.10 turnos y horarios · 8.7 cuadrantes · 1.9 calendario y festivos · 12.6 aviso al publicar | **Se aprovecha**. Es lo más usado de la empresa y las maquetas no lo tocan |
+| **Disponibilidad** | Qué días puede trabajar cada uno, deducido del historial | 9 filas (83 en total) | **Sin número propio** (lo más cercano, 1.10) | **Se aprovecha**, dentro de la ficha (pestaña «Tiempo») |
+| **Plantilla** | Horas y coste por persona, y el PDF mensual del registro de jornada | Solo lee | 4.26 y 9.2 coste de personal · 8.8 resumen mensual (el PDF) · 8.9 informe para la Inspección | **Se rehace**: el PDF pasa al informe de la Inspección (§2); el coste, a la ficha |
+| **Plantilla de turnos** | Qué turnos abre cada local y cuánta gente necesita | 30 turnos tocados (26 Foodint) | **Sin número propio:** cuánta gente necesita cada turno (es de operación) | **Se aprovecha**, fuera de Laboral (es de operación, no de laboral) |
+| **Informes** (de Team) | Panel de demanda por hora, ventas por local y horas trabajadas | Solo lee | 9.18 coste de personal frente a ventas | **Se aprovecha** su cálculo para el KPI «Personal sobre ventas» de «Equipo» |
+| **Nóminas** | Subir el PDF, leerlo con IA, casarlo por DNI y bandeja de revisión | 0 (13 en total, la última el 04/08) | L2 · 4.27 estado de la nómina del mes · 4.21 recibos al portal. **Sin número propio:** leer la nómina de la gestoría | **Se rehace** como «Nóminas del mes» (maqueta 7), sobre el mismo extractor (§5) |
+| **Informes Gestoría** (`InformesPage`) | **No es de personal**: es el generador de informes de ventas. El menú lo llama «Informes Gestoría» | Solo lee | — (ventas, no es de Laboral) | **Sobra en este menú.** La exportación a la gestoría de verdad está en «Bolsa de horas» |
+| **Bolsa de horas** | Horas planificadas, fichadas y ausencias; cierres de mes; exportación a la gestoría | 0 cierres (9 en total) | 8.7 bolsa de horas · 8.5 horas frente al calendario · 3.1 y 10.1 variables del mes a la gestoría | **Se aprovecha** el motor; la pantalla va a la ficha (pestaña «Tiempo») |
+| **Formación** | Cursos, intentos, firma y diploma | 115 cursos asignados y 21 intentos | 12.5 formación · 1.45 formación obligatoria del puesto · 11.6 PRL | **Se aprovecha** tal cual. No es de la L1 |
+| **Predicción de personal** (`/ventas/prediccion`) | Predice personal por semana desde un análisis de ventas guardado en el navegador | No está en el menú; guarda en `localStorage`; 0 medible | **Sin número propio:** previsión de personal | **Sobra**: no se llega desde el menú y no guarda nada en la base |
 
 ### 1.2 · El portal del trabajador (`src/pages/trabajador/*`)
 
 | Pieza | Qué hace | Uso en 60 días [Q1] | Función del inventario | Propuesta |
 |---|---|---|---|---|
-| **TrabajadorApp** | El marco: navegación entre módulos, barra de abajo, actualización | 6 de los 11 accesos de trabajador entraron en 60 días [Q15] | Portal | **Se rehace** con las pestañas de la maqueta (Inicio · Fichar · Turnos/Nóminas · Más) |
-| **HomeEmpleado** | Cuadrícula: APPCC, Mi Portal, Conteo, Recepciones; fichar arriba | — (es la portada) | Portada | **Se rehace**: la portada enseña el día (maquetas 1 y 2) |
-| **PortalEmpleado** | Lista de 9 botones | — | Menú del portal | **Sobra**: la sustituyen las pestañas |
-| **FichajeEmpleado** | Fichar desde el móvil, con GPS, radio del local, aviso de contexto y salida anticipada | 687 fichajes no manuales en Foodint (la mayoría, del móvil: §4) | Fichar | **Se aprovecha**: es lo que mejor funciona. Se le añade el olvido de ayer (maqueta 1) |
-| **MisFichajes** | Marcas sueltas y «Reportar olvido / Corregir» | 6 peticiones de corrección | Ver mis fichajes; pedir corrección | **Se rehace** la vista (día a día, horas y minutos, total del mes, firma); **se aprovecha** la petición |
-| **MiHorario / MisTurnos** | La semana con total y «Solicitar cambio» | Solo lee | Mi horario | **Se aprovecha** |
-| **CambiosTurnoPage** | Cambios de turno del trabajador | 0 | Cambios de turno | **Se aprovecha** dentro de «Turnos» |
-| **MisVacaciones** | Pedir y ver vacaciones | 7 ausencias pedidas (4 Foodint, 3 Casa Lola) | Pedir ausencias | **Se rehace** como «Ausencias» (maqueta 2: saldo, festivos descontados, quién más libra) |
-| **MisDocumentos** | PDF de contrato y nóminas | 0 subidos en 60 días. 13 nóminas se llaman con el código del correo (§5) | Mis documentos | **Se rehace**: «Nóminas» explicadas y «Mi contrato» |
-| **MiBolsaHoras** | Saldo de horas del trabajador | Solo lee | Bolsa de horas | **Se aprovecha** dentro de «Fichar» |
-| **MiFormacion** | Cursos con firma | 21 intentos | Formación | **Se aprovecha** |
-| **MisChecklistsPage / MiAutoinventario** | APPCC y conteos | De operación, no de laboral | Para hacer hoy | **Se aprovecha** en «Para hacer hoy» (maqueta 2) |
-| **MisAjustes** | Renunciar al aviso de olvido por WhatsApp | 11 personas sin aviso (todas de Casa Lola, la carga) | Desconexión digital | **Se aprovecha** |
-| **LoginEmpleado** | Usuario y contraseña, o enlace de acceso | — | Acceso | **Se aprovecha** |
+| **TrabajadorApp** | El marco: navegación entre módulos, barra de abajo, actualización | 6 de los 11 accesos de trabajador entraron en 60 días [Q15] | 2.37 portal del empleado | **Se rehace** con las pestañas de la maqueta (Inicio · Fichar · Turnos/Nóminas · Más) |
+| **HomeEmpleado** | Cuadrícula: APPCC, Mi Portal, Conteo, Recepciones; fichar arriba | — (es la portada) | 2.37 portal (la portada, fase P) | **Se rehace**: la portada enseña el día (maquetas 1 y 2) |
+| **PortalEmpleado** | Lista de 9 botones | — | 2.37 portal | **Sobra**: la sustituyen las pestañas |
+| **FichajeEmpleado** | Fichar desde el móvil, con GPS, radio del local, aviso de contexto y salida anticipada | 687 fichajes no manuales en Foodint, del móvil, aunque digan `kiosko` (§4) | 8.2 fichaje desde el móvil, con distancia al local | **Se aprovecha**: es lo que mejor funciona. Se le añade el olvido de ayer (maqueta 1) |
+| **MisFichajes** | Marcas sueltas y «Reportar olvido / Corregir» | 6 peticiones de corrección | 8.1 ver mis fichajes · 8.3 y 3.24 pedir una corrección | **Se rehace** la vista (día a día, horas y minutos, total del mes, firma); **se aprovecha** la petición |
+| **MiHorario / MisTurnos** | La semana con total y «Solicitar cambio» | Solo lee | 8.7 turnos · 11.11 calendario laboral en su portal | **Se aprovecha** |
+| **CambiosTurnoPage** | Cambios de turno del trabajador | 0 | 8.7. **Sin número propio:** el cambio entre compañeros | **Se aprovecha** dentro de «Turnos» |
+| **MisVacaciones** | Pedir y ver vacaciones | 7 ausencias pedidas (4 Foodint, 3 Casa Lola) | 8.12 pedir ausencias · 3.13 vacaciones · 9.9 saldo | **Se rehace** como «Ausencias» (maqueta 2: saldo, festivos descontados, quién más libra) |
+| **MisDocumentos** | PDF de contrato y nóminas | 0 subidos en 60 días. 13 nóminas se llaman con el código del correo (§5) | 2.37 nóminas y certificados · 4.21 recibos al portal · 2.36 documentos | **Se rehace**: «Nóminas» explicadas y «Mi contrato» |
+| **MiBolsaHoras** | Saldo de horas del trabajador | Solo lee | 8.7 bolsa de horas | **Se aprovecha** dentro de «Fichar» |
+| **MiFormacion** | Cursos con firma | 21 intentos | 12.5 formación | **Se aprovecha** |
+| **MisChecklistsPage / MiAutoinventario** | APPCC y conteos | De operación, no de laboral | — (operación, no es de Laboral) | **Se aprovecha** en «Para hacer hoy» (maqueta 2) |
+| **MisAjustes** | Renunciar al aviso de olvido por WhatsApp | 11 personas sin aviso (todas de Casa Lola, la carga) | 11.8 desconexión digital · 8.4 aviso de olvido | **Se aprovecha** |
+| **LoginEmpleado** | Usuario y contraseña, o enlace de acceso | — | 2.37 portal · 10.12 usuarios | **Se aprovecha** |
 
 ### 1.3 · Las funciones (edge functions)
 
 | Pieza | Qué hace | Uso en 60 días | Función del inventario | Propuesta |
 |---|---|---|---|---|
-| **clockout-reminder** | Cada 10 min: detecta olvidos (`enqueue_clockout_reminders`) y manda el WhatsApp | 82 avisos encolados [Q1] | Aviso de olvido | **Se rehace la detección** (§3); el envío se aprovecha |
-| **manage-employee** | Crear, desactivar, reactivar y borrar el acceso; contraseña y enlace de acceso | 0 accesos creados [Q15] | Acceso al portal | **Se aprovecha** |
-| **payroll-extract** | Lee la nómina con IA, la comprueba por totales y la casa por DNI | 0 (13 en total) [Q16] | Nóminas de la gestoría | **Se aprovecha**, ampliando lo que lee (§5) |
-| **payroll-inbound** | Recibe el correo reenviado de la gestoría y pasa los PDF al extractor | 0 desde el 04/08 [Q16] | Nóminas de la gestoría | **Se aprovecha**; falta saber por qué dejó de recibir (§5) |
+| **clockout-reminder** | Cada 10 min: detecta olvidos (`enqueue_clockout_reminders`) y manda el WhatsApp | 82 avisos encolados [Q1] | 8.4 aviso de olvido | **Se rehace la detección** (§3); el envío se aprovecha |
+| **manage-employee** | Crear, desactivar, reactivar y borrar el acceso; contraseña y enlace de acceso | 0 accesos creados [Q15] | 2.37 acceso al portal · 10.12 usuarios y permisos | **Se aprovecha** |
+| **payroll-extract** | Lee la nómina con IA, la comprueba por totales y la casa por DNI | 0 (13 en total) [Q16] | L2 · 4.21 y 4.27. **Sin número propio:** leer la nómina de la gestoría | **Se aprovecha**, ampliando lo que lee (§5) |
+| **payroll-inbound** | Recibe el correo reenviado de la gestoría y pasa los PDF al extractor | 0 desde el 04/08 [Q16] | L2 · 4.27. **Sin número propio:** recibir el correo de la gestoría | **Se aprovecha**; falta saber por qué dejó de recibir (§5) |
 
 ### 1.4 · Las tablas
 
@@ -122,6 +123,26 @@ aparte. Folvy Interno (la plantilla) y Kitchen Grill no tienen nada.
 | `employee_notifications` | Avisos dentro del portal | 73 en 60 días | **Se aprovecha** |
 | `employee_formations` | Carnés con caducidad | 0 | **Sobra** hasta que alguien la use; la caducidad del carné de manipulador sí la quiere la ficha |
 | `documents` | Contratos y nóminas en PDF | 34 (11 contratos, 23 nóminas) | **Se aprovecha**, con el bucket cerrado (§6) |
+
+### 1.5 · Lo que Folvy hace y el inventario no numera
+
+Al casar la columna salen funciones que Folvy tiene, que la gente usa o
+configura, y que `sumied_laboral_inventario.md` no recoge con número propio.
+Con la regla de Julio («que nadie le falte ninguna opción»), conviene darles
+número antes de la L1:
+
+| Función de hoy | Dónde está | Lo más cercano del inventario |
+|---|---|---|
+| Quién está trabajando ahora, frente al cuadrante | Ahora mismo | 8.1 y 8.7 |
+| Publicar un turno libre y que alguien lo coja | Turnos abiertos | 1.10 y 8.7 |
+| Cambio de turno entre compañeros, con aprobación | Cambios de turno (empresa y portal) | 8.7 |
+| Disponibilidad de cada persona (qué días puede) | Disponibilidad | 1.10 |
+| Cuánta gente necesita cada turno (coberturas) | Plantilla de turnos | 1.10 |
+| Previsión de personal desde las ventas | Predicción de personal | 9.18 |
+| Leer la nómina de la gestoría, comprobarla y casarla por DNI | Nóminas, `payroll-extract` y `payroll-inbound` | La fase L2 la describe, pero ningún número la recoge (4.21 y 4.27 son lo de después) |
+| Qué ve cada trabajador en su portal (bolsa, nocturnas, coste, avisos) | `worker_portal_visibility` | 10.12, de lejos |
+| Permisos del encargado pantalla por pantalla | `managerPermissionsService` | 10.12 |
+| Radio y modo del fichaje por local (bloquear o avisar), salida anticipada y avisos de contexto al fichar | Fichar (portal y kiosko) | 8.2 dice «con distancia al local», sin el resto |
 
 ---
 
@@ -176,7 +197,7 @@ Desde el 01/08 hay **497 salidas** en Foodint [Q6]:
 
 | Cómo llegó la salida | N | Quién y por qué vía | ¿Rastro con antes y después? |
 |---|---|---|---|
-| Fichada en su momento, sin tocar | 446 | La persona, desde el móvil o la tablet | No hace falta |
+| Fichada en su momento, sin tocar | 446 | La persona, desde su móvil (la etiqueta dice `kiosko`: §4) | No hace falta |
 | **Añadida a mano** (`source='manual'`) | **10** | 4 por **petición del trabajador** aprobada por un administrador; 6 **directas del administrador** desde Control horario o la ficha [Q7] | **Sí**: `create_manual` con motivo y quién (`actor_user_id`, rol admin). El «antes» no existe (no había marca) |
 | Fichada y **cambiada después** | 40 | **7 salidas con la hora movida por un administrador** desde la app: 8 cambios (7 directos con motivo, 1 por petición), 43 min hacia atrás de media (6 de 8 hacia atrás). **Las otras 33**, solo el saneamiento del 07/08, sin mover la hora [Q5, Q6b] | **Sí**: antes y después |
 | Anuladas | 3 | Administrador o saneamiento | **Sí** |
@@ -219,7 +240,7 @@ nocturnas, festivos y ausencias. Excluye bien lo anulado. Le falta:
 | Le falta | Por qué es necesario | Qué hace falta |
 |---|---|---|
 | Cada corrección con quién, cuándo y por qué, con la marca original al lado | La maqueta lo pone en cada fila; es lo primero que pregunta un inspector | Leer `clock_entry_audit` y `clock_correction_request` y pintarlas. Los datos existen desde junio |
-| «Cómo se registró» cada marca | Ídem | Llega con el arreglo del §4 para lo nuevo; lo antiguo sale «sin distinguir» |
+| «Cómo se registró» cada marca | Ídem | Llega con el arreglo del §4 para lo nuevo. Lo antiguo de Foodint, «Móvil del trabajador (deducido)»; el de otras cuentas, «sin distinguir» (§4) |
 | Las marcas añadidas sin pasar por la auditoría | Hoy son invisibles | Marcar como «añadida después» toda marca con `created_at` muy posterior a su hora, y cerrar la puerta (L1) |
 | Horas ordinarias y extra según convenio | La maqueta las separa | Hoy solo hay el total y la diferencia con el contrato (`compute_employee_balance`) |
 | Por local o para todos, y en hoja de cálculo | La Inspección lo pide por centro de trabajo | Hoy es una persona y un mes, solo en PDF |
@@ -338,12 +359,22 @@ y 23 `manual`; ninguno dice `movil` [Q14]. `buildClockEntry` escribía siempre
 | Pista | Qué dice | Cuántos (Foodint) [Q14] |
 |---|---|---|
 | `scheduled` (turno teórico) relleno | **Móvil seguro.** La tablet nunca pasa el calendario a `buildClockEntry`, y sin calendario `getTheoreticalShift` devuelve vacío | 429 de 1.478 |
-| Puntos GPS distintos al mes | Una tablet fija daría 1 o 2 puntos por local. Hay entre 16 y 34 puntos distintos (a 100 m) cada mes: **la mayoría es del móvil** | 186 puntos a 11 m en total; el más repetido, 390 fichajes (la red del local da la misma posición a todos los móviles) |
+| Puntos GPS distintos | Una tablet fija daría 1 o 2 puntos por local. Hay entre 16 y 34 puntos distintos (a 100 m) cada mes, y 18 en los últimos 30 días, de 5 personas [Q21]: **es el móvil** | 186 puntos a 11 m en total; el más repetido, 390 fichajes (la red del local da la misma posición a todos los móviles) |
+| Las tablets de Foodint | Las tres que se conectan son estaciones de cocina; ninguna está en modo kiosko [Q21] | 0 kioskos |
 | `address` «Sin ubicación…» | No distingue: lo ponen las dos pantallas | 49 |
 
-Mi propuesta es que el informe diga «Tablet o móvil (sin distinguir)» para todo
-lo antiguo. Se puede decir «Móvil (deducido del turno teórico)» para los 429
-seguros, siempre con la palabra «deducido». No reescribiría nada.
+**Corrección (27/10, tarde).** La primera versión de esta sección trataba lo
+antiguo como «sin distinguir» y daba por posible que parte fuera de la tablet.
+Era apoyarse en la etiqueta. **En Foodint todo lo antiguo es del móvil:** lo dice
+Julio, que sabe cómo fichan, y lo confirman las dos últimas filas de la tabla.
+
+Mi propuesta, entonces:
+- **En Foodint**, que el informe diga «Móvil del trabajador (antes del 27/10,
+  deducido)» para lo antiguo. La palabra «deducido» se queda, porque la base no
+  lo guardó.
+- **En otra cuenta**, «Tablet o móvil (sin distinguir)», salvo que se pueda
+  deducir igual. Casa Lola, por ejemplo, es una carga de datos sin GPS.
+- **No se reescribe nada en la base.**
 
 ---
 
@@ -404,7 +435,7 @@ nota el líquido.
 | Salario | `employees.salary`, `payroll_cost`, PDF de nóminas | 22 fichas con salario; 13 nóminas | **Cualquier usuario activo de la cuenta, también los trabajadores** [Q19] |
 | DNI | `employees.dni`, `payroll_inbox.read_dni`, PDF | 22 fichas | Ídem |
 | Fecha de nacimiento, teléfono | `employees` | 10 / 22 | Ídem |
-| PIN del kiosko | `employees.pin`, **en claro** | 20 | Ídem: un trabajador puede leer el PIN de un compañero y fichar por él en la tablet |
+| PIN del kiosko | `employees.pin`, **en claro** | 20 | Ídem: un trabajador puede leer el PIN de un compañero y fichar por él en la tablet (Foodint no usa la tablet: §4) |
 | Foto del fichaje | `clock_entries.photo_data_url` | **0** (nadie la usa) | — |
 | Ubicación | `clock_entries.lat/lng` | 1.429 fichajes de Foodint | Cualquier usuario de la cuenta |
 | Bajas médicas (dato de salud) | `vacations.type = 'baja_medica'` | 2 en Foodint | Cualquier usuario de la cuenta |
@@ -512,7 +543,7 @@ Para que no se pierda al construir la L1:
 3. **La bolsa de horas con cierres de mes** y la **exportación a la gestoría**
    (`exportGestoriaService`).
 4. **El kiosko de la tablet con PIN**, para locales donde no se ficha con el
-   móvil.
+   móvil. Foodint no lo usa, pero otro cliente puede necesitarlo.
 5. **El radio y el modo del fichaje por local** (`clock_radius_m`,
    `clock_geofence_mode`: bloquear o avisar), la **salida anticipada** marcada,
    y los **avisos de contexto** al fichar (jornada muy larga, entrada a hora
@@ -538,8 +569,9 @@ Para que no se pierda al construir la L1:
 
 1. **Cerrar el bucket de documentos** (riesgo 1, abajo). No se puede construir
    «Mi contrato» ni «La nómina explicada» encima de un bucket público.
-2. **Leer el inventario** (`sumied_laboral_inventario.md`) para casar las
-   funciones con su número. Desde esta sesión no se puede.
+2. ~~Leer el inventario para casar las funciones con su número.~~ Hecho: la
+   columna del §1 lleva el número, y lo que no lo tiene está en «Lo que Folvy
+   hace y el inventario no numera».
 3. **Decidir el modelo de permisos** (quién lee qué): la ficha nueva no se puede
    diseñar sin saber qué ve el trabajador y qué el encargado.
 4. **La función de fichar en el servidor** (`fichar()`), antes que la pantalla
@@ -572,7 +604,8 @@ Para que no se pierda al construir la L1:
    anonimización (RGPD art. 5.1.e). El registro de jornada sí debe guardarse 4
    años; la ubicación, no tanto.
 7. **El PIN del kiosko en claro**: permite fichar por otro en la tablet. Es un
-   riesgo para la fiabilidad del registro, no una brecha por sí mismo.
+   riesgo para la fiabilidad del registro, no una brecha por sí mismo. En
+   Foodint no se usa la tablet (§4).
 8. **No hay informe para la Inspección con las correcciones a la vista** (§2.4):
    los datos existen, pero hoy habría que sacarlos a mano.
 
@@ -830,4 +863,16 @@ select policyname, roles, cmd from pg_policies where schemaname='storage' and po
 select ((storage.foldername(name))[1] = '_inbox') de_la_bandeja, count(*), min(created_at)::date, max(created_at)::date
 from storage.objects where bucket_id='employee-documents' group by 1;
 -- fichas: 22 (22/05 – 19/07) · bandeja de nóminas: 13 (09/07 – 04/08)
+```
+
+**Q21 · Desde dónde ficha Foodint (añadida el 27/10 por la tarde)**
+```sql
+with k as (select * from clock_entries where account_id='51ad1792-6629-4ef7-833a-b57b09a86710' and source='kiosko')
+select count(*) filter (where created_at > now()-interval '30 days') ult30,
+ count(*) filter (where created_at > now()-interval '30 days' and lat is not null) ult30_gps,
+ count(distinct (round(lat::numeric,3), round(lng::numeric,3))) filter (where created_at > now()-interval '30 days') puntos_100m,
+ count(distinct employee_id) filter (where created_at > now()-interval '30 days') personas,
+ (select string_agg(distinct device_mode, ',') from kds_device d where d.account_id='51ad1792-6629-4ef7-833a-b57b09a86710') modos_tablet
+from k;
+-- 354 · 345 · 18 · 5 · estacion (ninguna tablet en modo kiosko)
 ```
