@@ -113,7 +113,6 @@ Deno.serve(async (req: Request) => {
     "capabilities[transfers][requested]": "true",
     "capabilities[bizum_payments][requested]": "true",
     "business_profile[mcc]": "5812",
-    "business_profile[url]": "https://example.com",
     "business_profile[product_description]": "Restaurante (sonda de prueba)",
     "individual[first_name]": "Sonda",
     "individual[last_name]": "Prueba",
