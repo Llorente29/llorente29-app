@@ -40,8 +40,10 @@ declare
   l1  constant uuid := 'f01b0000-0000-4000-8000-0000000000e1';
   r jsonb; n jsonb;
 begin
-  insert into public.external_integration (account_id, source, external_org_id, organization_name, ownership_type, is_active)
-  values (a, 'lastapp', org, 'Cuenta de Last de prueba (F01b)', 'own', true);
+  -- Una integración de Last pide el nombre del secreto de su token
+  -- (external_integration_source_shape_chk). Sin secreto detrás: nada aquí llama a Last.
+  insert into public.external_integration (account_id, source, external_org_id, organization_name, ownership_type, is_active, token_secret_name)
+  values (a, 'lastapp', org, 'Cuenta de Last de prueba (F01b)', 'own', true, 'e2e_last_token_prueba');
   insert into public.external_location_map (account_id, source, external_location_id, location_id, is_active)
   values (a, 'lastapp', l1::text, 'c01a0000-0000-4000-8000-0000000000a2', true);
   insert into public.external_catalog_product (account_id, source, external_org_id, catalog_product_id, organization_product_id,
