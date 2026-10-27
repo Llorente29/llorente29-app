@@ -57,3 +57,28 @@ describe('agente «Libro diario» · libros y balances (C05)', () => {
     expect(t).not.toContain('**En verde**')
   })
 })
+
+// Respuesta 3 al V04 (27/10) · Las recibidas, en el libro, van en su periodo de
+// deducción (RIVA art. 64), como las cuenta el 303 (0290): «deducida en» o, si
+// no, el de su recepción; y solo lo deducible, que es lo que va a la 472. Con la
+// fecha de la factura y la cuota entera, el 27/10 daba dos rojos en Foodint que
+// no lo eran (una de Carrefour del 06/08 recibida el 01/10, y 6,07 € de Orange
+// no deducibles, que van a la 628).
+describe('libro_diario · las recibidas, como el 303', () => {
+  const sqlLibros = readFileSync('scripts/conta/agente-libros.sql', 'utf8')
+  const trozo = sqlLibros.slice(sqlLibros.indexOf("'libro_diario'"), sqlLibros.indexOf("'cerrado_con_asientos'"))
+  it('el periodo: «deducida en» o la fecha de recepción; las emitidas, la de la factura', () => {
+    expect(trozo).toMatch(/when lb\.libro = 'issued' then v\.issue_date/)
+    expect(trozo).toMatch(/v\.deduction_period ~ '\^\[1-4\]T\$'/)
+    expect(trozo).toMatch(/else coalesce\(v\.received_date, v\.issue_date\) end\) between t\.desde and t\.hasta/)
+  })
+  it('la cuota: lo deducible en las recibidas, la entera en las emitidas', () => {
+    expect(trozo).toMatch(/case when lb\.libro = 'issued' then v\.tax_amount else coalesce\(v\.deductible_amount, v\.tax_amount\) end/)
+  })
+  it('la misma regla que el 303 (0290)', () => {
+    const m0290 = readFileSync('supabase/migrations/20261124T0290_i01c_deducida.sql', 'utf8')
+    expect(m0290).toContain("coalesce(v.deduction_period, extract(quarter from coalesce(v.received_date, v.issue_date))::int || 'T') per")
+    expect(m0290).toContain('coalesce(v.deductible_amount, v.tax_amount) ded')
+  })
+})
+
