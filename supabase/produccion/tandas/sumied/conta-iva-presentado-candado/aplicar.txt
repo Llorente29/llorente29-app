@@ -1,0 +1,19 @@
+# V04 · Respuesta 5 · PR 1 · El candado del IVA. Rama conta/iva-presentado-candado.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1233 — AÑADE conta_iva_presentado (el único sitio que decide si el IVA
+#      de un día está presentado), su mensaje, el primer día abierto y sin
+#      presentar, y conta_iva_presentados (para las pantallas). PONE tres
+#      disparadores (journal_entry, journal_line y vat_book_entry) que paran
+#      validar, anular, cambiar o mover un asiento con IVA de un periodo con el
+#      303 presentado, y crear, cambiar o borrar su libro. CAMBIA EN CALIENTE
+#      _journal_entry_proponer (con su respaldo, byte a byte): una recibida que
+#      llega tarde se propone en el primer día abierto, con el aviso.
+#      · Medido en producción: 0 asientos de Sumied con IVA en un periodo
+#        presentado. Hoy el candado no para nada de lo que hay.
+#      · Ni el camino del pedido ni nada que destruya.
+#
+# AUTORIZO: no hace falta (lo dice el analizador). Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261027T1233_v04_iva_presentado_candado.sql
+cuenta: scripts/conta/produccion/cuentas/v04-iva-candado.sql

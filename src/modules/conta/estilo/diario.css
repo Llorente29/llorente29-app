@@ -211,3 +211,11 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
   .cxd-expedida-con-papel { grid-template-columns: minmax(0, 1fr); }
   .cxd-expedida-con-papel > .cxd-expedida-papel { position: static; }
 }
+
+/* V04 · Respuesta 5 · El candado del IVA presentado (ui/CandadoIva.tsx). */
+.cx-candado-iva { display: inline-flex; align-items: center; gap: 4px; color: var(--cx-apoyo); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.cx-solo-lector { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.cx-franja-iva span, .cx-franja-tardia span { display: inline-flex; align-items: flex-start; gap: 6px; }
+.cx-franja-tardia { background: var(--cx-azul-suave); color: var(--cx-texto); }
+/* V04 (1408) · Lo cambiado con el periodo reabierto, en el diario. */
+.cx-franja-reabierto { background: var(--cx-azul-suave); color: var(--cx-texto); }

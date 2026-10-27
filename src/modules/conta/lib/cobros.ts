@@ -246,24 +246,79 @@ export function devolucionesQueCuadran(cargoCent: number, recibos: readonly Reci
     .sort((a, b) => a.gastosCent - b.gastosCent)
 }
 
-// ── El correo del mandato ───────────────────────────────────────────────────
+// ── PC01 · Entrega 4 · Los recordatorios ────────────────────────────────────
 
-/** El correo que se abre: el asunto y el texto, con el enlace para firmar. */
-export function correoDelMandato(o: { cliente: string; empresa: string | null; ref: string; enlace: string; caduca: string }): { asunto: string; cuerpo: string } {
-  const de = o.empresa ? ` de ${o.empresa}` : ''
-  return {
-    asunto: `Mandato de domiciliación ${o.ref}${de}`,
-    cuerpo: [
-      'Hola:',
-      '',
-      `Para cobraros las facturas${de} por domiciliación bancaria necesitamos el mandato SEPA firmado (referencia ${o.ref}).`,
-      'Se firma en un minuto desde el móvil, sin crear cuenta: solo hace falta el nombre de quien firma y el IBAN donde queréis que se carguen los recibos.',
-      '',
-      o.enlace,
-      '',
-      `El enlace vale hasta el ${o.caduca.split('-').reverse().join('/')}.`,
-      '',
-      'Gracias.',
-    ].join('\n'),
+/** Por qué una factura no lleva recordatorios (la base lo decide: _pc01e4_sin_recordatorio). */
+export type SinRecordatorio = 'cobrada' | 'plataforma' | 'domiciliada' | 'en_remesa' | 'apagados' | 'cliente' | 'sin_vencimiento' | 'sin_correo'
+export interface RecordatoriosFactura { id: string; enviados: number; ultimo: string | null; proximo: string | null; sin: SinRecordatorio | null; noSalio: { toca: string; motivo: string | null } | null }
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+/** La columna «Recordatorios» de Cobros, como en el tablero: «3 enviados · próximo 01/11», «no hacen falta», «con enlace · abierta 2 veces»… */
+export function textoRecordatorios(r: RecordatoriosFactura | null | undefined, enlace?: { aperturas: number } | null): string {
+  if (enlace && (!r || r.sin === null || r.sin === 'cliente' || r.sin === 'apagados' || r.sin === 'sin_correo')) {
+    const n = enlace.aperturas
+    return `con enlace · ${n === 0 ? 'sin abrir' : `abierta ${n} ${n === 1 ? 'vez' : 'veces'}`}`
   }
+  if (!r) return '—'
+  const enviados = r.enviados ? `${r.enviados} ${r.enviados === 1 ? 'enviado' : 'enviados'}` : null
+  switch (r.sin) {
+    case 'plataforma': case 'domiciliada': case 'en_remesa': return 'no hacen falta'
+    case 'apagados': return enviados ? `${enviados} · apagados` : 'apagados'
+    case 'cliente': return enviados ? `${enviados} · apagados para este cliente` : 'apagados para este cliente'
+    case 'sin_correo': return 'sin correo del cliente'
+    case 'sin_vencimiento': return 'sin vencimiento'
+    case 'cobrada': return enviados ?? '—'
+  }
+  const proximo = r.proximo ? `próximo ${ddmm(r.proximo)}` : null
+  return [enviados, proximo].filter(Boolean).join(' · ') || 'ya no quedan'
 }
+
+/** Los días de los recordatorios, en palabras: «3 días antes, el día que vence y a los 7 y 15 días». */
+export function textoDias(dias: readonly number[]): string {
+  const orden = [...new Set(dias)].sort((a, b) => a - b)
+  const antes = orden.filter((d) => d < 0).map((d) => -d).sort((a, b) => a - b)
+  const despues = orden.filter((d) => d > 0)
+  const y = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`)
+  const partes: string[] = []
+  if (antes.length) partes.push(`${y(antes.map(String))} ${antes.length === 1 && antes[0] === 1 ? 'día' : 'días'} antes`)
+  if (orden.includes(0)) partes.push('el día que vence')
+  if (despues.length) partes.push(`a los ${y(despues.map(String))} ${despues.length === 1 && despues[0] === 1 ? 'día' : 'días'}`)
+  return y(partes)
+}
+
+/** Lo que se escribe en el campo de los días («-3, 0, 7, 15»), leído; null si algo no es un número entero. */
+export function leerDias(texto: string): number[] | null {
+  const xs = texto.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean)
+  if (!xs.length || xs.some((x) => !/^[-+]?\d{1,3}$/.test(x))) return null
+  return [...new Set(xs.map(Number))].sort((a, b) => a - b)
+}
+
+// ── PC01 · Entrega 4 · Cómo te pagan: tarjeta y Bizum, por Stripe ──────────
+
+/** El estado de un método de pago, como lo guarda la base (conta_cobro_stripe). */
+export type EstadoMetodoPago = 'activo' | 'falta_alta' | 'revisando'
+export interface CobroStripe { tarjeta: EstadoMetodoPago; bizum: EstadoMetodoPago; bizumEncendido: boolean; pendiente: number; modo: 'prueba' | 'real' }
+
+/** El estado en palabras de la calle (nada de «capacidad», «v2» ni «Connect»). */
+export function textoMetodoPago(e: EstadoMetodoPago | null): string {
+  if (e === 'activo') return 'Activo'
+  if (e === 'revisando') return 'Stripe está revisando'
+  return 'Falta tu alta en Stripe'
+}
+
+/** El único botón de «Cómo te pagan»: lleva al alta de Stripe; con todo activo, no hace falta. */
+export function botonAltaStripe(c: CobroStripe | null): string | null {
+  if (!c) return 'Darte de alta en Stripe'
+  if (c.tarjeta === 'activo' && c.bizum === 'activo') return null
+  if (c.tarjeta === 'falta_alta' || c.bizum === 'falta_alta') return 'Terminar tu alta en Stripe'
+  return 'Ver tu alta en Stripe'
+}
+
+/** La frase de Bizum para la ficha de Cobros mientras no esté activo. Null si lo está. */
+export function avisoBizum(c: CobroStripe | null): string | null {
+  if (c?.bizum === 'activo') return null
+  if (c?.bizum === 'revisando') return 'Bizum: Stripe está revisando tu alta.'
+  return 'Bizum: falta terminar el alta en Stripe.'
+}
+

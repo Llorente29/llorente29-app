@@ -19,7 +19,7 @@ import {
   ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, devolucionSinCobrar, liquidacionPlataforma, facturaProveedor, deLaFacturaDeLote, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
   type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
-import { avisoPeriodoCerrado, diaAbierto, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
+import { avisoPeriodoCerrado, diaAbierto, diaDeEntrada, fechaDeLaRecibida, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
 import { tandaDeDias } from '@/modules/conta/lib/proponer'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
 import { ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
@@ -638,7 +638,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   // D03 · 0790: lo que guarda la ficha (el gasto repartido y el asiento a mano). Mientras
   // la base no lo tenga (staging antes de aplicarla), se lee lo de siempre.
-  const SELECT = 'id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
+  const SELECT = 'id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, created_at, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
   // D07b · 'pagada' también: una factura pagada en el banco antes de validarla (COHELDI T0626/657,
   // EUROPASTRY 2403975) está aprobada y sin asiento; sin ella aquí, su ficha decía «Estoy
   // comprobando la cuenta y el IVA» para siempre y no se podía validar.
@@ -675,21 +675,29 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     if (deLiquidacion.has(String(f.id))) continue
     const sup = String(f.supplier_id); const prov = (f.supplier ?? {}) as Fila
     const fechaFactura = String(f.invoice_date)
-    let fecha = fechaFactura
+    // V04 (Julio, 27/10): nunca antes del día en que entró, aunque el mes esté abierto.
+    const entrada = fechaDeLaRecibida(fechaFactura, diaDeEntrada(s(f.created_at)))
+    let fecha = entrada.fecha
+    // Que entró después no es una duda: va en sus razones, sin bajar la confianza (lo seguro se sigue apuntando solo).
+    let razonEntrada = entrada.aviso
     let avisoFecha: string | null = null
-    if (!abierto(fechaFactura)) {
+    if (!abierto(fecha)) {
       // D07b (Julio, 23/10): la de un periodo cerrado se asienta el PRIMER DÍA
       // ABIERTO, conserva su fecha de factura (el libro de IVA la lleva) y su
       // IVA va al periodo del asiento; un aviso ámbar dice las dos fechas. Solo
       // al mirarla o validarla una a una (o en bloque): la tanda de pendientes
       // no las arrastra, como siempre (lo traído de Diez ya está allí).
-      const fp = soloFactura || ver ? fechaPropuesta(fechaFactura, ctx.calendario) : { fecha: null, aviso: null }
+      const fp = soloFactura || ver ? fechaPropuesta(fecha, ctx.calendario) : { fecha: null, aviso: null }
       if (!fp.fecha) {
         if (soloFactura || ver) r.sinPropuesta.push({ id: String(f.id), que: `Factura${f.invoice_number ? ` ${String(f.invoice_number)}` : ''}`, porque: fp.aviso ?? 'Su fecha cae en un periodo cerrado o antes del primer día abierto: no se apunta ahí.' })
         continue
       }
+      // Entró en un periodo cerrado: el primer día abierto desde ese día, y lo dice.
+      razonEntrada = null
+      avisoFecha = entrada.aviso
+        ? `Esta factura entró el ${entrada.fecha.slice(8, 10)}/${entrada.fecha.slice(5, 7)}: se contabiliza el ${fp.fecha.slice(8, 10)}/${fp.fecha.slice(5, 7)}, el primer día abierto.`
+        : avisoPeriodoCerrado(fechaFactura, fp.fecha)
       fecha = fp.fecha
-      avisoFecha = avisoPeriodoCerrado(fechaFactura, fp.fecha)
     }
     let cuentaProv = ctx.enlace('supplier', sup, 'principal')
     let gasto = ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null)
@@ -784,6 +792,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
         porque: `${nombreProv} no tenía cuenta contable: ${ver ? 'al validar, le creo' : 'le he creado'} la siguiente libre de la ${cuentaNueva.hoja} (${cuentaNueva.hoja === '4000' ? 'proveedores' : 'acreedores'}) y queda en su ficha` })
     }
     if (avisoFecha) { res.propuesta.avisos.push(avisoFecha); res.propuesta.confianza = peor(res.propuesta.confianza, 'probable') }
+    if (razonEntrada) {
+      res.propuesta.razones.push({ decision: razonEntrada,
+        porque: `Una factura recibida no se contabiliza antes del día en que entró: su IVA se deduce desde ese día, y así el asiento y su IVA caen en el mismo trimestre. Su fecha de factura (${fechaFactura.split('-').reverse().join('/')}) no cambia` })
+    }
     if (clase === 'intracomunitaria' && ficha.vies !== 'valid') {
       res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
       res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')

@@ -1,0 +1,11 @@
+# V04 · Respuesta 5, punto 3 · Reabrir para corregir. La 1408 cambia en caliente
+# conta_iva_presentado y conta_iva_presentados y pone disparadores en
+# journal_entry, journal_line, vat_book_entry y tax_return: desde la rama, solo
+# en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos: quién reabre (B no, el encargado no, el
+# administrador con motivo sí, dos veces no), la original intacta y la nueva
+# nº 2; reabierto se propone, valida y anula en el periodo y queda marcado; las
+# pantallas; apuntar la nueva y que vuelva a cerrarse; el aviso a los 30 días;
+# y la vuelta atrás (para con reaperturas; sin ellas, byte a byte).
+supabase/migrations/20261027T1408_v04_iva_reabrir.sql
+supabase/staging/sql/20261027_v04_iva_reabrir_prueba.sql

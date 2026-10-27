@@ -443,3 +443,14 @@
 @media (max-width: 767px) {
   .s-trimestre-perceptores-campos { grid-template-columns: 1fr; }
 }
+
+/* V04 (1408) · Reabrir para corregir: la reapertura en rojo, las dos presentaciones y «Más». */
+.s-trimestre-reabrir { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.s-trimestre-reabierto { border: 1px solid var(--s-falta); border-radius: 8px; padding: 10px 12px; }
+.s-trimestre-reabierto-titulo { color: var(--s-falta); margin: 0 0 4px; }
+.s-trimestre-presentaciones { margin: 4px 0; padding-left: 18px; }
+.s-trimestre-mas > summary { cursor: pointer; }
+.s-trimestre-mas[open] > summary { margin-bottom: 8px; }
+.s-trimestre-solo-una { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.s-trimestre-entendido { display: flex; gap: 8px; align-items: flex-start; }
+.s-trimestre-reabierto-cabeza { margin: 0; font-size: var(--s-t-s); color: var(--s-falta); font-weight: 600; }

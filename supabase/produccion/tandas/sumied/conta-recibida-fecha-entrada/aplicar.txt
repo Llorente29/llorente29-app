@@ -1,0 +1,17 @@
+# V04 · Respuesta 6, punto 2 · La recibida nunca se asienta antes del día en que entró.
+# Rama conta/recibida-fecha-entrada. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1350 — AÑADE _conta_recibida_no_antes_de_entrar y CAMBIA EN CALIENTE
+#      _journal_entry_proponer (con su respaldo, byte a byte): la propuesta de
+#      una factura recibida con fecha anterior al día en que entró se asienta
+#      ese día (o el primer día abierto y sin presentar desde él), con «Esta
+#      factura entró el 01/10: se contabiliza el 01/10.» La fecha de la
+#      factura no se toca. Lo ya asentado, tampoco.
+#      · Medido en producción: 90 de las 95 recibidas validadas de Foodint
+#        tienen el asiento antes del día en que entraron (mismo mes; no se tocan).
+#      · Ni el camino del pedido ni nada que destruya.
+#
+# AUTORIZO: no hace falta (lo dice el analizador). Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261027T1350_v04_recibida_fecha_entrada.sql
+cuenta: scripts/conta/produccion/cuentas/v04-recibida-entrada.sql
