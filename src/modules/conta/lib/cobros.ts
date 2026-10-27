@@ -85,9 +85,20 @@ export const NOMBRE_ESTADO: Record<EstadoCobro, string> = {
   cobrada_parte: 'Cobrada en parte', vence_semana: 'Vence esta semana', por_cobrar: 'Por cobrar',
 }
 
-/** El chip del estado (tablero cobros-1): rojo vencida o devuelto, ámbar lo que pide algo, verde lo que va solo. */
-export function chipEstado(f: FilaCobro): { texto: string; tono: 'falta' | 'duda' | 'seguro' | 'neutro' } {
+/** S01 · De una factura cobrada por el enlace de pago: con quién, y si su abono ya llegó al banco (conta_cobros_abonos). */
+export interface AbonoCobro { proveedor: 'stripe' | 'redsys'; cobrado: string | null; abonado: string | null }
+
+/**
+ * El chip del estado (tablero cobros-1): rojo vencida o devuelto, ámbar lo que pide algo, verde lo que va solo.
+ * S01 · Cobrada por el enlace: «Cobrado · pendiente del abono» hasta que Bancos casa el abono de Stripe o del
+ * TPV; después, «Cobrado · abonado el 05/11».
+ */
+export function chipEstado(f: FilaCobro, abono?: AbonoCobro | null): { texto: string; tono: 'falta' | 'duda' | 'seguro' | 'neutro' } {
   const e = estadoCobro(f)
+  if (e === 'cobrada' && abono) {
+    return abono.abonado ? { texto: `Cobrado · abonado el ${abono.abonado.slice(8, 10)}/${abono.abonado.slice(5, 7)}`, tono: 'seguro' }
+      : { texto: 'Cobrado · pendiente del abono', tono: 'neutro' }
+  }
   if (e === 'vencida') return { texto: `Vencida · ${f.diasVencida ?? 0} ${f.diasVencida === 1 ? 'día' : 'días'}`, tono: 'falta' }
   if (e === 'devuelto') return { texto: `Devuelto${f.devuelto?.motivo ? ` · ${f.devuelto.motivo}` : ''}`, tono: 'falta' }
   if (e === 'en_remesa') return { texto: `En la remesa ${f.remesa!.codigo}`, tono: 'seguro' }
@@ -322,3 +333,46 @@ export function avisoBizum(c: CobroStripe | null): string | null {
   return 'Bizum: falta terminar el alta en Stripe.'
 }
 
+
+// ── S01 · Cómo te pagan: el TPV del banco (Redsys) ──────────────────────────
+
+/** El estado del TPV, como lo da la base (conta_cobro_redsys_leer). */
+export type EstadoRedsys = 'falta_comercio' | 'falta_clave' | 'pruebas' | 'activo'
+export interface CobroRedsys {
+  estado: EstadoRedsys; comercio: string | null; terminal: string; conClave: boolean; bizum: boolean; enEnlace: boolean
+  modo: 'prueba' | 'real'; cobra: boolean; proveedorEnlace: 'stripe' | 'redsys' | null; cambiado: { at: string | null; por: string | null } | null
+}
+
+/** El estado del TPV en palabras: «Activo», «Falta el número de comercio», «Falta la clave del comercio», «En pruebas». */
+export function textoRedsys(c: CobroRedsys | null): string {
+  if (!c || c.estado === 'falta_comercio') return 'Falta el número de comercio'
+  if (c.estado === 'falta_clave') return 'Falta la clave del comercio'
+  if (c.estado === 'pruebas') return 'En pruebas'
+  return 'Activo'
+}
+export const tonoRedsys = (c: CobroRedsys | null): 'seguro' | 'duda' | 'falta' => (c?.estado === 'activo' ? 'seguro' : c?.estado === 'pruebas' ? 'duda' : 'falta')
+
+/** La nota del TPV debajo de su estado (null si no hace falta decir nada). */
+export function notaRedsys(c: CobroRedsys | null): string | null {
+  if (!c) return 'Pon el número de comercio, el terminal y la clave que te da tu banco con el TPV virtual. Sumied guarda la clave en su caja fuerte y no la vuelve a enseñar.'
+  if (c.estado === 'pruebas' && !c.cobra) return 'Aún en pruebas: tus clientes no pagan por aquí hasta que lo abramos para tu empresa.'
+  if (c.estado === 'pruebas') return 'En pruebas: los pagos van al entorno de pruebas de Redsys y no mueven dinero.'
+  if (c.estado === 'activo' && c.proveedorEnlace === 'stripe') return 'El enlace de pago cobra ahora por Stripe.'
+  return null
+}
+
+/** El número de comercio, como lo escribe el banco («999 008 881»): ¿son 9 cifras? Null si vale; si no, qué falla. */
+export function errorComercio(texto: string): string | null {
+  const x = texto.replace(/\s/g, '')
+  if (!x) return null
+  return /^\d{9}$/.test(x) ? null : 'El número de comercio son 9 cifras.'
+}
+export function errorTerminal(texto: string): string | null {
+  return /^\s*\d{1,3}\s*$/.test(texto) ? null : 'El terminal es un número de 1 a 3 cifras (casi siempre, 1).'
+}
+/** La clave SHA-256 del TPV: 32 letras, números, «+» o «/». Vacía: se queda la guardada. */
+export function errorClave(texto: string): string | null {
+  const x = texto.trim()
+  if (!x) return null
+  return /^[A-Za-z0-9+/]{32}$/.test(x) ? null : 'La clave son 32 letras y números (la «clave SHA-256» del TPV virtual, en el panel de tu banco).'
+}
