@@ -1,0 +1,191 @@
+{
+  "cuando": "2026-10-27T11:17:06Z",
+  "desde": "función de staging-conta (sonda PC01 E4)",
+  "ok": true,
+  "modo_prueba": true,
+  "plataforma": {
+    "pais": "ES",
+    "moneda": "eur",
+    "capacidades_bizum": {
+      "bizum_payments": "active"
+    },
+    "version_de_la_cuenta": "2026-06-24.dahlia"
+  },
+  "alta": {
+    "creada": true,
+    "version": "2026-06-24.dahlia",
+    "intentos": [
+      {
+        "version": "2026-06-24.dahlia",
+        "creada": true
+      }
+    ]
+  },
+  "capacidades": {
+    "todas": {
+      "card_payments": "inactive",
+      "transfers": "inactive"
+    },
+    "cobros_activos": false,
+    "pendiente": [
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url"
+    ],
+    "deshabilitada_por": "requirements.past_due"
+  },
+  "pedir_bizum": {
+    "ok": true,
+    "estado": "inactive",
+    "pedida": true,
+    "le_falta": [
+      "business_profile.mcc",
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url",
+      "business_type",
+      "company.tax_id",
+      "representative.address.city",
+      "representative.address.line1",
+      "representative.address.postal_code",
+      "representative.dob.day",
+      "representative.dob.month",
+      "representative.dob.year",
+      "representative.email",
+      "representative.first_name",
+      "representative.last_name",
+      "representative.nationality",
+      "representative.phone",
+      "tos_acceptance.date",
+      "tos_acceptance.ip"
+    ],
+    "vencidos": [
+      "business_profile.mcc",
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url",
+      "business_type",
+      "company.tax_id",
+      "representative.address.city",
+      "representative.address.line1",
+      "representative.address.postal_code",
+      "representative.dob.day",
+      "representative.dob.month",
+      "representative.dob.year",
+      "representative.email",
+      "representative.first_name",
+      "representative.last_name",
+      "representative.nationality",
+      "representative.phone",
+      "tos_acceptance.date",
+      "tos_acceptance.ip"
+    ],
+    "deshabilitada_por": "requirements.fields_needed",
+    "errores": []
+  },
+  "bizum_despues": {
+    "estado": "inactive",
+    "le_falta": [
+      "business_profile.mcc",
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url",
+      "business_type",
+      "company.tax_id",
+      "representative.address.city",
+      "representative.address.line1",
+      "representative.address.postal_code",
+      "representative.dob.day",
+      "representative.dob.month",
+      "representative.dob.year",
+      "representative.email",
+      "representative.first_name",
+      "representative.last_name",
+      "representative.nationality",
+      "representative.phone",
+      "tos_acceptance.date",
+      "tos_acceptance.ip"
+    ]
+  },
+  "configuraciones": [
+    {
+      "nombre": "Default",
+      "activa": true,
+      "por_defecto": true,
+      "bizum": {
+        "disponible": false,
+        "preferencia": {
+          "overridable": true,
+          "preference": "off",
+          "value": "off"
+        }
+      },
+      "tarjeta": {
+        "disponible": true,
+        "preferencia": {
+          "overridable": true,
+          "preference": "on",
+          "value": "on"
+        }
+      }
+    },
+    {
+      "nombre": "Default",
+      "activa": true,
+      "por_defecto": true,
+      "bizum": {
+        "disponible": false,
+        "preferencia": {
+          "overridable": null,
+          "preference": "off",
+          "value": "off"
+        }
+      },
+      "tarjeta": {
+        "disponible": true,
+        "preferencia": {
+          "overridable": null,
+          "preference": "on",
+          "value": "on"
+        }
+      }
+    }
+  ],
+  "cobros": {
+    "cobro_bizum": {
+      "ok": true,
+      "estado": "requires_action",
+      "metodos": [
+        "bizum"
+      ],
+      "siguiente": "await_authorization"
+    },
+    "automaticos": {
+      "metodos": [
+        "card",
+        "bancontact",
+        "eps",
+        "ideal",
+        "klarna",
+        "link"
+      ],
+      "bizum": false
+    },
+    "sesion_bizum": {
+      "ok": true,
+      "metodos": [
+        "bizum"
+      ]
+    },
+    "sesion_tarjeta_y_bizum": {
+      "ok": true,
+      "metodos": [
+        "card",
+        "bizum"
+      ]
+    }
+  },
+  "borrada": {
+    "borrada": true
+  }
+}

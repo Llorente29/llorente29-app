@@ -17,11 +17,12 @@ import { useApp } from '../context/AppContext'
 import { Button, Card } from '../components/ui'
 import type { Employee, Location, KioskoConfig } from '../types'
 import {
-  employeesForKiosko, hasOpenShift, nextClockType, checkPin,
+  employeesForKiosko, hasOpenShift, nextClockType,
   getCurrentPosition, buildClockEntry,
   loadKioskoConfig, saveKioskoConfig, defaultKioskoConfig,
   coordsForLocation, distanceMeters,
 } from '../services/fichajeKiosko'
+import { conPinDeKiosko, comprobarPinDeKiosko } from '../services/kioskoPinService'
 import { mensajeDeFalloDeFichaje } from '../services/supabaseSync'
 
 type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'warn-confirm' | 'success' | 'error'
@@ -72,6 +73,19 @@ export default function KioskoFichajePage() {
     return employeesForKiosko(staff, config.locationId)
   }, [staff, config])
 
+  // L00 (27/10/2026): el PIN ya no llega al cliente. Quién tiene PIN se
+  // pregunta al servidor; si la pregunta falla, se deja teclear y el servidor
+  // decide al comprobarlo.
+  const [conPin, setConPin] = useState<Set<string> | null>(null)
+  useEffect(() => {
+    let cancel = false
+    setConPin(null)
+    conPinDeKiosko(employeesAvail)
+      .then(s => { if (!cancel) setConPin(s) })
+      .catch(err => console.error('[kiosko] quién tiene PIN:', err))
+    return () => { cancel = true }
+  }, [employeesAvail])
+
   // Volver al inicio tras 4s en pantallas finales
   useEffect(() => {
     if (step === 'success' || step === 'error') {
@@ -89,7 +103,7 @@ export default function KioskoFichajePage() {
   }
 
   function selectEmployee(emp: Employee) {
-    if (!emp.pin) {
+    if (conPin && !conPin.has(emp.id)) {
       setResultMsg(`${emp.name} no tiene PIN asignado. Pide al encargado que lo configure.`)
       setStep('error')
       return
@@ -117,15 +131,26 @@ export default function KioskoFichajePage() {
   // Validar PIN cuando llega a 4 dígitos
   useEffect(() => {
     if (pin.length === 4 && selectedEmp) {
-      if (checkPin(selectedEmp, pin)) {
-        doClockAction()
-      } else {
-        setPinError('PIN incorrecto')
-        setTimeout(() => {
-          setPin('')
-          setPinError('')
-        }, 1200)
-      }
+      let cancel = false
+      comprobarPinDeKiosko(selectedEmp, pin)
+        .then(bueno => {
+          if (cancel) return
+          if (bueno) {
+            doClockAction()
+          } else {
+            setPinError('PIN incorrecto')
+            setTimeout(() => {
+              setPin('')
+              setPinError('')
+            }, 1200)
+          }
+        })
+        .catch(err => {
+          if (cancel) return
+          setPinError(err instanceof Error ? err.message : 'No se ha podido comprobar el PIN.')
+          setTimeout(() => { setPin(''); setPinError('') }, 2500)
+        })
+      return () => { cancel = true }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pin])

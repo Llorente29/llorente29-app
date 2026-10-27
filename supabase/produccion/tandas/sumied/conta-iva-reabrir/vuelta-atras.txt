@@ -1,0 +1,4 @@
+# V04 · Respuesta 5, punto 3 · vuelta atrás de «Reabrir para corregir»: las dos
+# funciones del candado como en la 1233 (byte a byte), sin tablas, disparadores
+# ni cron. PARA si ya hay alguna reapertura: no se deshace a ciegas.
+supabase/vuelta-atras/20261027T1408_v04_iva_reabrir.down.sql

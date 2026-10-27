@@ -48,6 +48,9 @@ import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuen
 import { cuantas } from '@/modules/conta/lib/plural'
 import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
 import { conImpuesto } from '@/modules/conta/lib/impuestoIndirecto'
+import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
+import { mesPresentado, textosCandado, type PeriodoPresentado } from '@/modules/conta/lib/ivaPresentado'
+import { CandadoIva } from '@/modules/conta/diseno/CandadoIva'
 
 type Vista = 'issued' | 'received' | 'intracomunitarias'
 const TITULO: Record<Vista, string> = { issued: 'Facturas expedidas', received: 'Facturas recibidas', intracomunitarias: 'Operaciones intracomunitarias' }
@@ -81,6 +84,15 @@ export function RegistroIva({ libro }: { libro: Vista }) {
   const pedido = useSearchParams()[0].get('periodo')
   const [periodo, setPeriodo] = useState(() => (delTrimestre(ps, pedido) ?? ps.find((p) => p.desde <= hoy && hoy <= p.hasta) ?? ps[0]).id)
   const p = ps.find((x) => x.id === periodo) ?? ps[0]
+  // V04 · El candado del IVA: el periodo elegido, si su 303 está presentado (un trimestre, o sus tres meses).
+  const iva = useIvaPresentado(L.companyId, [Number(L.ejercicio.inicio.slice(0, 4)), Number(L.ejercicio.fin.slice(0, 4))])
+  const cerrado = (x: { id: string; desde: string; hasta: string }): PeriodoPresentado | null => {
+    if (x.id === 'año') return null
+    const meses = [x.desde.slice(0, 7), x.hasta.slice(0, 7)]
+    const deCada = meses.map((m) => mesPresentado(m, iva.presentados))
+    return deCada.every(Boolean) ? deCada[1] : null
+  }
+  const candado = cerrado(p)
   const [f, setF] = useState<FiltrosLibro & { importe?: string }>({})
   const [porNif, setPorNif] = useState(false)
   const [completando, setCompletando] = useState<AnotacionLibro | null>(null)
@@ -126,9 +138,14 @@ export function RegistroIva({ libro }: { libro: Vista }) {
     <section className="cxl-pagina" aria-label={TITULO[libro]}>
       {encabezado}
       <ControlesInforme>
-        <FiltroSelector etiqueta="Periodo" valor={periodo} alCambiar={setPeriodo} opciones={ps.map((x) => ({ valor: x.id, texto: x.nombre }))} />
+        <FiltroSelector etiqueta="Periodo" valor={periodo} alCambiar={setPeriodo} opciones={ps.map((x) => ({ valor: x.id, texto: cerrado(x) ? `${x.nombre} · IVA presentado` : x.nombre }))} />
       </ControlesInforme>
       <Guardado texto={hecho} />
+      {candado && (
+        <p className="cxl-apoyo" role="status" data-prueba="libro-iva-presentado">
+          <CandadoIva {...textosCandado(candado)} /> · Sus anotaciones ya no cambian: solo se completan su número, su NIF o su nombre, que no son su IVA. Lo que llegue tarde va {/^[1-4]T/.test(candado.siguiente) ? `al ${candado.siguiente}` : `a ${candado.siguiente}`}.
+        </p>
+      )}
 
       {!vistas && <div className="s-lista-cargando" aria-busy="true" aria-label="Cargando el libro" />}
       {vistas && (

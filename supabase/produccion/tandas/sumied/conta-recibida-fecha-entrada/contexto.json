@@ -1,0 +1,8 @@
+{
+ "_que": "V04 · Respuesta 6, punto 2 · la recibida, no antes del día en que entró (1350). Contexto de producción medido en SOLO LECTURA el 27/10 a las 12:5xZ con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: de lo que toca la 1350 existe _journal_entry_proponer (la de la 1233, huella 7d7680b9, sin otra firma y fuera del camino del pedido); _conta_recibida_no_antes_de_entrar no existe. Nada en el historial.",
+ "medido": "2026-10-27T12:56Z",
+ "tanda": {
+  "supabase/migrations/20261027T1350_v04_recibida_fecha_entrada.sql": "f373c48385786b09852ac26ebb09d003"
+ },
+ "contexto": {"tablas":[],"funciones":["public._journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text,uuid)"],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

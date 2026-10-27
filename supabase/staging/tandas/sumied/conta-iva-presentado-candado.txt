@@ -1,0 +1,13 @@
+# V04 · Respuesta 5 · PR 1 · El candado del IVA. La 1233 cambia en caliente
+# _journal_entry_proponer y pone disparadores en journal_entry, journal_line y
+# vat_book_entry: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos (regla 10): validar, anular, cambiar y
+# mover un asiento con IVA de un periodo presentado, sus apuntes y su libro,
+# todos PARAN con el mensaje; lo que no es su IVA se completa; la recibida
+# tardía se propone sola en el periodo abierto con su aviso y su libro la
+# registra ahí; la expedida para; mensual; permisos; y la vuelta atrás.
+# Y la semilla de F-2026-0915 (Respuesta 5, punto 5): entró el 24/09, y su
+# libro la registra ese día (asiento e IVA en el mismo trimestre).
+supabase/migrations/20261027T1233_v04_iva_presentado_candado.sql
+supabase/staging/sql/20261027_v04_iva_presentado_candado_prueba.sql
+supabase/seeds/conta/seed_v04_0915_entro_el_24_staging.sql
