@@ -22,6 +22,7 @@ select clave, valor from (
     ((to_regclass('public.conta_cobro_redsys') is not null)::int + (to_regclass('public.conta_enlace_pago_intento') is not null)::int
      + (to_regclass('public.conta_redsys_aviso') is not null)::int)::text valor union all
   select 2, 'filas en las tablas de Redsys',
+    -- quieta: nacen con la tanda y solo se escriben al guardar un TPV o al pagar por él; en producción no hay ninguna empresa con Redsys y conta-redsys aún no está desplegada
     case when to_regclass('public.conta_cobro_redsys') is null then 'no existe'
          else (xpath('/row/n/text()', query_to_xml('select (select count(*) from public.conta_cobro_redsys) + (select count(*) from public.conta_enlace_pago_intento)
                                                     + (select count(*) from public.conta_redsys_aviso) n', false, true, '')))[1]::text end union all
@@ -40,12 +41,16 @@ select clave, valor from (
     (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
        and p.proname in ('conta_enlace_pago_para', 'conta_enlace_pago_ver', 'conta_enlace_pago_datos', 'conta_enlace_pago_cobrado'))::text union all
   select 7, 'claves de Redsys en Vault',
+    -- quieta: solo las escribe conta_cobro_redsys_guardar, que nace con la tanda; nadie guarda un TPV durante el ensayo (conta-redsys aún no está desplegada)
     (select count(*) from vault.secrets where name like 'conta\_redsys:%')::text union all
   select 8, 'cobros por el enlace (tabla entera)',
+    -- quieta: el cobro con tarjeta está apagado en producción (0 cuentas de Stripe, STRIPE_COBRO_REAL vacío): ningún enlace se cobra
     (select count(*) from public.conta_enlace_pago where status = 'pagado')::text union all
   select 9, 'asientos de cobro por el enlace (customer_payment, tabla entera)',
+    -- quieta: solo los escriben las funciones de la tanda al cobrar por el enlace, y el cobro está apagado en producción
     (select count(*) from public.journal_entry where source_type = 'customer_payment')::text union all
   select 10, 'cuentas de pasarela (tesorería «pasarela», tabla entera)',
+    -- quieta: solo las crea _s01_cuenta_pasarela (nace con la tanda) con el primer cobro por el enlace, y el cobro está apagado en producción
     (select count(*) from public.treasury_account where kind = 'pasarela')::text union all
   select 11, 'copia previa de la 2238 (conta_s01_cobros_antes)',
     case when to_regclass('public.conta_s01_cobros_antes') is null then 'no existe'

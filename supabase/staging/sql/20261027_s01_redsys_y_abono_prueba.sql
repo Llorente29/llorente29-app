@@ -62,15 +62,26 @@ do $$ begin
   end if;
 end $$;
 set local statement_timeout = '180s';
+-- Los cerrojos, de golpe, al principio y siempre en el mismo orden (como la
+-- vuelta atrás de la 1408): las tablas a las que apuntan las claves ajenas
+-- nuevas y las tres que cambian. Si una e2e está clonando su carril a la vez,
+-- se espera a que acabe en vez de chocar con ella (el ensayo 680 y la e2e 994
+-- del 27/10 se bloquearon el uno al otro, a la vez, en company).
+set local lock_timeout = '120s';
+lock table public.accounts, public.company, public.company_account, public.bank_match in share row exclusive mode;
+lock table public.conta_enlace_pago, public.treasury_account, public.journal_entry in access exclusive mode;
 
 -- Lo de antes: las cuatro funciones del enlace tal como las dejó la 1121.
 create temp table _md5 (fn text primary key, antes text) on commit drop;
 insert into _md5 select p.proname, md5(p.prosrc) from pg_proc p
  where p.pronamespace = 'public'::regnamespace and p.proname in ('conta_enlace_pago_para', 'conta_enlace_pago_ver', 'conta_enlace_pago_datos', 'conta_enlace_pago_cobrado');
 -- La 2031 solo va en ROLLBACK (cambia), y su vuelta atrás restaura desde el
--- respaldo que guarda ella misma: no se pasa aquí. La 2030 sí se quita antes,
--- por si el ensayo de la rama la hubiera pasado de verdad.
+-- respaldo que guarda ella misma: no se pasa aquí. La 2030 se quita antes solo
+-- si ya estuviera en staging de verdad.
+select to_regclass('public.conta_cobro_redsys') is not null as ya_esta_la_2030 \gset
+\if :ya_esta_la_2030
 \i supabase/vuelta-atras/20261027T2030_s01_redsys_y_abono.down.sql
+\endif
 do $$ begin
   if to_regclass('public.conta_cobro_redsys') is not null or (select count(*) from _md5) <> 4 then
     raise exception 'PRUEBA S01 REDSYS · 0: staging no está como antes de la 2030 (o le falta la 1121).';
