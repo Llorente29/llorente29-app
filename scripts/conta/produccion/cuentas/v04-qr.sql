@@ -7,7 +7,7 @@
 -- Lo que tiene que cambiar: las columnas de Verifactu del tique y el tramo
 -- (0 → 10 de 10), el fabricante (0 → 1), el disparador y el cron (0 → 1), y las
 -- huellas de las cinco funciones que cambian. Lo demás, igual: los pedidos y
--- los tiques de Foodint hasta el corte, ningún registro de Verifactu nuevo, y
+-- los tiques de Foodint hasta el corte, los registros de Verifactu hasta el corte, y
 -- las funciones del camino que la 0741 usa.
 select clave, valor from (
   select 1 o, 'pedidos de Foodint hasta el corte (propias / cedidas)' clave,
@@ -25,8 +25,8 @@ select clave, valor from (
     (select count(*) from unnest(array['verifactu_sistema']) t where to_regclass('public.' || t) is not null)::text union all
   select 5, 'el disparador de la venta y el cron del reintento',
     (select count(*) from pg_trigger where tgname = 'ticket_tras_venta')::text || ' y ' || (select count(*) from cron.job where jobname = 'ticket-verifactu-pendientes')::text union all
-  select 6, 'registros de Verifactu (base entera)',
-    (select count(*) from public.verifactu_registro)::text union all
+  select 6, 'registros de Verifactu hasta el corte (base entera)',
+    (select count(*) from public.verifactu_registro where generado_at < timestamptz '2026-10-27 06:00:00+00')::text union all
   select 7, 'huella de las cinco funciones que cambian',
     (select string_agg(p.proname || ' ' || left(md5(pg_get_functiondef(p.oid)), 8), ', ' order by p.proname) from pg_proc p
       where p.pronamespace = 'public'::regnamespace and p.proname in ('fiscal_for_print', 'fiscal_for_preview', '_ticket_invoice_number', 'ticket_invoice_ajustes', 'verifactu_modo')) union all
