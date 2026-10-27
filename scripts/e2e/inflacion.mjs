@@ -10,8 +10,15 @@
 //
 // Con --tiempos escribe, en vez de la tabla, un tiempos.json nuevo con lo de
 // este run (para cuando la suite cambie mucho).
+//
+// Con --nuevos <salida.json> (27/10, Respuesta 2 al V04): los ficheros de este
+// run que aún no tienen tiempo en tiempos.json, medidos con la misma vara. Los
+// pinta en una tabla y escribe en <salida.json> el tiempos.json de hoy con
+// ellos dentro, para cambiarlo de un golpe en un commit que solo toque ese
+// fichero. Así un PR con una e2e nueva no apunta nada en ningún sitio: la
+// entera la mide y propone sacarla de «sin medir».
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { tiemposDelRepo } from './trozos.mjs'
 
 export function porFichero(informe) {
@@ -28,6 +35,15 @@ export function porFichero(informe) {
   return t
 }
 
+/** Lo de este run que no tenía tiempo: { nuevos: {fichero: s}, propuesto: tiempos.json con ellos }. */
+export function nuevos(ahora, antes) {
+  const n = {}
+  for (const k of Object.keys(ahora).sort()) if (typeof antes[k] !== 'number' && ahora[k] > 0) n[k] = Math.round(ahora[k] * 10) / 10
+  const propuesto = { ...antes, ...n }
+  const orden = Object.keys(propuesto).sort((a, b) => (a.startsWith('_') === b.startsWith('_') ? a.localeCompare(b) : a.startsWith('_') ? -1 : 1))
+  return { nuevos: n, propuesto: Object.fromEntries(orden.map((k) => [k, propuesto[k]])) }
+}
+
 export function comparar(ahora, antes) {
   const filas = Object.keys(ahora).filter((f) => typeof antes[f] === 'number' && antes[f] > 0)
     .map((f) => ({ f, antes: antes[f], ahora: ahora[f], x: ahora[f] / antes[f] }))
@@ -39,8 +55,21 @@ export function comparar(ahora, antes) {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const informe = JSON.parse(readFileSync(process.argv[2], 'utf8'))
   const ahora = porFichero(informe)
-  if (process.argv.includes('--tiempos')) {
-    const o = { _: tiemposDelRepo()._ }
+  const iNuevos = process.argv.indexOf('--nuevos')
+  if (iNuevos > 0) {
+    const r = nuevos(ahora, tiemposDelRepo())
+    writeFileSync(process.argv[iNuevos + 1], JSON.stringify(r.propuesto, null, 1) + '\n')
+    const k = Object.keys(r.nuevos)
+    console.log(`### Medidos ahora, que no tenían tiempo (${k.length})\n`)
+    if (!k.length) console.log('Ninguno: todo lo que ha corrido ya tenía su tiempo en tests/e2e/tiempos.json.')
+    else {
+      console.log('| fichero | s, los dos tamaños |'); console.log('|---|---:|')
+      for (const f of k) console.log(`| ${f} | ${r.nuevos[f].toFixed(1)} |`)
+      console.log('\nPara sacarlos de «sin medir»: el artefacto «tiempos-propuestos» es tests/e2e/tiempos.json con ellos dentro. Va en un commit que solo cambia ese fichero.')
+    }
+  } else if (process.argv.includes('--tiempos')) {
+    const viejo = tiemposDelRepo()
+    const o = Object.fromEntries(Object.keys(viejo).filter((k) => k.startsWith('_')).map((k) => [k, viejo[k]]))
     for (const k of Object.keys(ahora).sort()) o[k] = Math.round(ahora[k] * 10) / 10
     console.log(JSON.stringify(o, null, 1))
   } else {
