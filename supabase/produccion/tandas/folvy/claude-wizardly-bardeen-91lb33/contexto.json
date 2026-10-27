@@ -1,0 +1,25 @@
+{
+  "_que": "L00 · contexto de producción de la tanda (1112), medido otra vez en SOLO LECTURA el 27/10 a las 13:47Z, con la 1215 (#354) ya aplicada. Existen public.clock_entries (2168 filas, todas las cuentas) con clock_entries_source_check (kiosko, movil, manual) y tg_clock_entry_debounce (una firma, huella 72f6807d, sin cambios: la 1215 no la toca). Los disparadores de clock_entries son ahora clock_entry_audit_alta (diferido, de la 1215), clock_entry_audit_aud, trg_clock_a_quien_y_hora (de la 1215), trg_clock_debounce, trg_clock_entry_orden y trg_fill_acc. Ni la tabla ni la función están en el camino del pedido; ningún cron las llama; nada de la tanda en el historial. Antes (11:13Z): las mismas medidas con 2167 filas y sin los dos disparadores de la 1215.",
+  "medido": "2026-10-27T13:47Z",
+  "tanda": {
+    "supabase/migrations/20261027T1112_l00_origen_del_fichaje.sql": "36489858822a0a039b9fdbad6713a71a"
+  },
+  "contexto": {
+    "tablas": [
+      "public.clock_entries"
+    ],
+    "funciones": [
+      "public.tg_clock_entry_debounce()"
+    ],
+    "filas": {
+      "public.clock_entries": 2168
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

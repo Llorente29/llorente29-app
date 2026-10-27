@@ -12,6 +12,7 @@ import {
   fetchCorrectionRequests, fetchClockAudit,
   type ClockCorrectionRequest, type ClockEntryAudit, type ClockType,
 } from '../services/clockEditService'
+import { etiquetaOrigen } from '../services/fichajeKiosko'
 
 const DEFAULT_RADIUS_M = 200
 
@@ -221,7 +222,7 @@ export default function FichajesGlobalPage() {
                     {e.voided && <Badge color="gray" className="ml-1">anulado</Badge>}
                     {!e.voided && e.roundingApplied && <Badge color="yellow" className="ml-1">redondeado</Badge>}
                     {!e.voided && !e.roundingApplied && (e.diffMinutes || 0) > 10 && <Badge color="red" className="ml-1">+{e.diffMinutes}min</Badge>}
-                    {e.source === 'manual' && <Badge color="gray" className="ml-1">manual</Badge>}
+                    <p className="text-xs text-text-secondary">{etiquetaOrigen(e.source)}</p>
                   </td>
                   <td className="p-3 text-xs text-text-secondary hidden sm:table-cell">{e.scheduled || '—'}</td>
                   <td className="p-3 text-xs hidden sm:table-cell">

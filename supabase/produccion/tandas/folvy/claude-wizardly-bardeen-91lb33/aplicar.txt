@@ -1,0 +1,18 @@
+# L00 · Laboral, fase L0 · punto 4: el origen del fichaje.
+# Rama claude/wizardly-bardeen-91lb33. Se ensaya y se aplica desde esta rama,
+# antes de fusionar (el front nuevo escribe 'tablet', que la base de hoy rechaza).
+#
+#   1. 1112 — CAMBIA en caliente, sin tocar datos:
+#      · clock_entries_source_check admite 'tablet' (solo amplía; se quita y se
+#        vuelve a poner con el mismo nombre, ~2.200 filas).
+#      · tg_clock_entry_debounce (el freno del doble toque, misma firma) frena
+#        también 'movil' y 'tablet', no solo 'kiosko'. Guardada antes con
+#        _respaldar_funcion.
+#      Declaradas en su cabecera, con su prueba de staging. No está en el
+#      camino del pedido.
+#
+# Sin «autorizo»: no toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261027T1112_l00_origen_del_fichaje.sql
+cuenta: scripts/conta/produccion/cuentas/l00-origen-del-fichaje.sql
