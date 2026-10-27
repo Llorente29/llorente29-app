@@ -1,5 +1,5 @@
 {
-  "cuando": "2026-10-27T11:03:13Z",
+  "cuando": "2026-10-27T11:17:06Z",
   "desde": "función de staging-conta (sonda PC01 E4)",
   "ok": true,
   "modo_prueba": true,
@@ -8,71 +8,184 @@
     "moneda": "eur",
     "capacidades_bizum": {
       "bizum_payments": "active"
-    }
+    },
+    "version_de_la_cuenta": "2026-06-24.dahlia"
   },
-  "altas": {
-    "con_bizum": {
-      "v1": {
-        "creada": false,
-        "status": 400,
-        "tipo": "invalid_request_error",
-        "codigo": null,
-        "parametro": null,
-        "mensaje": "With a dashboard type of `express`, the Connect application must control losses."
+  "alta": {
+    "creada": true,
+    "version": "2026-06-24.dahlia",
+    "intentos": [
+      {
+        "version": "2026-06-24.dahlia",
+        "creada": true
+      }
+    ]
+  },
+  "capacidades": {
+    "todas": {
+      "card_payments": "inactive",
+      "transfers": "inactive"
+    },
+    "cobros_activos": false,
+    "pendiente": [
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url"
+    ],
+    "deshabilitada_por": "requirements.past_due"
+  },
+  "pedir_bizum": {
+    "ok": true,
+    "estado": "inactive",
+    "pedida": true,
+    "le_falta": [
+      "business_profile.mcc",
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url",
+      "business_type",
+      "company.tax_id",
+      "representative.address.city",
+      "representative.address.line1",
+      "representative.address.postal_code",
+      "representative.dob.day",
+      "representative.dob.month",
+      "representative.dob.year",
+      "representative.email",
+      "representative.first_name",
+      "representative.last_name",
+      "representative.nationality",
+      "representative.phone",
+      "tos_acceptance.date",
+      "tos_acceptance.ip"
+    ],
+    "vencidos": [
+      "business_profile.mcc",
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url",
+      "business_type",
+      "company.tax_id",
+      "representative.address.city",
+      "representative.address.line1",
+      "representative.address.postal_code",
+      "representative.dob.day",
+      "representative.dob.month",
+      "representative.dob.year",
+      "representative.email",
+      "representative.first_name",
+      "representative.last_name",
+      "representative.nationality",
+      "representative.phone",
+      "tos_acceptance.date",
+      "tos_acceptance.ip"
+    ],
+    "deshabilitada_por": "requirements.fields_needed",
+    "errores": []
+  },
+  "bizum_despues": {
+    "estado": "inactive",
+    "le_falta": [
+      "business_profile.mcc",
+      "business_profile.product_description",
+      "business_profile.support_phone",
+      "business_profile.url",
+      "business_type",
+      "company.tax_id",
+      "representative.address.city",
+      "representative.address.line1",
+      "representative.address.postal_code",
+      "representative.dob.day",
+      "representative.dob.month",
+      "representative.dob.year",
+      "representative.email",
+      "representative.first_name",
+      "representative.last_name",
+      "representative.nationality",
+      "representative.phone",
+      "tos_acceptance.date",
+      "tos_acceptance.ip"
+    ]
+  },
+  "configuraciones": [
+    {
+      "nombre": "Default",
+      "activa": true,
+      "por_defecto": true,
+      "bizum": {
+        "disponible": false,
+        "preferencia": {
+          "overridable": true,
+          "preference": "off",
+          "value": "off"
+        }
       },
-      "v2": {
-        "creada": false,
-        "intentos": [
-          {
-            "version": null,
-            "status": 400,
-            "tipo": null,
-            "codigo": null,
-            "parametro": null,
-            "mensaje": "You did not provide an API version. You need to provide an API version header. Learn more at https://stripe.com/docs/api-v2-overview#sdk-and-api-versioning. For the list of valid versions, see https://docs.stripe.com/changelog"
-          },
-          {
-            "version": "2025-08-27.preview",
-            "status": 400,
-            "tipo": null,
-            "codigo": "invalid_fields",
-            "parametro": null,
-            "mensaje": "Some fields in the request were invalid: 'configuration.merchant.capabilities.bizum_payments: Unknown field, did you mean blik_payments, link_payments, zip_payments?'"
-          }
-        ]
+      "tarjeta": {
+        "disponible": true,
+        "preferencia": {
+          "overridable": true,
+          "preference": "on",
+          "value": "on"
+        }
       }
     },
-    "sin_bizum": {
-      "v1": {
-        "creada": false,
-        "status": 400,
-        "tipo": "invalid_request_error",
-        "codigo": null,
-        "parametro": null,
-        "mensaje": "With a dashboard type of `express`, the Connect application must control losses."
+    {
+      "nombre": "Default",
+      "activa": true,
+      "por_defecto": true,
+      "bizum": {
+        "disponible": false,
+        "preferencia": {
+          "overridable": null,
+          "preference": "off",
+          "value": "off"
+        }
       },
-      "v2": {
-        "creada": false,
-        "intentos": [
-          {
-            "version": null,
-            "status": 400,
-            "tipo": null,
-            "codigo": null,
-            "parametro": null,
-            "mensaje": "You did not provide an API version. You need to provide an API version header. Learn more at https://stripe.com/docs/api-v2-overview#sdk-and-api-versioning. For the list of valid versions, see https://docs.stripe.com/changelog"
-          },
-          {
-            "version": "2025-08-27.preview",
-            "status": 400,
-            "tipo": null,
-            "codigo": "account_controller_unsupported_configuration",
-            "parametro": null,
-            "mensaje": "This account configuration is not supported. Please reference https://docs.stripe.com/connect/customized-integration-guide."
-          }
-        ]
+      "tarjeta": {
+        "disponible": true,
+        "preferencia": {
+          "overridable": null,
+          "preference": "on",
+          "value": "on"
+        }
       }
     }
+  ],
+  "cobros": {
+    "cobro_bizum": {
+      "ok": true,
+      "estado": "requires_action",
+      "metodos": [
+        "bizum"
+      ],
+      "siguiente": "await_authorization"
+    },
+    "automaticos": {
+      "metodos": [
+        "card",
+        "bancontact",
+        "eps",
+        "ideal",
+        "klarna",
+        "link"
+      ],
+      "bizum": false
+    },
+    "sesion_bizum": {
+      "ok": true,
+      "metodos": [
+        "bizum"
+      ]
+    },
+    "sesion_tarjeta_y_bizum": {
+      "ok": true,
+      "metodos": [
+        "card",
+        "bizum"
+      ]
+    }
   },
-  "borradas": {}
+  "borrada": {
+    "borrada": true
+  }
 }
