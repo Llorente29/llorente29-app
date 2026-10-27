@@ -43,7 +43,7 @@
 // ---------------------------------------------------------------------------
 
 import QRCode from 'qrcode'
-import { lineasFiscales } from './fiscalTique'
+import { lineasFiscales, PUNTOS_POR_MM, puntosPorModulo, QR_HACIENDA_MM, qrHacienda } from './fiscalTique'
 import { numeroGrande, passCode, type PassCode, type PassCodeInput } from '@/modules/orders/lib/passCode'
 import { allergenLabel, isAllergenCode } from '@/modules/kitchen/lib/allergens'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
@@ -473,6 +473,25 @@ export async function renderBagImage(order: any, fiscal?: any): Promise<HTMLCanv
   left('Pagos', 22, true)
   lr((order.payment_method || (order.channel ?? '').trim() || 'Pago') + ':', money(total), 22)
   y += 24
+
+  // V04 · PR 2 · El QR de Hacienda (solo con Verifactu en real), encima del de
+  // la tienda: de 30 a 40 mm, corrección M, módulo a módulo a un número entero
+  // de puntos (sin reescalar: cada módulo, nítido) y 2 mm en blanco alrededor.
+  const qrH = qrHacienda(fiscal)
+  if (qrH) {
+    const m = QRCode.create(qrH.url, { errorCorrectionLevel: 'M' }).modules
+    const p = puntosPorModulo(m.size)
+    if (p) {
+      rule()
+      center(qrH.encima, 22, true, 4)
+      const lado = m.size * p, x0 = Math.round((W - lado) / 2), margen = QR_HACIENDA_MM.margen * PUNTOS_POR_MM
+      y += margen
+      ctx.fillStyle = INK
+      for (let i = 0; i < m.size; i++) for (let j = 0; j < m.size; j++) if (m.get(i, j)) ctx.fillRect(x0 + j * p, y + i * p, p, p)
+      y += lado + margen
+      center(qrH.debajo, 24, true, 10)
+    }
+  }
 
   // QR de la marca
   if (order.brand_shop_url) {

@@ -21,7 +21,7 @@ import '@/modules/conta/estilo'
 import './facturasPedidos.css'
 import { Chip, ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import {
-  codigoNoVale, estadoLocal, facturaDeMarca, prefijo, textoVerifactu, ultimoTexto,
+  avisoFabricante, codigoNoVale, estadoLocal, facturaDeMarca, prefijo, textoQr, textoVerifactu, ultimoTexto,
   type AjustesFacturas, type LocalFacturas,
 } from './lib/facturasPedidos'
 import { cargarAjustesFacturas, guardarCodigoLocal } from './services/facturasPedidosService'
@@ -55,6 +55,8 @@ export default function FacturasPedidosPage() {
 
       {aviso && <p className="cx-fp-aviso" data-tono={aviso.ok ? 'ok' : 'falta'} role="status" data-testid="aviso-facturas">{aviso.texto}</p>}
 
+      {avisoFabricante(datos) && <p className="cx-fp-aviso" data-tono="falta" role="status" data-testid="aviso-fabricante">{avisoFabricante(datos)}</p>}
+
       <section className="cx-tarjeta cx-fp-verifactu" aria-label="Verifactu" data-testid="verifactu-estado">
         {datos.empresas.length === 0 && <p>Aún no hay ninguna empresa dada de alta en Sumied: los tiques llevan el nombre y el NIF de la cuenta.</p>}
         {datos.empresas.map((e) => {
@@ -65,7 +67,7 @@ export default function FacturasPedidosPage() {
               <div className="cx-fp-empresa-texto">
                 <Chip tono={t.tono}>{t.chip}</Chip>
                 <p>{t.frase}</p>
-                <p className="cx-fp-apoyo">El QR de Hacienda en el tique llega con la próxima entrega: hoy el tique lleva quién factura y su número.</p>
+                <p className="cx-fp-apoyo" data-testid="qr-del-tique">{textoQr(e)}</p>
               </div>
               <Link className="cx-boton" to={rutaConta('ajustes/verifactu')}>Ir a Sumied</Link>
             </div>

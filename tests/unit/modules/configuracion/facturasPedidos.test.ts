@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  codigoNoVale, estadoLocal, facturaDeMarca, leerAjustes, prefijo, textoVerifactu, ultimoTexto,
+  avisoFabricante, codigoNoVale, estadoLocal, facturaDeMarca, leerAjustes, prefijo, textoQr, textoVerifactu, ultimoTexto,
 } from '@/modules/configuracion/lib/facturasPedidos'
 
 const crudo = {
@@ -61,5 +61,26 @@ describe('V04 · Ajustes › Facturas de los pedidos', () => {
     expect(facturaDeMarca(a.marcas[0])).toEqual({ deQuien: 'Propia', suFactura: 'Nuestra serie, la del local que la prepara' })
     expect(facturaDeMarca(a.marcas[1])).toEqual({ deQuien: 'Cedida · CLOUDTOWN BRANDS SL', suFactura: 'La emite CLOUDTOWN BRANDS SL desde Last' })
     expect(facturaDeMarca({ ...a.marcas[1], emisor: null }).suFactura).toBe('La emite el socio desde Last')
+  })
+
+  it('V04 · PR 2: qué lleva el papel según Verifactu (el QR, solo en real)', () => {
+    expect(textoQr(a.empresas[0])).toMatch(/apagado, los tiques no van a Hacienda y salen sin QR/)
+    expect(textoQr({ ...a.empresas[0], verifactu: 'pruebas' })).toMatch(/entorno de pruebas.*el tique del cliente sale sin QR/)
+    expect(textoQr({ ...a.empresas[0], verifactu: 'real' })).toMatch(/lleva su QR, encima del de la tienda/)
+  })
+
+  it('V04 · PR 2: el aviso del fabricante de Sumied, y una base de antes no lo trae', () => {
+    expect(a.fabricanteFalta).toBe(false)
+    expect(avisoFabricante(a)).toBeNull()
+    const b = leerAjustes({ ...crudo, fabricante_falta: true })
+    expect(avisoFabricante(b)).toMatch(/^Falta quién fabrica Sumied .*no se puede pasar a real\.$/)
+  })
+
+  it('V04 · PR 2: el tramo B desde el paso a real, y los tiques pendientes de Verifactu', () => {
+    const b = leerAjustes({ ...crudo, locales: [{ ...crudo.locales[0], tramo: 'B', serie: 'CA26B-000001', ultimo: 7, verifactu_pendientes: 2 }] })
+    expect(b.locales[0].tramo).toBe('B')
+    expect(estadoLocal(b.locales[0])).toBe('Último número: CA26B-000007. Desde el paso a real va en el tramo B: así no repite ningún número de antes. 2 tiques tienen su registro de Verifactu pendiente: se reintenta cada 5 minutos.')
+    expect(a.locales[0].tramo).toBeNull()
+    expect(a.locales[0].verifactuPendientes).toBe(0)
   })
 })

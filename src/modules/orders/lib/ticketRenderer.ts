@@ -27,7 +27,7 @@ import { unidadesDeComponente } from '@/lib/unidadesDeComponente'
 import { passCode } from './passCode'
 import { direccionParaMostrar } from '@/lib/direccionEntrega'
 import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket'
-import { lineasFiscales, type FiscalTique } from '@/native/print/fiscalTique'
+import { lineasFiscales, qrHacienda, type FiscalTique } from '@/native/print/fiscalTique'
 
 // ── Modelo intermedio ───────────────────────────────────────────────────────
 
@@ -41,6 +41,7 @@ export type TicketBlock =
   | { kind: 'rule'; dashed?: boolean }               // línea separadora
   | { kind: 'space'; lines?: number }                // hueco vertical
   | { kind: 'qr'; data: string; caption?: string; size?: 'sm' | 'lg' }
+  | { kind: 'qrHacienda'; data: string; encima: string; debajo: string } // V04 · PR 2: el QR de Verifactu (real)
   | { kind: 'cut' }                                  // corte de papel (una etiqueta por ticket)
 
 export interface TicketDoc {
@@ -250,6 +251,13 @@ export function renderBagTicket(order: OrderFeedItem, fiscal?: FiscalTique | nul
   if (order.discount_amount) b.push({ kind: 'row', left: 'Descuento', right: '-' + money(order.discount_amount) })
   b.push({ kind: 'row', left: 'TOTAL', right: money(order.total), bold: true })
   if (order.payment_method) b.push({ kind: 'row', left: 'Pago', right: order.payment_method, muted: true })
+
+  // V04 · PR 2 · El QR de Hacienda (solo con Verifactu en real), encima del de la tienda.
+  const qrH = qrHacienda(fiscal)
+  if (qrH) {
+    b.push({ kind: 'rule', dashed: true })
+    b.push({ kind: 'qrHacienda', data: qrH.url, encima: qrH.encima, debajo: qrH.debajo })
+  }
 
   // QR a la shop (caption configurable por marca)
   if (order.brand_shop_url) {

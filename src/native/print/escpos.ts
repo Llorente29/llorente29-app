@@ -48,7 +48,7 @@ const sizeFor    = (b: Bytes, s: number) => {
 const sizeNormal = (b: Bytes) => b.push(GS, 0x21, 0x00);
 const cut        = (b: Bytes) => { lf(b, 4); b.push(GS, 0x56, 1); };
 
-function qr(b: Bytes, data: string, moduleSize = 6) {
+function qr(b: Bytes, data: string, moduleSize = 6, ecc = 51) {
   const store = new TextEncoder().encode(data || '');
   const len = store.length + 3;
   const pL = len & 0xff, pH = (len >> 8) & 0xff;
@@ -63,7 +63,8 @@ function qr(b: Bytes, data: string, moduleSize = 6) {
   // El repliegue a M (50) YA NO HACE FALTA: con la URL entera en mayusculas el QR
   // entra en modo alfanumerico y en ECC Q sale la MISMA version 3 que saldria en
   // M. Se conserva el 25 % de correccion al precio del 15 % (Julio, 04/09).
-  b.push(GS, 0x28, 0x6b, 3, 0, 49, 69, 51);
+  // V04 · PR 2: el QR de Hacienda va en M (50), como pide la AEAT (§6).
+  b.push(GS, 0x28, 0x6b, 3, 0, 49, 69, ecc);
   b.push(GS, 0x28, 0x6b, pL, pH, 49, 80, 48);
   for (let i = 0; i < store.length; i++) b.push(store[i]);
   b.push(GS, 0x28, 0x6b, 3, 0, 49, 81, 48);
@@ -194,6 +195,18 @@ export function renderDoc(doc: TicketDoc): Uint8Array {
         qr(b, blk.data ?? '', blk.size === 'sm' ? 6 : 7);
         lf(b);
         if (blk.caption) { boldOn(b); b.text(blk.caption); lf(b); boldOff(b); }
+        alignLeft(b);
+        break;
+      }
+      case 'qrHacienda': {
+        // V04 · PR 2: «QR tributario:», el QR (corrección M, de 30 a 40 mm: el
+        // módulo lo da puntosPorModulo) y «VERI*FACTU».
+        alignCtr(b);
+        if (blk.encima) { boldOn(b); b.text(blk.encima); lf(b); boldOff(b); }
+        lf(b);
+        qr(b, blk.data ?? '', Math.max(1, Math.min(16, Number(blk.modulo) || 6)), 50);
+        lf(b);
+        if (blk.debajo) { boldOn(b); b.text(blk.debajo); lf(b); boldOff(b); }
         alignLeft(b);
         break;
       }
