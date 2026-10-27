@@ -221,15 +221,15 @@ begin
   if coalesce(p_tipo, 'complementary') not in ('complementary', 'substitutive') then
     raise exception 'La nueva presentación es complementaria o sustitutiva.' using errcode = '22023';
   end if;
-  -- La última del periodo tiene que estar presentada, y nada reabierto ya.
+  -- Nada reabierto ya, y la última del periodo, presentada.
+  if exists (select 1 from public.vat_reopening o where o.company_id = r.company_id and o.fiscal_year = r.fiscal_year and o.period = r.period and o.closed_at is null) then
+    raise exception 'El % de % ya está reabierto para corregir.', public.conta_iva_periodo_nombre(r.period, r.fiscal_year, false), r.fiscal_year using errcode = '23505';
+  end if;
   select * into v_ultima from public.tax_return
    where company_id = r.company_id and form_code = '303' and fiscal_year = r.fiscal_year and period = r.period
    order by sequence desc limit 1;
   if v_ultima.status not in ('filed', 'booked', 'paid', 'offset', 'refunded') then
     raise exception 'El 303 % de % no está presentado: no hay nada que reabrir.', r.period, r.fiscal_year using errcode = '22023';
-  end if;
-  if exists (select 1 from public.vat_reopening o where o.company_id = r.company_id and o.fiscal_year = r.fiscal_year and o.period = r.period and o.closed_at is null) then
-    raise exception 'El % de % ya está reabierto para corregir.', public.conta_iva_periodo_nombre(r.period, r.fiscal_year, false), r.fiscal_year using errcode = '23505';
   end if;
   v_seq := v_ultima.sequence + 1;
   v_nombre := coalesce(p_quien_nombre, public.conta_impuesto_quien());
