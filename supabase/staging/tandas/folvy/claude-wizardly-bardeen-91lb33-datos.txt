@@ -6,5 +6,7 @@
 # que no cada uno, fichar (hora del servidor, solo por sí mismo, rastro), el
 # PIN en el servidor, los PDF por persona, la corrección manual sin rastro
 # doble, una sola firma, y la vuelta atrás.
-supabase/migrations/20261027T1215_l00_datos_de_los_trabajadores.sql
+# La migración NO va en esta lista: la prueba la aplica con «\i» después de
+# medir lo de antes (paso 0). Listarla aquí la aplicaba dos veces y el paso 0
+# veía ya la nueva (ensayo #641).
 supabase/staging/sql/20261027_l00_datos_de_los_trabajadores_prueba.sql
