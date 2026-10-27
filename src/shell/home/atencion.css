@@ -8,7 +8,7 @@
 .at-fila { display: flex; gap: 16px; align-items: center; padding: 16px 18px; border-top: 1px solid var(--color-border-default); flex-wrap: wrap; }
 .at-fila:first-child { border-top: 0; }
 .at-ico { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font-weight: 700; font-family: var(--font-display); flex: none; font-size: 15px; }
-.at-ico[data-tipo='marca'] { background: var(--color-accent-bg); color: var(--color-accent); }
+.at-ico[data-tipo='marca'], .at-ico[data-tipo='carta'] { background: var(--color-accent-bg); color: var(--color-accent); }
 .at-ico[data-tipo='tablet'], .at-ico[data-tipo='cuadrante'] { background: var(--color-warning-bg); color: var(--color-warning); }
 .at-ico[data-tipo='conteo'] { background: var(--color-bg-page); color: var(--color-text-secondary); }
 .at-txt { flex: 1 1 320px; min-width: 0; }

@@ -68,3 +68,22 @@
   .ml-fila { padding: 14px; gap: 12px; }
   .ml-fila .ml-boton { flex: 1 1 100%; }
 }
+/* F01 · PR 2 · tablero 5: Cambios de Last. */
+.cc-pagina { display: flex; flex-direction: column; gap: 16px; color: var(--color-text-primary); }
+.cc-miga { color: var(--color-text-secondary); font-size: 13px; }
+.cc-titulo { font-family: var(--font-display); font-size: 24px; margin: 0; line-height: 1.15; }
+.cc-sub { color: var(--color-text-secondary); margin: -8px 0 0; }
+.cc-vacio { color: var(--color-text-secondary); margin: 0; }
+.cc-marcas { display: flex; gap: 4px; border-bottom: 1px solid var(--color-border-default); flex-wrap: wrap; }
+.cc-marcas button { font: inherit; font-size: 14px; background: none; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 8px 12px; color: var(--color-text-secondary); cursor: pointer; }
+.cc-marcas button[aria-selected='true'] { color: var(--color-text-primary); font-weight: 600; border-color: var(--color-accent); }
+.cc-ico-aviso { background: var(--color-warning-bg) !important; color: var(--color-warning) !important; }
+.ml-chip[data-tono='ok'] { background: var(--color-success-bg); color: var(--color-success); }
+.cc-tabla { overflow-x: auto; border: 1px solid var(--color-border-default); border-radius: 12px; background: var(--color-bg-card); }
+.cc-tabla table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 560px; }
+.cc-tabla th { text-align: left; font-weight: 600; color: var(--color-text-secondary); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; padding: 10px 14px; background: var(--color-bg-page); border-bottom: 1px solid var(--color-border-default); }
+.cc-tabla td { padding: 11px 14px; border-bottom: 1px solid var(--color-border-default); vertical-align: middle; }
+.cc-tabla tr:last-child td { border-bottom: 0; }
+.cc-num { text-align: right; font-variant-numeric: tabular-nums; }
+.cc-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
+.cc-enlace { text-decoration: none; display: inline-flex; align-items: center; }

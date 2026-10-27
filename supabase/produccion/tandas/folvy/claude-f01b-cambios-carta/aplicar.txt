@@ -1,0 +1,19 @@
+# F01 · PR 2 · Cambios en la carta de una marca que ya tienes (tablero 5):
+# platos nuevos, platos que se van, precios distintos y los extras de Last.
+# Rama claude/f01b-cambios-carta. Se ensaya y se aplica desde esta rama, antes
+# de fusionar.
+#
+#   1. 1910 — SOLO AÑADE (y se puede pasar dos veces): el espejo de los extras
+#      de Last (external_catalog_modifier), lo apuntado al poner precios de Last
+#      (external_catalog_change) y las funciones de la pantalla. No cambia
+#      ninguna función ni dato existente: nada en el camino del pedido.
+#
+# AUTORIZO: ninguno. El analizador la da por «sigue» (solo crea).
+# Datos de Foodint: no cambia ninguno. Los extras los llena last-catalog-sync
+# (cada hora) cuando se despliegue; los precios solo cambian al pulsar «Poner
+# los de Last», y quedan apuntados. La cuenta de abajo lo mide igual a los dos
+# lados.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/f01b-cambios-carta.sql
+supabase/migrations/20261027T1910_f01b_cambios_carta.sql

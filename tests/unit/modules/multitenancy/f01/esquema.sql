@@ -17,7 +17,7 @@ do $$ begin create role authenticated; create role anon; create role service_rol
 
 create table accounts (id uuid primary key, name text);
 create table locations (id uuid primary key, account_id uuid, name text, active boolean default true);
-create table kitchen_unit (id uuid primary key, account_id uuid, name text, dimension text, is_base boolean, is_seed boolean, is_active boolean, created_at timestamptz default now());
+create table kitchen_unit (id uuid primary key, account_id uuid, name text, dimension text, is_base boolean, is_seed boolean, is_active boolean, created_at timestamptz default now(), abbreviation text);
 create table sales_channel (id uuid primary key default gen_random_uuid(), account_id uuid, name text, slug text, is_active boolean default true);
 create table brand (id uuid primary key default gen_random_uuid(), account_id uuid not null, name text not null, slug text not null,
   ownership_type text not null default 'own', is_active boolean not null default true, archived_at timestamptz, catalog_source text not null default 'folvy',
@@ -44,7 +44,7 @@ create table menu_item (id uuid primary key default gen_random_uuid(), account_i
   price numeric not null default 0, product_type text default 'item', external_id text, external_source text, source text, needs_review boolean, archived_at timestamptz,
   updated_at timestamptz default now(), created_by_name text);
 create unique index uq_menu_item_external on menu_item (account_id, external_source, external_id, brand_id) where external_id is not null;
-create table menu_item_override (id uuid primary key default gen_random_uuid(), account_id uuid, menu_item_id uuid, location_id uuid, channel_id uuid, price numeric);
+create table menu_item_override (id uuid primary key default gen_random_uuid(), account_id uuid, menu_item_id uuid, location_id uuid, channel_id uuid, price numeric, updated_at timestamptz default now());
 create unique index uq_menu_item_override_scope on menu_item_override (menu_item_id, coalesce(location_id, '00000000-0000-0000-0000-000000000000'::uuid), coalesce(channel_id, '00000000-0000-0000-0000-000000000000'::uuid));
 create table inventory_count (id uuid primary key default gen_random_uuid(), account_id uuid, status text, closed_at timestamptz);
 create table sale (id uuid primary key default gen_random_uuid(), account_id uuid, location_id uuid, brand_id uuid, source text, sold_at timestamptz, raw_products jsonb,
@@ -86,3 +86,16 @@ create or replace function public.ticket_invoice_ajustes(p_account uuid) returns
 create or replace function public._respaldar_funcion(p_firma text, p_migracion text) returns text language plpgsql as $$
 begin insert into funcion_respaldo values (p_firma, p_migracion, pg_get_functiondef(to_regprocedure(p_firma)), 'x') on conflict do nothing; return 'x'; end $$;
 create table company (id uuid primary key default gen_random_uuid(), account_id uuid, legal_name text, trade_name text);
+
+-- F01 · PR 2: los extras de Folvy (lo que usan las funciones de la 1910).
+create table modifier_group (id uuid primary key default gen_random_uuid(), account_id uuid not null, brand_id uuid not null, name text not null,
+  min_selections integer, max_selections integer, group_type text check (group_type in ('choice','extras','removal','side','cross_sell','info')),
+  is_active boolean default true, external_id text, external_source text);
+create unique index uq_modifier_group_external on modifier_group (account_id, external_source, external_id) where external_id is not null;
+create table modifier_option (id uuid primary key default gen_random_uuid(), account_id uuid not null, modifier_group_id uuid not null, name text not null,
+  price_impact numeric, is_active boolean default true, external_id text, external_source text, pos_modifier_id text);
+create unique index uq_modifier_option_external on modifier_option (account_id, external_source, external_id) where external_id is not null;
+create table modifier_recipe_impact (id uuid primary key default gen_random_uuid(), account_id uuid, modifier_option_id uuid, impact_type text,
+  target_recipe_item_id uuid, quantity numeric, unit_id uuid, status text, source text, rationale text, confirmed_by uuid, confirmed_by_name text,
+  confirmed_at timestamptz, created_at timestamptz default now(), updated_at timestamptz default now());
+create unique index modifier_recipe_impact_un_confirmado_por_ficha on modifier_recipe_impact (modifier_option_id, target_recipe_item_id) nulls not distinct where status = 'confirmed';

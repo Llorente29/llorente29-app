@@ -572,6 +572,51 @@ Deno.serve(async (req: Request) => {
     }
   }
 
+  // F01 · PR 2: el espejo de los EXTRAS. Una llamada al catálogo de la
+  // organización (el mismo que lee lastapp-catalog-import cada noche): cada
+  // pregunta, su hueco y su extra, con los productos que la hacen. Si falla,
+  // se dice y la sincronización vale igual.
+  let extras: any = null;
+  if (!dryRun && !body.location_id) {
+    try {
+      const orgCat = await lastGet(`/organizations/${orgId}/catalog`, integ.token, { "organizationID": orgId });
+      const productos: any[] = Array.isArray(orgCat?.products) ? orgCat.products : [];
+      const grupos: any[] = Array.isArray(orgCat?.modifierGroups) ? orgCat.modifierGroups : [];
+      const mods = new Map<string, any>();
+      for (const m of (Array.isArray(orgCat?.modifiers) ? orgCat.modifiers : [])) if (m?.id) mods.set(String(m.id), m);
+      const productosDe = new Map<string, string[]>();
+      for (const p of productos) {
+        for (const gid of (Array.isArray(p?.modifierGroups) ? p.modifierGroups : [])) {
+          const k = String(gid);
+          const l = productosDe.get(k) ?? [];
+          if (p?.id) l.push(String(p.id));
+          productosDe.set(k, l);
+        }
+      }
+      const filas: any[] = [];
+      for (const g of grupos) {
+        if (!g?.id) continue;
+        for (const om of (Array.isArray(g?.organizationModifiers) ? g.organizationModifiers : [])) {
+          if (!om?.id || !om?.modifierId) continue;
+          const mod = mods.get(String(om.modifierId));
+          const precio = typeof om.priceOverride === "number" ? om.priceOverride
+            : (typeof mod?.priceImpact === "number" ? mod.priceImpact : 0);
+          filas.push({
+            group_id: String(g.id), slot_id: String(om.id), modifier_id: String(om.modifierId),
+            group_name: typeof g.name === "string" ? g.name : null,
+            group_min: typeof g.min === "number" ? g.min : null, group_max: typeof g.max === "number" ? g.max : null,
+            name: typeof mod?.name === "string" ? mod.name : null, price_cents: precio,
+            product_ids: productosDe.get(String(g.id)) ?? [],
+          });
+        }
+      }
+      const { data, error } = await sb.rpc("f01_espejo_extras", { p_account: accountId, p_org: orgId, p_extras: filas });
+      extras = error ? { error: error.message } : data;
+    } catch (e) {
+      extras = { error: String(e) };
+    }
+  }
+
   // F01: la pasada de las marcas dadas de alta. Vincula los locales nuevos de
   // cada una en cuanto el espejo trae su id de marca, y coloca lo vendido que
   // haya quedado sin marca (con la regla 6). No crea marcas ni platos: eso es
@@ -607,6 +652,7 @@ Deno.serve(async (req: Request) => {
     locations_failed: failed,
     totals,
     marcas_de_last: marcas,
+    extras_de_last: extras,
     by_location: byLocation,
     duration_ms: Date.now() - startedAt,
   });

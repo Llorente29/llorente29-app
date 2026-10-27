@@ -80,8 +80,8 @@ select 'a0000000-0000-4000-8000-000000000001', b.id, ri.id, c.nombre, pg_temp.m(
 insert into menu_item (account_id, brand_id, recipe_item_id, name, external_id, external_source, archived_at)
 select 'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000005', ri.id, c.nombre, pg_temp.m(c.n)::text, 'lastapp', now()
   from carta c join recipe_item ri on ri.name = c.almacen where c.n = 13;
-insert into menu_item (account_id, brand_id, recipe_item_id, name, external_id, external_source)
-select 'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000003', null, c.nombre, pg_temp.m(c.n)::text, 'lastapp'
+insert into menu_item (account_id, brand_id, recipe_item_id, name, external_id, external_source, price)
+select 'a0000000-0000-4000-8000-000000000001', 'b0000000-0000-4000-8000-000000000003', null, c.nombre, pg_temp.m(c.n)::text, 'lastapp', c.cents / 100.0
   from carta c where c.almacen is null;
 -- El socio de las otras: las facturas de sus pedidos.
 insert into inventory_count (account_id, status, closed_at) values ('a0000000-0000-4000-8000-000000000001','aprobado', now() - interval '2 days');

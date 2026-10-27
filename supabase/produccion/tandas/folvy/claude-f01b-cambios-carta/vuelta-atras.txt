@@ -1,0 +1,3 @@
+# F01 · PR 2 · vuelta atrás. PARA si ya hay precios puestos desde la pantalla
+# (external_catalog_change con filas): quitarla perdería ese apunte.
+supabase/vuelta-atras/20261027T1910_f01b_cambios_carta.down.sql
