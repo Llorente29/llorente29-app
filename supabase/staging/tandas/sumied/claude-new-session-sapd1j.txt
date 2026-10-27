@@ -1,5 +1,6 @@
-# S01 · PR 1 · Redsys y el abono casado. La 2030 añade y la 2031 cambia cuatro
-# funciones del enlace: las dos en ROLLBACK, con su prueba, que recorre los
+# S01 · PR 1 · Redsys y el abono casado. La 2030 añade, la 2031 cambia cuatro
+# funciones del enlace y dos CHECK, y la 2238 da su asiento a los cobros de
+# antes: las tres en ROLLBACK, con su prueba (la 2238 con su vuelta atrás exacta), que recorre los
 # caminos de verdad: guardar el TPV con la clave en Vault; el enlace y la página
 # por Redsys (y por Stripe con el TPV fuera); el pago con Redsys (otro comercio
 # no, el bueno una vez, mal firmado apuntado y sin cobrar); la comisión de
@@ -8,4 +9,5 @@
 # atrás (la 2031 deja el md5 de antes).
 supabase/migrations/20261027T2030_s01_redsys_y_abono.sql
 supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql
+supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql
 supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql

@@ -12,6 +12,9 @@
 --   · Lo que la tanda NO toca, igual a los dos lados: los enlaces de pago y los
 --     cobros con tarjeta (hoy 0 y 0, tabla entera) y las claves de Redsys en
 --     Vault (0).
+--   · La 2238: con 0 cobros, 0 asientos de cobro y 0 cuentas de pasarela antes
+--     y después; su copia previa nace con 0 filas («no existe» al deshacerla).
+--     Los dos CHECK: «false» antes, «true» con la 2031.
 -- Todo es del catálogo o de tablas que crea la propia tanda (miradas con
 -- to_regclass): nada que otro proceso escriba a mitad del ensayo (W06).
 select clave, valor from (
@@ -37,5 +40,18 @@ select clave, valor from (
     (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
        and p.proname in ('conta_enlace_pago_para', 'conta_enlace_pago_ver', 'conta_enlace_pago_datos', 'conta_enlace_pago_cobrado'))::text union all
   select 7, 'claves de Redsys en Vault',
-    (select count(*) from vault.secrets where name like 'conta\_redsys:%')::text
+    (select count(*) from vault.secrets where name like 'conta\_redsys:%')::text union all
+  select 8, 'cobros por el enlace (tabla entera)',
+    (select count(*) from public.conta_enlace_pago where status = 'pagado')::text union all
+  select 9, 'asientos de cobro por el enlace (customer_payment, tabla entera)',
+    (select count(*) from public.journal_entry where source_type = 'customer_payment')::text union all
+  select 10, 'cuentas de pasarela (tesorería «pasarela», tabla entera)',
+    (select count(*) from public.treasury_account where kind = 'pasarela')::text union all
+  select 11, 'copia previa de la 2238 (conta_s01_cobros_antes)',
+    case when to_regclass('public.conta_s01_cobros_antes') is null then 'no existe'
+         else (xpath('/row/n/text()', query_to_xml('select count(*) n from public.conta_s01_cobros_antes', false, true, '')))[1]::text end union all
+  select 12, 'CHECK de journal_entry.source_type admite customer_payment',
+    (select (pg_get_constraintdef(oid) like '%customer_payment%')::text from pg_constraint where conname = 'journal_entry_source_type_check') union all
+  select 13, 'CHECK de treasury_account.kind admite pasarela',
+    (select (pg_get_constraintdef(oid) like '%pasarela%')::text from pg_constraint where conname = 'treasury_account_kind_check')
 ) x order by o;

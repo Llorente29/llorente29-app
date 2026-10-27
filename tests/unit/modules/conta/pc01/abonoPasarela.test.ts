@@ -10,8 +10,9 @@
 //   · Un abono que no cuadra con ningún tramo: nada.
 //   · El TPV: tiene que nombrarlo el banco; comisión de 0 al 3 %, para confirmar.
 //   · Un lote: cada cobro se casa una sola vez.
-//   · Sin la 430 del cliente: por aclarar, diciendo qué falta.
-//   · El asiento que se enseña: 572 + 626 al debe, la 430 al haber, y cuadra.
+//   · Un cobro sin su asiento (la pasarela contra la 430): por aclarar, diciendo qué falta.
+//   · El asiento que se enseña (Respuesta 1): 572 del banco + 626 al debe, la
+//     cuenta de la pasarela («Stripe · por abonar») al haber, y cuadra.
 
 import { describe, expect, it } from 'vitest'
 import { abonoDePasarela, conciliar, decidir, type CobroPasarela, type Contexto, type Movimiento } from '@/modules/conta/lib/conciliacion'
@@ -29,13 +30,14 @@ let n = 0
 const mov = (p: Partial<Movimiento> & { importeCent: number; concepto: string }): Movimiento =>
   ({ id: `m${++n}`, cuentaId: BANCO, fecha: '2026-11-05', conceptoComun: null, referencias: [], antesDelCorte: false, ...p })
 
-/** Un cobro con tarjeta por Stripe: 1,5 % + 0,25 €, como cobra Stripe a una tarjeta europea. */
-const conStripe = (id: string, fecha: string, brutoCent: number, cuenta: string | null = '43000012', cliente = 'Club Deportivo Vallecas'): CobroPasarela => {
+const STRIPE_POR_ABONAR = '57200021', TPV_POR_ABONAR = '57200022'
+/** Un cobro con tarjeta por Stripe: 1,5 % + 0,25 €, como cobra Stripe a una tarjeta europea. Con su asiento contra «Stripe · por abonar». */
+const conStripe = (id: string, fecha: string, brutoCent: number, conAsiento = true, cliente = 'Club Deportivo Vallecas'): CobroPasarela => {
   const comisionCent = Math.round(brutoCent * 0.015) + 25
-  return { id, proveedor: 'stripe', fecha, brutoCent, comisionCent, netoCent: brutoCent - comisionCent, factura: `F-${id}`, cliente, cuenta }
+  return { id, proveedor: 'stripe', fecha, brutoCent, comisionCent, netoCent: brutoCent - comisionCent, factura: `F-${id}`, cliente, cuenta: STRIPE_POR_ABONAR, conAsiento }
 }
 const conTpv = (id: string, fecha: string, brutoCent: number): CobroPasarela =>
-  ({ id, proveedor: 'redsys', fecha, brutoCent, comisionCent: null, netoCent: null, factura: `A-${id}`, cliente: 'Academia de Baile Lavapiés', cuenta: '43000013' })
+  ({ id, proveedor: 'redsys', fecha, brutoCent, comisionCent: null, netoCent: null, factura: `A-${id}`, cliente: 'Academia de Baile Lavapiés', cuenta: TPV_POR_ABONAR, conAsiento: true })
 
 // Tres cobros del 3 al 5/11 que suman 120,00 €: 40 + 50 + 30.
 const S1 = conStripe('s1', '2026-11-03', 4_000), S2 = conStripe('s2', '2026-11-04', 5_000), S3 = conStripe('s3', '2026-11-05', 3_000)
@@ -51,7 +53,7 @@ describe('El abono de Stripe', () => {
     expect(d.que).toBe('Abono de Stripe del 03/11 al 05/11 · 3 cobros')
     expect(d.porque).toBe('Abono de Stripe del 03/11 al 05/11: 3 cobros, 120,00 € menos 2,55 € de comisión. Cuadra al céntimo con lo que Stripe dijo de cada cobro.')
     expect(d.destino).toEqual({ tipo: 'abono_pasarela', proveedor: 'stripe', cobros: ['s1', 's2', 's3'], comision: 2.55, cuenta_comision: '62600000',
-      clientes: [{ cuenta: '43000012', importe: 120 }], concepto: 'Abono de Stripe del 03/11 al 05/11 · 3 cobros' })
+      cuenta_pasarela: STRIPE_POR_ABONAR, cobrado: 120, concepto: 'Abono de Stripe del 03/11 al 05/11 · 3 cobros' })
     expect(PILDORA[d.origen!]).toBe('Cobro con tarjeta')
   })
 
@@ -102,7 +104,7 @@ describe('El abono del TPV (Redsys)', () => {
     const d = decidir(mov({ importeCent: 12_040, concepto: 'ABONO TPV COMERCIO 999008881' }), ctx({ cobrosPasarela: [T1, T2] }))
     expect(d.confianza).toBe('probable')
     expect(d.porque).toBe('Abono del TPV del 04/11: 2 cobros, 121,00 € menos 0,60 € de comisión. El banco no dice la comisión: sale de lo cobrado menos lo abonado. Confírmalo.')
-    expect(d.destino).toMatchObject({ tipo: 'abono_pasarela', proveedor: 'redsys', comision: 0.6, clientes: [{ cuenta: '43000013', importe: 121 }] })
+    expect(d.destino).toMatchObject({ tipo: 'abono_pasarela', proveedor: 'redsys', comision: 0.6, cuenta_pasarela: TPV_POR_ABONAR, cobrado: 121 })
   })
 
   it('sin comisión (el banco abona el bruto), también', () => {
@@ -124,16 +126,16 @@ describe('En el motor', () => {
     expect(db.destino?.tipo).not.toBe('abono_pasarela')
   })
 
-  it('sin la 430 del cliente: por aclarar, diciendo qué falta', () => {
-    const sin = conStripe('x1', '2026-11-03', 4_000, null, 'Eventos Rivas Catering SL')
+  it('un cobro sin su asiento: por aclarar, diciendo qué falta (sin él, en la pasarela no hay nada que saldar)', () => {
+    const sin = conStripe('x1', '2026-11-03', 4_000, false, 'Eventos Rivas Catering SL')
     const d = decidir(mov({ importeCent: sin.netoCent!, concepto: 'STRIPE' }), ctx({ cobrosPasarela: [sin] }))
     expect(d.confianza).toBe('duda')
-    expect(d.falta).toBe('la cuenta de cliente (430) de Eventos Rivas Catering SL')
+    expect(d.falta).toBe('el asiento del cobro de la F-x1 (Eventos Rivas Catering SL)')
     expect(d.destino).toBeNull()
   })
 
-  it('el asiento que se enseña: banco y comisión al debe, cada cliente al haber, y cuadra', () => {
-    const otro = conStripe('s4', '2026-11-05', 2_000, '43000014', 'Colegio Nuestra Señora del Pilar')
+  it('el asiento que se enseña: banco y comisión al debe, la pasarela al haber por lo cobrado, y cuadra', () => {
+    const otro = conStripe('s4', '2026-11-05', 2_000, true, 'Colegio Nuestra Señora del Pilar')
     const imp = NETO + otro.netoCent!
     const d = decidir(mov({ importeCent: imp, concepto: 'STRIPE' }), ctx({ cobrosPasarela: [S1, S2, S3, otro] }))
     const m = { importeCent: imp } as Parameters<typeof asientoQueSeCrea>[0]
@@ -141,8 +143,7 @@ describe('En el motor', () => {
     expect(lineas).toEqual([
       { cuenta: '57200001', debeCent: imp, haberCent: 0 },
       { cuenta: '62600000', debeCent: COMISION + otro.comisionCent!, haberCent: 0 },
-      { cuenta: '43000012', debeCent: 0, haberCent: 12_000 },
-      { cuenta: '43000014', debeCent: 0, haberCent: 2_000 },
+      { cuenta: STRIPE_POR_ABONAR, debeCent: 0, haberCent: 14_000 },
     ])
     expect(lineas.reduce((t, l) => t + l.debeCent - l.haberCent, 0)).toBe(0)
   })

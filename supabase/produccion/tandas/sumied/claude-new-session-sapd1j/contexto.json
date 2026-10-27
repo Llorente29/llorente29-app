@@ -1,13 +1,16 @@
 {
-  "_que": "S01 · PR 1 · Redsys y el abono casado · contexto de producción de la tanda (2030 añade, 2031 cambia cuatro funciones del enlace con la misma firma), medido en SOLO LECTURA el 27/10 a las 20:56Z (hora del servidor) con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: de lo que crea la 2030 no existe nada; existen conta_enlace_pago (0 filas) y las cuatro funciones que cambia la 2031, con una sola firma cada una (sin «otras»); nada en el camino del pedido; nada suyo en el historial.",
-  "medido": "2026-10-27T20:56Z",
+  "_que": "S01 · PR 1 (con la Respuesta 1) · Redsys, el asiento del cobro contra la cuenta de la pasarela y el abono casado · contexto de producción de la tanda (2030 añade, 2031 cambia cuatro funciones del enlace y amplía dos CHECK, 2238 da su asiento a los cobros de antes), medido en SOLO LECTURA el 27/10 a las 21:52Z (hora del servidor) con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: de lo que crea la 2030 no existe nada; existen conta_enlace_pago (0 filas), journal_entry y treasury_account, y las cuatro funciones que cambia la 2031, con una sola firma cada una; nada en el camino del pedido; nada suyo en el historial.",
+  "medido": "2026-10-27T21:52Z",
   "tanda": {
-    "supabase/migrations/20261027T2030_s01_redsys_y_abono.sql": "22bc2dfe5c60fc9a4188f0c8ca1ddf0b",
-    "supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql": "29139bda56fceebb1d7f3e14e76ad2db"
+    "supabase/migrations/20261027T2030_s01_redsys_y_abono.sql": "0cc8a28b379bdd9b9c16aaa72f8cc8cd",
+    "supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql": "ee3e1d65f38742ccbf2a0669f2019346",
+    "supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql": "f9dce877908b4d21e9c170b907b1c0e6"
   },
   "contexto": {
     "tablas": [
       "public.conta_enlace_pago",
+      "public.journal_entry",
+      "public.treasury_account",
       "vault.secrets"
     ],
     "funciones": [
@@ -18,6 +21,8 @@
     ],
     "filas": {
       "public.conta_enlace_pago": 0,
+      "public.journal_entry": 14955,
+      "public.treasury_account": 0,
       "vault.secrets": 0
     },
     "otras": {},

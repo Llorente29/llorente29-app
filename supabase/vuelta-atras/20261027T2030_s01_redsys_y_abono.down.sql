@@ -9,7 +9,9 @@
 -- Vault también se quitan (vault.secrets con nombre «conta_redsys:…»): sin su
 -- tabla no las usa nadie. Lo que ya está en otras tablas se queda, porque es
 -- verdad con o sin la 2030: los cobros apuntados (customer_invoice_payment),
--- los casados del banco y sus asientos, y el historial de cada factura.
+-- los casados del banco y sus asientos, el historial de cada factura, y las
+-- cuentas de pasarela del plan y de tesorería con sus asientos (la vuelta
+-- atrás de la 2031 para si las hay: se decide antes qué hacer con ellas).
 -- Se puede pasar dos veces (todo «if exists»).
 
 drop function if exists public.conta_cobros_abonos(uuid);
@@ -19,6 +21,8 @@ drop function if exists public.conta_enlace_pago_comision(text, numeric, numeric
 drop function if exists public.conta_redsys_aviso_apuntar(text, uuid, boolean, text, numeric, text, jsonb);
 drop function if exists public.conta_enlace_pago_cobrado_redsys(text, text, numeric, text, text);
 drop function if exists public._s01_enlace_cobrar(uuid, numeric, text, text, text, date);
+drop function if exists public._s01_asiento_cobro(uuid, text);
+drop function if exists public._s01_cuenta_pasarela(uuid, text);
 drop function if exists public.conta_redsys_aviso_datos(text);
 drop function if exists public.conta_enlace_pago_pedido(text, numeric);
 drop function if exists public.conta_cobro_redsys_datos(uuid);
@@ -28,6 +32,7 @@ drop function if exists public._s01_metodos_enlace(uuid);
 drop function if exists public._s01_proveedor_enlace(uuid);
 drop function if exists public._s01_redsys_estado(public.conta_cobro_redsys);
 
+drop table if exists public.conta_pasarela_cuenta;
 drop table if exists public.conta_redsys_aviso;
 drop table if exists public.conta_enlace_pago_intento;
 drop index if exists public.conta_enlace_pago_abono_idx;

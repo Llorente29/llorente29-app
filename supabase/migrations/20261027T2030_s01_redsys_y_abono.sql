@@ -33,13 +33,25 @@
 --        · conta_abonos_pasarela_pendientes: los cobros que esperan su abono
 --          (los lee el motor de conciliación);
 --        · conta_abono_pasarela_casar: casa el abono con sus cobros: un asiento,
---          572 por el neto y 626 por la comisión contra la 430 de cada cliente
---          (el cobro por el enlace no hace asiento: la 430 se salda aquí);
+--          572 del banco por el neto y 626 por la comisión, contra la cuenta de
+--          la pasarela, que vuelve a cero por esos cobros;
 --        · conta_cobros_abonos: «Cobrado · pendiente del abono» o «abonado el».
+--   6. (Respuesta 1 al S01 · PR 1) LA CUENTA DE LA PASARELA: el día que el
+--      cliente paga, ya no debe. El cobro por el enlace hace su asiento ese día
+--      (_s01_asiento_cobro): la cuenta de la pasarela al debe, contra la 430 del
+--      cliente. La cuenta es una subcuenta de tesorería por proveedor y empresa,
+--      colgada de la 572 («Stripe · por abonar», «TPV del banco · por abonar»),
+--      que se crea sola la primera vez (_s01_cuenta_pasarela) con su cuenta de
+--      tesorería (tipo «pasarela», la 2031 amplía el CHECK) para que Bancos la
+--      enseñe con su saldo. conta_pasarela_cuenta dice cuál es la de cada una.
+--      El asiento es de origen «customer_payment» (la 2031 amplía el CHECK) y
+--      entra en el traspaso del mes como cualquier otro (C12).
 --
--- SOLO AÑADE: tres tablas, columnas que admiten vacío y funciones nuevas. No
+-- SOLO AÑADE: cuatro tablas, columnas que admiten vacío y funciones nuevas. No
 -- toca filas al aplicarse, ni nada del camino del pedido, ni coste ni stock.
 -- La clave de Redsys la escribe en Vault la función al guardar, no el fichero.
+-- Va con la 2031 (los dos CHECK que amplía): sus funciones usan «pasarela» y
+-- «customer_payment» solo cuando cobran, nunca al aplicarse.
 
 -- 1. Los datos del TPV virtual de cada empresa ----------------------------------------
 create table if not exists public.conta_cobro_redsys (
@@ -100,6 +112,26 @@ comment on table public.conta_redsys_aviso is 'S01 · Cada aviso de Redsys, tamb
 create index if not exists conta_redsys_aviso_pedido_idx on public.conta_redsys_aviso (pedido);
 alter table public.conta_redsys_aviso enable row level security;
 revoke all on table public.conta_redsys_aviso from public, anon, authenticated;
+
+-- 4b. La cuenta de la pasarela de cada empresa ---------------------------------------
+create table if not exists public.conta_pasarela_cuenta (
+  company_id          uuid not null references public.company(id) on delete cascade,
+  proveedor           text not null check (proveedor in ('stripe', 'redsys')),
+  account_id          uuid not null references public.accounts(id) on delete cascade,
+  treasury_account_id uuid not null references public.treasury_account(id) on delete cascade,
+  company_account_id  uuid not null references public.company_account(id) on delete cascade,
+  code                text not null,
+  created_at          timestamptz not null default now(),
+  primary key (company_id, proveedor)
+);
+comment on table public.conta_pasarela_cuenta is
+  'S01 · La subcuenta de tesorería (572) de cada pasarela de cobro de una empresa: lo cobrado con tarjeta o Bizum que Stripe o el banco aún no han abonado.';
+alter table public.conta_pasarela_cuenta enable row level security;
+revoke all on table public.conta_pasarela_cuenta from public, anon, authenticated;
+grant select on table public.conta_pasarela_cuenta to authenticated;
+drop policy if exists conta_pasarela_cuenta_leer on public.conta_pasarela_cuenta;
+create policy conta_pasarela_cuenta_leer on public.conta_pasarela_cuenta for select to authenticated
+  using (public.belongs_to_account(account_id));
 
 -- 5. Las funciones --------------------------------------------------------------------
 
@@ -243,12 +275,88 @@ $$;
 revoke all on function public.conta_redsys_aviso_datos(text) from public, anon, authenticated;
 grant execute on function public.conta_redsys_aviso_datos(text) to service_role;
 
--- El cobro de un enlace, por el motor de la E1 (customer_invoice_payment, sin
--- asiento: el abono del proveedor se casa en Bancos). Una vez: el segundo aviso
--- no hace nada. Sin pasarse de lo pendiente: lo que sobre lo dice el historial.
+-- La cuenta de la pasarela de una empresa (su código), creada la primera vez:
+-- la subcuenta 572 siguiente con su nombre en palabras («Stripe · por abonar»,
+-- «TPV del banco · por abonar»), su cuenta de tesorería de tipo «pasarela» (la
+-- enseña Bancos con su saldo) y su enlace. Null si la empresa aún no tiene el
+-- plan activado: entonces el cobro se apunta sin asiento y lo dice.
+create or replace function public._s01_cuenta_pasarela(p_company uuid, p_proveedor text)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_cuenta uuid; v_plan text; v_d int; v_code text; v_ca uuid; v_ta uuid; v_nombre text; v_existe text;
+begin
+  if p_proveedor not in ('stripe', 'redsys') then raise exception 'Proveedor: stripe o redsys.' using errcode = '22023'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('conta_pasarela:' || p_company::text || ':' || p_proveedor, 0));
+  select code into v_existe from public.conta_pasarela_cuenta where company_id = p_company and proveedor = p_proveedor;
+  if v_existe is not null then return v_existe; end if;
+  select account_id into v_cuenta from public.company where id = p_company;
+  select a.plan into v_plan from public.company_account a where a.company_id = p_company and a.account_id = v_cuenta limit 1;
+  if v_cuenta is null or v_plan is null then return null; end if;
+  select p.account_digits into v_d from public.company_tax_profile p where p.company_id = p_company;
+  v_code := public.company_account_siguiente(p_company, '572', coalesce(v_d, 8));
+  if v_code is null then raise exception 'No queda numeración libre en 572 para la cuenta de la pasarela.' using errcode = '23514'; end if;
+  v_nombre := case p_proveedor when 'stripe' then 'Stripe · por abonar' else 'TPV del banco · por abonar' end;
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, source, created_by_name)
+  values (v_cuenta, p_company, v_plan, v_code, '572', v_nombre, v_nombre, 'own', 'manual', 'Sumied')
+  returning id into v_ca;
+  insert into public.treasury_account (account_id, company_id, kind, name, short_name)
+  values (v_cuenta, p_company, 'pasarela', v_nombre, case p_proveedor when 'stripe' then 'Stripe' else 'TPV' end)
+  returning id into v_ta;
+  insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+  values (v_cuenta, p_company, v_ca, 'bank_account', v_ta::text, 'principal', 'manual');
+  insert into public.conta_pasarela_cuenta (company_id, proveedor, account_id, treasury_account_id, company_account_id, code)
+  values (p_company, p_proveedor, v_cuenta, v_ta, v_ca, v_code);
+  return v_code;
+end $$;
+revoke all on function public._s01_cuenta_pasarela(uuid, text) from public, anon, authenticated;
+
+-- El asiento de un cobro por el enlace, el día del cobro: la cuenta de la
+-- pasarela al debe, contra la 430 del cliente, por lo cobrado. Origen
+-- «customer_payment» (el cobro). Si ya lo tiene, nada. Si no se puede (sin la
+-- 430 del cliente, sin plan, sin ejercicio), no lo hace y dice por qué: el
+-- cobro queda apuntado igual y el historial de la factura lo cuenta.
+create or replace function public._s01_asiento_cobro(p_payment uuid, p_proveedor text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare p public.customer_invoice_payment; v public.customer_invoice; v_cli text; v_pas text; v_res jsonb; v_entry uuid; v_nombre text; v_concepto text;
+begin
+  select * into p from public.customer_invoice_payment where id = p_payment for update;
+  if p.id is null then return jsonb_build_object('asiento', null, 'motivo', 'el cobro no existe'); end if;
+  if p.entry_id is not null and exists (select 1 from public.journal_entry where id = p.entry_id and status in ('propuesto', 'borrador', 'validado')) then
+    return jsonb_build_object('asiento', p.entry_id, 'motivo', null, 'ya', true);
+  end if;
+  select * into v from public.customer_invoice where id = p.invoice_id;
+  select coalesce(pa.name, v.customer->>'nombre') into v_nombre from public.party pa where pa.id = v.party_id;
+  v_nombre := coalesce(v_nombre, v.customer->>'nombre', 'el cliente');
+  v_cli := public._pc01e3_cuenta_cliente(p.company_id, v.party_id);
+  if v_cli is null then return jsonb_build_object('asiento', null, 'motivo', format('%s no tiene su cuenta de cliente (430)', v_nombre)); end if;
+  v_pas := public._s01_cuenta_pasarela(p.company_id, p_proveedor);
+  if v_pas is null then return jsonb_build_object('asiento', null, 'motivo', 'la empresa aún no tiene el plan contable activado'); end if;
+  v_concepto := format('Cobro %s · %s · %s', case p_proveedor when 'redsys' then 'TPV' else 'Stripe' end, v_nombre, coalesce(v.number_text, 'sin número'));
+  v_res := public._journal_entry_proponer(p.company_id,
+    jsonb_build_object('fecha', p.paid_on, 'series', (public._bank_ajustes(p.company_id)).treasury_series, 'concepto', v_concepto,
+                       'source_type', 'customer_payment', 'source_id', p.id, 'confianza', 'seguro',
+                       'porque', format('El cliente pagó %s con %s por el enlace de pago, y %s lo confirmó: ya no debe; queda por abonar en el banco.',
+                                        public.conta_euros_exactos(p.amount), case when p.method = 'bizum' then 'Bizum' else 'tarjeta' end,
+                                        case p_proveedor when 'redsys' then 'el banco' else 'Stripe' end),
+                       'razones', '[]'::jsonb, 'party_id', v.party_id, 'documento', v.number_text),
+    jsonb_build_array(
+      jsonb_build_object('cuenta', v_pas, 'debe', p.amount, 'haber', 0, 'concepto', v_concepto, 'comun', true),
+      jsonb_build_object('cuenta', v_cli, 'debe', 0, 'haber', p.amount, 'tercero_id', v.party_id, 'concepto', v_concepto, 'comun', true)),
+    '{}'::jsonb, 'Sumied', null);
+  v_entry := (v_res->>'id')::uuid;
+  update public.customer_invoice_payment set entry_id = v_entry where id = p.id;
+  return jsonb_build_object('asiento', v_entry, 'motivo', null, 'cuenta', v_pas);
+end $$;
+revoke all on function public._s01_asiento_cobro(uuid, text) from public, anon, authenticated;
+
+-- El cobro de un enlace, por el motor de la E1 (customer_invoice_payment), con
+-- su asiento el día del cobro (_s01_asiento_cobro: la pasarela contra la 430).
+-- Una vez: el segundo aviso no hace nada. Sin pasarse de lo pendiente: lo que
+-- sobre lo dice el historial. Si el asiento no se puede hacer, el cobro queda
+-- apuntado igual y el historial dice por qué.
 create or replace function public._s01_enlace_cobrar(p_enlace uuid, p_importe numeric, p_metodo text, p_ref text, p_proveedor text, p_fecha date)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare e public.conta_enlace_pago; v public.customer_invoice; v_queda numeric; v_apunta numeric; v_pago uuid; v_metodo text;
+        v_as jsonb; v_texto_asiento text := '';
 begin
   select * into e from public.conta_enlace_pago where id = p_enlace for update;
   if e.id is null then return jsonb_build_object('hecho', false, 'motivo', 'no_existe'); end if;
@@ -262,6 +370,15 @@ begin
     values (v.account_id, v.company_id, v.id, coalesce(p_fecha, public.conta_hoy()), v_apunta, v_metodo,
             'Enlace de pago (' || case when v_metodo = 'bizum' then 'Bizum' else 'tarjeta' end || ')', 'Sumied')
     returning id into v_pago;
+    -- El asiento del cobro (la pasarela contra la 430). Lo que falle aquí no deshace el cobro: se dice.
+    begin
+      v_as := public._s01_asiento_cobro(v_pago, p_proveedor);
+    exception when others then
+      v_as := jsonb_build_object('asiento', null, 'motivo', sqlerrm);
+    end;
+    v_texto_asiento := case when v_as->>'asiento' is not null
+      then format(' Asiento: %s, contra la 430 del cliente.', case p_proveedor when 'redsys' then 'TPV del banco · por abonar' else 'Stripe · por abonar' end)
+      else format(' Sin asiento: %s.', v_as->>'motivo') end;
   end if;
   update public.conta_enlace_pago set status = 'pagado', pago_ref = p_ref, metodo = v_metodo, importe = p_importe, pagado_at = now(), payment_id = v_pago,
          proveedor = p_proveedor
@@ -271,9 +388,11 @@ begin
       case when coalesce(p_importe, 0) > v_apunta then format(': se apuntan %s, lo que quedaba; el resto, %s, lo tiene %s y hay que devolverlo.',
                                                        public.conta_euros_exactos(v_apunta), public.conta_euros_exactos(p_importe - v_apunta),
                                                        case when p_proveedor = 'redsys' then 'el banco' else 'Stripe' end)
-           when v_queda - v_apunta < 0.005 then ': cobrada entera.' else format('; quedan %s.', public.conta_euros_exactos(v_queda - v_apunta)) end),
-    jsonb_build_object('importe', p_importe, 'apuntado', v_apunta, 'metodo', v_metodo, 'enlace', e.id, 'proveedor', p_proveedor), 'Sumied');
-  return jsonb_build_object('hecho', true, 'factura', v.id, 'apuntado', v_apunta, 'sobra', greatest(coalesce(p_importe, 0) - v_apunta, 0));
+           when v_queda - v_apunta < 0.005 then ': cobrada entera.' else format('; quedan %s.', public.conta_euros_exactos(v_queda - v_apunta)) end)
+      || v_texto_asiento,
+    jsonb_build_object('importe', p_importe, 'apuntado', v_apunta, 'metodo', v_metodo, 'enlace', e.id, 'proveedor', p_proveedor, 'asiento', v_as->>'asiento'), 'Sumied');
+  return jsonb_build_object('hecho', true, 'factura', v.id, 'apuntado', v_apunta, 'sobra', greatest(coalesce(p_importe, 0) - v_apunta, 0),
+                            'asiento', v_as->>'asiento');
 end $$;
 revoke all on function public._s01_enlace_cobrar(uuid, numeric, text, text, text, date) from public, anon, authenticated;
 
@@ -314,7 +433,9 @@ revoke all on function public.conta_enlace_pago_comision(text, numeric, numeric)
 grant execute on function public.conta_enlace_pago_comision(text, numeric, numeric) to service_role;
 
 -- Los cobros por el enlace que esperan su abono en el banco (los lee el motor
--- de conciliación). Lo cobrado (bruto) es lo apuntado a la factura.
+-- de conciliación). Lo cobrado (bruto) es lo apuntado a la factura; «cuenta»,
+-- la de la pasarela; «con_asiento», si el cobro ya tiene su asiento (sin él,
+-- no hay nada en la pasarela que saldar).
 create or replace function public.conta_abonos_pasarela_pendientes(p_company uuid)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_cuenta uuid;
@@ -324,9 +445,11 @@ begin
   return coalesce((select jsonb_agg(jsonb_build_object(
       'id', e.id, 'proveedor', coalesce(e.proveedor, 'stripe'), 'fecha', (e.pagado_at at time zone 'Europe/Madrid')::date,
       'bruto', p.amount, 'comision', e.comision, 'neto', e.neto, 'factura', ci.number_text, 'cliente', coalesce(pa.name, ci.customer->>'nombre'),
-      'cuenta', public._pc01e3_cuenta_cliente(e.company_id, ci.party_id), 'tercero_id', ci.party_id) order by e.pagado_at)
+      'cuenta', pc.code, 'tercero_id', ci.party_id,
+      'con_asiento', exists (select 1 from public.journal_entry j where j.id = p.entry_id and j.status in ('propuesto', 'borrador', 'validado'))) order by e.pagado_at)
     from public.conta_enlace_pago e
     join public.customer_invoice_payment p on p.id = e.payment_id
+    left join public.conta_pasarela_cuenta pc on pc.company_id = e.company_id and pc.proveedor = coalesce(e.proveedor, 'stripe')
     join public.customer_invoice ci on ci.id = e.invoice_id
     left join public.party pa on pa.id = ci.party_id
    where e.company_id = p_company and e.status = 'pagado'
@@ -335,15 +458,18 @@ end $$;
 revoke all on function public.conta_abonos_pasarela_pendientes(uuid) from public, anon;
 grant execute on function public.conta_abonos_pasarela_pendientes(uuid) to authenticated;
 
--- Casar el abono del proveedor con sus cobros. Un asiento: 572 por lo abonado,
--- 626 por la comisión y la 430 de cada cliente por lo cobrado; Bancos lo enlaza
--- (bank_casar) y, como lo ha creado este casado, deshacerlo lo quita.
+-- Casar el abono del proveedor con sus cobros. Un asiento: la 572 del banco por
+-- lo abonado y la 626 por la comisión, contra la cuenta de la pasarela por lo
+-- cobrado (que vuelve a cero por esos cobros). Bancos lo enlaza (bank_casar) y,
+-- como lo ha creado este casado, deshacerlo lo quita. Cada cobro tiene que
+-- tener su asiento: sin él, en la pasarela no hay nada que saldar.
 create or replace function public.conta_abono_pasarela_casar(p_movement uuid, p_enlaces uuid[], p_confianza text, p_porque text, p_por text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_m public.bank_movement; v_t public.treasury_account; v_aj public.bank_settings; v_cuenta uuid; v_n int; v_prov text; v_nprov int;
   v_bruto numeric; v_fees numeric; v_fees_n int; v_com numeric; v_desde date; v_hasta date; v_gas text; v_572 text; v_local uuid; v_comun boolean;
   v_lineas jsonb; v_l record; v_res jsonb; v_entry uuid; v_match uuid; v_nombre text; v_periodo text; v_concepto text; v_quien text;
+  v_pas text; v_sin text;
 begin
   select * into v_m from public.bank_movement where id = p_movement for update;
   if v_m.id is null then raise exception 'Ese movimiento no existe.' using errcode = 'P0002'; end if;
@@ -378,6 +504,15 @@ begin
     v_gas := public._pc01e3_cuenta_gastos(v_m.company_id);
     if v_gas is null then raise exception 'La empresa no tiene una cuenta 626 para la comisión: créala en el plan.' using errcode = '23514'; end if;
   end if;
+  -- Cada cobro, con su asiento contra la pasarela.
+  select string_agg(coalesce(ci.number_text, 'sin número'), ', ') into v_sin
+    from public.conta_enlace_pago e join public.customer_invoice_payment p on p.id = e.payment_id join public.customer_invoice ci on ci.id = e.invoice_id
+   where e.id = any(p_enlaces) and not exists (select 1 from public.journal_entry j where j.id = p.entry_id and j.status in ('propuesto', 'borrador', 'validado'));
+  if v_sin is not null then
+    raise exception 'El cobro de % aún no tiene su asiento (la pasarela contra la 430): sin él no hay nada que saldar. Mira su historial.', v_sin using errcode = '23514';
+  end if;
+  select code into v_pas from public.conta_pasarela_cuenta where company_id = v_m.company_id and proveedor = v_prov;
+  if v_pas is null then raise exception 'La empresa no tiene la cuenta de % por abonar.', v_nombre using errcode = '23514'; end if;
   v_local := v_t.location_id; v_comun := v_local is null;
   v_periodo := case when v_desde = v_hasta then 'del ' || to_char(v_desde, 'DD/MM') else format('del %s al %s', to_char(v_desde, 'DD/MM'), to_char(v_hasta, 'DD/MM')) end;
   v_concepto := format('Abono de %s %s', case v_prov when 'redsys' then 'TPV' else 'Stripe' end, v_periodo);
@@ -386,15 +521,8 @@ begin
     v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_gas, 'debe', v_com, 'haber', 0,
       'concepto', format('Comisión %s %s', case v_prov when 'redsys' then 'TPV' else 'Stripe' end, v_periodo), 'local_id', v_local, 'comun', v_comun));
   end if;
-  for v_l in select ci.party_id, coalesce(pa.name, ci.customer->>'nombre') as nombre, public._pc01e3_cuenta_cliente(v_m.company_id, ci.party_id) as cuenta,
-                    sum(p.amount) as importe, string_agg(coalesce(ci.number_text, 'sin número'), ', ' order by ci.issue_date) as facturas
-               from public.conta_enlace_pago e join public.customer_invoice_payment p on p.id = e.payment_id
-               join public.customer_invoice ci on ci.id = e.invoice_id left join public.party pa on pa.id = ci.party_id
-              where e.id = any(p_enlaces) group by ci.party_id, coalesce(pa.name, ci.customer->>'nombre') loop
-    if v_l.cuenta is null then raise exception '% no tiene su cuenta de cliente (430) en el plan.', coalesce(v_l.nombre, 'Un cliente') using errcode = '23514'; end if;
-    v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_l.cuenta, 'debe', 0, 'haber', v_l.importe, 'tercero_id', v_l.party_id,
-      'concepto', format('Cobro con tarjeta · %s · %s', coalesce(v_l.nombre, ''), v_l.facturas), 'local_id', v_local, 'comun', v_comun));
-  end loop;
+  v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_pas, 'debe', 0, 'haber', v_bruto,
+    'concepto', format('%s · %s %s', v_concepto, v_n, case when v_n = 1 then 'cobro' else 'cobros' end), 'local_id', v_local, 'comun', v_comun));
   v_aj := public._bank_ajustes(v_m.company_id);
   v_quien := case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end;
   v_res := public._journal_entry_proponer(v_m.company_id,
@@ -414,14 +542,15 @@ begin
       jsonb_build_object('casado', v_match, 'asiento', v_entry), v_quien);
   end loop;
   return jsonb_build_object('casado', v_match, 'asiento', v_entry, 'cobros', v_n, 'comision', v_com,
-    'frase', format('Casado el abono de %s %s: %s %s, %s menos %s de comisión. Asiento: %s al banco y %s a comisiones.', v_nombre, v_periodo,
+    'frase', format('Casado el abono de %s %s: %s %s, %s menos %s de comisión. Asiento: %s al banco y %s a comisiones; %s queda saldada por esos cobros.', v_nombre, v_periodo,
       v_n, case when v_n = 1 then 'cobro' else 'cobros' end, public.conta_euros_exactos(v_bruto), public.conta_euros_exactos(v_com),
-      public.conta_euros_exactos(v_m.amount), public.conta_euros_exactos(v_com)));
+      public.conta_euros_exactos(v_m.amount), public.conta_euros_exactos(v_com),
+      case v_prov when 'redsys' then '«TPV del banco · por abonar»' else '«Stripe · por abonar»' end));
 end $$;
 revoke all on function public.conta_abono_pasarela_casar(uuid, uuid[], text, text, text) from public, anon;
 grant execute on function public.conta_abono_pasarela_casar(uuid, uuid[], text, text, text) to authenticated;
 comment on function public.conta_abono_pasarela_casar(uuid, uuid[], text, text, text) is
-  'S01 · Casa el abono de Stripe o del TPV (Redsys) con sus cobros por el enlace: 572 por el neto y 626 por la comisión contra la 430 de cada cliente. Deshacer el casado lo quita.';
+  'S01 · Casa el abono de Stripe o del TPV (Redsys) con sus cobros por el enlace: 572 por el neto y 626 por la comisión contra la cuenta de la pasarela. Deshacer el casado lo quita.';
 
 -- Ventas › Cobros: de cada factura cobrada por el enlace, si su abono ya ha llegado al banco y cuándo.
 create or replace function public.conta_cobros_abonos(p_company uuid)
@@ -444,6 +573,6 @@ grant execute on function public.conta_cobros_abonos(uuid) to authenticated;
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'conta_lectura') then
-    grant select on public.conta_cobro_redsys, public.conta_enlace_pago_intento, public.conta_redsys_aviso to conta_lectura;
+    grant select on public.conta_cobro_redsys, public.conta_enlace_pago_intento, public.conta_redsys_aviso, public.conta_pasarela_cuenta to conta_lectura;
   end if;
 end $$;

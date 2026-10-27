@@ -27,7 +27,9 @@
 // por el enlace de pago, menos su comisión. Se casa con esos cobros
 // (abonoDePasarela): «seguro» solo si el banco nombra a Stripe y el neto
 // cuadra al céntimo con lo que Stripe dijo de cada cobro; el del TPV, como el
-// banco no dice la comisión, siempre para confirmar.
+// banco no dice la comisión, siempre para confirmar. El asiento: el banco por
+// el neto y la 626 por la comisión, contra la cuenta de la pasarela («Stripe ·
+// por abonar»), donde quedó cada cobro el día que el cliente pagó.
 //
 // NADA SE CASA DOS VECES: `conciliar` recorre los movimientos en orden y cada
 // candidato (lo que queda de una factura, una liquidación, el otro lado de un
@@ -87,11 +89,13 @@ export function facturasQueCobra(c: Pick<Cliente, 'facturas'>, imp: number): { i
 /**
  * S01 · Un cobro por el enlace de pago que espera su abono en el banco
  * (conta_abonos_pasarela_pendientes). Stripe da su neto y su comisión con el
- * cobro; el TPV (Redsys), no: la comisión sale al casar el abono.
+ * cobro; el TPV (Redsys), no: la comisión sale al casar el abono. `cuenta` es
+ * la de la pasarela («Stripe · por abonar»); `conAsiento`, si el cobro ya hizo
+ * su asiento (sin él, en la pasarela no hay nada que saldar).
  */
 export interface CobroPasarela {
   id: string; proveedor: 'stripe' | 'redsys'; fecha: string; brutoCent: number; netoCent: number | null; comisionCent: number | null
-  factura: string | null; cliente: string; cuenta: string | null
+  factura: string | null; cliente: string; cuenta: string | null; conAsiento: boolean
 }
 
 export interface Liquidacion {
@@ -181,10 +185,11 @@ export type Destino =
   /**
    * S01 · El abono de Stripe o del TPV: no va a bank_casar directamente, sino a
    * conta_abono_pasarela_casar (bancosNucleo), que hace el asiento (572 por el
-   * neto, 626 por la comisión, la 430 de cada cliente por lo cobrado) y lo casa.
+   * neto, 626 por la comisión, contra la cuenta de la pasarela) y lo casa.
    */
   | { tipo: 'abono_pasarela'; proveedor: 'stripe' | 'redsys'; cobros: string[]; comision: number; cuenta_comision: string
-      clientes: { cuenta: string; importe: number }[]; concepto: string }
+      /** La cuenta de la pasarela y lo cobrado (bruto) que se salda en ella. */
+      cuenta_pasarela: string; cobrado: number; concepto: string }
   | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string }[];
       /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
       facturas?: { id: string; importe: number }[];
@@ -529,17 +534,15 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
   if (entra && ctx.cobrosPasarela?.length) {
     const a = abonoDePasarela(m, ctx.cobrosPasarela, g.pasarela)
     if (a) {
-      const sinCuenta = a.cobros.find((c) => !c.cuenta)
-      if (sinCuenta) {
-        return { ...b, confianza: 'duda', origen: 'pasarela', contraparte: null, que: a.que, falta: `la cuenta de cliente (430) de ${sinCuenta.cliente}`,
-          porque: `${a.porque} Pero ${sinCuenta.cliente} no tiene su cuenta de cliente (430): ponla en su ficha de Contactos.`, destino: null }
+      const sinAsiento = a.cobros.find((c) => !c.conAsiento || !c.cuenta)
+      if (sinAsiento) {
+        return { ...b, confianza: 'duda', origen: 'pasarela', contraparte: null, que: a.que, falta: `el asiento del cobro de la ${sinAsiento.factura ?? 'factura'} (${sinAsiento.cliente})`,
+          porque: `${a.porque} Pero el cobro de la ${sinAsiento.factura ?? 'factura'} aún no tiene su asiento, y sin él no hay nada por abonar que saldar: mira el historial de la factura.`, destino: null }
       }
       for (const c of a.cobros) g.pasarela.add(c.id)
-      const porCuenta = new Map<string, number>()
-      for (const c of a.cobros) porCuenta.set(c.cuenta!, (porCuenta.get(c.cuenta!) ?? 0) + c.brutoCent)
       return { ...b, confianza: a.confianza, origen: 'pasarela', contraparte: null, que: a.que, porque: a.porque,
         destino: { tipo: 'abono_pasarela', proveedor: a.proveedor, cobros: a.cobros.map((c) => c.id), comision: euros(a.comisionCent),
-          cuenta_comision: ctx.cuentas626, clientes: [...porCuenta].map(([cuenta, c]) => ({ cuenta, importe: euros(c) })), concepto: a.que } }
+          cuenta_comision: ctx.cuentas626, cuenta_pasarela: a.cobros[0].cuenta!, cobrado: euros(a.brutoCent), concepto: a.que } }
     }
   }
 

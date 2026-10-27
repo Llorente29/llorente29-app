@@ -13,6 +13,11 @@
 // que lleva aquí con ?nuevo=banco; el principal de Bancos es «Subir extracto».
 //
 // Sin tarjetas de crédito: ninguna empresa las usa (respuesta 3, punto 4).
+//
+// S01 · Debajo de los bancos, las cuentas de la pasarela de cobro («Stripe ·
+// por abonar», «TPV del banco · por abonar»), con su saldo: lo que tus
+// clientes han pagado con tarjeta o Bizum y aún no ha llegado al banco. No
+// tienen extracto: suben con cada cobro y vuelven a cero al casar su abono.
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -22,8 +27,9 @@ import { useLeer } from '@/modules/conta/libros/contexto'
 import { ibanLegible, nombreConCodigo, textoExtractoDeshecho } from '@/modules/conta/lib/bancosVista'
 import { DialogoMotivo } from '@/modules/conta/bancos/CierreDelMes'
 import {
-  altaCuenta, bajaTarjeta, corregirIban, deshacerExtracto, guardarAlias, cuentasPorDarDeAlta, guardarTarjeta, localDeCuenta, type BancoVista, type Extracto,
+  altaCuenta, bajaTarjeta, corregirIban, cuentasPasarela, deshacerExtracto, guardarAlias, cuentasPorDarDeAlta, guardarTarjeta, localDeCuenta, type BancoVista, type Extracto,
 } from '@/modules/conta/services/bancosPantallas'
+import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
@@ -35,11 +41,12 @@ type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
 
 export function CuentasYExtractos() {
-  const { companyId, datos, vuelta, recargar } = useBancos()
+  const { accountId, companyId, datos, vuelta, recargar } = useBancos()
   const { local: ejeLocal } = useAnalitica()
   const [query, setQuery] = useSearchParams()
   const [aviso, setAviso] = useState<Aviso>(null)
   const porDar = useLeer(() => cuentasPorDarDeAlta(companyId), `${companyId}:${vuelta}`)
+  const pasarelas = useLeer(() => cuentasPasarela(accountId, companyId, hoyEnMadrid()), `${companyId}:${vuelta}:pasarelas`)
   const [alta, setAlta] = useState<{ codigo: string; nombre: string; iban: string } | null>(null)
   // «+ Nuevo banco o tarjeta» (el botón del encabezado) y los enlaces de «no hay ningún banco» llegan
   // con ?nuevo=banco: el diálogo, ya abierto. (Se deriva de la dirección, no se copia: también vale si
@@ -68,6 +75,21 @@ export function CuentasYExtractos() {
         <TarjetaBanco key={b.id} b={b} extractos={datos.extractos.filter((e) => e.cuentaId === b.id)} hacer={hacer}
           prellenar={query.get('banco') === b.id ? query.get('tarjeta') : null} />
       ))}
+
+      {pasarelas.error && <div className="cx-error" role="alert">No se han podido leer los cobros con tarjeta por abonar: {pasarelas.error}</div>}
+      {(pasarelas.datos?.length ?? 0) > 0 && (
+        <div className="cx-tarjeta cxb-lista" aria-label="Cobros con tarjeta por abonar" data-prueba="pasarelas">
+          <h3 className="cxl-subtitulo">Cobros con tarjeta por abonar</h3>
+          <p className="cx-ayuda">Lo que tus clientes han pagado con tarjeta o Bizum por el enlace de pago y aún no ha llegado a tu banco. Sube con cada cobro y vuelve a cero cuando casas su abono en Movimientos.</p>
+          {pasarelas.datos!.map((p) => (
+            <div key={p.codigo} className="cxb-lista-fila">
+              <span className="cxb-lista-texto"><strong>{nombreConCodigo(p.nombre, p.codigo)}</strong>
+                <span className="cx-ayuda">{p.saldoCent === 0 ? 'Todo abonado.' : p.proveedor === 'stripe' ? 'Lo tiene Stripe: llega al banco en unos días.' : 'Lo tiene el banco: llega con la liquidación del TPV.'}</span></span>
+              <strong className="s-cifra">{eurosExactos(p.saldoCent / 100)}</strong>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="cx-tarjeta cxb-lista" aria-label="Cuentas por dar de alta">
         <h3 className="cxl-subtitulo">Cuentas del plan que aún no son un banco</h3>

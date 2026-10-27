@@ -254,10 +254,10 @@ export function asientoQueSeCrea(m: MovimientoBanco, destino: Destino, cuenta572
     }
     case 'liquidacion': return [banco, { cuenta: destino.cuenta_cliente, debeCent: 0, haberCent: abs }]
     case 'traspaso': return [banco, { cuenta: otra572 ?? 'la 572 de la otra cuenta', debeCent: entra ? 0 : abs, haberCent: entra ? abs : 0 }]
-    // S01 · El abono de Stripe o del TPV: el banco por el neto, la comisión al debe y lo cobrado de cada cliente al haber.
+    // S01 · El abono de Stripe o del TPV: el banco por el neto y la comisión al debe, contra la cuenta de la pasarela por lo cobrado.
     case 'abono_pasarela': return [banco,
       ...(destino.comision > 0 ? [{ cuenta: destino.cuenta_comision, debeCent: c(destino.comision), haberCent: 0 }] : []),
-      ...destino.clientes.map((x) => ({ cuenta: x.cuenta, debeCent: 0, haberCent: c(x.importe) }))]
+      { cuenta: destino.cuenta_pasarela, debeCent: 0, haberCent: c(destino.cobrado) }]
     default: return [banco, ...destino.lineas.map((l) => ({ cuenta: l.cuenta, debeCent: entra ? 0 : c(l.importe), haberCent: entra ? c(l.importe) : 0 }))]
   }
 }

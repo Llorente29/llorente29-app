@@ -1,8 +1,9 @@
 -- supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql
 --
--- SOLO STAGING. Prueba de la 2030 y la 2031 del S01 · PR 1 (Redsys como
--- segundo proveedor del enlace de pago, y casar en Bancos el abono con su
--- comisión), con \i dentro de la transacción y ROLLBACK: staging no cambia.
+-- SOLO STAGING. Prueba de la 2030, la 2031 y la 2238 del S01 · PR 1 (Redsys
+-- como segundo proveedor del enlace de pago, el asiento del cobro contra la
+-- cuenta de la pasarela, y casar en Bancos el abono con su comisión), con \i
+-- dentro de la transacción y ROLLBACK: staging no cambia.
 -- En la empresa A, con datos INVENTADOS que se siembra ella misma (un cliente,
 -- su 430 y tres facturas de 121,00 €), por los CAMINOS de verdad: los datos del
 -- TPV y los cobros los apunta el servidor (service_role, como conta-redsys,
@@ -17,25 +18,37 @@
 --   2. En pruebas y sin abrir (cobra = no): ni enlace ni página. Abierto: el
 --      enlace cobra por Redsys, con tarjeta; con Bizum en el TPV, también Bizum.
 --      Otra clave: el mismo secreto, cambiado.
+--  2b. La 2238 (los cobros por el enlace de antes, sin asiento): uno de la E4
+--      sin asiento recibe el suyo con la fecha del cobro, y se crea la cuenta
+--      «Stripe · por abonar»; su vuelta atrás lo deja EXACTAMENTE como estaba
+--      (la huella de antes y la de después, iguales) y borra la copia; y se
+--      puede volver a pasar.
 --   3. El pago con Redsys: el número de pedido; el aviso de otro comercio, no;
---      el bueno cobra 121,00 € por el motor de la E1, con «redsys»; repetido,
---      nada. Un aviso mal firmado se apunta y no cobra.
+--      el bueno cobra 121,00 € por el motor de la E1, con «redsys», y hace su
+--      asiento ese día: «TPV del banco · por abonar» 121,00 al debe contra la
+--      430 del cliente (origen «customer_payment»); la cuenta se crea sola, con
+--      su cuenta de tesorería de tipo «pasarela». Repetido, nada. Un aviso mal
+--      firmado se apunta y no cobra.
 --   4. Con el TPV fuera del enlace, cobra Stripe (lo de la 2031): el cobro, con
---      «stripe», y su comisión (1,95 €) y su neto (119,05 €).
---   5. Lo que espera su abono: los dos cobros.
+--      «stripe», su asiento contra «Stripe · por abonar», y su comisión (1,95 €)
+--      y su neto (119,05 €).
+--   5. Lo que espera su abono: los dos cobros, con su pasarela y su asiento.
 --   6. El abono de Stripe: con otro importe o con la comisión que no cuadra, no;
---      el bueno (119,05 €): el asiento 572 119,05 · 626 1,95 contra la 430 121,00,
---      el cobro deja de esperar y Cobros dice «abonado el».
---   7. El abono del TPV (120,40 €, sin comisión conocida): 0,60 € a la 626.
---      Juntar Stripe y TPV en un abono, no.
---   8. Deshacer el casado de Stripe en Bancos: el asiento se va y el cobro
---      vuelve a esperar su abono.
+--      el bueno (119,05 €): el asiento 572 del banco 119,05 · 626 1,95 contra
+--      «Stripe · por abonar» 121,00; el cobro deja de esperar y Cobros dice
+--      «abonado el».
+--   7. El abono del TPV (120,40 €, sin comisión conocida): 0,60 € a la 626,
+--      contra «TPV del banco · por abonar». Juntar Stripe y TPV, no. Casados los
+--      dos, LAS DOS CUENTAS DE PASARELA QUEDAN A CERO.
+--   8. Deshacer el casado de Stripe en Bancos: el asiento se va, el cobro
+--      vuelve a esperar su abono y «Stripe · por abonar» vuelve a 121,00.
 --   9. Lo que el E4 ya hacía, igual: la página sin datos del proveedor.
 --  10. La vuelta atrás: la 2031 deja las cuatro funciones con el md5 de antes
 --      (desde su respaldo, que se borra);
 --      la 2030, sin nada suyo, tampoco la clave en Vault.
 --
--- Nombra lo que toca, para el analizador: conta_cobro_redsys, conta_enlace_pago,
+-- Nombra lo que toca, para el analizador: conta_pasarela_cuenta, journal_entry,
+-- treasury_account, conta_s01_cobros_antes, conta_cobro_redsys, conta_enlace_pago,
 -- conta_enlace_pago_intento, conta_redsys_aviso, conta_enlace_pago_para,
 -- conta_enlace_pago_ver, conta_enlace_pago_datos, conta_enlace_pago_cobrado,
 -- customer_invoice_payment, customer_invoice_event, bank_casar, bank_match,
@@ -65,6 +78,18 @@ do $$ begin
 end $$;
 \i supabase/migrations/20261027T2030_s01_redsys_y_abono.sql
 \i supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql
+
+-- Las líneas de un asiento, en una frase («43009901 0.00/121.00 · …», por código).
+create or replace function pg_temp.lineas(p uuid) returns text language sql as $$
+  select string_agg(ca.code || ' ' || coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by ca.code)
+    from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = p
+$$;
+-- El saldo de una cuenta en los asientos vivos (propuestos, borradores y validados).
+create or replace function pg_temp.saldo(p_company uuid, p_code text) returns numeric language sql as $$
+  select coalesce(sum(coalesce(jl.debit, 0) - coalesce(jl.credit, 0)), 0)::numeric(14,2)
+    from public.journal_line jl join public.journal_entry je on je.id = jl.entry_id join public.company_account ca on ca.id = jl.company_account_id
+   where ca.company_id = p_company and ca.code = p_code and je.status in ('propuesto', 'borrador', 'validado')
+$$;
 
 create temp table _p (clave text primary key, v text) on commit drop;
 grant select, insert, update on _p to authenticated, anon, service_role;
@@ -205,6 +230,71 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── 2b · La 2238: un cobro de la E4 sin asiento (como postgres) ─────────────
+-- Un cobro con tarjeta de antes de la 2030: apuntado por el motor de la E1, sin asiento.
+create temp table _huella (paso text primary key, h text) on commit drop;
+create or replace function pg_temp.huella_2238(e uuid) returns text language sql as $$
+  select md5(concat_ws('|',
+    (select string_agg(p.id::text || ':' || coalesce(p.entry_id::text, '-'), ',' order by p.id) from public.customer_invoice_payment p where p.company_id = e),
+    (select count(*) from public.journal_entry where company_id = e and source_type = 'customer_payment'),
+    (select count(*) from public.treasury_account where company_id = e and kind = 'pasarela'),
+    (select count(*) from public.company_account where company_id = e and name like '%· por abonar'),
+    (select count(*) from public.company_account_link l where l.company_id = e and l.entity = 'bank_account'),
+    (select count(*) from public.conta_pasarela_cuenta where company_id = e),
+    to_regclass('public.conta_s01_cobros_antes') is not null))
+$$;
+do $$
+declare e uuid := (select v::uuid from _p where clave = 'empresa'); a uuid := (select v::uuid from _p where clave = 'cuenta'); t3 text; pago uuid;
+begin
+  perform public.conta_cobro_stripe_apuntar(e, 'acct_prueba_s01', 'activo', 'activo', true, 0, 'Prueba');
+  t3 := public.conta_enlace_pago_para((select v::uuid from _p where clave = 'f3'));
+  insert into public.customer_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, created_by_name)
+  values (a, e, (select v::uuid from _p where clave = 'f3'), public.conta_hoy() - 2, 121, 'tarjeta', 'Enlace de pago (tarjeta)', 'Sumied')
+  returning id into pago;
+  update public.conta_enlace_pago set status = 'pagado', pago_ref = 'pi_antiguo_s01', metodo = 'tarjeta', importe = 121, pagado_at = now() - interval '2 days', payment_id = pago
+   where token = t3;
+  insert into _p values ('token3', t3), ('pago3', pago);
+  insert into _huella values ('antes', pg_temp.huella_2238(e));
+  if exists (select 1 from public.conta_pasarela_cuenta where company_id = e) then raise exception 'PRUEBA S01 REDSYS · 2b: ya había cuentas de pasarela.'; end if;
+end $$;
+\i supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql
+do $$
+declare e uuid := (select v::uuid from _p where clave = 'empresa'); ent uuid; pas text; lin text; v_err text;
+begin
+  select entry_id into ent from public.customer_invoice_payment where id = (select v::uuid from _p where clave = 'pago3');
+  select code into pas from public.conta_pasarela_cuenta where company_id = e and proveedor = 'stripe';
+  if ent is null or pas is null then raise exception 'PRUEBA S01 REDSYS · 2b: la 2238 no hizo el asiento o la cuenta de Stripe.'; end if;
+  if (select entry_date from public.journal_entry where id = ent) <> public.conta_hoy() - 2 or (select source_type from public.journal_entry where id = ent) <> 'customer_payment' then
+    raise exception 'PRUEBA S01 REDSYS · 2b: el asiento no es del día del cobro o no es un cobro.';
+  end if;
+  lin := pg_temp.lineas(ent);
+  if lin <> format('43009901 0.00/121.00 · %s 121.00/0.00', pas) then raise exception 'PRUEBA S01 REDSYS · 2b: el asiento fue «%».', lin; end if;
+  if (select name from public.company_account where company_id = e and code = pas) <> 'Stripe · por abonar'
+     or (select kind from public.treasury_account t join public.conta_pasarela_cuenta pc on pc.treasury_account_id = t.id where pc.company_id = e and pc.proveedor = 'stripe') <> 'pasarela'
+     or (select count(*) from public.conta_s01_cobros_antes) <> 3 then
+    raise exception 'PRUEBA S01 REDSYS · 2b: la cuenta de la pasarela o la copia no son las esperadas.';
+  end if;
+  raise notice '2b · la 2238: el cobro de antes, con su asiento del día del cobro (%), y «Stripe · por abonar» (%) creada', lin, pas;
+end $$;
+\i supabase/vuelta-atras/20261027T2238_s01_cobros_sin_asiento.down.sql
+do $$
+declare e uuid := (select v::uuid from _p where clave = 'empresa');
+begin
+  if pg_temp.huella_2238(e) <> (select h from _huella where paso = 'antes') then
+    raise exception 'PRUEBA S01 REDSYS · 2b: la vuelta atrás de la 2238 no deja todo como estaba.';
+  end if;
+  raise notice '2b · la vuelta atrás de la 2238: la huella de antes y la de después, iguales; sin copia';
+end $$;
+-- Y otra vez con su vuelta atrás: después de deshacerla, se puede volver a pasar.
+\i supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql
+\i supabase/vuelta-atras/20261027T2238_s01_cobros_sin_asiento.down.sql
+-- El cobro inventado de antes se quita, para que no cuente en lo que sigue.
+do $$ begin
+  update public.conta_enlace_pago set status = 'abierto', pago_ref = null, metodo = null, importe = null, pagado_at = null, payment_id = null
+   where token = (select v from _p where clave = 'token3');
+  delete from public.customer_invoice_payment where id = (select v::uuid from _p where clave = 'pago3');
+end $$;
+
 -- ── 3 · El pago con Redsys (como el servidor) ──────────────────────────────
 set local role service_role;
 do $$
@@ -233,6 +323,20 @@ begin
     raise exception 'PRUEBA S01 REDSYS · 3: el aviso repetido dio %.', x;
   end if;
   if (select count(*) from public.conta_redsys_aviso where pedido = ped and not firma_ok) <> 1 then raise exception 'PRUEBA S01 REDSYS · 3: el aviso mal firmado no quedó apuntado.'; end if;
+  -- Su asiento, el día del cobro: «TPV del banco · por abonar» contra la 430.
+  declare ent uuid; pas text; lin text;
+  begin
+    select p.entry_id into ent from public.customer_invoice_payment p where p.invoice_id = (select v::uuid from _p where clave = 'f1');
+    select code into pas from public.conta_pasarela_cuenta where company_id = e and proveedor = 'redsys';
+    lin := pg_temp.lineas(ent);
+    if ent is null or pas is null or lin <> format('43009901 0.00/121.00 · %s 121.00/0.00', pas)
+       or (select source_type || ' ' || entry_date from public.journal_entry where id = ent) <> 'customer_payment ' || public.conta_hoy()
+       or (select name from public.company_account where company_id = e and code = pas) <> 'TPV del banco · por abonar' then
+      raise exception 'PRUEBA S01 REDSYS · 3: el asiento del cobro fue «%» (pasarela %).', lin, pas;
+    end if;
+    insert into _p values ('pas_tpv', pas);
+    raise notice '3 · el asiento del cobro con Redsys: %', lin;
+  end;
   raise notice '3 · Redsys: pedido %, de otro comercio no; el bueno cobra 121,00 €; repetido, nada; mal firmado, apuntado y sin cobrar', ped;
 end $$;
 
@@ -240,7 +344,6 @@ end $$;
 do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa'); x jsonb;
 begin
-  perform public.conta_cobro_stripe_apuntar(e, 'acct_prueba_s01', 'activo', 'activo', true, 0, 'Prueba');
   perform public.conta_cobro_redsys_guardar(e, '999008881', '1', null, true, false, 'prueba', true, 'Prueba');
   if public.conta_enlace_pago_datos((select v from _p where clave = 'token2'))->>'proveedor' <> 'stripe' then raise exception 'PRUEBA S01 REDSYS · 4: fuera del enlace, no cobra Stripe.'; end if;
   perform public.conta_enlace_pago_sesion((select v from _p where clave = 'token2'), 'cs_prueba_s01_2');
@@ -252,6 +355,11 @@ begin
   if (select proveedor || ' ' || comision || ' ' || neto from public.conta_enlace_pago where sesion = 'cs_prueba_s01_2') <> 'stripe 1.95 119.05' then
     raise exception 'PRUEBA S01 REDSYS · 4: el cobro de Stripe no guardó proveedor, comisión y neto.';
   end if;
+  if (x->>'asiento') is null or pg_temp.lineas((x->>'asiento')::uuid)
+     <> format('43009901 0.00/121.00 · %s 121.00/0.00', (select code from public.conta_pasarela_cuenta where company_id = e and proveedor = 'stripe')) then
+    raise exception 'PRUEBA S01 REDSYS · 4: el asiento del cobro con Stripe fue «%».', pg_temp.lineas((x->>'asiento')::uuid);
+  end if;
+  insert into _p values ('pas_stripe', (select code from public.conta_pasarela_cuenta where company_id = e and proveedor = 'stripe'));
   raise notice '4 · Stripe: de otra cuenta no; el bueno cobra 121,00 € con «stripe», con 1,95 € de comisión y 119,05 € de neto';
 end $$;
 reset role;
@@ -263,8 +371,10 @@ do $$
 declare x jsonb := public.conta_abonos_pasarela_pendientes((select v::uuid from _p where clave = 'empresa'));
 begin
   if (select count(*) from jsonb_array_elements(x) r where r->>'factura' like 'S01P-%') <> 2
-     or not exists (select 1 from jsonb_array_elements(x) r where r->>'factura' = 'S01P-2' and r->>'proveedor' = 'stripe' and (r->>'neto')::numeric = 119.05 and r->>'cuenta' = '43009901')
-     or not exists (select 1 from jsonb_array_elements(x) r where r->>'factura' = 'S01P-1' and r->>'proveedor' = 'redsys' and r->>'neto' is null) then
+     or not exists (select 1 from jsonb_array_elements(x) r where r->>'factura' = 'S01P-2' and r->>'proveedor' = 'stripe' and (r->>'neto')::numeric = 119.05
+                     and r->>'cuenta' = (select v from _p where clave = 'pas_stripe') and (r->>'con_asiento')::boolean)
+     or not exists (select 1 from jsonb_array_elements(x) r where r->>'factura' = 'S01P-1' and r->>'proveedor' = 'redsys' and r->>'neto' is null
+                     and r->>'cuenta' = (select v from _p where clave = 'pas_tpv') and (r->>'con_asiento')::boolean) then
     raise exception 'PRUEBA S01 REDSYS · 5: lo que espera su abono es %.', x;
   end if;
   raise notice '5 · esperan su abono: el de Stripe (neto 119,05 €) y el del TPV (sin neto)';
@@ -299,13 +409,22 @@ begin
   x := public.conta_abono_pasarela_casar((select v::uuid from _p where clave = 'mov_stripe'), array[st], 'seguro',
          'Abono de Stripe del día: 1 cobro, 121,00 € menos 1,95 € de comisión.', 'folvy');
   insert into _p values ('casado_stripe', x->>'casado');
-  if x->>'frase' not like 'Casado el abono de Stripe del __/__: 1 cobro, 121,00 € menos 1,95 € de comisión. Asiento: 119,05 € al banco y 1,95 € a comisiones.' then
+  if x->>'frase' not like 'Casado el abono de Stripe del __/__: 1 cobro, 121,00 € menos 1,95 € de comisión. Asiento: 119,05 € al banco y 1,95 € a comisiones; «Stripe · por abonar» queda saldada por esos cobros.' then
     raise exception 'PRUEBA S01 REDSYS · 6: casar dijo «%».', x->>'frase';
   end if;
   select journal_entry_id into ent from public.bank_match where id = (x->>'casado')::uuid;
   select string_agg(ca.code || ' ' || coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by ca.code) into lin
     from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = ent;
-  if lin not like '43009901 0.00/121.00 · 572_____ 119.05/0.00 · 626_____ 1.95/0.00' then raise exception 'PRUEBA S01 REDSYS · 6: el asiento fue «%».', lin; end if;
+  if lin <> (select string_agg(x2, ' · ' order by x2) from unnest(array[
+       (select code from public.company_account ca join public.company_account_link l on l.company_account_id = ca.id
+         where l.entity = 'bank_account' and l.entity_id = (select v from _p where clave = 'banco')) || ' 119.05/0.00',
+       (select v from _p where clave = 'pas_stripe') || ' 0.00/121.00',
+       (select code from public.company_account where company_id = (select v::uuid from _p where clave = 'empresa') and code like '626%' order by code limit 1) || ' 1.95/0.00']) x2) then
+    raise exception 'PRUEBA S01 REDSYS · 6: el asiento fue «%».', lin;
+  end if;
+  if pg_temp.saldo((select v::uuid from _p where clave = 'empresa'), (select v from _p where clave = 'pas_stripe')) <> 0 then
+    raise exception 'PRUEBA S01 REDSYS · 6: casado el abono, «Stripe · por abonar» no queda a cero.';
+  end if;
   if (select status from public.bank_movement where id = (select v::uuid from _p where clave = 'mov_stripe')) <> 'casado'
      or not (select entry_created from public.bank_match where id = (x->>'casado')::uuid) then
     raise exception 'PRUEBA S01 REDSYS · 6: el movimiento no quedó casado con su asiento.';
@@ -323,10 +442,16 @@ begin
   select journal_entry_id into ent from public.bank_match where id = (x->>'casado')::uuid;
   select string_agg(ca.code || ' ' || coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by ca.code) into lin
     from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = ent;
-  if lin not like '43009901 0.00/121.00 · 572_____ 120.40/0.00 · 626_____ 0.60/0.00' or (x->>'comision')::numeric <> 0.60 then
+  if lin not like '%' || (select v from _p where clave = 'pas_tpv') || ' 0.00/121.00%' or lin not like '% 120.40/0.00%' or lin not like '%626_____ 0.60/0.00%'
+     or (x->>'comision')::numeric <> 0.60 then
     raise exception 'PRUEBA S01 REDSYS · 7: el asiento del TPV fue «%».', lin;
   end if;
+  if pg_temp.saldo((select v::uuid from _p where clave = 'empresa'), (select v from _p where clave = 'pas_tpv')) <> 0
+     or pg_temp.saldo((select v::uuid from _p where clave = 'empresa'), (select v from _p where clave = 'pas_stripe')) <> 0 then
+    raise exception 'PRUEBA S01 REDSYS · 7: casados los dos abonos, las cuentas de pasarela no quedan a cero.';
+  end if;
   raise notice '7 · %', x->>'frase';
+  raise notice '7 · casados los dos abonos: «Stripe · por abonar» y «TPV del banco · por abonar», a cero';
 end $$;
 
 -- ── 8 · Deshacer el casado de Stripe en Bancos ─────────────────────────────
@@ -347,7 +472,10 @@ begin
   if (select estado from public.conta_factura_cobro where invoice_id = (select v::uuid from _p where clave = 'f2')) <> 'cobrada' then
     raise exception 'PRUEBA S01 REDSYS · 8: deshacer el abono descobró la factura.';
   end if;
-  raise notice '8 · deshacer en Bancos: el asiento se va, el cobro vuelve a esperar su abono y la factura sigue cobrada';
+  if pg_temp.saldo((select v::uuid from _p where clave = 'empresa'), (select v from _p where clave = 'pas_stripe')) <> 121 then
+    raise exception 'PRUEBA S01 REDSYS · 8: deshecho el abono, «Stripe · por abonar» no vuelve a 121,00.';
+  end if;
+  raise notice '8 · deshacer en Bancos: el asiento se va, el cobro vuelve a esperar su abono, la factura sigue cobrada y «Stripe · por abonar» vuelve a 121,00';
 end $$;
 reset role;
 
@@ -365,6 +493,19 @@ end $$;
 reset role;
 
 -- ── 10 · La vuelta atrás ─────────────────────────────────────────────────────
+-- Con asientos de cobro o cuentas de pasarela, la de la 2031 PARA (lo prueba la base local
+-- del parte: un \i que falla no se puede recoger aquí).
+-- Para seguir con la vuelta atrás, como haría Julio después de decidir: se quitan los
+-- asientos de cobro y las cuentas de pasarela de la prueba (todo inventado).
+do $$
+declare e uuid := (select v::uuid from _p where clave = 'empresa');
+begin
+  delete from public.journal_entry where company_id = e and source_type = 'customer_payment';
+  delete from public.conta_pasarela_cuenta where company_id = e;
+  delete from public.company_account_link where company_id = e and entity = 'bank_account'
+     and entity_id in (select id::text from public.treasury_account where company_id = e and kind = 'pasarela');
+  delete from public.treasury_account where company_id = e and kind = 'pasarela';
+end $$;
 \i supabase/vuelta-atras/20261027T2031_s01_enlace_con_redsys.down.sql
 do $$
 declare dif text;

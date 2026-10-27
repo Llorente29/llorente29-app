@@ -12,10 +12,18 @@
 #   2. 2031 — CAMBIA en caliente cuatro funciones del enlace de pago, con la
 #      misma firma (conta_enlace_pago_para, _ver, _datos y _cobrado), declarado
 #      en su cabecera con su prueba. Hoy en producción hay 0 enlaces de pago. No
-#      está en el camino del pedido.
+#      está en el camino del pedido. Y amplía dos CHECK (Respuesta 1): el origen
+#      «customer_payment» de journal_entry (el asiento del cobro) y el tipo
+#      «pasarela» de treasury_account (la cuenta «Stripe · por abonar»).
+#   3. 2238 — DATOS (Respuesta 1, punto 4): a los cobros por el enlace que ya
+#      existan sin asiento les hace el suyo, con la fecha del cobro, y crea la
+#      cuenta de la pasarela si hace falta. Con copia previa
+#      (conta_s01_cobros_antes) y vuelta atrás exacta. Medido el 27/10: 0
+#      cobros con tarjeta en producción.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/s01-redsys-abono.sql
 supabase/migrations/20261027T2030_s01_redsys_y_abono.sql
 supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql
+supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql

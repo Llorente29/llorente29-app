@@ -83,6 +83,8 @@ export type OrigenAsiento =
   | 'purchase_accrual' | 'purchase_accrual_reversal'
   // V01: una factura de venta emitida en Sumied (y el cobro en efectivo de una).
   | 'customer_invoice'
+  // S01: el cobro de una factura por el enlace de pago (la pasarela contra la 430).
+  | 'customer_payment'
 
 // ── Céntimos ────────────────────────────────────────────────────────────────
 

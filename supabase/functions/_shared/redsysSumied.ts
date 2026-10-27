@@ -210,9 +210,14 @@ export const importeRedsys = (euros: number): string => String(Math.round(Number
 export const autorizado = (respuesta: string | null | undefined): boolean => /^\d{1,4}$/.test(String(respuesta ?? '').trim()) && Number(respuesta) <= 99
 
 /**
- * Con qué se pagó. Redsys dice el método en Ds_ProcessedPayMethod; Bizum es el
- * 68 (guía de Bizum de Redsys). Lo demás es tarjeta. Se comprueba con el
- * primer cobro de prueba en sis-t (el parte lo dice si no coincide).
+ * Con qué se pagó. Redsys dice el método en Ds_ProcessedPayMethod: el 68 es
+ * Bizum; lo demás es tarjeta. Y Ds_Merchant_PayMethods = «z» elige Bizum (sin
+ * él, Redsys enseña lo que el banco tenga encendido; «C», solo tarjeta).
+ * Fuentes:
+ *   · Redsys, parámetros de entrada y salida:
+ *     https://pagosonline.redsys.es/desarrolladores-inicio/integrate-con-nosotros/parametros-de-entrada-y-salida/
+ *   · BBVA, manual de integración de Bizum:
+ *     https://bbva.es/en/content/dam/public-web/bbvaes/documents/productos/tpv/manual-de-integracion-bizum.pdf
  */
 export const metodoRedsys = (p: Record<string, string>): 'tarjeta' | 'bizum' =>
   String(p.Ds_ProcessedPayMethod ?? p.DS_PROCESSEDPAYMETHOD ?? '').trim() === '68' ? 'bizum' : 'tarjeta'

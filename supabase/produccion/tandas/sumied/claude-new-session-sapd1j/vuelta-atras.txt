@@ -1,3 +1,4 @@
 # S01 · PR 1 · Redsys y el abono casado · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261027T2238_s01_cobros_sin_asiento.down.sql
 supabase/vuelta-atras/20261027T2031_s01_enlace_con_redsys.down.sql
 supabase/vuelta-atras/20261027T2030_s01_redsys_y_abono.down.sql

@@ -126,7 +126,8 @@ export function crearBancos(bd: Bd) {
 
   async function bancosDeLaEmpresa(accountId: string, companyId: string): Promise<BancoFolvy[]> {
     const [ts, enlaces, recordados] = await Promise.all([
-      leer(tabla('treasury_account').select('id, name, short_name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los bancos'),
+      // S01 · Sin las cuentas de la pasarela («Stripe · por abonar»): no tienen extracto ni movimientos; Bancos las enseña aparte, con su saldo.
+      leer(tabla('treasury_account').select('id, name, short_name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).in('kind', ['bank', 'card', 'cash']), 'los bancos'),
       leer(tabla('company_account_link').select('entity_id, company_account:company_account_id(code)').eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'bank_account').eq('role', 'principal'), 'las cuentas de los bancos'),
       leer(tabla('bank_account_iban').select('treasury_account_id, iban').eq('account_id', accountId).eq('company_id', companyId), 'los IBAN recordados'),
     ])
@@ -196,7 +197,7 @@ export function crearBancos(bd: Bd) {
       leer(tabla('company').select('legal_name, trade_name').eq('id', companyId), 'la empresa'),
       // D01 · El mapa de tiendas de las plataformas: la cuenta del banco de cada marca × local.
       leer(tabla('platform_store').select('id, external_text, treasury_account_id, location_id').eq('account_id', accountId).eq('company_id', companyId), 'las tiendas de las plataformas'),
-      leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las cuentas de cada local'),
+      leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).in('kind', ['bank', 'card', 'cash']), 'las cuentas de cada local'),
       // PC01 · Las emitidas a un cliente (no las de los cierres: ésas las cobra su liquidación) y lo que les queda.
       leer(tabla('customer_invoice').select('id, number_text, issue_date, party_id').eq('account_id', accountId).eq('company_id', companyId)
         .eq('status', 'emitida').in('origin', ['a_mano', 'recurrente', 'presupuesto', 'tienda', 'automatica']), 'las facturas emitidas'),
@@ -320,7 +321,7 @@ export function crearBancos(bd: Bd) {
       cobrosPasarela: (pasarela ?? []).map((c) => ({
         id: String(c.id), proveedor: c.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, fecha: String(c.fecha), brutoCent: cent(c.bruto),
         netoCent: c.neto === null || c.neto === undefined ? null : cent(c.neto), comisionCent: c.comision === null || c.comision === undefined ? null : cent(c.comision),
-        factura: s(c.factura), cliente: String(c.cliente ?? 'Un cliente'), cuenta: s(c.cuenta),
+        factura: s(c.factura), cliente: String(c.cliente ?? 'Un cliente'), cuenta: s(c.cuenta), conAsiento: c.con_asiento === true,
       })),
     }
     return { ctx, movimientos }

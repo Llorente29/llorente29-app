@@ -22,6 +22,16 @@
 -- 84a2d513…, conta_enlace_pago_datos 5bc6c477…, conta_enlace_pago_cobrado
 -- 39479a1c…. Hoy en producción: 0 enlaces y 0 cuentas de Stripe.
 --
+-- Y dos CHECK que solo amplían (Respuesta 1 al S01 · PR 1): todo lo que valía
+-- sigue valiendo. NOT VALID y validados después, como la 0836.
+--   · journal_entry.source_type admite «customer_payment»: el asiento del cobro
+--     por el enlace (la pasarela contra la 430), gemelo de «supplier_payment».
+--   · treasury_account.kind admite «pasarela»: la cuenta de tesorería de
+--     «Stripe · por abonar» y «TPV del banco · por abonar», para que Bancos la
+--     enseñe con su saldo. Sin IBAN (el CHECK del IBAN es solo para «bank»).
+--
+-- cambia: public.journal_entry · prueba: supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql
+-- cambia: public.treasury_account · prueba: supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql
 -- cambia: public.conta_enlace_pago_para · prueba: supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql
 -- cambia: public.conta_enlace_pago_ver · prueba: supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql
 -- cambia: public.conta_enlace_pago_datos · prueba: supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql
@@ -35,6 +45,17 @@ select public._respaldar_funcion('public.conta_enlace_pago_para(uuid)', '2026102
 select public._respaldar_funcion('public.conta_enlace_pago_ver(text)', '20261027T2031_s01_enlace_con_redsys');
 select public._respaldar_funcion('public.conta_enlace_pago_datos(text)', '20261027T2031_s01_enlace_con_redsys');
 select public._respaldar_funcion('public.conta_enlace_pago_cobrado(text,text,text,numeric,text,date)', '20261027T2031_s01_enlace_con_redsys');
+
+alter table public.journal_entry drop constraint if exists journal_entry_source_type_check;
+alter table public.journal_entry add constraint journal_entry_source_type_check check (source_type = any (array[
+  'sales_day', 'sales_adjustment', 'supplier_invoice', 'supplier_payment', 'channel_settlement', 'licensed_settlement', 'payroll', 'bank',
+  'vat_settlement', 'manual', 'template', 'reversal', 'opening', 'closing', 'migrated', 'purchase_accrual', 'purchase_accrual_reversal',
+  'customer_invoice', 'customer_payment'])) not valid;
+alter table public.journal_entry validate constraint journal_entry_source_type_check;
+
+alter table public.treasury_account drop constraint if exists treasury_account_kind_check;
+alter table public.treasury_account add constraint treasury_account_kind_check check (kind = any (array['bank', 'card', 'cash', 'pasarela'])) not valid;
+alter table public.treasury_account validate constraint treasury_account_kind_check;
 
 -- El enlace de pago de una factura (solo el servidor): el abierto que tenga, o
 -- uno nuevo. Null si la empresa no cobra con tarjeta (ni Redsys ni Stripe), si
