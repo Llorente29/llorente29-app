@@ -34,6 +34,12 @@
 -- Cada función que ya existe se guarda antes con _respaldar_funcion y su vuelta
 -- atrás la restaura byte a byte.
 
+-- Los cerrojos de las cuatro tablas que reciben disparador, de golpe y al
+-- principio, siempre en el mismo orden: así no se cruza a medias con quien
+-- esté escribiendo en ellas (el ensayo 652 chocó con una e2e en marcha).
+set local lock_timeout = '20s';
+lock table public.tax_return, public.journal_entry, public.journal_line, public.vat_book_entry in share row exclusive mode;
+
 select public._respaldar_funcion('public.conta_iva_presentado(uuid,date)', '20261027T1408_v04_iva_reabrir');
 select public._respaldar_funcion('public.conta_iva_presentados(uuid,int)', '20261027T1408_v04_iva_reabrir');
 

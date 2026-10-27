@@ -10,6 +10,10 @@
 
 select public._conta_iva_reabrir_se_puede_deshacer();
 
+-- Los cerrojos de las cuatro tablas, de golpe y al principio (como la migración).
+set local lock_timeout = '20s';
+lock table public.tax_return, public.journal_entry, public.journal_line, public.vat_book_entry in access exclusive mode;
+
 select public._restaurar_funcion('public.conta_iva_presentados(uuid,int)', '20261027T1408_v04_iva_reabrir');
 select public._restaurar_funcion('public.conta_iva_presentado(uuid,date)', '20261027T1408_v04_iva_reabrir');
 

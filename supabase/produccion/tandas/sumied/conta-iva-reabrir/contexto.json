@@ -2,7 +2,7 @@
  "_que": "V04 · Respuesta 5, punto 3 · Reabrir para corregir (1408). Contexto de producción medido en SOLO LECTURA el 27/10 a las 13:3xZ con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen journal_entry (14955 filas), journal_line (39614), tax_return y vat_book_entry (4509), ninguna del camino del pedido; y conta_iva_presentado y conta_iva_presentados (las de la 1233, sin otra firma). Las tablas y funciones nuevas no existen. Nada en el historial.",
  "medido": "2026-10-27T13:35Z",
  "tanda": {
-  "supabase/migrations/20261027T1408_v04_iva_reabrir.sql": "a7fb0b92d5052eaedb92f1c921686aae"
+  "supabase/migrations/20261027T1408_v04_iva_reabrir.sql": "d723295c05b0038761075bda7e1ab5a1"
  },
  "contexto": {"tablas":["public.journal_entry","public.journal_line","public.tax_return","public.vat_book_entry"],"funciones":["public.conta_iva_presentado(uuid,date)","public.conta_iva_presentados(uuid,int)"],"filas":{"public.journal_entry":14955,"public.journal_line":39614,"public.tax_return":0,"public.vat_book_entry":4509},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }
