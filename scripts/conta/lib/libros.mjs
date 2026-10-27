@@ -23,7 +23,7 @@ export const NORMAS_LIBROS = {
   por_defecto: 'Respuesta 1 del C05: las cuentas que el modelo no nombra van «colocadas por defecto» y se completan',
   otros_resultados: 'PGC de pymes, tercera parte, norma 6.ª.6 (abreviado y normal, 7.ª.9): «Otros resultados» se explica en la memoria',
   pyg_129: 'PGC, quinta parte, cuenta 129: tras regularizar, gastos e ingresos quedan a cero y el resultado en la 129',
-  libro_diario: 'RIVA art. 62 y encargo C05, regla 6: las cuotas del libro registro son las de la 477 y la 472',
+  libro_diario: 'RIVA art. 62 y 64 y encargo C05, regla 6: las cuotas del libro registro son las de la 477 y la 472 (las recibidas, en su periodo de deducción y lo deducible)',
   cerrado_con_asientos: 'Encargo C05, regla 7: un ejercicio cerrado no admite asientos',
 }
 

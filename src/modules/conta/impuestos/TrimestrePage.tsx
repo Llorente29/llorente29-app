@@ -48,7 +48,8 @@ import {
 } from './trimestre'
 import { TraerPorCsv } from './TraerPorCsv'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
-import { diaPresentado, textosCandado, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
+import { diaPresentado, mesReabierto, textoReabierto, textosCandado, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
+import { ReabrirTrimestre } from './ReabrirTrimestre'
 import { CandadoIva } from '@/modules/conta/diseno/CandadoIva'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -173,6 +174,11 @@ export default function TrimestrePage() {
       </div>
       {(() => {
         const cerrado = q ? trimestrePresentado(ejercicio, q, iva.presentados) : null
+        // V04 (1408): reabierto para corregir, en rojo.
+        const reabierto = q ? mesReabierto(`${ejercicio}-${String(q * 3).padStart(2, '0')}`, iva.presentados) : null
+        if (reabierto?.reabierto) {
+          return <p className="s-trimestre-reabierto-cabeza" role="status" data-prueba="trimestre-reabierto-cabeza">{textoReabierto(reabierto.reabierto)}</p>
+        }
         return cerrado ? (
           <p className="s-apoyo" role="status" data-prueba="trimestre-iva-presentado">
             <CandadoIva {...textosCandado(cerrado)} /> · Su IVA ya no se cambia: lo que llegue tarde va {/^[1-4]T/.test(cerrado.siguiente) ? `al ${cerrado.siguiente}` : `a ${cerrado.siguiente}`}.
@@ -305,6 +311,11 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer, alPega
         </dl>
       )}
       {d && !deRuta && <Acciones m={m} d={d} ejercicio={ejercicio} trimestre={trimestre} presentada={presentada} />}
+      {/* V04 (1408): «Más» › «Reabrir para corregir», y la original y la nueva juntas. */}
+      {d && m.modelo === '303' && m.periodo && (
+        <ReabrirTrimestre companyId={datos.empresa.id} ejercicio={ejercicio} trimestre={m.periodo} declaracionId={d.id} presentadaEl={d.presentada ?? null}
+          presentada={presentada} deRuta={deRuta} quien={null} alHacer={alHacer} />
+      )}
       {(m.modelo === '111' || m.modelo === '115') && !presentada && !m.no_toca && datos.puede_gestionar && (
         <Preparar m={m} d={datos} ejercicio={ejercicio} trimestre={trimestre} deRuta={deRuta} alHacer={alHacer} />
       )}

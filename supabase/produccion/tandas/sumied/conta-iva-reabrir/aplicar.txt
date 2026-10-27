@@ -1,0 +1,20 @@
+# V04 · Respuesta 5, punto 3 · PR 2 del candado del IVA: «Reabrir para corregir».
+# Rama conta/iva-reabrir. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1408 — AÑADE vat_reopening y vat_reopening_entry, reabrir (solo el
+#      administrador o el gestor, con motivo), apuntar la nueva presentación,
+#      el recordatorio a los 30 días (cron iva-reabierto-recordar, cada día) y
+#      conta_iva_reaperturas. PONE disparadores en journal_entry, journal_line
+#      y vat_book_entry (marcan lo que se hace con el periodo reabierto) y en
+#      tax_return (cierra la reapertura al presentarse la nueva). CAMBIA EN
+#      CALIENTE conta_iva_presentado y conta_iva_presentados (con su respaldo,
+#      byte a byte): lo reabierto no lleva candado hasta su nueva presentación.
+#      · La presentación original no se toca nunca: la nueva es otra
+#        declaración (sequence + 1, replaces_return_id).
+#      · Hoy no hay ninguna reapertura: el candado sigue igual.
+#      · Ni el camino del pedido ni nada que destruya.
+#
+# AUTORIZO: no hace falta (lo dice el analizador). Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261027T1408_v04_iva_reabrir.sql
+cuenta: scripts/conta/produccion/cuentas/v04-iva-reabrir.sql

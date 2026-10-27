@@ -89,7 +89,8 @@ for f in "${FICHEROS[@]}"; do
   echo "::group::[$i/${#FICHEROS[@]}] $f"
   rm -f "$CARRIL_DIR/barrera.espera"
   if ! BARRERA_QUE="$f" "$CARRIL" barrera-entrar; then
-    printf '%s\t%s\t0\tsin barrera\n' "$f" "${CARRIL_BARRERA_MIN:-20}m" >> "$TSV"
+    # Lo que esperó de verdad (antes ponía siempre «20m», aunque fallara al momento).
+    printf '%s\t%s\t0\tsin barrera\n' "$f" "$(cat "$CARRIL_DIR/barrera.espera" 2>/dev/null || echo '?')" >> "$TSV"
     fallos=$((fallos + 1)); echo "::endgroup::"; continue
   fi
   DENTRO=1

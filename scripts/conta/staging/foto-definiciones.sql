@@ -23,7 +23,7 @@
 -- w06_staging (el registro de staging, que no es de ninguna tanda).
 with esq as (
   select oid, nspname from pg_namespace
-  where nspname not in ('pg_catalog', 'information_schema', 'pg_toast', 'w06_staging')
+  where nspname not in ('pg_catalog', 'information_schema', 'pg_toast', 'w06_staging', 'e2e_carril')
     and nspname !~ '^pg_(temp|toast_temp)_'
 )
 select clave, valor from (
