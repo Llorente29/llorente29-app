@@ -8,7 +8,8 @@ import { passCode } from '@/modules/orders/lib/passCode';
 import { direccionParaMostrar } from '@/lib/direccionEntrega';
 import { bloqueEntrega, SIN_DIRECCION } from '@/modules/reparto/lib/entregaTicket';
 import { unidadesDeComponente } from '@/lib/unidadesDeComponente';
-import { lineasFiscales } from './fiscalTique';
+import QRCode from 'qrcode';
+import { lineasFiscales, puntosPorModulo, qrHacienda } from './fiscalTique';
 
 // CÓDIGO DE PASE (lo que canta el repartidor): Glovo → pos_short_code; Uber →
 // platform_order_code completo; propio/otros → pos_short_code. Lógica única en passCode.ts.
@@ -192,6 +193,15 @@ export function renderBagTicket(order: any, fiscal?: any): TicketDoc {
   b.push({ kind: 'text', text: 'Pagos', bold: true });
   if (order.payment_method) b.push({ kind: 'row', left: order.payment_method + ':', right: money(total) });
   else if (ch) b.push({ kind: 'row', left: ch + ':', right: money(total) });
+  // V04 · PR 2 · El QR de Hacienda (solo con Verifactu en real), encima del de la tienda.
+  const qrH = qrHacienda(fiscal);
+  if (qrH) {
+    const modulo = puntosPorModulo(QRCode.create(qrH.url, { errorCorrectionLevel: 'M' }).modules.size);
+    if (modulo) {
+      b.push({ kind: 'rule', dashed: true });
+      b.push({ kind: 'qrHacienda', data: qrH.url, encima: qrH.encima, debajo: qrH.debajo, modulo });
+    }
+  }
   if (order.brand_shop_url) {
     b.push({ kind: 'rule', dashed: true });
     b.push({ kind: 'qr', data: order.brand_shop_url, caption: order.brand_qr_caption ?? 'Pide directo la próxima vez y ahorra', size: 'lg' });

@@ -197,15 +197,20 @@ Deno.serve(async (req) => {
   // En pruebas, el certificado de pruebas se lee antes: da el productor si no
   // está puesto. Si faltan sus secretos, cada envío lo dirá al pedir el material.
   if (entorno === "pruebas") { try { leerCertPruebas(); } catch { /* lo dice material() */ } }
-  const sifNombre = Deno.env.get("VERIFACTU_SIF_NOMBRE") ?? (entorno === "pruebas" ? certPruebas?.titular ?? "" : "");
-  const sifNif = Deno.env.get("VERIFACTU_SIF_NIF") ?? (entorno === "pruebas" ? certPruebas?.nif ?? "" : "");
+  // V04 · PR 2: quién fabrica Sumied lo dice la base (verifactu_sistema), el
+  // mismo dato que mira el candado para pasar a real. Si la base aún no lo
+  // tiene (o no tiene la función), los secretos de antes.
+  const { data: sifBase } = await srv.rpc("verifactu_sistema_ver");
+  const sb = (sifBase ?? null) as { nombre_razon?: string | null; nif?: string | null } | null;
+  const sifNombre = sb?.nombre_razon || Deno.env.get("VERIFACTU_SIF_NOMBRE") || (entorno === "pruebas" ? certPruebas?.titular ?? "" : "");
+  const sifNif = sb?.nif || Deno.env.get("VERIFACTU_SIF_NIF") || (entorno === "pruebas" ? certPruebas?.nif ?? "" : "");
 
   const piezas: Piezas = {
     tomar: async (e, max) => (await rpc("verifactu_cola_tomar", { p_entorno: e, p_max: max })) as Lote | null,
     responder: (id, x) => rpc("verifactu_cola_respuesta", { p_envio: id, p: x }),
     fallar: (id, err) => rpc("verifactu_cola_fallo", { p_envio: id, p_error: err }),
     material: async (lote) => {
-      const sinProductor = () => new SinCertificado("Falta quién produce el sistema (nombre y NIF de la declaración responsable: VERIFACTU_SIF_NOMBRE y VERIFACTU_SIF_NIF). Se rellena antes de pasar a real.");
+      const sinProductor = () => new SinCertificado("Falta quién produce el sistema (nombre y NIF de la declaración responsable: verifactu_sistema en la base, o VERIFACTU_SIF_NOMBRE y VERIFACTU_SIF_NIF). Se rellena antes de pasar a real.");
       if (entorno === "pruebas") {
         const m = materialPruebas(lote);
         if (!sifNombre || !sifNif) throw sinProductor();

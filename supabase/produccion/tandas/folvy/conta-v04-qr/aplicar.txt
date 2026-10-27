@@ -1,0 +1,23 @@
+# V04 · PR 2 · El tique de la bolsa con Verifactu (el QR de Hacienda).
+# Rama conta/v04-qr. Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0741 — AÑADE el fabricante de Sumied (verifactu_sistema, vacío), las
+#      columnas de Verifactu de cada tique, el tramo de las series, el registro
+#      F2/R5 de cada tique, la anulación al cancelar, la rectificativa al
+#      devolver después de entregar y el reintento de lo pendiente (cron cada
+#      5 min). CAMBIA EN CALIENTE (con su respaldo, byte a byte):
+#      fiscal_for_print, fiscal_for_preview, _ticket_invoice_number,
+#      ticket_invoice_ajustes y verifactu_modo; y pone un disparador en sale.
+#      Quita la clave única de la serie (local, año, tipo) y pone la que lleva
+#      el tramo.
+#      · Con Verifactu apagado (hoy, todas las empresas de producción), el
+#        tique sale igual que con la 2309: ni registro ni QR.
+#      · La impresión no espera a Hacienda ni falla si el motor falla.
+#
+# AUTORIZO: sí (camino del pedido: fiscal_for_print y el disparador de sale; y
+# quita una restricción). En el campo `autorizo`:
+#   20261027T0741_v04_tique_verifactu.sql
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261027T0741_v04_tique_verifactu.sql
+cuenta: scripts/conta/produccion/cuentas/v04-qr.sql

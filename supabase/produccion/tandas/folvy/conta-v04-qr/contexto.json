@@ -1,0 +1,37 @@
+{
+ "_que": "V04 · PR 2 · contexto de producción de la tanda (0741), medido en SOLO LECTURA el 27/10 a las 06:47Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. De lo que toca la 0741 existen: sale (21031 filas, camino del pedido), ticket_invoice y ticket_invoice_series (0 filas), y las cinco funciones que cambia en caliente sin otra firma (fiscal_for_print es camino del pedido); nada en el historial. Ninguna empresa con Verifactu encendido. La cuenta (v04-qr.sql) a las 06:5xZ: 3978 / 10950 · 0 · 0 de 10 · 0 · 0 y 0 · 0 · _ticket_invoice_number 6e140882, fiscal_for_preview 98888cc6, fiscal_for_print f32a7c74, ticket_invoice_ajustes d8f59630, verifactu_modo d3460342 · _ticket_quien_factura 3a010b65, _verifactu_registrar 34c4777a, cancel_sale 954472a9, close_sale dd57b687, encolar_alerta 7349bace, kds_resolve_device 6c853904, order_for_print 09e3f639, reprint_order_by_token 0890fdda, verifactu_url_qr 851be6d2.",
+ "medido": "2026-10-27T06:47Z",
+ "tanda": {
+  "supabase/migrations/20261027T0741_v04_tique_verifactu.sql": "811d8bf55cc8b2eb97f7f28428ffb9f6"
+ },
+ "contexto": {
+  "tablas": [
+   "public.sale",
+   "public.ticket_invoice",
+   "public.ticket_invoice_series"
+  ],
+  "funciones": [
+   "public._ticket_invoice_number(uuid,uuid,uuid,text,text,text,timestamptz)",
+   "public.fiscal_for_preview(uuid)",
+   "public.fiscal_for_print(text,uuid)",
+   "public.ticket_invoice_ajustes(uuid)",
+   "public.verifactu_modo(uuid,text,text,text,text)"
+  ],
+  "filas": {
+   "public.sale": 21031,
+   "public.ticket_invoice": 0,
+   "public.ticket_invoice_series": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [
+    "public.sale"
+   ],
+   "funciones": [
+    "public.fiscal_for_print(text,uuid)"
+   ]
+  },
+  "usos": {},
+  "registro": []
+ }
+}

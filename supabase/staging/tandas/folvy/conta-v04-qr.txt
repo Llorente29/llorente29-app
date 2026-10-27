@@ -1,0 +1,11 @@
+# V04 · PR 2 · El tique de la bolsa con Verifactu. La 0741 cambia en caliente
+# fiscal_for_print y cuatro más, y pone un disparador en sale: desde la rama,
+# solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos (regla 10): imprimir, reimprimir, cerrar
+# y cancelar con Verifactu apagado, en pruebas y en real; el motor caído (el
+# tique sale, el registro pendiente y avisado, y el reintento); la anulación al
+# cancelar; la rectificativa al devolver después de entregar; el candado del
+# fabricante; el tramo B y el QR en real; las cedidas fuera; los permisos; y la
+# vuelta atrás (en limpio, y que para con números dados).
+supabase/migrations/20261027T0741_v04_tique_verifactu.sql
+supabase/staging/sql/20261027_v04_tique_verifactu_prueba.sql

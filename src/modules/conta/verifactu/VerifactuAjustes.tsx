@@ -54,6 +54,11 @@ export function VerifactuAjustes() {
         <h1 className="cxvf-alta-titulo">Verifactu: tus facturas, directas a Hacienda</h1>
         <p className="s-apoyo">Desde el 1 de enero de 2027 cada factura que emitas tiene que llegar a Hacienda en el momento. Sumied lo hace solo. Lo dejas listo en tres pasos.</p>
       </header>
+      {d.fabricantePuesto === false && (
+        <p className="s-aviso-lista" data-tono="falta" role="status" data-prueba="aviso-fabricante">
+          Falta quién fabrica Sumied (el nombre y el NIF de la declaración responsable): hasta que esté puesto, Verifactu no se puede pasar a real. En pruebas sí se puede trabajar.
+        </p>
+      )}
       <div className="cxvf-alta-columnas">
         <div className="cxvf-pasos">
           <PasoDatos razon={activa.razonSocial ?? activa.nombre} nif={activa.nif} />

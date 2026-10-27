@@ -221,11 +221,32 @@ function Block({ blk }: { blk: TicketBlock }) {
       return <div style={{ height: (blk.lines ?? 1) * 8 }} />
     case 'qr':
       return <QrBlock data={blk.data} caption={blk.caption} size={blk.size ?? 'lg'} />
+    case 'qrHacienda':
+      return <QrHaciendaBlock data={blk.data} encima={blk.encima} debajo={blk.debajo} />
     case 'cut':
       return <div style={{ borderTop: '2px dotted #bbb', margin: '10px -12px 0', paddingTop: 4, textAlign: 'center', fontSize: 8, color: '#bbb' }}>✂ corte</div>
     default:
       return null
   }
+}
+
+// V04 · PR 2 · El QR de Hacienda: corrección M, «QR tributario:» encima y
+// «VERI*FACTU» debajo. En la vista previa, a la escala del resto del tique.
+function QrHaciendaBlock({ data, encima, debajo }: { data: string; encima: string; debajo: string }) {
+  const [url, setUrl] = useState<string | null>(null)
+  const px = 104
+  useEffect(() => {
+    let on = true
+    QRCode.toDataURL(data, { width: px * 2, margin: 2, errorCorrectionLevel: 'M' }).then((u) => { if (on) setUrl(u) }).catch(() => {})
+    return () => { on = false }
+  }, [data])
+  return (
+    <div data-testid="qr-hacienda" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, marginTop: 8 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700 }}>{encima}</div>
+      {url ? <img src={url} width={px} height={px} alt="QR de Hacienda" /> : <div style={{ width: px, height: px, background: '#eee' }} />}
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5 }}>{debajo}</div>
+    </div>
+  )
 }
 
 function QrBlock({ data, caption, size }: { data: string; caption?: string; size: 'sm' | 'lg' }) {

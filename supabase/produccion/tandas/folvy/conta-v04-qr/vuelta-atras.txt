@@ -1,0 +1,4 @@
+# V04 · PR 2 · vuelta atrás. PARA si ya hay números en un tramo, rectificativas o
+# registros de Verifactu de los tiques (están en papeles de clientes y en
+# Hacienda): no se deshace sin decidirlo antes.
+supabase/vuelta-atras/20261027T0741_v04_tique_verifactu.down.sql

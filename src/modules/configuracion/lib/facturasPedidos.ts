@@ -10,9 +10,17 @@ export interface EmpresaFacturas { companyId: string; nombre: string; nif: strin
 export interface LocalFacturas {
   locationId: string; nombre: string; activo: boolean; codigo: string | null; propuesto: string | null; empresa: string | null
   serie: string | null; ultimo: number | null; ultimoAt: string | null; rectificativas: string | null; ultimoR: number | null; numeros: number
+  /** V04 · PR 2: el tramo de la serie (B…) desde el paso a real a mitad de año; null, sin tramo. */
+  tramo: string | null
+  /** V04 · PR 2: tiques cuyo registro de Verifactu quedó pendiente (se reintenta cada 5 minutos). */
+  verifactuPendientes: number
 }
 export interface MarcaFacturas { brandId: string; nombre: string; propia: boolean; emisor: string | null }
-export interface AjustesFacturas { año: number; empresas: EmpresaFacturas[]; locales: LocalFacturas[]; marcas: MarcaFacturas[]; cedidasSinFactura7d: number }
+export interface AjustesFacturas {
+  año: number; empresas: EmpresaFacturas[]; locales: LocalFacturas[]; marcas: MarcaFacturas[]; cedidasSinFactura7d: number
+  /** V04 · PR 2: falta quién fabrica Sumied; sin eso no se pasa a real. Una base de antes no lo trae: false. */
+  fabricanteFalta: boolean
+}
 
 type Fila = Record<string, unknown>
 const s = (v: unknown) => (v === null || v === undefined || v === '' ? null : String(v))
@@ -30,12 +38,26 @@ export function leerAjustes(r: Fila): AjustesFacturas {
     locales: lista('locales').map((l) => ({
       locationId: String(l.location_id), nombre: String(l.nombre ?? ''), activo: l.activo !== false, codigo: s(l.codigo), propuesto: s(l.propuesto),
       empresa: s(l.empresa), serie: s(l.serie), ultimo: n(l.ultimo), ultimoAt: s(l.ultimo_at), rectificativas: s(l.rectificativas), ultimoR: n(l.ultimo_r),
-      numeros: Number(l.numeros ?? 0),
+      numeros: Number(l.numeros ?? 0), tramo: s(l.tramo), verifactuPendientes: Number(l.verifactu_pendientes ?? 0),
     })),
     marcas: lista('marcas').map((m) => ({ brandId: String(m.brand_id), nombre: String(m.nombre ?? ''), propia: m.propia !== false, emisor: s(m.emisor) })),
     cedidasSinFactura7d: Number(r.cedidas_sin_factura_7d ?? 0),
+    fabricanteFalta: r.fabricante_falta === true,
   }
 }
+
+/** V04 · PR 2 · Qué lleva el papel del cliente según el modo de Verifactu. */
+export function textoQr(e: EmpresaFacturas): string {
+  if (e.verifactu === 'real') return 'Cada tique va a Hacienda y lleva su QR, encima del de la tienda.'
+  if (e.verifactu === 'pruebas') return 'Cada tique se registra y se envía al entorno de pruebas de Hacienda; el tique del cliente sale sin QR.'
+  return 'Con Verifactu apagado, los tiques no van a Hacienda y salen sin QR.'
+}
+
+/** V04 · PR 2 · El aviso del fabricante de Sumied, o null si está puesto. */
+export const avisoFabricante = (a: AjustesFacturas): string | null =>
+  a.fabricanteFalta
+    ? 'Falta quién fabrica Sumied (el nombre y el NIF de la declaración responsable): hasta que esté puesto, Verifactu no se puede pasar a real.'
+    : null
 
 /** «CA26-» de «CA26-000001»: el prefijo de la serie, sin el número. */
 export const prefijo = (serie: string | null) => (serie ? serie.replace(/\d{6}$/, '') : null)
@@ -58,8 +80,12 @@ export function textoVerifactu(e: EmpresaFacturas): { chip: string; tono: 'neutr
 /** Lo que dice cada local de su serie (regla 7: un local sin código se ve, y dice qué pasa con sus tiques). */
 export function estadoLocal(l: LocalFacturas): string {
   if (!l.codigo) return 'Sin código: sus tiques salen como hoy, con el número del pedido. Elige el código para que numere su serie.'
-  if (!l.ultimo) return `Numera desde el próximo tique: ${l.serie}.`
-  return `Último número: ${ultimoTexto(l.serie, l.ultimo)}.`
+  const tramo = l.tramo ? ` Desde el paso a real va en el tramo ${l.tramo}: así no repite ningún número de antes.` : ''
+  const pendientes = l.verifactuPendientes > 0
+    ? ` ${l.verifactuPendientes === 1 ? 'Un tique tiene' : `${l.verifactuPendientes.toLocaleString('es-ES')} tiques tienen`} su registro de Verifactu pendiente: se reintenta cada 5 minutos.`
+    : ''
+  if (!l.ultimo) return `Numera desde el próximo tique: ${l.serie}.${tramo}${pendientes}`
+  return `Último número: ${ultimoTexto(l.serie, l.ultimo)}.${tramo}${pendientes}`
 }
 
 /** El código que escribe la persona: 2 o 3 letras, sin acentos. Null si vale; si no, por qué. */

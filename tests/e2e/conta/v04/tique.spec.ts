@@ -11,6 +11,9 @@
 //   2. Ajustes › «Facturas de los pedidos» (tablero 4): el estado de Verifactu
 //      con el enlace a Sumied, la serie de cada local y su código (propuesto,
 //      guardado con su frase), y las marcas propias y cedidas.
+//   3. V04 · PR 2: con Verifactu en «real», el QR de Hacienda («QR tributario:»
+//      y «VERI*FACTU»), encima del de la tienda; en «pruebas», el papel sin QR.
+//      Y en Ajustes, el aviso del fabricante de Sumied y qué lleva el papel.
 // Los pedidos son los de la semilla de reparto (Norte Centro, cuenta A). Lo
 // fiscal de la base (fiscal_for_preview, ticket_invoice_ajustes y
 // ticket_invoice_code_set) está SIMULADO en el navegador con la forma que
@@ -43,8 +46,8 @@ const FISCAL: Record<string, unknown> = {
   [PEDIDO.sinFactura]: { legalName: null, taxId: null, address: null, ticketNumber: null, issuerKind: 'cedida', sinFactura: true, serie: false, pendiente: false },
 }
 
-async function abrirPedidos(page: Page) {
-  await page.route(/\/rest\/v1\/rpc\/fiscal_for_preview\b/, (r) => json(r, FISCAL[String(cuerpo(r).p_sale_id)] ?? null))
+async function abrirPedidos(page: Page, fiscal: (saleId: string) => unknown = (id) => FISCAL[id] ?? null) {
+  await page.route(/\/rest\/v1\/rpc\/fiscal_for_preview\b/, (r) => json(r, fiscal(String(cuerpo(r).p_sale_id))))
   await entrarComo(page, CUENTA_A.email)
   await page.addInitScript((id) => { window.localStorage.setItem('andy-app-active-location', id) }, NORTE_CENTRO)
   await page.goto('/orders')
@@ -123,6 +126,7 @@ const AJUSTES = {
     { brand_id: 'b3', nombre: 'Birria Burrito', propia: false, emisor: 'CLOUDTOWN BRANDS SL' },
   ],
   cedidas_sin_factura_7d: 2,
+  fabricante_falta: true,
 }
 
 test('Ajustes › Facturas de los pedidos: Verifactu, la serie de cada local y las marcas', async ({ page }) => {
@@ -139,6 +143,9 @@ test('Ajustes › Facturas de los pedidos: Verifactu, la serie de cada local y l
   await expect(vf).toContainText('Verifactu: apagado')
   await expect(vf).toContainText('Se enciende en Sumied › Ajustes › Verifactu, para toda la empresa. Falta la prueba de conexión con Hacienda (el certificado).')
   await expect(vf.getByRole('link', { name: 'Ir a Sumied' })).toHaveAttribute('href', /ajustes\/verifactu$/)
+  // V04 · PR 2: qué lleva el papel, y el aviso del fabricante de Sumied.
+  await expect(vf.getByTestId('qr-del-tique')).toContainText('Con Verifactu apagado, los tiques no van a Hacienda y salen sin QR.')
+  await expect(p.getByTestId('aviso-fabricante')).toContainText('Falta quién fabrica Sumied (el nombre y el NIF de la declaración responsable): hasta que esté puesto, Verifactu no se puede pasar a real.')
   // La serie de cada local: Carabanchel con su código fijo y su último número; Alcalá, sin código, lo dice.
   await expect(p.getByTestId('local-Foodint Carabanchel')).toContainText('CA26-000123')
   await expect(p.getByTestId('local-Foodint Carabanchel').getByRole('textbox')).toHaveCount(0)
@@ -162,5 +169,40 @@ test('Ajustes › Facturas de los pedidos: Verifactu, la serie de cada local y l
   await alcala.getByRole('button', { name: 'Guardar' }).click()
   await expect(p.getByTestId('aviso-facturas')).toContainText('Guardado: Foodint Alcalá numera con AL. El próximo tique de una marca propia en este local será el AL26-000001')
   expect(guardado).toMatchObject({ p_location: 'l2', p_code: 'ALB' })
+  expect(errores).toEqual([])
+})
+
+// V04 · PR 2 · Lo que devolvería fiscal_for_preview (0741) para la propia, en
+// real (con la URL del QR que calcula la base) y en pruebas (sin QR).
+const QR_REAL = 'https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQR?nif=B56496938&numserie=CA26B-000124&fecha=27-10-2026&importe=20.18'
+const PROPIA_EN = (modo: 'real' | 'pruebas') => ({
+  legalName: 'Llorente29 Food, S.L.', taxId: 'B56496938', address: null, ticketNumber: modo === 'real' ? 'CA26B-000124' : 'CA26-000124',
+  issuerKind: 'propia', sinFactura: false, serie: true, pendiente: false, verifactu: modo, verifactuQr: modo === 'real' ? QR_REAL : null,
+})
+
+test('con Verifactu en real, el tique lleva el QR de Hacienda encima del de la tienda; en pruebas, no', async ({ page }) => {
+  test.skip(lado(page) === 'movil', 'La imagen del tique es la misma en los dos tamaños: se fotografía en el ordenador.')
+  const errores = vigilar(page)
+  let modo: 'real' | 'pruebas' = 'real'
+  await abrirPedidos(page, (id) => (id === PEDIDO.propia ? PROPIA_EN(modo) : FISCAL[id] ?? null))
+
+  let t = await tiqueDe(page, PEDIDO.propia)
+  await expect(t.vista).toContainText('CA26B-000124')
+  const qr = t.vista.getByTestId('qr-hacienda')
+  await expect(qr).toBeVisible()
+  await expect(qr).toContainText('QR tributario:')
+  await expect(qr).toContainText('VERI*FACTU')
+  await page.evaluate(() => document.fonts.ready)
+  const real = await t.img.screenshot({ path: `${DIR}/tique-propia-real-con-qr.png` })
+  await alLado(page, real, 'maqueta-tablero-1.png', 'tique-propia-real-al-lado-del-tablero-1.png')
+  await page.mouse.click(5, 5)
+  await expect(t.vista).toHaveCount(0)
+
+  modo = 'pruebas'
+  t = await tiqueDe(page, PEDIDO.propia)
+  await expect(t.vista).toContainText('CA26-000124')
+  await expect(t.vista.getByTestId('qr-hacienda')).toHaveCount(0)
+  await expect(t.vista).not.toContainText('VERI*FACTU')
+  await t.img.screenshot({ path: `${DIR}/tique-propia-pruebas-sin-qr.png` })
   expect(errores).toEqual([])
 })

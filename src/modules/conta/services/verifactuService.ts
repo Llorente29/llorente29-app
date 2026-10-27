@@ -46,6 +46,8 @@ export interface DatosVerifactu {
   pruebasProbada: boolean
   /** La de real con el NIF de esta empresa. */
   realProbada: boolean
+  /** V04 · PR 2: ¿está puesto quién fabrica Sumied? Sin eso no se pasa a real. null: la base aún no lo sabe decir. */
+  fabricantePuesto: boolean | null
 }
 
 const APAGADA: VerifactuEmpresa = { modo: 'apagado', via: 'colaborador', certificadoId: null, pruebasDesde: null, realDesde: null, realSerie: null, realObligaHasta: null, otrosProgramas: null }
@@ -59,6 +61,8 @@ export async function leerVerifactu(accountId: string, companyId: string, nif: s
     rpc<boolean>('verifactu_conexion_probada', { p_entorno: 'pruebas', p_nif: nif }),
     rpc<boolean>('verifactu_conexion_probada', { p_entorno: 'real', p_nif: nif }),
   ])
+  // V04 · PR 2. Una base sin la 0741 no tiene la función: entonces no se sabe, y no se avisa.
+  const fabricante = await rpc<boolean>('verifactu_sistema_completo', {}).catch(() => null)
   const e = empresa[0]
   const a = autorizaciones[0]
   return {
@@ -70,6 +74,7 @@ export async function leerVerifactu(accountId: string, companyId: string, nif: s
     autorizacion: a ? { id: String(a.id), certificadoId: String(a.certificate_id), por: String(a.autorizada_por_nombre), el: String(a.autorizada_at) } : null,
     pruebasProbada: pruebas === true,
     realProbada: real === true,
+    fabricantePuesto: fabricante === null ? null : fabricante === true,
   }
 }
 
