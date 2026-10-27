@@ -98,7 +98,14 @@ export default function FacturaVentaPage() {
   // «Hacer una nueva bien hecha» (después de anular): la nueva sale con lo de la anulada.
   const copia = query.get('copia')
   const deCopia = useLeer(accountId && nueva && copia ? () => leerFactura(accountId, copia) : null, `${accountId}:${copia}:copia`)
-  const f = leida.datos ?? null
+  // Lo último leído, mientras vuelve a leer (después de anular, subsanar o
+  // reenviar): la ficha no se desmonta y el aviso de lo que ha pasado sigue a la
+  // vista (regla 8). Solo de la misma factura y la misma empresa.
+  const [ultimaFactura, setUltimaFactura] = useState<{ id: string; datos: NonNullable<typeof leida.datos> } | null>(null)
+  if (facturaId && leida.datos && leida.datos !== ultimaFactura?.datos) setUltimaFactura({ id: facturaId, datos: leida.datos })
+  const [ultimosCatalogos, setUltimosCatalogos] = useState<{ id: string; datos: NonNullable<typeof catalogos.datos> } | null>(null)
+  if (companyId && catalogos.datos && catalogos.datos !== ultimosCatalogos?.datos) setUltimosCatalogos({ id: companyId, datos: catalogos.datos })
+  const f = leida.datos ?? (!leida.error && ultimaFactura && ultimaFactura.id === facturaId ? ultimaFactura.datos : null)
   const original = useLeer(accountId && f?.corrige ? () => leerFactura(accountId, f.corrige!.id) : null, `${accountId}:${f?.corrige?.id}:original:${vuelta}`)
   const empresa = useLeer(accountId && companyId ? () => empresaDelPdf(accountId, companyId) : null, `${accountId}:${companyId}:empresa-pdf`)
   // V01c: en traspaso mensual nada va a Diez suelto: va en el traspaso del mes de su fecha (Contabilidad › Cierre).
@@ -107,7 +114,7 @@ export default function FacturaVentaPage() {
   const asiento = useLeer(accountId && f?.entryId ? () => leerAsiento(accountId, f.entryId!) : null, `${accountId}:${f?.entryId}:asiento`)
   const pdfUrl = useLeer(f?.pdf ? () => urlDelPdf(f.pdf!.ruta) : null, `${f?.pdf?.ruta}:url`)
 
-  const cat = catalogos.datos
+  const cat = catalogos.datos ?? (!catalogos.error && ultimosCatalogos && ultimosCatalogos.id === companyId ? ultimosCatalogos.datos : null)
   const base = useMemo(() => {
     const b = borradorDe(f, hoy, cat)
     if (nueva && deCopia.datos) {

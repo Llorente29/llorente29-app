@@ -169,16 +169,10 @@ describe('las capturas de inventario: de la rama sin frente que toca inventario'
 describe('fijar en una rama sin frente (C10, 23/10)', () => {
   it('se salta con 0 y lo dice: no pone el run en rojo', async () => {
     const { execFileSync } = await import('node:child_process')
-    const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'], { encoding: 'utf8' })
-    // «fijar» mira lo que cambia el checkout contra main (origin/main...HEAD), no
-    // la rama del argumento: en una rama que toca una zona con capturas
-    // (inventario, marcas), esa zona es la dueña. Se espera lo que toca (F01, 27/10).
-    let cambiados: string[] = []
-    try { cambiados = execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean) } catch { /* sin origin/main */ }
-    const { zonasTocadas } = await import('../../scripts/e2e/area.mjs')
-    const { DE_QUIEN } = await import('../../scripts/conta/capturas.mjs')
-    const zonas = zonasTocadas(cambiados).filter((z: { zona: string }) => z.zona in DE_QUIEN)
-    if (zonas.length === 1) expect(out).toContain(`Frente ${zonas[0].zona}:`)
-    else expect(out).toContain('no hay capturas que fijar (se salta)')
+    // Sin nada cambiado, a mano: si no, lee el diff de la rama donde corre la prueba,
+    // y en una que toca inventario esa rama es dueña de inventario (unitarias #103).
+    const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'],
+      { encoding: 'utf8', env: { ...process.env, CAPTURAS_CAMBIADOS: '' } })
+    expect(out).toContain('no hay capturas que fijar (se salta)')
   })
 })

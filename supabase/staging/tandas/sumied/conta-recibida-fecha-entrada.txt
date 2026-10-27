@@ -1,0 +1,8 @@
+# V04 · Respuesta 6, punto 2 · La recibida nunca antes del día en que entró. La 1350
+# cambia en caliente _journal_entry_proponer: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos: proponer y validar una que entró
+# después de su fecha (asiento y libro el día que entró), la del día, la del
+# mes de entrada cerrado, con el periodo presentado (el candado y esta regla a
+# la vez), un asiento a mano, y la vuelta atrás.
+supabase/migrations/20261027T1350_v04_recibida_fecha_entrada.sql
+supabase/staging/sql/20261027_v04_recibida_fecha_entrada_prueba.sql

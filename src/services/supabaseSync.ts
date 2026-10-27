@@ -296,11 +296,10 @@ export async function fetchEmployees(accountId: string | null): Promise<Employee
 }
 
 /**
- * Devuelve los empleados que comparten local(es) con el trabajador.
- * A diferencia de fetchEmployees(accountId), NO exige accountId: en sesion de
- * trabajador no se conoce la cuenta, pero si su(s) location_id. La RLS de
- * employees (employees_read) ya restringe a los locales de la cuenta del
- * usuario, asi que filtrar por location_id es seguro y suficiente.
+ * Devuelve los compañeros que comparten local(es) con el trabajador: solo
+ * nombre, foto y puesto (companeros_de_trabajo, de servidor). No exige
+ * accountId: en sesión de trabajador no se conoce la cuenta, pero sí sus
+ * locales, y la función ya limita a los de su cuenta y sus locales.
  *
  * Usado por el modulo de cambios de turno (modal de solicitud, tablon, mis
  * solicitudes) para poblar la lista de companeros y resolver nombres.
@@ -309,13 +308,26 @@ export async function fetchColleagues(locationIds: string[]): Promise<Employee[]
   if (!supabase) return []
   const ids = (locationIds || []).filter(Boolean)
   if (ids.length === 0) return []
-  const { data, error } = await supabase
-    .from('employees')
-    .select('*')
-    .in('location_id', ids)
-    .order('name')
+  // L00 · Respuesta 1 (27/10/2026): un trabajador ya no lee la tabla employees
+  // de sus compañeros (salario, DNI, PIN…). De ellos solo llega lo que hace
+  // falta para los turnos y los cambios: nombre, foto y puesto, por una función
+  // de servidor. El resto de campos del Employee sale vacío.
+  // companeros_de_trabajo es nueva (1215) y aún no está en database.ts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('companeros_de_trabajo', { p_location_ids: ids })
+  if (error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? ''))) {
+    // La base aún no tiene la 1215 (staging desde una rama, o el front llega
+    // antes que la tanda): lo de antes, que en esa base todavía se puede leer.
+    const r = await supabase.from('employees').select('id, name, photo, position, location_id, assigned_locations, active').in('location_id', ids).order('name')
+    if (r.error) { console.error('Supabase fetchColleagues:', r.error); return [] }
+    return (r.data ?? []).map(c => rowToEmployee(c as unknown as EmployeeRow))
+  }
   if (error) { console.error('Supabase fetchColleagues:', error); return [] }
-  return (data as EmployeeRow[]).map(rowToEmployee)
+  type Companero = { id: string; name: string; photo: string | null; position: string | null; location_id: string | null; assigned_locations: string[] | null; active: boolean }
+  return ((data ?? []) as Companero[]).map(c => rowToEmployee({
+    id: c.id, name: c.name, photo: c.photo, position: c.position,
+    location_id: c.location_id, assigned_locations: c.assigned_locations, active: c.active,
+  } as unknown as EmployeeRow))
 }
 
 /**
@@ -357,7 +369,7 @@ interface ClockRow {
   scheduled: string | null
   rounding_applied: boolean | null
   diff_minutes: number | null
-  source: 'kiosko' | 'movil' | 'manual'
+  source: 'kiosko' | 'movil' | 'tablet' | 'manual'
   location_id_at_clock: string | null
   photo_data_url: string | null
   voided: boolean | null

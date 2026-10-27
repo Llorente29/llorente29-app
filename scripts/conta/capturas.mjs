@@ -124,7 +124,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Lo que la rama cambia contra main (para el dueño por zona). En Actions el
   // checkout es de un solo commit y no trae origin/main (run 762, 21/10): se trae
   // main y se ahonda la rama hasta encontrar dónde se separaron. Sin eso, nada.
+  // CAPTURAS_CAMBIADOS (L00, 27/10): lo que cambia la rama, dado a mano (ficheros
+  // separados por comas; vacío = nada). Lo usa la prueba de «fijar en una rama sin
+  // frente», que si no leía el diff del checkout donde corre: en una rama que toca
+  // inventario salía dueña de inventario y la prueba caía (unitarias #103).
   const cambiadosContraMain = () => {
+    if (process.env.CAPTURAS_CAMBIADOS !== undefined) return process.env.CAPTURAS_CAMBIADOS.split(',').map((f) => f.trim()).filter(Boolean)
     const diff = () => execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean)
     try { return diff() } catch { /* sin origin/main o sin la base común: se trae abajo */ }
     try {

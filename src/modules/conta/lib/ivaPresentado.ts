@@ -24,21 +24,40 @@ export interface PeriodoPresentado {
   nombre: string
   /** A qué periodo va lo que llegue tarde: «4T», «octubre», «1T de 2027». */
   siguiente: string
+  /** V04 (1408): reabierto para corregir, sin presentar todavía. Sin candado mientras tanto. */
+  reabierto?: Reabierto | null
 }
+
+export interface Reabierto { id: string; motivo: string; desde: string; por: string | null; tipo: 'complementary' | 'substitutive'; secuencia: number }
 
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 const esTrimestre = (p: string) => /^[1-4]T/.test(p)
 
-/** El periodo presentado que cubre ese día, o null. */
+/** El periodo presentado (y no reabierto) que cubre ese día, o null. */
 export function presentadoDe(fecha: string | null | undefined, lista: readonly PeriodoPresentado[]): PeriodoPresentado | null {
   if (!fecha) return null
   const d = fecha.slice(0, 10)
-  return lista.find((p) => p.desde <= d && d <= p.hasta) ?? null
+  return lista.find((p) => !p.reabierto && p.desde <= d && d <= p.hasta) ?? null
 }
 
-/** ¿Algún día de este mes (AAAA-MM) está en un periodo presentado? */
+/** ¿Algún día de este mes (AAAA-MM) está en un periodo presentado (y no reabierto)? */
 export function mesPresentado(mes: string, lista: readonly PeriodoPresentado[]): PeriodoPresentado | null {
-  return lista.find((p) => p.desde.slice(0, 7) <= mes && mes <= p.hasta.slice(0, 7)) ?? null
+  return lista.find((p) => !p.reabierto && p.desde.slice(0, 7) <= mes && mes <= p.hasta.slice(0, 7)) ?? null
+}
+
+/** El periodo reabierto para corregir que cubre ese mes (AAAA-MM), o null. */
+export function mesReabierto(mes: string, lista: readonly PeriodoPresentado[]): PeriodoPresentado | null {
+  return lista.find((p) => !!p.reabierto && p.desde.slice(0, 7) <= mes && mes <= p.hasta.slice(0, 7)) ?? null
+}
+
+/** «complementaria nº 2», «sustitutiva nº 3». */
+export function nuevaPresentacion(r: Pick<Reabierto, 'tipo' | 'secuencia'>): string {
+  return `${r.tipo === 'complementary' ? 'complementaria' : 'sustitutiva'} nº ${r.secuencia}`
+}
+
+/** Lo que dice el trimestre reabierto, en rojo: «Reabierto para corregir, sin presentar · complementaria nº 2». */
+export function textoReabierto(r: Reabierto): string {
+  return `Reabierto para corregir, sin presentar · ${nuevaPresentacion(r)}`
 }
 
 /** ¿Está presentado este trimestre (1–4) de este año, o los tres meses de él? */
@@ -48,12 +67,16 @@ export function trimestrePresentado(ejercicio: number, trimestre: number, lista:
   return deCada.every(Boolean) ? deCada[2] : null
 }
 
-/** La fecha de presentación, como la escribe la base: «20/10». */
-export function diaPresentado(p: PeriodoPresentado): string {
-  const d = new Date(p.presentado)
-  const f = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).formatToParts(d)
+/** El día y el mes en Madrid de un instante, siempre con dos cifras: «20/07». */
+export function diaMesMadrid(iso: string): string {
+  const f = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Madrid' }).formatToParts(new Date(iso))
   const v = (t: string) => (f.find((x) => x.type === t)?.value ?? '').padStart(2, '0')
   return `${v('day')}/${v('month')}`
+}
+
+/** La fecha de presentación, como la escribe la base: «20/10». */
+export function diaPresentado(p: PeriodoPresentado): string {
+  return diaMesMadrid(p.presentado)
 }
 
 const del = (p: PeriodoPresentado) => (esTrimestre(p.periodo) ? `del ${p.nombre}` : `de ${p.nombre}`)
@@ -108,4 +131,23 @@ export function candadoDelAsiento(a: { fecha: string; origen: string; apuntes: r
 /** Lo que dice el candado pequeño: «IVA presentado 20/10», y su título con el mensaje entero. */
 export function textosCandado(p: PeriodoPresentado): { texto: string; titulo: string } {
   return { texto: `IVA presentado ${diaPresentado(p)}`, titulo: `El IVA ${del(p)} ya está presentado (${diaPresentado(p)}). No se puede cambiar.` }
+}
+
+/** Una marca de lo que se hizo con un asiento mientras su periodo estaba reabierto (vat_reopening_entry). */
+export interface MarcaAsiento { accion: string; en: string; por: string | null; motivo: string; periodo: string; ejercicio: number; tipo: 'complementary' | 'substitutive'; secuencia: number }
+
+const ACCION: Record<string, string> = { creado: 'Creado', validado: 'Validado', anulado: 'Anulado', cambiado: 'Cambiado', libro: 'Su libro de IVA, cambiado' }
+
+/**
+ * Lo que dice el diario: «Validado con el 3T de 2026 reabierto para corregir:
+ * Ana el 28/10 · «Falta una venta de septiembre» · va en la complementaria nº 2.»
+ * Con varias marcas, la última manda la frase y se cuentan las demás.
+ */
+export function textoMarcaReapertura(marcas: readonly MarcaAsiento[]): string {
+  if (!marcas.length) return ''
+  const orden = [...marcas].sort((x, y) => x.en.localeCompare(y.en))
+  const m = orden[orden.length - 1]
+  const dia = diaMesMadrid(m.en)
+  const acciones = [...new Set(orden.map((x) => x.accion))].map((x) => (x === 'libro' ? 'su libro de IVA' : x))
+  return `${ACCION[m.accion] ?? m.accion} con el ${m.periodo} de ${m.ejercicio} reabierto para corregir: ${m.por ?? 'alguien'} el ${dia} · «${m.motivo}» · va en la ${nuevaPresentacion({ tipo: m.tipo, secuencia: m.secuencia })}.${acciones.length > 1 ? ` (${acciones.join(', ')})` : ''}`
 }

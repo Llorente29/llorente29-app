@@ -1,0 +1,28 @@
+# L00 · Respuesta 1 · Cerrar los datos de los trabajadores (27/10/2026).
+# Rama claude/wizardly-bardeen-91lb33-datos. Se ensaya y se aplica desde esta
+# rama, antes de fusionar.
+#
+#   1. 1215 — el almacén employee-documents, privado y sin anon_all (lee el
+#      administrador o el encargado de la cuenta, y el trabajador lo suyo; sube
+#      solo el administrador); las lecturas de personal, por persona (nueve
+#      tablas, y la bandeja de nóminas solo para el administrador o el
+#      encargado); companeros_de_trabajo (nombre, foto y puesto); fichar: el
+#      trabajador solo para sí y con la hora del servidor, y toda marca nueva
+#      con rastro en clock_entry_audit; el PIN, fuera de employees y comprobado
+#      en el servidor; employee_clock_status con la guarda de persona (CAMBIA
+#      en caliente, con respaldo); y cuatro funciones de servidor sin guarda
+#      que dejan de llamarse con sesión.
+#      · Toca datos: el almacén pasa a privado y los PIN pasan de
+#        employees.pin a employee_kiosk_pin. No borra ningún fichero ni fila.
+#      · Con el front de antes, hasta que llegue el nuevo: los PDF no abren,
+#        el kiosko dice «no tiene PIN» y en los cambios de turno el trabajador
+#        no ve los nombres de los compañeros. Fichar sigue igual.
+#
+# AUTORIZO: sí (quita una política y cambia datos: el almacén y los PIN). En
+# el campo `autorizo`:
+#   20261027T1215_l00_datos_de_los_trabajadores.sql
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta. OJO: devuelve también lo
+# malo (el almacén público); si salta sola, hay que volver a cerrarlo a mano.
+supabase/migrations/20261027T1215_l00_datos_de_los_trabajadores.sql
+cuenta: scripts/conta/produccion/cuentas/l00-datos-de-los-trabajadores.sql

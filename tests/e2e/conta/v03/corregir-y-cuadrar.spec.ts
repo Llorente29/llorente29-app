@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { CARRIL, CUENTA_D, STAGING_URL, anonKey, correoDePrueba, enCarril, entrarComo, pedirSesion } from '../sesion'
 import { rest } from '../api'
+import { clienteSuizo } from './clienteSuizo'
 
 const DIR = 'docs/conta/capturas/v03'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -60,11 +61,8 @@ async function emitirUnaDeD(page: Page) {
     await abrir.click()
     await expect(page.getByText(`Abierto el ejercicio ${ano}.`)).toBeVisible({ timeout: 30_000 })
   }
-  const alta = await rest<{ party_id: string }>(s, 'POST', 'rpc/party_save_customer', {
-    p_account: CUENTA_D.id, p_party: null, p_nombre: `Alpen Gastro AG e2e E3 ${Date.now().toString(36)}`, p_nif: 'CHE123456789', p_datos: { countryCode: 'CH' }, p_quien_nombre: 'e2e V03 E3',
-  })
-  expect(alta.status, JSON.stringify(alta.datos)).toBe(200)
-  await page.goto(`/conta/ventas/facturas/nueva?cliente=${alta.datos.party_id}`)
+  const cliente = await clienteSuizo(s, 'e2e V03 E3')
+  await page.goto(`/conta/ventas/facturas/nueva?cliente=${cliente}`)
   await expect(page.getByRole('heading', { level: 1, name: 'Nueva factura' })).toBeVisible({ timeout: 30_000 })
   await page.getByLabel('Concepto de la línea 1').fill('Asesoría de cocina')
   await page.getByLabel('Precio de la línea 1').fill('2150')

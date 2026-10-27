@@ -1,0 +1,4 @@
+# L00 · vuelta atrás: el freno del doble toque como estaba (restaurado del
+# respaldo) y el CHECK sin 'tablet'. PARA si ya hay fichajes 'tablet'. Antes,
+# devolver el front: con el front nuevo, quitar 'tablet' deja al kiosko sin fichar.
+supabase/vuelta-atras/20261027T1112_l00_origen_del_fichaje.down.sql

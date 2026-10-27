@@ -16,6 +16,9 @@
 --   5. otros_resultados     · 678/778 con saldo: la memoria tiene que explicarlos (aviso, C05b).
 --   6. pyg_129              · tras la regularización validada, 6 y 7 a cero (el resultado está en la 129).
 --   7. libro_diario         · por trimestre: cuotas del libro registro = movimiento de la 477 / 472 (sin la liquidación ni lo traído).
+--                             Las recibidas, como el 303 (0290): en su periodo de deducción (RIVA art. 64),
+--                             «deducida en» o, si no, el de su recepción; y solo lo deducible, que es lo
+--                             que va a la 472 (lo no deducible va al gasto). Respuesta 3 al V04, 27/10.
 --   8. cerrado_con_asientos · ningún asiento validado en un ejercicio después de cerrarlo.
 
 with
@@ -131,9 +134,13 @@ select json_build_object(
            'en_libro', q.en_libro, 'en_diario', q.en_diario) as x
       from (
         select mo.account_id, mo.company_id, to_char(t.desde, 'YYYY') || '-' || extract(quarter from t.desde) || 'T' as trimestre, lb.libro,
-               coalesce((select round(sum(v.tax_amount), 2) from public.vat_book_entry v
+               coalesce((select round(sum(case when lb.libro = 'issued' then v.tax_amount else coalesce(v.deductible_amount, v.tax_amount) end), 2)
+                           from public.vat_book_entry v
                           where v.company_id = mo.company_id and v.voided_at is null and v.source_type <> 'migrated'
-                            and v.issue_date between t.desde and t.hasta
+                            and (case when lb.libro = 'issued' then v.issue_date
+                                      when v.deduction_period ~ '^[1-4]T$' then make_date(v.deduction_year, (substr(v.deduction_period, 1, 1)::int - 1) * 3 + 1, 1)
+                                      when v.deduction_period ~ '^[0-9]{2}$' then make_date(v.deduction_year, v.deduction_period::int, 1)
+                                      else coalesce(v.received_date, v.issue_date) end) between t.desde and t.hasta
                             and (case when lb.libro = 'issued' then v.book = 'issued' else v.book in ('received', 'investment') end)), 0) as en_libro,
                coalesce((select round(sum(case when lb.libro = 'issued' then l.credit - l.debit else l.debit - l.credit end), 2)
                            from public.journal_ledger l

@@ -30,8 +30,8 @@ function carrilFalso() {
   writeFileSync(f, `#!/usr/bin/env bash
 case "$1" in
   barrera-entrar) echo "entrar $BARRERA_QUE" >> "${dir}/log"
-    [ -n "\${FALLA_BARRERA:-}" ] && [ "$BARRERA_QUE" = "$FALLA_BARRERA" ] && exit 1
-    echo "\${ESPERA:-0}" > "$CARRIL_DIR/barrera.espera" ;;
+    echo "\${ESPERA:-0}" > "$CARRIL_DIR/barrera.espera"
+    if [ -n "\${FALLA_BARRERA:-}" ] && [ "$BARRERA_QUE" = "$FALLA_BARRERA" ]; then exit 1; fi ;;
   barrera-salir) echo "salir" >> "${dir}/log" ;;
 esac
 `)
@@ -89,10 +89,11 @@ describe('la barrera es por fichero (por-fichero.sh)', () => {
   })
 
   it('sin la barrera (se acaba la espera): ese fichero no corre, cuenta como rojo, y los demás sí', () => {
-    const r = correr(['tests/e2e/a.spec.ts', 'tests/e2e/b.spec.ts'], { FALLA_BARRERA: 'tests/e2e/a.spec.ts' })
+    const r = correr(['tests/e2e/a.spec.ts', 'tests/e2e/b.spec.ts'], { FALLA_BARRERA: 'tests/e2e/a.spec.ts', ESPERA: '7' })
     expect(r.status).toBe(1)
     expect(log().filter((x) => x.startsWith('test'))).toHaveLength(1)
-    expect(readFileSync(join(dir, 'por-fichero.tsv'), 'utf8')).toContain('tests/e2e/a.spec.ts\t20m\t0\tsin barrera')
+    // Lo que esperó de verdad (Respuesta 4 al V04): antes ponía siempre «20m».
+    expect(readFileSync(join(dir, 'por-fichero.tsv'), 'utf8')).toContain('tests/e2e/a.spec.ts\t7\t0\tsin barrera')
   })
 
   it('apunta la espera de cada fichero en el resumen del run (los tiempos que pide Julio)', () => {
@@ -145,9 +146,12 @@ describe('los cerrojos: quién coge qué, y cuánto espera cada uno', () => {
   it('el carril ya no coge la barrera; el fichero la coge compartida; la aplicación, exclusiva', () => {
     expect(sql('guardian_e2e.sql')).not.toMatch(/4202/)
     expect(sql('guardian_e2e.sql')).toMatch(/pg_try_advisory_lock\(4203, c\)/)
-    expect(sql('guardian_barrera.sql')).toMatch(/pg_advisory_lock_shared\(4202, 0\);\nselect 'dentro';/)
-    expect(sql('guardian_barrera.sql')).toMatch(/set lock_timeout = :'espera';/)
-    expect(sql('guardian_migrar.sql')).toMatch(/pg_advisory_lock\(4202, 0\);\nselect 'migrar-cogido';/)
+    // Respuesta 4 al V04 (27/10): la barrera es una reserva con latido, no un
+    // cerrojo sujeto por una conexión (lo prueba barrera.test.ts contra un Postgres).
+    expect(existsSync('scripts/e2e/carril/guardian_barrera.sql')).toBe(false)
+    expect(existsSync('scripts/e2e/carril/guardian_migrar.sql')).toBe(false)
+    expect(sql('barrera.sql')).toMatch(/when 'lee' then not exists \(select 1 from e2e_carril\.barrera m where m\.modo = 'migra'\)/)
+    expect(sql('barrera.sql')).toMatch(/delete from e2e_carril\.barrera where latido_at < now\(\) - make_interval\(secs => :'caduca'::int\)/)
   })
 
   it('nadie espera para siempre: el carril 15 min, el fichero 20, la aplicación 15', () => {
@@ -155,8 +159,8 @@ describe('los cerrojos: quién coge qué, y cuánto espera cada uno', () => {
     expect(sh).toContain('ESPERA_MIN=${CARRIL_ESPERA_MIN:-15}')
     expect(sh).toContain('BARRERA_MIN=${CARRIL_BARRERA_MIN:-20}')
     expect(sh).toContain('MIGRAR_MIN=${CARRIL_MIGRAR_MIN:-15}')
-    expect(sh).toContain('guardian barrera "$(barrera_yo)" barrera "$BARRERA_MIN"')
-    expect(sh).toContain('guardian migrar "e2e-migrar ${CARRIL_YO:-?}" guardian "$MIGRAR_MIN"')
+    expect(sh).toContain('reservar barrera lee "$(barrera_yo)" "$BARRERA_MIN"')
+    expect(sh).toContain('reservar migrar migra "e2e-migrar ${CARRIL_YO:-?}" "$MIGRAR_MIN"')
     // Ni el workflow ni aplicar los suben por su cuenta.
     for (const wf of ['e2e-staging-conta.yml', 'aplicar-staging-conta.yml']) {
       expect(readFileSync(`.github/workflows/${wf}`, 'utf8')).not.toMatch(/CARRIL_(ESPERA|BARRERA|MIGRAR)_MIN/)
@@ -176,7 +180,7 @@ describe('los cerrojos: quién coge qué, y cuánto espera cada uno', () => {
     expect(clon).toMatch(/barrera-entrar[\s\S]*plantilla-coger[\s\S]*carril\.sh borrar[\s\S]*carril\.sh clonar[\s\S]*barrera-salir/)
     expect(wf).not.toContain('npx playwright test $E2E_FICHEROS')
     const sh = readFileSync('scripts/e2e/carril.sh', 'utf8')
-    expect(sh.slice(sh.indexOf('\nsoltar() {'), sh.indexOf('\nmigrar_coger() {'))).toContain('matar_guardian barrera')
+    expect(sh.slice(sh.indexOf('\nsoltar() {'), sh.indexOf('\nmigrar_coger() {'))).toContain('soltar_reserva barrera')
     // El borrar del final también, dentro de la barrera (26/10: uno cayó en mitad del ensayo de vuelta atrás).
     expect(sh.slice(sh.indexOf('\nsoltar() {'), sh.indexOf('\nmigrar_coger() {'))).toMatch(/barrera_entrar; then\n\s+borrar/)
   })

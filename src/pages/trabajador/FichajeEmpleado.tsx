@@ -280,7 +280,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     }
 
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
-    const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, calendarCtx)
+    const result = buildClockEntry(currentEmp, selectedLoc, config, position, { origen: 'movil', roundingToleranceMin, calendarCtx })
 
     if (!result.withinGeofence && geofenceMode === 'block') {
       setStep('error')
@@ -358,7 +358,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     // hacia la hora teórica (regalaría minutos no trabajados). Se guarda la hora real.
     // Al forzar el tipo tampoco: el redondeo se calculó para el tipo contrario.
     const ctxForBuild = (earlyExitMin != null || forzarTipo) ? undefined : calendarCtx
-    const result = buildClockEntry(currentEmp, selectedLoc, config, position, undefined, roundingToleranceMin, ctxForBuild)
+    const result = buildClockEntry(currentEmp, selectedLoc, config, position, { origen: 'movil', roundingToleranceMin, calendarCtx: ctxForBuild })
     let entry = result.entry
     const marcas: string[] = []
     if (mode === 'outside') marcas.push(`Fuera de zona · ${distM}m`)

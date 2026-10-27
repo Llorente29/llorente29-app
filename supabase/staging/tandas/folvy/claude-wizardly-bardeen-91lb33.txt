@@ -1,0 +1,9 @@
+# L00 · el origen del fichaje. La 1112 cambia en caliente el CHECK de
+# clock_entries y tg_clock_entry_debounce: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos (regla 10): fichar entrada desde el
+# móvil y salida desde la tablet, el freno del doble toque para cada origen,
+# lo manual sigue pasando, un origen que no existe se rechaza, una sola firma,
+# y la vuelta atrás (para con un fichaje tablet; sin él, deja lo de producción).
+# La migración NO va en esta lista: la prueba la aplica con «\i» después de
+# medir lo de antes (paso 0). Listarla aquí la aplicaba dos veces (ensayo #642).
+supabase/staging/sql/20261027_l00_origen_del_fichaje_prueba.sql

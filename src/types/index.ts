@@ -110,7 +110,8 @@ export interface ClockEntry {
   lat?: number; lng?: number; address?: string; scheduled?: string
   roundingApplied?: boolean; diffMinutes?: number
   // Datos del fichaje en kiosko
-  source?: 'kiosko' | 'movil' | 'manual'
+  // 'movil' y 'tablet', desde el 27/10/2026; 'kiosko' = filas de antes, sin distinguir.
+  source?: 'kiosko' | 'movil' | 'tablet' | 'manual'
   locationIdAtClock?: string         // local en el que fichó (puede no ser el principal)
   photoDataUrl?: string              // foto opcional al fichar (base64)
   voided?: boolean                   // borrado lógico: el fichaje anulado se conserva para el rastro legal
