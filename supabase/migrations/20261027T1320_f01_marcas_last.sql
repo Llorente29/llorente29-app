@@ -37,6 +37,11 @@
 --      necesita la 1322), la pone en sus locales y plataformas, la vincula,
 --      siembra su carta y coloca lo vendido antes (regla 6: nunca por debajo
 --      del último recuento cerrado; lo que queda debajo se cuenta y se dice).
+--   5 bis. «NO LA USO» (Respuesta 1): external_brand_oculta y f01_ocultar_marca.
+--      Una marca de Last que el cliente no usa deja de avisar y sale en Marcas
+--      › Ocultas, con quién y cuándo; no crea nada en la carta ni en el
+--      almacén. Lo que tiene pinta de cancelado (sin ventas en 90 días y sin un
+--      plato encendido) no se esconde solo: sale abajo, «Sin ventas desde …».
 --   6. LA PASADA (f01_pasada_last): la llama last-catalog-sync después de cada
 --      sincronización (cada hora de 12 a 23) y vincula los locales nuevos de las
 --      marcas dadas de alta en cuanto el espejo trae su id.
@@ -66,6 +71,26 @@ drop policy if exists external_brand_alta_select on public.external_brand_alta;
 create policy external_brand_alta_select on public.external_brand_alta for select to authenticated
   using (account_id = any ((select public.current_user_account_ids())::uuid[]));
 revoke insert, update, delete on public.external_brand_alta from anon, authenticated;
+
+-- ── 2 bis. Las marcas de Last que el cliente no usa («No la uso») ──────────
+create table if not exists public.external_brand_oculta (
+  id                   uuid primary key default gen_random_uuid(),
+  account_id           uuid not null references public.accounts(id) on delete cascade,
+  source               text not null default 'lastapp',
+  external_org_id      uuid not null,
+  external_brand_name  text not null,
+  created_at           timestamptz not null default now(),
+  created_by           uuid,
+  created_by_name      text,
+  constraint external_brand_oculta_uq unique (account_id, source, external_org_id, external_brand_name)
+);
+comment on table public.external_brand_oculta is
+  'F01 · Respuesta 1: las marcas de Last que el cliente dice que no usa. No avisan en Inicio ni salen entre las nuevas; se ven en Marcas › Ocultas y se recuperan con «Volver a mostrar». No crean nada en la carta ni en el almacén.';
+alter table public.external_brand_oculta enable row level security;
+drop policy if exists external_brand_oculta_select on public.external_brand_oculta;
+create policy external_brand_oculta_select on public.external_brand_oculta for select to authenticated
+  using (account_id = any ((select public.current_user_account_ids())::uuid[]));
+revoke insert, update, delete on public.external_brand_oculta from anon, authenticated;
 
 -- ── Ayudantes ───────────────────────────────────────────────────────────────
 -- El nombre de un plato para comparar: sin mayúsculas, sin acentos, sin signos
@@ -420,7 +445,8 @@ begin
     -- Una fila por (cuenta de Last, marca, local de Folvy ACTIVO), de una cuenta de Last encendida.
     select e.external_org_id as org, btrim(e.external_brand_name) as nombre, l.id as loc_id, l.name as loc_nombre,
            e.external_location_id::text as loc_last, e.external_brand_id as ext,
-           e.organization_product_id, e.product_name, coalesce(e.external_channels, array[e.external_channel]) as canales
+           e.organization_product_id, e.product_name, coalesce(e.external_channels, array[e.external_channel]) as canales,
+           e.is_enabled
       from public.external_catalog_product e
       join public.external_integration ei on ei.account_id = e.account_id and ei.source = 'lastapp'
            and ei.external_org_id = e.external_org_id and ei.is_active
@@ -432,6 +458,12 @@ begin
        and nullif(btrim(e.external_brand_name), '') is not null and btrim(e.external_brand_name) <> 'FOODINT'
        and e.seen_in_catalog_at >= fo.ultima - interval '1 day'
   ),
+  -- Las matrículas que están en más de una marca (bebidas, postres): no dicen de quién es una venta.
+  compartidas as (
+    select x.organization_product_id from public.external_catalog_product x
+     where x.account_id = p_account and x.organization_product_id is not null
+     group by x.organization_product_id having count(distinct btrim(x.external_brand_name)) > 1
+  ),
   marcas as (
     select v.org, v.nombre,
            jsonb_agg(distinct jsonb_build_object('id', v.loc_id, 'nombre', v.loc_nombre)) as locales,
@@ -440,15 +472,33 @@ begin
            count(distinct public._f01_normalizar(v.product_name)) filter (where v.organization_product_id is not null) as platos,
            -- Un local con su id de marca que Folvy ignora a propósito.
            bool_or(exists (select 1 from public.external_brand_map m where m.account_id = p_account and m.source = 'lastapp'
-                             and m.external_location_id = v.loc_last and m.external_brand_id = v.ext and m.is_ignored)) as ignorada
+                             and m.external_location_id = v.loc_last and m.external_brand_id = v.ext and m.is_ignored)) as ignorada,
+           -- ¿Algún plato encendido en alguna de sus tiendas con local activo?
+           bool_or(coalesce(v.is_enabled, true)) as alguna_activa,
+           -- Sus matrículas propias: con ellas se sabe si ha vendido, aunque no esté dada de alta.
+           array_agg(distinct v.organization_product_id::text) filter (
+             where v.organization_product_id is not null and v.organization_product_id not in (select c.organization_product_id from compartidas c)) as propias
       from vivas v group by v.org, v.nombre
   ),
   con_marca as (
     select m.*, public._f01_marca_vinculada(p_account, m.org, m.nombre) as vinculada,
            public._f01_marca_por_nombre(p_account, m.nombre) as por_nombre,
-           ei.organization_name, ei.ownership_type
+           ei.organization_name, ei.ownership_type,
+           o.created_at as oculta_el, o.created_by_name as oculta_por
       from marcas m
       join public.external_integration ei on ei.account_id = p_account and ei.source = 'lastapp' and ei.external_org_id = m.org
+      left join public.external_brand_oculta o on o.account_id = p_account and o.source = 'lastapp'
+           and o.external_org_id = m.org and o.external_brand_name = m.nombre
+  ),
+  -- La última venta: por su marca de Folvy, si la tiene, o por sus matrículas propias.
+  con_venta as (
+    select cm.*,
+           greatest(
+             (select max(s.sold_at) from public.sale s where s.account_id = p_account and s.source = 'lastapp'
+                and s.brand_id = coalesce(cm.vinculada, cm.por_nombre)),
+             (select max(s.sold_at) from public.sale_line sl join public.sale s on s.id = sl.sale_id and s.account_id = sl.account_id
+               where sl.account_id = p_account and sl.external_source = 'lastapp' and sl.external_product_id = any (coalesce(cm.propias, '{}')))) as ultima_venta
+      from con_marca cm
   ),
   -- El socio que se propone: el de las otras marcas de la misma cuenta de Last
   -- (su ficha; si no la tienen, la factura de sus pedidos de Last).
@@ -474,8 +524,15 @@ begin
            'nombre', cm.nombre,
            'estado', case when cm.ignorada then 'ignorada'
                           when cm.vinculada is not null then 'vinculada'
+                          when cm.oculta_el is not null then 'oculta'
                           when cm.por_nombre is not null then 'sin_vincular'
                           else 'nueva' end,
+           -- Tiene pinta de cancelada: sin ventas en 90 días y sin un plato encendido en sus tiendas.
+           -- No se esconde: sale abajo y lo decide el cliente («No la uso»).
+           'apagada', (cm.ultima_venta is null or cm.ultima_venta < now() - interval '90 days') and not cm.alguna_activa,
+           'ultima_venta', cm.ultima_venta,
+           'oculta_el', cm.oculta_el,
+           'oculta_por', cm.oculta_por,
            'brand_id', coalesce(cm.vinculada, cm.por_nombre),
            'marca_folvy', (select b.name from public.brand b where b.id = coalesce(cm.vinculada, cm.por_nombre)),
            'locales', cm.locales,
@@ -488,9 +545,11 @@ begin
               'socio', coalesce((select so.socio from socios so where so.org = cm.org order by so.marcas desc, so.socio limit 1),
                                 case when cm.ownership_type = 'licensed' then cm.organization_name end),
               'socio_marcas', coalesce((select so.marcas from socios so where so.org = cm.org order by so.marcas desc, so.socio limit 1), 0)))
-         order by (cm.vinculada is null and not cm.ignorada) desc, cm.nombre), '[]'::jsonb)
+         order by (cm.vinculada is null and not cm.ignorada and cm.oculta_el is null) desc,
+                  ((cm.ultima_venta is null or cm.ultima_venta < now() - interval '90 days') and not cm.alguna_activa),
+                  cm.nombre), '[]'::jsonb)
     into v
-    from con_marca cm;
+    from con_venta cm;
   return v;
 end $$;
 revoke all on function public._f01_marcas_last(uuid) from public, anon, authenticated;
@@ -506,6 +565,43 @@ begin
 end $$;
 revoke all on function public.f01_marcas_last(uuid) from public, anon;
 grant execute on function public.f01_marcas_last(uuid) to authenticated;
+
+-- «No la uso» y «Volver a mostrar». Solo guarda la decisión (quién y cuándo):
+-- no crea nada en la carta ni en el almacén. Confirma con lo que ha hecho (regla 8).
+create or replace function public.f01_ocultar_marca(p_account uuid, p_org uuid, p_nombre_last text, p_ocultar boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_nombre text := btrim(coalesce(p_nombre_last, ''));
+  v_quien  text;
+  v_n      integer;
+begin
+  if p_account is null or not (public.current_user_is_admin() or public.current_user_is_admin_of(p_account)) then
+    raise exception 'Ocultar una marca de Last es cosa de quien administra la cuenta.' using errcode = '42501';
+  end if;
+  if v_nombre = '' or p_ocultar is null then raise exception 'Falta la marca de Last.' using errcode = '22023'; end if;
+  if p_ocultar then
+    if not exists (select 1 from public.external_catalog_product e where e.account_id = p_account and e.source = 'lastapp'
+                    and e.external_org_id = p_org and btrim(e.external_brand_name) = v_nombre) then
+      raise exception 'La marca «%» no está en las cartas de Last.', v_nombre using errcode = 'P0002';
+    end if;
+    select coalesce(nullif(btrim(up.display_name), ''), u.email) into v_quien
+      from auth.users u left join public.user_profiles up on up.user_id = u.id and up.account_id = p_account
+     where u.id = auth.uid() limit 1;
+    insert into public.external_brand_oculta (account_id, source, external_org_id, external_brand_name, created_by, created_by_name)
+    values (p_account, 'lastapp', p_org, v_nombre, auth.uid(), v_quien)
+    on conflict (account_id, source, external_org_id, external_brand_name) do nothing;
+    get diagnostics v_n = row_count;
+    return jsonb_build_object('nombre', v_nombre, 'oculta', true, 'cambiada', v_n > 0,
+      'frase', v_nombre || ' no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.');
+  end if;
+  delete from public.external_brand_oculta
+   where account_id = p_account and source = 'lastapp' and external_org_id = p_org and external_brand_name = v_nombre;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('nombre', v_nombre, 'oculta', false, 'cambiada', v_n > 0,
+    'frase', v_nombre || ' vuelve a salir entre las marcas nuevas de Last.');
+end $$;
+revoke all on function public.f01_ocultar_marca(uuid, uuid, text, boolean) from public, anon;
+grant execute on function public.f01_ocultar_marca(uuid, uuid, text, boolean) to authenticated;
 
 -- ── 5. El alta en una sola pantalla ─────────────────────────────────────────
 create or replace function public._f01_alta_marca(p_account uuid, p_org uuid, p_nombre_last text, p_nombre text,
@@ -562,6 +658,9 @@ begin
       values (p_account, v_brand, v_socio, null, true, p_quien, p_quien_nombre)
       on conflict (brand_id) do update set owner_name = excluded.owner_name, is_active = true, archived_at = null, updated_at = now();
     end if;
+    -- Darla de alta es usarla: si estaba entre las ocultas, deja de estarlo.
+    delete from public.external_brand_oculta
+     where account_id = p_account and source = 'lastapp' and external_org_id = p_org and external_brand_name = v_last;
     insert into public.external_brand_alta (account_id, source, external_org_id, external_brand_name, brand_id, created_by, created_by_name)
     values (p_account, 'lastapp', p_org, v_last, v_brand, p_quien, p_quien_nombre)
     on conflict (account_id, source, external_org_id, external_brand_name) do update set brand_id = excluded.brand_id;

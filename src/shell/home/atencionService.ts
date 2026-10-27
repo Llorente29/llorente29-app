@@ -28,8 +28,8 @@
 // Nada aquí inventa una fuente: las tres tablas existen y están pobladas.
 
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
-import { leerMarcasLast } from '@/modules/multitenancy/services/marcasLastService'
-import { avisoMarca, claveMarca, iniciales, pendientes } from '@/modules/multitenancy/lib/marcasLast'
+import { leerMarcasLast, ocultarMarca } from '@/modules/multitenancy/services/marcasLastService'
+import { avisoMarca, claveMarca, fraseNoLaUso, iniciales, pendientes } from '@/modules/multitenancy/lib/marcasLast'
 
 // F01 (27/10): «marca» = una marca nueva en las cartas de Last, antes de que venda.
 export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante' | 'marca'
@@ -55,8 +55,15 @@ export interface AvisoAtencion {
    * lo trae, la fila dice el destino debajo y el botón es «Ver».
    */
   detalle?: string
-  chip?: { texto: string; tono: 'aviso' | 'mal' }
+  chip?: { texto: string; tono: 'aviso' | 'mal' | 'suave' }
   boton?: string
+  /** El botón principal sin destacar (una marca con pinta de cancelada, F01 · Respuesta 1). */
+  apagado?: boolean
+  /**
+   * F01 · Respuesta 1: un segundo botón, secundario, que pide confirmación en
+   * una línea («No la uso»). `hacer` devuelve la frase que se enseña (regla 8).
+   */
+  secundaria?: { texto: string; confirmar: string; hacer: () => Promise<string> }
   /** Las letras del icono (las de la marca); si no, el icono del tipo. */
   iniciales?: string
 }
@@ -236,8 +243,10 @@ export async function getAvisosAtencion(
         tipo: 'marca',
         texto: a.titulo,
         detalle: a.detalle,
-        chip: { texto: a.chip, tono: 'aviso' },
+        chip: { texto: a.chip, tono: a.chipTono },
         boton: 'Dar de alta',
+        apagado: m.apagada,
+        secundaria: { texto: 'No la uso', confirmar: fraseNoLaUso(m.nombre), hacer: () => ocultarMarca(accountId, m.org, m.nombre, true) },
         iniciales: iniciales(m.nombre),
         ruta: `/configuracion/marcas?alta=${encodeURIComponent(claveMarca(m))}`,
         destino: 'Marcas',

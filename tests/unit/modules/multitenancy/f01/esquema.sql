@@ -35,7 +35,8 @@ create table external_brand_map (id uuid primary key default gen_random_uuid(), 
   unique (account_id, source, external_location_id, external_brand_id));
 create table external_catalog_product (id uuid primary key default gen_random_uuid(), account_id uuid not null, source text not null default 'lastapp', external_org_id uuid not null,
   catalog_product_id uuid not null default gen_random_uuid(), organization_product_id uuid, external_brand_name text, product_name text, price_cents integer, product_type text default 'PRODUCT',
-  seen_in_catalog_at timestamptz default now(), external_channel text, external_channels text[], external_location_id uuid, missing_since timestamptz);
+  seen_in_catalog_at timestamptz default now(), external_channel text, external_channels text[], external_location_id uuid, missing_since timestamptz,
+  is_enabled boolean default true);
 create table recipe_item (id uuid primary key default gen_random_uuid(), account_id uuid, type text, name text, base_unit_id uuid, is_active boolean default true,
   archived_at timestamptz, source text, needs_review boolean default false, created_by_name text);
 create table recipe_line (id uuid primary key default gen_random_uuid(), parent_item_id uuid, child_item_id uuid);
@@ -48,7 +49,8 @@ create unique index uq_menu_item_override_scope on menu_item_override (menu_item
 create table inventory_count (id uuid primary key default gen_random_uuid(), account_id uuid, status text, closed_at timestamptz);
 create table sale (id uuid primary key default gen_random_uuid(), account_id uuid, location_id uuid, brand_id uuid, source text, sold_at timestamptz, raw_products jsonb,
   raw_tab text, external_brand_text text);
-create table sale_line (id uuid primary key default gen_random_uuid(), account_id uuid, sale_id uuid, menu_item_id uuid, unmapped_reason text, external_product_id text);
+create table sale_line (id uuid primary key default gen_random_uuid(), account_id uuid, sale_id uuid, menu_item_id uuid, unmapped_reason text, external_product_id text,
+  external_source text default 'lastapp');
 create table user_profiles (user_id uuid, account_id uuid, display_name text);
 create table funcion_respaldo (firma text, migracion text, definicion text, huella text, primary key (firma, migracion));
 

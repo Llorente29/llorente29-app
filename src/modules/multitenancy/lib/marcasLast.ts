@@ -8,7 +8,8 @@
 // «sin_vincular» (hay una marca que se llama igual, sin vincular). Las dos se
 // dan de alta igual: el alta reutiliza la que ya existe y no duplica.
 
-export type EstadoMarcaLast = 'nueva' | 'sin_vincular' | 'vinculada' | 'ignorada'
+// «oculta» (Respuesta 1): el cliente ha dicho «No la uso».
+export type EstadoMarcaLast = 'nueva' | 'sin_vincular' | 'vinculada' | 'ignorada' | 'oculta'
 
 export interface LocalMarca { id: string; nombre: string }
 
@@ -24,6 +25,11 @@ export interface MarcaLast {
   platos: number
   ventas: number
   propuesta: { propia: boolean; socio: string | null; socioMarcas: number }
+  /** Pinta de cancelada: sin ventas en 90 días y sin un plato encendido. Sale abajo, no se esconde. */
+  apagada: boolean
+  ultimaVenta: string | null
+  ocultaEl: string | null
+  ocultaPor: string | null
 }
 
 export interface CartaAlta {
@@ -57,7 +63,7 @@ type Fila = Record<string, unknown>
 const txt = (v: unknown): string | null => (typeof v === 'string' && v.trim() !== '' ? v : null)
 const num = (v: unknown): number => (typeof v === 'number' ? v : Number(v ?? 0) || 0)
 const lista = (v: unknown): Fila[] => (Array.isArray(v) ? (v as Fila[]) : [])
-const ESTADOS: EstadoMarcaLast[] = ['nueva', 'sin_vincular', 'vinculada', 'ignorada']
+const ESTADOS: EstadoMarcaLast[] = ['nueva', 'sin_vincular', 'vinculada', 'ignorada', 'oculta']
 
 export function leerMarcas(datos: unknown): MarcaLast[] {
   return lista(datos).map((m) => {
@@ -76,6 +82,10 @@ export function leerMarcas(datos: unknown): MarcaLast[] {
       platos: num(m.platos),
       ventas: num(m.ventas),
       propuesta: { propia: p.propia === true, socio: txt(p.socio), socioMarcas: num(p.socio_marcas) },
+      apagada: m.apagada === true,
+      ultimaVenta: txt(m.ultima_venta),
+      ocultaEl: txt(m.oculta_el),
+      ocultaPor: txt(m.oculta_por),
     }
   })
 }
@@ -114,6 +124,25 @@ export function leerAlta(datos: unknown): ResultadoAlta {
 
 /** Las que piden alta: las que no están vinculadas ni ignoradas. */
 export const pendientes = (m: MarcaLast[]): MarcaLast[] => m.filter((x) => x.estado === 'nueva' || x.estado === 'sin_vincular')
+  // Las que tienen pinta de cancelada, abajo (la base ya las ordena así; aquí se asegura).
+  .sort((a, b) => Number(a.apagada) - Number(b.apagada))
+
+/** Las que el cliente no usa («No la uso»): Marcas › Ocultas. */
+export const ocultas = (m: MarcaLast[]): MarcaLast[] => m.filter((x) => x.estado === 'oculta')
+
+/** «12/08/2026», en Madrid. */
+export function fechaCorta(iso: string): string {
+  return new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+}
+
+/** La confirmación de «No la uso», en una línea. */
+export const fraseNoLaUso = (nombre: string): string => `${nombre} no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.`
+
+/** Quién la ocultó y cuándo: «Oculta por Julio el 27/10/2026». */
+export function fraseOculta(m: MarcaLast): string {
+  const por = m.ocultaPor ? ` por ${m.ocultaPor}` : ''
+  return m.ocultaEl ? `Oculta${por} el ${fechaCorta(m.ocultaEl)}` : `Oculta${por}`
+}
 
 const NOMBRE_CANAL: Record<string, string> = { uber: 'Uber Eats', glovo: 'Glovo', justeat: 'Just Eat', deliveroo: 'Deliveroo', shop: 'Tienda online' }
 const ORDEN_CANAL = ['uber', 'glovo', 'justeat', 'deliveroo', 'shop']
@@ -149,14 +178,16 @@ export function iniciales(nombre: string): string {
 const plural = (n: number, uno: string, varios: string) => `${n} ${n === 1 ? uno : varios}`
 
 /** El aviso de Inicio (tablero 1). */
-export function avisoMarca(m: MarcaLast): { titulo: string; detalle: string; chip: string } {
+export function avisoMarca(m: MarcaLast): { titulo: string; detalle: string; chip: string; chipTono: 'aviso' | 'suave' } {
   const donde = m.locales.length ? `en ${enumerarLocales(m.locales)}` : 'sin local'
   const con = m.canales.length ? `, con ${enumerarCanales(m.canales)}` : ''
   const vendido = m.ventas > 0 ? `Ya lleva ${plural(m.ventas, 'venta', 'ventas')}.` : 'Todavía no ha vendido.'
   return {
     titulo: `Marca nueva: ${m.nombre}`,
     detalle: `Ha aparecido en Last, ${donde}${con}. ${plural(m.platos, 'plato', 'platos')}. ${vendido}`,
-    chip: 'Sin dar de alta',
+    // Pinta de cancelada: sin destacar, con la fecha de su última venta.
+    chip: m.apagada ? (m.ultimaVenta ? `Sin ventas desde ${fechaCorta(m.ultimaVenta)}` : 'Sin ventas registradas') : 'Sin dar de alta',
+    chipTono: m.apagada ? 'suave' : 'aviso',
   }
 }
 

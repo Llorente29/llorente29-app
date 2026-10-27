@@ -6,7 +6,8 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  avisoMarca, claveMarca, deClave, enumerar, fraseHecho, iniciales, leerAlta, leerMarcas, lineasCarta, localCorto, pendientes,
+  avisoMarca, claveMarca, deClave, enumerar, fraseHecho, fraseNoLaUso, fraseOculta, iniciales, leerAlta, leerMarcas, lineasCarta,
+  localCorto, ocultas, pendientes,
 } from '@/modules/multitenancy/lib/marcasLast'
 
 const deLaBase = [
@@ -39,6 +40,7 @@ describe('las marcas de Last que piden alta', () => {
       titulo: 'Marca nueva: El Delicioso Latin Food',
       detalle: 'Ha aparecido en Last, en Alcalá y Carabanchel, con Uber Eats y Glovo. 18 platos. Todavía no ha vendido.',
       chip: 'Sin dar de alta',
+      chipTono: 'aviso',
     })
     expect(avisoMarca({ ...m[1], ventas: 1, platos: 1 }).detalle)
       .toBe('Ha aparecido en Last, en Alcalá, con Uber Eats y Glovo. 1 plato. Ya lleva 1 venta.')
@@ -75,6 +77,28 @@ const alta = leerAlta({
     con_receta: 0, sin_receta: 8, precios_por_plataforma: 0, archivadas: [],
   },
   ventas: { colocadas: 0, fallidas: 0, antes_del_recuento: 0, corte: '2026-10-27T11:20:57Z' },
+})
+
+describe('«No la uso», las ocultas y las que tienen pinta de cancelada (Respuesta 1)', () => {
+  const vieja = { ...deLaBase[1], nombre: 'Van Van', apagada: true, ultima_venta: '2026-08-12T21:40:00Z' }
+  const nunca = { ...deLaBase[1], nombre: 'Marca Vieja', apagada: true, ultima_venta: null }
+  const oculta = { ...deLaBase[1], nombre: 'Van Van', estado: 'oculta', oculta_el: '2026-10-27T16:40:00Z', oculta_por: 'Julio' }
+  it('las de pinta de cancelada van abajo, con «Sin ventas desde …» sin destacar', () => {
+    const m = leerMarcas([vieja, deLaBase[0]])
+    expect(pendientes(m).map((x) => x.nombre)).toEqual(['El Delicioso Latin Food', 'Van Van'])
+    expect(avisoMarca(m[0])).toEqual(expect.objectContaining({ chip: 'Sin ventas desde 12/08/2026', chipTono: 'suave' }))
+    expect(avisoMarca(leerMarcas([nunca])[0]).chip).toBe('Sin ventas registradas')
+    expect(avisoMarca(m[1])).toEqual(expect.objectContaining({ chip: 'Sin dar de alta', chipTono: 'aviso' }))
+  })
+  it('una oculta no está pendiente: está en Ocultas, con quién y cuándo', () => {
+    const m = leerMarcas([oculta, deLaBase[0]])
+    expect(pendientes(m).map((x) => x.nombre)).toEqual(['El Delicioso Latin Food'])
+    expect(ocultas(m).map((x) => x.nombre)).toEqual(['Van Van'])
+    expect(fraseOculta(ocultas(m)[0])).toBe('Oculta por Julio el 27/10/2026')
+  })
+  it('la confirmación, en una línea', () => {
+    expect(fraseNoLaUso('Van Van')).toBe('Van Van no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.')
+  })
 })
 
 describe('el panel del alta (tablero 2) y su confirmación', () => {

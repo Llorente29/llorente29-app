@@ -15,6 +15,10 @@
 --     ARCHIVADO (lo que rompía el sembrado de antes con «duplicate key»).
 --   · «Solo en desuso»: solo en la tienda sin local: no sale.
 --
+--   1 bis. (Respuesta 1) «Marca Vieja F01», con todo apagado y sin ventas, sale
+--      abajo y marcada (no se esconde sola); «No la uso» la oculta sin crear
+--      nada y con quién; «Volver a mostrar» la devuelve; la vuelta atrás de la
+--      1320 se lleva las ocultas.
 --   1. Las marcas de Last: Prueba Latina sale «nueva», con 2 locales, Uber y
 --      Glovo, 3 platos (el de dos nombres cuenta uno) y el socio que propone su
 --      cuenta de Last; Brasa Prestada «vinculada»; «Solo en desuso» no sale.
@@ -78,9 +82,12 @@ begin
       ('f0100000-0000-4000-8000-000000000d04', 'Prueba Latina ', 'f01-pl', 'TEQUEÑOS PL', 650, array['uber','glovo'], array[l1, l2, l3]),
       ('f0100000-0000-4000-8000-000000000d01', 'Brasa Prestada', 'f01-brasa', 'Agua pet.', 200, array['uber','glovo'], array[l1]),
       ('f0100000-0000-4000-8000-000000000d09', 'Brasa Prestada', 'f01-brasa', 'Pollo a la brasa', 990, array['uber','glovo'], array[l1]),
-      ('f0100000-0000-4000-8000-000000000d20', 'Solo en desuso', 'f01-desuso', 'Plato fantasma', 900, array['uber'], array[l3])
+      ('f0100000-0000-4000-8000-000000000d20', 'Solo en desuso', 'f01-desuso', 'Plato fantasma', 900, array['uber'], array[l3]),
+      ('f0100000-0000-4000-8000-000000000d30', 'Marca Vieja F01', 'f01-vieja', 'Plato viejo', 800, array['uber'], array[l1])
     ) x(m, marca, ext, nombre, cents, canales, locs)
     cross join unnest(x.canales) ch cross join unnest(x.locs) l;
+  -- La vieja: todos sus platos apagados en Last y sin ventas (pinta de cancelada).
+  update public.external_catalog_product set is_enabled = false where account_id = a and external_brand_name = 'Marca Vieja F01';
   -- El socio de Brasa Prestada, en su ficha (como lo dejaría la 1321).
   insert into public.brand_licensing_agreement (account_id, brand_id, owner_name, revenue_share_pct, created_by_name)
   values (a, brasa, 'Socio de Prueba F01, S.L.', null, 'prueba F01')
@@ -121,6 +128,35 @@ begin
     raise exception 'PRUEBA F01 · 1: una marca que solo está en una tienda de Last sin local sale como pendiente.';
   end if;
   raise notice '1 · las marcas de Last: Prueba Latina nueva (2 locales, 3 platos, socio propuesto), Brasa Prestada vinculada, la de la tienda en desuso no sale';
+
+  -- 1 bis · Respuesta 1: la vieja sale (no se esconde sola), abajo y marcada;
+  -- «No la uso» la oculta sin crear nada; «Volver a mostrar» la devuelve.
+  declare vj jsonb; n0 text; n1 text; pos_pl int; pos_vj int;
+  begin
+    select x, o into vj, pos_vj from jsonb_array_elements(v) with ordinality t(x, o) where x->>'nombre' = 'Marca Vieja F01';
+    select o into pos_pl from jsonb_array_elements(v) with ordinality t(x, o) where x->>'nombre' = 'Prueba Latina';
+    if vj is null or vj->>'estado' <> 'nueva' or not (vj->>'apagada')::boolean or vj->>'ultima_venta' is not null or pos_vj < pos_pl then
+      raise exception 'PRUEBA F01 · 1 bis: la marca vieja no sale abajo y marcada: % (puesto % frente a %)', vj, pos_vj, pos_pl;
+    end if;
+    n0 := (select count(*) from public.brand where account_id = a) || '/' || (select count(*) from public.menu_item where account_id = a)
+          || '/' || (select count(*) from public.recipe_item where account_id = a) || '/' || (select count(*) from public.brand_licensing_agreement where account_id = a);
+    r := public.f01_ocultar_marca(a, (vj->>'org')::uuid, 'Marca Vieja F01', true);
+    if r->>'frase' <> 'Marca Vieja F01 no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.' then raise exception 'PRUEBA F01 · 1 bis: la frase de «No la uso» es «%».', r->>'frase'; end if;
+    n1 := (select count(*) from public.brand where account_id = a) || '/' || (select count(*) from public.menu_item where account_id = a)
+          || '/' || (select count(*) from public.recipe_item where account_id = a) || '/' || (select count(*) from public.brand_licensing_agreement where account_id = a);
+    if n1 <> n0 then raise exception 'PRUEBA F01 · 1 bis: «No la uso» ha creado algo (marcas/platos/artículos/fichas: % → %).', n0, n1; end if;
+    if (select x->>'estado' from jsonb_array_elements(public.f01_marcas_last(a)) x where x->>'nombre' = 'Marca Vieja F01') <> 'oculta'
+       or (select created_by from public.external_brand_oculta where account_id = a and external_brand_name = 'Marca Vieja F01') is distinct from 'c01a0000-0000-4000-8000-0000000000a1' then
+      raise exception 'PRUEBA F01 · 1 bis: la vieja no ha quedado oculta con quién la ocultó.';
+    end if;
+    perform public.f01_ocultar_marca(a, (vj->>'org')::uuid, 'Marca Vieja F01', false);
+    if (select x->>'estado' from jsonb_array_elements(public.f01_marcas_last(a)) x where x->>'nombre' = 'Marca Vieja F01') <> 'nueva' then
+      raise exception 'PRUEBA F01 · 1 bis: «Volver a mostrar» no la ha devuelto.';
+    end if;
+    -- Otra vez oculta: la vuelta atrás de la 1320 tiene que llevársela.
+    perform public.f01_ocultar_marca(a, (vj->>'org')::uuid, 'Marca Vieja F01', true);
+    raise notice '1 bis · la vieja sale abajo («sin ventas»), «No la uso» la oculta sin crear nada (%), «Volver a mostrar» la devuelve', n1;
+  end;
 
   r := public.f01_alta_marca(a, (pl->>'org')::uuid, 'Prueba Latina', 'Prueba Latina', false, 'Socio de Prueba F01, S.L.', true);
   if (r->'carta'->>'platos')::int <> 3 or (r->'carta'->>'creados')::int <> 4 or jsonb_array_length(r->'carta'->'juntados') <> 1
@@ -314,12 +350,14 @@ end $$;
 \i supabase/vuelta-atras/20261027T1320_f01_marcas_last.down.sql
 do $$
 begin
-  if to_regclass('public.external_brand_alta') is not null or to_regprocedure('public.f01_alta_marca(uuid,uuid,text,text,boolean,text,boolean)') is not null
+  if to_regclass('public.external_brand_alta') is not null or to_regclass('public.external_brand_oculta') is not null
+     or to_regprocedure('public.f01_ocultar_marca(uuid,uuid,text,boolean)') is not null
+     or to_regprocedure('public.f01_alta_marca(uuid,uuid,text,text,boolean,text,boolean)') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'external_catalog_product' and column_name = 'external_brand_id')
      or (select is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'brand_licensing_agreement' and column_name = 'revenue_share_pct') <> 'NO' then
     raise exception 'PRUEBA F01 · 8: las vueltas atrás no dejan la base como estaba.';
   end if;
-  raise notice '8 · las vueltas atrás de la 1321, la 1322 y la 1320: la base como estaba (sin la tabla, sin las funciones, sin la columna y el porcentaje obligatorio)';
+  raise notice '8 · las vueltas atrás de la 1321, la 1322 y la 1320: la base como estaba (sin las tablas de altas y ocultas, sin las funciones, sin la columna y el porcentaje obligatorio)';
 end $$;
 
 rollback;

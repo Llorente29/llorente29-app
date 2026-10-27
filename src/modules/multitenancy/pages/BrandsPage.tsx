@@ -25,6 +25,7 @@ import { useState } from 'react'
 import BrandsListView from '../components/brands/BrandsListView'
 import BrandDetailView from '../components/brands/BrandDetailView'
 import MarcasNuevasLast from '../components/brands/MarcasNuevasLast'
+import MarcasOcultasLast from '../components/brands/MarcasOcultasLast'
 import { useActiveAccount } from '../hooks/useActiveAccount'
 
 export default function BrandsPage() {
@@ -36,18 +37,22 @@ export default function BrandsPage() {
   // pasamos un onChanged callback al detalle.
   const [listRefreshKey, setListRefreshKey] = useState(0)
   const { activeAccountId } = useActiveAccount()
+  // F01: lo que cambia una parte de las marcas de Last (alta, «No la uso»,
+  // «Volver a mostrar») lo vuelven a leer las demás.
+  const [vueltaLast, setVueltaLast] = useState(0)
+  const cambioLast = () => { setVueltaLast((v) => v + 1); setListRefreshKey((k) => k + 1) }
 
   if (selectedBrandId === null) {
     return (
       <>
         {/* F01: las marcas nuevas de Last y su alta (tablero 2). */}
-        {activeAccountId && (
-          <MarcasNuevasLast accountId={activeAccountId} onAlta={() => setListRefreshKey((k) => k + 1)} />
-        )}
+        {activeAccountId && <MarcasNuevasLast accountId={activeAccountId} vuelta={vueltaLast} onCambio={cambioLast} />}
         <BrandsListView
           key={listRefreshKey}
           onSelectBrand={(id) => setSelectedBrandId(id)}
         />
+        {/* F01 · Respuesta 1: al final, plegada, las que no se usan. */}
+        {activeAccountId && <MarcasOcultasLast accountId={activeAccountId} vuelta={vueltaLast} onCambio={cambioLast} />}
       </>
     )
   }

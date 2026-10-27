@@ -51,6 +51,17 @@
 .ml-fila .ml-txt { flex: 1 1 320px; min-width: 0; }
 .ml-fila .ml-txt b { display: block; font-weight: 600; }
 .ml-fila .ml-txt span { color: var(--color-text-secondary); font-size: 14px; }
+/* F01 · Respuesta 1: «No la uso», las que tienen pinta de cancelada y Ocultas. */
+.ml-chip[data-tono='suave'] { background: var(--color-bg-page); color: var(--color-text-secondary); border: 1px solid var(--color-border-default); }
+.ml-fila[data-apagada='si'] .ml-ico { background: var(--color-bg-page); color: var(--color-text-secondary); }
+.ml-fila[data-apagada='si'] .ml-txt b { font-weight: 500; color: var(--color-text-secondary); }
+.ml-confirmar { flex: 1 1 100%; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--color-bg-page); font-size: 14px; }
+.ml-panel > .ml-confirmar { margin: 0 22px 12px; flex: none; }
+.ml-confirmar span { flex: 1 1 260px; }
+.ml-ocultas { margin-top: 24px; }
+.ml-ocultas > summary { cursor: pointer; font-weight: 600; font-size: 15px; padding: 8px 0; color: var(--color-text-secondary); }
+.ml-ocultas > summary:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+.ml-ocultas[open] > summary { color: var(--color-text-primary); }
 @media (max-width: 640px) {
   .ml-fondo { padding: 0; align-items: stretch; }
   .ml-panel { border-radius: 0; max-width: none; min-height: 100%; }

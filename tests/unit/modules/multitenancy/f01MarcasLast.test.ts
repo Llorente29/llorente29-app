@@ -48,7 +48,7 @@ type Carta = { matriculas: number; platos: number; ya_estaban: number; creados: 
 const marcas = () => json<Marca[]>(`select public._f01_marcas_last('${CUENTA}')`)
 const ensayo = () => json<{ carta: Carta; locales: { nombre: string }[]; nueva: boolean }>(
   `select public._f01_alta_marca('${CUENTA}', '${ORG}', 'El Delicioso Latin Food ', 'El Delicioso Latin Food', false, 'X', true, null, null)`)
-const foto = () => sql(`select (select count(*) from menu_item) || '/' || (select count(*) from recipe_item) || '/' || (select count(*) from brand_licensing_agreement)
+const foto = () => sql(`select (select count(*) from menu_item) || '/' || (select count(*) from recipe_item) || '/' || (select count(*) from brand_licensing_agreement) || '/' || (select count(*) from brand)
   || '/' || (select count(*) from menu_item where recipe_item_id is null) || '/' || (select count(*) from external_brand_alta)`)
 
 describe.skipIf(!listo)('F01 · marcas de Last, con la población real de El Delicioso', () => {
@@ -83,6 +83,30 @@ describe.skipIf(!listo)('F01 · marcas de Last, con la población real de El Del
     expect(ed.propuesta).toEqual({ propia: false, socio: 'CLOUDTOWN BRANDS SL', socio_marcas: 2 })
     // Van Van: solo Alcalá (la otra tienda no es de ningún local).
     expect(m.find((x) => x.nombre === 'Van Van')!.locales.map((l) => l.nombre)).toEqual(['Foodint Alcalá'])
+  })
+
+  it('«No la uso»: Van Van deja de estar pendiente, no crea nada y se recupera', () => {
+    const antes = foto()
+    const ocultar = (si: boolean) => json<{ frase: string; cambiada: boolean }>(
+      `select set_config('prueba.admin', 'si', false) \\g /dev/null\nselect public.f01_ocultar_marca('${CUENTA}', '${ORG}', 'Van Van', ${si})`)
+    expect(ocultar(true)).toEqual(expect.objectContaining({ cambiada: true, frase: 'Van Van no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.' }))
+    expect(ocultar(true).cambiada).toBe(false)
+    expect(marcas().find((x) => x.nombre === 'Van Van')!.estado).toBe('oculta')
+    expect(foto()).toBe(antes)
+    expect(ocultar(false).cambiada).toBe(true)
+    expect(marcas().find((x) => x.nombre === 'Van Van')!.estado).toBe('nueva')
+  })
+
+  it('lo que tiene pinta de cancelado (sin ventas y sin un plato encendido) sale, abajo y marcado', () => {
+    type ConVenta = Marca & { apagada: boolean; ultima_venta: string | null }
+    const vv = () => json<ConVenta[]>(`select public._f01_marcas_last('${CUENTA}')`).find((x) => x.nombre === 'Van Van')!
+    expect(vv().apagada).toBe(false)
+    sql(`update external_catalog_product set is_enabled = false where external_brand_name = 'Van Van'`)
+    const m = json<ConVenta[]>(`select public._f01_marcas_last('${CUENTA}')`)
+    const pend = m.filter((x) => x.estado === 'nueva' || x.estado === 'sin_vincular')
+    expect(pend.map((x) => x.nombre)).toEqual(['El Delicioso Latin Food', 'Van Van'])
+    expect(pend[1]).toEqual(expect.objectContaining({ apagada: true, ultima_venta: null }))
+    sql(`update external_catalog_product set is_enabled = true where external_brand_name = 'Van Van'`)
   })
 
   it('el ensayo del alta cuenta la carta de verdad y no toca nada', () => {

@@ -17,8 +17,9 @@
 --   ninguna migración— se la deja usar al administrador de A (el de la
 --   plantilla o el de su carril), y solo en SU cuenta:
 --     · 'empezar' archiva lo que dejó un alta anterior de «Latina de Prueba»
---                 (la marca y sus platos), quita su alta, sus vínculos y su ficha
---                 de socio, y pone la carta de Last «vista ahora»;
+--                 (la marca y sus platos), quita su alta, sus vínculos, su ficha
+--                 de socio y las marcas ocultas de esta carta («No la uso»), y
+--                 pone la carta de Last «vista ahora»;
 --     · 'limpiar' lo mismo, sin tocar la carta (al acabar la prueba).
 --
 -- Guardas: aborta si al otro lado hay cuentas de producción, o si falta la
@@ -68,6 +69,15 @@ begin
    where c.ch = any (x.canales)
   on conflict (account_id, source, catalog_product_id, external_location_id) do nothing;
 
+  -- Respuesta 1: «Vieja de Prueba», con su plato apagado en Last y sin ventas
+  -- (pinta de cancelada): sale abajo, sin destacar, y no se esconde sola.
+  insert into public.external_catalog_product (account_id, source, external_org_id, catalog_product_id, organization_product_id,
+       external_brand_name, external_brand_id, product_name, price_cents, product_type, external_channel, external_channels,
+       external_location_id, seen_in_catalog_at, is_enabled, last_synced_at)
+  values (a_cuenta, 'lastapp', org, 'f01e2e00-0099-4000-8000-000000000001', 'f01e2e00-0000-4000-8000-000000000099',
+          'Vieja de Prueba', 'f01e2e-vieja-1', 'Plato viejo', 800, 'PRODUCT', 'uber', array['uber'], l1, now(), false, now())
+  on conflict (account_id, source, catalog_product_id, external_location_id) do nothing;
+
   raise notice 'Semilla F01 OK: «Latina de Prueba» en Last (cuenta A), 4 matrículas, Uber y Glovo, en Norte Centro, Norte Mercado y una tienda sin local.';
 end $$;
 
@@ -97,6 +107,7 @@ begin
    where a.account_id = v_cuenta and a.brand_id in (select b.id from public.brand b where b.account_id = v_cuenta and b.name = 'Latina de Prueba');
   delete from public.external_brand_map where account_id = v_cuenta and source = 'lastapp' and external_brand_id like 'f01e2e-lp-%';
   delete from public.external_brand_alta where account_id = v_cuenta and external_org_id = org;
+  delete from public.external_brand_oculta where account_id = v_cuenta and external_org_id = org;
   update public.brand b set archived_at = now(), is_active = false, updated_at = now()
    where b.account_id = v_cuenta and b.name = 'Latina de Prueba' and b.archived_at is null;
   get diagnostics v_marcas = row_count;

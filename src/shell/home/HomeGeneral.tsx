@@ -126,6 +126,24 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
   const [avisos, setAvisos] = useState<AvisoAtencion[]>([])
+  // F01 · Respuesta 1: «No la uso», con su confirmación en una línea y su resultado.
+  const [confirmando, setConfirmando] = useState<string | null>(null)
+  const [ocultando, setOcultando] = useState(false)
+  const [hechoAtencion, setHechoAtencion] = useState<{ ok: boolean; texto: string } | null>(null)
+  const confirmarSecundaria = async (a: AvisoAtencion) => {
+    if (!a.secundaria) return
+    setOcultando(true)
+    try {
+      const frase = await a.secundaria.hacer()
+      setAvisos((xs) => xs.filter((x) => x.id !== a.id))
+      setHechoAtencion({ ok: true, texto: frase })
+      setConfirmando(null)
+    } catch (e) {
+      setHechoAtencion({ ok: false, texto: `No se ha guardado: ${e instanceof Error ? e.message : String(e)}` })
+    } finally {
+      setOcultando(false)
+    }
+  }
   const [cajonAbierto, setCajonAbierto] = useState(false)
   const [guardando, setGuardando] = useState(false)
 
@@ -292,14 +310,17 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
           porque la franja ordena y etiqueta, no decide qué existe.
           Cada fila: qué pasa, dónde, su etiqueta y UN botón al sitio donde se
           resuelve. Las marcas nuevas de Last van primero. */}
-      {avisos.length > 0 && (
+      {(avisos.length > 0 || hechoAtencion) && (
         <section className="at-bloque" aria-labelledby="at-titulo" data-prueba="atencion">
           <p id="at-titulo" className="at-titulo">Lo que necesita tu atención</p>
+          {hechoAtencion && (
+            <p className="at-hecho" role={hechoAtencion.ok ? 'status' : 'alert'} data-tono={hechoAtencion.ok ? 'ok' : 'mal'}>{hechoAtencion.texto}</p>
+          )}
           <ul className="at-lista">
             {avisos.map(a => {
               const Icono = ICONO_AVISO[a.tipo]
               return (
-                <li key={a.id} className="at-fila" data-tipo={a.tipo}>
+                <li key={a.id} className="at-fila" data-tipo={a.tipo} data-apagada={a.apagado ? 'si' : undefined}>
                   <div className="at-ico" data-tipo={a.tipo} aria-hidden>
                     {a.iniciales ?? <Icono size={18} />}
                   </div>
@@ -308,10 +329,25 @@ export default function HomeGeneral({ userName }: HomeGeneralProps) {
                     <span>{a.detalle ?? a.destino}</span>
                   </div>
                   {a.chip && <span className="at-chip" data-tono={a.chip.tono}>{a.chip.texto}</span>}
-                  <button type="button" className="at-boton" data-principal={a.tipo === 'marca' ? 'si' : 'no'}
+                  <button type="button" className="at-boton" data-principal={a.tipo === 'marca' && !a.apagado ? 'si' : 'no'}
                     onClick={() => navigate(a.ruta)} aria-label={`${a.boton ?? 'Ver'}: ${a.texto}`}>
                     {a.boton ?? 'Ver'}
                   </button>
+                  {a.secundaria && (
+                    <button type="button" className="at-boton" data-principal="no" disabled={ocultando}
+                      onClick={() => { setConfirmando(a.id); setHechoAtencion(null) }} aria-label={`${a.secundaria.texto}: ${a.texto}`}>
+                      {a.secundaria.texto}
+                    </button>
+                  )}
+                  {a.secundaria && confirmando === a.id && (
+                    <div className="at-confirmar" role="group" aria-label={`Confirmar: ${a.secundaria.texto}`}>
+                      <span>{a.secundaria.confirmar}</span>
+                      <button type="button" className="at-boton" data-principal="no" disabled={ocultando}
+                        onClick={() => void confirmarSecundaria(a)}>{ocultando ? 'Guardando…' : 'Sí, no la uso'}</button>
+                      <button type="button" className="at-boton" data-principal="no" disabled={ocultando}
+                        onClick={() => setConfirmando(null)}>Cancelar</button>
+                    </div>
+                  )}
                 </li>
               )
             })}

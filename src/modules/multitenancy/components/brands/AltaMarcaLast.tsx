@@ -8,10 +8,10 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  fraseHecho, iniciales, lineasCarta, localCorto, nombreCanal,
+  fraseHecho, fraseNoLaUso, iniciales, lineasCarta, localCorto, nombreCanal,
   type MarcaLast, type ResultadoAlta,
 } from '../../lib/marcasLast'
-import { darDeAlta, ensayarAlta } from '../../services/marcasLastService'
+import { darDeAlta, ensayarAlta, ocultarMarca } from '../../services/marcasLastService'
 import './altaMarcaLast.css'
 
 interface Props {
@@ -19,11 +19,14 @@ interface Props {
   marca: MarcaLast
   onCerrar: () => void
   onHecho: (frase: string, r: ResultadoAlta) => void
+  /** «No la uso» (Respuesta 1): la marca se oculta y el panel se cierra con la frase. */
+  onOculta: (frase: string) => void
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-export default function AltaMarcaLast({ accountId, marca, onCerrar, onHecho }: Props) {
+export default function AltaMarcaLast({ accountId, marca, onCerrar, onHecho, onOculta }: Props) {
+  const [confirmando, setConfirmando] = useState(false)
   const [nombre, setNombre] = useState(marca.marcaFolvy ?? marca.nombre)
   const [propia, setPropia] = useState(marca.propuesta.propia)
   const [socio, setSocio] = useState(marca.propuesta.socio ?? '')
@@ -63,6 +66,13 @@ export default function AltaMarcaLast({ accountId, marca, onCerrar, onHecho }: P
     } finally {
       setOcupado(false)
     }
+  }
+
+  const noLaUso = async () => {
+    setOcupado(true); setError(null)
+    try { onOculta(await ocultarMarca(accountId, marca.org, marca.nombre, true)) }
+    catch (e) { setError(`No se ha guardado: ${msg(e)}`) }
+    finally { setOcupado(false) }
   }
 
   const cuenta = marca.cuentaLast ?? 'Last'
@@ -137,8 +147,17 @@ export default function AltaMarcaLast({ accountId, marca, onCerrar, onHecho }: P
 
         {(error || falta) && <p className="ml-error" role="alert">{error ?? falta}</p>}
 
+        {confirmando && (
+          <div className="ml-confirmar" role="group" aria-label="Confirmar: No la uso">
+            <span>{fraseNoLaUso(marca.nombre)}</span>
+            <button type="button" className="ml-boton" onClick={() => void noLaUso()} disabled={ocupado}>{ocupado ? 'Guardando…' : 'Sí, no la uso'}</button>
+            <button type="button" className="ml-boton" onClick={() => setConfirmando(false)} disabled={ocupado}>Cancelar</button>
+          </div>
+        )}
+
         <div className="ml-pie">
           <span className="ml-pista">No toca ninguna otra marca.</span>
+          <button type="button" className="ml-boton" onClick={() => setConfirmando(true)} disabled={ocupado}>No la uso</button>
           <button type="button" className="ml-boton" onClick={onCerrar} disabled={ocupado}>Ahora no</button>
           <button type="button" className="ml-boton" data-principal="si" onClick={() => void alta()} disabled={ocupado || !!falta}>
             {ocupado ? 'Dando de alta…' : `Dar de alta ${corto}`}

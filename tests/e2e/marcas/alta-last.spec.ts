@@ -19,6 +19,10 @@
 //      (el porcentaje del socio, opcional, «cambia» y solo va en ROLLBACK), y una
 //      cedida sin porcentaje no se puede guardar todavía. Lo cedido lo prueba la
 //      prueba de staging (20261027_f01_marcas_last_prueba.sql).
+//   (Respuesta 1) «Vieja de Prueba» (su plato apagado, sin ventas) sale abajo,
+//   «Sin ventas registradas», sin destacar. Y la segunda prueba: «No la uso» en
+//   Inicio pide confirmación en una línea, el aviso se va y la marca sale en
+//   Marcas › Ocultas (1), de donde «Volver a mostrar» la devuelve.
 //   3. LA CONFIRMACIÓN (regla 8): «Dada de alta Latina de Prueba: 2 locales,
 //      3 platos. Faltan 2 recetas.», la marca en la lista y, en la base, sus 4
 //      platos (la arepa con un solo artículo, el agua con el del almacén), sus
@@ -77,6 +81,12 @@ test('una marca nueva de Last: el aviso en Inicio y el alta en una sola pantalla
   await expect(fila).toContainText('Ha aparecido en Last, en Norte Centro y Norte Mercado, con Uber Eats y Glovo. 3 platos. Todavía no ha vendido.')
   await expect(fila).toContainText('Sin dar de alta')
   await expect(fila.locator('.at-ico')).toHaveText('LP')
+  // La vieja: después de la nueva, sin destacar, con su chip.
+  const marcas = atencion.locator('li[data-tipo="marca"]')
+  await expect(marcas.filter({ hasText: 'Vieja de Prueba' })).toHaveAttribute('data-apagada', 'si')
+  await expect(marcas.filter({ hasText: 'Vieja de Prueba' })).toContainText('Sin ventas registradas')
+  const textos = await marcas.allTextContents()
+  expect(textos.findIndex((t) => t.includes(MARCA)), 'la nueva va antes que la vieja').toBeLessThan(textos.findIndex((t) => t.includes('Vieja de Prueba')))
   await fila.scrollIntoViewIfNeeded()
   await foto(page, '1-inicio-aviso', sufijo)
 
@@ -129,4 +139,49 @@ test('una marca nueva de Last: el aviso en Inicio y el alta en una sola pantalla
   // Y en Inicio ya no sale.
   await irAInicio(page)
   await expect(page.locator('li[data-tipo="marca"]').filter({ hasText: MARCA })).toHaveCount(0)
+})
+
+test('«No la uso»: el aviso se va, sale en Marcas › Ocultas y se recupera', async ({ page }, info) => {
+  const sufijo = info.project.name === 'movil' ? '-movil' : ''
+  await preparar('empezar')
+  await entrarComo(page, CUENTA_A.email)
+  await irAInicio(page)
+  const atencion = page.locator('[data-prueba="atencion"]')
+  const fila = atencion.locator('li[data-tipo="marca"]').filter({ hasText: `Marca nueva: ${MARCA}` })
+  await expect(fila).toHaveCount(1, { timeout: 20_000 })
+
+  // Botón secundario, sin color de alerta, con su confirmación en una línea.
+  const noLaUso = fila.getByRole('button', { name: `No la uso: Marca nueva: ${MARCA}` })
+  await expect(noLaUso).toHaveAttribute('data-principal', 'no')
+  await noLaUso.click()
+  const confirmar = fila.getByRole('group', { name: 'Confirmar: No la uso' })
+  await expect(confirmar).toContainText(`${MARCA} no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.`)
+  await fila.scrollIntoViewIfNeeded()
+  await foto(page, '1-inicio-no-la-uso', sufijo)
+  await confirmar.getByRole('button', { name: 'Sí, no la uso' }).click()
+  await expect(atencion.getByRole('status')).toHaveText(`${MARCA} no volverá a avisar. Puedes recuperarla en Marcas › Ocultas.`)
+  await expect(atencion.locator('li[data-tipo="marca"]').filter({ hasText: MARCA })).toHaveCount(0)
+
+  // Y al volver a entrar tampoco avisa.
+  await irAInicio(page)
+  await expect(page.locator('li[data-tipo="marca"]').filter({ hasText: `Marca nueva: ${MARCA}` })).toHaveCount(0)
+
+  // Marcas › Ocultas, plegada, con el número.
+  await page.goto('/configuracion/marcas')
+  const seccion = page.locator('[data-prueba="marcas-ocultas"]')
+  await expect(seccion.locator('summary')).toHaveText('Ocultas (1)', { timeout: 20_000 })
+  await expect(seccion).not.toHaveAttribute('open', '')
+  await seccion.locator('summary').click()
+  const oculta = seccion.locator('li').filter({ hasText: MARCA })
+  await expect(oculta).toContainText(/Oculta por .+ el \d{2}\/\d{2}\/\d{4}/)
+  await seccion.scrollIntoViewIfNeeded()
+  await foto(page, '2-marcas-ocultas', sufijo)
+
+  // «Volver a mostrar»: vuelve a las nuevas, y en la base no se ha creado nada.
+  await oculta.getByRole('button', { name: `Volver a mostrar ${MARCA}` }).click()
+  await expect(seccion.getByRole('status')).toHaveText(`${MARCA} vuelve a salir entre las marcas nuevas de Last.`)
+  await expect(page.locator('[data-prueba="marcas-nuevas-last"]').getByText(`Marca nueva: ${MARCA}`)).toBeVisible()
+  const s = await pedirSesion(CUENTA_A.email)
+  const b = await rest<unknown[]>(s, 'GET', `brand?name=eq.${encodeURIComponent(MARCA)}&archived_at=is.null&select=id`)
+  expect(b.datos, '«No la uso» no crea la marca').toHaveLength(0)
 })

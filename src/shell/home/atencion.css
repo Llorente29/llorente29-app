@@ -17,6 +17,16 @@
 .at-chip { display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; border-radius: 99px; padding: 2px 10px; white-space: nowrap; }
 .at-chip[data-tono='aviso'] { background: var(--color-warning-bg); color: var(--color-warning); }
 .at-chip[data-tono='mal'] { background: var(--color-danger-bg); color: var(--color-danger); }
+.at-chip[data-tono='suave'] { background: var(--color-bg-page); color: var(--color-text-secondary); border: 1px solid var(--color-border-default); }
+/* F01 · Respuesta 1: una marca con pinta de cancelada, sin destacar. */
+.at-fila[data-apagada='si'] .at-ico { background: var(--color-bg-page); color: var(--color-text-secondary); }
+.at-fila[data-apagada='si'] .at-txt b { font-weight: 500; color: var(--color-text-secondary); }
+/* «No la uso»: la confirmación en una línea, debajo de la fila. */
+.at-confirmar { flex: 1 1 100%; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 10px 12px; border-radius: 10px; background: var(--color-bg-page); font-size: 14px; }
+.at-confirmar span { flex: 1 1 260px; color: var(--color-text-primary); }
+.at-hecho { margin: 0 0 8px; padding: 10px 14px; border-radius: 10px; font-size: 14px; font-weight: 500; background: var(--color-text-primary); color: var(--color-bg-card); }
+.at-hecho[data-tono='mal'] { background: var(--color-danger-bg); color: var(--color-danger); }
+.at-boton:disabled { opacity: 0.55; cursor: default; }
 .at-boton { font: inherit; font-weight: 600; font-size: 14px; border-radius: 9px; padding: 9px 16px; border: 1px solid var(--color-border-default); background: var(--color-bg-card); color: var(--color-text-primary); cursor: pointer; white-space: nowrap; }
 .at-boton[data-principal='si'] { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-text-on-accent); }
 .at-boton:hover { filter: brightness(0.97); }

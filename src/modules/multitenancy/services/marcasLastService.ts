@@ -36,3 +36,9 @@ export async function darDeAlta(d: DatosAlta): Promise<ResultadoAlta> {
     p_propia: d.propia, p_socio: d.socio, p_ensayo: false,
   }))
 }
+
+/** «No la uso» (ocultar = true) o «Volver a mostrar» (false). Devuelve la frase que se enseña (regla 8). */
+export async function ocultarMarca(accountId: string, org: string, nombreLast: string, ocultar: boolean): Promise<string> {
+  const r = await rpcSinTipar<{ frase?: string }>('f01_ocultar_marca', { p_account: accountId, p_org: org, p_nombre_last: nombreLast, p_ocultar: ocultar })
+  return r?.frase ?? (ocultar ? `${nombreLast} oculta.` : `${nombreLast} vuelve a salir.`)
+}

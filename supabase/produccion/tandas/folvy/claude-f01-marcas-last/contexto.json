@@ -2,7 +2,7 @@
  "_que": "F01 · PR 1 · Marcas de Last · contexto de producción de la tanda (1320, 1322 y 1321), medido en SOLO LECTURA el 27/10 a las 13:40Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. De lo que toca existen: external_catalog_product (13039 filas, sin external_brand_id), brand_licensing_agreement (0 filas en toda la base) y las dos funciones que se cambian en caliente con la misma firma (seed_catalog_canonical d719fe96 y ticket_invoice_ajustes); nada en el camino del pedido y nada suyo en el historial.",
  "medido": "2026-10-27T13:40Z",
  "tanda": {
-  "supabase/migrations/20261027T1320_f01_marcas_last.sql": "6cc6dff0ca90083a4a180c6060ac3e0d",
+  "supabase/migrations/20261027T1320_f01_marcas_last.sql": "410f8519e0669098ed93792a3bbfe8f4",
   "supabase/migrations/20261027T1322_f01_sembrado_y_socio.sql": "67ac31b3323ebd6942725f4fff6b62ee",
   "supabase/migrations/20261027T1321_f01_socios_y_el_delicioso.sql": "706e47478ee3245e0d41782e703ef86b"
  },
