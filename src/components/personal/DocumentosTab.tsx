@@ -6,7 +6,7 @@ import type { Employee } from '../../types'
 import type { DocumentFile } from '../../types/personal'
 import { fmtInt } from '../../lib/format'
 import { DOCUMENT_TYPES } from '../../types/personal'
-import { fetchDocuments, uploadDocument, getDocumentUrl, deleteDocument } from '../../services/documentsService'
+import { fetchDocuments, uploadDocument, abrirDocumento, deleteDocument } from '../../services/documentsService'
 
 interface Props {
   employee: Employee
@@ -50,9 +50,13 @@ export default function DocumentosTab({ employee }: Props) {
     }
   }
 
-  function handleDownload(doc: DocumentFile) {
-    const url = getDocumentUrl(doc.filePath)
-    if (url) window.open(url, '_blank')
+  async function handleDownload(doc: DocumentFile) {
+    setError('')
+    try {
+      await abrirDocumento(doc.filePath)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'No se ha podido abrir el documento.')
+    }
   }
 
   async function handleDelete(doc: DocumentFile) {
@@ -72,6 +76,7 @@ export default function DocumentosTab({ employee }: Props) {
         <p className="text-xs text-gray-500">{docs.length} documento{docs.length !== 1 ? 's' : ''}</p>
         <Button size="sm" onClick={() => setShowUpload(true)}>+ Subir documento</Button>
       </div>
+      {error && !showUpload && <p role="alert" className="text-sm text-red-600">{error}</p>}
 
       {loading ? (
         <Card className="p-6 text-center"><p className="text-sm text-gray-500">Cargando...</p></Card>
