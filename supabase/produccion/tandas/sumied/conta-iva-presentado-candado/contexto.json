@@ -2,7 +2,7 @@
  "_que": "V04 · Respuesta 5 · el candado del IVA (1233). Contexto de producción medido en SOLO LECTURA el 27/10 a las 12:2xZ con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow. De lo que toca la 1233 existen: journal_entry (14955 filas), journal_line (39614) y vat_book_entry (4509), ninguna del camino del pedido; y _journal_entry_proponer (la única que cambia en caliente, sin otra firma, fuera del camino). Las funciones nuevas no existen. Nada en el historial.",
  "medido": "2026-10-27T12:25Z",
  "tanda": {
-  "supabase/migrations/20261027T1233_v04_iva_presentado_candado.sql": "6e0e908ec7532a56ed5ef26280ab11ea"
+  "supabase/migrations/20261027T1233_v04_iva_presentado_candado.sql": "b0ee7af08e7a0e0244fdcaa94a2bb1b9"
  },
  "contexto": {"tablas":["public.journal_entry","public.journal_line","public.vat_book_entry"],"funciones":["public._journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text,uuid)"],"filas":{"public.journal_entry":14955,"public.journal_line":39614,"public.vat_book_entry":4509},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }

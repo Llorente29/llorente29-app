@@ -217,7 +217,7 @@ begin
   select * into v_e from public.journal_entry where id = (r->>'id')::uuid;
   if v_e.entry_date <> date '2026-07-05' or v_e.document_date <> date '2026-06-20'
      or r->>'aviso' is distinct from 'El 2T ya está presentado. Esta factura se deduce en el 3T.'
-     or not v_e.reasons @> jsonb_build_array('El 2T ya está presentado. Esta factura se deduce en el 3T.') then
+     or not v_e.reasons @> jsonb_build_array(jsonb_build_object('decision', 'El 2T ya está presentado. Esta factura se deduce en el 3T.', 'cita', 'LIVA art. 99.Tres')) then
     raise exception 'PRUEBA V04 candado · 4: la tardía no va al 3T con su aviso: asiento %, factura %, %', v_e.entry_date, v_e.document_date, r;
   end if;
   perform public.journal_entry_validar(v_e.id, 'Prueba V04');

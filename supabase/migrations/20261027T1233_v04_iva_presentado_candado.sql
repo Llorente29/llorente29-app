@@ -274,20 +274,26 @@ begin
                     public.conta_iva_periodo_frase('el', v_p->>'periodo', (v_p->>'ejercicio')::int, false),
                     public.conta_iva_periodo_frase('en', public.conta_iva_periodo_de(v_p->>'cadencia', v_nueva), extract(year from v_nueva)::int,
                                                    extract(year from v_nueva)::int <> (v_p->>'ejercicio')::int));
+  -- La razón, con la forma de las del núcleo (decision, porque, cita).
   return p_entry || jsonb_build_object('fecha', v_nueva, 'aviso', v_aviso,
-                                       'razones', coalesce(p_entry->'razones', '[]'::jsonb) || jsonb_build_array(v_aviso));
+    'razones', coalesce(p_entry->'razones', '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+      'decision', v_aviso,
+      'porque', format('Una factura contabilizada después de presentar el periodo no entra en él: se asienta el %s, el primer día abierto. Su fecha de factura no cambia.',
+                       to_char(v_nueva, 'DD/MM/YYYY')),
+      'cita', 'LIVA art. 99.Tres')));
 end $$;
 revoke all on function public._conta_iva_ajustar_propuesta(uuid, jsonb, jsonb) from public, anon, authenticated;
 
 -- ── 4 · Para las pantallas: los periodos presentados de un ejercicio ───────
 -- El candado de cada mes y cada trimestre en el diario, el libro de IVA e
--- Impuestos. Solo lo ve quien es de la cuenta de la empresa.
+-- Impuestos. Lo ve quien es de la cuenta de la empresa o ve sus impuestos.
 create or replace function public.conta_iva_presentados(p_company uuid, p_year int)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_cuenta uuid;
 begin
   select account_id into v_cuenta from public.company where id = p_company;
-  if v_cuenta is null or not (v_cuenta = any ((select public.current_user_account_ids())::uuid[])) then
+  -- Quien es de la cuenta, o quien ve sus impuestos (su asesoría, con su consentimiento).
+  if v_cuenta is null or not (v_cuenta = any ((select public.current_user_account_ids())::uuid[]) or public.conta_impuesto_puede_ver(p_company)) then
     raise exception 'No puedes ver esta empresa.' using errcode = '42501';
   end if;
   return coalesce((

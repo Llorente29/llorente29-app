@@ -47,6 +47,9 @@ import {
   type CasillaTrimestre, type FilaLiquidacion, type LineaCuadre, type ModeloTrimestre, type RetencionesDiario, type Trimestre,
 } from './trimestre'
 import { TraerPorCsv } from './TraerPorCsv'
+import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
+import { diaPresentado, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
+import { CandadoIva } from '@/modules/conta/ui/CandadoIva'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
@@ -64,6 +67,8 @@ export default function TrimestrePage() {
   const ejercicio = Number(ej)
   const q = numeroTrimestre(trimestre)
   const navegar = useNavigate()
+  // V04 · El candado del IVA: los trimestres con el 303 presentado, para el candado del selector y de la cabecera.
+  const iva = useIvaPresentado(companyId, Number.isInteger(ejercicio) ? [ejercicio] : [])
   const [vuelta, setVuelta] = useState(0)
   // Lo leído va con la clave de lo que se pidió: al cambiar de trimestre, lo de antes deja de valer sin borrarlo a mano.
   const pedido = `${companyId}/${ejercicio}/${q}/${vuelta}`
@@ -154,12 +159,26 @@ export default function TrimestrePage() {
             </select>
           </label>
           <div role="radiogroup" aria-label="Trimestre" className="s-trimestre-qs">
-            {['1T', '2T', '3T', '4T'].map((t) => (
-              <button key={t} type="button" role="radio" aria-checked={t === trimestre} className="s-trimestre-q" onClick={() => ir(ejercicio, t)}>{t}</button>
-            ))}
+            {['1T', '2T', '3T', '4T'].map((t) => {
+              const cerrado = trimestrePresentado(ejercicio, Number(t[0]), iva.presentados)
+              return (
+                <button key={t} type="button" role="radio" aria-checked={t === trimestre} className="s-trimestre-q" onClick={() => ir(ejercicio, t)}
+                  title={cerrado ? `IVA del ${t} presentado el ${diaPresentado(cerrado)}` : undefined}>
+                  {t}{cerrado && <> <CandadoIva p={cerrado} corto /></>}
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
+      {(() => {
+        const cerrado = q ? trimestrePresentado(ejercicio, q, iva.presentados) : null
+        return cerrado ? (
+          <p className="s-apoyo" role="status" data-prueba="trimestre-iva-presentado">
+            <CandadoIva p={cerrado} /> · Su IVA ya no se cambia: lo que llegue tarde va {/^[1-4]T/.test(cerrado.siguiente) ? `al ${cerrado.siguiente}` : `a ${cerrado.siguiente}`}.
+          </p>
+        ) : null
+      })()}
 
       {error && (
         <Tarjeta titulo="No se ha podido leer el trimestre" tono="falta" accion={<Boton onClick={() => setVuelta((v) => v + 1)}>Volver a intentar</Boton>}>
