@@ -1,0 +1,16 @@
+# F01 · respuesta 4 (27/10) · El F01 PR 1 (#358), a staging: nunca llegó.
+#
+# Por qué: el run de main tras fusionar el #358 (aplicar-staging-conta #677,
+# 45024ca) cayó entero con «Ruta no permitida en el manifiesto:
+# supabase/seeds/folvy/seed_f01_marcas_last_staging.sql»: el workflow no
+# admitía las semillas de Folvy. No aplicó nada; producción sí tiene la 1320,
+# la 1321 y la 1322. Este PR admite seeds/folvy (staging-tanda.mjs
+# RUTA_STAGING) y pasa lo que faltó.
+#
+# Sus líneas ya están en el manifiesto de main (claude-f01-marcas-last.txt) y
+# por eso no cuentan como nuevas: van con «otra vez:», que las pasa una vez, en
+# el orden del manifiesto del #358 y sin su prueba.
+otra vez: supabase/migrations/20261027T1320_f01_marcas_last.sql
+otra vez: supabase/seeds/folvy/seed_f01_marcas_last_staging.sql
+otra vez: supabase/migrations/20261027T1322_f01_sembrado_y_socio.sql
+otra vez: supabase/migrations/20261027T1321_f01_socios_y_el_delicioso.sql

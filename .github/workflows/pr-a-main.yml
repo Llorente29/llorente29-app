@@ -66,6 +66,20 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/produccion/cuenta-crece.mjs revisar "$BASE" "$HEAD"
 
+      # F01, respuesta 4 (27/10): lo que el PR añade al manifiesto de staging
+      # lo admite el workflow que lo aplica. El #358 llegó a main con una
+      # semilla en seeds/folvy, que aplicar-staging-conta.yml no admitía: el
+      # run de main tras la fusión (#677) cayó entero y staging se quedó sin
+      # el F01. La regla es la misma en los dos (staging-tanda.mjs RUTA_STAGING).
+      - name: El manifiesto de staging solo nombra rutas que el workflow admite
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          node scripts/conta/staging-tanda.mjs nuevas "$BASE" > /tmp/staging-nuevas.txt
+          echo "Líneas nuevas en el manifiesto de staging: $(wc -l < /tmp/staging-nuevas.txt)."
+          if [ -s /tmp/staging-nuevas.txt ]; then node scripts/conta/staging-tanda.mjs rutas $(cat /tmp/staging-nuevas.txt); fi
+
       # C10 (23/10): el nombre de cada migración nueva, en su formato y sin
       # repetir en main ni en los demás PR abiertos.
       - name: Cada PR edita solo su tanda (C10)
