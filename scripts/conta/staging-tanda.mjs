@@ -86,12 +86,14 @@ function sinRuido(sql) {
  * Lo que impide ensayar un fichero en ROLLBACK, en palabras (o null si vale):
  *   · un COMMIT (o END) dejaría de verdad lo de antes;
  *   · un ROLLBACK que no es la última sentencia deja en autocommit, de verdad, lo de después.
+ * «ROLLBACK [WORK|TRANSACTION] TO [SAVEPOINT] x» no cuenta: vuelve al savepoint y
+ * la transacción sigue abierta (S01, 28/10: la prueba de la guarda de la 2238).
  */
 export function porQueNoSeEnsaya(sql) {
   const s = sinRuido(sql)
   if (/(^|;)\s*(commit|end)\s*(transaction|work)?\s*;/im.test(s)) return 'tiene un COMMIT: dejaría cosas de verdad en staging'
   const sentencias = s.split(';').map((x) => x.trim()).filter(Boolean)
-  const i = sentencias.findIndex((x) => /^rollback\b/i.test(x))
+  const i = sentencias.findIndex((x) => /^rollback\b/i.test(x) && !/^rollback(\s+(work|transaction))?\s+to\b/i.test(x))
   if (i >= 0 && i !== sentencias.length - 1) return 'tiene un ROLLBACK que no es su última sentencia: lo de después iría de verdad'
   return null
 }

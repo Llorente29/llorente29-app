@@ -458,7 +458,13 @@ test('Ajustes › Cobros: el TPV del banco, sin datos; lo que no vale; «Guardar
   await page.screenshot({ path: `${DIR}/ajustes-redsys-${lado(page)}.png`, fullPage: true })
 
   await barra.getByRole('button', { name: /Guardar cambios/ }).click()
-  await expect(tpv.getByRole('status')).toHaveText('Guardado. Redsys en pruebas, comercio 999008881.')
+  // El aviso por su texto, no «el primer status» (la barra de cambios también es
+  // uno). Si no sale, el fallo dice lo que enseña el TPV en ese momento.
+  await expect(tpv.getByRole('status').filter({ hasText: /^Guardado\./ })).toHaveText('Guardado. Redsys en pruebas, comercio 999008881.')
+    .catch(async (e: Error) => {
+      const enseña = (await tpv.innerText().catch(() => '(el TPV ya no está en la pantalla)')).replace(/\s+/g, ' ').trim()
+      throw new Error(`Al guardar no sale «Guardado» en el TPV. Enseña: «${enseña}».\n${e.message}`)
+    })
   expect(llamadas.find((l) => l.f === 'redsys')!.cuerpo).toEqual({ empresa: expect.any(String), comercio: '999008881', terminal: '1',
     clave: 'sq7HjrUOBfKmC576ILgskD5srU870gJ7', bizum: true, en_enlace: true, quien: null })
   await expect(tpv.getByRole('list', { name: 'Tu TPV' }).getByRole('listitem')).toHaveText(/Tarjeta con tu banco\s*En pruebas/)

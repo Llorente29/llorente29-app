@@ -13,11 +13,16 @@
 // S01 · PR 1 · Debajo, el TPV del banco (Redsys, RedsysTpv): el segundo
 // proveedor, con el mismo patrón. En Ajustes › Cobros se ponen sus datos
 // (editar); en Ventas › Cobros, solo su estado y el camino a Ajustes.
+// Al guardar el TPV se vuelve a leer, y mientras tanto se queda a la vista lo
+// último leído de esa empresa (useLeerConservando): si se quitara, el TPV se
+// montaría otra vez sin el «Guardado. Redsys en pruebas…» y el botón callaría
+// (regla 8; S01, Respuesta 3, la e2e #997).
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { avisoBizum, botonAltaStripe, textoMetodoPago, type EstadoMetodoPago } from '@/modules/conta/lib/cobros'
 import { cobroStripe, leerCobroRedsys, leerCobroStripe } from '@/modules/conta/services/cobrosService'
 import { RedsysTpv } from './RedsysTpv'
@@ -47,7 +52,7 @@ export function ComoTePagan({ empresaId, nivel = 2, editar = false }: { empresaI
   const [vuelta, setVuelta] = useState(0)
   // Envuelto: «sin alta» (null) no es lo mismo que «aún leyendo».
   const datos = useLeer(() => leerCobroStripe(empresaId).then((c) => ({ c })), `${empresaId}:${vuelta}:cobro-stripe`)
-  const tpv = useLeer(() => leerCobroRedsys(empresaId).then((c) => ({ c })), `${empresaId}:${vuelta}:cobro-redsys`)
+  const tpv = useLeerConservando(() => leerCobroRedsys(empresaId).then((c) => ({ c })), empresaId, `${vuelta}:cobro-redsys`)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [query, setQuery] = useSearchParams()

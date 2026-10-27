@@ -46,6 +46,15 @@ describe('qué se puede ensayar en ROLLBACK', () => {
     expect(porQueNoSeEnsaya('do $$ begin perform 1; end $$;\ncreate function f() returns int language plpgsql as $f$ begin return 1; end; $f$;\n')).toBeNull()
     expect(porQueNoSeEnsaya("select 'commit;';\n-- commit;\n")).toBeNull()
   })
+  it('volver a un savepoint no cierra la transacción: se ensaya; un ROLLBACK a secas en medio sigue parando (S01, 28/10)', () => {
+    expect(porQueNoSeEnsaya('begin;\nsavepoint x;\nselect 1;\nrollback to savepoint x;\nselect 2;\nrollback;\n')).toBeNull()
+    expect(porQueNoSeEnsaya('begin;\nsavepoint x;\nselect 1;\nrollback to x;\nselect 2;\nrollback;\n')).toBeNull()
+    expect(porQueNoSeEnsaya('begin;\nsavepoint x;\nROLLBACK WORK TO SAVEPOINT x;\nselect 2;\nrollback;\n')).toBeNull()
+    expect(porQueNoSeEnsaya('begin;\nselect 1;\nrollback;\nselect 2;\nrollback;\n')).toMatch(/ROLLBACK que no es su última sentencia/)
+    expect(porQueNoSeEnsaya('begin;\nselect 1;\nrollback work;\nselect 2;\n')).toMatch(/ROLLBACK/)
+    expect(porQueNoSeEnsaya('begin;\nselect 1;\nrollback transaction;\nselect 2;\n')).toMatch(/ROLLBACK/)
+    expect(porQueNoSeEnsaya(readFileSync('supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql', 'utf8'))).toBeNull()
+  })
 })
 
 describe('las sesiones del ensayo', () => {
