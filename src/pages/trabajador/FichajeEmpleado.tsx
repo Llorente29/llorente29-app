@@ -8,6 +8,7 @@ import { useApp } from '../../context/AppContext'
 import { fetchEmployeeClockStatus } from '../../services/teamHoursService'
 import type { EmployeeClockStatus } from '../../services/teamHoursService'
 import { mensajeDeFalloDeFichaje, ClockWriteError } from '../../services/supabaseSync'
+import { puedeFichar } from './puedeFichar'
 import { ultimoFichajeGuardado, guardarFichajePendiente, type FichajeGuardado } from '../../services/fichajeServidor'
 import { Card } from '../../components/ui'
 import type { Employee, Location } from '../../types'
@@ -242,8 +243,14 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   const inZone = distance !== null && distance <= radiusForLoc(selectedLoc)
   // L1a (27/10): fuera del radio no bloquea por defecto; se marca y se avisa.
   const geofenceMode = selectedLoc?.clockGeofenceMode ?? 'warn'
-  // En modo 'warn' se puede fichar aunque esté fuera de zona (GPS caprichoso / sin coords).
-  const canClock = !!selectedLoc && (inZone || geofenceMode === 'warn')
+  // Solo se bloquea cuando se SABE que está fuera y el local está en
+  // «bloquear», como fichar() en la base (puedeFichar.ts). Hasta el 27/10, un
+  // local sin coordenadas en «bloquear» dejaba el botón gris y sin decir nada.
+  const { puede: canClock, porQueNo: porQueNoSePuede, sinMedir } = puedeFichar({
+    local: selectedLoc, locales: allowedLocations.length, distancia: distance,
+    radio: radiusForLoc(selectedLoc), modo: geofenceMode === 'block' ? 'block' : 'warn',
+    hayPosicion: !!position,
+  })
 
   // Margen (min) para avisar de salida anticipada. Independiente del redondeo.
   const EARLY_EXIT_WARN_MIN = 3
@@ -368,6 +375,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     const marcas: string[] = []
     if (mode === 'outside') marcas.push(`Fuera de zona · ${distM}m`)
     else if (mode === 'nogps') marcas.push('Sin ubicación (GPS no disponible)')
+    else if (!coordsForLocation(selectedLoc)) marcas.push('Local sin ubicación puesta: sin distancia')
     if (earlyExitMin != null) marcas.push(`Salida anticipada · ${earlyExitMin} min antes`)
     if (forzarTipo && forzarTipo !== entry.type) {
       marcas.push(`Corregido por el trabajador · la app ofrecía ${entry.type}`)
@@ -761,9 +769,14 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
           {nextType === 'entrada' ? <><LogIn size={28} /> FICHAR ENTRADA</> : <><LogOut size={28} /> FICHAR SALIDA</>}
         </button>
 
-        {!inZone && selectedLoc && geofenceMode === 'block' && (
-          <p className="text-center text-xs text-warning mt-3 inline-flex items-center justify-center gap-1 w-full">
-            <AlertTriangle size={11} /> Acércate al local para activar el botón
+        {porQueNoSePuede && (
+          <p className="text-center text-sm text-warning mt-3 inline-flex items-center justify-center gap-1 w-full" data-prueba="por-que-no-se-puede">
+            <AlertTriangle size={14} /> {porQueNoSePuede}
+          </p>
+        )}
+        {!porQueNoSePuede && sinMedir && (
+          <p className="text-center text-xs text-text-secondary mt-3 w-full" data-prueba="sin-medir">
+            {sinMedir}: puedes fichar igual y quedará marcado sin la distancia.
           </p>
         )}
       </div>

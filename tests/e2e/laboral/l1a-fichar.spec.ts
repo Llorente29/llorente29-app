@@ -41,11 +41,24 @@ async function jornadaAbierta(page: Page): Promise<boolean> {
   return page.getByText('Fichar salida', { exact: true }).first().isVisible()
 }
 
+/**
+ * El botón tiene que activarse: el trabajador ficha siempre (fuera del radio o
+ * sin ubicación, marcado). Si no, la pantalla dice por qué, y el fallo lo cita.
+ */
+async function botonActivo(page: Page, boton: ReturnType<Page['getByRole']>) {
+  try {
+    await expect(boton).toBeEnabled({ timeout: 20_000 })
+  } catch {
+    const motivo = await page.locator('[data-prueba="por-que-no-se-puede"]').textContent().catch(() => null)
+    throw new Error(`El botón de fichar no se activa. La pantalla dice: ${motivo ?? '(nada: botón gris sin explicación)'}`)
+  }
+}
+
 /** Pulsa fichar y pasa los avisos que salgan (fuera de zona, anticipado, contexto). */
 async function fichar(page: Page) {
   await page.getByText(/^Fichar (entrada|salida)$/).first().click()
   const boton = page.getByRole('button', { name: /FICHAR (ENTRADA|SALIDA)/ })
-  await expect(boton).toBeEnabled({ timeout: 20_000 })
+  await botonActivo(page, boton)
   await boton.click()
   const confirmar = page.getByRole('button', { name: /^(Fichar igualmente|Entendido, fichar|Sí, me voy|Sí, fichar (ENTRADA|SALIDA))$/ })
   const final = page.locator('[data-prueba="fichaje-hecho"], [data-prueba="fichaje-pendiente"]')
@@ -83,7 +96,7 @@ test('el trabajador ficha entrada y salida desde su portal, y ve lo que se guard
     await alInicio(page)
     await page.getByText('Fichar salida', { exact: true }).first().click()
     const boton = page.getByRole('button', { name: /FICHAR SALIDA/ })
-    await expect(boton).toBeEnabled({ timeout: 20_000 })
+    await botonActivo(page, boton)
     await context.setOffline(true)
     await boton.click()
     const confirmar = page.getByRole('button', { name: /^(Fichar igualmente|Sí, me voy|Sí, fichar SALIDA)$/ })
