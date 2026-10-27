@@ -7,17 +7,20 @@
 // prueba? Se contesta haciendo, no leyendo:
 //
 //   1. la plataforma: país y moneda de la cuenta de la clave (GET /v1/account);
-//   2. DOS altas de prueba, España: la que pide Bizum (bizum_payments) y la
-//      que no. Sin «type» y con el controlador explícito (Stripe cubre las
-//      pérdidas): v1 con controller[…] y, si no la acepta, v2
-//      (/v2/core/accounts). De cada una: si se crea, el estado de cada
-//      capacidad y el error literal de Stripe (Respuesta 8 al PC01, 27/10);
-//   3. en la cuenta que pide Bizum (cargo directo, cabecera Stripe-Account,
-//      como la tienda de Folvy en shop-payment-intent): un cobro solo con
-//      Bizum, los métodos automáticos y la sesión de pago (Checkout) con Bizum
-//      y con tarjeta y Bizum. La cuenta no tiene los datos de alta (los pide
-//      Stripe): el error literal también responde;
-//   4. y se borran las cuentas de prueba.
+//   2. UNA alta de prueba, España, por Accounts v2 (panel completo, Stripe
+//      cobra las comisiones y cubre las pérdidas, solo tarjeta en el alta),
+//      probando las versiones de la API en orden y guardando el error literal
+//      de cada una (Respuesta 9 al PC01, 27/10). Después, aparte:
+//        2.1 todas sus capacidades, con su estado;
+//        2.2 pedir bizum_payments (POST /v1/accounts/{id}/capabilities/…);
+//        2.3 sus configuraciones de métodos de pago: si sale Bizum y si se
+//            puede activar;
+//   3. en esa cuenta (cargo directo, cabecera Stripe-Account, como la tienda de
+//      Folvy en shop-payment-intent): un cobro solo con Bizum, los métodos
+//      automáticos y la sesión de pago (Checkout) con Bizum y con tarjeta y
+//      Bizum. Sin datos de alta (los pide Stripe), el error literal también
+//      responde;
+//   4. y se borra (o se cierra) la cuenta de prueba.
 //
 // Lo que no puede hacer, y lo vigila el workflow antes de desplegarla:
 //   · Producción: para si SUPABASE_URL es la de producción.
@@ -29,7 +32,10 @@
 // el alta de prueba por business_profile[url] («Not a valid URL»). La web no es
 // obligatoria y se quitó (1245193a). El de las 08:42Z (be54e853) dijo la causa
 // de verdad: el alta llevaba «type» con la plataforma cubriendo las pérdidas, y
-// eso Stripe ya no lo acepta. Ahora va sin «type» y con el controlador.
+// eso Stripe ya no lo acepta. El de las 11:03Z (57153459): la v1 con panel
+// Express exige que las pérdidas sean de la plataforma, y la v2 pide versión y
+// no conoce bizum_payments en el alta. Ahora: una alta v2 con panel completo, y
+// Bizum se pide aparte, después.
 //
 // El workflow la copia a supabase/functions/stripe-bizum-sonda/ dentro del
 // runner, la llama una vez y la borra. No vive en main.
@@ -43,7 +49,7 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-type Resp = { status: number; ok: boolean; datos: any };
+type Resp = { status: number; ok: boolean; datos: any; version?: string | null };
 
 async function stripe(clave: string, metodo: "GET" | "POST" | "DELETE", ruta: string, campos: Record<string, string> = {}, cuenta?: string): Promise<Resp> {
   const headers: Record<string, string> = { Authorization: `Bearer ${clave}` };
@@ -56,7 +62,7 @@ async function stripe(clave: string, metodo: "GET" | "POST" | "DELETE", ruta: st
   const r = await fetch(`${API}${ruta}`, { method: metodo, headers, body, signal: AbortSignal.timeout(25_000) });
   const datos = await r.json().catch(() => null);
   console.log(JSON.stringify({ sonda: "stripe-bizum", paso: `${metodo} ${ruta.split("?")[0].replace(/(acct|pi|cs)_[A-Za-z0-9_]+/g, "$1_…")}`, status: r.status }));
-  return { status: r.status, ok: r.ok, datos };
+  return { status: r.status, ok: r.ok, datos, version: r.headers.get("stripe-version") };
 }
 
 /** Lo que se cuenta de un error de Stripe: su tipo, su código y su texto (de Stripe, sin datos de nadie). */
@@ -107,46 +113,82 @@ Deno.serve(async (req: Request) => {
   out.plataforma = plat.ok ? {
     pais: plat.datos?.country ?? null, moneda: plat.datos?.default_currency ?? null,
     capacidades_bizum: Object.fromEntries(Object.entries(plat.datos?.capabilities ?? {}).filter(([k]) => /bizum/i.test(k))),
+    version_de_la_cuenta: plat.version ?? null,
   } : error(plat);
 
-  // 2. Las dos altas de prueba, España: la que pide Bizum y la que no. Sin
-  //    «type» (la plataforma no puede ser quien cubre las pérdidas: Respuesta 8
-  //    al PC01) y con el controlador explícito, como el ejemplo de Stripe de
-  //    cuentas con el riesgo gestionado por Stripe:
-  //      · v1: controller[losses][payments]=stripe, controller[fees][payer]=application,
-  //            controller[requirement_collection]=stripe, controller[stripe_dashboard][type]=express;
-  //      · si la v1 no lo acepta, v2 (POST /v2/core/accounts) con losses_collector=stripe.
-  //    De cada alta: si se crea, el estado de cada capacidad y el error literal.
-  //    Con requirement_collection=stripe los datos los pide Stripe en su alta:
-  //    aquí no se rellenan (la cuenta queda sin cobros activos, y lo dice).
-  const altas: Record<string, unknown> = {};
-  const creadas: { id: string; via: "v1" | "v2"; bizum: boolean }[] = [];
-  for (const conBizum of [true, false]) {
-    const r = await alta(clave, conBizum);
-    altas[conBizum ? "con_bizum" : "sin_bizum"] = r.informe;
-    if (r.id) creadas.push({ id: r.id, via: r.via!, bizum: conBizum });
+  // 2. UNA alta de prueba, España (Respuesta 9 al PC01, del ejemplo oficial de
+  //    Stripe «Create connected accounts with Managed Risk»): Accounts v2, panel
+  //    completo (el restaurante tiene su propio panel de Stripe), Stripe cobra
+  //    las comisiones y cubre las pérdidas, y solo tarjeta en el alta. Bizum va
+  //    DESPUÉS, aparte. Versiones, en orden y con el error literal de cada una:
+  //    la de la cuenta (la cabecera Stripe-Version de la v1) si no es preview,
+  //    la última estable que se conoce y 2026-09-30.preview.
+  const versiones = [...new Set([
+    ...(plat.version && !/preview/i.test(plat.version) ? [plat.version] : []),
+    "2025-09-30.clover",
+    "2026-09-30.preview",
+  ])];
+  const cuerpo = {
+    contact_email: "sonda-bizum@example.com",
+    display_name: "Sonda Bizum (prueba)",
+    dashboard: "full",
+    identity: { country: "es" },
+    defaults: { responsibilities: { fees_collector: "stripe", losses_collector: "stripe" } },
+    configuration: { merchant: { capabilities: { card_payments: { requested: true } } } },
+  };
+  const intentos: unknown[] = [];
+  let cuenta: string | null = null, version: string | null = null;
+  for (const v of versiones) {
+    const a = await stripeV2(clave, "/v2/core/accounts", cuerpo, v);
+    if (a.ok && a.datos?.id) { cuenta = a.datos.id; version = v; intentos.push({ version: v, creada: true }); break; }
+    intentos.push({ version: v, creada: false, ...error(a), mensaje: tapar(error(a).mensaje) });
   }
-  out.altas = altas;
+  out.alta = { creada: cuenta !== null, version, intentos };
+  if (!cuenta) return json(out);
 
-  const cuenta = creadas.find((c) => c.bizum)?.id ?? creadas[0]?.id ?? null;
   try {
-    if (cuenta) out.cobros = await cobros(clave, cuenta);
+    // 2.1 Todas las capacidades de la cuenta, con su estado.
+    await new Promise((r) => setTimeout(r, 3000));
+    const leida = await stripe(clave, "GET", `/v1/accounts/${cuenta}`);
+    out.capacidades = leida.ok ? {
+      todas: leida.datos?.capabilities ?? {},
+      cobros_activos: leida.datos?.charges_enabled === true,
+      pendiente: leida.datos?.requirements?.currently_due ?? [],
+      deshabilitada_por: leida.datos?.requirements?.disabled_reason ?? null,
+    } : { ...error(leida), mensaje: tapar(error(leida).mensaje) };
+
+    // 2.2 Pedir Bizum aparte, una vez creada.
+    const pide = await stripe(clave, "POST", `/v1/accounts/${cuenta}/capabilities/bizum_payments`, { requested: "true" });
+    out.pedir_bizum = pide.ok ? {
+      ok: true, estado: pide.datos?.status ?? null, pedida: pide.datos?.requested ?? null,
+      le_falta: pide.datos?.requirements?.currently_due ?? [], vencidos: pide.datos?.requirements?.past_due ?? [],
+      deshabilitada_por: pide.datos?.requirements?.disabled_reason ?? null, errores: pide.datos?.requirements?.errors ?? [],
+    } : { ok: false, ...error(pide), mensaje: tapar(error(pide).mensaje) };
+    await new Promise((r) => setTimeout(r, 2000));
+    const otra = await stripe(clave, "GET", `/v1/accounts/${cuenta}/capabilities/bizum_payments`);
+    out.bizum_despues = otra.ok ? { estado: otra.datos?.status ?? null, le_falta: otra.datos?.requirements?.currently_due ?? [] } : { ...error(otra), mensaje: tapar(error(otra).mensaje) };
+
+    // 2.3 Las configuraciones de métodos de pago de la cuenta: ¿sale Bizum y se puede activar?
+    const conf = await stripe(clave, "GET", "/v1/payment_method_configurations", {}, cuenta);
+    out.configuraciones = conf.ok ? ((conf.datos?.data ?? []) as any[]).map((c) => ({
+      nombre: c?.name ?? null, activa: c?.active ?? null, por_defecto: c?.is_default ?? null,
+      bizum: c?.bizum ? { disponible: c.bizum.available ?? null, preferencia: c.bizum.display_preference ?? null } : "no_aparece",
+      tarjeta: c?.card ? { disponible: c.card.available ?? null, preferencia: c.card.display_preference ?? null } : "no_aparece",
+    })) : { ...error(conf), mensaje: tapar(error(conf).mensaje) };
+
+    // 3. Los cobros de antes, sobre esa cuenta.
+    out.cobros = await cobros(clave, cuenta);
   } finally {
-    // 4. Se borran las cuentas conectadas de prueba.
-    const borradas: Record<string, unknown> = {};
-    for (const c of creadas) {
-      const b = await stripe(clave, "DELETE", `/v1/accounts/${c.id}`);
-      if (b.ok && b.datos?.deleted === true) { borradas[c.bizum ? "con_bizum" : "sin_bizum"] = { borrada: true }; continue; }
-      const v2 = c.via === "v2" ? await stripeV2(clave, `/v2/core/accounts/${c.id}/close`, {}, VERSION_V2[0]) : null;
-      borradas[c.bizum ? "con_bizum" : "sin_bizum"] = v2?.ok ? { borrada: false, cerrada: true } : { borrada: false, error_v1: tapar(error(b).mensaje), error_v2: v2 ? tapar(error(v2).mensaje) : null };
+    // 4. Se borra la cuenta de prueba (o se cierra, si la v1 no la borra).
+    const b = await stripe(clave, "DELETE", `/v1/accounts/${cuenta}`);
+    if (b.ok && b.datos?.deleted === true) out.borrada = { borrada: true };
+    else {
+      const c = await stripeV2(clave, `/v2/core/accounts/${cuenta}/close`, {}, version);
+      out.borrada = c.ok ? { borrada: false, cerrada: true } : { borrada: false, cerrada: false, error_v1: tapar(error(b).mensaje), error_v2: tapar(error(c).mensaje) };
     }
-    out.borradas = borradas;
   }
   return json(out);
 });
-
-// Las versiones de la API v2 que se prueban, en orden (sin versión primero: la de la cuenta).
-const VERSION_V2: (string | null)[] = [null, "2025-08-27.preview", "2025-04-30.preview"];
 
 async function stripeV2(clave: string, ruta: string, cuerpo: unknown, version: string | null): Promise<Resp> {
   const headers: Record<string, string> = { Authorization: `Bearer ${clave}`, "Content-Type": "application/json" };
@@ -155,71 +197,6 @@ async function stripeV2(clave: string, ruta: string, cuerpo: unknown, version: s
   const datos = await r.json().catch(() => null);
   console.log(JSON.stringify({ sonda: "stripe-bizum", paso: `POST ${ruta.replace(/acct_[A-Za-z0-9_]+/g, "acct_…")}`, version, status: r.status }));
   return { status: r.status, ok: r.ok, datos };
-}
-
-/** Las capacidades de una cuenta, con lo que le falta a cada una (GET /v1/accounts vale también para las de v2). */
-async function capacidades(clave: string, id: string) {
-  await new Promise((r) => setTimeout(r, 3000));
-  const l = await stripe(clave, "GET", `/v1/accounts/${id}`);
-  if (!l.ok) return { error: tapar(error(l).mensaje) };
-  const caps = l.datos?.capabilities ?? {};
-  const bizum = Object.keys(caps).filter((k) => /bizum/i.test(k));
-  return {
-    todas: caps,
-    bizum: bizum.length ? Object.fromEntries(bizum.map((k) => [k, caps[k]])) : "ninguna_capacidad_con_bizum_en_el_nombre",
-    cobros_activos: l.datos?.charges_enabled === true,
-    controlador: l.datos?.controller ?? null,
-    pendiente: l.datos?.requirements?.currently_due ?? [],
-    deshabilitada_por: l.datos?.requirements?.disabled_reason ?? null,
-  };
-}
-
-async function alta(clave: string, conBizum: boolean): Promise<{ id: string | null; via: "v1" | "v2" | null; informe: Record<string, unknown> }> {
-  const informe: Record<string, unknown> = {};
-  // v1, sin «type», con el controlador explícito.
-  const v1: Record<string, string> = {
-    country: "ES",
-    email: "sonda-bizum@example.com",
-    "controller[losses][payments]": "stripe",
-    "controller[fees][payer]": "application",
-    "controller[requirement_collection]": "stripe",
-    "controller[stripe_dashboard][type]": "express",
-    "capabilities[card_payments][requested]": "true",
-    "capabilities[transfers][requested]": "true",
-  };
-  if (conBizum) v1["capabilities[bizum_payments][requested]"] = "true";
-  const a1 = await stripe(clave, "POST", "/v1/accounts", v1);
-  informe.v1 = a1.ok ? { creada: true } : { creada: false, ...error(a1), mensaje: tapar(error(a1).mensaje) };
-  if (a1.ok && a1.datos?.id) {
-    informe.capacidades = await capacidades(clave, a1.datos.id);
-    return { id: a1.datos.id, via: "v1", informe };
-  }
-  // v2, con Stripe cubriendo las pérdidas.
-  const cuerpo = {
-    contact_email: "sonda-bizum@example.com",
-    display_name: "Sonda Bizum (prueba)",
-    identity: { country: "es" },
-    dashboard: "express",
-    defaults: { currency: "eur", responsibilities: { losses_collector: "stripe", fees_collector: "application" } },
-    configuration: {
-      merchant: { capabilities: { card_payments: { requested: true }, ...(conBizum ? { bizum_payments: { requested: true } } : {}) } },
-    },
-    include: ["configuration.merchant", "requirements"],
-  };
-  const intentos: unknown[] = [];
-  for (const version of VERSION_V2) {
-    const a2 = await stripeV2(clave, "/v2/core/accounts", cuerpo, version);
-    if (a2.ok && a2.datos?.id) {
-      informe.v2 = { creada: true, version, intentos, capacidades_v2: a2.datos?.configuration?.merchant?.capabilities ?? null };
-      informe.capacidades = await capacidades(clave, a2.datos.id);
-      return { id: a2.datos.id, via: "v2", informe };
-    }
-    intentos.push({ version, ...error(a2), mensaje: tapar(error(a2).mensaje) });
-    // Si lo que falla no es la versión, otra versión no lo arregla.
-    if (!/version/i.test(String(error(a2).mensaje ?? ""))) break;
-  }
-  informe.v2 = { creada: false, intentos };
-  return { id: null, via: null, informe };
 }
 
 /** 3. En la cuenta (cargo directo, cabecera Stripe-Account, como la tienda): Bizum solo, los automáticos y la sesión de pago. */

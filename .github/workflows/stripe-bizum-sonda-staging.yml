@@ -12,9 +12,10 @@ name: PC01 · E4 · Sonda de Bizum con Stripe Connect en staging-conta
 #      dice y para en verde: la pone Julio (una clave sk_test_);
 #   3. un token de un solo run como secreto de la función, y la despliega
 #      (supabase/staging/sondas/stripe-bizum, copiada a supabase/functions/ dentro del runner);
-#   4. la llama UNA vez: crea una cuenta conectada de prueba (España, con Bizum
-#      pedido), intenta cobrar con Bizum, autoriza en la página de prueba de
-#      Stripe, prueba la sesión de pago y borra la cuenta;
+#   4. la llama UNA vez: crea una cuenta conectada de prueba (España, Accounts
+#      v2, panel completo, Stripe cubre las pérdidas), le pide Bizum aparte, mira
+#      sus capacidades y sus métodos de pago, intenta cobrar con Bizum, prueba la
+#      sesión de pago y borra o cierra la cuenta (Respuesta 9 al PC01);
 #   5. guarda lo que contesta Stripe (estados, códigos y textos de error de
 #      Stripe; sin la clave y con los identificadores tapados) en la rama, en
 #      docs/conta/pc01/e4/sonda-bizum.json, y al resumen solo números (D01 R2);
@@ -107,17 +108,20 @@ jobs:
           jq -r '"@@ # bizum",
             "@@ ok \(if .ok then 1 else 0 end)",
             (if .error then "@@ error.\(.error | ascii_downcase | gsub("[^a-z0-9_]"; "_")) 1" else empty end),
-            "@@ alta_con_bizum_creada \(if (.altas.con_bizum.v1.creada or .altas.con_bizum.v2.creada) then 1 else 0 end)",
-            "@@ alta_con_bizum_por_v2 \(if .altas.con_bizum.v2.creada then 1 else 0 end)",
-            "@@ alta_sin_bizum_creada \(if (.altas.sin_bizum.v1.creada or .altas.sin_bizum.v2.creada) then 1 else 0 end)",
-            "@@ capacidad_bizum_activa \(if ((.altas.con_bizum.capacidades.bizum | objects | .bizum_payments) // "") == "active" then 1 else 0 end)",
-            "@@ capacidad_bizum_pendiente \(if ((.altas.con_bizum.capacidades.bizum | objects | .bizum_payments) // "") == "pending" then 1 else 0 end)",
+            "@@ plataforma_bizum_activa \(if (.plataforma.capacidades_bizum.bizum_payments // "") == "active" then 1 else 0 end)",
+            "@@ alta_creada \(if .alta.creada then 1 else 0 end)",
+            "@@ alta_intentos \((.alta.intentos // []) | length)",
+            "@@ pedir_bizum_aceptado \(if .pedir_bizum.ok then 1 else 0 end)",
+            "@@ bizum_activa \(if (.bizum_despues.estado // "") == "active" then 1 else 0 end)",
+            "@@ bizum_pendiente \(if (.bizum_despues.estado // "") == "pending" then 1 else 0 end)",
+            "@@ bizum_inactiva \(if (.bizum_despues.estado // "") == "inactive" then 1 else 0 end)",
+            "@@ configuraciones_con_bizum \([(.configuraciones | arrays | .[]) | select(.bizum | objects)] | length)",
             "@@ cobro_bizum_aceptado \(if .cobros.cobro_bizum.ok then 1 else 0 end)",
             "@@ cobro_bizum_pagado \(if .cobros.cargo.pagado then 1 else 0 end)",
             "@@ automaticos_con_bizum \(if .cobros.automaticos.bizum then 1 else 0 end)",
             "@@ sesion_bizum \(if .cobros.sesion_bizum.ok then 1 else 0 end)",
             "@@ sesion_tarjeta_y_bizum \(if .cobros.sesion_tarjeta_y_bizum.ok then 1 else 0 end)",
-            "@@ cuentas_borradas \([.borradas[]? | select(.borrada or .cerrada)] | length)"' /tmp/sonda/r.json | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+            "@@ cuenta_borrada_o_cerrada \(if (.borrada.borrada or .borrada.cerrada) then 1 else 0 end)"' /tmp/sonda/r.json | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
           # A la rama, entero: lo que contesta Stripe (sin la clave; identificadores tapados).
           A=docs/conta/pc01/e4; mkdir -p "$A"
           jq --arg cuando "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{cuando: $cuando, desde: "función de staging-conta (sonda PC01 E4)"} + .' /tmp/sonda/r.json \
