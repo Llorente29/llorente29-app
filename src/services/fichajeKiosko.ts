@@ -84,11 +84,7 @@ export function nextClockType(employee: Employee): 'entrada' | 'salida' {
   return hasOpenShift(employee) ? 'salida' : 'entrada'
 }
 
-// Validar PIN
-export function checkPin(employee: Employee, pin: string): boolean {
-  if (!employee.pin) return false
-  return employee.pin === pin
-}
+// El PIN se comprueba en el servidor (kioskoPinService, L00 · 27/10/2026).
 
 // Crear el fichaje (sin guardar — la página llamará a actions del context)
 export interface ClockResult {

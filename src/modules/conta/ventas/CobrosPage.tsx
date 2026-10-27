@@ -33,6 +33,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { diaMesCorto, eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { localesDeLaCuenta } from '@/modules/conta/services/diarioService'
@@ -42,10 +43,11 @@ import { Boton, Chip } from '@/modules/conta/diseno'
 import { CifrasBandeja, FiltroBuscar, FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, type ColumnaLista } from '@/modules/conta/diseno/plantillas'
 import {
   NOMBRE_ESTADO_REMESA, PESTANAS_COBROS, chipEstado, cifrasCobros, enPestana, estadoCobro, filtrar, leerPestana, libre, nombreForma, ordenarCobros,
-  porQueNoEnRemesa, type FilaCobro, type FormaCobro,
+  porQueNoEnRemesa, textoDias, textoRecordatorios, type FilaCobro, type FormaCobro,
 } from '@/modules/conta/lib/cobros'
-import { crearRemesaCobros, leerCobros, leerRemesasCobros, type RemesaCobrosResumen, type SinMandato } from '@/modules/conta/services/cobrosService'
-import { DialogoMandato } from './DialogosCobros'
+import { crearRemesaCobros, leerCobros, leerEnlacesPago, leerRecordatorios, leerRemesasCobros, type RemesaCobrosResumen, type SinMandato } from '@/modules/conta/services/cobrosService'
+import { ComoTePagan } from './ComoTePagan'
+import { DialogoMandato, DialogoRecordatorios } from './DialogosCobros'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -83,6 +85,10 @@ export default function CobrosPage() {
   const cambiar = (c: Record<string, string | null>) => setQuery((antes) => new URLSearchParams(conCambio(antes.toString(), c)), { replace: true })
 
   const pestana = leerPestana(query.get('pestana'))
+  // Conservando lo leído mientras relee: si volviera a null, se cerraría el diálogo «Recordatorios»
+  // y con él la frase que confirma lo que se acaba de cambiar (regla 8; lo cazó la e2e #975).
+  const recordatorios = useLeerConservando(activa ? () => leerRecordatorios(activa.id) : null, activa?.id ?? '', `${vuelta}:recordatorios`)
+  const enlaces = useLeer(activa ? () => leerEnlacesPago(activa.id) : null, `${activa?.id}:${vuelta}:enlaces-pago`)
   const remesas = useLeer(activa && pestana === 'remesas' ? () => leerRemesasCobros(activa.id) : null, `${activa?.id}:${vuelta}:${pestana === 'remesas' ? 'con' : 'sin'}:remesas-cobros`)
   const fl = { buscar: query.get('q') ?? '', hasta: query.get('hasta') || null, forma: (query.get('forma') || 'todas') as FormaCobro | 'todas', local: query.get('local') || null }
   const d = datos.datos
@@ -106,6 +112,7 @@ export default function CobrosPage() {
   const fechaCargo = fechaElegida || cif?.proxima.cargo || ''
   const [ocupado, setOcupado] = useState(false)
   const [mandatoA, setMandatoA] = useState<SinMandato | null>(null)
+  const [verRecordatorios, setVerRecordatorios] = useState(false)
 
   const cobrar = async () => {
     if (!activa || cobrables.length === 0 || ocupado) return
@@ -124,7 +131,7 @@ export default function CobrosPage() {
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
-      if (e.key !== 'Enter' || !cobrables.length || mandatoA || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
+      if (e.key !== 'Enter' || !cobrables.length || mandatoA || verRecordatorios || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
       e.preventDefault(); void cobrar()
     }
     window.addEventListener('keydown', alPulsar)
@@ -153,6 +160,7 @@ export default function CobrosPage() {
     { id: 'factura', titulo: 'Factura', celda: (f) => f.numero ?? 'sin número', prioridad: 3, minimo: 110 },
     { id: 'forma', titulo: 'Cómo paga', celda: (f) => <Chip tono={f.forma === 'direct_debit' ? 'duda' : 'neutro'}>{nombreForma(f.forma)}</Chip>, prioridad: 4, minimo: 130 },
     { id: 'pendiente', titulo: 'Pendiente', cifra: true, celda: (f) => <strong>{eurosExactos(estadoCobro(f) === 'cobrada' ? f.total : f.pendiente).replace(' €', '')}</strong>, minimo: 90 },
+    { id: 'recordatorios', titulo: 'Recordatorios', celda: (f) => <span className="cx-ayuda">{estadoCobro(f) === 'cobrada' ? '—' : textoRecordatorios(recordatorios.datos?.facturas.get(f.id), enlaces.datos?.get(f.id))}</span>, prioridad: 5, minimo: 160 },
     { id: 'estado', titulo: 'Estado', celda: (f) => { const c = chipEstado(f); return <Chip tono={c.tono}>{c.texto}</Chip> }, minimo: 150 },
   ]
   const tarjeta = (f: FilaCobro) => {
@@ -171,6 +179,7 @@ export default function CobrosPage() {
     <div className="pg-pagina">
       <EncabezadoPagina titulo="Cobros"
         frase="Lo que te deben y cómo te lo van a pagar. Cada cobro marca su factura, venga del banco, de una remesa, de la caja o de una plataforma."
+        secundarios={<Boton onClick={() => setVerRecordatorios(true)} disabled={!recordatorios.datos}>Recordatorios</Boton>}
         masAcciones={[{ titulo: 'Cobros', acciones: [
           { id: 'remesas', etiqueta: 'Remesas de recibos', alPulsar: () => cambiar({ pestana: 'remesas' }), grupo: 'Cobros', dato: 'Las remesas de recibos domiciliados, con su estado' },
         ] }]} />
@@ -243,11 +252,21 @@ export default function CobrosPage() {
       {vivas.length > 0 && pestana !== 'remesas' && <p className="cx-ayuda pg-barra-nota">Te preparo la remesa de recibos (el fichero para subir al banco). Cuando llegue el abono, las facturas quedan cobradas; si devuelven alguno, te lo digo.</p>}
 
       <div className="pg-notas">
-        <p><strong>Domiciliados, con su mandato.</strong> Un recibo solo se pasa a quien ha firmado el mandato. Se lo mandas desde aquí, lo firma desde el correo con el móvil, y queda en su ficha de Contactos.</p>
+        <p><strong>Recordatorios que se mandan solos{recordatorios.datos && !recordatorios.datos.activos ? ' (apagados)' : ''}:</strong>{' '}
+          {recordatorios.datos && !recordatorios.datos.activos
+            ? 'ahora no se manda ninguno; se encienden en Ajustes › Cobros.'
+            : `${textoDias(recordatorios.datos?.dias ?? [-3, 0, 7, 15])}, cada vez con la factura en PDF. Se paran solos cuando cobras.`}</p>
+        <p><strong>Domiciliados, con su mandato.</strong> Un recibo solo se pasa a quien ha firmado el mandato. Te lo mando yo con el nombre de tu empresa, lo firma desde el correo con el móvil, y queda en su ficha de Contactos.</p>
         <p><strong>Plataformas.</strong> Lo que pagan Uber, Glovo y Just Eat se cobra en <a className="pg-enlace" href={rutaLiquidacionesVentas()} onClick={(e) => { e.preventDefault(); navegar(rutaLiquidacionesVentas()) }}>Liquidaciones</a>: al cobrar una liquidación, las facturas de sus cierres quedan cobradas.</p>
         <p><strong>Cobro en caja y con tarjeta del datáfono.</strong> Lo cobrado en el cierre del día ya entra cobrado. El abono del datáfono se casa en Bancos con los cierres de esos días.</p>
       </div>
 
+      {activa && <ComoTePagan empresaId={activa.id} />}
+
+      {verRecordatorios && activa && recordatorios.datos && (
+        <DialogoRecordatorios empresaId={activa.id} datos={recordatorios.datos} filas={todas}
+          alCerrar={() => setVerRecordatorios(false)} alCambiar={() => recordatorios.recargar()} />
+      )}
       {mandatoA && activa && (
         <DialogoMandato empresaId={activa.id} cliente={mandatoA}
           alCerrar={(frase) => { setMandatoA(null); if (frase) { setAviso({ tono: 'seguro', texto: frase }); setVuelta((v) => v + 1) } }} />

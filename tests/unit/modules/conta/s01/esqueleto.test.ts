@@ -178,8 +178,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   it('S02 · Ajustes es un apartado con sus páginas (las de su índice), sin las de Definiciones; en el producto solo, sin las que dicen «aún no»', () => {
     const a = PRODUCTOS.find((p) => p.id === 'ajustes')!
     // V03 E2 (26/10): entra Facturación › Verifactu (tablero 25), con pantalla: sale también en el producto solo.
-    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Verifactu', 'Personas y asesor', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
-    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'verifactu', 'folvy'])
+    // PC01 E4 (27/10): entra Facturación › Cobros (los recordatorios), con pantalla.
+    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Verifactu', 'Cobros', 'Personas y asesor', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
+    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'verifactu', 'cobros', 'folvy'])
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')

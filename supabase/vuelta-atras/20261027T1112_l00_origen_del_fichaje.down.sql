@@ -12,6 +12,12 @@
 -- OJO: con el front nuevo publicado, quitar 'tablet' hace que la pantalla de
 -- kiosko no pueda fichar. Primero se devuelve el front.
 
+-- Lo pendiente de esta transacción, antes de tocar clock_entries: desde la 1215
+-- (27/10) cada alta deja un aviso diferido (clock_entry_audit_alta), y con avisos
+-- pendientes Postgres no deja cambiar la tabla (55006). Pasa si en la misma
+-- transacción se ha fichado, como en su prueba de staging; sin la 1215, no hace nada.
+set constraints all immediate;
+
 do $$
 begin
   if exists (select 1 from public.clock_entries where source = 'tablet') then

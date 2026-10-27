@@ -53,6 +53,8 @@ import { useFicheroElegido } from '@/modules/conta/libro/ficheroElegido'
 import { ElegirExpedida, PapelExpedida } from '@/modules/conta/libro/FacturaExpedida'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { TextoConImpuesto } from '@/modules/conta/ui/TextoConImpuesto'
+import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
+import { mensajePresentado, presentadoDe } from '@/modules/conta/lib/ivaPresentado'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
 /** Los totales del pie, como se escriben en la hoja («1.234,56»). */
@@ -108,6 +110,10 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
   const problemas = problemasMano(concepto, fecha, lineas.map((l) => ({ ...l, localId: l.localId ?? unLocal })), codigos, !!ejeLocal)
   const c = cuadreMano(lineas)
   const ejercicio = base?.ejercicios.find((e) => fecha >= e.inicio && fecha <= e.fin) ?? null
+  // V04 · El candado del IVA: con apuntes en una 472 o una 477 y la fecha en un periodo presentado, no se guarda (la base lo para igual).
+  const iva = useIvaPresentado(activa?.id, /^\d{4}/.test(fecha) ? [Number(fecha.slice(0, 4))] : [])
+  const conIva = lineas.some((l) => /^47[27]/.test(l.cuenta.trim()))
+  const candado = conIva ? presentadoDe(fecha, iva.presentados) : null
   const enPalabras = asientoEnPalabras(lineas.map((l) => {
     const cta = porCodigo.get(l.cuenta.trim())
     return { codigo: cta?.code ?? '', nombre: cta?.nombre ?? '', debe: importeMano(l.debe) || 0, haber: importeMano(l.haber) || 0 }
@@ -183,6 +189,7 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
     if (!accountId || !activa || !base) return
     if (!ejercicio) { setFallo(`No hay ejercicio para el ${fecha.split('-').reverse().join('/')}: ábrelo en Ajustes › Ejercicio.`); return }
     if (problemas.length) return
+    if (candado) { setFallo(mensajePresentado(candado)); return }
     setOcupado(true)
     try {
       const id = await guardarAMano(accountId, activa.id, ejercicio.id, serie, fecha, concepto, lineas.map((l) => (ejeLocal ? { ...l, localId: l.localId ?? unLocal } : { ...l, localId: null, comun: false })), base.cuentas, userName)
@@ -235,7 +242,7 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
 
   const textoPrincipal = adjuntando ? 'Adjuntando la factura…' : ocupado ? 'Guardando…' : 'Guardar y validar'
   const principal = (
-    <Boton variante="principal" onClick={() => void guardar(true)} disabled={ocupado || !base} tecla="Ctrl Intro" atajo="Control+Enter">{textoPrincipal}</Boton>
+    <Boton variante="principal" onClick={() => void guardar(true)} disabled={ocupado || !base || !!candado} tecla="Ctrl Intro" atajo="Control+Enter">{textoPrincipal}</Boton>
   )
   const encabezado = (
     <EncabezadoPagina titulo={titulo} migasExtra={[{ etiqueta: titulo }]}
@@ -243,7 +250,7 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
       frase={def ? <TextoConImpuesto texto={def.ayuda} /> : 'Escribe los apuntes: el debe y el haber tienen que sumar lo mismo. Se guarda como borrador o se guarda y se valida.'}
       secundarios={<>
         <BotonEnlace a={volverA}>Cancelar</BotonEnlace>
-        <Boton onClick={() => void guardar(false)} disabled={ocupado || !base}>Guardar borrador</Boton>
+        <Boton onClick={() => void guardar(false)} disabled={ocupado || !base || !!candado}>Guardar borrador</Boton>
       </>}
       principal={principal} />
   )
@@ -276,6 +283,7 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
       <label className="s-hoja-campo">Fecha
         <input className="s-control" type="date" data-campo-hoja="fecha" value={fecha} onChange={(e) => setFecha(e.target.value)} />
         {!ejercicio && <span className="s-hoja-nota" data-tono="duda">No hay ejercicio abierto para esa fecha.</span>}
+        {candado && <span className="s-hoja-nota" data-tono="duda" data-prueba="fecha-iva-presentado">{mensajePresentado(candado)}</span>}
       </label>
       <label className="s-hoja-campo">Serie
         <select className="s-control s-control-selector" data-campo-hoja="serie" value={serie} onChange={(e) => setSerie(Number(e.target.value) as Serie)}>
