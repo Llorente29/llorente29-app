@@ -1,24 +1,78 @@
 {
-  "cuando": "2026-10-27T08:42:12Z",
+  "cuando": "2026-10-27T11:03:13Z",
   "desde": "función de staging-conta (sonda PC01 E4)",
   "ok": true,
   "modo_prueba": true,
   "plataforma": {
     "pais": "ES",
-    "moneda": "eur"
+    "moneda": "eur",
+    "capacidades_bizum": {
+      "bizum_payments": "active"
+    }
   },
-  "alta_con_bizum": {
-    "status": 400,
-    "tipo": "invalid_request_error",
-    "codigo": null,
-    "parametro": null,
-    "mensaje": "You tried to create an Accounts v1 connected account using the legacy `type` field with your platform as the losses collector. Use Accounts v2, remove `type`, and set `losses_collector` to `stripe`, then retry your request. See https://docs.stripe.com/connect/risk-management/connected-accounts-with-managed-risk for a code sample."
+  "altas": {
+    "con_bizum": {
+      "v1": {
+        "creada": false,
+        "status": 400,
+        "tipo": "invalid_request_error",
+        "codigo": null,
+        "parametro": null,
+        "mensaje": "With a dashboard type of `express`, the Connect application must control losses."
+      },
+      "v2": {
+        "creada": false,
+        "intentos": [
+          {
+            "version": null,
+            "status": 400,
+            "tipo": null,
+            "codigo": null,
+            "parametro": null,
+            "mensaje": "You did not provide an API version. You need to provide an API version header. Learn more at https://stripe.com/docs/api-v2-overview#sdk-and-api-versioning. For the list of valid versions, see https://docs.stripe.com/changelog"
+          },
+          {
+            "version": "2025-08-27.preview",
+            "status": 400,
+            "tipo": null,
+            "codigo": "invalid_fields",
+            "parametro": null,
+            "mensaje": "Some fields in the request were invalid: 'configuration.merchant.capabilities.bizum_payments: Unknown field, did you mean blik_payments, link_payments, zip_payments?'"
+          }
+        ]
+      }
+    },
+    "sin_bizum": {
+      "v1": {
+        "creada": false,
+        "status": 400,
+        "tipo": "invalid_request_error",
+        "codigo": null,
+        "parametro": null,
+        "mensaje": "With a dashboard type of `express`, the Connect application must control losses."
+      },
+      "v2": {
+        "creada": false,
+        "intentos": [
+          {
+            "version": null,
+            "status": 400,
+            "tipo": null,
+            "codigo": null,
+            "parametro": null,
+            "mensaje": "You did not provide an API version. You need to provide an API version header. Learn more at https://stripe.com/docs/api-v2-overview#sdk-and-api-versioning. For the list of valid versions, see https://docs.stripe.com/changelog"
+          },
+          {
+            "version": "2025-08-27.preview",
+            "status": 400,
+            "tipo": null,
+            "codigo": "account_controller_unsupported_configuration",
+            "parametro": null,
+            "mensaje": "This account configuration is not supported. Please reference https://docs.stripe.com/connect/customized-integration-guide."
+          }
+        ]
+      }
+    }
   },
-  "alta_sin_bizum": {
-    "status": 400,
-    "tipo": "invalid_request_error",
-    "codigo": null,
-    "parametro": null,
-    "mensaje": "You tried to create an Accounts v1 connected account using the legacy `type` field with your platform as the losses collector. Use Accounts v2, remove `type`, and set `losses_collector` to `stripe`, then retry your request. See https://docs.stripe.com/connect/risk-management/connected-accounts-with-managed-risk for a code sample."
-  }
+  "borradas": {}
 }
