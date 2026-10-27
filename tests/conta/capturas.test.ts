@@ -169,7 +169,10 @@ describe('las capturas de inventario: de la rama sin frente que toca inventario'
 describe('fijar en una rama sin frente (C10, 23/10)', () => {
   it('se salta con 0 y lo dice: no pone el run en rojo', async () => {
     const { execFileSync } = await import('node:child_process')
-    const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'], { encoding: 'utf8' })
+    // Sin nada cambiado, a mano: si no, lee el diff de la rama donde corre la prueba,
+    // y en una que toca inventario esa rama es dueña de inventario (unitarias #103).
+    const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'],
+      { encoding: 'utf8', env: { ...process.env, CAPTURAS_CAMBIADOS: '' } })
     expect(out).toContain('no hay capturas que fijar (se salta)')
   })
 })
