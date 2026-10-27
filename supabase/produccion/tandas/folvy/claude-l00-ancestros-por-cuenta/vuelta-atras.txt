@@ -1,0 +1,4 @@
+# L00 · Respuesta 6 · vuelta atrás: kitchen_ancestors_of como el 27/10, del
+# respaldo y byte a byte. Vuelve también lo de antes: la cascada de coste de un
+# trabajador que recibe un albarán se para hasta que la oficina lo confirma.
+supabase/vuelta-atras/20261027T1647_l00_ancestros_por_cuenta.down.sql
