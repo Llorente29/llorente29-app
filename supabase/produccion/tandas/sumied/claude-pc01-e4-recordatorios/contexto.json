@@ -1,0 +1,8 @@
+{
+  "_que": "PC01 · E4 · Recordatorios · contexto de producción de la tanda (0641, solo añade), medido en SOLO LECTURA el 27/10 a las 06:44Z: ninguna de las 3 tablas ni de las funciones que crea existe, ni el cron conta-recordatorios-despertar; nada en el historial. Lo que usa (las piezas de la E3, conta_factura_cobro, _conta_venta_evento, conta_hoy) ya está en producción. Nada en el camino del pedido.",
+  "medido": "2026-10-27T06:44Z",
+  "tanda": {
+    "supabase/migrations/20261027T0641_pc01e4_recordatorios.sql": "e665c6e7cf8772ecf06e3a82aaa9032b"
+  },
+  "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

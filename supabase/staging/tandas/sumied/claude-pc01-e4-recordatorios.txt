@@ -1,0 +1,8 @@
+# PC01 · Entrega 4 · recordatorios. La 0641 solo añade (y se puede pasar dos
+# veces): desde la rama, de verdad (W05). Su prueba (ROLLBACK): lo que toca
+# mandar cada día (antes de vencer, el día, después), lo que no lleva (plataforma,
+# domiciliada, en remesa, apagados, el cliente apagado, sin correo, cobrada),
+# apuntar sin repetir, el historial de la factura, el resumen de la pantalla,
+# los ajustes y el despertador fuera de las 9, y la vuelta atrás.
+supabase/migrations/20261027T0641_pc01e4_recordatorios.sql
+supabase/staging/sql/20261027_pc01e4_recordatorios_prueba.sql

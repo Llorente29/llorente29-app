@@ -4,9 +4,10 @@
 // funciones conta_* de la 2142 (dueño único, N8). Cada escritura devuelve la
 // frase de lo que ha pasado (regla 8), escrita en la base.
 
+import { supabase } from '@/lib/supabase'
 import { rpc } from '@/modules/conta/services/bd'
 import {
-  filaCobro, type EstadoRemesaCobros, type FilaCobro, type RemesaCobrosParaCasar, type ReciboDevolvible,
+  filaCobro, type EstadoRemesaCobros, type FilaCobro, type RecordatoriosFactura, type RemesaCobrosParaCasar, type ReciboDevolvible, type SinRecordatorio,
 } from '@/modules/conta/lib/cobros'
 import type { DatosRemesaRecibos } from '@/modules/conta/lib/sepa'
 
@@ -156,3 +157,67 @@ export async function cobrosParaCasar(companyId: string): Promise<{ abonos: Reme
     })),
   }
 }
+
+// ── PC01 · Entrega 4 · Los recordatorios y el mandato que sale desde Sumied ──
+
+export interface UltimoRecordatorio { at: string; factura: string; facturaId: string; cliente: string; para: string | null; enviado: boolean; motivo: string | null; dia: number }
+export interface Recordatorios {
+  activos: boolean
+  dias: number[]
+  cambiado: { at: string; por: string | null } | null
+  clientesApagados: { id: string; nombre: string; por: string | null; at: string | null }[]
+  facturas: Map<string, RecordatoriosFactura>
+  ultimos: UltimoRecordatorio[]
+  hoy: string
+}
+
+export async function leerRecordatorios(companyId: string): Promise<Recordatorios> {
+  const d = await rpc<Fila>('conta_recordatorios_resumen', { p_company: companyId })
+  const c = d?.cambiado as Fila | null
+  return {
+    activos: d?.activos !== false,
+    dias: ((d?.dias as unknown[] | null) ?? [-3, 0, 7, 15]).map(num),
+    cambiado: c ? { at: String(c.at), por: str(c.por) } : null,
+    clientesApagados: ((d?.clientes_apagados as Fila[] | null) ?? []).map((x) => ({ id: String(x.id), nombre: String(x.nombre), por: str(x.por), at: str(x.at) })),
+    facturas: new Map(((d?.facturas as Fila[] | null) ?? []).map((x) => {
+      const n = x.no_salio as Fila | null
+      return [String(x.id), { id: String(x.id), enviados: num(x.enviados), ultimo: str(x.ultimo), proximo: str(x.proximo), sin: str(x.sin) as SinRecordatorio | null,
+        noSalio: n ? { toca: String(n.toca), motivo: str(n.motivo) } : null }]
+    })),
+    ultimos: ((d?.ultimos as Fila[] | null) ?? []).map((x) => ({
+      at: String(x.at), factura: String(x.factura ?? ''), facturaId: String(x.factura_id), cliente: String(x.cliente ?? ''), para: str(x.para),
+      enviado: x.enviado === true, motivo: str(x.motivo), dia: num(x.dia),
+    })),
+    hoy: String(d?.hoy ?? ''),
+  }
+}
+
+export const guardarAjustesCobro = (companyId: string, activos: boolean, dias: readonly number[]) =>
+  rpc<Frase>('conta_cobro_ajustes_guardar', { p_company: companyId, p_recordatorios: activos, p_dias: dias })
+export const recordatoriosCliente = (companyId: string, clienteId: string, apagar: boolean) =>
+  rpc<Frase>('conta_recordatorios_cliente', { p_company: companyId, p_party: clienteId, p_apagar: apagar })
+
+export interface ResultadoCorreo { enviado: boolean; texto: string }
+
+/** Llama a una función de correo de Sumied. Nunca lanza: dice qué ha pasado (regla 8). */
+async function correoPorFuncion(funcion: string, body: Record<string, unknown>, que: string): Promise<ResultadoCorreo> {
+  if (!supabase) return { enviado: false, texto: `No se ha mandado ${que}: no hay conexión con la base.` }
+  const { data, error } = await supabase.functions.invoke(funcion, { body })
+  if (!error && data && typeof data === 'object' && 'texto' in data) return { enviado: (data as Fila).enviado === true, texto: String((data as Fila).texto) }
+  const ctx = (error as { context?: Response } | null)?.context
+  if (ctx && typeof ctx.json === 'function') {
+    const cuerpo = await ctx.clone().json().catch(() => null) as Fila | null
+    if (cuerpo?.texto) return { enviado: false, texto: String(cuerpo.texto) }
+    const motivo = str(cuerpo?.error) ?? (ctx.status === 404 ? 'el envío aún no está publicado en este entorno' : `la función ha contestado ${ctx.status}`)
+    return { enviado: false, texto: `No se ha mandado ${que}: ${motivo}.` }
+  }
+  return { enviado: false, texto: `No se ha mandado ${que}: ${error ? `no se ha podido hablar con el envío (${error.message})` : 'el envío no ha contestado'}.` }
+}
+
+/** Manda desde Sumied el correo con el enlace para firmar el mandato. */
+export const enviarMandato = (mandatoId: string, para: string) =>
+  correoPorFuncion('conta-mandato-enviar', { mandato: mandatoId, para, origen: typeof window === 'undefined' ? null : window.location.origin }, 'el mandato')
+
+/** Manda a un correo la prueba del recordatorio de una factura (no cuenta como recordatorio). */
+export const probarRecordatorio = (facturaId: string, para: string) =>
+  correoPorFuncion('conta-recordatorios', { factura: facturaId, para }, 'la prueba')

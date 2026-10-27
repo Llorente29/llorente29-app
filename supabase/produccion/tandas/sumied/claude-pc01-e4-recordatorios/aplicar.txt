@@ -1,0 +1,14 @@
+# PC01 · Entrega 4 · Punto 1 · Los recordatorios de cobro que se mandan solos
+# (encargo maestro del PC01). Rama claude/pc01-e4-recordatorios. Se ensaya y se
+# aplica desde esta rama, antes de fusionar.
+#
+#   1. 0641 — SOLO AÑADE: los ajustes de cobro por empresa (si se mandan y qué
+#      días), los clientes sin recordatorios, el registro de cada recordatorio,
+#      las funciones que los preparan, apuntan y resumen, y el cron de cada hora
+#      que despierta a conta-recordatorios a las 9 de Madrid. No toca datos ni
+#      nada que exista. No está en el camino del pedido: sin autorizo.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/pc01-e4.sql
+supabase/migrations/20261027T0641_pc01e4_recordatorios.sql

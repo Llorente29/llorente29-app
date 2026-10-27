@@ -3,7 +3,9 @@
 // PC01 · Entrega 3 · Ventas › Cobros (tableros cobros-1 y cobros-2), sin React:
 // el estado de cada fila, qué entra en una remesa de recibos y por qué no, las
 // pestañas, las cifras, la próxima remesa, los pasos de una remesa, lo que
-// Bancos propone para un abono o una devolución, y el correo del mandato.
+// Bancos propone para un abono o una devolución, y (E4) la columna
+// «Recordatorios» y los días en palabras. El correo del mandato lo escribe
+// ahora el servidor: pc01/cobroCorreos.test.ts.
 //
 // Dos poblaciones:
 //   · la REAL de Foodint (fixtures/cobros-foodint-20261026.json): sus 89
@@ -16,8 +18,8 @@
 import { describe, expect, it } from 'vitest'
 import foodint from './fixtures/cobros-foodint-20261026.json'
 import {
-  abonosQueCuadran, chipEstado, cifrasCobros, correoDelMandato, devolucionesQueCuadran, enPestana, estadoCobro, filaCobro, filtrar, libre,
-  pasosRemesa, porQueNoEnRemesa, siguienteLaborable, cargoProximo, type FilaCobro,
+  abonosQueCuadran, chipEstado, cifrasCobros, devolucionesQueCuadran, enPestana, estadoCobro, filaCobro, filtrar, libre,
+  pasosRemesa, porQueNoEnRemesa, siguienteLaborable, cargoProximo, leerDias, textoDias, textoRecordatorios, type FilaCobro,
 } from '@/modules/conta/lib/cobros'
 
 const f = (x: Record<string, unknown>): FilaCobro => filaCobro({
@@ -148,12 +150,42 @@ describe('lo que propone Bancos', () => {
   })
 })
 
-describe('el correo del mandato', () => {
-  it('lleva la referencia, el enlace y hasta cuándo vale; nada de palabras de técnico', () => {
-    const c = correoDelMandato({ cliente: 'Bar La Esquina de Usera', empresa: 'Llorente29 Food SL', ref: 'SUM-000124', enlace: 'https://app.ejemplo/mandato.html?t=abc', caduca: '2026-11-25' })
-    expect(c.asunto).toBe('Mandato de domiciliación SUM-000124 de Llorente29 Food SL')
-    expect(c.cuerpo).toContain('https://app.ejemplo/mandato.html?t=abc')
-    expect(c.cuerpo).toContain('El enlace vale hasta el 25/11/2026.')
-    expect(c.cuerpo).not.toMatch(/\b(SDD|pain|XML|token)\b/i)
+describe('la columna «Recordatorios» (E4), como en el tablero', () => {
+  const r = (x: Partial<Parameters<typeof textoRecordatorios>[0] & object>) => ({ id: 'f', enviados: 0, ultimo: null, proximo: null, sin: null, noSalio: null, ...x })
+  it('enviados y el próximo', () => {
+    expect(textoRecordatorios(r({ enviados: 3, proximo: '2026-11-01' }))).toBe('3 enviados · próximo 01/11')
+    expect(textoRecordatorios(r({ proximo: '2026-11-11' }))).toBe('próximo 11/11')
+    expect(textoRecordatorios(r({ enviados: 1 }))).toBe('1 enviado')
+    expect(textoRecordatorios(r({}))).toBe('ya no quedan')
+  })
+  it('por qué no lleva: domiciliada, plataforma y en remesa «no hacen falta»; apagados y sin correo, dicho', () => {
+    expect(textoRecordatorios(r({ sin: 'domiciliada' }))).toBe('no hacen falta')
+    expect(textoRecordatorios(r({ sin: 'plataforma' }))).toBe('no hacen falta')
+    expect(textoRecordatorios(r({ sin: 'en_remesa' }))).toBe('no hacen falta')
+    expect(textoRecordatorios(r({ sin: 'cliente', enviados: 2 }))).toBe('2 enviados · apagados para este cliente')
+    expect(textoRecordatorios(r({ sin: 'apagados' }))).toBe('apagados')
+    expect(textoRecordatorios(r({ sin: 'sin_correo' }))).toBe('sin correo del cliente')
+    expect(textoRecordatorios(undefined)).toBe('—')
+  })
+  it('las 89 por cobrar REALES de Foodint son de plataforma: «no hacen falta» en todas (0 recordatorios, como se midió en producción)', () => {
+    const filas = (foodint as { filas: Record<string, unknown>[] }).filas
+    expect(filas).toHaveLength(89)
+    expect(new Set(filas.map((f) => textoRecordatorios(r({ sin: f.de_plataforma === true ? 'plataforma' : null }))))).toEqual(new Set(['no hacen falta']))
+  })
+})
+
+describe('los días de los recordatorios (E4)', () => {
+  it('en palabras', () => {
+    expect(textoDias([-3, 0, 7, 15])).toBe('3 días antes, el día que vence y a los 7 y 15 días')
+    expect(textoDias([0])).toBe('el día que vence')
+    expect(textoDias([-1, 30])).toBe('1 día antes y a los 30 días')
+    expect(textoDias([-5, -2, 1])).toBe('2 y 5 días antes y a los 1 día')
+  })
+  it('leídos del campo', () => {
+    expect(leerDias('-3, 0, 7, 15')).toEqual([-3, 0, 7, 15])
+    expect(leerDias('15 7 0 -3 7')).toEqual([-3, 0, 7, 15])
+    expect(leerDias('')).toBeNull()
+    expect(leerDias('-3, siete')).toBeNull()
+    expect(leerDias('1.5')).toBeNull()
   })
 })

@@ -130,6 +130,19 @@ verify_jwt = true
 [functions.conta-venta-correo]
 verify_jwt = true
 
+# PC01 E4 (27/10) conta-mandato-enviar · «Enviarle el mandato para firmar» sale
+# desde Sumied. verify_jwt = true: la llama el diálogo del mandato con la sesión
+# de quien pulsa. Cerrada por CORREO_MARCA_ABIERTOS («mandato_sepa»).
+[functions.conta-mandato-enviar]
+verify_jwt = true
+
+# PC01 E4 (27/10) conta-recordatorios · los recordatorios de cobro. La despierta
+# el cron conta-recordatorios-despertar con x-cron-secret (CRON_SECRET), sin
+# sesión; la prueba a un correo se comprueba dentro (getUser y permiso).
+# verify_jwt = false. Cerrada por CORREO_MARCA_ABIERTOS («recordatorio_cobro»).
+[functions.conta-recordatorios]
+verify_jwt = false
+
 # C07 (22/10): el servidor manda a Diez lo que se queda atrás. La despierta el
 # cron conta-diez-despertar con x-cron-secret (CRON_SECRET), sin sesión.
 [functions.conta-diez-cola]

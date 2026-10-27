@@ -246,24 +246,47 @@ export function devolucionesQueCuadran(cargoCent: number, recibos: readonly Reci
     .sort((a, b) => a.gastosCent - b.gastosCent)
 }
 
-// ── El correo del mandato ───────────────────────────────────────────────────
+// ── PC01 · Entrega 4 · Los recordatorios ────────────────────────────────────
 
-/** El correo que se abre: el asunto y el texto, con el enlace para firmar. */
-export function correoDelMandato(o: { cliente: string; empresa: string | null; ref: string; enlace: string; caduca: string }): { asunto: string; cuerpo: string } {
-  const de = o.empresa ? ` de ${o.empresa}` : ''
-  return {
-    asunto: `Mandato de domiciliación ${o.ref}${de}`,
-    cuerpo: [
-      'Hola:',
-      '',
-      `Para cobraros las facturas${de} por domiciliación bancaria necesitamos el mandato SEPA firmado (referencia ${o.ref}).`,
-      'Se firma en un minuto desde el móvil, sin crear cuenta: solo hace falta el nombre de quien firma y el IBAN donde queréis que se carguen los recibos.',
-      '',
-      o.enlace,
-      '',
-      `El enlace vale hasta el ${o.caduca.split('-').reverse().join('/')}.`,
-      '',
-      'Gracias.',
-    ].join('\n'),
+/** Por qué una factura no lleva recordatorios (la base lo decide: _pc01e4_sin_recordatorio). */
+export type SinRecordatorio = 'cobrada' | 'plataforma' | 'domiciliada' | 'en_remesa' | 'apagados' | 'cliente' | 'sin_vencimiento' | 'sin_correo'
+export interface RecordatoriosFactura { id: string; enviados: number; ultimo: string | null; proximo: string | null; sin: SinRecordatorio | null; noSalio: { toca: string; motivo: string | null } | null }
+
+const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
+
+/** La columna «Recordatorios» de Cobros, como en el tablero: «3 enviados · próximo 01/11», «no hacen falta»… */
+export function textoRecordatorios(r: RecordatoriosFactura | null | undefined): string {
+  if (!r) return '—'
+  const enviados = r.enviados ? `${r.enviados} ${r.enviados === 1 ? 'enviado' : 'enviados'}` : null
+  switch (r.sin) {
+    case 'plataforma': case 'domiciliada': case 'en_remesa': return 'no hacen falta'
+    case 'apagados': return enviados ? `${enviados} · apagados` : 'apagados'
+    case 'cliente': return enviados ? `${enviados} · apagados para este cliente` : 'apagados para este cliente'
+    case 'sin_correo': return 'sin correo del cliente'
+    case 'sin_vencimiento': return 'sin vencimiento'
+    case 'cobrada': return enviados ?? '—'
   }
+  const proximo = r.proximo ? `próximo ${ddmm(r.proximo)}` : null
+  return [enviados, proximo].filter(Boolean).join(' · ') || 'ya no quedan'
 }
+
+/** Los días de los recordatorios, en palabras: «3 días antes, el día que vence y a los 7 y 15 días». */
+export function textoDias(dias: readonly number[]): string {
+  const orden = [...new Set(dias)].sort((a, b) => a - b)
+  const antes = orden.filter((d) => d < 0).map((d) => -d).sort((a, b) => a - b)
+  const despues = orden.filter((d) => d > 0)
+  const y = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1]}`)
+  const partes: string[] = []
+  if (antes.length) partes.push(`${y(antes.map(String))} ${antes.length === 1 && antes[0] === 1 ? 'día' : 'días'} antes`)
+  if (orden.includes(0)) partes.push('el día que vence')
+  if (despues.length) partes.push(`a los ${y(despues.map(String))} ${despues.length === 1 && despues[0] === 1 ? 'día' : 'días'}`)
+  return y(partes)
+}
+
+/** Lo que se escribe en el campo de los días («-3, 0, 7, 15»), leído; null si algo no es un número entero. */
+export function leerDias(texto: string): number[] | null {
+  const xs = texto.split(/[\s,;]+/).map((x) => x.trim()).filter(Boolean)
+  if (!xs.length || xs.some((x) => !/^[-+]?\d{1,3}$/.test(x))) return null
+  return [...new Set(xs.map(Number))].sort((a, b) => a - b)
+}
+
