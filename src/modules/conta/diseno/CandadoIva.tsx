@@ -1,17 +1,16 @@
-// src/modules/conta/ui/CandadoIva.tsx
+// src/modules/conta/diseno/CandadoIva.tsx
 //
 // V04 · Respuesta 5 · El candado del IVA presentado: el icono junto al mes o al
-// trimestre, y la franja que lo explica en la ficha. El texto va siempre al
-// lado del icono (es decorativo) y es el mismo que el de la base.
+// trimestre, y las franjas que lo explican en la ficha. El texto va siempre al
+// lado del icono (es decorativo) y lo da quien lo pinta, con los textos de la
+// base (lib/ivaPresentado.ts: textosCandado y mensajePresentado).
 
-import { Icono } from '@/modules/conta/diseno/Icono'
-import { diaPresentado, type PeriodoPresentado } from '@/modules/conta/lib/ivaPresentado'
+import { Icono } from './Icono'
 
-/** El candado pequeño: «🔒 IVA presentado 20/10». */
-export function CandadoIva({ p, corto = false }: { p: PeriodoPresentado; corto?: boolean }) {
-  const texto = `IVA presentado ${diaPresentado(p)}`
+/** El candado pequeño: «🔒 IVA presentado 20/10». Con `corto`, el texto solo para el lector de pantalla. */
+export function CandadoIva({ texto, titulo, corto = false }: { texto: string; titulo: string; corto?: boolean }) {
   return (
-    <span className="cx-candado-iva" data-prueba="candado-iva" title={`El IVA ${/^[1-4]T/.test(p.periodo) ? 'del' : 'de'} ${p.nombre} ya está presentado (${diaPresentado(p)}). No se puede cambiar.`}>
+    <span className="cx-candado-iva" data-prueba="candado-iva" title={titulo}>
       <Icono nombre="cierre" />{corto ? <span className="cx-solo-lector">{texto}</span> : texto}
     </span>
   )

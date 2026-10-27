@@ -48,8 +48,8 @@ import {
 } from './trimestre'
 import { TraerPorCsv } from './TraerPorCsv'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
-import { diaPresentado, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
-import { CandadoIva } from '@/modules/conta/ui/CandadoIva'
+import { diaPresentado, textosCandado, trimestrePresentado } from '@/modules/conta/lib/ivaPresentado'
+import { CandadoIva } from '@/modules/conta/diseno/CandadoIva'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const hoy = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
@@ -164,7 +164,7 @@ export default function TrimestrePage() {
               return (
                 <button key={t} type="button" role="radio" aria-checked={t === trimestre} className="s-trimestre-q" onClick={() => ir(ejercicio, t)}
                   title={cerrado ? `IVA del ${t} presentado el ${diaPresentado(cerrado)}` : undefined}>
-                  {t}{cerrado && <> <CandadoIva p={cerrado} corto /></>}
+                  {t}{cerrado && <> <CandadoIva {...textosCandado(cerrado)} corto /></>}
                 </button>
               )
             })}
@@ -175,7 +175,7 @@ export default function TrimestrePage() {
         const cerrado = q ? trimestrePresentado(ejercicio, q, iva.presentados) : null
         return cerrado ? (
           <p className="s-apoyo" role="status" data-prueba="trimestre-iva-presentado">
-            <CandadoIva p={cerrado} /> · Su IVA ya no se cambia: lo que llegue tarde va {/^[1-4]T/.test(cerrado.siguiente) ? `al ${cerrado.siguiente}` : `a ${cerrado.siguiente}`}.
+            <CandadoIva {...textosCandado(cerrado)} /> · Su IVA ya no se cambia: lo que llegue tarde va {/^[1-4]T/.test(cerrado.siguiente) ? `al ${cerrado.siguiente}` : `a ${cerrado.siguiente}`}.
           </p>
         ) : null
       })()}

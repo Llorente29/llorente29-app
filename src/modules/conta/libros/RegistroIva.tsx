@@ -49,8 +49,8 @@ import { cuantas } from '@/modules/conta/lib/plural'
 import { useImpuestoEmpresa } from '@/modules/conta/hooks/useImpuestoEmpresa'
 import { conImpuesto } from '@/modules/conta/lib/impuestoIndirecto'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
-import { mesPresentado, type PeriodoPresentado } from '@/modules/conta/lib/ivaPresentado'
-import { CandadoIva } from '@/modules/conta/ui/CandadoIva'
+import { mesPresentado, textosCandado, type PeriodoPresentado } from '@/modules/conta/lib/ivaPresentado'
+import { CandadoIva } from '@/modules/conta/diseno/CandadoIva'
 
 type Vista = 'issued' | 'received' | 'intracomunitarias'
 const TITULO: Record<Vista, string> = { issued: 'Facturas expedidas', received: 'Facturas recibidas', intracomunitarias: 'Operaciones intracomunitarias' }
@@ -143,7 +143,7 @@ export function RegistroIva({ libro }: { libro: Vista }) {
       <Guardado texto={hecho} />
       {candado && (
         <p className="cxl-apoyo" role="status" data-prueba="libro-iva-presentado">
-          <CandadoIva p={candado} /> · Sus anotaciones ya no cambian: solo se completan su número, su NIF o su nombre, que no son su IVA. Lo que llegue tarde va {/^[1-4]T/.test(candado.siguiente) ? `al ${candado.siguiente}` : `a ${candado.siguiente}`}.
+          <CandadoIva {...textosCandado(candado)} /> · Sus anotaciones ya no cambian: solo se completan su número, su NIF o su nombre, que no son su IVA. Lo que llegue tarde va {/^[1-4]T/.test(candado.siguiente) ? `al ${candado.siguiente}` : `a ${candado.siguiente}`}.
         </p>
       )}
 

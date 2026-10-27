@@ -104,3 +104,8 @@ export function candadoDelAsiento(a: { fecha: string; origen: string; apuntes: r
   if (ORIGENES_SIN_CANDADO.includes(a.origen) || !llevaIva(a.apuntes)) return null
   return presentadoDe(a.fecha, lista)
 }
+
+/** Lo que dice el candado pequeño: «IVA presentado 20/10», y su título con el mensaje entero. */
+export function textosCandado(p: PeriodoPresentado): { texto: string; titulo: string } {
+  return { texto: `IVA presentado ${diaPresentado(p)}`, titulo: `El IVA ${del(p)} ya está presentado (${diaPresentado(p)}). No se puede cambiar.` }
+}

@@ -57,7 +57,7 @@ import { motivosParaValidar } from '@/modules/conta/services/esperanService'
 import { porQueNoSeValida, type MotivoEspera } from '@/modules/conta/lib/esperan'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
 import { avisoTardia, candadoDelAsiento, mensajePresentado } from '@/modules/conta/lib/ivaPresentado'
-import { FranjaIvaPresentado, FranjaTardia } from '@/modules/conta/ui/CandadoIva'
+import { FranjaIvaPresentado, FranjaTardia } from '@/modules/conta/diseno/CandadoIva'
 
 interface Datos {
   asiento: AsientoDiario | null; cuentas: CuentaPlan[]; cierres: CierreMes[]; conDiez: ConDiez | null; conDiezError: string | null
