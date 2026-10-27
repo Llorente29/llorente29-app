@@ -593,6 +593,10 @@ jobs:
             # Las mismas pruebas, ahora y en la entera en serie del 16/10.
             PLAYWRIGHT_JSON_OUTPUT_FILE="$RUNNER_TEMP/informe.json" npx playwright merge-reports --reporter json "$RUNNER_TEMP/trozos/blob-report"
             node scripts/e2e/inflacion.mjs "$RUNNER_TEMP/informe.json" | tee -a "$GITHUB_STEP_SUMMARY"
+            # Lo que no tenía tiempo, medido con la misma vara (27/10): sale como
+            # artefacto «tiempos-propuestos» para sacarlo de «sin medir». Un PR
+            # con una e2e nueva no apunta nada: lo mide la entera.
+            node scripts/e2e/inflacion.mjs "$RUNNER_TEMP/informe.json" --nuevos "$RUNNER_TEMP/tiempos-propuestos.json" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "Ningún trozo dejó informe."
           fi
@@ -603,6 +607,15 @@ jobs:
         with:
           name: playwright-report
           path: playwright-report
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Tiempos propuestos (tests/e2e/tiempos.json con lo que no estaba medido)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tiempos-propuestos
+          path: ${{ runner.temp }}/tiempos-propuestos.json
           retention-days: 14
           if-no-files-found: ignore
 

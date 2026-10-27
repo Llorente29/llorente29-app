@@ -15,34 +15,20 @@ const TODOS = ficheros()
 const TIEMPOS = tiemposDelRepo()
 
 describe('la entera en trozos', () => {
-  it('la suite real tiene ficheros, y casi todos tienen su tiempo medido', () => {
+  // 27/10 (Respuesta 2 al V04): nada de esta prueba se apunta a mano al añadir
+  // una e2e. Hasta el 26/10 cada PR con una e2e subía aquí el tope de «sin
+  // medir» y el techo del trozo, y el segundo en fusionarse chocaba siempre
+  // (#335, #339, #342, #343). El historial de aquellos topes está en git.
+  //   · «Sin medir» = lo que no está en tests/e2e/tiempos.json. Lo mide la
+  //     entera (artefacto «tiempos-propuestos») y se saca de la lista en un
+  //     commit que solo toca tiempos.json.
+  //   · El tope sale de lo que hay: como mucho una cuarta parte de la suite. Si
+  //     se pasa, no es que un PR haya añadido una e2e: es que hace días que
+  //     nadie mete lo medido, y los trozos se reparten a ciegas.
+  it('la suite real tiene ficheros, y casi todos tienen su tiempo medido (como mucho una cuarta parte sin medir)', () => {
     expect(TODOS.length).toBeGreaterThanOrEqual(38)
     const sin = TODOS.filter((f) => typeof TIEMPOS[f] !== 'number')
-    // Los nuevos cuentan como la mediana. 21/10: main trae 4 sin medir (i01b/plazo,
-    // i01d/proveedor-extranjero, i01e/ficha-libro, i01h/sociedades); inventario/autoconteo
-    // ya está medido (e2e 761). 23/10 (D06): entra d01/validar-en-bloque, nueva y sin medir
-    // (cuenta como la mediana): son 5. La mide la entera de su PR.
-    // 23/10 (D07): entra d01/plataforma, nueva y sin medir (una sola prueba, sin datos que crear): son 6.
-    // 24/10 (N1): se miden d01/validar-en-bloque y d01/plataforma (e2e 39980636692) y entra
-    // d01/nif-de-la-ficha, nueva y sin medir: son 5.
-    // 24/10 (N5, al traer main): entra n5/anchos-compras, nueva y sin medir (cuenta como la mediana): son 6.
-    // 24/10 (V01): entra v01/facturas, nueva y sin medir: son 7. La mide la entera de su PR.
-    // 24/10 (V01, entrega 2): entra v01/cierres, nueva y sin medir: son 8. La mide la entera de su PR.
-    // 24/10 (V01, entrega 3): entra v01/liquidaciones, nueva y sin medir: son 9. La mide la entera de su PR.
-    // 24/10 (C12, al traer main con la V01 entrega 2): entra c12/traspaso, nueva y sin medir (cuenta como la mediana): son 9. La mide la entera de la noche.
-    // 25/10 (V01, al traer main con el C12 al #325): eran 10; se miden v01/facturas, v01/cierres y
-    // v01/liquidaciones (entera 40142597258 en verde, tests/e2e/tiempos.json): son 7.
-    // 25/10 (V02, entrega 1): entra v02/puerta, nueva y sin medir: son 8. La mide la entera de su PR.
-    // 25/10 (PC01 · E1, al traer main con la V02): entra pc01/cobros-y-pagos, nueva y sin medir: son 9. La mide la entera de la noche.
-    // 26/10 (V03 · E2): entra v03/verifactu y la mide la entera de su PR (40268812432, tiempos.json): siguen 9.
-    // 26/10 (V02 · Pantallas): entra v02/liquidaciones, nueva y sin medir: son 10. La mide la entera de su PR.
-    // 26/10 (V03 · E2, al traer main con la V02 · Pantallas): las dos juntas, v03/verifactu medida y v02/liquidaciones sin medir: son 10 (contadas con tiempos.json de las dos).
-    // 26/10 (PC01 · E2, al traer main con la V03 · E2): entra pc01/pagos, nueva y sin medir: son 11. La mide la entera de su PR.
-    // 26/10 (PC01 · E2, al traer main con la cola de staging): contadas las dos ramas, siguen 11 sin medir. La mide la entera de la noche.
-    // 26/10 (V03 · E3, al traer main con la PC01 · E2): entra v03/corregir-y-cuadrar, nueva y sin medir: son 12. La mide la entera de la noche.
-    // 26/10 (PC01 · E3): entra pc01/cobros, nueva y sin medir: son 13. La mide la entera de la noche.
-    // 26/10 (V04 · PR 1, al traer main con la PC01 · E3): entra conta/v04/tique, nueva y sin medir: son 14. La mide la entera de la noche.
-    expect(sin.length).toBeLessThan(15)
+    expect(sin.length, `sin tiempo medido: ${sin.join(', ')}. Mete en tests/e2e/tiempos.json el artefacto «tiempos-propuestos» de una entera.`).toBeLessThanOrEqual(Math.floor(TODOS.length / 4))
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -57,58 +43,35 @@ describe('la entera en trozos', () => {
     const seg = tr.map((t) => t.segundos)
     const media = seg.reduce((a, b) => a + b, 0) / 4
     expect(Math.max(...seg)).toBeLessThanOrEqual(media * 1.1)
-    // Medido el 16/10: 33,3 min con 1 worker; en 4 trozos, unos 8,4 cada uno.
-    // 18/10 (S01d): la suite ha crecido (s01c, s01d). La entera de 4 carriles
-    // del 18/10 (run 39109156060) midió sus trozos en 8,7, 9,3 y 11,3 min; el
-    // reparto estimado da 10,3. El techo pasa a 11 min, con esa medida.
-    // 18/10 (I01b): s01/esqueleto, s01d/flujos e i01b/impuestos, medidos ya (esqueleto
-    // solo, 286 s), contaban como la mediana (39 s). La entera de 2 trozos de ese día
-    // (run 39153669213) tardó 25,6 y 18,7 min en sus pruebas: 44,3 min, unos 11,1 por
-    // trozo de 4; el reparto estimado da 11,7. El techo pasa a 12 min, con esa medida.
-    // 19/10 (P01): entran p01/despacho, i01c/csv e i01c/justificantes, sin tiempo
-    // medido aún (cuentan como la mediana). La entera de 2 trozos de la rama del P01
-    // (run 39256234205, db689e8f) tardó 30,1 y 25,7 min en sus pruebas: 55,8 min, unos
-    // 13,9 por trozo de 4; el reparto estimado da 12,2. El techo pasa a 13 min, con esa medida.
-    // 20/10 (S01f): medidos ya p01/despacho, i01c/csv, i01c/justificantes y s01e/capturas
-    // (este, 329 s: contaba como la mediana), y entra s01f/pestanas. La entera de 2 trozos
-    // del P01 (run 39385193238, 5fd026cf) tardó 26,5 y 28,5 min en sus pruebas: 55,0 min,
-    // unos 13,75 por trozo de 4; el reparto estimado da 14,0. El techo pasa a 14,5 min, con esa medida.
-    // 20/10 (I01b): medidos ya s01f/pestanas (82 s) y s01g/ancho (51 s), que contaban
-    // como la mediana, y entran i01b/plazo, i01d/proveedor-extranjero e i01e/ficha-libro.
-    // La entera de 2 trozos del S01g (run 39459913673, 74e061c1) tardó 31,3 y 25,9 min
-    // en sus pruebas: 57,2 min, unos 14,3 por trozo de 4; el reparto estimado da 14,9.
-    // El techo pasa a 15,5 min, con esa medida.
-    // 21/10 (I01g): entra i01g/retenciones (25,0 s, medido en la e2e 729 y otra vez 24,9 en la entera).
-    // La entera de 2 trozos de la rama del I01g (run 39522151356, 62b2d7e9) tardó 32,1 y 29,0 min en sus
-    // pruebas: 61,1 min, unos 15,3 por trozo de 4. Con los tiempos del I01b y del I01g juntos, el reparto estimado
-    // da 15,1 (21/10, al traer main). Un solo techo: 15,5 min.
-    // 21/10 (autoconteo): entran medidos i01h/sociedades (26,5 s) e inventario/autoconteo (55,9 s,
-    // e2e 761). El reparto estimado da 15,6: el techo pasa a 16 min. Lo mide la entera de la tanda.
-    // 22/10 (C07): entran medidos i01h/en-vivo (20,6 s, del #281) y c06/diezTodo (85,0 s, e2e
-    // 39735848930). El reparto estimado da 16,04: el techo pasa a 16,5 min. Lo mide la entera de la tanda.
-    // 23/10 (D06): entra d01/validar-en-bloque, sin medir (cuenta como la mediana). El reparto
-    // estimado da 16,65: el techo pasa a 17 min. Lo mide la entera de su PR.
-    // 24/10 (N1): d01/validar-en-bloque medido (130,2 s en la e2e 39980636692; contaba como la
-    // mediana) y d01/plataforma (6,8 s); entra d01/nif-de-la-ficha, sin medir. El reparto estimado
-    // da 17,25: el techo pasa a 17,5 min. Lo mide la entera de la noche.
-    // 24/10 (N5, al traer main): entra n5/anchos-compras, sin medir (cuenta como la mediana).
-    // 24/10 (V01): entra v01/facturas, sin medir (cuenta como la mediana). El reparto estimado
-    // da 17,56: el techo pasa a 18 min. Lo mide la entera de su PR.
-    // 24/10 (C12, al traer main): entra c12/traspaso, sin medir (cuenta como la mediana). Lo mide la entera de la noche.
-    // 25/10 (PC01 · E1): entra pc01/cobros-y-pagos, sin medir (cuenta como la mediana). El reparto
-    // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de la noche.
-    // 25/10 (V02, entrega 1): entra v02/puerta, sin medir (cuenta como la mediana). El reparto
-    // estimado da 18,12: el techo pasa a 18,5 min. Lo mide la entera de su PR.
-    // 25/10 (PC01 · E1, al traer main con la V02): las dos juntas, pc01/cobros-y-pagos y v02/puerta,
-    // sin medir. El reparto estimado da 18,30 (media 18,27): el techo se queda en 18,5 min. Lo mide la entera de la noche.
-    // 26/10 (la cola de staging): entra conta/humo/pantallas, la rápida de lo común, medida: 67,3 s
-    // (e2e 40328678034). El reparto estimado da 18,81: el techo pasa a 19 min. Lo mide la entera de la noche.
-    // 26/10 (PC01 · E2, al traer main con la cola de staging): las dos juntas, conta/humo/pantallas medida y
-    // pc01/pagos sin medir (cuenta como la mediana). Contadas las dos: el reparto estimado da 18,98 (media 18,96): el
-    // techo se queda en 19 min. Lo mide la entera de la noche.
-    // 26/10 (V03 · E3, al traer main con la PC01 · E2): entra v03/corregir-y-cuadrar, sin medir (cuenta como la
-    // mediana). El reparto estimado da 19,14: el techo pasa a 19,5 min. Lo mide la entera de la noche.
-    expect(Math.max(...seg) / 60).toBeLessThan(19.5)
+  })
+
+  // El techo, con dos guardas que no se tocan al añadir una e2e:
+  //   1. Lo MEDIDO, en 4 trozos, bajo su techo (`_techo_4_trozos_min` de
+  //      tiempos.json, al lado de lo medido: cambia solo cuando cambia lo medido,
+  //      en el mismo commit). Es la alarma de siempre de que la suite crece.
+  //   2. TODO, con lo nuevo como la mediana, en los trozos que usa de verdad la
+  //      entera (`TROZOS_PEDIDOS:-N` del workflow) y en 4: el trozo más largo,
+  //      como mucho la mitad del `timeout-minutes` del job del trozo. La otra
+  //      mitad es la preparación y las esperas, según el propio workflow.
+  it('lo medido, en 4 trozos, no pasa de su techo (el de tiempos.json)', () => {
+    const techo = TIEMPOS._techo_4_trozos_min
+    expect(typeof techo).toBe('number')
+    const medidos = TODOS.filter((f) => typeof TIEMPOS[f] === 'number')
+    const seg = repartir(medidos, 4, TIEMPOS).map((t) => t.segundos)
+    expect(Math.max(...seg) / 60).toBeLessThan(techo)
+  })
+
+  it('con lo nuevo dentro, ningún trozo pasa de la mitad del límite de su job', () => {
+    const wf = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
+    const job = wf.slice(wf.indexOf('\n  trozo:'), wf.indexOf('\n  entera:'))
+    const limite = Number(/timeout-minutes: (\d+)/.exec(job)?.[1])
+    const porDefecto = Number(/N=\$\{TROZOS_PEDIDOS:-(\d)\}/.exec(wf)?.[1])
+    expect(limite).toBeGreaterThan(0)
+    expect(porDefecto).toBeGreaterThan(0)
+    for (const n of new Set([porDefecto, 4])) {
+      const seg = repartir(TODOS, n, TIEMPOS).map((t) => t.segundos)
+      expect(Math.max(...seg) / 60, `${n} trozos`).toBeLessThanOrEqual(limite / 2)
+    }
   })
 
   it('es determinista: cada trozo lo calcula por su cuenta y sale el mismo reparto', () => {
