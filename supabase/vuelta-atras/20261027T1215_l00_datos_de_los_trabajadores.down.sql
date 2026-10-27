@@ -9,9 +9,10 @@
 -- Si salta sola (la comprobación de después falla), HAY QUE VOLVER A CERRAR el
 -- almacén a mano en cuanto se sepa por qué ha saltado: es la fuga de antes.
 --
--- Lo único que NO devuelve: la auditoría sigue admitiendo la acción «create».
--- Quitarla del CHECK obligaría a borrar el rastro de las altas que se hayan
--- apuntado mientras tanto, y el rastro del registro de jornada no se borra.
+-- La auditoría: el CHECK vuelve a ser el de antes SOLO si nadie ha dejado aún
+-- una acción «create». Si ya hay alguna, se queda admitiéndola: quitarla
+-- obligaría a borrar el rastro de esas altas, y el rastro del registro de
+-- jornada no se borra. (En el ensayo no hay ninguna: vuelve byte a byte.)
 
 -- Lo pendiente de esta transacción (el alta en la auditoría y la clave de
 -- employee_kiosk_pin son diferidos), antes de quitar lo que lo dispara: con
@@ -21,11 +22,18 @@ set constraints all immediate;
 -- 6 · employee_clock_status, la de antes, byte a byte (del respaldo).
 select public._restaurar_funcion('public.employee_clock_status(uuid)', '20261027T1215_l00_datos_de_los_trabajadores');
 
--- 7 · Los permisos de antes de las cuatro funciones sin guarda.
-grant execute on function public.migrate_locations_and_staff(uuid, uuid, boolean) to authenticated;
-grant execute on function public.location_labor_cost(uuid, timestamptz, timestamptz) to authenticated;
-grant execute on function public.location_economics(uuid, timestamptz, timestamptz) to authenticated;
-grant execute on function public.close_month_balance(uuid, text, date, date) to authenticated;
+-- 7 · Los permisos de antes de las cuatro funciones sin guarda, en su orden:
+-- {postgres, authenticated, service_role}. Dar authenticated sin más lo pone
+-- detrás de service_role y la huella de permisos ya no es la de antes (ensayo
+-- #645): se quita service_role, se da authenticated y se vuelve a dar.
+revoke execute on function public.migrate_locations_and_staff(uuid, uuid, boolean) from service_role;
+revoke execute on function public.location_labor_cost(uuid, timestamptz, timestamptz) from service_role;
+revoke execute on function public.location_economics(uuid, timestamptz, timestamptz) from service_role;
+revoke execute on function public.close_month_balance(uuid, text, date, date) from service_role;
+grant execute on function public.migrate_locations_and_staff(uuid, uuid, boolean) to authenticated, service_role;
+grant execute on function public.location_labor_cost(uuid, timestamptz, timestamptz) to authenticated, service_role;
+grant execute on function public.location_economics(uuid, timestamptz, timestamptz) to authenticated, service_role;
+grant execute on function public.close_month_balance(uuid, text, date, date) to authenticated, service_role;
 
 -- 5 · El PIN, de vuelta a employees (primero se quita el disparador que lo vacía).
 drop trigger if exists trg_employee_pin_guardar on public.employees;
@@ -38,6 +46,18 @@ drop table if exists public.employee_kiosk_pin;
 -- 4 · Fichar: fuera los dos disparadores.
 drop trigger if exists clock_entry_audit_alta on public.clock_entries;
 drop function if exists public._clock_entry_audit_alta();
+
+-- El CHECK de la auditoría, el de antes, si no hay ninguna acción «create».
+do $$
+begin
+  if exists (select 1 from public.clock_entry_audit where action = 'create') then
+    raise notice 'vuelta atrás 1215: hay altas con «create» en la auditoría; el CHECK sigue admitiéndola (el rastro no se borra).';
+  else
+    alter table public.clock_entry_audit drop constraint clock_entry_audit_action_check;
+    alter table public.clock_entry_audit add constraint clock_entry_audit_action_check
+      check (action = any (array['create_manual'::text, 'edit'::text, 'void'::text, 'restore'::text, 'request'::text, 'approve'::text, 'reject'::text]));
+  end if;
+end $$;
 drop trigger if exists trg_clock_a_quien_y_hora on public.clock_entries;
 drop function if exists public._clock_entry_quien_y_hora();
 

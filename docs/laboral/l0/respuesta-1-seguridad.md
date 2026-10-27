@@ -130,8 +130,9 @@ staging, que corre sin la tanda puesta, sale igual.
 
 **La vuelta atrás** devuelve todo a como estaba, también lo malo: el almacén
 público y el PIN en la ficha. Si saltara sola, hay que volver a cerrar el
-almacén a mano. Lo único que no devuelve es la acción `create` del CHECK de la
-auditoría, porque quitarla obligaría a borrar rastro.
+almacén a mano. El CHECK de la auditoría vuelve al de antes solo si aún no hay
+ninguna acción `create`; si ya la hay, se queda admitiéndola, porque quitarla
+obligaría a borrar rastro.
 
 ## Lo que he visto y no entra (para el siguiente encargo)
 
