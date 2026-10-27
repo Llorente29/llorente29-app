@@ -37,15 +37,23 @@
 # workflow sale de la variable del repositorio E2E_CARRILES (vacía = 2): si
 # staging pasa a Small, se pone a 4 allí, sin tocar el código.
 #
-# CÓMO SE CIERRA SIN TABLAS NI CADUCIDADES. Dos cerrojos consultivos de
-# Postgres, cada uno en un psql en segundo plano (un «guardián»):
-#   · (4203, N) exclusivo, todo el job: el carril N es de este job y de nadie más.
-#   · (4202, 0) la BARRERA: COMPARTIDO por cada fichero de pruebas mientras
-#     corre (y por el clon), EXCLUSIVO por quien migra. Postgres pone en cola a
-#     un fichero nuevo si hay alguien esperando para migrar: no se cuela nadie,
-#     y quien migra entra en cuanto acaban los ficheros en marcha.
-# Si el runner muere, se cae la conexión y Postgres los suelta solo. Si el
-# psql se cuelga, el job tiene su timeout y al acabar mata los procesos.
+# CÓMO SE CIERRA.
+#   · El CARRIL: (4203, N), un cerrojo consultivo exclusivo, todo el job, en un
+#     psql en segundo plano (un «guardián»): el carril N es de este job y de nadie más.
+#   · La BARRERA (Respuesta 4 al V04, 27/10): una RESERVA con latido en
+#     e2e_carril.barrera (scripts/e2e/carril/barrera.sql), no un cerrojo sujeto
+#     por una conexión. «lee» la reserva cada fichero de pruebas mientras corre
+#     (y el clon, y el borrado); «migra», quien aplica a staging. Un «lee» nuevo
+#     no entra si alguien quiere migrar: no se cuela nadie, y quien migra entra
+#     en cuanto acaban los ficheros en marcha.
+#     Cada reserva late cada CARRIL_LATIDO_S (15 s) desde un proceso aparte. Si
+#     ese proceso muere (el runner, el job, un kill), deja de latir y la
+#     reserva caduca sola a los CARRIL_CADUCA_S (60 s): el siguiente entra en
+#     menos de 2 minutos. Y quien espera ve siempre quién la tiene, con su latido.
+#     Por qué no el cerrojo (4202, 0) de antes: con el pooler de Supabase, la
+#     sesión que lo sujetaba podía seguir viva en el servidor con el cliente
+#     muerto, o morir sin decir nada; la noche del 27/10 (entera 969) dos
+#     ficheros se quedaron sin barrera y el que esperaba leía «La tienen: nadie».
 #
 # LA COLA (V03, respuesta 6, 26/10). Hasta hoy la e2e cogía (4202,0) para TODO
 # el job: una entera de hora y media dejaba a la aplicación esperando 40 min y
@@ -77,6 +85,8 @@ CARRIL_DIR=${CARRIL_DIR:-${RUNNER_TEMP:-/tmp}/carril}
 ESPERA_MIN=${CARRIL_ESPERA_MIN:-15}
 BARRERA_MIN=${CARRIL_BARRERA_MIN:-20}
 MIGRAR_MIN=${CARRIL_MIGRAR_MIN:-15}
+CADUCA_S=${CARRIL_CADUCA_S:-60}
+LATIDO_S=${CARRIL_LATIDO_S:-15}
 MAX=${CARRIL_MAX:-2}
 VIEJO=${CARRIL_CERROJO_VIEJO:-1}
 : "${DB_URL:?Falta DB_URL}"
@@ -125,10 +135,69 @@ esperar_linea() {
 
 # Quién tiene (o espera) el cerrojo de migrar: para decir a quién se espera.
 quien_hay() {
-  q -A -t -c "select string_agg(distinct a.application_name || case when l.granted then '' else ' (esperando)' end
-                                || ' · ' || l.mode, ' | ')
-                from pg_locks l join pg_stat_activity a on a.pid = l.pid
-               where l.locktype = 'advisory' and l.classid = 4202 and l.objid = 0" 2>/dev/null || true
+  reserva quien '' '' '' 2>/dev/null | sed -n 's/^hay //p' | sed 's/^nadie$//' || true
+}
+
+# ── La barrera: reservas con latido (barrera.sql) ───────────────────────────
+# Una llamada corta a barrera.sql: op id quien modo. Escribe lo que dice
+# («estado dentro|espera» y «hay …»). Reintenta un fallo de conexión.
+reserva() {
+  local i out
+  for i in 1 2 3; do
+    if out=$(q -A -t -v op="$1" -v id="$2" -v quien="$3" -v modo="$4" -v caduca="$CADUCA_S" -f "$SQL/barrera.sql" 2>&1); then
+      printf '%s\n' "$out"; return 0
+    fi
+    [ "$i" -lt 3 ] && sleep "$i"
+  done
+  printf '%s\n' "$out" >&2; return 1
+}
+
+# reservar <nombre> <lee|migra> <quién> <minutos>: espera su turno (como mucho
+# <minutos>) y, dentro, deja latiendo su reserva. Escribe en
+# $CARRIL_DIR/<nombre>.espera los segundos que ha esperado.
+reservar() {
+  local nombre=$1 modo=$2 quien=$3 min=$4 id t0 out fallos=0 ultimo=''
+  soltar_reserva "$nombre"
+  id=$(cat /proc/sys/kernel/random/uuid)
+  echo "$id" > "$CARRIL_DIR/$nombre.reserva"
+  t0=$(date +%s)
+  while :; do
+    if out=$(reserva entrar "$id" "$quien" "$modo"); then
+      fallos=0
+      ultimo=$(printf '%s\n' "$out" | sed -n 's/^hay //p')
+      printf '%s\n' "$out" | grep -q '^estado dentro' && break
+    else
+      fallos=$((fallos + 1))
+      [ "$fallos" -ge 5 ] && { echo "::error::No se puede hablar con staging para la barrera (5 veces seguidas)." >&2; echo $(( $(date +%s) - t0 )) > "$CARRIL_DIR/$nombre.espera"; rm -f "$CARRIL_DIR/$nombre.reserva"; return 1; }
+    fi
+    if [ $(( $(date +%s) - t0 )) -ge $(( min * 60 )) ]; then
+      echo $(( $(date +%s) - t0 )) > "$CARRIL_DIR/$nombre.espera"
+      reserva salir "$id" '' '' > /dev/null 2>&1 || true
+      rm -f "$CARRIL_DIR/$nombre.reserva"
+      echo "${ultimo:-nadie}" > "$CARRIL_DIR/$nombre.quien"
+      return 1
+    fi
+    sleep 2
+  done
+  echo $(( $(date +%s) - t0 )) > "$CARRIL_DIR/$nombre.espera"
+  # El latido, aparte: si este proceso muere, la reserva caduca sola.
+  ( trap 'exit 0' TERM; while sleep "$LATIDO_S"; do reserva latir "$id" '' '' > /dev/null 2>&1 || true; done ) > /dev/null 2>&1 < /dev/null &
+  echo $! > "$CARRIL_DIR/$nombre.latido"
+  disown $! 2>/dev/null || true
+}
+
+# soltar_reserva <nombre>: para el latido y quita la reserva (si se puede; si
+# no, caduca sola).
+soltar_reserva() {
+  local nombre=$1 id lpid
+  if [ -s "$CARRIL_DIR/$nombre.latido" ]; then
+    lpid=$(cat "$CARRIL_DIR/$nombre.latido"); kill "$lpid" 2>/dev/null || true; rm -f "$CARRIL_DIR/$nombre.latido"
+  fi
+  [ -s "$CARRIL_DIR/$nombre.reserva" ] || return 0
+  id=$(cat "$CARRIL_DIR/$nombre.reserva")
+  reserva salir "$id" '' '' > /dev/null 2>&1 \
+    || echo "::warning::No he podido quitar la reserva «$nombre» de la barrera: caduca sola en ${CADUCA_S} s."
+  rm -f "$CARRIL_DIR/$nombre.reserva"
 }
 
 # Quién tiene los carriles: para decir a quién se espera.
@@ -176,19 +245,15 @@ coger() {
 # $CARRIL_DIR/barrera.espera los segundos que ha esperado.
 barrera_yo() { echo "e2e-barrera ${CARRIL_YO:-?}${BARRERA_QUE:+ · $BARRERA_QUE}"; }
 barrera_entrar() {
-  matar_guardian barrera
-  guardian barrera "$(barrera_yo)" barrera "$BARRERA_MIN"
-  local t0 otros; t0=$(date +%s)
-  esperar_linea 'dentro' barrera > /dev/null || {
-    otros=$(quien_hay)
-    echo "::error::Sin la barrera en ${BARRERA_MIN} min: se está aplicando algo a staging. La tienen: ${otros:-nadie}"
-    matar_guardian barrera; return 1
+  reservar barrera lee "$(barrera_yo)" "$BARRERA_MIN" || {
+    local e; e=$(cat "$CARRIL_DIR/barrera.espera" 2>/dev/null || echo '?')
+    echo "::error::Sin la barrera tras ${e} s: se está aplicando algo a staging. La tienen: $(cat "$CARRIL_DIR/barrera.quien" 2>/dev/null || quien_hay)"
+    return 1
   }
-  local e=$(( $(date +%s) - t0 ))
-  echo "$e" > "$CARRIL_DIR/barrera.espera"
+  local e; e=$(cat "$CARRIL_DIR/barrera.espera")
   if [ "$e" -ge 5 ]; then echo "Barrera cogida tras $e s: se estaba aplicando algo a staging."; fi
 }
-barrera_salir() { matar_guardian barrera; }
+barrera_salir() { soltar_reserva barrera; }
 
 # Los parámetros, en un fichero: psql sustituye :'variable' en lo que lee de
 # un fichero, no en -c. La clave y la semilla no salen nunca por pantalla.
@@ -254,22 +319,21 @@ soltar() {
       echo "::warning::Sin la barrera no se borra el carril $(cat "$CARRIL_DIR/numero"): lo borra el próximo que lo coja."
     fi
   fi
-  matar_guardian barrera
+  soltar_reserva barrera
   matar_guardian
   rm -f "$CARRIL_DIR/numero"
   echo "Carril soltado."
 }
 
 migrar_coger() {
-  guardian migrar "e2e-migrar ${CARRIL_YO:-?}" guardian "$MIGRAR_MIN"
-  local t0; t0=$(date +%s)
   local otros; otros=$(quien_hay)
   [ -n "$otros" ] && echo "Esperando a que acaben: $otros"
-  esperar_linea 'migrar-cogido' > /dev/null || { echo "::error::Sin el cerrojo de migrar en ${MIGRAR_MIN} min. Lo tienen: $(quien_hay)"; matar_guardian; exit 1; }
-  echo "::notice title=Espera de la aplicación::Cerrojo de migrar cogido tras $(( $(date +%s) - t0 )) s: ningún fichero de prueba está corriendo en staging."
+  reservar migrar migra "e2e-migrar ${CARRIL_YO:-?}" "$MIGRAR_MIN" || {
+    echo "::error::Sin el cerrojo de migrar en ${MIGRAR_MIN} min. Lo tienen: $(cat "$CARRIL_DIR/migrar.quien" 2>/dev/null || quien_hay)"; exit 1; }
+  echo "::notice title=Espera de la aplicación::Cerrojo de migrar cogido tras $(cat "$CARRIL_DIR/migrar.espera") s: ningún fichero de prueba está corriendo en staging."
 }
 
-migrar_soltar() { matar_guardian; echo "Cerrojo de migrar soltado."; }
+migrar_soltar() { soltar_reserva migrar; echo "Cerrojo de migrar soltado."; }
 
 ensayo() {
   local n=${1:-4001} t0; t0=$(date +%s%N)
