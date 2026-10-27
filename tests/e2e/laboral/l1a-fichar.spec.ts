@@ -32,13 +32,31 @@ async function captura(page: Page, nombre: string) {
   await test.info().attach(fichero, { body: png, contentType: 'image/png' })
 }
 
+// Los botones de la portada, por su nombre. Con una expresión sobre el TEXTO,
+// «Fichar salida» no casaba: el botón lleva el icono y un espacio delante
+// (e2e #995, con la jornada abierta). Sin «\b» al final: el nombre de «Fichar
+// entrada» sale pegado a su subtítulo. La pantalla de fichar dice «FICHAR …» en
+// mayúsculas y la barra de abajo, «Fichar» solo: ninguno casa.
+const botonDeLaPortada = (page: Page, tipo: 'entrada' | 'salida' | 'cualquiera') =>
+  page.getByRole('button', { name: tipo === 'cualquiera' ? /^Fichar (entrada|salida)/ : new RegExp(`^Fichar ${tipo}`) })
+
+/** Lo que enseña la pantalla, para que un fallo lo diga. */
+async function loQueSeVe(page: Page): Promise<string> {
+  const texto = await page.locator('body').innerText({ timeout: 2_000 }).catch(() => '')
+  return texto.replace(/\s+/g, ' ').trim().slice(0, 400) || '(la página está vacía)'
+}
+
 async function alInicio(page: Page) {
   await page.goto('/')
-  await expect(page.getByText(/^Fichar (entrada|salida)$/).first()).toBeVisible({ timeout: 30_000 })
+  try {
+    await expect(botonDeLaPortada(page, 'cualquiera')).toBeVisible({ timeout: 30_000 })
+  } catch {
+    throw new Error(`La portada del trabajador no enseña «Fichar entrada» ni «Fichar salida». En ${page.url()} se ve: ${await loQueSeVe(page)}`)
+  }
 }
 
 async function jornadaAbierta(page: Page): Promise<boolean> {
-  return page.getByText('Fichar salida', { exact: true }).first().isVisible()
+  return botonDeLaPortada(page, 'salida').isVisible()
 }
 
 /**
@@ -56,7 +74,7 @@ async function botonActivo(page: Page, boton: ReturnType<Page['getByRole']>) {
 
 /** Pulsa fichar y pasa los avisos que salgan (fuera de zona, anticipado, contexto). */
 async function fichar(page: Page) {
-  await page.getByText(/^Fichar (entrada|salida)$/).first().click()
+  await botonDeLaPortada(page, 'cualquiera').click()
   const boton = page.getByRole('button', { name: /FICHAR (ENTRADA|SALIDA)/ })
   await botonActivo(page, boton)
   await boton.click()
@@ -94,7 +112,7 @@ test('el trabajador ficha entrada y salida desde su portal, y ve lo que se guard
 
   await test.step('salida sin red: se queda en el móvil y lo dice', async () => {
     await alInicio(page)
-    await page.getByText('Fichar salida', { exact: true }).first().click()
+    await botonDeLaPortada(page, 'salida').click()
     const boton = page.getByRole('button', { name: /FICHAR SALIDA/ })
     await botonActivo(page, boton)
     await context.setOffline(true)
@@ -129,7 +147,7 @@ test('el trabajador ficha entrada y salida desde su portal, y ve lo que se guard
       await captura(page, '4-salida-hecha')
       await alInicio(page)
     }
-    await expect(page.getByText('Fichar entrada', { exact: true }).first()).toBeVisible()
+    await expect(botonDeLaPortada(page, 'entrada')).toBeVisible()
   })
 
   expect(errores, 'errores de la página al fichar').toEqual([])
