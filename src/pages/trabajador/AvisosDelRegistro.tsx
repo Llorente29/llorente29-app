@@ -18,7 +18,7 @@ import {
 } from '@/modules/personal/laboral/registroJornadaServicio'
 import { armarInforme, mesYAnio, type InformeJornada } from '@/modules/personal/laboral/informeJornada'
 import { diaMadrid, fechaYHora, horaMadrid } from '@/modules/personal/laboral/calculoJornada'
-import { RAIZ_LABORAL } from '@/modules/personal/laboral/estilo'
+import { PIEZA_LABORAL } from '@/modules/personal/laboral/estilo'
 
 const TIPO: Record<string, string> = { entrada: 'entrada', salida: 'salida', pausa_inicio: 'pausa', pausa_fin: 'vuelta de la pausa' }
 const diaMes = (iso: string) => { const d = diaMadrid(iso); return `${d.slice(8, 10)}/${d.slice(5, 7)}` }
@@ -177,7 +177,7 @@ export default function AvisosDelRegistro({ employee }: { employee: Employee }) 
   }, [employee.id])
 
   return (
-    <div className={`${RAIZ_LABORAL} l-portal px-4 pt-3 max-w-md mx-auto`}>
+    <div className={`${PIEZA_LABORAL} l-portal px-4 pt-3 max-w-md mx-auto`}>
       {correcciones.map(c => <TarjetaCorreccion key={c.id} c={c} />)}
       <TarjetaFirma employee={employee} />
     </div>

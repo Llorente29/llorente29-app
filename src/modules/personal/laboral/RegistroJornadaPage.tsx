@@ -16,14 +16,16 @@ import { armarInforme, hojaDeCalculo, periodoDelMes, textoPeriodo, type DatosInf
 import { diaMadrid, fechaYHora } from './calculoJornada'
 import { descargar, nombreDeFichero, pdfDelInforme } from './informePdf'
 import { crearEnlace, leerInforme, retirarEnlace, type EnlaceInspeccion } from './registroJornadaServicio'
+import { ordenarPersonas, personaPorDefecto } from './personas'
 import { RAIZ_LABORAL } from './estilo'
 
 export default function RegistroJornadaPage() {
   const { staff, userProfile } = useApp()
   const [params, setParams] = useSearchParams()
   const hoy = diaMadrid(new Date().toISOString())
-  const personas = [...staff].sort((a, b) => a.name.localeCompare(b.name, 'es'))
-  const persona = params.get('persona') ?? personas[0]?.id ?? ''
+  // W08: las activas primero y las de baja al final; abre con la primera activa.
+  const personas = ordenarPersonas(staff)
+  const persona = params.get('persona') ?? personaPorDefecto(personas)
   const mes = params.get('mes') ?? hoy.slice(0, 7)
   const { desde, hasta } = periodoDelMes(mes, hoy)
   const esAdmin = userProfile?.role === 'admin'

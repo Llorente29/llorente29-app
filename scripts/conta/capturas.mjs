@@ -23,11 +23,14 @@
 //   node scripts/conta/capturas.mjs fijar <rama>           → git add de las del frente
 //   node scripts/conta/capturas.mjs recoger <marca> <dir>  → copia las de este run
 //   node scripts/conta/capturas.mjs comprobar [rama]       → sale con 1 si hay de otro
+//   node scripts/conta/capturas.mjs revisar <rama> <base> <head>
+//       → lo mismo, para un PR (pr-a-main.yml), sobre base...head: nombra cada
+//         PNG que no es del frente de la rama (W08, 28/10).
 
 import { execFileSync } from 'node:child_process'
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { zonasTocadas } from '../e2e/area.mjs'
+import { zonasDuenas } from '../e2e/area.mjs'
 
 export const CARPETAS = ['docs/conta/capturas', 'docs/reparto/capturas', 'docs/inventario/capturas', 'docs/marcas/capturas']
 
@@ -72,9 +75,12 @@ export const DE_QUIEN = {
 
 /**
  * El dueño de las capturas de una rama: el de su nombre y, si el nombre no es de
- * nadie, la zona por fichero que toca contra main (scripts/e2e/area.mjs,
- * ZONAS_POR_FICHERO), si toca una sola con capturas. Así una rama sin frente que
- * toca inventario fija las de docs/inventario/capturas y ninguna más.
+ * nadie, la zona de la que ES lo que cambia contra main (scripts/e2e/area.mjs,
+ * ZONAS_POR_FICHERO, su lista `duenos`), si es de una sola con capturas. Así una
+ * rama sin frente que cambia inventario fija las de docs/inventario/capturas y
+ * ninguna más; y una que solo toca a un vecino de la zona (el portal del
+ * trabajador) no fija ninguna (W08, 28/10). Las capturas que cambia la propia
+ * rama no cuentan para decidirlo.
  */
 export function duenoDeLaRama(rama, cambiados = []) {
   if (/^reparto-/.test(rama)) return 'reparto'
@@ -83,8 +89,23 @@ export function duenoDeLaRama(rama, cambiados = []) {
   if (/^conta\/compras/.test(rama)) return 'compras'
   const frente = frenteDeLaRama(rama)
   if (frente) return frente
-  const zonas = zonasTocadas(cambiados).filter((z) => z.zona in DE_QUIEN)
+  const zonas = zonasDuenas(cambiados.filter((f) => !esCaptura(f))).filter((z) => z.zona in DE_QUIEN)
   return zonas.length === 1 ? zonas[0].zona : null
+}
+
+/** Si una ruta es de una de las carpetas de capturas. */
+export function esCaptura(ruta) {
+  return CARPETAS.some((c) => ruta.startsWith(`${c}/`))
+}
+
+/**
+ * Las capturas que cambia una rama y no son de su dueño (W08): las que chocan
+ * con main. De lo cambiado contra main saca el dueño y devuelve, fichero a
+ * fichero, las de otro.
+ */
+export function capturasAjenas(rama, cambiados) {
+  const dueno = duenoDeLaRama(rama, cambiados)
+  return { dueno, ajenas: repartir(cambiados.filter(esCaptura), dueno).ajenas }
 }
 
 /** Reparte rutas de capturas entre las del dueño y las de otros. */
@@ -161,15 +182,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     for (const r of estas) { mkdirSync(dirname(join(destino, r)), { recursive: true }); copyFileSync(r, join(destino, r)) }
     console.log(`${estas.length} capturas de este run${estas.length ? ` (${carpetasDe(estas).join(', ')})` : ''}.`)
     if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `n=${estas.length}\n`)
-  } else if (orden === 'comprobar') {
+  } else if (orden === 'comprobar' || orden === 'revisar') {
+    // comprobar [rama]: antes de subir, contra origin/main. revisar <rama> <base> <head>:
+    // en pr-a-main.yml, sobre el diff del PR (también cuando el último commit es del bot).
     const rama = args[0] ?? ramaActual()
-    const dueno = duenoDeLaRama(rama, cambiadosContraMain())
-    const enLaRama = git('diff', '--name-only', 'origin/main...HEAD', '--', ...CARPETAS).split('\n').filter(Boolean)
-    const { ajenas } = repartir(enLaRama, dueno)
+    const cambiados = orden === 'revisar'
+      ? git('diff', '--name-only', `${args[1]}...${args[2]}`).split('\n').filter(Boolean)
+      : cambiadosContraMain()
+    const { dueno, ajenas } = capturasAjenas(rama, cambiados)
+    const enLaRama = cambiados.filter(esCaptura)
     if (ajenas.length) {
-      const cs = carpetasDe(ajenas)
-      console.error(`✗ La rama «${rama}» trae ${ajenas.length} capturas que no son de su frente (${cs.join(', ')}): son las que chocan entre PRs.`)
-      console.error(`  Devuélvelas a las de main: git checkout origin/main -- ${cs.join(' ')}  (y lo que main no tenga: git rm)`)
+      console.error(`✗ La rama «${rama}» trae ${ajenas.length} capturas que no son de su frente (${dueno ?? 'no es de ninguno'}); son las que chocan con main:`)
+      for (const f of ajenas) console.error(`  · ${f}`)
+      console.error(`  Devuélvelas a las de main: git checkout origin/main -- ${ajenas.join(' ')}  (y lo que main no tenga: git rm)`)
+      if (process.env.GITHUB_ACTIONS) for (const f of ajenas) console.log(`::error file=${f}::Captura que no es del frente de la rama (${dueno ?? 'ninguno'}): vuelve a la de main.`)
       process.exit(1)
     }
     console.log(`Capturas de la rama: ${enLaRama.length}, todas de su frente (${dueno ?? 'ninguno'}).`)
