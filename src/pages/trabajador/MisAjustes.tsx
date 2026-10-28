@@ -3,12 +3,15 @@
 // único ajuste: opt-out del recordatorio de olvido de fichaje de salida
 // (desconexión digital — art. 88 LOPDGDD — es ayuda consentida, con derecho
 // a renuncia).
+// L1a · PR 1 (27/10/2026): y el texto de qué se guarda al fichar, para qué y
+// cuánto tiempo (src/lib/registroDeJornadaTexto.ts).
 
 import { useState } from 'react'
-import { ArrowLeft, BellRing } from 'lucide-react'
+import { ArrowLeft, BellRing, ShieldCheck, ChevronDown } from 'lucide-react'
 import { Card } from '../../components/ui'
 import type { Employee } from '../../types'
 import { setMyReminderPref } from '../../services/employeeSelfService'
+import { APARTADOS_REGISTRO_DE_JORNADA, TITULO_REGISTRO_DE_JORNADA } from '../../lib/registroDeJornadaTexto'
 
 interface Props {
   employee: Employee
@@ -19,6 +22,7 @@ export default function MisAjustes({ employee, onBack }: Props) {
   const [enabled, setEnabled] = useState(employee.forgotClockoutReminder ?? true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [textoAbierto, setTextoAbierto] = useState(false)
 
   async function toggle() {
     const next = !enabled
@@ -83,6 +87,40 @@ export default function MisAjustes({ employee, onBack }: Props) {
             </button>
           </div>
         </Card>
+
+        <div className="mt-3" data-prueba="que-se-guarda">
+        <Card className="p-4">
+          <button
+            type="button"
+            onClick={() => setTextoAbierto(a => !a)}
+            aria-expanded={textoAbierto}
+            className="w-full flex items-start gap-3 text-left"
+          >
+            <div className="w-9 h-9 rounded-full bg-accent-bg flex items-center justify-center shrink-0">
+              <ShieldCheck size={18} className="text-accent" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">{TITULO_REGISTRO_DE_JORNADA}</p>
+              <p className="text-xs text-text-secondary mt-1">
+                La ubicación solo al fichar, tres meses. El registro, cuatro años.
+              </p>
+            </div>
+            <ChevronDown size={18} className={`text-text-secondary shrink-0 mt-2 transition-base ${textoAbierto ? 'rotate-180' : ''}`} />
+          </button>
+          {textoAbierto && (
+            <div className="mt-4 space-y-4 border-t border-border-default pt-4">
+              {APARTADOS_REGISTRO_DE_JORNADA.map(a => (
+                <section key={a.titulo}>
+                  <h3 className="text-sm font-semibold text-text-primary mb-1">{a.titulo}</h3>
+                  {a.parrafos.map((p, i) => (
+                    <p key={i} className="text-sm text-text-secondary mb-1.5">{p}</p>
+                  ))}
+                </section>
+              ))}
+            </div>
+          )}
+        </Card>
+        </div>
       </div>
     </div>
   )

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   LogIn, LogOut, Users, Clock, Activity, Plus, Pencil, Ban, History,
-  Check, X, AlertTriangle, Inbox, Search, CheckCircle2,
+  Check, X, AlertTriangle, Inbox, Search, CheckCircle2, FileText,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
@@ -13,6 +13,8 @@ import {
   type ClockCorrectionRequest, type ClockEntryAudit, type ClockType,
 } from '../services/clockEditService'
 import { etiquetaOrigen } from '../services/fichajeKiosko'
+import { descargarTextoRegistroDeJornada } from '../lib/registroDeJornadaTexto'
+import FueraDelRadioBloque from '../components/personal/FueraDelRadioBloque'
 
 const DEFAULT_RADIUS_M = 200
 
@@ -104,11 +106,24 @@ export default function FichajesGlobalPage() {
           <h1 className="font-display text-2xl text-accent">Control Horario</h1>
           <p className="text-sm text-text-secondary mt-0.5">{liveEntries.length} fichajes en el periodo</p>
         </div>
-        <button onClick={() => setShowAdd(true)}
-          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-medium hover:bg-accent-hover transition-base shrink-0">
-          <Plus size={16} /> Añadir fichaje
-        </button>
+        <div className="flex flex-wrap justify-end gap-2 shrink-0">
+          <button onClick={() => descargarTextoRegistroDeJornada()}
+            data-prueba="descargar-que-se-guarda"
+            title="El texto para el trabajador: qué se guarda al fichar, para qué y cuánto tiempo"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border-default text-text-primary text-sm font-medium hover:bg-accent-bg transition-base">
+            <FileText size={16} /> Qué se guarda
+          </button>
+          <button onClick={() => setShowAdd(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent text-text-on-accent text-sm font-medium hover:bg-accent-hover transition-base">
+            <Plus size={16} /> Añadir fichaje
+          </button>
+        </div>
       </div>
+
+      <FueraDelRadioBloque
+        personas={staff.filter(e => locFilter === 'todas' || e.locationId === locFilter)}
+        locales={locations}
+      />
 
       {requests.length > 0 && (
         <Card className="border-warning/40">

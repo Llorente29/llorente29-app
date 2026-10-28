@@ -1,0 +1,33 @@
+# L1a · PR 1 · Fichar en el servidor, permisos por papel y conservación
+# (27/10/2026). Rama claude/l1a-fichar-en-el-servidor. Se ensaya y se aplica
+# desde esta rama, antes de fusionar.
+#
+#   1. 1905 — fichar() en el servidor (la hora del servidor, o la declarada sin
+#      cobertura; el móvil, solo por ti; la tablet, con PIN; la distancia y si
+#      cae dentro del radio; su rastro «create»); add_manual_clock_entry también
+#      para el encargado de esos locales; las lecturas por papel (el encargado,
+#      las personas de sus locales; nóminas, bandeja y documentos, solo el
+#      administrador y la propia persona; las bajas, «ausente»); el salario, el
+#      DNI y el nacimiento por empleados_datos_privados (solo el administrador);
+#      la conservación (cada noche, 02:37 UTC) y su vigía (07:13 UTC); y el modo
+#      del radio por defecto en «avisar».
+#      · Cambia en caliente cuatro funciones, con respaldo, y once políticas de
+#        lectura. No toca el camino del pedido.
+#      · LA PRIMERA NOCHE la limpieza borra las coordenadas de los fichajes de
+#        más de 3 meses: 425 de Foodint creados antes del 27/07 (medido el 27/10
+#        a las 19:16 UTC), y los que crucen los 3 meses hasta esa noche. Quedan
+#        la distancia y si estaban dentro del radio. No tiene vuelta atrás: es
+#        la decisión 2 de Julio.
+#      · Con el front de antes (hasta que Vercel diga READY), todo sigue igual:
+#        el front de antes no llama a nada nuevo, y lo que cambia solo es lo que
+#        ve un encargado (no hay ninguno en producción).
+#      · El INSERT directo y las columnas privadas de employees NO se quitan
+#        aquí: es el paso 2, primer fichero de la tanda del PR 2.
+#
+# Antes (producción, 27/10 19:16 UTC): las cuatro funciones 5d27e918 ·
+# f291fb28 · 1964b700 · 9bee9822; nada nuevo; modo por defecto 'block'; 425
+# fichajes con coordenadas creados antes del 27/07/2026.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261027T1905_l1a_fichar_en_el_servidor.sql
+cuenta: scripts/conta/produccion/cuentas/l1a-fichar-en-el-servidor.sql

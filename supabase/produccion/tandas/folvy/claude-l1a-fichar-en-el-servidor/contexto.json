@@ -1,0 +1,48 @@
+{
+  "_que": "L1a · PR 1 · contexto de producción de la tanda (1905), medido en SOLO LECTURA el 27/10 a las 19:16 UTC con la consulta del analizador (sql-contexto). Existen las once tablas cuyas lecturas cambia y las cuatro funciones que reemplaza (una firma cada una); lo nuevo no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-27T19:16Z",
+  "tanda": {
+    "supabase/migrations/20261027T1905_l1a_fichar_en_el_servidor.sql": "6e38b6c8dc7126d9c16c5e39b7b925c5"
+  },
+  "contexto": {
+    "tablas": [
+      "public.clock_correction_request",
+      "public.clock_entries",
+      "public.clock_entry_audit",
+      "public.documents",
+      "public.employee_notifications",
+      "public.employees",
+      "public.locations",
+      "public.monthly_balance_closures",
+      "public.payroll_cost",
+      "public.payroll_inbox",
+      "public.vacations"
+    ],
+    "funciones": [
+      "public._clock_entry_quien_y_hora()",
+      "public._documento_trabajador_puede(text,boolean)",
+      "public.add_manual_clock_entry(uuid,text,timestamp with time zone,text,text,boolean)",
+      "public.employee_clock_status(uuid)"
+    ],
+    "filas": {
+      "public.clock_correction_request": 0,
+      "public.clock_entries": 2168,
+      "public.clock_entry_audit": 600,
+      "public.documents": 29,
+      "public.employee_notifications": 99,
+      "public.employees": 22,
+      "public.locations": 8,
+      "public.monthly_balance_closures": 3,
+      "public.payroll_cost": 13,
+      "public.payroll_inbox": 13,
+      "public.vacations": 10
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

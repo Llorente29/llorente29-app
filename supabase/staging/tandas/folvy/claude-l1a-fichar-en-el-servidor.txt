@@ -1,0 +1,12 @@
+# L1a · PR 1 · Fichar en el servidor, permisos por papel y conservación.
+#
+# La 1112, la 1215 y la 1647 de la L00 ya no van aquí: las pasó a staging el
+# #364 (claude-l00-a-staging), y desde main se aplicarían otra vez.
+#
+# La 1905, y su prueba (ROLLBACK), que empieza por su vuelta atrás si ya está
+# aplicada (el patrón de la V04): entra como el trabajador, el encargado, el
+# administrador y otra cuenta; fichar (hora del servidor, sin cobertura, fuera
+# del radio, PIN de la tablet), las lecturas por papel, la conservación y la
+# vuelta atrás.
+supabase/migrations/20261027T1905_l1a_fichar_en_el_servidor.sql
+supabase/staging/sql/20261027_l1a_fichar_en_el_servidor_prueba.sql

@@ -3,6 +3,7 @@
 
 import { supabase } from '../lib/supabase';
 import { createNotificationsForEmployees } from './notificationsService';
+import { leerAusenciasVisibles } from './vacationsService';
 import type {
   ShiftTemplate,
   EmployeeAvailability,
@@ -434,7 +435,6 @@ export async function copyScheduleToWeeks(
   opts?: { skipPublished?: boolean; removeApprovedVacations?: boolean }
 ): Promise<CopyScheduleResult | null> {
   if (!supabase) return null;
-  const sb = supabase;
   const skipPublished = opts?.skipPublished ?? true;
   const removeVac = opts?.removeApprovedVacations ?? true;
 
@@ -459,14 +459,10 @@ export async function copyScheduleToWeeks(
       const sorted = [...targetWeekStarts].sort();
       const rangeStart = sorted[0];
       const rangeEnd = addDaysISO(sorted[sorted.length - 1], 6);
-      const { data: vac } = await sb
-        .from('vacations')
-        .select('employee_id, start_date, end_date')
-        .eq('status', 'aprobada')
-        .in('employee_id', Array.from(empIds))
-        .lte('start_date', rangeEnd)
-        .gte('end_date', rangeStart);
-      for (const v of (vac || []) as Array<{ employee_id: string; start_date: string; end_date: string }>) {
+      // L1a: por ausencias_visibles (una baja del equipo también es ausencia).
+      const { filas } = await leerAusenciasVisibles({ desde: rangeStart, hasta: rangeEnd, employeeIds: Array.from(empIds) });
+      const vac = filas.filter(f => f.status === 'aprobada');
+      for (const v of vac) {
         const arr = vacByEmp.get(v.employee_id) || [];
         arr.push({ start: v.start_date, end: v.end_date });
         vacByEmp.set(v.employee_id, arr);

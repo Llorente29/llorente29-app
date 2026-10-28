@@ -27,6 +27,7 @@
 import { rpcSinTipar } from '@/lib/rpcSinTipar'
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import { diaDelNegocio, lunesDeLaSemana } from '@/lib/fechas'
+import { leerDatosPrivadosDeEmpleados } from '@/services/supabaseSync'
 
 /** Semanas del año, para pasar de coste anual a coste por hora. */
 const SEMANAS_AL_ANO = 52
@@ -81,8 +82,10 @@ export async function leePersonalSobreVentas(
   const lunes = diaDelNegocio(new Date(Date.UTC(y, m - 1, d, 12)))
   const hoy = diaDelNegocio(ahora)
 
+  // L1a (27/10): el salario y el coste de SS no se leen de employees; solo el
+  // administrador los recibe (empleados_datos_privados).
   let qEmp = sb().from('employees')
-    .select('id, name, salary, employer_ss_annual, contracted_hours_week, weekly_hours')
+    .select('id, name, contracted_hours_week, weekly_hours')
     .eq('account_id', accountId).eq('active', true)
   if (locationId) qEmp = qEmp.eq('location_id', locationId)
 
@@ -105,7 +108,16 @@ export async function leePersonalSobreVentas(
   if (emp.error) throw new Error(`No se ha podido leer la plantilla: ${emp.error.message}`)
   if (ventas.error) throw new Error(`No se han podido leer las ventas: ${ventas.error.message}`)
 
-  const plantilla = (emp.data ?? []) as Record<string, unknown>[]
+  const privados = await leerDatosPrivadosDeEmpleados(accountId)
+  const plantillaSinPrivados = (emp.data ?? []) as Record<string, unknown>[]
+  if (plantillaSinPrivados.length > 0 && privados.size === 0) {
+    // No es una cuenta sin salarios: es que quien mira no es el administrador.
+    throw new Error('El coste del personal solo lo ve el administrador.')
+  }
+  const plantilla: Record<string, unknown>[] = plantillaSinPrivados.map(e => {
+    const p = privados.get(String(e.id))
+    return { ...e, salary: p?.salary ?? null, employer_ss_annual: p?.employerSsAnnual ?? null }
+  })
   const ventasEur = ((ventas.data ?? []) as { total: number | null }[])
     .reduce((s, r) => s + (Number(r.total) || 0), 0)
 

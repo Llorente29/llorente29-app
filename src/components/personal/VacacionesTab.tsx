@@ -5,7 +5,7 @@ import { Sun, Wallet, Ban, AlertTriangle, MessageSquare } from 'lucide-react'
 import { Card, Button } from '../ui'
 import type { Employee } from '../../types'
 import type { VacationRequest, VacationStatus, VacationType, VacationSettings } from '../../types/personal'
-import { VACATION_TYPES } from '../../types/personal'
+import { VACATION_TYPES, etiquetaDeAusencia } from '../../types/personal'
 import {
   fetchVacations, reviewVacation, deleteVacation,
   fetchVacationSettings, availableDays, naturalDaysBetween,
@@ -160,7 +160,7 @@ export default function VacacionesTab({ employee }: Props) {
   }
 
   function typeLabel(t: string): string {
-    return VACATION_TYPES.find(x => x.id === t)?.label || t
+    return etiquetaDeAusencia(t)
   }
 
   return (

@@ -7,7 +7,9 @@ import {
 import { useApp } from '../../context/AppContext'
 import { fetchEmployeeClockStatus } from '../../services/teamHoursService'
 import type { EmployeeClockStatus } from '../../services/teamHoursService'
-import { mensajeDeFalloDeFichaje } from '../../services/supabaseSync'
+import { mensajeDeFalloDeFichaje, ClockWriteError } from '../../services/supabaseSync'
+import { puedeFichar } from './puedeFichar'
+import { ultimoFichajeGuardado, guardarFichajePendiente, type FichajeGuardado } from '../../services/fichajeServidor'
 import { Card } from '../../components/ui'
 import type { Employee, Location } from '../../types'
 import {
@@ -36,7 +38,7 @@ interface Props {
 
 export default function FichajeEmpleado({ employee, onBack }: Props) {
   const { locations, addClockEntry, staff } = useApp()
-  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'early-confirm' | 'contexto-confirm' | 'success' | 'error'>('idle')
+  const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'early-confirm' | 'contexto-confirm' | 'success' | 'pendiente' | 'error'>('idle')
   const [position, setPosition] = useState<GeolocationPosition | null>(null)
   const [errorMsg, setErrorMsg] = useState('')
   const [pendingDist, setPendingDist] = useState(0)
@@ -62,6 +64,9 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   // Lo ULTIMO escrito de verdad, para que la pantalla de exito no diga
   // "entrada" cuando se corrigio a salida.
   const [written, setWritten] = useState<null | { type: 'entrada' | 'salida'; datetime: string }>(null)
+  // L1a (27/10): lo que de verdad guardó el servidor (la hora, el local, la
+  // distancia y si cayó dentro del radio), para enseñarlo tal cual.
+  const [guardado, setGuardado] = useState<FichajeGuardado | null>(null)
 
   // Locales donde puede fichar
   const allowedLocations = useMemo(() => {
@@ -236,9 +241,16 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   }, [position, selectedLoc])
 
   const inZone = distance !== null && distance <= radiusForLoc(selectedLoc)
-  const geofenceMode = selectedLoc?.clockGeofenceMode ?? 'block'
-  // En modo 'warn' se puede fichar aunque esté fuera de zona (GPS caprichoso / sin coords).
-  const canClock = !!selectedLoc && (inZone || geofenceMode === 'warn')
+  // L1a (27/10): fuera del radio no bloquea por defecto; se marca y se avisa.
+  const geofenceMode = selectedLoc?.clockGeofenceMode ?? 'warn'
+  // Solo se bloquea cuando se SABE que está fuera y el local está en
+  // «bloquear», como fichar() en la base (puedeFichar.ts). Hasta el 27/10, un
+  // local sin coordenadas en «bloquear» dejaba el botón gris y sin decir nada.
+  const { puede: canClock, porQueNo: porQueNoSePuede, sinMedir } = puedeFichar({
+    local: selectedLoc, locales: allowedLocations.length, distancia: distance,
+    radio: radiusForLoc(selectedLoc), modo: geofenceMode === 'block' ? 'block' : 'warn',
+    hayPosicion: !!position,
+  })
 
   // Margen (min) para avisar de salida anticipada. Independiente del redondeo.
   const EARLY_EXIT_WARN_MIN = 3
@@ -363,6 +375,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     const marcas: string[] = []
     if (mode === 'outside') marcas.push(`Fuera de zona · ${distM}m`)
     else if (mode === 'nogps') marcas.push('Sin ubicación (GPS no disponible)')
+    else if (!coordsForLocation(selectedLoc)) marcas.push('Local sin ubicación puesta: sin distancia')
     if (earlyExitMin != null) marcas.push(`Salida anticipada · ${earlyExitMin} min antes`)
     if (forzarTipo && forzarTipo !== entry.type) {
       marcas.push(`Corregido por el trabajador · la app ofrecía ${entry.type}`)
@@ -380,15 +393,28 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     // Hasta el 30/08 esto era `await addClockEntry(...)` seguido de `setStep('success')`
     // pasara lo que pasara: si la BBDD rechazaba la fila, la pantalla decía
     // "¡Entrada registrada!" igual y el fichaje no existía. Regla 8.
+    const antes = ultimoFichajeGuardado(currentEmp.id)
     try {
       await addClockEntry(currentEmp.id, entry)
     } catch (e) {
+      // L1a (27/10): sin cobertura, el fichaje se hace igual. Se guarda en el
+      // móvil con su hora y se manda solo al volver la red (TrabajadorApp).
+      if (e instanceof ClockWriteError && e.sinRed) {
+        const hora = new Date().toISOString()
+        if (guardarFichajePendiente(currentEmp.id, entry, hora)) {
+          setWritten({ type: entry.type, datetime: hora })
+          setStep('pendiente')
+          return
+        }
+      }
       console.error('[fichaje] escritura rechazada:', e)
       setErrorMsg(mensajeDeFalloDeFichaje(e))
       setStep('error')
       return
     }
-    setWritten({ type: entry.type, datetime: entry.datetime })
+    const ahora = ultimoFichajeGuardado(currentEmp.id)
+    setGuardado(ahora && ahora !== antes ? ahora : null)
+    setWritten({ type: entry.type, datetime: ahora && ahora !== antes ? ahora.datetime : entry.datetime })
     setStep('success')
   }
 
@@ -415,7 +441,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
               <AlertCircle size={48} className="text-danger" />
             </div>
             <p className="font-semibold text-text-primary text-lg">No se puede fichar</p>
-            <p className="text-sm text-text-secondary mt-3">{errorMsg}</p>
+            <p className="text-sm text-text-secondary mt-3" data-prueba="fichaje-error">{errorMsg}</p>
             <div className="flex gap-2 mt-5">
               <button onClick={onBack}
                 className="flex-1 py-3 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
@@ -573,24 +599,56 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   }
 
   if (step === 'success') {
+    const tipo = written?.type ?? nextType
+    const hora = horaCorta(written ? new Date(written.datetime) : new Date())
+    const local = guardado?.local || selectedLoc?.name || ''
+    const turno = tipo === 'entrada' && todayShift ? ` Te toca hasta las ${todayShift.end}.` : ''
     return (
       <div className="min-h-screen bg-page p-4">
-        <div className="max-w-md mx-auto pt-12">
+        <div className="max-w-md mx-auto pt-12 space-y-3">
           <Card className="p-6 text-center">
             <div className="flex justify-center mb-3">
               <CheckCircle2 size={72} className="text-success" />
             </div>
             <p className="font-bold text-2xl text-success">
-              {(written?.type ?? nextType) === 'entrada' ? '¡Entrada registrada!' : '¡Salida registrada!'}
+              {tipo === 'entrada' ? '¡Entrada registrada!' : '¡Salida registrada!'}
             </p>
-            <p className="text-sm text-text-secondary mt-2">
-              {horaCorta(written ? new Date(written.datetime) : new Date())} · {selectedLoc?.name}
+            <p className="text-base text-text-primary mt-2" data-prueba="fichaje-hecho">
+              {tipo === 'entrada' ? 'Entrada' : 'Salida'} {hora} · {local}
+              {guardado?.distanciaM != null ? ` (a ${fmtMetros(guardado.distanciaM)})` : ''}.{turno}
             </p>
-            <button onClick={onBack}
-              className="mt-6 w-full py-3 rounded-xl bg-success text-text-on-accent font-medium hover:opacity-90 transition-base">
-              Volver al inicio
-            </button>
           </Card>
+          {guardado && <LoQueSeGuardo g={guardado} />}
+          <button onClick={onBack}
+            className="w-full py-3 rounded-xl bg-success text-text-on-accent font-medium hover:opacity-90 transition-base">
+            Volver al inicio
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'pendiente') {
+    const tipo = written?.type ?? nextType
+    return (
+      <div className="min-h-screen bg-page p-4">
+        <div className="max-w-md mx-auto pt-12 space-y-3">
+          <Card className="p-6 text-center border-2 border-warning">
+            <div className="flex justify-center mb-3">
+              <Satellite size={56} className="text-warning" />
+            </div>
+            <p className="font-bold text-xl text-text-primary" data-prueba="fichaje-pendiente">Sin conexión: tu {tipo} está guardada en este móvil</p>
+            <p className="text-sm text-text-secondary mt-3">
+              {tipo === 'entrada' ? 'Entrada' : 'Salida'} de las <b>{horaCorta(written ? new Date(written.datetime) : new Date())}</b>
+              {selectedLoc ? <> · {selectedLoc.name}</> : null}. Se enviará sola en cuanto el móvil tenga red, con
+              esta hora. En el registro saldrán las dos horas: la de tu móvil y la de llegada.
+            </p>
+            <p className="text-xs text-text-secondary mt-3">No cierres la sesión ni borres los datos de la app hasta que se envíe.</p>
+          </Card>
+          <button onClick={onBack}
+            className="w-full py-3 rounded-xl bg-accent text-text-on-accent font-medium hover:bg-accent-hover transition-base">
+            Volver al inicio
+          </button>
         </div>
       </div>
     )
@@ -711,9 +769,14 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
           {nextType === 'entrada' ? <><LogIn size={28} /> FICHAR ENTRADA</> : <><LogOut size={28} /> FICHAR SALIDA</>}
         </button>
 
-        {!inZone && selectedLoc && geofenceMode === 'block' && (
-          <p className="text-center text-xs text-warning mt-3 inline-flex items-center justify-center gap-1 w-full">
-            <AlertTriangle size={11} /> Acércate al local para activar el botón
+        {porQueNoSePuede && (
+          <p className="text-center text-sm text-warning mt-3 inline-flex items-center justify-center gap-1 w-full" data-prueba="por-que-no-se-puede">
+            <AlertTriangle size={14} /> {porQueNoSePuede}
+          </p>
+        )}
+        {!porQueNoSePuede && sinMedir && (
+          <p className="text-center text-xs text-text-secondary mt-3 w-full" data-prueba="sin-medir">
+            {sinMedir}: puedes fichar igual y quedará marcado sin la distancia.
           </p>
         )}
       </div>
@@ -725,6 +788,40 @@ function Centered({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen flex items-center justify-center bg-page p-6">
       <div className="text-center">{children}</div>
+    </div>
+  )
+}
+
+function fmtMetros(m: number): string {
+  return m >= 1000 ? `${(m / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 })} km` : `${m} m`
+}
+
+/**
+ * Lo que se guardó de este fichaje, en palabras (L1a, decisión de Julio: «el
+ * trabajador ve lo que se guardó»). La hora es la del servidor; de la
+ * ubicación, la distancia y si cayó dentro del radio.
+ */
+function LoQueSeGuardo({ g }: { g: FichajeGuardado }) {
+  const ubicacion = g.distanciaM == null
+    ? (g.localConCoordenadas
+        ? 'Sin tu ubicación: el móvil no la dio. Queda marcado para que lo revise tu encargado.'
+        : `El local no tiene su ubicación puesta: no se ha podido medir la distancia.`)
+    : g.dentroDelRadio
+      ? `Estabas a ${fmtMetros(g.distanciaM)} del local, dentro del radio (${fmtMetros(g.radioM)}).`
+      : `Estabas a ${fmtMetros(g.distanciaM)} del local, fuera del radio (${fmtMetros(g.radioM)}). Tu encargado lo verá.`
+  return (
+    <div data-prueba="lo-que-se-guardo">
+    <Card className="p-4">
+      <p className="text-xs text-text-secondary uppercase tracking-wide font-semibold mb-2">Lo que se ha guardado</p>
+      <ul className="text-sm text-text-primary space-y-1.5">
+        <li>La hora: <b>{horaCorta(new Date(g.datetime))}</b>, la del servidor{g.datetime !== g.realDatetime ? ` (tocaste a las ${horaCorta(new Date(g.realDatetime))}; se cuenta la de tu turno)` : ''}.</li>
+        <li>El local: <b>{g.local}</b>.</li>
+        <li>{ubicacion}</li>
+      </ul>
+      <p className="text-xs text-text-secondary mt-3">
+        Tu ubicación exacta se borra a los 3 meses; se quedan la distancia y si estabas dentro. El registro se guarda 4 años. Más en Mi portal › Ajustes.
+      </p>
+    </Card>
     </div>
   )
 }

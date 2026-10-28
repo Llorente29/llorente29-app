@@ -15,6 +15,9 @@ export interface DocumentFile {
 }
 
 export type VacationType = 'vacaciones' | 'asuntos_propios' | 'baja_medica' | 'permiso_matrimonio' | 'permiso_fallecimiento' | 'permiso_mudanza' | 'otro'
+  // L1a (27/10): una baja médica, vista por quien no es el administrador ni la
+  // propia persona (ausencias_visibles). Nunca se pide ni se guarda.
+  | 'ausente'
 
 export type VacationStatus = 'solicitada' | 'aprobada' | 'rechazada' | 'cancelada'
 
@@ -71,6 +74,12 @@ export const VACATION_TYPES: { id: VacationType; label: string; descontable: boo
 // apagar desde la configuración. El selector del trabajador y el panel de
 // configuración del gestor comparten esta constante para no desincronizarse.
 export const ALWAYS_AVAILABLE_VACATION_TYPE: VacationType = 'vacaciones'
+
+/** El nombre de un tipo de ausencia para enseñarlo («Ausente» para una baja que no se enseña). */
+export function etiquetaDeAusencia(t: string): string {
+  if (t === 'ausente') return 'Ausente'
+  return VACATION_TYPES.find(x => x.id === t)?.label || t
+}
 
 export const DOCUMENT_TYPES: { id: string; label: string; icon: string }[] = [
   { id: 'nomina',             label: 'Nómina',              icon: '💰' },

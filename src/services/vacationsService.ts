@@ -42,21 +42,54 @@ function rowToVacation(r: VacRow): VacationRequest {
   }
 }
 
+/** Una fila de ausencias_visibles: la de vacations, con el motivo de una baja oculto si no te toca verlo. */
+export type AusenciaVisible = VacRow & { account_id: string; motivo_oculto?: boolean }
+
+/**
+ * Las ausencias que ves (L1a, 27/10/2026): las tuyas; las de las personas de
+ * tus locales si eres encargado (las bajas médicas, como «ausente»); todas si
+ * eres el administrador. Por ausencias_visibles, para que una baja no
+ * desaparezca de la vista del encargado: la fila se enseña, el motivo de salud
+ * no (regla 7). Con la base de antes de la 1905, lo de antes.
+ */
+export async function leerAusenciasVisibles(
+  opts: { desde?: string; hasta?: string; employeeIds?: string[] } = {},
+): Promise<{ filas: AusenciaVisible[]; error: string | null }> {
+  if (!supabase) return { filas: [], error: 'Sin conexión con el servidor.' }
+  // ausencias_visibles es de la 1905 y aún no está en database.ts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)('ausencias_visibles', {
+    p_desde: opts.desde ?? null, p_hasta: opts.hasta ?? null,
+    p_employee_ids: opts.employeeIds && opts.employeeIds.length > 0 ? opts.employeeIds : null,
+  })
+  if (error && (error.code === 'PGRST202' || /could not find the function/i.test(error.message ?? ''))) {
+    let q = supabase.from('vacations').select('*').order('start_date', { ascending: false })
+    if (opts.desde) q = q.gte('end_date', opts.desde)
+    if (opts.hasta) q = q.lte('start_date', opts.hasta)
+    if (opts.employeeIds && opts.employeeIds.length > 0) q = q.in('employee_id', opts.employeeIds)
+    const r = await q
+    if (r.error) return { filas: [], error: r.error.message }
+    return { filas: (r.data ?? []) as unknown as AusenciaVisible[], error: null }
+  }
+  if (error) return { filas: [], error: error.message }
+  return { filas: (data ?? []) as AusenciaVisible[], error: null }
+}
+
 export async function fetchVacations(employeeId?: string): Promise<VacationRequest[] | null> {
   if (!supabase) return null
-  let query = supabase.from('vacations').select('*').order('start_date', { ascending: false })
-  if (employeeId) query = query.eq('employee_id', employeeId)
-  const { data, error } = await query
+  const { filas, error } = await leerAusenciasVisibles({ employeeIds: employeeId ? [employeeId] : undefined })
   if (error) { console.error('fetchVacations:', error); return null }
-  return (data as VacRow[]).map(rowToVacation)
+  return filas.map(rowToVacation)
 }
 
 export async function fetchPendingVacations(): Promise<VacationRequest[] | null> {
   if (!supabase) return null
-  const { data, error } = await supabase.from('vacations')
-    .select('*').eq('status', 'solicitada').order('requested_at', { ascending: false })
+  const { filas, error } = await leerAusenciasVisibles()
   if (error) { console.error('fetchPendingVacations:', error); return null }
-  return (data as VacRow[]).map(rowToVacation)
+  return filas
+    .filter(f => f.status === 'solicitada')
+    .sort((a, b) => (b.requested_at ?? '').localeCompare(a.requested_at ?? ''))
+    .map(rowToVacation)
 }
 
 export async function requestVacation(
