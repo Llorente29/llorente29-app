@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest'
 import { apuntarOrigen, completarFicha, deLaFactura, estadoIban, origenDelCampo, partirDireccion } from '../../../src/modules/conta/lib/fichaDesdeDocumento'
 import { altaEnFactura, textoAltaDesdeFactura } from '../../../src/modules/conta/lib/proveedorDesdeFactura'
 import { camposDeOrigenTocados } from '../../../src/modules/conta/services/proveedorService'
+import { cuentaDelReparto } from '../../../src/modules/conta/lib/recibidaGuardada'
 
 const vacia = { nif: null, nombreFiscal: null, calle: null, codigoPostal: null, ciudad: null }
 const PAPEL = { nif: 'B12345674', nombre: 'Suministros del Ejemplo S.L.U.', direccion: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9, 11160 Barbate (Cádiz)' }
@@ -135,5 +136,16 @@ describe('S01b · «de la factura R0672» en la ficha', () => {
     expect(camposDeOrigenTocados({ fiscalCity: 'Cádiz', website: null })).toEqual(['direccion', 'web'])
     expect(camposDeOrigenTocados({ name: 'Otro nombre' })).toEqual([])
     expect(camposDeOrigenTocados({ iban: 'ES91…', legalName: 'X', taxId: 'B1' })).toEqual(['nif', 'nombreFiscal', 'iban'])
+  })
+})
+
+describe('S01b · el proveedor recién dado de alta: su gasto, el que dice la ficha de la factura', () => {
+  it('sin reparto guardado, nada (y la propuesta sigue diciendo que le falta el tipo de gasto)', () => {
+    expect(cuentaDelReparto([])).toBeNull()
+    expect(cuentaDelReparto([{ position: 0, account_code: '  ' }, { position: 1, account_code: null }])).toBeNull()
+  })
+  it('con la cuenta elegida y guardada: esa; si se repartió, la del primer gasto por su posición', () => {
+    expect(cuentaDelReparto([{ position: 0, account_code: '60000000' }])).toBe('60000000')
+    expect(cuentaDelReparto([{ position: 2, account_code: '62200000' }, { position: 1, account_code: '60200000' }])).toBe('60200000')
   })
 })

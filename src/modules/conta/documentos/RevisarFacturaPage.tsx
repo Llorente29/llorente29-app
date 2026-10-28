@@ -539,7 +539,7 @@ export default function RevisarFacturaPage() {
         altaProveedor={alta.que === 'alta' && altaAbierta ? undefined : alta.que === 'alta'
           ? (abrirLista) => <EnlacesAlta nombreLeido={nombreLeido} abierta={altaAbierta} alAbrirAlta={() => setAltaAbierta(true)} alAbrirLista={abrirLista} />
           : alta.que === 'es_uno_tuyo'
-            ? <button type="button" className="s-boton s-boton-enlace" onClick={() => void elegirYGuardar(alta.proveedorId, alta.nombre, `Elegido ${alta.nombre}: el NIF de la factura es el suyo.`)}>Es {alta.nombre}: elegirlo</button>
+            ? <span className="cxf-alta-enlaces"><button type="button" className="s-boton s-boton-enlace" onClick={() => void elegirYGuardar(alta.proveedorId, alta.nombre, `Elegido ${alta.nombre}: el NIF de la factura es el suyo.`)}>Es {alta.nombre}: elegirlo</button></span>
             : undefined}
         debajo={(abrirLista) => <>
           {altaAbierta && alta.que === 'alta' && accountId && (

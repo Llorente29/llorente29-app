@@ -13,7 +13,7 @@
 import { hojaDelProveedor, siguienteLibre } from '@/modules/conta/lib/planEmpresa'
 import { leerNoDeducibles, type IvaNoDeducible } from '@/modules/conta/services/ivaNoDeducibleService'
 import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
-import { aplicarAsientoAMano, aplicarReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
+import { aplicarAsientoAMano, aplicarReparto, cuentaDelReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
   unidadesDelDia, type UnidadVentas, devolucionSinCobrar, facturaProveedor, deLaFacturaDeLote,
@@ -364,6 +364,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     }
     let cuentaProv = ctx.enlace('supplier', sup, 'principal')
     let gasto = ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null)
+    // S01b · Un proveedor recién dado de alta desde la factura no tiene tipo de gasto ni historia:
+    // la cuenta elegida y guardada en la propia factura (su reparto, 0790) es su gasto. Sin esto se
+    // quedaba en «le falta el tipo de gasto» aunque la ficha de la factura ya lo dijera.
+    if (!gasto) gasto = cuentaDelReparto((f.supplier_invoice_expense ?? []) as Fila[])
     // D07b (Julio, 23/10): sin cuenta contable, al validarla se le crea la
     // siguiente libre de su rango y se guarda en su ficha (company_account_add,
     // que la enlaza); al mirarla, se dice cuál será. La tanda de pendientes no
