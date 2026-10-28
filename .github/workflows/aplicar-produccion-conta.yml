@@ -241,8 +241,8 @@ jobs:
           echo "Ensayo en verde de este mismo commit: sí ($n)." >> "$INFORME"; echo >> "$INFORME"
 
       - name: Contexto (solo lee) e historial · lo ya aplicado no se reaplica
-        timeout-minutes: 15
         if: inputs.modo != 'vuelta_atras'
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -316,8 +316,8 @@ jobs:
           fi
 
       - name: Antes · D1, salud del pedido y agentes
-        timeout-minutes: 15
         if: env.NADA != '1'
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
@@ -372,8 +372,8 @@ jobs:
           echo >> "$INFORME"
 
       - name: ENSAYO · todo en una transacción, con el registro en el historial, y ROLLBACK
-        timeout-minutes: 15
         if: inputs.modo == 'ensayo' && env.NADA != '1'
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -435,8 +435,8 @@ jobs:
           if [ "$d1" -ne 0 ]; then echo "::error::D1 da diferencias no decididas."; cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
 
       - name: ENSAYO · la vuelta atrás automática funcionaría (tanda y .down.sql al revés, y ROLLBACK)
-        timeout-minutes: 15
         if: inputs.modo == 'ensayo' && env.NADA != '1'
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |

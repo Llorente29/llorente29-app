@@ -21,7 +21,15 @@ export function limpiarVolcado(texto, { para16 = false } = {}) {
     if (/^\\(un)?restrict\b/.test(l)) return false
     if (para16 && /^SET transaction_timeout\b/.test(l)) return false
     return true
-  }).join('\n')
+  }).map((l) => (para16 && /^(GRANT|REVOKE) /.test(l) ? sinMaintain(l) : l)).join('\n')
+}
+
+/** El privilegio MAINTAIN es de la 17: en una 16, fuera de la lista (y la sentencia, si no queda nada). */
+function sinMaintain(l) {
+  const m = l.match(/^(GRANT|REVOKE) (.+?) ON (.+)$/)
+  if (!m || !/\bMAINTAIN\b/.test(m[2])) return l
+  const privs = m[2].split(',').filter((p) => p.trim() !== 'MAINTAIN')
+  return privs.length ? `${m[1]} ${privs.join(',')} ON ${m[3]}` : `-- (sin MAINTAIN en la 16) ${l}`
 }
 
 const SECRETOS = [
@@ -70,16 +78,25 @@ export function buscarSecretos(texto) {
   return fuera
 }
 
-/** Los roles que nombra el volcado (sin PUBLIC ni CURRENT_USER). */
+/**
+ * Los roles que nombra el volcado (sin PUBLIC ni CURRENT_USER), solo en las
+ * sentencias que nombran roles —GRANT, REVOKE, ALTER DEFAULT PRIVILEGES y
+ * CREATE POLICY—, no en los cuerpos de las funciones (donde «FROM x» es una
+ * tabla).
+ */
 export function rolesDelVolcado(texto) {
   const roles = new Set()
   const nombre = '("[^"]+"|[a-z_][a-z0-9_]*)'
-  const pon = (r) => { const n = r.replace(/^"|"$/g, ''); if (!/^(public|current_user|session_user|current_role)$/i.test(n)) roles.add(n) }
-  for (const m of texto.matchAll(new RegExp(`\\b(?:TO|FROM)\\s+${nombre}((?:\\s*,\\s*${nombre})*)`, 'g'))) {
-    pon(m[1]); for (const otro of (m[2] ?? '').split(',').map((s) => s.trim()).filter(Boolean)) pon(otro)
+  const pon = (r) => { const n = r.trim().replace(/^"|"$/g, ''); if (n && !/^(public|current_user|session_user|current_role)$/i.test(n)) roles.add(n) }
+  const lista = (t) => t.split(',').map((x) => x.trim().replace(/;$/, '')).filter((x) => new RegExp(`^${nombre}$`, 'i').test(x)).forEach(pon)
+  for (const l of texto.split('\n')) {
+    let m
+    if ((m = l.match(/^GRANT .* TO (.+?)( WITH (GRANT|ADMIN) OPTION)?;$/))) lista(m[1])
+    else if ((m = l.match(/^REVOKE .* FROM (.+?)( CASCADE)?;$/))) lista(m[1])
+    if ((m = l.match(new RegExp(`^ALTER DEFAULT PRIVILEGES FOR ROLE ${nombre}`)))) pon(m[1])
+    if ((m = l.match(/^ALTER DEFAULT PRIVILEGES .* TO (.+?);$/))) lista(m[1])
+    if (/^CREATE POLICY /.test(l) && (m = l.match(/ TO ([^;]+?)(?: USING| WITH CHECK|;|$)/))) lista(m[1])
   }
-  for (const m of texto.matchAll(new RegExp(`\\bFOR ROLE\\s+${nombre}`, 'g'))) pon(m[1])
-  for (const m of texto.matchAll(new RegExp(`\\bOWNER TO\\s+${nombre}`, 'g'))) pon(m[1])
   return [...roles].sort()
 }
 

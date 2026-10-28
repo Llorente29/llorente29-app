@@ -9,10 +9,10 @@ const jwt = (datos: object) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringif
 const WF = readFileSync('.github/workflows/estructura-staging.yml', 'utf8')
 
 describe('el volcado: limpio, sin secretos y con sus roles', () => {
-  it('quita los \\restrict del pg_dump 17.6 y, para la 16, el transaction_timeout', () => {
-    const v = '\\restrict abc\nSET transaction_timeout = 0;\nCREATE TABLE public.x (id int);\n\\unrestrict abc'
-    expect(limpiarVolcado(v)).toBe('SET transaction_timeout = 0;\nCREATE TABLE public.x (id int);')
-    expect(limpiarVolcado(v, { para16: true })).toBe('CREATE TABLE public.x (id int);')
+  it('quita los \\restrict del pg_dump 17.6 y, para la 16, el transaction_timeout y el privilegio MAINTAIN', () => {
+    const v = '\\restrict abc\nSET transaction_timeout = 0;\nCREATE TABLE public.x (id int);\nGRANT SELECT,TRUNCATE,MAINTAIN ON TABLE public.x TO anon;\nGRANT MAINTAIN ON TABLE public.x TO anon;\n\\unrestrict abc'
+    expect(limpiarVolcado(v)).toBe('SET transaction_timeout = 0;\nCREATE TABLE public.x (id int);\nGRANT SELECT,TRUNCATE,MAINTAIN ON TABLE public.x TO anon;\nGRANT MAINTAIN ON TABLE public.x TO anon;')
+    expect(limpiarVolcado(v, { para16: true })).toBe('CREATE TABLE public.x (id int);\nGRANT SELECT,TRUNCATE ON TABLE public.x TO anon;\n-- (sin MAINTAIN en la 16) GRANT MAINTAIN ON TABLE public.x TO anon;')
   })
   it('la clave anon no es secreto (la de tg_auto_dispatch); service_role, una URL con contraseña o una clave de Stripe, sí', () => {
     expect(rolDelJwt(jwt({ role: 'anon', ref: 'xzmpnchlguibclvxyynt' }))).toBe('anon')
@@ -23,8 +23,9 @@ describe('el volcado: limpio, sin secretos y con sus roles', () => {
     expect(buscarSecretos('CREATE TABLE public.x (id int);')).toEqual([])
   })
   it('los roles que nombra, para crearlos antes de cargarlo', () => {
-    const v = 'GRANT ALL ON TABLE public.x TO anon;\nGRANT SELECT ON TABLE public.x TO authenticated, service_role;\nALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO postgres;\nGRANT USAGE ON SCHEMA public TO PUBLIC;'
-    expect(rolesDelVolcado(v)).toEqual(['anon', 'authenticated', 'postgres', 'service_role', 'supabase_admin'])
+    const v = 'GRANT ALL ON TABLE public.x TO anon;\nGRANT SELECT ON TABLE public.x TO authenticated, service_role;\nALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA public GRANT ALL ON TABLES TO postgres;\nGRANT USAGE ON SCHEMA public TO PUBLIC;\nCREATE POLICY p ON public.x FOR SELECT TO dashboard_user USING (true);\n    select * from candidatos c join cab to_x on true where x in (select 1 from vendidas);'
+    // Los «FROM x» de dentro de una función son tablas, no roles (el primer volcado sacaba 180).
+    expect(rolesDelVolcado(v)).toEqual(['anon', 'authenticated', 'dashboard_user', 'postgres', 'service_role', 'supabase_admin'])
   })
 })
 

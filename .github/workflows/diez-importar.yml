@@ -347,8 +347,8 @@ jobs:
           "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v empresa="$EMPRESA" -v modo="$MODO" \
             -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Recordar lo usado (para que la siguiente salga rellena)
-        timeout-minutes: 15
         if: success()
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -458,8 +458,8 @@ jobs:
           CARGA: /tmp/carga
         run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts >> /tmp/informe.md
       - name: Simulado · escribir, medir y deshacer (ensayo)
-        timeout-minutes: 25
         if: inputs.modo == 'simulado-staging'
+        timeout-minutes: 25
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |

@@ -411,8 +411,8 @@ jobs:
       # W02 (1c): cuánto aprieta la e2e a staging (Micro), medido desde el trozo
       # 1: consultas a la vez, conexiones y ocupación de la base cada 5 s.
       - name: Carga · empezar a medir (trozo 1)
-        timeout-minutes: 15
         if: matrix.trozo == 1
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: scripts/e2e/carga.sh empezar
@@ -472,8 +472,8 @@ jobs:
       # Si ni esto llega a correr, el carril lo borra el próximo que lo coja y
       # los cerrojos se sueltan al caerse la conexión.
       - name: Carril · borrar y soltar (pase lo que pase)
-        timeout-minutes: 15
         if: always()
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -481,8 +481,8 @@ jobs:
           scripts/e2e/carril.sh soltar
 
       - name: Carga · lo medido mientras corrían las pruebas (trozo 1)
-        timeout-minutes: 15
         if: always() && matrix.trozo == 1
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: scripts/e2e/carga.sh acabar "${PRUEBAS_DESDE:-}"
@@ -700,8 +700,8 @@ jobs:
       # última en verde es la que vale), sin un run aparte; a mano, con
       # «fijar_capturas». Solo en verde (los N trozos) y solo las del frente de la rama.
       - name: Capturas · fijar las del frente en la rama
-        timeout-minutes: 15
         if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fijar_capturas))
+        timeout-minutes: 15
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

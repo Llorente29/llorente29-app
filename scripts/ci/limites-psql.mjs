@@ -59,7 +59,9 @@ export function poner(fichero, texto, raiz = '.') {
     if (!(tocaLaBase(p, raiz) || (p.run && jobConUrl(texto, j)))) continue
     const primera = p.lineas[0]
     if (!/^ {6}- name:/.test(primera)) continue
-    inserciones.push({ despues: p.inicio, linea: `        timeout-minutes: ${limiteDe(fichero, p.nombre, j.timeout)}` })
+    // Detrás del nombre y, si lo hay, de su `if:` de una línea: el nombre y su condición, juntos.
+    const despues = /^ {8}if: /.test(p.lineas[1] ?? '') ? p.inicio + 1 : p.inicio
+    inserciones.push({ despues, linea: `        timeout-minutes: ${limiteDe(fichero, p.nombre, j.timeout)}` })
   }
   for (const ins of inserciones.sort((a, b) => b.despues - a.despues)) lineas.splice(ins.despues + 1, 0, ins.linea)
   let out = lineas.join('\n')

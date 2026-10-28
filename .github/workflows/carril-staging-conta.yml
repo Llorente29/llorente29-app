@@ -93,8 +93,8 @@ jobs:
           scripts/e2e/carril.sh ensayo 4001 | tee "$RUNNER_TEMP/ensayo.txt"
 
       - name: Carril · esperar su turno y coger uno
-        timeout-minutes: 20
         if: github.event_name == 'push' || inputs.de_verdad
+        timeout-minutes: 20
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -105,8 +105,8 @@ jobs:
           scripts/e2e/carril.sh plantilla-coger
 
       - name: Carril · clonar las cuentas de prueba
-        timeout-minutes: 15
         if: github.event_name == 'push' || inputs.de_verdad
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -130,8 +130,8 @@ jobs:
       # El runner que muere sin soltar: se mata el psql del guardián con -9 (nadie
       # termina nada) y se mide cuánto tardan los cerrojos en soltarse solos.
       - name: Carril · si el runner muere, los cerrojos se sueltan solos
-        timeout-minutes: 15
         if: github.event_name == 'push' || inputs.de_verdad
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_DIR: ${{ runner.temp }}/huerfano
@@ -154,8 +154,8 @@ jobs:
           echo "Cerrojos del guardián muerto sueltos solos a los $(( $(date +%s) - t0 )) s." | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Carril · borrar y soltar (pase lo que pase)
-        timeout-minutes: 15
         if: always() && (github.event_name == 'push' || inputs.de_verdad)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: scripts/e2e/carril.sh soltar

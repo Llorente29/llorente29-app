@@ -26,10 +26,16 @@
 #      local: sus esquemas van vacíos, y lo que los llame falla al ejecutarse,
 #      no al cargar;
 #   3. la estructura entera, en una transacción;
-#   4. las semillas (supabase/seeds), por el orden en que entraron en git —el
-#      mismo en que se aplicaron en staging—, cada una en su transacción. Una
-#      que no carga (la escribieron para una estructura de antes) se dice y se
-#      sigue: al final, cuáles cargaron y cuáles no, sin esconder ninguna.
+#   4. las semillas (supabase/seeds): la C01 primero y las demás por pasadas,
+#      cada una en su transacción. Una que no carga se dice y se sigue: al
+#      final, cuáles cargaron y cuáles no, sin esconder ninguna.
+#
+# LO QUE FALTA (28/10, medido): sin datos, de 42 semillas cargan 12. Las demás
+# necesitan los catálogos que en staging metieron las migraciones como DATOS
+# (unidades de cocina, plan contable, modelos de impuestos, la plantilla de
+# Folvy Interno) o filas de control (funcion_respaldo, el historial), o están
+# escritas para una estructura de antes. Para una base igual a staging hace
+# falta volcar también esas filas: lo decide Julio (respuesta 8 del W09).
 #
 # Lo que esto NO es: staging. No tiene sus filas (solo las de las semillas),
 # ni pg_cron, ni las funciones de borde. Sirve para probar SQL, no para una e2e.
@@ -62,7 +68,9 @@ else
 fi
 VERSION=$(psql -X -At -d postgres -c 'show server_version_num')
 if [ "$VERSION" -lt 170000 ]; then OPC=--para-16; else OPC=''; fi
-node scripts/staging/esquema.mjs limpiar "$TMP/crudo.sql" "$TMP/esquema.sql" $OPC
+node scripts/staging/esquema.mjs limpiar "$TMP/crudo.sql" "$TMP/limpio.sql" $OPC
+# public y extensions ya existen en una base nueva: sin chocar.
+sed -E 's/^CREATE SCHEMA ([a-z_0-9]+);/CREATE SCHEMA IF NOT EXISTS \1;/' "$TMP/limpio.sql" > "$TMP/esquema.sql"
 
 # 2 · La base, los roles y las extensiones
 dropdb --if-exists "$BASE"
@@ -89,22 +97,30 @@ psqlb -f "$TMP/preparar.sql"
 psqlb -1 -f "$TMP/esquema.sql" > "$TMP/carga.log" 2>&1 || { tail -20 "$TMP/carga.log" >&2; echo "✗ La estructura no carga (arriba, el error)." >&2; exit 1; }
 echo "Estructura cargada: $(psql -X -At -d "$BASE" -c "select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relkind = 'r'") tablas y $(psql -X -At -d "$BASE" -c "select count(*) from pg_proc where pronamespace = 'public'::regnamespace") funciones en public."
 
-# 4 · Las semillas, por el orden en que entraron en git
+# 4 · Las semillas. Git no sabe en qué orden se aplicaron (todas entraron en el
+# mismo commit, el 23/10): va primero la C01 —sus guardas piden una base sin
+# más cuentas— y después las demás por pasadas, mientras alguna nueva cargue
+# (una que necesita otra entra en cuanto la otra esté).
 if [ "$SEMILLAS" = 1 ]; then
   CLAVE="${CLAVE_PRUEBAS:-$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16)}"
-  HASH=$(psql -X -At -d "$BASE" -v clave="$CLAVE" -c "select extensions.crypt(:'clave', extensions.gen_salt('bf', 10))")
-  : > "$TMP/orden.txt"
-  for f in $(git ls-files 'supabase/seeds/*.sql'); do
-    echo "$(git log --diff-filter=A --format=%at -1 -- "$f") $f" >> "$TMP/orden.txt"
+  HASH=$(echo "select extensions.crypt(:'clave', extensions.gen_salt('bf', 10));" | psql -X -At -d "$BASE" -v clave="$CLAVE")
+  { echo supabase/seeds/conta/seed_c01_staging.sql; git ls-files 'supabase/seeds/*.sql' | grep -v '/seed_c01_staging.sql$'; } > "$TMP/pendientes.txt"
+  cargadas=0
+  for pasada in 1 2 3 4 5 6 7 8; do
+    : > "$TMP/siguen.txt"; n=0
+    while read -r f; do
+      sed "s|__HASH_CLAVE_PRUEBAS__|$HASH|g" "$f" > "$TMP/semilla.sql"
+      if psqlb -1 -f "$TMP/semilla.sql" > "$TMP/semilla.log" 2>&1; then n=$((n + 1)); else echo "$f" >> "$TMP/siguen.txt"; fi
+    done < "$TMP/pendientes.txt"
+    cargadas=$((cargadas + n)); cp "$TMP/siguen.txt" "$TMP/pendientes.txt"
+    [ "$n" -eq 0 ] && break
   done
-  bien=(); mal=()
-  while read -r _ f; do
+  echo "Semillas: $cargadas cargadas, $(wc -l < "$TMP/pendientes.txt") no."
+  while read -r f; do
     sed "s|__HASH_CLAVE_PRUEBAS__|$HASH|g" "$f" > "$TMP/semilla.sql"
-    if psqlb -1 -f "$TMP/semilla.sql" > "$TMP/semilla.log" 2>&1; then bien+=("$f")
-    else mal+=("$f: $(grep -m1 'ERROR' "$TMP/semilla.log" | sed 's/^psql:[^ ]* //')"); fi
-  done < <(sort -n "$TMP/orden.txt")
-  echo "Semillas: ${#bien[@]} cargadas, ${#mal[@]} no."
-  for m in "${mal[@]}"; do echo "  ✗ $m"; done
+    psqlb -1 -f "$TMP/semilla.sql" > "$TMP/semilla.log" 2>&1 || true
+    echo "  ✗ $f: $(grep -m1 'ERROR' "$TMP/semilla.log" | sed 's/^psql:[^ ]* //')"
+  done < "$TMP/pendientes.txt"
   [ -n "${CLAVE_PRUEBAS:-}" ] || echo "Contraseña de los usuarios de prueba: $CLAVE"
 fi
 echo "Lista: psql -d $BASE"
