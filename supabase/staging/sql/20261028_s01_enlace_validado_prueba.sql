@@ -146,7 +146,7 @@ reset role;
 select set_config('request.jwt.claims', json_build_object('sub', (select v from _p where clave = 'admin'), 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
-declare e uuid := (select v::uuid from _p where clave = 'empresa'); r jsonb; v jsonb;
+declare e uuid := (select v::uuid from _p where clave = 'empresa'); r jsonb; val jsonb;
 begin
   r := public.journal_entry_proponer(e,
     jsonb_build_object('fecha', public.conta_hoy(), 'series', 4, 'concepto', 'Prueba S01 validar a mano', 'source_type', 'manual', 'confianza', 'seguro', 'porque', 'Prueba.'),
@@ -154,9 +154,9 @@ begin
                       jsonb_build_object('cuenta', (select v from _p where clave = 'pas_tpv'), 'debe', 0, 'haber', 10, 'comun', true)),
     null, 'Prueba');
   insert into _p values ('ent_mano', r->>'id');
-  v := public.journal_entry_validar((r->>'id')::uuid, 'Prueba');
-  if (select status from public.journal_entry where id = (r->>'id')::uuid) <> 'validado' or (v->>'numero') is null then
-    raise exception 'PRUEBA S01 VALIDADO · 3: validar a mano dio %.', v;
+  val := public.journal_entry_validar((r->>'id')::uuid, 'Prueba');
+  if (select status from public.journal_entry where id = (r->>'id')::uuid) <> 'validado' or (val->>'numero') is null then
+    raise exception 'PRUEBA S01 VALIDADO · 3: validar a mano dio %.', val;
   end if;
 end $$;
 reset role;
