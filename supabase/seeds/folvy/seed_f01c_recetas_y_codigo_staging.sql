@@ -62,7 +62,6 @@ declare
   -- por el número de carril, y dos juegos que solo se distinguieran ahí
   -- chocarían al copiarse (lo vio el run 40668493856: brand_pkey).
   pre     text;
-  viejo   constant text := 'f01c2e00-0001-4000-8000-';
 begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'Semilla F01c ABORTADA: esta base tiene cuentas de producción. ¿Es staging-conta?';
@@ -77,21 +76,6 @@ begin
   if to_regclass('public.f01_receta_puesta') is null then
     raise exception 'Semilla F01c: falta la 0850 (f01_receta_puesta).';
   end if;
-
-  -- El juego del móvil de antes (con el segundo grupo 0001), fuera: chocaba con
-  -- el carril 1. Era de esta semilla y no tiene ventas ni nada colgando.
-  delete from public.external_brand_map where account_id = a and source = 'lastapp' and external_brand_id like 'f01c-m-%';
-  delete from public.external_brand_alta where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
-  delete from public.f01_marca_reconocida where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
-  delete from public.external_catalog_product where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
-  delete from public.external_location_map where account_id = a and external_location_id in (viejo || '0000000000e1', viejo || '0000000000e2');
-  delete from public.external_integration where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
-  delete from public.menu_item where account_id = a and brand_id = (viejo || '0000000000b1')::uuid;
-  delete from public.recipe_line where account_id = a and (id::text like viejo || '%' or parent_item_id::text like viejo || '%');
-  delete from public.recipe_item where account_id = a and id::text like viejo || '%';
-  delete from public.brand_channel where account_id = a and brand_id = (viejo || '0000000000b1')::uuid;
-  delete from public.brand_location_availability where account_id = a and brand_id = (viejo || '0000000000b1')::uuid;
-  delete from public.brand where account_id = a and id = (viejo || '0000000000b1')::uuid;
 
   -- Lo que lleva la receta de Alitas que lee la prueba.
   insert into public.recipe_item (id, account_id, type, name, base_unit_id, is_active, cost_strategy, fixed_cost, created_by_name)
