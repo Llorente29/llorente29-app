@@ -384,6 +384,10 @@
 .s-trimestre-cuadre tr[data-casa='no'] th { color: var(--s-falta); }
 .s-trimestre-checks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--s-2); font-size: var(--s-t-s); color: var(--s-tinta); }
 .s-trimestre-checks li[data-resultado='error'], .s-trimestre-checks li[data-resultado='warning'] { color: var(--s-falta); }
+/* S02 · Lo que causa un aviso (asientos, perceptores, periodos) va en el color de siempre: el rojo es solo la frase. */
+.s-trimestre-checks li .s-anual-causa, .s-trimestre-checks li .s-trimestre-cuadre { color: var(--s-tinta); }
+.s-trimestre-checks li .s-trimestre-cuadre tr[data-casa='no'] th { color: var(--s-falta); }
+.s-anual-causa { margin: 4px 0 6px; padding-left: 0; list-style: none; }
 
 /* Por debajo de 1.500 px, la derecha baja debajo de la izquierda; el justificante sigue al lado. */
 @media (max-width: 1499px) {

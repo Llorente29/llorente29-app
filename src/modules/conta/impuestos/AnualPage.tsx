@@ -317,15 +317,15 @@ function Centro({ m, ejercicio, perceptores }: { m: ModeloTrimestre; ejercicio: 
       {perceptores !== null && filas.length === 0 && <p className="s-apoyo">En el año no hay nada retenido a nadie.</p>}
       {filas.length > 0 && (
         <table className="s-trimestre-casillas s-anual-perceptores" aria-label="Perceptores del 190">
-          <thead><tr><th scope="col">Quién</th><th scope="col">Clave</th><th scope="col" className="s-tabla-cifra">Pagado</th><th scope="col" className="s-tabla-cifra">Retenido</th></tr></thead>
+          <thead><tr><th scope="col">Quién</th><th scope="col" className="s-tabla-cifra">Pagado</th><th scope="col" className="s-tabla-cifra">Retenido</th></tr></thead>
           <tbody>{filas.map((p, i) => (
             <tr key={`${p.clave}/${p.nif ?? ''}/${i}`} data-falta={p.falta.length ? 'si' : undefined}>
               <td>
                 {p.sin_trabajador ? <strong>Nóminas sin trabajador</strong> : <strong>{p.nombre ?? 'Sin nombre'}</strong>}
                 <span className="s-tabla-apoyo">{p.sin_trabajador ? 'Lo que el diario retiene en nóminas y no está en ninguna nómina por trabajador' : `${p.nif ?? 'sin NIF'}${p.provincia ? ` · provincia ${p.provincia}` : ''}`}</span>
+                <span className="s-tabla-apoyo">Clave {p.clave}{p.subclave ? `.${p.subclave}` : ''} · {claveEnPalabras(p.clave, p.subclave)}</span>
                 {p.falta.length > 0 && <span className="s-impuestos-aviso">! {p.falta.join(', ')}</span>}
               </td>
-              <td>{p.clave}{p.subclave ? `.${p.subclave}` : ''}<span className="s-tabla-apoyo">{claveEnPalabras(p.clave, p.subclave)}</span></td>
               <td className="s-tabla-cifra s-cifra">{eurosExactos(p.integra)}</td>
               <td className="s-tabla-cifra s-cifra">{eurosExactos(p.retenciones)}</td>
             </tr>
@@ -368,7 +368,10 @@ function Aviso({ c, presentada, alHacer }: { c: Check; presentada: boolean; alHa
     ...(((det.lineas as { asientos?: Asiento[] }[] | undefined) ?? []).flatMap((l) => l.asientos ?? [])),
   ]
   const perceptores = ((det.perceptores as Perceptor190[] | undefined) ?? [])
-  const periodos = c.clave === 'sum_111_vs_190' ? ((det.periodos as { periodo: string; retenido_111: number; retenido_diario: number; declaracion: string | null }[] | undefined) ?? []) : []
+  const periodos = c.clave === 'sum_111_vs_190'
+    ? ((det.periodos as { periodo: string; base_111: number; retenido_111: number; base_diario: number; retenido_diario: number; declaracion: string | null }[] | undefined) ?? [])
+    : []
+  const casa = (a: number, b: number) => Math.abs(a - b) < 0.005
   return (
     <>
       {c.resultado === 'ok' ? '✓ ' : '! '}{c.titulo}
@@ -383,14 +386,18 @@ function Aviso({ c, presentada, alHacer }: { c: Check; presentada: boolean; alHa
       )}
       {c.resultado === 'warning' && periodos.length > 0 && (
         <table className="s-trimestre-cuadre" aria-label="El 190 y los 111">
-          <thead><tr><th scope="col">Periodo</th><th scope="col" className="s-tabla-cifra">111</th><th scope="col" className="s-tabla-cifra">Diario</th></tr></thead>
-          <tbody>{periodos.map((p) => (
-            <tr key={p.periodo} data-casa={Math.abs(p.retenido_111 - p.retenido_diario) < 0.005 ? 'si' : 'no'}>
-              <th scope="row">{p.periodo}{p.declaracion ? '' : ' · sin 111'}</th>
-              <td className="s-tabla-cifra s-cifra">{p.declaracion ? eurosExactos(p.retenido_111) : '—'}</td>
-              <td className="s-tabla-cifra s-cifra">{eurosExactos(p.retenido_diario)}</td>
-            </tr>
-          ))}</tbody>
+          <thead><tr><th scope="col">Periodo</th><th scope="col" className="s-tabla-cifra">El 111</th><th scope="col" className="s-tabla-cifra">El diario</th></tr></thead>
+          <tbody>{periodos.map((p) => {
+            const vacio = !p.declaracion && casa(p.base_diario, 0) && casa(p.retenido_diario, 0)
+            const bien = vacio || (!!p.declaracion && casa(p.base_111, p.base_diario) && casa(p.retenido_111, p.retenido_diario))
+            return (
+              <tr key={p.periodo} data-casa={bien ? 'si' : 'no'}>
+                <th scope="row">{bien ? '✓ ' : '! '}{p.periodo}{p.declaracion ? '' : ' · sin 111'}</th>
+                <td className="s-tabla-cifra s-cifra">{p.declaracion ? <>{eurosExactos(p.retenido_111)}<span className="s-tabla-apoyo">base {eurosExactos(p.base_111)}</span></> : '—'}</td>
+                <td className="s-tabla-cifra s-cifra">{eurosExactos(p.retenido_diario)}<span className="s-tabla-apoyo">base {eurosExactos(p.base_diario)}</span></td>
+              </tr>
+            )
+          })}</tbody>
         </table>
       )}
       {c.resultado === 'warning' && !c.aceptado && !presentada && (abierto ? (
