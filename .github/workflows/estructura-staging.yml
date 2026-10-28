@@ -107,8 +107,17 @@ jobs:
         timeout-minutes: 3
         run: |
           set -euo pipefail
-          git fetch -q origin "refs/heads/estructura/staging:refs/remotes/origin/estructura" 2>/dev/null || true
-          PADRE=$(git rev-parse -q --verify refs/remotes/origin/estructura || true)
+          # Si la rama ya existe, el commit nuevo va ENCIMA de su último: el fetch
+          # tiene que salir bien (si no, para aquí y dice por qué; nunca un
+          # commit sin padre sobre una rama que ya existe).
+          PADRE=''
+          if git ls-remote --exit-code --heads origin estructura/staging > /dev/null; then
+            git fetch --no-tags --depth=1 origin "+refs/heads/estructura/staging:refs/estructura/anterior"
+            PADRE=$(git rev-parse --verify refs/estructura/anterior)
+            echo "Encima de ${PADRE::7}."
+          else
+            echo "estructura/staging no existe todavía: el primer commit va sin padre."
+          fi
           mkdir -p supabase/staging
           cp "$RUNNER_TEMP/estructura/esquema.sql" supabase/staging/esquema.sql
           export GIT_INDEX_FILE="$RUNNER_TEMP/indice-estructura"

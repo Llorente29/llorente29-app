@@ -41,6 +41,12 @@ describe('el workflow de la estructura', () => {
     expect(WF).toContain('git push -q origin "$COMMIT:refs/heads/estructura/staging"')
     expect(WF).not.toMatch(/HEAD:main|push origin main/)
   })
+  it('encima del último de estructura/staging: el fetch no se esconde (el run 3 publicó sin padre y GitHub lo rechazó)', () => {
+    const publicar = WF.slice(WF.indexOf('- name: Publicar en estructura/staging'))
+    expect(publicar).toContain('git ls-remote --exit-code --heads origin estructura/staging')
+    expect(publicar).toContain('git fetch --no-tags --depth=1 origin "+refs/heads/estructura/staging:refs/estructura/anterior"')
+    expect(publicar).not.toMatch(/fetch[^\n]*\|\| true/)
+  })
   it('el guion local trae la estructura de esa rama y no lleva ninguna URL de staging', () => {
     const g = readFileSync('scripts/staging/base-local.sh', 'utf8')
     expect(g).toContain('git show origin/estructura-staging:supabase/staging/esquema.sql')
