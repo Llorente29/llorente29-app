@@ -59,7 +59,7 @@ describe('el workflow de la estructura', () => {
 
 describe('psql con límite, en todos los workflows que tocan la base', () => {
   const ficheros = readdirSync('.github/workflows').filter((f) => f.endsWith('.yml'))
-  const resultados = ficheros.map((f) => ({ f, r: faltas(readFileSync(`.github/workflows/${f}`, 'utf8')) }))
+  const resultados = ficheros.map((f) => ({ f, r: faltas(readFileSync(`.github/workflows/${f}`, 'utf8'), '.', f) }))
 
   it('cada uno lleva PGCONNECT_TIMEOUT arriba y cada paso que toca la base, su timeout (no mayor que el job)', () => {
     const conBase = resultados.filter(({ r }) => r.tocaLaBase)
@@ -78,6 +78,25 @@ describe('psql con límite, en todos los workflows que tocan la base', () => {
     expect(sin).not.toBe(original)
     expect(faltas(sin).fuera.map((x) => x.que)).toContain('paso que toca la base sin timeout-minutes')
     expect(faltas(poner('vigia-autoconteo.yml', sin)).fuera).toEqual([])
+  })
+  it('el #379 (W09b): la comprobación de después espera la salud del pedido 15 min y aún le queda para medir y deshacer', () => {
+    const wf = readFileSync('.github/workflows/aplicar-produccion-conta.yml', 'utf8')
+    const salud = Number(wf.match(/SALUD_MINUTOS: '(\d+)'/)![1])
+    const despues = resultados.find(({ f }) => f === 'aplicar-produccion-conta.yml')!.r.pasos!
+      .find((p) => p.paso.startsWith('Después · comprobación'))!
+    expect(salud).toBe(15)
+    expect(despues.timeout).toBe(25)
+    expect(despues.timeout! - salud).toBeGreaterThanOrEqual(10)
+  })
+  it('los que esperan a propósito tienen más que su espera; si alguien los baja, la comprobación lo dice', () => {
+    const t = (f: string, n: string) => resultados.find((x) => x.f === f)!.r.pasos!.find((p) => p.paso === n)!.timeout!
+    expect(t('aplicar-staging-conta.yml', 'Lo que solo añade, de verdad (desde la rama)')).toBeGreaterThan(15) // CARRIL_MIGRAR_MIN
+    expect(t('e2e-staging-conta.yml', 'Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)')).toBeGreaterThan(20) // CARRIL_BARRERA_MIN
+    expect(t('aplicar-staging-conta.yml', 'La tanda de producción en staging (real-con-fallo o real)')).toBeGreaterThan(8) // :04–:11
+    const original = readFileSync('.github/workflows/aplicar-produccion-conta.yml', 'utf8')
+    const bajado = original.replace(/(- name: Después · comprobación[^\n]*\n {8}timeout-minutes: )25/, '$115')
+    expect(bajado).not.toBe(original)
+    expect(faltas(bajado, '.', 'aplicar-produccion-conta.yml').fuera.map((x) => x.que).join(' ')).toContain('menor que lo que necesita (25')
   })
   it('los largos, nunca por encima de su job', () => {
     expect(limiteDe('e2e-staging-conta.yml', 'Pruebas (ordenador y móvil)', 120)).toBe(120)

@@ -131,7 +131,7 @@ jobs:
       # termina nada) y se mide cuánto tardan los cerrojos en soltarse solos.
       - name: Carril · si el runner muere, los cerrojos se sueltan solos
         if: github.event_name == 'push' || inputs.de_verdad
-        timeout-minutes: 15
+        timeout-minutes: 20
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_DIR: ${{ runner.temp }}/huerfano
