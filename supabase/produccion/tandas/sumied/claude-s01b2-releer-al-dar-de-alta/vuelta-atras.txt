@@ -1,0 +1,2 @@
+# S01b2 · vuelta atrás.
+supabase/vuelta-atras/20261028T1555_s01b2_lectura_releida.down.sql

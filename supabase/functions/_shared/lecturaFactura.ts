@@ -53,6 +53,8 @@ export type LecturaModelo = {
     supplier_tax_id?: string | null
     supplier_email?: string | null
     supplier_address?: string | null
+    /** S01b2 · El prompt de siempre ya lo pedía (Tramo A, ocrAlbaranNucleo): de reserva si la parte de factura no lo trae. */
+    supplier_phone?: string | null
     doc_number?: string | null
     doc_date?: string | null
     doc_type?: string | null
@@ -228,7 +230,7 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
   const clase: FacturaLeida['clase'] = f.invoice_kind === 'rectificativa' ? 'rectificativa' : f.invoice_kind === 'simplificada' ? 'simplificada' : 'completa'
   const nif = normalizarNif(d.supplier_tax_id)
   const factura: FacturaLeida = {
-    proveedor: { nombre: txt(d.supplier_name), nif, email: txt(d.supplier_email), direccion: txt(d.supplier_address), telefono: txt(f.supplier_phone), web: txt(f.supplier_website) },
+    proveedor: { nombre: txt(d.supplier_name), nif, email: txt(d.supplier_email), direccion: txt(d.supplier_address), telefono: txt(f.supplier_phone) ?? txt(d.supplier_phone), web: txt(f.supplier_website) },
     destinatario: { nombre: txt(d.bill_to_name), nif: normalizarNif(d.bill_to_tax_id) },
     numero, numeroClave: claveNumero(numero), fecha, vencimiento, clase, rectificaA: txt(f.corrects_number),
     tipos, base, cuota, recargo, retencion, total, iban: txt(f.iban)?.replace(/\s+/g, '').toUpperCase() ?? null,
