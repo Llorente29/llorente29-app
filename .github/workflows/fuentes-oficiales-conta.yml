@@ -42,7 +42,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Hace falta el historial: compara fuentes.json con el del commit de
+          # antes del push (event.before).
+          # W09c (28/10): todo el historial de commits y árboles, sin el contenido
+          # viejo (las capturas PNG del historial pesan más de 1,3 GB). Lo que un
+          # paso lea de un commit viejo (git show) lo baja git al momento.
           fetch-depth: 0
+          filter: blob:none
       - uses: actions/setup-node@v4
         with:
           node-version: 22
