@@ -91,6 +91,8 @@ export const PUBLIC_AUTH_ROUTES: readonly string[] = [
   '/reset-password',
   '/reset-password/confirm',
   '/acceso',
+  // L1a · PR 2 (28/10): el enlace para la Inspección (?t=<token>), con o sin sesión.
+  '/inspeccion',
 ] as const
 
 /**

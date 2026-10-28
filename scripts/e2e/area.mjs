@@ -159,10 +159,16 @@ export function productosTocados(cambiados) {
 
 /**
  * LAS ZONAS POR FICHERO (Julio, 21/10, encargo del autoconteo): una zona que no
- * es de ninguna rama, sino de lo que se toca. Un push que cambia algo de aquí
- * corre además su carpeta de e2e, sea cual sea la rama. Y si la rama no es de
- * ningún frente, la zona es también la dueña de sus capturas
- * (scripts/conta/capturas.mjs): la misma tabla para las dos cosas.
+ * es de ninguna rama, sino de lo que se toca. Dos listas, para dos cosas:
+ *   · `ficheros`: un push que cambia algo de aquí corre además su carpeta de
+ *     e2e, sea cual sea la rama. Es ancha a propósito: incluye a los VECINOS
+ *     (el portal del trabajador es la puerta del autoconteo), porque romperlos
+ *     rompe la zona.
+ *   · `duenos` (W08, 28/10): si la rama no es de ningún frente y cambia algo de
+ *     aquí, la zona es la dueña de sus capturas (scripts/conta/capturas.mjs).
+ *     Es estrecha: solo lo que ES de la zona. Hasta el W08 era la misma lista,
+ *     y tres PR de Laboral que solo tocaban el portal (#350, #354 y #370)
+ *     fijaron PNG de inventario y chocaron con main.
  */
 export const ZONAS_POR_FICHERO = [
   {
@@ -170,19 +176,27 @@ export const ZONAS_POR_FICHERO = [
     pruebas: 'tests/e2e/inventario',
     capturas: 'docs/inventario/capturas',
     ficheros: ['src/modules/supply/', 'src/pages/trabajador/', 'tests/e2e/inventario/', 'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql'],
+    // Del portal, solo la pantalla del conteo.
+    duenos: ['src/modules/supply/', 'src/pages/trabajador/MiAutoinventario.tsx', 'tests/e2e/inventario/', 'supabase/seeds/conta/seed_autoconteo_e2e_staging.sql'],
   },
   {
     // F01 (27/10): las marcas de Last (el aviso de Inicio y el alta en Marcas).
     zona: 'marcas',
     pruebas: 'tests/e2e/marcas',
     capturas: 'docs/marcas/capturas',
-    ficheros: ['src/modules/multitenancy/', 'tests/e2e/marcas/', 'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql'],
+    ficheros: ['src/modules/multitenancy/', 'tests/e2e/marcas/', 'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql', 'supabase/seeds/folvy/seed_f01b_cambios_carta_staging.sql'],
+    duenos: ['src/modules/multitenancy/', 'tests/e2e/marcas/', 'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql', 'supabase/seeds/folvy/seed_f01b_cambios_carta_staging.sql'],
   },
 ]
 
-/** Las zonas que tocan unos ficheros cambiados, en el orden de la tabla. */
+/** Las zonas que tocan unos ficheros cambiados, en el orden de la tabla (qué e2e corre). */
 export function zonasTocadas(cambiados) {
   return ZONAS_POR_FICHERO.filter((z) => cambiados.some((f) => z.ficheros.some((p) => f.startsWith(p))))
+}
+
+/** Las zonas de las que unos ficheros cambiados SON (no solo vecinos): las dueñas de capturas. */
+export function zonasDuenas(cambiados) {
+  return ZONAS_POR_FICHERO.filter((z) => cambiados.some((f) => z.duenos.some((p) => f === p || f.startsWith(p))))
 }
 
 /** La etiqueta de un PR que pide la entera aunque no toque lo común. */

@@ -1,0 +1,10 @@
+# L1a · PR 2 · Las correcciones dentro de la ley y el informe para la Inspección.
+#
+# La 0705 (solo añade: desde la rama va de verdad, W05) y la 0706, y su prueba
+# (ROLLBACK), que empieza por sus vueltas atrás si ya están aplicadas: entra
+# como el trabajador, el encargado, el administrador, otra cuenta y sin
+# sesión; corregir y la conformidad; la firma del mes; el informe; el enlace;
+# las jornadas para revisar; y la vuelta atrás. La 0700 va en el PR 2b.
+supabase/migrations/20261028T0705_l1a_correcciones_firma_e_informe.sql
+supabase/migrations/20261028T0706_l1a_corregir_con_conformidad.sql
+supabase/staging/sql/20261028_l1a_correcciones_e_informe_prueba.sql

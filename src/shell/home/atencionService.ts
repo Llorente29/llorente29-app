@@ -30,9 +30,11 @@
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
 import { leerMarcasLast, ocultarMarca } from '@/modules/multitenancy/services/marcasLastService'
 import { avisoMarca, claveMarca, fraseNoLaUso, iniciales, pendientes } from '@/modules/multitenancy/lib/marcasLast'
+import { leerCambiosCarta } from '@/modules/multitenancy/services/cambiosCartaService'
+import { pideDecidir, resumenCambios } from '@/modules/multitenancy/lib/cambiosCarta'
 
 // F01 (27/10): «marca» = una marca nueva en las cartas de Last, antes de que venda.
-export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante' | 'marca'
+export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante' | 'marca' | 'carta'
 
 export interface AvisoAtencion {
   id: string
@@ -173,7 +175,7 @@ export async function getAvisosAtencion(
   const idsLocales = [...nombreLocal.keys()]
   if (idsLocales.length === 0) return []
 
-  const [conteos, tablets, cuadrantes, marcas] = await Promise.all([
+  const [conteos, tablets, cuadrantes, marcas, cartas] = await Promise.all([
     sb.from('inventory_count').select('id, code, status, location_id, started_at')
       .eq('account_id', accountId).in('status', ESTADOS_CONTEO_VIVO),
     // Solo dispositivos ACTIVOS: uno dado de baja a propósito no es una tablet
@@ -186,6 +188,8 @@ export async function getAvisosAtencion(
       .in('week_start', [semanaActual, semanaSiguiente]),
     // F01: las marcas nuevas de Last (solo las ve quien administra la cuenta).
     leerMarcasLast(accountId).then((m) => ({ data: m, error: null }), (e: unknown) => ({ data: null, error: e })),
+    // F01 · PR 2: los cambios de carta de las marcas de Last (tablero 5).
+    leerCambiosCarta(accountId).then((c) => ({ data: c, error: null }), (e: unknown) => ({ data: null, error: e })),
   ])
   const enAlcance = (loc: unknown) => locationId == null || loc === locationId
   const deQuien = (loc: unknown) =>
@@ -252,6 +256,24 @@ export async function getAvisosAtencion(
         destino: 'Marcas',
       }
     }))
+  }
+
+  // Los cambios de carta que piden una decisión (los platos que se han ido,
+  // solos, no interrumpen: se ven en la pantalla).
+  if (cartas.error) console.error('[atencion] cambios de carta', cartas.error)
+  else {
+    const conCambios = (cartas.data ?? []).filter(pideDecidir)
+    avisos.splice(avisos.filter((a) => a.tipo === 'marca').length, 0, ...conCambios.map((c): AvisoAtencion => ({
+      id: `carta:${c.brandId}`,
+      tipo: 'carta',
+      texto: `Cambios en la carta de ${c.nombre}`,
+      detalle: resumenCambios(c),
+      chip: c.extrasNuevos.length ? { texto: 'Sin decidir', tono: 'aviso' } : undefined,
+      boton: 'Revisar',
+      iniciales: iniciales(c.nombre),
+      ruta: `/configuracion/cambios-last?marca=${encodeURIComponent(c.brandId)}`,
+      destino: 'Marcas · Cambios de Last',
+    })))
   }
 
   return avisos

@@ -1,0 +1,26 @@
+# F01 · PR 2 · Cambios en la carta de una marca que ya tienes (tablero 5):
+# platos nuevos, platos que se van, precios distintos y los extras de Last.
+# Rama claude/f01b-cambios-carta. Se ensaya y se aplica desde esta rama, antes
+# de fusionar.
+#
+#   1. 1910 — SOLO AÑADE (y se puede pasar dos veces): el espejo de los extras
+#      de Last (external_catalog_modifier), lo apuntado al poner precios de Last
+#      (external_catalog_change) y las funciones de la pantalla. No cambia
+#      ninguna función ni dato existente: nada en el camino del pedido.
+#   2. 0650 — CAMBIA EN CALIENTE _f01_alta_marca, misma firma, con su respaldo
+#      byte a byte: el alta de una marca de Last fallaba (23503
+#      brand_created_by_fkey) si quien la da de alta no es empleado, y el
+#      administrador de Foodint no lo es. Declarado en su cabecera, con su
+#      prueba de staging. Nada en el camino del pedido.
+#
+# AUTORIZO: ninguno. El analizador da «sigue» a las dos (la 1910 solo crea; la
+# 0650 cambia en caliente, declarada y fuera del camino del pedido).
+# Datos de Foodint: no cambia ninguno. Los extras los llena last-catalog-sync
+# (cada hora) cuando se despliegue; los precios solo cambian al pulsar «Poner
+# los de Last», y quedan apuntados. La cuenta de abajo lo mide igual a los dos
+# lados.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/f01b-cambios-carta.sql
+supabase/migrations/20261027T1910_f01b_cambios_carta.sql
+supabase/migrations/20261028T0650_f01b_alta_sin_empleado.sql

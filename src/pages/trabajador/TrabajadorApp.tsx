@@ -9,6 +9,7 @@ import type { WorkerModule } from './HomeEmpleado'
 import PortalEmpleado from './PortalEmpleado'
 import type { PortalSubPage } from './PortalEmpleado'
 import { AvisoFichajesPendientes } from './FichajesPendientes'
+import AvisosDelRegistro from './AvisosDelRegistro'
 import { useFichajesPendientes } from './usarFichajesPendientes'
 import FichajeEmpleado from './FichajeEmpleado'
 import MiHorario from './MiHorario'
@@ -489,6 +490,8 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   return (
     <div className="pb-20">
       <AvisoFichajesPendientes {...fichajesSinRed} />
+      {/* L1a · PR 2: las correcciones del encargado por contestar y la firma del mes. */}
+      <AvisosDelRegistro employee={employee} />
       <HomeEmpleado
         employee={employee}
         onNavigate={(mod: WorkerModule) => {

@@ -1,0 +1,16 @@
+# F01 · PR 2 · Cambios de carta. La 1910 solo añade y se puede pasar dos veces:
+# desde la rama, de verdad (W05), y con ella la semilla de los extras de la
+# carta de prueba de la e2e (cuenta A, «Latina de Prueba»).
+supabase/migrations/20261027T1910_f01b_cambios_carta.sql
+supabase/seeds/folvy/seed_f01b_cambios_carta_staging.sql
+
+# La 0650 cambia _f01_alta_marca (el alta, con quien no es empleado): desde la
+# rama, solo en ROLLBACK. Va detrás de la semilla, que no la necesita (W07: así
+# la semilla puede ir de verdad), y delante de su prueba (la sección 0b).
+supabase/migrations/20261028T0650_f01b_alta_sin_empleado.sql
+
+# Su prueba (ROLLBACK): el espejo de extras, los cambios de una marca (plato
+# nuevo, plato que se va, precio por plataforma), poner precios, añadir platos,
+# guardar extras dos veces sin duplicar, una venta de Last con el extra que
+# descuenta almacén, los cuatro caminos de la regla 10 y la vuelta atrás.
+supabase/staging/sql/20261027_f01b_cambios_carta_prueba.sql

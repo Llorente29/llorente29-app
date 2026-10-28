@@ -24,7 +24,7 @@
 import { supabase, isSupabaseEnabled } from '../lib/supabase'
 import type { Database } from '../types/database'
 import type { Location, Employee, ClockEntry, ShiftPeriod, RestPattern } from '../types'
-import { ficharEnElServidor, corregirConMotivo, esFuncionQueNoExiste, esFalloDeRed } from './fichajeServidor'
+import { ficharEnElServidor, corregirConMotivo, esFuncionQueNoExiste } from './fichajeServidor'
 
 // Tipos helper para inserts/updates tipados
 type EmployeeInsert = Database['public']['Tables']['employees']['Insert']
@@ -429,7 +429,15 @@ export async function upsertEmployee(e: Employee): Promise<Employee | null> {
   // tipado rechaza columnas desconocidas; casteamos el row. La columna existe en BD.
   // L1a: se lee de vuelta sin las columnas privadas; las que se acaban de
   // guardar se devuelven tal cual las mandó quien las escribió.
-  const { data, error } = await supabase.from('employees').upsert(row as EmployeeInsert).select(COLUMNAS_DE_LA_FICHA).single()
+  // L1a · PR 2 (28/10): una ficha que ya existe se guarda con UPDATE y una
+  // nueva con INSERT, nunca con upsert. Con el salario, el DNI y el nacimiento
+  // cerrados a la sesión (la tanda siguiente), un INSERT … ON CONFLICT DO
+  // UPDATE falla siempre, también para el administrador (medido en local);
+  // INSERT y UPDATE devolviendo solo las columnas abiertas, no.
+  const { id, ...cambios } = row as EmployeeInsert & { id?: string }
+  const { data, error } = id
+    ? await supabase.from('employees').update(cambios as EmployeeInsert).eq('id', id).select(COLUMNAS_DE_LA_FICHA).single()
+    : await supabase.from('employees').insert(row as EmployeeInsert).select(COLUMNAS_DE_LA_FICHA).single()
   if (error) { console.error('Supabase upsertEmployee:', error); return null }
   const guardada = rowToEmployee(data as unknown as EmployeeRow)
   return e.datosPrivados === 'ocultos'
@@ -595,37 +603,14 @@ export async function insertClockEntry(employeeId: string, entry: ClockEntry): P
     if (err) throw new ClockWriteError(err.message, err.hint, err.code)
     return true
   }
-  // El móvil y la tablet fichan en el servidor (fichar()). Con la base de
-  // antes de la 1905, lo de antes (abajo).
+  // El móvil y la tablet fichan en el servidor (fichar(), en producción desde
+  // el PR 1). No hay INSERT directo de respaldo: la L1a · PR 2b quitará ese
+  // permiso a la sesión. Si la función no está, se dice.
   const r = await ficharEnElServidor(employeeId, entry)
   if (r.tipo === 'guardado') return true
   if (r.tipo === 'rechazado') throw new ClockWriteError(r.error.message, r.error.hint, r.error.code)
   if (r.tipo === 'sin-red') throw new ClockWriteError(r.error.message, r.error.hint, r.error.code, true)
-  const row = {
-    employee_id: employeeId,
-    type: entry.type,
-    datetime: entry.datetime,
-    real_datetime: entry.realDatetime || null,
-    lat: entry.lat ?? null,
-    lng: entry.lng ?? null,
-    address: entry.address || null,
-    scheduled: entry.scheduled || null,
-    rounding_applied: entry.roundingApplied ?? false,
-    diff_minutes: entry.diffMinutes ?? null,
-    source: entry.source || 'kiosko',
-    location_id_at_clock: entry.locationIdAtClock || null,
-    photo_data_url: entry.photoDataUrl || null,
-  }
-  const { error } = await supabase.from('clock_entries').insert(row)
-  if (error) {
-    // NO se degrada a `false`. Hasta el 30/08 este error se quedaba en la
-    // consola, addClockEntry ignoraba el booleano y la pantalla decia
-    // "registrada" igual. Un rechazo del trigger o un fallo de red se leian
-    // como exito, y la persona se iba a casa creyendo que habia fichado.
-    console.error('Supabase insertClockEntry:', error)
-    throw new ClockWriteError(error.message, error.hint ?? null, error.code ?? null, esFalloDeRed(error))
-  }
-  return true
+  throw new ClockWriteError('FICHAR_NO_DISPONIBLE', 'El servidor no tiene la función de fichar. Avisa a tu encargado: NO ha quedado guardado.', null)
 }
 
 // ─── REALTIME ─────────────────────────────────────────────────────────────
