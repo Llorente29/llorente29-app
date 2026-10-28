@@ -18,7 +18,7 @@ import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { leerFueraDelRadio, metros, DIAS_FUERA_DEL_RADIO } from '@/services/fueraDelRadioService'
 import { correccionesEnDesacuerdo, jornadasParaRevisar } from './registroJornadaServicio'
 import { diaMadrid, fechaLarga, horaMadrid } from './calculoJornada'
-import { RAIZ_LABORAL } from './estilo'
+import { PIEZA_LABORAL } from './estilo'
 
 interface Caso {
   clave: string
@@ -110,7 +110,7 @@ export default function ParaRevisar() {
 
   if (error) {
     return (
-      <div className={RAIZ_LABORAL}>
+      <div className={PIEZA_LABORAL}>
         <Tarjeta tono="falta" titulo="Para revisar" apoyo={`No se ha podido leer: ${error}`} />
       </div>
     )
@@ -119,7 +119,7 @@ export default function ParaRevisar() {
 
   const vistos = todos ? casos : casos.slice(0, VISIBLES)
   return (
-    <div className={RAIZ_LABORAL} data-prueba="para-revisar">
+    <div className={PIEZA_LABORAL} data-prueba="para-revisar">
       <Tarjeta compacta titulo={`Para revisar · ${casos.length}`}
         apoyo={`Jornadas de más de 12 h, entradas sin salida, fichajes fuera del radio (${DIAS_FUERA_DEL_RADIO} días) y correcciones en desacuerdo. Nada se arregla solo.`}>
         <div className="l-revisar">
