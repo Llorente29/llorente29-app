@@ -14,10 +14,12 @@ import {
   type OpenShift, type ShiftRequest,
 } from '../services/openShiftsService'
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 type FilterTab = 'abierto' | 'asignado' | 'todos'
 
 export default function TurnosAbiertosPage() {
+  const voc = useProductoLaboral()
   const { staff, locations } = useApp()
   const [filter, setFilter] = useState<FilterTab>('abierto')
   const [shifts, setShifts] = useState<OpenShift[]>([])
@@ -122,7 +124,7 @@ export default function TurnosAbiertosPage() {
   }
 
   function locationName(id: string): string {
-    return locations.find(l => l.id === id)?.name || 'Local'
+    return locations.find(l => l.id === id)?.name || voc.Local
   }
 
   function employeeName(id: string): string {
@@ -326,7 +328,7 @@ export default function TurnosAbiertosPage() {
           <div className="bg-card rounded-xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
             <p className="font-bold text-lg mb-4 text-text-primary">Publicar turno abierto</p>
 
-            <label className="text-xs text-text-secondary block mb-1">Local</label>
+            <label className="text-xs text-text-secondary block mb-1">{voc.Local}</label>
             <select value={locationId} onChange={e => setLocationId(e.target.value)}
               className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary mb-3">
               <option value="">Selecciona...</option>
@@ -352,7 +354,7 @@ export default function TurnosAbiertosPage() {
 
             <label className="text-xs text-text-secondary block mb-1">Puesto (opcional)</label>
             <input type="text" value={position} onChange={e => setPosition(e.target.value)}
-              placeholder="Ej: Camarero, Cocina"
+              placeholder={voc.hosteleria ? 'Ej: Camarero, Cocina' : 'Ej: Administración, Almacén'}
               className="w-full border border-border-default rounded-lg px-3 py-2 text-sm bg-card text-text-primary mb-3" />
 
             <label className="text-xs text-text-secondary block mb-1">Notas (opcional)</label>

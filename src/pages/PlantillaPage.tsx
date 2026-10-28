@@ -20,6 +20,7 @@ import { fetchSalesByLocation } from '../services/teamReportsService'
 import { toISODate } from '../types/scheduler'
 import { fetchRegistroJornadaMensual, fetchRegistroJornadaTotales } from '../services/registroJornadaService'
 import { generateRegistroJornadaPdf } from '../services/registroJornadaPdfService'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
@@ -52,6 +53,7 @@ const eur = (n: number) => n.toLocaleString('es-ES', { style: 'currency', curren
 const hrs = (n: number) => `${n.toLocaleString('es-ES', { maximumFractionDigits: 1 })}h`
 
 export default function PlantillaPage() {
+  const voc = useProductoLaboral()
   const { staff, locations } = useApp()
   const { activeAccountId } = useActiveAccount()
   const { resolvedLocationId } = useLocationScope()
@@ -113,7 +115,7 @@ export default function PlantillaPage() {
     setLoading(true)
     Promise.all([
       fetchTeamHoursSummary(activeAccountId, period.from, period.to, resolvedLocationId ?? undefined),
-      fetchSalesByLocation(activeAccountId, period.from, period.to),
+      voc.hosteleria ? fetchSalesByLocation(activeAccountId, period.from, period.to) : Promise.resolve([]),
     ]).then(([summary, sales]) => {
       if (cancel) return
       setRows(summary)
@@ -124,7 +126,7 @@ export default function PlantillaPage() {
       setLoading(false)
     })
     return () => { cancel = true }
-  }, [activeAccountId, period.from, period.to, resolvedLocationId])
+  }, [activeAccountId, period.from, period.to, resolvedLocationId, voc.hosteleria])
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -161,7 +163,7 @@ export default function PlantillaPage() {
   const locName = (id: string) => locations.find(l => l.id === id)?.name || '—'
 
   function goToFicha(employeeId: string) {
-    navigate(`/personal?employee=${employeeId}`)
+    navigate(`${voc.base}?employee=${employeeId}`)
   }
 
   return (
@@ -208,11 +210,11 @@ export default function PlantillaPage() {
                 <p className="text-xs text-warning mt-0.5 inline-flex items-center gap-1"><AlertTriangle size={11} /> {stats.partialCount} con nómina incompleta</p>
               )}
             </Card>
-            <Card className="p-3">
+            {voc.hosteleria && <Card className="p-3">
               <p className="text-[11px] font-bold uppercase tracking-wide text-text-secondary">% personal / ventas</p>
               <p className="text-2xl font-bold text-text-primary mt-1 tabular-nums">{stats.pctSales == null ? '—' : `${stats.pctSales.toFixed(1)}%`}</p>
               <p className="text-xs text-text-secondary mt-0.5">ventas {salesTotal == null ? '—' : eur(salesTotal)}</p>
-            </Card>
+            </Card>}
           </>
         )}
       </div>
@@ -227,7 +229,7 @@ export default function PlantillaPage() {
             <thead className="bg-page">
               <tr>
                 <Th label="Empleado" sortKey="name" active={sortKey} dir={sortDir} onSort={toggleSort} align="left" sticky />
-                {showLocationColumn && <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">Local</th>}
+                {showLocationColumn && <th className="px-3 py-2 text-left text-xs font-semibold text-text-secondary">{voc.Local}</th>}
                 <Th label="Contratadas" sortKey="contracted" active={sortKey} dir={sortDir} onSort={toggleSort} />
                 <Th label="Trabajadas" sortKey="worked" active={sortKey} dir={sortDir} onSort={toggleSort} />
                 <Th label="Vacaciones" sortKey="vacation" active={sortKey} dir={sortDir} onSort={toggleSort} />

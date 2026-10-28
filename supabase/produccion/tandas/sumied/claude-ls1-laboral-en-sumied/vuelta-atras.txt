@@ -1,0 +1,3 @@
+# LS1 · vuelta atrás: fuera la fila de conta_laboral que puso la 2224 (Laboral
+# deja de verse en el Sumied de Foodint; no se pierde ningún dato).
+supabase/vuelta-atras/20261028T2224_ls1_laboral_en_foodint.down.sql

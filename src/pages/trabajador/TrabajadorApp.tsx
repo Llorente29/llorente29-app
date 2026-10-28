@@ -19,6 +19,8 @@ import MisVacaciones from './MisVacaciones'
 import MiBolsaHoras from '../../components/MiBolsaHoras'
 import MisTurnos from './MisTurnos'
 import CambiosTurnoPage from './CambiosTurnoPage'
+import { useMarcaDelPortal } from './marcaPortal'
+import { SUMIED, conProductoLaboral } from '../../modules/personal/laboral/productoLaboral'
 import MiAutoinventario from './MiAutoinventario'
 import { getMyDailyQueue, getMyManualCounts, type MyManualCount } from '../../modules/supply/services/autoinventoryService'
 import { startInventoryCount } from '../../modules/supply/services/inventoryCountService'
@@ -57,7 +59,17 @@ interface Props {
   exitLabel?: 'logout' | 'back-to-management'
 }
 
-export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'logout' }: Props) {
+/**
+ * LS1 (28/10/2026): con la marca de Sumied, el portal va dentro del contexto
+ * de Sumied (dice «centro», no «local», y nada de hostelería).
+ */
+export default function TrabajadorApp(props: Props) {
+  const marca = useMarcaDelPortal()
+  const portal = <PortalDelTrabajador {...props} />
+  return marca?.soloContabilidad ? conProductoLaboral(SUMIED, portal) : portal
+}
+
+function PortalDelTrabajador({ employeeId, onExitMode, exitLabel = 'logout' }: Props) {
   const {
     staff,
     syncing,
@@ -69,6 +81,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
     refreshStaff,
   } = useApp()
   const [subPage, setSubPage] = useState<SubPage>('home')
+  const marca = useMarcaDelPortal()
 
   /**
    * EL VIGÍA DE VERSIÓN, QUE AQUÍ FALTABA (incidente del 10/09, 12:34).
@@ -343,7 +356,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
       <div className="min-h-screen flex items-center justify-center bg-page">
         <div className="text-center">
           <p className="text-2xl font-display font-medium mb-2 text-accent">
-            Folvy
+            {marca?.nombre ?? 'Folvy'}
           </p>
           <p className="text-sm text-text-secondary">Cargando...</p>
         </div>
@@ -406,7 +419,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
           employee={employee}
           onOpenExecution={(id) => { setCurrentExecutionId(id); setSubPage('appcc_execution') }}
         />
-        <BottomTabBar active="tareas" onSelect={goToTab} showTareas={showAppccTab} />
+        <BottomTabBar active="tareas" onSelect={goToTab} showTareas={showAppccTab && !marca} />
       </div>
     )
   }
@@ -472,7 +485,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
           onNavigate={(p: PortalSubPage) => { if (p === 'fichar') setFicharOrigin('portal'); setSubPage(p) }}
           showBolsaHoras={visibility.showHourBank}
         />
-        <BottomTabBar active="mas" onSelect={goToTab} showTareas={showAppccTab} />
+        <BottomTabBar active="mas" onSelect={goToTab} showTareas={showAppccTab && !marca} />
       </div>
     )
   }
@@ -511,8 +524,9 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
         onOpenManualCount={handleOpenManualCount}
         manualBusyId={manualBusyId}
         manualError={manualError}
+        marca={marca}
       />
-      <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab} />
+      <BottomTabBar active="inicio" onSelect={goToTab} showTareas={showAppccTab && !marca} />
     </div>
   )
 }

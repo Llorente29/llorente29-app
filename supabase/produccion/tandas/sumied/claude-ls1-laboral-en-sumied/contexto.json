@@ -1,0 +1,23 @@
+{
+  "_que": "LS1 · contexto de producción de la tanda (2224), medido en SOLO LECTURA el 28/10 a las 21:25 UTC con la consulta del analizador (sql-contexto). Existe feature_flags (su único disparador es trg_set_updated_at); Foodint no tiene fila de conta_laboral y ninguna cuenta lo tiene encendido. Nada está en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-28T21:25Z",
+  "tanda": {
+    "supabase/migrations/20261028T2224_ls1_laboral_en_foodint.sql": "65eb68ce4247e854f1d1b1fdda320a92"
+  },
+  "contexto": {
+    "tablas": [
+      "public.feature_flags"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.feature_flags": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

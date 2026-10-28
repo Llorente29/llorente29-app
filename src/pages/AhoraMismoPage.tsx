@@ -26,6 +26,7 @@ import { getMondayOfWeek, toISODate, shiftDurationHours, type DayOfWeek } from '
 import { isSupabaseEnabled, supabase } from '../lib/supabase'
 import { getStaffingGaps, type StaffingGap } from '../modules/multitenancy/services/businessHoursService'
 import { fetchMinRestMinutes } from '../services/breakPolicyService'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 // F4.4 — horas transcurridas desde la última salida ANTES de ahora (la
 // jornada previa, no la de hoy si sigue dentro). clockEntries viene más
@@ -38,6 +39,7 @@ function hoursSinceLastRest(clockEntries: ClockEntry[], now: Date): number | nul
 }
 
 export default function AhoraMismoPage() {
+  const voc = useProductoLaboral()
   const { staff, locations } = useApp()
   const { activeAccountId } = useActiveAccount()
   const [now, setNow] = useState(new Date())
@@ -286,7 +288,7 @@ export default function AhoraMismoPage() {
               ? 'bg-accent text-text-on-accent'
               : 'bg-card border border-border-default text-text-secondary hover:border-accent'
           }`}>
-          Todos los locales
+          Todos los {voc.locales}
         </button>
         {locations.filter(l => l.active).map(l => (
           <button key={l.id} onClick={() => setFilterLoc(l.id)}
@@ -343,7 +345,7 @@ export default function AhoraMismoPage() {
             <Users size={48} className="text-accent" />
           </div>
           <p className="font-semibold text-text-primary">Sin empleados</p>
-          <p className="text-xs text-text-secondary mt-1">No hay empleados activos en este local</p>
+          <p className="text-xs text-text-secondary mt-1">No hay empleados activos en este {voc.local}</p>
         </Card>
       )}
     </div>

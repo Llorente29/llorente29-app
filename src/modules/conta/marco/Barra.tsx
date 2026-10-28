@@ -63,6 +63,7 @@ function Paginas({ p, paginas, actual, contadores, search, alPulsar }: {
             <Link to={conConsulta(rutaConta(t.ruta!), search)} className="s-barra-pagina" aria-current={t.id === actual ? 'page' : undefined}
               aria-describedby={desc} onClick={alPulsar}>
               <span className="s-barra-nombre">{t.etiqueta}</span>
+              {t.llega && <span className="s-barra-pagina-chip" data-tono="llega">{t.llega}</span>}
               {c && (c.partes
                 ? c.partes.map((x) => <span key={x.frase} className="s-barra-pagina-chip" data-tono={c.tono} aria-hidden="true" title={x.frase}>{x.n}</span>)
                 : <span className="s-barra-pagina-chip" data-tono={c.tono} aria-hidden="true" title={c.frase}>{c.n}</span>)}

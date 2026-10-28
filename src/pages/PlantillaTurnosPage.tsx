@@ -17,6 +17,7 @@ import {
   shiftDurationHours,
   DAY_LABELS_SHORT,
 } from '../types/scheduler';
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6];
 const DAY_FIELD: Record<DayOfWeek, keyof ShiftTemplate> = {
@@ -30,6 +31,7 @@ const DAY_FIELD: Record<DayOfWeek, keyof ShiftTemplate> = {
 };
 
 export default function PlantillaTurnosPage() {
+  const voc = useProductoLaboral()
   const { locations } = useApp();
   const [locationId, setLocationId] = useState<string>('');
   const [templates, setTemplates] = useState<ShiftTemplate[]>([]);
@@ -97,12 +99,11 @@ export default function PlantillaTurnosPage() {
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6">
         <h1 className="font-display text-2xl text-accent">
-          Plantilla de turnos del local
+          Plantilla de turnos {voc.delLocal}
         </h1>
         <p className="text-sm text-text-secondary mt-1">
-          Define qué horarios puede abrir el local y cuántas personas necesita
-          en cada turno por día de la semana. El generador automático usará
-          esto como base.
+          Define qué horarios puede abrir {voc.elLocal} y cuántas personas necesita
+          en cada turno por día de la semana.{voc.hosteleria && ' El generador automático usará esto como base.'}
         </p>
       </div>
 
@@ -119,7 +120,7 @@ export default function PlantillaTurnosPage() {
 
       {/* Selector de local */}
       <div className="mb-4 flex items-center gap-3">
-        <label className="text-sm font-medium text-text-primary">Local:</label>
+        <label className="text-sm font-medium text-text-primary">{voc.Local}:</label>
         <select
           value={locationId}
           onChange={(e) => setLocationId(e.target.value)}
@@ -437,6 +438,7 @@ function NewTemplateForm({ locationId, onCancel, onCreated }: NewTemplateFormPro
 /* ========== Resumen de horas necesarias semana ========== */
 
 function CoverageSummary({ templates }: { templates: ShiftTemplate[] }) {
+  const voc = useProductoLaboral()
   const totals = useMemo(() => {
     let totalShifts = 0;
     let totalHours = 0;
@@ -478,7 +480,7 @@ function CoverageSummary({ templates }: { templates: ShiftTemplate[] }) {
         </div>
       </div>
       <p className="text-xs text-text-secondary mt-2">
-        Estas horas se repartirán entre los empleados del local respetando sus
+        Estas horas se repartirán entre los empleados {voc.delLocal} respetando sus
         jornadas contratadas.
       </p>
     </div>

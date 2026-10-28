@@ -9,6 +9,7 @@
 // NO toca FormacionesTab.tsx ni employee_formations (certificados externos,
 // tabla y pantalla aparte, fuera de alcance de C1).
 
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -59,6 +60,13 @@ const STATUS_BADGE: Record<Course['status'], { label: string; color: string }> =
 // Orden lógico del catálogo (guía §5.bis / catálogo v2 §6), no alfabético:
 // cumplimiento primero (es lo obligatorio), 'sin_categoria' al final para no
 // esconder cursos aún sin clasificar (deuda declarada, no un descarte).
+/** Categorías que son de hostelería: en Sumied no se enseñan. */
+const CATEGORIAS_HOSTELERIA: (CourseCategory | 'sin_categoria')[] = ['cocina', 'delivery', 'sala', 'producto']
+/** En Sumied, fuera las plantillas de hostelería (categoría o prerrequisito APPCC). */
+function esDeHosteleria(c: Course): boolean {
+  return !!c.appccPrerequisite || (!!c.category && CATEGORIAS_HOSTELERIA.includes(c.category))
+}
+
 const CATEGORY_ORDER: (CourseCategory | 'sin_categoria')[] = [
   'cumplimiento', 'cocina', 'delivery', 'sala', 'equipo', 'producto', 'sostenibilidad', 'sin_categoria',
 ]
@@ -102,6 +110,7 @@ const CATEGORY_BG: Record<CourseCategory | 'sin_categoria', string> = {
 }
 
 export default function CoursesPage() {
+  const voc = useProductoLaboral()
   const { activeAccountId, staff, locations } = useApp()
   const [courses, setCourses] = useState<Course[]>([])
   const [businessType, setBusinessType] = useState<string | null>(null)
@@ -278,7 +287,8 @@ export default function CoursesPage() {
             c.accountId === null
             && c.deliveryMode !== 'solo_archivo'
             && !adoptedOriginIds.has(c.id)
-            && coursesService.courseAppliesToBusinessType(c, businessType),
+            && coursesService.courseAppliesToBusinessType(c, businessType)
+            && (voc.hosteleria || !esDeHosteleria(c)),
           )
           // Certificados externos: si la cuenta ya adoptó su copia, se enseña
           // ESA (puede llevar notas/ajustes propios); si no, la plantilla
@@ -288,7 +298,7 @@ export default function CoursesPage() {
             const existing = soloByCode.get(c.code)
             if (!existing || (c.accountId !== null && existing.accountId === null)) soloByCode.set(c.code, c)
           }
-          const external = [...soloByCode.values()]
+          const external = [...soloByCode.values()].filter(c => voc.hosteleria || !esDeHosteleria(c))
 
           const filtered = mine.filter(c =>
             (categoryFilter === 'todas' || c.category === categoryFilter) &&
@@ -316,6 +326,7 @@ export default function CoursesPage() {
                       <option value="todas">Todas las categorías</option>
                       {(Object.keys(CATEGORY_LABEL) as (CourseCategory | 'sin_categoria')[])
                         .filter((k): k is CourseCategory => k !== 'sin_categoria')
+                        .filter(k => voc.hosteleria || !CATEGORIAS_HOSTELERIA.includes(k))
                         .map(k => <option key={k} value={k}>{CATEGORY_LABEL[k]}</option>)}
                     </Select>
                   </div>
@@ -329,7 +340,7 @@ export default function CoursesPage() {
 
                 {mine.length === 0 ? (
                   <Card className="p-8 text-center">
-                    <p className="text-sm text-text-secondary">Todavía no tienes ningún curso propio. Añade uno del catálogo Folvy o crea el primero.</p>
+                    <p className="text-sm text-text-secondary">Todavía no tienes ningún curso propio. Añade uno del catálogo {voc.marca} o crea el primero.</p>
                   </Card>
                 ) : filtered.length === 0 ? (
                   <Card className="p-8 text-center">
@@ -356,8 +367,8 @@ export default function CoursesPage() {
               {/* Zona 2 — Catálogo Folvy (plantillas sin adoptar) */}
               {catalog.length > 0 && (
                 <section>
-                  <h2 className="font-display text-lg text-text-primary mb-1">Catálogo Folvy</h2>
-                  <p className="text-sm text-text-secondary mb-4">Plantillas de Folvy que aún no tienes. Añádelas para empezar a asignarlas.</p>
+                  <h2 className="font-display text-lg text-text-primary mb-1">{voc.sumied ? 'Catálogo de cursos' : 'Catálogo Folvy'}</h2>
+                  <p className="text-sm text-text-secondary mb-4">{voc.sumied ? 'Plantillas' : 'Plantillas de Folvy'} que aún no tienes. Añádelas para empezar a asignarlas.</p>
                   {adoptCatalogError && <Alert type="error" className="mb-4">{adoptCatalogError}</Alert>}
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {catalog.map(c => (
@@ -379,7 +390,7 @@ export default function CoursesPage() {
               {external.length > 0 && (
                 <section>
                   <h2 className="font-display text-lg text-text-primary mb-1">Certificados externos</h2>
-                  <p className="text-sm text-text-secondary mb-4">Formación que Folvy vigila pero no imparte.</p>
+                  <p className="text-sm text-text-secondary mb-4">Formación que {voc.marca} vigila pero no imparte.</p>
                   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     {external.map(c => (
                       <SoloArchivoCard key={c.id} course={c} imageUrl={imageUrlFor(c)} onClick={() => setSelectedId(c.id)} />
@@ -524,6 +535,7 @@ function SoloArchivoCard({ course, imageUrl, onClick }: { course: Course; imageU
 function CreateCourseModal({ open, onClose, accountId, onCreated }: {
   open: boolean; onClose: () => void; accountId: string; onCreated: () => void
 }) {
+  const voc = useProductoLaboral()
   const [code, setCode] = useState('')
   const [title, setTitle] = useState('')
   const [legalBasis, setLegalBasis] = useState('')
@@ -574,8 +586,8 @@ function CreateCourseModal({ open, onClose, accountId, onCreated }: {
         <div>
           <Label>Modo de entrega</Label>
           <Select value={deliveryMode} onChange={e => setDeliveryMode(e.target.value as DeliveryMode)}>
-            <option value="folvy_imparte">Folvy imparte</option>
-            <option value="solo_archivo">Solo archivo (Folvy no imparte)</option>
+            <option value="folvy_imparte">{voc.marca} imparte</option>
+            <option value="solo_archivo">Solo archivo ({voc.marca} no imparte)</option>
             <option value="mixto">Mixto</option>
           </Select>
         </div>
@@ -612,6 +624,7 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
   onAdopted: (newCourseId: string) => void
   onPreview: () => void
 }) {
+  const voc = useProductoLaboral()
   const [tab, setTab] = useState<'contenido' | 'asignar' | 'seguimiento'>('contenido')
   const editable = course.accountId !== null
 
@@ -626,7 +639,7 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
           <h1 className="font-display text-xl text-text-primary truncate">{course.title}</h1>
         </div>
         <Badge color={STATUS_BADGE[course.status].color}>{STATUS_BADGE[course.status].label}</Badge>
-        {!editable && <Badge color="blue">Plantilla Folvy · solo lectura</Badge>}
+        {!editable && <Badge color="blue">Plantilla {voc.marca} · solo lectura</Badge>}
         <Button variant="outline" size="sm" onClick={onPreview}>
           <BookOpen size={14} /> Vista previa
         </Button>
@@ -637,10 +650,10 @@ function CourseDetail({ course, accountId, staff, locations, onBack, onChanged, 
       <div className="mb-5">
         <p className="text-sm text-text-secondary">{course.legalBasis || 'Sin base legal declarada'}</p>
         <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <Badge color="gray">{DELIVERY_LABEL[course.deliveryMode]}</Badge>
+          <Badge color="gray">{DELIVERY_LABEL[course.deliveryMode].replace('Folvy', voc.marca)}</Badge>
           {course.level && <Badge color="gray">{LEVEL_LABEL[course.level]}</Badge>}
           {course.isMandatory && <Badge color="blue">Obligatorio</Badge>}
-          {course.appccPrerequisite && <Badge color="yellow">Prerrequisito APPCC</Badge>}
+          {voc.hosteleria && course.appccPrerequisite && <Badge color="yellow">Prerrequisito APPCC</Badge>}
         </div>
       </div>
 
@@ -672,6 +685,7 @@ function ContenidoTab({ course, accountId, editable, onChanged, onAdopted }: {
   course: Course; accountId: string; editable: boolean; onChanged: () => void
   onAdopted: (newCourseId: string) => void
 }) {
+  const voc = useProductoLaboral()
   const [content, setContent] = useState<CourseWithContent | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -713,10 +727,10 @@ function ContenidoTab({ course, accountId, editable, onChanged, onAdopted }: {
     <div className="space-y-6">
       {!editable && (
         <Alert type="info">
-          <p>Este curso es una plantilla de Folvy. Su contenido legal no se edita desde aquí — solo se asigna.</p>
+          <p>Este curso es una plantilla de {voc.marca}. Su contenido legal no se edita desde aquí — solo se asigna.</p>
           <p className="mt-2">
-            Para poner una foto de tu propia cocina en una sección, primero hay que adoptar el curso a tu cuenta
-            (se crea una copia propia; la plantilla de Folvy no se toca y el resto de clientes sigue viendo la suya).
+            Para poner una foto de {voc.hosteleria ? 'tu propia cocina' : 'tu empresa'} en una sección, primero hay que adoptar el curso a tu cuenta
+            (se crea una copia propia; la plantilla de {voc.marca} no se toca y el resto de clientes sigue viendo la suya).
           </p>
           {adoptError && <p className="mt-2 text-danger">{adoptError}</p>}
           <div className="mt-3">
@@ -1134,6 +1148,7 @@ function CoverCard({ course, editable, accountId, adoptedFromCourseId, onChanged
   adoptedFromCourseId: string | null
   onChanged: () => void
 }) {
+  const voc = useProductoLaboral()
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageFailed, setImageFailed] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -1170,7 +1185,7 @@ function CoverCard({ course, editable, accountId, adoptedFromCourseId, onChanged
       await revertCoverToFolvy(course.id, accountId)
       onChanged()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo volver a la portada de Folvy')
+      setError(err instanceof Error ? err.message : `No se pudo volver a la portada de ${voc.marca}`)
     } finally {
       setBusy(false)
     }
@@ -1197,7 +1212,7 @@ function CoverCard({ course, editable, accountId, adoptedFromCourseId, onChanged
             </Button>
             {adoptedFromCourseId && (
               <Button size="sm" variant="ghost" onClick={revertToFolvy} disabled={busy}>
-                Volver a la portada de Folvy
+                Volver a la portada de {voc.marca}
               </Button>
             )}
           </div>
@@ -1214,6 +1229,7 @@ function SectionCard({ section, editable, accountId, adoptedFromCourseId, onChan
   adoptedFromCourseId: string | null
   onChanged: () => void
 }) {
+  const voc = useProductoLaboral()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(section.title)
   const [body, setBody] = useState(section.body)
@@ -1266,7 +1282,7 @@ function SectionCard({ section, editable, accountId, adoptedFromCourseId, onChan
       await revertSectionImageToFolvy(section.id, accountId)
       onChanged()
     } catch (err) {
-      setImageError(err instanceof Error ? err.message : 'No se pudo volver a la imagen de Folvy')
+      setImageError(err instanceof Error ? err.message : `No se pudo volver a la imagen de ${voc.marca}`)
     } finally {
       setImageBusy(false)
     }
@@ -1323,7 +1339,7 @@ function SectionCard({ section, editable, accountId, adoptedFromCourseId, onChan
             </Button>
             {adoptedFromCourseId && (
               <Button size="sm" variant="ghost" onClick={revertToFolvy} disabled={imageBusy}>
-                Volver a la imagen de Folvy
+                Volver a la imagen de {voc.marca}
               </Button>
             )}
           </div>
@@ -1458,13 +1474,16 @@ function QuestionCard({ question, editable, onChanged }: {
 function AsignarTab({ course, accountId, staff, locations }: {
   course: Course; accountId: string; staff: Employee[]; locations: Location[]
 }) {
+  const voc = useProductoLaboral()
   const [assignments, setAssignments] = useState<CourseAssignment[]>([])
   const [matrix, setMatrix] = useState<TrainingComplianceRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
   const [targetType, setTargetType] = useState<'empleado' | 'puesto' | 'local'>('empleado')
   const [employeeId, setEmployeeId] = useState('')
-  const [role, setRole] = useState(POSITIONS[0])
+  // En Sumied los puestos son los que tiene escritos el equipo, no los de cocina.
+  const puestos = voc.hosteleria ? POSITIONS : [...new Set(staff.map(e => (e.position ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b))
+  const [role, setRole] = useState(puestos[0] ?? '')
   const [locationId, setLocationId] = useState('')
   const [dueAt, setDueAt] = useState('')
   const [saving, setSaving] = useState(false)
@@ -1568,7 +1587,7 @@ function AsignarTab({ course, accountId, staff, locations }: {
   function targetLabel(a: CourseAssignment): string {
     if (a.employeeId) return staff.find(e => e.id === a.employeeId)?.name ?? 'Empleado'
     if (a.role) return `Puesto: ${a.role}`
-    if (a.locationId) return `Local: ${locations.find(l => l.id === a.locationId)?.name ?? a.locationId}`
+    if (a.locationId) return `${voc.Local}: ${locations.find(l => l.id === a.locationId)?.name ?? a.locationId}`
     return '—'
   }
 
@@ -1593,7 +1612,7 @@ function AsignarTab({ course, accountId, staff, locations }: {
             <Select value={targetType} onChange={e => { setTargetType(e.target.value as typeof targetType); setDuplicateOf(null) }}>
               <option value="empleado">Un empleado</option>
               <option value="puesto">Todo un puesto</option>
-              <option value="local">Todo un local</option>
+              <option value="local">Todo un {voc.local}</option>
             </Select>
           </div>
           <div>
@@ -1614,13 +1633,13 @@ function AsignarTab({ course, accountId, staff, locations }: {
           <div className="mt-3">
             <Label>Puesto</Label>
             <Select value={role} onChange={e => { setRole(e.target.value); setDuplicateOf(null) }}>
-              {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+              {puestos.map(p => <option key={p} value={p}>{p}</option>)}
             </Select>
           </div>
         )}
         {targetType === 'local' && (
           <div className="mt-3">
-            <Label>Local</Label>
+            <Label>{voc.Local}</Label>
             <Select value={locationId} onChange={e => { setLocationId(e.target.value); setDuplicateOf(null) }}>
               <option value="">Selecciona…</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
@@ -1731,6 +1750,7 @@ function useSimpleToast() {
 }
 
 function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }) {
+  const voc = useProductoLaboral()
   const { activeAccount } = useApp()
   const navigate = useNavigate()
   const [rows, setRows] = useState<TrackingRow[]>([])
@@ -1883,9 +1903,9 @@ function SeguimientoTab({ course, staff }: { course: Course; staff: Employee[] }
         <Button variant="outline" size="sm" onClick={handleNotifyPending} disabled={notifyingBulk}>
           <Send size={14} /> {notifyingBulk ? 'Avisando…' : 'Avisar a los pendientes'}
         </Button>
-        <Button variant="outline" size="sm" onClick={() => navigate('/appcc/formacion')}>
+        {voc.hosteleria && <Button variant="outline" size="sm" onClick={() => navigate('/appcc/formacion')}>
           Ver informe de inspección
-        </Button>
+        </Button>}
         <Button variant="outline" size="sm" onClick={downloadActa} disabled={generatingActa}>
           {generatingActa ? 'Generando acta…' : 'Descargar acta de sesión'}
         </Button>

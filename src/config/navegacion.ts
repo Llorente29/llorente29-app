@@ -273,6 +273,11 @@ export const CONTA = {
     impuestos: 'impuestos',
     /** I01b · Una pestaña de Impuestos: presentados, sociedades, certificados. */
     impuestosPestana: 'impuestos/:pestana',
+    /** LS1 · Laboral (28/10): Equipo, y cada página por su nombre, el mismo que en Folvy › Personal. */
+    laboral: 'laboral',
+    laboralPagina: 'laboral/:pagina',
+    /** LS1 · Lo que llega más adelante (contrato y convenio, nóminas, seguros sociales, SEPE). */
+    laboralLlega: 'laboral/llega/:que',
     /** I01b · El IVA de un periodo (tablero 9): impuestos/iva/2026/3T. */
     impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
     /** I01c · El trimestre (maqueta_303_v2): impuestos/trimestre/2026/3T. */

@@ -1,0 +1,3 @@
+# LS1 · Laboral en Sumied. La 2224 solo añade (y en staging no hace nada: no
+# está Foodint). La e2e enciende Laboral en la empresa sola de su carril.
+supabase/migrations/20261028T2224_ls1_laboral_en_foodint.sql

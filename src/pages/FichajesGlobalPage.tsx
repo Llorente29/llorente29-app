@@ -15,6 +15,7 @@ import {
 } from '../services/clockEditService'
 import { etiquetaOrigen } from '../services/fichajeKiosko'
 import { descargarTextoRegistroDeJornada } from '../lib/registroDeJornadaTexto'
+import { useProductoLaboral, enVocabulario } from '@/modules/personal/laboral/productoLaboral'
 
 const DEFAULT_RADIUS_M = 200
 
@@ -43,6 +44,7 @@ function prettyISO(iso: string): string {
 }
 
 export default function FichajesGlobalPage() {
+  const voc = useProductoLaboral()
   const { staff, locations } = useApp()
   const today = new Date()
   // L1a · PR 2 (28/10): «Corregir» desde «Para revisar» llega con
@@ -180,7 +182,7 @@ export default function FichajesGlobalPage() {
           </select>
         </div>
         <div className="flex items-center gap-2">
-          <label className="text-xs text-text-secondary">Local</label>
+          <label className="text-xs text-text-secondary">{voc.Local}</label>
           <select value={locFilter} onChange={e => setLocFilter(e.target.value)}
             className="border border-border-default rounded-md px-2 py-1.5 text-sm bg-card text-text-primary">
             <option value="todas">Todos</option>
@@ -584,6 +586,7 @@ function VoidModal({ entry, onClose, submit }: {
   onClose: () => void
   submit: (reason: string) => Promise<void>
 }) {
+  const voc = useProductoLaboral()
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
@@ -609,7 +612,7 @@ function VoidModal({ entry, onClose, submit }: {
             <span className="text-text-secondary">Fichaje:</span> <span className="text-text-primary font-medium">{entry.employeeName} · {entry.type === 'entrada' ? 'Entrada' : 'Salida'} · {prettyISO(entry.datetime)}</span>
           </div>
           <p className="text-xs text-text-secondary mb-3">Se conserva anulado para el rastro legal (no se borra).</p>
-          <div className="mb-4"><ReasonPicker options={REASONS_VOID} value={reason} onChange={setReason} /></div>
+          <div className="mb-4"><ReasonPicker options={REASONS_VOID.map(r => enVocabulario(r, voc))} value={reason} onChange={setReason} /></div>
           <ErrLine err={err} />
           <button disabled={finalReason.length === 0 || busy} onClick={go}
             className="w-full py-3 rounded-xl bg-danger text-text-on-accent font-medium hover:opacity-90 disabled:opacity-50 transition-base">
