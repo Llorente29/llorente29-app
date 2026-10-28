@@ -56,12 +56,12 @@ describe('N1 · el NIF que se propone, si vale y qué se guarda', () => {
 describe('N1 · en la ficha de la recibida', () => {
   const pagina = readFileSync('src/modules/conta/documentos/RevisarFacturaPage.tsx', 'utf8')
   it('el bloque sale cuando su ficha no tiene NIF y no está validada, y al guardar vuelve a preparar el asiento', () => {
-    expect(pagina).toContain('!soloLectura && !fac.asiento && fac.proveedor?.id && fichaProv.datos && !fichaProv.datos.taxId && (')
+    expect(pagina).toContain('!soloLectura && !fac.asiento && fac.proveedor?.id && fichaProv.datos?.id === fac.proveedor.id && !fichaProv.datos.taxId && (')
     expect(pagina).toContain('alGuardar={(t) => { setNifGuardado({ id: invoiceId, texto: t }); setVuelta((v) => v + 1) }}')
     expect(pagina).toContain('data-prueba="nif-guardado"')
   })
   it('el NIF ya no espera «al validar» en la nota del documento: lo guarda el bloque (el resto, sí, al validar)', () => {
-    expect(pagina).toContain("if (c.proponer.taxId) { delete c.proponer.taxId; c.frases = c.frases.filter((f) => !f.startsWith('el NIF ')) }")
+    expect(pagina).toContain("if (c.proponer.taxId) { delete c.proponer.taxId; c.frases = c.frases.filter((f) => !f.startsWith('el NIF ')); c.campos = c.campos.filter((x) => x !== 'nif') }")
     // La frase que se quita es la que escribe completarFicha.
     expect(completarFicha({ ...fichaCarrefour }, { ...CARREFOUR, nif: AMIRSA }).frases[0]).toBe(`el NIF ${AMIRSA}`)
   })

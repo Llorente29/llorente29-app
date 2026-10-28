@@ -304,3 +304,10 @@
   .cxdo-compras-lista li { grid-template-columns: 1fr auto; }
   .cxdo-compras-acciones { grid-column: 1 / -1; justify-content: flex-end; }
 }
+
+/* S01b · Lo que trae la factura para su ficha, con el mismo margen que los bloques de la ficha. */
+.cxf-desde-documento { padding: var(--s-4) var(--s-5); display: flex; flex-direction: column; gap: var(--s-3); border-top: 1px solid var(--s-linea); }
+.cxf-desde-documento > .s-apoyo { margin: 0; }
+/* S01b · «Dar de alta a <nombre>» va en la columna estrecha del proveedor: con un nombre largo,
+   el botón partía la línea por fuera y el campo de al lado se quedaba el clic. Se parte dentro. */
+.cxf-alta-enlaces .s-boton-enlace { display: inline; max-width: 100%; height: auto; white-space: normal; overflow: visible; overflow-wrap: anywhere; text-align: left; }

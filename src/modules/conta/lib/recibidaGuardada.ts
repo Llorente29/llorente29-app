@@ -71,3 +71,15 @@ export function aplicarAsientoAMano(p: Propuesta, overrides: unknown): Propuesta
   })
   return { ...p, lineas, razones: [...p.razones, { decision: 'A mano', porque: 'el asiento se tocó a mano en su ficha: van sus cuentas e importes' }] }
 }
+
+/**
+ * S01b · La cuenta de gasto que dice la ficha de la factura (su reparto guardado, 0790), para el
+ * proveedor que no tiene tipo de gasto ni historia: la del primer gasto, por su posición. Sin
+ * reparto, null.
+ */
+export function cuentaDelReparto(filas: readonly { position?: unknown; account_code?: unknown }[]): string | null {
+  const conCuenta = filas.filter((x) => typeof x.account_code === 'string' && x.account_code.trim() !== '')
+  if (conCuenta.length === 0) return null
+  const primera = [...conCuenta].sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))[0]
+  return String(primera.account_code).trim()
+}

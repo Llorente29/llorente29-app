@@ -1,0 +1,8 @@
+# S01b · El proveedor desde la factura: de qué factura sale cada dato y
+# «Guardar este IBAN» (1304), y el IBAN que ya no entra solo (1305). En
+# ROLLBACK desde la rama, con su prueba: el IBAN no se pone solo (al leerla ni
+# al elegir después), el distinto como siempre, «Guardar este IBAN» con quién,
+# cuándo y de qué factura, lo que no se puede, y las vueltas atrás.
+supabase/migrations/20261028T1304_s01b_ficha_desde_factura.sql
+supabase/migrations/20261028T1305_s01b_iban_no_se_pone_solo.sql
+supabase/staging/sql/20261028_s01b_ficha_desde_factura_prueba.sql

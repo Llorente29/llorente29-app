@@ -20,8 +20,8 @@
 // proveedor: al volver, sigue ahí.
 
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
-import { rutaDocumentos, rutaRevisarFactura, rutaTerceros } from '@/config/navegacion'
+import { useNavigate } from 'react-router-dom'
+import { rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
@@ -39,6 +39,8 @@ import { guardarRecibidaAMano, tiposDeIvaRecibida } from '@/modules/conta/servic
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { borradorDe, cambiosParaLaBase, comprobarAMano, noSeGuardaAMano, totalesDe, type BorradorFicha } from '@/modules/conta/documentos/fichaRecibida'
 import { BloqueGasto, BloqueImportesIva, BloquePago, BloqueProveedorFactura, HuecoPapel } from '@/modules/conta/documentos/FichaRecibidaBloques'
+import { FormularioAltaProveedor } from '@/modules/conta/proveedor/NuevoProveedorDialogo'
+import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
 
 const GUARDADO = 'conta.recibidaAMano.ficha'
 const sinCambio = () => undefined
@@ -76,6 +78,8 @@ export default function RecibidaAMano() {
   const [fichero, setFichero] = useState<{ file: File; url: string } | null>(null)
   const [intentado, setIntentado] = useState(false)
   const [guardando, setGuardando] = useState(false)
+  const [altaAbierta, setAltaAbierta] = useState(false)
+  const [avisoAlta, setAvisoAlta] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   useEffect(() => { guardarBorrador(b) }, [b])
   useEffect(() => () => { if (fichero) URL.revokeObjectURL(fichero.url) }, [fichero])
@@ -134,7 +138,20 @@ export default function RecibidaAMano() {
   if (ejeLocal && locales.error) return <ErrorConReintento mensaje={locales.error} reintentar={locales.recargar} />
   if (!proveedores.datos || !tipos.datos || (ejeLocal && !locales.datos)) return <TarjetaCargando />
 
-  const altaProveedor = <Link to={`${rutaTerceros()}?nuevo=proveedor`} className="cx-enlace">+ Dar de alta un proveedor</Link>
+  // S01b · El alta, aquí mismo y con el mismo formulario de «Subir factura»: al crearlo queda elegido; lo escrito no se pierde.
+  const altaProveedor = !b.proveedorId && !altaAbierta
+    ? <button type="button" className="s-boton s-boton-enlace" onClick={() => setAltaAbierta(true)} data-prueba="alta-a-mano">+ Dar de alta un proveedor</button>
+    : undefined
+  const altaDebajo = <>
+    {altaAbierta && accountId && (
+      <div className="cxf-alta" data-prueba="formulario-alta-a-mano">
+        <FormularioAltaProveedor accountId={accountId} otros={proveedores.datos.map((p) => ({ name: p.nombre, taxId: p.nif }))} sinForm
+          textoCrear="Darlo de alta y elegirlo" alCancelar={() => setAltaAbierta(false)}
+          alCrear={(p) => { setAltaAbierta(false); poner({ proveedorId: p.id }); setAvisoAlta(fraseAltaEnFactura(p.name)); proveedores.recargar() }} />
+      </div>
+    )}
+    {avisoAlta && <p className="s-aviso-lista" data-tono="ok" role="status">{avisoAlta}</p>}
+  </>
   const botones = (
     <div className="s-pie">
       <Boton variante="secundario" onClick={cancelar} ancho={movil}>Cancelar</Boton>
@@ -145,7 +162,7 @@ export default function RecibidaAMano() {
   const datos = (
     <form onSubmit={(e) => void guardar(e)} noValidate className="cxf-a-mano-form">
       <BloqueProveedorFactura proveedorId={b.proveedorId} numero={b.numero} fecha={b.fecha} proveedores={proveedores.datos}
-        alCambiar={poner} cambioDe={sinCambio} deshacer={sinCambio} soloLectura={false} altaProveedor={altaProveedor}
+        alCambiar={poner} cambioDe={sinCambio} deshacer={sinCambio} soloLectura={false} altaProveedor={altaProveedor} debajo={altaDebajo}
         motivoProveedor={(() => { const p = proveedores.datos!.find((x) => x.id === b.proveedorId); return p?.nif ? `NIF ${p.nif}, de su ficha` : undefined })()}
         errores={{ proveedor: err.proveedor, numero: err.numero, fecha: err.fecha }} />
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={listaTipos} totales={totales} pdf={null} fuente="factura"

@@ -20,7 +20,8 @@
 
 import { useState } from 'react'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
-import { Campo, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
+import { Campo, OrigenDelDato, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
+import { origenDelCampo } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { Propuestas } from '@/modules/conta/proveedor/Propuestas'
 import { useGuardarAlSalir } from '@/modules/conta/proveedor/useGuardarAlSalir'
 import { Guardado } from '@/modules/conta/ui/piezas'
@@ -159,6 +160,7 @@ function Formulario() {
         {(p) => <input {...p} className="cx-input" value={legalName} onChange={(e) => setLegalName(e.target.value)}
           onBlur={() => void g.guardar({ legalName: legalName.trim() || null }, 'razón social')} />}
       </Campo>
+      <OrigenDelDato campo="nombreFiscal" texto={origenDelCampo(f.dataFromInvoice, 'nombreFiscal')} />
       <Pildoras campo="taxIdType" etiqueta="Tipo de NIF" opciones={TIPO_ID} elegidas={[tipoId]}
         alCambiar={(v) => { const t = v[0] ?? tipoId; setTipoId(t); if (taxId.trim()) void guardarNif(t) }} />
       <Campo campo="taxId" etiqueta={tipoId === 'vat_eu' ? 'NIF-IVA (con las letras del país delante)' : 'NIF'}
@@ -172,6 +174,7 @@ function Formulario() {
           placeholder={tipoId === 'vat_eu' ? 'FR40303265045' : 'B12345678'}
           onChange={(e) => setTaxId(e.target.value)} onBlur={() => void guardarNif()} />}
       </Campo>
+      <OrigenDelDato campo="nif" texto={origenDelCampo(f.dataFromInvoice, 'nif')} />
       {tipoId === 'foreign' ? (
         <Campo campo="countryCode" etiqueta="País (código de dos letras)"
           ayuda={/^[A-Z]{2}$/.test(countryCode) && countryCode !== 'ES' ? `${nombrePais(countryCode)}.` : 'Por ejemplo: US (Estados Unidos), GB (Reino Unido), CH (Suiza).'}>
@@ -190,6 +193,7 @@ function Formulario() {
 
       <fieldset className="cx-fieldset">
         <legend className="cx-tarjeta-titulo" style={{ fontSize: 16, marginBottom: 6 }}>Dirección fiscal</legend>
+        <OrigenDelDato campo="direccion" texto={origenDelCampo(f.dataFromInvoice, 'direccion')} />
         <Campo campo="fiscalStreet" etiqueta="Calle y número">
           {(p) => <input {...p} className="cx-input" value={street} autoComplete="street-address" onChange={(e) => setStreet(e.target.value)}
             onBlur={() => void g.guardar({ fiscalStreet: street.trim() || null }, 'calle')} />}
@@ -238,6 +242,7 @@ function Formulario() {
         {(p) => <input {...p} className="cx-input" value={website} inputMode="url" placeholder="https://" onChange={(e) => setWebsite(e.target.value)}
           onBlur={() => void g.guardar({ website: website.trim() || null }, 'web')} />}
       </Campo>
+      <OrigenDelDato campo="web" texto={origenDelCampo(f.dataFromInvoice, 'web')} />
       <Campo campo="tags" etiqueta="Etiquetas" ayuda="Separadas por comas. Sirven para buscar en la lista: «bebidas, local Centro».">
         {(p) => <input {...p} className="cx-input" value={tags} onChange={(e) => setTags(e.target.value)}
           onBlur={() => void g.guardar({ tags: tags.split(',').map((t) => t.trim()).filter(Boolean) }, 'etiquetas')} />}
