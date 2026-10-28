@@ -67,6 +67,8 @@ node scripts/conta/sql-sin-where.mjs
 # migración nueva o cambiada (ni en su vuelta atrás): en staging, una dirección
 # escrita llama a producción.
 node scripts/conta/sql-sin-direccion.mjs
+# W10: el repositorio es público; ninguna línea añadida, en ningún fichero, trae un secreto.
+node scripts/conta/sin-secretos.mjs
 
 paso '8/10 · la tanda de producción, analizada contra el contexto REAL de producción (R11)'
 # Antes de dar datos de lanzamiento a Julio: el analizador con el contexto real,

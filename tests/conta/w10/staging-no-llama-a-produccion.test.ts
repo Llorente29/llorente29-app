@@ -5,7 +5,13 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { direccionesYSecretos } from '../../../scripts/conta/sql-sin-direccion.mjs'
+import { lineasAnadidas, secretosAnadidos } from '../../../scripts/conta/sin-secretos.mjs'
 import { buscarSecretos } from '../../../scripts/staging/esquema.mjs'
+import { comprobarSecreto } from '../../../supabase/functions/_shared/secretoConRelevo.ts'
+
+// Los datos con forma de secreto se construyen aquí: nunca enteros en el
+// repositorio (sin-secretos.mjs para cualquier línea añadida que lo parezca).
+const FV = (para: string) => `fv_${para}_` + 'Ab0'.repeat(8)
 
 const M1440 = readFileSync('supabase/migrations/20261028T1440_w10_project_url.sql', 'utf8')
 const M1441 = readFileSync('supabase/migrations/20261028T1441_w10_funciones_leen_su_proyecto.sql', 'utf8')
@@ -36,7 +42,7 @@ describe('la comprobación: ni direcciones ni secretos escritos (punto 4)', () =
     expect(direccionesYSecretos("select public._project_url() || '/functions/v1/x';")).toEqual([])
   })
   it('un secreto cuenta también en un comentario', () => {
-    expect(direccionesYSecretos('-- el de antes era fv_oadv_AbCdEf0123456789XyZ\nselect 1;')[0].que).toContain('fv_')
+    expect(direccionesYSecretos(`-- el de antes era ${FV('oadv')}\nselect 1;`)[0].que).toContain('fv_')
   })
   it('corre en cada PR a main y en antes-de-subir', () => {
     expect(readFileSync('.github/workflows/pr-a-main.yml', 'utf8')).toContain('node scripts/conta/sql-sin-direccion.mjs "$BASE" "$HEAD"')
@@ -46,7 +52,7 @@ describe('la comprobación: ni direcciones ni secretos escritos (punto 4)', () =
 
 describe('la búsqueda de secretos reconoce los fv_… (lo pidió Julio el 28/10)', () => {
   it('un fv_<para qué>_<tira larga> es secreto; el nombre de función fv_e164_or_null, no', () => {
-    expect(buscarSecretos("'x-order-advance-secret',  'fv_oadv_0123456789abcdefABCDEF0123456789'")[0].que).toContain('fv_')
+    expect(buscarSecretos(`'x-order-advance-secret',  '${FV('oadv')}'`)[0].que).toContain('fv_')
     expect(buscarSecretos('  v_phone := public.fv_e164_or_null(s.customer_phone);')).toEqual([])
   })
 })
@@ -109,5 +115,51 @@ describe('la tanda y la prueba de staging', () => {
     expect(PRUEBA.trim().endsWith('rollback;')).toBe(true)
     // No lleva ninguna dirección ni secreto escritos.
     expect(direccionesYSecretos(PRUEBA)).toEqual([])
+  })
+})
+
+describe('el relevo: durante el cambio, la función acepta el vigente y el anterior', () => {
+  const env = (m: Record<string, string>) => (k: string) => m[k]
+  it('con el vigente entra; con el anterior, solo si existe <NOMBRE>_PREV; con otro, no', () => {
+    const e = env({ X_SECRET: 'nuevo', X_SECRET_PREV: 'viejo' })
+    expect(comprobarSecreto('nuevo', 'X_SECRET', e)).toBe('vigente')
+    expect(comprobarSecreto('viejo', 'X_SECRET', e)).toBe('anterior')
+    expect(comprobarSecreto('otro', 'X_SECRET', e)).toBeNull()
+    expect(comprobarSecreto('viejo', 'X_SECRET', env({ X_SECRET: 'nuevo' }))).toBeNull()
+  })
+  it('sin secreto configurado, nada entra (tampoco una cadena vacía)', () => {
+    expect(comprobarSecreto('', 'X_SECRET', env({}))).toBeNull()
+    expect(comprobarSecreto('', 'X_SECRET', env({ X_SECRET: '', X_SECRET_PREV: '' }))).toBeNull()
+  })
+  it('las cuatro funciones que solo aceptaban uno usan el relevo', () => {
+    for (const [f, n] of [['availability-dispatch', 'AVAILABILITY_DISPATCH_SECRET'], ['hubrise-location-dispatch', 'LOCATION_STATUS_DISPATCH_SECRET'],
+      ['last-catalog-probe', 'AVAILABILITY_DISPATCH_SECRET'], ['lastapp-set-price', 'AVAILABILITY_DISPATCH_SECRET']]) {
+      const t = readFileSync(`supabase/functions/${f}/index.ts`, 'utf8')
+      expect(t).toContain(`comprobarSecreto(`)
+      expect(t).toContain(`"${n}")`)
+      expect(t).not.toMatch(new RegExp(`Deno\\.env\\.get\\("${n}"\\)`))
+    }
+  })
+})
+
+describe('sin-secretos: ninguna línea añadida trae un secreto (punto 4, cualquier fichero)', () => {
+  const diff = (f: string, lineas: string[]) => `diff --git a/${f} b/${f}\n--- a/${f}\n+++ b/${f}\n@@ -0,0 +1,${lineas.length} @@\n` + lineas.map((l) => `+${l}`).join('\n') + '\n'
+  it('lo ve en cualquier fichero: un .md, un .json o un .ts', () => {
+    expect(secretosAnadidos(diff('CONTEXTO_CLAUDE.md', ['nada', `clave: ${FV('locst')}`]))).toEqual([{ fichero: 'CONTEXTO_CLAUDE.md', linea: 2, que: 'un secreto interno de Folvy (fv_…)' }])
+    expect(secretosAnadidos(diff('promo-agent/config.example.json', [`  "PUSH_AGENT_SECRET": "${FV('push')}",`]))).toHaveLength(1)
+    expect(secretosAnadidos(diff('src/x.ts', ['const sk = "sk_' + 'live_' + 'A'.repeat(24) + '"']))[0].que).toContain('Stripe')
+  })
+  it('solo lo añadido: lo que se quita o ya estaba no cuenta', () => {
+    const d = `diff --git a/a.md b/a.md\n--- a/a.md\n+++ b/a.md\n@@ -3 +3 @@\n-clave: ${FV('avl')}\n+clave: (en el Vault)\n`
+    expect(secretosAnadidos(d)).toEqual([])
+    expect(lineasAnadidas(d)).toEqual([{ fichero: 'a.md', linea: 3, texto: 'clave: (en el Vault)' }])
+  })
+  it('la clave anon (pública) no cuenta', () => {
+    const anon = 'eyJhbGciOiJIUzI1NiJ9.' + Buffer.from(JSON.stringify({ role: 'anon' })).toString('base64url') + '.firmaDePruebaFirma'
+    expect(secretosAnadidos(diff('.github/workflows/x.yml', [`  ANON: ${anon}`]))).toEqual([])
+  })
+  it('corre en cada PR a main y en antes-de-subir', () => {
+    expect(readFileSync('.github/workflows/pr-a-main.yml', 'utf8')).toContain('node scripts/conta/sin-secretos.mjs "$BASE" "$HEAD"')
+    expect(readFileSync('scripts/conta/antes-de-subir.sh', 'utf8')).toContain('node scripts/conta/sin-secretos.mjs')
   })
 })
