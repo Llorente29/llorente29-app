@@ -7,13 +7,28 @@
 // lo mandamos a la raíz, donde App.tsx lo enruta a su portal por rol.
 //
 // Ruta pública: se renderiza haya o no sesión previa. Token de un solo uso.
+//
+// LS1 (28/10/2026): sin enlace (sin ?token_hash), /acceso es la entrada con
+// USUARIO y CONTRASEÑA (AccesoTrabajadorPage). Hasta hoy decía «Este enlace no
+// es válido» y esa entrada no se podía abrir desde ningún sitio: las
+// credenciales que da el alta no tenían puerta. Y lleva la marca de la pestaña.
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { CON_MARCA, MARCA } from '../marca/marca'
+import AccesoTrabajadorPage from './AccesoTrabajadorPage'
+
+function conEnlace(): boolean {
+  return new URLSearchParams(window.location.search).has('token_hash')
+}
 
 export default function AccesoClaimPage() {
+  return conEnlace() ? <CanjearEnlace /> : <AccesoTrabajadorPage />
+}
+
+function CanjearEnlace() {
   const navigate = useNavigate()
   const [status, setStatus] = useState<'verifying' | 'error'>('verifying')
   const [errorMsg, setErrorMsg] = useState('')
@@ -60,7 +75,7 @@ export default function AccesoClaimPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-page p-6">
       <div className="text-center max-w-sm">
-        <p className="text-2xl font-display font-medium mb-2 text-accent">Folvy</p>
+        <p className="text-2xl font-display font-medium mb-2 text-accent">{CON_MARCA ? MARCA.nombre : 'Folvy'}</p>
         {status === 'verifying' ? (
           <p className="text-sm text-text-secondary">Validando tu acceso…</p>
         ) : (

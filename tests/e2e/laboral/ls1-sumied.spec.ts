@@ -105,9 +105,16 @@ test.beforeAll(async () => {
   const sola = await pedirSesion(SOLA)
   const cuenta = await cuentaDe(sola)
   const plataforma = await pedirSesion(PLATAFORMA)
-  const r = await rest(plataforma, 'POST', 'feature_flags?on_conflict=account_id,feature_key',
-    { account_id: cuenta, feature_key: 'conta_laboral', enabled: true, source: 'manual_grant', grant_reason: 'e2e LS1 (carril)' })
-  expect([200, 201], `encender conta_laboral: ${JSON.stringify(r.datos)}`).toContain(r.status)
+  // Cada proceso (ordenador y móvil) lo enciende: el segundo pisa al primero (merge-duplicates), no choca.
+  const r = await fetch(`${STAGING_URL}/rest/v1/feature_flags?on_conflict=account_id,feature_key`, {
+    method: 'POST',
+    headers: {
+      apikey: anonKey(), Authorization: `Bearer ${plataforma.access_token}`, 'Content-Type': 'application/json',
+      Prefer: 'resolution=merge-duplicates,return=minimal',
+    },
+    body: JSON.stringify({ account_id: cuenta, feature_key: 'conta_laboral', enabled: true, source: 'manual_grant', grant_reason: 'e2e LS1 (carril)' }),
+  })
+  expect([200, 201, 204], `encender conta_laboral: HTTP ${r.status} ${await r.text()}`).toContain(r.status)
 })
 
 async function portalDeLaPersona(browser: Browser) {
