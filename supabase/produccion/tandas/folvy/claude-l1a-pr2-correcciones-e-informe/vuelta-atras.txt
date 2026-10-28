@@ -1,0 +1,9 @@
+# L1a · PR 2 · vuelta atrás, en orden inverso: la 0706 (fuera los dos
+# disparadores; las cuatro de corrección como estaban), la 0705 (fuera las
+# firmas, los enlaces, las columnas de la conformidad y las funciones nuevas) y
+# la 0700 (la escritura directa y sus políticas, y la gestoría con los
+# permisos de quien llama). Se pierden las firmas, los enlaces y las
+# respuestas de conformidad guardadas entre medias.
+supabase/vuelta-atras/20261028T0706_l1a_corregir_con_conformidad.down.sql
+supabase/vuelta-atras/20261028T0705_l1a_correcciones_firma_e_informe.down.sql
+supabase/vuelta-atras/20261028T0700_l1a_cerrar_escritura_directa.down.sql

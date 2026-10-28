@@ -1,0 +1,40 @@
+# L1a · PR 2 · Las correcciones dentro de la ley y el informe para la
+# Inspección (28/10/2026). Rama claude/l1a-pr2-correcciones-e-informe. Se
+# ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0700 — el paso 2 del PR 1: clock_entries sin escritura directa (ni
+#      INSERT, ni UPDATE, ni DELETE para la sesión; fuera sus tres políticas) y
+#      export_gestoria_mensual de servidor, solo para el administrador.
+#      · CERROJO: para si en las últimas 24 h ha entrado algún fichaje por el
+#        INSERT directo (móviles o tablets con el front de antes del #362).
+#        Medido el 28/10 a las 06:03 UTC: 8. El último, el 27/10 a las 23:11
+#        UTC; el front del #362 se estaba publicando a las 06:45 de Madrid. Si
+#        el ensayo o el real paran aquí, es que aún no ha pasado el día: se
+#        relanza más tarde, sin tocar nada.
+#      · El cierre del salario, el DNI y el nacimiento en employees NO va aquí:
+#        con esas columnas cerradas, el upsert con que el front del PR 1 guarda
+#        la ficha falla (medido en local). Este PR publica el front que guarda
+#        con INSERT o UPDATE; el cierre va en la tanda siguiente.
+#   2. 0705 — SOLO AÑADE: las columnas de la conformidad en el rastro (admiten
+#      nulos), responder_correccion, _puede_corregir, la firma del mes, los
+#      datos del informe, el enlace para la Inspección (caduca) y las jornadas
+#      para revisar. Se puede pasar dos veces.
+#   3. 0706 — CAMBIA: la conformidad «pendiente» cuando corrige otro (un
+#      disparador nuevo en el rastro); editar, anular y resolver también para
+#      el encargado con los suyos; el trabajador pide solo para sí; y corregir
+#      un mes firmado deja la firma sin valor (un disparador nuevo en
+#      clock_entries que solo mira el tipo, la hora y si está anulada).
+#      · Cambia en caliente cuatro funciones de corrección (con respaldo). No
+#        toca el camino del pedido.
+#
+# Antes (producción, 28/10 06:03 UTC): edit_clock_entry b2fd9f27 ·
+# export_gestoria_mensual 152170ea · request_clock_correction 612536bf ·
+# resolve_clock_correction 953ac87e · void_clock_entry dba9ae6a; escritura
+# directa true · true · true; 3 políticas de escritura; la gestoría con los
+# permisos de quien llama; nada nuevo; el cerrojo, 8.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261028T0700_l1a_cerrar_escritura_directa.sql
+supabase/migrations/20261028T0705_l1a_correcciones_firma_e_informe.sql
+supabase/migrations/20261028T0706_l1a_corregir_con_conformidad.sql
+cuenta: scripts/conta/produccion/cuentas/l1a-correcciones-e-informe.sql
