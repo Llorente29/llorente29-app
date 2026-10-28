@@ -41,6 +41,9 @@ export type FacturaModelo = {
   payment_terms_text?: string | null
   /** PC01 · E2b · Cómo se paga, si el papel lo dice: transfer, direct_debit, card o cash. */
   payment_method?: string | null
+  /** S01b · El teléfono y la web del proveedor, si el papel los trae. */
+  supplier_phone?: string | null
+  supplier_website?: string | null
 }
 
 /** Lo que devuelve el modelo con el modo factura: lo de siempre y «factura». */
@@ -70,7 +73,8 @@ export type Comprobacion = { id: string; ok: boolean; grave: boolean; texto: str
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
 export type FacturaLeida = {
-  proveedor: { nombre: string | null; nif: string | null; email: string | null; direccion: string | null }
+  /** S01b · Además, el teléfono y la web del proveedor si el papel los trae (para su ficha). */
+  proveedor: { nombre: string | null; nif: string | null; email: string | null; direccion: string | null; telefono: string | null; web: string | null }
   destinatario: { nombre: string | null; nif: string | null }
   numero: string | null
   /** La clave para las repetidas (igual que la base: mayúsculas y solo letras y números). */
@@ -224,7 +228,7 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
   const clase: FacturaLeida['clase'] = f.invoice_kind === 'rectificativa' ? 'rectificativa' : f.invoice_kind === 'simplificada' ? 'simplificada' : 'completa'
   const nif = normalizarNif(d.supplier_tax_id)
   const factura: FacturaLeida = {
-    proveedor: { nombre: txt(d.supplier_name), nif, email: txt(d.supplier_email), direccion: txt(d.supplier_address) },
+    proveedor: { nombre: txt(d.supplier_name), nif, email: txt(d.supplier_email), direccion: txt(d.supplier_address), telefono: txt(f.supplier_phone), web: txt(f.supplier_website) },
     destinatario: { nombre: txt(d.bill_to_name), nif: normalizarNif(d.bill_to_tax_id) },
     numero, numeroClave: claveNumero(numero), fecha, vencimiento, clase, rectificaA: txt(f.corrects_number),
     tipos, base, cuota, recargo, retencion, total, iban: txt(f.iban)?.replace(/\s+/g, '').toUpperCase() ?? null,
@@ -334,7 +338,9 @@ export const PROMPT_FACTURA =
   `    "withholding_amount": <importe de la retención, en positivo, o null>,\n` +
   `    "iban": "<IBAN para el pago si aparece, o null>",\n` +
   `    "payment_terms_text": "<forma o plazo de pago tal cual aparece, o null>",\n` +
-  `    "payment_method": "<transfer (transferencia), direct_debit (domiciliación o recibo), card (tarjeta), cash (efectivo), o null si no lo dice>"\n` +
+  `    "payment_method": "<transfer (transferencia), direct_debit (domiciliación o recibo), card (tarjeta), cash (efectivo), o null si no lo dice>",\n` +
+  `    "supplier_phone": "<teléfono del PROVEEDOR que emite si aparece, o null>",\n` +
+  `    "supplier_website": "<web del PROVEEDOR que emite si aparece, o null>"\n` +
   `  }\n` +
   `REGLAS DEL MODO FACTURA:\n` +
   `- "tax_breakdown" es el CUADRO DE IMPUESTOS del pie (una fila por tipo de IVA), tal cual aparece. Si el papel\n` +
@@ -344,4 +350,6 @@ export const PROMPT_FACTURA =
   `- La retención resta del total: "grand_total" es lo que se paga después de restarla.\n` +
   `- "iban" es la cuenta del PROVEEDOR para pagarle. En una domiciliación, el IBAN que aparece suele ser el del\n` +
   `  cliente (donde se carga el recibo): ese NO va en "iban".\n` +
+  `- "supplier_phone" y "supplier_website" son los del PROVEEDOR que emite, nunca los del cliente ni los de la\n` +
+  `  plataforma por la que se pidió.\n` +
   `- NO inventes NADA: lo que no esté, null.`

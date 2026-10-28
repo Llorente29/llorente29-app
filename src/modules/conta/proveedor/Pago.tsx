@@ -13,7 +13,8 @@
 import { useState } from 'react'
 import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { ResumenComoTeFactura } from '@/modules/conta/proveedor/ComoTeFactura'
-import { Campo, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
+import { Campo, OrigenDelDato, Pildoras, SeGuarda, type OpcionPildora } from '@/modules/conta/proveedor/piezas'
+import { origenDelCampo } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { useGuardarAlSalir } from '@/modules/conta/proveedor/useGuardarAlSalir'
 import { formatearIban, normalizarIban, validarIban } from '@/modules/conta/lib/iban'
 import { formasDelDesplegable } from '@/modules/conta/lib/opcionesFicha'
@@ -90,6 +91,7 @@ export default function Pago() {
         {(p) => <input {...p} className="cx-input cx-cifra" value={iban} autoComplete="off" placeholder="ES12 3456 7890 1234 5678 9012"
           onChange={(e) => setIban(e.target.value.toUpperCase())} onBlur={() => void salirDeIban()} />}
       </Campo>
+      <OrigenDelDato campo="iban" texto={origenDelCampo(f.dataFromInvoice, 'iban')} />
       <Campo campo="bic" etiqueta={extranjero ? 'BIC / SWIFT (obligatorio con un IBAN de fuera de España)' : 'BIC / SWIFT (opcional)'} error={g.error('bic')}>
         {(p) => <input {...p} className="cx-input" value={bic} autoComplete="off" placeholder="CAIXESBBXXX" onChange={(e) => setBic(e.target.value.toUpperCase())}
           onBlur={() => void g.guardar({ bic: bic.trim().toUpperCase() || null }, 'BIC')} />}

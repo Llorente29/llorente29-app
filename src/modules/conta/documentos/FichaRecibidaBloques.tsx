@@ -9,7 +9,7 @@
 //
 // `data-prueba` y los nombres accesibles van pensados para las e2e de la ficha.
 
-import { useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useId, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { Boton, Fecha, Icono, Tecla } from '@/modules/conta/diseno'
 import { BloqueFicha, BuscarCuentaHoja, MarcaCambiado, type CambioCampo, type CuentaHoja, type TonoCampo } from '@/modules/conta/diseno/plantillas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
@@ -50,7 +50,7 @@ export function CampoEditable({ etiqueta, cambio, alDeshacer, tono = 'normal', m
 
 // ── Proveedor y factura ─────────────────────────────────────────────────────
 
-export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores, alCambiar, cambioDe, deshacer, motivoProveedor, tonoProveedor, motivoNumero, soloLectura, errores = {}, altaProveedor }: {
+export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores, alCambiar, cambioDe, deshacer, motivoProveedor, tonoProveedor, motivoNumero, soloLectura, errores = {}, altaProveedor, debajo }: {
   proveedorId: string
   numero: string
   fecha: string
@@ -63,10 +63,22 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
   motivoNumero?: ReactNode
   soloLectura: boolean
   errores?: Partial<Record<'proveedor' | 'numero' | 'fecha', string>>
-  /** «+ Dar de alta un proveedor» (la a mano). */
-  altaProveedor?: ReactNode
+  /**
+   * «Dar de alta a …» y «Es uno que ya tengo» (S01b). Con una función, recibe
+   * cómo abrir la lista de proveedores para elegir uno.
+   */
+  altaProveedor?: ReactNode | ((abrirLista: () => void) => ReactNode)
+  /** S01b · Lo que va dentro del bloque, debajo de la fila: el alta, el aviso del NIF distinto (con cómo abrir la lista). */
+  debajo?: ReactNode | ((abrirLista: () => void) => ReactNode)
 }) {
   const [cambiando, setCambiando] = useState(!proveedorId)
+  const idLista = useId()
+  const abrirLista = () => {
+    setCambiando(true)
+    // Ya pintada, al foco y, donde se pueda, desplegada.
+    setTimeout(() => { const el = document.getElementById(idLista) as HTMLSelectElement | null; if (!el) return; el.focus(); try { (el as HTMLSelectElement & { showPicker?: () => void }).showPicker?.() } catch { /* sin gesto: solo el foco */ } }, 0)
+  }
+  const alta = typeof altaProveedor === 'function' ? altaProveedor(abrirLista) : altaProveedor
   const nombre = proveedores.find((p) => p.id === proveedorId)?.nombre
   return (
     <BloqueFicha titulo="Proveedor y factura">
@@ -75,10 +87,10 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
           motivo={errores.proveedor ? <span className="cxf-error" role="alert">{errores.proveedor}</span> : <>
             {motivoProveedor}
             {!soloLectura && proveedorId && !cambiando && <> · <button type="button" className="s-boton s-boton-enlace" onClick={() => setCambiando(true)}>Cambiar de proveedor</button></>}
-            {altaProveedor && <> · {altaProveedor}</>}
+            {alta && <> · {alta}</>}
           </>}>
           {cambiando && !soloLectura
-            ? <select className="s-control" aria-label="Proveedor" value={proveedorId} onChange={(e) => alCambiar({ proveedorId: e.target.value })} autoFocus={!!proveedorId}>
+            ? <select id={idLista} className="s-control" aria-label="Proveedor" value={proveedorId} onChange={(e) => alCambiar({ proveedorId: e.target.value })} autoFocus={!!proveedorId}>
                 <option value="">{proveedores.length ? 'Elige el proveedor…' : 'No tienes proveedores dados de alta'}</option>
                 {proveedores.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.nif ? ` · ${p.nif}` : ''}</option>)}
               </select>
@@ -96,6 +108,7 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
             : <Fecha id="cxf-fecha" aria-label="Fecha de la factura" valor={fecha} alCambiar={(v) => alCambiar({ fecha: v })} />}
         </CampoEditable>
       </div>
+      {typeof debajo === 'function' ? debajo(abrirLista) : debajo}
     </BloqueFicha>
   )
 }

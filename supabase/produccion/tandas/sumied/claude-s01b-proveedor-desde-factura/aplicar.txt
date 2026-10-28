@@ -1,0 +1,19 @@
+# S01b · Dar de alta al proveedor desde la propia factura, y que la ficha se
+# rellene sola (encargo del 28/10). Rama claude/s01b-proveedor-desde-factura.
+# Se ensaya y se aplica desde esta rama, antes de fusionar.
+#
+#   1. 1304 — AÑADE supplier.data_from_invoice (de qué factura sale cada dato
+#      de la ficha: «de la factura R0672») y conta_proveedor_iban_de_factura
+#      («Guardar este IBAN» en Revisar factura: a una ficha sin IBAN, el de su
+#      factura, comprobado, con quién, cuándo y de qué factura).
+#   2. 1305 — CAMBIA en caliente _pc01e2b_iban_de_la_factura (misma firma,
+#      respaldada): el IBAN de una factura ya no entra solo en una ficha vacía
+#      («sin confirmar», PC01e2b); el historial lo dice y se guarda al pulsar.
+#      Medido el 28/10: lo desplegado es lo del repositorio (md5 d8401562…), 0
+#      facturas con IBAN leído y 0 fichas con un IBAN sin confirmar.
+#
+# Ninguna está en el camino del pedido ni en el cron. Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/s01b-ficha-desde-factura.sql
+supabase/migrations/20261028T1304_s01b_ficha_desde_factura.sql
+supabase/migrations/20261028T1305_s01b_iban_no_se_pone_solo.sql

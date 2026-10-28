@@ -55,6 +55,8 @@ export interface FichaProveedor {
   // Comparación con Holded (respuesta 2 de Julio, punto 5). Ninguno cuenta
   // para el % de ficha completa.
   website: string | null
+  /** S01b · De qué factura sale cada dato que la ficha tomó de una factura (supplier.data_from_invoice): «de la factura R0672». */
+  dataFromInvoice: Record<string, { factura: string | null; facturaId: string; fecha: string; quien: string | null }> | null
   tags: string[]
   /** BIC/SWIFT. Obligatorio si el IBAN no es español. */
   bic: string | null

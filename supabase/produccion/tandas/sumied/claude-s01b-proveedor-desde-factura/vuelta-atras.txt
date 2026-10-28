@@ -1,0 +1,3 @@
+# S01b · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261028T1305_s01b_iban_no_se_pone_solo.down.sql
+supabase/vuelta-atras/20261028T1304_s01b_ficha_desde_factura.down.sql

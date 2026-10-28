@@ -82,6 +82,7 @@ export function filaAFicha(r: Fila): FichaProveedor {
     isActive: r.is_active !== false,
     notes: str(r.notes),
     website: str(r.website),
+    dataFromInvoice: r.data_from_invoice && typeof r.data_from_invoice === 'object' ? (r.data_from_invoice as FichaProveedor['dataFromInvoice']) : null,
     tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
     bic: str(r.bic),
     sepaMandateRef: str(r.sepa_mandate_ref),
@@ -110,7 +111,7 @@ const COLUMNA: Partial<Record<keyof FichaProveedor, string>> = {
   isActive: 'is_active', notes: 'notes', website: 'website', tags: 'tags', bic: 'bic',
   sepaMandateRef: 'sepa_mandate_ref', sepaMandateDate: 'sepa_mandate_date', currency: 'currency',
   earlyPaymentDiscountPct: 'early_payment_discount_pct', ivaIncluidoEnLinea: 'iva_incluido_en_linea',
-  invoicingFrequency: 'invoicing_frequency',
+  invoicingFrequency: 'invoicing_frequency', dataFromInvoice: 'data_from_invoice',
   archivedAt: 'archived_at',
 }
 
@@ -121,6 +122,17 @@ export function cambiosAFila(cambios: Partial<FichaProveedor>): Fila {
     if (col) fila[col] = valor
   }
   return fila
+}
+
+/** S01b · Los campos de data_from_invoice que toca un cambio de la ficha (lib/fichaDesdeDocumento, CampoDeFicha). */
+export function camposDeOrigenTocados(cambios: Partial<FichaProveedor>): string[] {
+  const r: string[] = []
+  if ('taxId' in cambios) r.push('nif')
+  if ('legalName' in cambios) r.push('nombreFiscal')
+  if ('fiscalStreet' in cambios || 'fiscalPostalCode' in cambios || 'fiscalCity' in cambios) r.push('direccion')
+  if ('website' in cambios) r.push('web')
+  if ('iban' in cambios) r.push('iban')
+  return r
 }
 
 export async function obtenerFicha(supplierId: string): Promise<FichaProveedor | null> {
@@ -134,12 +146,33 @@ export async function obtenerFicha(supplierId: string): Promise<FichaProveedor |
 export async function guardarFicha(supplierId: string, cambios: Partial<FichaProveedor>): Promise<FichaProveedor> {
   requireSupabase()
   const fila = cambiosAFila(cambios)
+  // S01b · Un dato que vino de una factura y se cambia a mano deja de ser «de la factura …»: se quita su origen.
+  const sinOrigen = cambios.dataFromInvoice === undefined ? camposDeOrigenTocados(cambios) : []
+  if (sinOrigen.length) {
+    const { data: ahora } = await from('supplier').select('data_from_invoice').eq('id', supplierId).maybeSingle()
+    const antes = (ahora as Fila | null)?.data_from_invoice as Record<string, unknown> | null | undefined
+    if (antes && sinOrigen.some((c) => c in antes)) {
+      const queda = Object.fromEntries(Object.entries(antes).filter(([c]) => !sinOrigen.includes(c)))
+      fila.data_from_invoice = Object.keys(queda).length ? queda : null
+    }
+  }
   if (Object.keys(fila).length === 0) {
     const f = await obtenerFicha(supplierId)
     if (!f) throw new Error('Ese proveedor ya no existe.')
     return f
   }
-  const { data, error } = await from('supplier').update(fila).eq('id', supplierId).select('*').single()
+  let { data, error } = await from('supplier').update(fila).eq('id', supplierId).select('*').single()
+  // S01b · Sin la 1304 en la base (una rama antes de su tanda) no hay data_from_invoice: se guardan los datos sin su origen.
+  if (error && 'data_from_invoice' in fila && /data_from_invoice/.test(`${error.message} ${error.details ?? ''}`)) {
+    const { data_from_invoice: _sinOrigen, ...resto } = fila
+    void _sinOrigen
+    if (Object.keys(resto).length === 0) {
+      const f = await obtenerFicha(supplierId)
+      if (!f) throw new Error('Ese proveedor ya no existe.')
+      return f
+    }
+    ;({ data, error } = await from('supplier').update(resto).eq('id', supplierId).select('*').single())
+  }
   if (error) {
     if (error.code === '23505') throw new Error('Ese NIF ya lo tiene otro proveedor de tu cuenta.')
     throw new Error(mensaje('No se pudo guardar', error))
@@ -742,6 +775,24 @@ export async function fijarAprendido(supplierId: string, campo: CampoAprendido, 
 
 export async function noEsRepetida(invoiceId: string, quien: string | null): Promise<void> {
   await rpc<null>('supplier_invoice_not_duplicate', { p_invoice_id: invoiceId, p_quien_nombre: quien })
+}
+
+/**
+ * S01b · «Guardar este IBAN» en Revisar factura: a un proveedor SIN IBAN, el que
+ * trae su factura. La base lo comprueba (módulo 97, que no sea vuestro) y apunta
+ * quién, cuándo y de qué factura. Nunca pisa otro IBAN.
+ */
+export async function guardarIbanDeFactura(supplierId: string, invoiceId: string): Promise<string> {
+  const r = await rpc<{ frase: string }>('conta_proveedor_iban_de_factura', { p_supplier: supplierId, p_invoice: invoiceId })
+  return r.frase
+}
+
+/** S01b · Si ya se decidió sobre el IBAN distinto de esta factura (C01b), para no volver a preguntarlo. */
+export async function decisionIbanDeFactura(invoiceId: string): Promise<DecisionIban | null> {
+  requireSupabase()
+  const { data, error } = await from('supplier_invoice').select('iban_decision').eq('id', invoiceId).maybeSingle()
+  if (error) throw new Error(mensaje('No se pudo leer la decisión sobre su IBAN', error))
+  return (str((data as Fila | null)?.iban_decision) as DecisionIban | null) ?? null
 }
 
 /** IBAN distinto en una factura: «Es el nuevo IBAN» (pasa a la ficha) o «No es suyo». */
