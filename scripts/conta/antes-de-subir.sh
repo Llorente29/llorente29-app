@@ -20,12 +20,11 @@
 # corren en GitHub Actions (e2e-staging-conta.yml), cada paso con
 # `set -euo pipefail`. Un push no está bien hasta que ese run sale verde.
 #
-# Capturas: artefacto en cada push y fijar las de tu frente antes del informe
-# (C06b, Julio, 15/10). Cada run deja las suyas en el artefacto «capturas» y el
-# enlace en un comentario del PR; a la rama no va ninguna. Antes de dar el
-# informe: Actions → «Pruebas e2e en staging-conta» → Run workflow en tu rama
-# con «fijar_capturas», que commitea solo las de tu frente (si sale verde). El
-# paso 10 para si la rama trae capturas de otro frente.
+# Capturas (W08b, Julio, 28/10): fuera del PR. Cada run deja las suyas en el
+# artefacto «capturas»; si sale en verde, las de tu frente se publican en la
+# rama aparte capturas/<rama>, y el comentario del PR las enseña en miniatura.
+# A la rama del PR no va ninguna; al fusionar, pasan a main. El paso 10 para si
+# la rama trae capturas de otro frente.
 
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
@@ -82,4 +81,4 @@ paso '10/10 · capturas: solo las de tu frente (C06b, 15/10)'
 # en el artefacto, y a la rama solo van las tuyas, fijadas a mano antes del informe.
 node scripts/conta/capturas.mjs comprobar
 printf '\nTodo en verde: se puede subir.\n'
-printf 'Capturas: artefacto en cada push y fijar las de tu frente antes del informe («fijar_capturas»).\n'
+printf 'Capturas: artefacto en cada push; las de tu frente, en capturas/<rama> y en el comentario del PR (W08b).\n'

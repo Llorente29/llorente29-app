@@ -23,6 +23,7 @@ import type { ModuleDefinition } from '@/shell/types'
 import { LocationsPage } from '@/pages/OtherPages'
 import BrandsPage from '@/modules/multitenancy/pages/BrandsPage'
 import CambiosCartaLastPage from '@/modules/multitenancy/pages/CambiosCartaLastPage'
+import RevisarMarcasLastPage from '@/modules/multitenancy/pages/RevisarMarcasLastPage'
 import AvisosSettingsPage from '@/pages/AvisosSettingsPage'
 import RepartoSettingsPage from '@/pages/RepartoSettingsPage'
 import QuienRepartePage from '@/modules/reparto/pages/QuienRepartePage'
@@ -42,6 +43,8 @@ export const configuracionModule: ModuleDefinition = {
     { path: 'marcas',    element: <BrandsPage /> },
     // F01 · PR 2: los cambios de carta de las marcas de Last (tablero 5).
     { path: 'cambios-last', element: <CambiosCartaLastPage /> },
+    // F01 · PR 3: Marcas › Revisar, una marca de Last que llega con otro código (tablero 4).
+    { path: 'revisar-last', element: <RevisarMarcasLastPage /> },
     { path: 'avisos',    element: <AvisosSettingsPage /> },
     { path: 'reparto',   element: <RepartoSettingsPage /> },
     // R02: quién reparte cada marca en cada plataforma (estilo nuevo).

@@ -77,12 +77,12 @@ describe('los workflows', () => {
     const tocados = execFileSync('git', ['show', '--name-only', '--format=', 'bb7d2e24'], { encoding: 'utf8' }).split('\n').filter(Boolean)
     expect(tocados).toEqual(['supabase/staging/sql/20261203_d02_recibida_pdf_prueba.sql'])
   })
-  it('después de su commit, el robot de capturas lanza el ensayo sobre ese commit si la rama trae tanda', () => {
-    const paso = e2e.slice(e2e.indexOf('- name: Capturas · fijar las del frente en la rama'))
-    const fin = paso.indexOf('\n  # ')
-    const cuerpo = paso.slice(0, fin)
-    expect(cuerpo).toMatch(/git push origin "HEAD:\$GITHUB_REF_NAME"[\s\S]*staging-tanda\.mjs nuevas origin\/main[\s\S]*gh workflow run aplicar-staging-conta\.yml[^\n]*--ref "\$GITHUB_REF_NAME" -f modo=aplicar/)
-    expect(cuerpo).toContain('GH_TOKEN: ${{ github.token }}')
+  // W08b (28/10): el robot ya no hace commits en la rama del PR, así que no hay
+  // commit suyo que se quede sin ensayo: el ensayo lo lanza quien empuja, como
+  // en cualquier otro commit. El permiso de Actions lo sigue usando la noche.
+  it('el robot de capturas no hace commits en la rama del PR ni lanza el ensayo por su cuenta', () => {
+    expect(e2e).not.toContain('HEAD:$GITHUB_REF_NAME')
+    expect(e2e).not.toMatch(/gh workflow run aplicar-staging-conta\.yml/)
     expect(e2e).toMatch(/permissions:[\s\S]*actions: write/)
   })
   it('el despliegue usa la misma lista que pr-a-main (con _shared) y compara lo desplegado, fichero a fichero', () => {

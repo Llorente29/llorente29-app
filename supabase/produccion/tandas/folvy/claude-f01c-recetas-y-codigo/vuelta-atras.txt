@@ -1,0 +1,6 @@
+# F01 · PR 3 · vuelta atrás, en orden inverso. La de la 0851 quita el
+# disparador de recipe_line y restaura f01_pasada_last byte a byte. La de la
+# 0850 PARA si ya hay decisiones de «Revisar marca» de una persona («Sí, es…» o
+# «No, es otra marca»): quitarla perdería ese apunte.
+supabase/vuelta-atras/20261028T0851_f01c_cola_y_pasada.down.sql
+supabase/vuelta-atras/20261028T0850_f01c_recetas_y_codigo.down.sql

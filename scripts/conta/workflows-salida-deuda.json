@@ -3,10 +3,12 @@
   "deuda": {
     ".github/workflows/aplicar-produccion-conta.yml": 46,
     ".github/workflows/build-apk.yml": 9,
-    ".github/workflows/cumplimiento-produccion-conta.yml": 14,
+    ".github/workflows/cumplimiento-produccion-conta.yml": 16,
     ".github/workflows/deploy-edge-functions.yml": 23,
     ".github/workflows/diez-importar.yml": 4,
-    ".github/workflows/diez-lectura.yml": 8,
-    ".github/workflows/medir-ocr-destinatario.yml": 8
-  }
+    ".github/workflows/diez-lectura.yml": 9,
+    ".github/workflows/medir-ocr-destinatario.yml": 8,
+    ".github/workflows/diez-conexion.yml": 4
+  },
+  "_w09": "W09 (28/10): cumplimiento-produccion-conta 14→16, diez-lectura 8→9 y diez-conexion (sin tope)→4 son lo que ya tenían en main (medido con revisar() sobre origin/main, igual que en la rama): el W09 los toca solo para poner límites a psql, y no sube ninguno."
 }

@@ -29,12 +29,17 @@
 
 import { supabase, isSupabaseEnabled } from '../../lib/supabase'
 import { leerMarcasLast, ocultarMarca } from '@/modules/multitenancy/services/marcasLastService'
-import { avisoMarca, claveMarca, fraseNoLaUso, iniciales, pendientes } from '@/modules/multitenancy/lib/marcasLast'
+import { avisoMarca, claveMarca, enumerar, fraseNoLaUso, iniciales, localCorto, pendientes } from '@/modules/multitenancy/lib/marcasLast'
 import { leerCambiosCarta } from '@/modules/multitenancy/services/cambiosCartaService'
 import { pideDecidir, resumenCambios } from '@/modules/multitenancy/lib/cambiosCarta'
+import { leerMarcasPorRevisar } from '@/modules/multitenancy/services/cartaMarcaService'
+import { chipPregunta, textoReconocida, textoSinMarca, type PorRevisar } from '@/modules/multitenancy/lib/cartaMarca'
 
 // F01 (27/10): «marca» = una marca nueva en las cartas de Last, antes de que venda.
-export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante' | 'marca' | 'carta'
+// F01 · PR 3 (28/10): «revisar» = una marca de Last con otro código que se parece
+// a una tuya; «reconocida» = una que Folvy ha unido sola; «sin_marca» = ventas
+// de Last de un código que nadie conoce (tablero 4: nunca en silencio).
+export type TipoAviso = 'conteo' | 'tablet' | 'cuadrante' | 'marca' | 'carta' | 'revisar' | 'reconocida' | 'sin_marca'
 
 export interface AvisoAtencion {
   id: string
@@ -175,7 +180,7 @@ export async function getAvisosAtencion(
   const idsLocales = [...nombreLocal.keys()]
   if (idsLocales.length === 0) return []
 
-  const [conteos, tablets, cuadrantes, marcas, cartas] = await Promise.all([
+  const [conteos, tablets, cuadrantes, marcas, cartas, revisar] = await Promise.all([
     sb.from('inventory_count').select('id, code, status, location_id, started_at')
       .eq('account_id', accountId).in('status', ESTADOS_CONTEO_VIVO),
     // Solo dispositivos ACTIVOS: uno dado de baja a propósito no es una tablet
@@ -190,6 +195,9 @@ export async function getAvisosAtencion(
     leerMarcasLast(accountId).then((m) => ({ data: m, error: null }), (e: unknown) => ({ data: null, error: e })),
     // F01 · PR 2: los cambios de carta de las marcas de Last (tablero 5).
     leerCambiosCarta(accountId).then((c) => ({ data: c, error: null }), (e: unknown) => ({ data: null, error: e })),
+    // F01 · PR 3: las marcas de Last que llegan con otro código (tablero 4).
+    leerMarcasPorRevisar(accountId).then((r): { data: PorRevisar | null; error: unknown } => ({ data: r, error: null }),
+      (e: unknown) => ({ data: null, error: e })),
   ])
   const enAlcance = (loc: unknown) => locationId == null || loc === locationId
   const deQuien = (loc: unknown) =>
@@ -237,9 +245,12 @@ export async function getAvisosAtencion(
 
   // Primero las marcas nuevas: venden en cuanto alguien pide, y hasta el alta
   // lo vendido no descuenta almacén. Todas, sin recortar (regla 7).
+  if (revisar.error) console.error('[atencion] marcas de Last por revisar', revisar.error)
+  // La que se parece a una tuya se pregunta (tablero 4), no se ofrece como nueva.
+  const preguntadas = new Set((revisar.data?.preguntas ?? []).map((q) => claveMarca(q)))
   if (marcas.error) console.error('[atencion] marcas de Last', marcas.error)
   else {
-    const nuevas = pendientes(marcas.data ?? []).filter((m) => locationId == null || m.locales.some((l) => l.id === locationId))
+    const nuevas = pendientes(marcas.data ?? []).filter((m) => (locationId == null || m.locales.some((l) => l.id === locationId)) && !preguntadas.has(claveMarca(m)))
     avisos.unshift(...nuevas.map((m): AvisoAtencion => {
       const a = avisoMarca(m)
       return {
@@ -274,6 +285,42 @@ export async function getAvisosAtencion(
       ruta: `/configuracion/cambios-last?marca=${encodeURIComponent(c.brandId)}`,
       destino: 'Marcas · Cambios de Last',
     })))
+  }
+
+  // F01 · PR 3 · tablero 4: lo que llega con otro código, lo primero (hasta
+  // decidirlo, sus ventas no tienen marca); lo que Folvy ha unido solo y las
+  // ventas sin marca, detrás de las marcas nuevas.
+  if (revisar.data) {
+    const enLocal = (l: { id: string }[]) => locationId == null || l.length === 0 || l.some((x) => x.id === locationId)
+    avisos.unshift(...revisar.data.preguntas.filter((q) => enLocal(q.locales)).map((q): AvisoAtencion => ({
+      id: `revisar:${claveMarca(q)}`,
+      tipo: 'revisar',
+      texto: `${q.nombre} llega con otro código${q.locales.length ? ` en ${enumerar(q.locales.map((l) => localCorto(l.nombre)))}` : ''}`,
+      detalle: `¿Es tu ${q.comparacion.marca}? Su carta se parece: ${q.comparacion.coinciden} de ${q.comparacion.platosFolvy} platos coinciden.`,
+      chip: { texto: chipPregunta(q), tono: q.ventas.despues + q.ventas.antes > 0 ? 'mal' : 'suave' },
+      boton: 'Revisar',
+      iniciales: iniciales(q.nombre),
+      ruta: `/configuracion/revisar-last?marca=${encodeURIComponent(claveMarca(q))}`,
+      destino: 'Marcas · Revisar',
+    })))
+    const tras = avisos.filter((a) => a.tipo === 'revisar' || a.tipo === 'marca').length
+    avisos.splice(tras, 0,
+      ...revisar.data.reconocidas.filter((r) => enLocal(r.locales)).map((r): AvisoAtencion => {
+        const t = textoReconocida(r)
+        return {
+          id: `reconocida:${r.id}`, tipo: 'reconocida', texto: t.titulo, detalle: t.detalle,
+          chip: { texto: r.como === 'sola' ? 'Reconocida' : 'Vinculada', tono: 'suave' }, boton: 'Ver',
+          iniciales: iniciales(r.nombreLast), ruta: '/configuracion/revisar-last', destino: 'Marcas · Revisar',
+        }
+      }),
+      // Interrumpe solo lo de los últimos 30 días (regla 7); Marcas › Revisar lo enseña todo.
+      ...(locationId == null ? revisar.data.sinMarca.filter((x) => x.ultima != null && Date.parse(x.ultima) > Date.now() - 30 * 86_400_000) : [])
+        .map((x, i): AvisoAtencion => ({
+        id: `sin_marca:${x.codigo ?? ''}:${i}`, tipo: 'sin_marca', texto: textoSinMarca(x),
+        detalle: 'No descuentan almacén hasta que se sepa de qué marca son.',
+        chip: { texto: x.ventas === 1 ? '1 venta sin marca' : `${x.ventas} ventas sin marca`, tono: 'mal' }, boton: 'Ver',
+        ruta: '/configuracion/revisar-last', destino: 'Marcas · Revisar',
+      })))
   }
 
   return avisos

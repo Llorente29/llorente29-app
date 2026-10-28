@@ -181,6 +181,7 @@ describe('el workflow de la e2e (W02)', () => {
       expect(coger).toBeLessThan(ap.indexOf(paso))
     }
     const soltar = ap.slice(ap.indexOf('- name: Cerrojo de migrar · soltarlo'))
-    expect(soltar.slice(0, 300)).toMatch(/if: always\(\)[\s\S]*scripts\/e2e\/carril\.sh migrar-soltar/)
+    // W09: con su timeout-minutes, el paso es una línea más largo.
+    expect(soltar.slice(0, 400)).toMatch(/if: always\(\)[\s\S]*scripts\/e2e\/carril\.sh migrar-soltar/)
   })
 })
