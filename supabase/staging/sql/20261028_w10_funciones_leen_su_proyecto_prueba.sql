@@ -17,6 +17,12 @@
 --   3 · tg_auto_dispatch lee la dirección del Vault y, si falta, no llama.
 --   4 · una sola firma de cada función.
 --   5 · la vuelta atrás: las 23 huellas de antes y nada de lo nuevo.
+--
+-- sin usuario: las 23 son SECURITY DEFINER y corren como su dueño, sea quien
+-- sea quien las llame (un disparador de sale, un cron, la app); lo único que
+-- cambia es de dónde leen la dirección y el secreto (el Vault), y eso no
+-- depende de quién llama. Las funciones nuevas no las puede llamar nadie de
+-- fuera (revoke a public, anon y authenticated).
 
 \set ON_ERROR_STOP 1
 begin;
