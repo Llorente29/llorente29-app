@@ -18,6 +18,9 @@
 //   node scripts/conta/staging-tanda.mjs semilla <ficheros…>
 //     → W07: las semillas que se puede intentar que vayan de verdad; en el
 //       error, las demás y por qué
+//   node scripts/conta/staging-tanda.mjs ya-de-verdad <registro>
+//     → W07b: de «fichero md5» (lo que la rama ya pasó de verdad), los que
+//       siguen iguales: cuentan como que van de verdad
 //   node scripts/conta/staging-tanda.mjs semilla-dos-veces <semilla> [previas…]
 //     → W07: el psql que la aplica dos veces en ROLLBACK y compara las medidas
 //   node scripts/conta/staging-tanda.mjs rollback <ficheros…>
@@ -39,6 +42,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { analizarFichero, categoria, creadosPorLaTanda } from './produccion/analizar.mjs'
 
@@ -282,6 +286,20 @@ export function porQueNoVaLaSemilla(fichero, sql) {
   return null
 }
 
+/**
+ * W07b (28/10) · Lo que la rama ya pasó de verdad en un run anterior (W05 o
+ * W07), con el mismo contenido, cuenta como «va de verdad» para lo que va
+ * detrás. Sin esto, en el segundo push de una rama su migración ya no «solo
+ * añade» contra staging (ya está puesta) y su semilla se quedaba en ROLLBACK
+ * «por ir detrás de algo que no va de verdad» (el #361, ensayo 40642383617).
+ * registro: «fichero md5» por línea (w06_staging.de_verdad de la rama);
+ * md5De(f): el md5 del fichero de ahora, o null si ya no existe.
+ */
+export function yaDeVerdad(registro, md5De) {
+  return String(registro ?? '').split('\n').map((l) => l.trim().split(/\s+/)).filter((x) => x.length === 2)
+    .filter(([f, m]) => md5De(f) === m).map(([f]) => f)
+}
+
 /** La medida de una semilla: filas y huella de cada tabla que escribe, y huella de cada función que crea. */
 export function sqlMedida(sql) {
   const tablas = tablasQueEscribe(sql).map((t) =>
@@ -364,6 +382,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       if (p) console.error(`\`${f}\`: solo en ROLLBACK (${p})`)
       else console.log(f)
     }
+  } else if (modo === 'ya-de-verdad') {
+    // W07b: de «fichero md5» (stdin o un fichero), los que siguen iguales en el árbol de ahora.
+    const md5De = (f) => { try { return createHash('md5').update(readFileSync(f)).digest('hex') } catch { return null } }
+    for (const f of yaDeVerdad(readFileSync(args[0] ?? 0, 'utf8'), md5De)) console.log(f)
   } else if (modo === 'semilla-dos-veces') {
     const [semilla, ...previas] = args
     console.log(sqlDosVeces(semilla, previas))

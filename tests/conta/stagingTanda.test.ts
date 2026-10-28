@@ -8,7 +8,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
 import { lineas, nuevas, porQueNoSeEnsaya, llevaSuTransaccion, sesiones, MANIFIESTO, RUTA_STAGING, rutaNoAdmitida, ruta, textoDelManifiesto,
-  porQueNoVaLaSemilla, tablasQueEscribe, funcionesQueCrea, sqlDosVeces } from '../../scripts/conta/staging-tanda.mjs'
+  porQueNoVaLaSemilla, tablasQueEscribe, funcionesQueCrea, sqlDosVeces, yaDeVerdad } from '../../scripts/conta/staging-tanda.mjs'
 
 const enCommit = (ref: string) => execFileSync('git', ['show', `${ref}:${MANIFIESTO}`], { encoding: 'utf8' })
 
@@ -345,5 +345,23 @@ describe.skipIf(!pgListo)('W07 · dos veces en ROLLBACK, la misma medida (en un 
     expect(sql(`select nombre from public.t where id = 4`)).toBe('d')
     expect(sql(`select count(*) from w06_staging.de_verdad where rama = 'rama-w07'`)).toBe('1')
     expect(sql(`select count(*) from w06_staging.antes_de_verdad where rama = 'rama-w07'`)).toBe('0')
+  })
+})
+
+// W07b (28/10): en el segundo push de una rama, su migración ya está puesta en
+// staging (W05) y ya no «solo añade»; su semilla no puede quedarse en ROLLBACK
+// por ir «detrás de algo que no va de verdad» (el #361, ensayo 40642383617).
+describe('W07b · lo que la rama ya pasó de verdad cuenta como que va', () => {
+  const md5 = (f: string) => ({ 'supabase/migrations/1910.sql': 'aaa', 'supabase/seeds/folvy/s.sql': 'bbb' } as Record<string, string>)[f] ?? null
+  it('el mismo contenido, sí; si el fichero cambió o ya no está, no', () => {
+    expect(yaDeVerdad('supabase/migrations/1910.sql aaa\nsupabase/seeds/folvy/s.sql zzz\nsupabase/migrations/borrada.sql ccc\n', md5))
+      .toEqual(['supabase/migrations/1910.sql'])
+    expect(yaDeVerdad('', md5)).toEqual([])
+  })
+  it('el workflow lo lee de w06_staging.de_verdad de la rama y lo suma a lo que va', () => {
+    const w = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
+    expect(w).toContain(`select fichero || ' ' || md5 from w06_staging.de_verdad where rama = :'rama';`)
+    expect(w).toContain('node "$S" ya-de-verdad /tmp/registro-de-verdad.txt > /tmp/ya-de-verdad.txt')
+    expect(w).toContain('cat /tmp/anaden.txt /tmp/semillas-van.txt /tmp/ya-de-verdad.txt > /tmp/van.txt')
   })
 })

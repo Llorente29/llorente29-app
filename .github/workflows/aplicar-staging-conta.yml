@@ -366,13 +366,22 @@ jobs:
           # Si coinciden, va; si no, se queda en ROLLBACK y aquí se dice por qué.
           # Y todo lo que va delante en la tanda (migraciones y semillas) tiene
           # que ir de verdad también: si no, la semilla no lo encontraría.
+          # W07b: lo que la rama ya pasó de verdad en un run anterior, con el
+          # mismo contenido, cuenta como que va (en el segundo push, su
+          # migración ya no «solo añade»: ya está puesta).
+          : > /tmp/ya-de-verdad.txt
+          if [ -s /tmp/semillas.txt ] && [ "$("$PSQL" "$DB_URL" -X -A -t -c "select to_regclass('w06_staging.de_verdad') is not null")" = "t" ]; then
+            echo "select fichero || ' ' || md5 from w06_staging.de_verdad where rama = :'rama';" \
+              | "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v rama="$GITHUB_REF_NAME" > /tmp/registro-de-verdad.txt
+            node "$S" ya-de-verdad /tmp/registro-de-verdad.txt > /tmp/ya-de-verdad.txt
+          fi
           if [ -s /tmp/semillas.txt ]; then
             { echo; echo "### Las semillas de la rama, de verdad si se aplican dos veces igual (W07)"; echo; } >> "$GITHUB_STEP_SUMMARY"
             node "$S" semilla $(cat /tmp/semillas.txt) > /tmp/semillas-ok.txt 2> /tmp/semillas-no.txt || true
             while IFS= read -r l; do echo "- $l" >> "$GITHUB_STEP_SUMMARY"; done < /tmp/semillas-no.txt
             while IFS= read -r f; do
               awk -v f="$f" '$0 == f { exit } { print }' /tmp/tanda.txt | grep -E '^supabase/(migrations|seeds)/' > /tmp/previas.txt || true
-              cat /tmp/anaden.txt /tmp/semillas-van.txt > /tmp/van.txt
+              cat /tmp/anaden.txt /tmp/semillas-van.txt /tmp/ya-de-verdad.txt > /tmp/van.txt
               falta=$(grep -vxF -f /tmp/van.txt /tmp/previas.txt || true)
               [ -s /tmp/van.txt ] || falta=$(cat /tmp/previas.txt)
               if [ -n "$falta" ]; then
