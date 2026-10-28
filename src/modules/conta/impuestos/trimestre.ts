@@ -110,7 +110,11 @@ export function tituloTrimestre(ejercicio: number, trimestre: string): string {
 
 /** El nombre corto de la tarjeta: «IVA · 303», «Retenciones · 111», «Alquiler · 115», «Sociedades · 202». */
 export function nombreTarjeta(m: Pick<ModeloTrimestre, 'modelo' | 'nombre' | 'periodo' | 'cadencia'>): string {
-  const corto: Record<string, string> = { '303': 'IVA', '111': 'Retenciones', '115': 'Alquiler', '202': 'Sociedades' }
+  const corto: Record<string, string> = {
+    '303': 'IVA', '111': 'Retenciones', '115': 'Alquiler', '202': 'Sociedades',
+    // S02 · Los del año.
+    '390': 'IVA del año', '190': 'Retenciones del año', '180': 'Alquileres del año', '347': 'Clientes y proveedores', '349': 'Operaciones con la UE',
+  }
   const mes = m.cadencia === 'monthly' && m.periodo ? ` · mes ${Number(m.periodo)}` : ''
   return `${corto[m.modelo] ?? m.nombre} · ${m.modelo}${mes}`
 }

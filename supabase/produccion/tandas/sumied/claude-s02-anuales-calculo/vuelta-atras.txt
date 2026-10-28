@@ -1,0 +1,5 @@
+# S02 · el 190 · vuelta atrás: quita las cuatro funciones y deja el CHECK de
+# lo comprobado con sus catorce claves (borra antes lo comprobado con las tres
+# nuevas). Los borradores del 190 se quedan: son datos.
+cuenta: scripts/conta/produccion/cuentas/s02-modelo-190.sql
+supabase/vuelta-atras/20261028T1950_s02_modelo_190.down.sql

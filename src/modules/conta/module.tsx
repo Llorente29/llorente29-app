@@ -55,6 +55,7 @@ import BancosPage from '@/modules/conta/bancos/BancosPage'
 import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
 import IvaPeriodoPage from '@/modules/conta/impuestos/IvaPeriodoPage'
 import TrimestrePage from '@/modules/conta/impuestos/TrimestrePage'
+import AnualPage from '@/modules/conta/impuestos/AnualPage'
 import AceptarAsesoriaPage from '@/modules/conta/impuestos/AceptarAsesoriaPage'
 import { ClienteTrimestre } from '@/modules/conta/impuestos/despacho/ClienteTrimestre'
 import InicioPage from '@/modules/conta/inicio/InicioPage'
@@ -135,6 +136,7 @@ export const contaModule: ModuleDefinition = {
     // I01c · El trimestre (maqueta_303_v2), también de una empresa por la ruta (vista de despacho).
     { path: CONTA.rutas.impuestoTrimestre, element: enMarco(<TrimestrePage />, '¿Cuánto me queda por compensar?') },
     { path: CONTA.rutas.impuestoTrimestreEmpresa, element: enMarco(<TrimestrePage />, '¿Cuánto me queda por compensar?') },
+    { path: CONTA.rutas.impuestoAnual, element: enMarco(<AnualPage />, '¿Cuadra lo retenido en el año con los 111?') },
     // P01 · El trimestre de un cliente, abierto desde «Impuestos de tus clientes».
     { path: CONTA.rutas.impuestosCliente, element: enMarco(<ClienteTrimestre />, '¿Qué le falta a este cliente?') },
     // I01b · Aceptar la invitación de una empresa (con sesión; sin ella, la misma página en AuthRouter).

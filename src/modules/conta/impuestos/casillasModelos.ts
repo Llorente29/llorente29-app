@@ -53,6 +53,15 @@ const C115: Readonly<Record<string, string>> = {
   '05': 'Resultado a ingresar',
 }
 
+// S02 · El 190: no hay impreso con casillas; son los tres totales del registro
+// de declarante del diseño (anexo de la Orden EHA/3127/2009, posiciones
+// 136-175), con su nombre en palabras.
+const C190: Readonly<Record<string, string>> = {
+  '01': 'Número de percepciones (un registro por perceptor y clave)',
+  '02': 'Importe total de las percepciones',
+  '03': 'Total de las retenciones e ingresos a cuenta',
+}
+
 const C202: Readonly<Record<string, string>> = {
   '01': 'Base del pago fraccionado (modalidad del artículo 40.2)',
   '02': 'Resultado de la declaración anterior (solo complementarias)',
@@ -75,7 +84,7 @@ const C202: Readonly<Record<string, string>> = {
   '34': 'Cantidad a ingresar',
 }
 
-const POR_MODELO: Readonly<Record<string, Readonly<Record<string, string>>>> = { '111': C111, '115': C115, '202': C202 }
+const POR_MODELO: Readonly<Record<string, Readonly<Record<string, string>>>> = { '111': C111, '115': C115, '190': C190, '202': C202 }
 
 /**
  * El texto del diseño de registro del 303, en palabras: sin la fórmula entre

@@ -330,7 +330,7 @@ function Ficha({ m, d: datos, ejercicio, trimestre, deRuta, hoy, alHacer, alPega
 }
 
 /** Todas las casillas con «qué es» y su importe; la del resultado, marcada. */
-function TablaCasillas({ m, casillas, resultado }: { m: ModeloTrimestre; casillas: CasillaTrimestre[]; resultado: string | undefined }) {
+export function TablaCasillas({ m, casillas, resultado }: { m: ModeloTrimestre; casillas: CasillaTrimestre[]; resultado: string | undefined }) {
   return (
     <table className="s-trimestre-casillas" aria-label={`Casillas del ${m.modelo}`}>
       <thead><tr><th scope="col">Casilla</th><th scope="col">Qué es</th><th scope="col" className="s-tabla-cifra">Importe</th></tr></thead>
@@ -457,7 +457,7 @@ async function calcularYDecir(empresa: string, ejercicio: number, trimestre: str
 }
 
 /** Un botón que espera a lo que hace y no deja pulsarlo dos veces (regla 8). */
-function BotonCalcular({ texto, alCalcular, variante = 'principal' }: { texto: string; alCalcular: () => Promise<void>; variante?: 'principal' | 'secundario' | 'enlace' }) {
+export function BotonCalcular({ texto, alCalcular, variante = 'principal' }: { texto: string; alCalcular: () => Promise<void>; variante?: 'principal' | 'secundario' | 'enlace' }) {
   const [haciendo, setHaciendo] = useState(false)
   return (
     <Boton variante={variante} disabled={haciendo} onClick={async () => { setHaciendo(true); try { await alCalcular() } finally { setHaciendo(false) } }}>
@@ -794,7 +794,7 @@ function queFalta(m: ModeloTrimestre, ejercicio: number, trimestre: string, pres
  */
 const ZOOM = ['page-width', '75', '100', '125', '150', '200'] as const
 
-function VisorJustificante({ ruta, nombre, titulo, ampliado, alAmpliar }: { ruta: string; nombre: string; titulo: string; ampliado: boolean; alAmpliar: () => void }) {
+export function VisorJustificante({ ruta, nombre, titulo, ampliado, alAmpliar }: { ruta: string; nombre: string; titulo: string; ampliado: boolean; alAmpliar: () => void }) {
   const [zoom, setZoom] = useState(0)
   const [completa, setCompleta] = useState(false)
   const [url, setUrl] = useState<string | null>(null)
