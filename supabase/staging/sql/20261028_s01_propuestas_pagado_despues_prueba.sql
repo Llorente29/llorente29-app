@@ -59,7 +59,7 @@ create or replace function pg_temp.lineas(p uuid) returns text language sql as $
     from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = p
 $$;
 insert into _p select 'huella_antes', pg_temp.huella_ventas();
-insert into _p select 'prosrc_antes', md5(prosrc) from pg_proc where oid = to_regprocedure('public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)');
+insert into _p select 'prosrc_antes', md5(pg_get_functiondef(to_regprocedure('public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)')));
 
 select to_regclass('public.conta_propuesta_pendiente') is not null as ya_esta_la_0753,
        to_regprocedure('public.conta_propuesta_pagado_despues(uuid,jsonb)') is not null as ya_esta_la_0849 \gset
@@ -190,7 +190,8 @@ reset role;
 -- ── 5 · La vuelta atrás ─────────────────────────────────────────────────────
 \i supabase/vuelta-atras/20261028T0849_s01_propuestas_pagado_despues.down.sql
 do $$ begin
-  if (select md5(prosrc) from pg_proc where oid = to_regprocedure('public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)'))
+  -- La misma vara que la 0735: md5(pg_get_functiondef), la huella que guarda su respaldo.
+  if md5(pg_get_functiondef(to_regprocedure('public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)')))
      <> (select v from _p where clave = 'prosrc_antes') then
     raise exception 'PRUEBA S01 PAGADO · 5: la regla de ventas no vuelve byte a byte.';
   end if;

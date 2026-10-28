@@ -21,3 +21,8 @@ supabase/staging/sql/20261028_s01_propuestas_recibido_prueba.sql
 # cuenta, no; y la vuelta atrás, byte a byte.
 supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
 supabase/staging/sql/20261028_s01_propuestas_pagado_despues_prueba.sql
+# El socio de marca (0905), con su prueba: la regla, igual que la del navegador
+# sobre la semilla (con y sin lo aprendido); al recibirla, sola; sin su cuenta,
+# dicho; con ella, los tres asientos; sin cuenta, no; y la vuelta atrás.
+supabase/migrations/20261028T0905_s01_propuestas_socio.sql
+supabase/staging/sql/20261028_s01_propuestas_socio_prueba.sql

@@ -27,6 +27,10 @@
 #      pagado después se propone solo al leer la liquidación (origen 3 de 5).
 #      La regla de ventas no cambia: la prueba mide la huella de todas las
 #      propuestas de ventas de staging antes y después.
+#   6. 0905 — AÑADE el socio de marca solo (origen 4 de 5): las dos fórmulas en
+#      SQL, lo aprendido (regla 11) y quien las propone, y CAMBIA
+#      licensed_settlement con un disparador nuevo (3 filas en producción, de
+#      la fórmula «anterior», que no se propone): al confirmarse o saldarse.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
@@ -36,3 +40,4 @@ supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
 supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
 supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
 supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
+supabase/migrations/20261028T0905_s01_propuestas_socio.sql

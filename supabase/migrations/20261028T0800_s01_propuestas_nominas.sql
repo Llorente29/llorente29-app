@@ -93,7 +93,8 @@ declare v_cuenta uuid; r record; x jsonb; v_res jsonb;
 begin
   select account_id into v_cuenta from public.company where id = p_company;
   if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
-  if auth.uid() is not null and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
     raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
   end if;
   for r in select ps.id from public.payroll_summary ps

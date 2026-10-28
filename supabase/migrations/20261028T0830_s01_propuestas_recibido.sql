@@ -100,7 +100,8 @@ declare v_cuenta uuid; v_mes date; v_fin date; a record; x jsonb; q jsonb; v_res
 begin
   select account_id into v_cuenta from public.company where id = p_company;
   if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
-  if auth.uid() is not null and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
     raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
   end if;
   -- Los meses ya acabados (su último día, pasado) del rango, con ese día abierto.

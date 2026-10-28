@@ -1,9 +1,9 @@
 -- scripts/conta/produccion/cuentas/s01-enlace-validado.sql
 --
 -- S01 · PR 3 (28/10) · LO QUE CUENTA LA TANDA DEL COBRO POR EL ENLACE VALIDADO
--- (0735), y de la base, las nóminas, lo recibido sin factura y el pagado después
--- de las propuestas sin botón (0753, 0800, 0830 y 0849), antes y después. SOLO
--- LEE. La 0753, la 0800 y la 0830 solo añaden: antes y al
+-- (0735), y de la base, las nóminas, lo recibido sin factura, el pagado después y
+-- el socio de las propuestas sin botón (0753, 0800, 0830, 0849 y 0905), antes y
+-- después. SOLO LEE. La 0753, la 0800, la 0830 y la 0905 solo añaden: antes y al
 -- deshacerlas, «no existe» o 0.
 --   · La 0735 añade _journal_entry_validar (no existe antes ni al deshacerla) y
 --     cambia journal_entry_validar y _s01_asiento_cobro con la misma firma: su
@@ -52,5 +52,13 @@ select clave, valor from (
     || ' · ' || (select count(*) from pg_trigger where tgname like 'conta_liquidacion_pedidos_proponer%') union all
   select 14, 'asientos del pagado después (journal_entry sales_adjustment; tabla entera)',
     -- quieta: 0 el 28/10; channel_settlement_order no recibe filas desde el 12/07 y ningún no confirmado tiene línea de liquidación
-    (select count(*) from public.journal_entry where source_type = 'sales_adjustment')::text
+    (select count(*) from public.journal_entry where source_type = 'sales_adjustment')::text union all
+  select 15, '0905: funciones nuevas (de 9) y disparador de licensed_settlement (de 1)',
+    (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('conta_propuestas_socio', 'conta_proponer_socios', '_conta_proponer_socio', 'tg_conta_socio_proponer', '_conta_aprendizaje',
+                         '_conta_cuotas_y_redondeo', '_conta_hoja', '_conta_enlace', '_conta_tipo_iva'))
+    || ' · ' || (select count(*) from pg_trigger where tgname = 'conta_socio_proponer') union all
+  select 16, 'asientos del socio (journal_entry licensed_settlement; tabla entera)',
+    -- quieta: 0 el 28/10; las 3 liquidaciones de producción son de la fórmula «anterior», que no se propone
+    (select count(*) from public.journal_entry where source_type = 'licensed_settlement')::text
 ) x order by o;
