@@ -8,6 +8,8 @@ import HomeEmpleado from './HomeEmpleado'
 import type { WorkerModule } from './HomeEmpleado'
 import PortalEmpleado from './PortalEmpleado'
 import type { PortalSubPage } from './PortalEmpleado'
+import { AvisoFichajesPendientes } from './FichajesPendientes'
+import { useFichajesPendientes } from './usarFichajesPendientes'
 import FichajeEmpleado from './FichajeEmpleado'
 import MiHorario from './MiHorario'
 import MisFichajes from './MisFichajes'
@@ -145,6 +147,10 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
   const employee: Employee | null = employeeId
     ? (staff.find(e => e.id === employeeId) || null)
     : null
+
+  // L1a (27/10): los fichajes hechos sin cobertura se mandan solos al volver
+  // la red; la portada dice lo que espera y lo que no se ha aceptado.
+  const fichajesSinRed = useFichajesPendientes(employee?.id, refreshStaff)
 
   // F8 — resuelto en cuanto se conoce el empleado; nunca antes (fail-closed).
   useEffect(() => {
@@ -482,6 +488,7 @@ export default function TrabajadorApp({ employeeId, onExitMode, exitLabel = 'log
 
   return (
     <div className="pb-20">
+      <AvisoFichajesPendientes {...fichajesSinRed} />
       <HomeEmpleado
         employee={employee}
         onNavigate={(mod: WorkerModule) => {

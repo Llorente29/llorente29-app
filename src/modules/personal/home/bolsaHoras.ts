@@ -9,6 +9,7 @@ import {
 } from '@/services/hoursBalanceService'
 import type { Employee } from '@/types'
 import type { LocationBalanceConfig } from '@/services/hoursBalanceService'
+import { COLUMNAS_DE_LA_FICHA } from '@/services/supabaseSync'
 
 /**
  * El día de cierre del local. Mismos defectos que `BolsaHorasPage`: 25, y
@@ -61,7 +62,8 @@ export async function leeBolsaDeHoras(
   if (!isSupabaseEnabled || !supabase) {
     return { saldoTotal: 0, etiquetaPeriodo: '', empleados: 0, semanasSinPublicar: 0, masDesviados: [] }
   }
-  let q = supabase.from('employees').select('*').eq('account_id', accountId).eq('active', true)
+  // L1a: sin las columnas privadas (salario, DNI…), que la bolsa no usa.
+  let q = supabase.from('employees').select(COLUMNAS_DE_LA_FICHA).eq('account_id', accountId).eq('active', true)
   if (locationId) q = q.eq('location_id', locationId)
   const { data, error } = await q
   if (error) throw new Error(`No se ha podido leer la plantilla: ${error.message}`)

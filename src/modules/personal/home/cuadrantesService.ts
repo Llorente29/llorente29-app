@@ -5,6 +5,7 @@
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import type { LocalActivo, FilaSchedule, Empleado, Ausencia } from './estadoCuadrantes'
+import { leerAusenciasVisibles } from '@/services/vacationsService'
 
 function sb() {
   if (!isSupabaseEnabled || !supabase) throw new Error('Supabase no está configurado.')
@@ -42,8 +43,10 @@ export async function leeCuadrantes(
       .eq('account_id', accountId).eq('active', true).in('location_id', ids),
     // Sin filtrar por estado aquí: el cruce necesita ver las rechazadas para
     // NO contarlas, y que eso se vea en el código que decide, no en la consulta.
-    sb().from('vacations').select('employee_id, status, start_date, end_date, type')
-      .eq('account_id', accountId).gte('end_date', hoy),
+    // L1a: las ausencias que ve quien mira (las bajas, «ausente» para el encargado).
+    leerAusenciasVisibles({ desde: hoy }).then(r => ({
+      data: r.filas.filter(f => f.account_id === accountId), error: r.error ? { message: r.error } : null,
+    })),
   ])
   if (sch.error) throw new Error(`No se han podido leer los cuadrantes: ${sch.error.message}`)
   if (emp.error) throw new Error(`No se ha podido leer la plantilla: ${emp.error.message}`)

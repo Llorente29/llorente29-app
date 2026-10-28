@@ -332,35 +332,91 @@ jobs:
           PSQL=/usr/lib/postgresql/17/bin/psql
           export PGAPPNAME="gha-staging-conta-anade-${GITHUB_RUN_ID}"
           A=scripts/conta/produccion/analizar.mjs
+          S=scripts/conta/staging-tanda.mjs
           grep '^supabase/migrations/' /tmp/tanda.txt > /tmp/migraciones.txt || true
-          if [ ! -s /tmp/migraciones.txt ]; then echo "La rama no trae migraciones: nada va de verdad." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
-          # El contexto, medido en STAGING y solo leyendo (la misma consulta que la tanda de producción).
-          node "$A" objetivos $(cat /tmp/migraciones.txt) > /tmp/objetivos.json
-          node "$A" destruidos $(cat /tmp/migraciones.txt) > /tmp/destruidos.json
-          node "$A" sql-contexto /tmp/objetivos.json /tmp/destruidos.json $(cat /tmp/migraciones.txt) > /tmp/contexto.sql
-          PGOPTIONS="-c default_transaction_read_only=on" "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/contexto.sql > /tmp/contexto.json
-          node scripts/conta/staging-tanda.mjs anaden /tmp/contexto.json $(cat /tmp/migraciones.txt) > /tmp/anaden.txt 2> /tmp/no-anaden.txt || true
+          grep '^supabase/seeds/' /tmp/tanda.txt > /tmp/semillas.txt || true
+          : > /tmp/anaden.txt
+          : > /tmp/semillas-van.txt
           { echo; echo "### Lo que solo añade, de verdad (W05)"; echo; } >> "$GITHUB_STEP_SUMMARY"
-          while IFS= read -r l; do echo "- $l" >> "$GITHUB_STEP_SUMMARY"; done < /tmp/no-anaden.txt
-          if [ ! -s /tmp/anaden.txt ]; then echo "- Ninguna migración de la rama solo añade: todo se queda en ROLLBACK." >> "$GITHUB_STEP_SUMMARY"; exit 0; fi
-          # Que se pueda pasar otra vez: dos veces seguidas, en ROLLBACK.
-          while IFS= read -r f; do
-            if ! printf 'begin;\n\\i %s\n\\i %s\nrollback;\n' "$f" "$f" | "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 > /tmp/dos.txt 2>&1; then
-              cat /tmp/dos.txt
-              echo "::error::$f no se puede pasar dos veces seguidas: main la volverá a pasar. Que use «if not exists» o «create or replace». No va nada de verdad."
-              echo "- \`$f\`: **no se puede pasar dos veces**: no va de verdad." >> "$GITHUB_STEP_SUMMARY"
-              exit 1
-            fi
-          done < /tmp/anaden.txt
+          if [ ! -s /tmp/migraciones.txt ]; then
+            echo "- La rama no trae migraciones." >> "$GITHUB_STEP_SUMMARY"
+          else
+            # El contexto, medido en STAGING y solo leyendo (la misma consulta que la tanda de producción).
+            node "$A" objetivos $(cat /tmp/migraciones.txt) > /tmp/objetivos.json
+            node "$A" destruidos $(cat /tmp/migraciones.txt) > /tmp/destruidos.json
+            node "$A" sql-contexto /tmp/objetivos.json /tmp/destruidos.json $(cat /tmp/migraciones.txt) > /tmp/contexto.sql
+            PGOPTIONS="-c default_transaction_read_only=on" "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f /tmp/contexto.sql > /tmp/contexto.json
+            node "$S" anaden /tmp/contexto.json $(cat /tmp/migraciones.txt) > /tmp/anaden.txt 2> /tmp/no-anaden.txt || true
+            while IFS= read -r l; do echo "- $l" >> "$GITHUB_STEP_SUMMARY"; done < /tmp/no-anaden.txt
+            [ -s /tmp/anaden.txt ] || echo "- Ninguna migración de la rama solo añade: se quedan en ROLLBACK." >> "$GITHUB_STEP_SUMMARY"
+            # Que se pueda pasar otra vez: dos veces seguidas, en ROLLBACK.
+            while IFS= read -r f; do
+              if ! printf 'begin;\n\\i %s\n\\i %s\nrollback;\n' "$f" "$f" | "$PSQL" "$DB_URL" -X -v ON_ERROR_STOP=1 > /tmp/dos.txt 2>&1; then
+                cat /tmp/dos.txt
+                echo "::error::$f no se puede pasar dos veces seguidas: main la volverá a pasar. Que use «if not exists» o «create or replace». No va nada de verdad."
+                echo "- \`$f\`: **no se puede pasar dos veces**: no va de verdad." >> "$GITHUB_STEP_SUMMARY"
+                exit 1
+              fi
+            done < /tmp/anaden.txt
+          fi
+          # W07 (28/10): las semillas de la rama, de verdad si se pueden aplicar
+          # dos veces. Lo demuestra el ensayo, no la cabecera: en ROLLBACK se
+          # aplica, se mide, se aplica otra vez y se vuelve a medir (las filas y
+          # las huellas de las tablas que escribe y de las funciones que crea).
+          # Si coinciden, va; si no, se queda en ROLLBACK y aquí se dice por qué.
+          # Y todo lo que va delante en la tanda (migraciones y semillas) tiene
+          # que ir de verdad también: si no, la semilla no lo encontraría.
+          if [ -s /tmp/semillas.txt ]; then
+            { echo; echo "### Las semillas de la rama, de verdad si se aplican dos veces igual (W07)"; echo; } >> "$GITHUB_STEP_SUMMARY"
+            node "$S" semilla $(cat /tmp/semillas.txt) > /tmp/semillas-ok.txt 2> /tmp/semillas-no.txt || true
+            while IFS= read -r l; do echo "- $l" >> "$GITHUB_STEP_SUMMARY"; done < /tmp/semillas-no.txt
+            while IFS= read -r f; do
+              awk -v f="$f" '$0 == f { exit } { print }' /tmp/tanda.txt | grep -E '^supabase/(migrations|seeds)/' > /tmp/previas.txt || true
+              cat /tmp/anaden.txt /tmp/semillas-van.txt > /tmp/van.txt
+              falta=$(grep -vxF -f /tmp/van.txt /tmp/previas.txt || true)
+              [ -s /tmp/van.txt ] || falta=$(cat /tmp/previas.txt)
+              if [ -n "$falta" ]; then
+                echo "- \`$f\`: solo en ROLLBACK (va detrás de $(echo $falta | sed 's/ /, /g'), que no va de verdad)." >> "$GITHUB_STEP_SUMMARY"
+                continue
+              fi
+              node "$S" semilla-dos-veces "$f" $(cat /tmp/previas.txt) > /tmp/dos-semilla.sql
+              if ! "$PSQL" "$DB_URL" -X -A -t -f /tmp/dos-semilla.sql > /tmp/dos-semilla.txt 2>&1; then
+                cat /tmp/dos-semilla.txt
+                err=$(grep -E 'ERROR' /tmp/dos-semilla.txt | head -2 | tr '\n' ' ' | cut -c1-300)
+                echo "- \`$f\`: solo en ROLLBACK (no se puede aplicar dos veces: ${err:-sin mensaje})." >> "$GITHUB_STEP_SUMMARY"
+                continue
+              fi
+              r=$(grep '^W07|' /tmp/dos-semilla.txt | tail -1)
+              if [ "$r" = 'W07|igual' ]; then
+                echo "$f" >> /tmp/semillas-van.txt
+              else
+                echo "- \`$f\`: solo en ROLLBACK (la segunda vez la medida cambia: ${r#W07|distinto|})." >> "$GITHUB_STEP_SUMMARY"
+              fi
+            done < /tmp/semillas-ok.txt
+          fi
+          if [ ! -s /tmp/anaden.txt ] && [ ! -s /tmp/semillas-van.txt ]; then
+            echo "Nada de la rama va de verdad: todo se queda en ROLLBACK." | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
           # De verdad, con el cerrojo (espera a los ficheros de prueba en marcha), fichero a fichero.
-          # W06: con su registro en w06_staging (qué fue y cómo estaba antes), para
-          # que la comparación del push siguiente parta de como estaba.
+          # W06: las migraciones, con su registro en w06_staging (qué fue y cómo
+          # estaba antes), para que la comparación del push siguiente parta de
+          # como estaba. W07: las semillas, apuntadas pero sin registro de
+          # definiciones (no tienen .down.sql: compara.sh no las deshace).
           scripts/e2e/carril.sh migrar-coger
           scripts/e2e/cerrojo.sh coger
-          PSQL="$PSQL" bash scripts/conta/staging/de-verdad.sh "$GITHUB_REF_NAME" $(cat /tmp/anaden.txt)
-          while IFS= read -r f; do
-            echo "- \`$f\`: **solo añade: aplicado de verdad** (se puede pasar otra vez; registrado en w06_staging)." >> "$GITHUB_STEP_SUMMARY"
-          done < /tmp/anaden.txt
+          if [ -s /tmp/anaden.txt ]; then
+            PSQL="$PSQL" bash scripts/conta/staging/de-verdad.sh "$GITHUB_REF_NAME" $(cat /tmp/anaden.txt)
+            while IFS= read -r f; do
+              echo "- \`$f\`: **solo añade: aplicado de verdad** (se puede pasar otra vez; registrado en w06_staging)." >> "$GITHUB_STEP_SUMMARY"
+            done < /tmp/anaden.txt
+          fi
+          if [ -s /tmp/semillas-van.txt ]; then
+            PSQL="$PSQL" SIN_DEFINICIONES=1 bash scripts/conta/staging/de-verdad.sh "$GITHUB_REF_NAME" $(cat /tmp/semillas-van.txt)
+            while IFS= read -r f; do
+              echo "- \`$f\`: **aplicada dos veces en ROLLBACK con la misma medida: aplicada de verdad** (apuntada en w06_staging)." >> "$GITHUB_STEP_SUMMARY"
+            done < /tmp/semillas-van.txt
+          fi
 
       - name: Aplicar, fichero a fichero
         if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'

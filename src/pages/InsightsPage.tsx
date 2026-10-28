@@ -32,7 +32,7 @@ import { useApp } from '../context/AppContext'
 import { Card } from '../components/ui'
 import type { Employee } from '../types'
 import type { VacationRequest, Formation } from '../types/personal'
-import { VACATION_TYPES, FORMATION_CATALOG } from '../types/personal'
+import { etiquetaDeAusencia, FORMATION_CATALOG } from '../types/personal'
 import { fetchVacations } from '../services/vacationsService'
 import { fetchAllFormations, getFormationStatus } from '../services/formationsService'
 import { fetchTeamHoursSummary } from '../services/teamHoursService'
@@ -395,7 +395,7 @@ export default function InsightsPage({ onGoToIncompleteContracts }: { onGoToInco
   }
 
   function typeLabel(t: string): string {
-    return VACATION_TYPES.find(x => x.id === t)?.label || t
+    return etiquetaDeAusencia(t)
   }
 
   /* ─── RENDER ─────────────────────────────────────── */

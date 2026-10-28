@@ -8,6 +8,9 @@
 //     checkout.session.async_payment_succeeded (Bizum, que se autoriza en el
 //     móvil y llega después): apunta el cobro por el motor de la E1
 //     (conta_enlace_pago_cobrado), una vez por sesión, con el método de verdad;
+//   · S01: con el cobro, la comisión y el neto que da Stripe (el movimiento de
+//     saldo del cargo), para casar después en Bancos su abono, que trae el
+//     neto (conta_enlace_pago_comision);
 //   · account.updated y capability.updated: vuelve a leer la cuenta y guarda
 //     tarjeta y Bizum en palabras; con Bizum activo, lo enciende en sus
 //     métodos de pago (refrescar).
@@ -54,16 +57,24 @@ Deno.serve(async (req) => {
   if (!pagado) return json({ ok: true, ignorado: tipo });
   // El método de verdad: el del cargo (tarjeta o Bizum).
   let metodo = "tarjeta";
+  let saldo: { fee?: number; net?: number } | null = null;
   if (typeof o.payment_intent === "string") {
-    const pi = await v1(clave, "GET", `/v1/payment_intents/${o.payment_intent}?expand[]=latest_charge`, {}, cuenta);
+    const pi = await v1(clave, "GET", `/v1/payment_intents/${o.payment_intent}?expand[]=latest_charge.balance_transaction`, {}, cuenta);
     const t = pi.datos?.latest_charge?.payment_method_details?.type;
     if (t === "bizum") metodo = "bizum";
+    const bt = pi.datos?.latest_charge?.balance_transaction;
+    if (bt && typeof bt === "object" && Number.isFinite(Number(bt.fee)) && Number.isFinite(Number(bt.net))) saldo = { fee: Number(bt.fee), net: Number(bt.net) };
   }
   const { data, error } = await srv.rpc("conta_enlace_pago_cobrado", {
     p_sesion: String(o.id ?? ""), p_stripe: cuenta, p_pago_ref: typeof o.payment_intent === "string" ? o.payment_intent : null,
     p_importe: Number(o.amount_total ?? 0) / 100, p_metodo: metodo, p_fecha: null,
   });
   if (error) { console.error(`conta-stripe-webhook · ${ev.id} · ${error.message}`); return json({ error: "cobrado" }, 500); }
+  // La comisión y el neto (en céntimos en Stripe). Sin ellos, el abono se casa igual, pero no «seguro».
+  if (saldo && (data as { hecho?: boolean } | null)?.hecho) {
+    const { error: ec } = await srv.rpc("conta_enlace_pago_comision", { p_sesion: String(o.id ?? ""), p_comision: saldo.fee! / 100, p_neto: saldo.net! / 100 });
+    if (ec) console.error(`conta-stripe-webhook · ${ev.id} · comisión: ${ec.message}`);
+  }
   console.log(JSON.stringify({ funcion: "conta-stripe-webhook", evento: tipo, ...(data as Record<string, unknown>) }));
   return json({ ok: true, ...(data as Record<string, unknown>) });
 });

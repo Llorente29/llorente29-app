@@ -166,7 +166,7 @@ export function detectaSoledad(
     if (desde > ventanaFin) continue
 
     const motivo = (a.tipo ?? 'vacaciones').toLowerCase() === 'vacaciones'
-      ? 'de vacaciones' : `de ${a.tipo}`
+      ? 'de vacaciones' : a.tipo === 'ausente' ? 'ausente' : `de ${a.tipo}`
     // «se queda como única persona» y no «sola»: el género no está en la ficha
     // del empleado y no se deduce de un nombre. «persona» concuerda consigo
     // misma y no se equivoca con nadie.

@@ -130,6 +130,22 @@ export async function saldosContables(companyId: string, hasta: string, codigos:
   return out
 }
 
+/**
+ * S01 · Las cuentas de la pasarela de cobro («Stripe · por abonar», «TPV del
+ * banco · por abonar»), con su saldo hoy: lo cobrado con tarjeta o Bizum que
+ * aún no ha llegado al banco. Se crean solas con el primer cobro por el enlace.
+ */
+export interface CuentaPasarela { proveedor: 'stripe' | 'redsys'; codigo: string; nombre: string; saldoCent: number }
+export async function cuentasPasarela(accountId: string, companyId: string, hoy: string): Promise<CuentaPasarela[]> {
+  const filas = await leer(tabla('conta_pasarela_cuenta').select('proveedor, code, company_account:company_account_id(name, plain_name)')
+    .eq('account_id', accountId).eq('company_id', companyId), 'las cuentas de la pasarela')
+  const saldos = await saldosContables(companyId, hoy, filas.map((f) => String(f.code)))
+  return filas.map((f) => {
+    const ca = f.company_account as Fila | null
+    return { proveedor: f.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, codigo: String(f.code), nombre: String(ca?.plain_name ?? ca?.name ?? ''), saldoCent: saldos[String(f.code)] ?? 0 }
+  }).sort((a, b) => a.codigo.localeCompare(b.codigo))
+}
+
 /** Los asientos con un banco y sin movimiento que los case, en un mes (lo que está en contabilidad y no en el banco). */
 export async function asientosSinMovimiento(companyId: string, mes: string): Promise<{ id: string; cuentaId: string; fecha: string; importeCent: number; concepto: string }[]> {
   const { desde, hasta } = limitesMes(mes)

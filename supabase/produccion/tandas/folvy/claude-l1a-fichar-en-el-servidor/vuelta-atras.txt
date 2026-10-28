@@ -1,0 +1,4 @@
+# L1a · PR 1 · vuelta atrás: la base como la dejó la 1215 (el encargado ve toda
+# la cuenta; sin fichar(), sin conservación y sin su vigía). No devuelve las
+# coordenadas que la limpieza nocturna ya haya borrado.
+supabase/vuelta-atras/20261027T1905_l1a_fichar_en_el_servidor.down.sql

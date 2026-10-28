@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import type { Employee } from '../types'
 import type { ShiftTemplate, Schedule } from '../types/scheduler'
 import { createNotification } from './notificationsService'
+import { leerAusenciasVisibles } from './vacationsService'
 import {
   type ClosureResolution,
   type MonthlyBalanceClosure,
@@ -102,13 +103,11 @@ async function loadShiftTemplates(locationId: string): Promise<ShiftTemplate[]> 
 
 async function loadApprovedVacations(employeeId: string): Promise<VacationRow[]> {
   if (!supabase) return []
-  const { data, error } = await supabase
-    .from('vacations')
-    .select('id, start_date, end_date, type, status, paid')
-    .eq('employee_id', employeeId)
-    .eq('status', 'aprobada')
-  if (error) {
-    console.warn('[hoursBalance] Error cargando vacations:', error)
+  // L1a: por ausencias_visibles (el encargado ve la baja como «ausente»).
+  const { filas, error: errorAusencias } = await leerAusenciasVisibles({ employeeIds: [employeeId] })
+  const data = filas.filter(f => f.status === 'aprobada')
+  if (errorAusencias) {
+    console.warn('[hoursBalance] Error cargando vacations:', errorAusencias)
     return []
   }
   return (data || []) as VacationRow[]

@@ -24,6 +24,11 @@ export interface Employee {
   availability?: { lunes:string[]; martes:string[]; miercoles:string[]; jueves:string[]; viernes:string[]; sabado:string[]; domingo:string[] }
   // === Campos para fichaje en kiosko/móvil ===
   pin?: string                       // PIN de 4 dígitos para fichar
+  // L1a (27/10/2026): el salario, el DNI, la fecha de nacimiento y el coste de
+  // la Seguridad Social solo los ve el administrador (empleados_datos_privados).
+  // 'ocultos': no se han leído, y al guardar la ficha no se mandan (para no
+  // pisar los de la base con vacíos).
+  datosPrivados?: 'cargados' | 'ocultos'
   assignedLocations?: string[]       // locales donde puede fichar (si vacío, usa locationId)
   // === Campos para el scheduler (sub-fase 3.2) ===
   shiftCode?: string                 // código corto T1/T2/T3 para visualización en matriz
@@ -115,6 +120,17 @@ export interface ClockEntry {
   locationIdAtClock?: string         // local en el que fichó (puede no ser el principal)
   photoDataUrl?: string              // foto opcional al fichar (base64)
   voided?: boolean                   // borrado lógico: el fichaje anulado se conserva para el rastro legal
+  // L1a (27/10/2026): lo que se guarda de la ubicación (la distancia al local y
+  // si cayó dentro del radio; las coordenadas se borran a los 3 meses) y la
+  // hora del móvil cuando se fichó sin cobertura (createdAt: cuándo llegó).
+  distanceM?: number
+  withinRadius?: boolean
+  declaredAt?: string
+  createdAt?: string
+  // Solo para escribir una marca a mano (source 'manual'): es una corrección
+  // con motivo (add_manual_clock_entry), y el motivo y quién la pone van aquí.
+  motivo?: string
+  actorLabel?: string
 }
 
 export interface StaffDocument {

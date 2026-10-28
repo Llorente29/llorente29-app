@@ -23,6 +23,7 @@ import {
   coordsForLocation, distanceMeters,
 } from '../services/fichajeKiosko'
 import { conPinDeKiosko, comprobarPinDeKiosko } from '../services/kioskoPinService'
+import { prepararPinDeKiosko } from '../services/fichajeServidor'
 import { mensajeDeFalloDeFichaje } from '../services/supabaseSync'
 
 type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'warn-confirm' | 'success' | 'error'
@@ -196,6 +197,9 @@ export default function KioskoFichajePage() {
     // Desde el 30/08 la escritura LANZA si la BBDD rechaza la fila. Sin este
     // catch la pantalla se quedaria clavada en "Registrando..." — o, como hasta
     // hoy, diria "registrada" sin que existiera el fichaje. Regla 8.
+    // L1a (27/10): fichar() vuelve a comprobar el PIN en el servidor al
+    // escribir. Se le pasa aquí y se olvida al usarlo.
+    prepararPinDeKiosko(selectedEmp.id, pin)
     try {
       await addClockEntry(selectedEmp.id, entry)
     } catch (e) {
