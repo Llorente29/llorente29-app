@@ -8,6 +8,10 @@
 //     informe para la Inspección;
 //   · la firma del mes que acabó: revisa los días y firma. Si después se
 //     corrige un fichaje de ese mes, se vuelve a pedir.
+//   · (PR 3) el olvido de salida que ya le avisamos y sigue sin contestar:
+//     «Ayer no fichaste la salida. Tu turno acababa a las 17:00.» con
+//     [Salí a las 17:00] y [Otra hora] (tablero 1 de la maqueta). Crea la
+//     petición para el encargado; nunca escribe el fichaje.
 // Cada toque dice lo que ha hecho (regla 8).
 
 import { useEffect, useState } from 'react'
@@ -19,6 +23,8 @@ import {
 import { armarInforme, mesYAnio, type InformeJornada } from '@/modules/personal/laboral/informeJornada'
 import { diaMadrid, fechaYHora, horaMadrid } from '@/modules/personal/laboral/calculoJornada'
 import { PIEZA_LABORAL } from '@/modules/personal/laboral/estilo'
+import { misAvisosOlvido, responderAvisoOlvido, type AvisoOlvido } from '@/modules/personal/laboral/avisosOlvidoServicio'
+import { cuandoFueElOlvido, salidaDesdeHora } from '@/modules/personal/laboral/avisoOlvidoTexto'
 
 const TIPO: Record<string, string> = { entrada: 'entrada', salida: 'salida', pausa_inicio: 'pausa', pausa_fin: 'vuelta de la pausa' }
 const diaMes = (iso: string) => { const d = diaMadrid(iso); return `${d.slice(8, 10)}/${d.slice(5, 7)}` }
@@ -69,6 +75,65 @@ function TarjetaCorreccion({ c }: { c: CorreccionPendiente }) {
             <Boton variante="principal" disabled={enviando} onClick={() => { void responder(true) }}>Sí</Boton>
             <Boton disabled={enviando} onClick={() => { void responder(false) }}>No es así</Boton>
           </div>
+        )}
+        {error && <p className="l-error">{error}</p>}
+      </Tarjeta>
+    </div>
+  )
+}
+
+function TarjetaOlvido({ a }: { a: AvisoOlvido }) {
+  const [hecho, setHecho] = useState('')
+  const [error, setError] = useState('')
+  const [enviando, setEnviando] = useState(false)
+  const [pideHora, setPideHora] = useState(a.respuesta === 'otra_hora' || !a.finTurno)
+  const [hora, setHora] = useState('')
+  const finHora = a.finTurno ? horaMadrid(a.finTurno) : null
+
+  async function responder(respuesta: 'a_su_hora' | 'otra_hora', salida?: string) {
+    setEnviando(true); setError('')
+    try {
+      const r = await responderAvisoOlvido(a.id, respuesta, salida)
+      setHecho(r.texto)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setEnviando(false)
+    }
+  }
+  function enviarHora() {
+    const salida = salidaDesdeHora(a.entradaAt, hora)
+    if (!salida) { setError('Escribe la hora a la que saliste (por ejemplo, 17:15).'); return }
+    void responder('otra_hora', salida)
+  }
+
+  return (
+    <div data-prueba="olvido-de-salida">
+      <Tarjeta tono={hecho ? 'ok' : 'duda'} nivel={3}
+        titulo={`${cuandoFueElOlvido(a.entradaAt)} no fichaste la salida.`}
+        apoyo={finHora
+          ? `Tu turno${a.local ? ` en ${a.local}` : ''} acababa a las ${finHora}.`
+          : `Entraste a las ${horaMadrid(a.entradaAt)}${a.local ? ` en ${a.local}` : ''} y no hay salida.`}>
+        {hecho ? <p className="l-hecho" role="status">{hecho}</p> : (
+          <>
+            {!pideHora && finHora && (
+              <div className="l-portal-botones">
+                <Boton variante="principal" disabled={enviando} onClick={() => { void responder('a_su_hora') }}>{`Salí a las ${finHora}`}</Boton>
+                <Boton disabled={enviando} onClick={() => setPideHora(true)}>Otra hora</Boton>
+              </div>
+            )}
+            {pideHora && (
+              <div className="l-portal-hora">
+                <label>
+                  ¿A qué hora saliste?
+                  <input type="time" value={hora} onChange={(e) => setHora(e.target.value)} aria-label="Hora de salida" data-prueba="olvido-hora" />
+                </label>
+                <Boton variante="principal" disabled={enviando || !hora} onClick={enviarHora}>Pedir esa salida</Boton>
+                {finHora && <Boton variante="enlace" disabled={enviando} onClick={() => setPideHora(false)}>{`Salí a las ${finHora}`}</Boton>}
+              </div>
+            )}
+            <p className="l-nota">La propuesta la aprueba tu encargado. Queda apuntado quién la cambió, cuándo y por qué.</p>
+          </>
         )}
         {error && <p className="l-error">{error}</p>}
       </Tarjeta>
@@ -163,6 +228,20 @@ function TarjetaFirma({ employee }: { employee: Employee }) {
 
 export default function AvisosDelRegistro({ employee }: { employee: Employee }) {
   const [correcciones, setCorrecciones] = useState<CorreccionPendiente[]>([])
+  const [olvidos, setOlvidos] = useState<AvisoOlvido[]>([])
+  useEffect(() => {
+    let vivo = true
+    const t = window.setTimeout(async () => {
+      try {
+        const l = await misAvisosOlvido()
+        if (vivo) setOlvidos(l)
+      } catch {
+        // Sin la base de la 1800 (o sin red), no se pide nada aquí.
+        if (vivo) setOlvidos([])
+      }
+    }, 0)
+    return () => { vivo = false; window.clearTimeout(t) }
+  }, [employee.id])
   useEffect(() => {
     let vivo = true
     const t = window.setTimeout(async () => {
@@ -178,6 +257,7 @@ export default function AvisosDelRegistro({ employee }: { employee: Employee }) 
 
   return (
     <div className={`${PIEZA_LABORAL} l-portal px-4 pt-3 max-w-md mx-auto`}>
+      {olvidos.map(a => <TarjetaOlvido key={a.id} a={a} />)}
       {correcciones.map(c => <TarjetaCorreccion key={c.id} c={c} />)}
       <TarjetaFirma employee={employee} />
     </div>

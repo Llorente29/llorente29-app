@@ -45,6 +45,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import ParaRevisar from '@/modules/personal/laboral/ParaRevisar'
+import AvisosDeOlvido from '@/modules/personal/laboral/AvisosDeOlvido'
 
 const PHASE_ORDER_INDEX: Record<TrainingPhaseName, number> = { dia_1: 0, dias_30: 1, dias_90: 2 }
 const PHASE_SHORT_LABEL: Record<TrainingPhaseName, string> = {
@@ -208,6 +209,8 @@ export default function StaffPage() {
 
       {/* L1a · PR 2: «Para revisar», arriba (jornadas imposibles, fuera del radio, desacuerdos). */}
       <ParaRevisar />
+      {/* L1a · PR 3: si los avisos de olvido no salen, y su contador de la semana. */}
+      <AvisosDeOlvido />
 
       {/* Pestañas principales: Insights / Empleados */}
       <div className="flex items-center gap-1 bg-accent-bg rounded-lg p-1 w-fit">
