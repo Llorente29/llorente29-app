@@ -5,5 +5,6 @@ supabase/vuelta-atras/20261028T0905_s01_propuestas_socio.down.sql
 supabase/vuelta-atras/20261028T0849_s01_propuestas_pagado_despues.down.sql
 supabase/vuelta-atras/20261028T0830_s01_propuestas_recibido.down.sql
 supabase/vuelta-atras/20261028T0800_s01_propuestas_nominas.down.sql
+supabase/vuelta-atras/20261028T1103_s01_retencion_trabajo.down.sql
 supabase/vuelta-atras/20261028T0753_s01_propuestas_solas_base.down.sql
 supabase/vuelta-atras/20261028T0735_s01_enlace_validado.down.sql

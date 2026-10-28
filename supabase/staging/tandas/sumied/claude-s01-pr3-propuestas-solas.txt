@@ -5,9 +5,11 @@
 # propuesto y la factura lo dice, y la vuelta atrás deja la huella de antes.
 supabase/migrations/20261028T0735_s01_enlace_validado.sql
 supabase/staging/sql/20261028_s01_enlace_validado_prueba.sql
-# La base (0753) y las nóminas (0800), con su prueba: sin tipo de trabajo, dicho;
-# con él, propuesta; al llegar, sola; si no cuadra, dicho; y las vueltas atrás.
+# La base (0753), la retención del trabajo de serie (1103) y las nóminas (0800),
+# con su prueba: sin tipo de trabajo, dicho; con él, propuesta; la de serie, por
+# su clave y su vigencia; al llegar, sola; si no cuadra, dicho; y las vueltas atrás.
 supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
+supabase/migrations/20261028T1103_s01_retencion_trabajo.sql
 supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
 supabase/staging/sql/20261028_s01_propuestas_nominas_prueba.sql
 # Lo recibido sin factura (0830), con su prueba: sin tipo de gasto, dicho (en

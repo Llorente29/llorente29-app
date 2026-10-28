@@ -129,6 +129,29 @@ begin
 end $$;
 reset role;
 
+-- ── 2b · La de serie (1103): se busca por su clave y su vigencia, nunca «la primera» ──
+\i supabase/migrations/20261028T1103_s01_retencion_trabajo.sql
+do $$
+declare e uuid := (select v::uuid from _p where clave = 'empresa'); v_serie uuid; v_propia uuid;
+begin
+  select id into v_serie from public.withholding_rate where is_system and code = 'trabajo' and filed_in = '111';
+  select id into v_propia from public.withholding_rate where not is_system and code = 'trabajo' and company_id = e;
+  if v_serie is null or (select model_190_key || '·' || rate::text || '·' || valid_from::text from public.withholding_rate where id = v_serie) <> 'A·0.00·2007-04-01' then
+    raise exception 'PRUEBA S01 NÓMINAS · 2b: la de serie no está como se espera.';
+  end if;
+  -- Con las dos vigentes, la de la empresa.
+  if jsonb_path_query_first(public.conta_propuesta_nomina((select v::uuid from _p where clave = 'dic')), '$.lineas[*].retencion.tipo_id ? (@ != null)') #>> '{}' is distinct from v_propia::text then
+    raise exception 'PRUEBA S01 NÓMINAS · 2b: con las dos, no ha cogido la de la empresa: %', public.conta_propuesta_nomina((select v::uuid from _p where clave = 'dic'))->'lineas';
+  end if;
+  -- La de la empresa deja de estar vigente en diciembre: la de serie.
+  update public.withholding_rate set valid_to = '2026-11-30' where id = v_propia;
+  if jsonb_path_query_first(public.conta_propuesta_nomina((select v::uuid from _p where clave = 'dic')), '$.lineas[*].retencion.tipo_id ? (@ != null)') #>> '{}' is distinct from v_serie::text then
+    raise exception 'PRUEBA S01 NÓMINAS · 2b: sin la de la empresa, no ha cogido la de serie: %', public.conta_propuesta_nomina((select v::uuid from _p where clave = 'dic'))->'lineas';
+  end if;
+  update public.withholding_rate set valid_to = null where id = v_propia;
+  raise notice '2b · la de serie del trabajo (clave A, 111): la regla coge la de la empresa si está vigente y, si no, la de serie';
+end $$;
+
 -- ── 3 y 4 · Llegan nóminas (el disparador, sin nadie) ───────────────────────
 set local role service_role;
 do $$
@@ -169,15 +192,17 @@ end $$;
 reset role;
 
 -- ── 6 · Las vueltas atrás ───────────────────────────────────────────────────
+\i supabase/vuelta-atras/20261028T1103_s01_retencion_trabajo.down.sql
 \i supabase/vuelta-atras/20261028T0800_s01_propuestas_nominas.down.sql
 \i supabase/vuelta-atras/20261028T0753_s01_propuestas_solas_base.down.sql
 do $$ begin
   if to_regclass('public.conta_propuesta_pendiente') is not null
      or exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace
                  and proname in ('conta_dia_abierto', '_conta_proponer', '_conta_no_propuesta', 'conta_propuesta_nomina', 'conta_proponer_nominas', 'tg_conta_nomina_proponer'))
-     or exists (select 1 from pg_trigger where tgname = 'conta_nomina_proponer') then
+     or exists (select 1 from pg_trigger where tgname = 'conta_nomina_proponer')
+     or exists (select 1 from public.withholding_rate where is_system and code = 'trabajo') then
     raise exception 'PRUEBA S01 NÓMINAS · 6: las vueltas atrás dejan algo.';
   end if;
-  raise notice '6 · las vueltas atrás: no queda nada de la 0800 ni de la 0753';
+  raise notice '6 · las vueltas atrás: no queda nada de la 1103, la 0800 ni la 0753';
 end $$;
 rollback;

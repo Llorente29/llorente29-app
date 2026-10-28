@@ -73,5 +73,8 @@ select clave, valor from (
   select 19, '1025: la pasada de noche (función y procedimiento, de 2) y su cron (horario)',
     (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
        and p.proname in ('conta_propuestas_de_noche', 'conta_propuestas_de_noche_todas'))
-    || ' · ' || coalesce((select schedule from cron.job where jobname = 'conta-propuestas-de-noche'), 'sin cron')
+    || ' · ' || coalesce((select schedule from cron.job where jobname = 'conta-propuestas-de-noche'), 'sin cron') union all
+  select 20, '1103: tipos de retención (catálogo de serie, sin cuenta) · de ellos, el del trabajo',
+    -- 5 · 0 el 28/10; después del real, 6 · 1
+    (select count(*) from public.withholding_rate where is_system) || ' · ' || (select count(*) from public.withholding_rate where is_system and code = 'trabajo')
 ) x order by o;

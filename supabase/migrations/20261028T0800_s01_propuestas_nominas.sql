@@ -43,9 +43,13 @@ returns jsonb language sql stable set search_path = public as $$
       coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '476' order by ca.code limit 1), '47600000') as c_ss_acreedora,
       coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '4751' order by ca.code limit 1), '47510000') as c_irpf,
       coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '465' order by ca.code limit 1), '46500000') as c_remuneraciones,
+      -- Por su clave (code = 'trabajo', modelo 111), vigente el último día del mes,
+      -- nunca «el primero»: la de la empresa antes que la de serie (1103), y la
+      -- más reciente si hay dos versiones.
       (select w.id from public.withholding_rate w where w.filed_in = '111' and w.code = 'trabajo'
           and (w.account_id is null or w.account_id = n.account_id) and (w.company_id is null or w.company_id = n.company_id)
-        order by w.company_id nulls last, w.account_id nulls last limit 1) as ret
+          and w.valid_from <= n.fin and (w.valid_to is null or w.valid_to >= n.fin)
+        order by w.company_id nulls last, w.account_id nulls last, w.valid_from desc, w.id limit 1) as ret
       from n
   ), l as (
     select c.*, jsonb_build_array(

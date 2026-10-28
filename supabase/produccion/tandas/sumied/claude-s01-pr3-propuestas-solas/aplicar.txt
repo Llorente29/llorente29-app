@@ -13,6 +13,10 @@
 #   2. 0753 — AÑADE la base de las propuestas sin botón: «Lo que no he podido
 #      proponer» (conta_propuesta_pendiente), si un día está abierto, y la
 #      puerta única al libro (_conta_proponer). No toca filas.
+#   2b. 1103 — AÑADE la retención de serie de los rendimientos del trabajo
+#      (modelo 111, clave A del 190, al 0 %: el tipo es el de cada nómina). Va
+#      antes de la 0800 para que las nóminas la encuentren. Medido el 28/10:
+#      withholding_rate tiene 5 filas, todas de serie, ninguna de trabajo.
 #   3. 0800 — AÑADE las nóminas solas (origen 1 de 5): la regla en SQL, lo que
 #      la llama y el disparador de payroll_summary (0 nóminas en producción).
 #   4. 0830 — AÑADE lo recibido sin factura solo (origen 2 de 5): la regla en
@@ -47,6 +51,7 @@
 cuenta: scripts/conta/produccion/cuentas/s01-enlace-validado.sql
 supabase/migrations/20261028T0735_s01_enlace_validado.sql
 supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
+supabase/migrations/20261028T1103_s01_retencion_trabajo.sql
 supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
 supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
 supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
