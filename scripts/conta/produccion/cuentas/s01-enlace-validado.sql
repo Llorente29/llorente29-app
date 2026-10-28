@@ -1,9 +1,9 @@
 -- scripts/conta/produccion/cuentas/s01-enlace-validado.sql
 --
 -- S01 · PR 3 (28/10) · LO QUE CUENTA LA TANDA DEL COBRO POR EL ENLACE VALIDADO
--- (0735), y de la base, las nóminas y lo recibido sin factura de las propuestas
--- sin botón (0753, 0800 y 0830), antes y después. SOLO LEE. La 0753, la 0800 y
--- la 0830 solo añaden: antes y al
+-- (0735), y de la base, las nóminas, lo recibido sin factura y el pagado después
+-- de las propuestas sin botón (0753, 0800, 0830 y 0849), antes y después. SOLO
+-- LEE. La 0753, la 0800 y la 0830 solo añaden: antes y al
 -- deshacerlas, «no existe» o 0.
 --   · La 0735 añade _journal_entry_validar (no existe antes ni al deshacerla) y
 --     cambia journal_entry_validar y _s01_asiento_cobro con la misma firma: su
@@ -43,5 +43,14 @@ select clave, valor from (
        and p.proname in ('conta_propuestas_recibido', 'conta_proponer_recibidos'))::text union all
   select 11, 'asientos de lo recibido sin factura (journal_entry purchase_accrual*; tabla entera)',
     -- quieta: 0 el 28/10; solo los escribe el botón de Asientos (o la 0830 cuando se la llame), y aplicar la 0830 no la llama
-    (select count(*) from public.journal_entry where source_type in ('purchase_accrual', 'purchase_accrual_reversal'))::text
+    (select count(*) from public.journal_entry where source_type in ('purchase_accrual', 'purchase_accrual_reversal'))::text union all
+  select 12, '0849: huella de conta_propuesta_ventas_unidad (md5 del cuerpo; cambia con la tanda y vuelve al deshacerla)',
+    (select md5(prosrc) from pg_proc where oid = to_regprocedure('public.conta_propuesta_ventas_unidad(uuid,uuid,date,uuid,uuid)')) union all
+  select 13, '0849: funciones nuevas (de 4) y disparadores de channel_settlement_order (de 2)',
+    (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('_conta_propuesta_ventas', 'conta_propuesta_pagado_despues', 'conta_proponer_pagados_despues', 'tg_conta_liquidacion_pedidos_proponer'))
+    || ' · ' || (select count(*) from pg_trigger where tgname like 'conta_liquidacion_pedidos_proponer%') union all
+  select 14, 'asientos del pagado después (journal_entry sales_adjustment; tabla entera)',
+    -- quieta: 0 el 28/10; channel_settlement_order no recibe filas desde el 12/07 y ningún no confirmado tiene línea de liquidación
+    (select count(*) from public.journal_entry where source_type = 'sales_adjustment')::text
 ) x order by o;

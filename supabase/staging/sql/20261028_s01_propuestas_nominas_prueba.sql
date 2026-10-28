@@ -13,7 +13,9 @@
 --      propuesta y sin validar, del último día del mes; su «no he podido» se va.
 --      Otra vez, nada nuevo: ya estaba.
 --   3. Una nómina que llega se propone sola (el disparador).
---   4. Una que no cuadra llega: no se propone, entra igual, y queda dicho por qué.
+--   4. Llega una con otras deducciones (embargos, anticipos): no se propone,
+--      entra igual, y queda dicho por qué. (Una que no cuadra ya no puede entrar:
+--      la para payroll_summary_cuadra; la regla lo sigue diciendo, como el navegador.)
 --   5. Alguien sin cuenta no puede proponer.
 --   6. Las vueltas atrás (0800 y 0753): no queda nada suyo.
 --
@@ -140,15 +142,15 @@ begin
       (select porque from public.conta_propuesta_pendiente where company_id = e and origen_id = oct::text);
   end if;
   insert into public.payroll_summary (account_id, company_id, period_month, location_id, gross, employer_ss, employee_ss, irpf, other_deductions, net, employees_count, created_by_name)
-  values (a, e, '2026-11-01', l1, 4000.00, 1300.00, 250.00, 400.00, 0, 3000.00, 3, 'Prueba S01') returning id into nov;
+  values (a, e, '2026-11-01', l1, 4000.00, 1300.00, 250.00, 400.00, 150.00, 3200.00, 3, 'Prueba S01') returning id into nov;
   if exists (select 1 from public.journal_entry where company_id = e and source_type = 'payroll' and source_id = nov) then
-    raise exception 'PRUEBA S01 NÓMINAS · 4: una nómina que no cuadra se propuso.';
+    raise exception 'PRUEBA S01 NÓMINAS · 4: una nómina con otras deducciones se propuso.';
   end if;
   if (select porque from public.conta_propuesta_pendiente where company_id = e and origen = 'payroll' and origen_id = nov::text)
-     <> 'Bruto 4.000,00 € ≠ SS del trabajador + IRPF + otras + líquido: revisa el resumen de la gestoría.' then
+     <> 'El resumen trae otras deducciones (embargos, anticipos): dime a qué cuenta van antes de proponerla.' then
     raise exception 'PRUEBA S01 NÓMINAS · 4: no quedó dicho por qué (%).', (select porque from public.conta_propuesta_pendiente where company_id = e and origen_id = nov::text);
   end if;
-  raise notice '3 · la de octubre llega y se propone sola · 4 · la de noviembre no cuadra: entra, y se dice por qué';
+  raise notice '3 · la de octubre llega y se propone sola · 4 · la de noviembre trae otras deducciones: entra, y se dice por qué';
 end $$;
 reset role;
 

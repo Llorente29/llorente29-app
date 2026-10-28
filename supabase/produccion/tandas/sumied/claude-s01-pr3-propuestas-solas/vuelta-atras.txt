@@ -1,4 +1,5 @@
 # S01 · PR 3 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261028T0849_s01_propuestas_pagado_despues.down.sql
 supabase/vuelta-atras/20261028T0830_s01_propuestas_recibido.down.sql
 supabase/vuelta-atras/20261028T0800_s01_propuestas_nominas.down.sql
 supabase/vuelta-atras/20261028T0753_s01_propuestas_solas_base.down.sql

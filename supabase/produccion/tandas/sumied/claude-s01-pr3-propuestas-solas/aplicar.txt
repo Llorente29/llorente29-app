@@ -20,6 +20,13 @@
 #      el 28/10: purchase_accrual con 0 filas y 0 asientos de lo recibido sin
 #      factura; la regla, igual a la del navegador en los 6 asientos de octubre
 #      de Foodint.
+#   5. 0849 — CAMBIA en caliente conta_propuesta_ventas_unidad (misma firma: su
+#      cuerpo pasa, tal cual, a _conta_propuesta_ventas con un pedido opcional,
+#      y ella la llama sin pedido; respaldada) y pone dos disparadores nuevos
+#      en channel_settlement_order (6.638 filas, la última del 12/07): el
+#      pagado después se propone solo al leer la liquidación (origen 3 de 5).
+#      La regla de ventas no cambia: la prueba mide la huella de todas las
+#      propuestas de ventas de staging antes y después.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
@@ -28,3 +35,4 @@ supabase/migrations/20261028T0735_s01_enlace_validado.sql
 supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
 supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
 supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
+supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql

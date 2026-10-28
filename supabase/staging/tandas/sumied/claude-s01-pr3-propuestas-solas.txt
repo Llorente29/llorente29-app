@@ -15,3 +15,9 @@ supabase/staging/sql/20261028_s01_propuestas_nominas_prueba.sql
 # recepción sin importe; sin cuenta, no; y la vuelta atrás.
 supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
 supabase/staging/sql/20261028_s01_propuestas_recibido_prueba.sql
+# El pagado después (0849), con su prueba: la regla de ventas, la misma (huella
+# de todas las propuestas de ventas antes y después); al llegar la liquidación,
+# propuesto o dicho; otra vez, nada; si falla, la liquidación entra igual; sin
+# cuenta, no; y la vuelta atrás, byte a byte.
+supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
+supabase/staging/sql/20261028_s01_propuestas_pagado_despues_prueba.sql
