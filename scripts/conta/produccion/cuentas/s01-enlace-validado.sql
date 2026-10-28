@@ -69,5 +69,9 @@ select clave, valor from (
     || ' · ' || (select count(*) from pg_trigger where tgname = 'conta_plataforma_proponer') union all
   select 18, 'asientos de liquidaciones de plataforma (journal_entry channel_settlement; tabla entera)',
     -- quieta: 0 el 28/10 de 268 liquidaciones; solo los escribe el botón de Asientos, y aplicar la 0929 no propone nada (el disparador espera a que entre o cambie una)
-    (select count(*) from public.journal_entry where source_type = 'channel_settlement')::text
+    (select count(*) from public.journal_entry where source_type = 'channel_settlement')::text union all
+  select 19, '1025: la pasada de noche (función y procedimiento, de 2) y su cron (horario)',
+    (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('conta_propuestas_de_noche', 'conta_propuestas_de_noche_todas'))
+    || ' · ' || coalesce((select schedule from cron.job where jobname = 'conta-propuestas-de-noche'), 'sin cron')
 ) x order by o;

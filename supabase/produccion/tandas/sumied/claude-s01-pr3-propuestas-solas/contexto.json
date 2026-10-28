@@ -1,6 +1,6 @@
 {
- "_que": "S01 · PR 3 · contexto de producción de la tanda (0735 cambia journal_entry_validar y _s01_asiento_cobro; 0753, 0800 y 0830 añaden la base de las propuestas sin botón, las nóminas y lo recibido sin factura; 0849 cambia conta_propuesta_ventas_unidad y pone dos disparadores en channel_settlement_order; 0905 y 0929 añaden el socio y la plataforma y ponen un disparador en licensed_settlement y otro en channel_settlement), medido en SOLO LECTURA el 28/10 a las 08:55Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: las tres funciones que cambia existen con una sola firma; payroll_summary 0 filas, channel_settlement 262 (estimación de la base; 268 contadas), channel_settlement_order 6.638 y licensed_settlement 3; nada de lo nuevo existe; nada en el camino del pedido ni en el cron; nada en el historial.",
- "medido": "2026-10-28T08:55Z",
+ "_que": "S01 · PR 3 · contexto de producción de la tanda (0735 cambia journal_entry_validar y _s01_asiento_cobro; 0753, 0800 y 0830 añaden la base de las propuestas sin botón, las nóminas y lo recibido sin factura; 0849 cambia conta_propuesta_ventas_unidad y pone dos disparadores en channel_settlement_order; 0905 y 0929 añaden el socio y la plataforma y ponen un disparador en licensed_settlement y otro en channel_settlement; 1025 añade la pasada de las 03:40 y su cron), medido en SOLO LECTURA el 28/10 a las 09:29Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: las tres funciones que cambia existen con una sola firma; payroll_summary 0 filas, channel_settlement 262 (estimación de la base; 268 contadas), channel_settlement_order 6.638 y licensed_settlement 3; nada de lo nuevo existe; nada en el camino del pedido ni en el cron; nada en el historial.",
+ "medido": "2026-10-28T09:29Z",
  "tanda": {
   "supabase/migrations/20261028T0735_s01_enlace_validado.sql": "9528ec1b55f8858e21046d4cea20054b",
   "supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql": "d908dc1f73650a76199180e50b38e35e",
@@ -8,7 +8,8 @@
   "supabase/migrations/20261028T0830_s01_propuestas_recibido.sql": "6774f6a190d90a4c48ff425e648eea13",
   "supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql": "b9251c3f8a21a0375460f35157bfadc5",
   "supabase/migrations/20261028T0905_s01_propuestas_socio.sql": "3b130d6d33a79a14238f17bc3eb1f649",
-  "supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql": "2e55d76e3db56f0bda479abfb793ab9a"
+  "supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql": "2e55d76e3db56f0bda479abfb793ab9a",
+  "supabase/migrations/20261028T1025_s01_pasada_de_noche.sql": "c1017c24b8601145b96251da593f7b7d"
  },
  "contexto": {
   "tablas": [

@@ -36,6 +36,11 @@
 #      para las facturas del navegador; y CAMBIA channel_settlement con un
 #      disparador nuevo (268 filas en Foodint, 0 con asiento): al leerse.
 #      La regla, igual a la del navegador en las 268 (la misma entrada).
+#   8. 1025 — AÑADE la pasada de las 03:40 de Madrid: una función que pasa por
+#      los cinco orígenes y valida solo las ventas «seguro» sin «Mira esto» si
+#      la empresa lo tiene encendido (apagado en producción, medido el 11/10),
+#      el procedimiento de todas las empresas y su cron (01:40 y 02:40 UTC, con
+#      la guarda de la hora de Madrid).
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
@@ -47,3 +52,4 @@ supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
 supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
 supabase/migrations/20261028T0905_s01_propuestas_socio.sql
 supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
+supabase/migrations/20261028T1025_s01_pasada_de_noche.sql

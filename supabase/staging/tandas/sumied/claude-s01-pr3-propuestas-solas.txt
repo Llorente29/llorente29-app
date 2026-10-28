@@ -32,3 +32,8 @@ supabase/staging/sql/20261028_s01_propuestas_socio_prueba.sql
 # igual; sin cuenta, no; y la vuelta atrás.
 supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
 supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql
+# La pasada de las 03:40 (1025), con su prueba: apagado, los cinco orígenes y
+# nada validado; encendido, solo la «seguro» sin «Mira esto»; otra vez, nada;
+# ni de otra cuenta ni sin cuenta; el cron y la guarda de la hora; y la vuelta atrás.
+supabase/migrations/20261028T1025_s01_pasada_de_noche.sql
+supabase/staging/sql/20261028_s01_pasada_de_noche_prueba.sql

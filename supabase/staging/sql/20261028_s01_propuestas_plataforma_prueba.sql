@@ -70,10 +70,14 @@ do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa');
 begin
   if not public.conta_dia_abierto(e, '2026-10-20') then raise exception 'PRUEBA S01 PLATAFORMA · siembra: el 20/10 no está abierto.'; end if;
-  if exists (select 1 from public.journal_entry where company_id = e and source_type = 'channel_settlement')
-     or exists (select 1 from public.journal_correction where company_id = e and origin_key like 'channel_settlement:%') then
-    raise exception 'PRUEBA S01 PLATAFORMA · siembra: ya hay asientos o correcciones de liquidaciones de plataforma.';
+  -- Lo aprendido cambia las cuentas que se esperan: sin correcciones previas.
+  -- (Los asientos de otras liquidaciones dan igual: cada paso mira los de las
+  -- suyas, por source_id. Staging tiene uno propuesto del 07/10.)
+  if exists (select 1 from public.journal_correction where company_id = e and origin_key like 'channel_settlement:%') then
+    raise exception 'PRUEBA S01 PLATAFORMA · siembra: ya hay correcciones aprendidas de liquidaciones de plataforma.';
   end if;
+  raise notice 'siembra: % asiento(s) de liquidación de plataforma de antes en la empresa A, que la prueba no mira',
+    (select count(*) from public.journal_entry where company_id = e and source_type = 'channel_settlement');
 end $$;
 
 -- ── 0 · Los casos de las pruebas del navegador, en la regla de SQL ─────────
