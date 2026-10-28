@@ -12,5 +12,6 @@ select clave, valor from (
   select 3, 'trg_sale_push_status: lee order_advance_secret del Vault',
     (pg_get_functiondef('public.trg_sale_push_status()'::regprocedure) ~ 'name = ''order_advance_secret''')::text union all
   select 4, 'order_advance_secret en el Vault (huella corta)',
+    -- quieta: el Vault solo lo cambia una persona a mano (Julio, en el panel); ningún proceso escribe ahí durante el ensayo.
     coalesce((select left(md5(decrypted_secret), 12) from vault.decrypted_secrets where name = 'order_advance_secret'), 'no existe')
 ) t order by o;
