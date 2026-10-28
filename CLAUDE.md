@@ -482,38 +482,54 @@ de antes. 16/10: las e2e gastaron 2.953 min de Actions en un día, frente a unos
 commit ya superado. Se acepta perder el informe de un commit viejo a cambio de
 no pagarlo.)*
 
-### Capturas: las fija la e2e del push en verde, solo las de tu frente
+### Capturas: fuera del PR, en `capturas/<rama>`, y a `main` al fusionar
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> 15/10, después del choque del #194; **cambiada en el W04 (22/10)**: sin un
-> run aparte para fijarlas.
+> 15/10, después del choque del #194; cambiada en el W04 (22/10) y **otra vez
+> en el W08b (28/10, opción A)**: el bot ya no hace commits en la rama del PR, y
+> las capturas dejan de salir en «Files changed».
 
 - **En cada e2e, las capturas van como artefacto del run.**
   `e2e-staging-conta.yml` deja en el artefacto «capturas» las que ha sacado
-  ESE run, y un comentario del PR (uno solo, que se va editando) da el enlace.
-- **La e2e de cada push que sale en verde fija las de tu frente**: commitea
-  solo la carpeta del frente de la rama —A `d01`, B `b01`, C `c00`…`c06c`,
-  reparto `docs/reparto/capturas`— y nada más. La última en verde es la que
-  queda, y es lo que Julio mira en «Files changed». Ese commit lo hace el token
-  del workflow y no lanza otra e2e: **antes del siguiente push, `git pull`**.
-  A mano sigue estando `fijar_capturas`, por si hace falta.
-- **Una rama sin frente de contabilidad no fija nada**, y el run no se pone en
-  rojo por eso (C10, 23/10): el paso lo dice y se salta.
-- **Tu rama no lleva capturas de otro frente.** `antes-de-subir.sh` (paso 10)
-  para si las trae, y dice cómo devolverlas a las de `main`.
-- Las que ya están en el repositorio se quedan. `cierre/`, `compras/` y
-  `diez/` no son de ningún frente de hoy: no las fija nadie.
+  ESE run.
+- **La e2e de cada push que sale en verde publica las de tu frente en una rama
+  aparte, `capturas/<rama>`**: solo la carpeta del frente de la rama —A `d01`,
+  B `b01`, C `c00`…`c06c`, reparto `docs/reparto/capturas`, inventario y marcas
+  por lo que la rama ES (W08)— en un solo commit sin historia, que el bot
+  reescribe en cada run. **La rama del PR no cambia**: ni «Action required» ni
+  `git pull` antes del siguiente push. A mano, `publicar_capturas` (y `frente`
+  para forzar de quién son).
+- **El PR las enseña en un comentario** (uno solo, que se va editando): el
+  enlace al artefacto y las publicadas en miniatura, por tablero, enlazadas a
+  su PNG.
+- **Al fusionar el PR, pasan a `main`** en su carpeta de siempre
+  (`capturas-al-cerrar.yml`): un commit «Capturas en producción · #N» con solo
+  esos PNG, encima de la `main` más nueva. Lo empuja el token del workflow, que
+  no lanza otros workflows, y **Vercel no lo despliega**
+  (`scripts/vercel/saltar-build.mjs`, el `ignoreCommand` de `vercel.json`): la
+  producción sigue siendo el despliegue de la fusión, y ése es el que tiene que
+  decir READY. **Al fusionar o cerrar el PR, `capturas/<rama>` se borra.**
+- **Una rama sin frente no publica nada**, y el run no se pone en rojo por eso
+  (C10, 23/10): el paso lo dice y se salta.
+- **Tu rama no lleva capturas de otro frente.** `antes-de-subir.sh` (paso 10) y
+  `pr-a-main.yml` (W08) paran si las trae, nombrando cada PNG, y dicen cómo
+  devolverlas a las de `main`.
+- `cierre/`, `compras/` y `diez/` no son de ningún frente de hoy: no las
+  publica nadie.
 - El reparto vive en `scripts/conta/capturas.mjs`, y una prueba lo compara con
   el paso «Frente» del workflow, rama a rama.
 
-*Detector automático:* si un commit de capturas toca una carpeta que no es la
-de tu frente, ése es el choque del próximo PR de otro.
+*Detector automático:* si la rama de un PR trae un PNG distinto de `main`, algo
+lo ha metido a mano: las capturas viven en `capturas/<rama>`, no en el PR.
 
 *(15/10. Cada e2e en verde commiteaba todas sus capturas, también las de otros
 frentes, y un PNG cambia unos bytes en cada pasada. El #194 chocó con `main` en
 12 PNG de `b01` y `c00`; sus commits de capturas habían tocado 14 carpetas, entre
 ellas `b01`, `d01` y `r02`. Desde el 01/10 entraron en `main` 60 commits de
-capturas con 2.489 cambios de PNG.)*
+capturas con 2.489 cambios de PNG. 28/10: aun con solo las del frente, cada
+commit del bot en la rama del PR dejaba sus comprobaciones en «Action
+required», y tres PR de Laboral entraron con PNG de inventario; el #370 chocó
+con `main` en dos.)*
 
 ### Numeradas por la secuencia maestra
 
