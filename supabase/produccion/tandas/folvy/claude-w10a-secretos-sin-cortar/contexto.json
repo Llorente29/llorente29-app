@@ -1,0 +1,23 @@
+{
+  "_que": "W10a · contexto de producción de la tanda (1630), medido en SOLO LECTURA el 28/10 con la consulta del analizador (sql-contexto). trg_sale_push_status existe (una firma, md5 2470441d…, la misma que la guarda) y está en el camino del pedido (disparador de sale). Nada de la tanda en el historial.",
+  "medido": "2026-10-28T16:33Z",
+  "tanda": {
+    "supabase/migrations/20261028T1630_w10a_order_advance_secreto_del_vault.sql": "46c80f949e62372505cf92d3aaa1eef8"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.trg_sale_push_status()"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": [
+        "public.trg_sale_push_status()"
+      ]
+    },
+    "usos": {},
+    "registro": []
+  }
+}

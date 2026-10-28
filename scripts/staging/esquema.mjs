@@ -41,6 +41,11 @@ const SECRETOS = [
   ['una clave de AWS', /\bAKIA[0-9A-Z]{16}\b/],
   ['un token Bearer escrito', /\bBearer\s+[A-Za-z0-9._-]{24,}/],
   ['una clave de Supabase nueva', /\bsb_(secret|publishable)_[A-Za-z0-9_-]{10,}/],
+  // W10 (Julio, 28/10): los secretos internos de Folvy, como el de
+  // order-advance: «fv_<para qué>_<16 o más letras y números>». No confunde los
+  // nombres de función que empiezan igual (fv_e164_or_null): después del
+  // segundo «_» no viene una tira larga sin «_».
+  ['un secreto interno de Folvy (fv_…)', /\bfv_[a-z0-9]+_[A-Za-z0-9]{16,}\b/],
 ]
 
 /**
