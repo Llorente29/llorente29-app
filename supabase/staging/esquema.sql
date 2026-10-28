@@ -1086,6 +1086,28 @@ end;
 $$;
 
 
+--
+-- Name: _aviso_falta_en_vault(text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._aviso_falta_en_vault(p_que text, p_venta uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  begin
+    perform public._queue_system_alert(
+      'vault',
+      'Sin llamar a ' || p_que || ': falta un ajuste en el Vault',
+      format('El pedido %s no ha llamado a %s porque falta project_url (o su secreto) en el Vault de este proyecto. El pedido se ha guardado; la llamada no ha salido.', p_venta, p_que),
+      'vault-' || p_que
+    );
+  exception when others then
+    raise warning '_aviso_falta_en_vault: no se pudo avisar de % (venta %): %', p_que, p_venta, sqlerrm;
+  end;
+end $$;
+
+
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
@@ -8420,19 +8442,17 @@ declare v_s public.supplier; v_leido text := public._pc01e2_iban(new.read_iban);
 begin
   if tg_op = 'UPDATE' and new.supplier_id is not distinct from old.supplier_id and v_leido is not distinct from public._pc01e2_iban(old.read_iban) then return null; end if;
   if new.status in ('anulada', 'descartada', 'pagada') or coalesce(new.payment_method, 'transfer') <> 'transfer' then return null; end if;
-  select * into v_s from public.supplier where id = new.supplier_id and account_id = new.account_id for update;
+  select * into v_s from public.supplier where id = new.supplier_id and account_id = new.account_id;
   if v_s.id is null or v_s.archived_at is not null then return null; end if;
   -- Domiciliado, con tarjeta, al contado o prepago en su ficha, y la factura no dice otra cosa: no se le paga por transferencia.
   if new.payment_method is null and coalesce(v_s.payment_method, 'transfer') <> 'transfer' then return null; end if;
   v_ficha := public._pc01e2_iban(v_s.iban);
   if v_ficha is null then
-    update public.supplier set iban = v_leido, iban_set_at = now(), iban_set_by = null, iban_set_by_name = 'Sumied',
-           iban_unconfirmed_invoice_id = new.id, updated_at = now()
-     where id = v_s.id;
+    -- S01b · No se pone solo: se propone al revisarla y lo guarda quien pulsa.
     insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, action, text, detail)
-    values (new.account_id, new.company_id, new.inbox_id, new.id, 'folvy', 'corregida',
-            format('%s no tenía IBAN: le pongo el de esta factura (···· %s), sin confirmar. Se confirma la primera vez que se le paga por remesa.', v_s.name, right(v_leido, 4)),
-            jsonb_build_object('iban_puesto', true, 'iban4', right(v_leido, 4), 'supplier_id', v_s.id));
+    values (new.account_id, new.company_id, new.inbox_id, new.id, 'folvy', 'leida',
+            format('Esta factura trae un IBAN (···· %s) y %s no tiene en su ficha. No lo pongo solo: al revisarla, «Guardar este IBAN» lo guarda.', right(v_leido, 4), v_s.name),
+            jsonb_build_object('iban_propuesto', true, 'iban4', right(v_leido, 4), 'supplier_id', v_s.id));
   elsif v_ficha <> v_leido and new.iban_decision is null then
     insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, action, text, detail)
     values (new.account_id, new.company_id, new.inbox_id, new.id, 'folvy', 'leida',
@@ -8441,6 +8461,13 @@ begin
   end if;
   return null;
 end $$;
+
+
+--
+-- Name: FUNCTION _pc01e2b_iban_de_la_factura(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._pc01e2b_iban_de_la_factura() IS 'PC01 · E2b, S01b · Con su proveedor: si la ficha no tiene IBAN, lo dice en el historial y no lo pone (se guarda al pulsar); si tiene otro, lo dice y no se paga hasta decidir.';
 
 
 --
@@ -9486,6 +9513,39 @@ begin
   return next;
 end;
 $$;
+
+
+--
+-- Name: _project_url(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._project_url() RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare v text := public._project_url_si_hay();
+begin
+  if v is null then
+    raise exception 'Falta project_url en el Vault de este proyecto (o no tiene forma de https://<ref>.supabase.co). Se crea a mano: Supabase → Project Settings → Vault.';
+  end if;
+  return v;
+end $$;
+
+
+--
+-- Name: _project_url_si_hay(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._project_url_si_hay() RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $_$
+  select rtrim(s.decrypted_secret, '/')
+    from vault.decrypted_secrets s
+   where s.name = 'project_url'
+     and s.decrypted_secret ~ '^https://[a-z0-9]+\.supabase\.co/?$'
+   limit 1
+$_$;
 
 
 --
@@ -37129,6 +37189,65 @@ begin
           coalesce(p_quien_nombre, 'Alguien') || ' ha dado de alta a ' || (p->>'nombre') || ' con lo leído en la factura (por completar).');
   return jsonb_build_object('supplier_id', v_s, 'ya_estaba', false);
 end $_$;
+
+
+--
+-- Name: conta_proveedor_iban_de_factura(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_s public.supplier; v_f public.supplier_invoice;
+  v_quien text := coalesce(public.conta_nombre_actor(), 'Sumied');
+  v_iban text;
+begin
+  select * into v_s from public.supplier where id = p_supplier for update;
+  if v_s.id is null or not public.current_user_is_admin_or_manager_of(v_s.account_id) then
+    raise exception 'Ese proveedor no está, o no puedes cambiar su ficha.' using errcode = 'P0002';
+  end if;
+  select * into v_f from public.supplier_invoice where id = p_invoice and account_id = v_s.account_id;
+  if v_f.id is null then raise exception 'Esa factura no está.' using errcode = 'P0002'; end if;
+  if v_f.supplier_id is distinct from v_s.id then
+    raise exception 'Esa factura no es de %: elige primero su proveedor y guarda.', v_s.name using errcode = '23514';
+  end if;
+  -- El IBAN que trae la factura: el que guardó el lector (read_iban) o, si no, el de su lectura.
+  v_iban := public._pc01e2_iban(regexp_replace(coalesce(v_f.read_iban, v_f.reading->'factura'->>'iban', ''), '[-.]', '', 'g'));
+  if v_iban is null then raise exception 'Esta factura no trae IBAN.' using errcode = '22023'; end if;
+  if public._pc01e2_iban(v_s.iban) is not null then
+    if public._pc01e2_iban(v_s.iban) = v_iban then
+      return jsonb_build_object('iban4', right(v_iban, 4), 'frase', format('%s ya tiene este IBAN (···· %s) en su ficha.', v_s.name, right(v_iban, 4)));
+    end if;
+    raise exception '% ya tiene otro IBAN (···· %): si esta factura trae el nuevo, decídelo en ella.', v_s.name, right(public._pc01e2_iban(v_s.iban), 4) using errcode = '23514';
+  end if;
+  if not public._pc01e2b_iban_valido(v_iban) then raise exception 'El IBAN de esta factura no es correcto: puede estar mal leído. Compruébalo en su PDF.' using errcode = '22023'; end if;
+  if exists (select 1 from public.treasury_account t where t.account_id = v_s.account_id and public._pc01e2_iban(t.iban) = v_iban) then
+    raise exception 'Ese IBAN es de una cuenta vuestra, no de %.', v_s.name using errcode = '23514';
+  end if;
+  update public.supplier
+     set iban = v_iban, iban_set_at = now(), iban_set_by = auth.uid(), iban_set_by_name = v_quien, iban_unconfirmed_invoice_id = null,
+         data_from_invoice = coalesce(data_from_invoice, '{}'::jsonb) || jsonb_build_object('iban', jsonb_build_object(
+           'factura', v_f.invoice_number, 'facturaId', v_f.id, 'fecha', to_char(now() at time zone 'Europe/Madrid', 'YYYY-MM-DD'), 'quien', v_quien)),
+         updated_at = now()
+   where id = v_s.id;
+  insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, actor_name, action, text, detail)
+  values (v_f.account_id, v_f.company_id, v_f.inbox_id, v_f.id, 'persona', v_quien, 'corregida',
+          format('%s guarda en la ficha de %s el IBAN de esta factura (···· %s).', v_quien, v_s.name, right(v_iban, 4)),
+          jsonb_build_object('iban_puesto', true, 'iban4', right(v_iban, 4), 'supplier_id', v_s.id));
+  return jsonb_build_object('iban4', right(v_iban, 4),
+    'frase', format('IBAN de %s guardado en su ficha (···· %s), de la factura %s. Queda apuntado: %s, el %s a las %s.', v_s.name, right(v_iban, 4),
+                    coalesce(v_f.invoice_number, 'sin número'), v_quien,
+                    to_char(now() at time zone 'Europe/Madrid', 'DD/MM'), to_char(now() at time zone 'Europe/Madrid', 'HH24:MI')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid) IS 'S01b · «Guardar este IBAN» en Revisar factura: a un proveedor sin IBAN, el de su factura, comprobado y con quién, cuándo y de qué factura. Nunca pisa otro.';
 
 
 --
@@ -99266,6 +99385,7 @@ CREATE TABLE public.supplier (
     iban_set_by uuid,
     iban_set_by_name text,
     iban_unconfirmed_invoice_id uuid,
+    data_from_invoice jsonb,
     CONSTRAINT supplier_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT supplier_created_from_check CHECK ((created_from = 'factura'::text)),
     CONSTRAINT supplier_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
@@ -99408,6 +99528,13 @@ COMMENT ON COLUMN public.supplier.iban_set_by_name IS 'PC01 · E2b · Quién pus
 --
 
 COMMENT ON COLUMN public.supplier.iban_unconfirmed_invoice_id IS 'PC01 · E2b · El IBAN de la ficha se leyó de esta factura y nadie lo ha confirmado: para la remesa hasta confirmarlo.';
+
+
+--
+-- Name: COLUMN supplier.data_from_invoice; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.data_from_invoice IS 'S01b · De qué factura sale cada dato de la ficha tomado de una factura: { campo: { factura, facturaId, fecha, quien } } (nif, nombreFiscal, direccion, web, iban).';
 
 
 --
@@ -134898,6 +135025,14 @@ GRANT ALL ON FUNCTION public._availability_panel_core(p_account_id uuid, p_locat
 
 
 --
+-- Name: FUNCTION _aviso_falta_en_vault(p_que text, p_venta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._aviso_falta_en_vault(p_que text, p_venta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._aviso_falta_en_vault(p_que text, p_venta uuid) TO service_role;
+
+
+--
 -- Name: TABLE bank_settings; Type: ACL; Schema: public; Owner: -
 --
 
@@ -136605,6 +136740,22 @@ GRANT ALL ON FUNCTION public._pos_table_state(p_sale public.sale) TO service_rol
 GRANT ALL ON FUNCTION public._post_goods_receipt_lines(p_receipt_id uuid, p_only_unposted boolean) TO anon;
 GRANT ALL ON FUNCTION public._post_goods_receipt_lines(p_receipt_id uuid, p_only_unposted boolean) TO authenticated;
 GRANT ALL ON FUNCTION public._post_goods_receipt_lines(p_receipt_id uuid, p_only_unposted boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION _project_url(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._project_url() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._project_url() TO service_role;
+
+
+--
+-- Name: FUNCTION _project_url_si_hay(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._project_url_si_hay() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._project_url_si_hay() TO service_role;
 
 
 --
@@ -141662,6 +141813,15 @@ GRANT ALL ON FUNCTION public.conta_propuestos_dia_entero(p_company uuid) TO serv
 REVOKE ALL ON FUNCTION public.conta_proveedor_desde_factura(p_invoice uuid, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_proveedor_desde_factura(p_invoice uuid, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_proveedor_desde_factura(p_invoice uuid, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proveedor_iban_de_factura(p_supplier uuid, p_invoice uuid) TO service_role;
 
 
 --
