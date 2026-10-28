@@ -88,6 +88,7 @@ on:
       - 'supabase/vuelta-atras/**'
       - 'supabase/seeds/conta/**'
       - 'supabase/seeds/reparto/**'
+      - 'supabase/seeds/folvy/**'
       - 'scripts/conta/staging-tanda.mjs'
       # W06: la tanda de producción de la rama, lo que cuenta y el comparador.
       - 'supabase/produccion/tandas/**'
@@ -197,19 +198,12 @@ jobs:
             echo "NADA=1" >> "$GITHUB_ENV"
             exit 0
           fi
-          mal=0
-          while IFS= read -r f; do
-            # Solo SQL de las carpetas de migraciones, de staging o de semillas
-            # de contabilidad y de reparto (R02); sin rutas con «..».
-            if ! printf '%s' "$f" | grep -qE '^supabase/(migrations|staging/sql|seeds/conta|seeds/reparto)/[A-Za-z0-9_./-]+\.sql$' \
-               || printf '%s' "$f" | grep -q '\.\.'; then
-              echo "::error::Ruta no permitida en el manifiesto: $f"; mal=1; continue
-            fi
-            if [ ! -f "$f" ]; then
-              echo "::error::No existe: $f"; mal=1
-            fi
-          done < /tmp/tanda.txt
-          [ "$mal" -eq 0 ] || exit 1
+          # Solo SQL de las carpetas de migraciones, de staging o de semillas
+          # de contabilidad, de reparto (R02) y de Folvy (F01); sin rutas con
+          # «..». La regla vive en staging-tanda.mjs (RUTA_STAGING): la misma
+          # que mira pr-a-main.yml, para que un PR no llegue a main con una ruta
+          # que aquí no pasa (el #677, 27/10).
+          node scripts/conta/staging-tanda.mjs rutas $(cat /tmp/tanda.txt)
           # En ROLLBACK, nada puede quedarse de verdad.
           if [ "$ENSAYO" = 1 ]; then node scripts/conta/staging-tanda.mjs rollback $(cat /tmp/tanda.txt); fi
           echo "Tanda de $n ficheros ($QUE), en este orden:"

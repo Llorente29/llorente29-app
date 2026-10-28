@@ -11,6 +11,10 @@
 //
 //   node scripts/conta/staging-tanda.mjs nuevas <ref-de-antes> [manifiesto]
 //     → las líneas nuevas, en su orden (una por línea)
+//       («otra vez: <ruta>» pasa la ruta aunque ya estuviera: ver OTRA_VEZ)
+//   node scripts/conta/staging-tanda.mjs rutas <ficheros…>
+//     → para (sale con 1) si alguna ruta no la admite el workflow o no existe
+//       (la misma regla en aplicar-staging-conta.yml y en pr-a-main.yml)
 //   node scripts/conta/staging-tanda.mjs rollback <ficheros…>
 //     → para (sale con 1) si alguno haría algo de verdad dentro del ROLLBACK
 //   node scripts/conta/staging-tanda.mjs sesiones <ficheros…>
@@ -67,10 +71,37 @@ export function lineas(texto) {
   return String(texto ?? '').split('\n').map((l) => l.replace(/\s+$/, '')).filter((l) => l.trim() && !/^\s*#/.test(l))
 }
 
-/** Las líneas de «ahora» que no estaban en «antes», en el orden de «ahora». */
+// F01, respuesta 4 (27/10) · «OTRA VEZ». Lo que ya está en el manifiesto de
+// main no vuelve a pasar: «lo nuevo» se mide por la línea. Si un fichero entró
+// en el manifiesto y su run falló (el #677 cayó entero por la ruta de una
+// semilla de Folvy), staging se queda sin él y repetir la línea no sirve: no es
+// nueva. «otra vez: <ruta>» es una línea distinta —así cuenta como nueva una
+// vez, en el push que la añade— y pasa la ruta de detrás.
+const OTRA_VEZ = /^otra vez:\s*/
+
+/** La ruta de una línea del manifiesto (sin «otra vez:»). */
+export function ruta(linea) {
+  return String(linea).trim().replace(OTRA_VEZ, '')
+}
+
+/** Las rutas de «ahora» cuya línea no estaba en «antes», en el orden de «ahora» y sin repetir. */
 export function nuevas(antes, ahora) {
   const ya = new Set(lineas(antes))
-  return lineas(ahora).filter((l) => !ya.has(l))
+  return [...new Set(lineas(ahora).filter((l) => !ya.has(l)).map(ruta))]
+}
+
+// Qué rutas admite el manifiesto de staging: el SQL de las migraciones, de las
+// pruebas de staging y de las semillas de cada producto (contabilidad, reparto
+// y, desde el F01, Folvy). Una sola regla para el workflow que aplica
+// (aplicar-staging-conta.yml) y para el que revisa el PR (pr-a-main.yml): el
+// #358 se fusionó con una semilla de seeds/folvy que el workflow no admitía, y
+// el run de main tras la fusión (#677) cayó entero sin aplicar nada.
+export const RUTA_STAGING = /^supabase\/(migrations|staging\/sql|seeds\/conta|seeds\/reparto|seeds\/folvy)\/[A-Za-z0-9_./-]+\.sql$/
+
+/** Por qué el workflow no admitiría esta ruta, o null si la admite. */
+export function rutaNoAdmitida(f) {
+  if (!RUTA_STAGING.test(f) || f.includes('..')) return 'Ruta no permitida en el manifiesto'
+  return null
 }
 
 /** El SQL sin comentarios ni cadenas, para buscar sentencias de transacción. */
@@ -199,7 +230,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       for (const l of nuevas(textoDelManifiesto(ref), textoDelManifiesto())) console.log(l)
     }
   } else if (modo === 'entero') {
-    for (const l of lineas(textoDelManifiesto())) console.log(l)
+    for (const l of new Set(lineas(textoDelManifiesto()).map(ruta))) console.log(l)
+  } else if (modo === 'rutas') {
+    let mal = 0
+    for (const f of args) {
+      const p = rutaNoAdmitida(f)
+      if (p) { console.log(`::error::${p}: ${f} (admite ${RUTA_STAGING.source})`); mal = 1; continue }
+      if (!existsSync(f)) { console.log(`::error::No existe: ${f}`); mal = 1 }
+    }
+    process.exit(mal)
   } else if (modo === 'rollback') {
     let mal = 0
     for (const f of args) {
@@ -219,7 +258,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   } else if (modo === 'sesiones') {
     for (const s of sesiones(args)) console.log(`--@@ sesión ${s.fichero}\n${s.sql}`)
   } else {
-    console.error('uso: staging-tanda.mjs nuevas <ref> [manifiesto] | entero | rollback <ficheros…> | sesiones <ficheros…>')
+    console.error('uso: staging-tanda.mjs nuevas <ref> [manifiesto] | entero | rutas <ficheros…> | rollback <ficheros…> | sesiones <ficheros…>')
     process.exit(2)
   }
 }

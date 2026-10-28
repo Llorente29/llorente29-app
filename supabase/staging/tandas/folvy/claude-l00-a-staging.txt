@@ -1,0 +1,12 @@
+# L00 a staging (Respuesta 1 a la L1a, 27/10/2026). La 1112, la 1215 y la 1647
+# ya están en producción y nunca llegaron a staging: en el #350 se quitaron del
+# manifiesto porque sus pruebas también las aplicaban con \i, y así ninguna
+# pasada de main las aplicó de verdad. Sin ellas, la tanda de la L1a (#362)
+# no se puede comparar sobre staging: la 1905 respalda
+# _clock_entry_quien_y_hora(), que crea la 1215.
+#
+# Sin prueba (las de la L00 ya corrieron en sus PR) y sin tanda de producción.
+# Desde esta rama, en ROLLBACK; al fusionar, main las aplica de verdad (W04).
+supabase/migrations/20261027T1112_l00_origen_del_fichaje.sql
+supabase/migrations/20261027T1215_l00_datos_de_los_trabajadores.sql
+supabase/migrations/20261027T1647_l00_ancestros_por_cuenta.sql
