@@ -12,6 +12,11 @@
 --   3 · pasada dos veces, sigue habiendo una sola fila;
 --   4 · si alguien ya la hubiera apagado a mano, la 2224 no la toca;
 --   5 · la vuelta atrás quita la suya, y no la que se puso a mano.
+--
+-- sin usuario: la 2224 no crea ni cambia nada que llame una persona; solo
+-- escribe una fila de feature_flags, que fuera de una migración solo escribe
+-- la plataforma (su RLS no ha cambiado). Lo que ve la persona con el
+-- interruptor encendido lo prueba la e2e (tests/e2e/laboral/ls1-sumied.spec.ts).
 
 \set ON_ERROR_STOP 1
 begin;
