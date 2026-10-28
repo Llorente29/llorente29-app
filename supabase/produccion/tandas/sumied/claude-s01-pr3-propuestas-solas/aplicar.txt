@@ -10,8 +10,15 @@
 #      dice). Las dos con la misma firma, respaldadas. Medido el 28/10: 0
 #      enlaces de pago y 0 asientos de cobro por el enlace en producción. Ni
 #      una ni otra están en el camino del pedido ni en el cron.
+#   2. 0753 — AÑADE la base de las propuestas sin botón: «Lo que no he podido
+#      proponer» (conta_propuesta_pendiente), si un día está abierto, y la
+#      puerta única al libro (_conta_proponer). No toca filas.
+#   3. 0800 — AÑADE las nóminas solas (origen 1 de 5): la regla en SQL, lo que
+#      la llama y el disparador de payroll_summary (0 nóminas en producción).
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 cuenta: scripts/conta/produccion/cuentas/s01-enlace-validado.sql
 supabase/migrations/20261028T0735_s01_enlace_validado.sql
+supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
+supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
