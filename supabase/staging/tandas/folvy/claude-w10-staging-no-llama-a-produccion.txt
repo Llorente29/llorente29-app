@@ -1,0 +1,12 @@
+# W10 · Staging no llama a producción.
+#
+# La 1440 (solo añade: desde la rama va de verdad, W05) y la 1441 (cambia las
+# 23 funciones: desde la rama, solo en ROLLBACK), y su prueba (ROLLBACK), que
+# empieza por sus vueltas atrás si ya están aplicadas: la guarda dice
+# «staging»; ninguna dirección ni secreto escritos; una venta de Last que
+# cambia de estado, sin secreto en el Vault (no llama, avisa y se guarda) y con
+# uno de prueba (llama a order-advance de staging con ese secreto, y nada sale
+# hacia otro proyecto); tg_auto_dispatch; una firma de cada; la vuelta atrás.
+supabase/migrations/20261028T1440_w10_project_url.sql
+supabase/migrations/20261028T1441_w10_funciones_leen_su_proyecto.sql
+supabase/staging/sql/20261028_w10_funciones_leen_su_proyecto_prueba.sql

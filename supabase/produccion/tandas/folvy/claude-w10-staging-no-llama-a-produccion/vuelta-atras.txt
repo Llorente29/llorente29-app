@@ -1,0 +1,6 @@
+# W10 · vuelta atrás, en orden inverso: la 1441 (las 23 como estaban, byte a
+# byte, desde su respaldo; trg_sale_push_status vuelve con el secreto escrito)
+# y la 1440 (fuera las tres funciones nuevas). project_url se queda en el
+# Vault: lo creó Julio a mano.
+supabase/vuelta-atras/20261028T1441_w10_funciones_leen_su_proyecto.down.sql
+supabase/vuelta-atras/20261028T1440_w10_project_url.down.sql

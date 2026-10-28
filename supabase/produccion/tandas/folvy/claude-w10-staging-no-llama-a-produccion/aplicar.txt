@@ -1,0 +1,29 @@
+# W10 · Staging no llama a producción (28/10/2026). Rama
+# claude/w10-staging-no-llama-a-produccion. Se ensaya y se aplica desde esta
+# rama, antes de fusionar.
+#
+#   1. 1440 — SOLO AÑADE: _project_url(), _project_url_si_hay() y
+#      _aviso_falta_en_vault(). Leen project_url del Vault (lo creó Julio a
+#      mano el 28/10 en los dos proyectos). Se puede pasar dos veces.
+#   2. 1441 — CAMBIA en caliente las 23 funciones que llevaban escrita la
+#      dirección de producción: la leen del Vault. Y trg_sale_push_status lee
+#      además su secreto del Vault (order_advance_secret, mismo valor).
+#      · LA GUARDA: antes de tocar nada, las 23 tienen que estar como el 28/10
+#        (md5) y, en producción, la dirección escrita en cada una tiene que
+#        ser la del Vault. Si no, para y no cambia nada.
+#      · Con respaldo de las 23 (funcion_respaldo) y vuelta atrás byte a byte.
+#      · Camino del pedido: tg_auto_dispatch y trg_sale_push_status (sale) y
+#        las que despierta un cron. Lleva autorizo.
+#
+# En producción no cambia lo que hacen: la dirección que sale del Vault es la
+# escrita hoy (lo comprueba la guarda) y el secreto, el mismo valor (md5
+# da8c39f7 los dos). Lo único nuevo: si un día faltara project_url, los dos
+# disparadores de sale no llaman y avisan, en vez de llamar a otra parte.
+#
+# Antes (producción, 28/10): 23 funciones con la dirección escrita, 0 que la
+# lean del Vault, 0 de las nuevas; project_url en el Vault, apuntando a sí.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261028T1440_w10_project_url.sql
+supabase/migrations/20261028T1441_w10_funciones_leen_su_proyecto.sql
+cuenta: scripts/conta/produccion/cuentas/w10-funciones-leen-su-proyecto.sql

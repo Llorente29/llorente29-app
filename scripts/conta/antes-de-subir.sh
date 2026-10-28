@@ -63,6 +63,10 @@ node scripts/conta/antes-de-subir-sql.mjs
 # sin WHERE. La app pasa por safeupdate y los para, también dentro de una
 # función; las pruebas de staging corren como postgres y no lo ven.
 node scripts/conta/sql-sin-where.mjs
+# W10 (28/10): ni la dirección de un proyecto ni un secreto escritos en una
+# migración nueva o cambiada (ni en su vuelta atrás): en staging, una dirección
+# escrita llama a producción.
+node scripts/conta/sql-sin-direccion.mjs
 
 paso '8/10 · la tanda de producción, analizada contra el contexto REAL de producción (R11)'
 # Antes de dar datos de lanzamiento a Julio: el analizador con el contexto real,
