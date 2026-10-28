@@ -3,7 +3,8 @@
 -- y del código cambiado (tablero 4). SOLO STAGING. Necesita la 0850.
 -- ----------------------------------------------------------------------------
 -- Para tests/e2e/marcas/recetas-y-codigo.spec.ts, en la cuenta A. DOS JUEGOS
--- que no se tocan, uno para el ordenador y otro para el móvil, porque las dos
+-- que no se tocan, uno para el ordenador y otro para el móvil (ids con el
+-- cuarto grupo 8000 y 8001), porque las dos
 -- pasadas corren A LA VEZ sobre la misma cuenta (Respuesta 10: con un solo
 -- juego, cada una contaba las ventas de la otra). El del móvil lleva « M»
 -- detrás de cada nombre, y su propia cuenta de Last, sus tiendas y sus ids.
@@ -56,8 +57,12 @@ declare
   t1      uuid;
   t2      uuid;
   marca   uuid;
-  -- El principio de los ids del juego: el segundo grupo dice cuál (0000 ordenador, 0001 móvil).
+  -- El principio de los ids del juego: el CUARTO grupo dice cuál (8000
+  -- ordenador, 8001 móvil). El segundo no: es el que el clon del carril cambia
+  -- por el número de carril, y dos juegos que solo se distinguieran ahí
+  -- chocarían al copiarse (lo vio el run 40668493856: brand_pkey).
   pre     text;
+  viejo   constant text := 'f01c2e00-0001-4000-8000-';
 begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'Semilla F01c ABORTADA: esta base tiene cuentas de producción. ¿Es staging-conta?';
@@ -73,13 +78,28 @@ begin
     raise exception 'Semilla F01c: falta la 0850 (f01_receta_puesta).';
   end if;
 
+  -- El juego del móvil de antes (con el segundo grupo 0001), fuera: chocaba con
+  -- el carril 1. Era de esta semilla y no tiene ventas ni nada colgando.
+  delete from public.external_brand_map where account_id = a and source = 'lastapp' and external_brand_id like 'f01c-m-%';
+  delete from public.external_brand_alta where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
+  delete from public.f01_marca_reconocida where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
+  delete from public.external_catalog_product where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
+  delete from public.external_location_map where account_id = a and external_location_id in (viejo || '0000000000e1', viejo || '0000000000e2');
+  delete from public.external_integration where account_id = a and external_org_id = (viejo || '0000000000a0')::uuid;
+  delete from public.menu_item where account_id = a and brand_id = (viejo || '0000000000b1')::uuid;
+  delete from public.recipe_line where account_id = a and (id::text like viejo || '%' or parent_item_id::text like viejo || '%');
+  delete from public.recipe_item where account_id = a and id::text like viejo || '%';
+  delete from public.brand_channel where account_id = a and brand_id = (viejo || '0000000000b1')::uuid;
+  delete from public.brand_location_availability where account_id = a and brand_id = (viejo || '0000000000b1')::uuid;
+  delete from public.brand where account_id = a and id = (viejo || '0000000000b1')::uuid;
+
   -- Lo que lleva la receta de Alitas que lee la prueba.
   insert into public.recipe_item (id, account_id, type, name, base_unit_id, is_active, cost_strategy, fixed_cost, created_by_name)
   values ('f01c2e00-0000-4000-8000-000000000205', a, 'raw', 'Alitas de pollo', ud, true, 'fixed', 0.35, 'semilla F01c')
   on conflict (id) do nothing;
 
-  for j in select * from (values ('0000', '', 'f01c'), ('0001', ' M', 'f01c-m')) x(g, suf, cod) loop
-    pre := 'f01c2e00-' || j.g || '-4000-8000-';
+  for j in select * from (values ('0', '', 'f01c'), ('1', ' M', 'f01c-m')) x(g, suf, cod) loop
+    pre := 'f01c2e00-0000-4000-800' || j.g || '-';
     org := (pre || '0000000000a0')::uuid;
     t1 := (pre || '0000000000e1')::uuid;
     t2 := (pre || '0000000000e2')::uuid;
@@ -135,7 +155,7 @@ begin
          external_brand_name, external_brand_id, product_name, price_cents, product_type, external_channel, external_channels,
          external_location_id, seen_in_catalog_at, is_enabled, last_synced_at)
     select a, 'lastapp', org,
-           ('f01c2e00-' || lpad(to_hex(x.n), 4, '0') || '-40' || right(j.g, 2) || '-8000-' || lpad(to_hex(c.i * 16 + m.k), 12, '0'))::uuid,
+           ('f01c2e00-' || lpad(to_hex(x.n), 4, '0') || '-400' || j.g || '-8000-' || lpad(to_hex(c.i * 16 + m.k), 12, '0'))::uuid,
            (pre || '0000000001' || lpad(to_hex(x.n), 2, '0'))::uuid,
            m.marca || j.suf, j.cod || m.codigo, x.nombre || case when x.nombre = 'Agua mineral 50 cl' then '' else j.suf end,
            x.cents, 'PRODUCT', c.ch, array[c.ch], m.tienda, now(), true, now()
@@ -188,10 +208,10 @@ begin
   end if;
   if p_que not in ('empezar', 'pasada', 'limpiar') then raise exception 'e2e_f01c_preparar: «empezar», «pasada» o «limpiar».'; end if;
   if p_juego not in ('ordenador', 'movil') then raise exception 'e2e_f01c_preparar: el juego es «ordenador» o «movil».'; end if;
-  v_g := case p_juego when 'ordenador' then '0000' else '0001' end;
+  v_g := case p_juego when 'ordenador' then '8000' else '8001' end;
   v_suf := case p_juego when 'ordenador' then '' else ' M' end;
   v_cod := case p_juego when 'ordenador' then 'f01c' else 'f01c-m' end;
-  v_org := ('f01c2e00-' || v_g || '-4000-8000-0000000000a0')::uuid;
+  v_org := ('f01c2e00-0000-4000-' || v_g || '-0000000000a0')::uuid;
 
   -- La cuenta del que llama: la A de la plantilla o la de su carril, la que tiene la carta de prueba.
   select up.account_id into v_cuenta from public.user_profiles up
@@ -254,7 +274,7 @@ begin
     select v_cuenta, x.loc, x.marca, 'lastapp', now(), 'open', 'accepted', x.cents / 100.0, true,
            'f01c-e2e-' || p_juego || '-' || x.n, x.codigo, x.tienda,
            jsonb_build_array(jsonb_build_object('name', x.plato || v_suf, 'quantity', 1, 'price', x.cents,
-                                                'organizationProductId', 'f01c2e00-' || v_g || '-4000-8000-0000000001' || x.mat))::text, '{}'
+                                                'organizationProductId', 'f01c2e00-0000-4000-' || v_g || '-0000000001' || x.mat))::text, '{}'
       from (values (1, v_centro, v_marca, v_cod || '-pp-1', v_t1, 'Alitas de Prueba', 750, 'd5'),
                    (2, v_merc, null::uuid, v_cod || '-px-2', v_t2, 'Pollo asado de Prueba', 1250, 'd1'),
                    (3, v_merc, null::uuid, v_cod || '-pn-3', v_t2, 'Pollo asado de Prueba', 1250, 'e1'),
