@@ -72,7 +72,31 @@ async function botonActivo(page: Page, boton: ReturnType<Page['getByRole']>) {
   }
 }
 
-/** Pulsa fichar y pasa los avisos que salgan (fuera de zona, anticipado, contexto). */
+// Los errores de cada página, para citarlos en un fallo.
+const erroresDeLaPagina = new WeakMap<Page, string[]>()
+function vigilar(page: Page): string[] {
+  const errores: string[] = []
+  page.on('pageerror', (e) => errores.push(e.message))
+  erroresDeLaPagina.set(page, errores)
+  return errores
+}
+
+async function fallo(page: Page, que: string): Promise<never> {
+  const errores = erroresDeLaPagina.get(page) ?? []
+  throw new Error(`${que} En ${page.url()} se ve: ${await loQueSeVe(page)}`
+    + (errores.length ? ` · Errores de la página: ${errores.join(' | ')}` : ' · Sin errores de la página.'))
+}
+
+// El freno del doble toque (1112, desde el #364 también en staging): dos
+// fichajes de la misma persona a menos de 60 s, la base rechaza el segundo.
+const FRENO_MS = 61_000
+
+/**
+ * Pulsa fichar y pasa los avisos que salgan (fuera de zona, anticipado,
+ * contexto). Si la pantalla dice «No se puede fichar» por el freno de 60 s,
+ * espera y reintenta, como haría la persona. Con cualquier otro motivo, o si
+ * no sale nada, el fallo cita lo que se ve.
+ */
 async function fichar(page: Page) {
   await botonDeLaPortada(page, 'cualquiera').click()
   const boton = page.getByRole('button', { name: /FICHAR (ENTRADA|SALIDA)/ })
@@ -80,18 +104,35 @@ async function fichar(page: Page) {
   await boton.click()
   const confirmar = page.getByRole('button', { name: /^(Fichar igualmente|Entendido, fichar|Sí, me voy|Sí, fichar (ENTRADA|SALIDA))$/ })
   const final = page.locator('[data-prueba="fichaje-hecho"], [data-prueba="fichaje-pendiente"]')
-  for (let i = 0; i < 4; i++) {
-    await expect(confirmar.or(final).first()).toBeVisible({ timeout: 20_000 })
+  const error = page.locator('[data-prueba="fichaje-error"]')
+  let reintentado = false
+  for (let i = 0; i < 6; i++) {
+    try {
+      await expect(confirmar.or(final).or(error).first()).toBeVisible({ timeout: 20_000 })
+    } catch {
+      await fallo(page, 'Después de pulsar fichar no sale ni un aviso, ni «hecho», ni «No se puede fichar».')
+    }
     if (await final.first().isVisible()) return
+    if (await error.isVisible()) {
+      const motivo = (await error.textContent()) ?? ''
+      if (reintentado || !/hace unos segundos/.test(motivo)) await fallo(page, `La pantalla dice «No se puede fichar»: ${motivo}`)
+      reintentado = true
+      await page.waitForTimeout(FRENO_MS)
+      await page.getByRole('button', { name: 'Reintentar' }).click()
+      await botonActivo(page, boton)
+      await boton.click()
+      continue
+    }
     await confirmar.first().click()
   }
-  await expect(final.first()).toBeVisible()
+  await fallo(page, 'Fichar no termina después de seis pantallas.')
 }
 
 test('el trabajador ficha entrada y salida desde su portal, y ve lo que se guardó', async ({ page, context }) => {
-  test.setTimeout(4 * 60_000)
-  const errores: string[] = []
-  page.on('pageerror', (e) => errores.push(e.message))
+  // Hasta tres esperas del freno de 60 s (al cerrar una jornada de otro run, y
+  // entre la entrada y la salida).
+  test.setTimeout(7 * 60_000)
+  const errores = vigilar(page)
   await entrarComo(page, TRABAJADOR)
   await alInicio(page)
 

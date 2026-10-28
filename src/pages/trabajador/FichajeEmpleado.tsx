@@ -441,7 +441,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
               <AlertCircle size={48} className="text-danger" />
             </div>
             <p className="font-semibold text-text-primary text-lg">No se puede fichar</p>
-            <p className="text-sm text-text-secondary mt-3">{errorMsg}</p>
+            <p className="text-sm text-text-secondary mt-3" data-prueba="fichaje-error">{errorMsg}</p>
             <div className="flex gap-2 mt-5">
               <button onClick={onBack}
                 className="flex-1 py-3 rounded-xl bg-accent-bg text-text-primary font-medium hover:bg-page transition-base">
