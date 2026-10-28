@@ -108,6 +108,8 @@ permissions:
   actions: read
 
 env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
   PROD_REF: xzmpnchlguibclvxyynt
   STAGING_REF: oseymswjlzplqoxrfjzi
   PSQL: /usr/lib/postgresql/17/bin/psql
@@ -126,6 +128,7 @@ jobs:
         with:
           node-version: '22'
       - name: Guarda · el secreto apunta a STAGING
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -140,6 +143,7 @@ jobs:
           case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$STAGING_REF"*) echo "Staging." ;; *) echo "::error::La URL no es de staging."; exit 1 ;; esac
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -155,6 +159,7 @@ jobs:
           DIEZ_CORTE: '2024-12-30'
         run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts > /tmp/informe.md
       - name: Paso 2 · escribir, medir y deshacer (ensayo)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -163,6 +168,7 @@ jobs:
           "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v empresa="$EMPRESA" -v modo=ensayo \
             -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Paso 3 · un rechazo de verdad pone la tanda en ROJO, aun en real, y no deja nada
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -235,6 +241,7 @@ jobs:
           fi
           echo "Hay $n ensayo(s) en verde de este commit." >> /tmp/informe.md
       - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -256,6 +263,7 @@ jobs:
           [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA${SECRETO:+_$SECRETO}."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -263,6 +271,7 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
       - name: Empresa y lo último usado (lo que no se escribe sale de la base)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -285,6 +294,7 @@ jobs:
           origen() { [ -n "$1" ] && echo "escrito" || echo "lo último usado"; }
           { echo "Empresa \`$e\` · desde **$DESDE** ($(origen "$IN_DESDE")) · hasta **$HASTA** ($(origen "$IN_HASTA")) · corte **$CORTE** ($(origen "$IN_CORTE"))."; echo; } >> /tmp/informe.md
       - name: Guarda · la empresa, su base registrada, sus pasos y su ejercicio mixto de Diez hasta el corte
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -326,6 +336,7 @@ jobs:
           CARGA: /tmp/carga
         run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts >> /tmp/informe.md
       - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
+        timeout-minutes: 60
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -336,6 +347,7 @@ jobs:
           "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v VERBOSITY=sqlstate -v empresa="$EMPRESA" -v modo="$MODO" \
             -f "$GITHUB_WORKSPACE/scripts/conta/diez/importar.sql" | tee -a /tmp/informe.md
       - name: Recordar lo usado (para que la siguiente salga rellena)
+        timeout-minutes: 15
         if: success()
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
@@ -378,6 +390,7 @@ jobs:
           [[ "$DIEZ_DESDE" =~ ^[0-9]{6}$ && "$DIEZ_HASTA" =~ ^[0-9]{6}$ && "$DIEZ_CORTE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "::error::Fechas: desde y hasta AAAAMM, corte AAAA-MM-DD."; exit 1; }
           echo "# Diez · $MODO · empresa \`$EMPRESA\`" > /tmp/informe.md
       - name: Guarda · el secreto apunta a STAGING
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -392,6 +405,7 @@ jobs:
           case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$STAGING_REF"*) echo "Staging." ;; *) echo "::error::La URL no es de staging."; exit 1 ;; esac
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -399,6 +413,7 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
       - name: Guarda · staging de verdad, y la base registrada de la empresa
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -443,6 +458,7 @@ jobs:
           CARGA: /tmp/carga
         run: npx --yes tsx@4.19.2 scripts/conta/diez/importar-preparar.ts >> /tmp/informe.md
       - name: Simulado · escribir, medir y deshacer (ensayo)
+        timeout-minutes: 25
         if: inputs.modo == 'simulado-staging'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -492,6 +508,7 @@ jobs:
           echo "BASE=$BASE" > /tmp/env.txt
           cat /tmp/env.txt >> "$GITHUB_ENV"
       - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -506,6 +523,7 @@ jobs:
           case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING. Abortado sin conectar."; exit 1 ;; esac
           case "$DB_URL" in *"$PROD_REF"*) echo "Producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -513,6 +531,7 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
       - name: Registrar la base y preparar el corte (una transacción)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |

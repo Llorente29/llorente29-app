@@ -35,11 +35,37 @@ const SECRETOS = [
   ['una clave de Supabase nueva', /\bsb_(secret|publishable)_[A-Za-z0-9_-]{10,}/],
 ]
 
-/** Los sitios del volcado con pinta de secreto: [{ linea, que }]. */
+/**
+ * El `role` de un JWT, leyendo solo su cabecera de datos (sin comprobar la
+ * firma), o null si no se puede leer.
+ */
+export function rolDelJwt(jwt) {
+  try {
+    const datos = jwt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(Buffer.from(datos, 'base64').toString('utf8')).role ?? null
+  } catch { return null }
+}
+
+/**
+ * Los sitios del volcado con pinta de secreto: [{ linea, que }]. Un JWT de rol
+ * `anon` NO es secreto: es la clave pública que va dentro del front (28/10:
+ * tg_auto_dispatch lleva una escrita). Cualquier otro (service_role, el de un
+ * usuario, uno que no se puede leer) sí.
+ */
 export function buscarSecretos(texto) {
   const fuera = []
   texto.split('\n').forEach((l, i) => {
-    for (const [que, re] of SECRETOS) if (re.test(l)) fuera.push({ linea: i + 1, que })
+    for (const [que, re] of SECRETOS) {
+      if (!re.test(l)) continue
+      if (re === SECRETOS[0][1]) {
+        const jwts = l.match(new RegExp(re.source, 'g')) ?? []
+        const roles = jwts.map(rolDelJwt)
+        if (roles.every((r) => r === 'anon')) continue
+        fuera.push({ linea: i + 1, que: `${que}: rol ${roles.filter((r) => r !== 'anon').map((r) => r ?? 'ilegible').join(', ')}` })
+        continue
+      }
+      fuera.push({ linea: i + 1, que })
+    }
   })
   return fuera
 }

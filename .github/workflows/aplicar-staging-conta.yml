@@ -121,6 +121,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   aplicar:
     runs-on: ubuntu-latest
@@ -139,6 +143,7 @@ jobs:
           fetch-depth: 0
 
       - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -164,6 +169,7 @@ jobs:
           esac
 
       - name: Leer y validar el manifiesto
+        timeout-minutes: 15
         id: manifiesto
         if: inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
         env:
@@ -214,6 +220,7 @@ jobs:
           node-version: 22
 
       - name: Instalar psql 17
+        timeout-minutes: 15
         if: env.NADA != '1' || env.TANDA_PROD != '' || inputs.modo == 'compara-prueba'
         run: |
           set -euo pipefail
@@ -224,6 +231,7 @@ jobs:
           /usr/lib/postgresql/17/bin/psql --version
 
       - name: Guarda 3 · al otro lado no hay producción
+        timeout-minutes: 15
         if: env.NADA != '1' || env.TANDA_PROD != '' || inputs.modo == 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -252,6 +260,7 @@ jobs:
       # (sin carril), también el cerrojo de antes, e2e.cerrojo.
       # W04: solo lo que se queda de verdad coge el cerrojo; un ensayo en ROLLBACK no.
       - name: Cerrojo de migrar · esperar a que acaben los ficheros de prueba en marcha
+        timeout-minutes: 35
         if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -266,6 +275,7 @@ jobs:
           scripts/e2e/cerrojo.sh coger
 
       - name: Ensayar en ROLLBACK lo que añade la rama
+        timeout-minutes: 15
         if: env.NADA != '1' && env.ENSAYO == '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -307,6 +317,7 @@ jobs:
       # W06: la tanda de producción de la rama, como el ensayo de producción
       # (arriba, «W06»). Antes de W05: si no vuelve, no va nada de verdad.
       - name: Comparar como el ensayo de producción (la tanda de la rama, en ROLLBACK)
+        timeout-minutes: 15
         if: env.TANDA_PROD != '' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -319,6 +330,7 @@ jobs:
 
       # W05: lo que solo añade, de verdad desde la rama (arriba, «QUÉ PASA»).
       - name: Lo que solo añade, de verdad (desde la rama)
+        timeout-minutes: 15
         if: env.NADA != '1' && env.ENSAYO == '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -428,6 +440,7 @@ jobs:
           fi
 
       - name: Aplicar, fichero a fichero
+        timeout-minutes: 15
         if: env.NADA != '1' && env.ENSAYO != '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real' && inputs.modo != 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -475,6 +488,7 @@ jobs:
           exit "$fallo"
 
       - name: Ensayo de vuelta atrás (aplica, falla a propósito y deshace)
+        timeout-minutes: 15
         if: inputs.modo == 'ensayo-de-vuelta-atras'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -486,6 +500,7 @@ jobs:
           bash scripts/conta/produccion/ensayo-vuelta-atras.sh
 
       - name: La tanda de producción en staging (real-con-fallo o real)
+        timeout-minutes: 15
         if: inputs.modo == 'real-con-fallo' || inputs.modo == 'real'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -501,6 +516,7 @@ jobs:
       # y cuatro rotas a propósito. En verde solo si la buena sale en verde y las
       # cuatro rotas en rojo. Todo en ROLLBACK: staging no cambia.
       - name: Prueba del comparador (una vuelta atrás buena y cuatro rotas)
+        timeout-minutes: 15
         if: inputs.modo == 'compara-prueba'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -530,6 +546,7 @@ jobs:
           echo "La buena en verde y las cuatro rotas en rojo."
 
       - name: Cerrojo de migrar · soltarlo (pase lo que pase)
+        timeout-minutes: 15
         if: always()
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}

@@ -103,6 +103,10 @@ permissions:
   contents: read
   actions: read
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   aplicar:
     runs-on: ubuntu-latest
@@ -160,6 +164,7 @@ jobs:
           } > "$INFORME"
 
       - name: Guarda 1 y 2 · el secreto apunta a PRODUCCIÓN y no a staging
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -198,6 +203,7 @@ jobs:
           bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG" /tmp/sin-vuelta.txt /tmp/esperado.txt
 
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -207,6 +213,7 @@ jobs:
           "$PSQL" --version
 
       - name: Guarda 3 · al otro lado está Foodint
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -234,6 +241,7 @@ jobs:
           echo "Ensayo en verde de este mismo commit: sí ($n)." >> "$INFORME"; echo >> "$INFORME"
 
       - name: Contexto (solo lee) e historial · lo ya aplicado no se reaplica
+        timeout-minutes: 15
         if: inputs.modo != 'vuelta_atras'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
@@ -308,6 +316,7 @@ jobs:
           fi
 
       - name: Antes · D1, salud del pedido y agentes
+        timeout-minutes: 15
         if: env.NADA != '1'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
@@ -363,6 +372,7 @@ jobs:
           echo >> "$INFORME"
 
       - name: ENSAYO · todo en una transacción, con el registro en el historial, y ROLLBACK
+        timeout-minutes: 15
         if: inputs.modo == 'ensayo' && env.NADA != '1'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
@@ -425,6 +435,7 @@ jobs:
           if [ "$d1" -ne 0 ]; then echo "::error::D1 da diferencias no decididas."; cat "$INFORME" >> "$GITHUB_STEP_SUMMARY"; exit 1; fi
 
       - name: ENSAYO · la vuelta atrás automática funcionaría (tanda y .down.sql al revés, y ROLLBACK)
+        timeout-minutes: 15
         if: inputs.modo == 'ensayo' && env.NADA != '1'
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
@@ -492,6 +503,7 @@ jobs:
           fi
 
       - name: REAL · fichero a fichero, cada uno con su registro, para al primer fallo
+        timeout-minutes: 15
         id: real
         if: (inputs.modo == 'real' || inputs.modo == 'vuelta_atras') && env.NADA != '1'
         env:
@@ -534,6 +546,7 @@ jobs:
           exit "$fallo"
 
       - name: Después · comprobación (D1, serie, agentes y salud del pedido); si falla, vuelta atrás automática
+        timeout-minutes: 15
         id: despues
         # Solo si el REAL llegó a correr (aunque fallara a medias): no tras un análisis que para.
         if: always() && inputs.modo == 'real' && steps.real.outcome != 'skipped' && steps.real.outcome != ''
@@ -592,6 +605,7 @@ jobs:
           exit 1
 
       - name: Después de la vuelta atrás · D1 y recuento
+        timeout-minutes: 15
         # En modo vuelta_atras, y también cuando un REAL se deshace solo (R9):
         # la comprobación de después falló y deshacer.sh ha corrido.
         if: >-

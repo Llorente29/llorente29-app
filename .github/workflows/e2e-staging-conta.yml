@@ -201,6 +201,8 @@ permissions:
   actions: write
 
 env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
   STAGING_REF: oseymswjlzplqoxrfjzi
   PROD_REF: xzmpnchlguibclvxyynt
   VITE_SUPABASE_URL: https://oseymswjlzplqoxrfjzi.supabase.co
@@ -348,6 +350,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -364,6 +367,7 @@ jobs:
           case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
 
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -396,6 +400,7 @@ jobs:
           sed 's/^/  · /' "$RUNNER_TEMP/ficheros.txt"
 
       - name: Guarda 3 · al otro lado no hay cuentas de producción
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -406,6 +411,7 @@ jobs:
       # W02 (1c): cuánto aprieta la e2e a staging (Micro), medido desde el trozo
       # 1: consultas a la vez, conexiones y ocupación de la base cada 5 s.
       - name: Carga · empezar a medir (trozo 1)
+        timeout-minutes: 15
         if: matrix.trozo == 1
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -416,6 +422,7 @@ jobs:
       # Ya no espera a que nadie migre (V03, respuesta 6, 26/10): solo a que
       # quede un carril libre, como mucho 15 min.
       - name: Carril · esperar su turno y coger uno
+        timeout-minutes: 60
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -424,6 +431,7 @@ jobs:
           echo "E2E_CARRIL=$(cat "$RUNNER_TEMP/carril/numero")" >> "$GITHUB_ENV"
 
       - name: Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -452,6 +460,7 @@ jobs:
       # (scripts/e2e/por-fichero.sh): si se está aplicando algo a staging, el
       # fichero siguiente espera a que acabe, y lo apunta en el resumen.
       - name: Pruebas (ordenador y móvil)
+        timeout-minutes: 120
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -463,6 +472,7 @@ jobs:
       # Si ni esto llega a correr, el carril lo borra el próximo que lo coja y
       # los cerrojos se sueltan al caerse la conexión.
       - name: Carril · borrar y soltar (pase lo que pase)
+        timeout-minutes: 15
         if: always()
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -471,6 +481,7 @@ jobs:
           scripts/e2e/carril.sh soltar
 
       - name: Carga · lo medido mientras corrían las pruebas (trozo 1)
+        timeout-minutes: 15
         if: always() && matrix.trozo == 1
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
@@ -689,6 +700,7 @@ jobs:
       # última en verde es la que vale), sin un run aparte; a mano, con
       # «fijar_capturas». Solo en verde (los N trozos) y solo las del frente de la rama.
       - name: Capturas · fijar las del frente en la rama
+        timeout-minutes: 15
         if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fijar_capturas))
         env:
           GH_TOKEN: ${{ github.token }}

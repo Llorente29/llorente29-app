@@ -24,6 +24,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   bancos:
     if: startsWith(github.event.head_commit.message, '[c07-bancos-c0008]')
@@ -35,6 +39,7 @@ jobs:
         with:
           node-version: '22'
       - name: Enmascarar los secretos
+        timeout-minutes: 15
         env:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
@@ -57,6 +62,7 @@ jobs:
               raise SystemExit(1)
           PY
       - name: Los bancos de Foodint en Sumied (producción, conta_lectura, solo lectura)
+        timeout-minutes: 15
         env:
           RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
