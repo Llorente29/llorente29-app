@@ -1,9 +1,10 @@
 -- scripts/conta/produccion/cuentas/s01-enlace-validado.sql
 --
 -- S01 · PR 3 (28/10) · LO QUE CUENTA LA TANDA DEL COBRO POR EL ENLACE VALIDADO
--- (0735), y de la base, las nóminas, lo recibido sin factura, el pagado después y
--- el socio de las propuestas sin botón (0753, 0800, 0830, 0849 y 0905), antes y
--- después. SOLO LEE. La 0753, la 0800, la 0830 y la 0905 solo añaden: antes y al
+-- (0735), y de la base, las nóminas, lo recibido sin factura, el pagado después,
+-- el socio y la plataforma de las propuestas sin botón (0753, 0800, 0830, 0849,
+-- 0905 y 0929), antes y después. SOLO LEE. La 0753, la 0800, la 0830, la 0905 y la
+-- 0929 solo añaden: antes y al
 -- deshacerlas, «no existe» o 0.
 --   · La 0735 añade _journal_entry_validar (no existe antes ni al deshacerla) y
 --     cambia journal_entry_validar y _s01_asiento_cobro con la misma firma: su
@@ -60,5 +61,13 @@ select clave, valor from (
     || ' · ' || (select count(*) from pg_trigger where tgname = 'conta_socio_proponer') union all
   select 16, 'asientos del socio (journal_entry licensed_settlement; tabla entera)',
     -- quieta: 0 el 28/10; las 3 liquidaciones de producción son de la fórmula «anterior», que no se propone
-    (select count(*) from public.journal_entry where source_type = 'licensed_settlement')::text
+    (select count(*) from public.journal_entry where source_type = 'licensed_settlement')::text union all
+  select 17, '0929: funciones nuevas (de 7) y disparador de channel_settlement (de 1)',
+    (select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace
+       and p.proname in ('_conta_plataforma_regla', '_conta_plataforma_entrada', 'conta_propuestas_plataforma', '_conta_proponer_plataforma',
+                         'conta_proponer_plataformas', 'tg_conta_plataforma_proponer', 'conta_aprendizaje'))
+    || ' · ' || (select count(*) from pg_trigger where tgname = 'conta_plataforma_proponer') union all
+  select 18, 'asientos de liquidaciones de plataforma (journal_entry channel_settlement; tabla entera)',
+    -- quieta: 0 el 28/10 de 268 liquidaciones; solo los escribe el botón de Asientos, y aplicar la 0929 no propone nada (el disparador espera a que entre o cambie una)
+    (select count(*) from public.journal_entry where source_type = 'channel_settlement')::text
 ) x order by o;

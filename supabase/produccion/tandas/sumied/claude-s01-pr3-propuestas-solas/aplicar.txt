@@ -31,6 +31,11 @@
 #      SQL, lo aprendido (regla 11) y quien las propone, y CAMBIA
 #      licensed_settlement con un disparador nuevo (3 filas en producción, de
 #      la fórmula «anterior», que no se propone): al confirmarse o saldarse.
+#   7. 0929 — AÑADE la liquidación de plataforma sola (origen 5 de 5): la regla
+#      pura, lo que preparaba el servicio, quien las propone y lo aprendido
+#      para las facturas del navegador; y CAMBIA channel_settlement con un
+#      disparador nuevo (268 filas en Foodint, 0 con asiento): al leerse.
+#      La regla, igual a la del navegador en las 268 (la misma entrada).
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
@@ -41,3 +46,4 @@ supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
 supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
 supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
 supabase/migrations/20261028T0905_s01_propuestas_socio.sql
+supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql

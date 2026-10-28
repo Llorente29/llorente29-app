@@ -26,3 +26,9 @@ supabase/staging/sql/20261028_s01_propuestas_pagado_despues_prueba.sql
 # dicho; con ella, los tres asientos; sin cuenta, no; y la vuelta atrás.
 supabase/migrations/20261028T0905_s01_propuestas_socio.sql
 supabase/staging/sql/20261028_s01_propuestas_socio_prueba.sql
+# La liquidación de plataforma (0929), con su prueba: los 16 casos de las
+# pruebas del navegador, iguales; al leerla, sola; la del correo sin su factura,
+# dicha, y con ella, sola; lo aprendido; la de referencia; si falla, entra
+# igual; sin cuenta, no; y la vuelta atrás.
+supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
+supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql
