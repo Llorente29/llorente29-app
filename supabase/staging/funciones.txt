@@ -15,3 +15,10 @@ send-email
 # de producción usa SIEMPRE el doble (el PDF inventado que la e2e deja en
 # <cuenta>/doble-aeat/<CSV>.pdf): staging no llama nunca a Hacienda.
 conta-justificante-csv
+# S01 · Respuesta 5 (28/10): pagar con Redsys en staging. conta-pago firma el
+# pago (con REDSYS_PRUEBAS=si va a sis-t, el entorno de pruebas de Redsys),
+# conta-redsys guarda el TPV desde Ajustes › Cobros, y conta-redsys-aviso recibe
+# el aviso de Redsys, comprueba la firma y cobra. Nada llega a un banco de verdad.
+conta-pago
+conta-redsys
+conta-redsys-aviso
