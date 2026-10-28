@@ -121,7 +121,7 @@ test('S01b2 · una factura leída antes del 28/10: «Dar de alta a …» la vuel
   await expect(form.getByLabel(/^NIF/)).toHaveValue(nif)
   await expect(form.getByLabel('Dirección fiscal')).toHaveValue(direccion)
   await expect(form.getByLabel('Correo')).toHaveValue('')
-  for (const campo of ['Correo', 'Teléfono', 'Web']) await expect(form.getByLabel(campo), `${campo} sin ejemplo en gris`).not.toHaveAttribute('placeholder', /.+/)
+  for (const campo of ['Nombre con el que lo conocéis', /^NIF/, 'Dirección fiscal', 'Correo', 'Teléfono', 'Web']) await expect(form.getByLabel(campo), `${campo} sin ejemplo en gris`).not.toHaveAttribute('placeholder', /.+/)
   if (conFuncion) {
     await expect(page.locator('[data-prueba="relectura"]')).toHaveText('He vuelto a leer la factura: añado el teléfono y la web.')
     await expect(form.getByLabel('Teléfono')).toHaveValue(telefono)

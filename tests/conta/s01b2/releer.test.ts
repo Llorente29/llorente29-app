@@ -56,3 +56,12 @@ describe('S01b2 · el lector deja siempre las claves y aprovecha el teléfono qu
       .toMatchObject({ telefono: '956 111 111', web: 'www.ejemplo.es' })
   })
 })
+
+describe('S01b2 · el formulario de alta no lleva ejemplos en gris', () => {
+  it('ni en «Subir factura», ni en Revisar factura, ni en la recibida a mano, ni en «Nuevo proveedor»: el mismo formulario, sin un solo placeholder', async () => {
+    const { readFileSync } = await import('node:fs')
+    for (const f of ['src/modules/conta/proveedor/NuevoProveedorDialogo.tsx', 'src/modules/conta/documentos/ProveedorDesdeFactura.tsx']) {
+      expect(readFileSync(f, 'utf8'), f).not.toMatch(/placeholder=/)
+    }
+  })
+})

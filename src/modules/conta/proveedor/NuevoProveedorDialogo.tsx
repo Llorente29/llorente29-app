@@ -124,11 +124,13 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
   return (
     <Caja className="cx-formulario" {...props}>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
-      <Campo campo="nuevo-name" etiqueta="Nombre con el que lo conocéis" error={errores.nombre}>
-        {(p) => <input {...p} className="cx-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="Hermanos Ruiz" />}
+      {/* S01b2 · Ningún campo lleva un ejemplo en gris: parecen datos de verdad. Lo que la factura no trae, vacío y dicho. */}
+      <Campo campo="nuevo-name" etiqueta="Nombre con el que lo conocéis" error={errores.nombre} ayuda={delPapel && !iniciales.nombre ? NO_VIENE : undefined}>
+        {(p) => <input {...p} className="cx-input" value={name} onChange={(e) => setName(e.target.value)} />}
       </Campo>
-      <Campo campo="nuevo-nif" etiqueta="NIF (opcional)" error={errores.nif ?? nifAlMomento} aviso={nota} ayuda={delPapel ? 'Lo comprobamos al momento.' : 'Lo comprobamos al momento. El resto se completa en su ficha.'}>
-        {(p) => <input {...p} className="cx-input" value={nif} onChange={(e) => setNif(e.target.value)} autoCapitalize="characters" placeholder="B12345678" />}
+      <Campo campo="nuevo-nif" etiqueta="NIF (opcional)" error={errores.nif ?? nifAlMomento} aviso={nota}
+        ayuda={delPapel ? (iniciales.nif ? 'Lo comprobamos al momento.' : `${NO_VIENE} Si lo tienes, lo comprobamos al momento.`) : 'Lo comprobamos al momento. El resto se completa en su ficha.'}>
+        {(p) => <input {...p} className="cx-input" value={nif} onChange={(e) => setNif(e.target.value)} autoCapitalize="characters" />}
       </Campo>
       {delPapel && (
         <>
