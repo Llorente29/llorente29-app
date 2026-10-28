@@ -16,13 +16,11 @@ import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
 import { aplicarAsientoAMano, aplicarReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, unidadesDelDia, type UnidadVentas, noConfirmadoPagado, devolucionSinCobrar, liquidacionPlataforma, facturaProveedor, deLaFacturaDeLote, finDeMesCompras, liquidacionMensual, nomina, liquidacionSocio, aplicarAprendizaje,
-  type PedidoDia, type DevolucionDia, type CargoPlataforma, type Correccion, type SerieTesoreria,
+  unidadesDelDia, type UnidadVentas, devolucionSinCobrar, facturaProveedor, deLaFacturaDeLote,
+  type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
-import { avisoPeriodoCerrado, diaAbierto, diaDeEntrada, fechaDeLaRecibida, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta } from '@/modules/conta/lib/libro'
-import { tandaDeDias } from '@/modules/conta/lib/proponer'
+import { avisoPeriodoCerrado, diaAbierto, diaDeEntrada, fechaDeLaRecibida, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
-import { ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -266,352 +264,23 @@ async function proponer(companyId: string, p: Propuesta, resumen: Fila | null, r
   }
 }
 
-const huella = async (texto: string): Promise<string> => {
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto))
-  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
-}
 
-/** Propone lo que falte entre dos fechas: ventas del día, facturas, liquidaciones y nóminas. */
-export async function proponerPendientes(accountId: string, companyId: string, desde: string, hasta: string, quien: string | null): Promise<ResultadoProponer> {
-  const ctx = await cargarContexto(accountId, companyId)
-  const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
-  const abierto = (f: string) => diaAbierto(f, ctx.calendario)
+// S01 · PR 3 (entrega 5): «Proponer lo pendiente» ya no existe. Las ventas del
+// día las propone el cierre de cada hora (SQL); las facturas recibidas, Compras al
+// validarlas (proponerFactura, abajo); y los cinco orígenes de la entrega 5
+// (nóminas, lo recibido sin factura, el pagado después, el socio y la
+// plataforma), la base al pasar lo que los origina y en la pasada de las 03:40.
 
-  // ── Ventas del día (reglas 6 y 13) ──
-  // Respuesta 4: del mes más reciente hacia atrás, un mes cada vez, y se dice
-  // cuántos días quedan (lo de antes del corte ni entra: desde/hasta ya lo dejan fuera).
-  const todos = ((await rpc('conta_dias_por_asentar', { p_company: companyId, p_desde: desde, p_hasta: hasta })) as Fila[] | null ?? [])
-    .filter((d) => abierto(String(d.dia))).map((d) => ({ location_id: String(d.location_id), dia: String(d.dia) }))
-  const tanda = tandaDeDias(todos)
-  r.mesVentas = tanda.mes
-  r.quedanDias = tanda.quedanDias
-  const dias = tanda.ahora
-  const ventas = ctx.hoja('700'); const devoluciones = ctx.hoja('708') ?? ventas
-  const iva477 = ctx.tipoVentas ? ctx.enlace('tax_rate', ctx.tipoVentas.id, 'repercutido') : null
-  for (const d of dias) {
-    const localId = d.location_id; const dia = d.dia
-    const que = `Ventas del ${dia.split('-').reverse().join('/')} · ${ctx.locales.get(localId) ?? 'local'}`
-    if (!abierto(dia)) continue
-    if (!ctx.tipoVentas || !iva477 || !ventas) { r.sinPropuesta.push({ que, porque: 'Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.' }); continue }
-    const [pedidos, devs] = await Promise.all([
-      rpc('conta_pedidos_del_dia', { p_company: companyId, p_location: localId, p_dia: dia }) as Promise<Fila[] | null>,
-      rpc('conta_devoluciones_del_dia', { p_company: companyId, p_location: localId, p_dia: dia }) as Promise<Fila[] | null>,
-    ])
-    const cobroPorCanal: Record<string, string> = {}
-    for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
-    // C06b (16/10): el descuento, el envío y qué se hace con él (conta_cargos_de_pedidos).
-    // Sin la función —el front antes que la base—, como hasta hoy.
-    const cerrados = (pedidos ?? []).filter((p) => p.estado === 'closed').map((p) => String(p.id))
-    const cargos = new Map<string, Fila>()
-    if (cerrados.length && ctx.ventasPorPlataforma) {
-      const cs = await (rpc('conta_cargos_de_pedidos', { p_account: accountId, p_sales: cerrados }) as Promise<Fila[] | null>).catch(() => null)
-      for (const c of cs ?? []) cargos.set(String(c.id), c)
-    }
-    const losPedidos = (pedidos ?? []).map((p): PedidoDia => ({
-      id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
-      estado: (String(p.estado) as PedidoDia['estado']), total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
-      tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
-      ...(cargos.has(String(p.id)) ? {
-        descuento: n(cargos.get(String(p.id))!.descuento), envio: n(cargos.get(String(p.id))!.envio),
-        claseEnvio: String(cargos.get(String(p.id))!.clase) as PedidoDia['claseEnvio'], porQueEnvio: s(cargos.get(String(p.id))!.por_que),
-      } : {}),
-    }))
-    const lasDevoluciones = (devs ?? []).map((x): DevolucionDia => ({
-      pedidoId: s(x.pedido_id), codigo: s(x.codigo), canalId: s(x.canal_id), marcaId: s(x.marca_id), marcaPropia: x.propia !== false, importe: n(x.importe),
-      // Hasta F01 Folvy no emite facturas de plataforma: ninguna devolución pide rectificativa todavía.
-      conFactura: false,
-    }))
-    const nombreCanal = (id: string | null) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal')
-    const regla = ctx.ventasPorPlataforma
-    // C04b R5: con la regla por plataforma, un asiento por unidad (Uber y Just
-    // Eat, uno; Glovo, uno por marca), igual que el cierre del día. Sin ella,
-    // la regla de antes: el día y el local enteros.
-    const unidades: (UnidadVentas | undefined)[] = regla ? unidadesDelDia(losPedidos, lasDevoluciones, (c) => !!c && regla.porMarca.has(c)) : [undefined]
-    for (const unidad of unidades) {
-      const queUnidad = unidad ? `${que} · ${nombreCanal(unidad.canalId)}${unidad.marcaId ? ` · ${ctx.marcas.get(unidad.marcaId)?.nombre ?? 'una marca'}` : ''}` : que
-      const res = ventasDelDia({
-        fecha: dia, localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
-        nombreCanal, nombreMarca: (id) => (id ? ctx.marcas.get(id)?.nombre ?? 'una marca' : 'sin marca'), unidad,
-        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca,
-          promocionesPorCanal: regla?.promocionesPorCanal, enviosPorCanal: regla?.enviosPorCanal },
-        pedidos: losPedidos, devoluciones: lasDevoluciones,
-      })
-      if (!res.propuesta) {
-        r.sinPropuesta.push({ que: queUnidad, porque: res.sinPropuesta ?? 'Sin propuesta.', pedidos: res.pedidosDelPorque?.map((p) => ({
-          codigo: p.codigo, canal: p.canalId ? ctx.canales.get(p.canalId)?.nombre ?? 'un canal' : 'sin canal',
-          marca: p.marcaId ? ctx.marcas.get(p.marcaId)?.nombre ?? 'una marca' : 'sin marca', total: p.total, estado: p.estado,
-        })) })
-        continue
-      }
-      const detalle = await huella(res.resumen.pedidoIds.join('|') + '#' + String(Math.round(res.resumen.total * 100)))
-      await proponer(companyId, res.propuesta, {
-        location_id: localId, sales_day: dia, tickets_count: res.resumen.tickets, total: res.resumen.total,
-        ...(unidad ? { unit_key: unidad.clave, channel_id: unidad.canalId, brand_id: unidad.marcaId } : {}),
-        by_rate: [{ tax_rate_id: ctx.tipoVentas.id, rate: ctx.tipoVentas.porcentaje, base: res.resumen.base, cuota: res.resumen.cuota, calculated: res.resumen.baseCalculada }],
-        by_channel: res.resumen.porCanal.map((c) => ({ channel_id: c.canalId, total: c.total })),
-        by_brand: res.resumen.porMarca.map((m) => ({ brand_id: m.marcaId, base: m.base })),
-        detail_hash: detalle, sale_ids: res.resumen.pedidoIds, base_calculated: res.resumen.baseCalculada,
-      }, r, ctx, quien)
-    }
-  }
-
-  // ── Cierre del día · la liquidación manda (T4) ──
-  // Un pedido cerrado como no confirmado que una liquidación paga: venta de su
-  // día, aparte (sales_adjustment, origen = la venta). Sin rango: el pago llega
-  // después; solo lo que caiga en un día abierto.
-  if (ctx.tipoVentas && iva477 && ventas) {
-    const cobroPorCanal: Record<string, string> = {}
-    for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
-    const pagados = ((await rpc('conta_no_confirmados_pagados', { p_company: companyId })) as Fila[] | null) ?? []
-    for (const x of pagados) {
-      const dia = String(x.dia); const localId = s(x.location_id)
-      const que = `Pedido ${s(x.codigo) ?? 'sin código'} del ${dia.split('-').reverse().join('/')}, pagado después`
-      if (!abierto(dia) || !localId) continue
-      // Base, cuota y tipos del pedido, como los da el día.
-      const delDia = ((await rpc('conta_pedidos_del_dia', { p_company: companyId, p_location: localId, p_dia: dia })) as Fila[] | null) ?? []
-      const p = delDia.find((f) => String(f.id) === String(x.sale_id))
-      if (!p) { r.sinPropuesta.push({ que, porque: 'No encuentro el pedido en su día: puede que ya no esté activo.' }); continue }
-      const res = noConfirmadoPagado({
-        pedido: {
-          id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
-          estado: 'unconfirmed', total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
-          tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
-        },
-        dia, liquidacion: { ref: s(x.settlement_ref), fecha: s(x.settlement_date) }, diaValidado: x.dia_validado === true,
-      }, {
-        localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
-        nombreCanal: (id) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal'),
-        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477 },
-      })
-      if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? 'Sin propuesta.' }); continue }
-      await proponer(companyId, res.propuesta, null, r, ctx, quien)
-    }
-  }
-
-  // ── Cierre del día · cerrados sin confirmar que la liquidación no cobra (C11b) ──
-  // V01 · Entrega 3 (Julio, 24/10): ya no salen aquí, en el Libro diario. Son
-  // una diferencia de su liquidación, en Ventas › Liquidaciones, donde se
-  // resuelven en una frase (gasto: su devolución al libro; o reclamación).
-
-  const { socios, ret, partyPorProveedor } = await facturasDeProveedor(accountId, companyId, desde, hasta, ctx, r, quien, abierto)
-
-  // ── Compras (10/10), §2.5: la liquidación mensual, desde sus documentos ──
-  // Las confirmadas de esta empresa. Sus asientos van con la fecha de sus
-  // facturas (días después del mes): se leen las de los dos meses de antes.
-  {
-    const desdeLiq = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`); desdeLiq.setUTCMonth(desdeLiq.getUTCMonth() - 2)
-    const liqs = await leer(tabla('licensed_settlement').select('id, party_id, supplier_id, location_id, settlement_ref, received_invoice_id, detail, party(name), supplier(name, expense_category_id)')
-      .eq('account_id', accountId).eq('company_id', companyId).eq('formula', 'documentos').eq('status', 'confirmada')
-      .gte('period_to', desdeLiq.toISOString().slice(0, 10)).lte('period_from', hasta), 'las liquidaciones mensuales')
-    const tipoIva = (pct: number) => ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_'))
-    for (const l of liqs) {
-      const d = (l.detail ?? {}) as Fila
-      const em = (d.emitida ?? {}) as Fila; const rc = (d.recibida ?? {}) as Fila
-      const party = String(l.party_id); const sup = String(l.supplier_id); const prov = (l.supplier ?? {}) as Fila
-      const socio = s(((l.party ?? {}) as Fila).name) ?? s(prov.name) ?? 'el socio'
-      const que = `Liquidación de ${socio} · ${s(l.settlement_ref) ?? ''} · ${ctx.locales.get(String(l.location_id)) ?? 'local'}`
-      const lineas = (x: Fila) => ((x.lineas ?? []) as Fila[]).map((y) => ({ concepto: String(y.concepto), base: n(y.base), tipo: n(y.tipo) }))
-      const res = liquidacionMensual({
-        id: String(l.id), facturaRecibidaId: String(l.received_invoice_id), socio, terceroId: party, localId: s(l.location_id),
-        emitida: { numero: String(em.numero), fecha: String(em.fecha), lineas: lineas(em), total: n(em.total) },
-        recibida: { numero: String(rc.numero), fecha: String(rc.fecha), lineas: lineas(rc), total: n(rc.total) },
-        saldo: d.transaccion && (d.transaccion as Fila).saldo ? n(((d.transaccion as Fila).saldo as Fila).importe) : null,
-        bloqueos: ((d.bloqueos ?? []) as unknown[]).map(String),
-      }, {
-        cliente: ctx.enlace('customer', party, 'principal'), proveedor: ctx.enlace('supplier', sup, 'principal'),
-        compras: ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null),
-        ingresoServicios: ctx.hoja('705'), ingresoMercaderias: ctx.hoja('700'), redondeoGasto: ctx.hoja('669'), redondeoIngreso: ctx.hoja('769'),
-        ivaRepercutido: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'repercutido') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
-        ivaSoportado: (pct) => { const t = tipoIva(pct); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
-      })
-      if (res.sinPropuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta }); continue }
-      for (const p of res.propuestas) if (abierto(p.fecha)) await proponer(companyId, p, null, r, ctx, quien)
-    }
-  }
-
-  // ── Compras (10/10), §2.4: lo recibido sin factura al cierre de cada mes ──
-  // Solo meses ya acabados (su último día, pasado) dentro de desde–hasta y
-  // abiertos. compras_fin_de_mes guarda de qué recepciones sale cada uno; su
-  // id es el origen del asiento y de su contrario, que se proponen una vez.
-  {
-    const hoy = new Date().toISOString().slice(0, 10)
-    const meses: string[] = []
-    for (let d = new Date(`${desde.slice(0, 7)}-01T00:00:00Z`); d.toISOString().slice(0, 10) <= hasta; d.setUTCMonth(d.getUTCMonth() + 1)) {
-      const fin = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 0)).toISOString().slice(0, 10)
-      if (fin < hoy && fin <= hasta && abierto(fin)) meses.push(d.toISOString().slice(0, 10))
-    }
-    if (meses.length > 0) {
-      const provs = new Map((await leer(tabla('supplier').select('id, name, expense_category_id').eq('account_id', accountId), 'los proveedores')).map((x) => [String(x.id), x]))
-      for (const mes of meses) {
-        const filas = ((await rpc('compras_fin_de_mes', { p_empresa: companyId, p_mes: mes })) as Fila[] | null) ?? []
-        for (const a of filas) {
-          const sup = String(a.supplier_id); const prov = provs.get(sup) ?? {}
-          const gasto = ctx.enlace('supplier', sup, 'gasto') ?? (prov.expense_category_id ? ctx.enlace('expense_category', String(prov.expense_category_id), 'principal') : null)
-          const res = finDeMesCompras({
-            id: String(a.id), mes, proveedor: s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
-            localId: s(a.location_id), nombreLocal: a.location_id ? ctx.locales.get(String(a.location_id)) ?? null : null, base: n(a.base),
-            recepciones: ((a.receipts ?? []) as Fila[]).map((x) => ({ codigo: s(x.code), fecha: String(x.fecha), base: x.base === null || x.base === undefined ? null : n(x.base) })),
-            sinBase: n(a.without_base),
-          }, { gasto, pendiente: ctx.hoja('4009') })
-          if (res.sinPropuesta) { r.sinPropuesta.push({ que: `Recibido sin factura · ${s(prov.name) ?? 'proveedor'} · ${mes.slice(5, 7)}/${mes.slice(0, 4)}`, porque: res.sinPropuesta }); continue }
-          for (const p of res.propuestas) if (abierto(p.fecha)) await proponer(companyId, p, null, r, ctx, quien)
-        }
-      }
-    }
-  }
-
-  // ── Liquidaciones de plataforma sin asiento (regla 7) ──
-  // Respuesta 3, punto 4: la liquidación de una marca cedida va a la cuenta de
-  // liquidación de SU socio (marca → acuerdo de cesión → socio → enlace «liquidacion»).
-  const acuerdos = await leer(tabla('brand_licensing_agreement').select('brand_id, party_id').eq('account_id', accountId), 'los acuerdos de cesión')
-  const socioDeMarca = new Map(acuerdos.filter((x) => x.party_id).map((x) => [String(x.brand_id), String(x.party_id)]))
-  const liqs = await sinAsientoVivo(companyId, 'channel_settlement', await leer(tabla('channel_settlement').select('id, channel_id, brand_id, location_id, settlement_ref, settlement_date, period_from, period_to, flow_type, gross_sales, commission, delivery_transport, promo_product, promo_flash, access_fee, prime_fee, recurring_fee, incidents_cost, incidents_refund, min_order_fee, other_cost, net_payout, accumulated_debt, source, collected_on, collected_amount, commission_invoice_id, promo_charges, ads_spend, item_promotions, chargebacks, other_earnings, adjustments, needs_review, review_note, is_reference, raw')
-    .eq('account_id', accountId).gte('settlement_date', desde).lte('settlement_date', hasta).order('settlement_date', { ascending: false }), 'las liquidaciones'), r)
-  // B01 (respuesta 1, P2): el cobro que ya ha casado Bancos lo asienta Bancos;
-  // aquí solo la comisión y los cargos, para que el cobro no salga dos veces.
-  const cobradasPorBanco = new Set((await leer(tabla('bank_match_item').select('channel_settlement_id, bank_match!inner(status)')
-    .eq('account_id', accountId).not('channel_settlement_id', 'is', null).eq('bank_match.status', 'vivo'), 'los cobros casados en Bancos'))
-    .map((x) => String(x.channel_settlement_id)))
-  // D01 · Las del correo llevan su factura de comisión aparte (serie 2).
-  const idsFactura = liqs.map((l) => s(l.commission_invoice_id)).filter((x): x is string => !!x)
-  const facturaDe = new Map((idsFactura.length ? await leer(tabla('supplier_invoice').select('id, invoice_number, grand_total').eq('account_id', accountId).in('id', idsFactura), 'las facturas de comisión') : [])
-    .map((f) => [String(f.id), { total: n(f.grand_total), numero: s(f.invoice_number) }]))
-  for (const l of liqs) {
-    const fecha = s(l.collected_on) ?? String(l.settlement_date)
-    if (!abierto(fecha)) continue
-    const canal = l.channel_id ? ctx.canales.get(String(l.channel_id)) : undefined
-    const que = `Liquidación ${canal?.nombre ?? 'de plataforma'}${l.settlement_ref ? ` · ${l.settlement_ref}` : ''}`
-    // D01 (Julio, 16/10): la contabilidad está cerrada hasta el corte; una liquidación de antes es de
-    // referencia: sin asiento de liquidación (su cobro, si llega, lo asienta Bancos al casarlo).
-    // Va antes que sus cuentas: no se asienta, así que no le faltan; el motivo es éste.
-    if (l.is_reference === true) {
-      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'De referencia: es de antes del cierre de la contabilidad; no lleva factura ni asiento.' })
-      continue
-    }
-    const c430 = canal?.partyId ? ctx.enlace('customer', canal.partyId, 'principal') : null
-    const c410 = canal?.supplierId ? ctx.enlace('supplier', canal.supplierId, 'principal') : null
-    const t21 = ctx.tipos.find((x) => x.code === 'iva_general')
-    const c472 = t21 ? ctx.enlace('tax_rate', t21.id, 'soportado') : null
-    if (!c430 || !c410 || !c472 || !t21) { r.sinPropuesta.push({ que, porque: 'Falta su 430, su 410 o la 472 del 21 %: revisa su ficha (Plataformas).' }); continue }
-    // El CSV de Glovo (lib/liquidaciones, 96 de 96 en producción): su factura es la
-    // comisión + IVA y nada más; entrega, tasas, promociones e incidencias son un
-    // desglose que no se cobra aparte, y el neto arrastra la deuda anterior.
-    const glovo = l.source === ORIGEN_GLOVO
-    const cargos: CargoPlataforma[] = glovo ? [] : ([
-      ['Transporte', l.delivery_transport], ['Promociones a tu cargo', l.promo_product], ['Promoción flash', l.promo_flash], ['Cuota de acceso', l.access_fee],
-      ['Cuota prime', l.prime_fee], ['Cuota recurrente', l.recurring_fee], ['Incidencias (espera del repartidor y otras)', l.incidents_cost],
-      ['Pedido mínimo', l.min_order_fee], ['Otros cargos', l.other_cost],
-    ] as const).map(([concepto, v]) => ({ concepto, importe: Math.abs(n(v)) })).filter((x) => x.importe !== 0)
-    const delCorreo = String(l.source ?? '').startsWith('correo_')
-    // D01 (Julio, 16/10): por aclarar —un solape, algo que no cuadró al leer, la tienda sin asignar— no se asienta: nunca se suma doble.
-    if (delCorreo && l.needs_review) {
-      r.sinPropuesta.push({ que, porque: s(l.review_note) ?? 'Por aclarar: revisa la liquidación antes de asentarla.' })
-      continue
-    }
-    // D07 (camino B): la factura de comisión de Uber es UNA por semana para varias
-    // liquidaciones; cada una compensa SU parte (la factura de su correo), no el total.
-    const deLaFactura = l.commission_invoice_id ? facturaDe.get(String(l.commission_invoice_id)) ?? null : null
-    const suParte = n(((l.raw ?? null) as { factura?: { total?: unknown } } | null)?.factura?.total ?? null)
-    const facturaAparte = deLaFactura ? { ...deLaFactura, total: suParte > 0 ? suParte : deLaFactura.total } : null
-    if (delCorreo && !facturaAparte && [l.commission, l.other_cost, l.promo_charges, l.ads_spend].some((v) => Math.round(n(v) * 100) !== 0)) {
-      r.sinPropuesta.push({ que, porque: 'Falta su factura de comisión (la liquidación la propone al leerse): sin ella, la comisión no se asienta aquí.' })
-      continue
-    }
-    const asentados = (await rpc('conta_dias_por_asentar', { p_company: companyId, p_desde: s(l.period_from) ?? fecha, p_hasta: s(l.period_to) ?? fecha })) as Fila[] | null
-    const pendientes = (asentados ?? []).filter((x) => !l.location_id || String(x.location_id) === String(l.location_id)).reduce((t, x) => t + n(x.pedidos), 0)
-    const res = liquidacionPlataforma({
-      id: String(l.id), fecha: String(l.settlement_date), ref: s(l.settlement_ref), plataforma: canal?.nombre ?? 'la plataforma',
-      flujo: l.flow_type === 'licensed' ? 'licensed' : 'own', ventas: n(l.gross_sales), comision: Math.abs(n(l.commission)), cargos,
-      devoluciones: glovo ? 0 : Math.abs(n(l.incidents_refund)),
-      neto: l.net_payout === null ? null : glovo ? n(l.net_payout) - n(l.accumulated_debt) : n(l.net_payout),
-      cobrado: l.collected_on && !cobradasPorBanco.has(String(l.id)) ? { fecha: String(l.collected_on), importe: n(l.collected_amount) } : null,
-      cobroEnBancos: cobradasPorBanco.has(String(l.id)),
-      // Lo que se sabe sin recorrer pedido a pedido: cuántos del periodo FALTAN en un resumen del día.
-      pedidos: { total: pendientes, asentados: 0 }, localId: s(l.location_id),
-      facturaAparte,
-      apartado: delCorreo ? ([['Promociones en artículos', l.item_promotions], ['Contracargos', l.chargebacks], ['Otras ganancias', l.other_earnings], ['Ajustes', l.adjustments]] as const)
-        .map(([concepto, v]) => ({ concepto, importe: Math.abs(n(v)) })) : [],
-    }, {
-      cliente430: c430, proveedor410: c410, comision: ctx.hoja('623') ?? '62300000', otrosCargos: ctx.hoja('629') ?? '62900000',
-      iva21: { cuenta: c472, tipoId: t21.id }, banco: ctx.bancoDeLocal(s(l.location_id)),
-      pendienteSocio: l.brand_id && socioDeMarca.has(String(l.brand_id)) ? ctx.enlace('customer', socioDeMarca.get(String(l.brand_id))!, 'liquidacion') : null,
-      serieTesoreria: ctx.serieTesoreria,
-    })
-    if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
-    await proponer(companyId, aplicarAprendizaje(res.propuesta, `channel_settlement:${s(l.channel_id)}`, ctx.correcciones), null, r, ctx, quien)
-  }
-
-  // ── Liquidación mensual del socio de marca (respuesta 4, punto 4) ──
-  // Cuando el mes del socio está cerrado (confirmada o saldada) y sin asiento:
-  // su resumen mensual como compra (400), tu comisión como ingreso (705) con
-  // IVA a su 430, y la compensación con lo cobrado por cuenta de él (su
-  // «Liquidación pendiente») y con sus compras. El cálculo es el del C03
-  // (brand_partner_settlement_compute); aquí solo se asienta.
-  const [liqSocio, partes] = await Promise.all([
-    leer(tabla('licensed_settlement').select('id, party_id, location_id, period_from, period_to, status, purchases_amount, contributions_amount, commission_amount')
-      .eq('account_id', accountId).eq('formula', 'compras_aportaciones_comision').in('status', ['confirmada', 'saldada'])
-      .gte('period_to', desde).lte('period_to', hasta).order('period_to', { ascending: false }), 'las liquidaciones del socio')
-      .then((filas) => sinAsientoVivo(companyId, 'licensed_settlement', filas, r)),
-    leer(tabla('party').select('id, name').eq('account_id', accountId), 'los terceros'),
-  ])
-  const nombreDe = new Map(partes.map((x) => [String(x.id), String(x.name)]))
-  const tReducido = ctx.tipos.find((x) => x.code === 'iva_reducido')
-  const tGeneral = ctx.tipos.find((x) => x.code === 'iva_general')
-  for (const l of liqSocio) {
-    const fecha = String(l.period_to)
-    if (!abierto(fecha)) continue
-    const party = String(l.party_id); const socio = nombreDe.get(party) ?? 'el socio'
-    const local = s(l.location_id)
-    const que = `Liquidación de ${socio} · ${ctx.locales.get(local ?? '') ?? 'local'} · ${fecha.slice(5, 7)}/${fecha.slice(0, 4)}`
-    const sup = proveedorDeParty(socios, party)
-    const c400 = sup ? ctx.enlace('supplier', sup, 'principal') : null
-    const c430 = ctx.enlace('customer', party, 'principal')
-    const pendiente = ctx.enlace('customer', party, 'liquidacion')
-    const c705 = ctx.hoja('705')
-    const c477 = tGeneral ? ctx.enlace('tax_rate', tGeneral.id, 'repercutido') : null
-    const faltan = [!c400 && 'su 400', !c430 && 'su 430', !pendiente && 'su «Liquidación pendiente»', !c705 && 'la 705', !c477 && 'la 477 del 21 %'].filter(Boolean)
-    if (faltan.length || !tGeneral) { r.sinPropuesta.push({ que, porque: `Falta ${faltan.join(', ')}: revisa su ficha (Contabilidad).` }); continue }
-    // Lo cobrado por cuenta de él ese mes en ese local: las liquidaciones de sus marcas cedidas.
-    const marcasDelSocio = [...socioDeMarca].filter(([, p]) => p === party).map(([b]) => b)
-    const cobradas = marcasDelSocio.length
-      ? await leer(tabla('channel_settlement').select('collected_amount, location_id').eq('account_id', accountId).eq('flow_type', 'licensed')
-        .in('brand_id', marcasDelSocio).gte('collected_on', String(l.period_from)).lte('collected_on', fecha), 'lo cobrado por cuenta del socio')
-      : []
-    const ventasCobradas = cobradas.filter((x) => !local || !x.location_id || String(x.location_id) === local).reduce((t, x) => t + n(x.collected_amount), 0)
-    const res = liquidacionSocio({
-      id: String(l.id), fecha, socio, terceroId: party, localId: local,
-      // Los albaranes no traen IVA: se propone al 10 % (alimentación) y se avisa para contrastarlo con su resumen.
-      compras: n(l.purchases_amount) && tReducido ? [{ base: n(l.purchases_amount), tipo: { id: tReducido.id, porcentaje: tReducido.rate } }] : [],
-      comision: n(l.commission_amount), ventasCobradas,
-    }, {
-      proveedor: c400!, cliente: c430!, compras: ctx.hoja('600') ?? '60000000', ingresosServicios: c705!,
-      iva21: { cuenta: c477!, tipoId: tGeneral.id },
-      ivaSoportado: (pct) => { const t = ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')); const c = t ? ctx.enlace('tax_rate', t.id, 'soportado') : null; return c && t ? { cuenta: c, tipoId: t.id } : null },
-      pendienteSocio: pendiente!,
-    })
-    if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
-    const p = res.propuesta
-    if (n(l.purchases_amount)) p.avisos.push(`El IVA de sus compras va al ${tReducido?.rate ?? 10} %: los albaranes no lo traen. Compruébalo con su resumen mensual.`)
-    if (n(l.contributions_amount)) p.avisos.push(`Sus aportaciones del mes (${n(l.contributions_amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} €) no entran aquí: van por el banco cuando llegan.`)
-    if (p.avisos.length) p.confianza = 'duda'
-    await proponer(companyId, aplicarAprendizaje(p, `licensed_settlement:${party}`, ctx.correcciones), null, r, ctx, quien)
-  }
-
-  // ── Nóminas ──
-  const nominas = await leer(tabla('payroll_summary').select('id, period_month, location_id, gross, employer_ss, employee_ss, irpf, other_deductions, net')
-    .eq('account_id', accountId).eq('company_id', companyId).is('entry_id', null).gte('period_month', desde.slice(0, 7) + '-01').lte('period_month', hasta).order('period_month', { ascending: false }), 'las nóminas')
-  const retTrabajo = ret.find((x) => String(x.filed_in) === '111')
-  for (const x of nominas) {
-    const res = nomina({
-      id: String(x.id), mes: String(x.period_month), localId: s(x.location_id), bruto: n(x.gross), ssEmpresa: n(x.employer_ss), ssTrabajador: n(x.employee_ss),
-      irpf: n(x.irpf), otras: n(x.other_deductions), neto: n(x.net), retencionTipoId: retTrabajo ? String(retTrabajo.id) : null,
-    }, { sueldos: ctx.hoja('640') ?? '64000000', ssEmpresa: ctx.hoja('642') ?? '64200000', ssAcreedora: ctx.hoja('476') ?? '47600000', irpf: ctx.hoja('4751') ?? '47510000', remuneraciones: ctx.hoja('465') ?? '46500000' })
-    const que = `Nóminas de ${String(x.period_month).slice(5, 7)}/${String(x.period_month).slice(0, 4)}`
-    if (!res.propuesta) { r.sinPropuesta.push({ que, porque: res.sinPropuesta ?? '' }); continue }
-    if (!abierto(res.propuesta.fecha)) continue
-    await proponer(companyId, res.propuesta, null, r, ctx, quien)
-  }
-  return r
+/**
+ * Regla 11 · lo aprendido (S01 · PR 3): vive en SQL, una sola copia
+ * (_conta_aprendizaje). Aquí solo se mira si hay algo aprendido de este origen;
+ * si lo hay, la base dice qué cuentas cambian y por qué.
+ */
+async function aprender(companyId: string, p: Propuesta, clave: string, ctx: ContextoLibro): Promise<Propuesta> {
+  if (!ctx.correcciones.some((x) => x.clave === clave)) return p
+  const x = (await rpc('conta_aprendizaje', { p_company: companyId, p_clave: clave, p_cuentas: p.lineas.map((l) => l.cuenta) })) as { cuentas: string[]; razon: Razon | null } | null
+  if (!x?.razon) return p
+  return { ...p, lineas: p.lineas.map((l, i) => ({ ...l, cuenta: x.cuentas[i] ?? l.cuenta })), razones: [...p.razones, x.razon] }
 }
 
 /** Una corrección hecha a una propuesta: la siguiente del mismo origen lo hará igual (regla 11). */
@@ -620,12 +289,6 @@ export async function apuntarCorreccion(accountId: string, companyId: string, cl
     account_id: accountId, company_id: companyId, origin_key: clave, proposed_code: propuesta, chosen_code: elegida, entry_id: entryId, created_by_name: quien,
   })
   if (error) throw new Error(mensaje('No se ha podido guardar lo aprendido', error))
-}
-
-/** La ficha de proveedor de un tercero (su papel «supplier»). */
-function proveedorDeParty(roles: readonly Fila[], partyId: string): string | null {
-  const r = roles.find((x) => x.role === 'supplier' && String(x.party_id) === partyId && x.supplier_id)
-  return r ? String(r.supplier_id) : null
 }
 
 /**
@@ -811,7 +474,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     // D03 · 0790: el gasto repartido y el asiento a mano de la ficha mandan sobre lo aprendido.
     const reparto = ((f.supplier_invoice_expense ?? []) as Fila[]).sort((a, b) => n(a.position) - n(b.position))
       .map((x) => ({ cuenta: String(x.account_code), local: s(x.location_id), comun: x.is_common === true, importe: n(x.amount) }))
-    const aprendida = aplicarAprendizaje(res.propuesta, `supplier_invoice:${sup}`, ctx.correcciones)
+    const aprendida = await aprender(companyId, res.propuesta, `supplier_invoice:${sup}`, ctx)
     const final = aplicarAsientoAMano(f.vat_non_deductible === true ? aprendida : aplicarReparto(aprendida, reparto), f.entry_overrides ?? null)
     // N23 «Cómo se apunta»: la misma propuesta, sin escribirla.
     if (ver) ver(final)

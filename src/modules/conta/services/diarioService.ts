@@ -100,6 +100,19 @@ export async function ventasSinCanal(accountId: string, companyId: string, resum
   return out
 }
 
+/**
+ * S01 · PR 3 · Lo propuesto de unos orígenes, de cualquier fecha: lo que se
+ * decide en su apartado (lib/diario.ts, SE_DECIDE_EN) y ese apartado enseña
+ * entero (regla 7: un asiento propuesto de hace meses también espera).
+ */
+export async function leerPropuestosDe(accountId: string, companyId: string, origenes: readonly OrigenAsiento[]): Promise<AsientoDiario[]> {
+  const { data, error } = await tabla('journal_entry').select(CAMPOS_ASIENTO)
+    .eq('account_id', accountId).eq('company_id', companyId).eq('status', 'propuesto').in('source_type', [...origenes])
+    .order('entry_date', { ascending: true }).limit(5000)
+  if (error) throw new Error(mensaje('No se han podido leer los asientos por validar', error))
+  return ((data ?? []) as Fila[]).map(aAsiento)
+}
+
 export async function leerAsiento(accountId: string, entryId: string): Promise<AsientoDiario | null> {
   const { data, error } = await tabla('journal_entry').select(`${CAMPOS_ASIENTO}, company_id`).eq('account_id', accountId).eq('id', entryId).maybeSingle()
   if (error) throw new Error(mensaje('No se ha podido leer el asiento', error))

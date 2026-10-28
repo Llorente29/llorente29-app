@@ -1,0 +1,41 @@
+# S01 · PR 3 · El cobro por el enlace nace validado (0735) y la entrega 5,
+# origen por origen. En ROLLBACK desde la rama, con su prueba: el asiento del
+# cobro (Redsys y Stripe) nace validado, validar a mano sigue igual, la
+# devolución le da la vuelta con su contraasiento, sin poder validar se queda
+# propuesto y la factura lo dice, y la vuelta atrás deja la huella de antes.
+supabase/migrations/20261028T0735_s01_enlace_validado.sql
+supabase/staging/sql/20261028_s01_enlace_validado_prueba.sql
+# La base (0753), la retención del trabajo de serie (1103) y las nóminas (0800),
+# con su prueba: sin tipo de trabajo, dicho; con él, propuesta; la de serie, por
+# su clave y su vigencia; al llegar, sola; si no cuadra, dicho; y las vueltas atrás.
+supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
+supabase/migrations/20261028T1103_s01_retencion_trabajo.sql
+supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
+supabase/staging/sql/20261028_s01_propuestas_nominas_prueba.sql
+# Lo recibido sin factura (0830), con su prueba: sin tipo de gasto, dicho (en
+# Compras); con él, el del 30/09 y su contrario del 01/10; un bisiesto; una
+# recepción sin importe; sin cuenta, no; y la vuelta atrás.
+supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
+supabase/staging/sql/20261028_s01_propuestas_recibido_prueba.sql
+# El pagado después (0849), con su prueba: la regla de ventas, la misma (huella
+# de todas las propuestas de ventas antes y después); al llegar la liquidación,
+# propuesto o dicho; otra vez, nada; si falla, la liquidación entra igual; sin
+# cuenta, no; y la vuelta atrás, byte a byte.
+supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
+supabase/staging/sql/20261028_s01_propuestas_pagado_despues_prueba.sql
+# El socio de marca (0905), con su prueba: la regla, igual que la del navegador
+# sobre la semilla (con y sin lo aprendido); al recibirla, sola; sin su cuenta,
+# dicho; con ella, los tres asientos; sin cuenta, no; y la vuelta atrás.
+supabase/migrations/20261028T0905_s01_propuestas_socio.sql
+supabase/staging/sql/20261028_s01_propuestas_socio_prueba.sql
+# La liquidación de plataforma (0929), con su prueba: los 16 casos de las
+# pruebas del navegador, iguales; al leerla, sola; la del correo sin su factura,
+# dicha, y con ella, sola; lo aprendido; la de referencia; si falla, entra
+# igual; sin cuenta, no; y la vuelta atrás.
+supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
+supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql
+# La pasada de las 03:40 (1025), con su prueba: apagado, los cinco orígenes y
+# nada validado; encendido, solo la «seguro» sin «Mira esto»; otra vez, nada;
+# ni de otra cuenta ni sin cuenta; el cron y la guarda de la hora; y la vuelta atrás.
+supabase/migrations/20261028T1025_s01_pasada_de_noche.sql
+supabase/staging/sql/20261028_s01_pasada_de_noche_prueba.sql

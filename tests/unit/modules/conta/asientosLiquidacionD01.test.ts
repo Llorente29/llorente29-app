@@ -5,7 +5,7 @@
 // (comisión 10,00 + anuncios 10,00 = base 16,53 e IVA 3,47).
 import { describe, expect, it } from 'vitest'
 import { cuadre } from '@/modules/conta/lib/libro'
-import { facturaProveedor, liquidacionPlataforma, type CuentasLiquidacion, type EntradaLiquidacion } from '@/modules/conta/lib/asientosPropuestos'
+import { facturaProveedor } from '@/modules/conta/lib/asientosPropuestos'
 
 const NORTE = 'loc-norte'
 const IVA = { cuenta: '47200021', tipoId: 't21' }
@@ -50,37 +50,7 @@ describe('la factura de comisión de una liquidación (serie 2)', () => {
   })
 })
 
-describe('la liquidación con su factura de comisión aparte', () => {
-  const c: CuentasLiquidacion = { cliente430: '43000003', proveedor410: '41000003', comision: '62300000', otrosCargos: '62900000', iva21: IVA, banco: '57200001', pendienteSocio: null, serieTesoreria: 4 }
-  const base: EntradaLiquidacion = {
-    id: 'liq1', fecha: '2026-09-28', ref: null, plataforma: 'Uber Eats', flujo: 'own', ventas: 88, comision: 8, cargos: [{ concepto: 'Otros cargos', importe: 2 }],
-    devoluciones: 0, neto: 53, cobrado: null, cobroEnBancos: true, pedidos: { total: 0, asentados: 0 }, localId: NORTE,
-    facturaAparte: { total: 20, numero: null }, apartado: [{ concepto: 'Promociones en artículos', importe: 15 }, { concepto: 'Contracargos', importe: 0 }],
-  }
-  it('ni comisión ni cargos ni IVA (van en su factura): solo la compensación 410/430; lo apartado se dice', () => {
-    const p = liquidacionPlataforma(base, c).propuesta!
-    expect(p.serie).toBe(4)
-    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['41000003', 20, 0], ['43000003', 0, 20]])
-    expect(p.lineas.some((l) => l.cuenta.startsWith('62') || l.cuenta.startsWith('472'))).toBe(false)
-    expect(p.avisos).toEqual([
-      'Su factura de comisión aún no tiene número: la compensación lo llevará cuando llegue.',
-      'Queda en su 430 sin apuntar, hasta decidir cómo: Promociones en artículos 15,00 €.',
-    ])
-    expect(p.confianza).toBe('duda')
-    expect(p.razones.map((x) => x.decision)).toEqual(['Comisión en su factura', 'Cobro en Bancos'])
-  })
-  it('con el cobro (sin Bancos): la compensación y el cobro; un neto negativo, «sin cobro»', () => {
-    const p = liquidacionPlataforma({ ...base, cobroEnBancos: false, cobrado: { fecha: '2026-09-29', importe: 53 }, facturaAparte: { total: 20, numero: 'F-1' }, apartado: [] }, c).propuesta!
-    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['41000003', 20, 0], ['43000003', 0, 20], ['57200001', 53, 0], ['43000003', 0, 53]])
-    expect([cuadre(p.lineas).cuadra, p.confianza, p.fecha]).toEqual([true, 'probable', '2026-09-29'])
-    const neg = liquidacionPlataforma({ ...base, cobroEnBancos: false, neto: -4.5, facturaAparte: { total: 20, numero: 'F-2' }, apartado: [] }, c).propuesta!
-    expect(neg.razones.map((x) => x.decision)).toContain('Sin cobro')
-  })
-  it('sin factura aparte, lo de siempre (las de los ficheros no cambian)', () => {
-    const p = liquidacionPlataforma({ ...base, facturaAparte: null, apartado: undefined }, c).propuesta!
-    expect(p.lineas.some((l) => l.cuenta === '47200021')).toBe(true)
-  })
-})
+// (Sus casos de liquidacionPlataforma viven en el paso 0 de supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql: la regla está en SQL desde el S01 · PR 3.)
 
 describe('por aclarar (Julio, 16/10): nunca se suma doble', () => {
   it('la factura de una liquidación que se solapa o no cuadra no se propone, y dice por qué', () => {

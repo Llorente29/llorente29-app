@@ -29,7 +29,7 @@ import { cruzarConRelacion, NOMBRE_ESTADO_PRODUCTO, type FilaCruce, type Product
 import { albaranesDeLiquidacion } from '@/modules/conta/services/comprasService'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { validar } from '@/modules/conta/services/diarioService'
-import { cargarContexto, proponerPendientes } from '@/modules/conta/services/propuestasLibroService'
+import { cargarContexto } from '@/modules/conta/services/propuestasLibroService'
 import { candidatosCobro, lineasDelSocio, type MovimientoCandidato } from '@/modules/conta/services/liquidacionesVentasService'
 import { VerPapel } from '@/modules/conta/compras/VerPapel'
 
@@ -131,12 +131,17 @@ export function SocioDelMes({ accountId, companyId, liq, relacion, quien }: {
         {asientos.error && <div className="cx-error" role="alert">{asientos.error}</div>}
         {asientos.datos && asientos.datos.length === 0 && (
           <p className="cx-ayuda" style={{ marginTop: 0 }}>
-            {confirmada ? 'Aún no se han propuesto: su factura a la 600, la tuya a la 705 y la compensación.' : 'Se proponen al contabilizarla.'}{' '}
+            {confirmada
+              ? 'Aún no están: su factura a la 600, la tuya a la 705 y la compensación se proponen solas al confirmarla; si no salieron, arriba en Liquidaciones dice por qué.'
+              : 'Se proponen solos al confirmarla.'}{' '}
             {confirmada && companyId && (
               <button type="button" className="cx-boton-sec" disabled={!!ocupado} onClick={() => void hacer('proponer', async () => {
-                const r = await proponerPendientes(accountId, companyId, liq.period_from, hoyEnMadrid(), quien)
-                return `Propuesto lo pendiente desde el ${liq.period_from.split('-').reverse().join('/')}: ${r.propuestas} ${r.propuestas === 1 ? 'asiento' : 'asientos'} nuevos${r.yaEstaban ? `, ${r.yaEstaban} ya estaban` : ''}.${r.sinPropuesta.length ? ` Sin propuesta: ${r.sinPropuesta.slice(0, 3).map((x) => `${x.que} (${x.porque})`).join('; ')}.` : ''}`
-              })}>{ocupado === 'proponer' ? 'Proponiendo…' : 'Proponer sus asientos'}</button>
+                // S01 · PR 3: la regla del socio vive en SQL (conta_proponer_socios); aquí solo se vuelve a intentar.
+                const r = (await rpc('conta_proponer_socios', { p_company: companyId, p_desde: liq.period_from, p_hasta: hoyEnMadrid(), p_quien: quien })) as Fila
+                const sin = ((r.sinPropuesta ?? []) as Fila[]).map((x) => `${String(x.que)} (${String(x.porque)})`)
+                const nuevos = Number(r.propuestas ?? 0); const ya = Number(r.yaEstaban ?? 0)
+                return `Vuelto a intentar: ${nuevos} ${nuevos === 1 ? 'asiento nuevo' : 'asientos nuevos'}${ya ? `, ${ya} ya estaban` : ''}.${sin.length ? ` Sin proponer: ${sin.slice(0, 3).join('; ')}.` : ''}`
+              })}>{ocupado === 'proponer' ? 'Intentándolo…' : 'Volver a intentarlo'}</button>
             )}
           </p>
         )}

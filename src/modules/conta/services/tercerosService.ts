@@ -254,7 +254,8 @@ export async function cargarFichaTercero(accountId: string, companyId: string | 
     leer(tabla('locations').select('id, name').eq('account_id', accountId).order('name'), 'los locales'),
     companyId ? leer(tabla('treasury_account').select('id, name, iban').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'bank').eq('is_active', true).order('name'), 'los bancos') : Promise.resolve([]),
     leer(tabla('sales_channel').select('id, name, slug').eq('account_id', accountId).order('name'), 'los canales de venta'),
-    leer(tabla('withholding_rate').select('id, name, rate').or(`is_system.eq.true,account_id.eq.${accountId}`).order('rate'), 'las retenciones'),
+    // S01 · PR 3 (1103): la del trabajo es de las nóminas; un contacto no es un trabajador.
+    leer(tabla('withholding_rate').select('id, name, rate').or(`is_system.eq.true,account_id.eq.${accountId}`).neq('code', 'trabajo').order('rate'), 'las retenciones'),
     companyId ? cuentasDeTercero(accountId, companyId, partyId, supplierId) : Promise.resolve({ suyas: [], sinDueno: [], activo: false }),
   ])
   return {

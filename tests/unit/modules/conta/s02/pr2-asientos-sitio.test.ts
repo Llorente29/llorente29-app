@@ -14,6 +14,7 @@
 // Facturas recibidas propuestas no hay hoy en la base: ese caso va con
 // ejemplos, y se dice.
 
+import { DE_COMPRAS } from '@/modules/conta/lib/asientosDeCompras'
 import { describe, expect, it } from 'vitest'
 import {
   cifras, delLibroDiario, filtrar, filtrosVisibles, loQueHeHechoYo, pasosCierre, seDecideEnSuSitio, sePuedeCerrar, sinValidarPorSitio,
@@ -76,22 +77,30 @@ describe('la factura recibida propuesta se decide en Compras y gastos (ejemplos:
   it('propuesta: fuera de la lista, de «Compras», de «Para revisar» y de «Lo que he hecho yo»', () => {
     expect(seDecideEnSuSitio(libro[3])).toBe('recibidas')
     expect(delLibro.map((a) => a.id)).not.toContain('fra-prop')
-    expect(filtrar(delLibro, 'compras').map((a) => a.id).sort()).toEqual(['accrual-prop', 'fra-anul', 'fra-val', 'pago-prop'])
+    expect(filtrar(delLibro, 'compras').map((a) => a.id).sort()).toEqual(['fra-anul', 'fra-val'])
     expect(paraRevisar(libro, sinEspera).map((a) => a.id)).not.toContain('fra-prop')
     expect(loQueHeHechoYo(delLibro, 50).map((h) => h.asientoId)).not.toContain('fra-prop')
   })
   it('validada o anulada, sí sale: es el libro diario', () => {
     expect(delLibro.map((a) => a.id)).toEqual(expect.arrayContaining(['fra-val', 'fra-anul']))
   })
-  it('el pago y el recibido sin factura se quedan: ninguna pantalla de Compras los valida', () => {
-    expect(paraRevisar(libro, sinEspera).map((a) => a.id)).toEqual(expect.arrayContaining(['pago-prop', 'accrual-prop', 'borr']))
+  it('S01 · PR 3: el pago y el recibido sin factura se van a Compras (AsientosDeCompras los enseña y los valida)', () => {
+    expect(seDecideEnSuSitio(libro[6])).toBe('recibidas')
+    expect(seDecideEnSuSitio(libro[7])).toBe('recibidas')
+    expect(paraRevisar(libro, sinEspera).map((a) => a.id)).toEqual(['borr'])
+  })
+  it('la lista de Compras y la tabla, con la misma vara: cada origen de DE_COMPRAS se decide en Facturas recibidas', () => {
+    for (const origen of DE_COMPRAS) expect(seDecideEnSuSitio({ estado: 'propuesto', origen }), origen).toBe('recibidas')
+  })
+  it('las nóminas se quedan en Asientos hasta Laboral', () => {
+    expect(seDecideEnSuSitio({ estado: 'propuesto', origen: 'payroll' })).toBeNull()
   })
   it('el número del menú y la lista, con la misma vara (las filas que lee el menú: id, estado y origen)', () => {
     const filasMenu = libro.filter((a) => a.estado === 'propuesto' || a.estado === 'borrador').map((a) => ({ id: a.id, estado: a.estado, origen: a.origen }))
     const espera = (a: { id: string }) => (a.id === 'bank-2' ? 'El mes está cerrado.' : null)
     const menu = delLibroDiario(filasMenu).filter((a) => !espera(a)).length
     expect(menu).toBe(paraRevisar(libro, espera).length)
-    expect(menu).toBe(3) // el pago, el recibido sin factura y el borrador (los del banco, en Bancos)
+    expect(menu).toBe(1) // el borrador (los del banco, en Bancos; el pago y el recibido sin factura, en Compras)
   })
 })
 

@@ -157,8 +157,11 @@ export function filtrosVisibles(asientos: readonly AsientoDiario[]): { id: Filtr
 //     con su veredicto y lo valida (uno a uno con «Validar y siguiente» e Intro,
 //     o «Validar los N» los listos). Medido en producción el 22/10: los 25
 //     propuestos del banco (Foodint, 1–14/10) tienen su movimiento casado.
-//   · supplier_payment, purchase_accrual y su contrario: NO. Ninguna pantalla de
-//     Compras los enseña ni los valida: se proponen y se validan aquí.
+//   · supplier_payment, purchase_accrual y su contrario: SÍ desde la S01 · PR 3
+//     (PC01, entrega 5, punto 6). Se proponen solos (la provisión al cerrar el
+//     mes, en la base) y Facturas recibidas los enseña todos, de cualquier
+//     fecha, y los valida uno a uno (documentos/AsientosDeCompras.tsx).
+//   · payroll: NO, hasta Laboral (PC01): se decide en Asientos.
 //   · sales_day: SÍ (V01, entrega 2, Julio 24/10). Las propuestas de ventas
 //     del cierre del día esperan en Ventas › Cierres del día, que las enseña
 //     con sus pedidos y las valida con su factura resumen, su PDF y su asiento
@@ -175,6 +178,10 @@ export type SitioPropio = 'recibidas' | 'bancos' | 'cierres' | 'liquidaciones'
 
 const SE_DECIDE_EN: Partial<Record<OrigenAsiento, SitioPropio>> = {
   supplier_invoice: 'recibidas',
+  // S01 · PR 3: lo de compras sin factura y el pago (lib/asientosDeCompras.ts, DE_COMPRAS).
+  purchase_accrual: 'recibidas',
+  purchase_accrual_reversal: 'recibidas',
+  supplier_payment: 'recibidas',
   bank: 'bancos',
   sales_day: 'cierres',
   // V01 · Entrega 3: lo propuesto de una liquidación (de plataforma o del socio
