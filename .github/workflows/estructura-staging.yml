@@ -1,4 +1,4 @@
-name: Estructura de staging (sin datos)
+name: Estructura de staging (sin datos de cuentas)
 
 # QUÉ HACE (W09, Julio, 28/10)
 # Saca la ESTRUCTURA de staging-conta, sin una sola fila (pg_dump
@@ -16,9 +16,15 @@ name: Estructura de staging (sin datos)
 # verde (lo que cambia staging de verdad), a mano, o al cambiar este workflow o
 # su guion (para probarlo desde una rama: vuelca la misma staging).
 #
-# QUÉ NO SALE: datos (solo estructura), propietarios ni secretos.
-# scripts/staging/esquema.mjs busca en el volcado cualquier cosa con pinta de
-# secreto (un JWT, una clave de Stripe, una URL con contraseña…) y, si la
+# Y LAS FILAS DE CATÁLOGO (opción (a) de Julio, 28/10): las tablas de
+# scripts/staging/catalogos.txt, cada una con su porqué —el plan contable, los
+# modelos de impuestos, los países, funcion_respaldo, el historial…—, en
+# supabase/staging/datos.sql, en la misma rama. Sin cuentas, sin auth y sin
+# Vault: las semillas ponen encima las cuentas de prueba.
+#
+# QUÉ NO SALE: datos de cuentas, propietarios ni secretos.
+# scripts/staging/esquema.mjs busca en los dos ficheros cualquier cosa con pinta
+# de secreto (un JWT, una clave de Stripe, una URL con contraseña…) y, si la
 # encuentra, NO publica y el run sale en rojo diciendo la línea.
 #
 # W09 · psql con límite: PGCONNECT_TIMEOUT para conectar y un límite por paso.
@@ -34,6 +40,7 @@ on:
     paths:
       - '.github/workflows/estructura-staging.yml'
       - 'scripts/staging/esquema.mjs'
+      - 'scripts/staging/catalogos.txt'
 
 permissions:
   contents: write
@@ -100,8 +107,40 @@ jobs:
           node scripts/staging/esquema.mjs secretos "$RUNNER_TEMP/estructura/esquema.sql"
           echo "Volcado: $(wc -l < "$RUNNER_TEMP/estructura/esquema.sql") líneas, $(grep -c '^CREATE TABLE' "$RUNNER_TEMP/estructura/esquema.sql") tablas, $(grep -c '^CREATE FUNCTION\|^CREATE OR REPLACE FUNCTION' "$RUNNER_TEMP/estructura/esquema.sql") funciones." | tee -a "$GITHUB_STEP_SUMMARY"
 
-      # Un commit encima del anterior de estructura/staging, con solo el
-      # esquema, hecho en un índice aparte: no toca el checkout ni ninguna otra
+      # Las filas de catalogos.txt, como COPY: columnas no generadas (o las que
+      # diga la lista), ordenadas por la primera para que el diff de un día a
+      # otro sea solo lo que cambió. Se cargan con session_replication_role =
+      # replica (sin disparadores ni claves ajenas: el orden no importa).
+      - name: Volcar las filas de catálogo (catalogos.txt)
+        timeout-minutes: 5
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          D="$RUNNER_TEMP/estructura/datos.sql"
+          node scripts/staging/esquema.mjs catalogos scripts/staging/catalogos.txt > "$RUNNER_TEMP/catalogos.lst"
+          {
+            echo "-- Filas de catálogo de staging-conta (scripts/staging/catalogos.txt). Sin cuentas, sin auth y sin Vault."
+            echo "SET session_replication_role = replica;"
+          } > "$D"
+          echo "| tabla | filas |" >> "$GITHUB_STEP_SUMMARY"; echo "|---|---:|" >> "$GITHUB_STEP_SUMMARY"
+          while IFS='|' read -r TABLA FILTRO COLS; do
+            if [ -z "$COLS" ]; then
+              COLS=$(psql "$DB_URL" -X -At -v ON_ERROR_STOP=1 -c "select string_agg(quote_ident(attname), ',' order by attnum) from pg_attribute where attrelid = '$TABLA'::regclass and attnum > 0 and not attisdropped and attgenerated = ''")
+            fi
+            DONDE=''; [ -n "$FILTRO" ] && DONDE="where $FILTRO"
+            echo "COPY $TABLA ($COLS) FROM stdin;" >> "$D"
+            psql "$DB_URL" -X -q -v ON_ERROR_STOP=1 -c "\\copy (select $COLS from $TABLA $DONDE order by 1) to stdout" > "$RUNNER_TEMP/filas.tsv"
+            cat "$RUNNER_TEMP/filas.tsv" >> "$D"
+            echo '\.' >> "$D"
+            echo "| $TABLA ${FILTRO:+($FILTRO)} | $(wc -l < "$RUNNER_TEMP/filas.tsv") |" >> "$GITHUB_STEP_SUMMARY"
+          done < "$RUNNER_TEMP/catalogos.lst"
+          echo "RESET session_replication_role;" >> "$D"
+          node scripts/staging/esquema.mjs secretos "$D"
+          echo "Filas: $(wc -l < "$D") líneas en datos.sql, $(wc -l < "$RUNNER_TEMP/catalogos.lst") tablas." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Un commit encima del anterior de estructura/staging, con el esquema y
+      # las filas de catálogo, hecho en un índice aparte: no toca el checkout ni ninguna otra
       # rama. Si no ha cambiado nada, no hay commit.
       - name: Publicar en estructura/staging
         timeout-minutes: 3
@@ -120,15 +159,16 @@ jobs:
           fi
           mkdir -p supabase/staging
           cp "$RUNNER_TEMP/estructura/esquema.sql" supabase/staging/esquema.sql
+          cp "$RUNNER_TEMP/estructura/datos.sql" supabase/staging/datos.sql
           export GIT_INDEX_FILE="$RUNNER_TEMP/indice-estructura"
           rm -f "$GIT_INDEX_FILE"
-          git add -f supabase/staging/esquema.sql
+          git add -f supabase/staging/esquema.sql supabase/staging/datos.sql
           ARBOL=$(git write-tree)
           unset GIT_INDEX_FILE
           if [ -n "$PADRE" ] && [ "$(git rev-parse "$PADRE^{tree}")" = "$ARBOL" ]; then
-            echo "La estructura de staging no ha cambiado: nada que publicar." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+            echo "Ni la estructura ni los catálogos de staging han cambiado: nada que publicar." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
           fi
-          HUELLA=$(md5sum supabase/staging/esquema.sql | cut -c1-8)
+          HUELLA=$(cat supabase/staging/esquema.sql supabase/staging/datos.sql | md5sum | cut -c1-8)
           COMMIT=$(git -c user.name=folvy-estructura -c user.email=estructura@folvy.invalid commit-tree "$ARBOL" ${PADRE:+-p "$PADRE"} \
             -m "Estructura de staging · $(date -u +%Y-%m-%dT%H:%MZ) · md5 $HUELLA (${GITHUB_REF_NAME}, ${GITHUB_SHA::7}, run $GITHUB_RUN_ID)")
           git push -q origin "$COMMIT:refs/heads/estructura/staging"

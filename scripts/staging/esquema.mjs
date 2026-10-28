@@ -100,6 +100,37 @@ export function rolesDelVolcado(texto) {
   return [...roles].sort()
 }
 
+/**
+ * W09 · opción (a): la lista de scripts/staging/catalogos.txt. Una línea por
+ * tabla, «esquema.tabla | filtro | columnas | por qué». Se valida aquí para que
+ * el volcado no pueda llevarse filas de una cuenta por un descuido:
+ *   · el filtro solo puede ser vacío o «account_id is null»;
+ *   · sin porqué, no entra;
+ *   · auth, vault, storage y las tablas de cuentas y personas, nunca.
+ */
+export const NUNCA = /^(auth|vault|storage|net|cron)\.|^public\.(accounts|user_profiles|employees|platform_admins|platform_audit_log|security_audit_log|conta_contrasena_intento|tax_certificate|tax_certificate_grant)$/
+export function leerCatalogos(texto) {
+  const filas = []
+  const errores = []
+  texto.split('\n').forEach((l, i) => {
+    const t = l.trim()
+    if (!t || t.startsWith('#')) return
+    const partes = t.split('|').map((x) => x.trim())
+    const [tabla, filtro = '', columnas = '', ...resto] = partes
+    const porque = resto.join('|').trim()
+    const donde = `línea ${i + 1} (${tabla})`
+    if (partes.length < 4) { errores.push(`${donde}: hacen falta 4 campos separados por «|»`); return }
+    if (!/^[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*$/.test(tabla)) errores.push(`${donde}: «esquema.tabla» en minúscula`)
+    if (NUNCA.test(tabla)) errores.push(`${donde}: esa tabla no se vuelca nunca (cuentas, personas o secretos)`)
+    if (filtro && filtro !== 'account_id is null') errores.push(`${donde}: el filtro solo puede ser vacío o «account_id is null»`)
+    if (columnas && !/^[a-z_][a-z0-9_]*(\s*,\s*[a-z_][a-z0-9_]*)*$/.test(columnas)) errores.push(`${donde}: columnas separadas por comas`)
+    if (!porque) errores.push(`${donde}: falta el porqué`)
+    if (filas.some((f) => f.tabla === tabla)) errores.push(`${donde}: repetida`)
+    filas.push({ tabla, filtro, columnas: columnas ? columnas.split(',').map((c) => c.trim()) : [], porque })
+  })
+  return { filas, errores }
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [orden, ...args] = process.argv.slice(2)
   if (orden === 'limpiar') {
@@ -109,13 +140,18 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const hallados = buscarSecretos(readFileSync(args[0], 'utf8'))
     if (hallados.length) {
       for (const h of hallados.slice(0, 20)) console.error(`✗ línea ${h.linea}: ${h.que}`)
-      console.error(`✗ ${hallados.length} sitios con pinta de secreto: NO se publica la estructura.`)
+      console.error(`✗ ${hallados.length} sitios con pinta de secreto en ${args[0]}: NO se publica.`)
       process.exit(1)
     }
     console.log('Sin nada con pinta de secreto.')
+  } else if (orden === 'catalogos') {
+    // Para el workflow: una línea por tabla, «tabla|filtro|columnas» (con «|»: un tabulador vacío se lo come el read de bash).
+    const { filas, errores } = leerCatalogos(readFileSync(args[0], 'utf8'))
+    if (errores.length) { for (const e of errores) console.error(`✗ ${e}`); process.exit(1) }
+    process.stdout.write(filas.map((f) => [f.tabla, f.filtro, f.columnas.join(',')].join('|')).join('\n') + '\n')
   } else if (orden === 'roles') {
     process.stdout.write(rolesDelVolcado(readFileSync(args[0], 'utf8')).join('\n') + '\n')
   } else {
-    console.error('Uso: esquema.mjs limpiar <entrada> <salida> [--para-16] | secretos <fichero> | roles <fichero>'); process.exit(1)
+    console.error('Uso: esquema.mjs limpiar <entrada> <salida> [--para-16] | secretos <fichero> | roles <fichero> | catalogos <lista>'); process.exit(1)
   }
 }

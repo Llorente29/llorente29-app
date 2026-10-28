@@ -2,7 +2,7 @@
 // psql con límite (el #728 esperó casi una hora a la red sin una consulta).
 import { readFileSync, readdirSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { buscarSecretos, limpiarVolcado, rolDelJwt, rolesDelVolcado } from '../../../scripts/staging/esquema.mjs'
+import { buscarSecretos, leerCatalogos, limpiarVolcado, rolDelJwt, rolesDelVolcado } from '../../../scripts/staging/esquema.mjs'
 import { CONECTAR_S, faltas, limiteDe, PASO_MIN, poner } from '../../../scripts/ci/limites-psql.mjs'
 
 const jwt = (datos: object) => `eyJhbGciOiJIUzI1NiJ9.${Buffer.from(JSON.stringify(datos)).toString('base64url')}.firmaDePruebaFirma`
@@ -30,9 +30,12 @@ describe('el volcado: limpio, sin secretos y con sus roles', () => {
 })
 
 describe('el workflow de la estructura', () => {
-  it('solo estructura (--schema-only), y busca secretos ANTES de publicar', () => {
+  it('la estructura con --schema-only; filas, solo las de catalogos.txt; y busca secretos ANTES de publicar', () => {
     expect(WF).toContain('--schema-only')
-    expect(WF).not.toMatch(/--data-only|pg_dumpall|COPY /)
+    expect(WF).not.toMatch(/--data-only|pg_dumpall/)
+    // El único COPY es el de la lista (opción (a)), tabla a tabla.
+    expect(WF.match(/COPY /g)).toHaveLength(1)
+    expect(WF).toContain('COPY $TABLA ($COLS) FROM stdin;')
     expect(WF.indexOf('esquema.mjs secretos')).toBeLessThan(WF.indexOf('- name: Publicar en estructura/staging'))
   })
   it('después de cada aplicar de main en verde, a mano o al cambiar él mismo; y a la rama aparte, no a main', () => {
@@ -81,5 +84,37 @@ describe('psql con límite, en todos los workflows que tocan la base', () => {
     expect(limiteDe('carril-staging-conta.yml', 'Carril · esperar su turno y coger uno', 20)).toBe(20)
     expect(limiteDe('x.yml', 'cualquiera', 10)).toBe(10)
     expect(limiteDe('x.yml', 'cualquiera', 60)).toBe(PASO_MIN)
+  })
+})
+
+describe('opción (a): las filas de catálogo, con su porqué y sin cuentas', () => {
+  const LISTA = readFileSync('scripts/staging/catalogos.txt', 'utf8')
+  it('la lista de verdad se lee sin errores, y cada tabla lleva su porqué', () => {
+    const { filas, errores } = leerCatalogos(LISTA)
+    expect(errores).toEqual([])
+    expect(filas.length).toBeGreaterThan(20)
+    for (const f of filas) expect(f.porque.length).toBeGreaterThan(10)
+    // Lo que paraba la prueba del #370 y las semillas (medido el 28/10).
+    for (const t of ['public.funcion_respaldo', 'public.pgc_account', 'public.tax_form', 'supabase_migrations.schema_migrations'])
+      expect(filas.map((f) => f.tabla)).toContain(t)
+  })
+  it('el historial va sin el texto de las migraciones (lleva escrito el secreto de order-advance)', () => {
+    const h = leerCatalogos(LISTA).filas.find((f) => f.tabla === 'supabase_migrations.schema_migrations')
+    expect(h?.columnas).toEqual(['version', 'name'])
+  })
+  it('nunca cuentas, auth ni Vault; el filtro solo puede quitar filas de cuentas; sin porqué no entra', () => {
+    const mal = (l: string) => leerCatalogos(l).errores
+    expect(mal('public.accounts | | | las cuentas')[0]).toContain('no se vuelca nunca')
+    expect(mal('auth.users | | | los usuarios')[0]).toContain('no se vuelca nunca')
+    expect(mal('vault.secrets | | | el vault')[0]).toContain('no se vuelca nunca')
+    expect(mal("public.tax_rate | account_id = 'x' | | una cuenta")[0]).toContain('el filtro')
+    expect(mal('public.tax_rate | account_id is null | |')[0]).toContain('falta el porqué')
+    expect(mal('public.tax_rate | | | a\npublic.tax_rate | | | b')[0]).toContain('repetida')
+  })
+  it('el workflow vuelca la lista, busca secretos también en las filas y publica datos.sql', () => {
+    expect(WF).toContain('esquema.mjs catalogos scripts/staging/catalogos.txt')
+    expect(WF).toMatch(/esquema\.mjs secretos "\$D"/)
+    expect(WF).toContain('git add -f supabase/staging/esquema.sql supabase/staging/datos.sql')
+    expect(WF).toContain("- 'scripts/staging/catalogos.txt'")
   })
 })

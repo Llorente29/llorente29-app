@@ -1,0 +1,72 @@
+# scripts/staging/catalogos.txt
+#
+# W09 · opción (a) de Julio (28/10): las FILAS que estructura-staging.yml vuelca
+# de staging-conta, además de la estructura. Solo catálogos globales y filas de
+# control: nada de cuentas, de auth ni del Vault. Las semillas ponen encima las
+# cuentas de prueba.
+#
+# Una línea por tabla:   esquema.tabla | filtro (where) | columnas | por qué
+#   · filtro vacío  = la tabla entera (catálogo global, sin account_id);
+#   · columnas vacío = todas las no generadas; si no, solo esas (el resto se
+#     queda con su valor por defecto o NULL al cargar).
+# La búsqueda de secretos (scripts/staging/esquema.mjs secretos) corre también
+# sobre estas filas: si sale algo, no se publica.
+#
+# Medido en staging el 28/10, solo leyendo: tablas sin account_id con filas, y
+# filas con account_id NULL en las que sí lo tienen. Lo que NO va, y por qué,
+# al final.
+
+# ── Fuentes oficiales: de ellas cuelgan casi todos los catálogos de abajo.
+public.official_source       |                        |  | 30 filas. Clave ajena de cnae_code, iae_heading, country, currency, pgc_account y postal_code_place.
+
+# ── Contabilidad (Sumied)
+public.pgc_account           |                        |  | 1.686 filas. El plan contable: sin él, ninguna empresa de las semillas puede abrir cuentas (57200001, 41000100…).
+public.annual_accounts_line  |                        |  | 367 filas. Las líneas de las cuentas anuales.
+public.annual_accounts_mapping | account_id is null   |  | 1.444 filas. El reparto del plan en las cuentas anuales que trae el sistema (las de una cuenta no van).
+public.entry_text            | account_id is null     |  | 4 filas. Los textos de asiento del sistema.
+public.expense_category      | account_id is null     |  | 12 filas. Las categorías de gasto del sistema.
+public.payment_method        | account_id is null     |  | 4 filas. Las formas de pago del sistema.
+public.payment_term          | account_id is null     |  | 4 filas. Los plazos de pago del sistema.
+
+# ── Impuestos
+public.tax_form              |                        |  | 11 filas. Los modelos (303, 111, 115…): clave ajena de tax_obligation.
+public.tax_form_deadline     |                        |  | 18 filas. Sus plazos.
+public.tax_holiday           |                        |  | 49 filas. Los festivos que mueven los plazos.
+public.tax_holiday_year      |                        |  | 4 filas. Los años de festivos cargados.
+public.tax_rate              | account_id is null     |  | 15 filas. Los tipos del sistema.
+public.withholding_rate      | account_id is null     |  | 6 filas. Las retenciones del sistema.
+public.vat_scheme            |                        |  | 10 filas. Los regímenes de IVA.
+public.vat_category          |                        |  | 5 filas. Catálogo global de categorías fiscales (regla 9: se lee entero a propósito).
+public.vat_category_tax      |                        |  | 7 filas. Su tipo por categoría.
+public.vat_rate              |                        |  | 6 filas. Catálogo global.
+
+# ── Datos de empresa
+public.legal_form            |                        |  | 16 filas. Las formas jurídicas (S.L., S.A.…).
+public.cnae_code             |                        |  | 1.060 filas. Las actividades CNAE.
+public.iae_heading           |                        |  | 1.432 filas. Los epígrafes del IAE.
+public.country               |                        |  | 275 filas. Los países.
+public.currency              |                        |  | 280 filas. Las monedas.
+public.postal_code_place     |                        |  | 37.867 filas. Código postal → población. Datos públicos del INE.
+
+# ── Folvy
+public.connector             |                        |  | 1 fila. Catálogo global de conectores (sin secretos: solo nombre, tipo y el esquema de su ajuste).
+
+# ── Filas de control
+public.funcion_respaldo      |                        |  | 31 filas. Las copias de las funciones de antes de cada cambio: sin ellas, una prueba de staging no puede deshacer lo que ya está (la del #370 paraba en el paso 0).
+supabase_migrations.schema_migrations | | version, name | 551 filas. El historial, solo el número y el nombre: el texto de cada migración (statements) no va, porque es el que lleva escrito el secreto de order-advance (W10).
+
+# ── Lo que NO va, y por qué (medido el 28/10):
+#   accounts (288), user_profiles y todo lo que lleva account_id no nulo: datos de cuentas.
+#   auth.*, vault.*: usuarios y secretos.
+#   platform_admins, platform_audit_log, security_audit_log, conta_contrasena_intento,
+#     conta_enlace_pago_intento, conta_redsys_aviso: personas, accesos y pagos.
+#   tax_certificate, tax_certificate_grant: certificados.
+#   verifactu_sistema: el NIF y el nombre del productor; las pruebas que lo necesiten lo ponen.
+#   recipe_item_version, supplier_invoice_line, supplier_invoice_receipt,
+#     system_alert_queue: cuelgan de filas de una cuenta.
+#   spatial_ref_sys: la trae postgis.
+#   La plantilla «Folvy Interno» (00000000-0000-0000-0000-000000000001): en
+#     staging no tiene ni una fila (0 en todas las tablas), así que no hay nada
+#     que volcar.
+#   Las unidades de cocina (kitchen_unit): en staging son todas de una cuenta
+#     (0 con account_id NULL); las pone la semilla C01b.
