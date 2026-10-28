@@ -33,8 +33,9 @@
 --   5 · los estados de Meta: entregado, leído y fallido.
 --   6 · fuera del radio: aviso a la empresa, salvo el habitual (3 o más en 30
 --       días a menos de 200 m); dentro del radio, nada; quién lo lee.
---   7 · el vigía: un fallo de la empresa avisa una vez al día; el de una
---       persona, no; lo atascado, también; y en palabras de oficina.
+--   7 · el vigía: sin el cron del envío, lo dice (staging no lo tiene); un
+--       fallo de la empresa avisa una vez al día; el de una persona, no; lo
+--       atascado, también; y en palabras de oficina.
 --   8 · la vuelta atrás: la huella de antes y nada de lo nuevo.
 
 \set ON_ERROR_STOP 1
@@ -432,7 +433,7 @@ end $$;
 
 -- ── 7 · El vigía ───────────────────────────────────────────────────────────
 do $$
-declare j jsonb; a uuid := (select v::uuid from _s where clave = 'cuenta'); n integer; t text;
+declare j jsonb; a uuid := (select v::uuid from _s where clave = 'cuenta'); n integer; t text; v_hay_cron boolean;
         ahora timestamptz := timestamp '2026-10-21 18:30' at time zone 'Europe/Madrid';
 begin
   -- Las palabras.
@@ -444,6 +445,18 @@ begin
   -- Los avisos de la prueba son «de hoy» para el vigía: se mueven a esa mañana.
   update public.clockout_reminder_log set created_at = ahora - interval '1 hour', status = 'sent'
    where employee_id in (select v::uuid from _s where clave in ('marcos','tarde','noche','sintel','sinturno','renuncia','portal'));
+  -- Sin el cron del envío (staging no lo tiene: es de producción), el vigía lo
+  -- dice; y se programa aquí, dentro de la transacción, para lo que sigue.
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    execute $q$select exists (select 1 from cron.job where jobname = 'clockout-reminder-drain' and active)$q$ into v_hay_cron;
+    if not v_hay_cron then
+      j := public.vigia_avisos_olvido(true, ahora);
+      if (j->>'cron')::boolean or j->'avisos'->0->>'texto' not like 'El envío de los avisos de olvido por WhatsApp no está programado%' then
+        raise exception 'PRUEBA L1A3 · 7: sin el cron del envío, el vigía no lo dice (%).', j;
+      end if;
+      execute $q$select cron.schedule('clockout-reminder-drain', '*/10 * * * *', 'select 1')$q$;
+    end if;
+  end if;
   -- Un fallo de una persona: nada.
   update public.clockout_reminder_log set status = 'failed', error = '{"code":131026,"message":"Message undeliverable"}'
    where id = (pg_temp.aviso('tarde')).id;
