@@ -1,0 +1,57 @@
+/* src/modules/personal/laboral/laboral.css
+ *
+ * L1a · PR 2 (28/10/2026). Lo poco propio de las pantallas de Laboral que no
+ * traen las piezas de diseno/ (la rejilla de las cifras, la tabla del informe,
+ * las filas de «Para revisar»). Solo con los valores del sistema (var(--s-*)):
+ * ni un color ni una medida escritos a mano.
+ */
+
+.l-raiz { display: flex; flex-direction: column; gap: var(--s-5); }
+.l-raiz h1 { margin: 0; font-size: var(--s-t-titulo); font-weight: var(--s-peso-titulo); color: var(--s-tinta); line-height: 1.15; }
+.l-apoyo { margin: 0; color: var(--s-apoyo); }
+.l-cabeza { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: var(--s-4); }
+.l-acciones { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.l-banda { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+.l-nota { margin: 0; color: var(--s-apoyo); font-size: var(--s-t-s); }
+.l-filtros { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: flex-end; }
+.l-filtros label { display: flex; flex-direction: column; gap: var(--s-1); color: var(--s-apoyo); font-size: var(--s-t-s); }
+.l-filtros select, .l-filtros input {
+  min-height: var(--s-alto-control); padding: 0 var(--s-3); border: var(--s-linea) solid var(--s-borde-control);
+  border-radius: var(--s-radio-campo); background: var(--s-superficie); color: var(--s-tinta); font: inherit;
+}
+
+/* La tabla del informe: se desplaza en el móvil, nunca la página. */
+.l-tabla-envoltorio { overflow-x: auto; }
+.l-tabla { min-width: 760px; }
+.l-tabla td { vertical-align: top; }
+.l-tabla td:first-child, .l-tabla td:nth-child(2) { white-space: nowrap; }
+.l-tabla .l-cifra { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.l-tabla .l-registro { display: flex; flex-direction: column; gap: var(--s-1); color: var(--s-apoyo); }
+.l-tabla .l-registro p { margin: 0; }
+.l-tabla .l-sin-jornada { color: var(--s-apoyo); font-style: italic; }
+.l-tabla .l-tramo + .l-tramo { margin-top: var(--s-1); }
+
+/* «Para revisar»: una frase por caso y su botón. */
+.l-revisar { display: flex; flex-direction: column; }
+.l-revisar-fila {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3) var(--s-4);
+  padding: var(--s-3) var(--s-6); border-top: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.l-revisar-texto { flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: var(--s-1); }
+.l-revisar-texto b { color: var(--s-tinta); font-weight: var(--s-peso-medio); }
+.l-revisar-texto span { color: var(--s-apoyo); font-size: var(--s-t-s); }
+.l-revisar-pie { padding: var(--s-3) var(--s-6); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+
+/* La tarjeta del portal (corrección del encargado, firma del mes). */
+.l-portal { display: flex; flex-direction: column; gap: var(--s-3); }
+.l-portal:empty { display: none; }
+.l-portal .s-tarjeta { gap: var(--s-3); }
+.l-portal-botones { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.l-hecho { margin: 0; color: var(--s-ok); font-weight: var(--s-peso-medio); }
+.l-error { margin: 0; color: var(--s-falta); }
+.l-enlace { word-break: break-all; }
+.l-pagina-publica { max-width: var(--s-ancho-pantalla); margin: 0 auto; padding: var(--s-6) var(--s-4) var(--s-12); min-height: 100vh; }
+
+@media (max-width: 820px) {
+  .l-banda { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

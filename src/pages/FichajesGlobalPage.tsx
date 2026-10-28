@@ -3,6 +3,7 @@ import {
   LogIn, LogOut, Users, Clock, Activity, Plus, Pencil, Ban, History,
   Check, X, AlertTriangle, Inbox, Search, CheckCircle2, FileText,
 } from 'lucide-react'
+import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Badge, Card } from '../components/ui'
@@ -14,7 +15,6 @@ import {
 } from '../services/clockEditService'
 import { etiquetaOrigen } from '../services/fichajeKiosko'
 import { descargarTextoRegistroDeJornada } from '../lib/registroDeJornadaTexto'
-import FueraDelRadioBloque from '../components/personal/FueraDelRadioBloque'
 
 const DEFAULT_RADIUS_M = 200
 
@@ -45,13 +45,18 @@ function prettyISO(iso: string): string {
 export default function FichajesGlobalPage() {
   const { staff, locations } = useApp()
   const today = new Date()
-  const [dateFrom, setDateFrom] = useState(new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10))
-  const [dateTo, setDateTo] = useState(new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10))
-  const [empFilter, setEmpFilter] = useState('')
+  // L1a · PR 2 (28/10): «Corregir» desde «Para revisar» llega con
+  // ?persona=<id>&desde=AAAA-MM-DD&hasta=AAAA-MM-DD: abre esa persona y ese día.
+  const [params] = useSearchParams()
+  const personaPedida = params.get('persona') ?? ''
+  const [dateFrom, setDateFrom] = useState(params.get('desde') ?? new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10))
+  const [dateTo, setDateTo] = useState(params.get('hasta') ?? new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10))
+  const [empFilter, setEmpFilter] = useState(personaPedida)
   const [locFilter, setLocFilter] = useState('todas')
 
   const { resolvedLocationId } = useLocationScope()
-  useEffect(() => { setLocFilter(resolvedLocationId ?? 'todas') }, [resolvedLocationId])
+  // Con una persona pedida, todos los locales: su local puede no ser el elegido arriba.
+  useEffect(() => { setLocFilter(personaPedida ? 'todas' : (resolvedLocationId ?? 'todas')) }, [resolvedLocationId, personaPedida])
 
   const [showAdd, setShowAdd] = useState(false)
   const [editTarget, setEditTarget] = useState<(ClockEntry & { employeeName: string }) | null>(null)
@@ -119,11 +124,6 @@ export default function FichajesGlobalPage() {
           </button>
         </div>
       </div>
-
-      <FueraDelRadioBloque
-        personas={staff.filter(e => locFilter === 'todas' || e.locationId === locFilter)}
-        locales={locations}
-      />
 
       {requests.length > 0 && (
         <Card className="border-warning/40">

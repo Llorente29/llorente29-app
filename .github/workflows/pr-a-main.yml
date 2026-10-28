@@ -92,6 +92,17 @@ jobs:
           git diff --name-only --diff-filter=d "$BASE...$HEAD" > /tmp/cambiados.txt
           node scripts/conta/produccion/tanda.mjs ajenos "$RAMA" /tmp/cambiados.txt
 
+      # W08 (28/10): nunca un PNG distinto de main que no sea del frente de la
+      # rama. El bot de capturas fijó PNG de inventario en tres PR de Laboral
+      # (#350, #354 y #370) y chocaron con main. Corre también sobre el commit
+      # del bot (su head), y nombra cada fichero.
+      - name: Las capturas, solo las del frente de la rama (W08)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          RAMA: ${{ github.event.pull_request.head.ref }}
+        run: node scripts/conta/capturas.mjs revisar "$RAMA" "$BASE" "$HEAD"
+
       - name: Nombres de las migraciones nuevas
         env:
           GH_TOKEN: ${{ github.token }}
