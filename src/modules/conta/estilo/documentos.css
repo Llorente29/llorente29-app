@@ -310,4 +310,7 @@
 .cxf-desde-documento > .s-apoyo { margin: 0; }
 /* S01b · «Dar de alta a <nombre>» va en la columna estrecha del proveedor: con un nombre largo,
    el botón partía la línea por fuera y el campo de al lado se quedaba el clic. Se parte dentro. */
-.cxf-alta-enlaces .s-boton-enlace { display: inline; max-width: 100%; height: auto; white-space: normal; overflow: visible; overflow-wrap: anywhere; text-align: left; }
+.cxf-alta-enlaces .s-boton-enlace { display: inline; max-width: 100%; height: auto; white-space: normal; overflow: visible; overflow-wrap: normal; text-align: left; }
+/* S01b2 · El nombre del proveedor, de una pieza: si no cabe en lo que queda de línea, pasa entero a la
+   siguiente; solo se parte por dentro si es más ancho que la columna. */
+.cxf-nombre-entero { display: inline-block; max-width: 100%; overflow-wrap: anywhere; text-decoration: inherit; }

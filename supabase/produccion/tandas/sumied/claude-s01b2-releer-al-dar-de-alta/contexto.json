@@ -1,0 +1,19 @@
+{
+ "_que": "S01b2 · contexto de producción de la tanda (1555 añade conta_lectura_proveedor_releida), medido en SOLO LECTURA el 28/10 a las 15:13Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: la función nueva no existe; nada en el camino del pedido ni en el cron; nada en el historial.",
+ "medido": "2026-10-28T15:13Z",
+ "tanda": {
+  "supabase/migrations/20261028T1555_s01b2_lectura_releida.sql": "96e33a7bf696644d02ce927ce4cfb3fe"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
