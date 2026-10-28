@@ -434,7 +434,7 @@ jobs:
           echo "E2E_CARRIL=$(cat "$RUNNER_TEMP/carril/numero")" >> "$GITHUB_ENV"
 
       - name: Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)
-        timeout-minutes: 15
+        timeout-minutes: 30
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |

@@ -28,8 +28,23 @@ export const PASO_MIN = 15
  * Los pasos que tardan más de verdad (nunca por encima del job): [fichero, nombre del paso, minutos].
  * Las e2e esperan carril y corren las pruebas; el aplicar de staging espera la barrera
  * y el cerrojo (15 + 15, su job lo dice); las importaciones de Diez escriben miles de filas.
+ *
+ * W09b (28/10): y los que ESPERAN A PROPÓSITO. El límite de 15 cortó el real del
+ * #379 (run 40705454389) en «Después · comprobación», que vigila la salud del
+ * pedido 15 minutos antes de medir. Cada uno, lo que espera más lo que hace después:
+ *   · producción, Después · comprobación: SALUD_MINUTOS (15) + medir + vuelta atrás → 25;
+ *   · staging, Lo que solo añade: el cerrojo de migrar (CARRIL_MIGRAR_MIN, 15) + aplicar → 35,
+ *     como el otro paso que coge el mismo cerrojo;
+ *   · staging, la tanda de producción: hasta 8 min a que pase el cierre del día (:04–:11) + el real → 25;
+ *   · e2e, clonar: la barrera (CARRIL_BARRERA_MIN, 20) + clonar → 30;
+ *   · carril, si el runner muere: coger (CARRIL_ESPERA_MIN, 15) + soltar → 20 (lo que da su job).
  */
 export const LARGOS = [
+  ['aplicar-produccion-conta.yml', 'Después · comprobación (D1, serie, agentes y salud del pedido); si falla, vuelta atrás automática', 25],
+  ['aplicar-staging-conta.yml', 'Lo que solo añade, de verdad (desde la rama)', 35],
+  ['aplicar-staging-conta.yml', 'La tanda de producción en staging (real-con-fallo o real)', 25],
+  ['e2e-staging-conta.yml', 'Carril · clonar las cuentas de prueba (con la contraseña de un solo uso)', 30],
+  ['carril-staging-conta.yml', 'Carril · si el runner muere, los cerrojos se sueltan solos', 20],
   ['e2e-staging-conta.yml', 'Pruebas (ordenador y móvil)', 120],
   ['e2e-staging-conta.yml', 'Carril · esperar su turno y coger uno', 60],
   ['carril-staging-conta.yml', 'Carril · esperar su turno y coger uno', 20],
@@ -130,7 +145,7 @@ function jobConUrl(texto, job) {
 }
 
 /** Lo que falta en un workflow: [{ que, job?, paso? }]. */
-export function faltas(texto, raiz = '.') {
+export function faltas(texto, raiz = '.', fichero = null) {
   const fuera = []
   const jobs = pasosDe(texto)
   const pasosBase = jobs.flatMap((j) => j.pasos.filter((p) => tocaLaBase(p, raiz) || (p.run && jobConUrl(texto, j))).map((p) => ({ j, p })))
@@ -140,6 +155,7 @@ export function faltas(texto, raiz = '.') {
   for (const { j, p } of pasosBase) {
     if (!p.timeout) fuera.push({ que: 'paso que toca la base sin timeout-minutes', job: j.nombre, paso: p.nombre })
     else if (j.timeout && p.timeout > j.timeout) fuera.push({ que: `timeout-minutes ${p.timeout} mayor que el del job (${j.timeout})`, job: j.nombre, paso: p.nombre })
+    else if (fichero && LARGOS.some(([f, n]) => f === fichero && n === p.nombre) && p.timeout < limiteDe(fichero, p.nombre, j.timeout)) fuera.push({ que: `timeout-minutes ${p.timeout} menor que lo que necesita (${limiteDe(fichero, p.nombre, j.timeout)}: espera a propósito o tarda de verdad; LARGOS)`, job: j.nombre, paso: p.nombre })
   }
   return { tocaLaBase: true, fuera, pasos: pasosBase.map(({ j, p }) => ({ job: j.nombre, jobTimeout: j.timeout, paso: p.nombre, timeout: p.timeout })) }
 }
@@ -156,7 +172,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   }
   let mal = 0
   for (const f of readdirSync(DIR).filter((x) => x.endsWith('.yml')).sort()) {
-    const r = faltas(readFileSync(join(DIR, f), 'utf8'))
+    const r = faltas(readFileSync(join(DIR, f), 'utf8'), '.', f)
     if (!r.tocaLaBase) continue
     if (orden === 'listar') for (const p of r.pasos) console.log(`${f}\t${p.job} (${p.jobTimeout ?? '—'})\t${p.timeout ?? '—'}\t${p.paso}`)
     for (const x of r.fuera) { mal++; if (orden === 'comprobar') console.error(`✗ ${f}${x.job ? ` · ${x.job}` : ''}${x.paso ? ` · «${x.paso}»` : ''}: ${x.que}`) }
