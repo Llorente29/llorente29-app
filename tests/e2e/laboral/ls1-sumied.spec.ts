@@ -203,7 +203,12 @@ test('de cero: un centro, una persona, fichar desde el portal, corregir en «Par
   await movil.locator('input[type="password"]').fill(clave)
   await movil.getByRole('button', { name: /Entrar/ }).click()
   const portada = movil.getByRole('button', { name: /^Fichar entrada/ })
-  await expect(portada).toBeVisible({ timeout: 40_000 })
+  try {
+    await expect(portada).toBeVisible({ timeout: 40_000 })
+  } catch {
+    const se = (await movil.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 400)
+    throw new Error(`Después de «Entrar» en /acceso no sale la portada del trabajador. En ${movil.url()} se ve: ${se || '(nada)'} · Errores: ${erroresMovil.join(' | ') || 'ninguno'}`)
+  }
   await expect(movil.locator('[data-marca-portal="sumied"]')).toBeVisible()
   await expect(movil.locator('body')).not.toContainText(/folvy|APPCC|Recepciones/i)
   await captura(movil, '07-portal')
@@ -279,7 +284,7 @@ test('cada pantalla de Laboral abre sin errores, sin «Folvy» ni «local», y l
 
   for (const p of PANTALLAS) {
     await page.goto(`/conta/laboral${p ? `/${p}` : ''}`, { timeout: 30_000 })
-    const raiz = page.locator(`[data-prueba="laboral-${p || 'equipo'}"]`)
+    const raiz = page.locator(`[data-laboral-pagina="${p || 'equipo'}"]`)
     await expect(raiz, `la pantalla «${p || 'equipo'}» no abre`).toBeVisible({ timeout: 30_000 })
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined)
     await expect(page.getByText('Cargando…', { exact: true })).toHaveCount(0, { timeout: 15_000 }).catch(() => undefined)

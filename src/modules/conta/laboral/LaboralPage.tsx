@@ -50,7 +50,7 @@ export default function LaboralPage() {
   const Pantalla = PANTALLAS[pagina]
   if (!Pantalla) return <Navigate to={rutaConta(CONTA.rutas.laboral)} replace />
   return conProductoLaboral(SUMIED, (
-    <div className="s-laboral" data-prueba={`laboral-${pagina || 'equipo'}`}>
+    <div className="s-laboral" data-laboral-pagina={pagina || 'equipo'}>
       <Suspense fallback={<Cargando />}>
         <Pantalla />
       </Suspense>
