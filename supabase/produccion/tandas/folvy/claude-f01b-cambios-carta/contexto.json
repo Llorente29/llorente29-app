@@ -1,0 +1,22 @@
+{
+ "_que": "F01 · PR 2 · Cambios de carta · contexto de producción de la tanda (1910 y 0650), medido en SOLO LECTURA el 28/10 a las 07:05Z con la consulta de analizar.mjs sql-contexto. No existe nada de lo que crea la 1910 (2 tablas y 10 funciones); existe _f01_alta_marca (la 1320, huella 3c4e68e2), que la 0650 cambia en caliente con la misma firma. Nada en el camino del pedido y nada de las dos en el historial.",
+ "medido": "2026-10-28T07:05Z",
+ "tanda": {
+  "supabase/migrations/20261027T1910_f01b_cambios_carta.sql": "1f7b9f124d9f33303aa8088b04970953",
+  "supabase/migrations/20261028T0650_f01b_alta_sin_empleado.sql": "14f9c9d83299f109b54ac3f00cdda4b0"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._f01_alta_marca(uuid,uuid,text,text,boolean,text,boolean,uuid,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

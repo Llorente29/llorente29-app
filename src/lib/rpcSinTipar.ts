@@ -20,6 +20,7 @@
 //   · fiscal_for_preview(p_sale_id)         — lo fiscal del tique en «Ver tiques» (pedidos, V04)
 //   · ticket_invoice_ajustes / ticket_invoice_code_set — Ajustes › Facturas de los pedidos (V04)
 //   · f01_marcas_last / f01_alta_marca / f01_ocultar_marca — las marcas nuevas de Last en Inicio y su alta en Marcas (F01)
+//   · f01_cambios_carta / f01_anadir_platos_nuevos / f01_guardar_extras / f01_poner_precios_de_last — Cambios de Last (F01 · PR 2)
 //
 // Cuando se regenere el fichero de tipos: quitar la llamada de arriba, borrar
 // este fichero, y el compilador señalará solo lo que falte.

@@ -150,15 +150,16 @@ export const PRODUCTOS: Producto[] = [
   {
     // V01 (Julio, 24/10) · Ventas sustituye a Facturación: Facturas (luego
     // Presupuestos y Cobros) y, solo si vende en hostelería, Cierres del día y
-    // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona: Series, aún
-    // sin pantalla, no sale. El id sigue siendo 'facturacion' (el
-    // interruptor, los favoritos y las preferencias guardadas lo usan).
+    // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona. El id sigue
+    // siendo 'facturacion' (el interruptor, los favoritos y las preferencias
+    // guardadas lo usan).
+    // S01 · PR 2 (menú limpio): Series sale del menú hasta que tenga pantalla;
+    // vuelve con el S05 del plan.
     id: 'facturacion', etiqueta: 'Ventas', icono: 'facturacion', ruta: R.facturasVenta, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       // PC01 · E3 · Cobros (tableros cobros-1 y cobros-2): lo que te deben, las remesas de recibos y los devueltos.
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: R.cobros, prefijos: [R.cobros] },
-      { id: 'series', etiqueta: 'Series', icono: 'plantillas', ruta: null, prefijos: [] },
       // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te
       // pagan quienes cobran por ti: plataformas, el datáfono, Amazon, Stripe…),
       // encima del bloque «Hostelería». La ficha de la del socio de marca (y la de
@@ -173,13 +174,13 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    // S02 · Facturas recibidas · Tickets · Pagos · Repartidores. Tickets aún sin pantalla (otro encargo).
+    // S02 · Facturas recibidas · Pagos · Repartidores. S01 · PR 2 (menú limpio):
+    // Tickets sale del menú hasta que tenga pantalla; vuelve con el S07 del plan.
     // «Por revisar» (las recepciones de Cocina que esperan factura, compras/) cuelga de
     // Facturas recibidas: es de donde salen esas facturas.
     id: 'compras', etiqueta: 'Compras y gastos', icono: 'compras', ruta: R.documentos, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'recibidas', etiqueta: 'Facturas recibidas', icono: 'recibida', ruta: R.documentos, prefijos: [R.documentos, R.compras] },
-      { id: 'tickets', etiqueta: 'Tickets', icono: 'documento', ruta: null, prefijos: [] },
       // PC01 · E2 · Pagos (tableros 15 y 16): la lista, sus remesas y la ficha de una.
       { id: 'pagos', etiqueta: 'Pagos', icono: 'pagos', ruta: R.pagos, prefijos: [R.pagos] },
       // S02 · PR 3: las quincenas de Catcher (y la ficha de una). V01 · Entrega 3: las
@@ -242,6 +243,17 @@ export const PRODUCTOS: Producto[] = [
 const cumple = (c: Condicion | undefined, ctx: Contexto) => !c || (c === 'hosteleria' ? ctx.hosteleria : c === 'diez' ? ctx.diez : ctx.asesoria === true)
 
 /** Las páginas que salen: con pantalla y, si piden algo de la empresa, que lo tenga. */
+/**
+ * S01 · PR 2 (menú limpio): las pestañas SIN pantalla (`ruta: null`) de los
+ * apartados que se pueden pintar (los que tienen pantalla). Tiene que estar
+ * vacía: lo que no tiene pantalla no está en el menú (sale cuando la tenga).
+ * Un apartado entero sin pantalla (Laboral, de L) no se pinta: sus pestañas no
+ * cuentan.
+ */
+export function pestanasSinPantalla(lista: readonly Producto[] = PRODUCTOS): string[] {
+  return lista.filter((p) => p.ruta !== null).flatMap((p) => p.pestanas.filter((t) => t.ruta === null).map((t) => `${p.etiqueta} › ${t.etiqueta}`))
+}
+
 export function pestanasVisibles(p: Producto, ctx: Contexto): Pestana[] {
   return p.pestanas.filter((t) => t.ruta !== null && cumple(t.solo, ctx) && !(t.hueco && ctx.solo))
 }

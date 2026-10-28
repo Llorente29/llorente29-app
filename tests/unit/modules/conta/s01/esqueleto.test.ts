@@ -120,11 +120,11 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
       ['laboral', 'personas'], ['impuestos', 'finanzas'], ['contactos', 'operaciones'],
     ])
   })
-  it('S02 · las páginas del mapa: Ventas (V01: Facturas · Cobros · Series; Cobros y Series aún sin pantalla) y Laboral, aún sin pantalla', () => {
+  it('S02 · las páginas del mapa: Ventas (Facturas · Cobros · Liquidaciones · Cierres del día; Series, fuera hasta el S05) y Laboral, aún sin pantalla', () => {
     // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
     // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te pagan quienes
     // cobran por ti), encima del bloque «Hostelería»; sin hostelería, sin plataformas.
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Series', 'Liquidaciones', 'Cierres del día'])
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Liquidaciones', 'Cierres del día'])
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
     expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
@@ -163,9 +163,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, NADA).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro'])
     expect(pestanasVisibles(c, CON_DIEZ).map((t) => t.etiqueta)).toEqual(['Asientos', 'Libros y listados', 'Definiciones', 'Cierre y Registro', 'Importar'])
   })
-  it('PC01 · Compras y gastos: Facturas recibidas · Tickets · Pagos · Repartidores; Repartidores solo con hostelería; Tickets, cuando tenga pantalla', () => {
+  it('PC01 · Compras y gastos: Facturas recibidas · Pagos · Repartidores; Repartidores solo con hostelería; Tickets, fuera hasta el S07', () => {
     const c = PRODUCTOS.find((p) => p.id === 'compras')!
-    expect(c.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas recibidas', 'Tickets', 'Pagos', 'Repartidores'])
+    expect(c.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas recibidas', 'Pagos', 'Repartidores'])
     expect(pestanasVisibles(c, NADA).map((t) => t.id)).toEqual(['recibidas', 'pagos'])
     expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'pagos', 'liquidaciones'])
     expect(c.ruta).toBe(CONTA.rutas.documentos)

@@ -176,7 +176,7 @@ export const ZONAS_POR_FICHERO = [
     zona: 'marcas',
     pruebas: 'tests/e2e/marcas',
     capturas: 'docs/marcas/capturas',
-    ficheros: ['src/modules/multitenancy/', 'tests/e2e/marcas/', 'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql'],
+    ficheros: ['src/modules/multitenancy/', 'tests/e2e/marcas/', 'supabase/seeds/folvy/seed_f01_marcas_last_staging.sql', 'supabase/seeds/folvy/seed_f01b_cambios_carta_staging.sql'],
   },
 ]
 

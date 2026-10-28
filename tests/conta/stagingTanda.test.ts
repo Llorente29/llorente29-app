@@ -2,10 +2,13 @@
 // Contra la población real (regla 31): las dos últimas fusiones de main, los
 // 98 ficheros del manifiesto de hoy y las migraciones viejas que llevan COMMIT.
 
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
-import { lineas, nuevas, porQueNoSeEnsaya, llevaSuTransaccion, sesiones, MANIFIESTO, RUTA_STAGING, rutaNoAdmitida, ruta, textoDelManifiesto } from '../../scripts/conta/staging-tanda.mjs'
+import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { chmodSync, chownSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { tmpdir, userInfo } from 'node:os'
+import { join } from 'node:path'
+import { lineas, nuevas, porQueNoSeEnsaya, llevaSuTransaccion, sesiones, MANIFIESTO, RUTA_STAGING, rutaNoAdmitida, ruta, textoDelManifiesto,
+  porQueNoVaLaSemilla, tablasQueEscribe, funcionesQueCrea, sqlDosVeces, yaDeVerdad } from '../../scripts/conta/staging-tanda.mjs'
 
 const enCommit = (ref: string) => execFileSync('git', ['show', `${ref}:${MANIFIESTO}`], { encoding: 'utf8' })
 
@@ -220,5 +223,145 @@ describe('la tanda del S01 (Respuesta 3): qué va de verdad desde la rama', () =
   it('la 2030 sigue siendo «solo añade»', () => {
     const n = f('20261027T2030_s01_redsys_y_abono.sql')
     expect(porQueNoSoloAnade(n, readFileSync(n, 'utf8'), ctx)).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// W07 (Julio, 28/10): las semillas de una rama llegan a staging si se pueden
+// aplicar dos veces, y eso lo demuestra el ensayo (dos veces en ROLLBACK, la
+// misma medida), no su cabecera.
+describe('W07 · qué semilla se puede intentar que vaya de verdad', () => {
+  const sem = 'supabase/seeds/folvy/x.sql'
+  it('una con «on conflict do nothing» sí', () => {
+    expect(porQueNoVaLaSemilla(sem, `insert into public.t (id, nombre) values (1, 'a') on conflict (id) do nothing;`)).toBeNull()
+    expect(porQueNoVaLaSemilla(sem, `do $$ begin insert into public.t (id) values (1) on conflict do nothing; end $$;`)).toBeNull()
+  })
+  it('una con un insert a secas se queda en ROLLBACK, con su motivo', () => {
+    expect(porQueNoVaLaSemilla(sem, `insert into public.t (id) values (1);`))
+      .toBe('inserta en public.t sin «on conflict» ni «not exists»: la segunda vez duplica')
+  })
+  it('una que llama a una función que escribe se queda en ROLLBACK (la regla del S01, #363)', () => {
+    expect(porQueNoVaLaSemilla(sem, `select public.journal_entry_validar('x');`))
+      .toBe('al aplicarse llama a public.journal_entry_validar(), que puede escribir donde la medida no mira')
+    expect(porQueNoVaLaSemilla(sem, `do $$ begin perform public.conta_cerrar_mes('x'); end $$;`)).toMatch(/^al aplicarse llama a public\.conta_cerrar_mes\(\)/)
+  })
+  it('la que llama a una función que crea ella misma, sí; su cuerpo no cuenta como «al aplicarse»', () => {
+    const sql = `create or replace function public.e2e_x() returns void language plpgsql as $$ begin update public.t set n = 1; perform public.otra(); end $$;
+                 insert into public.t (id) values (1) on conflict do nothing;`
+    expect(porQueNoVaLaSemilla(sem, sql)).toBeNull()
+    expect(tablasQueEscribe(sql)).toEqual(['public.t'])
+    expect(funcionesQueCrea(sql)).toEqual(['e2e_x'])
+  })
+  it('update, delete o truncate al aplicarse: cambian lo que leen las demás ramas', () => {
+    expect(porQueNoVaLaSemilla(sem, `update public.supplier set nif = 'x' where id = '1';`)).toMatch(/^update public\.supplier al aplicarse/)
+    expect(porQueNoVaLaSemilla(sem, `do $$ begin if true then delete from public.t where id = 1; end if; end $$;`)).toMatch(/^delete from public\.t al aplicarse/)
+  })
+  it('un insert guardado con «if not exists» o «where not exists» sí (lo prueba la medida doble)', () => {
+    expect(porQueNoVaLaSemilla(sem, `do $$ begin if not exists (select 1 from public.t where id = 1) then insert into public.t (id) values (1); end if; end $$;`)).toBeNull()
+    expect(porQueNoVaLaSemilla(sem, `insert into public.t (id) select 1 where not exists (select 1 from public.t where id = 1);`)).toBeNull()
+  })
+  it('una migración o una prueba no son semillas', () => {
+    expect(porQueNoVaLaSemilla('supabase/migrations/x.sql', 'select 1;')).toBe('no es una semilla')
+  })
+  it('las semillas de hoy (regla 31): la del F01 (#358) pasa; la del R02 (update) y la del autoconteo (llama a una función) no', () => {
+    const leer = (f: string) => readFileSync(f, 'utf8')
+    expect(porQueNoVaLaSemilla('supabase/seeds/folvy/seed_f01_marcas_last_staging.sql', leer('supabase/seeds/folvy/seed_f01_marcas_last_staging.sql'))).toBeNull()
+    expect(porQueNoVaLaSemilla('supabase/seeds/reparto/seed_r02_e2e.sql', leer('supabase/seeds/reparto/seed_r02_e2e.sql'))).toMatch(/^update public\.locations/)
+    expect(porQueNoVaLaSemilla('supabase/seeds/conta/seed_autoconteo_e2e_staging.sql', leer('supabase/seeds/conta/seed_autoconteo_e2e_staging.sql')))
+      .toMatch(/^al aplicarse llama a public\.recompute_location_stock_core\(\)/)
+  })
+  it('el workflow mide dos veces antes de pasar una semilla de verdad, y la pasa sin registro de definiciones', () => {
+    const w = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
+    expect(w).toContain('node "$S" semilla $(cat /tmp/semillas.txt)')
+    expect(w).toContain('node "$S" semilla-dos-veces "$f" $(cat /tmp/previas.txt)')
+    expect(w).toContain(`if [ "$r" = 'W07|igual' ]; then`)
+    expect(w).toContain('SIN_DEFINICIONES=1 bash scripts/conta/staging/de-verdad.sh')
+  })
+})
+
+// La medida doble y el «de verdad» de una semilla, contra un Postgres DE VERDAD
+// (regla 31), con el psql que genera staging-tanda.mjs y el de-verdad.sh de verdad.
+const binPg = (() => {
+  const base = '/usr/lib/postgresql'
+  if (!existsSync(base)) return null
+  const v = readdirSync(base).filter((d) => existsSync(join(base, d, 'bin', 'pg_ctl'))).sort().pop()
+  return v ? join(base, v, 'bin') : null
+})()
+const pgListo = !!binPg && spawnSync('psql', ['--version']).status === 0
+describe.skipIf(!pgListo)('W07 · dos veces en ROLLBACK, la misma medida (en un Postgres de verdad)', () => {
+  const PUERTO = String(58000 + Math.floor(Math.random() * 900))
+  let dir = ''
+  const comoPostgres = userInfo().uid === 0
+  const run = (exe: string, args: string[]) =>
+    comoPostgres ? spawnSync('runuser', ['-u', 'postgres', '--', exe, ...args], { encoding: 'utf8' }) : spawnSync(exe, args, { encoding: 'utf8' })
+  const url = () => `postgresql://postgres@/postgres?host=${dir}&port=${PUERTO}`
+  const psql = (args: string[]) => spawnSync('psql', [url(), '-X', '-q', '-At', '-v', 'ON_ERROR_STOP=1', ...args], { encoding: 'utf8' })
+  const sql = (q: string) => { const r = psql(['-c', q]); if (r.status !== 0) throw new Error(r.stderr); return r.stdout.trim() }
+  /** Escribe la semilla en un fichero y pasa su psql de dos veces: la línea W07. */
+  function dosVeces(texto: string): string {
+    const f = join(dir, `semilla-${Math.random().toString(36).slice(2)}.sql`)
+    writeFileSync(f, texto)
+    const g = join(dir, 'dos.sql')
+    writeFileSync(g, sqlDosVeces(f))
+    const r = psql(['-f', g])
+    return r.status === 0 ? r.stdout.trim().split('\n').filter((l) => l.startsWith('W07|')).pop()! : `ERROR ${r.stderr}`
+  }
+
+  beforeAll(() => {
+    dir = mkdtempSync(join(tmpdir(), 'w07-'))
+    if (comoPostgres) { chmodSync(dir, 0o777); chownSync(dir, 102, 104) }
+    const ini = run(join(binPg!, 'initdb'), ['-D', join(dir, 'datos'), '-A', 'trust', '-U', 'postgres', '--no-sync'])
+    if (ini.status !== 0) throw new Error(ini.stderr)
+    const arr = run(join(binPg!, 'pg_ctl'), ['-D', join(dir, 'datos'), '-o', `-k ${dir} -p ${PUERTO} -c listen_addresses='' -c fsync=off`, '-w', 'start', '-l', join(dir, 'log')])
+    if (arr.status !== 0) throw new Error(arr.stderr || readFileSync(join(dir, 'log'), 'utf8'))
+    sql(`create table public.t (id int primary key, nombre text, creado timestamptz default now()); insert into public.t values (9, 'de antes')`)
+  }, 60_000)
+  afterAll(() => {
+    if (dir) run(join(binPg!, 'pg_ctl'), ['-D', join(dir, 'datos'), '-m', 'immediate', 'stop'])
+    if (dir) rmSync(dir, { recursive: true, force: true })
+  })
+
+  it('con «on conflict do nothing» y una función: igual las dos veces, y no deja nada (ROLLBACK)', () => {
+    expect(dosVeces(`insert into public.t (id, nombre) values (1, 'a'), (2, 'b') on conflict (id) do nothing;
+      create or replace function public.e2e_w07() returns int language sql as $$ select 7 $$;`)).toBe('W07|igual')
+    expect(sql('select count(*) from public.t')).toBe('1')
+    expect(sql(`select count(*) from pg_proc where proname = 'e2e_w07'`)).toBe('0')
+  })
+  it('con un insert a secas (si se colara): la segunda vez falla por la clave y no va', () => {
+    expect(dosVeces(`insert into public.t (id, nombre) values (3, 'c');`)).toMatch(/^ERROR .*duplicate key/s)
+  })
+  it('la cabecera no basta: «on conflict do nothing» con una clave nueva cada vez da otra medida', () => {
+    expect(dosVeces(`insert into public.t (id, nombre) select (select coalesce(max(id), 0) + 1 from public.t), 'otra' on conflict do nothing;`))
+      .toBe('W07|distinto|tabla public.t: 2 filas → 3 filas (otra huella)')
+  })
+  it('de-verdad.sh con SIN_DEFINICIONES=1: la aplica y la apunta, sin registro de definiciones', () => {
+    const f = join(dir, 'de-verdad.sql')
+    writeFileSync(f, `insert into public.t (id, nombre) values (4, 'd') on conflict (id) do nothing;`)
+    const r = spawnSync('bash', ['scripts/conta/staging/de-verdad.sh', 'rama-w07', f], {
+      encoding: 'utf8', env: { ...process.env, PSQL: 'psql', DB_URL: url(), SIN_DEFINICIONES: '1' },
+    })
+    expect(r.status, r.stderr).toBe(0)
+    expect(r.stdout).toContain('Sin registro de definiciones (W07: semillas).')
+    expect(sql(`select nombre from public.t where id = 4`)).toBe('d')
+    expect(sql(`select count(*) from w06_staging.de_verdad where rama = 'rama-w07'`)).toBe('1')
+    expect(sql(`select count(*) from w06_staging.antes_de_verdad where rama = 'rama-w07'`)).toBe('0')
+  })
+})
+
+// W07b (28/10): en el segundo push de una rama, su migración ya está puesta en
+// staging (W05) y ya no «solo añade»; su semilla no puede quedarse en ROLLBACK
+// por ir «detrás de algo que no va de verdad» (el #361, ensayo 40642383617).
+describe('W07b · lo que la rama ya pasó de verdad cuenta como que va', () => {
+  const md5 = (f: string) => ({ 'supabase/migrations/1910.sql': 'aaa', 'supabase/seeds/folvy/s.sql': 'bbb' } as Record<string, string>)[f] ?? null
+  it('el mismo contenido, sí; si el fichero cambió o ya no está, no', () => {
+    expect(yaDeVerdad('supabase/migrations/1910.sql aaa\nsupabase/seeds/folvy/s.sql zzz\nsupabase/migrations/borrada.sql ccc\n', md5))
+      .toEqual(['supabase/migrations/1910.sql'])
+    expect(yaDeVerdad('', md5)).toEqual([])
+  })
+  it('el workflow lo lee de w06_staging.de_verdad de la rama y lo suma a lo que va', () => {
+    const w = readFileSync('.github/workflows/aplicar-staging-conta.yml', 'utf8')
+    expect(w).toContain(`select fichero || ' ' || md5 from w06_staging.de_verdad where rama = :'rama';`)
+    expect(w).toContain('node "$S" ya-de-verdad /tmp/registro-de-verdad.txt > /tmp/ya-de-verdad.txt')
+    expect(w).toContain('cat /tmp/anaden.txt /tmp/semillas-van.txt /tmp/ya-de-verdad.txt > /tmp/van.txt')
   })
 })

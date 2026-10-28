@@ -67,8 +67,31 @@ async function foto(page: Page, nombre: string, sufijo: string) {
 
 test.afterEach(async () => { await preparar('limpiar') })
 
+/**
+ * Respuesta 7 (28/10): si la confirmación no sale, el error dice lo que enseña
+ * la pantalla (la dirección, los primeros 400 caracteres y los errores de la
+ * página), porque la captura del fallo no se puede bajar desde fuera de Actions.
+ */
+async function esperarOContar(page: Page, errores: string[], esperar: () => Promise<void>) {
+  try {
+    await esperar()
+  } catch (e) {
+    const texto = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400)
+    const avisos = (await page.locator('[role="alert"]').allInnerTexts().catch(() => [] as string[])).map((t) => t.trim()).filter(Boolean)
+    throw new Error([
+      (e as Error).message.split('\n')[0],
+      `Dirección: ${page.url()}`,
+      `Avisos en pantalla: ${avisos.length ? avisos.join(' | ') : 'ninguno'}`,
+      `Pantalla (400 caracteres): ${texto || '(vacía)'}`,
+      `pageerror: ${errores.length ? errores.join(' | ') : 'ninguno'}`,
+    ].join('\n'))
+  }
+}
+
 test('una marca nueva de Last: el aviso en Inicio y el alta en una sola pantalla', async ({ page }, info) => {
   const sufijo = info.project.name === 'movil' ? '-movil' : ''
+  const errores: string[] = []
+  page.on('pageerror', (e) => errores.push(e.message))
   const { cuenta } = await preparar('empezar')
 
   // ── 1 · Inicio: el aviso ──────────────────────────────────────────────────
@@ -115,7 +138,8 @@ test('una marca nueva de Last: el aviso en Inicio y el alta en una sola pantalla
 
   // ── 3 · La confirmación, con contenido ────────────────────────────────────
   const hecho = page.locator('[data-prueba="alta-hecha"]')
-  await expect(hecho).toHaveText(`Dada de alta ${MARCA}: 2 locales, 3 platos. Faltan 2 recetas.`, { timeout: 30_000 })
+  await esperarOContar(page, errores, () =>
+    expect(hecho).toHaveText(`Dada de alta ${MARCA}: 2 locales, 3 platos. Faltan 2 recetas.`, { timeout: 30_000 }))
   await expect(panel).toHaveCount(0)
   await expect(page.locator('[data-prueba="marcas-nuevas-last"]').getByText(`Marca nueva: ${MARCA}`)).toHaveCount(0)
   await foto(page, '2-alta-hecha', sufijo)
@@ -128,9 +152,12 @@ test('una marca nueva de Last: el aviso en Inicio y el alta en una sola pantalla
   expect(b.datos[0].ownership_type).toBe('own')
   const platos = await rest<{ name: string; recipe_item_id: string | null }[]>(s, 'GET',
     `menu_item?brand_id=eq.${b.datos[0].id}&archived_at=is.null&select=name,recipe_item_id&order=name`)
-  expect(platos.datos.map((p) => p.name)).toEqual(['AREPA REINA (LP)', 'AREPA REINA LP', 'Agua mineral 50 cl', 'TEQUEÑOS LP'])
+  // Sin depender del orden: la base ordena los nombres según su intercalación
+  // (en staging, «Agua» antes que «AREPA»), no por bytes (run 40651888247).
+  expect(platos.datos.map((p) => p.name).sort()).toEqual(['AREPA REINA (LP)', 'AREPA REINA LP', 'Agua mineral 50 cl', 'TEQUEÑOS LP'])
   expect(platos.datos.every((p) => p.recipe_item_id)).toBe(true)
-  expect(platos.datos[0].recipe_item_id, 'los dos nombres de la arepa, un solo artículo').toBe(platos.datos[1].recipe_item_id)
+  const arepa = (n: string) => platos.datos.find((p) => p.name === n)!.recipe_item_id
+  expect(arepa('AREPA REINA (LP)'), 'los dos nombres de la arepa, un solo artículo').toBe(arepa('AREPA REINA LP'))
   const locales = await rest<unknown[]>(s, 'GET', `brand_location_availability?brand_id=eq.${b.datos[0].id}&is_active=eq.true&select=id`)
   expect(locales.datos).toHaveLength(2)
   const vinculos = await rest<unknown[]>(s, 'GET', `external_brand_map?brand_id=eq.${b.datos[0].id}&select=id`)

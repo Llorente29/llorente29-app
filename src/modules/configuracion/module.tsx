@@ -17,11 +17,12 @@
 //
 // Fichero .tsx porque los `element` de las rutas son JSX.
 
-import { MapPin, Tag, Bell, UserCog, Bike, Truck, Receipt } from 'lucide-react'
+import { MapPin, Tag, Bell, UserCog, Bike, Truck, Receipt, RefreshCw } from 'lucide-react'
 import type { ModuleDefinition } from '@/shell/types'
 
 import { LocationsPage } from '@/pages/OtherPages'
 import BrandsPage from '@/modules/multitenancy/pages/BrandsPage'
+import CambiosCartaLastPage from '@/modules/multitenancy/pages/CambiosCartaLastPage'
 import AvisosSettingsPage from '@/pages/AvisosSettingsPage'
 import RepartoSettingsPage from '@/pages/RepartoSettingsPage'
 import QuienRepartePage from '@/modules/reparto/pages/QuienRepartePage'
@@ -39,6 +40,8 @@ export const configuracionModule: ModuleDefinition = {
     { path: '',          element: <LocationsPage /> },
     { path: 'locales',   element: <LocationsPage /> },
     { path: 'marcas',    element: <BrandsPage /> },
+    // F01 · PR 2: los cambios de carta de las marcas de Last (tablero 5).
+    { path: 'cambios-last', element: <CambiosCartaLastPage /> },
     { path: 'avisos',    element: <AvisosSettingsPage /> },
     { path: 'reparto',   element: <RepartoSettingsPage /> },
     // R02: quién reparte cada marca en cada plataforma (estilo nuevo).
@@ -52,6 +55,7 @@ export const configuracionModule: ModuleDefinition = {
     items: [
       { id: 'config_locales',  label: 'Locales',            icon: MapPin,  path: 'locales',  requiredPermission: 'show_locations' },
       { id: 'config_marcas',   label: 'Marcas',             icon: Tag,     path: 'marcas',   requiredRole: 'admin' },
+      { id: 'config_cambios_last', label: 'Cambios de Last', icon: RefreshCw, path: 'cambios-last', requiredRole: 'admin' },
       { id: 'config_avisos',   label: 'Avisos',             icon: Bell,    path: 'avisos',   requiredPermission: 'show_tspoon_settings' },
       { id: 'config_reparto',  label: 'Reparto',            icon: Bike,    path: 'reparto',  requiredRole: 'admin' },
       // R02: la decide el encargado del local también (la base lo permite a admin y manager).

@@ -12,6 +12,13 @@
 # lo que había la PRIMERA vez que la rama lo cambió: una definición que ya
 # está registrada no se pisa.
 #
+# W07 (28/10) · Con SIN_DEFINICIONES=1 (las semillas de la rama): se aplican y
+# quedan apuntadas en w06_staging.de_verdad, pero NO se registra cómo estaban
+# las definiciones antes. Una semilla no tiene .down.sql: compara.sh no la puede
+# deshacer, y si sus definiciones estuvieran en el registro las daría por «no
+# vuelven a como estaban». Se puede, porque está probado que se aplica dos veces
+# igual (staging-tanda.mjs semilla-dos-veces) y main la volverá a pasar.
+#
 # Entorno: PSQL, DB_URL. Imprime una línea por fichero aplicado.
 set -euo pipefail
 rama="${1:?rama}"; shift
@@ -31,7 +38,7 @@ create table if not exists w06_staging.antes_de_verdad (
   primary key (rama, clave));
 SQL
 
-q -A -t --csv -f "$FOTO" > "$T/antes.csv"
+[ "${SIN_DEFINICIONES:-}" = 1 ] || q -A -t --csv -f "$FOTO" > "$T/antes.csv"
 for f in "$@"; do
   q -1 -f "$f"
   echo "insert into w06_staging.de_verdad (rama, fichero, md5) values (:'rama', :'f', :'md5')
@@ -39,6 +46,7 @@ for f in "$@"; do
     | q -v rama="$rama" -v f="$f" -v md5="$(md5sum "$f" | cut -d' ' -f1)"
   echo "aplicado de verdad: $f"
 done
+if [ "${SIN_DEFINICIONES:-}" = 1 ]; then echo "Sin registro de definiciones (W07: semillas)."; exit 0; fi
 q -A -t --csv -f "$FOTO" > "$T/despues.csv"
 node scripts/conta/staging/definiciones-comparar.mjs delta "$T/antes.csv" "$T/despues.csv" > "$T/delta.csv"
 n=$(grep -c . "$T/delta.csv" || true)

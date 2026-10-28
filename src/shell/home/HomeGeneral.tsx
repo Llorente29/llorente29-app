@@ -88,6 +88,7 @@ const ICONO_AVISO: Record<TipoAviso, typeof ClipboardList> = {
   tablet: TabletSmartphone,
   cuadrante: CalendarClock,
   marca: Tag,
+  carta: Tag,
 }
 
 /** De dónde viene el mosaico que se está viendo. Se dice, no se adivina. */
