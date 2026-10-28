@@ -178,7 +178,7 @@ declare v_err text;
 begin
   begin perform public.conta_proveedor_iban_de_factura((select v::uuid from _p where clave = 'p1'), (select v::uuid from _p where clave = 'f4'));
   exception when others then v_err := sqlerrm; end;
-  if v_err is distinct from 'El IBAN de esta factura no es correcto: puede estar mal leído. Compruébalo en el papel.' then raise exception 'PRUEBA S01b · 2e: con un IBAN mal leído dio «%».', v_err; end if;
+  if v_err is distinct from 'El IBAN de esta factura no es correcto: puede estar mal leído. Compruébalo en su PDF.' then raise exception 'PRUEBA S01b · 2e: con un IBAN mal leído dio «%».', v_err; end if;
   raise notice '2e · un IBAN que no pasa el módulo 97 no se guarda';
 end $$;
 reset role;

@@ -1,8 +1,8 @@
 {
- "_que": "S01b · contexto de producción de la tanda (1304 añade supplier.data_from_invoice y conta_proveedor_iban_de_factura; 1305 cambia _pc01e2b_iban_de_la_factura con la misma firma), medido en SOLO LECTURA el 28/10 a las 12:14Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: la función que cambia existe con una sola firma (md5 de prosrc d840156236f657fb49d44e7bb221795b, el del repositorio); supplier, 100 filas de estimación; nada de lo nuevo existe; nada en el camino del pedido ni en el cron; nada en el historial.",
+ "_que": "S01b · contexto de producción de la tanda (1304 añade supplier.data_from_invoice y conta_proveedor_iban_de_factura; 1305 cambia _pc01e2b_iban_de_la_factura con la misma firma), medido en SOLO LECTURA el 28/10 a las 12:14Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: la función que cambia existe con una sola firma (md5 de prosrc d840156236f657fb49d44e7bb221795b, el del repositorio); supplier, 100 filas de estimación; nada de lo nuevo existe; nada en el camino del pedido ni en el cron; nada en el historial. Huella de la 1304 rehecha el 28/10 (de 2b5d1872 a ab4a5f38): solo cambia el texto de un error («Compruébalo en su PDF», la app no dice «papel»); no toca ningún objeto de los medidos.",
  "medido": "2026-10-28T12:14Z",
  "tanda": {
-  "supabase/migrations/20261028T1304_s01b_ficha_desde_factura.sql": "2b5d1872b5e5c0df9690b22b8e6dc6b2",
+  "supabase/migrations/20261028T1304_s01b_ficha_desde_factura.sql": "ab4a5f38a5c3a6a466daa55eeb3c9d18",
   "supabase/migrations/20261028T1305_s01b_iban_no_se_pone_solo.sql": "0aba1fc535d91a101f007006004a3462"
  },
  "contexto": {

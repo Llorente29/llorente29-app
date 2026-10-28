@@ -52,7 +52,7 @@ begin
     end if;
     raise exception '% ya tiene otro IBAN (···· %): si esta factura trae el nuevo, decídelo en ella.', v_s.name, right(public._pc01e2_iban(v_s.iban), 4) using errcode = '23514';
   end if;
-  if not public._pc01e2b_iban_valido(v_iban) then raise exception 'El IBAN de esta factura no es correcto: puede estar mal leído. Compruébalo en el papel.' using errcode = '22023'; end if;
+  if not public._pc01e2b_iban_valido(v_iban) then raise exception 'El IBAN de esta factura no es correcto: puede estar mal leído. Compruébalo en su PDF.' using errcode = '22023'; end if;
   if exists (select 1 from public.treasury_account t where t.account_id = v_s.account_id and public._pc01e2_iban(t.iban) = v_iban) then
     raise exception 'Ese IBAN es de una cuenta vuestra, no de %.', v_s.name using errcode = '23514';
   end if;

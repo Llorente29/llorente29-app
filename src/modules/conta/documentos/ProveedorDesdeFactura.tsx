@@ -188,7 +188,7 @@ export function AvisoIbanDistinto({ iban, ficha, factura, quien, accountId, alHa
     <div className="s-aviso-lista cxf-iban-distinto" data-tono="falta" role="alert" data-prueba="iban-distinto">
       <p style={{ margin: 0 }}><strong>Ojo: el IBAN de esta factura no es el de su ficha. Antes de pagar, confírmalo llamando al proveedor a su teléfono de siempre, no al de la factura.</strong></p>
       <p style={{ margin: '4px 0 8px' }}>En la factura: {iban.formateado} · En su ficha: {iban.ficha}</p>
-      {!iban.valido && <p style={{ margin: '0 0 8px' }}>El de la factura no es un IBAN válido ({iban.motivo?.replace(/\.$/, '')}): puede estar mal leído. Compruébalo en el papel.</p>}
+      {!iban.valido && <p style={{ margin: '0 0 8px' }}>El de la factura no es un IBAN válido ({iban.motivo?.replace(/\.$/, '')}): puede estar mal leído. Compruébalo en su PDF.</p>}
       {paso === 'aviso' ? (
         <div className="cxf-botones">
           <Boton onClick={() => setPaso('confirmar')} disabled={ocupado || !iban.valido}>Cambiar el IBAN de su ficha</Boton>
