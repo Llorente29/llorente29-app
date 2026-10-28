@@ -43,6 +43,15 @@ jobs:
           # paso lea de un commit viejo (git show) lo baja git al momento.
           fetch-depth: 0
           filter: blob:none
+          # W09d (28/10): sin las imágenes de las capturas de hoy (docs/**/capturas,
+          # PNG y JPG: 172 de los 295 MB del árbol). Ningún paso las lee: las
+          # capturas se revisan por el diff (capturas.mjs revisar), no en disco.
+          # Lo demás de esas carpetas (.md, .json) sí se baja.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /*
+            !/docs/**/capturas/**/*.png
+            !/docs/**/capturas/**/*.jpg
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
