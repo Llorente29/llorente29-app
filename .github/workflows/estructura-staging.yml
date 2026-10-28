@@ -1,0 +1,126 @@
+name: Estructura de staging (sin datos)
+
+# QUÉ HACE (W09, Julio, 28/10)
+# Saca la ESTRUCTURA de staging-conta, sin una sola fila (pg_dump
+# --schema-only), y la deja en el repositorio, en la rama aparte
+# estructura/staging, fichero supabase/staging/esquema.sql: un commit por cada
+# cambio, encima del anterior, para poder ver qué cambió de un día a otro.
+# Con ella, scripts/staging/base-local.sh monta en local una base igual a
+# staging con las semillas, para probar SQL sin esperar a un run.
+#
+# Por qué una rama aparte y no main: un commit del bot a main es un despliegue
+# de Vercel y un PNG o un esquema más que choca; en la rama de un PR deja sus
+# comprobaciones en «Action required» (W08b). Aquí no molesta a nadie.
+#
+# CUÁNDO: después de cada «Aplicar SQL en staging-conta» de main que sale en
+# verde (lo que cambia staging de verdad), a mano, o al cambiar este workflow o
+# su guion (para probarlo desde una rama: vuelca la misma staging).
+#
+# QUÉ NO SALE: datos (solo estructura), propietarios ni secretos.
+# scripts/staging/esquema.mjs busca en el volcado cualquier cosa con pinta de
+# secreto (un JWT, una clave de Stripe, una URL con contraseña…) y, si la
+# encuentra, NO publica y el run sale en rojo diciendo la línea.
+#
+# W09 · psql con límite: PGCONNECT_TIMEOUT para conectar y un límite por paso.
+
+on:
+  workflow_run:
+    workflows: ['Aplicar SQL en staging-conta']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+  push:
+    branches: ['claude/**', 'conta/**']
+    paths:
+      - '.github/workflows/estructura-staging.yml'
+      - 'scripts/staging/esquema.mjs'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: estructura-staging
+  cancel-in-progress: false
+
+env:
+  STAGING_REF: oseymswjlzplqoxrfjzi
+  PROD_REF: xzmpnchlguibclvxyynt
+  PGCONNECT_TIMEOUT: '15'
+
+jobs:
+  volcar:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        timeout-minutes: 2
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DB_URL:-}" ]; then echo "::error::Falta el secreto STAGING_CONTA_DB_URL."; exit 1; fi
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN. Abortado sin conectar."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
+
+      - name: Instalar pg_dump 17 (la versión de staging)
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      # Los esquemas de la aplicación y auth (las pruebas entran como usuarios).
+      # Fuera lo que monta Supabase por su cuenta (storage, realtime, graphql,
+      # vault, net, cron…): el guion local pone lo poco que hace falta.
+      - name: Volcar la estructura (sin datos)
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/estructura"
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" --schema-only --no-owner \
+            --schema=public --schema=auth --schema=propuestas --schema=e2e --schema=e2e_carril \
+            --schema=supabase_migrations --schema=w06_staging --schema=r02_prueba \
+            -f "$RUNNER_TEMP/estructura/crudo.sql"
+          node scripts/staging/esquema.mjs limpiar "$RUNNER_TEMP/estructura/crudo.sql" "$RUNNER_TEMP/estructura/esquema.sql"
+          node scripts/staging/esquema.mjs secretos "$RUNNER_TEMP/estructura/esquema.sql"
+          echo "Volcado: $(wc -l < "$RUNNER_TEMP/estructura/esquema.sql") líneas, $(grep -c '^CREATE TABLE' "$RUNNER_TEMP/estructura/esquema.sql") tablas, $(grep -c '^CREATE FUNCTION\|^CREATE OR REPLACE FUNCTION' "$RUNNER_TEMP/estructura/esquema.sql") funciones." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Un commit encima del anterior de estructura/staging, con solo el
+      # esquema, hecho en un índice aparte: no toca el checkout ni ninguna otra
+      # rama. Si no ha cambiado nada, no hay commit.
+      - name: Publicar en estructura/staging
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          git fetch -q origin "refs/heads/estructura/staging:refs/remotes/origin/estructura" 2>/dev/null || true
+          PADRE=$(git rev-parse -q --verify refs/remotes/origin/estructura || true)
+          mkdir -p supabase/staging
+          cp "$RUNNER_TEMP/estructura/esquema.sql" supabase/staging/esquema.sql
+          export GIT_INDEX_FILE="$RUNNER_TEMP/indice-estructura"
+          rm -f "$GIT_INDEX_FILE"
+          git add -f supabase/staging/esquema.sql
+          ARBOL=$(git write-tree)
+          unset GIT_INDEX_FILE
+          if [ -n "$PADRE" ] && [ "$(git rev-parse "$PADRE^{tree}")" = "$ARBOL" ]; then
+            echo "La estructura de staging no ha cambiado: nada que publicar." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          HUELLA=$(md5sum supabase/staging/esquema.sql | cut -c1-8)
+          COMMIT=$(git -c user.name=folvy-estructura -c user.email=estructura@folvy.invalid commit-tree "$ARBOL" ${PADRE:+-p "$PADRE"} \
+            -m "Estructura de staging · $(date -u +%Y-%m-%dT%H:%MZ) · md5 $HUELLA (${GITHUB_REF_NAME}, ${GITHUB_SHA::7}, run $GITHUB_RUN_ID)")
+          git push -q origin "$COMMIT:refs/heads/estructura/staging"
+          echo "Publicada en estructura/staging: ${COMMIT::7} (md5 $HUELLA)." | tee -a "$GITHUB_STEP_SUMMARY"
