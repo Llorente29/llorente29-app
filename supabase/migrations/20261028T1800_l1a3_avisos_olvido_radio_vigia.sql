@@ -21,9 +21,9 @@
 --   4 · Lo que llega del webhook (whatsapp_entrada): todo, también lo
 --       rechazado por firma; y los estados de entrega (whatsapp_estado).
 --   5 · Los avisos a la empresa (aviso_empresa): un fichaje fuera del radio
---       (salvo el habitual: 3 o más en 30 días a menos de 200 m del mismo
---       sitio; el disparador lo pone la 1801), y que los avisos de olvido
---       dejan de salir. Los lee «Equipo» y
+--       con una ubicación precisa (precision_m de 100 m o menos; la columna
+--       es de aquí, el disparador lo pone la 1801 y la precisión la rellena
+--       fichar() desde la 1802), y que los avisos de olvido dejan de salir. Los lee «Equipo» y
 --       salen por correo (la función de borde clockout-reminder).
 --   6 · El vigía (vigia_avisos_olvido, cron cada 15 min): detecta él mismo
 --       (no depende de la función de borde) y avisa a la empresa el mismo día
@@ -39,6 +39,16 @@ comment on column public.app_settings.aviso_olvido_desde is
   'L1a PR 3: desde qué hora (Madrid) puede salir el WhatsApp del olvido. Null: 08:00.';
 comment on column public.app_settings.aviso_olvido_hasta is
   'L1a PR 3: hasta qué hora (Madrid) puede salir el WhatsApp del olvido; después, solo el portal. Null: 22:00.';
+
+-- ── 0b · La precisión de la ubicación en cada fichaje ─────────────────────
+-- coords.accuracy del navegador, en metros (el radio del círculo donde está el
+-- móvil con un 68 % de probabilidad). Más de 100 m es una ubicación
+-- aproximada (la «ubicación aproximada» de Android o iPhone, o la del
+-- ordenador por la red): no sirve para decir que alguien estaba fuera del
+-- radio. La rellena fichar() desde la 1802; las marcas de antes, nulas.
+alter table public.clock_entries add column if not exists precision_m integer;
+comment on column public.clock_entries.precision_m is
+  'L1a PR 3: la precisión de la ubicación que dio el móvil al fichar (coords.accuracy, metros). Más de 100 m = ubicación aproximada: no cuenta como fuera del radio (within_radius null). Null: sin ubicación, o marca de antes del 28/10.';
 
 -- ── 1 · El registro de cada aviso, con lo que hace falta para contestarlo ──
 alter table public.clockout_reminder_log add column if not exists location_id uuid references public.locations(id) on delete set null;
@@ -434,7 +444,7 @@ revoke all on public.aviso_empresa from anon;
 revoke insert, update, delete on public.aviso_empresa from authenticated;
 grant select on public.aviso_empresa to authenticated;
 comment on table public.aviso_empresa is
-  'L1a PR 3: lo que la empresa tiene que saber el mismo día: un fichaje fuera del radio (no el habitual) y que los avisos de olvido dejan de salir. Lo enseña «Equipo» y sale por correo a los administradores y a los encargados del local (clockout-reminder).';
+  'L1a PR 3: lo que la empresa tiene que saber el mismo día: un fichaje fuera del radio con ubicación precisa y que los avisos de olvido dejan de salir. Lo enseña «Equipo» y sale por correo a los administradores y a los encargados del local (clockout-reminder).';
 
 -- A quién se le manda cada aviso por correo: los administradores de la
 -- cuenta y los encargados de ese local, activos y con correo.
@@ -461,29 +471,21 @@ $$;
 revoke all on function public.avisos_empresa_por_enviar(integer) from public, anon, authenticated;
 grant execute on function public.avisos_empresa_por_enviar(integer) to service_role;
 
--- Fuera del radio: aviso, salvo el habitual. Nunca rompe el fichaje.
-create or replace function public._metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision)
-returns double precision language sql immutable set search_path = public as $$
-  select 2 * 6371000 * asin(sqrt(power(sin(radians(p_lat2 - p_lat1) / 2), 2)
-         + cos(radians(p_lat1)) * cos(radians(p_lat2)) * power(sin(radians(p_lng2 - p_lng1) / 2), 2)));
-$$;
-
+-- Fuera del radio: aviso al encargado, solo con una ubicación PRECISA (la
+-- precisión del móvil, precision_m, de 100 m o menos). Una ubicación
+-- aproximada no es «fuera del radio»: fichar() deja within_radius en null y el
+-- trabajador ve en el momento cómo activar la ubicación precisa. Nunca rompe
+-- el fichaje.
 create or replace function public.tg_fichaje_fuera_del_radio()
 returns trigger
 language plpgsql security definer set search_path = public
 as $$
-declare v_previos integer := 0; v_nombre text; v_local text; v_radio integer; v_loc uuid; v_tipo text;
+declare v_nombre text; v_local text; v_radio integer; v_loc uuid; v_tipo text;
 begin
   begin
-    if new.lat is not null and new.lng is not null then
-      select count(*) into v_previos from public.clock_entries p
-       where p.employee_id = new.employee_id and p.id <> new.id and not p.voided
-         and p.within_radius = false and p.lat is not null and p.lng is not null
-         and p.datetime between new.datetime - interval '30 days' and new.datetime
-         and public._metros(new.lat, new.lng, p.lat, p.lng) <= 200;
-    end if;
-    if v_previos >= 3 then
-      return null;   -- habitual: está en «Fuera del radio» de Equipo, pero no interrumpe
+    -- Lo mismo que la condición del disparador (1801), por si se llama sin ella.
+    if new.within_radius is distinct from false or new.precision_m is null or new.precision_m > 100 then
+      return null;
     end if;
     select e.name, coalesce(new.location_id_at_clock, e.location_id) into v_nombre, v_loc
       from public.employees e where e.id = new.employee_id;
@@ -493,14 +495,14 @@ begin
     insert into public.aviso_empresa(account_id, location_id, employee_id, clock_entry_id, tipo, clave, titulo, texto)
     values (new.account_id, v_loc, new.employee_id, new.id, 'fuera_del_radio', 'fuera_del_radio:' || new.id,
             format('%s fichó fuera del radio de %s', coalesce(v_nombre, 'Una persona'), coalesce(v_local, 'su local')),
-            format('%s fichó %s el %s a las %s a %s de %s (el radio es de %s m). Si fue a propósito (un recado, un evento), no hace falta nada; si no, revísalo en Equipo › Para revisar.',
+            format('%s fichó %s el %s a las %s a %s de %s (el radio es de %s m; el móvil daba la ubicación con una precisión de %s m). Si fue a propósito (un recado, un evento), no hace falta nada; si no, revísalo en Equipo › Para revisar.',
                    coalesce(v_nombre, 'Una persona'), v_tipo,
                    to_char(new.datetime at time zone 'Europe/Madrid', 'DD/MM'),
                    to_char(new.datetime at time zone 'Europe/Madrid', 'HH24:MI'),
                    case when new.distance_m is null then 'una distancia que no se pudo medir'
                         when new.distance_m >= 1000 then replace(to_char(new.distance_m / 1000.0, 'FM990.0'), '.', ',') || ' km'
                         else new.distance_m || ' m' end,
-                   coalesce(v_local, 'su local'), coalesce(v_radio, 200)))
+                   coalesce(v_local, 'su local'), coalesce(v_radio, 200), new.precision_m))
     on conflict (clave) do nothing;
   exception when others then
     begin

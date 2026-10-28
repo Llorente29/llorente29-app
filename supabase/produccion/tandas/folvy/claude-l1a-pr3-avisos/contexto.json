@@ -1,9 +1,10 @@
 {
-  "_que": "L1a · PR 3 · contexto de producción de la tanda (1800 y 1801), medido en SOLO LECTURA el 28/10 a las 18:14 UTC con la consulta del analizador (sql-contexto). Existen las tres tablas que se tocan (app_settings, clock_entries, clockout_reminder_log) y la función que se reemplaza (una firma); lo nuevo no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
-  "medido": "2026-10-28T18:14Z",
+  "_que": "L1a · PR 3 · contexto de producción de la tanda (1800, 1801 y 1934), medido en SOLO LECTURA el 28/10 a las 19:36 UTC con la consulta del analizador (sql-contexto). Existen las tres tablas que se tocan y las dos funciones que se reemplazan (enqueue_clockout_reminders y fichar, una firma cada una); lo nuevo (fichar_con_precision y el resto) no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-28T19:36Z",
   "tanda": {
-    "supabase/migrations/20261028T1800_l1a3_avisos_olvido_radio_vigia.sql": "e8e9c9cbb5b21c7ae6f8b9483ae3061d",
-    "supabase/migrations/20261028T1801_l1a3_olvido_detectar_en_madrid.sql": "3d3ed7534f11edaf83536ef29d1fac80"
+    "supabase/migrations/20261028T1800_l1a3_avisos_olvido_radio_vigia.sql": "ad239b81c869724e2c04e59467b7cb06",
+    "supabase/migrations/20261028T1801_l1a3_olvido_detectar_en_madrid.sql": "a10f3a3df341e7e5f1f3582b34689718",
+    "supabase/migrations/20261028T1934_l1a3_fichar_con_precision.sql": "6a83d0ee371dd087b6242bc4b67c5676"
   },
   "contexto": {
     "tablas": [
@@ -12,7 +13,8 @@
       "public.clockout_reminder_log"
     ],
     "funciones": [
-      "public.enqueue_clockout_reminders()"
+      "public.enqueue_clockout_reminders()",
+      "public.fichar(uuid,text,text,uuid,double precision,double precision,timestamptz,timestamptz,text,boolean,integer,text,text,boolean,text)"
     ],
     "filas": {
       "public.app_settings": 1,

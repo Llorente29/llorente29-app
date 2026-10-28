@@ -18,8 +18,9 @@
 --   · clockout_reminder_log: tres CHECK que solo miran columnas que añade la
 --     1800 (canal, respuesta, respondida_via; las 111 filas de antes, nulas);
 --   · clock_entries: el disparador NUEVO de fuera del radio (después de
---     insertar, solo cuando within_radius es false; nunca rompe el fichaje:
---     si falla, lo dice a sistema y el fichaje sigue).
+--     insertar, solo cuando within_radius es false y la ubicación es precisa,
+--     precision_m de 100 m o menos; nunca rompe el fichaje: si falla, lo dice
+--     a sistema y el fichaje sigue).
 --
 -- cambia: public.enqueue_clockout_reminders · prueba: supabase/staging/sql/20261028_l1a3_avisos_prueba.sql
 -- cambia: public.clockout_reminder_log · prueba: supabase/staging/sql/20261028_l1a3_avisos_prueba.sql
@@ -71,5 +72,5 @@ end $$;
 drop trigger if exists trg_fichaje_fuera_del_radio on public.clock_entries;
 create trigger trg_fichaje_fuera_del_radio
   after insert on public.clock_entries
-  for each row when (new.within_radius = false)
+  for each row when (new.within_radius = false and new.precision_m is not null and new.precision_m <= 100)
   execute function public.tg_fichaje_fuera_del_radio();

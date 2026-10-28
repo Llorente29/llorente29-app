@@ -1,6 +1,6 @@
 -- supabase/staging/sql/20261028_l1a3_avisos_prueba.sql
 --
--- SOLO STAGING. Prueba de la 1800 y la 1801 (L1a · PR 3: el aviso de olvido
+-- SOLO STAGING. Prueba de la 1800, la 1801 y la 1934 (L1a · PR 3: el aviso de olvido
 -- rehecho, la respuesta en un toque, el aviso fuera del radio y el vigía de
 -- los envíos), con \i dentro de la transacción y ROLLBACK: staging no cambia.
 --
@@ -19,7 +19,9 @@
 --   sinturno  entrada 06:00, sin turno                  → WhatsApp a las 18:00
 --   renuncia  no quiere el WhatsApp                     → solo portal
 --   portal    la del usuario «trabajador» de la cuenta A → contesta en el portal
---   lejos     ficha fuera del radio                     → aviso salvo el habitual
+--   lejos     ficha con fichar() desde el móvil         → aviso solo con ubicación
+--             precisa fuera del radio; la aproximada (más de 100 m de
+--             precisión) no es ni dentro ni fuera
 --
 --   0 · lo de antes: si ya están aplicadas, sus vueltas atrás; la huella de
 --       enqueue_clockout_reminders para compararla al final.
@@ -31,12 +33,16 @@
 --   4 · contestar en el portal: solo lo suyo; «Otra hora» pide la hora; la
 --       tarjeta desaparece al contestar.
 --   5 · los estados de Meta: entregado, leído y fallido.
---   6 · fuera del radio: aviso a la empresa, salvo el habitual (3 o más en 30
---       días a menos de 200 m); dentro del radio, nada; quién lo lee.
+--   6 · fuera del radio y la precisión (la 1934): fichar_con_precision guarda la
+--       precisión; con más de 100 m es «ubicación aproximada» (ni dentro ni
+--       fuera, no bloquea); solo avisa al encargado la precisa fuera del
+--       radio; sin precisión (el front de antes), fuera pero sin aviso; quién
+--       lee los avisos; y fichar() de siempre sigue fichando, sin precisión.
 --   7 · el vigía: sin el cron del envío, lo dice (staging no lo tiene); un
 --       fallo de la empresa avisa una vez al día; el de una persona, no; lo
 --       atascado, también; y en palabras de oficina.
---   8 · la vuelta atrás: la huella de antes y nada de lo nuevo.
+--   8 · la vuelta atrás: las huellas de antes (fichar con sus permisos) y nada
+--       de lo nuevo.
 
 \set ON_ERROR_STOP 1
 begin;
@@ -48,6 +54,10 @@ end $$;
 set local statement_timeout = '180s';
 
 -- ── 0 · Lo de antes ─────────────────────────────────────────────────────────
+select exists (select 1 from public.funcion_respaldo where migracion = '20261028T1934_l1a3_fichar_con_precision') as l1a3_c_aplicada \gset
+\if :l1a3_c_aplicada
+\i supabase/vuelta-atras/20261028T1934_l1a3_fichar_con_precision.down.sql
+\endif
 select exists (select 1 from public.funcion_respaldo where migracion = '20261028T1801_l1a3_olvido_detectar_en_madrid') as l1a3_b_aplicada \gset
 \if :l1a3_b_aplicada
 \i supabase/vuelta-atras/20261028T1801_l1a3_olvido_detectar_en_madrid.down.sql
@@ -64,6 +74,7 @@ insert into _s values
   ('admin', 'c01a0000-0000-4000-8000-0000000000a1'), ('encargado', 'c01a0000-0000-4000-8000-0000000000a6'),
   ('trabajador', 'c01a0000-0000-4000-8000-0000000000a7'), ('admin_b', 'c01b0000-0000-4000-8000-0000000000b1');
 insert into _s select 'huella', md5(pg_get_functiondef('public.enqueue_clockout_reminders()'::regprocedure));
+insert into _s select 'huella_fichar', md5(pg_get_functiondef(to_regprocedure('public.fichar(uuid,text,text,uuid,double precision,double precision,timestamptz,timestamptz,text,boolean,integer,text,text,boolean,text)')));
 
 do $$ begin
   if to_regclass('public.aviso_empresa') is not null or to_regclass('public.whatsapp_entrada') is not null
@@ -137,6 +148,7 @@ set constraints all immediate;
 -- La 1800 se puede pasar dos veces (W05: desde la rama va de verdad).
 \i supabase/migrations/20261028T1800_l1a3_avisos_olvido_radio_vigia.sql
 \i supabase/migrations/20261028T1801_l1a3_olvido_detectar_en_madrid.sql
+\i supabase/migrations/20261028T1934_l1a3_fichar_con_precision.sql
 
 -- Lo que hace enqueue_clockout_reminders, con la hora de la prueba.
 create temp table _encolar (ahora timestamptz) on commit drop;
@@ -372,30 +384,78 @@ do $$ begin
   raise notice '5 · estados: entregado y leído apuntados';
 end $$;
 
--- ── 6 · Fuera del radio ────────────────────────────────────────────────────
+-- ── 6 · Fuera del radio y la ubicación aproximada, fichando con fichar() ───
+-- El usuario «trabajador» pasa a ser «lejos» y ficha desde el móvil. Las
+-- horas, como sin cobertura (p_hora_declarada), para separarlas una hora.
+-- Norte Centro está en (40.4168, -3.7038), radio 200 m.
+reset role;
+update public.user_profiles set employee_id = (select v::uuid from _s where clave = 'lejos')
+ where user_id = (select v::uuid from _s where clave = 'trabajador') and account_id = (select v::uuid from _s where clave = 'cuenta');
+select set_config('request.jwt.claims', json_build_object('sub', (select v from _s where clave = 'trabajador'), 'role', 'authenticated')::text, true) \gset _
+set local role authenticated;
 do $$
-declare lejos uuid := (select v::uuid from _s where clave = 'lejos'); a uuid := (select v::uuid from _s where clave = 'cuenta');
-        centro uuid := (select v::uuid from _s where clave = 'centro'); i integer; n integer;
+declare lejos uuid := (select v::uuid from _s where clave = 'lejos'); centro uuid := (select v::uuid from _s where clave = 'centro');
+        r jsonb;
 begin
-  -- Cuatro entradas en el mismo sitio, a 670 m: avisan las tres primeras; la cuarta es habitual.
-  for i in 1..4 loop
-    insert into public.clock_entries (employee_id, account_id, type, datetime, real_datetime, source, location_id_at_clock, lat, lng, distance_m, within_radius, created_at)
-    values (lejos, a, 'entrada', now() - make_interval(days => 10 - i), now() - make_interval(days => 10 - i), 'movil', centro, 40.4228, -3.7038, 670, false, now());
-    insert into public.clock_entries (employee_id, account_id, type, datetime, real_datetime, source, location_id_at_clock, lat, lng, distance_m, within_radius, created_at)
-    values (lejos, a, 'salida', now() - make_interval(days => 10 - i) + interval '6 hours', now() - make_interval(days => 10 - i) + interval '6 hours', 'movil', centro, 40.4169, -3.7038, 11, true, now());
-  end loop;
-  select count(*) into n from public.aviso_empresa where employee_id = lejos and tipo = 'fuera_del_radio';
-  if n <> 3 then raise exception 'PRUEBA L1A3 · 6: fuera del radio tenían que ser 3 avisos (el cuarto es habitual) y son %.', n; end if;
-  -- Otro sitio, a 2,1 km: aviso.
-  insert into public.clock_entries (employee_id, account_id, type, datetime, real_datetime, source, location_id_at_clock, lat, lng, distance_m, within_radius, created_at)
-  values (lejos, a, 'entrada', now() - interval '1 day', now() - interval '1 day', 'movil', centro, 40.4357, -3.7038, 2100, false, now());
-  if not exists (select 1 from public.aviso_empresa where employee_id = lejos and texto like '%a 2,1 km de Norte Centro (el radio es de 200 m)%') then
-    raise exception 'PRUEBA L1A3 · 6: el fichaje de otro sitio no avisa, o no lo dice en palabras: %.',
+  -- 1 · Precisa (12 m) y a 670 m: fuera del radio, con aviso.
+  r := public.fichar_con_precision(lejos, 'entrada', 'movil', centro, 40.4228, -3.7038, p_hora_declarada => now() - interval '10 hours', p_precision_m => 12);
+  if (r->>'dentro_del_radio')::boolean is distinct from false or (r->>'ubicacion_aproximada')::boolean or (r->>'precision_m')::int <> 12 then
+    raise exception 'PRUEBA L1A3 · 6: una ubicación precisa a 670 m no sale fuera del radio (%).', r;
+  end if;
+  insert into _s values ('m_precisa', r->>'id');
+  -- 2 · Aproximada (1.500 m de precisión), en el mismo punto: ni dentro ni fuera.
+  r := public.fichar_con_precision(lejos, 'salida', 'movil', centro, 40.4228, -3.7038, p_hora_declarada => now() - interval '9 hours', p_precision_m => 1500);
+  if r->>'dentro_del_radio' is not null or not (r->>'ubicacion_aproximada')::boolean or (r->>'distancia_m')::int not between 660 and 680 then
+    raise exception 'PRUEBA L1A3 · 6: una ubicación aproximada cuenta como dentro o fuera (%).', r;
+  end if;
+  insert into _s values ('m_aproximada', r->>'id');
+  -- 3 · Precisa y dentro: nada.
+  r := public.fichar_con_precision(lejos, 'entrada', 'movil', centro, 40.4169, -3.7038, p_hora_declarada => now() - interval '8 hours', p_precision_m => 5);
+  if not (r->>'dentro_del_radio')::boolean then raise exception 'PRUEBA L1A3 · 6: a 11 m con 5 m de precisión no sale dentro (%).', r; end if;
+  -- 4 · fichar() de siempre (el front de antes, sin precisión) y fuera: fuera del radio, pero sin aviso.
+  r := public.fichar(lejos, 'salida', 'movil', centro, 40.4357, -3.7038, p_hora_declarada => now() - interval '7 hours');
+  if (r->>'dentro_del_radio')::boolean is distinct from false or r->>'precision_m' is not null then
+    raise exception 'PRUEBA L1A3 · 6: sin precisión no se guarda como antes (%).', r;
+  end if;
+  insert into _s values ('m_sin_precision', r->>'id');
+end $$;
+-- 5 · El local en «bloquear»: una ubicación aproximada no bloquea; una precisa fuera, sí.
+reset role;
+update public.locations set clock_geofence_mode = 'block' where id = (select v::uuid from _s where clave = 'centro');
+set local role authenticated;
+do $$
+declare lejos uuid := (select v::uuid from _s where clave = 'lejos'); centro uuid := (select v::uuid from _s where clave = 'centro'); r jsonb;
+begin
+  begin
+    perform public.fichar_con_precision(lejos, 'entrada', 'movil', centro, 40.4357, -3.7038, p_hora_declarada => now() - interval '6 hours', p_precision_m => 20);
+    raise exception 'PRUEBA L1A3 · 6: en «bloquear», una ubicación precisa a 2,1 km ficha.';
+  exception when insufficient_privilege then
+    if sqlerrm not like 'FUERA_DE_ZONA%' then raise; end if;
+  end;
+  r := public.fichar_con_precision(lejos, 'entrada', 'movil', centro, 40.4357, -3.7038, p_hora_declarada => now() - interval '5 hours', p_precision_m => 2000);
+  if not (r->>'ubicacion_aproximada')::boolean then raise exception 'PRUEBA L1A3 · 6: en «bloquear», la aproximada no ficha como aproximada (%).', r; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', '', true) \gset _
+update public.locations set clock_geofence_mode = 'warn' where id = (select v::uuid from _s where clave = 'centro');
+do $$
+declare lejos uuid := (select v::uuid from _s where clave = 'lejos'); n integer; t text;
+begin
+  select count(*), min(texto) into n, t from public.aviso_empresa where employee_id = lejos and tipo = 'fuera_del_radio';
+  if n <> 1 or not exists (select 1 from public.aviso_empresa where clock_entry_id = (select v::uuid from _s where clave = 'm_precisa')) then
+    raise exception 'PRUEBA L1A3 · 6: tenía que avisar solo de la precisa fuera del radio, y hay % avisos: %.', n,
       (select string_agg(texto, ' | ') from public.aviso_empresa where employee_id = lejos);
   end if;
-  insert into _s values ('aviso_radio', (select id from public.aviso_empresa where employee_id = lejos order by creado_at desc limit 1));
-  raise notice '6 · fuera del radio: 3 avisos y el cuarto habitual, no; otro sitio, sí: «%»',
-    (select texto from public.aviso_empresa where employee_id = lejos and texto like '%2,1 km%');
+  if t not like '%a 66_ m de Norte Centro (el radio es de 200 m; el móvil daba la ubicación con una precisión de 12 m)%' then
+    raise exception 'PRUEBA L1A3 · 6: el aviso no lo dice en palabras: %', t;
+  end if;
+  if (select precision_m from public.clock_entries where id = (select v::uuid from _s where clave = 'm_aproximada')) <> 1500
+     or (select within_radius from public.clock_entries where id = (select v::uuid from _s where clave = 'm_aproximada')) is not null then
+    raise exception 'PRUEBA L1A3 · 6: la marca aproximada no guarda su precisión, o dice dentro o fuera.';
+  end if;
+  -- Y un disparador que falla nunca rompe el fichaje: lo prueba el «exception» de la función.
+  insert into _s values ('aviso_radio', (select id from public.aviso_empresa where employee_id = lejos limit 1));
+  raise notice '6 · fuera del radio: solo la precisa (12 m) avisa: «%»; la aproximada (1.500 m), ni dentro ni fuera y sin aviso; sin precisión, fuera y sin aviso; en «bloquear», la aproximada ficha y la precisa fuera no', t;
 end $$;
 -- Lo leen el administrador y el encargado del local; el trabajador y la otra cuenta, no.
 select set_config('request.jwt.claims', json_build_object('sub', (select v from _s where clave = 'encargado'), 'role', 'authenticated')::text, true) \gset _
@@ -488,20 +548,30 @@ begin
 end $$;
 
 -- ── 8 · La vuelta atrás ────────────────────────────────────────────────────
+\i supabase/vuelta-atras/20261028T1934_l1a3_fichar_con_precision.down.sql
 \i supabase/vuelta-atras/20261028T1801_l1a3_olvido_detectar_en_madrid.down.sql
 \i supabase/vuelta-atras/20261028T1800_l1a3_avisos_olvido_radio_vigia.down.sql
 do $$ begin
   if md5(pg_get_functiondef('public.enqueue_clockout_reminders()'::regprocedure)) <> (select v from _s where clave = 'huella') then
     raise exception 'PRUEBA L1A3 · 8: la vuelta atrás no deja enqueue_clockout_reminders como estaba.';
   end if;
+  if md5(pg_get_functiondef(to_regprocedure('public.fichar(uuid,text,text,uuid,double precision,double precision,timestamptz,timestamptz,text,boolean,integer,text,text,boolean,text)')))
+       is distinct from (select v from _s where clave = 'huella_fichar')
+     or (select count(*) from pg_proc where proname = 'fichar' and pronamespace = 'public'::regnamespace) <> 1
+     or exists (select 1 from pg_proc where proname = 'fichar_con_precision' and pronamespace = 'public'::regnamespace)
+     or not has_function_privilege('authenticated', 'public.fichar(uuid,text,text,uuid,double precision,double precision,timestamptz,timestamptz,text,boolean,integer,text,text,boolean,text)', 'EXECUTE')
+     or has_function_privilege('anon', 'public.fichar(uuid,text,text,uuid,double precision,double precision,timestamptz,timestamptz,text,boolean,integer,text,text,boolean,text)', 'EXECUTE') then
+    raise exception 'PRUEBA L1A3 · 8: la vuelta atrás no deja fichar() como estaba (una sola firma, su huella y sus permisos).';
+  end if;
   if to_regclass('public.aviso_empresa') is not null or to_regclass('public.whatsapp_entrada') is not null
      or to_regprocedure('public.avisos_olvido_debidos(timestamptz)') is not null
      or exists (select 1 from pg_trigger where tgname = 'trg_fichaje_fuera_del_radio')
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clockout_reminder_log' and column_name = 'canal')
-     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'aviso_olvido_hasta') then
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'app_settings' and column_name = 'aviso_olvido_hasta')
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'clock_entries' and column_name = 'precision_m') then
     raise exception 'PRUEBA L1A3 · 8: la vuelta atrás deja cosas de la 1800.';
   end if;
-  raise notice '8 · vuelta atrás: enqueue_clockout_reminders con su huella y nada de la 1800';
+  raise notice '8 · vuelta atrás: enqueue_clockout_reminders y fichar() con su huella (fichar, una firma y sus permisos; sin fichar_con_precision) y nada de la 1800';
 end $$;
 
 rollback;

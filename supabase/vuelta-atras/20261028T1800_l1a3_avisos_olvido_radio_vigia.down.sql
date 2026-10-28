@@ -22,6 +22,7 @@ drop function if exists public.vigia_avisos_olvido(boolean, timestamptz);
 drop function if exists public.whatsapp_error_en_palabras(text);
 drop trigger if exists trg_fichaje_fuera_del_radio on public.clock_entries;
 drop function if exists public.tg_fichaje_fuera_del_radio();
+-- _metros: la tuvo una versión anterior de la 1800 (el «sitio habitual», quitado el 28/10).
 drop function if exists public._metros(double precision, double precision, double precision, double precision);
 drop function if exists public.avisos_empresa_por_enviar(integer);
 drop table if exists public.aviso_empresa;
@@ -45,3 +46,4 @@ alter table public.clockout_reminder_log
   drop column if exists canal, drop column if exists salta_at, drop column if exists fin_turno,
   drop column if exists inicio_turno, drop column if exists entrada_at, drop column if exists location_id;
 alter table public.app_settings drop column if exists aviso_olvido_hasta, drop column if exists aviso_olvido_desde;
+alter table public.clock_entries drop column if exists precision_m;
