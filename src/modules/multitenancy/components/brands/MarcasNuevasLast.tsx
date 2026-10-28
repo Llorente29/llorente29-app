@@ -20,11 +20,13 @@ interface Props {
   vuelta: number
   /** Tras un alta o «No la uso»: lo demás de Marcas tiene que volver a leerse. */
   onCambio: () => void
+  /** F01 · PR 3: tras el alta, la ficha de la marca en su carta (con la frase del alta). */
+  onAlta?: (brandId: string, frase: string) => void
 }
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
-export default function MarcasNuevasLast({ accountId, vuelta, onCambio }: Props) {
+export default function MarcasNuevasLast({ accountId, vuelta, onCambio, onAlta }: Props) {
   const [marcas, setMarcas] = useState<MarcaLast[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hecho, setHecho] = useState<{ ok: boolean; texto: string } | null>(null)
@@ -103,7 +105,11 @@ export default function MarcasNuevasLast({ accountId, vuelta, onCambio }: Props)
           accountId={accountId}
           marca={abierta}
           onCerrar={cerrar}
-          onHecho={(frase) => { setHecho({ ok: true, texto: frase }); cerrar(); onCambio() }}
+          onHecho={(frase, r) => {
+            onCambio()
+            if (onAlta && r.brandId) { onAlta(r.brandId, frase); return }
+            setHecho({ ok: true, texto: frase }); cerrar()
+          }}
           onOculta={(frase) => { setHecho({ ok: true, texto: frase }); cerrar(); onCambio() }}
         />
       )}

@@ -14,6 +14,7 @@
 // TABS INCLUIDOS (V1):
 //   - data:      campos básicos de identidad de la marca
 //   - locations: en qué locales opera (toggle ON/OFF por local)
+//   - carta:     los platos y las recetas que faltan (F01 · PR 3, tablero 3)
 //
 // TABS FUTUROS (NO incluidos hoy):
 //   - billing:      IBAN, cuenta contable, forma de pago, vencimiento
@@ -28,6 +29,7 @@ import type { Brand } from '../../../../types/multitenancy'
 import BrandDataTab from './BrandDataTab'
 import BrandLocationsTab from './BrandLocationsTab'
 import BrandHoursTab from './BrandHoursTab'
+import BrandCartaTab from './BrandCartaTab'
 import BrandLogoUploader from './BrandLogoUploader'
 
 // ─────────────────────────────────────────────────────────────────────
@@ -49,6 +51,8 @@ const BRAND_TABS: BrandTabDef[] = [
   { id: 'data', label: 'Datos', Component: BrandDataTab },
   { id: 'locations', label: 'Disponibilidad', Component: BrandLocationsTab },
   { id: 'hours', label: 'Horarios', Component: BrandHoursTab },
+  // F01 · PR 3 · tablero 3: la carta y las recetas que faltan.
+  { id: 'carta', label: 'Carta', Component: BrandCartaTab },
   // Para añadir un tab futuro:
   // { id: 'billing', label: 'Facturación', Component: BrandBillingTab },
 ]
@@ -60,13 +64,20 @@ const BRAND_TABS: BrandTabDef[] = [
 interface BrandDetailViewProps {
   brandId: string
   onBack: () => void
+  /** La pestaña con la que se abre (F01: el alta y los avisos llevan a «carta»). */
+  initialTabId?: string
+  /** Lo que acaba de pasar, arriba (F01: «Dada de alta …» al venir del alta). */
+  aviso?: string | null
+  /** Cuando cambia de pestaña (para que la URL lo diga). */
+  onTabChange?: (id: string) => void
 }
 
-export default function BrandDetailView({ brandId, onBack }: BrandDetailViewProps) {
+export default function BrandDetailView({ brandId, onBack, initialTabId, aviso, onTabChange }: BrandDetailViewProps) {
   const [brand, setBrand] = useState<Brand | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTabId, setActiveTabId] = useState<string>(BRAND_TABS[0]?.id ?? 'data')
+  const [activeTabId, setActiveTabId] = useState<string>(
+    BRAND_TABS.some((t) => t.id === initialTabId) ? (initialTabId as string) : (BRAND_TABS[0]?.id ?? 'data'))
 
   // Cargar marca al montar / cuando cambia brandId
   useEffect(() => {
@@ -115,6 +126,8 @@ export default function BrandDetailView({ brandId, onBack }: BrandDetailViewProp
           Volver al listado
         </button>
       </div>
+
+      {aviso && <div className="ml-hecho" role="status" data-prueba="alta-hecha">{aviso}</div>}
 
       {/* Header de la marca */}
       {loading && (
@@ -171,7 +184,7 @@ export default function BrandDetailView({ brandId, onBack }: BrandDetailViewProp
                     aria-selected={isActive}
                     aria-controls={`tabpanel-${tab.id}`}
                     id={`tab-${tab.id}`}
-                    onClick={() => setActiveTabId(tab.id)}
+                    onClick={() => { setActiveTabId(tab.id); onTabChange?.(tab.id) }}
                     className={
                       'px-3 py-2 text-sm font-medium transition-base border-b-2 -mb-px ' +
                       (isActive
