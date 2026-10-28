@@ -228,7 +228,7 @@ begin
   insert into public.tax_return_check (tax_return_id, account_id, company_id, check_key, result, title, detail)
   values (r.id, c.account_id, p_company, 'payees_190_nif', case when v_n > 0 then 'error' else 'ok' end,
           case when v_n = 0 then 'Cada perceptor tiene un NIF que vale.'
-               when v_n = 1 then '1 perceptor sin NIF o con un NIF que no vale: ' || coalesce((select l->>'nombre' from jsonb_array_elements(v_det) l limit 1), 'sin nombre') || '. Corrígelo en su ficha.'
+               when v_n = 1 then '1 perceptor sin NIF o con un NIF que no vale: ' || coalesce((select l->>'nombre' from jsonb_array_elements(v_det) l limit 1), 'uno sin ficha de proveedor') || '. Corrígelo en su ficha.'
                else v_n || ' perceptores sin NIF o con un NIF que no vale. Corrígelo en su ficha.' end,
           jsonb_build_object('perceptores', v_det));
 
@@ -241,7 +241,7 @@ begin
                else concat_ws(' ',
                  case (select count(*) from jsonb_array_elements(v_det) l where l->>'clave' = 'G')
                    when 0 then null
-                   when 1 then '1 proveedor sin provincia (sin código postal español en su ficha): ' || (select l->>'nombre' from jsonb_array_elements(v_det) l where l->>'clave' = 'G' limit 1) || '.'
+                   when 1 then '1 proveedor sin provincia (sin código postal español en su ficha): ' || coalesce((select l->>'nombre' from jsonb_array_elements(v_det) l where l->>'clave' = 'G' limit 1), 'uno sin ficha de proveedor') || '.'
                    else (select count(*) from jsonb_array_elements(v_det) l where l->>'clave' = 'G') || ' proveedores sin provincia (sin código postal español en su ficha).' end,
                  case (select count(*) from jsonb_array_elements(v_det) l where l->>'clave' = 'A')
                    when 0 then null
