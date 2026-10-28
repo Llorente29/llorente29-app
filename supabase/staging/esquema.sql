@@ -3335,6 +3335,20 @@ $$;
 
 
 --
+-- Name: _conta_no_propuesta(uuid, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  insert into public.conta_propuesta_pendiente (account_id, company_id, origen, origen_id, que, porque, donde)
+  select c.account_id, c.id, p_origen, p_origen_id, p_que, p_porque, p_donde from public.company c where c.id = p_company
+  on conflict (company_id, origen, origen_id) do update set que = excluded.que, porque = excluded.porque, donde = excluded.donde, at = now()
+$$;
+
+
+--
 -- Name: _conta_periodo_de(text, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3349,6 +3363,30 @@ CREATE FUNCTION public._conta_periodo_de(p_cada text, p_dia date) RETURNS datera
     else daterange(date_trunc('month', p_dia)::date, (date_trunc('month', p_dia) + interval '1 month')::date - 1, '[]')
   end
 $$;
+
+
+--
+-- Name: _conta_proponer(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_res jsonb;
+begin
+  v_res := public._journal_entry_proponer(p_company, p_propuesta->'entrada', p_propuesta->'lineas', null, coalesce(p_quien, 'Sumied'), null);
+  delete from public.conta_propuesta_pendiente
+   where company_id = p_company and origen = p_propuesta->'entrada'->>'source_type' and origen_id = p_propuesta->'entrada'->>'source_id';
+  return v_res;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) IS 'S01 · PR 3: una propuesta ya hecha ({entrada, lineas}, la forma de aJson) al libro por _journal_entry_proponer, y fuera su «no he podido».';
 
 
 --
@@ -6581,6 +6619,58 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._journal_entry_proponer(p_company uuid, p_entry jsonb, p_lines jsonb, p_summary jsonb, p_quien_nombre text, p_quien uuid) IS 'Propone un asiento (el cuerpo de journal_entry_proponer y del cierre del día). V04 (1233): una recibida de un periodo con el IVA presentado se asienta en el primer día abierto; una expedida para. V04 (1350): una recibida nunca antes del día en que entró. Los avisos, en «aviso».';
+
+
+--
+-- Name: _journal_entry_validar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._journal_entry_validar(p_entry uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_e public.journal_entry;
+  v_numero int; v_seq bigint; v_prev text; v_hash text; v_mal text;
+begin
+  select * into v_e from public.journal_entry where id = p_entry for update;
+  if v_e.id is null then raise exception 'Ese asiento no existe.' using errcode = 'P0002'; end if;
+  if v_e.status not in ('propuesto', 'borrador') then
+    raise exception 'El asiento ya está %.', v_e.status using errcode = '23514';
+  end if;
+
+  -- Reglas 1, 4 y 5 y el envío por aclarar: el primer motivo, con su texto.
+  -- La regla vive en conta_motivos_para_validar (M01, 16/10).
+  select m.motivo into v_mal from public.conta_motivos_para_validar(p_entry) m order by m.orden limit 1;
+  if v_mal is not null then raise exception '%', v_mal using errcode = '23514'; end if;
+
+  -- Regla 2: número siguiente de su serie en el ejercicio, sin huecos. Huella encadenada.
+  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || v_e.company_id, 0));
+  select coalesce(max(number), 0) + 1 into v_numero from public.journal_entry
+   where company_id = v_e.company_id and fiscal_year_id = v_e.fiscal_year_id and series = v_e.series and number is not null;
+  select chain_seq, hash into v_seq, v_prev from public.journal_entry
+   where company_id = v_e.company_id and chain_seq is not null order by chain_seq desc limit 1;
+  v_seq := coalesce(v_seq, 0) + 1;
+
+  update public.journal_entry set number = v_numero, status = 'validado', validated_at = now(), validated_by = auth.uid(),
+         validated_by_name = coalesce(p_quien_nombre, public.conta_nombre_actor()), chain_seq = v_seq, prev_hash = v_prev,
+         hash = 'pendiente'
+   where id = p_entry;
+  v_hash := public.journal_huella(v_prev, public.journal_entry_canonico(p_entry));
+  -- La huella se escribe en la misma transacción: el disparador deja pasar este
+  -- cambio porque el asiento acaba de validarse (journal_entry_inalterable, 0100).
+  perform set_config('folvy.journal_huella', p_entry::text, true);
+  update public.journal_entry set hash = v_hash where id = p_entry;
+  perform set_config('folvy.journal_huella', '', true);
+  return jsonb_build_object('id', p_entry, 'serie', v_e.series, 'numero', v_numero, 'huella', v_hash);
+end $$;
+
+
+--
+-- Name: FUNCTION _journal_entry_validar(p_entry uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._journal_entry_validar(p_entry uuid, p_quien_nombre text) IS 'S01 · PR 3: el cuerpo de journal_entry_validar sin comprobar quién valida (servidor: el aviso del banco, la pasada de noche). Una sola copia de las reglas de validar.';
 
 
 --
@@ -10139,6 +10229,7 @@ CREATE FUNCTION public._s01_asiento_cobro(p_payment uuid, p_proveedor text) RETU
     SET search_path TO 'public'
     AS $$
 declare p public.customer_invoice_payment; v public.customer_invoice; v_cli text; v_pas text; v_res jsonb; v_entry uuid; v_nombre text; v_concepto text;
+        v_sin_validar text;
 begin
   select * into p from public.customer_invoice_payment where id = p_payment for update;
   if p.id is null then return jsonb_build_object('asiento', null, 'motivo', 'el cobro no existe'); end if;
@@ -10166,7 +10257,19 @@ begin
     '{}'::jsonb, 'Sumied', null);
   v_entry := (v_res->>'id')::uuid;
   update public.customer_invoice_payment set entry_id = v_entry where id = p.id;
-  return jsonb_build_object('asiento', v_entry, 'motivo', null, 'cuenta', v_pas);
+  -- S01 · PR 3 (Julio, 28/10): nace validado, como el cobro en efectivo. Si no se
+  -- puede, se queda propuesto y la factura lo dice (regla 8).
+  begin
+    perform public._journal_entry_validar(v_entry, format('Sumied (cobro confirmado por %s)', case p_proveedor when 'redsys' then 'el banco' else 'Stripe' end));
+  exception when others then
+    v_sin_validar := sqlerrm;
+  end;
+  if v_sin_validar is not null then
+    perform public._conta_venta_evento(v.id, 'asiento_sin_validar',
+      format('El asiento del cobro de %s se queda propuesto, sin validar: %s Valídalo en Contabilidad › Asientos.', public.conta_euros_exactos(p.amount), v_sin_validar),
+      jsonb_build_object('asiento', v_entry), 'Sumied');
+  end if;
+  return jsonb_build_object('asiento', v_entry, 'motivo', null, 'cuenta', v_pas, 'validado', v_sin_validar is null, 'sin_validar', v_sin_validar);
 end $$;
 
 
@@ -27270,6 +27373,25 @@ COMMENT ON FUNCTION public.conta_devoluciones_del_dia(p_company uuid, p_location
 
 
 --
+-- Name: conta_dia_abierto(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select p_dia is not null and public.conta_primer_dia_abierto(p_company, p_dia) = p_dia
+$$;
+
+
+--
+-- Name: FUNCTION conta_dia_abierto(p_company uuid, p_dia date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) IS 'S01 · PR 3: el día está en un ejercicio abierto, fuera de lo traído y con su mes sin cerrar (diaAbierto del navegador).';
+
+
+--
 -- Name: conta_dias_por_asentar(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -36278,6 +36400,122 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_proponer_dias(p_company uuid, p_ahora timestamp with time zone, p_quien text) IS 'Cierre del día 2 + C04b R5: propone las ventas de los días cerrados y abiertos que no tienen asiento vivo (por unidad: plataforma, o plataforma y marca, si la empresa usa la regla por plataforma), y apunta en sales_day_proposal_log lo que pasó con cada día y local.';
+
+
+--
+-- Name: conta_proponer_nominas(uuid, date, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; r record; x jsonb; v_res jsonb;
+        v_prop int := 0; v_ya int := 0; v_desc int := 0; v_sin jsonb := '[]'::jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
+  end if;
+  for r in select ps.id from public.payroll_summary ps
+            where ps.company_id = p_company and ps.account_id = v_cuenta and ps.entry_id is null
+              and ps.period_month >= date_trunc('month', p_desde)::date and ps.period_month <= p_hasta
+            order by ps.period_month desc loop
+    x := public.conta_propuesta_nomina(r.id);
+    if x ? 'sin_propuesta' then
+      perform public._conta_no_propuesta(p_company, 'payroll', r.id::text, x->>'que', x->>'sin_propuesta', 'Contabilidad › Asientos');
+      v_sin := v_sin || jsonb_build_array(jsonb_build_object('que', x->>'que', 'porque', x->>'sin_propuesta'));
+      continue;
+    end if;
+    if not public.conta_dia_abierto(p_company, (x->'propuesta'->'entrada'->>'fecha')::date) then continue; end if;
+    v_res := public._conta_proponer(p_company, x->'propuesta', p_quien);
+    if (v_res->>'descartada')::boolean then v_desc := v_desc + 1;
+    elsif (v_res->>'existente')::boolean then v_ya := v_ya + 1;
+    else v_prop := v_prop + 1; end if;
+  end loop;
+  return jsonb_build_object('propuestas', v_prop, 'yaEstaban', v_ya, 'descartadas', v_desc, 'sinPropuesta', v_sin);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text) IS 'S01 · PR 3: propone las nóminas de un rango (navegador, pasada de noche, disparador); lo que no puede, a conta_propuesta_pendiente. No valida.';
+
+
+--
+-- Name: conta_propuesta_nomina(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_propuesta_nomina(p_payroll uuid) RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  with n as (
+    select ps.*, (date_trunc('month', ps.period_month) + interval '1 month - 1 day')::date as fin,
+           to_char(ps.period_month, 'MM/YYYY') as mes
+      from public.payroll_summary ps where ps.id = p_payroll
+  ), c as (
+    select n.*,
+      coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '640' order by ca.code limit 1), '64000000') as c_sueldos,
+      coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '642' order by ca.code limit 1), '64200000') as c_ss_empresa,
+      coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '476' order by ca.code limit 1), '47600000') as c_ss_acreedora,
+      coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '4751' order by ca.code limit 1), '47510000') as c_irpf,
+      coalesce((select ca.code from public.company_account ca where ca.company_id = n.company_id and ca.kind = 'template' and ca.status is distinct from 'cerrada' and ca.template_code = '465' order by ca.code limit 1), '46500000') as c_remuneraciones,
+      -- Por su clave (code = 'trabajo', modelo 111), vigente el último día del mes,
+      -- nunca «el primero»: la de la empresa antes que la de serie (1103), y la
+      -- más reciente si hay dos versiones.
+      (select w.id from public.withholding_rate w where w.filed_in = '111' and w.code = 'trabajo'
+          and (w.account_id is null or w.account_id = n.account_id) and (w.company_id is null or w.company_id = n.company_id)
+          and w.valid_from <= n.fin and (w.valid_to is null or w.valid_to >= n.fin)
+        order by w.company_id nulls last, w.account_id nulls last, w.valid_from desc, w.id limit 1) as ret
+      from n
+  ), l as (
+    select c.*, jsonb_build_array(
+        jsonb_build_object('cuenta', c_sueldos, 'debe', gross, 'haber', 0),
+        jsonb_build_object('cuenta', c_ss_empresa, 'debe', employer_ss, 'haber', 0),
+        jsonb_build_object('cuenta', c_ss_acreedora, 'debe', 0, 'haber', round(employer_ss + employee_ss, 2)),
+        jsonb_build_object('cuenta', c_irpf, 'debe', 0, 'haber', irpf, 'retencion', jsonb_build_object('tipo_id', ret, 'base', gross, 'modelo', '111')),
+        jsonb_build_object('cuenta', c_remuneraciones, 'debe', 0, 'haber', net)) as crudas
+      from c
+  )
+  select case
+    when not exists (select 1 from n) then jsonb_build_object('sin_propuesta', 'La nómina no existe.', 'que', 'Nóminas')
+    when round(l.gross * 100) <> round(l.employee_ss * 100) + round(l.irpf * 100) + round(l.other_deductions * 100) + round(l.net * 100) then
+      jsonb_build_object('que', 'Nóminas de ' || l.mes,
+        'sin_propuesta', format('Bruto %s ≠ SS del trabajador + IRPF + otras + líquido: revisa el resumen de la gestoría.', public.conta_euros_exactos(l.gross)))
+    when round(l.other_deductions * 100) <> 0 then
+      jsonb_build_object('que', 'Nóminas de ' || l.mes, 'sin_propuesta', 'El resumen trae otras deducciones (embargos, anticipos): dime a qué cuenta van antes de proponerla.')
+    when round(l.irpf * 100) <> 0 and l.ret is null then
+      jsonb_build_object('que', 'Nóminas de ' || l.mes, 'sin_propuesta', 'Falta el tipo de retención de trabajo en Tablas › Retenciones.')
+    else jsonb_build_object('que', 'Nóminas de ' || l.mes, 'propuesta', jsonb_build_object(
+      'entrada', jsonb_build_object(
+        'series', 9, 'fecha', l.fin, 'concepto', 'Nóminas de ' || l.mes, 'source_type', 'payroll', 'source_id', l.id,
+        'confianza', case when l.location_id is not null then 'seguro' else 'probable' end,
+        'porque', 'El resumen de la gestoría: sueldos y SS de la empresa como gasto; SS, IRPF y líquido como lo que se debe.',
+        'razones', jsonb_build_array(jsonb_build_object('decision', format('IRPF %s a la 4751', public.conta_euros_exactos(l.irpf)),
+                                                        'porque', 'retenciones de trabajo: van al 111 del trimestre')),
+        'party_id', null, 'documento', null),
+      'lineas', (select coalesce(jsonb_agg(x.v || jsonb_build_object('concepto', null, 'local_id', l.location_id, 'comun', l.location_id is null,
+                                                                    'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null)
+                                           || case when x.v ? 'retencion' then '{}'::jsonb else jsonb_build_object('retencion', null) end
+                                           order by x.o), '[]'::jsonb)
+                   from jsonb_array_elements(l.crudas) with ordinality x(v, o)
+                  where round(((x.v->>'debe')::numeric + (x.v->>'haber')::numeric) * 100) > 0
+                    and not (x.v ? 'retencion' and round(l.irpf * 100) = 0))))
+    end
+  from (select 1) uno left join l on true
+$$;
+
+
+--
+-- Name: FUNCTION conta_propuesta_nomina(p_payroll uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) IS 'S01 · PR 3: la regla de una nómina (nomina() del navegador), en SQL puro: {entrada, lineas} como aJson, o {sin_propuesta}. Solo lee.';
 
 
 --
@@ -47153,6 +47391,8 @@ declare
   v_vinc    jsonb;
   v_ventas  jsonb;
   v_salida  jsonb := '[]'::jsonb;
+  v_solas   jsonb;
+  v_recetas jsonb;
 begin
   for v_a in select a.* from public.external_brand_alta a
                join public.brand b on b.id = a.brand_id and b.archived_at is null
@@ -47162,9 +47402,22 @@ begin
     if (v_vinc->>'vinculos_nuevos')::integer > 0 then
       v_ventas := public._f01_recolocar(p_account, v_a.brand_id, v_a.external_org_id, v_a.external_brand_name);
       v_salida := v_salida || jsonb_build_object('marca', v_a.external_brand_name, 'vinculos_nuevos', v_vinc->'vinculos_nuevos', 'ventas', v_ventas);
+      -- F01 · PR 3: la marca llega con otro código en algún local. Se ha
+      -- vinculado sola; ahora, además, se avisa.
+      insert into public.f01_marca_reconocida (account_id, source, external_org_id, external_brand_name, brand_id, como,
+                                               ventas, locales, created_by_name)
+      values (p_account, 'lastapp', v_a.external_org_id, v_a.external_brand_name, v_a.brand_id, 'codigo_nuevo',
+              v_ventas || jsonb_build_object('vinculos_nuevos', v_vinc->'vinculos_nuevos'),
+              coalesce(v_vinc->'locales', '[]'::jsonb), 'F01 · pasada de Last');
     end if;
   end loop;
-  return jsonb_build_object('marcas_con_vinculos_nuevos', v_salida);
+
+  -- F01 · PR 3: las de carta idéntica, unidas solas; y lo vendido de las
+  -- recetas recién puestas, colocado (regla 6).
+  v_solas := public._f01c_reconocer_solas(p_account);
+  v_recetas := public._f01c_colocar_recetas(p_account, 2000);
+
+  return jsonb_build_object('marcas_con_vinculos_nuevos', v_salida, 'reconocidas_solas', v_solas, 'recetas', v_recetas);
 end $$;
 
 
@@ -51569,41 +51822,14 @@ CREATE FUNCTION public.journal_entry_validar(p_entry uuid, p_quien_nombre text D
     AS $$
 declare
   v_e public.journal_entry;
-  v_numero int; v_seq bigint; v_prev text; v_hash text; v_mal text;
 begin
   select * into v_e from public.journal_entry where id = p_entry for update;
   if v_e.id is null then raise exception 'Ese asiento no existe.' using errcode = 'P0002'; end if;
   if not public.current_user_is_admin_or_manager_of(v_e.account_id) then
     raise exception 'Solo un administrador o un encargado de la cuenta valida asientos.' using errcode = '42501';
   end if;
-  if v_e.status not in ('propuesto', 'borrador') then
-    raise exception 'El asiento ya está %.', v_e.status using errcode = '23514';
-  end if;
-
-  -- Reglas 1, 4 y 5 y el envío por aclarar: el primer motivo, con su texto.
-  -- La regla vive en conta_motivos_para_validar (M01, 16/10).
-  select m.motivo into v_mal from public.conta_motivos_para_validar(p_entry) m order by m.orden limit 1;
-  if v_mal is not null then raise exception '%', v_mal using errcode = '23514'; end if;
-
-  -- Regla 2: número siguiente de su serie en el ejercicio, sin huecos. Huella encadenada.
-  perform pg_advisory_xact_lock(hashtextextended('journal_entry_numero:' || v_e.company_id, 0));
-  select coalesce(max(number), 0) + 1 into v_numero from public.journal_entry
-   where company_id = v_e.company_id and fiscal_year_id = v_e.fiscal_year_id and series = v_e.series and number is not null;
-  select chain_seq, hash into v_seq, v_prev from public.journal_entry
-   where company_id = v_e.company_id and chain_seq is not null order by chain_seq desc limit 1;
-  v_seq := coalesce(v_seq, 0) + 1;
-
-  update public.journal_entry set number = v_numero, status = 'validado', validated_at = now(), validated_by = auth.uid(),
-         validated_by_name = coalesce(p_quien_nombre, public.conta_nombre_actor()), chain_seq = v_seq, prev_hash = v_prev,
-         hash = 'pendiente'
-   where id = p_entry;
-  v_hash := public.journal_huella(v_prev, public.journal_entry_canonico(p_entry));
-  -- La huella se escribe en la misma transacción: el disparador deja pasar este
-  -- cambio porque el asiento acaba de validarse (journal_entry_inalterable, 0100).
-  perform set_config('folvy.journal_huella', p_entry::text, true);
-  update public.journal_entry set hash = v_hash where id = p_entry;
-  perform set_config('folvy.journal_huella', '', true);
-  return jsonb_build_object('id', p_entry, 'serie', v_e.series, 'numero', v_numero, 'huella', v_hash);
+  -- S01 · PR 3: las reglas de validar viven en _journal_entry_validar (una sola copia).
+  return public._journal_entry_validar(p_entry, p_quien_nombre);
 end $$;
 
 
@@ -78119,6 +78345,25 @@ COMMENT ON FUNCTION public.tg_clock_entry_orden() IS 'Orden de los fichajes que 
 
 
 --
+-- Name: tg_conta_nomina_proponer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_conta_nomina_proponer() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  begin
+    perform public.conta_proponer_nominas(new.company_id, new.period_month, (date_trunc('month', new.period_month) + interval '1 month - 1 day')::date, 'Sumied (al llegar de la gestoría)');
+  exception when others then
+    perform public._conta_no_propuesta(new.company_id, 'payroll', new.id::text, 'Nóminas de ' || to_char(new.period_month, 'MM/YYYY'),
+      'No he podido proponerla al llegar: ' || sqlerrm, 'Contabilidad › Asientos');
+  end;
+  return null;
+end $$;
+
+
+--
 -- Name: tg_count_line_sella_el_motivo(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -89641,6 +89886,31 @@ ALTER TABLE public.conta_programa_anterior_registro ALTER COLUMN id ADD GENERATE
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: conta_propuesta_pendiente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_propuesta_pendiente (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    origen text NOT NULL,
+    origen_id text NOT NULL,
+    que text NOT NULL,
+    porque text NOT NULL,
+    donde text,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_propuesta_pendiente_origen_check CHECK ((origen = ANY (ARRAY['payroll'::text, 'purchase_accrual'::text, 'sales_adjustment'::text, 'licensed_settlement'::text, 'channel_settlement'::text])))
+);
+
+
+--
+-- Name: TABLE conta_propuesta_pendiente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_propuesta_pendiente IS 'S01 · PR 3 (entrega 5): lo que no se ha podido proponer solo, y por qué, en palabras de oficina; donde = el apartado en el que se arregla. Se borra cuando el origen se propone.';
 
 
 --
@@ -103705,6 +103975,22 @@ ALTER TABLE ONLY public.conta_programa_anterior_registro
 
 
 --
+-- Name: conta_propuesta_pendiente conta_propuesta_pendiente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_propuesta_pendiente
+    ADD CONSTRAINT conta_propuesta_pendiente_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_propuesta_pendiente conta_propuesta_pendiente_uno; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_propuesta_pendiente
+    ADD CONSTRAINT conta_propuesta_pendiente_uno UNIQUE (company_id, origen, origen_id);
+
+
+--
 -- Name: conta_puerta_ajustes conta_puerta_ajustes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -113201,6 +113487,13 @@ CREATE TRIGGER conta_diez_base_guarda BEFORE INSERT OR UPDATE ON public.conta_di
 
 
 --
+-- Name: payroll_summary conta_nomina_proponer; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_nomina_proponer AFTER INSERT ON public.payroll_summary FOR EACH ROW EXECUTE FUNCTION public.tg_conta_nomina_proponer();
+
+
+--
 -- Name: conta_programa_anterior conta_programa_anterior_apuntar; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -114416,6 +114709,13 @@ CREATE TRIGGER trg_recipe_item_step_updated_at BEFORE UPDATE ON public.recipe_it
 --
 
 CREATE TRIGGER trg_recipe_item_updated_at BEFORE UPDATE ON public.recipe_item FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+
+--
+-- Name: recipe_line trg_recipe_line_f01c_receta_puesta; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_recipe_line_f01c_receta_puesta AFTER INSERT ON public.recipe_line REFERENCING NEW TABLE AS nuevas FOR EACH STATEMENT EXECUTE FUNCTION public._f01c_receta_puesta();
 
 
 --
@@ -117859,6 +118159,22 @@ ALTER TABLE ONLY public.conta_programa_anterior
 
 ALTER TABLE ONLY public.conta_programa_anterior
     ADD CONSTRAINT conta_programa_anterior_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_propuesta_pendiente conta_propuesta_pendiente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_propuesta_pendiente
+    ADD CONSTRAINT conta_propuesta_pendiente_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_propuesta_pendiente conta_propuesta_pendiente_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_propuesta_pendiente
+    ADD CONSTRAINT conta_propuesta_pendiente_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -127684,6 +128000,19 @@ CREATE POLICY conta_programa_anterior_registro_leer ON public.conta_programa_ant
 
 
 --
+-- Name: conta_propuesta_pendiente; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_propuesta_pendiente ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_propuesta_pendiente conta_propuesta_pendiente_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_propuesta_pendiente_leer ON public.conta_propuesta_pendiente FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_puerta_ajustes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -135076,12 +135405,28 @@ GRANT ALL ON FUNCTION public._conta_liquidacion_solape(p_settlement uuid) TO ser
 
 
 --
+-- Name: FUNCTION _conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_periodo_de(p_cada text, p_dia date); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public._conta_periodo_de(p_cada text, p_dia date) TO anon;
 GRANT ALL ON FUNCTION public._conta_periodo_de(p_cada text, p_dia date) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_periodo_de(p_cada text, p_dia date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) TO service_role;
 
 
 --
@@ -135673,6 +136018,14 @@ GRANT ALL ON FUNCTION public._interpret_pack_size(p_pack_size numeric, p_pack_un
 
 REVOKE ALL ON FUNCTION public._journal_entry_proponer(p_company uuid, p_entry jsonb, p_lines jsonb, p_summary jsonb, p_quien_nombre text, p_quien uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._journal_entry_proponer(p_company uuid, p_entry jsonb, p_lines jsonb, p_summary jsonb, p_quien_nombre text, p_quien uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _journal_entry_validar(p_entry uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._journal_entry_validar(p_entry uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._journal_entry_validar(p_entry uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -139598,6 +139951,15 @@ GRANT ALL ON FUNCTION public.conta_devoluciones_del_dia(p_company uuid, p_locati
 
 
 --
+-- Name: FUNCTION conta_dia_abierto(p_company uuid, p_dia date); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) TO anon;
+GRANT ALL ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_dias_por_asentar(p_company uuid, p_desde date, p_hasta date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -141233,6 +141595,24 @@ GRANT ALL ON FUNCTION public.conta_programa_anterior_poner(p_company uuid, p_pro
 
 REVOKE ALL ON FUNCTION public.conta_proponer_dias(p_company uuid, p_ahora timestamp with time zone, p_quien text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_proponer_dias(p_company uuid, p_ahora timestamp with time zone, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date, p_hasta date, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_propuesta_nomina(p_payroll uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) TO anon;
+GRANT ALL ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) TO service_role;
 
 
 --
@@ -147555,6 +147935,14 @@ GRANT ALL ON FUNCTION public.tg_clock_entry_orden() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_conta_nomina_proponer(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_conta_nomina_proponer() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_conta_nomina_proponer() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_count_line_sella_el_motivo(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -150520,6 +150908,15 @@ GRANT ALL ON TABLE public.conta_programa_anterior_registro TO service_role;
 GRANT ALL ON SEQUENCE public.conta_programa_anterior_registro_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.conta_programa_anterior_registro_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.conta_programa_anterior_registro_id_seq TO service_role;
+
+
+--
+-- Name: TABLE conta_propuesta_pendiente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.conta_propuesta_pendiente TO anon;
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.conta_propuesta_pendiente TO authenticated;
+GRANT ALL ON TABLE public.conta_propuesta_pendiente TO service_role;
 
 
 --
