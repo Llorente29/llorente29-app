@@ -137,6 +137,7 @@ begin
   if je.status <> 'validado' or je.number is null or je.validated_by_name <> 'Sumied (cobro confirmado por Stripe)' then
     raise exception 'PRUEBA S01 VALIDADO · 2: el asiento del cobro con Stripe está % (por «%»).', je.status, je.validated_by_name;
   end if;
+  insert into _p values ('pas_stripe', (select code from public.conta_pasarela_cuenta where company_id = e and proveedor = 'stripe'));
   raise notice '2 · Stripe: el asiento del cobro nace validado (nº %), %', je.number, pg_temp.lineas(je.id);
 end $$;
 reset role;
@@ -151,7 +152,7 @@ begin
   r := public.journal_entry_proponer(e,
     jsonb_build_object('fecha', public.conta_hoy(), 'series', 4, 'concepto', 'Prueba S01 validar a mano', 'source_type', 'manual', 'confianza', 'seguro', 'porque', 'Prueba.'),
     jsonb_build_array(jsonb_build_object('cuenta', '43009902', 'debe', 10, 'haber', 0, 'comun', true, 'tercero_id', (select v from _p where clave = 'cliente')),
-                      jsonb_build_object('cuenta', (select v from _p where clave = 'pas_tpv'), 'debe', 0, 'haber', 10, 'comun', true)),
+                      jsonb_build_object('cuenta', (select v from _p where clave = 'pas_stripe'), 'debe', 0, 'haber', 10, 'comun', true)),
     null, 'Prueba');
   insert into _p values ('ent_mano', r->>'id');
   val := public.journal_entry_validar((r->>'id')::uuid, 'Prueba');
