@@ -151,3 +151,36 @@ test('el olvido de salida: la tarjeta del portal contesta en un toque, y Equipo 
     await limpiar(s)
   }
 })
+
+// L1a · PR 3 (28/10, Julio): el móvil de Natacha daba la «ubicación
+// aproximada» del navegador (670 m siempre, con sus compañeras a 4–6 m). Con
+// una precisión de más de 100 m, la pantalla de fichar lo dice en el momento,
+// con los pasos para Android y para iPhone, y no lo trata como «fuera del
+// radio». No llega a fichar: solo abre la pantalla y vuelve.
+test('una ubicación aproximada: la pantalla de fichar lo dice en el momento, con los pasos', async ({ page, context }) => {
+  test.skip(test.info().project.name !== 'ordenador', 'Una sola vez: los dos tamaños salen de este test.')
+  test.setTimeout(2 * 60_000)
+  const errores: string[] = []
+  page.on('pageerror', (e) => errores.push(e.message))
+  await context.grantPermissions(['geolocation'])
+  await context.setGeolocation({ latitude: 40.4228, longitude: -3.7038, accuracy: 1500 })
+
+  await entrarComo(page, TRABAJADOR)
+  await page.goto('/')
+  await page.getByRole('button', { name: /^Fichar (entrada|salida)/ }).click()
+  const aviso = page.locator('[data-prueba="ubicacion-aproximada"]')
+  await expect(aviso).toBeVisible({ timeout: 30_000 })
+  await expect(aviso).toContainText('Tu móvil está dando una ubicación aproximada: activa la ubicación precisa')
+  await expect(aviso).toContainText('± 1,5 km')
+  await expect(aviso).toContainText('no como fuera del radio')
+  await aviso.getByText('Cómo activarla en Android').click()
+  await expect(aviso).toContainText('Usar ubicación precisa')
+  await aviso.getByText('Cómo activarla en iPhone').click()
+  await expect(aviso).toContainText('Ubicación exacta')
+  // No es «fuera del radio»: no sale «Estás a … del local».
+  await expect(page.getByText(/^Estás a \d+ ?m del local/)).toHaveCount(0)
+  await captura(page, 'l1a3-ubicacion-aproximada')
+  await page.setViewportSize(MOVIL)
+  await captura(page, 'l1a3-ubicacion-aproximada-movil')
+  expect(errores, `errores de la página: ${errores.join(' | ')}`).toEqual([])
+})

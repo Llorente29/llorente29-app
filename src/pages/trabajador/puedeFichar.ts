@@ -15,6 +15,8 @@ export interface EstadoParaFichar {
   radio: number
   modo: 'block' | 'warn'
   hayPosicion: boolean
+  /** L1a PR 3: la ubicación del móvil es aproximada (más de 100 m): no se sabe si está fuera. */
+  aproximada?: boolean
 }
 
 export interface PuedeFichar {
@@ -33,7 +35,7 @@ export function puedeFichar(e: EstadoParaFichar): PuedeFichar {
       sinMedir: null,
     }
   }
-  const fueraSabido = e.distancia !== null && e.distancia > e.radio
+  const fueraSabido = !e.aproximada && e.distancia !== null && e.distancia > e.radio
   if (fueraSabido && e.modo === 'block') {
     return {
       puede: false,
