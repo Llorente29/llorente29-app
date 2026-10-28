@@ -16,6 +16,7 @@
 import { supabase, isSupabaseEnabled } from '../../../lib/supabase'
 import { getSchedule, listShiftTemplates } from '../../../services/schedulerService'
 import { getMondayOfWeek, toISODate, type ScheduleCells } from '../../../types/scheduler'
+import { diaNatural, inicioDelDiaUtc } from '../../../lib/fechas'
 import { fetchEmployees } from '../../../services/supabaseSync'
 import { leerAusenciasVisibles } from '@/services/vacationsService'
 
@@ -296,14 +297,15 @@ export async function getMyDailyQueue(
   dateISO?: string,
 ): Promise<{ countId: string | null; lines: DailyQueueLine[] }> {
   requireSupabase()
-  const day = dateISO ?? toISODate(new Date())
+  // El día del negocio (Madrid) y su inicio en UTC: la base lee las horas en UTC.
+  const day = dateISO ?? diaNatural(new Date())
   const { data: counts } = await supabase!
     .from('inventory_count')
     .select('id, created_at')
     .eq('location_id', locationId)
     .eq('kind', 'cycle')
     .neq('status', 'anulado')
-    .gte('created_at', day + 'T00:00:00')
+    .gte('created_at', inicioDelDiaUtc(day))
     .order('created_at', { ascending: false })
     .limit(1)
   const countId = counts?.[0]?.id as string | undefined
@@ -484,7 +486,8 @@ export async function getTodayAssignments(
   requireSupabase()
   const empty: TodayAssignmentSummary = { countId: null, totalLines: 0, assignedLines: 0, perPerson: [], byItem: {} }
 
-  const day = dateISO ?? toISODate(new Date())
+  // El día del negocio (Madrid) y su inicio en UTC, como getMyDailyQueue.
+  const day = dateISO ?? diaNatural(new Date())
   const { data: counts } = await supabase!
     .from('inventory_count')
     .select('id')
@@ -492,7 +495,7 @@ export async function getTodayAssignments(
     .eq('location_id', locationId)
     .eq('kind', 'cycle')
     .neq('status', 'anulado')
-    .gte('created_at', day + 'T00:00:00')
+    .gte('created_at', inicioDelDiaUtc(day))
     .order('created_at', { ascending: false })
     .limit(1)
   const countId = (counts?.[0]?.id as string | undefined) ?? null

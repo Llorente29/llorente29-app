@@ -19,6 +19,7 @@
 
 import { supabase, isSupabaseEnabled } from '@/lib/supabase'
 import type { PurchaseFormat } from '@/types/kitchen'
+import { diaNatural, inicioDelDiaUtc } from '@/lib/fechas'
 
 function requireSupabase(): void {
   if (!isSupabaseEnabled || !supabase) {
@@ -235,13 +236,14 @@ export async function listFormatReview(
   opts: { desde?: string; incluirResueltos?: boolean } = {},
 ): Promise<FormatReviewItem[]> {
   requireSupabase()
-  const desde = opts.desde ?? new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10)
+  // Los últimos 30 días del negocio (Madrid), desde su medianoche pasada a UTC.
+  const desde = opts.desde ?? diaNatural(new Date(Date.now() - 30 * 864e5))
 
   // (1) Qué se cuenta y cuántas veces.
   const { data: lineas, error: e1 } = await from('inventory_count_line')
     .select('recipe_item_id, inventory_count!inner(created_at)')
     .eq('account_id', accountId)
-    .gte('inventory_count.created_at', `${desde}T00:00:00`)
+    .gte('inventory_count.created_at', inicioDelDiaUtc(desde))
   if (e1) throw new Error(`No se pudieron cargar los conteos: ${e1.message}`)
 
   const veces = new Map<string, number>()

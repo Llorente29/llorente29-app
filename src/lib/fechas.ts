@@ -75,6 +75,16 @@ function medianocheDelNegocio(ymd: string): Date {
   return new Date(comoSiUtc - desfase(primera))
 }
 
+/**
+ * El inicio de un día del negocio ('YYYY-MM-DD'), como instante UTC en ISO,
+ * para filtrar en la base. Un filtro `created_at >= 'YYYY-MM-DDT00:00:00'` sin
+ * zona lo lee la base en UTC: entre las 00:00 y la 01:00 de Madrid (las 02:00
+ * en verano) lo hecho «hoy» se queda fuera (el autoconteo, 28/10).
+ */
+export function inicioDelDiaUtc(ymd: string): string {
+  return medianocheDelNegocio(ymd).toISOString()
+}
+
 /** El día natural del negocio que contiene `d`, como rango [desde, hasta). */
 export function diaDelNegocio(d: Date): { desde: Date; hasta: Date; ymd: string } {
   const ymd = diaNatural(d)
