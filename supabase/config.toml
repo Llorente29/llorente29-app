@@ -244,3 +244,12 @@ verify_jwt = true
 # plataforma. «invitar» y «aprobar» miran la sesión dentro.
 [functions.conta-asesoria]
 verify_jwt = false
+
+# (28/10) L1a · PR 3 · whatsapp-webhook: lo que Meta manda del WhatsApp de
+# Folvy (las respuestas de un toque al aviso de olvido y los estados de
+# entrega). verify_jwt = FALSE, deliberado: quien llama es Meta, sin JWT. Su
+# frontera es la firma de Meta (X-Hub-Signature-256 con WHATSAPP_APP_SECRET),
+# que se comprueba SIEMPRE: sin ella, o con una que no cuadra, se rechaza y
+# queda apuntado en whatsapp_entrada.
+[functions.whatsapp-webhook]
+verify_jwt = false

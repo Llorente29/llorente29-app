@@ -1,0 +1,30 @@
+{
+  "_que": "L1a · PR 3 · contexto de producción de la tanda (1800 y 1801), medido en SOLO LECTURA el 28/10 a las 18:14 UTC con la consulta del analizador (sql-contexto). Existen las tres tablas que se tocan (app_settings, clock_entries, clockout_reminder_log) y la función que se reemplaza (una firma); lo nuevo no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-28T18:14Z",
+  "tanda": {
+    "supabase/migrations/20261028T1800_l1a3_avisos_olvido_radio_vigia.sql": "e8e9c9cbb5b21c7ae6f8b9483ae3061d",
+    "supabase/migrations/20261028T1801_l1a3_olvido_detectar_en_madrid.sql": "3d3ed7534f11edaf83536ef29d1fac80"
+  },
+  "contexto": {
+    "tablas": [
+      "public.app_settings",
+      "public.clock_entries",
+      "public.clockout_reminder_log"
+    ],
+    "funciones": [
+      "public.enqueue_clockout_reminders()"
+    ],
+    "filas": {
+      "public.app_settings": 1,
+      "public.clock_entries": 2168,
+      "public.clockout_reminder_log": 111
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
