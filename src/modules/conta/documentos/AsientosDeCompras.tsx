@@ -14,7 +14,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
-import { Boton } from '@/modules/conta/diseno'
+import { Boton, Chip } from '@/modules/conta/diseno'
 import { leerPropuestosDe, validar } from '@/modules/conta/services/diarioService'
 import { DE_COMPRAS, queEsDeCompras, tituloDeCompras } from '@/modules/conta/lib/asientosDeCompras'
 
@@ -52,16 +52,23 @@ export function AsientosDeCompras() {
       {filas.length > 0 && (
         <>
           <p className="cx-ayuda" style={{ marginTop: 0 }}>Los propongo yo: lo recibido sin factura al cerrar el mes (y su contrario el día 1) y los pagos a proveedor. Míralos y valídalos aquí.</p>
-          <ul>
+          <ul className="cxdo-compras-lista">
             {filas.map((a) => {
               const importe = a.apuntes.reduce((t, l) => t + l.debe, 0)
-              const que = `${queEsDeCompras(a.origen)} del ${diaMes(a.fecha)}`
+              const que = `${queEsDeCompras(a.origen).toLowerCase()} (${diaMes(a.fecha)})`
+              const mira = a.razones.filter((x) => x.decision === 'Mira esto').map((x) => x.porque)
               return (
                 <li key={a.id}>
-                  <strong>{que}</strong> · {a.concepto} · {eurosExactos(importe)}
-                  {a.razones.some((x) => x.decision === 'Mira esto') && <> · <em>mira esto: {a.razones.filter((x) => x.decision === 'Mira esto').map((x) => x.porque).join(' · ')}</em></>}
-                  {' '}<Link to={rutaAsiento(a.id)}>Ver sus apuntes</Link>{' '}
-                  <Boton onClick={() => void validarUno(a.id, que)} disabled={ocupado !== null}>{ocupado === a.id ? 'Validando…' : 'Validar'}</Boton>
+                  <div className="cxdo-compras-que">
+                    <span><strong>{queEsDeCompras(a.origen)}</strong> · {diaMes(a.fecha)}</span>
+                    <span className="cxdo-compras-concepto">{a.concepto}</span>
+                    {mira.length > 0 && <span><Chip tono="duda">Mira esto</Chip> {mira.join(' · ')}</span>}
+                  </div>
+                  <span className="cxdo-compras-importe">{eurosExactos(importe)}</span>
+                  <span className="cxdo-compras-acciones">
+                    <Link to={rutaAsiento(a.id)}>Ver sus apuntes</Link>
+                    <Boton onClick={() => void validarUno(a.id, que)} disabled={ocupado !== null}>{ocupado === a.id ? 'Validando…' : 'Validar'}</Boton>
+                  </span>
                 </li>
               )
             })}

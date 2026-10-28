@@ -50,7 +50,8 @@ export async function cargarCuentasProveedor(accountId: string, companyId: strin
     leer(tabla('company_account').select('id, code, template_code, name, plain_name, kind, status, is_common, source').eq('account_id', accountId).eq('company_id', companyId).order('code'), 'las cuentas de la empresa'),
     leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role, source').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
     leer(tabla('tax_rate').select('id, name, rate, surcharge_rate').or(sistemaOCuenta), 'los tipos de IVA'),
-    leer(tabla('withholding_rate').select('id, name, rate').or(sistemaOCuenta), 'las retenciones'),
+    // S01 · PR 3 (1103): la del trabajo es de las nóminas; un proveedor no es un trabajador.
+    leer(tabla('withholding_rate').select('id, name, rate').or(sistemaOCuenta).neq('code', 'trabajo'), 'las retenciones'),
     leer(tabla('treasury_account').select('id, name, iban').eq('account_id', accountId).eq('company_id', companyId).eq('kind', 'bank').eq('is_active', true).order('name'), 'los bancos'),
     leer(tabla('vat_scheme').select('code, name, legal_ref').in('code', ['recargo_equivalencia', 'criterio_caja']), 'los regímenes del IVA'),
     leer(tabla('tax_form').select('code, name, legal_ref').in('code', ['303', '349']), 'los modelos'),

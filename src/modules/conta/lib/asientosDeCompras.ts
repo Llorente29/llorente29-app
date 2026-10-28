@@ -10,8 +10,8 @@ import type { OrigenAsiento } from '@/modules/conta/lib/libro'
 export const DE_COMPRAS: readonly OrigenAsiento[] = ['purchase_accrual', 'purchase_accrual_reversal', 'supplier_payment']
 
 export function queEsDeCompras(o: OrigenAsiento): string {
-  if (o === 'purchase_accrual') return 'Lo recibido sin factura, al cerrar el mes'
-  if (o === 'purchase_accrual_reversal') return 'Su contrario, el día 1'
+  if (o === 'purchase_accrual') return 'Recibido sin factura, al cerrar el mes'
+  if (o === 'purchase_accrual_reversal') return 'Su contrario, al abrir el mes'
   if (o === 'supplier_payment') return 'Pago a proveedor'
   return 'Asiento de compras'
 }

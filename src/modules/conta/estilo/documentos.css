@@ -290,3 +290,17 @@
   .cxf-total { margin-left: 0; }
   .cxf-fila-proveedor { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* S01 · PR 3 · Asientos de compras por validar (documentos/AsientosDeCompras.tsx):
+ * qué y su concepto a la izquierda, el importe y las acciones a la derecha; en
+ * el móvil, uno debajo de otro. */
+.cxdo-compras-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cxdo-compras-lista li { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; padding: 10px 0; border-top: 1px solid var(--cx-borde-campo); font-size: 14px; }
+.cxdo-compras-que { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxdo-compras-concepto { color: var(--cx-apoyo); font-size: 13px; }
+.cxdo-compras-importe { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.cxdo-compras-acciones { display: flex; gap: 12px; align-items: center; white-space: nowrap; }
+@media (max-width: 767px) {
+  .cxdo-compras-lista li { grid-template-columns: 1fr auto; }
+  .cxdo-compras-acciones { grid-column: 1 / -1; justify-content: flex-end; }
+}
