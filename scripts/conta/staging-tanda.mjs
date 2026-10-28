@@ -15,6 +15,11 @@
 //   node scripts/conta/staging-tanda.mjs rutas <ficheros…>
 //     → para (sale con 1) si alguna ruta no la admite el workflow o no existe
 //       (la misma regla en aplicar-staging-conta.yml y en pr-a-main.yml)
+//   node scripts/conta/staging-tanda.mjs semilla <ficheros…>
+//     → W07: las semillas que se puede intentar que vayan de verdad; en el
+//       error, las demás y por qué
+//   node scripts/conta/staging-tanda.mjs semilla-dos-veces <semilla> [previas…]
+//     → W07: el psql que la aplica dos veces en ROLLBACK y compara las medidas
 //   node scripts/conta/staging-tanda.mjs rollback <ficheros…>
 //     → para (sale con 1) si alguno haría algo de verdad dentro del ROLLBACK
 //   node scripts/conta/staging-tanda.mjs sesiones <ficheros…>
@@ -217,6 +222,103 @@ export function porQueNoSoloAnade(fichero, sql, contexto) {
   return null
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// W07 (Julio, 28/10) · LAS SEMILLAS DE UNA RAMA LLEGAN A STAGING.
+// Una semilla nueva solo se ensayaba en ROLLBACK hasta fusionar, y la e2e de la
+// rama que la necesitaba no la encontraba: el #358 (arreglado a mano con el
+// #365) y el #361. Ahora una semilla va de verdad desde la rama, como lo que
+// solo añade (W05), si se puede aplicar dos veces. No basta con que lo diga su
+// cabecera: lo demuestra el ensayo. En ROLLBACK se aplica, se mide, se aplica
+// otra vez y se vuelve a medir; si las dos medidas coinciden (las mismas filas y
+// las mismas huellas en las tablas que escribe y en las funciones que crea), va
+// de verdad. Si no, se queda solo en ROLLBACK, y el ensayo dice por qué.
+//
+// Antes de medir, lo que ni se intenta (porQueNoVaLaSemilla):
+//   · un COMMIT o un ROLLBACK a mitad (no se puede ensayar);
+//   · llamar al aplicarse a una función que no crea ella (la regla del S01 en el
+//     #363: puede escribir donde la medida no mira);
+//   · un insert a secas, sin «on conflict» ni «not exists»: la segunda vez duplica;
+//   · update, delete o truncate al aplicarse: cambian filas que ya existen y que
+//     leen las demás ramas (lo que va de verdad desde una rama solo añade).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const esSemilla = (f) => /^supabase\/seeds\//.test(f)
+
+/** Los trozos de SQL que se ejecutan al aplicar: cada sentencia de fuera y cada sentencia del cuerpo de un DO (no el de las funciones que define). */
+export function trozosAlAplicar(sql) {
+  const limpio = sql.replace(/--.*$/gm, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/'(?:[^']|'')*'/g, "''")
+  const dos = [...limpio.matchAll(/\bdo\s+(\$[A-Za-z_]*\$)([\s\S]*?)\1/gi)].flatMap((m) => m[2].split(';'))
+  const fuera = sinRuido(sql).split(';')
+  return [...dos, ...fuera].map((x) => x.trim()).filter(Boolean)
+}
+
+const tablaPublica = (t) => (t.includes('.') ? t : `public.${t}`).toLowerCase()
+
+/** Las tablas en las que escribe la semilla al aplicarse (insert, update, delete, truncate). */
+export function tablasQueEscribe(sql) {
+  const t = trozosAlAplicar(sql).flatMap((x) => [...x.matchAll(/\b(?:insert\s+into|update|delete\s+from|truncate(?:\s+table)?)\s+(?:only\s+)?([a-z_][a-z0-9_]*(?:\.[a-z_][a-z0-9_]*)?)/gi)].map((m) => tablaPublica(m[1])))
+  return [...new Set(t)].sort()
+}
+
+/** Las funciones de public que crea la semilla (por nombre). */
+export function funcionesQueCrea(sql) {
+  const limpio = sql.replace(/--.*$/gm, ' ')
+  return [...new Set([...limpio.matchAll(/\bcreate\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-z_][a-z0-9_]*)\s*\(/gi)].map((m) => m[1].toLowerCase()))].sort()
+}
+
+/** ¿Puede intentarse que esta semilla vaya de verdad desde la rama? null si sí; si no, por qué. */
+export function porQueNoVaLaSemilla(fichero, sql) {
+  if (!esSemilla(fichero)) return 'no es una semilla'
+  const e = porQueNoSeEnsaya(sql)
+  if (e) return e
+  const llama = llamadasAlAplicar(sql)
+  if (llama.length) return `al aplicarse llama a ${llama.join(', ')}, que puede escribir donde la medida no mira`
+  const trozos = trozosAlAplicar(sql)
+  const cambia = trozos.map((x) => x.match(/^(?:[\s\S]*?\b(?:then|else|loop|begin)\s+)?(update|delete\s+from|truncate)\s+(?:table\s+)?(?:only\s+)?([a-z_][a-z0-9_.]*)/i)).find(Boolean)
+  if (cambia) return `${cambia[1].toLowerCase()} ${tablaPublica(cambia[2])} al aplicarse: cambia filas que ya existen y que leen las demás ramas`
+  const aSecas = trozos.find((x) => /\binsert\s+into\b/i.test(x) && !/\bon\s+conflict\b/i.test(x) && !/\bnot\s+exists\b/i.test(x))
+  if (aSecas) return `inserta en ${tablaPublica(aSecas.match(/\binsert\s+into\s+([a-z_][a-z0-9_.]*)/i)[1])} sin «on conflict» ni «not exists»: la segunda vez duplica`
+  if (!tablasQueEscribe(sql).length && !funcionesQueCrea(sql).length) return 'no escribe en ninguna tabla ni crea funciones: no hay nada que medir'
+  return null
+}
+
+/** La medida de una semilla: filas y huella de cada tabla que escribe, y huella de cada función que crea. */
+export function sqlMedida(sql) {
+  const tablas = tablasQueEscribe(sql).map((t) =>
+    `select 'tabla ${t}'::text as obj, (select count(*) from ${t})::text as n, (select md5(coalesce(string_agg(x::text, '|' order by x::text), '')) from ${t} x) as huella`)
+  const fns = funcionesQueCrea(sql)
+  const funciones = fns.length
+    ? [`select 'función ' || p.oid::regprocedure::text, '', md5(pg_get_functiondef(p.oid)) from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname in (${fns.map((f) => `'${f}'`).join(', ')})`]
+    : []
+  return [...tablas, ...funciones].join('\nunion all\n')
+}
+
+/**
+ * El script de psql que aplica la semilla dos veces en ROLLBACK y dice si las
+ * dos medidas coinciden: la última línea es «W07|igual» o «W07|distinto|…».
+ * Antes, lo de la tanda que va delante (previas), para que la semilla encuentre
+ * lo que necesita.
+ */
+export function sqlDosVeces(semilla, previas = [], leer = (f) => readFileSync(f, 'utf8')) {
+  const medida = sqlMedida(leer(semilla))
+  return [
+    '\\set ON_ERROR_STOP 1',
+    'begin;',
+    ...previas.map((p) => `\\i ${p}`),
+    `\\i ${semilla}`,
+    `create temp table _w07_1 on commit drop as ${medida};`,
+    `\\i ${semilla}`,
+    `create temp table _w07_2 on commit drop as ${medida};`,
+    `select 'W07|' || coalesce('distinto|' || (select string_agg(coalesce(a.obj, b.obj) || ': ' || case
+         when a.obj is null then 'aparece la segunda vez' when b.obj is null then 'desaparece la segunda vez'
+         when a.obj like 'función %' then 'otra definición'
+         when a.n is distinct from b.n then a.n || ' filas → ' || b.n || ' filas (otra huella)'
+         else 'las mismas ' || a.n || ' filas, con otra huella' end, '; ' order by coalesce(a.obj, b.obj))
+       from _w07_1 a full join _w07_2 b on a.obj = b.obj where (a.n, a.huella) is distinct from (b.n, b.huella)), 'igual');`,
+    'rollback;',
+  ].join('\n')
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const [modo, ...args] = process.argv.slice(2)
   if (modo === 'nuevas') {
@@ -255,10 +357,20 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       if (p) console.error(`${f}: solo en ROLLBACK (${p})`)
       else console.log(f)
     }
+  } else if (modo === 'semilla') {
+    // W07: las que se puede intentar que vayan de verdad (una por línea); las demás, al error con su porqué.
+    for (const f of args) {
+      const p = porQueNoVaLaSemilla(f, readFileSync(f, 'utf8'))
+      if (p) console.error(`\`${f}\`: solo en ROLLBACK (${p})`)
+      else console.log(f)
+    }
+  } else if (modo === 'semilla-dos-veces') {
+    const [semilla, ...previas] = args
+    console.log(sqlDosVeces(semilla, previas))
   } else if (modo === 'sesiones') {
     for (const s of sesiones(args)) console.log(`--@@ sesión ${s.fichero}\n${s.sql}`)
   } else {
-    console.error('uso: staging-tanda.mjs nuevas <ref> [manifiesto] | entero | rutas <ficheros…> | rollback <ficheros…> | sesiones <ficheros…>')
+    console.error('uso: staging-tanda.mjs nuevas <ref> [manifiesto] | entero | rutas <ficheros…> | semilla <ficheros…> | semilla-dos-veces <semilla> [previas…] | rollback <ficheros…> | sesiones <ficheros…>')
     process.exit(2)
   }
 }
