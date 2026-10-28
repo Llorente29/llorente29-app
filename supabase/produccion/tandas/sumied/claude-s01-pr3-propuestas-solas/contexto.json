@@ -1,10 +1,11 @@
 {
- "_que": "S01 · PR 3 · contexto de producción de la tanda (0735 cambia journal_entry_validar y _s01_asiento_cobro; 0753 y 0800 añaden la base de las propuestas sin botón y las nóminas), medido en SOLO LECTURA el 28/10 a las 07:00Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: las dos funciones que cambia existen con una sola firma; payroll_summary existe con 0 filas; nada de lo nuevo existe; nada en el camino del pedido, en el cron ni en el historial.",
- "medido": "2026-10-28T07:00Z",
+ "_que": "S01 · PR 3 · contexto de producción de la tanda (0735 cambia journal_entry_validar y _s01_asiento_cobro; 0753, 0800 y 0830 añaden la base de las propuestas sin botón, las nóminas y lo recibido sin factura), medido en SOLO LECTURA el 28/10 (07:00Z, y a las 07:42Z lo de la 0830: sus dos funciones no existen, purchase_accrual 0 filas, 0 asientos de lo recibido sin factura, nada en el historial) con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: las dos funciones que cambia existen con una sola firma; payroll_summary existe con 0 filas; nada de lo nuevo existe; nada en el camino del pedido, en el cron ni en el historial.",
+ "medido": "2026-10-28T07:42Z",
  "tanda": {
   "supabase/migrations/20261028T0735_s01_enlace_validado.sql": "9528ec1b55f8858e21046d4cea20054b",
   "supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql": "d908dc1f73650a76199180e50b38e35e",
-  "supabase/migrations/20261028T0800_s01_propuestas_nominas.sql": "56e152fc37bc7e1d79246d3b0db05886"
+  "supabase/migrations/20261028T0800_s01_propuestas_nominas.sql": "56e152fc37bc7e1d79246d3b0db05886",
+  "supabase/migrations/20261028T0830_s01_propuestas_recibido.sql": "bd38ef5b65601b4cc9ae4f9aa6237004"
  },
  "contexto": {
   "tablas": [

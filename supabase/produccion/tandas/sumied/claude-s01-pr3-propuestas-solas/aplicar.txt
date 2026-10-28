@@ -15,6 +15,11 @@
 #      puerta única al libro (_conta_proponer). No toca filas.
 #   3. 0800 — AÑADE las nóminas solas (origen 1 de 5): la regla en SQL, lo que
 #      la llama y el disparador de payroll_summary (0 nóminas en producción).
+#   4. 0830 — AÑADE lo recibido sin factura solo (origen 2 de 5): la regla en
+#      SQL y lo que la llama (al acabar el mes, en la pasada de noche). Medido
+#      el 28/10: purchase_accrual con 0 filas y 0 asientos de lo recibido sin
+#      factura; la regla, igual a la del navegador en los 6 asientos de octubre
+#      de Foodint.
 #
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
@@ -22,3 +27,4 @@ cuenta: scripts/conta/produccion/cuentas/s01-enlace-validado.sql
 supabase/migrations/20261028T0735_s01_enlace_validado.sql
 supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
 supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
+supabase/migrations/20261028T0830_s01_propuestas_recibido.sql

@@ -10,3 +10,8 @@ supabase/staging/sql/20261028_s01_enlace_validado_prueba.sql
 supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql
 supabase/migrations/20261028T0800_s01_propuestas_nominas.sql
 supabase/staging/sql/20261028_s01_propuestas_nominas_prueba.sql
+# Lo recibido sin factura (0830), con su prueba: sin tipo de gasto, dicho (en
+# Compras); con él, el del 30/09 y su contrario del 01/10; un bisiesto; una
+# recepción sin importe; sin cuenta, no; y la vuelta atrás.
+supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
+supabase/staging/sql/20261028_s01_propuestas_recibido_prueba.sql
