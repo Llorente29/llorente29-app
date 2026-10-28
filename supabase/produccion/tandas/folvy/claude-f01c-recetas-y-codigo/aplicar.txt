@@ -1,0 +1,27 @@
+# F01 · PR 3 · Las recetas que faltan (tablero 3) y una marca que ya tienes con
+# otro código (tablero 4). Rama claude/f01c-recetas-y-codigo. Se ensaya y se
+# aplica desde esta rama, antes de fusionar.
+#
+#   1. 0850 — SOLO AÑADE (y se puede pasar dos veces): la cola de las recetas
+#      recién puestas (f01_receta_puesta), lo hecho o decidido con una marca de
+#      otro código (f01_marca_reconocida) y las funciones de las dos pantallas.
+#      No cambia ninguna función ni dato existente.
+#   2. 0851 — CAMBIA EN CALIENTE, declarado en su cabecera y con su prueba de
+#      staging: un disparador nuevo en recipe_line (por sentencia: solo apunta
+#      en la cola el plato de Last que recibe su PRIMERA línea) y
+#      f01_pasada_last, misma firma, con su respaldo byte a byte (además: avisa
+#      del código nuevo de un local, une sola la de carta idéntica y coloca lo
+#      vendido de las recetas puestas, con la regla 6).
+#
+# AUTORIZO: 20261028T0851_f01c_cola_y_pasada.sql. recipe_line está en el camino
+# del pedido por su nombre (recipe_.*), aunque ningún pedido la escribe: el
+# disparador solo salta al guardar una receta.
+# Datos de Foodint: no cambia ninguno al aplicar (la cuenta de abajo lo mide
+# igual a los dos lados). La pasada de cada hora une y coloca después: hoy en
+# Foodint no hay ninguna marca de Last sin dar de alta ni receta recién puesta.
+# Funciones a desplegar: ninguna (last-catalog-sync ya llama a f01_pasada_last).
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/f01c-recetas-y-codigo.sql
+supabase/migrations/20261028T0850_f01c_recetas_y_codigo.sql
+supabase/migrations/20261028T0851_f01c_cola_y_pasada.sql

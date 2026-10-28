@@ -101,3 +101,12 @@ create table modifier_recipe_impact (id uuid primary key default gen_random_uuid
   target_recipe_item_id uuid, quantity numeric, unit_id uuid, status text, source text, rationale text, confirmed_by uuid, confirmed_by_name text,
   confirmed_at timestamptz, created_at timestamptz default now(), updated_at timestamptz default now());
 create unique index modifier_recipe_impact_un_confirmado_por_ficha on modifier_recipe_impact (modifier_option_id, target_recipe_item_id) nulls not distinct where status = 'confirmed';
+
+-- F01 · PR 3: lo que usan las funciones de la 0850 y la 0851 (la cuenta de cada
+-- línea de receta y el local de Last de cada venta, como en producción).
+alter table recipe_line add column if not exists account_id uuid;
+alter table sale add column if not exists external_location_text text;
+alter table brand_channel add column if not exists archived_at timestamptz;
+create table if not exists recipe_item_ai_session (id uuid primary key default gen_random_uuid(), account_id uuid, recipe_item_id uuid, status text,
+  updated_at timestamptz default now());
+alter table menu_item add column if not exists created_at timestamptz default clock_timestamp();
