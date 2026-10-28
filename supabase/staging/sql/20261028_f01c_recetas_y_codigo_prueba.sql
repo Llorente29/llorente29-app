@@ -16,6 +16,8 @@
 --      Croquetas sin artículo; el agua, del almacén; 1 venta esperando.
 --   2. Poner la receta de Alitas: el disparador la pone en la cola, y colocar
 --      descuenta el pan de su venta (que antes no descontaba nada).
+--   (La semilla tiene dos juegos, ordenador y móvil; la prueba usa el del
+--   ordenador.)
 --   3. Regla 6: con un recuento cerrado después de una venta de Croquetas, esa
 --      venta NO se toca al poner su receta, y se dice.
 --   4. Código cambiado (tablero 4): la pasada une Express sola (carta
@@ -35,7 +37,7 @@ do $$ begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'PRUEBA F01c: esta base tiene cuentas de producción. No se toca nada.';
   end if;
-  if to_regprocedure('public.e2e_f01c_preparar(text)') is null then
+  if to_regprocedure('public.e2e_f01c_preparar(text,text)') is null then
     raise exception 'PRUEBA F01c: falta la semilla seed_f01c_recetas_y_codigo_staging (va antes en el manifiesto).';
   end if;
 end $$;
@@ -50,7 +52,7 @@ declare
   b constant uuid := 'f01c2e00-0000-4000-8000-0000000000b1';
   r jsonb; c jsonb;
 begin
-  r := public.e2e_f01c_preparar('empezar');
+  r := public.e2e_f01c_preparar('empezar', 'ordenador');
   if (r->>'ventas')::int <> 4 or r->>'sesion' is null then raise exception 'PRUEBA F01c · 1: la preparación no ha dejado las 4 ventas y la lectura: %', r; end if;
   c := public.f01_carta_marca(a, b);
   if c->'resumen' <> '{"platos": 5, "con_receta": 3, "sin_receta": 2, "almacen": 1}'::jsonb then
@@ -72,7 +74,7 @@ declare
   a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   v uuid;
 begin
-  select s.id into v from public.sale s where s.account_id = a and s.external_ref = 'f01c-e2e-1' and s.is_active;
+  select s.id into v from public.sale s where s.account_id = a and s.external_ref = 'f01c-e2e-ordenador-1' and s.is_active;
   perform public.close_sale(v);
   if (select count(*) from public.stock_movement where account_id = a and source_type = 'sale' and movement_type = 'consumo' and source_id = v) <> 0 then
     raise exception 'PRUEBA F01c · 2: la venta de Alitas descuenta algo sin tener receta.';
@@ -186,10 +188,11 @@ declare
   v jsonb; q jsonb; r jsonb;
 begin
   v := public.f01_marcas_por_revisar(a);
-  if (select string_agg(x->>'nombre', ', ' order by x->>'nombre') from jsonb_array_elements(v->'preguntas') x) <> 'Pollería Express, Pollos Nuevos' then
+  -- Las del juego del ordenador (el del móvil, « M», es de su pasada de la e2e).
+  if (select string_agg(x->>'nombre', ', ' order by x->>'nombre') from jsonb_array_elements(v->'preguntas') x where x->>'org' = org::text) <> 'Pollería Express, Pollos Nuevos' then
     raise exception 'PRUEBA F01c · 4: antes de la pasada se tendrían que preguntar Express y Nuevos: %', v->'preguntas';
   end if;
-  r := public.e2e_f01c_preparar('pasada');
+  r := public.e2e_f01c_preparar('pasada', 'ordenador');
   if jsonb_array_length(r->'reconocidas_solas') <> 1 or r->'reconocidas_solas'->0->>'nombre_last' <> 'Pollería Express'
      or (r->'reconocidas_solas'->0->'ventas'->>'colocadas')::int <> 1 then
     raise exception 'PRUEBA F01c · 4: la pasada no ha unido Express sola con su venta: %', r;
@@ -214,14 +217,14 @@ declare
   a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   n int;
 begin
-  if (select count(*) from public.sale where account_id = a and external_ref in ('f01c-e2e-2', 'f01c-e2e-3', 'f01c-e2e-4') and is_active
+  if (select count(*) from public.sale where account_id = a and external_ref in ('f01c-e2e-ordenador-2', 'f01c-e2e-ordenador-3', 'f01c-e2e-ordenador-4') and is_active
         and brand_id = 'f01c2e00-0000-4000-8000-0000000000b1') <> 3 then
     raise exception 'PRUEBA F01c · 4: las ventas de Express y Pollos Nuevos no tienen la marca de la Pollería.';
   end if;
   -- El pollo de Pollos Nuevos (otra matrícula) se junta con el de la Pollería y descuenta su pan.
-  perform public.close_sale(s.id) from public.sale s where s.account_id = a and s.external_ref = 'f01c-e2e-3' and s.is_active;
+  perform public.close_sale(s.id) from public.sale s where s.account_id = a and s.external_ref = 'f01c-e2e-ordenador-3' and s.is_active;
   select count(*) into n from public.stock_movement sm join public.sale s on s.id = sm.source_id
-   where s.account_id = a and s.external_ref = 'f01c-e2e-3' and sm.movement_type = 'consumo' and sm.recipe_item_id = 'c1b0a000-0000-4000-8000-000000000203';
+   where s.account_id = a and s.external_ref = 'f01c-e2e-ordenador-3' and sm.movement_type = 'consumo' and sm.recipe_item_id = 'c1b0a000-0000-4000-8000-000000000203';
   if n = 0 then raise exception 'PRUEBA F01c · 4: el pollo de Pollos Nuevos no descuenta el pan de la receta de la Pollería.'; end if;
   raise notice '4 · Express unida sola y avisada; Pollos Nuevos preguntada (3 de 4) y confirmada: sus 2 ventas, con marca; el pollo descuenta el pan';
 end $$;
