@@ -2,7 +2,7 @@
 //
 // S01b · El proveedor desde la propia factura (Julio, 28/10). Las piezas que
 // van dentro de Revisar factura y de la recibida a mano:
-//   · AltaDesdeFactura: «Dar de alta a OFITOR 2000 S.L.U.» y «Es uno que ya
+//   · AltaDesdeFactura: «Dar de alta a Suministros del Ejemplo S.L.U.» y «Es uno que ya
 //     tengo». El alta es el MISMO formulario de «Subir factura»
 //     (FormularioAltaProveedor), dentro del bloque «Proveedor y factura», con
 //     todo lo que trae el papel para revisar.

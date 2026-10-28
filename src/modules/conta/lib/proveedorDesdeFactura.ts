@@ -5,7 +5,7 @@
 
 import { normalizarNif } from '@/modules/conta/lib/nif'
 
-/** «Dar de alta a OFITOR 2000 S.L.U.» (o «Dar de alta a su proveedor» si no leyó el nombre). */
+/** «Dar de alta a Suministros del Ejemplo S.L.U.» (o «Dar de alta a su proveedor» si no leyó el nombre). */
 export function textoAltaDesdeFactura(nombreLeido: string | null | undefined): string {
   const n = (nombreLeido ?? '').replace(/\s+/g, ' ').trim()
   return n ? `Dar de alta a ${n}` : 'Dar de alta a su proveedor'

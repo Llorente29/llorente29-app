@@ -2,10 +2,10 @@
 //
 // S01b · La ficha del proveedor se rellena sola con lo que trae la factura
 // (completarFicha, ampliada), el NIF distinto y el IBAN, que nunca entra solo.
-// La forma de los datos es la de la lectura de verdad (la R0672 de OFITOR 2000
-// S.L.U., en «Para revisar» en producción el 28/10: nombre, NIF y una
-// dirección de polígono con la provincia entre paréntesis); la dirección y los
-// contactos, inventados (el repositorio es público).
+// La forma de los datos es la de la lectura de verdad (la única recibida de
+// Foodint sin proveedor en «Para revisar» el 28/10: nombre, NIF y una dirección
+// de polígono con la provincia entre paréntesis); el nombre, el NIF, la
+// dirección y los contactos, inventados (el repositorio es público).
 
 import { describe, expect, it } from 'vitest'
 import { apuntarOrigen, completarFicha, deLaFactura, estadoIban, origenDelCampo, partirDireccion } from '../../../src/modules/conta/lib/fichaDesdeDocumento'
@@ -13,31 +13,31 @@ import { altaEnFactura, textoAltaDesdeFactura } from '../../../src/modules/conta
 import { camposDeOrigenTocados } from '../../../src/modules/conta/services/proveedorService'
 
 const vacia = { nif: null, nombreFiscal: null, calle: null, codigoPostal: null, ciudad: null }
-const OFITOR = { nif: 'B11807195', nombre: 'OFITOR 2000 S.L.U.', direccion: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9, 11160 Barbate (Cádiz)' }
+const PAPEL = { nif: 'B12345674', nombre: 'Suministros del Ejemplo S.L.U.', direccion: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9, 11160 Barbate (Cádiz)' }
 const IBAN_BUENO = 'ES9121000418450200051332'
 const OTRO_IBAN_BUENO = 'ES7921000813610123456789'
 
 describe('S01b · qué se rellena y qué no', () => {
   it('un polígono con la provincia entre paréntesis: calle, código postal y ciudad', () => {
-    expect(partirDireccion(OFITOR.direccion)).toEqual({ calle: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9', codigoPostal: '11160', ciudad: 'Barbate' })
+    expect(partirDireccion(PAPEL.direccion)).toEqual({ calle: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9', codigoPostal: '11160', ciudad: 'Barbate' })
   })
   it('a una ficha vacía: todo lo que trae (NIF, nombre fiscal, dirección, correo, teléfono y web)', () => {
-    const r = completarFicha(vacia, { ...OFITOR, correo: 'Admin@Ejemplo.es ', telefono: '+34 956 00 00 00', web: 'https://www.ejemplo.es/' })
-    expect(r.proponer).toEqual({ taxId: 'B11807195', legalName: 'OFITOR 2000 S.L.U.', fiscalStreet: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9', fiscalPostalCode: '11160', fiscalCity: 'Barbate', website: 'ejemplo.es' })
+    const r = completarFicha(vacia, { ...PAPEL, correo: 'Admin@Ejemplo.es ', telefono: '+34 956 00 00 00', web: 'https://www.ejemplo.es/' })
+    expect(r.proponer).toEqual({ taxId: 'B12345674', legalName: 'Suministros del Ejemplo S.L.U.', fiscalStreet: 'Pol.I. Inventado, C/ Ejemplo,9, Nave 9', fiscalPostalCode: '11160', fiscalCity: 'Barbate', website: 'ejemplo.es' })
     expect(r.contacto).toEqual({ correo: 'admin@ejemplo.es', telefono: '+34 956 00 00 00' })
     expect(r.campos).toEqual(['nif', 'nombreFiscal', 'direccion', 'correo', 'telefono', 'web'])
     expect(r.cambiados).toEqual([])
   })
   it('lo que ya tiene y es lo mismo no se toca: el teléfono con o sin +34, el correo en mayúsculas, la web con www', () => {
-    const r = completarFicha({ ...vacia, nif: 'B11807195', correos: ['admin@ejemplo.es'], telefonos: ['956000000'], web: 'www.ejemplo.es' },
+    const r = completarFicha({ ...vacia, nif: 'B12345674', correos: ['admin@ejemplo.es'], telefonos: ['956000000'], web: 'www.ejemplo.es' },
       { nif: 'B-11807195', nombre: null, direccion: null, correo: 'ADMIN@ejemplo.es', telefono: '+34 956 00 00 00', web: 'http://ejemplo.es' })
     expect(r.proponer).toEqual({})
     expect(r.contacto).toEqual({})
     expect(r.cambiados).toEqual([])
   })
   it('lo que no coincide no se pisa: sale con su pregunta y lo que se guardaría al pulsar', () => {
-    const r = completarFicha({ nif: 'B11807195', nombreFiscal: 'OFITOR 2000 S.L.U.', calle: 'Calle Antigua 1', codigoPostal: '11160', ciudad: 'Barbate', correos: ['pedidos@ejemplo.es'], web: 'ejemplo.es' },
-      { ...OFITOR, correo: 'facturas@ejemplo.es', web: 'otra-web.es' })
+    const r = completarFicha({ nif: 'B12345674', nombreFiscal: 'Suministros del Ejemplo S.L.U.', calle: 'Calle Antigua 1', codigoPostal: '11160', ciudad: 'Barbate', correos: ['pedidos@ejemplo.es'], web: 'ejemplo.es' },
+      { ...PAPEL, correo: 'facturas@ejemplo.es', web: 'otra-web.es' })
     expect(r.proponer).toEqual({})
     expect(r.cambiados.map((c) => c.pregunta)).toEqual([
       'Su dirección ha cambiado: ¿la actualizo?',
@@ -48,7 +48,7 @@ describe('S01b · qué se rellena y qué no', () => {
     expect(r.cambiados[1].contacto).toEqual({ correo: 'facturas@ejemplo.es' })
   })
   it('la misma calle con otras mayúsculas, tildes o comas no es un cambio', () => {
-    const r = completarFicha({ ...vacia, calle: 'POL.I. INVENTADO C/ EJEMPLO 9 NAVE 9', codigoPostal: '11160', ciudad: 'Barbate' }, { nif: null, nombre: null, direccion: OFITOR.direccion })
+    const r = completarFicha({ ...vacia, calle: 'POL.I. INVENTADO C/ EJEMPLO 9 NAVE 9', codigoPostal: '11160', ciudad: 'Barbate' }, { nif: null, nombre: null, direccion: PAPEL.direccion })
     expect(r.cambiados).toEqual([])
   })
   it('un correo o una web mal escritos no se proponen', () => {
@@ -65,9 +65,9 @@ describe('S01b · el NIF distinto', () => {
     expect(r.proponer.taxId).toBeUndefined()
   })
   it('sin NIF en la ficha no hay «distinto»: se propone el de la factura', () => {
-    const r = completarFicha(vacia, { nif: 'B11807195', nombre: null, direccion: null })
+    const r = completarFicha(vacia, { nif: 'B12345674', nombre: null, direccion: null })
     expect(r.nifDistinto).toBeNull()
-    expect(r.proponer.taxId).toBe('B11807195')
+    expect(r.proponer.taxId).toBe('B12345674')
   })
 })
 
@@ -111,16 +111,16 @@ describe('S01b · «de la factura R0672»', () => {
 describe('S01b · cuándo se ofrece el alta en la factura', () => {
   const proveedores = [{ id: 'p1', nombre: 'Panadería de Prueba', nif: 'B87654321' }]
   it('sin proveedor y con un NIF que no tienes: «Dar de alta a …»', () => {
-    expect(altaEnFactura({ proveedorId: '', soloLectura: false, nifLeido: 'B11807195', proveedores })).toEqual({ que: 'alta' })
-    expect(textoAltaDesdeFactura('OFITOR 2000  S.L.U. ')).toBe('Dar de alta a OFITOR 2000 S.L.U.')
+    expect(altaEnFactura({ proveedorId: '', soloLectura: false, nifLeido: 'B12345674', proveedores })).toEqual({ que: 'alta' })
+    expect(textoAltaDesdeFactura('Suministros del Ejemplo  S.L.U. ')).toBe('Dar de alta a Suministros del Ejemplo S.L.U.')
     expect(textoAltaDesdeFactura(null)).toBe('Dar de alta a su proveedor')
   })
   it('el NIF leído ya es de uno tuyo (con guiones o no): elegirlo, no darlo de alta otra vez', () => {
     expect(altaEnFactura({ proveedorId: null, soloLectura: false, nifLeido: 'b-87654321', proveedores })).toEqual({ que: 'es_uno_tuyo', proveedorId: 'p1', nombre: 'Panadería de Prueba' })
   })
   it('con proveedor, o ya validada: nada', () => {
-    expect(altaEnFactura({ proveedorId: 'p1', soloLectura: false, nifLeido: 'B11807195', proveedores })).toEqual({ que: 'nada' })
-    expect(altaEnFactura({ proveedorId: '', soloLectura: true, nifLeido: 'B11807195', proveedores })).toEqual({ que: 'nada' })
+    expect(altaEnFactura({ proveedorId: 'p1', soloLectura: false, nifLeido: 'B12345674', proveedores })).toEqual({ que: 'nada' })
+    expect(altaEnFactura({ proveedorId: '', soloLectura: true, nifLeido: 'B12345674', proveedores })).toEqual({ que: 'nada' })
   })
 })
 
