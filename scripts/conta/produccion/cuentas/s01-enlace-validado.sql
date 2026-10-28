@@ -27,6 +27,7 @@ select clave, valor from (
     -- quieta: solo los escribe _s01_asiento_cobro al cobrar por el enlace, y el cobro está apagado en producción (0 enlaces de pago el 28/10)
     (select count(*) from public.journal_entry where source_type = 'customer_payment')::text union all
   select 5, 'respaldos de la 0735 (funcion_respaldo)',
+    -- quieta: solo la escribe _respaldar_funcion dentro de una migración, y se cuentan los de la 0735 (por su nombre), que nadie más pone
     (select count(*) from public.funcion_respaldo where migracion = '20261028T0735_s01_enlace_validado')::text union all
   select 6, '0753: «Lo que no he podido proponer» (filas, o no existe)',
     case when to_regclass('public.conta_propuesta_pendiente') is null then 'no existe'
@@ -75,6 +76,6 @@ select clave, valor from (
        and p.proname in ('conta_propuestas_de_noche', 'conta_propuestas_de_noche_todas'))
     || ' · ' || coalesce((select schedule from cron.job where jobname = 'conta-propuestas-de-noche'), 'sin cron') union all
   select 20, '1103: tipos de retención (catálogo de serie, sin cuenta) · de ellos, el del trabajo',
-    -- 5 · 0 el 28/10; después del real, 6 · 1
+    -- quieta: el catálogo de serie (is_system) solo lo cambia una migración; las filas de cada cuenta no se cuentan. 5 · 0 el 28/10; después del real, 6 · 1
     (select count(*) from public.withholding_rate where is_system) || ' · ' || (select count(*) from public.withholding_rate where is_system and code = 'trabajo')
 ) x order by o;
