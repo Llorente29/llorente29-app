@@ -6,7 +6,6 @@
 import { describe, expect, it } from 'vitest'
 import { cuadre, ORIGEN_GLOVO } from '@/modules/conta/lib/liquidaciones'
 import { nifDeListado, esIvaExtranjero } from '@/modules/conta/lib/importarPlan'
-import { liquidacionPlataforma } from '@/modules/conta/lib/asientosPropuestos'
 // @ts-expect-error — módulo .mjs sin tipos
 import { descuadre, revisarTerceros } from '../../../../scripts/conta/lib/terceros.mjs'
 
@@ -57,27 +56,7 @@ describe('neto de una liquidación de Glovo: ventas − comisión × 1,21 + deud
   })
 })
 
-describe('el asiento de una liquidación de Glovo: su factura es la comisión con IVA, sin los cargos del desglose', () => {
-  const cuentas = { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't21' }, banco: null, pendienteSocio: null }
-  const f = GLOVO[4]
-  const entrada = (cargos: { concepto: string; importe: number }[]) => ({
-    id: 'l', fecha: '2026-10-15', ref: null, plataforma: 'la plataforma', flujo: 'own' as const, ventas: f.gross_sales, comision: f.commission,
-    cargos, devoluciones: 0, neto: f.net_payout - (f.accumulated_debt ?? 0), cobrado: null, pedidos: { total: 0, asentados: 0 }, localId: null,
-  })
-  it('sin cargos (como lo llama ahora el servicio para Glovo) cuadra con el neto: sin «duda» por el neto', () => {
-    const { propuesta } = liquidacionPlataforma(entrada([]), cuentas)
-    expect(propuesta!.avisos.join(' ')).not.toMatch(/la plataforma dice neto/)
-  })
-  it('con el desglose como cargos (lo de antes) no cuadra: la factura saldría inflada', () => {
-    const { propuesta } = liquidacionPlataforma(entrada([{ concepto: 'Transporte', importe: 399 }, { concepto: 'Cuota de acceso', importe: 269.42 }]), cuentas)
-    expect(propuesta!.avisos.join(' ')).toMatch(/la plataforma dice neto/)
-  })
-  it('a 1 céntimo (el redondeo del IVA de Glovo) tampoco es «duda»', () => {
-    const g = GLOVO[0]
-    const { propuesta } = liquidacionPlataforma({ ...entrada([]), ventas: g.gross_sales, comision: g.commission, neto: g.net_payout - (g.accumulated_debt ?? 0) }, cuentas)
-    expect(propuesta!.avisos.join(' ')).not.toMatch(/la plataforma dice neto/)
-  })
-})
+// (Sus casos de liquidacionPlataforma viven en el paso 0 de supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql: la regla está en SQL desde el S01 · PR 3.)
 
 describe('dos subcuentas: solo cuenta la PRINCIPAL de cada tercero', () => {
   const A = 'a'
