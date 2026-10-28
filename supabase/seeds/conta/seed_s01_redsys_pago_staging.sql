@@ -86,15 +86,16 @@ begin
       values (r_cuenta, r_empresa, v_ano::text, make_date(v_ano, 1, 1), make_date(v_ano, 12, 31), 'open', null);
     end if;
 
-    -- El cliente y su 430, con el mismo molde que la 430 de serie del plan.
+    -- El cliente y su 430: una subcuenta propia de la 43000000 de serie (molde
+    -- 4300), como las de los clientes de la empresa A (own, manual).
     insert into public.party (id, account_id, name, tax_id) values (r_cliente, r_cuenta, 'Cliente Redsys de Prueba', 'B00000690');
-    select * into v_430 from public.company_account where company_id = r_empresa and template_code = '430' order by code limit 1;
-    if v_430.id is null then raise exception 'Semilla S01 Redsys: el plan no dejó ninguna 430 de molde.'; end if;
+    select * into v_430 from public.company_account where company_id = r_empresa and code = '43000000';
+    if v_430.id is null then raise exception 'Semilla S01 Redsys: el plan no dejó la 43000000 de serie.'; end if;
     insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
-    values (r_cuenta, r_empresa, v_430.plan, '43000901', v_430.template_code, 'Clientes · Cliente Redsys de Prueba', v_430.kind, v_430.source);
+    values (r_cuenta, r_empresa, v_430.plan, '43000001', v_430.template_code, 'Clientes · Cliente Redsys de Prueba', 'own', 'manual');
     insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
     select r_cuenta, r_empresa, ca.id, 'customer', r_cliente::text, 'principal', 'manual'
-      from public.company_account ca where ca.company_id = r_empresa and ca.code = '43000901';
+      from public.company_account ca where ca.company_id = r_empresa and ca.code = '43000001';
 
     -- La factura de 12,10 €, emitida y sin cobrar.
     select id into v_tra from public.payment_method where code = 'transferencia' and account_id is null limit 1;
