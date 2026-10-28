@@ -49,6 +49,7 @@ import { resolverGrupos } from './resolverGrupos'
 import type { Ejercicio } from './periodo'
 import { barraAbierta } from '@/modules/conta/diseno/plantillas/anchos'
 import { useTramoAncho } from '@/modules/conta/diseno/plantillas/useAncho'
+import { BARRA_PREGUNTAR } from './muyPronto'
 
 /** Los apartados de la barra, con el activo dentro aunque no esté contratado, en el orden del mapa. */
 function conElActivo(visibles: Producto[], activo: Producto | null): Producto[] {
@@ -213,7 +214,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
           </main>
         </div>
         {movil && cajon && <Cajon d={datosBarra} solo={solo} cerrar={cerrarCajon} tuyo={<>{favoritos(true)}{usuario(true)}</>} />}
-        {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={!solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
+        {buscando && <Buscador cerrar={() => setBuscando(false)} solo={solo} conPregunta={BARRA_PREGUNTAR && !solo && !sinPregunta} ctx={ctxListo ? ctx : undefined} />}
       </div>
     </MarcoContexto.Provider>
   )
