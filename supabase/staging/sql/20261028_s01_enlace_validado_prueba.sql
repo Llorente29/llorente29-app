@@ -61,11 +61,12 @@ create or replace function pg_temp.lineas(p uuid) returns text language sql as $
   select string_agg(ca.code || ' ' || coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by ca.code)
     from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = p
 $$;
--- El saldo de una cuenta en los asientos vivos (propuestos, borradores y validados).
+-- El saldo de una cuenta en el libro, como lo enseña (libroService.ts): un asiento
+-- anulado y su contraasiento salen los dos y se compensan.
 create or replace function pg_temp.saldo(p_company uuid, p_code text) returns numeric language sql as $$
   select coalesce(sum(coalesce(jl.debit, 0) - coalesce(jl.credit, 0)), 0)::numeric(14,2)
     from public.journal_line jl join public.journal_entry je on je.id = jl.entry_id join public.company_account ca on ca.id = jl.company_account_id
-   where ca.company_id = p_company and ca.code = p_code and je.status in ('propuesto', 'borrador', 'validado')
+   where ca.company_id = p_company and ca.code = p_code and je.status in ('propuesto', 'borrador', 'validado', 'anulado')
 $$;
 
 create temp table _p (clave text primary key, v text) on commit drop;
