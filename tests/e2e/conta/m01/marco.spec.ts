@@ -305,16 +305,11 @@ test('el libro diario en el marco: tabla densa en compacta y en cómoda, Te toca
   // En la barra de acciones del marco, con su tecla; el ejercicio, en la barra de arriba.
   const acciones = page.getByRole('toolbar', { name: 'Acciones del libro diario' })
   await expect(acciones.getByRole('button', { name: '+ Nuevo asiento' })).toHaveAttribute('aria-keyshortcuts', 'Insert')
-  if (lado(page) === 'movil') {
-    // En el móvil (Julio, 16/10): solo el principal a la vista; lo demás en «⋯».
-    await expect(acciones.getByRole('button')).toHaveCount(2)
-    await acciones.getByRole('button', { name: 'Más acciones del libro diario' }).click()
-    await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
-    await page.keyboard.press('Escape')
-    await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toHaveCount(0)
-  } else {
-    await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toBeVisible()
-  }
+  // S01 · PR 3 (entrega 5): ya no hay «Proponer lo pendiente»; los asientos se
+  // proponen solos. Con «Enviar a Diez» apagado (staging), «+ Nuevo asiento» es
+  // la única acción, y en el móvil no hace falta «⋯».
+  await expect(acciones.getByRole('button', { name: 'Proponer lo pendiente' })).toHaveCount(0)
+  if (lado(page) === 'movil') await expect(acciones.getByRole('button')).toHaveCount(1)
   await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Ejercicio' })).toBeVisible()
   // Te toca hoy: lo que espera revisión, que filtra al pulsarlo.
   await expect(page.getByRole('region', { name: 'Te toca hoy' }).getByRole('button', { name: /^\d+ para revisar$/ })).toBeVisible()

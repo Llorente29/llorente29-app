@@ -10,17 +10,24 @@
 // Medido en esa rama: sus commits de capturas tocaron 14 carpetas, entre ellas
 // b01, d01 y r02, que no eran suyas.
 //
-// La regla: «capturas: artefacto en cada push y fijar las de tu frente antes
-// del informe».
+// La regla (W08b, Julio, 28/10; antes C06b y W04): las capturas, FUERA del PR.
 //   · en cada e2e, las capturas que ha sacado ESE run van como artefacto del
-//     run (`recoger`), nunca como commit, y un comentario en el PR da el enlace;
-//   · antes de dar su informe, cada sesión lanza la e2e a mano con
-//     «fijar_capturas», que commitea SOLO la carpeta del frente de la rama
-//     (`fijar`): es lo que Julio ve en «Files changed»;
+//     run (`recoger`);
+//   · si sale en verde, las del frente de la rama (`suyas`) se publican en una
+//     rama aparte, `capturas/<rama>`, un solo commit sin historia que el bot
+//     reescribe en cada run. El bot NO hace commits en la rama del PR: un push
+//     con el token del workflow deja las comprobaciones del PR en «Action
+//     required» y los PNG chocaban con main;
+//   · un comentario del PR (uno solo, que se edita) las enseña en miniatura,
+//     por tablero (`comentario`);
+//   · al fusionar el PR, capturas-al-cerrar.yml las pasa a main en su carpeta de
+//     siempre; al fusionarlo o cerrarlo, borra `capturas/<rama>`;
 //   · antes de subir, `comprobar` para si la rama trae capturas de otro frente.
 //
 //   node scripts/conta/capturas.mjs frente <rama>          → a, b, c, d o nada
-//   node scripts/conta/capturas.mjs fijar <rama>           → git add de las del frente
+//   node scripts/conta/capturas.mjs suyas <rama> <dir>     → las del frente que hay en <dir>
+//   node scripts/conta/capturas.mjs comentario <repo> <sha> <rama> <lista>
+//       → el Markdown del comentario (miniaturas por tablero) de las rutas de <lista>
 //   node scripts/conta/capturas.mjs recoger <marca> <dir>  → copia las de este run
 //   node scripts/conta/capturas.mjs comprobar [rama]       → sale con 1 si hay de otro
 //   node scripts/conta/capturas.mjs revisar <rama> <base> <head>
@@ -28,7 +35,7 @@
 //         PNG que no es del frente de la rama (W08, 28/10).
 
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { zonasDuenas } from '../e2e/area.mjs'
 
@@ -47,7 +54,7 @@ export function frenteDeLaRama(rama) {
 }
 
 /**
- * De quién son las capturas que puede fijar una rama. El reparto (R02) no es
+ * De quién son las capturas que puede publicar una rama. El reparto (R02) no es
  * un frente de usuarios, pero sí tiene sus capturas.
  * cierre/ y diez/ no son de ningún frente de hoy: nadie las fija.
  */
@@ -83,6 +90,9 @@ export const DE_QUIEN = {
  * rama no cuentan para decidirlo.
  */
 export function duenoDeLaRama(rama, cambiados = []) {
+  // A mano (W08b): la e2e lanzada con «frente» publica las de ese frente.
+  const forzado = process.env.CAPTURAS_DUENO?.trim()
+  if (forzado && forzado in DE_QUIEN) return forzado
   if (/^reparto-/.test(rama)) return 'reparto'
   if (/^conta\/i\d/.test(rama)) return 'impuestos'
   if (/^conta\/p\d/.test(rama)) return 'despacho'
@@ -118,6 +128,55 @@ export function repartir(rutas, dueno) {
   return { suyas, ajenas }
 }
 
+/** La rama aparte donde se publican las capturas de una rama (W08b). */
+export function ramaDeCapturas(rama) {
+  return `capturas/${rama}`
+}
+
+/** El tablero de una captura, para agruparlas: «c00», «r02», «inventario». */
+export function tableroDe(ruta) {
+  const m = ruta.match(/^docs\/(conta|reparto)\/capturas\/([^/]+)\//)
+  if (m) return m[2]
+  return ruta.split('/')[1]
+}
+
+/**
+ * El Markdown del comentario: las capturas en miniatura (enlazadas a su PNG),
+ * por tablero y por nombre, de tres en tres. Con el sha del commit publicado,
+ * no con el nombre de la rama: el comentario enseña ESE run aunque la rama se
+ * reescriba o se borre después.
+ */
+export function comentarioCapturas({ servidor = 'https://github.com', repo, sha, rama, rutas }) {
+  const png = [...rutas].filter((r) => /\.(png|jpe?g|webp)$/i.test(r)).sort()
+  if (!png.length) return ''
+  const porTablero = new Map()
+  for (const r of png) { const t = tableroDe(r); if (!porTablero.has(t)) porTablero.set(t, []); porTablero.get(t).push(r) }
+  const url = (r) => `${servidor}/${repo}/blob/${sha}/${r}`
+  const partes = [`**${png.length} capturas del frente** en [\`${ramaDeCapturas(rama)}\`](${servidor}/${repo}/tree/${ramaDeCapturas(rama)}) (\`${sha.slice(0, 7)}\`). Al fusionar, pasan a main en su carpeta.`]
+  for (const [t, rs] of [...porTablero].sort(([a], [b]) => a.localeCompare(b))) {
+    partes.push('', `**${t}** · ${rs.length}`, '', '<table>')
+    for (let i = 0; i < rs.length; i += 3) {
+      const fila = rs.slice(i, i + 3).map((r) => `<td valign="top"><a href="${url(r)}"><img src="${url(r)}?raw=true" width="240" alt="${r.split('/').pop()}"></a><br><sub>${r.split('/').pop()}</sub></td>`)
+      partes.push(`<tr>${fila.join('')}</tr>`)
+    }
+    partes.push('</table>')
+  }
+  return partes.join('\n')
+}
+
+/** Las capturas que hay en <raiz>, con su ruta relativa (las de las CARPETAS). */
+export function capturasEn(raiz) {
+  const fuera = []
+  const andar = (d) => {
+    for (const e of readdirSync(join(raiz, d), { withFileTypes: true })) {
+      const r = `${d}/${e.name}`
+      if (e.isDirectory()) andar(r); else fuera.push(r)
+    }
+  }
+  for (const c of CARPETAS) if (existsSync(join(raiz, c))) andar(c)
+  return fuera.sort()
+}
+
 /** Las carpetas de primer nivel de unas rutas («docs/conta/capturas/b01»). */
 export function carpetasDe(rutas) {
   return [...new Set(rutas.map((r) => r.split('/').slice(0, 4).join('/')))].sort()
@@ -146,9 +205,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // checkout es de un solo commit y no trae origin/main (run 762, 21/10): se trae
   // main y se ahonda la rama hasta encontrar dónde se separaron. Sin eso, nada.
   // CAPTURAS_CAMBIADOS (L00, 27/10): lo que cambia la rama, dado a mano (ficheros
-  // separados por comas; vacío = nada). Lo usa la prueba de «fijar en una rama sin
-  // frente», que si no leía el diff del checkout donde corre: en una rama que toca
-  // inventario salía dueña de inventario y la prueba caía (unitarias #103).
+  // separados por comas; vacío = nada). Lo usan las pruebas, que si no leían el
+  // diff del checkout donde corren: en una rama que toca inventario salía dueña
+  // de inventario y la prueba caía (unitarias #103).
   const cambiadosContraMain = () => {
     if (process.env.CAPTURAS_CAMBIADOS !== undefined) return process.env.CAPTURAS_CAMBIADOS.split(',').map((f) => f.trim()).filter(Boolean)
     const diff = () => execFileSync('git', ['diff', '--name-only', 'origin/main...HEAD'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).split('\n').filter(Boolean)
@@ -162,19 +221,21 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   if (orden === 'frente') {
     process.stdout.write(frenteDeLaRama(args[0] ?? ramaActual()))
-  } else if (orden === 'fijar') {
-    const rama = args[0] ?? ramaActual()
+  } else if (orden === 'suyas') {
+    // Las de este run que son del frente de la rama (las que se publican en capturas/<rama>).
+    // Una rama sin frente (C10, 23/10) no tiene: lo dice y sale con 0, sin poner el run en rojo.
+    const [rama, dir] = args
+    if (!rama || !dir) { console.error('Uso: capturas.mjs suyas <rama> <dir>'); process.exit(1) }
     const dueno = duenoDeLaRama(rama, cambiadosContraMain())
-    // C10 (Julio, 23/10): una rama sin frente de contabilidad (la carta de cocina, una
-    // herramienta…) no tiene capturas que fijar: se salta, sin poner el run en rojo.
-    // Antes salía con 1 y la e2e, con todas las pruebas en verde, acababa en rojo (#302).
-    if (!dueno) { console.log(`La rama «${rama}» no es de ningún frente de contabilidad: no hay capturas que fijar (se salta).`); process.exit(0) }
-    // Lo cambiado y lo nuevo, fichero a fichero (-uall), solo en las carpetas de capturas.
-    const cambiadas = git('status', '--porcelain', '-uall', '--', ...CARPETAS).split('\n').filter(Boolean).map((l) => l.slice(3))
-    const { suyas, ajenas } = repartir(cambiadas, dueno)
-    if (suyas.length) execFileSync('git', ['add', '--', ...suyas])
-    console.log(`Frente ${dueno}: ${suyas.length} capturas para fijar.`)
-    if (ajenas.length) console.log(`No se fijan ${ajenas.length} de otras carpetas (${carpetasDe(ajenas).join(', ')}): van solo en el artefacto.`)
+    if (!dueno) { console.error(`La rama «${rama}» no es de ningún frente: no hay capturas que publicar (se salta).`); process.exit(0) }
+    const { suyas, ajenas } = repartir(capturasEn(dir), dueno)
+    console.error(`Frente ${dueno}: ${suyas.length} capturas para publicar.${ajenas.length ? ` No se publican ${ajenas.length} de otras carpetas (${carpetasDe(ajenas).join(', ')}): van solo en el artefacto.` : ''}`)
+    if (suyas.length) process.stdout.write(suyas.join('\n') + '\n')
+  } else if (orden === 'comentario') {
+    const [repo, sha, rama, lista] = args
+    if (!repo || !sha || !rama || !lista) { console.error('Uso: capturas.mjs comentario <repo> <sha> <rama> <lista>'); process.exit(1) }
+    const rutas = readFileSync(lista, 'utf8').split('\n').map((l) => l.trim()).filter(Boolean)
+    process.stdout.write(comentarioCapturas({ servidor: process.env.GITHUB_SERVER_URL || undefined, repo, sha, rama, rutas }) + '\n')
   } else if (orden === 'recoger') {
     const [marca, destino] = args
     if (!marca || !destino) { console.error('Uso: capturas.mjs recoger <marca> <dir>'); process.exit(1) }
@@ -200,6 +261,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     }
     console.log(`Capturas de la rama: ${enLaRama.length}, todas de su frente (${dueno ?? 'ninguno'}).`)
   } else {
-    console.error('Uso: capturas.mjs frente|fijar|recoger|comprobar …'); process.exit(1)
+    console.error('Uso: capturas.mjs frente|suyas|comentario|recoger|comprobar|revisar …'); process.exit(1)
   }
 }

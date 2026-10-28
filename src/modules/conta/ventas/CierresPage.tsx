@@ -37,6 +37,8 @@ import {
 } from '@/modules/conta/lib/cierres'
 import { leerCierres, validarCierre } from '@/modules/conta/services/cierresService'
 import { LoQueDejaElCierre } from './LoQueDejaElCierre'
+import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
+import { DONDE } from '@/modules/conta/lib/noPropuesto'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 const nombreCierre = (x: Cierre) => `${x.canal}${x.marca ? ` · ${x.marca}` : ''} · ${x.local} · ${diaMes(x.dia)}`
@@ -164,6 +166,7 @@ export default function CierresPage() {
       </div>
       {ayer && <CifrasBandeja cifras={cifras} />}
       <LoQueDejaElCierre conPlataformas={vende} />
+      <LoQueNoHePodido donde={DONDE.cierres} vuelta={vuelta} />
 
       <PestanasEstado etiqueta="Estado de los cierres" pestanas={pestanas} actual={pestana} alCambiar={(id) => cambiar({ ver: id === 'por-validar' ? null : id })} />
       <FiltrosLista etiqueta="Filtros de los cierres">

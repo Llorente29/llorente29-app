@@ -87,3 +87,36 @@
 .cc-num { text-align: right; font-variant-numeric: tabular-nums; }
 .cc-acciones { display: flex; gap: 10px; flex-wrap: wrap; }
 .cc-enlace { text-decoration: none; display: inline-flex; align-items: center; }
+/* F01 · PR 3 · tablero 3: la carta de la marca (las recetas que faltan). */
+.ml-chip[data-tono='mal'] { background: var(--color-danger-bg); color: var(--color-danger); }
+.rc-sub { margin: 0; }
+.rc-progreso { display: flex; flex-direction: column; gap: 8px; background: var(--color-warning-bg); border-radius: 12px; padding: 14px 16px; }
+.rc-progreso[data-completa='si'] { background: var(--color-success-bg); }
+.rc-fila { display: flex; gap: 12px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
+.rc-barra { height: 8px; border-radius: 99px; background: rgb(0 0 0 / 0.08); overflow: hidden; }
+.rc-barra i { display: block; height: 100%; background: var(--color-warning); }
+.rc-progreso[data-completa='si'] .rc-barra i { background: var(--color-success); }
+.rc-lectura { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--color-border-default); border-radius: 12px; padding: 16px; background: var(--color-bg-card); max-width: 640px; }
+.rc-leido { margin: 0; }
+.rc-espera { display: block; margin-top: 4px; }
+.rc-enlace { font: inherit; font-size: 14px; background: none; border: 0; padding: 0; color: var(--color-accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.rc-enlace:disabled { opacity: 0.6; cursor: default; }
+.rc-enlace:focus-visible { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+.rc-todos { align-self: flex-start; color: var(--color-text-secondary); }
+.rc-en-toast { color: inherit; }
+/* F01 · PR 3 · tablero 4: Marcas › Revisar (una marca que llega con otro código). */
+.rv-pregunta { border: 1px solid var(--color-border-default); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; max-width: 760px; background: var(--color-bg-card); }
+.rv-pregunta > .ml-chip { align-self: flex-start; }
+.rv-pregunta h2 { margin: 0; font-family: var(--font-display); font-size: 20px; }
+.rv-texto { margin: 0; }
+.rv-compara { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.rv-compara > div { background: var(--color-bg-page); border: 1px solid var(--color-border-default); border-radius: 10px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.rv-compara b { display: block; }
+.rv-compara span { color: var(--color-text-secondary); }
+.rv-platos { margin: 6px 0 0; padding: 0 0 0 18px; color: var(--color-text-secondary); font-size: 13px; }
+.rv-platos li[data-coincide='no'] { color: var(--color-warning); }
+@media (max-width: 640px) {
+  .rv-compara { grid-template-columns: 1fr; }
+  .rv-pregunta { padding: 16px; }
+  .rv-pregunta .ml-boton { flex: 1 1 100%; }
+}

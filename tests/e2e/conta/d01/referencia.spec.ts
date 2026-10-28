@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 // tests/e2e/conta/d01/referencia.spec.ts
 //
-// D01 · Cómo se ve en Libros una liquidación DE REFERENCIA y su motivo, contra
+// D01 · Cómo se ve una liquidación DE REFERENCIA y su motivo, contra
 // staging-conta, en ordenador (1440) y móvil (390). Capturas en
 // docs/conta/capturas/d01/.
 //
@@ -10,12 +10,15 @@
 // pagada el 02/01/2026, entrada por el camino del correo. La base la dejó de
 // referencia y sin factura.
 //
-// «Proponer lo pendiente» repasa todo lo de la cuenta A, y A la comparten los
-// frentes: la prueba no escribe nada. Las dos llamadas que escriben al
-// proponer se contestan aquí y no llegan a la base:
-//   · journal_entry_proponer → «ya estaba» (así tampoco se valida nada solo);
-//   · compras_fin_de_mes → nada (recalcula su cálculo de fin de mes).
-// Lo demás se lee de verdad, también la liquidación y su motivo.
+// S01 · PR 3 (entrega 5): ya no hay «Proponer lo pendiente» en Asientos. La
+// liquidación se propone sola al leerse y en la pasada de las 03:40; la que
+// no se puede proponer queda, con su porqué, en «Lo que no he podido proponer»
+// de Ventas › Liquidaciones. Que la regla la deja fuera con ESTE motivo lo prueba
+// la de staging (20261028_s01_propuestas_plataforma_prueba.sql, «la de
+// referencia»). Aquí, la pantalla: la fila que la base escribe para ella en
+// conta_propuesta_pendiente se contesta tal cual (la cuenta A la comparten los
+// frentes y la pasada no corre en la prueba), y se mira que sale, entera, en su
+// apartado, y que no la tapa nada. La prueba no escribe nada.
 
 import { test, expect, type Page } from '@playwright/test'
 import { CUENTA_A, entrarComo } from '../sesion'
@@ -31,20 +34,19 @@ async function capturar(page: Page, nombre: string) {
   expect(await loQueTapanSinPregunta(page, '.cx-principal', FLOTANTES_CONTA)).toEqual([])
 }
 
-test('A · Libros: una liquidación de referencia no se propone, y dice por qué', async ({ page }) => {
-  test.setTimeout(180_000)
+test('A · Ventas › Liquidaciones: una liquidación de referencia no se propone, y dice por qué', async ({ page }) => {
+  test.setTimeout(120_000)
   const errores: string[] = []
   page.on('pageerror', (e) => { errores.push(e.message); console.log(`[error de la página] ${e.message}`) })
+  // Lo que escribe la base para ella (_conta_no_propuesta, donde = 'Ventas › Liquidaciones').
+  await page.route(/\/rest\/v1\/conta_propuesta_pendiente\?/, async (r) => {
+    const donde = new URL(r.request().url()).searchParams.get('donde')
+    const filas = donde === 'eq.Ventas › Liquidaciones'
+      ? [{ id: '00000000-0000-4000-8000-0000000000d1', origen: 'channel_settlement', que: 'Liquidación Glovo · semana del 22/12/2025', porque: MOTIVO, at: '2026-10-29T02:40:00Z' }]
+      : []
+    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(filas) })
+  })
   const escritas: string[] = []
-  await page.route('**/rest/v1/rpc/journal_entry_proponer', async (r) => {
-    escritas.push('journal_entry_proponer')
-    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: '00000000-0000-4000-8000-000000000000', existente: true }) })
-  })
-  await page.route('**/rest/v1/rpc/compras_fin_de_mes', async (r) => {
-    escritas.push('compras_fin_de_mes')
-    await r.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
-  })
-  // Ninguna otra escritura: si el repaso escribiera algo más, la prueba lo dice en vez de hacerlo.
   await page.route('**/rest/v1/**', async (r) => {
     const m = r.request().method()
     if (m === 'GET' || m === 'HEAD' || (m === 'POST' && /\/rest\/v1\/rpc\//.test(r.request().url()))) return r.fallback()
@@ -53,26 +55,23 @@ test('A · Libros: una liquidación de referencia no se propone, y dice por qué
   })
 
   await entrarComo(page, CUENTA_A.email)
+  // Asientos ya no ofrece «Proponer lo pendiente».
   await page.goto('/conta/libros/diario')
-  // M01: el título lo dicen las pestañas del marco; el encabezado, para el lector (como en c04/libro).
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
-  // M01: en el móvil, lo que no es la acción principal va en «⋯».
-  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Más acciones del libro diario' }).click()
-  await page.getByRole('button', { name: 'Proponer lo pendiente' }).click()
-  await expect(page.getByRole('button', { name: 'Repasando…' })).toHaveCount(0, { timeout: 150_000 })
+  await expect(page.getByRole('button', { name: 'Proponer lo pendiente' })).toHaveCount(0)
 
-  const lista = page.getByRole('region', { name: 'Lo que no he propuesto' })
-  await expect(lista).toBeVisible()
+  await page.goto('/conta/ventas/liquidaciones')
+  const lista = page.getByRole('region', { name: 'Lo que no he podido proponer' })
+  await expect(lista).toBeVisible({ timeout: 30_000 })
+  await expect(lista.getByRole('heading', { name: 'Lo que no he podido proponer, y por qué · 1' })).toBeVisible()
   const linea = lista.getByRole('listitem').filter({ hasText: MOTIVO })
   await expect(linea).toHaveCount(1)
   await expect(linea).toContainText(/^Liquidación /)
-  // Dice lo que ha hecho, con contenido (regla 8).
-  await expect(page.getByText(/^Repasado del .* sin propuesta \(debajo, por qué\)/)).toBeVisible()
   // Lo de la marca no sale en lo nuevo.
   expect((await lista.innerText()).split('\n').filter((l) => /folvy|sumied/i.test(l))).toEqual([])
 
   await linea.scrollIntoViewIfNeeded()
-  await capturar(page, 'libros-referencia')
-  expect(escritas.filter((x) => !['journal_entry_proponer', 'compras_fin_de_mes'].includes(x)), 'escrituras que no se esperaban').toEqual([])
+  await capturar(page, 'liquidaciones-referencia')
+  expect(escritas, 'escrituras que no se esperaban').toEqual([])
   expect(errores).toEqual([])
 })

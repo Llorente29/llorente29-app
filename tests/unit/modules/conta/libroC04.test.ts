@@ -12,8 +12,8 @@ import {
   resultadoPorLocal, validaSola, NOMBRE_SERIE, type LineaAsiento, type CalendarioEmpresa,
 } from '@/modules/conta/lib/libro'
 import {
-  ventasDelDia, liquidacionPlataforma, facturaProveedor, finDeMesCompras, pagoFactura, liquidacionSocio, nomina, aplicarAprendizaje, cuentaDeBoe,
-  type PedidoDia, type EntradaVentasDia, type CuentasLiquidacion, type EntradaLiquidacion,
+  ventasDelDia, facturaProveedor, pagoFactura, cuentaDeBoe,
+  type PedidoDia, type EntradaVentasDia,
 } from '@/modules/conta/lib/asientosPropuestos'
 
 const NORTE = 'loc-norte', SUR = 'loc-sur'
@@ -216,37 +216,7 @@ describe('Julio, respuesta 1 · lo que deciden las plataformas', () => {
   })
 })
 
-describe('regla 7 · liquidación de plataforma', () => {
-  const c: CuentasLiquidacion = { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't21' }, banco: '57200001', pendienteSocio: '55200001' }
-  const base: EntradaLiquidacion = {
-    id: 'liq1', fecha: '2026-10-15', ref: '1–15 oct', plataforma: 'Glovo', flujo: 'own', ventas: 1000, comision: 200,
-    cargos: [{ concepto: 'Espera del repartidor', importe: 10 }], devoluciones: 11, neto: 734.9, cobrado: { fecha: '2026-10-20', importe: 734.9 },
-    pedidos: { total: 40, asentados: 40 }, localId: NORTE,
-  }
-  it('comisión y cargos con IVA 21 %, compensados con su 430 y el cobro; sin ventas', () => {
-    const p = liquidacionPlataforma(base, c).propuesta!
-    expect(cuadre(p.lineas).cuadra).toBe(true)
-    expect(p.lineas.some((l) => l.cuenta.startsWith('70'))).toBe(false)
-    expect(p.lineas.find((l) => l.cuenta === '47200021')).toMatchObject({ debe: 44.1, iva: { base: 210, tipo: 21, libro: 'received' } })
-    expect(p.lineas.find((l) => l.concepto === 'Espera del repartidor')).toMatchObject({ cuenta: '62900000', debe: 10 })
-    expect(p.confianza).toBe('seguro')
-    expect(p.razones.map((x) => x.decision)).toContain('Sin ventas')
-  })
-  it('si quedan pedidos sin su resumen del día: no los asienta y duda', () => {
-    const p = liquidacionPlataforma({ ...base, pedidos: { total: 40, asentados: 37 } }, c).propuesta!
-    expect(p.confianza).toBe('duda')
-    expect(p.avisos[0]).toContain('3 de 40 pedidos')
-    expect(p.lineas.some((l) => l.cuenta.startsWith('70'))).toBe(false)
-  })
-  it('el neto no cuadra con ventas − devoluciones − factura: duda con la cifra', () => {
-    expect(liquidacionPlataforma({ ...base, neto: 700 }, c).propuesta!.avisos.join(' ')).toContain('neto 700,00 €')
-  })
-  it('una marca cedida: lo cobrado es del socio, no ingreso tuyo (NRV 16.ª)', () => {
-    const p = liquidacionPlataforma({ ...base, flujo: 'licensed' }, c).propuesta!
-    expect(p.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['57200001', 734.9, 0], ['55200001', 0, 734.9]])
-    expect(p.razones[0].cita).toBe('PGC de Pymes, NRV 16.ª')
-  })
-})
+// (Sus casos de liquidacionPlataforma viven en el paso 0 de supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql: la regla está en SQL desde el S01 · PR 3.)
 
 describe('regla 8 · factura de proveedor, pago y socio', () => {
   const c = { proveedor: '41000006', retencion: '47510000', ivaSoportado: (p: number) => ({ 4: { cuenta: '47200004', tipoId: 't4' }, 10: { cuenta: '47200010', tipoId: 't10' }, 21: { cuenta: '47200021', tipoId: 't21' } } as Record<number, { cuenta: string; tipoId: string }>)[p] ?? null }
@@ -301,82 +271,12 @@ describe('regla 8 · factura de proveedor, pago y socio', () => {
     expect(pagoFactura({ facturaId: 'f1', fecha: '2026-10-10', proveedor: 'X', numero: 'F-12', importe: 190.8, localId: NORTE, terceroId: null }, { proveedor: '41000006', banco: '57200001' }).propuesta!.lineas.map((l) => l.cuenta)).toEqual(['41000006', '57200001'])
     expect(pagoFactura({ facturaId: 'f1', fecha: '2026-10-10', proveedor: 'X', numero: null, importe: 1, localId: NORTE, terceroId: null }, { proveedor: '41000006', banco: null }).sinPropuesta).toContain('banco')
   })
-  it('liquidación del socio: compras, comisión 705 con IVA, sus ventas cobradas y la compensación', () => {
-    const p = liquidacionSocio({ id: 'ls', fecha: '2026-10-31', socio: 'Socio de marca', terceroId: 's', localId: SUR, compras: [{ base: 1000, tipo: { id: 't10', porcentaje: 10 } }], comision: 300, ventasCobradas: 2000 }, {
-      proveedor: '40000002', cliente: '43000004', compras: '60000000', ingresosServicios: '70500000', iva21: { cuenta: '47700021', tipoId: 't21' }, ivaSoportado: c.ivaSoportado, pendienteSocio: '41000009',
-    }).propuesta!
-    expect(cuadre(p.lineas).cuadra).toBe(true)
-    expect(p.lineas.find((l) => l.cuenta === '70500000')!.haber).toBe(300)
-    expect(p.porque).toContain('le pagas 2.737,00 €')
-    // Respuesta 3, punto 4: lo cobrado por cuenta de él no pasa por su 400.
-    const saldo = (cta: string) => p.lineas.filter((l) => l.cuenta === cta).reduce((t, l) => t + l.haber - l.debe, 0)
-    expect(p.lineas.filter((l) => l.cuenta === '40000002').map((l) => [l.debe, l.haber])).toEqual([[0, 1100]])
-    // La comisión con IVA (363 €) se cobra de lo cobrado por cuenta de él; su 430 queda a cero.
-    expect(Math.round(saldo('43000004') * 100)).toBe(0)
-    expect(p.lineas.filter((l) => l.cuenta === '41000009').map((l) => [l.debe, l.haber])).toEqual([[363, 0]])
-  })
-  it('liquidación del socio sin ventas cobradas: la comisión se compensa con sus compras', () => {
-    const p = liquidacionSocio({ id: 'ls', fecha: '2026-10-31', socio: 'Socio de marca', terceroId: 's', localId: SUR, compras: [{ base: 1000, tipo: { id: 't10', porcentaje: 10 } }], comision: 300, ventasCobradas: 0 }, {
-      proveedor: '40000002', cliente: '43000004', compras: '60000000', ingresosServicios: '70500000', iva21: { cuenta: '47700021', tipoId: 't21' }, ivaSoportado: c.ivaSoportado, pendienteSocio: '41000009',
-    }).propuesta!
-    expect(cuadre(p.lineas).cuadra).toBe(true)
-    expect(p.lineas.some((l) => l.cuenta === '41000009')).toBe(false)
-    expect(p.lineas.filter((l) => l.cuenta === '40000002').map((l) => [l.debe, l.haber])).toEqual([[0, 1100], [363, 0]])
-    expect(p.porque).toContain('le pagas 737,00 €')
-  })
 })
 
 // Compras (10/10), §2.4 y aceptación 4: lo recibido sin factura al cierre.
 // La forma es la de D en Foodint: albaranes de un local, factura al mes.
-describe('compras · lo recibido sin factura a fin de mes', () => {
-  const e = {
-    id: 'acc1', mes: '2026-10-01', proveedor: 'Carnes de prueba', terceroId: 'p1', localId: NORTE, nombreLocal: 'Norte',
-    base: 150, recepciones: [{ codigo: 'ALB-1', fecha: '2026-10-05', base: 100 }, { codigo: 'ALB-2', fecha: '2026-10-20', base: 50 }], sinBase: 0,
-  }
-  it('un asiento el último día y su contrario el día 1, con el mismo origen', () => {
-    const r = finDeMesCompras(e, { gasto: '60000000', pendiente: '40090000' })
-    expect(r.sinPropuesta).toBeNull()
-    const [fin, uno] = r.propuestas
-    expect([fin.fecha, fin.origen, uno.fecha, uno.origen]).toEqual(['2026-10-31', { tipo: 'purchase_accrual', id: 'acc1' }, '2026-11-01', { tipo: 'purchase_accrual_reversal', id: 'acc1' }])
-    expect(fin.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 150, 0], ['40090000', 0, 150]])
-    expect(uno.lineas.map((l) => [l.cuenta, l.debe, l.haber])).toEqual([['60000000', 0, 150], ['40090000', 150, 0]])
-    expect(cuadre(fin.lineas).cuadra && cuadre(uno.lineas).cuadra).toBe(true)
-    expect(fin.razones[0].porque).toBe('ALB-1 (05/10, 100,00 €), ALB-2 (20/10, 50,00 €)')
-    expect(fin.concepto).toBe('Recibido sin factura · Carnes de prueba · Norte · octubre')
-    expect(fin.confianza).toBe('seguro')
-  })
-  it('el último día de febrero de un bisiesto', () => {
-    expect(finDeMesCompras({ ...e, mes: '2028-02-01' }, { gasto: '60000000', pendiente: '40090000' }).propuestas.map((p) => p.fecha)).toEqual(['2028-02-29', '2028-03-01'])
-  })
-  it('una recepción sin importe: se dice, y la confianza baja', () => {
-    const r = finDeMesCompras({ ...e, recepciones: [...e.recepciones, { codigo: 'ALB-3', fecha: '2026-10-28', base: null }], sinBase: 1 }, { gasto: '60000000', pendiente: '40090000' })
-    expect(r.propuestas[0].confianza).toBe('duda')
-    expect(r.propuestas[0].avisos).toEqual(['1 recepción(es) sin importe no están en la cifra.'])
-  })
-  it('sin tipo de gasto no cae a una cuenta genérica: no se propone', () => {
-    const r = finDeMesCompras(e, { gasto: null, pendiente: '40090000' })
-    expect(r.propuestas).toEqual([])
-    expect(r.sinPropuesta).toContain('le falta el tipo de gasto')
-  })
-})
-
-describe('nómina, aprendizaje y cuentas traídas', () => {
-  it('nómina: 640, 642, 476, 4751 (111) y 465; si no cuadra, lo dice', () => {
-    const c = { sueldos: '64000000', ssEmpresa: '64200000', ssAcreedora: '47600000', irpf: '47510000', remuneraciones: '46500000' }
-    const p = nomina({ id: 'n', mes: '2026-10-01', localId: NORTE, bruto: 7734.03, ssEmpresa: 2180.51, ssTrabajador: 440.57, irpf: 206.3, otras: 0, neto: 7087.16, retencionTipoId: 'rt' }, c).propuesta!
-    expect(p.fecha).toBe('2026-10-31')
-    expect(cuadre(p.lineas).cuadra).toBe(true)
-    expect(p.lineas.find((l) => l.cuenta === '47510000')!.retencion!.modelo).toBe('111')
-    expect(nomina({ id: 'n', mes: '2026-10-01', localId: NORTE, bruto: 100, ssEmpresa: 0, ssTrabajador: 0, irpf: 0, otras: 0, neto: 90, retencionTipoId: null }, c).sinPropuesta).toContain('Bruto')
-  })
-  it('regla 11: una corrección cambia la siguiente del mismo origen, y lo dice', () => {
-    const p = liquidacionPlataforma({ id: 'l', fecha: '2026-10-15', ref: null, plataforma: 'Glovo', flujo: 'own', ventas: 0, comision: 100, cargos: [], devoluciones: 0, neto: null, cobrado: null, pedidos: { total: 0, asentados: 0 }, localId: NORTE },
-      { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't' }, banco: null, pendienteSocio: null }).propuesta!
-    const q = aplicarAprendizaje(p, 'channel_settlement:glovo', [{ clave: 'channel_settlement:glovo', propuesta: '62300000', elegida: '62700000', quien: 'Julio', cuando: '2026-10-01' }])
-    expect(q.lineas[0].cuenta).toBe('62700000')
-    expect(q.razones.at(-1)!.decision).toBe('Lo has corregido antes')
-    expect(aplicarAprendizaje(p, 'channel_settlement:uber', [{ clave: 'channel_settlement:glovo', propuesta: '62300000', elegida: '62700000', quien: null, cuando: 'x' }])).toBe(p)
-  })
+describe('aprendizaje y cuentas traídas (la nómina vive en SQL desde el S01 · PR 3)', () => {
+  // Regla 11 (lo aprendido) vive en SQL desde el S01 · PR 3: _conta_aprendizaje; sus casos, en las pruebas de staging de la 0905 y la 0929.
   it('regla 12: la 47200000 de Diez propone la 472 del tipo; la común, la subcuenta del tercero', () => {
     const ivaPorTipo = (p: '472' | '477', t: number) => `${p}000${String(t).padStart(2, '0')}`
     expect(cuentaDeBoe('47200000', { tipo: 21, ivaPorTipo })).toEqual({ cuenta: '47200021', porque: 'La 47200000 de Diez junta todos los tipos; en tu plan hay una 472 por tipo: la del 21 % es la 47200021.' })

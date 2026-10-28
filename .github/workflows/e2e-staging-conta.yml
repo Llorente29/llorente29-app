@@ -116,17 +116,20 @@ run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' ||
 # Por eso: el push corre solo su área (scripts/e2e/area.mjs), la entera solo a
 # mano, y un push nuevo cancela la e2e del commit anterior.
 #
-# LAS CAPTURAS (C06b, Julio, 15/10; W04, 22/10):
+# LAS CAPTURAS (C06b, 15/10; W04, 22/10; W08b, Julio, 28/10: fuera del PR):
 #   · En CADA trozo, las capturas que ha sacado (las escritas después de la
 #     marca) van en su artefacto «capturas-N»; el job «entera» las junta en el
-#     artefacto «capturas», 30 días, y un comentario del PR (uno solo, que se va
-#     editando) da el enlace.
-#   · La e2e de cada PUSH que sale en verde commitea SOLO la carpeta del frente
-#     de la rama (scripts/conta/capturas.mjs fijar): la última en verde es la
-#     que queda, y Julio las ve en «Files changed». Sin un run aparte. Las de
-#     otros frentes de ese run se quedan en el artefacto. Ese commit no lanza
-#     otra e2e (lo hace el token del workflow): antes del siguiente push, traer
-#     la rama (git pull). A mano, igual, con «fijar_capturas».
+#     artefacto «capturas», 30 días.
+#   · La e2e de cada PUSH que sale en verde publica las del frente de la rama
+#     (scripts/conta/capturas.mjs suyas) en una rama APARTE, capturas/<rama>:
+#     un solo commit sin historia, que se reescribe en cada run. El bot no hace
+#     commits en la rama del PR: un push con el token del workflow dejaba las
+#     comprobaciones del PR en «Action required», y los PNG chocaban con main.
+#     A mano, igual, con «publicar_capturas» (y «frente», para forzar de quién).
+#   · Un comentario del PR (uno solo, que se va editando) da el enlace al
+#     artefacto y enseña las publicadas en miniatura, por tablero.
+#   · Al fusionar el PR, capturas-al-cerrar.yml las pasa a main en su carpeta
+#     de siempre; al fusionarlo o cerrarlo, borra capturas/<rama>.
 
 on:
   push:
@@ -171,9 +174,9 @@ on:
         type: string
         required: false
         default: ''
-      # Antes del informe: commitea en la rama las capturas de SU frente (solo esas).
-      fijar_capturas:
-        description: 'Fijar en la rama las capturas del frente de la rama (antes del informe)'
+      # W08b: publica en capturas/<rama> las de SU frente (solo esas), fuera del PR.
+      publicar_capturas:
+        description: 'Publicar en capturas/<rama> las capturas del frente de la rama (fuera del PR)'
         type: boolean
         required: false
         default: false
@@ -641,7 +644,7 @@ jobs:
           if-no-files-found: ignore
 
       # Las capturas de todos los trozos, en su sitio del repositorio (para
-      # fijarlas) y en un solo artefacto.
+      # publicarlas) y en un solo artefacto.
       - name: Capturas · juntar las de los trozos
         id: juntar
         if: always()
@@ -673,7 +676,32 @@ jobs:
           path: ${{ runner.temp }}/capturas
           retention-days: 30
 
-      # Un solo comentario por PR, que se edita en cada run: el enlace, no los PNG.
+      # W08b (Julio, 28/10): las del frente, FUERA del PR. Un árbol con solo
+      # ésas, hecho en un índice aparte (no toca el checkout), en un commit sin
+      # padre que se empuja a la fuerza a capturas/<rama>: el bot reescribe esa
+      # rama en cada run y la rama del PR no cambia (ni «Action required» ni
+      # PNG que choquen con main). Solo en verde (los N trozos).
+      - name: Capturas · publicar las del frente en capturas/<rama>
+        id: publicar
+        if: success() && steps.recoger.outputs.n != '0' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publicar_capturas))
+        env:
+          CAPTURAS_DUENO: ${{ inputs.frente }}
+        run: |
+          set -euo pipefail
+          node scripts/conta/capturas.mjs suyas "$GITHUB_REF_NAME" "$RUNNER_TEMP/capturas" > "$RUNNER_TEMP/suyas.txt"
+          if [ ! -s "$RUNNER_TEMP/suyas.txt" ]; then echo "Nada que publicar." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+          export GIT_INDEX_FILE="$RUNNER_TEMP/indice-capturas"
+          rm -f "$GIT_INDEX_FILE"
+          xargs -a "$RUNNER_TEMP/suyas.txt" -d '\n' git add -f --
+          ARBOL=$(git write-tree)
+          unset GIT_INDEX_FILE
+          COMMIT=$(git -c user.name=folvy-e2e -c user.email=e2e@folvy.invalid commit-tree "$ARBOL" -m "Capturas de $GITHUB_REF_NAME (${GITHUB_SHA::7}, run $GITHUB_RUN_ID)")
+          git push -f -q origin "$COMMIT:refs/heads/capturas/$GITHUB_REF_NAME"
+          echo "sha=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "Publicadas $(wc -l < "$RUNNER_TEMP/suyas.txt") en capturas/$GITHUB_REF_NAME (${COMMIT::7})." | tee -a "$GITHUB_STEP_SUMMARY"
+
+      # Un solo comentario por PR, que se edita en cada run: el enlace al
+      # artefacto y, si se han publicado, las del frente en miniatura.
       - name: Capturas · el enlace en el PR
         if: always() && steps.artefacto.outputs.artifact-url != ''
         env:
@@ -681,11 +709,17 @@ jobs:
           URL: ${{ steps.artefacto.outputs.artifact-url }}
           N: ${{ steps.recoger.outputs.n }}
           ESTADO: ${{ job.status }}
+          PUBLICADO: ${{ steps.publicar.outputs.sha }}
         run: |
           set -euo pipefail
           MARCA='<!-- capturas-e2e -->'
-          T="$(printf '%s\n**Capturas de la e2e** · run [%s](%s/%s/actions/runs/%s) · `%s` · %s\n\n%s capturas de este run: [descargar el artefacto](%s) (caduca a los 30 días).\n\nSi el run sale en verde, las del frente de la rama quedan fijadas en la rama (un commit «Capturas fijadas…»), y Julio las ve en «Files changed».' \
-            "$MARCA" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "${GITHUB_SHA::7}" "$([ "$ESTADO" = success ] && echo 'en verde' || echo "en $ESTADO")" "$N" "$URL")"
+          if [ -n "$PUBLICADO" ]; then
+            MINIATURAS="$(node scripts/conta/capturas.mjs comentario "$GITHUB_REPOSITORY" "$PUBLICADO" "$GITHUB_REF_NAME" "$RUNNER_TEMP/suyas.txt")"
+          else
+            MINIATURAS='Sin capturas del frente publicadas en este run (en rojo, o la rama no es de ningún frente): están todas en el artefacto.'
+          fi
+          T="$(printf '%s\n**Capturas de la e2e** · run [%s](%s/%s/actions/runs/%s) · `%s` · %s\n\n%s capturas de este run: [descargar el artefacto](%s) (caduca a los 30 días).\n\n%s' \
+            "$MARCA" "$GITHUB_RUN_ID" "$GITHUB_SERVER_URL" "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "${GITHUB_SHA::7}" "$([ "$ESTADO" = success ] && echo 'en verde' || echo "en $ESTADO")" "$N" "$URL" "$MINIATURAS")"
           echo "$T" >> "$GITHUB_STEP_SUMMARY"
           PR=$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$GITHUB_REF_NAME" --state open --json number -q '.[0].number')
           if [ -z "$PR" ]; then echo "La rama no tiene PR abierto: el enlace queda en el resumen del run."; exit 0; fi
@@ -694,38 +728,6 @@ jobs:
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$ID" -f body="$T" > /dev/null; echo "Comentario del PR #$PR actualizado."
           else
             gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body "$T" > /dev/null; echo "Comentario en el PR #$PR."
-          fi
-
-      # W04 (Julio, 22/10): las fija la e2e de cada PUSH que sale en verde (la
-      # última en verde es la que vale), sin un run aparte; a mano, con
-      # «fijar_capturas». Solo en verde (los N trozos) y solo las del frente de la rama.
-      - name: Capturas · fijar las del frente en la rama
-        if: success() && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.fijar_capturas))
-        timeout-minutes: 15
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          git config user.name "folvy-e2e"
-          git config user.email "e2e@folvy.invalid"
-          node scripts/conta/capturas.mjs fijar "$GITHUB_REF_NAME"
-          if git diff --cached --quiet; then echo "Las capturas del frente no han cambiado."; exit 0; fi
-          git commit -m "Capturas fijadas en staging-conta (${GITHUB_SHA::7}, frente de ${GITHUB_REF_NAME})"
-          # Lo de otros frentes no se sube: se descarta antes de traer la rama.
-          git restore --worktree -- docs/conta/capturas docs/reparto/capturas 2>/dev/null || true
-          git clean -fdq -- docs/conta/capturas docs/reparto/capturas
-          # Si alguien ha empujado a la rama mientras tanto: las de este run (-X theirs, en un rebase, son las nuestras).
-          git pull --rebase -X theirs origin "$GITHUB_REF_NAME"
-          git push origin "HEAD:$GITHUB_REF_NAME"
-          # W06 (22/10): un push con este token no lanza workflows, así que el
-          # commit del robot se queda sin ensayo de staging y es el último de la
-          # rama. Si la rama trae tanda (añade algo al manifiesto de staging),
-          # el ensayo se lanza aquí sobre el commit nuevo: la prueba corre sobre
-          # el último commit, sea quien sea el autor.
-          git fetch -q --depth=1 origin main:refs/remotes/origin/main
-          if [ -n "$(node scripts/conta/staging-tanda.mjs nuevas origin/main)" ]; then
-            gh workflow run aplicar-staging-conta.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f modo=aplicar
-            echo "La rama trae tanda: ensayo de staging lanzado sobre $(git rev-parse --short HEAD)." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
   # LA NOCHE: verde, repetir o avisar (scripts/e2e/noche.mjs, Julio, 21/10).

@@ -48,6 +48,9 @@ import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
 import { Boton, Chip, Icono } from '@/modules/conta/diseno'
+import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
+import { AsientosDeCompras } from '@/modules/conta/documentos/AsientosDeCompras'
+import { DONDE } from '@/modules/conta/lib/noPropuesto'
 import {
   FiltroBuscar, FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, escribirOrden, recordarLista, type ColumnaLista,
 } from '@/modules/conta/diseno/plantillas'
@@ -282,6 +285,9 @@ export default function DocumentosPage() {
       {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>}
       {extras.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{extras.error}. La base, el IVA y si están pagadas salen con «—». <button type="button" className="s-boton s-boton-enlace" onClick={extras.recargar}>Reintentar</button></p>}
+
+      <AsientosDeCompras />
+      <LoQueNoHePodido donde={DONDE.recibidas} />
 
       <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id })}
         derecha={!movil && porRevisar > 0 && <button type="button" className="s-boton s-boton-enlace" onClick={revisarUnaAUna}>Revisarlas de una en una <Icono nombre="siguiente" /></button>} />

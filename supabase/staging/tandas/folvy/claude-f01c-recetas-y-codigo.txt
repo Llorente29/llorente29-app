@@ -1,0 +1,17 @@
+# F01 · PR 3 · Recetas que faltan y código cambiado. La 0850 solo añade y se
+# puede pasar dos veces: desde la rama, de verdad (W05), y con ella la semilla
+# de la carta de prueba de la e2e (cuenta A, «Pollería de Prueba», «Pollería
+# Express» y «Pollos Nuevos»), que solo necesita la 0850.
+supabase/migrations/20261028T0850_f01c_recetas_y_codigo.sql
+supabase/seeds/folvy/seed_f01c_recetas_y_codigo_staging.sql
+
+# La 0851 cambia (el disparador de recipe_line y f01_pasada_last): desde la
+# rama, solo en ROLLBACK. Va detrás de la semilla (W07: así la semilla puede ir
+# de verdad) y delante de su prueba.
+supabase/migrations/20261028T0851_f01c_cola_y_pasada.sql
+
+# Su prueba (ROLLBACK), con el motor de consumo de verdad: la carta, poner una
+# receta y que lo vendido descuente, la regla 6, la unión sola (idéntica) y la
+# pregunta (se parece), la pasada repetida, los cuatro caminos de la regla 10
+# y las dos vueltas atrás.
+supabase/staging/sql/20261028_f01c_recetas_y_codigo_prueba.sql

@@ -1,0 +1,28 @@
+{
+ "_que": "F01 · PR 3 · Recetas que faltan y código cambiado · contexto de producción de la tanda (0850 y 0851), medido en SOLO LECTURA el 28/10 a las 08:50Z con la consulta de analizar.mjs sql-contexto. No existe nada de lo que crea la 0850 (2 tablas y 17 funciones); existen recipe_line (2.343 filas, camino del pedido por nombre), donde la 0851 pone un disparador nuevo, y f01_pasada_last, que la 0851 cambia en caliente con la misma firma. Nada de las dos en el historial.",
+ "medido": "2026-10-28T08:50Z",
+ "tanda": {
+  "supabase/migrations/20261028T0850_f01c_recetas_y_codigo.sql": "55896147c24b437ae015db408b6a644f",
+  "supabase/migrations/20261028T0851_f01c_cola_y_pasada.sql": "98b9992009bbdbdc0da2403c4764efcf"
+ },
+ "contexto": {
+  "tablas": [
+   "public.recipe_line"
+  ],
+  "funciones": [
+   "public.f01_pasada_last(uuid)"
+  ],
+  "filas": {
+   "public.recipe_line": 2343
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [
+    "public.recipe_line"
+   ],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

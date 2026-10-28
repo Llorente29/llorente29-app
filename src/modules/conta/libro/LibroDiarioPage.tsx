@@ -2,9 +2,11 @@
 //
 // C04 · Libros › Libro diario (maqueta N11Diario), pasado al marco nuevo en
 // el M01 (maqueta N30 §4, encargo F01 tarea 4) con la tabla densa:
-//   · arriba, en la barra de acciones del marco: «+ Nuevo asiento» (Ins),
-//     «Proponer lo pendiente» y «Validar y enviar a Diez»; el ejercicio, en la
-//     barra de arriba (lo pone Libros);
+//   · arriba, en la barra de acciones del marco: «+ Nuevo asiento» (Ins) y
+//     «Validar y enviar a Diez»; el ejercicio, en la barra de arriba (lo pone
+//     Libros). S01 · PR 3 (entrega 5): ya no hay «Proponer lo pendiente»: los
+//     asientos se proponen solos en la base al pasar lo que los origina y cada
+//     noche; lo que no se ha podido, en su apartado (aquí, las nóminas);
 //   · la franja «Te toca hoy»: lo que espera revisión y lo validado que no ha
 //     llegado a Diez, que filtran al pulsarlos;
 //   · el mes en una línea: sus asientos, si está abierto o cerrado y su
@@ -18,8 +20,8 @@
 //   · el pie: cuántos, los marcados y el cuadre («Debe … · Haber … · Cuadra»);
 //   · a la derecha, «Lo que he hecho yo» (con Deshacer) y el cierre del mes
 //     anterior.
-// Nada de lo de antes se pierde: proponer, el corte, enviar a Diez, el mes
-// cerrado con «Pedir desbloqueo», lo que no se propuso y por qué.
+// Nada de lo de antes se pierde: enviar a Diez, el mes cerrado con «Pedir
+// desbloqueo», lo que no se propuso y por qué (el corte, en Tu empresa).
 //
 // Regla 7: «Todos» enseña todo, también lo anulado, y el pie dice siempre
 // cuántos hay de cuántos. S02 · PR 2: «todo» es lo de Asientos. Lo propuesto
@@ -30,7 +32,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaDocumentos, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
+import { rutaAsiento, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -46,14 +48,12 @@ import {
   cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, primerDiaAbierto, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
-import { proponerPendientes, type ResultadoProponer } from '@/modules/conta/services/propuestasLibroService'
-import { fijarCorte, primeraVenta } from '@/modules/conta/services/corteService'
-import { corteDesdeRespuesta, rangoAProponer } from '@/modules/conta/lib/proponer'
-import { textoDiaEnCurso, ultimoDiaCerrado } from '@/modules/conta/lib/cierreDelDia'
+import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
+import { DONDE } from '@/modules/conta/lib/noPropuesto'
+import { textoDiaEnCurso } from '@/modules/conta/lib/cierreDelDia'
 import { TonoChip } from '@/modules/conta/libro/piezasLibro'
 import { paraRevisar } from '@/modules/conta/libro/paraRevisar'
 import { nombresDeCuentas, palabrasLlanas } from '@/modules/conta/libro/palabrasLlanas'
-import { MARCA } from '../cuenta/marca'
 import { EnviarADiezDialogo, type CandidatoDiez } from '@/modules/conta/libro/ConDiez'
 import { cobroDe, estadoDiez, motivoSinPatron, type ConDiez, type EstadoDiez } from '@/modules/conta/lib/conDiez'
 import { anularConDiez, enviarADiez, leerConDiez, validarYEnviar } from '@/modules/conta/services/conDiezService'
@@ -72,7 +72,6 @@ import { TablaDensa, type ColumnaDensa } from '@/modules/conta/ui/tabla/TablaDen
 import { TablaAsiento } from '@/modules/conta/diseno/plantillas'
 import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/libro/apuntesAsiento'
 import { borrarVista, cumpleFiltros, guardarVista, leerVistas, miles, type CampoFiltro, type VistaGuardada } from '@/modules/conta/ui/tabla/tablaDensa'
-import { CampoFecha } from '@/modules/conta/ui/fecha/CampoFecha'
 import { useAnalitica, useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 import type { EjeVista } from '@/modules/conta/esqueleto/productos'
 
@@ -193,10 +192,6 @@ export default function LibroDiarioPage() {
   const [hecho, setHecho] = useState<string | null>(null)
   const [fallo, setFallo] = useState<string | null>(null)
   const [abierto, setAbierto] = useState<string | null>(null)
-  const [proponiendo, setProponiendo] = useState(false)
-  const [sinPropuesta, setSinPropuesta] = useState<ResultadoProponer['sinPropuesta']>([])
-  // S02 · PR 2: tras «Proponer lo pendiente», dónde se revisa lo propuesto de facturas.
-  const [propuestoAhora, setPropuestoAhora] = useState(false)
   const [desbloqueo, setDesbloqueo] = useState(false)
   const [enviarDiez, setEnviarDiez] = useState(false)
   const usuario = userName ?? 'yo'
@@ -312,54 +307,6 @@ export default function LibroDiarioPage() {
     return () => window.removeEventListener('keydown', tecla)
   }, [navegar, puedeNuevo])
 
-  // Respuesta 4: el corte manda (nada ≤ imported_until), sin corte y con ventas
-  // de antes del ejercicio se pregunta primero, y cada vez un mes de ventas del
-  // más reciente hacia atrás, diciendo cuántos días quedan.
-  const [pregunta, setPregunta] = useState<{ porque: string; desde: string; programa: string; fallo: string | null } | null>(null)
-
-  async function proponer() {
-    if (!accountId || !activa || !datos?.ejercicio) return
-    setFallo(null); setHecho(null); setPropuestoAhora(false); setProponiendo(true)
-    try {
-      const e = datos.ejercicio
-      // Hasta el último día CERRADO, no hasta hoy: un día no se propone antes
-      // de su hora de cierre (las 2:00 de serie, ajuste de la empresa).
-      const cerrado = ultimoDiaCerrado(new Date(), datos.horaCierre)
-      const rango = rangoAProponer(e, cerrado, { primeraVenta: await primeraVenta(accountId), asientosEnEjercicio: datos.asientos.length })
-      if (rango.tipo === 'nada') { setHecho(rango.porque); return }
-      if (rango.tipo === 'preguntar') { setPregunta({ porque: rango.porque, desde: '', programa: '', fallo: null }); return }
-      const { desde, hasta } = rango
-      const r = await proponerPendientes(accountId, activa.id, desde, hasta, userName)
-      setSinPropuesta(r.sinPropuesta)
-      const partes = [`${r.propuestas} ${r.propuestas === 1 ? 'asiento propuesto' : 'asientos propuestos'}`]
-      if (r.validadasSolas) partes.push(`${r.validadasSolas} validados solos (los Seguros de ventas, como tienes elegido)`)
-      if (r.yaEstaban) partes.push(`${r.yaEstaban} ya estaban`)
-      if (r.descartadas) partes.push(`${r.descartadas} descartados antes, que no vuelvo a proponer`)
-      if (r.sinPropuesta.length) partes.push(`${r.sinPropuesta.length} sin propuesta (debajo, por qué)`)
-      const ventas = r.mesVentas ? ` Ventas de ${nombreMes(r.mesVentas)}.` : ''
-      const quedan = r.quedanDias > 0
-        ? ` Quedan ${miles(r.quedanDias)} ${r.quedanDias === 1 ? 'día' : 'días'} de ventas más antiguos por proponer: vuelve a pulsar.`
-        : ' No queda ningún día de ventas por proponer.'
-      // S02 · PR 2: lo de facturas no sale aquí; se revisa en Compras (lo dice la nota de debajo, con su número).
-      setHecho(`Repasado del ${diaMesCorto(desde)} al ${diaMesCorto(hasta)}${e.traidoHasta ? ` (hasta el ${diaMesCorto(e.traidoHasta)} lo trae el programa anterior)` : ''}: ${partes.join(' · ')}.${ventas}${quedan} Lo propuesto de facturas recibidas se revisa en ${NOMBRE_SITIO.recibidas}.`)
-      setPropuestoAhora(true)
-      recargar()
-    } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha podido proponer.') }
-    finally { setProponiendo(false) }
-  }
-
-  async function contestar() {
-    if (!activa || !datos?.ejercicio || !pregunta) return
-    const r = corteDesdeRespuesta(datos.ejercicio, pregunta.desde, hoyEnMadrid())
-    if ('error' in r) { setPregunta({ ...pregunta, fallo: r.error }); return }
-    try {
-      await fijarCorte(activa.id, r.corte, pregunta.programa.trim() || 'el programa anterior')
-      setPregunta(null)
-      setHecho(r.corte ? `Guardado: ${MARCA.nombre} asienta desde el ${diaMesCorto(pregunta.desde)}; lo de antes lo trae el programa anterior.` : `Guardado: ${MARCA.nombre} asienta el ejercicio entero.`)
-      recargar()
-    } catch (e) { setPregunta({ ...pregunta, fallo: e instanceof Error ? e.message : 'No se ha podido guardar.' }) }
-  }
-
   async function deshacer(id: string) {
     const a = datos?.asientos.find((x) => x.id === id)
     if (!a) return
@@ -382,7 +329,6 @@ export default function LibroDiarioPage() {
   const fuera = sinValidar?.enSuSitio.filter((x) => x.n > 0).map((x) => `${x.n} en ${NOMBRE_SITIO[x.sitio]}`) ?? []
   const sinValidarTexto = sinValidarMes ? `${sinValidarMes} ${sinValidarMes === 1 ? 'asiento' : 'asientos'} sin validar dentro${fuera.length ? ` (${fuera.join(', ')})` : ''}` : ''
   // Las facturas propuestas que esperan en Compras ahora mismo (del libro recién leído, no del recuento de antes).
-  const facturasEnCompras = datos ? datos.enSuSitio.filter((a) => seDecideEnSuSitio(a) === 'recibidas').length : 0
   // S01e: las columnas fijas, a lo que de verdad ocupan («General 1.287», «12.345,67 €»,
   // «Hecho por Folvy»): lo que sobra va al concepto, que antes se cortaba con sitio al lado.
   const columnas: ColumnaDensa<AsientoDiario>[] = datos ? [
@@ -419,18 +365,11 @@ export default function LibroDiarioPage() {
       <h2 className="cx-oculto">Libro diario</h2>
       <AccionesPantalla etiqueta="Acciones del libro diario">
         <BotonAccion principal tecla="Ins" atajo="Insert" onClick={() => navegar(rutaNuevoAsiento())} disabled={!puedeNuevo}>+ Nuevo asiento</BotonAccion>
-        <BotonAccion onClick={proponer} disabled={proponiendo || !datos?.ejercicio}>{proponiendo ? 'Repasando…' : 'Proponer lo pendiente'}</BotonAccion>
         {alMomento && candidatosDiez.length > 0 && (
           <BotonAccion onClick={() => setEnviarDiez(true)}>Validar y enviar a Diez{propuestosDiez ? ` · ${propuestosDiez}` : ''}</BotonAccion>
         )}
       </AccionesPantalla>
       <Guardado texto={hecho} />
-      {propuestoAhora && datos && facturasEnCompras > 0 && (
-        <p className="cx-ayuda" role="note">
-          {facturasEnCompras === 1 ? 'Una factura propuesta espera' : `${miles(facturasEnCompras)} facturas propuestas esperan`} en {NOMBRE_SITIO.recibidas}: se validan allí, con la factura al lado.{' '}
-          <Link to={rutaDocumentos('por-revisar')} className="cx-enlace">Revisarlas</Link>
-        </p>
-      )}
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       {encendido && datos?.conDiezError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer cómo están con Diez las ventas por plataforma: {datos.conDiezError}</p>}
       {datos?.esperanError && <p className="cx-ayuda cxt-ambar" role="note">No he podido leer qué asientos esperan (lo que la validación pararía): {datos.esperanError}. Mientras tanto, todo lo propuesto cuenta como para revisar.</p>}
@@ -438,30 +377,7 @@ export default function LibroDiarioPage() {
         // Información, no un aviso: el día en curso no se propone hasta su cierre.
         <p className="cx-ayuda cxd-dia-en-curso" role="note">{textoDiaEnCurso(datos.horaCierre)}</p>
       )}
-      {pregunta && (
-        <section className="cx-tarjeta" aria-label={`Desde qué día asienta ${MARCA.nombre}`}>
-          <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">¿Desde qué día asienta {MARCA.nombre}?</h2></div>
-          <p className="cx-ayuda" style={{ marginTop: 0 }}>{pregunta.porque} Lo de antes de ese día no lo propongo: lo trae el programa anterior. Se puede cambiar en Ajustes › Ejercicio.</p>
-          <form className="cx-rejilla-2" onSubmit={(ev) => { ev.preventDefault(); void contestar() }}>
-            <label className="cx-campo"><span className="cx-etiqueta">Desde el día</span>
-              <CampoFecha className="cx-input" valor={pregunta.desde} alCambiar={(v) => setPregunta({ ...pregunta, desde: v, fallo: null })} /></label>
-            <label className="cx-campo"><span className="cx-etiqueta">Programa anterior</span>
-              <input className="cx-input" value={pregunta.programa} placeholder="Diez, A3, Sage…" onChange={(ev) => setPregunta({ ...pregunta, programa: ev.target.value })} /></label>
-            <div className="cx-pie">
-              <button type="button" className="cx-boton-sec" onClick={() => setPregunta(null)}>Ahora no</button>
-              <button type="submit" className="cx-boton">Guardar</button>
-            </div>
-          </form>
-          {pregunta.fallo && <div className="cx-error" role="alert">{pregunta.fallo}</div>}
-        </section>
-      )}
-      {sinPropuesta.length > 0 && (
-        <section className="cx-tarjeta cxd-sin-propuesta" aria-label="Lo que no he propuesto">
-          <div className="cx-tarjeta-cabeza"><h2 className="cx-tarjeta-titulo">Lo que no he propuesto, y por qué</h2>
-            <button type="button" className="cx-enlace" onClick={() => setSinPropuesta([])}>Entendido</button></div>
-          <ul>{sinPropuesta.map((x, i) => <SinPropuesta key={i} x={x} />)}</ul>
-        </section>
-      )}
+      <LoQueNoHePodido donde={DONDE.asientos} vuelta={vuelta} />
 
       {error && <ErrorConReintento mensaje={error} reintentar={recargar} />}
       {!error && !datos && (
@@ -536,9 +452,9 @@ export default function LibroDiarioPage() {
                 vacio={enEsperan
                   ? <Vacio titulo="Nada esperando." explicacion={`Aquí sale lo que todavía no se puede validar o enviar, con su motivo: un mes cerrado, un envío por aclarar${hosteleria ? ', una plataforma sin su factura medida en Diez' : ''}…`} />
                   : filtro === 'revisar' && !soloSinDiez
-                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí; con «Proponer lo pendiente» repaso ${hosteleria ? 'ventas, facturas, liquidaciones y nóminas' : 'ventas, facturas y nóminas'}. Las facturas recibidas se revisan en ${NOMBRE_SITIO.recibidas}, y lo del banco en ${NOMBRE_SITIO.bancos}.`} />
+                  ? <Vacio titulo="Nada que revisar." explicacion={`Lo que propongo sale aquí. Lo propongo solo, en cuanto llega lo que lo origina (${hosteleria ? 'el cierre de cada día, cada liquidación, cada nómina' : 'cada nómina'}), y cada noche repaso lo que falte. Las facturas recibidas se revisan en ${NOMBRE_SITIO.recibidas}, y lo del banco en ${NOMBRE_SITIO.bancos}.`} />
                   : datos.asientos.length === 0
-                    ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Pulsa «Proponer lo pendiente» y los preparo con su porqué; o haz uno a mano con «+ Nuevo asiento»." />
+                    ? <Vacio titulo="Aún no hay asientos en este ejercicio." explicacion="Los preparo solos, con su porqué, en cuanto llega lo que los origina y cada noche; o haz uno a mano con «+ Nuevo asiento»." />
                     : <Vacio titulo="Ningún asiento con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros: el libro tiene más." />}
               />
             </section>
@@ -710,22 +626,5 @@ function PedirDesbloqueo({ mes, companyId, alCerrar, alHacer }: { mes: string; c
         <button type="button" className="cx-boton" onClick={pedir} disabled={ocupado || !motivo.trim()}>{ocupado ? 'Reabriendo…' : 'Desbloquear'}</button>
       </div>
     </Dialogo>
-  )
-}
-
-/** Una línea de «Lo que no he propuesto»; si habla de pedidos, «Ver los N pedidos». */
-function SinPropuesta({ x }: { x: ResultadoProponer['sinPropuesta'][number] }) {
-  const [ver, setVer] = useState(false)
-  const n = x.pedidos?.length ?? 0
-  return (
-    <li>
-      <strong>{x.que}</strong> · {palabrasLlanas(x.porque)}
-      {n > 0 && <> <button type="button" className="cx-enlace" aria-expanded={ver} onClick={() => setVer((v) => !v)}>{ver ? 'Ocultar' : n === 1 ? 'Ver el pedido' : `Ver los ${n} pedidos`}</button></>}
-      {ver && x.pedidos && (
-        <ul className="cxd-sin-pedidos">
-          {x.pedidos.map((p, j) => <li key={j}>{p.codigo ?? 'sin código'} · {p.marca} · {p.canal} · {eurosExactos(p.total)}</li>)}
-        </ul>
-      )}
-    </li>
   )
 }

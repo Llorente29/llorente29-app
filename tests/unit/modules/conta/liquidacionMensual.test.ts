@@ -7,8 +7,6 @@
 
 import { describe, expect, it } from 'vitest'
 import { filasDe, leerLiquidacion, reconocer, type DocumentoLiquidacion } from '@/modules/conta/lib/lectorLiquidacionMensual'
-import { cuotasYRedondeo, liquidacionMensual, type CuentasLiquidacionMensual } from '@/modules/conta/lib/asientosPropuestos'
-import { cuadre } from '@/modules/conta/lib/libro'
 import type { Celda, PaginaPdf } from '@/modules/conta/lib/lectorDiez'
 
 const EMPRESA = 'B56496938'
@@ -153,75 +151,6 @@ describe('lector · cada documento por su título, cada factura por su NIF', () 
   })
 })
 
-describe('aceptación 5 · septiembre, al céntimo', () => {
-  const lectura = leerLiquidacion([AF, FV, transaccion()], EMPRESA)
-  const c: CuentasLiquidacionMensual = {
-    cliente: '43000009', proveedor: '40000009', compras: '60000000', ingresoServicios: '70500000', ingresoMercaderias: '70000000',
-    redondeoGasto: '66900000', redondeoIngreso: '76900000',
-    ivaRepercutido: (p) => (p === 10 ? { cuenta: '47700010', tipoId: 'r10' } : null),
-    ivaSoportado: (p) => ({ 4: { cuenta: '47200004', tipoId: 's4' }, 10: { cuenta: '47200010', tipoId: 's10' }, 21: { cuenta: '47200021', tipoId: 's21' } } as Record<number, { cuenta: string; tipoId: string }>)[p] ?? null,
-  }
-  const e = {
-    id: 'liq', facturaRecibidaId: 'fv', socio: 'Marcas de Prueba', terceroId: 'p', localId: 'local',
-    emitida: { numero: lectura.emitida!.numero!, fecha: lectura.emitida!.fecha!, lineas: lectura.emitida!.lineas, total: lectura.emitida!.total! },
-    recibida: { numero: lectura.recibida!.numero!, fecha: lectura.recibida!.fecha!, lineas: lectura.recibida!.lineas, total: lectura.recibida!.total! },
-    saldo: lectura.transaccion!.saldo!.importe, bloqueos: lectura.bloqueos,
-  }
-  const r = liquidacionMensual(e, c)
-  const [compra, ingreso, compensa] = r.propuestas
-  const filas = (p: typeof compra) => p.lineas.map((l) => [l.cuenta, l.debe, l.haber])
-
-  // Su factura dice 3.987,81 y sus tres líneas suman 3.987,82: calcula el total
-  // con el IVA sin redondear por tipo. La regla 5 del libro (la cuota es base
-  // × tipo) no se rompe: las cuotas van como en el papel y el céntimo, aparte.
-  it('compra: 3.587,15 de base al 4, 10 y 21 %, cuotas como en el papel, total 3.987,81 a su 400', () => {
-    expect(r.sinPropuesta).toBeNull()
-    expect(filas(compra)).toEqual([['60000000', 3587.15, 0], ['47200004', 31.11, 0], ['47200010', 200.39, 0], ['47200021', 169.17, 0], ['40000009', 0, 3987.81], ['76900000', 0, 0.01]])
-    expect(compra.lineas.filter((l) => l.iva).map((l) => [l.iva!.tipo, l.iva!.base, l.iva!.libro])).toEqual([[4, 777.69, 'received'], [10, 2003.91, 'received'], [21, 805.55, 'received']])
-    expect(cuadre(compra.lineas).cuadra).toBe(true)
-    expect(compra.origen).toEqual({ tipo: 'supplier_invoice', id: 'fv' })
-    expect(compra.avisos[0]).toBe('Su factura FV-02927 dice 3.987,81 €; base y cuota de cada tipo dan 3.987,82 €. Las cuotas van como en la factura y el céntimo, a «redondeos».')
-  })
-  it('sin 669/769 en el plan, el céntimo va a la línea del gasto, y se dice', () => {
-    const sin = liquidacionMensual(e, { ...c, redondeoGasto: null, redondeoIngreso: null }).propuestas[0]
-    expect(filas(sin)).toEqual([['60000000', 3587.14, 0], ['47200004', 31.11, 0], ['47200010', 200.39, 0], ['47200021', 169.17, 0], ['40000009', 0, 3987.81]])
-    expect(cuadre(sin.lineas).cuadra).toBe(true)
-    expect(sin.avisos[0]).toContain('no hay 669/769 en tu plan')
-  })
-  // V01 · Entrega 3 (Julio, 24/10): entera a la 705, como hoy (AF-02717 a AF-02884 en producción), también el género aportado.
-  it('ingreso: 8.666,95 de base + 866,70 de IVA = 9.533,65, entera a la 705, al libro de expedidas con el nº AF-02927', () => {
-    expect(filas(ingreso)).toEqual([['43000009', 9533.65, 0], ['70500000', 0, 8666.95], ['47700010', 0, 866.7]])
-    const iva = ingreso.lineas.find((l) => l.iva)!
-    expect([iva.iva!.base, iva.iva!.libro, iva.documento]).toEqual([8666.95, 'issued', 'AF-02927'])
-    expect(cuadre(ingreso.lineas).cuadra).toBe(true)
-    expect(ingreso.origen).toEqual({ tipo: 'licensed_settlement', id: 'liq' })
-  })
-  it('compensación: su factura contra lo que te debe; te paga 5.545,84 €', () => {
-    expect(filas(compensa)).toEqual([['40000009', 3987.81, 0], ['43000009', 0, 3987.81]])
-    expect(compensa.porque).toContain('Te paga 5.545,84 €')
-    // Lo que queda en su 430 tras los tres: el saldo, y su 400 a cero.
-    const todas = [compra, ingreso, compensa].flatMap((p) => p.lineas)
-    const saldo = (cta: string) => Math.round(todas.filter((l) => l.cuenta === cta).reduce((t, l) => t + (l.debe - l.haber) * 100, 0)) / 100
-    expect([saldo('43000009'), saldo('40000009')]).toEqual([5545.84, 0])
-  })
-  it('lo que el lector no dio por bueno no se propone', () => {
-    expect(liquidacionMensual({ ...e, bloqueos: ['algo'] }, c).sinPropuesta).toBe('algo')
-    expect(liquidacionMensual({ ...e, saldo: 5000 }, c).sinPropuesta).toContain('La transacción dice 5.000,00 € de saldo')
-  })
-  it('una línea de la que le haces que no se sabe si es servicio o mercadería: lo pregunta', () => {
-    const raro = { ...e, emitida: { ...e.emitida, lineas: [...e.emitida.lineas, { concepto: 'Ajuste trimestral', base: 0, tipo: 10 }] } }
-    expect(liquidacionMensual(raro, c).sinPropuesta).toContain('«Ajuste trimestral»')
-  })
-  it('sin tipo de gasto en su ficha no cae a una cuenta genérica', () => {
-    expect(liquidacionMensual(e, { ...c, compras: null }).sinPropuesta).toContain('le falta el tipo de gasto')
-  })
-})
-
-describe('cuotasYRedondeo', () => {
-  it('sin redondeo distinto, la cuota de cada tipo tal cual', () => {
-    expect(cuotasYRedondeo([{ base: 8666.95, tipo: 10 }], 9533.65)).toEqual({ porTipo: [{ tipo: 10, base: 8666.95, cuota: 866.7 }], redondeo: 0 })
-  })
-  it('más de un céntimo por tipo no es redondeo', () => {
-    expect(cuotasYRedondeo([{ base: 100, tipo: 21 }], 121.05)).toBeNull()
-  })
-})
+// La aceptación 5 (los tres asientos al céntimo) y cuotasYRedondeo viven en SQL desde
+// el S01 · PR 3 (conta_propuestas_socio): sus casos, en el paso 8 de
+// supabase/staging/sql/20261028_s01_propuestas_socio_prueba.sql.

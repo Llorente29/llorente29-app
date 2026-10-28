@@ -309,29 +309,11 @@ describe('Piezas', () => {
   })
 })
 
-describe('P2 · un pago por dos caminos, un asiento (el lado del libro)', () => {
-  it('la liquidación cuyo cobro ya casó Bancos no vuelve a llevar el cobro', async () => {
-    const { liquidacionPlataforma } = await import('@/modules/conta/lib/asientosPropuestos')
-    const c = { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't21' }, banco: '57200001', pendienteSocio: null }
-    const base = { id: 'liq1', fecha: '2026-10-08', ref: '1–7 oct', plataforma: 'Plataforma Norte', flujo: 'own' as const, ventas: 4120.4, comision: 585.31, cargos: [],
-      devoluciones: 0, neto: 3412.18, cobrado: null, cobroEnBancos: true, pedidos: { total: 0, asentados: 0 }, localId: null }
-    const p = liquidacionPlataforma(base, c).propuesta!
-    expect(p.lineas.some((l) => l.cuenta === '57200001')).toBe(false)
-    expect(p.razones.map((r) => r.decision)).toContain('Cobro en Bancos')
-    // Sin Bancos y con «cobrada» a mano, el cobro sigue yendo en la liquidación (como hoy).
-    const q = liquidacionPlataforma({ ...base, cobroEnBancos: false, cobrado: { fecha: '2026-10-09', importe: 3412.18 } }, c).propuesta!
-    expect(q.lineas.filter((l) => l.cuenta === '57200001')).toHaveLength(1)
-  })
-})
+// (Sus casos de liquidacionPlataforma viven en el paso 0 de supabase/staging/sql/20261028_s01_propuestas_plataforma_prueba.sql: la regla está en SQL desde el S01 · PR 3.)
 
 describe('P3 · el cobro y el pago en la serie de tesorería de la empresa (respuesta 3)', () => {
   it('«Pago a…» y la liquidación van a la serie que diga la empresa; sin decirlo, la 3 de siempre', async () => {
-    const { liquidacionPlataforma, pagoFactura } = await import('@/modules/conta/lib/asientosPropuestos')
-    const c = { cliente430: '43000001', proveedor410: '41000002', comision: '62300000', otrosCargos: '62900000', iva21: { cuenta: '47200021', tipoId: 't21' }, banco: '57200001', pendienteSocio: null }
-    const l = { id: 'liq1', fecha: '2026-10-08', ref: '1–7 oct', plataforma: 'Plataforma Norte', flujo: 'own' as const, ventas: 4120.4, comision: 585.31, cargos: [],
-      devoluciones: 0, neto: 3412.18, cobrado: { fecha: '2026-10-09', importe: 3412.18 }, pedidos: { total: 0, asentados: 0 }, localId: null }
-    expect(liquidacionPlataforma(l, c).propuesta!.serie).toBe(3)
-    expect(liquidacionPlataforma(l, { ...c, serieTesoreria: 4 }).propuesta!.serie).toBe(4)
+    const { pagoFactura } = await import('@/modules/conta/lib/asientosPropuestos')
     const f = { facturaId: 'f1', fecha: '2026-10-09', proveedor: 'Mayorista Alfa', numero: 'A-1', importe: 100, localId: null, terceroId: null }
     expect(pagoFactura(f, { proveedor: '40000001', banco: '57200001' }).propuesta!.serie).toBe(3)
     expect(pagoFactura(f, { proveedor: '40000001', banco: '57200001', serieTesoreria: 4 }).propuesta!.serie).toBe(4)

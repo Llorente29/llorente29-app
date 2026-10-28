@@ -128,13 +128,24 @@ describe('las capturas de ESTE run (las escritas después de la marca)', () => {
 })
 
 describe('el workflow', () => {
-  // W04 (Julio, 22/10): las fija la e2e del push en verde, sin un run aparte; a mano, igual.
-  it('las fija la e2e del push en verde (o a mano con fijar_capturas), solo las del frente y con el script', () => {
-    expect(WF).not.toMatch(/git add docs\/conta\/capturas/)
-    const fijar = WF.slice(WF.indexOf('- name: Capturas · fijar las del frente en la rama'))
-    expect(fijar).toMatch(/if: success\(\) && \(github\.event_name == 'push' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.fijar_capturas\)\)/)
-    expect(fijar).toMatch(/node scripts\/conta\/capturas\.mjs fijar "\$GITHUB_REF_NAME"/)
-    expect(WF.match(/git commit/g)).toHaveLength(1)
+  // W08b (Julio, 28/10): las publica la e2e del push en verde en capturas/<rama>, FUERA del PR.
+  it('las publica la e2e del push en verde (o a mano con publicar_capturas) en capturas/<rama>, y nunca hace commits en la rama del PR', () => {
+    const paso = WF.slice(WF.indexOf('- name: Capturas · publicar las del frente en capturas/<rama>'))
+    const cuerpo = paso.slice(0, paso.indexOf('\n      - name:', 10))
+    expect(cuerpo).toMatch(/if: success\(\) && steps\.recoger\.outputs\.n != '0' && \(github\.event_name == 'push' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.publicar_capturas\)\)/)
+    expect(cuerpo).toContain('node scripts/conta/capturas.mjs suyas "$GITHUB_REF_NAME" "$RUNNER_TEMP/capturas"')
+    // Un índice aparte y un commit sin padre: el checkout y la rama del PR no cambian.
+    expect(cuerpo).toContain('export GIT_INDEX_FILE=')
+    expect(cuerpo).toMatch(/git -c user\.name=folvy-e2e -c user\.email=e2e@folvy\.invalid commit-tree "\$ARBOL"/)
+    expect(cuerpo).toContain('git push -f -q origin "$COMMIT:refs/heads/capturas/$GITHUB_REF_NAME"')
+    // Ni un commit ni un push a la rama del PR en todo el workflow.
+    expect(WF).not.toMatch(/git commit\b/)
+    expect(WF).not.toContain('HEAD:$GITHUB_REF_NAME')
+    expect(WF).not.toContain('fijar')
+    // Publicar va antes del comentario, que enseña las publicadas.
+    expect(WF.indexOf('name: Capturas · publicar las del frente')).toBeLessThan(WF.indexOf('name: Capturas · el enlace en el PR'))
+    expect(WF).toContain('PUBLICADO: ${{ steps.publicar.outputs.sha }}')
+    expect(WF).toContain('node scripts/conta/capturas.mjs comentario "$GITHUB_REPOSITORY" "$PUBLICADO" "$GITHUB_REF_NAME" "$RUNNER_TEMP/suyas.txt"')
   })
   it('en cada run, pase lo que pase: la marca antes de las pruebas, el artefacto y el enlace en el PR', () => {
     expect(WF.indexOf('name: Capturas · la marca')).toBeLessThan(WF.indexOf('name: Pruebas (ordenador y móvil)'))
@@ -167,14 +178,15 @@ describe('las capturas de inventario: de la rama sin frente que toca inventario'
   })
 })
 
-describe('fijar en una rama sin frente (C10, 23/10)', () => {
+describe('publicar en una rama sin frente (C10, 23/10)', () => {
   it('se salta con 0 y lo dice: no pone el run en rojo', async () => {
-    const { execFileSync } = await import('node:child_process')
-    // Sin nada cambiado, a mano: si no, lee el diff de la rama donde corre la prueba,
-    // y en una que toca inventario esa rama es dueña de inventario (unitarias #103).
-    const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'],
-      { encoding: 'utf8', env: { ...process.env, CAPTURAS_CAMBIADOS: '' } })
-    expect(out).toContain('no hay capturas que fijar (se salta)')
+    const { spawnSync } = await import('node:child_process')
+    // Sin nada cambiado, a mano: si no, lee el diff de la rama donde corre la prueba.
+    const r = spawnSync('node', ['scripts/conta/capturas.mjs', 'suyas', 'conta/c08b-catalogo-perdido', 'docs'],
+      { encoding: 'utf8', env: { ...process.env, CAPTURAS_CAMBIADOS: '', CAPTURAS_DUENO: '' } })
+    expect(r.status).toBe(0)
+    expect(r.stdout).toBe('')
+    expect(r.stderr).toContain('no hay capturas que publicar (se salta)')
   })
 })
 

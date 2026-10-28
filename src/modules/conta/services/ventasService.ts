@@ -216,7 +216,8 @@ export async function catalogosFactura(accountId: string, companyId: string): Pr
       .order('created_at', { ascending: false }), 'los correos de las facturas'),
     leer(tabla('tax_rate').select('id, name, rate, surcharge_rate, treatment, company_id, valid_to').in('treatment', ['taxed', 'exempt']).or(`company_id.is.null,company_id.eq.${companyId}`).order('rate', { ascending: false }), 'los tipos de IVA'),
     leer(tabla('company_account').select('id, code, name, plain_name').eq('company_id', companyId).like('code', '70%').order('code'), 'las cuentas de ventas'),
-    leer(tabla('withholding_rate').select('id, name, rate, company_id').or(`company_id.is.null,company_id.eq.${companyId}`).order('rate', { ascending: false }), 'las retenciones'),
+    // S01 · PR 3 (1103): la del trabajo es de las nóminas; un cliente no es un trabajador.
+    leer(tabla('withholding_rate').select('id, name, rate, company_id').or(`company_id.is.null,company_id.eq.${companyId}`).neq('code', 'trabajo').order('rate', { ascending: false }), 'las retenciones'),
     leer(tabla('payment_method').select('id, name, code, company_id, account_id').or(`account_id.is.null,account_id.eq.${accountId}`).order('sort_order'), 'las formas de cobro'),
   ])
   const clientesIds = new Set(papeles.map((p) => String(p.party_id)))

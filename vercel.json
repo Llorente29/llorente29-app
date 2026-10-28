@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "node scripts/vercel/saltar-build.mjs",
   "rewrites": [
     {
       "source": "/E/:token",

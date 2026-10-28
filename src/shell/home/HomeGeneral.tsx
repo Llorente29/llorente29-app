@@ -89,6 +89,9 @@ const ICONO_AVISO: Record<TipoAviso, typeof ClipboardList> = {
   cuadrante: CalendarClock,
   marca: Tag,
   carta: Tag,
+  revisar: Tag,
+  reconocida: Tag,
+  sin_marca: Tag,
 }
 
 /** De dónde viene el mosaico que se está viendo. Se dice, no se adivina. */
