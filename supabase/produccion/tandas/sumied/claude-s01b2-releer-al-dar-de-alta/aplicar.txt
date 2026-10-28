@@ -1,0 +1,15 @@
+# S01b2 · Volver a leer la factura al darla de alta (encargo del 28/10). Rama
+# claude/s01b2-releer-al-dar-de-alta. Se ensaya y se aplica desde esta rama,
+# antes de fusionar.
+#
+#   1. 1555 — AÑADE conta_lectura_proveedor_releida(factura, sesión): completa
+#      la lectura guardada de una factura con lo que le faltaba del proveedor
+#      (teléfono, web, correo, dirección), tomado de una relectura de SU PDF
+#      (goods_receipt_ai_session de ocr-albaran). Nunca cambia nombre ni NIF.
+#      Medido el 28/10: Foodint, 85 lecturas, las 85 sin las claves «telefono» y
+#      «web».
+#
+# No está en el camino del pedido ni en el cron. Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/s01b2-lectura-releida.sql
+supabase/migrations/20261028T1555_s01b2_lectura_releida.sql

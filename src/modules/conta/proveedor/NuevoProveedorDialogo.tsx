@@ -30,6 +30,7 @@ import { avisoNifAlta, revisarAlta, valoresInicialesAlta, type ProveedorExistent
 import type { FichaProveedor } from '@/modules/conta/types'
 import { completarFicha } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { guardarDesdeFactura, type FacturaOrigen } from '@/modules/conta/services/fichaDesdeFacturaService'
+import { NO_VIENE_EN_LA_FACTURA } from '@/modules/conta/lib/proveedorDesdeFactura'
 
 /** S01b · Lo que trae el papel además del nombre y el NIF, y de qué factura sale. */
 export interface DelPapel {
@@ -39,6 +40,9 @@ export interface DelPapel {
   web?: string | null
   factura: FacturaOrigen
 }
+
+/** S01b2 · Un campo que la factura no trae va vacío y lo dice (nunca un ejemplo que parezca un dato). */
+const NO_VIENE = `${NO_VIENE_EN_LA_FACTURA}.`
 
 export interface PropsAltaProveedor {
   accountId: string
@@ -128,17 +132,19 @@ export function FormularioAltaProveedor({ accountId, otros, nombreInicial, nifIn
       </Campo>
       {delPapel && (
         <>
-          <Campo campo="nuevo-direccion" etiqueta="Dirección fiscal" ayuda={direccion ? 'La de la factura. Se guarda en su ficha.' : undefined}>
-            {(p) => <input {...p} className="cx-input" value={direccion} onChange={(e) => setDireccion(e.target.value)} placeholder="Calle, número, código postal y ciudad" />}
+          <Campo campo="nuevo-direccion" etiqueta="Dirección fiscal" ayuda={delPapel.direccion ? 'La de la factura. Se guarda en su ficha.' : NO_VIENE}>
+            {(p) => <input {...p} className="cx-input" value={direccion} onChange={(e) => setDireccion(e.target.value)} />}
           </Campo>
-          <Campo campo="nuevo-correo" etiqueta="Correo">
-            {(p) => <input {...p} className="cx-input" type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} placeholder="facturas@proveedor.es" />}
+          <Campo campo="nuevo-correo" etiqueta="Correo" ayuda={delPapel.correo ? undefined : NO_VIENE}>
+            {(p) => <input {...p} className="cx-input" type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} />}
           </Campo>
-          <Campo campo="nuevo-telefono" etiqueta="Teléfono">
-            {(p) => <input {...p} className="cx-input" type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} placeholder="912 345 678" />}
+          <Campo campo="nuevo-telefono" etiqueta="Teléfono" ayuda={delPapel.telefono ? undefined : NO_VIENE}>
+            {(p) => <input {...p} className="cx-input" type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} />}
           </Campo>
-          <Campo campo="nuevo-web" etiqueta="Web" ayuda={`Lo que traiga la factura queda en su ficha ${delPapel.factura.numero ? `«de la factura ${delPapel.factura.numero}»` : '«de una factura»'}.`}>
-            {(p) => <input {...p} className="cx-input" value={web} onChange={(e) => setWeb(e.target.value)} placeholder="proveedor.es" />}
+          <Campo campo="nuevo-web" etiqueta="Web" ayuda={delPapel.web
+            ? `Lo que traiga la factura queda en su ficha ${delPapel.factura.numero ? `«de la factura ${delPapel.factura.numero}»` : '«de una factura»'}.`
+            : NO_VIENE}>
+            {(p) => <input {...p} className="cx-input" value={web} onChange={(e) => setWeb(e.target.value)} />}
           </Campo>
         </>
       )}
