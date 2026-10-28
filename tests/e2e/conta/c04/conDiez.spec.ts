@@ -41,8 +41,9 @@ test('A · apagado (como está en staging): el libro no ofrece «Validar y envia
   await entrarComo(page, CUENTA_A.email)
   await page.goto('/conta/libros/diario')
   await expect(page.getByRole('heading', { name: 'Libro diario' })).toHaveCount(1)
-  if (lado(page) === 'movil') await page.getByRole('button', { name: 'Más acciones del libro diario' }).click()
-  await expect(page.getByRole('button', { name: /^Proponer lo pendiente/ })).toBeVisible()
+  // S01 · PR 3: «Proponer lo pendiente» ya no existe; apagado, solo queda «+ Nuevo asiento» (sin «⋯» en el móvil).
+  await expect(page.getByRole('button', { name: '+ Nuevo asiento' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Más acciones del libro diario' })).toHaveCount(0)
   await expect(page.getByRole('button', { name: /Validar y enviar a Diez/ })).toHaveCount(0)
 })
 

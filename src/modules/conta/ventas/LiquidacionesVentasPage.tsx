@@ -48,6 +48,8 @@ import {
 } from '@/modules/conta/services/liquidacionesMotorService'
 import { leerLiquidaciones } from '@/modules/conta/services/liquidacionesService'
 import { Socios } from '@/modules/conta/ventas/SociosDeMarca'
+import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
+import { DONDE } from '@/modules/conta/lib/noPropuesto'
 
 /** El envío automático de correos. Cerrado mientras no haya dominio de correo (el mismo que en Documentos). */
 const ENVIO_ABIERTO = false
@@ -191,6 +193,7 @@ export default function LiquidacionesVentasPage() {
               alCambiar={() => setCambiando({ fila: c.fila, cambioId: id, texto: c.texto })} />
           ))}
           {cerrados.map((t) => <p key={t} className="s-aviso-lista" data-tono="duda">{t}</p>)}
+          <LoQueNoHePodido donde={DONDE.liquidaciones} />
 
           <div className="cxlq-columnas">
             <EsteMes refLista={listaMes} filas={filasMes} movil={movil} ocupado={ocupado} alBoton={alBoton} alVer={setAbierta} alVerTodas={() => cambiarVer('todas')} />

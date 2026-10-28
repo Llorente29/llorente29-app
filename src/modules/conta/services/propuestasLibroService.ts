@@ -16,11 +16,10 @@ import { porQueNoDeducible } from '@/modules/conta/lib/ivaNoDeducible'
 import { aplicarAsientoAMano, aplicarReparto, lineasYCuotas } from '@/modules/conta/lib/recibidaGuardada'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
-  ventasDelDia, unidadesDelDia, type UnidadVentas, devolucionSinCobrar, facturaProveedor, deLaFacturaDeLote,
-  type PedidoDia, type DevolucionDia, type Correccion, type SerieTesoreria,
+  unidadesDelDia, type UnidadVentas, devolucionSinCobrar, facturaProveedor, deLaFacturaDeLote,
+  type Correccion, type SerieTesoreria,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { avisoPeriodoCerrado, diaAbierto, diaDeEntrada, fechaDeLaRecibida, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
-import { tandaDeDias } from '@/modules/conta/lib/proponer'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
 
 type Fila = Record<string, unknown>
@@ -265,154 +264,12 @@ async function proponer(companyId: string, p: Propuesta, resumen: Fila | null, r
   }
 }
 
-const huella = async (texto: string): Promise<string> => {
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto))
-  return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
-}
 
-/** Propone lo que falte entre dos fechas: ventas del día, facturas, liquidaciones y nóminas. */
-export async function proponerPendientes(accountId: string, companyId: string, desde: string, hasta: string, quien: string | null): Promise<ResultadoProponer> {
-  const ctx = await cargarContexto(accountId, companyId)
-  const r: ResultadoProponer = { propuestas: 0, yaEstaban: 0, descartadas: 0, sinPropuesta: [], validadasSolas: 0, mesVentas: null, quedanDias: 0 }
-  const abierto = (f: string) => diaAbierto(f, ctx.calendario)
-
-  // ── Ventas del día (reglas 6 y 13) ──
-  // Respuesta 4: del mes más reciente hacia atrás, un mes cada vez, y se dice
-  // cuántos días quedan (lo de antes del corte ni entra: desde/hasta ya lo dejan fuera).
-  const todos = ((await rpc('conta_dias_por_asentar', { p_company: companyId, p_desde: desde, p_hasta: hasta })) as Fila[] | null ?? [])
-    .filter((d) => abierto(String(d.dia))).map((d) => ({ location_id: String(d.location_id), dia: String(d.dia) }))
-  const tanda = tandaDeDias(todos)
-  r.mesVentas = tanda.mes
-  r.quedanDias = tanda.quedanDias
-  const dias = tanda.ahora
-  const ventas = ctx.hoja('700'); const devoluciones = ctx.hoja('708') ?? ventas
-  const iva477 = ctx.tipoVentas ? ctx.enlace('tax_rate', ctx.tipoVentas.id, 'repercutido') : null
-  for (const d of dias) {
-    const localId = d.location_id; const dia = d.dia
-    const que = `Ventas del ${dia.split('-').reverse().join('/')} · ${ctx.locales.get(localId) ?? 'local'}`
-    if (!abierto(dia)) continue
-    if (!ctx.tipoVentas || !iva477 || !ventas) { r.sinPropuesta.push({ que, porque: 'Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.' }); continue }
-    const [pedidos, devs] = await Promise.all([
-      rpc('conta_pedidos_del_dia', { p_company: companyId, p_location: localId, p_dia: dia }) as Promise<Fila[] | null>,
-      rpc('conta_devoluciones_del_dia', { p_company: companyId, p_location: localId, p_dia: dia }) as Promise<Fila[] | null>,
-    ])
-    const cobroPorCanal: Record<string, string> = {}
-    for (const [id, c] of ctx.canales) { const cta = c.partyId ? ctx.enlace('customer', c.partyId, 'principal') : null; if (cta) cobroPorCanal[id] = cta }
-    // C06b (16/10): el descuento, el envío y qué se hace con él (conta_cargos_de_pedidos).
-    // Sin la función —el front antes que la base—, como hasta hoy.
-    const cerrados = (pedidos ?? []).filter((p) => p.estado === 'closed').map((p) => String(p.id))
-    const cargos = new Map<string, Fila>()
-    if (cerrados.length && ctx.ventasPorPlataforma) {
-      const cs = await (rpc('conta_cargos_de_pedidos', { p_account: accountId, p_sales: cerrados }) as Promise<Fila[] | null>).catch(() => null)
-      for (const c of cs ?? []) cargos.set(String(c.id), c)
-    }
-    const losPedidos = (pedidos ?? []).map((p): PedidoDia => ({
-      id: String(p.id), codigo: s(p.codigo), canalId: s(p.canal_id), marcaId: s(p.marca_id), marcaPropia: p.propia !== false,
-      estado: (String(p.estado) as PedidoDia['estado']), total: n(p.total), base: p.base === null ? null : n(p.base), cuota: p.cuota === null ? null : n(p.cuota),
-      tiposEnLineas: Array.isArray(p.tipos) ? (p.tipos as unknown[]).map(Number) : [],
-      ...(cargos.has(String(p.id)) ? {
-        descuento: n(cargos.get(String(p.id))!.descuento), envio: n(cargos.get(String(p.id))!.envio),
-        claseEnvio: String(cargos.get(String(p.id))!.clase) as PedidoDia['claseEnvio'], porQueEnvio: s(cargos.get(String(p.id))!.por_que),
-      } : {}),
-    }))
-    const lasDevoluciones = (devs ?? []).map((x): DevolucionDia => ({
-      pedidoId: s(x.pedido_id), codigo: s(x.codigo), canalId: s(x.canal_id), marcaId: s(x.marca_id), marcaPropia: x.propia !== false, importe: n(x.importe),
-      // Hasta F01 Folvy no emite facturas de plataforma: ninguna devolución pide rectificativa todavía.
-      conFactura: false,
-    }))
-    const nombreCanal = (id: string | null) => (id ? ctx.canales.get(id)?.nombre ?? 'un canal' : 'sin canal')
-    const regla = ctx.ventasPorPlataforma
-    // C04b R5: con la regla por plataforma, un asiento por unidad (Uber y Just
-    // Eat, uno; Glovo, uno por marca), igual que el cierre del día. Sin ella,
-    // la regla de antes: el día y el local enteros.
-    const unidades: (UnidadVentas | undefined)[] = regla ? unidadesDelDia(losPedidos, lasDevoluciones, (c) => !!c && regla.porMarca.has(c)) : [undefined]
-    for (const unidad of unidades) {
-      const queUnidad = unidad ? `${que} · ${nombreCanal(unidad.canalId)}${unidad.marcaId ? ` · ${ctx.marcas.get(unidad.marcaId)?.nombre ?? 'una marca'}` : ''}` : que
-      const res = ventasDelDia({
-        fecha: dia, localId, tipo: ctx.tipoVentas, porMarca: true, nombreLocal: ctx.locales.get(localId) ?? 'local',
-        nombreCanal, nombreMarca: (id) => (id ? ctx.marcas.get(id)?.nombre ?? 'una marca' : 'sin marca'), unidad,
-        cuentas: { cobroPorCanal, ventas, devoluciones: devoluciones!, ivaRepercutido: iva477, ventasPorMarca: regla?.ventasPorMarca, devolucionesPorMarca: regla?.devolucionesPorMarca,
-          promocionesPorCanal: regla?.promocionesPorCanal, enviosPorCanal: regla?.enviosPorCanal },
-        pedidos: losPedidos, devoluciones: lasDevoluciones,
-      })
-      if (!res.propuesta) {
-        r.sinPropuesta.push({ que: queUnidad, porque: res.sinPropuesta ?? 'Sin propuesta.', pedidos: res.pedidosDelPorque?.map((p) => ({
-          codigo: p.codigo, canal: p.canalId ? ctx.canales.get(p.canalId)?.nombre ?? 'un canal' : 'sin canal',
-          marca: p.marcaId ? ctx.marcas.get(p.marcaId)?.nombre ?? 'una marca' : 'sin marca', total: p.total, estado: p.estado,
-        })) })
-        continue
-      }
-      const detalle = await huella(res.resumen.pedidoIds.join('|') + '#' + String(Math.round(res.resumen.total * 100)))
-      await proponer(companyId, res.propuesta, {
-        location_id: localId, sales_day: dia, tickets_count: res.resumen.tickets, total: res.resumen.total,
-        ...(unidad ? { unit_key: unidad.clave, channel_id: unidad.canalId, brand_id: unidad.marcaId } : {}),
-        by_rate: [{ tax_rate_id: ctx.tipoVentas.id, rate: ctx.tipoVentas.porcentaje, base: res.resumen.base, cuota: res.resumen.cuota, calculated: res.resumen.baseCalculada }],
-        by_channel: res.resumen.porCanal.map((c) => ({ channel_id: c.canalId, total: c.total })),
-        by_brand: res.resumen.porMarca.map((m) => ({ brand_id: m.marcaId, base: m.base })),
-        detail_hash: detalle, sale_ids: res.resumen.pedidoIds, base_calculated: res.resumen.baseCalculada,
-      }, r, ctx, quien)
-    }
-  }
-
-  // ── Cierre del día · la liquidación manda (T4) ──
-  // Un pedido cerrado como no confirmado que una liquidación paga: venta de su
-  // día, aparte (sales_adjustment, origen = la venta). S01 · PR 3 (entrega 5):
-  // la regla vive en SQL (conta_propuesta_pagado_despues, sobre la de ventas: una
-  // sola copia). Se propone sola al leer la liquidación y en la pasada de noche.
-  {
-    const pag = (await rpc('conta_proponer_pagados_despues', { p_company: companyId, p_quien: quien })) as Fila
-    r.propuestas += n(pag.propuestas); r.yaEstaban += n(pag.yaEstaban); r.descartadas += n(pag.descartadas)
-    for (const x of (pag.sinPropuesta ?? []) as Fila[]) r.sinPropuesta.push({ que: String(x.que), porque: String(x.porque) })
-  }
-
-  // ── Cierre del día · cerrados sin confirmar que la liquidación no cobra (C11b) ──
-  // V01 · Entrega 3 (Julio, 24/10): ya no salen aquí, en el Libro diario. Son
-  // una diferencia de su liquidación, en Ventas › Liquidaciones, donde se
-  // resuelven en una frase (gasto: su devolución al libro; o reclamación).
-
-  await facturasDeProveedor(accountId, companyId, desde, hasta, ctx, r, quien, abierto)
-
-  // ── El socio de marca: la liquidación mensual (por documentos, §2.5; o por
-  // compras, aportaciones y comisión, respuesta 4) ──
-  // S01 · PR 3 (entrega 5): las dos reglas viven en SQL (conta_propuestas_socio,
-  // una sola copia, comparada con la de aquí sobre la semilla de staging antes de
-  // borrarla). Se proponen solas al confirmarse la liquidación y en la pasada de noche.
-  {
-    const soc = (await rpc('conta_proponer_socios', { p_company: companyId, p_desde: desde, p_hasta: hasta, p_quien: quien })) as Fila
-    r.propuestas += n(soc.propuestas); r.yaEstaban += n(soc.yaEstaban); r.descartadas += n(soc.descartadas)
-    for (const x of (soc.sinPropuesta ?? []) as Fila[]) r.sinPropuesta.push({ que: String(x.que), porque: String(x.porque) })
-  }
-
-  // ── Compras (10/10), §2.4: lo recibido sin factura al cierre de cada mes ──
-  // S01 · PR 3 (entrega 5): la regla vive en SQL (conta_propuestas_recibido, una
-  // sola copia, comparada con la de aquí sobre lo de Foodint de octubre antes de
-  // borrarla). Los meses ya acabados del rango y abiertos; el asiento del último
-  // día y su contrario del día 1. Al cerrar el mes y en la pasada de noche; aquí, lo mismo.
-  {
-    const rec = (await rpc('conta_proponer_recibidos', { p_company: companyId, p_desde: desde, p_hasta: hasta, p_quien: quien })) as Fila
-    r.propuestas += n(rec.propuestas); r.yaEstaban += n(rec.yaEstaban); r.descartadas += n(rec.descartadas)
-    for (const x of (rec.sinPropuesta ?? []) as Fila[]) r.sinPropuesta.push({ que: String(x.que), porque: String(x.porque) })
-  }
-
-  // ── Liquidaciones de plataforma sin asiento (regla 7) ──
-  // S01 · PR 3 (entrega 5): la regla vive en SQL (conta_propuestas_plataforma,
-  // una sola copia, comparada con la de aquí sobre las 268 liquidaciones de
-  // Foodint antes de borrarla). Se proponen solas al leerse y en la pasada de noche.
-  {
-    const pla = (await rpc('conta_proponer_plataformas', { p_company: companyId, p_desde: desde, p_hasta: hasta, p_quien: quien })) as Fila
-    r.propuestas += n(pla.propuestas); r.yaEstaban += n(pla.yaEstaban); r.descartadas += n(pla.descartadas)
-    for (const x of (pla.sinPropuesta ?? []) as Fila[]) r.sinPropuesta.push({ que: String(x.que), porque: String(x.porque) })
-  }
-
-  // ── Nóminas ──
-  // S01 · PR 3 (entrega 5): la regla vive en SQL (conta_propuesta_nomina, una
-  // sola copia, comparada con la de aquí sobre las nóminas que había antes de
-  // borrarla). Se proponen solas al llegar y en la pasada de noche; aquí, lo mismo.
-  const nom = (await rpc('conta_proponer_nominas', { p_company: companyId, p_desde: desde, p_hasta: hasta, p_quien: quien })) as Fila
-  r.propuestas += n(nom.propuestas); r.yaEstaban += n(nom.yaEstaban); r.descartadas += n(nom.descartadas)
-  for (const x of (nom.sinPropuesta ?? []) as Fila[]) r.sinPropuesta.push({ que: String(x.que), porque: String(x.porque) })
-  return r
-}
+// S01 · PR 3 (entrega 5): «Proponer lo pendiente» ya no existe. Las ventas del
+// día las propone el cierre de cada hora (SQL); las facturas recibidas, Compras al
+// validarlas (proponerFactura, abajo); y los cinco orígenes de la entrega 5
+// (nóminas, lo recibido sin factura, el pagado después, el socio y la
+// plataforma), la base al pasar lo que los origina y en la pasada de las 03:40.
 
 /**
  * Regla 11 · lo aprendido (S01 · PR 3): vive en SQL, una sola copia

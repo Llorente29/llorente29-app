@@ -46,11 +46,3 @@ export async function fijarCorte(companyId: string, hasta: string | null, progra
   const r = (await rpc('conta_fijar_corte', { p_company: companyId, p_hasta: hasta, p_programa: programa })) as { meses_cerrados?: number } | null
   return Number(r?.meses_cerrados ?? 0)
 }
-
-/** El primer día con ventas en Folvy de la cuenta (fecha de Madrid), o null. */
-export async function primeraVenta(accountId: string): Promise<string | null> {
-  const { data, error } = await tabla('sale').select('sold_at').eq('account_id', accountId).order('sold_at', { ascending: true }).limit(1)
-  if (error) throw new Error(mensaje('No se ha podido leer la primera venta', error))
-  const v = (data as { sold_at: string }[] | null)?.[0]?.sold_at
-  return v ? new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date(v)) : null
-}
