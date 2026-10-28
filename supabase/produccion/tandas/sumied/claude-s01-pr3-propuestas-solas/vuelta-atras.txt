@@ -1,0 +1,2 @@
+# S01 · PR 3 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261028T0735_s01_enlace_validado.down.sql

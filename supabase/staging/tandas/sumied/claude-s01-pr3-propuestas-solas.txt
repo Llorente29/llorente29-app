@@ -1,0 +1,7 @@
+# S01 · PR 3 · El cobro por el enlace nace validado (0735) y la entrega 5,
+# origen por origen. En ROLLBACK desde la rama, con su prueba: el asiento del
+# cobro (Redsys y Stripe) nace validado, validar a mano sigue igual, la
+# devolución le da la vuelta con su contraasiento, sin poder validar se queda
+# propuesto y la factura lo dice, y la vuelta atrás deja la huella de antes.
+supabase/migrations/20261028T0735_s01_enlace_validado.sql
+supabase/staging/sql/20261028_s01_enlace_validado_prueba.sql

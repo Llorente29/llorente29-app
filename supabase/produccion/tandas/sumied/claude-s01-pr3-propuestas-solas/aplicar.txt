@@ -1,0 +1,17 @@
+# S01 · PR 3 · El cobro por el enlace nace validado (Respuesta 7, 28/10), y la
+# entrega 5 del PC01 (las propuestas sin botón), origen por origen. Rama
+# claude/s01-pr3-propuestas-solas. Se ensaya y se aplica desde esta rama, antes
+# de fusionar.
+#
+#   1. 0735 — CAMBIA en caliente journal_entry_validar (sus reglas pasan a
+#      _journal_entry_validar, una sola copia; la de siempre comprueba quién
+#      valida y la llama) y _s01_asiento_cobro (el asiento del cobro por el
+#      enlace nace validado; si no se puede, se queda propuesto y la factura lo
+#      dice). Las dos con la misma firma, respaldadas. Medido el 28/10: 0
+#      enlaces de pago y 0 asientos de cobro por el enlace en producción. Ni
+#      una ni otra están en el camino del pedido ni en el cron.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/s01-enlace-validado.sql
+supabase/migrations/20261028T0735_s01_enlace_validado.sql

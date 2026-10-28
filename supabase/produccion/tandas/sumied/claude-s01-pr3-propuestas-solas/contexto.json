@@ -1,0 +1,22 @@
+{
+ "_que": "S01 · PR 3 · el cobro por el enlace nace validado (0735: cambia journal_entry_validar y _s01_asiento_cobro, añade _journal_entry_validar) · contexto de producción medido en SOLO LECTURA el 28/10 a las 06:39Z con la consulta de analizar.mjs sql-contexto y los CAMINO_* del workflow: las dos funciones que cambia existen con una sola firma, ninguna en el camino del pedido ni en el cron, _journal_entry_validar no existe y no hay nada en el historial.",
+ "medido": "2026-10-28T06:39Z",
+ "tanda": {
+  "supabase/migrations/20261028T0735_s01_enlace_validado.sql": "9528ec1b55f8858e21046d4cea20054b"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._s01_asiento_cobro(uuid,text)",
+   "public.journal_entry_validar(uuid,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
