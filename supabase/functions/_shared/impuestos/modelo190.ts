@@ -52,6 +52,8 @@ export interface Perceptor190 {
   retenciones: number
   /** Solo claves A, B y C: el año de nacimiento. */
   anioNacimiento?: number | null
+  /** Claves A, B y C: las cotizaciones a la Seguridad Social a cargo del perceptor (art. 19.2 LIRPF), en euros. */
+  gastos?: number | null
   /** Solo clave A: el tipo de contrato (1 general, 2 menos de un año, 3, 4). */
   contrato?: '1' | '2' | '3' | '4' | null
   /** Solo claves A, B y C: 1, 2 o 3 («3» si no la comunicó). */
@@ -211,6 +213,8 @@ function registro2(d: Datos190, p: Perceptor190): string {
   if (['A', 'B', 'C'].includes(p.clave)) {
     poner(r, c('AÑO DE NACIMIENTO'), numerico(p.anioNacimiento ?? 0, 4))
     poner(r, c('SITUACIÓN FAMILIAR'), p.situacionFamiliar ?? '3')
+    const gastos = c('GASTOS DEDUCIBLES')
+    poner(r, gastos, importe(p.gastos ?? 0, gastos.lon))
   }
   if (p.clave === 'A') poner(r, c('CONTRATO O RELACIÓN'), p.contrato ?? '1')
   return r.join('')
@@ -268,7 +272,7 @@ function validarEntrada(d: Datos190): string[] {
     if (!alfanumerico(p.nombre, 40).trim()) f.push(`El perceptor ${i + 1} no tiene nombre.`)
     if (!prov.has(p.provincia)) f.push(`${quien}: la provincia «${p.provincia || 'falta'}» no es un código del anexo.`)
     if (CON_SUBCLAVE.includes(p.clave) && !/^\d{2}$/.test(p.subclave ?? '')) f.push(`${quien}: la clave ${p.clave} lleva subclave de dos cifras.`)
-    if (p.integra < 0 || p.retenciones < 0) f.push(`${quien}: los importes del 190 son positivos.`)
+    if (p.integra < 0 || p.retenciones < 0 || (p.gastos ?? 0) < 0) f.push(`${quien}: los importes del 190 son positivos.`)
     if (['A', 'B', 'C'].includes(p.clave) && !(p.anioNacimiento && p.anioNacimiento > 1900 && p.anioNacimiento <= d.ejercicio)) f.push(`${quien}: la clave ${p.clave} lleva el año de nacimiento.`)
   })
   return f

@@ -23,7 +23,7 @@ const base = (o: Partial<Datos190> = {}): Datos190 => ({
   contacto: { telefono: '600 000 000', nombre: 'Prueba Prueba, Persona', correo: 'prueba@example.com' },
   numero: '1900000000001',
   perceptores: [
-    { nif: '00000000T', nombre: 'Uno Uno, Ana', provincia: '28', clave: 'A', integra: 20000, retenciones: 2400.5, anioNacimiento: 1990 },
+    { nif: '00000000T', nombre: 'Uno Uno, Ana', provincia: '28', clave: 'A', integra: 20000, retenciones: 2400.5, anioNacimiento: 1990, gastos: 1270.25 },
     { nif: '00000001R', nombre: 'Dos Dos, Íñigo', provincia: '08', clave: 'G', subclave: '01', integra: 1000, retenciones: 150 },
   ],
   ...o,
@@ -106,6 +106,7 @@ describe('generar190: un año con un empleado y un profesional', () => {
     expect(en(a, 153, 156)).toBe('1990')
     expect(en(a, 157, 157)).toBe('3')
     expect(en(a, 168, 168)).toBe('1')
+    expect(en(a, 184, 196)).toBe('0000000127025') // gastos deducibles: 1.270,25
     expect(en(a, 323, 387)).toBe(' '.repeat(65))
     expect(en(a, 395, 500)).toBe(' '.repeat(106))
   })
@@ -115,6 +116,7 @@ describe('generar190: un año con un empleado y un profesional', () => {
     expect(en(g, 78, 80)).toBe('G01')
     expect(en(g, 153, 156)).toBe('0000')
     expect(en(g, 168, 168)).toBe('0')
+    expect(en(g, 184, 196)).toBe('0'.repeat(13))
   })
 
   it('la comprobación lo relee y suma lo mismo', () => {

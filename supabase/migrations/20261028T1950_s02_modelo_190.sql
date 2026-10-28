@@ -15,7 +15,8 @@
 --         ficha de proveedor (la provincia, las dos primeras cifras de su
 --         código postal, que son las del anexo);
 --       · nóminas ([01]–[03] del 111): un perceptor por trabajador, clave A,
---         con lo que dicen sus nóminas (payroll_cost: bruto e IRPF) si la
+--         con lo que dicen sus nóminas (payroll_cost: bruto, IRPF y sus
+--         cotizaciones, que son los «gastos deducibles» del anexo) si la
 --         cuenta tiene una sola empresa. Lo que el diario retiene en nóminas
 --         y no está en ninguna nómina por trabajador queda en una línea «sin
 --         trabajador»: es un error, porque el 190 lleva un registro por
@@ -142,7 +143,7 @@ begin
   select count(*) = 1 into v_una_empresa from public.company where account_id = c.account_id;
   if v_una_empresa then
     with n as (
-      select pc.employee_id, sum(pc.gross) as bruto, sum(pc.irpf) as irpf, count(*) as nominas
+      select pc.employee_id, sum(pc.gross) as bruto, sum(pc.irpf) as irpf, sum(coalesce(pc.employee_ss, 0)) as cotizaciones, count(*) as nominas
         from public.payroll_cost pc
        where pc.account_id = c.account_id and pc.period_year = p_year and pc.irpf is not null and pc.gross is not null
        group by 1
@@ -151,6 +152,8 @@ begin
              'origen', 'nominas', 'clave', 'A', 'subclave', null, 'perceptor', em.id, 'nif', nullif(em.dni, ''), 'nombre', em.name,
              'provincia', null, 'nif_valido', nullif(em.dni, '') is not null and public._verifactu_nif_es_valido(em.dni),
              'anio_nacimiento', extract(year from em.birth_date)::int, 'nominas', n.nominas,
+             -- Los «gastos deducibles» del 190 (art. 19.2 LIRPF): las cotizaciones a cargo del trabajador.
+             'gastos', round(n.cotizaciones, 2),
              'integra', round(n.bruto, 2), 'retenciones', round(n.irpf, 2)) order by em.name), '[]'), v_lineas),
            coalesce(sum(n.bruto), 0), coalesce(sum(n.irpf), 0)
       into v_lineas, v_pay_base, v_pay_ret
@@ -415,7 +418,7 @@ begin
                        'nif', l.frozen->>'nif', 'nombre', l.frozen->>'nombre', 'provincia', l.frozen->>'provincia',
                        'clave', l.frozen->>'clave', 'subclave', l.frozen->>'subclave',
                        'integra', (l.frozen->>'integra')::numeric, 'retenciones', (l.frozen->>'retenciones')::numeric,
-                       'anio_nacimiento', (l.frozen->>'anio_nacimiento')::int) order by l.frozen->>'clave', l.frozen->>'nombre'), '[]')
+                       'anio_nacimiento', (l.frozen->>'anio_nacimiento')::int, 'gastos', (l.frozen->>'gastos')::numeric) order by l.frozen->>'clave', l.frozen->>'nombre'), '[]')
                       from public.tax_return_line l where l.tax_return_id = r.id and not coalesce((l.frozen->>'sin_trabajador')::boolean, false)));
 end $$;
 

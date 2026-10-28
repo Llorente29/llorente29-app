@@ -338,13 +338,13 @@ export async function fichero190(base: ClienteBase, a: { usuario: string; declar
       ejercicio: number; nif: string; nombre: string; numero: string
       contacto: { telefono: string; nombre: string; correo: string }
       perceptores: { nif: string | null; nombre: string | null; provincia: string | null; clave: Datos190['perceptores'][number]['clave']; subclave: string | null
-        integra: number; retenciones: number; anio_nacimiento: number | null }[]
+        integra: number; retenciones: number; anio_nacimiento: number | null; gastos?: number | null }[]
     }>(base, 'conta_impuesto_190_fichero', { p_return: a.declaracion, p_user: a.usuario })
     const d: Datos190 = {
       ejercicio: x.ejercicio, nif: x.nif, nombre: x.nombre, numero: x.numero, contacto: x.contacto,
       perceptores: x.perceptores.map((p) => ({
         nif: p.nif ?? '', nombre: p.nombre ?? '', provincia: p.provincia ?? '', clave: p.clave, subclave: p.subclave,
-        integra: Number(p.integra), retenciones: Number(p.retenciones), anioNacimiento: p.anio_nacimiento,
+        integra: Number(p.integra), retenciones: Number(p.retenciones), anioNacimiento: p.anio_nacimiento, gastos: p.gastos === null || p.gastos === undefined ? null : Number(p.gastos),
       })),
     }
     let fichero: string

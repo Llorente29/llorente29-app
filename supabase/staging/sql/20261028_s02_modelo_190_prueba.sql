@@ -87,13 +87,13 @@ end $$;
 
 reset role;
 
--- ── 1b · El trabajador y su nómina de octubre: 1.000 de bruto, 350 de IRPF ──
+-- ── 1b · El trabajador y su nómina de octubre: 1.000 de bruto, 350 de IRPF y 63,50 de cotizaciones ──
 do $$
 declare a constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; v_emp uuid;
 begin
   insert into public.employees (account_id, name, dni, birth_date) values (a, 'Prueba S02 Trabajador', '00000001R', '1990-01-01') returning id into v_emp;
-  insert into public.payroll_cost (account_id, employee_id, period_year, period_month, status, gross, irpf, source)
-  values (a, v_emp, 2026, 10, 'definitiva', 1000, 350, 'manual');
+  insert into public.payroll_cost (account_id, employee_id, period_year, period_month, status, gross, irpf, employee_ss, source)
+  values (a, v_emp, 2026, 10, 'definitiva', 1000, 350, 63.50, 'manual');
   insert into prueba_190 values ('trabajador', to_jsonb(v_emp));
 end $$;
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
@@ -154,7 +154,7 @@ begin
   select coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0) into sin;
   if una then
     select l.frozen into t from public.tax_return_line l where l.tax_return_id = d and l.frozen->>'clave' = 'A' and l.frozen->>'perceptor' = trab;
-    if t is null or (t->>'retenciones')::numeric <> 350 or (t->>'anio_nacimiento')::int <> 1990 or t->>'nif' <> '00000001R' then
+    if t is null or (t->>'retenciones')::numeric <> 350 or (t->>'anio_nacimiento')::int <> 1990 or t->>'nif' <> '00000001R' or (t->>'gastos')::numeric <> 63.50 then
       raise exception 'PRUEBA 190 · 3: la línea A del trabajador no es la esperada (%).', t;
     end if;
     if sin <> (s0->>'sin')::numeric then
