@@ -208,7 +208,9 @@ test('de cero: un centro, una persona, fichar desde el portal, corregir en «Par
   await portada.click()
   const boton = movil.getByRole('button', { name: /FICHAR ENTRADA/ })
   await expect(boton).toBeEnabled({ timeout: 30_000 })
-  await expect(movil.locator('body')).not.toContainText(/\blocal(es)?\b/i)
+  // Sin «local» (en Sumied es «centro»), sin contar la banda de staging («BUILD LOCAL»).
+  const textoFichar = (await movil.locator('body').innerText()).replace(/BUILD LOCAL/g, '')
+  expect(textoFichar).not.toMatch(/\blocal(es)?\b/i)
   await captura(movil, '08-fichar')
   await boton.click()
   const hecho = movil.locator('[data-prueba="fichaje-hecho"]')
