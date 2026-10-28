@@ -264,7 +264,7 @@ export default function HomeEmpleado({
 
       {/* Instalar la app en el móvil (PWA) — banner discreto */}
       <div className="px-5 pt-4">
-        <InstallAppButton />
+        <InstallAppButton nombre={marca?.nombre} />
       </div>
 
       {/* C5 — Inventarios manuales asignados (uno por zona). Empezar lo pulsa

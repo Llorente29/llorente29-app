@@ -186,13 +186,6 @@ test('de cero: un centro, una persona, fichar desde el portal, corregir en «Par
   expect(empleados.datos.length, `la persona ${usuario} no está en employees`).toBe(1)
   const persona = empleados.datos[0].id
 
-  // Una entrada de hace dos días sin salida (se le olvidó): la pone el administrador.
-  const r0 = await rest(sola, 'POST', 'rpc/add_manual_clock_entry', {
-    p_employee_id: persona, p_type: 'entrada', p_datetime: aLas(hace2, '09:00'),
-    p_reason: 'Entrada en papel (prueba LS1)', p_actor_label: 'Administrador de la prueba', p_force: true,
-  })
-  expect(r0.status, `add_manual_clock_entry: ${JSON.stringify(r0.datos)}`).toBe(200)
-
   // 3 · La persona entra en /acceso desde el móvil, con la marca Sumied, y ficha.
   const { ctx, page: movil } = await portalDeLaPersona(browser)
   const erroresMovil = vigilar(movil)
@@ -225,6 +218,14 @@ test('de cero: un centro, una persona, fichar desde el portal, corregir en «Par
   await expect(hecho).toContainText(centro, { timeout: 30_000 })
   await expect(movil.locator('[data-prueba="lo-que-se-guardo"]')).toContainText('del centro, dentro del radio')
   await captura(movil, '09-fichado')
+
+  // Una entrada de hace dos días sin salida (se le olvidó): la pone el administrador.
+  // Después de fichar hoy: con ella abierta, la portada diría «Fichar salida».
+  const r0 = await rest(sola, 'POST', 'rpc/add_manual_clock_entry', {
+    p_employee_id: persona, p_type: 'entrada', p_datetime: aLas(hace2, '09:00'),
+    p_reason: 'Entrada en papel (prueba LS1)', p_actor_label: 'Administrador de la prueba', p_force: true,
+  })
+  expect(r0.status, `add_manual_clock_entry: ${JSON.stringify(r0.datos)}`).toBe(200)
 
   // La persona pide desde su portal que le pongan la entrada de ayer (se le olvidó).
   const yo = await sesionDeUsuario(usuario, clave)
