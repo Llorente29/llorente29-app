@@ -1,8 +1,7 @@
 {
-  "_que": "L1a · PR 2 · contexto de producción de la tanda (0700, 0705 y 0706), medido en SOLO LECTURA el 28/10 a las 06:03 UTC con la consulta del analizador (sql-contexto). Existen las dos tablas que cambia y las cinco funciones que reemplaza (una firma cada una); lo nuevo no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
-  "medido": "2026-10-28T06:03Z",
+  "_que": "L1a · PR 2 · contexto de producción de la tanda (0705 y 0706; la 0700 salió al PR 2b), medido en SOLO LECTURA el 28/10 a las 07:48 UTC con la consulta del analizador (sql-contexto). Existen las dos tablas que cambia y las cuatro funciones que reemplaza (una firma cada una); lo nuevo no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-28T07:48Z",
   "tanda": {
-    "supabase/migrations/20261028T0700_l1a_cerrar_escritura_directa.sql": "6898efe9ee0ea5d8278f1e635af723a4",
     "supabase/migrations/20261028T0705_l1a_correcciones_firma_e_informe.sql": "8d642d5fe31f7984ef588bd34b1921b6",
     "supabase/migrations/20261028T0706_l1a_corregir_con_conformidad.sql": "4a5fe6053e4c11fd27dd81565c3b4711"
   },
@@ -13,7 +12,6 @@
     ],
     "funciones": [
       "public.edit_clock_entry(uuid,timestamp with time zone,text,text,text)",
-      "public.export_gestoria_mensual(uuid,date,date)",
       "public.request_clock_correction(uuid,uuid,text,text,uuid,text,timestamp with time zone)",
       "public.resolve_clock_correction(uuid,boolean,text,text)",
       "public.void_clock_entry(uuid,text,text)"

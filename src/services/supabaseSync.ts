@@ -603,9 +603,9 @@ export async function insertClockEntry(employeeId: string, entry: ClockEntry): P
     if (err) throw new ClockWriteError(err.message, err.hint, err.code)
     return true
   }
-  // El móvil y la tablet fichan en el servidor (fichar()). Desde la L1a · PR 2
-  // (0700) la sesión ya no puede insertar en clock_entries: no hay camino de
-  // respaldo, y si la función no está, se dice.
+  // El móvil y la tablet fichan en el servidor (fichar(), en producción desde
+  // el PR 1). No hay INSERT directo de respaldo: la L1a · PR 2b quitará ese
+  // permiso a la sesión. Si la función no está, se dice.
   const r = await ficharEnElServidor(employeeId, entry)
   if (r.tipo === 'guardado') return true
   if (r.tipo === 'rechazado') throw new ClockWriteError(r.error.message, r.error.hint, r.error.code)
