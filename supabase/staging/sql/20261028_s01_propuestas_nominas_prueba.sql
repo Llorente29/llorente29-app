@@ -98,9 +98,10 @@ end $$;
 reset role;
 
 -- ── 2 · Con él: se propone, sin validar ─────────────────────────────────────
--- Como lo pondría el cliente en Tablas › Retenciones: un tipo suyo, de su cuenta.
-insert into public.withholding_rate (account_id, code, name, rate, filed_in, valid_from, is_system)
-values ((select v::uuid from _p where clave = 'cuenta'), 'trabajo', 'Rendimientos del trabajo (prueba S01)', 15, '111', '2026-01-01', false);
+-- Como lo pondría el cliente en Tablas › Retenciones: un tipo suyo, de su cuenta y su
+-- empresa (lo que no es de serie lleva las dos: conta_fila_serie_ok).
+insert into public.withholding_rate (account_id, company_id, code, name, rate, filed_in, valid_from, is_system)
+values ((select v::uuid from _p where clave = 'cuenta'), (select v::uuid from _p where clave = 'empresa'), 'trabajo', 'Rendimientos del trabajo (prueba S01)', 15, '111', '2026-01-01', false);
 set local role authenticated;
 do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa'); x jsonb; je public.journal_entry;

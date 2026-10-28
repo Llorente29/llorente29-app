@@ -14,7 +14,7 @@
 --   2. conta_proponer_recibidos(empresa, desde, hasta, quién): los meses ya
 --      acabados del rango, con su día abierto; calcula lo de cada mes
 --      (_compras_fin_de_mes, la de siempre) y propone. Lo que no puede, a «Lo
---      que no he podido proponer» (dónde: Compras). No valida (como hoy).
+--      que no he podido proponer» (dónde: Compras y gastos › Facturas recibidas). No valida (como hoy).
 --
 -- Medido en producción el 28/10, solo lectura: purchase_accrual vacía (se
 -- calcula al pedirla) y 0 asientos de lo recibido sin factura. La regla se
@@ -110,7 +110,7 @@ begin
     for a in select id from public._compras_fin_de_mes(p_company, v_mes) loop
       x := public.conta_propuestas_recibido(a.id);
       if x ? 'sin_propuesta' then
-        perform public._conta_no_propuesta(p_company, 'purchase_accrual', a.id::text, x->>'que', x->>'sin_propuesta', 'Compras › Facturas recibidas');
+        perform public._conta_no_propuesta(p_company, 'purchase_accrual', a.id::text, x->>'que', x->>'sin_propuesta', 'Compras y gastos › Facturas recibidas');
         v_sin := v_sin || jsonb_build_array(jsonb_build_object('que', x->>'que', 'porque', x->>'sin_propuesta'));
         continue;
       end if;
@@ -128,4 +128,4 @@ end $$;
 revoke all on function public.conta_proponer_recibidos(uuid, date, date, text) from public, anon;
 grant execute on function public.conta_proponer_recibidos(uuid, date, date, text) to authenticated, service_role;
 comment on function public.conta_proponer_recibidos(uuid, date, date, text) is
-  'S01 · PR 3: propone lo recibido sin factura de los meses acabados del rango (navegador y pasada de noche); lo que no puede, a conta_propuesta_pendiente (Compras). No valida.';
+  'S01 · PR 3: propone lo recibido sin factura de los meses acabados del rango (navegador y pasada de noche); lo que no puede, a conta_propuesta_pendiente (Compras y gastos › Facturas recibidas). No valida.';

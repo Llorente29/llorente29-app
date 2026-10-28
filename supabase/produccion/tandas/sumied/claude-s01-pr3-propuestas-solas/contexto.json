@@ -5,7 +5,7 @@
   "supabase/migrations/20261028T0735_s01_enlace_validado.sql": "9528ec1b55f8858e21046d4cea20054b",
   "supabase/migrations/20261028T0753_s01_propuestas_solas_base.sql": "d908dc1f73650a76199180e50b38e35e",
   "supabase/migrations/20261028T0800_s01_propuestas_nominas.sql": "56e152fc37bc7e1d79246d3b0db05886",
-  "supabase/migrations/20261028T0830_s01_propuestas_recibido.sql": "bd38ef5b65601b4cc9ae4f9aa6237004"
+  "supabase/migrations/20261028T0830_s01_propuestas_recibido.sql": "c8f262ee9c12b64259fad44cca7ee7e3"
  },
  "contexto": {
   "tablas": [

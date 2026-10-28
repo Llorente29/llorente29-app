@@ -86,7 +86,7 @@ begin
      or x->'sinPropuesta'->0->>'que' <> 'Recibido sin factura · Carnes Prueba del Valle, S.L. · 09/2026' then
     raise exception 'PRUEBA S01 RECIBIDO · 1: sin tipo de gasto dio %.', x;
   end if;
-  if (select count(*) from public.conta_propuesta_pendiente where company_id = e and origen = 'purchase_accrual' and donde = 'Compras › Facturas recibidas') <> 2 then
+  if (select count(*) from public.conta_propuesta_pendiente where company_id = e and origen = 'purchase_accrual' and donde = 'Compras y gastos › Facturas recibidas') <> 2 then
     raise exception 'PRUEBA S01 RECIBIDO · 1: el «no he podido» no quedó apuntado en Compras (o el administrador no lo lee).';
   end if;
   raise notice '1 · sin tipo de gasto: «%», en «Lo que no he podido proponer» (Compras)', x->'sinPropuesta'->0->>'porque';
