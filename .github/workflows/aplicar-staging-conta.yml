@@ -331,7 +331,7 @@ jobs:
       # W05: lo que solo añade, de verdad desde la rama (arriba, «QUÉ PASA»).
       - name: Lo que solo añade, de verdad (desde la rama)
         if: env.NADA != '1' && env.ENSAYO == '1' && inputs.modo != 'ensayo-de-vuelta-atras' && inputs.modo != 'real-con-fallo' && inputs.modo != 'real'
-        timeout-minutes: 15
+        timeout-minutes: 35
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           CARRIL_YO: "run ${{ github.run_id }} · aplicar · ${{ github.ref_name }}"
@@ -501,7 +501,7 @@ jobs:
 
       - name: La tanda de producción en staging (real-con-fallo o real)
         if: inputs.modo == 'real-con-fallo' || inputs.modo == 'real'
-        timeout-minutes: 15
+        timeout-minutes: 25
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
           MODO: ${{ inputs.modo }}

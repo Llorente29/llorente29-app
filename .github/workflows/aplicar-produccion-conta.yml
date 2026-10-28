@@ -546,7 +546,7 @@ jobs:
           exit "$fallo"
 
       - name: Después · comprobación (D1, serie, agentes y salud del pedido); si falla, vuelta atrás automática
-        timeout-minutes: 15
+        timeout-minutes: 25
         id: despues
         # Solo si el REAL llegó a correr (aunque fallara a medias): no tras un análisis que para.
         if: always() && inputs.modo == 'real' && steps.real.outcome != 'skipped' && steps.real.outcome != ''
