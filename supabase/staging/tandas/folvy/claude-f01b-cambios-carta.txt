@@ -4,6 +4,11 @@
 supabase/migrations/20261027T1910_f01b_cambios_carta.sql
 supabase/seeds/folvy/seed_f01b_cambios_carta_staging.sql
 
+# La 0650 cambia _f01_alta_marca (el alta, con quien no es empleado): desde la
+# rama, solo en ROLLBACK. Va detrás de la semilla, que no la necesita (W07: así
+# la semilla puede ir de verdad), y delante de su prueba (la sección 0b).
+supabase/migrations/20261028T0650_f01b_alta_sin_empleado.sql
+
 # Su prueba (ROLLBACK): el espejo de extras, los cambios de una marca (plato
 # nuevo, plato que se va, precio por plataforma), poner precios, añadir platos,
 # guardar extras dos veces sin duplicar, una venta de Last con el extra que

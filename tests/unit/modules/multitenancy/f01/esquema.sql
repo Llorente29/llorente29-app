@@ -19,9 +19,11 @@ create table accounts (id uuid primary key, name text);
 create table locations (id uuid primary key, account_id uuid, name text, active boolean default true);
 create table kitchen_unit (id uuid primary key, account_id uuid, name text, dimension text, is_base boolean, is_seed boolean, is_active boolean, created_at timestamptz default now(), abbreviation text);
 create table sales_channel (id uuid primary key default gen_random_uuid(), account_id uuid, name text, slug text, is_active boolean default true);
+-- Como en producción: brand.created_by apunta a employees(id), que no tiene el id del usuario (F01 · 0650).
+create table employees (id uuid primary key default gen_random_uuid(), account_id uuid, name text);
 create table brand (id uuid primary key default gen_random_uuid(), account_id uuid not null, name text not null, slug text not null,
   ownership_type text not null default 'own', is_active boolean not null default true, archived_at timestamptz, catalog_source text not null default 'folvy',
-  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), created_by uuid, created_by_name text, unique (account_id, slug));
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), created_by uuid references employees(id) on delete set null, created_by_name text, unique (account_id, slug));
 create table brand_licensing_agreement (id uuid primary key default gen_random_uuid(), account_id uuid not null, brand_id uuid not null unique, owner_name text not null, notes text,
   revenue_share_pct numeric not null check (revenue_share_pct between 0 and 100), reimburses_consumption boolean not null default true, is_active boolean not null default true,
   archived_at timestamptz, created_at timestamptz default now(), updated_at timestamptz default now(), created_by uuid, created_by_name text, party_id uuid);

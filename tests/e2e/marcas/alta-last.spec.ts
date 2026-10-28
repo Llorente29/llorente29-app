@@ -77,9 +77,11 @@ async function esperarOContar(page: Page, errores: string[], esperar: () => Prom
     await esperar()
   } catch (e) {
     const texto = (await page.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').trim().slice(0, 400)
+    const avisos = (await page.locator('[role="alert"]').allInnerTexts().catch(() => [] as string[])).map((t) => t.trim()).filter(Boolean)
     throw new Error([
       (e as Error).message.split('\n')[0],
       `Dirección: ${page.url()}`,
+      `Avisos en pantalla: ${avisos.length ? avisos.join(' | ') : 'ninguno'}`,
       `Pantalla (400 caracteres): ${texto || '(vacía)'}`,
       `pageerror: ${errores.length ? errores.join(' | ') : 'ninguno'}`,
     ].join('\n'))

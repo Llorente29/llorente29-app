@@ -151,6 +151,31 @@ describe.skipIf(!listo)('F01 · PR 2 · cambios de carta de Last, con la poblaci
     expect(sql(`select count(*) from menu_item where brand_id = '${ED}' and name = 'TEQUEÑO ED' and archived_at is null`)).toBe('1')
   })
 
+  it('0650: el alta de quien no es empleado falla con la 1320 (23503) y funciona con la 0650; el de un empleado se guarda', () => {
+    // Una marca de Last nueva en la carta de El Delicioso (la misma org), con un plato.
+    const org = sql(`select external_org_id from external_catalog_product where account_id = '${CUENTA}' limit 1`)
+    const loc = sql(`select external_location_id from external_catalog_product where account_id = '${CUENTA}' and external_location_id is not null limit 1`)
+    sql(`insert into external_catalog_product (account_id, source, external_org_id, catalog_product_id, organization_product_id, external_brand_name,
+           product_name, price_cents, product_type, external_channel, external_channels, external_location_id, seen_in_catalog_at, is_enabled)
+         values ('${CUENTA}', 'lastapp', '${org}', gen_random_uuid(), gen_random_uuid(), 'Marca Admin', 'Plato admin', 800, 'PRODUCT', 'uber',
+                 array['uber'], '${loc}', now(), true),
+                ('${CUENTA}', 'lastapp', '${org}', gen_random_uuid(), gen_random_uuid(), 'Marca Empleado', 'Plato empleado', 800, 'PRODUCT', 'uber',
+                 array['uber'], '${loc}', now(), true)`)
+    const alta = (marca: string, quien: string) =>
+      `select public._f01_alta_marca('${CUENTA}', '${org}', '${marca}', '${marca}', true, null, false, '${quien}', 'Julio')->>'brand_id'`
+    const admin = '11111111-0000-4000-8000-0000000000a1'
+    // Con la 1320 (antes de la 0650): falla con la clave ajena, como en producción.
+    expect(() => sql(alta('Marca Admin', admin))).toThrow(/brand_created_by_fkey/)
+    sql(leer('supabase/migrations/20261028T0650_f01b_alta_sin_empleado.sql'))
+    const b = sql(alta('Marca Admin', admin))
+    expect(sql(`select coalesce(created_by::text, 'null') || ' · ' || created_by_name from brand where id = '${b}'`)).toBe('null · Julio')
+    expect(sql(`select count(*) from external_brand_alta where brand_id = '${b}' and created_by = '${admin}'`)).toBe('1')
+    // Un empleado de la cuenta sí queda como quien la creó.
+    const emp = sql(`insert into employees (account_id, name) values ('${CUENTA}', 'Encargada') returning id`)
+    const b2 = sql(alta('Marca Empleado', emp))
+    expect(sql(`select created_by from brand where id = '${b2}'`)).toBe(emp)
+  })
+
   it('la vuelta atrás para con precios apuntados y, sin ellos, quita lo que añade', () => {
     expect(() => sql(leer('supabase/vuelta-atras/20261027T1910_f01b_cambios_carta.down.sql'))).toThrow(/precios puestos desde Last/)
     sql(`delete from external_catalog_change`)

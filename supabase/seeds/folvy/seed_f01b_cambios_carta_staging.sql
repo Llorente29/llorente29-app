@@ -62,7 +62,10 @@ begin
   -- La carta y sus extras, vistos ahora; la marca, dada de alta si no lo está.
   perform public.e2e_f01_preparar('empezar');
   update public.external_catalog_modifier set seen_in_catalog_at = now(), missing_since = null where account_id = v_cuenta and external_org_id = org;
-  r := public._f01_alta_marca(v_cuenta, org, 'Latina de Prueba', 'Latina de Prueba', true, null, false, auth.uid(), 'e2e F01b');
+  -- Quién: nadie (null). brand.created_by apunta a employees y el administrador
+  -- de la prueba no es empleado; hasta la 0650, _f01_alta_marca lo ponía tal
+  -- cual y fallaba (23503). Lo que mide esta preparación es la carta, no quién.
+  r := public._f01_alta_marca(v_cuenta, org, 'Latina de Prueba', 'Latina de Prueba', true, null, false, null, 'e2e F01b');
   return jsonb_build_object('cuenta', v_cuenta, 'brand_id', r->>'brand_id');
 end $$;
 revoke all on function public.e2e_f01b_preparar() from public, anon;

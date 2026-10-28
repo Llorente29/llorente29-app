@@ -21,6 +21,12 @@
 --      con el extra (descuenta el pan del almacén), recibir un albarán, apuntar
 --      una merma y aprobar un recuento.
 --   6. La vuelta atrás: para con precios apuntados; sin ellos, quita lo que añade.
+--
+-- Y la 0650 (_f01_alta_marca, que cambia en caliente):
+--   0b. El alta desde la pantalla (f01_alta_marca) como el administrador de A,
+--       que no es empleado (como el de Foodint): sin la 0650 fallaba con 23503
+--       brand_created_by_fkey; con ella, la marca se crea con created_by null y
+--       el alta queda apuntada a su nombre en external_brand_alta.
 -- ============================================================================
 
 \set ON_ERROR_STOP 1
@@ -67,6 +73,49 @@ begin
   n := public.f01_espejo_extras(a, org, '[]'::jsonb);
   if n <> '{"vistos": 0, "idos": 0}'::jsonb then raise exception 'PRUEBA F01b · 1: una foto vacía da por idos a todos: %', n; end if;
   raise notice '0 y 1 · la marca dada de alta con sus 2 platos; el espejo guarda los 2 extras y una foto vacía no los da por idos';
+end $$;
+
+-- ── 0b · El alta desde la pantalla, como el administrador de A (no es empleado) ──
+do $$
+declare
+  a   constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  org constant uuid := 'f01b0000-0000-4000-8000-0000000000a0';
+  l1  constant uuid := 'f01b0000-0000-4000-8000-0000000000e1';
+begin
+  if exists (select 1 from public.employees where id = 'c01a0000-0000-4000-8000-0000000000a1') then
+    raise exception 'PRUEBA F01b · 0b: el administrador de A es empleado: esta prueba no mediría nada.';
+  end if;
+  insert into public.external_catalog_product (account_id, source, external_org_id, catalog_product_id, organization_product_id,
+       external_brand_name, external_brand_id, product_name, price_cents, product_type, external_channel, external_channels,
+       external_location_id, seen_in_catalog_at, is_enabled)
+  values (a, 'lastapp', org, gen_random_uuid(), 'f01b0000-0000-4000-8000-000000000d09', 'Prueba Alta Admin', 'f01b-aa-1',
+          'Plato del alta', 800, 'PRODUCT', 'uber', array['uber'], l1, now(), true);
+end $$;
+-- ── 2 a 4 · Como el administrador de A ──────────────────────────────────────
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare
+  a   constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
+  org constant uuid := 'f01b0000-0000-4000-8000-0000000000a0';
+  r jsonb;
+begin
+  r := public.f01_alta_marca(a, org, 'Prueba Alta Admin', 'Prueba Alta Admin', true, null, false);
+  if r->>'brand_id' is null then raise exception 'PRUEBA F01b · 0b: el alta no ha creado la marca: %', r; end if;
+  perform set_config('f01b.marca_admin', r->>'brand_id', true);
+end $$;
+reset role;
+do $$
+declare
+  b uuid := current_setting('f01b.marca_admin')::uuid;
+begin
+  if (select created_by from public.brand where id = b) is not null then
+    raise exception 'PRUEBA F01b · 0b: la marca guarda un created_by que no es de un empleado.';
+  end if;
+  if (select count(*) from public.external_brand_alta where brand_id = b and created_by = 'c01a0000-0000-4000-8000-0000000000a1') <> 1 then
+    raise exception 'PRUEBA F01b · 0b: el alta no queda apuntada a quien la hizo.';
+  end if;
+  raise notice '0b · el alta como el administrador de A (no es empleado): marca creada, created_by null, alta apuntada a su nombre';
 end $$;
 
 -- ── 2 a 4 · Como el administrador de A ──────────────────────────────────────
@@ -236,6 +285,16 @@ begin
 end $$;
 
 -- ── 6 · La vuelta atrás, sobre estos datos ──────────────────────────────────
+-- La de la 0650: _f01_alta_marca vuelve a ser la de la 1320, byte a byte (lo
+-- comprueba _restaurar_funcion con su huella), y ya no mira employees.
+\i supabase/vuelta-atras/20261028T0650_f01b_alta_sin_empleado.down.sql
+do $$
+begin
+  if pg_get_functiondef('public._f01_alta_marca(uuid,uuid,text,text,boolean,text,boolean,uuid,text)'::regprocedure) like '%from public.employees e where e.id = p_quien%' then
+    raise exception 'PRUEBA F01b · 6: la vuelta atrás de la 0650 no ha restaurado _f01_alta_marca.';
+  end if;
+  raise notice '6 · la vuelta atrás de la 0650 deja _f01_alta_marca como en la 1320';
+end $$;
 do $$
 begin
   begin
