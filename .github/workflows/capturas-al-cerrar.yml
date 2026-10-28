@@ -1,0 +1,100 @@
+name: Capturas · al cerrar el PR
+
+# QUÉ HACE (W08b, Julio, 28/10)
+# Las capturas de una rama viven fuera de su PR, en capturas/<rama> (las
+# publica e2e-staging-conta.yml en cada e2e en verde). Al cerrarse el PR:
+#   · si se ha FUSIONADO, las pasa a main en su carpeta de siempre
+#     (docs/<frente>/capturas/…), para que main tenga las de lo que está en
+#     producción: un commit «Capturas en producción · #N», encima de la main más
+#     nueva, que solo toca esos PNG;
+#   · fusionado o no, borra capturas/<rama>.
+#
+# Por qué no pide aprobación ni choca:
+#   · lo empuja el token de este workflow, y un push con ese token no lanza
+#     workflows (ni el despliegue de funciones, ni el ensayo de main, ni la APK);
+#     main no tiene protección de rama (28/10), así que no hace falta un secreto;
+#   · solo toca las capturas del frente, sobre la main más nueva; si alguien
+#     empuja a la vez, vuelve a empezar desde la nueva (3 veces);
+#   · Vercel no lo despliega: scripts/vercel/saltar-build.mjs (el ignoreCommand
+#     de vercel.json) salta el build de un commit que empieza por la marca y
+#     solo cambia capturas. Producción sigue en el despliegue de la fusión.
+# Comprueba antes de copiar que todo lo de capturas/<rama> son capturas: si no,
+# para sin tocar main.
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+# Dos fusiones seguidas: una detrás de otra, sin cancelar ninguna.
+concurrency:
+  group: capturas-a-main
+  cancel-in-progress: false
+
+jobs:
+  capturas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      RAMA: ${{ github.event.pull_request.head.ref }}
+      PR: ${{ github.event.pull_request.number }}
+      FUSIONADO: ${{ github.event.pull_request.merged }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: ¿Tiene capturas publicadas?
+        id: hay
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --heads origin "capturas/$RAMA" > /dev/null; then
+            echo "si=1" >> "$GITHUB_OUTPUT"; echo "capturas/$RAMA existe."
+          else
+            echo "La rama «$RAMA» no tiene capturas publicadas: nada que hacer." | tee -a "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: A main, en su carpeta (si se ha fusionado)
+        id: main
+        if: steps.hay.outputs.si == '1' && env.FUSIONADO == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "folvy-e2e"
+          git config user.email "e2e@folvy.invalid"
+          git fetch -q --depth=1 origin "refs/heads/capturas/$RAMA:refs/remotes/origin/capturas-del-pr"
+          git ls-tree -r --name-only origin/capturas-del-pr > "$RUNNER_TEMP/capturas.txt"
+          # Todo lo que hay ahí tiene que ser una captura (las carpetas de capturas.mjs): si no, no se toca main.
+          node -e '
+            import("./scripts/conta/capturas.mjs").then(({ esCaptura }) => {
+              const fs = require("node:fs").readFileSync(process.argv[1], "utf8").split("\n").filter(Boolean)
+              const otras = fs.filter((f) => !esCaptura(f))
+              if (!fs.length || otras.length) { console.error(`✗ capturas/${process.env.RAMA} trae ${otras.length} ficheros que no son capturas: ${otras.join(", ")}`); process.exit(1) }
+              console.log(`${fs.length} capturas para main.`)
+            })' "$RUNNER_TEMP/capturas.txt"
+          for vuelta in 1 2 3; do
+            xargs -a "$RUNNER_TEMP/capturas.txt" -d '\n' git checkout -q origin/capturas-del-pr --
+            xargs -a "$RUNNER_TEMP/capturas.txt" -d '\n' git add --
+            if git diff --cached --quiet; then echo "Las capturas de main ya eran éstas." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+            git commit -q -m "Capturas en producción · #$PR ($RAMA)"
+            if git push -q origin HEAD:main; then
+              echo "Capturas de #$PR en main: $(wc -l < "$RUNNER_TEMP/capturas.txt") ficheros ($(git rev-parse --short HEAD))." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "main se ha movido: vuelta $vuelta, desde la nueva."
+            git fetch -q --depth=1 origin main
+            git reset -q --hard origin/main
+          done
+          echo "::error::No se pudieron dejar las capturas en main después de 3 vueltas."
+          exit 1
+
+      # Si el paso a main ha fallado, la rama se queda: son las únicas copias.
+      - name: Borrar capturas/<rama>
+        if: always() && steps.hay.outputs.si == '1' && (env.FUSIONADO != 'true' || steps.main.outcome == 'success')
+        run: |
+          set -euo pipefail
+          git push -q origin --delete "capturas/$RAMA"
+          echo "Borrada capturas/$RAMA." | tee -a "$GITHUB_STEP_SUMMARY"
