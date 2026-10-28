@@ -152,9 +152,12 @@ test('una marca nueva de Last: el aviso en Inicio y el alta en una sola pantalla
   expect(b.datos[0].ownership_type).toBe('own')
   const platos = await rest<{ name: string; recipe_item_id: string | null }[]>(s, 'GET',
     `menu_item?brand_id=eq.${b.datos[0].id}&archived_at=is.null&select=name,recipe_item_id&order=name`)
-  expect(platos.datos.map((p) => p.name)).toEqual(['AREPA REINA (LP)', 'AREPA REINA LP', 'Agua mineral 50 cl', 'TEQUEÑOS LP'])
+  // Sin depender del orden: la base ordena los nombres según su intercalación
+  // (en staging, «Agua» antes que «AREPA»), no por bytes (run 40651888247).
+  expect(platos.datos.map((p) => p.name).sort()).toEqual(['AREPA REINA (LP)', 'AREPA REINA LP', 'Agua mineral 50 cl', 'TEQUEÑOS LP'])
   expect(platos.datos.every((p) => p.recipe_item_id)).toBe(true)
-  expect(platos.datos[0].recipe_item_id, 'los dos nombres de la arepa, un solo artículo').toBe(platos.datos[1].recipe_item_id)
+  const arepa = (n: string) => platos.datos.find((p) => p.name === n)!.recipe_item_id
+  expect(arepa('AREPA REINA (LP)'), 'los dos nombres de la arepa, un solo artículo').toBe(arepa('AREPA REINA LP'))
   const locales = await rest<unknown[]>(s, 'GET', `brand_location_availability?brand_id=eq.${b.datos[0].id}&is_active=eq.true&select=id`)
   expect(locales.datos).toHaveLength(2)
   const vinculos = await rest<unknown[]>(s, 'GET', `external_brand_map?brand_id=eq.${b.datos[0].id}&select=id`)
