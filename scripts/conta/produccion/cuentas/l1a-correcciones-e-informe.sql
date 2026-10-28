@@ -2,8 +2,11 @@
 --
 -- L1a · PR 2 (28/10) · LO QUE CUENTA LA TANDA, antes y después. SOLO LEE.
 -- Todo es del catálogo (pg_proc, pg_policy, privilegios, columnas), salvo el
--- cerrojo de la 0700, que lee el rastro de las últimas 24 h con el mismo
--- criterio que la migración (de todas las cuentas: la tanda no toca filas).
+-- cerrojo de la 0700, que lee el rastro con el mismo criterio que la migración
+-- (de todas las cuentas: la tanda no toca filas), pero en una ventana FIJA: las
+-- 24 h antes de la medida del 28/10 a las 06:03 UTC. Con «now()» la cifra
+-- cambiaría sola entre el antes y el después. Quien decide si la 0700 para es
+-- la propia migración, con su «now()».
 select clave, valor from (
   select 1 o, 'huellas de las cinco funciones que cambia' clave,
     (select string_agg(p.proname || ' ' || left(md5(pg_get_functiondef(p.oid)), 8), ' · ' order by p.proname) from pg_proc p
@@ -25,8 +28,9 @@ select clave, valor from (
   select 7, 'columnas nuevas del rastro (conformidad, peticion_id)',
     (select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'clock_entry_audit'
       and column_name in ('conformidad', 'conformidad_at', 'conformidad_nota', 'peticion_id'))::text union all
-  select 8, 'el cerrojo: fichajes por el INSERT directo en las últimas 24 h (todas las cuentas)',
+  select 8, 'el cerrojo: fichajes por el INSERT directo del 27/10 06:03 al 28/10 06:03 UTC (todas las cuentas)',
     (select count(*) from public.clock_entry_audit a
-      where a.action = 'create' and a.created_at > now() - interval '24 hours' and a.actor_user_id is not null
+      where a.action = 'create' and a.created_at > timestamptz '2026-10-27 06:03:00+00' and a.created_at < timestamptz '2026-10-28 06:03:00+00'
+        and a.actor_user_id is not null
         and coalesce(a.reason, '') not like 'Fichaje propio desde el móvil%' and coalesce(a.reason, '') not like 'Fichaje en la tablet%')::text
 ) t order by o;

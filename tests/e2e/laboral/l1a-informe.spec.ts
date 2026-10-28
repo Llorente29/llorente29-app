@@ -21,6 +21,8 @@ import { rest } from '../conta/api'
 
 const TRABAJADOR_FICHA = enCarril('c01a0000-0000-4000-8000-0000000000e7') // «Trabajador de Prueba» (semilla del autoconteo)
 const MOTIVO = 'No fichó (prueba e2e del informe)'
+// add_manual_clock_entry con p_force deja escrito que se forzó, delante del motivo.
+const MOTIVO_GUARDADO = `FORZADO · ${MOTIVO}`
 
 async function captura(page: Page, nombre: string) {
   const fichero = `${test.info().project.name}-${nombre}.png`
@@ -47,7 +49,9 @@ test('el informe para la Inspección, con un fichaje corregido: la pantalla, el 
   test.setTimeout(3 * 60_000)
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(e.message))
-  const dia = diaDeHace(3)
+  // Ordenador y móvil corren a la vez en el mismo carril: cada uno corrige su
+  // propio día, o el informe de uno ve las marcas del otro.
+  const dia = diaDeHace(test.info().project.name === 'movil' ? 4 : 3)
   const mes = dia.slice(0, 7)
 
   // El administrador pone a mano la jornada que no se fichó, con su motivo.
@@ -71,7 +75,7 @@ test('el informe para la Inspección, con un fichaje corregido: la pantalla, el 
   await expect(fila).toContainText('13:30')
   await expect(fila).toContainText('4 h 30')
   await expect(fila).toContainText('Entrada añadida después (09:00)')
-  await expect(fila).toContainText(`motivo: «${MOTIVO}»`)
+  await expect(fila).toContainText(`motivo: «${MOTIVO_GUARDADO}»`)
   await expect(fila).toContainText('Corregido después')
   // Sin códigos: ni ids ni nombres internos.
   await expect(informe).not.toContainText(TRABAJADOR_FICHA)
@@ -118,7 +122,8 @@ test('Personal abre con «Para revisar» sin errores, y el menú lleva al regist
   await page.goto('/personal', { timeout: 30_000 })
   await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined)
   await captura(page, '4-personal')
-  await page.getByRole('link', { name: 'Registro de jornada' }).first().click()
+  // El lateral pinta cada apartado como un botón (con su título), no como enlace.
+  await page.getByRole('button', { name: 'Registro de jornada', exact: true }).first().click()
   await expect(page.locator('[data-prueba="registro-jornada"]')).toBeVisible({ timeout: 30_000 })
   expect(errores, 'errores de la página en Personal').toEqual([])
 })
