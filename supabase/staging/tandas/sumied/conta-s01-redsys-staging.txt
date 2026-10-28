@@ -1,0 +1,6 @@
+# S01 · Respuesta 5 (28/10): la empresa para pagar con Redsys en staging. Una
+# cuenta propia (fuera de la plantilla de la e2e y de su limpieza) con su plan,
+# un cliente con su 430, la factura RDS-1 de 12,10 €, el TPV en pruebas con el
+# comercio público de Redsys (999008881) abierto, y el enlace de pago. Desde la
+# rama, en ROLLBACK; de verdad al fusionar, desde main.
+supabase/seeds/conta/seed_s01_redsys_pago_staging.sql
