@@ -1,0 +1,5 @@
+# S01b2 · Volver a leer la factura al darla de alta: la función que completa la
+# lectura guardada desde una relectura de su PDF (1555). Solo añade y se puede
+# pasar dos veces (create or replace): va de verdad desde la rama (W05).
+supabase/migrations/20261028T1555_s01b2_lectura_releida.sql
+supabase/staging/sql/20261028_s01b2_lectura_releida_prueba.sql

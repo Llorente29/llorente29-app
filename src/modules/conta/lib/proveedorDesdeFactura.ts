@@ -34,3 +34,31 @@ export function altaEnFactura(x: {
   const suyo = nif ? x.proveedores.find((p) => p.nif && normalizarNif(p.nif) === nif) : undefined
   return suyo ? { que: 'es_uno_tuyo', proveedorId: suyo.id, nombre: suyo.nombre } : { que: 'alta' }
 }
+
+// ── S01b2 · Volver a leer la factura cuando su lectura es de antes ─────────
+
+/** Lo que la lectura guardada dice del proveedor (reading->factura->proveedor). */
+export type ProveedorLeido = Partial<Record<'nombre' | 'nif' | 'email' | 'direccion' | 'telefono' | 'web', string | null>>
+
+/**
+ * ¿Hay que volver a leer su PDF? Sí si la lectura es de antes del 28/10: no
+ * tiene las CLAVES «telefono» y «web» (el lector de hoy las deja siempre,
+ * vacías si la factura no las trae). Una clave vacía no se vuelve a leer: ya se
+ * leyó con el lector de hoy y la factura no lo trae.
+ */
+export function hayQueReleer(p: ProveedorLeido | null | undefined, conPdf: boolean): boolean {
+  if (!conPdf || !p || typeof p !== 'object') return false
+  return !('telefono' in p) || !('web' in p)
+}
+
+/** Debajo de un campo del alta: lo que dice si la factura no lo trae (vacío, nunca un ejemplo que parezca un dato). */
+export const NO_VIENE_EN_LA_FACTURA = 'No viene en la factura'
+
+/** La frase de la relectura, para decirla (regla 8). */
+export function fraseRelectura(puesto: readonly string[]): string {
+  const nombre: Record<string, string> = { telefono: 'el teléfono', web: 'la web', email: 'el correo', direccion: 'la dirección' }
+  const cosas = puesto.map((k) => nombre[k] ?? k)
+  if (cosas.length === 0) return 'He vuelto a leer la factura: no trae nada más del proveedor.'
+  const lista = cosas.length === 1 ? cosas[0] : `${cosas.slice(0, -1).join(', ')} y ${cosas.at(-1)}`
+  return `He vuelto a leer la factura: añado ${lista}.`
+}
