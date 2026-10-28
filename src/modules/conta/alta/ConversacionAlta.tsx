@@ -37,7 +37,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
 import { TarjetaCargando, ErrorConReintento, MarcaIA } from '@/modules/conta/ui/piezas'
 import { Flecha, Microfono } from '@/modules/conta/ui/Icono'
-import { TEXTO_MUY_PRONTO } from '@/modules/conta/marco/muyPronto'
+import { BARRA_PREGUNTAR, TEXTO_MUY_PRONTO } from '@/modules/conta/marco/muyPronto'
 import {
   PASOS, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
   type ClavePregunta, type ContextoAlta, type PasoAlta, type Pregunta,
@@ -617,7 +617,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           )}
           <button type="submit" className="cx-alta-enviar" aria-label="Enviar" disabled={texto.trim() === '' || ocupado || paso === 'hecho'}
             onMouseDown={(e) => e.preventDefault()}><Flecha /></button>
-          <button type="button" className="cx-voz" aria-label="Hablar" onClick={() => setMuyPronto(true)}><Microfono /></button>
+          {/* S01 · PR 2: la voz solo diría «Muy pronto»; apagada hasta el S09 (BARRA_PREGUNTAR). */}
+          {BARRA_PREGUNTAR && <button type="button" className="cx-voz" aria-label="Hablar" onClick={() => setMuyPronto(true)}><Microfono /></button>}
           <div role="status" aria-live="polite">{muyPronto && <span className="cx-muy-pronto">{TEXTO_MUY_PRONTO}</span>}</div>
         </form>
         <span className="cx-alta-pista">Vale escribir «ni idea» o «pregúntaselo a mi asesor». Nada se da por bueno sin que lo confirmes.</span>

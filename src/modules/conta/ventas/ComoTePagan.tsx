@@ -21,7 +21,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
-import { useLeer } from '@/modules/conta/libros/contexto'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { avisoBizum, botonAltaStripe, textoMetodoPago, type EstadoMetodoPago } from '@/modules/conta/lib/cobros'
 import { cobroStripe, leerCobroRedsys, leerCobroStripe } from '@/modules/conta/services/cobrosService'
@@ -51,7 +50,9 @@ function LogoBizum() {
 export function ComoTePagan({ empresaId, nivel = 2, editar = false }: { empresaId: string; nivel?: 2 | 3; editar?: boolean }) {
   const [vuelta, setVuelta] = useState(0)
   // Envuelto: «sin alta» (null) no es lo mismo que «aún leyendo».
-  const datos = useLeer(() => leerCobroStripe(empresaId).then((c) => ({ c })), `${empresaId}:${vuelta}:cobro-stripe`)
+  // S01 · PR 2: Stripe, igual que el TPV: al volver a leer (al guardar el TPV o al
+  // volver del alta) se queda lo leído de la empresa, sin el esqueleto de en medio.
+  const datos = useLeerConservando(() => leerCobroStripe(empresaId).then((c) => ({ c })), empresaId, `${vuelta}:cobro-stripe`)
   const tpv = useLeerConservando(() => leerCobroRedsys(empresaId).then((c) => ({ c })), empresaId, `${vuelta}:cobro-redsys`)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
   const [ocupado, setOcupado] = useState(false)
