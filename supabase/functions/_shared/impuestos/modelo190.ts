@@ -101,10 +101,12 @@ export function parte(c: CampoDr190, texto: string): { desde: number; hasta: num
 // ── Formato ─────────────────────────────────────────────────────────────────
 /** Mayúsculas sin acentos ni caracteres especiales; la Ñ y la Ç se quedan. */
 export function alfanumerico(v: string, lon: number): string {
-  const limpio = v.toUpperCase().replace(/Ñ/g, '\u0001').replace(/Ç/g, '\u0002')
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^A-Z0-9\u0001\u0002 ]/g, ' ').replace(/\s+/g, ' ').trim()
-    .replace(/\u0001/g, 'Ñ').replace(/\u0002/g, 'Ç')
+  // Letra a letra: la Ñ y la Ç se quedan; el resto pierde el acento; lo que no es letra ni cifra, blanco.
+  const limpio = [...v.toUpperCase()].map((ch) => {
+    if (ch === 'Ñ' || ch === 'Ç') return ch
+    const base = ch.normalize('NFD')[0]
+    return /[A-Z0-9]/.test(base) ? base : ' '
+  }).join('').replace(/\s+/g, ' ').trim()
   return limpio.slice(0, lon).padEnd(lon, ' ')
 }
 
@@ -282,7 +284,9 @@ export interface Comprobacion190 {
 }
 
 const en = (r: string, pos: { desde: number; hasta: number }) => r.slice(pos.desde - 1, pos.hasta)
-const euros = (s: string) => Number(s) / 100
+// Para los mensajes: céntimos leídos del propio fichero (siempre un número), en euros con dos decimales.
+// eslint-disable-next-line no-restricted-syntax
+const euros = (cent: string | number) => (Number(cent) / 100).toFixed(2)
 
 function leerCampos(t: Tipo, r: string, n: number, fallos: string[]) {
   const donde = (c: CampoDr190) => `Registro ${n} (tipo ${t}), ${c.desde}-${c.hasta} «${c.nombre.slice(0, 40)}»`
@@ -331,8 +335,8 @@ export function comprobar190(fichero: string, d?: Pick<Datos190, 'ejercicio' | '
   if (n !== regs.length - 1) fallos.push(`El registro 1 dice ${n} percepciones y hay ${regs.length - 1} registros de perceptor.`)
   const imp = c1('IMPORTE TOTAL DE LAS PERCEPCIONES')
   const total = en(r1, parte(imp, 'IMPORTE'))
-  if (Number(total) !== integra) fallos.push(`El registro 1 dice ${euros(total).toFixed(2)} € de percepciones y los perceptores suman ${euros(String(integra)).toFixed(2)} €.`)
+  if (Number(total) !== integra) fallos.push(`El registro 1 dice ${euros(total)} € de percepciones y los perceptores suman ${euros(integra)} €.`)
   const ret = en(r1, c1('IMPORTE TOTAL DE LAS RETENCIONES'))
-  if (Number(ret) !== retenciones) fallos.push(`El registro 1 dice ${euros(ret).toFixed(2)} € de retenciones y los perceptores suman ${euros(String(retenciones)).toFixed(2)} €.`)
+  if (Number(ret) !== retenciones) fallos.push(`El registro 1 dice ${euros(ret)} € de retenciones y los perceptores suman ${euros(retenciones)} €.`)
   return { ok: fallos.length === 0, fallos, perceptores: regs.length - 1, integra: integra / 100, retenciones: retenciones / 100 }
 }
