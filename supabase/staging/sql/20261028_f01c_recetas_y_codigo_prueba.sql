@@ -347,8 +347,12 @@ begin
      or to_regprocedure('public.f01_carta_marca(uuid,uuid)') is not null or to_regprocedure('public.f01_decidir_marca(uuid,uuid,text,uuid,boolean)') is not null then
     raise exception 'PRUEBA F01c · 6: la vuelta atrás de la 0850 no deja la base como estaba.';
   end if;
-  if (select count(*) from public.external_brand_alta where external_org_id = 'f01c2e00-0000-4000-8000-0000000000a0') <> 3 then
-    raise exception 'PRUEBA F01c · 6: la vuelta atrás ha tocado lo unido en tablas que existían.';
+  -- Con la cuenta (regla 9): los carriles de las e2e copian la cuenta A con la misma cuenta de Last.
+  if (select count(*) from public.external_brand_alta where account_id = 'c01a0000-0000-4000-8000-00000000000a'
+        and external_org_id = 'f01c2e00-0000-4000-8000-0000000000a0') <> 3 then
+    raise exception 'PRUEBA F01c · 6: la vuelta atrás ha tocado lo unido en tablas que existían: esperaba 3 altas en la cuenta A y hay %.',
+      (select count(*) from public.external_brand_alta where account_id = 'c01a0000-0000-4000-8000-00000000000a'
+         and external_org_id = 'f01c2e00-0000-4000-8000-0000000000a0');
   end if;
   raise notice '6 · la vuelta atrás de la 0850: sin sus tablas ni sus funciones; las marcas unidas se quedan';
 end $$;
