@@ -25,6 +25,10 @@ permissions:
   contents: read
   pull-requests: read
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   revisar:
     runs-on: ubuntu-latest
@@ -72,6 +76,7 @@ jobs:
       # run de main tras la fusión (#677) cayó entero y staging se quedó sin
       # el F01. La regla es la misma en los dos (staging-tanda.mjs RUTA_STAGING).
       - name: El manifiesto de staging solo nombra rutas que el workflow admite
+        timeout-minutes: 5
         env:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |

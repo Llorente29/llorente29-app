@@ -26,6 +26,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   lectura:
     if: startsWith(github.event.head_commit.message, '[libros-iva-lectura]')
@@ -46,6 +50,7 @@ jobs:
       # El lado de Sumied del cruce: como el vigía de producción, con
       # conta_lectura, sesión de solo lectura, y solo producción.
       - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -65,6 +70,7 @@ jobs:
           case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
           case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -72,6 +78,7 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
       - name: Volcar los asientos traídos de Foodint (solo lectura)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |

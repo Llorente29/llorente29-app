@@ -65,6 +65,8 @@ permissions:
   actions: read
 
 env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
   PROD_REF: xzmpnchlguibclvxyynt
   STAGING_REF: oseymswjlzplqoxrfjzi
   PSQL: /usr/lib/postgresql/17/bin/psql
@@ -115,6 +117,7 @@ jobs:
                 --json displayTitle --jq "[.[] | select(.displayTitle == \"Diez · libros de IVA · ensayo · ${FECHA_RECIBIDA} · hasta el ${TRIMESTRE}\")] | length")
           [ "$n" -ge 1 ] || { echo "::error::No hay un ensayo en verde de este commit con esa fecha de las recibidas y hasta ese trimestre. Primero el ensayo."; exit 1; }
       - name: Guardas · el secreto apunta a PRODUCCIÓN y no a staging
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -136,6 +139,7 @@ jobs:
           [ -n "$DIEZ_LECTURA" ] || { echo "::error::Falta el secreto DIEZ_LECTURA."; exit 1; }
           jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -143,6 +147,7 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
       - name: Guarda · la empresa, su base de Diez, su ejercicio mixto hasta el corte y el 303 presentado de cada trimestre
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |
@@ -183,6 +188,7 @@ jobs:
           npx --yes tsx@4.19.2 scripts/conta/diez/libros-iva-preparar.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
           grep -v '^#' scripts/conta/diez/autoliquidadas-foodint.csv > /tmp/carga/autoliquidadas.csv
       - name: Paso 2 · escribir, medir contra el testigo y decidir (una transacción)
+        timeout-minutes: 45
         env:
           DB_URL: ${{ secrets.PROD_CONTA_DB_URL }}
         run: |

@@ -49,6 +49,10 @@ permissions:
   # Solo para el aviso de lo rojo (una incidencia); nada más escribe.
   issues: write
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   hora:
     name: ¿Son las 03:40 en Madrid?
@@ -97,6 +101,7 @@ jobs:
           node-version: 22
 
       - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -117,6 +122,7 @@ jobs:
           case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
 
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -125,6 +131,7 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
 
       - name: Guarda 3 y 4 · Foodint al otro lado, sesión de solo lectura y sin permisos de escritura
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -141,6 +148,7 @@ jobs:
           echo "Producción (está Foodint), sesión de solo lectura, y el usuario solo tiene SELECT."
 
       - name: Volcar las filas de serie (solo lectura)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -154,6 +162,7 @@ jobs:
           fi
 
       - name: Revisar contra la referencia
+        timeout-minutes: 15
         id: revisar
         continue-on-error: true
         run: node scripts/conta/agente-datos-maestros.mjs /tmp/bd.json /tmp/informe.md producción /tmp/terceros.json
@@ -188,6 +197,7 @@ jobs:
       # día, cedidas, socio, resultado por local, meses cerrados y propuestas
       # viejas. Solo lee; antes del C04 (sin journal_entry) no hay libro que mirar.
       - name: Libro diario (solo lectura)
+        timeout-minutes: 15
         id: libro
         continue-on-error: true
         env:
@@ -235,6 +245,7 @@ jobs:
 
       # B01 · Agente «Conciliación» (solo lectura, rol conta_lectura: 20261101T0160).
       - name: Conciliación (solo lectura)
+        timeout-minutes: 15
         id: conciliacion
         continue-on-error: true
         env:
@@ -340,6 +351,7 @@ jobs:
           node-version: 22
 
       - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -360,6 +372,7 @@ jobs:
           case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
 
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -368,6 +381,7 @@ jobs:
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
 
       - name: Guarda 3 y 4 · Foodint al otro lado, sesión de solo lectura y el rol no puede escribir
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -388,6 +402,7 @@ jobs:
         run: node scripts/conta/fuentes.mjs descargar
 
       - name: Volcar el plan (solo lectura)
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
@@ -395,6 +410,7 @@ jobs:
           "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/agente-plan-contable.sql > /tmp/bd-plan.json
 
       - name: Revisar
+        timeout-minutes: 15
         id: revisar
         continue-on-error: true
         run: node scripts/conta/agente-plan-contable.mjs /tmp/bd-plan.json /tmp/informe-plan.md producción

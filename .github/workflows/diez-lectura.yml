@@ -41,6 +41,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
 jobs:
   swagger:
     if: (github.event_name == 'push' && github.ref_name == 'conta/c04b-diez') || inputs.modo == 'swagger'
@@ -139,6 +143,7 @@ jobs:
         with:
           node-version: '20'
       - name: Guardas · producción, conta_lectura, y el secreto de Diez enmascarado
+        timeout-minutes: 15
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
@@ -160,6 +165,7 @@ jobs:
           case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
           case "$DB_URL" in *"$PROD_REF"*) echo "Producción, con conta_lectura." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
       - name: Instalar psql 17
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           sudo apt-get update -qq
@@ -167,6 +173,7 @@ jobs:
           sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
           sudo apt-get install -y -qq postgresql-client-17 >/dev/null
       - name: Folvy · saldos de Foodint al corte y el mapeo de serie del abreviado (solo lectura)
+        timeout-minutes: 30
         env:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
