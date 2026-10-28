@@ -2,13 +2,13 @@
 --
 -- SOLO STAGING. Prueba de la 0753 (la base de las propuestas sin botón) y de la
 -- 0800 (las nóminas se proponen solas), con \i dentro de la transacción y
--- ROLLBACK: staging no cambia. En la empresa A, con la nómina de septiembre de
--- la semilla C04 (4.200,00 € de bruto, 420,00 € de IRPF) y otras inventadas,
+-- ROLLBACK: staging no cambia. En la empresa A, con nóminas inventadas de
+-- octubre a diciembre (la de septiembre de la semilla C04 ya tiene su asiento),
 -- por sus caminos: como el administrador (lo que llama el navegador), y al
 -- llegar una nómina (el disparador, sin nadie).
 --
---   1. Sin tipo de retención de trabajo: no se propone, y queda en «Lo que no he
---      podido proponer» con su porqué en palabras y dónde se arregla.
+--   1. Llega una sin tipo de retención de trabajo: no se propone, y queda en «Lo
+--      que no he podido proponer» con su porqué en palabras y dónde se arregla.
 --   2. Con él: se propone (640 · 642 al debe; 476 · 4751 (111) · 465 al haber),
 --      propuesta y sin validar, del último día del mes; su «no he podido» se va.
 --      Otra vez, nada nuevo: ya estaba.
@@ -54,33 +54,42 @@ grant select, insert, update on _p to authenticated, anon, service_role;
 insert into _p values ('empresa', '3b34403a-a7d6-4a48-a8d7-737e8cababdc'), ('cuenta', 'c01a0000-0000-4000-8000-00000000000a'),
   ('admin', 'c01a0000-0000-4000-8000-0000000000a1'), ('sept', 'c0400000-0000-4000-8000-000000000201');
 
+-- La nómina de septiembre de la semilla C04 ya tiene su asiento validado: la
+-- prueba usa nóminas suyas (inventadas, en ROLLBACK) de meses sin ninguna.
+delete from public.withholding_rate where code = 'trabajo' and filed_in = '111';
 do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa');
 begin
-  if not exists (select 1 from public.payroll_summary where id = (select v::uuid from _p where clave = 'sept') and company_id = e) then
-    raise exception 'PRUEBA S01 NÓMINAS · siembra: falta la nómina de septiembre de la semilla C04.';
+  if exists (select 1 from public.payroll_summary where company_id = e and period_month >= '2026-10-01') then
+    raise exception 'PRUEBA S01 NÓMINAS · siembra: la empresa A ya tiene nóminas de octubre a diciembre; no se prueba encima.';
   end if;
-  -- Lo de antes de la prueba sobre esa nómina se quita (en ROLLBACK): se empieza sin asiento.
-  delete from public.journal_line where entry_id in (select id from public.journal_entry where company_id = e and source_type = 'payroll' and status in ('propuesto', 'borrador'));
-  delete from public.journal_entry where company_id = e and source_type = 'payroll' and status in ('propuesto', 'borrador');
-  delete from public.withholding_rate where code = 'trabajo' and filed_in = '111';
-  if exists (select 1 from public.journal_entry where company_id = e and source_type = 'payroll') then
-    raise exception 'PRUEBA S01 NÓMINAS · siembra: hay asientos de nóminas validados en la empresa A; no se prueba encima.';
-  end if;
+  insert into _p select 'local', location_id::text from public.payroll_summary where id = (select v::uuid from _p where clave = 'sept');
 end $$;
 
--- ── 1 · Sin tipo de retención de trabajo: no se propone, y se dice ──────────
+-- ── 1 · Llega la de diciembre sin tipo de retención de trabajo: no se propone, y se dice ──
+set local role service_role;
+do $$
+declare e uuid := (select v::uuid from _p where clave = 'empresa'); a uuid := (select v::uuid from _p where clave = 'cuenta'); dic uuid;
+begin
+  insert into public.payroll_summary (account_id, company_id, period_month, location_id, gross, employer_ss, employee_ss, irpf, other_deductions, net, employees_count, created_by_name)
+  values (a, e, '2026-12-01', (select v::uuid from _p where clave = 'local'), 4200.00, 1340.00, 268.80, 420.00, 0, 3511.20, 3, 'Prueba S01') returning id into dic;
+  insert into _p values ('dic', dic);
+end $$;
+reset role;
 select set_config('request.jwt.claims', json_build_object('sub', (select v from _p where clave = 'admin'), 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa'); x jsonb;
 begin
-  x := public.conta_proponer_nominas(e, '2026-09-01', '2026-09-30', 'Prueba');
+  if exists (select 1 from public.journal_entry where company_id = e and source_type = 'payroll' and source_id = (select v::uuid from _p where clave = 'dic')) then
+    raise exception 'PRUEBA S01 NÓMINAS · 1: sin tipo de trabajo, al llegar se propuso.';
+  end if;
+  x := public.conta_proponer_nominas(e, '2026-12-01', '2026-12-31', 'Prueba');
   if (x->>'propuestas')::int <> 0 or x->'sinPropuesta'->0->>'porque' <> 'Falta el tipo de retención de trabajo en Tablas › Retenciones.'
-     or x->'sinPropuesta'->0->>'que' <> 'Nóminas de 09/2026' then
+     or x->'sinPropuesta'->0->>'que' <> 'Nóminas de 12/2026' then
     raise exception 'PRUEBA S01 NÓMINAS · 1: sin tipo de trabajo dio %.', x;
   end if;
-  if (select porque || ' · ' || donde from public.conta_propuesta_pendiente where company_id = e and origen = 'payroll' and origen_id = (select v from _p where clave = 'sept'))
+  if (select porque || ' · ' || donde from public.conta_propuesta_pendiente where company_id = e and origen = 'payroll' and origen_id = (select v from _p where clave = 'dic'))
      <> 'Falta el tipo de retención de trabajo en Tablas › Retenciones. · Contabilidad › Asientos' then
     raise exception 'PRUEBA S01 NÓMINAS · 1: el «no he podido» no quedó apuntado (o el administrador no lo lee).';
   end if;
@@ -90,15 +99,15 @@ reset role;
 
 -- ── 2 · Con él: se propone, sin validar ─────────────────────────────────────
 insert into public.withholding_rate (code, name, rate, filed_in, valid_from, is_system)
-values ('trabajo', 'Rendimientos del trabajo (prueba S01)', 15, '111', '2026-01-01', true) returning id as ret_trabajo \gset
+values ('trabajo', 'Rendimientos del trabajo (prueba S01)', 15, '111', '2026-01-01', true);
 set local role authenticated;
 do $$
-declare e uuid := (select v::uuid from _p where clave = 'empresa'); x jsonb; ent uuid; je public.journal_entry;
+declare e uuid := (select v::uuid from _p where clave = 'empresa'); x jsonb; je public.journal_entry;
 begin
-  x := public.conta_proponer_nominas(e, '2026-09-01', '2026-09-30', 'Prueba');
+  x := public.conta_proponer_nominas(e, '2026-12-01', '2026-12-31', 'Prueba');
   if (x->>'propuestas')::int <> 1 or jsonb_array_length(x->'sinPropuesta') <> 0 then raise exception 'PRUEBA S01 NÓMINAS · 2: con el tipo dio %.', x; end if;
-  select * into je from public.journal_entry where company_id = e and source_type = 'payroll' and source_id = (select v::uuid from _p where clave = 'sept');
-  if je.status <> 'propuesto' or je.entry_date <> '2026-09-30' or je.series <> 9 or je.concept <> 'Nóminas de 09/2026' or je.confidence <> 'seguro' then
+  select * into je from public.journal_entry where company_id = e and source_type = 'payroll' and source_id = (select v::uuid from _p where clave = 'dic');
+  if je.status <> 'propuesto' or je.entry_date <> '2026-12-31' or je.series <> 9 or je.concept <> 'Nóminas de 12/2026' or je.confidence <> 'seguro' then
     raise exception 'PRUEBA S01 NÓMINAS · 2: el asiento es % del % (serie %, «%», %).', je.status, je.entry_date, je.series, je.concept, je.confidence;
   end if;
   if pg_temp.lineas(je.id) <> '64000000 4200.00/0.00 · 64200000 1340.00/0.00 · 47600000 0.00/1608.80 · 47510000 0.00/420.00 · 46500000 0.00/3511.20' then
@@ -110,7 +119,7 @@ begin
   if exists (select 1 from public.conta_propuesta_pendiente where company_id = e and origen = 'payroll') then
     raise exception 'PRUEBA S01 NÓMINAS · 2: el «no he podido» sigue ahí después de proponerla.';
   end if;
-  x := public.conta_proponer_nominas(e, '2026-09-01', '2026-09-30', 'Prueba');
+  x := public.conta_proponer_nominas(e, '2026-12-01', '2026-12-31', 'Prueba');
   if (x->>'propuestas')::int <> 0 or (x->>'yaEstaban')::int <> 1 then raise exception 'PRUEBA S01 NÓMINAS · 2: otra vez dio %.', x; end if;
   raise notice '2 · con el tipo de trabajo: %, propuesta (sin validar); otra vez, ya estaba', pg_temp.lineas(je.id);
 end $$;
@@ -120,7 +129,7 @@ reset role;
 set local role service_role;
 do $$
 declare e uuid := (select v::uuid from _p where clave = 'empresa'); a uuid := (select v::uuid from _p where clave = 'cuenta');
-        l1 uuid := (select location_id from public.payroll_summary where id = (select v::uuid from _p where clave = 'sept')); oct uuid; nov uuid;
+        l1 uuid := (select v::uuid from _p where clave = 'local'); oct uuid; nov uuid;
 begin
   insert into public.payroll_summary (account_id, company_id, period_month, location_id, gross, employer_ss, employee_ss, irpf, other_deductions, net, employees_count, created_by_name)
   values (a, e, '2026-10-01', l1, 4300.00, 1370.00, 275.20, 430.00, 0, 3594.80, 3, 'Prueba S01') returning id into oct;
