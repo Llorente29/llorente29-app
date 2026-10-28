@@ -8,7 +8,8 @@ import { mkdtempSync, mkdirSync, readFileSync, readdirSync, utimesSync, writeFil
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { carpetasDe, despuesDe, duenoDeLaRama, frenteDeLaRama, repartir } from '../../scripts/conta/capturas.mjs'
+import { capturasAjenas, carpetasDe, despuesDe, duenoDeLaRama, frenteDeLaRama, repartir } from '../../scripts/conta/capturas.mjs'
+import { zonasDuenas, zonasTocadas } from '../../scripts/e2e/area.mjs'
 
 const WF = readFileSync('.github/workflows/e2e-staging-conta.yml', 'utf8')
 const RAMAS = readFileSync('tests/conta/fixtures/ramas-20261015.txt', 'utf8').split('\n').filter(Boolean)
@@ -174,5 +175,66 @@ describe('fijar en una rama sin frente (C10, 23/10)', () => {
     const out = execFileSync('node', ['scripts/conta/capturas.mjs', 'fijar', 'conta/c08b-catalogo-perdido'],
       { encoding: 'utf8', env: { ...process.env, CAPTURAS_CAMBIADOS: '' } })
     expect(out).toContain('no hay capturas que fijar (se salta)')
+  })
+})
+
+// W08 (Julio, 28/10): el dueño de las capturas sale de lo que la rama ES, no de
+// los vecinos de la zona. Tres PR de Laboral (#350, #354 y #370) solo tocaban el
+// portal del trabajador, la zona los hizo dueños de inventario y el bot fijó sus
+// PNG: «Action required» y conflictos binarios con main. Contra los cinco PR
+// reales que tocaron la zona (fixture: git show --name-only de su squash).
+describe('W08 · las capturas, solo de su frente', () => {
+  const PRS = JSON.parse(readFileSync('tests/conta/fixtures/prs-zona-inventario-20261028.json', 'utf8')).prs as { pr: number, ficheros: string[] }[]
+  const pr = (n: number) => PRS.find((p) => p.pr === n)!.ficheros
+  const sinCapturas = (fs: string[]) => fs.filter((f) => !f.startsWith('docs/inventario/capturas/'))
+
+  it('una rama que solo toca el portal (src/pages/trabajador/) no fija inventario: el #370', () => {
+    const portal = sinCapturas(pr(370)).filter((f) => f.startsWith('src/pages/trabajador/'))
+    expect(portal).toEqual(['src/pages/trabajador/AvisosDelRegistro.tsx', 'src/pages/trabajador/TrabajadorApp.tsx'])
+    expect(duenoDeLaRama('claude/l1a-pr2-correcciones-e-informe', sinCapturas(pr(370)))).toBeNull()
+    // Pero la e2e de inventario sigue corriendo: el portal es la puerta del autoconteo.
+    expect(zonasTocadas(portal).map((z) => z.zona)).toEqual(['inventario'])
+    expect(zonasDuenas(portal)).toEqual([])
+  })
+
+  it('una rama de inventario sí los fija: el #372 (y el #362, que cambió autoinventoryService.ts)', () => {
+    expect(duenoDeLaRama('claude/autoconteo-hora', sinCapturas(pr(372)))).toBe('inventario')
+    expect(duenoDeLaRama('claude/l1a-pr1', sinCapturas(pr(362)))).toBe('inventario')
+    expect(duenoDeLaRama('claude/x', ['src/pages/trabajador/MiAutoinventario.tsx'])).toBe('inventario')
+  })
+
+  it('los cinco PR reales: la comprobación habría parado los tres de Laboral, nombrando cada PNG, y deja pasar los dos de inventario', () => {
+    const veredicto = Object.fromEntries(PRS.map((p) => [p.pr, capturasAjenas('claude/rama', p.ficheros)]))
+    expect(veredicto[370].ajenas).toEqual([
+      'docs/inventario/capturas/e2e-conteo-aplicado-movil.png', 'docs/inventario/capturas/e2e-conteo-aplicado.png',
+      'docs/inventario/capturas/e2e-tablet-aplicado-movil.png', 'docs/inventario/capturas/e2e-tablet-aplicado.png',
+    ])
+    expect(veredicto[350].ajenas).toHaveLength(4)
+    expect(veredicto[354].ajenas).toHaveLength(6)
+    expect(veredicto[372]).toEqual({ dueno: 'inventario', ajenas: [] })
+    expect(veredicto[362]).toEqual({ dueno: 'inventario', ajenas: [] })
+  })
+
+  it('las capturas que cambia la propia rama no la hacen dueña de nada', () => {
+    expect(duenoDeLaRama('claude/x', ['docs/inventario/capturas/e2e-aviso.png'])).toBeNull()
+    expect(capturasAjenas('claude/x', ['docs/inventario/capturas/e2e-aviso.png']).ajenas).toEqual(['docs/inventario/capturas/e2e-aviso.png'])
+  })
+
+  it('comprobar falla con 1 y dice cuáles, y en una rama de inventario pasa', async () => {
+    const { spawnSync } = await import('node:child_process')
+    const correr = (ficheros: string[]) => spawnSync('node', ['scripts/conta/capturas.mjs', 'comprobar', 'claude/rama'],
+      { encoding: 'utf8', env: { ...process.env, GITHUB_ACTIONS: '', CAPTURAS_CAMBIADOS: ficheros.join(',') } })
+    const mal = correr(pr(370))
+    expect(mal.status).toBe(1)
+    expect(mal.stderr).toContain('trae 4 capturas que no son de su frente')
+    expect(mal.stderr).toContain('· docs/inventario/capturas/e2e-tablet-aplicado-movil.png')
+    const bien = correr(pr(372))
+    expect(bien.status).toBe(0)
+    expect(bien.stdout).toContain('todas de su frente (inventario)')
+  })
+
+  it('pr-a-main.yml lo comprueba en cada PR, sobre su diff', () => {
+    const wf = readFileSync('.github/workflows/pr-a-main.yml', 'utf8')
+    expect(wf).toContain('node scripts/conta/capturas.mjs revisar "$RAMA" "$BASE" "$HEAD"')
   })
 })
