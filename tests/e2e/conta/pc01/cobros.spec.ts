@@ -35,6 +35,14 @@
 //   5. (E4) «Recordatorios»: los días, los últimos, apagar a un cliente y
 //      mandarte una prueba.
 //   6. (E4) Ajustes › Cobros: los días en palabras, lo que no vale, guardar.
+//   7. (S01) Ajustes › Cobros: el TPV del banco (Redsys): sin datos, «Falta el
+//      número de comercio»; lo que no vale; «Guardar cambios» lo dice y queda
+//      «En pruebas». La clave no vuelve a la pantalla.
+//   8. (S01) Cobrados: «Cobrado · pendiente del abono» y «Cobrado · abonado el».
+//   9. (S01) La página de pago con el TPV: dónde se paga, y «Pagar» manda el
+//      formulario firmado a Redsys (sis-t, simulado).
+//   (conta_cobro_redsys_leer, conta-redsys y conta_cobros_abonos, de la 2030,
+//   simulados con su forma: staging no los tiene hasta la tanda.)
 // Las capturas, al lado de su tablero (docs/conta/pc01/tableros), en el artefacto.
 
 import { readFileSync } from 'node:fs'
@@ -163,6 +171,19 @@ async function simular(page: Page, ficha: 'preparada' | 'plazo' = 'preparada'): 
   await page.route(/\/rest\/v1\/rpc\/conta_enlaces_pago_resumen(\?|$)/, (r) => json(r, [{ id: 'f-eventos', aperturas: 2, abierto: new Date().toISOString() }]))
   await page.route(/\/functions\/v1\/conta-stripe(\?|$)/, apuntar('stripe', () => ({ ok: true, url: 'https://stripe-prueba.example/alta', texto: 'Te llevo al alta de Stripe.' })))
   await page.route('https://stripe-prueba.example/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Alta de Stripe (simulada)</title><h1>Alta de Stripe (simulada)</h1>' }))
+  // S01 · El TPV del banco (la 2030): sin datos hasta que se guardan; después, en pruebas.
+  let tpv: Record<string, unknown> | null = null
+  await page.route(/\/rest\/v1\/rpc\/conta_cobro_redsys_leer(\?|$)/, (r) => json(r, tpv))
+  await page.route(/\/functions\/v1\/conta-redsys(\?|$)/, (r) => {
+    llamadas.push({ f: 'redsys', cuerpo: r.request().postDataJSON() })
+    tpv = { estado: 'pruebas', comercio: '999008881', terminal: '1', con_clave: true, bizum: false, en_enlace: true, modo: 'prueba', cobra: true, proveedor_enlace: 'redsys',
+      cambiado: { at: new Date().toISOString(), por: 'Ana Prueba' } }
+    return json(r, { ok: true, texto: 'Guardado. Redsys en pruebas, comercio 999008881.', estado: 'pruebas', proveedor: 'redsys' })
+  })
+  await page.route(/\/rest\/v1\/rpc\/conta_cobros_abonos(\?|$)/, (r) => json(r, [
+    { id: 'f-tarjeta-1', proveedor: 'stripe', cobrado: dia(-3), abonado: null },
+    { id: 'f-tarjeta-2', proveedor: 'redsys', cobrado: dia(-6), abonado: dia(-4) },
+  ]))
   return llamadas
 }
 
@@ -409,3 +430,96 @@ test('La página de pago, sin cuenta: la factura, lo pendiente, tarjeta y Bizum;
   expect(errores).toEqual([])
 })
 
+
+// ── S01 · PR 1 · El TPV del banco (Redsys) y el abono ──────────────────────
+
+test('Ajustes › Cobros: el TPV del banco, sin datos; lo que no vale; «Guardar cambios» lo dice y queda en pruebas', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page)
+  await page.goto('/conta/ajustes/cobros')
+  const tpv = page.locator('[data-prueba="ajustes-cobros"] [data-prueba="redsys"]')
+  await expect(tpv.getByRole('list', { name: 'Tu TPV' }).getByRole('listitem')).toHaveText(/Tarjeta con tu banco\s*Falta el número de comercio/, { timeout: 30_000 })
+  await expect(tpv).toContainText('Sumied guarda la clave en su caja fuerte y no la vuelve a enseñar.')
+
+  await tpv.getByRole('textbox', { name: 'Número de comercio' }).fill('99900888')
+  await expect(tpv).toContainText('El número de comercio son 9 cifras.')
+  await tpv.getByRole('textbox', { name: 'Número de comercio' }).fill('999 008 881')
+  await tpv.getByLabel('Clave del comercio', { exact: true }).fill('corta')
+  await expect(tpv).toContainText('La clave son 32 letras y números')
+  await tpv.getByLabel('Clave del comercio', { exact: true }).fill('sq7HjrUOBfKmC576ILgskD5srU870gJ7')
+  await tpv.getByLabel('¿Tu banco tiene Bizum en el TPV?').selectOption('si')
+  const barra = tpv.getByRole('region', { name: 'Cambios sin guardar' })
+  await expect(barra).toContainText('3 cambios sin guardar')
+  expect(await tpv.innerText()).not.toContain('sq7HjrUOBfKmC576ILgskD5srU870gJ7')
+  expect(await tpv.innerText()).not.toMatch(/\b(webhook|HMAC|cuenta puente|Vault|FUC|3DES)\b/i)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/ajustes-redsys-${lado(page)}.png`, fullPage: true })
+
+  await barra.getByRole('button', { name: /Guardar cambios/ }).click()
+  // El aviso por su texto, no «el primer status» (la barra de cambios también es
+  // uno). Si no sale, el fallo dice lo que enseña el TPV en ese momento.
+  await expect(tpv.getByRole('status').filter({ hasText: /^Guardado\./ })).toHaveText('Guardado. Redsys en pruebas, comercio 999008881.')
+    .catch(async (e: Error) => {
+      const enseña = (await tpv.innerText().catch(() => '(el TPV ya no está en la pantalla)')).replace(/\s+/g, ' ').trim()
+      throw new Error(`Al guardar no sale «Guardado» en el TPV. Enseña: «${enseña}».\n${e.message}`)
+    })
+  expect(llamadas.find((l) => l.f === 'redsys')!.cuerpo).toEqual({ empresa: expect.any(String), comercio: '999008881', terminal: '1',
+    clave: 'sq7HjrUOBfKmC576ILgskD5srU870gJ7', bizum: true, en_enlace: true, quien: null })
+  await expect(tpv.getByRole('list', { name: 'Tu TPV' }).getByRole('listitem')).toHaveText(/Tarjeta con tu banco\s*En pruebas/)
+  await expect(tpv).toContainText('En pruebas: los pagos van al entorno de pruebas de Redsys y no mueven dinero.')
+  await expect(tpv.getByLabel('Clave del comercio', { exact: true })).toHaveValue('')
+  await expect(tpv.getByLabel('Clave del comercio', { exact: true })).toHaveAttribute('placeholder', '•••••••• (guardada)')
+  await page.screenshot({ path: `${DIR}/ajustes-redsys-guardado-${lado(page)}.png`, fullPage: true })
+  expect(errores).toEqual([])
+})
+
+test('Cobrados: «Cobrado · pendiente del abono» hasta que Bancos casa el abono, y «Cobrado · abonado el»', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  await simular(page)
+  const cobradas = [
+    fila({ id: 'f-tarjeta-1', party_id: 'c-eventos', cliente: 'Eventos Catering Prueba SL', numero: 'F-2026/0091', total: 121, cobrado: 121, pendiente: 0, estado: 'cobrada', forma: 'card', con_mandato: false, mandato: null }),
+    fila({ id: 'f-tarjeta-2', party_id: 'c-ghost', cliente: 'Ghost Kitchens Prueba SL', numero: 'A-2026/0015', total: 242, cobrado: 242, pendiente: 0, estado: 'cobrada', forma: 'card', con_mandato: false, mandato: null }),
+  ]
+  await page.route(/\/rest\/v1\/rpc\/conta_cobros_lista(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    filas: [...FILAS, ...cobradas], cobrado_mes: 31240.55, cobradas_mes: 218, remesas: 9,
+    sin_mandato: [{ id: 'c-bar', nombre: 'Bar La Esquina Prueba', facturas: 1, pendiente: 385, correo: null, enviado: null }],
+  }) }))
+  await page.goto('/conta/ventas/cobros?pestana=cobrados')
+  await expect(page.getByRole('heading', { level: 1, name: 'Cobros' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Cobrado · pendiente del abono').first()).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText(`Cobrado · abonado el ${ddmm(dia(-4))}`).first()).toBeVisible()
+  await alLado(page, 'cobrados-abono', 'cobros-1')
+  expect(errores).toEqual([])
+})
+
+test('La página de pago con el TPV del banco: dónde se paga, y «Pagar» manda el formulario firmado a Redsys', async ({ page }) => {
+  test.setTimeout(60_000)
+  const errores = vigilar(page)
+  const ver = { estado: 'abierto', empresa: 'Foodint Prueba SL', color: '#1E63C9', factura: 'F-2026/0089', fecha: dia(-20), vence: dia(19), total: 780.5, pendiente: 780.5,
+    metodos: ['tarjeta'], proveedor: 'redsys', pagado: null }
+  const campos = { Ds_SignatureVersion: 'HMAC_SHA256_V1', Ds_MerchantParameters: 'eyJEU19NRVJDSEFOVF9PUkRFUiI6IjI2MTAyNzIxNDc5MyJ9', Ds_Signature: 'firma-de-prueba=' }
+  let enviado = ''
+  await page.route(/\/rest\/v1\/rpc\/conta_enlace_pago_ver(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(ver) }))
+  await page.route(/\/functions\/v1\/conta-pago(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify({ ok: true, redsys: { url: 'https://sis-t.redsys.es:25443/sis/realizarPago', campos } }) }))
+  await page.route('https://sis-t.redsys.es:25443/**', (r) => { enviado = r.request().postData() ?? ''
+    return r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>TPV de pruebas (simulado)</title><h1>TPV de pruebas (simulado)</h1>' }) })
+  await page.goto(`/pagar.html?t=${TOKEN}`)
+  await expect(page.getByRole('heading', { level: 1, name: 'Pagar la factura' })).toBeVisible({ timeout: 30_000 })
+  await expect(page.getByText('Pagas en la página segura del banco (Redsys), con tarjeta.')).toBeVisible()
+  expect(await page.locator('main').innerText()).not.toMatch(TECNICAS)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/pagar-redsys-${lado(page)}.png`, fullPage: true })
+  await page.getByRole('button', { name: 'Pagar 780,50 €' }).click()
+  await expect(page.getByRole('heading', { name: 'TPV de pruebas (simulado)' })).toBeVisible({ timeout: 30_000 })
+  expect(Object.fromEntries(new URLSearchParams(enviado))).toEqual(campos)
+
+  // A la vuelta, lo confirma el banco.
+  await page.goto(`/pagar.html?t=${TOKEN}&vuelta=ok`)
+  await expect(page.getByRole('status')).toHaveText('Pago recibido: el banco lo está confirmando. Si has pagado con Bizum, termina de aceptarlo en el móvil. No hace falta que hagas nada más.')
+  expect(errores).toEqual([])
+})

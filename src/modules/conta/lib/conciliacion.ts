@@ -23,6 +23,14 @@
 // impuestos (303/111/115), comisiones del banco (626), reglas y lo aprendido
 // por contraparte.
 //
+// S01 · El ABONO DE STRIPE O DEL TPV (Redsys): el neto de uno o varios cobros
+// por el enlace de pago, menos su comisión. Se casa con esos cobros
+// (abonoDePasarela): «seguro» solo si el banco nombra a Stripe y el neto
+// cuadra al céntimo con lo que Stripe dijo de cada cobro; el del TPV, como el
+// banco no dice la comisión, siempre para confirmar. El asiento: el banco por
+// el neto y la 626 por la comisión, contra la cuenta de la pasarela («Stripe ·
+// por abonar»), donde quedó cada cobro el día que el cliente pagó.
+//
 // NADA SE CASA DOS VECES: `conciliar` recorre los movimientos en orden y cada
 // candidato (lo que queda de una factura, una liquidación, el otro lado de un
 // traspaso, un asiento traído) se gasta al usarse.
@@ -78,6 +86,18 @@ export function facturasQueCobra(c: Pick<Cliente, 'facturas'>, imp: number): { i
   if (fs.length > 1 && fs.reduce((t, f) => t + f.pendienteCent, 0) === imp) return fs.map((f) => ({ id: f.id, importe: f.pendienteCent / 100, numero: f.numero }))
   return []
 }
+/**
+ * S01 · Un cobro por el enlace de pago que espera su abono en el banco
+ * (conta_abonos_pasarela_pendientes). Stripe da su neto y su comisión con el
+ * cobro; el TPV (Redsys), no: la comisión sale al casar el abono. `cuenta` es
+ * la de la pasarela («Stripe · por abonar»); `conAsiento`, si el cobro ya hizo
+ * su asiento (sin él, en la pasarela no hay nada que saldar).
+ */
+export interface CobroPasarela {
+  id: string; proveedor: 'stripe' | 'redsys'; fecha: string; brutoCent: number; netoCent: number | null; comisionCent: number | null
+  factura: string | null; cliente: string; cuenta: string | null; conAsiento: boolean
+}
+
 export interface Liquidacion {
   id: string; plataforma: string; fecha: string; desde: string | null; hasta: string | null; netoCent: number; cuenta430: string; terceroId: string | null
   /**
@@ -147,10 +167,12 @@ export interface Contexto {
    */
   cuentaDiferenciaGasto?: string
   cuentaDiferenciaIngreso?: string
+  /** S01 · Los cobros por el enlace de pago (Stripe y TPV) que esperan su abono. */
+  cobrosPasarela?: CobroPasarela[]
 }
 
 /** De dónde sale la propuesta: la píldora de la fila (N17b). */
-export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo'
+export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo' | 'pasarela'
 
 /** El destino tal y como lo recibe bank_casar (20261101T0110). */
 export type Destino =
@@ -160,6 +182,14 @@ export type Destino =
       diferencia?: { cuenta: string; importe: number; concepto: string } }
   | { tipo: 'liquidacion'; liquidacion_id: string; cuenta_cliente: string; tercero_id: string | null; concepto: string }
   | { tipo: 'traspaso'; otro_movimiento_id: string; concepto: string }
+  /**
+   * S01 · El abono de Stripe o del TPV: no va a bank_casar directamente, sino a
+   * conta_abono_pasarela_casar (bancosNucleo), que hace el asiento (572 por el
+   * neto, 626 por la comisión, contra la cuenta de la pasarela) y lo casa.
+   */
+  | { tipo: 'abono_pasarela'; proveedor: 'stripe' | 'redsys'; cobros: string[]; comision: number; cuenta_comision: string
+      /** La cuenta de la pasarela y lo cobrado (bruto) que se salda en ella. */
+      cuenta_pasarela: string; cobrado: number; concepto: string }
   | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string }[];
       /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
       facturas?: { id: string; importe: number }[];
@@ -233,8 +263,8 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 /** Lo que va quedando de cada candidato mientras se recorre un lote: nada se casa dos veces. */
-interface Gastado { facturas: Map<string, number>; liquidaciones: Set<string>; movimientos: Set<string>; asientos: Set<string>; saldos: Map<string, number>; pendiente430: Map<string, number> }
-const nuevoGastado = (): Gastado => ({ facturas: new Map(), liquidaciones: new Set(), movimientos: new Set(), asientos: new Set(), saldos: new Map(), pendiente430: new Map() })
+interface Gastado { facturas: Map<string, number>; liquidaciones: Set<string>; movimientos: Set<string>; asientos: Set<string>; saldos: Map<string, number>; pendiente430: Map<string, number>; pasarela: Set<string> }
+const nuevoGastado = (): Gastado => ({ facturas: new Map(), liquidaciones: new Set(), movimientos: new Set(), asientos: new Set(), saldos: new Map(), pendiente430: new Map(), pasarela: new Set() })
 
 function base(m: Movimiento): Omit<Decision, 'confianza' | 'que' | 'porque' | 'destino'> {
   return { movimientoId: m.id, falta: null, antesDelCorteSinPareja: false, pideTicket: false, reglaId: null, contraparte: contraparteDe(m), otroLadoDe: null, tarjetaId: null,
@@ -255,7 +285,8 @@ function conOrigen(d: Decision): Decision {
   if (d.origen) return d
   const t = d.destino?.tipo ?? d.alternativas[0]?.destino.tipo
   const origen: Origen | null = d.reglaId ? 'regla' : t === 'factura_recibida' ? 'factura' : t === 'traspaso' ? 'traspaso' : t === 'liquidacion' ? 'liquidacion'
-    : t === 'asiento' ? 'libro' : t === 'contrato' ? 'contrato' : t === 'anticipo' ? 'anticipo' : t === 'factura_emitida' ? 'cliente' : null
+    : t === 'asiento' ? 'libro' : t === 'contrato' ? 'contrato' : t === 'anticipo' ? 'anticipo' : t === 'factura_emitida' ? 'cliente'
+    : t === 'abono_pasarela' ? 'pasarela' : null
   return { ...d, origen }
 }
 
@@ -310,6 +341,86 @@ export function cuentaDeTienda(t: { cuentaId: string | null; localId: string | n
   if (t.cuentaId) return t.cuentaId
   const xs = t.localId ? bancos.filter((b) => b.localId === t.localId) : []
   return xs.length === 1 ? xs[0].id : null
+}
+
+/** ¿El banco nombra a Stripe? ¿Y al TPV del banco (Redsys)? */
+export const nombraStripe = (texto: string) => /\bSTRIPE\b/.test(normal(texto))
+export const nombraTpv = (texto: string) => /\b(REDSYS|TPV|TPVV|DATAFONO|COMERCIO ELECTRONICO)\b/.test(normal(texto))
+
+/** La comisión más alta que se acepta en un abono del TPV, sobre lo cobrado (el banco no la dice). */
+export const COMISION_TPV_MAXIMA = 0.03
+
+export interface AbonoPasarela {
+  proveedor: 'stripe' | 'redsys'
+  cobros: CobroPasarela[]
+  brutoCent: number
+  comisionCent: number
+  confianza: Confianza
+  /** «Abono de Stripe del 03/11 al 05/11 · 3 cobros». */
+  que: string
+  /** «Abono de Stripe del 3 al 5/11: 3 cobros, 120,00 € menos 1,80 € de comisión.» y por qué cuadra. */
+  porque: string
+}
+
+/** «del 05/11» o «del 03/11 al 05/11». */
+function periodoDe(cobros: readonly CobroPasarela[]): string {
+  const desde = cobros[0].fecha, hasta = cobros[cobros.length - 1].fecha
+  return desde === hasta ? `del ${ddmm(desde)}` : `del ${ddmm(desde)} al ${ddmm(hasta)}`
+}
+
+/**
+ * S01 · ¿Es este ingreso el abono de Stripe o del TPV? Busca, entre los cobros
+ * por el enlace que esperan su abono (cobrados ese día o en los 31 anteriores,
+ * sin gastar), un tramo SEGUIDO en el tiempo que cuadre:
+ *   · Stripe: la suma de sus netos es exactamente el ingreso. Si el banco nombra
+ *     a Stripe y el tramo es único, «seguro»; si no, para confirmar.
+ *   · TPV (Redsys): el banco tiene que nombrar al TPV, y lo cobrado menos el
+ *     ingreso (la comisión) va de 0 al 3 %. Siempre para confirmar: el banco no
+ *     dice la comisión. Si hay varios tramos, el de menos comisión.
+ * Puro: no gasta nada (lo hace quien lo llama). Null si nada cuadra.
+ */
+export function abonoDePasarela(m: Movimiento, cobros: readonly CobroPasarela[], usados: ReadonlySet<string> = new Set()): AbonoPasarela | null {
+  const imp = m.importeCent
+  if (imp <= 0 || m.antesDelCorte) return null
+  const txt = textoDe(m)
+  const tramos = (prov: 'stripe' | 'redsys') => {
+    const xs = cobros.filter((c) => c.proveedor === prov && !usados.has(c.id) && c.fecha <= m.fecha && dias(c.fecha, m.fecha) <= 31)
+      .sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id.localeCompare(b.id))
+    const out: CobroPasarela[][] = []
+    for (let i = 0; i < xs.length; i++) {
+      for (let j = i; j < xs.length; j++) out.push(xs.slice(i, j + 1))
+    }
+    return out
+  }
+  const suma = (xs: readonly CobroPasarela[], f: (c: CobroPasarela) => number) => xs.reduce((t, c) => t + f(c), 0)
+  const frase = (prov: 'stripe' | 'redsys', xs: CobroPasarela[], comision: number) =>
+    `Abono ${prov === 'stripe' ? 'de Stripe' : 'del TPV'} ${periodoDe(xs)}: ${xs.length} ${xs.length === 1 ? 'cobro' : 'cobros'}, ${eurosCent(suma(xs, (c) => c.brutoCent))} menos ${eurosCent(comision)} de comisión.`
+
+  // Stripe: el neto exacto de cada cobro.
+  const deStripe = tramos('stripe').filter((xs) => xs.every((c) => c.netoCent !== null) && suma(xs, (c) => c.netoCent!) === imp)
+  if (deStripe.length) {
+    const xs = deStripe.sort((a, b) => b[b.length - 1].fecha.localeCompare(a[a.length - 1].fecha) || a.length - b.length)[0]
+    const bruto = suma(xs, (c) => c.brutoCent), comision = bruto - imp
+    const nombra = nombraStripe(txt)
+    const seguro = nombra && deStripe.length === 1
+    return { proveedor: 'stripe', cobros: xs, brutoCent: bruto, comisionCent: comision, confianza: seguro ? 'seguro' : 'probable',
+      que: `Abono de Stripe ${periodoDe(xs)} · ${xs.length} ${xs.length === 1 ? 'cobro' : 'cobros'}`,
+      porque: `${frase('stripe', xs, comision)} ` + (seguro ? 'Cuadra al céntimo con lo que Stripe dijo de cada cobro.'
+        : !nombra ? 'Cuadra al céntimo con lo que Stripe dijo de cada cobro, pero el banco no nombra a Stripe: confírmalo.'
+        : `Cuadra al céntimo, pero hay ${deStripe.length} formas de juntar los cobros que dan lo mismo: confirma que son estos.`) }
+  }
+
+  // TPV: el banco lo nombra y la comisión es pequeña.
+  if (!nombraTpv(txt)) return null
+  const delTpv = tramos('redsys').map((xs) => ({ xs, bruto: suma(xs, (c) => c.brutoCent) }))
+    .filter(({ bruto }) => bruto >= imp && bruto - imp <= Math.round(bruto * COMISION_TPV_MAXIMA))
+    .sort((a, b) => (a.bruto - imp) - (b.bruto - imp) || b.xs[b.xs.length - 1].fecha.localeCompare(a.xs[a.xs.length - 1].fecha))
+  if (!delTpv.length) return null
+  const { xs, bruto } = delTpv[0]
+  const comision = bruto - imp
+  return { proveedor: 'redsys', cobros: xs, brutoCent: bruto, comisionCent: comision, confianza: 'probable',
+    que: `Abono del TPV ${periodoDe(xs)} · ${xs.length} ${xs.length === 1 ? 'cobro' : 'cobros'}`,
+    porque: `${frase('redsys', xs, comision)} El banco no dice la comisión: sale de lo cobrado menos lo abonado. Confírmalo.` }
 }
 
 /** ¿Es un pago con tarjeta? (concepto común 12 de la AEB, o lo dice el concepto) */
@@ -416,6 +527,22 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
       return { ...b, confianza: 'probable', origen: 'traspaso', contraparte: null, que: `Traspaso ${sentido} otra cuenta tuya`,
         porque: `${nombraEmpresa ? 'Lo manda tu propia empresa' : 'El banco lo llama traspaso'}, pero no dice de qué cuenta: elige ${otras.map(etiqueta).join(' o ')}.`,
         destino: null, alternativas: otras.map((c) => ({ etiqueta: `${entra ? 'Desde' : 'A'} ${etiqueta(c)}`, destino: destinoDe(c) })) }
+    }
+  }
+
+  // ── 2b · S01 · Abono de Stripe o del TPV ─────────────────────────────────
+  if (entra && ctx.cobrosPasarela?.length) {
+    const a = abonoDePasarela(m, ctx.cobrosPasarela, g.pasarela)
+    if (a) {
+      const sinAsiento = a.cobros.find((c) => !c.conAsiento || !c.cuenta)
+      if (sinAsiento) {
+        return { ...b, confianza: 'duda', origen: 'pasarela', contraparte: null, que: a.que, falta: `el asiento del cobro de la ${sinAsiento.factura ?? 'factura'} (${sinAsiento.cliente})`,
+          porque: `${a.porque} Pero el cobro de la ${sinAsiento.factura ?? 'factura'} aún no tiene su asiento, y sin él no hay nada por abonar que saldar: mira el historial de la factura.`, destino: null }
+      }
+      for (const c of a.cobros) g.pasarela.add(c.id)
+      return { ...b, confianza: a.confianza, origen: 'pasarela', contraparte: null, que: a.que, porque: a.porque,
+        destino: { tipo: 'abono_pasarela', proveedor: a.proveedor, cobros: a.cobros.map((c) => c.id), comision: euros(a.comisionCent),
+          cuenta_comision: ctx.cuentas626, cuenta_pasarela: a.cobros[0].cuenta!, cobrado: euros(a.brutoCent), concepto: a.que } }
     }
   }
 

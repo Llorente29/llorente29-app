@@ -159,6 +159,16 @@ verify_jwt = false
 [functions.conta-stripe-webhook]
 verify_jwt = false
 
+# S01 · conta-redsys: guardar el TPV virtual (Redsys) de una empresa; la llama
+# Ajustes › Cobros con la sesión de quien pulsa (verify_jwt = true).
+[functions.conta-redsys]
+verify_jwt = true
+
+# S01 · conta-redsys-aviso: el aviso del banco cuando un cliente paga con el
+# TPV. verify_jwt = false: lo llama Redsys; la seguridad la da su firma.
+[functions.conta-redsys-aviso]
+verify_jwt = false
+
 # C07 (22/10): el servidor manda a Diez lo que se queda atrás. La despierta el
 # cron conta-diez-despertar con x-cron-secret (CRON_SECRET), sin sesión.
 [functions.conta-diez-cola]

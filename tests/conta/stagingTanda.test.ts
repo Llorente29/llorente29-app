@@ -46,6 +46,26 @@ describe('qué se puede ensayar en ROLLBACK', () => {
     expect(porQueNoSeEnsaya('do $$ begin perform 1; end $$;\ncreate function f() returns int language plpgsql as $f$ begin return 1; end; $f$;\n')).toBeNull()
     expect(porQueNoSeEnsaya("select 'commit;';\n-- commit;\n")).toBeNull()
   })
+  it('volver a un savepoint no cierra la transacción: se ensaya; un ROLLBACK a secas en medio sigue parando (S01, 28/10)', () => {
+    expect(porQueNoSeEnsaya('begin;\nsavepoint x;\nselect 1;\nrollback to savepoint x;\nselect 2;\nrollback;\n')).toBeNull()
+    expect(porQueNoSeEnsaya('begin;\nsavepoint x;\nselect 1;\nrollback to x;\nselect 2;\nrollback;\n')).toBeNull()
+    expect(porQueNoSeEnsaya('begin;\nsavepoint x;\nROLLBACK WORK TO SAVEPOINT x;\nselect 2;\nrollback;\n')).toBeNull()
+    expect(porQueNoSeEnsaya('begin;\nselect 1;\nrollback;\nselect 2;\nrollback;\n')).toMatch(/ROLLBACK que no es su última sentencia/)
+    expect(porQueNoSeEnsaya('begin;\nselect 1;\nrollback work;\nselect 2;\n')).toMatch(/ROLLBACK/)
+    expect(porQueNoSeEnsaya('begin;\nselect 1;\nrollback transaction;\nselect 2;\n')).toMatch(/ROLLBACK/)
+    expect(porQueNoSeEnsaya(readFileSync('supabase/staging/sql/20261027_s01_redsys_y_abono_prueba.sql', 'utf8'))).toBeNull()
+  })
+  it('lo que se llama al aplicar: la función de un DO o de un select, no el cuerpo de las que define, ni una tabla ni una política (S01, 28/10)', () => {
+    expect(llamadasAlAplicar("do $$ declare x jsonb; begin x := public._s01_asiento_cobro(r.id, 'stripe'); end $$;")).toEqual(['public._s01_asiento_cobro()'])
+    expect(llamadasAlAplicar("select public._respaldar_funcion('public.f(uuid)', 'm');")).toEqual(['public._respaldar_funcion()'])
+    expect(llamadasAlAplicar([
+      'create table public.t (id uuid references public.company(id));',
+      'insert into public.t (id) values (null);',
+      'create policy p on public.t using (public.belongs_to_account(id));',
+      'create or replace function public.g() returns int language sql as $f$ select public.h() $f$;',
+      'select public.g();',
+    ].join('\n'))).toEqual([])
+  })
 })
 
 describe('las sesiones del ensayo', () => {
@@ -62,7 +82,7 @@ describe('las sesiones del ensayo', () => {
 })
 
 // W05 (Julio, 22/10): lo que solo añade va de verdad desde la rama; lo demás, solo en ROLLBACK.
-import { porQueNoSoloAnade } from '../../scripts/conta/staging-tanda.mjs'
+import { porQueNoSoloAnade, llamadasAlAplicar } from '../../scripts/conta/staging-tanda.mjs'
 
 describe('lo que solo añade, de verdad desde la rama', () => {
   // La 0460 de D (rama claude/cool-noether-i932tx, 22/10), sus tres sentencias tal cual.
@@ -187,5 +207,18 @@ describe('«otra vez:»: lo que entró en el manifiesto y su run no aplicó', ()
       'supabase/migrations/20261027T1322_f01_sembrado_y_socio.sql',
       'supabase/migrations/20261027T1321_f01_socios_y_el_delicioso.sql',
     ])
+  })
+})
+
+describe('la tanda del S01 (Respuesta 3): qué va de verdad desde la rama', () => {
+  const ctx = { tablas: ['conta_enlace_pago', 'journal_entry', 'treasury_account', 'company', 'accounts', 'company_account', 'bank_match'], funciones: [] as string[] }
+  const f = (n: string) => `supabase/migrations/${n}`
+  it('la 2238 llama a _s01_asiento_cobro: solo en ROLLBACK, aunque solo cree su copia', () => {
+    const n = f('20261027T2238_s01_cobros_sin_asiento.sql')
+    expect(porQueNoSoloAnade(n, readFileSync(n, 'utf8'), ctx)).toMatch(/llama a public\._s01_asiento_cobro\(\)/)
+  })
+  it('la 2030 sigue siendo «solo añade»', () => {
+    const n = f('20261027T2030_s01_redsys_y_abono.sql')
+    expect(porQueNoSoloAnade(n, readFileSync(n, 'utf8'), ctx)).toBeNull()
   })
 })

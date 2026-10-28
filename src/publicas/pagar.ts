@@ -12,7 +12,12 @@
 //   · A la vuelta (?vuelta=ok) dice que el pago está hecho o que Stripe lo está
 //     confirmando (Bizum se autoriza en el móvil): el cobro lo apunta el aviso
 //     de Stripe, no esta página.
+//   · S01 · Si la empresa cobra por el TPV de su banco (Redsys), conta-pago
+//     devuelve el formulario ya firmado y esta página lo manda a Redsys. El
+//     cobro lo apunta el aviso del banco (conta-redsys-aviso).
 // Todo lo que viene de la base se pinta como TEXTO (textContent), nunca como HTML.
+
+import { dondeSePaga, irARedsys, metodosEnFrase, quienConfirma } from './pagarPuro'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -27,6 +32,8 @@ interface Enlace {
   total?: number | null
   pendiente?: number | null
   metodos?: ('tarjeta' | 'bizum')[]
+  /** S01 · Con quién se paga: Stripe o el TPV del banco (Redsys). */
+  proveedor?: 'stripe' | 'redsys' | null
   pagado?: { el: string | null; con: string | null; importe: number | null } | null
 }
 
@@ -67,12 +74,6 @@ function cabecera(e: Enlace, raiz: HTMLElement) {
   return caja
 }
 
-/** «tarjeta» o «tarjeta y Bizum»: con qué deja pagar el enlace, para ir dentro de una frase. */
-export function metodosEnFrase(m: readonly string[] | undefined): string {
-  const xs = (m ?? []).map((x) => (x === 'bizum' ? 'Bizum' : 'tarjeta'))
-  return xs.length === 2 ? `${xs[0]} y ${xs[1]}` : xs[0] ?? 'tarjeta'
-}
-
 async function arrancar() {
   const raiz = document.getElementById('pagar')!
   const q = new URLSearchParams(window.location.search)
@@ -91,7 +92,7 @@ async function arrancar() {
       cabecera(e, raiz); return
     }
     if (vuelta === 'ok') {
-      raiz.append(el('p', 'Pago recibido: Stripe lo está confirmando. Si has pagado con Bizum, termina de aceptarlo en el móvil. No hace falta que hagas nada más.', { class: 'aviso', 'data-tono': 'bien', role: 'status' }))
+      raiz.append(el('p', `Pago recibido: ${quienConfirma(e.proveedor)} lo está confirmando. Si has pagado con Bizum, termina de aceptarlo en el móvil. No hace falta que hagas nada más.`, { class: 'aviso', 'data-tono': 'bien', role: 'status' }))
       cabecera(e, raiz); return
     }
     if (e.estado === 'cobrada') { raiz.append(el('p', 'Esta factura no tiene nada pendiente de pagar. Gracias.', { class: 'aviso', 'data-tono': 'bien', role: 'status' })); cabecera(e, raiz); return }
@@ -108,7 +109,8 @@ async function arrancar() {
     boton.addEventListener('click', async () => {
       fallo.hidden = true; boton.disabled = true; boton.textContent = 'Abriendo el pago…'
       try {
-        const r = await llamar<{ ok: boolean; url?: string; texto?: string }>('/functions/v1/conta-pago', { token, origen: window.location.origin })
+        const r = await llamar<{ ok: boolean; url?: string; texto?: string; redsys?: { url: string; campos: Record<string, string> } }>('/functions/v1/conta-pago', { token, origen: window.location.origin })
+        if (r.ok && r.redsys) { irARedsys(r.redsys).submit(); return }
         if (!r.ok || !r.url) throw new Error(r.texto || 'No se ha podido abrir el pago.')
         window.location.assign(r.url)
       } catch (x) {
@@ -116,7 +118,7 @@ async function arrancar() {
         boton.disabled = false; boton.textContent = `Pagar ${euros(Number(e.pendiente ?? 0))}`
       }
     })
-    caja.append(fallo, boton, el('p', `Pagas en la página segura de Stripe, con ${metodosEnFrase(e.metodos)}. ${e.empresa ?? 'La empresa'} no ve los datos de tu tarjeta.`, { class: 'ayuda' }))
+    caja.append(fallo, boton, el('p', `Pagas en ${dondeSePaga(e.proveedor)}, con ${metodosEnFrase(e.metodos)}. ${e.empresa ?? 'La empresa'} no ve los datos de tu tarjeta.`, { class: 'ayuda' }))
   } catch (x) {
     solo((x as Error).message)
   }

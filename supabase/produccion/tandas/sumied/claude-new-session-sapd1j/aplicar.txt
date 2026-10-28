@@ -1,0 +1,29 @@
+# S01 · PR 1 · Lo que faltó de la entrega 4 del PC01: Redsys como segundo
+# proveedor del enlace de pago, y casar en Bancos el abono del proveedor con su
+# comisión. Rama claude/new-session-sapd1j. Se ensaya y se aplica desde esta
+# rama, antes de fusionar.
+#
+#   1. 2030 — AÑADE: los datos del TPV de cada empresa (la clave, a Vault), los
+#      intentos de pago con Redsys, los avisos del banco, cuatro columnas que
+#      admiten vacío en conta_enlace_pago y sus funciones (cobrar por Redsys, la
+#      comisión de Stripe, los cobros que esperan su abono y casarlo). No toca
+#      filas al aplicarse ni el camino del pedido. Una de sus funciones escribe
+#      en Vault al guardar (no al aplicarse): el analizador dirá si lo cuenta.
+#   2. 2031 — CAMBIA en caliente cuatro funciones del enlace de pago, con la
+#      misma firma (conta_enlace_pago_para, _ver, _datos y _cobrado), declarado
+#      en su cabecera con su prueba. Hoy en producción hay 0 enlaces de pago. No
+#      está en el camino del pedido. Y amplía dos CHECK (Respuesta 1): el origen
+#      «customer_payment» de journal_entry (el asiento del cobro) y el tipo
+#      «pasarela» de treasury_account (la cuenta «Stripe · por abonar»).
+#   3. 2238 — DATOS (Respuesta 1, punto 4): a los cobros por el enlace que ya
+#      existan sin asiento les hace el suyo, con la fecha del cobro, y crea la
+#      cuenta de la pasarela si hace falta. Con copia previa
+#      (conta_s01_cobros_antes) y vuelta atrás exacta. Medido el 27/10: 0
+#      cobros con tarjeta en producción.
+#
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/s01-redsys-abono.sql
+supabase/migrations/20261027T2030_s01_redsys_y_abono.sql
+supabase/migrations/20261027T2031_s01_enlace_con_redsys.sql
+supabase/migrations/20261027T2238_s01_cobros_sin_asiento.sql

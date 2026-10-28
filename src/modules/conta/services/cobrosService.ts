@@ -7,7 +7,7 @@
 import { supabase } from '@/lib/supabase'
 import { rpc } from '@/modules/conta/services/bd'
 import {
-  filaCobro, type CobroStripe, type EstadoMetodoPago, type EstadoRemesaCobros, type FilaCobro, type RecordatoriosFactura, type RemesaCobrosParaCasar,
+  filaCobro, type AbonoCobro, type CobroRedsys, type CobroStripe, type EstadoMetodoPago, type EstadoRedsys, type EstadoRemesaCobros, type FilaCobro, type RecordatoriosFactura, type RemesaCobrosParaCasar,
   type ReciboDevolvible, type SinRecordatorio,
 } from '@/modules/conta/lib/cobros'
 import type { DatosRemesaRecibos } from '@/modules/conta/lib/sepa'
@@ -259,3 +259,43 @@ export async function cobroStripe(companyId: string, accion: 'alta' | 'estado'):
   return { ok: false, texto: `${que}: ${error ? error.message : 'no ha contestado'}.`, url: null }
 }
 
+
+// ── S01 · El TPV del banco (Redsys) y el abono ──────────────────────────────
+
+export async function leerCobroRedsys(companyId: string): Promise<CobroRedsys | null> {
+  const d = await rpc<Fila | null>('conta_cobro_redsys_leer', { p_company: companyId })
+  if (!d) return null
+  const c = d.cambiado as Fila | null
+  const prov = str(d.proveedor_enlace)
+  return {
+    estado: String(d.estado) as EstadoRedsys, comercio: str(d.comercio), terminal: String(d.terminal ?? '1'), conClave: d.con_clave === true,
+    bizum: d.bizum === true, enEnlace: d.en_enlace !== false, modo: d.modo === 'real' ? 'real' : 'prueba', cobra: d.cobra === true,
+    proveedorEnlace: prov === 'redsys' || prov === 'stripe' ? prov : null, cambiado: c ? { at: str(c.at), por: str(c.por) } : null,
+  }
+}
+
+export interface DatosRedsys { comercio: string; terminal: string; clave: string; bizum: boolean; enEnlace: boolean }
+
+/** Guarda el TPV por conta-redsys (la clave va a la caja fuerte). Nunca lanza: dice qué ha pasado (regla 8). */
+export async function guardarRedsys(companyId: string, d: DatosRedsys, quien: string | null): Promise<{ ok: boolean; texto: string }> {
+  const que = 'No se ha guardado el TPV'
+  if (!supabase) return { ok: false, texto: `${que}: no hay conexión con la base.` }
+  const { data, error } = await supabase.functions.invoke('conta-redsys', {
+    body: { empresa: companyId, comercio: d.comercio, terminal: d.terminal, clave: d.clave.trim() || null, bizum: d.bizum, en_enlace: d.enEnlace, quien },
+  })
+  if (!error && data && typeof data === 'object' && 'texto' in data) return { ok: (data as Fila).ok === true, texto: String((data as Fila).texto) }
+  const ctx = (error as { context?: Response } | null)?.context
+  if (ctx && typeof ctx.json === 'function') {
+    const cuerpo = await ctx.clone().json().catch(() => null) as Fila | null
+    if (cuerpo?.texto) return { ok: false, texto: String(cuerpo.texto) }
+    const motivo = str(cuerpo?.error) ?? (ctx.status === 404 ? 'aún no está publicado en este entorno' : `la función ha contestado ${ctx.status}`)
+    return { ok: false, texto: `${que}: ${motivo}.` }
+  }
+  return { ok: false, texto: `${que}: ${error ? error.message : 'no ha contestado'}.` }
+}
+
+/** De cada factura cobrada por el enlace, con quién y si su abono ya llegó al banco. */
+export async function leerAbonos(companyId: string): Promise<Map<string, AbonoCobro>> {
+  const d = await rpc<Fila[]>('conta_cobros_abonos', { p_company: companyId })
+  return new Map((d ?? []).map((x) => [String(x.id), { proveedor: x.proveedor === 'redsys' ? 'redsys' : 'stripe', cobrado: str(x.cobrado), abonado: str(x.abonado) }]))
+}

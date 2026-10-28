@@ -126,7 +126,8 @@ export function crearBancos(bd: Bd) {
 
   async function bancosDeLaEmpresa(accountId: string, companyId: string): Promise<BancoFolvy[]> {
     const [ts, enlaces, recordados] = await Promise.all([
-      leer(tabla('treasury_account').select('id, name, short_name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los bancos'),
+      // S01 · Sin las cuentas de la pasarela («Stripe · por abonar»): no tienen extracto ni movimientos; Bancos las enseña aparte, con su saldo.
+      leer(tabla('treasury_account').select('id, name, short_name, iban, kind, location_id, is_active, iban_review').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).in('kind', ['bank', 'card', 'cash']), 'los bancos'),
       leer(tabla('company_account_link').select('entity_id, company_account:company_account_id(code)').eq('account_id', accountId).eq('company_id', companyId).eq('entity', 'bank_account').eq('role', 'principal'), 'las cuentas de los bancos'),
       leer(tabla('bank_account_iban').select('treasury_account_id, iban').eq('account_id', accountId).eq('company_id', companyId), 'los IBAN recordados'),
     ])
@@ -173,7 +174,7 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas, pasarela] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
@@ -196,12 +197,16 @@ export function crearBancos(bd: Bd) {
       leer(tabla('company').select('legal_name, trade_name').eq('id', companyId), 'la empresa'),
       // D01 · El mapa de tiendas de las plataformas: la cuenta del banco de cada marca × local.
       leer(tabla('platform_store').select('id, external_text, treasury_account_id, location_id').eq('account_id', accountId).eq('company_id', companyId), 'las tiendas de las plataformas'),
-      leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'las cuentas de cada local'),
+      leer(tabla('treasury_account').select('id, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).in('kind', ['bank', 'card', 'cash']), 'las cuentas de cada local'),
       // PC01 · Las emitidas a un cliente (no las de los cierres: ésas las cobra su liquidación) y lo que les queda.
       leer(tabla('customer_invoice').select('id, number_text, issue_date, party_id').eq('account_id', accountId).eq('company_id', companyId)
         .eq('status', 'emitida').in('origin', ['a_mano', 'recurrente', 'presupuesto', 'tienda', 'automatica']), 'las facturas emitidas'),
       leer(tabla('conta_factura_cobro').select('invoice_id, pendiente').eq('account_id', accountId).eq('company_id', companyId)
         .in('estado', ['vencida', 'falta_liquidacion', 'cobrada_parte', 'vence_semana', 'por_cobrar']), 'lo que queda por cobrar de cada factura'),
+      // S01 · Los cobros por el enlace de pago (Stripe y TPV) que esperan su abono.
+      // Si no se puede leer, Bancos sigue: esos abonos se casan a mano, como antes.
+      rpc<Fila[]>('conta_abonos_pasarela_pendientes', { p_company: companyId })
+        .catch((e: unknown) => { console.warn('[bancos] no se pudieron leer los cobros con tarjeta que esperan su abono', e); return [] as Fila[] }),
     ])
     const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
     const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))
@@ -313,6 +318,11 @@ export function crearBancos(bd: Bd) {
       nombresPropios: nombresDeEmpresa(empresa[0]),
       cuentaDiferenciaGasto: hoja('669') ?? '66900000',
       cuentaDiferenciaIngreso: hoja('769') ?? '76900000',
+      cobrosPasarela: (pasarela ?? []).map((c) => ({
+        id: String(c.id), proveedor: c.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, fecha: String(c.fecha), brutoCent: cent(c.bruto),
+        netoCent: c.neto === null || c.neto === undefined ? null : cent(c.neto), comisionCent: c.comision === null || c.comision === undefined ? null : cent(c.comision),
+        factura: s(c.factura), cliente: String(c.cliente ?? 'Un cliente'), cuenta: s(c.cuenta), conAsiento: c.con_asiento === true,
+      })),
     }
     return { ctx, movimientos }
   }
@@ -331,7 +341,7 @@ export function crearBancos(bd: Bd) {
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
         if (d.confianza === 'seguro' && d.destino) {
-          await rpc('bank_casar', { p_movement: d.movimientoId, p_destino: d.destino, p_confianza: 'seguro', p_porque: d.porque, p_razones: [], p_por: 'folvy', p_regla: d.reglaId })
+          await casarDestino(d.movimientoId, d.destino, 'seguro', d.porque, 'folvy', d.reglaId)
           if (d.destino.tipo === 'traspaso') hechos.add(d.destino.otro_movimiento_id)
           r.casadosSolos++
         } else if (d.antesDelCorteSinPareja) {
@@ -354,9 +364,22 @@ export function crearBancos(bd: Bd) {
     return r
   }
 
+  /**
+   * Casa un movimiento con su destino. El abono de Stripe o del TPV (S01) va a
+   * conta_abono_pasarela_casar, que hace su asiento y lo casa con bank_casar;
+   * lo demás, a bank_casar directamente.
+   */
+  async function casarDestino(movimientoId: string, destino: Destino, confianza: 'seguro' | 'probable' | 'duda', porque: string, por: 'folvy' | 'persona', reglaId: string | null): Promise<Fila> {
+    if (destino.tipo === 'abono_pasarela') {
+      return rpc<Fila>('conta_abono_pasarela_casar', { p_movement: movimientoId, p_enlaces: destino.cobros, p_confianza: confianza, p_porque: porque, p_por: por })
+    }
+    return rpc<Fila>('bank_casar', { p_movement: movimientoId, p_destino: destino, p_confianza: confianza, p_porque: porque, p_razones: [], p_por: por, p_regla: reglaId })
+  }
+
   /** «Sí»: casa lo propuesto (o el destino que elija la persona). */
   async function confirmar(movimientoId: string, porque: string, destino: Destino, confianza: 'seguro' | 'probable' | 'duda', reglaId: string | null): Promise<{ asiento: string; creado: boolean }> {
-    const r = await rpc<Fila>('bank_casar', { p_movement: movimientoId, p_destino: destino, p_confianza: confianza, p_porque: porque, p_razones: [], p_por: 'persona', p_regla: reglaId })
+    const r = await casarDestino(movimientoId, destino, confianza, porque, 'persona', reglaId)
+    if (destino.tipo === 'abono_pasarela') return { asiento: String(r.asiento), creado: true }
     if (reglaId) await rpc('bank_regla_confirmada', { p_id: reglaId })
     return { asiento: String(r.asiento), creado: !!r.creado }
   }

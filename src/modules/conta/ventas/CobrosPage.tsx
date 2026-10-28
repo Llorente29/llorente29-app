@@ -45,7 +45,7 @@ import {
   NOMBRE_ESTADO_REMESA, PESTANAS_COBROS, chipEstado, cifrasCobros, enPestana, estadoCobro, filtrar, leerPestana, libre, nombreForma, ordenarCobros,
   porQueNoEnRemesa, textoDias, textoRecordatorios, type FilaCobro, type FormaCobro,
 } from '@/modules/conta/lib/cobros'
-import { crearRemesaCobros, leerCobros, leerEnlacesPago, leerRecordatorios, leerRemesasCobros, type RemesaCobrosResumen, type SinMandato } from '@/modules/conta/services/cobrosService'
+import { crearRemesaCobros, leerAbonos, leerCobros, leerEnlacesPago, leerRecordatorios, leerRemesasCobros, type RemesaCobrosResumen, type SinMandato } from '@/modules/conta/services/cobrosService'
 import { ComoTePagan } from './ComoTePagan'
 import { DialogoMandato, DialogoRecordatorios } from './DialogosCobros'
 
@@ -89,6 +89,8 @@ export default function CobrosPage() {
   // y con él la frase que confirma lo que se acaba de cambiar (regla 8; lo cazó la e2e #975).
   const recordatorios = useLeerConservando(activa ? () => leerRecordatorios(activa.id) : null, activa?.id ?? '', `${vuelta}:recordatorios`)
   const enlaces = useLeer(activa ? () => leerEnlacesPago(activa.id) : null, `${activa?.id}:${vuelta}:enlaces-pago`)
+  // S01 · Las cobradas por el enlace: «Cobrado · pendiente del abono» o «abonado el».
+  const abonos = useLeer(activa ? () => leerAbonos(activa.id) : null, `${activa?.id}:${vuelta}:abonos`)
   const remesas = useLeer(activa && pestana === 'remesas' ? () => leerRemesasCobros(activa.id) : null, `${activa?.id}:${vuelta}:${pestana === 'remesas' ? 'con' : 'sin'}:remesas-cobros`)
   const fl = { buscar: query.get('q') ?? '', hasta: query.get('hasta') || null, forma: (query.get('forma') || 'todas') as FormaCobro | 'todas', local: query.get('local') || null }
   const d = datos.datos
@@ -161,10 +163,10 @@ export default function CobrosPage() {
     { id: 'forma', titulo: 'Cómo paga', celda: (f) => <Chip tono={f.forma === 'direct_debit' ? 'duda' : 'neutro'}>{nombreForma(f.forma)}</Chip>, prioridad: 4, minimo: 130 },
     { id: 'pendiente', titulo: 'Pendiente', cifra: true, celda: (f) => <strong>{eurosExactos(estadoCobro(f) === 'cobrada' ? f.total : f.pendiente).replace(' €', '')}</strong>, minimo: 90 },
     { id: 'recordatorios', titulo: 'Recordatorios', celda: (f) => <span className="cx-ayuda">{estadoCobro(f) === 'cobrada' ? '—' : textoRecordatorios(recordatorios.datos?.facturas.get(f.id), enlaces.datos?.get(f.id))}</span>, prioridad: 5, minimo: 160 },
-    { id: 'estado', titulo: 'Estado', celda: (f) => { const c = chipEstado(f); return <Chip tono={c.tono}>{c.texto}</Chip> }, minimo: 150 },
+    { id: 'estado', titulo: 'Estado', celda: (f) => { const c = chipEstado(f, abonos.datos?.get(f.id)); return <Chip tono={c.tono}>{c.texto}</Chip> }, minimo: 150 },
   ]
   const tarjeta = (f: FilaCobro) => {
-    const c = chipEstado(f)
+    const c = chipEstado(f, abonos.datos?.get(f.id))
     return (
       <span className="pg-tarjeta">
         <span className="pg-tarjeta-fila"><strong>{f.cliente}</strong><strong className="s-cifra">{eurosExactos(f.pendiente)}</strong></span>
