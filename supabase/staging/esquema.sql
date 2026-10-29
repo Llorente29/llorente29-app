@@ -49231,6 +49231,38 @@ end $$;
 
 
 --
+-- Name: firma_registro_mes_pedir(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_personas integer;
+begin
+  if p_account_id is null or p_pedir is null then
+    raise exception 'DATOS_INCOMPLETOS' using errcode = '22023', hint = 'Falta la empresa o si se enciende o se apaga.';
+  end if;
+  if not public.current_user_is_admin_of(p_account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'Solo el administrador de la empresa puede encender o apagar la firma del registro.';
+  end if;
+  update public.accounts set firma_registro_mes = p_pedir where id = p_account_id;
+  if not found then
+    raise exception 'CUENTA_NO_EXISTE' using errcode = '22023', hint = 'Esa empresa no existe.';
+  end if;
+  select count(*) into v_personas from public.employees where account_id = p_account_id and active;
+  return jsonb_build_object('pedir', p_pedir, 'personas', v_personas);
+end $$;
+
+
+--
+-- Name: FUNCTION firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean) IS 'L1a-H (29/10/2026). Enciende o apaga «Pedir a cada persona que firme su registro del mes» de una cuenta. Solo su administrador. Devuelve {pedir, personas}: las personas activas de la cuenta.';
+
+
+--
 -- Name: firmar_registro_mes(uuid, date, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -81908,14 +81940,30 @@ declare
     'in_preparation','awaiting_collection','awaiting_shipment',
     'in_delivery','completed','rejected','cancelled','delivery_failed'
   ];
+  v_secret text;
 begin
   -- solo canales con empuje y estados empujables
   if new.source = 'lastapp' and new.order_status = any(v_pushable) then
+    -- W10a: el secreto, del Vault (order_advance_secret); ya no va escrito.
+    -- Si falta, no se llama a nadie y queda dicho; el pedido sigue.
+    select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'order_advance_secret';
+    if v_secret is null then
+      begin
+        perform public._queue_system_alert(
+          'vault',
+          'Sin llamar a order-advance: falta order_advance_secret en el Vault',
+          format('El pedido %s (estado %s) no ha avisado a order-advance porque el Vault de este proyecto no tiene order_advance_secret. El pedido se ha guardado; el aviso a la plataforma no ha salido.', new.id, new.order_status),
+          'vault-order-advance');
+      exception when others then
+        raise warning 'trg_sale_push_status: falta order_advance_secret y no se pudo avisar (venta %): %', new.id, sqlerrm;
+      end;
+      return new;
+    end if;
     perform net.http_post(
       url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/order-advance',
       headers := jsonb_build_object(
         'Content-Type',            'application/json',
-        'x-order-advance-secret',  'fv_oadv_CV8IjsPzPIwDIXBPg42FkQMUMJp5Vyde'
+        'x-order-advance-secret',  v_secret
       ),
       body    := jsonb_build_object(
         'sale_id',    new.id,
@@ -86657,6 +86705,7 @@ CREATE TABLE public.accounts (
     product_brand text,
     tax_advisor_since timestamp with time zone,
     tax_advisor_by uuid,
+    firma_registro_mes boolean,
     CONSTRAINT accounts_business_type_check CHECK ((business_type = ANY (ARRAY['dark_kitchen'::text, 'bar'::text, 'restaurante'::text, 'cafeteria'::text, 'hotel'::text, 'otro'::text, 'otra_actividad'::text]))),
     CONSTRAINT accounts_lifecycle_order CHECK (((deleted_at IS NULL) OR (archived_at IS NULL) OR (deleted_at >= archived_at))),
     CONSTRAINT accounts_product_brand_formato CHECK (((product_brand IS NULL) OR (product_brand ~ '^[a-z][a-z0-9_]{1,40}$'::text))),
@@ -86755,6 +86804,13 @@ COMMENT ON COLUMN public.accounts.tax_advisor_since IS 'P01. Desde cuándo la cu
 --
 
 COMMENT ON COLUMN public.accounts.tax_advisor_by IS 'P01. Quién marcó la cuenta como asesoría.';
+
+
+--
+-- Name: COLUMN accounts.firma_registro_mes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.accounts.firma_registro_mes IS 'L1a-H (29/10/2026). «Pedir a cada persona que firme su registro del mes» en su portal. NULL o false: apagado (no sale la tarjeta de la firma ni ningún aviso de firma). Lo cambia el administrador de la cuenta con firma_registro_mes_pedir. Las firmas ya hechas no dependen de esto.';
 
 
 --
@@ -146137,6 +146193,15 @@ GRANT ALL ON FUNCTION public.finish_image_job(p_post_id uuid, p_public_url text)
 
 
 --
+-- Name: FUNCTION firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.firma_registro_mes_pedir(p_account_id uuid, p_pedir boolean) TO service_role;
+
+
+--
 -- Name: FUNCTION firmar_registro_mes(p_employee_id uuid, p_mes date, p_resumen jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -152216,6 +152281,14 @@ GRANT ALL ON TABLE public.accounts TO anon;
 GRANT ALL ON TABLE public.accounts TO authenticated;
 GRANT ALL ON TABLE public.accounts TO service_role;
 GRANT SELECT ON TABLE public.accounts TO supabase_auth_admin;
+
+
+--
+-- Name: COLUMN accounts.firma_registro_mes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(firma_registro_mes) ON TABLE public.accounts TO authenticated;
+GRANT SELECT(firma_registro_mes) ON TABLE public.accounts TO anon;
 
 
 --
