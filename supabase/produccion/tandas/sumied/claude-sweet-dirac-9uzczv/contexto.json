@@ -1,0 +1,26 @@
+{
+  "_que": "B01c · los movimientos de BBVA entran solos (open-banking.io), solo Foodint · contexto de producción de la tanda (0752, que solo añade, y 0753, que cambia _bank_cuenta_de_empresa y amplía el CHECK del proveedor de bank_aggregator_link), medido en SOLO LECTURA el 29/10 a las 08:04Z con la consulta de analizar.mjs sql-contexto y el CAMINO_TABLAS/CAMINO_FUNCIONES del workflow. Existen bank_aggregator_link (la del B01, 0150: 0 filas) y _bank_cuenta_de_empresa (la de la 0110, byte a byte: comparada con pg_get_functiondef); bank_aggregator_connection y las cuatro funciones nuevas no existen. Nada en el camino del pedido; ninguna de las dos en el historial.",
+  "medido": "2026-10-29T08:04Z",
+  "tanda": {
+    "supabase/migrations/20261029T0752_b01c_banco_agregador.sql": "0fa359a9013ed708958cec061b1d0008",
+    "supabase/migrations/20261029T0753_b01c_servicio_y_proveedor.sql": "272acad799eb77e39e10cf0dbe522401"
+  },
+  "contexto": {
+    "tablas": [
+      "public.bank_aggregator_link"
+    ],
+    "funciones": [
+      "public._bank_cuenta_de_empresa(uuid)"
+    ],
+    "filas": {
+      "public.bank_aggregator_link": 0
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

@@ -388,6 +388,9 @@
 .s-trimestre-checks li .s-anual-causa, .s-trimestre-checks li .s-trimestre-cuadre { color: var(--s-tinta); }
 .s-trimestre-checks li .s-trimestre-cuadre tr[data-casa='no'] th { color: var(--s-falta); }
 .s-anual-causa { margin: 4px 0 6px; padding-left: 0; list-style: none; }
+/* S02 · El 180: la tabla de arrendadores no se sale de su tarjeta en el móvil; si no cabe, se desplaza dentro. */
+.s-anual-tabla { max-width: 100%; overflow-x: auto; }
+.s-anual-perceptores td:first-child { overflow-wrap: anywhere; }
 
 /* Por debajo de 1.500 px, la derecha baja debajo de la izquierda; el justificante sigue al lado. */
 @media (max-width: 1499px) {

@@ -1,0 +1,12 @@
+# B01c · los movimientos de BBVA entran solos (open-banking.io). La 0752 solo
+# añade y se puede pasar dos veces: desde la rama, de verdad (W05), para que la
+# e2e la tenga. La 0753 cambia (_bank_cuenta_de_empresa y el CHECK del
+# proveedor): desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK): la clave de servicio pasa y un ajeno no; un Norma 43 y
+# lo mismo por la conexión (2 reconocidos por la huella suave, 1 nuevo); apuntar
+# como servicio y como administrador (el fallo sin porqué para, lo bueno se
+# queda); la pasada de la empresa solo el servicio; quitar; el despertador; y
+# las dos vueltas atrás.
+supabase/migrations/20261029T0752_b01c_banco_agregador.sql
+supabase/migrations/20261029T0753_b01c_servicio_y_proveedor.sql
+supabase/staging/sql/20261029_b01c_banco_agregador_prueba.sql

@@ -1,0 +1,16 @@
+# S02 · Los modelos anuales · el 180. Rama claude/s02-anual-180. Se ensaya y
+# se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0845 — AÑADE la tabla del inmueble arrendado (company_lease, vacía) y
+#      tres funciones (el cálculo del 180 desde los 115 del año, guardar el
+#      inmueble de un arrendador y los datos del fichero, esta solo para el
+#      servicio), y CAMBIA en caliente el CHECK de tax_return_check: tres
+#      claves más (payees_180_nif, payees_180_province y lease_180). Solo
+#      amplía; declarado en su cabecera con su prueba de staging. No toca
+#      datos. Nada en el camino del pedido.
+#
+# Sin «autorizo»: no destruye nada ni toca datos.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/s02-modelo-180.sql
+supabase/migrations/20261029T0845_s02_modelo_180.sql

@@ -11,6 +11,11 @@ name: PR a main · funciones y título
 #   3. (N2, 23/10) la descripción dice a qué producto va, en «## Producto»:
 #      Sumied, Folvy o Común (_shared es común), contra el diff; y si agrupa
 #      las funciones en «### Sumied» / «### Folvy», cada una en el suyo.
+#   4. (W12, 29/10) merge, nunca rebase: un push al PR no reescribe su historia
+#      (regla 5 de CLAUDE.md, scripts/ci/sin-rebase.mjs).
+#   5. (W12, 29/10) ningún DNI, NIE, NAF ni IBAN que parezca real en lo que
+#      añade el PR, sus commits o su descripción (regla T11,
+#      scripts/ci/datos-personales.mjs).
 # Lo que no puede ver: el mensaje que se escribe AL FUSIONAR. Ese lo vigila
 # quien fusiona (CLAUDE.md), y si se cuela, deploy-edge-functions no corre:
 # se despliega a mano con su `funciones`.
@@ -72,6 +77,15 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/sql-sin-where.mjs "$BASE" "$HEAD"
+
+      # W10a (28/10): el repositorio es público. Ninguna línea que añade el PR,
+      # en ningún fichero, trae un secreto (también los «fv_…» internos: tres
+      # estaban escritos en migraciones y seguían vivos).
+      - name: Ningún secreto en lo que añade el PR (W10a)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/sin-secretos.mjs "$BASE" "$HEAD"
 
       # W06 (26/10): una cuenta de tanda («cuenta:») no mide algo que crece
       # solo. El ensayo de producción cuenta antes y después de deshacer, con
@@ -140,3 +154,22 @@ jobs:
           done
           echo "Migraciones nuevas en este PR: $(wc -l < /tmp/nuevas.txt) · en main: $(wc -l < /tmp/main.txt) · en otros PR abiertos: $(wc -l < /tmp/prs.txt)."
           node scripts/conta/produccion/nombres.mjs revisar /tmp/nuevas.txt /tmp/main.txt /tmp/prs.txt
+
+      # W12 · Regla T8 (29/10): merge, nunca rebase. En cada push al PR, el commit
+      # de antes tiene que seguir en la historia del nuevo.
+      - name: La rama no reescribe su historia (merge, nunca rebase)
+        if: github.event.action == 'synchronize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ANTES: ${{ github.event.before }}
+          DESPUES: ${{ github.event.after }}
+        run: node scripts/ci/sin-rebase.mjs "$ANTES" "$DESPUES"
+
+      # W12 · Regla T11 (29/10): el repositorio es público. Ningún dato personal
+      # real (DNI, NIE, NAF, IBAN, con su control) en lo que añade el PR.
+      - name: Ningún dato personal real (DNI, NIE, NAF, IBAN)
+        env:
+          PR_CUERPO: ${{ github.event.pull_request.body }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/ci/datos-personales.mjs "$BASE" "$HEAD"

@@ -1,0 +1,9 @@
+# S02 · el 180. La 0845 añade la tabla del inmueble y tres funciones, y amplía
+# el CHECK de tax_return_check («cambia»): desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por sus caminos: un arrendador con ficha; dos
+# asientos de alquiler validados de verdad (con su 4751 al 19 %); el 180 sube
+# lo que tiene que subir, con NIF, provincia y porcentaje, y sin inmueble da
+# error; el inmueble se guarda y el error se va; el 4T casa con su 115; el
+# fichero solo para el servicio; la cuenta B no ve nada de A; y la vuelta atrás.
+supabase/migrations/20261029T0845_s02_modelo_180.sql
+supabase/staging/sql/20261029_s02_modelo_180_prueba.sql

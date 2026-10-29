@@ -30,6 +30,11 @@ const empieza = (f, lista) => lista.some((p) => f === p || f.startsWith(p))
 
 /** De qué producto es un fichero del diff: 'sumied', 'folvy', 'comun' o null (sin dueño por su nombre). */
 export function productoDelFichero(f) {
+  // W12: el tiempo de una prueba (tests/e2e/tiempos/<ruta>.json) es del producto de la prueba; la nota y el techo, de nadie.
+  if (f.startsWith('tests/e2e/tiempos/')) {
+    const prueba = /^tests\/e2e\/tiempos\/(.+\.spec\.ts)\.json$/.exec(f)
+    return prueba ? productoDelFichero(`tests/e2e/${prueba[1]}`) : null
+  }
   if (empieza(f, LO_COMUN_AMBOS)) return 'comun'
   if (f.startsWith('supabase/functions/_shared/')) return 'comun'
   if (empieza(f, RUTAS_SUMIED)) return 'sumied'

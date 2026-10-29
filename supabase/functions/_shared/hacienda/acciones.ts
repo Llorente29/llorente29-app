@@ -23,6 +23,7 @@
 //   fichero    I01b · «Descargar el fichero oficial»: generado y comprobado,
 //              sin llamar a Hacienda (funciona con la puerta cerrada).
 //   fichero190 S02 · Lo mismo con el 190 (diseño del anexo del BOE).
+//   fichero180 S02 · Lo mismo con el 180 (diseño del anexo VI del BOE).
 //   fuera      «Ya lo presenté fuera»: con el CSV. Con certificado, se
 //              comprueba con la consulta (ese CSV, ese NIF, ese modelo y
 //              periodo) y se trae el PDF por la URL del CSV; si no responde,
@@ -38,6 +39,7 @@ import { type Forge, firmanteDelPem, CertificadoNoVale } from '../certificados/l
 import { LlamadaFallida } from '../certificados/mtls.ts'
 import { comprobar303, FicheroNoVale, generar303, type Datos303 } from '../impuestos/dr303.ts'
 import { comprobar190, FicheroNoVale as FicheroNoVale190, generar190, type Datos190 } from '../impuestos/modelo190.ts'
+import { comprobar180, FicheroNoVale as FicheroNoVale180, generar180, type Datos180, type Inmueble180 } from '../impuestos/modelo180.ts'
 import { type Hacienda, PuertaCerrada, RespuestaRara } from './puerta.ts'
 
 export interface Dependencias {
@@ -359,6 +361,56 @@ export async function fichero190(base: ClienteBase, a: { usuario: string; declar
     return {
       ok: true, fichero, nombre: `190_${x.ejercicio}.txt`,
       mensaje: `El fichero del 190 de ${x.ejercicio}: ${c.perceptores} ${c.perceptores === 1 ? 'perceptor' : 'perceptores'}, comprobado contra el diseño de Hacienda.`,
+    }
+  } catch (e) {
+    const f = porQueFalla(e)
+    return { ok: false, motivo: f.motivo, mensaje: f.mensaje }
+  }
+}
+
+/**
+ * S02 · «Descargar el fichero oficial» del 180: generado recorriendo el diseño
+ * del anexo VI de la Orden de 21/11/2000 y comprobado releyéndolo. No llama a
+ * Hacienda. La base dice si la persona puede (conta_impuesto_gestiona) y da
+ * los datos (conta_impuesto_180_fichero, que no los da con un error sin
+ * resolver o un aviso sin mirar en lo comprobado).
+ */
+export async function fichero180(base: ClienteBase, a: { usuario: string; declaracion: string; empresa: string }): Promise<Salida> {
+  try {
+    const puede = await rpc<boolean>(base, 'conta_impuesto_gestiona', { p_user: a.usuario, p_company: a.empresa })
+    if (puede !== true) return { ok: false, motivo: 'no_deja', mensaje: 'No puedes bajar el fichero de los impuestos de esta empresa.' }
+    type InmuebleBase = Record<string, string | null>
+    const x = await rpc<{
+      ejercicio: number; nif: string; nombre: string; numero: string
+      contacto: { telefono: string; nombre: string }
+      perceptores: { nif: string | null; nombre: string | null; provincia: string | null; modalidad: string | null
+        base: number; porcentaje: number; retenciones: number; inmueble: InmuebleBase | null }[]
+    }>(base, 'conta_impuesto_180_fichero', { p_return: a.declaracion, p_user: a.usuario })
+    const inmueble = (i: InmuebleBase | null): Inmueble180 => ({
+      situacion: (i?.situacion ?? '') as Inmueble180['situacion'], catastral: i?.catastral, tipoVia: i?.tipo_via, nombreVia: i?.nombre_via ?? '',
+      tipoNumeracion: i?.tipo_numeracion, numero: i?.numero, calificador: i?.calificador, bloque: i?.bloque, portal: i?.portal,
+      escalera: i?.escalera, planta: i?.planta, puerta: i?.puerta, complemento: i?.complemento, localidad: i?.localidad,
+      municipio: i?.municipio ?? '', codigoMunicipio: i?.codigo_municipio, provincia: i?.provincia ?? '', cp: i?.cp ?? '',
+    })
+    const d: Datos180 = {
+      ejercicio: x.ejercicio, nif: x.nif, nombre: x.nombre, numero: x.numero, contacto: x.contacto,
+      perceptores: x.perceptores.map((p) => ({
+        nif: p.nif ?? '', nombre: p.nombre ?? '', provincia: p.provincia ?? '', modalidad: p.modalidad === '2' ? '2' : '1',
+        base: Number(p.base), porcentaje: Number(p.porcentaje), retenciones: Number(p.retenciones), inmueble: inmueble(p.inmueble),
+      })),
+    }
+    let fichero: string
+    try {
+      fichero = generar180(d)
+    } catch (e) {
+      const fallos = e instanceof FicheroNoVale180 || e instanceof FicheroNoVale190 ? e.fallos : ['No se ha podido generar el fichero.']
+      return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${fallos.join(' ')}`, fallos }
+    }
+    const c = comprobar180(fichero, d)
+    if (!c.ok) return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${c.fallos.join(' ')}`, fallos: c.fallos }
+    return {
+      ok: true, fichero, nombre: `180_${x.ejercicio}.txt`,
+      mensaje: `El fichero del 180 de ${x.ejercicio}: ${c.perceptores} ${c.perceptores === 1 ? 'arrendador' : 'arrendadores'}, comprobado contra el diseño de Hacienda.`,
     }
   } catch (e) {
     const f = porQueFalla(e)

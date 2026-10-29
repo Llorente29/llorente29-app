@@ -5,11 +5,13 @@
 // el selector del año y la tira de modelos con su estado y su plazo; debajo,
 // en tres columnas, la ficha del modelo elegido (casillas en palabras,
 // calcular, revisar, «ya lo presenté fuera» y el fichero), en el centro el
-// justificante o lo calculado (en el 190, sus perceptores) y a la derecha lo
-// comprobado, cada aviso con el asiento o la ficha que lo causa.
+// justificante o lo calculado (en el 190, sus perceptores; en el 180, sus
+// arrendadores con el local) y a la derecha lo comprobado, cada aviso con el
+// asiento o la ficha que lo causa.
 //
-// Hoy Sumied calcula el 190 (de los 111 del año). Los demás se presentan fuera
-// y se apuntan aquí con su CSV: quedan presentados y con candado.
+// Hoy Sumied calcula el 190 (de los 111 del año) y el 180 (de los 115). Los
+// demás se presentan fuera y se apuntan aquí con su CSV: quedan presentados y
+// con candado.
 // Cada botón dice lo que ha hecho, con su cifra (regla 8).
 
 import { useEffect, useMemo, useState } from 'react'
@@ -19,9 +21,13 @@ import { Boton, Campo, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import {
-  aceptarAviso, calcular190, comprobacionesConAviso, hacienda, informativaFuera, leerAnual, perceptores190, revisarDeclaracion, type Perceptor190,
+  aceptarAviso, calcular180, calcular190, comprobacionesConAviso, hacienda, informativaFuera, leerAnual, perceptores180, perceptores190, ponerInmueble180,
+  revisarDeclaracion, type Inmueble180, type Perceptor180, type Perceptor190,
 } from '@/modules/conta/services/impuestosService'
-import { CALCULA_SUMIED, claveEnPalabras, ejercicioPorDefecto, perceptoresEnOrden, porQueNoFichero, queFaltaAnual, sinTrabajadorEnPalabras, tarjetaAnual } from './anual'
+import {
+  arrendadoresEnOrden, CALCULA_SUMIED, claveEnPalabras, ejercicioPorDefecto, faltaEnInmueble, inmuebleEnPalabras, perceptoresEnOrden, porcentajeEnPalabras,
+  porQueNoFichero, queFaltaAnual, sinTrabajadorEnPalabras, tarjetaAnual,
+} from './anual'
 import { estaPresentada, presentadorEnPalabras, type ModeloTrimestre, type Trimestre } from './trimestre'
 import { BotonCalcular, TablaCasillas, VisorJustificante } from './TrimestrePage'
 
@@ -123,13 +129,16 @@ function Cuerpo({ m, d: datos, ejercicio, hoy, ampliado, alAmpliar, alHacer }: {
   m: ModeloTrimestre; d: Trimestre; ejercicio: number; hoy: string; ampliado: boolean; alAmpliar: () => void; alHacer: (h: Hecho) => void
 }) {
   const decl = m.declaracion
-  const [leido, setLeido] = useState<{ checks: Check[]; perceptores: Perceptor190[]; fallo: string | null } | null>(null)
+  const [leido, setLeido] = useState<{ checks: Check[]; perceptores: Perceptor190[]; arrendadores: Perceptor180[]; fallo: string | null } | null>(null)
   useEffect(() => {
     if (!decl) return
     let vivo = true
-    Promise.all([comprobacionesConAviso(decl.id, decl.cuenta), m.modelo === '190' ? perceptores190(decl.id, decl.cuenta) : Promise.resolve([] as Perceptor190[])])
-      .then(([checks, perceptores]) => { if (vivo) setLeido({ checks, perceptores, fallo: null }) },
-        (e: unknown) => { if (vivo) setLeido({ checks: [], perceptores: [], fallo: msg(e) }) })
+    Promise.all([
+      comprobacionesConAviso(decl.id, decl.cuenta),
+      m.modelo === '190' ? perceptores190(decl.id, decl.cuenta) : Promise.resolve([] as Perceptor190[]),
+      m.modelo === '180' ? perceptores180(decl.id, decl.cuenta) : Promise.resolve([] as Perceptor180[]),
+    ]).then(([checks, perceptores, arrendadores]) => { if (vivo) setLeido({ checks, perceptores, arrendadores, fallo: null }) },
+      (e: unknown) => { if (vivo) setLeido({ checks: [], perceptores: [], arrendadores: [], fallo: msg(e) }) })
     return () => { vivo = false }
   }, [decl, m.modelo])
   return (
@@ -140,7 +149,10 @@ function Cuerpo({ m, d: datos, ejercicio, hoy, ampliado, alAmpliar, alHacer }: {
       <div className="s-trimestre-col s-trimestre-col-centro">
         {decl?.justificante_pdf
           ? <VisorJustificante ruta={decl.justificante_pdf} nombre={`justificante-${m.modelo}-${ejercicio}.pdf`} titulo={`${m.modelo} · ${ejercicio}`} ampliado={ampliado} alAmpliar={alAmpliar} />
-          : <Centro m={m} ejercicio={ejercicio} perceptores={leido?.perceptores ?? null} />}
+          : m.modelo === '180' && decl && decl.estado !== 'pending'
+            ? <Arrendadores companyId={datos.empresa.id} ejercicio={ejercicio} arrendadores={leido?.arrendadores ?? null}
+                editable={datos.puede_gestionar && !estaPresentada(decl.estado)} alHacer={alHacer} />
+            : <Centro m={m} ejercicio={ejercicio} perceptores={leido?.perceptores ?? null} />}
       </div>
       <div className="s-trimestre-col s-trimestre-col-der">
         <Comprobado m={m} checks={leido?.checks ?? null} fallo={leido?.fallo ?? null} alHacer={alHacer} />
@@ -195,21 +207,22 @@ function Preparar({ m, d: datos, ejercicio, checks, alHacer }: { m: ModeloTrimes
   const calcula = CALCULA_SUMIED.has(m.modelo)
   const calcular = async () => {
     try {
-      const c = await calcular190(datos.empresa.id, ejercicio)
+      const c = await (m.modelo === '180' ? calcular180 : calcular190)(datos.empresa.id, ejercicio)
       const cosas = [c.errores ? `${c.errores} ${c.errores === 1 ? 'cosa' : 'cosas'} por resolver` : null, c.avisos ? `${c.avisos} ${c.avisos === 1 ? 'aviso' : 'avisos'}` : null].filter(Boolean)
-      alHacer({ tono: 'ok', texto: `Calculado el 190 de ${ejercicio}: ${c.perceptores} ${c.perceptores === 1 ? 'línea' : 'líneas'} de perceptor y ${eurosExactos(c.casillas['03'] ?? 0)} retenidos${cosas.length ? `; ${cosas.join(' y ')} en «Lo comprobado»` : ', y todo cuadra'}.` })
-    } catch (e) { alHacer({ tono: 'falta', texto: `No se ha calculado el 190 de ${ejercicio}: ${msg(e)}` }) }
+      const quien = m.modelo === '180' ? (c.perceptores === 1 ? 'arrendador' : 'arrendadores') : (c.perceptores === 1 ? 'línea de perceptor' : 'líneas de perceptor')
+      alHacer({ tono: 'ok', texto: `Calculado el ${m.modelo} de ${ejercicio}: ${c.perceptores} ${quien} y ${eurosExactos(c.casillas['03'] ?? 0)} retenidos${cosas.length ? `; ${cosas.join(' y ')} en «Lo comprobado»` : ', y todo cuadra'}.` })
+    } catch (e) { alHacer({ tono: 'falta', texto: `No se ha calculado el ${m.modelo} de ${ejercicio}: ${msg(e)}` }) }
   }
   const noFichero = calcula ? porQueNoFichero(m, checks) : null
   const errores = (checks ?? []).filter((c) => c.resultado === 'error').length
   const bajar = async () => {
-    const s = await hacienda('fichero_190', { declaracion: d!.id })
+    const s = await hacienda(m.modelo === '180' ? 'fichero_180' : 'fichero_190', { declaracion: d!.id })
     if (!s.ok) { alHacer({ tono: 'falta', texto: `No se ha descargado: ${s.mensaje}` }); return }
     const texto = String(s.fichero ?? '')
     const bytes = Uint8Array.from(texto, (ch) => ch.charCodeAt(0) & 0xff) // ISO-8859-1, como pide el anexo
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([bytes], { type: 'text/plain;charset=iso-8859-1' }))
-    a.download = String(s.nombre ?? `190_${ejercicio}.txt`)
+    a.download = String(s.nombre ?? `${m.modelo}_${ejercicio}.txt`)
     a.click()
     URL.revokeObjectURL(a.href)
     alHacer({ tono: 'ok', texto: `Descargado ${a.download}: ${s.mensaje}` })
@@ -336,6 +349,115 @@ function Centro({ m, ejercicio, perceptores }: { m: ModeloTrimestre; ejercicio: 
   )
 }
 
+/** El centro del 180: cada arrendador con lo pagado, el porcentaje, lo retenido y su local (o el formulario para ponerlo). */
+function Arrendadores({ companyId, ejercicio, arrendadores, editable, alHacer }: {
+  companyId: string; ejercicio: number; arrendadores: Perceptor180[] | null; editable: boolean; alHacer: (h: Hecho) => void
+}) {
+  const [editando, setEditando] = useState<string | null>(null)
+  const filas = arrendadoresEnOrden(arrendadores ?? [])
+  const con = filas.filter((p) => p.falta.length > 0).length
+  return (
+    <section className="s-tarjeta s-trimestre-derecha" aria-labelledby="derecha-titulo" data-prueba="arrendadores-180">
+      <div className="s-trimestre-derecha-cabeza">
+        <h2 id="derecha-titulo" className="s-trimestre-derecha-titulo">Los arrendadores del {ejercicio}</h2>
+        <span className="s-apoyo">{arrendadores === null ? 'Leyendo…' : `${filas.length} ${filas.length === 1 ? 'arrendador' : 'arrendadores'}${con ? ` · ${con} con algo que corregir, arriba` : ''}`}</span>
+      </div>
+      {arrendadores !== null && filas.length === 0 && <p className="s-apoyo">En el año no hay ningún alquiler con retención.</p>}
+      {filas.length > 0 && (
+        <div className="s-anual-tabla">
+        <table className="s-trimestre-casillas s-anual-perceptores" aria-label="Arrendadores del 180">
+          <thead><tr><th scope="col">Quién y el local</th><th scope="col" className="s-tabla-cifra">Pagado</th><th scope="col" className="s-tabla-cifra">Retenido</th></tr></thead>
+          <tbody>{filas.map((p, i) => {
+            const clave = p.proveedor ?? p.perceptor ?? String(i)
+            return (
+              <tr key={clave} data-falta={p.falta.length ? 'si' : undefined}>
+                <td>
+                  <strong>{p.nombre ?? 'Sin nombre'}</strong>
+                  <span className="s-tabla-apoyo">{p.nif ?? 'sin NIF'}{p.provincia ? ` · provincia ${p.provincia}` : ''}</span>
+                  {p.inmueble
+                    ? <span className="s-tabla-apoyo" data-prueba="local">Local: {inmuebleEnPalabras(p.inmueble)}</span>
+                    : <span className="s-tabla-apoyo">El 180 lleva el local alquilado: su referencia catastral y su dirección.</span>}
+                  {p.falta.length > 0 && <span className="s-impuestos-aviso">! {p.falta.join(', ')}</span>}
+                  {editable && p.proveedor && editando !== clave && (
+                    <Boton variante="enlace" onClick={() => setEditando(clave)}>{p.inmueble ? 'Cambiar el local' : 'Poner el local'}</Boton>
+                  )}
+                  {editable && !p.proveedor && <span className="s-tabla-apoyo">Sin ficha de proveedor: enlaza su subcuenta a su ficha para poner el local.</span>}
+                </td>
+                <td className="s-tabla-cifra s-cifra">{eurosExactos(p.base)}</td>
+                <td className="s-tabla-cifra s-cifra">{eurosExactos(p.retenciones)}<span className="s-tabla-apoyo">al {porcentajeEnPalabras(p.porcentaje)}</span></td>
+              </tr>
+            )
+          })}</tbody>
+        </table>
+        </div>
+      )}
+      {/* El formulario, debajo de la tabla y a todo el ancho: en el móvil no cabe en una celda. */}
+      {filas.filter((p) => p.proveedor && (p.proveedor ?? p.perceptor) === editando).map((p) => (
+        <FormInmueble key={p.proveedor} companyId={companyId} proveedor={p.proveedor!} nombre={p.nombre} actual={p.inmueble} alCerrar={() => setEditando(null)} alHacer={alHacer} />
+      ))}
+    </section>
+  )
+}
+
+const SITUACIONES: { valor: Inmueble180['situacion']; texto: string }[] = [
+  { valor: '1', texto: 'Con referencia catastral (fuera del País Vasco y Navarra)' },
+  { valor: '2', texto: 'Con referencia catastral, en el País Vasco' },
+  { valor: '3', texto: 'Con referencia catastral, en Navarra' },
+  { valor: '4', texto: 'Sin referencia catastral' },
+]
+
+/** El local alquilado de un arrendador, con lo que pide el anexo VI. Lo comprueba la base al guardar, y dice qué ha guardado. */
+function FormInmueble({ companyId, proveedor, nombre, actual, alCerrar, alHacer }: {
+  companyId: string; proveedor: string; nombre: string | null; actual: Inmueble180 | null; alCerrar: () => void; alHacer: (h: Hecho) => void
+}) {
+  const [i, setI] = useState<Partial<Inmueble180>>(actual ?? { situacion: '1' })
+  const [haciendo, setHaciendo] = useState(false)
+  const falta = faltaEnInmueble(i)
+  const poner = (k: keyof Inmueble180) => (e: { target: { value: string } }) => setI((x) => ({ ...x, [k]: e.target.value }))
+  const texto = (k: keyof Inmueble180, etiqueta: string, ayuda?: string, modo?: 'numeric') => (
+    <Campo etiqueta={etiqueta} ayuda={ayuda}>
+      {(p) => <input {...p} className="s-control" inputMode={modo} autoComplete="off" value={String(i[k] ?? '')} onChange={poner(k)} />}
+    </Campo>
+  )
+  return (
+    <form className="s-trimestre-perceptores" data-prueba="form-inmueble" onSubmit={async (e) => {
+      e.preventDefault()
+      if (falta.length) return
+      setHaciendo(true)
+      try {
+        const r = await ponerInmueble180(companyId, proveedor, { ...i, catastral: i.situacion === '4' ? null : i.catastral ?? null })
+        alHacer({ tono: 'ok', texto: r.mensaje })
+      } catch (x) { alHacer({ tono: 'falta', texto: `No se ha guardado el local: ${msg(x)}` }) } finally { setHaciendo(false) }
+    }}>
+      <p className="s-trimestre-perceptores-titulo">El local alquilado a {nombre ?? 'este arrendador'}</p>
+      <div className="s-trimestre-perceptores-campos">
+        <Campo etiqueta="Situación">
+          {(p) => (
+            <select {...p} className="s-control" value={i.situacion ?? ''} onChange={poner('situacion')}>
+              {SITUACIONES.map((s) => <option key={s.valor} value={s.valor}>{s.texto}</option>)}
+            </select>
+          )}
+        </Campo>
+        {i.situacion !== '4' && texto('catastral', 'Referencia catastral', '20 letras y cifras, como en el recibo del IBI.')}
+        {texto('tipo_via', 'Tipo de vía', 'CL, AV, PZ…')}
+        {texto('nombre_via', 'Calle')}
+        {texto('numero', 'Número')}
+        {texto('planta', 'Planta')}
+        {texto('puerta', 'Puerta')}
+        {texto('cp', 'Código postal', undefined, 'numeric')}
+        {texto('municipio', 'Municipio')}
+        {texto('provincia', 'Provincia', 'Dos cifras: 28 es Madrid.', 'numeric')}
+        {texto('codigo_municipio', 'Código de municipio del INE', 'Cinco cifras, si lo sabes.', 'numeric')}
+      </div>
+      {falta.length > 0 && <p className="s-impuestos-porque-no" role="note">Falta {falta.join(', ')}.</p>}
+      <div className="s-impuestos-fila-botones">
+        <Boton type="submit" variante="principal" disabled={haciendo || falta.length > 0}>{haciendo ? 'Guardando…' : 'Guardar el local'}</Boton>
+        <Boton variante="enlace" onClick={alCerrar}>Cancelar</Boton>
+      </div>
+    </form>
+  )
+}
+
 /** Lo comprobado: cada aviso con lo que lo causa (el asiento o el perceptor), y «Dar por bueno» en los avisos. */
 function Comprobado({ m, checks, fallo, alHacer }: { m: ModeloTrimestre; checks: Check[] | null; fallo: string | null; alHacer: (h: Hecho) => void }) {
   const decl = m.declaracion
@@ -344,7 +466,9 @@ function Comprobado({ m, checks, fallo, alHacer }: { m: ModeloTrimestre; checks:
   return (
     <section className="s-tarjeta s-trimestre-comprobado" aria-labelledby="comp-titulo" data-prueba="comprobado">
       <h3 id="comp-titulo" className="s-trimestre-cartera-titulo">Lo comprobado</h3>
-      {!decl && <p className="s-apoyo">{CALCULA_SUMIED.has(m.modelo) ? 'Al calcularlo, Sumied comprueba que suma lo mismo que los 111 del año y que cada perceptor tiene su NIF y su provincia.' : `Del ${m.modelo} no hay comprobaciones todavía.`}</p>}
+      {!decl && <p className="s-apoyo">{m.modelo === '180'
+        ? 'Al calcularlo, Sumied comprueba que suma lo mismo que los 115 del año y que cada arrendador tiene su NIF, su provincia y su local.'
+        : CALCULA_SUMIED.has(m.modelo) ? 'Al calcularlo, Sumied comprueba que suma lo mismo que los 111 del año y que cada perceptor tiene su NIF y su provincia.' : `Del ${m.modelo} no hay comprobaciones todavía.`}</p>}
       {decl && !checks && !fallo && <p className="s-apoyo">Leyendo…</p>}
       {fallo && <p className="s-impuestos-fallo" role="alert">{fallo}</p>}
       {lista.length > 0 && (
@@ -368,8 +492,14 @@ function Aviso({ c, presentada, alHacer }: { c: Check; presentada: boolean; alHa
     ...(((det.lineas as { asientos?: Asiento[] }[] | undefined) ?? []).flatMap((l) => l.asientos ?? [])),
   ]
   const perceptores = ((det.perceptores as Perceptor190[] | undefined) ?? [])
-  const periodos = c.clave === 'sum_111_vs_190'
-    ? ((det.periodos as { periodo: string; base_111: number; retenido_111: number; base_diario: number; retenido_diario: number; declaracion: string | null }[] | undefined) ?? [])
+  // El cuadre por periodos: el 190 contra los 111 y el 180 contra los 115.
+  const de = c.clave === 'sum_115_vs_180' ? '115' : '111'
+  const periodos = c.clave === 'sum_111_vs_190' || c.clave === 'sum_115_vs_180'
+    ? ((det.periodos as Record<string, unknown>[] | undefined) ?? []).map((p) => ({
+        periodo: String(p.periodo), declaracion: (p.declaracion as string | null) ?? null,
+        base_111: Number(p[`base_${de}`] ?? 0), retenido_111: Number(p[`retenido_${de}`] ?? 0),
+        base_diario: Number(p.base_diario ?? 0), retenido_diario: Number(p.retenido_diario ?? 0),
+      }))
     : []
   const casa = (a: number, b: number) => Math.abs(a - b) < 0.005
   return (
@@ -377,7 +507,7 @@ function Aviso({ c, presentada, alHacer }: { c: Check; presentada: boolean; alHa
       {c.resultado === 'ok' ? '✓ ' : '! '}{c.titulo}
       {c.aceptado && <span className="s-tabla-apoyo">Dado por bueno: {c.motivo}</span>}
       {c.resultado !== 'ok' && perceptores.length > 0 && (
-        <ul className="s-anual-causa">{perceptores.map((p, i) => <li key={i}>{p.nombre ?? 'Sin nombre'} · {p.nif ?? 'sin NIF'}{p.clave === 'G' ? ' · corrígelo en su ficha de proveedor' : ''}</li>)}</ul>
+        <ul className="s-anual-causa">{perceptores.map((p, i) => <li key={i}>{p.nombre ?? 'Sin nombre'} · {p.nif ?? 'sin NIF'}{p.clave === 'G' || c.clave === 'payees_180_nif' || c.clave === 'payees_180_province' ? ' · corrígelo en su ficha de proveedor' : c.clave === 'lease_180' ? ' · pon su local en su fila, en el centro' : ''}</li>)}</ul>
       )}
       {c.resultado !== 'ok' && asientos.length > 0 && (
         <ul className="s-anual-causa">{asientos.slice(0, 12).map((a) => (
@@ -385,14 +515,14 @@ function Aviso({ c, presentada, alHacer }: { c: Check; presentada: boolean; alHa
         ))}{asientos.length > 12 && <li className="s-apoyo">y {asientos.length - 12} más</li>}</ul>
       )}
       {c.resultado === 'warning' && periodos.length > 0 && (
-        <table className="s-trimestre-cuadre" aria-label="El 190 y los 111">
-          <thead><tr><th scope="col">Periodo</th><th scope="col" className="s-tabla-cifra">El 111</th><th scope="col" className="s-tabla-cifra">El diario</th></tr></thead>
+        <table className="s-trimestre-cuadre" aria-label={`El ${de === '115' ? '180' : '190'} y los ${de}`}>
+          <thead><tr><th scope="col">Periodo</th><th scope="col" className="s-tabla-cifra">El {de}</th><th scope="col" className="s-tabla-cifra">El diario</th></tr></thead>
           <tbody>{periodos.map((p) => {
             const vacio = !p.declaracion && casa(p.base_diario, 0) && casa(p.retenido_diario, 0)
             const bien = vacio || (!!p.declaracion && casa(p.base_111, p.base_diario) && casa(p.retenido_111, p.retenido_diario))
             return (
               <tr key={p.periodo} data-casa={bien ? 'si' : 'no'}>
-                <th scope="row">{bien ? '✓ ' : '! '}{p.periodo}{p.declaracion ? '' : ' · sin 111'}</th>
+                <th scope="row">{bien ? '✓ ' : '! '}{p.periodo}{p.declaracion ? '' : ` · sin ${de}`}</th>
                 <td className="s-tabla-cifra s-cifra">{p.declaracion ? <>{eurosExactos(p.retenido_111)}<span className="s-tabla-apoyo">base {eurosExactos(p.base_111)}</span></> : '—'}</td>
                 <td className="s-tabla-cifra s-cifra">{eurosExactos(p.retenido_diario)}<span className="s-tabla-apoyo">base {eurosExactos(p.base_diario)}</span></td>
               </tr>

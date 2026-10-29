@@ -1,0 +1,3 @@
+# W10a · vuelta atrás: trg_sale_push_status como estaba, byte a byte, con el
+# secreto escrito. Solo sirve ANTES de que Julio cambie el secreto.
+supabase/vuelta-atras/20261028T1630_w10a_order_advance_secreto_del_vault.down.sql
