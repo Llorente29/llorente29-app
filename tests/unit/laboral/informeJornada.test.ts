@@ -98,7 +98,7 @@ describe('el informe del tablero 5', () => {
 
   it('lo antiguo de Foodint, con su texto; y la petición aprobada, con quién la pidió', () => {
     const f = fila('2026-10-25')
-    expect(f.registro[0]).toBe('Móvil del trabajador (antes del 27/10, deducido)')
+    expect(f.registro[0]).toBe('Portal antiguo, sin ubicación: no se sabe si desde el móvil o la tablet')
     expect(f.registro).toContain('Salida añadida después (14:00) · la pidió el trabajador el 26/10/2026 a las 10:12 («me olvidé»), aprobada por Laura (encargado) el 26/10/2026 a las 10:40')
   })
 
@@ -118,6 +118,37 @@ describe('el informe del tablero 5', () => {
   it('sin códigos: ni ids ni nombres de columnas en lo que se lee', () => {
     const todo = JSON.stringify(inf.filas.map(f => f.registro))
     expect(todo).not.toMatch(/\b(a1|c2|x1|create_manual|void|manager|movil|kiosko)\b/)
+  })
+})
+
+describe('el origen corregido (0732: «kiosko» que era el móvil)', () => {
+  // La marca a1 venía como «kiosko» y tuvo GPS: la corrección de datos la pasó
+  // a «movil» y dejó su fila «edit» en el rastro, que solo cambia el origen.
+  const corregida = armarInforme({
+    ...DATOS,
+    marcas: DATOS.marcas.map(m => m.id === 'a1'
+      ? { ...m, origen_corregido: { antes: 'kiosko', cuando: iso('2026-10-29T09:30:00+01:00'), motivo: 'Origen corregido: …' } }
+      : m),
+    cambios: [...DATOS.cambios, {
+      id: 'x9', marca: 'a1', accion: 'edit', cuando: iso('2026-10-29T09:30:00+01:00'), quien: 'Corrección de datos (Folvy)', papel: null,
+      es_la_persona: false, motivo: 'Origen corregido: …',
+      antes: { type: 'entrada', real_datetime: iso('2026-10-22T18:58:00+02:00') },
+      despues: { type: 'entrada', real_datetime: iso('2026-10-22T18:58:00+02:00') },
+      conformidad: null, conformidad_at: null, conformidad_nota: null, peticion: null, solo_origen: true,
+    }],
+  }, AHORA)
+  const dia = corregida.filas.find(f => f.dia === '2026-10-22')!
+
+  it('se dice en la marca, con la fecha y de qué venía', () => {
+    expect(dia.registro).toContain('Fichado desde el móvil en Alcalá · origen corregido el 29/10/2026 a las 09:30 (figuraba como «quiosco del portal antiguo»; la marca tuvo ubicación del móvil)')
+  })
+  it('no cuenta como corregida ni sale como «cambiada después»', () => {
+    expect(dia.corregido).toBe(false)
+    expect(dia.registro.join(' ')).not.toMatch(/cambiada después/)
+    expect(corregida.totales.corregidas).toBe('3 de 11')
+  })
+  it('sin códigos', () => {
+    expect(JSON.stringify(dia.registro)).not.toMatch(/\b(a1|x9|movil|kiosko|edit)\b/)
   })
 })
 

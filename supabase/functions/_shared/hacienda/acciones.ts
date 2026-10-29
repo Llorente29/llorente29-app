@@ -22,6 +22,7 @@
 //                   conta-documentos. Si el PDF no sale, se pide subirlo.
 //   fichero    I01b · «Descargar el fichero oficial»: generado y comprobado,
 //              sin llamar a Hacienda (funciona con la puerta cerrada).
+//   fichero190 S02 · Lo mismo con el 190 (diseño del anexo del BOE).
 //   fuera      «Ya lo presenté fuera»: con el CSV. Con certificado, se
 //              comprueba con la consulta (ese CSV, ese NIF, ese modelo y
 //              periodo) y se trae el PDF por la URL del CSV; si no responde,
@@ -36,6 +37,7 @@ import { AlmacenNoDeja, enmascarar } from '../certificados/almacen.ts'
 import { type Forge, firmanteDelPem, CertificadoNoVale } from '../certificados/leerP12.ts'
 import { LlamadaFallida } from '../certificados/mtls.ts'
 import { comprobar303, FicheroNoVale, generar303, type Datos303 } from '../impuestos/dr303.ts'
+import { comprobar190, FicheroNoVale as FicheroNoVale190, generar190, type Datos190 } from '../impuestos/modelo190.ts'
 import { type Hacienda, PuertaCerrada, RespuestaRara } from './puerta.ts'
 
 export interface Dependencias {
@@ -315,6 +317,49 @@ export async function fichero303(base: ClienteBase, programa: Dependencias['prog
       return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${comprobado.fallos.join(' ')}`, fallos: comprobado.fallos }
     }
     return { ok: true, fichero, nombre: `303_${datos.ejercicio}_${datos.periodo}.txt`, mensaje: `El fichero del 303 del ${datos.periodo}/${datos.ejercicio}, comprobado contra el diseño de Hacienda.` }
+  } catch (e) {
+    const f = porQueFalla(e)
+    return { ok: false, motivo: f.motivo, mensaje: f.mensaje }
+  }
+}
+
+/**
+ * S02 · «Descargar el fichero oficial» del 190: generado recorriendo el diseño
+ * del anexo de la Orden EHA/3127/2009 y comprobado releyéndolo. No llama a
+ * Hacienda. La base dice si la persona puede (conta_impuesto_gestiona) y da
+ * los datos (conta_impuesto_190_fichero, que no los da con un error sin
+ * resolver en lo comprobado).
+ */
+export async function fichero190(base: ClienteBase, a: { usuario: string; declaracion: string; empresa: string }): Promise<Salida> {
+  try {
+    const puede = await rpc<boolean>(base, 'conta_impuesto_gestiona', { p_user: a.usuario, p_company: a.empresa })
+    if (puede !== true) return { ok: false, motivo: 'no_deja', mensaje: 'No puedes bajar el fichero de los impuestos de esta empresa.' }
+    const x = await rpc<{
+      ejercicio: number; nif: string; nombre: string; numero: string
+      contacto: { telefono: string; nombre: string; correo: string }
+      perceptores: { nif: string | null; nombre: string | null; provincia: string | null; clave: Datos190['perceptores'][number]['clave']; subclave: string | null
+        integra: number; retenciones: number; anio_nacimiento: number | null; gastos?: number | null }[]
+    }>(base, 'conta_impuesto_190_fichero', { p_return: a.declaracion, p_user: a.usuario })
+    const d: Datos190 = {
+      ejercicio: x.ejercicio, nif: x.nif, nombre: x.nombre, numero: x.numero, contacto: x.contacto,
+      perceptores: x.perceptores.map((p) => ({
+        nif: p.nif ?? '', nombre: p.nombre ?? '', provincia: p.provincia ?? '', clave: p.clave, subclave: p.subclave,
+        integra: Number(p.integra), retenciones: Number(p.retenciones), anioNacimiento: p.anio_nacimiento, gastos: p.gastos === null || p.gastos === undefined ? null : Number(p.gastos),
+      })),
+    }
+    let fichero: string
+    try {
+      fichero = generar190(d)
+    } catch (e) {
+      const fallos = e instanceof FicheroNoVale190 ? e.fallos : ['No se ha podido generar el fichero.']
+      return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${fallos.join(' ')}`, fallos }
+    }
+    const c = comprobar190(fichero, d)
+    if (!c.ok) return { ok: false, motivo: 'fichero', mensaje: `El fichero no cumple el diseño de Hacienda: ${c.fallos.join(' ')}`, fallos: c.fallos }
+    return {
+      ok: true, fichero, nombre: `190_${x.ejercicio}.txt`,
+      mensaje: `El fichero del 190 de ${x.ejercicio}: ${c.perceptores} ${c.perceptores === 1 ? 'perceptor' : 'perceptores'}, comprobado contra el diseño de Hacienda.`,
+    }
   } catch (e) {
     const f = porQueFalla(e)
     return { ok: false, motivo: f.motivo, mensaje: f.mensaje }

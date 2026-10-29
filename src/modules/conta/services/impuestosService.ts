@@ -140,7 +140,7 @@ export function confirmarCertificado(certificado: string, accion: 'test' | 'file
 export type SalidaHacienda = { ok: boolean; mensaje: string; motivo?: string; [k: string]: unknown }
 
 /** Llama a conta-hacienda. Nunca lanza: si la función contesta con un error, su cuerpo dice por qué. */
-export async function hacienda(accion: 'puerta' | 'fichero_303' | 'presentar_303' | 'ya_presentado_fuera' | 'probar', cuerpo: Record<string, unknown> = {}): Promise<SalidaHacienda> {
+export async function hacienda(accion: 'puerta' | 'fichero_303' | 'fichero_190' | 'presentar_303' | 'ya_presentado_fuera' | 'probar', cuerpo: Record<string, unknown> = {}): Promise<SalidaHacienda> {
   hayBase()
   const { data, error } = await supabase!.functions.invoke('conta-hacienda', { body: { accion, ...cuerpo } })
   if (!error && data && typeof data === 'object' && 'ok' in data) return data as SalidaHacienda
@@ -476,4 +476,46 @@ export async function asesoria(accion: 'invitar' | 'ver' | 'aceptar' | 'aprobar'
     return { ok: false, mensaje: `La invitación ha contestado ${ctx.status}. No se ha cambiado nada.` }
   }
   return { ok: false, mensaje: 'No se ha podido hablar con la invitación. No se ha cambiado nada.' }
+}
+
+// ── S02 · Los modelos del año ──────────────────────────────────────────────
+
+/** S02 · La tira del año (conta_impuesto_anual): los modelos anuales de la empresa, con la forma del trimestre. No escribe nada. */
+export function leerAnual(companyId: string, ejercicio: number): Promise<Trimestre> {
+  return rpc<Trimestre>('conta_impuesto_anual', { p_company: companyId, p_year: ejercicio })
+}
+
+/** S02 · Lo que devuelve conta_impuesto_190_calcular. */
+export interface Calculo190 { declaracion: string; ejercicio: number; perceptores: number; casillas: Record<string, number>; errores: number; avisos: number }
+
+/** S02 · Calcula (o recalcula) el borrador del 190 del año desde los 111. */
+export function calcular190(companyId: string, ejercicio: number): Promise<Calculo190> {
+  return rpc<Calculo190>('conta_impuesto_190_calcular', { p_company: companyId, p_year: ejercicio })
+}
+
+/** S02 · «Ya lo presenté fuera» de un modelo anual informativo, con su CSV y su fecha. */
+export function informativaFuera(companyId: string, modelo: string, ejercicio: number, csv: string, fecha: string, justificante: string | null): Promise<{ ok: boolean; mensaje: string }> {
+  return rpc('conta_impuesto_informativa_fuera', { p_company: companyId, p_form: modelo, p_year: ejercicio, p_csv: csv, p_fecha: fecha, p_justificante: justificante })
+}
+
+/** S02 · Un perceptor del 190, como lo dejó el cálculo (tax_return_line.frozen). */
+export interface Perceptor190 {
+  clave: string; subclave: string | null; nif: string | null; nombre: string | null; provincia: string | null; nif_valido: boolean
+  integra: number; retenciones: number; sin_trabajador?: boolean; origen: 'diario' | 'nominas'; anio_nacimiento?: number | null
+  asientos?: { asiento: string; fecha: string; serie: number | null; numero: number | null; retenido: number; periodo: string }[]
+}
+
+/** S02 · Los perceptores del 190 calculado. */
+export async function perceptores190(id: string, cuenta: string): Promise<Perceptor190[]> {
+  const { data, error } = await tabla('tax_return_line').select('frozen').eq('tax_return_id', id).eq('account_id', cuenta)
+  if (error) throw new Error(`No se han podido leer los perceptores: ${error.message}`)
+  return ((data ?? []) as { frozen: Perceptor190 }[]).map((f) => f.frozen)
+}
+
+/** S02 · Lo comprobado de una declaración, con su id y si un aviso se dio por bueno (para «Dar por bueno»). */
+export async function comprobacionesConAviso(id: string, cuenta: string): Promise<{ id: string; clave: string; resultado: 'ok' | 'warning' | 'error'; titulo: string; detalle: Record<string, unknown> | null; aceptado: boolean; motivo: string | null }[]> {
+  const { data, error } = await tabla('tax_return_check').select('id, check_key, result, title, detail, accepted_at, accepted_reason').eq('tax_return_id', id).eq('account_id', cuenta)
+  if (error) throw new Error(`No se ha podido leer lo comprobado: ${error.message}`)
+  return ((data ?? []) as { id: string; check_key: string; result: 'ok' | 'warning' | 'error'; title: string; detail: Record<string, unknown> | null; accepted_at: string | null; accepted_reason: string | null }[])
+    .map((f) => ({ id: f.id, clave: f.check_key, resultado: f.result, titulo: f.title, detalle: f.detail, aceptado: f.accepted_at !== null, motivo: f.accepted_reason }))
 }

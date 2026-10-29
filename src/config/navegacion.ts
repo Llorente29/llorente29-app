@@ -282,6 +282,7 @@ export const CONTA = {
     impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
     /** I01c · El trimestre (maqueta_303_v2): impuestos/trimestre/2026/3T. */
     impuestoTrimestre: 'impuestos/trimestre/:ejercicio/:trimestre',
+    impuestoAnual: 'impuestos/anual/:ejercicio/:modelo',
     /** I01c · El trimestre de una empresa por la ruta (la vista de despacho de P abre el de un cliente). */
     impuestoTrimestreEmpresa: 'impuestos/empresa/:empresa/trimestre/:ejercicio/:trimestre',
     /** P01 · El trimestre de un cliente de la asesoría: impuestos/clientes/<empresa>. */
@@ -452,6 +453,8 @@ export const rutaIvaPeriodo = (ejercicio: number, periodo: string): string => ru
 export const rutaTrimestre = (ejercicio: number, trimestre: string, empresa?: string): string => (empresa
   ? rutaConta(CONTA.rutas.impuestoTrimestreEmpresa, { empresa, ejercicio: String(ejercicio), trimestre })
   : rutaConta(CONTA.rutas.impuestoTrimestre, { ejercicio: String(ejercicio), trimestre }))
+/** S02 · Los modelos del año: el 190 de 2026 → /conta/impuestos/anual/2026/190. */
+export const rutaAnual = (ejercicio: number, modelo: string): string => rutaConta(CONTA.rutas.impuestoAnual, { ejercicio: String(ejercicio), modelo })
 /** Subir los documentos de la liquidación de un proveedor, en un local y un mes ('YYYY-MM-01'). */
 export const rutaLiquidacionNueva = (proveedor: string, local: string | null, mes: string): string => {
   const q = new URLSearchParams({ proveedor, mes })

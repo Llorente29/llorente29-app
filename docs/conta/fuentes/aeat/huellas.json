@@ -1,0 +1,12 @@
+{
+  "_que_es": "Diseños de registro oficiales de la AEAT guardados tal cual, con su huella. El sha256 se comprueba en tests/conta/s02/fuentesAeat.test.ts: si el fichero cambia, la prueba falla.",
+  "ficheros": {
+    "dr390e2026.xlsx": {
+      "modelo": "390",
+      "ejercicio": 2026,
+      "origen": "Diseño de registro oficial del modelo 390 de 2026 (AEAT), aportado por Julio el 28/10/2026: la sede de la AEAT no responde desde el entorno de trabajo.",
+      "sha256": "5ce047995347c2b5ad6e5d4e407f126eeb9bd214602ed7c99e9f85175176ec15",
+      "bytes": 556940
+    }
+  }
+}
