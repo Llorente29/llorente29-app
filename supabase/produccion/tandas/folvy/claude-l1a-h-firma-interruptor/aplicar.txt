@@ -1,0 +1,19 @@
+# L1a-H · La firma del registro, solo cuando la empresa la encienda (29/10/2026).
+# Rama claude/l1a-h-firma-interruptor. Se ensaya y se aplica desde esta rama,
+# antes de fusionar (el front nuevo lee accounts.firma_registro_mes; sin la
+# columna, no pide la firma a nadie: falla hacia apagado).
+#
+#   1. 1135 — SOLO AÑADE: accounts.firma_registro_mes (admite nulos, sin valor
+#      por defecto: todas las cuentas, Foodint incluida, quedan apagadas sin
+#      tocar ninguna fila), su grant de lectura (regla de la 0731) y
+#      firma_registro_mes_pedir (nueva; solo el administrador de la cuenta).
+#      Se puede pasar dos veces.
+#
+# Nada está en el camino del pedido. No toca registro_jornada_firma: lo firmado
+# se conserva.
+# Antes (producción, 29/10 11:31 UTC): accounts sin la columna, sin la función,
+# nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261029T1135_l1ah_firma_interruptor.sql
+cuenta: scripts/conta/produccion/cuentas/l1ah-firma-interruptor.sql
