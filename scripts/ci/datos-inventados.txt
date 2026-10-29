@@ -1,0 +1,14 @@
+# scripts/ci/datos-inventados.txt
+#
+# W12 · Regla T11. Los datos INVENTADOS que no se ven inventados a simple vista
+# (los que sí, como 00000000T, 12345678Z o un IBAN del banco 9999, no hace
+# falta ponerlos aquí). Uno por línea, con su porqué detrás de «#». Antes de
+# añadir uno, comprueba que no es de nadie: contra producción, sin sacar el dato
+# (cuenta cuántas filas lo tienen en supplier, party, employees, treasury_account…).
+#
+# Comprobados el 29/10 contra producción: ninguno está en ninguna tabla.
+89890001K                 # NIF de las pruebas de Verifactu de la AEAT (v03, la huella de su documentación)
+91000123W                 # inventado del P01: el cliente autónomo de la semilla de staging
+91000234K                 # inventado del P01: el otro cliente de la semilla de staging
+ES1000492352082414205416  # inventado del S01d: el IBAN que se pone a un proveedor en la e2e de pagos
+ES9121000418450200051332  # el IBAN de ejemplo de los manuales; lo usan muchas pruebas

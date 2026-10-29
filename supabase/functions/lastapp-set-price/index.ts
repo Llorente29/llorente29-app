@@ -19,6 +19,7 @@
 // ============================================================================
 
 import { createClient } from "@supabase/supabase-js";
+import { comprobarSecreto } from "../_shared/secretoConRelevo.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,9 +58,9 @@ async function putProduct(token: string, catalogId: string, productId: string, l
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
+  // W10: acepta también AVAILABILITY_DISPATCH_SECRET_PREV mientras se cambia el secreto.
   const secret = req.headers.get("x-availability-dispatch-secret") ?? "";
-  const expected = Deno.env.get("AVAILABILITY_DISPATCH_SECRET") ?? "";
-  if (!expected || secret !== expected) return json({ ok: false, error: "unauthorized" }, 401);
+  if (!comprobarSecreto(secret, "AVAILABILITY_DISPATCH_SECRET")) return json({ ok: false, error: "unauthorized" }, 401);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* ignore */ }

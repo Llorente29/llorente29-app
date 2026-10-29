@@ -35,8 +35,8 @@ describe('la e2e de un push corre solo su área', () => {
     }
   })
 
-  it('la corta existe y está medida en tiempos.json (91 s en los dos tamaños)', async () => {
-    const t = (await import('../../e2e/tiempos.json')).default as Record<string, number>
+  it('la corta existe y está medida en tests/e2e/tiempos/ (91 s en los dos tamaños)', async () => {
+    const t = (await import('../../../scripts/e2e/trozos.mjs')).tiemposDelRepo() as Record<string, number>
     let s = 0
     for (const f of CORTA) {
       expect(existsSync(f), f).toBe(true)
