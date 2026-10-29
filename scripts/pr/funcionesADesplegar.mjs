@@ -45,11 +45,13 @@ export function funcionesDelCuerpo(cuerpo) {
   // N2: las funciones pueden ir en «### Sumied» y «### Folvy»; solo para un encabezado de su nivel o más alto.
   const nivel = lineas[i].trim().match(/^#+/)[0].length
   const out = []
+  // W12 (29/10): «ninguna» vale solo para su grupo («### Folvy» → ninguna de Folvy). Antes, una
+  // línea «ninguna» bajo un grupo vaciaba la sección entera y se perdían las del otro grupo (#390).
   for (const l of lineas.slice(i + 1)) {
     const h = l.trim().match(/^(#{1,6})\s/)
     if (h && h[1].length <= nivel) break
     if (h) continue
-    if (/^\s*ninguna\b/i.test(l)) return []
+    if (/^\s*[-*]?\s*ninguna\b/i.test(l)) continue
     const m = l.match(/^\s*[-*]\s*`?([a-z0-9][a-z0-9_-]*)`?/i)
     if (m) out.push(m[1])
   }

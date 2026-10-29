@@ -264,6 +264,14 @@ jobs:
           sparse-checkout: |
             scripts/e2e
             tests/e2e
+      # W12 · Regla T6 (29/10): un solo push a staging por paso. Si las dos
+      # últimas e2e acabadas de la rama salieron en rojo, la tercera no corre:
+      # la sesión para y avisa. La desbloquea una e2e en verde lanzada a mano.
+      - name: Dos e2e seguidas en rojo en esta rama · para y avisa
+        if: github.event_name == 'push' && github.ref_name != 'main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/e2e/dos-rojas.mjs
       - name: Frente (de la rama, o el pedido a mano)
         id: frente
         env:
@@ -615,7 +623,7 @@ jobs:
             # Lo que no tenía tiempo, medido con la misma vara (27/10): sale como
             # artefacto «tiempos-propuestos» para sacarlo de «sin medir». Un PR
             # con una e2e nueva no apunta nada: lo mide la entera.
-            node scripts/e2e/inflacion.mjs "$RUNNER_TEMP/informe.json" --nuevos "$RUNNER_TEMP/tiempos-propuestos.json" | tee -a "$GITHUB_STEP_SUMMARY"
+            node scripts/e2e/inflacion.mjs "$RUNNER_TEMP/informe.json" --nuevos "$RUNNER_TEMP/tiempos-propuestos" | tee -a "$GITHUB_STEP_SUMMARY"
           else
             echo "Ningún trozo dejó informe."
           fi
@@ -629,12 +637,12 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
-      - name: Tiempos propuestos (tests/e2e/tiempos.json con lo que no estaba medido)
+      - name: Tiempos propuestos (un fichero por prueba sin medir, para tests/e2e/tiempos/)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tiempos-propuestos
-          path: ${{ runner.temp }}/tiempos-propuestos.json
+          path: ${{ runner.temp }}/tiempos-propuestos
           retention-days: 14
           if-no-files-found: ignore
 

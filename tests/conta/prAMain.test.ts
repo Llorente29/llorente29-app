@@ -32,6 +32,12 @@ describe('la sección «Funciones a desplegar a mano»', () => {
     expect(funcionesDelCuerpo('## Funciones a desplegar a mano\nninguna')).toEqual([])
     expect(funcionesDelCuerpo('## Resumen\nnada')).toBeNull()
   })
+  it('W12: «ninguna» bajo un grupo vale solo para su grupo (el #390: «### Folvy» con «ninguna» vaciaba también la de Sumied)', () => {
+    const cuerpo = '## Funciones a desplegar a mano\n\n### Sumied\n- `conta-banco-agregador` (nueva)\n\n### Folvy\nninguna (las de _shared solo las importa la de Sumied)\n\n## Producto\nSumied'
+    expect(funcionesDelCuerpo(cuerpo)).toEqual(['conta-banco-agregador'])
+    expect(funcionesDelCuerpo('## Funciones a desplegar a mano\n### Sumied\nninguna\n### Folvy\n- send-email')).toEqual(['send-email'])
+    expect(funcionesDelCuerpo('## Funciones a desplegar a mano\n### Sumied\n- ninguna\n### Folvy\nninguna')).toEqual([])
+  })
   it('el PR cumple solo si dice exactamente las que toca, y su título no salta CI', () => {
     const cambiados = ['supabase/functions/_shared/marcas.ts']
     const bien = '## Funciones a desplegar a mano\n- conta-contrasena\n- send-email'

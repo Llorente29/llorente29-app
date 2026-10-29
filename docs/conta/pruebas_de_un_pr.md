@@ -76,7 +76,7 @@ pruebas.
   carril: unos 4 min) y el arranque de cada fichero (unos 5 s cada uno), salen
   **unos 12–13 min** de reloj.
 
-Los segundos son los de `tests/e2e/tiempos.json`, con la misma vara para
+Los segundos son los de `tests/e2e/tiempos/` (uno por prueba, W12), con la misma vara para
 todos.
 
 ## Dónde vive
