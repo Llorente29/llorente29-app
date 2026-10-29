@@ -1311,7 +1311,8 @@ declare v uuid;
 begin
   select account_id into v from public.company where id = p_company;
   if v is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
-  if not public.current_user_is_admin_or_manager_of(v) then
+  -- B01c: la función de cada noche (conta-banco-agregador) llama con la clave de servicio, sin persona.
+  if not (public.current_user_is_admin_or_manager_of(v) or auth.role() = 'service_role') then
     raise exception 'Solo un administrador o un encargado de la cuenta trabaja los bancos.' using errcode = '42501';
   end if;
   return v;
@@ -56770,6 +56771,62 @@ $$;
 
 
 --
+-- Name: lab_import_leer_cabeceras(uuid, text, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb DEFAULT '{}'::jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_lote public.lab_import_lote;
+  v_repetido boolean := false;
+  v_h jsonb;
+begin
+  if p_account_id is null or not public.current_user_is_admin_of(p_account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El historial de personal lo importa el administrador de la cuenta.';
+  end if;
+  if coalesce(btrim(p_fichero_nombre), '') = '' or coalesce(p_fichero_huella, '') !~ '^[0-9a-f]{64}$' then
+    raise exception 'FICHERO_SIN_NOMBRE_O_HUELLA' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_hojas) is distinct from 'array' or jsonb_array_length(p_hojas) = 0 then
+    raise exception 'SIN_HOJAS' using errcode = '22023', hint = 'El fichero no trae ninguna hoja.';
+  end if;
+  -- Solo cabeceras: nombre, columnas (textos) y filas (un número). Nada más.
+  for v_h in select * from jsonb_array_elements(p_hojas) loop
+    if jsonb_typeof(v_h) <> 'object'
+       or (select count(*) from jsonb_object_keys(v_h) k where k not in ('nombre', 'columnas', 'filas')) > 0
+       or jsonb_typeof(v_h -> 'nombre') <> 'string'
+       or jsonb_typeof(v_h -> 'columnas') <> 'array'
+       or jsonb_typeof(v_h -> 'filas') <> 'number'
+       or exists (select 1 from jsonb_array_elements(v_h -> 'columnas') c where jsonb_typeof(c) <> 'string') then
+      raise exception 'HOJA_MAL_FORMADA' using errcode = '22023', hint = 'Cada hoja lleva solo su nombre, sus cabeceras y cuántas filas tiene.';
+    end if;
+  end loop;
+  if pg_column_size(p_hojas) + pg_column_size(coalesce(p_comparacion, '{}'::jsonb)) > 262144 then
+    raise exception 'CABECERAS_DEMASIADO_GRANDES' using errcode = '22023';
+  end if;
+
+  select * into v_lote from public.lab_import_lote
+   where account_id = p_account_id and fichero_huella = p_fichero_huella and estado not in ('deshecho', 'descartado');
+  if v_lote.id is not null then
+    v_repetido := true;
+    update public.lab_import_lote
+       set resumen = jsonb_build_object('hojas', p_hojas, 'comparacion', coalesce(p_comparacion, '{}'::jsonb)),
+           fichero_nombre = btrim(p_fichero_nombre)
+     where id = v_lote.id
+    returning * into v_lote;
+  else
+    insert into public.lab_import_lote (account_id, origen, fichero_nombre, fichero_huella, resumen, subido_por)
+    values (p_account_id, 'cegid', btrim(p_fichero_nombre), p_fichero_huella,
+            jsonb_build_object('hojas', p_hojas, 'comparacion', coalesce(p_comparacion, '{}'::jsonb)), auth.uid())
+    returning * into v_lote;
+  end if;
+  return jsonb_build_object('id', v_lote.id, 'repetido', v_repetido, 'subido_at', v_lote.subido_at, 'estado', v_lote.estado);
+end $_$;
+
+
+--
 -- Name: label_scan_register(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -87771,7 +87828,7 @@ CREATE TABLE public.bank_aggregator_link (
     last_from date,
     last_to date,
     CONSTRAINT bank_aggregator_link_last_status_check CHECK (((last_status IS NULL) OR (last_status = ANY (ARRAY['al_dia'::text, 'sin_movimientos'::text, 'permiso_caducado'::text, 'fallo'::text])))),
-    CONSTRAINT bank_aggregator_link_provider_check CHECK ((provider = ANY (ARRAY['simulado'::text, 'enable_banking'::text]))),
+    CONSTRAINT bank_aggregator_link_provider_check CHECK ((provider = ANY (ARRAY['simulado'::text, 'enable_banking'::text, 'open_banking_io'::text]))),
     CONSTRAINT bank_aggregator_link_renew_url_check CHECK (((renew_url IS NULL) OR (renew_url ~ '^https://'::text))),
     CONSTRAINT bank_aggregator_link_status_check CHECK ((status = ANY (ARRAY['activo'::text, 'caducado'::text, 'revocado'::text])))
 );
@@ -96302,6 +96359,63 @@ CREATE TABLE public.kitchen_unit (
     CONSTRAINT kitchen_unit_factor_positive CHECK ((factor_to_base > (0)::numeric)),
     CONSTRAINT kitchen_unit_seed_consistency CHECK (((is_seed AND (account_id IS NULL)) OR ((NOT is_seed) AND (account_id IS NOT NULL))))
 );
+
+
+--
+-- Name: lab_import_fila; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_import_fila (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    lote_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    hoja text NOT NULL,
+    fila_n integer NOT NULL,
+    datos jsonb NOT NULL,
+    huella text NOT NULL,
+    estado text DEFAULT 'ok'::text NOT NULL,
+    mensajes text[] DEFAULT '{}'::text[] NOT NULL,
+    destino_tabla text,
+    destino_id uuid,
+    CONSTRAINT lab_import_fila_estado_check CHECK ((estado = ANY (ARRAY['ok'::text, 'aviso'::text, 'error'::text, 'ignorada'::text]))),
+    CONSTRAINT lab_import_fila_fila_n_check CHECK ((fila_n > 0)),
+    CONSTRAINT lab_import_fila_hoja_check CHECK ((hoja = ANY (ARRAY['empresa'::text, 'convenio'::text, 'tablas_salariales'::text, 'conceptos'::text, 'trabajadores'::text, 'contratos'::text, 'nominas'::text, 'nominas_conceptos'::text, 'cuadre_contable'::text])))
+);
+
+
+--
+-- Name: TABLE lab_import_fila; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_import_fila IS 'LAB1 · Cada fila de cada hoja de un lote, tal cual (desde la tanda 2). account_id duplicado a propósito, para la RLS y la regla 9. Solo el administrador de la cuenta.';
+
+
+--
+-- Name: lab_import_lote; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_import_lote (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    origen text DEFAULT 'cegid'::text NOT NULL,
+    fichero_nombre text NOT NULL,
+    fichero_huella text NOT NULL,
+    estado text DEFAULT 'leido'::text NOT NULL,
+    resumen jsonb DEFAULT '{}'::jsonb NOT NULL,
+    subido_por uuid DEFAULT auth.uid(),
+    subido_at timestamp with time zone DEFAULT now() NOT NULL,
+    aplicado_por uuid,
+    aplicado_at timestamp with time zone,
+    CONSTRAINT lab_import_lote_estado_check CHECK ((estado = ANY (ARRAY['leido'::text, 'validado'::text, 'aplicado'::text, 'deshecho'::text, 'descartado'::text]))),
+    CONSTRAINT lab_import_lote_origen_check CHECK ((origen = 'cegid'::text))
+);
+
+
+--
+-- Name: TABLE lab_import_lote; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_import_lote IS 'LAB1 · Una subida del paquete de historial de personal (Cegid). Desde la tanda 1 guarda las cabeceras de cada hoja y su comparación con lo esperado; ningún valor. Solo el administrador de la cuenta.';
 
 
 --
@@ -107149,6 +107263,30 @@ ALTER TABLE ONLY public.kitchen_unit
 
 
 --
+-- Name: lab_import_fila lab_import_fila_lote_id_hoja_fila_n_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_import_fila
+    ADD CONSTRAINT lab_import_fila_lote_id_hoja_fila_n_key UNIQUE (lote_id, hoja, fila_n);
+
+
+--
+-- Name: lab_import_fila lab_import_fila_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_import_fila
+    ADD CONSTRAINT lab_import_fila_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_import_lote lab_import_lote_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_import_lote
+    ADD CONSTRAINT lab_import_lote_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: label_token label_token_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -113743,6 +113881,20 @@ CREATE INDEX kitchen_station_loc_idx ON public.kitchen_station USING btree (acco
 --
 
 CREATE UNIQUE INDEX kitchen_station_one_default_per_location ON public.kitchen_station USING btree (location_id) WHERE is_default;
+
+
+--
+-- Name: lab_import_lote_cuenta; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lab_import_lote_cuenta ON public.lab_import_lote USING btree (account_id, subido_at DESC);
+
+
+--
+-- Name: lab_import_lote_huella_viva; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX lab_import_lote_huella_viva ON public.lab_import_lote USING btree (account_id, fichero_huella) WHERE (estado <> ALL (ARRAY['deshecho'::text, 'descartado'::text]));
 
 
 --
@@ -122423,6 +122575,30 @@ ALTER TABLE ONLY public.kitchen_time_config
 
 ALTER TABLE ONLY public.kitchen_unit
     ADD CONSTRAINT kitchen_unit_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_import_fila lab_import_fila_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_import_fila
+    ADD CONSTRAINT lab_import_fila_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_import_fila lab_import_fila_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_import_fila
+    ADD CONSTRAINT lab_import_fila_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_import_lote lab_import_lote_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_import_lote
+    ADD CONSTRAINT lab_import_lote_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --
@@ -132382,6 +132558,32 @@ CREATE POLICY kitchen_unit_select ON public.kitchen_unit FOR SELECT USING (((acc
 --
 
 CREATE POLICY kitchen_unit_update ON public.kitchen_unit FOR UPDATE USING (((account_id IS NOT NULL) AND public.current_user_is_admin_or_manager_of(account_id)));
+
+
+--
+-- Name: lab_import_fila; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_import_fila ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_import_fila lab_import_fila_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_import_fila_leer ON public.lab_import_fila FOR SELECT TO authenticated USING (public.current_user_is_admin_of(account_id));
+
+
+--
+-- Name: lab_import_lote; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_import_lote ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_import_lote lab_import_lote_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_import_lote_leer ON public.lab_import_lote FOR SELECT TO authenticated USING (public.current_user_is_admin_of(account_id));
 
 
 --
@@ -146589,6 +146791,15 @@ GRANT ALL ON FUNCTION public.kitchen_unarchive_item(p_item_id uuid) TO service_r
 
 
 --
+-- Name: FUNCTION lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION label_scan_register(p_token text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -154539,6 +154750,22 @@ GRANT ALL ON TABLE public.kitchen_time_config TO service_role;
 GRANT ALL ON TABLE public.kitchen_unit TO anon;
 GRANT ALL ON TABLE public.kitchen_unit TO authenticated;
 GRANT ALL ON TABLE public.kitchen_unit TO service_role;
+
+
+--
+-- Name: TABLE lab_import_fila; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_import_fila TO service_role;
+GRANT SELECT ON TABLE public.lab_import_fila TO authenticated;
+
+
+--
+-- Name: TABLE lab_import_lote; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_import_lote TO service_role;
+GRANT SELECT ON TABLE public.lab_import_lote TO authenticated;
 
 
 --
