@@ -148,7 +148,7 @@ declare
   sup text := (select v #>> '{}' from prueba_190 where k = 'proveedor');
   trab text := (select v #>> '{}' from prueba_190 where k = 'trabajador');
   una boolean := (select (v #>> '{}')::boolean from prueba_190 where k = 'una_empresa');
-  c jsonb; d uuid; g jsonb; t jsonb; sin numeric;
+  c jsonb; d uuid; g jsonb; t jsonb; sin numeric; esperado numeric;
 begin
   c := public.conta_impuesto_190_calcular(emp, 2026);
   d := (c->>'declaracion')::uuid;
@@ -166,8 +166,10 @@ begin
     raise exception 'PRUEBA 190 · 3: la [02] no sube 2.300 (antes %, ahora %): la nómina sin retención no entra.', s0->>'c02', c#>>'{casillas,02}';
   end if;
   -- Lo pagado sin trabajador: la nómina sin retención (800) y, con varias empresas, también la de 1.000.
+  -- (El esperado va en una variable: dentro de un IF, PL/pgSQL corta la condición en el primer THEN.)
+  esperado := case when una then 800 else 1800 end;
   if (select coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0))
-     - (s0->>'sin_integra')::numeric <> case when una then 800 else 1800 end then
+     - (s0->>'sin_integra')::numeric <> esperado then
     raise exception 'PRUEBA 190 · 3: lo pagado «sin trabajador» no sube lo esperado (una empresa: %).', una;
   end if;
   if una then
