@@ -17,6 +17,7 @@
 --   5. La factura que llega por correo (170,10 = el total del albarán del
 --      paso 4) casa sola y dice que difiere en 52,00 €; la de 363,67 casa con
 --      el del paso 1; una de 99,99 espera su albarán.
+--   5b. La factura contra su albarán, línea a línea.
 --   6. El motivo del hueco lo quita de «líneas sin leer».
 --   7. El correo de facturas: la confirmación de Gmail con su código y su
 --      enlace, y cada correo con lo que se hizo.
@@ -35,6 +36,8 @@ set local statement_timeout = '180s';
 \i supabase/migrations/20261029T1012_s01c_facturas_solas.sql
 \i supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql
 
+-- La empresa de prueba de A, por su NIF de prueba (su id cambia de una base a otra).
+select set_config('s01c.empresa', (select id::text from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' and tax_id = 'B28000016'), true);
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 
 create function pg_temp.sesion(p_doc text, p_num text, p_total numeric, p_base numeric, p_suma numeric) returns uuid language plpgsql as $$
@@ -69,12 +72,12 @@ create function pg_temp.factura_por_correo(p_sup uuid, p_num text, p_total numer
 declare v_in uuid; v_f uuid;
 begin
   insert into document_inbox (account_id, company_id, channel, status, email_id, email_to, email_from, email_subject, email_received_at)
-  values ('c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'correo', 'leyendo', p_email,
+  values ('c01a0000-0000-4000-8000-00000000000a', current_setting('s01c.empresa')::uuid, 'correo', 'leyendo', p_email,
           'facturas-prueba-s01c@entrada.folvy.app', 'administracion@proveedor.example', 'Factura ' || p_num, now())
   returning id into v_in;
   insert into supplier_invoice (account_id, company_id, supplier_id, doc_kind, invoice_number, invoice_date, status, source, grand_total, tax_base_total, tax_total,
                                 needs_review, created_by_name, arrival_channel, inbox_id)
-  values ('c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', p_sup, 'invoice', p_num, date '2026-10-20', 'en_revision', 'ocr',
+  values ('c01a0000-0000-4000-8000-00000000000a', current_setting('s01c.empresa')::uuid, p_sup, 'invoice', p_num, date '2026-10-20', 'en_revision', 'ocr',
           p_total, round(p_total / 1.1, 2), p_total - round(p_total / 1.1, 2), true, 'Folvy', 'correo', v_in)
   returning id into v_f;
   update document_inbox set status = 'factura', supplier_invoice_id = v_f where id = v_in;
@@ -183,6 +186,36 @@ begin
   raise notice 'PRUEBA S01c · 5: casan solas la de 170,10 (difiere en 52,00 €: líneas sin leer) y la de 363,67; la de 99,99 espera su albarán.';
 end $$;
 
+-- ── 5b · La factura contra su albarán, línea a línea ───────────────────────
+-- Las líneas de la factura llegan después de la factura (así lo hace la
+-- entrada): la comparación se calcula al leerla. El albarán 26/13024 tiene una
+-- línea leída («Género», 1 × 1,00); la factura trae esa (en mayúsculas y con
+-- tilde) y la que no se leyó. La de 363,67 trae 2 del mismo artículo.
+do $$
+declare
+  f1 uuid := (select id from _s01c where que = 'f1');
+  f2 uuid := (select supplier_invoice_id from supplier_invoice_receipt where goods_receipt_id = 'c01c0000-0000-4000-8000-000000000101');
+  r jsonb;
+begin
+  insert into supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, position) values
+    (f1, 'GÉNERO', 1, 1.00, 1.00, 10, 1),
+    (f1, 'Aceite de prueba 5 L', 2, 26.00, 52.00, 10, 2);
+  r := public.compras_factura_lineas(f1);
+  if (r->>'lineas_factura')::int <> 2 or (r->>'cuadran')::int <> 1 or (r->>'solo_factura')::int <> 1 or (r->>'solo_albaran')::int <> 0
+     or r->'lineas'->0->>'resultado' <> 'cuadra' or r->'lineas'->0->>'albaran' <> '26/13024'
+     or r->'lineas'->1->>'resultado' <> 'solo_factura' or (r->'lineas'->1->>'importe_factura')::numeric <> 52.00 then
+    raise exception 'PRUEBA S01c · 5b: la de 170,10 línea a línea no es la esperada (%).', r;
+  end if;
+  insert into supplier_invoice_line (supplier_invoice_id, recipe_item_id, raw_text, qty, unit_price, line_amount, vat_pct, position) values
+    (f2, '7e000000-0000-4000-8000-000000000a01', 'Otro nombre en la factura', 2, 1.00, 2.00, 10, 1);
+  r := public.compras_factura_lineas(f2);
+  if (r->>'difieren')::int <> 1 or r->'lineas'->0->>'resultado' <> 'cantidad'
+     or (r->'lineas'->0->>'cant_factura')::numeric <> 2 or (r->'lineas'->0->>'cant_albaran')::numeric <> 1 then
+    raise exception 'PRUEBA S01c · 5b: la de 363,67 no difiere en cantidad (%).', r;
+  end if;
+  raise notice 'PRUEBA S01c · 5b: línea a línea, la de 170,10 cuadra en «Género» y trae 52,00 € que el albarán no tiene; la de 363,67 difiere en cantidad (2 frente a 1).';
+end $$;
+
 -- ── 6 · El motivo del hueco ────────────────────────────────────────────────
 do $$
 declare r jsonb;
@@ -233,23 +266,23 @@ reset role;
 do $$
 declare v_dir text;
 begin
-  select local_part into v_dir from company_inbound_address where company_id = '3b34403a-a7d6-4a48-a8d7-737e8cababdc' and kind = 'facturas';
+  select local_part into v_dir from company_inbound_address where company_id = current_setting('s01c.empresa')::uuid and kind = 'facturas';
   if v_dir is null then
     insert into company_inbound_address (account_id, company_id, kind, local_part, created_by_name)
-    values ('c01a0000-0000-4000-8000-00000000000a', '3b34403a-a7d6-4a48-a8d7-737e8cababdc', 'facturas', 'facturas-prueba-s01c', 'prueba')
+    values ('c01a0000-0000-4000-8000-00000000000a', current_setting('s01c.empresa')::uuid, 'facturas', 'facturas-prueba-s01c', 'prueba')
     returning local_part into v_dir;
   end if;
   insert into inbound_email_log (email_id, to_address, from_address, subject, company_id, account_id, outcome, detail, received_at) values
-    ('prueba-s01c-conf', v_dir || '@entrada.folvy.app', 'forwarding-noreply@google.com', '(#123456789) Confirmación de reenvío', '3b34403a-a7d6-4a48-a8d7-737e8cababdc',
+    ('prueba-s01c-conf', v_dir || '@entrada.folvy.app', 'forwarding-noreply@google.com', '(#123456789) Confirmación de reenvío', current_setting('s01c.empresa')::uuid,
      'c01a0000-0000-4000-8000-00000000000a', 'confirmacion', '{"codigo": "123456789", "enlace": "https://mail-settings.google.com/mail/vf-prueba"}', now() - interval '1 hour'),
-    ('prueba-s01c-1', v_dir || '@entrada.folvy.app', 'administracion@proveedor.example', 'Factura 1/26A/10965', '3b34403a-a7d6-4a48-a8d7-737e8cababdc',
+    ('prueba-s01c-1', v_dir || '@entrada.folvy.app', 'administracion@proveedor.example', 'Factura 1/26A/10965', current_setting('s01c.empresa')::uuid,
      'c01a0000-0000-4000-8000-00000000000a', 'recibido', '{}', now());
   update document_inbox set email_to = v_dir || '@entrada.folvy.app' where email_id like 'prueba-s01c-%';
 end $$;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
-declare c jsonb := public.conta_correo_facturas('3b34403a-a7d6-4a48-a8d7-737e8cababdc'); x jsonb;
+declare c jsonb := public.conta_correo_facturas(current_setting('s01c.empresa')::uuid); x jsonb;
 begin
   if c->'confirmacion'->>'codigo' is distinct from '123456789' or c->'confirmacion'->>'enlace' not like 'https://mail-settings.google.com/%' then
     raise exception 'PRUEBA S01c · 7: no enseña la confirmación de Gmail (%).', c->'confirmacion';
@@ -263,15 +296,18 @@ end $$;
 reset role;
 
 -- ── 8 · La cuenta B ────────────────────────────────────────────────────────
+select set_config('s01c.f1', (select id::text from _s01c where que = 'f1'), true);
 select set_config('request.jwt.claims', '{"sub":"c01b0000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
 set local role authenticated;
 do $$ begin
-  begin perform public.conta_correo_facturas('3b34403a-a7d6-4a48-a8d7-737e8cababdc'); raise exception 'PRUEBA S01c · 8: B lee el correo de A.';
+  begin perform public.conta_correo_facturas(current_setting('s01c.empresa')::uuid); raise exception 'PRUEBA S01c · 8: B lee el correo de A.';
   exception when no_data_found then null; end;
   begin perform public.compras_esperando_detalle('c01a0000-0000-4000-8000-00000000000a', null); raise exception 'PRUEBA S01c · 8: B lee lo que espera factura de A.';
   exception when insufficient_privilege then null; end;
   begin perform public.compras_cuando_llegan_poner('c01c0000-0000-4000-8000-000000000003', null); raise exception 'PRUEBA S01c · 8: B cambia la ficha de A.';
   exception when insufficient_privilege then null; end;
+  begin perform public.compras_factura_lineas(current_setting('s01c.f1')::uuid); raise exception 'PRUEBA S01c · 8: B lee las líneas de una factura de A.';
+  exception when no_data_found then null; end;
   raise notice 'PRUEBA S01c · 8: la cuenta B no lee ni cambia nada de A.';
 end $$;
 reset role;
@@ -280,7 +316,7 @@ reset role;
 \i supabase/vuelta-atras/20261029T1013_s01c_arreglo_foodint.down.sql
 \i supabase/vuelta-atras/20261029T1012_s01c_facturas_solas.down.sql
 do $$ begin
-  if to_regprocedure('public._compras_casar_solo(uuid)') is not null or exists (select 1 from public.funcion_respaldo where migracion = '20261029T1012_s01c_facturas_solas')
+  if to_regprocedure('public._compras_casar_solo(uuid)') is not null or to_regprocedure('public.compras_factura_lineas(uuid)') is not null or exists (select 1 from public.funcion_respaldo where migracion = '20261029T1012_s01c_facturas_solas')
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'supplier' and column_name = 'invoice_arrival')
      or position('S01c' in pg_get_functiondef('public.tg_goods_receipt_path_factura()'::regprocedure)) > 0
      or position('S01c' in pg_get_functiondef('public._compras_camino_calcula(uuid)'::regprocedure)) > 0 then

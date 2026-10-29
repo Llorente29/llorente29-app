@@ -18,8 +18,8 @@ import { Boton, Tarjeta } from '@/modules/conta/diseno'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { crearCorreoFacturas, leerCorreoFacturas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
-import { cuandoEnPalabras, queSeHizo } from '@/modules/conta/lib/correoFacturas'
+import { crearCorreoFacturas, leerCorreoFacturas, leerLineasFactura, type ComparacionLineas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
+import { cuandoEnPalabras, lineaEnPalabras, queSeHizo, resumenLineas } from '@/modules/conta/lib/correoFacturas'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -107,10 +107,45 @@ export function LlegadasPorCorreo({ llegadas, max }: { llegadas: readonly Llegad
             <span className="cxc-correo-que"><strong>{q.titulo}</strong>{l.factura?.total != null ? <span className="cx-cifra"> · {eurosExactos(l.factura.total)}</span> : null}</span>
             {q.texto && <span className="cxc-cosa-apoyo">{q.texto}</span>}
             <span className="cxc-cosa-apoyo">{cuandoEnPalabras(l.fecha, hoy)} · de {l.de ?? 'alguien'}{l.asunto ? ` · «${l.asunto}»` : ''}</span>
+            {l.factura?.casada && <LineaALinea facturaId={l.factura.id} />}
           </li>
         )
       })}
     </ul>
+  )
+}
+
+/** La factura contra sus albaranes, línea a línea: se abre a mano y dice qué cuadra y qué no. */
+export function LineaALinea({ facturaId }: { facturaId: string }) {
+  const [abierta, setAbierta] = useState(false)
+  const [c, setC] = useState<ComparacionLineas | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const abrir = async () => {
+    if (abierta) { setAbierta(false); return }
+    setAbierta(true)
+    if (c) return
+    try { setC(await leerLineasFactura(facturaId)); setError(null) }
+    catch (e) { setError(`No se ha podido comparar: ${msg(e)}`) }
+  }
+  return (
+    <div className="cxc-lineas" data-prueba="linea-a-linea">
+      <button type="button" className="cx-enlace" onClick={abrir} aria-expanded={abierta}>{abierta ? 'Ocultar línea a línea' : 'Ver línea a línea'}</button>
+      {abierta && error && <p className="cx-error" role="alert">{error}</p>}
+      {abierta && !error && !c && <p className="cx-ayuda">Comparando…</p>}
+      {abierta && c && (
+        <>
+          <p className="cxc-cosa-apoyo" data-prueba="resumen-lineas"><strong>{resumenLineas(c)}</strong></p>
+          {c.lineas.length > 0 && (
+            <ul className="cxc-lineas-lista" aria-label="La factura contra el albarán, línea a línea">
+              {c.lineas.map((x, i) => {
+                const p = lineaEnPalabras(x)
+                return <li key={i} data-mira={p.mira ? 'si' : 'no'}><span className="cxc-lineas-que">{p.que}</span><span className="cxc-cosa-apoyo">{p.dice}</span></li>
+              })}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 

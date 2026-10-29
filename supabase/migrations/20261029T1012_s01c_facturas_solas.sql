@@ -40,6 +40,11 @@
 --   7. El correo de facturas de una empresa (conta_correo_facturas, nueva,
 --      solo lee): su dirección, si recibe, el último correo, la confirmación de
 --      Gmail con su código y su enlace, y qué se hizo con cada correo.
+--   8. La factura contra sus albaranes, línea a línea (compras_factura_lineas,
+--      nueva, solo lee): cada línea de la factura con la de su albarán (por
+--      artículo, por código del proveedor o por el mismo texto), y si cuadra,
+--      difiere en cantidad o en importe, o está solo en un lado. Se calcula al
+--      leerla: la factura que llega por correo se crea antes que sus líneas.
 --
 -- Nada del camino del pedido. No toca filas: lo de Foodint va en la 1013.
 
@@ -459,3 +464,79 @@ begin
 end $$;
 revoke all on function public.conta_correo_facturas(uuid) from public, anon;
 grant execute on function public.conta_correo_facturas(uuid) to authenticated;
+
+-- ── 9 · La factura contra sus albaranes, línea a línea (solo lee) ─────────
+create or replace function public._compras_texto_norm(p text)
+returns text language sql immutable set search_path = public as $$
+  select btrim(regexp_replace(lower(translate(coalesce(p, ''), 'ÁÉÍÓÚÜÑáéíóúüñ', 'aeiouunaeiouun')), '[^a-z0-9]+', ' ', 'g'))
+$$;
+revoke all on function public._compras_texto_norm(text) from public, anon, authenticated;
+
+create or replace function public._compras_lineas_comparar(p_factura uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_alb jsonb; v_out jsonb := '[]'; fl record; v_hit int; a jsonb; v_res text;
+  n_ok int := 0; n_dif int := 0; n_fac int := 0; n_alb int := 0; n_lin int := 0;
+begin
+  -- Las líneas de los albaranes casados con la factura, en su orden.
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'albaran', coalesce(g.supplier_doc_number, g.code), 'art', l.recipe_item_id, 'cod', nullif(lower(btrim(l.supplier_code)), ''),
+           'txt', public._compras_texto_norm(coalesce(l.raw_text, l.product_name)), 'texto', coalesce(l.product_name, l.raw_text),
+           'cant', coalesce(l.doc_qty, l.qty_received), 'importe', coalesce(l.doc_amount, round(l.qty_received * l.unit_cost, 2)), 'usada', false)
+           order by g.receipt_date, g.code, l.position, l.created_at), '[]')
+    into v_alb
+    from supplier_invoice_receipt r join goods_receipt g on g.id = r.goods_receipt_id
+    join goods_receipt_line l on l.goods_receipt_id = g.id
+   where r.supplier_invoice_id = p_factura;
+  for fl in
+    select il.recipe_item_id, nullif(lower(btrim(il.supplier_code)), '') cod, public._compras_texto_norm(il.raw_text) txt,
+           il.raw_text, il.qty, il.line_amount
+      from supplier_invoice_line il where il.supplier_invoice_id = p_factura order by il.position, il.created_at
+  loop
+    n_lin := n_lin + 1;
+    -- Su línea del albarán: el mismo artículo, si no el mismo código del proveedor, si no el mismo texto.
+    select x.i - 1 into v_hit from jsonb_array_elements(v_alb) with ordinality x(e, i)
+     where not (x.e->>'usada')::boolean
+       and ((fl.recipe_item_id is not null and x.e->>'art' = fl.recipe_item_id::text)
+         or (fl.cod is not null and x.e->>'cod' = fl.cod)
+         or (fl.txt <> '' and x.e->>'txt' = fl.txt))
+     order by case when x.e->>'art' = fl.recipe_item_id::text then 1 when x.e->>'cod' = fl.cod then 2 else 3 end, x.i
+     limit 1;
+    if v_hit is null then
+      n_fac := n_fac + 1;
+      v_out := v_out || jsonb_build_array(jsonb_build_object('resultado', 'solo_factura', 'texto_factura', fl.raw_text,
+                 'cant_factura', fl.qty, 'importe_factura', fl.line_amount));
+      continue;
+    end if;
+    a := v_alb->v_hit;
+    v_alb := jsonb_set(v_alb, array[v_hit::text, 'usada'], 'true');
+    v_res := case when fl.qty is not null and (a->>'cant') is not null and abs(fl.qty - (a->>'cant')::numeric) > 0.001 then 'cantidad'
+                  when fl.line_amount is not null and (a->>'importe') is not null and abs(fl.line_amount - (a->>'importe')::numeric) > 0.02 then 'importe'
+                  else 'cuadra' end;
+    if v_res = 'cuadra' then n_ok := n_ok + 1; else n_dif := n_dif + 1; end if;
+    v_out := v_out || jsonb_build_array(jsonb_build_object('resultado', v_res, 'texto_factura', fl.raw_text, 'albaran', a->>'albaran',
+               'texto_albaran', a->>'texto', 'cant_factura', fl.qty, 'cant_albaran', (a->>'cant')::numeric,
+               'importe_factura', fl.line_amount, 'importe_albaran', (a->>'importe')::numeric));
+  end loop;
+  -- Lo que está en el albarán y la factura no trae.
+  for a in select x.e from jsonb_array_elements(v_alb) x(e) where not (x.e->>'usada')::boolean loop
+    n_alb := n_alb + 1;
+    v_out := v_out || jsonb_build_array(jsonb_build_object('resultado', 'solo_albaran', 'albaran', a->>'albaran', 'texto_albaran', a->>'texto',
+               'cant_albaran', (a->>'cant')::numeric, 'importe_albaran', (a->>'importe')::numeric));
+  end loop;
+  return jsonb_build_object('lineas_factura', n_lin, 'cuadran', n_ok, 'difieren', n_dif, 'solo_factura', n_fac, 'solo_albaran', n_alb, 'lineas', v_out);
+end $$;
+revoke all on function public._compras_lineas_comparar(uuid) from public, anon, authenticated;
+
+create or replace function public.compras_factura_lineas(p_factura uuid)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare f supplier_invoice;
+begin
+  select * into f from supplier_invoice where id = p_factura;
+  if f.id is null or not public.belongs_to_account(f.account_id) then
+    raise exception 'Esa factura no está.' using errcode = 'P0002';
+  end if;
+  return public._compras_lineas_comparar(f.id);
+end $$;
+revoke all on function public.compras_factura_lineas(uuid) from public, anon;
+grant execute on function public.compras_factura_lineas(uuid) to authenticated;

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { decidir, facturasEnConcepto, type Contexto, type FacturaPendiente, type Movimiento } from '@/modules/conta/lib/conciliacion'
 import { esperaEnPalabras } from '@/modules/conta/lib/compras'
-import { cuandoEnPalabras, queSeHizo } from '@/modules/conta/lib/correoFacturas'
+import { cuandoEnPalabras, lineaEnPalabras, queSeHizo, resumenLineas } from '@/modules/conta/lib/correoFacturas'
 import type { LlegadaCorreo } from '@/modules/conta/services/comprasService'
 
 function ctx(p: Partial<Contexto> = {}): Contexto {
@@ -94,5 +94,25 @@ describe('el correo de facturas, en palabras', () => {
     expect(queSeHizo(l({ llegada: 'no_es_factura', motivo: 'No parece una factura.' })).titulo).toBe('No es una factura')
     expect(queSeHizo(l({ llegada: 'repetida', factura: { ...f, casada: false } })).titulo).toBe(`Repetida: 1/26A/10965 de ${PROV}`)
     expect(queSeHizo(l({ resultado: 'confirmacion', llegada: null })).titulo).toBe('Gmail pide confirmar el reenvío')
+  })
+})
+
+describe('la factura contra el albarán, línea a línea', () => {
+  // El caso de Olimpo: el albarán 26/13024 se leyó con una línea y la factura trae dos.
+  const c = { lineas_factura: 2, cuadran: 1, difieren: 0, solo_factura: 1, solo_albaran: 0, lineas: [
+    { resultado: 'cuadra' as const, texto_factura: 'GÉNERO', texto_albaran: 'Género', albaran: '26/13024', cant_factura: 1, cant_albaran: 1, importe_factura: 97.44, importe_albaran: 97.44 },
+    { resultado: 'solo_factura' as const, texto_factura: 'Aceite de prueba 5 L', cant_factura: 2, importe_factura: 52 },
+  ] }
+  it('cada línea dice si cuadra y, si no, qué difiere o en qué lado está', () => {
+    expect(lineaEnPalabras(c.lineas[0])).toEqual({ que: 'GÉNERO', dice: 'Cuadra · 1 · 97,44 €', mira: false })
+    expect(lineaEnPalabras(c.lineas[1])).toEqual({ que: 'Aceite de prueba 5 L', dice: 'En la factura y no en el albarán · 2 · 52,00 €', mira: true })
+    expect(lineaEnPalabras({ resultado: 'cantidad', texto_factura: 'Queso', cant_factura: 2, cant_albaran: 1.5 }).dice).toBe('Difiere en cantidad: la factura dice 2 y el albarán 1,5')
+    expect(lineaEnPalabras({ resultado: 'importe', texto_factura: 'Queso', importe_factura: 10, importe_albaran: 9.5 }).dice).toBe('Difiere en importe: la factura dice 10,00 € y el albarán 9,50 €')
+    expect(lineaEnPalabras({ resultado: 'solo_albaran', texto_albaran: 'Pan', albaran: '26/13024', cant_albaran: 3, importe_albaran: 4.5 }).dice).toBe('En el albarán 26/13024 y no en la factura · 3 · 4,50 €')
+  })
+  it('el resumen cuenta lo que hay, sin esconder nada', () => {
+    expect(resumenLineas(c)).toBe('1 cuadra · 1 solo en la factura')
+    expect(resumenLineas({ ...c, cuadran: 4, solo_factura: 0, lineas_factura: 4 })).toBe('Las 4 líneas cuadran con el albarán.')
+    expect(resumenLineas({ ...c, lineas_factura: 0, cuadran: 0, solo_factura: 0, solo_albaran: 3 })).toBe('La factura no trae sus líneas: no se pueden comparar con las del albarán.')
   })
 })

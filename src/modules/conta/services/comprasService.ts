@@ -173,6 +173,23 @@ export interface CorreoFacturas {
 
 export const leerCorreoFacturas = (companyId: string) => rpc<CorreoFacturas>('conta_correo_facturas', { p_company: companyId })
 
+/** S01c · Una línea de la factura contra la de su albarán (o lo que está en un solo lado). */
+export interface LineaComparada {
+  resultado: 'cuadra' | 'cantidad' | 'importe' | 'solo_factura' | 'solo_albaran'
+  texto_factura?: string | null; texto_albaran?: string | null; albaran?: string | null
+  cant_factura?: number | null; cant_albaran?: number | null; importe_factura?: number | null; importe_albaran?: number | null
+}
+export interface ComparacionLineas {
+  lineas_factura: number; cuadran: number; difieren: number; solo_factura: number; solo_albaran: number; lineas: LineaComparada[]
+}
+const num = (x: unknown) => (x == null ? null : Number(x))
+/** S01c · La factura contra sus albaranes, línea a línea (solo lee). */
+export async function leerLineasFactura(facturaId: string): Promise<ComparacionLineas> {
+  const r = await rpc<ComparacionLineas>('compras_factura_lineas', { p_factura: facturaId })
+  return { ...r, lineas: (r.lineas ?? []).map((l) => ({ ...l, cant_factura: num(l.cant_factura), cant_albaran: num(l.cant_albaran),
+    importe_factura: num(l.importe_factura), importe_albaran: num(l.importe_albaran) })) }
+}
+
 /** S01c · Crea la dirección de facturas de la empresa si aún no la tiene. */
 export async function crearCorreoFacturas(companyId: string, quien: string | null): Promise<string> {
   const r = await rpc<{ direccion: string }>('conta_direccion_entrada', { p_company: companyId, p_tipo: 'facturas', p_quien_nombre: quien })

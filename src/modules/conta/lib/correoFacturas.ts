@@ -5,7 +5,8 @@
 // cada correo (factura leída y casada, esperando su albarán, no es una
 // factura, repetida). Todo en palabras de oficina.
 
-import type { LlegadaCorreo } from '@/modules/conta/services/comprasService'
+import type { ComparacionLineas, LineaComparada, LlegadaCorreo } from '@/modules/conta/services/comprasService'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 
 const HORA = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' })
 const DIA = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'long' })
@@ -40,4 +41,32 @@ export function queSeHizo(l: LlegadaCorreo): { titulo: string; texto: string | n
   if (l.llegada === 'error' || l.resultado === 'error') return { titulo: 'No se ha podido leer', texto: l.motivo, tono: 'mira' }
   if (l.resultado === 'apagada') return { titulo: 'La dirección estaba apagada', texto: 'No se ha leído.', tono: 'mira' }
   return { titulo: 'Recibido', texto: l.motivo, tono: 'espera' }
+}
+
+const cant = (x: number | null | undefined) => (x == null ? '—' : x.toLocaleString('es-ES', { maximumFractionDigits: 3 }))
+const eur = (x: number | null | undefined) => (x == null ? '—' : eurosExactos(x))
+
+/** Una línea de la comparación, en palabras: qué es, qué dice y si hay que mirarla. */
+export function lineaEnPalabras(l: LineaComparada): { que: string; dice: string; mira: boolean } {
+  const que = l.texto_factura ?? l.texto_albaran ?? 'Línea sin texto'
+  switch (l.resultado) {
+    case 'cuadra': return { que, dice: `Cuadra · ${cant(l.cant_factura)} · ${eur(l.importe_factura)}`, mira: false }
+    case 'cantidad': return { que, dice: `Difiere en cantidad: la factura dice ${cant(l.cant_factura)} y el albarán ${cant(l.cant_albaran)}`, mira: true }
+    case 'importe': return { que, dice: `Difiere en importe: la factura dice ${eur(l.importe_factura)} y el albarán ${eur(l.importe_albaran)}`, mira: true }
+    case 'solo_factura': return { que, dice: `En la factura y no en el albarán · ${cant(l.cant_factura)} · ${eur(l.importe_factura)}`, mira: true }
+    case 'solo_albaran': return { que, dice: `En el albarán ${l.albaran ?? ''} y no en la factura · ${cant(l.cant_albaran)} · ${eur(l.importe_albaran)}`.replace('  ', ' '), mira: true }
+  }
+}
+
+/** El resumen: «Las 4 líneas cuadran» o «3 cuadran · 1 difiere · 1 solo en la factura». */
+export function resumenLineas(c: ComparacionLineas): string {
+  if (c.lineas_factura === 0) return c.solo_albaran > 0 ? 'La factura no trae sus líneas: no se pueden comparar con las del albarán.' : 'Ni la factura ni el albarán traen líneas.'
+  if (c.difieren + c.solo_factura + c.solo_albaran === 0) return c.cuadran === 1 ? 'La línea cuadra con el albarán.' : `Las ${c.cuadran} líneas cuadran con el albarán.`
+  const partes = [
+    c.cuadran ? `${c.cuadran} ${c.cuadran === 1 ? 'cuadra' : 'cuadran'}` : null,
+    c.difieren ? `${c.difieren} ${c.difieren === 1 ? 'difiere' : 'difieren'}` : null,
+    c.solo_factura ? `${c.solo_factura} solo en la factura` : null,
+    c.solo_albaran ? `${c.solo_albaran} solo en el albarán` : null,
+  ].filter(Boolean)
+  return partes.join(' · ')
 }

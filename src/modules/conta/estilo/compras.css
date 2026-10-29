@@ -170,3 +170,9 @@
 .cxc-correo-llegadas > li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--cx-borde, #e5e7eb); }
 .cxc-correo-llegadas > li:first-child { border-top: 0; }
 .cxc-correo-llegadas > li[data-tono='mira'] .cxc-correo-que { color: var(--cx-ambar, #b45309); }
+/* S01c · La factura contra el albarán, línea a línea */
+.cxc-lineas { margin-top: 4px; }
+.cxc-lineas-lista { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.cxc-lineas-lista > li { display: flex; flex-direction: column; padding: 4px 0 4px 8px; border-left: 3px solid var(--cx-verde, #15803d); }
+.cxc-lineas-lista > li[data-mira='si'] { border-left-color: var(--cx-ambar, #b45309); }
+.cxc-lineas-que { overflow-wrap: anywhere; }
