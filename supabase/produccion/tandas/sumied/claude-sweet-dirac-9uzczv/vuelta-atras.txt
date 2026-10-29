@@ -1,0 +1,4 @@
+# B01c · vuelta atrás, en orden inverso: primero lo que cambia (0753), luego lo que añade (0752).
+cuenta: scripts/conta/produccion/cuentas/b01c-agregador.sql
+supabase/vuelta-atras/20261029T0753_b01c_servicio_y_proveedor.down.sql
+supabase/vuelta-atras/20261029T0752_b01c_banco_agregador.down.sql

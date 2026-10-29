@@ -244,3 +244,10 @@ verify_jwt = true
 # plataforma. «invitar» y «aprobar» miran la sesión dentro.
 [functions.conta-asesoria]
 verify_jwt = false
+
+# B01c (29/10) conta-banco-agregador · los movimientos de BBVA de Foodint entran
+# solos, por open-banking.io. La despierta el cron conta-banco-agregador-despertar
+# a las 3 de Madrid con x-cron-secret (CRON_SECRET), sin sesión; sin el secreto, 401.
+# verify_jwt = false. El credentials.json va en el secreto OPEN_BANKING_IO_CREDENTIALS.
+[functions.conta-banco-agregador]
+verify_jwt = false

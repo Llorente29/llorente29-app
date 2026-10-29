@@ -1,0 +1,24 @@
+# B01c · Los movimientos de BBVA entran solos (Foodint), con open-banking.io.
+# Rama claude/sweet-dirac-9uzczv. Se ensaya y se aplica desde esta rama, antes
+# de fusionar.
+#
+#   1. 0752 — SOLO AÑADE: bank_aggregator_connection (qué empresa trae sus
+#      movimientos sola: una fila, Foodint), columnas que admiten nulos en
+#      bank_aggregator_link (la del B01, vacía) con cómo fue la última pasada,
+#      las funciones que la apuntan y el cron de cada hora que despierta a
+#      conta-banco-agregador a las 3 de Madrid. No está en el camino del
+#      pedido: sin autorizo.
+#   2. 0753 — CAMBIA en caliente, declarado en su cabecera con su prueba de
+#      staging: _bank_cuenta_de_empresa deja pasar a la clave de servicio (la
+#      función de la noche no lleva persona) y el CHECK del proveedor de
+#      bank_aggregator_link admite open_banking_io (solo amplía). No está en el
+#      camino del pedido: sin autorizo.
+#
+# El cron llama a conta-banco-agregador: hasta que se despliegue (con la
+# fusión) y Julio suba el secreto OPEN_BANKING_IO_CREDENTIALS, la llamada de
+# las 3 da 404 o «falta el secreto», y lo dice la fila de Foodint en
+# bank_aggregator_connection. No toca nada más.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/b01c-agregador.sql
+supabase/migrations/20261029T0752_b01c_banco_agregador.sql
+supabase/migrations/20261029T0753_b01c_servicio_y_proveedor.sql

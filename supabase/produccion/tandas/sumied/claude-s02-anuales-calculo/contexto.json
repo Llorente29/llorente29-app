@@ -1,0 +1,23 @@
+{
+ "_que": "S02 · el 190 · contexto de producción de la tanda (1950), medido en SOLO LECTURA el 28/10 a las 19:04Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe tax_return_check (la del CHECK que se amplía; filas estimadas 0) y no existe ninguna de las cuatro funciones que crea la 1950 (ni otra firma con su nombre); nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-10-28T19:04Z",
+ "tanda": {
+  "supabase/migrations/20261028T1950_s02_modelo_190.sql": "6a37ff9c92aff6dacbe7a5d2aef65a4b"
+ },
+ "contexto": {
+  "tablas": [
+   "public.tax_return_check"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.tax_return_check": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
