@@ -1,0 +1,23 @@
+{
+  "_que": "W10a · cierre · contexto de producción de la 1053, medido en SOLO LECTURA el 29/10 a las 10:58 UTC con la consulta del analizador (sql-contexto). funcion_respaldo existe; nada en el camino del pedido; nada en el historial. La cuenta, antes: respaldo de la 1630 = 1, respaldos con un secreto fv_ = 1, trg_sale_push_status 385240cb.",
+  "medido": "2026-10-29T10:58Z",
+  "tanda": {
+    "supabase/migrations/20261029T1053_w10a_borrar_respaldo_secreto_viejo.sql": "e4cacf64855b1aae4f5d6d6e6d9b49d1"
+  },
+  "contexto": {
+    "tablas": [
+      "public.funcion_respaldo"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.funcion_respaldo": 24
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
