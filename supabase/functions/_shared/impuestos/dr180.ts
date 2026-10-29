@@ -1,0 +1,696 @@
+// supabase/functions/_shared/impuestos/dr180.ts
+//
+// NO SE TOCA A MANO: lo escribe scripts/conta/s02/dr180.mjs desde
+// docs/conta/referencia/dr180.json (y este, del Orden de 21 de noviembre de 2000, anexo VI (modificado por la Orden HFP/1284/2023, de 28 de noviembre),
+// BOE-A-2023-24412, vigente desde 2023-12-01, en docs/conta/fuentes/boe/orden-modelo-180-anexo-vi.xml;
+// sha256 de la versión vigente 2bdd22d2e21e7a72587e51ec7564531336fa0aee7efe8b2e8a414d622247288f).
+
+export interface ParteDr180 { desde: number; hasta: number; texto: string }
+export interface CampoDr180 { desde: number; hasta: number; lon: number; tipo: string; nombre: string; descripcion: string; partes: ParteDr180[] }
+export interface ProvinciaDr180 { codigo: string; nombre: string }
+
+export const DR180 = {
+  "boe": "BOE-A-2023-24412",
+  "vigenteDesde": "2023-12-01",
+  "sha256": "2bdd22d2e21e7a72587e51ec7564531336fa0aee7efe8b2e8a414d622247288f",
+  "longitud": 500,
+  "registros": {
+    "1": [
+      {
+        "desde": 1,
+        "hasta": 1,
+        "tipo": "Numérico",
+        "nombre": "TIPO DE REGISTRO",
+        "descripcion": "Constante «1».",
+        "partes": [],
+        "lon": 1
+      },
+      {
+        "desde": 2,
+        "hasta": 4,
+        "tipo": "Numérico",
+        "nombre": "MODELO DECLARACIÓN",
+        "descripcion": "Constante «180».",
+        "partes": [],
+        "lon": 3
+      },
+      {
+        "desde": 5,
+        "hasta": 8,
+        "tipo": "Numérico",
+        "nombre": "EJERCICIO",
+        "descripcion": "Las cuatro cifras del ejercicio fiscal al que corresponde la declaración.",
+        "partes": [],
+        "lon": 4
+      },
+      {
+        "desde": 9,
+        "hasta": 17,
+        "tipo": "Alfanumérico",
+        "nombre": "N.I.F. DEL DECLARANTE",
+        "descripcion": "Se consignará el NIF del declarante.\nEste campo deberá estar ajustado a la derecha, siendo la última posición el carácter de control y rellenando con ceros las posiciones de la izquierda, de acuerdo con las reglas previstas en el Reglamento General de las actuaciones y los procedimientos de gestión e inspección tributaria y de desarrollo de las normas comunes de los procedimientos de aplicación de los tributos, aprobado por el Real Decreto 1065/2007 de 27 de Julio (BOE del 5 de septiembre).",
+        "partes": [],
+        "lon": 9
+      },
+      {
+        "desde": 18,
+        "hasta": 57,
+        "tipo": "Alfanumérico",
+        "nombre": "APELLIDOS Y NOMBRE O RAZÓN SOCIAL DEL DECLARANTE",
+        "descripcion": "Si es una persona física se consignará el primer apellido, un espacio, el segundo apellido, un espacio y el nombre completo, necesariamente en este orden.\nPara personas jurídicas y entidades sin personalidad jurídica, se consignará la razón social completa o denominación, sin anagrama.\nEn ningún caso podrá figurar en este campo un nombre comercial.",
+        "partes": [],
+        "lon": 40
+      },
+      {
+        "desde": 58,
+        "hasta": 58,
+        "tipo": "Alfabético",
+        "nombre": "TIPO DE SOPORTE",
+        "descripcion": "Se cumplimentará una de las siguientes claves:\n«C»: Si la información se presenta en cinta magnética.\n«T»: Transmisión telemática",
+        "partes": [],
+        "lon": 1
+      },
+      {
+        "desde": 59,
+        "hasta": 107,
+        "tipo": "Alfanumérico",
+        "nombre": "PERSONA CON QUIÉN RELACIONARSE",
+        "descripcion": "Datos de la persona con quién relacionarse. Este campo se subdivide en dos:",
+        "partes": [
+          {
+            "desde": 59,
+            "hasta": 67,
+            "texto": "TELÉFONO: Campo numérico de 9 posiciones."
+          },
+          {
+            "desde": 68,
+            "hasta": 107,
+            "texto": "APELLIDOS Y NOMBRE: Se consignará el primer apellido, un espacio, el segundo apellido, un espacio y el nombre completo, necesariamente en este orden."
+          }
+        ],
+        "lon": 49
+      },
+      {
+        "desde": 108,
+        "hasta": 120,
+        "tipo": "Numérico",
+        "nombre": "NÚMERO DE IDENTIFICATIVO DE LA DECLARACIÓN",
+        "descripcion": "Se consignará el número identificativo correspondiente a la declaración.\nEl número identificativo de la declaración que habrá de figurar en el modelo 180 en euros, será un número secuencial cuyos tres primeros dígitos se corresponderán con el código 180.",
+        "partes": [],
+        "lon": 13
+      },
+      {
+        "desde": 121,
+        "hasta": 122,
+        "tipo": "Alfabético",
+        "nombre": "DECLARACIÓN COMPLEMENTARIA O SUSTITUTIVA",
+        "descripcion": "En el caso excepcional de segunda o posterior presentación de declaraciones, deberá cumplimentarse obligatoriamente uno de los siguientes campos:\nLa modificación del contenido de datos declarados en otra declaración del mismo ejercicio presentada anteriormente, se realizará desde el servicio de consulta y modificación de declaraciones informativas en la Oficina Virtual de la Agencia Tributaria (www.agenciatributaria.gob.es).",
+        "partes": [
+          {
+            "desde": 121,
+            "hasta": 121,
+            "texto": "DECLARACIÓN COMPLEMENTARIA: Se consignará una «C» si la presentación de esta declaración tiene por objeto incluir nuevos registros de tipo 2 que, debiendo haber figurado en otra declaración del mismo ejercicio presentada anteriormente, hubieran sido completamente omitidas en la misma."
+          },
+          {
+            "desde": 122,
+            "hasta": 122,
+            "texto": "DECLARACIÓN SUSTITUTIVA: Se consignará una «S» si la presentación tiene como objeto anular y sustituir completamente a otra declaración anterior, del mismo ejercicio. Una declaración sustitutiva sólo puede anular a una única declaración anterior."
+          }
+        ],
+        "lon": 2
+      },
+      {
+        "desde": 123,
+        "hasta": 135,
+        "tipo": "Numérico",
+        "nombre": "NÚMERO IDENTIFICATIVO DE LA DECLARACIÓN ANTERIOR",
+        "descripcion": "En el caso de que se haya consignado una \"C\" en el campo \"Declaración complementaria\" o en el caso de que se haya consignado \"S\" en el campo \"Declaración sustitutiva\", se consignará el número identificativo correspondiente a la declaración a la que sustituye o complementa.\nCampo de contenido numérico de 13 posiciones.\nEn cualquier otro caso deberá rellenarse a CEROS.",
+        "partes": [],
+        "lon": 13
+      },
+      {
+        "desde": 136,
+        "hasta": 144,
+        "tipo": "Numérico",
+        "nombre": "NÚMERO TOTAL DE PERCEPTORES",
+        "descripcion": "Se consignará el número total de perceptores declarados en el soporte para este declarante. Si un mismo perceptor figura en varios registros, se computará tantas veces como figure relacionado. (Número de registros de tipo 2).",
+        "partes": [],
+        "lon": 9
+      },
+      {
+        "desde": 145,
+        "hasta": 160,
+        "tipo": "Alfanumérico",
+        "nombre": "BASE RETENCIONES E INGRESOS A CUENTA",
+        "descripcion": "Se consignará la suma total de las cantidades reflejadas en el campo «BASE DE RETENCIONES E INGRESOS A CUENTA» (posiciones 80 a 92) correspondientes a los registros de tipo 2.\nEste campo se subdivide en dos:\nLos importes deben consignarse en EUROS.",
+        "partes": [
+          {
+            "desde": 145,
+            "hasta": 145,
+            "texto": "SIGNO: campo alfabético, que se cumplimentará cuando el resultado de la suma para obtener el importe de las bases de retenciones e ingresos a cuenta (posiciones 146 a 160 de este registro de tipo 1) sea menor de 0 (cero). En este caso se consignará una «N», en cualquier otro caso el contenido de este campo será un espacio."
+          },
+          {
+            "desde": 146,
+            "hasta": 160,
+            "texto": "IMPORTE: campo numérico en el que se consignará la suma de las cantidades reflejadas en el campo «BASE DE RETENCIONES E INGRESOS A CUENTA» (posición 80 a 92, correspondientes a los registros de percepciones), con independencia de la clave de modalidad a la que correspondan. En el supuesto de que en los registros de perceptores se hubiera consignado «N» en el campo «SIGNO DE LA BASE DE RETENCIONES E INGRESOS A CUENTA», (posición 79 del registro de tipo 2), por corresponder al reintegro de percepciones indebida o excesivamente satisfechas en ejercicios anteriores, dichas cantidades se computarán igualmente con signo menos al totalizar los importes que deben reflejarse en esta suma."
+          },
+          {
+            "desde": 146,
+            "hasta": 159,
+            "texto": "Parte entera del importe total de las bases de retenciones e ingresos a cuenta, si no tiene contenido se consignará a ceros."
+          },
+          {
+            "desde": 159,
+            "hasta": 160,
+            "texto": "Parte decimal del importe total de las bases de retenciones e ingresos a cuenta, si no tiene contenido se consignará a ceros."
+          }
+        ],
+        "lon": 16
+      },
+      {
+        "desde": 161,
+        "hasta": 175,
+        "tipo": "Numérico",
+        "nombre": "RETENCIONES E INGRESOS A CUENTA",
+        "descripcion": "Se consignará sin signo la suma de las cantidades reflejadas en el campo «RETENCIONES E INGRESOS A CUENTA» (posición 97 a 109) correspondientes a los registros de percepciones, con independencia de la modalidad de percepción a que correspondan.\nLos importes deben consignarse en EUROS.",
+        "partes": [
+          {
+            "desde": 161,
+            "hasta": 173,
+            "texto": "Parte entera del importe total de las retenciones e ingresos a cuenta, si no tiene contenido se consignará a ceros."
+          },
+          {
+            "desde": 174,
+            "hasta": 175,
+            "texto": "Parte decimal del importe total de las retenciones e ingresos a cuenta, si no tiene contenido se consignará a ceros."
+          }
+        ],
+        "lon": 15
+      },
+      {
+        "desde": 176,
+        "hasta": 237,
+        "tipo": "Blancos",
+        "nombre": "BLANCOS",
+        "descripcion": "",
+        "partes": [],
+        "lon": 62
+      },
+      {
+        "desde": 238,
+        "hasta": 500,
+        "tipo": "Alfanumérico",
+        "nombre": "SELLO ELECTRÓNICO",
+        "descripcion": "Campo reservado para el sello electrónico en presentaciones individuales, que será cumplimentado exclusivamente por los programas de la A.E.A.T. En cualquier otro caso, y en presentaciones colectivas se rellenará a blancos.",
+        "partes": [],
+        "lon": 263
+      }
+    ],
+    "2": [
+      {
+        "desde": 1,
+        "hasta": 1,
+        "tipo": "Numérico",
+        "nombre": "TIPO DE REGISTRO",
+        "descripcion": "Constante «2».",
+        "partes": [],
+        "lon": 1
+      },
+      {
+        "desde": 2,
+        "hasta": 4,
+        "tipo": "Numérico",
+        "nombre": "MODELO DECLARACIÓN",
+        "descripcion": "Constante «180».",
+        "partes": [],
+        "lon": 3
+      },
+      {
+        "desde": 5,
+        "hasta": 8,
+        "tipo": "Numérico",
+        "nombre": "EJERCICIO",
+        "descripcion": "Consignar lo contenido en estas mismas posiciones del registro de tipo 1.",
+        "partes": [],
+        "lon": 4
+      },
+      {
+        "desde": 9,
+        "hasta": 17,
+        "tipo": "Alfanumérico",
+        "nombre": "N.I.F. DEL DECLARANTE",
+        "descripcion": "Consignar lo contenido en estas mismas posiciones del registro de tipo 1.",
+        "partes": [],
+        "lon": 9
+      },
+      {
+        "desde": 18,
+        "hasta": 26,
+        "tipo": "Alfanumérico",
+        "nombre": "N.I.F. DEL PERCEPTOR",
+        "descripcion": "Si el declarado dispone de NIF asignado en España, se consignará:\nSi es una persona física se consignará el NIF del declarado de acuerdo con las reglas previstas en el Reglamento General de las actuaciones y los procedimientos de gestión e inspección tributaria y de desarrollo de las normas comunes de los procedimientos de aplicación de los tributos, aprobado por el Real Decreto 1065/2007, de 27 de julio (BOE del 5 de septiembre).\nSi el declarado es una persona jurídica o una entidad sin personalidad jurídica (Comunidad de bienes, Sociedad civil, herencia yacente, etc.), se consignará el número de identificación fiscal correspondiente a la misma.\nPara la identificación de los menores de 14 años en sus relaciones de naturaleza o con trascendencia tributaria habrán de figurar tanto los datos de la persona menor de 14 años, incluido su número de identificación fiscal, como los de su representante legal.\nEste campo deberá estar ajustado a la derecha, siendo la última posición el carácter de control y rellenando con ceros las posiciones a la izquierda.\nSólo se cumplimentará con los NIF asignados en España.",
+        "partes": [],
+        "lon": 9
+      },
+      {
+        "desde": 27,
+        "hasta": 35,
+        "tipo": "Alfanumérico",
+        "nombre": "N.I.F. DEL REPRESENTANTE LEGAL",
+        "descripcion": "Si el declarado es menor de 14 años se consignará en este campo el número de identificación fiscal de su representante legal (padre, madre o tutor). Este campo deberá estar ajustado a la derecha, siendo la última posición el carácter de control y rellenando con ceros las posiciones a la izquierda.\nEn cualquier otro caso el contenido de este campo se rellenará a espacios.",
+        "partes": [],
+        "lon": 9
+      },
+      {
+        "desde": 36,
+        "hasta": 75,
+        "tipo": "Alfanumérico",
+        "nombre": "APELLIDOS Y NOMBRE, RAZÓN SOCIAL O DENOMINACIÓN DEL PERCEPTOR",
+        "descripcion": "a) Para personas físicas se consignará el primer apellido, un espacio, el segundo apellido, un espacio y el nombre completo, necesariamente en este mismo orden. Si el declarado es menor de 14 años, se consignarán en este campo los apellidos y nombre del menor de edad.\nb) Tratándose de personas jurídicas y entidades sin personalidad jurídica, se consignará la razón social o la denominación completa de la entidad, sin anagramas.",
+        "partes": [],
+        "lon": 40
+      },
+      {
+        "desde": 76,
+        "hasta": 77,
+        "tipo": "Numérico",
+        "nombre": "CÓDIGO PROVINCIA",
+        "descripcion": "Se consignarán los dos dígitos numéricos que correspondan a la provincia o, en su caso, ciudad autónoma o Isla de La Palma, del domicilio del perceptor, según la siguiente relación:",
+        "partes": [],
+        "lon": 2
+      },
+      {
+        "desde": 78,
+        "hasta": 78,
+        "tipo": "Numérico",
+        "nombre": "MODALIDAD",
+        "descripcion": "Se consignará la modalidad de renta o rendimiento satisfecho a cada perceptor de acuerdo a las siguientes claves:\n«1» Si la renta o rendimiento satisfecho es de tipo dinerario.\n«2» Si la renta o rendimiento satisfecho es en especie.",
+        "partes": [],
+        "lon": 1
+      },
+      {
+        "desde": 79,
+        "hasta": 92,
+        "tipo": "Alfanumérico",
+        "nombre": "BASE RETENCIONES E INGRESOS A CUENTA",
+        "descripcion": "Se consignará el importe que a continuación se indica:\n– Si el perceptor es un contribuyente por el Impuesto sobre la Renta de las Personas Físicas se consignará la suma de los importes de los rendimientos que por todos los conceptos se satisfagan al arrendador, excluido el Impuesto sobre el Valor Añadido.\n– Si el perceptor es un sujeto pasivo del Impuesto sobre Sociedades o un contribuyente por el Impuesto sobre la Renta de no Residentes (establecimientos permanentes) se consignará la contraprestación íntegra satisfecha en concepto de alquiler, excluido el Impuesto sobre el Valor Añadido.\nEste campo se subdivide en:\nLos importes deben consignarse en EUROS.",
+        "partes": [
+          {
+            "desde": 79,
+            "hasta": 79,
+            "texto": "SIGNO: Alfabético. Se cumplimentará este campo cuando las percepciones correspondan a cantidades reintegradas por el perceptor en el ejercicio, como consecuencia de haber sido indebida o excesivamente percibidas en ejercicios anteriores. En este caso se consignará una «N», en cualquier otro caso el contenido de este campo será un espacio."
+          },
+          {
+            "desde": 80,
+            "hasta": 92,
+            "texto": "IMPORTE: Campo numérico de 13 posiciones. Se hará constar sin signo y sin decimales, el importe íntegro anual de las percepciones, efectivamente satisfechas a cada perceptor."
+          },
+          {
+            "desde": 80,
+            "hasta": 90,
+            "texto": "Parte entera del importe de la base de retenciones e ingresos a cuenta, si no tiene contenido se consignará a ceros."
+          },
+          {
+            "desde": 91,
+            "hasta": 92,
+            "texto": "Parte decimal del importe de la base de retenciones e ingresos a cuenta, si no tiene contenido se consignará a ceros."
+          }
+        ],
+        "lon": 14
+      },
+      {
+        "desde": 93,
+        "hasta": 96,
+        "tipo": "Numérico",
+        "nombre": "% RETENCIÓN",
+        "descripcion": "Este campo se subdivide en otros dos:\nSe consignará la parte entera del porcentaje (si no tiene, consignar CEROS).\nSe consignará la parte decimal del porcentaje (si no tiene, consignar CEROS).\nDe haberse utilizado a lo largo del año más de un porcentaje se indicará exclusivamente el último de ellos.",
+        "partes": [
+          {
+            "desde": 93,
+            "hasta": 94,
+            "texto": "ENTERO Numérico Parte entera:"
+          },
+          {
+            "desde": 95,
+            "hasta": 96,
+            "texto": "DECIMAL Numérico Parte decimal:"
+          }
+        ],
+        "lon": 4
+      },
+      {
+        "desde": 97,
+        "hasta": 109,
+        "tipo": "Numérico",
+        "nombre": "RETENCIONES E INGRESOS A CUENTA",
+        "descripcion": "Campo numérico de 13 posiciones.\nSe consignará el importe total de las retenciones e ingresos a cuenta que correspondan al campo «BASE RETENCIONES E INGRESOS A CUENTA» del perceptor.\nLos importes deben consignarse en EUROS.",
+        "partes": [],
+        "lon": 13
+      },
+      {
+        "desde": 110,
+        "hasta": 113,
+        "tipo": "Numérico",
+        "nombre": "EJERCICIO DEVENGO",
+        "descripcion": "Únicamente se cumplimentará este campo en los supuestos que a continuación se indican, en caso contrario se rellanará a ceros:\na) Cuando alguna de las rentas o rendimientos relacionados en el resumen anual se refiera a cantidades satisfechas cuyo devengo o exigibilidad corresponda a ejercicios anteriores al que es objeto de declaración; en estos casos, además de cumplimentar los demás datos que procedan, se reflejarán en este campo las cuatro cifras del ejercicio de devengo.\nCuando se hayan satisfecho a un mismo perceptor cantidades cuyo devengo corresponda a diferentes ejercicios, la cumplimentación de los correspondientes datos deberá desglosarse en varios registros, de forma que cada uno de ellos refleje exclusivamente los datos correspondientes a devengos de un mismo ejercicio.\nb) Asimismo, se cumplimentará este campo cuando se incluyan en el modelo 180 los datos relativos a cantidades reintegradas por sus perceptores en el ejercicio, como consecuencia de haber sido indebida o excesivamente percibidas en ejercicios anteriores.\nEn estos supuestos, cada reintegro se relacionará bajo la misma modalidad de percepción bajo la cual se incluyeron en su día las cantidades indebida o excesivamente satisfechas, reflejando su importe en el campo «Base de Retención», cumplimentando el campo «Signo de la Base de Retención» con la letra «N» y haciendo constar en el campo «Ejercicio devengo» el año en el que se hubieran devengado originariamente las percepciones reintegradas. Cuando se hayan producido reintegros procedentes de una misma persona o entidad que correspondan a percepciones originariamente devengadas en varios ejercicios, su importe deberá desglosarse en varios apuntes (registros), de forma que cada uno de ellos refleje exclusivamente reintegros de percepciones correspondientes a un mismo ejercicio.",
+        "partes": [],
+        "lon": 4
+      },
+      {
+        "desde": 114,
+        "hasta": 114,
+        "tipo": "Numérico",
+        "nombre": "SITUACIÓN DEL INMUEBLE",
+        "descripcion": "Se consignará de entre las siguientes claves la que corresponda a la situación del inmueble arrendado:\n1. Inmueble con referencia catastral situado en cualquier punto del territorio español, excepto País Vasco y Navarra.\n2. Inmueble con referencia catastral situado en la Comunidad Autónoma del País Vasco.\n3. Inmueble con referencia catastral situado en la Comunidad Foral de Navarra.\n4. Inmueble en cualquiera de las situaciones anteriores, pero sin referencia catastral.",
+        "partes": [],
+        "lon": 1
+      },
+      {
+        "desde": 115,
+        "hasta": 134,
+        "tipo": "Alfanumérico",
+        "nombre": "REFERENCIA CATASTRAL",
+        "descripcion": "Se consignará la referencia catastral correspondiente al inmueble arrendado.",
+        "partes": [],
+        "lon": 20
+      },
+      {
+        "desde": 135,
+        "hasta": 327,
+        "tipo": "Alfanumérico",
+        "nombre": "DIRECCIÓN DEL INMUEBLE",
+        "descripcion": "Se consignará la dirección correspondiente al inmueble arrendado.\nEste campo se subdivide en:\nSe consignará el código alfabético de tipo de vía, normalizado según Instituto Nacional de Estadística (INE).\nSe consignará el nombre largo de la vía pública, si no cupiese completo el nombre, no se harán constar los artículos, preposiciones ni conjunciones y se pondrán en abreviatura los títulos (vgr. cd = Conde). Los demás casos se abreviarán utilizando las siglas de uso general.\nSe consignará el tipo de numeración (Valores: NÚM; KM.; S/N; etc.).\nSe consignará el número de casa o punto kilométrico.\nSe consignará el calificador del número (valores BIS; DUP; MOD; ANT; etc. / metros si Tipo Numer = KM.).\nSe consignará el bloque (número o letras).\nSe consignará el portal (número o letras).\nSe consignará la escalera (número o letras).\nSe consignará la planta o el piso (número o letras).\nSe consignará la puerta (número o letras).\nDatos complementarios del domicilio. Valores: Literal libre. (Ejemplos: \"Urbanización ..........\"; \"Centro Comercial ........, local ..........\"; \"Mercado de .......... puesto n.º ........\"; \"Edificio .........\"; etc.).\nSe consignará el nombre de la localidad, de la población, etc., si es distinta al Municipio.\nSe consignará el nombre de municipio.\nSe consignará el correspondiente al inmueble arrendado.\nSe consignará el CÓDIGO de municipio normalizado según Instituto Nacional de Estadística (INE).\nSe consignará el código de la provincia.\nSe consignarán los dos dígitos numéricos que correspondan a la provincia o, en su caso, ciudad autónoma o Isla de La Palma, que corresponda al inmueble arrendado, según la siguiente relación:\nSe consignará el código postal correspondiente a la dirección del inmueble arrendado.",
+        "partes": [
+          {
+            "desde": 135,
+            "hasta": 139,
+            "texto": "TIPO DE VÍA."
+          },
+          {
+            "desde": 140,
+            "hasta": 189,
+            "texto": "NOMBRE VÍA PÚBLICA."
+          },
+          {
+            "desde": 190,
+            "hasta": 192,
+            "texto": "TIPO DE NUMERACIÓN."
+          },
+          {
+            "desde": 193,
+            "hasta": 197,
+            "texto": "NÚMERO DE CASA."
+          },
+          {
+            "desde": 198,
+            "hasta": 200,
+            "texto": "CALIFICADOR DEL NÚMERO."
+          },
+          {
+            "desde": 201,
+            "hasta": 203,
+            "texto": "BLOQUE."
+          },
+          {
+            "desde": 204,
+            "hasta": 206,
+            "texto": "PORTAL."
+          },
+          {
+            "desde": 207,
+            "hasta": 209,
+            "texto": "ESCALERA."
+          },
+          {
+            "desde": 210,
+            "hasta": 212,
+            "texto": "PLANTA O PISO."
+          },
+          {
+            "desde": 213,
+            "hasta": 215,
+            "texto": "PUERTA."
+          },
+          {
+            "desde": 216,
+            "hasta": 255,
+            "texto": "COMPLEMENTO."
+          },
+          {
+            "desde": 256,
+            "hasta": 285,
+            "texto": "LOCALIDAD O POBLACIÓN."
+          },
+          {
+            "desde": 286,
+            "hasta": 315,
+            "texto": "MUNICIPIO."
+          },
+          {
+            "desde": 316,
+            "hasta": 320,
+            "texto": "CÓDIGO DE MUNICIPIO."
+          },
+          {
+            "desde": 321,
+            "hasta": 322,
+            "texto": "CÓDIGO PROVINCIA."
+          },
+          {
+            "desde": 323,
+            "hasta": 327,
+            "texto": "CÓDIGO POSTAL."
+          }
+        ],
+        "lon": 193
+      },
+      {
+        "desde": 328,
+        "hasta": 500,
+        "tipo": "Blancos",
+        "nombre": "BLANCOS",
+        "descripcion": "",
+        "partes": [],
+        "lon": 173
+      }
+    ]
+  },
+  "provincias": [
+    {
+      "codigo": "01",
+      "nombre": "ARABA/ÁLAVA"
+    },
+    {
+      "codigo": "02",
+      "nombre": "ALBACETE"
+    },
+    {
+      "codigo": "03",
+      "nombre": "ALICANTE/ALACANT"
+    },
+    {
+      "codigo": "04",
+      "nombre": "ALMERÍA"
+    },
+    {
+      "codigo": "05",
+      "nombre": "ÁVILA"
+    },
+    {
+      "codigo": "06",
+      "nombre": "BADAJOZ"
+    },
+    {
+      "codigo": "07",
+      "nombre": "ILLES BALEARES"
+    },
+    {
+      "codigo": "08",
+      "nombre": "BARCELONA"
+    },
+    {
+      "codigo": "09",
+      "nombre": "BURGOS"
+    },
+    {
+      "codigo": "10",
+      "nombre": "CÁCERES"
+    },
+    {
+      "codigo": "11",
+      "nombre": "CÁDIZ"
+    },
+    {
+      "codigo": "12",
+      "nombre": "CASTELLÓN/CASTELLÓ"
+    },
+    {
+      "codigo": "13",
+      "nombre": "CIUDAD REAL"
+    },
+    {
+      "codigo": "14",
+      "nombre": "CÓRDOBA"
+    },
+    {
+      "codigo": "15",
+      "nombre": "CORUÑA, A"
+    },
+    {
+      "codigo": "16",
+      "nombre": "CUENCA"
+    },
+    {
+      "codigo": "17",
+      "nombre": "GIRONA"
+    },
+    {
+      "codigo": "18",
+      "nombre": "GRANADA"
+    },
+    {
+      "codigo": "19",
+      "nombre": "GUADALAJARA"
+    },
+    {
+      "codigo": "20",
+      "nombre": "GIPUZKOA"
+    },
+    {
+      "codigo": "21",
+      "nombre": "HUELVA"
+    },
+    {
+      "codigo": "22",
+      "nombre": "HUESCA"
+    },
+    {
+      "codigo": "23",
+      "nombre": "JAÉN"
+    },
+    {
+      "codigo": "24",
+      "nombre": "LEÓN"
+    },
+    {
+      "codigo": "25",
+      "nombre": "LLEIDA"
+    },
+    {
+      "codigo": "26",
+      "nombre": "RIOJA, LA"
+    },
+    {
+      "codigo": "27",
+      "nombre": "LUGO"
+    },
+    {
+      "codigo": "28",
+      "nombre": "MADRID"
+    },
+    {
+      "codigo": "29",
+      "nombre": "MÁLAGA"
+    },
+    {
+      "codigo": "30",
+      "nombre": "MURCIA"
+    },
+    {
+      "codigo": "31",
+      "nombre": "NAVARRA"
+    },
+    {
+      "codigo": "32",
+      "nombre": "OURENSE"
+    },
+    {
+      "codigo": "33",
+      "nombre": "ASTURIAS"
+    },
+    {
+      "codigo": "34",
+      "nombre": "PALENCIA"
+    },
+    {
+      "codigo": "35",
+      "nombre": "PALMAS, LAS"
+    },
+    {
+      "codigo": "36",
+      "nombre": "PONTEVEDRA"
+    },
+    {
+      "codigo": "37",
+      "nombre": "SALAMANCA"
+    },
+    {
+      "codigo": "38",
+      "nombre": "S.C.TENERIFE (a excepción de Isla de La Palma)"
+    },
+    {
+      "codigo": "39",
+      "nombre": "CANTABRIA"
+    },
+    {
+      "codigo": "40",
+      "nombre": "SEGOVIA"
+    },
+    {
+      "codigo": "41",
+      "nombre": "SEVILLA"
+    },
+    {
+      "codigo": "42",
+      "nombre": "SORIA"
+    },
+    {
+      "codigo": "43",
+      "nombre": "TARRAGONA"
+    },
+    {
+      "codigo": "44",
+      "nombre": "TERUEL"
+    },
+    {
+      "codigo": "45",
+      "nombre": "TOLEDO"
+    },
+    {
+      "codigo": "46",
+      "nombre": "VALENCIA/VALÉNCIA"
+    },
+    {
+      "codigo": "47",
+      "nombre": "VALLADOLID"
+    },
+    {
+      "codigo": "48",
+      "nombre": "BIZKAIA"
+    },
+    {
+      "codigo": "49",
+      "nombre": "ZAMORA"
+    },
+    {
+      "codigo": "50",
+      "nombre": "ZARAGOZA"
+    },
+    {
+      "codigo": "51",
+      "nombre": "CEUTA"
+    },
+    {
+      "codigo": "52",
+      "nombre": "MELILLA"
+    },
+    {
+      "codigo": "53",
+      "nombre": "ISLA DE LA PALMA"
+    }
+  ]
+} as const satisfies {
+  boe: string; vigenteDesde: string; sha256: string; longitud: number
+  registros: Record<'1' | '2', readonly CampoDr180[]>
+  provincias: readonly ProvinciaDr180[]
+}

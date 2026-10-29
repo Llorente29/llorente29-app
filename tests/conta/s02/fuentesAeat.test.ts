@@ -4,15 +4,16 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const DIR = 'docs/conta/fuentes/aeat'
-const huellas = JSON.parse(readFileSync(`${DIR}/huellas.json`, 'utf8')).ficheros as Record<string, { sha256: string; bytes: number }>
-
-describe('diseños de registro de la AEAT', () => {
-  for (const [f, h] of Object.entries(huellas)) {
-    it(`${f}: su sha256 y su tamaño`, () => {
-      const b = readFileSync(`${DIR}/${f}`)
-      expect(b.length).toBe(h.bytes)
-      expect(createHash('sha256').update(b).digest('hex')).toBe(h.sha256)
-    })
-  }
-})
+// S02 (29/10): y los bloques del BOE guardados tal cual (el anexo VI del 180).
+for (const DIR of ['docs/conta/fuentes/aeat', 'docs/conta/fuentes/boe']) {
+  const huellas = JSON.parse(readFileSync(`${DIR}/huellas.json`, 'utf8')).ficheros as Record<string, { sha256: string; bytes: number }>
+  describe(`fuentes guardadas tal cual en ${DIR}`, () => {
+    for (const [f, h] of Object.entries(huellas)) {
+      it(`${f}: su sha256 y su tamaño`, () => {
+        const b = readFileSync(`${DIR}/${f}`)
+        expect(b.length).toBe(h.bytes)
+        expect(createHash('sha256').update(b).digest('hex')).toBe(h.sha256)
+      })
+    }
+  })
+}
