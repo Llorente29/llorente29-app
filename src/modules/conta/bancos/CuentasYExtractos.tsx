@@ -36,6 +36,7 @@ import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { DialogoBancoNuevo } from '@/modules/conta/bancos/DialogoBancoNuevo'
 import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
+import { lineaConexion, type ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
@@ -117,6 +118,19 @@ export function CuentasYExtractos() {
   )
 }
 
+/** B01c · «Conectada con BBVA · actualizada hoy a las 03:00», o el aviso del permiso con su botón «Renovar». */
+function LineaConexion({ conexion }: { conexion: ConexionCuenta | null }) {
+  const l = lineaConexion(conexion, new Date())
+  if (!l) return null
+  return (
+    <div className={l.nivel === 'ok' ? 'cx-ayuda cxb-conexion' : l.nivel === 'aviso' ? 'cx-aviso cxb-conexion' : 'cx-error cxb-conexion'}
+      role={l.nivel === 'ok' ? 'status' : 'alert'} data-prueba="conexion-banco">
+      <span>{l.texto}</span>
+      {l.renovar && <a className="cx-boton-sec" href={l.renovar} target="_blank" rel="noreferrer">Renovar</a>}
+    </div>
+  )
+}
+
 function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extractos: Extracto[]; hacer: (f: () => Promise<string>) => Promise<void>; prellenar: string | null }) {
   const { datos } = useBancos()
   const nombreLocal = (id: string | null) => (id ? datos.locales.find((l) => l.id === id)?.nombre ?? 'un local' : 'Común')
@@ -155,6 +169,7 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
           </label>
         )}
       </div>
+      <LineaConexion conexion={b.conexion} />
       {!b.cuenta && <div className="cx-aviso" role="note">Este banco no tiene su cuenta en contabilidad: no puedo casar nada hasta que la tenga.</div>}
 
       {b.ibanRevision && (
