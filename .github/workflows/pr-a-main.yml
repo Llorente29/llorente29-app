@@ -73,6 +73,15 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/sql-sin-where.mjs "$BASE" "$HEAD"
 
+      # W10a (28/10): el repositorio es público. Ninguna línea que añade el PR,
+      # en ningún fichero, trae un secreto (también los «fv_…» internos: tres
+      # estaban escritos en migraciones y seguían vivos).
+      - name: Ningún secreto en lo que añade el PR (W10a)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/sin-secretos.mjs "$BASE" "$HEAD"
+
       # W06 (26/10): una cuenta de tanda («cuenta:») no mide algo que crece
       # solo. El ensayo de producción cuenta antes y después de deshacer, con
       # minutos en medio y el negocio abierto: el #241 se paró porque contaba
