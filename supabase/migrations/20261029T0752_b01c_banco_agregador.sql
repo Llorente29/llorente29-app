@@ -86,6 +86,7 @@ create or replace function public.bank_agregador_apuntar(p_treasury uuid, p_prov
                                                          p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_t public.treasury_account; v_cuenta uuid; v_prov text := replace(coalesce(p_proveedor, ''), '-', '_'); v_bien boolean := p_estado in ('al_dia', 'sin_movimientos');
+        v_caduca timestamptz;
 begin
   select * into v_t from public.treasury_account where id = p_treasury;
   if v_t.id is null then raise exception 'Esa cuenta del banco no existe.' using errcode = 'P0002'; end if;
@@ -94,19 +95,21 @@ begin
   if p_estado in ('fallo', 'permiso_caducado') and coalesce(trim(p_mensaje), '') = '' then
     raise exception 'Un fallo o un permiso caducado se apuntan con su porqué.' using errcode = '23514';
   end if;
-  if p_caduca is null and not exists (select 1 from public.bank_aggregator_link where provider = v_prov and external_account_id = p_cuenta_proveedor) then
+  -- Sin fecha nueva, la que ya tenía (el NOT NULL se mira antes del «on conflict»: hay que dársela aquí).
+  v_caduca := coalesce(p_caduca, (select consent_valid_until from public.bank_aggregator_link where provider = v_prov and external_account_id = p_cuenta_proveedor));
+  if v_caduca is null then
     raise exception 'El banco no dice hasta cuándo vale el permiso de «%»: no se puede apuntar la conexión.', v_t.name using errcode = '23502';
   end if;
   insert into public.bank_aggregator_link as l (account_id, company_id, treasury_account_id, provider, external_account_id, consent_id, consent_valid_until, status,
                                                 last_sync_at, created_by, created_by_name, bank_name, renew_url, last_run_at, last_status, last_message,
                                                 bank_balance, bank_balance_date, last_new, last_repeated, last_from, last_to)
-  values (v_cuenta, v_t.company_id, p_treasury, v_prov, p_cuenta_proveedor, coalesce(nullif(trim(p_conexion), ''), p_cuenta_proveedor), p_caduca,
+  values (v_cuenta, v_t.company_id, p_treasury, v_prov, p_cuenta_proveedor, coalesce(nullif(trim(p_conexion), ''), p_cuenta_proveedor), v_caduca,
           case when p_estado = 'permiso_caducado' then 'caducado' else 'activo' end,
           case when v_bien then now() end, auth.uid(), public.conta_nombre_actor(), nullif(trim(p_banco), ''), p_renovar, now(), p_estado, nullif(trim(p_mensaje), ''),
           p_saldo_banco, p_saldo_fecha, p_nuevos, p_repetidos, p_desde, p_hasta)
   on conflict (provider, external_account_id) do update set
     treasury_account_id = excluded.treasury_account_id, consent_id = excluded.consent_id,
-    consent_valid_until = coalesce(excluded.consent_valid_until, l.consent_valid_until), status = excluded.status,
+    consent_valid_until = excluded.consent_valid_until, status = excluded.status,
     last_sync_at = coalesce(excluded.last_sync_at, l.last_sync_at), bank_name = coalesce(excluded.bank_name, l.bank_name), renew_url = excluded.renew_url, last_run_at = excluded.last_run_at,
     last_status = excluded.last_status, last_message = excluded.last_message,
     bank_balance = coalesce(excluded.bank_balance, l.bank_balance), bank_balance_date = coalesce(excluded.bank_balance_date, l.bank_balance_date),
