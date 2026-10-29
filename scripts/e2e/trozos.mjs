@@ -9,7 +9,7 @@
 //
 // Cómo reparte: fichero a fichero (los dos tamaños de un fichero van juntos,
 // como corrían), del más lento al más rápido, cada uno al trozo que menos lleva.
-// Los tiempos son los de la última entera medida (tests/e2e/tiempos.json); un
+// Los tiempos son los de la última entera medida (tests/e2e/tiempos/, uno por prueba); un
 // fichero nuevo cuenta como la mediana. Es determinista: los cuatro trozos de
 // una entera calculan el mismo reparto sin hablar entre ellos, y el job que los
 // junta comprueba que entre todos están todos los ficheros, una vez cada uno.
@@ -17,8 +17,8 @@
 // Medido el 16/10 sobre la entera de B (33,3 min con 1 worker): en 4 trozos, el
 // más largo lleva 8,3 min de pruebas.
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { dirname, join, relative } from 'node:path'
 
 const RAIZ = 'tests/e2e'
 // El testMatch por defecto de Playwright.
@@ -63,8 +63,38 @@ export function repartir(lista, n, tiempos = {}) {
   return trozos
 }
 
-export function tiemposDelRepo(ruta = join(RAIZ, 'tiempos.json')) {
-  try { return JSON.parse(readFileSync(ruta, 'utf8')) } catch { return {} }
+/**
+ * W12 (29/10): los tiempos medidos, uno por prueba, en tests/e2e/tiempos/<ruta>.json
+ * ({ "segundos": n, "medido": "…" }), y el techo en tests/e2e/tiempos/_techo.json.
+ * Devuelve lo mismo que el tiempos.json único de antes: { "<ruta>": segundos,
+ * "_techo_4_trozos_min": …, "_techo_porque": … }. Antes, dos PR que añadían un
+ * tiempo chocaban siempre (la misma nota y la misma última línea).
+ */
+export const TIEMPOS = join(RAIZ, 'tiempos')
+export function tiemposDelRepo(carpeta = TIEMPOS) {
+  const t = {}
+  if (!existsSync(carpeta)) return t
+  const andar = (d) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const p = join(d, e.name)
+      if (e.isDirectory()) andar(p)
+      else if (e.name === '_techo.json') Object.assign(t, JSON.parse(readFileSync(p, 'utf8')))
+      else if (e.name.endsWith('.json')) {
+        const v = JSON.parse(readFileSync(p, 'utf8'))
+        if (typeof v.segundos === 'number') t[relative(carpeta, p).split('\\').join('/').replace(/\.json$/, '')] = v.segundos
+      }
+    }
+  }
+  andar(carpeta)
+  return t
+}
+
+/** Escribe el tiempo de una prueba en su fichero (tests/e2e/tiempos/<ruta>.json, o bajo `carpeta`). */
+export function escribirTiempo(ruta, segundos, medido, carpeta = TIEMPOS) {
+  const f = join(carpeta, `${ruta}.json`)
+  mkdirSync(dirname(f), { recursive: true })
+  writeFileSync(f, JSON.stringify(medido ? { segundos, medido } : { segundos }) + '\n')
+  return f
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

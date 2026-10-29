@@ -7,11 +7,11 @@
 // lo que cambia en un modelo anual informativo, que no se paga.
 
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import type { Perceptor190 } from '@/modules/conta/services/impuestosService'
+import type { Inmueble180, Perceptor180, Perceptor190 } from '@/modules/conta/services/impuestosService'
 import { estaPresentada, tarjeta, type ModeloTrimestre } from './trimestre'
 
 /** Los modelos anuales que Sumied calcula hoy. Los demás se presentan fuera y se apuntan con su CSV. */
-export const CALCULA_SUMIED: ReadonlySet<string> = new Set(['190'])
+export const CALCULA_SUMIED: ReadonlySet<string> = new Set(['190', '180'])
 
 /** Los anuales se presentan en enero y febrero del año siguiente: hasta febrero se abre el año anterior. */
 export function ejercicioPorDefecto(hoy: string): number {
@@ -21,12 +21,12 @@ export function ejercicioPorDefecto(hoy: string): number {
 
 /**
  * La tarjeta de la tira: la del trimestre, pero sin «0,00 €» de un modelo que
- * no se paga. En el 190 calculado, lo retenido en el año ([03]).
+ * no se paga. En el 190 y el 180 calculados, lo retenido en el año ([03]).
  */
 export function tarjetaAnual(m: ModeloTrimestre, hoy: string, ejercicio: number, desde?: string | null): ReturnType<typeof tarjeta> {
   const t = tarjeta(m, hoy, ejercicio, desde)
   const c03 = m.declaracion?.casillas.find((c) => c.casilla === '03')?.valor ?? null
-  const importe = m.modelo === '190' && c03 !== null ? `${eurosExactos(c03)} retenidos` : '—'
+  const importe = CALCULA_SUMIED.has(m.modelo) && c03 !== null ? `${eurosExactos(c03)} retenidos` : '—'
   // Un informativo calculado sale «cero»: no es «Para revisar 0,00 €», es para revisar.
   return { ...t, importe }
 }
@@ -38,7 +38,9 @@ export function queFaltaAnual(m: ModeloTrimestre): { titulo: string; texto: stri
     if (!d || d.estado === 'pending') {
       return {
         titulo: `Falta calcular el ${m.modelo} del año`,
-        texto: 'Sumied lo calcula con los 111 del año: cada proveedor con retención y cada trabajador con nómina, con su NIF, su provincia y lo retenido. Después comprueba que suma lo mismo que los 111.',
+        texto: m.modelo === '180'
+          ? 'Sumied lo calcula con los 115 del año: cada arrendador con retención, con su NIF, su provincia, el porcentaje y el local alquilado. Después comprueba que suma lo mismo que los 115.'
+          : 'Sumied lo calcula con los 111 del año: cada proveedor con retención y cada trabajador con nómina, con su NIF, su provincia y lo retenido. Después comprueba que suma lo mismo que los 111.',
         calcula: true,
       }
     }
@@ -110,4 +112,54 @@ export function sinTrabajadorEnPalabras(p: Pick<Perceptor190, 'clave' | 'subclav
     return { titulo: 'Indemnizaciones sin trabajador', apoyo: 'Las indemnizaciones exentas del diario (la 641) que no están en ninguna nómina por trabajador' }
   }
   return { titulo: 'Nóminas sin trabajador', apoyo: 'Lo que el diario paga en nóminas (la 640) y no está en ninguna nómina por trabajador' }
+}
+
+/**
+ * Los arrendadores del 180 en el orden en que se enseñan: primero los que
+ * tienen algo que corregir (sin NIF que valga, sin provincia o sin el local),
+ * después el resto por nombre. No se esconde ninguno (regla 7).
+ */
+export function arrendadoresEnOrden(lista: readonly Perceptor180[]): (Perceptor180 & { falta: string[] })[] {
+  const conFalta = lista.map((p) => {
+    const falta: string[] = []
+    if (!p.nif) falta.push('sin NIF')
+    else if (!p.nif_valido) falta.push('NIF que no vale')
+    if (!p.provincia) falta.push('sin provincia')
+    if (!p.inmueble) falta.push('sin el local')
+    return { ...p, falta }
+  })
+  return conFalta.sort((a, b) => (b.falta.length > 0 ? 1 : 0) - (a.falta.length > 0 ? 1 : 0) || (a.nombre ?? '').localeCompare(b.nombre ?? '', 'es'))
+}
+
+/** El local alquilado en una línea: la dirección y si lleva referencia catastral (situación del anexo VI). */
+export function inmuebleEnPalabras(i: Inmueble180): string {
+  const calle = [i.tipo_via, i.nombre_via, i.numero].filter(Boolean).join(' ')
+  const piso = [i.planta && `planta ${i.planta}`, i.puerta && `puerta ${i.puerta}`].filter(Boolean).join(', ')
+  const donde = `${calle}${piso ? `, ${piso}` : ''}, ${i.cp} ${i.municipio}`
+  const SITUACION: Record<Inmueble180['situacion'], string> = {
+    '1': 'con referencia catastral', '2': 'con referencia catastral, en el País Vasco', '3': 'con referencia catastral, en Navarra', '4': 'sin referencia catastral',
+  }
+  return `${donde} · ${SITUACION[i.situacion]}${i.catastral ? ` ${i.catastral}` : ''}`
+}
+
+/** El porcentaje de retención con coma: «19 %», «19,5 %». */
+export function porcentajeEnPalabras(p: number): string {
+  return `${String(Math.round(p * 100) / 100).replace('.', ',')} %`
+}
+
+/**
+ * Lo que falta para guardar el local de un arrendador, como lo comprueba la
+ * base: vacío si se puede guardar. La base lo vuelve a comprobar y es la que manda.
+ */
+export function faltaEnInmueble(i: Partial<Inmueble180>): string[] {
+  const f: string[] = []
+  const cat = (i.catastral ?? '').replace(/\s/g, '').toUpperCase()
+  if (!['1', '2', '3', '4'].includes(i.situacion ?? '')) f.push('la situación')
+  if (i.situacion && i.situacion !== '4' && !/^[0-9A-Z]{20}$/.test(cat)) f.push('la referencia catastral (20 letras y cifras)')
+  if (!(i.nombre_via ?? '').trim()) f.push('la calle')
+  if (!(i.municipio ?? '').trim()) f.push('el municipio')
+  if (!/^(0[1-9]|[1-4]\d|5[0-3])$/.test(i.provincia ?? '')) f.push('la provincia')
+  if (!/^\d{5}$/.test(i.cp ?? '')) f.push('el código postal')
+  if (i.codigo_municipio && !/^\d{5}$/.test(i.codigo_municipio)) f.push('el código de municipio (5 cifras)')
+  return f
 }

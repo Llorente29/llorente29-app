@@ -47,7 +47,7 @@ export const COMUN = ['tests/e2e/conta/c00/marco.spec.ts', 'tests/e2e/conta/rls.
  *     permiso por local entre tablets: 9 pruebas, 59,6 s;
  *   · quien-reparte: «Quién reparte» y la etiqueta de reparto en la cocina, y
  *     que la cuenta B no ve ni toca lo de A: 4 pruebas, 31,4 s.
- * 91 s de pruebas en los dos tamaños (tests/e2e/tiempos.json, la misma vara
+ * 91 s de pruebas en los dos tamaños (tests/e2e/tiempos/, la misma vara
  * que la entera). Lo que NO cubre, porque no hay e2e de ello: crear un pedido
  * y llevarlo por todos sus estados en cocina.
  */
@@ -143,7 +143,8 @@ export const LO_COMUN = [...LO_COMUN_SUMIED, ...LO_COMUN_AMBOS]
 export const SUITE_SUMIED = ['tests/e2e/conta']
 export function suiteFolvy(raiz = 'tests/e2e') {
   if (!existsSync(raiz)) return []
-  return readdirSync(raiz, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name !== 'conta').map((d) => `${raiz}/${d.name}`).sort()
+  // W12: tests/e2e/tiempos no son pruebas: son sus tiempos, uno por prueba.
+  return readdirSync(raiz, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name !== 'conta' && d.name !== 'tiempos').map((d) => `${raiz}/${d.name}`).sort()
 }
 /** Lo que es de Sumied (la contabilidad): sus pantallas, funciones, guiones, pruebas y documentos. */
 export const RUTAS_SUMIED = [
@@ -152,6 +153,12 @@ export const RUTAS_SUMIED = [
 ]
 /** ¿Toca la contabilidad? ¿Toca Folvy (pantallas, funciones o pruebas que no son de la contabilidad)? */
 export function productosTocados(cambiados) {
+  // W12: un tiempo cuenta como la prueba que mide (tests/e2e/tiempos/conta/… es de Sumied); la nota y el techo, de nadie.
+  cambiados = cambiados.flatMap((f) => {
+    if (!f.startsWith('tests/e2e/tiempos/')) return [f]
+    const m = /^tests\/e2e\/tiempos\/(.+\.spec\.ts)\.json$/.exec(f)
+    return m ? [`tests/e2e/${m[1]}`] : []
+  })
   const esSumied = (f) => RUTAS_SUMIED.some((p) => f.startsWith(p))
   const esFolvy = (f) => !esSumied(f) && /^(src\/|supabase\/functions\/|tests\/e2e\/|tests\/unit\/|supabase\/(produccion|staging)\/tandas\/folvy\/)/.test(f)
   return { sumied: cambiados.some(esSumied), folvy: cambiados.some(esFolvy) }

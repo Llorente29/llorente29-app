@@ -140,7 +140,7 @@ export function confirmarCertificado(certificado: string, accion: 'test' | 'file
 export type SalidaHacienda = { ok: boolean; mensaje: string; motivo?: string; [k: string]: unknown }
 
 /** Llama a conta-hacienda. Nunca lanza: si la función contesta con un error, su cuerpo dice por qué. */
-export async function hacienda(accion: 'puerta' | 'fichero_303' | 'fichero_190' | 'presentar_303' | 'ya_presentado_fuera' | 'probar', cuerpo: Record<string, unknown> = {}): Promise<SalidaHacienda> {
+export async function hacienda(accion: 'puerta' | 'fichero_303' | 'fichero_190' | 'fichero_180' | 'presentar_303' | 'ya_presentado_fuera' | 'probar', cuerpo: Record<string, unknown> = {}): Promise<SalidaHacienda> {
   hayBase()
   const { data, error } = await supabase!.functions.invoke('conta-hacienda', { body: { accion, ...cuerpo } })
   if (!error && data && typeof data === 'object' && 'ok' in data) return data as SalidaHacienda
@@ -510,6 +510,38 @@ export async function perceptores190(id: string, cuenta: string): Promise<Percep
   const { data, error } = await tabla('tax_return_line').select('frozen').eq('tax_return_id', id).eq('account_id', cuenta)
   if (error) throw new Error(`No se han podido leer los perceptores: ${error.message}`)
   return ((data ?? []) as { frozen: Perceptor190 }[]).map((f) => f.frozen)
+}
+
+/** S02 · Calcula (o recalcula) el borrador del 180 del año desde los 115. Devuelve lo mismo que el del 190. */
+export function calcular180(companyId: string, ejercicio: number): Promise<Calculo190> {
+  return rpc<Calculo190>('conta_impuesto_180_calcular', { p_company: companyId, p_year: ejercicio })
+}
+
+/** S02 · El inmueble arrendado de un arrendador, como lo pide el registro de perceptor del 180 (anexo VI). */
+export interface Inmueble180 {
+  situacion: '1' | '2' | '3' | '4'; catastral: string | null; tipo_via: string | null; nombre_via: string; tipo_numeracion: string | null
+  numero: string | null; calificador?: string | null; bloque?: string | null; portal?: string | null; escalera?: string | null
+  planta: string | null; puerta: string | null; complemento?: string | null; localidad?: string | null
+  municipio: string; codigo_municipio: string | null; provincia: string; cp: string
+}
+
+/** S02 · Un arrendador del 180, como lo dejó el cálculo (tax_return_line.frozen). */
+export interface Perceptor180 {
+  perceptor: string | null; proveedor: string | null; nif: string | null; nombre: string | null; provincia: string | null; nif_valido: boolean
+  base: number; porcentaje: number; retenciones: number; inmueble: Inmueble180 | null
+  asientos?: { asiento: string; fecha: string; serie: number | null; numero: number | null; retenido: number; periodo: string }[]
+}
+
+/** S02 · Los arrendadores del 180 calculado. */
+export async function perceptores180(id: string, cuenta: string): Promise<Perceptor180[]> {
+  const { data, error } = await tabla('tax_return_line').select('frozen').eq('tax_return_id', id).eq('account_id', cuenta)
+  if (error) throw new Error(`No se han podido leer los arrendadores: ${error.message}`)
+  return ((data ?? []) as { frozen: Perceptor180 }[]).map((f) => f.frozen)
+}
+
+/** S02 · Guarda el inmueble de un arrendador (lo comprueba la base y dice qué ha guardado). */
+export function ponerInmueble180(companyId: string, proveedor: string, datos: Partial<Inmueble180>): Promise<{ ok: boolean; mensaje: string }> {
+  return rpc('conta_impuesto_180_inmueble_poner', { p_company: companyId, p_supplier: proveedor, p_datos: datos })
 }
 
 /** S02 · Lo comprobado de una declaración, con su id y si un aviso se dio por bueno (para «Dar por bueno»). */

@@ -1,0 +1,5 @@
+# W10a · cierre: la 1053 (borra el respaldo de la 1630, con el secreto viejo) y
+# su prueba (ROLLBACK). Desde main va de verdad: es lo que devuelve a verde el
+# volcado de la estructura de staging (W09).
+supabase/migrations/20261029T1053_w10a_borrar_respaldo_secreto_viejo.sql
+supabase/staging/sql/20261029_w10a_cierre_prueba.sql
