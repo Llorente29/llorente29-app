@@ -313,7 +313,6 @@ end $$;
 reset role;
 
 -- ── 9 · La vuelta atrás, y otra vez delante ────────────────────────────────
-\i supabase/vuelta-atras/20261029T1013_s01c_arreglo_foodint.down.sql
 \i supabase/vuelta-atras/20261029T1012_s01c_facturas_solas.down.sql
 do $$ begin
   if to_regprocedure('public._compras_casar_solo(uuid)') is not null or to_regprocedure('public.compras_factura_lineas(uuid)') is not null or exists (select 1 from public.funcion_respaldo where migracion = '20261029T1012_s01c_facturas_solas')

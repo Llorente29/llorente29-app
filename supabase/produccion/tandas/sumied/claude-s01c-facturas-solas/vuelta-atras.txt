@@ -1,4 +1,5 @@
-# S01c · vuelta atrás de la 1012: vuelve a poner las dos funciones como
-# estaban (del respaldo, con su huella) y quita lo nuevo.
+# S01c · segundo real, la 1013 sola: SIN VUELTA ATRÁS, declarada en
+# aplicar.txt (un contraasiento no se borra). No hay ningún fichero que
+# deshacer. La 1012 (primer real) tiene la suya en
+# supabase/vuelta-atras/20261029T1012_s01c_facturas_solas.down.sql.
 cuenta: scripts/conta/produccion/cuentas/s01c-facturas-solas.sql
-supabase/vuelta-atras/20261029T1012_s01c_facturas_solas.down.sql
