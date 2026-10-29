@@ -4,7 +4,7 @@
 
 
 -- Dumped from database version 17.11
--- Dumped by pg_dump version 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
+-- Dumped by pg_dump version 17.11 (Ubuntu 17.11-1.pgdg26.04+2)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -1105,6 +1105,98 @@ begin
   exception when others then
     raise warning '_aviso_falta_en_vault: no se pudo avisar de % (venta %): %', p_que, p_venta, sqlerrm;
   end;
+end $$;
+
+
+--
+-- Name: _aviso_olvido_responder(uuid, text, timestamp with time zone, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._aviso_olvido_responder(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone, p_via text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  l public.clockout_reminder_log;
+  v_siguiente timestamptz;
+  v_hora timestamptz;
+  v_peticion public.clock_correction_request;
+  v_existente uuid;
+  v_motivo text;
+  v_hhmm text;
+begin
+  if p_respuesta not in ('a_su_hora', 'otra_hora', 'sigo') then
+    raise exception 'RESPUESTA_INVALIDA' using errcode = '22023';
+  end if;
+  select * into l from public.clockout_reminder_log where id = p_log_id for update;
+  if not found or l.entrada_at is null then
+    return jsonb_build_object('resultado', 'no_existe', 'texto', 'No encontramos ese aviso. Si te falta la salida, pídela desde tu portal.');
+  end if;
+  if l.correction_request_id is not null then
+    return jsonb_build_object('resultado', 'ya_respondida', 'peticion_id', l.correction_request_id,
+      'texto', 'Ya nos contestaste: tu encargado tiene la petición para revisarla.');
+  end if;
+
+  if not exists (select 1 from public.clock_entries ce where ce.id = l.clock_entry_id and not ce.voided) then
+    return jsonb_build_object('resultado', 'anulada', 'texto', 'Esa entrada ya no está en tu registro: no hace falta nada.');
+  end if;
+  -- ¿Sigue abierta? Si ya hay algo fichado después, no hace falta nada.
+  select min(n.datetime) into v_siguiente from public.clock_entries n
+   where n.employee_id = l.employee_id and not n.voided and n.id <> l.clock_entry_id and n.datetime > l.entrada_at;
+  if v_siguiente is not null then
+    update public.clockout_reminder_log set respuesta = p_respuesta, respondida_at = now(), respondida_via = p_via, updated_at = now() where id = l.id;
+    return jsonb_build_object('resultado', 'ya_fichada',
+      'texto', format('Ya tienes fichado lo siguiente a las %s. No hace falta nada más.', to_char(v_siguiente at time zone 'Europe/Madrid', 'HH24:MI')));
+  end if;
+
+  if p_respuesta = 'sigo' then
+    update public.clockout_reminder_log set respuesta = 'sigo', respondida_at = now(), respondida_via = p_via, updated_at = now() where id = l.id;
+    return jsonb_build_object('resultado', 'apuntado', 'texto', 'Apuntado. Acuérdate de fichar la salida al terminar.');
+  end if;
+
+  v_hora := case when p_respuesta = 'a_su_hora' then l.fin_turno else p_hora end;
+  if v_hora is null then
+    -- «Otra hora» por WhatsApp (o «a su hora» sin turno): la hora la pone en el portal.
+    update public.clockout_reminder_log set respuesta = p_respuesta, respondida_at = now(), respondida_via = p_via, updated_at = now() where id = l.id;
+    return jsonb_build_object('resultado', 'pide_hora', 'texto', 'Dinos a qué hora saliste desde tu portal. Tu encargado lo revisará.');
+  end if;
+  if v_hora <= l.entrada_at then
+    raise exception 'HORA_ANTES_DE_LA_ENTRADA' using errcode = '22023', hint = 'La salida tiene que ser después de la entrada.';
+  end if;
+  if v_hora > now() + interval '5 minutes' then
+    raise exception 'HORA_FUTURA' using errcode = '22023', hint = 'La salida no puede ser una hora que aún no ha llegado.';
+  end if;
+
+  v_hhmm := to_char(v_hora at time zone 'Europe/Madrid', 'HH24:MI');
+  -- Si ya hay una petición de esa salida (la pidió desde «Reportar olvido»), se enlaza.
+  select r.id into v_existente from public.clock_correction_request r
+   where r.employee_id = l.employee_id and r.kind = 'add' and r.proposed_type = 'salida'
+     and r.status in ('pending', 'approved') and r.proposed_datetime > l.entrada_at
+   order by r.created_at desc limit 1;
+  if v_existente is not null then
+    update public.clockout_reminder_log set respuesta = p_respuesta, respondida_at = now(), respondida_via = p_via,
+           correction_request_id = v_existente, updated_at = now() where id = l.id;
+    return jsonb_build_object('resultado', 'ya_pedida', 'peticion_id', v_existente,
+      'texto', 'Ya tenías pedida esa salida: tu encargado la tiene para revisarla.');
+  end if;
+
+  v_motivo := format('Respuesta al aviso de olvido (%s): %s.',
+                     case p_via when 'whatsapp' then 'WhatsApp' else 'portal' end,
+                     case when p_respuesta = 'a_su_hora' then format('salí a mi hora, a las %s', v_hhmm)
+                          else format('salí a las %s', v_hhmm) end);
+  insert into public.clock_correction_request(
+    account_id, employee_id, requested_by_employee_id, clock_entry_id, kind, proposed_type, proposed_datetime, reason)
+  values (l.account_id, l.employee_id, l.employee_id, null, 'add', 'salida', v_hora, v_motivo)
+  returning * into v_peticion;
+  insert into public.clock_entry_audit(
+    clock_entry_id, employee_id, account_id, action, actor_employee_id, actor_label, reason, after, peticion_id)
+  values (null, l.employee_id, l.account_id, 'request', l.employee_id,
+          case p_via when 'whatsapp' then 'WhatsApp (aviso de olvido)' else 'Portal (aviso de olvido)' end,
+          v_motivo, to_jsonb(v_peticion), v_peticion.id);
+  update public.clockout_reminder_log set respuesta = p_respuesta, respondida_at = now(), respondida_via = p_via,
+         correction_request_id = v_peticion.id, updated_at = now() where id = l.id;
+  return jsonb_build_object('resultado', 'peticion', 'peticion_id', v_peticion.id, 'hora', v_hhmm,
+    'texto', format('Hecho: le hemos pedido a tu encargado que apunte tu salida a las %s. Lo verás en tu portal cuando la apruebe.', v_hhmm));
 end $$;
 
 
@@ -6364,10 +6456,19 @@ begin
                'id', ce.id, 'tipo', ce.type, 'hora', coalesce(ce.real_datetime, ce.datetime),
                'declarada', ce.declared_at, 'llegada', ce.created_at, 'origen', ce.source,
                'local', l.name, 'distancia_m', ce.distance_m, 'dentro_del_radio', ce.within_radius,
-               'anulada', coalesce(ce.voided, false))
+               'anulada', coalesce(ce.voided, false),
+               'origen_corregido', oc.dato)
              order by coalesce(ce.real_datetime, ce.datetime), ce.id)
         from public.clock_entries ce
         left join public.locations l on l.id = ce.location_id_at_clock
+        left join lateral (
+          -- La última vez que se corrigió SOLO el origen (p. ej. la 0732:
+          -- «kiosko» que era el móvil). No es una corrección de la hora.
+          select jsonb_build_object('antes', a.before ->> 'source', 'cuando', a.created_at, 'motivo', a.reason) dato
+            from public.clock_entry_audit a
+           where a.clock_entry_id = ce.id and a.action = 'edit'
+             and public._solo_cambia_origen(a.before, a.after)
+           order by a.created_at desc, a.id desc limit 1) oc on true
        where ce.employee_id = e.id
          and coalesce(ce.real_datetime, ce.datetime) >= v_ini
          and coalesce(ce.real_datetime, ce.datetime) < v_fin), '[]'::jsonb),
@@ -6378,6 +6479,7 @@ begin
                'papel', up.role,
                'es_la_persona', (up.employee_id is not null and up.employee_id = e.id),
                'motivo', a.reason, 'antes', a.before, 'despues', a.after,
+               'solo_origen', (a.action = 'edit' and public._solo_cambia_origen(a.before, a.after)),
                'conformidad', a.conformidad, 'conformidad_at', a.conformidad_at, 'conformidad_nota', a.conformidad_nota,
                'peticion', case when r.id is null then null else jsonb_build_object(
                   'pedida_at', r.created_at, 'motivo', r.reason, 'tipo', r.kind) end)
@@ -7199,6 +7301,19 @@ CREATE FUNCTION public._mes_madrid(p_t timestamp with time zone) RETURNS date
     SET search_path TO 'public'
     AS $$
   select date_trunc('month', p_t at time zone 'Europe/Madrid')::date;
+$$;
+
+
+--
+-- Name: _metros(double precision, double precision, double precision, double precision); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) RETURNS double precision
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select 2 * 6371000 * asin(sqrt(power(sin(radians(p_lat2 - p_lat1) / 2), 2)
+         + cos(radians(p_lat1)) * cos(radians(p_lat2)) * power(sin(radians(p_lng2 - p_lng1) / 2), 2)));
 $$;
 
 
@@ -11669,6 +11784,20 @@ begin
     'offer', v_offer
   );
 end;
+$$;
+
+
+--
+-- Name: _solo_cambia_origen(jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._solo_cambia_origen(p_antes jsonb, p_despues jsonb) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select p_antes is not null and p_despues is not null
+     and (p_antes ->> 'source') is distinct from (p_despues ->> 'source')
+     and (p_antes - 'source') = (p_despues - 'source')
 $$;
 
 
@@ -17321,6 +17450,183 @@ $$;
 
 
 --
+-- Name: aviso_olvido_cola(integer, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.aviso_olvido_cola(p_limite integer DEFAULT 25, p_ahora timestamp with time zone DEFAULT now()) RETURNS TABLE(id uuid, employee_id uuid, to_phone text, attempts integer, nombre text, username text, local_nombre text, fin_hora text, entrada_hora text, con_turno boolean)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r record; v_desde time; v_hasta time; v_ahora time := (p_ahora at time zone 'Europe/Madrid')::time;
+begin
+  for r in
+    select l.*, e.name as e_name, e.username as e_username, loc.name as loc_name
+      from public.clockout_reminder_log l
+      join public.employees e on e.id = l.employee_id
+      left join public.locations loc on loc.id = l.location_id
+     where l.status = 'queued' and l.attempts < 3
+     order by l.created_at
+     limit greatest(p_limite, 0)
+     for update of l skip locked
+  loop
+    -- Lo viejo (de antes de la 1800) se manda como siempre: no tiene entrada_at.
+    if r.entrada_at is not null then
+      if not exists (select 1 from public.clock_entries ce where ce.id = r.clock_entry_id and not ce.voided) then
+        update public.clockout_reminder_log set status = 'skipped', skip_reason = 'anulada', updated_at = now() where clockout_reminder_log.id = r.id;
+        continue;
+      end if;
+      if exists (select 1 from public.clock_entries n
+                  where n.employee_id = r.employee_id and not n.voided
+                    and n.id <> r.clock_entry_id and n.datetime > r.entrada_at) then
+        update public.clockout_reminder_log set status = 'skipped', skip_reason = 'ya_fichada', updated_at = now() where clockout_reminder_log.id = r.id;
+        continue;
+      end if;
+      select coalesce((select s.aviso_olvido_desde from public.app_settings s where s.account_id = r.account_id order by s.updated_at desc limit 1),
+                      (select s.aviso_olvido_desde from public.app_settings s where s.scope = 'global' and s.account_id is null limit 1), time '08:00'),
+             coalesce((select s.aviso_olvido_hasta from public.app_settings s where s.account_id = r.account_id order by s.updated_at desc limit 1),
+                      (select s.aviso_olvido_hasta from public.app_settings s where s.scope = 'global' and s.account_id is null limit 1), time '22:00')
+        into v_desde, v_hasta;
+      if v_ahora < v_desde or v_ahora >= v_hasta then
+        update public.clockout_reminder_log set status = 'skipped', canal = 'portal', skip_reason = 'fuera_de_hora', updated_at = now() where clockout_reminder_log.id = r.id;
+        continue;
+      end if;
+    end if;
+    id := r.id; employee_id := r.employee_id; to_phone := r.to_phone; attempts := r.attempts;
+    nombre := coalesce(nullif(split_part(btrim(coalesce(r.e_name, '')), ' ', 1), ''), 'Hola');
+    username := r.e_username;
+    local_nombre := coalesce(r.loc_name, 'tu local');
+    fin_hora := coalesce(to_char(r.fin_turno at time zone 'Europe/Madrid', 'HH24:MI'), nullif(btrim(r.scheduled_end), ''));
+    entrada_hora := to_char(r.entrada_at at time zone 'Europe/Madrid', 'HH24:MI');
+    con_turno := r.fin_turno is not null or (r.entrada_at is null and nullif(btrim(r.scheduled_end), '') is not null);
+    return next;
+  end loop;
+end $$;
+
+
+--
+-- Name: FUNCTION aviso_olvido_cola(p_limite integer, p_ahora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.aviso_olvido_cola(p_limite integer, p_ahora timestamp with time zone) IS 'L1a PR 3: lo que la función de borde puede mandar ya. Antes, vuelve a mirar cada aviso: si la entrada ya tiene algo fichado después, no sale (ya_fichada); si ya no es hora, pasa al portal (fuera_de_hora).';
+
+
+--
+-- Name: avisos_empresa_por_enviar(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.avisos_empresa_por_enviar(p_limite integer DEFAULT 20) RETURNS TABLE(id uuid, account_id uuid, tipo text, titulo text, texto text, destinatarios text[])
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'auth'
+    AS $$
+  select a.id, a.account_id, a.tipo, a.titulo, a.texto,
+         coalesce((select array_agg(distinct u.email::text)
+                     from public.user_profiles up
+                     join auth.users u on u.id = up.user_id
+                    where up.account_id = a.account_id and up.active and up.suspended_at is null
+                      and u.email is not null and u.email not like '%@empleado.folvy.app'
+                      and (up.role = 'admin'
+                           or (up.role = 'manager' and a.location_id is not null
+                               and exists (select 1 from public.manager_locations ml
+                                            where ml.user_profile_id = up.id and ml.location_id = a.location_id)))),
+                  '{}'::text[])
+    from public.aviso_empresa a
+   where a.correo_estado = 'pendiente'
+   order by a.creado_at
+   limit greatest(p_limite, 0);
+$$;
+
+
+--
+-- Name: avisos_olvido_debidos(timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone DEFAULT now()) RETURNS TABLE(clock_entry_id uuid, employee_id uuid, account_id uuid, location_id uuid, to_phone text, entrada_at timestamp with time zone, inicio_turno timestamp with time zone, fin_turno timestamp with time zone, salta_at timestamp with time zone, canal text, status text, skip_reason text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with abiertas as (
+    -- Una entrada sin nada fichado después (ni salida ni otra entrada).
+    select ce.id, ce.employee_id, ce.account_id, ce.datetime,
+           coalesce(ce.location_id_at_clock, e.location_id) as loc,
+           e.phone, e.active, e.forgot_clockout_reminder
+      from public.clock_entries ce
+      join public.employees e on e.id = ce.employee_id
+     where ce.type = 'entrada' and not ce.voided
+       and ce.datetime > p_ahora - interval '36 hours' and ce.datetime <= p_ahora
+       and not exists (select 1 from public.clock_entries n
+                        where n.employee_id = ce.employee_id and not n.voided
+                          and n.id <> ce.id and n.datetime > ce.datetime)
+  ),
+  turnos as (
+    -- Los turnos publicados de esa persona en ese local, el día de la entrada
+    -- o el anterior (los de noche), en hora de Madrid.
+    select a.id, t.inicio, t.fin
+      from abiertas a
+      cross join lateral (values ((a.datetime at time zone 'Europe/Madrid')::date),
+                                 ((a.datetime at time zone 'Europe/Madrid')::date - 1)) dd(d)
+      join public.schedules s on s.location_id = a.loc and s.account_id = a.account_id
+                             and s.status = 'published' and s.week_start = date_trunc('week', dd.d)::date
+      join public.shift_templates st on st.location_id = a.loc and s.cells ? st.id::text
+      cross join lateral (select (dd.d + st.start_time) at time zone 'Europe/Madrid' as inicio,
+                                 (dd.d + st.end_time + case when st.end_time <= st.start_time then interval '1 day' else interval '0' end)
+                                   at time zone 'Europe/Madrid' as fin) t
+     where coalesce(s.cells -> (st.id::text) -> ((extract(isodow from dd.d)::int - 1)::text), '[]'::jsonb) @> to_jsonb(a.employee_id::text)
+       and abs(extract(epoch from (t.inicio - a.datetime))) <= 6 * 3600
+       and t.fin > a.datetime
+  ),
+  mejor as (
+    select distinct on (t.id) t.id, t.inicio, t.fin
+      from turnos t join abiertas a on a.id = t.id
+     order by t.id, abs(extract(epoch from (t.inicio - a.datetime)))
+  ),
+  ajustes as (
+    select a.id,
+           coalesce((select s.forgot_clockout_min from public.app_settings s where s.account_id = a.account_id order by s.updated_at desc limit 1),
+                    (select s.forgot_clockout_min from public.app_settings s where s.scope = 'global' and s.account_id is null limit 1), 30) as margen,
+           coalesce((select s.aviso_olvido_desde from public.app_settings s where s.account_id = a.account_id order by s.updated_at desc limit 1),
+                    (select s.aviso_olvido_desde from public.app_settings s where s.scope = 'global' and s.account_id is null limit 1), time '08:00') as desde,
+           coalesce((select s.aviso_olvido_hasta from public.app_settings s where s.account_id = a.account_id order by s.updated_at desc limit 1),
+                    (select s.aviso_olvido_hasta from public.app_settings s where s.scope = 'global' and s.account_id is null limit 1), time '22:00') as hasta
+      from abiertas a
+  ),
+  debidas as (
+    select a.*, m.inicio, m.fin, j.desde, j.hasta,
+           coalesce(m.fin + make_interval(mins => j.margen), a.datetime + interval '12 hours') as salta
+      from abiertas a
+      join ajustes j on j.id = a.id
+      left join mejor m on m.id = a.id
+  )
+  select d.id, d.employee_id, d.account_id, d.loc,
+         nullif(btrim(d.phone), ''), d.datetime, d.inicio, d.fin, d.salta,
+         x.canal,
+         case when x.canal = 'whatsapp' then 'queued' else 'skipped' end,
+         x.motivo
+    from debidas d
+    cross join lateral (
+      select case
+               when not d.active then 'de_baja'
+               when not coalesce(d.forgot_clockout_reminder, true) then 'no_quiere_whatsapp'
+               when nullif(btrim(d.phone), '') is null then 'sin_telefono'
+               when (p_ahora at time zone 'Europe/Madrid')::time < d.desde
+                 or (p_ahora at time zone 'Europe/Madrid')::time >= d.hasta then 'fuera_de_hora'
+               when p_ahora - d.salta > interval '1 hour' then 'tarde'
+             end as motivo
+    ) y
+    cross join lateral (select case when y.motivo is null then 'whatsapp' else 'portal' end as canal, y.motivo) x
+   where d.salta <= p_ahora
+     and d.salta > p_ahora - interval '24 hours'
+     and not exists (select 1 from public.clockout_reminder_log l where l.clock_entry_id = d.id);
+$$;
+
+
+--
+-- Name: FUNCTION avisos_olvido_debidos(p_ahora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone) IS 'L1a PR 3: los olvidos de salida que tocan avisar ahora, en hora de Madrid. Una entrada abierta con turno publicado que acabó hace más de forgot_clockout_min; sin turno, a las 12 h. WhatsApp solo dentro de la franja de la empresa y en la primera hora; si no, solo el portal (status skipped, con el motivo). La usa enqueue_clockout_reminders.';
+
+
+--
 -- Name: avt_cause_context(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17838,6 +18144,85 @@ CREATE FUNCTION public.bank_agente_toca_hoy(p_company uuid) RETURNS boolean
   select not exists (select 1 from public.bank_agent_run r where r.company_id = p_company
                       and (r.ran_at at time zone 'Europe/Madrid')::date = (now() at time zone 'Europe/Madrid')::date)
 $$;
+
+
+--
+-- Name: bank_agregador_apuntar(uuid, text, text, text, text, timestamp with time zone, text, text, text, numeric, date, integer, integer, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_t public.treasury_account; v_cuenta uuid; v_prov text := replace(coalesce(p_proveedor, ''), '-', '_'); v_bien boolean := p_estado in ('al_dia', 'sin_movimientos');
+        v_caduca timestamptz;
+begin
+  select * into v_t from public.treasury_account where id = p_treasury;
+  if v_t.id is null then raise exception 'Esa cuenta del banco no existe.' using errcode = 'P0002'; end if;
+  v_cuenta := public._bank_cuenta_de_empresa(v_t.company_id);
+  if v_t.kind <> 'bank' then raise exception 'Solo un banco se conecta: «%» no lo es.', v_t.name using errcode = '23514'; end if;
+  if p_estado in ('fallo', 'permiso_caducado') and coalesce(trim(p_mensaje), '') = '' then
+    raise exception 'Un fallo o un permiso caducado se apuntan con su porqué.' using errcode = '23514';
+  end if;
+  -- Sin fecha nueva, la que ya tenía (el NOT NULL se mira antes del «on conflict»: hay que dársela aquí).
+  v_caduca := coalesce(p_caduca, (select consent_valid_until from public.bank_aggregator_link where provider = v_prov and external_account_id = p_cuenta_proveedor));
+  if v_caduca is null then
+    raise exception 'El banco no dice hasta cuándo vale el permiso de «%»: no se puede apuntar la conexión.', v_t.name using errcode = '23502';
+  end if;
+  insert into public.bank_aggregator_link as l (account_id, company_id, treasury_account_id, provider, external_account_id, consent_id, consent_valid_until, status,
+                                                last_sync_at, created_by, created_by_name, bank_name, renew_url, last_run_at, last_status, last_message,
+                                                bank_balance, bank_balance_date, last_new, last_repeated, last_from, last_to)
+  values (v_cuenta, v_t.company_id, p_treasury, v_prov, p_cuenta_proveedor, coalesce(nullif(trim(p_conexion), ''), p_cuenta_proveedor), v_caduca,
+          case when p_estado = 'permiso_caducado' then 'caducado' else 'activo' end,
+          case when v_bien then now() end, auth.uid(), public.conta_nombre_actor(), nullif(trim(p_banco), ''), p_renovar, now(), p_estado, nullif(trim(p_mensaje), ''),
+          p_saldo_banco, p_saldo_fecha, p_nuevos, p_repetidos, p_desde, p_hasta)
+  on conflict (provider, external_account_id) do update set
+    treasury_account_id = excluded.treasury_account_id, consent_id = excluded.consent_id,
+    consent_valid_until = excluded.consent_valid_until, status = excluded.status,
+    last_sync_at = coalesce(excluded.last_sync_at, l.last_sync_at), bank_name = coalesce(excluded.bank_name, l.bank_name), renew_url = excluded.renew_url, last_run_at = excluded.last_run_at,
+    last_status = excluded.last_status, last_message = excluded.last_message,
+    bank_balance = coalesce(excluded.bank_balance, l.bank_balance), bank_balance_date = coalesce(excluded.bank_balance_date, l.bank_balance_date),
+    last_new = excluded.last_new, last_repeated = excluded.last_repeated, last_from = excluded.last_from, last_to = excluded.last_to;
+end $$;
+
+
+--
+-- Name: FUNCTION bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date) IS 'B01c. Cómo ha ido la pasada de una cuenta conectada (la escribe conta-banco-agregador cada noche). Un fallo o un permiso caducado llevan siempre su porqué.';
+
+
+--
+-- Name: bank_agregador_conexion_apuntar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_agregador_conexion_apuntar(p_conexion uuid, p_error text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if auth.role() is distinct from 'service_role' then raise exception 'Solo la función de cada noche apunta la pasada.' using errcode = '42501'; end if;
+  update public.bank_aggregator_connection set last_run_at = now(), last_error = nullif(trim(p_error), '') where id = p_conexion;
+  if not found then raise exception 'Esa conexión no existe.' using errcode = 'P0002'; end if;
+end $$;
+
+
+--
+-- Name: bank_agregador_quitar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_agregador_quitar(p_treasury uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_t public.treasury_account;
+begin
+  select * into v_t from public.treasury_account where id = p_treasury;
+  if v_t.id is null then raise exception 'Esa cuenta del banco no existe.' using errcode = 'P0002'; end if;
+  perform public._bank_cuenta_de_empresa(v_t.company_id);
+  delete from public.bank_aggregator_link where treasury_account_id = p_treasury and provider in ('simulado', 'open_banking_io');
+end $$;
 
 
 --
@@ -25538,6 +25923,36 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_asiento_envio(p_entry uuid) IS 'C07 · Lo que el envío a Diez lee de un asiento que va como asiento general (banco, manual, liquidación…) o de su contraasiento: cabecera, origen, lo que anula y sus líneas con la cuenta. Para los de la cuenta, o el servidor.';
+
+
+--
+-- Name: conta_banco_agregador_despertar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_banco_agregador_despertar() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_secreto text;
+begin
+  if extract(hour from (now() at time zone 'Europe/Madrid')) <> 3 then return; end if;
+  if not exists (select 1 from public.bank_aggregator_connection where enabled) then return; end if;
+  select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+  if v_secreto is null then
+    raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-banco-agregador.' using errcode = '55000';
+  end if;
+  perform net.http_post(
+    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-banco-agregador',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+    body := '{}'::jsonb, timeout_milliseconds := 150000);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_banco_agregador_despertar(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada hora (cron conta-banco-agregador-despertar, solo en producción): a las 3 de Madrid, si hay alguna empresa conectada, llama a conta-banco-agregador. Si falta el secreto, falla (cron lo apunta como failed), no calla.';
 
 
 --
@@ -46985,8 +47400,15 @@ $$;
 --
 
 CREATE FUNCTION public.export_gestoria_mensual(p_account uuid, p_from date, p_to date) RETURNS TABLE(empleado text, dni text, local text, dias_trabajados integer, horas_trabajadas numeric, horas_nocturnas numeric, dias_vacaciones integer, dias_baja integer, dias_festivo_trabajado integer, horas_contratadas numeric, delta_horas numeric, incidencias text)
-    LANGUAGE sql STABLE
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
     AS $$
+begin
+  -- Lleva el DNI y lo manda a la gestoría: solo el administrador de la cuenta.
+  if not public.current_user_is_admin_of(p_account) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El resumen para la gestoría solo lo saca el administrador.';
+  end if;
+  return query
   select e.name, e.dni, l.name,
     t.dias_trabajados, t.horas_trabajadas, t.horas_nocturnas,
     t.dias_vacaciones, t.dias_baja, t.dias_festivo_trabajado,
@@ -47006,7 +47428,7 @@ CREATE FUNCTION public.export_gestoria_mensual(p_account uuid, p_from date, p_to
   cross join lateral public.registro_jornada_totales(e.id, p_from, p_to) t
   where e.account_id = p_account and e.active
   order by e.name;
-$$;
+end $$;
 
 
 --
@@ -59090,6 +59512,32 @@ $$;
 
 
 --
+-- Name: mis_avisos_olvido(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mis_avisos_olvido() RETURNS TABLE(id uuid, entrada_at timestamp with time zone, fin_turno timestamp with time zone, local_nombre text, respuesta text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select l.id, l.entrada_at, l.fin_turno, coalesce(loc.name, ''), l.respuesta
+    from public.clockout_reminder_log l
+    left join public.locations loc on loc.id = l.location_id
+    join public.current_employee_and_account() yo on yo.employee_id = l.employee_id and yo.account_id = l.account_id
+   where l.entrada_at is not null and l.entrada_at > now() - interval '14 days'
+     and exists (select 1 from public.clock_entries ce where ce.id = l.clock_entry_id and not ce.voided)
+     and l.correction_request_id is null
+     and (l.respuesta is null or l.respuesta = 'otra_hora' or (l.respuesta = 'sigo' and l.entrada_at < now() - interval '12 hours'))
+     and not exists (select 1 from public.clock_entries n
+                      where n.employee_id = l.employee_id and not n.voided
+                        and n.id <> l.clock_entry_id and n.datetime > l.entrada_at)
+     and not exists (select 1 from public.clock_correction_request r
+                      where r.employee_id = l.employee_id and r.kind = 'add' and r.proposed_type = 'salida'
+                        and r.status in ('pending', 'approved') and r.proposed_datetime > l.entrada_at)
+   order by l.entrada_at desc;
+$$;
+
+
+--
 -- Name: modificadores_cobertura_de_codigos(uuid, text[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -69818,6 +70266,61 @@ $$;
 
 
 --
+-- Name: responder_aviso_olvido(uuid, text, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.responder_aviso_olvido(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare l public.clockout_reminder_log;
+begin
+  select * into l from public.clockout_reminder_log where id = p_log_id;
+  if not found or not public.current_user_is_employee(l.employee_id, l.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'Solo puedes contestar tus propios avisos.';
+  end if;
+  if p_respuesta = 'otra_hora' and p_hora is null then
+    raise exception 'FALTA_LA_HORA' using errcode = '22023', hint = 'Di a qué hora saliste.';
+  end if;
+  return public._aviso_olvido_responder(p_log_id, p_respuesta, p_hora, 'portal');
+end $$;
+
+
+--
+-- Name: responder_aviso_olvido_whatsapp(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.responder_aviso_olvido_whatsapp(p_log_id uuid, p_respuesta text, p_telefono text, p_contexto_wamid text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare l public.clockout_reminder_log;
+  v_a text := right(regexp_replace(coalesce(p_telefono, ''), '\D', '', 'g'), 9);
+  v_b text;
+begin
+  select * into l from public.clockout_reminder_log where id = p_log_id;
+  if not found then
+    return jsonb_build_object('resultado', 'no_existe', 'texto', 'No encontramos ese aviso. Si te falta la salida, pídela desde tu portal.');
+  end if;
+  v_b := right(regexp_replace(coalesce(l.to_phone, ''), '\D', '', 'g'), 9);
+  if length(v_a) < 9 or v_a <> v_b then
+    return jsonb_build_object('resultado', 'otro_telefono', 'texto', 'Este aviso no era para este número.');
+  end if;
+  if p_contexto_wamid is not null and l.provider_message_id is not null and p_contexto_wamid <> l.provider_message_id then
+    return jsonb_build_object('resultado', 'otro_mensaje', 'texto', 'Este aviso no era para este número.');
+  end if;
+  return public._aviso_olvido_responder(p_log_id, p_respuesta, null, 'whatsapp');
+end $$;
+
+
+--
+-- Name: FUNCTION responder_aviso_olvido_whatsapp(p_log_id uuid, p_respuesta text, p_telefono text, p_contexto_wamid text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.responder_aviso_olvido_whatsapp(p_log_id uuid, p_respuesta text, p_telefono text, p_contexto_wamid text) IS 'L1a PR 3: la respuesta de un toque al WhatsApp del olvido (la llama whatsapp-webhook, después de comprobar la firma de Meta). Crea la petición de corrección; nunca el fichaje.';
+
+
+--
 -- Name: responder_correccion(uuid, boolean, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -78664,6 +79167,56 @@ $$;
 
 
 --
+-- Name: tg_fichaje_fuera_del_radio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_fichaje_fuera_del_radio() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_previos integer := 0; v_nombre text; v_local text; v_radio integer; v_loc uuid; v_tipo text;
+begin
+  begin
+    if new.lat is not null and new.lng is not null then
+      select count(*) into v_previos from public.clock_entries p
+       where p.employee_id = new.employee_id and p.id <> new.id and not p.voided
+         and p.within_radius = false and p.lat is not null and p.lng is not null
+         and p.datetime between new.datetime - interval '30 days' and new.datetime
+         and public._metros(new.lat, new.lng, p.lat, p.lng) <= 200;
+    end if;
+    if v_previos >= 3 then
+      return null;   -- habitual: está en «Fuera del radio» de Equipo, pero no interrumpe
+    end if;
+    select e.name, coalesce(new.location_id_at_clock, e.location_id) into v_nombre, v_loc
+      from public.employees e where e.id = new.employee_id;
+    select l.name, l.clock_radius_m into v_local, v_radio from public.locations l where l.id = v_loc;
+    v_tipo := case new.type when 'entrada' then 'la entrada' when 'salida' then 'la salida'
+                            when 'pausa_inicio' then 'el inicio de la pausa' when 'pausa_fin' then 'el fin de la pausa' else 'un fichaje' end;
+    insert into public.aviso_empresa(account_id, location_id, employee_id, clock_entry_id, tipo, clave, titulo, texto)
+    values (new.account_id, v_loc, new.employee_id, new.id, 'fuera_del_radio', 'fuera_del_radio:' || new.id,
+            format('%s fichó fuera del radio de %s', coalesce(v_nombre, 'Una persona'), coalesce(v_local, 'su local')),
+            format('%s fichó %s el %s a las %s a %s de %s (el radio es de %s m). Si fue a propósito (un recado, un evento), no hace falta nada; si no, revísalo en Equipo › Para revisar.',
+                   coalesce(v_nombre, 'Una persona'), v_tipo,
+                   to_char(new.datetime at time zone 'Europe/Madrid', 'DD/MM'),
+                   to_char(new.datetime at time zone 'Europe/Madrid', 'HH24:MI'),
+                   case when new.distance_m is null then 'una distancia que no se pudo medir'
+                        when new.distance_m >= 1000 then replace(to_char(new.distance_m / 1000.0, 'FM990.0'), '.', ',') || ' km'
+                        else new.distance_m || ' m' end,
+                   coalesce(v_local, 'su local'), coalesce(v_radio, 200)))
+    on conflict (clave) do nothing;
+  exception when others then
+    begin
+      perform public._queue_system_alert('fichaje_fuera_del_radio', 'Fuera del radio: no se pudo crear el aviso',
+        format('El fichaje %s cayó fuera del radio y no se pudo avisar al encargado: %s', new.id, sqlerrm),
+        'fichaje_fuera_del_radio', interval '6 hours');
+    exception when others then null;
+    end;
+  end;
+  return null;
+end $$;
+
+
+--
 -- Name: tg_goods_receipt_compras_camino(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -83025,6 +83578,87 @@ $$;
 
 
 --
+-- Name: vigia_avisos_olvido(boolean, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.vigia_avisos_olvido(p_dry boolean DEFAULT false, p_ahora timestamp with time zone DEFAULT now()) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_hoy timestamptz := ((p_ahora at time zone 'Europe/Madrid')::date)::timestamp at time zone 'Europe/Madrid';
+  v_cron boolean := true;
+  v_detectados integer := 0;
+  r record;
+  v_avisos jsonb := '[]'::jsonb;
+  v_texto text;
+begin
+  -- Detecta él mismo: si la función de borde no corre, la cola crece y se ve.
+  if not p_dry then
+    begin
+      v_detectados := public.enqueue_clockout_reminders();
+    exception when others then
+      perform public._queue_system_alert('avisos_olvido', 'Avisos de olvido: la detección falla',
+        format('enqueue_clockout_reminders() falló: %s', sqlerrm), 'avisos_olvido_detectar', interval '6 hours');
+    end;
+  end if;
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    select exists (select 1 from cron.job where jobname = 'clockout-reminder-drain' and active) into v_cron;
+  end if;
+
+  for r in
+    with hoy as (
+      select l.account_id, l.status, l.created_at, l.error, w.de_empresa, w.texto
+        from public.clockout_reminder_log l
+        left join lateral public.whatsapp_error_en_palabras(l.error) w on l.status = 'failed'
+       where l.created_at >= v_hoy
+    )
+    select h.account_id,
+           count(*) filter (where h.status = 'failed' and h.de_empresa) as fallos_empresa,
+           count(*) filter (where h.status = 'failed' and not h.de_empresa) as fallos_persona,
+           count(*) filter (where h.status = 'queued' and h.created_at < p_ahora - interval '30 minutes') as atascados,
+           count(*) filter (where h.status = 'sent') as enviados,
+           (array_agg(h.texto order by h.created_at desc) filter (where h.status = 'failed' and h.de_empresa))[1] as motivo
+      from hoy h
+     group by h.account_id
+  loop
+    if r.fallos_empresa = 0 and r.atascados = 0 and v_cron then continue; end if;
+    v_texto := case
+      when r.fallos_empresa > 0 then
+        format('%s por WhatsApp. El motivo: %s Hasta que se arregle, nadie recibe el WhatsApp: cada persona lo ve al abrir su portal.',
+               case when r.fallos_empresa = 1 then 'Hoy no ha salido 1 aviso de olvido'
+                    else format('Hoy no han salido %s avisos de olvido', r.fallos_empresa) end,
+               r.motivo)
+      when not v_cron then
+        'El envío de los avisos de olvido por WhatsApp no está programado: no sale ninguno. Mientras tanto, cada persona lo ve al abrir su portal.'
+      else
+        format('%s más de 30 minutos para salir: el envío por WhatsApp no está corriendo. Mientras tanto, cada persona lo ve al abrir su portal.',
+               case when r.atascados = 1 then 'Hay 1 aviso de olvido esperando' else format('Hay %s avisos de olvido esperando', r.atascados) end)
+    end;
+    v_avisos := v_avisos || jsonb_build_object('cuenta', r.account_id, 'texto', v_texto,
+                  'fallos_empresa', r.fallos_empresa, 'atascados', r.atascados, 'enviados', r.enviados);
+    if not p_dry then
+      insert into public.aviso_empresa(account_id, tipo, clave, titulo, texto, creado_at)
+      values (r.account_id, 'avisos_olvido_fallan',
+              'avisos_olvido_fallan:' || r.account_id || ':' || to_char(p_ahora at time zone 'Europe/Madrid', 'YYYY-MM-DD'),
+              'Los avisos de olvido de fichaje no están saliendo', v_texto, p_ahora)
+      on conflict (clave) do nothing;
+      perform public._queue_system_alert('avisos_olvido', 'Avisos de olvido: no salen',
+        format('Cuenta %s: %s', r.account_id, v_texto), 'avisos_olvido_' || r.account_id, interval '20 hours');
+    end if;
+  end loop;
+  return jsonb_build_object('detectados', v_detectados, 'cron', v_cron, 'avisos', v_avisos);
+end $$;
+
+
+--
+-- Name: FUNCTION vigia_avisos_olvido(p_dry boolean, p_ahora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.vigia_avisos_olvido(p_dry boolean, p_ahora timestamp with time zone) IS 'L1a PR 3: cada 15 min (cron avisos-olvido-vigia). Detecta los olvidos sin depender de la función de borde y, si hoy los WhatsApp fallan por algo de la empresa o se quedan en cola más de 30 min, avisa a la empresa (aviso_empresa, una vez al día) y a sistema.';
+
+
+--
 -- Name: void_clock_entry(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -83304,6 +83938,77 @@ CREATE FUNCTION public.weekly_rest_minutes_for(p_account uuid, p_location uuid) 
       WHERE bp.account_id = p_account LIMIT 1),
     2160);
 $$;
+
+
+--
+-- Name: whatsapp_error_en_palabras(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.whatsapp_error_en_palabras(p_error text) RETURNS TABLE(de_empresa boolean, texto text)
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+declare v_code integer := nullif(substring(coalesce(p_error, '') from '"code"\s*:\s*(\d+)'), '')::integer;
+begin
+  if p_error is null or btrim(p_error) = '' then
+    de_empresa := true; texto := 'El envío falló sin decir por qué.'; return next; return;
+  end if;
+  if p_error like 'magic_link_failed%' then
+    de_empresa := true; texto := 'No se pudo preparar el enlace al portal para el mensaje.'; return next; return;
+  end if;
+  if p_error like 'sin_username%' then
+    de_empresa := false; texto := 'Esa persona no tiene usuario del portal.'; return next; return;
+  end if;
+  case
+    -- Por el código, nunca por «OAuthException»: Meta pone ese tipo también
+    -- a los errores de plantilla.
+    when v_code in (190, 102) then
+      de_empresa := true; texto := 'La llave de WhatsApp de la empresa ha caducado o no es válida: hay que renovarla en Meta.';
+    when v_code in (10, 200) then
+      de_empresa := true; texto := 'La llave de WhatsApp de la empresa no tiene permiso para mandar mensajes desde ese número.';
+    when v_code = 132001 then
+      de_empresa := true; texto := 'La plantilla de WhatsApp no existe en Meta (o no está aprobada en español).';
+    when v_code in (132000, 132005, 132007, 132012, 132015, 132016, 132068, 132069) then
+      de_empresa := true; texto := 'La plantilla de WhatsApp está pausada, desactivada o no encaja con lo que se manda.';
+    when v_code in (131031, 368, 131042) then
+      de_empresa := true; texto := 'Meta tiene bloqueada la cuenta de WhatsApp de la empresa (o su forma de pago).';
+    when v_code in (4, 80007, 130429, 131048, 131056) then
+      de_empresa := true; texto := 'Meta está frenando los envíos por exceso de mensajes.';
+    when v_code = 131030 then
+      de_empresa := true; texto := 'La cuenta de WhatsApp sigue en pruebas y solo puede escribir a los números de su lista.';
+    when v_code in (131026, 133010, 131021, 131051) then
+      de_empresa := false; texto := 'Ese número no tiene WhatsApp o no puede recibir el mensaje.';
+    when v_code = 131047 then
+      de_empresa := false; texto := 'Han pasado más de 24 h desde su último mensaje.';
+    when v_code is not null then
+      de_empresa := true; texto := format('WhatsApp rechazó el mensaje (código %s).', v_code);
+    else
+      de_empresa := true; texto := 'No se pudo hablar con WhatsApp (la red o Meta no contestaron).';
+  end case;
+  return next;
+end $$;
+
+
+--
+-- Name: whatsapp_estado(text, text, timestamp with time zone, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.whatsapp_estado(p_wamid text, p_estado text, p_at timestamp with time zone DEFAULT now(), p_error text DEFAULT NULL::text) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_id uuid;
+begin
+  update public.clockout_reminder_log
+     set entregado_at = case when p_estado in ('delivered', 'read') then coalesce(entregado_at, p_at) else entregado_at end,
+         leido_at     = case when p_estado = 'read' then coalesce(leido_at, p_at) else leido_at end,
+         status       = case when p_estado = 'failed' then 'failed' else status end,
+         error        = case when p_estado = 'failed' then coalesce(p_error, error) else error end,
+         updated_at   = now()
+   where provider_message_id = p_wamid
+   returning id into v_id;
+  return v_id is not null;
+end $$;
 
 
 --
@@ -85627,6 +86332,8 @@ CREATE TABLE public.app_settings (
     show_compliance_to_employee boolean DEFAULT false NOT NULL,
     ctb_diff_pct numeric DEFAULT 10 NOT NULL,
     ctb_diff_eur numeric DEFAULT 15 NOT NULL,
+    aviso_olvido_desde time without time zone,
+    aviso_olvido_hasta time without time zone,
     CONSTRAINT app_settings_scope_check CHECK ((scope = 'global'::text))
 );
 
@@ -85664,6 +86371,20 @@ COMMENT ON COLUMN public.app_settings.ctb_diff_pct IS 'Diferencia mínima, en % 
 --
 
 COMMENT ON COLUMN public.app_settings.ctb_diff_eur IS 'Valor en euros a partir del cual una diferencia se reclama aunque no llegue al %. Evita perdonar en silencio en cantidades grandes.';
+
+
+--
+-- Name: COLUMN app_settings.aviso_olvido_desde; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.app_settings.aviso_olvido_desde IS 'L1a PR 3: desde qué hora (Madrid) puede salir el WhatsApp del olvido. Null: 08:00.';
+
+
+--
+-- Name: COLUMN app_settings.aviso_olvido_hasta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.app_settings.aviso_olvido_hasta IS 'L1a PR 3: hasta qué hora (Madrid) puede salir el WhatsApp del olvido; después, solo el portal. Null: 22:00.';
 
 
 --
@@ -86403,6 +87124,37 @@ COMMENT ON COLUMN public.availability_push_log.source IS 'lastapp|hubrise|other 
 
 
 --
+-- Name: aviso_empresa; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aviso_empresa (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    location_id uuid,
+    employee_id uuid,
+    clock_entry_id uuid,
+    tipo text NOT NULL,
+    clave text NOT NULL,
+    titulo text NOT NULL,
+    texto text NOT NULL,
+    creado_at timestamp with time zone DEFAULT now() NOT NULL,
+    correo_estado text DEFAULT 'pendiente'::text NOT NULL,
+    correo_a integer,
+    correo_at timestamp with time zone,
+    correo_error text,
+    CONSTRAINT aviso_empresa_correo_estado_check CHECK ((correo_estado = ANY (ARRAY['pendiente'::text, 'enviado'::text, 'sin_destinatarios'::text, 'sin_clave'::text, 'fallo'::text]))),
+    CONSTRAINT aviso_empresa_tipo_check CHECK ((tipo = ANY (ARRAY['fuera_del_radio'::text, 'avisos_olvido_fallan'::text])))
+);
+
+
+--
+-- Name: TABLE aviso_empresa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.aviso_empresa IS 'L1a PR 3: lo que la empresa tiene que saber el mismo día: un fichaje fuera del radio (no el habitual) y que los avisos de olvido dejan de salir. Lo enseña «Equipo» y sale por correo a los administradores y a los encargados del local (clockout-reminder).';
+
+
+--
 -- Name: bank_account_iban; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -86494,6 +87246,36 @@ COMMENT ON TABLE public.bank_agent_run IS 'B01 (respuesta 4). Cada pasada del ag
 
 
 --
+-- Name: bank_aggregator_connection; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.bank_aggregator_connection (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    provider text NOT NULL,
+    bank_name text NOT NULL,
+    secret_name text NOT NULL,
+    renew_url text,
+    enabled boolean DEFAULT true NOT NULL,
+    last_run_at timestamp with time zone,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT bank_aggregator_connection_bank_name_check CHECK ((length(TRIM(BOTH FROM bank_name)) > 0)),
+    CONSTRAINT bank_aggregator_connection_provider_check CHECK ((provider ~ '^[a-z0-9-]+$'::text)),
+    CONSTRAINT bank_aggregator_connection_renew_url_check CHECK (((renew_url IS NULL) OR (renew_url ~ '^https://'::text))),
+    CONSTRAINT bank_aggregator_connection_secret_name_check CHECK ((secret_name ~ '^[A-Z][A-Z0-9_]*$'::text))
+);
+
+
+--
+-- Name: TABLE bank_aggregator_connection; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.bank_aggregator_connection IS 'B01c. Qué empresa trae los movimientos de sus bancos sola, por qué proveedor, con qué secreto de las funciones (el credentials.json; aquí solo su NOMBRE) y dónde se renueva el permiso. Solo la escribe una migración: no se ofrece a otros clientes todavía. last_error: por qué no se pudo ni abrir la conexión la última noche (null si se abrió).';
+
+
+--
 -- Name: bank_aggregator_link; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -86511,7 +87293,20 @@ CREATE TABLE public.bank_aggregator_link (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by uuid,
     created_by_name text,
+    bank_name text,
+    renew_url text,
+    last_run_at timestamp with time zone,
+    last_status text,
+    last_message text,
+    bank_balance numeric(14,2),
+    bank_balance_date date,
+    last_new integer,
+    last_repeated integer,
+    last_from date,
+    last_to date,
+    CONSTRAINT bank_aggregator_link_last_status_check CHECK (((last_status IS NULL) OR (last_status = ANY (ARRAY['al_dia'::text, 'sin_movimientos'::text, 'permiso_caducado'::text, 'fallo'::text])))),
     CONSTRAINT bank_aggregator_link_provider_check CHECK ((provider = ANY (ARRAY['simulado'::text, 'enable_banking'::text]))),
+    CONSTRAINT bank_aggregator_link_renew_url_check CHECK (((renew_url IS NULL) OR (renew_url ~ '^https://'::text))),
     CONSTRAINT bank_aggregator_link_status_check CHECK ((status = ANY (ARRAY['activo'::text, 'caducado'::text, 'revocado'::text])))
 );
 
@@ -86521,6 +87316,41 @@ CREATE TABLE public.bank_aggregator_link (
 --
 
 COMMENT ON TABLE public.bank_aggregator_link IS 'B01 (respuesta 4). Una cuenta del banco conectada por un agregador (PSD2, RDL 19/2018 art. 3.38) y su consentimiento, que caduca a los 180 días. Sin pantalla hasta que exista el contrato.';
+
+
+--
+-- Name: COLUMN bank_aggregator_link.bank_name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_aggregator_link.bank_name IS 'B01c. El banco, como se enseña: «Conectada con BBVA».';
+
+
+--
+-- Name: COLUMN bank_aggregator_link.renew_url; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_aggregator_link.renew_url IS 'B01c. Dónde se renueva el permiso (el botón «Renovar»).';
+
+
+--
+-- Name: COLUMN bank_aggregator_link.last_run_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_aggregator_link.last_run_at IS 'B01c. La última pasada de la noche, haya ido bien o mal (last_sync_at: la última que leyó bien).';
+
+
+--
+-- Name: COLUMN bank_aggregator_link.last_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_aggregator_link.last_status IS 'B01c. Cómo fue la última pasada: al_dia, sin_movimientos, permiso_caducado o fallo (los dos últimos siempre con last_message).';
+
+
+--
+-- Name: COLUMN bank_aggregator_link.bank_balance; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_aggregator_link.bank_balance IS 'B01c. El saldo contable que dio el banco en la última pasada (bank_balance_date: de qué día).';
 
 
 --
@@ -88021,8 +88851,34 @@ CREATE TABLE public.clockout_reminder_log (
     sent_at timestamp with time zone,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     scheduled_end text,
+    location_id uuid,
+    entrada_at timestamp with time zone,
+    inicio_turno timestamp with time zone,
+    fin_turno timestamp with time zone,
+    salta_at timestamp with time zone,
+    canal text,
+    respuesta text,
+    respondida_at timestamp with time zone,
+    respondida_via text,
+    correction_request_id uuid,
+    entregado_at timestamp with time zone,
+    leido_at timestamp with time zone,
     CONSTRAINT clockout_reminder_status_chk CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])))
 );
+
+
+--
+-- Name: COLUMN clockout_reminder_log.canal; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.clockout_reminder_log.canal IS 'L1a PR 3: por dónde se avisa. whatsapp: sale el mensaje; portal: solo lo ve al abrir su portal (fuera de la franja, sin teléfono o sin querer WhatsApp).';
+
+
+--
+-- Name: COLUMN clockout_reminder_log.correction_request_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.clockout_reminder_log.correction_request_id IS 'L1a PR 3: la petición de corrección que creó la respuesta («Salí a esa hora» u «Otra hora» con su hora). Nunca un fichaje: lo aprueba el encargado.';
 
 
 --
@@ -101963,6 +102819,32 @@ COMMENT ON TABLE public.weather_poll IS 'RLS deny-all intencional (caché intern
 
 
 --
+-- Name: whatsapp_entrada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.whatsapp_entrada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    recibido_at timestamp with time zone DEFAULT now() NOT NULL,
+    aceptado boolean NOT NULL,
+    motivo text,
+    tipo text,
+    wamid text,
+    telefono_fin text,
+    aviso_id uuid,
+    resultado text,
+    datos jsonb,
+    bytes integer
+);
+
+
+--
+-- Name: TABLE whatsapp_entrada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.whatsapp_entrada IS 'L1a PR 3: todo lo que llega al webhook de WhatsApp, también lo rechazado (sin la firma de Meta, o con una que no cuadra). Sin políticas: solo la clave de servicio.';
+
+
+--
 -- Name: withholding_rate; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -103113,6 +103995,22 @@ ALTER TABLE ONLY public.availability_push_log
 
 
 --
+-- Name: aviso_empresa aviso_empresa_clave_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_empresa
+    ADD CONSTRAINT aviso_empresa_clave_key UNIQUE (clave);
+
+
+--
+-- Name: aviso_empresa aviso_empresa_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_empresa
+    ADD CONSTRAINT aviso_empresa_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: bank_account_iban bank_account_iban_company_id_iban_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -103142,6 +104040,22 @@ ALTER TABLE ONLY public.bank_activity_log
 
 ALTER TABLE ONLY public.bank_agent_run
     ADD CONSTRAINT bank_agent_run_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bank_aggregator_connection bank_aggregator_connection_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_connection
+    ADD CONSTRAINT bank_aggregator_connection_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: bank_aggregator_connection bank_aggregator_connection_una; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_connection
+    ADD CONSTRAINT bank_aggregator_connection_una UNIQUE (company_id, provider);
 
 
 --
@@ -107977,6 +108891,14 @@ ALTER TABLE ONLY public.weather_poll
 
 
 --
+-- Name: whatsapp_entrada whatsapp_entrada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.whatsapp_entrada
+    ADD CONSTRAINT whatsapp_entrada_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: withholding_rate withholding_rate_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -112001,6 +112923,20 @@ CREATE INDEX ix_availability_push_log_source_created ON public.availability_push
 
 
 --
+-- Name: ix_aviso_empresa_correo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_aviso_empresa_correo ON public.aviso_empresa USING btree (correo_estado) WHERE (correo_estado = 'pendiente'::text);
+
+
+--
+-- Name: ix_aviso_empresa_cuenta; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_aviso_empresa_cuenta ON public.aviso_empresa USING btree (account_id, creado_at DESC);
+
+
+--
 -- Name: ix_business_hours_exc; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -112050,10 +112986,24 @@ CREATE INDEX ix_clock_req_acct ON public.clock_correction_request USING btree (a
 
 
 --
+-- Name: ix_clockout_reminder_empleado; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_clockout_reminder_empleado ON public.clockout_reminder_log USING btree (employee_id, created_at DESC);
+
+
+--
 -- Name: ix_clockout_reminder_queued; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX ix_clockout_reminder_queued ON public.clockout_reminder_log USING btree (status) WHERE (status = 'queued'::text);
+
+
+--
+-- Name: ix_clockout_reminder_wamid; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_clockout_reminder_wamid ON public.clockout_reminder_log USING btree (provider_message_id) WHERE (provider_message_id IS NOT NULL);
 
 
 --
@@ -112250,6 +113200,13 @@ CREATE INDEX ix_training_notice_queued ON public.training_notice USING btree (ch
 --
 
 CREATE INDEX ix_training_notice_wamid ON public.training_notice USING btree (provider_message_id) WHERE (provider_message_id IS NOT NULL);
+
+
+--
+-- Name: ix_whatsapp_entrada_recibido; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_whatsapp_entrada_recibido ON public.whatsapp_entrada USING btree (recibido_at DESC);
 
 
 --
@@ -116349,6 +117306,38 @@ ALTER TABLE ONLY public.availability_integrator_notice
 
 
 --
+-- Name: aviso_empresa aviso_empresa_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_empresa
+    ADD CONSTRAINT aviso_empresa_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: aviso_empresa aviso_empresa_clock_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_empresa
+    ADD CONSTRAINT aviso_empresa_clock_entry_id_fkey FOREIGN KEY (clock_entry_id) REFERENCES public.clock_entries(id) ON DELETE SET NULL;
+
+
+--
+-- Name: aviso_empresa aviso_empresa_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_empresa
+    ADD CONSTRAINT aviso_empresa_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE SET NULL;
+
+
+--
+-- Name: aviso_empresa aviso_empresa_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_empresa
+    ADD CONSTRAINT aviso_empresa_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE SET NULL;
+
+
+--
 -- Name: bank_account_iban bank_account_iban_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -116426,6 +117415,22 @@ ALTER TABLE ONLY public.bank_agent_run
 
 ALTER TABLE ONLY public.bank_agent_run
     ADD CONSTRAINT bank_agent_run_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_aggregator_connection bank_aggregator_connection_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_connection
+    ADD CONSTRAINT bank_aggregator_connection_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_aggregator_connection bank_aggregator_connection_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_connection
+    ADD CONSTRAINT bank_aggregator_connection_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -117340,11 +118345,27 @@ ALTER TABLE ONLY public.clockout_reminder_log
 
 
 --
+-- Name: clockout_reminder_log clockout_reminder_log_correction_request_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clockout_reminder_log
+    ADD CONSTRAINT clockout_reminder_log_correction_request_id_fkey FOREIGN KEY (correction_request_id) REFERENCES public.clock_correction_request(id) ON DELETE SET NULL;
+
+
+--
 -- Name: clockout_reminder_log clockout_reminder_log_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.clockout_reminder_log
     ADD CONSTRAINT clockout_reminder_log_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE CASCADE;
+
+
+--
+-- Name: clockout_reminder_log clockout_reminder_log_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.clockout_reminder_log
+    ADD CONSTRAINT clockout_reminder_log_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE SET NULL;
 
 
 --
@@ -125315,6 +126336,14 @@ ALTER TABLE ONLY public.weather_poll
 
 
 --
+-- Name: whatsapp_entrada whatsapp_entrada_aviso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.whatsapp_entrada
+    ADD CONSTRAINT whatsapp_entrada_aviso_id_fkey FOREIGN KEY (aviso_id) REFERENCES public.clockout_reminder_log(id) ON DELETE SET NULL;
+
+
+--
 -- Name: withholding_rate withholding_rate_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -126597,6 +127626,19 @@ CREATE POLICY availability_push_log_read ON public.availability_push_log FOR SEL
 
 
 --
+-- Name: aviso_empresa; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.aviso_empresa ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: aviso_empresa aviso_empresa_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY aviso_empresa_leer ON public.aviso_empresa FOR SELECT TO authenticated USING ((public.current_user_is_admin_of(account_id) OR (public.current_user_is_admin_or_manager_of(account_id) AND ((location_id IS NULL) OR (location_id = ANY (public.current_user_location_ids()))))));
+
+
+--
 -- Name: bank_account_iban; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -126633,6 +127675,19 @@ ALTER TABLE public.bank_agent_run ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY bank_agent_run_select ON public.bank_agent_run FOR SELECT USING (( SELECT public.belongs_to_account(bank_agent_run.account_id) AS belongs_to_account));
+
+
+--
+-- Name: bank_aggregator_connection; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.bank_aggregator_connection ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: bank_aggregator_connection bank_aggregator_connection_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY bank_aggregator_connection_select ON public.bank_aggregator_connection FOR SELECT USING (( SELECT public.belongs_to_account(bank_aggregator_connection.account_id) AS belongs_to_account));
 
 
 --
@@ -127330,27 +128385,6 @@ ALTER TABLE public.clock_correction_request ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.clock_entries ENABLE ROW LEVEL SECURITY;
-
---
--- Name: clock_entries clock_entries_delete; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY clock_entries_delete ON public.clock_entries FOR DELETE TO authenticated USING (public.current_user_is_admin_of(account_id));
-
-
---
--- Name: clock_entries clock_entries_insert; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY clock_entries_insert ON public.clock_entries FOR INSERT TO authenticated WITH CHECK ((public.current_user_is_admin_or_manager_of(account_id) OR public.current_user_is_employee(employee_id, account_id)));
-
-
---
--- Name: clock_entries clock_entries_modify; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY clock_entries_modify ON public.clock_entries FOR UPDATE TO authenticated USING (public.current_user_is_admin_of(account_id)) WITH CHECK (public.current_user_is_admin_of(account_id));
-
 
 --
 -- Name: clock_entries clock_entries_read; Type: POLICY; Schema: public; Owner: -
@@ -134922,6 +135956,12 @@ CREATE POLICY void_reason_write ON public.void_reason USING (public.current_user
 ALTER TABLE public.weather_poll ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: whatsapp_entrada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.whatsapp_entrada ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: withholding_rate; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -135100,6 +136140,14 @@ GRANT ALL ON FUNCTION public._aviso_falta_en_vault(p_que text, p_venta uuid) TO 
 
 
 --
+-- Name: FUNCTION _aviso_olvido_responder(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone, p_via text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._aviso_olvido_responder(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone, p_via text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._aviso_olvido_responder(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone, p_via text) TO service_role;
+
+
+--
 -- Name: TABLE bank_settings; Type: ACL; Schema: public; Owner: -
 --
 
@@ -135259,8 +136307,8 @@ GRANT ALL ON FUNCTION public._clock_entry_quien_y_hora() TO service_role;
 -- Name: TABLE clock_entries; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.clock_entries TO anon;
-GRANT ALL ON TABLE public.clock_entries TO authenticated;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.clock_entries TO anon;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.clock_entries TO authenticated;
 GRANT ALL ON TABLE public.clock_entries TO service_role;
 
 
@@ -136298,6 +137346,15 @@ GRANT ALL ON FUNCTION public._mes_madrid(p_t timestamp with time zone) TO servic
 
 
 --
+-- Name: FUNCTION _metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) TO anon;
+GRANT ALL ON FUNCTION public._metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) TO authenticated;
+GRANT ALL ON FUNCTION public._metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) TO service_role;
+
+
+--
 -- Name: FUNCTION _modgroups_of_item(p_menu_item_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -137160,6 +138217,14 @@ GRANT ALL ON FUNCTION public._shop_item_promo(p_account uuid, p_menu_item_id uui
 REVOKE ALL ON FUNCTION public._shop_reprice_line(p_account_id uuid, p_line jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._shop_reprice_line(p_account_id uuid, p_line jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public._shop_reprice_line(p_account_id uuid, p_line jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION _solo_cambia_origen(p_antes jsonb, p_despues jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._solo_cambia_origen(p_antes jsonb, p_despues jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._solo_cambia_origen(p_antes jsonb, p_despues jsonb) TO service_role;
 
 
 --
@@ -138089,6 +139154,30 @@ GRANT ALL ON FUNCTION public.availability_sales_profile(p_account_id uuid, p_sco
 
 
 --
+-- Name: FUNCTION aviso_olvido_cola(p_limite integer, p_ahora timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.aviso_olvido_cola(p_limite integer, p_ahora timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.aviso_olvido_cola(p_limite integer, p_ahora timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION avisos_empresa_por_enviar(p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.avisos_empresa_por_enviar(p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.avisos_empresa_por_enviar(p_limite integer) TO service_role;
+
+
+--
+-- Name: FUNCTION avisos_olvido_debidos(p_ahora timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone) TO service_role;
+
+
+--
 -- Name: FUNCTION avt_cause_context(p_count_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -138149,6 +139238,32 @@ GRANT ALL ON FUNCTION public.bank_agente_registrar(p_company uuid, p_disparo tex
 GRANT ALL ON FUNCTION public.bank_agente_toca_hoy(p_company uuid) TO anon;
 GRANT ALL ON FUNCTION public.bank_agente_toca_hoy(p_company uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_agente_toca_hoy(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_agregador_apuntar(p_treasury uuid, p_proveedor text, p_cuenta_proveedor text, p_conexion text, p_banco text, p_caduca timestamp with time zone, p_renovar text, p_estado text, p_mensaje text, p_saldo_banco numeric, p_saldo_fecha date, p_nuevos integer, p_repetidos integer, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_agregador_conexion_apuntar(p_conexion uuid, p_error text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_agregador_conexion_apuntar(p_conexion uuid, p_error text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_agregador_conexion_apuntar(p_conexion uuid, p_error text) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_agregador_quitar(p_treasury uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_agregador_quitar(p_treasury uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_agregador_quitar(p_treasury uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_agregador_quitar(p_treasury uuid) TO service_role;
 
 
 --
@@ -139715,6 +140830,14 @@ GRANT ALL ON FUNCTION public.conta_asesoria_vincular(i public.tax_advisor_invita
 REVOKE ALL ON FUNCTION public.conta_asiento_envio(p_entry uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_asiento_envio(p_entry uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_asiento_envio(p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_banco_agregador_despertar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_banco_agregador_despertar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_banco_agregador_despertar() TO service_role;
 
 
 --
@@ -145447,6 +146570,15 @@ GRANT ALL ON FUNCTION public.mirror_state(p_account uuid, p_item uuid) TO servic
 
 
 --
+-- Name: FUNCTION mis_avisos_olvido(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.mis_avisos_olvido() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.mis_avisos_olvido() TO authenticated;
+GRANT ALL ON FUNCTION public.mis_avisos_olvido() TO service_role;
+
+
+--
 -- Name: FUNCTION modificadores_cobertura_de_codigos(p_account_id uuid, p_catalog_ids text[]); Type: ACL; Schema: public; Owner: -
 --
 
@@ -146925,6 +148057,23 @@ GRANT ALL ON FUNCTION public.resolver_opcion_de_extra(p_account_id uuid, p_menu_
 
 
 --
+-- Name: FUNCTION responder_aviso_olvido(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.responder_aviso_olvido(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.responder_aviso_olvido(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone) TO authenticated;
+GRANT ALL ON FUNCTION public.responder_aviso_olvido(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION responder_aviso_olvido_whatsapp(p_log_id uuid, p_respuesta text, p_telefono text, p_contexto_wamid text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.responder_aviso_olvido_whatsapp(p_log_id uuid, p_respuesta text, p_telefono text, p_contexto_wamid text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.responder_aviso_olvido_whatsapp(p_log_id uuid, p_respuesta text, p_telefono text, p_contexto_wamid text) TO service_role;
+
+
+--
 -- Name: FUNCTION responder_correccion(p_audit_id uuid, p_conforme boolean, p_nota text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -148215,6 +149364,14 @@ GRANT ALL ON FUNCTION public.tg_ensure_public_token() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_fichaje_fuera_del_radio(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_fichaje_fuera_del_radio() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_fichaje_fuera_del_radio() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_goods_receipt_compras_camino(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -149180,6 +150337,14 @@ GRANT ALL ON FUNCTION public.verify_practical_items(p_attempt_id uuid, p_checks 
 
 
 --
+-- Name: FUNCTION vigia_avisos_olvido(p_dry boolean, p_ahora timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.vigia_avisos_olvido(p_dry boolean, p_ahora timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.vigia_avisos_olvido(p_dry boolean, p_ahora timestamp with time zone) TO service_role;
+
+
+--
 -- Name: FUNCTION void_clock_entry(p_entry_id uuid, p_reason text, p_actor_label text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -149213,6 +150378,23 @@ GRANT ALL ON FUNCTION public.warehouse_reliability_queue(p_account_id uuid, p_lo
 GRANT ALL ON FUNCTION public.weekly_rest_minutes_for(p_account uuid, p_location uuid) TO anon;
 GRANT ALL ON FUNCTION public.weekly_rest_minutes_for(p_account uuid, p_location uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.weekly_rest_minutes_for(p_account uuid, p_location uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION whatsapp_error_en_palabras(p_error text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.whatsapp_error_en_palabras(p_error text) TO anon;
+GRANT ALL ON FUNCTION public.whatsapp_error_en_palabras(p_error text) TO authenticated;
+GRANT ALL ON FUNCTION public.whatsapp_error_en_palabras(p_error text) TO service_role;
+
+
+--
+-- Name: FUNCTION whatsapp_estado(p_wamid text, p_estado text, p_at timestamp with time zone, p_error text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.whatsapp_estado(p_wamid text, p_estado text, p_at timestamp with time zone, p_error text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.whatsapp_estado(p_wamid text, p_estado text, p_at timestamp with time zone, p_error text) TO service_role;
 
 
 --
@@ -150261,6 +151443,14 @@ GRANT ALL ON TABLE public.availability_push_log TO service_role;
 
 
 --
+-- Name: TABLE aviso_empresa; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.aviso_empresa TO authenticated;
+GRANT ALL ON TABLE public.aviso_empresa TO service_role;
+
+
+--
 -- Name: TABLE bank_account_iban; Type: ACL; Schema: public; Owner: -
 --
 
@@ -150285,6 +151475,15 @@ GRANT ALL ON TABLE public.bank_activity_log TO service_role;
 GRANT ALL ON TABLE public.bank_agent_run TO anon;
 GRANT ALL ON TABLE public.bank_agent_run TO authenticated;
 GRANT ALL ON TABLE public.bank_agent_run TO service_role;
+
+
+--
+-- Name: TABLE bank_aggregator_connection; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.bank_aggregator_connection TO anon;
+GRANT ALL ON TABLE public.bank_aggregator_connection TO authenticated;
+GRANT ALL ON TABLE public.bank_aggregator_connection TO service_role;
 
 
 --
@@ -151762,9 +152961,281 @@ GRANT ALL ON TABLE public.employee_notifications TO service_role;
 -- Name: TABLE employees; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.employees TO anon;
-GRANT ALL ON TABLE public.employees TO authenticated;
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE public.employees TO anon;
+GRANT INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE public.employees TO authenticated;
 GRANT ALL ON TABLE public.employees TO service_role;
+
+
+--
+-- Name: COLUMN employees.id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(id) ON TABLE public.employees TO authenticated;
+GRANT SELECT(id) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.name; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(name) ON TABLE public.employees TO authenticated;
+GRANT SELECT(name) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.phone; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(phone) ON TABLE public.employees TO authenticated;
+GRANT SELECT(phone) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.email; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(email) ON TABLE public.employees TO authenticated;
+GRANT SELECT(email) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.photo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(photo) ON TABLE public.employees TO authenticated;
+GRANT SELECT(photo) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees."position"; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT("position") ON TABLE public.employees TO authenticated;
+GRANT SELECT("position") ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.department; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(department) ON TABLE public.employees TO authenticated;
+GRANT SELECT(department) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.contract_type; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(contract_type) ON TABLE public.employees TO authenticated;
+GRANT SELECT(contract_type) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.start_date; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(start_date) ON TABLE public.employees TO authenticated;
+GRANT SELECT(start_date) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.end_date; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(end_date) ON TABLE public.employees TO authenticated;
+GRANT SELECT(end_date) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.weekly_hours; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(weekly_hours) ON TABLE public.employees TO authenticated;
+GRANT SELECT(weekly_hours) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.schedule; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(schedule) ON TABLE public.employees TO authenticated;
+GRANT SELECT(schedule) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.active; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(active) ON TABLE public.employees TO authenticated;
+GRANT SELECT(active) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.notes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(notes) ON TABLE public.employees TO authenticated;
+GRANT SELECT(notes) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.pin; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(pin) ON TABLE public.employees TO authenticated;
+GRANT SELECT(pin) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.location_id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(location_id) ON TABLE public.employees TO authenticated;
+GRANT SELECT(location_id) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.assigned_locations; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(assigned_locations) ON TABLE public.employees TO authenticated;
+GRANT SELECT(assigned_locations) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.weekly_schedule; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(weekly_schedule) ON TABLE public.employees TO authenticated;
+GRANT SELECT(weekly_schedule) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.availability; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(availability) ON TABLE public.employees TO authenticated;
+GRANT SELECT(availability) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.created_at; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(created_at) ON TABLE public.employees TO authenticated;
+GRANT SELECT(created_at) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.updated_at; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(updated_at) ON TABLE public.employees TO authenticated;
+GRANT SELECT(updated_at) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.contracted_hours_week; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(contracted_hours_week) ON TABLE public.employees TO authenticated;
+GRANT SELECT(contracted_hours_week) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.shift_code; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(shift_code) ON TABLE public.employees TO authenticated;
+GRANT SELECT(shift_code) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.shift_period; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(shift_period) ON TABLE public.employees TO authenticated;
+GRANT SELECT(shift_period) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.rest_pattern; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(rest_pattern) ON TABLE public.employees TO authenticated;
+GRANT SELECT(rest_pattern) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.initial_hours_balance; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(initial_hours_balance) ON TABLE public.employees TO authenticated;
+GRANT SELECT(initial_hours_balance) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.show_hours_balance; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(show_hours_balance) ON TABLE public.employees TO authenticated;
+GRANT SELECT(show_hours_balance) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.termination_type; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(termination_type) ON TABLE public.employees TO authenticated;
+GRANT SELECT(termination_type) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.termination_reason; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(termination_reason) ON TABLE public.employees TO authenticated;
+GRANT SELECT(termination_reason) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.termination_communicated_to_gestoria; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(termination_communicated_to_gestoria) ON TABLE public.employees TO authenticated;
+GRANT SELECT(termination_communicated_to_gestoria) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.trial_period_days; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(trial_period_days) ON TABLE public.employees TO authenticated;
+GRANT SELECT(trial_period_days) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.username; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(username) ON TABLE public.employees TO authenticated;
+GRANT SELECT(username) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.forgot_clockout_reminder; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(forgot_clockout_reminder) ON TABLE public.employees TO authenticated;
+GRANT SELECT(forgot_clockout_reminder) ON TABLE public.employees TO anon;
+
+
+--
+-- Name: COLUMN employees.account_id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(account_id) ON TABLE public.employees TO authenticated;
+GRANT SELECT(account_id) ON TABLE public.employees TO anon;
 
 
 --
@@ -154561,6 +156032,13 @@ GRANT ALL ON TABLE public.void_reason TO service_role;
 --
 
 GRANT ALL ON TABLE public.weather_poll TO service_role;
+
+
+--
+-- Name: TABLE whatsapp_entrada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.whatsapp_entrada TO service_role;
 
 
 --
