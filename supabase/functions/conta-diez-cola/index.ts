@@ -50,3 +50,4 @@ Deno.serve(async (req) => {
   console.log(`conta-diez-cola · cogidos ${cogidos.length} · en Diez ${llegan} · sin llegar ${no} · para la siguiente ${sinTiempo}`);
   return json({ cogidos: cogidos.length, en_diez: llegan, sin_llegar: no, para_la_siguiente: sinTiempo });
 });
+// W12: rama de prueba que no se fusiona (T13).
