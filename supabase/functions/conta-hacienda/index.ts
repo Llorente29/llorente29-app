@@ -10,6 +10,7 @@
 //   · «puerta»               {}                                   I01b: ¿está abierta? (no llama a Hacienda).
 //   · «fichero_303»          { declaracion }                      I01b: el fichero oficial (no llama a Hacienda).
 //   · «fichero_190»          { declaracion }                      S02: el del 190 (no llama a Hacienda).
+//   · «fichero_180»          { declaracion }                      S02: el del 180 (no llama a Hacienda).
 // La confirmación es el token de un solo uso que da conta_cert_confirmar a
 // quien «puede presentar», al confirmar ESA acción.
 //
@@ -32,7 +33,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { AlmacenVault } from "../_shared/certificados/almacen.ts";
 import { HaciendaDoble } from "../_shared/hacienda/doble.ts";
 import { CERRADA, comprobarPuerta, type Hacienda, HaciendaAeat, HaciendaCerrada, PuertaCerrada } from "../_shared/hacienda/puerta.ts";
-import { contabilizarTrasPresentar, type Dependencias, fichero190, fichero303, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
+import { contabilizarTrasPresentar, type Dependencias, fichero180, fichero190, fichero303, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -105,6 +106,18 @@ Deno.serve(async (req) => {
     const { data: r } = await servicio.from("tax_return").select("company_id, form_code").eq("id", declaracion).maybeSingle();
     if (!r || r.form_code !== "190") return json({ ok: false, mensaje: "Esa declaración no está." }, 404);
     const salida = await fichero190(servicio, { usuario, declaracion, empresa: r.company_id });
+    console.log(JSON.stringify({ hacienda: accion, resultado: salida.ok ? "ok" : salida.motivo }));
+    return json(salida, salida.ok ? 200 : 422);
+  }
+
+  // S02 · El fichero del 180, igual: sin Hacienda ni certificado.
+  if (accion === "fichero_180") {
+    const declaracion = uuid(cuerpo.declaracion);
+    if (!declaracion) return json({ ok: false, mensaje: "Falta la declaración." }, 400);
+    const servicio = createClient(SUPABASE_URL, SERVICIO);
+    const { data: r } = await servicio.from("tax_return").select("company_id, form_code").eq("id", declaracion).maybeSingle();
+    if (!r || r.form_code !== "180") return json({ ok: false, mensaje: "Esa declaración no está." }, 404);
+    const salida = await fichero180(servicio, { usuario, declaracion, empresa: r.company_id });
     console.log(JSON.stringify({ hacienda: accion, resultado: salida.ok ? "ok" : salida.motivo }));
     return json(salida, salida.ok ? 200 : 422);
   }

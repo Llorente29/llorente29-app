@@ -1,0 +1,6 @@
+# S02 · el 180 · vuelta atrás: quita las tres funciones y la tabla del
+# inmueble, y deja el CHECK de lo comprobado con sus diecisiete claves (borra
+# antes lo comprobado con las tres nuevas). Los borradores del 180 se quedan:
+# son datos.
+cuenta: scripts/conta/produccion/cuentas/s02-modelo-180.sql
+supabase/vuelta-atras/20261029T0845_s02_modelo_180.down.sql

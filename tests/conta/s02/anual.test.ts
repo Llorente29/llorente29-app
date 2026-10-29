@@ -1,8 +1,8 @@
 // S02 · La pantalla del año, lo que no es pantalla (src/modules/conta/impuestos/anual.ts).
 import { describe, expect, it } from 'vitest'
-import { claveEnPalabras, ejercicioPorDefecto, perceptoresEnOrden, porQueNoFichero, queFaltaAnual, sinTrabajadorEnPalabras, tarjetaAnual } from '@/modules/conta/impuestos/anual'
+import { arrendadoresEnOrden, claveEnPalabras, ejercicioPorDefecto, faltaEnInmueble, inmuebleEnPalabras, perceptoresEnOrden, porcentajeEnPalabras, porQueNoFichero, queFaltaAnual, sinTrabajadorEnPalabras, tarjetaAnual } from '@/modules/conta/impuestos/anual'
 import type { ModeloTrimestre } from '@/modules/conta/impuestos/trimestre'
-import type { Perceptor190 } from '@/modules/conta/services/impuestosService'
+import type { Inmueble180, Perceptor180, Perceptor190 } from '@/modules/conta/services/impuestosService'
 
 const modelo = (o: Partial<ModeloTrimestre> = {}, decl: Partial<NonNullable<ModeloTrimestre['declaracion']>> | null = null): ModeloTrimestre => ({
   modelo: '190', nombre: 'Resumen anual de retenciones', cadencia: 'annual', periodo: '0A', no_toca: false, presentacion: '2027-02-01', domiciliacion: null,
@@ -72,5 +72,28 @@ describe('los perceptores', () => {
       titulo: 'Indemnizaciones sin trabajador',
       apoyo: 'Las indemnizaciones exentas del diario (la 641) que no están en ninguna nómina por trabajador',
     })
+  })
+})
+
+describe('el 180: los arrendadores y su local', () => {
+  const local: Inmueble180 = { situacion: '1', catastral: '0000000AA0000A0001AA', tipo_via: 'CL', nombre_via: 'Calle de Prueba', tipo_numeracion: 'NUM', numero: '12',
+    planta: 'BJ', puerta: null, municipio: 'Madrid', codigo_municipio: null, provincia: '28', cp: '28001' }
+  const a = (o: Partial<Perceptor180>): Perceptor180 => ({ perceptor: 'x', proveedor: 'p', nif: '00000000T', nombre: 'Uno', provincia: '28', nif_valido: true,
+    base: 1000, porcentaje: 19, retenciones: 190, inmueble: local, ...o })
+  it('el que no tiene local va arriba, con su etiqueta; no se esconde ninguno', () => {
+    const r = arrendadoresEnOrden([a({ nombre: 'Bien' }), a({ nombre: 'Sin local', inmueble: null })])
+    expect(r.map((x) => x.nombre)).toEqual(['Sin local', 'Bien'])
+    expect(r[0].falta).toEqual(['sin el local'])
+  })
+  it('el local en una línea, y el porcentaje con coma', () => {
+    expect(inmuebleEnPalabras(local)).toBe('CL Calle de Prueba 12, planta BJ, 28001 Madrid · con referencia catastral 0000000AA0000A0001AA')
+    expect(inmuebleEnPalabras({ ...local, situacion: '4', catastral: null, planta: null })).toBe('CL Calle de Prueba 12, 28001 Madrid · sin referencia catastral')
+    expect(porcentajeEnPalabras(19)).toBe('19 %')
+    expect(porcentajeEnPalabras(19.5)).toBe('19,5 %')
+  })
+  it('lo que falta para guardar el local, como lo comprueba la base', () => {
+    expect(faltaEnInmueble(local)).toEqual([])
+    expect(faltaEnInmueble({ situacion: '1', nombre_via: 'X', municipio: 'Y', provincia: '28', cp: '2800' })).toEqual(['la referencia catastral (20 letras y cifras)', 'el código postal'])
+    expect(faltaEnInmueble({ situacion: '4', nombre_via: 'X', municipio: 'Y', provincia: '54', cp: '28001' })).toEqual(['la provincia'])
   })
 })

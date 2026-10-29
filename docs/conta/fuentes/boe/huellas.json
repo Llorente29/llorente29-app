@@ -1,0 +1,12 @@
+{
+  "_que_es": "Bloques del BOE guardados tal cual (el XML de la API de legislación consolidada), cuando el texto de docs/conta/fuentes/textos pierde las tablas: fuentes.mjs solo guarda los párrafos. El sha256 se comprueba en tests/conta/s02/fuentesAeat.test.ts: si el fichero cambia, la prueba falla.",
+  "ficheros": {
+    "orden-modelo-180-anexo-vi.xml": {
+      "modelo": "180",
+      "norma": "Orden de 21 de noviembre de 2000 (BOE-A-2000-21430), anexo VI: diseños lógicos del modelo 180",
+      "origen": "https://www.boe.es/datosabiertos/api/legislacion-consolidada/id/BOE-A-2000-21430/texto/bloque/anvi, bajado el 29/10/2026. Trae todas las versiones del anexo; la vigente es la de BOE-A-2023-24412 (desde el 01/12/2023, aplicable al 180 de 2023 en adelante).",
+      "sha256": "5c19c8150b3c836e519226c3862e6907d4eb97832f648c4fc39d05faa210f830",
+      "bytes": 242629
+    }
+  }
+}

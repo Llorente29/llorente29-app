@@ -1,0 +1,23 @@
+{
+ "_que": "S02 · el 180 · contexto de producción de la tanda (0845), medido en SOLO LECTURA el 29/10 a las 08:47Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe tax_return_check (la del CHECK que se amplía; filas estimadas 0) y no existe la tabla company_lease ni ninguna de las tres funciones que crea la 0845 (ni otra firma con su nombre); nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-10-29T08:47Z",
+ "tanda": {
+  "supabase/migrations/20261029T0845_s02_modelo_180.sql": "8de372f3adfca06d28930af3525b237d"
+ },
+ "contexto": {
+  "tablas": [
+   "public.tax_return_check"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.tax_return_check": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
