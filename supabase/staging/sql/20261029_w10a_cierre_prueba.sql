@@ -1,5 +1,7 @@
 -- supabase/staging/sql/20261029_w10a_cierre_prueba.sql
 --
+-- sin usuario: borra una fila de funcion_respaldo, que la sesión no lee ni escribe; la app no llama a nada de esto.
+--
 -- SOLO STAGING. Prueba de la 1053 (W10a, cierre), con \i dentro de la
 -- transacción y ROLLBACK: staging no cambia.
 --
