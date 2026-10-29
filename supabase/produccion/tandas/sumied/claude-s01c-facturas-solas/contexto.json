@@ -1,0 +1,39 @@
+{
+ "_que": "S01c · las facturas entran solas · contexto de producción de la tanda (1012 y 1013), medido en SOLO LECTURA el 29/10 a las 10:10Z (repasado a las 10:38Z tras añadir compras_recepcion_linea_anadir, que tampoco existe) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las siete tablas que tocan y las dos funciones que la 1012 cambia (_compras_camino_calcula y tg_goods_receipt_path_factura); no existe ninguna de las siete nuevas; funcion_respaldo, _respaldar_funcion y _restaurar_funcion existen y no hay respaldo de la 1012; nada en el camino del pedido y nada en el historial.",
+ "medido": "2026-10-29T10:52Z",
+ "tanda": {
+  "supabase/migrations/20261029T1012_s01c_facturas_solas.sql": "943f001cf6a9038f4cae95cf9aae62fd",
+  "supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql": "f058399802a76026d848d1e1e36c6fad"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_inbound_address",
+   "public.document_activity",
+   "public.goods_receipt",
+   "public.goods_receipt_path",
+   "public.supplier",
+   "public.supplier_invoice",
+   "public.supplier_invoice_receipt"
+  ],
+  "funciones": [
+   "public._compras_camino_calcula(uuid)",
+   "public.tg_goods_receipt_path_factura()"
+  ],
+  "filas": {
+   "public.company_inbound_address": 0,
+   "public.document_activity": 84,
+   "public.goods_receipt": 351,
+   "public.goods_receipt_path": 30,
+   "public.supplier": 100,
+   "public.supplier_invoice": 95,
+   "public.supplier_invoice_receipt": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,23 @@
+# S01c · Las facturas de proveedor entran solas por correo y casan con su
+# albarán. Rama claude/s01c-facturas-solas. Se ensaya y se aplica desde esta
+# rama, antes de fusionar.
+#
+#   1. 1012 — CAMBIA en caliente _compras_camino_calcula (manda la ficha) y
+#      tg_goods_receipt_path_factura (ninguna factura con una pregunta abierta),
+#      misma firma, declarado en su cabecera con su prueba de staging; antes
+#      guarda las dos como estaban (_respaldar_funcion) para su vuelta atrás.
+#      AÑADE supplier.invoice_arrival, goods_receipt.unread_gap_*, cinco
+#      funciones y un disparador en supplier_invoice (casar sola la que entra).
+#   2. 1013 — ARREGLA Foodint (con «autorizo»: toca datos): anula FAC-00100 y su
+#      asiento 2/3177 (contraasiento, no se borra), devuelve ALB-00218 a
+#      «esperando factura», pone a Amirsa «todas juntas a primeros de mes» y
+#      cierra su pregunta, y borra la dirección «documentos» foodint@ (apagada,
+#      sin correos). Cada cosa se comprueba antes de tocarla; si no está como
+#      se midió, para.
+#
+# Nada en el camino del pedido.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+cuenta: scripts/conta/produccion/cuentas/s01c-facturas-solas.sql
+supabase/migrations/20261029T1012_s01c_facturas_solas.sql
+supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql

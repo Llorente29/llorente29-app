@@ -801,15 +801,17 @@ function SummaryScreen({
     <div className="flex-1 flex flex-col items-center justify-center text-center gap-4 py-6">
       {aiReviewReasons.length > 0 && (
         <div className="w-full text-left rounded-lg border border-warning bg-warning-bg px-4 py-3">
-          <p className="text-base font-semibold text-text-primary">Este albarán va a oficina antes de entrar al almacén</p>
+          {/* S01c (Julio, 29/10): lo que dice tiene que ser cierto. Desde el 25/08 la mercancía entra
+              siempre (ver «hold» más abajo): el albarán solo queda marcado para que oficina lo repase. */}
+          <p className="text-base font-semibold text-text-primary">Oficina repasará este albarán</p>
           <ul className="mt-1.5 space-y-0.5">
             {aiReviewReasons.map((r, i) => (
               <li key={i} className="text-sm text-text-primary">· {r}</li>
             ))}
           </ul>
           <p className="text-sm text-text-primary mt-2">
-            Tu trabajo aquí ya está hecho y no se pierde. La mercancía entrará al almacén cuando
-            oficina lo cierre con el albarán delante.
+            Tu trabajo aquí ya está hecho. La mercancía entra al almacén ahora, al recibirla; el albarán
+            queda marcado para que oficina lo repase con el albarán en la mano.
           </p>
         </div>
       )}

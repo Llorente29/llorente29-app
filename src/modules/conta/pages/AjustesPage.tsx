@@ -30,6 +30,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelDia'
 import { VerifactuAjustes } from '@/modules/conta/verifactu/VerifactuAjustes'
 import { CobrosAjustes } from '@/modules/conta/ventas/CobrosAjustes'
+import { CorreoFacturasAjustes } from '@/modules/conta/compras/CorreoFacturas'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
@@ -64,6 +65,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'verifactu') return <>{movil && cabeza}<VerifactuAjustes /></>
   // PC01 E4 · Cobros: los recordatorios; no necesita los datos de la empresa de Ajustes.
   if (id === 'cobros') return <>{cabeza}<CobrosAjustes /></>
+  // S01c · Correo de facturas: la dirección, el reenvío de Gmail y lo que ha llegado; no necesita los datos de la empresa de Ajustes.
+  if (id === 'correo-facturas') return <>{cabeza}<CorreoFacturasAjustes /></>
   if (e.hueco) {
     return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Aún no." explicacion={e.hueco} /></div></>
   }

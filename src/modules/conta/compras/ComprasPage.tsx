@@ -18,10 +18,13 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { ErrorConReintento, Guardado, Tarjeta, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  agruparAMirar, albaranesDesde, cuandoLlega, diasEntre, DIAS_SIN_FACTURAR, estadoLiquidacion, fraseLiquidacion, fraseSaldo, importeEsperando,
-  mesAnterior, mesSiguiente, nombreMes, primeroDeMes, type EsperandoFactura, type FilaLiquidacion, type Mirar,
+  agruparAMirar, esperaEnPalabras, estadoLiquidacion, fraseLiquidacion, fraseSaldo,
+  mesAnterior, mesSiguiente, nombreMes, primeroDeMes, type FilaLiquidacion, type Mirar,
 } from '@/modules/conta/lib/compras'
-import { cargarEsperando, cargarLiquidaciones, cargarMirar, contarContabilizadas } from '@/modules/conta/services/comprasService'
+import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
+import { cargarEsperandoDetalle, cargarLiquidaciones, cargarMirar, contarContabilizadas, type AlbaranEsperando } from '@/modules/conta/services/comprasService'
+import { LlegadoPorCorreo } from '@/modules/conta/compras/CorreoFacturas'
+import { HuecoAlbaran } from '@/modules/conta/compras/HuecoAlbaran'
 import SubirFactura from '@/modules/conta/compras/SubirFactura'
 import { EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import { FilasAMirar } from '@/modules/conta/compras/QueMirar'
@@ -30,7 +33,7 @@ import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 interface Datos {
   mirar: Mirar
-  esperando: EsperandoFactura[]
+  esperando: AlbaranEsperando[]
   liquidaciones: { mes: string; filas: FilaLiquidacion[] }[]
   contabilizadas: number | null
 }
@@ -59,7 +62,7 @@ export default function ComprasPage() {
     let vivo = true
     Promise.all([
       cargarMirar(accountId),
-      cargarEsperando(accountId),
+      cargarEsperandoDetalle(accountId),
       cargarLiquidaciones(accountId, mesAnterior(mes)),
       cargarLiquidaciones(accountId, mes),
       activa ? contarContabilizadas(activa.id, mes, mesSiguiente(mes)) : Promise.resolve(null),
@@ -99,7 +102,9 @@ export default function ComprasPage() {
           : <FilasAMirar filas={filas} accountId={accountId} hecho={hecho} subir={() => setSubir({})} />}
       </Tarjeta>
 
-      <Esperando filas={datos.esperando} hoy={hoy} soltar={(fs) => setSubir({ ficheros: fs })} />
+      <Esperando filas={datos.esperando} soltar={(fs) => setSubir({ ficheros: fs })} hecho={hecho} />
+
+      {activa && <LlegadoPorCorreo companyId={activa.id} />}
 
       {hosteleria && <Tarjeta titulo="Liquidaciones del mes">
         <p className="cx-ayuda" style={{ marginTop: 0 }}>Proveedores que no facturan cada entrega: liquidan una vez al mes, local por local.</p>
@@ -126,39 +131,41 @@ export default function ComprasPage() {
 }
 
 // ── Qué está esperando factura ─────────────────────────────────────────────
+// S01c: albarán a albarán, con los días que lleva y hasta cuándo es normal
+// esperar según cómo factura su proveedor y cuándo manda las facturas. El
+// plazo pone la etiqueta «retrasado» y el orden; no quita ninguna fila (regla 7).
 
-function Esperando({ filas, hoy, soltar }: { filas: EsperandoFactura[]; hoy: string; soltar: (fs: File[]) => void }) {
+function Esperando({ filas, soltar, hecho }: { filas: AlbaranEsperando[]; soltar: (fs: File[]) => void; hecho: (frase: string) => void }) {
   const [encima, setEncima] = useState(false)
   const alSoltar = (e: DragEvent) => {
     e.preventDefault(); setEncima(false)
     const fs = Array.from(e.dataTransfer.files ?? [])
     if (fs.length > 0) soltar(fs)
   }
+  const retrasados = filas.filter((f) => f.retrasado).length
   return (
-    <Tarjeta titulo="Qué está esperando factura">
-      <p className="cx-ayuda" style={{ marginTop: 0 }}>Género recibido con albarán. Se apunta cuando llega la factura.</p>
+    <Tarjeta titulo="Qué está esperando factura" accion={filas.length > 0 ? <span className="cxc-cuenta" aria-label={`${filas.length} albaranes`}>{filas.length}</span> : undefined}>
+      <p className="cx-ayuda" style={{ marginTop: 0 }}>
+        Género recibido con albarán. Cuando llega su factura (por correo o subida), la caso con su albarán y te digo si cuadra.
+        {retrasados > 0 ? ` ${retrasados === 1 ? 'Uno lleva' : `${retrasados} llevan`} más de lo normal: arriba.` : ''}
+      </p>
       {filas.length === 0
         ? <p style={{ margin: 0, color: 'var(--cx-apoyo)' }}>Nada espera factura.</p>
         : (
-          <div className="cxc-tabla cxc-esperando" role="table" aria-label="Qué está esperando factura">
-            <span className="cxc-tabla-cabeza" role="columnheader">Proveedor</span>
-            <span className="cxc-tabla-cabeza" role="columnheader">Local</span>
-            <span className="cxc-tabla-cabeza" role="columnheader">Albaranes</span>
-            <span className="cxc-tabla-cabeza cx-cifra" role="columnheader">Importe</span>
-            <span className="cxc-tabla-cabeza" role="columnheader">Cuándo llega</span>
-            {filas.map((e) => {
-              const tarde = diasEntre(e.oldest, hoy) > DIAS_SIN_FACTURAR
-              return [
-                <span key={`${e.supplier_id}-${e.location_id}-p`} role="cell" style={{ fontWeight: 600 }}>{e.supplier_name}</span>,
-                <span key={`${e.supplier_id}-${e.location_id}-l`} role="cell" className="cxc-solo-ancho">{e.location_name ?? 'Sin local'}</span>,
-                <span key={`${e.supplier_id}-${e.location_id}-a`} role="cell" className="cxc-solo-ancho">{albaranesDesde(e)}</span>,
-                <span key={`${e.supplier_id}-${e.location_id}-i`} role="cell" className="cx-cifra">{importeEsperando(e)}</span>,
-                <span key={`${e.supplier_id}-${e.location_id}-c`} role="cell" className={tarde ? 'cxc-cuando cxc-tarde' : 'cxc-cuando'}>
-                  {cuandoLlega(e, hoy)}
-                </span>,
-              ]
+          <ul className="cxc-esperando-lista" aria-label="Qué está esperando factura" data-prueba="esperando">
+            {filas.map((a) => {
+              const e = esperaEnPalabras(a)
+              return (
+                <li key={a.goods_receipt_id} data-retrasado={a.retrasado ? 'si' : undefined}>
+                  <span className="cxc-liq-titulo">{a.supplier_name} · albarán {a.doc_number ?? a.code ?? ''} del {fechaLarga(a.receipt_date)}</span>
+                  <span className="cx-cifra">{a.total_papel != null ? eurosExactos(a.total_papel) : a.base != null ? `${eurosExactos(a.base)} de base` : 'sin importe'}</span>
+                  <span className={a.retrasado ? 'cxc-cuando cxc-tarde' : 'cxc-cuando'}>{e.estado}</span>
+                  <span className="cxc-cosa-apoyo">{e.porque}</span>
+                  {a.lineas_sin_leer != null && <HuecoAlbaran recepcion={a.goods_receipt_id} falta={a.lineas_sin_leer} alHacer={(frase) => hecho(frase)} />}
+                </li>
+              )
             })}
-          </div>
+          </ul>
         )}
       <div className={encima ? 'cxc-soltar cxc-soltar-encima' : 'cxc-soltar'}
         onDragOver={(e) => { e.preventDefault(); setEncima(true) }} onDragLeave={() => setEncima(false)} onDrop={alSoltar}>

@@ -152,3 +152,21 @@
   .cxc-docs { justify-content: flex-start; max-width: none; }
   .cxc-docs-pie { text-align: left; }
 }
+
+/* S01c · «Qué está esperando factura» albarán a albarán, el hueco de un albarán y el correo de facturas. */
+.cxc-esperando-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cxc-esperando-lista > li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 10px 0; border-top: 1px solid var(--cx-borde, #e5e7eb); }
+.cxc-esperando-lista > li:first-child { border-top: 0; }
+.cxc-esperando-lista > li > .cxc-cuando, .cxc-esperando-lista > li > .cxc-cosa-apoyo, .cxc-esperando-lista > li > .cxc-hueco { grid-column: 1 / -1; }
+.cxc-hueco { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.cxc-hueco-form { display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
+.cxc-hueco-opciones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cxc-hueco-opciones button { background: none; border: 0; padding: 6px 4px; text-align: left; cursor: pointer; color: var(--cx-azul, #1d4ed8); }
+.cxc-correo-dir { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.cxc-correo-direccion { font-size: 20px; font-weight: 600; overflow-wrap: anywhere; }
+.cxc-correo-codigo { font-size: 20px; letter-spacing: 0.06em; }
+.cxc-correo-pasos { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; }
+.cxc-correo-llegadas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.cxc-correo-llegadas > li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--cx-borde, #e5e7eb); }
+.cxc-correo-llegadas > li:first-child { border-top: 0; }
+.cxc-correo-llegadas > li[data-tono='mira'] .cxc-correo-que { color: var(--cx-ambar, #b45309); }

@@ -10,6 +10,8 @@
 // Movimientos, que es quien escribe; el panel solo dice qué se quiere.
 
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaCompras } from '@/config/navegacion'
 import { diaMesCorto, eurosExactos } from '@/modules/conta/lib/formato'
 import { textoDeImporte } from '@/modules/conta/diseno'
 import { AsientoQueSeCrea } from '@/modules/conta/diseno/plantillas'
@@ -129,6 +131,10 @@ export function PanelMovimiento(p: PanelProps) {
           </p>
           {m.porque && <p className="cx-ayuda">{m.porque}</p>}
           {m.propuesta.facturaSinAprobar && <p className="cxn-ambar-texto">Factura sin aprobar: confirmar el pago no la aprueba.</p>}
+          {/* S01c · Falta la factura que nombra el banco: se sube (o llega por correo) y se casa con este pago. */}
+          {m.propuesta.que.startsWith('Falta la factura') && (
+            <div className="cxn-acciones"><Link className="cx-boton" to={`${rutaCompras()}?subir`}>Subir la factura</Link></div>
+          )}
           {(m.propuesta.alternativas ?? []).length > 0 && (
             <div className="cxn-acciones">
               {m.propuesta.alternativas!.map((a) => (

@@ -1,0 +1,7 @@
+# S01c · vuelta atrás, en orden inverso. La 1013 deshace lo que se puede
+# (Amirsa y la dirección «documentos»); FAC-00100 sigue anulada con su
+# contraasiento, porque un contraasiento no se anula. La 1012 vuelve a poner
+# las dos funciones como estaban y quita lo nuevo.
+cuenta: scripts/conta/produccion/cuentas/s01c-facturas-solas.sql
+supabase/vuelta-atras/20261029T1013_s01c_arreglo_foodint.down.sql
+supabase/vuelta-atras/20261029T1012_s01c_facturas_solas.down.sql
