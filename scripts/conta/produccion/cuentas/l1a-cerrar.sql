@@ -16,10 +16,12 @@ select clave, valor from (
     has_column_privilege('authenticated', 'public.employees', 'dni', 'select')::text || ' · ' ||
     has_column_privilege('authenticated', 'public.employees', 'name', 'select')::text union all
   select 5, '«kiosko» con GPS (antes 1434, después 0) · sin GPS (716 y 716)',
+    -- quieta: desde el 28/10 nadie escribe «kiosko» (fichar() guarda «movil» o «tablet»); solo la mueve la 0732
     (select count(*) filter (where lat is not null or ubicacion_borrada_at is not null) || ' · ' ||
             count(*) filter (where lat is null and ubicacion_borrada_at is null)
        from public.clock_entries where source = 'kiosko') union all
   select 6, 'rastro de la corrección de origen (antes 0, después 1434)',
+    -- quieta: ese motivo solo lo escribe la 0732 (y su vuelta atrás lo deja igual)
     (select count(*) from public.clock_entry_audit where action = 'edit' and reason like 'Origen corregido:%(20261029T0732_l1a_origen_movil)%')::text union all
   select 7, '_informe_registro_jornada: huella · _solo_cambia_origen existe',
     (select left(md5(pg_get_functiondef(to_regprocedure('public._informe_registro_jornada(uuid,date,date,boolean,boolean)'))), 8))
