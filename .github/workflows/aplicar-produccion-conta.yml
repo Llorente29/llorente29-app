@@ -94,11 +94,6 @@ on:
         type: string
         default: ''
 
-# Nunca dos a la vez contra producción.
-concurrency:
-  group: aplicar-produccion-conta
-  cancel-in-progress: false
-
 permissions:
   contents: read
   actions: read
@@ -108,8 +103,47 @@ env:
   PGCONNECT_TIMEOUT: '15'
 
 jobs:
-  aplicar:
+  # W12 · Regla T9 (29/10): el ensayo espera a que acabe la e2e de su rama (tope
+  # de 45 min; si se pasa, en rojo). Va aparte y sin la cola de producción:
+  # esperar aquí no para los runs de las demás ramas.
+  espera-e2e:
+    if: inputs.modo == 'ensayo'
     runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci
+      - name: Esperar a que acabe la e2e de esta rama (regla T9)
+        timeout-minutes: 50
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci/esperar-e2e.mjs 45
+
+  # W12 · Regla T10 (29/10): el real lo lanza siempre Julio. El job pide la
+  # aprobación del entorno «produccion» (sus revisores: Julio) y no sigue hasta
+  # que la da en GitHub. Las sesiones lanzan con la autorización de Julio, así
+  # que mirar quién lanza no las distingue (los 40 runs del 27 al 29/10, todos
+  # «Llorente29»); esto sí. El ensayo no la necesita.
+  aprobacion:
+    if: inputs.modo == 'real'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: produccion
+    steps:
+      - name: Julio ha aprobado el real
+        run: echo "Real aprobado en el entorno «produccion» por quien tiene que aprobarlo. Rama ${GITHUB_REF_NAME}, commit ${GITHUB_SHA}."
+
+  aplicar:
+    needs: [espera-e2e, aprobacion]
+    # Sigue si la espera y la aprobación han ido bien o no tocaban (saltadas).
+    if: always() && !cancelled() && needs.espera-e2e.result != 'failure' && needs.aprobacion.result != 'failure'
+    runs-on: ubuntu-latest
+    # Nunca dos a la vez contra producción (antes, para todo el workflow; desde
+    # el W12, solo para el job que aplica: la espera y la aprobación, fuera).
+    concurrency:
+      group: aplicar-produccion-conta
+      cancel-in-progress: false
     # 15 minutos de la lectura de salud del pedido, más la vuelta atrás si toca.
     timeout-minutes: 60
     env:

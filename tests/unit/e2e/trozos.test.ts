@@ -3,7 +3,7 @@
 // W02 (paso 1c): la entera en 4 trozos que corren a la vez. Lo que no puede
 // pasar nunca: que entre los trozos falte un fichero (la «entera» no lo sería)
 // o que uno corra dos veces (dos carriles haciendo lo mismo). Contra la suite
-// REAL de tests/e2e y los tiempos medidos (tests/e2e/tiempos.json, la entera
+// REAL de tests/e2e y los tiempos medidos (tests/e2e/tiempos/, uno por prueba; la entera
 // de B del 16/10), no contra ficheros inventados.
 
 import { describe, expect, it } from 'vitest'
@@ -19,16 +19,16 @@ describe('la entera en trozos', () => {
   // una e2e. Hasta el 26/10 cada PR con una e2e subía aquí el tope de «sin
   // medir» y el techo del trozo, y el segundo en fusionarse chocaba siempre
   // (#335, #339, #342, #343). El historial de aquellos topes está en git.
-  //   · «Sin medir» = lo que no está en tests/e2e/tiempos.json. Lo mide la
+  //   · «Sin medir» = lo que no tiene su fichero en tests/e2e/tiempos/. Lo mide la
   //     entera (artefacto «tiempos-propuestos») y se saca de la lista en un
-  //     commit que solo toca tiempos.json.
+  //     commit que solo toca tests/e2e/tiempos/ (W12: un fichero por prueba).
   //   · El tope sale de lo que hay: como mucho una cuarta parte de la suite. Si
   //     se pasa, no es que un PR haya añadido una e2e: es que hace días que
   //     nadie mete lo medido, y los trozos se reparten a ciegas.
   it('la suite real tiene ficheros, y casi todos tienen su tiempo medido (como mucho una cuarta parte sin medir)', () => {
     expect(TODOS.length).toBeGreaterThanOrEqual(38)
     const sin = TODOS.filter((f) => typeof TIEMPOS[f] !== 'number')
-    expect(sin.length, `sin tiempo medido: ${sin.join(', ')}. Mete en tests/e2e/tiempos.json el artefacto «tiempos-propuestos» de una entera.`).toBeLessThanOrEqual(Math.floor(TODOS.length / 4))
+    expect(sin.length, `sin tiempo medido: ${sin.join(', ')}. Copia en tests/e2e/tiempos/ los ficheros del artefacto «tiempos-propuestos» de una e2e en verde.`).toBeLessThanOrEqual(Math.floor(TODOS.length / 4))
   })
 
   it('en 4 trozos están TODOS los ficheros, una vez cada uno', () => {
@@ -47,13 +47,13 @@ describe('la entera en trozos', () => {
 
   // El techo, con dos guardas que no se tocan al añadir una e2e:
   //   1. Lo MEDIDO, en 4 trozos, bajo su techo (`_techo_4_trozos_min` de
-  //      tiempos.json, al lado de lo medido: cambia solo cuando cambia lo medido,
+  //      tests/e2e/tiempos/_techo.json, al lado de lo medido: cambia solo cuando cambia lo medido,
   //      en el mismo commit). Es la alarma de siempre de que la suite crece.
   //   2. TODO, con lo nuevo como la mediana, en los trozos que usa de verdad la
   //      entera (`TROZOS_PEDIDOS:-N` del workflow) y en 4: el trozo más largo,
   //      como mucho la mitad del `timeout-minutes` del job del trozo. La otra
   //      mitad es la preparación y las esperas, según el propio workflow.
-  it('lo medido, en 4 trozos, no pasa de su techo (el de tiempos.json)', () => {
+  it('lo medido, en 4 trozos, no pasa de su techo (el de tests/e2e/tiempos/_techo.json)', () => {
     const techo = TIEMPOS._techo_4_trozos_min
     expect(typeof techo).toBe('number')
     const medidos = TODOS.filter((f) => typeof TIEMPOS[f] === 'number')

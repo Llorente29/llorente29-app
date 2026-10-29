@@ -113,20 +113,44 @@ on:
         options: ['aplicar', 'ensayo-de-vuelta-atras', 'real-con-fallo', 'real', 'compara-prueba']
         default: 'aplicar'
 
-# Dos tandas a la vez sobre la misma base se pisan. Se encolan.
-concurrency:
-  group: aplicar-staging-conta
-  cancel-in-progress: false
-
 permissions:
   contents: read
+  # W12 · Regla T9: la espera mira las e2e de la rama.
+  actions: read
 
 env:
   # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
   PGCONNECT_TIMEOUT: '15'
 
 jobs:
+  # W12 · Regla T9 (29/10): desde una rama, la prueba de staging espera a que
+  # acabe la e2e de SU rama (tope de 45 min; si se pasa, en rojo). Entre ramas
+  # distintas no hay cerrojo (W04). Va aparte y antes de la cola de staging:
+  # esperar aquí no para el «aplicar» de las demás ramas, y no coge ni la
+  # barrera ni el cerrojo (la e2e solo espera a staging mientras staging los
+  # tiene cogidos: así no hay interbloqueo).
+  espera-e2e:
+    if: github.ref_name != 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/ci
+      - name: Esperar a que acabe la e2e de esta rama (regla T9)
+        timeout-minutes: 50
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/ci/esperar-e2e.mjs 45
+
   aplicar:
+    needs: espera-e2e
+    if: always() && !cancelled() && needs.espera-e2e.result != 'failure'
+    # Dos tandas a la vez sobre la misma base se pisan. Se encolan (desde el
+    # W12, la cola es de este job: la espera de arriba va fuera).
+    concurrency:
+      group: aplicar-staging-conta
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # 15 de aplicar y hasta 30 esperando: 15 a que acaben los ficheros de
     # prueba en marcha (desde el 26/10 la barrera es por fichero: como mucho el

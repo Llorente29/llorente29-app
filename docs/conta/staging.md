@@ -598,7 +598,7 @@ ellas** (contraseña, escenario del R02, las pruebas), siempre después de coger
 
 **La entera en trozos (2 por defecto).** `scripts/e2e/trozos.mjs` reparte los
 ficheros del más lento al más rápido, cada uno al trozo que menos lleva, con
-los tiempos de `tests/e2e/tiempos.json`. Por defecto son 2: con 4 a la vez, la
+los tiempos de `tests/e2e/tiempos/` (uno por prueba, W12). Por defecto son 2: con 4 a la vez, la
 Micro de staging se ahoga (medido el 16/10: de 1 fallo a 6-8). A mano se
 pueden pedir de 1 a 4. Todos calculan el mismo reparto, y el job «entera»
 comprueba que entre todos están todos los ficheros, una vez cada uno, y que
