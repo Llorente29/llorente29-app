@@ -10,10 +10,11 @@
 --      y código postal).
 --   0. Lo de partida: el 190 de A antes de la prueba (su [03] y sus líneas).
 --   1b. Un trabajador con su nómina de octubre (IRPF 350).
---   2. Dos asientos validados de verdad en el 4T: la nómina (1.000 de base,
---      350 retenidos, con las nóminas del 111) y la factura del profesional
---      (500 de gasto, 75 retenidos).
---   3. El 190: la [03] sube 425; la línea G del proveedor sube 75, con su NIF
+--   2. Tres asientos validados de verdad en el 4T: la nómina (1.000 de base,
+--      350 retenidos, con las nóminas del 111), la factura del profesional
+--      (500 de gasto, 75 retenidos) y una nómina SIN retención (800 en la 640).
+--   3. El 190: la [03] sube 425 y la [02], 2.300 (también la nómina sin
+--      retención); la línea G del proveedor sube 75, con su NIF
 --      y la provincia 08; la del trabajador (clave A), 350, si la cuenta tiene
 --      una sola empresa; lo que queda «sin trabajador» no cambia.
 --   4. Con el 111 del 4T calculado, el 4T del 190 casa con él.
@@ -82,7 +83,9 @@ begin
     'c03', coalesce((c#>>'{casillas,03}')::numeric, 0),
     'g', coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and l.frozen->>'clave' = 'G'
                     and l.frozen->>'proveedor' = (select v #>> '{}' from prueba_190 where k = 'proveedor')), 0),
-    'sin', coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0)));
+    'sin', coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0),
+    'sin_integra', coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0),
+    'c02', coalesce((c#>>'{casillas,02}')::numeric, 0)));
 end $$;
 
 reset role;
@@ -129,6 +132,12 @@ begin
   insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
   values (a, emp, e, 1, c623, 500, 0, loc, null, null, null), (a, emp, e, 2, c4751, 0, 75, loc, w_prof, 500, '111'), (a, emp, e, 3, c41p, 0, 425, loc, null, null, null);
   perform public.journal_entry_validar(e);
+  -- S02 (29/10): una nómina SIN retención (800 en la 640, sin la 4751): también va en el 190.
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (a, emp, v_y, 4, '2026-11-30', 'Prueba S02 · nómina sin retención', 'manual') returning id into e;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, c640, 800, 0, loc, null, null, null), (a, emp, e, 2, c465, 0, 800, loc, null, null, null);
+  perform public.journal_entry_validar(e);
 end $$;
 
 -- ── 3 · El 190 con los asientos ────────────────────────────────────────────
@@ -152,6 +161,15 @@ begin
     raise exception 'PRUEBA 190 · 3: la línea G del proveedor no es la esperada (%).', g;
   end if;
   select coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0) into sin;
+  -- La [02]: 1.000 de la nómina con retención, 500 del profesional y 800 de la nómina sin retención.
+  if (c#>>'{casillas,02}')::numeric - (s0->>'c02')::numeric <> 2300 then
+    raise exception 'PRUEBA 190 · 3: la [02] no sube 2.300 (antes %, ahora %): la nómina sin retención no entra.', s0->>'c02', c#>>'{casillas,02}';
+  end if;
+  -- Lo pagado sin trabajador: la nómina sin retención (800) y, con varias empresas, también la de 1.000.
+  if (select coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0))
+     - (s0->>'sin_integra')::numeric <> case when una then 800 else 1800 end then
+    raise exception 'PRUEBA 190 · 3: lo pagado «sin trabajador» no sube lo esperado (una empresa: %).', una;
+  end if;
   if una then
     select l.frozen into t from public.tax_return_line l where l.tax_return_id = d and l.frozen->>'clave' = 'A' and l.frozen->>'perceptor' = trab;
     if t is null or (t->>'retenciones')::numeric <> 350 or (t->>'anio_nacimiento')::int <> 1990 or t->>'nif' <> '00000001R' or (t->>'gastos')::numeric <> 63.50 then
