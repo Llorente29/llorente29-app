@@ -23,7 +23,7 @@
 
 import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { rutaImpuestos, rutaIvaPeriodo } from '@/config/navegacion'
+import { rutaAnual, rutaImpuestos, rutaIvaPeriodo } from '@/config/navegacion'
 import { Boton, Campo, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra, Texto } from '@/modules/conta/diseno'
 import { useEntradasEnCinta, useNivel } from '@/modules/conta/marco/nuevo/contexto'
 import { anadirImpuesto } from '@/modules/conta/services/impuestosService'
@@ -126,7 +126,8 @@ function Fila({ f, nivel }: { f: FilaCalendario; nivel: ReturnType<typeof useNiv
   const v = vistaDeFila(f)
   const d = f.declaracion
   const nombre = nombreDeFila(f, nivel)
-  const ir = f.se_calcula ? rutaIvaPeriodo(f.ejercicio, f.periodo) : null
+  // S02 · Las anuales, a la pantalla del año (calcular, comprobar, el fichero y «ya lo presenté fuera»).
+  const ir = f.se_calcula ? rutaIvaPeriodo(f.ejercicio, f.periodo) : f.cadencia === 'annual' ? rutaAnual(f.ejercicio, f.modelo) : null
   return (
     <tr data-ambar={v.ambar ? 'si' : undefined}>
       <td data-titulo="Impuesto">

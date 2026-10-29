@@ -26,6 +26,8 @@ export interface MarcaInforme {
   distancia_m: number | null
   dentro_del_radio: boolean | null
   anulada: boolean
+  /** La última vez que se corrigió SOLO su origen (0733): de qué venía y cuándo. */
+  origen_corregido?: { antes: string | null; cuando: string; motivo: string | null } | null
 }
 
 export interface CambioInforme {
@@ -43,6 +45,8 @@ export interface CambioInforme {
   conformidad_at: string | null
   conformidad_nota: string | null
   peticion: { pedida_at: string; motivo: string; tipo: string } | null
+  /** Solo cambió el origen (p. ej. «kiosko» que era el móvil): no toca la hora. */
+  solo_origen?: boolean
 }
 
 export interface FirmaInforme {
@@ -142,6 +146,11 @@ export function periodoDelMes(mes: string, hoy: string = diaMadrid(new Date().to
   return { desde: `${mes}-01`, hasta: ultimo > hoy && `${mes}-01` <= hoy ? hoy : ultimo }
 }
 
+/** Cómo se llamaba cada origen guardado, para decir de qué se corrigió. */
+const NOMBRE_ORIGEN: Record<string, string> = {
+  kiosko: 'quiosco del portal antiguo', movil: 'móvil', tablet: 'tablet del local', manual: 'puesta a mano',
+}
+
 /** Cómo se fichó una marca, en palabras. */
 export function textoOrigen(m: MarcaInforme): string {
   const en = m.local ? ` en ${m.local}` : ''
@@ -150,8 +159,15 @@ export function textoOrigen(m: MarcaInforme): string {
     case 'movil': t = `Fichado desde el móvil${en}`; break
     case 'tablet': t = `Fichado en la tablet del local${en}`; break
     case 'manual': t = 'Puesta a mano'; break
-    case 'kiosko': t = 'Móvil del trabajador (antes del 27/10, deducido)'; break
+    // Lo que queda en «kiosko» después de la corrección del 29/10 (0732) no
+    // tuvo ubicación: el portal antiguo no dejaba saber si fue el móvil o la tablet.
+    case 'kiosko': t = 'Portal antiguo, sin ubicación: no se sabe si desde el móvil o la tablet'; break
     default: t = 'Sin origen guardado'
+  }
+  if (m.origen_corregido) {
+    const antes = m.origen_corregido.antes ? `figuraba como «${NOMBRE_ORIGEN[m.origen_corregido.antes] ?? m.origen_corregido.antes}»` : 'no tenía origen'
+    const porque = m.origen_corregido.antes === 'kiosko' && m.origen === 'movil' ? '; la marca tuvo ubicación del móvil' : ''
+    t += ` · origen corregido el ${fechaYHora(m.origen_corregido.cuando)} (${antes}${porque})`
   }
   if (m.dentro_del_radio === false && m.distancia_m != null) t += ` · fuera del radio, a ${m.distancia_m} m`
   if (m.declarada && m.llegada) t += ` · sin cobertura: hora del móvil ${horaMadrid(m.declarada)}, llegó a las ${horaMadrid(m.llegada)}`
@@ -198,7 +214,9 @@ export function armarInforme(d: DatosInforme, ahora: Date = new Date()): Informe
   const totales = totalesJornada(dias, d.persona.horas_semana)
   const porId = new Map(d.marcas.map(m => [m.id, m]))
   const cambiosPorMarca = new Map<string, CambioInforme[]>()
-  for (const c of d.cambios) if (c.marca) cambiosPorMarca.set(c.marca, [...(cambiosPorMarca.get(c.marca) ?? []), c])
+  // Las que solo corrigen el origen se cuentan en la marca (textoOrigen), no
+  // como «corregido después»: no cambian ninguna hora.
+  for (const c of d.cambios) if (c.marca && !c.solo_origen) cambiosPorMarca.set(c.marca, [...(cambiosPorMarca.get(c.marca) ?? []), c])
 
   const ausenciaDe = (dia: string) => d.ausencias.find(a => a.desde <= dia && a.hasta >= dia)
   const festivoDe = (dia: string) => d.festivos.find(f => f.dia === dia)

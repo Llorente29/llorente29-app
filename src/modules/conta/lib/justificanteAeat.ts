@@ -77,6 +77,8 @@ export const MODELOS_JUSTIFICANTE: Record<string, { nombre: string; resultado: s
 const ENTERAS: Record<string, ReadonlySet<string>> = {
   '111': new Set(['01', '04', '07', '10', '13', '16', '19', '22', '25']),
   '115': new Set(['01']),
+  // S02 · El 190: la [01] es el número de percepciones (un registro por perceptor y clave).
+  '190': new Set(['01']),
 }
 
 /** Si una casilla cuenta personas (perceptores), no euros: «3», no «3,00 €». */
