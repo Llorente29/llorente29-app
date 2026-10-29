@@ -60,6 +60,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // I01c (19/10): el trimestre, también el de una empresa por la ruta.
     impuestoTrimestre: 'impuestos.trimestre', impuestoTrimestreEmpresa: 'impuestos.trimestre',
+    // S02 · Los modelos del año (390, 190, 180, 347, 349): se llega desde el calendario.
+    impuestoAnual: 'impuestos.calendario',
     // P01 · El trimestre de un cliente. S02: la cartera del asesor es su apartado, «Clientes del despacho».
     impuestosCliente: 'despacho',
     // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).

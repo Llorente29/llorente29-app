@@ -1,0 +1,10 @@
+# S02 · el 190. La 1950 añade cuatro funciones y amplía el CHECK de
+# tax_return_check («cambia»): desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por sus caminos: un proveedor con ficha y un
+# trabajador con su nómina; dos asientos validados de verdad (la nómina y la
+# factura del profesional); el 190 sube lo que tiene que subir, con NIF,
+# provincia y clave; el 4T casa con su 111; «ya lo presenté fuera» con CSV y
+# el candado; el fichero solo para el servicio y sin datos con errores; la
+# cuenta B no ve nada de A; y la vuelta atrás.
+supabase/migrations/20261028T1950_s02_modelo_190.sql
+supabase/staging/sql/20261028_s02_modelo_190_prueba.sql
