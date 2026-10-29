@@ -79,6 +79,8 @@ const ENTERAS: Record<string, ReadonlySet<string>> = {
   '115': new Set(['01']),
   // S02 · El 190: la [01] es el número de percepciones (un registro por perceptor y clave).
   '190': new Set(['01']),
+  // S02 · El 180: la [01] es el número de arrendadores.
+  '180': new Set(['01']),
 }
 
 /** Si una casilla cuenta personas (perceptores), no euros: «3», no «3,00 €». */

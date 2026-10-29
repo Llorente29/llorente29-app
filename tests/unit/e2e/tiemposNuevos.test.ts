@@ -1,16 +1,18 @@
 // tests/unit/e2e/tiemposNuevos.test.ts
 //
 // 27/10 (Respuesta 2 al V04) · La entera mide lo que no tenía tiempo y lo
-// propone para tests/e2e/tiempos.json (inflacion.mjs --nuevos). Un PR con una
-// e2e nueva no apunta nada en ningún fichero compartido.
+// propone (inflacion.mjs --nuevos). Un PR con una e2e nueva no apunta nada en
+// ningún fichero compartido.
+// W12 (29/10) · Un fichero por prueba en tests/e2e/tiempos/: dos PR que añaden
+// un tiempo cada uno ya no tocan el mismo fichero, así que no pueden chocar.
 
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { nuevos, porFichero } from '../../../scripts/e2e/inflacion.mjs'
-import { tiemposDelRepo } from '../../../scripts/e2e/trozos.mjs'
+import { escribirTiempo, ficheros, tiemposDelRepo } from '../../../scripts/e2e/trozos.mjs'
 
 // Un informe JSON de Playwright, con la forma que deja merge-reports.
 const informe = (pruebas: Record<string, number[]>) => ({
@@ -19,36 +21,51 @@ const informe = (pruebas: Record<string, number[]>) => ({
   })),
 })
 
+describe('los tiempos, un fichero por prueba (W12)', () => {
+  const repo = tiemposDelRepo()
+
+  it('ya no existe el tiempos.json único, y cada tiempo es de una prueba que existe', () => {
+    expect(existsSync('tests/e2e/tiempos.json'), 'tests/e2e/tiempos.json ha vuelto: los tiempos van uno por prueba en tests/e2e/tiempos/<ruta>.json (LEEME.md de esa carpeta).').toBe(false)
+    const pruebas = new Set(ficheros())
+    const sueltos = Object.keys(repo).filter((k) => !k.startsWith('_') && !pruebas.has(k))
+    expect(sueltos, `tiempos de pruebas que ya no existen: ${sueltos.join(', ')}. Borra sus ficheros de tests/e2e/tiempos/.`).toEqual([])
+    expect(typeof repo._techo_4_trozos_min).toBe('number')
+  })
+
+  it('dos PR que añaden un tiempo cada uno escriben ficheros distintos: no chocan', () => {
+    const d = mkdtempSync(join(tmpdir(), 'tiempos-'))
+    const a = escribirTiempo('conta/zz/una.spec.ts', 10, 'e2e 1 en verde', d)
+    const b = escribirTiempo('conta/zz/otra.spec.ts', 20, null, d)
+    expect(a).not.toBe(b)
+    writeFileSync(join(d, '_techo.json'), JSON.stringify({ _techo_4_trozos_min: 19.5 }))
+    expect(tiemposDelRepo(d)).toEqual({ 'conta/zz/una.spec.ts': 10, 'conta/zz/otra.spec.ts': 20, _techo_4_trozos_min: 19.5 })
+    expect(JSON.parse(readFileSync(a, 'utf8'))).toEqual({ segundos: 10, medido: 'e2e 1 en verde' })
+  })
+})
+
 describe('la entera propone los tiempos de lo que no estaba medido', () => {
   const repo = tiemposDelRepo()
   const medido = Object.keys(repo).find((k) => typeof repo[k] === 'number' && !k.startsWith('_'))!
 
   it('solo lo que no tenía tiempo, con la misma vara (los dos tamaños sumados)', () => {
     const ahora = porFichero(informe({ 'conta/zz/nueva.spec.ts': [12_000, 13_500], [medido]: [999_000] }))
-    const r = nuevos(ahora, repo)
-    expect(r.nuevos).toEqual({ 'conta/zz/nueva.spec.ts': 25.5 })
-    // Lo ya medido no se pisa, y el techo y la nota se quedan.
-    expect(r.propuesto[medido]).toBe(repo[medido])
-    expect(r.propuesto._techo_4_trozos_min).toBe(repo._techo_4_trozos_min)
-    expect(r.propuesto._).toBe(repo._)
-    expect(Object.keys(r.propuesto).slice(0, 3)).toEqual(['_', '_techo_4_trozos_min', '_techo_porque'])
+    expect(nuevos(ahora, repo).nuevos).toEqual({ 'conta/zz/nueva.spec.ts': 25.5 })
   })
 
-  it('la orden escribe el tiempos.json propuesto y dice qué ha medido', () => {
+  it('la orden deja un fichero por prueba nueva, con su ruta, y dice qué ha medido', () => {
     const d = mkdtempSync(join(tmpdir(), 'tiempos-'))
     writeFileSync(join(d, 'informe.json'), JSON.stringify(informe({ 'conta/zz/nueva.spec.ts': [4_000] })))
-    const sale = execFileSync('node', ['scripts/e2e/inflacion.mjs', join(d, 'informe.json'), '--nuevos', join(d, 'p.json')], { encoding: 'utf8' })
+    const sale = execFileSync('node', ['scripts/e2e/inflacion.mjs', join(d, 'informe.json'), '--nuevos', join(d, 'p')], { encoding: 'utf8' })
     expect(sale).toContain('| conta/zz/nueva.spec.ts | 4.0 |')
-    const p = JSON.parse(readFileSync(join(d, 'p.json'), 'utf8'))
-    expect(p['conta/zz/nueva.spec.ts']).toBe(4)
-    expect(Object.keys(p).length).toBe(Object.keys(repo).length + 1)
+    expect(readdirSync(join(d, 'p', 'conta', 'zz'))).toEqual(['nueva.spec.ts.json'])
+    expect(JSON.parse(readFileSync(join(d, 'p', 'conta', 'zz', 'nueva.spec.ts.json'), 'utf8')).segundos).toBe(4)
   })
 
-  it('--tiempos (rehacerlo entero) no pierde el techo ni la nota', () => {
+  it('--tiempos <carpeta> (rehacerlo entero) escribe un fichero por prueba y no toca el techo', () => {
     const d = mkdtempSync(join(tmpdir(), 'tiempos-'))
     writeFileSync(join(d, 'informe.json'), JSON.stringify(informe({ 'conta/zz/nueva.spec.ts': [4_000] })))
-    const p = JSON.parse(execFileSync('node', ['scripts/e2e/inflacion.mjs', join(d, 'informe.json'), '--tiempos'], { encoding: 'utf8' }))
-    expect(p._techo_4_trozos_min).toBe(repo._techo_4_trozos_min)
-    expect(p._).toBe(repo._)
+    execFileSync('node', ['scripts/e2e/inflacion.mjs', join(d, 'informe.json'), '--tiempos', join(d, 't')], { encoding: 'utf8' })
+    expect(tiemposDelRepo(join(d, 't'))).toEqual({ 'conta/zz/nueva.spec.ts': 4 })
+    expect(tiemposDelRepo()._techo_4_trozos_min).toBe(repo._techo_4_trozos_min)
   })
 })

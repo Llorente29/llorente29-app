@@ -62,6 +62,14 @@ const C190: Readonly<Record<string, string>> = {
   '03': 'Total de las retenciones e ingresos a cuenta',
 }
 
+// S02 · El 180: igual, los tres totales del registro de declarante del anexo VI
+// de la Orden de 21/11/2000 (posiciones 136-175).
+const C180: Readonly<Record<string, string>> = {
+  '01': 'Número total de perceptores (cada arrendador una vez)',
+  '02': 'Base de las retenciones: lo pagado por los alquileres, sin IVA',
+  '03': 'Total de las retenciones e ingresos a cuenta',
+}
+
 const C202: Readonly<Record<string, string>> = {
   '01': 'Base del pago fraccionado (modalidad del artículo 40.2)',
   '02': 'Resultado de la declaración anterior (solo complementarias)',
@@ -84,7 +92,7 @@ const C202: Readonly<Record<string, string>> = {
   '34': 'Cantidad a ingresar',
 }
 
-const POR_MODELO: Readonly<Record<string, Readonly<Record<string, string>>>> = { '111': C111, '115': C115, '190': C190, '202': C202 }
+const POR_MODELO: Readonly<Record<string, Readonly<Record<string, string>>>> = { '111': C111, '115': C115, '180': C180, '190': C190, '202': C202 }
 
 /**
  * El texto del diseño de registro del 303, en palabras: sin la fórmula entre

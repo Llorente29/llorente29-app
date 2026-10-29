@@ -215,7 +215,7 @@ begin
   end if;
   begin perform public.conta_impuesto_revisar(d); raise exception 'PRUEBA 190 · 3: se dio por revisado con errores.';
   exception when invalid_parameter_value then null; end;
-  raise notice 'PRUEBA 190 · 3: la [03] sube 425, el proveedor con su NIF y la provincia 08, el trabajador (una empresa: %) y no se revisa con errores.', una;
+  raise notice 'PRUEBA 190 · 3: la [03] sube 425 y la [02], 2.600 (con la nómina sin retención y la indemnización, 300 en su línea L.05); el proveedor con su NIF y la provincia 08, el trabajador (una empresa: %) y no se revisa con errores.', una;
 end $$;
 
 -- ── 4 · Con el 111 del 4T calculado, el 4T del 190 casa con él ─────────────

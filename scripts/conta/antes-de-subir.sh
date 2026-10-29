@@ -63,6 +63,8 @@ node scripts/conta/antes-de-subir-sql.mjs
 # sin WHERE. La app pasa por safeupdate y los para, también dentro de una
 # función; las pruebas de staging corren como postgres y no lo ven.
 node scripts/conta/sql-sin-where.mjs
+# W10a: el repositorio es público; ninguna línea añadida, en ningún fichero, trae un secreto.
+node scripts/conta/sin-secretos.mjs
 # N1 (29/10): toda columna nueva de employees lleva su «grant select» para la
 # sesión o dice que es privada (desde la 0731, sin él la sesión no la ve).
 node scripts/conta/employees-columnas.mjs

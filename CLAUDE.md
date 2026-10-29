@@ -2,33 +2,100 @@
 
 REGLA CERO: antes de responder cualquier pregunta técnica, lee SIEMPRE CONTEXTO_CLAUDE.md (estado actual, decisiones, roadmap y deudas del proyecto Folvy).
 
-Reglas de trabajo del CEO (Julio):
-- Archivos completos, no diffs.
-- Pedir el fichero original antes de modificarlo.
-- No tocar App.tsx ni AppContext.tsx sin permiso explícito.
-- La BBDD es la verdad: verificar vía information_schema antes de decisiones de schema.
-- SQL transaccional y revisable ANTES de ejecutar. Claude Code propone, Julio ejecuta y verifica.
+## Reglas de trabajo
+
+> W12 (29/10): todas las reglas de trabajo en un solo sitio y en orden, con
+> número propio (T1…T13) para no confundirlas con las «ganadas en producción». Las que
+> una máquina puede comprobar se comprueban solas y salen en rojo con un mensaje
+> que dice qué ha pasado, dónde y qué hacer; al lado de cada una, quién la
+> comprueba. Las que no, se quedan escritas aquí y se dice por qué.
+
+### Cómo se trabaja un encargo
+
+T1. **El alcance se cierra al recibir el encargo.** Lo que surja mientras se
+   trabaja se apunta para el siguiente encargo y **no entra en el PR en
+   marcha**, aunque lo pida un mensaje posterior. *(Julio, 23/10.)*
+T2. **Sin agentes en paralelo**, salvo que el encargo lo diga expresamente.
+T3. **Siempre en español**, también las notas entre paso y paso y lo que se
+   piensa en voz alta. Nada en inglés, salvo nombres de código.
+T4. **Tiempo máximo: el que diga el encargo, o 90 minutos** si no dice nada. Si
+   se pasa, se para y se avisa en dos líneas: qué falta y por qué.
+   *No lo comprueba una máquina: una sesión no deja rastro de cuándo empezó.*
+T5. **Primero en local lo que se pueda:** las pruebas SQL en la base local del
+   W09 (`scripts/staging/base-local.sh`) y las unitarias
+   (`antes-de-subir.sh`). La e2e va a staging, con la regla T6. Supabase entero
+   en local (con su login y su API, que la e2e necesita) llega con la máquina
+   propia del W11; hasta entonces no se monta. *No lo comprueba una máquina: lo
+   que pasa en local no deja rastro en GitHub.*
+T6. **Un solo push a staging por paso.** Si la e2e de una rama sale en rojo dos
+   veces seguidas, la sesión para y avisa a Julio con los dos enlaces: no hay un
+   tercer intento. Las pruebas de la zona, una vez y al final, sobre el commit
+   definitivo; no se relanzan por cada commit intermedio.
+   *Lo comprueba* `e2e-staging-conta.yml` *(job plan,* `scripts/e2e/dos-rojas.mjs`*):
+   la tercera e2e de push no corre. La desbloquea una e2e en verde lanzada a mano
+   por Julio.*
+   *Si la e2e de un push necesita lo que añade la tanda de la rama,* empuja
+   primero la base sola (no lanza e2e), lanza su «Aplicar SQL en staging» y
+   después empuja el resto: con la regla T9 la prueba de staging espera a la e2e,
+   y una e2e sin su base sale en rojo.
+T7. **Cada sesión vigila sus propias ejecuciones** (e2e, ensayo, staging,
+   Vercel) hasta el final y da el resultado con su enlace. *(W12, 29/10:
+   sustituye a «abrir o actualizar un PR acaba el turno», del 26/10.)* *No lo
+   comprueba una máquina: es lo que hace la sesión después de lanzar.*
+T8. **Merge, nunca rebase**, en las ramas de los PR: para traer `main`,
+   `git merge origin/main` y un push normal; nunca un push forzado. Reiniciar
+   una rama cuyo PR ya se fusionó es empezar otra desde `main` con un PR nuevo.
+   *Lo comprueba* `pr-a-main.yml` *(*`scripts/ci/sin-rebase.mjs`*): en cada
+   push al PR, el commit de antes tiene que seguir en la historia del nuevo.*
+   *(Del 17 al 29/10 se reescribieron 3 ramas: l1a-fichar-en-el-servidor,
+   i01c-trimestre y p01-despacho.)*
+T9. **Nunca una e2e de staging y un ensayo a la vez en la misma rama.** El
+   ensayo de producción y la prueba de staging (el «Aplicar SQL en staging»
+   desde una rama) esperan a que acabe la e2e de su rama, como mucho 45
+   minutos; si se pasa, en rojo. Entre ramas distintas no hay cerrojo (W04).
+   *Lo comprueban* `aplicar-produccion-conta.yml` *y* `aplicar-staging-conta.yml`
+   *(job espera-e2e,* `scripts/ci/esperar-e2e.mjs`*), antes de su cola.*
+   *(Del 17 al 29/10, 6 de 112 ensayos corrieron con la e2e de su rama en
+   marcha; el 29/10 el 180 se interbloqueó por esto.)*
+T10. **El real en producción lo lanza siempre Julio**, nunca una sesión. La
+    sesión propone (SQL transaccional y revisable, con su ensayo en verde) y
+    Julio ejecuta y verifica. *Lo comprueba* `aplicar-produccion-conta.yml`:
+    *el real pasa por el job* `aprobacion` *con el entorno «produccion», y no
+    sigue hasta que Julio lo aprueba en GitHub. Mirar quién lanza no vale: las
+    sesiones lanzan con la autorización de Julio (los 40 runs del 27 al 29/10
+    salen todos a nombre de «Llorente29»).*
+T11. **Ningún dato personal real en el repositorio:** ni DNI o NIE, ni NAF, ni
+    IBAN, ni nombres de personas, en código, fixtures, pruebas, semillas,
+    commits, descripciones de PR o capturas. El repositorio es público. Los
+    inventados se ven inventados (todo ceros, 12345678…; un IBAN del banco
+    9999), o van a `scripts/ci/datos-inventados.txt` con su porqué, comprobados
+    antes contra producción. Los secretos los vigila `sin-secretos.mjs`.
+    *Lo comprueba* `pr-a-main.yml` *(*`scripts/ci/datos-personales.mjs`*): DNI,
+    NIE, NAF e IBAN con su dígito de control, en lo que añade el PR, sus
+    commits y su descripción. Los nombres de personas y lo que sale dentro de una
+    captura no los puede ver una máquina: se miran a mano antes de subir.*
+    *(29/10: el NIE y el nombre de un rider de Foodint estaban en
+    `tests/conta/diez/texto.test.ts` y en la descripción del #298; se cambiaron
+    por inventados. Siguen en la historia de git, y el nombre en el comentario
+    de la migración ya aplicada `20261208T0820`: **pendiente para el W11**, que
+    deja de estar a la vista cuando el repositorio pase a privado. Reescribir
+    `main` con tantas ramas y sesiones vivas rompe más de lo que protege.)*
+T12. **Los tiempos de las e2e, uno por prueba:** `tests/e2e/tiempos/<ruta>.json`
+    (LEEME en esa carpeta). Dos PR que añaden un tiempo ya no tocan el mismo
+    fichero. *Lo comprueba* `tests/unit/e2e/tiemposNuevos.test.ts`*: si vuelve
+    el* `tests/e2e/tiempos.json` *único, en rojo.*
+T13. **«Funciones a desplegar a mano»: «ninguna» vale solo para su grupo**
+    (`### Sumied` / `### Folvy`). *Lo comprueba* `scripts/pr/funcionesADesplegar.mjs`
+    *en* `pr-a-main.yml`. *(El #390: un «ninguna» bajo «### Folvy» vaciaba también
+    la de Sumied.)*
+
+### Cómo se escribe el código
+
+- Archivos completos, no diffs. Pedir el fichero original antes de modificarlo.
+- No tocar `App.tsx` ni `AppContext.tsx` sin permiso explícito.
+- La BBDD es la verdad: verificar vía `information_schema` antes de decisiones de schema.
 - Marcar siempre cada acción operativa (commit, build, push, deploy).
 - TypeScript strict, camelCase cliente / snake_case BBDD.
-
-## Cómo se trabaja un encargo
-
-> Regla de Julio (23/10). Vale para todas las sesiones.
-
-- **El alcance se cierra al recibir el encargo.** Lo que surja mientras se
-  trabaja se apunta para el siguiente encargo y **no entra en el PR en
-  marcha**, aunque lo pida un mensaje posterior.
-- **Sin agentes en paralelo**, salvo que el encargo lo diga expresamente.
-- **Las pruebas de la zona, una vez y al final**, sobre el commit definitivo.
-  No se relanzan por cada commit intermedio.
-- **Tiempo máximo: el que diga el encargo, o 90 minutos** si no dice nada. Si
-  se pasa, se para y se avisa en dos líneas: qué falta y por qué.
-- **Siempre en español, también las notas entre paso y paso y lo que se piensa en voz alta.** Nada en inglés, salvo nombres de código.
-- **Al abrir o actualizar un PR y lanzar su e2e, se termina el turno** (regla
-  de Julio, 26/10, para ahorrar uso). No se vigila el PR, no se suscribe nadie
-  a sus avisos y no se programan revisiones; tampoco se contesta a los avisos
-  de Vercel. Julio escribe cuando la e2e acaba, en verde o en rojo, con el
-  enlace.
 
 ## Reglas ganadas en producción
 
@@ -413,19 +480,6 @@ y en un PR solo con la etiqueta **`e2e-entera`**, cuando Julio la pide.
 son unos 8 min de pruebas, 12–13 de reloj. Las 5 que cayeron por tiempo esa mañana salieron
 en verde con staging tranquilo. Antes, el 22/10: el #281 y el C07 se llevaron
 275 y más de 225 min de máquina.)*
-
-### Abrir o actualizar un PR y lanzar su e2e acaba el turno
-
-> Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de
-> Julio, 26/10, para ahorrar uso.
-
-- Cuando abras o actualices un PR y lances su e2e, **termina tu turno**.
-- **No vigiles el PR**: ni te suscribas a sus avisos ni programes revisiones.
-- **No respondas a los avisos de Vercel.**
-- Julio escribe cuando la e2e acabe, en verde o en rojo, con el enlace.
-
-*Detector automático:* si después de abrir el PR vas a esperar a algo, suscribirte
-o programar una vuelta, para: eso lo hace Julio.
 
 ### Staging recibe de verdad solo lo que está en producción
 
