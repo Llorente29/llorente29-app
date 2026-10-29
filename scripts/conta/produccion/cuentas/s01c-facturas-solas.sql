@@ -3,7 +3,7 @@
 -- S01c · LO QUE CUENTA LA TANDA, antes y después. SOLO LEE. De Foodint
 -- (regla 9), sin nombres, NIF ni importes.
 --
--- Lo que tiene que pasar:
+-- Lo que tiene que pasar (primer real, la 1012: solo la 1; segundo real, la 1013: de la 2 a la 5):
 --   1. las seis funciones nuevas: de false a true;
 --   2. FAC-00100: de «aprobada» a «anulada», y su asiento de «validado» a «anulado»;
 --   3. el camino de ALB-00218: de «factura, consumido» a «pendiente_factura, sin consumir»;
