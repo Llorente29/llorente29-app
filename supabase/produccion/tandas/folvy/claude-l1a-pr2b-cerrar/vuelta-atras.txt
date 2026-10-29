@@ -1,0 +1,9 @@
+# L1a · PR 2b · vuelta atrás, en orden inverso: el informe como estaba (0733),
+# el origen de vuelta a «kiosko» en las marcas que cambió la 0732 (con su
+# rastro), el SELECT de tabla de employees (0731) y la escritura directa en
+# clock_entries con sus tres políticas y export_gestoria_mensual como estaba
+# (0730).
+supabase/vuelta-atras/20261029T0733_l1a_informe_origen.down.sql
+supabase/vuelta-atras/20261029T0732_l1a_origen_movil.down.sql
+supabase/vuelta-atras/20261029T0731_l1a_columnas_privadas.down.sql
+supabase/vuelta-atras/20261029T0730_l1a_cerrar_escritura_directa.down.sql

@@ -4,7 +4,7 @@
 // ramas de conta/ y reparto- que había el 15/10, las carpetas de capturas que
 // hay en el repositorio y los 12 PNG con los que chocó el #194.
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, mkdirSync, readFileSync, readdirSync, utimesSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -68,10 +68,22 @@ describe('el frente de la rama', () => {
   })
 })
 
+// W09d (28/10): las del repositorio según git, no según el disco. Las unitarias
+// de la CI se bajan el árbol sin las imágenes de docs/**/capturas, y una carpeta
+// con solo imágenes no existe en el disco. Con el árbol entero dan lo mismo
+// (medido el 28/10: 33, 2 y 14 a los dos lados).
+const enGit = (dir: string) =>
+  execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', dir], { encoding: 'utf8' }).split('\n').filter(Boolean)
+/** Las subcarpetas de `dir` (como readdirSync con isDirectory). */
+const subcarpetas = (dir: string) =>
+  [...new Set(enGit(dir).map((f) => f.slice(dir.length + 1).split('/')).filter((p) => p.length > 1).map((p) => p[0]))].sort()
+/** Lo que hay directamente en `dir` (como readdirSync). */
+const entradas = (dir: string) => [...new Set(enGit(dir).map((f) => f.slice(dir.length + 1).split('/')[0]))].sort()
+
 describe('de quién es cada carpeta de capturas (las que hay en el repositorio)', () => {
   const carpetas = [
-    ...readdirSync('docs/conta/capturas', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `docs/conta/capturas/${e.name}`),
-    ...readdirSync('docs/reparto/capturas', { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => `docs/reparto/capturas/${e.name}`),
+    ...subcarpetas('docs/conta/capturas').map((n) => `docs/conta/capturas/${n}`),
+    ...subcarpetas('docs/reparto/capturas').map((n) => `docs/reparto/capturas/${n}`),
   ]
   const de = (dueno: 'a' | 'b' | 'c' | 'd' | 'reparto' | 'impuestos' | 'despacho' | 'compras') => carpetas.filter((c) => repartir([`${c}/x.png`], dueno).suyas.length).map((c) => c.split('/').pop())
 
@@ -163,7 +175,7 @@ describe('el workflow', () => {
 
 // Autoconteo (Julio, 21/10): las de inventario son de la zona, no de un frente.
 describe('las capturas de inventario: de la rama sin frente que toca inventario', () => {
-  const nuestras = readdirSync('docs/inventario/capturas').map((f) => `docs/inventario/capturas/${f}`)
+  const nuestras = entradas('docs/inventario/capturas').map((f) => `docs/inventario/capturas/${f}`)
   it('una rama sin frente que toca inventario es su dueña, y fija las de docs/inventario/capturas', () => {
     const dueno = duenoDeLaRama('claude/exciting-cray-eik036', ['src/modules/supply/lib/autoconteoTexto.ts', 'tests/e2e/inventario/autoconteo.spec.ts'])
     expect(dueno).toBe('inventario')

@@ -30,6 +30,18 @@ const mensajeDe = (e: unknown): string => (e instanceof Error ? e.message : Stri
 
 // ── Dar de alta ─────────────────────────────────────────────────────────────
 
+/**
+ * S01b2 · El nombre del proveedor dentro de un enlace, como una pieza: si no cabe en lo que queda de
+ * línea, pasa ENTERO a la siguiente («Dar de alta a» / «OFITOR 2000 S.L.U.»), sin partirse por la mitad.
+ * Solo se parte por dentro si es más ancho que la columna entera.
+ */
+export function NombreEntero({ texto, nombre }: { texto: string; nombre: string | null | undefined }) {
+  const n = (nombre ?? '').replace(/\s+/g, ' ').trim()
+  const i = n ? texto.lastIndexOf(n) : -1
+  if (i < 0) return <>{texto}</>
+  return <>{texto.slice(0, i)}<span className="cxf-nombre-entero">{n}</span>{texto.slice(i + n.length)}</>
+}
+
 /** Los dos enlaces, en la línea del proveedor: «Dar de alta a …» · «Es uno que ya tengo». */
 export function EnlacesAlta({ nombreLeido, alAbrirAlta, alAbrirLista, abierta }: {
   nombreLeido: string | null
@@ -40,28 +52,45 @@ export function EnlacesAlta({ nombreLeido, alAbrirAlta, alAbrirLista, abierta }:
   if (abierta) return null
   return (
     <span className="cxf-alta-enlaces" data-prueba="alta-desde-factura">
-      <button type="button" className="s-boton s-boton-enlace" onClick={alAbrirAlta}>{textoAltaDesdeFactura(nombreLeido)}</button>
+      <button type="button" className="s-boton s-boton-enlace" onClick={alAbrirAlta} aria-label={textoAltaDesdeFactura(nombreLeido)}>
+        <NombreEntero texto={textoAltaDesdeFactura(nombreLeido)} nombre={nombreLeido} />
+      </button>
       {' · '}
       <button type="button" className="s-boton s-boton-enlace" onClick={alAbrirLista}>Es uno que ya tengo</button>
     </span>
   )
 }
 
-/** El formulario de alta dentro del bloque, con todo lo leído. Al crear, lo deja elegido en la factura. */
-export function AltaDesdeFactura({ accountId, otros, leido, factura, alCancelar, alCrear }: {
+/**
+ * El formulario de alta dentro del bloque, con todo lo leído. Al crear, lo deja elegido en la factura.
+ * S01b2 · Si su lectura es de antes y hay que volver a leer el PDF, mientras lee lo dice («Leyendo la
+ * factura…») y el formulario sale después, con lo releído; lo que pasó con la relectura, debajo.
+ */
+export function AltaDesdeFactura({ accountId, otros, leido, factura, alCancelar, alCrear, leyendo = false, relectura = null }: {
   accountId: string
   otros: readonly ProveedorExistente[]
   leido: { nombre: string | null; nif: string | null; direccion: string | null; correo: string | null; telefono: string | null; web: string | null }
   factura: FacturaOrigen
   alCancelar: () => void
   alCrear: (proveedor: FichaProveedor) => void
+  leyendo?: boolean
+  relectura?: { texto: string; tono: 'ok' | 'falta' } | null
 }) {
   const delPapel: DelPapel = { direccion: leido.direccion, correo: leido.correo, telefono: leido.telefono, web: leido.web, factura }
   return (
-    <div className="cxf-alta" role="group" aria-label="Dar de alta al proveedor de esta factura" data-prueba="formulario-alta-factura">
-      <p className="s-apoyo" style={{ marginTop: 0 }}>Lo que trae {factura.numero ? `la factura ${factura.numero}` : 'la factura'}, para revisarlo. Al crearlo queda elegido en esta factura; lo que ya has revisado no se pierde.</p>
-      <FormularioAltaProveedor accountId={accountId} otros={otros} nombreInicial={leido.nombre} nifInicial={leido.nif} delPapel={delPapel}
-        textoCrear="Darlo de alta y elegirlo" alCancelar={alCancelar} alCrear={alCrear} />
+    <div className="cxf-alta" role="group" aria-label="Dar de alta al proveedor de esta factura" data-prueba="formulario-alta-factura" aria-busy={leyendo || undefined}>
+      {leyendo ? (
+        <p className="s-apoyo" role="status" data-prueba="leyendo-factura" style={{ margin: 0 }}>
+          Leyendo la factura… Su lectura es de antes de que se leyeran el teléfono y la web: la vuelvo a leer para rellenarlo todo.
+        </p>
+      ) : (
+        <>
+          <p className="s-apoyo" style={{ marginTop: 0 }}>Lo que trae {factura.numero ? `la factura ${factura.numero}` : 'la factura'}, para revisarlo. Al crearlo queda elegido en esta factura; lo que ya has revisado no se pierde.</p>
+          {relectura && <p className="s-aviso-lista" data-tono={relectura.tono} role="status" data-prueba="relectura">{relectura.texto}</p>}
+          <FormularioAltaProveedor accountId={accountId} otros={otros} nombreInicial={leido.nombre} nifInicial={leido.nif} delPapel={delPapel}
+            textoCrear="Darlo de alta y elegirlo" alCancelar={alCancelar} alCrear={alCrear} />
+        </>
+      )}
     </div>
   )
 }

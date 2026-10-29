@@ -47,15 +47,15 @@ import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
 import { LiquidacionesDeLaFactura } from '@/modules/conta/documentos/LiquidacionesDeLaFactura'
 import { completarFicha, deLaFactura, enUnaFrase } from '@/modules/conta/lib/fichaDesdeDocumento'
-import { altaEnFactura } from '@/modules/conta/lib/proveedorDesdeFactura'
+import { altaEnFactura, fraseRelectura, hayQueReleer, type ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
 import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
 import { contactosDeLaFicha, guardarDesdeFactura } from '@/modules/conta/services/fichaDesdeFacturaService'
-import { AltaDesdeFactura, AvisoIbanDistinto, EnlacesAlta, IbanNuevo, LoQueHaCambiado, NifDistinto } from '@/modules/conta/documentos/ProveedorDesdeFactura'
+import { AltaDesdeFactura, AvisoIbanDistinto, EnlacesAlta, IbanNuevo, LoQueHaCambiado, NifDistinto, NombreEntero } from '@/modules/conta/documentos/ProveedorDesdeFactura'
 import { NifDeLaFicha } from './NifDeLaFicha'
 import { decisionIbanDeFactura, obtenerFicha } from '@/modules/conta/services/proveedorService'
 import {
   apuntarFactura, cuentasDeGasto, descartarFactura, guardarCambiosRecibida, leerDescarte, ponerPapelRecibida, sinPapelRecibida, leerExtrasFacturas, leerFactura, leerFichaRecibida,
-  plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
+  plazoDeLaFicha, proveedoresDeLaCuenta, recuperarFactura, releerProveedorDeLaFactura, urlDelPapel, verPropuestaFactura, type Apuntada,
 } from '@/modules/conta/services/documentosService'
 import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioService'
 import { tiposDeIvaRecibida } from '@/modules/conta/services/recibidaAManoService'
@@ -209,10 +209,15 @@ export default function RevisarFacturaPage() {
   const fichaProv = useLeer(accountId && proveedorFicha ? () => obtenerFicha(proveedorFicha) : null, `${accountId}:${proveedorFicha || '-'}:ficha-proveedor:${vuelta}`)
   const contactosProv = useLeer(proveedorFicha ? () => contactosDeLaFicha(proveedorFicha) : null, `${proveedorFicha || '-'}:contactos:${vuelta}`)
   const decisionIban = useLeer(invoiceId ? () => decisionIbanDeFactura(invoiceId) : null, `${invoiceId}:iban-decision:${vuelta}`)
-  const leidoProv = fac?.lectura?.factura?.proveedor ?? null
+  // S01b2 · Una lectura de antes del 28/10 no trae el teléfono ni la web: al dar de alta o al validar se
+  // vuelve a leer su PDF (releer, abajo) y lo releído manda sobre lo guardado.
+  const [releido, setReleido] = useState<{ id: string; prov: ProveedorLeido; texto: string; tono: 'ok' | 'falta' } | null>(null)
+  const [leyendo, setLeyendo] = useState(false)
+  const guardadoProv = fac?.lectura?.factura?.proveedor ?? null
+  const leidoProv = useMemo(() => (guardadoProv && releido?.id === invoiceId ? { ...guardadoProv, ...releido.prov } : guardadoProv),
+    [guardadoProv, releido, invoiceId])
   const ibanLeido = fac?.lectura?.factura?.iban ?? null
-  const desdeDocumento = useMemo(() => {
-    const p = leidoProv
+  const calcularDesde = useCallback((p: typeof leidoProv) => {
     const fp = fichaProv.datos
     if (!p || !fp || fp.id !== proveedorFicha || (!contactosProv.datos && !contactosProv.error)) return null
     const c = completarFicha({ nif: fp.taxId, nombreFiscal: fp.legalName, calle: fp.fiscalStreet, codigoPostal: fp.fiscalPostalCode, ciudad: fp.fiscalCity,
@@ -221,7 +226,26 @@ export default function RevisarFacturaPage() {
     // N1: el NIF que le falta no espera a validar (sin él no hay asiento): lo guarda «NIF del proveedor», ahora.
     if (c.proponer.taxId) { delete c.proponer.taxId; c.frases = c.frases.filter((f) => !f.startsWith('el NIF ')); c.campos = c.campos.filter((x) => x !== 'nif') }
     return c
-  }, [leidoProv, ibanLeido, fichaProv.datos, contactosProv.datos, contactosProv.error, proveedorFicha])
+  }, [ibanLeido, fichaProv.datos, contactosProv.datos, contactosProv.error, proveedorFicha])
+  const desdeDocumento = useMemo(() => calcularDesde(leidoProv), [calcularDesde, leidoProv])
+  /**
+   * S01b2 · Vuelve a leer su PDF si su lectura es de antes (sin las claves del teléfono y la web), una
+   * vez por factura, y devuelve el proveedor como queda; si no hace falta, null. Lo que pasa, se dice.
+   */
+  async function releer(): Promise<typeof leidoProv> {
+    if (!fac || !hayQueReleer(guardadoProv as ProveedorLeido | null, !!fac.papel) || releido?.id === invoiceId) return null
+    setLeyendo(true)
+    try {
+      const r = await releerProveedorDeLaFactura(fac.account_id, fac.id, fac.papel!)
+      setReleido({ id: invoiceId, prov: r.proveedor, texto: fraseRelectura(r.puesto), tono: 'ok' })
+      return guardadoProv ? { ...guardadoProv, ...(r.proveedor as Partial<NonNullable<typeof guardadoProv>>) } : null
+    } catch (e) {
+      setReleido({ id: invoiceId, prov: {}, texto: `No he podido volver a leer la factura (${e instanceof Error ? e.message : String(e)}): rellena a mano lo que falte.`, tono: 'falta' })
+      return null
+    } finally {
+      setLeyendo(false)
+    }
+  }
   const facturaOrigen = useMemo(() => ({ id: fac?.id ?? '', numero: fac?.numero ?? null }), [fac?.id, fac?.numero])
   const quien = useMemo(() => ({ id: userId ?? null, name: userName ?? null }), [userId, userName])
   // S01b · El alta y lo que dice cada botón.
@@ -350,13 +374,16 @@ export default function RevisarFacturaPage() {
     setApuntando(true)
     try {
       const r = await apuntarFactura(fac, userName, userId, localPropuesto ?? null)
+      // S01b2 · Con una lectura de antes, se vuelve a leer su PDF para completar también el teléfono y la web.
+      const desde = r.validado && fac.proveedor?.id && fichaProv.datos?.id === fac.proveedor.id
+        ? (await releer().then((p) => (p ? calcularDesde(p) : desdeDocumento)).catch(() => desdeDocumento)) : desdeDocumento
       // D07b: lo que le faltaba a la ficha del proveedor y trae el documento, guardado al validar.
-      if (r.validado && desdeDocumento?.frases.length && fac.proveedor?.id && fichaProv.datos?.id === fac.proveedor.id) {
+      if (r.validado && desde?.frases.length && fac.proveedor?.id && fichaProv.datos?.id === fac.proveedor.id) {
         try {
           // S01b · Y queda escrito de qué factura sale cada dato («de la factura R0672»); el correo y el teléfono, en un contacto.
-          await guardarDesdeFactura({ accountId: fac.account_id, ficha: fichaProv.datos, cambios: desdeDocumento.proponer, campos: desdeDocumento.campos,
-            contacto: desdeDocumento.contacto, factura: facturaOrigen, quien })
-          r.texto += ` Ficha de ${fac.proveedor.nombre ?? 'su proveedor'} completada con ${enUnaFrase(desdeDocumento.frases)}, ${deLaFactura(fac.numero)}.`
+          await guardarDesdeFactura({ accountId: fac.account_id, ficha: fichaProv.datos, cambios: desde.proponer, campos: desde.campos,
+            contacto: desde.contacto, factura: facturaOrigen, quien })
+          r.texto += ` Ficha de ${fac.proveedor.nombre ?? 'su proveedor'} completada con ${enUnaFrase(desde.frases)}, ${deLaFactura(fac.numero)}.`
         } catch (e) { r.texto += ` No se ha podido completar la ficha del proveedor: ${e instanceof Error ? e.message : String(e)}.` }
       }
       // D06: pagada con tarjeta → se casa con el cargo del banco (mismo importe, en los 5 días siguientes).
@@ -536,16 +563,20 @@ export default function RevisarFacturaPage() {
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} soloLectura={soloLectura}
         tonoProveedor={mProv.tono} motivoProveedor={mProv.marca ? `${mProv.marca}${prov?.nif ? ` · NIF ${prov.nif}` : ''}` : mProv.motivo}
         motivoNumero={fac.no_repetida ? 'No está repetida: lo confirmaste.' : fac.numero ? 'No hay otra con su número y su total.' : 'Sin número no es una factura completa.'}
-        altaProveedor={alta.que === 'alta' && altaAbierta ? undefined : alta.que === 'alta'
-          ? (abrirLista) => <EnlacesAlta nombreLeido={nombreLeido} abierta={altaAbierta} alAbrirAlta={() => setAltaAbierta(true)} alAbrirLista={abrirLista} />
-          : alta.que === 'es_uno_tuyo'
-            ? <span className="cxf-alta-enlaces"><button type="button" className="s-boton s-boton-enlace" onClick={() => void elegirYGuardar(alta.proveedorId, alta.nombre, `Elegido ${alta.nombre}: el NIF de la factura es el suyo.`)}>Es {alta.nombre}: elegirlo</button></span>
-            : undefined}
+        // S01b2 · «Dar de alta a …» y «Es X: elegirlo» van debajo, a lo ancho del bloque: en la columna del
+        // proveedor (un tercio) un nombre como «OFITOR 2000 S.L.U.» se partía en dos líneas.
         debajo={(abrirLista) => <>
+          {alta.que === 'alta' && !altaAbierta && (
+            <EnlacesAlta nombreLeido={nombreLeido} abierta={altaAbierta} alAbrirAlta={() => { setAltaAbierta(true); void releer() }} alAbrirLista={abrirLista} />
+          )}
+          {alta.que === 'es_uno_tuyo' && (
+            <span className="cxf-alta-enlaces"><button type="button" className="s-boton s-boton-enlace" onClick={() => void elegirYGuardar(alta.proveedorId, alta.nombre, `Elegido ${alta.nombre}: el NIF de la factura es el suyo.`)}><NombreEntero texto={`Es ${alta.nombre}: elegirlo`} nombre={alta.nombre} /></button></span>
+          )}
           {altaAbierta && alta.que === 'alta' && accountId && (
             <AltaDesdeFactura accountId={accountId} otros={(proveedores.datos ?? []).map((p) => ({ name: p.nombre, taxId: p.nif }))}
               leido={{ nombre: nombreLeido, nif: leidoProv?.nif ?? fac.propuesto?.nif ?? null, direccion: leidoProv?.direccion ?? null, correo: leidoProv?.email ?? null, telefono: leidoProv?.telefono ?? null, web: leidoProv?.web ?? null }}
-              factura={facturaOrigen} alCancelar={() => setAltaAbierta(false)}
+              factura={facturaOrigen} alCancelar={() => setAltaAbierta(false)} leyendo={leyendo}
+              relectura={releido?.id === invoiceId ? { texto: releido.texto, tono: releido.tono } : null}
               alCrear={(p) => { setAltaAbierta(false); void elegirYGuardar(p.id, p.name, fraseAltaEnFactura(p.name)) }} />
           )}
           {!soloLectura && desdeDocumento?.nifDistinto && fichaProv.datos && accountId && (

@@ -30,6 +30,7 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { textoParaPantalla } from '@/modules/conta/lib/errorBase'
 import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
 import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
+import type { ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
 
 type Fila = Record<string, unknown>
 const RECEPCIONES = 'receipt-uploads'
@@ -136,6 +137,21 @@ async function leerEnModoFactura(accountId: string, ruta: string): Promise<strin
   const id = (data as Fila | null)?.session_id
   if (typeof id !== 'string') throw new Error('la lectura no ha devuelto su sesión')
   return id
+}
+
+/**
+ * S01b2 · Vuelve a leer el PDF guardado de una factura con el lector de hoy (el
+ * mismo de «Subir factura»: ocr-albaran en modo factura) y completa su lectura
+ * con lo que le faltaba del proveedor (conta_lectura_proveedor_releida, que lo
+ * toma de la sesión de esa lectura, no de aquí). Devuelve el proveedor como ha
+ * quedado y qué se ha añadido.
+ */
+export async function releerProveedorDeLaFactura(accountId: string, invoiceId: string, ruta: string): Promise<{ proveedor: ProveedorLeido; puesto: string[] }> {
+  const sesion = await leerEnModoFactura(accountId, ruta)
+  const r = await rpc<Fila>('conta_lectura_proveedor_releida', { p_invoice: invoiceId, p_session: sesion })
+  const proveedor = (r.proveedor && typeof r.proveedor === 'object' ? r.proveedor : {}) as ProveedorLeido
+  const puesto = Array.isArray(r.puesto) ? (r.puesto as unknown[]).map(String) : []
+  return { proveedor, puesto }
 }
 
 /**
