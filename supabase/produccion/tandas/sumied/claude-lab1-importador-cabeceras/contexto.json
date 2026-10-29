@@ -1,0 +1,19 @@
+{
+  "_que": "LAB1 · tanda 1 · contexto de producción de la 0850, medido en SOLO LECTURA el 29/10 a las 08:58 UTC con la consulta del analizador (sql-contexto). No existe ninguna de las dos tablas ni la función; nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-10-29T08:58Z",
+  "tanda": {
+    "supabase/migrations/20261029T0850_lab1_importador_lote.sql": "a865a8757ba67828d62704bc3bca2798"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

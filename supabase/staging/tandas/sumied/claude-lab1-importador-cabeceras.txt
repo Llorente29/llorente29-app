@@ -1,0 +1,7 @@
+# LAB1 · Importador del historial de Cegid, tanda 1: la 0850 (solo añade: desde
+# la rama va de verdad, W05) y su prueba (ROLLBACK), que empieza por su vuelta
+# atrás si ya está aplicada: el administrador guarda las cabeceras y el mismo
+# fichero no hace otro lote; nadie más (encargado, otra cuenta, sin sesión);
+# solo cabeceras; sin escritura directa; y la vuelta atrás.
+supabase/migrations/20261029T0850_lab1_importador_lote.sql
+supabase/staging/sql/20261029_lab1_importador_prueba.sql

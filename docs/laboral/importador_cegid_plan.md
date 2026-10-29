@@ -45,7 +45,7 @@ Todas son nuevas, así que el analizador las clasifica como «añade». Todas ll
 | company_id | uuid | la empresa de Sumied (CIF), si la cuenta tiene varias |
 | origen | text | `'cegid'` (después, a3, Sage…) |
 | fichero_nombre | text | el nombre tal como llegó |
-| fichero_md5 | text | la huella: el mismo fichero dos veces se reconoce |
+| fichero_huella | text | SHA-256 del fichero (la da el navegador): el mismo fichero dos veces se reconoce |
 | fichero_ruta | text | en el bucket privado `laboral-import/<cuenta>/<lote>.xlsx` |
 | estado | text check | `leido` → `validado` → `aplicado` / `deshecho` / `descartado` |
 | resumen | jsonb | filas por hoja; ok, avisos y errores; qué crea y qué cambia |
@@ -58,7 +58,7 @@ Todas son nuevas, así que el analizador las clasifica como «añade». Todas ll
 | id | uuid pk | |
 | lote_id | uuid fk → lote (on delete cascade) | |
 | account_id | uuid not null | duplicado a propósito, para la RLS y la regla 9 |
-| hoja | text check | `trabajadores`, `contratos`, `conceptos`, `tablas_salariales`, `nominas`, `nominas_lineas` |
+| hoja | text check | las nueve: `empresa`, `convenio`, `tablas_salariales`, `conceptos`, `trabajadores`, `contratos`, `nominas`, `nominas_conceptos`, `cuadre_contable` |
 | fila_n | int | la fila del Excel, para decir «fila 37 de Contratos» |
 | datos | jsonb | la fila cruda, con las cabeceras de Cegid como claves |
 | huella | text | md5 de `datos`: si la fila cambia entre dos subidas, se ve |
@@ -152,14 +152,21 @@ Por tandas pequeñas, cada una con su PR y la e2e primero en local (W09 + Playwr
 - Las pruebas usan un Excel inventado que se genera dentro de la prueba, con nombres y DNI de mentira con su letra bien puesta.
 - Contra la población real (regla 31) se mide en producción, con el lote de Julio, y el parte pega recuentos, nunca filas.
 
-## 5 · Lo que tiene que decidir Julio
+## 5 · Lo que decidió Julio (29/10)
 
-1. **Las cabeceras.** ¿Me pasas los nombres de las columnas de las cinco hojas, sin datos, o prefieres subirlo con «solo cabeceras» cuando esté la tanda 1?
-2. **Las personas que ya no están.** ¿Se crean como fichas de baja para que su historial tenga dueño? Es lo que propongo.
-3. **Si una nómina está en el PDF y en Cegid**, ¿cuál manda? Propongo el PDF, y que la diferencia se vea.
-4. **Convenio por cuenta o común a todas.** Propongo por cuenta hasta el núcleo.
-5. **Desde cuándo.** ¿Todo lo que traiga el paquete, o desde una fecha?
-6. **¿El paquete trae los PDF de las nóminas** o solo los importes?
+1. **Las cabeceras** las dio Julio, solo nombres. Son **nueve hojas**, no cinco, y están en `src/modules/conta/laboral/importar/cegidCabeceras.ts`:
+   - **Empresa** y **Convenio**, de «campo · valor». De ellas solo se leen los nombres de la columna A.
+   - Siete tablas: **Tablas_salariales**, **Conceptos**, **Trabajadores**, **Contratos**, **Nominas** (los importes del recibo, una columna cada uno), **Nominas_conceptos** (las líneas) y **Cuadre_contable** (nómina contra contabilidad, por mes).
+2. **Las personas que ya no están** entran como fichas de baja.
+3. **Nómina en el PDF y en Cegid:** gana el PDF de la gestoría, y la diferencia se enseña.
+4. **Convenio** por cuenta, hasta el núcleo.
+5. **Desde cuándo:** todo lo que traiga el paquete, desde 12/2023.
+6. **Los PDF van aparte:**
+   - un `lab_recibos_AAAA_MM.pdf` por mes con todos los trabajadores, de 12/2023 a 09/2026;
+   - y los PDF de las fichas.
+   - El importador parte cada PDF por persona y lo deja en su ficha (tanda propia, después de la 3).
+
+**Cambio en la tanda 1, respecto a §4:** el fichero no se sube. Se lee en el navegador y a la base van solo las cabeceras y cuántas filas tiene cada hoja. El bucket privado llega con la tanda 2, que es la que lee filas.
 
 ## 6 · Cómo encaja con lo que viene
 
