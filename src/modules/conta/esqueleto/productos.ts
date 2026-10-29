@@ -59,6 +59,8 @@ export interface Pestana {
   hueco?: boolean
   /** V01 · El bloque de la barra al que pertenece («Hostelería»): su título sale encima de la primera. */
   bloque?: string
+  /** LS1 · Aún no existe: la barra lo dice («Llega en noviembre») y su página lo explica. */
+  llega?: string
 }
 
 export interface Producto {
@@ -105,6 +107,18 @@ export interface EjeVista { nombre: string; plural: string }
 export interface Analitica { local: EjeVista | null; marca: EjeVista | null }
 
 const R = CONTA.rutas
+
+/** LS1 · Una página de Laboral: su dirección es `laboral/<pagina>`, el mismo nombre que en Folvy › Personal. */
+function lab(id: string, etiqueta: string, icono: NombreIcono, pagina: string, bloque?: string): Pestana {
+  const ruta = pagina ? `${R.laboral}/${pagina}` : R.laboral
+  return { id, etiqueta, icono, ruta, prefijos: pagina ? [ruta] : [R.laboral], ...(bloque ? { bloque } : {}) }
+}
+
+/** LS1 · Lo que aún no existe: sale en el menú con «Llega en …» y lleva a una página que lo dice. */
+function llega(id: string, etiqueta: string, icono: NombreIcono, cuando: string): Pestana {
+  const ruta = `${R.laboral}/llega/${id}`
+  return { id, etiqueta, icono, ruta, prefijos: [ruta], bloque: 'Llega pronto', llega: `Llega en ${cuando}` }
+}
 
 /**
  * S02 · Las páginas de Ajustes son las entradas de su índice (C02), menos las
@@ -202,14 +216,34 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
-    // S02 · Empleados · Nóminas · Seguros sociales · Fichajes y ausencias · Portal del empleado. Aún sin pantalla: no sale.
-    id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: null, prefijos: [], interruptor: 'conta_laboral', grupo: 'personas',
+    // LS1 (28/10/2026) · Laboral: todo lo de Folvy › Personal que vale para
+    // cualquier empresa, con «centro» en vez de «local» y sin hostelería; y lo
+    // que aún no existe, a la vista con «Llega en …» (Julio, 28/10).
+    id: 'laboral', etiqueta: 'Laboral', icono: 'laboral', ruta: R.laboral, prefijos: [], interruptor: 'conta_laboral', grupo: 'personas',
     pestanas: [
-      { id: 'empleados', etiqueta: 'Empleados', icono: 'usuarios', ruta: null, prefijos: [] },
-      { id: 'nominas', etiqueta: 'Nóminas', icono: 'facturas', ruta: null, prefijos: [] },
-      { id: 'seguros', etiqueta: 'Seguros sociales', icono: 'certificados', ruta: null, prefijos: [] },
-      { id: 'fichajes', etiqueta: 'Fichajes y ausencias', icono: 'fecha', ruta: null, prefijos: [] },
-      { id: 'portal', etiqueta: 'Portal del empleado', icono: 'clientes', ruta: null, prefijos: [] },
+      lab('equipo', 'Equipo', 'usuarios', ''),
+      lab('ahora', 'Ahora mismo', 'vigilancia', 'ahora-mismo'),
+      lab('revisar', 'Para revisar', 'revisar', 'para-revisar'),
+      lab('control', 'Control horario', 'fecha', 'control-horario', 'Tiempo'),
+      lab('registro', 'Registro de jornada', 'listados', 'registro-jornada', 'Tiempo'),
+      lab('bolsa', 'Bolsa de horas', 'tesoreria', 'bolsa-horas', 'Tiempo'),
+      lab('recordatorios', 'Recordatorios de fichaje', 'avisos', 'recordatorios-fichaje', 'Tiempo'),
+      lab('kiosko', 'Fichar en una tablet', 'digitalizar', 'kiosko', 'Tiempo'),
+      lab('cuadrante', 'Cuadrante', 'fecha', 'calendario', 'Turnos'),
+      lab('turnosTipo', 'Turnos tipo', 'plantillas', 'plantilla-turnos', 'Turnos'),
+      lab('disponibilidad', 'Disponibilidad', 'ok', 'disponibilidad', 'Turnos'),
+      lab('abiertos', 'Turnos abiertos', 'nuevo', 'turnos-abiertos', 'Turnos'),
+      lab('cambios', 'Cambios de turno', 'recurrentes', 'cambios', 'Turnos'),
+      lab('plantilla', 'Horas y contrato', 'graficas', 'plantilla', 'Turnos'),
+      lab('ausencias', 'Vacaciones y ausencias', 'fecha', 'solicitudes', 'Personas'),
+      lab('formacion', 'Formación', 'certificados', 'formacion', 'Personas'),
+      lab('nominas', 'Nóminas de la gestoría', 'facturas', 'nominas', 'Personas'),
+      lab('centros', 'Centros de trabajo', 'empresa', 'centros', 'Personas'),
+      lab('portal', 'Portal del empleado', 'clientes', 'portal', 'Personas'),
+      llega('contrato', 'Contrato y convenio', 'documento', 'noviembre'),
+      llega('nominasSumied', 'Nóminas calculadas por Sumied', 'facturas', 'enero'),
+      llega('seguros', 'Seguros sociales', 'certificados', 'febrero'),
+      llega('sepe', 'SEPE', 'presentados', 'febrero'),
     ],
   },
   // I01b · Impuestos, con su interruptor por cuenta. El IVA de un periodo (impuestos/iva/…)

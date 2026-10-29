@@ -1,0 +1,6 @@
+# LS1 · Laboral en Sumied. La 2224 solo añade (y en staging no hace nada: no
+# está Foodint), y su prueba (ROLLBACK) la pasa con una Foodint inventada dentro
+# de la transacción, dos veces y con su vuelta atrás. La e2e enciende Laboral
+# en la empresa sola de su carril.
+supabase/migrations/20261028T2224_ls1_laboral_en_foodint.sql
+supabase/staging/sql/20261028_ls1_laboral_prueba.sql

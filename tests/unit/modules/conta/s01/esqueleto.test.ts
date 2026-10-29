@@ -23,7 +23,7 @@ import { logoDe } from '@/modules/conta/cuenta/contratoCuenta'
 import { MARCA } from '@/marca/marca'
 import { mesCorto } from '@/modules/conta/lib/bancosVista'
 
-const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', clave: 'k', invoiceId: 'i', loteId: 'k', pestana: 'reglas', empresa: 'c' })
+const rellena = (r: string) => rutaConta(r, { apartado: 'x', tabla: 'x', entrada: 'impuestos', codigo: '40000002', partyId: 'p', supplierId: 's', entryId: 'e', area: 'mayor', accion: 'libro-mayor', liqId: 'l', clave: 'k', invoiceId: 'i', loteId: 'k', pestana: 'reglas', empresa: 'c', pagina: 'centros', que: 'contrato' })
 const de = (path: string) => { const d = dondeEsta(path); return d ? (d.pestana ? `${d.producto.id}.${d.pestana.id}` : d.producto.id) : null }
 
 const NADA: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
@@ -58,6 +58,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     liquidaciones: 'compras.liquidaciones', liquidacionNueva: 'facturacion.liquidacionesVentas', liquidacion: 'facturacion.liquidacionesVentas', loteCatcher: 'compras.liquidaciones',
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
+    // LS1 · Laboral: Equipo, una pantalla por su nombre y lo que «Llega en …».
+    laboral: 'laboral.equipo', laboralPagina: 'laboral.centros', laboralLlega: 'laboral.contrato',
     // I01c (19/10): el trimestre, también el de una empresa por la ruta.
     impuestoTrimestre: 'impuestos.trimestre', impuestoTrimestreEmpresa: 'impuestos.trimestre',
     // S02 · Los modelos del año (390, 190, 180, 347, 349): se llega desde el calendario.
@@ -122,7 +124,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
       ['laboral', 'personas'], ['impuestos', 'finanzas'], ['contactos', 'operaciones'],
     ])
   })
-  it('S02 · las páginas del mapa: Ventas (Facturas · Cobros · Liquidaciones · Cierres del día; Series, fuera hasta el S05) y Laboral, aún sin pantalla', () => {
+  it('S02 · las páginas del mapa: Ventas (Facturas · Cobros · Liquidaciones · Cierres del día; Series, fuera hasta el S05) y Laboral (LS1)', () => {
     // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
     // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te pagan quienes
     // cobran por ti), encima del bloque «Hostelería»; sin hostelería, sin plataformas.
@@ -130,14 +132,22 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
     expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
-    expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual(['Empleados', 'Nóminas', 'Seguros sociales', 'Fichajes y ausencias', 'Portal del empleado'])
+    // LS1 (28/10): lo de Folvy › Personal que vale para cualquier empresa, y lo que llega después.
+    expect(PRODUCTOS.find((p) => p.id === 'laboral')!.pestanas.map((t) => t.etiqueta)).toEqual([
+      'Equipo', 'Ahora mismo', 'Para revisar',
+      'Control horario', 'Registro de jornada', 'Bolsa de horas', 'Recordatorios de fichaje', 'Fichar en una tablet',
+      'Cuadrante', 'Turnos tipo', 'Disponibilidad', 'Turnos abiertos', 'Cambios de turno', 'Horas y contrato',
+      'Vacaciones y ausencias', 'Formación', 'Nóminas de la gestoría', 'Centros de trabajo', 'Portal del empleado',
+      'Contrato y convenio', 'Nóminas calculadas por Sumied', 'Seguros sociales', 'SEPE',
+    ])
   })
   // S02 · PR 2 (decisión 5 de Julio): la emitida pasa a Facturación › Facturas
   // emitidas y Facturación sale en la barra con ella, sin interruptor.
-  it('Ventas (antes Facturación) sale (con Facturas, sin interruptor); Laboral no, ni con el suyo encendido; Impuestos (I01b), solo con el suyo', () => {
+  it('Ventas (antes Facturación) sale (con Facturas, sin interruptor); Laboral (LS1) e Impuestos (I01b), solo con el suyo', () => {
     const todo: Contexto = { ...NADA, interruptores: new Set(INTERRUPTORES) }
     expect(productosVisibles(NADA).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'contactos', 'ajustes'])
-    expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'impuestos', 'contactos', 'ajustes'])
+    expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'laboral', 'impuestos', 'contactos', 'ajustes'])
+    expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }).map((p) => p.id)).toContain('laboral')
     expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
