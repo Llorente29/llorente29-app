@@ -62,7 +62,7 @@
 .cxb-cierre[data-destacado] { border-color: var(--cx-azul-borde); }
 .cxb-banco-cabeza { gap: 12px; flex-wrap: wrap; }
 .cxb-local { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--cx-apoyo); min-width: 200px; }
-.cxb-revisa { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cxb-revisa, .cxb-conexion { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .cxb-tarjeta-nueva { display: grid; grid-template-columns: 140px minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
 .cxb-check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
 .cxb-cuentas { max-height: 260px; }

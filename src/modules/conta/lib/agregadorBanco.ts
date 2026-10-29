@@ -1,5 +1,9 @@
 // src/modules/conta/lib/agregadorBanco.ts
 //
+// B01c (29/10): open-banking.io (abajo), lo que conecta de verdad las cuentas
+// de BBVA de Foodint, con el mismo contrato; y la línea que enseña Bancos en
+// cada cuenta conectada (lineaConexion).
+//
 // B01 · tarea 6 (respuesta 4, punto 4.3): el agregador, preparado para Enable
 // Banking (cobra por cuenta conectada; Julio pide presupuesto) y probado con un
 // proveedor SIMULADO. Nada de esto se enseña en pantalla hasta que exista el
@@ -26,6 +30,9 @@
 // (bank_importar, 0110): entre fuentes distintas, la suave basta.
 
 import type { CuentaAgregador, MovimientoAgregador, PaginaAgregador, ProveedorAgregador } from '@/modules/conta/lib/fuentesBanco'
+import {
+  proveedorOpenBankingIo as nucleoOpenBankingIo, type ClienteOpenBankingIo, type ConexionDelProveedor,
+} from '../../../../supabase/functions/_shared/bancoAgregador.ts'
 
 // ── Enable Banking ──────────────────────────────────────────────────────────
 
@@ -92,6 +99,78 @@ export function proveedorEnableBanking(transporte: TransporteEnableBanking): Pro
       return { saldoInicialCent: null, saldoFinalCent: null, movimientos }
     },
   }
+}
+
+// ── open-banking.io (B01c) ──────────────────────────────────────────────────
+// Lo que conecta de verdad desde el B01c: open-banking.io, que va sobre Enable
+// Banking y entrega los datos cifrados (se descifran en el servidor, con la
+// clave privada del credentials.json). El núcleo vive en
+// supabase/functions/_shared/bancoAgregador.ts porque lo usa la función de cada
+// noche (conta-banco-agregador); aquí se publica con el contrato de siempre, y
+// tsc comprueba que lo cumple.
+
+export type { ClienteOpenBankingIo } from '../../../../supabase/functions/_shared/bancoAgregador.ts'
+export { movimientoDeOpenBankingIo, saldoDelBanco, saldoAlCerrar, desdeCuando, paraImportar, sincronizarEmpresa, FUENTE_OBI } from '../../../../supabase/functions/_shared/bancoAgregador.ts'
+
+/** open-banking.io como ProveedorAgregador (y lo que sabe de la conexión: refrescar, permisos y saldos). `hoy`: el día de Madrid. */
+export function proveedorOpenBankingIo(cliente: ClienteOpenBankingIo, hoy: string): ProveedorAgregador & ConexionDelProveedor {
+  return nucleoOpenBankingIo(cliente, hoy)
+}
+
+// ── Lo que dice Bancos de una cuenta conectada (B01c) ──────────────────────
+
+export interface ConexionCuenta {
+  banco: string
+  estado: 'al_dia' | 'sin_movimientos' | 'permiso_caducado' | 'fallo' | null
+  mensaje: string | null
+  /** Cuándo se leyó bien por última vez (ISO con hora). */
+  leida: string | null
+  /** Cuándo se intentó por última vez (ISO con hora). */
+  intentada: string | null
+  caduca: string | null
+  renovar: string | null
+}
+
+export interface LineaConexion {
+  nivel: 'ok' | 'aviso' | 'error'
+  texto: string
+  /** El botón «Renovar»: lleva a donde se renueva el permiso. */
+  renovar: string | null
+}
+
+const horaMadrid = (iso: string) => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+const diaMadrid = (iso: string) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
+
+/** «hoy a las 03:00», «ayer a las 03:00» o «el 27/10 a las 03:00», en la hora de Madrid. */
+export function cuandoFue(iso: string, ahora: Date): string {
+  const d = diaMadrid(iso), hoy = diaMadrid(ahora.toISOString())
+  const ayer = diaMadrid(new Date(ahora.getTime() - 86_400_000).toISOString())
+  const dia = d === hoy ? 'hoy' : d === ayer ? 'ayer' : `el ${d.slice(8, 10)}/${d.slice(5, 7)}`
+  return `${dia} a las ${horaMadrid(iso)}`
+}
+
+/**
+ * La línea de una cuenta conectada, en palabras: «Conectada con BBVA ·
+ * actualizada hoy a las 03:00»; a 7 días de caducar, «Caduca el permiso en 7
+ * días · Renovar»; caducado o fallado, qué pasa y desde cuándo. Null si la
+ * cuenta no está conectada.
+ */
+export function lineaConexion(c: ConexionCuenta | null, ahora: Date): LineaConexion | null {
+  if (!c) return null
+  const hoy = diaMadrid(ahora.toISOString())
+  const aviso = c.caduca ? avisoConsentimiento({ conexionId: '', banco: c.banco, caduca: diaMadrid(c.caduca) }, hoy) : null
+  const leida = c.leida ? `actualizada ${cuandoFue(c.leida, ahora)}` : 'aún no se ha leído'
+  if (c.estado === 'permiso_caducado' || aviso?.nivel === 'caducado') {
+    return { nivel: 'error', renovar: c.renovar, texto: `El permiso para leer ${c.banco} ha caducado: no llegan sus movimientos (${leida}). Renuévalo y confirma en tu banco.` }
+  }
+  if (c.estado === 'fallo') {
+    return { nivel: 'error', renovar: null, texto: `Conectada con ${c.banco} · la última vez (${cuandoFue(c.intentada ?? c.leida ?? ahora.toISOString(), ahora)}) no se pudo leer: ${c.mensaje ?? 'sin motivo'}. Sigue ${leida}.` }
+  }
+  if (aviso && aviso.nivel === 'aviso') {
+    const dias = aviso.dias === 0 ? 'hoy' : aviso.dias === 1 ? 'mañana' : `en ${aviso.dias} días`
+    return { nivel: 'aviso', renovar: c.renovar, texto: `Caduca el permiso ${dias} · ${leida}` }
+  }
+  return { nivel: 'ok', renovar: null, texto: `Conectada con ${c.banco} · ${leida}` }
 }
 
 // ── Simulado ────────────────────────────────────────────────────────────────

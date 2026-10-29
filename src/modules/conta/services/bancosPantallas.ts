@@ -14,6 +14,7 @@ import type { FacturaParaCasar } from '@/modules/conta/lib/conciliarVista'
 import { reglasQuePropongo, type Casado, type MovRegla, type NoLaPropongo, type ReglaPropuesta } from '@/modules/conta/lib/reglasBanco'
 import { limitesMes, type ExtractoDeshecho, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
+import type { ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -35,6 +36,8 @@ export interface BancoVista extends BancoFolvy {
   cuentaNombre: string | null
   tarjetas: Tarjeta[]
   ultimoExtracto: Extracto | null
+  /** B01c · La conexión directa con el banco (open-banking.io), si la cuenta la tiene. */
+  conexion: ConexionCuenta | null
 }
 export interface DatosBancos {
   bancos: BancoVista[]
@@ -49,9 +52,19 @@ export interface DatosBancos {
   corte: string | null
 }
 
+/** B01c · Una fila de bank_aggregator_link, como la pinta Bancos. */
+function conexionDe(c: Fila | undefined): ConexionCuenta | null {
+  if (!c) return null
+  const estado = s(c.last_status) as ConexionCuenta['estado']
+  return {
+    banco: s(c.bank_name) ?? 'el banco', estado: c.status === 'caducado' && !estado ? 'permiso_caducado' : estado, mensaje: s(c.last_message),
+    leida: s(c.last_sync_at), intentada: s(c.last_run_at), caduca: s(c.consent_valid_until), renovar: s(c.renew_url),
+  }
+}
+
 /** Lo de arriba de todas las pestañas: los bancos, sus tarjetas y extractos, los locales y el plan. */
 export async function leerDatosBancos(accountId: string, companyId: string): Promise<DatosBancos> {
-  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, porValidar, reglas, ajustes] = await Promise.all([
+  const [bs, tarjetas, extractos, locales, cuentas, primero, dudas, porValidar, reglas, ajustes, conexiones] = await Promise.all([
     bancos.bancosDeLaEmpresa(accountId, companyId),
     leer(tabla('bank_card').select('id, treasury_account_id, last4, holder_name, location_id').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true).order('created_at', { ascending: true }), 'las tarjetas'),
     leer(tabla('bank_statement').select('id, treasury_account_id, file_name, format, period_from, period_to, opening_balance, closing_balance, movements_count, new_count, repeated_count, balanced, unchecked_reason, continuity, continuity_gap, imported_at, imported_by_name')
@@ -66,6 +79,11 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
       .eq('bank_match.status', 'vivo').eq('bank_match.journal_entry.status', 'propuesto'), 'lo que falta por validar'),
     leer(tabla('bank_rule').select('status').eq('account_id', accountId).eq('company_id', companyId), 'las reglas'),
     leer(tabla('bank_settings').select('cutover_date').eq('account_id', accountId).eq('company_id', companyId).limit(1), 'los ajustes del banco'),
+    // B01c · Las cuentas conectadas con el banco y cómo fue su última pasada. Si no se puede leer,
+    // Bancos sigue sin la línea de la conexión (y lo dice la consola): nada de lo demás depende de ella.
+    leer(tabla('bank_aggregator_link').select('treasury_account_id, bank_name, status, last_status, last_message, last_sync_at, last_run_at, consent_valid_until, renew_url')
+      .eq('account_id', accountId).eq('company_id', companyId).order('last_run_at', { ascending: false }), 'las cuentas conectadas')
+      .catch((e: unknown) => { console.warn('[bancos] no se pudieron leer las cuentas conectadas', e); return [] as Fila[] }),
   ])
   const nombres: Record<string, string> = {}
   for (const c of cuentas) nombres[String(c.code)] = String(c.plain_name ?? c.name).trim().replace(/[.\s]+$/, '')
@@ -83,6 +101,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
       ...b, cuentaNombre: b.cuenta ? nombres[b.cuenta] ?? null : null,
       tarjetas: tjs.filter((t) => t.cuentaId === b.id),
       ultimoExtracto: ext.find((e) => e.cuentaId === b.id) ?? null,
+      conexion: conexionDe(conexiones.find((c) => String(c.treasury_account_id) === b.id)),
     })),
     extractos: ext,
     locales: locales.map((l) => ({ id: String(l.id), nombre: String(l.name) })),
