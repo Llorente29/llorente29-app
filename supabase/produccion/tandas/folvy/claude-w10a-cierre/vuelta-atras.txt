@@ -1,0 +1,3 @@
+# W10a · cierre · SIN VUELTA ATRÁS, declarada en aplicar.txt: no hay ningún
+# fichero que aplicar. Devolver el respaldo sería volver a escribir el secreto
+# viejo de order-advance, que además ya está revocado.
