@@ -39,7 +39,8 @@ function isAndroid(): boolean {
   return /android/i.test(window.navigator.userAgent)
 }
 
-export default function InstallAppButton() {
+/** LS1: `nombre` es la marca del portal (Sumied); sin ella, Folvy. */
+export default function InstallAppButton({ nombre = 'Folvy' }: { nombre?: string } = {}) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled] = useState(false)
   // Modal de instrucciones manuales: 'ios' | 'android' | null
@@ -112,7 +113,7 @@ export default function InstallAppButton() {
           <polyline points="7 10 12 15 17 10" />
           <line x1="12" y1="15" x2="12" y2="3" />
         </svg>
-        Instalar Folvy en este móvil
+        Instalar {nombre} en este móvil
       </button>
 
       {helpFor && (
@@ -120,7 +121,7 @@ export default function InstallAppButton() {
           <div className="bg-card rounded-xl w-full max-w-sm p-6 border border-border-default" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-base font-medium text-text-primary mb-3">Instalar en tu móvil</h3>
             <p className="text-sm text-text-secondary mb-2">
-              Para guardar Folvy como una app en tu pantalla de inicio:
+              Para guardar {nombre} como una app en tu pantalla de inicio:
             </p>
 
             {helpFor === 'ios' ? (

@@ -1,0 +1,26 @@
+# W10a · cierre (29/10/2026). Rama claude/w10a-cierre. Se ensaya y se aplica
+# desde esta rama, antes de fusionar.
+#
+#   1. 1053 — borra de funcion_respaldo el respaldo de la 1630 (el texto de
+#      trg_sale_push_status de antes, con el secreto viejo de order-advance).
+#      AUTORIZO: borra una fila que existe. Con guarda: la función viva es la
+#      de la 1630 y la fila es la esperada.
+#
+# CUÁNDO: con el secreto ya cambiado y comprobado (Julio, 29/10).
+#
+# SIN VUELTA ATRÁS, a propósito: devolver la fila sería volver a escribir el
+# secreto viejo. Va declarado («sin-vuelta-atras:», W02): el ensayo comprueba
+# lo que la tanda dice que deja («esperado:»), medida a medida.
+#
+# Antes (producción, 29/10 10:50 UTC): respaldo de la 1630, 1 fila (2470441d);
+# respaldos con un secreto fv_, 1; trg_sale_push_status 385240cb. En staging,
+# lo mismo.
+#
+# autorizo:
+#   20261029T1053_w10a_borrar_respaldo_secreto_viejo.sql
+cuenta: scripts/conta/produccion/cuentas/w10a-cierre.sql
+supabase/migrations/20261029T1053_w10a_borrar_respaldo_secreto_viejo.sql
+sin-vuelta-atras: supabase/migrations/20261029T1053_w10a_borrar_respaldo_secreto_viejo.sql · motivo: borra el respaldo con el secreto viejo de order-advance, a propósito; devolverlo sería volver a escribir un secreto revocado
+esperado: w10a-cierre · respaldo de la 1630 (trg_sale_push_status) = 0
+esperado: w10a-cierre · respaldos con un secreto fv_ = 0
+esperado: w10a-cierre · huella corta de trg_sale_push_status = como antes

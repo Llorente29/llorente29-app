@@ -1,5 +1,6 @@
 // src/pages/trabajador/MisTurnos.tsx
 // El empleado ve los turnos abiertos disponibles y puede solicitar coger alguno.
+import { useProductoLaboral } from '../../modules/personal/laboral/productoLaboral'
 import { useState, useEffect, useMemo } from 'react'
 import { ArrowLeft, CalendarPlus, ClipboardList } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
@@ -19,6 +20,7 @@ interface Props {
 }
 
 export default function MisTurnos({ employee, onBack }: Props) {
+  const voc = useProductoLaboral()
   const { locations } = useApp()
   const [shifts, setShifts] = useState<OpenShift[]>([])
   const [myRequests, setMyRequests] = useState<ShiftRequest[]>([])
@@ -54,7 +56,7 @@ export default function MisTurnos({ employee, onBack }: Props) {
   }, [employee.id])
 
   function locationName(id: string): string {
-    return locations.find(l => l.id === id)?.name || 'Local'
+    return locations.find(l => l.id === id)?.name || voc.Local
   }
 
   // ¿Ya tengo solicitud pendiente para este turno?

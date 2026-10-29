@@ -59,6 +59,8 @@ import AnualPage from '@/modules/conta/impuestos/AnualPage'
 import AceptarAsesoriaPage from '@/modules/conta/impuestos/AceptarAsesoriaPage'
 import { ClienteTrimestre } from '@/modules/conta/impuestos/despacho/ClienteTrimestre'
 import InicioPage from '@/modules/conta/inicio/InicioPage'
+import LaboralPage from '@/modules/conta/laboral/LaboralPage'
+import LlegaPage from '@/modules/conta/laboral/LlegaPage'
 import PuertaPage from '@/modules/conta/puerta/PuertaPage'
 import QueEsperasPage from '@/modules/conta/puerta/QueEsperasPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
@@ -130,6 +132,10 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.bancos, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     { path: CONTA.rutas.bancosPestana, element: enMarco(<BancosPage />, '¿Qué es la transferencia de 1.278,17?', true) },
     // I01b · Impuestos (tableros 8, 9 y 10): el calendario, sus pestañas y el IVA de un periodo.
+    // LS1 · Laboral (28/10): las pantallas de Folvy › Personal, dentro de Sumied.
+    { path: CONTA.rutas.laboral, element: enMarco(<LaboralPage />, '¿Quién está trabajando ahora?', true) },
+    { path: CONTA.rutas.laboralPagina, element: enMarco(<LaboralPage />, '¿Quién no fichó ayer la salida?', true) },
+    { path: CONTA.rutas.laboralLlega, element: enMarco(<LlegaPage />, '¿Cuándo llegan las nóminas?') },
     { path: CONTA.rutas.impuestos, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
     { path: CONTA.rutas.impuestosPestana, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
     { path: CONTA.rutas.impuestoIva, element: enMarco(<IvaPeriodoPage />, '¿Por qué pago más que el trimestre pasado?') },

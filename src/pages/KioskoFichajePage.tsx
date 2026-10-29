@@ -25,10 +25,12 @@ import {
 import { conPinDeKiosko, comprobarPinDeKiosko } from '../services/kioskoPinService'
 import { prepararPinDeKiosko } from '../services/fichajeServidor'
 import { mensajeDeFalloDeFichaje } from '../services/supabaseSync'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 type Step = 'select-employee' | 'enter-pin' | 'confirming' | 'warn-confirm' | 'success' | 'error'
 
 export default function KioskoFichajePage() {
+  const voc = useProductoLaboral()
   // TODO scope-local: NO se conecta al selector global de local a propósito.
   // El local del kiosko es CONFIG del dispositivo físico (qué tablet está en qué
   // local, persistido en localStorage + geofence), no un filtro de vista. Atarlo
@@ -250,7 +252,7 @@ export default function KioskoFichajePage() {
             <Settings size={32} className="text-accent" />
           </div>
           <p className="font-semibold text-text-primary">Configura el kiosko</p>
-          <p className="text-sm text-text-secondary mt-1">Necesitas asignar este kiosko a un local activo.</p>
+          <p className="text-sm text-text-secondary mt-1">Necesitas asignar este kiosko a un {voc.local} activo.</p>
           <Button onClick={() => setShowConfig(true)} className="mt-4">Configurar</Button>
         </Card>
         {showConfig && <ConfigModal config={config || defaultKioskoConfig(locations[0]?.id || '')} locations={locations}
@@ -296,11 +298,11 @@ export default function KioskoFichajePage() {
             <div className="flex justify-center mb-3">
               <AlertCircle size={64} className="text-danger" strokeWidth={2} />
             </div>
-            <p className="font-bold text-danger text-2xl">Estás fichando FUERA del local</p>
+            <p className="font-bold text-danger text-2xl">Estás fichando FUERA {voc.delLocal}</p>
             <p className="text-4xl font-extrabold text-danger mt-2">a {pendingDist} m</p>
             <p className="text-sm text-text-secondary mt-3">
               Estás a {pendingDist} metros de <b>{activeLocation?.name}</b>. El fichaje se registrará
-              con esta distancia y el encargado podrá verlo. Ficha solo si de verdad estás en el local.
+              con esta distancia y el encargado podrá verlo. Ficha solo si de verdad estás en {voc.elLocal}.
             </p>
             <div className="flex gap-3 mt-6">
               <button onClick={() => { setPendingEntry(null); setStep('select-employee') }}
@@ -415,6 +417,7 @@ function InstallBanner({ onFullscreen }: { onFullscreen: () => void }) {
 function SelectEmployeeView({ employees, onSelect }: {
   employees: Employee[]; onSelect: (e: Employee) => void
 }) {
+  const voc = useProductoLaboral()
   if (!employees.length) {
     return (
       <div className="mt-12 text-center">
@@ -422,7 +425,7 @@ function SelectEmployeeView({ employees, onSelect }: {
           <Users size={48} className="text-accent" />
         </div>
         <p className="font-semibold text-text-primary text-lg">Sin empleados asignados</p>
-        <p className="text-sm text-text-secondary mt-1">Asigna empleados a este local desde Personal.</p>
+        <p className="text-sm text-text-secondary mt-1">Asigna empleados a este {voc.local} desde {voc.sumied ? 'Equipo' : 'Personal'}.</p>
       </div>
     )
   }
@@ -545,6 +548,7 @@ function ConfigModal({ config, locations, onSave, onCancel }: {
   config: KioskoConfig; locations: Location[]
   onSave: (c: KioskoConfig) => void; onCancel: () => void
 }) {
+  const voc = useProductoLaboral()
   const [draft, setDraft] = useState<KioskoConfig>(config)
   const [testResult, setTestResult] = useState<string>('')
   const activeLoc = locations.find(l => l.id === draft.locationId)
@@ -553,12 +557,12 @@ function ConfigModal({ config, locations, onSave, onCancel }: {
     setTestResult('Obteniendo ubicación...')
     try {
       const pos = await getCurrentPosition()
-      if (!activeLoc) { setTestResult('Selecciona un local primero'); return }
+      if (!activeLoc) { setTestResult(`Selecciona un ${voc.local} primero`); return }
       const lc = coordsForLocation(activeLoc)
-      if (!lc) { setTestResult(`Tu ubicación: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}. El local no tiene coordenadas configuradas.`); return }
+      if (!lc) { setTestResult(`Tu ubicación: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}. ${voc.elLocal.charAt(0).toUpperCase() + voc.elLocal.slice(1)} no tiene coordenadas configuradas.`); return }
       const d = Math.round(distanceMeters(pos.coords.latitude, pos.coords.longitude, lc.lat, lc.lng))
       const ok = d <= draft.geofenceRadiusM
-      setTestResult(`Distancia al local: ${d}m (límite ${draft.geofenceRadiusM}m) ${ok ? '✓' : '✗'}`)
+      setTestResult(`Distancia al ${voc.local}: ${d}m (límite ${draft.geofenceRadiusM}m) ${ok ? '✓' : '✗'}`)
     } catch (e: unknown) {
       setTestResult('Error: ' + (e instanceof Error ? e.message : 'desconocido'))
     }
@@ -569,7 +573,7 @@ function ConfigModal({ config, locations, onSave, onCancel }: {
       <div className="bg-card rounded-xl max-w-md w-full p-5 max-h-[90vh] overflow-y-auto">
         <p className="font-bold text-text-primary text-lg mb-4">Configuración del kiosko</p>
 
-        <label className="block text-xs font-medium text-text-secondary mb-1">Local del kiosko</label>
+        <label className="block text-xs font-medium text-text-secondary mb-1">{voc.Local} del kiosko</label>
         <select
           value={draft.locationId}
           onChange={e => setDraft(d => ({ ...d, locationId: e.target.value }))}

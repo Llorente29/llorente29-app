@@ -16,9 +16,10 @@ import { useNavigate } from 'react-router-dom'
 import { useApp } from '@/context/AppContext'
 import { Boton, Chip, Tarjeta } from '@/modules/conta/diseno'
 import { leerFueraDelRadio, metros, DIAS_FUERA_DEL_RADIO } from '@/services/fueraDelRadioService'
-import { correccionesEnDesacuerdo, jornadasParaRevisar } from './registroJornadaServicio'
+import { correccionesEnDesacuerdo, jornadasParaRevisar, type JornadaParaRevisar } from './registroJornadaServicio'
 import { diaMadrid, fechaLarga, horaMadrid } from './calculoJornada'
 import { PIEZA_LABORAL } from './estilo'
+import { useProductoLaboral } from './productoLaboral'
 
 interface Caso {
   clave: string
@@ -29,14 +30,22 @@ interface Caso {
   etiqueta: string
   boton: string
   ir: string
+  /** La jornada que se puede corregir ahí mismo (LS1, Sumied). */
+  jornada?: JornadaParaRevisar
 }
 
 const VISIBLES = 6
 const TIPO: Record<string, string> = { entrada: 'entrada', salida: 'salida', pausa_inicio: 'pausa', pausa_fin: 'vuelta de la pausa' }
 
-export default function ParaRevisar() {
+/**
+ * LS1 (28/10/2026): en Sumied › Laboral › Para revisar se corrige ahí mismo
+ * (`alCorregir`), y la pantalla dice «nada para revisar» en vez de
+ * desaparecer (`siempre`), porque se abre a propósito (regla 7).
+ */
+export default function ParaRevisar({ alCorregir, siempre = false }: { alCorregir?: (j: JornadaParaRevisar) => void; siempre?: boolean } = {}) {
   const { activeAccountId, staff, locations } = useApp()
   const navigate = useNavigate()
+  const voc = useProductoLaboral()
   const [casos, setCasos] = useState<Caso[] | null>(null)
   const [error, setError] = useState('')
   const [todos, setTodos] = useState(false)
@@ -63,14 +72,14 @@ export default function ParaRevisar() {
                 clave: `j-${j.clockEntryId}`, cuando: j.entrada,
                 texto: `${quien} · jornada de ${String(j.horas ?? '').replace('.', ',')} h el ${fechaLarga(dia)}`,
                 detalle: `De las ${horaMadrid(j.entrada)} a las ${j.salida ? horaMadrid(j.salida) : '—'}${j.salida && diaMadrid(j.salida) !== dia ? ` del ${fechaLarga(diaMadrid(j.salida))}` : ''}. ¿Falta una salida en medio?`,
-                tono: 'duda', etiqueta: 'Más de 12 h', boton: 'Corregir',
+                tono: 'duda', etiqueta: 'Más de 12 h', boton: 'Corregir', jornada: j,
                 ir: `control-horario?persona=${j.employeeId}&desde=${dia}&hasta=${j.salida ? diaMadrid(j.salida) : dia}`,
               }
             : {
                 clave: `j-${j.clockEntryId}`, cuando: j.entrada,
                 texto: `${quien} · entrada del ${fechaLarga(dia)} sin salida`,
                 detalle: `Entró a las ${horaMadrid(j.entrada)} y no hay salida antes de su siguiente entrada. Esas horas no cuentan hasta que se corrija.`,
-                tono: 'falta', etiqueta: 'Sin salida', boton: 'Corregir',
+                tono: 'falta', etiqueta: 'Sin salida', boton: 'Corregir', jornada: j,
                 ir: `control-horario?persona=${j.employeeId}&desde=${dia}&hasta=${dia}`,
               })
         }
@@ -80,7 +89,7 @@ export default function ParaRevisar() {
             lista.push({
               clave: `f-${f.id}`, cuando: f.hora,
               texto: `${nombre.get(f.employeeId) ?? 'Persona'} · ${TIPO[f.tipo] ?? f.tipo} del ${fechaLarga(dia)} fuera del radio`,
-              detalle: `A las ${horaMadrid(f.hora)}, a ${metros(f.distanciaM)} de ${(f.locationId && local.get(f.locationId)) || 'su local'}. Se guardó con la distancia: nadie se quedó sin fichar.`,
+              detalle: `A las ${horaMadrid(f.hora)}, a ${metros(f.distanciaM)} de ${(f.locationId && local.get(f.locationId)) || `su ${voc.local}`}. Se guardó con la distancia: nadie se quedó sin fichar.`,
               tono: 'duda', etiqueta: 'Fuera del radio', boton: 'Ver',
               ir: `control-horario?persona=${f.employeeId}&desde=${dia}&hasta=${dia}`,
             })
@@ -106,7 +115,7 @@ export default function ParaRevisar() {
     return () => { vivo = false; window.clearTimeout(t) }
     // staff y locations cambian de identidad en cada sincronización: manda la lista de ids.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountId, claveStaff, locations.length])
+  }, [activeAccountId, claveStaff, locations.length, voc.local])
 
   if (error) {
     return (
@@ -115,7 +124,12 @@ export default function ParaRevisar() {
       </div>
     )
   }
-  if (!casos || casos.length === 0) return null
+  if (!casos) return null
+  if (casos.length === 0) {
+    return siempre
+      ? <div className={PIEZA_LABORAL} data-prueba="para-revisar-vacio"><Tarjeta compacta tono="ok" titulo="Para revisar · 0" apoyo="Ninguna jornada de más de 12 h, ninguna entrada sin salida, ningún fichaje fuera del radio y ninguna corrección en desacuerdo." /></div>
+      : null
+  }
 
   const vistos = todos ? casos : casos.slice(0, VISIBLES)
   return (
@@ -130,7 +144,8 @@ export default function ParaRevisar() {
                 <b>{c.texto}</b>
                 <span>{c.detalle}</span>
               </div>
-              <Boton onClick={() => navigate(c.ir)}>{c.boton}</Boton>
+              <Boton onClick={() => (alCorregir && c.jornada ? alCorregir(c.jornada) : navigate(`${voc.base}/${c.ir}`))}
+                data-prueba={alCorregir && c.jornada ? 'para-revisar-corregir' : undefined}>{c.boton}</Boton>
             </div>
           ))}
           {casos.length > VISIBLES && (

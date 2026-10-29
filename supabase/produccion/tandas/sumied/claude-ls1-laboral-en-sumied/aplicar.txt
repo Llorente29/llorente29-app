@@ -1,0 +1,11 @@
+# LS1 · Laboral en Sumied (28/10/2026). Rama claude/ls1-laboral-en-sumied. Se
+# ensaya y se aplica desde esta rama, antes de fusionar. Sin autorizo.
+#
+#   1. 2224 — SOLO AÑADE: la fila `conta_laboral` de Foodint en feature_flags
+#      (insert … on conflict do nothing). Se puede pasar dos veces.
+#
+# Antes (producción, 28/10 21:25 UTC): Foodint sin fila de conta_laboral;
+# 0 cuentas con conta_laboral encendido. La cuenta mide la fila de Foodint.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261028T2224_ls1_laboral_en_foodint.sql
+cuenta: scripts/conta/produccion/cuentas/ls1-laboral-en-sumied.sql

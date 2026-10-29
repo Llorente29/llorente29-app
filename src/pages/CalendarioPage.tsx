@@ -7,6 +7,7 @@
 // - Sugerencias para huecos sin cubrir
 // - Horario individualizado por empleado (plegable)
 
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Wand2, Save, Check, Megaphone, X, Plus,
@@ -240,6 +241,7 @@ function confirmOverwrite(cells: ScheduleCells, savedCells: ScheduleCells, fallb
 }
 
 export default function CalendarioPage() {
+  const voc = useProductoLaboral()
   const { locations, staff, activeAccountId } = useApp()
   const { hasPermission } = usePermissions()
   const canEditSchedule = hasPermission('can_edit_schedule')
@@ -498,7 +500,7 @@ export default function CalendarioPage() {
 
   // Ventas de la semana del cuadrante (histórico del local) → base del % personal.
   useEffect(() => {
-    if (!activeAccountId || !locationId) { setWeekSales(null); return }
+    if (!activeAccountId || !locationId || !voc.hosteleria) { setWeekSales(null); return }
     let cancel = false
     ;(async () => {
       const end = addDays(weekStart, 7)
@@ -507,27 +509,27 @@ export default function CalendarioPage() {
       if (!cancel) setWeekSales(row ? row.ventas : 0)
     })()
     return () => { cancel = true }
-  }, [activeAccountId, locationId, weekStart])
+  }, [activeAccountId, locationId, weekStart, voc.hosteleria])
 
   // Perfil de demanda (día×hora) de las últimas ~8 semanas → SOLO la forma horaria (curva).
   const [demand, setDemand] = useState<DemandProfile[]>([])
   useEffect(() => {
-    if (!activeAccountId) { setDemand([]); return }
+    if (!activeAccountId || !voc.hosteleria) { setDemand([]); return }
     let cancel = false
     const from = addDays(weekStart, -56)
     const to = addDays(weekStart, 7)
     fetchDemandProfile(activeAccountId, from, to).then(d => { if (!cancel) setDemand(d) })
     return () => { cancel = true }
-  }, [activeAccountId, weekStart])
+  }, [activeAccountId, weekStart, voc.hosteleria])
 
   // Previsión AJUSTADA por día del local y semana: base × coef_día × coef_mes × tendencia.
   const [forecast, setForecast] = useState<DemandForecast[]>([])
   useEffect(() => {
-    if (!activeAccountId || !locationId) { setForecast([]); return }
+    if (!activeAccountId || !locationId || !voc.hosteleria) { setForecast([]); return }
     let cancel = false
     fetchDemandForecast(activeAccountId, locationId, weekStart).then(f => { if (!cancel) setForecast(f) })
     return () => { cancel = true }
-  }, [activeAccountId, locationId, weekStart])
+  }, [activeAccountId, locationId, weekStart, voc.hosteleria])
 
   const forecastByDow = useMemo(() => {
     const m: Record<number, DemandForecast> = {}
@@ -620,13 +622,13 @@ export default function CalendarioPage() {
   // clic abre el mismo "Modelo de trabajo" para editarlo.
   const [ritmoCocina, setRitmoCocina] = useState<number | null>(null)
   useEffect(() => {
-    if (!activeAccountId) { setRitmoCocina(null); return }
+    if (!activeAccountId || !voc.hosteleria) { setRitmoCocina(null); return }
     let cancel = false
     fetchLaborModel(activeAccountId, ['cocina']).then(rows => {
       if (!cancel) setRitmoCocina(rows[0]?.perPersonHour ?? null)
     })
     return () => { cancel = true }
-  }, [activeAccountId, laborModalOpen])
+  }, [activeAccountId, laborModalOpen, voc.hosteleria])
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
   const [configMenuOpen, setConfigMenuOpen] = useState(false)
   const reloadRoles = () => { if (activeAccountId) fetchStaffRoles(activeAccountId).then(setRoles) }
@@ -1180,7 +1182,7 @@ export default function CalendarioPage() {
         </select>
         {locationClosed && (
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-danger-bg text-danger">
-            <AlertTriangle size={12} /> Este local está cerrado
+            <AlertTriangle size={12} /> Este {voc.local} está cerrado
           </span>
         )}
         {ritmoCocina != null && (
@@ -1235,7 +1237,7 @@ export default function CalendarioPage() {
         {/* F10 — alternativa que convive con "Generar automático": el
             encargado elige. Bloques anclados a shift_templates reales vía
             generate_week_schedule v3; nunca guarda sola. */}
-        {canEditSchedule && !locationClosed && (
+        {voc.hosteleria && canEditSchedule && !locationClosed && (
           <button
             onClick={doPropose}
             disabled={proposing || filling || loading || employees.length === 0}
@@ -1248,7 +1250,7 @@ export default function CalendarioPage() {
         {/* ENCARGO F10 (09/08) — "Cubrir el resto": segunda pasada que AÑADE
             sobre el borrador ya cargado (parámetros de dotación de pico,
             franjas forzadas, bloques fijos y tolerancia de contrato). */}
-        {canEditSchedule && !locationClosed && (
+        {voc.hosteleria && canEditSchedule && !locationClosed && (
           <button
             onClick={doCubrirElResto}
             disabled={proposing || filling || loading || employees.length === 0}
@@ -1258,7 +1260,7 @@ export default function CalendarioPage() {
             {filling ? <RefreshCw size={15} className="animate-spin" /> : <Plus size={15} />} Cubrir el resto
           </button>
         )}
-        {canEditSchedule && !locationClosed && (
+        {voc.hosteleria && canEditSchedule && !locationClosed && (
           <span
             className="text-[10.5px] font-semibold text-text-tertiary uppercase tracking-wide"
             title="El generador solo calcula demanda y turnos de cocina; otras áreas (reparto, sala…) no entran en esta propuesta"
@@ -1403,8 +1405,8 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {/* Hero inteligente: demanda → cobertura → coste (la historia de la semana) */}
-      <div className="bg-card border border-border-default rounded-2xl overflow-hidden">
+      {/* Hero inteligente: demanda → cobertura → coste (la historia de la semana). En Sumied no: es de cocina y ventas. */}
+      {voc.hosteleria && <div className="bg-card border border-border-default rounded-2xl overflow-hidden">
         <div className="flex items-start gap-2.5 px-4 py-3 border-b border-border-default" style={{ background: 'linear-gradient(90deg,#f3faf8,#ffffff)' }}>
           <span className="w-7 h-7 rounded-lg grid place-items-center shrink-0" style={{ background: '#e4f0ee', color: '#2f6f6b' }}><Sparkles size={15} /></span>
           <p className="text-[13px] text-text-primary leading-snug m-0">
@@ -1450,11 +1452,11 @@ export default function CalendarioPage() {
             )}
           </div>
         </div>
-      </div>
+      </div>}
 
       <div className="flex items-center gap-3 text-xs text-text-secondary empty:hidden">
         {employees.length === 0 && locationId && (
-          <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay empleados activos en este local</span>
+          <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay empleados activos en este {voc.local}</span>
         )}
         {templates.length === 0 && locationId && (
           <span className="inline-flex items-center gap-1 text-warning"><AlertTriangle size={12} /> No hay turnos definidos en la plantilla</span>
@@ -1567,15 +1569,15 @@ export default function CalendarioPage() {
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setConfigMenuOpen(false)} />
                 <div className="absolute right-0 mt-1 z-50 w-80 bg-card border border-border-default rounded-xl shadow-lg overflow-hidden">
-                  <button onClick={() => { setConfigMenuOpen(false); setLaborModalOpen(true) }}
+                  {voc.hosteleria && <button onClick={() => { setConfigMenuOpen(false); setLaborModalOpen(true) }}
                     className="w-full text-left px-3 py-2.5 hover:bg-page flex items-start gap-3">
                     <span className="w-8 h-8 rounded-lg bg-accent-bg grid place-items-center shrink-0 text-text-primary"><SlidersHorizontal size={15} /></span>
                     <span><span className="block text-sm font-semibold text-text-primary">Modelo de trabajo</span><span className="block text-[11.5px] text-text-secondary leading-snug">Cuánta gente hace falta por hora y rol según la demanda. La cocina la dirigen los platos.</span></span>
-                  </button>
+                  </button>}
                   <button onClick={() => { setConfigMenuOpen(false); setRolesModalOpen(true) }}
                     className="w-full text-left px-3 py-2.5 hover:bg-page flex items-start gap-3 border-t border-border-default">
                     <span className="w-8 h-8 rounded-lg bg-accent-bg grid place-items-center shrink-0 text-text-primary"><Users size={15} /></span>
-                    <span><span className="block text-sm font-semibold text-text-primary">Áreas del personal</span><span className="block text-[11.5px] text-text-secondary leading-snug">Cocina, sala, reparto… dan color a los turnos y dicen qué área produce platos.</span></span>
+                    <span><span className="block text-sm font-semibold text-text-primary">Áreas del personal</span><span className="block text-[11.5px] text-text-secondary leading-snug">{voc.hosteleria ? 'Cocina, sala, reparto… dan color a los turnos y dicen qué área produce platos.' : 'Administración, almacén, atención… dan color a los turnos.'}</span></span>
                   </button>
                 </div>
               </>
@@ -1592,7 +1594,7 @@ export default function CalendarioPage() {
 
       {displayTemplates.length > 0 && (viewMode === 'empleado' ? (
         employees.length === 0 ? (
-          <div className="bg-card border border-border-default rounded-lg p-6 text-center text-sm text-text-secondary">No hay empleados en este local.</div>
+          <div className="bg-card border border-border-default rounded-lg p-6 text-center text-sm text-text-secondary">No hay empleados en este {voc.local}.</div>
         ) : (
         <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
           <table className="w-full text-sm">

@@ -65,6 +65,8 @@
   background: var(--s-barra-chip-suave); color: var(--s-barra-activo-texto); font-variant-numeric: tabular-nums;
 }
 .s-barra-pagina-chip[data-tono='vence'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+/* LS1 · «Llega en noviembre»: lo que aún no existe, a la vista y sin color de aviso. */
+.s-barra-pagina-chip[data-tono='llega'] { background: transparent; color: var(--s-barra-texto); font-weight: var(--s-peso-normal); white-space: nowrap; opacity: .8; }
 .s-barra-pagina[aria-current='page'] .s-barra-pagina-chip { background: var(--s-superficie); color: var(--s-accion); }
 
 /* Plegada: solo el icono, centrado; el nombre, al pasar el ratón y para el lector; el chip, un globo. */

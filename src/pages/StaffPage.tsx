@@ -10,6 +10,8 @@ import FormacionesTab from '../components/personal/FormacionesTab'
 import SendMessageModal from '../components/personal/SendMessageModal'
 import AccesoTrabajadorPanel from '../components/personal/AccesoTrabajadorPanel'
 import InsightsPage from './InsightsPage'
+import { useProductoLaboral, enVocabulario } from '@/modules/personal/laboral/productoLaboral'
+import AltaCorta from '@/modules/personal/laboral/AltaCorta'
 import { fetchStaffRoles, type StaffRole } from '../services/staffRoleService'
 import { mensajeDeFalloDeFichaje } from '../services/supabaseSync'
 import {
@@ -54,6 +56,8 @@ const PHASE_SHORT_LABEL: Record<TrainingPhaseName, string> = {
 }
 
 
+/** Sumied no es hostelería: el puesto se escribe, con estas sugerencias. */
+const PUESTOS_GENERICOS = ['Dirección', 'Administración', 'Contabilidad', 'Comercial', 'Atención al cliente', 'Técnico', 'Operario', 'Almacén', 'Limpieza', 'Otro']
 const POSITIONS = ['Encargado', 'Jefe de cocina', 'Cocinero', 'Ayudante cocina', 'Camarero', 'Barra', 'Hostess', 'Limpieza', 'Gerente', 'Otro']
 const CONTRACT_TYPES = ['Indefinido', 'Temporal', 'Prácticas', 'Beca', 'Autónomo', 'Otro']
 const DAYS = ['lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo'] as const
@@ -121,8 +125,9 @@ function findCorrectionTarget(
 }
 
 export default function StaffPage() {
+  const voc = useProductoLaboral()
   const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile, addClockEntry } = useApp()
-  const [mainTab, setMainTab] = useState<'insights' | 'list'>('insights')
+  const [mainTab, setMainTab] = useState<'insights' | 'list'>(voc.hosteleria ? 'insights' : 'list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
@@ -187,7 +192,7 @@ export default function StaffPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-display text-text-primary">Personal</h1>
+          <h1 className="text-2xl font-display text-text-primary">{voc.sumied ? 'Equipo' : 'Personal'}</h1>
           <p className="text-sm text-text-secondary mt-0.5">
             {staff.length} empleados · {staff.filter(e => e.active).length} activos · {workingNow} trabajando ahora
           </p>
@@ -200,8 +205,9 @@ export default function StaffPage() {
               setShowNewEmployeeModal(true)
             }}
             disabled={locations.length === 0}
+            data-prueba="equipo-alta"
           >
-            + Nuevo Empleado
+            {voc.sumied ? '+ Dar de alta a una persona' : '+ Nuevo Empleado'}
           </Button>
         )}
       </div>
@@ -209,8 +215,8 @@ export default function StaffPage() {
       {/* L1a · PR 2: «Para revisar», arriba (jornadas imposibles, fuera del radio, desacuerdos). */}
       <ParaRevisar />
 
-      {/* Pestañas principales: Insights / Empleados */}
-      <div className="flex items-center gap-1 bg-accent-bg rounded-lg p-1 w-fit">
+      {/* Pestañas principales: Insights / Empleados. En Sumied no hay Insights (mezcla ventas). */}
+      {voc.hosteleria && <div className="flex items-center gap-1 bg-accent-bg rounded-lg p-1 w-fit">
         <button
           onClick={() => setMainTab('insights')}
           className={`inline-flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-base ${
@@ -231,10 +237,10 @@ export default function StaffPage() {
         >
           <Users size={14} /> Empleados
         </button>
-      </div>
+      </div>}
 
       {/* Contenido según pestaña */}
-      {mainTab === 'insights' && (
+      {voc.hosteleria && mainTab === 'insights' && (
         <InsightsPage
           onGoToIncompleteContracts={() => {
             setMainTab('list')
@@ -292,7 +298,7 @@ export default function StaffPage() {
               />
             </div>
             <Select value={locFilter} onChange={e => setLocFilter(e.target.value)} className="w-44">
-              <option value="todas">Todos los locales</option>
+              <option value="todas">Todos los {voc.locales}</option>
               {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </Select>
             <Select value={stateFilter} onChange={e => setStateFilter(e.target.value as 'all' | 'active' | 'inactive')} className="w-36">
@@ -310,7 +316,7 @@ export default function StaffPage() {
           {/* Employee list */}
           {locations.length === 0 ? (
             <Card className="p-8 text-center">
-              <p className="text-text-secondary">Primero crea un local en la sección Locales</p>
+              <p className="text-text-secondary">{voc.sumied ? 'Primero da de alta un centro de trabajo en «Centros».' : 'Primero crea un local en la sección Locales'}</p>
             </Card>
           ) : filtered.length === 0 ? (
             <Card className="p-8 text-center">
@@ -381,7 +387,14 @@ export default function StaffPage() {
       )}
 
       {/* Modal "Nuevo Empleado": pide datos mínimos y crea cuenta con Magic Link */}
-      {showNewEmployeeModal && (
+      {/* LS1: en Sumied, el alta corta (lo justo y su acceso al portal). */}
+      {showNewEmployeeModal && voc.sumied && (
+        <AltaCorta
+          alCerrar={() => setShowNewEmployeeModal(false)}
+          alCrear={() => setMainTab('list')}
+        />
+      )}
+      {showNewEmployeeModal && !voc.sumied && (
         <NewEmployeeModal
           locations={locations}
           onCancel={() => setShowNewEmployeeModal(false)}
@@ -430,6 +443,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
   senderName: string | null
   addClockEntry: (employeeId: string, entry: ClockEntry) => Promise<void>
 }) {
+  const voc = useProductoLaboral()
   const [emp, setEmp] = useState<Employee>({ ...employee, clockEntries: [...employee.clockEntries] })
   // L00 (27/10/2026): el PIN ya no llega al cliente; solo si lo tiene.
   const [tienePin, setTienePin] = useState<boolean | null>(null)
@@ -725,7 +739,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                       }`}
                       title={
                         trainingStatus.blockingPending.length > 0
-                          ? `No puede manipular alimentos — falta: ${trainingStatus.blockingPending.join(', ')}`
+                          ? `${voc.hosteleria ? 'No puede manipular alimentos' : 'Formación obligatoria pendiente'} — falta: ${trainingStatus.blockingPending.join(', ')}`
                           : trainingStatus.otherPending.length > 0
                             ? `Pendiente del itinerario de incorporación: ${trainingStatus.otherPending.join(', ')}`
                             : 'Formación de incorporación al día'
@@ -734,7 +748,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                       <span className={`w-1.5 h-1.5 rounded-full ${
                         trainingStatus.status === 'rojo' ? 'bg-danger' : trainingStatus.status === 'amarillo' ? 'bg-warning' : 'bg-success'
                       }`} />
-                      {trainingStatus.status === 'rojo' ? 'No puede manipular alimentos' : trainingStatus.status === 'amarillo' ? 'Formación pendiente' : 'Formación al día'}
+                      {trainingStatus.status === 'rojo' ? (voc.hosteleria ? 'No puede manipular alimentos' : 'Formación obligatoria pendiente') : trainingStatus.status === 'amarillo' ? 'Formación pendiente' : 'Formación al día'}
                     </span>
                   )}
                 </div>
@@ -768,9 +782,16 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
             </div>
             <div>
               <Label>Puesto</Label>
-              <Select className="mt-1" value={emp.position} onChange={e => update('position', e.target.value)}>
-                {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
-              </Select>
+              {voc.hosteleria ? (
+                <Select className="mt-1" value={emp.position} onChange={e => update('position', e.target.value)}>
+                  {POSITIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </Select>
+              ) : (
+                <>
+                  <Input className="mt-1" list="puestos-sumied" value={emp.position ?? ''} onChange={e => update('position', e.target.value)} placeholder="Ej: Administración" />
+                  <datalist id="puestos-sumied">{PUESTOS_GENERICOS.map(p => <option key={p} value={p} />)}</datalist>
+                </>
+              )}
             </div>
             <div>
               <Label>Área</Label>
@@ -784,14 +805,14 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
               <p className="text-[11px] text-text-secondary mt-1">Da color a sus turnos en el cuadrante. Gestiona las áreas desde el Calendario.</p>
             </div>
             <div>
-              <Label>Local principal</Label>
+              <Label>{voc.Local} principal</Label>
               <Select className="mt-1" value={emp.locationId} onChange={e => update('locationId', e.target.value)}>
                 {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
               </Select>
             </div>
             <div className="col-span-2">
-              <Label>Locales donde puede fichar</Label>
-              <p className="text-xs text-text-secondary mb-2">Si rota entre varios locales, marca todos. Si está vacío, solo podrá fichar en su local principal.</p>
+              <Label>{voc.Locales} donde puede fichar</Label>
+              <p className="text-xs text-text-secondary mb-2">Si rota entre varios {voc.locales}, marca todos. Si está vacío, solo podrá fichar en su {voc.local} principal.</p>
               <div className="flex flex-wrap gap-2 mt-1">
                 {locations.map(l => {
                   const assigned = emp.assignedLocations || []
@@ -1316,7 +1337,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 </Select>
                 <p className="text-xs text-text-secondary mt-1">
                   Los descansos siempre caen entre Lunes y Jueves. Viernes, sábado y
-                  domingo no descansa nadie por política del local.
+                  domingo no descansa nadie por política {voc.delLocal}.
                 </p>
               </div>
             </div>
@@ -1438,7 +1459,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 onClick={() => {
                   const locName = locations.find(l => l.id === employee.locationId)?.name
                   setGrantUsername(suggestUsername(employee.name, locName))
-                  setGrantPassword(generatePassword())
+                  setGrantPassword(generatePassword(voc.hosteleria))
                   setGrantRole(suggestRoleByPosition(employee.position))
                   setGrantError(null)
                   setGrantedCredentials(null)
@@ -1527,7 +1548,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
 
               if (data.communicated) {
                 try {
-                  const gmailUrl = buildGestoriaMailto(updated, locations, gestoriaEmail)
+                  const gmailUrl = enVocabulario(buildGestoriaMailto(updated, locations, gestoriaEmail), voc)
                   setTimeout(() => { window.open(gmailUrl, '_blank') }, 100)
                 } catch (e) {
                   console.warn('[Termination] No se pudo abrir Gmail:', e)
@@ -1653,8 +1674,8 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                         className="mt-1"
                       />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-text-primary">Responsable de local</p>
-                        <p className="text-xs text-text-secondary">Accede a gestión y también a su portal. Puede gestionar los locales que le asignes. No ve el resto.</p>
+                        <p className="text-sm font-medium text-text-primary">Responsable de {voc.local}</p>
+                        <p className="text-xs text-text-secondary">Accede a gestión y también a su portal. Puede gestionar los {voc.locales} que le asignes. No ve el resto.</p>
                       </div>
                     </label>
                   </div>
@@ -1664,7 +1685,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                 {grantRole === 'manager' && (
                   <>
                     <div>
-                      <Label>Locales que gestiona</Label>
+                      <Label>{voc.Locales} que gestiona</Label>
                       <div className="space-y-1.5 mt-1">
                         {locations.map(l => (
                           <label key={l.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default hover:border-accent cursor-pointer text-sm text-text-primary transition-base">
@@ -1681,7 +1702,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                       </div>
                       {grantManagerLocationIds.length === 0 && (
                         <p className="text-[11px] text-danger mt-1">
-                          Elige al menos un local, o este usuario no verá nada.
+                          Elige al menos un {voc.local}, o este usuario no verá nada.
                         </p>
                       )}
                     </div>
@@ -1735,7 +1756,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setGrantPassword(generatePassword())}
+                      onClick={() => setGrantPassword(generatePassword(voc.hosteleria))}
                       disabled={grantSubmitting}
                     >
                       Regenerar
@@ -1778,7 +1799,7 @@ function EmployeeModal({ employee, onClose, onSave, onDelete, locations, gestori
                         return
                       }
                       if (grantRole === 'manager' && grantManagerLocationIds.length === 0) {
-                        setGrantError('Elige al menos un local, o este usuario no verá nada.')
+                        setGrantError(`Elige al menos un ${voc.local}, o este usuario no verá nada.`)
                         return
                       }
                       if (grantRole === 'manager' && !grantTemplateKey) {
@@ -2436,10 +2457,13 @@ function suggestUsername(name: string, locationName: string | undefined): string
 
 // Genera una contraseña legible: "Palabra-NNNN" con dígitos sin confusión.
 // Evita O/0/I/l/1 para facilitar el tecleo en móvil.
-function generatePassword(): string {
-  const words = [
+function generatePassword(hosteleria = true): string {
+  const words = hosteleria ? [
     'Mesa', 'Plato', 'Fuego', 'Sal', 'Pan', 'Vino', 'Cafe', 'Horno',
     'Barra', 'Cocina', 'Turno', 'Hielo', 'Sopa', 'Brasa', 'Menu', 'Tapa',
+  ] : [
+    'Mesa', 'Sol', 'Rio', 'Monte', 'Faro', 'Puerto', 'Torre', 'Lago',
+    'Norte', 'Plaza', 'Puente', 'Valle', 'Bosque', 'Cielo', 'Mar', 'Luna',
   ]
   const digits = '23456789' // sin 0/1
   const word = words[Math.floor(Math.random() * words.length)]
@@ -2464,6 +2488,7 @@ function suggestRoleByPosition(position: string | undefined): 'worker' | 'manage
 type CreatedCredentials = { username: string; password: string; employeeId: string }
 
 function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: NewEmployeeModalProps) {
+  const voc = useProductoLaboral()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [pin, setPin] = useState('')
@@ -2476,7 +2501,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
   const [withAppAccess, setWithAppAccess] = useState(true) // ON por defecto (R2)
   const [username, setUsername] = useState('')
   const [usernameEdited, setUsernameEdited] = useState(false) // si el manager lo tocó, no autorrellenar
-  const [password, setPassword] = useState(() => generatePassword())
+  const [password, setPassword] = useState(() => generatePassword(voc.hosteleria))
   const [appRole, setAppRole] = useState<'worker' | 'manager'>('worker') // Trabajador por defecto
 
   // ENCARGO CODE (14/08) feat/f0-responsable-de-local, B.2/§4.bis — locales
@@ -2518,7 +2543,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
       return
     }
     if (!locationId) {
-      setError('Selecciona un local.')
+      setError(`Selecciona un ${voc.local}.`)
       return
     }
     if (pin && !/^\d{4}$/.test(pin)) {
@@ -2541,7 +2566,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
       }
       // ENCARGO CODE (14/08) §4.bis: mismo paso, no uno aparte.
       if (appRole === 'manager' && managerLocationIds.length === 0) {
-        setError('Elige al menos un local, o este usuario no verá nada.')
+        setError(`Elige al menos un ${voc.local}, o este usuario no verá nada.`)
         return
       }
       if (appRole === 'manager' && !templateKey) {
@@ -2665,7 +2690,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
         </div>
 
         <div>
-          <Label>Local principal</Label>
+          <Label>{voc.Local} principal</Label>
           <Select
             value={locationId}
             onChange={(e) => setLocationId(e.target.value)}
@@ -2679,7 +2704,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
 
         {locations.length > 1 && (
           <div>
-            <Label>Locales adicionales</Label>
+            <Label>{voc.Locales} adicionales</Label>
             <div className="flex flex-col gap-1 mt-1">
               {locations
                 .filter(loc => loc.id !== locationId)
@@ -2762,8 +2787,8 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
                     className="mt-1"
                   />
                   <div className="flex-1">
-                    <p className="text-sm font-medium text-text-primary">Responsable de local</p>
-                    <p className="text-xs text-text-secondary">Accede a gestión y también a su portal. Puede gestionar los locales que le asignes. No ve el resto.</p>
+                    <p className="text-sm font-medium text-text-primary">Responsable de {voc.local}</p>
+                    <p className="text-xs text-text-secondary">Accede a gestión y también a su portal. Puede gestionar los {voc.locales} que le asignes. No ve el resto.</p>
                   </div>
                 </label>
               </div>
@@ -2775,7 +2800,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
             {appRole === 'manager' && (
               <>
                 <div>
-                  <Label>Locales que gestiona</Label>
+                  <Label>{voc.Locales} que gestiona</Label>
                   <div className="space-y-1.5 mt-1">
                     {locations.map(l => (
                       <label key={l.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border-default hover:border-accent cursor-pointer text-sm text-text-primary transition-base">
@@ -2792,7 +2817,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
                   </div>
                   {managerLocationIds.length === 0 && (
                     <p className="text-[11px] text-danger mt-1 inline-flex items-center gap-1">
-                      <AlertTriangle size={11} /> Elige al menos un local, o este usuario no verá nada.
+                      <AlertTriangle size={11} /> Elige al menos un {voc.local}, o este usuario no verá nada.
                     </p>
                   )}
                 </div>
@@ -2848,7 +2873,7 @@ function NewEmployeeModal({ locations, onCancel, onCreated, onCreateLocal }: New
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPassword(generatePassword())}
+                  onClick={() => setPassword(generatePassword(voc.hosteleria))}
                   disabled={submitting}
                 >
                   Regenerar

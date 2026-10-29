@@ -25,6 +25,7 @@ import {
 import { listAvailabilityForLocation, setAvailability, clearUnavailable } from '../services/schedulerService'
 import type { EmployeeAvailability, DayOfWeek, ShiftPeriod } from '../types/scheduler'
 import { DAY_LABELS } from '../types/scheduler'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 const DAYS: DayOfWeek[] = [0, 1, 2, 3, 4, 5, 6]
 const PERIODS: ShiftPeriod[] = ['morning', 'evening']
@@ -44,6 +45,7 @@ function keyOf(employeeId: string, day: DayOfWeek, period: ShiftPeriod) {
 }
 
 export default function DisponibilidadPage() {
+  const voc = useProductoLaboral()
   const { staff, locations } = useApp()
   const { activeAccountId } = useActiveAccount()
   const { hasPermission } = usePermissions()
@@ -220,7 +222,7 @@ export default function DisponibilidadPage() {
       {loading ? (
         <Card className="p-8 text-center text-sm text-text-secondary">Cargando disponibilidad…</Card>
       ) : employees.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-text-secondary">Sin empleados activos en este local.</Card>
+        <Card className="p-8 text-center text-sm text-text-secondary">Sin empleados activos en este {voc.local}.</Card>
       ) : (
         <div className="bg-card border border-border-default rounded-lg overflow-x-auto">
           <table className="w-full text-sm border-collapse">
