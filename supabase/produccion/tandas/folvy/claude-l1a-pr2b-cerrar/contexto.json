@@ -1,0 +1,29 @@
+{
+  "_que": "L1a · PR 2b · contexto de producción de la tanda (0730, 0731, 0732 y 0733), medido en SOLO LECTURA el 29/10 a las 07:40 UTC con la consulta del analizador (sql-contexto). Existen clock_entries y las dos funciones que reemplaza (una firma cada una); _solo_cambia_origen no existe. Nada está en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-29T07:40Z",
+  "tanda": {
+    "supabase/migrations/20261029T0730_l1a_cerrar_escritura_directa.sql": "7dd42d43fa2e66f5df9228e543d4b039",
+    "supabase/migrations/20261029T0731_l1a_columnas_privadas.sql": "23a508c58fd0a5afb42565a1dd8b6e68",
+    "supabase/migrations/20261029T0732_l1a_origen_movil.sql": "3b0ab2e8c671e0cf57848b8ec704936a",
+    "supabase/migrations/20261029T0733_l1a_informe_origen.sql": "fa94b3e73663474d0a9d390234e92c83"
+  },
+  "contexto": {
+    "tablas": [
+      "public.clock_entries"
+    ],
+    "funciones": [
+      "public._informe_registro_jornada(uuid,date,date,boolean,boolean)",
+      "public.export_gestoria_mensual(uuid,date,date)"
+    ],
+    "filas": {
+      "public.clock_entries": 2187
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

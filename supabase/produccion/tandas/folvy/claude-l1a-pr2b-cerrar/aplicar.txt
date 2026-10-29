@@ -1,0 +1,29 @@
+# L1a · PR 2b · «Cerrar» (29/10/2026). Rama claude/l1a-pr2b-cerrar. Se ensaya y
+# se aplica desde esta rama, antes de fusionar.
+#
+#   1. 0730 — DESTRUYE (autorizo): clock_entries sin INSERT, UPDATE ni DELETE
+#      para la sesión y fuera sus tres políticas; export_gestoria_mensual de
+#      servidor, solo el administrador (cambia, con respaldo). Con cerrojo:
+#      para si en 24 h ha entrado algún fichaje por el INSERT directo (el
+#      29/10 a las 07:22 UTC cuenta 0; el último, 27/10 23:11 UTC).
+#   2. 0731 — CIERRA LECTURA: salario, DNI, nacimiento y coste de SS de
+#      employees, sin SELECT para la sesión. El analizador dice «sigue» porque
+#      lo hace con un execute dinámico y no ve el revoke; quita algo que hoy se
+#      puede leer, así que va con el mismo autorizo que la 0730.
+#   3. 0732 — CAMBIA DATOS (autorizo): «kiosko» con GPS pasa a «movil», con
+#      rastro. 1.434 marcas (todas de Foodint); se quedan 716 en «kiosko».
+#   4. 0733 — CAMBIA: _informe_registro_jornada (misma firma, con respaldo) y
+#      _solo_cambia_origen (nueva).
+#
+# Nada está en el camino del pedido.
+# Antes (producción, 29/10 07:40 UTC): políticas de clock_entries 4 ·
+# export_gestoria_mensual 152170ea · employees con SELECT de tabla para la
+# sesión · «kiosko» con GPS 1.434, sin GPS 716 · nada de la tanda en el
+# historial.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261029T0730_l1a_cerrar_escritura_directa.sql
+supabase/migrations/20261029T0731_l1a_columnas_privadas.sql
+supabase/migrations/20261029T0732_l1a_origen_movil.sql
+supabase/migrations/20261029T0733_l1a_informe_origen.sql
+cuenta: scripts/conta/produccion/cuentas/l1a-cerrar.sql

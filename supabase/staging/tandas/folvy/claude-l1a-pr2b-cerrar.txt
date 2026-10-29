@@ -1,0 +1,11 @@
+# L1a · PR 2b · «Cerrar»: la 0730, la 0731, la 0732 y la 0733, y su prueba
+# (ROLLBACK), que empieza por sus vueltas atrás si ya están aplicadas: entra
+# como el trabajador, el encargado, el administrador y sin sesión; la
+# escritura directa cerrada y fichar() fichando; la gestoría; las columnas
+# privadas; el origen con su rastro y la firma vigente; el informe; y la vuelta
+# atrás.
+supabase/migrations/20261029T0730_l1a_cerrar_escritura_directa.sql
+supabase/migrations/20261029T0731_l1a_columnas_privadas.sql
+supabase/migrations/20261029T0732_l1a_origen_movil.sql
+supabase/migrations/20261029T0733_l1a_informe_origen.sql
+supabase/staging/sql/20261029_l1a_cerrar_prueba.sql
