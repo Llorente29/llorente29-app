@@ -1,6 +1,6 @@
 // S02 · La pantalla del año, lo que no es pantalla (src/modules/conta/impuestos/anual.ts).
 import { describe, expect, it } from 'vitest'
-import { claveEnPalabras, ejercicioPorDefecto, perceptoresEnOrden, porQueNoFichero, queFaltaAnual, tarjetaAnual } from '@/modules/conta/impuestos/anual'
+import { claveEnPalabras, ejercicioPorDefecto, perceptoresEnOrden, porQueNoFichero, queFaltaAnual, sinTrabajadorEnPalabras, tarjetaAnual } from '@/modules/conta/impuestos/anual'
 import type { ModeloTrimestre } from '@/modules/conta/impuestos/trimestre'
 import type { Perceptor190 } from '@/modules/conta/services/impuestosService'
 
@@ -64,5 +64,13 @@ describe('los perceptores', () => {
   it('la clave en palabras', () => {
     expect(claveEnPalabras('G', '03')).toBe('Actividad profesional · tipo reducido de inicio')
     expect(claveEnPalabras('A', null)).toBe('Empleado por cuenta ajena')
+    expect(claveEnPalabras('L', '05')).toBe('Rentas exentas · indemnización por despido o cese exenta')
+  })
+  it('lo «sin trabajador»: las nóminas (640) y las indemnizaciones (641) se dicen por separado', () => {
+    expect(sinTrabajadorEnPalabras({ clave: 'A', subclave: null }).titulo).toBe('Nóminas sin trabajador')
+    expect(sinTrabajadorEnPalabras({ clave: 'L', subclave: '05' })).toEqual({
+      titulo: 'Indemnizaciones sin trabajador',
+      apoyo: 'Las indemnizaciones exentas del diario (la 641) que no están en ninguna nómina por trabajador',
+    })
   })
 })

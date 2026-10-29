@@ -93,7 +93,21 @@ export function claveEnPalabras(clave: string, subclave: string | null): string 
     A: 'Empleado por cuenta ajena',
     E: 'Consejero o administrador',
     G: 'Actividad profesional',
+    L: 'Rentas exentas',
   }
-  const sub = clave === 'G' && subclave === '03' ? ' · tipo reducido de inicio' : ''
+  const sub = clave === 'G' && subclave === '03' ? ' · tipo reducido de inicio'
+    : clave === 'L' && subclave === '05' ? ' · indemnización por despido o cese exenta' : ''
   return `${c[clave] ?? `Clave ${clave}`}${sub}`
+}
+
+/**
+ * Una línea «sin trabajador» del 190, en palabras: lo que el diario paga y no
+ * está en ninguna nómina por trabajador. Las nóminas (640, clave A) y las
+ * indemnizaciones exentas (641, clave L.05) se dicen por separado.
+ */
+export function sinTrabajadorEnPalabras(p: Pick<Perceptor190, 'clave' | 'subclave'>): { titulo: string; apoyo: string } {
+  if (p.clave === 'L') {
+    return { titulo: 'Indemnizaciones sin trabajador', apoyo: 'Las indemnizaciones exentas del diario (la 641) que no están en ninguna nómina por trabajador' }
+  }
+  return { titulo: 'Nóminas sin trabajador', apoyo: 'Lo que el diario paga en nóminas (la 640) y no está en ninguna nómina por trabajador' }
 }

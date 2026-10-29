@@ -14,6 +14,7 @@
 --         si no 01 (tipo general). El NIF, el nombre y la provincia, de su
 --         ficha de proveedor (la provincia, las dos primeras cifras de su
 --         código postal, que son las del anexo);
+--       · indemnizaciones exentas (la 641): clave L, subclave 05 del anexo;
 --       · nóminas ([01]–[03] del 111, y también las que no llevan retención,
 --         que el 111 no ve): un perceptor por trabajador, clave A,
 --         con lo que dicen sus nóminas (payroll_cost: bruto, IRPF y sus
@@ -62,7 +63,7 @@ declare
   c public.company; o public.tax_obligation; r public.tax_return; v_plazo record; v_quien text := public.conta_impuesto_quien();
   v_cad111 text; v_pers text[]; v_per text; v_d jsonb; v_asientos jsonb := '[]'; v_sin_modelo jsonb := '[]';
   v_lineas jsonb; v_trim jsonb := '[]'; v_n int; v_base numeric; v_ret numeric; v_det jsonb;
-  v_nom_base numeric := 0; v_nom_ret numeric := 0; v_sin_ret_base numeric := 0; v_sin_ret_asientos jsonb := '[]'; v_pay_base numeric := 0; v_pay_ret numeric := 0; v_una_empresa boolean;
+  v_nom_base numeric := 0; v_nom_ret numeric := 0; v_sin_ret_base numeric := 0; v_sin_ret_asientos jsonb := '[]'; v_l05 numeric := 0; v_l05_asientos jsonb := '[]'; v_det_a jsonb; v_det_l jsonb; v_pay_base numeric := 0; v_pay_ret numeric := 0; v_una_empresa boolean;
   v_dif text; v_falta_111 text; v_box jsonb;
   e text := 'FM999G999G990D00';
 begin
@@ -188,6 +189,31 @@ begin
                               from jsonb_array_elements(v_asientos) x where x->>'tipo' = '111_nomina'), '[]') || v_sin_ret_asientos));
   end if;
 
+  -- Las indemnizaciones exentas (la 641): clave L, subclave 05 del anexo («indemnizaciones por
+  -- despido o cese del trabajador que estén exentas», art. 7.e LIRPF). Sin retención. Del diario
+  -- no se sabe de quién son: van «sin trabajador» hasta que entren las nóminas de cada persona.
+  -- (S02, 29/10: la L.05 de los 190 presentados de Foodint es la 641 al céntimo: 717,68 en
+  -- 2024; 897,78 + 870,43 en 2025.)
+  select coalesce(sum(q.n641), 0),
+         coalesce(jsonb_agg(jsonb_build_object('asiento', q.id, 'fecha', q.entry_date, 'serie', q.series, 'numero', q.number,
+                                               'retenido', 0, 'base', round(q.n641, 2)) order by q.entry_date), '[]')
+    into v_l05, v_l05_asientos
+    from (select je.id, je.entry_date, je.series, je.number, sum(l.debit - l.credit) filter (where ca.code like '641%') as n641
+            from public.journal_entry je
+            join public.journal_line l on l.entry_id = je.id
+            join public.company_account ca on ca.id = l.company_account_id
+           where je.account_id = c.account_id and je.company_id = p_company and je.status in ('validado', 'anulado')
+             and je.entry_date between make_date(p_year, 1, 1) and make_date(p_year, 12, 31)
+             and coalesce(je.source_type, '') not in ('opening', 'closing')
+           group by je.id, je.entry_date, je.series, je.number
+          having bool_or(ca.code like '641%') and not bool_or(ca.code ~ '^(10|11|12)')) q
+   where abs(q.n641) >= 0.005;
+  if abs(v_l05) >= 0.005 then
+    v_lineas := v_lineas || jsonb_build_array(jsonb_build_object(
+      'origen', 'diario', 'clave', 'L', 'subclave', '05', 'perceptor', null, 'nif', null, 'nombre', null, 'provincia', null, 'nif_valido', false,
+      'sin_trabajador', true, 'integra', round(v_l05, 2), 'retenciones', 0, 'asientos', v_l05_asientos));
+  end if;
+
   -- Las líneas: cada perceptor y clave, con su foto.
   delete from public.tax_return_line where tax_return_id = r.id;
   insert into public.tax_return_line (tax_return_id, account_id, company_id, boxes, frozen)
@@ -271,18 +297,26 @@ begin
 
   -- d) Nóminas sin trabajador.
   select coalesce(jsonb_agg(l), '[]') into v_det from jsonb_array_elements(v_lineas) l where coalesce((l->>'sin_trabajador')::boolean, false);
+  select l into v_det_a from jsonb_array_elements(v_det) l where l->>'clave' = 'A' limit 1;
+  select l into v_det_l from jsonb_array_elements(v_det) l where l->>'clave' = 'L' limit 1;
   insert into public.tax_return_check (tax_return_id, account_id, company_id, check_key, result, title, detail)
   values (r.id, c.account_id, p_company, 'payroll_190', case when jsonb_array_length(v_det) > 0 then 'error' else 'ok' end,
           case when jsonb_array_length(v_det) = 0 then 'Las nóminas del año van por trabajador.'
-               else 'Las nóminas del diario pagan ' || translate(to_char(v_nom_base, e), ',.', '.,') || ' € (' ||
+               else concat_ws(' ',
+                 case when v_det_a is not null then
+                    'Las nóminas del diario pagan ' || translate(to_char(v_nom_base, e), ',.', '.,') || ' € (' ||
                     translate(to_char(v_nom_ret, e), ',.', '.,') || ' € retenidos) y las nóminas por trabajador de Sumied, ' ||
                     translate(to_char(v_pay_base, e), ',.', '.,') || ' € (' || translate(to_char(v_pay_ret, e), ',.', '.,') ||
                     ' €): el 190 lleva una línea por persona, y quedan ' ||
                     translate(to_char(v_nom_base - v_pay_base, e), ',.', '.,') || ' € pagados y ' ||
                     translate(to_char(v_nom_ret - v_pay_ret, e), ',.', '.,') || ' € retenidos sin trabajador (' ||
-                    jsonb_array_length(v_det->0->'asientos') || case when jsonb_array_length(v_det->0->'asientos') = 1 then ' asiento' else ' asientos' end || ' de nómina).' ||
-                    case when not v_una_empresa then ' La cuenta tiene más de una empresa: sus nóminas no se pueden repartir.' else '' end end,
-          jsonb_build_object('diario', jsonb_build_object('base', v_nom_base, 'retenido', v_nom_ret, 'sin_retencion', v_sin_ret_base),
+                    jsonb_array_length(v_det_a->'asientos') || case when jsonb_array_length(v_det_a->'asientos') = 1 then ' asiento' else ' asientos' end || ' de nómina).' end,
+                 case when v_det_l is not null then
+                    'Las indemnizaciones exentas (la 641, clave L.05) suman ' || translate(to_char(v_l05, e), ',.', '.,') ||
+                    ' € y tampoco se sabe de quién son (' || jsonb_array_length(v_det_l->'asientos') ||
+                    case when jsonb_array_length(v_det_l->'asientos') = 1 then ' asiento).' else ' asientos).' end end,
+                 case when not v_una_empresa then 'La cuenta tiene más de una empresa: sus nóminas no se pueden repartir.' end) end,
+          jsonb_build_object('diario', jsonb_build_object('base', v_nom_base, 'retenido', v_nom_ret, 'sin_retencion', v_sin_ret_base, 'indemnizaciones_l05', v_l05),
                              'nominas', jsonb_build_object('base', v_pay_base, 'retenido', v_pay_ret), 'lineas', v_det));
 
   -- e) Asientos con retención sin modelo en el año.

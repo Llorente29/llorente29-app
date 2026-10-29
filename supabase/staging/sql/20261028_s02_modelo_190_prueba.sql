@@ -10,11 +10,12 @@
 --      y código postal).
 --   0. Lo de partida: el 190 de A antes de la prueba (su [03] y sus líneas).
 --   1b. Un trabajador con su nómina de octubre (IRPF 350).
---   2. Tres asientos validados de verdad en el 4T: la nómina (1.000 de base,
+--   2. Cuatro asientos validados de verdad en el 4T: la nómina (1.000 de base,
 --      350 retenidos, con las nóminas del 111), la factura del profesional
---      (500 de gasto, 75 retenidos) y una nómina SIN retención (800 en la 640).
---   3. El 190: la [03] sube 425 y la [02], 2.300 (también la nómina sin
---      retención); la línea G del proveedor sube 75, con su NIF
+--      (500 de gasto, 75 retenidos), una nómina SIN retención (800 en la 640)
+--      y una indemnización exenta (300 en la 641, clave L.05).
+--   3. El 190: la [03] sube 425 y la [02], 2.600 (también la nómina sin
+--      retención y la indemnización, en su línea L.05); la línea G del proveedor sube 75, con su NIF
 --      y la provincia 08; la del trabajador (clave A), 350, si la cuenta tiene
 --      una sola empresa; lo que queda «sin trabajador» no cambia.
 --   4. Con el 111 del 4T calculado, el 4T del 190 casa con él.
@@ -48,6 +49,12 @@ declare
 begin
   select id into c41p from public.company_account where company_id = emp and code = '41000002';
   if c41p is null then raise exception 'PRUEBA 190 · 1: falta la subcuenta 41000002 de la empresa A.'; end if;
+  -- S02 (29/10): la 641 de A, para la indemnización exenta del paso 2 (si no la tiene; con el plan de su 640).
+  if not exists (select 1 from public.company_account where company_id = emp and code like '641%') then
+    insert into public.company_account (account_id, company_id, plan, code, template_code, name, kind, source)
+    select a, emp, ca.plan, '64100000', '641', 'Indemnizaciones', 'template', 'manual'
+      from public.company_account ca where ca.company_id = emp and ca.code = '64000000';
+  end if;
   -- El 190 en los modelos de A (si no estaba).
   if not exists (select 1 from public.tax_obligation where company_id = emp and form_code = '190' and valid_to is null and active) then
     insert into public.tax_obligation (account_id, company_id, form_code, cadence, active, origin, reason, why, valid_from)
@@ -83,9 +90,10 @@ begin
     'c03', coalesce((c#>>'{casillas,03}')::numeric, 0),
     'g', coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and l.frozen->>'clave' = 'G'
                     and l.frozen->>'proveedor' = (select v #>> '{}' from prueba_190 where k = 'proveedor')), 0),
-    'sin', coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0),
-    'sin_integra', coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0),
-    'c02', coalesce((c#>>'{casillas,02}')::numeric, 0)));
+    'sin', coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean and l.frozen->>'clave' = 'A'), 0),
+    'sin_integra', coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean and l.frozen->>'clave' = 'A'), 0),
+    'c02', coalesce((c#>>'{casillas,02}')::numeric, 0),
+    'l05', coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and l.frozen->>'clave' = 'L' and l.frozen->>'subclave' = '05'), 0)));
 end $$;
 
 reset role;
@@ -108,7 +116,7 @@ declare
   a constant uuid := 'c01a0000-0000-4000-8000-00000000000a';
   emp constant uuid := '3b34403a-a7d6-4a48-a8d7-737e8cababdc';
   loc constant uuid := 'c01a0000-0000-4000-8000-0000000000a2';
-  v_y uuid; c640 uuid; c465 uuid; c4751 uuid; c623 uuid; c41p uuid; e uuid; w_trab uuid; w_prof uuid;
+  v_y uuid; c640 uuid; c641 uuid; c465 uuid; c4751 uuid; c623 uuid; c41p uuid; e uuid; w_trab uuid; w_prof uuid;
 begin
   select id into v_y from public.fiscal_year where company_id = emp and code = '2026';
   select id into c640 from public.company_account where company_id = emp and code = '64000000';
@@ -138,6 +146,14 @@ begin
   insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
   values (a, emp, e, 1, c640, 800, 0, loc, null, null, null), (a, emp, e, 2, c465, 0, 800, loc, null, null, null);
   perform public.journal_entry_validar(e);
+  -- S02 (29/10): una indemnización exenta (300 en la 641): clave L, subclave 05.
+  select id into c641 from public.company_account where company_id = emp and code like '641%' order by code limit 1;
+  if c641 is null then raise exception 'PRUEBA 190 · 2: la empresa A no tiene ninguna subcuenta de la 641.'; end if;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type)
+  values (a, emp, v_y, 4, '2026-12-15', 'Prueba S02 · indemnización exenta', 'manual') returning id into e;
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model)
+  values (a, emp, e, 1, c641, 300, 0, loc, null, null, null), (a, emp, e, 2, c465, 0, 300, loc, null, null, null);
+  perform public.journal_entry_validar(e);
 end $$;
 
 -- ── 3 · El 190 con los asientos ────────────────────────────────────────────
@@ -160,15 +176,20 @@ begin
   if g is null or (g->>'retenciones')::numeric - (s0->>'g')::numeric <> 75 or g->>'nif' <> '00000000T' or g->>'provincia' <> '08' or g->>'subclave' <> '01' then
     raise exception 'PRUEBA 190 · 3: la línea G del proveedor no es la esperada (%).', g;
   end if;
-  select coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0) into sin;
-  -- La [02]: 1.000 de la nómina con retención, 500 del profesional y 800 de la nómina sin retención.
-  if (c#>>'{casillas,02}')::numeric - (s0->>'c02')::numeric <> 2300 then
-    raise exception 'PRUEBA 190 · 3: la [02] no sube 2.300 (antes %, ahora %): la nómina sin retención no entra.', s0->>'c02', c#>>'{casillas,02}';
+  select coalesce((select (l.frozen->>'retenciones')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean and l.frozen->>'clave' = 'A'), 0) into sin;
+  -- La [02]: 1.000 de la nómina con retención, 500 del profesional, 800 de la nómina sin retención y 300 de la indemnización.
+  if (c#>>'{casillas,02}')::numeric - (s0->>'c02')::numeric <> 2600 then
+    raise exception 'PRUEBA 190 · 3: la [02] no sube 2.600 (antes %, ahora %): falta la nómina sin retención o la indemnización.', s0->>'c02', c#>>'{casillas,02}';
+  end if;
+  -- La indemnización, en su línea L.05 (sin trabajador: del diario no se sabe de quién es).
+  if coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and l.frozen->>'clave' = 'L' and l.frozen->>'subclave' = '05'
+                and (l.frozen->>'sin_trabajador')::boolean), 0) - (s0->>'l05')::numeric <> 300 then
+    raise exception 'PRUEBA 190 · 3: la indemnización no va en la línea L.05.';
   end if;
   -- Lo pagado sin trabajador: la nómina sin retención (800) y, con varias empresas, también la de 1.000.
   -- (El esperado va en una variable: dentro de un IF, PL/pgSQL corta la condición en el primer THEN.)
   esperado := case when una then 800 else 1800 end;
-  if (select coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean), 0))
+  if (select coalesce((select (l.frozen->>'integra')::numeric from public.tax_return_line l where l.tax_return_id = d and (l.frozen->>'sin_trabajador')::boolean and l.frozen->>'clave' = 'A'), 0))
      - (s0->>'sin_integra')::numeric <> esperado then
     raise exception 'PRUEBA 190 · 3: lo pagado «sin trabajador» no sube lo esperado (una empresa: %).', una;
   end if;

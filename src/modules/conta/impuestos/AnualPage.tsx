@@ -21,7 +21,7 @@ import { eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
 import {
   aceptarAviso, calcular190, comprobacionesConAviso, hacienda, informativaFuera, leerAnual, perceptores190, revisarDeclaracion, type Perceptor190,
 } from '@/modules/conta/services/impuestosService'
-import { CALCULA_SUMIED, claveEnPalabras, ejercicioPorDefecto, perceptoresEnOrden, porQueNoFichero, queFaltaAnual, tarjetaAnual } from './anual'
+import { CALCULA_SUMIED, claveEnPalabras, ejercicioPorDefecto, perceptoresEnOrden, porQueNoFichero, queFaltaAnual, sinTrabajadorEnPalabras, tarjetaAnual } from './anual'
 import { estaPresentada, presentadorEnPalabras, type ModeloTrimestre, type Trimestre } from './trimestre'
 import { BotonCalcular, TablaCasillas, VisorJustificante } from './TrimestrePage'
 
@@ -321,8 +321,8 @@ function Centro({ m, ejercicio, perceptores }: { m: ModeloTrimestre; ejercicio: 
           <tbody>{filas.map((p, i) => (
             <tr key={`${p.clave}/${p.nif ?? ''}/${i}`} data-falta={p.falta.length ? 'si' : undefined}>
               <td>
-                {p.sin_trabajador ? <strong>Nóminas sin trabajador</strong> : <strong>{p.nombre ?? 'Sin nombre'}</strong>}
-                <span className="s-tabla-apoyo">{p.sin_trabajador ? 'Lo que el diario retiene en nóminas y no está en ninguna nómina por trabajador' : `${p.nif ?? 'sin NIF'}${p.provincia ? ` · provincia ${p.provincia}` : ''}`}</span>
+                {p.sin_trabajador ? <strong>{sinTrabajadorEnPalabras(p).titulo}</strong> : <strong>{p.nombre ?? 'Sin nombre'}</strong>}
+                <span className="s-tabla-apoyo">{p.sin_trabajador ? sinTrabajadorEnPalabras(p).apoyo : `${p.nif ?? 'sin NIF'}${p.provincia ? ` · provincia ${p.provincia}` : ''}`}</span>
                 <span className="s-tabla-apoyo">Clave {p.clave}{p.subclave ? `.${p.subclave}` : ''} · {claveEnPalabras(p.clave, p.subclave)}</span>
                 {p.falta.length > 0 && <span className="s-impuestos-aviso">! {p.falta.join(', ')}</span>}
               </td>
