@@ -153,7 +153,7 @@ function CuandoLlegan({ proveedor, nombre }: { proveedor: string; nombre: string
   return (
     <section className="cx-tarjeta cxc-como" aria-label={`Cuándo llegan las facturas de ${nombre}`} data-prueba="cuando-llegan">
       <p className="cxc-dice"><strong>Cuándo llegan sus facturas</strong></p>
-      <div className="cxc-forma-mas" role="radiogroup" aria-label="Cuándo llegan sus facturas">
+      <div className="cxc-cuando-ops" role="radiogroup" aria-label="Cuándo llegan sus facturas">
         {([['al_momento', 'Al momento'], ['inicio_mes_siguiente', 'Todas juntas a primeros del mes siguiente']] as const).map(([v, texto]) => (
           <button key={v} type="button" role="radio" aria-checked={actual === v} disabled={ocupado}
             className={actual === v ? 'cx-boton-sec cxc-forma-op cxc-forma-op-si' : 'cx-boton-sec cxc-forma-op'}
