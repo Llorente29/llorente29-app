@@ -73,6 +73,26 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/sql-sin-where.mjs "$BASE" "$HEAD"
 
+      # W10 (28/10): ninguna migración nueva o cambiada (ni su vuelta atrás)
+      # escribe la dirección de un proyecto de Supabase ni un secreto. 23
+      # funciones llevaban la de producción escrita y staging, construido con
+      # las mismas migraciones, llamaba a producción; una llevaba además el
+      # secreto de order-advance. La dirección se lee con _project_url() y los
+      # secretos, del Vault.
+      - name: Ninguna dirección de proyecto ni secreto escritos (W10)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/sql-sin-direccion.mjs "$BASE" "$HEAD"
+
+      # W10 (28/10): el repositorio es público. Ninguna línea que añade el PR,
+      # en ningún fichero, trae un secreto (también los «fv_…» internos).
+      - name: Ningún secreto en lo que añade el PR (W10)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/sin-secretos.mjs "$BASE" "$HEAD"
+
       # W06 (26/10): una cuenta de tanda («cuenta:») no mide algo que crece
       # solo. El ensayo de producción cuenta antes y después de deshacer, con
       # minutos en medio y el negocio abierto: el #241 se paró porque contaba

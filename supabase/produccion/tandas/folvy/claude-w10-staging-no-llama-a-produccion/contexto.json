@@ -1,0 +1,56 @@
+{
+  "_que": "W10 · contexto de producción de la tanda (1440 y 1441), medido en SOLO LECTURA el 28/10 con la consulta del analizador (sql-contexto). Existen las 23 funciones que cambian (una firma cada una); las tres nuevas no existen. Once están en el camino del pedido (los dos disparadores de sale y las que despierta un cron). Nada de la tanda en el historial.",
+  "medido": "2026-10-28T13:14Z",
+  "tanda": {
+    "supabase/migrations/20261028T1440_w10_project_url.sql": "03533240308c2cbf92d4bba8522ab069",
+    "supabase/migrations/20261028T1441_w10_funciones_leen_su_proyecto.sql": "513c957f29b7ae95eb71064d742b68b3"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public._set_brand_closure_core(uuid,uuid[],text,timestamp with time zone,text,text,uuid,uuid,text,text)",
+      "public.conta_diez_despertar()",
+      "public.conta_lote_releer_lanzar(uuid,text)",
+      "public.conta_recibida_pdf_despertar()",
+      "public.conta_recordatorios_despertar()",
+      "public.db_health_connection_guard()",
+      "public.last_catalog_import_dispatch()",
+      "public.last_catalog_sync_dispatch()",
+      "public.push_location_opening_hours(uuid)",
+      "public.request_social_generation(uuid)",
+      "public.set_location_status_by_token(text,text,timestamp with time zone,text,text)",
+      "public.set_location_status(uuid,text,timestamp with time zone,text,text)",
+      "public.set_modifier_option_availability_by_token(text,uuid,boolean,text,timestamp with time zone,text)",
+      "public.set_modifier_option_availability(uuid,boolean,uuid,text,timestamp with time zone,text)",
+      "public.set_product_availability_by_token(text,uuid,boolean,text,timestamp with time zone,text)",
+      "public.set_product_availability(uuid,boolean,uuid,text,timestamp with time zone,text)",
+      "public.set_products_availability_bulk_by_token(text,uuid[],boolean,text,timestamp with time zone,text)",
+      "public.set_products_availability_bulk(uuid[],boolean,uuid,text,timestamp with time zone,text)",
+      "public.system_alert_queue_drain()",
+      "public.tg_auto_dispatch()",
+      "public.trg_sale_push_status()",
+      "public.verifactu_despertar_cuadre()",
+      "public.verifactu_despertar()"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": [
+        "public.conta_diez_despertar()",
+        "public.conta_recibida_pdf_despertar()",
+        "public.conta_recordatorios_despertar()",
+        "public.db_health_connection_guard()",
+        "public.last_catalog_import_dispatch()",
+        "public.last_catalog_sync_dispatch()",
+        "public.system_alert_queue_drain()",
+        "public.tg_auto_dispatch()",
+        "public.trg_sale_push_status()",
+        "public.verifactu_despertar_cuadre()",
+        "public.verifactu_despertar()"
+      ]
+    },
+    "usos": {},
+    "registro": []
+  }
+}
