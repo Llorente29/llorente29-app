@@ -59,6 +59,9 @@ export interface FichajeGuardado {
   radioM: number
   local: string
   localConCoordenadas: boolean
+  /** L1a PR 3: la precisión de la ubicación (m) y si era aproximada (más de 100 m). */
+  precisionM: number | null
+  ubicacionAproximada: boolean
 }
 
 const ultimos = new Map<string, FichajeGuardado>()
@@ -82,6 +85,8 @@ function aGuardado(r: Record<string, unknown>): FichajeGuardado {
     radioM: Number(r.radio_m ?? 200),
     local: String(r.local ?? ''),
     localConCoordenadas: Boolean(r.local_con_coordenadas),
+    precisionM: r.precision_m == null ? null : Number(r.precision_m),
+    ubicacionAproximada: Boolean(r.ubicacion_aproximada),
   }
 }
 
@@ -120,22 +125,26 @@ export async function ficharEnElServidor(
   const origen = entry.source === 'tablet' ? 'tablet' : 'movil'
   const pin = origen === 'tablet' ? tomarPinDeKiosko(employeeId) : null
   let r: { data: unknown; error: { message: string; hint?: string | null; code?: string | null } | null }
+  const args: Record<string, unknown> = {
+    p_employee_id: employeeId,
+    p_type: entry.type,
+    p_origen: origen,
+    p_location_id: entry.locationIdAtClock ?? null,
+    p_lat: entry.lat ?? null,
+    p_lng: entry.lng ?? null,
+    p_hora_efectiva: entry.datetime ?? null,
+    p_hora_declarada: horaDeclarada ?? null,
+    p_scheduled: entry.scheduled ?? null,
+    p_rounding_applied: entry.roundingApplied ?? false,
+    p_diff_minutes: entry.diffMinutes ?? null,
+    p_address: entry.address ?? null,
+    p_pin: pin,
+  }
   try {
-    r = await rpc('fichar', {
-      p_employee_id: employeeId,
-      p_type: entry.type,
-      p_origen: origen,
-      p_location_id: entry.locationIdAtClock ?? null,
-      p_lat: entry.lat ?? null,
-      p_lng: entry.lng ?? null,
-      p_hora_efectiva: entry.datetime ?? null,
-      p_hora_declarada: horaDeclarada ?? null,
-      p_scheduled: entry.scheduled ?? null,
-      p_rounding_applied: entry.roundingApplied ?? false,
-      p_diff_minutes: entry.diffMinutes ?? null,
-      p_address: entry.address ?? null,
-      p_pin: pin,
-    })
+    // L1a PR 3: con la precisión de la ubicación, fichar_con_precision (la
+    // 1934). Una base sin ella (PGRST202) ficha con fichar(), sin precisión.
+    r = await rpc('fichar_con_precision', { ...args, p_precision_m: entry.precisionM ?? null })
+    if (r.error && esFuncionQueNoExiste(r.error)) r = await rpc('fichar', args)
   } catch (e) {
     const err = { message: e instanceof Error ? e.message : String(e), hint: null, code: null }
     return esFalloDeRed(e) ? { tipo: 'sin-red', error: err } : { tipo: 'rechazado', error: err }

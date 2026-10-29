@@ -1,0 +1,31 @@
+# L1a · PR 3 · Los avisos que avisan (28/10/2026). Rama claude/l1a-pr3-avisos.
+# Se ensaya y se aplica desde esta rama, antes de fusionar. Sin autorizo.
+#
+#   1. 1800 — SOLO AÑADE: la detección del olvido en hora de Madrid, la cola
+#      que vuelve a mirar antes de mandar, la respuesta de un toque (crea la
+#      petición, nunca el fichaje), lo que llega de Meta (whatsapp_entrada) y
+#      sus estados, los avisos a la empresa (aviso_empresa), el vigía y su
+#      cron (avisos-olvido-vigia, cada 15 min), y columnas que admiten nulos
+#      en clockout_reminder_log y app_settings. Se puede pasar dos veces; ya
+#      va de verdad a staging desde la rama (W05).
+#   2. 1801 — CAMBIA en caliente, declarado: enqueue_clockout_reminders() usa
+#      la detección nueva (misma firma, con respaldo); tres CHECK que solo
+#      miran las columnas nuevas de clockout_reminder_log; y el disparador
+#      nuevo de fuera del radio en clock_entries (nunca rompe el fichaje). No
+#      toca el camino del pedido.
+#   3. 1934 — AÑADE fichar_con_precision() (fichar con la precisión de la
+#      ubicación: con más de 100 m es aproximada, ni dentro ni fuera del
+#      radio, y sin aviso) y CAMBIA en caliente fichar() (misma firma, con
+#      guarda por su huella del 28/10 y respaldo): llama a la nueva sin
+#      precisión. Sin DROP: el front de antes sigue igual.
+#
+# Antes (producción, 28/10 19:36 UTC): enqueue_clockout_reminders e4183a0c;
+# fichar() 6e69363e (una firma, de 15 parámetros);
+# tablas, funciones, columnas, disparador y cron nuevos: 0. Del camino del
+# pedido: nada.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261028T1800_l1a3_avisos_olvido_radio_vigia.sql
+supabase/migrations/20261028T1801_l1a3_olvido_detectar_en_madrid.sql
+supabase/migrations/20261028T1934_l1a3_fichar_con_precision.sql
+cuenta: scripts/conta/produccion/cuentas/l1a-avisos.sql

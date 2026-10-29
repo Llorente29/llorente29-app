@@ -23,6 +23,10 @@ describe('puedeFichar', () => {
   it('fuera del radio en «avisar»: sí', () => {
     expect(puedeFichar({ ...base, distancia: 900, modo: 'warn' }).puede).toBe(true)
   })
+  // L1a PR 3: el caso de Natacha, 670 m con la ubicación aproximada del navegador.
+  it('a 670 m con una ubicación aproximada en «bloquear»: sí (no se sabe si está fuera)', () => {
+    expect(puedeFichar({ ...base, distancia: 670, aproximada: true })).toEqual({ puede: true, porQueNo: null, sinMedir: null })
+  })
   it('fuera del radio en «bloquear»: no, y dice a cuánto está', () => {
     expect(puedeFichar({ ...base, distancia: 900.4 })).toEqual({
       puede: false, porQueNo: 'Estás a 900 m de Norte · Centro. Acércate al local para fichar.', sinMedir: null,

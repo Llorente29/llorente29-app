@@ -22,6 +22,7 @@ import type { CalendarContext, ScheduledShift, ShiftTypeInfo } from '../../servi
 import { listShiftTemplates, getSchedule } from '../../services/schedulerService'
 import { getMondayOfWeek, toISODate, shiftDurationHours } from '../../types/scheduler'
 import { fetchAppSettings } from '../../services/appSettingsService'
+import { AVISO_APROXIMADA, PASOS_UBICACION_PRECISA, esAproximada, precisionDe, textoPrecision } from '@/modules/personal/laboral/ubicacionAproximada'
 
 const DEFAULT_RADIUS_M = 200  // fallback si el local no tiene radio configurado
 const radiusForLoc = (loc: Location | null | undefined) => (loc?.clockRadiusM ?? DEFAULT_RADIUS_M)
@@ -29,7 +30,7 @@ const radiusForLoc = (loc: Location | null | undefined) => (loc?.clockRadiusM ??
 // Donde se ficha: 'in' (en zona) · 'outside' (fuera, marca la distancia) ·
 // 'nogps' (sin ubicacion). La salida anticipada NO es un modo: es una marca
 // aparte, porque se puede salir antes de hora Y estar fuera de zona a la vez.
-type ClockMode = 'in' | 'outside' | 'nogps'
+type ClockMode = 'in' | 'outside' | 'nogps' | 'aproximada'
 
 interface Props {
   employee: Employee
@@ -241,6 +242,10 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   }, [position, selectedLoc])
 
   const inZone = distance !== null && distance <= radiusForLoc(selectedLoc)
+  // L1a PR 3: con una ubicación aproximada (precisión de más de 100 m) no se
+  // sabe si está dentro o fuera: ni avisa de «fuera de zona» ni bloquea.
+  const aproximada = esAproximada(position?.coords.accuracy)
+  const precision = precisionDe(position?.coords.accuracy)
   // L1a (27/10): fuera del radio no bloquea por defecto; se marca y se avisa.
   const geofenceMode = selectedLoc?.clockGeofenceMode ?? 'warn'
   // Solo se bloquea cuando se SABE que está fuera y el local está en
@@ -250,6 +255,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     local: selectedLoc, locales: allowedLocations.length, distancia: distance,
     radio: radiusForLoc(selectedLoc), modo: geofenceMode === 'block' ? 'block' : 'warn',
     hayPosicion: !!position,
+    aproximada,
   })
 
   // Margen (min) para avisar de salida anticipada. Independiente del redondeo.
@@ -293,6 +299,13 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
 
     const config = { ...defaultKioskoConfig(selectedLoc.id), geofenceRadiusM: radiusForLoc(selectedLoc) }
     const result = buildClockEntry(currentEmp, selectedLoc, config, position, { origen: 'movil', roundingToleranceMin, calendarCtx })
+
+    // Ubicación aproximada: se ficha igual y queda dicho; el aviso con los
+    // pasos ya está a la vista encima del botón.
+    if (result.aproximada) {
+      void tramitar('aproximada', 0)
+      return
+    }
 
     if (!result.withinGeofence && geofenceMode === 'block') {
       setStep('error')
@@ -375,6 +388,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     const marcas: string[] = []
     if (mode === 'outside') marcas.push(`Fuera de zona · ${distM}m`)
     else if (mode === 'nogps') marcas.push('Sin ubicación (GPS no disponible)')
+    else if (mode === 'aproximada') marcas.push(`Ubicación aproximada · ${entry.precisionM != null ? textoPrecision(entry.precisionM) : 'sin precisión'}`)
     else if (!coordsForLocation(selectedLoc)) marcas.push('Local sin ubicación puesta: sin distancia')
     if (earlyExitMin != null) marcas.push(`Salida anticipada · ${earlyExitMin} min antes`)
     if (forzarTipo && forzarTipo !== entry.type) {
@@ -723,8 +737,34 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
           </Card>
         )}
 
+        {/* L1a PR 3: ubicación aproximada, en el momento y con los pasos */}
+        {selectedLoc && aproximada && (
+          <div data-prueba="ubicacion-aproximada">
+          <Card className="p-4 mb-4 bg-warning-bg border-warning/30">
+            <div className="flex items-start gap-3">
+              <AlertTriangle size={24} className="text-warning shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-warning">{AVISO_APROXIMADA}</p>
+                <p className="text-xs text-text-secondary mt-1">
+                  Tu móvil sitúa tu posición con un margen de {precision != null ? textoPrecision(precision) : 'muchos metros'}: así no se puede saber si estás en {selectedLoc.name}.
+                  Puedes fichar igual: quedará guardado como «ubicación aproximada», no como fuera del radio.
+                </p>
+                {PASOS_UBICACION_PRECISA.map(s => (
+                  <details key={s.sistema} className="mt-2">
+                    <summary className="text-xs font-semibold text-text-primary cursor-pointer">Cómo activarla en {s.sistema}</summary>
+                    <ol className="list-decimal pl-5 mt-1 space-y-1 text-xs text-text-secondary">
+                      {s.pasos.map(paso => <li key={paso}>{paso}</li>)}
+                    </ol>
+                  </details>
+                ))}
+              </div>
+            </div>
+          </Card>
+          </div>
+        )}
+
         {/* Estado de ubicación */}
-        {selectedLoc && distance !== null && (
+        {selectedLoc && distance !== null && !aproximada && (
           <Card className={`p-4 mb-4 ${inZone ? 'bg-success-bg border-success/30' : 'bg-warning-bg border-warning/30'}`}>
             <div className="flex items-center gap-3">
               {inZone
@@ -802,7 +842,9 @@ function fmtMetros(m: number): string {
  * ubicación, la distancia y si cayó dentro del radio.
  */
 function LoQueSeGuardo({ g }: { g: FichajeGuardado }) {
-  const ubicacion = g.distanciaM == null
+  const ubicacion = g.ubicacionAproximada
+    ? `Tu móvil dio una ubicación aproximada (${g.precisionM != null ? textoPrecision(g.precisionM) : 'sin precisión'}): queda guardada así, no como fuera del radio. Activa la ubicación precisa para la próxima vez.`
+    : g.distanciaM == null
     ? (g.localConCoordenadas
         ? 'Sin tu ubicación: el móvil no la dio. Queda marcado para que lo revise tu encargado.'
         : `El local no tiene su ubicación puesta: no se ha podido medir la distancia.`)

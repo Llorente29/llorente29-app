@@ -1,0 +1,10 @@
+# L1a · PR 3 · vuelta atrás, en orden inverso: la 1934 (fichar() de antes,
+# byte a byte, y fuera fichar_con_precision), la 1801 (enqueue_clockout_reminders
+# como estaba, desde su respaldo) y la 1800 (fuera el vigía y su cron, el
+# disparador de fuera del radio, las tablas, las funciones y las columnas
+# nuevas). Se pierden los avisos a la empresa, lo que llegó de Meta y las
+# respuestas guardadas entre medias; las peticiones de corrección creadas se
+# quedan (son del encargado).
+supabase/vuelta-atras/20261028T1934_l1a3_fichar_con_precision.down.sql
+supabase/vuelta-atras/20261028T1801_l1a3_olvido_detectar_en_madrid.down.sql
+supabase/vuelta-atras/20261028T1800_l1a3_avisos_olvido_radio_vigia.down.sql

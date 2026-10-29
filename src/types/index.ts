@@ -125,6 +125,9 @@ export interface ClockEntry {
   // hora del móvil cuando se fichó sin cobertura (createdAt: cuándo llegó).
   distanceM?: number
   withinRadius?: boolean
+  // L1a PR 3 (28/10/2026): la precisión de la ubicación que dio el móvil
+  // (coords.accuracy, metros). Más de 100 m = ubicación aproximada.
+  precisionM?: number
   declaredAt?: string
   createdAt?: string
   // Solo para escribir una marca a mano (source 'manual'): es una corrección

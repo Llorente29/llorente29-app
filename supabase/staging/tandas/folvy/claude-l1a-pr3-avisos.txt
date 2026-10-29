@@ -1,0 +1,12 @@
+# L1a · PR 3 · Los avisos que avisan.
+#
+# La 1800 (solo añade: desde la rama va de verdad, W05), la 1801 y la 1934
+# (cambian: solo en ROLLBACK), y su prueba
+# (ROLLBACK), que empieza por sus vueltas atrás si ya están aplicadas: un
+# miércoles inventado con su cuadrante; la detección, la cola, contestar por
+# WhatsApp y en el portal, los estados de Meta, fuera del radio, el vigía y la
+# vuelta atrás.
+supabase/migrations/20261028T1800_l1a3_avisos_olvido_radio_vigia.sql
+supabase/migrations/20261028T1801_l1a3_olvido_detectar_en_madrid.sql
+supabase/migrations/20261028T1934_l1a3_fichar_con_precision.sql
+supabase/staging/sql/20261028_l1a3_avisos_prueba.sql

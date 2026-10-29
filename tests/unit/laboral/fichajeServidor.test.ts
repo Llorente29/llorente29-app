@@ -52,13 +52,18 @@ describe('qué es un fallo de red y qué no', () => {
 })
 
 describe('ficharEnElServidor', () => {
-  it('manda lo que pide fichar() y devuelve lo que se guardó', async () => {
-    rpc.mockResolvedValue({ data: respuesta, error: null })
-    const r = await ficharEnElServidor(YO, entrada({ lat: 40.4, lng: -3.7, locationIdAtClock: 'L1' }))
-    expect(rpc).toHaveBeenCalledWith('fichar', expect.objectContaining({
+  it('manda lo que pide fichar_con_precision() y devuelve lo que se guardó', async () => {
+    rpc.mockResolvedValue({ data: { ...respuesta, precision_m: 12, ubicacion_aproximada: false }, error: null })
+    const r = await ficharEnElServidor(YO, entrada({ lat: 40.4, lng: -3.7, locationIdAtClock: 'L1', precisionM: 12 }))
+    expect(rpc).toHaveBeenCalledTimes(1)
+    expect(rpc).toHaveBeenCalledWith('fichar_con_precision', expect.objectContaining({
       p_employee_id: YO, p_type: 'entrada', p_origen: 'movil', p_location_id: 'L1',
-      p_lat: 40.4, p_lng: -3.7, p_hora_declarada: null, p_pin: null,
+      p_lat: 40.4, p_lng: -3.7, p_hora_declarada: null, p_pin: null, p_precision_m: 12,
     }))
+    if (r.tipo === 'guardado') {
+      expect(r.guardado.precisionM).toBe(12)
+      expect(r.guardado.ubicacionAproximada).toBe(false)
+    }
     expect(r.tipo).toBe('guardado')
     if (r.tipo === 'guardado') {
       expect(r.guardado.distanciaM).toBe(40)
@@ -75,6 +80,16 @@ describe('ficharEnElServidor', () => {
     await ficharEnElServidor(YO, entrada({ source: 'tablet' } as Partial<ClockEntry>))
     expect(rpc.mock.calls[0][1]).toMatchObject({ p_origen: 'tablet', p_pin: '4321' })
     expect(rpc.mock.calls[1][1]).toMatchObject({ p_origen: 'tablet', p_pin: null })
+  })
+
+  // L1a PR 3: una base sin la 1934 no tiene fichar_con_precision: ficha con fichar(), sin precisión.
+  it('sin fichar_con_precision, ficha con fichar() y sin p_precision_m', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } })
+    rpc.mockResolvedValueOnce({ data: respuesta, error: null })
+    const r = await ficharEnElServidor(YO, entrada({ precisionM: 1500 }))
+    expect(r.tipo).toBe('guardado')
+    expect(rpc.mock.calls.map((c) => c[0])).toEqual(['fichar_con_precision', 'fichar'])
+    expect(rpc.mock.calls[1][1]).not.toHaveProperty('p_precision_m')
   })
 
   it('con la base de antes (sin fichar) dice «sin-funcion»', async () => {

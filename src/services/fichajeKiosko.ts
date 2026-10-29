@@ -1,4 +1,5 @@
 // src/services/fichajeKiosko.ts
+import { esAproximada, precisionDe } from '@/modules/personal/laboral/ubicacionAproximada'
 import type { Employee, ClockEntry, Location, KioskoConfig } from '../types'
 import { applyRounding, type CalendarContext } from './horasComputo'
 
@@ -91,6 +92,8 @@ export interface ClockResult {
   entry: ClockEntry
   withinGeofence: boolean
   distanceM: number
+  /** L1a PR 3: la ubicación del móvil es aproximada (precisión de más de 100 m). */
+  aproximada: boolean
 }
 
 // ─── EL ORIGEN DEL FICHAJE (L0, 27/10/2026) ───────────────────────────────
@@ -141,6 +144,10 @@ export function buildClockEntry(
 
   let withinGeofence = true
   let distanceM = 0
+  // L1a PR 3: con una ubicación aproximada no se sabe si está dentro o fuera:
+  // no cuenta como fuera del radio (como fichar() en la base).
+  const precisionM = precisionDe(position?.coords.accuracy)
+  const aproximada = esAproximada(position?.coords.accuracy)
 
   if (position) {
     const locCoords = coordsForLocation(location)
@@ -149,7 +156,7 @@ export function buildClockEntry(
         position.coords.latitude, position.coords.longitude,
         locCoords.lat, locCoords.lng,
       )
-      withinGeofence = distanceM <= config.geofenceRadiusM
+      withinGeofence = aproximada || distanceM <= config.geofenceRadiusM
     }
   }
 
@@ -166,12 +173,13 @@ export function buildClockEntry(
     diffMinutes: rounding.diffMin,
     lat: position?.coords.latitude,
     lng: position?.coords.longitude,
+    precisionM: precisionM ?? undefined,
     source: origen,
     locationIdAtClock: location.id,
     photoDataUrl,
   }
 
-  return { entry, withinGeofence, distanceM }
+  return { entry, withinGeofence, distanceM, aproximada }
 }
 
 // LocalStorage para config del kiosko
