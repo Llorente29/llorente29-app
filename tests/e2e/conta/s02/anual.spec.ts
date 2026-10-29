@@ -107,7 +107,8 @@ test('El 190 de 2026: la tira del año, calcular desde los 111, lo comprobado y 
     await expect(page.locator('[data-prueba="anual-hecho"]')).toContainText(/Calculado el 190 de 2026: \d+ líneas? de perceptor y [\d.,]+ € retenidos/)
     await expect(page.locator('[data-prueba="perceptores-190"]')).toContainText('Los perceptores del 2026')
     const comprobado = page.locator('[data-prueba="comprobado"]')
-    await expect(comprobado).toContainText(/111 del año/)
+    // La frase de la suma dice «los 111 del año» si los hay, y «no hay 111 en Sumied de: …» si falta alguno.
+    await expect(comprobado).toContainText(/los 111 del año|no hay 111 en Sumied/)
     await expect(comprobado).toContainText(/NIF/)
     // El fichero: si queda algo por resolver o un aviso sin mirar, lo dice.
     const porQue = page.locator('[data-prueba="por-que-no-fichero"]')
@@ -175,7 +176,7 @@ test('El 180 de 2026: calcular desde los 115, los arrendadores con su local y lo
       await expect(hecho).toContainText(/Calculado el 180 de 2026: \d+ arrendador(es)? y [\d.,]+ € retenidos/)
       const centro = page.locator('[data-prueba="arrendadores-180"]')
       await expect(centro).toContainText('Los arrendadores del 2026')
-      await expect(page.locator('[data-prueba="comprobado"]')).toContainText(/115 del año/)
+      await expect(page.locator('[data-prueba="comprobado"]')).toContainText(/los 115 del año|no hay 115 en Sumied/)
       // Un arrendador sin local: el formulario no deja guardar sin lo que pide el anexo.
       const poner = centro.getByRole('button', { name: 'Poner el local' }).first()
       if (await poner.isVisible()) {

@@ -38,16 +38,9 @@
 --
 -- Nada del camino del pedido: lo llaman solo las pantallas de Impuestos.
 
--- ── 1. El CHECK de lo comprobado (solo amplía) ─────────────────────────────
-alter table public.tax_return_check drop constraint if exists tax_return_check_check_key_check;
-alter table public.tax_return_check add constraint tax_return_check_check_key_check
-  check (check_key in ('book_vs_303', 'ledger_477_472', 'sum_303_vs_390', 'sum_111_vs_190', 'sum_115_vs_180',
-                       'third_parties_347', 'mail_invoices_missing', 'out_of_period', 'file_layout', 'previous_offset',
-                       'ledger_4751', 'payees_111', 'withholding_unclassified', 'base_200',
-                       'payees_190_nif', 'payees_190_province', 'payroll_190',
-                       'payees_180_nif', 'payees_180_province', 'lease_180'));
-
--- ── 2. El inmueble arrendado ──────────────────────────────────────────────
+-- ── 1. El inmueble arrendado ───────────────────────────────────────────────
+-- Lo primero: sus claves ajenas bloquean accounts, company y supplier, y se
+-- piden sin tener nada más cogido (staging dio 40P01 al revés, 29/10).
 create table if not exists public.company_lease (
   id                uuid primary key default gen_random_uuid(),
   account_id        uuid not null references public.accounts(id) on delete cascade,
@@ -94,6 +87,15 @@ begin
     grant select on table public.company_lease to conta_lectura;
   end if;
 end $$;
+
+-- ── 2. El CHECK de lo comprobado (solo amplía) ─────────────────────────────
+alter table public.tax_return_check drop constraint if exists tax_return_check_check_key_check;
+alter table public.tax_return_check add constraint tax_return_check_check_key_check
+  check (check_key in ('book_vs_303', 'ledger_477_472', 'sum_303_vs_390', 'sum_111_vs_190', 'sum_115_vs_180',
+                       'third_parties_347', 'mail_invoices_missing', 'out_of_period', 'file_layout', 'previous_offset',
+                       'ledger_4751', 'payees_111', 'withholding_unclassified', 'base_200',
+                       'payees_190_nif', 'payees_190_province', 'payroll_190',
+                       'payees_180_nif', 'payees_180_province', 'lease_180'));
 
 -- ── 3. El borrador del 180 ────────────────────────────────────────────────
 create or replace function public.conta_impuesto_180_calcular(p_company uuid, p_year int)
