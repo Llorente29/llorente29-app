@@ -1,0 +1,19 @@
+{
+  "_que": "LAB2 · tanda 2 · contexto de producción de la 0950, medido en SOLO LECTURA el 30/10 a las 09:58 UTC con la consulta del analizador (sql-contexto). No existe ninguna de las dos funciones; nada en el camino del pedido; nada en el historial. lab_import_fila, con 0 filas.",
+  "medido": "2026-10-30T09:58Z",
+  "tanda": {
+    "supabase/migrations/20261030T0950_lab2_importador_filas.sql": "b68c4c1199f62e608eacb800d2df0a47"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

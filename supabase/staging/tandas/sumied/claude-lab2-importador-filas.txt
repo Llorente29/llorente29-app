@@ -1,0 +1,7 @@
+# LAB2 · Importador del historial de Cegid, tanda 2: la 0950 (solo añade: desde
+# la rama va de verdad, W05) y su prueba (ROLLBACK), que empieza por su vuelta
+# atrás si ya está aplicada: el administrador carga por trozos y termina; el
+# mismo fichero no duplica; lo que sobra se quita; nadie más; lo que no entra;
+# y la vuelta atrás.
+supabase/migrations/20261030T0950_lab2_importador_filas.sql
+supabase/staging/sql/20261030_lab2_importador_filas_prueba.sql

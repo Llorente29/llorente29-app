@@ -1,0 +1,15 @@
+# LAB2 · Importador del historial de Cegid, tanda 2 (30/10/2026): las filas.
+# Rama claude/lab2-importador-filas. Se ensaya y se aplica desde esta rama,
+# antes de fusionar. Sin autorizo.
+#
+#   1. 0950 — SOLO AÑADE: lab_import_cargar_filas y lab_import_terminar_filas.
+#      Guardan las filas de las nueve hojas en lab_import_fila (de la 0850),
+#      tal cual, solo el administrador de la cuenta y solo en un lote recién
+#      leído. Nada en el camino del pedido.
+#
+# Antes (producción, 30/10 09:58 UTC): ninguna de las dos funciones;
+# lab_import_fila con 0 filas.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261030T0950_lab2_importador_filas.sql
+cuenta: scripts/conta/produccion/cuentas/lab2-importador-filas.sql

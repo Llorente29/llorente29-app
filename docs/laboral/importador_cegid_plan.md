@@ -143,10 +143,10 @@ Por tandas pequeñas, cada una con su PR y la e2e primero en local (W09 + Playwr
 
 | tanda | qué | pruebas |
 |---|---|---|
-| 1 | Cabeceras: el bucket privado, `lab_import_lote`, `lab_import_fila` y la pantalla «solo leer cabeceras» | unitarias; staging en ROLLBACK; e2e local con un Excel **inventado** |
-| 2 | Con las cabeceras reales de Julio: la traducción `cegid.mjs`, las tablas del 2.2 y `validar` | unitarias contra **las cabeceras reales** (solo nombres de columna, sin valores); staging en ROLLBACK |
-| 3 | `aplicar`, `deshacer` y el paso a `payroll_cost` | ensayo en staging con el Excel inventado: aplicar, repetir sin duplicar y deshacer |
-| 4 | Julio sube el paquete real en producción | el resumen del lote, pegado en el parte: conteos por hoja, avisos y cuadres |
+| 1 | **Hecha (#398, 0850).** Cabeceras: `lab_import_lote`, `lab_import_fila` y la pantalla «solo leer cabeceras» | unitarias; staging en ROLLBACK; e2e con un Excel **inventado** |
+| 2 | **Hecha (LAB2, 0950).** Las filas de las nueve hojas, tal cual, en `lab_import_fila`: por trozos, sin duplicar al releer, y lo que sobra se quita | unitarias contra **las cabeceras reales** con filas inventadas; staging en ROLLBACK; e2e que carga, relee y cuenta por la API |
+| 3 | **Pasa al N1 (PR 1, 30/10):** de las filas a fichas, contratos y conceptos del modelo nuevo de la ficha, con su resultado en pantalla y sin volver a subir el Excel | lo dice el encargo del N1 |
+| 4 | Julio sube el paquete real en producción (las cabeceras y después las filas) | el resultado de la pantalla, pegado en el parte: filas por hoja |
 
 **Sin datos reales en el repositorio:**
 - Las pruebas usan un Excel inventado que se genera dentro de la prueba, con nombres y DNI de mentira con su letra bien puesta.
@@ -166,7 +166,7 @@ Por tandas pequeñas, cada una con su PR y la e2e primero en local (W09 + Playwr
    - y los PDF de las fichas.
    - El importador parte cada PDF por persona y lo deja en su ficha (tanda propia, después de la 3).
 
-**Cambio en la tanda 1, respecto a §4:** el fichero no se sube. Se lee en el navegador y a la base van solo las cabeceras y cuántas filas tiene cada hoja. El bucket privado llega con la tanda 2, que es la que lee filas.
+**Cambio respecto a §4:** el fichero no se sube nunca. Se lee en el navegador: en la tanda 1 van a la base solo las cabeceras y cuántas filas tiene cada hoja; en la tanda 2, las filas tal cual. Sin el fichero guardado no hace falta el bucket privado: el que quiera releerlo, lo vuelve a elegir.
 
 ## 6 · Cómo encaja con lo que viene
 
