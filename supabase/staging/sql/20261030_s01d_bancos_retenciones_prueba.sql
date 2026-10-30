@@ -58,9 +58,10 @@ begin
   if exists (select 1 from public.tax_return where company_id = emp and fiscal_year = 2024 and form_code in ('111', '115')) then
     raise exception 'PRUEBA S01d · 0: A ya tiene un 111 o un 115 de 2024 en staging. Revisa la prueba.';
   end if;
-  -- La 115 de la prueba: una subcuenta más de la 4751, como la 47510019 de Foodint.
+  -- La 115 de la prueba: una subcuenta más de la 4751, como la 47510019 de Foodint. Propia
+  -- («own»): una de plantilla solo puede ser la 47510000 (company_account_check1).
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, status, is_common, source, created_by_name)
-  values (a, emp, c4751.plan, '47510077', c4751.template_code, 'Prueba S01d · retenciones de alquileres', null, c4751.kind, c4751.status, c4751.is_common, c4751.source, 'prueba')
+  values (a, emp, c4751.plan, '47510077', c4751.template_code, 'Prueba S01d · retenciones de alquileres', null, 'own', 'activa', false, 'manual', 'prueba')
   returning id into v_id;
   update public.company_account set withholding_model = '111' where id = c4751.id;
   update public.company_account set withholding_model = '115' where id = v_id;
