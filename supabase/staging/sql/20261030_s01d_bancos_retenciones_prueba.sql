@@ -65,8 +65,9 @@ begin
   returning id into v_id;
   update public.company_account set withholding_model = '111' where id = c4751.id;
   update public.company_account set withholding_model = '115' where id = v_id;
-  insert into public.tax_return (account_id, company_id, obligation_id, form_code, fiscal_year, period, cadence, kind, status, amount, result_kind, sequence, due_date, filed_at, filed_via)
-  select a, emp, (select id from public.tax_obligation where company_id = emp and form_code = f limit 1), f, 2024, p, 'quarterly', 'normal', 'filed', imp, 'to_pay', 1, d, now(), 'outside'
+  -- Presentadas: con su CSV de la AEAT (tax_return_check5), inventado.
+  insert into public.tax_return (account_id, company_id, obligation_id, form_code, fiscal_year, period, cadence, kind, status, amount, result_kind, sequence, due_date, filed_at, filed_via, aeat_csv)
+  select a, emp, (select id from public.tax_obligation where company_id = emp and form_code = f limit 1), f, 2024, p, 'quarterly', 'normal', 'filed', imp, 'to_pay', 1, d, now(), 'outside', 'PRUEBAS01D' || f || p
     from (values ('111', '1T', 661.33, date '2024-04-20'), ('115', '2T', 1069.02, date '2024-07-20'), ('111', '3T', 578.01, date '2024-10-20')) v(f, p, imp, d);
   insert into _s01d values ('emp', emp::text);
 end $$;
@@ -151,8 +152,9 @@ begin
   if t.id is null then raise exception 'PRUEBA S01d · 3: A no tiene un banco con su 572.'; end if;
   select id into v_st from public.bank_statement where treasury_account_id = t.id limit 1;
   if v_st is null then
-    insert into public.bank_statement (account_id, company_id, treasury_account_id, source, format, file_name, period_from, period_to, movements_count, new_count, balanced)
-    values (t.account_id, emp, t.id, 'fichero', 'csv:prueba', 'prueba-s01d.csv', '2026-10-01', '2026-10-31', 1, 1, true) returning id into v_st;
+    -- Sin saldos: «sin_saldo», sin cuadre y con su motivo (bank_statement_sin_saldo).
+    insert into public.bank_statement (account_id, company_id, treasury_account_id, source, format, file_name, period_from, period_to, movements_count, new_count, repeated_count, continuity, balanced, unchecked_reason)
+    values (t.account_id, emp, t.id, 'fichero', 'csv:prueba', 'prueba-s01d.csv', '2026-10-01', '2026-10-31', 1, 1, 0, 'sin_saldo', null, 'Prueba S01d: sin saldos') returning id into v_st;
   end if;
   insert into public.bank_movement (account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount, bank_concept, clean_concept, fingerprint, soft_fingerprint)
   values (t.account_id, emp, t.id, v_st, '2026-10-20', '2026-10-20', -578.01, 'PRUEBA S01D AEAT 111', 'PRUEBA S01D AEAT 111', 'prueba-s01d-111', 'prueba-s01d-111')
