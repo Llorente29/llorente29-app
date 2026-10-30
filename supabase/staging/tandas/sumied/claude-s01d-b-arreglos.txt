@@ -1,0 +1,8 @@
+# S01d-b · los tres fallos de la prueba real con Foodint. La 1638 cambia
+# bank_contrato_guardar: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por el camino de la pantalla: el cuadro parcial que
+# no cuadra con lo pendiente no se guarda y el que sí, con el aviso; el año
+# siguiente se añade al mismo contrato; el cuadro completo, como antes; la
+# cuenta B; y la vuelta atrás.
+supabase/migrations/20261030T1638_s01d_contrato_parcial.sql
+supabase/staging/sql/20261030_s01d_contrato_parcial_prueba.sql

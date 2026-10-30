@@ -29,6 +29,10 @@ export async function leerContratos(accountId: string, companyId: string): Promi
 }
 
 export interface ContratoNuevo {
+  /** S01d-b · Si va a un contrato que ya existe: se le añaden las filas del año nuevo. */
+  contratoId?: string | null
+  /** S01d-b · Las cuotas de todo el contrato y la deuda pendiente al final del cuadro (cuadro parcial). */
+  cuotas?: number | null; pendienteCent?: number | null
   tipo: 'prestamo' | 'aplazamiento' | 'poliza'; nombre: string; contiene: string
   importeCent: number | null; cuadro: FilaCuadro[]; bancoId: string | null
   cuentaCorto: string; cuentaLargo: string | null; cuentaIntereses: string
@@ -40,6 +44,7 @@ export async function guardarContrato(companyId: string, c: ContratoNuevo): Prom
   const r = await rpc<{ id: string; mensaje: string }>('bank_contrato_guardar', {
     p_company: companyId,
     p_datos: {
+      ...(c.contratoId ? { contrato: c.contratoId } : {}), cuotas: c.cuotas ?? null, pendiente: c.pendienteCent == null ? null : c.pendienteCent / 100,
       tipo: c.tipo, nombre: c.nombre, contiene: c.contiene, importe: c.importeCent === null ? null : c.importeCent / 100, banco: c.bancoId,
       capital_corto: c.cuentaCorto, capital_largo: c.cuentaLargo, intereses: c.cuentaIntereses, documento: c.documento, documento_tipo: c.documentoTipo,
       cuadro: c.cuadro.map((f) => ({ fecha: f.fecha, cuota: f.cuotaCent / 100, capital: f.capitalCent / 100, intereses: f.interesesCent / 100 })),
@@ -52,6 +57,8 @@ export async function guardarContrato(companyId: string, c: ContratoNuevo): Prom
 export interface CuadroDelPdf {
   tipo: 'prestamo' | 'aplazamiento'; organismo: string | null; importeCent: number | null
   cuadro: FilaCuadro[]; sumaCent: number; cuadra: boolean | null
+  /** S01d-b · Las cuotas de todo el contrato (del texto) y la deuda pendiente al final del cuadro. */
+  cuotas: number; pendienteCent: number | null
 }
 
 /** «Subir el cuadro» con un PDF: se sube a receipt-uploads y lo lee ocr-albaran (modo cuadro). Nada se guarda aún. */
@@ -67,5 +74,6 @@ export async function leerCuadroPdf(accountId: string, f: File): Promise<CuadroD
     importeCent: c.importeAplazado === null || c.importeAplazado === undefined ? null : cent(c.importeAplazado),
     cuadro: (c.filas as Fila[]).map((x) => ({ fecha: String(x.fecha), cuotaCent: cent(x.cuota), capitalCent: cent(x.capital), interesesCent: cent(x.intereses) })),
     sumaCent: cent(c.sumaCapital), cuadra: c.cuadra === null || c.cuadra === undefined ? null : Boolean(c.cuadra),
+    cuotas: Number(c.cuotasTotales ?? (c.filas as unknown[]).length), pendienteCent: c.deudaPendiente === null || c.deudaPendiente === undefined ? null : cent(c.deudaPendiente),
   }
 }

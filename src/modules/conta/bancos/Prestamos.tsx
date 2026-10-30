@@ -12,9 +12,10 @@ import { useBancos } from '@/modules/conta/bancos/contexto'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { eurosExactos, diaMesCorto, fechaLarga } from '@/modules/conta/lib/formato'
 import { ultimosIban } from '@/modules/conta/lib/bancosVista'
-import { comoSeCasa, cuadraConLoAplazado, leerCuadro, proximaCuota, quedaPorPagar, resumen, TIPOS, type FilaCuadro } from '@/modules/conta/lib/contratos'
+import { avisoDeCuotas, comoSeCasa, comprobarCuadroLeido, leerCuadro, proximaCuota, quedaPorPagar, resumen, TIPOS, type FilaCuadro } from '@/modules/conta/lib/contratos'
 import { leerImporte, textoImporte } from '@/modules/conta/lib/reparto'
 import { guardarContrato, leerContratos, leerCuadroPdf, type ContratoNuevo } from '@/modules/conta/services/contratosService'
+import type { ContratoVista } from '@/modules/conta/lib/contratos'
 import { abrirExtracto } from '@/modules/conta/services/bancosService'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 
@@ -25,6 +26,8 @@ interface Leido {
   fichero: string; tipoDoc: 'excel' | 'pdf'; cuadro: FilaCuadro[]
   /** Del PDF: lo que dice el documento (lo aplazado, si es un aplazamiento y de quién). */
   importeCent?: number | null; tipo?: 'prestamo' | 'aplazamiento'; organismo?: string | null
+  /** S01d-b · Del PDF: las cuotas que dice el texto y la deuda pendiente al final del cuadro (cuadro parcial). */
+  cuotas?: number; pendienteCent?: number | null
   /** El fichero, para «Ver el PDF» sin volver a bajarlo. */
   url?: string
 }
@@ -44,7 +47,7 @@ export function Prestamos() {
       setLeyendo(true)
       try {
         const c = await leerCuadroPdf(accountId, f)
-        setLeido({ fichero: f.name, tipoDoc: 'pdf', cuadro: c.cuadro, importeCent: c.importeCent, tipo: c.tipo, organismo: c.organismo, url: URL.createObjectURL(f) })
+        setLeido({ fichero: f.name, tipoDoc: 'pdf', cuadro: c.cuadro, importeCent: c.importeCent, tipo: c.tipo, organismo: c.organismo, cuotas: c.cuotas, pendienteCent: c.pendienteCent, url: URL.createObjectURL(f) })
       } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setLeyendo(false); if (input.current) input.current.value = '' }
       return
     }
@@ -113,7 +116,7 @@ export function Prestamos() {
                     const banco = nombreBanco(c.bancoId)
                     return (
                       <tr key={c.id}>
-                        <td><strong>{c.nombre}</strong></td>
+                        <td><strong>{c.nombre}</strong>{avisoDeCuotas(c) && <span className="cxpr-aviso">{avisoDeCuotas(c)}</span>}</td>
                         <td className="cxpr-tipo">{TIPOS[c.tipo]}{banco ? ` · ${banco}` : ''}</td>
                         <td className="cxpr-num cx-cifra">{queda === null ? '—' : euros(queda)}</td>
                         <td>{c.tipo === 'poliza' ? <span className="cx-ayuda">Sin cuota fija</span> : p ? `${diaMesCorto(p.fecha)} · ${euros(p.cuotaCent)}` : 'Pagado'}</td>
@@ -128,7 +131,7 @@ export function Prestamos() {
         )}
       </div>
       {leido && (
-        <CuadroLeido key={leido.fichero} leido={leido} alCerrar={() => setLeido(null)}
+        <CuadroLeido key={leido.fichero} leido={leido} contratos={cs.filter((c) => c.tipo !== 'poliza' && c.cuadro?.length)} alCerrar={() => setLeido(null)}
           alGuardar={async (c) => { const m = await guardarContrato(companyId, c); setLeido(null); setHecho(m); contratos.recargar(); recargar() }} />
       )}
     </div>
@@ -136,7 +139,9 @@ export function Prestamos() {
 }
 
 /** El panel de la derecha: lo leído, para revisar y confirmar. */
-function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: () => void; alGuardar: (c: ContratoNuevo) => Promise<void> }) {
+function CuadroLeido({ leido, contratos, alCerrar, alGuardar }: {
+  leido: Leido; contratos: readonly ContratoVista[]; alCerrar: () => void; alGuardar: (c: ContratoNuevo) => Promise<void>
+}) {
   const { datos } = useBancos()
   const sumaCapital = leido.cuadro.reduce((t, f) => t + f.capitalCent, 0)
   const [tipo, setTipo] = useState<ContratoNuevo['tipo']>(leido.tipo ?? 'prestamo')
@@ -150,19 +155,32 @@ function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: (
   const [intereses, setIntereses] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // S01d-b · El total de cuotas (el del texto, si el cuadro trae menos) y la deuda pendiente del cuadro.
+  const [cuotas, setCuotas] = useState(String(Math.max(leido.cuotas ?? 0, leido.cuadro.length)))
+  const [pendiente, setPendiente] = useState(leido.pendienteCent == null ? '' : textoImporte(leido.pendienteCent))
+  // S01d-b · «Subir el cuadro» sobre un contrato que ya existe: el del mismo nombre que dice el documento, si lo hay.
+  const [destino, setDestino] = useState<string>(() => contratos.find((c) => leido.organismo && c.nombre.includes(leido.organismo))?.id ?? '')
+  const existente = contratos.find((c) => c.id === destino) ?? null
 
-  const importeCent = leerImporte(importe)
-  const cuadre = importeCent === null ? null : cuadraConLoAplazado(leido.cuadro, importeCent)
+  const importeCent = existente ? existente.principalCent : leerImporte(importe)
+  const nCuotas = Math.max(Number(cuotas) || 0, leido.cuadro.length)
+  const pendienteCent = pendiente.trim() ? leerImporte(pendiente) : null
+  // Al añadir a un contrato, lo que se comprueba son todas sus filas: las que tiene y las nuevas (después de la última).
+  const filasTodas = existente ? [...(existente.cuadro ?? []), ...leido.cuadro.filter((f) => f.fecha > (existente.cuadro?.at(-1)?.fecha ?? ''))] : leido.cuadro
+  const cuadre = importeCent === null ? null : comprobarCuadroLeido(filasTodas, importeCent, existente ? Math.max(existente.cuotas ?? 0, filasTodas.length) : nCuotas, pendienteCent)
+  const nuevas = existente ? filasTodas.length - (existente.cuadro?.length ?? 0) : leido.cuadro.length
+  const aviso = cuadre?.parcial ? avisoDeCuotas({ tipo: 'aplazamiento', cuotas: existente ? Math.max(existente.cuotas ?? 0, filasTodas.length) : nCuotas, cuadro: filasTodas }) : null
   const existe = (c: string) => datos.nombres[c.trim()] !== undefined
   const plan = useMemo(() => Object.entries(datos.nombres).filter(([c]) => c.length >= 8).map(([codigo, n]) => ({ codigo, n })), [datos.nombres])
-  const falta = !nombre.trim() ? 'Ponle un nombre.' : !contiene.trim() ? 'Di qué pone el banco en el concepto de la cuota.'
+  const falta = existente ? (nuevas === 0 ? `Este cuadro no trae ninguna cuota después de la última que ya tiene «${existente.nombre}».` : !cuadre?.cuadra ? 'El cuadro no cuadra.' : null)
+    : !nombre.trim() ? 'Ponle un nombre.' : !contiene.trim() ? 'Di qué pone el banco en el concepto de la cuota.'
     : !corto.trim() || !existe(corto) ? 'Elige la cuenta del capital a corto (520).' : !intereses.trim() || !existe(intereses) ? 'Elige la cuenta de los intereses (662).'
-    : largo.trim() && !existe(largo) ? `La cuenta ${largo.trim()} no está en el plan.` : !cuadre?.cuadra ? 'El capital del cuadro no suma lo aplazado.' : null
+    : largo.trim() && !existe(largo) ? `La cuenta ${largo.trim()} no está en el plan.` : !cuadre?.cuadra ? (cuadre?.parcial ? 'El cuadro no cuadra con lo pendiente.' : 'El capital del cuadro no suma lo aplazado.') : null
 
   const confirmar = async () => {
     setOcupado(true); setError(null)
     try {
-      await alGuardar({ tipo, nombre: nombre.trim(), contiene: contiene.trim(), importeCent, cuadro: leido.cuadro, bancoId: bancoId || null,
+      await alGuardar({ contratoId: existente?.id ?? null, cuotas: nCuotas, pendienteCent, tipo, nombre: nombre.trim(), contiene: contiene.trim(), importeCent, cuadro: leido.cuadro, bancoId: bancoId || null,
         cuentaCorto: corto.trim(), cuentaLargo: largo.trim() || null, cuentaIntereses: intereses.trim(), documento: leido.fichero, documentoTipo: leido.tipoDoc })
     } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setOcupado(false) }
   }
@@ -175,22 +193,46 @@ function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: (
       </header>
       <datalist id="cxpr-plan">{plan.map((c) => <option key={c.codigo} value={c.codigo}>{c.n}</option>)}</datalist>
       <dl className="cxpr-datos">
-        <div><dt>Qué es</dt><dd>
-          <select className="cx-input" value={tipo} onChange={(e) => setTipo(e.target.value as ContratoNuevo['tipo'])} aria-label="Qué es">
-            <option value="prestamo">Préstamo</option><option value="aplazamiento">Aplazamiento</option>
-          </select></dd></div>
-        <div><dt>Nombre</dt><dd><input className="cx-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Préstamo del banco" aria-label="Nombre" /></dd></div>
-        <div><dt>Lo que pone el banco</dt><dd><input className="cx-input" value={contiene} onChange={(e) => setContiene(e.target.value)} placeholder="AMORTIZACION PRESTAMO" aria-label="Lo que pone el banco" /></dd></div>
-        <div><dt>Importe aplazado</dt><dd><input className="cx-input cxpr-num" value={importe} onChange={(e) => setImporte(e.target.value)} inputMode="decimal" aria-label="Importe aplazado" /></dd></div>
-        <div><dt>Número de cuotas</dt><dd className="cx-cifra">{leido.cuadro.length}</dd></div>
+        {contratos.length > 0 && (
+          <div><dt>Es de</dt><dd>
+            <select className="cx-input" value={destino} onChange={(e) => setDestino(e.target.value)} aria-label="Es de">
+              <option value="">Un contrato nuevo</option>
+              {contratos.map((c) => <option key={c.id} value={c.id}>{c.nombre} (añadir las cuotas nuevas)</option>)}
+            </select></dd></div>
+        )}
+        {existente ? (
+          <>
+            <div><dt>Importe aplazado</dt><dd className="cx-cifra">{existente.principalCent === null ? '—' : euros(existente.principalCent)}</dd></div>
+            <div><dt>Número de cuotas</dt><dd className="cx-cifra">{existente.cuotas ?? '—'}</dd></div>
+            <div><dt>Cuotas nuevas</dt><dd className="cx-cifra">{nuevas} (ya tiene {existente.cuadro?.length ?? 0})</dd></div>
+          </>
+        ) : (
+          <>
+            <div><dt>Qué es</dt><dd>
+              <select className="cx-input" value={tipo} onChange={(e) => setTipo(e.target.value as ContratoNuevo['tipo'])} aria-label="Qué es">
+                <option value="prestamo">Préstamo</option><option value="aplazamiento">Aplazamiento</option>
+              </select></dd></div>
+            <div><dt>Nombre</dt><dd><input className="cx-input" value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Préstamo del banco" aria-label="Nombre" /></dd></div>
+            <div><dt>Lo que pone el banco</dt><dd><input className="cx-input" value={contiene} onChange={(e) => setContiene(e.target.value)} placeholder="AMORTIZACION PRESTAMO" aria-label="Lo que pone el banco" /></dd></div>
+            <div><dt>Importe aplazado</dt><dd><input className="cx-input cxpr-num" value={importe} onChange={(e) => setImporte(e.target.value)} inputMode="decimal" aria-label="Importe aplazado" /></dd></div>
+            <div><dt>Número de cuotas</dt><dd><input className="cx-input cxpr-num" value={cuotas} onChange={(e) => setCuotas(e.target.value.replace(/\D/g, ''))} inputMode="numeric" aria-label="Número de cuotas" /></dd></div>
+          </>
+        )}
+        {(existente ? (existente.cuotas ?? 0) > filasTodas.length : nCuotas > leido.cuadro.length) && (
+          <div><dt>Deuda pendiente del cuadro</dt><dd><input className="cx-input cxpr-num" value={pendiente} onChange={(e) => setPendiente(e.target.value)} inputMode="decimal" aria-label="Deuda pendiente del cuadro" /></dd></div>
+        )}
         <div><dt>Primera cuota</dt><dd className="cx-cifra">{fechaLarga(leido.cuadro[0].fecha)}</dd></div>
-        <div><dt>Se carga en</dt><dd>
-          <select className="cx-input" value={bancoId} onChange={(e) => setBancoId(e.target.value)} aria-label="Se carga en">
-            {datos.bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}{ultimosIban(b.iban) ? ` ·${ultimosIban(b.iban)}` : ''}</option>)}
-          </select></dd></div>
-        <div><dt>Capital a largo</dt><dd><input className="cx-input" list="cxpr-plan" value={largo} onChange={(e) => setLargo(e.target.value)} placeholder="170…" aria-label="Capital a largo" /></dd></div>
-        <div><dt>Capital a corto</dt><dd><input className="cx-input" list="cxpr-plan" value={corto} onChange={(e) => setCorto(e.target.value)} placeholder="520…" aria-label="Capital a corto" /></dd></div>
-        <div><dt>Intereses</dt><dd><input className="cx-input" list="cxpr-plan" value={intereses} onChange={(e) => setIntereses(e.target.value)} placeholder="662…" aria-label="Intereses" /></dd></div>
+        {!existente && (
+          <>
+            <div><dt>Se carga en</dt><dd>
+              <select className="cx-input" value={bancoId} onChange={(e) => setBancoId(e.target.value)} aria-label="Se carga en">
+                {datos.bancos.map((b) => <option key={b.id} value={b.id}>{b.nombre}{ultimosIban(b.iban) ? ` ·${ultimosIban(b.iban)}` : ''}</option>)}
+              </select></dd></div>
+            <div><dt>Capital a largo</dt><dd><input className="cx-input" list="cxpr-plan" value={largo} onChange={(e) => setLargo(e.target.value)} placeholder="170…" aria-label="Capital a largo" /></dd></div>
+            <div><dt>Capital a corto</dt><dd><input className="cx-input" list="cxpr-plan" value={corto} onChange={(e) => setCorto(e.target.value)} placeholder="520…" aria-label="Capital a corto" /></dd></div>
+            <div><dt>Intereses</dt><dd><input className="cx-input" list="cxpr-plan" value={intereses} onChange={(e) => setIntereses(e.target.value)} placeholder="662…" aria-label="Intereses" /></dd></div>
+          </>
+        )}
       </dl>
       <div className="cxpr-cuadro">
         <table>
@@ -204,17 +246,15 @@ function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: (
         </table>
       </div>
       {cuadre && (
-        <p className={cuadre.cuadra ? 'cxpr-cuadra' : 'cxpr-no-cuadra'} role="status">
-          {cuadre.cuadra ? `La suma del capital da ${euros(cuadre.sumaCent)}: cuadra con lo aplazado.`
-            : `La suma del capital da ${euros(cuadre.sumaCent)} y lo aplazado es ${euros(importeCent!)}: faltan o sobran ${euros(Math.abs(importeCent! - cuadre.sumaCent))}. No lo guardo así.`}
-        </p>
+        <p className={cuadre.cuadra ? 'cxpr-cuadra' : 'cxpr-no-cuadra'} role="status">{cuadre.texto}</p>
       )}
+      {aviso && cuadre?.cuadra && <p className="cxpr-aviso-panel">{aviso}</p>}
       {falta && <p className="cx-ayuda">{falta}</p>}
       {error && <div className="cx-error" role="alert">{error}</div>}
       <footer className="cxpr-panel-pie">
         {leido.url ? <a className="cx-boton-sec" href={leido.url} target="_blank" rel="noreferrer">Ver el PDF</a>
           : <button type="button" className="cx-boton-sec" onClick={alCerrar} disabled={ocupado}>Cancelar</button>}
-        <button type="button" className="cx-boton" disabled={falta !== null || ocupado} onClick={confirmar}>{ocupado ? 'Guardando…' : 'Confirmar y crear el contrato'}</button>
+        <button type="button" className="cx-boton" disabled={falta !== null || ocupado} onClick={confirmar}>{ocupado ? 'Guardando…' : existente ? `Añadir ${nuevas === 1 ? '1 cuota' : `${nuevas} cuotas`} a «${existente.nombre}»` : 'Confirmar y crear el contrato'}</button>
       </footer>
     </aside>
   )
