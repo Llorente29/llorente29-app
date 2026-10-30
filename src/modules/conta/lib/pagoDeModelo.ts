@@ -32,3 +32,26 @@ export function queQuedaPorPagar(p: Pick<ModeloPagado, 'texto' | 'importe' | 'pa
   if (queda > 0) return `El ${p.texto} es de ${eurosExactos(p.importe)}: al validar este asiento quedarán ${eurosExactos(queda)} por pagar.`
   return `El ${p.texto} es de ${eurosExactos(p.importe)}: con este asiento se habrán pagado ${eurosExactos(-queda)} de más.`
 }
+
+/** Una declaración presentada y sin pagar, como la lee la propuesta. */
+export interface DeclaracionSinPagar { modelo: string; ejercicio: number; periodo: string; importeCent: number }
+
+/**
+ * S01d-b · Lo que se propone al abrir «Es el pago de un modelo» (respuesta 3):
+ * el modelo de la cuenta (withholding_model; si no lo dice, el 111) y el
+ * periodo del modelo presentado y sin pagar por ese mismo importe; si no hay
+ * ninguno, el trimestre anterior a la fecha del asiento.
+ */
+export function propuestaDePago(modeloDeLaCuenta: string | null, declaraciones: readonly DeclaracionSinPagar[], importeCent: number, fecha: string):
+  { modelo: '111' | '115' | '123'; ejercicio: number; periodo: string; porque: string } {
+  const modelo = (['111', '115', '123'] as const).find((m) => m === modeloDeLaCuenta) ?? '111'
+  const igual = declaraciones.filter((d) => d.modelo === modelo && d.importeCent === importeCent)
+  if (igual.length === 1) {
+    return { modelo, ejercicio: igual[0].ejercicio, periodo: igual[0].periodo, porque: `el ${modelo} presentado y sin pagar por ese importe` }
+  }
+  const anio = Number(fecha.slice(0, 4)), mes = Number(fecha.slice(5, 7))
+  const t = Math.ceil(mes / 3)
+  return t === 1
+    ? { modelo, ejercicio: anio - 1, periodo: '4T', porque: 'el trimestre anterior a la fecha del asiento' }
+    : { modelo, ejercicio: anio, periodo: `${t - 1}T`, porque: 'el trimestre anterior a la fecha del asiento' }
+}

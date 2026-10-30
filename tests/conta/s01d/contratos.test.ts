@@ -93,6 +93,7 @@ describe('el PDF en modo «cuadro» (ocr-albaran): lo leído, comprobado', () =>
     const r = comprobarCuadro({ tipo: 'aplazamiento', organismo: 'Seguridad Social', importe_aplazado: 1000,
       filas: [{ fecha: '2026-12-30', cuota: 510, capital: 500, intereses: 10 }, { fecha: '2026-11-30', cuota: 520, capital: 500, intereses: 20 }, { fecha: 'pronto', capital: 1 }] })
     expect(r).toEqual({ tipo: 'aplazamiento', organismo: 'Seguridad Social', importeAplazado: 1000, sumaCapital: 1000, cuadra: true,
+      cuotasTotales: 2, deudaPendiente: null, parcial: false, acumulada: false,
       filas: [{ fecha: '2026-11-30', cuota: 520, capital: 500, intereses: 20 }, { fecha: '2026-12-30', cuota: 510, capital: 500, intereses: 10 }] })
   })
   it('no cuadra si falta un céntimo; sin lo aplazado en el papel, lo dice la persona; sin filas, error', async () => {

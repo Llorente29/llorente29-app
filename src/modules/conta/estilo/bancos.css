@@ -358,3 +358,7 @@
   .cxpr-tabla td { padding: 2px 0; border: 0; text-align: left; }
   .cxpr-panel-pie { flex-direction: column-reverse; }
 }
+
+/* S01d-b · El aviso de las cuotas que faltan (cuadro parcial: la TGSS manda el de cada año). */
+.cxpr-aviso { display: block; margin-top: 4px; font-size: 13px; color: var(--cx-ambar); }
+.cxpr-aviso-panel { margin: 10px 24px 0; padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }

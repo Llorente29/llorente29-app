@@ -23,6 +23,7 @@ import type { Confianza, OrigenAsiento, Razon, Serie } from '@/modules/conta/lib
 import { apuntarCorreccion } from '@/modules/conta/services/propuestasLibroService'
 import { normalizarHora } from '@/modules/conta/lib/cierreDelDia'
 import { autorVisible, esFirmaAutomatica } from '@/modules/conta/lib/autor'
+import type { DeclaracionSinPagar } from '@/modules/conta/lib/pagoDeModelo'
 import type { LineaPredefinida, Predefinido } from '@/modules/conta/lib/tipoAsiento'
 
 type Fila = Record<string, unknown>
@@ -428,4 +429,24 @@ export async function marcarPagoDeModelo(entryId: string, posicion: number, mode
       importe: p.importe == null ? null : n(p.importe), pagado: n(p.pagado), pendiente: p.pendiente == null ? null : n(p.pendiente), asientoPago: s(p.asiento_pago),
     } }
   } catch (e) { throw sinPrefijo(e) }
+}
+
+/**
+ * S01d-b · Lo que hace falta para proponer el modelo y el periodo de un apunte
+ * de la 4751: el modelo de su cuenta y las declaraciones presentadas sin pagar
+ * de la empresa (111, 115 y 123).
+ */
+export async function datosDelPagoDeModelo(companyId: string, cuenta: string): Promise<{ modeloDeLaCuenta: string | null; declaraciones: DeclaracionSinPagar[] }> {
+  const [c, d] = await Promise.all([
+    tabla('company_account').select('withholding_model').eq('company_id', companyId).eq('code', cuenta).maybeSingle(),
+    tabla('tax_return').select('form_code, fiscal_year, period, amount, payment_entry_id, status').eq('company_id', companyId)
+      .in('form_code', ['111', '115', '123']).in('status', ['filed', 'booked']),
+  ])
+  if (c.error) throw new Error(`No se ha podido leer la cuenta ${cuenta}: ${c.error.message}`)
+  if (d.error) throw new Error(`No se han podido leer las declaraciones: ${d.error.message}`)
+  return {
+    modeloDeLaCuenta: s((c.data as Fila | null)?.withholding_model),
+    declaraciones: ((d.data ?? []) as Fila[]).filter((x) => x.payment_entry_id == null && x.amount != null)
+      .map((x) => ({ modelo: String(x.form_code), ejercicio: Number(x.fiscal_year), periodo: String(x.period), importeCent: Math.round(Number(x.amount) * 100) })),
+  }
 }

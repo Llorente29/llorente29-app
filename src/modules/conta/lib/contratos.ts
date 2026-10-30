@@ -55,6 +55,13 @@ const COLUMNAS: Record<'fecha' | 'cuota' | 'capital' | 'intereses', RegExp> = {
  * tienen fecha. Si no encuentra los títulos, dice cuál falta.
  */
 export function leerCuadro(filas: readonly (readonly string[])[]): { cuadro: FilaCuadro[] } | { error: string } {
+  // S01d-b (respuesta 3): el Excel de «Amortizaciones y movimientos» de BBVA es el historial de lo ya
+  // pagado, no el cuadro. Se reconoce por su título o por sus columnas, y se dice.
+  const todo = filas.slice(0, 15).map((f) => f.map(normal))
+  if (todo.some((f) => f.some((c) => /amortizaciones y movimientos/.test(c)))
+      || todo.some((f) => f.some((c) => /^fecha de operacion/.test(c)) && f.some((c) => /^tipo de movimiento/.test(c)))) {
+    return { error: 'Este Excel es el historial de lo ya pagado. Sube el de «Próximas cuotas».' }
+  }
   for (const [i, f] of filas.entries()) {
     const t = f.map(normal)
     // «Capital pendiente» o «vivo» es el saldo, no el capital de la cuota.
@@ -65,6 +72,8 @@ export function leerCuadro(filas: readonly (readonly string[])[]): { cuadro: Fil
     for (const r of filas.slice(i + 1)) {
       const d = leerFecha(r[c.fecha] ?? '')
       if (!d) continue
+      // Una formalización (la firma del préstamo) nunca es una cuota.
+      if (r.some((x) => /formaliz/i.test(x))) continue
       const capitalCent = leerImporte(r[c.capital] ?? '') ?? 0
       const interesesCent = leerImporte(r[c.intereses] ?? '') ?? 0
       const cuotaCent = c.cuota >= 0 ? (leerImporte(r[c.cuota] ?? '') ?? capitalCent + interesesCent) : capitalCent + interesesCent
@@ -81,6 +90,43 @@ export function leerCuadro(filas: readonly (readonly string[])[]): { cuadro: Fil
 export function cuadraConLoAplazado(cuadro: readonly FilaCuadro[], importeCent: number): { cuadra: boolean; sumaCent: number } {
   const sumaCent = cuadro.reduce((t, f) => t + f.capitalCent, 0)
   return { cuadra: sumaCent === importeCent, sumaCent }
+}
+
+/**
+ * S01d-b · La comprobación de un cuadro, completo o PARCIAL (respuesta 3): si
+ * trae todas las cuotas, el capital suma lo aplazado; si trae menos (la TGSS
+ * manda el de cada año), lo aplazado menos el capital de las filas leídas da
+ * la deuda pendiente del cuadro. Sin pendiente, un parcial no se puede comprobar.
+ */
+export function comprobarCuadroLeido(cuadro: readonly FilaCuadro[], importeCent: number, cuotas: number, pendienteCent: number | null):
+  { cuadra: boolean; parcial: boolean; sumaCent: number; texto: string } {
+  const sumaCent = cuadro.reduce((t, f) => t + f.capitalCent, 0)
+  const e = (c: number) => eurosTexto(c)
+  if (cuotas <= cuadro.length) {
+    const cuadra = sumaCent === importeCent
+    return { cuadra, parcial: false, sumaCent, texto: cuadra ? `La suma del capital da ${e(sumaCent)}: cuadra con lo aplazado.`
+      : `La suma del capital da ${e(sumaCent)} y lo aplazado es ${e(importeCent)}: faltan o sobran ${e(Math.abs(importeCent - sumaCent))}. No lo guardo así.` }
+  }
+  if (pendienteCent === null) {
+    return { cuadra: false, parcial: true, sumaCent, texto: `El cuadro trae ${cuadro.length} de ${cuotas} cuotas: di la deuda pendiente que trae, para comprobarlo.` }
+  }
+  const cuadra = importeCent - sumaCent === pendienteCent
+  return { cuadra, parcial: true, sumaCent, texto: cuadra
+    ? `Lo aplazado menos el capital de las ${cuadro.length} cuotas del cuadro da ${e(importeCent - sumaCent)}: es la deuda pendiente del cuadro.`
+    : `Lo aplazado menos el capital de las ${cuadro.length} cuotas del cuadro da ${e(importeCent - sumaCent)}, y el cuadro dice que quedan ${e(pendienteCent)}. No lo guardo así.` }
+}
+
+/** «Faltan las cuotas de 2027: sube el cuadro de ese año cuando llegue»; null si el contrato tiene todas sus filas. */
+export function avisoDeCuotas(c: Pick<ContratoVista, 'cuadro' | 'cuotas' | 'tipo'>): string | null {
+  if (c.tipo === 'poliza' || !c.cuadro?.length || !c.cuotas || c.cuotas <= c.cuadro.length) return null
+  const anio = Number(c.cuadro[c.cuadro.length - 1].fecha.slice(0, 4)) + 1
+  return `Faltan las cuotas de ${anio}: sube el cuadro de ese año cuando llegue.`
+}
+
+/** «1.234,56 €», sin depender de la pantalla. */
+function eurosTexto(c: number): string {
+  const abs = Math.abs(c)
+  return `${c < 0 ? '−' : ''}${String(Math.floor(abs / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')},${String(abs % 100).padStart(2, '0')} €`
 }
 
 /** Lo que queda por pagar después de cada fila (lo que guarda la base en `pendiente`). */

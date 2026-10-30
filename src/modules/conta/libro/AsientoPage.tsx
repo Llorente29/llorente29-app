@@ -290,7 +290,7 @@ export default function AsientoPage() {
             debajo={(l) => (editable && cambiando === l.apunte.posicion
               ? <BuscarCuenta cuentas={datos.cuentas} actual={l.apunte.cuenta} alElegir={(x) => hacerCambio(l.apunte.posicion, x)} alCerrar={() => setCambiando(null)} />
               : editable && pagando === l.apunte.posicion
-                ? <PagoDeModelo entryId={a.id} posicion={l.apunte.posicion} cuenta={l.apunte.cuenta} importe={l.apunte.debe || l.apunte.haber} sale={l.apunte.debe > 0}
+                ? <PagoDeModelo entryId={a.id} companyId={activa?.id ?? null} posicion={l.apunte.posicion} cuenta={l.apunte.cuenta} importe={l.apunte.debe || l.apunte.haber} sale={l.apunte.debe > 0}
                     fecha={a.fecha} alCerrar={() => setPagando(null)} alHacer={(t) => { setFallo(null); setHecho(t); setPagando(null); recargar() }} />
                 : null)} />
           {a.origen === 'sales_day' && a.origenId && accountId && activa && <NoConfirmadosDelDia accountId={accountId} companyId={activa.id} resumenId={a.origenId} />}
