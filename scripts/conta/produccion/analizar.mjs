@@ -101,7 +101,9 @@ function firma(s) {
   }
   if (!cerrado) return null
   trozos.push(cur)
-  const args = trozos.map((a) => a.trim()).filter(Boolean).map((a) => {
+  // DM1 (30/10): como Postgres, la firma no cuenta los parámetros OUT (los INOUT sí).
+  // Sin esto, current_employee_and_account(out …, out …) salía como (uuid,uuid): otra firma.
+  const args = trozos.map((a) => a.trim()).filter(Boolean).filter((a) => !/^out\s/i.test(a)).map((a) => {
     const sinDefecto = a.replace(/\s+default\s+[\s\S]*$/i, '').replace(/\s*=\s*[\s\S]*$/, '')
     const partes = sinDefecto.split(/\s+/).filter((p) => !/^(in|out|inout|variadic)$/i.test(p))
     // «p_id uuid» → uuid; «uuid» → uuid
