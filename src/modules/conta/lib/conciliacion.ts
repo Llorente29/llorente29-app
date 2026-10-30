@@ -40,6 +40,8 @@
 // Importes en CÉNTIMOS.
 
 import { eurosCent, limpiarConcepto } from '@/modules/conta/lib/extractoBanco'
+import { modeloYPeriodo } from '@/modules/conta/lib/libro'
+import { aplicarRegla, type LineaRegla } from '@/modules/conta/lib/reparto'
 
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -115,9 +117,11 @@ export interface Plataforma {
   pendiente: { desde: string; hasta: string; ventasCent: number }[]
 }
 export interface Nomina { mes: string; ssPendienteCent: number; netoPendienteCent: number; cuenta476: string; cuenta465: string }
-export interface Impuesto { modelo: '303' | '111' | '115'; periodo: string; importeCent: number; cuenta: string }
+/** S01d · Una declaración presentada sin pagar: su modelo, su periodo («2026-3T»), lo que hay que ingresar y la cuenta de su modelo. */
+export interface Impuesto { modelo: '303' | '111' | '115' | '123'; periodo: string; importeCent: number; cuenta: string; declaracionId?: string }
 export interface Contrato {
-  id: string; tipo: 'prestamo' | 'alquiler' | 'otro'; nombre: string; contiene: string; importeCent: number; confirmaciones: number
+  /** S01d · También el aplazamiento (Seguridad Social, Hacienda) y la póliza de crédito (sin cuota fija: importeCent null). */
+  id: string; tipo: 'prestamo' | 'alquiler' | 'otro' | 'aplazamiento' | 'poliza'; nombre: string; contiene: string; importeCent: number | null; confirmaciones: number
   terceroId: string | null
   cuadro: { fecha: string; cuotaCent: number; capitalCent: number; interesesCent: number }[] | null
   cuentaCapital: string | null; cuentaIntereses: string | null; cuentaGasto: string | null
@@ -128,6 +132,8 @@ export interface Regla {
   id: string; palabras: string; contiene: string; signo: 1 | -1 | null; cuenta: string; terceroId: string | null
   /** Veces que la persona la ha confirmado sin corregir: a la 3.ª casa sola (B01). */
   confirmaciones?: number
+  /** S01d · «Recordar este reparto»: las cuentas entre las que se reparte (importe fijo, o null = lo que falte). */
+  lineas?: LineaRegla[] | null
 }
 /** Lo confirmado antes (por la persona, o traído del libro de Diez) por contraparte. */
 export interface Aprendido { contraparte: string; cuenta: string; terceroId: string | null; veces: number }
@@ -210,7 +216,7 @@ export type Destino =
   | { tipo: 'abono_pasarela'; proveedor: 'stripe' | 'redsys'; cobros: string[]; comision: number; cuenta_comision: string
       /** La cuenta de la pasarela y lo cobrado (bruto) que se salda en ella. */
       cuenta_pasarela: string; cobrado: number; concepto: string }
-  | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string }[];
+  | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string; modelo?: string; periodo?: string }[];
       /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
       facturas?: { id: string; importe: number }[];
       tercero_id?: string | null; contrato_id?: string; concepto: string }
@@ -248,6 +254,8 @@ export interface Decision {
   quedaPorCasarCent: number | null
   /** B02 · La factura propuesta está «en revisión»: confirmar el pago no la aprueba. */
   facturaSinAprobar: boolean
+  /** S01d · Una regla con reparto que no cuadra con este importe: las mismas cuentas, para aclarar. */
+  reparto?: LineaRegla[] | null
 }
 
 const euros = (c: number) => c / 100
@@ -566,22 +574,36 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     }
   }
 
-  // ── 3 · Contrato con cuota (préstamo, alquiler) ──────────────────────────
+  // ── 3 · Contrato con cuota (préstamo, aplazamiento, póliza, alquiler) ──
   if (!entra) {
-    const cs = ctx.contratos.filter((c) => nombra(txt, [c.contiene]) && c.importeCent === -imp)
+    // S01d · Con cuadro, por su fila: la cuota de ese importe en ese mes (el préstamo y el Click & Pay
+    // comparten concepto del banco; los separan el importe, la fecha y la fila del cuadro). Sin cuadro, por el importe.
+    const conCuadro = (c: Contrato) => (c.tipo === 'prestamo' || c.tipo === 'aplazamiento')
+    const filaDe = (c: Contrato) => c.cuadro?.find((f) => f.cuotaCent === -imp && f.fecha.slice(0, 7) === m.fecha.slice(0, 7)) ?? null
+    const nombran = ctx.contratos.filter((c) => nombra(txt, [c.contiene]))
+    const porFila = nombran.filter((c) => conCuadro(c) && filaDe(c) !== null)
+    const cs = porFila.length ? porFila : nombran.filter((c) => c.tipo !== 'poliza' && c.importeCent === -imp)
+    // La póliza no tiene cuota fija: su liquidación se reparte en capital e intereses (respuesta 1, 30/10).
+    const polizas = nombran.filter((c) => c.tipo === 'poliza')
+    if (cs.length === 0 && polizas.length === 1 && polizas[0].cuentaCapital && polizas[0].cuentaIntereses) {
+      const c = polizas[0]
+      return { ...b, confianza: 'duda', que: `Liquidación de ${c.nombre}`, falta: 'repartir el importe',
+        reparto: [{ cuenta: c.cuentaCapital!, importeCent: null, concepto: 'Capital' }, { cuenta: c.cuentaIntereses!, importeCent: null, concepto: 'Intereses' }],
+        porque: `Es una liquidación de ${c.nombre}. Sin la liquidación del banco no sé cuánto es capital y cuánto intereses: repártelo tú.`, destino: null }
+    }
     if (cs.length === 1) {
       const c = cs[0]
-      const seguro = c.confirmaciones >= 3
-      if (c.tipo === 'prestamo') {
-        const fila = c.cuadro?.find((f) => f.cuotaCent === -imp && f.fecha.slice(0, 7) === m.fecha.slice(0, 7))
+      const seguro = c.confirmaciones >= 3 || porFila.length === 1
+      if (conCuadro(c)) {
+        const fila = filaDe(c)
         if (!fila || !c.cuentaCapital || !c.cuentaIntereses) {
           return { ...b, confianza: 'duda', que: `Cuota de ${c.nombre}`, falta: 'el cuadro de amortización de este mes',
             porque: `Es la cuota de ${c.nombre}, pero sin el cuadro de amortización no sé cuánto es capital y cuánto intereses.`, destino: null }
         }
         return { ...b, confianza: seguro ? 'seguro' : 'probable', que: `Cuota de ${c.nombre}`,
-          porque: `Cuota ${seguro ? `confirmada ${c.confirmaciones} veces` : 'de un contrato conocido'}: ${eurosCent(fila.capitalCent)} de capital (${nombreCuenta(ctx, c.cuentaCapital)}) y ${eurosCent(fila.interesesCent)} de intereses (${nombreCuenta(ctx, c.cuentaIntereses)}), según su cuadro.`,
+          porque: `Cuota del ${fila.fecha.slice(8, 10)}/${fila.fecha.slice(5, 7)} según su cuadro: ${eurosCent(fila.capitalCent)} de capital (${nombreCuenta(ctx, c.cuentaCapital)}) y ${eurosCent(fila.interesesCent)} de intereses (${nombreCuenta(ctx, c.cuentaIntereses)}).`,
           destino: { tipo: 'contrato', contrato_id: c.id, tercero_id: c.terceroId, concepto: `Cuota de ${c.nombre}`,
-            lineas: [{ cuenta: c.cuentaCapital, importe: euros(fila.capitalCent), concepto: 'Capital' }, { cuenta: c.cuentaIntereses, importe: euros(fila.interesesCent), concepto: 'Intereses' }] } }
+            lineas: [{ cuenta: c.cuentaCapital, importe: euros(fila.capitalCent), concepto: 'Capital' }, ...(fila.interesesCent > 0 ? [{ cuenta: c.cuentaIntereses, importe: euros(fila.interesesCent), concepto: 'Intereses' }] : [])] } }
       }
       const gasto = c.cuentaGasto ?? ''
       return { ...b, confianza: seguro ? 'seguro' : 'probable', que: `Cuota de ${c.nombre}`,
@@ -798,8 +820,11 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     const xs = ctx.impuestos.filter((x) => x.importeCent === -imp && (!modelo || x.modelo === modelo))
     if (xs.length === 1) {
       const x = xs[0]
-      return { ...b, confianza: 'probable', origen: 'impuesto', que: `Modelo ${x.modelo} · ${x.periodo}`, porque: `Mismo importe que el ${x.modelo} de ${x.periodo} pendiente en ${nombreCuenta(ctx, x.cuenta)}.`,
-        destino: { tipo: 'cuenta', concepto: `Pago del modelo ${x.modelo} · ${x.periodo}`, lineas: [{ cuenta: x.cuenta, importe: euros(-imp) }] } }
+      const mp = modeloYPeriodo(x.modelo, x.periodo)
+      // S01d: el pago de una retención (111, 115, 123) lleva su modelo y su periodo en la línea: con eso valida.
+      const retencion = x.modelo !== '303' ? { modelo: x.modelo, periodo: x.periodo } : {}
+      return { ...b, confianza: 'probable', origen: 'impuesto', que: `Modelo ${mp}`, porque: `Mismo importe que el ${mp} presentado y sin pagar (${nombreCuenta(ctx, x.cuenta)}).`,
+        destino: { tipo: 'cuenta', concepto: `Pago del modelo ${mp}`, lineas: [{ cuenta: x.cuenta, importe: euros(-imp), ...retencion }] } }
     }
     return { ...b, confianza: 'duda', origen: 'impuesto', que: 'Pago a Hacienda', falta: 'el modelo y el periodo',
       porque: `Es un pago a Hacienda de ${eurosCent(-imp)}, pero no hay ningún modelo pendiente por ese importe: ¿de qué modelo y periodo es?`, destino: null }
@@ -812,6 +837,21 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     // Una regla propone; casa sola cuando la persona la ha confirmado 3 veces sin corregir (B01).
     // Antes, punto verde: «lo casaría sola, pero aún no puedo».
     const conf = r.confirmaciones ?? 0
+    // S01d · Regla con reparto: si el importe cuadra, sale repartido y «probable» (nunca sola: varias
+    // cuentas se miran); si no, las mismas cuentas y «Falta por repartir», por aclarar (respuesta 1, 30/10).
+    if (r.lineas && r.lineas.length > 0) {
+      const ap = aplicarRegla(imp, r.lineas)
+      if (!ap.cuadra) {
+        return { ...b, confianza: 'duda', reglaId: r.id, origen: 'regla', que: `Reparto de la regla · ${r.lineas.map((l) => l.cuenta).join(' + ')}`,
+          falta: 'repartir el importe', reparto: ap.lineas.map((l) => ({ ...l, importeCent: l.importeCent })),
+          porque: `Regla: ${r.palabras}. El importe (${eurosCent(abs(imp))}) no es el de siempre: di cuánto va a cada cuenta.`, destino: null }
+      }
+      return { ...b, confianza: 'probable', preseleccionar: false, reglaId: r.id, origen: 'regla', que: `Repartido · ${ap.lineas.map((l) => nombreCuenta(ctx, l.cuenta)).join(' + ')}`,
+        porque: `Regla: ${r.palabras} (el mismo reparto de siempre).`,
+        destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,
+          lineas: ap.lineas.map((l) => ({ cuenta: l.cuenta, importe: euros(l.importeCent!), ...(l.concepto ? { concepto: l.concepto } : {}),
+            ...(l.modelo && l.periodo ? { modelo: l.modelo, periodo: l.periodo } : {}) })) } }
+    }
     const sola = conf >= 3
     return { ...b, confianza: sola ? 'seguro' : 'probable', preseleccionar: !sola, reglaId: r.id, origen: 'regla', que: nombreCuenta(ctx, r.cuenta),
       porque: sola ? `Regla confirmada ${conf} veces: ${r.palabras}.` : `Regla: ${r.palabras} (confirmada ${conf} ${conf === 1 ? 'vez' : 'veces'}; a la 3.ª caso sola).`, destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,

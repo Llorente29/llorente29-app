@@ -219,3 +219,10 @@ a.cxd-ia-hecho:hover { text-decoration: underline; }
 .cx-franja-tardia { background: var(--cx-azul-suave); color: var(--cx-texto); }
 /* V04 (1408) · Lo cambiado con el periodo reabierto, en el diario. */
 .cx-franja-reabierto { background: var(--cx-azul-suave); color: var(--cx-texto); }
+
+/* S01d · El pago de un modelo, debajo de su apunte */
+.cxd-acciones-apunte { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.cxd-pago-modelo { padding: 12px 0; display: flex; flex-direction: column; gap: 10px; }
+.cxd-pago-modelo-campos { display: flex; flex-wrap: wrap; gap: 10px 16px; }
+.cxd-pago-modelo-campos label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; min-width: 140px; }
+.cxd-pago-modelo-botones { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }

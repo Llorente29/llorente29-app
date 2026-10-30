@@ -85,9 +85,9 @@ describe('el veredicto y lo que entra en bloque', () => {
 })
 
 describe('«Validar y siguiente» y lo que dice la pantalla', () => {
-  it('tras validar, la siguiente; la última, la anterior; sin ninguna, nada', () => {
+  it('tras validar, la siguiente; tras la última, nada (S01d: solo hacia delante, y la tarjeta de fin de cuenta)', () => {
     expect(siguienteTras(['a', 'b', 'c'], 'a')).toBe('b')
-    expect(siguienteTras(['a', 'b', 'c'], 'c')).toBe('b')
+    expect(siguienteTras(['a', 'b', 'c'], 'c')).toBeNull()
     expect(siguienteTras(['a'], 'a')).toBeNull()
   })
   it('en bloque: cuántos, qué números, y lo que no se ha podido uno a uno (regla 8)', () => {

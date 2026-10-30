@@ -34,6 +34,8 @@ export interface PropuestaGuardada {
   alternativas?: { etiqueta: string; destino: Record<string, unknown> }[]
   quedaPorCasarCent?: number | null
   facturaSinAprobar?: boolean
+  /** S01d · Las cuentas de una regla con reparto cuyo importe no cuadró: la ventana abre con ellas. */
+  reparto?: { cuenta: string; importeCent: number | null; concepto: string | null; modelo?: string | null; periodo?: string | null }[] | null
 }
 
 export interface MovimientoBanco {

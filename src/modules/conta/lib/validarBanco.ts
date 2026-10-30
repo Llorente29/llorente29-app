@@ -44,11 +44,39 @@ export function conVeredicto(movs: readonly MovimientoBanco[], esperan: Readonly
 export const listosParaValidar = (xs: readonly { m: MovimientoBanco; v: VeredictoBanco }[]): MovimientoBanco[] =>
   xs.filter((x) => x.v.tipo === 'lista').map((x) => x.m)
 
-/** Tras validar uno, a cuál se pasa: el siguiente de la lista; si era el último, el anterior; si no queda ninguno, null. */
+/**
+ * Tras validar uno, a cuál se pasa: el siguiente de la lista, solo hacia
+ * delante (S01d). Si era el último, null: la cuenta está acabada y lo dice su
+ * tarjeta; nunca se salta a otro banco ni se vuelve atrás.
+ */
 export function siguienteTras(ids: readonly string[], hecho: string): string | null {
   const i = ids.indexOf(hecho)
   if (i < 0) return ids[0] ?? null
-  return ids[i + 1] ?? ids[i - 1] ?? null
+  return ids[i + 1] ?? null
+}
+
+/** «BBVA ·6536»: el nombre del banco y las cuatro últimas de su cuenta. */
+export function nombreConCuenta(b: { nombre: string; iban: string | null }): string {
+  const u = b.iban ? b.iban.replace(/\s/g, '').slice(-4) : null
+  return u ? `${b.nombre} ·${u}` : b.nombre
+}
+
+/**
+ * S01d · La tarjeta de fin de cuenta (tablero 4): «Has terminado BBVA ·6536.
+ * Validados 9 movimientos (asientos 3310 a 3318). Quedan 12 por validar en
+ * BBVA ·4525 y 3 en BBVA ·0133.» Los otros, de más a menos.
+ */
+export function finDeCuenta(banco: string, numeros: readonly number[], otros: readonly { id: string; nombre: string; n: number }[]): {
+  titulo: string; chip: string; texto: string; seguir: { id: string; nombre: string } | null
+} {
+  const quedan = [...otros].filter((o) => o.n > 0).sort((a, b) => b.n - a.n)
+  const n = [...numeros].sort((a, b) => a - b)
+  const validados = n.length === 0 ? '' : n.length === 1 ? `Validado 1 movimiento (asiento ${n[0]}). `
+    : n[n.length - 1] - n[0] === n.length - 1 ? `Validados ${n.length} movimientos (asientos ${n[0]} a ${n[n.length - 1]}). `
+      : `Validados ${n.length} movimientos (asientos ${n.join(', ')}). `
+  const resto = quedan.length === 0 ? 'No queda nada por validar en ningún banco.'
+    : `Quedan ${quedan.map((o, i) => `${o.n}${i === 0 ? ' por validar' : ''} en ${o.nombre}`).join(', ').replace(/, ([^,]*)$/, ' y $1')}.`
+  return { titulo: `Has terminado ${banco}`, chip: `${banco} al día`, texto: `${validados}${resto}`, seguir: quedan[0] ? { id: quedan[0].id, nombre: quedan[0].nombre } : null }
 }
 
 /** Lo que dice la pantalla tras validar en bloque (regla 8: con contenido). */

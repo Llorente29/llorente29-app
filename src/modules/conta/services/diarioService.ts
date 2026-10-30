@@ -34,7 +34,7 @@ const CAMPOS_ASIENTO = [
   'id, series, number, entry_date, concept, source_type, source_id, status, confidence, reason, reasons, party_id, document_ref, document_date',
   'external_program, external_series, external_number, validated_at, validated_by_name, chain_seq, prev_hash, hash',
   'reverses_entry_id, voided_by_entry_id, voided_at, voided_by_name, void_reason, created_at, created_by_name',
-  'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, external_negative_side, company_account(code, name, kind, plain_name, template_code, plan), locations(name), brand(name, ownership_type), tax_rate(rate))',
+  'journal_line(position, company_account_id, debit, credit, concept, location_id, is_common, brand_id, document_ref, tax_rate_id, tax_base, vat_book, withholding_base, withholding_model, withholding_period, external_negative_side, company_account(code, name, kind, plain_name, template_code, plan), locations(name), brand(name, ownership_type), tax_rate(rate))',
 ].join(', ')
 
 function aApunte(l: Fila): ApunteDiario {
@@ -50,7 +50,7 @@ function aApunte(l: Fila): ApunteDiario {
     comun: l.is_common === true, marcaId: s(l.brand_id), marca: br ? s(br.name) : null, cedida: br?.ownership_type === 'licensed',
     documento: s(l.document_ref),
     iva: l.tax_rate_id ? { tipoId: String(l.tax_rate_id), base: n(l.tax_base), libro: String(l.vat_book ?? ''), tipo: tr ? n(tr.rate) : null } : null,
-    retencion: l.withholding_model ? { base: n(l.withholding_base), modelo: String(l.withholding_model) } : null,
+    retencion: l.withholding_model ? { base: n(l.withholding_base), modelo: String(l.withholding_model), periodo: s(l.withholding_period) } : null,
     negativoEnDiez: l.external_negative_side === 'debe' || l.external_negative_side === 'haber' ? l.external_negative_side : null,
   }
 }
@@ -412,4 +412,20 @@ export async function guardarPredefinido(accountId: string, companyId: string, n
     throw new Error(mensaje('No se ha guardado el predefinido', r.error))
   }
   return id
+}
+
+// ── S01d · El pago, la compensación o la devolución de un modelo ─────────────
+
+export interface ModeloPagado { modelo: string; periodo: string; texto: string; declaracion: string | null; importe: number | null; pagado: number; pendiente: number | null; asientoPago: string | null }
+
+/** Un apunte de la 4751 de un asiento sin validar es el pago de un modelo y periodo («2026-3T»). Devuelve la frase y lo pagado hasta hoy. */
+export async function marcarPagoDeModelo(entryId: string, posicion: number, modelo: string, periodo: string): Promise<{ mensaje: string; pagado: ModeloPagado }> {
+  try {
+    const r = (await rpc('conta_apunte_pago_modelo', { p_entry: entryId, p_posicion: posicion, p_modelo: modelo, p_periodo: periodo })) as Fila
+    const p = r.pagado as Fila
+    return { mensaje: String(r.mensaje), pagado: {
+      modelo: String(p.modelo), periodo: String(p.periodo), texto: String(p.texto), declaracion: s(p.declaracion),
+      importe: p.importe == null ? null : n(p.importe), pagado: n(p.pagado), pendiente: p.pendiente == null ? null : n(p.pendiente), asientoPago: s(p.asiento_pago),
+    } }
+  } catch (e) { throw sinPrefijo(e) }
 }

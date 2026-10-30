@@ -100,7 +100,7 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // apartado, en la barra, todas a la vista y en el orden del mapa. PR 2: «Cierre del mes» ya
       // no es de Bancos (vive en Contabilidad › Cierre y Registro › Cerrar el mes).
       const paginas = page.getByRole('navigation', { name: 'Menú de contabilidad' }).getByRole('list', { name: 'Páginas de Bancos' })
-      await expect(paginas.getByRole('link')).toHaveText(['Movimientos', 'Cuentas y extractos', 'Reglas'])
+      await expect(paginas.getByRole('link')).toHaveText(['Movimientos', 'Préstamos y aplazamientos', 'Cuentas y extractos', 'Reglas'])
       for (const l of await paginas.getByRole('link').all()) await expect(l).toBeVisible()
       // El mes, en el botón del periodo de la cabecera (S02: «Octubre 2026», el formato de todas).
       await expect(page.locator('.s-cab-periodo').getByRole('combobox', { name: 'Mes' })).toHaveValue('2026-10')

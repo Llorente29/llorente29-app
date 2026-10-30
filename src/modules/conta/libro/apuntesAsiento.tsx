@@ -14,6 +14,7 @@ import { textoDeImporte } from '@/modules/conta/diseno'
 import type { ColumnaAsiento, LineaAsientoVista } from '@/modules/conta/diseno/plantillas'
 import { Chip } from '@/modules/conta/ui/piezas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
+import { modeloYPeriodo } from '@/modules/conta/lib/libro'
 import { marcaNegativoDiez, pastillasDeLinea, type ApunteDiario } from '@/modules/conta/lib/diario'
 
 /** Una línea de la tabla común del asiento, con su apunte detrás (para sus columnas y sus acciones). */
@@ -38,8 +39,9 @@ export function textoIva(iva: NonNullable<ApunteDiario['iva']>): string {
   return `${iva.tipo ?? ''} % sobre ${eurosExactos(iva.base)}${libro ? ` · ${libro}` : ''}`
 }
 
-/** «111 sobre 500,00 €». */
-export const textoRetencion = (r: NonNullable<ApunteDiario['retencion']>): string => `${r.modelo} sobre ${eurosExactos(r.base)}`
+/** «111 sobre 500,00 €» (la que nace) o «Pago del 111 · 3T 2026» (S01d). */
+export const textoRetencion = (r: NonNullable<ApunteDiario['retencion']>): string =>
+  r.periodo ? `Pago del ${modeloYPeriodo(r.modelo, r.periodo)}` : `${r.modelo} sobre ${eurosExactos(r.base)}`
 
 const chips = (l: ApunteDiario, eje: 'local' | 'marca') => pastillasDeLinea(l, { local: eje === 'local', marca: eje === 'marca' })
 

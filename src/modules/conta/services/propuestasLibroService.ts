@@ -225,7 +225,9 @@ function aJson(p: Propuesta) {
       cuenta: l.cuenta, debe: l.debe, haber: l.haber, concepto: l.concepto ?? null, local_id: l.localId, comun: !!l.comun,
       marca_id: l.marcaId ?? null, tercero_id: l.terceroId ?? null, documento: l.documento ?? null,
       iva: l.iva ? { tipo_id: l.iva.tipoId, base: l.iva.base, libro: l.iva.libro, deducible: l.iva.deducible ?? null, facturas: l.iva.facturas ?? 1 } : null,
-      retencion: l.retencion ? { tipo_id: l.retencion.tipoId, base: l.retencion.base, modelo: l.retencion.modelo } : null,
+      // S01d: la que nace lleva tipo, base y modelo; el pago de un modelo, su modelo y su periodo.
+      retencion: !l.retencion ? null : l.retencion.periodo !== undefined ? { modelo: l.retencion.modelo, periodo: l.retencion.periodo }
+        : { tipo_id: l.retencion.tipoId, base: l.retencion.base, modelo: l.retencion.modelo },
     })),
   }
 }
@@ -467,9 +469,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       res.propuesta.avisos.push(`El NIF-IVA de ${nombreProv} está sin comprobar en VIES: ábrelo en su ficha y se vuelve a preguntar.`)
       res.propuesta.confianza = peor(res.propuesta.confianza, 'probable')
     }
-    if (res.propuesta.lineas.find((l) => l.retencion)) {
-      const l = res.propuesta.lineas.find((x) => x.retencion)!
-      l.retencion = { ...l.retencion!, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
+    const conRetencion = res.propuesta.lineas.find((x) => x.retencion && x.retencion.periodo === undefined)
+    if (conRetencion?.retencion && conRetencion.retencion.periodo === undefined) {
+      conRetencion.retencion = { ...conRetencion.retencion, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
     }
     if (deLoAprendido?.cuenta) {
       res.propuesta.razones.push({ decision: `Gasto: ${s(deLoAprendido.nombre) ?? 'la cuenta'} · ${deLoAprendido.cuenta}`, porque: `${s(deLoAprendido.porque) ?? ''} (${s(deLoAprendido.origen) ?? 'aprendido'})` })

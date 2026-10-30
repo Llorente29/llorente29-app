@@ -182,9 +182,10 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'pagos', 'liquidaciones'])
     expect(c.ruta).toBe(CONTA.rutas.documentos)
   })
-  it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
+  it('S02 · Bancos: Movimientos · Préstamos y aplazamientos (S01d) · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
     const b = PRODUCTOS.find((p) => p.id === 'bancos')!
-    expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Cuentas y extractos', 'Reglas'])
+    expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Préstamos y aplazamientos', 'Cuentas y extractos', 'Reglas'])
+    expect(de('/conta/bancos/prestamos')).toBe('bancos.prestamos')
     expect(de('/conta/bancos/cierre')).toBe('contabilidad.cierre')
   })
   it('S02 · Ajustes es un apartado con sus páginas (las de su índice), sin las de Definiciones; en el producto solo, sin las que dicen «aún no»', () => {

@@ -1,0 +1,13 @@
+# S01d · Bancos y retenciones. La 0855 solo añade (columnas que admiten
+# nulos), y la 0934 igual (las columnas del contrato): van de verdad desde la
+# rama, para que la e2e las encuentre. La 0900 cambia cinco funciones y la 0935 amplía recurring_contract: desde la rama,
+# solo en ROLLBACK. La 0901 arregla Foodint y en staging no hace nada.
+# Su prueba (ROLLBACK), por sus caminos: la compensación de Hacienda, el pago
+# de un 115, casar el cargo de un 111 por el banco, el diario de retenciones,
+# lo que no vale, la cuenta B, préstamos y aplazamientos, y la vuelta atrás.
+supabase/migrations/20261030T0855_s01d_columnas_retencion.sql
+supabase/migrations/20261030T0900_s01d_retenciones_pago.sql
+supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
+supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
+supabase/migrations/20261030T0935_s01d_contratos.sql
+supabase/staging/sql/20261030_s01d_bancos_retenciones_prueba.sql

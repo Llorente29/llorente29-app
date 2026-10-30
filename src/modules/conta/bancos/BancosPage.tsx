@@ -59,6 +59,7 @@ import { Boton } from '@/modules/conta/diseno'
 import { Movimientos } from '@/modules/conta/bancos/Movimientos'
 import { Reglas } from '@/modules/conta/bancos/Reglas'
 import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
+import { Prestamos } from '@/modules/conta/bancos/Prestamos'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
 import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
@@ -69,6 +70,7 @@ function contenido(v: VistaBancos): ReactNode {
     case 'movimientos': return <Movimientos />
     case 'reglas': return <Reglas />
     case 'cuentas': return <CuentasYExtractos />
+    case 'prestamos': return <Prestamos />
     case 'subir': return <SubirExtracto />
     case 'hecho': return <HechoPorFolvy />
   }
@@ -104,6 +106,12 @@ function Bancos() {
   const bancos = datos.datos?.bancos ?? []
   // S01e: sin ?banco ni ?mes, se abre donde hay movimientos (el banco y el mes de su último extracto).
   const banco = bancos.find((b) => b.id === query.get('banco')) ?? bancoInicial(bancos, datos.datos?.dudas ?? {})
+  // S01d · El banco, fijo en la dirección: si no, al validar cambian las dudas y al recargar
+  // bancoInicial elegía otro banco («Validar y siguiente» saltaba de banco).
+  const bancoFijo = banco?.id ?? null
+  useEffect(() => {
+    if (bancoFijo && !query.get('banco')) setQuery((p) => { const q = new URLSearchParams(p); q.set('banco', bancoFijo); return q }, { replace: true })
+  }, [bancoFijo, query, setQuery])
   const mes = meses.includes(query.get('mes') ?? '') ? query.get('mes')! : mesInicial(meses, banco, hoy)
   const hechos = useLeerConservando(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, ambito, `${mes}:${vuelta}`)
   // Lo casado solo que sigue vivo: lo deshecho ya no es «hecho por Folvy».

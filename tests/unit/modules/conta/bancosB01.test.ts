@@ -307,11 +307,19 @@ describe('Excel/CSV de los once bancos y la tarjeta', () => {
     expect(reconocerBanco(EJEMPLOS.santander)).toBe('santander')
   })
 
-  it('un saldo que no sale de la fila anterior se caza', () => {
+  it('S01d · un saldo que no sale de la fila anterior se caza, pero si el total cuadra entra con aviso', () => {
     const malo = EJEMPLOS.santander.map((f) => [...f]); malo[2][5] = '1.090,00'
     const c = cuadrar(leerCsvBanco(malo, 'santander'))
+    expect(c.ok).toBe(true)
+    expect(c.avisos?.[0]).toMatch(/el saldo del banco no sale de la anterior; el total cuadra\.$/)
+    expect(c.filasRotas?.some((f) => f.saldoCent === 109000 && f.esperadoCent === 108800)).toBe(true)
+  })
+
+  it('S01d · si el total no cuadra (falta un movimiento), no entra', () => {
+    const malo = EJEMPLOS.santander.map((f) => [...f]); malo.splice(2, 1)
+    const c = cuadrar({ ...leerCsvBanco(malo, 'santander'), cuentas: leerCsvBanco(malo, 'santander').cuentas.map((x) => ({ ...x, saldoFinalCent: (x.saldoFinalCent ?? 0) + 1 })) })
     expect(c.ok).toBe(false)
-    expect(c.motivos[0]).toMatch(/el saldo debería ser 1\.088,00 € y el fichero dice 1\.090,00 €/)
+    expect(c.motivos[0]).toMatch(/y el banco dice que el saldo final es/)
   })
 
   it('el fichero de otro banco no se lee a ciegas: dice qué columnas busca', () => {

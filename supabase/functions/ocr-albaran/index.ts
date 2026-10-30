@@ -47,6 +47,7 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from '@supabase/supabase-js';
 import { MODELO_VISION, buildPrompt, extractJson, validate, type ParsedDoc } from '../_shared/ocrAlbaranNucleo.ts';
+import { PROMPT_CUADRO, comprobarCuadro } from '../_shared/lecturaCuadro.ts';
 import { leerFactura, PROMPT_FACTURA, type LecturaModelo } from '../_shared/lecturaFactura.ts';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
@@ -63,7 +64,10 @@ interface OcrRequest {
   // (vencimiento, cuadro de impuestos, recargo, retención, rectificativa, IBAN)
   // y devuelve la lectura comprobada (_shared/lecturaFactura.ts). Sin modo,
   // todo es exactamente como antes.
-  modo?: 'factura';
+  // S01d (30/10): «cuadro» lee un cuadro de amortización o la resolución de
+  // un aplazamiento y devuelve sus filas comprobadas (_shared/lecturaCuadro.ts),
+  // sin guardar sesión: lo guarda Bancos cuando la persona confirma.
+  modo?: 'factura' | 'cuadro';
 }
 
 const MEDIR_MAX = 40;
@@ -224,6 +228,15 @@ Deno.serve(async (req) => {
   if ('error' in b) return jsonResponse(400, { error: b.error });
   const contentBlocks = b.blocks;
   const inputFiles = b.files;
+
+  // S01d · Modo cuadro: las filas y si el capital suma lo aplazado; nada se guarda aquí.
+  if (modo === 'cuadro') {
+    const r = await leerConIa(anthropicKey, model, contentBlocks, PROMPT_CUADRO);
+    if ('error' in r) return jsonResponse(502, { error: 'Error del servicio de IA', detail: r.error });
+    const cuadro = comprobarCuadro(r.parsed);
+    if ('error' in cuadro) return jsonResponse(422, { error: cuadro.error });
+    return jsonResponse(200, { cuadro, ai_model: model });
+  }
 
   // ── 2) Llamar a Opus visión ──
   const t0 = Date.now();

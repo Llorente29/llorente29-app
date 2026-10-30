@@ -17,16 +17,17 @@ import { rutaLibros } from '@/config/navegacion'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import { nombreMes, ultimosIban } from '@/modules/conta/lib/bancosVista'
 
-export interface PestanaBancos { id: 'movimientos' | 'reglas' | 'cuentas'; nombre: string }
+export interface PestanaBancos { id: 'movimientos' | 'reglas' | 'cuentas' | 'prestamos'; nombre: string }
 export const PESTANAS_BANCOS: PestanaBancos[] = [
   { id: 'movimientos', nombre: 'Movimientos' },
+  { id: 'prestamos', nombre: 'Préstamos y aplazamientos' },
   { id: 'cuentas', nombre: 'Cuentas y extractos' },
   { id: 'reglas', nombre: 'Reglas' },
 ]
 
 /** Lo que tiene ruta propia en Bancos: las tres páginas y dos acciones («Subir extracto» y «Lo que he hecho»). */
 export type VistaBancos = PestanaBancos['id'] | 'subir' | 'hecho'
-const VISTAS: VistaBancos[] = ['movimientos', 'reglas', 'cuentas', 'subir', 'hecho']
+const VISTAS: VistaBancos[] = ['movimientos', 'reglas', 'cuentas', 'prestamos', 'subir', 'hecho']
 
 export function resolverVista(p: string | undefined): VistaBancos {
   return (VISTAS as string[]).includes(p ?? '') ? (p as VistaBancos) : 'movimientos'
@@ -114,6 +115,8 @@ export function encabezadoDe(v: VistaBancos, o: { banco: { nombre: string; iban:
       return { titulo: 'Reglas', frase: 'Lo que se hace siempre igual. Las uso para proponer; una regla casa sola cuando la has confirmado 3 veces sin corregirla.', migasExtra: [] }
     case 'cuentas':
       return { titulo: 'Cuentas y extractos', frase: 'Tus cuentas del banco, sus tarjetas de débito y lo que se ha subido de cada una.', migasExtra: [] }
+    case 'prestamos':
+      return { titulo: 'Préstamos y aplazamientos', frase: 'Lo que pagas a plazos: con su cuadro, cada cuota se casa sola con su fila.', migasExtra: [] }
   }
 }
 
@@ -126,6 +129,7 @@ export const BUSCABLES: Buscable[] = [
   { vista: 'hecho', nombre: LO_HECHO, donde: 'Movimientos', palabras: 'hecho folvy deshacer automatico casado solo' },
   { vista: 'reglas', nombre: 'Reglas', donde: 'Bancos', palabras: 'reglas aprender siempre concepto' },
   { vista: 'cuentas', nombre: 'Cuentas y extractos', donde: 'Bancos', palabras: 'cuentas extractos tarjetas iban alta local' },
+  { vista: 'prestamos', nombre: 'Préstamos y aplazamientos', donde: 'Bancos', palabras: 'prestamo aplazamiento poliza credito cuadro amortizacion cuota seguridad social hacienda fraccionamiento' },
   { vista: 'cuentas', nombre: 'Tarjetas', donde: 'Cuentas y extractos', palabras: 'tarjeta tarjetas debito titular ticket' },
 ]
 
