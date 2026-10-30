@@ -23,7 +23,7 @@ cuenta: scripts/conta/produccion/cuentas/s01c-facturas-solas.sql
 sin-vuelta-atras: supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql · motivo: anula FAC-00100 con contraasiento (se revierte, no se borra); no hay a qué volver sin borrar un asiento
 esperado: s01c-facturas-solas · funciones nuevas (casar / llegan / esperando / hueco / correo / disparador) = como antes
 esperado: s01c-facturas-solas · FAC-00100 (factura / asiento) = anulada / anulado
-esperado: s01c-facturas-solas · camino de ALB-00218 = pendiente_factura, sin consumir
+esperado: s01c-facturas-solas · camino de ALB-00218 = pendiente_factura · sin consumir
 esperado: s01c-facturas-solas · Amirsa (cuándo llegan / preguntas abiertas) = inicio_mes_siguiente / 0
 esperado: s01c-facturas-solas · direcciones de entrada de Foodint = 2
 supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql

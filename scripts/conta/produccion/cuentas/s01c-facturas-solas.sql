@@ -6,7 +6,7 @@
 -- Lo que tiene que pasar (primer real, la 1012: solo la 1; segundo real, la 1013: de la 2 a la 5):
 --   1. las seis funciones nuevas: de false a true;
 --   2. FAC-00100: de «aprobada» a «anulada», y su asiento de «validado» a «anulado»;
---   3. el camino de ALB-00218: de «factura, consumido» a «pendiente_factura, sin consumir»;
+--   3. el camino de ALB-00218: de «factura · consumido» a «pendiente_factura · sin consumir»;
 --   4. Amirsa: «cuándo llegan» de «no está» a «inicio_mes_siguiente»; sus preguntas abiertas, de 1 a 0;
 --   5. las direcciones de entrada de Foodint: de 3 a 2 (sin «documentos»).
 select clave, valor from (
@@ -23,7 +23,7 @@ select clave, valor from (
        from public.supplier_invoice si where si.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and si.code = 'FAC-00100') union all
   select 3, 'camino de ALB-00218',
     -- quieta: el camino de un albarán por su código; solo lo cambia la 1013 o una factura que case con él, y a la dirección de facturas no ha llegado ninguna
-    (select p.path || case when p.consumed_at is null then ', sin consumir' else ', consumido' end
+    (select p.path || case when p.consumed_at is null then ' · sin consumir' else ' · consumido' end
        from public.goods_receipt_path p join public.goods_receipt g on g.id = p.goods_receipt_id
       where g.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and g.code = 'ALB-00218') union all
   select 4, 'Amirsa (cuándo llegan / preguntas abiertas)',
