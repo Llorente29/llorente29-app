@@ -1,0 +1,9 @@
+# S01e · la ficha de cada préstamo o aplazamiento. La 2210 solo añade
+# columnas (va de verdad desde la rama); la 2211 cambia bank_casar y
+# bank_contrato_guardar: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por los caminos de la pantalla: casar la cuota guarda
+# su contrato y su fila (y no dos veces); sustituir las pendientes de un
+# préstamo deja las pagadas; un aplazamiento no se sustituye; y la vuelta atrás.
+supabase/migrations/20261030T2210_s01e_columnas.sql
+supabase/migrations/20261030T2211_s01e_ficha.sql
+supabase/staging/sql/20261030_s01e_ficha_prueba.sql

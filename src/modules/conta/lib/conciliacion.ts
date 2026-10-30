@@ -219,7 +219,9 @@ export type Destino =
   | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string; modelo?: string; periodo?: string }[];
       /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
       facturas?: { id: string; importe: number }[];
-      tercero_id?: string | null; contrato_id?: string; concepto: string }
+      tercero_id?: string | null; contrato_id?: string;
+      /** S01e · Solo «contrato» con cuadro: la fecha de la fila que paga (bank_casar la guarda en bank_match). */
+      fila?: string; concepto: string }
 
 export interface Decision {
   movimientoId: string
@@ -602,7 +604,7 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
         }
         return { ...b, confianza: seguro ? 'seguro' : 'probable', que: `Cuota de ${c.nombre}`,
           porque: `Cuota del ${fila.fecha.slice(8, 10)}/${fila.fecha.slice(5, 7)} según su cuadro: ${eurosCent(fila.capitalCent)} de capital (${nombreCuenta(ctx, c.cuentaCapital)}) y ${eurosCent(fila.interesesCent)} de intereses (${nombreCuenta(ctx, c.cuentaIntereses)}).`,
-          destino: { tipo: 'contrato', contrato_id: c.id, tercero_id: c.terceroId, concepto: `Cuota de ${c.nombre}`,
+          destino: { tipo: 'contrato', contrato_id: c.id, fila: fila.fecha, tercero_id: c.terceroId, concepto: `Cuota de ${c.nombre}`,
             lineas: [{ cuenta: c.cuentaCapital, importe: euros(fila.capitalCent), concepto: 'Capital' }, ...(fila.interesesCent > 0 ? [{ cuenta: c.cuentaIntereses, importe: euros(fila.interesesCent), concepto: 'Intereses' }] : [])] } }
       }
       const gasto = c.cuentaGasto ?? ''

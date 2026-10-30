@@ -1,0 +1,29 @@
+{
+ "_que": "S01e · contexto de producción medido en SOLO LECTURA el 30/10 a las 22:07Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen bank_casar (md5 de su definición 2464ce97732e884d1a4c176d2ba89d07, la de la 0900) y bank_contrato_guardar (533598fa307f0c01a82d1545f6c13bc0, la de la 1638); bank_match y recurring_contract existen; nada en el camino del pedido; ninguna de las dos en el historial; Foodint tiene 2 contratos.",
+ "medido": "2026-10-30T22:07Z",
+ "tanda": {
+  "supabase/migrations/20261030T2210_s01e_columnas.sql": "28853d6f6cec6e4f50d23755cd531d79",
+  "supabase/migrations/20261030T2211_s01e_ficha.sql": "7784586200ef00da7d8e5307c687da48"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_match",
+   "public.recurring_contract"
+  ],
+  "funciones": [
+   "public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)",
+   "public.bank_contrato_guardar(uuid,jsonb)"
+  ],
+  "filas": {
+   "public.bank_match": 558,
+   "public.recurring_contract": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
