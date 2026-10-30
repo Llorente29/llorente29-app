@@ -8593,6 +8593,8 @@ CREATE TABLE public.bank_match (
     undone_by uuid,
     undone_by_name text,
     undo_reason text,
+    contract_id uuid,
+    contract_due_date date,
     CONSTRAINT bank_match_by_who_check CHECK ((by_who = ANY (ARRAY['folvy'::text, 'persona'::text]))),
     CONSTRAINT bank_match_confidence_check CHECK ((confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text]))),
     CONSTRAINT bank_match_deshecho_completo CHECK (((status = 'deshecho'::text) = ((undone_at IS NOT NULL) AND (undo_reason IS NOT NULL)))),
@@ -8607,6 +8609,20 @@ CREATE TABLE public.bank_match (
 --
 
 COMMENT ON TABLE public.bank_match IS 'B01. Lo casado: un movimiento con un asiento (entry_created: el asiento lo creó el banco; si no, se enlazó uno que ya existía, P2). Un vivo por movimiento. Deshacer deja «deshecho» con quién, cuándo y por qué; su asiento propuesto se quita y el validado se anula.';
+
+
+--
+-- Name: COLUMN bank_match.contract_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_match.contract_id IS 'S01e. El contrato (préstamo o aplazamiento) cuya cuota paga este cargo. Nulo en todo lo demás y en las cuotas casadas antes del S01e.';
+
+
+--
+-- Name: COLUMN bank_match.contract_due_date; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_match.contract_due_date IS 'S01e. La fecha de la fila del cuadro que paga este cargo (con contract_id).';
 
 
 --
@@ -18495,6 +18511,7 @@ declare
   v_f jsonb; v_inv public.supplier_invoice; v_pagado numeric; v_cs public.channel_settlement; v_o public.bank_movement; v_o572 text;
   v_ot public.treasury_account; v_aviso text; v_tercero uuid := nullif(p_destino->>'tercero_id', '')::uuid; v_marcada boolean;
   v_dif numeric := 0; v_dif_cuenta text;
+  v_contrato uuid; v_fila date;
   -- PC01: las facturas emitidas que cobra el movimiento.
   v_ci public.customer_invoice; v_cobrado numeric; v_sumf numeric := 0;
 begin
@@ -18510,6 +18527,22 @@ begin
   end if;
   if v_m.status = 'ignorado' then raise exception 'Ese movimiento está ignorado.' using errcode = '23514'; end if;
   if v_m.status = 'posible_repetido' then raise exception 'Primero di si es el mismo que el ya traído.' using errcode = '23514'; end if;
+  -- S01e · La cuota de un contrato: el contrato (de esta empresa) y la fila del cuadro que paga.
+  if v_tipo = 'contrato' and nullif(p_destino->>'contrato_id', '') is not null then
+    select c.id into v_contrato from public.recurring_contract c
+     where c.id = (p_destino->>'contrato_id')::uuid and c.company_id = v_m.company_id;
+    if v_contrato is null then raise exception 'Ese contrato no es de esta empresa.' using errcode = '22023'; end if;
+    v_fila := nullif(p_destino->>'fila', '')::date;
+    if v_fila is not null then
+      if not exists (select 1 from public.recurring_contract c, jsonb_array_elements(coalesce(c.schedule, '[]'::jsonb)) f
+                      where c.id = v_contrato and (f->>'fecha')::date = v_fila) then
+        raise exception 'El % no es una cuota del cuadro de ese contrato.', to_char(v_fila, 'DD/MM/YYYY') using errcode = '22023';
+      end if;
+      if exists (select 1 from public.bank_match bm where bm.contract_id = v_contrato and bm.contract_due_date = v_fila and bm.status = 'vivo') then
+        raise exception 'La cuota del % de ese contrato ya está casada con otro cargo.', to_char(v_fila, 'DD/MM/YYYY') using errcode = '23505';
+      end if;
+    end if;
+  end if;
   -- P4: antes del corte el libro ya tiene el banco (traído): solo se enlaza.
   if v_m.before_cutover and v_tipo <> 'asiento' then
     raise exception 'Este movimiento es de antes de la fecha de corte: solo se enlaza con un asiento que ya esté en el libro.' using errcode = '23514';
@@ -18655,9 +18688,9 @@ begin
   end if;
 
   insert into public.bank_match (account_id, company_id, movement_id, kind, journal_entry_id, entry_created, amount, confidence, reason, by_who, rule_id,
-                                 created_by, created_by_name)
+                                 created_by, created_by_name, contract_id, contract_due_date)
   values (v_cuenta, v_m.company_id, v_m.id, v_tipo, v_entry, v_creado, v_m.amount, p_confianza, p_porque, p_por, p_regla, auth.uid(),
-          case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end)
+          case when p_por = 'folvy' then 'Folvy' else public.conta_nombre_actor() end, v_contrato, v_fila)
   returning id into v_match;
 
   -- Respuesta 4: la persona casa con otra cosa lo que proponía una regla → una
@@ -18766,6 +18799,8 @@ declare
   v_largo text := nullif(p_datos->>'capital_largo', ''); v_int text := nullif(p_datos->>'intereses', '');
   v_contrato uuid := nullif(p_datos->>'contrato', '')::uuid; c public.recurring_contract; v_ultima date; v_nuevas int;
   v_aviso text;
+  v_modo text := coalesce(nullif(p_datos->>'modo', ''), 'anadir'); v_amortizado numeric := coalesce(nullif(p_datos->>'amortizado', '')::numeric, 0);
+  v_desde date; v_quedan jsonb; v_quedan_suma numeric; v_quitadas int; v_pagada date; v_resto numeric;
 begin
   select account_id into v_account from public.company where id = p_company;
   if v_account is null or not public.current_user_is_admin_or_manager_of(v_account) then
@@ -18776,12 +18811,68 @@ begin
   if v_contrato is not null then
     select * into c from public.recurring_contract where id = v_contrato and company_id = p_company;
     if c.id is null then raise exception 'Ese contrato no está.' using errcode = 'P0002'; end if;
+    -- S01e · «Más acciones» de la ficha: cambiar las cuentas, lo que pone el banco o darlo por terminado.
+    if v_modo = 'datos' then
+      if exists (select 1 from unnest(array[v_corto, v_largo, v_int]) cu(code)
+                  where cu.code is not null and not exists (select 1 from public.company_account a where a.company_id = p_company and a.code = cu.code)) then
+        raise exception 'Alguna de las cuentas no está en el plan de la empresa.' using errcode = '22023';
+      end if;
+      if p_datos ? 'contiene' and coalesce(trim(p_datos->>'contiene'), '') = '' then
+        raise exception 'Di qué pone el banco en el concepto de la cuota.' using errcode = '22023';
+      end if;
+      update public.recurring_contract set
+             short_capital_account = coalesce(v_corto, short_capital_account), capital_account = coalesce(v_corto, capital_account),
+             long_capital_account = case when p_datos ? 'capital_largo' then v_largo else long_capital_account end,
+             interest_account = coalesce(v_int, interest_account),
+             concept_contains = coalesce(nullif(trim(p_datos->>'contiene'), ''), concept_contains),
+             is_active = case when p_datos ? 'activo' then (p_datos->>'activo')::boolean else is_active end
+       where id = c.id returning * into c;
+      return jsonb_build_object('id', c.id, 'mensaje', case when not c.is_active
+        then format('«%s», dado por terminado: ya no sale en la lista ni casa cuotas.', c.name)
+        else format('Guardado «%s»: capital a corto %s%s, intereses %s; el banco pone «%s».', c.name, coalesce(c.short_capital_account, c.capital_account),
+          coalesce(', a largo ' || c.long_capital_account, ''), c.interest_account, c.concept_contains) end);
+    end if;
     if c.kind = 'poliza' or c.principal is null then
       raise exception 'Una póliza no tiene cuadro: sus liquidaciones se reparten con la del banco.' using errcode = '22023';
     end if;
     if v_cuadro is null or jsonb_typeof(v_cuadro) <> 'array' or jsonb_array_length(v_cuadro) = 0 then
       raise exception 'Falta el cuadro: las fechas, las cuotas, el capital y los intereses.' using errcode = '22023';
     end if;
+    -- S01e · Un préstamo con un cuadro nuevo (después de amortizar de golpe, o si el banco lo
+    -- rehace): se van las cuotas desde la primera del cuadro nuevo y entran las suyas. Las pagadas
+    -- no se tocan: si el cuadro nuevo empieza en una cuota ya pagada, no se cambia nada.
+    if v_modo = 'sustituir' then
+      if c.kind <> 'prestamo' then
+        raise exception 'Cambiar las cuotas pendientes es para un préstamo: a un aplazamiento se le añaden las del año nuevo.' using errcode = '22023';
+      end if;
+      if v_amortizado < 0 then raise exception 'Lo amortizado de golpe no puede ser negativo.' using errcode = '22023'; end if;
+      select min((f->>'fecha')::date) into v_desde from jsonb_array_elements(v_cuadro) f;
+      select min(bm.contract_due_date) into v_pagada from public.bank_match bm
+       where bm.contract_id = c.id and bm.status = 'vivo' and bm.contract_due_date >= v_desde;
+      if v_pagada is not null then
+        raise exception 'La cuota del % ya está pagada: el cuadro nuevo tiene que empezar después de ella.', to_char(v_pagada, 'DD/MM/YYYY') using errcode = '22023';
+      end if;
+      select coalesce(jsonb_agg(f order by (f->>'fecha')::date), '[]'::jsonb), coalesce(round(sum((f->>'capital')::numeric), 2), 0)
+        into v_quedan, v_quedan_suma from jsonb_array_elements(coalesce(c.schedule, '[]'::jsonb)) f where (f->>'fecha')::date < v_desde;
+      v_quitadas := jsonb_array_length(coalesce(c.schedule, '[]'::jsonb)) - jsonb_array_length(v_quedan);
+      select round(sum((f->>'capital')::numeric), 2), count(*) into v_suma, v_nuevas from jsonb_array_elements(v_cuadro) f;
+      v_resto := round(c.principal - v_quedan_suma - v_amortizado, 2);
+      -- La comprobación: lo prestado, menos el capital de las cuotas que se quedan y lo amortizado de golpe, es el capital del cuadro nuevo.
+      if v_resto <> v_suma then
+        raise exception 'Lo prestado (%) menos el capital de las % cuotas que se quedan (%) y lo amortizado de golpe (%) da %, y el capital del cuadro nuevo suma %: no cuadra, no lo cambio.',
+          public.conta_impuesto_euros(c.principal), jsonb_array_length(v_quedan), public.conta_impuesto_euros(v_quedan_suma),
+          public.conta_impuesto_euros(v_amortizado), public.conta_impuesto_euros(v_resto), public.conta_impuesto_euros(v_suma) using errcode = '22023';
+      end if;
+      v_cuadro := public.conta_cuadro_con_pendiente((select jsonb_agg(f - 'pendiente' order by (f->>'fecha')::date) from jsonb_array_elements(v_cuadro) f), v_resto);
+      if v_amortizado > 0 then v_cuadro := jsonb_set(v_cuadro, '{0,amortizado_antes}', to_jsonb(v_amortizado)); end if;
+      update public.recurring_contract set schedule = v_quedan || v_cuadro, installments = jsonb_array_length(v_quedan) + v_nuevas,
+             amount = (v_cuadro->0->>'cuota')::numeric, document_name = coalesce(nullif(p_datos->>'documento', ''), document_name),
+             document_uploaded_at = now()
+       where id = c.id;
+      return jsonb_build_object('id', c.id, 'mensaje', format('Cambiado el cuadro de «%s»: se van %s cuotas pendientes y entran %s. Desde el %s quedan %s de capital.',
+        c.name, v_quitadas, v_nuevas, to_char(v_desde, 'DD/MM/YYYY'), public.conta_impuesto_euros(v_resto)));
+    end if;
+    if v_modo <> 'anadir' then raise exception 'Qué hago con el contrato: añadir las cuotas nuevas, cambiar las pendientes o sus datos.' using errcode = '22023'; end if;
     select max((f->>'fecha')::date) into v_ultima from jsonb_array_elements(coalesce(c.schedule, '[]'::jsonb)) f;
     -- Solo las filas de después de la última que tiene: subir otra vez el mismo cuadro no duplica nada.
     select coalesce(jsonb_agg(f order by (f->>'fecha')::date), '[]'::jsonb), count(*) into v_cuadro, v_nuevas
@@ -18807,7 +18898,7 @@ begin
         v_filas, public.conta_impuesto_euros(v_suma), public.conta_impuesto_euros(c.principal) using errcode = '22023';
     end if;
     update public.recurring_contract set schedule = public.conta_cuadro_con_pendiente(v_cuadro, c.principal), installments = v_cuotas,
-           document_name = coalesce(nullif(p_datos->>'documento', ''), document_name)
+           document_name = coalesce(nullif(p_datos->>'documento', ''), document_name), document_uploaded_at = now()
      where id = c.id;
     v_aviso := case when v_filas < v_cuotas then format(' Faltan las cuotas de %s: sube el cuadro de ese año cuando llegue.',
       extract(year from (select max((f->>'fecha')::date) from jsonb_array_elements(v_cuadro) f))::int + 1) else '' end;
@@ -18861,12 +18952,14 @@ begin
   end if;
 
   insert into public.recurring_contract (account_id, company_id, kind, name, concept_contains, amount, schedule, capital_account, interest_account,
-    long_capital_account, short_capital_account, treasury_account_id, principal, installments, document_name, document_kind, created_by, created_by_name)
+    long_capital_account, short_capital_account, treasury_account_id, principal, installments, document_name, document_kind, created_by, created_by_name,
+    document_uploaded_at)
   values (v_account, p_company, v_kind, trim(p_datos->>'nombre'), trim(p_datos->>'contiene'),
     case when v_kind = 'poliza' then null else (v_cuadro->0->>'cuota')::numeric end,
     case when v_kind = 'poliza' then null else v_cuadro end,
     v_corto, v_int, v_largo, v_corto, v_banco, v_importe, v_cuotas,
-    nullif(p_datos->>'documento', ''), coalesce(nullif(p_datos->>'documento_tipo', ''), 'a_mano'), auth.uid(), public.conta_nombre_actor())
+    nullif(p_datos->>'documento', ''), coalesce(nullif(p_datos->>'documento_tipo', ''), 'a_mano'), auth.uid(), public.conta_nombre_actor(),
+    case when nullif(p_datos->>'documento', '') is not null then now() end)
   returning id into v_id;
 
   return jsonb_build_object('id', v_id, 'mensaje', case when v_kind = 'poliza'
@@ -18880,7 +18973,7 @@ end $$;
 -- Name: FUNCTION bank_contrato_guardar(p_company uuid, p_datos jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) IS 'S01d. Alta de un préstamo, aplazamiento o póliza desde «Subir el cuadro» (tablero 3). S01d-b: cuadro parcial (cuotas del texto y deuda pendiente) y añadir las filas del año nuevo a un contrato que ya existe.';
+COMMENT ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) IS 'S01d. Alta de un préstamo, aplazamiento o póliza desde «Subir el cuadro» (tablero 3). S01d-b: cuadro parcial (cuotas del texto y deuda pendiente) y añadir las filas del año nuevo a un contrato que ya existe. S01e: modo «sustituir» (las cuotas pendientes de un préstamo) y la fecha de subida del cuadro.';
 
 
 --
@@ -100836,6 +100929,7 @@ CREATE TABLE public.recurring_contract (
     installments integer,
     document_name text,
     document_kind text,
+    document_uploaded_at timestamp with time zone,
     CONSTRAINT recurring_contract_amount_check CHECK ((amount > (0)::numeric)),
     CONSTRAINT recurring_contract_concept_contains_check CHECK ((length(TRIM(BOTH FROM concept_contains)) > 0)),
     CONSTRAINT recurring_contract_confirmations_check CHECK ((confirmations >= 0)),
@@ -100890,6 +100984,13 @@ COMMENT ON COLUMN public.recurring_contract.principal IS 'S01d. El importe prest
 --
 
 COMMENT ON COLUMN public.recurring_contract.document_name IS 'S01d. El cuadro o la resolución que se leyó (nombre del fichero).';
+
+
+--
+-- Name: COLUMN recurring_contract.document_uploaded_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.document_uploaded_at IS 'S01e. Cuándo se subió el cuadro que tiene el contrato. Nulo en los de antes del S01e (la ficha usa created_at).';
 
 
 --
@@ -119581,6 +119682,14 @@ ALTER TABLE ONLY public.bank_match
 
 ALTER TABLE ONLY public.bank_match
     ADD CONSTRAINT bank_match_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_match bank_match_contract_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_match
+    ADD CONSTRAINT bank_match_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.recurring_contract(id) ON DELETE SET NULL;
 
 
 --
