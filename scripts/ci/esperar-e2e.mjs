@@ -31,7 +31,8 @@ const dormir = (s) => new Promise((r) => setTimeout(r, s * 1000))
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const minutos = Number(process.argv[2] ?? 45)
-  const repo = process.env.GITHUB_REPOSITORY, rama = process.env.GITHUB_REF_NAME
+  // W12b: desde main, la rama nombrada en «rama» (RAMA); si no, la del run.
+  const repo = process.env.GITHUB_REPOSITORY, rama = process.env.RAMA || process.env.GITHUB_REF_NAME
   const leer = () => enMarcha(JSON.parse(execFileSync('gh', ['api', `repos/${repo}/actions/workflows/e2e-staging-conta.yml/runs?branch=${encodeURIComponent(rama)}&per_page=20`,
     '-q', '.workflow_runs | map({id, status, created_at})'], { encoding: 'utf8' })))
   const hasta = Date.now() + minutos * 60_000

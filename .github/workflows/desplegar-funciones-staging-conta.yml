@@ -19,13 +19,27 @@ name: Desplegar funciones en staging-conta
 #     esbuild antes— (regla 1: lo desplegado se comprueba, no se da por bueno con
 #     el color del run).
 #
-# CUÁNDO: un push a conta/** que cambie supabase/staging/funciones.txt.
+# CUÁNDO (W12b, 30/10): a mano, SIEMPRE DESDE MAIN, con la rama en «rama» y su
+# último commit en «commit». Antes saltaba con cada push a conta/** que cambiara
+# supabase/staging/funciones.txt; pero el token de Supabase alcanza también
+# producción (no hay uno solo de staging: staging es una rama del mismo
+# proyecto), y un workflow de una rama no puede tenerlo. Ahora el token vive en
+# el entorno «despliegue», que solo admite main: los pasos son los de main, y de
+# la rama solo se traen supabase/functions, supabase/config.toml y el manifiesto.
+
+run-name: "funciones a staging · ${{ inputs.rama }} · ${{ inputs.commit }}"
 
 on:
-  push:
-    branches: ['conta/**']
-    paths:
-      - 'supabase/staging/funciones.txt'
+  workflow_dispatch:
+    inputs:
+      rama:
+        description: 'La rama cuyas funciones (las de su supabase/staging/funciones.txt) se despliegan en staging-conta. Se lanza desde main.'
+        required: true
+        type: string
+      commit:
+        description: 'El último commit de esa rama (los 40 caracteres).'
+        required: true
+        type: string
 
 concurrency:
   group: desplegar-funciones-staging-conta
@@ -36,6 +50,9 @@ permissions:
 
 jobs:
   desplegar:
+    # W12b (30/10): el secreto vive en el entorno «despliegue», que solo admite
+    # ejecuciones de main (el token de Supabase y la clave de servicio alcanzan producción).
+    environment: despliegue
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -43,6 +60,22 @@ jobs:
       PROD_REF: xzmpnchlguibclvxyynt
     steps:
       - uses: actions/checkout@v4
+
+      - name: Desde main, con las funciones de la rama
+        env:
+          RAMA: ${{ inputs.rama }}
+          COMMIT: ${{ inputs.commit }}
+        run: |
+          set -euo pipefail
+          [ "$GITHUB_REF_NAME" = main ] || { echo "::error::Se lanza desde main, no desde «$GITHUB_REF_NAME». Qué hacer: lánzalo desde main con la rama en «rama» y su último commit en «commit»."; exit 1; }
+          [[ "$RAMA" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::«rama» no es un nombre de rama: «$RAMA»."; exit 1; }
+          [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::«commit» son los 40 caracteres del último commit de la rama."; exit 1; }
+          ultimo=$(git ls-remote origin "refs/heads/$RAMA" | cut -f1)
+          [ "$ultimo" = "$COMMIT" ] || { echo "::error::«commit» ($COMMIT) no es el último de «$RAMA» (${ultimo:-la rama no existe})."; exit 1; }
+          git fetch -q --depth=1 origin "$COMMIT"
+          # Solo lo que se despliega y cómo: los pasos siguen siendo los de main.
+          git checkout "$COMMIT" -- supabase/functions supabase/config.toml supabase/staging/funciones.txt
+          echo "Funciones de $RAMA ($COMMIT); los pasos, de main ($GITHUB_SHA)."
 
       - name: Guardas · staging y no producción; la lista, válida
         env:
