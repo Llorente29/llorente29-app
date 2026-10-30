@@ -86,3 +86,19 @@ describe('cada cuota, con su fila', () => {
     expect(d.reparto).toEqual([{ cuenta: '52000001', importeCent: null, concepto: 'Capital' }, { cuenta: '66230000', importeCent: null, concepto: 'Intereses' }])
   })
 })
+
+describe('el PDF en modo «cuadro» (ocr-albaran): lo leído, comprobado', () => {
+  it('la resolución de un aplazamiento: filas en orden y cuadra con lo aplazado', async () => {
+    const { comprobarCuadro } = await import('../../../supabase/functions/_shared/lecturaCuadro')
+    const r = comprobarCuadro({ tipo: 'aplazamiento', organismo: 'Seguridad Social', importe_aplazado: 1000,
+      filas: [{ fecha: '2026-12-30', cuota: 510, capital: 500, intereses: 10 }, { fecha: '2026-11-30', cuota: 520, capital: 500, intereses: 20 }, { fecha: 'pronto', capital: 1 }] })
+    expect(r).toEqual({ tipo: 'aplazamiento', organismo: 'Seguridad Social', importeAplazado: 1000, sumaCapital: 1000, cuadra: true,
+      filas: [{ fecha: '2026-11-30', cuota: 520, capital: 500, intereses: 20 }, { fecha: '2026-12-30', cuota: 510, capital: 500, intereses: 10 }] })
+  })
+  it('no cuadra si falta un céntimo; sin lo aplazado en el papel, lo dice la persona; sin filas, error', async () => {
+    const { comprobarCuadro } = await import('../../../supabase/functions/_shared/lecturaCuadro')
+    expect(comprobarCuadro({ importe_aplazado: 1000.01, filas: [{ fecha: '2026-11-30', capital: 1000, intereses: 0 }] })).toMatchObject({ cuadra: false, tipo: 'prestamo' })
+    expect(comprobarCuadro({ filas: [{ fecha: '2026-11-30', capital: '1000,00' }] })).toMatchObject({ cuadra: null, sumaCapital: 1000, filas: [{ cuota: 1000, intereses: 0 }] })
+    expect(comprobarCuadro({ filas: [] })).toEqual({ error: 'No he encontrado ninguna fila del cuadro (fecha, cuota, capital e intereses) en el documento.' })
+  })
+})

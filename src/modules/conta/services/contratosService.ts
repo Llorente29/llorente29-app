@@ -4,7 +4,9 @@
 // empresa y darlos de alta desde «Subir el cuadro» (bank_contrato_guardar,
 // que no guarda un cuadro cuyo capital no sume lo aplazado).
 
-import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { supabase } from '@/lib/supabase'
+import { hayBase, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { uploadReceiptFiles } from '@/modules/supply/services/goodsReceiptService'
 import type { ContratoVista, FilaCuadro, TipoContrato } from '@/modules/conta/lib/contratos'
 
 type Fila = Record<string, unknown>
@@ -44,4 +46,26 @@ export async function guardarContrato(companyId: string, c: ContratoNuevo): Prom
     },
   })
   return r.mensaje
+}
+
+/** Lo que devuelve ocr-albaran en modo «cuadro» (_shared/lecturaCuadro.ts). */
+export interface CuadroDelPdf {
+  tipo: 'prestamo' | 'aplazamiento'; organismo: string | null; importeCent: number | null
+  cuadro: FilaCuadro[]; sumaCent: number; cuadra: boolean | null
+}
+
+/** «Subir el cuadro» con un PDF: se sube a receipt-uploads y lo lee ocr-albaran (modo cuadro). Nada se guarda aún. */
+export async function leerCuadroPdf(accountId: string, f: File): Promise<CuadroDelPdf> {
+  hayBase()
+  const [ruta] = await uploadReceiptFiles(accountId, [f])
+  const { data, error } = await supabase!.functions.invoke('ocr-albaran', { body: { account_id: accountId, file_paths: [ruta], modo: 'cuadro' } })
+  if (error) throw new Error(`No se ha podido leer el PDF (${error.message}).`)
+  const c = (data as { cuadro?: Fila } | null)?.cuadro
+  if (!c || !Array.isArray(c.filas)) throw new Error('La lectura del PDF no ha devuelto el cuadro.')
+  return {
+    tipo: c.tipo === 'aplazamiento' ? 'aplazamiento' : 'prestamo', organismo: s(c.organismo),
+    importeCent: c.importeAplazado === null || c.importeAplazado === undefined ? null : cent(c.importeAplazado),
+    cuadro: (c.filas as Fila[]).map((x) => ({ fecha: String(x.fecha), cuotaCent: cent(x.cuota), capitalCent: cent(x.capital), interesesCent: cent(x.intereses) })),
+    sumaCent: cent(c.sumaCapital), cuadra: c.cuadra === null || c.cuadra === undefined ? null : Boolean(c.cuadra),
+  }
 }

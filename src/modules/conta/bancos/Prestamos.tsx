@@ -13,15 +13,21 @@ import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { eurosExactos, diaMesCorto, fechaLarga } from '@/modules/conta/lib/formato'
 import { ultimosIban } from '@/modules/conta/lib/bancosVista'
 import { comoSeCasa, cuadraConLoAplazado, leerCuadro, proximaCuota, quedaPorPagar, resumen, TIPOS, type FilaCuadro } from '@/modules/conta/lib/contratos'
-import { leerImporte } from '@/modules/conta/lib/reparto'
-import { guardarContrato, leerContratos, type ContratoNuevo } from '@/modules/conta/services/contratosService'
+import { leerImporte, textoImporte } from '@/modules/conta/lib/reparto'
+import { guardarContrato, leerContratos, leerCuadroPdf, type ContratoNuevo } from '@/modules/conta/services/contratosService'
 import { abrirExtracto } from '@/modules/conta/services/bancosService'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 
 const euros = (c: number) => eurosExactos(c / 100)
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
-interface Leido { fichero: string; tipoDoc: 'excel' | 'pdf'; cuadro: FilaCuadro[] }
+interface Leido {
+  fichero: string; tipoDoc: 'excel' | 'pdf'; cuadro: FilaCuadro[]
+  /** Del PDF: lo que dice el documento (lo aplazado, si es un aplazamiento y de quién). */
+  importeCent?: number | null; tipo?: 'prestamo' | 'aplazamiento'; organismo?: string | null
+  /** El fichero, para «Ver el PDF» sin volver a bajarlo. */
+  url?: string
+}
 
 export function Prestamos() {
   const { accountId, companyId, hoy, datos, vuelta, recargar } = useBancos()
@@ -29,12 +35,17 @@ export function Prestamos() {
   const [leido, setLeido] = useState<Leido | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hecho, setHecho] = useState<string | null>(null)
+  const [leyendo, setLeyendo] = useState(false)
   const input = useRef<HTMLInputElement>(null)
 
   const subir = async (f: File) => {
     setError(null); setHecho(null)
     if (/\.pdf$/i.test(f.name)) {
-      setError('El cuadro en PDF (la resolución de la Seguridad Social o de Hacienda) aún no lo leo: sube el Excel del banco, o escríbelo en un Excel con fecha, cuota, capital e intereses.')
+      setLeyendo(true)
+      try {
+        const c = await leerCuadroPdf(accountId, f)
+        setLeido({ fichero: f.name, tipoDoc: 'pdf', cuadro: c.cuadro, importeCent: c.importeCent, tipo: c.tipo, organismo: c.organismo, url: URL.createObjectURL(f) })
+      } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setLeyendo(false); if (input.current) input.current.value = '' }
       return
     }
     try {
@@ -59,7 +70,7 @@ export function Prestamos() {
     <div className="cxpr-pagina">
       <div className="cxpr-principal">
         <div className="cxpr-cabeza">
-          <button type="button" className="cx-boton" onClick={() => input.current?.click()}>Subir el cuadro</button>
+          <button type="button" className="cx-boton" onClick={() => input.current?.click()} disabled={leyendo}>{leyendo ? 'Leyendo el PDF…' : 'Subir el cuadro'}</button>
           <input ref={input} type="file" className="cx-oculto" accept=".xlsx,.xls,.pdf" aria-label="Fichero del cuadro"
             onChange={(e) => { const f = e.target.files?.[0]; if (f) void subir(f) }} />
         </div>
@@ -128,10 +139,11 @@ export function Prestamos() {
 function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: () => void; alGuardar: (c: ContratoNuevo) => Promise<void> }) {
   const { datos } = useBancos()
   const sumaCapital = leido.cuadro.reduce((t, f) => t + f.capitalCent, 0)
-  const [tipo, setTipo] = useState<ContratoNuevo['tipo']>('prestamo')
-  const [nombre, setNombre] = useState('')
+  const [tipo, setTipo] = useState<ContratoNuevo['tipo']>(leido.tipo ?? 'prestamo')
+  const [nombre, setNombre] = useState(leido.tipo === 'aplazamiento' && leido.organismo ? `Aplazamiento ${leido.organismo}` : '')
   const [contiene, setContiene] = useState('')
-  const [importe, setImporte] = useState(eurosExactos(sumaCapital / 100).replace(/\s?€/, ''))
+  // Lo aplazado: lo que dice el documento; si no lo dice (el Excel del banco), la suma del capital, para revisar.
+  const [importe, setImporte] = useState(textoImporte(leido.importeCent ?? sumaCapital))
   const [bancoId, setBancoId] = useState<string>(datos.bancos[0]?.id ?? '')
   const [largo, setLargo] = useState('')
   const [corto, setCorto] = useState('')
@@ -158,7 +170,7 @@ function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: (
   return (
     <aside className="cxpr-panel" aria-label="Cuadro leído">
       <header className="cxpr-panel-cabeza">
-        <h2>Cuadro leído · {leido.fichero}</h2>
+        <h2>{leido.tipo === 'aplazamiento' ? 'Resolución leída' : 'Cuadro leído'} · {leido.organismo ?? leido.fichero}</h2>
         <p className="cx-ayuda">Revisa y confirma. Nada se guarda hasta que confirmes.</p>
       </header>
       <datalist id="cxpr-plan">{plan.map((c) => <option key={c.codigo} value={c.codigo}>{c.n}</option>)}</datalist>
@@ -200,7 +212,8 @@ function CuadroLeido({ leido, alCerrar, alGuardar }: { leido: Leido; alCerrar: (
       {falta && <p className="cx-ayuda">{falta}</p>}
       {error && <div className="cx-error" role="alert">{error}</div>}
       <footer className="cxpr-panel-pie">
-        <button type="button" className="cx-boton-sec" onClick={alCerrar} disabled={ocupado}>Cancelar</button>
+        {leido.url ? <a className="cx-boton-sec" href={leido.url} target="_blank" rel="noreferrer">Ver el PDF</a>
+          : <button type="button" className="cx-boton-sec" onClick={alCerrar} disabled={ocupado}>Cancelar</button>}
         <button type="button" className="cx-boton" disabled={falta !== null || ocupado} onClick={confirmar}>{ocupado ? 'Guardando…' : 'Confirmar y crear el contrato'}</button>
       </footer>
     </aside>
