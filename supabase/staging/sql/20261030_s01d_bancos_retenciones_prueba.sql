@@ -20,7 +20,7 @@
 --   5. Lo que no vale: tipo y periodo a la vez, otra cuenta, otro modelo, un
 --      periodo mal escrito, un asiento validado.
 --   6. La cuenta B no ve ni cambia nada de A.
---   7. La vuelta atrás, y otra vez delante.
+--   7. La vuelta atrás, y otra vez delante (va primero, antes del paso 0).
 --   8. Préstamos y aplazamientos (antes del 7): un cuadro cuyo capital no
 --      suma lo aplazado no se guarda; el que sí, con lo pendiente en cada
 --      fila y el capital a corto; la póliza, sin cuota; B no da de alta en A.
@@ -38,6 +38,32 @@ set local statement_timeout = '180s';
 \i supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
 \i supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
 \i supabase/migrations/20261030T0935_s01d_contratos.sql
+
+-- ── 7 · La vuelta atrás, y otra vez delante (lo primero: antes de que la prueba ──
+--        marque ningún pago, que la vuelta atrás no deja deshacer sin decidir)
+\i supabase/vuelta-atras/20261030T0935_s01d_contratos.down.sql
+\i supabase/vuelta-atras/20261030T0934_s01d_contratos_columnas.down.sql
+\i supabase/vuelta-atras/20261030T0901_s01d_modelo_de_la_4751_foodint.down.sql
+\i supabase/vuelta-atras/20261030T0900_s01d_retenciones_pago.down.sql
+\i supabase/vuelta-atras/20261030T0855_s01d_columnas_retencion.down.sql
+do $$ begin
+  if to_regprocedure('public.conta_apunte_pago_modelo(uuid,integer,text,text)') is not null
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'journal_line' and column_name = 'withholding_period')
+     or exists (select 1 from public.funcion_respaldo where migracion = '20261030T0900_s01d_retenciones_pago')
+     or exists (select 1 from pg_trigger where tgname = 'journal_entry_pago_modelo')
+     or to_regprocedure('public.bank_contrato_guardar(uuid,jsonb)') is not null
+     or position('withholding_period' in coalesce((select pg_get_constraintdef(oid) from pg_constraint where conname = 'journal_line_retencion_completa'), '')) > 0
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'recurring_contract' and column_name = 'short_capital_account')
+     or position('su modelo y su periodo' in pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure)) > 0 then
+    raise exception 'PRUEBA S01d · 7: la vuelta atrás deja algo del S01d.';
+  end if;
+end $$;
+\i supabase/migrations/20261030T0855_s01d_columnas_retencion.sql
+\i supabase/migrations/20261030T0900_s01d_retenciones_pago.sql
+\i supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
+\i supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
+\i supabase/migrations/20261030T0935_s01d_contratos.sql
+do $$ begin raise notice 'PRUEBA S01d · 7: la vuelta atrás quita lo del S01d y deja las funciones como estaban; y otra vez delante.'; end $$;
 
 create temp table _s01d (k text primary key, v text) on commit drop;
 grant all on _s01d to authenticated;
@@ -206,10 +232,18 @@ begin
   returning id into e;
   insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, withholding_rate_id, withholding_base, withholding_model, withholding_period)
   values (a, emp, e, 1, (select id from public.company_account where company_id = emp and code = '47510000'), 10, 0, loc,
-          (select id from public.withholding_rate where is_system and code = 'profesional' and valid_to is null), 100, '111', '2024-1T'),
+          (select id from public.withholding_rate where is_system and code = 'profesional' and valid_to is null), 100, '111', null),
          (a, emp, e, 2, (select id from public.company_account where company_id = emp and code = '57200001'), 0, 10, loc, null, null, null, null);
-  select string_agg(motivo, ' ') into m from public.conta_motivos_para_validar(e);
-  if position('no las dos' in coalesce(m, '')) = 0 then raise exception 'PRUEBA S01d · 5: tipo y periodo a la vez pasa (%).', m; end if;
+  -- Tipo y periodo a la vez: ni se guarda (journal_line_retencion_completa, ampliada en la 0900 a dos formas).
+  begin
+    update public.journal_line set withholding_period = '2024-1T' where entry_id = e and position = 1;
+    raise exception 'PRUEBA S01d · 5: guarda tipo y periodo a la vez.';
+  exception when check_violation then null; end;
+  -- Ni modelo solo, sin tipo ni periodo.
+  begin
+    update public.journal_line set withholding_rate_id = null, withholding_base = null where entry_id = e and position = 1;
+    raise exception 'PRUEBA S01d · 5: guarda un modelo sin tipo ni periodo.';
+  exception when check_violation then null; end;
   begin perform public.conta_apunte_pago_modelo(e, 2, '111', '2024-1T'); raise exception 'PRUEBA S01d · 5: la 572 es el pago de un modelo.';
   exception when sqlstate '22023' then null; end;
   begin perform public.conta_apunte_pago_modelo(e, 1, '303', '2024-1T'); raise exception 'PRUEBA S01d · 5: aceptó el 303 en la 4751.';
@@ -218,7 +252,7 @@ begin
   exception when sqlstate '22023' then null; end;
   begin perform public.conta_apunte_pago_modelo((select v::uuid from _s01d where k = 'compensacion'), 1, '111', '2024-2T'); raise exception 'PRUEBA S01d · 5: cambió un asiento validado.';
   exception when sqlstate '22023' then null; end;
-  raise notice 'PRUEBA S01d · 5: tipo y periodo a la vez, otra cuenta, otro modelo, un periodo mal escrito o un asiento validado: no.';
+  raise notice 'PRUEBA S01d · 5: tipo y periodo a la vez (ni se guarda), un modelo solo, otra cuenta, otro modelo, un periodo mal escrito o un asiento validado: no.';
 end $$;
 reset role;
 
@@ -275,30 +309,5 @@ do $$ begin
   raise notice 'PRUEBA S01d · 8: la cuenta B no da de alta contratos en A.';
 end $$;
 reset role;
-
--- ── 7 · La vuelta atrás, y otra vez delante ────────────────────────────────
-delete from public.recurring_contract where company_id = (select v::uuid from _s01d where k = 'emp') and name like 'Prueba S01d%';
-\i supabase/vuelta-atras/20261030T0935_s01d_contratos.down.sql
-\i supabase/vuelta-atras/20261030T0934_s01d_contratos_columnas.down.sql
-\i supabase/vuelta-atras/20261030T0901_s01d_modelo_de_la_4751_foodint.down.sql
-\i supabase/vuelta-atras/20261030T0900_s01d_retenciones_pago.down.sql
-\i supabase/vuelta-atras/20261030T0855_s01d_columnas_retencion.down.sql
-do $$ begin
-  if to_regprocedure('public.conta_apunte_pago_modelo(uuid,integer,text,text)') is not null
-     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'journal_line' and column_name = 'withholding_period')
-     or exists (select 1 from public.funcion_respaldo where migracion = '20261030T0900_s01d_retenciones_pago')
-     or exists (select 1 from pg_trigger where tgname = 'journal_entry_pago_modelo')
-     or to_regprocedure('public.bank_contrato_guardar(uuid,jsonb)') is not null
-     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'recurring_contract' and column_name = 'short_capital_account')
-     or position('su modelo y su periodo' in pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure)) > 0 then
-    raise exception 'PRUEBA S01d · 7: la vuelta atrás deja algo del S01d.';
-  end if;
-end $$;
-\i supabase/migrations/20261030T0855_s01d_columnas_retencion.sql
-\i supabase/migrations/20261030T0900_s01d_retenciones_pago.sql
-\i supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
-\i supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
-\i supabase/migrations/20261030T0935_s01d_contratos.sql
-do $$ begin raise notice 'PRUEBA S01d · 7: la vuelta atrás quita lo del S01d y deja las funciones como estaban; y otra vez delante.'; end $$;
 
 rollback;

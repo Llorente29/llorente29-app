@@ -1,9 +1,9 @@
 {
- "_que": "S01d · contexto de producción medido en SOLO LECTURA el 30/10 a las 09:45Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las cuatro tablas (bank_contrato_guardar y conta_cuadro_con_pendiente no son tablas: los nombra el analizador) y las cinco funciones que cambia; nada en el camino del pedido; recurring_contract tiene 0 filas; ningún fichero está en el historial.",
- "medido": "2026-10-30T09:45Z",
+ "_que": "S01d · contexto de producción medido en SOLO LECTURA el 30/10 a las 10:15Z (otra vez, con la 0900 que amplía journal_line_retencion_completa) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las cuatro tablas y las cinco funciones que cambia; nada en el camino del pedido; recurring_contract tiene 0 filas; ningún fichero está en el historial.",
+ "medido": "2026-10-30T10:15Z",
  "tanda": {
   "supabase/migrations/20261030T0855_s01d_columnas_retencion.sql": "604f8f608d11a6ea69bbfa2099913725",
-  "supabase/migrations/20261030T0900_s01d_retenciones_pago.sql": "b821608e91d3a39704d3c32814925310",
+  "supabase/migrations/20261030T0900_s01d_retenciones_pago.sql": "8551abe2b35ecd2fe8e866e07f69e9d8",
   "supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql": "c7ff44448b9632ef073174e9e8b76eab",
   "supabase/migrations/20261030T0934_s01d_contratos_columnas.sql": "492c0447e31a10ac001affe00c2a2b2b",
   "supabase/migrations/20261030T0935_s01d_contratos.sql": "f6406a58051fdfa0d4f79041f3955873"
