@@ -50,8 +50,8 @@ T8. **Merge, nunca rebase**, en las ramas de los PR: para traer `main`,
    *(Del 17 al 29/10 se reescribieron 3 ramas: l1a-fichar-en-el-servidor,
    i01c-trimestre y p01-despacho.)*
 T9. **Nunca una e2e de staging y un ensayo a la vez en la misma rama.** El
-   ensayo de producción y la prueba de staging (el «Aplicar SQL en staging»
-   desde una rama) esperan a que acabe la e2e de su rama, como mucho 45
+   ensayo de producción (de la rama que nombra) y la prueba de staging (el
+   «Aplicar SQL en staging» desde una rama) esperan a que acabe la e2e de su rama, como mucho 45
    minutos; si se pasa, en rojo. Entre ramas distintas no hay cerrojo (W04).
    *Lo comprueban* `aplicar-produccion-conta.yml` *y* `aplicar-staging-conta.yml`
    *(job espera-e2e,* `scripts/ci/esperar-e2e.mjs`*), antes de su cola.*
@@ -59,11 +59,18 @@ T9. **Nunca una e2e de staging y un ensayo a la vez en la misma rama.** El
    marcha; el 29/10 el 180 se interbloqueó por esto.)*
 T10. **El real en producción lo lanza siempre Julio**, nunca una sesión. La
     sesión propone (SQL transaccional y revisable, con su ensayo en verde) y
-    Julio ejecuta y verifica. *Lo comprueba* `aplicar-produccion-conta.yml`:
-    *el real pasa por el job* `aprobacion` *con el entorno «produccion», y no
-    sigue hasta que Julio lo aprueba en GitHub. Mirar quién lanza no vale: las
+    Julio ejecuta y verifica. *Lo comprueban los entornos de GitHub (W12b,
+    30/10): los secretos de producción viven en cuatro entornos que solo
+    admiten ejecuciones de* `main`*: «produccion» (el real y la vuelta atrás,
+    con la aprobación de Julio), «produccion-ensayo» (el ensayo), «lectura»
+    (*`conta_lectura`*) y «despliegue» (el token de Supabase y la clave de
+    servicio). Un workflow de una rama no los recibe, sea el de antes o uno
+    cambiado. Lo vigila* `tests/unit/ci/reglasSolas.test.ts`*: ningún job usa
+    un secreto de producción sin su entorno. Mirar quién lanza no vale: las
     sesiones lanzan con la autorización de Julio (los 40 runs del 27 al 29/10
     salen todos a nombre de «Llorente29»).*
+    *(29/10: el real 318 se lanzó desde* `claude/w10a-cierre`*, que tenía el
+    workflow de antes del W12, y pasó sin aprobación.)*
 T11. **Ningún dato personal real en el repositorio:** ni DNI o NIE, ni NAF, ni
     IBAN, ni nombres de personas, en código, fixtures, pruebas, semillas,
     commits, descripciones de PR o capturas. El repositorio es público. Los
@@ -237,14 +244,23 @@ del camino y se dijera antes. Acababa a las 00:30 porque en 30 días (26/08–
 24/09) el pedido más tardío entró a las 23:59 y 0 de 30 días tuvieron alguno
 después de las 00:15.
 
-### Una tanda se ensaya y se aplica desde su rama, antes de fusionar
+### Una tanda se ensaya y se aplica antes de fusionar, desde main nombrando su rama
 
 > Sin número: la acuña `folvy_deudas_abiertas.md` cuando toque. Regla de Julio,
-> S01d (18/10).
+> S01d (18/10); **desde el W12b (30/10), se lanza desde `main`**.
 
-El ensayo y el real de una tanda se lanzan **desde la rama del PR, antes de
-fusionarlo**, no desde `main` después. Así, cuando el front llega a producción
-con la fusión, lo que lee ya está en la base.
+El ensayo y el real de la tanda de un PR se hacen **antes de fusionarlo**, no
+después. Así, cuando el front llega a producción con la fusión, lo que lee ya
+está en la base.
+
+**Se lanzan desde `main`**, con la rama en «rama» y su último commit en
+«commit» (el workflow para si no es el último). Los guiones, el análisis y la
+transacción son los de `main`; de la rama solo se traen datos (`supabase/`,
+`src/` y las cuentas). El commit va en el nombre del run, y el real busca un
+ensayo en verde lanzado desde `main` con ese mismo nombre. Lo mismo para
+desplegar funciones en staging (`desplegar-funciones-staging-conta.yml`).
+El analizador para cualquier línea que empiece por `\` en lo que se ejecuta:
+un `\connect` se saltaría el ROLLBACK del ensayo.
 
 *(18/10. La tanda del S01d —0160 y 0170— se aplicó desde `conta/s01d-tanda`,
 con el ensayo y el real en verde, y #236 se fusionó después.)*

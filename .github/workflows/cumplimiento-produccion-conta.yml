@@ -81,6 +81,9 @@ jobs:
           echo "toca=${toca}" >> "$GITHUB_OUTPUT"
 
   datos-maestros:
+    # W12b (30/10): el secreto vive en el entorno «lectura», que solo admite
+    # ejecuciones de main (conta_lectura lo lee todo, y su «solo lectura» lo puede quitar quien se conecta).
+    environment: lectura
     name: Datos maestros e impuestos · PRODUCCIÓN
     needs: hora
     if: needs.hora.outputs.toca == 'true'
@@ -331,6 +334,9 @@ jobs:
           echo "::warning::Ha cambiado alguna fuente oficial, o no se ha podido comprobar: ver el informe."
 
   plan-contable:
+    # W12b (30/10): el secreto vive en el entorno «lectura», que solo admite
+    # ejecuciones de main (conta_lectura lo lee todo, y su «solo lectura» lo puede quitar quien se conecta).
+    environment: lectura
     name: Plan contable · PRODUCCIÓN
     needs: hora
     if: needs.hora.outputs.toca == 'true'

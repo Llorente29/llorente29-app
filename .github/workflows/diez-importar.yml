@@ -189,6 +189,9 @@ jobs:
         run: '[ -f /tmp/informe.md ] && cat /tmp/informe.md >> "$GITHUB_STEP_SUMMARY" || true'
 
   produccion:
+    # W12b (30/10): el secreto vive en el entorno «produccion», que solo admite
+    # ejecuciones de main (escribe en producción: con la aprobación de Julio).
+    environment: produccion
     if: github.event_name == 'workflow_dispatch' && (inputs.modo == 'ensayo' || inputs.modo == 'real')
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -481,6 +484,9 @@ jobs:
 
   # C06 · Registrar la base de una empresa y preparar su corte, en producción.
   preparar:
+    # W12b (30/10): el secreto vive en el entorno «produccion», que solo admite
+    # ejecuciones de main (escribe en producción: con la aprobación de Julio).
+    environment: produccion
     if: github.event_name == 'workflow_dispatch' && inputs.modo == 'preparar'
     runs-on: ubuntu-latest
     timeout-minutes: 15
