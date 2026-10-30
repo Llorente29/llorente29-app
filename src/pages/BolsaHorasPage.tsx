@@ -26,6 +26,7 @@ import type {
 } from '../types/hoursBalance'
 import type { Location } from '../types'
 import { exportGestoriaCsv } from '../services/exportGestoriaService'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 type Tab = 'current' | 'pending' | 'history'
 
@@ -76,6 +77,7 @@ interface AutoCloseDetection {
 }
 
 export default function BolsaHorasPage() {
+  const voc = useProductoLaboral()
   const { staff, locations } = useApp()
   const [locationId, setLocationId] = useState<string>('')
   const [tab, setTab] = useState<Tab>('current')
@@ -155,7 +157,7 @@ export default function BolsaHorasPage() {
   async function handleCloseManual() {
     if (!locationId) return
     if (!confirm(
-      `¿Cerrar el periodo actual para todos los empleados de este local?\n\n` +
+      `¿Cerrar el periodo actual para todos los empleados de este ${voc.local}?\n\n` +
       `Esto creará un cierre que podrás resolver luego en la pestaña Pendientes.`
     )) return
     setLoading(true)
@@ -340,11 +342,12 @@ function CurrentTab({
   loading: boolean
   onShowAlerts: (data: { employeeName: string; alerts: DayAlert[] }) => void
 }) {
+  const voc = useProductoLaboral()
   if (loading) return <Skeleton />
   if (states.length === 0) {
     return (
       <div className="bg-card border rounded-lg p-8 text-center text-text-secondary">
-        No hay empleados en este local
+        No hay empleados en este {voc.local}
       </div>
     )
   }

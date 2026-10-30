@@ -1,4 +1,5 @@
 // src/pages/trabajador/FichajeEmpleado.tsx
+import { useProductoLaboral, enVocabulario } from '../../modules/personal/laboral/productoLaboral'
 import { useState, useEffect, useMemo } from 'react'
 import {
   ArrowLeft, MapPin, AlertCircle, AlertTriangle, CheckCircle2, Satellite,
@@ -37,6 +38,7 @@ interface Props {
 }
 
 export default function FichajeEmpleado({ employee, onBack }: Props) {
+  const voc = useProductoLaboral()
   const { locations, addClockEntry, staff } = useApp()
   const [step, setStep] = useState<'idle' | 'fetching-gps' | 'choosing-location' | 'confirming' | 'warn-confirm' | 'early-confirm' | 'contexto-confirm' | 'success' | 'pendiente' | 'error'>('idle')
   const [position, setPosition] = useState<GeolocationPosition | null>(null)
@@ -109,7 +111,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
           setStep('idle')
         } else {
           setStep('error')
-          setErrorMsg('No tienes ningún local asignado. Contacta con tu encargado.')
+          setErrorMsg(`No tienes ningún ${voc.local} asignado. Contacta con tu encargado.`)
         }
       })
       .catch(() => {
@@ -120,7 +122,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
         if (allowedLocations.length === 1) setSelectedLocId(allowedLocations[0].id)
         if (allowedLocations.length === 0) {
           setStep('error')
-          setErrorMsg('No tienes ningún local asignado. Contacta con tu encargado.')
+          setErrorMsg(`No tienes ningún ${voc.local} asignado. Contacta con tu encargado.`)
         } else {
           setStep('idle')
         }
@@ -246,11 +248,12 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
   // Solo se bloquea cuando se SABE que está fuera y el local está en
   // «bloquear», como fichar() en la base (puedeFichar.ts). Hasta el 27/10, un
   // local sin coordenadas en «bloquear» dejaba el botón gris y sin decir nada.
-  const { puede: canClock, porQueNo: porQueNoSePuede, sinMedir } = puedeFichar({
+  const { puede: canClock, porQueNo: porQueNoBruto, sinMedir } = puedeFichar({
     local: selectedLoc, locales: allowedLocations.length, distancia: distance,
     radio: radiusForLoc(selectedLoc), modo: geofenceMode === 'block' ? 'block' : 'warn',
     hayPosicion: !!position,
   })
+  const porQueNoSePuede = porQueNoBruto ? enVocabulario(porQueNoBruto, voc) : porQueNoBruto
 
   // Margen (min) para avisar de salida anticipada. Independiente del redondeo.
   const EARLY_EXIT_WARN_MIN = 3
@@ -296,7 +299,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
 
     if (!result.withinGeofence && geofenceMode === 'block') {
       setStep('error')
-      setErrorMsg(`Estás a ${Math.round(result.distanceM)}m del local. Acércate para fichar.`)
+      setErrorMsg(`Estás a ${Math.round(result.distanceM)}m ${voc.delLocal}. Acércate para fichar.`)
       return
     }
 
@@ -375,7 +378,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
     const marcas: string[] = []
     if (mode === 'outside') marcas.push(`Fuera de zona · ${distM}m`)
     else if (mode === 'nogps') marcas.push('Sin ubicación (GPS no disponible)')
-    else if (!coordsForLocation(selectedLoc)) marcas.push('Local sin ubicación puesta: sin distancia')
+    else if (!coordsForLocation(selectedLoc)) marcas.push(`${voc.Local} sin ubicación puesta: sin distancia`)
     if (earlyExitMin != null) marcas.push(`Salida anticipada · ${earlyExitMin} min antes`)
     if (forzarTipo && forzarTipo !== entry.type) {
       marcas.push(`Corregido por el trabajador · la app ofrecía ${entry.type}`)
@@ -466,11 +469,11 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
             <div className="flex justify-center mb-3">
               <AlertTriangle size={56} className="text-danger" />
             </div>
-            <p className="font-bold text-danger text-xl">Estás fichando FUERA del local</p>
+            <p className="font-bold text-danger text-xl">Estás fichando FUERA {voc.delLocal}</p>
             <p className="text-3xl font-extrabold text-danger mt-2">a {pendingDist} m</p>
             <p className="text-sm text-text-secondary mt-3">
               Estás a {pendingDist} metros de <b>{selectedLoc?.name}</b>. El fichaje se registrará
-              con esta distancia y tu encargado podrá verlo. Ficha solo si de verdad estás en el local.
+              con esta distancia y tu encargado podrá verlo. Ficha solo si de verdad estás en {voc.elLocal}.
             </p>
             <div className="flex gap-2 mt-6">
               <button
@@ -687,7 +690,7 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
         {/* Selector de local si tiene varios */}
         {allowedLocations.length > 1 && (
           <Card className="p-4 mb-4">
-            <p className="text-xs text-text-secondary mb-2">Local donde fichas</p>
+            <p className="text-xs text-text-secondary mb-2">{voc.Local} donde fichas</p>
             <div className="space-y-2">
               {allowedLocations.map(l => {
                 const lc = coordsForLocation(l)
@@ -732,14 +735,14 @@ export default function FichajeEmpleado({ employee, onBack }: Props) {
                 : <AlertTriangle size={24} className="text-warning shrink-0" />}
               <div className="flex-1">
                 <p className={`text-sm font-semibold ${inZone ? 'text-success' : 'text-warning'}`}>
-                  {inZone ? 'Estás en la zona del local' : `Estás a ${Math.round(distance)}m del local`}
+                  {inZone ? `Estás en la zona ${voc.delLocal}` : `Estás a ${Math.round(distance)}m ${voc.delLocal}`}
                 </p>
                 <p className="text-xs text-text-secondary mt-0.5">
                   {inZone
                     ? `${Math.round(distance)}m · ${selectedLoc.name}`
                     : geofenceMode === 'warn'
                       ? 'Puedes fichar igualmente; quedará marcado para revisión.'
-                      : 'Acércate al local para fichar'}
+                      : `Acércate al ${voc.local} para fichar`}
                 </p>
               </div>
             </div>
@@ -802,20 +805,21 @@ function fmtMetros(m: number): string {
  * ubicación, la distancia y si cayó dentro del radio.
  */
 function LoQueSeGuardo({ g }: { g: FichajeGuardado }) {
+  const voc = useProductoLaboral()
   const ubicacion = g.distanciaM == null
     ? (g.localConCoordenadas
         ? 'Sin tu ubicación: el móvil no la dio. Queda marcado para que lo revise tu encargado.'
-        : `El local no tiene su ubicación puesta: no se ha podido medir la distancia.`)
+        : `${voc.sumied ? 'El centro' : 'El local'} no tiene su ubicación puesta: no se ha podido medir la distancia.`)
     : g.dentroDelRadio
-      ? `Estabas a ${fmtMetros(g.distanciaM)} del local, dentro del radio (${fmtMetros(g.radioM)}).`
-      : `Estabas a ${fmtMetros(g.distanciaM)} del local, fuera del radio (${fmtMetros(g.radioM)}). Tu encargado lo verá.`
+      ? `Estabas a ${fmtMetros(g.distanciaM)} ${voc.delLocal}, dentro del radio (${fmtMetros(g.radioM)}).`
+      : `Estabas a ${fmtMetros(g.distanciaM)} ${voc.delLocal}, fuera del radio (${fmtMetros(g.radioM)}). Tu encargado lo verá.`
   return (
     <div data-prueba="lo-que-se-guardo">
     <Card className="p-4">
       <p className="text-xs text-text-secondary uppercase tracking-wide font-semibold mb-2">Lo que se ha guardado</p>
       <ul className="text-sm text-text-primary space-y-1.5">
         <li>La hora: <b>{horaCorta(new Date(g.datetime))}</b>, la del servidor{g.datetime !== g.realDatetime ? ` (tocaste a las ${horaCorta(new Date(g.realDatetime))}; se cuenta la de tu turno)` : ''}.</li>
-        <li>El local: <b>{g.local}</b>.</li>
+        <li>{voc.sumied ? 'El centro' : 'El local'}: <b>{g.local}</b>.</li>
         <li>{ubicacion}</li>
       </ul>
       <p className="text-xs text-text-secondary mt-3">

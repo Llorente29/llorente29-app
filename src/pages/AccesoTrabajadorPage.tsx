@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../modules/multitenancy/hooks/useAuth'
 import { checkAccountStatus } from '../services/accountStatusService'
 import { LogoSquare } from '../components/Logo'
+import { CON_MARCA, MARCA } from '../marca/marca'
 import { Lock, User, AlertCircle, LogIn } from 'lucide-react'
 
 type FormState = 'idle' | 'submitting' | 'error' | 'blocked'
@@ -133,8 +134,11 @@ export default function AccesoTrabajadorPage() {
       <div className="w-full max-w-sm">
         {/* Cabecera: isotipo Empleados (no el wordmark del manager) */}
         <div className="text-center mb-6">
-          <LogoSquare size={72} variant="empleados" className="mx-auto mb-3" />
-          <p className="font-display text-lg text-text-primary">Folvy</p>
+          {/* LS1: entrando por el dominio de una marca (Sumied), su logo y su nombre. */}
+          {CON_MARCA && MARCA.logo
+            ? <img src={MARCA.logo} alt="" className="mx-auto mb-3" style={{ width: 72, height: 72 }} />
+            : <LogoSquare size={72} variant="empleados" className="mx-auto mb-3" />}
+          <p className="font-display text-lg text-text-primary">{CON_MARCA ? MARCA.nombre : 'Folvy'}</p>
           <p className="text-sm text-text-secondary mt-0.5">Acceso empleados</p>
         </div>
 
@@ -234,7 +238,7 @@ export default function AccesoTrabajadorPage() {
         </div>
 
         <p className="text-center text-xs text-text-secondary mt-4">
-          Folvy · Restauración Profesional
+          {CON_MARCA ? `${MARCA.nombre} · Laboral` : 'Folvy · Restauración Profesional'}
         </p>
       </div>
     </div>

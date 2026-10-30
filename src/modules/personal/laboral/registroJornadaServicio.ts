@@ -158,3 +158,25 @@ export async function firmarMes(employeeId: string, mes: string, resumen: Record
   if (error) throw enPalabras(error, 'No se ha podido firmar.')
   return { firmadoAt: String((data as { firmado_at: string }).firmado_at) }
 }
+
+// ── L1a-H (29/10) · La firma del mes, solo si la empresa la pide ─────────────
+// accounts.firma_registro_mes y firma_registro_mes_pedir son de la 1135.
+
+/**
+ * Si la empresa pide a cada persona que firme su registro del mes. NULL o
+ * false es apagado. Lanza si no se puede leer (sin la 1135, sin red): quien
+ * llama decide; el portal lo toma como apagado.
+ */
+export async function pideFirmaDelMes(accountId: string): Promise<boolean> {
+  const { data, error } = await db().from('accounts').select('firma_registro_mes').eq('id', accountId).maybeSingle()
+  if (error) throw enPalabras(error, 'No se ha podido leer si la empresa pide la firma del registro.')
+  return (data as { firma_registro_mes?: boolean | null } | null)?.firma_registro_mes === true
+}
+
+/** Enciende o apaga la firma del mes de la empresa (solo su administrador). */
+export async function pedirFirmaDelMes(accountId: string, pedir: boolean): Promise<{ pedir: boolean; personas: number }> {
+  const { data, error } = await db().rpc('firma_registro_mes_pedir', { p_account_id: accountId, p_pedir: pedir })
+  if (error) throw enPalabras(error, pedir ? 'No se ha podido encender la firma del registro.' : 'No se ha podido apagar la firma del registro.')
+  const r = data as { pedir: boolean; personas: number }
+  return { pedir: r.pedir === true, personas: Number(r.personas ?? 0) }
+}

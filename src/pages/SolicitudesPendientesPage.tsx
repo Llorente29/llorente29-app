@@ -14,10 +14,12 @@ import {
 } from '../services/vacationsService'
 import { isSupabaseEnabled } from '../lib/supabase'
 import { supabase } from '../lib/supabase'
+import { useProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 
 type FilterTab = 'pendientes' | 'aprobadas' | 'todas'
 
 export default function SolicitudesPendientesPage() {
+  const voc = useProductoLaboral()
   const { staff } = useApp()
   const { activeAccountId } = useActiveAccount()
   const { hasPermission } = usePermissions()
@@ -288,7 +290,7 @@ export default function SolicitudesPendientesPage() {
             {reviewMinStaffWarning && (
               <div className="bg-warning-bg border border-warning/30 rounded-lg p-3 mt-3 text-xs text-warning inline-flex items-start gap-1.5">
                 <AlertTriangle size={12} className="shrink-0 mt-0.5" />
-                <span><strong>Mínimo de plantilla:</strong> si apruebas, ese día solo quedarían {reviewStaffInfo?.afterApproval} personas trabajando en su local. ¿Seguro?</span>
+                <span><strong>Mínimo de plantilla:</strong> si apruebas, ese día solo quedarían {reviewStaffInfo?.afterApproval} personas trabajando en su {voc.local}. ¿Seguro?</span>
               </div>
             )}
 

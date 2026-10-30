@@ -1,0 +1,3 @@
+# L1a-H · vuelta atrás: quita firma_registro_mes_pedir y la columna. Antes,
+# devolver el front (sin la columna, el de esta rama deja de pedir la firma).
+supabase/vuelta-atras/20261029T1135_l1ah_firma_interruptor.down.sql

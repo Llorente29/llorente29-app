@@ -13,6 +13,7 @@ import { hasOpenShift } from '../../services/fichajeKiosko'
 import NotificationBell from '../../components/NotificationBell'
 import { supabase } from '../../lib/supabase'
 import InstallAppButton from '../../components/InstallAppButton'
+import type { Marca } from '../../marca/marca'
 
 export type WorkerModule = 'appcc' | 'portal' | 'fichar' | 'inventario' | 'recepcion'
 
@@ -39,6 +40,8 @@ interface Props {
   /** id del manual que está arrancando (build en curso) — deshabilita su botón. */
   manualBusyId?: string | null
   manualError?: string | null
+  /** LS1: marca propia del portal (Sumied). Null: Folvy, como siempre. */
+  marca?: Marca | null
 }
 
 interface ModuleButton {
@@ -56,10 +59,12 @@ interface ModuleButton {
 export default function HomeEmpleado({
   employee, onNavigate, onLogout, exitLabel = 'logout', appccPendingCount = 0, showInventory = false,
   inventoryPendingCount = 0, receivingPendingCount = 0,
-  manualCounts = [], onOpenManualCount, manualBusyId = null, manualError = null,
+  manualCounts = [], onOpenManualCount, manualBusyId = null, manualError = null, marca = null,
 }: Props) {
   const open = hasOpenShift(employee)
-  const [showAppcc, setShowAppcc] = useState(false)
+  const [hayAppcc, setShowAppcc] = useState(false)
+  // LS1: con marca propia (Sumied) no hay APPCC, conteos ni recepciones: es solo Laboral.
+  const showAppcc = hayAppcc && !marca
 
   // Verificar si el local del empleado tiene APPCC configurado
   useEffect(() => {
@@ -76,7 +81,7 @@ export default function HomeEmpleado({
     return () => { cancel = true }
   }, [employee.locationId])
 
-  const modules: ModuleButton[] = [
+  const todos: ModuleButton[] = [
     ...(showAppcc ? [{
       id: 'appcc' as WorkerModule,
       icon: Leaf,
@@ -124,6 +129,7 @@ export default function HomeEmpleado({
     // Preparado para más módulos:
     // { id: 'stock', icon: Package, title: 'Stock', desc: 'Recuentos y recepciones', iconColor: '...', iconBg: '...' },
   ]
+  const modules = marca ? todos.filter(m => m.id === 'portal') : todos
 
   const now = new Date()
   const greeting = now.getHours() < 14 ? 'Buenos días' : now.getHours() < 21 ? 'Buenas tardes' : 'Buenas noches'
@@ -158,9 +164,10 @@ export default function HomeEmpleado({
   return (
     <div className="min-h-screen bg-page flex flex-col">
       {/* Banda superior navy (coherente con el Folvy de gestión) */}
-      <div className="bg-accent px-5 pt-6 pb-5">
+      <div className="bg-accent px-5 pt-6 pb-5" style={marca ? { background: marca.tema?.tinta ?? marca.colorLogo } : undefined} data-marca-portal={marca?.id}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
+            {marca?.logoHorizontalBlanco && <img src={marca.logoHorizontalBlanco} alt={marca.nombre} className="h-6 mb-3" />}
             <p className="text-sm text-white/65">{greeting}</p>
             <p className="font-display text-2xl text-white mt-0.5 truncate">{employee.name.split(' ')[0]}</p>
           </div>
@@ -257,7 +264,7 @@ export default function HomeEmpleado({
 
       {/* Instalar la app en el móvil (PWA) — banner discreto */}
       <div className="px-5 pt-4">
-        <InstallAppButton />
+        <InstallAppButton nombre={marca?.nombre} />
       </div>
 
       {/* C5 — Inventarios manuales asignados (uno por zona). Empezar lo pulsa
@@ -352,7 +359,7 @@ export default function HomeEmpleado({
       </div>
 
       {/* Footer */}
-      <p className="text-center text-xs text-text-secondary pb-4">Folvy · Restauración Profesional</p>
+      <p className="text-center text-xs text-text-secondary pb-4">{marca ? `${marca.nombre} · Laboral` : 'Folvy · Restauración Profesional'}</p>
     </div>
   )
 }

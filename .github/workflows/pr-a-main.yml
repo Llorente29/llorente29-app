@@ -87,6 +87,17 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/sin-secretos.mjs "$BASE" "$HEAD"
 
+      # N1 (29/10): desde la 0731 la sesión solo lee las columnas de employees
+      # que tienen su «grant select». Una columna nueva sin él deja la pantalla
+      # que la pida en blanco («permission denied for table employees»). Cada
+      # columna que añade una migración lleva su permiso o «-- privada:
+      # employees.<columna> · <por qué>» en el mismo fichero.
+      - name: Cada columna nueva de employees, con su permiso o privada (N1)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/employees-columnas.mjs "$BASE" "$HEAD"
+
       # W06 (26/10): una cuenta de tanda («cuenta:») no mide algo que crece
       # solo. El ensayo de producción cuenta antes y después de deshacer, con
       # minutos en medio y el negocio abierto: el #241 se paró porque contaba
