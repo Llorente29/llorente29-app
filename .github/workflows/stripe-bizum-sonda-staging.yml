@@ -42,6 +42,9 @@ permissions:
 
 jobs:
   sonda:
+    # W12b (30/10): el secreto vive en el entorno «despliegue», que solo admite
+    # ejecuciones de main (el token de Supabase y la clave de servicio alcanzan producción).
+    environment: despliegue
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15

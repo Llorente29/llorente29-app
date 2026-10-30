@@ -41,6 +41,9 @@ env:
 
 jobs:
   vigia:
+    # W12b (30/10): el secreto vive en el entorno «lectura», que solo admite
+    # ejecuciones de main (conta_lectura lo lee todo, y su «solo lectura» lo puede quitar quien se conecta).
+    environment: lectura
     name: Autoconteo de la noche · PRODUCCIÓN
     runs-on: ubuntu-latest
     timeout-minutes: 10

@@ -41,6 +41,9 @@ concurrency:
 
 jobs:
   medir:
+    # W12b (30/10): el secreto vive en el entorno «despliegue», que solo admite
+    # ejecuciones de main (el token de Supabase y la clave de servicio alcanzan producción).
+    environment: despliegue
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

@@ -225,8 +225,20 @@ export function clasificar(s, dentroDeDo = false) {
   return r
 }
 
+/**
+ * W12b (30/10) · Las órdenes de psql (líneas que empiezan por «\\»). Dentro de
+ * la transacción del ensayo, un «\\connect» abre otra conexión que confirma
+ * sola y un «\\!» ejecuta en la máquina, con la URL de producción a mano: un
+ * fichero de la tanda se saltaría el ROLLBACK. Ningún fichero de una tanda las
+ * necesita: PARA cualquier línea que empiece por «\\», esté donde esté.
+ */
+export function ordenesDePsql(texto) {
+  return texto.split('\n').flatMap((l, i) => (/^\s*\\/.test(l) ? [{ linea: i + 1, texto: l.trim().slice(0, 80) }] : []))
+}
+
 export function analizarFichero(f, texto = readFileSync(f, 'utf8')) {
-  return sentencias(texto).flatMap((s) => clasificar(s))
+  const psql = ordenesDePsql(texto).map((x) => ({ accion: 'psql', tipo: 'control', objeto: `línea ${x.linea}`, detalle: x.texto, dentroDeDo: false }))
+  return [...psql, ...sentencias(texto).flatMap((s) => clasificar(s))]
 }
 
 /**
@@ -291,6 +303,7 @@ export function decidir(ops, existe) {
     const linea = `${o.accion} · ${o.tipo} · \`${o.objeto}\`${o.detalle ? ` · ${o.detalle}` : ''}`
     if (o.accion === 'dinamico') { avisos.push(linea); continue }
     if (o.accion === 'transaccion') { para.push(`${linea} — el fichero no puede llevar su propio control de transacción`); continue }
+    if (o.accion === 'psql') { para.push(`${linea} — una orden de psql (línea que empieza por «\\»): se saltaría la transacción`); continue }
     if (!ex) continue
     if (['borra', 'renombra'].includes(o.accion) && ['tabla', 'vista', 'funcion', 'columna', 'materialized view'].includes(o.tipo)) para.push(linea)
     else if (o.accion === 'cambia_datos') para.push(linea)
@@ -378,6 +391,7 @@ export function destruido(o) {
 export function categoria(o, ctx) {
   const mismo = ctx.opsDelFichero ?? []
   if (o.accion === 'transaccion') return { cat: 'bloquea', motivo: 'el fichero no puede llevar su propio control de transacción' }
+  if (o.accion === 'psql') return { cat: 'bloquea', motivo: 'una orden de psql (línea que empieza por «\\»): se saltaría la transacción del ensayo' }
   if (o.accion === 'dinamico') return { cat: 'aviso', motivo: 'execute dinámico: que lo mire una persona' }
   const ex = ctx.existe(o)
   if (o.tipo === 'funcion' && ['crea', 'reemplaza'].includes(o.accion) && !ex) {
@@ -759,6 +773,17 @@ if (modo === 'objetivos') {
   // sql-contexto objetivos.json destruidos.json f… (CAMINO_TABLAS y CAMINO_FUNCIONES del entorno)
   const [fObj, fDes, ...ficheros] = resto
   process.stdout.write(sqlContexto(leerJson(fObj), leerJson(fDes), ficheros, process.env.CAMINO_TABLAS ?? '^$', process.env.CAMINO_FUNCIONES ?? '^$') + '\n')
+} else if (modo === 'psql') {
+  // W12b · psql f… → para (sale con 1) si algún fichero lleva una orden de psql
+  // (línea que empieza por «\\»). Para todo SQL de la rama que vaya a ejecutarse
+  // contra producción: la tanda, sus cuentas y sus vueltas atrás.
+  let mal = 0
+  for (const f of resto) for (const x of ordenesDePsql(readFileSync(f, 'utf8'))) {
+    mal++
+    console.log(`::error::Hay una orden de psql en ${f}, línea ${x.linea} («${x.texto}»). Dentro del ensayo se saltaría la transacción: un «\\connect» confirma solo y un «\\!» ejecuta en la máquina. Qué hacer: quítala; si incluía otro fichero (\\i, \\ir), pon su contenido dentro.`)
+  }
+  if (mal) process.exit(1)
+  console.log(`Sin órdenes de psql en ${resto.length} fichero(s).`)
 } else if (modo === 'historial') {
   // historial contexto.json f… → {pendientes, yaAplicados, distintos}
   const [fCtx, ...ficheros] = resto

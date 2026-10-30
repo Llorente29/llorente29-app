@@ -84,6 +84,9 @@ env:
 
 jobs:
   traer:
+    # W12b (30/10): el secreto vive en el entorno «produccion», que solo admite
+    # ejecuciones de main (escribe en producción: con la aprobación de Julio).
+    environment: produccion
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

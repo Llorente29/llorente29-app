@@ -314,7 +314,8 @@ describe('W01 · el workflow de producción: sin franja, y las guardas de siempr
     expect(texto).toContain('bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG"')
     // C10: la tanda de la rama, en su carpeta (tanda.mjs workflow).
     expect(texto).toMatch(/M=\$DIR\/aplicar\.txt; PAT='[^']+'; OBLIG=si/)
-    expect(texto).toContain('node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$GITHUB_REF_NAME}"')
+    // W12b (30/10): desde main, la tanda de la rama nombrada en «rama» (RAMA).
+    expect(texto).toContain('node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$RAMA}"')
   })
 })
 
