@@ -5,6 +5,8 @@
 -- cambia: public.bank_casar · prueba: supabase/staging/sql/20261030_s01d_bancos_retenciones_prueba.sql
 -- cambia: public.conta_impuesto_casar_cargo · prueba: supabase/staging/sql/20261030_s01d_bancos_retenciones_prueba.sql
 -- cambia: public.journal_entry · prueba: supabase/staging/sql/20261030_s01d_bancos_retenciones_prueba.sql
+-- (la de journal_line es su restricción journal_line_retencion_completa, ampliada a dos formas en el 2b)
+-- cambia: public.journal_line · prueba: supabase/staging/sql/20261030_s01d_bancos_retenciones_prueba.sql
 --
 -- S01d · 1 · LAS RETENCIONES: LA QUE NACE Y LA QUE SE PAGA (encargo de Julio,
 -- 30/10; visto bueno al paso 0 en su respuesta 1).
@@ -51,6 +53,21 @@ select public._respaldar_funcion('public.conta_motivos_para_validar(uuid)', '202
 select public._respaldar_funcion('public.conta_impuesto_retenciones_diario(uuid,integer,text)', '20261030T0900_s01d_retenciones_pago');
 select public._respaldar_funcion('public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)', '20261030T0900_s01d_retenciones_pago');
 select public._respaldar_funcion('public.conta_impuesto_casar_cargo(uuid,uuid)', '20261030T0900_s01d_retenciones_pago');
+
+-- ── 2b · La retención completa: las dos formas que valen (respuesta 2, 30/10) ──
+-- Antes solo valía «tipo, base y modelo» o nada, así que el pago de un modelo
+-- (modelo y periodo, sin tipo ni base) no se podía ni guardar (run 41038303126).
+-- Ahora valen dos formas, y nada más:
+--   · tipo, base y modelo, sin periodo: la retención que nace;
+--   · modelo y periodo, sin tipo ni base: el pago, la compensación o la devolución de un modelo.
+-- Lo de antes sigue valiendo (el periodo nace vacío en la 0855). Se añade sin
+-- validar y se valida después, para no cerrar journal_line mientras recorre sus filas.
+alter table public.journal_line drop constraint if exists journal_line_retencion_completa;
+alter table public.journal_line add constraint journal_line_retencion_completa check (
+  (withholding_rate_id is null and withholding_base is null and withholding_model is null and withholding_period is null)
+  or (withholding_rate_id is not null and withholding_base is not null and withholding_model is not null and withholding_period is null)
+  or (withholding_rate_id is null and withholding_base is null and withholding_model is not null and withholding_period is not null)) not valid;
+alter table public.journal_line validate constraint journal_line_retencion_completa;
 
 -- ── 3 · Las cuatro, cambiadas sobre lo que hay en producción ─────────────
 CREATE OR REPLACE FUNCTION public._journal_entry_proponer(p_company uuid, p_entry jsonb, p_lines jsonb, p_summary jsonb, p_quien_nombre text, p_quien uuid)

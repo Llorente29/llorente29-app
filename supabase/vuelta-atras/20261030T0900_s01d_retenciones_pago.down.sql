@@ -15,3 +15,15 @@ select public._restaurar_funcion('public.conta_impuesto_retenciones_diario(uuid,
 select public._restaurar_funcion('public.conta_motivos_para_validar(uuid)', '20261030T0900_s01d_retenciones_pago');
 select public._restaurar_funcion('public._journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text,uuid)', '20261030T0900_s01d_retenciones_pago');
 drop function if exists public.conta_modelo_periodo_texto(text, text);
+-- La retención completa, como estaba: tipo, base y modelo, o nada. Un apunte ya
+-- marcado como pago (modelo y periodo, sin tipo) la incumpliría: entonces para
+-- y lo dice, en vez de borrarle el modelo a nadie.
+do $$ begin
+  if exists (select 1 from public.journal_line where withholding_rate_id is null and withholding_model is not null) then
+    raise exception 'Hay apuntes marcados como pago de un modelo: la restricción de antes no los deja. Decide qué hacer con ellos antes de deshacer la 0900.';
+  end if;
+end $$;
+alter table public.journal_line drop constraint if exists journal_line_retencion_completa;
+alter table public.journal_line add constraint journal_line_retencion_completa check (
+  (withholding_rate_id is null and withholding_base is null and withholding_model is null)
+  or (withholding_rate_id is not null and withholding_base is not null and withholding_model is not null));
