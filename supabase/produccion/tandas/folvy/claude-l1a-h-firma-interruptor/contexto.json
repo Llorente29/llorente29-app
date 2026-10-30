@@ -1,0 +1,23 @@
+{
+  "_que": "L1a-H · contexto de producción de la tanda (1135), medido en SOLO LECTURA el 29/10 a las 11:31 UTC con la consulta del analizador (sql-contexto). Existe public.accounts, sin la columna firma_registro_mes; firma_registro_mes_pedir no existe. Nada en el camino del pedido; nada de la tanda en el historial.",
+  "medido": "2026-10-29T11:31Z",
+  "tanda": {
+    "supabase/migrations/20261029T1135_l1ah_firma_interruptor.sql": "ff3ac03026e7ee86caa793df0d1208de"
+  },
+  "contexto": {
+    "tablas": [
+      "public.accounts"
+    ],
+    "funciones": [],
+    "filas": {
+      "public.accounts": 2
+    },
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

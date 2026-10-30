@@ -1,0 +1,7 @@
+# L1a-H · La firma del registro, solo cuando la empresa la encienda: la 1135
+# (solo añade) y su prueba (ROLLBACK), que empieza por su vuelta atrás si ya
+# está aplicada: todas las cuentas en NULL, el administrador la enciende y la
+# apaga, el encargado y el trabajador no pueden, el trabajador la lee, pasada
+# dos veces, y la vuelta atrás.
+supabase/migrations/20261029T1135_l1ah_firma_interruptor.sql
+supabase/staging/sql/20261029_l1ah_firma_interruptor_prueba.sql

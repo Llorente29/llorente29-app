@@ -9,16 +9,22 @@
 //   · la firma del mes que acabó: revisa los días y firma. Si después se
 //     corrige un fichaje de ese mes, se vuelve a pedir.
 // Cada toque dice lo que ha hecho (regla 8).
+//
+// L1a-H (29/10/2026): la firma del mes sale SOLO si la empresa la pide
+// (accounts.firma_registro_mes, el interruptor de Laboral › Registro de
+// jornada; apagado por defecto). Si no se puede saber, no se pide. Las
+// correcciones del encargado salen siempre, como antes.
 
 import { useEffect, useState } from 'react'
 import { Boton, Dialogo, Tarjeta } from '@/modules/conta/diseno'
 import type { Employee } from '../../types'
 import {
-  correccionesPorResponder, firmarMes, firmasDe, leerInforme, responderCorreccion, type CorreccionPendiente,
+  correccionesPorResponder, firmarMes, firmasDe, leerInforme, pideFirmaDelMes, responderCorreccion, type CorreccionPendiente,
 } from '@/modules/personal/laboral/registroJornadaServicio'
 import { armarInforme, mesYAnio, type InformeJornada } from '@/modules/personal/laboral/informeJornada'
 import { diaMadrid, fechaYHora, horaMadrid } from '@/modules/personal/laboral/calculoJornada'
 import { PIEZA_LABORAL } from '@/modules/personal/laboral/estilo'
+import { mesAnterior } from '@/modules/personal/laboral/firmaDelMes'
 
 const TIPO: Record<string, string> = { entrada: 'entrada', salida: 'salida', pausa_inicio: 'pausa', pausa_fin: 'vuelta de la pausa' }
 const diaMes = (iso: string) => { const d = diaMadrid(iso); return `${d.slice(8, 10)}/${d.slice(5, 7)}` }
@@ -34,12 +40,6 @@ function fraseCorreccion(c: CorreccionPendiente): string {
     case 'void': return `Tu encargado anuló tu ${tipo} ${del} de las ${c.horaAntes ? horaMadrid(c.horaAntes) : '—'}`
     default: return `Tu encargado recuperó tu ${tipo} ${del} de las ${hora ? horaMadrid(hora) : '—'}`
   }
-}
-
-/** El mes anterior al de hoy, en Madrid: AAAA-MM. */
-function mesAnterior(hoy: string): string {
-  const [y, m] = hoy.split('-').map(Number)
-  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`
 }
 
 function TarjetaCorreccion({ c }: { c: CorreccionPendiente }) {
@@ -161,8 +161,22 @@ function TarjetaFirma({ employee }: { employee: Employee }) {
   )
 }
 
-export default function AvisosDelRegistro({ employee }: { employee: Employee }) {
+export default function AvisosDelRegistro({ employee, accountId }: { employee: Employee; accountId: string | null | undefined }) {
   const [correcciones, setCorrecciones] = useState<CorreccionPendiente[]>([])
+  const [pideFirma, setPideFirma] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    const t = window.setTimeout(async () => {
+      try {
+        const v = accountId ? await pideFirmaDelMes(accountId) : false
+        if (vivo) setPideFirma(v)
+      } catch {
+        // Sin saberlo (sin la 1135 o sin red), no se pide: apagado.
+        if (vivo) setPideFirma(false)
+      }
+    }, 0)
+    return () => { vivo = false; window.clearTimeout(t) }
+  }, [accountId])
   useEffect(() => {
     let vivo = true
     const t = window.setTimeout(async () => {
@@ -179,7 +193,7 @@ export default function AvisosDelRegistro({ employee }: { employee: Employee }) 
   return (
     <div className={`${PIEZA_LABORAL} l-portal px-4 pt-3 max-w-md mx-auto`}>
       {correcciones.map(c => <TarjetaCorreccion key={c.id} c={c} />)}
-      <TarjetaFirma employee={employee} />
+      {pideFirma && <TarjetaFirma employee={employee} />}
     </div>
   )
 }
