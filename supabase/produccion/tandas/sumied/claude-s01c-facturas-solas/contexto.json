@@ -1,0 +1,33 @@
+{
+ "_que": "S01c · segundo real, la 1013 sola · contexto de producción medido en SOLO LECTURA el 29/10 a las 13:15Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las seis tablas que toca; nada en el camino del pedido; la 1013 no está en el historial (la 1012 sí, del primer real).",
+ "medido": "2026-10-29T13:15Z",
+ "tanda": {
+  "supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql": "f058399802a76026d848d1e1e36c6fad"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_inbound_address",
+   "public.document_activity",
+   "public.goods_receipt_path",
+   "public.supplier",
+   "public.supplier_invoice",
+   "public.supplier_invoice_receipt"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_inbound_address": 0,
+   "public.document_activity": 84,
+   "public.goods_receipt_path": 30,
+   "public.supplier": 100,
+   "public.supplier_invoice": 95,
+   "public.supplier_invoice_receipt": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

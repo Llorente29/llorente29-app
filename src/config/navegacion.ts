@@ -325,6 +325,13 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     ],
   },
   {
+    // S01c · Ajustes › Correo de facturas: la dirección, el reenvío de Gmail y lo que ha llegado.
+    grupo: 'Compras',
+    entradas: [
+      { id: 'correo-facturas', etiqueta: 'Correo de facturas', ruta: 'ajustes/correo-facturas' },
+    ],
+  },
+  {
     // V03 E2 · Ajustes › Facturación › Verifactu (tablero 25).
     grupo: 'Facturación',
     entradas: [

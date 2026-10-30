@@ -169,6 +169,26 @@ export interface Contexto {
   cuentaDiferenciaIngreso?: string
   /** S01 · Los cobros por el enlace de pago (Stripe y TPV) que esperan su abono. */
   cobrosPasarela?: CobroPasarela[]
+  /** S01c · Los albaranes que esperan factura: dicen qué albarán espera una factura que falta. */
+  albaranesEsperando?: AlbaranQueEspera[]
+}
+
+/** S01c · Un albarán que espera su factura, para decir cuál espera la que falta. */
+export interface AlbaranQueEspera { proveedor: string; numero: string | null; fecha: string; totalCent: number | null }
+
+/**
+ * S01c · Los números de factura que nombra un concepto del banco: «FACT:
+ * 26A/10965», «FRA 2026/0477», «FACTURA Nº 123». Solo lo que va detrás de esas
+ * palabras: un número suelto no es una factura.
+ */
+export function facturasEnConcepto(texto: string): string[] {
+  const out: string[] = []
+  const re = /\b(?:FACTURAS?|FACT|FRAS?)\b\.?\s*(?:N[º°O]?\.?\s*)?:?\s*([A-Z0-9][A-Z0-9/.-]*\d[A-Z0-9/.-]*)/gi
+  for (const m of texto.matchAll(re)) {
+    const ref = m[1].replace(/[.-]+$/, '').toUpperCase()
+    if (ref.replace(/[^A-Z0-9]/g, '').length >= 3 && !out.includes(ref)) out.push(ref)
+  }
+  return out
 }
 
 /** De dónde sale la propuesta: la píldora de la fila (N17b). */
@@ -635,6 +655,21 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
         destino: factura(f, pagar, m) }
     }
     const delProv = vivas.filter((f) => nombra(txt, [f.proveedor, ...f.alias]))
+    // S01c · El banco nombra una factura («FACT: 26A/10965») que no está pendiente en Sumied:
+    // se dice que falta, con el albarán que la espera. Nunca se casa con otra de distinto número.
+    const refs = facturasEnConcepto(m.concepto)
+    if (refs.length > 0 && !vivas.some((f) => f.numero && refs.some((r) => refEn(r, f.numero!)))) {
+      const quien = delProv[0]?.proveedor ?? ctx.proveedores.find((x) => nombra(txt, [x.proveedor, ...x.alias]))?.proveedor ?? null
+      if (quien) {
+        const ref = refs[0]
+        const alb = (ctx.albaranesEsperando ?? []).filter((a) => normal(a.proveedor) === normal(quien) && a.totalCent === pagar)
+        const espera = alb.length === 1 ? ` La espera el albarán ${alb[0].numero ?? ''} del ${ddmm(alb[0].fecha)}.`.replace('  ', ' ') : ''
+        return { ...b, confianza: 'duda', origen: 'factura', falta: `la factura ${ref}`,
+          que: `Falta la factura ${ref} de ${quien} · ${eurosCent(pagar)}`,
+          porque: `El banco dice que pagas la factura ${ref} de ${quien}, y no la tengo entre las pendientes: no la caso con otra.${espera} Súbela (o reenvíala a tu correo de facturas) y la caso con este pago.`,
+          destino: null }
+      }
+    }
     const exactas = delProv.filter((f) => queda(f) === pagar)
     if (exactas.length >= 1) {
       // La aprobada antes que la que está en revisión; entre iguales, la más antigua (diciéndolo).

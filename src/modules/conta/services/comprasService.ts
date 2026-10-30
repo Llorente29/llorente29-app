@@ -126,3 +126,108 @@ export async function albaranesDeLiquidacion(liq: string): Promise<AlbaranLiquid
   const v = await rpc<AlbaranLiquidacion[] | null>('compras_liquidacion_recepciones', { p_liq: liq })
   return (v ?? []).map((x) => ({ ...x, base: x.base == null ? null : Number(x.base) }))
 }
+
+// ── S01c · Las facturas entran solas ────────────────────────────────────────
+
+/** Cuándo llegan las facturas de un proveedor (null = al momento). */
+export type LlegadaFacturas = 'al_momento' | 'inicio_mes_siguiente'
+
+/** S01c · Guarda «cuándo llegan sus facturas» y devuelve la frase de lo guardado. */
+export async function cambiarCuandoLlegan(proveedor: string, valor: LlegadaFacturas | null): Promise<string> {
+  const r = await rpc<{ mensaje: string }>('compras_cuando_llegan_poner', { p_proveedor: proveedor, p_valor: valor })
+  return r.mensaje
+}
+
+/** S01c · Un albarán esperando su factura (o su liquidación), con los días que lleva. */
+export interface AlbaranEsperando {
+  goods_receipt_id: string; code: string | null; doc_number: string | null; receipt_date: string
+  supplier_id: string; supplier_name: string; location_name: string | null
+  camino: 'pendiente_factura' | 'liquidacion'; forma: string | null; llegada: LlegadaFacturas | null
+  base: number | null; total_papel: number | null; lineas_sin_leer: number | null; motivo_hueco: string | null
+  espera_hasta: string; dias: number; retrasado: boolean
+}
+
+export async function cargarEsperandoDetalle(accountId: string): Promise<AlbaranEsperando[]> {
+  const f = await rpc<AlbaranEsperando[] | null>('compras_esperando_detalle', { p_cuenta: accountId })
+  return (f ?? []).map((x) => ({ ...x, base: x.base == null ? null : Number(x.base), total_papel: x.total_papel == null ? null : Number(x.total_papel),
+    lineas_sin_leer: x.lineas_sin_leer == null ? null : Number(x.lineas_sin_leer) }))
+}
+
+/** S01c · Apunta por qué faltan líneas en un albarán que no cuadra; devuelve la frase de lo apuntado. */
+export async function apuntarHueco(recepcion: string, motivo: string): Promise<string> {
+  const r = await rpc<{ mensaje: string }>('compras_hueco_recepcion', { p_recepcion: recepcion, p_motivo: motivo })
+  return r.mensaje
+}
+
+/** S01c · Un correo que llegó a la dirección de facturas y lo que se hizo con él. */
+export interface LlegadaCorreo {
+  fecha: string; de: string | null; asunto: string | null; resultado: string; llegada: string | null; motivo: string | null
+  factura: { id: string; codigo: string | null; numero: string | null; total: number | null; proveedor: string | null; casada: boolean } | null
+  dicho: string | null
+}
+export interface CorreoFacturas {
+  direccion: string | null; activa?: boolean; ultimo?: string | null
+  confirmacion?: { fecha: string; codigo: string | null; enlace: string | null } | null
+  llegadas?: LlegadaCorreo[]
+}
+
+export const leerCorreoFacturas = (companyId: string) => rpc<CorreoFacturas>('conta_correo_facturas', { p_company: companyId })
+
+/** S01c · Una línea de la factura contra la de su albarán (o lo que está en un solo lado). */
+export interface LineaComparada {
+  resultado: 'cuadra' | 'cantidad' | 'importe' | 'solo_factura' | 'solo_albaran'
+  texto_factura?: string | null; texto_albaran?: string | null; albaran?: string | null
+  cant_factura?: number | null; cant_albaran?: number | null; importe_factura?: number | null; importe_albaran?: number | null
+}
+export interface ComparacionLineas {
+  lineas_factura: number; cuadran: number; difieren: number; solo_factura: number; solo_albaran: number; lineas: LineaComparada[]
+}
+const num = (x: unknown) => (x == null ? null : Number(x))
+/** S01c · La factura contra sus albaranes, línea a línea (solo lee). */
+export async function leerLineasFactura(facturaId: string): Promise<ComparacionLineas> {
+  const r = await rpc<ComparacionLineas>('compras_factura_lineas', { p_factura: facturaId })
+  return { ...r, lineas: (r.lineas ?? []).map((l) => ({ ...l, cant_factura: num(l.cant_factura), cant_albaran: num(l.cant_albaran),
+    importe_factura: num(l.importe_factura), importe_albaran: num(l.importe_albaran) })) }
+}
+
+/** S01c · Crea la dirección de facturas de la empresa si aún no la tiene. */
+export async function crearCorreoFacturas(companyId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ direccion: string }>('conta_direccion_entrada', { p_company: companyId, p_tipo: 'facturas', p_quien_nombre: quien })
+  return r.direccion
+}
+
+/** S01c · Añade en oficina la línea que no se leyó (entra al almacén como al recibir); devuelve la frase y lo que falta todavía. */
+export async function anadirLineaRecepcion(recepcion: string, articulo: string, cantidad: number, importe: number, texto: string | null): Promise<{ mensaje: string; queda: number }> {
+  const r = await rpc<{ mensaje: string; queda: number }>('compras_recepcion_linea_anadir', { p_recepcion: recepcion, p_articulo: articulo, p_cantidad: cantidad, p_importe: importe, p_texto: texto })
+  return { mensaje: r.mensaje, queda: Number(r.queda) }
+}
+
+/** S01c · Los artículos de la cuenta cuyo nombre lleva lo escrito (para elegir el de la línea que falta). */
+export async function buscarArticulos(accountId: string, q: string): Promise<{ id: string; nombre: string }[]> {
+  const limpio = q.trim().replace(/[%_,()]/g, ' ')
+  if (limpio.length < 2) return []
+  const { data, error } = await tabla('recipe_item').select('id, name').eq('account_id', accountId).ilike('name', `%${limpio}%`).order('name').limit(12)
+  if (error) throw new Error(`No se han podido buscar los artículos: ${error.message}`)
+  return ((data ?? []) as { id: string; name: string }[]).map((x) => ({ id: x.id, nombre: x.name }))
+}
+
+/**
+ * S01c · Lo que le falta a una recepción por leer: la base del albarán contra
+ * lo que suman sus líneas leídas, menos lo añadido en oficina. null si cuadra
+ * o si alguien ya dijo por qué.
+ */
+export async function huecoDeRecepcion(recepcion: string): Promise<{ falta: number | null; motivo: string | null }> {
+  const { data: g, error } = await tabla('goods_receipt').select('ai_session_id, unread_gap_amount, unread_gap_reason').eq('id', recepcion).maybeSingle()
+  if (error) throw new Error(`No se ha podido leer el albarán: ${error.message}`)
+  const r = g as { ai_session_id: string | null; unread_gap_amount: number | null; unread_gap_reason: string | null } | null
+  if (!r) return { falta: null, motivo: null }
+  if (r.unread_gap_reason) return { falta: null, motivo: r.unread_gap_reason }
+  if (r.unread_gap_amount != null) return { falta: Number(r.unread_gap_amount) >= 0.01 ? Number(r.unread_gap_amount) : null, motivo: null }
+  if (!r.ai_session_id) return { falta: null, motivo: null }
+  const { data: s, error: e2 } = await tabla('goods_receipt_ai_session').select('validation').eq('id', r.ai_session_id).maybeSingle()
+  if (e2) throw new Error(`No se ha podido leer lo que se leyó del albarán: ${e2.message}`)
+  const v = (s as { validation: { cuadra?: boolean; base_declared?: number; lines_sum?: number } | null } | null)?.validation
+  if (!v || v.cuadra !== false) return { falta: null, motivo: null }
+  const falta = Math.round(((Number(v.base_declared ?? 0)) - Number(v.lines_sum ?? 0)) * 100) / 100
+  return { falta: falta >= 0.01 ? falta : null, motivo: null }
+}

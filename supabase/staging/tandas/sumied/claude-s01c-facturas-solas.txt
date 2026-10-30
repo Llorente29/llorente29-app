@@ -1,0 +1,11 @@
+# S01c · las facturas entran solas. La 1012 cambia dos funciones de Compras
+# («cambia») y añade lo demás; la 1013 arregla Foodint y en staging no hace
+# nada (no está Foodint). Desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK), por sus caminos: recepciones confirmadas de verdad
+# (manda la ficha, sin ficha se pregunta, a primeros de mes no se pregunta),
+# «Esperando factura» con sus días, facturas que entran por correo y casan
+# solas (y la que espera su albarán), el motivo del hueco, el correo de
+# facturas con la confirmación de Gmail, la cuenta B, y la vuelta atrás.
+supabase/migrations/20261029T1012_s01c_facturas_solas.sql
+supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql
+supabase/staging/sql/20261029_s01c_facturas_solas_prueba.sql

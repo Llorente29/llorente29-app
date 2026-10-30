@@ -324,6 +324,13 @@ export function crearBancos(bd: Bd) {
         factura: s(c.factura), cliente: String(c.cliente ?? 'Un cliente'), cuenta: s(c.cuenta), conAsiento: c.con_asiento === true,
       })),
     }
+    // S01c · Los albaranes que esperan factura, para decir cuál espera la que falta. Si la base aún
+    // no tiene la función (antes de su tanda), se concilia igual, sin ellos.
+    try {
+      const esperando = await rpc<Fila[]>('compras_esperando_detalle', { p_cuenta: accountId })
+      ctx.albaranesEsperando = (esperando ?? []).map((a) => ({ proveedor: String(a.supplier_name ?? ''), numero: s(a.doc_number) ?? s(a.code),
+        fecha: String(a.receipt_date), totalCent: a.total_papel === null || a.total_papel === undefined ? null : cent(a.total_papel) }))
+    } catch (e) { console.warn('[bancos] los albaranes que esperan factura no se han podido leer', e) }
     return { ctx, movimientos }
   }
 

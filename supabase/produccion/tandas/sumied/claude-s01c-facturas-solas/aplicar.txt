@@ -1,0 +1,29 @@
+# S01c · Las facturas de proveedor entran solas por correo y casan con su
+# albarán. Rama claude/s01c-facturas-solas. Dos reales desde esta rama
+# (decisión de Julio, 29/10):
+#
+#   1. La 1012 (manda la ficha, el disparador sin factura con pregunta abierta,
+#      «cuándo llegan», casar sola, línea a línea…): aplicada en real y en
+#      verde (#324). Está en el historial de producción con su huella.
+#   2. AHORA, la 1013 SOLA — ARREGLA Foodint (con «autorizo»: toca datos):
+#      anula FAC-00100 y su asiento 2/3177 (contraasiento, no se borra),
+#      devuelve ALB-00218 a «esperando factura», pone a Amirsa «todas juntas a
+#      primeros de mes» y cierra su pregunta, y borra la dirección
+#      «documentos» foodint@ (apagada, sin correos). Cada cosa se comprueba
+#      antes de tocarla; si no está como se midió, para.
+#
+# SIN VUELTA ATRÁS, a propósito: un contraasiento no se borra, así que no hay
+# a qué volver. Va declarado («sin-vuelta-atras:», W02): el ensayo no compara
+# «como antes» sino lo que la tanda dice que deja («esperado:»), medida a
+# medida. vuelta-atras.txt no lista ningún fichero. (El ensayo 40867927860,
+# con la 1012 y la 1013 juntas, paró por la R9 por esto.)
+#
+# Nada en el camino del pedido. Sin aplicar: lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01c-facturas-solas.sql
+sin-vuelta-atras: supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql · motivo: anula FAC-00100 con contraasiento (se revierte, no se borra); no hay a qué volver sin borrar un asiento
+esperado: s01c-facturas-solas · funciones nuevas (casar / llegan / esperando / hueco / correo / disparador) = como antes
+esperado: s01c-facturas-solas · FAC-00100 (factura / asiento) = anulada / anulado
+esperado: s01c-facturas-solas · camino de ALB-00218 = pendiente_factura · sin consumir
+esperado: s01c-facturas-solas · Amirsa (cuándo llegan / preguntas abiertas) = inicio_mes_siguiente / 0
+esperado: s01c-facturas-solas · direcciones de entrada de Foodint = 2
+supabase/migrations/20261029T1013_s01c_arreglo_foodint.sql
