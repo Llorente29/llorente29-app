@@ -1,0 +1,506 @@
+<!doctype html><html><head><meta charset=utf8><script>if(location.hostname=="dosier.sumied.com")location.replace("/sumied"+location.search)</script><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Dosier Folvy</title><meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,500..600,100;1,9..144,500..600,100&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600&display=swap">
+<style>
+
+:root{--ink:#221C16;--paper:#FAF5EC;--card:#FFFDF9;--line:#EADFCF;--soft:#6B6055;--green:#1F9D6B;--green-ink:#14704B;
+--tomate:#D4502C;--mostaza:#D99A1B;--oliva:#6F8238;--berenjena:#7A4868;--pizarra:#3F6480;--teja:#B5673C;
+--acc:#1F9D6B;--tint:color-mix(in srgb,var(--acc) 12%,#FFFDF9);
+--display:"Fraunces","Iowan Old Style",Georgia,serif;--body:"Inter","Segoe UI",system-ui,sans-serif}
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15.5px;line-height:1.6;margin:0;padding-block:28px;padding-inline:16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:26px}
+.sheet{--tint:color-mix(in srgb,var(--acc) 13%,#FFFDF9);background:var(--card);border-radius:22px;padding:44px 48px;display:flex;flex-direction:column;gap:26px;box-shadow:0 1px 0 var(--line),0 18px 40px -28px rgba(80,50,20,.35);position:relative;overflow:hidden}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:-.015em;margin:0;text-wrap:balance}
+h2{font-size:34px;line-height:1.1;font-variation-settings:"SOFT" 100,"opsz" 72}
+h3{font-size:18.5px;line-height:1.25;font-weight:600}
+p{margin:0;max-width:68ch} .lead{font-size:17.5px;line-height:1.55} .soft{color:var(--soft)}
+.eyebrow{font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--acc)}
+.head{display:flex;flex-direction:column;gap:12px}
+
+.band{display:flex;align-items:center;gap:18px;background:var(--tint);border-radius:18px;padding:18px 22px;position:relative;overflow:hidden}
+.band::after{content:"";position:absolute;right:-46px;top:-46px;width:150px;height:150px;border-radius:50%;border:22px solid color-mix(in srgb,var(--acc) 22%,transparent)}
+.ico{flex:none;width:62px;height:62px;border-radius:50%;background:var(--acc);display:grid;place-items:center;color:#fff}
+.ico svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.band>div{display:flex;flex-direction:column;gap:4px;min-width:0;position:relative;z-index:1}
+
+.cover{background:#2A211A;color:#FFF8EC;min-height:640px;justify-content:space-between;padding:54px}
+.cover .plates{position:absolute;inset:0;pointer-events:none}
+.cover .plates i{position:absolute;border-radius:50%}
+.logo{display:flex;align-items:center;gap:10px;font-family:"Space Grotesk",var(--body);font-weight:600;font-size:27px;letter-spacing:-.04em;position:relative}
+.cover h1{font-size:clamp(40px,7.4vw,70px);line-height:1.0;max-width:11ch;font-variation-settings:"SOFT" 100,"opsz" 144;position:relative}
+.cover h1 em{font-style:italic;color:#F2B84B;font-weight:500}
+.cover .sub{font-size:19px;color:#E8DCC8;max-width:44ch;position:relative}
+.cover .meta{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#C9B99F;border-top:1px solid #4A3D30;padding-top:16px;position:relative}
+.covermid{display:flex;flex-direction:column;gap:22px;position:relative}
+.chips{display:flex;flex-wrap:wrap;gap:8px;max-width:520px} .chips span{background:#3A2E24;border-radius:99px;padding:6px 13px;font-size:13.5px;color:#F3E8D6}
+
+.ring{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.ring div{background:var(--t,#F4ECDD);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.ring b{font-family:var(--display);font-weight:600;font-size:17px} .ring span{font-size:13px;color:#5A4F44;line-height:1.4}
+.ring .core{grid-column:1/-1;background:#2A211A;color:#FFF8EC;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:18px 22px}
+.ring .core span{color:#E8DCC8;font-size:14px} .ring .core b{font-size:21px}
+.flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;counter-reset:f}
+.flow div{counter-increment:f;background:#F4ECDD;border-radius:16px;padding:14px 16px 16px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.flow div::before{content:counter(f);width:28px;height:28px;border-radius:50%;background:var(--acc);color:#fff;display:grid;place-items:center;font-weight:600;font-size:14px;margin-bottom:2px}
+.flow b{font-family:var(--display);font-size:16.5px;font-weight:600;line-height:1.25} .flow span{font-size:13.2px;color:#5A4F44;line-height:1.45}
+.cols{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 34px}
+.item{display:flex;flex-direction:column;gap:5px;min-width:0} .item p{font-size:14.4px;color:var(--soft)}
+ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+li{padding-left:20px;position:relative;font-size:14.5px;max-width:64ch}
+li::before{content:"";position:absolute;left:2px;top:.58em;width:8px;height:8px;border-radius:50%;background:var(--acc)}
+li b{font-weight:600}
+.rule{height:0;border-top:2px dotted var(--line)} .block{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+.shot{margin:0;display:block;width:100%;break-inside:avoid} .shot figcaption{margin-top:9px}
+.shot .mat{background:var(--tint);border-radius:18px;padding:14px 14px 0;overflow:hidden}
+.shot img{display:block;width:100%;height:auto;border-radius:10px 10px 0 0;box-shadow:0 10px 26px -10px rgba(60,35,10,.45)}
+.shot figcaption{font-size:13px;color:var(--soft);padding-inline:4px} .shot figcaption b{color:var(--ink);font-weight:600}
+.shots2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.feat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 26px}
+.feat .item{padding-left:16px;border-left:3px solid color-mix(in srgb,var(--acc) 45%,transparent)}
+.feat .item h3{font-size:16px} .feat .item p{font-size:13.8px;line-height:1.5}
+.feat .block h3{font-size:17px;color:var(--acc)} .feat .block ul{gap:6px} .feat .block li{font-size:13.6px}
+.phones{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px 26px;justify-items:center;background:var(--tint);border-radius:22px;padding:26px 20px 20px}
+.phone{margin:0;display:flex;flex-direction:column;gap:9px;align-items:center;width:100%;max-width:220px;break-inside:avoid}
+.phone img{display:block;width:100%;height:auto;aspect-ratio:654/1300;object-fit:cover;object-position:top;border:7px solid #2A211A;border-radius:28px;background:#fff;box-shadow:0 14px 26px -14px rgba(60,35,10,.6)}
+.phone.bottom img{object-position:bottom} .phone.short img{aspect-ratio:654/888}
+.phones.five{grid-template-columns:repeat(5,minmax(0,1fr));gap:14px} .phones.five .phone img{aspect-ratio:327/709;border-width:5px;border-radius:22px}
+.phone figcaption{font-size:12.8px;color:var(--soft);text-align:center} .phone figcaption b{color:var(--ink);display:block;font-family:var(--display);font-size:15px}
+.tablewrap{overflow-x:auto} table{border-collapse:collapse;width:100%;font-size:14.2px;min-width:520px}
+th{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:var(--soft);font-weight:600;text-align:left;padding:0 10px 9px 0;border-bottom:2px solid var(--ink)}
+td{padding:9px 10px 9px 0;border-bottom:1px solid var(--line);vertical-align:top} td:first-child{font-family:var(--display);font-weight:600;font-size:15.5px}
+.next{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.next .item{background:#F4ECDD;border-radius:16px;padding:16px} .next .n{font-family:var(--display);font-weight:600;font-size:17px;color:var(--tomate)}
+.contact{background:#2A211A;color:#FFF8EC;border-radius:18px;padding:24px 26px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px}
+.contact b{font-family:var(--display);font-size:23px;font-weight:600} .contact span{color:#E8DCC8;font-size:14.5px}
+.cdata{display:flex;flex-direction:column;gap:4px;align-items:flex-end} .contact .url{user-select:all;font-size:16px;font-weight:500;color:#F2B84B}
+.note{font-size:13.4px;color:var(--soft);background:#F4ECDD;border-radius:14px;padding:12px 16px;max-width:none} .note b{color:var(--ink)}
+.quote{font-family:var(--display);font-style:italic;font-size:21px;line-height:1.35;color:var(--acc);max-width:34ch}
+.item,.block,.head{break-inside:avoid}
+
+.sheet.dark{background:var(--tomate);color:#FFF8EC;gap:30px}
+.dark::before{content:"";position:absolute;right:-110px;bottom:-110px;width:340px;height:340px;border-radius:50%;border:44px solid rgba(255,248,236,.14)}
+.dark h2{font-size:44px;line-height:1.05;max-width:15ch} .dark h2 em{font-style:italic;color:#FFE2A6;font-weight:500}
+.dark .eyebrow{color:#FFE2A6} .dark .lead{color:#FFF1DD;font-size:19px} .dark .rule{border-color:rgba(255,248,236,.35)}
+.dark .item p{color:#FFE9D2} .dark>*{position:relative}
+.trio{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.trio div{background:rgba(255,248,236,.13);border-radius:18px;padding:22px 20px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.trio b{font-family:var(--display);font-weight:600;font-size:21px;line-height:1.18} .trio span{font-size:14.8px;color:#FFEEDB;line-height:1.5}
+.bigline{font-family:var(--display);font-style:italic;font-size:25px;line-height:1.3;color:#fff;max-width:28ch}
+@media (max-width:700px){.sheet,.cover{padding:26px 20px;border-radius:18px} h2{font-size:26px} .cols,.shots2,.feat,.next,.flow,.ring,.trio{grid-template-columns:minmax(0,1fr)} .phones,.phones.five{grid-template-columns:repeat(2,minmax(0,1fr))} .cover{min-height:540px} .cover .plates{opacity:.28} .dark h2{font-size:32px} .ico{width:50px;height:50px} .ico svg{width:26px;height:26px} .band{padding:14px 16px;gap:14px}}
+@page{size:A4;margin:11mm 0} @page :first{margin:0} @page dark{margin:0}
+@media print{
+body{padding:0;font-size:13.2px} .doc{max-width:none;gap:0}
+.sheet{background:transparent;box-shadow:none;border-radius:0;padding:0 15mm;break-before:page;gap:15px;overflow:visible}
+.cover{background:#2A211A;height:297mm;padding:22mm 20mm;break-before:auto;overflow:hidden} .cover h1{font-size:66px}
+.sheet.dark{background:var(--tomate);page:dark;height:297mm;padding:26mm 20mm;gap:30px;overflow:hidden} .dark .item p{font-size:13.5px} .dark h2{font-size:46px}
+h2{font-size:27px} .lead{font-size:14.4px} ul{gap:5px}
+.band{padding:12px 18px;border-radius:14px} .ico{width:48px;height:48px} .ico svg{width:25px;height:25px}
+.feat{gap:11px 20px} .feat .item p,li,.item p{font-size:12.2px} .feat .item h3{font-size:13.6px} .feat .block li{font-size:11.8px} .feat .block ul{gap:4px} .feat .block h3{font-size:14.5px} .note{font-size:11.8px;padding:8px 12px}
+.shot .mat{padding:9px 9px 0;border-radius:12px} .shot img{box-shadow:none}
+.shot.big img{aspect-ratio:1420/480;object-fit:cover;object-position:top} .shot.tall img{aspect-ratio:1420/560} .shot.wide img{aspect-ratio:1420/330}
+.shots2 .shot img{aspect-ratio:1420/580;object-fit:cover;object-position:top}
+td{padding:4px 10px 4px 0} .next .item{padding:10px 12px} .contact{padding:14px 20px} td:first-child{font-size:13.5px} .phone{max-width:45mm} .phones{padding:14px} .phones.five .phone{max-width:31mm}
+.ring div,.flow div{padding:10px 12px} .ring span,.flow span{font-size:11.8px} .quote{font-size:17px}
+}
+
+.tag{display:inline-block;font-family:var(--body);font-size:10.8px;font-weight:600;letter-spacing:.03em;border-radius:99px;padding:1px 8px;vertical-align:1px;margin-left:3px;white-space:nowrap}
+.tag.ok{background:#E3F3EB;color:#14704B}.tag.prueba{background:#FDF0D5;color:#8A5A00}.tag.dev{background:#F1E6EE;color:#7A4868}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.stats div{background:#2A211A;border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.stats b{font-family:var(--display);font-weight:600;font-size:28px;line-height:1.1;color:#F2B84B}.stats span{font-size:12.8px;color:#E8DCC8;line-height:1.35}
+.layers{display:flex;flex-direction:column;gap:10px}
+.layer{display:grid;grid-template-columns:130px minmax(0,1fr);gap:14px;align-items:stretch}
+.lname{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--acc);display:flex;align-items:center;border-right:2px dotted var(--line);padding-right:10px}
+.lcells{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.lcells>div{background:var(--tint);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.lcells>div.wide{grid-column:1/-1;background:#2A211A;color:#FFF8EC}.lcells>div.wide span{color:#E8DCC8}
+.lcells b{font-family:var(--display);font-weight:600;font-size:16px}.lcells span{font-size:13px;color:#5A4F44;line-height:1.4}
+.lcells.chips2{display:flex;flex-wrap:wrap;gap:7px;align-content:center}.lcells.chips2 span{background:#F4ECDD;border-radius:99px;padding:5px 12px;font-size:13px;color:var(--ink)}
+.flow.six{grid-template-columns:repeat(3,minmax(0,1fr))}
+table.cmp th span{display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:12px}
+table.cmp td{font-size:13.8px}table.cmp td.si{color:var(--green-ink);font-weight:600}table.cmp td.no{color:#8C7F72}table.cmp td.med{color:#8A5A00}
+table.cmp td:last-child{background:color-mix(in srgb,var(--green) 9%,#FFFDF9);padding-left:10px}
+.trio.light div{background:#F4ECDD}.trio.light b{color:var(--acc)}.trio.light span{color:#5A4F44}
+@media (max-width:700px){.stats,.lcells,.flow.six{grid-template-columns:repeat(2,minmax(0,1fr))}.layer{grid-template-columns:minmax(0,1fr)}.lname{border-right:0;padding:0}.lcells>div.wide{grid-column:1/-1}}
+@media print{.stats b{font-size:22px}.stats span,.lcells span{font-size:11.2px}.lcells>div{padding:8px 10px}.lcells b{font-size:13.5px}table.cmp td{font-size:11.6px}.tag{font-size:9.5px}}
+</style>
+<div class="doc">
+<section class="sheet cover">
+<div class="plates"><i style="width:360px;height:360px;right:-120px;top:-90px;background:#D4502C"></i><i style="width:230px;height:230px;right:70px;top:210px;border:26px solid #F2B84B"></i><i style="width:150px;height:150px;right:-40px;top:370px;background:#6F8238"></i><i style="width:90px;height:90px;right:250px;top:60px;background:#F2B84B"></i><i style="width:420px;height:420px;right:-210px;bottom:-250px;border:40px solid #3A2E24"></i></div>
+<div class="logo"><svg width="34" height="34" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="46 10.55" transform="rotate(-11.5 12 12)"/><circle cx="18.36" cy="5.64" r="2.5" fill="#1F9D6B"/></svg>folvy</div>
+<div class="covermid"><h1>Tu negocio entero, <em>en un solo sitio.</em></h1>
+<p class="sub">Folvy 360: de la compra al cobro y de la cocina a las cuentas. Hecho para quien lleva restaurantes, no para quien lleva ordenadores.</p>
+<div class="chips"><span>TPV</span><span>Pedidos y cocina</span><span>Carta y costes</span><span>Compras y almacén</span><span>Ventas y márgenes</span><span>Equipo</span><span>Seguridad alimentaria</span><span>Tienda propia</span><span>Redes sociales</span><span>Integraciones</span><span>Sumied: contabilidad e impuestos</span><span>Laboral</span><span>Inteligencia artificial</span></div></div>
+<div class="meta"><span>Dosier de producto · 2.ª edición</span><span>Octubre 2026</span><span>folvy.app</span></div>
+</section>
+<section class="sheet" style="--acc:var(--green)">
+<div class="head" data-acc="--green"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg></span><div><span class="eyebrow">La idea</span><h2>360: todo el negocio dentro del mismo sistema</h2></div></div><p class="lead">Un grupo de hostelería suele trabajar con ocho o diez programas que no se hablan: el TPV, una tablet por plataforma, hojas de cálculo para los costes, una aplicación de fichajes, otra de turnos, la carpeta del APPCC, la web de pedidos y la contabilidad en la gestoría.</p></div>
+<p class="soft">Cada uno guarda su trozo. Para saber cuánto se gana de verdad hay que juntar a mano datos que no cuadran. Folvy no añade un programa más a esa lista: la sustituye entera.</p>
+<div class="ring">
+<div class="core"><b>Un solo dato de cada cosa</b><span>Una carta · un almacén · una plantilla · unas ventas · una contabilidad</span></div>
+<div style="--t:color-mix(in srgb,var(--tomate) 16%,#FFFDF9)"><b>TPV</b><span>Venta en mostrador, barra y sala</span></div>
+<div style="--t:color-mix(in srgb,var(--mostaza) 16%,#FFFDF9)"><b>Orders</b><span>Pedidos, cocina, pase y reparto</span></div>
+<div style="--t:color-mix(in srgb,var(--oliva) 16%,#FFFDF9)"><b>Kitchen</b><span>Carta, recetas, costes y precios</span></div>
+<div style="--t:color-mix(in srgb,var(--teja) 16%,#FFFDF9)"><b>Supply</b><span>Compras, albaranes y almacén</span></div>
+<div style="--t:color-mix(in srgb,var(--pizarra) 16%,#FFFDF9)"><b>Sales</b><span>Ventas, márgenes y liquidaciones</span></div>
+<div style="--t:color-mix(in srgb,var(--berenjena) 16%,#FFFDF9)"><b>Team</b><span>Cuadrantes, fichajes, nóminas, formación</span></div>
+<div style="--t:color-mix(in srgb,var(--oliva) 16%,#FFFDF9)"><b>Safety</b><span>APPCC, alérgenos y documentación</span></div>
+<div style="--t:color-mix(in srgb,var(--tomate) 16%,#FFFDF9)"><b>Shop</b><span>Tienda online propia y fidelización</span></div>
+<div style="--t:color-mix(in srgb,var(--mostaza) 16%,#FFFDF9)"><b>Social</b><span>Redes sociales de cada marca</span></div>
+<div style="--t:color-mix(in srgb,var(--pizarra) 16%,#FFFDF9)"><b>Connect</b><span>Plataformas, TPV externo, reparto</span></div>
+<div style="--t:color-mix(in srgb,var(--berenjena) 16%,#FFFDF9)"><b>Sumied</b><span>Contabilidad, bancos, impuestos y laboral</span></div>
+<div style="--t:color-mix(in srgb,var(--teja) 16%,#FFFDF9)"><b>Inteligencia artificial</b><span>En todos los módulos, no aparte</span></div>
+</div>
+<div class="feat"><div class="item"><h3>Para todo el grupo</h3><p>Cada pantalla se ve del grupo entero o de un local, una marca o un canal. El selector de local está siempre arriba.</p></div><div class="item"><h3>Para todo el equipo</h3><p>Dirección, oficina, encargados y cocina entran al mismo sistema, cada uno con lo suyo y con sus permisos.</p></div><div class="item"><h3>En cualquier dispositivo</h3><p>Ordenador en la oficina, tablet en la cocina y móvil en el bolsillo. Sin instalar nada en los ordenadores.</p></div><div class="item"><h3>A la medida de cada negocio</h3><p>Folvy se amolda a cómo trabaja cada grupo. Si falta algo, estamos abiertos a construirlo.</p></div><div class="item"><h3>Para toda la hostelería</h3><p>Restaurante con sala, bar, cafetería o cocina de delivery: cada uno activa lo suyo.</p></div><div class="item"><h3>Con inteligencia artificial</h3><p>Dentro de cada módulo, para quitar trabajo: lee albaranes, propone horarios y ofertas.</p></div></div>
+<div class="stats">
+<div><b>3</b><span>locales en producción</span></div>
+<div><b>19</b><span>marcas cocinadas en ellos</span></div>
+<div><b>~4.000</b><span>ventas al mes, por todos los canales</span></div>
+<div><b>433</b><span>artículos con su receta y su coste</span></div>
+</div>
+<p class="soft">Las capturas de este dosier son de Folvy funcionando en un grupo de restauración con varios locales y más de diez marcas. Los nombres de empresa, locales, marcas, personas y proveedores se han cambiado.</p>
+</section>
+<section class="sheet" style="--acc:var(--green)">
+<div class="head" data-acc="--green"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg></span><div><span class="eyebrow">Sin fisuras</span><h2>Un dato entra una vez y llega a todas partes</h2></div></div><p class="lead">Esto es lo que ocurre en Folvy cuando se vende una hamburguesa, sin que nadie teclee nada dos veces.</p></div>
+<div class="flow">
+<div><b>Se vende</b><span>En el TPV, en una plataforma o en la tienda propia. Da igual por dónde entre.</span></div>
+<div><b>Cocina la ve</b><span>Aparece en la pantalla de su partida y sale la pegatina con sus alérgenos.</span></div>
+<div><b>El almacén descuenta</b><span>El pan, la carne, el queso y también el envase, cada uno en su cantidad.</span></div>
+<div><b>Se sabe lo que ha costado</b><span>El coste viene de la última compra, así que el margen de esa venta es real.</span></div>
+<div><b>Ventas la suma</b><span>Por local, marca y canal, con la comisión de la plataforma ya restada.</span></div>
+<div><b>Compras la tiene en cuenta</b><span>El próximo pedido sugerido al proveedor sale del consumo de verdad.</span></div>
+<div><b>El cuadrante se ajusta</b><span>La previsión de platos de la semana siguiente dice cuánta gente hace falta.</span></div>
+<div><b>Contabilidad la apunta</b><span>La venta, su IVA y su coste quedan registrados en su cuenta.</span></div>
+</div>
+<div class="block"><h3>Lo que sustituye</h3><div class="tablewrap"><table><thead><tr><th>Hoy, por separado</th><th>Con Folvy</th><th>Qué se gana al estar junto</th></tr></thead><tbody>
+<tr><td>TPV</td><td>TPV de Folvy</td><td>Cada venta nace con su coste y su margen</td></tr>
+<tr><td>Una tablet por plataforma</td><td>Orders</td><td>Una sola pantalla y una sola cocina para todos los canales</td></tr>
+<tr><td>Hojas de cálculo de costes</td><td>Kitchen</td><td>El coste cambia solo cuando cambia la compra</td></tr>
+<tr><td>Libreta o Excel de inventario</td><td>Supply</td><td>Se compara lo que hay con lo que debería haber</td></tr>
+<tr><td>Aplicación de fichajes y otra de turnos</td><td>Team</td><td>El horario sale de las ventas y el coste se ve al montarlo</td></tr>
+<tr><td>Carpeta del APPCC</td><td>Safety</td><td>Los alérgenos salen de las recetas y van a carta y etiquetas</td></tr>
+<tr><td>Web de pedidos y agencia de redes</td><td>Shop y Social</td><td>Las ofertas conocen el margen de cada plato</td></tr>
+<tr><td>Programa contable y gestoría</td><td>Sumied</td><td>Facturas, bancos, impuestos y Verifactu, sin pasarle nada a nadie</td></tr>
+</tbody></table></div></div>
+</section>
+<section class="sheet" style="--acc:var(--teja)">
+<div class="head" data-acc="--teja"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg></span><div><span class="eyebrow">El día a día</span><h2>Inicio y Pendientes</h2></div></div><p class="lead">Al entrar, Folvy dice cómo va el negocio y qué hay que atender hoy, sin ir a buscarlo módulo a módulo.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/52.jpg" alt=""></div><figcaption><b>Inicio.</b> Ventas de ayer y de la semana, evolución, quién está en cocina, cuadrantes, productos agotados y fichajes que faltan.</figcaption></figure>
+<figure class="shot big"><div class="mat"><img src="img/62.jpg" alt=""></div><figcaption><b>Pendientes.</b> Lo que queda por hacer en cada local y los avisos de salud de los datos, cada uno con su botón para resolverlo.</figcaption></figure>
+<div class="feat"><div class="item"><h3>Centro de mando a medida</h3><p>Tarjetas de ventas, canales, personal, agotados, cuadrantes o food cost. Cada usuario elige las suyas y las ordena.</p></div><div class="item"><h3>Lo urgente, arriba</h3><p>Un recuento sin cerrar o un local sin fichajes aparece en la primera línea, con el enlace directo.</p></div><div class="item"><h3>Una sola lista de tareas</h3><p>Todo lo pendiente de todos los módulos, por local y por semana.</p></div><div class="item"><h3>Salud de los datos</h3><p>Avisa cuando algo no cuadra: artículos en negativo, fichas de proveedor que no coinciden con lo recibido, platos sin coste.</p></div><div class="item"><h3>Por local o del grupo</h3><p>La misma pantalla sirve al encargado de un local y a quien dirige todos.</p></div><div class="item"><h3>Asistente siempre a mano</h3><p>Un botón en cada pantalla para preguntar en lenguaje normal o por voz.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--tomate)">
+<div class="head" data-acc="--tomate"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="6" rx="1.5"/><path d="M4 21h16l-1.5-9h-13z"/><path d="M9 15h.01M12 15h.01M15 15h.01M9 18h.01M12 18h.01M15 18h.01"/></svg></span><div><span class="eyebrow">TPV · 1 de 2</span><h2>Vender, comandar y cobrar</h2></div></div><p class="lead">Un TPV que cualquiera aprende en un turno: botones grandes, pocos pasos y la cuenta siempre a la vista. Funciona en ordenador, tablet y móvil, y cada venta nace ya con su coste y su margen.</p></div>
+<figure class="shot big wide"><div class="mat"><img src="img/66.jpg" alt=""></div><figcaption><b>Venta y cobro.</b> Categorías a la izquierda, productos con foto en el centro y la cuenta a la derecha. Al cobrar se elige el medio de pago.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/67.jpg" alt=""></div><figcaption><b>Extras y notas.</b> Opciones del producto y notas rápidas para cocina.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/68.jpg" alt=""></div><figcaption><b>Menús y combos.</b> Con Guardar, Comandar y Cobrar siempre abajo.</figcaption></figure></div>
+<div class="feat"><div class="block"><h3>Venta y carta</h3><ul><li><b>Carta por marca y categoría</b>, con foto, color y precio.</li><li><b>Extras</b> obligatorios y opcionales, con su precio.</li><li><b>Menús y combos</b> por pasos.</li><li><b>Menú del día</b> con primeros, segundos y suplementos.</li><li><b>Buscador</b> de producto por nombre.</li><li><b>Producto abierto</b> con precio libre.</li><li><b>Venta por peso</b> con balanza.</li><li><b>Mostrador, para llevar o mesa</b> en cada cuenta.</li></ul></div><div class="block"><h3>Precios y promociones</h3><ul><li><b>Tarifas por sala:</b> barra, comedor y terraza.</li><li><b>Precios por franja horaria</b> (happy hour).</li><li><b>Precios por canal</b> de venta.</li><li><b>Descuentos</b> por línea y por cuenta.</li><li><b>Promociones:</b> 2×1, regalo, cupón y código.</li><li><b>Invitaciones</b> como tipo propio, no como descuento.</li><li><b>Cliente en la cuenta</b> y su tarjeta de fidelidad.</li><li><b>Alérgenos</b> de cada plato a la vista.</li></ul></div><div class="block"><h3>Cocina</h3><ul><li><b>Comandar</b> a la pantalla o a la impresora de cada partida.</li><li><b>Notas de cocina</b> de un toque o escritas.</li><li><b>Nombre de cocina</b> distinto del de la carta.</li><li><b>Marchar por tiempos:</b> primeros, segundos y postres.</li><li><b>Comanda de anulación</b> cuando se quita un plato.</li><li><b>Reimprimir</b> comandas y tickets.</li><li><b>Agotados:</b> lo que cocina marca sin stock no se puede vender.</li><li><b>Recetas y emplatado</b> consultables en la pantalla de cocina.</li></ul></div></div>
+<p class="note"><b>Nota.</b> Algunas de estas funciones están en desarrollo o en fase final. En la demo os enseñamos lo que ya funciona y os decimos el estado y la fecha de cada una.</p>
+</section>
+<section class="sheet" style="--acc:var(--tomate)">
+<div class="head" data-acc="--tomate"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="6" rx="1.5"/><path d="M4 21h16l-1.5-9h-13z"/><path d="M9 15h.01M12 15h.01M15 15h.01M9 18h.01M12 18h.01M15 18h.01"/></svg></span><div><span class="eyebrow">TPV · 2 de 2</span><h2>Sala, cobro, caja y facturación</h2></div></div><p class="lead">Todo lo que necesita un local con mesas, barra y caja, pensado para camareros y encargados, no para informáticos.</p></div>
+<div class="feat"><div class="block"><h3>Sala</h3><ul><li><b>Plano de mesas</b> con varias zonas y estados por color.</li><li><b>Comensales</b> al abrir la mesa.</li><li><b>Juntar, separar y mover</b> mesas y cuentas.</li><li><b>Pasar platos</b> de una cuenta a otra.</li><li><b>Cuenta por comensal.</b></li><li><b>Tiempo de ocupación</b> de cada mesa.</li><li><b>Comandero en el móvil</b> para el camarero.</li><li><b>Pagar en mesa por QR</b> desde el móvil del cliente.</li><li><b>Reservas</b> y conexión con plataformas de reservas.</li></ul></div><div class="block"><h3>Cobro</h3><ul><li><b>Efectivo</b> con cálculo del cambio.</li><li><b>Tarjeta</b> con el datáfono que ya tengáis, sin obligar a uno.</li><li><b>Bizum</b> y pago con el móvil.</li><li><b>Ticket restaurante.</b></li><li><b>Varios medios de pago</b> en la misma cuenta.</li><li><b>Dividir la cuenta:</b> a partes iguales, por platos o por importe.</li><li><b>Propinas</b> separadas y su reparto entre el equipo.</li><li><b>Cuenta a crédito</b> de cliente o empresa.</li><li><b>Vales y tarjetas regalo.</b></li><li><b>Devoluciones</b> enlazadas a la venta original.</li></ul></div><div class="block"><h3>Caja y control</h3><ul><li><b>Apertura de turno</b> con fondo de caja.</li><li><b>Entradas y salidas</b> de efectivo con su motivo.</li><li><b>Arqueo</b> con desglose de billetes y monedas.</li><li><b>Arqueo a ciegas</b> y arqueos intermedios.</li><li><b>Descuadre</b> con tolerancia y autorización.</li><li><b>Cierres X y Z.</b></li><li><b>Varias cajas</b> y traspaso entre empleados.</li><li><b>Cajones automáticos</b> de efectivo.</li><li><b>Anulaciones con motivo</b> e informe por empleado.</li><li><b>Permisos por puesto</b>, heredados de Team.</li></ul></div></div>
+<div class="rule"></div>
+<div class="feat"><div class="block"><h3>Facturación</h3><ul><li><b>Factura simplificada</b> con serie por local.</li><li><b>Factura completa</b> a petición, y ticket con NIF.</li><li><b>Autofactura por QR:</b> el cliente se la saca solo.</li><li><b>Rectificativas</b> de verdad.</li><li><b>VeriFactu:</b> numeración, QR y registro, obligatorio para sociedades desde enero de 2027.</li></ul></div><div class="block"><h3>Equipos y conexión</h3><ul><li><b>Ordenador, tablet y móvil</b>, Windows, Apple y Android.</li><li><b>Impresoras de tickets</b> en red y cajón.</li><li><b>Sigue vendiendo sin conexión</b> y sincroniza al volver.</li><li><b>Importar la carta</b> del TPV anterior.</li><li><b>Vuestro TPV actual</b> puede seguir: Folvy lee sus ventas.</li></ul></div><div class="block"><h3>Lo que un TPV suelto no da</h3><ul><li><b>El coste de cada venta</b> y su margen, al momento.</li><li><b>Descuento de almacén</b> de ingredientes y envases.</li><li><b>Agotados automáticos</b> según el stock.</li><li><b>Qué platos empujar</b> desde la propia pantalla.</li><li><b>La venta contabilizada</b> sin teclearla otra vez.</li></ul></div></div>
+<p class="note"><b>Nota.</b> Algunas de estas funciones están en desarrollo o en fase final. En la demo os enseñamos lo que ya funciona y os decimos el estado y la fecha de cada una.</p>
+</section>
+<section class="sheet" style="--acc:var(--mostaza)">
+<div class="head" data-acc="--mostaza"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 18h18"/><path d="M5 18a7 7 0 0 1 14 0"/><path d="M12 8V6"/><circle cx="12" cy="5" r="1"/></svg></span><div><span class="eyebrow">Folvy Orders</span><h2>Pedidos, cocina y reparto</h2></div></div><p class="lead">Los pedidos de mostrador, plataformas y tienda propia entran solos a la misma pantalla y se siguen hasta que salen por la puerta.</p></div>
+<figure class="shot big tall"><div class="mat"><img src="img/32.jpg" alt=""></div><figcaption><b>Pedidos.</b> Cada pedido con su canal, su estado, sus alérgenos y quién lo reparte. Pestañas: en curso, esperando repartidor, en ruta, terminados e incidencias.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/34.jpg" alt=""></div><figcaption><b>Tiempos de cocina.</b> Mediana, porcentaje en objetivo y detalle por franja y por marca.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/15.jpg" alt=""></div><figcaption><b>Disponibilidad.</b> Lo agotado ahora mismo; se reactiva de un toque.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Todos los canales juntos</h3><p>Glovo, Uber Eats, Just Eat, tienda propia y mostrador en una pantalla, sin una tablet por plataforma.</p></div><div class="item"><h3>Pantalla de cocina</h3><p>En tablets normales: vista de elaboración por partida y vista de pase, con aviso sonoro.</p></div><div class="item"><h3>Tickets y pegatinas</h3><p>Ticket de cocina, ticket de bolsa y una pegatina por plato con sus alérgenos. Se imprimen solos al aceptar.</p></div><div class="item"><h3>Alérgenos en cada línea</h3><p>Cocina y pase los ven en cada plato sin consultar nada.</p></div><div class="item"><h3>Tiempos medidos</h3><p>Cuánto tarda cada pedido, cada franja y cada marca, contra el objetivo marcado.</p></div><div class="item"><h3>Incidencias aparte</h3><p>Cancelaciones y retrasos quedan separados con su motivo.</p></div><div class="item"><h3>Despacho de reparto propio</h3><p>Los pedidos directos se envían al repartidor desde aquí, con el ahorro frente a la plataforma a la vista.</p></div><div class="item"><h3>Cerrar local o marca</h3><p>Un botón para pausar un local o una marca en todos los canales a la vez.</p></div><div class="item"><h3>Reimprimir y cerrar a mano</h3><p>Cualquier ticket se vuelve a sacar; un pedido se cierra a mano indicando por qué.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--oliva)">
+<div class="head" data-acc="--oliva"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M7 14a4 4 0 1 1 1.5-7.7 4 4 0 0 1 7 0A4 4 0 1 1 17 14z"/><path d="M7 14v5h10v-5"/><path d="M7 17h10"/></svg></span><div><span class="eyebrow">Folvy Kitchen · 1 de 3</span><h2>Cartas y precios</h2></div></div><p class="lead">La carta de cada marca se mantiene en un solo sitio y desde ahí se publica a los locales, al TPV, a la tienda y a las plataformas.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/16.jpg" alt=""></div><figcaption><b>Cartas.</b> Ventas de la semana y margen medio de la carta, con sus categorías, productos y combos. Arriba, el botón de publicar.</figcaption></figure>
+<figure class="shot big"><div class="mat"><img src="img/17.jpg" alt=""></div><figcaption><b>Precios de la carta.</b> Un precio base y uno por canal. Se elige categoría y canales, se aplica un porcentaje y se redondea.</figcaption></figure>
+<div class="feat"><div class="item"><h3>Una carta por marca</h3><p>Categorías, productos, combos y fotos, con arrastrar para ordenar.</p></div><div class="item"><h3>Publicar donde toque</h3><p>A todos los locales o a uno, y a las plataformas conectadas.</p></div><div class="item"><h3>Precios por canal</h3><p>Sala, mostrador, tienda y cada plataforma, en una sola rejilla.</p></div><div class="item"><h3>Subidas en bloque</h3><p>Un porcentaje a un canal o a una categoría en dos toques, con redondeo.</p></div><div class="item"><h3>Margen neto por celda</h3><p>La rejilla cambia de precio a margen: se ve qué celdas pierden dinero.</p></div><div class="item"><h3>Extras y preguntas</h3><p>«¿Quieres añadir bacon?»: las opciones se crean una vez y se reutilizan en los platos.</p></div><div class="item"><h3>Extras con coste</h3><p>Cada extra que se cobra dice lo que lleva, para que descuente y tenga margen.</p></div><div class="item"><h3>Avisos de la carta</h3><p>Productos sin receta, sin foto o agotados, filtrados de un toque.</p></div><div class="item"><h3>Buscador</h3><p>Cualquier plato, ingrediente o extra de cualquier marca.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--oliva)">
+<div class="head" data-acc="--oliva"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M7 14a4 4 0 1 1 1.5-7.7 4 4 0 0 1 7 0A4 4 0 1 1 17 14z"/><path d="M7 14v5h10v-5"/><path d="M7 17h10"/></svg></span><div><span class="eyebrow">Folvy Kitchen · 2 de 3</span><h2>Recetas, escandallos y disponibilidad</h2></div></div><p class="lead">Lo que cuesta de verdad cada plato, al céntimo, y recalculado solo cada vez que cambia el precio de una compra.</p></div>
+<figure class="shot big tall"><div class="mat"><img src="img/12.jpg" alt=""></div><figcaption><b>Ficha de plato.</b> Coste, food cost y precio; debajo el escandallo con cada ingrediente, sus gramos, su merma y lo que cuesta. A la derecha, el coste en vivo.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/10.jpg" alt=""></div><figcaption><b>Platos.</b> Todas las recetas con foto, coste y si están validadas.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/21.jpg" alt=""></div><figcaption><b>Informes de disponibilidad.</b> Horas cerradas, pérdidas estimadas y cuándo ocurre.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Escandallo vivo</h3><p>Ingredientes, envases y preparaciones. El coste sale de la última compra.</p></div><div class="item"><h3>Ficha desde una foto</h3><p>Se fotografía la ficha en papel y Folvy la convierte en receta.</p></div><div class="item"><h3>Mermas sugeridas</h3><p>La inteligencia artificial propone la merma de cada ingrediente; cocina la acepta o la corrige.</p></div><div class="item"><h3>Producción</h3><p>Multiplicar la receta por 2, por 3 o por la cantidad que haga falta.</p></div><div class="item"><h3>Preparaciones</h3><p>Salsas, masas y bases con su propia receta, que entran en otros platos.</p></div><div class="item"><h3>Etiquetado y alérgenos</h3><p>Salen de los ingredientes y van a la carta, a las pegatinas y a las plataformas.</p></div><div class="item"><h3>Curso de cada plato</h3><p>Un botón crea la formación para que el equipo aprenda a hacerlo.</p></div><div class="item"><h3>Agotados con historial</h3><p>Se marca en cocina y desaparece de todos los canales. Queda cuánto tiempo estuvo cerrado.</p></div><div class="item"><h3>Lo que cuesta estar cerrado</h3><p>Horas sin vender y pérdida estimada, por local, marca y producto.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--oliva)">
+<div class="head" data-acc="--oliva"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M7 14a4 4 0 1 1 1.5-7.7 4 4 0 0 1 7 0A4 4 0 1 1 17 14z"/><path d="M7 14v5h10v-5"/><path d="M7 17h10"/></svg></span><div><span class="eyebrow">Folvy Kitchen · 3 de 3</span><h2>Rentabilidad e ingeniería de menús</h2></div></div><p class="lead">Con el coste de cada plato y lo que se vende de cada uno, Folvy dice qué platos empujar, a cuáles subir el precio y cuáles quitar.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/14.jpg" alt=""></div><figcaption><b>Ingeniería de menús.</b> Estrellas, caballos de batalla, joyas escondidas y lastres, con la acción propuesta en cada plato.</figcaption></figure>
+<figure class="shot big"><div class="mat"><img src="img/13.jpg" alt=""></div><figcaption><b>Rentabilidad.</b> Precio, coste, margen y unidades vendidas de cada plato de una marca, ordenado por lo que deja.</figcaption></figure>
+<div class="feat"><div class="item"><h3>Qué deja dinero</h3><p>Margen por unidad y margen total de cada plato, por marca y periodo.</p></div><div class="item"><h3>Cuatro grupos claros</h3><p>Se vende mucho o poco, deja mucho o poco. Cada plato cae en uno.</p></div><div class="item"><h3>Una decisión por plato</h3><p>«Con 0,50 € más habrías ganado 22 € en el periodo»: subir precio, darle sitio o revisarlo.</p></div><div class="item"><h3>Platos caros de hacer</h3><p>Avisa de los que tienen el coste por encima de lo normal.</p></div><div class="item"><h3>Sin ventas</h3><p>Los platos que nadie pide en el periodo, para decidir si siguen.</p></div><div class="item"><h3>Bebidas aparte</h3><p>Se analizan por separado para no falsear la media.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--teja)">
+<div class="head" data-acc="--teja"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 8l9-4 9 4-9 4z"/><path d="M3 8v8l9 4 9-4V8"/><path d="M12 12v8"/></svg></span><div><span class="eyebrow">Folvy Supply · 1 de 2</span><h2>Compras</h2></div></div><p class="lead">Del pedido al proveedor a la mercancía dentro del almacén, con el precio de cada cosa actualizado por el camino.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/23.jpg" alt=""></div><figcaption><b>Pedidos a proveedor.</b> Estado de cada pedido, lo que falta por llegar y los días de retraso.</figcaption></figure>
+<figure class="shot big"><div class="mat"><img src="img/24.jpg" alt=""></div><figcaption><b>Recepciones.</b> Cada albarán confirmado, con las opciones de recibir un pedido o escanear el albarán.</figcaption></figure>
+<div class="feat"><div class="item"><h3>Pedido sugerido</h3><p>Folvy propone cuánto pedir a cada proveedor según el consumo real y el mínimo de cada artículo.</p></div><div class="item"><h3>Seguimiento</h3><p>Enviado, recibido en parte, cerrado o cancelado, con lo que falta.</p></div><div class="item"><h3>Albarán con una foto</h3><p>Se escanea; Folvy reconoce productos, formatos y precios y da entrada al almacén.</p></div><div class="item"><h3>Recibir contra pedido</h3><p>Se marca lo que ha llegado de lo pedido y lo que no.</p></div><div class="item"><h3>Corregir sin borrar</h3><p>Un albarán mal metido se anula y se corrige, y queda el rastro.</p></div><div class="item"><h3>Formatos de compra</h3><p>Cajas, bolsas, kilos o unidades: el mismo artículo se compra de varias formas y Folvy lo convierte.</p></div><div class="item"><h3>Ficha de proveedor</h3><p>Datos fiscales, forma de pago, artículos que sirve y lo que se le debe.</p></div><div class="item"><h3>Facturas de proveedor</h3><p>Se registran o se escanean y se cuadran contra lo recibido.</p></div><div class="item"><h3>El coste sale de la compra</h3><p>El precio de cada ingrediente es el de lo comprado, no uno tecleado a mano.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--teja)">
+<div class="head" data-acc="--teja"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 8l9-4 9 4-9 4z"/><path d="M3 8v8l9 4 9-4V8"/><path d="M12 12v8"/></svg></span><div><span class="eyebrow">Folvy Supply · 2 de 2</span><h2>Almacén</h2></div></div><p class="lead">Qué hay, dónde está, cómo se mueve y cuánto debería quedar. Por local y valorado en euros.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/30.jpg" alt=""></div><figcaption><b>Teórico frente a real.</b> Inicial, compras, consumo y lo contado. La diferencia de cada artículo, en euros, y la merma del periodo.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/28.jpg" alt=""></div><figcaption><b>Movimientos.</b> Todo lo que entra, sale o se ajusta, con su origen.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/31.jpg" alt=""></div><figcaption><b>Recuento del día.</b> Folvy dice qué contar hoy y lo reparte entre el equipo.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Existencias por zonas</h3><p>Cámara, congelador, seco: cada artículo en su sitio, con cantidad y valor.</p></div><div class="item"><h3>Niveles</h3><p>Mínimo y óptimo por artículo y local, con aviso al bajar.</p></div><div class="item"><h3>Libro de movimientos</h3><p>Ventas, entradas, traspasos entre locales, mermas y ajustes, con autor y motivo.</p></div><div class="item"><h3>Mermas</h3><p>Se registran con su causa y su coste.</p></div><div class="item"><h3>Inventarios</h3><p>Completos o por zonas, asignados a una persona y aprobados por otra.</p></div><div class="item"><h3>Recuento diario guiado</h3><p>En el móvil, unos pocos artículos al día: los de más valor y más riesgo.</p></div><div class="item"><h3>Recuento a ciegas</h3><p>Quien cuenta no ve lo que dice el sistema, para que no se copie.</p></div><div class="item"><h3>Desviación en euros</h3><p>Lo que debería haberse gastado según lo vendido frente a lo contado.</p></div><div class="item"><h3>Fiabilidad del dato</h3><p>Folvy dice cuánto se puede confiar en cada cifra, no solo la cifra.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--pizarra)">
+<div class="head" data-acc="--pizarra"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 20V5"/><path d="M4 20h16"/><rect x="7" y="12" width="3" height="5"/><rect x="12" y="8" width="3" height="9"/><rect x="17" y="10" width="3" height="7"/></svg></span><div><span class="eyebrow">Folvy Sales · 1 de 2</span><h2>Ventas e informes</h2></div></div><p class="lead">Las ventas de todos los canales y todos los locales, cruzadas como haga falta y comparadas siempre con el periodo anterior.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/1.jpg" alt=""></div><figcaption><b>Resumen de ventas.</b> Ventas netas, ticket medio y pedidos; reparto por canal, ranking de marcas y de locales.</figcaption></figure>
+<figure class="shot big"><div class="mat"><img src="img/2.jpg" alt=""></div><figcaption><b>Informes.</b> Se elige cómo cruzar (local, marca, canal, servicio) y el periodo. Bruto, descuentos, neto, pedidos y ticket medio, con su variación.</figcaption></figure>
+<div class="feat"><div class="item"><h3>En tiempo real</h3><p>Hoy, ayer, siete días o el mes, con filtros de local, canal y marca.</p></div><div class="item"><h3>Ranking de marcas y locales</h3><p>Qué vende más y por qué canal.</p></div><div class="item"><h3>Informes a medida</h3><p>Dos preguntas se eligen y la tabla se monta sola. Se exporta.</p></div><div class="item"><h3>Comparación honesta</h3><p>Cada cifra frente al mismo periodo anterior, y sin comparar días a medias.</p></div><div class="item"><h3>Mapa de calor horario</h3><p>A qué horas se vende, para ajustar turnos y ofertas.</p></div><div class="item"><h3>Zonas de pedido</h3><p>De qué barrios llegan los pedidos y cuáles compensan.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--pizarra)">
+<div class="head" data-acc="--pizarra"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 20V5"/><path d="M4 20h16"/><rect x="7" y="12" width="3" height="5"/><rect x="12" y="8" width="3" height="9"/><rect x="17" y="10" width="3" height="7"/></svg></span><div><span class="eyebrow">Folvy Sales · 2 de 2</span><h2>De la venta a la caja</h2></div></div><p class="lead">Vender no es cobrar. Folvy enseña cuánto de cada euro vendido en plataforma llega de verdad a la cuenta, y dónde se queda el resto.</p></div>
+<figure class="shot big tall"><div class="mat"><img src="img/8.jpg" alt=""></div><figcaption><b>Economía y márgenes.</b> De la venta bruta a la liquidación: comisión, promociones, tasas e incidencias, concepto a concepto.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/3.jpg" alt=""></div><figcaption><b>Tendencia.</b> Mes a mes: venta, comisión, promociones y lo que llega a caja.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/6.jpg" alt=""></div><figcaption><b>Calidad.</b> Valoraciones, comentarios, incidencias y reembolsos.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Liquidaciones leídas</h3><p>Lo que paga cada plataforma, cruzado con los pedidos.</p></div><div class="item"><h3>Coste real del canal</h3><p>Comisión, promociones y tasas juntas, que es lo que de verdad cuesta vender ahí.</p></div><div class="item"><h3>Rentabilidad por marca</h3><p>Qué porcentaje de lo vendido llega a caja en cada marca.</p></div><div class="item"><h3>Tarifas por canal</h3><p>Las comisiones de cada plataforma y tipo de reparto, para calcular el margen real.</p></div><div class="item"><h3>Margen final</h3><p>Venta menos canal, comida y personal: el número que lo cierra todo.</p></div><div class="item"><h3>Recomendaciones</h3><p>Folvy analiza los datos y propone acciones concretas.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--berenjena)">
+<div class="head" data-acc="--berenjena"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.3"/><path d="M16 14.5a5 5 0 0 1 5 5"/></svg></span><div><span class="eyebrow">Folvy Team · 1 de 2</span><h2>Cuadrantes y coste de personal</h2></div></div><p class="lead">Los horarios salen de las ventas previstas, y el coste de personal sobre ventas se ve mientras se montan.</p></div>
+<figure class="shot big tall"><div class="mat"><img src="img/38.jpg" alt=""></div><figcaption><b>Calendario.</b> Arriba, los platos previstos cada día; debajo, los turnos de cada persona. El coste sobre ventas cambia al mover un turno.</figcaption></figure>
+<figure class="shot big"><div class="mat"><img src="img/41.jpg" alt=""></div><figcaption><b>Informes.</b> Horas fichadas, coste laboral y ventas por hora de cada local; y las ventas de cada franja frente a la gente que había.</figcaption></figure>
+<div class="feat"><div class="item"><h3>Previsión de demanda</h3><p>Platos previstos por día a partir del histórico de ventas.</p></div><div class="item"><h3>Cuadrante automático</h3><p>Folvy propone el horario de la semana respetando contratos y descansos.</p></div><div class="item"><h3>Coste en vivo</h3><p>Euros, horas y porcentaje sobre ventas, contra el objetivo.</p></div><div class="item"><h3>Plantillas de turnos</h3><p>Los turnos habituales se guardan y se aplican.</p></div><div class="item"><h3>Publicar</h3><p>El equipo recibe su horario en el móvil.</p></div><div class="item"><h3>Disponibilidad</h3><p>Cada persona indica cuándo puede y cuándo no.</p></div><div class="item"><h3>Turnos abiertos y cambios</h3><p>Un turno sin cubrir se ofrece; dos compañeros se cambian con aprobación.</p></div><div class="item"><h3>Avisos de convenio</h3><p>Descansos y jornadas que no cumplen, antes de que sean un problema.</p></div><div class="item"><h3>Productividad</h3><p>Ventas por hora trabajada y por local.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--berenjena)">
+<div class="head" data-acc="--berenjena"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.3"/><path d="M16 14.5a5 5 0 0 1 5 5"/></svg></span><div><span class="eyebrow">Folvy Team · 2 de 2</span><h2>Control horario, nóminas y formación</h2></div></div><p class="lead">El fichaje diario, lo que sale de él y todo lo que hay que tener al día con cada persona.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/39.jpg" alt=""></div><figcaption><b>Control horario.</b> Cada entrada y salida con su hora, su turno y la distancia al local desde donde se fichó.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/40.jpg" alt=""></div><figcaption><b>Bolsa de horas.</b> Trabajadas frente a contratadas, con cierre mensual.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/42.jpg" alt=""></div><figcaption><b>Formación.</b> Catálogo de cursos con examen y firma.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Fichaje en el móvil o en el local</h3><p>Desde el teléfono de cada uno o desde una tablet fija en modo kiosko.</p></div><div class="item"><h3>Ahora mismo</h3><p>Quién está trabajando, quién no ha fichado y quién olvidó salir.</p></div><div class="item"><h3>Recordatorios</h3><p>Aviso a quien tiene turno y no ha fichado.</p></div><div class="item"><h3>Registro para inspección</h3><p>Histórico de fichajes con sus correcciones y quién las hizo.</p></div><div class="item"><h3>Solicitudes</h3><p>Vacaciones y ausencias, pedidas y aprobadas desde el móvil.</p></div><div class="item"><h3>Bolsa de horas</h3><p>Saldo de cada persona y qué hacer con él: pagar, compensar o arrastrar.</p></div><div class="item"><h3>Nóminas leídas</h3><p>Se sube el PDF y Folvy saca bruto, seguridad social y coste real.</p></div><div class="item"><h3>Informes para la gestoría</h3><p>Los datos del mes listos para quien hace las nóminas.</p></div><div class="item"><h3>Formación</h3><p>Cursos obligatorios y de cocina, con itinerario para los nuevos.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--oliva)">
+<div class="head" data-acc="--oliva"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.5-3.2 8-8 9-4.8-1-8-4.5-8-9V6z"/><path d="M8.5 12l2.5 2.5 4.5-5"/></svg></span><div><span class="eyebrow">Folvy Safety</span><h2>Seguridad alimentaria</h2></div></div><p class="lead">El APPCC deja de ser una carpeta de papeles. Los controles se hacen en la tablet o el móvil y todo queda listo para una inspección.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/48.jpg" alt=""></div><figcaption><b>Alérgenos.</b> Los 14 de declaración obligatoria, plato a plato, calculados desde los ingredientes. Se exporta a PDF o Excel.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/47.jpg" alt=""></div><figcaption><b>Controles de hoy.</b> Cada uno con su hora y su responsable.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/49.jpg" alt=""></div><figcaption><b>Archivo documental.</b> Lo que un inspector puede pedir, por familias.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Controles repartidos</h3><p>Apertura, cierre, temperaturas y limpieza, asignados a quien trabaja ese día.</p></div><div class="item"><h3>Incidencias con seguimiento</h3><p>Con gravedad, foto y aviso al encargado; se escalan si no se cierran.</p></div><div class="item"><h3>Auditorías</h3><p>Revisiones periódicas con puntuación, sobre plantillas propias.</p></div><div class="item"><h3>Documentos leídos con IA</h3><p>Se arrastra una ficha técnica; Folvy la lee y aplica sus alérgenos al ingrediente.</p></div><div class="item"><h3>Carpeta de inspección</h3><p>Un botón reúne en un PDF todo lo que se puede pedir.</p></div><div class="item"><h3>Panel de cumplimiento</h3><p>Controles hechos, incidencias abiertas y formación obligatoria, por local.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--tomate)">
+<div class="head" data-acc="--tomate"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M5 8h14l-1 12H6z"/><path d="M9 8V7a3 3 0 0 1 6 0v1"/></svg></span><div><span class="eyebrow">Folvy Shop y Folvy Social</span><h2>Vender más: tienda propia, ofertas y redes</h2></div></div><p class="lead">Tres piezas que trabajan con el mismo dato: lo que cuesta cada plato. Por eso las ofertas no se comen el margen.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/20.jpg" alt=""></div><figcaption><b>Ofertas.</b> El agente propone la promoción de cada marca en la tienda y en cada plataforma, según su objetivo. Se publican de una vez.</figcaption></figure>
+<div class="shots2"><figure class="shot "><div class="mat"><img src="img/53.jpg" alt=""></div><figcaption><b>Campañas de la tienda.</b> Bienvenida, fidelidad y códigos, con sus canjes.</figcaption></figure><figure class="shot "><div class="mat"><img src="img/59.jpg" alt=""></div><figcaption><b>Folvy Social.</b> Lo publicado y lo que viene en Instagram, TikTok y Facebook. Imagen y texto los propone el agente.</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Tienda online propia</h3><p>Cada marca con su escaparate, o varias marcas en un solo pedido. Sin comisión de plataforma.</p></div><div class="item"><h3>Fidelización</h3><p>Registro con consentimiento, bienvenida, bono por repetición y cupones.</p></div><div class="item"><h3>Ofertas con suelo de margen</h3><p>Ninguna promoción baja del margen mínimo que se marque.</p></div><div class="item"><h3>Tipos de oferta</h3><p>Porcentaje, 2×1, regalo, envío gratis, código y franjas horarias.</p></div><div class="item"><h3>Zonas de entrega</h3><p>Hasta dónde se reparte, a qué precio y con qué pedido mínimo.</p></div><div class="item"><h3>Redes con criterio</h3><p>Se le dice al agente cómo habla cada marca; propone, y una persona aprueba.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--pizarra)">
+<div class="head" data-acc="--pizarra"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M9 3v5M15 3v5"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v4"/></svg></span><div><span class="eyebrow">Folvy Connect e inteligencia artificial</span><h2>Conectado por fuera, inteligente por dentro</h2></div></div><p class="lead">Folvy se conecta con lo que ya usáis, y lleva inteligencia artificial en cada módulo para quitar trabajo, no para adornar.</p></div>
+<figure class="shot big"><div class="mat"><img src="img/61.jpg" alt=""></div><figcaption><b>Integraciones.</b> Plataformas de delivery, TPV externo y reparto. Las credenciales se guardan cifradas.</figcaption></figure>
+<div class="cols"><div class="block"><h3>Con qué se conecta</h3><ul>
+<li><b>Glovo, Uber Eats y Just Eat:</b> pedidos, carta, precios y agotados.</li><li><b>TPV externo:</b> lectura de ventas si se mantiene el TPV actual.</li><li><b>Empresas de reparto</b> para los pedidos propios.</li><li><b>Impresoras de tickets y etiquetas</b> en red, y tablets de cocina.</li><li><b>Instagram, TikTok y Facebook</b> para las publicaciones.</li><li><b>WhatsApp</b> para los avisos al equipo.</li></ul></div>
+<div class="block"><h3>Dónde trabaja la inteligencia artificial</h3><ul>
+<li><b>Lee documentos:</b> albaranes, facturas, nóminas y fichas técnicas.</li><li><b>Crea recetas</b> desde la foto de una ficha y propone mermas.</li><li><b>Monta el cuadrante</b> a partir de la demanda prevista.</li><li><b>Elige qué contar hoy</b> en el almacén y quién lo cuenta.</li><li><b>Propone ofertas</b> que respetan el margen.</li><li><b>Prepara publicaciones</b> para las redes de cada marca.</li><li><b>Responde preguntas</b> sobre el negocio, escritas o por voz.</li></ul></div></div>
+<p class="soft">La regla es siempre la misma: la inteligencia artificial propone y una persona decide. Nada se publica, se pide o se cambia sin que alguien lo confirme.</p>
+</section>
+<section class="sheet" style="--acc:var(--mostaza)">
+<div class="head" data-acc="--mostaza"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span><div><span class="eyebrow">En el bolsillo · 1 de 2</span><h2>La app del empleado</h2></div></div><p class="lead">Cada trabajador lleva Folvy en su móvil, y puede instalarlo como una aplicación más. No es una aplicación de recursos humanos aparte: es donde ficha, ve su horario y hace el trabajo del día en el local.</p></div>
+<div class="phones five"><figure class="phone "><img src="img/e_inicio.jpg" alt=""><figcaption><b>Inicio</b>Fichar y lo que toca hoy</figcaption></figure><figure class="phone "><img src="img/e_portal.jpg" alt=""><figcaption><b>Mi Portal</b>Todo lo suyo, en una lista</figcaption></figure><figure class="phone "><img src="img/e_fichajes.jpg" alt=""><figcaption><b>Mis fichajes</b>Historial y correcciones</figcaption></figure><figure class="phone "><img src="img/e_formacion.jpg" alt=""><figcaption><b>Mi formación</b>Cursos y su progreso</figcaption></figure><figure class="phone "><img src="img/e_recep.jpg" alt=""><figcaption><b>Recepciones</b>Foto del albarán y listo</figcaption></figure></div>
+<div class="feat">
+<div class="block"><h3>Su jornada</h3><ul><li><b>Fichar</b> entrada, pausa y salida desde el móvil, con la ubicación, o en la tablet del local.</li><li><b>Mi horario:</b> los turnos de la semana en cuanto se publican, con aviso.</li><li><b>Turnos abiertos:</b> apuntarse a un turno que hace falta cubrir.</li><li><b>Cambios de turno</b> con un compañero, con aprobación del responsable.</li><li><b>Mis fichajes:</b> lo que ha fichado, con «Reportar olvido» y «Corregir».</li><li><b>Mi bolsa de horas:</b> su saldo de horas a favor o en contra.</li><li><b>Recordatorio por WhatsApp</b> si se olvida de fichar la salida.</li></ul></div>
+<div class="block"><h3>Su trabajo en el local</h3><ul><li><b>Tareas del día</b> en una sola lista.</li><li><b>Controles APPCC:</b> temperaturas, limpieza, apertura y cierre, con foto si hace falta.</li><li><b>Recuento de almacén:</b> los artículos que le tocan hoy, sin ver lo que dice el sistema.</li><li><b>Recepción de mercancía:</b> foto del albarán y Folvy busca el pedido; o contar a mano.</li><li><b>Incidencias:</b> avisar de una avería o de algo que está mal.</li><li><b>Manuales</b> de cómo se hace cada cosa, en la misma pantalla.</li></ul></div>
+<div class="block"><h3>Sus cosas</h3><ul><li><b>Vacaciones y ausencias:</b> pedirlas y ver si están aprobadas.</li><li><b>Mis documentos:</b> nóminas, contratos y partes; también puede subir los suyos.</li><li><b>Mi formación:</b> cursos con examen y certificado firmado.</li><li><b>Avisos:</b> horario publicado, turno cambiado, formación pendiente.</li><li><b>Ajustes:</b> cómo y cuándo quiere recibir los avisos.</li></ul></div>
+</div>
+<p class="soft">Para la empresa, esto significa que el registro horario, el APPCC y el inventario se hacen solos durante la jornada, con nombre y hora, en vez de rellenarse a final de mes.</p>
+</section>
+<section class="sheet" style="--acc:var(--mostaza)">
+<div class="head" data-acc="--mostaza"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg></span><div><span class="eyebrow">En el bolsillo · 2 de 2</span><h2>Dirección y encargados, desde el móvil</h2></div></div><p class="lead">Todo el sistema de gestión funciona también en el teléfono, con el menú abajo. El dueño mira las ventas desde casa; el encargado resuelve sin ir al ordenador.</p></div>
+<div class="phones"><figure class="phone bottom short"><img src="img/m_inicio.jpg" alt=""><figcaption><b>Inicio</b>Ventas del día y de la semana</figcaption></figure><figure class="phone "><img src="img/m_ventas.jpg" alt=""><figcaption><b>Ventas</b>En tiempo real, por canal</figcaption></figure><figure class="phone "><img src="img/m_tiempos.jpg" alt=""><figcaption><b>Tiempos de cocina</b>Cómo va el servicio</figcaption></figure></div>
+<div class="feat"><div class="item"><h3>Las ventas, al momento</h3><p>De hoy, de ayer o del mes, por local, marca y canal.</p></div><div class="item"><h3>Cómo va el servicio</h3><p>Pedidos en curso, tiempos de cocina e incidencias.</p></div><div class="item"><h3>Aprobar desde el móvil</h3><p>Vacaciones, cambios de turno y correcciones de fichaje.</p></div><div class="item"><h3>Cerrar o abrir</h3><p>Un producto, una marca o un local entero, en todos los canales.</p></div><div class="item"><h3>Avisos</h3><p>Lo que pide atención llega al teléfono del responsable.</p></div><div class="item"><h3>El asistente</h3><p>Preguntar por voz cómo va el día y recibir la respuesta con datos.</p></div></div>
+</section>
+<section class="sheet" style="--acc:var(--pizarra)">
+<div class="head"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h11"/><path d="M9 8h6M9 11h4"/></svg></span><div><span class="eyebrow">Sumied · 1 de 3</span><h2>La contabilidad que se hace sola</h2></div></div><p class="lead">Sumied es la administración de Folvy: contabilidad, bancos, impuestos y laboral. Va dentro de Folvy, así que las ventas, las compras y las nóminas ya están dentro cuando llega la hora de contabilizar. Quien la usa no teclea asientos: revisa y valida lo que Sumied propone.</p></div>
+<div class="feat">
+<div class="block"><h3>Facturas y compras</h3><ul>
+<li><b>Las facturas entran solas</b> por correo, o con una foto o un PDF. <span class="tag ok">En uso</span></li>
+<li><b>Se leen con inteligencia artificial:</b> proveedor, NIF, bases, tipos de IVA y vencimiento.</li>
+<li><b>Proveedor nuevo desde la propia factura</b>, sin rellenar fichas.</li>
+<li><b>Se cruzan con el albarán</b> de Supply, y avisan si falta alguno.</li>
+<li><b>Validar en bloque</b> las que cuadran, y mirar solo las dudosas.</li>
+<li><b>IVA no deducible</b> y facturas con varios tipos, bien repartidos.</li>
+<li><b>Liquidaciones de Glovo, Uber Eats y Just Eat</b> contra sus pedidos.</li></ul></div>
+<div class="block"><h3>Bancos</h3><ul>
+<li><b>Extractos</b> conectados o subidos en Excel. <span class="tag ok">En uso</span></li>
+<li><b>Cada movimiento con su propuesta:</b> qué factura paga y en qué cuenta va.</li>
+<li><b>Reglas</b> que aprenden lo que se repite cada mes.</li>
+<li><b>Repartir un movimiento</b> entre varias facturas o cuentas.</li>
+<li><b>Préstamos y aplazamientos</b> con su cuadro: cada cuota se separa sola en capital e intereses. <span class="tag ok">Nuevo</span></li>
+<li><b>Remesas de pagos</b> a proveedores.</li>
+<li><b>Cierre del mes por cuenta:</b> saldo del banco contra saldo contable.</li></ul></div>
+<div class="block"><h3>Libros y cierre</h3><ul>
+<li><b>Diario, mayor y sumas y saldos.</b> <span class="tag ok">En uso</span></li>
+<li><b>Libros registro de IVA</b> de emitidas y recibidas.</li>
+<li><b>Balance y cuenta de resultados.</b></li>
+<li><b>Contabilidad analítica</b> por local y por marca.</li>
+<li><b>Fichas de clientes y proveedores</b> con su saldo y cómo pagan.</li>
+<li><b>Cierre de ejercicio y cuentas anuales</b> para el Registro Mercantil.</li>
+<li><b>Traspaso al programa de la gestoría</b> si se quiere seguir con ella.</li></ul></div>
+</div>
+<div class="stats">
+<div><b>15.000+</b><span>asientos llevados en Sumied</span></div>
+<div><b>73</b><span>proveedores con sus facturas</span></div>
+<div><b>19</b><span>marcas separadas en cada cuenta</span></div>
+<div><b>3</b><span>locales, cada uno con su resultado</span></div>
+</div>
+<p class="soft">Cifras de la empresa del grupo que usa Sumied a diario, medidas el 30/10/2026.</p>
+</section>
+<section class="sheet" style="--acc:var(--pizarra)">
+<div class="head"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13l2 2 4-4"/></svg></span><div><span class="eyebrow">Sumied · 2 de 3</span><h2>Impuestos y Verifactu, desde la misma pantalla</h2></div></div><p class="lead">Los impuestos salen de la contabilidad que ya está hecha. Sumied prepara cada modelo, lo presenta en la Agencia Tributaria con el certificado de la empresa, guarda el justificante y apunta el pago cuando se carga en el banco.</p></div>
+<div class="cols">
+<div class="block"><h3>Impuestos</h3><ul>
+<li><b>Calendario fiscal</b> de cada sociedad, con lo que vence y lo que falta. <span class="tag ok">En uso</span></li>
+<li><b>IVA trimestral y resumen anual</b> (303 y 390), casilla a casilla y con su origen.</li>
+<li><b>Retenciones</b> de trabajadores, profesionales y alquileres (111, 115, 190).</li>
+<li><b>Impuesto sobre Sociedades</b> y sus pagos fraccionados (200 y 202).</li>
+<li><b>Presentación con el certificado</b> de la empresa, o traer lo ya presentado con su CSV.</li>
+<li><b>El pago se casa solo</b> con el cargo del banco y deja la cuenta de Hacienda a cero.</li>
+<li><b>Varias sociedades</b> en un mismo calendario.</li></ul></div>
+<div class="block"><h3>Verifactu y facturas emitidas</h3><ul>
+<li><b>Cada factura emitida, encadenada</b> y enviada a la Agencia Tributaria como pide Verifactu. <span class="tag prueba">En pruebas con la AEAT</span></li>
+<li><b>Comprobar con Hacienda</b> que lo enviado ha llegado, factura a factura.</li>
+<li><b>«Me he equivocado»:</b> rectificar o anular sin romper la cadena.</li>
+<li><b>Exportar la cadena</b> si la pide una inspección.</li>
+<li><b>Factura de venta por correo</b> al cliente, y comprobación de NIF europeos (VIES).</li>
+<li><b>Series por local</b> y factura simplificada desde el TPV.</li></ul></div>
+</div>
+<div class="note"><b>De cada cifra al papel.</b> Desde cualquier casilla de un impuesto se baja a los asientos que la forman, y desde el asiento, a la factura, al ticket o al movimiento del banco que lo originó. Es lo que pide una inspección y lo que agradece una asesoría.</div>
+</section>
+<section class="sheet" style="--acc:var(--berenjena)">
+<div class="head"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 4.5a3 3 0 0 1 0 6M18 14.5a5 5 0 0 1 3 4.5"/></svg></span><div><span class="eyebrow">Sumied · 3 de 3</span><h2>Laboral, Mi portal y la asesoría dentro</h2></div></div><p class="lead">El equipo ficha en Folvy, las nóminas llegan a Sumied y la asesoría trabaja en el mismo sistema que la empresa. Nadie envía Excel a nadie.</p></div>
+<div class="feat">
+<div class="block"><h3>Laboral</h3><ul>
+<li><b>Registro de jornada</b> que guarda el servidor, no el móvil: no se puede maquillar. <span class="tag ok">En uso</span></li>
+<li><b>Nóminas leídas del PDF</b> y contabilizadas.</li>
+<li><b>Centros de trabajo</b> de cada sociedad.</li><li><b>Historial laboral importado</b> desde el programa anterior (Cegid y similares).</li>
+<li><b>Seguros sociales</b> y sus aplazamientos, con su cuadro.</li>
+<li><b>Lo que pide revisión</b>, en una sola bandeja.</li></ul></div>
+<div class="block"><h3>Mi portal</h3><ul>
+<li><b>Cada persona ve lo suyo:</b> nóminas, contratos, fichajes y vacaciones. <span class="tag ok">En uso</span></li>
+<li><b>Recibe sus documentos</b> en el momento, sin papel.</li>
+<li><b>Corrige un fichaje</b> y lo aprueba su responsable.</li>
+<li><b>Sube lo suyo:</b> bajas, justificantes, títulos.</li></ul></div>
+<div class="block"><h3>Para la asesoría</h3><ul>
+<li><b>Acceso de la asesoría</b> con sus permisos, aceptado por la empresa. <span class="tag ok">En uso</span></li>
+<li><b>Un solo usuario para varias empresas</b>, con un selector arriba. <span class="tag dev">En desarrollo</span></li>
+<li><b>Empresa de demostración</b> con datos inventados y un botón que la deja como al principio. <span class="tag dev">En desarrollo</span></li>
+<li><b>Si sigue con su programa,</b> Sumied le traspasa los asientos.</li></ul></div>
+</div>
+<div class="quote">Una asesoría deja de pedir papeles: entra, revisa lo que Sumied ha propuesto y presenta.</div>
+</section>
+<section class="sheet" style="--acc:var(--berenjena)">
+<div class="head" data-acc="--berenjena"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M3 20V9l5-4 5 4v11"/><path d="M13 20v-8l4-3 4 3v8"/><path d="M2 20h20"/><path d="M7 20v-4h2v4"/></svg></span><div><span class="eyebrow">Para un grupo</span><h2>Pensado para varios locales desde el primer día</h2></div></div><p class="lead">Folvy no es un programa de un local que luego se multiplica. Los locales, las marcas y los canales están en la base de todo.</p></div>
+<div class="feat"><div class="item"><h3>Locales, marcas y canales</h3><p>Cada venta, cada compra y cada hora trabajada sabe de qué local, de qué marca y por qué canal.</p></div><div class="item"><h3>Consolidado y detalle</h3><p>Los mismos informes para el grupo entero o para un solo local, sin exportar.</p></div><div class="item"><h3>Usuarios y permisos</h3><p>Cada persona ve y toca solo lo que le corresponde.</p></div><div class="item"><h3>Avisos</h3><p>Cada responsable recibe los suyos: un agotado, una incidencia, un fichaje que falta.</p></div><div class="item"><h3>Traspasos entre locales</h3><p>La mercancía que va de un local a otro queda registrada en los dos.</p></div><div class="item"><h3>Marcas propias y de terceros</h3><p>Si se cocinan marcas de otros, Folvy las separa en ventas y en márgenes.</p></div><div class="item"><h3>Datos aislados y en Europa</h3><p>Los datos de cada cliente están separados de los demás y alojados en la Unión Europea.</p></div><div class="item"><h3>Sin instalaciones</h3><p>Se entra desde el navegador. Las tablets de cocina llevan su aplicación y se actualizan solas.</p></div><div class="item"><h3>Crece con el grupo</h3><p>Un local nuevo o una marca nueva se dan de alta y heredan carta, proveedores y plantillas.</p></div></div>
+<div class="rule"></div>
+<div class="block"><h3>Cómo se pone en marcha</h3><div class="flow" style="grid-template-columns:repeat(4,minmax(0,1fr))">
+<div><b>Carta y recetas</b><span>Se cargan las cartas y los escandallos, con fotos de fichas si las hay.</span></div>
+<div><b>Proveedores y almacén</b><span>Con los primeros albaranes escaneados y un inventario inicial.</span></div>
+<div><b>Equipo</b><span>Empleados, contratos y turnos; el equipo empieza a fichar.</span></div>
+<div><b>Venta y canales</b><span>Se conectan las plataformas y el TPV, local a local.</span></div>
+</div><p class="soft">No hace falta arrancar con todo. Cada grupo activa primero lo que más le duele y va sumando el resto.</p></div>
+</section>
+<section class="sheet" style="--acc:var(--pizarra)">
+<div class="head"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="5" rx="1.5"/><rect x="3" y="10" width="18" height="5" rx="1.5"/><rect x="3" y="16.5" width="18" height="4" rx="1.5"/><path d="M7 6h.01M7 12.5h.01"/></svg></span><div><span class="eyebrow">Por dentro · 1 de 2</span><h2>Una sola plataforma, de la tablet a la base de datos</h2></div></div><p class="lead">Folvy no son varias aplicaciones unidas con integraciones: es un único programa con una única base de datos. Por eso un dato entra una vez y llega a todas partes.</p></div>
+<div class="layers">
+<div class="layer"><span class="lname">Dónde se usa</span><div class="lcells"><div><b>Navegador</b><span>Oficina y dirección, sin instalar nada</span></div><div><b>Móvil</b><span>App de Android e instalable en iPhone</span></div><div><b>Tablets de cocina y TPV</b><span>App nativa que imprime tickets y etiquetas por la red del local</span></div></div></div>
+<div class="layer"><span class="lname">El programa</span><div class="lcells"><div class="wide"><b>Un solo código para todo</b><span>React y TypeScript estricto. La misma pantalla en ordenador, móvil y tablet, adaptada a cada uno. Folvy y Sumied comparten usuarios, permisos y datos.</span></div></div></div>
+<div class="layer"><span class="lname">El servidor</span><div class="lcells"><div><b>Base de datos</b><span>PostgreSQL 17 alojado en la Unión Europea (Irlanda). Cada fila sabe de qué cliente es, y la propia base impide ver la de otro.</span></div><div><b>Más de 90 funciones</b><span>Pedidos de plataformas, lectura de documentos, Hacienda, bancos, pagos, avisos.</span></div><div><b>Vigías</b><span>Tareas programadas que revisan cada noche que todo cuadra y avisan si algo se para.</span></div></div></div>
+<div class="layer"><span class="lname">Con quién habla</span><div class="lcells chips2"><span>Glovo</span><span>Uber Eats</span><span>Just Eat</span><span>HubRise</span><span>TPV externo</span><span>Reparto propio</span><span>Agencia Tributaria</span><span>Bancos</span><span>Stripe y Redsys</span><span>WhatsApp</span><span>Instagram, TikTok, Facebook</span><span>Impresoras de red</span></div></div>
+</div>
+<div class="cols">
+<div class="block"><h3>Hecho para el servicio</h3><ul>
+<li><b>Las tablets se actualizan solas</b>, pero solo fuera del horario del local y con la cocina en calma. Nunca a mitad de un servicio.</li>
+<li><b>Si la red falla, la tablet sigue:</b> lo que se descargó se aplica igual, en vez de quedarse parada.</li>
+<li><b>Impresión directa</b> desde la tablet a la impresora del local, sin un ordenador en medio.</li></ul></div>
+<div class="block"><h3>Inteligencia artificial con límites</h3><ul>
+<li><b>Propone, no decide:</b> una persona confirma cada factura, cada horario y cada publicación.</li>
+<li><b>Trabaja sobre vuestros datos</b>, dentro de vuestra cuenta, y deja escrito qué propuso.</li>
+<li><b>Lee papeles de verdad:</b> albaranes, facturas, nóminas, fichas técnicas y etiquetas.</li></ul></div>
+</div>
+</section>
+<section class="sheet" style="--acc:var(--green)">
+<div class="head"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div><span class="eyebrow">Por dentro · 2 de 2</span><h2>Mejorar cada semana sin parar ningún servicio</h2></div></div><p class="lead">Folvy cambia casi cada día. Lo que lo hace posible no es tener cuidado: es un camino fijo que cada cambio tiene que recorrer antes de llegar a vuestros locales, y que comprueban las máquinas, no la buena voluntad.</p></div>
+<div class="flow six">
+<div><b>Se escribe con su prueba</b><span>Cada cambio lleva la prueba que demuestra que funciona.</span></div>
+<div><b>Pruebas automáticas</b><span>Cientos de pruebas del código y casi cien recorridos de pantallas, como lo haría una persona.</span></div>
+<div><b>Copia de ensayo</b><span>Se prueba en una copia del sistema, nunca primero en el vuestro.</span></div>
+<div><b>Ensayo que se deshace</b><span>Los cambios en la base de datos se ensayan sobre la real dentro de una operación que se deshace al acabar.</span></div>
+<div><b>Lo aprueba una persona</b><span>Nada llega a producción sin la aprobación expresa del responsable. Ningún proceso automático puede saltársela.</span></div>
+<div><b>Se comprueba y, si no, se deshace</b><span>Después se mira que los pedidos de todos los clientes siguen avanzando. Si no, se vuelve atrás solo.</span></div>
+</div>
+<div class="stats">
+<div><b>~100</b><span>recorridos de pantallas automáticos</span></div>
+<div><b>450</b><span>ficheros de pruebas del código</span></div>
+<div><b>Cada noche</b><span>la batería entera sobre la versión publicada</span></div>
+<div><b>1.500+</b><span>cambios de base de datos, todos registrados</span></div>
+</div>
+<div class="cols">
+<div class="block"><h3>Seguridad</h3><ul>
+<li><b>Datos de cada cliente aislados</b> en la propia base de datos, no solo en la pantalla.</li>
+<li><b>Datos en la Unión Europea.</b></li>
+<li><b>Credenciales cifradas:</b> claves de plataformas, bancos y certificados nunca viajan en claro.</li>
+<li><b>Permisos por persona:</b> cada uno ve y toca solo lo suyo.</li>
+<li><b>Las claves de producción</b> solo las recibe la versión aprobada, nunca una prueba.</li></ul></div>
+<div class="block"><h3>Trazabilidad</h3><ul>
+<li><b>Cada cambio, registrado</b> con su huella: se sabe qué se aplicó, cuándo y quién lo aprobó.</li>
+<li><b>Lo publicado se compara cada día</b> con lo escrito, para que no haya arreglos sueltos que se pierdan.</li>
+<li><b>Los botones importantes confirman</b> con contenido («Publicado. Avisadas 4 personas»), nunca en silencio.</li>
+<li><b>Ninguna pantalla esconde filas</b> para parecer más limpia: ordena por importancia, pero lo enseña todo.</li></ul></div>
+</div>
+</section>
+<section class="sheet" style="--acc:var(--tomate)">
+<div class="head"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/></svg></span><div><span class="eyebrow">Por qué Folvy</span><h2>Lo que cambia frente a lo de siempre</h2></div></div><p class="lead">Un grupo de hostelería suele elegir entre dos caminos: juntar programas sueltos o llevar un programa de gestión genérico. Folvy es un tercer camino, hecho para la cocina y para la oficina a la vez.</p></div>
+<div class="tablewrap"><table class="cmp"><thead><tr><th>Lo que necesita un grupo</th><th>Programas sueltos<br><span>TPV, una tablet por plataforma, Excel</span></th><th>Programa de gestión genérico<br><span>contabilidad y facturación</span></th><th>Folvy 360</th></tr></thead><tbody>
+<tr><td>El coste real de cada plato vendido</td><td class="no">A mano, en Excel</td><td class="no">No llega a la cocina</td><td class="si">Sale de la última compra, solo</td></tr>
+<tr><td>Todos los canales en una sola cocina</td><td class="no">Una tablet por plataforma</td><td class="no">—</td><td class="si">Una pantalla por partida</td></tr>
+<tr><td>El horario según lo que se va a vender</td><td class="no">Aparte, a ojo</td><td class="no">—</td><td class="si">Lo propone con la previsión</td></tr>
+<tr><td>Contabilidad sin teclear ventas ni compras</td><td class="no">Se pasa a la gestoría</td><td class="med">Se importa o se teclea</td><td class="si">Ya está dentro</td></tr>
+<tr><td>Impuestos y Verifactu</td><td class="no">La gestoría</td><td class="si">Sí</td><td class="si">Sí, con el origen de cada casilla</td></tr>
+<tr><td>Resultado por local, marca y canal</td><td class="no">Hojas de cálculo</td><td class="med">Con centros de coste a mano</td><td class="si">De serie, en cada asiento</td></tr>
+<tr><td>APPCC, alérgenos y formación</td><td class="no">Carpeta y otra app</td><td class="no">—</td><td class="si">Salen de las recetas</td></tr>
+<tr><td>Una sola persona a quien llamar</td><td class="no">Un proveedor por programa</td><td class="med">Uno, solo para la oficina</td><td class="si">Uno, para todo</td></tr>
+</tbody></table></div>
+<div class="trio light">
+<div><b>Menos programas</b><span>Una suscripción y un acceso en lugar de ocho o diez, con sus integraciones que se rompen.</span></div>
+<div><b>Margen que se ve</b><span>El coste de cada venta es el de verdad, y una subida de un proveedor se nota en la carta ese mismo día.</span></div>
+<div><b>Horas de oficina</b><span>Facturas, bancos e impuestos llegan propuestos. La oficina revisa en vez de teclear.</span></div>
+</div>
+</section>
+<section class="sheet dark">
+<div class="head"><span class="eyebrow">Cómo trabajamos</span><h2>Folvy se amolda a tu negocio, <em>no al revés</em></h2>
+<p class="lead">Cada grupo tiene su manera de hacer las cosas, y ahí suele estar lo que lo hace funcionar. No pedimos que la cambiéis para encajar en el programa.</p></div>
+<div class="trio">
+<div><b>Nos adaptamos a cómo trabajáis</b><span>Vuestros locales, marcas, turnos, partidas, proveedores y forma de contar. Folvy se configura alrededor de eso, y cada grupo activa solo lo que necesita.</span></div>
+<div><b>Si os falta algo, lo construimos</b><span>No estamos cerrados a desarrollar algo específico para vosotros: un informe que no existe, una conexión con otro programa, un proceso propio de vuestra casa. Se habla, se valora y se hace.</span></div>
+<div><b>Vuestras sugerencias cuentan</b><span>Escuchamos a quien usa Folvy cada día. Buena parte de lo que habéis visto en este dosier nació de una petición de alguien en una cocina o en una oficina.</span></div>
+</div>
+<div class="rule"></div>
+<div class="cols">
+<div class="item"><h3>Habláis con quien lo hace</h3><p>Las peticiones no se pierden en un buzón de soporte. Llegan directamente a quien diseña y construye el producto.</p></div>
+<div class="item"><h3>Hecho por gente de hostelería</h3><p>Folvy nace dentro del sector. Sabemos lo que es un servicio de sábado por la noche, un inventario a fin de mes y una inspección sin avisar.</p></div>
+</div>
+<p class="bigline">Contadnos en la demo qué echáis en falta en lo que usáis hoy. Es por donde nos gusta empezar.</p>
+</section>
+<section class="sheet" style="--acc:var(--green)">
+<div class="head" data-acc="--green"><div class="band"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></svg></span><div><span class="eyebrow">Resumen</span><h2>Folvy 360, de un vistazo</h2></div></div></div>
+<div class="tablewrap"><table><thead><tr><th>Parte</th><th>Qué cubre</th></tr></thead><tbody><tr><td>Inicio y Pendientes</td><td>Centro de mando, avisos y lista de tareas</td></tr><tr><td>TPV</td><td>Venta, sala, comandero, cobro, caja y facturación</td></tr><tr><td>Folvy Orders</td><td>Pedidos de todos los canales, pantallas de cocina, pase, tickets, tiempos y reparto</td></tr><tr><td>Folvy Kitchen</td><td>Cartas, precios, recetas, costes, rentabilidad y agotados</td></tr><tr><td>Folvy Supply</td><td>Pedidos a proveedor, albaranes, facturas, almacén y recuentos</td></tr><tr><td>Folvy Sales</td><td>Ventas, informes, márgenes, liquidaciones y calidad</td></tr><tr><td>Folvy Team</td><td>Cuadrantes, control horario, bolsa de horas, nóminas y formación</td></tr><tr><td>Folvy Safety</td><td>APPCC, incidencias, auditorías, alérgenos y documentos</td></tr><tr><td>Folvy Shop</td><td>Tienda propia, campañas, fidelización y zonas de entrega</td></tr><tr><td>Folvy Social</td><td>Publicaciones para redes propuestas por inteligencia artificial</td></tr><tr><td>Folvy Connect</td><td>Plataformas de delivery, TPV externo y reparto</td></tr><tr><td>App del empleado</td><td>Fichar, horario, tareas, documentos y formación en el móvil</td></tr><tr><td>Sumied</td><td>Contabilidad, facturas que entran solas, bancos, préstamos, impuestos y Verifactu</td></tr><tr><td>Laboral y Mi portal</td><td>Registro de jornada, nóminas, documentos de cada persona y acceso de la asesoría</td></tr><tr><td>La plataforma</td><td>Datos en la UE y aislados por cliente, tablets que se actualizan fuera del servicio, cambios probados y aprobados</td></tr></tbody></table></div>
+<p class="note"><b>Nota.</b> Folvy está en desarrollo continuo. La mayor parte de lo que recoge este dosier ya está en uso; lo que no lo está lleva su etiqueta: <span class="tag ok">En uso</span> <span class="tag prueba">En pruebas</span> <span class="tag dev">En desarrollo</span>. En la demo os enseñamos lo que ya funciona y os decimos el estado y la fecha de cada cosa.</p>
+<div class="block"><h3>Siguientes pasos</h3><div class="next">
+<div class="item"><span class="n">1 · Demo</span><p>Una hora, con vuestro caso: cuántos locales, qué usáis hoy y qué os duele más.</p></div>
+<div class="item"><span class="n">2 · Propuesta</span><p>Qué partes activar primero, qué habría que adaptar o construir para vosotros, y su precio.</p></div>
+<div class="item"><span class="n">3 · Puesta en marcha</span><p>Cargamos carta, proveedores y equipo con vosotros, local a local.</p></div></div></div>
+<div class="contact"><div><b>Julio García Colón</b><br><span>CEO de Folvy</span></div><div class="cdata"><span class="url">hello@folvy.app</span><span class="url">+34 695 043 886</span><span class="url">folvy.app</span></div></div>
+</section>
+</div>
+
+<style>.btn-pdf{position:fixed;right:18px;bottom:18px;z-index:9;font:600 14px/1 system-ui,sans-serif;border:0;border-radius:99px;padding:13px 18px;cursor:pointer;box-shadow:0 8px 22px -8px rgba(0,0,0,.45)}.btn-pdf{background:#2A211A;color:#FFF8EC}@media print{.btn-pdf{display:none}}</style><button class="btn-pdf" onclick="dosierPdf()">Descargar en PDF</button><script>(function(){
+var DOC=window.DOSIER||"",EP=/folvy\.app$/.test(location.hostname)?"https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/dosier-track":"/t";
+var q=new URLSearchParams(location.search),c=(q.get("c")||"").slice(0,50),src=DOC?(DOC+(c?" · "+c:"")):c;
+var sid=(crypto.randomUUID&&crypto.randomUUID())||"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(k){var r=Math.random()*16|0;return(k=="x"?r:(r&3|8)).toString(16)});
+var lugar={},vis=0,desde=document.visibilityState=="visible"?Date.now():0,maxS=0,secc=[];
+function secs(){return Math.round((vis+(desde?Date.now()-desde:0))/1000)}
+function scroll(){var h=document.documentElement,t=h.scrollHeight-h.clientHeight;return t>0?Math.min(100,Math.round(100*(h.scrollTop||document.body.scrollTop)/t)):100}
+addEventListener("scroll",function(){maxS=Math.max(maxS,scroll())},{passive:true});
+function datos(t){return JSON.stringify({t:t,sid:sid,s:maxS,secs:secs(),secc:secc,w:innerWidth,ciu:lugar.ciu||"",pais:lugar.pais||"",red:lugar.red||"",ref:document.referrer||"",src:src})}
+function enviar(t,beacon){var d=datos(t);try{if(beacon&&navigator.sendBeacon){navigator.sendBeacon(EP,new Blob([d],{type:"text/plain"}));return}fetch(EP,{method:"POST",body:d,headers:{"Content-Type":"text/plain"},keepalive:true}).catch(function(){})}catch(e){}}
+try{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(!e.isIntersecting)return;var tx=e.target.textContent.replace(/\s+/g," ").trim();if(tx){tx=(DOC?DOC+": ":"")+tx;tx=tx.slice(0,60);if(secc.indexOf(tx)<0)secc.push(tx)}})},{threshold:.6});document.querySelectorAll("section h1,section h2").forEach(function(s){io.observe(s)})}catch(e){}
+var abierto=false;function abrir(){if(abierto)return;abierto=true;enviar("open")}
+fetch("/api/lugar",{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){lugar=j||{}}).catch(function(){}).then(abrir);setTimeout(abrir,2500);
+setInterval(function(){if(document.visibilityState=="visible")enviar("ping")},20000);
+document.addEventListener("visibilitychange",function(){if(document.visibilityState=="hidden"){if(desde){vis+=Date.now()-desde;desde=0}enviar("ping",true)}else{desde=Date.now()}});
+addEventListener("pagehide",function(){enviar("ping",true)});
+window.dosierPdf=function(){enviar("pdf");setTimeout(function(){window.print()},150)};
+})();</script></body></html>

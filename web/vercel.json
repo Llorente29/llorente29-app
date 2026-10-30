@@ -1,0 +1,6 @@
+{
+  "cleanUrls": true,
+  "headers": [{ "source": "/(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] }],
+  "redirects": [{ "source": "/panel", "has": [{ "type": "host", "value": "dosier.sumied.com" }], "destination": "https://dosier.folvy.app/panel", "permanent": false }],
+  "rewrites": [{ "source": "/t", "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/dosier-track" }]
+}

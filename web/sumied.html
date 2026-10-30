@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dosier Sumied</title><meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<style>
+
+:root{color-scheme:light;--tinta:#172443;--apoyo:#4A5B73;--fondo:#F4F7FB;--blanco:#FFFFFF;--marino:#0B1F3B;--marino2:#13294B;
+--azul:#1E63C9;--azul-suave:#EAF2F8;--turq:#00D1B2;--turq-suave:#EAF9F8;--turq-texto:#0B6B5C;--ambar:#8A4B00;--ambar-suave:#FFF3DF;--linea:#DCE5F0;--lila:#6B4FBB;--lila-suave:#F1ECFB;
+--f:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif}
+*{box-sizing:border-box}
+html,body{background:var(--fondo)}
+body{margin:0;color:var(--tinta);font-family:var(--f);font-size:15.5px;line-height:1.6;padding:28px 16px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.doc{max-width:960px;margin:0 auto;display:flex;flex-direction:column;gap:24px}
+.hoja{background:var(--blanco);border:1px solid var(--linea);border-radius:22px;padding:44px 48px;display:flex;flex-direction:column;gap:24px;position:relative;overflow:hidden}
+h1,h2,h3{margin:0;letter-spacing:-.022em;text-wrap:balance;font-weight:800}
+h2{font-size:33px;line-height:1.12} h3{font-size:17px;line-height:1.3;font-weight:700}
+p{margin:0;max-width:70ch} .lead{font-size:17.5px;line-height:1.55;color:var(--tinta)} .apoyo{color:var(--apoyo)}
+.ceja{font-size:12.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--azul)}
+.cab{display:flex;flex-direction:column;gap:10px}
+.cab .num{display:flex;align-items:center;gap:10px}
+.cab .num i{width:30px;height:6px;border-radius:3px;background:var(--turq)}
+
+.portada{background:var(--marino);color:#fff;border:0;min-height:660px;justify-content:space-between;padding:54px}
+.portada .fondo{position:absolute;inset:0;pointer-events:none}
+.portada .fondo i{position:absolute;border-radius:40px;transform:rotate(-18deg)}
+.portada .logo{height:46px;width:auto;position:relative;align-self:flex-start}
+.portada h1{font-size:clamp(40px,7vw,68px);line-height:1.02;max-width:12ch;position:relative}
+.portada h1 em{font-style:normal;color:var(--turq)}
+.portada .sub{font-size:19px;color:#C7D3E3;max-width:46ch;position:relative}
+.portada .mitad{display:flex;flex-direction:column;gap:22px;position:relative}
+.pastillas{display:flex;flex-wrap:wrap;gap:8px;max-width:600px}
+.pastillas span{background:var(--marino2);border:1px solid #24426E;border-radius:99px;padding:6px 13px;font-size:13.5px;color:#E3EBF5}
+.portada .pie{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;font-size:12.5px;letter-spacing:.08em;text-transform:uppercase;color:#9FB2CC;border-top:1px solid #24426E;padding-top:16px;position:relative}
+
+.dos{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:22px 32px}
+.tres{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.tarjeta{background:var(--fondo);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tarjeta p{font-size:14.2px;color:var(--apoyo)} .tarjeta .ico{width:38px;height:38px;border-radius:11px;background:var(--azul);color:#fff;display:grid;place-items:center;margin-bottom:4px}
+.tarjeta .ico svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.tarjeta.turq{background:var(--turq-suave)} .tarjeta.turq .ico{background:var(--turq);color:var(--marino)}
+.tarjeta.marino{background:var(--marino);color:#fff} .tarjeta.marino p{color:#C7D3E3} .tarjeta.marino .ico{background:var(--turq);color:var(--marino)}
+ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
+li{padding-left:22px;position:relative;font-size:14.5px}
+li::before{content:"";position:absolute;left:3px;top:.62em;width:9px;height:9px;border-radius:3px;background:var(--turq)}
+li b{font-weight:600}
+.bloque{display:flex;flex-direction:column;gap:12px;min-width:0}
+.bloque>h3{display:flex;align-items:center;gap:8px}
+.raya{border-top:1px solid var(--linea)}
+
+.tag{display:inline-block;font-size:10.8px;font-weight:700;letter-spacing:.03em;border-radius:99px;padding:1px 8px;vertical-align:1px;margin-left:3px;white-space:nowrap}
+.tag.uso{background:var(--turq-suave);color:var(--turq-texto)} .tag.prueba{background:var(--ambar-suave);color:var(--ambar)} .tag.dev{background:var(--lila-suave);color:var(--lila)}
+.leyenda{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--apoyo);align-items:center}
+
+.flujo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;counter-reset:f}
+.flujo div{counter-increment:f;background:var(--fondo);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.flujo div::before{content:counter(f);width:28px;height:28px;border-radius:9px;background:var(--marino);color:#fff;display:grid;place-items:center;font-weight:700;font-size:13.5px;margin-bottom:4px}
+.flujo b{font-size:15.5px} .flujo span{font-size:13.6px;color:var(--apoyo);line-height:1.45}
+
+.cifras{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.cifras div{background:var(--marino);border-radius:16px;padding:16px 18px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.cifras b{font-size:29px;font-weight:800;letter-spacing:-.02em;color:var(--turq);line-height:1.1} .cifras span{font-size:13px;color:#C7D3E3;line-height:1.35}
+
+.pantalla{border:1px solid var(--linea);border-radius:16px;overflow:hidden;background:var(--fondo);box-shadow:0 18px 36px -24px rgba(11,31,59,.45)}
+.pantalla .barra{display:flex;align-items:center;gap:8px;background:#fff;border-bottom:1px solid var(--linea);padding:9px 14px;font-size:12.5px;color:var(--apoyo)}
+.pantalla .barra i{width:9px;height:9px;border-radius:50%;background:var(--linea)}
+.pantalla .barra b{color:var(--tinta);margin-left:8px}
+.pantalla .cuerpo{display:grid;grid-template-columns:150px minmax(0,1fr);min-height:250px}
+.pantalla nav{background:var(--marino);padding:14px 10px;display:flex;flex-direction:column;gap:3px}
+.pantalla nav span{font-size:12px;color:#C7D3E3;padding:6px 9px;border-radius:7px} .pantalla nav span.on{background:#24426E;color:#fff;font-weight:600}
+.pantalla nav img{height:18px;width:auto;margin:2px 8px 12px;align-self:flex-start}
+.pantalla .zona{padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.pantalla .titulo{font-size:16px;font-weight:800}
+.fila{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:center;background:#fff;border:1px solid var(--linea);border-radius:10px;padding:9px 12px;font-size:12.8px}
+.fila small{display:block;color:var(--apoyo);font-size:11.6px}
+.fila .bt{font-size:11.5px;font-weight:700;color:#fff;background:var(--azul);border-radius:7px;padding:5px 10px;white-space:nowrap}
+.fila .bt.claro{background:var(--azul-suave);color:var(--azul)}
+.ia{background:var(--turq-suave);border:1px dashed #8FE3C2;border-radius:10px;padding:9px 12px;font-size:12.6px;color:#1F4B3C}
+.ia b{color:var(--tinta)}
+.asiento{width:100%;border-collapse:collapse;font-size:12.4px;background:#fff;border:1px solid var(--linea);border-radius:10px;overflow:hidden}
+.asiento th{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--apoyo);text-align:left;padding:7px 10px;border-bottom:1px solid var(--linea);font-weight:600}
+.asiento td{padding:6px 10px;border-bottom:1px solid #EEF2F7} .asiento td.n{text-align:right;font-variant-numeric:tabular-nums} .asiento td b{font-weight:700}
+.asiento th.n{text-align:right}
+.pie-pantalla{font-size:12.5px;color:var(--apoyo);margin-top:8px}
+
+.tablawrap{overflow-x:auto} table.cmp{border-collapse:collapse;width:100%;min-width:560px;font-size:14px}
+table.cmp th{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--apoyo);font-weight:700;text-align:left;padding:0 10px 10px 0;border-bottom:2px solid var(--tinta);vertical-align:bottom}
+table.cmp th span{display:block;text-transform:none;letter-spacing:0;font-weight:400;font-size:12px}
+table.cmp td{padding:10px 10px 10px 0;border-bottom:1px solid var(--linea);vertical-align:top}
+table.cmp td:first-child{font-weight:600}
+table.cmp td.no{color:#7F8FA6} table.cmp td.med{color:var(--ambar)} table.cmp td.si{color:var(--turq-texto);font-weight:700}
+table.cmp td:last-child,table.cmp th:last-child{background:var(--turq-suave);padding-left:12px}
+.nota{font-size:13.4px;color:var(--apoyo);background:var(--fondo);border-radius:14px;padding:12px 16px;max-width:none} .nota b{color:var(--tinta)}
+.frase{font-size:22px;font-weight:700;letter-spacing:-.015em;line-height:1.3;color:var(--azul);max-width:36ch}
+
+.hoja.oscura{background:var(--marino);color:#fff;border:0}
+.oscura .lead{color:#E3EBF5} .oscura .ceja{color:var(--turq)} .oscura h2 em{font-style:normal;color:var(--turq)}
+.oscura .tarjeta{background:var(--marino2)} .oscura .tarjeta p{color:#C7D3E3}
+.oscura li{color:#E3EBF5}
+.contacto{background:var(--fondo);border-radius:18px;padding:22px 24px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:14px}
+.oscura .contacto{background:var(--marino2)}
+.contacto b{font-size:21px} .contacto .dato{font-weight:600;color:var(--turq);user-select:all}
+.oferta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.oferta div{border:1px solid #24426E;border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:4px}
+.oferta b{font-size:30px;font-weight:800;color:var(--turq);letter-spacing:-.02em;line-height:1.1} .oferta span{font-size:14px;color:#C7D3E3}
+.item,.bloque,.tarjeta,.pantalla,.cab{break-inside:avoid}
+@media (max-width:720px){
+body{padding:16px 16px}.hoja{padding:26px 20px;border-radius:18px}.portada{padding:30px 22px;min-height:560px}
+h2{font-size:26px}.dos,.tres,.flujo,.oferta{grid-template-columns:minmax(0,1fr)}.cifras{grid-template-columns:repeat(2,minmax(0,1fr))}
+.pantalla .cuerpo{grid-template-columns:minmax(0,1fr)}.pantalla nav{display:none}.portada .fondo{opacity:.35}
+}
+@page{size:A4;margin:12mm 0} @page :first{margin:0}
+@media print{
+body{padding:0;font-size:12.8px;background:#fff}.doc{max-width:none;gap:0}
+.hoja{border:0;border-radius:0;padding:0 15mm;break-before:page;gap:14px;overflow:visible}
+.portada{height:297mm;padding:24mm 20mm;break-before:auto;overflow:hidden;border-radius:0}
+.hoja.oscura{padding:16mm 15mm;min-height:273mm}
+h2{font-size:25px}.lead{font-size:14px}li,.tarjeta p,.flujo span{font-size:12px}ul{gap:5px}.tarjeta,.flujo div{padding:11px 13px}
+.cifras b{font-size:22px}.pantalla{box-shadow:none}.tag{font-size:9.5px}
+}
+</style></head><body>
+<div class="doc">
+
+<section class="hoja portada">
+<div class="fondo"><i style="width:340px;height:150px;right:-90px;top:70px;background:#1E63C9"></i><i style="width:340px;height:150px;right:-30px;top:250px;background:#00D1B2"></i><i style="width:200px;height:90px;right:250px;top:40px;border:3px solid #24426E"></i><i style="width:520px;height:220px;right:-220px;bottom:-110px;border:3px solid #24426E"></i></div>
+<img class="logo" src="https://app.sumied.com/marcas/sumied/sumied-logo-horizontal-blanco.svg" alt="Sumied">
+<div class="mitad">
+<h1>La contabilidad que se hace sola. <em>Tú solo revisas.</em></h1>
+<p class="sub">Contabilidad, facturación, bancos, impuestos y laboral para empresas y despachos de cualquier sector. La inteligencia artificial propone; la norma española manda; una persona decide.</p>
+<div class="pastillas"><span>Facturas que entran solas</span><span>Bancos conectados</span><span>Préstamos y aplazamientos</span><span>Impuestos presentados</span><span>Verifactu</span><span>Cobros y pagos</span><span>Laboral y Mi portal</span><span>Para despachos</span><span>Junto a Folvy ERP</span></div>
+</div>
+<div class="pie"><span>Dosier de producto</span><span>Octubre 2026</span><span>sumied.com</span></div>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">La idea</span></div><h2>Revisar, no contabilizar</h2>
+<p class="lead">Un programa de contabilidad clásico espera a que alguien teclee cada factura, cada cobro y cada cuota. Sumied le da la vuelta: lee lo que llega, propone el asiento y lo deja listo. Quien lleva la contabilidad mira, corrige si hace falta y valida.</p></div>
+<div class="tres">
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 12h4l3 6 4-12 3 6h2"/></svg></span><h3>Automatiza</h3><p>Facturas, extractos, cuotas e impuestos entran solos y llegan con su propuesta de asiento.</p></div>
+<div class="tarjeta turq"><span class="ico"><svg viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span><h3>Revisa</h3><p>Lo que cuadra se valida en bloque. Lo dudoso sale arriba, con su motivo dicho en palabras.</p></div>
+<div class="tarjeta marino"><span class="ico"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><h3>Cumple</h3><p>Plan General Contable, IVA, retenciones y Verifactu. Lo que la ley cierra, Sumied no deja tocarlo.</p></div>
+</div>
+<div class="raya"></div>
+<div class="cab"><span class="ceja">Para quién</span><h3 style="font-size:21px">Para cualquier empresa, sea del sector que sea</h3>
+<p class="apoyo">El plan contable, los impuestos y la nómina son los de cualquier empresa española. Al dar de alta la empresa, Sumied prepara lo que le corresponde: su plan de cuentas, sus modelos de Hacienda y su calendario.</p></div>
+<div class="tres">
+<div class="tarjeta"><h3>Empresas</h3><p>Una sociedad o un grupo de sociedades que quiere llevar su contabilidad y sus impuestos sin teclear, con o sin gestoría.</p></div>
+<div class="tarjeta"><h3>Despachos y asesorías</h3><p>Todos los clientes en una vista, con lo que vence y lo que falta de cada uno, y el trabajo hecho por la máquina antes de empezar.</p></div>
+<div class="tarjeta"><h3>Empresas con Folvy</h3><p>Si la empresa usa Folvy, el ERP que convive con Sumied, las compras, las ventas y el personal ya están dentro.</p></div>
+</div>
+<p class="frase">Sumied no es una contabilidad más rápida de teclear. Es una contabilidad que casi no hay que teclear.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Cómo trabaja</span></div><h2>Un mes en Sumied, sin teclear un asiento</h2>
+<p class="lead">Así pasa una factura de proveedor por Sumied, desde que llega al correo hasta que el impuesto está presentado.</p></div>
+<div class="flujo">
+<div><b>Llega la factura</b><span>Al correo de la empresa, en PDF o en foto. Nadie la tiene que subir.</span></div>
+<div><b>Se lee sola</b><span>Proveedor, NIF, bases, tipos de IVA, retención y vencimiento. Si el proveedor es nuevo, se da de alta desde la propia factura.</span></div>
+<div><b>Se propone el asiento</b><span>Con la cuenta de ese proveedor, su IVA y su vencimiento. Una persona lo valida.</span></div>
+<div><b>El banco la paga</b><span>El cargo del extracto se casa con la factura, y el proveedor queda a cero.</span></div>
+<div><b>El impuesto sale solo</b><span>El IVA del trimestre se forma con lo validado, casilla a casilla y con su origen.</span></div>
+<div><b>Se presenta y se cierra</b><span>Con el certificado de la empresa. Desde ese momento el trimestre no se puede tocar.</span></div>
+</div>
+<figure class="pantalla" style="margin:0">
+<div class="barra"><i></i><i></i><i></i><b>Inicio · lo que hay que revisar hoy</b></div>
+<div class="cuerpo"><nav><img src="https://app.sumied.com/marcas/sumied/sumied-logo-horizontal-blanco.svg" alt=""><span class="on">Inicio</span><span>Contabilidad</span><span>Compras y gastos</span><span>Ventas</span><span>Bancos</span><span>Impuestos</span><span>Laboral</span></nav>
+<div class="zona"><div class="titulo">Buenos días. Esto es lo de hoy.</div>
+<div class="fila"><span><b>4 facturas recibidas listas</b><small>Leídas y con su asiento propuesto · 1.284,30 €</small></span><span class="bt">Validar las 4</span></div>
+<div class="fila"><span><b>1 factura con dudas</b><small>Suministros Norte S.L. · el IVA no cuadra con la base</small></span><span class="bt claro">Revisar</span></div>
+<div class="fila"><span><b>IVA del 4.º trimestre</b><small>Vence el 30/01 · borrador al día</small></span><span class="bt claro">Ver modelo</span></div>
+<div class="ia"><b>Sumied ha casado 23 movimientos del banco</b> con sus facturas esta noche. Quedan 2 que no sabe a qué corresponden.</div>
+</div></div>
+</figure>
+<p class="pie-pantalla">Ilustración con datos de ejemplo.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Contabilidad</span></div><h2>Todo en su sitio, y a mano cuando se quiere</h2>
+<p class="lead">Debajo de la automatización hay una contabilidad completa, ordenada como la espera un profesional: por módulos, por pestañas y con cada acción donde se busca. Quien prefiere trabajar a la antigua puede hacerlo.</p></div>
+<div class="dos">
+<div class="bloque"><h3>La contabilidad de siempre, bien hecha</h3><ul>
+<li><b>Plan General Contable oficial</b>, con las subcuentas de la empresa; se trae el plan del programa anterior.</li>
+<li><b>Un asiento se lee como asiento:</b> Debe y Haber en sus columnas, la cuenta delante del texto.</li>
+<li><b>Asientos a mano</b>, plantillas y asientos que se repiten.</li>
+<li><b>Extracto de cualquier cuenta</b> y salto directo al mayor.</li>
+<li><b>Cobros y pagos con cualquier subcuenta</b>, también por compensación, sin cuentas puente.</li>
+<li><b>Los cambios se confirman con un botón</b>, y si se sale sin aceptar, Sumied avisa.</li></ul></div>
+<div class="bloque"><h3>Para moverse rápido</h3><ul>
+<li><b>Buscador universal:</b> Ctrl + K encuentra una cuenta, un proveedor, una factura o una pantalla.</li>
+<li><b>Favoritos</b> con las pantallas que más se usan.</li>
+<li><b>Tres niveles de usuario:</b> sin experiencia, medio y experto. Cambian las ayudas y los textos, no las opciones.</li>
+<li><b>Varias sociedades</b> en la misma cuenta, cada una con su NIF y su contabilidad.</li>
+<li><b>Contabilidad analítica</b> por centro, departamento o proyecto, si se activa.</li>
+<li><b>Todo se descarga</b> en Excel o PDF.</li></ul></div>
+</div>
+<div class="tres">
+<div class="tarjeta"><h3>Sin experiencia</h3><p>Palabras de todos los días y una ayuda en cada paso. Ideal para el dueño de una empresa pequeña.</p></div>
+<div class="tarjeta turq"><h3>Medio</h3><p>El administrativo que lleva la contabilidad cada día: menos explicaciones, más velocidad.</p></div>
+<div class="tarjeta marino"><h3>Experto</h3><p>El lenguaje del contable y del despacho, con todas las opciones a la vista.</p></div>
+</div>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Compras y gastos</span></div><h2>Las facturas de proveedor entran solas</h2>
+<p class="lead">Se acabó reenviar facturas a la gestoría o pasarlas a mano. Sumied las recoge donde llegan, las lee y deja cada una con su asiento.</p></div>
+<div class="dos" style="align-items:start">
+<div class="bloque"><ul>
+<li><b>Llegan solas</b> por correo, desde varios buzones, o se suben con una foto o un PDF.</li>
+<li><b>Las fotos se convierten en PDF</b> al guardarse, enderezadas y legibles.</li>
+<li><b>Lectura con inteligencia artificial</b> de cada dato: proveedor, NIF, fecha, bases, tipos de IVA, retención y vencimiento.</li>
+<li><b>Proveedor nuevo desde la factura</b>, sin salir; y su ficha se completa sola con lo que falte.</li>
+<li><b>Validar en bloque</b> las que cuadran; las dudosas, con su motivo.</li>
+<li><b>IVA no deducible</b>, varios tipos y retenciones, bien repartidos.</li>
+<li><b>Facturas recurrentes</b>, como un alquiler, que se esperan cada mes y avisan si no llegan.</li>
+<li><b>La misma factura, una sola vez:</b> si llega dos veces, se queda la buena y la foto se cambia por el PDF.</li>
+<li><b>Gastos con ticket</b> desde el móvil: foto y contabilizado.</li>
+<li><b>Una factura que entra sola</b> se puede cambiar como una hecha a mano: cualquier campo, su PDF, su cuenta.</li></ul></div>
+<figure class="pantalla" style="margin:0">
+<div class="barra"><i></i><i></i><i></i><b>Factura recibida · leída</b></div>
+<div class="zona">
+<div class="fila"><span><b>Suministros Norte S.L.</b><small>Factura A-2026/0412 · 14/10/2026 · vence el 13/11</small></span><span class="bt">Validar</span></div>
+<table class="asiento"><thead><tr><th>Cuenta</th><th class="n">Debe</th><th class="n">Haber</th></tr></thead><tbody>
+<tr><td><b>60000000</b> Compras de mercaderías</td><td class="n">850,00</td><td class="n"></td></tr>
+<tr><td><b>47200021</b> IVA soportado 21 %</td><td class="n">178,50</td><td class="n"></td></tr>
+<tr><td><b>40000037</b> Suministros Norte S.L.</td><td class="n"></td><td class="n">1.028,50</td></tr></tbody></table>
+<div class="ia">Leída del PDF. <b>Mismo proveedor y cuenta que las 11 anteriores.</b> Vence a 30 días, como siempre.</div>
+</div>
+</figure>
+</div>
+<p class="pie-pantalla">Ilustración con datos de ejemplo.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Ventas, cobros y pagos</span></div><h2>Facturar, cobrar y pagar desde el mismo sitio</h2></div>
+<div class="dos">
+<div class="bloque"><h3>Ventas</h3><ul>
+<li><b>Facturas de venta</b> a mano o automáticas, con sus series.</li>
+<li><b>Una venta tiene su ficha</b> y se puede corregir, rectificar o abonar.</li>
+<li><b>Envío por correo</b> al cliente con su PDF.</li>
+<li><b>Comprobación de NIF europeos</b> (VIES) antes de facturar sin IVA.</li>
+<li><b>Facturas exentas y no sujetas.</b></li>
+<li><b>Clientes con su ficha</b>, su forma de pago y su saldo.</li></ul></div>
+<div class="bloque"><h3>Cobros y pagos</h3><ul>
+<li><b>Enlace de pago</b> con tarjeta o Bizum en la propia factura.</li>
+<li><b>Remesas SEPA</b> de cobros a clientes y de pagos a proveedores.</li>
+<li><b>Pagar al proveedor</b> desde su factura, con aviso de cuándo toca.</li>
+<li><b>Avisos de vencimiento</b> de lo que hay que cobrar y pagar.</li>
+<li><b>Previsión de lo que va a entrar y salir</b> del banco.</li></ul></div>
+</div>
+<div class="raya"></div>
+<div class="dos" style="align-items:start">
+<div class="bloque"><h3>Verifactu, de serie</h3>
+<p class="apoyo">Cada factura emitida se encadena con la anterior, lleva su código QR y se envía a la Agencia Tributaria como pide el reglamento.</p><ul>
+<li><b>Comprobar con Hacienda</b> que cada factura ha llegado.</li>
+<li><b>«Me he equivocado»:</b> rectificar o anular sin romper la cadena.</li>
+<li><b>Exportar la cadena</b> si la pide una inspección.</li>
+<li><b>El certificado se autoriza una vez</b>, solo para esto, y se puede retirar.</li></ul></div>
+<div class="tarjeta marino" style="align-self:stretch;justify-content:center"><h3 style="font-size:20px">Preparado antes de que sea obligatorio</h3><p>Un programa de contabilidad tiene que tener listo lo que pide la ley antes de que el cliente lo necesite, no a última hora. Con Verifactu, y con cada modelo anual, Sumied trabaja así.</p></div>
+</div>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Bancos</span></div><h2>El banco cuadra solo, cuota a cuota</h2>
+<p class="lead">La conciliación es donde más horas se pierden. En Sumied cada movimiento llega con su propuesta, y lo que se repite se aprende.</p></div>
+<div class="dos">
+<div class="bloque"><h3>Movimientos</h3><ul>
+<li><b>Cuentas conectadas</b> de cualquier banco español, o extractos subidos en Excel.</li>
+<li><b>Cada movimiento con su propuesta:</b> qué factura cobra o paga y en qué cuenta va.</li>
+<li><b>Reglas</b> para lo que se repite: comisiones, suministros, nóminas.</li>
+<li><b>Repartir un movimiento</b> entre varias facturas o cuentas.</li>
+<li><b>Cierre del mes por cuenta:</b> el saldo del banco contra el saldo contable, con la diferencia explicada.</li></ul></div>
+<div class="bloque"><h3>Préstamos y aplazamientos</h3><ul>
+<li><b>Se sube el cuadro del banco</b> o la resolución de un aplazamiento, y Sumied lo lee.</li>
+<li><b>Cada cuota se separa sola</b> en capital e intereses al cargarse.</li>
+<li><b>La ficha del préstamo:</b> lo que queda, la próxima cuota y el cuadro entero.</li>
+<li><b>Si el banco cobra otra cifra</b>, lo dice y lo deja para aclarar.</li>
+<li><b>Aplazamientos</b> de impuestos o de la Seguridad Social, con su calendario.</li></ul></div>
+</div>
+<figure class="pantalla" style="margin:0">
+<div class="barra"><i></i><i></i><i></i><b>Préstamo · cuadro de amortización</b></div>
+<div class="cuerpo"><nav><img src="https://app.sumied.com/marcas/sumied/sumied-logo-horizontal-blanco.svg" alt=""><span>Inicio</span><span>Contabilidad</span><span class="on">Bancos</span><span>Impuestos</span><span>Laboral</span></nav>
+<div class="zona"><div class="titulo">Préstamo Banco Ejemplo · 60 cuotas</div>
+<table class="asiento"><thead><tr><th>Fecha</th><th class="n">Cuota</th><th class="n">Capital</th><th class="n">Intereses</th><th class="n">Queda</th><th>Estado</th></tr></thead><tbody>
+<tr><td>05/10/2026</td><td class="n">512,40</td><td class="n">431,12</td><td class="n">81,28</td><td class="n">23.940,55</td><td><span class="tag uso">Pagada</span></td></tr>
+<tr><td><b>05/11/2026</b></td><td class="n">512,40</td><td class="n">432,92</td><td class="n">79,48</td><td class="n">23.507,63</td><td><span class="tag prueba">Próxima</span></td></tr>
+<tr><td>05/12/2026</td><td class="n">512,40</td><td class="n">434,72</td><td class="n">77,68</td><td class="n">23.072,91</td><td style="color:var(--apoyo)">Pendiente</td></tr></tbody></table>
+<div class="ia">Cuando el banco cargue la cuota del 05/11, <b>Sumied la casará y hará el asiento</b>: 432,92 a capital y 79,48 a intereses.</div>
+</div></div>
+</figure>
+<p class="pie-pantalla">Ilustración con datos de ejemplo.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Impuestos</span></div><h2>Los impuestos salen de la contabilidad que ya está hecha</h2>
+<p class="lead">Sumied prepara cada modelo según el tipo de empresa, lo presenta con su certificado, guarda el justificante y apunta el pago cuando se carga en el banco.</p></div>
+<div class="dos">
+<div class="bloque"><h3>Los modelos</h3><ul>
+<li><b>Calendario fiscal</b> de cada sociedad: lo que vence y lo que falta.</li>
+<li><b>IVA:</b> trimestral y resumen anual (303 y 390), con el origen de cada casilla.</li>
+<li><b>Retenciones</b> de trabajadores, profesionales y alquileres (111, 115 y 190).</li>
+<li><b>Impuesto sobre Sociedades</b> y pagos fraccionados (200 y 202).</li>
+<li><b>Operaciones con terceros</b> y el resto de declaraciones informativas.</li>
+<li><b>Los modelos salen solos</b> según el tipo de empresa, sin configurarlos uno a uno.</li></ul></div>
+<div class="bloque"><h3>Presentar y cerrar</h3><ul>
+<li><b>Presentación directa</b> con el certificado de la empresa.</li>
+<li><b>Traer lo presentado fuera</b> pegando su CSV.</li>
+<li><b>Justificantes guardados</b> junto a su modelo.</li>
+<li><b>Trimestre cerrado al presentar:</b> nada entra después en un IVA ya declarado.</li>
+<li><b>Reabrir es un permiso aparte</b>, para una complementaria y con rastro.</li>
+<li><b>El pago se casa solo</b> con el cargo del banco y deja la cuenta de Hacienda a cero.</li></ul></div>
+</div>
+<p class="frase">De cualquier casilla de un impuesto se baja al asiento, y del asiento a la factura o al movimiento del banco que lo originó.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Libros y cierre</span></div><h2>Informes que se enseñan sin rehacerlos</h2>
+<p class="lead">Los libros y los estados se ven en pantalla, se filtran y se descargan, y cada cifra lleva a su origen.</p></div>
+<div class="dos">
+<div class="bloque"><h3>Libros</h3><ul>
+<li><b>Libro diario</b>, completo o resumido.</li>
+<li><b>Libro mayor</b> de cualquier cuenta o grupo de cuentas.</li>
+<li><b>Sumas y saldos</b> a cualquier fecha y nivel.</li>
+<li><b>Libros registro de IVA</b> de emitidas y recibidas.</li>
+<li><b>En Excel o PDF</b>, listos para legalizar.</li></ul></div>
+<div class="bloque"><h3>Estados y cierre</h3><ul>
+<li><b>Balance y cuenta de resultados</b>, comparados con el año anterior.</li>
+<li><b>Resultado por centro</b> con la analítica.</li>
+<li><b>Cierre de mes</b> con lo que falta, cuenta a cuenta.</li>
+<li><b>Cierre de ejercicio</b> y asiento de apertura.</li>
+<li><b>Cuentas anuales</b> para el Registro Mercantil.</li>
+<li><b>Traspaso al programa del asesor</b>, una vez al mes, si se quiere seguir con él.</li></ul></div>
+</div>
+<div class="cifras">
+<div><b>15.000+</b><span>asientos llevados en Sumied en producción</span></div>
+<div><b>73</b><span>proveedores con sus facturas leídas</span></div>
+<div><b>7</b><span>modelos de Hacienda preparados desde la contabilidad</span></div>
+<div><b>Cada noche</b><span>agentes que revisan que todo cuadra</span></div>
+</div>
+<p class="apoyo" style="font-size:13px">Cifras medidas el 30/10/2026.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Laboral</span></div><h2>Nóminas, contratos y jornada, sin otro programa</h2>
+<p class="lead">Laboral es para hacer nóminas y contratos con su convenio, sea el que sea, y presentarlos. Y para que la empresa cumpla con el registro de jornada sin pensarlo.</p></div>
+<div class="dos">
+<div class="bloque"><h3>Nóminas y contratos</h3><ul>
+<li><b>Cálculo de nóminas</b> con cualquier convenio.</li>
+<li><b>Contratos, altas, bajas y variaciones</b>, con sus presentaciones.</li>
+<li><b>Seguros sociales</b> y sus aplazamientos.</li>
+<li><b>Nóminas de la gestoría</b> leídas del PDF y contabilizadas, para quien siga con ella.</li>
+<li><b>Historial laboral</b> traído del programa anterior.</li>
+<li><b>Pago de nóminas</b> por remesa desde el banco.</li></ul></div>
+<div class="bloque"><h3>Personas y jornada</h3><ul>
+<li><b>Ficha del trabajador</b> completa, con su foto, su contrato y sus documentos.</li>
+<li><b>Registro de jornada</b> guardado en el servidor, listo para la Inspección de Trabajo.</li>
+<li><b>Correcciones de fichaje</b> siempre dentro de la ley, con su rastro.</li>
+<li><b>Vacaciones, ausencias y bolsa de horas.</b></li>
+<li><b>Centros de trabajo</b> de cada sociedad.</li>
+<li><b>Quién ve qué:</b> el encargado ve a su equipo, sin salarios ni DNI.</li></ul></div>
+</div>
+<p class="nota"><b>Informes para la Inspección de Trabajo</b> claros y exactos, sin rodeos: horas de cada persona, día a día, con sus correcciones y quién las hizo.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Mi portal</span></div><h2>Cada trabajador, con lo suyo en el móvil</h2>
+<p class="lead">Mi portal es la parte de Sumied que usa el equipo. Se instala en el móvil y sirve para el día a día, no solo para ver la nómina.</p></div>
+<div class="tres">
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg></span><h3>Fichar</h3><p>Entrada, pausa y salida desde su móvil, con la ubicación. Si se olvida, le llega un aviso; si se equivoca, pide la corrección.</p></div>
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/></svg></span><h3>Sus documentos</h3><p>Nóminas, contrato y certificados en el momento en que se emiten. Y sube los suyos: bajas, justificantes, títulos.</p></div>
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span><h3>Su calendario</h3><p>Sus horas fichadas, sus turnos, sus vacaciones y su saldo de horas. Pide días libres y ve si están aprobados.</p></div>
+</div>
+<div class="dos">
+<div class="bloque"><h3>Para la empresa</h3><ul>
+<li><b>Se acaba el papel</b> de las nóminas y los recibís.</li>
+<li><b>El registro de jornada se hace solo</b> durante el día, con nombre y hora.</li>
+<li><b>Las peticiones llegan ordenadas</b> al responsable, que aprueba desde su móvil.</li></ul></div>
+<div class="bloque"><h3>Con Folvy</h3><ul>
+<li><b>El mismo portal</b> sirve también para el trabajo del día: recibir mercancía, contar el almacén o hacer las tareas.</li>
+<li><b>Una sola aplicación</b> para el trabajador, con la marca de su empresa.</li></ul></div>
+</div>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Inteligencia artificial</span></div><h2>La IA hace el trabajo pesado, y lo explica</h2>
+<p class="lead">La inteligencia artificial de Sumied no es un chat aparte. Está en cada pantalla, haciendo lo que antes era teclear, y siempre dice qué ha hecho y por qué.</p></div>
+<div class="tres">
+<div class="tarjeta turq"><h3>Lee</h3><p>Facturas, tickets, extractos, cuadros de préstamo, nóminas y resoluciones de Hacienda o de la Seguridad Social.</p></div>
+<div class="tarjeta turq"><h3>Propone</h3><p>El asiento, la cuenta, la factura que paga un movimiento, el reparto de una cuota.</p></div>
+<div class="tarjeta turq"><h3>Completa</h3><p>La ficha de un proveedor o un cliente con lo que trae el documento: NIF, dirección, forma de pago.</p></div>
+<div class="tarjeta turq"><h3>Avisa</h3><p>De una factura que falta, un IVA que no cuadra, un pago que vence o un cobro distinto al esperado.</p></div>
+<div class="tarjeta turq"><h3>Vigila</h3><p>Agentes que revisan cada noche que la contabilidad cumple el plan contable y la norma fiscal.</p></div>
+<div class="tarjeta turq"><h3>Explica</h3><p>Cada propuesta lleva su motivo en palabras: «mismo proveedor y cuenta que las 11 anteriores».</p></div>
+</div>
+<p class="frase">La regla no cambia: la IA propone y una persona decide. Nada se contabiliza ni se presenta sin que alguien lo valide.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Para despachos</span></div><h2>La asesoría entra, revisa y presenta</h2>
+<p class="lead">Un despacho deja de pedir documentos a sus clientes: los encuentra ya leídos, contabilizados y con el borrador del impuesto hecho.</p></div>
+<div class="tres">
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 14h3M8 17h6"/></svg></span><h3>Todos los clientes en una vista</h3><p>El trimestre de cada cliente: qué está listo, qué falta y qué vence.</p></div>
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 20a5.5 5.5 0 0 1 11 0"/><path d="M16 8h5M18.5 5.5v5"/></svg></span><h3>Acceso aceptado por el cliente</h3><p>La empresa invita a su asesoría y decide qué puede hacer. Se retira con un clic.</p></div>
+<div class="tarjeta"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg></span><h3>Un usuario, varias empresas</h3><p>Cambiar de cliente con un selector arriba, sin cerrar sesión.</p></div>
+</div>
+<div class="dos">
+<div class="bloque"><h3>Lo que gana el despacho</h3><ul>
+<li><b>Menos picar datos</b> y más tiempo para asesorar.</li>
+<li><b>Lo dudoso, señalado:</b> no hay que repasarlo todo para encontrar el error.</li>
+<li><b>Presentaciones de todos los clientes</b> desde el mismo calendario.</li>
+<li><b>El cliente ve lo mismo</b> que el despacho, sin enviarse Excel.</li>
+<li><b>Cada cifra con su origen</b>, para responder a Hacienda en minutos.</li></ul></div>
+<div class="bloque"><h3>Empresa de demostración</h3><ul>
+<li><b>Una empresa con datos inventados</b> y meses de actividad, para probar sin miedo.</li>
+<li><b>Un botón la deja como al principio</b>, con las fechas puestas al día.</li>
+<li><b>Sirve para formar</b> al equipo del despacho o del cliente.</li></ul></div>
+</div>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Sumied y Folvy</span></div><h2>Sumied lleva la administración. Folvy, la operación.</h2>
+<p class="lead">Folvy es el ERP que convive con Sumied: compras, almacén, ventas, producción y equipo. Juntos son un solo sistema con un solo dato; por separado, cada uno funciona solo.</p></div>
+<div class="dos" style="align-items:stretch">
+<div class="tarjeta marino" style="gap:10px"><img src="https://app.sumied.com/marcas/sumied/sumied-logo-horizontal-blanco.svg" alt="Sumied" style="height:26px;width:auto;align-self:flex-start"><h3 style="font-size:19px">La administración</h3><ul>
+<li>Contabilidad, facturación y bancos</li><li>Impuestos y Verifactu</li><li>Laboral y Mi portal</li><li>Para la empresa y para su despacho</li></ul></div>
+<div class="tarjeta" style="gap:10px"><span style="display:flex;align-items:center;gap:8px;font-family:'Space Grotesk',var(--f);font-weight:700;font-size:22px;letter-spacing:-.04em"><svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="#172443" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="46 10.55" transform="rotate(-11.5 12 12)"/><circle cx="18.36" cy="5.64" r="2.5" fill="#1F9D6B"/></svg>folvy</span><h3 style="font-size:19px">La operación del día a día</h3><ul>
+<li>Compras a proveedores, albaranes y almacén</li><li>Ventas, punto de venta y pedidos</li><li>Costes, márgenes y producción</li><li>Cuadrantes, fichajes y formación del equipo</li></ul></div>
+</div>
+<div class="flujo">
+<div><b>Se compra en Folvy</b><span>El albarán entra en el almacén, y la factura del proveedor llega a Sumied ya cruzada con él.</span></div>
+<div><b>Se vende en Folvy</b><span>Cada venta llega a Sumied con su IVA, su cobro y su coste.</span></div>
+<div><b>El equipo ficha en Folvy</b><span>Las horas llegan a Laboral y a la nómina, sin pasarlas.</span></div>
+</div>
+<p class="nota"><b>Un ERP para todos los sectores.</b> Folvy nació en el sector con más ritmo y más detalle del día a día, y se está abriendo a cualquier tipo de empresa: comercio, distribución, servicios. Sumied ya sirve a todas desde el primer día.</p>
+</section>
+
+<section class="hoja">
+<div class="cab"><div class="num"><i></i><span class="ceja">Por dentro</span></div><h2>Seguro, trazable y probado antes de cada cambio</h2>
+<p class="lead">Una contabilidad tiene que poder enseñarse a un inspector. Sumied se ha construido para eso desde el primer día.</p></div>
+<div class="tres">
+<div class="tarjeta"><h3>Datos en la Unión Europea</h3><p>En una base de datos alojada en Irlanda, y separados por cliente en la propia base, no solo en la pantalla.</p></div>
+<div class="tarjeta"><h3>Certificados a buen recaudo</h3><p>El certificado de la empresa se autoriza una vez, para lo que se diga, y se puede revocar. Las claves se guardan cifradas.</p></div>
+<div class="tarjeta"><h3>Lo cerrado, cerrado</h3><p>Un periodo presentado no se modifica. Cada cambio queda registrado con quién y cuándo.</p></div>
+<div class="tarjeta"><h3>Permisos por persona</h3><p>Cada usuario ve y toca solo lo suyo: el administrador, el contable, el encargado, el trabajador, el despacho.</p></div>
+<div class="tarjeta"><h3>Cada cambio, ensayado</h3><p>Pruebas automáticas, una copia de ensayo y la aprobación de una persona antes de llegar a producción, y vuelta atrás si algo falla.</p></div>
+<div class="tarjeta"><h3>Donde estés</h3><p>Desde el navegador, sin instalar nada, y en apps de Android e iPhone.</p></div>
+</div>
+<div class="raya"></div>
+<div class="cab"><span class="ceja">Por qué Sumied</span><h3 style="font-size:21px">Lo que cambia frente a lo de siempre</h3></div>
+<div class="tablawrap"><table class="cmp"><thead><tr><th>Lo que se necesita</th><th>Programa contable clásico<br><span>de escritorio o de despacho</span></th><th>Programa en la nube para pymes<br><span>facturación y algo de contabilidad</span></th><th>Sumied</th></tr></thead><tbody>
+<tr><td>Facturas recibidas</td><td class="no">Se teclean</td><td class="med">Se suben y se repasan</td><td class="si">Llegan solas, leídas y con su asiento</td></tr>
+<tr><td>Banco</td><td class="no">Se puntea a mano</td><td class="med">Sugerencias sencillas</td><td class="si">Propuesta por movimiento, reglas y préstamos</td></tr>
+<tr><td>Impuestos</td><td class="si">Completos</td><td class="med">Los básicos</td><td class="si">Completos, presentados y con su origen</td></tr>
+<tr><td>Rigor contable</td><td class="si">Alto</td><td class="med">Justo</td><td class="si">Alto, con cierres que no se pueden saltar</td></tr>
+<tr><td>Facilidad de uso</td><td class="no">Para expertos</td><td class="si">Alta</td><td class="si">Alta, con tres niveles de usuario</td></tr>
+<tr><td>Laboral</td><td class="med">Otro programa</td><td class="med">Fichajes y poco más</td><td class="si">Nóminas, jornada y portal en el mismo sitio</td></tr>
+<tr><td>Despachos</td><td class="med">Sí, sin automatizar</td><td class="no">Poco</td><td class="si">Vista de todos los clientes y trabajo ya hecho</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="hoja oscura">
+<div class="cab"><span class="ceja">Empezar</span><h2>Pruébalo con tu propia empresa, <em>sin compromiso</em></h2>
+<p class="lead">Traemos tu contabilidad del programa que uses, la ponemos en marcha contigo y en pocas semanas el trabajo diario es revisar.</p></div>
+<div class="oferta">
+<div><b>15 días</b><span>gratis, con todo abierto</span></div>
+<div><b>3 meses</b><span>al 50 % después de la prueba</span></div>
+<div><b>Tu histórico</b><span>traído del programa anterior, con su plan de cuentas</span></div>
+</div>
+<div class="tres">
+<div class="tarjeta"><h3>1 · Demo</h3><p>Media hora con tu caso: qué empresa, qué programa usas hoy y qué te quita más horas.</p></div>
+<div class="tarjeta"><h3>2 · Alta</h3><p>Tu empresa, de qué programa vienes, tu certificado y tus bancos. El plan contable y los modelos salen de tu tipo de empresa.</p></div>
+<div class="tarjeta"><h3>3 · En marcha</h3><p>Las facturas empiezan a llegar solas desde el primer día.</p></div>
+</div>
+<div class="contacto"><div><b>Julio García Colón</b><br><span style="color:#C7D3E3">Fundador de Sumied y Folvy</span></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span class="dato">+34 695 043 886</span><span class="dato">sumied.com</span></div></div>
+</section>
+
+</div>
+
+<style>.btn-pdf{position:fixed;right:18px;bottom:18px;z-index:9;font:600 14px/1 system-ui,sans-serif;border:0;border-radius:99px;padding:13px 18px;cursor:pointer;box-shadow:0 8px 22px -8px rgba(0,0,0,.45)}.btn-pdf{background:#1E63C9;color:#fff}@media print{.btn-pdf{display:none}}</style><button class="btn-pdf" onclick="dosierPdf()">Descargar en PDF</button><script>window.DOSIER="Sumied";(function(){
+var DOC=window.DOSIER||"",EP=/folvy\.app$/.test(location.hostname)?"https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/dosier-track":"/t";
+var q=new URLSearchParams(location.search),c=(q.get("c")||"").slice(0,50),src=DOC?(DOC+(c?" · "+c:"")):c;
+var sid=(crypto.randomUUID&&crypto.randomUUID())||"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,function(k){var r=Math.random()*16|0;return(k=="x"?r:(r&3|8)).toString(16)});
+var lugar={},vis=0,desde=document.visibilityState=="visible"?Date.now():0,maxS=0,secc=[];
+function secs(){return Math.round((vis+(desde?Date.now()-desde:0))/1000)}
+function scroll(){var h=document.documentElement,t=h.scrollHeight-h.clientHeight;return t>0?Math.min(100,Math.round(100*(h.scrollTop||document.body.scrollTop)/t)):100}
+addEventListener("scroll",function(){maxS=Math.max(maxS,scroll())},{passive:true});
+function datos(t){return JSON.stringify({t:t,sid:sid,s:maxS,secs:secs(),secc:secc,w:innerWidth,ciu:lugar.ciu||"",pais:lugar.pais||"",red:lugar.red||"",ref:document.referrer||"",src:src})}
+function enviar(t,beacon){var d=datos(t);try{if(beacon&&navigator.sendBeacon){navigator.sendBeacon(EP,new Blob([d],{type:"text/plain"}));return}fetch(EP,{method:"POST",body:d,headers:{"Content-Type":"text/plain"},keepalive:true}).catch(function(){})}catch(e){}}
+try{var io=new IntersectionObserver(function(es){es.forEach(function(e){if(!e.isIntersecting)return;var tx=e.target.textContent.replace(/\s+/g," ").trim();if(tx){tx=(DOC?DOC+": ":"")+tx;tx=tx.slice(0,60);if(secc.indexOf(tx)<0)secc.push(tx)}})},{threshold:.6});document.querySelectorAll("section h1,section h2").forEach(function(s){io.observe(s)})}catch(e){}
+var abierto=false;function abrir(){if(abierto)return;abierto=true;enviar("open")}
+fetch("/api/lugar",{cache:"no-store"}).then(function(r){return r.json()}).then(function(j){lugar=j||{}}).catch(function(){}).then(abrir);setTimeout(abrir,2500);
+setInterval(function(){if(document.visibilityState=="visible")enviar("ping")},20000);
+document.addEventListener("visibilitychange",function(){if(document.visibilityState=="hidden"){if(desde){vis+=Date.now()-desde;desde=0}enviar("ping",true)}else{desde=Date.now()}});
+addEventListener("pagehide",function(){enviar("ping",true)});
+window.dosierPdf=function(){enviar("pdf");setTimeout(function(){window.print()},150)};
+})();</script></body></html>
