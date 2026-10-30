@@ -2,7 +2,8 @@
 // Panel de administración de usuarios y roles. SOLO PARA ADMIN.
 
 import { useState, useEffect } from 'react'
-import { Users, RefreshCw, ShieldCheck, Briefcase, User, Ban, MapPin, AlertTriangle, Lock, Check, ChevronRight } from 'lucide-react'
+import { Users, RefreshCw, ShieldCheck, Briefcase, User, Ban, MapPin, AlertTriangle, Lock, Check, ChevronRight, UserPlus } from 'lucide-react'
+import { InvitarPersona } from '@/modules/multitenancy/components/InvitarPersona'
 import { useApp } from '../context/AppContext'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { Button, Card, Badge, Modal, Label, Select, Alert } from '../components/ui'
@@ -52,6 +53,7 @@ export default function UsuariosAccesosPage() {
   const [error, setError] = useState<string | null>(null)
   const [editingUser, setEditingUser] = useState<UserListItem | null>(null)
   const [filter, setFilter] = useState<'all' | 'admin' | 'manager' | 'worker' | 'inactive'>('all')
+  const [invitando, setInvitando] = useState(false)
 
   // BLOQUE B-6a (17/05/2026): migrado de getCurrentProfile() a hooks.
   //   - Gate de admin: usePermissions().isFullAccess (scope cuenta activa).
@@ -140,10 +142,20 @@ export default function UsuariosAccesosPage() {
             {stats.total} usuarios activos · {stats.inactive} inactivos
           </p>
         </div>
-        <Button size="sm" variant="outline" onClick={() => reload(activeAccountId)}>
-          <span className="inline-flex items-center gap-1.5"><RefreshCw size={14} /> Recargar</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* DM1 · PR 1 (30/10): invitar a una persona a una o varias empresas (tablero 4). */}
+          {!invitando && (
+            <Button size="sm" onClick={() => setInvitando(true)}>
+              <span className="inline-flex items-center gap-1.5" data-prueba="abrir-invitar"><UserPlus size={14} /> Invitar a una persona</span>
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => reload(activeAccountId)}>
+            <span className="inline-flex items-center gap-1.5"><RefreshCw size={14} /> Recargar</span>
+          </Button>
+        </div>
       </div>
+
+      {invitando && <InvitarPersona alCerrar={() => setInvitando(false)} alInvitar={() => reload(activeAccountId)} />}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

@@ -1,0 +1,33 @@
+/* src/modules/multitenancy/components/invitar.css
+ *
+ * DM1 · PR 1 (30/10): «Invitar a una persona» (tablero 4). Solo con los valores
+ * del sistema (var(--s-*)), dentro de .cx-colores para que valga igual en Folvy.
+ */
+.s-invitar { display: flex; flex-direction: column; background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); }
+.s-invitar-cabeza { padding: var(--s-5) var(--s-6); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-invitar-titulo { margin: 0; font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); }
+.s-invitar-apoyo { margin: 0; color: var(--s-apoyo); font-size: var(--s-t-s); }
+.s-invitar-cuerpo { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5) var(--s-6); }
+.s-invitar-empresas { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-3); }
+.s-invitar-empresas legend { font-weight: var(--s-peso-medio); color: var(--s-tinta); margin-bottom: var(--s-2); }
+.s-invitar-empresa {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-3);
+  padding: var(--s-3) var(--s-4); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.s-invitar-empresa[data-marcada] { border-color: var(--s-accion); background: var(--s-accion-suave); }
+.s-invitar-casilla { display: flex; align-items: center; gap: var(--s-3); cursor: pointer; }
+.s-invitar-casilla > span { display: flex; flex-direction: column; }
+.s-invitar-nombre { font-weight: var(--s-peso-medio); color: var(--s-tinta); }
+.s-invitar-empresa .s-control-selector { width: auto; min-width: 200px; }
+.s-invitar-hecho { margin: 0; color: var(--s-ok); font-weight: var(--s-peso-medio); }
+.s-invitar-error { margin: 0; color: var(--s-falta); }
+.s-invitar-pie { display: flex; justify-content: flex-end; gap: var(--s-2); padding: var(--s-4) var(--s-6); border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+
+/* Ajustes › Usuarios de Sumied: la lista a la izquierda y el panel a la derecha. */
+.s-usuarios { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-5); align-items: start; }
+.s-usuarios-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-usuarios-lista li { display: flex; justify-content: space-between; gap: var(--s-3); padding: var(--s-2) 0; border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-usuarios-lista li:not([data-activo]) { color: var(--s-apoyo); }
+.s-usuarios-nombre { color: var(--s-tinta); }
+.s-usuarios-rol { color: var(--s-apoyo); font-size: var(--s-t-s); }
+@media (max-width: 900px) { .s-usuarios { grid-template-columns: minmax(0, 1fr); } }

@@ -57,8 +57,8 @@ test('cuenta B (sin interruptor ni Cocina): el módulo carga y funciona solo', a
   await expect(menu.getByRole('link', { name: 'Ajustes', exact: true })).toHaveAttribute('aria-current', /^(page|true)$/)
   const paginas = menu.getByRole('list', { name: 'Páginas de Ajustes' })
   await expect(paginas).toBeVisible()
-  // El índice dice lo que habrá (C02, N6): «Personas y asesor» sale, y su pantalla dice «aún no».
-  await expect(paginas.getByRole('link', { name: 'Personas y asesor' })).toBeVisible()
+  // El índice dice lo que hay (C02, N6). DM1 · PR 1 (30/10): «Personas y asesor» ya tiene pantalla y se llama «Usuarios».
+  await expect(paginas.getByRole('link', { name: 'Usuarios', exact: true })).toBeVisible()
   // S02: el plan y las tablas son de Contabilidad › Definiciones, no de Ajustes.
   await expect(paginas.getByRole('link', { name: 'Tablas generales' })).toHaveCount(0)
   // Laboral no sale hasta que exista (decisión 5 del S02), ni lo que no tiene pantalla.

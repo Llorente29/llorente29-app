@@ -343,7 +343,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
   {
     grupo: 'Acceso y avisos',
     entradas: [
-      { id: 'personas', etiqueta: 'Personas y asesor', ruta: 'ajustes/personas', hueco: 'Quién entra y qué ve, y el acceso de tu asesor, llegan en un encargo propio.' },
+      // DM1 · PR 1 (30/10): ya no es un hueco. Quién entra e «Invitar a una persona» (tablero 4).
+      { id: 'personas', etiqueta: 'Usuarios', ruta: 'ajustes/personas' },
       { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: `Qué te avisa ${MARCA.nombre} y por dónde llega en un encargo propio.` },
       { id: 'folvy', etiqueta: `Lo que ha hecho ${MARCA.nombre}`, ruta: 'ajustes/folvy' },
     ],

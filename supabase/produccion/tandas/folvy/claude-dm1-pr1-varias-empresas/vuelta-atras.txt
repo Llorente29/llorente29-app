@@ -1,0 +1,5 @@
+# DM1 · PR 1 · vuelta atrás, en orden inverso: las ocho funciones de permisos
+# como estaban (1951) y fuera la tabla y las funciones nuevas (1950). Antes,
+# devolver el front y quitar las pertenencias de más que se hayan dado.
+supabase/vuelta-atras/20261030T1951_dm1_permisos_de_la_activa.down.sql
+supabase/vuelta-atras/20261030T1950_dm1_cuenta_activa.down.sql

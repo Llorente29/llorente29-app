@@ -42,6 +42,8 @@ import AvisoNuevaVersion from './version/AvisoNuevaVersion'
 import { usePendingBoard } from '../modules/pendientes/hooks/usePendingBoard'
 import { useFeatureGate } from '@/platform/feature-gate/useFeatureGate'
 import { MARCA } from '@/marca/marca'
+import { useMisEmpresas } from '@/modules/multitenancy/hooks/useMisEmpresas'
+import { abrirEmpresa } from '@/modules/multitenancy/services/empresasService'
 
 const SETTINGS_BASE = 'configuracion'
 
@@ -76,7 +78,16 @@ export default function Shell() {
       .catch(() => { if (alive) setAllAccounts([]) })
     return () => { alive = false }
   }, [isPlatformAdmin])
-  const selectorAccounts = isPlatformAdmin ? allAccounts : accounts
+  // DM1 · PR 1 (30/10): quien tiene varias cuentas (una asesoría) también cambia
+  // de empresa aquí. La base solo enseña la abierta: cambiar llama a
+  // cambiar_empresa y recarga la aplicación entera.
+  const misCuentas = useMisEmpresas()
+  const variasCuentas = !isPlatformAdmin && misCuentas.length > 1
+  const selectorAccounts = isPlatformAdmin
+    ? allAccounts
+    : variasCuentas
+      ? misCuentas.map(c => ({ id: c.account_id, name: c.nombre } as Account))
+      : accounts
 
   // Cuenta activa mostrada: para platform admin sale de allAccounts (resuelve
   // aunque la cuenta no esté entre las del usuario); si no, la del contexto.
@@ -89,6 +100,13 @@ export default function Shell() {
   function switchAccount(accountId: string) {
     setActiveAccountId(accountId)
     navigate('/')
+  }
+
+  // DM1 · PR 1: abrir otra cuenta propia (no de plataforma). Si la base no deja, lo dice.
+  function abrirOtraEmpresa(accountId: string) {
+    abrirEmpresa(accountId, null, '/').catch((e: unknown) => {
+      window.alert(e instanceof Error ? e.message : 'No se ha podido abrir esa empresa.')
+    })
   }
 
   // R1.2/R1.3a/R1.3b: ¿viewport móvil? (< 768px). Decide barra inferior,
@@ -276,7 +294,7 @@ export default function Shell() {
         onEnterWorkerMode={userProfile?.employeeId ? () => setWorkerMode(true) : undefined}
         activeAccount={shownAccount}
         accounts={selectorAccounts}
-        onSwitchAccount={isPlatformAdmin ? switchAccount : undefined}
+        onSwitchAccount={isPlatformAdmin ? switchAccount : variasCuentas ? abrirOtraEmpresa : undefined}
         pendingCount={pendingActionableCount}
       />}
 
