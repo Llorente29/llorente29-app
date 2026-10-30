@@ -4672,6 +4672,49 @@ $$;
 
 
 --
+-- Name: _cuenta_activa(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._cuenta_activa() RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_uid uuid := auth.uid();
+  v_memo text := current_setting('folvy.cuenta_activa', true);
+  v_cuenta uuid;
+begin
+  if v_uid is null then return null; end if;
+  -- Las políticas la llaman fila a fila: se calcula una vez por transacción y
+  -- usuario, y se guarda en un ajuste local de la transacción (con el usuario
+  -- delante, por si cambia dentro de la misma). Medido el 30/10: sin esto, las
+  -- consultas de ventas tardaban entre el doble y el triple.
+  if v_memo like v_uid::text || ':%' then
+    return nullif(split_part(v_memo, ':', 2), '')::uuid;
+  end if;
+  select coalesce(
+    (select a.account_id
+       from public.user_active_account a
+       join public.user_profiles up on up.user_id = a.user_id and up.account_id = a.account_id and up.active
+      where a.user_id = v_uid),
+    (select up.account_id
+       from public.user_profiles up
+      where up.user_id = v_uid and up.active and up.account_id is not null
+      order by up.created_at, up.account_id
+      limit 1)) into v_cuenta;
+  perform set_config('folvy.cuenta_activa', v_uid::text || ':' || coalesce(v_cuenta::text, ''), true);
+  return v_cuenta;
+end $$;
+
+
+--
+-- Name: FUNCTION _cuenta_activa(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._cuenta_activa() IS 'DM1 (30/10/2026). La cuenta abierta de quien llama: la guardada si sigue siendo miembro activo; si no, la más antigua. NULL sin usuario. Se calcula una vez por transacción (folvy.cuenta_activa).';
+
+
+--
 -- Name: _delivery_zone_account_of_location(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -12563,6 +12606,25 @@ $$;
 
 
 --
+-- Name: _usuario_por_correo(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._usuario_por_correo(p_correo text) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'auth'
+    AS $$
+  select u.id from auth.users u where lower(u.email) = lower(trim(p_correo)) limit 1
+$$;
+
+
+--
+-- Name: FUNCTION _usuario_por_correo(p_correo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._usuario_por_correo(p_correo text) IS 'DM1 (30/10/2026). El usuario de un correo, si existe. Solo service_role (invitar-persona).';
+
+
+--
 -- Name: _v02l_factura_comision_llega(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -18698,14 +18760,61 @@ CREATE FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) RETU
     AS $$
 declare
   v_account uuid; v_id uuid; v_kind text := p_datos->>'tipo'; v_cuadro jsonb := p_datos->'cuadro';
-  v_importe numeric := nullif(p_datos->>'importe', '')::numeric; v_suma numeric; v_cuotas int;
+  v_importe numeric := nullif(p_datos->>'importe', '')::numeric; v_suma numeric; v_filas int; v_cuotas int;
+  v_total int := nullif(p_datos->>'cuotas', '')::int; v_pendiente numeric := nullif(p_datos->>'pendiente', '')::numeric;
   v_banco uuid := nullif(p_datos->>'banco', '')::uuid; v_corto text := nullif(p_datos->>'capital_corto', '');
   v_largo text := nullif(p_datos->>'capital_largo', ''); v_int text := nullif(p_datos->>'intereses', '');
+  v_contrato uuid := nullif(p_datos->>'contrato', '')::uuid; c public.recurring_contract; v_ultima date; v_nuevas int;
+  v_aviso text;
 begin
   select account_id into v_account from public.company where id = p_company;
   if v_account is null or not public.current_user_is_admin_or_manager_of(v_account) then
     raise exception 'Esa empresa no está.' using errcode = 'P0002';
   end if;
+
+  -- ── Añadir las filas del año nuevo a un contrato que ya existe ──────────
+  if v_contrato is not null then
+    select * into c from public.recurring_contract where id = v_contrato and company_id = p_company;
+    if c.id is null then raise exception 'Ese contrato no está.' using errcode = 'P0002'; end if;
+    if c.kind = 'poliza' or c.principal is null then
+      raise exception 'Una póliza no tiene cuadro: sus liquidaciones se reparten con la del banco.' using errcode = '22023';
+    end if;
+    if v_cuadro is null or jsonb_typeof(v_cuadro) <> 'array' or jsonb_array_length(v_cuadro) = 0 then
+      raise exception 'Falta el cuadro: las fechas, las cuotas, el capital y los intereses.' using errcode = '22023';
+    end if;
+    select max((f->>'fecha')::date) into v_ultima from jsonb_array_elements(coalesce(c.schedule, '[]'::jsonb)) f;
+    -- Solo las filas de después de la última que tiene: subir otra vez el mismo cuadro no duplica nada.
+    select coalesce(jsonb_agg(f order by (f->>'fecha')::date), '[]'::jsonb), count(*) into v_cuadro, v_nuevas
+      from jsonb_array_elements(v_cuadro) f where v_ultima is null or (f->>'fecha')::date > v_ultima;
+    if v_nuevas = 0 then
+      raise exception 'Ese cuadro no trae ninguna cuota después de la última que ya tiene «%» (%): no añado nada.',
+        c.name, to_char(v_ultima, 'DD/MM/YYYY') using errcode = '22023';
+    end if;
+    v_cuadro := coalesce((select jsonb_agg(f - 'pendiente' order by (f->>'fecha')::date) from jsonb_array_elements(coalesce(c.schedule, '[]'::jsonb)) f), '[]'::jsonb) || v_cuadro;
+    select round(sum((f->>'capital')::numeric), 2), count(*) into v_suma, v_filas from jsonb_array_elements(v_cuadro) f;
+    v_cuotas := greatest(coalesce(c.installments, 0), v_filas);
+    if v_filas < v_cuotas then
+      if v_pendiente is null then
+        raise exception 'Con las cuotas de este cuadro quedan % sin conocer: di la deuda pendiente que trae el cuadro, para comprobarlo.', v_cuotas - v_filas using errcode = '22023';
+      end if;
+      if round(c.principal - v_suma, 2) <> round(v_pendiente, 2) then
+        raise exception 'Lo aplazado (%) menos el capital de las % cuotas conocidas (%) da %, y el cuadro dice que quedan %: no cuadra, no lo añado.',
+          public.conta_impuesto_euros(c.principal), v_filas, public.conta_impuesto_euros(v_suma),
+          public.conta_impuesto_euros(c.principal - v_suma), public.conta_impuesto_euros(v_pendiente) using errcode = '22023';
+      end if;
+    elsif v_suma <> round(c.principal, 2) then
+      raise exception 'Con este cuadro están las % cuotas, y el capital suma % de los % aplazados: no cuadra, no lo añado.',
+        v_filas, public.conta_impuesto_euros(v_suma), public.conta_impuesto_euros(c.principal) using errcode = '22023';
+    end if;
+    update public.recurring_contract set schedule = public.conta_cuadro_con_pendiente(v_cuadro, c.principal), installments = v_cuotas,
+           document_name = coalesce(nullif(p_datos->>'documento', ''), document_name)
+     where id = c.id;
+    v_aviso := case when v_filas < v_cuotas then format(' Faltan las cuotas de %s: sube el cuadro de ese año cuando llegue.',
+      extract(year from (select max((f->>'fecha')::date) from jsonb_array_elements(v_cuadro) f))::int + 1) else '' end;
+    return jsonb_build_object('id', c.id, 'mensaje', format('Añadidas %s cuotas a «%s»: ya tiene %s de %s.%s', v_nuevas, c.name, v_filas, v_cuotas, v_aviso));
+  end if;
+
+  -- ── Un contrato nuevo ─────────────────────────────────────────────────────
   if v_kind is null or v_kind not in ('prestamo', 'aplazamiento', 'poliza') then
     raise exception 'Di qué es: un préstamo, un aplazamiento o una póliza.' using errcode = '22023';
   end if;
@@ -18720,8 +18829,8 @@ begin
     raise exception 'Ese banco no es de esta empresa.' using errcode = '22023';
   end if;
   -- Las cuentas, del plan de esta empresa (regla 9: nunca por nombre ni de otra cuenta).
-  if exists (select 1 from unnest(array[v_corto, v_largo, v_int]) c(code)
-              where c.code is not null and not exists (select 1 from public.company_account a where a.company_id = p_company and a.code = c.code)) then
+  if exists (select 1 from unnest(array[v_corto, v_largo, v_int]) cu(code)
+              where cu.code is not null and not exists (select 1 from public.company_account a where a.company_id = p_company and a.code = cu.code)) then
     raise exception 'Alguna de las cuentas no está en el plan de la empresa.' using errcode = '22023';
   end if;
 
@@ -18730,8 +18839,21 @@ begin
       raise exception 'Falta el cuadro: las fechas, las cuotas, el capital y los intereses.' using errcode = '22023';
     end if;
     if v_importe is null then raise exception 'Falta el importe prestado o aplazado.' using errcode = '22023'; end if;
-    select round(sum((f->>'capital')::numeric), 2), count(*) into v_suma, v_cuotas from jsonb_array_elements(v_cuadro) f;
-    if v_suma <> round(v_importe, 2) then
+    select round(sum((f->>'capital')::numeric), 2), count(*) into v_suma, v_filas from jsonb_array_elements(v_cuadro) f;
+    v_cuotas := greatest(coalesce(v_total, 0), v_filas);
+    if v_filas < v_cuotas then
+      -- Cuadro parcial: lo aplazado menos el capital de las filas leídas es la deuda pendiente del cuadro.
+      if v_pendiente is null then
+        raise exception 'El cuadro trae % de % cuotas: di la deuda pendiente que trae, para comprobarlo.', v_filas, v_cuotas using errcode = '22023';
+      end if;
+      if round(v_importe - v_suma, 2) <> round(v_pendiente, 2) then
+        raise exception 'Lo aplazado (%) menos el capital de las % cuotas del cuadro (%) da %, y el cuadro dice que quedan %: no cuadra, no lo guardo.',
+          public.conta_impuesto_euros(v_importe), v_filas, public.conta_impuesto_euros(v_suma),
+          public.conta_impuesto_euros(v_importe - v_suma), public.conta_impuesto_euros(v_pendiente) using errcode = '22023';
+      end if;
+      v_aviso := format(' Faltan las cuotas de %s: sube el cuadro de ese año cuando llegue.',
+        extract(year from (select max((f->>'fecha')::date) from jsonb_array_elements(v_cuadro) f))::int + 1);
+    elsif v_suma <> round(v_importe, 2) then
       raise exception 'La suma del capital da % y lo aplazado es %: el cuadro no cuadra, no lo guardo.',
         public.conta_impuesto_euros(v_suma), public.conta_impuesto_euros(v_importe) using errcode = '22023';
     end if;
@@ -18749,8 +18871,8 @@ begin
 
   return jsonb_build_object('id', v_id, 'mensaje', case when v_kind = 'poliza'
     then format('Guardada la póliza «%s»: sus liquidaciones se reparten con la del banco.', trim(p_datos->>'nombre'))
-    else format('Guardado «%s»: %s cuotas, %s aplazados. Cada cuota se casará sola con su fila del cuadro.',
-      trim(p_datos->>'nombre'), v_cuotas, public.conta_impuesto_euros(v_importe)) end);
+    else format('Guardado «%s»: %s cuotas, %s aplazados. Cada cuota se casará sola con su fila del cuadro.%s',
+      trim(p_datos->>'nombre'), v_cuotas, public.conta_impuesto_euros(v_importe), coalesce(v_aviso, '')) end);
 end $$;
 
 
@@ -18758,7 +18880,7 @@ end $$;
 -- Name: FUNCTION bank_contrato_guardar(p_company uuid, p_datos jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) IS 'S01d. Alta de un préstamo, aplazamiento o póliza desde «Subir el cuadro» (tablero 3). No guarda un cuadro cuyo capital no sume lo aplazado.';
+COMMENT ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) IS 'S01d. Alta de un préstamo, aplazamiento o póliza desde «Subir el cuadro» (tablero 3). S01d-b: cuadro parcial (cuotas del texto y deuda pendiente) y añadir las filas del año nuevo a un contrato que ya existe.';
 
 
 --
@@ -20244,6 +20366,41 @@ BEGIN
   RETURN v_n;
 END;
 $$;
+
+
+--
+-- Name: cambiar_empresa(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cambiar_empresa(p_account_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_nombre text;
+begin
+  if auth.uid() is null then
+    raise exception 'SIN_SESION' using errcode = '42501', hint = 'Hay que entrar para cambiar de empresa.';
+  end if;
+  select a.name into v_nombre
+    from public.user_profiles up join public.accounts a on a.id = up.account_id
+   where up.user_id = auth.uid() and up.account_id = p_account_id and up.active;
+  if v_nombre is null then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'No tienes acceso a esa empresa.';
+  end if;
+  insert into public.user_active_account (user_id, account_id, updated_at)
+  values (auth.uid(), p_account_id, now())
+  on conflict (user_id) do update set account_id = excluded.account_id, updated_at = excluded.updated_at;
+  -- La de esta transacción, también: lo que se lea después ya es de la nueva.
+  perform set_config('folvy.cuenta_activa', auth.uid()::text || ':' || p_account_id::text, true);
+  return jsonb_build_object('account_id', p_account_id, 'nombre', v_nombre);
+end $$;
+
+
+--
+-- Name: FUNCTION cambiar_empresa(p_account_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.cambiar_empresa(p_account_id uuid) IS 'DM1 (30/10/2026). Abre otra cuenta de quien llama, si es miembro activo. Después la pantalla se recarga.';
 
 
 --
@@ -61043,6 +61200,46 @@ CREATE FUNCTION public.mis_avisos_olvido() RETURNS TABLE(id uuid, entrada_at tim
                         and r.status in ('pending', 'approved') and r.proposed_datetime > l.entrada_at)
    order by l.entrada_at desc;
 $$;
+
+
+--
+-- Name: mis_empresas(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mis_empresas() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'account_id', a.id,
+      'nombre', a.name,
+      'slug', a.slug,
+      'logo', a.logo_url,
+      'rol', up.role,
+      'solo_sumied', a.product_brand is not null,
+      'activa', a.id = public._cuenta_activa(),
+      'sociedades', coalesce((
+        select jsonb_agg(jsonb_build_object(
+                 'id', c.id,
+                 'nombre', coalesce(nullif(c.trade_name, ''), c.legal_name),
+                 'razon_social', c.legal_name,
+                 'color', c.color,
+                 'logo', c.logo_path)
+               order by coalesce(nullif(c.trade_name, ''), c.legal_name))
+          from public.company c
+         where c.account_id = a.id and coalesce(c.is_active, true)), '[]'::jsonb))
+    order by a.name), '[]'::jsonb)
+  from public.user_profiles up
+  join public.accounts a on a.id = up.account_id
+  where up.user_id = auth.uid() and up.active and up.account_id is not null
+$$;
+
+
+--
+-- Name: FUNCTION mis_empresas(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.mis_empresas() IS 'DM1 (30/10/2026). Las cuentas de quien llama, con su rol, si es solo Sumied, si está abierta y sus sociedades. Para el selector de empresa.';
 
 
 --
@@ -103875,6 +104072,24 @@ CREATE TABLE public.usage_counters (
 
 
 --
+-- Name: user_active_account; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.user_active_account (
+    user_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE user_active_account; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.user_active_account IS 'DM1 (30/10/2026). La cuenta que tiene abierta cada persona con varias. Solo la escribe cambiar_empresa. La lee _cuenta_activa, y de ella current_user_account_ids y las funciones de permisos (1951).';
+
+
+--
 -- Name: user_item_unit_pref; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -110492,6 +110707,14 @@ ALTER TABLE ONLY public.uber_store_map
 
 ALTER TABLE ONLY public.usage_counters
     ADD CONSTRAINT usage_counters_pkey PRIMARY KEY (account_id, quota_key, period_start);
+
+
+--
+-- Name: user_active_account user_active_account_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_active_account
+    ADD CONSTRAINT user_active_account_pkey PRIMARY KEY (user_id);
 
 
 --
@@ -127823,6 +128046,22 @@ ALTER TABLE ONLY public.usage_counters
 
 
 --
+-- Name: user_active_account user_active_account_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_active_account
+    ADD CONSTRAINT user_active_account_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: user_active_account user_active_account_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_active_account
+    ADD CONSTRAINT user_active_account_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_item_unit_pref user_item_unit_pref_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -137516,6 +137755,19 @@ CREATE POLICY usage_counters_write_admin ON public.usage_counters TO authenticat
 
 
 --
+-- Name: user_active_account; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.user_active_account ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: user_active_account user_active_account_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY user_active_account_read ON public.user_active_account FOR SELECT TO authenticated USING ((user_id = auth.uid()));
+
+
+--
 -- Name: user_item_unit_pref; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -138858,6 +139110,15 @@ GRANT ALL ON FUNCTION public._create_dish_from_unmapped_core(p_account_id uuid, 
 
 REVOKE ALL ON FUNCTION public._ctb_receipt_differences_core(p_receipt_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._ctb_receipt_differences_core(p_receipt_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _cuenta_activa(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._cuenta_activa() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._cuenta_activa() TO authenticated;
+GRANT ALL ON FUNCTION public._cuenta_activa() TO service_role;
 
 
 --
@@ -140356,6 +140617,14 @@ GRANT ALL ON FUNCTION public._user_can_manage_admins(p_user_id uuid) TO service_
 
 
 --
+-- Name: FUNCTION _usuario_por_correo(p_correo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._usuario_por_correo(p_correo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._usuario_por_correo(p_correo text) TO service_role;
+
+
+--
 -- Name: FUNCTION _v02l_factura_comision_llega(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -141660,6 +141929,15 @@ GRANT ALL ON FUNCTION public.build_course_content_snapshot(p_course_id uuid) TO 
 GRANT ALL ON FUNCTION public.build_inventory_count(p_count_id uuid, p_area_ids uuid[], p_full boolean) TO anon;
 GRANT ALL ON FUNCTION public.build_inventory_count(p_count_id uuid, p_area_ids uuid[], p_full boolean) TO authenticated;
 GRANT ALL ON FUNCTION public.build_inventory_count(p_count_id uuid, p_area_ids uuid[], p_full boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION cambiar_empresa(p_account_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.cambiar_empresa(p_account_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.cambiar_empresa(p_account_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.cambiar_empresa(p_account_id uuid) TO service_role;
 
 
 --
@@ -148746,6 +149024,15 @@ GRANT ALL ON FUNCTION public.mirror_state(p_account uuid, p_item uuid) TO servic
 REVOKE ALL ON FUNCTION public.mis_avisos_olvido() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.mis_avisos_olvido() TO authenticated;
 GRANT ALL ON FUNCTION public.mis_avisos_olvido() TO service_role;
+
+
+--
+-- Name: FUNCTION mis_empresas(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.mis_empresas() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.mis_empresas() TO authenticated;
+GRANT ALL ON FUNCTION public.mis_empresas() TO service_role;
 
 
 --
@@ -158041,6 +158328,14 @@ GRANT ALL ON TABLE public.uber_store_map TO service_role;
 GRANT ALL ON TABLE public.usage_counters TO anon;
 GRANT ALL ON TABLE public.usage_counters TO authenticated;
 GRANT ALL ON TABLE public.usage_counters TO service_role;
+
+
+--
+-- Name: TABLE user_active_account; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.user_active_account TO service_role;
+GRANT SELECT ON TABLE public.user_active_account TO authenticated;
 
 
 --
