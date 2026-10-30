@@ -15,6 +15,7 @@ import { reglasQuePropongo, type Casado, type MovRegla, type NoLaPropongo, type 
 import { limitesMes, type ExtractoDeshecho, type MovimientoBanco, type PropuestaGuardada } from '@/modules/conta/lib/bancosVista'
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
+import type { LineaRegla } from '@/modules/conta/lib/reparto'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -228,10 +229,14 @@ export const borrarRegla = (id: string) => rpc<void>('bank_regla_borrar', { p_id
  * persona la acepta (la base no deja que Folvy encienda una sola): dos pasos,
  * los dos en el registro de la regla.
  */
-export async function guardarRegla(companyId: string, r: { id?: string | null; palabras: string; contiene: string; cuenta: string; signo?: 1 | -1 | null; origen: 'persona' | 'folvy' }): Promise<string> {
+export async function guardarRegla(companyId: string, r: { id?: string | null; palabras: string; contiene: string; cuenta: string; signo?: 1 | -1 | null; origen: 'persona' | 'folvy'
+  /** S01d · «Recordar este reparto»: cada línea con su importe fijo (null = lo que falte). */
+  lineas?: LineaRegla[] | null }): Promise<string> {
+  const lineas = r.lineas && r.lineas.length > 1 ? r.lineas.map((l) => ({ cuenta: l.cuenta, importe_cent: l.importeCent, concepto: l.concepto,
+    ...(l.modelo ? { modelo: l.modelo } : {}), ...(l.periodo ? { periodo: l.periodo } : {}) })) : null
   const id = await rpc<string>('bank_regla_guardar', {
     p_company: companyId, p_id: r.id ?? null, p_palabras: r.palabras, p_condicion: { contiene: r.contiene, ...(r.signo ? { signo: r.signo } : {}) },
-    p_destino: { cuenta: r.cuenta }, p_origen: r.origen, p_estado: r.origen === 'folvy' && !r.id ? 'propuesta' : 'activa',
+    p_destino: { cuenta: r.cuenta, ...(lineas ? { lineas } : {}) }, p_origen: r.origen, p_estado: r.origen === 'folvy' && !r.id ? 'propuesta' : 'activa',
   })
   if (r.origen === 'folvy' && !r.id) await rpc<void>('bank_regla_estado', { p_id: id, p_estado: 'activa' })
   return id

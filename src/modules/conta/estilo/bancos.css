@@ -260,3 +260,48 @@
 .cxv-fin-texto { margin: 0; color: var(--cx-texto-suave, #4b5563); font-size: 16px; }
 .cxv-fin-botones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
 @media (max-width: 640px) { .cxv-fin { padding: 20px; } .cxv-fin-botones { flex-direction: column; align-self: stretch; } }
+
+/* S01d · «Decirlo yo · a qué va este movimiento» con reparto (tableros 1 y 2). */
+.cxr-cabeza { display: flex; gap: 32px; align-items: flex-end; padding: 16px 20px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); margin-bottom: 14px; }
+.cxr-cabeza > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxr-cabeza strong { font-size: 16px; }
+.cxr-cabeza-concepto { flex: 1; }
+.cxr-cabeza-concepto strong { overflow-wrap: anywhere; }
+.cxr-cabeza-importe { text-align: right; align-items: flex-end; }
+.cxr-cabeza-importe strong { font-size: 22px; }
+.cxr-aclarar { margin: 0; padding: 12px 16px; border: 1px solid var(--cx-ambar-punto); border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxr-tabla { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); }
+.cxr-fila { display: grid; grid-template-columns: 150px minmax(120px, 1fr) 130px minmax(140px, 1.2fr) 70px 32px; gap: 12px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--cx-linea); }
+.cxr-titulos { font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding-top: 12px; padding-bottom: 12px; }
+.cxr-num { text-align: right; }
+.cxr-nombre { overflow-wrap: anywhere; }
+.cxr-local { color: var(--cx-apoyo); }
+.cxr-quitar { border: 0; background: none; font-size: 18px; color: var(--cx-texto); cursor: pointer; }
+.cxr-quitar:disabled { color: var(--cx-borde-campo); cursor: default; }
+.cxr-modelo { grid-column: 1 / -1; display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--cx-apoyo); }
+.cxr-modelo label { display: flex; flex-direction: column; gap: 4px; }
+.cxr-otra { margin: 14px 20px; padding: 10px 22px; border: 1px dashed var(--cx-azul); border-radius: var(--cx-radio-boton); background: none; color: var(--cx-azul); font-weight: 600; cursor: pointer; }
+.cxr-total { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--cx-linea); }
+.cxr-falta { padding: 6px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); font-weight: 600; }
+.cxr-falta-cero { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxr-solo-movil { display: none; }
+
+@media (max-width: 720px) {
+  .cxr-cabeza { flex-direction: column; align-items: stretch; gap: 6px; }
+  .cxr-cabeza-importe { text-align: left; align-items: flex-start; }
+  .cxr-cabeza-importe strong { font-size: 28px; }
+  .cxr-tabla { border: 0; background: none; }
+  .cxr-titulos, .cxr-total { display: none; }
+  .cxr-fila { grid-template-columns: 1fr 1fr 32px; grid-template-areas: 'cuenta importe quitar' 'nombre nombre nombre' 'concepto concepto concepto' 'modelo modelo modelo';
+    border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); margin-bottom: 12px; padding: 14px 16px; }
+  .cxr-fila > .cxr-cuenta { grid-area: cuenta; }
+  .cxr-fila > input.cxr-num { grid-area: importe; }
+  .cxr-fila > .cxr-quitar { grid-area: quitar; }
+  .cxr-fila > .cxr-nombre { grid-area: nombre; font-size: 14px; color: var(--cx-apoyo); }
+  .cxr-fila > input:nth-of-type(3) { grid-area: concepto; }
+  .cxr-fila > .cxr-modelo { grid-area: modelo; }
+  .cxr-fila > .cxr-local { display: none; }
+  .cxr-otra { width: 100%; margin: 0 0 12px; }
+  .cxr-pie { position: sticky; bottom: 0; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 0; background: var(--cx-blanco); border-top: 1px solid var(--cx-linea); }
+  .cxr-solo-movil { display: inline-block; align-self: flex-start; }
+}

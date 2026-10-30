@@ -41,6 +41,7 @@
 
 import { eurosCent, limpiarConcepto } from '@/modules/conta/lib/extractoBanco'
 import { modeloYPeriodo } from '@/modules/conta/lib/libro'
+import { aplicarRegla, type LineaRegla } from '@/modules/conta/lib/reparto'
 
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -130,6 +131,8 @@ export interface Regla {
   id: string; palabras: string; contiene: string; signo: 1 | -1 | null; cuenta: string; terceroId: string | null
   /** Veces que la persona la ha confirmado sin corregir: a la 3.ª casa sola (B01). */
   confirmaciones?: number
+  /** S01d · «Recordar este reparto»: las cuentas entre las que se reparte (importe fijo, o null = lo que falte). */
+  lineas?: LineaRegla[] | null
 }
 /** Lo confirmado antes (por la persona, o traído del libro de Diez) por contraparte. */
 export interface Aprendido { contraparte: string; cuenta: string; terceroId: string | null; veces: number }
@@ -250,6 +253,8 @@ export interface Decision {
   quedaPorCasarCent: number | null
   /** B02 · La factura propuesta está «en revisión»: confirmar el pago no la aprueba. */
   facturaSinAprobar: boolean
+  /** S01d · Una regla con reparto que no cuadra con este importe: las mismas cuentas, para aclarar. */
+  reparto?: LineaRegla[] | null
 }
 
 const euros = (c: number) => c / 100
@@ -817,6 +822,21 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     // Una regla propone; casa sola cuando la persona la ha confirmado 3 veces sin corregir (B01).
     // Antes, punto verde: «lo casaría sola, pero aún no puedo».
     const conf = r.confirmaciones ?? 0
+    // S01d · Regla con reparto: si el importe cuadra, sale repartido y «probable» (nunca sola: varias
+    // cuentas se miran); si no, las mismas cuentas y «Falta por repartir», por aclarar (respuesta 1, 30/10).
+    if (r.lineas && r.lineas.length > 0) {
+      const ap = aplicarRegla(imp, r.lineas)
+      if (!ap.cuadra) {
+        return { ...b, confianza: 'duda', reglaId: r.id, origen: 'regla', que: `Reparto de la regla · ${r.lineas.map((l) => l.cuenta).join(' + ')}`,
+          falta: 'repartir el importe', reparto: ap.lineas.map((l) => ({ ...l, importeCent: l.importeCent })),
+          porque: `Regla: ${r.palabras}. El importe (${eurosCent(abs(imp))}) no es el de siempre: di cuánto va a cada cuenta.`, destino: null }
+      }
+      return { ...b, confianza: 'probable', preseleccionar: false, reglaId: r.id, origen: 'regla', que: `Repartido · ${ap.lineas.map((l) => nombreCuenta(ctx, l.cuenta)).join(' + ')}`,
+        porque: `Regla: ${r.palabras} (el mismo reparto de siempre).`,
+        destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,
+          lineas: ap.lineas.map((l) => ({ cuenta: l.cuenta, importe: euros(l.importeCent!), ...(l.concepto ? { concepto: l.concepto } : {}),
+            ...(l.modelo && l.periodo ? { modelo: l.modelo, periodo: l.periodo } : {}) })) } }
+    }
     const sola = conf >= 3
     return { ...b, confianza: sola ? 'seguro' : 'probable', preseleccionar: !sola, reglaId: r.id, origen: 'regla', que: nombreCuenta(ctx, r.cuenta),
       porque: sola ? `Regla confirmada ${conf} veces: ${r.palabras}.` : `Regla: ${r.palabras} (confirmada ${conf} ${conf === 1 ? 'vez' : 'veces'}; a la 3.ª caso sola).`, destino: { tipo: 'cuenta', tercero_id: r.terceroId, concepto: limpiarConcepto(m.concepto) || ctx.nombres[r.cuenta] || r.cuenta,

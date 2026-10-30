@@ -310,7 +310,10 @@ export function crearBancos(bd: Bd) {
       reglas: reglas.map((r) => {
         const cond = r.condition as Fila, dest = r.target as Fila
         return { id: String(r.id), palabras: String(r.words), contiene: String(cond.contiene), signo: cond.signo === 1 || cond.signo === -1 ? cond.signo : null,
-          cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id), confirmaciones: n(r.confirmations) }
+          cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id), confirmaciones: n(r.confirmations),
+          // S01d · «Recordar este reparto»: las líneas de la regla (importe en céntimos; null = lo que falte).
+          lineas: Array.isArray(dest.lineas) ? (dest.lineas as Fila[]).map((l) => ({ cuenta: String(l.cuenta), importeCent: l.importe_cent === null || l.importe_cent === undefined ? null : Number(l.importe_cent),
+            concepto: s(l.concepto), modelo: s(l.modelo), periodo: s(l.periodo) })) : null }
       }),
       aprendido: [...veces.values()],
       asientos: asientos.map((a): AsientoLibre => ({ id: String(a.entry_id), cuentaId: String(a.treasury_account_id), fecha: String(a.fecha), importeCent: cent(a.importe),
@@ -349,7 +352,7 @@ export function crearBancos(bd: Bd) {
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
       const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId,
         origen: d.origen, preseleccionar: d.preseleccionar, tarjetaDesconocida: d.tarjetaDesconocida, alternativas: d.alternativas,
-        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar }
+        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, reparto: d.reparto ?? null }
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
         if (d.confianza === 'seguro' && d.destino) {
