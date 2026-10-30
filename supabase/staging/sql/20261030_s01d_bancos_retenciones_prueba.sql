@@ -191,18 +191,18 @@ set local role authenticated;
 do $$
 declare
   emp uuid := (select v::uuid from _s01d where k = 'emp');
-  t public.tax_return; v jsonb; l record;
+  t public.tax_return; res jsonb; l record;
 begin
   select * into t from public.tax_return where company_id = emp and form_code = '111' and fiscal_year = 2024 and period = '3T';
-  v := public.conta_impuesto_casar_cargo(t.id, (select v::uuid from _s01d where k = 'cargo'));
+  res := public.conta_impuesto_casar_cargo(t.id, (select v::uuid from _s01d where k = 'cargo'));
   select * into t from public.tax_return where id = t.id;
   select a.code, ln.withholding_model, ln.withholding_period, ln.debit, e.status into l
     from public.journal_line ln join public.company_account a on a.id = ln.company_account_id join public.journal_entry e on e.id = ln.entry_id
    where ln.entry_id = t.payment_entry_id and a.template_code like '475%';
   if t.status <> 'paid' or l.code <> '47510000' or l.withholding_model <> '111' or l.withholding_period <> '2024-3T' or l.debit <> 578.01 or l.status <> 'validado' then
-    raise exception 'PRUEBA S01d · 3: «Casar el cargo» del 111 no deja su pago en la 47510000 con su periodo (%, %, %).', t.status, row_to_json(l), v;
+    raise exception 'PRUEBA S01d · 3: «Casar el cargo» del 111 no deja su pago en la 47510000 con su periodo (%, %, %).', t.status, row_to_json(l), res;
   end if;
-  raise notice 'PRUEBA S01d · 3: «%» El pago del 111 va a la 47510000 con «111 · 3T 2024» y se valida solo.', v->>'mensaje';
+  raise notice 'PRUEBA S01d · 3: «%» El pago del 111 va a la 47510000 con «111 · 3T 2024» y se valida solo.', res->>'mensaje';
 end $$;
 
 -- ── 4 · El diario de retenciones del 4T de 2026 ───────────────────────────
@@ -279,7 +279,7 @@ declare
   corto text := coalesce((select code from public.company_account where company_id = emp and code like '520%' order by code limit 1), '47510000');
   intereses text := coalesce((select code from public.company_account where company_id = emp and code like '662%' order by code limit 1), '47510077');
   cuadro jsonb := '[{"fecha":"2026-11-30","cuota":520,"capital":500,"intereses":20},{"fecha":"2026-12-30","cuota":510,"capital":500,"intereses":10}]';
-  v jsonb; c public.recurring_contract;
+  res jsonb; c public.recurring_contract;
 begin
   begin
     perform public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'aplazamiento', 'nombre', 'Prueba S01d · aplazamiento', 'contiene', 'PRUEBA S01D APLAZ',
@@ -288,18 +288,18 @@ begin
   exception when sqlstate '22023' then
     if sqlerrm not like '%no cuadra%' then raise exception 'PRUEBA S01d · 8: el aviso del cuadro dice otra cosa: %', sqlerrm; end if;
   end;
-  v := public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'aplazamiento', 'nombre', 'Prueba S01d · aplazamiento', 'contiene', 'PRUEBA S01D APLAZ',
+  res := public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'aplazamiento', 'nombre', 'Prueba S01d · aplazamiento', 'contiene', 'PRUEBA S01D APLAZ',
     'importe', 1000, 'capital_corto', corto, 'intereses', intereses, 'cuadro', cuadro, 'documento', 'resolucion-prueba.pdf', 'documento_tipo', 'pdf'));
-  select * into c from public.recurring_contract where id = (v->>'id')::uuid;
+  select * into c from public.recurring_contract where id = (res->>'id')::uuid;
   if c.kind <> 'aplazamiento' or c.amount <> 520 or c.principal <> 1000 or c.installments <> 2 or c.short_capital_account <> corto or c.capital_account <> corto
      or (c.schedule->0->>'pendiente')::numeric <> 500 or (c.schedule->1->>'pendiente')::numeric <> 0 then
     raise exception 'PRUEBA S01d · 8: el contrato no queda como debe: %', row_to_json(c);
   end if;
-  if v->>'mensaje' not like 'Guardado «Prueba S01d · aplazamiento»: 2 cuotas%' then raise exception 'PRUEBA S01d · 8: la confirmación dice %', v->>'mensaje'; end if;
-  v := public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'poliza', 'nombre', 'Prueba S01d · póliza', 'contiene', 'PRUEBA S01D POLIZA', 'capital_corto', corto, 'intereses', intereses));
-  if (select amount from public.recurring_contract where id = (v->>'id')::uuid) is not null then raise exception 'PRUEBA S01d · 8: la póliza lleva cuota.'; end if;
+  if res->>'mensaje' not like 'Guardado «Prueba S01d · aplazamiento»: 2 cuotas%' then raise exception 'PRUEBA S01d · 8: la confirmación dice %', res->>'mensaje'; end if;
+  res := public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'poliza', 'nombre', 'Prueba S01d · póliza', 'contiene', 'PRUEBA S01D POLIZA', 'capital_corto', corto, 'intereses', intereses));
+  if (select amount from public.recurring_contract where id = (res->>'id')::uuid) is not null then raise exception 'PRUEBA S01d · 8: la póliza lleva cuota.'; end if;
   insert into _s01d values ('contrato_emp', emp::text) on conflict do nothing;
-  raise notice 'PRUEBA S01d · 8: el cuadro que no cuadra no se guarda; el que sí, con lo pendiente por fila; la póliza, sin cuota. %', v->>'mensaje';
+  raise notice 'PRUEBA S01d · 8: el cuadro que no cuadra no se guarda; el que sí, con lo pendiente por fila; la póliza, sin cuota. %', res->>'mensaje';
 end $$;
 select set_config('request.jwt.claims', '{"sub":"c01b0000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
 do $$ begin
