@@ -211,6 +211,7 @@ export const PRODUCTOS: Producto[] = [
     id: 'bancos', etiqueta: 'Bancos', icono: 'bancos', ruta: R.bancos, prefijos: [], grupo: 'finanzas',
     pestanas: [
       { id: 'movimientos', etiqueta: 'Movimientos', icono: 'movimientos', ruta: R.bancos, prefijos: [R.bancos] },
+      { id: 'prestamos', etiqueta: 'Préstamos y aplazamientos', icono: 'cuentasBanco', ruta: `${R.bancos}/prestamos`, prefijos: [`${R.bancos}/prestamos`] },
       { id: 'cuentas', etiqueta: 'Cuentas y extractos', icono: 'cuentasBanco', ruta: `${R.bancos}/cuentas`, prefijos: [`${R.bancos}/cuentas`] },
       { id: 'reglas', etiqueta: 'Reglas', icono: 'reglas', ruta: `${R.bancos}/reglas`, prefijos: [`${R.bancos}/reglas`] },
     ],

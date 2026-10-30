@@ -59,6 +59,7 @@ import { Boton } from '@/modules/conta/diseno'
 import { Movimientos } from '@/modules/conta/bancos/Movimientos'
 import { Reglas } from '@/modules/conta/bancos/Reglas'
 import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
+import { Prestamos } from '@/modules/conta/bancos/Prestamos'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
 import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
@@ -69,6 +70,7 @@ function contenido(v: VistaBancos): ReactNode {
     case 'movimientos': return <Movimientos />
     case 'reglas': return <Reglas />
     case 'cuentas': return <CuentasYExtractos />
+    case 'prestamos': return <Prestamos />
     case 'subir': return <SubirExtracto />
     case 'hecho': return <HechoPorFolvy />
   }

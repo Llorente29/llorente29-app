@@ -305,3 +305,56 @@
   .cxr-pie { position: sticky; bottom: 0; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 0; background: var(--cx-blanco); border-top: 1px solid var(--cx-linea); }
   .cxr-solo-movil { display: inline-block; align-self: flex-start; }
 }
+
+/* S01d · Préstamos y aplazamientos (tablero 3). */
+.cxpr-pagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.cxpr-pagina:has(.cxpr-panel) { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+.cxpr-principal { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.cxpr-cabeza { display: flex; justify-content: flex-end; }
+.cxpr-hecho { padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxpr-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cxpr-cifra { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); }
+.cxpr-cifra span, .cxpr-cifra small { color: var(--cx-apoyo); }
+.cxpr-cifra small { font-size: 14px; }
+.cxpr-cifra strong { font-size: 26px; }
+.cxpr-tabla { width: 100%; border-collapse: collapse; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); overflow: hidden; }
+.cxpr-tabla th { text-align: left; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding: 14px 16px; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-tabla td { padding: 16px; border-bottom: 1px solid var(--cx-linea); vertical-align: middle; }
+.cxpr-tabla tr:last-child td { border-bottom: 0; }
+.cxpr-num { text-align: right; }
+.cxpr-tipo { color: var(--cx-apoyo); }
+.cxpr-sola { color: var(--cx-verde-oscuro); font-weight: 600; }
+.cxpr-mano { color: var(--cx-ambar); font-weight: 600; }
+.cxpr-vacio p { margin: 0 0 6px; }
+.cxpr-panel { display: flex; flex-direction: column; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+.cxpr-panel-cabeza { padding: 20px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-panel-cabeza h2 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
+.cxpr-datos { margin: 0; padding: 12px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-datos > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; }
+.cxpr-datos dt { color: var(--cx-apoyo); }
+.cxpr-datos dd { margin: 0; font-weight: 600; max-width: 60%; }
+.cxpr-datos dd .cx-input { width: 100%; }
+.cxpr-cuadro { max-height: 260px; overflow: auto; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-cuadro table { width: 100%; border-collapse: collapse; }
+.cxpr-cuadro th { position: sticky; top: 0; background: var(--cx-blanco); text-align: left; font-size: 13px; color: var(--cx-apoyo); padding: 10px 24px 10px 12px; }
+.cxpr-cuadro th:first-child, .cxpr-cuadro td:first-child { padding-left: 24px; }
+.cxpr-cuadro td { padding: 10px 24px 10px 12px; border-top: 1px solid var(--cx-linea); }
+.cxpr-cuadra, .cxpr-no-cuadra { margin: 16px 24px 0; padding: 14px 18px; border-radius: var(--cx-radio-caja); }
+.cxpr-cuadra { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxpr-no-cuadra { background: var(--cx-rojo-suave); color: var(--cx-rojo); }
+.cxpr-panel > .cx-ayuda, .cxpr-panel > .cx-error { margin: 12px 24px 0; }
+.cxpr-panel-pie { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; margin-top: auto; border-top: 1px solid var(--cx-linea); }
+
+@media (max-width: 1100px) {
+  .cxpr-pagina:has(.cxpr-panel) { grid-template-columns: minmax(0, 1fr); }
+  .cxpr-panel { position: static; max-height: none; }
+}
+@media (max-width: 720px) {
+  .cxpr-cifras { grid-template-columns: minmax(0, 1fr); }
+  .cxpr-cabeza .cx-boton { width: 100%; }
+  .cxpr-tabla thead { display: none; }
+  .cxpr-tabla, .cxpr-tabla tbody, .cxpr-tabla tr, .cxpr-tabla td { display: block; }
+  .cxpr-tabla tr { padding: 12px 16px; border-bottom: 1px solid var(--cx-linea); }
+  .cxpr-tabla td { padding: 2px 0; border: 0; text-align: left; }
+  .cxpr-panel-pie { flex-direction: column-reverse; }
+}

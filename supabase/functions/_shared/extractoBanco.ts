@@ -84,6 +84,41 @@ export interface Cuadre {
   motivos: string[]
   /** Lo que no se ha podido comprobar (un Excel sin saldo). No impide, pero se dice. */
   sinComprobar: string[]
+  /**
+   * S01d · Entra, pero se dice: el total cuadra y alguna fila del Excel no sale de
+   * la anterior ni reordenando los movimientos de su día. Con sus filas.
+   */
+  avisos?: string[]
+  filasRotas?: FilaRota[]
+}
+
+/** S01d · Una fila cuyo saldo no sale de la anterior (ni reordenando su día). */
+export interface FilaRota { cuenta: string; fecha: string; fechaValor: string | null; concepto: string; importeCent: number; saldoCent: number; esperadoCent: number }
+
+/**
+ * S01d · BBVA ordena a su manera los movimientos de un mismo día: el saldo de
+ * cada fila no siempre sale de la anterior. Dentro de cada día, se pone primero
+ * el que sale del saldo anterior, y así hasta acabar el día; lo que no encadena
+ * se queda donde estaba. Devuelve el orden (índices del fichero). Pura.
+ */
+export function encadenarPorDia(movs: readonly Pick<MovimientoLeido, 'fecha' | 'importeCent'>[], saldos: readonly (number | null)[]): number[] {
+  const orden: number[] = []
+  let previo: number | null = null
+  let i = 0
+  while (i < movs.length) {
+    let j = i
+    while (j < movs.length && movs[j].fecha === movs[i].fecha) j++
+    const resto = Array.from({ length: j - i }, (_, k) => i + k)
+    while (resto.length) {
+      const k: number = previo === null ? -1 : resto.findIndex((x) => saldos[x] !== null && saldos[x] !== undefined && previo! + movs[x].importeCent === saldos[x])
+      const elegido: number = resto.splice(k < 0 ? 0 : k, 1)[0]
+      orden.push(elegido)
+      const s: number | null | undefined = saldos[elegido]
+      previo = s === null || s === undefined ? (previo === null ? null : previo + movs[elegido].importeCent) : s
+    }
+    i = j
+  }
+  return orden
 }
 
 export const cent = (euros: number) => Math.round(euros * 100)
@@ -113,17 +148,30 @@ export function cuadrarCuenta(c: CuentaLeida): Cuadre {
     if (tDebe !== c.control.totalDebeCent) motivos.push(`${quien}: los cargos suman ${eurosCent(tDebe)} y el final de cuenta dice ${eurosCent(c.control.totalDebeCent)}.`)
     if (tHaber !== c.control.totalHaberCent) motivos.push(`${quien}: los abonos suman ${eurosCent(tHaber)} y el final de cuenta dice ${eurosCent(c.control.totalHaberCent)}.`)
   }
+  const filasRotas: FilaRota[] = []
   if (c.saldosPorFila) {
-    // Excel con columna de saldo: cada fila tiene que salir de la anterior.
+    // Excel con columna de saldo: cada fila sale de la anterior, una vez puestos en orden
+    // los movimientos de cada día (S01d). Lo que sigue roto se dice; lo que manda es el total.
+    const orden = encadenarPorDia(c.movimientos, c.saldosPorFila)
     let previo: number | null = null
-    c.movimientos.forEach((m, i) => {
-      const s = c.saldosPorFila![i]
-      if (s === null || s === undefined) return
+    let primero: number | null = null
+    let ultimo: number | null = null
+    for (const i of orden) {
+      const m = c.movimientos[i]
+      const s = c.saldosPorFila[i]
+      if (s === null || s === undefined) { if (previo !== null) previo += m.importeCent; continue }
+      if (primero === null) primero = s - m.importeCent
       if (previo !== null && previo + m.importeCent !== s) {
-        motivos.push(`${quien}: en la fila del ${m.fecha} (${eurosCent(m.importeCent)}) el saldo debería ser ${eurosCent(previo + m.importeCent)} y el fichero dice ${eurosCent(s)}.`)
+        filasRotas.push({ cuenta: quien, fecha: m.fecha, fechaValor: m.fechaValor ?? null, concepto: m.conceptoBanco, importeCent: m.importeCent, saldoCent: s, esperadoCent: previo + m.importeCent })
       }
       previo = s
-    })
+      ultimo = s
+    }
+    const inicial = c.saldoInicialCent ?? primero
+    const final = c.saldoFinalCent ?? ultimo
+    if (inicial !== null && final !== null && inicial + suma !== final) {
+      motivos.push(`${quien}: saldo inicial ${eurosCent(inicial)} + movimientos ${eurosCent(suma)} = ${eurosCent(inicial + suma)}, y el banco dice que el saldo final es ${eurosCent(final)} (diferencia ${eurosCent(final - inicial - suma)}).`)
+    }
   } else if (c.saldoInicialCent !== null && c.saldoFinalCent !== null) {
     const calculado = c.saldoInicialCent + suma
     if (calculado !== c.saldoFinalCent) {
@@ -132,13 +180,17 @@ export function cuadrarCuenta(c: CuentaLeida): Cuadre {
   } else {
     sinComprobar.push(`${quien}: el fichero no trae saldos, así que no puedo comprobar que estén todos los movimientos.`)
   }
-  return { ok: motivos.length === 0, motivos, sinComprobar }
+  const avisos = filasRotas.length === 0 ? [] : [filasRotas.length === 1
+    ? `${quien}: en 1 fila el saldo del banco no sale de la anterior; el total cuadra.`
+    : `${quien}: en ${filasRotas.length} filas el saldo del banco no sale de la anterior; el total cuadra.`]
+  return { ok: motivos.length === 0, motivos, sinComprobar, avisos, filasRotas }
 }
 
 /** El cuadre del extracto entero: no se importa nada si una sola cuenta no cuadra. */
 export function cuadrar(e: ExtractoLeido): Cuadre {
   const partes = e.cuentas.map(cuadrarCuenta)
-  return { ok: partes.every((p) => p.ok), motivos: partes.flatMap((p) => p.motivos), sinComprobar: partes.flatMap((p) => p.sinComprobar) }
+  return { ok: partes.every((p) => p.ok), motivos: partes.flatMap((p) => p.motivos), sinComprobar: partes.flatMap((p) => p.sinComprobar),
+    avisos: partes.flatMap((p) => p.avisos ?? []), filasRotas: partes.flatMap((p) => p.filasRotas ?? []) }
 }
 
 /**

@@ -21,7 +21,7 @@ import { leerFicheroBanco, type ContenidoFichero } from '@/modules/conta/lib/fue
 import { partirCsv } from '@/modules/conta/lib/importarPlan'
 import type { BancoCsv } from '@/modules/conta/lib/lectorCsvBanco'
 import {
-  conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Decision, type Destino, type Impuesto, type Movimiento, type Plataforma,
+  conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Contrato, type Decision, type Destino, type Impuesto, type Movimiento, type Plataforma,
 } from '@/modules/conta/lib/conciliacion'
 
 type Fila = Record<string, unknown>
@@ -303,10 +303,11 @@ export function crearBancos(bd: Bd) {
       // (la 4750 del 303; la subcuenta de la 4751 que dice ser de ese modelo; si no lo dice ninguna y solo
       // hay una 4751 con saldo, ésa). Lo que no tiene cuenta no se propone: se queda en «¿de qué modelo es?».
       impuestos: impuestosPorPagar(declaraciones, cuentas, saldos, hoy),
-      contratos: contratos.map((c) => ({ id: String(c.id), tipo: c.kind as 'prestamo' | 'alquiler' | 'otro', nombre: String(c.name), contiene: String(c.concept_contains),
-        importeCent: cent(c.amount), confirmaciones: n(c.confirmations), terceroId: s(c.party_id),
+      contratos: contratos.map((c) => ({ id: String(c.id), tipo: c.kind as Contrato['tipo'], nombre: String(c.name), contiene: String(c.concept_contains),
+        importeCent: c.amount === null ? null : cent(c.amount), confirmaciones: n(c.confirmations), terceroId: s(c.party_id),
         cuadro: Array.isArray(c.schedule) ? (c.schedule as Fila[]).map((f) => ({ fecha: String(f.fecha), cuotaCent: cent(f.cuota), capitalCent: cent(f.capital), interesesCent: cent(f.intereses) })) : null,
-        cuentaCapital: s(c.capital_account), cuentaIntereses: s(c.interest_account), cuentaGasto: s(c.expense_account) })),
+        // S01d · El capital de cada cuota va a corto (520); el paso de largo a corto va con el cierre del año.
+        cuentaCapital: s(c.short_capital_account) ?? s(c.capital_account), cuentaIntereses: s(c.interest_account), cuentaGasto: s(c.expense_account) })),
       reglas: reglas.map((r) => {
         const cond = r.condition as Fila, dest = r.target as Fila
         return { id: String(r.id), palabras: String(r.words), contiene: String(cond.contiene), signo: cond.signo === 1 || cond.signo === -1 ? cond.signo : null,

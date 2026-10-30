@@ -120,7 +120,8 @@ export interface Nomina { mes: string; ssPendienteCent: number; netoPendienteCen
 /** S01d · Una declaración presentada sin pagar: su modelo, su periodo («2026-3T»), lo que hay que ingresar y la cuenta de su modelo. */
 export interface Impuesto { modelo: '303' | '111' | '115' | '123'; periodo: string; importeCent: number; cuenta: string; declaracionId?: string }
 export interface Contrato {
-  id: string; tipo: 'prestamo' | 'alquiler' | 'otro'; nombre: string; contiene: string; importeCent: number; confirmaciones: number
+  /** S01d · También el aplazamiento (Seguridad Social, Hacienda) y la póliza de crédito (sin cuota fija: importeCent null). */
+  id: string; tipo: 'prestamo' | 'alquiler' | 'otro' | 'aplazamiento' | 'poliza'; nombre: string; contiene: string; importeCent: number | null; confirmaciones: number
   terceroId: string | null
   cuadro: { fecha: string; cuotaCent: number; capitalCent: number; interesesCent: number }[] | null
   cuentaCapital: string | null; cuentaIntereses: string | null; cuentaGasto: string | null
@@ -573,22 +574,36 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     }
   }
 
-  // ── 3 · Contrato con cuota (préstamo, alquiler) ──────────────────────────
+  // ── 3 · Contrato con cuota (préstamo, aplazamiento, póliza, alquiler) ──
   if (!entra) {
-    const cs = ctx.contratos.filter((c) => nombra(txt, [c.contiene]) && c.importeCent === -imp)
+    // S01d · Con cuadro, por su fila: la cuota de ese importe en ese mes (el préstamo y el Click & Pay
+    // comparten concepto del banco; los separan el importe, la fecha y la fila del cuadro). Sin cuadro, por el importe.
+    const conCuadro = (c: Contrato) => (c.tipo === 'prestamo' || c.tipo === 'aplazamiento')
+    const filaDe = (c: Contrato) => c.cuadro?.find((f) => f.cuotaCent === -imp && f.fecha.slice(0, 7) === m.fecha.slice(0, 7)) ?? null
+    const nombran = ctx.contratos.filter((c) => nombra(txt, [c.contiene]))
+    const porFila = nombran.filter((c) => conCuadro(c) && filaDe(c) !== null)
+    const cs = porFila.length ? porFila : nombran.filter((c) => c.tipo !== 'poliza' && c.importeCent === -imp)
+    // La póliza no tiene cuota fija: su liquidación se reparte en capital e intereses (respuesta 1, 30/10).
+    const polizas = nombran.filter((c) => c.tipo === 'poliza')
+    if (cs.length === 0 && polizas.length === 1 && polizas[0].cuentaCapital && polizas[0].cuentaIntereses) {
+      const c = polizas[0]
+      return { ...b, confianza: 'duda', que: `Liquidación de ${c.nombre}`, falta: 'repartir el importe',
+        reparto: [{ cuenta: c.cuentaCapital!, importeCent: null, concepto: 'Capital' }, { cuenta: c.cuentaIntereses!, importeCent: null, concepto: 'Intereses' }],
+        porque: `Es una liquidación de ${c.nombre}. Sin la liquidación del banco no sé cuánto es capital y cuánto intereses: repártelo tú.`, destino: null }
+    }
     if (cs.length === 1) {
       const c = cs[0]
-      const seguro = c.confirmaciones >= 3
-      if (c.tipo === 'prestamo') {
-        const fila = c.cuadro?.find((f) => f.cuotaCent === -imp && f.fecha.slice(0, 7) === m.fecha.slice(0, 7))
+      const seguro = c.confirmaciones >= 3 || porFila.length === 1
+      if (conCuadro(c)) {
+        const fila = filaDe(c)
         if (!fila || !c.cuentaCapital || !c.cuentaIntereses) {
           return { ...b, confianza: 'duda', que: `Cuota de ${c.nombre}`, falta: 'el cuadro de amortización de este mes',
             porque: `Es la cuota de ${c.nombre}, pero sin el cuadro de amortización no sé cuánto es capital y cuánto intereses.`, destino: null }
         }
         return { ...b, confianza: seguro ? 'seguro' : 'probable', que: `Cuota de ${c.nombre}`,
-          porque: `Cuota ${seguro ? `confirmada ${c.confirmaciones} veces` : 'de un contrato conocido'}: ${eurosCent(fila.capitalCent)} de capital (${nombreCuenta(ctx, c.cuentaCapital)}) y ${eurosCent(fila.interesesCent)} de intereses (${nombreCuenta(ctx, c.cuentaIntereses)}), según su cuadro.`,
+          porque: `Cuota del ${fila.fecha.slice(8, 10)}/${fila.fecha.slice(5, 7)} según su cuadro: ${eurosCent(fila.capitalCent)} de capital (${nombreCuenta(ctx, c.cuentaCapital)}) y ${eurosCent(fila.interesesCent)} de intereses (${nombreCuenta(ctx, c.cuentaIntereses)}).`,
           destino: { tipo: 'contrato', contrato_id: c.id, tercero_id: c.terceroId, concepto: `Cuota de ${c.nombre}`,
-            lineas: [{ cuenta: c.cuentaCapital, importe: euros(fila.capitalCent), concepto: 'Capital' }, { cuenta: c.cuentaIntereses, importe: euros(fila.interesesCent), concepto: 'Intereses' }] } }
+            lineas: [{ cuenta: c.cuentaCapital, importe: euros(fila.capitalCent), concepto: 'Capital' }, ...(fila.interesesCent > 0 ? [{ cuenta: c.cuentaIntereses, importe: euros(fila.interesesCent), concepto: 'Intereses' }] : [])] } }
       }
       const gasto = c.cuentaGasto ?? ''
       return { ...b, confianza: seguro ? 'seguro' : 'probable', que: `Cuota de ${c.nombre}`,

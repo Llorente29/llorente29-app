@@ -179,7 +179,7 @@ test('una pantalla vieja dentro del marco: Bancos, con su estilo, sus páginas y
     await expect(paginas).toBeVisible()
     await expect(paginas).toHaveClass(/s-barra-paginas/)
     // S02 · PR 2: «Cierre del mes» se mudó a Contabilidad › Cierre y Registro › Cerrar el mes.
-    await expect(paginas.locator('.s-barra-nombre')).toHaveText(['Movimientos', 'Cuentas y extractos', 'Reglas'])
+    await expect(paginas.locator('.s-barra-nombre')).toHaveText(['Movimientos', 'Préstamos y aplazamientos', 'Cuentas y extractos', 'Reglas'])
     await expect(paginas.getByRole('link', { name: 'Movimientos', exact: true })).toHaveAttribute('aria-current', 'page')
     // S02 · PR 2: Bancos pinta su encabezado (EncabezadoPagina, con bancos/acciones.ts): el h1
     // visible de la página y sus acciones; el marco ya no pone su fila (nada sale dos veces).
