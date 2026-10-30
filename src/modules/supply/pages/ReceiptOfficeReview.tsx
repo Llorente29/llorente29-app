@@ -38,6 +38,7 @@ import {
 } from '@/modules/supply/services/goodsReceiptService'
 import { getSupplierCatalog, listSupplyLocations, buildFormatLabel, type SupplierCatalogEntry } from '@/modules/supply/services/supplierCatalogService'
 import { listSuppliers, createPurchaseFormat, listFormatsByItem } from '@/modules/kitchen/services/purchaseFormatService'
+import { apuntarHueco, huecoDeRecepcion } from '@/modules/conta/services/comprasService'
 import {
   resolveVatRates, explicaOrigen, explicaFalta, categoriasParaTipo,
   confirmaCategoriaFiscal, type TipoIvaResuelto, type CategoriaFiscal,
@@ -144,6 +145,11 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   const [receipt, setReceipt] = useState<GoodsReceipt | null>(null)
   const [lines, setLines] = useState<GoodsReceiptLine[]>([])
   const [docTotal, setDocTotal] = useState<number | null>(null)
+  // S01c · Lo que falta por leer del albarán (su base contra sus líneas leídas). Con algo
+  // que falta, no se cierra sin decir por qué: «Faltan 52,00 € de líneas sin leer».
+  const [hueco, setHueco] = useState<{ falta: number | null; motivo: string | null }>({ falta: null, motivo: null })
+  const [motivoHueco, setMotivoHueco] = useState('')
+  const [huecoAviso, setHuecoAviso] = useState<string | null>(null)
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [locationName, setLocationName] = useState<string>('')
   const [itemInfo, setItemInfo] = useState<Record<string, { name: string; baseUnitAbbr: string | null }>>({})
@@ -237,6 +243,8 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         if (r.aiSessionId) {
           try { setDocTotal(await getReceiptDocTotal(r.aiSessionId)) }
           catch (e) { console.error('ReceiptOfficeReview: no se pudo leer el total del albarán', e) }
+          try { setHueco(await huecoDeRecepcion(r.id)) }
+          catch (e) { console.error('ReceiptOfficeReview: no se pudo leer lo que falta por leer', e) }
         } else {
           setDocTotal(null)
         }
@@ -361,7 +369,8 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
   // El servidor lo exige también (confirm_goods_receipt), para que no dependa
   // de que la pantalla se acuerde.
   const headerComplete = !!receipt?.supplierId && !!(receipt?.supplierDocNumber ?? '').trim()
-  const canClose = allDecided && headerComplete
+  const huecoPendiente = hueco.falta != null && !hueco.motivo
+  const canClose = allDecided && headerComplete && !huecoPendiente
 
   // ── Picker de artículo (se reutiliza en las 3 clases: cambiar/dudosa/sin decidir) ──
   const [pickerLineId, setPickerLineId] = useState<string | null>(null)
@@ -1099,6 +1108,33 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
         </div>
       )}
 
+      {/* ══ S01c · LO QUE FALTA POR LEER ══ */}
+      {huecoPendiente && (
+        <div className="rounded-lg border border-warning bg-warning-bg px-4 py-3" role="note" data-prueba="hueco-oficina">
+          <p className="text-base font-semibold text-text-primary">
+            Faltan {fmtMoney(hueco.falta!)} de líneas sin leer: añádelas o di por qué.
+          </p>
+          <p className="text-sm text-text-primary mt-1">
+            Las líneas del albarán no suman su base. Si falta alguna, añádela arriba con el albarán delante; si no, di por qué y queda marcado para la oficina.
+          </p>
+          <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={async (e) => {
+            e.preventDefault()
+            if (!receipt || !motivoHueco.trim()) return
+            try {
+              const frase = await apuntarHueco(receipt.id, motivoHueco.trim())
+              setHueco({ falta: hueco.falta, motivo: motivoHueco.trim() }); setHuecoAviso(frase); setMotivoHueco('')
+            } catch (x) { setHuecoAviso(`No se ha apuntado: ${x instanceof Error ? x.message : String(x)}`) }
+          }}>
+            <input value={motivoHueco} onChange={(e) => setMotivoHueco(e.target.value)} placeholder="Por qué faltan (por ejemplo: una caja vino sin precio)"
+              aria-label="Por qué faltan esas líneas" className="flex-1 min-w-[16rem] px-3 py-2 rounded-md border border-border-default bg-card text-sm" />
+            <button type="submit" disabled={!motivoHueco.trim()} className="px-4 py-2 rounded-md text-sm font-medium border border-border-default bg-card hover:bg-page disabled:opacity-50 transition-base">
+              Apuntar el motivo
+            </button>
+          </form>
+        </div>
+      )}
+      {huecoAviso && <p className="text-sm text-text-primary" role="status">{huecoAviso}</p>}
+
       {/* ══ PIE ══ */}
       <div className="bg-card border border-border-default rounded-lg px-5 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div className="text-sm text-text-secondary tabular-nums">
@@ -1117,15 +1153,17 @@ export default function ReceiptOfficeReview({ accountId, receiptId, onBack, onSa
                 ? `Faltan por decidir: ${pendingLines.map(l => itemInfo[l.recipeItemId ?? '']?.name ?? sentenceCase(l.productName)).join(', ')}`
                 : !headerComplete
                   ? 'Falta el proveedor o el nº de albarán'
-                  : undefined
+                  : huecoPendiente
+                    ? `Faltan ${fmtMoney(hueco.falta!)} de líneas sin leer: añádelas o di por qué`
+                    : undefined
             }
             className="min-h-close-desktop px-6 rounded-lg text-base font-bold bg-success text-text-on-accent disabled:bg-border-default disabled:text-text-secondary disabled:cursor-not-allowed transition-base">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Verificado — cerrar albarán'}
           </button>
         </div>
         <p className="text-sm text-text-secondary w-full">
-          El botón se enciende cuando las {lines.length} líneas tengan decisión y la cabecera tenga proveedor
-          y nº de albarán. Ninguna línea se pierde en silencio: o entra al almacén, o dices tú que no es mercancía.
+          El botón se enciende cuando las {lines.length} líneas tengan decisión, la cabecera tenga proveedor
+          y nº de albarán y, si faltan líneas por leer, digas por qué. Ninguna línea se pierde en silencio: o entra al almacén, o dices tú que no es mercancía.
         </p>
       </div>
 

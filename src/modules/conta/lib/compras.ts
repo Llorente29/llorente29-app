@@ -364,6 +364,25 @@ export function cuandoLlega(e: Pick<EsperandoFactura, 'oldest' | 'per_location'>
   return e.per_location ? 'Una por local' : 'Una para todos los locales'
 }
 
+/**
+ * S01c · Un albarán esperando factura, en palabras: «Esperando · 17 días ·
+ * normal hasta el 3 de noviembre» o «Retrasado · 17 días (lo normal era hasta
+ * el 3 de noviembre)», y por qué ese plazo.
+ */
+export function esperaEnPalabras(a: { dias: number; espera_hasta: string; retrasado: boolean; camino: string; forma: string | null; llegada: string | null; supplier_name: string }): { estado: string; porque: string } {
+  const dias = a.dias === 1 ? '1 día' : `${a.dias} días`
+  const hasta = diaCorto(a.espera_hasta)
+  const estado = a.retrasado ? `Retrasado · ${dias} (lo normal era hasta el ${hasta})` : `Esperando · ${dias} · normal hasta el ${hasta}`
+  const porque = a.camino === 'liquidacion' || a.forma === 'monthly_settlement'
+    ? `${a.supplier_name} liquida cada mes: su factura del mes llega a primeros del siguiente.`
+    : a.llegada === 'inicio_mes_siguiente'
+      ? `${a.supplier_name} manda todas sus facturas juntas a primeros del mes siguiente.`
+      : a.forma === 'per_delivery'
+        ? `${a.supplier_name} factura con cada entrega: su factura suele llegar en unos días.`
+        : `${a.supplier_name} manda la factura después del albarán.`
+  return { estado, porque }
+}
+
 // ── Liquidaciones del mes ──────────────────────────────────────────────────
 
 export interface FilaLiquidacion {

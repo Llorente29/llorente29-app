@@ -14,7 +14,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { rutaComoTeFactura } from '@/config/navegacion'
 import { tabla } from '@/modules/conta/services/bd'
-import { cambiarFormaFacturar, ultimosPapeles } from '@/modules/conta/services/comprasService'
+import { cambiarCuandoLlegan, cambiarFormaFacturar, ultimosPapeles, type LlegadaFacturas } from '@/modules/conta/services/comprasService'
 import { FORMAS, chocaConLaFicha, fraseUltimosPapeles, tituloForma, type FormaFacturar, type PapelLeido } from '@/modules/conta/lib/compras'
 import { Guardado } from '@/modules/conta/ui/piezas'
 
@@ -115,8 +115,55 @@ export default function ComoTeFactura({ proveedor: id, nombre, alGuardar }: { pr
         <Guardado texto={aviso} />
         {fallo && <div className="cx-error" role="alert">{fallo}</div>}
       </section>
-      <p className="cx-ayuda cxc-como-nota">Esto es la costumbre. Si un día trae otro tipo de documento (un albarán en vez de factura, o al revés), lo veré y te lo preguntaré en Compras.</p>
+      <CuandoLlegan proveedor={id} nombre={nombre} />
+      <p className="cx-ayuda cxc-como-nota">Esto es la costumbre, y manda: si un día trae otro tipo de documento (un albarán en vez de factura, o al revés), no apunto ninguna factura con él y te aviso en Compras.</p>
     </>
+  )
+}
+
+/**
+ * S01c · «Cuándo llegan sus facturas»: al momento, o todas juntas a primeros
+ * del mes siguiente (como Amirsa, que hace una factura por entrega pero las
+ * manda a primeros de mes). Solo cambia hasta cuándo es normal esperarlas en
+ * «Qué está esperando factura». Guarda al pulsar y dice qué ha guardado (regla 8).
+ */
+function CuandoLlegan({ proveedor, nombre }: { proveedor: string; nombre: string }) {
+  const [valor, setValor] = useState<LlegadaFacturas | null | undefined>(undefined)
+  const [aviso, setAviso] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<string | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+  useEffect(() => {
+    let vivo = true
+    tabla('supplier').select('invoice_arrival').eq('id', proveedor).maybeSingle()
+      .then(({ data, error }: { data: { invoice_arrival: LlegadaFacturas | null } | null; error: { message: string } | null }) => {
+        if (!vivo) return
+        if (error) setFallo(`No se pudo leer cuándo llegan sus facturas: ${error.message}`)
+        else setValor(data?.invoice_arrival ?? null)
+      })
+    return () => { vivo = false }
+  }, [proveedor])
+  if (valor === undefined) return fallo ? <div className="cx-error" role="alert">{fallo}</div> : null
+  const elegir = async (v: LlegadaFacturas) => {
+    setOcupado(true); setFallo(null); setAviso(null)
+    try { setAviso(await cambiarCuandoLlegan(proveedor, v)); setValor(v) }
+    catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo guardar.') }
+    finally { setOcupado(false) }
+  }
+  const actual: LlegadaFacturas = valor ?? 'al_momento'
+  return (
+    <section className="cx-tarjeta cxc-como" aria-label={`Cuándo llegan las facturas de ${nombre}`} data-prueba="cuando-llegan">
+      <p className="cxc-dice"><strong>Cuándo llegan sus facturas</strong></p>
+      <div className="cxc-cuando-ops" role="radiogroup" aria-label="Cuándo llegan sus facturas">
+        {([['al_momento', 'Al momento'], ['inicio_mes_siguiente', 'Todas juntas a primeros del mes siguiente']] as const).map(([v, texto]) => (
+          <button key={v} type="button" role="radio" aria-checked={actual === v} disabled={ocupado}
+            className={actual === v ? 'cx-boton-sec cxc-forma-op cxc-forma-op-si' : 'cx-boton-sec cxc-forma-op'}
+            onClick={() => { if (actual !== v) void elegir(v) }}>{texto}</button>
+        ))}
+      </div>
+      <p className="cx-ayuda" style={{ marginBottom: 0 }}>Con «todas juntas a primeros de mes», sus albaranes del mes no salen como retrasados hasta el día 10 del mes siguiente.</p>
+      <Guardado texto={aviso} />
+      {fallo && <div className="cx-error" role="alert">{fallo}</div>}
+    </section>
   )
 }
 

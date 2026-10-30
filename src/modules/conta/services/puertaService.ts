@@ -5,7 +5,7 @@
 //
 //   · Leer: conta_puerta (la dirección, lo conectado y lo último) y
 //     conta_puerta_fuentes (las fuentes con sus llegadas y los ajustes).
-//   · La dirección única: conta_direccion_entrada con «documentos» (la crea si
+//   · La dirección única: conta_direccion_entrada con «facturas» (S01c; la crea si
 //     no la hay; la misma función que las de facturas y liquidaciones).
 //   · Aprender las fuentes: conta_puerta_fuentes_proponer y, una a una,
 //     conta_puerta_fuente_guardar (lo que ya está guardado no se pisa).
@@ -26,9 +26,13 @@ const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16)
 export const leerPuerta = (companyId: string, dias = 30) => rpc<DatosPuerta>('conta_puerta', { p_company: companyId, p_dias: dias })
 export const leerFuentes = (companyId: string) => rpc<DatosFuentes>('conta_puerta_fuentes', { p_company: companyId })
 
-/** La dirección única de la empresa: la que ya tiene o una nueva. */
+/**
+ * La dirección única de la empresa: la que ya tiene o una nueva. S01c (Julio,
+ * 29/10): es la de FACTURAS (facturas-<empresa>@), no una de «documentos»
+ * aparte, para no tener dos.
+ */
 export async function direccionUnica(companyId: string, quien: string | null): Promise<{ direccion: string; yaEstaba: boolean }> {
-  const r = await rpc<{ direccion: string; ya_estaba: boolean }>('conta_direccion_entrada', { p_company: companyId, p_tipo: 'documentos', p_quien_nombre: quien })
+  const r = await rpc<{ direccion: string; ya_estaba: boolean }>('conta_direccion_entrada', { p_company: companyId, p_tipo: 'facturas', p_quien_nombre: quien })
   return { direccion: r.direccion, yaEstaba: r.ya_estaba }
 }
 

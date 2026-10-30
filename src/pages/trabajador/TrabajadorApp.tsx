@@ -504,7 +504,7 @@ function PortalDelTrabajador({ employeeId, onExitMode, exitLabel = 'logout' }: P
     <div className="pb-20">
       <AvisoFichajesPendientes {...fichajesSinRed} />
       {/* L1a · PR 2: las correcciones del encargado por contestar y la firma del mes. */}
-      <AvisosDelRegistro employee={employee} />
+      <AvisosDelRegistro employee={employee} accountId={activeAccountId} />
       <HomeEmpleado
         employee={employee}
         onNavigate={(mod: WorkerModule) => {

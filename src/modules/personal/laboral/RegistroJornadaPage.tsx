@@ -6,6 +6,10 @@
 // crea un enlace de solo lectura para la Inspección que caduca solo. Cada
 // botón dice lo que ha hecho (regla 8). Llega con ?persona=<id>&mes=AAAA-MM
 // desde «Para revisar».
+//
+// L1a-H (29/10/2026): arriba, el interruptor de la empresa «Pedir a cada
+// persona que firme su registro del mes» (apagado por defecto). Lo cambia el
+// administrador y la pantalla dice qué ha hecho (regla 8); los demás lo ven.
 
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -15,12 +19,68 @@ import InformeJornadaVista from './InformeJornadaVista'
 import { armarInforme, hojaDeCalculo, periodoDelMes, textoPeriodo, type DatosInforme } from './informeJornada'
 import { diaMadrid, fechaYHora } from './calculoJornada'
 import { descargar, nombreDeFichero, pdfDelInforme } from './informePdf'
-import { crearEnlace, leerInforme, retirarEnlace, type EnlaceInspeccion } from './registroJornadaServicio'
+import { crearEnlace, leerInforme, pedirFirmaDelMes, pideFirmaDelMes, retirarEnlace, type EnlaceInspeccion } from './registroJornadaServicio'
+import { APOYO_INTERRUPTOR, TITULO_INTERRUPTOR, fraseDelCambio } from './firmaDelMes'
 import { ordenarPersonas, personaPorDefecto } from './personas'
 import { RAIZ_LABORAL } from './estilo'
 
+/** «Pedir a cada persona que firme su registro del mes», de la empresa. */
+function FirmaDelMesInterruptor({ accountId, esAdmin, hoy }: { accountId: string; esAdmin: boolean; hoy: string }) {
+  const [pide, setPide] = useState<boolean | null>(null)
+  const [cambiando, setCambiando] = useState(false)
+  const [hecho, setHecho] = useState('')
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let vivo = true
+    const t = window.setTimeout(async () => {
+      try {
+        const v = await pideFirmaDelMes(accountId)
+        if (vivo) setPide(v)
+      } catch (e) {
+        if (vivo) { setPide(null); setError(e instanceof Error ? e.message : String(e)) }
+      }
+    }, 0)
+    return () => { vivo = false; window.clearTimeout(t) }
+  }, [accountId])
+
+  async function cambiar(pedir: boolean) {
+    setCambiando(true); setError(''); setHecho('')
+    try {
+      const r = await pedirFirmaDelMes(accountId, pedir)
+      setPide(r.pedir)
+      setHecho(fraseDelCambio(r.pedir, r.personas, hoy))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setCambiando(false)
+    }
+  }
+
+  const on = pide === true
+  return (
+    <div data-prueba="firma-interruptor">
+      <Tarjeta nivel={3} titulo={TITULO_INTERRUPTOR} apoyo={APOYO_INTERRUPTOR}
+        accion={
+          <button type="button" role="switch" aria-checked={on} aria-label={TITULO_INTERRUPTOR}
+            className="l-interruptor" data-on={on || undefined} data-prueba="firma-interruptor-boton"
+            disabled={!esAdmin || pide === null || cambiando} onClick={() => { void cambiar(!on) }}>
+            <span className="l-interruptor-bola" />
+          </button>
+        }>
+        <p className="l-nota" data-prueba="firma-interruptor-estado">
+          {pide === null ? 'Sin saber si está encendido.' : on ? 'Encendido.' : 'Apagado: nadie ve la firma del registro en su portal.'}
+          {!esAdmin && ' Solo el administrador de la empresa puede cambiarlo.'}
+        </p>
+        {hecho && <p className="l-hecho" role="status" data-prueba="firma-interruptor-hecho">{hecho}</p>}
+        {error && <p className="l-error">{error}</p>}
+      </Tarjeta>
+    </div>
+  )
+}
+
 export default function RegistroJornadaPage() {
-  const { staff, userProfile } = useApp()
+  const { staff, userProfile, activeAccountId } = useApp()
   const [params, setParams] = useSearchParams()
   const hoy = diaMadrid(new Date().toISOString())
   // W08: las activas primero y las de baja al final; abre con la primera activa.
@@ -103,6 +163,7 @@ export default function RegistroJornadaPage() {
 
   return (
     <div className={RAIZ_LABORAL} data-prueba="registro-jornada">
+      {activeAccountId && <FirmaDelMesInterruptor accountId={activeAccountId} esAdmin={esAdmin} hoy={hoy} />}
       <div className="l-filtros">
         <label>Persona
           <select value={persona} onChange={e => elegir('persona', e.target.value)} data-prueba="registro-persona">

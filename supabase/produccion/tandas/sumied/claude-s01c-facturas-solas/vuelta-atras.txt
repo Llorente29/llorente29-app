@@ -1,0 +1,5 @@
+# S01c · segundo real, la 1013 sola: SIN VUELTA ATRÁS, declarada en
+# aplicar.txt (un contraasiento no se borra). No hay ningún fichero que
+# deshacer. La 1012 (primer real) tiene la suya en
+# supabase/vuelta-atras/20261029T1012_s01c_facturas_solas.down.sql.
+cuenta: scripts/conta/produccion/cuentas/s01c-facturas-solas.sql
