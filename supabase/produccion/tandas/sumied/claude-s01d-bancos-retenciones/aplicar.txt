@@ -1,0 +1,21 @@
+# S01d · Bancos y retenciones: lo que falló al contabilizar Foodint. Rama
+# claude/s01d-bancos-retenciones. En este orden:
+#
+#   0855  añade la columna del periodo del modelo en la línea y la del modelo
+#         de cada subcuenta de la 4751 (solo añade).
+#   0900  cambia en caliente cinco funciones de la 4751 (proponer, motivos,
+#         diario de retenciones, casar con el banco, casar el cargo) con su
+#         respaldo, y añade el pago de un modelo y su disparador.
+#   0901  ARREGLA Foodint (con «autorizo»: toca datos): 47510000 = 111 y
+#         47510019 = 115. Si no encuentra exactamente una de cada, para.
+#   0934  préstamos y aplazamientos: las columnas nuevas del contrato (solo añade).
+#   0935  amplía los tipos y las cuentas de recurring_contract (0 filas en
+#         producción) y añade el alta desde «Subir el cuadro».
+#
+# Nada en el camino del pedido. Sin aplicar: lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01d-bancos-retenciones.sql
+supabase/migrations/20261030T0855_s01d_columnas_retencion.sql
+supabase/migrations/20261030T0900_s01d_retenciones_pago.sql
+supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
+supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
+supabase/migrations/20261030T0935_s01d_contratos.sql
