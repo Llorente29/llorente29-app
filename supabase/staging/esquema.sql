@@ -6875,13 +6875,13 @@ begin
     if v_cta is null then raise exception 'La cuenta % no está en el plan de la empresa.', v_l->>'cuenta' using errcode = '23514'; end if;
     insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept, location_id, is_common,
                                      brand_id, party_id, document_ref, tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents,
-                                     withholding_rate_id, withholding_base, withholding_model)
+                                     withholding_rate_id, withholding_base, withholding_model, withholding_period)
     values (v_cuenta, p_company, v_id, v_pos, v_cta, coalesce((v_l->>'debe')::numeric, 0), coalesce((v_l->>'haber')::numeric, 0), v_l->>'concepto',
             nullif(v_l->>'local_id', '')::uuid, coalesce((v_l->>'comun')::boolean, false), nullif(v_l->>'marca_id', '')::uuid,
             nullif(v_l->>'tercero_id', '')::uuid, v_l->>'documento',
             nullif(v_l->'iva'->>'tipo_id', '')::uuid, (v_l->'iva'->>'base')::numeric, v_l->'iva'->>'libro', v_l->'iva'->>'deducible',
             coalesce((v_l->'iva'->>'facturas')::int, 1),
-            nullif(v_l->'retencion'->>'tipo_id', '')::uuid, (v_l->'retencion'->>'base')::numeric, v_l->'retencion'->>'modelo');
+            nullif(v_l->'retencion'->>'tipo_id', '')::uuid, (v_l->'retencion'->>'base')::numeric, v_l->'retencion'->>'modelo', nullif(v_l->'retencion'->>'periodo', ''));
   end loop;
   if v_resumen is not null then update public.sales_day_summary set entry_id = v_id where id = v_resumen; end if;
   return jsonb_strip_nulls(jsonb_build_object('id', v_id, 'existente', false, 'aviso', nullif(concat_ws(' ', v_aviso_iva, p_entry->>'aviso'), '')));
@@ -18536,7 +18536,10 @@ begin
       v_lineas := v_lineas || jsonb_build_array(jsonb_build_object('cuenta', v_l->>'cuenta',
         'debe', case when v_entra then 0 else (v_l->>'importe')::numeric end, 'haber', case when v_entra then (v_l->>'importe')::numeric else 0 end,
         'tercero_id', coalesce(nullif(v_l->>'tercero_id', '')::uuid, v_tercero), 'concepto', coalesce(v_l->>'concepto', v_concepto),
-        'local_id', v_local, 'comun', v_comun));
+        'local_id', v_local, 'comun', v_comun,
+        -- S01d: el pago de un modelo lleva su modelo y su periodo («111 · 3T 2026»).
+        'retencion', case when nullif(v_l->>'periodo', '') is not null
+                          then jsonb_build_object('modelo', v_l->>'modelo', 'periodo', v_l->>'periodo') end));
     end loop;
     if v_suma <> v_abs then raise exception 'Las líneas suman % y el movimiento es de %.', public.conta_euros_exactos(v_suma), public.conta_euros_exactos(v_abs) using errcode = '23514'; end if;
     -- PC01 · Cobrar facturas emitidas: cada una, de la empresa, emitida y sin pasarse.
@@ -18683,6 +18686,79 @@ CREATE FUNCTION public.bank_consentimientos_por_caducar(p_company uuid, p_dias i
      and (l.consent_valid_until at time zone 'Europe/Madrid')::date <= (now() at time zone 'Europe/Madrid')::date + coalesce(p_dias, 7)
    order by l.consent_valid_until
 $$;
+
+
+--
+-- Name: bank_contrato_guardar(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_account uuid; v_id uuid; v_kind text := p_datos->>'tipo'; v_cuadro jsonb := p_datos->'cuadro';
+  v_importe numeric := nullif(p_datos->>'importe', '')::numeric; v_suma numeric; v_cuotas int;
+  v_banco uuid := nullif(p_datos->>'banco', '')::uuid; v_corto text := nullif(p_datos->>'capital_corto', '');
+  v_largo text := nullif(p_datos->>'capital_largo', ''); v_int text := nullif(p_datos->>'intereses', '');
+begin
+  select account_id into v_account from public.company where id = p_company;
+  if v_account is null or not public.current_user_is_admin_or_manager_of(v_account) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if v_kind is null or v_kind not in ('prestamo', 'aplazamiento', 'poliza') then
+    raise exception 'Di qué es: un préstamo, un aplazamiento o una póliza.' using errcode = '22023';
+  end if;
+  if coalesce(trim(p_datos->>'nombre'), '') = '' then raise exception 'Ponle un nombre al contrato.' using errcode = '22023'; end if;
+  if coalesce(trim(p_datos->>'contiene'), '') = '' then
+    raise exception 'Di qué pone el banco en el concepto de la cuota.' using errcode = '22023';
+  end if;
+  if v_corto is null or v_int is null then
+    raise exception 'Faltan las cuentas: el capital a corto y los intereses.' using errcode = '22023';
+  end if;
+  if v_banco is not null and not exists (select 1 from public.treasury_account t where t.id = v_banco and t.company_id = p_company) then
+    raise exception 'Ese banco no es de esta empresa.' using errcode = '22023';
+  end if;
+  -- Las cuentas, del plan de esta empresa (regla 9: nunca por nombre ni de otra cuenta).
+  if exists (select 1 from unnest(array[v_corto, v_largo, v_int]) c(code)
+              where c.code is not null and not exists (select 1 from public.company_account a where a.company_id = p_company and a.code = c.code)) then
+    raise exception 'Alguna de las cuentas no está en el plan de la empresa.' using errcode = '22023';
+  end if;
+
+  if v_kind <> 'poliza' then
+    if v_cuadro is null or jsonb_typeof(v_cuadro) <> 'array' or jsonb_array_length(v_cuadro) = 0 then
+      raise exception 'Falta el cuadro: las fechas, las cuotas, el capital y los intereses.' using errcode = '22023';
+    end if;
+    if v_importe is null then raise exception 'Falta el importe prestado o aplazado.' using errcode = '22023'; end if;
+    select round(sum((f->>'capital')::numeric), 2), count(*) into v_suma, v_cuotas from jsonb_array_elements(v_cuadro) f;
+    if v_suma <> round(v_importe, 2) then
+      raise exception 'La suma del capital da % y lo aplazado es %: el cuadro no cuadra, no lo guardo.',
+        public.conta_impuesto_euros(v_suma), public.conta_impuesto_euros(v_importe) using errcode = '22023';
+    end if;
+    v_cuadro := public.conta_cuadro_con_pendiente(v_cuadro, v_importe);
+  end if;
+
+  insert into public.recurring_contract (account_id, company_id, kind, name, concept_contains, amount, schedule, capital_account, interest_account,
+    long_capital_account, short_capital_account, treasury_account_id, principal, installments, document_name, document_kind, created_by, created_by_name)
+  values (v_account, p_company, v_kind, trim(p_datos->>'nombre'), trim(p_datos->>'contiene'),
+    case when v_kind = 'poliza' then null else (v_cuadro->0->>'cuota')::numeric end,
+    case when v_kind = 'poliza' then null else v_cuadro end,
+    v_corto, v_int, v_largo, v_corto, v_banco, v_importe, v_cuotas,
+    nullif(p_datos->>'documento', ''), coalesce(nullif(p_datos->>'documento_tipo', ''), 'a_mano'), auth.uid(), public.conta_nombre_actor())
+  returning id into v_id;
+
+  return jsonb_build_object('id', v_id, 'mensaje', case when v_kind = 'poliza'
+    then format('Guardada la póliza «%s»: sus liquidaciones se reparten con la del banco.', trim(p_datos->>'nombre'))
+    else format('Guardado «%s»: %s cuotas, %s aplazados. Cada cuota se casará sola con su fila del cuadro.',
+      trim(p_datos->>'nombre'), v_cuotas, public.conta_impuesto_euros(v_importe)) end);
+end $$;
+
+
+--
+-- Name: FUNCTION bank_contrato_guardar(p_company uuid, p_datos jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) IS 'S01d. Alta de un préstamo, aplazamiento o póliza desde «Subir el cuadro» (tablero 3). No guarda un cuadro cuyo capital no sume lo aplazado.';
 
 
 --
@@ -25905,6 +25981,40 @@ end $$;
 
 
 --
+-- Name: conta_apunte_pago_modelo(uuid, integer, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_apunte_pago_modelo(p_entry uuid, p_posicion integer, p_modelo text, p_periodo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare e journal_entry; l journal_line; a company_account; v_txt text;
+begin
+  select * into e from journal_entry where id = p_entry;
+  if e.id is null or not public.current_user_is_admin_or_manager_of(e.account_id) then
+    raise exception 'Ese asiento no está.' using errcode = 'P0002';
+  end if;
+  if e.status not in ('borrador', 'propuesto') then
+    raise exception 'El asiento ya está %: un asiento validado no se cambia.', e.status using errcode = '22023';
+  end if;
+  select * into l from journal_line where entry_id = e.id and position = p_posicion;
+  select * into a from company_account where id = l.company_account_id;
+  if l.id is null or a.template_code not like '4751%' then
+    raise exception 'Solo un apunte de la 4751 es el pago de un modelo.' using errcode = '22023';
+  end if;
+  if p_modelo is null or p_modelo not in ('111', '115', '123') then raise exception 'Di el modelo: 111, 115 o 123.' using errcode = '22023'; end if;
+  if p_periodo is null or p_periodo !~ '^[0-9]{4}-([1-4]T|0[1-9]|1[0-2]|0A)$' then
+    raise exception 'Di el periodo: el año y el trimestre (3T), el mes o el año entero.' using errcode = '22023';
+  end if;
+  update journal_line set withholding_model = p_modelo, withholding_period = p_periodo, withholding_rate_id = null, withholding_base = null
+   where id = l.id;
+  v_txt := public.conta_modelo_periodo_texto(p_modelo, p_periodo);
+  return jsonb_build_object('mensaje', format('Apuntado: el apunte %s (%s) es %s de %s.', p_posicion, a.code,
+    case when l.debit > 0 then 'el pago' else 'la devolución' end, v_txt), 'pagado', public.conta_modelo_pagado(e.company_id, p_modelo, p_periodo));
+end $_$;
+
+
+--
 -- Name: conta_asesoria_aceptar(text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -27785,6 +27895,27 @@ $_$;
 --
 
 COMMENT ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p_admin_user_id uuid, p_admin_nombre text, p_marca text, p_motivo text, p_creada_por uuid) IS 'C06 · Alta de una cuenta SOLO de contabilidad: sin Cocina, con el interruptor conta (quién y por qué) y su apunte en platform_audit_log. Solo service_role (edge function conta-crear-cuenta).';
+
+
+--
+-- Name: conta_cuadro_con_pendiente(jsonb, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) RETURNS jsonb
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(a.fila || jsonb_build_object('pendiente', round(p_importe - a.acumulado, 2)) order by a.n), '[]'::jsonb)
+    from (select f.fila, f.n, sum((f.fila->>'capital')::numeric) over (order by f.n) as acumulado
+            from jsonb_array_elements(p_cuadro) with ordinality as f(fila, n)) a
+$$;
+
+
+--
+-- Name: FUNCTION conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) IS 'S01d. El cuadro de un contrato con lo que queda por pagar después de cada fila (importe menos el capital acumulado).';
 
 
 --
@@ -32614,14 +32745,30 @@ begin
     raise exception 'El movimiento es de % y la declaración, de % %.', public.conta_impuesto_euros(m.amount), public.conta_impuesto_euros(r.amount),
       case when r.result_kind = 'to_pay' then 'a pagar' else 'a devolver' end using errcode = '22023';
   end if;
-  select min(code) into v_cta from public.company_account where company_id = r.company_id
-     and template_code = case when r.result_kind = 'to_pay' then '4750' else '4700' end;
-  if v_cta is null then raise exception 'La cuenta % no está en el plan de la empresa.', case when r.result_kind = 'to_pay' then '4750' else '4700' end using errcode = '23514'; end if;
+  if r.form_code in ('111', '115', '123') then
+    -- S01d: una retención se paga en la subcuenta de la 4751 de su modelo (la que lo dice en su
+    -- configuración; si ninguna lo dice y solo hay una, ésa), con su modelo y su periodo en la línea.
+    select min(code) into v_cta from public.company_account where company_id = r.company_id and template_code like '4751%' and withholding_model = r.form_code
+     having count(*) = 1;
+    if v_cta is null then
+      select min(code) into v_cta from public.company_account where company_id = r.company_id and template_code like '4751%' and kind <> 'template'
+       having count(*) = 1;
+    end if;
+    if v_cta is null then
+      raise exception 'No sé en qué subcuenta de la 4751 va el %: dilo en la cuenta (su modelo).', r.form_code using errcode = '23514';
+    end if;
+  else
+    select min(code) into v_cta from public.company_account where company_id = r.company_id
+       and template_code = case when r.result_kind = 'to_pay' then '4750' else '4700' end;
+    if v_cta is null then raise exception 'La cuenta % no está en el plan de la empresa.', case when r.result_kind = 'to_pay' then '4750' else '4700' end using errcode = '23514'; end if;
+  end if;
 
   v_casado := public.bank_casar(m.id,
     jsonb_build_object('tipo', 'cuenta', 'concepto', 'Pago del ' || r.form_code || ' ' || r.period || '/' || r.fiscal_year,
                        'lineas', jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'importe', r.amount,
-                                                   'concepto', 'Pago del ' || r.form_code || ' ' || r.period || '/' || r.fiscal_year))),
+                                                   'concepto', 'Pago del ' || r.form_code || ' ' || r.period || '/' || r.fiscal_year)
+                                                   || case when r.form_code in ('111', '115', '123')
+                                                           then jsonb_build_object('modelo', r.form_code, 'periodo', r.fiscal_year || '-' || r.period) else '{}'::jsonb end)),
     'seguro', 'Es el ' || case when r.result_kind = 'to_pay' then 'cargo' else 'abono' end || ' del ' || r.form_code || ' ' || r.period || '/' || r.fiscal_year || ' por su importe.',
     jsonb_build_array(jsonb_build_object('decision', 'pago-impuesto', 'declaracion', r.id)), 'persona', null);
   v_match := (v_casado->>'match')::uuid; v_entry := (v_casado->>'asiento')::uuid;
@@ -34512,6 +34659,9 @@ begin
            coalesce(sum(l.credit - l.debit) filter (where ca.code like '4751%'), 0) as retenido,
            bool_or(ca.code ~ '^(10|11|12)') as mueve_grupo_1,
            bool_or(ca.code like '57%') as tesoreria,
+           -- S01d: todas sus líneas de la 4751 dicen modelo y periodo y no llevan tipo: es un pago, una compensación o una devolución.
+           coalesce(bool_and(l.withholding_rate_id is null and l.withholding_model is not null and l.withholding_period is not null)
+                    filter (where ca.code like '4751%'), false) as pago_marcado,
            coalesce(sum(l.debit - l.credit) filter (where ca.code like '621%'), 0) as b621,
            coalesce(sum(l.debit - l.credit) filter (where ca.code like '640%'), 0) as b640,
            coalesce(sum(l.debit - l.credit) filter (where ca.code ~ '^(6|2)' and ca.code !~ '^(621|64)'), 0) as bgasto,
@@ -34533,6 +34683,7 @@ begin
   ), m0 as (
     select x.*,
            case when x.source_type in ('opening', 'closing') or x.mueve_grupo_1 then 'apertura'
+                when x.pago_marcado then 'pago'
                 when x.retenido < 0 and x.reverses_entry_id is null and x.tesoreria then 'pago'
                 when x.modelo_linea is not null and x.modelo_linea not in ('111', '115') then 'otro_modelo'
                 when x.modelo_linea = '115' or (x.modelo_linea is null and x.b621 <> 0) then '115'
@@ -37005,6 +37156,45 @@ end $$;
 
 
 --
+-- Name: conta_modelo_pagado(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_modelo_pagado(p_company uuid, p_modelo text, p_periodo text) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c company; t tax_return; v_pagado numeric; v_pendiente numeric;
+begin
+  select * into c from company where id = p_company;
+  if c.id is null or not public.belongs_to_account(c.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  select coalesce(sum(l.debit - l.credit), 0) into v_pagado
+    from journal_line l join journal_entry e on e.id = l.entry_id join company_account a on a.id = l.company_account_id
+   where l.company_id = p_company and e.status = 'validado' and a.template_code like '4751%'
+     and l.withholding_model = p_modelo and l.withholding_period = p_periodo and l.withholding_rate_id is null;
+  select * into t from tax_return
+   where company_id = p_company and form_code = p_modelo and fiscal_year = split_part(p_periodo, '-', 1)::int
+     and period = case when split_part(p_periodo, '-', 2) = '0A' then '0A' else split_part(p_periodo, '-', 2) end
+     and status = 'filed' order by sequence desc limit 1;
+  v_pendiente := case when t.id is not null and t.result_kind = 'to_pay' then round(t.amount - v_pagado, 2) end;
+  return jsonb_build_object('modelo', p_modelo, 'periodo', p_periodo, 'texto', public.conta_modelo_periodo_texto(p_modelo, p_periodo),
+    'declaracion', t.id, 'importe', t.amount, 'pagado', round(v_pagado, 2), 'pendiente', v_pendiente, 'asiento_pago', t.payment_entry_id);
+end $$;
+
+
+--
+-- Name: conta_modelo_periodo_texto(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_modelo_periodo_texto(p_modelo text, p_periodo text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select p_modelo || ' · ' || case when split_part(p_periodo, '-', 2) = '0A' then 'año ' || split_part(p_periodo, '-', 1)
+                                   else split_part(p_periodo, '-', 2) || ' ' || split_part(p_periodo, '-', 1) end
+$$;
+
+
+--
 -- Name: conta_motivos_para_validar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -37120,7 +37310,10 @@ begin
              and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(1, floor(l.tax_documents / 2.0)) / 100
           then format('la cuota %s no es la base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))
         when a.template_code like '4751%' and l.withholding_rate_id is null and not v_cierre
-          then 'una retención lleva su tipo, su base y su modelo'
+             and not (l.withholding_model is not null and l.withholding_period is not null)
+          then 'una retención lleva su tipo, su base y su modelo; el pago o la compensación de un modelo, su modelo y su periodo'
+        when a.template_code like '4751%' and l.withholding_rate_id is not null and l.withholding_period is not null
+          then 'o es una retención que nace (tipo, base y modelo) o el pago de un modelo (modelo y periodo), no las dos'
         when v_local and not l.is_common and l.location_id is null
           then 'falta el local (o marcarlo como común)'
         end as motivo) m
@@ -57463,6 +57656,62 @@ $$;
 
 
 --
+-- Name: lab_import_cargar_filas(uuid, text, integer, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_import_cargar_filas(p_lote uuid, p_hoja text, p_desde integer, p_filas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_lote public.lab_import_lote;
+  v_n int;
+  v_nuevas int;
+begin
+  select * into v_lote from public.lab_import_lote where id = p_lote;
+  if v_lote.id is null or not public.current_user_is_admin_of(v_lote.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El historial de personal lo importa el administrador de la cuenta.';
+  end if;
+  if v_lote.estado <> 'leido' then
+    raise exception 'LOTE_NO_LEIDO' using errcode = '22023', hint = 'Las filas se cargan en un lote recién leído.';
+  end if;
+  if p_hoja not in ('empresa', 'convenio', 'tablas_salariales', 'conceptos', 'trabajadores',
+                    'contratos', 'nominas', 'nominas_conceptos', 'cuadre_contable') then
+    raise exception 'HOJA_DESCONOCIDA' using errcode = '22023';
+  end if;
+  if p_desde is null or p_desde < 1 then
+    raise exception 'FILA_INICIAL_MAL' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_filas) is distinct from 'array' or jsonb_array_length(p_filas) = 0 then
+    raise exception 'SIN_FILAS' using errcode = '22023';
+  end if;
+  if jsonb_array_length(p_filas) > 1000 or pg_column_size(p_filas) > 2097152 then
+    raise exception 'TROZO_DEMASIADO_GRANDE' using errcode = '22023', hint = 'Como mucho 1.000 filas o 2 MB por trozo.';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_filas) f where jsonb_typeof(f) <> 'object') then
+    raise exception 'FILA_MAL_FORMADA' using errcode = '22023', hint = 'Cada fila va como sus columnas y sus valores.';
+  end if;
+
+  select count(*) into v_nuevas
+    from jsonb_array_elements(p_filas) with ordinality f(datos, i)
+   where not exists (select 1 from public.lab_import_fila x
+                      where x.lote_id = p_lote and x.hoja = p_hoja and x.fila_n = p_desde + f.i::int - 1);
+
+  insert into public.lab_import_fila (lote_id, account_id, hoja, fila_n, datos, huella)
+  select p_lote, v_lote.account_id, p_hoja, p_desde + f.i::int - 1, f.datos, md5(f.datos::text)
+    from jsonb_array_elements(p_filas) with ordinality f(datos, i)
+  on conflict (lote_id, hoja, fila_n) do update
+     set datos = excluded.datos, huella = excluded.huella,
+         estado = 'ok', mensajes = '{}', destino_tabla = null, destino_id = null
+   where public.lab_import_fila.huella is distinct from excluded.huella;
+  get diagnostics v_n = row_count;
+
+  return jsonb_build_object('hoja', p_hoja, 'recibidas', jsonb_array_length(p_filas),
+                            'nuevas', v_nuevas, 'cambiadas', v_n - v_nuevas);
+end $$;
+
+
+--
 -- Name: lab_import_leer_cabeceras(uuid, text, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -57516,6 +57765,50 @@ begin
   end if;
   return jsonb_build_object('id', v_lote.id, 'repetido', v_repetido, 'subido_at', v_lote.subido_at, 'estado', v_lote.estado);
 end $_$;
+
+
+--
+-- Name: lab_import_terminar_filas(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_lote public.lab_import_lote;
+  v_quitadas int;
+  v_hojas jsonb;
+begin
+  select * into v_lote from public.lab_import_lote where id = p_lote;
+  if v_lote.id is null or not public.current_user_is_admin_of(v_lote.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El historial de personal lo importa el administrador de la cuenta.';
+  end if;
+  if v_lote.estado <> 'leido' then
+    raise exception 'LOTE_NO_LEIDO' using errcode = '22023';
+  end if;
+  if jsonb_typeof(p_esperadas) is distinct from 'object'
+     or exists (select 1 from jsonb_each(p_esperadas) e where jsonb_typeof(e.value) <> 'number') then
+    raise exception 'ESPERADAS_MAL_FORMADAS' using errcode = '22023';
+  end if;
+
+  delete from public.lab_import_fila f
+   where f.lote_id = p_lote
+     and (not (p_esperadas ? f.hoja) or f.fila_n > (p_esperadas ->> f.hoja)::int);
+  get diagnostics v_quitadas = row_count;
+
+  select coalesce(jsonb_object_agg(h.hoja, jsonb_build_object('esperadas', h.esperadas, 'cargadas', h.cargadas)), '{}'::jsonb)
+    into v_hojas
+    from (select e.key hoja, (e.value)::text::int esperadas,
+                 (select count(*) from public.lab_import_fila f where f.lote_id = p_lote and f.hoja = e.key)::int cargadas
+            from jsonb_each(p_esperadas) e) h;
+
+  return jsonb_build_object(
+    'hojas', v_hojas,
+    'quitadas', v_quitadas,
+    'cargadas', (select count(*) from public.lab_import_fila where lote_id = p_lote),
+    'completo', not exists (select 1 from jsonb_each(v_hojas) x where (x.value ->> 'esperadas') <> (x.value ->> 'cargadas')));
+end $$;
 
 
 --
@@ -80692,6 +80985,37 @@ end $$;
 
 
 --
+-- Name: tg_journal_entry_pago_modelo(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_journal_entry_pago_modelo() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r record; v jsonb;
+begin
+  if new.status <> 'validado' or old.status = 'validado' then return null; end if;
+  for r in select distinct l.withholding_model m, l.withholding_period p from journal_line l
+            where l.entry_id = new.id and l.withholding_period is not null and l.withholding_rate_id is null loop
+    v := public.conta_modelo_pagado(new.company_id, r.m, r.p);
+    if (v->>'declaracion') is not null and (v->>'pendiente')::numeric <= 0 and (v->>'asiento_pago') is null then
+      -- Lo mismo que «Casar el cargo» de Impuestos: pagada, con su asiento y, si vino del banco, su casado.
+      update tax_return t set payment_entry_id = new.id,
+             status = case when t.status in ('filed', 'booked') then 'paid' else t.status end,
+             bank_match_id = coalesce(t.bank_match_id, (select m.id from bank_match m where m.journal_entry_id = new.id and m.status = 'vivo' limit 1)),
+             updated_at = now()
+       where t.id = (v->>'declaracion')::uuid and t.payment_entry_id is null;
+      insert into tax_return_event (tax_return_id, account_id, company_id, by_user, by_name, kind, message, detail)
+      values ((v->>'declaracion')::uuid, new.account_id, new.company_id, auth.uid(), coalesce(new.validated_by_name, 'Sumied'), 'note',
+              format('Pagado: lo dice el asiento %s/%s del %s (%s).', new.series, new.number, to_char(new.entry_date, 'DD/MM/YYYY'), v->>'texto'),
+              jsonb_build_object('asiento', new.id, 'pagado', v->'pagado'));
+    end if;
+  end loop;
+  return null;
+end $$;
+
+
+--
 -- Name: tg_menu_item_inherit_stock_group(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -90354,6 +90678,7 @@ CREATE TABLE public.company_account (
     import_id uuid,
     name_pending boolean DEFAULT false NOT NULL,
     import_run_id uuid,
+    withholding_model text,
     CONSTRAINT company_account_check CHECK ((code ~~ (template_code || '%'::text))),
     CONSTRAINT company_account_check1 CHECK (((kind = 'own'::text) OR (code = rpad(template_code, length(code), '0'::text)))),
     CONSTRAINT company_account_check2 CHECK (((NOT is_common) OR (kind = 'template'::text))),
@@ -90363,7 +90688,8 @@ CREATE TABLE public.company_account (
     CONSTRAINT company_account_plan_check CHECK ((plan = ANY (ARRAY['pymes'::text, 'general'::text]))),
     CONSTRAINT company_account_source_check CHECK ((source = ANY (ARRAY['serie'::text, 'manual'::text, 'ai_accepted'::text, 'migrated'::text]))),
     CONSTRAINT company_account_status_check CHECK ((status = ANY (ARRAY['activa'::text, 'oculta'::text, 'cerrada'::text]))),
-    CONSTRAINT company_account_template_code_check CHECK ((template_code ~ '^[1-9][0-9]{0,4}$'::text))
+    CONSTRAINT company_account_template_code_check CHECK ((template_code ~ '^[1-9][0-9]{0,4}$'::text)),
+    CONSTRAINT company_account_withholding_model_check CHECK ((withholding_model = ANY (ARRAY['111'::text, '115'::text, '123'::text])))
 );
 
 
@@ -90414,6 +90740,13 @@ COMMENT ON COLUMN public.company_account.name_pending IS 'C06 · La subcuenta ll
 --
 
 COMMENT ON COLUMN public.company_account.import_run_id IS 'C06b · La lectura del histórico (import_run) que dio de alta la subcuenta. Con import_id (la importación del plan), los dos caminos por los que una cuenta es «migrated». Null: ninguno de los dos, o de antes del C06b.';
+
+
+--
+-- Name: COLUMN company_account.withholding_model; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.company_account.withholding_model IS 'S01d. El modelo de una subcuenta de la 4751 (111, 115 o 123): de ahí sale el modelo al pagar desde Bancos.';
 
 
 --
@@ -96788,6 +97121,7 @@ CREATE TABLE public.journal_line (
     external_counterpart text,
     external_voucher text,
     external_negative_side text,
+    withholding_period text,
     CONSTRAINT journal_line_comun_sin_local CHECK ((NOT (is_common AND (location_id IS NOT NULL)))),
     CONSTRAINT journal_line_credit_check CHECK ((credit >= (0)::numeric)),
     CONSTRAINT journal_line_debe_o_haber CHECK (((debit > (0)::numeric) <> (credit > (0)::numeric))),
@@ -96796,11 +97130,12 @@ CREATE TABLE public.journal_line (
     CONSTRAINT journal_line_external_negative_side_check CHECK ((external_negative_side = ANY (ARRAY['debe'::text, 'haber'::text]))),
     CONSTRAINT journal_line_iva_completo CHECK ((((tax_rate_id IS NULL) AND (tax_base IS NULL) AND (vat_book IS NULL) AND (vat_deductible IS NULL)) OR ((tax_rate_id IS NOT NULL) AND (tax_base IS NOT NULL) AND (vat_book IS NOT NULL)))),
     CONSTRAINT journal_line_position_check CHECK (("position" > 0)),
-    CONSTRAINT journal_line_retencion_completa CHECK ((((withholding_rate_id IS NULL) AND (withholding_base IS NULL) AND (withholding_model IS NULL)) OR ((withholding_rate_id IS NOT NULL) AND (withholding_base IS NOT NULL) AND (withholding_model IS NOT NULL)))),
+    CONSTRAINT journal_line_retencion_completa CHECK ((((withholding_rate_id IS NULL) AND (withholding_base IS NULL) AND (withholding_model IS NULL) AND (withholding_period IS NULL)) OR ((withholding_rate_id IS NOT NULL) AND (withholding_base IS NOT NULL) AND (withholding_model IS NOT NULL) AND (withholding_period IS NULL)) OR ((withholding_rate_id IS NULL) AND (withholding_base IS NULL) AND (withholding_model IS NOT NULL) AND (withholding_period IS NOT NULL)))),
     CONSTRAINT journal_line_tax_documents_check CHECK ((tax_documents > 0)),
     CONSTRAINT journal_line_vat_book_check CHECK (((vat_book IS NULL) OR (vat_book = ANY (ARRAY['issued'::text, 'received'::text, 'investment'::text, 'not_subject'::text])))),
     CONSTRAINT journal_line_vat_deductible_check CHECK (((vat_deductible IS NULL) OR (vat_deductible = ANY (ARRAY['yes'::text, 'no'::text, 'prorrata'::text])))),
-    CONSTRAINT journal_line_withholding_model_check CHECK (((withholding_model IS NULL) OR (withholding_model = ANY (ARRAY['111'::text, '115'::text, '123'::text]))))
+    CONSTRAINT journal_line_withholding_model_check CHECK (((withholding_model IS NULL) OR (withholding_model = ANY (ARRAY['111'::text, '115'::text, '123'::text])))),
+    CONSTRAINT journal_line_withholding_period_check CHECK ((withholding_period ~ '^[0-9]{4}-([1-4]T|0[1-9]|1[0-2]|0A)$'::text))
 );
 
 
@@ -96844,6 +97179,13 @@ COMMENT ON COLUMN public.journal_line.external_voucher IS 'Justificante tal como
 --
 
 COMMENT ON COLUMN public.journal_line.external_negative_side IS 'Traída de Diez con importe NEGATIVO: en qué lado iba allí (debe o haber). Folvy la guarda en positivo al otro lado; Libros la marca «En Diez iba en negativo».';
+
+
+--
+-- Name: COLUMN journal_line.withholding_period; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.journal_line.withholding_period IS 'S01d. El periodo del modelo que paga, compensa o devuelve este apunte de la 4751 («2026-3T», «2026-01» o «2026-0A»), con withholding_model y sin withholding_rate_id. Nulo en la retención que nace.';
 
 
 --
@@ -100280,7 +100622,7 @@ CREATE TABLE public.recurring_contract (
     name text NOT NULL,
     party_id uuid,
     concept_contains text NOT NULL,
-    amount numeric(14,2) NOT NULL,
+    amount numeric(14,2),
     schedule jsonb,
     capital_account text,
     interest_account text,
@@ -100290,13 +100632,24 @@ CREATE TABLE public.recurring_contract (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by uuid,
     created_by_name text,
+    long_capital_account text,
+    short_capital_account text,
+    treasury_account_id uuid,
+    principal numeric(14,2),
+    installments integer,
+    document_name text,
+    document_kind text,
     CONSTRAINT recurring_contract_amount_check CHECK ((amount > (0)::numeric)),
     CONSTRAINT recurring_contract_concept_contains_check CHECK ((length(TRIM(BOTH FROM concept_contains)) > 0)),
     CONSTRAINT recurring_contract_confirmations_check CHECK ((confirmations >= 0)),
     CONSTRAINT recurring_contract_cuadro CHECK (((schedule IS NULL) OR (jsonb_typeof(schedule) = 'array'::text))),
-    CONSTRAINT recurring_contract_cuentas CHECK ((((kind = 'prestamo'::text) AND (capital_account IS NOT NULL) AND (interest_account IS NOT NULL)) OR ((kind <> 'prestamo'::text) AND (expense_account IS NOT NULL)))),
-    CONSTRAINT recurring_contract_kind_check CHECK ((kind = ANY (ARRAY['prestamo'::text, 'alquiler'::text, 'otro'::text]))),
-    CONSTRAINT recurring_contract_name_check CHECK ((length(TRIM(BOTH FROM name)) > 0))
+    CONSTRAINT recurring_contract_cuentas CHECK ((((kind = ANY (ARRAY['prestamo'::text, 'aplazamiento'::text, 'poliza'::text])) AND (capital_account IS NOT NULL) AND (interest_account IS NOT NULL)) OR ((kind <> ALL (ARRAY['prestamo'::text, 'aplazamiento'::text, 'poliza'::text])) AND (expense_account IS NOT NULL)))),
+    CONSTRAINT recurring_contract_document_kind_check CHECK (((document_kind IS NULL) OR (document_kind = ANY (ARRAY['excel'::text, 'pdf'::text, 'a_mano'::text])))),
+    CONSTRAINT recurring_contract_importe CHECK (((kind = 'poliza'::text) OR (amount IS NOT NULL))),
+    CONSTRAINT recurring_contract_installments_check CHECK (((installments IS NULL) OR (installments > 0))),
+    CONSTRAINT recurring_contract_kind_check CHECK ((kind = ANY (ARRAY['prestamo'::text, 'alquiler'::text, 'otro'::text, 'aplazamiento'::text, 'poliza'::text]))),
+    CONSTRAINT recurring_contract_name_check CHECK ((length(TRIM(BOTH FROM name)) > 0)),
+    CONSTRAINT recurring_contract_principal_check CHECK (((principal IS NULL) OR (principal > (0)::numeric)))
 );
 
 
@@ -100305,6 +100658,41 @@ CREATE TABLE public.recurring_contract (
 --
 
 COMMENT ON TABLE public.recurring_contract IS 'B01. Préstamo o alquiler con cuota conocida. Su cuota se casa sola (seguro) cuando se ha confirmado 3 veces; el préstamo se parte en capital (170/520) e intereses (662) con su cuadro.';
+
+
+--
+-- Name: COLUMN recurring_contract.long_capital_account; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.long_capital_account IS 'S01d. El capital a más de un año (170/171). Pasarlo a corto al cerrar el año va con el cierre, no aquí.';
+
+
+--
+-- Name: COLUMN recurring_contract.short_capital_account; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.short_capital_account IS 'S01d. El capital a menos de un año (520/521): ahí va el capital de cada cuota.';
+
+
+--
+-- Name: COLUMN recurring_contract.treasury_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.treasury_account_id IS 'S01d. El banco donde se carga la cuota.';
+
+
+--
+-- Name: COLUMN recurring_contract.principal; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.principal IS 'S01d. El importe prestado o aplazado: el capital del cuadro tiene que sumarlo.';
+
+
+--
+-- Name: COLUMN recurring_contract.document_name; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.document_name IS 'S01d. El cuadro o la resolución que se leyó (nombre del fichero).';
 
 
 --
@@ -116182,6 +116570,13 @@ CREATE TRIGGER journal_entry_liquidacion_anulada AFTER UPDATE OF status ON publi
 
 
 --
+-- Name: journal_entry journal_entry_pago_modelo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER journal_entry_pago_modelo AFTER UPDATE OF status ON public.journal_entry FOR EACH ROW WHEN (((new.status = 'validado'::text) AND (old.status IS DISTINCT FROM 'validado'::text))) EXECUTE FUNCTION public.tg_journal_entry_pago_modelo();
+
+
+--
 -- Name: location_company location_company_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -125233,6 +125628,14 @@ ALTER TABLE ONLY public.recurring_contract
 
 ALTER TABLE ONLY public.recurring_contract
     ADD CONSTRAINT recurring_contract_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: recurring_contract recurring_contract_treasury_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract
+    ADD CONSTRAINT recurring_contract_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE SET NULL;
 
 
 --
@@ -140874,6 +141277,15 @@ GRANT ALL ON FUNCTION public.bank_consentimientos_por_caducar(p_company uuid, p_
 
 
 --
+-- Name: FUNCTION bank_contrato_guardar(p_company uuid, p_datos jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_contrato_guardar(p_company uuid, p_datos jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION bank_cuenta_alias(p_treasury uuid, p_alias text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -142349,6 +142761,15 @@ GRANT ALL ON FUNCTION public.conta_al_dia() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_apunte_pago_modelo(p_entry uuid, p_posicion integer, p_modelo text, p_periodo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_apunte_pago_modelo(p_entry uuid, p_posicion integer, p_modelo text, p_periodo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_apunte_pago_modelo(p_entry uuid, p_posicion integer, p_modelo text, p_periodo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_apunte_pago_modelo(p_entry uuid, p_posicion integer, p_modelo text, p_periodo text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_asesoria_aceptar(p_token_hash text, p_advisor_account uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -142843,6 +143264,15 @@ GRANT ALL ON FUNCTION public.conta_correo_facturas(p_company uuid) TO service_ro
 
 REVOKE ALL ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p_admin_user_id uuid, p_admin_nombre text, p_marca text, p_motivo text, p_creada_por uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p_admin_user_id uuid, p_admin_nombre text, p_marca text, p_motivo text, p_creada_por uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) TO anon;
+GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_cuadro_con_pendiente(p_cuadro jsonb, p_importe numeric) TO service_role;
 
 
 --
@@ -144427,6 +144857,24 @@ GRANT ALL ON FUNCTION public.conta_misma_cuenta() TO service_role;
 GRANT ALL ON FUNCTION public.conta_misma_cuenta_si_propia() TO anon;
 GRANT ALL ON FUNCTION public.conta_misma_cuenta_si_propia() TO authenticated;
 GRANT ALL ON FUNCTION public.conta_misma_cuenta_si_propia() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_modelo_pagado(p_company uuid, p_modelo text, p_periodo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_modelo_pagado(p_company uuid, p_modelo text, p_periodo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_modelo_pagado(p_company uuid, p_modelo text, p_periodo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_modelo_pagado(p_company uuid, p_modelo text, p_periodo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_modelo_periodo_texto(p_modelo text, p_periodo text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_modelo_periodo_texto(p_modelo text, p_periodo text) TO anon;
+GRANT ALL ON FUNCTION public.conta_modelo_periodo_texto(p_modelo text, p_periodo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_modelo_periodo_texto(p_modelo text, p_periodo text) TO service_role;
 
 
 --
@@ -147783,12 +148231,30 @@ GRANT ALL ON FUNCTION public.kitchen_unarchive_item(p_item_id uuid) TO service_r
 
 
 --
+-- Name: FUNCTION lab_import_cargar_filas(p_lote uuid, p_hoja text, p_desde integer, p_filas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_import_cargar_filas(p_lote uuid, p_hoja text, p_desde integer, p_filas jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_import_cargar_filas(p_lote uuid, p_hoja text, p_desde integer, p_filas jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_import_cargar_filas(p_lote uuid, p_hoja text, p_desde integer, p_filas jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fichero_nombre text, p_fichero_huella text, p_hojas jsonb, p_comparacion jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) TO service_role;
 
 
 --
@@ -151134,6 +151600,14 @@ GRANT ALL ON FUNCTION public.tg_journal_entry_envio_por_aclarar() TO service_rol
 REVOKE ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() TO authenticated;
 GRANT ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_journal_entry_pago_modelo(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_journal_entry_pago_modelo() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_journal_entry_pago_modelo() TO service_role;
 
 
 --
