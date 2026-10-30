@@ -254,8 +254,9 @@ test('cuenta A: el índice de Ajustes (N6), con «aún no» donde aún no hay pa
   const barra = page.getByRole('navigation', { name: 'Menú de contabilidad' })
   await expect(barra.getByRole('link', { name: 'Ajustes', exact: true })).toHaveAttribute('aria-current', 'true')
   const indice = barra.getByRole('list', { name: 'Páginas de Ajustes' })
-  // V03 E2 (26/10): entra Facturación › Verifactu.
-  await expect(indice.locator('.s-barra-nombre')).toHaveText(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Verifactu', 'Usuarios', 'Avisos', /^Lo que ha hecho /])
+  // V03 E2 (26/10): entra Facturación › Verifactu. PC01 E4 (27/10): Cobros. S01c (29/10): Correo de facturas.
+  // DM1 · PR 1 (30/10): «Personas y asesor» ya tiene pantalla y se llama «Usuarios».
+  await expect(indice.locator('.s-barra-nombre')).toHaveText(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Avisos', /^Lo que ha hecho /])
   await expect(indice.getByRole('link', { name: 'Certificados y accesos', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(page.getByText('Aún no.')).toBeVisible()
   for (const deDefiniciones of ['Plan contable', 'Tablas generales', 'Numeración']) await expect(indice.getByRole('link', { name: deDefiniciones })).toHaveCount(0)
