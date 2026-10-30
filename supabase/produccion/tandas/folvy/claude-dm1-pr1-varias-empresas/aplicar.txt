@@ -1,0 +1,20 @@
+# DM1 · PR 1 · Un usuario en varias empresas (30/10/2026). Rama
+# claude/dm1-pr1-varias-empresas. Se ensaya y se aplica antes de fusionar,
+# lanzado desde main nombrando la rama (W12b).
+#
+#   1. 1950 — SOLO AÑADE: user_active_account (la cuenta abierta de cada
+#      persona), _cuenta_activa (la abierta, calculada una vez por transacción),
+#      mis_empresas, cambiar_empresa y _usuario_por_correo (solo service_role).
+#   2. 1951 — CAMBIA EN CALIENTE (autorizo, camino del pedido): las ocho
+#      funciones de permisos miran solo la cuenta abierta. Misma firma, con
+#      respaldo. Con una sola cuenta (las 15 personas de hoy) no cambia nada;
+#      el superadministrador y las tareas sin usuario, tampoco.
+#
+# Antes (producción, 30/10 19:56 UTC): las ocho funciones con una sola firma
+# cada una; ninguna de las nuevas; 15 perfiles, nadie con más de una cuenta;
+# nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261030T1950_dm1_cuenta_activa.sql
+supabase/migrations/20261030T1951_dm1_permisos_de_la_activa.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-cuenta-activa.sql

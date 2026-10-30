@@ -1,0 +1,29 @@
+{
+  "_que": "DM1 · PR 1 · contexto de producción de la tanda (1950 y 1951), medido en SOLO LECTURA el 30/10 a las 19:56 UTC. Existen las ocho funciones de permisos que cambia la 1951, con una sola firma cada una (current_employee_and_account es () con dos parámetros OUT); no existen user_active_account ni las cuatro funciones nuevas. Ninguna está en el camino del pedido por disparador ni por cron (las usan las políticas). Nada de la tanda en el historial. 15 perfiles, nadie con más de una cuenta.",
+  "medido": "2026-10-30T19:56Z",
+  "tanda": {
+    "supabase/migrations/20261030T1950_dm1_cuenta_activa.sql": "ab1d72276d21ebd65dd9e36005186497",
+    "supabase/migrations/20261030T1951_dm1_permisos_de_la_activa.sql": "d10f1a2962f066c6070308d3dda1144e"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.current_employee_and_account()",
+      "public.current_user_account_ids()",
+      "public.current_user_is_admin_of(uuid)",
+      "public.current_user_is_admin_or_manager_of(uuid)",
+      "public.current_user_is_employee(uuid,uuid)",
+      "public.current_user_is_office()",
+      "public.current_user_location_ids()",
+      "public.current_user_ve_persona(uuid,uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}
