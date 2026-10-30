@@ -1,0 +1,13 @@
+# LAB1 · Importador del historial de Cegid, tanda 1 (29/10/2026): el lote y
+# las cabeceras. Rama claude/lab1-importador-cabeceras (va detrás de LS1, #388).
+# Se ensaya y se aplica desde esta rama, antes de fusionar. Sin autorizo.
+#
+#   1. 0850 — SOLO AÑADE: lab_import_lote, lab_import_fila (vacía hasta la
+#      tanda 2) y lab_import_leer_cabeceras. RLS solo administrador y sin
+#      escritura directa. Nada en el camino del pedido.
+#
+# Antes (producción, 29/10 08:58 UTC): ninguna tabla lab_* ni la función.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261029T0850_lab1_importador_lote.sql
+cuenta: scripts/conta/produccion/cuentas/lab1-importador-cabeceras.sql

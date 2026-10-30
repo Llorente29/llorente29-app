@@ -39,6 +39,8 @@ const PANTALLAS: Record<string, Pantalla> = {
   nominas: lazy(() => import('@/pages/NominasPage')),
   centros: lazy(() => import('./CentrosPage')),
   portal: lazy(() => import('./PortalEmpleadoPage')),
+  // LAB1 · El importador del historial de Cegid (tanda 1: solo las cabeceras).
+  'importar-historial': lazy(() => import('./importar/ImportarHistorialPage')),
 }
 
 function Cargando() {

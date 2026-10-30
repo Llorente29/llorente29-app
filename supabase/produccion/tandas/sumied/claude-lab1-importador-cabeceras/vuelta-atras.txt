@@ -1,0 +1,3 @@
+# LAB1 · tanda 1 · vuelta atrás: fuera la función y las dos tablas, con los
+# lotes que se hayan leído entre medias (solo cabeceras: ningún dato).
+supabase/vuelta-atras/20261029T0850_lab1_importador_lote.down.sql
