@@ -145,6 +145,9 @@ test('cargar las filas: las 51 del paquete, hoja a hoja; otra vez, sin duplicar'
   // Las 51 filas: Empresa 20 campos, Convenio 10 y 3 por cada una de las siete tablas.
   await page.locator('[data-prueba="importar-cargar"]').click()
   const hecho = page.locator('[data-prueba="importar-filas"]')
+  // Si la pantalla dice un error, que la prueba lo enseñe en vez de esperar al tiempo máximo.
+  await expect(page.locator('[data-prueba="importar-filas"], [data-prueba="importar-error"]')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
   await expect(hecho).toContainText('Cargadas 51 filas de 9 hojas: Empresa 20 · Convenio 10 · Tablas_salariales 3', { timeout: 60_000 })
   await expect(hecho).toContainText('51 nuevas.')
   await captura(page, 'lab2-filas-cargadas')
@@ -162,6 +165,8 @@ test('cargar las filas: las 51 del paquete, hoja a hoja; otra vez, sin duplicar'
   // El mismo fichero otra vez: nada nuevo, nada duplicado.
   await leer(page, 'paquete con filas.xlsx', bytes)
   await page.locator('[data-prueba="importar-cargar"]').click()
+  await expect(page.locator('[data-prueba="importar-filas"], [data-prueba="importar-error"]')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
   await expect(hecho).toContainText('Ninguna cambia: es lo mismo que ya estaba.', { timeout: 60_000 })
   const otraVez = await rest<{ hoja: string }[]>(sola, 'GET', `lab_import_fila?select=hoja&lote_id=eq.${lote.datos[0].id}`)
   expect(otraVez.datos).toHaveLength(51)

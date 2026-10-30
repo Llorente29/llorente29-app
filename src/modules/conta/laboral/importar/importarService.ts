@@ -83,8 +83,9 @@ export async function cargarFilas(
 ): Promise<ResultadoFilas> {
   if (!supabase) throw new Error('Sin conexión con la base.')
   // lab_import_cargar_filas y lab_import_terminar_filas son de la 0950 y aún no están en database.ts.
+  // Llamada como método: suelto, supabase.rpc pierde su «this» y falla antes de llegar a la red (e2e del 30/10).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rpc = supabase.rpc as any
+  const rpc = (nombre: string, args: object) => (supabase!.rpc as any)(nombre, args)
   let nuevas = 0
   let cambiadas = 0
   for (const h of hojas) {
