@@ -1,0 +1,15 @@
+# S01e · La ficha de cada préstamo o aplazamiento (encargo del 30/10; tanda
+# aceptada por Julio después del paso 0). Rama claude/s01e-ficha-contrato.
+#
+#   2210  añade bank_match.contract_id y contract_due_date (qué fila del
+#         cuadro paga un cargo) y recurring_contract.document_uploaded_at.
+#   2211  cambia bank_casar (guarda el contrato y la fila al casar una cuota)
+#         y bank_contrato_guardar (modo «sustituir» las cuotas pendientes de
+#         un préstamo, y la fecha de subida del cuadro). Misma firma, con
+#         respaldo.
+#
+# Nada en el camino del pedido. Sin datos: las cuotas ya casadas se quedan
+# como están. Sin aplicar: el real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01e-ficha-contrato.sql
+supabase/migrations/20261030T2210_s01e_columnas.sql
+supabase/migrations/20261030T2211_s01e_ficha.sql

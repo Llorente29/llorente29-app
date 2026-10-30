@@ -1,0 +1,5 @@
+# S01e · la vuelta atrás: las dos funciones como estaban (del respaldo) y
+# fuera las tres columnas.
+cuenta: scripts/conta/produccion/cuentas/s01e-ficha-contrato.sql
+supabase/vuelta-atras/20261030T2211_s01e_ficha.down.sql
+supabase/vuelta-atras/20261030T2210_s01e_columnas.down.sql
