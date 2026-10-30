@@ -20,6 +20,8 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { Icono, Tecla } from '@/modules/conta/diseno'
 import { colorDeEmpresa, inicialDeEmpresa } from './colorEmpresa'
+import { useMisEmpresas } from '@/modules/multitenancy/hooks/useMisEmpresas'
+import { VariasEmpresas } from './VariasEmpresas'
 
 /** El cuadrado de la empresa: su logo si lo subió; si no, su inicial en su color. */
 export function CuadradoEmpresa({ nombre, color, logo }: { nombre: string; color: string; logo: string | null }) {
@@ -31,6 +33,9 @@ export function CuadradoEmpresa({ nombre, color, logo }: { nombre: string; color
 function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colorElegido: string | null; movil: boolean }) {
   const { activa, empresas, elegir, cargando } = useEmpresas()
   const { abierto, setAbierto, alternar, caja, boton } = useDesplegable()
+  // DM1 · PR 1: con varias cuentas (una asesoría), sus sociedades agrupadas por cuenta.
+  const cuentas = useMisEmpresas()
+  const varias = cuentas.length > 1
   const [busca, setBusca] = useState('')
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -55,7 +60,13 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
         </span>
         <Icono nombre="desplegar" />
       </button>
-      {abierto && (
+      {abierto && varias && (
+        <div className={`s-menu s-menu-empresas${movil ? ' s-menu-hoja' : ''}`} role="group" aria-label={movil ? 'Cambiar de empresa' : 'Tus empresas'}>
+          <span className={movil ? 's-hoja-titulo' : 's-menu-titulo'}>{movil ? 'Cambiar de empresa' : 'Tus empresas'}</span>
+          <VariasEmpresas cuentas={cuentas} sociedadAbierta={activa.id} elegirEnEsta={elegir} cerrar={() => setAbierto(false)} />
+        </div>
+      )}
+      {abierto && !varias && (
         <div className="s-menu s-menu-empresas" role="group" aria-label="Tus empresas">
           <span className="s-menu-titulo">Tus empresas</span>
           {empresas.length > 1 && (

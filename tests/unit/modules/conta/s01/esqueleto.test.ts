@@ -193,8 +193,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V03 E2 (26/10): entra Facturación › Verifactu (tablero 25), con pantalla: sale también en el producto solo.
     // PC01 E4 (27/10): entra Facturación › Cobros (los recordatorios), con pantalla.
     // S01c (29/10): entra Compras › Correo de facturas (la dirección, la confirmación de Gmail y lo que ha llegado), con pantalla.
-    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Personas y asesor', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
-    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'correo-facturas', 'verifactu', 'cobros', 'folvy'])
+    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
+    // DM1 · PR 1 (30/10): entra Usuarios (quién entra e «Invitar a una persona»), con pantalla.
+    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'correo-facturas', 'verifactu', 'cobros', 'personas', 'folvy'])
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')

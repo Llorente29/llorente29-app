@@ -299,3 +299,17 @@ html:has(.s-cabecera) { scroll-padding-top: 72px; }   /* 3 + 56 + aire: los toke
 .s-color-empresa:focus-visible { outline: none; box-shadow: var(--s-foco); }
 .s-color-empresa:disabled { opacity: 0.55; cursor: not-allowed; }
 .s-color-empresa-pequeno { width: var(--s-4); height: var(--s-4); display: inline-block; vertical-align: middle; }
+
+/* DM1 · PR 1 (30/10): las empresas de varias cuentas (tableros 1 y 2). */
+.s-varias { display: flex; flex-direction: column; gap: var(--s-1); }
+.s-varias-fila { display: flex; align-items: center; gap: var(--s-3); width: 100%; text-align: left; }
+.s-varias-fila .s-menu-texto { flex: 1; min-width: 0; }
+.s-varias-fila[aria-current='true'] { background: var(--s-accion-suave); }
+.s-varias-abierta { font-size: var(--s-t-xs); color: var(--s-accion); font-weight: var(--s-peso-medio); }
+.s-varias-error { color: var(--s-falta); }
+.s-menu-empresas.s-menu-hoja {
+  position: fixed; left: 0; right: 0; bottom: 0; top: auto; min-width: 0; max-height: 80vh; overflow-y: auto;
+  border-radius: var(--s-radio-bloque) var(--s-radio-bloque) 0 0; padding: var(--s-5) var(--s-4) calc(var(--s-5) + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--s-sombra); z-index: 60;
+}
+.s-hoja-titulo { font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); padding: 0 var(--s-2) var(--s-3); }

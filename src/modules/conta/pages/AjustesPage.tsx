@@ -36,6 +36,7 @@ import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
 import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
 import { ApartadoColor } from '@/modules/conta/empresa/ApartadoColor'
+import { Usuarios } from '@/modules/conta/ajustes/Usuarios'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
@@ -67,6 +68,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'cobros') return <>{cabeza}<CobrosAjustes /></>
   // S01c · Correo de facturas: la dirección, el reenvío de Gmail y lo que ha llegado; no necesita los datos de la empresa de Ajustes.
   if (id === 'correo-facturas') return <>{cabeza}<CorreoFacturasAjustes /></>
+  // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
+  if (id === 'personas') return <>{cabeza}<Usuarios /></>
   if (e.hueco) {
     return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Aún no." explicacion={e.hueco} /></div></>
   }

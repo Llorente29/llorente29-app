@@ -251,3 +251,9 @@ verify_jwt = false
 # verify_jwt = false. El credentials.json va en el secreto OPEN_BANKING_IO_CREDENTIALS.
 [functions.conta-banco-agregador]
 verify_jwt = false
+
+# (30/10) DM1 · PR 1. invitar-persona: Ajustes › Usuarios › Invitar. Su frontera
+# es el JWT de quien invita, que además tiene que ser administrador activo de
+# cada empresa que nombra (se mira dentro): verify_jwt = true.
+[functions.invitar-persona]
+verify_jwt = true

@@ -19,7 +19,8 @@ describe('navegación del módulo de contabilidad', () => {
   it('C06 · en el producto vendido solo, nada que diga «aún no» en Ajustes', () => {
     expect(indiceAjustes(true).flatMap((g) => g.entradas).some((e) => e.hueco)).toBe(false)
     // S01e: Numeración ya tiene pantalla (Tablas generales › Numeración de facturas): no dice «aún no».
-    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['certificados', 'personas', 'avisos'])
+    // DM1 · PR 1 (30/10): Personas ya tiene pantalla (Usuarios: quién entra e «Invitar a una persona»).
+    expect(indiceAjustes().flatMap((g) => g.entradas).filter((e) => e.hueco).map((e) => e.id)).toEqual(['certificados', 'avisos'])
   })
   it('S02 · el menú del C00 ya no existe: la barra sale del mapa (productos.ts)', async () => {
     const nav = await import('@/config/navegacion') as Record<string, unknown>
