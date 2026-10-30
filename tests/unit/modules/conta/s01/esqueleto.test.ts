@@ -137,7 +137,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
       'Equipo', 'Ahora mismo', 'Para revisar',
       'Control horario', 'Registro de jornada', 'Bolsa de horas', 'Recordatorios de fichaje', 'Fichar en una tablet',
       'Cuadrante', 'Turnos tipo', 'Disponibilidad', 'Turnos abiertos', 'Cambios de turno', 'Horas y contrato',
-      'Vacaciones y ausencias', 'Formación', 'Nóminas de la gestoría', 'Centros de trabajo', 'Portal del empleado',
+      'Vacaciones y ausencias', 'Formación', 'Nóminas de la gestoría', 'Centros de trabajo', 'Portal del empleado', 'Importar historial',
       'Contrato y convenio', 'Nóminas calculadas por Sumied', 'Seguros sociales', 'SEPE',
     ])
   })

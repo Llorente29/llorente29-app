@@ -240,6 +240,7 @@ export const PRODUCTOS: Producto[] = [
       lab('nominas', 'Nóminas de la gestoría', 'facturas', 'nominas', 'Personas'),
       lab('centros', 'Centros de trabajo', 'empresa', 'centros', 'Personas'),
       lab('portal', 'Portal del empleado', 'clientes', 'portal', 'Personas'),
+      lab('importar', 'Importar historial', 'importar', 'importar-historial', 'Personas'),
       llega('contrato', 'Contrato y convenio', 'documento', 'noviembre'),
       llega('nominasSumied', 'Nóminas calculadas por Sumied', 'facturas', 'enero'),
       llega('seguros', 'Seguros sociales', 'certificados', 'febrero'),
