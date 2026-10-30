@@ -44952,12 +44952,13 @@ CREATE FUNCTION public.current_employee_and_account(OUT employee_id uuid, OUT ac
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
+  -- DM1 (30/10): la ficha de la cuenta abierta, sin «limit 1» al azar.
   select up.employee_id, up.account_id
   from public.user_profiles up
   where up.user_id = auth.uid()
     and up.active = true
     and up.employee_id is not null
-  limit 1;
+    and up.account_id = public._cuenta_activa();
 $$;
 
 
@@ -44969,18 +44970,14 @@ CREATE FUNCTION public.current_user_account_ids() RETURNS uuid[]
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT CASE
-    WHEN public.current_user_is_admin() THEN
+  select case
+    when public.current_user_is_admin() then
       -- Superadmin de plataforma: ve todas las cuentas.
-      (SELECT COALESCE(array_agg(id), '{}') FROM public.accounts)
-    ELSE
-      -- Usuario normal: solo sus cuentas.
-      (SELECT COALESCE(array_agg(account_id), '{}')
-       FROM public.user_profiles
-       WHERE user_id = auth.uid()
-         AND active = true
-         AND account_id IS NOT NULL)
-  END;
+      (select coalesce(array_agg(id), '{}') from public.accounts)
+    else
+      -- DM1 (30/10): la cuenta abierta (con una sola cuenta, esa).
+      coalesce(array_remove(array[public._cuenta_activa()], null), '{}')
+  end;
 $$;
 
 
@@ -45091,14 +45088,15 @@ CREATE FUNCTION public.current_user_is_admin_of(p_account_id uuid) RETURNS boole
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT EXISTS (
-    SELECT 1
-    FROM public.user_profiles
-    WHERE user_id = auth.uid()
-      AND account_id = p_account_id
-      AND role = 'admin'
-      AND active = true
-  ) OR public.current_user_is_admin();
+  select exists (
+    select 1
+    from public.user_profiles
+    where user_id = auth.uid()
+      and account_id = p_account_id
+      and account_id = public._cuenta_activa()   -- DM1: solo en la abierta
+      and role = 'admin'
+      and active = true
+  ) or public.current_user_is_admin();
 $$;
 
 
@@ -45110,13 +45108,14 @@ CREATE FUNCTION public.current_user_is_admin_or_manager_of(p_account_id uuid) RE
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_profiles me
-    WHERE me.user_id = auth.uid()
-      AND me.account_id = p_account_id
-      AND me.role = ANY (ARRAY['admin', 'manager'])
-      AND me.active = true
-  ) OR public.current_user_is_admin();
+  select exists (
+    select 1 from public.user_profiles me
+    where me.user_id = auth.uid()
+      and me.account_id = p_account_id
+      and me.account_id = public._cuenta_activa()   -- DM1: solo en la abierta
+      and me.role = any (array['admin', 'manager'])
+      and me.active = true
+  ) or public.current_user_is_admin();
 $$;
 
 
@@ -45132,6 +45131,7 @@ CREATE FUNCTION public.current_user_is_employee(p_employee_id uuid, p_account_id
     select 1 from public.user_profiles up
     where up.user_id = auth.uid()
       and up.account_id = p_account_id
+      and up.account_id = public._cuenta_activa()   -- DM1: solo en la abierta
       and up.employee_id = p_employee_id
       and up.active = true
   );
@@ -45150,6 +45150,7 @@ CREATE FUNCTION public.current_user_is_office() RETURNS boolean
     select 1 from public.user_profiles up
     where up.user_id = auth.uid()
       and up.active = true
+      and up.account_id = public._cuenta_activa()   -- DM1: su rol en la abierta
       and up.role = any (array['admin', 'manager'])
   ) or public.current_user_is_admin();
 $$;
@@ -45170,14 +45171,17 @@ CREATE FUNCTION public.current_user_location_ids() RETURNS uuid[]
       select 1 from public.manager_locations ml
       join public.user_profiles up on up.id = ml.user_profile_id
       where up.user_id = auth.uid() and up.active = true
+        and up.account_id = public._cuenta_activa()   -- DM1: los de la abierta
     ) then
       (select coalesce(array_agg(distinct ml.location_id), '{}'::uuid[])
          from public.manager_locations ml
          join public.user_profiles up on up.id = ml.user_profile_id
-        where up.user_id = auth.uid() and up.active = true)
+        where up.user_id = auth.uid() and up.active = true
+          and up.account_id = public._cuenta_activa())
     when exists (
       select 1 from public.user_profiles up
       where up.user_id = auth.uid() and up.active = true and up.role = 'admin'
+        and up.account_id = public._cuenta_activa()
     ) then
       (select coalesce(array_agg(l.id), '{}'::uuid[]) from public.locations l
         where l.account_id = any(public.current_user_account_ids()))
@@ -45210,6 +45214,7 @@ CREATE FUNCTION public.current_user_ve_persona(p_employee_id uuid, p_account_id 
       or public.current_user_is_employee(p_employee_id, p_account_id)
       or (exists (select 1 from public.user_profiles up
                    where up.user_id = auth.uid() and up.account_id = p_account_id
+                     and up.account_id = public._cuenta_activa()   -- DM1: solo en la abierta
                      and up.role = 'manager' and up.active)
           and exists (select 1 from public.employees e
                        where e.id = p_employee_id and e.account_id = p_account_id
