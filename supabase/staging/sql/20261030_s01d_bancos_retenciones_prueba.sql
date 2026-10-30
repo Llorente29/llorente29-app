@@ -21,6 +21,9 @@
 --      periodo mal escrito, un asiento validado.
 --   6. La cuenta B no ve ni cambia nada de A.
 --   7. La vuelta atrás, y otra vez delante.
+--   8. Préstamos y aplazamientos (antes del 7): un cuadro cuyo capital no
+--      suma lo aplazado no se guarda; el que sí, con lo pendiente en cada
+--      fila y el capital a corto; la póliza, sin cuota; B no da de alta en A.
 
 begin;
 do $$ begin
@@ -33,6 +36,8 @@ set local statement_timeout = '180s';
 \i supabase/migrations/20261030T0855_s01d_columnas_retencion.sql
 \i supabase/migrations/20261030T0900_s01d_retenciones_pago.sql
 \i supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
+\i supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
+\i supabase/migrations/20261030T0935_s01d_contratos.sql
 
 create temp table _s01d (k text primary key, v text) on commit drop;
 grant all on _s01d to authenticated;
@@ -228,7 +233,50 @@ do $$ begin
 end $$;
 reset role;
 
+-- ── 8 · Préstamos y aplazamientos ─────────────────────────────────────────
+select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
+set local role authenticated;
+do $$
+declare
+  emp uuid := (select v::uuid from _s01d where k = 'emp');
+  corto text := coalesce((select code from public.company_account where company_id = emp and code like '520%' order by code limit 1), '47510000');
+  intereses text := coalesce((select code from public.company_account where company_id = emp and code like '662%' order by code limit 1), '47510077');
+  cuadro jsonb := '[{"fecha":"2026-11-30","cuota":520,"capital":500,"intereses":20},{"fecha":"2026-12-30","cuota":510,"capital":500,"intereses":10}]';
+  v jsonb; c public.recurring_contract;
+begin
+  begin
+    perform public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'aplazamiento', 'nombre', 'Prueba S01d · aplazamiento', 'contiene', 'PRUEBA S01D APLAZ',
+      'importe', 1000.01, 'capital_corto', corto, 'intereses', intereses, 'cuadro', cuadro));
+    raise exception 'PRUEBA S01d · 8: guarda un cuadro cuyo capital no suma lo aplazado.';
+  exception when sqlstate '22023' then
+    if sqlerrm not like '%no cuadra%' then raise exception 'PRUEBA S01d · 8: el aviso del cuadro dice otra cosa: %', sqlerrm; end if;
+  end;
+  v := public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'aplazamiento', 'nombre', 'Prueba S01d · aplazamiento', 'contiene', 'PRUEBA S01D APLAZ',
+    'importe', 1000, 'capital_corto', corto, 'intereses', intereses, 'cuadro', cuadro, 'documento', 'resolucion-prueba.pdf', 'documento_tipo', 'pdf'));
+  select * into c from public.recurring_contract where id = (v->>'id')::uuid;
+  if c.kind <> 'aplazamiento' or c.amount <> 520 or c.principal <> 1000 or c.installments <> 2 or c.short_capital_account <> corto or c.capital_account <> corto
+     or (c.schedule->0->>'pendiente')::numeric <> 500 or (c.schedule->1->>'pendiente')::numeric <> 0 then
+    raise exception 'PRUEBA S01d · 8: el contrato no queda como debe: %', row_to_json(c);
+  end if;
+  if v->>'mensaje' not like 'Guardado «Prueba S01d · aplazamiento»: 2 cuotas%' then raise exception 'PRUEBA S01d · 8: la confirmación dice %', v->>'mensaje'; end if;
+  v := public.bank_contrato_guardar(emp, jsonb_build_object('tipo', 'poliza', 'nombre', 'Prueba S01d · póliza', 'contiene', 'PRUEBA S01D POLIZA', 'capital_corto', corto, 'intereses', intereses));
+  if (select amount from public.recurring_contract where id = (v->>'id')::uuid) is not null then raise exception 'PRUEBA S01d · 8: la póliza lleva cuota.'; end if;
+  insert into _s01d values ('contrato_emp', emp::text) on conflict do nothing;
+  raise notice 'PRUEBA S01d · 8: el cuadro que no cuadra no se guarda; el que sí, con lo pendiente por fila; la póliza, sin cuota. %', v->>'mensaje';
+end $$;
+select set_config('request.jwt.claims', '{"sub":"c01b0000-0000-4000-8000-0000000000b1","role":"authenticated"}', true);
+do $$ begin
+  begin perform public.bank_contrato_guardar(current_setting('s01d.emp')::uuid, '{"tipo":"poliza","nombre":"x","contiene":"x","capital_corto":"x","intereses":"x"}');
+    raise exception 'PRUEBA S01d · 8: B da de alta un contrato en A.';
+  exception when no_data_found then null; end;
+  raise notice 'PRUEBA S01d · 8: la cuenta B no da de alta contratos en A.';
+end $$;
+reset role;
+
 -- ── 7 · La vuelta atrás, y otra vez delante ────────────────────────────────
+delete from public.recurring_contract where company_id = (select v::uuid from _s01d where k = 'emp') and name like 'Prueba S01d%';
+\i supabase/vuelta-atras/20261030T0935_s01d_contratos.down.sql
+\i supabase/vuelta-atras/20261030T0934_s01d_contratos_columnas.down.sql
 \i supabase/vuelta-atras/20261030T0901_s01d_modelo_de_la_4751_foodint.down.sql
 \i supabase/vuelta-atras/20261030T0900_s01d_retenciones_pago.down.sql
 \i supabase/vuelta-atras/20261030T0855_s01d_columnas_retencion.down.sql
@@ -237,6 +285,8 @@ do $$ begin
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'journal_line' and column_name = 'withholding_period')
      or exists (select 1 from public.funcion_respaldo where migracion = '20261030T0900_s01d_retenciones_pago')
      or exists (select 1 from pg_trigger where tgname = 'journal_entry_pago_modelo')
+     or to_regprocedure('public.bank_contrato_guardar(uuid,jsonb)') is not null
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'recurring_contract' and column_name = 'short_capital_account')
      or position('su modelo y su periodo' in pg_get_functiondef('public.conta_motivos_para_validar(uuid)'::regprocedure)) > 0 then
     raise exception 'PRUEBA S01d · 7: la vuelta atrás deja algo del S01d.';
   end if;
@@ -244,6 +294,8 @@ end $$;
 \i supabase/migrations/20261030T0855_s01d_columnas_retencion.sql
 \i supabase/migrations/20261030T0900_s01d_retenciones_pago.sql
 \i supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql
+\i supabase/migrations/20261030T0934_s01d_contratos_columnas.sql
+\i supabase/migrations/20261030T0935_s01d_contratos.sql
 do $$ begin raise notice 'PRUEBA S01d · 7: la vuelta atrás quita lo del S01d y deja las funciones como estaban; y otra vez delante.'; end $$;
 
 rollback;

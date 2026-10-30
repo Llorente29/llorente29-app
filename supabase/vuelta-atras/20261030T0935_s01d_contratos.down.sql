@@ -16,6 +16,3 @@ alter table public.recurring_contract drop constraint if exists recurring_contra
 alter table public.recurring_contract alter column amount set not null;
 alter table public.recurring_contract drop constraint if exists recurring_contract_kind_check;
 alter table public.recurring_contract add constraint recurring_contract_kind_check check (kind in ('prestamo', 'alquiler', 'otro'));
-alter table public.recurring_contract
-  drop column if exists long_capital_account, drop column if exists short_capital_account, drop column if exists treasury_account_id,
-  drop column if exists principal, drop column if exists installments, drop column if exists document_name, drop column if exists document_kind;

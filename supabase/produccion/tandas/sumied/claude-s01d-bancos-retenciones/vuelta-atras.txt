@@ -1,0 +1,7 @@
+# S01d · la vuelta atrás, en orden inverso.
+cuenta: scripts/conta/produccion/cuentas/s01d-bancos-retenciones.sql
+supabase/vuelta-atras/20261030T0935_s01d_contratos.down.sql
+supabase/vuelta-atras/20261030T0934_s01d_contratos_columnas.down.sql
+supabase/vuelta-atras/20261030T0901_s01d_modelo_de_la_4751_foodint.down.sql
+supabase/vuelta-atras/20261030T0900_s01d_retenciones_pago.down.sql
+supabase/vuelta-atras/20261030T0855_s01d_columnas_retencion.down.sql

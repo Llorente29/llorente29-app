@@ -1,0 +1,39 @@
+{
+ "_que": "S01d · contexto de producción medido en SOLO LECTURA el 30/10 a las 09:45Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las cuatro tablas (bank_contrato_guardar y conta_cuadro_con_pendiente no son tablas: los nombra el analizador) y las cinco funciones que cambia; nada en el camino del pedido; recurring_contract tiene 0 filas; ningún fichero está en el historial.",
+ "medido": "2026-10-30T09:45Z",
+ "tanda": {
+  "supabase/migrations/20261030T0855_s01d_columnas_retencion.sql": "604f8f608d11a6ea69bbfa2099913725",
+  "supabase/migrations/20261030T0900_s01d_retenciones_pago.sql": "b821608e91d3a39704d3c32814925310",
+  "supabase/migrations/20261030T0901_s01d_modelo_de_la_4751_foodint.sql": "c7ff44448b9632ef073174e9e8b76eab",
+  "supabase/migrations/20261030T0934_s01d_contratos_columnas.sql": "492c0447e31a10ac001affe00c2a2b2b",
+  "supabase/migrations/20261030T0935_s01d_contratos.sql": "f6406a58051fdfa0d4f79041f3955873"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account",
+   "public.journal_entry",
+   "public.journal_line",
+   "public.recurring_contract"
+  ],
+  "funciones": [
+   "public._journal_entry_proponer(uuid,jsonb,jsonb,jsonb,text,uuid)",
+   "public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)",
+   "public.conta_impuesto_casar_cargo(uuid,uuid)",
+   "public.conta_impuesto_retenciones_diario(uuid,integer,text)",
+   "public.conta_motivos_para_validar(uuid)"
+  ],
+  "filas": {
+   "public.company_account": 751,
+   "public.journal_entry": 14955,
+   "public.journal_line": 39614,
+   "public.recurring_contract": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
