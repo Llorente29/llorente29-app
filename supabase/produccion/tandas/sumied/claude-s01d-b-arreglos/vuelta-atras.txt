@@ -1,0 +1,3 @@
+# S01d-b · la vuelta atrás: bank_contrato_guardar como estaba (del respaldo).
+cuenta: scripts/conta/produccion/cuentas/s01d-b-arreglos.sql
+supabase/vuelta-atras/20261030T1638_s01d_contrato_parcial.down.sql

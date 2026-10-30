@@ -1,0 +1,11 @@
+# S01d-b · Los tres fallos de la prueba real con Foodint (respuesta 3 de
+# Julio, 30/10). Rama claude/s01d-b-arreglos. Una sola migración:
+#
+#   1638  cambia bank_contrato_guardar (misma firma, con su respaldo): cuadro
+#         PARCIAL (cuotas del texto y deuda pendiente) y añadir las filas del
+#         año nuevo a un contrato que ya existe. El cuadro completo sigue igual.
+#
+# Nada en el camino del pedido. Sin datos: el aplazamiento de la Seguridad
+# Social lo da de alta Julio desde la pantalla. Sin aplicar: lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01d-b-arreglos.sql
+supabase/migrations/20261030T1638_s01d_contrato_parcial.sql
