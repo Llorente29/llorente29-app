@@ -362,3 +362,52 @@
 /* S01d-b · El aviso de las cuotas que faltan (cuadro parcial: la TGSS manda el de cada año). */
 .cxpr-aviso { display: block; margin-top: 4px; font-size: 13px; color: var(--cx-ambar); }
 .cxpr-aviso-panel { margin: 10px 24px 0; padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+
+/* S01e · La ficha de un préstamo o aplazamiento (tablero 5). */
+.cxpr-fila-enlace { cursor: pointer; }
+.cxpr-fila-enlace:hover td { background: var(--cx-azul-suave); }
+.cxpr-nombre { color: inherit; text-decoration: none; }
+.cxpr-nombre:hover strong { text-decoration: underline; }
+.cxfc-pagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.cxfc-pagina.cxfc-con-panel { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+.cxfc-principal { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.cxfc-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.cxfc-cuentas { margin: 0; color: var(--cx-apoyo); overflow-wrap: anywhere; }
+.cxfc-cuentas strong { color: var(--cx-texto, inherit); }
+.cxfc-terminado { padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxfc-cuadro { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); overflow: hidden; }
+.cxfc-cuadro-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-cuadro-cabeza h2 { margin: 0; font-size: 18px; }
+.cxfc-filtros { display: flex; gap: 10px; flex-wrap: wrap; }
+.cxfc-filtro { font: inherit; padding: 6px 14px; border: 1px solid var(--cx-linea); border-radius: 999px; background: var(--cx-blanco); color: var(--cx-apoyo); cursor: pointer; }
+.cxfc-filtro[aria-pressed='true'] { background: var(--cx-azul-suave); border-color: var(--cx-azul-borde); color: var(--cx-azul); font-weight: 600; }
+.cxfc-antes { margin: 0; padding: 10px 24px; background: var(--cx-fondo); color: var(--cx-apoyo); font-size: 14px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tabla { width: 100%; border-collapse: collapse; }
+.cxfc-tabla th { text-align: left; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding: 12px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tabla td { padding: 14px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tabla th.cxpr-num, .cxfc-tabla td.cxpr-num { padding-left: 8px; }
+.cxfc-es-proxima td { background: var(--cx-azul-suave); font-weight: 600; }
+.cxfc-proxima { display: inline-block; padding: 2px 12px; border: 1px solid var(--cx-azul); border-radius: 999px; color: var(--cx-azul); font-weight: 600; font-size: 14px; }
+.cxfc-pendiente { color: var(--cx-apoyo); }
+.cxfc-estado { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cxfc-chip-enlace { text-decoration: none; }
+.cxfc-mov { font-size: 14px; }
+.cxfc-vacio { margin: 0; padding: 16px 24px; color: var(--cx-apoyo); }
+.cxfc-falta { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 24px; border-top: 1px solid var(--cx-linea); color: var(--cx-ambar); font-weight: 600; }
+.cxfc-tarjetas { list-style: none; margin: 0; padding: 0; }
+.cxfc-tarjeta { padding: 14px 16px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tarjeta.cxfc-es-proxima { background: var(--cx-azul-suave); }
+.cxfc-tarjeta-arriba { display: flex; justify-content: space-between; gap: 12px; font-size: 18px; }
+.cxfc-tarjeta-abajo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; color: var(--cx-apoyo); font-size: 14px; }
+@media (max-width: 1100px) {
+  .cxfc-pagina.cxfc-con-panel { grid-template-columns: minmax(0, 1fr); }
+  .cxfc-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .cxfc-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .cxfc-cifras .cxpr-cifra { padding: 14px; }
+  .cxfc-cifras .cxpr-cifra strong { font-size: 20px; }
+  .cxfc-cuadro-cabeza { padding: 14px 16px; }
+  .cxfc-antes { padding: 10px 16px; }
+  .cxfc-falta { padding: 14px 16px; }
+}

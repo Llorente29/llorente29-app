@@ -1,5 +1,7 @@
 // src/modules/conta/bancos/Prestamos.tsx
 //
+// S01e · Cada contrato de la lista abre su ficha (FichaContrato, tablero 5).
+//
 // S01d · Bancos › Préstamos y aplazamientos (tablero 3). Arriba, las cuotas
 // del mes, la próxima y lo que queda por pagar; debajo, cada contrato con
 // cómo se casa. «Subir el cuadro» lee el Excel del banco (con el mismo lector
@@ -8,29 +10,21 @@
 // sume lo aplazado (la base lo vuelve a comprobar).
 
 import { useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaBancos } from '@/config/navegacion'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
 import { eurosExactos, diaMesCorto, fechaLarga } from '@/modules/conta/lib/formato'
 import { ultimosIban } from '@/modules/conta/lib/bancosVista'
-import { avisoDeCuotas, comoSeCasa, comprobarCuadroLeido, leerCuadro, proximaCuota, quedaPorPagar, resumen, TIPOS, type FilaCuadro } from '@/modules/conta/lib/contratos'
+import { avisoDeCuotas, comoSeCasa, comprobarCuadroLeido, proximaCuota, quedaPorPagar, resumen, TIPOS } from '@/modules/conta/lib/contratos'
 import { leerImporte, textoImporte } from '@/modules/conta/lib/reparto'
-import { guardarContrato, leerContratos, leerCuadroPdf, type ContratoNuevo } from '@/modules/conta/services/contratosService'
+import { guardarContrato, leerContratos, type ContratoNuevo } from '@/modules/conta/services/contratosService'
+import { leerFicheroCuadro, type Leido } from '@/modules/conta/bancos/leerFicheroCuadro'
 import type { ContratoVista } from '@/modules/conta/lib/contratos'
-import { abrirExtracto } from '@/modules/conta/services/bancosService'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 
 const euros = (c: number) => eurosExactos(c / 100)
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-
-interface Leido {
-  fichero: string; tipoDoc: 'excel' | 'pdf'; cuadro: FilaCuadro[]
-  /** Del PDF: lo que dice el documento (lo aplazado, si es un aplazamiento y de quién). */
-  importeCent?: number | null; tipo?: 'prestamo' | 'aplazamiento'; organismo?: string | null
-  /** S01d-b · Del PDF: las cuotas que dice el texto y la deuda pendiente al final del cuadro (cuadro parcial). */
-  cuotas?: number; pendienteCent?: number | null
-  /** El fichero, para «Ver el PDF» sin volver a bajarlo. */
-  url?: string
-}
 
 export function Prestamos() {
   const { accountId, companyId, hoy, datos, vuelta, recargar } = useBancos()
@@ -42,24 +36,15 @@ export function Prestamos() {
   const input = useRef<HTMLInputElement>(null)
 
   const subir = async (f: File) => {
-    setError(null); setHecho(null)
-    if (/\.pdf$/i.test(f.name)) {
-      setLeyendo(true)
-      try {
-        const c = await leerCuadroPdf(accountId, f)
-        setLeido({ fichero: f.name, tipoDoc: 'pdf', cuadro: c.cuadro, importeCent: c.importeCent, tipo: c.tipo, organismo: c.organismo, cuotas: c.cuotas, pendienteCent: c.pendienteCent, url: URL.createObjectURL(f) })
-      } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setLeyendo(false); if (input.current) input.current.value = '' }
-      return
-    }
-    try {
-      const a = await abrirExtracto(f)
-      if (!('filas' in a.contenido)) { setError('Esto no es un Excel: el cuadro va en .xlsx o .xls.'); return }
-      const r = leerCuadro(a.contenido.filas)
-      if ('error' in r) { setError(r.error); return }
-      setLeido({ fichero: f.name, tipoDoc: 'excel', cuadro: r.cuadro })
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { if (input.current) input.current.value = '' }
+    setError(null); setHecho(null); setLeyendo(/\.pdf$/i.test(f.name))
+    try { setLeido(await leerFicheroCuadro(accountId, f)) } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setLeyendo(false); if (input.current) input.current.value = '' }
   }
 
+  // S01e · Cada fila abre su ficha (Bancos › Préstamos y aplazamientos › <nombre>), como página.
+  const [query] = useSearchParams()
+  const navegar = useNavigate()
+  const enlaceFicha = (id: string) => { const p = new URLSearchParams(query); p.set('contrato', id); return `${rutaBancos('prestamos')}?${p.toString()}` }
+  const abrir = (id: string) => navegar(enlaceFicha(id))
   const cs = contratos.datos ?? []
   const r = resumen(cs, hoy)
   const nombreBanco = (id: string | null) => {
@@ -115,8 +100,8 @@ export function Prestamos() {
                     const como = comoSeCasa(c)
                     const banco = nombreBanco(c.bancoId)
                     return (
-                      <tr key={c.id}>
-                        <td><strong>{c.nombre}</strong>{avisoDeCuotas(c) && <span className="cxpr-aviso">{avisoDeCuotas(c)}</span>}</td>
+                      <tr key={c.id} className="cxpr-fila-enlace" onClick={() => abrir(c.id)}>
+                        <td><Link to={enlaceFicha(c.id)} className="cxpr-nombre" onClick={(e) => e.stopPropagation()}><strong>{c.nombre}</strong></Link>{avisoDeCuotas(c) && <span className="cxpr-aviso">{avisoDeCuotas(c)}</span>}</td>
                         <td className="cxpr-tipo">{TIPOS[c.tipo]}{banco ? ` · ${banco}` : ''}</td>
                         <td className="cxpr-num cx-cifra">{queda === null ? '—' : euros(queda)}</td>
                         <td>{c.tipo === 'poliza' ? <span className="cx-ayuda">Sin cuota fija</span> : p ? `${diaMesCorto(p.fecha)} · ${euros(p.cuotaCent)}` : 'Pagado'}</td>

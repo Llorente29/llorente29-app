@@ -10,7 +10,11 @@ import { leerImporte } from '@/modules/conta/lib/reparto'
 
 export type TipoContrato = 'prestamo' | 'aplazamiento' | 'poliza' | 'alquiler' | 'otro'
 
-export interface FilaCuadro { fecha: string; cuotaCent: number; capitalCent: number; interesesCent: number; pendienteCent?: number | null }
+export interface FilaCuadro {
+  fecha: string; cuotaCent: number; capitalCent: number; interesesCent: number; pendienteCent?: number | null
+  /** S01e · En la primera fila de un cuadro sustituido: lo amortizado de golpe antes de él. */
+  amortizadoAntesCent?: number | null
+}
 
 export interface ContratoVista {
   id: string; tipo: TipoContrato; nombre: string; contiene: string
@@ -18,6 +22,8 @@ export interface ContratoVista {
   cuadro: FilaCuadro[] | null; bancoId: string | null
   cuentaCorto: string | null; cuentaLargo: string | null; cuentaIntereses: string | null
   documento: string | null
+  /** S01e · Cuándo se subió el cuadro (o se dio de alta, en los de antes) y si sigue vivo. */
+  subidoEl?: string | null; activo?: boolean
 }
 
 const normal = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
