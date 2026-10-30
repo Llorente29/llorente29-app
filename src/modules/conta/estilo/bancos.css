@@ -246,3 +246,17 @@
 .cxv-veredicto { font-size: 13px; padding: 2px 8px; border-radius: 6px; align-self: flex-start; }
 .cxv-veredicto[data-tono='propuesto'] { background: var(--s-propuesto); color: var(--s-propuesto-texto); }
 .cxv-veredicto[data-tono='duda'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+
+/* S01d · El aviso del extracto: el total cuadra y alguna fila no */
+.cxb-aviso-filas { margin-top: 12px; }
+.cxb-aviso-filas details { margin-top: 4px; }
+.cxb-aviso-filas summary { cursor: pointer; }
+.cxb-filas-rotas { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+
+/* S01d · Fin de cuenta en «Validar y siguiente» (tablero 4) */
+.cxv-fin { padding: 28px 32px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.cxv-fin-chip { background: var(--cx-verde-claro, #e6f4ea); color: var(--cx-verde-oscuro, #1e6b35); font-weight: 600; font-size: 14px; padding: 4px 10px; border-radius: 8px; }
+.cxv-fin-titulo { margin: 0; font-size: 24px; }
+.cxv-fin-texto { margin: 0; color: var(--cx-texto-suave, #4b5563); font-size: 16px; }
+.cxv-fin-botones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+@media (max-width: 640px) { .cxv-fin { padding: 20px; } .cxv-fin-botones { flex-direction: column; align-self: stretch; } }

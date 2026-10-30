@@ -40,6 +40,7 @@
 // Importes en CÉNTIMOS.
 
 import { eurosCent, limpiarConcepto } from '@/modules/conta/lib/extractoBanco'
+import { modeloYPeriodo } from '@/modules/conta/lib/libro'
 
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -115,7 +116,8 @@ export interface Plataforma {
   pendiente: { desde: string; hasta: string; ventasCent: number }[]
 }
 export interface Nomina { mes: string; ssPendienteCent: number; netoPendienteCent: number; cuenta476: string; cuenta465: string }
-export interface Impuesto { modelo: '303' | '111' | '115'; periodo: string; importeCent: number; cuenta: string }
+/** S01d · Una declaración presentada sin pagar: su modelo, su periodo («2026-3T»), lo que hay que ingresar y la cuenta de su modelo. */
+export interface Impuesto { modelo: '303' | '111' | '115' | '123'; periodo: string; importeCent: number; cuenta: string; declaracionId?: string }
 export interface Contrato {
   id: string; tipo: 'prestamo' | 'alquiler' | 'otro'; nombre: string; contiene: string; importeCent: number; confirmaciones: number
   terceroId: string | null
@@ -210,7 +212,7 @@ export type Destino =
   | { tipo: 'abono_pasarela'; proveedor: 'stripe' | 'redsys'; cobros: string[]; comision: number; cuenta_comision: string
       /** La cuenta de la pasarela y lo cobrado (bruto) que se salda en ella. */
       cuenta_pasarela: string; cobrado: number; concepto: string }
-  | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string }[];
+  | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string; modelo?: string; periodo?: string }[];
       /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
       facturas?: { id: string; importe: number }[];
       tercero_id?: string | null; contrato_id?: string; concepto: string }
@@ -798,8 +800,11 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
     const xs = ctx.impuestos.filter((x) => x.importeCent === -imp && (!modelo || x.modelo === modelo))
     if (xs.length === 1) {
       const x = xs[0]
-      return { ...b, confianza: 'probable', origen: 'impuesto', que: `Modelo ${x.modelo} · ${x.periodo}`, porque: `Mismo importe que el ${x.modelo} de ${x.periodo} pendiente en ${nombreCuenta(ctx, x.cuenta)}.`,
-        destino: { tipo: 'cuenta', concepto: `Pago del modelo ${x.modelo} · ${x.periodo}`, lineas: [{ cuenta: x.cuenta, importe: euros(-imp) }] } }
+      const mp = modeloYPeriodo(x.modelo, x.periodo)
+      // S01d: el pago de una retención (111, 115, 123) lleva su modelo y su periodo en la línea: con eso valida.
+      const retencion = x.modelo !== '303' ? { modelo: x.modelo, periodo: x.periodo } : {}
+      return { ...b, confianza: 'probable', origen: 'impuesto', que: `Modelo ${mp}`, porque: `Mismo importe que el ${mp} presentado y sin pagar (${nombreCuenta(ctx, x.cuenta)}).`,
+        destino: { tipo: 'cuenta', concepto: `Pago del modelo ${mp}`, lineas: [{ cuenta: x.cuenta, importe: euros(-imp), ...retencion }] } }
     }
     return { ...b, confianza: 'duda', origen: 'impuesto', que: 'Pago a Hacienda', falta: 'el modelo y el periodo',
       porque: `Es un pago a Hacienda de ${eurosCent(-imp)}, pero no hay ningún modelo pendiente por ese importe: ¿de qué modelo y periodo es?`, destino: null }

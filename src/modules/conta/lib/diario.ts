@@ -40,7 +40,8 @@ export interface ApunteDiario {
   cedida: boolean
   documento: string | null
   iva: { tipoId: string; base: number; libro: string; tipo: number | null } | null
-  retencion: { base: number; modelo: string } | null
+  /** La que nace (base y modelo) o, S01d, el pago de un modelo (modelo y periodo, sin base). */
+  retencion: { base: number; modelo: string; periodo: string | null } | null
   /** Traída de Diez con importe NEGATIVO: en qué lado iba allí. Folvy la lleva
    *  en positivo al otro lado; Libros lo dice para contrastar línea a línea. */
   negativoEnDiez: 'debe' | 'haber' | null

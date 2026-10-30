@@ -47,6 +47,8 @@ export interface DatosBancos {
   primerMovimiento: string | null
   /** Por banco: los movimientos que piden una decisión (para confirmar + por aclarar). */
   dudas: Record<string, number>
+  /** S01d · Por banco: lo casado cuyo asiento sigue propuesto («Por validar»). */
+  porValidar: Record<string, number>
   reglas: { activas: number; nuevas: number }
   /** La fecha de corte de los bancos de la empresa (bank_settings): antes, la contabilidad está cerrada. */
   corte: string | null
@@ -96,6 +98,8 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
   const tjs: Tarjeta[] = tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) }))
   const porBanco: Record<string, number> = {}
   for (const d of [...dudas, ...porValidar]) porBanco[String(d.treasury_account_id)] = (porBanco[String(d.treasury_account_id)] ?? 0) + 1
+  const validarPorBanco: Record<string, number> = {}
+  for (const d of porValidar) validarPorBanco[String(d.treasury_account_id)] = (validarPorBanco[String(d.treasury_account_id)] ?? 0) + 1
   return {
     bancos: bs.filter((b) => b.kind === 'bank').map((b) => ({
       ...b, cuentaNombre: b.cuenta ? nombres[b.cuenta] ?? null : null,
@@ -108,6 +112,7 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
     nombres,
     primerMovimiento: primero[0] ? String(primero[0].op_date) : null,
     dudas: porBanco,
+    porValidar: validarPorBanco,
     reglas: { activas: reglas.filter((r) => r.status === 'activa').length, nuevas: reglas.filter((r) => r.status === 'propuesta').length },
     corte: s(ajustes[0]?.cutover_date),
   }
