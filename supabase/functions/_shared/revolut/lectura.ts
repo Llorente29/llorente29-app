@@ -38,7 +38,6 @@
 // se terminó), así que un movimiento tiene la misma huella en cada lectura.
 
 import type { ConexionDelProveedor, CuentaAgregador, MovimientoAgregador, PaginaAgregador, ProveedorAgregador } from '../bancoAgregador.ts'
-import { saldoAlCerrar } from '../bancoAgregador.ts'
 
 export const PROVEEDOR_REVOLUT = 'revolut'
 /** La fuente de sus extractos en bank_statement (la que mira desdeCuando). */
@@ -118,14 +117,20 @@ const TIPOS: Record<string, string> = {
   refund: 'Devolución', topup: 'Ingreso', topup_return: 'Devolución de ingreso', tax: 'Impuesto', tax_refund: 'Devolución de impuesto',
 }
 
-/**
- * Los movimientos de UNA cuenta de Revolut entre `desde` y `hasta` (días de
- * Madrid, los dos incluidos), sacados de las transacciones que se han leído.
- * Ordenados por fecha y, dentro del día, por el instante: así la huella suave
- * sale igual cada vez que se lee el mismo día.
- */
-export function movimientosDeRevolut(txs: readonly TransaccionRevolut[], cuenta: string, desde: string, hasta: string): MovimientoAgregador[] {
-  const out: (MovimientoAgregador & { instante: string })[] = []
+/** Un movimiento con lo que hace falta para ordenarlo y para saber el saldo justo después. */
+interface MovimientoConSaldo extends MovimientoAgregador {
+  instante: string
+  /**
+   * El saldo de la cuenta justo DESPUÉS de este movimiento, en céntimos: el
+   * `balance` de la pata (TransactionLeg.balance). Va en el último de los
+   * movimientos de la pata (la comisión, si la hay). Null en lo que no lo trae:
+   * la devolución (la pone Sumied) y una pata sin balance.
+   */
+  saldoDespuesCent: number | null
+}
+
+function movimientosConSaldo(txs: readonly TransaccionRevolut[], cuenta: string, desde: string, hasta: string): MovimientoConSaldo[] {
+  const out: MovimientoConSaldo[] = []
   const dentro = (d: string) => d >= desde && d <= hasta
   for (const t of txs) {
     for (const p of t.legs ?? []) {
@@ -133,28 +138,54 @@ export function movimientosDeRevolut(txs: readonly TransaccionRevolut[], cuenta:
       const { concepto, contraparte } = conceptoDe(t, p)
       const base = `${t.id}:${p.leg_id}`
       const completada = t.completed_at ?? null
+      const saldo = p.balance == null ? null : aCentimos(p.balance)
+      const fee = aCentimos(p.fee ?? 0)
       // Lo que entró: completada, o devuelta después de haberse completado.
       if (completada && (t.state === 'completed' || t.state === 'reverted')) {
         const dia = diaMadrid(completada)
         if (dentro(dia)) {
-          out.push({ id: base, fecha: dia, fechaValor: dia, importeCent: aCentimos(p.amount), concepto, contraparte, instante: completada })
-          const fee = aCentimos(p.fee ?? 0)
-          if (fee !== 0) out.push({ id: `${base}:comision`, fecha: dia, fechaValor: dia, importeCent: -Math.abs(fee), concepto: `Comisión de Revolut · ${concepto}`, contraparte: 'Revolut', instante: completada })
+          out.push({ id: base, fecha: dia, fechaValor: dia, importeCent: aCentimos(p.amount), concepto, contraparte, instante: completada, saldoDespuesCent: fee !== 0 ? null : saldo })
+          if (fee !== 0) out.push({ id: `${base}:comision`, fecha: dia, fechaValor: dia, importeCent: -Math.abs(fee), concepto: `Comisión de Revolut · ${concepto}`, contraparte: 'Revolut', instante: completada, saldoDespuesCent: saldo })
         }
       }
       // La devolución: el contrario, el día en que Revolut la devolvió.
       if (t.state === 'reverted' && completada) {
         const dia = diaMadrid(t.updated_at)
         if (dentro(dia)) {
-          out.push({ id: `${base}:vuelta`, fecha: dia, fechaValor: dia, importeCent: -aCentimos(p.amount), concepto: `Devuelto por Revolut · ${concepto}`, contraparte, instante: t.updated_at })
-          const fee = aCentimos(p.fee ?? 0)
-          if (fee !== 0) out.push({ id: `${base}:comision:vuelta`, fecha: dia, fechaValor: dia, importeCent: Math.abs(fee), concepto: `Devuelta la comisión de Revolut · ${concepto}`, contraparte: 'Revolut', instante: t.updated_at })
+          out.push({ id: `${base}:vuelta`, fecha: dia, fechaValor: dia, importeCent: -aCentimos(p.amount), concepto: `Devuelto por Revolut · ${concepto}`, contraparte, instante: t.updated_at, saldoDespuesCent: null })
+          if (fee !== 0) out.push({ id: `${base}:comision:vuelta`, fecha: dia, fechaValor: dia, importeCent: Math.abs(fee), concepto: `Devuelta la comisión de Revolut · ${concepto}`, contraparte: 'Revolut', instante: t.updated_at, saldoDespuesCent: null })
         }
       }
     }
   }
   out.sort((a, b) => a.fecha.localeCompare(b.fecha) || a.instante.localeCompare(b.instante) || a.id.localeCompare(b.id))
-  return out.map((m) => ({ id: m.id, fecha: m.fecha, fechaValor: m.fechaValor, importeCent: m.importeCent, concepto: m.concepto, contraparte: m.contraparte }))
+  return out
+}
+
+/**
+ * Los movimientos de UNA cuenta de Revolut entre `desde` y `hasta` (días de
+ * Madrid, los dos incluidos), sacados de las transacciones que se han leído.
+ * Ordenados por fecha y, dentro del día, por el instante: así la huella suave
+ * sale igual cada vez que se lee el mismo día.
+ */
+export function movimientosDeRevolut(txs: readonly TransaccionRevolut[], cuenta: string, desde: string, hasta: string): MovimientoAgregador[] {
+  return movimientosConSaldo(txs, cuenta, desde, hasta)
+    .map((m) => ({ id: m.id, fecha: m.fecha, fechaValor: m.fechaValor, importeCent: m.importeCent, concepto: m.concepto, contraparte: m.contraparte }))
+}
+
+/**
+ * El saldo de la cuenta justo después del último movimiento TERMINADO hasta
+ * `hasta` (incluido), en céntimos: el `balance` de su pata, más lo que Sumied
+ * haya puesto después sin balance (una devolución). NO el saldo de la cuenta:
+ * ése descuenta también lo que está pendiente, y un pago pendiente daría un
+ * falso descuadre (Julio, 31/10). Null si no hay ningún movimiento con balance.
+ */
+export function saldoTrasElUltimo(txs: readonly TransaccionRevolut[], cuenta: string, hasta: string): number | null {
+  const movs = movimientosConSaldo(txs, cuenta, '0000-01-01', hasta)
+  let i = movs.length - 1
+  while (i >= 0 && movs[i].saldoDespuesCent === null) i--
+  if (i < 0) return null
+  return movs.slice(i + 1).reduce((s, m) => s + m.importeCent, movs[i].saldoDespuesCent!)
 }
 
 /** Los cuatro últimos de un IBAN o de un número de cuenta, para enseñar y para los registros (nunca entero). */
@@ -169,8 +200,10 @@ const finHolgado = (dia: string) => `${masDias(dia, 2)}T00:00:00Z`
 
 /**
  * Revolut con la forma de cualquier proveedor. `hoy` es el día de Madrid de la
- * lectura. El saldo del periodo, como con open-banking.io: el saldo de AHORA
- * de la cuenta, menos lo que entró después del periodo (saldoAlCerrar).
+ * lectura. El saldo final del periodo es el `balance` de la pata del último
+ * movimiento terminado (saldoTrasElUltimo), y el inicial, ése menos lo del
+ * periodo. El saldo de la cuenta (saldos) es solo lo que se enseña como
+ * «saldo del banco»: incluye lo pendiente y no sirve para la continuidad.
  * Solo se ofrecen las cuentas activas en euros.
  */
 export function proveedorRevolut(c: ClienteLecturaRevolut, hoy: string): ProveedorAgregador & ConexionDelProveedor & { otrasDivisas(): Promise<CuentaRevolut[]> } {
@@ -191,13 +224,12 @@ export function proveedorRevolut(c: ClienteLecturaRevolut, hoy: string): Proveed
       return out
     },
     async movimientos(_conexion: string, cuenta: string, desde: string, hasta: string): Promise<PaginaAgregador> {
-      // Se mira desde antes (las devoluciones de pagos viejos) y hasta hoy (lo de después del periodo, para el saldo al cerrar).
+      // Se mira desde antes: las devoluciones de pagos viejos, y el último saldo si en el periodo solo hay devoluciones.
       const txs = await c.transacciones(cuenta, inicioHolgado(masDias(desde, -DIAS_DEVOLUCIONES)), finHolgado(hoy))
       const movimientos = movimientosDeRevolut(txs, cuenta, desde, hasta)
-      const despues = movimientosDeRevolut(txs, cuenta, masDias(hasta, 1), hoy)
-      const a = (await todas()).find((x) => x.id === cuenta)
-      if (!a) return { saldoInicialCent: null, saldoFinalCent: null, movimientos }
-      const final = saldoAlCerrar({ cent: aCentimos(a.balance), fecha: hoy }, despues, hasta)
+      // El saldo al cerrar: el de justo después del último movimiento terminado (su pata), no el de la cuenta.
+      const final = saldoTrasElUltimo(txs, cuenta, hasta)
+      if (final === null) return { saldoInicialCent: null, saldoFinalCent: null, movimientos }
       const delPeriodo = movimientos.reduce((s, m) => s + m.importeCent, 0)
       return { saldoInicialCent: final - delPeriodo, saldoFinalCent: final, movimientos }
     },

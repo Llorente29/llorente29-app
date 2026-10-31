@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { paraImportar, sincronizarEmpresa, type BaseAgregador } from '../../../../../supabase/functions/_shared/bancoAgregador.ts'
 import {
-  OPCIONES_REVOLUT, movimientosDeRevolut, proveedorRevolut, SIN_CADUCIDAD, diaMadrid,
+  OPCIONES_REVOLUT, movimientosDeRevolut, saldoTrasElUltimo, proveedorRevolut, SIN_CADUCIDAD, diaMadrid,
   type ClienteLecturaRevolut, type CuentaRevolut, type TransaccionRevolut,
 } from '../../../../../supabase/functions/_shared/revolut/lectura.ts'
 
@@ -16,11 +16,11 @@ const IBAN = 'ES0099990000000000005678'
 const CUENTA = 'cuenta-eur-1'
 const OTRA = 'cuenta-eur-2'
 
-function tx(p: Partial<TransaccionRevolut> & { id: string; amount: number; at: string; cuenta?: string; fee?: number }): TransaccionRevolut {
+function tx(p: Partial<TransaccionRevolut> & { id: string; amount: number; at: string; cuenta?: string; fee?: number; balance?: number }): TransaccionRevolut {
   return {
     id: p.id, type: p.type ?? 'transfer', state: p.state ?? 'completed', created_at: p.created_at ?? p.at, updated_at: p.updated_at ?? p.at,
     completed_at: p.completed_at === undefined ? p.at : p.completed_at, reference: p.reference ?? null,
-    legs: p.legs ?? [{ leg_id: 'l1', account_id: p.cuenta ?? CUENTA, amount: p.amount, fee: p.fee ?? 0, currency: 'EUR', description: 'To Suministros Prueba S.L.' }],
+    legs: p.legs ?? [{ leg_id: 'l1', account_id: p.cuenta ?? CUENTA, amount: p.amount, fee: p.fee ?? 0, currency: 'EUR', description: 'To Suministros Prueba S.L.', balance: p.balance ?? null }],
   }
 }
 
@@ -123,41 +123,65 @@ describe('proveedorRevolut con sincronizarEmpresa', () => {
     { id: CUENTA, name: 'Principal', balance: saldo, currency: 'EUR', state: 'active' },
     { id: 'usd', name: 'Dólares', balance: 50, currency: 'USD', state: 'active' },
   ]
-  const antes = [tx({ id: 't1', amount: -100, at: '2026-10-28T10:00:00Z' }), tx({ id: 't2', amount: 250, at: '2026-10-29T10:00:00Z' })]
-  const deHoy = tx({ id: 't3', amount: -20, at: '2026-10-31T08:00:00Z' })
+  // El balance de cada pata: el saldo justo después de ese movimiento (850 → 750 → 1000 → 980).
+  const antes = [tx({ id: 't1', amount: -100, at: '2026-10-28T10:00:00Z', balance: 750 }), tx({ id: 't2', amount: 250, at: '2026-10-29T10:00:00Z', balance: 1000 })]
+  const deHoy = tx({ id: 't3', amount: -20, at: '2026-10-31T08:00:00Z', balance: 980 })
 
-  it('la primera lectura trae desde el día que pidió la persona HASTA HOY, con el saldo de ahora', async () => {
+  it('la primera lectura trae desde el día que pidió la persona HASTA HOY, con el saldo tras el último terminado', async () => {
     const s = baseSimulada()
-    const partes = await leer(s, [...antes, deHoy], cuentas(1000), '2026-10-31', '2026-10-25')
+    const partes = await leer(s, [...antes, deHoy], cuentas(980), '2026-10-31', '2026-10-25')
     expect(partes).toHaveLength(1) // la de dólares no se ofrece
-    expect(partes[0]).toMatchObject({ estado: 'al_dia', desde: '2026-10-25', hasta: '2026-10-31', leidos: 3, nuevos: 3, repetidos: 0, saldoBancoCent: 100000, saldoFinalCent: 100000 })
+    expect(partes[0]).toMatchObject({ estado: 'al_dia', desde: '2026-10-25', hasta: '2026-10-31', leidos: 3, nuevos: 3, repetidos: 0, saldoBancoCent: 98000, saldoFinalCent: 98000 })
+    expect(s.extractos[0]).toMatchObject({ inicial: 850, final: 980 })
     expect(s.apuntes[0]).toMatchObject({ p_proveedor: 'revolut', p_caduca: SIN_CADUCIDAD })
   })
 
   it('UN MOVIMIENTO DE HOY ENTRA HOY, y leerlo otra vez no lo duplica', async () => {
     const s = baseSimulada()
     // 09:00: entra el de las 08:00 de hoy (UTC; las 09:00 de Madrid).
-    await leer(s, [...antes, deHoy], cuentas(1000), '2026-10-31', '2026-10-25')
+    await leer(s, [...antes, deHoy], cuentas(980), '2026-10-31', '2026-10-25')
     expect([...s.movimientos.values()].map((m) => m.ref2)).toContain('t3:l1')
     expect(s.extractos).toHaveLength(1)
 
     // 10:00, la lectura de cada hora (o un aviso repetido): nada nuevo. Ni movimientos ni extracto.
-    const otra = await leer(s, [...antes, deHoy], cuentas(1000), '2026-10-31')
-    expect(otra[0]).toMatchObject({ estado: 'sin_movimientos', nuevos: 0, repetidos: 1, saldoFinalCent: 100000 })
+    const otra = await leer(s, [...antes, deHoy], cuentas(980), '2026-10-31')
+    expect(otra[0]).toMatchObject({ estado: 'sin_movimientos', nuevos: 0, repetidos: 1, saldoFinalCent: 98000 })
     expect(s.movimientos.size).toBe(3)
     expect(s.extractos).toHaveLength(1)
 
     // 12:00: llega otro de hoy (el pago de una factura). Entra solo él, al momento, y el saldo sigue.
-    const pago = tx({ id: 't4', amount: -1028.5, at: '2026-10-31T11:30:00Z' })
-    const tras = await leer(s, [...antes, deHoy, pago], cuentas(1000 - 1028.5), '2026-10-31')
+    const pago = tx({ id: 't4', amount: -1028.5, at: '2026-10-31T11:30:00Z', balance: -48.5 })
+    const tras = await leer(s, [...antes, deHoy, pago], cuentas(-48.5), '2026-10-31')
     expect(tras[0]).toMatchObject({ estado: 'al_dia', desde: '2026-10-31', hasta: '2026-10-31', leidos: 2, nuevos: 1, repetidos: 1, continuidad: 'sigue' })
     expect(s.movimientos.size).toBe(4)
-    expect(s.extractos.at(-1)).toMatchObject({ desde: '2026-10-31', hasta: '2026-10-31', inicial: 1000, final: -28.5 })
+    expect(s.extractos.at(-1)).toMatchObject({ desde: '2026-10-31', hasta: '2026-10-31', inicial: 980, final: -48.5 })
 
     // Mañana, la primera lectura vuelve a mirar hoy y no duplica nada.
-    const manana = await leer(s, [...antes, deHoy, pago], cuentas(1000 - 1028.5), '2026-11-01')
+    const manana = await leer(s, [...antes, deHoy, pago], cuentas(-48.5), '2026-11-01')
     expect(manana[0]).toMatchObject({ estado: 'sin_movimientos', nuevos: 0, repetidos: 2 })
     expect(s.movimientos.size).toBe(4)
+  })
+
+  it('UN PAGO PENDIENTE NO DA UN FALSO DESCUADRE: el saldo es el de la pata, no el de la cuenta', async () => {
+    const s = baseSimulada()
+    await leer(s, [...antes, deHoy], cuentas(980), '2026-10-31', '2026-10-25')
+    // A las 11:00 sale un pago de 300 €, todavía pendiente: la cuenta ya dice 680, pero no ha terminado.
+    const pendiente = tx({ id: 'p1', amount: -300, at: '2026-10-31T10:00:00Z', state: 'pending', completed_at: null })
+    const pago = tx({ id: 't4', amount: -50, at: '2026-10-31T11:30:00Z', balance: 930 })
+    const r = await leer(s, [...antes, deHoy, pendiente, pago], cuentas(630), '2026-10-31')
+    expect(r[0]).toMatchObject({ nuevos: 1, continuidad: 'sigue', saldoFinalCent: 93000, saldoBancoCent: 63000 })
+    expect(s.extractos.at(-1)).toMatchObject({ inicial: 980, final: 930 })
+    // Con el saldo de la cuenta (630) habría salido «hueco» de 300 €: es lo que ya no pasa.
+  })
+
+  it('el saldo tras el último: el de su pata, con la comisión, y lo que Sumied pone después sin balance (una devolución)', () => {
+    const conComision = tx({ id: 'c', amount: -200, fee: 0.3, at: '2026-10-20T10:00:00Z', balance: 799.7 })
+    expect(saldoTrasElUltimo([conComision], CUENTA, '2026-10-20')).toBe(79970)
+    const devuelta = tx({ id: 'r', amount: -75.5, at: '2026-10-10T09:00:00Z', state: 'reverted', updated_at: '2026-10-13T09:00:00Z', balance: 924.5 })
+    expect(saldoTrasElUltimo([devuelta], CUENTA, '2026-10-12')).toBe(92450)
+    expect(saldoTrasElUltimo([devuelta], CUENTA, '2026-10-13')).toBe(100000)
+    // Sin ningún movimiento con balance, no se inventa: sin saldo.
+    expect(saldoTrasElUltimo([tx({ id: 'x', amount: -1, at: '2026-10-10T09:00:00Z' })], CUENTA, '2026-10-31')).toBeNull()
   })
 
   it('la huella de un movimiento es la misma leído solo o con el resto de su día', () => {
@@ -169,9 +193,9 @@ describe('proveedorRevolut con sincronizarEmpresa', () => {
   it('SIN DUPLICADOS aunque la base no supiera qué tiene: la huella dura los rechaza', async () => {
     const s = baseSimulada()
     const sinConocidos = { ...s.base, conocidos: undefined }
-    await sincronizarEmpresa(sinConocidos, proveedorRevolut(cliente(antes, cuentas(1150)), '2026-10-31'), empresa, '2026-10-31', '2026-10-31', { ...OPCIONES_REVOLUT, desdeInicial: '2026-10-25' })
+    await sincronizarEmpresa(sinConocidos, proveedorRevolut(cliente(antes, cuentas(1000)), '2026-10-31'), empresa, '2026-10-31', '2026-10-31', { ...OPCIONES_REVOLUT, desdeInicial: '2026-10-25' })
     s.extractos.length = 0
-    const otra = await sincronizarEmpresa(sinConocidos, proveedorRevolut(cliente(antes, cuentas(1150)), '2026-10-31'), empresa, '2026-10-31', '2026-10-31', { ...OPCIONES_REVOLUT, desdeInicial: '2026-10-25' })
+    const otra = await sincronizarEmpresa(sinConocidos, proveedorRevolut(cliente(antes, cuentas(1000)), '2026-10-31'), empresa, '2026-10-31', '2026-10-31', { ...OPCIONES_REVOLUT, desdeInicial: '2026-10-25' })
     expect(otra[0]).toMatchObject({ nuevos: 0, repetidos: 2 })
     expect(s.movimientos.size).toBe(2)
   })

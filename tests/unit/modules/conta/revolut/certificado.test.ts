@@ -25,6 +25,14 @@ describe('crearLlave', () => {
     expect(l.certificadoPem).not.toContain('PRIVATE')
   })
 
+  it('el número de serie nunca empieza por 0 (salía mal escrito en DER 1 de cada ~120 veces)', async () => {
+    const llaves = await Promise.all(Array.from({ length: 50 }, () => crearLlave('Serie')))
+    for (const l of llaves) {
+      const x = new X509Certificate(l.certificadoPem) // con un 0 de más, aquí revienta: «illegal padding»
+      expect(x.serialNumber).toMatch(/^[4-7][0-9A-F]{31}$/)
+    }
+  }, 60000)
+
   it('cada empresa, una llave distinta', async () => {
     const [a, b] = await Promise.all([crearLlave('A'), crearLlave('B')])
     expect(a.huella).not.toBe(b.huella)

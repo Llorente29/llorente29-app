@@ -88,7 +88,8 @@ export async function crearLlave(nombre: string, ahora: Date = new Date()): Prom
   const par = await crypto.subtle.generateKey({ ...ALG, modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]) }, true, ['sign', 'verify']) as CryptoKeyPair
   const spki = new Uint8Array(await crypto.subtle.exportKey('spki', par.publicKey))
   const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', par.privateKey))
-  const serie = crypto.getRandomValues(new Uint8Array(16)); serie[0] &= 0x7f
+  // El número de serie: positivo y sin un 0 delante (un 0 de más es DER mal escrito, «illegal padding»).
+  const serie = crypto.getRandomValues(new Uint8Array(16)); serie[0] = (serie[0] & 0x3f) | 0x40
   const hasta = new Date(ahora); hasta.setUTCFullYear(hasta.getUTCFullYear() + ANOS_CERTIFICADO)
   const algoritmo = secuencia(oid(SHA256_RSA), nulo())
   const sujeto = secuencia(
