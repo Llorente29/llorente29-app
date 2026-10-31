@@ -76,7 +76,8 @@ import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
 import { cargoParaLaTarjeta, casarPagoConTarjeta, duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
 import { faltaDocumento, pagadaConTarjeta, textoDePago, ultimos4 } from '@/modules/conta/documentos/paraValidar'
 import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
-import { CHIP_ABONO, conSigno, esAbono, sinSigno } from '@/modules/conta/documentos/abono'
+import { CHIP_ABONO, conSigno, esAbono, estadoPagoAbono, sinSigno } from '@/modules/conta/documentos/abono'
+import { leerLoQueAnula } from '@/modules/conta/services/abonoService'
 import { BloqueAbono } from '@/modules/conta/documentos/BloqueAbono'
 import {
   ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
@@ -125,6 +126,8 @@ export default function RevisarFacturaPage() {
   // S01h · Un abono se enseña y se cuadra sin signo (todo va a tu favor); al guardar, conSigno se lo devuelve.
   const abono = esAbono(facLeida)
   const fac = useMemo(() => (facLeida ? sinSigno(facLeida) : facLeida), [facLeida])
+  // S01h · 1 · Lo que anula, leído una vez: lo dicen igual «ANULA», su «Pago» y el «Estado» del bloque Pago.
+  const loQueAnula = useLeer(abono && accountId && invoiceId ? () => leerLoQueAnula(accountId, invoiceId) : null, `${accountId}:${invoiceId}:anula:${vuelta}`)
   const envioDiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio
   // C12: con el traspaso mensual, al validar no sale nada: va en el traspaso del mes.
   const enviaADiez = envioDiez?.alMomento === true
@@ -611,7 +614,7 @@ export default function RevisarFacturaPage() {
           delDocumento={fac.lectura?.factura?.proveedor?.nif ?? null} alGuardar={(t) => { setNifGuardado({ id: invoiceId, texto: t }); setVuelta((v) => v + 1) }} />
       )}
       {nifGuardado?.id === invoiceId && <p className="s-aviso-lista" data-tono="ok" role="status" data-prueba="nif-guardado">{nifGuardado.texto}</p>}
-      {abono && !descartada && <BloqueAbono accountId={accountId} invoiceId={invoiceId} total={totales.total} base={totales.base} cuota={totales.iva} fechaAsiento={fac.fecha} vuelta={vuelta} />}
+      {abono && !descartada && <BloqueAbono a={loQueAnula} total={totales.total} base={totales.base} cuota={totales.iva} fechaAsiento={fac.fecha} />}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
         fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales} abono={abono}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
@@ -623,6 +626,7 @@ export default function RevisarFacturaPage() {
         alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura}
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />
       <BloquePago formaPago={b.formaPago} vence={b.vence} estadoPago={b.estadoPago} soloLectura={soloLectura}
+        motivoEstado={abono ? estadoPagoAbono(loQueAnula.datos) : undefined}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'vence', x as string) }} cambioDe={ed.cambioDe} deshacer={ed.deshacer}
         motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : mayuscula(vence.apoyo)}
         tonoVence={vence.aviso && b.formaPago !== 'prepaid' ? 'revisar' : 'normal'}

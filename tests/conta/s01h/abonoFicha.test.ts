@@ -2,7 +2,7 @@
 // lo que dice de lo que anula, el IVA y el pago. Números del 1506416 con
 // códigos y números inventados donde no hace falta el real.
 import { describe, expect, it } from 'vitest'
-import { conSigno, esAbono, sinSigno, textoAnula, textoIva, textoPago, type LoQueAnula } from '@/modules/conta/documentos/abono'
+import { conSigno, esAbono, estadoPagoAbono, sinSigno, textoAnula, textoIva, textoPago, type LoQueAnula } from '@/modules/conta/documentos/abono'
 import type { FacturaRevisar } from '@/modules/conta/services/documentosService'
 
 const fac = (o: Partial<FacturaRevisar> = {}) => ({
@@ -75,5 +75,22 @@ describe('S01h · lo que dice la ficha', () => {
     expect(textoPago({ ...ligado, compensado: true }, 175.46)).toEqual({ titulo: 'Pago: compensada con la FAC-00006', detalle: 'Las dos quedan saldadas, sin movimiento de banco.' })
     expect(textoPago({ ...ligado, anulada: { ...ligado.anulada!, pagada: true } }, 175.46).detalle).toBe('La FAC-00006 ya está pagada: los 175,46 € quedan como saldo a tu favor con el proveedor.')
     expect(textoPago({ anulada: null, sustituta: null, dice: 'F-000099', compensado: false }, 176).detalle).toBe('Sin la factura que anula, los 176,00 € quedan como saldo a tu favor con el proveedor.')
+  })
+})
+
+describe('S01h · 1 · «Pago › Estado» de un abono dice lo mismo que su bloque, sin el banco', () => {
+  it('ligado a una sin pagar: se compensa al validar', () => {
+    expect(estadoPagoAbono(ligado)).toBe('Se compensa con la FAC-00006 al validar.')
+  })
+  it('ya compensado, a favor, o sin leer todavía', () => {
+    expect(estadoPagoAbono({ ...ligado, compensado: true })).toBe('Compensado con la FAC-00006: sin movimiento de banco.')
+    expect(estadoPagoAbono({ ...ligado, anulada: { ...ligado.anulada!, pagada: true } })).toBe('Queda a tu favor con el proveedor: no pasa por el banco.')
+    expect(estadoPagoAbono({ anulada: null, sustituta: null, dice: null, compensado: false })).toBe('Queda a tu favor con el proveedor: no pasa por el banco.')
+    expect(estadoPagoAbono(null)).toBe('')
+  })
+  it('nunca promete el banco', () => {
+    for (const a of [ligado, { ...ligado, compensado: true }, { anulada: null, sustituta: null, dice: 'X', compensado: false }]) {
+      expect(estadoPagoAbono(a)).not.toMatch(/casará/)
+    }
   })
 })
