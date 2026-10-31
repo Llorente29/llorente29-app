@@ -1,0 +1,23 @@
+{
+ "_que": "DM1 · PR 2a · contexto de producción de la tanda (0907), medido en SOLO LECTURA el 31/10 a las 09:20 UTC. Existe accounts (no está en el camino del pedido) y no tiene is_demo; no existen cuenta_puede_salir ni _accounts_is_demo_solo_plataforma. Nada de la tanda en el historial.",
+ "medido": "2026-10-31T09:20Z",
+ "tanda": {
+  "supabase/migrations/20261031T0907_dm1_marca_de_demo.sql": "e2eb231a223e32e3d7e76cc47b5d6cf0"
+ },
+ "contexto": {
+  "tablas": [
+   "public.accounts"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.accounts": 2
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

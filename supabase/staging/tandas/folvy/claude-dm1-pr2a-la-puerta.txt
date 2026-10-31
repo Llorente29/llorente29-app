@@ -1,0 +1,9 @@
+# DM1 · PR 2a · La marca de demo y la puerta: la 0907 (accounts.is_demo,
+# cuenta_puede_salir y el disparador que deja marcar solo al
+# superadministrador) y su prueba (ROLLBACK), que empieza por su vuelta atrás
+# si ya está aplicada: sin la 0907 no hay puerta (rojo a propósito); el
+# administrador de A no marca su cuenta, ni por las políticas ni saltándolas;
+# el superadministrador y la plataforma, sí; dos veces, igual; y la vuelta
+# atrás.
+supabase/migrations/20261031T0907_dm1_marca_de_demo.sql
+supabase/staging/sql/20261031_dm1_marca_de_demo_prueba.sql

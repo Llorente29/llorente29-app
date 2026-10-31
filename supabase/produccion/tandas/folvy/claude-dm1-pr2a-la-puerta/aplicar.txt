@@ -1,0 +1,14 @@
+# DM1 · PR 2a · La marca de demo y la puerta (31/10/2026). Rama
+# claude/dm1-pr2a-la-puerta. Se ensaya y se aplica antes de fusionar, lanzado
+# desde main nombrando la rama (W12b).
+#
+#   1. 0907 — SOLO AÑADE: accounts.is_demo (nula), cuenta_puede_salir(cuenta)
+#      y el disparador que deja cambiar la marca solo al superadministrador.
+#      Hoy ninguna cuenta es de demo: nada cambia para nadie.
+#
+# Antes (producción, 31/10 09:20 UTC): accounts sin is_demo; ninguna de las
+# dos funciones; nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261031T0907_dm1_marca_de_demo.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-marca-de-demo.sql

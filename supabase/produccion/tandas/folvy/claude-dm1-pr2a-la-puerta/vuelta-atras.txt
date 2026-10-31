@@ -1,0 +1,3 @@
+# DM1 · PR 2a · vuelta atrás: fuera el disparador, la puerta y la marca (para
+# si alguna cuenta ya está marcada de demo).
+supabase/vuelta-atras/20261031T0907_dm1_marca_de_demo.down.sql
