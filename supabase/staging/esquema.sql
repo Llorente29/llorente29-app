@@ -282,6 +282,31 @@ $$;
 
 
 --
+-- Name: _accounts_is_demo_solo_plataforma(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._accounts_is_demo_solo_plataforma() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if new.is_demo is distinct from (case when tg_op = 'UPDATE' then old.is_demo else null end)
+     and auth.uid() is not null and not public.current_user_is_admin() then
+    raise exception 'SOLO_PLATAFORMA' using errcode = '42501',
+      hint = 'Solo el superadministrador marca una cuenta como demo.';
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: FUNCTION _accounts_is_demo_solo_plataforma(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._accounts_is_demo_solo_plataforma() IS 'DM1 (31/10/2026). accounts.is_demo solo lo cambia el superadministrador (o la plataforma, sin usuario).';
+
+
+--
 -- Name: _actor_name(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6239,6 +6264,8 @@ BEGIN
     BEGIN
       PERFORM public.autoclose_daily_count(v_stale_id);
     EXCEPTION WHEN OTHERS THEN
+      -- DM1 · PR 2a (31/10): una cuenta de demo no avisa; el rezagado se queda igual.
+      IF public.cuenta_puede_salir(p_account_id) THEN
       PERFORM public._queue_system_alert(
         'autoinventario',
         'Autoinventario: no se pudo autocerrar un conteo rezagado',
@@ -6246,6 +6273,7 @@ BEGIN
                'el rezagado sigue abierto y hay que cerrarlo a mano.',
                v_stale_id, p_location_id, sqlerrm),
         'autoinventario_autocierre');
+      END IF;
     END;
   END LOOP;
 
@@ -22897,6 +22925,8 @@ BEGIN
     HAVING count(s.*) >= greatest(coalesce(p_min_ventas, 5), 1)
        AND 100.0 * count(s.platform_order_code) / count(s.*) < coalesce(p_pct_minimo, 50)
   LOOP
+    -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los vigías.
+    CONTINUE WHEN NOT public.cuenta_puede_salir(r.account_id);
     v_pct := round(100.0 * r.con_codigo / r.ventas, 1);
     v_sev := CASE WHEN r.con_codigo = 0 THEN 'CRITICO' ELSE 'ALTO' END;
 
@@ -45251,6 +45281,25 @@ COMMENT ON FUNCTION public.cuenta_opera(p_account_id uuid) IS 'TRUE si la cuenta
 
 
 --
+-- Name: cuenta_puede_salir(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.cuenta_puede_salir(p_account_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select not coalesce((select a.is_demo from public.accounts a where a.id = p_account_id), false)
+$$;
+
+
+--
+-- Name: FUNCTION cuenta_puede_salir(p_account_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.cuenta_puede_salir(p_account_id uuid) IS 'DM1 (31/10/2026). La puerta: falso si la cuenta es de demo (no manda nada fuera). La llaman las funciones del servidor que hablan con fuera (_shared/puerta.ts).';
+
+
+--
 -- Name: current_employee_and_account(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -48616,7 +48665,18 @@ CREATE FUNCTION public.encolar_alerta(p_kind text, p_subject text, p_message tex
     AS $$
 DECLARE
   v_id bigint;
+  v_cuenta uuid;
 BEGIN
+  -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los avisos. La del
+  -- aviso, o la de su local, o la de su marca; sin ninguna, sigue como antes.
+  v_cuenta := coalesce(
+    p_account_id,
+    (SELECT l.account_id FROM public.locations l WHERE l.id = p_location_id),
+    (SELECT b.account_id FROM public.brand b WHERE b.id = p_brand_id));
+  IF v_cuenta IS NOT NULL AND NOT public.cuenta_puede_salir(v_cuenta) THEN
+    RETURN NULL;
+  END IF;
+
   -- El antirruido, igual que antes. Devuelve NULL cuando NO encola, para que
   -- el llamador pueda distinguir «encolado» de «callado a propósito». La vieja
   -- devolvía void y las dos cosas se veían igual desde fuera.
@@ -55015,6 +55075,8 @@ begin
     where dev.is_active
       and dev.app_version is not null
   loop
+    -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los vigías.
+    continue when not public.cuenta_puede_salir(v_d.account_id);
     v_txt := null;
 
     if v_d.es_builtin then
@@ -62310,6 +62372,8 @@ begin
        and not public._impacto_completo(i.impact_type, i.target_recipe_item_id, i.quantity)
      group by i.account_id, a.name
   loop
+    -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los vigías.
+    continue when not public.cuenta_puede_salir(r.account_id);
     perform public._queue_system_alert(
       'modificador_ficha_a_medias',
       'Hay ' || r.respuestas::text || ' respuestas con ficha a medias en ' || r.cuenta,
@@ -62391,6 +62455,9 @@ begin
       left join accounts a on a.id = c.account_id
      group by c.account_id, a.name
   loop
+    -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los vigías.
+    -- Tampoco se siembra ni se mueve su marca: al quitarle la demo, empieza de cero.
+    continue when not public.cuenta_puede_salir(r.account_id);
     select * into v_base from public.modifier_zero_cost_baseline where account_id = r.account_id;
 
     if not found then
@@ -73845,6 +73912,8 @@ BEGIN
   FOR a IN SELECT DISTINCT s.account_id FROM public.sale s
             WHERE s.sold_at >= now() - make_interval(days => greatest(coalesce(p_days,30),1))
   LOOP
+    -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los vigías.
+    CONTINUE WHEN NOT public.cuenta_puede_salir(a.account_id);
     -- Sin carta montada no hay nada que avisar: todo estaria sin casar.
     SELECT count(*)::integer INTO v_cat
       FROM public.menu_item mi
@@ -87994,6 +88063,7 @@ CREATE TABLE public.accounts (
     tax_advisor_since timestamp with time zone,
     tax_advisor_by uuid,
     firma_registro_mes boolean,
+    is_demo boolean,
     CONSTRAINT accounts_business_type_check CHECK ((business_type = ANY (ARRAY['dark_kitchen'::text, 'bar'::text, 'restaurante'::text, 'cafeteria'::text, 'hotel'::text, 'otro'::text, 'otra_actividad'::text]))),
     CONSTRAINT accounts_lifecycle_order CHECK (((deleted_at IS NULL) OR (archived_at IS NULL) OR (deleted_at >= archived_at))),
     CONSTRAINT accounts_product_brand_formato CHECK (((product_brand IS NULL) OR (product_brand ~ '^[a-z][a-z0-9_]{1,40}$'::text))),
@@ -88099,6 +88169,13 @@ COMMENT ON COLUMN public.accounts.tax_advisor_by IS 'P01. Quién marcó la cuent
 --
 
 COMMENT ON COLUMN public.accounts.firma_registro_mes IS 'L1a-H (29/10/2026). «Pedir a cada persona que firme su registro del mes» en su portal. NULL o false: apagado (no sale la tarjeta de la firma ni ningún aviso de firma). Lo cambia el administrador de la cuenta con firma_registro_mes_pedir. Las firmas ya hechas no dependen de esto.';
+
+
+--
+-- Name: COLUMN accounts.is_demo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.accounts.is_demo IS 'DM1 (31/10/2026). Cuenta de demostración: no manda nada fuera (cuenta_puede_salir) y se restaura con un botón. Solo la pone el superadministrador.';
 
 
 --
@@ -116864,6 +116941,13 @@ CREATE UNIQUE INDEX void_reason_account_label_uq ON public.void_reason USING btr
 
 
 --
+-- Name: accounts accounts_is_demo_solo_plataforma; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER accounts_is_demo_solo_plataforma BEFORE INSERT OR UPDATE OF is_demo ON public.accounts FOR EACH ROW EXECUTE FUNCTION public._accounts_is_demo_solo_plataforma();
+
+
+--
 -- Name: accounts adopt_mandatory_courses_after_insert_accounts; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -138702,6 +138786,14 @@ GRANT ALL ON FUNCTION public._account_of_employee(p_employee_id uuid) TO service
 
 
 --
+-- Name: FUNCTION _accounts_is_demo_solo_plataforma(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._accounts_is_demo_solo_plataforma() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._accounts_is_demo_solo_plataforma() TO service_role;
+
+
+--
 -- Name: FUNCTION _actor_name(p_account_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -147044,6 +147136,15 @@ GRANT ALL ON FUNCTION public.ctb_receipt_differences(p_receipt_id uuid) TO servi
 
 REVOKE ALL ON FUNCTION public.cuenta_opera(p_account_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.cuenta_opera(p_account_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION cuenta_puede_salir(p_account_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.cuenta_puede_salir(p_account_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.cuenta_puede_salir(p_account_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.cuenta_puede_salir(p_account_id uuid) TO service_role;
 
 
 --
