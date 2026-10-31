@@ -41,6 +41,7 @@
 // explícito porque no hay una tabla con RLS de por medio que lo haga solo).
 // Deploy SIN --no-verify-jwt.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -121,6 +122,10 @@ Deno.serve(async (req: Request) => {
   if (!isAdmin) return json({ ok: false, error: "No autorizado." }, 403);
 
   const sb: SupabaseClient = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con HubRise ni para desconectarse.
+  if (!(await cuentaPuedeSalir(sb, accountId))) {
+    return json({ ok: false, demo: true, error: `${EN_LA_DEMO} Una empresa de demostración no está conectada a HubRise.` }, 409);
+  }
 
   // Buscar por location_id SIN filtrar is_active -- soporta desconexion
   // normal (activa) y reintento (ya apagada, revoke_pending=true).

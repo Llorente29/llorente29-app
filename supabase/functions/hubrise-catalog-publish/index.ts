@@ -62,6 +62,7 @@
 //   (sin conexión, validación) para que el front los muestre; 401/500 solo auth/crash.
 // ===
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
@@ -244,6 +245,11 @@ Deno.serve(async (req: Request) => {
 
   // ── service_role para el trabajo ───
   const sb: SupabaseClient = createClient(SUPABASE_URL, SERVICE, { auth: { persistSession: false } });
+
+  // DM1 · PR 2a · La puerta: una cuenta de demo no publica su carta en HubRise.
+  if (!(await cuentaPuedeSalir(sb, accountId))) {
+    return json({ ok: true, demo: true, publicado: false, mensaje: `${EN_LA_DEMO} La carta de una empresa de demostración no se publica en HubRise.` }, 200);
+  }
 
   // ── Token ESCRITOR (Fase 1): 1 por cuenta, en Vault. PRIMARIO para resolver
   // conexiones (Fase 2, ver abajo) y para publicar. Sin fallo mudo: si no

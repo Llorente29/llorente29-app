@@ -27,6 +27,7 @@
 // Deploy: --no-verify-jwt (fijado con Julio; slug hubrise-oauth-callback debe
 // coincidir EXACTO con el redirect_uri registrado en HubRise).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "@supabase/supabase-js";
 import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
 
@@ -137,6 +138,8 @@ Deno.serve(async (req: Request) => {
   if (age > NONCE_MAX_AGE_MS) return fail("El enlace caduco (mas de 15 minutos). Vuelve a abrir hubrise-oauth-start.");
 
   const accountId = pending.account_id as string;
+  // DM1 · PR 2a · La puerta: una cuenta de demo no termina de conectarse a HubRise (no se pide el token).
+  if (!(await cuentaPuedeSalir(sb, accountId))) return fail(`${EN_LA_DEMO} Una empresa de demostración no se conecta a HubRise.`);
   const kind = (pending.kind as string | null) ?? "writer";
   const nonceLocationId = (pending.location_id as string | null) ?? null;
 

@@ -258,6 +258,90 @@ verify_jwt = false
 [functions.invitar-persona]
 verify_jwt = true
 
+# DM1 · PR 2a (31/10): el verify_jwt que tienen VIVO en producción (leído el 31/10),
+# escrito aquí para que desplegar-funciones-staging-conta no tenga que adivinarlo.
+
+[functions.account-email]
+verify_jwt = true
+
+[functions.availability-dispatch]
+verify_jwt = false
+
+[functions.catcher-dispatch]
+verify_jwt = false
+
+[functions.clockout-reminder]
+verify_jwt = false
+
+[functions.compliance-doc-notify]
+verify_jwt = false
+
+[functions.customer-notify]
+verify_jwt = false
+
+[functions.hubrise-brand-connect]
+verify_jwt = true
+
+[functions.hubrise-callback-ensure]
+verify_jwt = false
+
+[functions.hubrise-catalog-create]
+verify_jwt = true
+
+[functions.hubrise-catalog-publish]
+verify_jwt = true
+
+[functions.hubrise-connection-health]
+verify_jwt = false
+
+[functions.hubrise-location-disconnect]
+verify_jwt = true
+
+[functions.hubrise-location-dispatch]
+verify_jwt = false
+
+[functions.hubrise-oauth-callback]
+verify_jwt = false
+
+[functions.hubrise-oauth-start]
+verify_jwt = false
+
+[functions.hubrise-order-status]
+verify_jwt = true
+
+[functions.last-catalog-probe]
+verify_jwt = false
+
+[functions.last-catalog-sync]
+verify_jwt = false
+
+[functions.lastapp-backfill-sales]
+verify_jwt = false
+
+[functions.lastapp-catalog-import]
+verify_jwt = false
+
+[functions.lastapp-set-price]
+verify_jwt = false
+
+[functions.order-advance]
+verify_jwt = false
+
+[functions.shop-payment-intent]
+verify_jwt = false
+
+[functions.social-publish]
+verify_jwt = false
+
+[functions.stripe-connect-onboard]
+verify_jwt = true
+
+[functions.training-notify]
+verify_jwt = false
+
+[functions.uber-promo-push]
+verify_jwt = false
+
 # B01 Revolut · PR 1 (31/10). conta-revolut-conectar: el asistente, con la
 # sesión de quien conecta (administrador o encargado; se mira dentro).
 [functions.conta-revolut-conectar]

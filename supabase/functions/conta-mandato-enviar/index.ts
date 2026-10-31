@@ -23,6 +23,7 @@
 //
 // verify_jwt = true (config.toml): sin sesión no hay nada que hacer.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
@@ -65,6 +66,12 @@ Deno.serve(async (req) => {
   if (puede !== true) return json({ error: "Solo un administrador o un encargado de la cuenta manda mandatos." }, 403);
   if (m.status !== "por_firmar") return json({ enviado: false, texto: `No se ha mandado el mandato ${m.ref}: ya está ${m.status === "firmado" ? "firmado" : "anulado"}.` });
   if (Date.parse(m.expires_at) < Date.now()) return json({ enviado: false, texto: `No se ha mandado el mandato ${m.ref}: su enlace ha caducado. Prepara otro.` });
+
+  // DM1 · PR 2a · La puerta: una cuenta de demo no manda correos. Queda como enviado, y lo dice.
+  if (!(await cuentaPuedeSalir(srv, m.account_id))) {
+    await sb.rpc("conta_mandato_enviado", { p_mandato: id, p_correo: para });
+    return json({ enviado: true, demo: true, texto: `Enviado el mandato ${m.ref} a ${para}. ${EN_LA_DEMO}` });
+  }
 
   // El freno, antes de tocar nada más.
   const cerrojo = cerrojoMarca(MARCAS.sumied, PLANTILLA_MANDATO, para, Deno.env.get("CORREO_MARCA_ABIERTOS"));

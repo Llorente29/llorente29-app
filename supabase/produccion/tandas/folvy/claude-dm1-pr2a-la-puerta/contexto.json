@@ -1,0 +1,39 @@
+{
+ "_que": "DM1 · PR 2a · contexto de producción de la tanda (0907, 1713 y 1912), medido en SOLO LECTURA el 31/10 a las 17:57 UTC. Existe accounts (no está en el camino del pedido) y no tiene is_demo; no existen cuenta_puede_salir ni _accounts_is_demo_solo_plataforma; encolar_alerta y las seis vigías existen con una sola firma y con la huella que guarda cada fichero. Las cinco vigías que corren por tarea programada cuentan como camino del pedido (por nombre o por cron.job). Nada de la tanda en el historial.",
+ "medido": "2026-10-31T17:57Z",
+ "tanda": {
+  "supabase/migrations/20261031T0907_dm1_marca_de_demo.sql": "e2eb231a223e32e3d7e76cc47b5d6cf0",
+  "supabase/migrations/20261031T1713_dm1_avisos_sin_demo.sql": "cfec5090873d1c184e93b51322b2b631",
+  "supabase/migrations/20261031T1912_dm1_vigias_sin_demo.sql": "23e1a63feaee326290cf91e8550a60bd"
+ },
+ "contexto": {
+  "tablas": [
+   "public.accounts"
+  ],
+  "funciones": [
+   "public._generate_daily_count_core(uuid,uuid,uuid[],integer,numeric,boolean)",
+   "public.codigo_plataforma_watchdog(integer,numeric,interval)",
+   "public.encolar_alerta(text,text,text,text,interval,uuid,uuid,uuid,text)",
+   "public.kds_device_stale_bundle_check()",
+   "public.modifier_incomplete_impact_watchdog(interval)",
+   "public.modifier_zero_cost_watchdog(interval,interval)",
+   "public.sales_unmapped_watchdog(integer,integer)"
+  ],
+  "filas": {
+   "public.accounts": 2
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": [
+    "public.codigo_plataforma_watchdog(integer,numeric,interval)",
+    "public.kds_device_stale_bundle_check()",
+    "public.modifier_incomplete_impact_watchdog(interval)",
+    "public.modifier_zero_cost_watchdog(interval,interval)",
+    "public.sales_unmapped_watchdog(integer,integer)"
+   ]
+  },
+  "usos": {},
+  "registro": []
+ }
+}

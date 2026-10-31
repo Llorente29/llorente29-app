@@ -12,6 +12,7 @@
 //     cliente; Glovo gestiona ese tramo. Empujar DELIVERED daría INVALID_STATUS_CHANGE.
 //   - own_delivery / pickup: se empuja todo el ciclo (Folvy controla el desenlace).
 
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -128,18 +129,22 @@ Deno.serve(async (req: Request) => {
     return json({ ok: false, error: "faltan token/tab/location" }, 200);
   }
 
+  // DM1 · PR 2a · La puerta: una cuenta de demo no empuja nada a Last. Para
+  // las demás, siPuedeSalir devuelve lo mismo que pushLast (camino del pedido:
+  // si no se puede preguntar, sale, como antes).
+  const enLaDemo = () => ({ ok: true, reason: EN_LA_DEMO });
   let result;
   if (CANCEL_STATES.includes(newStatus)) {
-    result = await pushLast(`/orders/${tabId}/cancel`, "POST", token, locId, {
+    result = await siPuedeSalir(sb, sale.account_id, () => pushLast(`/orders/${tabId}/cancel`, "POST", token, locId, {
       errorMessage: "Cancelado desde Folvy",
       errorCode: "CANCELLED_BY_OPERATOR",
-    });
+    }), enLaDemo, "sale");
   } else {
     const last = LAST_STATUS[newStatus] ?? null;
     if (!last) {
       return json({ ok: true, push: { attempted: false, reason: "estado no se propaga" } }, 200);
     }
-    result = await pushLast(`/orders/${tabId}/status`, "PUT", token, locId, { newStatus: last });
+    result = await siPuedeSalir(sb, sale.account_id, () => pushLast(`/orders/${tabId}/status`, "PUT", token, locId, { newStatus: last }), enLaDemo, "sale");
   }
 
   return json({ ok: result.ok, push: { attempted: true, ...result } }, 200);

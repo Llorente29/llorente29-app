@@ -15,6 +15,7 @@
 // la llamada no reenvía nada (last_reminder_at ya fijado).
 // ============================================================================
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from '../_shared/puerta.ts';
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 
@@ -132,6 +133,8 @@ Deno.serve(async (req) => {
       let resendId: string | null = null;
       let errMsg: string | null = null;
       try {
+        // DM1 · PR 2a · La puerta: el correo al proveedor de una cuenta de demo no sale; queda como enviado, y lo dice.
+        if (!(await cuentaPuedeSalir(sb, d.account_id))) { errMsg = EN_LA_DEMO; emailsSent++; } else {
         const r = await fetch(RESEND_ENDPOINT, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
@@ -140,6 +143,7 @@ Deno.serve(async (req) => {
         const body = await r.json().catch(() => ({}));
         if (!r.ok) { status = 'failed'; errMsg = (body as { message?: string })?.message ?? `HTTP ${r.status}`; emailsFailed++; }
         else { resendId = (body as { id?: string })?.id ?? null; emailsSent++; }
+        }
       } catch (e) {
         status = 'failed'; errMsg = e instanceof Error ? e.message : String(e); emailsFailed++;
       }

@@ -17,6 +17,7 @@
 // La cuenta conectada se crea con la clave de la PLATAFORMA (STRIPE_SECRET_KEY),
 // garantizando que cuelga de nuestra plataforma (no de un sandbox del panel).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from '../_shared/puerta.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 
@@ -61,6 +62,8 @@ Deno.serve(async (req) => {
     .maybeSingle()
   if (accErr) return json(500, { error: `DB: ${accErr.message}` })
   if (!acc) return json(404, { error: 'Cuenta no encontrada' })
+  // DM1 · PR 2a · La puerta: una cuenta de demo no se da de alta en Stripe ni le pregunta nada.
+  if (!(await cuentaPuedeSalir(sb, accountId))) return json(409, { error: `${EN_LA_DEMO} Una empresa de demostración no se da de alta en Stripe.`, demo: true })
 
   try {
     if (action === 'refresh_status') {

@@ -25,6 +25,7 @@
 // Núcleo sin Deno: la función conta-verifactu le pasa las piezas.
 
 import type { MaterialCertificado } from '../certificados/mtls.ts'
+import { EN_LA_DEMO } from '../puerta.ts'
 import { EnvioRechazado, leerRespuesta, RespuestaIlegible } from './respuesta.ts'
 import { type Registro, RegistroNoValido, sobreEnvio, type SistemaInformatico } from './xml.ts'
 
@@ -54,6 +55,21 @@ export interface Piezas {
   llamar: (url: string, xml: string, material: MaterialCertificado) => Promise<RespuestaHttp>
   sistema: SistemaInformatico
   url: string
+  /**
+   * DM1 · PR 2a: ¿es de una cuenta de demo? (cuentaPuedeSalir, _shared/puerta.ts).
+   * Si lo es, el lote NO va a Hacienda: se apunta como correcto, sin CSV y con
+   * «En la demo no se envía de verdad», para que la pantalla lo enseñe hecho y
+   * la cola no lo vuelva a intentar.
+   */
+  enLaDemo?: (lote: Lote) => Promise<boolean>
+}
+
+/** Lo que se apunta de un lote de demo: correcto, sin CSV y dicho. Nunca sale a Hacienda. */
+export function respuestaDeLaDemo(lote: Lote): Record<string, unknown> {
+  return {
+    http_status: 200, estado_envio: 'Correcto', tiempo_espera_s: null, csv: null, respuesta: EN_LA_DEMO,
+    registros: lote.registros.map((x) => ({ id: x.id, estado: 'Correcto', codigo: null, descripcion: EN_LA_DEMO })),
+  }
 }
 
 export interface Resumen {
@@ -64,6 +80,8 @@ export interface Resumen {
   incorrectos: number
   vuelven: number
   fallos: { envio_id: string; motivo: string }[]
+  /** DM1: lotes de demo, apuntados sin salir. */
+  en_la_demo: number
 }
 
 /** Lo que se guarda de un fallo: el motivo y su texto, recortado (sin el material). */
@@ -78,13 +96,19 @@ function motivo(e: unknown): { clave: string; texto: string } {
 
 /** Una vuelta: como mucho `maxEnvios` envíos (uno por NIF y flujo abierto). */
 export async function unaVuelta(p: Piezas, entorno: Entorno, maxEnvios = 10): Promise<Resumen> {
-  const r: Resumen = { envios: 0, registros: 0, correctos: 0, con_errores: 0, incorrectos: 0, vuelven: 0, fallos: [] }
+  const r: Resumen = { envios: 0, registros: 0, correctos: 0, con_errores: 0, incorrectos: 0, vuelven: 0, fallos: [], en_la_demo: 0 }
   for (let i = 0; i < maxEnvios; i++) {
     const lote = await p.tomar(entorno, 1000)
     if (!lote || !lote.registros?.length) break
     r.envios++
     r.registros += lote.registros.length
     try {
+      if (p.enLaDemo && await p.enLaDemo(lote)) {
+        await p.responder(lote.envio_id, respuestaDeLaDemo(lote))
+        r.en_la_demo++
+        r.correctos += lote.registros.length
+        continue
+      }
       const obligado = { nombre: lote.registros[0].nombre_emisor, nif: lote.nif_emisor }
       const xml = sobreEnvio(obligado, lote.registros, p.sistema)
       const material = await p.material(lote)

@@ -10,6 +10,7 @@
 //
 // El magic link se genera fresco en cada envío. Idempotente por fila.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -83,6 +84,12 @@ Deno.serve(async (_req) => {
   const results: unknown[] = [];
   for (const n of rows ?? []) {
     const nowIso = new Date().toISOString();
+    // DM1 · PR 2a · La puerta: el WhatsApp de una cuenta de demo no sale. Queda
+    // como enviado (sin mensaje del proveedor) y lo dice, para que no se reintente.
+    if (!(await cuentaPuedeSalir(sb, n.account_id ?? null))) {
+      await sb.from("clockout_reminder_log").update({ status: "sent", provider_message_id: null, sent_at: nowIso, updated_at: nowIso, error: EN_LA_DEMO }).eq("id", n.id);
+      continue;
+    }
     try {
       const toPhone = normPhone(String(n.to_phone ?? ""));
       if (!toPhone) {

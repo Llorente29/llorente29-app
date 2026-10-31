@@ -28,6 +28,7 @@
 // Endpoint: POST /functions/v1/account-email
 // ============================================================
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from '../_shared/puerta.ts';
 import { createClient } from '@supabase/supabase-js';
 import { corsHeaders } from '../_shared/cors.ts';
 import { renderAccountMessage } from './templates.ts';
@@ -333,6 +334,12 @@ Deno.serve(async (req) => {
       return jsonResponse(429, {
         error: 'Límite de envío alcanzado, reintenta más tarde',
       });
+    }
+
+    // DM1 · PR 2a · La puerta: una cuenta de demo no manda correos. Se da por
+    // hecho y se dice (sin tocar Resend ni el registro de envíos).
+    if (!(await cuentaPuedeSalir(supabaseAdmin, p.accountId))) {
+      return jsonResponse(200, { status: 'ok', sent: 0, failed: 0, demo: true, mensaje: EN_LA_DEMO });
     }
 
     // ────────────────────────────────────────────────────────────
