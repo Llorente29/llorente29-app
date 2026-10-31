@@ -23,7 +23,7 @@ import { useBancos } from '@/modules/conta/bancos/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { altaBancoNuevo } from '@/modules/conta/services/bancosPantallas'
 import {
-  bancoLigado, comprobarClientId, desdePropuesto, leerConexion, lineaRevolut, nombreDeBanco, PARAM_CODIGO, PARAM_ERROR, PARAM_ESTADO,
+  bancoLigado, comprobarClientId, NO_DISPONIBLE, desdePropuesto, leerConexion, lineaRevolut, nombreDeBanco, PARAM_CODIGO, PARAM_ERROR, PARAM_ESTADO,
   recordarVuelta, revolut, vueltaDeLaDireccion, type CuentaDeRevolut,
 } from '@/modules/conta/bancos/revolut/revolut'
 
@@ -43,7 +43,8 @@ export function TarjetaRevolut() {
   const location = useLocation()
   const navigate = useNavigate()
   const lectura = useLeer(() => leerConexion(companyId).then((c) => ({ c })), `revolut:${companyId}`)
-  const conexion = lectura.datos?.c ?? null
+  const noDisponible = lectura.datos?.c === NO_DISPONIBLE
+  const conexion = lectura.datos && lectura.datos.c !== NO_DISPONIBLE ? lectura.datos.c : null
   const cargar = lectura.recargar
   // La vuelta de Revolut: se toma una vez, al llegar, y se quita de la dirección.
   const [vuelta] = useState(() => vueltaDeLaDireccion(location.search))
@@ -90,6 +91,14 @@ export function TarjetaRevolut() {
   }
 
   if (!lectura.datos && !lectura.error) return null
+  if (noDisponible) {
+    return (
+      <div className="cx-tarjeta cxb-revolut" aria-label="Revolut Business" data-prueba="revolut">
+        <div className="cxb-revolut-cabeza"><span className="cxb-revolut-logo" aria-hidden="true">R</span>
+          <span className="cxb-lista-texto"><strong>Revolut Business</strong><span className="cx-ayuda">Revolut aún no está en este entorno: llega con la próxima actualización.</span></span></div>
+      </div>
+    )
+  }
   const l = lineaRevolut(conexion, new Date())
   return (
     <div className="cx-tarjeta cxb-revolut" aria-label="Revolut Business" data-prueba="revolut">

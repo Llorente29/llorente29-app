@@ -48,12 +48,17 @@ export async function revolut<T = Record<string, unknown>>(accion: string, cuerp
   return { ok: false, texto: `No se ha podido hablar con la conexión con Revolut${error ? ` (${error.message})` : ''}.` }
 }
 
+/** Lo que devuelve leerConexion cuando la base de este entorno aún no tiene la tabla de Revolut. */
+export const NO_DISPONIBLE = 'no_disponible' as const
+
 /** La conexión con Revolut de una empresa (o null si nunca se empezó). Lo público: lo secreto vive en el Vault. */
-export async function leerConexion(companyId: string): Promise<ConexionRevolut | null> {
+export async function leerConexion(companyId: string): Promise<ConexionRevolut | null | typeof NO_DISPONIBLE> {
   // La tabla es nueva (2210): aún no está en src/types/database.ts, como las del C00 (services/bd.ts).
   const { data: fila, error } = await tabla('revolut_conexion')
     .select('estado, entorno, certificado, vuelta, desde_historico, conectada_at, conectada_por_nombre, last_ok_at, last_error')
     .eq('company_id', companyId).maybeSingle()
+  // Antes de que la base de este entorno tenga la tabla (la 2210): Revolut no está aquí todavía, y se dice.
+  if (error && (error.code === 'PGRST205' || error.code === '42P01')) return NO_DISPONIBLE
   if (error) throw new Error(`No se ha podido leer la conexión con Revolut: ${error.message}`)
   if (!fila) return null
   const data = fila as unknown as Record<string, string | null>
