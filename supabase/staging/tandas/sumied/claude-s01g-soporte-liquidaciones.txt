@@ -1,0 +1,12 @@
+# S01g · las recepciones de soporte de la liquidación y «Por aclarar» con su
+# acción. La 0930 solo añade (va de verdad desde la rama); la 0931 cambia
+# conta_documentos_recibidos y brand_partner_settlement_prepare: desde la
+# rama, solo en ROLLBACK. La 0932 es de datos de Foodint (no está en staging):
+# no va aquí; la prueba es el ensayo de producción.
+# Su prueba (ROLLBACK), por los caminos de la pantalla: la recepción de
+# soporte sale «soporte»; la liquidación del socio guarda su proveedor y la
+# encuentra; «No es soporte» la devuelve a por aclarar; «Subir el PDF»; y la
+# vuelta atrás.
+supabase/migrations/20261031T0930_s01g_soporte_columnas.sql
+supabase/migrations/20261031T0931_s01g_soporte.sql
+supabase/staging/sql/20261031_s01g_soporte_prueba.sql

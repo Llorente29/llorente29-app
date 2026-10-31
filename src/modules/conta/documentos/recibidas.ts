@@ -17,7 +17,7 @@
 
 import type { PestanaEstado } from '@/modules/conta/diseno/plantillas'
 import { leerOrden, ordenar, type Sentido } from '@/modules/conta/diseno/plantillas'
-import { limites, ventanaParaRevisar, type Canal, type FilaDocumento } from './documentos'
+import { etiquetaSoporte, faltaElPdf, limites, ventanaParaRevisar, type Canal, type FilaDocumento } from './documentos'
 import type { ExtraFactura } from '@/modules/conta/services/documentosService'
 
 export type IdPestana = 'todas' | 'por-revisar' | 'por-aclarar' | 'por-pagar' | 'pagadas' | 'otras'
@@ -56,7 +56,7 @@ export function estadoDeFila(f: FilaDocumento, extra: ExtraFactura | undefined):
   switch (f.estado) {
     case 'para_mirar': return { texto: 'Por revisar', tono: 'duda' }
     case 'por_aclarar':
-      if (f.tipo === 'llegada') return { texto: /pdf/i.test(f.porque ?? '') ? 'Falta el PDF' : 'Sin leer', tono: 'duda' }
+      if (f.tipo === 'llegada') return { texto: faltaElPdf(f) ? 'Falta el PDF' : 'Sin leer', tono: 'duda' }
       if (f.tipo === 'recepcion') return { texto: 'Aún no es factura', tono: 'duda' }
       if (!f.proveedor.id) return { texto: 'Proveedor nuevo', tono: 'duda' }
       return { texto: 'Por aclarar', tono: 'duda' }
@@ -64,12 +64,15 @@ export function estadoDeFila(f: FilaDocumento, extra: ExtraFactura | undefined):
     case 'repetida': return { texto: 'Repetida', tono: 'neutro' }
     case 'descartada': return { texto: 'No es una factura', tono: 'neutro' }
     case 'en_diez': return { texto: 'En Diez', tono: 'neutro' }
+    case 'soporte': return { texto: f.soporte ? etiquetaSoporte(f.soporte) : 'Soporte de una liquidación', tono: 'neutro' }
     default: return { texto: 'Por aclarar', tono: 'duda' }
   }
 }
 
 export interface Filtros {
   pestana: IdPestana
+  /** S01g · En «Otras», qué es (su etiqueta: «Repetidas», «Soporte · … · oct 2026 · …»), o ''. */
+  que?: string
   /** Texto: proveedor, número o importe. */
   q: string
   /** 'YYYY-MM', o '' para los últimos 12 meses. */
@@ -129,10 +132,30 @@ export function pestanasConNumero(filas: readonly FilaDocumento[], extras: Reado
   return [{ id: 'todas', etiqueta: 'Todas', n: filas.length, siempre: true }, ...resto.filter((p) => p.siempre || p.n > 0)]
 }
 
+/** S01g · Qué es una fila de «Otras»: su etiqueta, para el filtro «Qué es». */
+export function queEsOtra(f: FilaDocumento): string {
+  switch (f.estado) {
+    case 'soporte': return f.soporte ? etiquetaSoporte(f.soporte) : 'Soporte de una liquidación'
+    case 'repetida': return 'Repetidas'
+    case 'descartada': return 'No es una factura'
+    case 'en_diez': return 'En Diez'
+    default: return 'Otras'
+  }
+}
+
+/** S01g · Las opciones del filtro «Qué es» de «Otras», con su número: solo las que hay. */
+export function opcionesOtras(filas: readonly FilaDocumento[], extras: ReadonlyMap<string, ExtraFactura>): { etiqueta: string; n: number }[] {
+  const n = new Map<string, number>()
+  for (const x of filas) if (pestanaDeFila(x, extras.get(x.id)) === 'otras') n.set(queEsOtra(x), (n.get(queEsOtra(x)) ?? 0) + 1)
+  return [...n.entries()].map(([etiqueta, k]) => ({ etiqueta, n: k })).sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es'))
+}
+
 /** Las filas de la lista, ya filtradas y ordenadas. */
 export function filasDeLaLista(filas: readonly FilaDocumento[], extras: ReadonlyMap<string, ExtraFactura>, f: Filtros): FilaDocumento[] {
   const base = filtrarSinPestana(filas, extras, f)
-  const deLaPestana = f.pestana === 'todas' ? base : base.filter((x) => pestanaDeFila(x, extras.get(x.id)) === f.pestana)
+  const enPestana = f.pestana === 'todas' ? base : base.filter((x) => pestanaDeFila(x, extras.get(x.id)) === f.pestana)
+  // S01g · El filtro «Qué es», solo en «Otras»: se elige entre las etiquetas que hay (regla 30) y la fila nunca se esconde sin él (regla 7).
+  const deLaPestana = f.pestana === 'otras' && f.que ? enPestana.filter((x) => queEsOtra(x) === f.que) : enPestana
   const valor = (x: FilaDocumento): string | number | null => {
     switch (f.orden.columna) {
       case 'proveedor': return x.proveedor.nombre ?? null
@@ -201,6 +224,7 @@ export function filtrosDe(query: URLSearchParams): Filtros {
     prov: query.get('prov') ?? '',
     local: query.get('local') ?? '',
     canal: query.get('canal') ?? '',
+    que: query.get('que') ?? '',
     orden: leerOrden(query.get('orden') ?? undefined, ORDEN_DE_SERIE),
   }
 }

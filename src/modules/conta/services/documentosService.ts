@@ -687,3 +687,43 @@ export async function sinPapelRecibida(invoiceId: string, sin: boolean, motivoSi
   if (x.error) return { hecho: false, falta: false, texto: x.error }
   return { hecho: true, falta: false, texto: typeof x.datos?.texto === 'string' ? x.datos.texto : sin ? `Sin PDF: «${motivoSin.trim()}»` : 'Ya no está marcada «Sin PDF»' }
 }
+
+// ── S01g · Las acciones de «Por aclarar» y el soporte de una liquidación ────
+// Nombres dentro de cadenas (regla 40), comprobados en producción el 31/10:
+// document_inbox (file_path, status); conta_factura_desde_lectura,
+// conta_puerta_dime_que_es; y los nuevos de la 0930 (conta_llegada_pdf_subido,
+// conta_recepcion_no_es_soporte).
+
+/** «Leerla»: una llegada sin leer, con el lector de «Subir factura». Devuelve la frase de la base. */
+export async function leerLlegada(accountId: string, inboxId: string): Promise<string> {
+  const { data, error } = await tabla('document_inbox').select('file_path').eq('id', inboxId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido abrir el documento', error))
+  const ruta = (data as Fila | null)?.file_path
+  if (typeof ruta !== 'string' || !ruta) throw new Error('A este documento le falta el fichero: súbelo primero.')
+  const sesion = await leerEnModoFactura(accountId, ruta)
+  const r = await rpc<Fila>('conta_factura_desde_lectura', { p_inbox: inboxId, p_session: sesion })
+  return typeof r.texto === 'string' ? r.texto : `Leída: ${String(r.estado)}.`
+}
+
+/** «Subir el PDF»: el fichero va a la misma llegada (le faltaba) y se lee en el momento. */
+export async function subirPdfDeLlegada(accountId: string, inboxId: string, f: File): Promise<string> {
+  hayBase()
+  const [ruta] = await uploadReceiptFiles(accountId, [f])
+  const bajado = await supabase!.storage.from(RECEPCIONES).download(ruta)
+  if (bajado.error || !bajado.data) throw new Error(`No se ha podido comprobar lo subido (${bajado.error?.message ?? 'vacío'}).`)
+  const bytes = await bajado.data.arrayBuffer()
+  await rpc('conta_llegada_pdf_subido', { p_inbox: inboxId, p_ruta: ruta, p_nombre: f.name, p_tipo: bajado.data.type || f.type, p_bytes: bytes.byteLength, p_sha256: await sha256(bytes) })
+  return `«${f.name}» subido. ${await leerLlegada(accountId, inboxId)}`
+}
+
+/** «No es una factura» de una llegada: pasa a «otra cosa» y sale de Facturas recibidas (la puerta, V02). */
+export async function llegadaNoEsFactura(inboxId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto?: string }>('conta_puerta_dime_que_es', { p_inbox: inboxId, p_tipo: 'otro', p_recordar: false, p_quien_nombre: quien })
+  return r.texto ?? 'Hecho: no es una factura. Sale de Facturas recibidas y lo tienes en Inicio › Documentos.'
+}
+
+/** «No es soporte»: la recepción vuelve a «Por aclarar». */
+export async function recepcionNoEsSoporte(recepcionId: string): Promise<string> {
+  const r = await rpc<{ mensaje: string }>('conta_recepcion_no_es_soporte', { p_recepcion: recepcionId })
+  return r.mensaje
+}

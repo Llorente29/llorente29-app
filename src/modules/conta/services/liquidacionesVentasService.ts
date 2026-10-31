@@ -23,7 +23,7 @@ import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { cargarContexto, proponerDevolucionSinCobrar } from '@/modules/conta/services/propuestasLibroService'
 import { asientoDeGasto, grupoDeFila, periodo, r2, type GrupoPlataforma } from '@/modules/conta/lib/liquidacionesPlataforma'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import type { CasadoAMano, Dimension, LineaAlbaran } from '@/modules/conta/lib/socioDelMes'
+import type { CasadoAMano, Dimension, LineaAlbaran, ProductoRelacion } from '@/modules/conta/lib/socioDelMes'
 
 type Fila = Record<string, unknown>
 
@@ -123,7 +123,20 @@ export async function lineasDelSocio(accountId: string, liqId: string): Promise<
   ])
   const casados: CasadoAMano[] = (prods ?? []).map((p) => ({ nombre: p.nombre, articulo: p.articulo, noEsNuestro: p.no_es_nuestro === true }))
   const codigo = new Map((recs ?? []).map((r) => [r.recepcion, r.codigo]))
-  if (codigo.size === 0) return { lineas: [], casados }
+  return { lineas: await lineasDeRecepciones(accountId, codigo), casados }
+}
+
+/** S01g · El detalle de una liquidación: la «Relación Compras y Ventas» que se leyó al subirla (null si no la tiene). */
+export async function relacionDeLiquidacion(accountId: string, liqId: string): Promise<ProductoRelacion[] | null> {
+  const { data, error } = await tabla('licensed_settlement').select('detail').eq('account_id', accountId).eq('id', liqId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer la liquidación', error))
+  const p = ((data as Fila | null)?.detail as { inventario?: { productos?: unknown } } | null)?.inventario?.productos
+  return Array.isArray(p) ? (p as ProductoRelacion[]) : null
+}
+
+/** Las líneas de unas recepciones (id → su código), con su artículo y su cantidad en la unidad base. */
+export async function lineasDeRecepciones(accountId: string, codigo: ReadonlyMap<string, string | null>): Promise<LineaAlbaran[]> {
+  if (codigo.size === 0) return []
   const { data: ls, error } = await tabla('goods_receipt_line')
     .select('goods_receipt_id, recipe_item_id, product_name, qty_in_base, qty_received, doc_amount, unit_cost, not_goods')
     .eq('account_id', accountId).in('goods_receipt_id', [...codigo.keys()])
@@ -157,5 +170,5 @@ export async function lineasDelSocio(accountId: string, liqId: string): Promise<
       dimension: u?.dimension ?? null, cantidadBase: q == null || !u ? null : q * u.factor, importe,
     }
   })
-  return { lineas, casados }
+  return lineas
 }
