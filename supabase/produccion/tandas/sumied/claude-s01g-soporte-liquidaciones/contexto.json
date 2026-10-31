@@ -1,0 +1,30 @@
+{
+ "_que": "S01g · contexto de producción medido en SOLO LECTURA el 31/10 a las 09:22Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen conta_documentos_recibidos (md5 de su definición bad615e89c94f5e39b7e52fcb3d940d3, la de la V02) y brand_partner_settlement_prepare (932e8c5873e6acff135790f7116fa9b9, la de la C03); las dos funciones nuevas no existen; nada en el camino del pedido; ninguna de las tres en el historial; Foodint tiene 3 liquidaciones de CTB sin proveedor.",
+ "medido": "2026-10-31T09:22Z",
+ "tanda": {
+  "supabase/migrations/20261031T0930_s01g_soporte_columnas.sql": "6907165e8715e8ad062e53c7514ed3ea",
+  "supabase/migrations/20261031T0931_s01g_soporte.sql": "47ac3d37ada7a51fa9b309999f84095b",
+  "supabase/migrations/20261031T0932_s01g_liquidaciones_ctb_foodint.sql": "37ecc15398366ca499d8ce709bfd7dfd"
+ },
+ "contexto": {
+  "tablas": [
+   "public.goods_receipt_path",
+   "public.licensed_settlement"
+  ],
+  "funciones": [
+   "public.brand_partner_settlement_prepare(uuid,uuid,date,date,text)",
+   "public.conta_documentos_recibidos(uuid,date,date)"
+  ],
+  "filas": {
+   "public.goods_receipt_path": 56,
+   "public.licensed_settlement": 3
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

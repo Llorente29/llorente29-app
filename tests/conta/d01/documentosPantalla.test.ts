@@ -84,7 +84,8 @@ describe('cada fila', () => {
     expect(boton(fila({ estado: 'para_mirar' })).texto).toBe('Mirar')
     expect(boton(fila({ estado: 'por_aclarar' })).texto).toBe('Aclarar')
     expect(boton(fila({ estado: 'apuntada' })).texto).toBe('Ver')
-    expect(boton(fila({ tipo: 'llegada', estado: 'por_aclarar', proveedor: { id: null, nombre: null } })).texto).toBe('Ver')
+    // S01g (regla 8): una llegada de «Por aclarar» ya no se abre solo para verla: «Leerla» (o «Subir el PDF» si le falta).
+    expect(boton(fila({ tipo: 'llegada', estado: 'por_aclarar', proveedor: { id: null, nombre: null } })).texto).toBe('Leerla')
   })
   it('el punto: verde apuntada, ámbar para mirar, gris lo que no se sabe', () => {
     expect(punto(fila({ estado: 'apuntada' }))).toBe('verde')

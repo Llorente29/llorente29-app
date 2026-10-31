@@ -21,7 +21,8 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
  * de Diez si casa, y nunca se apunta otra vez.
  */
 /** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada'
+/** S01g (0931) · 'soporte': una recepción que es soporte de la liquidación mensual de un socio (CTB): no se apunta como compra. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -50,9 +51,41 @@ export interface FilaDocumento {
   /** R6 · El papel de la recepción (receipt-uploads). */
   papel?: string | null
   recepcion: { fecha: string; local: string | null } | null
+  /** S01g · Solo las de soporte: de qué liquidación (proveedor, mes y local) y la liquidación, si ya está. */
+  soporte?: Soporte | null
   asiento: { id: string; estado: string; solo: boolean } | null
   llego: string
   archivo?: string | null
+}
+
+/** S01g · El soporte de una liquidación mensual (conta_documentos_recibidos, 0931). */
+export interface Soporte {
+  proveedor_id: string | null; proveedor: string | null
+  /** 'AAAA-MM' */
+  mes: string
+  local: string | null; local_id: string | null
+  /** El código de la recepción (ALB-…): así viene en las líneas del cruce de la liquidación. */
+  codigo: string | null
+  liquidacion: { id: string; desde: string; hasta: string } | null
+}
+
+const MESES_CORTOS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic']
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+/** «CLOUDTOWN BRANDS, S.L.» → «Cloudtown Brands»: sin la forma jurídica y sin mayúsculas sostenidas. No se inventa una sigla. */
+export function nombreCortoProveedor(nombre: string | null | undefined): string {
+  const sin = (nombre ?? '').replace(/,?\s*\b(S\.?\s?L\.?(\s?U\.?)?|S\.?\s?A\.?(\s?U\.?)?|S\.?\s?C\.?|S\.?\s?COOP\.?)\s*$/i, '').trim()
+  if (!sin) return 'su proveedor'
+  return sin === sin.toUpperCase() ? sin.toLowerCase().replace(/(^|[\s-])\p{L}/gu, (m) => m.toUpperCase()) : sin
+}
+
+/** «oct 2026» / «octubre». */
+export const mesCorto = (mes: string) => `${MESES_CORTOS[Number(mes.slice(5, 7)) - 1] ?? mes} ${mes.slice(0, 4)}`
+export const mesLargoDe = (mes: string) => MESES_LARGOS[Number(mes.slice(5, 7)) - 1] ?? mes
+
+/** La etiqueta de una recepción de soporte: «Soporte · Cloudtown Brands · oct 2026 · Foodint Alcalá». */
+export function etiquetaSoporte(s: Soporte): string {
+  return ['Soporte', nombreCortoProveedor(s.proveedor), mesCorto(s.mes), s.local].filter(Boolean).join(' · ')
 }
 
 export interface Esperada { supplier_id: string; supplier_name: string; label: string | null; periodo: string; ultima: string | null; pedida: string | null }
@@ -71,6 +104,8 @@ export interface DatosDocumentos {
     apuntadas: number
     para_mirar: number
     por_aclarar: number
+    /** S01g · Las recepciones de soporte de una liquidación (en «Otras»). */
+    soporte?: number
     esperadas_no_llegadas: number
   }
 }
@@ -181,6 +216,9 @@ const frase = (x: string) => (/[.!?…:]$/.test(x.trim()) ? x.trim() : `${x.trim
  */
 export function entendido(f: FilaDocumento, solo = false): { titulo: string; porque: string | null } {
   if (f.tipo === 'llegada') return { titulo: f.archivo ? `«${f.archivo}»` : 'Un documento sin leer', porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
+  if (f.tipo === 'recepcion' && f.estado === 'soporte') {
+    return { titulo: 'Soporte de la liquidación · no se apunta como compra', porque: f.porque ?? null }
+  }
   if (f.tipo === 'recepcion') {
     const titulo = f.estado === 'en_diez' ? (f.diez ? `Ya en Diez · asiento ${f.diez.serie}/${f.diez.numero}` : 'De antes del corte · la llevó Diez') : 'Leída por la recepción · aún no es factura'
     return { titulo, porque: f.porque ?? 'La leyó la recepción.' }
@@ -214,12 +252,19 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
 /** El único botón de la fila. */
 export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
   // R6 · Una recepción no se apunta desde aquí: se ve lo que leyó (Julio, 21/10: por lo que es, nunca «papel»).
+  if (f.tipo === 'recepcion' && f.estado === 'soporte') return { texto: 'Ver con qué cuadra', principal: false }
+  // S01g · Ninguna fila de «Por aclarar» se abre sin una acción que la resuelva (regla 8).
+  if (f.tipo === 'recepcion' && f.estado === 'por_aclarar') return { texto: 'Aclarar', principal: true }
   if (f.tipo === 'recepcion') return { texto: 'Ver la factura', principal: false }
+  if (f.tipo === 'llegada' && f.estado === 'por_aclarar') return { texto: faltaElPdf(f) ? 'Subir el PDF' : 'Leerla', principal: true }
   if (f.tipo === 'factura' && !f.proveedor.id) return { texto: 'Decirlo yo', principal: true }
   if (f.estado === 'para_mirar') return { texto: 'Mirar', principal: false }
   if (f.estado === 'por_aclarar') return { texto: f.tipo === 'llegada' ? 'Ver' : 'Aclarar', principal: false }
   return { texto: 'Ver', principal: false }
 }
+
+/** S01g · Una llegada a la que le falta el PDF (el correo traía un enlace). */
+export const faltaElPdf = (f: Pick<FilaDocumento, 'tipo' | 'porque'>) => f.tipo === 'llegada' && /pdf/i.test(f.porque ?? '')
 
 /** El punto de la fila: verde seguro, ámbar probable o para mirar, gris lo que no se sabe. */
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
