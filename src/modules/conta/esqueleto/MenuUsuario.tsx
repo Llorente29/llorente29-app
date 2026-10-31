@@ -44,7 +44,9 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = fal
     if (!r.ok) { setSaliendo(false); setErrorSalir(`No se ha podido cerrar la sesión: ${r.error ?? 'sin respuesta'}. Vuelve a probar.`); return }
     menuSetAbierto(false)
     // Sin sesión, la app enseña la entrada de su marca (Sumied o Folvy) en /login.
-    navigate('/login', { replace: true })
+    // Como Folvy (ShellTopBar), sin reemplazar: al volver atrás, /conta sin sesión
+    // también enseña la entrada.
+    navigate('/login')
   }
   return (
     <div className="s-desplegable" ref={menuCaja}>

@@ -95,9 +95,12 @@ export default function AdminShell() {
     <div className="min-h-screen flex flex-col" style={{ background: 'var(--color-bg-page)' }}>
       {/* Cabecera del portal de staff — azul marino, separada visualmente del
           Shell de cliente para dejar claro que es otro plano. */}
+      {/* S01f · En el móvil la cabecera parte en varias líneas en vez de ensanchar la
+          página: con una sola fila de 68 px no cabía en 390 px y dejaba fuera de la
+          pantalla lo de la derecha de cada ficha (los interruptores de Sumied). */}
       <header
-        className="flex items-center gap-6 px-6"
-        style={{ background: 'var(--color-accent)', height: 68 }}
+        className="flex flex-wrap items-center gap-x-6 gap-y-2 px-6 py-3"
+        style={{ background: 'var(--color-accent)', minHeight: 68 }}
       >
         <button
           type="button"
@@ -107,7 +110,7 @@ export default function AdminShell() {
         >
           Folvy Admin
         </button>
-        <nav className="flex items-center gap-4">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {NAV_ITEMS.map(item => (
             <button
               key={item.to}
@@ -207,7 +210,7 @@ export default function AdminShell() {
         </div>
       )}
 
-      <main className="flex-1" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
+      <main className="flex-1 min-w-0" style={{ paddingLeft: 26, paddingRight: 26, paddingTop: 24, paddingBottom: 24 }}>
         <Routes>
           {/* /_admin → home del portal */}
           <Route path="/_admin" element={<Navigate to="/_admin/inicio" replace />} />
