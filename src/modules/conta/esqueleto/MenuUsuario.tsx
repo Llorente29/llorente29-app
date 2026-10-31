@@ -6,8 +6,13 @@
 // dónde está cada cosa) y la densidad (Cómoda, filas de 56 px; Compacta, de
 // 40: decisión 2 de Julio, 22/10). Y, si no es el producto vendido solo,
 // «Volver a Folvy». S02: se acabó la cinta, y con ella «Ocultar la cinta».
+// S01f (31/10): al final, separado, «Cerrar sesión»: en app.sumied.com,
+// entrando directo, no había forma de salir. El mismo signOut que Folvy
+// (ShellTopBar) y a /login, que enseña la entrada de la marca en la que se está.
 
-import { Link } from 'react-router-dom'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { signOut } from '@/services/authService'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
 import { iniciales } from '@/modules/conta/lib/formato'
 import { Icono } from '@/modules/conta/diseno'
@@ -30,6 +35,17 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = fal
 }) {
   const { abierto: menuAbierto, setAbierto: menuSetAbierto, alternar: menuAlternar, caja: menuCaja, boton: menuBoton } = useDesplegable()
   const elegir = (c: Partial<Preferencias>, dicho: string) => { cambiar(c, dicho); menuSetAbierto(false) }
+  const navigate = useNavigate()
+  const [saliendo, setSaliendo] = useState(false)
+  const [errorSalir, setErrorSalir] = useState<string | null>(null)
+  const salir = async () => {
+    setSaliendo(true); setErrorSalir(null)
+    const r = await signOut()
+    if (!r.ok) { setSaliendo(false); setErrorSalir(`No se ha podido cerrar la sesión: ${r.error ?? 'sin respuesta'}. Vuelve a probar.`); return }
+    menuSetAbierto(false)
+    // Sin sesión, la app enseña la entrada de su marca (Sumied o Folvy) en /login.
+    navigate('/login', { replace: true })
+  }
   return (
     <div className="s-desplegable" ref={menuCaja}>
       {enCajon && (
@@ -75,6 +91,11 @@ export function MenuUsuario({ nombre, prefs, solo, movil, cambiar, enCajon = fal
               <Link to="/" className="s-menu-item">Volver a Folvy</Link>
             </>
           )}
+          <div className="s-menu-separador" />
+          <button type="button" className="s-menu-item s-menu-salir" onClick={() => void salir()} disabled={saliendo}>
+            <span>{saliendo ? 'Cerrando la sesión…' : 'Cerrar sesión'}</span><Icono nombre="salir" />
+          </button>
+          {errorSalir && <p className="s-menu-nota" role="alert">{errorSalir}</p>}
         </div>
       )}
     </div>

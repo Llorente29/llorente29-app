@@ -15,6 +15,7 @@ import { getAccountDiscount, setAccountDiscount, clearAccountDiscount, type Acco
 import IntegrationsSection from '@/admin/components/IntegrationsSection'
 import StripeConnectSection from '@/admin/components/StripeConnectSection'
 import AccountLogoUploader from '@/admin/components/AccountLogoUploader'
+import SeccionSumied from '@/admin/components/SeccionSumied'
 
 type LoadState =
   | { state: 'loading' }
@@ -450,6 +451,9 @@ export default function CuentaDetallePage() {
           </>
         )}
       </section>
+
+      {/* S01f · Sumied: sus interruptores (feature_flags), aparte de la suscripción de arriba. */}
+      <SeccionSumied accountId={acc.id} cuenta={acc.name} />
 
       {/* Descuento del cliente (capa de precios P-C) */}
       <section className="mb-8">
