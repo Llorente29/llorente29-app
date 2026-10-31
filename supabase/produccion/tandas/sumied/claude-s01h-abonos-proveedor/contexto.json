@@ -1,0 +1,29 @@
+{
+ "_que": "S01h · contexto de producción medido en SOLO LECTURA el 31/10 a las 18:56Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen journal_entry, supplier_invoice y supplier_invoice_tax; las cuatro funciones nuevas no existen ni tienen otras firmas; nada en el camino del pedido; ninguna de las tres en el historial.",
+ "medido": "2026-10-31T18:56Z",
+ "tanda": {
+  "supabase/migrations/20261031T1850_s01h_pago_por_compensacion.sql": "35bb4ce4830234ad88ae76c46ed91ef5",
+  "supabase/migrations/20261031T1851_s01h_abonos.sql": "30637afc926bd03f0e756be9fe722367",
+  "supabase/migrations/20261031T1852_s01h_abono_europastry_foodint.sql": "a57d712bc50dd9095c61d8cb5accc301"
+ },
+ "contexto": {
+  "tablas": [
+   "public.journal_entry",
+   "public.supplier_invoice",
+   "public.supplier_invoice_tax"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.journal_entry": 14955,
+   "public.supplier_invoice": 110,
+   "public.supplier_invoice_tax": 115
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
