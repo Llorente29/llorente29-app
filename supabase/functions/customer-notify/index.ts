@@ -1,6 +1,7 @@
 // customer-notify: drena customer_notification 'pending' y las envía por Meta WhatsApp Cloud API.
 // Idempotente por fila; marca sent/failed; reintenta hasta 3.
 // COPIA SOMBRA (debug): las primeras N reales se reenvían a un número de control (auto-apaga al llegar a N).
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -51,6 +52,12 @@ Deno.serve(async (req) => {
   const results: unknown[] = [];
   for (const n of rows ?? []) {
     const nowIso = new Date().toISOString();
+    // DM1 · PR 2a · La puerta: el WhatsApp de una cuenta de demo no sale. Queda
+    // como enviado (sin mensaje del proveedor) y lo dice, para que no se reintente.
+    if (!(await cuentaPuedeSalir(sb, n.account_id ?? null))) {
+      await sb.from("customer_notification").update({ status: "sent", provider_message_id: null, sent_at: nowIso, updated_at: nowIso, error: EN_LA_DEMO }).eq("id", n.id);
+      continue;
+    }
     try {
       const p = (n.payload ?? {}) as Record<string, unknown>;
       const params = [String(p.customer_name ?? "Hola"), String(p.brand ?? "tu pedido"), String(p.track_url ?? "")];

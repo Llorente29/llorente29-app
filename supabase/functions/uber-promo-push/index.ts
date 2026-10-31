@@ -11,6 +11,7 @@
 // DESPLIEGUE: SIEMPRE --no-verify-jwt (lo llama pg_cron sin JWT; frontera = x-agent-secret).
 // Secrets requeridos: OFFERS_AGENT_SECRET, UBER_CLIENT_ID, UBER_CLIENT_SECRET.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_SECRET = Deno.env.get("OFFERS_AGENT_SECRET")!;
@@ -132,6 +133,8 @@ Deno.serve(async (req) => {
         last_error: err ?? null,
         updated_at: new Date().toISOString(),
       }).eq("id", job.id);
+    // DM1 · PR 2a · La puerta: una oferta de una cuenta de demo no va a Uber. Queda hecha, y lo dice.
+    if (!(await cuentaPuedeSalir(supa, job.account_id))) { await report(true, null, EN_LA_DEMO); continue; }
 
     try {
       // Tiendas de Uber de esta marca (mapeo obligatorio)

@@ -45,6 +45,10 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
   'conta-redsys': 'guarda los datos del TPV de la empresa y firma con su clave; no habla con el banco (cobrar es conta-pago, que lleva puerta)',
   'conta-redsys-aviso': 'RECIBE el aviso del banco cuando un cliente paga; no manda nada',
   'conta-stripe-webhook': 'RECIBE los avisos de Stripe y solo lee el estado de un alta que ya existe (una demo no puede darse de alta: conta-stripe lleva puerta)',
+  'payroll-inbound': 'RECOGE las nóminas que llegan por correo (lee lo recibido en Resend); no manda nada',
+  'dosier-track': 'cuenta las visitas al dosier comercial de Folvy y avisa al equipo de Folvy: es de la plataforma, no de una cuenta',
+  'social-agent': 'prepara el contenido de redes (la dirección de la tienda va escrita en el texto, no se llama); publicarlo es social-publish, que lleva puerta',
+  'system-alert': 'el cartero de los avisos al equipo de Folvy: recibe el aviso ya escrito, sin cuenta. Que una demo no cuente en los avisos va donde se encolan (FALTA_EN_LA_BASE)',
   'conta-facturas-entrada': 'recoge los correos con facturas que LLEGAN a la cuenta (lee lo recibido en Resend); no manda nada',
   // De la plataforma, no de una cuenta.
   'create-platform-admin': 'da de alta a un superadministrador: es de la plataforma, no de una cuenta',
@@ -59,12 +63,14 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
 }
 
 /** Las que aún hay que cerrar. Se vacía en el PR 2a; mientras tanto, ninguna cuenta puede ser de demo. */
-const AUN_SIN_PUERTA = [
-  'account-email', 'clockout-reminder', 'compliance-doc-notify', 'customer-notify',
-  'dosier-track', 
-  'payroll-inbound', 'shop-payment-intent',
-  'social-agent', 'social-publish', 'social-token-refresh', 'stripe-connect-onboard', 'system-alert',
-  'training-notify', 'uber-promo-push',
+const AUN_SIN_PUERTA: string[] = []
+
+/**
+ * Lo que aún falta en la BASE, no en las funciones del servidor. Mientras no
+ * esté vacía, tampoco se puede marcar ninguna cuenta de demo.
+ */
+const FALTA_EN_LA_BASE: string[] = [
+  'los avisos del sistema: que _queue_system_alert y encolar_alerta no encolen nada de una cuenta de demo (una demo no cuenta en los vigías ni en los avisos)',
 ]
 
 const lista = salidas()
@@ -97,7 +103,7 @@ describe('la puerta de las demos: cada función que sale fuera, en su lista', ()
   })
 
   it('mientras quede alguna sin puerta, nada del repositorio marca una cuenta como demo', () => {
-    if (AUN_SIN_PUERTA.length === 0) return
+    if (AUN_SIN_PUERTA.length === 0 && FALTA_EN_LA_BASE.length === 0) return
     const dirs = ['supabase/migrations', 'supabase/seeds', 'scripts/conta/produccion/cuentas']
     const marcan: string[] = []
     const mirar = (d: string): void => {
@@ -109,6 +115,6 @@ describe('la puerta de las demos: cada función que sale fuera, en su lista', ()
       }
     }
     dirs.forEach(mirar)
-    expect(marcan, `Quedan ${AUN_SIN_PUERTA.length} funciones sin puerta (AUN_SIN_PUERTA): una demo mandaría cosas de verdad por ellas. Qué hacer: ciérralas antes de marcar ninguna cuenta`).toEqual([])
+    expect(marcan, `Quedan ${AUN_SIN_PUERTA.length} funciones sin puerta (AUN_SIN_PUERTA) y ${FALTA_EN_LA_BASE.length} cosas de la base (FALTA_EN_LA_BASE): una demo mandaría o avisaría de verdad por ellas. Qué hacer: ciérralas antes de marcar ninguna cuenta`).toEqual([])
   })
 })
