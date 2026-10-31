@@ -29,7 +29,6 @@ B01 Revolut · PR 1 · **Conectar Revolut Business y leer sus movimientos.** Los
 
 - **El aviso pide el permiso `WRITE`** (especificación oficial). Con solo `READ` no se registra, y la lectura de cada hora hace de aviso: hasta una hora de retraso. El código lo registra en cuanto haya `WRITE`. Falta que Julio decida si se pide al conectar o con «Activar pagos».
 - **La dirección de vuelta** es una página aparte, `revolut-vuelta.html`, en `/bancos/revolut/vuelta` por la primera regla de `vercel.json`. Solo devuelve a la página de Bancos desde la que se salió, nunca a otro sitio. Así no se toca `App.tsx`.
-
 - **En staging, la 2210 no va de verdad desde la rama.** El clasificador de «solo añade» (`staging-tanda.mjs`) ve `vault.create_secret` en el cuerpo de `conta_revolut_secreto_poner` y lo cuenta como escritura en el Vault, aunque no se ejecuta al aplicar. Run 808: «Nada de la rama va de verdad». Afinarlo es tocar la herramienta común: va a otro encargo (T1). Mientras la tabla no esté, la tarjeta dice «Revolut aún no está en este entorno» en vez de dar error, y la e2e del asistente va después de fusionar.
 
 ## Tanda
@@ -61,9 +60,9 @@ Contexto medido en producción en solo lectura el 31/10. La vuelta atrás, en or
   - dos lecturas de Revolut el mismo día «sigue», y un fichero del mismo día como antes;
   - desconectar;
   - las tres vueltas atrás.
-  Pasada en la base local del W09. Sin la 2212, sale en rojo.
+  Pasada en la base local del W09; en staging, el run 808 de «Aplicar SQL en staging», en verde (todo en ROLLBACK). Sin la 2212, sale en rojo.
 - **`npm run build`** en limpio y **`antes-de-subir.sh`**: todo en verde salvo `tests/conta/capturas.test.ts`, que falla igual en `origin/main`. La carpeta `s01h` de las capturas del #412 no está en su lista; queda apuntado para otro encargo (T1).
-- **e2e contra el sandbox**: con la cuenta de pruebas de Julio (P9, sus pasos van aparte), en un push siguiente.
+- **e2e contra el sandbox**: después de fusionar, cuando staging tenga la tabla, con la cuenta de pruebas de Julio (P9, sus pasos van aparte).
 
 ## Funciones a desplegar a mano
 

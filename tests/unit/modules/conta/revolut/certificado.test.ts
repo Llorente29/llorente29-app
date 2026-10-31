@@ -1,7 +1,7 @@
 // B01 Revolut · PR 1 · La llave de la empresa: el certificado que se pega en
 // Revolut se lee como X.509 de verdad, lleva la clave pública de la privada que
 // se guarda, y la firma del cliente (JWT RS256) se verifica con él.
-import { X509Certificate, createPublicKey, createVerify } from 'node:crypto'
+import { X509Certificate, createPrivateKey, createPublicKey, createVerify } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { ANOS_CERTIFICADO, crearLlave, dominioDeVuelta, firmaDelCliente } from '../../../../../supabase/functions/_shared/revolut/certificado.ts'
 
@@ -12,7 +12,10 @@ describe('crearLlave', () => {
     const ahora = new Date('2026-10-31T12:00:00Z')
     const l = await crearLlave('Taberna de Prueba Norte S.L.', ahora)
     expect(l.certificadoPem).toMatch(/^-----BEGIN CERTIFICATE-----\n/)
-    expect(l.privadaPem).toMatch(/^-----BEGIN PRIVATE KEY-----\n/)
+    // La privada es una clave privada RSA de 2048 que Node carga (PKCS#8).
+    const privada = createPrivateKey(l.privadaPem)
+    expect(privada.type).toBe('private')
+    expect(privada.asymmetricKeyDetails?.modulusLength).toBe(2048)
     const x = new X509Certificate(l.certificadoPem)
     expect(x.subject).toContain('CN=Sumied · Taberna de Prueba Norte S.L.')
     expect(x.issuer).toBe(x.subject)
