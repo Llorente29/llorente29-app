@@ -26,6 +26,7 @@ const REC_SIN = 'e2e01e0a-0000-4000-8000-000000000001'
 const REC_CON = 'e2e01e0a-0000-4000-8000-000000000002'
 const REC_OTRA = 'e2e01e0a-0000-4000-8000-000000000003'
 const LLEGADA = 'e2e01e0a-0000-4000-8000-000000000004'
+const REPETIDA = 'e2e01e0a-0000-4000-8000-000000000005'
 const LIQ = 'e2e01e0a-0000-4000-8000-0000000000aa'
 const PROV = 'SOCIO INVENTADO BRANDS, S.L.'
 const ETIQUETA = 'Soporte · Socio Inventado Brands · oct 2026 · Local de prueba'
@@ -41,6 +42,9 @@ const FILAS = [
   filaSoporte(REC_CON, 'ALB-E2E02', 'FV00000002', 88.5, { id: LIQ, desde: '2026-10-01', hasta: '2026-10-31' }),
   { id: LLEGADA, tipo: 'llegada', estado: 'por_aclarar', proveedor: { id: null, nombre: null }, numero: null, fecha: '2026-10-28', total: null, canal: 'correo', confianza: null,
     porque: 'Recibida, sin leer todavía.', entendido: null, recepcion: null, asiento: null, llego: '2026-10-28T08:00:00Z', archivo: 'factura-inventada.pdf' },
+  // Una repetida, para que «Otras» tenga dos tipos y salga el filtro «Qué es» (sale con dos o más).
+  { id: REPETIDA, tipo: 'factura', estado: 'repetida', proveedor: { id: null, nombre: 'Proveedor inventado' }, numero: 'F-00000009', fecha: '2026-10-21', total: 12.1, canal: 'correo', confianza: null,
+    porque: 'Ya está la misma factura.', entendido: null, recepcion: null, asiento: null, llego: '2026-10-21T08:00:00Z' },
 ]
 const LINEAS = [
   { goods_receipt_id: REC_SIN, recipe_item_id: 'a-pan', product_name: 'Pan inventado', qty_in_base: 48, qty_received: 48, doc_amount: 29.76, unit_cost: 0.62, not_goods: false },
@@ -97,6 +101,7 @@ test.describe('S01g · las recepciones de soporte y «Por aclarar» con su acci�
     await que.getByRole('button', { name: `${ETIQUETA} · 2` }).click()
     await expect(que.getByRole('button', { name: `${ETIQUETA} · 2` })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByText(ETIQUETA).first()).toBeVisible()
+    await expect(page.getByText('F-00000009')).toHaveCount(0)
     await capturar(page, 'otras-soporte')
   })
 
