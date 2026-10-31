@@ -59,6 +59,7 @@ insert into _plantilla_usuarios values
   ('c01a0000-0000-4000-8000-0000000000a6'),  -- a.encargado@prueba.folvy.test   · cuenta A, manager
   ('c01a0000-0000-4000-8000-0000000000a7'),  -- a.trabajador@prueba.folvy.test  · cuenta A, worker con ficha (autoconteo, 21/10)
   ('c01a0000-0000-4000-8000-0000000000a8'),  -- dos.empresas@prueba.folvy.test  · cuentas A y B, administradora de las dos (DM1, 30/10)
+  ('d1e00000-0000-4000-8000-0000000000e1'),  -- alta.dos@prueba.folvy.test      · una cuenta sin sociedad y la A (DM1, el alta no encierra, 31/10)
   ('c01b0000-0000-4000-8000-0000000000b1'),  -- b.admin@prueba.folvy.test       · cuenta B
   ('c01c0000-0000-4000-8000-0000000000c1'),  -- c.admin@prueba.folvy.test       · cuenta C, sin empresa
   ('c01d0000-0000-4000-8000-0000000000d1'),  -- d.admin@prueba.folvy.test       · cuenta D, sin hostelería (S01)
