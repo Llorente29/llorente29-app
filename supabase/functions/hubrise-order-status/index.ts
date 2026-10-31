@@ -24,7 +24,7 @@
 // CAMBIO 29/07/2026 (pre-auditoría HubRise — Antoine Monnier):
 //   PUT → PATCH para actualizaciones de estado de pedidos.
 
-import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { resolveHubriseToken } from "../_shared/hubriseToken.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -90,7 +90,7 @@ Deno.serve(async (req: Request) => {
   // Cliente service_role: resolver token por conexión y espejar el estado.
   const svc = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
   // DM1 · PR 2a · La puerta: una cuenta de demo no empuja estados a HubRise (ni con el token de entorno).
-  if (!(await cuentaPuedeSalir(svc, sale.account_id as string))) return json({ ok: true, demo: true, mensaje: EN_LA_DEMO });
+  if (!(await siPuedeSalir(svc, sale.account_id as string, async () => true, () => false, "sale"))) return json({ ok: true, demo: true, mensaje: EN_LA_DEMO });
 
   // 2) Token por conexión (fallback al Secret global durante la migración).
   const dbToken = await resolveHubriseToken(svc, {

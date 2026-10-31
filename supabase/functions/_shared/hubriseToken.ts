@@ -38,22 +38,19 @@
 // de conectar el cliente 2 — no antes, para no meter riesgo en mitad de la
 // certificación de Carabanchel (hubrise-catalog-publish v40 recién desplegada).
 
-import { cuentaPuedeSalir } from "./puerta.ts";
+import { siPuedeSalir } from "./puerta.ts";
 
 // deno-lint-ignore no-explicit-any
 type QueryResult = { data: any; error: any };
 
 // DM1 · PR 2a · La puerta: una cuenta de demo no tiene token de HubRise (como
-// si no estuviera conectada), así que nada de lo que lo pide sale. Si no se
-// puede preguntar, tampoco hay token: sin respuesta, no se sale.
+// si no estuviera conectada), así que nada de lo que lo pide sale. Es el
+// camino del pedido: para una cuenta que no es de demo no cambia nada, y si no
+// se puede preguntar, sale como antes (siPuedeSalir con «sale»).
 async function puedeSalir(sb: SupabaseLike, accountId: string): Promise<boolean> {
-  try {
-    return await cuentaPuedeSalir(sb, accountId);
-  } catch (e) {
-    console.warn(`hubriseToken: no se ha podido preguntar si la cuenta ${accountId} puede salir:`, e instanceof Error ? e.message : e);
-    return false;
-  }
+  return await siPuedeSalir(sb, accountId, async () => true, () => false, "sale");
 }
+
 interface SupabaseLike {
   from: (table: string) => {
     // deno-lint-ignore no-explicit-any

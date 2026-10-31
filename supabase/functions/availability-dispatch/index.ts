@@ -67,7 +67,7 @@
 //   - otter   : disponibilidad de item. Hueco declarado (se LOGUEA, no se silencia).
 // ============================================================================
 
-import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 import { resolveWriterToken } from "../_shared/hubriseToken.ts";
@@ -124,7 +124,7 @@ Deno.serve(async (req: Request) => {
   );
 
   // DM1 · PR 2a · La puerta: una cuenta de demo no manda disponibilidades a HubRise.
-  if (!(await cuentaPuedeSalir(sb, accountId))) {
+  if (!(await siPuedeSalir(sb, accountId, async () => true, () => false, "sale"))) {
     return json({ ok: true, demo: true, mensaje: EN_LA_DEMO }, 200);
   }
 

@@ -60,9 +60,9 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
 
 /** Las que aún hay que cerrar. Se vacía en el PR 2a; mientras tanto, ninguna cuenta puede ser de demo. */
 const AUN_SIN_PUERTA = [
-  'account-email', 'catcher-dispatch', 'clockout-reminder', 'compliance-doc-notify', 'customer-notify',
-  'dosier-track', 'last-catalog-probe', 'last-catalog-sync', 'lastapp-backfill-sales',
-  'lastapp-catalog-import', 'lastapp-set-price', 'order-advance', 'payroll-inbound', 'shop-payment-intent',
+  'account-email', 'clockout-reminder', 'compliance-doc-notify', 'customer-notify',
+  'dosier-track', 
+  'payroll-inbound', 'shop-payment-intent',
   'social-agent', 'social-publish', 'social-token-refresh', 'stripe-connect-onboard', 'system-alert',
   'training-notify', 'uber-promo-push',
 ]

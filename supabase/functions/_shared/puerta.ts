@@ -42,3 +42,32 @@ export async function cuentaPuedeSalir(db: ConRpc, accountId: string | null | un
 export function hechoEnLaDemo(extra: Record<string, unknown> = {}): Record<string, unknown> {
   return { status: 'ok', demo: true, enviado: false, mensaje: EN_LA_DEMO, ...extra }
 }
+
+/**
+ * La puerta alrededor de un envío. Para una cuenta que no es de demo, devuelve
+ * EXACTAMENTE lo que devuelve `salir` (la llamada de siempre, una vez); para
+ * una de demo, lo que diga `enLaDemo`, sin llamar a `salir`. Lo prueba
+ * tests/unit/demo/caminoDelPedido.test.ts.
+ *
+ * `siNoContesta`: qué hacer si no se puede preguntar a la base.
+ *   · 'sale' (el camino del pedido: order-advance, HubRise, Last): sale, como
+ *     antes de la puerta, y lo dice en el registro. Un pedido no se queda sin
+ *     su empuje porque falle una pregunta.
+ *   · 'no_sale' (lo demás): lanza, como cuentaPuedeSalir; el envío falla como
+ *     fallaría sin la puerta y su reintento de siempre lo vuelve a intentar.
+ */
+export async function siPuedeSalir<T>(
+  db: ConRpc, accountId: string | null | undefined,
+  salir: () => Promise<T>, enLaDemo: () => T | Promise<T>,
+  siNoContesta: 'sale' | 'no_sale' = 'no_sale',
+): Promise<T> {
+  let puede: boolean
+  try {
+    puede = await cuentaPuedeSalir(db, accountId)
+  } catch (e) {
+    if (siNoContesta === 'no_sale') throw e
+    console.error(`puerta: no se ha podido preguntar si la cuenta ${accountId} puede salir; sale, como antes: ${e instanceof Error ? e.message : String(e)}`)
+    puede = true
+  }
+  return puede ? salir() : enLaDemo()
+}

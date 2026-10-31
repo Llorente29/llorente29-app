@@ -53,7 +53,7 @@
 // (Resuelto: el secreto HMAC es el client_secret del cliente OAuth, único por
 //  aplicación, en hex. No es por conexión.)
 
-import { cuentaPuedeSalir } from "../_shared/puerta.ts";
+import { siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { pushOrderStatus } from "../_shared/hubrisePush.ts";
 import { resolveHubriseToken } from "../_shared/hubriseToken.ts";
@@ -539,8 +539,8 @@ async function maybeAckReceived(
   if (incoming !== "new") return;     // ya viene received/accepted/etc. -> no re-empujar
   if (!args.isNew) return;            // solo en la primera ingesta del pedido
   if (!args.externalRef) return;
-  // DM1 · PR 2a · La puerta: una cuenta de demo no empuja nada a HubRise.
-  if (!(await cuentaPuedeSalir(sb, args.accountId))) return;
+  // DM1 · PR 2a · La puerta: una cuenta de demo no empuja nada a HubRise (camino del pedido: si no contesta, sale).
+  if (!(await siPuedeSalir(sb, args.accountId, async () => true, () => false, "sale"))) return;
 
   const token = await resolveHubriseToken(sb, {
     accountId: args.accountId,
@@ -586,8 +586,8 @@ async function maybeAutoAccept(
 
   const cfg = await resolveAutoAccept(sb, args.accountId, args.channelId, args.brandId);
   if (!cfg.autoAccept) return false;
-  // DM1 · PR 2a · La puerta: una cuenta de demo no empuja nada a HubRise.
-  if (!(await cuentaPuedeSalir(sb, args.accountId))) return false;
+  // DM1 · PR 2a · La puerta: una cuenta de demo no empuja nada a HubRise (camino del pedido: si no contesta, sale).
+  if (!(await siPuedeSalir(sb, args.accountId, async () => true, () => false, "sale"))) return false;
   // cfg.respectHours queda INERTE hasta Horarios (no se evalúa todavía).
 
   const token = await resolveHubriseToken(sb, {
