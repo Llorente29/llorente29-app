@@ -15,10 +15,10 @@
 //     Catcher pasan por siPuedeSalir con «sale» (no por cuentaPuedeSalir, que
 //     lanza si la base no contesta): el código lo dice, y aquí se comprueba.
 
-import { describe, it, expect } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { siPuedeSalir, EN_LA_DEMO } from '../../../supabase/functions/_shared/puerta'
+import { siPuedeSalir, EN_LA_DEMO, olvidarDemosVistas } from '../../../supabase/functions/_shared/puerta'
 import { resolveHubriseToken, listActiveHubriseConnections, resolveWriterToken } from '../../../supabase/functions/_shared/hubriseToken'
 import { RAIZ } from './salidas'
 
@@ -26,16 +26,28 @@ const NORMAL = '00000000-0000-0000-0000-00000000000a'
 const DEMO = '00000000-0000-0000-0000-00000000000d'
 
 type Modo = 'con_puerta' | 'antes' | 'no_contesta'
-/** La base: con la 0907 (DEMO es de demo), sin ella (antes), o sin contestar. */
-function base(modo: Modo, filas: Record<string, unknown>[] = []) {
-  const consulta = () => {
+/**
+ * La base: con la 0907 (DEMO es de demo), sin ella (antes), o sin contestar
+ * la función. `marca`: lo que da releer accounts.is_demo si la función no
+ * contesta ('no_contesta' = tampoco contesta).
+ */
+function base(modo: Modo, filas: Record<string, unknown>[] = [], marca: 'no_contesta' | 'segun_cuenta' = 'no_contesta') {
+  const consulta = (tabla: string) => {
     const q: Record<string, unknown> = {}
+    let id: unknown = null
     const yo = () => q
-    Object.assign(q, { select: yo, eq: yo, is: yo, not: yo, order: yo, then: (ok: (r: unknown) => unknown) => Promise.resolve({ data: filas, error: null }).then(ok) })
+    Object.assign(q, {
+      select: yo, is: yo, not: yo, order: yo,
+      eq: (col: string, v: unknown) => { if (col === 'id') id = v; return q },
+      maybeSingle: async () => (tabla === 'accounts' && marca === 'segun_cuenta'
+        ? { data: { is_demo: id === DEMO }, error: null }
+        : { data: null, error: { message: 'tampoco contesta' } }),
+      then: (ok: (r: unknown) => unknown) => Promise.resolve({ data: filas, error: null }).then(ok),
+    })
     return q
   }
   return {
-    from: () => consulta(),
+    from: (t: string) => consulta(t),
     rpc: async (fn: string, args?: Record<string, unknown>) => {
       if (fn === 'cuenta_puede_salir') {
         if (modo === 'antes') return { data: null, error: { message: 'no existe', code: 'PGRST202' } }
@@ -47,6 +59,8 @@ function base(modo: Modo, filas: Record<string, unknown>[] = []) {
     },
   }
 }
+
+beforeEach(() => olvidarDemosVistas())
 
 describe('siPuedeSalir: para una cuenta normal, la misma respuesta', () => {
   for (const modo of ['con_puerta', 'antes', 'no_contesta'] as const) {
@@ -63,6 +77,35 @@ describe('siPuedeSalir: para una cuenta normal, la misma respuesta', () => {
     const r = await siPuedeSalir(base('con_puerta'), DEMO, async () => { veces++; return { ok: true } }, () => ({ ok: true, reason: EN_LA_DEMO }), 'sale')
     expect(veces).toBe(0)
     expect(r).toEqual({ ok: true, reason: EN_LA_DEMO })
+  })
+  it('si la base no contesta y la marca releída dice demo, una demo NO sale', async () => {
+    let veces = 0
+    const r = await siPuedeSalir(base('no_contesta', [], 'segun_cuenta'), DEMO, async () => { veces++; return 'salió' }, () => 'demo', 'sale')
+    expect(veces).toBe(0)
+    expect(r).toBe('demo')
+  })
+  it('si la base no contesta y la marca releída dice que no es demo, sale', async () => {
+    let veces = 0
+    const r = await siPuedeSalir(base('no_contesta', [], 'segun_cuenta'), NORMAL, async () => { veces++; return 'salió' }, () => 'demo', 'sale')
+    expect(veces).toBe(1)
+    expect(r).toBe('salió')
+  })
+  it('una demo ya vista no sale aunque luego no conteste nada', async () => {
+    await siPuedeSalir(base('con_puerta'), DEMO, async () => 'salió', () => 'demo', 'sale')
+    let veces = 0
+    const r = await siPuedeSalir(base('no_contesta', [], 'no_contesta'), DEMO, async () => { veces++; return 'salió' }, () => 'demo', 'sale')
+    expect(veces).toBe(0)
+    expect(r).toBe('demo')
+  })
+  it('cada vez que deja salir sin respuesta, lo apunta (PUERTA_SIN_RESPUESTA)', async () => {
+    const apuntado: string[] = []
+    const antes = console.error
+    console.error = (m: unknown) => { apuntado.push(String(m)) }
+    try {
+      await siPuedeSalir(base('no_contesta'), NORMAL, async () => 1, () => 0, 'sale')
+      await siPuedeSalir(base('no_contesta'), NORMAL, async () => 1, () => 0, 'sale')
+    } finally { console.error = antes }
+    expect(apuntado.filter((m) => m.startsWith('PUERTA_SIN_RESPUESTA')).length).toBe(2)
   })
   it('fuera del camino del pedido, si la base no contesta, no sale: lanza', async () => {
     await expect(siPuedeSalir(base('no_contesta'), NORMAL, async () => 1, () => 0, 'no_sale')).rejects.toThrow()
@@ -98,6 +141,21 @@ describe('HubRise: el token de una cuenta normal, el mismo antes y después', ()
 describe('el camino del pedido usa la puerta que no lo para si la base no contesta', () => {
   const CAMINO = ['order-advance', 'hubrise-webhook', 'hubrise-order-status', 'availability-dispatch', 'catcher-dispatch',
     'last-catalog-probe', 'last-catalog-sync', 'lastapp-backfill-sales', 'lastapp-catalog-import', 'lastapp-set-price']
+  it('nadie fuera del camino del pedido usa «sale» (deja salir si la base no contesta)', () => {
+    const raiz = join(RAIZ, 'supabase/functions')
+    const usan: string[] = []
+    for (const n of readdirSync(raiz)) {
+      const dir = join(raiz, n)
+      if (!statSync(dir).isDirectory()) continue
+      const ficheros = n === '_shared' ? readdirSync(dir).filter((x) => x.endsWith('.ts')).map((x) => join(dir, x)) : [join(dir, 'index.ts')]
+      for (const f of ficheros) {
+        if (!existsSync(f)) continue
+        const t = readFileSync(f, 'utf8').replace(/^\s*(\/\/|\*).*$/gm, '')
+        if (/siPuedeSalir\([\s\S]*?"sale"\)/.test(t)) usan.push(n === '_shared' ? `_shared/${f.split('/').pop()}` : n)
+      }
+    }
+    expect(usan.sort()).toEqual([...CAMINO, '_shared/hubriseToken.ts'].sort())
+  })
   for (const f of CAMINO) {
     it(f, () => {
       const t = readFileSync(join(RAIZ, 'supabase/functions', f, 'index.ts'), 'utf8')
