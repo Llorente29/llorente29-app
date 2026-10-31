@@ -32,7 +32,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
@@ -76,6 +76,8 @@ import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
 import { cargoParaLaTarjeta, casarPagoConTarjeta, duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
 import { faltaDocumento, pagadaConTarjeta, textoDePago, ultimos4 } from '@/modules/conta/documentos/paraValidar'
 import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
+import { CHIP_ABONO, conSigno, esAbono, sinSigno } from '@/modules/conta/documentos/abono'
+import { BloqueAbono } from '@/modules/conta/documentos/BloqueAbono'
 import {
   ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
   textoDelGuardado, totalesDe, type BorradorFicha,
@@ -119,7 +121,10 @@ export default function RevisarFacturaPage() {
   const avisoDeAntes = (useLocation().state as { aviso?: string } | null)?.aviso ?? null
   const [vuelta, setVuelta] = useState(0)
   const f = useLeer(invoiceId ? () => leerFactura(invoiceId) : null, `${invoiceId}:${vuelta}`)
-  const fac = useUltimo(f.datos, invoiceId)
+  const facLeida = useUltimo(f.datos, invoiceId)
+  // S01h · Un abono se enseña y se cuadra sin signo (todo va a tu favor); al guardar, conSigno se lo devuelve.
+  const abono = esAbono(facLeida)
+  const fac = useMemo(() => (facLeida ? sinSigno(facLeida) : facLeida), [facLeida])
   const envioDiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio
   // C12: con el traspaso mensual, al validar no sale nada: va en el traspaso del mes.
   const enviaADiez = envioDiez?.alMomento === true
@@ -296,7 +301,8 @@ export default function RevisarFacturaPage() {
       const aLaFuncion = campos.filter((c) => COMO_SE_GUARDA[c as keyof BorradorFicha] && 'con' in COMO_SE_GUARDA[c as keyof BorradorFicha]
         && (COMO_SE_GUARDA[c as keyof BorradorFicha] as { con: string }).con === 'conta_recibida_guardar')
       const previa = cuentasProp ? asientoVistaPrevia(b, cuentasProp, () => 'Cuenta', () => null).lineas : undefined
-      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(b, aLaFuncion, { previa, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
+      const paraLaBase = cambiosParaLaBase(b, aLaFuncion, { previa, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null })
+      const r = await guardarCambiosRecibida(fac, abono ? conSigno(paraLaBase) : paraLaBase,
         { quien: userName, nombres: { proveedor: nombreProveedor(b.proveedorId), vence: fechaEs(b.vence) }, localPropuesto: localPropuesto ?? null })
       const partes: string[] = []
       const fallos = [...r.fallos]
@@ -494,8 +500,11 @@ export default function RevisarFacturaPage() {
 
   const estado = descartada ? { texto: 'No es una factura', tono: 'neutro' as const }
     : validada ? (pagada ? { texto: 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
-      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : { texto: 'Por revisar', tono: 'duda' as const }
-  const migasExtra = [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
+      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : abono ? { texto: CHIP_ABONO, tono: 'seguro' as const } : { texto: 'Por revisar', tono: 'duda' as const }
+  // S01h · La miga de un abono: «Por revisar», como la pestaña de la que viene (Julio, 31/10).
+  const migasExtra = abono
+    ? [...(!validada && !descartada ? [{ etiqueta: 'Por revisar', a: rutaRecibidaEnAsientos() }] : []), { etiqueta: `Abono${fac.numero ? ` ${fac.numero}` : ''}` }]
+    : [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
   const tienePapel = !!papel.datos?.url
   const mas: GrupoDeAcciones[] = [{
     titulo: '',
@@ -602,8 +611,9 @@ export default function RevisarFacturaPage() {
           delDocumento={fac.lectura?.factura?.proveedor?.nif ?? null} alGuardar={(t) => { setNifGuardado({ id: invoiceId, texto: t }); setVuelta((v) => v + 1) }} />
       )}
       {nifGuardado?.id === invoiceId && <p className="s-aviso-lista" data-tono="ok" role="status" data-prueba="nif-guardado">{nifGuardado.texto}</p>}
+      {abono && !descartada && <BloqueAbono accountId={accountId} invoiceId={invoiceId} total={totales.total} base={totales.base} cuota={totales.iva} fechaAsiento={fac.fecha} vuelta={vuelta} />}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
-        fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales}
+        fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales} abono={abono}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}

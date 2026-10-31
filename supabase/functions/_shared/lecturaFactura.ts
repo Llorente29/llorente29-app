@@ -214,20 +214,31 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
   }
   tipos.sort((a, b) => b.tipo - a.tipo)
 
+  // S01h · Un abono: lo dice el papel (rectificativa, «ABONO») o lo dicen sus importes en negativo.
+  // Entonces TODO va en negativo: bases, cuotas, recargo, retención y total. El modelo a veces deja
+  // las cuotas en positivo con las bases en negativo (el 1506416 de Europastry, 31/10): así las
+  // comprobaciones decían «sobran 29,00 €» y «debería ser −13,44 y dice 13,44» sin haber error.
+  const totalLeido = num(d.grand_total)
+  const esAbono = f.invoice_kind === 'rectificativa' || (totalLeido != null && totalLeido < 0)
+    || tipos.some((t) => t.base < 0 || t.cuota < 0 || t.recargo < 0)
+  const neg = (x: number) => -Math.abs(x)
+  if (esAbono) for (const t of tipos) { t.base = neg(t.base); t.cuota = neg(t.cuota); t.recargo = neg(t.recargo) }
+
   const base = e(tipos.reduce((t, x) => t + c(x.base), 0))
   const cuota = e(tipos.reduce((t, x) => t + c(x.cuota), 0))
   const recargo = e(tipos.reduce((t, x) => t + c(x.recargo), 0))
-  const retImporte = num(f.withholding_amount)
+  const retLeida = num(f.withholding_amount)
+  const retImporte = retLeida != null && esAbono ? neg(retLeida) : retLeida
   const retTipo = num(f.withholding_pct)
   const retencion = retImporte != null || retTipo != null
     ? { tipo: retTipo, importe: retImporte ?? e(Math.round((c(base) * (retTipo ?? 0)) / 100)) }
     : null
-  const total = num(d.grand_total)
+  const total = totalLeido != null && esAbono ? neg(totalLeido) : totalLeido
 
   const numero = txt(d.doc_number)
   const fecha = fechaIso(txt(d.doc_date))
   const vencimiento = fechaIso(txt(f.due_date))
-  const clase: FacturaLeida['clase'] = f.invoice_kind === 'rectificativa' ? 'rectificativa' : f.invoice_kind === 'simplificada' ? 'simplificada' : 'completa'
+  const clase: FacturaLeida['clase'] = esAbono ? 'rectificativa' : f.invoice_kind === 'simplificada' ? 'simplificada' : 'completa'
   const nif = normalizarNif(d.supplier_tax_id)
   const factura: FacturaLeida = {
     proveedor: { nombre: txt(d.supplier_name), nif, email: txt(d.supplier_email), direccion: txt(d.supplier_address), telefono: txt(f.supplier_phone) ?? txt(d.supplier_phone), web: txt(f.supplier_website) },
@@ -348,6 +359,8 @@ export const PROMPT_FACTURA =
   `- "tax_breakdown" es el CUADRO DE IMPUESTOS del pie (una fila por tipo de IVA), tal cual aparece. Si el papel\n` +
   `  no trae cuadro, déjalo en [] (no lo calcules tú desde las líneas).\n` +
   `- Una rectificativa o abono lleva las bases y cuotas en NEGATIVO, y "grand_total" también.\n` +
+  `- Si el papel dice ABONO, NOTA DE ABONO, RECTIFICATIVA o «anula documento …», es rectificativa: "invoice_kind"\n` +
+  `  es "rectificativa" y "corrects_number" es el número del documento que anula o rectifica.\n` +
   `- "simplificada" es un ticket o factura simplificada (sin los datos del cliente o sin desglose completo).\n` +
   `- La retención resta del total: "grand_total" es lo que se paga después de restarla.\n` +
   `- "iban" es la cuenta del PROVEEDOR para pagarle. En una domiciliación, el IBAN que aparece suele ser el del\n` +

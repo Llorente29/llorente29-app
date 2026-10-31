@@ -17,7 +17,7 @@ import { aplicarAsientoAMano, aplicarReparto, cuentaDelReparto, lineasYCuotas } 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import {
   unidadesDelDia, type UnidadVentas, devolucionSinCobrar, facturaProveedor, deLaFacturaDeLote,
-  type Correccion, type SerieTesoreria,
+  type Correccion, type SerieTesoreria, comoAbono, plantillaDevolucion,
 } from '@/modules/conta/lib/asientosPropuestos'
 import { avisoPeriodoCerrado, diaAbierto, diaDeEntrada, fechaDeLaRecibida, fechaPropuesta, peor, type CalendarioEmpresa, type LineaAsiento, type Propuesta, type Razon } from '@/modules/conta/lib/libro'
 import { claseIva, nombrePais, tipoDeLaClase, type ClaseIva, type FichaIva } from '@/modules/conta/lib/ivaProveedor'
@@ -303,7 +303,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   // D03 · 0790: lo que guarda la ficha (el gasto repartido y el asiento a mano). Mientras
   // la base no lo tenga (staging antes de aplicarla), se lee lo de siempre.
-  const SELECT = 'id, supplier_id, location_id, brand_id, source, issuer_name, issuer_tax_id, invoice_number, invoice_date, created_at, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
+  const SELECT = 'id, supplier_id, location_id, brand_id, source, doc_kind, corrects_invoice_id, issuer_name, issuer_tax_id, invoice_number, invoice_date, created_at, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
   // D07b · 'pagada' también: una factura pagada en el banco antes de validarla (COHELDI T0626/657,
   // EUROPASTRY 2403975) está aprobada y sin asiento; sin ella aquí, su ficha decía «Estoy
   // comprobando la cuenta y el IVA» para siempre y no se podía validar.
@@ -419,17 +419,21 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     const tipoDe = (pct: number) => ctx.tipos.find((x) => x.rate === pct && x.code.startsWith('iva_')) ?? null
     const lote = f.source === 'lote' ? deLaFacturaDeLote(f, gasto, tipoDe, (id) => ctx.locales.get(id) ?? null) : null
     // D03 · 0790: el IVA por tipo de supplier_invoice_tax manda siempre que tenga filas (lo corregido en la ficha).
+    // S01h · Un abono se arma como su factura, con los importes en positivo, y se le da la vuelta
+    // abajo (comoAbono). Así no hay apuntes en negativo (journal_line_debe_o_haber).
+    const abono = s(f.doc_kind) === 'credit_note' || n(f.grand_total) < 0
+    const imp = (x: number) => (abono ? Math.abs(x) : x)
     const deLineas = ((f.supplier_invoice_line ?? []) as Fila[]).map((l) => {
       const t = tipoDe(n(l.vat_pct))
-      return { base: n(l.line_amount), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: s(l.expense_account_code) ?? gasto }
+      return { base: imp(n(l.line_amount)), tipo: t ? { id: t.id, porcentaje: t.rate } : null, cuentaGasto: s(l.expense_account_code) ?? gasto }
     })
-    const impuestos = ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: n(x.base), cuota: n(x.vat_amount) }))
+    const impuestos = ((f.supplier_invoice_tax ?? []) as Fila[]).map((x) => ({ porcentaje: n(x.vat_pct), base: imp(n(x.base)), cuota: imp(n(x.vat_amount)) }))
     const lc = lineasYCuotas(deLineas, impuestos, gasto, tipoDe, ((f.supplier_invoice_line ?? []) as Fila[]).some((l) => !!s(l.expense_account_code)))
     const res = facturaProveedor({
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: lote?.proveedor ?? s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
       // Ficha completa (tablero 3b): una sola factura sin local guardado lleva el de su
       // recepción, el que la ficha enseña como PROPUESTO («el local sale de la recepción»).
-      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id) ?? (soloFactura ? localPropuesto ?? null : null), total: n(f.grand_total),
+      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id) ?? (soloFactura ? localPropuesto ?? null : null), total: imp(n(f.grand_total)),
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
       lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : lc.lineas),
       ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : lc.cuotas ? { cuotas: lc.cuotas } : {}),
@@ -438,7 +442,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
         marcaId: s(f.brand_id), faltaNumero: !s(f.invoice_number),
         porAclarar: (((f.reading as Fila | null)?.requisitos ?? []) as Fila[]).filter((x) => (x.id === 'solape' || x.id === 'cuadre') && x.ok === false).map((x) => String(x.texto)),
       } : {}),
-      retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: n(f.withholding_amount), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
+      retencion: rr && f.withholding_amount !== null ? { tipoId: String(rr.id), porcentaje: n(rr.rate), base: 0, importe: imp(n(f.withholding_amount)), modelo: (String(rr.filed_in) as '111' | '115' | '123') } : null,
       ivaNoDeducible: f.vat_non_deductible === true,
       motivoNoDeducible: porQueNoDeducible(noDeducibles.get(String(f.id))?.motivo, noDeducibles.get(String(f.id))?.texto),
       autoliquidacion: tipoAuto && f.vat_non_deductible !== true ? { tipo: tipoAuto, porque: `${nombreProv} ${porqueAutoliquida(clase, ficha.pais)}.` } : null,
@@ -456,6 +460,10 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       },
     })
     if (!res.propuesta) { r.sinPropuesta.push({ id: String(f.id), que, porque: res.sinPropuesta ?? '' }); continue }
+    if (abono) {
+      const anula = s(f.corrects_invoice_id) ? `la ${s(((f.reading as Fila | null)?.factura as Fila | undefined)?.rectificaA) ?? 'factura que rectifica'}` : null
+      res.propuesta = comoAbono(res.propuesta, (c) => { const h = plantillaDevolucion(c); return h ? ctx.hoja(h) : null }, anula)
+    }
     if (cuentaNueva) {
       res.propuesta.razones.push({ decision: `Cuenta del proveedor: ${cuentaNueva.codigo} (nueva)`,
         porque: `${nombreProv} no tenía cuenta contable: ${ver ? 'al validar, le creo' : 'le he creado'} la siguiente libre de la ${cuentaNueva.hoja} (${cuentaNueva.hoja === '4000' ? 'proveedores' : 'acreedores'}) y queda en su ficha` })
@@ -471,7 +479,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
     }
     const conRetencion = res.propuesta.lineas.find((x) => x.retencion && x.retencion.periodo === undefined)
     if (conRetencion?.retencion && conRetencion.retencion.periodo === undefined) {
-      conRetencion.retencion = { ...conRetencion.retencion, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + x.debe, 0) }
+      conRetencion.retencion = { ...conRetencion.retencion, base: res.propuesta.lineas.filter((x) => x.cuenta[0] === '6').reduce((t, x) => t + (abono ? x.haber : x.debe), 0) }
     }
     if (deLoAprendido?.cuenta) {
       res.propuesta.razones.push({ decision: `Gasto: ${s(deLoAprendido.nombre) ?? 'la cuenta'} · ${deLoAprendido.cuenta}`, porque: `${s(deLoAprendido.porque) ?? ''} (${s(deLoAprendido.origen) ?? 'aprendido'})` })

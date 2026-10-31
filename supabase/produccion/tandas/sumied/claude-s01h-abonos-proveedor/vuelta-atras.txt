@@ -1,0 +1,7 @@
+# S01h · la vuelta atrás: el abono 1506416 como se midió (si su asiento no se
+# ha validado), fuera los disparadores y las funciones de la 1851 y el CHECK
+# de paid_method como estaba (NOT VALID si ya hay pagos por compensación).
+cuenta: scripts/conta/produccion/cuentas/s01h-abonos.sql
+supabase/vuelta-atras/20261031T1852_s01h_abono_europastry_foodint.down.sql
+supabase/vuelta-atras/20261031T1851_s01h_abonos.down.sql
+supabase/vuelta-atras/20261031T1850_s01h_pago_por_compensacion.down.sql

@@ -115,7 +115,9 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
 
 // ── Importes por tipo de IVA ────────────────────────────────────────────────
 
-export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false }: {
+export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false, abono = false }: {
+  /** S01h · Un abono: todo va a tu favor, sin signo; el total se llama «Total a tu favor». */
+  abono?: boolean
   iva: readonly LineaIva[]
   retencion: Adicional | null
   recargo: Adicional | null
@@ -212,7 +214,7 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
           <span>IVA <strong className="s-cifra">{importeEs(totales.iva)}</strong></span>
           {!!totales.recargo && <span>Recargo <strong className="s-cifra">{importeEs(totales.recargo)}</strong></span>}
           {!!totales.retencion && <span>Retención <strong className="s-cifra">−{importeEs(totales.retencion)}</strong></span>}
-          <span className="cxf-total">Total <strong className="s-cifra">{eurosExactos(totales.total)}</strong></span>
+          <span className="cxf-total">{abono ? 'Total a tu favor' : 'Total'} <strong className="s-cifra">{eurosExactos(totales.total)}</strong></span>
           {contra && (
             <span className="cxf-contra" data-igual={contra.redondeo ? 'redondeo' : contra.igual === true ? 'si' : contra.igual === false ? 'no' : undefined} data-prueba="contra-pdf">
               {contra.igual === true && !contra.redondeo && <Icono nombre="ok" />} {contra.texto}
