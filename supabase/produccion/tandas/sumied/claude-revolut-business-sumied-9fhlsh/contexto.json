@@ -1,16 +1,19 @@
 {
- "_que": "B01 Revolut · PR 1 · contexto de producción de la tanda (2210 y 2211), medido en SOLO LECTURA el 31/10 a las 22:10Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ninguna de las tablas ni de las funciones que crea la 2210 (ni otra firma con su nombre), nada en el camino del pedido y nada en el historial. bank_aggregator_link existe (la 2211 amplía su CHECK).",
- "medido": "2026-10-31T22:10Z",
+ "_que": "B01 Revolut · PR 1 · contexto de producción de la tanda (2210, 2211 y 2212), medido en SOLO LECTURA el 31/10 a las 22:23Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ninguna de las tablas ni de las funciones que crea la 2210 (ni otra firma con su nombre), nada en el camino del pedido y nada en el historial. bank_aggregator_link existe (la 2211 amplía su CHECK) y bank_importar existe con md5(prosrc) 09859e42… (la de la B02, la que guarda la 2212; igual en staging).",
+ "medido": "2026-10-31T22:23Z",
  "tanda": {
   "supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql": "e0ea193a867973b6f2e537adc9d42682",
-  "supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql": "cabe11fd332b12032caf195463cd90e9"
+  "supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql": "cabe11fd332b12032caf195463cd90e9",
+  "supabase/migrations/20261031T2212_b01rv_revolut_en_el_dia.sql": "8638399d4a762ca1082250f2ad0af30f"
  },
  "contexto": {
   "tablas": [
    "public.bank_aggregator_link",
    "vault.secrets"
   ],
-  "funciones": [],
+  "funciones": [
+   "public.bank_importar(uuid,text,text,text,text,date,date,numeric,numeric,text,text,jsonb)"
+  ],
   "filas": {
    "public.bank_aggregator_link": 0,
    "vault.secrets": 0

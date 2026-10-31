@@ -1,6 +1,6 @@
 -- ============================================================================
--- PRUEBA (staging) · B01 Revolut · PR 1 (2210, que añade, y 2211, que cambia):
--- conectar Revolut Business y leer sus movimientos.
+-- PRUEBA (staging) · B01 Revolut · PR 1 (2210, que añade; 2211 y 2212, que
+-- cambian): conectar Revolut Business y leer sus movimientos.
 -- Todo en una transacción con ROLLBACK. Datos INVENTADOS, en un banco que crea
 -- la propia prueba en la empresa de la cuenta A.
 --
@@ -15,13 +15,16 @@
 --      como el de BBVA, con la fecha «sin caducidad». Y SIN DUPLICADOS en la
 --      base de verdad: los mismos dos movimientos, leídos dos veces por
 --      bank_importar con la fuente agregador:revolut, entran una vez.
+--   3b. Lo de hoy entra hoy (2212, bank_importar): dos lecturas de Revolut el
+--      mismo día siguen la continuidad; un fichero del mismo día, como antes.
 --   4. conta_revolut_desconectar: solo la clave de servicio; desde Sumied
 --      queda «desconectada», sin secretos y sin cuentas conectadas, y lo que
 --      entró se queda; desde Revolut, «retirada» con su porqué.
 --   5. El despertador sin ninguna conexión conectada no hace nada (ni pide
 --      el Vault).
---   6. Las dos vueltas atrás (2211 y luego 2210): sin la tabla ni las
---      funciones, y el proveedor como lo dejó la 0753 del B01c.
+--   6. Las tres vueltas atrás (2212, 2211 y 2210): bank_importar como la de
+--      la B02 (su huella), sin la tabla ni las funciones, y el proveedor como
+--      lo dejó la 0753 del B01c.
 -- ============================================================================
 
 \set ON_ERROR_STOP 1
@@ -150,6 +153,31 @@ begin
 end $$;
 reset role;
 
+-- ── 3b · Lo de hoy entra hoy (2212, cambia bank_importar) ──────────────────
+-- Dos lecturas de Revolut el MISMO día: la segunda sigue a la primera
+-- («sigue», no «hueco»). Un fichero que empieza el mismo día en que acabó
+-- otro, como antes: se mide contra el que acaba antes de ese día.
+do $$
+declare r jsonb; b uuid := (select id from _r where que = 'banco');
+begin
+  perform set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+  r := public.bank_importar(b, 'agregador:revolut', 'agregador:revolut', 'Revolut · 09:00', null, date '2030-03-01', date '2030-03-01', 0.00, -10.00, null, null,
+    jsonb_build_array(jsonb_build_object('fecha', '2030-03-01', 'importe', -10.00, 'concepto_banco', 'PAGO INVENTADO 1', 'ref2', 'tx-hoy-1:l1', 'huella', 'h-hoy-1', 'huella_suave', '2030-03-01|-1000|1')));
+  r := public.bank_importar(b, 'agregador:revolut', 'agregador:revolut', 'Revolut · 12:00', null, date '2030-03-01', date '2030-03-01', -10.00, -15.00, null, null,
+    jsonb_build_array(jsonb_build_object('fecha', '2030-03-01', 'importe', -5.00, 'concepto_banco', 'PAGO INVENTADO 2', 'ref2', 'tx-hoy-2:l1', 'huella', 'h-hoy-2', 'huella_suave', '2030-03-01|-500|1')));
+  if r->>'continuidad' <> 'sigue' or (r->>'nuevos')::int <> 1 then
+    raise exception 'PRUEBA B01 Revolut · 3b: la segunda lectura del día dio % con % nuevos (tenía que «sigue» con 1).', r->>'continuidad', r->>'nuevos';
+  end if;
+  -- Un fichero del mismo día: lo de antes (se mide contra el que acaba antes del 01/04, el de Revolut del 01/03: −15 ≠ −1).
+  r := public.bank_importar(b, 'fichero', 'norma43', 'b01rv-1.n43', repeat('d', 64), date '2030-04-01', date '2030-04-01', 0.00, -1.00, null, null,
+    jsonb_build_array(jsonb_build_object('fecha', '2030-04-01', 'importe', -1.00, 'concepto_banco', 'RECIBO INVENTADO 1', 'huella', 'h-f-1', 'huella_suave', '2030-04-01|-100|1')));
+  r := public.bank_importar(b, 'fichero', 'norma43', 'b01rv-2.n43', repeat('e', 64), date '2030-04-01', date '2030-04-01', -1.00, -2.00, null, null,
+    jsonb_build_array(jsonb_build_object('fecha', '2030-04-01', 'importe', -1.00, 'concepto_banco', 'RECIBO INVENTADO 2', 'huella', 'h-f-2', 'huella_suave', '2030-04-01|-100|2')));
+  if r->>'continuidad' <> 'hueco' then
+    raise exception 'PRUEBA B01 Revolut · 3b: un fichero del mismo día cambió de comportamiento (%, tenía que seguir siendo «hueco»).', r->>'continuidad';
+  end if;
+end $$;
+
 -- ── 4 · Desconectar ────────────────────────────────────────────────────────
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 do $$
@@ -197,10 +225,14 @@ end $$;
 -- ── 6 · Las vueltas atrás ──────────────────────────────────────────────────
 reset role;
 select set_config('request.jwt.claims', '', true);
+\ir ../../vuelta-atras/20261031T2212_b01rv_revolut_en_el_dia.down.sql
 \ir ../../vuelta-atras/20261031T2211_b01rv_revolut_proveedor.down.sql
 \ir ../../vuelta-atras/20261031T2210_b01rv_revolut_conexion.down.sql
 do $$
 begin
+  if (select md5(prosrc) from pg_proc where oid = 'public.bank_importar(uuid,text,text,text,text,date,date,numeric,numeric,text,text,jsonb)'::regprocedure) <> '09859e4297eb98e9ce75ea7efec8216f' then
+    raise exception 'PRUEBA B01 Revolut · 6: bank_importar no volvió a ser la de la B02.';
+  end if;
   if to_regclass('public.revolut_conexion') is not null then raise exception 'PRUEBA B01 Revolut · 6: la vuelta atrás dejó la tabla.'; end if;
   if to_regprocedure('public.conta_revolut_desconectar(uuid, uuid, text, boolean)') is not null then raise exception 'PRUEBA B01 Revolut · 6: la vuelta atrás dejó las funciones.'; end if;
   if pg_get_constraintdef((select oid from pg_constraint where conname = 'bank_aggregator_link_provider_check')) not like '%open_banking_io%'

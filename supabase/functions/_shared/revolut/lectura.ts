@@ -24,15 +24,18 @@
 //     Revolut», id «<transacción>:<leg_id>:comision».
 //   · Solo las cuentas en euros se traen (respuesta 1, P2: las demás divisas
 //     quedan para otro encargo). Las otras se enseñan, no se leen.
-//   · Como con BBVA, se lee hasta AYER (un día cerrado): sincronizarEmpresa
-//     lee desde el día siguiente al último extracto, y un día leído a medias
-//     perdería lo que llegase después. Lo de hoy entra en la primera lectura
-//     de mañana. El aviso de Revolut y la lectura de cada hora mantienen la
-//     cuenta «al día» (su saldo y su estado), no adelantan el día.
+//   · LO TERMINADO ENTRA EN CUANTO LLEGA (respuesta 3 de Julio): por el aviso
+//     o por la lectura de cada hora, hasta HOY, no hasta ayer. La espera de un
+//     día es de cómo lee BBVA y se queda para BBVA. Por eso Revolut se lee con
+//     `OPCIONES_REVOLUT`: vuelve a leer el último día leído (releerUltimoDia)
+//     y manda a la base solo lo que no tiene aún (BaseAgregador.conocidos,
+//     por su id). Una lectura sin nada nuevo no crea extracto.
 //
-// El id de Revolut va en reference_2 y forma parte de la huella dura: una
-// segunda lectura del mismo periodo no crea nada nuevo (bank_importar: on
-// conflict (treasury_account_id, fingerprint) do nothing).
+// El id de Revolut va en reference_2 y forma parte de la huella dura: leer el
+// mismo día dos veces no crea nada nuevo (y, si llegara, bank_importar: on
+// conflict (treasury_account_id, fingerprint) do nothing). Las huellas se
+// calculan sobre el día entero, en el mismo orden cada vez (por la hora en que
+// se terminó), así que un movimiento tiene la misma huella en cada lectura.
 
 import type { ConexionDelProveedor, CuentaAgregador, MovimientoAgregador, PaginaAgregador, ProveedorAgregador } from '../bancoAgregador.ts'
 import { saldoAlCerrar } from '../bancoAgregador.ts'
@@ -44,6 +47,9 @@ export const FUENTE_REVOLUT = `agregador:${PROVEEDOR_REVOLUT}` as const
 export const DIAS_ATRAS_REVOLUT = 3 * 366
 /** Cuántos días antes del periodo se mira, para encontrar devoluciones de pagos más viejos. */
 export const DIAS_DEVOLUCIONES = 90
+
+/** Cómo se lee Revolut con sincronizarEmpresa (con `hoy` como último día, no ayer). */
+export const OPCIONES_REVOLUT = { fuente: FUENTE_REVOLUT, diasAtras: DIAS_ATRAS_REVOLUT, releerUltimoDia: true } as const
 
 // ── Lo que da la API (solo los campos que se usan) ──────────────────────────
 

@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest'
 import { paraImportar, sincronizarEmpresa, type BaseAgregador } from '../../../../../supabase/functions/_shared/bancoAgregador.ts'
 import {
-  FUENTE_REVOLUT, movimientosDeRevolut, proveedorRevolut, SIN_CADUCIDAD, diaMadrid,
+  OPCIONES_REVOLUT, movimientosDeRevolut, proveedorRevolut, SIN_CADUCIDAD, diaMadrid,
   type ClienteLecturaRevolut, type CuentaRevolut, type TransaccionRevolut,
 } from '../../../../../supabase/functions/_shared/revolut/lectura.ts'
 
@@ -75,7 +75,9 @@ describe('movimientosDeRevolut', () => {
   })
 })
 
-// ── La lectura entera, dos veces, contra una base que hace lo de bank_importar ──
+// ── La lectura entera, contra una base que hace lo de bank_importar ──────────
+// Lo terminado de Revolut entra en cuanto llega (respuesta 3): se lee hasta
+// HOY, se vuelve a leer el último día y solo se manda lo que la base no tiene.
 
 function cliente(txs: TransaccionRevolut[], cuentas: CuentaRevolut[]): ClienteLecturaRevolut {
   return {
@@ -87,7 +89,7 @@ function cliente(txs: TransaccionRevolut[], cuentas: CuentaRevolut[]): ClienteLe
 
 function baseSimulada() {
   const movimientos = new Map<string, Record<string, unknown>>()
-  const extractos: { fuente: string; desde: string; hasta: string }[] = []
+  const extractos: { fuente: string; desde: string; hasta: string; inicial: number | null; final: number | null }[] = []
   const apuntes: Record<string, unknown>[] = []
   const base: BaseAgregador = {
     bancos: async () => [{ id: 'banco-revolut', nombre: 'Revolut · Principal', iban: 'ES00 9999 0000 0000 0000 5678' }],
@@ -99,54 +101,78 @@ function baseSimulada() {
         if (movimientos.has(k)) repetidos++
         else { movimientos.set(k, m); nuevos++ }
       }
-      extractos.push({ fuente: String(args.p_fuente), desde: String(args.p_desde), hasta: String(args.p_hasta) })
-      return { nuevos, repetidos, posibles_repetidos: 0, continuidad: 'ok' }
+      // La continuidad de la 2212: el último extracto de Revolut que acaba antes o el mismo día en que empieza este.
+      const prev = [...extractos].filter((e) => e.final !== null && e.hasta <= String(args.p_desde)).pop()
+      const inicial = args.p_saldo_inicial as number | null
+      extractos.push({ fuente: String(args.p_fuente), desde: String(args.p_desde), hasta: String(args.p_hasta), inicial, final: args.p_saldo_final as number | null })
+      const continuidad = inicial === null ? 'sin_saldo' : !prev ? 'primero' : Math.round(prev.final! * 100) === Math.round(inicial * 100) ? 'sigue' : 'hueco'
+      return { nuevos, repetidos, posibles_repetidos: 0, continuidad }
     },
     async apuntar(a) { apuntes.push(a) },
+    async conocidos(_t, refs) { return new Set(refs.filter((r) => [...movimientos.values()].some((m) => m.ref2 === r))) },
   }
   return { base, movimientos, extractos, apuntes }
 }
 
+const empresa = { accountId: 'a', companyId: 'c', banco: 'Revolut', renovar: null }
+const leer = (s: ReturnType<typeof baseSimulada>, txs: TransaccionRevolut[], cuentas: CuentaRevolut[], hoy: string, desdeInicial?: string) =>
+  sincronizarEmpresa(s.base, proveedorRevolut(cliente(txs, cuentas), hoy), empresa, hoy, hoy, { ...OPCIONES_REVOLUT, desdeInicial })
+
 describe('proveedorRevolut con sincronizarEmpresa', () => {
-  const cuentas: CuentaRevolut[] = [
-    { id: CUENTA, name: 'Principal', balance: 1000, currency: 'EUR', state: 'active' },
+  const cuentas = (saldo: number): CuentaRevolut[] => [
+    { id: CUENTA, name: 'Principal', balance: saldo, currency: 'EUR', state: 'active' },
     { id: 'usd', name: 'Dólares', balance: 50, currency: 'USD', state: 'active' },
   ]
-  const txs = [
-    tx({ id: 't1', amount: -100, at: '2026-10-28T10:00:00Z' }),
-    tx({ id: 't2', amount: 250, at: '2026-10-29T10:00:00Z' }),
-    tx({ id: 't3', amount: -20, at: '2026-10-31T08:00:00Z' }), // hoy: no entra hasta mañana
-  ]
-  const empresa = { accountId: 'a', companyId: 'c', banco: 'Revolut', renovar: null }
-  const opciones = { fuente: FUENTE_REVOLUT, desdeInicial: '2026-10-25', diasAtras: 3 * 366 }
+  const antes = [tx({ id: 't1', amount: -100, at: '2026-10-28T10:00:00Z' }), tx({ id: 't2', amount: 250, at: '2026-10-29T10:00:00Z' })]
+  const deHoy = tx({ id: 't3', amount: -20, at: '2026-10-31T08:00:00Z' })
 
-  it('la primera lectura trae desde el día que pidió la persona hasta ayer, con el saldo al cerrar', async () => {
+  it('la primera lectura trae desde el día que pidió la persona HASTA HOY, con el saldo de ahora', async () => {
     const s = baseSimulada()
-    const partes = await sincronizarEmpresa(s.base, proveedorRevolut(cliente(txs, cuentas), '2026-10-31'), empresa, '2026-10-31', '2026-10-30', opciones)
+    const partes = await leer(s, [...antes, deHoy], cuentas(1000), '2026-10-31', '2026-10-25')
     expect(partes).toHaveLength(1) // la de dólares no se ofrece
-    expect(partes[0]).toMatchObject({ estado: 'al_dia', desde: '2026-10-25', hasta: '2026-10-30', leidos: 2, nuevos: 2, repetidos: 0, saldoBancoCent: 100000 })
-    // Saldo de ahora 1000 €, después del periodo salió t3 (−20 €): al cerrar el 30, 1020 €.
-    expect(partes[0].saldoFinalCent).toBe(102000)
+    expect(partes[0]).toMatchObject({ estado: 'al_dia', desde: '2026-10-25', hasta: '2026-10-31', leidos: 3, nuevos: 3, repetidos: 0, saldoBancoCent: 100000, saldoFinalCent: 100000 })
     expect(s.apuntes[0]).toMatchObject({ p_proveedor: 'revolut', p_caduca: SIN_CADUCIDAD })
   })
 
-  it('SIN DUPLICADOS: leer otra vez el mismo periodo no crea nada nuevo', async () => {
+  it('UN MOVIMIENTO DE HOY ENTRA HOY, y leerlo otra vez no lo duplica', async () => {
     const s = baseSimulada()
-    const p = () => proveedorRevolut(cliente(txs, cuentas), '2026-10-31')
-    await sincronizarEmpresa(s.base, p(), empresa, '2026-10-31', '2026-10-30', opciones)
-    expect(s.movimientos.size).toBe(2)
-    // Mismo periodo otra vez, a la fuerza (como si se hubiera borrado el extracto): todo repetido.
-    s.extractos.length = 0
-    const otra = await sincronizarEmpresa(s.base, p(), empresa, '2026-10-31', '2026-10-30', opciones)
-    expect(otra[0]).toMatchObject({ nuevos: 0, repetidos: 2 })
-    expect(s.movimientos.size).toBe(2)
+    // 09:00: entra el de las 08:00 de hoy (UTC; las 09:00 de Madrid).
+    await leer(s, [...antes, deHoy], cuentas(1000), '2026-10-31', '2026-10-25')
+    expect([...s.movimientos.values()].map((m) => m.ref2)).toContain('t3:l1')
+    expect(s.extractos).toHaveLength(1)
+
+    // 10:00, la lectura de cada hora (o un aviso repetido): nada nuevo. Ni movimientos ni extracto.
+    const otra = await leer(s, [...antes, deHoy], cuentas(1000), '2026-10-31')
+    expect(otra[0]).toMatchObject({ estado: 'sin_movimientos', nuevos: 0, repetidos: 1, saldoFinalCent: 100000 })
+    expect(s.movimientos.size).toBe(3)
+    expect(s.extractos).toHaveLength(1)
+
+    // 12:00: llega otro de hoy (el pago de una factura). Entra solo él, al momento, y el saldo sigue.
+    const pago = tx({ id: 't4', amount: -1028.5, at: '2026-10-31T11:30:00Z' })
+    const tras = await leer(s, [...antes, deHoy, pago], cuentas(1000 - 1028.5), '2026-10-31')
+    expect(tras[0]).toMatchObject({ estado: 'al_dia', desde: '2026-10-31', hasta: '2026-10-31', leidos: 2, nuevos: 1, repetidos: 1, continuidad: 'sigue' })
+    expect(s.movimientos.size).toBe(4)
+    expect(s.extractos.at(-1)).toMatchObject({ desde: '2026-10-31', hasta: '2026-10-31', inicial: 1000, final: -28.5 })
+
+    // Mañana, la primera lectura vuelve a mirar hoy y no duplica nada.
+    const manana = await leer(s, [...antes, deHoy, pago], cuentas(1000 - 1028.5), '2026-11-01')
+    expect(manana[0]).toMatchObject({ estado: 'sin_movimientos', nuevos: 0, repetidos: 2 })
+    expect(s.movimientos.size).toBe(4)
   })
 
-  it('la siguiente lectura sigue desde el día después del último extracto suyo', async () => {
+  it('la huella de un movimiento es la misma leído solo o con el resto de su día', () => {
+    const solo = paraImportar(movimientosDeRevolut([deHoy], CUENTA, '2026-10-31', '2026-10-31'))
+    const conOtro = paraImportar(movimientosDeRevolut([deHoy, tx({ id: 't4', amount: -5, at: '2026-10-31T11:30:00Z' })], CUENTA, '2026-10-31', '2026-10-31'))
+    expect(conOtro[0].huella).toBe(solo[0].huella)
+  })
+
+  it('SIN DUPLICADOS aunque la base no supiera qué tiene: la huella dura los rechaza', async () => {
     const s = baseSimulada()
-    await sincronizarEmpresa(s.base, proveedorRevolut(cliente(txs, cuentas), '2026-10-31'), empresa, '2026-10-31', '2026-10-30', opciones)
-    const manana = await sincronizarEmpresa(s.base, proveedorRevolut(cliente(txs, cuentas), '2026-11-01'), empresa, '2026-11-01', '2026-10-31', opciones)
-    expect(manana[0]).toMatchObject({ desde: '2026-10-31', hasta: '2026-10-31', nuevos: 1 })
-    expect(s.movimientos.size).toBe(3)
+    const sinConocidos = { ...s.base, conocidos: undefined }
+    await sincronizarEmpresa(sinConocidos, proveedorRevolut(cliente(antes, cuentas(1150)), '2026-10-31'), empresa, '2026-10-31', '2026-10-31', { ...OPCIONES_REVOLUT, desdeInicial: '2026-10-25' })
+    s.extractos.length = 0
+    const otra = await sincronizarEmpresa(sinConocidos, proveedorRevolut(cliente(antes, cuentas(1150)), '2026-10-31'), empresa, '2026-10-31', '2026-10-31', { ...OPCIONES_REVOLUT, desdeInicial: '2026-10-25' })
+    expect(otra[0]).toMatchObject({ nuevos: 0, repetidos: 2 })
+    expect(s.movimientos.size).toBe(2)
   })
 })

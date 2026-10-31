@@ -12,6 +12,10 @@
 #        (conta-revolut-despertar), con la dirección de project_url (W10).
 #   2. 2211 — CAMBIA en caliente, declarado: el CHECK del proveedor de
 #      bank_aggregator_link admite además «revolut». Solo amplía.
+#   3. 2212 — CAMBIA en caliente, declarado: bank_importar (misma firma, con
+#      respaldo y guarda de md5 09859e42…). Lo terminado de Revolut entra en
+#      cuanto llega: su continuidad se mide también contra la lectura de
+#      Revolut del mismo día. Para BBVA y los ficheros, igual que antes.
 #      Nada en el camino del pedido.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
@@ -19,4 +23,5 @@
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql
 supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql
+supabase/migrations/20261031T2212_b01rv_revolut_en_el_dia.sql
 cuenta: scripts/conta/produccion/cuentas/b01rv-revolut.sql

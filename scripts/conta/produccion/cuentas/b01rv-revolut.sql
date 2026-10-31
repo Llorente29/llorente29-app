@@ -6,7 +6,8 @@
 -- La tabla nueva solo se nombra dentro de cadenas.
 -- Lo que tiene que cambiar: la tabla de la conexión (0 → 1 de 1), sus seis
 -- funciones (0 → 6), el cron conta-revolut-despertar (0 → 1) y el proveedor
--- «revolut» en el CHECK de bank_aggregator_link (no → sí). Lo demás, igual:
+-- «revolut» en el CHECK de bank_aggregator_link (no → sí) y la huella de
+-- bank_importar (09859e42 → la nueva). Lo demás, igual:
 -- las cuentas conectadas de Foodint (las 3 de BBVA) y sus movimientos.
 select clave, valor from (
   select 1 o, 'tabla de la conexión con Revolut (base entera)' clave,
@@ -17,6 +18,8 @@ select clave, valor from (
   select 3, 'cron conta-revolut-despertar', (select count(*) from cron.job where jobname = 'conta-revolut-despertar')::text union all
   select 4, 'el CHECK del proveedor admite revolut',
     (select case when pg_get_constraintdef(oid) like '%revolut%' then 'sí' else 'no' end from pg_constraint where conname = 'bank_aggregator_link_provider_check') union all
+  select 7, 'huella de bank_importar',
+    (select left(md5(prosrc), 8) from pg_proc where oid = 'public.bank_importar(uuid,text,text,text,text,date,date,numeric,numeric,text,text,jsonb)'::regprocedure) union all
   select 5, 'cuentas conectadas de Foodint (por proveedor)',
     -- quieta: la tanda no conecta nada; Revolut se conecta después, desde la pantalla
     (select coalesce(string_agg(provider || ' ' || n, ', ' order by provider), 'ninguna') from (
