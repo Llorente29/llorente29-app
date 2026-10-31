@@ -344,3 +344,11 @@
   .cxso-cabeza, .cxso-aviso, .cxso-espera { padding: 14px 16px; }
   .cxso-pie, .cxso-acciones { padding: 12px 16px; }
 }
+
+/* S01g · La etiqueta de soporte es larga («Soporte · <socio> · <mes> · <local>»):
+   en la ficha y en la lista parte línea en vez de salirse por la derecha en el móvil. */
+.cxso-pagina .s-chip, .cxso-documentos .s-chip { white-space: normal; max-width: 100%; }
+.cxso-lineas { list-style: none; margin: 0; padding: 0; }
+.cxso-lineas li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 16px; border-top: 1px solid var(--cx-linea); }
+.cxso-lineas li span:not(.s-cifra) { grid-column: 1; color: var(--cx-apoyo); font-size: 14px; }
+.cxso-lineas li .s-cifra { grid-column: 2; grid-row: 1; font-weight: 600; }

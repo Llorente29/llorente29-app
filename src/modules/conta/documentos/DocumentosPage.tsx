@@ -279,7 +279,7 @@ export default function DocumentosPage() {
     <Boton variante="principal" icono="nuevo" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir factura</Boton>
   )
   return (
-    <div className="s-pagina">
+    <div className="s-pagina cxso-documentos">
       <EncabezadoPagina
         titulo="Facturas recibidas"
         frase={fraseDeLaLista({ correo: !!d?.correo.activo, recibeMercancia: !!d?.recibe_mercancia, solo: producto.solo })}

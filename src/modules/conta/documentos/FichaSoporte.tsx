@@ -143,12 +143,19 @@ export function FichaSoporte({ accountId, fila, alVolver, alCambiar }: {
                 <span className="cxso-rotulo">ESPERANDO LA LIQUIDACIÓN</span>
                 <strong>La de {prov} de {mes}{s.local ? ` de ${s.local}` : ''} aún no ha llegado</strong>
                 <span>Cuando la subas, cuadro esta recepción con su «Relación Compras y Ventas», producto a producto, y te digo lo que no coincide.</span>
-                <div className="cxso-acciones"><BotonEnlace variante="principal" icono="subir" a={subir}>{`Subir la liquidación de ${mes}`}</BotonEnlace></div>
+                {/* En el móvil, el botón va abajo, en el pulgar: aquí no se repite. */}
+                {!movil && <div className="cxso-acciones"><BotonEnlace variante="principal" icono="subir" a={subir}>{`Subir la liquidación de ${mes}`}</BotonEnlace></div>}
               </section>
             )}
             <section className="cxso-tarjeta" aria-label="Lo que trae esta recepción">
               <header className="cxso-cabeza"><strong>Lo que trae esta recepción</strong></header>
-              {lineas.length === 0 ? <p className="cxso-pie">La recepción no tiene líneas con artículo: mira el albarán.</p> : (
+              {lineas.length === 0 ? <p className="cxso-pie">La recepción no tiene líneas con artículo: mira el albarán.</p> : movil ? (
+                <ul className="cxso-lineas">
+                  {lineas.map((l, i) => (
+                    <li key={i}><strong>{l.nombre}</strong><span>{num(l.cantidad, 3)} {l.unidad} · {l.precio == null ? '—' : eurosExactos(l.precio)}</span><span className="s-cifra">{eurosExactos(l.importe)}</span></li>
+                  ))}
+                </ul>
+              ) : (
                 <table className="cxso-tabla">
                   <thead><tr><th>Producto</th><th className="cxso-num">Cantidad</th><th className="cxso-num">Precio</th><th className="cxso-num">Importe</th></tr></thead>
                   <tbody>
