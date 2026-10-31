@@ -264,6 +264,7 @@ export default function ShellTopBar({
                     <button
                       key={a.id}
                       type="button"
+                      data-cuenta={a.id}
                       onClick={() => { setAcctMenuOpen(false); onSwitchAccount!(a.id) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left"
                       style={{ background: isActive ? PILL_BG : 'transparent', color: INK, fontWeight: isActive ? 600 : 400 }}
