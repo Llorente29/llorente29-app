@@ -30,7 +30,8 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { clienteDiezParaLeer, despacharADiez } from "../_shared/diezDespacho.ts";
+import { cuentaPuedeSalir } from "../_shared/puerta.ts";
+import { clienteDiezParaLeer, despacharADiez, EN_LA_DEMO_DIEZ } from "../_shared/diezDespacho.ts";
 import { aaaammDelMes, cuadrar, lineasDeApuntes, siguientes, type Saldo } from "../_shared/diezTraspaso.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -69,6 +70,8 @@ Deno.serve(async (req) => {
   if (admin !== true) return json({ error: "Solo un administrador de la cuenta traspasa el mes a Diez." }, 403);
 
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con Diez, ni para traspasar ni para comprobar.
+  if (!(await cuentaPuedeSalir(srv, t.account_id))) return json({ error: EN_LA_DEMO_DIEZ, demo: true }, 409);
   return accion === "tanda" ? tanda(srv, t) : comprobar(srv, t);
 });
 

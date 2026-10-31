@@ -61,6 +61,7 @@
 // Ni entera, ni sus primeros caracteres, ni su longitud. Todo lo que salga de
 // aquí pasa por `sinSecretos`, igual que en `social-publish`.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_SECRET = Deno.env.get("OFFERS_AGENT_SECRET")!;
@@ -134,6 +135,8 @@ Deno.serve(async (req) => {
     const nombre = typeof cfg.token_vault_name === "string" ? cfg.token_vault_name : null;
     const cuenta = fila.account_id as string;
     const red = fila.network as string;
+    // DM1 · PR 2a · La puerta: una cuenta de demo no renueva llaves en Instagram.
+    if (!(await cuentaPuedeSalir(supa, cuenta))) { out.push({ red, cuenta, saltada: EN_LA_DEMO }); continue; }
 
     if (!nombre) {
       out.push({ red, cuenta, saltada: "no tiene nombre de llave en el Vault" });

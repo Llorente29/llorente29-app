@@ -19,6 +19,7 @@
 //
 // verify_jwt = true (config.toml).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
@@ -57,6 +58,10 @@ Deno.serve(async (req) => {
   if (!co) return json({ ok: false, texto: "Esa empresa no está." }, 404);
   const { data: puede } = await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: co.account_id });
   if (puede !== true) return json({ error: "Solo un administrador o un encargado de la cuenta da de alta el cobro." }, 403);
+  // DM1 · PR 2a · La puerta: una cuenta de demo no se da de alta en Stripe ni le pregunta nada.
+  if (!(await cuentaPuedeSalir(sb, co.account_id))) {
+    return json({ ok: false, demo: true, texto: `${EN_LA_DEMO} Una empresa de demostración no se da de alta en Stripe: el cobro con tarjeta se enseña, pero no cobra.` });
+  }
 
   const clave = Deno.env.get("STRIPE_SECRET_KEY") ?? "";
   if (!clave) return json({ ok: false, texto: "El cobro con tarjeta y Bizum no está configurado en este entorno." });

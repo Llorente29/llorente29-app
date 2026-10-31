@@ -1,0 +1,31 @@
+# DM1 · PR 2a · La marca de demo y la puerta (31/10/2026). Rama
+# claude/dm1-pr2a-la-puerta. Se ensaya y se aplica antes de fusionar, lanzado
+# desde main nombrando la rama (W12b).
+#
+#   1. 0907 — SOLO AÑADE: accounts.is_demo (nula), cuenta_puede_salir(cuenta)
+#      y el disparador que deja cambiar la marca solo al superadministrador.
+#      Hoy ninguna cuenta es de demo: nada cambia para nadie.
+#   2. 1713 — CAMBIA EN CALIENTE (declarada, con su prueba; no está en el
+#      camino del pedido): encolar_alerta no encola el aviso de una cuenta de
+#      demo (por su cuenta, su local o su marca). Misma firma, con respaldo y
+#      guarda de md5. Para las demás, idéntica.
+#   3. 1912 — CAMBIA EN CALIENTE (declarada, con su prueba): los seis vigías
+#      que recorren todas las cuentas y encolan sin cuenta saltan la de demo
+#      (codigo_plataforma_watchdog, kds_device_stale_bundle_check,
+#      sales_unmapped_watchdog, modifier_incomplete_impact_watchdog,
+#      modifier_zero_cost_watchdog y el aviso del autocierre de
+#      _generate_daily_count_core). Misma firma, con respaldo y guarda de md5.
+#      Para las demás cuentas, idénticos. NECESITA «autorizo»: cinco de ellos
+#      corren por tarea programada y el analizador los cuenta en el camino del
+#      pedido (no lo son: solo encolan avisos al equipo de Folvy).
+#
+# Antes (producción, 31/10 17:57 UTC): accounts sin is_demo; ninguna de las
+# dos funciones nuevas; encolar_alerta (md5 36a9dfb7) y las seis vigías con
+# una sola firma y la huella que guarda la 1912; nada de la tanda en el
+# historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261031T0907_dm1_marca_de_demo.sql
+supabase/migrations/20261031T1713_dm1_avisos_sin_demo.sql
+supabase/migrations/20261031T1912_dm1_vigias_sin_demo.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-marca-de-demo.sql

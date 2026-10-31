@@ -28,6 +28,7 @@
 //
 // Deploy: --no-verify-jwt (navegación de navegador, sin sesión Folvy).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -98,6 +99,10 @@ Deno.serve(async (req: Request) => {
   }
 
   const sb = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  // DM1 · PR 2a · La puerta: una cuenta de demo no se conecta a HubRise.
+  if (!(await cuentaPuedeSalir(sb, accountId))) {
+    return text(`${EN_LA_DEMO} Una empresa de demostración no se conecta a HubRise.`, 409);
+  }
 
   // Flujo location: el location_id es obligatorio y debe ser un local real,
   // activo, de ESTA cuenta — nunca se acepta a ciegas.

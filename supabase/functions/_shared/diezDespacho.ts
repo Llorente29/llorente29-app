@@ -29,6 +29,7 @@
 // liquidaciones incluidos); queda quién y cuándo en conta_diez_traspaso. Lo que
 // no está en la lista sigue con la autorización de siempre (conta_diez_autorizo).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from './puerta.ts'
 import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { ClienteDiez, type AlmacenToken } from './diezCliente.ts'
 import { correspondenciaDeEmpresa } from './diezAnalitica.ts'
@@ -47,6 +48,8 @@ export const APAGADO = 'el envío a Diez está apagado en esta empresa (Ajustes 
 export const MENSUAL = 'esta empresa traspasa a Diez una vez al mes: va en el traspaso del mes (Contabilidad › Cierre)'
 
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join('')
+/** DM1 · PR 2a: el motivo de una cuenta de demo. */
+export const EN_LA_DEMO_DIEZ = `${EN_LA_DEMO.replace(/\.$/, '')}: una empresa de demostración no manda nada a Diez`
 const noLlega = (motivo: string, reintentar: boolean): ResultadoEnvio => ({ estado: 'no_llega', motivo, reintentar, texto: `No ha llegado a Diez: ${motivo}.` })
 
 type Cabecera = { id: string; account_id: string; company_id: string; status: string; entry_date: string; source_type: string; reverses_entry_id: string | null; number: number | null }
@@ -96,6 +99,9 @@ export async function despacharADiez(o: { lector: SupabaseClient; srv: SupabaseC
 }
 
 async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecera, traspaso?: ReadonlySet<string>): Promise<ResultadoEnvio> {
+  // DM1 · PR 2a · La puerta: una cuenta de demo no manda nada a Diez. Como el
+  // interruptor apagado: no llega y no se reintenta, y lo dice.
+  if (!(await cuentaPuedeSalir(srv, j.account_id))) return noLlega(EN_LA_DEMO_DIEZ, false)
   const como_ = await comoEnviaLaEmpresa(srv, j.account_id, j.company_id)
   if (!como_.encendido) return noLlega(APAGADO, false)
   // C12: en mensual, solo lo que va dentro del traspaso confirmado del mes.

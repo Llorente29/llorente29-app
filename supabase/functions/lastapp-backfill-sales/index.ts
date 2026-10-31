@@ -17,6 +17,7 @@
 // Idempotente por external_ref = bill.id.
 // ============================================================================
 
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 
@@ -78,6 +79,10 @@ Deno.serve(async (req: Request) => {
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con Last (si no se puede preguntar, sale como antes).
+  if (!(await siPuedeSalir(sb, accountId, async () => true, () => false, "sale"))) {
+    return jsonResponse({ ok: true, demo: true, mensaje: `${EN_LA_DEMO} Una empresa de demostración no habla con Last.` }, 200);
+  }
 
   const { data: integ, error: integErr } = await sb
     .from("external_integration").select("token_secret_name")

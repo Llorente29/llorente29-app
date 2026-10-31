@@ -18,6 +18,7 @@
 //   probe=true: vuelca el nodo crudo del producto (para inspeccionar campos).
 // ============================================================================
 
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { createClient } from "@supabase/supabase-js";
 import { comprobarSecreto } from "../_shared/secretoConRelevo.ts";
 
@@ -79,6 +80,11 @@ Deno.serve(async (req: Request) => {
   if (!dryRun && priceCents === null) return json({ ok: false, error: "price_cents requerido cuando dry_run=false" }, 400);
 
   const sb = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "");
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con Last. Para las demás no cambia
+  // nada (si no se puede preguntar, sale como antes).
+  if (!(await siPuedeSalir(sb, accountId, async () => true, () => false, "sale"))) {
+    return json({ ok: true, demo: true, mensaje: `${EN_LA_DEMO} Una empresa de demostración no habla con Last.` }, 200);
+  }
   const { data: integ, error: integErr } = await sb.from("external_integration").select("token_secret_name")
     .eq("account_id", accountId).eq("source", "lastapp").eq("external_org_id", orgId).eq("is_active", true).maybeSingle();
   if (integErr || !integ?.token_secret_name) return json({ ok: false, error: "integracion Last no encontrada" }, 404);

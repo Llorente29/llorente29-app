@@ -1,24 +1,46 @@
-# I01b · P2: conta-hacienda con dos acciones nuevas que no llaman a Hacienda
-# («puerta», para que el botón diga por qué no presenta todavía, y
-# «fichero_303», el fichero oficial), y el asiento de liquidación al presentar.
-# En staging habla con el doble (CONTA_HACIENDA=doble): nada llega a Hacienda.
-conta-hacienda
-# I01b · P4b: conta-asesoria (invitar a la asesoría, ver, aceptar y aprobar) y
-# send-email con la plantilla nueva invitacion_asesoria (las demás, igual).
+# DM1 · PR 2a · La puerta de las demos (31/10): las 41 funciones que toca el
+# #409 (las carpetas cambiadas y las que importan un _shared tocado:
+# puerta.ts, hubriseToken.ts, diezDespacho.ts y verifactu/), menos
+# hubrise-webhook, que no se despliega por aquí (regla 1, la puerta de la
+# prohibida). Se despliegan en staging para que lo que no compile salga aquí y
+# no en producción.
+account-email
+availability-dispatch
+catcher-dispatch
+clockout-reminder
+compliance-doc-notify
 conta-asesoria
-send-email
-# P01 · las mismas dos: conta-asesoria con la acción «resumen» (el resumen del
-# trimestre a los clientes, con el «responder a» de la asesoría) y send-email con
-# la plantilla resumen_trimestre, cerrada por el freno con cualquier marca. En
-# staging CORREO_MARCA_ABIERTOS no está: todo cerrado, y la e2e lo comprueba.
-# I01c · P1 definitiva: conta-justificante-csv, el justificante por su CSV. Fuera
-# de producción usa SIEMPRE el doble (el PDF inventado que la e2e deja en
-# <cuenta>/doble-aeat/<CSV>.pdf): staging no llama nunca a Hacienda.
-conta-justificante-csv
-# S01 · Respuesta 5 (28/10): pagar con Redsys en staging. conta-pago firma el
-# pago (con REDSYS_PRUEBAS=si va a sis-t, el entorno de pruebas de Redsys),
-# conta-redsys guarda el TPV desde Ajustes › Cobros, y conta-redsys-aviso recibe
-# el aviso de Redsys, comprueba la firma y cobra. Nada llega a un banco de verdad.
+conta-banco-agregador
+conta-diez-cola
+conta-diez-enviar
+conta-diez-traspaso
+conta-hacienda
+conta-mandato-enviar
 conta-pago
-conta-redsys
-conta-redsys-aviso
+conta-recordatorios
+conta-stripe
+conta-venta-correo
+conta-verifactu
+customer-notify
+hubrise-brand-connect
+hubrise-callback-ensure
+hubrise-catalog-create
+hubrise-catalog-publish
+hubrise-connection-health
+hubrise-location-disconnect
+hubrise-location-dispatch
+hubrise-oauth-callback
+hubrise-oauth-start
+hubrise-order-status
+last-catalog-probe
+last-catalog-sync
+lastapp-backfill-sales
+lastapp-catalog-import
+lastapp-set-price
+order-advance
+shop-payment-intent
+social-publish
+social-token-refresh
+stripe-connect-onboard
+training-notify
+uber-promo-push

@@ -32,6 +32,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leerP12 } from "../_shared/certificados/leerP12.ts";
 import { llamarConCertificado, type MaterialCertificado } from "../_shared/certificados/mtls.ts";
 import { encolarAlerta } from "../_shared/alerta.ts";
+import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { type Entorno, type Lote, type Piezas, unaVuelta } from "../_shared/verifactu/enviar.ts";
 import { puerta } from "../_shared/verifactu/puerta.ts";
 import { casosPruebas } from "../_shared/verifactu/pruebasAeat.ts";
@@ -128,6 +129,11 @@ Deno.serve(async (req) => {
     return data;
   };
   const accion = (await req.json().catch(() => ({})) as { accion?: string }).accion ?? "enviar";
+  // DM1 · PR 2a · La puerta: una empresa de una cuenta de demo no habla con Hacienda.
+  const empresaEnLaDemo = async (companyId: string): Promise<boolean> => {
+    const { data } = await srv.from("company").select("account_id").eq("id", companyId).maybeSingle();
+    return !(await cuentaPuedeSalir(srv, (data as { account_id?: string } | null)?.account_id ?? null));
+  };
   if (accion === "probar_conexion") {
     // Solo pruebas: una consulta con el certificado de pruebas al entorno de
     // pruebas de la AEAT, y su resultado apuntado (abre o no el candado, 2351).
@@ -189,6 +195,7 @@ Deno.serve(async (req) => {
         return { status: x.status, cuerpo: x.cuerpo };
       },
       url: URL[entorno],
+      enLaDemo: (c) => empresaEnLaDemo(c.company_id),
     }, entorno);
     console.log(`conta-verifactu · ${entorno} · cuadres ${r.cuadres} · hechos ${r.hechos} · páginas ${r.paginas} · facturas ${r.facturas} · fallos ${r.fallos.length}`);
     return json({ entorno, cuadres: r.cuadres, hechos: r.hechos, paginas: r.paginas, facturas: r.facturas, fallos: r.fallos.length });
@@ -245,6 +252,7 @@ Deno.serve(async (req) => {
       numeroInstalacion: entorno === "pruebas" ? "staging" : "produccion",
     },
     url: URL[entorno],
+    enLaDemo: (lote) => empresaEnLaDemo(lote.company_id),
   };
 
   const r = await unaVuelta(piezas, entorno);
@@ -260,6 +268,6 @@ Deno.serve(async (req) => {
     });
   }
 
-  console.log(`conta-verifactu · ${entorno} · envíos ${r.envios} · registros ${r.registros} · correctos ${r.correctos} · con errores ${r.con_errores} · incorrectos ${r.incorrectos} · vuelven ${r.vuelven} · fallos ${r.fallos.map((f) => f.motivo).join(",") || "0"} · atascados ${(atascados ?? []).length}`);
+  console.log(`conta-verifactu · ${entorno} · envíos ${r.envios} · registros ${r.registros} · correctos ${r.correctos} · con errores ${r.con_errores} · incorrectos ${r.incorrectos} · vuelven ${r.vuelven} · fallos ${r.fallos.map((f) => f.motivo).join(",") || "0"} · en la demo ${r.en_la_demo} · atascados ${(atascados ?? []).length}`);
   return json({ entorno, ...r, atascados: (atascados ?? []).length });
 });

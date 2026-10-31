@@ -32,6 +32,7 @@
 //
 // Deploy: --no-verify-jwt (inocua; solo repone NUESTRO callback -> NUESTRO webhook).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { listActiveHubriseConnections } from "../_shared/hubriseToken.ts";
 import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
@@ -111,7 +112,7 @@ Deno.serve(async (req: Request) => {
   if (integrationId) {
     const { data: row, error: rowErr } = await sb
       .from("external_integration")
-      .select("id, external_location_id, connection_name, access_token")
+      .select("id, account_id, external_location_id, connection_name, access_token")
       .eq("id", integrationId)
       .eq("source", "hubrise")
       .maybeSingle();
@@ -119,6 +120,8 @@ Deno.serve(async (req: Request) => {
     if (!row || !row.access_token) {
       return json({ ok: false, error: "conexion no encontrada o sin token" }, 404);
     }
+    // DM1 · PR 2a · La puerta: la conexión de una cuenta de demo no habla con HubRise.
+    if (!(await cuentaPuedeSalir(sb, row.account_id as string))) return json({ ok: true, demo: true, mensaje: EN_LA_DEMO }, 200);
     work = [{
       id: row.id as string,
       token: row.access_token as string,

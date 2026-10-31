@@ -81,6 +81,7 @@
 // repartidor, así que va al PRINCIPIO de orderInstructions:
 // «Tel. centralita <tel> + código <código>».
 
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { createClient } from "@supabase/supabase-js";
 import { instruccionesParaCatcher } from "./instrucciones.ts";
@@ -629,6 +630,13 @@ Deno.serve(async (req: Request) => {
   // DRY RUN: devolver el payload sin enviarlo.
   if (dryRun) {
     return json(200, { ok: true, dryRun: true, wouldSendTo: CATCHER_ORDER_URL, coordsSource, addressMismatch: mism, origin, payload: orderPayload });
+  }
+
+  // DM1 · PR 2a · La puerta: el pedido de una cuenta de demo no se manda a
+  // Catcher (no sale ningún rider). Camino del pedido: para las demás no cambia
+  // nada, y si no se puede preguntar, sale como antes.
+  if (!(await siPuedeSalir(sb, sale.account_id as string, async () => true, () => false, "sale"))) {
+    return json(200, { ok: true, demo: true, mensaje: `${EN_LA_DEMO} El pedido de una empresa de demostración no se manda a Catcher.` });
   }
 
   // 7. Autenticar contra Catcher.
