@@ -7,7 +7,9 @@
 -- de −175,46, sin ligar a lo que anula y con «efectivo» como forma de pago.
 --
 -- Queda así: cuotas −13,44 (10 %) y −1,06 (4 %), IVA −14,50, total −175,46,
--- sin forma de pago, y ligado a la FAC-00006 (el albarán-factura 24056558, que
+-- sin forma de pago, con las comprobaciones que da el lector nuevo para esas
+-- cifras («Cuadra: bases + IVA = total, al céntimo.», en vez de «sobran
+-- 29,00 €» y los dos «debería ser»), y ligado a la FAC-00006 (el albarán-factura 24056558, que
 -- anula entero; lo sustituye la 24056932, FAC-00121). Sin asiento todavía: al
 -- validarlo, la 1851 compensa la FAC-00006 y las dos quedan pagadas.
 --
@@ -39,9 +41,11 @@ begin
   get diagnostics v_n = row_count;
   if v_n <> 2 then raise exception 'S01h 1852: esperaba 2 cuotas que cambiar de signo y hay %.', v_n; end if;
   update public.supplier_invoice
-     set tax_total = -14.50, grand_total = -175.46, payment_method = null, corrects_invoice_id = v_fac,
+     set tax_total = -14.50, grand_total = -175.46, payment_method = null, corrects_invoice_id = v_fac, reading_confidence = 'seguro',
          reading = jsonb_set(jsonb_set(jsonb_set(reading, '{factura,cuota}', '-14.5'), '{factura,forma}', 'null'),
-                             '{factura,tipos}', (select jsonb_agg(t || jsonb_build_object('cuota', -abs((t->>'cuota')::numeric))) from jsonb_array_elements(reading->'factura'->'tipos') t)),
+                             '{factura,tipos}', (select jsonb_agg(t || jsonb_build_object('cuota', -abs((t->>'cuota')::numeric))) from jsonb_array_elements(reading->'factura'->'tipos') t))
+                   || jsonb_build_object('confianza', 'seguro', 'porque', jsonb_build_array('Todo cuadra y trae lo que pide la norma.'),
+                        'comprobaciones', jsonb_build_array(jsonb_build_object('id', 'suma', 'ok', true, 'grave', true, 'texto', 'Cuadra: bases + IVA = total, al céntimo.'))),
          updated_at = now()
    where id = v_abono;
   if (select sum(base) + sum(vat_amount) from public.supplier_invoice_tax where supplier_invoice_id = v_abono) <> -175.46 then

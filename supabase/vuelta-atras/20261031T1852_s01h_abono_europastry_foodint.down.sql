@@ -4,11 +4,18 @@
 -- se midió el 31/10 (cuotas 13,44 y 1,06 en positivo, IVA 14,50, total
 -- −146,46, «efectivo» y sin ligar). Solo si su asiento no se ha validado: con
 -- él validado, la compensación ya está hecha y no se deshace aquí.
+--
+-- sin prueba con datos: solo toca la fila de Foodint (FAC-00120), que staging no tiene. Se probó en la
+-- base local con una copia inventada de esa fila y de sus dos cuotas: ida, vuelta e ida otra vez, y la
+-- segunda ida para sin tocar nada; el ensayo de producción la pasa de verdad, dentro de su ROLLBACK.
 
 do $$
 declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
   v_abono constant uuid := 'f9e2738d-675c-4502-a6e9-c6eb71081633';
+  -- Las comprobaciones de antes, tal como estaban guardadas.
+  v_comp constant jsonb := '[{"id": "suma", "ok": false, "grave": true, "texto": "No cuadra: bases + IVA dan -146,46 € y el total es -175,46 € (sobran 29,00 €)."}, {"id": "cuota_10", "ok": false, "grave": true, "texto": "El IVA al 10 % debería ser -13,44 € sobre -134,38 € y la factura dice 13,44 €."}, {"id": "cuota_4", "ok": false, "grave": true, "texto": "El IVA al 4 % debería ser -1,06 € sobre -26,58 € y la factura dice 1,06 €."}]';
+  v_mal constant jsonb := '["No cuadra: bases + IVA dan -146,46 € y el total es -175,46 € (sobran 29,00 €).", "El IVA al 10 % debería ser -13,44 € sobre -134,38 € y la factura dice 13,44 €.", "El IVA al 4 % debería ser -1,06 € sobre -26,58 € y la factura dice 1,06 €."]';
 begin
   if not exists (select 1 from public.supplier_invoice where id = v_abono and account_id = v_acc) then return; end if;
   if exists (select 1 from public.journal_entry where account_id = v_acc and source_type = 'supplier_invoice' and source_id = v_abono and status = 'validado') then
@@ -16,9 +23,10 @@ begin
   end if;
   update public.supplier_invoice_tax set vat_amount = abs(vat_amount) where supplier_invoice_id = v_abono and vat_amount < 0;
   update public.supplier_invoice
-     set tax_total = 14.50, grand_total = -146.46, payment_method = 'cash',
+     set tax_total = 14.50, grand_total = -146.46, payment_method = 'cash', reading_confidence = 'duda',
          reading = jsonb_set(jsonb_set(jsonb_set(reading, '{factura,cuota}', '14.5'), '{factura,forma}', '"cash"'),
-                             '{factura,tipos}', (select jsonb_agg(t || jsonb_build_object('cuota', abs((t->>'cuota')::numeric))) from jsonb_array_elements(reading->'factura'->'tipos') t)),
+                             '{factura,tipos}', (select jsonb_agg(t || jsonb_build_object('cuota', abs((t->>'cuota')::numeric))) from jsonb_array_elements(reading->'factura'->'tipos') t))
+                   || jsonb_build_object('confianza', 'duda', 'porque', v_mal, 'comprobaciones', v_comp),
          updated_at = now()
    where id = v_abono and account_id = v_acc;
   -- Aparte: el disparador de la 1851 (que se quita después) liga al tocar «reading».

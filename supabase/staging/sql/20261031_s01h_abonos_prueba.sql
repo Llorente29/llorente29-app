@@ -10,6 +10,7 @@
 --   1. Se liga solo: un abono que dice «anula INV-S01H-1» se liga a esa
 --      factura (mismo proveedor, número normalizado). Con dos facturas del
 --      mismo número, no elige.
+--   1b. Un usuario no llama a conta_abono_compensar: solo el disparador.
 --   2. Su CAMINO (regla 10): la factura (21 % y 10 %) se valida; el abono se
 --      propone al revés (Debe el proveedor; Haber la 60800000 y el IVA de cada
 --      tipo, todo en positivo) y se valida. El libro de recibidas lo lleva
@@ -87,6 +88,21 @@ begin
   perform set_config('prueba.suelto', v_suelto::text, true);
   raise notice 'PRUEBA S01h · 1: el abono «anula inv s01h/1» se liga a INV-S01H-1; con dos facturas del mismo número, no elige.';
 end $$;
+
+-- 1b · Como usuario de D: conta_abono_compensar no se llama desde fuera (solo
+-- la llama el disparador al validar). Si la llama, la prueba FALLA a propósito.
+select set_config('request.jwt.claims', json_build_object('sub', 'c01d0000-0000-4000-8000-0000000000d1', 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform public.conta_abono_compensar(current_setting('prueba.a')::uuid);
+    raise exception 'PRUEBA S01h · 1b: un usuario ha llamado a conta_abono_compensar.';
+  exception when insufficient_privilege then null;
+  end;
+  raise notice 'PRUEBA S01h · 1b: un usuario no puede compensar a mano (42501): solo al validar el asiento.';
+end $$;
+reset role;
+select set_config('request.jwt.claims', '', true);
 
 -- 2 y 3 · Su camino: proponer y validar la factura y los abonos (con el usuario de D).
 do $$
