@@ -94,3 +94,15 @@ export function textoIva(fechaAsiento: string | null, base: number, cuota: numbe
     detalle: `Va al libro de recibidas como rectificativa: base −${eurosExactos(Math.abs(base))} y cuota −${eurosExactos(Math.abs(cuota))}.`,
   }
 }
+
+/**
+ * S01h · 1 · Lo que dice «Pago › Estado» de un abono, lo mismo que su bloque
+ * «Pago» (regla 8): nunca «se casará sola con el banco», porque un abono no se
+ * paga por el banco. Sin leer todavía lo que anula, nada (no se promete).
+ */
+export function estadoPagoAbono(a: LoQueAnula | null): string {
+  if (!a) return ''
+  if (a.compensado && a.anulada) return `Compensado con la ${a.anulada.codigo}: sin movimiento de banco.`
+  if (a.anulada && !a.anulada.pagada) return `Se compensa con la ${a.anulada.codigo} al validar.`
+  return 'Queda a tu favor con el proveedor: no pasa por el banco.'
+}
