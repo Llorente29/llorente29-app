@@ -6,7 +6,9 @@
 // API, con la sesión de la persona administradora de A y nombres y números
 // inventados y únicos por ejecución: un proveedor, la factura que se anula, la
 // que la sustituye (mismo importe) y el abono, ligado a la primera, con sus
-// importes en negativo (10 % y 21 %). Lo borra al acabar. No valida nada: el
+// importes en negativo (10 % y 21 %; las cuotas, añadidas a la respuesta de
+// conta_factura_para_revisar, porque la persona no escribe en
+// supplier_invoice_tax). Lo borra al acabar. No valida nada: el
 // enlace solo y la compensación los prueba la prueba de staging (desde la
 // rama, la 1851 solo va a staging en ROLLBACK).
 //
@@ -49,12 +51,22 @@ async function preparar(s: Sesion, nombre: string, marca: string): Promise<Prepa
     doc_kind: 'credit_note', invoice_number: `${marca}-AB`, invoice_date: '2026-10-13', tax_base_total: -150, tax_total: -26, grand_total: -176,
     corrects_invoice_id: anulada, reading: { factura: { clase: 'rectificativa', rectificaA: `${marca}-A` } },
   })
-  const t = await rest(s, 'POST', 'supplier_invoice_tax', [
-    { account_id: CUENTA_A.id, supplier_invoice_id: abono, vat_pct: 21, base: -100, vat_amount: -21, surcharge_amount: 0 },
-    { account_id: CUENTA_A.id, supplier_invoice_id: abono, vat_pct: 10, base: -50, vat_amount: -5, surcharge_amount: 0 },
-  ])
-  expect(t.status, `el IVA del abono: ${JSON.stringify(t.datos).slice(0, 300)}`).toBe(201)
   return { proveedor, facturas: [abono, sustituta, anulada], abono, anulada }
+}
+
+/**
+ * Las cuotas del abono (21 % y 10 %, en negativo): la persona no escribe en
+ * supplier_invoice_tax (RLS, 42501; las escribe la base al leer o guardar la
+ * ficha), así que se AÑADEN a la respuesta de conta_factura_para_revisar del
+ * abono. La pantalla es la de verdad.
+ */
+async function conSusCuotas(page: Page, abono: string) {
+  await page.route(/\/rest\/v1\/rpc\/conta_factura_para_revisar/, async (r) => {
+    const real = await r.fetch()
+    const cuerpo = await real.json() as { id?: string; tipos?: unknown[] }
+    if (cuerpo?.id === abono) cuerpo.tipos = [{ tipo: 21, base: -100, cuota: -21, recargo: 0 }, { tipo: 10, base: -50, cuota: -5, recargo: 0 }]
+    await r.fulfill({ response: real, json: cuerpo })
+  })
 }
 
 async function limpiar(s: Sesion, x: Preparado | null) {
@@ -77,12 +89,13 @@ test('S01h · la ficha de un abono: sin signo, lo que anula, el IVA que resta y 
   let x: (Preparado & { abono: string; anulada: string }) | null = null
   try {
     x = await preparar(s, nombre, marca)
+    await conSusCuotas(page, x.abono)
     await page.goto(`/conta/documentos/recibidas/${x.abono}?ver=por-revisar`)
     const ficha = page.locator('[data-prueba="ficha-recibida"]')
     await expect(ficha).toBeVisible({ timeout: 30_000 })
 
-    await expect(page.locator('.s-encabezado').getByText('Abono · a tu favor')).toBeVisible({ timeout: 30_000 })
-    await expect(page.locator('.s-encabezado').getByRole('link', { name: 'Por revisar' })).toBeVisible()
+    await expect(page.locator('.s-encabezado').getByText('Abono · a tu favor').first()).toBeVisible({ timeout: 30_000 })
+    await expect(page.locator('.s-migas').getByRole('link', { name: 'Por revisar', exact: true }).first()).toBeVisible()
 
     const anula = page.locator('[data-prueba="abono-anula"]')
     await expect(anula).toContainText('ANULA', { timeout: 30_000 })
