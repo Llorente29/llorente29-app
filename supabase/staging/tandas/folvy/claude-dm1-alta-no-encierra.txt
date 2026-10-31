@@ -1,0 +1,5 @@
+# DM1 · El alta no encierra. Sin migraciones: solo la semilla de la e2e, una
+# persona inventada administradora de una cuenta sin sociedad y de A. Solo
+# añade y se puede aplicar dos veces: va de verdad desde la rama (W07), y al
+# fusionar main la vuelve a pasar sin cambiar nada.
+supabase/seeds/conta/seed_dm1_alta_no_encierra_staging.sql

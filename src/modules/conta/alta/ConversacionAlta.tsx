@@ -29,6 +29,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useIsMobile } from '@/shell/useIsMobile'
+import { CambiarDeEmpresa } from '@/modules/conta/alta/CambiarDeEmpresa'
 import { rutaImpuestos, rutaTuEmpresa } from '@/config/navegacion'
 import { leerSoyAsesoria, marcarAsesoria } from '@/modules/conta/services/despachoService'
 import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
@@ -671,6 +672,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
               <span className="cx-cifra">{hechos} de {TOTAL_PUNTOS}</span>
             </button>
           ) : <span className="cx-ayuda">Se guarda solo · sigue cuando quieras</span>}
+          {/* DM1 (31/10): el alta no encierra a quien tiene otras empresas. */}
+          <CambiarDeEmpresa />
           <button type="button" className="cx-boton-sec cx-alta-salir" onClick={salir}>Salir y seguir luego</button>
         </div>
       </header>
