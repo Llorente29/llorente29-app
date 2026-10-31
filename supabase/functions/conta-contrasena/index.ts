@@ -19,7 +19,8 @@
 //
 // Y el aviso de «contraseña cambiada» (C06, respuesta 2): Body { accion:
 // 'cambiada' } con la sesión de quien la acaba de cambiar (Authorization). La
-// marca NO la dice quien llama: sale de su cuenta (accounts.product_brand). Sin
+// marca NO la dice quien llama: sale de la cuenta que tiene abierta
+// (_cuenta_activa, DM1; accounts.product_brand). Sin
 // marca no se manda nada (Foodint y las demás, como hoy). Solo si la contraseña
 // se tocó hace menos de 10 minutos. Contesta { avisado, a?, motivo? } para que
 // la pantalla diga qué ha pasado (regla 8).
@@ -112,8 +113,16 @@ async function avisarCambiada(req: Request): Promise<Response> {
   const hace = Date.now() - Date.parse(user.updated_at ?? '');
   if (!(hace >= 0 && hace < 10 * 60_000)) return json(200, { avisado: false, motivo: 'la contraseña no se ha cambiado ahora' });
 
+  // DM1 · PR 1b (30/10): la marca de la empresa ABIERTA (_cuenta_activa, con la
+  // sesión de quien llama). Antes era «su perfil» con maybeSingle: con dos
+  // empresas fallaba y no avisaba.
+  const comoEl = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
+    auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const { data: abierta, error: aErr } = await comoEl.rpc('_cuenta_activa');
+  if (aErr || !abierta) { console.error('[conta-contrasena] cuenta abierta', aErr?.message ?? 'ninguna'); return json(200, { avisado: false, motivo: 'no he podido leer tu cuenta' }); }
   const { data: perfil, error: pErr } = await admin.from('user_profiles')
-    .select('account_id, accounts(product_brand)').eq('user_id', user.id).eq('active', true).maybeSingle();
+    .select('account_id, accounts(product_brand)').eq('user_id', user.id).eq('account_id', abierta as string).eq('active', true).maybeSingle();
   if (pErr) { console.error('[conta-contrasena] perfil', pErr.message); return json(200, { avisado: false, motivo: 'no he podido leer tu cuenta' }); }
   const marca = (perfil as { accounts?: { product_brand?: string | null } | null } | null)?.accounts?.product_brand ?? null;
   if (!esIdMarca(marca) || marca === 'folvy') return json(200, { avisado: false, motivo: 'tu cuenta no lleva marca propia' });
