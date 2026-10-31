@@ -15,6 +15,8 @@ import { listUserProfilesByUser, getUserProfile } from '../modules/multitenancy/
 import { getEffectivePermissions, type EffectivePermissions } from '../services/effectivePermissionsService'
 import { fetchGestoriaConfig, updateGestoriaConfig, type GestoriaConfig, type GestoriaConfigPatch } from '../services/gestoriaConfigService'
 import { parseRoute, buildRoute, isValidSlugShape, isPublicAuthRoute, isShellRoute, isAdminRoute } from '../routes'
+import { cuentaAlArrancar } from '../modules/multitenancy/lib/cuentaAlArrancar'
+import { misEmpresas } from '../modules/multitenancy/services/empresasService'
 const DEFAULT_SCHEDULE: WeeklySchedule = {
   lunes: { active: true, start: '09:00', end: '17:00' },
   martes: { active: true, start: '09:00', end: '17:00' },
@@ -258,6 +260,33 @@ async function isPlatformAdminFromToken(): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+// DM1 · PR 1c (31/10): lo que dice la base de quien entra. Las mismas funciones
+// que usan las políticas. Sin la 1950 o sin red: null / false, y se sigue como
+// si no hubiera nada que abrir.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const rpc = (nombre: string, args?: Record<string, unknown>) => (supabase as any).rpc(nombre, args)
+
+async function esAdminDePlataforma(): Promise<boolean> {
+  if (!supabase) return false
+  const { data, error } = await rpc('current_user_is_admin')
+  return !error && data === true
+}
+
+async function cuentaAbiertaEnLaBase(): Promise<string | null> {
+  if (!supabase) return null
+  const { data, error } = await rpc('_cuenta_activa')
+  if (error) { console.error('[AppContext] _cuenta_activa:', error.message); return null }
+  return (data as string | null) ?? null
+}
+
+/** Abre otra empresa suya en la base (cambiar_empresa). true si la base dice que sí. */
+async function abrirEnLaBase(accountId: string): Promise<boolean> {
+  if (!supabase) return false
+  const { error } = await rpc('cambiar_empresa', { p_account_id: accountId })
+  if (error) { console.error('[AppContext] cambiar_empresa:', error.message); return false }
+  return true
 }
 
 async function loadProfileAndPermissions(
@@ -599,6 +628,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Ref para acceder a `accounts` desde callbacks sin recreate por dep.
   const accountsRef = useRef<Account[]>([])
+  // DM1 · PR 1c: ¿es superadministrador? (current_user_is_admin, al arrancar).
+  // Él cambia de cliente sin pasar por la base; los demás, con cambiar_empresa.
+  const esPlataformaRef = useRef(false)
 
   // Setter expuesto: persiste a localStorage, actualiza URL si conocemos el
   // slug, y dispara re-resolución de userProfile/permissions vía useEffect
@@ -615,6 +647,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // rutas viven fuera del namespace por cuenta; cambiar el slug mientras
   // el user está en una de ellas lo expulsaría del flow.
   const setActiveAccountId = useCallback((id: string) => {
+    // DM1 · PR 1c (31/10): quien no es superadministrador cambia de empresa en
+    // la base (cambiar_empresa), y la aplicación se recarga entera: la barra
+    // nunca enseña una mientras la base tiene abierta otra.
+    if (!esPlataformaRef.current && accountsRef.current.length > 0) {
+      void abrirEnLaBase(id).then(ok => {
+        if (!ok) return
+        try { localStorage.setItem(ACTIVE_ACCOUNT_KEY, id) } catch { /* no-op */ }
+        window.location.reload()
+      })
+      return
+    }
     setActiveAccountIdState(id)
     try {
       localStorage.setItem(ACTIVE_ACCOUNT_KEY, id)
@@ -671,13 +714,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return
         }
 
-        // Listar las accounts. listAccounts respeta RLS y filtra por las
-        // accesibles; aún así includeInternal=true por si el user es admin
-        // global y debe ver Folvy Interno.
+        // Lo que piden la URL y el navegador. En una ruta de auth pública, del
+        // shell o del panel admin (D-S2.30), la URL no trae cuenta: solo cuenta
+        // el navegador, y la URL no se toca.
+        const sinCuentaEnLaUrl = isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname) || isAdminRoute(location.pathname)
+        const urlParsed = parseRoute(location.pathname)
+        const slugDeLaUrl = (!sinCuentaEnLaUrl && urlParsed.slug && isValidSlugShape(urlParsed.slug)) ? urlParsed.slug : null
+        const persisted = (() => {
+          try { return localStorage.getItem(ACTIVE_ACCOUNT_KEY) } catch { return null }
+        })()
+
+        // DM1 · PR 1c (31/10): la empresa la decide la BASE, antes de pintar
+        // nada (cuentaAlArrancar). La barra nunca enseña una mientras la base
+        // tiene abierta otra. El superadministrador (current_user_is_admin, la
+        // misma que las políticas) sigue como antes: URL, navegador o la primera,
+        // porque gestiona cuentas de las que no es miembro.
+        const esPlataforma = await esAdminDePlataforma()
+        esPlataformaRef.current = esPlataforma
+        let chosenId: string | null = null
+        if (!esPlataforma) {
+          // Sus empresas salen de sus perfiles; los slugs, de mis_empresas: las
+          // políticas solo le dejan leer en accounts la que tiene abierta.
+          const empresas = slugDeLaUrl ? await misEmpresas() : []
+          const decision = cuentaAlArrancar({
+            mias: accountIds,
+            deLaBase: await cuentaAbiertaEnLaBase(),
+            deLaUrl: empresas.find(e => e.slug === slugDeLaUrl)?.account_id ?? null,
+            delNavegador: persisted,
+          })
+          chosenId = decision.activa
+          if (decision.abrir) {
+            const abierta = await abrirEnLaBase(decision.abrir)
+            if (!abierta) chosenId = decision.siFalla
+          }
+        }
+
+        // Listar las accounts (después de abrir: las políticas enseñan la
+        // abierta). includeInternal=true por si el user es admin global y debe
+        // ver Folvy Interno.
         const allVisible = await listAccounts({ includeInternal: true })
         const mine = allVisible.filter(a => accountIds.includes(a.id))
-
-        if (cancelled) return
 
         // Ordenar: internas al final (UX: mostrar primero las cuentas operativas).
         mine.sort((a, b) => {
@@ -685,83 +761,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           return a.name.localeCompare(b.name)
         })
 
-        setAccounts(mine)
-
-        // D-S2.30 Sesión 9 (20/05/2026): si el user está en una ruta de auth
-        // pública, NO sincronizar URL ↔ slug. Solo resolver activeAccountId
-        // desde localStorage o fallback. Sin esta guarda, AppContext
-        // interpretaba '/reset-password' como slug de cuenta inválido y
-        // navegaba a '/{cuenta-activa}/{rest}', expulsando al user del flow.
-        if (isPublicAuthRoute(location.pathname) || isShellRoute(location.pathname) || isAdminRoute(location.pathname)) {
-          const persisted = (() => {
-            try { return localStorage.getItem(ACTIVE_ACCOUNT_KEY) } catch { return null }
-          })()
-          const persistedIsValid = persisted && mine.some(a => a.id === persisted)
-          const chosenId = persistedIsValid ? persisted : (mine[0]?.id ?? null)
-          if (activeAccountId !== chosenId) {
-            setActiveAccountIdState(chosenId)
-          }
-          try {
-            if (chosenId) localStorage.setItem(ACTIVE_ACCOUNT_KEY, chosenId)
-            else localStorage.removeItem(ACTIVE_ACCOUNT_KEY)
-          } catch { /* localStorage no disponible */ }
-          return
+        if (esPlataforma) {
+          const urlAccount = slugDeLaUrl ? mine.find(a => a.slug === slugDeLaUrl) : undefined
+          const persistedIsValid = !!persisted && mine.some(a => a.id === persisted)
+          chosenId = urlAccount?.id ?? (persistedIsValid ? persisted : (mine[0]?.id ?? null))
         }
 
-        // Resolver activeAccountId — BLOQUE C completo Fase 1:
-        //   1. Si la URL trae un slug válido Y la cuenta es accesible → URL gana.
-        //   2. Si no, valor persistido en localStorage (si accesible).
-        //   3. Si no, primera cuenta de la lista ordenada.
-        //   4. Si no hay cuentas → null.
+        if (cancelled) return
 
-        const urlParsed = parseRoute(location.pathname)
-        const urlAccount = (urlParsed.slug && isValidSlugShape(urlParsed.slug))
-          ? mine.find(a => a.slug === urlParsed.slug)
-          : undefined
+        // Las cuentas y la elegida, a la vez: nunca una lista con otra activa.
+        setAccounts(mine)
+        if (activeAccountId !== chosenId) setActiveAccountIdState(chosenId)
+        try {
+          if (chosenId) localStorage.setItem(ACTIVE_ACCOUNT_KEY, chosenId)
+          else localStorage.removeItem(ACTIVE_ACCOUNT_KEY)
+        } catch { /* localStorage no disponible */ }
 
-        if (urlAccount) {
-          // URL manda. Re-sincronizamos state + localStorage.
-          if (activeAccountId !== urlAccount.id) {
-            setActiveAccountIdState(urlAccount.id)
-          }
-          try { localStorage.setItem(ACTIVE_ACCOUNT_KEY, urlAccount.id) } catch { /* no-op */ }
-        } else {
-          // URL sin slug o inválido. Vamos a localStorage / fallback.
-          const persisted = (() => {
-            try { return localStorage.getItem(ACTIVE_ACCOUNT_KEY) } catch { return null }
-          })()
-          const persistedIsValid = persisted && mine.some(a => a.id === persisted)
-
-          let chosenId: string | null
-          if (persistedIsValid) {
-            chosenId = persisted
-            if (activeAccountId !== persisted) {
-              setActiveAccountIdState(persisted)
-            }
-          } else {
-            if (persisted) {
-              console.warn(
-                `[AppContext] activeAccountId persistido "${persisted}" no accesible. ` +
-                'Auto-seleccionando primera cuenta disponible.'
-              )
-            }
-            chosenId = mine[0]?.id ?? null
-            setActiveAccountIdState(chosenId)
-            try {
-              if (chosenId) localStorage.setItem(ACTIVE_ACCOUNT_KEY, chosenId)
-              else localStorage.removeItem(ACTIVE_ACCOUNT_KEY)
-            } catch { /* localStorage no disponible */ }
-          }
-
-          // Si la URL NO trae slug pero hay cuenta resuelta → añadir el slug
-          // a la URL para que la barra del navegador sea consistente.
-          // Si la URL trae slug INVÁLIDO (no encontrado en mine) → corregir.
-          if (chosenId) {
-            const chosenAccount = mine.find(a => a.id === chosenId)
-            if (chosenAccount && urlParsed.slug !== chosenAccount.slug) {
-              const newPath = buildRoute(chosenAccount.slug, urlParsed.rest)
-              navigate(newPath, { replace: true })
-            }
+        // La URL, con el slug de la elegida (si la ruta lleva cuenta).
+        if (!sinCuentaEnLaUrl && chosenId) {
+          const chosenAccount = mine.find(a => a.id === chosenId)
+          if (chosenAccount && urlParsed.slug !== chosenAccount.slug) {
+            navigate(buildRoute(chosenAccount.slug, urlParsed.rest), { replace: true })
           }
         }
       } catch (e) {
@@ -801,6 +821,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const urlParsed = parseRoute(location.pathname)
     if (!urlParsed.slug || !isValidSlugShape(urlParsed.slug)) return
 
+    // DM1 · PR 1c (31/10): quien no es superadministrador solo «ve» en accounts
+    // la abierta. Si la URL cambia a otra empresa suya (atrás, un enlace), se
+    // abre en la base y se recarga; si no es suya, la URL vuelve a la abierta.
+    if (!esPlataformaRef.current) {
+      const abierta = accounts.find(a => a.id === activeAccountId)
+      if (!abierta || abierta.slug === urlParsed.slug) return
+      let cancel = false
+      void misEmpresas().then(empresas => {
+        if (cancel) return
+        const otra = empresas.find(e => e.slug === urlParsed.slug)
+        if (otra) {
+          void abrirEnLaBase(otra.account_id).then(ok => {
+            if (cancel) return
+            if (ok) {
+              try { localStorage.setItem(ACTIVE_ACCOUNT_KEY, otra.account_id) } catch { /* no-op */ }
+              window.location.reload()
+            } else {
+              navigate(buildRoute(abierta.slug, urlParsed.rest), { replace: true })
+            }
+          })
+        } else {
+          navigate(buildRoute(abierta.slug, urlParsed.rest), { replace: true })
+        }
+      })
+      return () => { cancel = true }
+    }
+
     const urlAccount = accounts.find(a => a.slug === urlParsed.slug)
     if (!urlAccount) return
 
@@ -808,7 +855,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setActiveAccountIdState(urlAccount.id)
       try { localStorage.setItem(ACTIVE_ACCOUNT_KEY, urlAccount.id) } catch { /* no-op */ }
     }
-  }, [accounts, location.pathname, activeAccountId])
+  }, [accounts, location.pathname, activeAccountId, navigate])
+
+  // DM1 · PR 1c (31/10): si otra pestaña cambia de empresa, la base ya tiene
+  // abierta la otra: esta se recarga para no enseñar la de antes.
+  useEffect(() => {
+    function alCambiar(e: StorageEvent) {
+      if (e.key !== ACTIVE_ACCOUNT_KEY || esPlataformaRef.current) return
+      if (!activeAccountId || !e.newValue || e.newValue === activeAccountId) return
+      window.location.reload()
+    }
+    window.addEventListener('storage', alCambiar)
+    return () => window.removeEventListener('storage', alCambiar)
+  }, [activeAccountId])
 
   // Resolución de userProfile + permissions cuando cambia activeAccountId
   // (o cuando termina la carga inicial de cuentas).
@@ -822,6 +881,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setPermissions(null)
       return
     }
+
+    // DM1 · PR 1c: el perfil de otra cuenta no se queda mientras carga el de
+    // esta (App enseña «cargando» sin perfil).
+    setUserProfile(p => (p && p.accountId === activeAccountId ? p : null))
 
     let cancelled = false
 
