@@ -1,0 +1,24 @@
+{
+ "_que": "S01f · contexto de producción medido en SOLO LECTURA el 31/10 a las 17:04Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe platform_audit_log (su CHECK con los 21 tipos de antes); las dos funciones nuevas no existen ni tienen otras firmas; nada en el camino del pedido; ninguna de las dos en el historial.",
+ "medido": "2026-10-31T17:04Z",
+ "tanda": {
+  "supabase/migrations/20261031T1705_s01f_auditoria_interruptor.sql": "a2f4c8364a91324828efcf81ed7b3d95",
+  "supabase/migrations/20261031T1706_s01f_interruptores.sql": "8d2ca4b1da5a502b1b924a42af6bf3dc"
+ },
+ "contexto": {
+  "tablas": [
+   "public.platform_audit_log"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.platform_audit_log": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,9 @@
+# S01f · los interruptores de Sumied por cuenta. La 1705 amplía el CHECK de
+# la auditoría (cambia: desde la rama, solo en ROLLBACK); la 1706 solo añade
+# dos funciones (va de verdad desde la rama). Su prueba (ROLLBACK): solo el
+# administrador de la plataforma; sin contabilidad no hay impuestos ni
+# laboral; quién, por qué y su apunte; apagar la contabilidad apaga las tres
+# sin borrar; y la vuelta atrás.
+supabase/migrations/20261031T1705_s01f_auditoria_interruptor.sql
+supabase/migrations/20261031T1706_s01f_interruptores.sql
+supabase/staging/sql/20261031_s01f_interruptores_prueba.sql

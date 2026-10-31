@@ -1,0 +1,5 @@
+# S01f · la vuelta atrás: fuera las dos funciones y el CHECK de la auditoría
+# como estaba (NOT VALID si ya hay apuntes del tipo nuevo, que no se pueden borrar).
+cuenta: scripts/conta/produccion/cuentas/s01f-interruptores.sql
+supabase/vuelta-atras/20261031T1706_s01f_interruptores.down.sql
+supabase/vuelta-atras/20261031T1705_s01f_auditoria_interruptor.down.sql
