@@ -24,6 +24,7 @@
 // verify_jwt = false (config.toml): el cron llama sin sesión; la prueba se
 // comprueba aquí (getUser y el permiso en conta_recordatorio_prueba_datos).
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
@@ -119,6 +120,11 @@ Deno.serve(async (req) => {
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
   const marcaDe = marcas(srv);
   const abiertos = Deno.env.get("CORREO_MARCA_ABIERTOS");
+  // DM1 · PR 2a · La puerta: la empresa de una cuenta de demo no manda recordatorios de verdad.
+  const enLaDemo = async (empresaId: string): Promise<boolean> => {
+    const { data } = await srv.from("company").select("account_id").eq("id", empresaId).maybeSingle();
+    return !(await cuentaPuedeSalir(srv, (data as { account_id?: string } | null)?.account_id ?? null));
+  };
 
   // ── El cron ────────────────────────────────────────────────────────────
   const secreto = Deno.env.get("CRON_SECRET") ?? "";
@@ -136,6 +142,9 @@ Deno.serve(async (req) => {
       } else if (!cerrojoMarca(MARCAS.sumied, PLANTILLA_RECORDATORIO, d.para, abiertos).abierto) {
         motivo = "cerrado";
         texto = `No se ha mandado el recordatorio de la ${d.numero} a ${d.para}: los recordatorios aún están cerrados (los abre Julio).`;
+      } else if (await enLaDemo(d.empresa_id)) {
+        enviado = true;
+        texto = `Recordatorio mandado a ${d.para}. ${EN_LA_DEMO}`;
       } else {
         const r = await mandar(srv, await marcaDe(d.empresa_id), d, d.para, false);
         if (r.ok) { enviado = true; correoId = r.id; texto = `Recordatorio mandado a ${d.para}.`; }
@@ -169,6 +178,9 @@ Deno.serve(async (req) => {
   const { data: d, error: e } = await sb.rpc("conta_recordatorio_prueba_datos", { p_invoice: factura });
   if (e) return json({ enviado: false, texto: `No se ha mandado la prueba: ${e.message}` }, e.code === "42501" ? 403 : 400);
   const datos = d as Datos;
+  if (await enLaDemo(datos.empresa_id)) {
+    return json({ enviado: true, demo: true, texto: `Prueba mandada a ${para}: el recordatorio de la ${datos.numero}. ${EN_LA_DEMO}` });
+  }
   if (!cerrojoMarca(MARCAS.sumied, PLANTILLA_RECORDATORIO, para, abiertos).abierto) {
     return json({ enviado: false, texto: `No se ha mandado la prueba a ${para}: los recordatorios aún están cerrados para ese correo (los abre Julio).` });
   }
