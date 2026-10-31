@@ -1,14 +1,17 @@
 {
- "_que": "DM1 · PR 2a · contexto de producción de la tanda (0907), medido en SOLO LECTURA el 31/10 a las 09:20 UTC. Existe accounts (no está en el camino del pedido) y no tiene is_demo; no existen cuenta_puede_salir ni _accounts_is_demo_solo_plataforma. Nada de la tanda en el historial.",
- "medido": "2026-10-31T09:20Z",
+ "_que": "DM1 · PR 2a · contexto de producción de la tanda (0907 y 1713), medido en SOLO LECTURA el 31/10 a las 17:20 UTC. Existe accounts (no está en el camino del pedido) y no tiene is_demo; no existen cuenta_puede_salir ni _accounts_is_demo_solo_plataforma; encolar_alerta existe con una sola firma (md5 36a9dfb7) y no está en el camino del pedido. Nada de la tanda en el historial.",
+ "medido": "2026-10-31T17:20Z",
  "tanda": {
-  "supabase/migrations/20261031T0907_dm1_marca_de_demo.sql": "e2eb231a223e32e3d7e76cc47b5d6cf0"
+  "supabase/migrations/20261031T0907_dm1_marca_de_demo.sql": "e2eb231a223e32e3d7e76cc47b5d6cf0",
+  "supabase/migrations/20261031T1713_dm1_avisos_sin_demo.sql": "cfec5090873d1c184e93b51322b2b631"
  },
  "contexto": {
   "tablas": [
    "public.accounts"
   ],
-  "funciones": [],
+  "funciones": [
+   "public.encolar_alerta(text,text,text,text,interval,uuid,uuid,uuid,text)"
+  ],
   "filas": {
    "public.accounts": 2
   },

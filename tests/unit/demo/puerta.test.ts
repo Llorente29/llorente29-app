@@ -70,7 +70,7 @@ const AUN_SIN_PUERTA: string[] = []
  * esté vacía, tampoco se puede marcar ninguna cuenta de demo.
  */
 const FALTA_EN_LA_BASE: string[] = [
-  'los avisos del sistema: que _queue_system_alert y encolar_alerta no encolen nada de una cuenta de demo (una demo no cuenta en los vigías ni en los avisos)',
+  'las siete vigías que encolan sin cuenta (_queue_system_alert) recorriendo datos de todas las cuentas: _generate_daily_count_core, codigo_plataforma_watchdog, kds_device_stale_bundle_check, modifier_incomplete_impact_watchdog, modifier_zero_cost_watchdog, sales_unmapped_watchdog y system_alert_queue_drain. Los avisos con cuenta ya no encolan si es de demo (1713, encolar_alerta)',
 ]
 
 const lista = salidas()

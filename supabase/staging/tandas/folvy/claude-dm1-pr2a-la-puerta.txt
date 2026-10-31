@@ -7,3 +7,8 @@
 # atrás.
 supabase/migrations/20261031T0907_dm1_marca_de_demo.sql
 supabase/staging/sql/20261031_dm1_marca_de_demo_prueba.sql
+# Y la 1713 (encolar_alerta no encola avisos de una demo) con su prueba: con
+# la función de antes la demo encola (rojo a propósito); después no, ni por
+# cuenta, ni por local, ni por marca; A y uno sin cuenta, sí; y la vuelta atrás.
+supabase/migrations/20261031T1713_dm1_avisos_sin_demo.sql
+supabase/staging/sql/20261031_dm1_avisos_sin_demo_prueba.sql

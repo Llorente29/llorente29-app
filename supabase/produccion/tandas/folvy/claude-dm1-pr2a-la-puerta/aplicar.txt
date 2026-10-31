@@ -5,10 +5,16 @@
 #   1. 0907 — SOLO AÑADE: accounts.is_demo (nula), cuenta_puede_salir(cuenta)
 #      y el disparador que deja cambiar la marca solo al superadministrador.
 #      Hoy ninguna cuenta es de demo: nada cambia para nadie.
+#   2. 1713 — CAMBIA EN CALIENTE (declarada, con su prueba; no está en el
+#      camino del pedido): encolar_alerta no encola el aviso de una cuenta de
+#      demo (por su cuenta, su local o su marca). Misma firma, con respaldo y
+#      guarda de md5. Para las demás, idéntica.
 #
-# Antes (producción, 31/10 09:20 UTC): accounts sin is_demo; ninguna de las
-# dos funciones; nada de la tanda en el historial.
+# Antes (producción, 31/10 17:20 UTC): accounts sin is_demo; ninguna de las
+# dos funciones nuevas; encolar_alerta con una sola firma (md5 36a9dfb7);
+# nada de la tanda en el historial.
 # Sin aplicar: el real lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261031T0907_dm1_marca_de_demo.sql
+supabase/migrations/20261031T1713_dm1_avisos_sin_demo.sql
 cuenta: scripts/conta/produccion/cuentas/dm1-marca-de-demo.sql
