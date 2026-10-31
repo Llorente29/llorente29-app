@@ -1,0 +1,18 @@
+# S01g · Las recepciones de soporte de la liquidación y «Por aclarar» con su
+# acción (encargo del 31/10, con el visto bueno de Julio a las maquetas).
+# Rama claude/s01g-soporte-liquidaciones.
+#
+#   0930  añade goods_receipt_path.not_support_at/by_name y dos funciones:
+#         conta_recepcion_no_es_soporte y conta_llegada_pdf_subido.
+#   0931  cambia conta_documentos_recibidos (las recepciones con la ruta
+#         «liquidacion» salen «soporte», con su liquidación) y
+#         brand_partner_settlement_prepare (guarda el proveedor del socio).
+#         Misma firma, con respaldo.
+#   0932  datos de Foodint (autorizo): CTB como proveedor de sus 3
+#         liquidaciones de junio, que lo tienen vacío.
+#
+# Nada en el camino del pedido. Sin aplicar: el real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01g-soporte-liquidaciones.sql
+supabase/migrations/20261031T0930_s01g_soporte_columnas.sql
+supabase/migrations/20261031T0931_s01g_soporte.sql
+supabase/migrations/20261031T0932_s01g_liquidaciones_ctb_foodint.sql
