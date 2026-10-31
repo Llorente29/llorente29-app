@@ -1,0 +1,22 @@
+# B01 Revolut · PR 1 · Conectar Revolut Business y leer sus movimientos. Rama
+# claude/revolut-business-sumied-9fhlsh. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1. 2210 — AÑADE, sin tocar nada de lo que existe ni datos:
+#      · revolut_conexion (una por empresa: el estado del asistente, el
+#        certificado PÚBLICO, la dirección de vuelta, el permiso y la última
+#        lectura);
+#      · los secretos en el Vault (revolut:<empresa>:privada | client_id |
+#        renovacion), que solo pone y lee la clave de servicio;
+#      · conta_revolut_desconectar y el despertador de cada hora
+#        (conta-revolut-despertar), con la dirección de project_url (W10).
+#   2. 2211 — CAMBIA en caliente, declarado: el CHECK del proveedor de
+#      bank_aggregator_link admite además «revolut». Solo amplía.
+#      Nada en el camino del pedido.
+#
+# Sin «autorizo»: no toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql
+supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql
+cuenta: scripts/conta/produccion/cuentas/b01rv-revolut.sql

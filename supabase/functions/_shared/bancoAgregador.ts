@@ -208,17 +208,29 @@ const masDias = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00
 /** Lo más atrás que se lee (el banco guarda unos 90 días). */
 export const DIAS_ATRAS = 89
 
+/** B01 Revolut · Lo que cambia de un proveedor a otro al decidir desde cuándo se lee. */
+export interface OpcionesLectura {
+  /** La fuente de los extractos de esta conexión (por defecto, la de open-banking.io, como antes). */
+  fuente?: string
+  /** La primera vez, sin nada suyo: desde este día (la carga del histórico que pide la persona). */
+  desdeInicial?: string | null
+  /** Lo más atrás que deja leer el banco (open-banking.io: 89). */
+  diasAtras?: number
+}
+
 /**
  * Desde qué día se lee una cuenta. Si ya trajo algo la conexión, desde el día
- * siguiente al último. Si no, desde el principio del último extracto subido
- * (así lo ya subido por Norma 43 se reconoce y la continuidad se mide contra el
- * de antes); sin ninguno, los últimos 30 días. Nunca más de 89 días atrás.
+ * siguiente al último. Si no, desde el día que pidió la persona (si lo hay) o
+ * desde el principio del último extracto subido (así lo ya subido por Norma 43
+ * se reconoce y la continuidad se mide contra el de antes); sin ninguno, los
+ * últimos 30 días. Nunca más de `diasAtras` (89) días atrás.
  */
-export function desdeCuando(extractos: readonly { fuente: string; desde: string; hasta: string }[], hoy: string): string {
-  const tope = masDias(hoy, -DIAS_ATRAS)
-  const suyos = extractos.filter((e) => e.fuente === FUENTE_OBI).sort((a, b) => b.hasta.localeCompare(a.hasta))
+export function desdeCuando(extractos: readonly { fuente: string; desde: string; hasta: string }[], hoy: string, o: OpcionesLectura = {}): string {
+  const fuente = o.fuente ?? FUENTE_OBI
+  const tope = masDias(hoy, -(o.diasAtras ?? DIAS_ATRAS))
+  const suyos = extractos.filter((e) => e.fuente === fuente).sort((a, b) => b.hasta.localeCompare(a.hasta))
   const d = suyos[0] ? masDias(suyos[0].hasta, 1)
-    : [...extractos].sort((a, b) => b.hasta.localeCompare(a.hasta))[0]?.desde ?? masDias(hoy, -30)
+    : o.desdeInicial ?? [...extractos].sort((a, b) => b.hasta.localeCompare(a.hasta))[0]?.desde ?? masDias(hoy, -30)
   return d < tope ? tope : d
 }
 
@@ -262,7 +274,7 @@ const euros = (c: number) => `${(c / 100).toFixed(2).replace('.', ',')} €`
  * para a las demás; su fallo queda apuntado con su porqué (y en el parte).
  */
 export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgregador & ConexionDelProveedor,
-  e: { accountId: string; companyId: string; banco: string; renovar: string | null }, hoy: string, ayer: string): Promise<ParteCuenta[]> {
+  e: { accountId: string; companyId: string; banco: string; renovar: string | null }, hoy: string, ayer: string, o: OpcionesLectura = {}): Promise<ParteCuenta[]> {
   const fallos = new Map((await p.refrescar()).map((f) => [f.cuenta, f.motivo]))
   const [cuentas, permisos, saldos, bancos] = await Promise.all([p.cuentas(''), p.permisos(), p.saldos(), base.bancos(e.accountId, e.companyId)])
   const out: ParteCuenta[] = []
@@ -294,7 +306,7 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
         await apuntar()
         continue
       }
-      const desde = desdeCuando(await base.extractos(banco.id), hoy)
+      const desde = desdeCuando(await base.extractos(banco.id), hoy, o)
       parte.desde = desde; parte.hasta = ayer
       if (desde > ayer) { parte.estado = 'sin_movimientos'; parte.mensaje = 'Ya estaba al día.'; await apuntar(); continue }
       const pag = await p.movimientos('', c.id, desde, ayer)

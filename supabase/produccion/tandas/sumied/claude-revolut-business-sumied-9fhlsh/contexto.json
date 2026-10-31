@@ -1,0 +1,26 @@
+{
+ "_que": "B01 Revolut · PR 1 · contexto de producción de la tanda (2210 y 2211), medido en SOLO LECTURA el 31/10 a las 22:10Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ninguna de las tablas ni de las funciones que crea la 2210 (ni otra firma con su nombre), nada en el camino del pedido y nada en el historial. bank_aggregator_link existe (la 2211 amplía su CHECK).",
+ "medido": "2026-10-31T22:10Z",
+ "tanda": {
+  "supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql": "e0ea193a867973b6f2e537adc9d42682",
+  "supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql": "cabe11fd332b12032caf195463cd90e9"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_aggregator_link",
+   "vault.secrets"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_aggregator_link": 0,
+   "vault.secrets": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
