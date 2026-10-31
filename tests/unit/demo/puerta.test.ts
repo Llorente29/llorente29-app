@@ -60,13 +60,11 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
 
 /** Las que aún hay que cerrar. Se vacía en el PR 2a; mientras tanto, ninguna cuenta puede ser de demo. */
 const AUN_SIN_PUERTA = [
-  'account-email', 'availability-dispatch', 'catcher-dispatch', 'clockout-reminder', 'compliance-doc-notify',
-  'customer-notify', 'dosier-track', 'hubrise-brand-connect', 'hubrise-callback-ensure',
-  'hubrise-catalog-create', 'hubrise-catalog-publish', 'hubrise-connection-health', 'hubrise-location-disconnect',
-  'hubrise-location-dispatch', 'hubrise-oauth-callback', 'hubrise-oauth-start', 'hubrise-order-status',
-  'hubrise-webhook', 'last-catalog-probe', 'last-catalog-sync', 'lastapp-backfill-sales', 'lastapp-catalog-import',
-  'lastapp-set-price', 'order-advance', 'payroll-inbound', 'shop-payment-intent', 'social-agent', 'social-publish',
-  'social-token-refresh', 'stripe-connect-onboard', 'system-alert', 'training-notify', 'uber-promo-push',
+  'account-email', 'catcher-dispatch', 'clockout-reminder', 'compliance-doc-notify', 'customer-notify',
+  'dosier-track', 'last-catalog-probe', 'last-catalog-sync', 'lastapp-backfill-sales',
+  'lastapp-catalog-import', 'lastapp-set-price', 'order-advance', 'payroll-inbound', 'shop-payment-intent',
+  'social-agent', 'social-publish', 'social-token-refresh', 'stripe-connect-onboard', 'system-alert',
+  'training-notify', 'uber-promo-push',
 ]
 
 const lista = salidas()
