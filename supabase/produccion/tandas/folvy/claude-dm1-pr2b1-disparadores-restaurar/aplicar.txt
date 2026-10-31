@@ -1,0 +1,19 @@
+# DM1 · PR 2b-1 · Los disparadores se apartan mientras se restaura una demo
+# (01/11/2026). Rama claude/dm1-pr2b1-disparadores-restaurar. Se ensaya y se
+# aplica antes de fusionar, lanzado desde main nombrando la rama (W12b).
+#
+#   1. 0024 — CAMBIA EN CALIENTE (declarada, con su prueba): _restaurando_demo()
+#      nueva y las 62 funciones de disparador de las 58 tablas que carga la
+#      foto de Casa Lola, cada una con una sola línea más al principio: si se
+#      está restaurando una demo (folvy.restaurando_demo = on, solo en esa
+#      transacción), devuelve la fila y no hace nada. Con el ajuste apagado,
+#      byte a byte las de antes. Misma firma, con respaldo y guarda de md5.
+#      NECESITA «autorizo»: las de sale, sale_line, stock y modificadores
+#      están en el camino del pedido.
+#
+# Antes (producción, 01/11): ninguna lleva la guarda; huella conjunta de las
+# 62, 585e7aff; nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-disparadores-restaurar.sql

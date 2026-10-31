@@ -10,3 +10,9 @@ supabase/migrations/20260827163135_adapt_hubrise_order_usa_hubrise_street_line.s
 # sus saltos CRLF, como está en producción (md5 e117089e…). Normalizarlos cambia
 # su huella y la prueba de staging no vería «lo de producción». Como binario.
 supabase/vuelta-atras/20261026T0642_pc01_sin_delete_sin_where.down.sql -text
+
+# DM1 2b-1 (01/11): las 62 funciones de disparador transcritas byte a byte desde
+# pg_get_functiondef de producción; 17 llevan CRLF en el cuerpo. Normalizarlos
+# cambiaría las funciones más allá de la línea de la guarda, y la prueba de
+# staging compara byte a byte con la de antes. Como binario.
+supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql -text
