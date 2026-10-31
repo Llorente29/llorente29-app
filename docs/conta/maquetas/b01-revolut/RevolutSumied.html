@@ -1,0 +1,376 @@
+<title>Revolut en Sumied</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Tablero de maquetas: cada pantalla es una banda con el ordenador a la izquierda y el móvil a la derecha.
+   La página sigue el tema; las pantallas son de Sumied (estilo N17) y se ven siempre en claro. */
+:root{
+  --pag-fondo:#EEF1F6; --pag-tinta:#0E1A2B; --pag-suave:#56627A; --pag-linea:#D9DFE8; --pag-acento:#2F5BFF;
+  /* Sumied (N17), fijos */
+  --s-fondo:#F5F7FA; --s-carta:#FFFFFF; --s-tinta:#0E1A2B; --s-suave:#5B677C; --s-linea:#E6EAF0;
+  --s-azul:#2F5BFF; --s-azul-claro:#EAF0FF; --s-menta:#E3FBF2; --s-verde:#0E8A5F; --s-ambar:#B26A00; --s-ambar-claro:#FFF4E0;
+  --s-rojo:#C2362B; --s-rojo-claro:#FDECEA; --s-rev:#191C1F;
+  --letra:'Geist','Helvetica Neue',Arial,sans-serif; --mono:'Geist Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pag-fondo:#0D1320;--pag-tinta:#E7ECF5;--pag-suave:#9AA6BC;--pag-linea:#273147;--pag-acento:#7D98FF;color-scheme:dark}}
+:root[data-theme="dark"]{--pag-fondo:#0D1320;--pag-tinta:#E7ECF5;--pag-suave:#9AA6BC;--pag-linea:#273147;--pag-acento:#7D98FF;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--pag-fondo);color:var(--pag-tinta);font-family:var(--letra);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 60px}
+.envoltura{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+header.cab h1{font-size:30px;margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+header.cab p{margin:0;color:var(--pag-suave);max-width:75ch}
+.indice{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.indice a{color:var(--pag-acento);text-decoration:none;border:1px solid var(--pag-linea);border-radius:999px;padding:5px 12px;font-size:13px}
+section.banda{display:flex;flex-direction:column;gap:14px}
+.banda>h2{font-size:20px;margin:0}
+.banda>p.nota{margin:0;color:var(--pag-suave);max-width:80ch}
+.par{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.lienzo{overflow-x:auto;max-width:100%;flex:1 1 820px;min-width:0}
+.etq{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--pag-suave);margin:0 0 6px}
+
+/* ── Pantalla de Sumied ───────────────────────────── */
+.orden{width:1080px;background:var(--s-fondo);color:var(--s-tinta);border-radius:20px;border:1px solid var(--pag-linea);display:flex;gap:14px;padding:14px;position:relative;font-size:14px}
+.menu{width:190px;flex-shrink:0;background:var(--s-carta);border:1px solid var(--s-linea);border-radius:18px;padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.menu b{font-size:15px;padding:4px 8px 12px}
+.menu span{padding:7px 10px;border-radius:10px;color:var(--s-suave)}
+.menu span.si{background:var(--s-azul-claro);color:var(--s-azul);font-weight:600}
+.cuerpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.pestanas{display:flex;gap:6px}
+.pestanas span{padding:6px 12px;border-radius:999px;color:var(--s-suave);font-size:13px}
+.pestanas span.si{background:var(--s-carta);border:1px solid var(--s-linea);color:var(--s-tinta);font-weight:600}
+.carta{background:var(--s-carta);border:1px solid var(--s-linea);border-radius:18px;padding:16px}
+.titulo{font-size:20px;font-weight:600;margin:0}
+.sub{color:var(--s-suave);margin:2px 0 0}
+.fila{display:flex;align-items:center;gap:12px}
+.entre{justify-content:space-between}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:12px;padding:9px 14px;font:600 14px var(--letra);border:1px solid var(--s-linea);background:var(--s-carta);color:var(--s-tinta);white-space:nowrap}
+.btn.pri{background:var(--s-azul);border-color:var(--s-azul);color:#fff}
+.btn.peligro{color:var(--s-rojo)}
+.btn.grande{width:100%;justify-content:center;padding:14px;font-size:16px;border-radius:14px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}
+.chip.ok{background:var(--s-menta);color:var(--s-verde)}
+.chip.av{background:var(--s-ambar-claro);color:var(--s-ambar)}
+.chip.mal{background:var(--s-rojo-claro);color:var(--s-rojo)}
+.chip.azul{background:var(--s-azul-claro);color:var(--s-azul)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:700;color:#fff;flex-shrink:0}
+.logo.rev{background:var(--s-rev)} .logo.bbva{background:#1464A5;font-size:11px}
+.tabla{width:100%;border-collapse:collapse;font-size:13.5px}
+.tabla th{text-align:left;font-weight:500;color:var(--s-suave);font-size:12px;padding:8px 10px;border-bottom:1px solid var(--s-linea)}
+.tabla td{padding:10px;border-bottom:1px solid var(--s-linea);vertical-align:middle}
+.tabla td.d{text-align:right}
+.caja{width:18px;height:18px;border-radius:5px;border:1.5px solid #B9C2D0;display:inline-block;vertical-align:middle}
+.caja.si{background:var(--s-azul);border-color:var(--s-azul);position:relative}
+.caja.si::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.velo{position:absolute;inset:0;background:rgba(14,26,43,.38);border-radius:20px;display:grid;place-items:center}
+.dialogo{width:640px;background:var(--s-carta);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(14,26,43,.25)}
+.pasos{display:flex;gap:8px}
+.paso{flex:1;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--s-suave)}
+.paso i{height:5px;border-radius:9px;background:var(--s-linea)}
+.paso.hecho i{background:var(--s-verde)} .paso.ahora i{background:var(--s-azul)} .paso.ahora{color:var(--s-tinta);font-weight:600}
+.cert{font-family:var(--mono);font-size:11px;line-height:1.35;background:var(--s-fondo);border:1px solid var(--s-linea);border-radius:12px;padding:10px;color:var(--s-suave);white-space:pre;overflow:hidden}
+.campo{display:flex;flex-direction:column;gap:5px}
+.campo label{font-size:12.5px;color:var(--s-suave);font-weight:500}
+.campo .in{border:1.5px solid var(--s-linea);border-radius:12px;padding:10px 12px;font-family:var(--mono);font-size:13px;background:#fff}
+.campo .in.foco{border-color:var(--s-azul);box-shadow:0 0 0 3px var(--s-azul-claro)}
+.campo .in.mal{border-color:var(--s-rojo)}
+.ayuda{font-size:12.5px;color:var(--s-suave)}
+.aviso{border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
+.aviso.mal{background:var(--s-rojo-claro);color:#7D1D15}
+.aviso.av{background:var(--s-ambar-claro);color:#6E4200}
+.aviso.ok{background:var(--s-menta);color:#0A5A3E}
+.aviso.info{background:var(--s-azul-claro);color:#1E3A9E}
+.aviso b{display:block}
+/* Esquema de la web de Revolut: no es una captura */
+.esq{background:#F7F7F8;border:1px dashed #B9C2D0;border-radius:14px;padding:10px;display:flex;gap:10px;font-size:11.5px;color:#3A4250;position:relative}
+.esq .lat{width:110px;display:flex;flex-direction:column;gap:3px}
+.esq .lat span{padding:4px 6px;border-radius:6px}
+.esq .lat span.si{background:#191C1F;color:#fff}
+.esq .zona{flex:1;background:#fff;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.esq .marca{outline:2.5px solid var(--s-azul);outline-offset:2px;border-radius:6px}
+.esq .pie{position:absolute;right:10px;bottom:6px;font-size:10px;color:#7A8394}
+.resumen{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
+.resumen dt{color:var(--s-suave)} .resumen dd{margin:0;font-weight:600}
+.cifra{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.linea-tiempo{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--s-suave);flex-wrap:wrap}
+.linea-tiempo .p{display:flex;align-items:center;gap:6px}
+.linea-tiempo .p i{width:10px;height:10px;border-radius:50%;background:var(--s-linea)}
+.linea-tiempo .p.ok i{background:var(--s-verde)} .linea-tiempo .p.ahora i{background:var(--s-azul)} .linea-tiempo .p.mal i{background:var(--s-rojo)}
+.linea-tiempo .s{width:22px;height:1.5px;background:var(--s-linea)}
+
+/* ── Móvil ─────────────────────────── */
+.movil{width:340px;flex-shrink:0;max-width:100%}
+.tel{width:340px;height:700px;background:var(--s-fondo);color:var(--s-tinta);border-radius:40px;border:10px solid #0E1A2B;overflow:hidden;display:flex;flex-direction:column;position:relative;font-size:14px}
+.tel .barra{height:26px;display:flex;justify-content:space-between;padding:6px 20px 0;font-size:11px;font-weight:600}
+.tel .top{padding:6px 16px 10px;display:flex;align-items:center;gap:10px}
+.tel .top b{font-size:17px}
+.tel .scroll{flex:1;overflow:hidden;padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+.tel .hoja{position:absolute;left:0;right:0;bottom:0;background:var(--s-carta);border-radius:24px 24px 0 0;padding:14px 16px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 -10px 40px rgba(14,26,43,.18)}
+.tel .asa{width:40px;height:5px;border-radius:9px;background:var(--s-linea);margin:0 auto}
+.tel .velo{border-radius:0}
+.tel .fijo{position:absolute;left:0;right:0;bottom:0;background:var(--s-carta);border-top:1px solid var(--s-linea);padding:12px 14px 18px;display:flex;flex-direction:column;gap:8px}
+.tel .item{background:var(--s-carta);border:1px solid var(--s-linea);border-radius:14px;padding:11px 12px;display:flex;gap:10px;align-items:center}
+.tel .item .t{flex:1;min-width:0}
+.tel .item .t b{display:block;font-size:14px}
+.tel .item .t small{color:var(--s-suave);font-size:12px}
+.notas{display:flex;flex-direction:column;gap:6px;margin:0;padding-left:18px;color:var(--pag-suave);font-size:13.5px;max-width:95ch}
+@media (prefers-reduced-motion:no-preference){.btn.pri{transition:filter .15s}.btn.pri:hover{filter:brightness(1.08)}}
+</style>
+
+<div class="envoltura">
+<header class="cab">
+  <h1>Revolut Business en Sumied · maquetas</h1>
+  <p>Encargo B01 (bancos), paso 0. Cinco pantallas, en ordenador y en móvil, en el estilo de Bancos (N17). Empresa de staging «Taberna de Prueba Norte». Todos los nombres, IBAN y cifras son inventados. Lo que se ve de la web de Revolut es un esquema, no una captura.</p>
+  <nav class="indice" aria-label="Pantallas">
+    <a href="#conectar">1 · Conectar</a><a href="#conectada">2 · Cuenta conectada</a><a href="#pagar">3 · Pagar una factura</a><a href="#remesa">4 · Remesa</a><a href="#rechazado">5 · Pago rechazado</a>
+  </nav>
+</header>
+
+<!-- ═════════ 1 · CONECTAR ═════════ -->
+<section class="banda" id="conectar">
+  <h2>1 · Conectar Revolut</h2>
+  <p class="nota">Asistente de tres pasos en la misma ventana, desde Bancos › Cuentas y extractos › Conectar un banco › Revolut Business. En el ordenador, el paso 2 con un error; en el móvil, el paso 1.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · paso 2 de 3, con el código mal pegado</p>
+      <div class="orden" style="height:720px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span>Compras</span><span class="si">Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo"><div class="pestanas"><span>Movimientos</span><span>Reglas</span><span class="si">Cuentas y extractos</span><span>Cierre del mes</span></div><div class="carta" style="height:200px"></div></div>
+        <div class="velo">
+          <div class="dialogo" role="dialog" aria-label="Conectar Revolut Business">
+            <div class="fila entre"><div class="fila"><span class="logo rev">R</span><div><p class="titulo">Conectar Revolut Business</p><p class="sub">Una vez por empresa. Unos 3 minutos.</p></div></div><span class="btn">Cerrar</span></div>
+            <div class="pasos"><div class="paso hecho"><i></i>1 · Copia el certificado ✓</div><div class="paso ahora"><i></i>2 · Pégalo en Revolut</div><div class="paso"><i></i>3 · Autoriza</div></div>
+            <div><b>Pega el certificado en Revolut y trae el código que te da</b>
+              <ol style="margin:6px 0 0;padding-left:20px;color:var(--s-suave);display:flex;flex-direction:column;gap:3px">
+                <li>Abre Revolut Business en el ordenador y entra en <b style="color:var(--s-tinta)">Ajustes › API</b>.</li>
+                <li>Pulsa <b style="color:var(--s-tinta)">Añadir certificado</b>. En «Dirección de vuelta» pega <span class="mono" style="color:var(--s-tinta)">sumied.com/revolut</span> <span class="btn" style="padding:2px 8px;font-size:12px">Copiar</span> y en «Certificado», el que copiaste.</li>
+                <li>Revolut te enseña un <b style="color:var(--s-tinta)">Client ID</b>. Cópialo y pégalo aquí.</li>
+              </ol></div>
+            <div class="esq" aria-label="Esquema de dónde está en Revolut">
+              <div class="lat"><span>Inicio</span><span>Pagos</span><span>Tarjetas</span><span class="si">Ajustes</span><span style="padding-left:14px" class="marca">API</span></div>
+              <div class="zona"><b>Business API</b><div class="fila entre"><span>Certificados</span><span class="marca" style="padding:2px 6px;background:#191C1F;color:#fff">+ Añadir certificado</span></div><div class="fila entre" style="border-top:1px solid #eee;padding-top:6px"><span>Client ID</span><span class="mono marca" style="padding:1px 4px">AbC…xYz</span></div></div>
+              <span class="pie">Esquema, no captura</span>
+            </div>
+            <div class="campo"><label for="cid">Client ID de Revolut</label><div class="in mal" id="cid">-----BEGIN CERTIFICATE-----MIID…</div></div>
+            <div class="aviso mal" role="alert"><span>✕</span><span><b>Eso es el certificado, no el Client ID.</b>El Client ID lo enseña Revolut después de guardar el certificado: es una línea corta de letras y números, debajo de «Client ID».</span></div>
+            <div class="fila entre"><span class="btn">← Volver al certificado</span><span class="btn pri" style="opacity:.45">Seguir</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · paso 1 de 3</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Conectar Revolut</b></div>
+        <div class="scroll">
+          <div class="pasos"><div class="paso ahora"><i></i>1 · Copia</div><div class="paso"><i></i>2 · Pega</div><div class="paso"><i></i>3 · Autoriza</div></div>
+          <b style="font-size:17px">Copia este certificado</b>
+          <p class="ayuda" style="margin:0">Sumied lo ha hecho para tu empresa. Es la parte pública de una llave: la otra mitad se queda guardada en Sumied y no la ve nadie, tampoco tú.</p>
+          <div class="cert">-----BEGIN CERTIFICATE-----
+MIIDazCCAlOgAwIBAgIUQ0FG…
+ZXN0IFNvY2llZGFkIGRlIFBy…
+dWViYSBOb3J0ZTAeFw0yNjEw…
+-----END CERTIFICATE-----</div>
+          <span class="btn pri grande">Copiar el certificado</span>
+          <div class="aviso info"><span>i</span><span>El paso 2 se hace en Revolut Business desde un <b style="display:inline">ordenador</b>: la sección de API no está en la app del móvil. Puedes seguir allí con este mismo asistente.</span></div>
+          <span class="btn grande">Mandarme el enlace al correo</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas"><li>El paso 3 abre Revolut para «Activar acceso» y vuelve solo a Sumied. Si vuelve sin permiso, dice «No has autorizado en Revolut. Vuelve a pulsar Autorizar» y se queda en el paso 3.</li><li>Al acabar el paso 3, antes de cerrar: cada cuenta de Revolut con su cuenta contable (pantalla 2).</li></ul>
+</section>
+
+<!-- ═════════ 2 · CONECTADA ═════════ -->
+<section class="banda" id="conectada">
+  <h2>2 · La cuenta conectada</h2>
+  <p class="nota">En Cuentas y extractos, junto a los bancos de siempre. Una cuenta en dólares se ve, entra, pero no se casa sola: lo dice.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · Bancos › Cuentas y extractos</p>
+      <div class="orden" style="height:560px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span>Compras</span><span class="si">Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo">
+          <div class="pestanas"><span>Movimientos</span><span>Reglas</span><span class="si">Cuentas y extractos</span><span>Cierre del mes</span></div>
+          <div class="fila entre"><div><p class="titulo">Tus bancos</p><p class="sub">4 cuentas · 3 al día solas</p></div><div class="fila"><span class="btn">Subir un extracto</span><span class="btn pri">Conectar un banco</span></div></div>
+          <div class="carta" style="padding:6px 16px">
+            <table class="tabla">
+              <thead><tr><th>Cuenta</th><th>Contable</th><th class="d">Saldo del banco</th><th>Cómo llega</th><th></th></tr></thead>
+              <tbody>
+                <tr><td><div class="fila"><span class="logo rev">R</span><div><b>Revolut · Principal</b><br><span class="sub mono">EUR ·5678</span></div></div></td><td class="mono">572 00004</td><td class="d num"><b>12.480,15 €</b></td><td><span class="chip ok">● Al día · hace 5 min</span><br><span class="ayuda">Por aviso de Revolut, y cada hora</span></td><td class="d"><span class="btn">Ver</span> <span class="btn peligro">Desconectar</span></td></tr>
+                <tr><td><div class="fila"><span class="logo rev">R</span><div><b>Revolut · Dólares</b><br><span class="sub mono">USD ·9012</span></div></div></td><td class="mono">572 00005</td><td class="d num">1.200,00 $</td><td><span class="chip av">En dólares: no se casa solo</span><br><span class="ayuda">Entran los movimientos; el casado, a mano</span></td><td class="d"><span class="btn">Ver</span></td></tr>
+                <tr><td><div class="fila"><span class="logo bbva">BBVA</span><div><b>BBVA · Cuenta principal</b><br><span class="sub mono">·0000</span></div></div></td><td class="mono">572 00001</td><td class="d num">8.310,40 €</td><td><span class="chip ok">● Al día · hoy a las 03:00</span></td><td class="d"><span class="btn">Ver</span></td></tr>
+                <tr><td><div class="fila"><span class="logo bbva">BBVA</span><div><b>BBVA · Pagos</b><br><span class="sub mono">·1111</span></div></div></td><td class="mono">572 00002</td><td class="d num">2.045,90 €</td><td><span class="chip ok">● Al día · hoy a las 03:00</span></td><td class="d"><span class="btn">Ver</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="carta fila entre"><div><b>Revolut Business</b> · conectado por Ana Prueba el 31/10 · puede leer <span class="chip azul">y pagar</span><br><span class="ayuda">Topes: 3.000 € por pago y 10.000 € al día. Por encima, una segunda persona aprueba.</span></div><span class="btn">Topes y permisos</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · al desconectar</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><b>Cuentas y extractos</b></div>
+        <div class="scroll">
+          <div class="item"><span class="logo rev">R</span><div class="t"><b>Revolut · Principal</b><small class="mono">EUR ·5678 · 572 00004</small><br><span class="chip ok">● Al día · hace 5 min</span></div><b class="num">12.480,15 €</b></div>
+          <div class="item"><span class="logo rev">R</span><div class="t"><b>Revolut · Dólares</b><small class="mono">USD ·9012</small><br><span class="chip av">No se casa solo</span></div><b class="num">1.200,00 $</b></div>
+          <div class="item"><span class="logo bbva">BBVA</span><div class="t"><b>BBVA · Principal</b><small>Al día · 03:00</small></div><b class="num">8.310,40 €</b></div>
+        </div>
+        <div class="velo" style="align-items:end;place-items:end stretch">
+          <div class="hoja" role="dialog" aria-label="Desconectar Revolut">
+            <div class="asa"></div>
+            <b style="font-size:17px">¿Desconectar Revolut?</b>
+            <p class="ayuda" style="margin:0;font-size:13.5px">Sumied deja de leer las 2 cuentas y no podrá pagar. Lo que ya entró se queda. Borra su llave y su permiso al momento.</p>
+            <div class="aviso av"><span>!</span><span>Quita también el certificado en Revolut › Ajustes › API: desde aquí Sumied no puede borrarlo allí.</span></div>
+            <span class="btn grande" style="background:var(--s-rojo);border-color:var(--s-rojo);color:#fff">Desconectar</span>
+            <span class="btn grande">No, dejarla</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas"><li>Tras desconectar: «Desconectado. Sumied ya no lee ni paga con Revolut ·5678 y ·9012» (regla 8). Si se quita desde Revolut, la línea pasa a <span class="chip mal">Desconectada desde Revolut</span> con «Volver a conectar».</li><li>El saldo de Revolut a fin de mes es el que usa el Cierre del mes de esa cuenta, igual que con BBVA.</li></ul>
+</section>
+
+<!-- ═════════ 3 · PAGAR ═════════ -->
+<section class="banda" id="pagar">
+  <h2>3 · Pagar una factura</h2>
+  <p class="nota">Botón «Pagar con Revolut» en la ficha de la factura recibida. El panel tiene el resumen y un solo botón. El móvil es el caso principal: abrir el aviso, mirar y aprobar.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · ficha de la factura con el panel abierto (el proveedor no tenía IBAN)</p>
+      <div class="orden" style="height:650px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo" style="flex-direction:row;gap:14px">
+          <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="fila entre"><div><p class="sub">Compras › Facturas recibidas</p><p class="titulo">A-2026/0412 · Suministros Norte S.L.</p></div><span class="chip av">Por pagar · vence 05/11</span></div>
+            <div class="carta"><div class="fila entre"><span class="sub">Total</span><span class="cifra num">1.028,50 €</span></div><div class="ayuda">Base 850,00 € · IVA 21 % 178,50 €</div></div>
+            <div class="carta" style="flex:1;background:repeating-linear-gradient(135deg,#fff 0 10px,#F7F8FA 10px 20px)"><span class="ayuda">La factura en papel</span></div>
+          </div>
+          <div class="carta" style="width:380px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(14,26,43,.12)">
+            <div class="fila entre"><b style="font-size:16px">Pagar con Revolut</b><span class="btn" style="padding:4px 10px">✕</span></div>
+            <div class="campo"><label for="iban">IBAN de Suministros Norte S.L.</label><div class="in foco" id="iban">ES00 9999 0000 0000 0000 1234</div><span class="ayuda">La ficha no tenía IBAN. Se guarda en ella con tu nombre.</span></div>
+            <div style="background:var(--s-fondo);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:10px">
+              <div class="cifra num">1.028,50 €</div>
+              <dl class="resumen"><dt>A</dt><dd>Suministros Norte S.L.</dd><dt>IBAN</dt><dd class="mono">…1234 <span class="chip av">nuevo</span></dd><dt>Desde</dt><dd>Revolut <span class="mono">·5678</span></dd><dt>Concepto</dt><dd class="mono">A-2026/0412</dd><dt>Sale</dt><dd>Hoy, transferencia normal</dd></dl>
+            </div>
+            <div class="aviso av"><span>!</span><span><b>Es un IBAN nuevo: lo aprueba otra persona también.</b>Se lo pedimos a Luis Ejemplo. Hasta que no lo apruebe, no sale nada.</span></div>
+            <span class="btn pri grande">Aprobar y pagar</span>
+            <span class="ayuda" style="text-align:center">Queda en el registro: quién, cuándo y qué.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · aprobar, y lo que pasa después</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>A-2026/0412</b></div>
+        <div class="scroll"><div class="item"><div class="t"><b>Suministros Norte S.L.</b><small>Vence 05/11</small></div><b class="num">1.028,50 €</b></div></div>
+        <div class="velo" style="align-items:end;place-items:end stretch">
+          <div class="hoja" role="dialog" aria-label="Pagar con Revolut">
+            <div class="asa"></div>
+            <span class="sub" style="margin:0">Pagar con Revolut</span>
+            <div class="cifra num" style="font-size:36px">1.028,50 €</div>
+            <dl class="resumen" style="font-size:14.5px"><dt>A</dt><dd>Suministros Norte S.L.</dd><dt>IBAN</dt><dd class="mono">…1234 <span class="chip ok">✓ comprobado</span></dd><dt>Desde</dt><dd>Revolut <span class="mono">·5678</span></dd><dt>Concepto</dt><dd class="mono">A-2026/0412</dd></dl>
+            <span class="btn pri grande" style="padding:16px">Aprobar y pagar</span>
+            <div class="linea-tiempo" aria-label="Lo que pasa después"><span class="p ok"><i></i>Aprobado 09:41</span><span class="s"></span><span class="p ahora"><i></i>Enviado a Revolut</span><span class="s"></span><span class="p"><i></i>Pagada</span></div>
+            <div class="aviso ok"><span>✓</span><span><b>Pagada · 31/10 · Revolut</b>Revolut lo ha confirmado a las 09:42. El movimiento de −1.028,50 € ya está casado con la factura.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas"><li>Al pulsar: «Enviado a Revolut. Te avisamos cuando lo confirme». Al confirmar, la factura dice «Pagada · 31/10 · Revolut» y el movimiento sale casado en Bancos, sin tocar nada.</li><li>Solo sale el botón a quien tiene el permiso de pagar. A los demás: «Pídeselo a Ana Prueba, que puede pagar con Revolut».</li><li>Facturas con tarjeta, domiciliadas o ya pagadas: el botón no sale como principal.</li></ul>
+</section>
+
+<!-- ═════════ 4 · REMESA ═════════ -->
+<section class="banda" id="remesa">
+  <h2>4 · Remesa por Revolut</h2>
+  <p class="nota">En Pagos: casillas por factura, el total arriba y un solo botón. Es la remesa de siempre (la del fichero SEPA) con otra salida. Se aprueba una vez.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · Compras › Pagos, 5 elegidas, una sin IBAN y por encima del tope del día</p>
+      <div class="orden" style="height:600px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo">
+          <div class="fila entre"><div><p class="titulo">Pagos</p><p class="sub">8 por pagar · 4 vencen esta semana</p></div></div>
+          <div class="carta fila entre" style="background:var(--s-tinta);color:#fff;border-color:var(--s-tinta)"><div><span style="opacity:.75">5 elegidas · desde Revolut ·5678</span><div class="cifra num" style="color:#fff">11.342,70 €</div></div><div class="fila"><span class="btn" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.35)">Descargar fichero SEPA</span><span class="btn pri">Pagar las 5 con Revolut</span></div></div>
+          <div class="aviso av"><span>!</span><span><b>Pasa del tope del día (10.000 €) y hay un IBAN nuevo: necesita una segunda aprobación.</b>Al pulsar, se pide a Luis Ejemplo. No sale ninguna hasta que estén las dos.</span></div>
+          <div class="carta" style="padding:4px 16px">
+            <table class="tabla">
+              <thead><tr><th><span class="caja si"></span></th><th>Proveedor</th><th>Factura</th><th>Vence</th><th>IBAN</th><th class="d">Importe</th></tr></thead>
+              <tbody>
+                <tr><td><span class="caja si"></span></td><td>Suministros Norte S.L.</td><td class="mono">A-2026/0412</td><td>05/11</td><td class="mono">…1234 <span class="chip ok">✓</span></td><td class="d num">1.028,50 €</td></tr>
+                <tr><td><span class="caja si"></span></td><td>Bebidas Ejemplo S.L.</td><td class="mono">F-889</td><td>03/11</td><td class="mono">…4321 <span class="chip ok">✓</span></td><td class="d num">2.310,00 €</td></tr>
+                <tr><td><span class="caja si"></span></td><td>Carnes Inventadas S.A.</td><td class="mono">2026-1187</td><td>04/11</td><td class="mono">…7788 <span class="chip av">nuevo</span></td><td class="d num">5.904,20 €</td></tr>
+                <tr><td><span class="caja si"></span></td><td>Panadería Prueba</td><td class="mono">P-102</td><td>06/11</td><td><span class="btn" style="padding:4px 10px;font-size:12.5px;color:var(--s-ambar)">Falta el IBAN · Añadir</span></td><td class="d num">640,00 €</td></tr>
+                <tr><td><span class="caja si"></span></td><td>Limpiezas Modelo S.L.</td><td class="mono">LM-55</td><td>08/11</td><td class="mono">…3344 <span class="chip ok">✓</span></td><td class="d num">1.460,00 €</td></tr>
+                <tr style="color:var(--s-suave)"><td><span class="caja"></span></td><td>Gas de Muestra S.A.</td><td class="mono">G-12</td><td>15/11</td><td>Domiciliada</td><td class="d num">312,40 €</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · Pagos con casillas</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><b>Pagos</b><span class="sub" style="margin-left:auto">8 por pagar</span></div>
+        <div class="scroll">
+          <div class="item"><span class="caja si"></span><div class="t"><b>Suministros Norte S.L.</b><small class="mono">A-2026/0412 · vence 05/11 · …1234</small></div><b class="num">1.028,50</b></div>
+          <div class="item"><span class="caja si"></span><div class="t"><b>Bebidas Ejemplo S.L.</b><small class="mono">F-889 · vence 03/11 · …4321</small></div><b class="num">2.310,00</b></div>
+          <div class="item"><span class="caja si"></span><div class="t"><b>Carnes Inventadas S.A.</b><small><span class="chip av">IBAN nuevo</span></small></div><b class="num">5.904,20</b></div>
+          <div class="item"><span class="caja si"></span><div class="t"><b>Panadería Prueba</b><small style="color:var(--s-ambar);font-weight:600">Falta el IBAN · Añadir</small></div><b class="num">640,00</b></div>
+          <div class="item"><span class="caja si"></span><div class="t"><b>Limpiezas Modelo S.L.</b><small class="mono">LM-55 · vence 08/11</small></div><b class="num">1.460,00</b></div>
+        </div>
+        <div class="fijo"><div class="fila entre"><span class="sub" style="margin:0">5 elegidas</span><b class="num" style="font-size:18px">11.342,70 €</b></div><span class="ayuda">Necesita una segunda aprobación (tope del día).</span><span class="btn pri grande">Pagar las 5 con Revolut</span></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas"><li>Con una sin IBAN, el botón pide primero el IBAN (o «Pagar las otras 4»). Nada sale hasta que los 5 beneficiarios están creados y comprobados en Revolut (P3 del paso 0).</li><li>Después, la ficha de la remesa enseña cada línea con su estado: enviada, pagada, rechazada con su porqué.</li></ul>
+</section>
+
+<!-- ═════════ 5 · RECHAZADO ═════════ -->
+<section class="banda" id="rechazado">
+  <h2>5 · Pago rechazado</h2>
+  <p class="nota">La factura sigue por pagar y la pantalla dice por qué, con palabras normales y qué hacer (regla 8). En el ordenador, el titular no coincide; en el móvil, Revolut lo rechaza por saldo.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · el nombre del titular del IBAN no coincide (se para antes de pagar)</p>
+      <div class="orden" style="height:520px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo" style="flex-direction:row;gap:14px">
+          <div style="flex:1;display:flex;flex-direction:column;gap:12px;min-width:0">
+            <div class="fila entre"><div><p class="sub">Compras › Facturas recibidas</p><p class="titulo">2026-1187 · Carnes Inventadas S.A.</p></div><span class="chip av">Por pagar</span></div>
+            <div class="carta"><div class="fila entre"><span class="sub">Total</span><span class="cifra num">5.904,20 €</span></div></div>
+            <div class="carta"><b>Historial del pago</b><div class="linea-tiempo" style="margin-top:8px"><span class="p ok"><i></i>Pedido por Ana Prueba · 10:02</span><span class="s"></span><span class="p mal"><i></i>Parado: el titular no coincide · 10:02</span></div></div>
+          </div>
+          <div class="carta" style="width:400px;flex-shrink:0;display:flex;flex-direction:column;gap:14px;box-shadow:0 10px 40px rgba(14,26,43,.12)">
+            <b style="font-size:16px">Pagar con Revolut</b>
+            <div class="aviso mal" role="alert"><span>✕</span><span><b>No se ha pagado: el IBAN no es de Carnes Inventadas S.A.</b>Revolut dice que el titular de …7788 es <b style="display:inline">«Distribuciones Otro Nombre S.L.»</b>. Antes de pagar, confirma con el proveedor que es su cuenta.</span></div>
+            <dl class="resumen"><dt>En la ficha</dt><dd>Carnes Inventadas S.A.</dd><dt>Según Revolut</dt><dd style="color:var(--s-rojo)">Distribuciones Otro Nombre S.L.</dd><dt>IBAN</dt><dd class="mono">…7788 · puesto el 30/10</dd></dl>
+            <span class="btn grande">Cambiar el IBAN</span>
+            <span class="btn grande">Es correcto, es su otra empresa: pagar igual</span>
+            <span class="ayuda">«Pagar igual» pide una segunda aprobación y queda escrito con tu nombre.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · Revolut lo rechaza</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>F-889</b></div>
+        <div class="scroll">
+          <div class="item"><div class="t"><b>Bebidas Ejemplo S.L.</b><small>Vence 03/11</small></div><b class="num">2.310,00 €</b></div>
+          <span class="chip av" style="align-self:flex-start">Sigue por pagar</span>
+          <div class="aviso mal" role="alert"><span>✕</span><span><b>Revolut no ha hecho el pago</b>No había saldo bastante en Revolut ·5678 a las 11:20 (había 1.940,00 €). No ha salido nada.</span></div>
+          <div class="linea-tiempo"><span class="p ok"><i></i>Aprobado 11:19</span><span class="s"></span><span class="p ok"><i></i>Enviado</span><span class="s"></span><span class="p mal"><i></i>Rechazado 11:20</span></div>
+          <span class="btn pri grande">Volver a intentarlo</span>
+          <span class="btn grande">Pagar desde otra cuenta</span>
+          <p class="ayuda" style="margin:0">Volver a intentarlo te enseña otra vez el resumen y pide aprobarlo de nuevo.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas"><li>El motivo sale tal como lo da Revolut, traducido a palabras normales; si no hay traducción, el texto de Revolut entre comillas y «Pregunta a Revolut con este número: …».</li></ul>
+</section>
+</div>
