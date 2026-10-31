@@ -42,6 +42,9 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
   'sports-events': 'consulta pública de partidos; no envía nada',
   'weather-events': 'consulta pública del tiempo; no envía nada',
   'conta-justificante-csv': 'lee el justificante público de Hacienda por su CSV; no presenta nada',
+  'conta-redsys': 'guarda los datos del TPV de la empresa y firma con su clave; no habla con el banco (cobrar es conta-pago, que lleva puerta)',
+  'conta-redsys-aviso': 'RECIBE el aviso del banco cuando un cliente paga; no manda nada',
+  'conta-stripe-webhook': 'RECIBE los avisos de Stripe y solo lee el estado de un alta que ya existe (una demo no puede darse de alta: conta-stripe lleva puerta)',
   'conta-facturas-entrada': 'recoge los correos con facturas que LLEGAN a la cuenta (lee lo recibido en Resend); no manda nada',
   // De la plataforma, no de una cuenta.
   'create-platform-admin': 'da de alta a un superadministrador: es de la plataforma, no de una cuenta',
@@ -58,7 +61,7 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
 /** Las que aún hay que cerrar. Se vacía en el PR 2a; mientras tanto, ninguna cuenta puede ser de demo. */
 const AUN_SIN_PUERTA = [
   'account-email', 'availability-dispatch', 'catcher-dispatch', 'clockout-reminder', 'compliance-doc-notify',
-  'conta-pago', 'conta-redsys', 'conta-redsys-aviso', 'conta-stripe', 'conta-stripe-webhook', 'customer-notify', 'dosier-track', 'hubrise-brand-connect', 'hubrise-callback-ensure',
+  'customer-notify', 'dosier-track', 'hubrise-brand-connect', 'hubrise-callback-ensure',
   'hubrise-catalog-create', 'hubrise-catalog-publish', 'hubrise-connection-health', 'hubrise-location-disconnect',
   'hubrise-location-dispatch', 'hubrise-oauth-callback', 'hubrise-oauth-start', 'hubrise-order-status',
   'hubrise-webhook', 'last-catalog-probe', 'last-catalog-sync', 'lastapp-backfill-sales', 'lastapp-catalog-import',
