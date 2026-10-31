@@ -7,6 +7,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { gate } from './featureGateService'
 import { subscribeFeatureGate, notifyFeatureGateChanged } from './gateEvents'
 import type { AccountPlatformState, Account } from '@/platform/types'
+import { useApp } from '@/context/AppContext'
 
 // ─── HOOK ────────────────────────────────────────────────────────────────
 
@@ -36,17 +37,21 @@ export function useFeatureGate(): UseFeatureGateResult {
     gate.snapshot()
   )
 
-  // Carga inicial si no hay snapshot todavía
+  // DM1 · PR 1b (30/10): la cuenta activa de la pantalla. Al cambiarla (el
+  // superadministrador, sin recargar), el gate vuelve a cargar la nueva y
+  // avisa a todos. Para el resto el gate sigue a la base (cuentaDelGate.ts),
+  // y cambiar de empresa recarga la aplicación entera.
+  const { activeAccountId } = useApp()
   useEffect(() => {
     let cancel = false
-    if (!snapshot) {
-      gate.load().then(state => {
-        if (!cancel) setSnapshot(state)
-      })
-    }
+    const antes = gate.snapshot()
+    gate.load(activeAccountId).then(state => {
+      if (cancel) return
+      setSnapshot(state)
+      if (state !== antes) notifyFeatureGateChanged()
+    })
     return () => { cancel = true }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [activeAccountId])
 
   // Suscribirse a cambios externos del gate
   useEffect(() => {
@@ -63,11 +68,11 @@ export function useFeatureGate(): UseFeatureGateResult {
   const hasAll = useCallback((ks: string[]) => gate.hasAll(ks), [snapshot])
   const canCreate = useCallback((k: string) => gate.canCreate(k), [snapshot])
   const refresh = useCallback(async () => {
-    await gate.refresh()
+    await gate.refresh(activeAccountId)
     setSnapshot(gate.snapshot())
     setTick(t => t + 1)
     notifyFeatureGateChanged()
-  }, [])
+  }, [activeAccountId])
 
   return {
     ready: snapshot !== null,
