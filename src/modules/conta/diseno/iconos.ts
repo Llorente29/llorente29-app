@@ -11,7 +11,7 @@ import {
   LayoutTemplate, LibraryBig, ListChecks, Lock, Mail, Menu, NotebookPen, Package, PanelLeftClose, PanelLeftOpen, Percent, Pin,
   PinOff, Plus, Receipt, Repeat, Scale, ScanLine, Search, Settings, SlidersHorizontal, Sparkles, Star, Store, TriangleAlert,
   Truck, Upload, UserRound, Users, Wallet, Workflow, X,
-  ExternalLink, Printer, Briefcase, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, CircleQuestionMark, Maximize2, Minimize2, ZoomIn, ZoomOut, Ellipsis,
+  ExternalLink, Printer, Briefcase, ChevronsLeft, ChevronsRight, ChevronLeft, ChevronRight, CircleQuestionMark, Maximize2, Minimize2, ZoomIn, ZoomOut, Ellipsis, LogOut,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -106,6 +106,8 @@ export const ICONOS = {
   acercar: ZoomIn,
   alejar: ZoomOut,
   masAcciones: Ellipsis,
+  // S01f · «Cerrar sesión».
+  salir: LogOut,
 } as const satisfies Record<string, LucideIcon>
 
 export type NombreIcono = keyof typeof ICONOS

@@ -42,6 +42,7 @@ const EVENT_LABELS: Record<string, string> = {
   account_created:          'Cuenta creada',
   account_status_changed:   'Estado de cuenta cambiado',
   account_modules_changed:  'Módulos cambiados',
+  account_feature_changed:  'Interruptor de Sumied cambiado',
   account_suspended:        'Cuenta suspendida',
   account_unsuspended:      'Cuenta reactivada',
   account_archived:         'Cuenta archivada',
