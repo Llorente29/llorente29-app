@@ -13,7 +13,8 @@
 --      Lo secreto NO va aquí: la llave privada, el client_id y el token de
 --      renovación van al Vault, uno por empresa (2).
 --   2. Los secretos, en el Vault (vault.create_secret, nunca un INSERT
---      crudo), con el nombre revolut:<empresa>:<qué>. Tres funciones, SOLO
+--      crudo), con el nombre revolut:<empresa>:<qué> (privada, client_id,
+--      renovacion y aviso, el secreto con que firma sus avisos). Tres funciones, SOLO
 --      para la clave de servicio (las funciones conta-revolut-*): poner, leer
 --      y quitar todos los de una empresa. Nadie más los lee: ni la pantalla,
 --      ni un administrador, ni conta_lectura.
@@ -56,6 +57,7 @@ create table if not exists public.revolut_conexion (
   last_run_at          timestamptz,
   last_ok_at           timestamptz,
   last_error           text,
+  webhook_id           text,
   created_at           timestamptz not null default now(),
   created_by           uuid,
   created_by_name      text,
@@ -67,6 +69,8 @@ comment on column public.revolut_conexion.estado is
   'B01 Revolut. certificado: creado, falta pegarlo y traer el client_id · autorizar: falta autorizar en Revolut · conectada · desconectada: desde Sumied · retirada: desde Revolut (la renovación del token falló porque el permiso ya no vale).';
 comment on column public.revolut_conexion.estado_oauth_huella is
   'B01 Revolut. SHA-256 del «state» de la autorización en curso (la vuelta solo vale si lo trae, y una vez). Nunca el valor.';
+comment on column public.revolut_conexion.webhook_id is
+  'B01 Revolut. El id del aviso (webhook) registrado en Revolut, si se pudo registrar (pide el permiso WRITE). Su secreto de firma, en el Vault (aviso).';
 comment on column public.revolut_conexion.desde_historico is
   'B01 Revolut. Desde qué día se trae el histórico la primera vez (lo dice la persona en el asistente).';
 
@@ -81,7 +85,7 @@ grant all on public.revolut_conexion to service_role;
 create or replace function public._revolut_nombre_secreto(p_company uuid, p_que text)
 returns text language plpgsql immutable as $$
 begin
-  if p_que not in ('privada', 'client_id', 'renovacion') then
+  if p_que not in ('privada', 'client_id', 'renovacion', 'aviso') then
     raise exception 'Revolut no guarda «%» en el Vault.', p_que using errcode = '22023';
   end if;
   return 'revolut:' || p_company::text || ':' || p_que;

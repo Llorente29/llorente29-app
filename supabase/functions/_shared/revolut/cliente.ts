@@ -125,3 +125,30 @@ export function clienteRevolut(f: Fetch, e: EntornoRevolut, acceso: string): Cli
     },
   }
 }
+
+/** Los eventos del aviso que pide Sumied (WebhookEventType, especificación oficial). */
+export const EVENTOS_AVISO = ['TransactionCreated', 'TransactionStateChanged'] as const
+
+/**
+ * Registra el aviso de Revolut (POST /webhooks, v2) hacia `url`. Pide el
+ * permiso WRITE: con solo READ, Revolut lo rechaza y la lectura de cada hora
+ * hace de aviso. Devuelve su id y el secreto con que firma (al Vault, nunca a
+ * un registro).
+ */
+export async function registrarAviso(f: Fetch, e: EntornoRevolut, acceso: string, url: string): Promise<{ id: string; secreto: string | null }> {
+  const r = await f(`${DIRECCIONES[e].api.replace('/1.0', '/2.0')}/webhooks`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${acceso}`, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ url, events: EVENTOS_AVISO }),
+  })
+  if (!r.ok) throw await leerFallo(r)
+  const b = await r.json() as { id?: string; signing_secret?: string }
+  if (!b.id) throw new FalloRevolut(r.status, null, 'Revolut no ha dado el id del aviso.')
+  return { id: b.id, secreto: b.signing_secret ?? null }
+}
+
+/** Quita el aviso de Revolut (DELETE /webhooks/{id}). Si ya no estaba, da igual. */
+export async function quitarAviso(f: Fetch, e: EntornoRevolut, acceso: string, id: string): Promise<void> {
+  const r = await f(`${DIRECCIONES[e].api.replace('/1.0', '/2.0')}/webhooks/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${acceso}` } })
+  if (!r.ok && r.status !== 404) throw await leerFallo(r)
+}

@@ -257,3 +257,20 @@ verify_jwt = false
 # cada empresa que nombra (se mira dentro): verify_jwt = true.
 [functions.invitar-persona]
 verify_jwt = true
+
+# B01 Revolut · PR 1 (31/10). conta-revolut-conectar: el asistente, con la
+# sesión de quien conecta (administrador o encargado; se mira dentro).
+[functions.conta-revolut-conectar]
+verify_jwt = true
+
+# conta-revolut-leer: la lectura de cada hora. La despierta el cron
+# conta-revolut-despertar con x-cron-secret (CRON_SECRET), sin sesión; sin el
+# secreto, 401. verify_jwt = false.
+[functions.conta-revolut-leer]
+verify_jwt = false
+
+# conta-revolut-aviso: el aviso de Revolut, sin sesión (verify_jwt = false). No
+# se cree lo que trae: solo adelanta una lectura con el token de la empresa,
+# con freno de 30 s.
+[functions.conta-revolut-aviso]
+verify_jwt = false
