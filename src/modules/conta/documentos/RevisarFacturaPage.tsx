@@ -127,7 +127,8 @@ export default function RevisarFacturaPage() {
   const abono = esAbono(facLeida)
   const fac = useMemo(() => (facLeida ? sinSigno(facLeida) : facLeida), [facLeida])
   // S01h · 1 · Lo que anula, leído una vez: lo dicen igual «ANULA», su «Pago» y el «Estado» del bloque Pago.
-  const loQueAnula = useLeer(abono && accountId && invoiceId ? () => leerLoQueAnula(accountId, invoiceId) : null, `${accountId}:${invoiceId}:anula:${vuelta}`)
+  // `abono` va en la clave: al cargar aún no se sabe, y useLeer solo vuelve a leer cuando la clave cambia.
+  const loQueAnula = useLeer(abono && accountId && invoiceId ? () => leerLoQueAnula(accountId, invoiceId) : null, `${accountId}:${invoiceId}:anula:${abono ? 'si' : 'no'}:${vuelta}`)
   const envioDiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio
   // C12: con el traspaso mensual, al validar no sale nada: va en el traspaso del mes.
   const enviaADiez = envioDiez?.alMomento === true

@@ -87,7 +87,7 @@ async function conSusCuotas(page: Page, abono: string) {
 
 /** Las líneas del asiento de la ficha: cuenta, Debe y Haber (las dos últimas cifras de cada fila). */
 async function lineasDelAsiento(page: Page): Promise<string[][]> {
-  const filas = page.locator('details.s-asiento-ficha tbody tr[data-linea]:not(.s-asiento-debajo)')
+  const filas = page.locator('details.s-asiento-ficha').first().locator('tbody tr[data-linea]:not(.s-asiento-debajo)')
   const n = await filas.count()
   const out: string[][] = []
   for (let i = 0; i < n; i++) {
@@ -138,7 +138,7 @@ test('S01h · la ficha de un abono: sin signo, lo que anula, el asiento al revé
     await expect(ficha).not.toContainText('sobran')
 
     // S01h · 1 · El asiento, línea a línea: cuenta, columna e importe.
-    const asiento = page.locator('details.s-asiento-ficha')
+    const asiento = page.locator('details.s-asiento-ficha').first()
     await expect(asiento.locator('tbody tr[data-linea]:not(.s-asiento-debajo)')).toHaveCount(4, { timeout: 40_000 })
     expect(await lineasDelAsiento(page)).toEqual([
       ['40000006', '175,46', ''],
