@@ -20055,6 +20055,10 @@ CREATE FUNCTION public.brand_partner_settlement_prepare(p_party uuid, p_location
     SET search_path TO 'public'
     AS $$
 declare v_cuenta uuid := public.party_cuenta(p_party); c jsonb; v_id uuid; v_estado text;
+  -- S01g · El proveedor del socio (el que liquida cada mes): con él, la liquidación encuentra sus recepciones de soporte.
+  v_prov uuid := (select pr.supplier_id from public.party_role pr join public.supplier s on s.id = pr.supplier_id
+                   where pr.party_id = p_party and s.account_id = public.party_cuenta(p_party)
+                   order by (s.invoicing_mode = 'monthly_settlement') desc nulls last, s.created_at limit 1);
 begin
   if not exists (select 1 from locations where id = p_location and account_id = v_cuenta) then
     raise exception 'Ese local no es de esta cuenta.' using errcode = '23514';
@@ -20066,17 +20070,18 @@ begin
   end if;
   c := public.brand_partner_settlement_compute(p_party, p_location, p_desde, p_hasta);
   if v_id is null then
-    insert into licensed_settlement (account_id, location_id, period_from, period_to, period_grain, formula, party_id, status,
+    insert into licensed_settlement (account_id, location_id, period_from, period_to, period_grain, formula, party_id, supplier_id, status,
                                      purchases_amount, contributions_amount, brand_sales_base, commission_pct, commission_amount, amount,
                                      detail, source, created_by, created_by_name, updated_at)
-    values (v_cuenta, p_location, p_desde, p_hasta, 'month', 'compras_aportaciones_comision', p_party, 'borrador',
+    values (v_cuenta, p_location, p_desde, p_hasta, 'month', 'compras_aportaciones_comision', p_party, v_prov, 'borrador',
             (c->>'compras')::numeric, (c->>'aportaciones')::numeric, (c->>'base_ventas')::numeric, (c->>'comision_pct')::numeric,
             (c->>'comision')::numeric, (c->>'importe')::numeric, c, 'folvy', auth.uid(), p_quien_nombre, now())
     returning id into v_id;
   else
     update licensed_settlement set purchases_amount = (c->>'compras')::numeric, contributions_amount = (c->>'aportaciones')::numeric,
            brand_sales_base = (c->>'base_ventas')::numeric, commission_pct = (c->>'comision_pct')::numeric,
-           commission_amount = (c->>'comision')::numeric, amount = (c->>'importe')::numeric, detail = c, updated_at = now()
+           commission_amount = (c->>'comision')::numeric, amount = (c->>'importe')::numeric, detail = c,
+           supplier_id = coalesce(supplier_id, v_prov), updated_at = now()
      where id = v_id;
   end if;
   return c || jsonb_build_object('id', v_id, 'estado', 'borrador');
@@ -29727,6 +29732,15 @@ begin
     -- Lo leído es el de la recepción: no se vuelve a leer con el modelo.
     select g.id, g.receipt_date, g.supplier_id, g.raw_document_url, g.created_at, s.name as proveedor_nombre,
            a.parsed_result->'document' as doc, p.question, p.reason as camino_porque,
+           -- S01g · El soporte de una liquidación mensual (la ruta «liquidacion»), con su local y su liquidación, si ya está.
+           p.path as ruta, p.supplier_id as ruta_proveedor, p.not_support_at, g.location_id as local_id, g.code as codigo,
+           (select s2.name from public.supplier s2 where s2.id = p.supplier_id and s2.account_id = v_acc) as ruta_proveedor_nombre,
+           (select lo.name from public.locations lo where lo.id = g.location_id and lo.account_id = v_acc) as local_nombre,
+           (select jsonb_build_object('id', l.id, 'desde', l.period_from, 'hasta', l.period_to)
+              from public.licensed_settlement l
+             where p.path = 'liquidacion' and l.account_id = v_acc and l.location_id = g.location_id and l.supplier_id = p.supplier_id
+               and g.receipt_date between l.period_from and l.period_to
+             order by l.period_from desc limit 1) as liquidacion,
            upper(regexp_replace(coalesce(nullif(a.parsed_result->'document'->>'doc_number', ''), g.supplier_doc_number, ''), '[^A-Za-z0-9]', '', 'g')) as clave,
            nullif(a.parsed_result->'document'->>'grand_total', '')::numeric as total,
            exists (select 1 from public.fiscal_year y
@@ -29767,17 +29781,22 @@ begin
   ), filas_r as (
     select jsonb_build_object(
       'id', r.id, 'tipo', 'recepcion',
-      'estado', case when r.antes_del_corte then 'en_diez' else 'por_aclarar' end,
+      'estado', case when r.antes_del_corte then 'en_diez' when r.ruta = 'liquidacion' and r.not_support_at is null then 'soporte' else 'por_aclarar' end,
       'proveedor', jsonb_build_object('id', r.supplier_id, 'nombre', coalesce(r.proveedor_nombre, r.doc->>'supplier_name')),
       'numero', nullif(r.doc->>'doc_number', ''), 'fecha', coalesce(nullif(r.doc->>'doc_date', '')::date, r.receipt_date), 'total', r.total,
       'canal', 'cocina', 'confianza', null,
       'porque', case
         when r.antes_del_corte and r.diez is not null then 'Es de antes del corte y ya está en Diez (asiento ' || (r.diez->>'serie') || '/' || (r.diez->>'numero') || ', mismo proveedor, número y total): no se vuelve a apuntar.'
         when r.antes_del_corte then 'Es de antes del corte: la llevó el programa anterior y no se vuelve a apuntar. No la encuentro en Diez por su número y su total: míralo allí.'
+        when r.ruta = 'liquidacion' and r.not_support_at is null then 'No se apunta como compra: entra en la contabilidad con la liquidación mensual de '
+          || coalesce(r.ruta_proveedor_nombre, 'su proveedor') || case when r.liquidacion is null then '. Su liquidación de este mes aún no ha llegado.' else '.' end
         when r.question = 'factura_sin_importes' then 'La recepción la leyó, pero no trae importes por línea con su IVA: no he podido hacer la factura. Súbela o díctamela.'
         when r.question is not null then 'La recepción la leyó, pero no he podido hacer la factura: ' || coalesce(r.camino_porque, 'falta algo en la recepción') || '.'
         else 'La recepción la leyó y aún no es factura: ábrela en Compras.' end,
-      'entendido', null, 'recepcion', jsonb_build_object('fecha', r.receipt_date, 'local', null),
+      'entendido', null, 'recepcion', jsonb_build_object('fecha', r.receipt_date, 'local', r.local_nombre),
+      'soporte', case when r.ruta = 'liquidacion' and r.not_support_at is null and not r.antes_del_corte then jsonb_build_object(
+        'proveedor_id', r.ruta_proveedor, 'proveedor', r.ruta_proveedor_nombre, 'mes', to_char(r.receipt_date, 'YYYY-MM'),
+        'local', r.local_nombre, 'local_id', r.local_id, 'codigo', r.codigo, 'liquidacion', r.liquidacion) end,
       'asiento', case when r.diez is not null then jsonb_build_object('id', r.diez->>'id', 'estado', 'validado', 'solo', false, 'diez', true) end,
       'diez', r.diez, 'papel', r.raw_document_url,
       'llego', r.created_at) as fila
@@ -29826,6 +29845,7 @@ begin
       'apuntadas', (select count(*) from jsonb_array_elements(v_filas) f where f->>'estado' = 'apuntada'),
       'para_mirar', (select count(*) from jsonb_array_elements(v_filas) f where f->>'estado' = 'para_mirar'),
       'por_aclarar', (select count(*) from jsonb_array_elements(v_filas) f where f->>'estado' = 'por_aclarar'),
+      'soporte', (select count(*) from jsonb_array_elements(v_filas) f where f->>'estado' = 'soporte'),
       'esperadas_no_llegadas', jsonb_array_length(v_esperadas)));
 end $_$;
 
@@ -36569,6 +36589,37 @@ COMMENT ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_h
 
 
 --
+-- Name: conta_llegada_pdf_subido(uuid, text, text, text, integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_d public.document_inbox;
+begin
+  select * into v_d from public.document_inbox where id = p_inbox;
+  if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese documento no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_d.account_id) then
+    raise exception 'Solo un administrador o un encargado sube el PDF de un documento.' using errcode = '42501';
+  end if;
+  if v_d.status <> 'falta_pdf' then raise exception 'A ese documento no le falta el PDF.' using errcode = '22023'; end if;
+  if coalesce(p_ruta, '') not like v_d.account_id::text || '/%' then raise exception 'El fichero no es de esta cuenta.' using errcode = '22023'; end if;
+  update public.document_inbox set file_bucket = 'receipt-uploads', file_path = p_ruta, file_name = p_nombre, mime_type = p_tipo,
+         size_bytes = p_bytes, sha256 = p_sha256, status = 'recibido', reason = null, updated_at = now()
+   where id = p_inbox;
+  return jsonb_build_object('id', p_inbox, 'ruta', p_ruta, 'mensaje', format('Subido «%s»: lo leo ahora.', p_nombre));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text) IS 'S01g. «Subir el PDF» de una llegada a la que le faltaba: el fichero va a la misma llegada y queda recibido, para leerlo.';
+
+
+--
 -- Name: conta_local_de_tienda(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -39914,6 +39965,36 @@ begin
   returning id into v_id;
   return jsonb_build_object('id', v_id, 'mes', v_mes);
 end $$;
+
+
+--
+-- Name: conta_recepcion_no_es_soporte(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recepcion_no_es_soporte(p_recepcion uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_g public.goods_receipt; v_n int;
+begin
+  select * into v_g from public.goods_receipt where id = p_recepcion;
+  if v_g.id is null or not public.belongs_to_account(v_g.account_id) then raise exception 'Esa recepción no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_g.account_id) then
+    raise exception 'Solo un administrador o un encargado dice que una recepción no es soporte.' using errcode = '42501';
+  end if;
+  update public.goods_receipt_path set not_support_at = now(), not_support_by_name = public.conta_nombre_actor()
+   where goods_receipt_id = p_recepcion and account_id = v_g.account_id and path = 'liquidacion' and not_support_at is null;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then raise exception 'Esa recepción no es soporte de una liquidación.' using errcode = '22023'; end if;
+  return jsonb_build_object('mensaje', format('La recepción %s ya no es soporte: vuelve a «Por aclarar».', coalesce(v_g.code, 'sin código')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recepcion_no_es_soporte(p_recepcion uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recepcion_no_es_soporte(p_recepcion uuid) IS 'S01g. «No es soporte de la liquidación»: la recepción vuelve a «Por aclarar» en Facturas recibidas.';
 
 
 --
@@ -96202,6 +96283,8 @@ CREATE TABLE public.goods_receipt_path (
     question_closed_note text,
     question_closed_by_name text,
     question_closed_at timestamp with time zone,
+    not_support_at timestamp with time zone,
+    not_support_by_name text,
     CONSTRAINT goods_receipt_path_how_check CHECK ((bill_to_how = ANY (ARRAY['nif'::text, 'recordado'::text, 'nombre'::text, 'ficha'::text, 'sin_dato'::text, 'desconocido'::text, 'generico'::text]))),
     CONSTRAINT goods_receipt_path_path_check CHECK ((path = ANY (ARRAY['factura'::text, 'pendiente_factura'::text, 'liquidacion'::text, 'a_nombre_de_otro'::text, 'sin_decidir'::text, 'anulada'::text, 'error'::text]))),
     CONSTRAINT goods_receipt_path_question_check CHECK ((question = ANY (ARRAY['a_nombre_de'::text, 'papel_y_ficha'::text, 'ficha_sin_forma'::text, 'sin_papel'::text, 'a_nombre_de_otro'::text, 'error'::text, 'factura_sin_importes'::text, 'factura_repetida'::text])))
@@ -96234,6 +96317,13 @@ COMMENT ON COLUMN public.goods_receipt_path.supplier_invoice_id IS 'Compras (10/
 --
 
 COMMENT ON COLUMN public.goods_receipt_path.question_closed IS 'Compras (10/10). La pregunta que alguien cerró («dejarlo así»). Si al redecidir sale la misma, no se vuelve a enseñar.';
+
+
+--
+-- Name: COLUMN goods_receipt_path.not_support_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.goods_receipt_path.not_support_at IS 'S01g. Cuándo se dijo «No es soporte de la liquidación» de una recepción con la ruta liquidacion: vuelve a «Por aclarar» en Facturas recibidas.';
 
 
 --
@@ -145074,6 +145164,15 @@ GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p
 
 
 --
+-- Name: FUNCTION conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_llegada_pdf_subido(p_inbox uuid, p_ruta text, p_nombre text, p_tipo text, p_bytes integer, p_sha256 text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_local_de_tienda(p_account uuid, p_texto text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -145664,6 +145763,15 @@ GRANT ALL ON FUNCTION public.conta_puerta_ya_lo_tengo(p_expected uuid, p_dia dat
 REVOKE ALL ON FUNCTION public.conta_reabrir_mes(p_company uuid, p_mes date, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_reabrir_mes(p_company uuid, p_mes date, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_reabrir_mes(p_company uuid, p_mes date, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recepcion_no_es_soporte(p_recepcion uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recepcion_no_es_soporte(p_recepcion uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recepcion_no_es_soporte(p_recepcion uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recepcion_no_es_soporte(p_recepcion uuid) TO service_role;
 
 
 --
