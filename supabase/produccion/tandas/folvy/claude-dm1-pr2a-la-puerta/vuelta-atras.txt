@@ -1,5 +1,6 @@
-# DM1 · PR 2a · vuelta atrás, en orden inverso: encolar_alerta como estaba
-# (1713) y fuera el disparador, la puerta y la marca (0907; para si alguna
+# DM1 · PR 2a · vuelta atrás, en orden inverso: los seis vigías como estaban
+# (1912), encolar_alerta como estaba (1713) y fuera el disparador, la puerta y la marca (0907; para si alguna
 # cuenta ya está marcada de demo).
+supabase/vuelta-atras/20261031T1912_dm1_vigias_sin_demo.down.sql
 supabase/vuelta-atras/20261031T1713_dm1_avisos_sin_demo.down.sql
 supabase/vuelta-atras/20261031T0907_dm1_marca_de_demo.down.sql

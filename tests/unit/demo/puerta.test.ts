@@ -48,7 +48,7 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
   'payroll-inbound': 'RECOGE las nóminas que llegan por correo (lee lo recibido en Resend); no manda nada',
   'dosier-track': 'cuenta las visitas al dosier comercial de Folvy y avisa al equipo de Folvy: es de la plataforma, no de una cuenta',
   'social-agent': 'prepara el contenido de redes (la dirección de la tienda va escrita en el texto, no se llama); publicarlo es social-publish, que lleva puerta',
-  'system-alert': 'el cartero de los avisos al equipo de Folvy: recibe el aviso ya escrito, sin cuenta. Que una demo no cuente en los avisos va donde se encolan (FALTA_EN_LA_BASE)',
+  'system-alert': 'el cartero de los avisos al equipo de Folvy: recibe el aviso ya escrito, sin cuenta. Que una demo no cuente en los avisos va donde se encolan (1713, encolar_alerta, y 1912, los vigías)',
   'conta-facturas-entrada': 'recoge los correos con facturas que LLEGAN a la cuenta (lee lo recibido en Resend); no manda nada',
   // De la plataforma, no de una cuenta.
   'create-platform-admin': 'da de alta a un superadministrador: es de la plataforma, no de una cuenta',
@@ -69,9 +69,12 @@ const AUN_SIN_PUERTA: string[] = []
  * Lo que aún falta en la BASE, no en las funciones del servidor. Mientras no
  * esté vacía, tampoco se puede marcar ninguna cuenta de demo.
  */
-const FALTA_EN_LA_BASE: string[] = [
-  'las siete vigías que encolan sin cuenta (_queue_system_alert) recorriendo datos de todas las cuentas: _generate_daily_count_core, codigo_plataforma_watchdog, kds_device_stale_bundle_check, modifier_incomplete_impact_watchdog, modifier_zero_cost_watchdog, sales_unmapped_watchdog y system_alert_queue_drain. Los avisos con cuenta ya no encolan si es de demo (1713, encolar_alerta)',
-]
+const FALTA_EN_LA_BASE: string[] = []
+// Cerrado en el PR 2a: los avisos con cuenta (1713, encolar_alerta) y los seis
+// vigías que recorren todas las cuentas (1912). system_alert_queue_drain no
+// se toca: su único aviso es del canal de alertas, sin cuenta (de la
+// plataforma); y tampoco el aviso del candado de
+// modifier_incomplete_impact_watchdog, que es de la tabla.
 
 const lista = salidas()
 const porNombre = new Map(lista.map((s) => [s.funcion, s]))
