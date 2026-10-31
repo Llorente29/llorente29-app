@@ -27,6 +27,7 @@
 //
 // En el registro: la acción y cómo acabó. Nunca el token, el correo ni el enlace.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from '../_shared/puerta.ts'
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { enlaceAceptar, huella, leerInvitar, marcaDeCuenta, tokenNuevo, tokenValido } from '../_shared/asesoria.ts'
@@ -100,6 +101,9 @@ Deno.serve(async (req) => {
       let motivo: string | null = null
       if (!enlace) {
         motivo = 'no hay dirección para el enlace en este entorno'
+      } else if (!(await cuentaPuedeSalir(admin, emp?.account_id ?? null))) {
+        // DM1 · PR 2a · La puerta: una empresa de demo no manda correos. El enlace vuelve, para mandarlo a mano.
+        motivo = EN_LA_DEMO.replace(/\.$/, '')
       } else {
         const r = await fetch(`${url}/functions/v1/send-email`, {
           method: 'POST',
@@ -147,6 +151,7 @@ Deno.serve(async (req) => {
       const marca = marcaDeCuenta(cta?.product_brand)
       const resultados: Resultado[] = []
       let fuera = 0
+      let enDemo = 0
       for (const empresa of p.empresas) {
         const c = visibles.get(empresa)
         if (!c) { fuera++; continue }
@@ -164,6 +169,12 @@ Deno.serve(async (req) => {
           if (e && !correos.includes(e)) correos.push(e)
         }
         if (correos.length === 0) { resultados.push({ cliente: nombre, como: 'sin_correo' }); continue }
+        // DM1 · PR 2a · La puerta: si la asesoría o el cliente son de demo, no sale; queda como mandado, y se dice.
+        if (!(await cuentaPuedeSalir(admin, p.cuenta)) || !(await cuentaPuedeSalir(admin, emp?.account_id ?? null))) {
+          resultados.push({ cliente: nombre, como: 'enviado', a: correos.length })
+          enDemo++
+          continue
+        }
         const datos = datosDelResumen(t.asesoria, p.ejercicio, p.periodo, c)
         let bien = 0
         let motivo: string | null = null
@@ -189,7 +200,8 @@ Deno.serve(async (req) => {
       }
       const enviados = resultados.filter((r) => r.como === 'enviado').length
       const cerrado = enviados === 0 && resultados.some((r) => r.como === 'cerrado')
-      const final = mensajeDelEnvio(resultados, fuera)
+      const base = mensajeDelEnvio(resultados, fuera)
+      const final = enDemo > 0 ? { ...base, mensaje: `${base.mensaje} ${EN_LA_DEMO}` } : base
       return fin(json(200, { ...final, cerrado, enviados }), cerrado ? 'cerrado' : `enviados_${enviados}`)
     }
 

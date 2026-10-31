@@ -43,6 +43,7 @@
 // exigir JWT). Cron cada 30 min — ver
 // 20260815T1910_hubrise_connection_health_cron.sql.
 
+import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { ensureHubriseCallback } from "../_shared/hubriseCallback.ts";
 import { encolarAlerta, claveDelDia } from "../_shared/alerta.ts";
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request) => {
 
   const { data, error } = await sb
     .from("external_integration")
-    .select("id, connection_name, external_location_id, access_token, token_status")
+    .select("id, account_id, connection_name, external_location_id, access_token, token_status")
     .eq("source", "hubrise")
     .eq("is_active", true)
     .not("access_token", "is", null);
@@ -141,6 +142,8 @@ Deno.serve(async (req: Request) => {
   const newlyInvalid: string[] = [];
 
   for (const c of conns) {
+    // DM1 · PR 2a · La puerta: la conexión de una cuenta de demo no se prueba contra HubRise.
+    if (!(await cuentaPuedeSalir(sb, (c as ConnRow & { account_id?: string }).account_id ?? null))) continue;
     const label = `${c.external_location_id ?? "?"} / ${c.connection_name ?? "?"}`;
     const outcome = await pingToken("/location", c.access_token as string);
     results.push({ label, outcome });

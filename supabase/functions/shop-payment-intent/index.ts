@@ -15,6 +15,7 @@
 //   POST { saleId }
 //   -> { ok, clientSecret, connectedAccountId, amount, currency, paymentIntentId }
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from '../_shared/puerta.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const cors = {
@@ -50,6 +51,9 @@ Deno.serve(async (req) => {
       .eq('id', saleId)
       .single()
     if (saleErr || !sale) return json({ ok: false, reason: 'sale_not_found' }, 404)
+
+    // DM1 · PR 2a · La puerta: la tienda de una cuenta de demo no cobra con Stripe.
+    if (!(await cuentaPuedeSalir(supabase, sale.account_id))) return json({ ok: false, reason: 'demo', mensaje: `${EN_LA_DEMO} La tienda de una empresa de demostración no cobra.` }, 409)
 
     // Cuenta conectada del restaurante + comisión configurada
     const { data: account } = await supabase

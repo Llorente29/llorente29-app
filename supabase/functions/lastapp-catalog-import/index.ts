@@ -39,6 +39,7 @@
 //   { account_id, lastapp_organization_id, dry_run?, aplicar_activo? }
 // Auth: platform admin (JWT folvy.is_platform_admin) o x-internal-key.
 
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 // El descubrimiento de catálogos y el cliente de Last viven en `_shared` desde
 // el 08/09: esta función tenía SU copia y descubría por `brands[].catalogs
@@ -625,6 +626,11 @@ Deno.serve(async (req: Request) => {
   }
 
   const sb = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey);
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con Last. Para las demás no cambia
+  // nada (si no se puede preguntar, sale como antes).
+  if (!(await siPuedeSalir(sb, accountId, async () => true, () => false, "sale"))) {
+    return jsonResponse({ ok: true, demo: true, mensaje: `${EN_LA_DEMO} Una empresa de demostración no habla con Last.` }, 200);
+  }
 
   // ── Token de la integración ──
   const { data: integ, error: integErr } = await sb

@@ -24,6 +24,7 @@
 // verify_jwt = false (config.toml): el cron llama sin sesión; aquí se comprueba
 // el secreto. Sin él, 401 y nada más.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { OpenBankingClient } from "npm:@open-banking-io/client@1.3.0";
 import { proveedorOpenBankingIo, sincronizarEmpresa, type BaseAgregador, type ParteCuenta } from "../_shared/bancoAgregador.ts";
@@ -81,6 +82,12 @@ Deno.serve(async (req) => {
   const partes: { empresa: string; banco: string; cuentas: ParteCuenta[]; error: string | null }[] = [];
   for (const c of (filas ?? []) as Conexion[]) {
     let cuentas: ParteCuenta[] = [], fallo: string | null = null;
+    // DM1 · PR 2a · La puerta: una cuenta de demo no habla con ningún banco de verdad.
+    if (!(await cuentaPuedeSalir(srv, c.account_id))) {
+      partes.push({ empresa: c.company_id, banco: c.bank_name, cuentas, error: null });
+      console.log(`[conta-banco-agregador] ${c.bank_name}: ${EN_LA_DEMO}`);
+      continue;
+    }
     try {
       if (c.provider !== "open-banking-io") throw new Error(`No sé hablar con el proveedor «${c.provider}».`);
       const credenciales = Deno.env.get(c.secret_name);

@@ -33,6 +33,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { AlmacenVault } from "../_shared/certificados/almacen.ts";
 import { HaciendaDoble } from "../_shared/hacienda/doble.ts";
 import { CERRADA, comprobarPuerta, type Hacienda, HaciendaAeat, HaciendaCerrada, PuertaCerrada } from "../_shared/hacienda/puerta.ts";
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { contabilizarTrasPresentar, type Dependencias, fichero180, fichero190, fichero303, presentar303, probar, type Salida, yaPresentadoFuera } from "../_shared/hacienda/acciones.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -154,6 +155,25 @@ Deno.serve(async (req) => {
       if (error && !/exists|duplicate/i.test(error.message)) throw new Error("No se ha podido guardar el justificante.");
     },
   };
+
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con Hacienda (ni
+  // prueba la conexión, ni presenta, ni consulta un CSV). La cuenta, la de la
+  // declaración; para probar, la que tiene abierta quien prueba.
+  if (accion === "probar" || accion === "presentar_303" || accion === "ya_presentado_fuera") {
+    const declaracion = uuid(cuerpo.declaracion);
+    let cuenta: string | null = null;
+    if (declaracion) {
+      const { data: r } = await servicio.from("tax_return").select("account_id").eq("id", declaracion).maybeSingle();
+      cuenta = (r as { account_id?: string } | null)?.account_id ?? null;
+    } else {
+      const { data: abierta } = await comoPersona.rpc("_cuenta_activa");
+      cuenta = (abierta as string | null) ?? null;
+    }
+    if (!(await cuentaPuedeSalir(servicio, cuenta))) {
+      console.log(JSON.stringify({ hacienda: accion, entorno: hacienda.entorno, resultado: "demo" }));
+      return json({ ok: false, motivo: "demo", demo: true, mensaje: `${EN_LA_DEMO} En una empresa de demostración no se habla con Hacienda: no se ha presentado ni consultado nada.` }, 200);
+    }
+  }
 
   let salida: Salida;
   try {

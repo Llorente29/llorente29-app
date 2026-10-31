@@ -25,6 +25,7 @@
 //
 // Contesta 200 con { url } o { ok: false, texto } en palabras.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
@@ -59,6 +60,14 @@ Deno.serve(async (req) => {
   if (d.estado !== "abierto") return json({ ok: false, texto: "Este enlace ya no vale. Pide otro a quien te lo mandó." });
   const pendiente = Number(d.pendiente ?? 0);
   if (!(pendiente >= 0.5)) return json({ ok: false, texto: "Esta factura no tiene nada pendiente de pagar." });
+
+  // DM1 · PR 2a · La puerta: la factura de una empresa de demo no se cobra de verdad (ni Stripe ni el banco).
+  {
+    const { data: co } = await srv.from("company").select("account_id").eq("id", String(d.empresa_id ?? "")).maybeSingle();
+    if (!(await cuentaPuedeSalir(srv, (co as { account_id?: string } | null)?.account_id ?? null))) {
+      return json({ ok: false, demo: true, texto: `${EN_LA_DEMO} ${d.empresa} es una empresa de demostración: aquí no se cobra nada.` });
+    }
+  }
 
   // S01 · Con el TPV del banco (Redsys).
   if (d.proveedor === "redsys") {

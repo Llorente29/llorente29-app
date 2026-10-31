@@ -30,6 +30,7 @@
 // Auth de entrada dual + patrón de token: igual que lastapp-catalog-import.
 // Deploy: --no-verify-jwt (lo invoca un cron con secreto interno).
 
+import { EN_LA_DEMO, siPuedeSalir } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Local (no ../_shared/cors.ts): el bundler de deploy no resuelve imports
@@ -539,6 +540,11 @@ Deno.serve(async (req: Request) => {
   }
 
   const sb = createClient(Deno.env.get("SUPABASE_URL") ?? "", serviceKey);
+  // DM1 · PR 2a · La puerta: una cuenta de demo no habla con Last. Para las demás no cambia
+  // nada (si no se puede preguntar, sale como antes).
+  if (!(await siPuedeSalir(sb, accountId, async () => true, () => false, "sale"))) {
+    return jsonResponse({ ok: true, demo: true, mensaje: `${EN_LA_DEMO} Una empresa de demostración no habla con Last.` }, 200);
+  }
 
   const integ = await resolveToken(sb, accountId, orgId);
   if ("error" in integ) return jsonResponse({ error: integ.error }, 404);

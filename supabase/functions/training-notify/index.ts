@@ -10,6 +10,7 @@
 //
 // Idempotente por fila; marca sent/failed; reintenta hasta 3.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
@@ -89,6 +90,12 @@ Deno.serve(async (req) => {
   const results: unknown[] = [];
   for (const n of rows ?? []) {
     const nowIso = new Date().toISOString();
+    // DM1 · PR 2a · La puerta: el WhatsApp de una cuenta de demo no sale. Queda
+    // como enviado (sin mensaje del proveedor) y lo dice, para que no se reintente.
+    if (!(await cuentaPuedeSalir(sb, n.account_id ?? null))) {
+      await sb.from("training_notice").update({ status: "sent", provider_message_id: null, sent_at: nowIso, updated_at: nowIso, error: EN_LA_DEMO }).eq("id", n.id);
+      continue;
+    }
     try {
       // 1) DESCONEXIÓN DIGITAL: ¿está fichado en entrada AHORA?
       const { data: clocked, error: clkErr } = await sb.rpc("training_is_clocked_in", { p_employee_id: n.employee_id });
