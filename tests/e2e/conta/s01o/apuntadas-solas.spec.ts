@@ -53,6 +53,8 @@ async function capturar(page: Page, nombre: string) {
 test.describe('S01o · lo que Sumied sabe al 100 % se apunta solo', () => {
   test.describe.configure({ timeout: 180_000 })
   test.use({ actionTimeout: 20_000 })
+  // Las rutas inventadas se quitan al acabar: una lectura que sigue en vuelo no tumba la prueba («route.fetch: Test ended»).
+  test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: 'ignoreErrors' }) })
 
   test('arriba, cuántas apuntó sola; «Apuntadas solas» con su porqué y «Deshacer»', async ({ page }) => {
     await entrarComo(page, CUENTA_A.email)
