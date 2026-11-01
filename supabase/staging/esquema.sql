@@ -4138,8 +4138,11 @@ begin
   foreach t in array coalesce(p_textos, '{}'::text[]) loop
     continue when t is null or btrim(t) = '';
     foreach p in array array[regexp_replace(t, '\(.*$', ''), t] loop
-      select count(*), min(l.id::text)::uuid into v_n, v_id from public.locations l
-       where l.account_id = p_account and l.address is not null and public._conta_dir_coincide(p, l.address);
+      select count(distinct l.id), min(l.id::text)::uuid into v_n, v_id from public.locations l
+       where l.account_id = p_account
+         and ((l.address is not null and public._conta_dir_coincide(p, l.address))
+              or exists (select 1 from public.location_address_alias a
+                          where a.location_id = l.id and a.account_id = p_account and public._conta_dir_coincide(p, a.address)));
       if v_n = 1 then return v_id; end if;
       if v_n > 1 then return null; end if;
     end loop;
