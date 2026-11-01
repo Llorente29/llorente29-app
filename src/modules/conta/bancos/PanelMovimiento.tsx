@@ -75,8 +75,8 @@ export function PanelMovimiento(p: PanelProps) {
   // PC01 · E2 · Las remesas que esperan justo este cargo: la remesa entera, o un pago suyo (el banco los carga uno a uno).
   const cargo = Math.abs(m.importeCent)
   const esperan = (p.remesas ?? []).flatMap((r) => [
-    ...(r.porCargarCent === cargo ? [{ clave: r.id, remesaId: r.id, codigo: r.codigo, aMano: r.aMano, lineas: null as string[] | null, texto: `${r.aMano ? 'Pago a mano' : 'Remesa'} ${r.codigo}`, apoyo: r.pagos.length === 1 ? `${r.pagos[0].proveedor} · ${r.pagos[0].factura ?? 'sin número'}` : `${r.pagos.length} pagos, del ${diaMesCorto(r.fecha)}` }] : []),
-    ...(r.pagos.length > 1 ? r.pagos.filter((x) => x.importeCent === cargo).map((x) => ({ clave: x.id, remesaId: r.id, codigo: r.codigo, aMano: r.aMano, lineas: [x.id], texto: `Un pago de la remesa ${r.codigo}`, apoyo: `${x.proveedor} · ${x.factura ?? 'sin número'}` })) : []),
+    ...(r.porCargarCent === cargo ? [{ clave: r.id, remesaId: r.id, codigo: r.codigo, aMano: r.aMano, porBanco: r.porBanco, lineas: null as string[] | null, texto: `${r.porBanco ? 'Pago por el banco' : r.aMano ? 'Pago a mano' : 'Remesa'} ${r.codigo}`, apoyo: r.pagos.length === 1 ? `${r.pagos[0].proveedor} · ${r.pagos[0].factura ?? 'sin número'}` : `${r.pagos.length} pagos, del ${diaMesCorto(r.fecha)}` }] : []),
+    ...(r.pagos.length > 1 ? r.pagos.filter((x) => x.importeCent === cargo).map((x) => ({ clave: x.id, remesaId: r.id, codigo: r.codigo, aMano: r.aMano, porBanco: r.porBanco, lineas: [x.id], texto: `Un pago de la remesa ${r.codigo}`, apoyo: `${x.proveedor} · ${x.factura ?? 'sin número'}` })) : []),
   ])
   // Respuesta 7 · Si el cargo es lo que espera UNA sola remesa entera, Bancos la propone sola; si cuadran dos o más, se elige.
   const { propuesta: remesaPropuesta, resto: otrasEsperan } = remesaQueSePropone(esperan)
@@ -154,7 +154,7 @@ export function PanelMovimiento(p: PanelProps) {
           <h4>Esperando este cargo</h4>
           {remesaPropuesta && (
             <div className="cxn-remesa-propuesta" data-prueba="remesa-propuesta">
-              <p><span className="cx-ayuda">Te propongo:</span> <strong>es el cargo {remesaPropuesta.aMano ? 'del pago a mano' : 'de la remesa'} {remesaPropuesta.codigo}</strong> <span className="cx-ayuda">{remesaPropuesta.apoyo}. Es lo único que espera justo este importe.</span></p>
+              <p><span className="cx-ayuda">Te propongo:</span> <strong>es el cargo {remesaPropuesta.porBanco ? 'del pago por el banco' : remesaPropuesta.aMano ? 'del pago a mano' : 'de la remesa'} {remesaPropuesta.codigo}</strong> <span className="cx-ayuda">{remesaPropuesta.apoyo}. Es lo único que espera justo este importe.</span></p>
               <button type="button" className="cx-boton" disabled={p.ocupado} onClick={() => p.alCasarRemesa!(remesaPropuesta.remesaId, null)}>{p.ocupado ? 'Casando…' : 'Sí, es esta'}</button>
             </div>
           )}

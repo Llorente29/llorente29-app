@@ -34,6 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { BloquePagarConRevolut } from '@/modules/conta/pagos/PagarConRevolut'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -647,6 +648,10 @@ export default function RevisarFacturaPage() {
         motivoForma={extra.datos?.comoPagada ? 'Con la que se pagó.' : conTarjeta && !guardado?.formaPago ? 'Lo dice el documento: pagada con tarjeta. Al validarla, la caso con su cargo del banco.' : ficha?.formaPagoFicha ? 'La de su ficha.' : undefined}
         pagada={pagada ? `Pagada el ${fechaEs(pagada.fecha)}${extra.datos?.comoPagada ? ` · ${extra.datos.comoPagada}` : ''}.` : null} />
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
+      {/* B01 · 2c-2 · Pagar con el banco desde Sumied: solo una factura aprobada y por pagar (lo demás lo dice la base al preparar). */}
+      {fac.company_id && fac.estado === 'aprobada' && extra.datos && !pagada && !abono && !descartada && (
+        <BloquePagarConRevolut empresaId={fac.company_id} facturaId={fac.id} alCambiar={() => setVuelta((x) => x + 1)} />
+      )}
       <AsientoQueSeCrea titulo={fac.asiento ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}
         alEditar={!fac.asiento && !soloLectura ? () => setAMano((x) => !x) : undefined}
         vacio={fac.asiento ? (asientoReal.error ? `No se ha podido leer su asiento${fac.asiento.numero ? ` (el ${fac.asiento.numero})` : ''}: ${asientoReal.error}` : 'Leyendo su asiento…')

@@ -4,7 +4,7 @@
 // funciones conta_* de la 0915 (dueño único, N8). Cada escritura devuelve la
 // frase de lo que ha pasado (regla 8), escrita en la base.
 
-import { rpc } from '@/modules/conta/services/bd'
+import { rpc, tabla } from '@/modules/conta/services/bd'
 import { filaPago, type EstadoRemesa, type FilaPago } from '@/modules/conta/lib/pagos'
 import type { DatosRemesaSepa } from '@/modules/conta/lib/sepa'
 
@@ -64,8 +64,22 @@ export interface PagoRemesa {
   iban4: string | null; ibanPais: string | null; ibanEstado: 'comprobado' | 'primer_pago' | 'cambiado' | 'sin_fichero'; ibanNota: string | null
   confirmadoPor: string | null; confirmadoAt: string | null; estado: 'pendiente' | 'por_confirmar' | 'pagada' | 'rechazada' | 'sacada'; motivo: string | null; cuenta: string | null
 }
+/**
+ * B01 · 2c-2 · Las remesas que son un pago mandado por la API del banco (tipo «banco», la 1614):
+ * sin fichero SEPA. Las funciones de las remesas dicen solo si son «a mano», así que el tipo se lee
+ * de la tabla (con su RLS de lectura). Antes de la 1614 en un entorno, ninguna lo es.
+ */
+async function porBancoDe(ids: string[]): Promise<Set<string>> {
+  if (!ids.length) return new Set()
+  const { data, error } = await tabla('conta_pago_remesa').select('id, kind').in('id', ids)
+  if (error) throw new Error(`No se ha podido leer de qué tipo son las remesas: ${error.message}`)
+  return new Set(((data ?? []) as unknown as { id: string; kind: string }[]).filter((r) => r.kind === 'banco').map((r) => r.id))
+}
+
 export interface Remesa {
-  id: string; codigo: string; aMano: boolean; fechaPago: string; estado: EstadoRemesa; total: number; porCargar: number
+  id: string; codigo: string; aMano: boolean
+  /** B01 · 2c-2 · Un pago mandado por la API del banco (Revolut): sin fichero. */
+  porBanco: boolean; fechaPago: string; estado: EstadoRemesa; total: number; porCargar: number
   vivas: number; pagadas: number; porConfirmar: number; rechazadas: number
   ficheroAt: string | null; ficheroPor: string | null; creada: string; creadaPor: string | null
   /** Respuesta 7 · El asiento del cargo se validó solo (el cargo cuadra con la remesa). */
@@ -79,8 +93,9 @@ export async function leerRemesa(remesaId: string): Promise<Remesa> {
   const d = await rpc<Fila>('conta_remesa_ficha', { p_remesa: remesaId })
   if (!d) throw new Error('Esa remesa no existe o no es de tu cuenta.')
   const b = d.banco as Fila
+  const porBanco = (await porBancoDe([String(d.id)])).has(String(d.id))
   return {
-    id: String(d.id), codigo: String(d.codigo), aMano: d.a_mano === true, fechaPago: String(d.fecha_pago), estado: String(d.estado) as EstadoRemesa,
+    id: String(d.id), codigo: String(d.codigo), aMano: d.a_mano === true, porBanco, fechaPago: String(d.fecha_pago), estado: String(d.estado) as EstadoRemesa,
     total: num(d.total), porCargar: num(d.por_cargar), vivas: num(d.vivas), pagadas: num(d.pagadas), porConfirmar: num(d.por_confirmar), rechazadas: num(d.rechazadas),
     ficheroAt: str(d.fichero_at), ficheroPor: str(d.fichero_por), creada: String(d.creada), creadaPor: str(d.creada_por), validadoSolo: d.validado_solo === true,
     banco: { id: String(b.id), nombre: String(b.nombre), iban4: str(b.iban4), cuenta: str(b.cuenta) },
@@ -93,22 +108,24 @@ export async function leerRemesa(remesaId: string): Promise<Remesa> {
   }
 }
 
-export interface RemesaResumen { id: string; codigo: string; aMano: boolean; fechaPago: string; estado: EstadoRemesa; total: number; vivas: number; pagadas: number; porConfirmar: number; banco: string }
+export interface RemesaResumen { id: string; codigo: string; aMano: boolean; porBanco: boolean; fechaPago: string; estado: EstadoRemesa; total: number; vivas: number; pagadas: number; porConfirmar: number; banco: string }
 export async function leerRemesas(companyId: string): Promise<RemesaResumen[]> {
   const d = await rpc<Fila[]>('conta_remesas_lista', { p_company: companyId })
+  const banco = await porBancoDe((d ?? []).map((r) => String(r.id)))
   return (d ?? []).map((r) => ({
-    id: String(r.id), codigo: String(r.codigo), aMano: r.a_mano === true, fechaPago: String(r.fecha_pago), estado: String(r.estado) as EstadoRemesa,
+    id: String(r.id), codigo: String(r.codigo), aMano: r.a_mano === true, porBanco: banco.has(String(r.id)), fechaPago: String(r.fecha_pago), estado: String(r.estado) as EstadoRemesa,
     total: num(r.total), vivas: num(r.vivas), pagadas: num(r.pagadas), porConfirmar: num(r.por_confirmar), banco: String(r.banco ?? ''),
   }))
 }
 
 /** Bancos: las remesas que esperan su cargo, con cada pago (para casar un cargo). */
-export interface RemesaParaCasar { id: string; codigo: string; fecha: string; aMano: boolean; porCargarCent: number; pagos: { id: string; importeCent: number; proveedor: string; factura: string | null }[] }
+export interface RemesaParaCasar { id: string; codigo: string; fecha: string; aMano: boolean; porBanco: boolean; porCargarCent: number; pagos: { id: string; importeCent: number; proveedor: string; factura: string | null }[] }
 export async function remesasParaCasar(companyId: string): Promise<RemesaParaCasar[]> {
   const d = await rpc<Fila[]>('conta_remesas_para_casar', { p_company: companyId })
   const cent = (x: unknown) => Math.round(num(x) * 100)
+  const banco = await porBancoDe((d ?? []).map((r) => String(r.id)))
   return (d ?? []).map((r) => ({
-    id: String(r.id), codigo: String(r.codigo), fecha: String(r.fecha), aMano: r.a_mano === true, porCargarCent: cent(r.por_cargar),
+    id: String(r.id), codigo: String(r.codigo), fecha: String(r.fecha), aMano: r.a_mano === true, porBanco: banco.has(String(r.id)), porCargarCent: cent(r.por_cargar),
     pagos: ((r.pagos as Fila[] | null) ?? []).map((p) => ({ id: String(p.id), importeCent: cent(p.importe), proveedor: String(p.proveedor ?? ''), factura: str(p.factura) })),
   }))
 }

@@ -42,6 +42,10 @@ function fraseDe(r: Remesa): string {
   const n = r.vivas
   const cuantas = n === 1 ? 'Una factura' : `${['Dos', 'Tres', 'Cuatro', 'Cinco', 'Seis'][n - 2] ?? String(n)} facturas`
   const desde = `${r.banco.nombre}${r.banco.iban4 ? ` ···${r.banco.iban4}` : ''}`
+  if (r.porBanco) {
+    return r.estado === 'pagada' ? `Pagada por el banco desde ${desde}: el cargo ya está casado en Bancos, con su asiento.`
+      : `Mandada al banco desde ${desde} (Pagar con Revolut). Cuando llegue el cargo (${eurosExactos(r.porCargar)}), cásalo en Bancos con este pago: la factura quedará pagada con su asiento.`
+  }
   if (r.aMano) {
     return r.estado === 'pagada' ? `Pagada a mano desde ${desde}: el cargo ya está casado en Bancos, con su asiento.`
       : `Pagada a mano desde ${desde}. Cuando llegue el cargo, cásalo en Bancos: el pago tendrá su asiento y la factura quedará pagada.`
@@ -95,16 +99,18 @@ export default function RemesaPagosPage() {
   const porConfirmar = r.pagos.filter((p) => p.estado === 'por_confirmar')
   const primera = porConfirmar[0] ?? null
   const vivos = r.pagos.filter((p) => p.estado !== 'sacada')
-  const titulo = r.aMano ? `Pago a mano · ${diaMesCorto(r.fechaPago)}` : `Remesa de transferencias · ${diaMesCorto(r.fechaPago)}`
+  const titulo = r.porBanco ? `Pago por el banco · ${diaMesCorto(r.fechaPago)}` : r.aMano ? `Pago a mano · ${diaMesCorto(r.fechaPago)}` : `Remesa de transferencias · ${diaMesCorto(r.fechaPago)}`
+  // B01 · 2c-2 · Un pago mandado por la API del banco no tiene fichero: como uno a mano, sin «Descargar».
+  const sinFichero = r.aMano || r.porBanco
 
-  const principal = !r.aMano && primera
+  const principal = !sinFichero && primera
     ? <Boton variante="principal" disabled={ocupado} onClick={() => void hacer(() => confirmarIban(primera.id))}>Confirmar el IBAN</Boton>
-    : !r.aMano && r.estado === 'fichero'
+    : !sinFichero && r.estado === 'fichero'
       ? <Boton variante="principal" disabled={ocupado} onClick={() => void descargar(null)}>{ocupado ? 'Preparando…' : 'Descargar el fichero'}</Boton>
       : undefined
-  const secundarios = !r.aMano && primera && r.vivas > 1
+  const secundarios = !sinFichero && primera && r.vivas > 1
     ? <Boton disabled={ocupado} onClick={() => void descargar(primera)}>Descargar sin {primera.proveedor}</Boton>
-    : !r.aMano && r.estado === 'en_banco' ? <Boton disabled={ocupado} onClick={() => void descargar(null)}>Descargar el fichero otra vez</Boton> : undefined
+    : !sinFichero && r.estado === 'en_banco' ? <Boton disabled={ocupado} onClick={() => void descargar(null)}>Descargar el fichero otra vez</Boton> : undefined
 
   // El asiento: cada proveedor a su 400/410 (debe) y el banco a su 572 (haber).
   const porProveedor = new Map<string, { nombre: string; cuenta: string; importe: number }>()
@@ -126,7 +132,7 @@ export default function RemesaPagosPage() {
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role={aviso.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-remesa">{aviso.texto}</p>}
 
       <ol className="pg-pasos" aria-label="En qué punto está la remesa">
-        {pasosRemesa(r.estado, r.aMano, r.validadoSolo).map((p, i) => (
+        {pasosRemesa(r.estado, sinFichero, r.validadoSolo).map((p, i) => (
           <li key={p.etiqueta} data-hecho={p.hecho ? 'si' : 'no'} data-actual={p.actual ? 'si' : 'no'} aria-current={p.actual ? 'step' : undefined}>
             <span className="pg-paso-marca" aria-hidden="true">{p.hecho ? '✓' : i + 1}</span>
             <span className="pg-paso-texto">{p.etiqueta}{p.detalle && <span className="pg-paso-detalle" data-prueba="validado-solo">{p.detalle}</span>}</span>
@@ -151,7 +157,7 @@ export default function RemesaPagosPage() {
                       {p.ibanEstado === 'primer_pago' && !p.confirmadoAt && <span className="cx-ayuda" title={p.ibanNota ?? ''}> · primer pago</span>}
                       {p.ibanEstado === 'primer_pago' && p.confirmadoAt && <span className="pg-iban-ok" title={`Confirmado por ${p.confirmadoPor ?? '—'}`}> ✓</span>}
                       {/* Respuesta 7 · Un primer pago no para la remesa, pero sin confirmar su IBAN el asiento no se valida solo. */}
-                      {p.ibanEstado === 'primer_pago' && !p.confirmadoAt && p.estado === 'pendiente' && !r.aMano && (
+                      {p.ibanEstado === 'primer_pago' && !p.confirmadoAt && p.estado === 'pendiente' && !sinFichero && (
                         <button type="button" className="pg-enlace pg-enlace-chico" disabled={ocupado} onClick={() => void hacer(() => confirmarIban(p.id))}>Confirmarlo</button>
                       )}
                     </td>
@@ -190,7 +196,8 @@ export default function RemesaPagosPage() {
               <dt>Cuenta de cargo</dt><dd>{r.banco.nombre}{r.banco.iban4 ? ` ···${r.banco.iban4}` : ''}</dd>
               <dt>Fecha de pago</dt><dd>{fechaLarga(r.fechaPago)}</dd>
               <dt>Total</dt><dd className="s-cifra">{eurosExactos(r.total)}</dd>
-              {!r.aMano && <><dt>Fichero</dt><dd>SEPA de transferencias · {plural(r.vivas, 'pago', 'pagos')}{r.ficheroAt ? ` · descargado ${horaMadrid(r.ficheroAt)}` : ''}</dd></>}
+              {r.porBanco && <><dt>Cómo sale</dt><dd>Por la API del banco (Pagar con Revolut), sin fichero</dd></>}
+              {!sinFichero && <><dt>Fichero</dt><dd>SEPA de transferencias · {plural(r.vivas, 'pago', 'pagos')}{r.ficheroAt ? ` · descargado ${horaMadrid(r.ficheroAt)}` : ''}</dd></>}
               <dt>Hecha por</dt><dd>{r.creadaPor ?? '—'} · {horaMadrid(r.creada)}</dd>
               {r.estado === 'pagada' && <><dt>Su asiento</dt><dd>{r.validadoSolo ? 'Validado solo: el cargo cuadra con la remesa' : 'En «Por validar»'}</dd></>}
             </dl>
