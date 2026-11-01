@@ -1,0 +1,23 @@
+# S01o · PR 1 · Lo que Sumied sabe al 100 % se apunta solo: las facturas de
+# comisión de las plataformas. Rama claude/s01o-apunta-solo. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1729  cambia public.company_account_link: los dos CHECK AMPLÍAN con el
+#         papel «publicidad» (la ficha guarda también la cuenta de publicidad).
+#   1730  cambia _conta_comision_buscar (misma firma, con su respaldo): primero
+#         liga por el NÚMERO de la factura (decisión 2 de Julio).
+#   1731  AÑADE la regla «seguro al 100 %», el apunte en el servidor, «Apuntadas
+#         solas», «Deshacer» y la pasada cada media hora (7 y 37). Nada se
+#         apunta si la empresa tiene apagado el interruptor.
+#   1732  Foodint (solo añade): la cuenta de gasto y de publicidad en
+#         las fichas de Glovo, Uber y Just Eat. Solo eso (respuesta 3 de Julio):
+#         el interruptor sigue apagado y no hay pasada. Lo enciende Julio cuando
+#         «Apuntadas solas» con «Deshacer» esté en producción, y la primera pasada
+#         la hace entonces la tarea programada.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01o-apunta-solo.sql
+supabase/migrations/20261101T1729_s01o_ficha_publicidad.sql
+supabase/migrations/20261101T1730_s01o_comision_por_numero.sql
+supabase/migrations/20261101T1731_s01o_plataforma_apunta_sola.sql
+supabase/migrations/20261101T1732_s01o_foodint.sql

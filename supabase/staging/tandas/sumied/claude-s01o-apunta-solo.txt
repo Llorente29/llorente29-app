@@ -1,0 +1,16 @@
+# S01o · PR 1 · Las facturas de plataforma se apuntan solas. La 1729 (CHECK que
+# amplía) y la 1730 (_conta_comision_buscar) cambian; la 1731 añade; la 1732 es
+# de Foodint (solo sus fichas) y en staging no hace nada.
+# Su prueba (ROLLBACK, cuenta D, datos inventados): sin cuenta de gasto en la
+# ficha y con el interruptor apagado no se apunta; la que cuadra con su número
+# se apunta sola (validada, pagada por compensación, con su porqué); la de la
+# tarifa recurrente también; la que no cuadra se queda con su motivo; la ligada
+# a otra se religa por su número; las rectificativas con una y con dos
+# liquidaciones; con el eje «local», el abono sin local se queda y el que dice
+# la dirección de su tienda se apunta con ese local; publicidad y la que mezcla; «Apuntadas solas» y «Deshacer»
+# como persona; la pasada; y la vuelta atrás.
+supabase/migrations/20261101T1729_s01o_ficha_publicidad.sql
+supabase/migrations/20261101T1730_s01o_comision_por_numero.sql
+supabase/migrations/20261101T1731_s01o_plataforma_apunta_sola.sql
+supabase/migrations/20261101T1732_s01o_foodint.sql
+supabase/staging/sql/20261101_s01o_apunta_solo_prueba.sql

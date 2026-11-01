@@ -27,7 +27,7 @@ export default function RemesasPagosPage() {
   const filas = datos.datos ?? []
   const columnas: ColumnaLista<RemesaResumen>[] = [
     { id: 'codigo', titulo: 'Remesa', celda: (r) => r.codigo, minimo: 110 },
-    { id: 'tipo', titulo: 'Qué es', celda: (r) => (r.aMano ? 'Pago a mano' : 'Transferencias'), prioridad: 3, minimo: 120 },
+    { id: 'tipo', titulo: 'Qué es', celda: (r) => (r.porBanco ? 'Pago por el banco' : r.aMano ? 'Pago a mano' : 'Transferencias'), prioridad: 3, minimo: 120 },
     { id: 'fecha', titulo: 'Fecha de pago', celda: (r) => diaMesCorto(r.fechaPago), minimo: 100 },
     { id: 'banco', titulo: 'Desde', celda: (r) => r.banco, prioridad: 2, minimo: 120 },
     { id: 'pagos', titulo: 'Pagos', cifra: true, celda: (r) => `${r.pagadas} de ${r.vivas}`, prioridad: 2, minimo: 70 },
@@ -48,7 +48,7 @@ export default function RemesasPagosPage() {
           tarjeta={(r) => (
             <span className="pg-tarjeta">
               <span className="pg-tarjeta-fila"><strong>{r.codigo}</strong><strong className="s-cifra">{eurosExactos(r.total)}</strong></span>
-              <span className="pg-tarjeta-fila cx-ayuda"><span>{r.aMano ? 'Pago a mano' : 'Transferencias'} · {diaMesCorto(r.fechaPago)}</span><Chip tono={TONO[r.estado]}>{NOMBRE_ESTADO_REMESA[r.estado]}</Chip></span>
+              <span className="pg-tarjeta-fila cx-ayuda"><span>{r.porBanco ? 'Pago por el banco' : r.aMano ? 'Pago a mano' : 'Transferencias'} · {diaMesCorto(r.fechaPago)}</span><Chip tono={TONO[r.estado]}>{NOMBRE_ESTADO_REMESA[r.estado]}</Chip></span>
             </span>
           )}
           vacio={<p className="s-lista-vacia">Aún no hay remesas. Se preparan en Pagos, marcando las facturas y «Pagar».</p>} />

@@ -401,7 +401,13 @@ export async function recuperarFactura(invoiceId: string, quien: string | null):
 // por ids, con su cuenta (regla 9). Si no se puede leer, la lista sale igual
 // con «—» en esas columnas y lo dice.
 
-export interface ExtraFactura { base: number | null; iva: number | null; pagada: string | null; comoPagada: string | null; localId: string | null; local: string | null }
+export interface ExtraFactura {
+  base: number | null; iva: number | null; pagada: string | null; comoPagada: string | null; localId: string | null; local: string | null
+  /** S01o · Si Sumied la apuntó sola: su porqué (conta_apuntadas_solas). */
+  sola?: string | null
+  /** S01o · Si no se apuntó sola: por qué la miras tú (una frase). */
+  motivo?: string | null
+}
 
 export async function leerExtrasFacturas(accountId: string, ids: readonly string[]): Promise<Map<string, ExtraFactura>> {
   const fuera = new Map<string, ExtraFactura>()
