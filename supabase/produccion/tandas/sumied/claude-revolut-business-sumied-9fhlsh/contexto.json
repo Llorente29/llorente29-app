@@ -1,13 +1,19 @@
 {
- "_que": "B01 Revolut · PR 2a · contexto de producción de la tanda (1234), medido en SOLO LECTURA el 01/11 a las 14:00Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ninguna de las 8 tablas ni de las 37 funciones que crea la 1234 (ni otra firma con su nombre), nada en el camino del pedido y nada en el historial.",
- "medido": "2026-11-01T14:00Z",
+ "_que": "B01 Revolut · PR 2b · contexto de producción de la tanda (1614), medido en SOLO LECTURA el 01/11 a las 16:40Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen conta_pago_remesa (su CHECK del tipo, conta_pago_remesa_kind_check, es fichero | a_mano) y la vista conta_pago_remesa_estado (md5 de su definición cc12648e…, la de la 0915), las dos con 0 filas; no existe ninguna de las cuatro funciones; nada en el camino del pedido; nada en el historial.",
+ "medido": "2026-11-01T16:40Z",
  "tanda": {
-  "supabase/migrations/20261101T1234_b01p_pagos_base.sql": "88715e88915bbaaee6a0cb56aca61455"
+  "supabase/migrations/20261101T1614_b01p_pagos_salida.sql": "4c48fa6e558bbd0afc936050835478e5"
  },
  "contexto": {
-  "tablas": [],
+  "tablas": [
+   "public.conta_pago_remesa",
+   "public.conta_pago_remesa_estado"
+  ],
   "funciones": [],
-  "filas": {},
+  "filas": {
+   "public.conta_pago_remesa": 0,
+   "public.conta_pago_remesa_estado": 0
+  },
   "otras": {},
   "camino": {
    "tablas": [],

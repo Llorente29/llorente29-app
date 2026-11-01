@@ -41,6 +41,11 @@ export const direcciones = (e: EntornoRevolut) => DIRECCIONES[e]
  */
 export const PERMISOS_AL_CONECTAR = ['READ', 'WRITE'] as const
 export const PERMISOS_AL_CONECTAR_TEXTO = PERMISOS_AL_CONECTAR.join(',')
+/** «Activar pagos» (PR 2b): los de conectar y PAY. Solo un administrador, con su llave o su PIN. */
+export const PERMISOS_CON_PAGOS = ['READ', 'WRITE', 'PAY'] as const
+export const PERMISOS_CON_PAGOS_TEXTO = PERMISOS_CON_PAGOS.join(',')
+/** ¿Estos permisos dejan pagar? (PAY). */
+export const dejanPagar = (permisos: string | null | undefined) => (permisos ?? '').split(/[,\s]+/).includes('PAY')
 /** ¿Estos permisos dejan registrar el aviso de Revolut? (pide WRITE). */
 export const dejanAvisar = (permisos: string | null | undefined) => (permisos ?? '').split(/[,\s]+/).includes('WRITE')
 
