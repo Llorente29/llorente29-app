@@ -95,8 +95,13 @@ export interface Aprobado {
 }
 
 export async function aprobar(companyId: string, cuentaId: string, facturaId: string, pagarIgualPorque: string | null): Promise<Aprobado> {
+  return aprobarVarias(companyId, cuentaId, [{ id: facturaId, pagarIgualPorque }])
+}
+
+/** «Aprobar y pagar» de varias facturas que salen juntas (un lote, una segunda aprobación si hace falta). PR 3b. */
+export async function aprobarVarias(companyId: string, cuentaId: string, facturas: { id: string; pagarIgualPorque: string | null }[]): Promise<Aprobado> {
   const d = await rpc<Fila>('conta_pago_aprobar', { p_company: companyId, p_treasury: cuentaId,
-    p_facturas: [{ id: facturaId, ...(pagarIgualPorque ? { pagar_igual_porque: pagarIgualPorque } : {}) }] })
+    p_facturas: facturas.map((f) => ({ id: f.id, ...(f.pagarIgualPorque ? { pagar_igual_porque: f.pagarIgualPorque } : {}) })) })
   const s = d.segunda as Fila | null
   return {
     lote: String(d.lote), estado: d.estado === 'listo' ? 'listo' : 'esperando_segunda', pagos: num(d.pagos), total: num(d.total), frase: String(d.frase ?? ''),
@@ -182,3 +187,40 @@ export async function paraMi(companyId: string): Promise<{ lote: string; aprobad
     throw e
   }
 }
+
+// ── Varias facturas a la vez (PR 3b, maqueta v2, pantalla 4) ───────────────
+
+export interface FilaVarias {
+  facturaId: string
+  proveedor: string
+  numero: string | null
+  preparado: Preparado | null
+  error: string | null
+  titular: Titular | null
+  titularError: string | null
+  pagarIgual: boolean
+  porque: string
+}
+
+/**
+ * Qué sale de la lista y qué no, y por qué. No sale: lo que la base no deja
+ * pagar (su porqué), lo que aún se está comprobando, y un titular que no
+ * coincide salvo que se marque «pagar igual» con su porqué. Lo demás, sí.
+ */
+export function quienesSalen(filas: readonly FilaVarias[]): { salen: FilaVarias[]; fuera: { fila: FilaVarias; porque: string }[]; comprobando: number } {
+  const salen: FilaVarias[] = []; const fuera: { fila: FilaVarias; porque: string }[] = []; let comprobando = 0
+  for (const f of filas) {
+    if (f.error) { fuera.push({ fila: f, porque: f.error }); continue }
+    if (!f.preparado) { comprobando++; continue }
+    if (!f.preparado.sePuede) { fuera.push({ fila: f, porque: f.preparado.porque ?? 'No se puede pagar desde Sumied.' }); continue }
+    if (!f.titular && !f.titularError) { comprobando++; continue }
+    if (f.titular?.resultado === 'no_coincide' && !(f.pagarIgual && f.porque.trim())) {
+      fuera.push({ fila: f, porque: 'El titular no coincide: compruébalo con el proveedor, o marca «pagar igual» y di por qué.' }); continue
+    }
+    salen.push(f)
+  }
+  return { salen, fuera, comprobando }
+}
+
+/** El texto del botón principal de la barra de Pagos: con el nombre del banco de «Desde». */
+export const textoPagarVarias = (n: number, banco: string) => n === 1 ? `Pagar 1 con ${banco}` : `Pagar las ${n} con ${banco}`
