@@ -50950,7 +50950,7 @@ CREATE FUNCTION public.empleados_datos_privados(p_account_id uuid) RETURNS TABLE
   select e.id, e.salary, e.dni, e.birth_date, e.employer_ss_annual
     from public.employees e
    where e.account_id = p_account_id
-     and public.current_user_is_admin_of(p_account_id)
+     and public.current_user_ve_laboral(p_account_id)
 $$;
 
 
@@ -50958,7 +50958,7 @@ $$;
 -- Name: FUNCTION empleados_datos_privados(p_account_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.empleados_datos_privados(p_account_id uuid) IS 'L1a (27/10): el salario, el DNI, la fecha de nacimiento y el coste de Seguridad Social de las personas de la cuenta, solo para su administrador. A cualquier otro le devuelve cero filas.';
+COMMENT ON FUNCTION public.empleados_datos_privados(p_account_id uuid) IS 'L1a (27/10) y N1 (01/11): el salario, el DNI, la fecha de nacimiento y el coste de Seguridad Social de las personas de la cuenta, para su administrador y para quien tiene el permiso de Laboral (current_user_ve_laboral). A cualquier otro le devuelve cero filas.';
 
 
 --
