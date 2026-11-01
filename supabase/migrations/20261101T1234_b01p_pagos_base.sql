@@ -73,7 +73,11 @@ create table if not exists public.conta_pago_lote (
   id                    uuid primary key default gen_random_uuid(),
   account_id            uuid not null references public.accounts(id) on delete cascade,
   company_id            uuid not null references public.company(id) on delete cascade,
-  treasury_account_id   uuid not null references public.treasury_account(id),
+  -- Sin clave ajena a las tablas de mucho uso (treasury_account, supplier_invoice,
+  -- supplier, las remesas): crearla o quitarla las bloquearía en exclusiva y se
+  -- cruzaría con quien escribe en ellas (staging, run 41309002393: 40P01 al
+  -- deshacer). Que sean de la empresa lo comprueban las funciones.
+  treasury_account_id   uuid not null,
   proveedor             text not null check (proveedor in ('revolut')),
   estado                text not null check (estado in ('esperando_segunda', 'listo', 'enviando', 'enviado', 'cancelado')),
   huella                text not null check (huella ~ '^[0-9a-f]{64}$'),
@@ -99,8 +103,8 @@ create table if not exists public.conta_pago_salida (
   account_id           uuid not null references public.accounts(id) on delete cascade,
   company_id           uuid not null references public.company(id) on delete cascade,
   lote_id              uuid not null references public.conta_pago_lote(id) on delete cascade,
-  invoice_id           uuid not null references public.supplier_invoice(id) on delete cascade,
-  supplier_id          uuid references public.supplier(id) on delete set null,
+  invoice_id           uuid not null,
+  supplier_id          uuid,
   amount               numeric(14,2) not null check (amount > 0),
   beneficiario         text not null,
   iban                 text not null,
@@ -113,8 +117,8 @@ create table if not exists public.conta_pago_salida (
   estado               text not null check (estado in ('esperando_segunda', 'lista', 'enviando', 'enviada', 'esperando_banco', 'pagada', 'rechazada', 'devuelta', 'cancelada')),
   estado_porque        text,
   estado_at            timestamptz not null default now(),
-  remesa_id            uuid references public.conta_pago_remesa(id) on delete set null,
-  remesa_linea_id      uuid references public.conta_pago_remesa_linea(id) on delete set null,
+  remesa_id            uuid,
+  remesa_linea_id      uuid,
   banco_id             text,
   created_at           timestamptz not null default now()
 );

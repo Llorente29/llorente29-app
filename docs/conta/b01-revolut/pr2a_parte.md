@@ -74,6 +74,8 @@ Empieza con la vuelta atrás, que deja la base sin el 2a.
 - **La migración, dos veces seguidas:** en verde (W05).
 - **En staging:** pendiente, el run [41309002393](https://github.com/Llorente29/llorente29-app/actions/runs/41309002393).
 
+**Lo que salió en staging, primer run** ([41309002393](https://github.com/Llorente29/llorente29-app/actions/runs/41309002393)): las 11 partes de la prueba, en verde. Después falló el paso que aplica la 1234 y la deshace en la misma transacción, como el ensayo de producción: 40P01, un interbloqueo, al quitar `conta_pago_reto`. Para quitar una clave ajena, PostgreSQL bloquea en exclusiva la tabla a la que apunta, y la 1234 apuntaba a tablas muy usadas (`supplier_invoice`, `supplier`, `treasury_account` y las remesas). Con otra sesión escribiendo en ellas, se cruzan. Ahora la 1234 no tiene clave ajena a ninguna de ellas, solo a `accounts` y `company`, como el PR 1. Que la factura, el proveedor y la cuenta sean de la empresa lo comprueban las funciones.
+
 **Lo que la prueba encontró en la migración:** concatenar un texto a un array sin tipo, una expresión regular con más de 255 repeticiones y una frase en plural con un solo pago. Corregidos.
 
 **Unitarias y e2e:** el 2a no toca `src/` ni las funciones, así que no lleva unitarias ni e2e. Llegan con el 2b (la llave, el PIN, el correo) y el 2c (las pantallas).
