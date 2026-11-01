@@ -351,6 +351,16 @@ function devolucionDe(gasto: string, c: CuentasFicha): Cuenta | null {
   return (p ? c.devoluciones?.find((d) => d.codigo.startsWith(p)) : null) ?? null
 }
 
+/**
+ * S01h · 2 · La cuenta a la que va de verdad el gasto en el asiento: la misma,
+ * salvo en un abono, que va a su 608x si la propuesta la trae (60000000 →
+ * 60800000). «A qué gasto va» enseña ésta, para decir lo mismo que el asiento.
+ */
+export function cuentaDelGastoEnAsiento(gasto: string, c: CuentasFicha | null): Cuenta | null {
+  if (!gasto || !c?.abono) return null
+  return devolucionDe(gasto, c)
+}
+
 export interface LineaVista {
   codigo: string
   nombre: string

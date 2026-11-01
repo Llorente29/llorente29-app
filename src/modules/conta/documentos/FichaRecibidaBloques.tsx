@@ -235,7 +235,7 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
 
 // ── A qué gasto va ──────────────────────────────────────────────────────────
 
-export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambiar, cambio, alDeshacer, tono, motivo, soloLectura, elegirLocal, errorLocal, sinReparto }: {
+export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambiar, cambio, alDeshacer, tono, motivo, soloLectura, elegirLocal, errorLocal, sinReparto, enAsiento }: {
   gastos: readonly LineaGasto[]
   base: number
   cuentas: readonly CuentaHoja[]
@@ -253,6 +253,8 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
   errorLocal?: string
   /** Sin «+ Repartir»: la a mano guarda una cuenta y un local (el reparto, en su ficha). */
   sinReparto?: boolean
+  /** S01h · 2 · La cuenta que va al asiento, si no es la guardada (un abono: su 608x). La casilla enseña ésa. */
+  enAsiento?: (cuenta: string) => { codigo: string; nombre: string } | null
 }) {
   const [buscando, setBuscando] = useState<number | null>(null)
   const refs = useRef<(HTMLButtonElement | null)[]>([])
@@ -272,13 +274,13 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
           <span className="s-lista-cifra">Importe</span>
           <span />
         </div>
-        {gastos.map((g, i) => (
+        {gastos.map((g, i) => { const va = g.cuenta ? enAsiento?.(g.cuenta) ?? null : null; const codigo = va?.codigo ?? g.cuenta; return (
           <div key={i} className="cxf-gasto-linea" role="group" aria-label={`Gasto ${i + 1}`} data-con-local={locales ? '' : undefined} data-tono={cambiado ? undefined : tono} data-prueba="linea-gasto">
             <div className="cxf-cuenta">
               <button type="button" ref={(el) => { refs.current[i] = el }} className="s-control cxf-cuenta-boton" disabled={soloLectura}
-                aria-label={`Cuenta de gasto${g.cuenta ? `: ${g.cuenta} ${nombre(g.cuenta)}` : ''}. F4 para buscarla`} aria-keyshortcuts="F4"
+                aria-label={`Cuenta de gasto${codigo ? `: ${codigo} ${va?.nombre ?? nombre(codigo)}` : ''}. F4 para buscarla`} aria-keyshortcuts="F4"
                 onClick={() => setBuscando(i)} onKeyDown={(e) => { if (e.key === 'F4') { e.preventDefault(); setBuscando(i) } }}>
-                {g.cuenta ? <><strong className="cxf-cuenta-codigo s-cifra">{g.cuenta}</strong> <span className="cxf-cuenta-nombre">{nombre(g.cuenta)}</span></> : <span className="cxf-cuenta-nombre">Elige la cuenta…</span>}
+                {codigo ? <><strong className="cxf-cuenta-codigo s-cifra">{codigo}</strong> <span className="cxf-cuenta-nombre">{va?.nombre ?? nombre(codigo)}</span></> : <span className="cxf-cuenta-nombre">Elige la cuenta…</span>}
                 {!soloLectura && <Tecla>F4</Tecla>}
               </button>
               {buscando === i && (
@@ -302,7 +304,12 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
               ? <button type="button" className="cxf-quitar" aria-label={`Quitar el gasto ${i + 1}`} onClick={() => alCambiar(gastos.filter((_, k) => k !== i))}><Icono nombre="cerrar" /></button>
               : <span />}
           </div>
-        ))}
+        ) })}
+        {gastos.some((g) => g.cuenta && enAsiento?.(g.cuenta)) && (
+          <p className="s-campo-ficha-motivo" data-prueba="gasto-devolucion">
+            Es un abono: va a la cuenta de devoluciones de la compra{gastos.filter((g) => g.cuenta && enAsiento?.(g.cuenta)).map((g) => ` (${g.cuenta} → ${enAsiento?.(g.cuenta)?.codigo})`)[0]}, la misma que el asiento.
+          </p>
+        )}
         {cambiado ? <MarcaCambiado cambio={cambio} onDeshacer={alDeshacer} parte="antes" /> : motivo && <p className="s-campo-ficha-motivo">{motivo}</p>}
         {errorLocal && <p className="cxf-error" role="alert">{errorLocal}</p>}
         {cuadre && <p className="cxf-error" role="status">{cuadre}</p>}
