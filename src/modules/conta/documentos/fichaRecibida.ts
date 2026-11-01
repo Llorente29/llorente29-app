@@ -37,7 +37,7 @@ export interface LineaGasto { cuenta: string; local: string; importe: string }
 /** Retención (IRPF) o recargo de equivalencia: su tipo y su importe. */
 export interface Adicional { tipo: string; importe: string }
 
-export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid'
+export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid' | 'compensation'
 export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: '', texto: 'Sin decir' },
   { valor: 'transfer', texto: 'Transferencia' },
@@ -46,6 +46,8 @@ export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: 'cash', texto: 'Efectivo' },
   // D06 · Riders: se paga del saldo prepago de Catcher (la 40700001), sin vencimiento que esperar.
   { valor: 'prepaid', texto: 'Saldo prepago Catcher (40700001)' },
+  // S01i · Las comisiones de las plataformas: se descuentan de lo que te paga la liquidación, no pasan por el banco.
+  { valor: 'compensation', texto: 'Compensación con la liquidación' },
 ]
 export const ESTADOS_PAGO: { valor: string; texto: string }[] = [
   { valor: 'sin_pagar', texto: 'Sin pagar' },
@@ -347,6 +349,16 @@ export function cuentasDeLaPropuesta(lineas: readonly LineaPropuestaVista[], nom
 function devolucionDe(gasto: string, c: CuentasFicha): Cuenta | null {
   const p = plantillaDevolucion(gasto)
   return (p ? c.devoluciones?.find((d) => d.codigo.startsWith(p)) : null) ?? null
+}
+
+/**
+ * S01h · 2 · La cuenta a la que va de verdad el gasto en el asiento: la misma,
+ * salvo en un abono, que va a su 608x si la propuesta la trae (60000000 →
+ * 60800000). «A qué gasto va» enseña ésta, para decir lo mismo que el asiento.
+ */
+export function cuentaDelGastoEnAsiento(gasto: string, c: CuentasFicha | null): Cuenta | null {
+  if (!gasto || !c?.abono) return null
+  return devolucionDe(gasto, c)
 }
 
 export interface LineaVista {

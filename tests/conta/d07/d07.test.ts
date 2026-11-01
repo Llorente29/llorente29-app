@@ -79,7 +79,7 @@ describe('D07b · la cuenta del proveedor que no la tiene (Orange)', () => {
 describe('D07 · Uber: las liquidaciones de plataforma, fuera de recibidas', () => {
   const l = (o: Partial<LiquidacionPlataforma>): LiquidacionPlataforma => ({
     id: 'x', canal: 'Uber Eats', tienda: 'FoodInt Camichi', desde: '2026-10-12', hasta: '2026-10-18', ventas: 1000, comision: 153.17, neto: 782.16,
-    cobrado: null, aFacturar: 280.75, factura: null, deReferencia: false, porAclarar: null, ...o,
+    cobrado: null, aFacturar: 280.75, facturas: [], deReferencia: false, porAclarar: null, ...o,
   })
   // Las 8 de Foodint: 7 de la semana 12–18/10 (una de ellas, 07/09–18/10) y una del 05–11/10.
   const ocho = [
@@ -93,8 +93,8 @@ describe('D07 · Uber: las liquidaciones de plataforma, fuera de recibidas', () 
     expect(f.periodo).toBe('del 12/10 al 18/10/2026')
     expect(f.apoyoImporte).toBe('Ventas 1.000,00 € · comisión 153,17 € · cobrado 782,16 € el 20/10')
     expect(f.abrir).toMatchObject({ a: 'sin-ficha' })
-    expect(estadoPlataforma(l({})).texto).toBe('Falta su factura')
-    expect(estadoPlataforma(l({ factura: { id: 'f', numero: 'UBER-W42' } })).texto).toBe('Con su factura')
+    expect(estadoPlataforma(l({})).texto).toBe('Falta la factura de comisión')
+    expect(estadoPlataforma(l({ facturas: [{ id: 'f', numero: 'UBER-W42', total: 280.75 }] })).texto).toBe('Factura de comisión · recibida')
     expect(estadoPlataforma(l({ deReferencia: true })).texto).toBe('De referencia')
     expect(estadoPlataforma(l({ aFacturar: 0, comision: 40 })).texto).toBe('Sin factura aparte')
   })
@@ -105,7 +105,7 @@ describe('D07 · Uber: las liquidaciones de plataforma, fuera de recibidas', () 
     // El 23/10 la del 12–18/10 aún puede llegar: solo la del 05–11/10.
     expect(semanasSinFactura(ocho, '2026-10-23').map((x) => x.hasta)).toEqual(['2026-10-11'])
     // Enlazada su factura, ya no se avisa.
-    expect(semanasSinFactura(ocho.map((x) => ({ ...x, factura: { id: 'f', numero: null } })), '2026-10-26')).toEqual([])
+    expect(semanasSinFactura(ocho.map((x) => ({ ...x, facturas: [{ id: 'f', numero: null, total: x.aFacturar }] })), '2026-10-26')).toEqual([])
   })
 })
 
