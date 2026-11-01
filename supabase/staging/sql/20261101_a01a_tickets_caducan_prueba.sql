@@ -6,7 +6,7 @@
 -- public.print_job_vigia, public.print_job_aviso y
 -- public._print_job_caducado_no_vuelve.
 --
---   0 · ROJO A PROPÓSITO: con lo de antes, un trabajo no puede caducar (la
+--   0 · lo de antes: si ya está aplicada, su vuelta atrás. Y ROJO A PROPÓSITO: con lo de antes, un trabajo no puede caducar (la
 --       base rechaza «expired»): uno de hace 3 h se queda «pending» para siempre.
 --   1 · recién aplicada.
 --   2 · un trabajo viejo (3 h) caduca, con su motivo; uno reciente (5 min), no.
@@ -69,6 +69,12 @@ delete from public.print_job where location_id = (select v::uuid from _s where c
 delete from public.system_alert_queue where location_id = (select v::uuid from _s where clave = 'local');
 
 -- ── 0 · Lo de antes ─────────────────────────────────────────────────────────
+-- El manifiesto de staging aplica la 1906 justo antes de esta prueba, en la
+-- misma transacción: si ya está, primero su vuelta atrás.
+select to_regprocedure('public.print_job_vigia()') is not null as a01a_aplicada \gset
+\if :a01a_aplicada
+\i supabase/vuelta-atras/20261101T1906_a01a_tickets_caducan.down.sql
+\endif
 create temp table _ids (clave text primary key, id uuid) on commit drop;
 insert into _ids values ('viejo0', pg_temp.trabajo(interval '3 hours'));
 do $$
