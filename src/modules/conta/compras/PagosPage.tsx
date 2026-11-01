@@ -48,6 +48,7 @@ import {
 } from '@/modules/conta/lib/pagos'
 import { crearRemesa, leerPagos } from '@/modules/conta/services/pagosService'
 import { DialogoPonerIban, DialogoPonerVencimiento, DialogoYaLaHePagado } from './DialogosPagos'
+import { EsperanMiSegunda } from '@/modules/conta/pagos/PagarConRevolut'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -177,6 +178,8 @@ export default function PagosPage() {
 
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer los pagos: {datos.error}</p>}
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role={aviso.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-pagos">{aviso.texto}</p>}
+      {/* B01 · 2c-2 · Con dos o más personas que pagan: lo que espera tu segunda aprobación. */}
+      {activa && <EsperanMiSegunda empresaId={activa.id} alCambiar={() => setVuelta((v) => v + 1)} />}
       {cif && <div className="pg-cifras" data-vencido={cif.vencido.n > 0 ? 'si' : 'no'}><CifrasBandeja cifras={cifras} /></div>}
       {cif && cif.sinVencimiento > 0 && (
         <div className="pg-aviso-ambar" role="status" data-prueba="sin-vencimiento">
