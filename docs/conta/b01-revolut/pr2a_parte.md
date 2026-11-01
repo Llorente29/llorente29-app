@@ -72,7 +72,7 @@ Empieza con la vuelta atrás, que deja la base sin el 2a.
 **Dónde se ha pasado:**
 - **En la base local del W09:** en verde. Ahí `service_role` no tiene `BYPASSRLS` como en Supabase: se le dio solo en local, y las comprobaciones que leen como la clave de servicio dan error si no ven la fila.
 - **La migración, dos veces seguidas:** en verde (W05).
-- **En staging:** pendiente, el run [41309002393](https://github.com/Llorente29/llorente29-app/actions/runs/41309002393).
+- **En staging:** en verde en el run [41309326222](https://github.com/Llorente29/llorente29-app/actions/runs/41309326222). Pasaron la prueba en ROLLBACK y el paso que aplica la 1234 y la deshace en la misma transacción, como el ensayo de producción. Como solo añade, quedó aplicada de verdad en staging (W05).
 
 **Lo que salió en staging, primer run** ([41309002393](https://github.com/Llorente29/llorente29-app/actions/runs/41309002393)): las 11 partes de la prueba, en verde. Después falló el paso que aplica la 1234 y la deshace en la misma transacción, como el ensayo de producción: 40P01, un interbloqueo, al quitar `conta_pago_reto`. Para quitar una clave ajena, PostgreSQL bloquea en exclusiva la tabla a la que apunta, y la 1234 apuntaba a tablas muy usadas (`supplier_invoice`, `supplier`, `treasury_account` y las remesas). Con otra sesión escribiendo en ellas, se cruzan. Ahora la 1234 no tiene clave ajena a ninguna de ellas, solo a `accounts` y `company`, como el PR 1. Que la factura, el proveedor y la cuenta sean de la empresa lo comprueban las funciones.
 
