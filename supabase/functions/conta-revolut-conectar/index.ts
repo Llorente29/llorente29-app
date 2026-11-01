@@ -119,7 +119,10 @@ Deno.serve(async (req) => {
         if (!vuelta) return mal("Abre Sumied desde su dirección de siempre (app.sumied.com) para conectar Revolut.");
         const desde = typeof b.desde === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.desde) ? b.desde : null;
         if (conexion?.estado === "conectada") return mal("Revolut ya está conectado en esta empresa.");
-        if (conexion && b.nuevo !== true && conexion.vuelta === vuelta && ["certificado", "autorizar"].includes(conexion.estado)) {
+        // Se sigue con la conexión a medias solo si es del mismo entorno: una
+        // empezada contra el sandbox (antes de poner REVOLUT_ENTORNO) pediría el
+        // token al sandbox con un Client ID de verdad. Si cambia, llave nueva.
+        if (conexion && b.nuevo !== true && conexion.vuelta === vuelta && conexion.entorno === ENTORNO && ["certificado", "autorizar"].includes(conexion.estado)) {
           const { data } = await srv.from("revolut_conexion").select("certificado").eq("id", conexion.id).single();
           if (desde) await srv.from("revolut_conexion").update({ desde_historico: desde }).eq("id", conexion.id);
           return json({ ok: true, certificado: data.certificado, vuelta, estado: conexion.estado });
@@ -135,6 +138,7 @@ Deno.serve(async (req) => {
       }
       case "client_id": {
         if (!conexion || !["certificado", "autorizar"].includes(conexion.estado)) return mal("Empieza otra vez: copia el certificado primero.");
+        if (conexion.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que empezaste. Cierra el asistente y vuelve a conectar: hay que copiar un certificado nuevo.");
         const clientId = String(b.clientId ?? "").trim();
         const motivo = comprobarClientId(clientId);
         if (motivo) return mal(motivo);
@@ -145,6 +149,7 @@ Deno.serve(async (req) => {
       }
       case "vuelta": {
         const c = conexion!;
+        if (c.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que empezaste. Cierra el asistente y vuelve a conectar: hay que copiar un certificado nuevo.");
         const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
         if (!privada || !clientId) return mal("Falta la llave o el Client ID de esta empresa. Empieza otra vez.");
         let t;
