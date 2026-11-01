@@ -323,6 +323,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
       { id: 'tablas', etiqueta: 'Tablas generales', ruta: 'ajustes/tablas' },
       // S01e: las series ya se crean en Tablas generales › Numeración de facturas: la entrada lleva allí y cuenta las que hay.
       { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/tablas/numeracion' },
+      // S01o · El interruptor de la empresa: lo que Sumied sabe al 100 % se apunta solo.
+      { id: 'apuntar-solo', etiqueta: 'Apuntar solo lo seguro', ruta: 'ajustes/apuntar-solo' },
       { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: 'ajustes/certificados', hueco: 'El certificado digital y los accesos a la sede de Hacienda llegan con la presentación de impuestos.' },
     ],
   },
