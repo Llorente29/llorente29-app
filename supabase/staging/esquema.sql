@@ -124240,6 +124240,14 @@ ALTER TABLE ONLY public.conta_pago_lote
 
 
 --
+-- Name: conta_pago_lote conta_pago_lote_treasury_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_lote
+    ADD CONSTRAINT conta_pago_lote_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: conta_pago_permiso conta_pago_permiso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -124392,11 +124400,43 @@ ALTER TABLE ONLY public.conta_pago_salida
 
 
 --
+-- Name: conta_pago_salida conta_pago_salida_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_invoice_id_fkey FOREIGN KEY (invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: conta_pago_salida conta_pago_salida_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.conta_pago_salida
     ADD CONSTRAINT conta_pago_salida_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_pago_lote(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_remesa_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_remesa_id_fkey FOREIGN KEY (remesa_id) REFERENCES public.conta_pago_remesa(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_remesa_linea_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_remesa_linea_id_fkey FOREIGN KEY (remesa_linea_id) REFERENCES public.conta_pago_remesa_linea(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE RESTRICT;
 
 
 --
