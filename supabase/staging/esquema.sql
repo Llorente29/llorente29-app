@@ -8804,8 +8804,11 @@ CREATE FUNCTION public._lab_campo(p_lote uuid, p_hoja text, p_campo text) RETURN
     AS $$
   select public._lab_txt(f.datos, 'valor')
     from public.lab_import_fila f
-   where f.lote_id = p_lote and f.hoja = p_hoja and public._lab_norm(f.datos ->> 'campo') = public._lab_norm(p_campo)
-   order by f.fila_n limit 1
+   where f.lote_id = p_lote and f.hoja = p_hoja
+     and (public._lab_norm(f.datos ->> 'campo') = public._lab_norm(p_campo)
+          or position('(' || lower(btrim(p_campo)) || ')' in lower(coalesce(f.datos ->> 'campo', ''))) > 0)
+   order by (public._lab_norm(f.datos ->> 'campo') = public._lab_norm(p_campo)) desc, f.fila_n
+   limit 1
 $$;
 
 
