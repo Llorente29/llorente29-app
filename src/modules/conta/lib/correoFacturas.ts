@@ -40,6 +40,10 @@ export function queSeHizo(l: LlegadaCorreo): { titulo: string; texto: string | n
   if (f) return { titulo: `Factura esperando su albarán: ${nombre}`, texto: l.dicho ?? 'Cuando llegue su albarán, la caso con él.', tono: 'espera' }
   if (l.llegada === 'error' || l.resultado === 'error') return { titulo: 'No se ha podido leer', texto: l.motivo, tono: 'mira' }
   if (l.resultado === 'apagada') return { titulo: 'La dirección estaba apagada', texto: 'No se ha leído.', tono: 'mira' }
+  // S01i · Un correo sin PDF ni enlace (Just Eat manda la factura escrita en el cuerpo): no se pierde, se dice.
+  if (l.resultado === 'sin_facturas') {
+    return { titulo: 'Sin factura que leer', texto: l.motivo ?? 'No trae ningún PDF ni enlace. Si la factura va escrita en el propio correo (la de Just Eat), aún no se lee: queda aquí apuntado para que la subas.', tono: 'mira' }
+  }
   return { titulo: 'Recibido', texto: l.motivo, tono: 'espera' }
 }
 
