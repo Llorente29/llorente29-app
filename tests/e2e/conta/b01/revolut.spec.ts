@@ -54,6 +54,8 @@ async function desconectar() {
 
 test.describe('B01 Revolut · el asistente, hasta autorizar', () => {
   test.describe.configure({ timeout: 180_000 })
+  // Cada acción, con su límite: sin él, un elemento que no aparece cuelga la prueba hasta el final (01/11).
+  test.use({ actionTimeout: 20_000 })
 
   test('certificado, vuelta, Client ID y la página del sandbox con READ y WRITE', async ({ page }) => {
     await desconectar()
@@ -73,17 +75,19 @@ test.describe('B01 Revolut · el asistente, hasta autorizar', () => {
       await expect(cert).not.toContainText('PRIVATE')
       await expect(dialogo.locator('[aria-current="step"]')).toContainText('1 · Copia el certificado')
       await capturar(page, '1-certificado')
+      // El texto, aquí: en el paso 2 el certificado ya no se enseña (y esperarlo colgaría la prueba).
+      const textoDelCertificado = (await cert.textContent({ timeout: 10_000 })) ?? '-----BEGIN CERTIFICATE-----'
       await dialogo.getByRole('button', { name: 'Seguir' }).click()
 
       // 2 · La dirección de vuelta de la marca y el Client ID.
       await expect(dialogo.locator('[data-prueba="vuelta"]')).toHaveText(`${ORIGEN_MARCA}/bancos/revolut/vuelta`)
       const campo = dialogo.locator('[data-prueba="client-id"]')
-      await campo.fill(await cert.textContent() ?? '-----BEGIN CERTIFICATE-----')
+      await campo.fill(textoDelCertificado)
       await dialogo.getByRole('button', { name: 'Seguir' }).click()
       await expect(dialogo.getByRole('alert')).toContainText('Eso es el certificado, no el Client ID.')
       await capturar(page, '2-client-id-equivocado')
       await campo.fill(CLIENT_ID)
-      const respuesta = page.waitForResponse((r) => r.url().includes('conta-revolut-conectar') && (r.request().postData() ?? '').includes('"client_id"'))
+      const respuesta = page.waitForResponse((r) => r.url().includes('conta-revolut-conectar') && (r.request().postData() ?? '').includes('"client_id"'), { timeout: 30_000 })
       await dialogo.getByRole('button', { name: 'Seguir' }).click()
       const cuerpo = await (await respuesta).json() as { ok: boolean; url?: string; texto?: string }
       expect(cuerpo.ok, cuerpo.texto).toBe(true)
