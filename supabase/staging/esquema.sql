@@ -31328,6 +31328,8 @@ declare
   v_nif text; v_prov uuid; v_rep record; v_fac uuid; v_conf text; v_texto text;
   v_doc text; v_total numeric; v_estado text; v_validada boolean;
   v_forma text; v_iban text;
+  -- S01l · La retención leída.
+  v_ret_imp numeric; v_ret_pct numeric; v_ret_base numeric; v_ret_fecha date; v_ret_ids uuid[]; v_ret_id uuid; v_ret_aviso text;
 begin
   select * into v_in from public.document_inbox where id = p_inbox for update;
   if v_in.id is null then raise exception 'Esa llegada no está.' using errcode = 'P0002'; end if;
@@ -31412,17 +31414,43 @@ begin
      or exists (select 1 from public.treasury_account t where t.account_id = v_in.account_id and public._pc01e2_iban(t.iban) = v_iban)) then
     v_iban := null;
   end if;
+
+  -- S01l · La retención: con su tipo (el leído, o el que da base × tipo = importe), o ninguna y en revisión.
+  v_ret_imp := abs(nullif(f->'retencion'->>'importe', '')::numeric);
+  if coalesce(v_ret_imp, 0) = 0 then
+    v_ret_imp := null;
+  else
+    v_ret_pct := abs(nullif(f->'retencion'->>'tipo', '')::numeric);
+    v_ret_base := abs(nullif(f->>'base', '')::numeric);
+    v_ret_fecha := coalesce(nullif(f->>'fecha', '')::date, current_date);
+    select array_agg(r.id order by r.sort_order, r.code) into v_ret_ids
+      from public.withholding_rate r
+     where (r.is_system or r.account_id = v_in.account_id) and r.code <> 'capital' and r.rate > 0
+       and (r.valid_from is null or r.valid_from <= v_ret_fecha) and (r.valid_to is null or r.valid_to >= v_ret_fecha)
+       and case when v_ret_pct is not null
+                then abs(r.rate - v_ret_pct) < 0.005 and (v_ret_base is null or abs(round(v_ret_base * r.rate / 100, 2) - v_ret_imp) <= 0.01)
+                else v_ret_base is not null and abs(round(v_ret_base * r.rate / 100, 2) - v_ret_imp) <= 0.01 end;
+    if coalesce(cardinality(v_ret_ids), 0) = 1 then
+      v_ret_id := v_ret_ids[1];
+    else
+      v_ret_aviso := format('La factura trae una retención de %s: elige su tipo.', public.conta_euros_exactos(v_ret_imp));
+      v_ret_imp := null;
+    end if;
+  end if;
+
   insert into public.supplier_invoice (account_id, company_id, supplier_id, doc_kind, invoice_number, invoice_date, due_date, status, source, ai_session_id,
-                                       raw_document_url, tax_base_total, tax_total, surcharge_total, grand_total, withholding_amount,
+                                       raw_document_url, tax_base_total, tax_total, surcharge_total, grand_total, withholding_amount, withholding_rate_id,
                                        needs_review, notes, created_by_name, arrival_channel, reading, reading_confidence, inbox_id,
                                        read_iban, payment_method)
   values (v_in.account_id, v_in.company_id, v_prov,
           case when f->>'clase' = 'rectificativa' or nullif(f->>'total', '')::numeric < 0 then 'credit_note' else 'invoice' end,
           f->>'numero', nullif(f->>'fecha', '')::date, nullif(f->>'vencimiento', '')::date, 'en_revision', 'ocr', p_session,
           v_in.file_path, nullif(f->>'base', '')::numeric, nullif(f->>'cuota', '')::numeric, nullif(f->>'recargo', '')::numeric, nullif(f->>'total', '')::numeric,
-          nullif(f->'retencion'->>'importe', '')::numeric,
-          v_conf <> 'seguro',
-          case when v_rep.nivel = 'posible' then '¿Repetida? El mismo proveedor, la misma fecha y el mismo total que la ' || coalesce(v_rep.invoice_number, 'sin número') || '.' end,
+          v_ret_imp, v_ret_id,
+          v_conf <> 'seguro' or v_ret_aviso is not null,
+          nullif(concat_ws(' ',
+            case when v_rep.nivel = 'posible' then '¿Repetida? El mismo proveedor, la misma fecha y el mismo total que la ' || coalesce(v_rep.invoice_number, 'sin número') || '.' end,
+            v_ret_aviso), ''),
           'Folvy', v_in.channel, l, v_conf, p_inbox,
           v_iban, v_forma)
   returning id into v_fac;
@@ -31438,7 +31466,8 @@ begin
          reason = case when v_prov is null then 'No tengo a este proveedor: lo doy de alta con lo leído si me dices que sí.' end, updated_at = now()
    where id = p_inbox;
   v_texto := 'He leído la ' || coalesce(f->>'numero', 'factura') || coalesce(' de ' || (f->'proveedor'->>'nombre'), '') ||
-             case v_conf when 'seguro' then ': todo cuadra.' when 'probable' then ': cuadra, pero hay algo que mirar.' else ': hay algo que aclarar.' end;
+             case v_conf when 'seguro' then ': todo cuadra.' when 'probable' then ': cuadra, pero hay algo que mirar.' else ': hay algo que aclarar.' end ||
+             coalesce(' ' || v_ret_aviso, '');
   insert into public.document_activity (account_id, company_id, inbox_id, supplier_invoice_id, actor, action, text, detail)
   values (v_in.account_id, v_in.company_id, p_inbox, v_fac, 'folvy', 'leida', v_texto, jsonb_build_object('confianza', v_conf, 'porque', l->'porque'));
   if v_prov is null then
@@ -31446,7 +31475,8 @@ begin
     values (v_in.account_id, v_in.company_id, p_inbox, v_fac, 'folvy', 'proveedor_propuesto',
             'No tengo a ' || coalesce(f->'proveedor'->>'nombre', 'este proveedor') || coalesce(' (NIF ' || v_nif || ')', '') || ': lo doy de alta con lo leído si me dices que sí.');
   end if;
-  return jsonb_build_object('estado', 'factura', 'factura_id', v_fac, 'confianza', v_conf, 'texto', v_texto, 'proveedor_nuevo', v_prov is null, 'posible_repetida', v_rep.nivel = 'posible');
+  return jsonb_build_object('estado', 'factura', 'factura_id', v_fac, 'confianza', v_conf, 'texto', v_texto, 'proveedor_nuevo', v_prov is null, 'posible_repetida', v_rep.nivel = 'posible',
+                            'retencion_sin_tipo', v_ret_aviso is not null);
 end $_$;
 
 
@@ -37673,6 +37703,50 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_local_de_tienda(p_account uuid, p_texto text) IS 'V01 · El local de la cuenta cuya dirección es la de la tienda (entre los últimos paréntesis). Null si no casa con ninguno o casa con más de uno.';
+
+
+--
+-- Name: conta_local_direcciones_guardar(uuid, text[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_local_direcciones_guardar(p_location uuid, p_direcciones text[], p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_nombre text; v_n int; v_inv uuid; v_buscadas int := 0; v_ligadas int := 0; v_r text;
+begin
+  select account_id, name into v_acc, v_nombre from public.locations where id = p_location;
+  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Ese local no es de tu cuenta.' using errcode = '42501'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_acc) then
+    raise exception 'Solo un administrador o un encargado de la cuenta cambia las direcciones de un local.' using errcode = '42501';
+  end if;
+  delete from public.location_address_alias where location_id = p_location;
+  insert into public.location_address_alias (account_id, location_id, address, created_by_name)
+  select distinct on (lower(btrim(d))) v_acc, p_location, btrim(d), coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor())
+    from unnest(coalesce(p_direcciones, '{}'::text[])) d where btrim(coalesce(d, '')) <> '';
+  get diagnostics v_n = row_count;
+  -- Con la dirección nueva, las facturas de plataformas sin ligar pueden encontrar ya su liquidación (S01i).
+  if to_regprocedure('public._conta_comision_buscar(uuid)') is not null then
+    for v_inv in
+      select si.id from public.supplier_invoice si
+        join public.party_role ps on ps.account_id = si.account_id and ps.role = 'supplier' and ps.supplier_id = si.supplier_id
+        join public.party_role pl on pl.account_id = ps.account_id and pl.party_id = ps.party_id and pl.role = 'platform'
+       where si.account_id = v_acc and si.status not in ('anulada', 'descartada', 'pagada')
+         and not exists (select 1 from public.channel_settlement_invoice k where k.supplier_invoice_id = si.id)
+    loop
+      v_buscadas := v_buscadas + 1;
+      v_r := public._conta_comision_buscar(v_inv);
+      if exists (select 1 from public.channel_settlement_invoice k where k.supplier_invoice_id = v_inv) then v_ligadas := v_ligadas + 1; end if;
+    end loop;
+  end if;
+  return jsonb_build_object('guardadas', v_n, 'buscadas', v_buscadas, 'ligadas', v_ligadas,
+    'texto', format('%s: %s.%s', v_nombre,
+      case when v_n = 0 then 'sin otras direcciones' when v_n = 1 then 'guardada 1 otra dirección' else format('guardadas %s otras direcciones', v_n) end,
+      case when v_buscadas = 0 then ''
+           else format(' Vuelta a buscar la liquidación de %s %s sin ligar: %s.', v_buscadas,
+             case when v_buscadas = 1 then 'factura de plataformas' else 'facturas de plataformas' end,
+             case when v_ligadas = 0 then 'ninguna se ha ligado aún' when v_ligadas = 1 then '1 ligada ahora' else format('%s ligadas ahora', v_ligadas) end) end));
+end $$;
 
 
 --
@@ -99192,6 +99266,21 @@ CREATE TABLE public.local_event (
 
 
 --
+-- Name: location_address_alias; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.location_address_alias (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    location_id uuid NOT NULL,
+    address text NOT NULL,
+    created_by_name text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT location_address_alias_address_check CHECK ((btrim(address) <> ''::text))
+);
+
+
+--
 -- Name: location_company; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -110103,6 +110192,14 @@ ALTER TABLE ONLY public.local_event
 
 
 --
+-- Name: location_address_alias location_address_alias_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.location_address_alias
+    ADD CONSTRAINT location_address_alias_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: location_company location_company_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -116652,6 +116749,20 @@ CREATE UNIQUE INDEX lab_import_lote_huella_viva ON public.lab_import_lote USING 
 --
 
 CREATE INDEX last_product_mirror_pending_idx ON public.last_product_mirror USING btree (account_id, external_location_id) WHERE ((enabled = false) AND (in_folvy = true));
+
+
+--
+-- Name: location_address_alias_cuenta; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX location_address_alias_cuenta ON public.location_address_alias USING btree (account_id);
+
+
+--
+-- Name: location_address_alias_una; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX location_address_alias_una ON public.location_address_alias USING btree (location_id, lower(btrim(address)));
 
 
 --
@@ -125581,6 +125692,22 @@ ALTER TABLE ONLY public.local_event
 
 ALTER TABLE ONLY public.local_event
     ADD CONSTRAINT local_event_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: location_address_alias location_address_alias_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.location_address_alias
+    ADD CONSTRAINT location_address_alias_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: location_address_alias location_address_alias_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.location_address_alias
+    ADD CONSTRAINT location_address_alias_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE CASCADE;
 
 
 --
@@ -135496,6 +135623,13 @@ CREATE POLICY kitchen_unit_update ON public.kitchen_unit FOR UPDATE USING (((acc
 
 
 --
+-- Name: location_address_alias laa_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY laa_read ON public.location_address_alias FOR SELECT USING ((account_id = ANY (public.current_user_account_ids())));
+
+
+--
 -- Name: lab_import_fila; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -135631,6 +135765,12 @@ CREATE POLICY lmp_read ON public.labor_model_prior FOR SELECT USING (true);
 --
 
 ALTER TABLE public.local_event ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: location_address_alias; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.location_address_alias ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: location_company; Type: ROW SECURITY; Schema: public; Owner: -
@@ -146617,6 +146757,15 @@ REVOKE ALL ON FUNCTION public.conta_local_de_tienda(p_account uuid, p_texto text
 GRANT ALL ON FUNCTION public.conta_local_de_tienda(p_account uuid, p_texto text) TO anon;
 GRANT ALL ON FUNCTION public.conta_local_de_tienda(p_account uuid, p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_local_de_tienda(p_account uuid, p_texto text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_local_direcciones_guardar(p_location uuid, p_direcciones text[], p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_local_direcciones_guardar(p_location uuid, p_direcciones text[], p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_local_direcciones_guardar(p_location uuid, p_direcciones text[], p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_local_direcciones_guardar(p_location uuid, p_direcciones text[], p_quien_nombre text) TO service_role;
 
 
 --
@@ -158320,6 +158469,15 @@ GRANT ALL ON TABLE public.licensed_settlement TO service_role;
 GRANT ALL ON TABLE public.local_event TO anon;
 GRANT ALL ON TABLE public.local_event TO authenticated;
 GRANT ALL ON TABLE public.local_event TO service_role;
+
+
+--
+-- Name: TABLE location_address_alias; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.location_address_alias TO anon;
+GRANT ALL ON TABLE public.location_address_alias TO authenticated;
+GRANT ALL ON TABLE public.location_address_alias TO service_role;
 
 
 --
