@@ -31,6 +31,7 @@ import { ApartadoCierreDelDia } from '@/modules/conta/empresa/ApartadoCierreDelD
 import { VerifactuAjustes } from '@/modules/conta/verifactu/VerifactuAjustes'
 import { CobrosAjustes } from '@/modules/conta/ventas/CobrosAjustes'
 import { CorreoFacturasAjustes } from '@/modules/conta/compras/CorreoFacturas'
+import { ApuntarSoloAjustes } from '@/modules/conta/compras/ApuntarSoloAjustes'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
@@ -68,6 +69,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'cobros') return <>{cabeza}<CobrosAjustes /></>
   // S01c · Correo de facturas: la dirección, el reenvío de Gmail y lo que ha llegado; no necesita los datos de la empresa de Ajustes.
   if (id === 'correo-facturas') return <>{cabeza}<CorreoFacturasAjustes /></>
+  // S01o · Apuntar solo lo seguro: el interruptor de la empresa; no necesita los datos de la empresa de Ajustes.
+  if (id === 'apuntar-solo') return <>{cabeza}<ApuntarSoloAjustes /></>
   // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
   if (id === 'personas') return <>{cabeza}<Usuarios /></>
   if (e.hueco) {

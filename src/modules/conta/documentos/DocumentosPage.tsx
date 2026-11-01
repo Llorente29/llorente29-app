@@ -28,8 +28,10 @@
 // ha entrado y qué no.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { rutaCompras, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaCompras, rutaFichaProveedor, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
+import { leerApuntadasSolas, deshacerApuntadaSola } from '@/modules/conta/services/apuntaSoloService'
+import { SIN_APUNTADAS, lineaDeArriba, motivoDeRevisar } from '@/modules/conta/lib/apuntaSolo'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -82,7 +84,20 @@ export default function DocumentosPage() {
   const datos = useLeer(activa ? () => leerDocumentos(activa.id, desde, hasta) : null, `${activa?.id}:${desde}:${hasta}:${vuelta}`)
   const ids = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'factura').map((x) => x.id), [datos.datos])
   const extras = useLeer(accountId && ids.length ? () => leerExtrasFacturas(accountId, ids) : null, `${accountId}:${ids.join(',')}`)
-  const mapa = extras.datos ?? (new Map() as Map<string, ExtraFactura>)
+  // S01o · Lo que Sumied apuntó solo (con su porqué) y por qué se quedaron las demás. Si no se puede leer, la lista sale igual y lo dice.
+  const solas = useLeer(activa ? () => leerApuntadasSolas(activa.id) : null, `${activa?.id}:${vuelta}:apuntadas-solas`)
+  const sol = solas.datos ?? SIN_APUNTADAS
+  const mapa = useMemo(() => {
+    const m = new Map(extras.datos ?? (new Map() as Map<string, ExtraFactura>))
+    const porque = new Map(sol.filas.map((x) => [x.id, x.porque]))
+    const vacia: ExtraFactura = { base: null, iva: null, pagada: null, comoPagada: null, localId: null, local: null }
+    // También las que no tienen fila en extras (aún sin leer, o si falló su lectura): su porqué o su motivo no se pierden.
+    for (const id of new Set([...m.keys(), ...porque.keys(), ...Object.keys(sol.motivos)])) {
+      m.set(id, { ...(m.get(id) ?? vacia), sola: porque.get(id) ?? null, motivo: sol.motivos[id] ?? null })
+    }
+    return m
+  }, [extras.datos, sol])
+  const [deshaciendo, setDeshaciendo] = useState<string | null>(null)
   // D06 · Validar en bloque (tablero 2b): en «Por revisar», el veredicto de cada fila (el de su ficha), y las que se marcan.
   const enBloque = f.pestana === 'por-revisar'
   const listas = useLeer(enBloque && accountId && activa && datos.datos && extras.datos
@@ -186,6 +201,14 @@ export default function DocumentosPage() {
     if (primera) navegar(`${rutaRevisarFactura(primera)}${q}`)
   }
   const porRevisar = pestanas.find((p) => p.id === 'por-revisar')?.n ?? 0
+  async function deshacer(x: FilaDocumento) {
+    setDeshaciendo(x.id); setFallo(null); setHecho(null)
+    try {
+      setHecho(await deshacerApuntadaSola(x.id, userName ?? null))
+      setVuelta((v) => v + 1); refrescarCuentasMenu()
+    } catch (e) { setFallo(e instanceof Error ? e.message : String(e)) } finally { setDeshaciendo(null) }
+  }
+  const arriba = lineaDeArriba(sol)
 
   // Los filtros: proveedores y locales de las filas que hay (la lista con la que se elige es la que se lee: regla 30).
   const proveedores = [...new Map(todasLasFilas.filter((x) => x.proveedor.id).map((x) => [x.proveedor.id!, x.proveedor.nombre ?? '—'])).entries()]
@@ -216,6 +239,15 @@ export default function DocumentosPage() {
     { id: 'base', titulo: 'Base', cifra: true, prioridad: 4, minimo: 100, celda: (x) => euro(mapa.get(x.id)?.base) },
     { id: 'iva', titulo: 'IVA', cifra: true, prioridad: 4, minimo: 90, celda: (x) => euro(mapa.get(x.id)?.iva) },
     { id: 'total', titulo: 'Total', cifra: true, ordenable: true, prioridad: 1, minimo: 110, celda: (x) => <strong>{euro(x.total)}</strong> },
+    ...(f.pestana === 'solas' ? [{
+      id: 'porque', titulo: 'Por qué se apuntó sola', prioridad: 2, minimo: 260,
+      celda: (x: FilaDocumento) => <span className="s-lista-texto-doble"><span>{mapa.get(x.id)?.sola}</span>
+        <button type="button" className="s-boton s-boton-enlace" disabled={deshaciendo === x.id} data-prueba="deshacer-sola"
+          onClick={(ev) => { ev.stopPropagation(); void deshacer(x) }}>{deshaciendo === x.id ? 'Deshaciendo…' : 'Deshacer'}</button></span>,
+    }] : []),
+    ...(enBloque && filas.some((x) => mapa.get(x.id)?.motivo) ? [{
+      id: 'motivo', titulo: 'Por qué la miras tú', prioridad: 3, minimo: 220, celda: (x: FilaDocumento) => <MotivoRevisar x={x} motivo={mapa.get(x.id)?.motivo} />,
+    }] : []),
     enBloque
       ? { id: 'lista', titulo: '¿Lista para validar?', prioridad: 2, minimo: 170, celda: (x) => <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> }
       : { id: 'estado', titulo: 'Estado', prioridad: 2, minimo: 150, celda: (x) => { const e = estadoDeFila(x, mapa.get(x.id)); return <Chip tono={e.tono}>{e.texto}</Chip> } },
@@ -228,6 +260,12 @@ export default function DocumentosPage() {
         <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{nombre(x)}</span><strong className="s-cifra">{euro(x.total)}</strong></span>
         <span className="s-tarjeta-apoyo">{[x.numero ?? 'sin número', diaMes(x.fecha ?? x.llego.slice(0, 10)), l].filter(Boolean).join(' · ')}</span>
         <span className="s-tarjeta-pie">{enBloque ? <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> : <Chip tono={e.tono}>{e.texto}</Chip>}{propuesto(x)}</span>
+        {enBloque && mapa.get(x.id)?.motivo && <span className="s-tarjeta-apoyo"><MotivoRevisar x={x} motivo={mapa.get(x.id)?.motivo} /></span>}
+        {f.pestana === 'solas' && (
+          <span className="s-tarjeta-apoyo">{mapa.get(x.id)?.sola}{' '}
+            <button type="button" className="s-boton s-boton-enlace" disabled={deshaciendo === x.id} data-prueba="deshacer-sola"
+              onClick={(ev) => { ev.stopPropagation(); void deshacer(x) }}>{deshaciendo === x.id ? 'Deshaciendo…' : 'Deshacer'}</button></span>
+        )}
       </>
     )
   }
@@ -304,6 +342,13 @@ export default function DocumentosPage() {
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>}
       {extras.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{extras.error}. La base, el IVA y si están pagadas salen con «—». <button type="button" className="s-boton s-boton-enlace" onClick={extras.recargar}>Reintentar</button></p>}
 
+      {arriba && f.pestana !== 'solas' && (
+        <p className="s-aviso-lista" data-tono="seguro" data-prueba="apuntadas-solas-arriba">{arriba} · <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ ver: 'solas' })}>Ver</button></p>
+      )}
+      {f.pestana === 'solas' && (
+        <p className="s-aviso-lista">Lo que Sumied tenía seguro al 100 %: su asiento ya está validado. Si alguna no es así, deshazla: su asiento se anula con su contraasiento y vuelve a «Por revisar».</p>
+      )}
+      {solas.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No he podido leer las que apuntó Sumied sola: {solas.error} <button type="button" className="s-boton s-boton-enlace" onClick={solas.recargar}>Reintentar</button></p>}
       <AsientosDeCompras />
       <LoQueNoHePodido donde={DONDE.recibidas} />
 
@@ -418,4 +463,15 @@ function ListaParaValidar({ p, cargando }: { p: { lista: boolean; motivo: string
   if (!p || p.comprobando) return <span className="s-apoyo"><Chip>{cargando || p?.comprobando ? 'Comprobando…' : 'Sin comprobar'}</Chip></span>
   if (p.lista) return <span className="s-lista-para-validar" data-lista=""><Chip tono="seguro">✓ Lista</Chip></span>
   return <span className="s-lista-para-validar" data-tono="duda"><Chip tono="duda">No está lista.</Chip> {p.motivo}</span>
+}
+
+/** S01o · Por qué la miras tú: la frase de la base; si lo que falta es la cuenta de la ficha, el enlace para ponerla. */
+function MotivoRevisar({ x, motivo }: { x: FilaDocumento; motivo: string | null | undefined }) {
+  const m = motivoDeRevisar(motivo)
+  if (!m) return null
+  return (
+    <span className="s-apoyo" data-prueba="motivo-revisar">{m.frase}
+      {m.ponerEnFicha && x.proveedor.id && <>{' · '}<Link to={rutaFichaProveedor(x.proveedor.id)} onClick={(ev) => ev.stopPropagation()}>Ponerla</Link></>}
+    </span>
+  )
 }

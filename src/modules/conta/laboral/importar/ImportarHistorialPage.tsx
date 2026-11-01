@@ -13,6 +13,9 @@
 // filas de las nueve hojas, tal cual, en el lote (por trozos, con su avance).
 // Volver a cargar el mismo fichero no duplica nada. Las filas llevan datos
 // personales y solo las ve el administrador de la cuenta.
+//
+// N1 · PR 1 (01/11) · Tercer paso, con todas las filas cargadas: cada centro
+// de Cegid con su local y «Pasar a las fichas» (VolcadoTarjeta).
 
 import { useCallback, useEffect, useState } from 'react'
 import { useApp } from '@/context/AppContext'
@@ -21,6 +24,7 @@ import { compararCabeceras, resumenComparacion, type Comparacion, type Comparaci
 import { huellaDelFichero, leerCabeceras } from './leerCabeceras'
 import { leerFilas, resumenFilas, type ResultadoFilas } from './leerFilas'
 import { cargarFilas, guardarCabeceras, leerLotes, type LoteImportacion } from './importarService'
+import VolcadoTarjeta from './VolcadoTarjeta'
 
 const ESTADO: Record<ComparacionHoja['estado'], { texto: string; tono: 'seguro' | 'duda' | 'falta' | 'neutro' }> = {
   igual: { texto: 'Como se esperaba', tono: 'seguro' },
@@ -138,6 +142,9 @@ export default function ImportarHistorialPage() {
           {filas && <p className="s-aviso-lista" data-tono={filas.completo ? 'seguro' : 'falta'} role="status" data-prueba="importar-filas">{resumenFilas(filas)}</p>}
         </Tarjeta>
       )}
+
+      {/* N1 · PR 1: con todas las filas cargadas, el tercer paso. */}
+      {loteId && filas?.completo && <VolcadoTarjeta key={loteId} loteId={loteId} />}
 
       <Tarjeta titulo={`Lotes leídos · ${lotes.length}`} nivel={3}
         apoyo={lotes.length ? undefined : 'Aún no se ha leído ningún fichero en esta cuenta.'}>
