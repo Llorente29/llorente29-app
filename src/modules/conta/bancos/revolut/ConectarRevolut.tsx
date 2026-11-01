@@ -15,6 +15,12 @@
 //     y después, ligar cada cuenta en euros a su cuenta contable (la 572 que
 //     crea bank_cuenta_nueva) y traer sus movimientos.
 // Cada botón dice lo que ha pasado, con contenido (regla 8).
+//
+// B01 · 2c-1: con Revolut conectado, la línea de los pagos («puede leer · aún
+// no paga» con «Activar pagos», o «lee y paga» con «Topes y permisos» y «Dejar
+// de pagar»; las piezas, en ActivarPagos.tsx). La vuelta de Revolut sobre una
+// conexión ya conectada es la de activar o dejar de pagar: se dice y no abre
+// «ligar». Si se vuelve sin el permiso, la función dice qué ha quedado.
 
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -22,10 +28,13 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { altaBancoNuevo } from '@/modules/conta/services/bancosPantallas'
+import { listUserProfilesByAccount } from '@/modules/multitenancy/services/userProfilesService'
 import {
-  bancoLigado, comprobarClientId, NO_DISPONIBLE, desdePropuesto, leerConexion, lineaRevolut, nombreDeBanco, PARAM_CODIGO, PARAM_ERROR, PARAM_ESTADO,
+  bancoLigado, comprobarClientId, NO_DISPONIBLE, desdePropuesto, leerConexion, lineaPagos, lineaRevolut, nombreDeBanco, PARAM_CODIGO, PARAM_ERROR, PARAM_ESTADO,
   recordarVuelta, revolut, vueltaDeLaDireccion, type CuentaDeRevolut,
 } from '@/modules/conta/bancos/revolut/revolut'
+import { AsistentePagos, DejarDePagar, TopesYPermisos, TuLlaveYPin } from '@/modules/conta/bancos/revolut/ActivarPagos'
+import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
 
 type Paso = 'copiar' | 'pegar' | 'autorizar' | 'ligar'
 const PASOS: { id: Paso; texto: string }[] = [
@@ -39,7 +48,7 @@ async function copiar(texto: string): Promise<boolean> {
 }
 
 export function TarjetaRevolut() {
-  const { companyId } = useBancos()
+  const { companyId, accountId } = useBancos()
   const location = useLocation()
   const navigate = useNavigate()
   const lectura = useLeer(() => leerConexion(companyId).then((c) => ({ c })), `revolut:${companyId}`)
@@ -48,7 +57,15 @@ export function TarjetaRevolut() {
   const cargar = lectura.recargar
   // La vuelta de Revolut: se toma una vez, al llegar, y se quita de la dirección.
   const [vuelta] = useState(() => vueltaDeLaDireccion(location.search))
-  const terminada = useLeer(vuelta && 'code' in vuelta ? () => revolut<{ cuentas: CuentaDeRevolut[] }>('vuelta', { code: vuelta.code, state: vuelta.state }) : null, `revolut-vuelta:${companyId}`)
+  const terminada = useLeer(vuelta && 'code' in vuelta ? () => revolut<{ cuentas?: CuentaDeRevolut[]; pagos?: boolean }>('vuelta', { code: vuelta.code, state: vuelta.state }) : null, `revolut-vuelta:${companyId}`)
+  // Sin el permiso: la función dice qué ha quedado, según a qué se fue (y la autorización empezada deja de valer).
+  const cancelada = useLeer(vuelta && 'error' in vuelta && vuelta.state ? () => revolut('cancelada', { state: vuelta.state }) : null, `revolut-cancelada:${companyId}`)
+  const conectada = conexion?.estado === 'conectada'
+  const quienPaga = useLeer(conectada ? () => leerQuienPaga(companyId) : null, `revolut-quien:${companyId}:${conectada}`)
+  const admins = useLeer(conectada && quienPaga.datos && !quienPaga.datos.soyAdmin
+    ? () => listUserProfilesByAccount(accountId, { role: 'admin', includeInactive: false }).then((ps) => ps.filter((p) => p.active && p.displayName).map((p) => p.displayName!))
+    : null, `revolut-admins:${accountId}:${!!quienPaga.datos}`)
+  const [pagos, setPagos] = useState<'activar' | 'topes' | 'dejar' | 'quitar_en_revolut' | 'mia' | null>(null)
   useEffect(() => {
     if (!vuelta) return
     const q = new URLSearchParams(location.search)
@@ -63,15 +80,18 @@ export function TarjetaRevolut() {
   const [confirmar, setConfirmar] = useState(false)
 
   // Lo que dice la vuelta, si no se ha cerrado: el asistente en «ligar», o en «autorizar» con su porqué.
-  const deLaVuelta: { paso: Paso; cuentas?: CuentaDeRevolut[]; aviso: { tipo: 'ok' | 'error'; texto: string } } | null = cerradaLaVuelta || !vuelta ? null
-    : 'error' in vuelta ? { paso: 'autorizar', aviso: { tipo: 'error', texto: vuelta.error === 'access_denied' ? 'No has autorizado en Revolut. Vuelve a pulsar «Autorizar en Revolut».' : 'Revolut ha vuelto sin el permiso. Vuelve a pulsar «Autorizar en Revolut».' } }
+  // Sobre una conexión ya conectada (activar o dejar de pagar), solo el aviso: no hay nada que ligar.
+  const deLaVuelta: { paso: Paso | null; cuentas?: CuentaDeRevolut[]; aviso: { tipo: 'ok' | 'error'; texto: string } } | null = cerradaLaVuelta || !vuelta || !lectura.datos ? null
+    : 'error' in vuelta ? (vuelta.state && !cancelada.datos && !cancelada.error ? null
+      : { paso: conectada ? null : 'autorizar', aviso: { tipo: 'error', texto: cancelada.datos?.texto ?? (vuelta.error === 'access_denied' ? 'No has autorizado en Revolut. Vuelve a pulsar «Autorizar en Revolut».' : 'Revolut ha vuelto sin el permiso. Vuelve a pulsar «Autorizar en Revolut».') } })
     : !terminada.datos ? null
+    : terminada.datos.ok && terminada.datos.pagos !== undefined ? { paso: null, aviso: { tipo: 'ok', texto: terminada.datos.texto ?? 'Hecho.' } }
     : terminada.datos.ok ? { paso: 'ligar', cuentas: terminada.datos.cuentas, aviso: { tipo: 'ok', texto: terminada.datos.texto ?? 'Conectado con Revolut Business.' } }
-    : { paso: 'autorizar', aviso: { tipo: 'error', texto: terminada.datos.texto } }
-  const abierto = elegido ?? deLaVuelta
+    : { paso: conectada ? null : 'autorizar', aviso: { tipo: 'error', texto: terminada.datos.texto } }
+  const abierto = elegido ?? (deLaVuelta?.paso ? { paso: deLaVuelta.paso, cuentas: deLaVuelta.cuentas } : null)
   const avisoVisible = aviso ?? deLaVuelta?.aviso ?? null
   const setAbierto = (a: { paso: Paso; cuentas?: CuentaDeRevolut[] } | null) => { setCerradaLaVuelta(true); setElegido(a) }
-  const terminandoLaVuelta = !!vuelta && 'code' in vuelta && !terminada.datos && !terminada.error
+  const terminandoLaVuelta = !!vuelta && !cerradaLaVuelta && (('code' in vuelta && !terminada.datos && !terminada.error) || ('error' in vuelta && !!vuelta.state && !cancelada.datos && !cancelada.error))
 
   const desconectar = async () => {
     setHaciendo(true); setAviso(null)
@@ -100,6 +120,9 @@ export function TarjetaRevolut() {
     )
   }
   const l = lineaRevolut(conexion, new Date())
+  const lp = lineaPagos(conexion, quienPaga.datos, admins.datos ?? [])
+  const yoPago = !!quienPaga.datos?.yoPuedo
+  const cerrarPagos = () => { setPagos(null); cargar(); quienPaga.recargar() }
   return (
     <div className="cx-tarjeta cxb-revolut" aria-label="Revolut Business" data-prueba="revolut">
       <div className="cxb-revolut-cabeza">
@@ -116,6 +139,20 @@ export function TarjetaRevolut() {
           </>}
         </span>
       </div>
+      {lp && (
+        <div className="cxb-lista-fila" data-prueba="revolut-pagos">
+          <span className="cxb-lista-texto"><span className={lp.nivel === 'aviso' ? 'cx-aviso' : 'cx-ayuda'} role="status">Pagos · {lp.texto}</span>
+            {lp.pideselo && <span className="cx-ayuda">{lp.pideselo}</span>}</span>
+          <span className="cxb-revolut-botones">
+            {lp.botones.includes('activar') && <button type="button" className="cx-boton" onClick={() => { setAviso(null); setPagos('activar') }}>Activar pagos</button>}
+            {lp.botones.includes('topes') && <button type="button" className="cx-boton-sec" onClick={() => { setAviso(null); setPagos('topes') }}>Topes y permisos</button>}
+            {yoPago && <button type="button" className="cx-boton-sec" onClick={() => { setAviso(null); setPagos('mia') }}>Tu llave y tu PIN</button>}
+            {lp.botones.includes('dejar') && <button type="button" className="cx-boton-sec cx-peligro" onClick={() => { setAviso(null); setPagos('dejar') }}>Dejar de pagar</button>}
+            {lp.botones.includes('quitar_en_revolut') && <button type="button" className="cx-boton-sec" onClick={() => { setAviso(null); setPagos('quitar_en_revolut') }}>Quitar el permiso en Revolut</button>}
+          </span>
+        </div>
+      )}
+      {quienPaga.error && <div className="cx-error" role="alert">{quienPaga.error}</div>}
       {(haciendo || terminandoLaVuelta) && <p className="cx-ayuda" role="status">Hablando con Revolut…</p>}
       {lectura.error && <div className="cx-error" role="alert">{lectura.error}</div>}
       {terminada.error && <div className="cx-error" role="alert">{terminada.error}</div>}
@@ -130,6 +167,17 @@ export function TarjetaRevolut() {
           </div>
         </Dialogo>
       )}
+      {pagos === 'activar' && <AsistentePagos alCerrar={cerrarPagos} />}
+      {pagos === 'topes' && <TopesYPermisos alCerrar={cerrarPagos} />}
+      {pagos === 'mia' && (
+        <Dialogo titulo="Tu llave y tu PIN de pago" alCerrar={cerrarPagos}>
+          <p className="cx-ayuda">Con ellos das la segunda aprobación de un pago. La llave es la forma normal; el PIN, para cuando no la tengas a mano.</p>
+          <TuLlaveYPin />
+          <div className="cx-pie"><button type="button" className="cx-boton" onClick={cerrarPagos}>Cerrar</button></div>
+        </Dialogo>
+      )}
+      {(pagos === 'dejar' || pagos === 'quitar_en_revolut') && <DejarDePagar soloRevolut={pagos === 'quitar_en_revolut'} alCerrar={cerrarPagos}
+        alAvisar={(a) => { setCerradaLaVuelta(true); setAviso(a) }} />}
       {abierto && <AsistenteRevolut key={`${abierto.paso}:${abierto.cuentas?.length ?? ''}`} inicio={abierto.paso} cuentas={abierto.cuentas ?? null} alCerrar={() => { setAbierto(null); cargar() }}
         alAvisar={(t) => setAviso({ tipo: 'ok', texto: t })} />}
     </div>

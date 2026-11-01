@@ -128,6 +128,11 @@ describe('leerEmpresa', () => {
     expect(p.error).toMatch(/ya no acepta el permiso/)
     expect(b.llamadas.find((x) => x.fn === 'conta_revolut_desconectar')?.args).toMatchObject({ p_company: EMPRESA, p_desde_revolut: true })
     expect(b.llamadas.some((x) => x.fn === 'bank_importar')).toBe(false)
+    // 2c-1: sin conexión no se paga, y se deja de pagar ANTES de apuntar la retirada.
+    const i = b.llamadas.findIndex((x) => x.fn === 'conta_pago_dejar')
+    expect(i).toBeGreaterThanOrEqual(0)
+    expect(b.llamadas[i].args).toMatchObject({ p_company: EMPRESA, p_quien: null })
+    expect(i).toBeLessThan(b.llamadas.findIndex((x) => x.fn === 'conta_revolut_desconectar'))
   })
 
   it('el registro no lleva secretos, tokens, client_id ni el IBAN entero', async () => {
