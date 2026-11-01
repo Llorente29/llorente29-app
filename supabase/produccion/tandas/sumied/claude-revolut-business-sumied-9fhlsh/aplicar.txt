@@ -1,27 +1,19 @@
-# B01 Revolut · PR 1 · Conectar Revolut Business y leer sus movimientos. Rama
+# B01 Revolut · PR 2a · La base del «Pagar» común. Rama
 # claude/revolut-business-sumied-9fhlsh. Se ensaya y se aplica desde main
 # nombrando esta rama, antes de fusionar.
 #
-#   1. 2210 — AÑADE, sin tocar nada de lo que existe ni datos:
-#      · revolut_conexion (una por empresa: el estado del asistente, el
-#        certificado PÚBLICO, la dirección de vuelta, el permiso y la última
-#        lectura);
-#      · los secretos en el Vault (revolut:<empresa>:privada | client_id |
-#        renovacion), que solo pone y lee la clave de servicio;
-#      · conta_revolut_desconectar y el despertador de cada hora
-#        (conta-revolut-despertar), con la dirección de project_url (W10).
-#   2. 2211 — CAMBIA en caliente, declarado: el CHECK del proveedor de
-#      bank_aggregator_link admite además «revolut». Solo amplía.
-#   3. 2212 — CAMBIA en caliente, declarado: bank_importar (misma firma, con
-#      respaldo y guarda de md5 09859e42…). Lo terminado de Revolut entra en
-#      cuanto llega: su continuidad se mide también contra la lectura de
-#      Revolut del mismo día. Para BBVA y los ficheros, igual que antes.
+# (La tanda del PR 1 —2210, 2211 y 2212— está aplicada y en el historial de
+# producción con su huella; su manifiesto, en la historia de git: #415.)
+#
+#   1. 1234 — AÑADE, sin tocar nada de lo que existe ni datos: el permiso de
+#      pagar, los topes, los pagos que salen juntos (lote) y cada pago, su
+#      registro, las llaves de acceso (solo la parte pública), el PIN de pago
+#      (cifrado) y los retos de un solo uso, con sus funciones. No manda ningún
+#      pago: eso es del PR 2b.
 #      Nada en el camino del pedido.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
-supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql
-supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql
-supabase/migrations/20261031T2212_b01rv_revolut_en_el_dia.sql
-cuenta: scripts/conta/produccion/cuentas/b01rv-revolut.sql
+supabase/migrations/20261101T1234_b01p_pagos_base.sql
+cuenta: scripts/conta/produccion/cuentas/b01p-pagos.sql
