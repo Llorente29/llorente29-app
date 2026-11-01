@@ -35,9 +35,13 @@ async function cuentaDe(s: Sesion): Promise<string> {
 /** Un paquete como el de Cegid, con valores de mentira. `marca` hace que cada run tenga su propio fichero (su huella). */
 function paquete(marca: string, cambiar?: (libro: XLSX.WorkBook) => void): Buffer {
   const libro = XLSX.utils.book_new()
+  // Como el paquete de verdad (N1 · respuesta 2): una portada LEEME, y las hojas
+  // «campo · valor» con su fila «campo | valor» y su «Centro de trabajo 1».
+  XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet([['Paquete inventado'], ['Empresa', `Empresa Inventada ${marca}`]]), 'LEEME')
   for (const h of HOJAS_CEGID) {
+    const campos = [...h.columnas, ...(h.numerados ?? []).map((b) => `${b} 1`)]
     const datos = h.clase === 'campo_valor'
-      ? h.columnas.map((c, i) => [c, `VALOR INVENTADO ${marca} ${i}`])
+      ? [['campo', 'valor'], ...campos.map((c, i) => [c, `VALOR INVENTADO ${marca} ${i}`])]
       : [[...h.columnas], ...[1, 2, 3].map((n) => h.columnas.map((_c, i) => `inventado ${marca} ${n}-${i}`))]
     XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(datos), h.nombre)
   }
@@ -92,9 +96,12 @@ test('leer solo las cabeceras: el paquete bien, el mismo otra vez y uno distinto
   const bueno = paquete(marca)
   await leer(page, 'paquete inventado.xlsx', bueno)
   await expect(page.locator('[data-prueba="importar-hecho"]'))
-    .toContainText('Leídas 9 hojas y 51 filas · 9 de 9 como se esperaban')
+    .toContainText('Leídas 9 hojas y 51 filas · 9 de 9 como se esperaban · y su portada (LEEME)')
   await expect(page.locator('[data-prueba="importar-hecho"]')).toContainText('Guardado como lote nuevo')
-  await expect(page.locator('[data-prueba="importar-hojas"] tbody tr')).toHaveCount(9)
+  // La portada (LEEME): se enseña, no bloquea y no cuenta como «no se esperaba».
+  await expect(page.locator('[data-prueba="importar-hoja-portada"]')).toContainText('Portada del paquete')
+  await expect(page.locator('[data-prueba="importar-hoja-portada"]')).toContainText(`No se carga: Paquete inventado · Empresa · Empresa Inventada ${marca}.`)
+  await expect(page.locator('[data-prueba="importar-hojas"] tbody tr')).toHaveCount(10)
   await expect(page.locator('[data-prueba="importar-hojas"]').getByText('Como se esperaba')).toHaveCount(9)
   await captura(page, 'lab1-cabeceras-bien')
 

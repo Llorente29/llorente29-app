@@ -7,7 +7,7 @@
 // sube y ningún valor llega a la base.
 
 import * as XLSX from 'xlsx'
-import { HOJAS_CEGID, normalizar, type HojaLeida } from './cegidCabeceras'
+import { HOJAS_CEGID, esCabeceraCampoValor, esPortada, normalizar, type HojaLeida } from './cegidCabeceras'
 
 const CAMPO_VALOR = new Set(HOJAS_CEGID.filter((h) => h.clase === 'campo_valor').map((h) => normalizar(h.nombre)))
 
@@ -17,9 +17,16 @@ const texto = (c: unknown) => String(c ?? '').trim()
 export function cabecerasDelLibro(libro: XLSX.WorkBook): HojaLeida[] {
   return libro.SheetNames.map((nombre) => {
     const filas = XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, raw: true, defval: '', blankrows: false }) as unknown[][]
+    if (esPortada(nombre)) {
+      // La portada (LEEME): lo que trae, en líneas, solo para la pantalla (no va a la base).
+      const portada = filas.map((f) => f.map(texto).filter((c) => c !== '').join(' · ')).filter((l) => l !== '')
+      return { nombre, columnas: [], filas: 0, portada }
+    }
     if (CAMPO_VALOR.has(normalizar(nombre))) {
-      // Campo · valor: la columna A son los nombres; la B, los valores, que no se leen.
-      const campos = filas.map((f) => texto(f[0])).filter((c) => c !== '')
+      // Campo · valor: la columna A son los nombres; la B, los valores, que no se leen
+      // (solo se mira si la primera fila es la cabecera «campo | valor», para saltarla).
+      const sinCabecera = filas.length && esCabeceraCampoValor(filas[0][0], filas[0][1]) ? filas.slice(1) : filas
+      const campos = sinCabecera.map((f) => texto(f[0])).filter((c) => c !== '')
       return { nombre, columnas: campos, filas: campos.length }
     }
     const [cabecera = [], ...datos] = filas

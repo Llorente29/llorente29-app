@@ -31,6 +31,7 @@ const ESTADO: Record<ComparacionHoja['estado'], { texto: string; tono: 'seguro' 
   diferente: { texto: 'Columnas distintas', tono: 'duda' },
   falta: { texto: 'Falta la hoja', tono: 'falta' },
   sobra: { texto: 'No se esperaba', tono: 'neutro' },
+  portada: { texto: 'Portada del paquete', tono: 'neutro' },
 }
 
 const fechaYHora = (iso: string) => new Date(iso).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -47,6 +48,7 @@ export default function ImportarHistorialPage() {
   const [cargando, setCargando] = useState(false)
   const [avance, setAvance] = useState('')
   const [filas, setFilas] = useState<ResultadoFilas | null>(null)
+  const [portada, setPortada] = useState<string[]>([])
 
   const cargarLotes = useCallback(() => {
     if (!activeAccountId) return
@@ -61,7 +63,10 @@ export default function ImportarHistorialPage() {
       const bytes = await fichero.arrayBuffer()
       const hojas = leerCabeceras(bytes)
       const c = compararCabeceras(hojas)
-      const lote = await guardarCabeceras(activeAccountId, fichero.name, await huellaDelFichero(bytes), hojas, c)
+      // La portada (LEEME) se enseña aquí y no va a la base: a la base, solo nombres de columna y recuentos.
+      setPortada(hojas.find((h) => h.portada)?.portada ?? [])
+      const lote = await guardarCabeceras(activeAccountId, fichero.name, await huellaDelFichero(bytes),
+        hojas.map(({ portada: _p, ...h }) => { void _p; return h }), c)
       setComparacion(c)
       setLoteId(lote.id)
       setHecho(`${resumenComparacion(c)}. ${lote.repetido
@@ -116,7 +121,7 @@ export default function ImportarHistorialPage() {
             <thead><tr><th>Hoja</th><th>Filas</th><th>Cabeceras</th><th>Qué pasa</th></tr></thead>
             <tbody>
               {comparacion.hojas.map((h) => (
-                <tr key={`${h.id ?? 'x'}-${h.nombre}`} data-prueba={`importar-hoja-${h.id ?? 'otra'}`}>
+                <tr key={`${h.id ?? 'x'}-${h.nombre}`} data-prueba={`importar-hoja-${h.id ?? (h.estado === 'portada' ? 'portada' : 'otra')}`}>
                   <td>{h.nombre}</td>
                   <td className="s-num">{h.filas.toLocaleString('es-ES')}</td>
                   <td><Chip tono={ESTADO[h.estado].tono}>{ESTADO[h.estado].texto}</Chip></td>
@@ -125,6 +130,7 @@ export default function ImportarHistorialPage() {
                     {h.nuevas.length > 0 && <span>{h.estado === 'sobra' ? 'Trae' : 'Nuevas'}: {h.nuevas.join(', ')}.</span>}
                     {h.estado === 'falta' && <span>El fichero no trae esta hoja.</span>}
                     {h.estado === 'igual' && <span>Todas las columnas, en su sitio.</span>}
+                    {h.estado === 'portada' && <span>No se carga: {portada.length ? portada.join(' · ') : 'viene vacía'}.</span>}
                   </td>
                 </tr>
               ))}
