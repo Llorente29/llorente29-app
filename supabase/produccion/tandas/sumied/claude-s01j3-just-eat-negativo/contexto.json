@@ -1,0 +1,24 @@
+{
+ "_que": "S01j·3 · contexto de producción: channel_settlement existe (400 filas, medido en SOLO LECTURA el 01/11 a las 13:11Z para el S01j·2); s01j3_comision_antes no existe; conta_liquidacion_registrar(uuid,jsonb,text) existe y la 1540 la cambia sobre su definición viva (no se ha podido leer su cuerpo desde esta sesión: Supabase daba 502; lo mide el ensayo); nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-01T13:11Z",
+ "tanda": {
+  "supabase/migrations/20261101T1540_s01j3_comision_con_signo.sql": "1907ce6dc9fc7f7ab506e9588febec6d",
+  "supabase/migrations/20261101T1541_s01j3_comision_foodint.sql": "dcaf0ef7ea633f8d69cfb688d0233f67"
+ },
+ "contexto": {
+  "tablas": [
+   "public.channel_settlement"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.channel_settlement": 400
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,5 @@
+# S01j·3 · la vuelta atrás, en orden inverso: la comisión de antes de las que
+# corrigió la 1541, y conta_liquidacion_registrar como estaba.
+cuenta: scripts/conta/produccion/cuentas/s01j3-comision.sql
+supabase/vuelta-atras/20261101T1541_s01j3_comision_foodint.down.sql
+supabase/vuelta-atras/20261101T1540_s01j3_comision_con_signo.down.sql
