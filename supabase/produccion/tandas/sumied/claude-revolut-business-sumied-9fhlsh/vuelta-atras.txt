@@ -1,0 +1,4 @@
+# B01 Revolut · PR 1 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261031T2212_b01rv_revolut_en_el_dia.down.sql
+supabase/vuelta-atras/20261031T2211_b01rv_revolut_proveedor.down.sql
+supabase/vuelta-atras/20261031T2210_b01rv_revolut_conexion.down.sql

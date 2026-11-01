@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Volviendo de Revolut</title>
+    <!--
+      B01 Revolut · PR 1 · LA DIRECCIÓN DE VUELTA DE REVOLUT (/bancos/revolut/vuelta,
+      por vercel.json). Revolut exige una dirección fija, y las páginas de Sumied
+      llevan delante la cuenta: esta página solo devuelve a la persona a la página
+      de Bancos desde la que salió (la guardó el asistente en este navegador) con
+      el código y el «state». No guarda nada, no llama a nadie y no enseña el
+      código. Sin la página guardada, a la portada, y lo dice.
+    -->
+    <style>
+      body { margin: 0; background: #F5F7FA; color: #0E1A2B; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+      main { max-width: 480px; margin: 0 auto; padding: 48px 16px; }
+      .caja { background: #fff; border: 1px solid #E6EAF0; border-radius: 16px; padding: 20px; }
+      a { color: #2F5BFF; }
+    </style>
+  </head>
+  <body>
+    <main><div class="caja" id="caja" role="status">Volviendo a Sumied…</div></main>
+    <script>
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var codigo = q.get('code'), estado = q.get('state'), error = q.get('error');
+        var camino = null;
+        try { camino = localStorage.getItem('sumied.revolut.vuelta'); } catch (e) { camino = null; }
+        // Solo un camino de este mismo sitio (nunca otra dirección).
+        if (!camino || camino.charAt(0) !== '/' || camino.charAt(1) === '/') camino = null;
+        var p = new URLSearchParams();
+        if (error || !codigo || !estado) p.set('revolut_error', error || 'sin_codigo');
+        else { p.set('revolut_code', codigo); p.set('revolut_state', estado); }
+        if (!camino) {
+          document.getElementById('caja').innerHTML = 'Has vuelto de Revolut, pero este navegador no sabe a qué empresa. Entra en Sumied › Bancos › Cuentas y extractos y vuelve a pulsar «Autorizar en Revolut». <a href="/">Ir a Sumied</a>';
+          return;
+        }
+        location.replace(camino + '?' + p.toString());
+      })();
+    </script>
+  </body>
+</html>

@@ -33,6 +33,8 @@ export default defineConfig({
         mandato: path.resolve(__dirname, 'mandato.html'),
         // PC01 · E4 · La de pagar una factura con tarjeta o Bizum, sin cuenta (pagar.html).
         pagar: path.resolve(__dirname, 'pagar.html'),
+        // B01 Revolut · La vuelta de Revolut (/bancos/revolut/vuelta, por vercel.json): devuelve a Bancos.
+        revolutVuelta: path.resolve(__dirname, 'revolut-vuelta.html'),
       },
     },
   },
