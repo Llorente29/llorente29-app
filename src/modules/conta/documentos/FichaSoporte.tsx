@@ -80,7 +80,7 @@ export function FichaSoporte({ accountId, fila, alVolver, alCambiar }: {
     <div className="s-pagina cxso-pagina">
       <EncabezadoPagina titulo={titulo} frase={[fila.recepcion?.fecha ? fechaCorta(fila.recepcion.fecha) : null, s.local, fila.numero ? `albarán ${fila.numero}` : null,
         fila.total != null ? eurosExactos(fila.total) : null, 'llegó por cocina'].filter(Boolean).join(' · ')}
-        migasExtra={[{ etiqueta: 'Otras', a: alVolver }, { etiqueta: s.codigo ?? 'Recepción' }]}
+        migasExtra={[{ etiqueta: 'Apartadas', a: alVolver }, { etiqueta: s.codigo ?? 'Recepción' }]}
         estado={{ texto: etiquetaSoporte(s), tono: 'accion' }}
         masAcciones={mas} principal={principal} />
 
