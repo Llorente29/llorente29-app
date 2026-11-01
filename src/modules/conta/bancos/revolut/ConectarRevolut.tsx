@@ -11,7 +11,7 @@
 //   · AsistenteRevolut: los tres pasos en la misma ventana, con su progreso:
 //     1. «Copia este certificado» (y desde cuándo traer los movimientos);
 //     2. «Pégalo en Revolut › Ajustes › API y pega aquí el Client ID»;
-//     3. «Autoriza en Revolut» (solo leer);
+//     3. «Autoriza en Revolut» (leer y avisar; pagar, aparte);
 //     y después, ligar cada cuenta en euros a su cuenta contable (la 572 que
 //     crea bank_cuenta_nueva) y traer sus movimientos.
 // Cada botón dice lo que ha pasado, con contenido (regla 8).
@@ -251,7 +251,7 @@ function AsistenteRevolut({ inicio, cuentas: cuentasIniciales, alCerrar, alAvisa
       {paso === 'autorizar' && (
         <div className="cx-formulario">
           <h3 className="cxl-subtitulo">Autoriza en Revolut</h3>
-          <p className="cx-ayuda">Se abre Revolut. Pulsa «Activar acceso» y vuelves solo a Sumied. Sumied pide <strong>solo leer</strong> tus movimientos: para pagar, pedirá permiso aparte cuando lo actives.</p>
+          <p className="cx-ayuda">Se abre Revolut. Pulsa «Activar acceso» y vuelves solo a Sumied. Sumied pide permiso para <strong>leer tus movimientos</strong> y para que Revolut le <strong>avise</strong> de cada uno, así entran al momento. <strong>No puede pagar</strong>: para eso pedirá un permiso aparte cuando actives los pagos.</p>
           {!url && <label className="cx-campo"><span>Client ID de Revolut (para volver a autorizar)</span>
             <input className="cx-input cx-cifra" value={clientId} onChange={(e) => setClientId(e.target.value)} autoComplete="off" spellCheck={false} />
           </label>}
