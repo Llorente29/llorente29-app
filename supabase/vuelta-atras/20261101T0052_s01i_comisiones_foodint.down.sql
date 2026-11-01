@@ -15,6 +15,9 @@ do $$
 declare v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then return; end if;
+  -- Los disparadores de la 0051 siguen vivos aquí (se deshace después): sin esto, al volver a
+  -- «aprobada» se buscaría su liquidación y se pagaría otra vez (lo cazó el ensayo del 01/11: 3).
+  perform set_config('s01i.sin_buscar', 'si', true);
   with p as (
     delete from public.supplier_invoice_payment where account_id = v_acc and method = 'compensation' and created_by_name = 'Sumied · compensada con la liquidación'
     returning invoice_id)
@@ -29,4 +32,5 @@ begin
    where si.account_id = v_acc and si.payment_method = 'compensation'
      and exists (select 1 from public.party_role ps join public.party_role pl on pl.account_id = ps.account_id and pl.party_id = ps.party_id and pl.role = 'platform'
                   where ps.account_id = v_acc and ps.role = 'supplier' and ps.supplier_id = si.supplier_id);
+  perform set_config('s01i.sin_buscar', '', true);
 end $$;

@@ -21,6 +21,8 @@
 --      · al llegar una liquidación, se buscan las facturas de su plataforma
 --        que estaban sin ligar («Falta la liquidación»).
 --      Ninguno impide guardar: si algo falla, la factura sigue sin ligar.
+--      Los dos se apartan con «s01i.sin_buscar = si» (lo pone la vuelta atrás
+--      de la 0052, solo en su transacción).
 
 alter table public.supplier_invoice
   drop constraint supplier_invoice_payment_method_check,
@@ -91,6 +93,8 @@ $function$;
 create or replace function public._s01i_factura_comision()
 returns trigger language plpgsql security definer set search_path to 'public' as $$
 begin
+  -- La vuelta atrás de la 0052 los aparta: deshace lo que hizo sin que se vuelva a ligar y pagar.
+  if current_setting('s01i.sin_buscar', true) = 'si' then return null; end if;
   if new.status in ('anulada', 'descartada') or new.supplier_id is null then return null; end if;
   begin
     perform public._conta_comision_buscar(new.id);
@@ -110,6 +114,7 @@ create or replace function public._s01i_liquidacion_llega()
 returns trigger language plpgsql security definer set search_path to 'public' as $$
 declare v uuid;
 begin
+  if current_setting('s01i.sin_buscar', true) = 'si' then return null; end if;
   begin
     for v in select si.id from public.supplier_invoice si
                join public.party_role ps on ps.account_id = si.account_id and ps.role = 'supplier' and ps.supplier_id = si.supplier_id

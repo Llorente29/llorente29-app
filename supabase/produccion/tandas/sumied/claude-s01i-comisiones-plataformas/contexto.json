@@ -3,7 +3,7 @@
  "medido": "2026-11-01T00:50Z",
  "tanda": {
   "supabase/migrations/20261101T0050_s01i_comision_liquidacion.sql": "3408d2ee9556b47ee4df9bae197d08e6",
-  "supabase/migrations/20261101T0051_s01i_comision_sin_banco.sql": "19f8afdc84feea2698f73a00841811ae",
+  "supabase/migrations/20261101T0051_s01i_comision_sin_banco.sql": "4d91902ad4d92b8b9a2a6e840971a159",
   "supabase/migrations/20261101T0052_s01i_comisiones_foodint.sql": "8ae1199cb55a0635afec9a032af658df"
  },
  "contexto": {

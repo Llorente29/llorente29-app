@@ -15,6 +15,7 @@
 --   2. Encaja una sola (marca y semana): se liga sola, queda pagada por
 --      compensación con la fecha de su liquidación, y no sale en Pagos ni en
 --      las pendientes de Bancos.
+--   2b. La marca de la vuelta atrás aparta los disparadores.
 --   3. Dos de la misma marca esa semana y la factura sin dirección: elige la
 --      que coincide al céntimo; si ninguna coincide, no adivina («varias»,
 --      con su porqué) y la persona elige (conta_comision_ligar).
@@ -148,6 +149,26 @@ begin
     raise exception 'PRUEBA S01i · 2: sale en Pagos o en las pendientes de Bancos.';
   end if;
   raise notice 'PRUEBA S01i · 2: ligada a la de su marca y su semana, pagada por compensación el 18/10, fuera de Pagos y de Bancos.';
+end $$;
+
+-- 2b · Lo que necesita la vuelta atrás de la 0052: con «s01i.sin_buscar», devolver a «aprobada» una
+-- pagada por compensación no la vuelve a pagar (sin la marca, sí: es lo que paró el ensayo del 01/11).
+do $$
+declare v uuid;
+begin
+  select si.id into v from public.supplier_invoice si where si.invoice_number = 'S01I-A' and si.account_id = current_setting('prueba.acc')::uuid;
+  perform set_config('s01i.sin_buscar', 'si', true);
+  delete from public.supplier_invoice_payment where invoice_id = v and created_by_name = 'Sumied · compensada con la liquidación';
+  update public.supplier_invoice set status = 'aprobada', paid_at = null, paid_method = null where id = v;
+  if (select status from public.supplier_invoice where id = v) <> 'aprobada' then
+    raise exception 'PRUEBA S01i · 2b: con la marca de la vuelta atrás, el disparador la ha vuelto a pagar.';
+  end if;
+  perform set_config('s01i.sin_buscar', '', true);
+  update public.supplier_invoice set status = 'aprobada' where id = v;
+  if (select status from public.supplier_invoice where id = v) <> 'pagada' then
+    raise exception 'PRUEBA S01i · 2b: sin la marca, al tocar su estado no se ha vuelto a pagar por compensación.';
+  end if;
+  raise notice 'PRUEBA S01i · 2b: con la marca de la vuelta atrás no se vuelve a pagar; sin ella, sí.';
 end $$;
 
 -- 3 · Dos de la misma marca, sin dirección: la que coincide al céntimo; si ninguna, no adivina.
