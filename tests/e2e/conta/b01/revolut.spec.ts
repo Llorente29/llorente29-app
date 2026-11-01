@@ -2,7 +2,7 @@
 // tests/e2e/conta/b01/revolut.spec.ts
 //
 // B01 Revolut · El asistente «Conectar Revolut Business», en staging-conta,
-// cuenta A, en ordenador (1440) y móvil (390), HASTA ANTES DE AUTORIZAR: lo que
+// cuenta B, en ordenador (1440) y móvil (390), HASTA ANTES DE AUTORIZAR: lo que
 // no necesita la cuenta de pruebas del sandbox (eso va en la e2e con el sandbox,
 // con la conexión que autoriza Julio una vez).
 //   1. Bancos › Cuentas y extractos: la tarjeta de Revolut, «Conectar Revolut».
@@ -16,15 +16,22 @@
 // marcas, así que la prueba entra como si fuera app.sumied.com (cambia el
 // «origen» de la llamada). Al acabar, DESCONECTA: sin secretos ni conexión a
 // medias en staging.
+//
+// Cuenta B y no A (01/11): la empresa A guarda la conexión de verdad con el
+// sandbox, la que autoriza Julio una vez y usan las e2e de leer y de pagar.
+// Esta prueba desconecta al empezar y al acabar: en A se la llevaría.
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
-import { EMPRESA_A, baseDeA, conLimpieza } from './datos'
+import { createClient } from '@supabase/supabase-js'
+import { CUENTA_B, STAGING_URL, anonKey, enCarril, entrarComo, pedirSesion } from '../sesion'
+import { conLimpieza } from './datos'
 
 const DIR = 'docs/conta/capturas/b01-revolut'
 const ORIGEN_MARCA = 'https://app.sumied.com'
 const CLIENT_ID = 'clientidinventadoe2e01'
+/** La empresa de la cuenta B («Cocina de Prueba Sur»). */
+const EMPRESA_B = enCarril('7e35fa0e-65aa-4a96-86e6-de9a2317c0f6')
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 
 async function capturar(page: Page, nombre: string) {
@@ -44,11 +51,16 @@ async function comoLaMarca(page: Page) {
   })
 }
 
+async function clienteDeB() {
+  const sesion = await pedirSesion(CUENTA_B.email)
+  return createClient(STAGING_URL, anonKey(), { global: { headers: { Authorization: `Bearer ${sesion.access_token}` } }, auth: { persistSession: false, autoRefreshToken: false } })
+}
+
 async function desconectar() {
-  const { cliente } = await baseDeA()
-  const { data } = await cliente.from('revolut_conexion').select('estado').eq('company_id', EMPRESA_A).maybeSingle()
+  const cliente = await clienteDeB()
+  const { data } = await cliente.from('revolut_conexion').select('estado').eq('company_id', EMPRESA_B).maybeSingle()
   if (!data || !['certificado', 'autorizar', 'conectada'].includes(String(data.estado))) return
-  const { error } = await cliente.functions.invoke('conta-revolut-conectar', { body: { accion: 'desconectar', empresa: EMPRESA_A } })
+  const { error } = await cliente.functions.invoke('conta-revolut-conectar', { body: { accion: 'desconectar', empresa: EMPRESA_B } })
   if (error) throw new Error(`No se ha podido desconectar Revolut al acabar: ${error.message}`)
 }
 
@@ -60,7 +72,7 @@ test.describe('B01 Revolut · el asistente, hasta autorizar', () => {
   test('certificado, vuelta, Client ID y la página del sandbox con READ y WRITE', async ({ page }) => {
     await desconectar()
     await conLimpieza(page, async () => {
-      await entrarComo(page, CUENTA_A.email)
+      await entrarComo(page, CUENTA_B.email)
       await comoLaMarca(page)
       await page.goto('/conta/bancos/cuentas')
       const tarjeta = page.locator('[data-prueba="revolut"]')
