@@ -36,6 +36,10 @@ export interface LiquidacionJustEat {
   ventas: number
   neto: number
   factura: { numero: string; base: number; iva: number; total: number }
+  /** S01j · La fecha de la factura («Fecha de factura»), si la trae. */
+  fechaFactura: string | null
+  /** S01j · El número del asunto («Just-eat invoice: 4126424»), si lo trae. */
+  numeroAsunto: string | null
   nifJustEat: string | null
   /** Lo demás que mueve el pago (campañas…): neto − ventas + factura. */
   otros: number
@@ -97,9 +101,12 @@ export function leerLiquidacionJustEat(c: { from?: string | null; subject?: stri
   const iFecha = ts.findIndex((t, k) => k > iFac && /^Fecha de factura/i.test(t))
   const nifs = ts.slice(iFac, iFecha < 0 ? iFac + 15 : iFecha).filter((t) => /^[A-Z]\d{8}$|^\d{8}[A-Z]$/.test(t))
   const pago = ts.find((t) => /^Será abonado antes del/i.test(t))
+  // S01j · La fecha de la factura: en el mismo trozo («Fecha de factura 16 octubre 2026») o en el siguiente.
+  const fechaFactura = iFecha < 0 ? null : fechaLarga(ts[iFecha].replace(/^Fecha de factura:?/i, '').trim()) ?? fechaLarga(ts[iFecha + 1] ?? '')
+  const numeroAsunto = /invoice:?\s*(\d{5,})/i.exec(c.subject ?? '')?.[1] ?? null
   return {
     restaurante, calle: calle ? calle.replace(/,/g, '').replace(/\s+/g, ' ').trim() : null, desde: d1, hasta: d2,
-    pagoEl: pago ? fechaLarga(pago) : null, pedidos, ventas, neto, factura: { numero, base, iva, total },
+    pagoEl: pago ? fechaLarga(pago) : null, pedidos, ventas, neto, factura: { numero, base, iva, total }, fechaFactura, numeroAsunto,
     nifJustEat: nifs.length ? nifs[nifs.length - 1] : null, otros: r2(neto - ventas + total), avisos,
   }
 }
@@ -113,5 +120,7 @@ export function paraRegistrarJustEat(l: LiquidacionJustEat, x: { emailId?: strin
     ventas: { total: l.ventas }, comision: l.factura.total, otros: l.otros, neto: l.neto,
     factura: { numero: l.factura.numero, base: l.factura.base, iva: l.factura.iva, total: l.factura.total },
     intermediario: { nombre: 'Just Eat Spain S.L.', nif: l.nifJustEat }, avisos: l.avisos,
+    // S01j · Para casar las antiguas sin periodo (import_csv_je, «je:<número>»).
+    referencia_asunto: l.numeroAsunto, fecha_factura: l.fechaFactura,
   }
 }

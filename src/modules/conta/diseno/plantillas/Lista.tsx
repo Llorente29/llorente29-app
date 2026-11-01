@@ -15,13 +15,15 @@ import type { PestanaEstado, Sentido } from './lista'
 import { columnasQueCaben, textoColumnasOcultas } from './anchos'
 
 /** Las pestañas de estado, con su número. La primera es «Todas» (la suma). */
-export function PestanasEstado({ pestanas, actual, alCambiar, etiqueta, derecha }: {
+export function PestanasEstado({ pestanas, actual, alCambiar, etiqueta, derecha, sinNumeros = false }: {
   pestanas: readonly PestanaEstado[]
   actual: string
   alCambiar: (id: string) => void
   etiqueta: string
   /** Lo que va a la derecha de las pestañas («Revisarlas de una en una →»). */
   derecha?: ReactNode
+  /** S01n · Sin la lista (cargando, o la carga falló), «—» y no un 0: un 0 diría que no hay ninguna (reglas 7 y 8). */
+  sinNumeros?: boolean
 }) {
   const fila = useRef<HTMLDivElement | null>(null)
   const mover = (e: KeyboardEvent<HTMLButtonElement>, i: number) => {
@@ -38,7 +40,9 @@ export function PestanasEstado({ pestanas, actual, alCambiar, etiqueta, derecha 
         {pestanas.map((p, i) => (
           <button key={p.id} type="button" role="tab" aria-selected={p.id === actual} tabIndex={p.id === actual ? 0 : -1}
             className="s-pestana-estado" onClick={() => alCambiar(p.id)} onKeyDown={(e) => mover(e, i)}>
-            <span>{p.etiqueta}</span><span className="s-pestana-estado-n s-cifra">{p.n.toLocaleString('es-ES')}</span>
+            <span>{p.etiqueta}</span>{sinNumeros
+              ? <span className="s-pestana-estado-n s-cifra" data-prueba="pestana-sin-numero" title="Sin contar: no se ha podido leer la lista">—</span>
+              : <span className="s-pestana-estado-n s-cifra">{p.n.toLocaleString('es-ES')}</span>}
           </button>
         ))}
       </div>

@@ -82,7 +82,7 @@ import { CHIP_ABONO, conSigno, esAbono, estadoPagoAbono, sinSigno } from '@/modu
 import { leerLoQueAnula } from '@/modules/conta/services/abonoService'
 import { BloqueAbono } from '@/modules/conta/documentos/BloqueAbono'
 import {
-  ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
+  ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, retencionLeidaSinTipo, cuentaDelGastoEnAsiento, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
   textoDelGuardado, totalesDe, type BorradorFicha,
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
@@ -214,6 +214,7 @@ export default function RevisarFacturaPage() {
   const formato = useMemo(() => formatoCampo(nombreProveedor, nombreLocal), [nombreProveedor, nombreLocal])
   const ed = useCambiosSinGuardar<BorradorFicha>(original, ETIQUETAS, formato)
   const b = ed.valor
+  const retLeida = fac ? retencionLeidaSinTipo(fac.retencion, fac.lectura?.factura?.retencion) : null
 
   // D07b + S01b · La ficha del proveedor ELEGIDO (también el recién elegido, aún sin guardar), sus
   // contactos, y lo que trae el papel: lo que le falta se guarda al validar, «de la factura …»; lo que
@@ -625,9 +626,17 @@ export default function RevisarFacturaPage() {
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}
+      {/* S01l · El papel traía una retención cuyo tipo no encajaba: no entró. Se propone para elegir su tipo. */}
+      {retLeida && !b.retencion && !soloLectura && (
+        <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="retencion-sin-tipo">
+          {retLeida.aviso}{' '}
+          <button type="button" className="s-boton s-boton-enlace" onClick={() => ed.poner('retencion', { tipo: retLeida.tipo, importe: importeEs(retLeida.importe) })}>Ponerla y elegir su tipo</button>
+        </p>
+      )}
+      {retLeida && b.retencion && b.retencion.tipo === '' && !soloLectura && <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="retencion-elige-tipo">Elige el tipo de la retención en su desplegable.</p>}
       {!descartada && <IvaNoDeducibleFicha accountId={accountId} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alGuardar={() => setVuelta((x) => x + 1)} />}
       {!descartada && <BloqueComision e={comision} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alLigar={() => setVuelta((x) => x + 1)} />}
-      <BloqueGasto gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
+      <BloqueGasto enAsiento={abono ? (g) => cuentaDelGastoEnAsiento(g, cuentasProp) : undefined} gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
         alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura}
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />
       <BloquePago formaPago={b.formaPago} vence={b.vence} estadoPago={b.estadoPago} soloLectura={soloLectura}

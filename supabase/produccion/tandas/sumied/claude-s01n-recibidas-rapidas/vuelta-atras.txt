@@ -1,0 +1,3 @@
+# S01n · la vuelta atrás: conta_documentos_recibidos como estaba (su respaldo).
+cuenta: scripts/conta/produccion/cuentas/s01n-recibidas.sql
+supabase/vuelta-atras/20261101T1134_s01n_recibidas_rapidas.down.sql

@@ -1,0 +1,22 @@
+{
+ "_que": "S01m · contexto de producción medido en SOLO LECTURA el 01/11 a las 09:54Z: existe _conta_local_de_texto(uuid,text[]) (una sola firma; su cuerpo es el del S01i, huella c759514d5a46d6a271d208e1bfb06f04; se reemplaza con la misma firma); location_address_alias y conta_local_direcciones_guardar no existen; nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-01T09:54Z",
+ "tanda": {
+  "supabase/migrations/20261101T0945_s01m_otras_direcciones.sql": "8acfade3be462f2ac8c34b4f94f0e84b",
+  "supabase/migrations/20261101T0946_s01m_local_por_otras.sql": "bea266e88d40f2fe1f1d4a4b348da613"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_local_de_texto(uuid,text[])"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

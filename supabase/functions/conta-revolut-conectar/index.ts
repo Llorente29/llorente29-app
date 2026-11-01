@@ -11,7 +11,8 @@
 //     la marca por la que entra: app.sumied.com o app.folvy.app). Si ya hay uno
 //     sin terminar, devuelve ése (con `nuevo: true`, otro).
 //   · client_id { clientId }: lo guarda en el Vault y devuelve la página de
-//     Revolut donde se pulsa «Activar acceso» (solo leer, respuesta 1, P4).
+//     Revolut donde se pulsa «Activar acceso» (leer y avisar: READ y WRITE,
+//     respuesta 5; PAY, solo con «Activar pagos»).
 //   · vuelta { code, state }: Revolut vuelve aquí. Cambia el código por el
 //     token (el de renovación, al Vault), deja la conexión «conectada» y
 //     devuelve sus cuentas para ligarlas a su 572.
@@ -27,7 +28,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
 import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { crearLlave } from "../_shared/revolut/certificado.ts";
-import { clienteRevolut, entornoDe, FalloRevolut, paginaDeAutorizar, pedirToken, PERMISO_LEER, registrarAviso, quitarAviso } from "../_shared/revolut/cliente.ts";
+import { clienteRevolut, entornoDe, FalloRevolut, dejanAvisar, paginaDeAutorizar, pedirToken, PERMISOS_AL_CONECTAR_TEXTO, registrarAviso, quitarAviso } from "../_shared/revolut/cliente.ts";
 import { ultimos4 } from "../_shared/revolut/lectura.ts";
 import { COLUMNAS_CONEXION, guardarSecreto, leerEmpresa, paraElRegistro, secreto, tokenDeAcceso, type ConexionRevolut } from "../_shared/revolut/servidor.ts";
 
@@ -118,7 +119,10 @@ Deno.serve(async (req) => {
         if (!vuelta) return mal("Abre Sumied desde su dirección de siempre (app.sumied.com) para conectar Revolut.");
         const desde = typeof b.desde === "string" && /^\d{4}-\d{2}-\d{2}$/.test(b.desde) ? b.desde : null;
         if (conexion?.estado === "conectada") return mal("Revolut ya está conectado en esta empresa.");
-        if (conexion && b.nuevo !== true && conexion.vuelta === vuelta && ["certificado", "autorizar"].includes(conexion.estado)) {
+        // Se sigue con la conexión a medias solo si es del mismo entorno: una
+        // empezada contra el sandbox (antes de poner REVOLUT_ENTORNO) pediría el
+        // token al sandbox con un Client ID de verdad. Si cambia, llave nueva.
+        if (conexion && b.nuevo !== true && conexion.vuelta === vuelta && conexion.entorno === ENTORNO && ["certificado", "autorizar"].includes(conexion.estado)) {
           const { data } = await srv.from("revolut_conexion").select("certificado").eq("id", conexion.id).single();
           if (desde) await srv.from("revolut_conexion").update({ desde_historico: desde }).eq("id", conexion.id);
           return json({ ok: true, certificado: data.certificado, vuelta, estado: conexion.estado });
@@ -134,16 +138,18 @@ Deno.serve(async (req) => {
       }
       case "client_id": {
         if (!conexion || !["certificado", "autorizar"].includes(conexion.estado)) return mal("Empieza otra vez: copia el certificado primero.");
+        if (conexion.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que empezaste. Cierra el asistente y vuelve a conectar: hay que copiar un certificado nuevo.");
         const clientId = String(b.clientId ?? "").trim();
         const motivo = comprobarClientId(clientId);
         if (motivo) return mal(motivo);
         await guardarSecreto(srv, empresa, "client_id", clientId);
         const state = [...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("");
         await srv.from("revolut_conexion").update({ estado: "autorizar", estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString() }).eq("id", conexion.id);
-        return json({ ok: true, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISO_LEER, estado: state }) });
+        return json({ ok: true, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISOS_AL_CONECTAR_TEXTO, estado: state }) });
       }
       case "vuelta": {
         const c = conexion!;
+        if (c.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que empezaste. Cierra el asistente y vuelve a conectar: hay que copiar un certificado nuevo.");
         const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
         if (!privada || !clientId) return mal("Falta la llave o el Client ID de esta empresa. Empieza otra vez.");
         let t;
@@ -159,11 +165,12 @@ Deno.serve(async (req) => {
         }
         if (!t.renovacion) return mal("Revolut no ha dado el permiso para seguir leyendo. Vuelve a pulsar «Autorizar en Revolut».");
         await guardarSecreto(srv, empresa, "renovacion", t.renovacion);
-        await srv.from("revolut_conexion").update({ estado: "conectada", permisos: PERMISO_LEER, estado_oauth_huella: null, estado_oauth_at: null,
+        await srv.from("revolut_conexion").update({ estado: "conectada", permisos: PERMISOS_AL_CONECTAR_TEXTO, estado_oauth_huella: null, estado_oauth_at: null,
           conectada_at: new Date().toISOString(), conectada_por: u.user.id, conectada_por_nombre: quien, desconectada_at: null, last_error: null }).eq("id", c.id);
-        // El aviso pide WRITE: con solo READ, Revolut lo rechaza y la lectura de cada hora hace de aviso.
+        // El aviso pide WRITE: se ha pedido al conectar (los permisos de AHORA, no los de antes de
+        // conectar, que están vacíos). Si Revolut no lo registra, la lectura de cada hora hace de aviso.
         let aviso = false;
-        if ((c.permisos ?? PERMISO_LEER).includes("WRITE")) {
+        if (dejanAvisar(PERMISOS_AL_CONECTAR_TEXTO)) {
           try {
             const w = await registrarAviso(fetch, c.entorno, t.acceso, `${SUPABASE_URL}/functions/v1/conta-revolut-aviso?c=${c.id}`);
             if (w.secreto) await guardarSecreto(srv, empresa, "aviso", w.secreto);

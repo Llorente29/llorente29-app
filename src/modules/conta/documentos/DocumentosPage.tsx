@@ -307,7 +307,7 @@ export default function DocumentosPage() {
       <AsientosDeCompras />
       <LoQueNoHePodido donde={DONDE.recibidas} />
 
-      <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id })}
+      <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id })} sinNumeros={!d}
         derecha={!movil && porRevisar > 0 && <button type="button" className="s-boton s-boton-enlace" onClick={revisarUnaAUna}>Revisarlas de una en una <Icono nombre="siguiente" /></button>} />
 
       <FiltrosLista etiqueta="Filtros de las facturas">

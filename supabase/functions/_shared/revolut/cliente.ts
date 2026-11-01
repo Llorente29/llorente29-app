@@ -31,8 +31,18 @@ export const entornoDe = (v: string | null | undefined): EntornoRevolut => ((v ?
 
 export const direcciones = (e: EntornoRevolut) => DIRECCIONES[e]
 
-/** Los permisos que se piden. PR 1: solo leer (respuesta 1, P4). El de pagar, al activar el primer pago. */
-export const PERMISO_LEER = 'READ'
+/**
+ * Los permisos que se piden al conectar (Julio, respuesta 5, 01/11): READ para
+ * leer y WRITE para registrar el aviso de Revolut, que es lo que hace que lo
+ * terminado entre al momento. WRITE también deja crear beneficiarios y
+ * borradores de pago, pero NO pagar: PAY se pide aparte, solo con «Activar
+ * pagos» (PR 2). En la página de Revolut van separados por comas (por
+ * confirmar en el sandbox, como el resto de lo que vive en sus guías).
+ */
+export const PERMISOS_AL_CONECTAR = ['READ', 'WRITE'] as const
+export const PERMISOS_AL_CONECTAR_TEXTO = PERMISOS_AL_CONECTAR.join(',')
+/** ¿Estos permisos dejan registrar el aviso de Revolut? (pide WRITE). */
+export const dejanAvisar = (permisos: string | null | undefined) => (permisos ?? '').split(/[,\s]+/).includes('WRITE')
 
 /** La página de Revolut donde la persona pulsa «Activar acceso». */
 export function paginaDeAutorizar(e: EntornoRevolut, d: { clientId: string; vuelta: string; permisos: string; estado: string }): string {
