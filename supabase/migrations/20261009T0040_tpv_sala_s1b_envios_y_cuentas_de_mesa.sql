@@ -93,11 +93,15 @@ begin
   end if;
 end $$;
 
--- 01/11/2026: los cierres, todos de entrada y en el orden de los pedidos
--- (sale y después sale_line). Sin esto, la S1b cogía primero cierres flojos
--- (las claves ajenas de las tablas nuevas) y los subía después a exclusivo
--- con los alter table: la misma forma que dio el 40P01 en su vuelta atrás.
-lock table public.sale, public.sale_line in access exclusive mode;
+-- 01/11/2026: los cierres, todos de entrada y en un solo orden. Primero las
+-- tablas a las que apuntan las claves ajenas que crea (y que su vuelta atrás
+-- tiene que borrar, con cierre exclusivo también sobre ellas): accounts,
+-- locations, kds_device, dining_table y void_reason; después sale y sale_line.
+-- Quien lee la sala (dining_table y luego sale) y las tablets (kds_device y
+-- luego sale) van en ese orden. Coger sale antes dio 40P01 en la vuelta atrás
+-- (ensayo y staging del 01/11). Son unos segundos, con los locales cerrados.
+lock table public.accounts, public.locations, public.kds_device, public.dining_table, public.void_reason,
+           public.sale, public.sale_line in access exclusive mode;
 
 -- ══ 1. Tablas nuevas ════════════════════════════════════════════════════
 
