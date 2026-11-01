@@ -7,6 +7,8 @@
 // palabras (regla 8). Sustituye a «Liquidaciones de su semana» (D07), que
 // dejaba marcadas todas las de los 13 días antes de la factura: las 8.
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
+import { rutaLiquidacionFicha } from '@/config/navegacion'
 import { Boton } from '@/modules/conta/diseno'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { cuadreLiquidacion, lineaCandidata, tituloComision, type EstadoComision } from '@/modules/conta/documentos/comision'
@@ -49,6 +51,7 @@ export function BloqueComision({ e, invoiceId, soloLectura, quien, alLigar }: {
               {l.tePago !== null ? ` y te pagó ${eurosExactos(l.tePago)}` : ''}: la comisión se descuenta de lo que te paga, no se paga por banco.
             </p>
             <p className={c.diferencia ? 's-aviso-lista' : 's-apoyo'} data-tono={c.diferencia ? 'duda' : undefined} data-prueba="comision-cuadre">{c.texto}</p>
+            <p className="s-apoyo"><Link to={rutaLiquidacionFicha(l.id)} data-prueba="ver-liquidacion">Ver la liquidación</Link></p>
             {l.facturas.length > 1 && (
               <ul className="s-lista-simple">
                 {l.facturas.map((f) => <li key={f.id}>{f.codigo ?? f.numero ?? 'Factura'}{f.numero && f.codigo ? ` · ${f.numero}` : ''} · {eurosExactos(f.total)}</li>)}
