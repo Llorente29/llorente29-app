@@ -1,4 +1,5 @@
 -- supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql
+-- cambia: public.revolut_conexion · prueba: supabase/staging/sql/20261101_b01p_dejar_de_pagar_prueba.sql
 --
 -- B01 Revolut · PR 2c-1 · «DEJAR DE PAGAR» y a qué se fue a Revolut. Solo añade.
 --
@@ -14,8 +15,10 @@
 --      «Desconectar» y un permiso retirado desde Revolut: sin conexión no se
 --      paga.
 --
--- No está en el camino del pedido.
+-- No está en el camino del pedido. revolut_conexion tiene una fila por empresa
+-- conectada: el cierre del alter dura nada, y si no lo coge en 5 s, para.
 
+set local lock_timeout = '5s';
 alter table public.revolut_conexion add column if not exists oauth_para text;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'revolut_conexion_oauth_para_check') then

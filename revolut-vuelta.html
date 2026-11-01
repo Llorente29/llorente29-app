@@ -32,7 +32,8 @@
         // Solo un camino de este mismo sitio (nunca otra dirección).
         if (!camino || camino.charAt(0) !== '/' || camino.charAt(1) === '/') camino = null;
         var p = new URLSearchParams();
-        if (error || !codigo || !estado) p.set('revolut_error', error || 'sin_codigo');
+        // Sin el permiso, el «state» también vuelve (si lo trae): Sumied dice qué ha quedado según a qué se fue.
+        if (error || !codigo || !estado) { p.set('revolut_error', error || 'sin_codigo'); if (estado && /^[0-9a-f]{64}$/.test(estado)) p.set('revolut_state', estado); }
         else { p.set('revolut_code', codigo); p.set('revolut_state', estado); }
         if (!camino) {
           document.getElementById('caja').innerHTML = 'Has vuelto de Revolut, pero este navegador no sabe a qué empresa. Entra en Sumied › Bancos › Cuentas y extractos y vuelve a pulsar «Autorizar en Revolut». <a href="/">Ir a Sumied</a>';

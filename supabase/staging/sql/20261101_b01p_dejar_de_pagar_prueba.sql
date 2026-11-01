@@ -1,5 +1,5 @@
 -- ============================================================================
--- PRUEBA (staging) · B01 Revolut · PR 2c-1 (1703, que solo añade): «Dejar de
+-- PRUEBA (staging) · B01 Revolut · PR 2c-1 (1703, añade y declara un CHECK): «Dejar de
 -- pagar». Todo en una transacción con ROLLBACK. Datos INVENTADOS (IBAN del
 -- banco 9999, T11), en la cuenta D. Necesita la 1234 y la 1614.
 --
