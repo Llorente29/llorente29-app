@@ -1,10 +1,10 @@
 -- scripts/conta/produccion/cuentas/s01o-apunta-solo.sql
 --
 -- S01o · LO QUE CUENTA LA TANDA, antes y después. SOLO LEE. Sin nombres.
--- Medido en solo lectura el 01/11 con la regla y la ficha de Julio simuladas: de
--- las 172 facturas de plataforma por revisar de Foodint, 156 se apuntan solas
--- (125 cargos y 31 abonos) y se quedan 16 con su motivo; las 3 de Glovo ligadas
--- a la liquidación de otra factura se quedan (no hay liquidación con su número).
+-- Lo que tiene que pasar con la tanda: las fichas de las plataformas de Foodint,
+-- de 0 a 3 con cuenta de gasto y de 0 a 2 con cuenta de publicidad; y nada más.
+-- El interruptor sigue apagado y no se apunta ninguna (172 por revisar, 0 solas):
+-- lo apuntado lo medirá la sesión principal después de que Julio lo encienda.
 select clave, valor from (
   select 1 o, 'Facturas de plataforma de Foodint por revisar sin asiento' clave,
     (select count(*)::text from public.supplier_invoice si

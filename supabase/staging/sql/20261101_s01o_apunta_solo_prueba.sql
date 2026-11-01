@@ -240,6 +240,32 @@ begin
   raise notice 'PRUEBA S01o · 6: «%» · «%»', r1->>'porque', r2->>'porque';
 end $$;
 
+-- 6b · Con el eje «local» encendido (como Foodint), validar pide el local en cada apunte: un abono sin
+-- liquidación toma el de su propia factura; si no lo dice, se queda con su motivo (Julio, respuesta 3: las 26).
+do $$
+declare v1 uuid; v2 uuid; r1 jsonb; r2 jsonb;
+begin
+  insert into public.conta_eje_analitico (account_id, company_id, eje, activo, nombre)
+  values (current_setting('prueba.acc')::uuid, current_setting('prueba.e')::uuid, 'local', true, 'Local')
+  on conflict do nothing;
+  update public.conta_eje_analitico set activo = true where company_id = current_setting('prueba.e')::uuid and eje = 'local';
+  v1 := pg_temp.factura('S01OJ0001', '[{"texto":"Abono de comisión","base":-5}]', '2026-04-15');
+  r1 := public._conta_plataforma_apuntar(v1);
+  if (r1->>'apuntada')::boolean or r1->>'motivo' <> 'Es un abono sin liquidación ligada y no dice de qué local es.' then
+    raise exception 'PRUEBA S01o · 6b: el abono sin local se ha apuntado (validar lo habría parado) o no dice por qué: %', r1;
+  end if;
+  v2 := pg_temp.factura('S01OK0001', '[{"texto":"Abono de comisión","base":-5}]', '2026-04-30');
+  update public.supplier_invoice set reading = jsonb_build_object('factura', jsonb_build_object('tienda', jsonb_build_object('direccion', 'Marca S01o (Calle Inventada Este 3)')))
+   where id = v2;
+  r2 := public._conta_plataforma_apuntar(v2);
+  if not coalesce((r2->>'apuntada')::boolean, false)
+     or exists (select 1 from public.journal_line where entry_id = (r2->>'asiento')::uuid and location_id is distinct from current_setting('prueba.loc')::uuid) then
+    raise exception 'PRUEBA S01o · 6b: el abono con la dirección de su local no se apunta con ese local: %', r2;
+  end if;
+  update public.conta_eje_analitico set activo = false where company_id = current_setting('prueba.e')::uuid and eje = 'local';
+  raise notice 'PRUEBA S01o · 6b: con el eje «local», sin local: «%»; con la dirección de su tienda, apuntado con su local.', r1->>'motivo';
+end $$;
+
 -- 7 · Publicidad: a su cuenta si la ficha la tiene; si mezcla, no adivina.
 do $$
 declare v1 uuid; v2 uuid; v3 uuid; r1 jsonb; r2 jsonb; r3 jsonb;

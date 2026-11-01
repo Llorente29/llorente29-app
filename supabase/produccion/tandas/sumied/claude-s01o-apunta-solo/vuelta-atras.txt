@@ -1,6 +1,7 @@
-# S01o · PR 1 · la vuelta atrás, en orden inverso. Lo ya apuntado (asientos
-# validados, inalterables) no lo quita: se deshace antes desde «Apuntadas
-# solas» › «Deshacer», que lo anula con su contraasiento (es de administrador).
+# S01o · PR 1 · la vuelta atrás, en orden inverso: las cuentas que puso la 1732
+# en las fichas, las funciones y la tabla de la 1731, _conta_comision_buscar
+# como estaba y los dos CHECK sin «publicidad». La tanda no apunta nada (el
+# interruptor sigue apagado), así que no deja asientos que quitar.
 cuenta: scripts/conta/produccion/cuentas/s01o-apunta-solo.sql
 supabase/vuelta-atras/20261101T1732_s01o_foodint.down.sql
 supabase/vuelta-atras/20261101T1731_s01o_plataforma_apunta_sola.down.sql

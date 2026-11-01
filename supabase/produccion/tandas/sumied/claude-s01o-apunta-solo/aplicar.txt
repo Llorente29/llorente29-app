@@ -9,9 +9,11 @@
 #   1731  AÑADE la regla «seguro al 100 %», el apunte en el servidor, «Apuntadas
 #         solas», «Deshacer» y la pasada cada media hora (7 y 37). Nada se
 #         apunta si la empresa tiene apagado el interruptor.
-#   1732  Foodint (autorizo: mueve filas): la cuenta de gasto y de publicidad en
-#         las fichas de Glovo, Uber y Just Eat, el interruptor encendido, y la
-#         primera pasada: liga por número y apunta lo seguro.
+#   1732  Foodint (solo añade): la cuenta de gasto y de publicidad en
+#         las fichas de Glovo, Uber y Just Eat. Solo eso (respuesta 3 de Julio):
+#         el interruptor sigue apagado y no hay pasada. Lo enciende Julio cuando
+#         «Apuntadas solas» con «Deshacer» esté en producción, y la primera pasada
+#         la hace entonces la tarea programada.
 #
 # Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/s01o-apunta-solo.sql

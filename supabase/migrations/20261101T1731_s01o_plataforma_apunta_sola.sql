@@ -117,6 +117,12 @@ begin
       select coalesce(cs.location_id, ps.location_id) into v_local from public.platform_store ps where ps.id = cs.store_id;
       v_local := coalesce(v_local, cs.location_id);
     end if;
+    -- Sin liquidación, el local de la propia factura (la dirección de la tienda que lee). Si la empresa
+    -- pide el local en cada apunte (el eje «local»), validar no lo deja pasar sin él: se dice aquí.
+    v_local := coalesce(v_local, nullif(d->>'local', '')::uuid);
+    if v_local is null and exists (select 1 from public.conta_eje_analitico x where x.company_id = v.company_id and x.account_id = v.account_id and x.eje = 'local' and x.activo) then
+      return jsonb_build_object('seguro', false, 'motivo', case when cs.id is null then 'Es un abono sin liquidación ligada y no dice de qué local es.' else 'Su liquidación no dice de qué local es.' end);
+    end if;
     v_por := format('Abono de %s: un gasto negativo de la plataforma.%s', v_plat,
                     case when cs.id is null then ' Sin liquidación ligada.' else format(' Ligado a su liquidación del %s.', public._conta_s01o_periodo(cs.period_from, cs.period_to)) end);
     return jsonb_build_object('seguro', true, 'regla', 'abono', 'porque', v_por, 'liquidacion', cs.id, 'local', v_local,

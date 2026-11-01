@@ -1,15 +1,17 @@
 -- supabase/migrations/20261101T1732_s01o_foodint.sql
 --
--- S01o · Foodint (Julio, 01/11, decisiones 1, 2 y 4 y la respuesta 2):
---   1. La ficha de cada plataforma, con su cuenta de gasto y de publicidad, las
---      que Foodint ya usa en su historia: Glovo 62300001 (toda su factura,
---      también Glovo Ads); Uber 62300002 y 62700002; Just Eat 62300003 y 62700003.
---   2. «Apuntar solo lo que Sumied tiene seguro», encendido en Foodint.
---   3. Las facturas de plataforma por revisar, ligadas por su número (las 15
---      ligadas a la liquidación de otra y las 8 sin ligar, medidas el 01/11) y
---      apuntadas solas las que estén seguras al 100 %; las demás, con su motivo.
---      Lo que sale queda en el parte (raise notice) y en supplier_invoice_auto.
--- Mueve filas: va con «autorizo». Filtra siempre por la cuenta de Foodint.
+-- S01o · Foodint (Julio, 01/11, respuestas 2 y 3): la ficha de cada plataforma,
+-- con su cuenta de gasto y de publicidad, las que Foodint ya usa en su historia:
+-- Glovo 62300001 (toda su factura, también Glovo Ads); Uber 62300002 y 62700002;
+-- Just Eat 62300003 y 62700003. Solo eso.
+--   · El interruptor «Apuntar solo lo seguro» de Foodint sigue APAGADO: lo enciende
+--     Julio desde Ajustes cuando la pantalla de «Apuntadas solas» con «Deshacer»
+--     esté en producción. Así nada se apunta solo antes de poder verlo y deshacerlo.
+--   · No hace la primera pasada: la hace la tarea programada (:07 y :37) cuando
+--     el interruptor esté encendido. Así la tanda no deja asientos validados que su
+--     vuelta atrás no puede quitar, y el motivo de cada factura queda en
+--     supplier_invoice_auto.
+-- Solo añade filas (los enlaces de la ficha, con su rastro en s01o_ficha_puesta). Filtra por la cuenta de Foodint.
 -- Vuelta atrás: supabase/vuelta-atras/20261101T1732_s01o_foodint.down.sql
 
 create table if not exists public.s01o_ficha_puesta (
@@ -22,7 +24,7 @@ do $$
 declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
   v_e constant uuid := '658728c0-fcd7-46ef-a860-d4e5e6eb21d9';
-  v_r jsonb; x record; v_id uuid;
+  x record; v_id uuid;
 begin
   if not exists (select 1 from public.company where id = v_e and account_id = v_acc) then
     raise notice 'S01o: esta base no tiene Foodint: no se toca nada.';
@@ -44,14 +46,13 @@ begin
       insert into public.s01o_ficha_puesta (link_id, account_id) values (v_id, v_acc);
     end if;
   end loop;
-  raise notice 'S01o · 1: puestas % cuentas en las fichas de las plataformas.', (select count(*) from public.s01o_ficha_puesta where account_id = v_acc);
-  -- 2 · El interruptor.
-  update public.company_purchase_setting set post_safe_invoices = true, updated_at = now(), updated_by_name = 'Sumied (S01o)'
-   where company_id = v_e and account_id = v_acc and post_safe_invoices is distinct from true;
-  if not exists (select 1 from public.company_purchase_setting where company_id = v_e and account_id = v_acc and post_safe_invoices) then
-    raise exception 'S01o · 2: el interruptor de Foodint no ha quedado encendido (¿no tiene su fila de compras?).';
+  raise notice 'S01o: puestas % cuentas en las fichas de las plataformas.', (select count(*) from public.s01o_ficha_puesta where account_id = v_acc);
+  -- Las cinco de la tabla de Julio, ni una menos: si falta alguna, para (la ficha no diría lo que él decidió).
+  if (select count(*) from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+       where k.account_id = v_acc and k.company_id = v_e and k.entity = 'supplier' and k.role in ('gasto', 'publicidad')
+         and a.code in ('62300001', '62300002', '62700002', '62300003', '62700003')) <> 5 then
+    raise exception 'S01o: las fichas de las plataformas de Foodint no quedan con sus 5 cuentas (gasto y publicidad).';
   end if;
-  -- 3 · Ligar por su número y apuntar lo seguro.
-  v_r := public._conta_plataformas_apuntar(v_e);
-  raise notice 'S01o · 3: %', v_r;
+  -- El interruptor NO se toca aquí (Julio, 01/11, respuesta 3): lo enciende Julio cuando
+  -- «Apuntadas solas» y «Deshacer» estén en producción; la pasada la hace entonces la tarea programada.
 end $$;
