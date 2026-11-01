@@ -197,6 +197,19 @@ export function borradorDe(d: DatosParaBorrador): BorradorFicha {
 
 /** Los tipos de retención de siempre (IRPF): si el importe es uno de ellos sobre la base, ese. */
 export const TIPOS_RETENCION = [15, 7, 19, 1] as const
+/**
+ * S01l · La retención que traía el papel y no entró con la factura (su tipo no
+ * encajaba con ninguno: conta_factura_desde_lectura la deja fuera y en revisión).
+ * La ficha la propone para elegir su tipo. null si la factura ya tiene la suya o
+ * el papel no traía ninguna.
+ */
+export function retencionLeidaSinTipo(guardada: number | null, leida: { tipo: number | null; importe: number } | null | undefined): { importe: number; tipo: string; aviso: string } | null {
+  if (guardada || !leida || !leida.importe) return null
+  const importe = Math.abs(leida.importe)
+  const tipo = leida.tipo !== null && (TIPOS_RETENCION as readonly number[]).includes(Math.abs(leida.tipo)) ? String(Math.abs(leida.tipo)) : ''
+  return { importe, tipo, aviso: `La factura trae una retención de ${eurosExactos(importe)}: elige su tipo.` }
+}
+
 function tipoDeRetencion(base: number, importe: number): string {
   const t = TIPOS_RETENCION.find((x) => cent(cuotaIva(base, x)) === cent(Math.abs(importe)))
   return t === undefined ? '' : String(t)
