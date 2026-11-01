@@ -1,0 +1,7 @@
+# S01l · la retención leída. La 0920 cambia conta_factura_desde_lectura (desde
+# la rama, solo en ROLLBACK); la 0921 son datos de Foodint (en staging no hace
+# nada). Su prueba (ROLLBACK): alquiler al 19 %, profesional al 15 % por base ×
+# tipo, una que no encaja (en revisión con su aviso), como persona y la vuelta atrás.
+supabase/migrations/20261101T0920_s01l_retencion_leida.sql
+supabase/migrations/20261101T0921_s01l_releer_foodint.sql
+supabase/staging/sql/20261101_s01l_retencion_prueba.sql

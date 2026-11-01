@@ -1,0 +1,4 @@
+# S01m · la vuelta atrás: _conta_local_de_texto como estaba; fuera la función y la tabla.
+cuenta: scripts/conta/produccion/cuentas/s01m-direcciones.sql
+supabase/vuelta-atras/20261101T0946_s01m_local_por_otras.down.sql
+supabase/vuelta-atras/20261101T0945_s01m_otras_direcciones.down.sql
