@@ -650,7 +650,7 @@ export default function RevisarFacturaPage() {
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
       {/* B01 · 2c-2 · Pagar con el banco desde Sumied: solo una factura aprobada y por pagar (lo demás lo dice la base al preparar). */}
       {fac.company_id && fac.estado === 'aprobada' && extra.datos && !pagada && !abono && !descartada && (
-        <BloquePagarConRevolut empresaId={fac.company_id} facturaId={fac.id} alCambiar={() => setVuelta((x) => x + 1)} />
+        <BloquePagarConRevolut empresaId={fac.company_id} facturaId={fac.id} />
       )}
       <AsientoQueSeCrea titulo={fac.asiento ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}
         alEditar={!fac.asiento && !soloLectura ? () => setAMano((x) => !x) : undefined}

@@ -35,7 +35,7 @@ const Mensaje = ({ a }: { a: Aviso | null }) => a
 
 const ETIQUETA_IBAN: Record<string, string> = { comprobado: '✓ comprobado', primer_pago: 'nuevo', cambiado: 'cambiado' }
 
-export function BloquePagarConRevolut({ empresaId, facturaId, alCambiar }: { empresaId: string; facturaId: string; alCambiar: () => void }) {
+export function BloquePagarConRevolut({ empresaId, facturaId }: { empresaId: string; facturaId: string }) {
   const [vuelta, setVuelta] = useState(0)
   const cuentas = useLeer(() => cuentasParaPagar(empresaId), `pagar-cuentas:${empresaId}`)
   const quien = useLeer(() => leerQuienPaga(empresaId), `pagar-quien:${empresaId}`)
@@ -44,7 +44,10 @@ export function BloquePagarConRevolut({ empresaId, facturaId, alCambiar }: { emp
   const [lote, setLote] = useState<string | null>(null)
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [haciendo, setHaciendo] = useState(false)
-  const recargar = () => { setVuelta((v) => v + 1); alCambiar() }
+  // Solo se relee el pago, no la ficha: releer la ficha vacía lo que la rodea mientras lee, y el
+  // bloque (con la segunda aprobación abierta) se desmontaría (e2e 41340811574). La factura no cambia
+  // al aprobar ni al mandar: queda pagada al casar su cargo en Bancos.
+  const recargar = () => setVuelta((v) => v + 1)
 
   const lista = cuentas.datos ?? []
   // Sin ninguna cuenta con la que pagar desde Sumied, el bloque no existe: el pago sigue siendo el de siempre.
