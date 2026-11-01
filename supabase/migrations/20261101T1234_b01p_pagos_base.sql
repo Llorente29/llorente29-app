@@ -50,6 +50,9 @@
 set local lock_timeout = '5s';
 lock table public.accounts, public.company, public.supplier, public.treasury_account, public.supplier_invoice,
            public.conta_pago_remesa, public.conta_pago_remesa_linea in share row exclusive mode;
+-- Para medir cuánto quedan cogidas (Julio, 01/11): la hora de la base aquí y al
+-- final; la diferencia es el tiempo que nadie puede escribir en esas tablas.
+select set_config('b01p.cierres_desde', clock_timestamp()::text, true);
 
 -- ── 1 · Quién puede pagar ──────────────────────────────────────────────────
 create table if not exists public.conta_pago_permiso (
@@ -956,4 +959,10 @@ begin
   if exists (select 1 from pg_roles where rolname = 'conta_lectura') then
     grant select on public.conta_pago_permiso, public.conta_pago_ajustes, public.conta_pago_lote, public.conta_pago_salida, public.conta_pago_evento to conta_lectura;
   end if;
+end $$;
+
+-- Cuánto han estado cogidas las tablas de arriba (sin escribir en ellas) hasta aquí.
+do $$ begin
+  raise notice 'B01 PR 2a · cierres: % ms desde que se cogieron (accounts, company, supplier, treasury_account, supplier_invoice y las remesas).',
+    round(extract(epoch from clock_timestamp() - current_setting('b01p.cierres_desde')::timestamptz) * 1000);
 end $$;
