@@ -37633,7 +37633,7 @@ begin
     case when v_hasta - v_desde = 6 then 'week' when v_hasta - v_desde between 13 and 15 then 'quincena' when v_hasta - v_desde between 27 and 30 then 'mes'
          when v_uber then 'weeks' else 'periodo' end,
     nullif(p->>'pedidos', '')::int, (p->'ventas'->>'total')::numeric, (p->'ventas'->>'base')::numeric, (p->'ventas'->>'iva')::numeric,
-    coalesce((p->'uber'->>'tasas')::numeric, -abs(nullif(p->>'comision', '')::numeric), 0), coalesce((p->'uber'->>'otros')::numeric, nullif(p->>'otros', '')::numeric, 0),
+    coalesce((p->'uber'->>'tasas')::numeric, case when v_prov = 'justeat' then -nullif(p->>'comision', '')::numeric else -abs(nullif(p->>'comision', '')::numeric) end, 0), coalesce((p->'uber'->>'otros')::numeric, nullif(p->>'otros', '')::numeric, 0),
     (p->'ganancias'->>'otras')::numeric,
     (p->'marketing'->>'otrosPromo')::numeric, (p->'marketing'->>'anuncios')::numeric, (p->'marketing'->>'promociones')::numeric,
     (p->'modificaciones'->>'contracargo')::numeric, (p->'modificaciones'->>'ajustes')::numeric,
@@ -103544,6 +103544,19 @@ CREATE TABLE public.s01j2_local_puesto (
 
 
 --
+-- Name: s01j3_comision_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.s01j3_comision_antes (
+    settlement_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    commission_antes numeric NOT NULL,
+    commission_ahora numeric NOT NULL,
+    corregido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: sale_capture; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -112390,6 +112403,14 @@ ALTER TABLE ONLY public.recipe_item_purchase_format
 
 ALTER TABLE ONLY public.s01j2_local_puesto
     ADD CONSTRAINT s01j2_local_puesto_pkey PRIMARY KEY (settlement_id);
+
+
+--
+-- Name: s01j3_comision_antes s01j3_comision_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.s01j3_comision_antes
+    ADD CONSTRAINT s01j3_comision_antes_pkey PRIMARY KEY (settlement_id);
 
 
 --
@@ -139269,6 +139290,12 @@ CREATE POLICY riuc_update ON public.recipe_item_unit_conversion FOR UPDATE USING
 ALTER TABLE public.s01j2_local_puesto ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: s01j3_comision_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.s01j3_comision_antes ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: sale; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -161325,6 +161352,13 @@ GRANT ALL ON TABLE public.revolut_conexion TO service_role;
 --
 
 GRANT ALL ON TABLE public.s01j2_local_puesto TO service_role;
+
+
+--
+-- Name: TABLE s01j3_comision_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.s01j3_comision_antes TO service_role;
 
 
 --
