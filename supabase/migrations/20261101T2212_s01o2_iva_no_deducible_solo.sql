@@ -1,5 +1,6 @@
 -- supabase/migrations/20261101T2212_s01o2_iva_no_deducible_solo.sql
 -- cambia: public.conta_motivos_para_validar · prueba: supabase/staging/sql/20261101_s01o2_resto_prueba.sql
+-- cambia: public.supplier_invoice_tax · prueba: supabase/staging/sql/20261101_s01o2_resto_prueba.sql
 -- cambia: public.supplier_invoice · prueba: supabase/staging/sql/20261101_s01o2_resto_prueba.sql
 --
 -- S01o·2 · El IVA que no se puede deducir lo sabe Sumied solo (Julio, 01/11,
@@ -79,6 +80,17 @@ end $$;
 drop trigger if exists s01o2_iva_no_deducible on public.supplier_invoice;
 create trigger s01o2_iva_no_deducible after insert or update of reading, supplier_id on public.supplier_invoice
   for each row execute function public.tg_s01o2_iva_no_deducible();
+
+-- Las líneas de IVA llegan después de la factura: al guardarlas, se vuelve a mirar (tocando su lectura, como al leerla).
+create or replace function public.tg_s01o2_iva_no_deducible_linea()
+returns trigger language plpgsql security definer set search_path to 'public' as $$
+begin
+  update public.supplier_invoice set reading = reading where id = new.supplier_invoice_id and vat_non_deductible_reason is null;
+  return null;
+end $$;
+drop trigger if exists s01o2_iva_no_deducible_linea on public.supplier_invoice_tax;
+create trigger s01o2_iva_no_deducible_linea after insert on public.supplier_invoice_tax
+  for each row execute function public.tg_s01o2_iva_no_deducible_linea();
 
 select public._respaldar_funcion('public.conta_motivos_para_validar(uuid)', '20261101T2212_s01o2_iva_no_deducible_solo');
 

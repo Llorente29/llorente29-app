@@ -1,0 +1,9 @@
+# S01o · PR 2 · la vuelta atrás, en orden inverso. La tanda no apunta nada (lo
+# apunta la pasada, con el interruptor); lo que ya apuntara se deshace desde
+# «Apuntadas solas» › «Deshacer».
+cuenta: scripts/conta/produccion/cuentas/s01o2-resto.sql
+supabase/vuelta-atras/20261102T0006_s01o2_foodint.down.sql
+supabase/vuelta-atras/20261102T0005_s01o2_factura_apunta_sola.down.sql
+supabase/vuelta-atras/20261101T2212_s01o2_iva_no_deducible_solo.down.sql
+supabase/vuelta-atras/20261101T2211_s01o2_entrega_mercancia.down.sql
+supabase/vuelta-atras/20261101T2210_s01o2_nif_y_repetidas.down.sql

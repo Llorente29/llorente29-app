@@ -3,6 +3,8 @@
 -- Vuelta atrás de la 2212: la regla 11 como estaba, fuera el disparador y la regla sola, el CHECK sin «sin_roi»
 -- (las que lo lleven pasan a «otro», con su texto) y fuera en_roi.
 select public._restaurar_funcion('public.conta_motivos_para_validar(uuid)', '20261101T2212_s01o2_iva_no_deducible_solo');
+drop trigger if exists s01o2_iva_no_deducible_linea on public.supplier_invoice_tax;
+drop function if exists public.tg_s01o2_iva_no_deducible_linea();
 drop trigger if exists s01o2_iva_no_deducible on public.supplier_invoice;
 drop function if exists public.tg_s01o2_iva_no_deducible();
 drop function if exists public._conta_iva_no_deducible_auto(uuid);
