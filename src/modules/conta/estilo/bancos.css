@@ -246,3 +246,192 @@
 .cxv-veredicto { font-size: 13px; padding: 2px 8px; border-radius: 6px; align-self: flex-start; }
 .cxv-veredicto[data-tono='propuesto'] { background: var(--s-propuesto); color: var(--s-propuesto-texto); }
 .cxv-veredicto[data-tono='duda'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+
+/* S01d · El aviso del extracto: el total cuadra y alguna fila no */
+.cxb-aviso-filas { margin-top: 12px; }
+.cxb-aviso-filas details { margin-top: 4px; }
+.cxb-aviso-filas summary { cursor: pointer; }
+.cxb-filas-rotas { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; overflow-wrap: anywhere; }
+
+/* S01d · Fin de cuenta en «Validar y siguiente» (tablero 4) */
+.cxv-fin { padding: 28px 32px; display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.cxv-fin-chip { background: var(--cx-verde-claro, #e6f4ea); color: var(--cx-verde-oscuro, #1e6b35); font-weight: 600; font-size: 14px; padding: 4px 10px; border-radius: 8px; }
+.cxv-fin-titulo { margin: 0; font-size: 24px; }
+.cxv-fin-texto { margin: 0; color: var(--cx-texto-suave, #4b5563); font-size: 16px; }
+.cxv-fin-botones { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+@media (max-width: 640px) { .cxv-fin { padding: 20px; } .cxv-fin-botones { flex-direction: column; align-self: stretch; } }
+
+/* S01d · «Decirlo yo · a qué va este movimiento» con reparto (tableros 1 y 2). */
+.cxr-cabeza { display: flex; gap: 32px; align-items: flex-end; padding: 16px 20px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); margin-bottom: 14px; }
+.cxr-cabeza > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxr-cabeza strong { font-size: 16px; }
+.cxr-cabeza-concepto { flex: 1; }
+.cxr-cabeza-concepto strong { overflow-wrap: anywhere; }
+.cxr-cabeza-importe { text-align: right; align-items: flex-end; }
+.cxr-cabeza-importe strong { font-size: 22px; }
+.cxr-aclarar { margin: 0; padding: 12px 16px; border: 1px solid var(--cx-ambar-punto); border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxr-tabla { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); }
+.cxr-fila { display: grid; grid-template-columns: 150px minmax(120px, 1fr) 130px minmax(140px, 1.2fr) 70px 32px; gap: 12px; align-items: center; padding: 10px 20px; border-bottom: 1px solid var(--cx-linea); }
+.cxr-titulos { font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding-top: 12px; padding-bottom: 12px; }
+.cxr-num { text-align: right; }
+.cxr-nombre { overflow-wrap: anywhere; }
+.cxr-local { color: var(--cx-apoyo); }
+.cxr-quitar { border: 0; background: none; font-size: 18px; color: var(--cx-texto); cursor: pointer; }
+.cxr-quitar:disabled { color: var(--cx-borde-campo); cursor: default; }
+.cxr-modelo { grid-column: 1 / -1; display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--cx-apoyo); }
+.cxr-modelo label { display: flex; flex-direction: column; gap: 4px; }
+.cxr-otra { margin: 14px 20px; padding: 10px 22px; border: 1px dashed var(--cx-azul); border-radius: var(--cx-radio-boton); background: none; color: var(--cx-azul); font-weight: 600; cursor: pointer; }
+.cxr-total { display: flex; gap: 40px; align-items: center; flex-wrap: wrap; padding: 14px 20px; border-top: 1px solid var(--cx-linea); }
+.cxr-falta { padding: 6px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); font-weight: 600; }
+.cxr-falta-cero { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxr-solo-movil { display: none; }
+
+@media (max-width: 720px) {
+  .cxr-cabeza { flex-direction: column; align-items: stretch; gap: 6px; }
+  .cxr-cabeza-importe { text-align: left; align-items: flex-start; }
+  .cxr-cabeza-importe strong { font-size: 28px; }
+  .cxr-tabla { border: 0; background: none; }
+  .cxr-titulos, .cxr-total { display: none; }
+  .cxr-fila { grid-template-columns: 1fr 1fr 32px; grid-template-areas: 'cuenta importe quitar' 'nombre nombre nombre' 'concepto concepto concepto' 'modelo modelo modelo';
+    border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); margin-bottom: 12px; padding: 14px 16px; }
+  .cxr-fila > .cxr-cuenta { grid-area: cuenta; }
+  .cxr-fila > input.cxr-num { grid-area: importe; }
+  .cxr-fila > .cxr-quitar { grid-area: quitar; }
+  .cxr-fila > .cxr-nombre { grid-area: nombre; font-size: 14px; color: var(--cx-apoyo); }
+  .cxr-fila > input:nth-of-type(3) { grid-area: concepto; }
+  .cxr-fila > .cxr-modelo { grid-area: modelo; }
+  .cxr-fila > .cxr-local { display: none; }
+  .cxr-otra { width: 100%; margin: 0 0 12px; }
+  .cxr-pie { position: sticky; bottom: 0; flex-direction: column; align-items: stretch; gap: 10px; padding: 12px 0; background: var(--cx-blanco); border-top: 1px solid var(--cx-linea); }
+  .cxr-solo-movil { display: inline-block; align-self: flex-start; }
+}
+
+/* S01d · Préstamos y aplazamientos (tablero 3). */
+.cxpr-pagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.cxpr-pagina:has(.cxpr-panel) { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+.cxpr-principal { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.cxpr-cabeza { display: flex; justify-content: flex-end; }
+.cxpr-hecho { padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxpr-cifras { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.cxpr-cifra { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); }
+.cxpr-cifra span, .cxpr-cifra small { color: var(--cx-apoyo); }
+.cxpr-cifra small { font-size: 14px; }
+.cxpr-cifra strong { font-size: 26px; }
+.cxpr-tabla { width: 100%; border-collapse: collapse; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); overflow: hidden; }
+.cxpr-tabla th { text-align: left; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding: 14px 16px; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-tabla td { padding: 16px; border-bottom: 1px solid var(--cx-linea); vertical-align: middle; }
+.cxpr-tabla tr:last-child td { border-bottom: 0; }
+.cxpr-num { text-align: right; }
+.cxpr-tipo { color: var(--cx-apoyo); }
+.cxpr-sola { color: var(--cx-verde-oscuro); font-weight: 600; }
+.cxpr-mano { color: var(--cx-ambar); font-weight: 600; }
+.cxpr-vacio p { margin: 0 0 6px; }
+.cxpr-panel { display: flex; flex-direction: column; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+.cxpr-panel-cabeza { padding: 20px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-panel-cabeza h2 { margin: 0 0 4px; font-size: 18px; overflow-wrap: anywhere; }
+.cxpr-datos { margin: 0; padding: 12px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-datos > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; }
+.cxpr-datos dt { color: var(--cx-apoyo); }
+.cxpr-datos dd { margin: 0; font-weight: 600; max-width: 60%; }
+.cxpr-datos dd .cx-input { width: 100%; }
+.cxpr-cuadro { max-height: 260px; overflow: auto; border-bottom: 1px solid var(--cx-linea); }
+.cxpr-cuadro table { width: 100%; border-collapse: collapse; }
+.cxpr-cuadro th { position: sticky; top: 0; background: var(--cx-blanco); text-align: left; font-size: 13px; color: var(--cx-apoyo); padding: 10px 24px 10px 12px; }
+.cxpr-cuadro th:first-child, .cxpr-cuadro td:first-child { padding-left: 24px; }
+.cxpr-cuadro td { padding: 10px 24px 10px 12px; border-top: 1px solid var(--cx-linea); }
+.cxpr-cuadra, .cxpr-no-cuadra { margin: 16px 24px 0; padding: 14px 18px; border-radius: var(--cx-radio-caja); }
+.cxpr-cuadra { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxpr-no-cuadra { background: var(--cx-rojo-suave); color: var(--cx-rojo); }
+.cxpr-panel > .cx-ayuda, .cxpr-panel > .cx-error { margin: 12px 24px 0; }
+.cxpr-panel-pie { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; margin-top: auto; border-top: 1px solid var(--cx-linea); }
+
+@media (max-width: 1100px) {
+  .cxpr-pagina:has(.cxpr-panel) { grid-template-columns: minmax(0, 1fr); }
+  .cxpr-panel { position: static; max-height: none; }
+}
+@media (max-width: 720px) {
+  .cxpr-cifras { grid-template-columns: minmax(0, 1fr); }
+  .cxpr-cabeza .cx-boton { width: 100%; }
+  .cxpr-tabla thead { display: none; }
+  .cxpr-tabla, .cxpr-tabla tbody, .cxpr-tabla tr, .cxpr-tabla td { display: block; }
+  .cxpr-tabla tr { padding: 12px 16px; border-bottom: 1px solid var(--cx-linea); }
+  .cxpr-tabla td { padding: 2px 0; border: 0; text-align: left; }
+  .cxpr-panel-pie { flex-direction: column-reverse; }
+}
+
+/* S01d-b · El aviso de las cuotas que faltan (cuadro parcial: la TGSS manda el de cada año). */
+.cxpr-aviso { display: block; margin-top: 4px; font-size: 13px; color: var(--cx-ambar); }
+.cxpr-aviso-panel { margin: 10px 24px 0; padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+
+/* S01e · La ficha de un préstamo o aplazamiento (tablero 5). */
+.cxpr-fila-enlace { cursor: pointer; }
+.cxpr-fila-enlace:hover td { background: var(--cx-azul-suave); }
+.cxpr-nombre { color: inherit; text-decoration: none; }
+.cxpr-nombre:hover strong { text-decoration: underline; }
+.cxfc-pagina { display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; align-items: start; }
+.cxfc-pagina.cxfc-con-panel { grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); }
+.cxfc-principal { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.cxfc-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.cxfc-cuentas { margin: 0; color: var(--cx-apoyo); overflow-wrap: anywhere; }
+.cxfc-cuentas strong { color: var(--cx-texto, inherit); }
+.cxfc-terminado { padding: 12px 16px; border-radius: var(--cx-radio-caja); background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxfc-cuadro { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); overflow: hidden; }
+.cxfc-cuadro-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-cuadro-cabeza h2 { margin: 0; font-size: 18px; }
+.cxfc-filtros { display: flex; gap: 10px; flex-wrap: wrap; }
+.cxfc-filtro { font: inherit; padding: 6px 14px; border: 1px solid var(--cx-linea); border-radius: 999px; background: var(--cx-blanco); color: var(--cx-apoyo); cursor: pointer; }
+.cxfc-filtro[aria-pressed='true'] { background: var(--cx-azul-suave); border-color: var(--cx-azul-borde); color: var(--cx-azul); font-weight: 600; }
+.cxfc-antes { margin: 0; padding: 10px 24px; background: var(--cx-fondo); color: var(--cx-apoyo); font-size: 14px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tabla { width: 100%; border-collapse: collapse; }
+.cxfc-tabla th { text-align: left; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding: 12px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tabla td { padding: 14px 24px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tabla th.cxpr-num, .cxfc-tabla td.cxpr-num { padding-left: 8px; }
+.cxfc-es-proxima td { background: var(--cx-azul-suave); font-weight: 600; }
+.cxfc-proxima { display: inline-block; padding: 2px 12px; border: 1px solid var(--cx-azul); border-radius: 999px; color: var(--cx-azul); font-weight: 600; font-size: 14px; }
+.cxfc-pendiente { color: var(--cx-apoyo); }
+.cxfc-estado { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cxfc-chip-enlace { text-decoration: none; }
+.cxfc-mov { font-size: 14px; }
+.cxfc-vacio { margin: 0; padding: 16px 24px; color: var(--cx-apoyo); }
+.cxfc-falta { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 24px; border-top: 1px solid var(--cx-linea); color: var(--cx-ambar); font-weight: 600; }
+.cxfc-tarjetas { list-style: none; margin: 0; padding: 0; }
+.cxfc-tarjeta { padding: 14px 16px; border-bottom: 1px solid var(--cx-linea); }
+.cxfc-tarjeta.cxfc-es-proxima { background: var(--cx-azul-suave); }
+.cxfc-tarjeta-arriba { display: flex; justify-content: space-between; gap: 12px; font-size: 18px; }
+.cxfc-tarjeta-abajo { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; color: var(--cx-apoyo); font-size: 14px; }
+@media (max-width: 1100px) {
+  .cxfc-pagina.cxfc-con-panel { grid-template-columns: minmax(0, 1fr); }
+  .cxfc-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .cxfc-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .cxfc-cifras .cxpr-cifra { padding: 14px; }
+  .cxfc-cifras .cxpr-cifra strong { font-size: 20px; }
+  .cxfc-cuadro-cabeza { padding: 14px 16px; }
+  .cxfc-antes { padding: 10px 16px; }
+  .cxfc-falta { padding: 14px 16px; }
+}
+
+/* ── B01 Revolut · PR 1 · La tarjeta de Revolut y su asistente (maquetas v2) ── */
+.cxb-revolut { display: flex; flex-direction: column; gap: 10px; }
+.cxb-revolut-cabeza { display: flex; align-items: center; gap: 12px; }
+.cxb-revolut-logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: var(--cx-texto); color: var(--cx-blanco); font-weight: 700; }
+.cxb-revolut-cabeza .cxb-lista-texto { flex: 1; }
+.cxb-revolut-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.cx-peligro { color: var(--cx-rojo); }
+.cx-boton.cx-peligro { background: var(--cx-rojo); border-color: var(--cx-rojo); color: var(--cx-blanco); }
+.cxb-revolut-pasos { display: flex; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.cxb-revolut-pasos li { flex: 1; font-size: 13px; color: var(--cx-apoyo); padding-top: 8px; border-top: 5px solid var(--cx-linea); }
+.cxb-revolut-pasos li[data-estado="hecho"] { border-top-color: var(--cx-verde-oscuro); }
+.cxb-revolut-pasos li[data-estado="ahora"] { border-top-color: var(--cx-azul); color: var(--cx-texto); font-weight: 600; }
+.cxb-revolut-cert { font-size: 11px; line-height: 1.35; background: var(--cx-fondo); border: 1px solid var(--cx-linea); border-radius: 12px; padding: 10px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
+.cxb-revolut-instrucciones { display: flex; flex-direction: column; gap: 6px; padding-left: 20px; margin: 0; }
+.cxb-revolut-instrucciones code { word-break: break-all; color: var(--cx-texto); }
+.cxb-revolut-esquema { display: flex; flex-direction: column; gap: 4px; border: 1px dashed var(--cx-borde-control); border-radius: 12px; padding: 10px; font-size: 13px; position: relative; }
+.cxb-revolut-esquema small { color: var(--cx-apoyo); font-size: 11px; align-self: flex-end; }
+@media (max-width: 767px) {
+  .cxb-revolut-cabeza { flex-wrap: wrap; }
+  .cxb-revolut-botones { width: 100%; }
+  .cxb-revolut-botones > button { flex: 1; }
+  .cxb-revolut-pasos li { font-size: 12px; }
+}

@@ -1,0 +1,35 @@
+# B01 Revolut · PR 1 · Conectar y leer. La 2210 solo añade: desde la rama va
+# de verdad después del ensayo (W05), si se puede pasar dos veces. La 2211
+# (el CHECK amplía) y la 2212 (bank_importar) cambian: solo en ROLLBACK desde
+# la rama.
+# Su prueba (ROLLBACK): la conexión (solo la clave de servicio la escribe; el
+# administrador la ve; otro no); los secretos en el Vault (solo la clave de
+# servicio); el proveedor «revolut» y SIN DUPLICADOS en la base de verdad (los
+# mismos movimientos dos veces entran una); lo de hoy entra hoy (dos lecturas
+# de Revolut el mismo día siguen; un fichero, como antes); desconectar desde Sumied y desde
+# Revolut; el despertador sin nada conectado; y las dos vueltas atrás.
+supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql
+supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql
+supabase/migrations/20261031T2212_b01rv_revolut_en_el_dia.sql
+supabase/staging/sql/20261031_b01rv_revolut_prueba.sql
+# B01 Revolut · PR 2a · La base del «Pagar» común. La 1234 solo añade: desde la
+# rama va de verdad después del ensayo (W05), si se puede pasar dos veces.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): sin permiso no se paga;
+# sin Revolut o solo para leer, tampoco; lo que no se paga por transferencia;
+# una segunda para varios pagos juntos; la llave; el PIN (5 fallos lo
+# bloquean, recuperarlo pide el correo, vale solo para la lista vista); con dos
+# personas, la da la otra; los topes; «No pagar»; quién ve qué; la llave nueva
+# pide el correo y un contador que no sube la quita; y la vuelta atrás.
+supabase/migrations/20261101T1234_b01p_pagos_base.sql
+supabase/staging/sql/20261101_b01p_pagos_base_prueba.sql
+# B01 Revolut · PR 2b · La salida al banco. La 1614 cambia el CHECK del tipo de
+# remesa (amplía) y su vista: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999, con la 1234 puesta):
+# «Activar pagos» solo un administrador; mandar un lote listo como remesa
+# «banco», en el banco, con su línea pendiente del cargo; un IBAN nuevo, sin la
+# segunda no se manda y con ella queda confirmado en la línea y en la ficha; lo
+# que dice el banco (pagado, rechazado: la factura vuelve a tener lo pendiente);
+# un IBAN que cambia entre aprobar y mandar para; Bancos ofrece casar el cargo;
+# solo la clave de servicio; y la vuelta atrás (la vista de producción, cc12648e…).
+supabase/migrations/20261101T1614_b01p_pagos_salida.sql
+supabase/staging/sql/20261101_b01p_pagos_salida_prueba.sql

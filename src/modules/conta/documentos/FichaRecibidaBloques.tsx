@@ -115,7 +115,9 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
 
 // ── Importes por tipo de IVA ────────────────────────────────────────────────
 
-export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false }: {
+export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false, abono = false }: {
+  /** S01h · Un abono: todo va a tu favor, sin signo; el total se llama «Total a tu favor». */
+  abono?: boolean
   iva: readonly LineaIva[]
   retencion: Adicional | null
   recargo: Adicional | null
@@ -212,7 +214,7 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
           <span>IVA <strong className="s-cifra">{importeEs(totales.iva)}</strong></span>
           {!!totales.recargo && <span>Recargo <strong className="s-cifra">{importeEs(totales.recargo)}</strong></span>}
           {!!totales.retencion && <span>Retención <strong className="s-cifra">−{importeEs(totales.retencion)}</strong></span>}
-          <span className="cxf-total">Total <strong className="s-cifra">{eurosExactos(totales.total)}</strong></span>
+          <span className="cxf-total">{abono ? 'Total a tu favor' : 'Total'} <strong className="s-cifra">{eurosExactos(totales.total)}</strong></span>
           {contra && (
             <span className="cxf-contra" data-igual={contra.redondeo ? 'redondeo' : contra.igual === true ? 'si' : contra.igual === false ? 'no' : undefined} data-prueba="contra-pdf">
               {contra.igual === true && !contra.redondeo && <Icono nombre="ok" />} {contra.texto}
@@ -233,7 +235,7 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
 
 // ── A qué gasto va ──────────────────────────────────────────────────────────
 
-export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambiar, cambio, alDeshacer, tono, motivo, soloLectura, elegirLocal, errorLocal, sinReparto }: {
+export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambiar, cambio, alDeshacer, tono, motivo, soloLectura, elegirLocal, errorLocal, sinReparto, enAsiento }: {
   gastos: readonly LineaGasto[]
   base: number
   cuentas: readonly CuentaHoja[]
@@ -251,6 +253,8 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
   errorLocal?: string
   /** Sin «+ Repartir»: la a mano guarda una cuenta y un local (el reparto, en su ficha). */
   sinReparto?: boolean
+  /** S01h · 2 · La cuenta que va al asiento, si no es la guardada (un abono: su 608x). La casilla enseña ésa. */
+  enAsiento?: (cuenta: string) => { codigo: string; nombre: string } | null
 }) {
   const [buscando, setBuscando] = useState<number | null>(null)
   const refs = useRef<(HTMLButtonElement | null)[]>([])
@@ -270,13 +274,13 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
           <span className="s-lista-cifra">Importe</span>
           <span />
         </div>
-        {gastos.map((g, i) => (
+        {gastos.map((g, i) => { const va = g.cuenta ? enAsiento?.(g.cuenta) ?? null : null; const codigo = va?.codigo ?? g.cuenta; return (
           <div key={i} className="cxf-gasto-linea" role="group" aria-label={`Gasto ${i + 1}`} data-con-local={locales ? '' : undefined} data-tono={cambiado ? undefined : tono} data-prueba="linea-gasto">
             <div className="cxf-cuenta">
               <button type="button" ref={(el) => { refs.current[i] = el }} className="s-control cxf-cuenta-boton" disabled={soloLectura}
-                aria-label={`Cuenta de gasto${g.cuenta ? `: ${g.cuenta} ${nombre(g.cuenta)}` : ''}. F4 para buscarla`} aria-keyshortcuts="F4"
+                aria-label={`Cuenta de gasto${codigo ? `: ${codigo} ${va?.nombre ?? nombre(codigo)}` : ''}. F4 para buscarla`} aria-keyshortcuts="F4"
                 onClick={() => setBuscando(i)} onKeyDown={(e) => { if (e.key === 'F4') { e.preventDefault(); setBuscando(i) } }}>
-                {g.cuenta ? <><strong className="cxf-cuenta-codigo s-cifra">{g.cuenta}</strong> <span className="cxf-cuenta-nombre">{nombre(g.cuenta)}</span></> : <span className="cxf-cuenta-nombre">Elige la cuenta…</span>}
+                {codigo ? <><strong className="cxf-cuenta-codigo s-cifra">{codigo}</strong> <span className="cxf-cuenta-nombre">{va?.nombre ?? nombre(codigo)}</span></> : <span className="cxf-cuenta-nombre">Elige la cuenta…</span>}
                 {!soloLectura && <Tecla>F4</Tecla>}
               </button>
               {buscando === i && (
@@ -300,7 +304,12 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
               ? <button type="button" className="cxf-quitar" aria-label={`Quitar el gasto ${i + 1}`} onClick={() => alCambiar(gastos.filter((_, k) => k !== i))}><Icono nombre="cerrar" /></button>
               : <span />}
           </div>
-        ))}
+        ) })}
+        {gastos.some((g) => g.cuenta && enAsiento?.(g.cuenta)) && (
+          <p className="s-campo-ficha-motivo" data-prueba="gasto-devolucion">
+            Es un abono: va a la cuenta de devoluciones de la compra{gastos.filter((g) => g.cuenta && enAsiento?.(g.cuenta)).map((g) => ` (${g.cuenta} → ${enAsiento?.(g.cuenta)?.codigo})`)[0]}, la misma que el asiento.
+          </p>
+        )}
         {cambiado ? <MarcaCambiado cambio={cambio} onDeshacer={alDeshacer} parte="antes" /> : motivo && <p className="s-campo-ficha-motivo">{motivo}</p>}
         {errorLocal && <p className="cxf-error" role="alert">{errorLocal}</p>}
         {cuadre && <p className="cxf-error" role="status">{cuadre}</p>}
@@ -319,7 +328,9 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
 
 // ── Pago ─────────────────────────────────────────────────────────────────────
 
-export function BloquePago({ formaPago, vence, estadoPago, alCambiar, cambioDe, deshacer, motivoVence, tonoVence, motivoForma, pagada, soloLectura }: {
+export function BloquePago({ formaPago, vence, estadoPago, alCambiar, cambioDe, deshacer, motivoVence, tonoVence, motivoForma, pagada, soloLectura, motivoEstado }: {
+  /** S01h · 1 · Lo que dice «Estado» cuando no es lo de siempre (un abono: se compensa o queda a tu favor; nunca «se casará con el banco»). */
+  motivoEstado?: ReactNode
   formaPago: string
   vence: string
   estadoPago: string
@@ -347,7 +358,7 @@ export function BloquePago({ formaPago, vence, estadoPago, alCambiar, cambioDe, 
             : <Fecha id="cxf-vence" aria-label="Vence" valor={vence} alCambiar={(v) => alCambiar({ vence: v })} />}
         </CampoEditable>
         <CampoEditable etiqueta="Estado" cambio={cambioDe('estadoPago')} alDeshacer={() => deshacer('estadoPago')} prueba="campo-estado-pago"
-          motivo={pagada ?? (estadoPago === 'sin_pagar' ? 'Se casará sola con el banco.' : undefined)}>
+          motivo={pagada ?? motivoEstado ?? (estadoPago === 'sin_pagar' ? 'Se casará sola con el banco.' : undefined)}>
           <select className="s-control" aria-label="Estado del pago" value={estadoPago} disabled={soloLectura} onChange={(e) => alCambiar({ estadoPago: e.target.value })}>
             {ESTADOS_PAGO.map((f) => <option key={f.valor} value={f.valor}>{f.texto}</option>)}
           </select>

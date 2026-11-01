@@ -26,6 +26,7 @@ import { cent, cuotaIva, deCent } from '@/modules/conta/lib/libro'
 import { leerImporteEs } from '@/modules/conta/lib/recibidaAMano'
 import { eurosExactos, porcentaje } from '@/modules/conta/lib/formato'
 import { diaMesMadrid } from '@/modules/conta/lib/ivaPresentado'
+import { plantillaDevolucion } from '@/modules/conta/lib/asientosPropuestos'
 
 // ── El borrador ──────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ export interface LineaGasto { cuenta: string; local: string; importe: string }
 /** Retención (IRPF) o recargo de equivalencia: su tipo y su importe. */
 export interface Adicional { tipo: string; importe: string }
 
-export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid'
+export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid' | 'compensation'
 export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: '', texto: 'Sin decir' },
   { valor: 'transfer', texto: 'Transferencia' },
@@ -45,6 +46,8 @@ export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: 'cash', texto: 'Efectivo' },
   // D06 · Riders: se paga del saldo prepago de Catcher (la 40700001), sin vencimiento que esperar.
   { valor: 'prepaid', texto: 'Saldo prepago Catcher (40700001)' },
+  // S01i · Las comisiones de las plataformas: se descuentan de lo que te paga la liquidación, no pasan por el banco.
+  { valor: 'compensation', texto: 'Compensación con la liquidación' },
 ]
 export const ESTADOS_PAGO: { valor: string; texto: string }[] = [
   { valor: 'sin_pagar', texto: 'Sin pagar' },
@@ -194,6 +197,19 @@ export function borradorDe(d: DatosParaBorrador): BorradorFicha {
 
 /** Los tipos de retención de siempre (IRPF): si el importe es uno de ellos sobre la base, ese. */
 export const TIPOS_RETENCION = [15, 7, 19, 1] as const
+/**
+ * S01l · La retención que traía el papel y no entró con la factura (su tipo no
+ * encajaba con ninguno: conta_factura_desde_lectura la deja fuera y en revisión).
+ * La ficha la propone para elegir su tipo. null si la factura ya tiene la suya o
+ * el papel no traía ninguna.
+ */
+export function retencionLeidaSinTipo(guardada: number | null, leida: { tipo: number | null; importe: number } | null | undefined): { importe: number; tipo: string; aviso: string } | null {
+  if (guardada || !leida || !leida.importe) return null
+  const importe = Math.abs(leida.importe)
+  const tipo = leida.tipo !== null && (TIPOS_RETENCION as readonly number[]).includes(Math.abs(leida.tipo)) ? String(Math.abs(leida.tipo)) : ''
+  return { importe, tipo, aviso: `La factura trae una retención de ${eurosExactos(importe)}: elige su tipo.` }
+}
+
 function tipoDeRetencion(base: number, importe: number): string {
   const t = TIPOS_RETENCION.find((x) => cent(cuotaIva(base, x)) === cent(Math.abs(importe)))
   return t === undefined ? '' : String(t)
@@ -302,6 +318,15 @@ export interface CuentasFicha {
   /** La 472 de cada tipo. */
   iva: ReadonlyMap<number, Cuenta>
   retencion: Cuenta | null
+  /**
+   * S01h · 1 · La propuesta es la de un abono (ya girada por comoAbono: el
+   * proveedor al Debe; la compra o su devolución y el IVA al Haber). Con ella,
+   * la vista previa sale al revés, y cada compra va a su cuenta de devoluciones
+   * si la propuesta la trae.
+   */
+  abono?: boolean
+  /** S01h · 1 · Las cuentas del Haber de un abono que no son IVA ni retención: la 608x de cada compra (o la compra misma). */
+  devoluciones?: readonly Cuenta[]
 }
 
 export interface LineaPropuestaVista {
@@ -317,12 +342,36 @@ export function cuentasDeLaPropuesta(lineas: readonly LineaPropuestaVista[], nom
   const iva = new Map<number, Cuenta>()
   let proveedor: Cuenta | null = null
   let retencion: Cuenta | null = null
+  // S01h · 1 · Un abono: su IVA soportado va al Haber (comoAbono). Entonces el
+  // proveedor es la línea del Debe, y lo demás del Haber son las devoluciones.
+  // Antes se buscaba la 472 solo en el Debe y el proveedor en el Haber: con un
+  // abono no había 472 y la 608 salía de «proveedor».
+  const abono = lineas.some((l) => l.iva && l.haber > 0 && !(l.debe > 0))
+  const devoluciones: Cuenta[] = []
   for (const l of lineas) {
-    if (l.iva && l.debe > 0) iva.set(Number(l.iva.tipo), { codigo: l.cuenta, nombre: nombre(l.cuenta) })
-    else if (l.retencion) retencion = { codigo: l.cuenta, nombre: nombre(l.cuenta) }
-    else if (l.haber > 0 && !proveedor) proveedor = { codigo: l.cuenta, nombre: nombre(l.cuenta) }
+    const c = { codigo: l.cuenta, nombre: nombre(l.cuenta) }
+    if (l.iva && (abono ? l.haber > 0 : l.debe > 0)) iva.set(Number(l.iva.tipo), c)
+    else if (l.retencion) retencion = c
+    else if (abono ? l.debe > 0 : l.haber > 0) { if (!proveedor) proveedor = c }
+    else if (abono && l.haber > 0 && !devoluciones.some((d) => d.codigo === c.codigo)) devoluciones.push(c)
   }
-  return { proveedor, iva, retencion }
+  return abono ? { proveedor, iva, retencion, abono, devoluciones } : { proveedor, iva, retencion }
+}
+
+/** S01h · 1 · La cuenta del Haber de un abono para una compra: su 608x si la propuesta la trae; si no, la misma compra. */
+function devolucionDe(gasto: string, c: CuentasFicha): Cuenta | null {
+  const p = plantillaDevolucion(gasto)
+  return (p ? c.devoluciones?.find((d) => d.codigo.startsWith(p)) : null) ?? null
+}
+
+/**
+ * S01h · 2 · La cuenta a la que va de verdad el gasto en el asiento: la misma,
+ * salvo en un abono, que va a su 608x si la propuesta la trae (60000000 →
+ * 60800000). «A qué gasto va» enseña ésta, para decir lo mismo que el asiento.
+ */
+export function cuentaDelGastoEnAsiento(gasto: string, c: CuentasFicha | null): Cuenta | null {
+  if (!gasto || !c?.abono) return null
+  return devolucionDe(gasto, c)
 }
 
 export interface LineaVista {
@@ -375,7 +424,16 @@ export function asientoVistaPrevia(b: BorradorFicha, c: CuentasFicha, nombreGast
   if (!c.proveedor) faltan.push('la cuenta del proveedor')
   haber.push({ codigo: c.proveedor?.codigo ?? '', nombre: c.proveedor?.nombre ?? 'Proveedor', debe: null, haber: t.total })
   // «Editar el asiento a mano»: la cuenta elegida en lugar de la propuesta, marcada.
-  const lineas = [...debe, ...haber].map((l) => {
+  // S01h · 1 · Un abono, al revés que su factura: el proveedor al Debe; la
+  // compra (en su cuenta de devoluciones, si la propuesta la trae) y el IVA de
+  // cada tipo al Haber. Cada importe, en positivo en su columna.
+  const enOrden = c.abono
+    ? [...haber, ...debe].map((l) => {
+        const d = l.debe !== null && l.codigo && l.codigo !== c.proveedor?.codigo && !/^472/.test(l.codigo) ? devolucionDe(l.codigo, c) : null
+        return { ...l, ...(d ? { codigo: d.codigo, nombre: d.nombre } : {}), debe: l.haber, haber: l.debe }
+      })
+    : [...debe, ...haber]
+  const lineas = enOrden.map((l) => {
     const otra = l.codigo ? b.aMano[l.codigo] : undefined
     return otra && otra !== l.codigo ? { ...l, codigo: otra, nombre: nombreGasto(otra), aMano: true } : l
   })

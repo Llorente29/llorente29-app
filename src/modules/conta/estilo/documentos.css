@@ -314,3 +314,63 @@
 /* S01b2 · El nombre del proveedor, de una pieza: si no cabe en lo que queda de línea, pasa entero a la
    siguiente; solo se parte por dentro si es más ancho que la columna. */
 .cxf-nombre-entero { display: inline-block; max-width: 100%; overflow-wrap: anywhere; text-decoration: inherit; }
+
+/* S01g · La ficha de una recepción de soporte de la liquidación, y el filtro «Qué es» de «Otras». */
+.cxso-que { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 12px; font-size: 14px; color: var(--cx-apoyo); }
+.cxso-que-chip { font: inherit; font-size: 14px; padding: 6px 14px; border-radius: 999px; border: 1px solid var(--cx-linea); background: var(--cx-blanco); color: var(--cx-apoyo); cursor: pointer; }
+.cxso-que-chip[aria-pressed='true'] { background: var(--cx-azul-suave); border-color: var(--cx-azul-borde); color: var(--cx-azul); font-weight: 600; }
+.cxso-pagina { display: flex; flex-direction: column; gap: 18px; }
+.cxso-aviso { display: flex; flex-direction: column; gap: 6px; padding: 18px 22px; border-radius: var(--cx-radio-tarjeta); border: 1px solid var(--cx-azul-borde); background: var(--cx-azul-suave); line-height: 1.5; }
+.cxso-tarjeta { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); background: var(--cx-blanco); overflow: hidden; }
+.cxso-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 18px 22px; border-bottom: 1px solid var(--cx-linea); }
+.cxso-cabeza > div { display: flex; flex-direction: column; gap: 4px; }
+.cxso-cabeza strong { font-size: 18px; }
+.cxso-rotulo { font-size: 13px; font-weight: 600; color: var(--cx-apoyo); }
+.cxso-tabla { width: 100%; border-collapse: collapse; }
+.cxso-tabla th { text-align: left; font-size: 13px; font-weight: 600; color: var(--cx-apoyo); padding: 12px 22px; }
+.cxso-tabla td { padding: 14px 22px; border-top: 1px solid var(--cx-linea); }
+.cxso-tabla tr[data-coincide='false'] td { background: var(--cx-ambar-suave); }
+.cxso-num { text-align: right; }
+.cxso-lista { list-style: none; margin: 0; padding: 0; }
+.cxso-lista li { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; border-top: 1px solid var(--cx-linea); }
+.cxso-lista li:first-child { border-top: 0; }
+.cxso-lista li[data-coincide='false'] { background: var(--cx-ambar-suave); }
+.cxso-lista li span { font-size: 14px; color: var(--cx-apoyo); }
+.cxso-pie { margin: 0; padding: 14px 22px; border-top: 1px solid var(--cx-linea); font-size: 14px; color: var(--cx-apoyo); line-height: 1.5; }
+.cxso-acciones { display: flex; gap: 12px; flex-wrap: wrap; padding: 14px 22px; }
+.cxso-espera { display: flex; flex-direction: column; gap: 8px; padding: 18px 22px; border-radius: var(--cx-radio-tarjeta); border: 1px solid var(--cx-ambar); background: var(--cx-ambar-suave); line-height: 1.5; }
+.cxso-espera .cxso-acciones { padding: 4px 0 0; }
+@media (max-width: 720px) {
+  .cxso-cabeza, .cxso-aviso, .cxso-espera { padding: 14px 16px; }
+  .cxso-pie, .cxso-acciones { padding: 12px 16px; }
+}
+
+/* S01g · La etiqueta de soporte es larga («Soporte · <socio> · <mes> · <local>»):
+   en la ficha y en la lista parte línea en vez de salirse por la derecha en el móvil. */
+.cxso-pagina .s-chip, .cxso-documentos .s-chip { white-space: normal; max-width: 100%; }
+.cxso-lineas { list-style: none; margin: 0; padding: 0; }
+.cxso-lineas li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 12px 16px; border-top: 1px solid var(--cx-linea); }
+.cxso-lineas li span:not(.s-cifra) { grid-column: 1; color: var(--cx-apoyo); font-size: 14px; }
+.cxso-lineas li .s-cifra { grid-column: 2; grid-row: 1; font-weight: 600; }
+
+/* S01h · El abono: lo que anula (verde si está ligado; ámbar si no está en Sumied) y, debajo, IVA y pago en dos piezas. */
+.cxab-anula { display: flex; flex-direction: column; gap: 4px; background: var(--s-ok-fondo); border-color: var(--s-ok-fondo); }
+.cxab-anula[data-ligado='no'] { background: var(--s-duda-fondo); border-color: var(--s-duda-fondo); }
+.cxab-anula .s-apoyo { margin: 0; }
+.cxab-etiqueta { font-size: var(--s-t-s); font-weight: 600; color: var(--s-ok); }
+.cxab-anula[data-ligado='no'] .cxab-etiqueta { color: var(--s-duda); }
+.cxab-dos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cxab-dos .s-bloque-ficha { display: flex; flex-direction: column; gap: 6px; }
+.cxab-dos .s-apoyo { margin: 0; }
+@media (max-width: 720px) { .cxab-dos { grid-template-columns: minmax(0, 1fr); } }
+
+/* S01i · «Se paga con la liquidación» en la ficha de una factura de comisión. */
+.cxcm { display: flex; flex-direction: column; gap: 6px; background: var(--s-ok-fondo); border-color: var(--s-ok-fondo); }
+.cxcm[data-tono='duda'] { background: var(--s-duda-fondo); border-color: var(--s-duda-fondo); }
+.cxcm .s-apoyo { margin: 0; }
+.cxcm-etiqueta { font-size: var(--s-t-s); font-weight: 600; color: var(--s-ok); }
+.cxcm[data-tono='duda'] .cxcm-etiqueta { color: var(--s-duda); }
+.cxcm-lista { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cxcm-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--s-superficie); }
+.cxcm-lista li[data-sugerida='si'] { outline: 2px solid var(--s-ok); }
+@media (max-width: 720px) { .cxcm-lista li { flex-direction: column; align-items: stretch; } }

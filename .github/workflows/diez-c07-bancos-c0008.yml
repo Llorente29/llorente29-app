@@ -30,6 +30,9 @@ env:
 
 jobs:
   bancos:
+    # W12b (30/10): el secreto vive en el entorno «lectura», que solo admite
+    # ejecuciones de main (conta_lectura lo lee todo, y su «solo lectura» lo puede quitar quien se conecta).
+    environment: lectura
     if: startsWith(github.event.head_commit.message, '[c07-bancos-c0008]')
     runs-on: ubuntu-latest
     timeout-minutes: 15

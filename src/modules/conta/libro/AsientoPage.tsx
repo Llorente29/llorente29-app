@@ -36,6 +36,7 @@ import { deDondeSale, estadoDe, estadoMes, mesDe, nombreMes, type AsientoDiario,
 import { TablaAsiento } from '@/modules/conta/diseno/plantillas'
 import { apoyoApunte, columnasApuntes, lineasDeApuntes } from '@/modules/conta/libro/apuntesAsiento'
 import { NOMBRE_CONFIANZA, NOMBRE_SERIE, cuadre } from '@/modules/conta/lib/libro'
+import { PagoDeModelo } from '@/modules/conta/libro/PagoDeModelo'
 import {
   cambiarCuenta, comprobarCadena, cuentasDeApunte, descartar, leerAsiento, leerCierres, validar, type CuentaPlan,
 } from '@/modules/conta/services/diarioService'
@@ -128,6 +129,8 @@ export default function AsientoPage() {
   const movil = useIsMobile()
   const [ocupado, setOcupado] = useState(false)
   const [cambiando, setCambiando] = useState<number | null>(null)
+  // S01d: el apunte de la 4751 que se está diciendo que es el pago de un modelo.
+  const [pagando, setPagando] = useState<number | null>(null)
   const [dialogo, setDialogo] = useState<'descartar' | 'anular' | null>(null)
   const [detalle, setDetalle] = useState(false)
 
@@ -272,12 +275,24 @@ export default function AsientoPage() {
             apoyo={(l) => apoyoApunte(l.apunte)}
             tituloAcciones="Cambiar la cuenta"
             acciones={editable ? (l) => (
-              <button type="button" className="cx-enlace" aria-expanded={cambiando === l.apunte.posicion}
-                onClick={() => setCambiando(cambiando === l.apunte.posicion ? null : l.apunte.posicion)}>Cambiar cuenta</button>
+              <span className="cxd-acciones-apunte">
+                <button type="button" className="cx-enlace" aria-expanded={cambiando === l.apunte.posicion}
+                  onClick={() => { setPagando(null); setCambiando(cambiando === l.apunte.posicion ? null : l.apunte.posicion) }}>Cambiar cuenta</button>
+                {/* S01d: un apunte de la 4751 sin retención que nace puede ser el pago de un modelo. */}
+                {l.apunte.cuenta.startsWith('4751') && !(l.apunte.retencion && !l.apunte.retencion.periodo) && (
+                  <button type="button" className="cx-enlace" aria-expanded={pagando === l.apunte.posicion}
+                    onClick={() => { setCambiando(null); setPagando(pagando === l.apunte.posicion ? null : l.apunte.posicion) }}>
+                    {l.apunte.retencion?.periodo ? 'Cambiar el modelo' : 'Es el pago de un modelo'}
+                  </button>
+                )}
+              </span>
             ) : undefined}
             debajo={(l) => (editable && cambiando === l.apunte.posicion
               ? <BuscarCuenta cuentas={datos.cuentas} actual={l.apunte.cuenta} alElegir={(x) => hacerCambio(l.apunte.posicion, x)} alCerrar={() => setCambiando(null)} />
-              : null)} />
+              : editable && pagando === l.apunte.posicion
+                ? <PagoDeModelo entryId={a.id} companyId={activa?.id ?? null} posicion={l.apunte.posicion} cuenta={l.apunte.cuenta} importe={l.apunte.debe || l.apunte.haber} sale={l.apunte.debe > 0}
+                    fecha={a.fecha} alCerrar={() => setPagando(null)} alHacer={(t) => { setFallo(null); setHecho(t); setPagando(null); recargar() }} />
+                : null)} />
           {a.origen === 'sales_day' && a.origenId && accountId && activa && <NoConfirmadosDelDia accountId={accountId} companyId={activa.id} resumenId={a.origenId} />}
           {editable && <p className="cx-ayuda">Cambia cualquier cuenta: se busca por nombre («comisiones») o por código. Un asiento nunca se guarda descuadrado.</p>}
         </section>

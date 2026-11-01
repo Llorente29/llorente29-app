@@ -1,0 +1,15 @@
+# S01f · Encender Sumied por cuenta desde la ficha de la cuenta, y «Cerrar
+# sesión» (encargo del 31/10, con el visto bueno de Julio a la maqueta).
+# Rama claude/s01f-interruptores-y-salir.
+#
+#   1705  cambia el CHECK de platform_audit_log: admite «account_feature_changed»
+#         (solo amplía; los 21 tipos de antes siguen valiendo).
+#   1706  añade conta_interruptores_de_cuenta y conta_interruptor_cambiar
+#         (solo el administrador de la plataforma; con motivo; apagar la
+#         contabilidad apaga las tres; nunca borra).
+#
+# Nada en el camino del pedido. No toca ningún interruptor: solo da la forma
+# de hacerlo. Sin aplicar: el real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01f-interruptores.sql
+supabase/migrations/20261031T1705_s01f_auditoria_interruptor.sql
+supabase/migrations/20261031T1706_s01f_interruptores.sql

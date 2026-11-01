@@ -1,0 +1,6 @@
+# DM1 · PR 1b · El gate de la empresa abierta. Sin migraciones: solo la
+# semilla de la e2e, una persona inventada administradora de A (con
+# contabilidad) y de B (sin ella). Solo añade y se puede aplicar dos veces: va
+# de verdad desde la rama (W07), y al fusionar main la vuelve a pasar sin
+# cambiar nada.
+supabase/seeds/conta/seed_dm1_dos_empresas_staging.sql

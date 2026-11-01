@@ -104,8 +104,10 @@ export default function ShellTopBar({
   // C00: un módulo con interruptor solo sale si la cuenta lo tiene encendido.
   const { has: tieneInterruptor } = useFeatureGate()
 
-  // Selector de cuenta: SOLO para platform admin (acceso exclusivo de staff).
-  const canSwitchAccount = isPlatformAdmin && !!onSwitchAccount && accounts.length > 0
+  // Selector de cuenta: el platform admin (todos los clientes) y, desde el DM1
+  // (30/10), quien tiene varias cuentas propias: Shell solo pasa onSwitchAccount
+  // en esos dos casos.
+  const canSwitchAccount = !!onSwitchAccount && accounts.length > 0
   const [acctMenuOpen, setAcctMenuOpen] = useState(false)
   const acctMenuRef = useRef<HTMLDivElement | null>(null)
 
@@ -254,7 +256,7 @@ export default function ShellTopBar({
                 style={{ top: 40, minWidth: 240, maxHeight: 360, background: '#fff', border: `1px solid ${BORDER}`, boxShadow: '0 6px 24px rgba(21,23,26,0.10)', zIndex: 50 }}
               >
                 <div style={{ padding: '8px 12px', fontSize: 11, color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
-                  Cambiar de cliente
+                  {isPlatformAdmin ? 'Cambiar de cliente' : 'Cambiar de empresa'}
                 </div>
                 {accounts.map(a => {
                   const isActive = a.id === activeAccount?.id
@@ -262,6 +264,7 @@ export default function ShellTopBar({
                     <button
                       key={a.id}
                       type="button"
+                      data-cuenta={a.id}
                       onClick={() => { setAcctMenuOpen(false); onSwitchAccount!(a.id) }}
                       className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left"
                       style={{ background: isActive ? PILL_BG : 'transparent', color: INK, fontWeight: isActive ? 600 : 400 }}

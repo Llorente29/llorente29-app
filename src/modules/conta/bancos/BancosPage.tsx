@@ -59,6 +59,8 @@ import { Boton } from '@/modules/conta/diseno'
 import { Movimientos } from '@/modules/conta/bancos/Movimientos'
 import { Reglas } from '@/modules/conta/bancos/Reglas'
 import { CuentasYExtractos } from '@/modules/conta/bancos/CuentasYExtractos'
+import { Prestamos } from '@/modules/conta/bancos/Prestamos'
+import { FichaContrato } from '@/modules/conta/bancos/FichaContrato'
 import { SubirExtracto } from '@/modules/conta/bancos/SubirExtracto'
 import { HechoPorFolvy } from '@/modules/conta/bancos/HechoPorFolvy'
 import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
@@ -69,6 +71,7 @@ function contenido(v: VistaBancos): ReactNode {
     case 'movimientos': return <Movimientos />
     case 'reglas': return <Reglas />
     case 'cuentas': return <CuentasYExtractos />
+    case 'prestamos': return <Prestamos />
     case 'subir': return <SubirExtracto />
     case 'hecho': return <HechoPorFolvy />
   }
@@ -104,6 +107,12 @@ function Bancos() {
   const bancos = datos.datos?.bancos ?? []
   // S01e: sin ?banco ni ?mes, se abre donde hay movimientos (el banco y el mes de su último extracto).
   const banco = bancos.find((b) => b.id === query.get('banco')) ?? bancoInicial(bancos, datos.datos?.dudas ?? {})
+  // S01d · El banco, fijo en la dirección: si no, al validar cambian las dudas y al recargar
+  // bancoInicial elegía otro banco («Validar y siguiente» saltaba de banco).
+  const bancoFijo = banco?.id ?? null
+  useEffect(() => {
+    if (bancoFijo && !query.get('banco')) setQuery((p) => { const q = new URLSearchParams(p); q.set('banco', bancoFijo); return q }, { replace: true })
+  }, [bancoFijo, query, setQuery])
   const mes = meses.includes(query.get('mes') ?? '') ? query.get('mes')! : mesInicial(meses, banco, hoy)
   const hechos = useLeerConservando(accountId && activa ? () => leerHechos(accountId, activa.id, mes) : null, ambito, `${mes}:${vuelta}`)
   // Lo casado solo que sigue vivo: lo deshecho ya no es «hecho por Folvy».
@@ -159,6 +168,12 @@ function Bancos() {
   if (!accountId && !cargando) return encabezado(<Vacio titulo="No hay cuenta activa." explicacion="Elige una cuenta para ver sus bancos." />)
   if (datos.error) return encabezado(<ErrorConReintento mensaje={datos.error} reintentar={datos.recargar} />)
   if (!ctx) return encabezado(<div className="cx-tarjeta" aria-busy="true" aria-label="Cargando los bancos">{[0, 1, 2].map((i) => <Hueso key={i} alto={40} />)}</div>)
+
+  // S01e · La ficha de un préstamo o aplazamiento (?contrato=): una página, con su encabezado y su miga para volver.
+  const contrato = vista === 'prestamos' ? query.get('contrato') : null
+  if (contrato) {
+    return <BancosCtx.Provider value={ctx}><FichaContrato key={contrato} id={contrato} alVolver={conQuery(rutaBancos('prestamos'), { contrato: null })} /></BancosCtx.Provider>
+  }
 
   // Las acciones de la página, con lo que se sabe de cada una (sus números y avisos).
   const resolver = (a: AccionBancos): Accion => {

@@ -733,3 +733,45 @@ export function devolucionSinCobrar(
     },
   }
 }
+
+// ── S01h · El abono de un proveedor ─────────────────────────────────────────
+
+/**
+ * La cuenta de devoluciones de una cuenta de compras, si el plan la tiene:
+ * 600 → 608, 601 → 6081, 602 → 6082 (PGC, 608 «Devoluciones de compras y
+ * operaciones similares»). Lo que no es una compra (un servicio de la 62, por
+ * ejemplo) no tiene devolución propia: va al Haber de su misma cuenta.
+ */
+export function plantillaDevolucion(cuenta: string): string | null {
+  if (cuenta.startsWith('600')) return '6080'
+  if (cuenta.startsWith('601')) return '6081'
+  if (cuenta.startsWith('602')) return '6082'
+  return null
+}
+
+/**
+ * S01h · El asiento de un abono de proveedor: el de su factura, al revés. Se
+ * arma con los importes en positivo (como una factura) y aquí se le da la
+ * vuelta: al Debe el proveedor; al Haber la compra (o su devolución, si el
+ * plan la tiene) y el IVA soportado de cada tipo. Cada importe, en positivo
+ * en su columna (el CHECK journal_line_debe_o_haber). El libro de recibidas lo
+ * lee al revés: base y cuota restan, como rectificativa (R1), en el
+ * trimestre del asiento.
+ */
+export function comoAbono(p: Propuesta, devolucion: (cuenta: string) => string | null, anula: string | null): Propuesta {
+  const cambiadas: { de: string; a: string }[] = []
+  const lineas = p.lineas.map((l) => {
+    let cuenta = l.cuenta
+    if (cuenta.startsWith('6') && l.debe > 0) {
+      const d = devolucion(cuenta)
+      if (d && d !== cuenta) { cambiadas.push({ de: cuenta, a: d }); cuenta = d }
+    }
+    return { ...l, cuenta, debe: l.haber, haber: l.debe }
+  })
+  const razones = [
+    { decision: 'Abono: el asiento de su factura, al revés', porque: `Al Debe el proveedor, por lo que te devuelve; al Haber la compra y el IVA soportado de cada tipo. En el libro de recibidas va como rectificativa y resta en el 303 del trimestre del asiento${anula ? `. Anula ${anula}` : ''}` },
+    ...[...new Map(cambiadas.map((x) => [x.de, x])).values()].map((x) => ({ decision: `Devolución de compras: ${x.a}`, porque: `La compra fue a la ${x.de}; lo que se devuelve va a su cuenta de devoluciones, que tu plan tiene` })),
+    ...p.razones,
+  ]
+  return { ...p, concepto: p.concepto.replace(/^Factura\b/, 'Abono'), lineas, razones }
+}

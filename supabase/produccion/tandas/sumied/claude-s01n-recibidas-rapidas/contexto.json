@@ -1,0 +1,21 @@
+{
+ "_que": "S01n · contexto de producción medido en SOLO LECTURA el 01/11 a las 10:40Z: existe conta_documentos_recibidos(uuid,date,date) (una sola firma; su cuerpo es el del S01g, huella 3e5a1a7e07564eab372eea33e20cec05; se reemplaza con la misma firma); nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-01T10:40Z",
+ "tanda": {
+  "supabase/migrations/20261101T1134_s01n_recibidas_rapidas.sql": "074bff72c5ebfde22d82f899a458bbb9"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_documentos_recibidos(uuid,date,date)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

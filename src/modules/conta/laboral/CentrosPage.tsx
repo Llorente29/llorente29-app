@@ -13,6 +13,10 @@
 // Guardar dice qué ha guardado o por qué no (regla 8).
 
 import { useState } from 'react'
+import { OtrasDirecciones } from './OtrasDirecciones'
+import { leerOtrasDirecciones } from '@/modules/conta/services/otrasDireccionesService'
+import { useLeer } from '@/modules/conta/libros/contexto'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useApp } from '@/context/AppContext'
 import { Boton, Chip, Dialogo, Tarjeta } from '@/modules/conta/diseno'
 import type { Location } from '@/types'
@@ -26,6 +30,10 @@ export default function CentrosPage() {
   const [hecho, setHecho] = useState('')
   const [gps, setGps] = useState('')
   const centros = [...locations].sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name))
+  // S01m · Las otras direcciones con las que lo nombran las plataformas.
+  const { userName } = useCuentaConta()
+  const [vueltaOtras, setVueltaOtras] = useState(0)
+  const otras = useLeer(() => leerOtrasDirecciones(locations.map((l) => l.id)), `${locations.map((l) => l.id).join(',')}:otras:${vueltaOtras}`)
 
   function abrir(b: Borrador) { setBorrador(b); setError(''); setGps(''); setHecho('') }
 
@@ -108,6 +116,7 @@ export default function CentrosPage() {
                   {c.lat != null && c.lng != null
                     ? <Chip tono="seguro">Ubicación puesta · radio {c.clockRadiusM ?? RADIO_POR_DEFECTO} m</Chip>
                     : <Chip tono="duda" titulo="Se ficha igual; el fichaje queda «sin distancia».">Sin ubicación</Chip>}
+                  {(otras.datos?.get(c.id) ?? []).length > 0 && <span className="s-laboral-otras" data-prueba="centro-otras"> · También: {otras.datos!.get(c.id)!.join(' · ')}</span>}
                 </>}
                 accion={<span className="s-laboral-acciones">
                   <Boton variante="secundario" onClick={() => abrir(deCentro(c))}>Editar</Boton>
@@ -146,6 +155,9 @@ export default function CentrosPage() {
             {(borrador.lat || borrador.lng) && <Boton variante="fantasma" onClick={() => setBorrador({ ...borrador, lat: '', lng: '' })}>Quitar la ubicación</Boton>}
           </div>
           {gps && <p className="s-apoyo" role="status">{gps}</p>}
+          {borrador.id && !borrador.id.startsWith('loc-') && (
+            <OtrasDirecciones key={`${borrador.id}:${(otras.datos?.get(borrador.id) ?? []).join('|')}`} locationId={borrador.id} iniciales={otras.datos?.get(borrador.id) ?? []} quien={userName ?? null} alGuardar={() => setVueltaOtras((v) => v + 1)} />
+          )}
         </Dialogo>
       )}
     </div>

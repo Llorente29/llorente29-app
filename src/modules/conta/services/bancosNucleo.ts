@@ -21,7 +21,7 @@ import { leerFicheroBanco, type ContenidoFichero } from '@/modules/conta/lib/fue
 import { partirCsv } from '@/modules/conta/lib/importarPlan'
 import type { BancoCsv } from '@/modules/conta/lib/lectorCsvBanco'
 import {
-  conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Decision, type Destino, type Movimiento, type Plataforma,
+  conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Contrato, type Decision, type Destino, type Impuesto, type Movimiento, type Plataforma,
 } from '@/modules/conta/lib/conciliacion'
 
 type Fila = Record<string, unknown>
@@ -174,7 +174,7 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas, pasarela] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas, pasarela, declaraciones] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
@@ -189,7 +189,7 @@ export function crearBancos(bd: Bd) {
       leer(tabla('sales_channel').select('id, name').eq('account_id', accountId), 'los canales'),
       leer(tabla('party_role').select('party_id, role, channel_id, supplier_id').eq('account_id', accountId), 'lo que es cada contacto'),
       leer(tabla('company_account_link').select('company_account_id, entity, entity_id, role').eq('account_id', accountId).eq('company_id', companyId), 'los enlaces'),
-      leer(tabla('company_account').select('id, code, name, plain_name, template_code, kind').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
+      leer(tabla('company_account').select('id, code, name, plain_name, template_code, kind, withholding_model').eq('account_id', accountId).eq('company_id', companyId), 'el plan'),
       leer(tabla('recurring_contract').select('*').eq('account_id', accountId).eq('company_id', companyId).eq('is_active', true), 'los contratos'),
       leer(tabla('bank_rule').select('id, words, condition, target, confirmations').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'activa'), 'las reglas'),
       leer(tabla('supplier').select('id, name, legal_name').eq('account_id', accountId).eq('is_active', true), 'los proveedores'),
@@ -207,6 +207,9 @@ export function crearBancos(bd: Bd) {
       // Si no se puede leer, Bancos sigue: esos abonos se casan a mano, como antes.
       rpc<Fila[]>('conta_abonos_pasarela_pendientes', { p_company: companyId })
         .catch((e: unknown) => { console.warn('[bancos] no se pudieron leer los cobros con tarjeta que esperan su abono', e); return [] as Fila[] }),
+      // S01d · Las declaraciones presentadas a ingresar y sin su asiento de pago: el modelo y el periodo del pago, de aquí.
+      leer(tabla('tax_return').select('id, form_code, fiscal_year, period, amount, payment_entry_id').eq('account_id', accountId).eq('company_id', companyId)
+        .eq('status', 'filed').eq('result_kind', 'to_pay'), 'las declaraciones por pagar'),
     ])
     const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
     const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))
@@ -296,16 +299,22 @@ export function crearBancos(bd: Bd) {
         const anterior = new Date(Date.UTC(Number(hoy.slice(0, 4)), Number(hoy.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7)
         return [{ mes: anterior, ssPendienteCent: ss, netoPendienteCent: neto, cuenta476: nombre476, cuenta465: hoja('465') ?? '46500000' }]
       })(),
-      impuestos: saldos.filter((x) => String(x.cuenta).startsWith('475') && n(x.saldo) < 0).map((x) => ({
-        modelo: String(x.cuenta).startsWith('4750') ? '303' as const : '111' as const, periodo: 'pendiente', importeCent: -cent(x.saldo), cuenta: String(x.cuenta) })),
-      contratos: contratos.map((c) => ({ id: String(c.id), tipo: c.kind as 'prestamo' | 'alquiler' | 'otro', nombre: String(c.name), contiene: String(c.concept_contains),
-        importeCent: cent(c.amount), confirmaciones: n(c.confirmations), terceroId: s(c.party_id),
+      // S01d · De las declaraciones presentadas sin pagar: su modelo, su periodo y la cuenta del modelo
+      // (la 4750 del 303; la subcuenta de la 4751 que dice ser de ese modelo; si no lo dice ninguna y solo
+      // hay una 4751 con saldo, ésa). Lo que no tiene cuenta no se propone: se queda en «¿de qué modelo es?».
+      impuestos: impuestosPorPagar(declaraciones, cuentas, saldos, hoy),
+      contratos: contratos.map((c) => ({ id: String(c.id), tipo: c.kind as Contrato['tipo'], nombre: String(c.name), contiene: String(c.concept_contains),
+        importeCent: c.amount === null ? null : cent(c.amount), confirmaciones: n(c.confirmations), terceroId: s(c.party_id),
         cuadro: Array.isArray(c.schedule) ? (c.schedule as Fila[]).map((f) => ({ fecha: String(f.fecha), cuotaCent: cent(f.cuota), capitalCent: cent(f.capital), interesesCent: cent(f.intereses) })) : null,
-        cuentaCapital: s(c.capital_account), cuentaIntereses: s(c.interest_account), cuentaGasto: s(c.expense_account) })),
+        // S01d · El capital de cada cuota va a corto (520); el paso de largo a corto va con el cierre del año.
+        cuentaCapital: s(c.short_capital_account) ?? s(c.capital_account), cuentaIntereses: s(c.interest_account), cuentaGasto: s(c.expense_account) })),
       reglas: reglas.map((r) => {
         const cond = r.condition as Fila, dest = r.target as Fila
         return { id: String(r.id), palabras: String(r.words), contiene: String(cond.contiene), signo: cond.signo === 1 || cond.signo === -1 ? cond.signo : null,
-          cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id), confirmaciones: n(r.confirmations) }
+          cuenta: String(dest.cuenta), terceroId: s(dest.tercero_id), confirmaciones: n(r.confirmations),
+          // S01d · «Recordar este reparto»: las líneas de la regla (importe en céntimos; null = lo que falte).
+          lineas: Array.isArray(dest.lineas) ? (dest.lineas as Fila[]).map((l) => ({ cuenta: String(l.cuenta), importeCent: l.importe_cent === null || l.importe_cent === undefined ? null : Number(l.importe_cent),
+            concepto: s(l.concepto), modelo: s(l.modelo), periodo: s(l.periodo) })) : null }
       }),
       aprendido: [...veces.values()],
       asientos: asientos.map((a): AsientoLibre => ({ id: String(a.entry_id), cuentaId: String(a.treasury_account_id), fecha: String(a.fecha), importeCent: cent(a.importe),
@@ -344,7 +353,7 @@ export function crearBancos(bd: Bd) {
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
       const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId,
         origen: d.origen, preseleccionar: d.preseleccionar, tarjetaDesconocida: d.tarjetaDesconocida, alternativas: d.alternativas,
-        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar }
+        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, reparto: d.reparto ?? null }
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
         if (d.confianza === 'seguro' && d.destino) {
@@ -397,4 +406,28 @@ export function crearBancos(bd: Bd) {
   }
 
   return { bancosDeLaEmpresa, importar, cargarContexto, conciliarPendientes, confirmar, deshacer }
+}
+
+/** S01d · Las declaraciones presentadas a ingresar y sin pagar, con la cuenta de su modelo. Pura. */
+export function impuestosPorPagar(declaraciones: readonly Fila[], cuentas: readonly Fila[], saldos: readonly Fila[], hoy = new Date().toISOString().slice(0, 10)): Impuesto[] {
+  const declaracionVieja = (d: Fila) => Number(d.fiscal_year) < Number(hoy.slice(0, 4)) - 1
+  const conModelo = (m: string) => cuentas.filter((c) => c.withholding_model === m).map((c) => String(c.code))
+  const cuenta4751Sola = (() => {
+    const xs = saldos.filter((x) => String(x.cuenta).startsWith('4751') && Number(x.saldo) < 0).map((x) => String(x.cuenta))
+    return xs.length === 1 ? xs[0] : null
+  })()
+  const c4750 = cuentas.find((c) => String(c.code).startsWith('4750') && c.kind !== 'template')?.code
+  const out: Impuesto[] = []
+  for (const d of declaraciones) {
+    if (d.payment_entry_id) continue
+    // Solo las de este año y el anterior: lo de antes ya se pagó (traído de otro programa, sin su asiento enlazado).
+    if (declaracionVieja(d)) continue
+    const modelo = String(d.form_code)
+    if (!['303', '111', '115', '123'].includes(modelo)) continue
+    const periodo = `${d.fiscal_year}-${d.period}`
+    const cuenta = modelo === '303' ? (c4750 ? String(c4750) : null) : (conModelo(modelo).length === 1 ? conModelo(modelo)[0] : cuenta4751Sola)
+    if (!cuenta) continue
+    out.push({ modelo: modelo as Impuesto['modelo'], periodo, importeCent: Math.round(Number(d.amount) * 100), cuenta, declaracionId: String(d.id) })
+  }
+  return out
 }

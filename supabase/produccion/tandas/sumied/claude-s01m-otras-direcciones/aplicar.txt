@@ -1,0 +1,12 @@
+# S01m · Un local admite otras direcciones con las que lo nombran las
+# plataformas, y el emparejamiento por dirección las usa (Julio, 01/11).
+# Rama claude/s01m-otras-direcciones.
+#
+#   0945  añade location_address_alias y conta_local_direcciones_guardar.
+#   0946  cambia _conta_local_de_texto (S01i): también por las otras direcciones.
+#
+# Ninguna fila cambia al aplicarse: las direcciones las escribe la persona en la
+# ficha del centro. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01m-direcciones.sql
+supabase/migrations/20261101T0945_s01m_otras_direcciones.sql
+supabase/migrations/20261101T0946_s01m_local_por_otras.sql

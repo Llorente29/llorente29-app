@@ -181,11 +181,18 @@ Deno.serve(async (req) => {
   if (callerErr || !callerUser) return errorResponse("Invalid session", 401);
 
   // 3) Verificar que el caller es admin (verificación real con service_role).
+  //    DM1 · PR 1b (30/10): el perfil de la empresa ABIERTA (_cuenta_activa,
+  //    con la sesión de quien llama). Antes, «su perfil» con maybeSingle: con
+  //    dos empresas fallaba (500), y no se sabía en cuál dar de alta.
   const adminClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+  const { data: cuentaAbierta, error: abiertaErr } = await callerClient.rpc("_cuenta_activa");
+  if (abiertaErr) return errorResponse(`Open account error: ${abiertaErr.message}`, 500);
+  if (!cuentaAbierta) return errorResponse("Forbidden: only admins can manage employees", 403);
   const { data: callerProfile, error: profileErr } = await adminClient
     .from("user_profiles")
     .select("role, active, account_id")
     .eq("user_id", callerUser.id)
+    .eq("account_id", cuentaAbierta as string)
     .eq("active", true)
     .maybeSingle();
 
@@ -363,6 +370,7 @@ async function handleCreate(admin: any, payload: Payload, actorUserId: string, c
       .from("user_profiles")
       .select("id")
       .eq("user_id", authUserId)
+      .eq("account_id", callerAccountId)
       .single();
 
     if (newProfileErr || !newProfile) {
@@ -758,6 +766,7 @@ async function handleGrantAccess(admin: any, payload: Payload, actorUserId: stri
       .from("user_profiles")
       .select("id")
       .eq("user_id", authUserId)
+      .eq("account_id", callerAccountId)
       .single();
 
     if (newProfileErr || !newProfile) {

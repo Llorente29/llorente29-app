@@ -1,0 +1,15 @@
+# S01h · Los abonos de proveedor (facturas rectificativas recibidas), con el
+# visto bueno de Julio a la maqueta (31/10). Rama claude/s01h-abonos-proveedor.
+#
+#   1850  cambia el CHECK de supplier_invoice.paid_method: admite
+#         «compensation» (solo amplía).
+#   1851  añade el enlace solo del abono con lo que anula, la compensación al
+#         validar su asiento y sus dos disparadores.
+#   1852  datos de Foodint (autorizo): el abono 1506416 de Europastry con sus
+#         cuotas en negativo, total −175,46 y ligado a la FAC-00006.
+#
+# Nada en el camino del pedido. Sin aplicar: el real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01h-abonos.sql
+supabase/migrations/20261031T1850_s01h_pago_por_compensacion.sql
+supabase/migrations/20261031T1851_s01h_abonos.sql
+supabase/migrations/20261031T1852_s01h_abono_europastry_foodint.sql

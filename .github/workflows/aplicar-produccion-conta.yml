@@ -67,8 +67,28 @@ name: Aplicar SQL en PRODUCCIÓN (contabilidad)
 #
 # OJO: GitHub solo deja lanzar un workflow_dispatch si el fichero del workflow
 # existe en la rama por defecto (main). Ver el informe del PR #138.
+#
+# W12b (30/10) · SIEMPRE DESDE MAIN, NOMBRANDO LA RAMA. El 29/10 el real 318 se
+# lanzó desde claude/w10a-cierre, que tenía el workflow de antes del W12, y pasó
+# sin aprobación: GitHub usa el workflow de la rama desde la que se lanza, y el
+# secreto estaba en el repositorio, al alcance de cualquier rama. Desde el W12b:
+#   · Se lanza desde main, con la rama en «rama» y su commit en «commit». Los
+#     guiones, el análisis y la transacción son siempre los de main; de la rama
+#     solo se traen DATOS, fijados por ese commit: supabase/ (la tanda, sus
+#     vueltas atrás y las pruebas que nombran), src/ (para ver qué lee el front)
+#     y scripts/conta/produccion/cuentas/. Una rama no puede convertir un
+#     ensayo en un real.
+#   · Los secretos viven en dos ENTORNOS, que solo admiten ejecuciones de main:
+#     «produccion-ensayo» (el ensayo; sin aprobación) y «produccion» (el real y
+#     la vuelta atrás; con la aprobación de Julio). Un workflow de una rama no
+#     los recibe: ni el de antes del W12b, ni uno cambiado a propósito.
+#   · El analizador para cualquier línea que empiece por «\» en lo que se
+#     ejecuta (tanda, cuentas y vueltas atrás): un «\connect» se saltaría el
+#     ROLLBACK del ensayo.
+#   · El commit de la rama va en el nombre del run, y el real busca un ensayo
+#     en verde, lanzado desde main, con ese mismo nombre.
 
-run-name: "${{ inputs.modo }} · ${{ github.ref_name }}${{ inputs.tanda && format(' · tanda {0}', inputs.tanda) || '' }} · ${{ github.sha }}"
+run-name: "${{ inputs.modo }} · ${{ inputs.rama || github.ref_name }}${{ inputs.tanda && format(' · tanda {0}', inputs.tanda) || '' }} · ${{ inputs.commit || github.sha }}"
 
 on:
   workflow_dispatch:
@@ -83,8 +103,18 @@ on:
         type: choice
         options: [ensayo, real, vuelta_atras]
         default: ensayo
+      rama:
+        description: 'La rama del PR cuya tanda se ensaya o se aplica (se lanza SIEMPRE desde main). Vacío solo para una tanda ya fusionada (entonces, «tanda»).'
+        required: false
+        type: string
+        default: ''
+      commit:
+        description: 'El commit de esa rama (los 40 caracteres): tiene que ser el último de la rama. Va en el nombre del run; el real busca un ensayo en verde de este mismo commit.'
+        required: false
+        type: string
+        default: ''
       tanda:
-        description: 'Vacío = la tanda de la rama desde la que se lanza. Desde main, el nombre de la carpeta de la tanda (supabase/produccion/tandas/<producto>/<nombre>), p. ej. «heredada».'
+        description: 'Solo para una tanda ya fusionada en main, sin «rama»: el nombre de su carpeta (supabase/produccion/tandas/<producto>/<nombre>), p. ej. «heredada».'
         required: false
         type: string
         default: ''
@@ -107,7 +137,7 @@ jobs:
   # de 45 min; si se pasa, en rojo). Va aparte y sin la cola de producción:
   # esperar aquí no para los runs de las demás ramas.
   espera-e2e:
-    if: inputs.modo == 'ensayo'
+    if: inputs.modo == 'ensayo' && inputs.rama != ''
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
@@ -118,27 +148,21 @@ jobs:
         timeout-minutes: 50
         env:
           GH_TOKEN: ${{ github.token }}
+          RAMA: ${{ inputs.rama }}
         run: node scripts/ci/esperar-e2e.mjs 45
 
-  # W12 · Regla T10 (29/10): el real lo lanza siempre Julio. El job pide la
-  # aprobación del entorno «produccion» (sus revisores: Julio) y no sigue hasta
-  # que la da en GitHub. Las sesiones lanzan con la autorización de Julio, así
-  # que mirar quién lanza no las distingue (los 40 runs del 27 al 29/10, todos
-  # «Llorente29»); esto sí. El ensayo no la necesita.
-  aprobacion:
-    if: inputs.modo == 'real'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    environment: produccion
-    steps:
-      - name: Julio ha aprobado el real
-        run: echo "Real aprobado en el entorno «produccion» por quien tiene que aprobarlo. Rama ${GITHUB_REF_NAME}, commit ${GITHUB_SHA}."
-
   aplicar:
-    needs: [espera-e2e, aprobacion]
-    # Sigue si la espera y la aprobación han ido bien o no tocaban (saltadas).
-    if: always() && !cancelled() && needs.espera-e2e.result != 'failure' && needs.aprobacion.result != 'failure'
+    needs: [espera-e2e]
+    # Sigue si la espera ha ido bien o no tocaba (saltada).
+    if: always() && !cancelled() && needs.espera-e2e.result != 'failure'
     runs-on: ubuntu-latest
+    # W12 · Regla T10 y W12b (30/10): los secretos de producción solo existen en
+    # dos entornos, y los dos solo admiten ejecuciones de main. El ensayo, en
+    # «produccion-ensayo» (sin aprobación). El real y la vuelta atrás, en
+    # «produccion»: el job no empieza hasta que Julio lo aprueba en GitHub. Las
+    # sesiones lanzan con la autorización de Julio (los 40 runs del 27 al 29/10,
+    # todos «Llorente29»), así que mirar quién lanza no las distingue; esto sí.
+    environment: ${{ inputs.modo == 'ensayo' && 'produccion-ensayo' || 'produccion' }}
     # Nunca dos a la vez contra producción (antes, para todo el workflow; desde
     # el W12, solo para el job que aplica: la espera y la aprobación, fuera).
     concurrency:
@@ -152,6 +176,10 @@ jobs:
       FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
       MODO: ${{ inputs.modo }}
       TANDA_PEDIDA: ${{ inputs.tanda }}
+      # W12b: la rama y su commit (o, para una tanda ya fusionada, main y el suyo).
+      RAMA: ${{ inputs.rama || github.ref_name }}
+      COMMIT: ${{ inputs.commit || github.sha }}
+      RAMA_PEDIDA: ${{ inputs.rama }}
       PSQL: /usr/lib/postgresql/17/bin/psql
       PGAPPNAME: gha-produccion-conta-${{ github.run_id }}
       # D01 R2 (13/10): sin NOTICE (los avisos de una migración pueden llevar
@@ -190,12 +218,36 @@ jobs:
             exit 1
           fi
           case "$MODO" in ensayo|real|vuelta_atras) ;; *) echo "::error::Modo desconocido: tiene que ser ensayo, real o vuelta_atras."; exit 1 ;; esac
+          # W12b: siempre desde main (el entorno ya lo exige; esto lo dice en palabras).
+          if [ "$GITHUB_REF_NAME" != "main" ]; then
+            echo "::error::Este workflow se lanza desde main, no desde «${GITHUB_REF_NAME}». Qué hacer: lánzalo desde main y escribe la rama en «rama» y su último commit en «commit»."
+            exit 1
+          fi
+          if [ -n "$RAMA_PEDIDA" ] && [ -n "${TANDA_PEDIDA:-}" ]; then echo "::error::O «rama» (la tanda de un PR) o «tanda» (una ya fusionada), no las dos."; exit 1; fi
+          if [ -z "$RAMA_PEDIDA" ] && [ -z "${TANDA_PEDIDA:-}" ]; then echo "::error::Falta «rama» (la del PR cuya tanda se aplica) o, para una ya fusionada, «tanda»."; exit 1; fi
+          if [ -n "$RAMA_PEDIDA" ]; then
+            [[ "$RAMA_PEDIDA" =~ ^[A-Za-z0-9._/-]+$ ]] && [ "$RAMA_PEDIDA" != main ] || { echo "::error::«rama» no es el nombre de una rama de PR: «$RAMA_PEDIDA»."; exit 1; }
+            [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::«commit» son los 40 caracteres del último commit de la rama."; exit 1; }
+          fi
           {
             echo "# Producción · modo **$MODO**"
             echo
-            echo "Rama \`${GITHUB_REF_NAME}\` · commit \`${GITHUB_SHA}\` · lanzado por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid (sin franja: W01)"
+            echo "Rama \`${RAMA}\` · commit \`${COMMIT}\` · lanzado desde main (\`${GITHUB_SHA}\`) por **${GITHUB_ACTOR}** · $(TZ=Europe/Madrid date '+%d/%m/%Y %H:%M') de Madrid (sin franja: W01)"
             echo
           } > "$INFORME"
+
+      - name: De la rama, solo los datos (la tanda, las pruebas, el front y las cuentas)
+        if: inputs.rama != ''
+        run: |
+          set -euo pipefail
+          # El commit tiene que ser el último de la rama: lo que se ensaya es lo que se fusionará.
+          ultimo=$(git ls-remote origin "refs/heads/$RAMA_PEDIDA" | cut -f1)
+          if [ -z "$ultimo" ]; then echo "::error::No existe la rama «$RAMA_PEDIDA»."; exit 1; fi
+          if [ "$ultimo" != "$COMMIT" ]; then echo "::error::«commit» ($COMMIT) no es el último de «$RAMA_PEDIDA» ($ultimo). Qué hacer: lánzalo con el último."; exit 1; fi
+          git fetch -q --depth=1 origin "$COMMIT"
+          # Solo DATOS: los guiones (scripts/, salvo las cuentas) y el workflow siguen siendo los de main.
+          git checkout "$COMMIT" -- supabase src scripts/conta/produccion/cuentas
+          echo "De $RAMA_PEDIDA ($COMMIT): supabase/, src/ y scripts/conta/produccion/cuentas/. El resto, de main ($GITHUB_SHA)."
 
       - name: Guarda 1 y 2 · el secreto apunta a PRODUCCIÓN y no a staging
         timeout-minutes: 15
@@ -221,13 +273,14 @@ jobs:
           esac
 
       - name: Leer y validar el manifiesto
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           # R9: el manifiesto declara también qué se cuenta antes y después
           # («cuenta: …»), obligatorio en la tanda de aplicar (manifiesto.sh).
           # C10: la tanda de la rama (o la nombrada en «tanda»), en su carpeta.
           if [ -n "${TANDA_PEDIDA:-}" ] && ! [[ "$TANDA_PEDIDA" =~ ^[A-Za-z0-9._/-]+$ ]]; then echo "::error::«tanda» es el nombre de una carpeta de supabase/produccion/tandas."; exit 1; fi
-          node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$GITHUB_REF_NAME}" > /tmp/tanda-error.txt 2>&1 || {
+          node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$RAMA}" > /tmp/tanda-error.txt 2>&1 || {
             echo "::error::No hay tanda para esta rama en supabase/produccion/tandas/<producto>/<rama>/aplicar.txt (o está en los dos productos). Desde main, di cuál en «tanda»."; exit 1; }
           DIR=$(cat /tmp/tanda-dir.txt)
           if [ "$MODO" = "vuelta_atras" ]; then M=$DIR/vuelta-atras.txt; PAT='^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.down\.sql$'; OBLIG=no
@@ -235,6 +288,10 @@ jobs:
           # W02: y si la tanda va SIN VUELTA ATRÁS, a propósito («sin-vuelta-atras:»),
           # con lo que se espera después («esperado:»). Vacíos si no lo declara.
           bash scripts/conta/produccion/manifiesto.sh "$M" /tmp/tanda.txt /tmp/cuentas.txt "$PAT" "$OBLIG" /tmp/sin-vuelta.txt /tmp/esperado.txt
+          # W12b: ninguna orden de psql en nada de lo que se ejecuta: la tanda, sus
+          # cuentas y sus vueltas atrás (un «\connect» se saltaría el ROLLBACK).
+          { cat /tmp/tanda.txt /tmp/cuentas.txt; grep -E '^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.sql$' "$DIR/vuelta-atras.txt" 2>/dev/null || true; } | sort -u > /tmp/sql-que-se-ejecuta.txt
+          node scripts/conta/produccion/analizar.mjs psql $(cat /tmp/sql-que-se-ejecuta.txt)
 
       - name: Instalar psql 17
         timeout-minutes: 15
@@ -265,10 +322,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          n=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/aplicar-produccion-conta.yml/runs?head_sha=${GITHUB_SHA}&status=success&per_page=50" \
-                --jq '[.workflow_runs[] | select(.display_title | startswith("ensayo · "))] | length')
+          # W12b: el ensayo que vale es uno lanzado DESDE MAIN (head_branch main)
+          # con el mismo nombre que este run, cambiando «real» por «ensayo»: la
+          # misma rama y el mismo commit. Uno lanzado desde una rama no cuenta.
+          propio=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" --jq .display_title)
+          buscado="ensayo · ${propio#real · }"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/aplicar-produccion-conta.yml/runs?branch=main&event=workflow_dispatch&status=success&per_page=100" > /tmp/ensayos.json
+          n=$(jq --arg t "$buscado" '[.workflow_runs[] | select(.head_branch == "main" and .display_title == $t)] | length' /tmp/ensayos.json)
           if [ "$n" -lt 1 ]; then
-            echo "::error::No hay ningún ENSAYO en verde del commit ${GITHUB_SHA}. Primero el ensayo, luego el real."
+            echo "::error::No hay ningún ENSAYO en verde lanzado desde main de «${RAMA}» en el commit ${COMMIT} (se busca «$buscado»). Primero el ensayo, luego el real."
             exit 1
           fi
           echo "Hay al menos un ensayo en verde de este commit."
@@ -309,6 +371,7 @@ jobs:
 
       - name: Análisis · qué hace cada fichero (sigue, AUTORIZO o BLOQUEA)
         if: inputs.modo != 'vuelta_atras' && env.NADA != '1'
+        timeout-minutes: 10
         env:
           AUTORIZO: ${{ inputs.autorizo }}
         run: |
@@ -345,7 +408,7 @@ jobs:
           fi
           if [ -s /tmp/autorizables.txt ]; then
             { echo "## Autorizados a mano"; echo
-              echo "Estos ficheros necesitaban «autorizo» y se aplican porque **${GITHUB_ACTOR}** los nombró enteros, desde la rama \`${GITHUB_REF_NAME}\`:"; echo
+              echo "Estos ficheros necesitaban «autorizo» y se aplican porque **${GITHUB_ACTOR}** los nombró enteros, para la rama \`${RAMA}\` (commit \`${COMMIT}\`):"; echo
               while IFS= read -r f; do echo "- \`$f\` (md5 \`$(md5sum "$f" | cut -d' ' -f1)\`)"; done < /tmp/autorizables.txt; echo; } >> "$INFORME"
           fi
 

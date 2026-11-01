@@ -1,0 +1,20 @@
+# DM1 · PR 2a · La marca de demo y la puerta: la 0907 (accounts.is_demo,
+# cuenta_puede_salir y el disparador que deja marcar solo al
+# superadministrador) y su prueba (ROLLBACK), que empieza por su vuelta atrás
+# si ya está aplicada: sin la 0907 no hay puerta (rojo a propósito); el
+# administrador de A no marca su cuenta, ni por las políticas ni saltándolas;
+# el superadministrador y la plataforma, sí; dos veces, igual; y la vuelta
+# atrás.
+supabase/migrations/20261031T0907_dm1_marca_de_demo.sql
+supabase/staging/sql/20261031_dm1_marca_de_demo_prueba.sql
+# Y la 1713 (encolar_alerta no encola avisos de una demo) con su prueba: con
+# la función de antes la demo encola (rojo a propósito); después no, ni por
+# cuenta, ni por local, ni por marca; A y uno sin cuenta, sí; y la vuelta atrás.
+supabase/migrations/20261031T1713_dm1_avisos_sin_demo.sql
+supabase/staging/sql/20261031_dm1_avisos_sin_demo_prueba.sql
+# Y la 1912 (los seis vigías saltan la cuenta de demo) con su prueba: con los
+# de antes la demo avisa del código perdido y siembra su marca de modificadores
+# (rojo a propósito); después no, y A con los mismos datos sí; las seis llevan
+# la puerta; y la vuelta atrás, byte a byte.
+supabase/migrations/20261031T1912_dm1_vigias_sin_demo.sql
+supabase/staging/sql/20261031_dm1_vigias_sin_demo_prueba.sql

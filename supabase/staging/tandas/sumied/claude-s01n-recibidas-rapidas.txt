@@ -1,0 +1,7 @@
+# S01n · Facturas recibidas e Inicio en menos de 1 s. La 1134 cambia
+# conta_documentos_recibidos (desde la rama, solo en ROLLBACK). Su prueba
+# (ROLLBACK): 1.000 facturas de 25 proveedores; con la de antes, 1.000 llamadas
+# o más a conta_gasto_aprendido; con la 1134, una por proveedor, menos de 1 s y
+# el mismo JSON; conta_pendientes en menos de 1 s; y la vuelta atrás.
+supabase/migrations/20261101T1134_s01n_recibidas_rapidas.sql
+supabase/staging/sql/20261101_s01n_recibidas_prueba.sql

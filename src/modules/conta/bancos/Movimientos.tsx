@@ -54,6 +54,7 @@ import {
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
+import { nombreConCuenta } from '@/modules/conta/lib/validarBanco'
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
 import { casarRemesa, remesasParaCasar } from '@/modules/conta/services/pagosService'
 import { casarAbono, cobrosParaCasar, reciboDevuelto } from '@/modules/conta/services/cobrosService'
@@ -200,11 +201,11 @@ export function Movimientos() {
   })
 
   // S02 · PR 2: validar el asiento de lo casado, aquí («Por validar»), uno a uno o en bloque.
-  const validarUno = async (m: MovimientoBanco): Promise<boolean> => {
-    let ok = false
+  const validarUno = async (m: MovimientoBanco): Promise<number | null> => {
+    let ok: number | null = null
     await con(m.id, async () => {
       const r = await validar(m.casado!.asientoId!, userName)
-      ok = true
+      ok = r.numero
       hecho(`Validado: ${m.casado?.asientoConcepto ?? quien(m)} (${quien(m)}) es el asiento ${r.numero}. Ya está en el libro diario.`)
     })
     return ok
@@ -233,11 +234,17 @@ export function Movimientos() {
   }
 
   const elegirCuenta = (m: MovimientoBanco) => async (e: Eleccion) => {
-    const destino: Destino = { tipo: 'cuenta', lineas: [{ cuenta: e.cuenta, importe: Math.abs(m.importeCent) / 100 }], concepto: e.concepto }
-    const nombre = `${ctx.datos.nombres[e.cuenta] ?? e.cuenta} · ${e.cuenta}`
+    // S01d · Una o varias cuentas (el reparto); la 4751 con su modelo y su periodo, que es lo que la valida.
+    const destino: Destino = { tipo: 'cuenta', concepto: e.concepto, lineas: e.lineas.map((l) => ({ cuenta: l.cuenta, importe: l.importeCent / 100,
+      ...(l.concepto ? { concepto: l.concepto } : {}), ...(l.modelo && l.periodo ? { modelo: l.modelo, periodo: l.periodo } : {}) })) }
+    const nombreDe = (c: string) => `${ctx.datos.nombres[c] ?? c} · ${c}`
+    const nombre = e.lineas.length === 1 ? nombreDe(e.lineas[0].cuenta) : e.lineas.map((l) => `${nombreDe(l.cuenta)} (${euros(l.importeCent)})`).join(' + ')
     await nucleo.confirmar(m.id, `Lo dijiste tú: ${nombre}.`, destino, 'probable', null)
-    if (e.regla) await guardarRegla(companyId, { palabras: `Cuando el concepto tenga «${e.regla}» → ${nombre}`, contiene: e.regla, cuenta: e.cuenta, signo: m.importeCent < 0 ? -1 : 1, origen: 'persona' })
-    hecho(`Casado con ${nombre} (${quien(m)})${e.regla ? `. Y desde ahora, lo que tenga «${e.regla}» irá ahí: está en Reglas` : ''}.`)
+    if (e.regla) {
+      await guardarRegla(companyId, { palabras: `Cuando el concepto tenga «${e.regla}» → ${e.lineas.length === 1 ? nombre : `repartir en ${e.lineas.map((l) => l.cuenta).join(' + ')}`}`,
+        contiene: e.regla, cuenta: e.lineas[0].cuenta, signo: m.importeCent < 0 ? -1 : 1, origen: 'persona', lineas: e.paraRegla })
+    }
+    hecho(`Casado con ${nombre} (${quien(m)})${e.regla ? `. Y desde ahora, lo que tenga «${e.regla}» saldrá ${e.lineas.length > 1 ? 'ya repartido, para confirmar' : 'ahí'}: está en Reglas` : ''}.`)
   }
   const apartar = (m: MovimientoBanco) => async (motivo: string) => {
     await ignorar(m.id, motivo)
@@ -387,7 +394,10 @@ export function Movimientos() {
 
       <div className={`cxn-cuerpo${panel && !movil ? ' cxn-con-panel' : ''}`}>
         {bandeja === 'validar' ? (
-          <PorValidar filas={paraValidar} donde={`de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}`} movil={movil} ocupado={ocupado}
+          <PorValidar key={`${banco.id}:${mes}`} filas={paraValidar} donde={`de ${nombreMes(mes).toLowerCase()} en ${banco.nombre}`} movil={movil} ocupado={ocupado}
+            banco={nombreConCuenta(banco)}
+            otros={ctx.datos.bancos.filter((b) => b.id !== banco.id).map((b) => ({ id: b.id, nombre: nombreConCuenta(b), n: ctx.datos.porValidar[b.id] ?? 0 }))}
+            alSeguir={(id) => ctx.elegirBanco(id)}
             alValidar={validarUno} alValidarLos={validarLos} alDeshacer={deshacer}
             alVerAsiento={(m) => m.casado?.asientoId && navegar(rutaAsiento(m.casado.asientoId))} />
         ) : bandeja === 'casados' ? (

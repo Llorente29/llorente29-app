@@ -1,0 +1,10 @@
+# S01h · los abonos de proveedor. La 1850 amplía el CHECK de paid_method
+# (cambia: desde la rama, solo en ROLLBACK); la 1851 añade el enlace solo y la
+# compensación con sus disparadores; la 1852 son datos de Foodint (en staging
+# no hace nada). Su prueba (ROLLBACK): se liga solo, el camino de validar
+# factura y abono (el libro resta, las dos pagadas por compensación), el
+# saldo a favor, la 1852 sin Foodint y la vuelta atrás.
+supabase/migrations/20261031T1850_s01h_pago_por_compensacion.sql
+supabase/migrations/20261031T1851_s01h_abonos.sql
+supabase/migrations/20261031T1852_s01h_abono_europastry_foodint.sql
+supabase/staging/sql/20261031_s01h_abonos_prueba.sql

@@ -76,6 +76,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
     // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
+    // S01j·2 · La ficha de UNA liquidación (de Correo de facturas y de su factura de comisión).
+    liquidacionFicha: 'facturacion.liquidacionesVentas',
     // PC01 · Entrega 2: Compras › Pagos (la lista, las remesas y la ficha de una) y «Repartidores», el nombre nuevo de Liquidaciones.
     repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
     // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
@@ -182,9 +184,10 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(pestanasVisibles(c, HOSTELERIA).map((t) => t.id)).toEqual(['recibidas', 'pagos', 'liquidaciones'])
     expect(c.ruta).toBe(CONTA.rutas.documentos)
   })
-  it('S02 · Bancos: Movimientos · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
+  it('S02 · Bancos: Movimientos · Préstamos y aplazamientos (S01d) · Cuentas y extractos · Reglas (el cierre del mes, en Contabilidad › Cierre y Registro desde el PR 2)', () => {
     const b = PRODUCTOS.find((p) => p.id === 'bancos')!
-    expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Cuentas y extractos', 'Reglas'])
+    expect(b.pestanas.map((t) => t.etiqueta)).toEqual(['Movimientos', 'Préstamos y aplazamientos', 'Cuentas y extractos', 'Reglas'])
+    expect(de('/conta/bancos/prestamos')).toBe('bancos.prestamos')
     expect(de('/conta/bancos/cierre')).toBe('contabilidad.cierre')
   })
   it('S02 · Ajustes es un apartado con sus páginas (las de su índice), sin las de Definiciones; en el producto solo, sin las que dicen «aún no»', () => {
@@ -192,8 +195,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V03 E2 (26/10): entra Facturación › Verifactu (tablero 25), con pantalla: sale también en el producto solo.
     // PC01 E4 (27/10): entra Facturación › Cobros (los recordatorios), con pantalla.
     // S01c (29/10): entra Compras › Correo de facturas (la dirección, la confirmación de Gmail y lo que ha llegado), con pantalla.
-    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Personas y asesor', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
-    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'correo-facturas', 'verifactu', 'cobros', 'folvy'])
+    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
+    // DM1 · PR 1 (30/10): entra Usuarios (quién entra e «Invitar a una persona»), con pantalla.
+    expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'correo-facturas', 'verifactu', 'cobros', 'personas', 'folvy'])
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')

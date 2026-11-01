@@ -38,8 +38,19 @@
 // de conectar el cliente 2 — no antes, para no meter riesgo en mitad de la
 // certificación de Carabanchel (hubrise-catalog-publish v40 recién desplegada).
 
+import { siPuedeSalir } from "./puerta.ts";
+
 // deno-lint-ignore no-explicit-any
 type QueryResult = { data: any; error: any };
+
+// DM1 · PR 2a · La puerta: una cuenta de demo no tiene token de HubRise (como
+// si no estuviera conectada), así que nada de lo que lo pide sale. Es el
+// camino del pedido: para una cuenta que no es de demo no cambia nada, y si no
+// se puede preguntar, sale como antes (siPuedeSalir con «sale»).
+async function puedeSalir(sb: SupabaseLike, accountId: string): Promise<boolean> {
+  return await siPuedeSalir(sb, accountId, async () => true, () => false, "sale");
+}
+
 interface SupabaseLike {
   from: (table: string) => {
     // deno-lint-ignore no-explicit-any
@@ -69,6 +80,7 @@ export async function resolveHubriseToken(
   q: HubriseTokenQuery,
 ): Promise<string | null> {
   if (!q.accountId || !q.externalLocationId) return null;
+  if (!(await puedeSalir(sb, q.accountId))) return null;
 
   const { data, error }: QueryResult = await sb
     .from("external_integration")
@@ -139,7 +151,14 @@ export async function listActiveHubriseConnections(
 
   if (error || !data) return [];
 
-  return (data as Array<Record<string, unknown>>)
+  // DM1 · PR 2a: fuera las de cuentas de demo.
+  const filas = data as Array<Record<string, unknown>>;
+  const cuentas = [...new Set(filas.map((r) => r["account_id"] as string))];
+  const salen = new Set<string>();
+  for (const c of cuentas) if (await puedeSalir(sb, c)) salen.add(c);
+
+  return filas
+    .filter((r) => salen.has(r["account_id"] as string))
     .filter((r) => {
       const enabled = r["push_status_enabled"] !== false;
       const tok = r["access_token"];
@@ -171,6 +190,7 @@ export async function resolveWriterToken(
   accountId: string,
 ): Promise<string | null> {
   if (!accountId) return null;
+  if (!(await puedeSalir(sb, accountId))) return null;
 
   const { data, error }: QueryResult = await sb.rpc("hubrise_writer_token_read", {
     p_account_id: accountId,

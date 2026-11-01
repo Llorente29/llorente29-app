@@ -19,6 +19,7 @@
 //
 // verify_jwt = true (config.toml): sin sesión no hay nada que hacer.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
@@ -76,6 +77,13 @@ Deno.serve(async (req) => {
     const texto = `No se ha mandado la ${f.number_text}: aún no tiene su PDF.`;
     await apuntar(false, texto, { para, motivo: "sin_pdf" });
     return json({ enviado: false, texto });
+  }
+
+  // DM1 · PR 2a · La puerta: una cuenta de demo no manda correos. Queda como enviada, y lo dice.
+  if (!(await cuentaPuedeSalir(srv, f.account_id))) {
+    const texto = `Enviada la ${f.number_text} a ${para}. ${EN_LA_DEMO}`;
+    await apuntar(true, texto, { para, demo: true });
+    return json({ enviado: true, demo: true, texto });
   }
 
   // El freno, antes de tocar nada más.

@@ -55,9 +55,11 @@ import {
   FiltroBuscar, FiltroSelector, FiltrosLista, PestanasEstado, TablaLista, conCambio, escribirOrden, recordarLista, type ColumnaLista,
 } from '@/modules/conta/diseno/plantillas'
 import {
-  LISTA_RECIBIDAS, NOMBRE_CANAL, colaDeFacturas, estadoDeFila, filasDeLaLista, filtrarSinPestana, filtrosDe, fraseDeLaLista, localDeFila, pestanasConNumero, totales,
+  LISTA_RECIBIDAS, NOMBRE_CANAL, colaDeFacturas, estadoDeFila, filasDeLaLista, filtrarSinPestana, filtrosDe, fraseDeLaLista, localDeFila, opcionesOtras, pestanasConNumero, totales,
   ventanaDe,
 } from '@/modules/conta/documentos/recibidas'
+import { FichaSoporte } from '@/modules/conta/documentos/FichaSoporte'
+import { AclararDocumento } from '@/modules/conta/documentos/AclararDocumento'
 
 const ACEPTA = 'application/pdf,image/jpeg,image/png,image/webp'
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
@@ -100,6 +102,9 @@ export default function DocumentosPage() {
   const [pidiendo, setPidiendo] = useState(false)
   const [fallo, setFallo] = useState<string | null>(null)
   const [masFiltros, setMasFiltros] = useState(!!f.canal)
+  // S01g · La fila de «Por aclarar» que se está aclarando (sus acciones), y lo que dijo la última.
+  const [aclarando, setAclarando] = useState<FilaDocumento | null>(null)
+  const [hecho, setHecho] = useState<string | null>(null)
 
   // La lista se recuerda tal cual está (filtros, orden y fila), para volver a ella.
   useEffect(() => { recordarLista(LISTA_RECIBIDAS, `${pathname}${search}`) }, [pathname, search])
@@ -166,6 +171,9 @@ export default function DocumentosPage() {
 
   /** Abrir una fila: se apunta la fila en la lista (para volver a ella) y se va a su ficha con la lista detrás. */
   const abrir = (x: FilaDocumento) => {
+    // S01g · El soporte de una liquidación abre su ficha; lo que está por aclarar, sus acciones (regla 8).
+    if (x.estado === 'soporte') { navegar(`${pathname}${conCambio(search, { recepcion: x.id, fila: x.id })}`); return }
+    if (x.tipo !== 'factura' && x.estado === 'por_aclarar') { setAclarando(x); return }
     if (x.tipo !== 'factura') { void abrirLlegada(x); return }
     const conFila = conCambio(search, { fila: x.id })
     setQuery(new URLSearchParams(conFila), { replace: true })
@@ -233,7 +241,8 @@ export default function DocumentosPage() {
       </span>
     </>
   )
-  const filaNoEsta = fila && d && !filas.some((x) => x.id === fila)
+  const filaNoEsta = fila && d && !filas.some((x) => x.id === fila) && !query.get('recepcion')
+  const otras = f.pestana === 'otras' ? opcionesOtras(base, mapa) : []
   const faltan = (d?.esperadas ?? []).filter((e) => !e.pedida)
 
   const mas: GrupoDeAcciones[] = [{
@@ -258,11 +267,19 @@ export default function DocumentosPage() {
     URL.revokeObjectURL(a.href)
   }
 
+  // S01g · La ficha de una recepción de soporte (?recepcion=), con la lista detrás para volver.
+  const recepcion = query.get('recepcion')
+  const filaSoporte = recepcion ? todasLasFilas.find((x) => x.id === recepcion && x.estado === 'soporte') ?? null : null
+  if (recepcion && filaSoporte && accountId) {
+    return <FichaSoporte accountId={accountId} fila={filaSoporte} alVolver={`${pathname}${conCambio(search, { recepcion: null })}`}
+      alCambiar={(m) => { setHecho(m); setVuelta((v) => v + 1); refrescarCuentasMenu(); navegar(`${pathname}${conCambio(search, { recepcion: null, ver: 'por-aclarar' })}`) }} />
+  }
+
   const botonSubir = (
     <Boton variante="principal" icono="nuevo" onClick={() => ficheros.current?.click()} disabled={!!subiendo}>Subir factura</Boton>
   )
   return (
-    <div className="s-pagina">
+    <div className="s-pagina cxso-documentos">
       <EncabezadoPagina
         titulo="Facturas recibidas"
         frase={fraseDeLaLista({ correo: !!d?.correo.activo, recibeMercancia: !!d?.recibe_mercancia, solo: producto.solo })}
@@ -283,13 +300,14 @@ export default function DocumentosPage() {
         )}
       </div>
       {fallo && <p className="s-aviso-lista" data-tono="falta" role="alert">{fallo}</p>}
+      {hecho && <p className="s-aviso-lista" data-tono="seguro" role="status">{hecho}</p>}
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer las facturas: {datos.error} <button type="button" className="s-boton s-boton-enlace" onClick={datos.recargar}>Reintentar</button></p>}
       {extras.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{extras.error}. La base, el IVA y si están pagadas salen con «—». <button type="button" className="s-boton s-boton-enlace" onClick={extras.recargar}>Reintentar</button></p>}
 
       <AsientosDeCompras />
       <LoQueNoHePodido donde={DONDE.recibidas} />
 
-      <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id })}
+      <PestanasEstado etiqueta="Estado de las facturas" pestanas={pestanas} actual={f.pestana} alCambiar={(id) => cambiar({ ver: id })} sinNumeros={!d}
         derecha={!movil && porRevisar > 0 && <button type="button" className="s-boton s-boton-enlace" onClick={revisarUnaAUna}>Revisarlas de una en una <Icono nombre="siguiente" /></button>} />
 
       <FiltrosLista etiqueta="Filtros de las facturas">
@@ -307,6 +325,16 @@ export default function DocumentosPage() {
               opciones={[{ valor: '', texto: 'De cualquier forma' }, ...canales.map((c) => ({ valor: c, texto: NOMBRE_CANAL[c] ?? c }))]} />
           : <button type="button" className="s-boton s-boton-enlace" onClick={() => setMasFiltros(true)}>Más filtros</button>}
       </FiltrosLista>
+
+      {otras.length > 1 && (
+        <div className="cxso-que" role="group" aria-label="Qué es">
+          <span>Qué es:</span>
+          <button type="button" className="cxso-que-chip" aria-pressed={!f.que} onClick={() => cambiar({ que: null })}>Todas · {otras.reduce((t, o) => t + o.n, 0)}</button>
+          {otras.map((o) => (
+            <button key={o.etiqueta} type="button" className="cxso-que-chip" aria-pressed={f.que === o.etiqueta} onClick={() => cambiar({ que: o.etiqueta })}>{o.etiqueta} · {o.n}</button>
+          ))}
+        </div>
+      )}
 
       {faltan.length > 0 && f.pestana !== 'pagadas' && (
         <p className="s-aviso-lista" data-tono="duda">
@@ -348,7 +376,7 @@ export default function DocumentosPage() {
           orden={f.orden} alOrdenar={(c) => cambiar({ orden: escribirOrden({ columna: c, sentido: f.orden.columna === c && f.orden.sentido === 'desc' ? 'asc' : 'desc' }) })}
           vacio={f.pestana === 'por-revisar' && !f.q && !f.prov && !f.local && !f.canal
             ? <><strong>Todo al día.</strong> No queda ninguna factura por revisar{f.mes ? ' este mes' : ''}. <button type="button" className="s-boton s-boton-enlace" onClick={() => ficheros.current?.click()}>Subir factura</button></>
-            : <>Ninguna factura con estos filtros. <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ q: null, prov: null, local: null, canal: null })}>Quitar los filtros</button></>}
+            : <>Ninguna factura con estos filtros. <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ q: null, prov: null, local: null, canal: null, que: null })}>Quitar los filtros</button></>}
           pie={pie}
         />
       )}
@@ -358,6 +386,11 @@ export default function DocumentosPage() {
         <Boton variante="principal" icono="subir" onClick={() => camara.current?.click()} disabled={!!subiendo}>Subir factura</Boton>
       </BotonPulgar>
 
+      {aclarando && accountId && (
+        <AclararDocumento fila={aclarando} accountId={accountId} quien={userName ?? null} alCerrar={() => setAclarando(null)}
+          alSubirFactura={() => { setAclarando(null); ficheros.current?.click() }}
+          alHecho={(m) => { setAclarando(null); setHecho(m); setVuelta((v) => v + 1); refrescarCuentasMenu() }} />
+      )}
       {pidiendo && d && (
         <Pedirselas companyId={activa.id} esperadas={faltan} quien={userName}
           alCerrar={() => setPidiendo(false)} alPedir={() => setVuelta((v) => v + 1)} />

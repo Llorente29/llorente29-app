@@ -257,6 +257,8 @@ export const CONTA = {
     cobros: 'ventas/cobros',
     remesaCobros: 'ventas/cobros/remesas/:remesaId',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
+    /** S01j·2 · La ficha de UNA liquidación de plataforma: sus cifras, su factura de comisión y el correo del que salió. */
+    liquidacionFicha: 'ventas/liquidaciones/liquidacion/:id',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -343,7 +345,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
   {
     grupo: 'Acceso y avisos',
     entradas: [
-      { id: 'personas', etiqueta: 'Personas y asesor', ruta: 'ajustes/personas', hueco: 'Quién entra y qué ve, y el acceso de tu asesor, llegan en un encargo propio.' },
+      // DM1 · PR 1 (30/10): ya no es un hueco. Quién entra e «Invitar a una persona» (tablero 4).
+      { id: 'personas', etiqueta: 'Usuarios', ruta: 'ajustes/personas' },
       { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: `Qué te avisa ${MARCA.nombre} y por dónde llega en un encargo propio.` },
       { id: 'folvy', etiqueta: `Lo que ha hecho ${MARCA.nombre}`, ruta: 'ajustes/folvy' },
     ],
@@ -430,6 +433,7 @@ export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.ci
 /** V01 · Entrega 3 · Ventas › Liquidaciones (ver: plataformas · socios) y la ficha de una fila de plataforma. */
 export const rutaLiquidacionesVentas = (ver?: 'plataformas' | 'socios'): string => `${rutaConta(CONTA.rutas.liquidacionesVentas)}${ver ? `?ver=${ver}` : ''}`
 export const rutaLiquidacionPlataforma = (clave: string): string => rutaConta(CONTA.rutas.liquidacionPlataforma, { clave })
+export const rutaLiquidacionFicha = (id: string): string => rutaConta(CONTA.rutas.liquidacionFicha, { id })
 /** Lo de antes: llevan a Ventas › Facturas. */
 export const rutaFacturasEmitidas = rutaFacturasVenta
 export const rutaNuevaEmitida = rutaNuevaFacturaVenta

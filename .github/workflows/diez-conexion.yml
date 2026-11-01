@@ -71,6 +71,9 @@ env:
 
 jobs:
   conexion:
+    # W12b (30/10): el secreto vive en el entorno «produccion», que solo admite
+    # ejecuciones de main (escribe en producción: con la aprobación de Julio).
+    environment: produccion
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[diez-conexion:staging]')
     runs-on: ubuntu-latest
     timeout-minutes: 15

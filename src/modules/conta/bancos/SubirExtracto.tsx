@@ -144,6 +144,26 @@ export function SubirExtracto() {
             )
           })}
           {datos.bancos.length === 0 && <p className="cx-ayuda">Aún no tienes ningún banco: pulsa «Nuevo banco…» junto a su cuenta y lo doy de alta aquí mismo, con el IBAN del fichero si lo trae; después subes el extracto a él.</p>}
+          {/* S01d · Entra, pero se dice: el total cuadra y alguna fila no sale de la anterior. Encima del botón, en ámbar, con sus filas. */}
+          {paso.cuadre.ok && (paso.cuadre.avisos?.length ?? 0) > 0 && (
+            <div className="cxb-banda cxb-banda-ambar cxb-aviso-filas" role="note" data-prueba="aviso-filas">
+              <div className="cxb-banda-texto">
+                {paso.cuadre.avisos!.map((t) => <strong key={t}>{t}</strong>)}
+                <details>
+                  <summary>Ver las filas</summary>
+                  <ul className="cxb-filas-rotas">
+                    {(paso.cuadre.filasRotas ?? []).map((f, i) => (
+                      <li key={i}>
+                        <span className="cx-cifra">{fechaLarga(f.fecha)}{f.fechaValor && f.fechaValor !== f.fecha ? ` (valor ${fechaLarga(f.fechaValor)})` : ''}</span>
+                        {' · '}{f.concepto}{' · '}<span className="cx-cifra">{eurosExactos(f.importeCent / 100)}</span>
+                        <span className="cx-ayuda"> · el banco dice {eurosExactos(f.saldoCent / 100)} y de la fila anterior sale {eurosExactos(f.esperadoCent / 100)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            </div>
+          )}
           <div className="cx-pie">
             <button type="button" className="cx-boton-sec" onClick={() => setPaso({ que: 'elegir' })}>Otro fichero</button>
             <button type="button" className="cx-boton" disabled={!paso.cuadre.ok || asignacion.some((x) => !x) || asignacion.every((x) => x === NO_SUBIR)

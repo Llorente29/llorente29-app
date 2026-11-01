@@ -1,0 +1,21 @@
+{
+ "_que": "S01d-b · contexto de producción medido en SOLO LECTURA el 30/10 a las 16:45Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe bank_contrato_guardar(uuid,jsonb) (md5 de su definición 5480067f36c14b851af5c724afb8387b, la del #400); nada en el camino del pedido; la 1638 no está en el historial; Foodint tiene 1 contrato.",
+ "medido": "2026-10-30T16:45Z",
+ "tanda": {
+  "supabase/migrations/20261030T1638_s01d_contrato_parcial.sql": "9c83da89ba8e83b490f02d4077f18843"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.bank_contrato_guardar(uuid,jsonb)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

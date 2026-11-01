@@ -1,0 +1,6 @@
+# DM1 · PR 1c · La barra enseña la empresa que tiene abierta la base. Sin
+# migraciones: solo la semilla de la e2e del superadministrador, su perfil en
+# una cuenta interna de prueba (sin perfil no podía abrir la aplicación). Solo
+# añade y se puede aplicar dos veces: va de verdad desde la rama (W07), y al
+# fusionar main la vuelve a pasar sin cambiar nada.
+supabase/seeds/conta/seed_dm1_plataforma_staging.sql

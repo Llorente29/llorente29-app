@@ -4044,3 +4044,18 @@ describe('la tanda de la rama claude/cool-noether-i932tx (C10): D07 + D07b · el
     expect(m.indexOf(PRUEBA_UBER)).toBeGreaterThan(m.indexOf(datos))
   })
 })
+
+describe('DM1 (30/10) · la firma de una función no cuenta sus parámetros OUT, como Postgres', () => {
+  it('current_employee_and_account(out …, out …) es la firma (), no (uuid,uuid)', () => {
+    const ops = analizarFichero('x.sql', 'create or replace function public.f(out a uuid, out b uuid) returns record language sql stable as $$ select null::uuid, null::uuid $$;')
+    expect(ops.find((o) => o.tipo === 'funcion')?.objeto).toBe('public.f()')
+  })
+  it('los INOUT sí cuentan', () => {
+    const ops = analizarFichero('x.sql', 'create or replace function public.g(inout a int, b text) language sql as $$ select a $$;')
+    expect(ops.find((o) => o.tipo === 'funcion')?.objeto).toBe('public.g(int,text)')
+  })
+  it('el analizador para cualquier línea que empiece por «\\» (W12b)', () => {
+    const ops = analizarFichero('x.sql', 'select 1;\n\\connect otra\n')
+    expect(ops.some((o) => o.accion === 'psql')).toBe(true)
+  })
+})

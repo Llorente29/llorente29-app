@@ -32,7 +32,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRevisarFactura } from '@/config/navegacion'
+import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
@@ -45,7 +45,9 @@ import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
-import { LiquidacionesDeLaFactura } from '@/modules/conta/documentos/LiquidacionesDeLaFactura'
+import { BloqueComision } from '@/modules/conta/documentos/BloqueComision'
+import { chipComision, estadoPagoComision } from '@/modules/conta/documentos/comision'
+import { leerComision } from '@/modules/conta/services/comisionService'
 import { completarFicha, deLaFactura, enUnaFrase } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { altaEnFactura, fraseRelectura, hayQueReleer, type ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
 import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
@@ -76,8 +78,11 @@ import { colaRecibidas } from '@/modules/conta/documentos/colaRecibidas'
 import { cargoParaLaTarjeta, casarPagoConTarjeta, duplicadaDe } from '@/modules/conta/documentos/paraValidarService'
 import { faltaDocumento, pagadaConTarjeta, textoDePago, ultimos4 } from '@/modules/conta/documentos/paraValidar'
 import { motivoGasto, motivoImportes, motivoProveedor, veredictoFactura, type Comprobacion } from '@/modules/conta/documentos/veredicto'
+import { CHIP_ABONO, conSigno, esAbono, estadoPagoAbono, sinSigno } from '@/modules/conta/documentos/abono'
+import { leerLoQueAnula } from '@/modules/conta/services/abonoService'
+import { BloqueAbono } from '@/modules/conta/documentos/BloqueAbono'
 import {
-  ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
+  ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, retencionLeidaSinTipo, cuentaDelGastoEnAsiento, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
   textoDelGuardado, totalesDe, type BorradorFicha,
 } from '@/modules/conta/documentos/fichaRecibida'
 import {
@@ -119,7 +124,15 @@ export default function RevisarFacturaPage() {
   const avisoDeAntes = (useLocation().state as { aviso?: string } | null)?.aviso ?? null
   const [vuelta, setVuelta] = useState(0)
   const f = useLeer(invoiceId ? () => leerFactura(invoiceId) : null, `${invoiceId}:${vuelta}`)
-  const fac = useUltimo(f.datos, invoiceId)
+  const facLeida = useUltimo(f.datos, invoiceId)
+  // S01h · Un abono se enseña y se cuadra sin signo (todo va a tu favor); al guardar, conSigno se lo devuelve.
+  const abono = esAbono(facLeida)
+  const fac = useMemo(() => (facLeida ? sinSigno(facLeida) : facLeida), [facLeida])
+  // S01h · 1 · Lo que anula, leído una vez: lo dicen igual «ANULA», su «Pago» y el «Estado» del bloque Pago.
+  // `abono` va en la clave: al cargar aún no se sabe, y useLeer solo vuelve a leer cuando la clave cambia.
+  const loQueAnula = useLeer(abono && accountId && invoiceId ? () => leerLoQueAnula(accountId, invoiceId) : null, `${accountId}:${invoiceId}:anula:${abono ? 'si' : 'no'}:${vuelta}`)
+  // S01i · Si es la factura de comisión de una plataforma: con qué liquidación va (lo decide la base; «no» si no es de una plataforma).
+  const comision = useLeer(invoiceId ? () => leerComision(invoiceId) : null, `${invoiceId}:comision:${vuelta}`)
   const envioDiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio
   // C12: con el traspaso mensual, al validar no sale nada: va en el traspaso del mes.
   const enviaADiez = envioDiez?.alMomento === true
@@ -201,6 +214,7 @@ export default function RevisarFacturaPage() {
   const formato = useMemo(() => formatoCampo(nombreProveedor, nombreLocal), [nombreProveedor, nombreLocal])
   const ed = useCambiosSinGuardar<BorradorFicha>(original, ETIQUETAS, formato)
   const b = ed.valor
+  const retLeida = fac ? retencionLeidaSinTipo(fac.retencion, fac.lectura?.factura?.retencion) : null
 
   // D07b + S01b · La ficha del proveedor ELEGIDO (también el recién elegido, aún sin guardar), sus
   // contactos, y lo que trae el papel: lo que le falta se guarda al validar, «de la factura …»; lo que
@@ -296,7 +310,8 @@ export default function RevisarFacturaPage() {
       const aLaFuncion = campos.filter((c) => COMO_SE_GUARDA[c as keyof BorradorFicha] && 'con' in COMO_SE_GUARDA[c as keyof BorradorFicha]
         && (COMO_SE_GUARDA[c as keyof BorradorFicha] as { con: string }).con === 'conta_recibida_guardar')
       const previa = cuentasProp ? asientoVistaPrevia(b, cuentasProp, () => 'Cuenta', () => null).lineas : undefined
-      const r = await guardarCambiosRecibida(fac, cambiosParaLaBase(b, aLaFuncion, { previa, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null }),
+      const paraLaBase = cambiosParaLaBase(b, aLaFuncion, { previa, comun: '', retencionTipoId: b.retencion && original.retencion && b.retencion.tipo === original.retencion.tipo ? ficha?.retencionId ?? null : null })
+      const r = await guardarCambiosRecibida(fac, abono ? conSigno(paraLaBase) : paraLaBase,
         { quien: userName, nombres: { proveedor: nombreProveedor(b.proveedorId), vence: fechaEs(b.vence) }, localPropuesto: localPropuesto ?? null })
       const partes: string[] = []
       const fallos = [...r.fallos]
@@ -493,9 +508,12 @@ export default function RevisarFacturaPage() {
   const aMano_ = ficha?.fuente === 'manual'
 
   const estado = descartada ? { texto: 'No es una factura', tono: 'neutro' as const }
-    : validada ? (pagada ? { texto: 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
-      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : { texto: 'Por revisar', tono: 'duda' as const }
-  const migasExtra = [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
+    : validada ? (pagada ? { texto: chipComision(comision.datos, true) ?? 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
+      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : abono ? { texto: CHIP_ABONO, tono: 'seguro' as const } : { texto: 'Por revisar', tono: 'duda' as const }
+  // S01h · La miga de un abono: «Por revisar», como la pestaña de la que viene (Julio, 31/10).
+  const migasExtra = abono
+    ? [...(!validada && !descartada ? [{ etiqueta: 'Por revisar', a: rutaRecibidaEnAsientos() }] : []), { etiqueta: `Abono${fac.numero ? ` ${fac.numero}` : ''}` }]
+    : [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
   const tienePapel = !!papel.datos?.url
   const mas: GrupoDeAcciones[] = [{
     titulo: '',
@@ -602,20 +620,30 @@ export default function RevisarFacturaPage() {
           delDocumento={fac.lectura?.factura?.proveedor?.nif ?? null} alGuardar={(t) => { setNifGuardado({ id: invoiceId, texto: t }); setVuelta((v) => v + 1) }} />
       )}
       {nifGuardado?.id === invoiceId && <p className="s-aviso-lista" data-tono="ok" role="status" data-prueba="nif-guardado">{nifGuardado.texto}</p>}
+      {abono && !descartada && <BloqueAbono a={loQueAnula} total={totales.total} base={totales.base} cuota={totales.iva} fechaAsiento={fac.fecha} />}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
-        fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales}
+        fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales} abono={abono}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}
+      {/* S01l · El papel traía una retención cuyo tipo no encajaba: no entró. Se propone para elegir su tipo. */}
+      {retLeida && !b.retencion && !soloLectura && (
+        <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="retencion-sin-tipo">
+          {retLeida.aviso}{' '}
+          <button type="button" className="s-boton s-boton-enlace" onClick={() => ed.poner('retencion', { tipo: retLeida.tipo, importe: importeEs(retLeida.importe) })}>Ponerla y elegir su tipo</button>
+        </p>
+      )}
+      {retLeida && b.retencion && b.retencion.tipo === '' && !soloLectura && <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="retencion-elige-tipo">Elige el tipo de la retención en su desplegable.</p>}
       {!descartada && <IvaNoDeducibleFicha accountId={accountId} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alGuardar={() => setVuelta((x) => x + 1)} />}
-      {!descartada && <LiquidacionesDeLaFactura accountId={accountId} supplierId={fac.proveedor?.id ?? null} invoiceId={invoiceId} fecha={fac.fecha} total={fac.total} soloLectura={descartada} quien={userName} />}
-      <BloqueGasto gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
+      {!descartada && <BloqueComision e={comision} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alLigar={() => setVuelta((x) => x + 1)} />}
+      <BloqueGasto enAsiento={abono ? (g) => cuentaDelGastoEnAsiento(g, cuentasProp) : undefined} gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
         alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura}
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />
       <BloquePago formaPago={b.formaPago} vence={b.vence} estadoPago={b.estadoPago} soloLectura={soloLectura}
+        motivoEstado={abono ? estadoPagoAbono(loQueAnula.datos) : estadoPagoComision(comision.datos, !!pagada)}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'vence', x as string) }} cambioDe={ed.cambioDe} deshacer={ed.deshacer}
-        motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : mayuscula(vence.apoyo)}
-        tonoVence={vence.aviso && b.formaPago !== 'prepaid' ? 'revisar' : 'normal'}
+        motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : b.formaPago === 'compensation' ? 'Se descuenta de lo que te paga la liquidación: no espera a un vencimiento.' : mayuscula(vence.apoyo)}
+        tonoVence={vence.aviso && b.formaPago !== 'prepaid' && b.formaPago !== 'compensation' ? 'revisar' : 'normal'}
         motivoForma={extra.datos?.comoPagada ? 'Con la que se pagó.' : conTarjeta && !guardado?.formaPago ? 'Lo dice el documento: pagada con tarjeta. Al validarla, la caso con su cargo del banco.' : ficha?.formaPagoFicha ? 'La de su ficha.' : undefined}
         pagada={pagada ? `Pagada el ${fechaEs(pagada.fecha)}${extra.datos?.comoPagada ? ` · ${extra.datos.comoPagada}` : ''}.` : null} />
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}

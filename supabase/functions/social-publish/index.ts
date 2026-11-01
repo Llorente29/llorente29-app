@@ -64,6 +64,7 @@
 //      botón. No es que desapareciera: es que decía algo tranquilizador sobre
 //      una fila muerta. Eso se arregla en el front, no aquí.
 
+import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 const AGENT_SECRET = Deno.env.get("OFFERS_AGENT_SECRET")!;
@@ -242,6 +243,15 @@ Deno.serve(async (req) => {
       continue;
     }
 
+    // DM1 · PR 2a · La puerta: una cuenta de demo no publica en Instagram. Queda como publicada, y lo dice.
+    if (!(await cuentaPuedeSalir(supa, p.account_id as string))) {
+      await supa.from("social_post").update({
+        status: "published", published_at: new Date().toISOString(), last_error: null, error_kind: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", p.id);
+      out.push({ id: p.id, demo: EN_LA_DEMO });
+      continue;
+    }
     const sa: any = (p as any).social_account;
     if (!sa || sa.link_status !== "linked") { out.push({ id: p.id, skipped: "cuenta no enlazada" }); continue; }
     const igUserId = sa.config?.ig_user_id;

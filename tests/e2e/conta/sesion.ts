@@ -101,6 +101,17 @@ export const CUENTA_C = {
     : FRENTE ? `e2e0000${FRENTE}-0000-4000-8000-00000000000c` : 'c01c0000-0000-4000-8000-00000000000c',
   email: correoDePrueba('c.admin@prueba.folvy.test'),
 }
+/**
+ * DM1 · PR 1b · Una persona en DOS empresas: administradora de A (con
+ * contabilidad) y de B (sin ella). Semilla seed_dm1_dos_empresas_staging.sql.
+ */
+export const DOS_EMPRESAS = { id: enCarril('c01a0000-0000-4000-8000-0000000000a8'), email: correoDePrueba('dos.empresas@prueba.folvy.test') }
+/**
+ * DM1 · El alta no encierra: administradora de «Obrador de Prueba Vacío» (sin
+ * sociedad, la que abre la base) y de A. Semilla seed_dm1_alta_no_encierra_staging.sql.
+ */
+export const ALTA_DOS = { id: enCarril('d1e00000-0000-4000-8000-0000000000e1'), email: correoDePrueba('alta.dos@prueba.folvy.test') }
+export const CUENTA_VACIA = enCarril('d1e00000-0000-4000-8000-00000000000e')
 export const HERMANOS_RUIZ = enCarril('c01a0000-0000-4000-8000-0000000000a3')
 export const CARNES_SUR = enCarril('c01b0000-0000-4000-8000-0000000000b3')
 

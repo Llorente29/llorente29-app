@@ -1,0 +1,6 @@
+# S01g · la vuelta atrás: las liquidaciones de junio sin proveedor (como
+# estaban), las dos funciones como estaban (del respaldo) y fuera lo añadido.
+cuenta: scripts/conta/produccion/cuentas/s01g-soporte-liquidaciones.sql
+supabase/vuelta-atras/20261031T0932_s01g_liquidaciones_ctb_foodint.down.sql
+supabase/vuelta-atras/20261031T0931_s01g_soporte.down.sql
+supabase/vuelta-atras/20261031T0930_s01g_soporte_columnas.down.sql

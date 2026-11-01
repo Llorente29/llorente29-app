@@ -40,7 +40,11 @@ export interface IvaApunte {
   /** Cuántas facturas resume este apunte (asiento resumen, RIVA 63.4). 1 si es una. */
   facturas?: number
 }
-export interface RetencionApunte { tipoId: string; tipo: number; base: number; modelo: '111' | '115' | '123' }
+/** La retención que nace (factura, nómina, alquiler): su tipo, su base y su modelo. */
+export interface RetencionNace { tipoId: string; tipo: number; base: number; modelo: '111' | '115' | '123'; periodo?: undefined }
+/** S01d · El pago, la compensación o la devolución de un modelo: su modelo y su periodo («2026-3T»), sin tipo ni base. */
+export interface RetencionPago { modelo: '111' | '115' | '123'; periodo: string; tipoId?: undefined }
+export type RetencionApunte = RetencionNace | RetencionPago
 
 export interface LineaAsiento {
   /** Código de la cuenta de la empresa (company_account.code). */
@@ -129,6 +133,25 @@ export function cuadre(lineas: readonly Pick<LineaAsiento, 'debe' | 'haber'>[]):
   return { estado, cuadra: estado === 'cuadra', debe: deCent(d), haber: deCent(h), diferencia: deCent(dif), texto }
 }
 
+// ── S01d · El periodo de un modelo ──────────────────────────────────────────
+
+/** «2026-3T», «2026-01» o «2026-0A» (el año entero): lo mismo que la base (journal_line.withholding_period). */
+export const PERIODO_MODELO = /^[0-9]{4}-([1-4]T|0[1-9]|1[0-2]|0A)$/
+
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+/** «3T 2026», «enero de 2026» o «año 2026». */
+export function periodoEnPalabras(periodo: string): string {
+  const [a, p] = periodo.split('-')
+  if (p === '0A') return `año ${a}`
+  if (/^[1-4]T$/.test(p)) return `${p} ${a}`
+  const m = Number(p)
+  return m >= 1 && m <= 12 ? `${MESES_LARGOS[m - 1]} de ${a}` : periodo
+}
+
+/** «111 · 3T 2026». */
+export const modeloYPeriodo = (modelo: string, periodo: string): string => `${modelo} · ${periodoEnPalabras(periodo)}`
+
 // ── Lo que la base no dejaría validar, dicho antes ──────────────────────────
 
 /** Los problemas de cada apunte (reglas 1, 5 y 9), en frases. Vacío = se puede validar. */
@@ -152,7 +175,8 @@ export function problemas(lineas: readonly LineaAsiento[], esDeIva: (cuenta: str
         out.push(`${n}: la cuota ${eurosExactos(deCent(cuota))} no es la base ${eurosExactos(l.iva.base)} × ${l.iva.tipo} % = ${eurosExactos(deCent(esperada))}.`)
       }
     }
-    if (esRetencion(l.cuenta) && !l.retencion) out.push(`${n}: una retención lleva su tipo, su base y su modelo.`)
+    if (esRetencion(l.cuenta) && !l.retencion) out.push(`${n}: una retención lleva su tipo, su base y su modelo; el pago o la compensación de un modelo, su modelo y su periodo.`)
+    if (l.retencion && l.retencion.periodo !== undefined && !PERIODO_MODELO.test(l.retencion.periodo)) out.push(`${n}: el periodo «${l.retencion.periodo}» no es un trimestre (3T), un mes ni el año.`)
     if (!l.comun && !l.localId) out.push(`${n}: falta el local (o marcarlo como común).`)
     if (l.comun && l.localId) out.push(`${n}: o lleva local o es común, no las dos.`)
   })

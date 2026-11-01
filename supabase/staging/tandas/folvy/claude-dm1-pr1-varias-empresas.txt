@@ -1,0 +1,10 @@
+# DM1 · PR 1 · Un usuario en varias empresas: la 1950 (solo añade) y la 1951
+# (cambia las ocho funciones de permisos), y su prueba (ROLLBACK), que empieza
+# por sus vueltas atrás si ya están aplicadas: con las funciones de antes la
+# persona de dos cuentas ve las dos (rojo a propósito); después, solo la
+# abierta, al leer y al escribir; los de una cuenta, el superadministrador y sin
+# usuario, igual que antes; el rendimiento de las 5 consultas de pedidos y
+# cocina, antes y después; y la vuelta atrás.
+supabase/migrations/20261030T1950_dm1_cuenta_activa.sql
+supabase/migrations/20261030T1951_dm1_permisos_de_la_activa.sql
+supabase/staging/sql/20261030_dm1_cuenta_activa_prueba.sql

@@ -1,0 +1,307 @@
+<title>Segunda aprobación con llave</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Tablero de maquetas: cada pantalla es una banda con el ordenador a la izquierda y el móvil a la derecha.
+   La página sigue el tema; las pantallas son de Sumied (estilo N17) y se ven siempre en claro. */
+:root{
+  --pag-fondo:#EEF1F6; --pag-tinta:#0E1A2B; --pag-suave:#56627A; --pag-linea:#D9DFE8; --pag-acento:#2F5BFF;
+  /* Sumied (N17), fijos */
+  --s-fondo:#F5F7FA; --s-carta:#FFFFFF; --s-tinta:#0E1A2B; --s-suave:#5B677C; --s-linea:#E6EAF0;
+  --s-azul:#2F5BFF; --s-azul-claro:#EAF0FF; --s-menta:#E3FBF2; --s-verde:#0E8A5F; --s-ambar:#B26A00; --s-ambar-claro:#FFF4E0;
+  --s-rojo:#C2362B; --s-rojo-claro:#FDECEA; --s-rev:#191C1F;
+  --letra:'Geist','Helvetica Neue',Arial,sans-serif; --mono:'Geist Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pag-fondo:#0D1320;--pag-tinta:#E7ECF5;--pag-suave:#9AA6BC;--pag-linea:#273147;--pag-acento:#7D98FF;color-scheme:dark}}
+:root[data-theme="dark"]{--pag-fondo:#0D1320;--pag-tinta:#E7ECF5;--pag-suave:#9AA6BC;--pag-linea:#273147;--pag-acento:#7D98FF;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--pag-fondo);color:var(--pag-tinta);font-family:var(--letra);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 60px}
+.envoltura{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+header.cab h1{font-size:30px;margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+header.cab p{margin:0;color:var(--pag-suave);max-width:75ch}
+.indice{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.indice a{color:var(--pag-acento);text-decoration:none;border:1px solid var(--pag-linea);border-radius:999px;padding:5px 12px;font-size:13px}
+section.banda{display:flex;flex-direction:column;gap:14px}
+.banda>h2{font-size:20px;margin:0}
+.banda>p.nota{margin:0;color:var(--pag-suave);max-width:80ch}
+.par{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.lienzo{overflow-x:auto;max-width:100%;flex:1 1 820px;min-width:0}
+.etq{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--pag-suave);margin:0 0 6px}
+
+/* ── Pantalla de Sumied ───────────────────────────── */
+.orden{width:1080px;background:var(--s-fondo);color:var(--s-tinta);border-radius:20px;border:1px solid var(--pag-linea);display:flex;gap:14px;padding:14px;position:relative;font-size:14px}
+.menu{width:190px;flex-shrink:0;background:var(--s-carta);border:1px solid var(--s-linea);border-radius:18px;padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.menu b{font-size:15px;padding:4px 8px 12px}
+.menu span{padding:7px 10px;border-radius:10px;color:var(--s-suave)}
+.menu span.si{background:var(--s-azul-claro);color:var(--s-azul);font-weight:600}
+.cuerpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.pestanas{display:flex;gap:6px}
+.pestanas span{padding:6px 12px;border-radius:999px;color:var(--s-suave);font-size:13px}
+.pestanas span.si{background:var(--s-carta);border:1px solid var(--s-linea);color:var(--s-tinta);font-weight:600}
+.carta{background:var(--s-carta);border:1px solid var(--s-linea);border-radius:18px;padding:16px}
+.titulo{font-size:20px;font-weight:600;margin:0}
+.sub{color:var(--s-suave);margin:2px 0 0}
+.fila{display:flex;align-items:center;gap:12px}
+.entre{justify-content:space-between}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:12px;padding:9px 14px;font:600 14px var(--letra);border:1px solid var(--s-linea);background:var(--s-carta);color:var(--s-tinta);white-space:nowrap}
+.btn.pri{background:var(--s-azul);border-color:var(--s-azul);color:#fff}
+.btn.peligro{color:var(--s-rojo)}
+.btn.grande{width:100%;justify-content:center;padding:14px;font-size:16px;border-radius:14px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}
+.chip.ok{background:var(--s-menta);color:var(--s-verde)}
+.chip.av{background:var(--s-ambar-claro);color:var(--s-ambar)}
+.chip.mal{background:var(--s-rojo-claro);color:var(--s-rojo)}
+.chip.azul{background:var(--s-azul-claro);color:var(--s-azul)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:700;color:#fff;flex-shrink:0}
+.logo.rev{background:var(--s-rev)} .logo.bbva{background:#1464A5;font-size:11px}
+.tabla{width:100%;border-collapse:collapse;font-size:13.5px}
+.tabla th{text-align:left;font-weight:500;color:var(--s-suave);font-size:12px;padding:8px 10px;border-bottom:1px solid var(--s-linea)}
+.tabla td{padding:10px;border-bottom:1px solid var(--s-linea);vertical-align:middle}
+.tabla td.d{text-align:right}
+.caja{width:18px;height:18px;border-radius:5px;border:1.5px solid #B9C2D0;display:inline-block;vertical-align:middle}
+.caja.si{background:var(--s-azul);border-color:var(--s-azul);position:relative}
+.caja.si::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.velo{position:absolute;inset:0;background:rgba(14,26,43,.38);border-radius:20px;display:grid;place-items:center}
+.dialogo{width:640px;background:var(--s-carta);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(14,26,43,.25)}
+.pasos{display:flex;gap:8px}
+.paso{flex:1;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--s-suave)}
+.paso i{height:5px;border-radius:9px;background:var(--s-linea)}
+.paso.hecho i{background:var(--s-verde)} .paso.ahora i{background:var(--s-azul)} .paso.ahora{color:var(--s-tinta);font-weight:600}
+.cert{font-family:var(--mono);font-size:11px;line-height:1.35;background:var(--s-fondo);border:1px solid var(--s-linea);border-radius:12px;padding:10px;color:var(--s-suave);white-space:pre;overflow:hidden}
+.campo{display:flex;flex-direction:column;gap:5px}
+.campo label{font-size:12.5px;color:var(--s-suave);font-weight:500}
+.campo .in{border:1.5px solid var(--s-linea);border-radius:12px;padding:10px 12px;font-family:var(--mono);font-size:13px;background:#fff}
+.campo .in.foco{border-color:var(--s-azul);box-shadow:0 0 0 3px var(--s-azul-claro)}
+.campo .in.mal{border-color:var(--s-rojo)}
+.ayuda{font-size:12.5px;color:var(--s-suave)}
+.aviso{border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
+.aviso.mal{background:var(--s-rojo-claro);color:#7D1D15}
+.aviso.av{background:var(--s-ambar-claro);color:#6E4200}
+.aviso.ok{background:var(--s-menta);color:#0A5A3E}
+.aviso.info{background:var(--s-azul-claro);color:#1E3A9E}
+.aviso b{display:block}
+/* Esquema de la web de Revolut: no es una captura */
+.esq{background:#F7F7F8;border:1px dashed #B9C2D0;border-radius:14px;padding:10px;display:flex;gap:10px;font-size:11.5px;color:#3A4250;position:relative}
+.esq .lat{width:110px;display:flex;flex-direction:column;gap:3px}
+.esq .lat span{padding:4px 6px;border-radius:6px}
+.esq .lat span.si{background:#191C1F;color:#fff}
+.esq .zona{flex:1;background:#fff;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.esq .marca{outline:2.5px solid var(--s-azul);outline-offset:2px;border-radius:6px}
+.esq .pie{position:absolute;right:10px;bottom:6px;font-size:10px;color:#7A8394}
+.resumen{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
+.resumen dt{color:var(--s-suave)} .resumen dd{margin:0;font-weight:600}
+.cifra{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.linea-tiempo{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--s-suave);flex-wrap:wrap}
+.linea-tiempo .p{display:flex;align-items:center;gap:6px}
+.linea-tiempo .p i{width:10px;height:10px;border-radius:50%;background:var(--s-linea)}
+.linea-tiempo .p.ok i{background:var(--s-verde)} .linea-tiempo .p.ahora i{background:var(--s-azul)} .linea-tiempo .p.mal i{background:var(--s-rojo)}
+.linea-tiempo .s{width:22px;height:1.5px;background:var(--s-linea)}
+
+/* ── Móvil ─────────────────────────── */
+.movil{width:340px;flex-shrink:0;max-width:100%}
+.tel{width:340px;height:700px;background:var(--s-fondo);color:var(--s-tinta);border-radius:40px;border:10px solid #0E1A2B;overflow:hidden;display:flex;flex-direction:column;position:relative;font-size:14px}
+.tel .barra{height:26px;display:flex;justify-content:space-between;padding:6px 20px 0;font-size:11px;font-weight:600}
+.tel .top{padding:6px 16px 10px;display:flex;align-items:center;gap:10px}
+.tel .top b{font-size:17px}
+.tel .scroll{flex:1;overflow:hidden;padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+.tel .hoja{position:absolute;left:0;right:0;bottom:0;background:var(--s-carta);border-radius:24px 24px 0 0;padding:14px 16px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 -10px 40px rgba(14,26,43,.18)}
+.tel .asa{width:40px;height:5px;border-radius:9px;background:var(--s-linea);margin:0 auto}
+.tel .velo{border-radius:0}
+.tel .fijo{position:absolute;left:0;right:0;bottom:0;background:var(--s-carta);border-top:1px solid var(--s-linea);padding:12px 14px 18px;display:flex;flex-direction:column;gap:8px}
+.tel .item{background:var(--s-carta);border:1px solid var(--s-linea);border-radius:14px;padding:11px 12px;display:flex;gap:10px;align-items:center}
+.tel .item .t{flex:1;min-width:0}
+.tel .item .t b{display:block;font-size:14px}
+.tel .item .t small{color:var(--s-suave);font-size:12px}
+.notas{display:flex;flex-direction:column;gap:6px;margin:0;padding-left:18px;color:var(--pag-suave);font-size:13.5px;max-width:95ch}
+@media (prefers-reduced-motion:no-preference){.btn.pri{transition:filter .15s}.btn.pri:hover{filter:brightness(1.08)}}
+/* La ventana del sistema (huella, cara, Windows Hello): un esquema, no una captura */
+.sis{width:360px;background:#FFFFFF;color:#1B1F24;border-radius:14px;border:1px dashed #9AA4B2;box-shadow:0 18px 50px rgba(14,26,43,.28);padding:18px;display:flex;flex-direction:column;gap:12px;font-family:'Segoe UI',system-ui,sans-serif;position:relative}
+.sis .pie{position:absolute;right:10px;bottom:6px;font-size:10px;color:#7A8394}
+.sis .ico{width:52px;height:52px;border-radius:50%;border:2px solid var(--s-azul);display:grid;place-items:center;margin:0 auto;color:var(--s-azul);font-size:22px}
+.lote{display:flex;flex-direction:column;gap:0;border:1px solid var(--s-linea);border-radius:14px;overflow:hidden}
+.lote .l{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--s-linea);font-size:13.5px}
+.lote .l:last-child{border-bottom:0}
+.lote .l small{display:block;color:var(--s-suave);font-size:12px}
+.lote .tot{background:var(--s-fondo);font-weight:700}
+.pregunta{border:1.5px solid var(--pag-acento);border-radius:14px;padding:12px 14px;max-width:95ch;color:var(--pag-tinta)}
+</style>
+
+<div class="envoltura">
+<header class="cab">
+  <h1>La segunda aprobación con tu llave · maqueta</h1>
+  <p>Encargo B01 (bancos), PR 2. Sustituye a la pantalla 3b de las maquetas v2 cuando paga una sola persona. Empresa de staging «Taberna de Prueba Norte». Todos los nombres, IBAN y cifras son inventados. La ventana de huella, cara o Windows Hello es un esquema: la dibuja el sistema del dispositivo, no Sumied.</p>
+  <div class="aviso info" style="margin-top:14px;max-width:95ch;background:var(--pag-fondo);color:var(--pag-tinta);border:1px solid var(--pag-linea)"><span>4</span><span><b>Versión 4 (01/11), con los dos mensajes de Julio.</b>La segunda aprobación es la llave de acceso del dispositivo (huella, cara o Windows Hello), y una sola confirmación vale para todos los pagos que salen juntos. El plan B ya no es un código al correo: es un <b style="display:inline">PIN de pago</b> de 6 cifras que crea cada persona que puede pagar. El correo queda solo para crear o recuperar el PIN y para activar la llave en un dispositivo nuevo.</span></div>
+  <nav class="indice" aria-label="Pantallas">
+    <a href="#llave">A · Confirmar con la llave</a><a href="#primera">B · La primera vez en un dispositivo</a><a href="#planb">C · Plan B: el PIN de pago</a><a href="#hecho">D · Lo que dice después</a><a href="#notas">Cómo funciona</a>
+  </nav>
+</header>
+
+<!-- ═════════ A · CONFIRMAR CON LA LLAVE ═════════ -->
+<section class="banda" id="llave">
+  <h2>A · Confirmar con la llave: tres pagos, una confirmación</h2>
+  <p class="nota">Ana aprueba tres facturas a la vez y dos piden segunda aprobación (un IBAN nuevo y uno por encima del tope). Sumied enseña la lista entera, con lo que va a salir, y le pide la llave una sola vez. Lo que confirma es esa lista exacta: si algo cambia después (un importe, un IBAN), la confirmación ya no vale y se pide otra.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · Windows Hello pidiendo la huella</p>
+      <div class="orden" style="height:640px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo" style="align-items:center;justify-content:center">
+          <div class="carta" style="width:600px;display:flex;flex-direction:column;gap:14px">
+            <div class="pasos"><div class="paso hecho"><i></i>1 · Aprobado por ti, 09:41 ✓</div><div class="paso ahora"><i></i>2 · Confirmar con tu llave</div></div>
+            <p class="titulo">Confirma con tu llave los 3 pagos que salen ahora</p>
+            <p class="sub" style="margin:0">Dos piden segunda aprobación. Una sola confirmación vale para los tres.</p>
+            <div class="lote">
+              <div class="l"><span><b>Suministros Norte S.L.</b><small class="mono">A-2026/0412 · IBAN …1234</small></span><span class="chip av">IBAN nuevo</span><b class="num">1.028,50 €</b></div>
+              <div class="l"><span><b>Carnes Inventadas S.A.</b><small class="mono">2026-1187 · IBAN …7788</small></span><span class="chip av">más de 3.000 €</span><b class="num">3.204,20 €</b></div>
+              <div class="l"><span><b>Bebidas Ejemplo S.L.</b><small class="mono">F-889 · IBAN …4410</small></span><span class="chip ok">✓ comprobado</span><b class="num">310,00 €</b></div>
+              <div class="l tot"><span>Desde Revolut <span class="mono">·5678</span></span><span></span><b class="num">4.542,70 €</b></div>
+            </div>
+            <div class="fila entre"><span class="btn">No pagar</span><span class="btn pri">Confirmar con mi llave</span></div>
+            <span class="ayuda">¿No tienes tu llave en este ordenador, o prefieres no usarla? <u>Usar mi PIN de pago</u></span>
+          </div>
+        </div>
+        <div class="velo"><div class="sis"><b style="font-size:15px">Windows Security</b><span style="font-size:13px">Sumied (app.sumied.com) quiere comprobar que eres tú.</span><div class="ico">◎</div><span style="text-align:center;font-size:13px">Toca el lector de huellas</span><span class="btn" style="align-self:flex-end;font-family:inherit">Cancelar</span><span class="pie">Esquema del sistema, no captura</span></div></div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · Face ID</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Segunda aprobación</b></div>
+        <div class="scroll">
+          <b style="font-size:17px">Confirma con tu llave los 3 pagos que salen ahora</b>
+          <div class="item"><div class="t"><b>Suministros Norte S.L.</b><small>IBAN nuevo · …1234</small></div><b class="num">1.028,50 €</b></div>
+          <div class="item"><div class="t"><b>Carnes Inventadas S.A.</b><small>más de 3.000 € · …7788</small></div><b class="num">3.204,20 €</b></div>
+          <div class="item"><div class="t"><b>Bebidas Ejemplo S.L.</b><small>✓ comprobado · …4410</small></div><b class="num">310,00 €</b></div>
+          <div class="fila entre" style="padding:0 4px"><span class="sub">Desde Revolut ·5678</span><b class="num">4.542,70 €</b></div>
+        </div>
+        <div class="velo" style="background:rgba(14,26,43,.55)"><div class="sis" style="width:220px;align-items:center;text-align:center"><div class="ico">☺</div><b>Face ID</b><span style="font-size:12px">Confirmar 3 pagos en Sumied</span><span class="pie">Esquema</span></div></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas">
+    <li>La llave la pide el sistema del dispositivo. Sumied no ve nunca la huella ni la cara: solo recibe la firma de que eres tú, y la comprueba en el servidor antes de mandar nada a Revolut.</li>
+    <li>Si cancelas la ventana del sistema: «No has confirmado. No ha salido ningún pago: los 3 siguen aprobados y esperando». Se puede volver a pulsar.</li>
+    <li>Si la confirmación no llega en 10 minutos, los pagos siguen aprobados y esperando; no sale nada solo.</li>
+    <li>Hoy, en el PR 2, «salen juntos» es una factura sola; con la remesa (PR 3) y las nóminas (PR 4), la lista crece y la confirmación sigue siendo una.</li>
+  </ul>
+</section>
+
+<!-- ═════════ B · LA PRIMERA VEZ ═════════ -->
+<section class="banda" id="primera">
+  <h2>B · La primera vez en un dispositivo: activar la llave</h2>
+  <p class="nota">La primera vez que Ana paga desde un ordenador o un móvil, Sumied le ofrece activar su llave ahí. Para que no la pueda activar quien solo tenga su sesión abierta, activarla pide antes el código del correo. Después, un aviso al correo: «Has activado tu llave en un ordenador con Windows».</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · activar la llave, con el código del correo</p>
+      <div class="orden" style="height:560px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo" style="align-items:center;justify-content:center">
+          <div class="carta" style="width:560px;display:flex;flex-direction:column;gap:14px">
+            <p class="titulo">Activa tu llave en este ordenador</p>
+            <p class="sub" style="margin:0">Con ella confirmas los pagos con tu huella, tu cara o el PIN de Windows, sin esperar un código. Se activa una vez por dispositivo.</p>
+            <div class="aviso info"><span>i</span><span><b>Antes, confirma que eres tú con el código del correo.</b>Lo hemos mandado a a•••@taberna-prueba.es a las 09:40. Vale 10 minutos y una sola vez.</span></div>
+            <div class="campo"><label for="codb">Código de 6 cifras</label><div class="in foco" id="codb" style="letter-spacing:.4em;font-size:18px">305 118</div></div>
+            <div class="fila entre"><span class="btn">Ahora no: usar mi PIN esta vez</span><span class="btn pri">Activar mi llave</span></div>
+            <span class="ayuda">Tus llaves activas, y quitarlas: Ajustes › Tu cuenta › Llaves de acceso.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · llave activada</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Tu llave</b></div>
+        <div class="scroll">
+          <div class="aviso ok" role="status"><span>✓</span><span><b>Llave activada en este iPhone.</b>Desde ahora confirmas los pagos con Face ID. Te hemos avisado al correo.</span></div>
+          <span class="btn pri grande">Seguir con los 3 pagos</span>
+          <p class="ayuda" style="margin:0">Si pierdes el móvil, quita su llave desde otro dispositivo en Ajustes › Tu cuenta › Llaves de acceso. Sin la llave, Sumied te pide tu PIN de pago.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ C · PLAN B ═════════ -->
+<section class="banda" id="planb">
+  <h2>C · Plan B: el PIN de pago</h2>
+  <p class="nota">Cuando el dispositivo no tiene llave, o cuando la persona prefiere no usarla, Sumied pide su PIN de pago: 6 cifras que crea ella misma, distintas de la contraseña. Vale solo para la lista exacta que se confirma, igual que la llave: un PIN para todos los pagos que salen juntos. Cinco intentos fallidos lo bloquean, y desbloquearlo pide el código del correo.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · sin llave en este ordenador: confirmar con el PIN (PIN equivocado)</p>
+      <div class="orden" style="height:600px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo" style="align-items:center;justify-content:center">
+          <div class="carta" style="width:560px;display:flex;flex-direction:column;gap:14px">
+            <div class="pasos"><div class="paso hecho"><i></i>1 · Aprobado por ti, 09:41 ✓</div><div class="paso ahora"><i></i>2 · Confirmar con tu PIN de pago</div></div>
+            <p class="titulo">Confirma con tu PIN de pago los 3 pagos que salen ahora</p>
+            <p class="sub" style="margin:0">Este ordenador no tiene tu llave. Tu PIN vale para esta lista y nada más.</p>
+            <div class="item" style="background:var(--s-fondo);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center"><div style="flex:1"><b>3 pagos desde Revolut <span class="mono">·5678</span></b><br><small class="ayuda">Suministros Norte · Carnes Inventadas · Bebidas Ejemplo</small></div><b class="num">4.542,70 €</b></div>
+            <div class="campo"><label for="pin">PIN de pago (6 cifras)</label><div class="in mal" id="pin" style="letter-spacing:.6em;font-size:20px">● ● ● ● ● ●</div></div>
+            <div class="aviso mal" role="alert"><span>✕</span><span><b>Ese no es tu PIN de pago.</b>Te quedan 4 intentos. Con 5 fallos se bloquea y tendrás que recuperarlo con el código del correo. Los pagos siguen aprobados y esperando.</span></div>
+            <div class="fila entre"><span class="btn">No pagar</span><span class="btn pri">Confirmar y pagar</span></div>
+            <span class="ayuda"><u>He olvidado mi PIN</u> · <u>Usar mi llave</u></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · la primera vez: crear el PIN de pago</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Tu PIN de pago</b></div>
+        <div class="scroll">
+          <b style="font-size:17px">Crea tu PIN de pago</b>
+          <p class="ayuda" style="margin:0">Lo usarás cuando no tengas tu llave a mano. 6 cifras, distintas de tu contraseña. No sirven 123456 ni seis iguales.</p>
+          <div class="aviso info"><span>i</span><span><b>Antes, confirma que eres tú.</b>Te hemos mandado un código a a•••@taberna-prueba.es a las 09:40. Vale 10 minutos.</span></div>
+          <div class="campo"><label for="codm">Código del correo</label><div class="in" id="codm" style="letter-spacing:.4em;font-size:18px">305 118</div></div>
+          <div class="campo"><label for="pin1">Tu PIN nuevo</label><div class="in foco" id="pin1" style="letter-spacing:.6em;font-size:18px">● ● ● ● _ _</div></div>
+          <div class="campo"><label for="pin2">Repítelo</label><div class="in" id="pin2" style="letter-spacing:.6em;font-size:18px">_ _ _ _ _ _</div></div>
+          <span class="btn pri grande">Guardar mi PIN</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="par">
+    <div class="lienzo" style="flex:1 1 480px"><p class="etq">Bloqueado tras 5 fallos</p>
+      <div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:8px">
+        <div class="aviso mal" role="alert"><span>✕</span><span><b>Tu PIN de pago está bloqueado.</b>Se ha equivocado 5 veces. No ha salido ningún pago: siguen aprobados y esperando. Confírmalos con tu llave, o crea un PIN nuevo con el código que te mandamos al correo.</span></div>
+        <div class="fila" style="gap:8px;flex-wrap:wrap"><span class="btn pri">Crear un PIN nuevo</span><span class="btn">Usar mi llave</span></div>
+        <span class="ayuda">Te avisamos al correo cuando se bloquea y cuando lo cambias.</span>
+      </div>
+    </div>
+    <div class="lienzo" style="flex:1 1 480px"><p class="etq">Con dos o más personas que pueden pagar</p>
+      <div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:8px">
+        <div class="aviso av"><span>!</span><span><b>Lo tiene que aprobar otra persona.</b>Se lo hemos pedido a Luis Ejemplo (aviso en Sumied y, si no lo abre en 15 minutos, también al correo). Hasta que lo apruebe, no sale nada.</span></div>
+        <span class="ayuda">Luis ve la misma lista y aprueba con su llave, o con su PIN de pago si su dispositivo no la tiene. Un «Aprobar» solo no vale. Quien pidió el pago no puede dar la segunda aprobación.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ D · DESPUÉS ═════════ -->
+<section class="banda" id="hecho">
+  <h2>D · Lo que dice después (regla 8)</h2>
+  <div class="par">
+    <div class="lienzo" style="flex:1 1 600px"><div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:10px;max-width:720px">
+      <div class="aviso ok" role="status"><span>✓</span><span><b>Confirmado con tu llave a las 09:41.</b>3 pagos, 4.542,70 €, enviados a Revolut ·5678. Te avisamos cuando los confirme.</span></div>
+      <div class="linea-tiempo"><span class="p ok"><i></i>Aprobado 09:41</span><span class="s"></span><span class="p ok"><i></i>Confirmado con tu llave 09:41</span><span class="s"></span><span class="p ahora"><i></i>Enviado a Revolut</span><span class="s"></span><span class="p"><i></i>Pagada</span></div>
+      <span class="ayuda">En el historial de cada factura: «Segunda aprobación: Ana Prueba, con su llave (Windows), 09:41 · IBAN nuevo». Con el plan B: «con su PIN de pago».</span>
+    </div></div>
+  </div>
+</section>
+
+<!-- ═════════ NOTAS ═════════ -->
+<section class="banda" id="notas">
+  <h2>Cómo funciona, y lo que hay que decidir</h2>
+  <ul class="notas">
+    <li><b>Qué es la llave.</b> Una llave de acceso del estándar WebAuthn (passkey). La parte privada no sale nunca del dispositivo; Sumied guarda solo la pública, por persona, y comprueba cada firma en el servidor. Se pide con «verificación del usuario»: tiene que ser la huella, la cara o el PIN del dispositivo, no basta con tenerlo en la mano.</li>
+    <li><b>Qué se firma.</b> La huella de la lista exacta de pagos (cada importe, IBAN, beneficiario y la cuenta de origen), con un reto de un solo uso que caduca a los 10 minutos. La función que paga no manda nada si la lista ha cambiado.</li>
+    <li><b>Una llave por dirección.</b> El navegador ata la llave a la dirección: una llave activada en app.sumied.com no vale en app.folvy.app ni en staging. Quien entre por las dos marcas activa una en cada una.</li>
+    <li><b>Activar una llave nueva pide el código del correo</b> y avisa al correo después. Si no, quien tuviera solo tu sesión abierta podría activar la suya y pagar.</li>
+    <li><b>El PIN de pago es el plan B</b>: en un dispositivo sin llave, o si la persona lo prefiere. Se guarda cifrado con una clave del servidor (no se puede leer ni probar fuera de Sumied), vale solo para la lista que se confirma y se bloquea con 5 fallos.</li>
+    <li><b>El correo, solo para tres cosas</b>: crear el PIN, recuperarlo (también tras un bloqueo) y activar la llave en un dispositivo nuevo. Ningún pago se confirma con un código del correo.</li>
+    <li><b>La primera aprobación no cambia</b>: «Aprobar y pagar» en la ficha. La llave es solo para la segunda.</li>
+  </ul>
+  <p class="ayuda" style="margin:0;color:var(--pag-suave)">Decidido el 01/11: con dos o más personas, la segunda también con su llave (o su PIN); un «Aprobar» solo no vale.</p>
+</section>
+</div>

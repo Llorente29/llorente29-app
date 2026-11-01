@@ -122,6 +122,9 @@ jobs:
           cat lectura.md >> "$GITHUB_STEP_SUMMARY"
 
   balance:
+    # W12b (30/10): el secreto vive en el entorno «lectura», que solo admite
+    # ejecuciones de main (conta_lectura lo lee todo, y su «solo lectura» lo puede quitar quien se conecta).
+    environment: lectura
     # C06b, punto 1: el balance abreviado de Folvy contra el de Diez, línea a
     # línea y a la misma fecha. Diez solo GET (balance-lineas.ts); Folvy con
     # conta_lectura (PROD_CONTA_RO_DB_URL), en una sesión de solo lectura, y
