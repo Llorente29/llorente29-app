@@ -6,8 +6,8 @@
 -- public.print_job_vigia, public.print_job_aviso y
 -- public._print_job_caducado_no_vuelve.
 --
---   0 · ROJO A PROPÓSITO: con el vigía de antes, un trabajo de hace 3 h sigue
---       «pending» para siempre (y el estado «expired» no existe).
+--   0 · ROJO A PROPÓSITO: con lo de antes, un trabajo no puede caducar (la
+--       base rechaza «expired»): uno de hace 3 h se queda «pending» para siempre.
 --   1 · recién aplicada.
 --   2 · un trabajo viejo (3 h) caduca, con su motivo; uno reciente (5 min), no.
 --   3 · un caducado no vuelve a la cola.
@@ -56,15 +56,19 @@ delete from public.system_alert_queue where location_id = (select v::uuid from _
 -- ── 0 · Lo de antes ─────────────────────────────────────────────────────────
 create temp table _ids (clave text primary key, id uuid) on commit drop;
 insert into _ids values ('viejo0', pg_temp.trabajo(interval '3 hours'));
-select public.db_health_watchdog();
-do $$ begin
-  if (select status from public.print_job where id = (select id from _ids where clave = 'viejo0')) <> 'pending' then
-    raise exception 'PRUEBA A01a · 0: con el vigía de antes el trabajo viejo ya no está pendiente: la prueba no mediría nada.';
-  end if;
-  raise notice 'A01a · 0 (rojo a propósito): con el vigía de antes, un trabajo de hace 3 h sigue «pending» para siempre.';
+do $$
+declare v_ok boolean := false;
+begin
+  -- ROJO A PROPÓSITO: con lo de antes, un trabajo no puede caducar.
+  begin
+    update public.print_job set status = 'expired' where id = (select id from _ids where clave = 'viejo0');
+  exception when check_violation then v_ok := true;
+  end;
+  if not v_ok then raise exception 'PRUEBA A01a · 0: con lo de antes ya existe el estado «expired»: la prueba no mediría nada.'; end if;
+  raise notice 'A01a · 0 (rojo a propósito): con lo de antes, un trabajo no puede caducar (la base rechaza «expired»). Aquí, el vigía tiene md5 %.',
+    left(md5(pg_get_functiondef('public.db_health_watchdog()'::regprocedure)), 8);
 end $$;
 delete from public.print_job where id = (select id from _ids where clave = 'viejo0');
-delete from public.system_alert_queue where location_id = (select v::uuid from _s where clave = 'local');
 
 -- ── 1 · Recién aplicada ─────────────────────────────────────────────────────
 \i supabase/migrations/20261101T1906_a01a_tickets_caducan.sql
