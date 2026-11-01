@@ -65,6 +65,9 @@ export async function tokenDeAcceso(srv: Srv, f: Fetch, c: ConexionRevolut, ahor
     return t.acceso
   } catch (e) {
     if (e instanceof FalloRevolut && e.permisoRetirado) {
+      // B01 · 2c-1: sin conexión no se paga. Si falla, se dice, pero se apunta la retirada igual.
+      const { error: dejErr } = await srv.rpc('conta_pago_dejar', { p_company: c.company_id, p_quien: null, p_quien_nombre: 'Revolut', p_motivo: 'Revolut ya no acepta el permiso de Sumied' })
+      if (dejErr) console.error(`[revolut] ${c.company_id.slice(0, 8)}: no se ha podido dejar de pagar (${dejErr.message})`)
       const { error } = await srv.rpc('conta_revolut_desconectar', { p_company: c.company_id, p_quien: null, p_quien_nombre: null, p_desde_revolut: true })
       if (error) throw new Error(`Revolut ya no acepta el permiso, y no se ha podido apuntar: ${error.message}`, { cause: e })
       throw new PermisoRetirado()
