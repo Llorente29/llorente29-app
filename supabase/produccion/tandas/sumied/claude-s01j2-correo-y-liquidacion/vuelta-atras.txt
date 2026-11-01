@@ -1,0 +1,7 @@
+# S01j·2 · la vuelta atrás, en orden inverso: quita los locales que puso la 1218,
+# el disparador y la ficha, y deja las dos funciones como estaban.
+cuenta: scripts/conta/produccion/cuentas/s01j2-correo.sql
+supabase/vuelta-atras/20261101T1218_s01j2_local_foodint.down.sql
+supabase/vuelta-atras/20261101T1217_s01j2_local_de_la_liquidacion.down.sql
+supabase/vuelta-atras/20261101T1216_s01j2_ficha_liquidacion.down.sql
+supabase/vuelta-atras/20261101T1215_s01j2_correo_que_salio.down.sql

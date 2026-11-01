@@ -4,6 +4,7 @@
 // las pantallas. Todo pasa por las funciones de la base (0120–0170), que
 // deciden y comprueban permisos; aquí solo se llaman y se traducen.
 
+import { supabase } from '@/lib/supabase'
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
 import { ivaDelPapel } from '@/modules/conta/lib/compras'
 import type {
@@ -164,6 +165,17 @@ export interface LlegadaCorreo {
   fecha: string; de: string | null; asunto: string | null; resultado: string; llegada: string | null; motivo: string | null
   factura: { id: string; codigo: string | null; numero: string | null; total: number | null; proveedor: string | null; casada: boolean } | null
   dicho: string | null
+  /** S01j·2 · Para «Volver a leer» y lo que salió del correo. */
+  email_id?: string | null
+  plataforma?: 'glovo' | 'justeat' | null
+  excel?: 'leido' | 'sin_leer' | 'no_traia' | null
+  liquidaciones?: LiquidacionDelCorreo[]
+  factura_comision?: { id: string; codigo: string | null; numero: string | null; total: number | null; en_revision: boolean | null; nota: string | null } | null
+}
+/** S01j·2 · Una liquidación que salió de un correo (o que ya había entrado con otro). */
+export interface LiquidacionDelCorreo {
+  id: string; plataforma: string | null; tienda: string | null; local: string | null
+  desde: string | null; hasta: string | null; neto: number | null; pago_el: string | null; otro_correo?: boolean
 }
 export interface CorreoFacturas {
   direccion: string | null; activa?: boolean; ultimo?: string | null
@@ -172,6 +184,21 @@ export interface CorreoFacturas {
 }
 
 export const leerCorreoFacturas = (companyId: string) => rpc<CorreoFacturas>('conta_correo_facturas', { p_company: companyId })
+
+/** S01j·2 · Lo que dice el servidor al volver a leer: la frase y cada correo («leido», «ya_no_esta» o «error»). */
+export interface Releidos { texto: string; correos: { emailId: string; estado: 'leido' | 'ya_no_esta' | 'error'; texto: string | null }[] }
+/** S01j·2 · Vuelve a leer unos correos (o todo lo de Glovo o Just Eat): los pide otra vez a la entrada y no duplica nada. */
+export async function releerCorreos(companyId: string, que: { emailIds: string[] } | { remitente: 'glovo' | 'justeat' }): Promise<Releidos> {
+  const body = 'emailIds' in que ? { company_id: companyId, email_ids: que.emailIds } : { company_id: companyId, remitente: que.remitente }
+  const { data, error } = await supabase!.functions.invoke('conta-facturas-entrada?releer=1', { body })
+  if (error) {
+    const ctx = (error as { context?: Response }).context
+    let texto = error.message
+    try { const j = ctx ? await ctx.json() as { error?: string } : null; if (j?.error) texto = j.error } catch { /* el mensaje de antes */ }
+    throw new Error(texto)
+  }
+  return data as Releidos
+}
 
 /** S01c · Una línea de la factura contra la de su albarán (o lo que está en un solo lado). */
 export interface LineaComparada {

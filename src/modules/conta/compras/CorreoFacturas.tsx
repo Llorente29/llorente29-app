@@ -13,13 +13,13 @@
 
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaAjustes } from '@/config/navegacion'
+import { rutaAjustes, rutaLiquidacionFicha, rutaRevisarFactura } from '@/config/navegacion'
 import { Boton, Tarjeta } from '@/modules/conta/diseno'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos } from '@/modules/conta/lib/formato'
-import { crearCorreoFacturas, leerCorreoFacturas, leerLineasFactura, type ComparacionLineas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
-import { cuandoEnPalabras, lineaEnPalabras, queSeHizo, resumenLineas } from '@/modules/conta/lib/correoFacturas'
+import { crearCorreoFacturas, leerCorreoFacturas, leerLineasFactura, releerCorreos, type ComparacionLineas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
+import { accionesDeLlegada, cuandoEnPalabras, lineaEnPalabras, nombrePlataforma, queSalio, resumenLineas } from '@/modules/conta/lib/correoFacturas'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -30,6 +30,8 @@ export function CorreoFacturasAjustes() {
   const [vuelta, setVuelta] = useState(0)
   const datos = useLeer(activa ? () => leerCorreoFacturas(activa.id) : null, `${activa?.id}:${vuelta}:correo-facturas`)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  // S01j·2 · Lo que dijo «volver a leer»: aquí, porque al recargar la lista se desmonta y se perdería.
+  const [releido, setReleido] = useState<{ ok: boolean; texto: string } | null>(null)
   const d = datos.datos
   if (!activa) return null
   if (!d && !datos.error) return <Tarjeta titulo="Correo de facturas"><p className="cx-ayuda">Leyendo…</p></Tarjeta>
@@ -87,31 +89,97 @@ export function CorreoFacturasAjustes() {
       </Tarjeta>
 
       <Tarjeta titulo="Lo que ha llegado">
-        <LlegadasPorCorreo llegadas={d.llegadas ?? []} />
+        <LlegadasPorCorreo llegadas={d.llegadas ?? []} companyId={activa.id} releido={releido}
+          alReleer={(r) => { setReleido(r); setVuelta((v) => v + 1) }} />
       </Tarjeta>
     </div>
   )
 }
 
-/** Cada correo que llegó, con lo que se hizo: factura leída y casada, esperando su albarán, no es una factura, repetida. */
-export function LlegadasPorCorreo({ llegadas, max }: { llegadas: readonly LlegadaCorreo[]; max?: number }) {
+/**
+ * Cada correo que llegó y qué salió de él (S01j·2, maquetas 1, 2 y 4): la
+ * factura y la liquidación, el Excel que se quedó sin leer o el que no venía,
+ * con su estado. Con la empresa, cada uno lleva su ⋯ («Volver a leer este
+ * correo», «Volver a leer todo lo de Glovo», «Ver la factura», «Ver la
+ * liquidación») y arriba se vuelve a leer todo lo de una plataforma. Lo que
+ * pasa al volver a leer se dice en pantalla (regla 8).
+ */
+export function LlegadasPorCorreo({ llegadas, max, companyId, releido = null, alReleer }: {
+  llegadas: readonly LlegadaCorreo[]; max?: number; companyId?: string
+  /** Lo que dijo la última vez que se volvió a leer (lo guarda quien la pinta: la lista se recarga). */
+  releido?: { ok: boolean; texto: string } | null
+  alReleer?: (r: { ok: boolean; texto: string }) => void
+}) {
+  const [abierto, setAbierto] = useState<number | null>(null)
+  const [leyendo, setLeyendo] = useState<string | null>(null)
+  const [fallo, setFallo] = useState<string | null>(null)
+  const aviso = fallo ? { ok: false, texto: fallo } : releido
   const lista = max ? llegadas.slice(0, max) : llegadas
   if (lista.length === 0) return <p className="cx-ayuda" style={{ margin: 0 }}>Aún no ha llegado ningún correo a la dirección de facturas.</p>
   const hoy = new Date()
+  const plataformas = companyId ? (['glovo', 'justeat'] as const).filter((p) => llegadas.some((l) => l.plataforma === p)) : []
+  const releer = async (clave: string, que: Parameters<typeof releerCorreos>[1]) => {
+    if (!companyId) return
+    setAbierto(null); setLeyendo(clave); setFallo(null)
+    try {
+      const r = await releerCorreos(companyId, que)
+      const fuera = r.correos.some((c) => c.estado === 'ya_no_esta')
+      alReleer?.({ ok: !r.correos.some((c) => c.estado === 'error') && !fuera, texto: r.texto })
+    } catch (e) { setFallo(`No se ha vuelto a leer: ${msg(e)}`) }
+    finally { setLeyendo(null) }
+  }
   return (
-    <ul className="cxc-correo-llegadas" aria-label="Lo que ha llegado por correo" data-prueba="llegadas">
-      {lista.map((l, i) => {
-        const q = queSeHizo(l)
-        return (
-          <li key={`${l.fecha}-${i}`} data-tono={q.tono}>
-            <span className="cxc-correo-que"><strong>{q.titulo}</strong>{l.factura?.total != null ? <span className="cx-cifra"> · {eurosExactos(l.factura.total)}</span> : null}</span>
-            {q.texto && <span className="cxc-cosa-apoyo">{q.texto}</span>}
-            <span className="cxc-cosa-apoyo">{cuandoEnPalabras(l.fecha, hoy)} · de {l.de ?? 'alguien'}{l.asunto ? ` · «${l.asunto}»` : ''}</span>
-            {l.factura?.casada && <LineaALinea facturaId={l.factura.id} />}
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      {plataformas.length > 0 && (
+        <div className="cxc-correo-releer">
+          {plataformas.map((p) => (
+            <Boton key={p} variante="secundario" disabled={leyendo !== null} onClick={() => void releer(p, { remitente: p })}>
+              {leyendo === p ? 'Leyendo otra vez…' : `Volver a leer todo lo de ${nombrePlataforma(p)}`}
+            </Boton>
+          ))}
+        </div>
+      )}
+      {aviso && <p className={aviso.ok ? 'cx-guardado' : 'cx-error'} role={aviso.ok ? 'status' : 'alert'} data-prueba="releer-aviso">{aviso.texto}</p>}
+      <ul className="cxc-correo-llegadas" aria-label="Lo que ha llegado por correo" data-prueba="llegadas">
+        {lista.map((l, i) => {
+          const q = queSalio(l)
+          const acciones = companyId ? accionesDeLlegada(l) : []
+          const fac = l.factura?.id ?? l.factura_comision?.id ?? null
+          const liq = l.liquidaciones?.[0]?.id ?? null
+          const plat = l.plataforma ?? null
+          return (
+            <li key={`${l.fecha}-${i}`} data-tono={q.chip.tono} data-prueba="llegada">
+              <div className="cxc-llegada">
+                <span className="cxc-llegada-cuando">{cuandoEnPalabras(l.fecha, hoy)}</span>
+                <span className="cxc-llegada-que">
+                  <strong className="cxc-correo-que">{q.titulo}{!l.liquidaciones?.length && l.factura?.total != null ? <span className="cx-cifra"> · {eurosExactos(l.factura.total)}</span> : null}</strong>
+                  {q.texto && <span className="cxc-cosa-apoyo" data-prueba="llegada-texto">{q.texto}</span>}
+                  <span className="cxc-cosa-apoyo">de {l.de ?? 'alguien'}{l.asunto ? ` · «${l.asunto}»` : ''}</span>
+                </span>
+                <span className="cxc-llegada-chip" data-tono={q.chip.tono} data-prueba="llegada-estado">{q.chip.texto}</span>
+                {acciones.length > 0 ? (
+                  <span className="cxc-llegada-mas">
+                    <button type="button" aria-label="Más acciones de esta llegada" aria-expanded={abierto === i} aria-haspopup="menu"
+                      onClick={() => setAbierto(abierto === i ? null : i)} disabled={leyendo !== null}>⋯</button>
+                    {abierto === i && (
+                      <span className="cxc-llegada-menu" role="menu" aria-label={`Acciones de la llegada ${cuandoEnPalabras(l.fecha, hoy)}`}>
+                        {acciones.includes('releer') && <button type="button" role="menuitem" onClick={() => void releer(`c${i}`, { emailIds: [l.email_id!] })}><strong>Volver a leer este correo</strong></button>}
+                        {acciones.includes('releer_plataforma') && plat && <button type="button" role="menuitem" onClick={() => void releer(plat, { remitente: plat })}>Volver a leer todo lo de {nombrePlataforma(plat)}</button>}
+                        {acciones.includes('factura') && fac && <Link role="menuitem" to={rutaRevisarFactura(fac)}>Ver la factura</Link>}
+                        {acciones.includes('liquidacion') && liq && <Link role="menuitem" to={rutaLiquidacionFicha(liq)}>Ver la liquidación</Link>}
+                      </span>
+                    )}
+                  </span>
+                ) : <span />}
+              </div>
+              {leyendo === `c${i}` && <span className="cxc-cosa-apoyo" role="status">Leyendo otra vez…</span>}
+              {l.factura?.casada && <LineaALinea facturaId={l.factura.id} />}
+            </li>
+          )
+        })}
+      </ul>
+      {!max && <p className="cx-ayuda">Los 30 últimos correos. Volver a leer no duplica nada: la factura con el mismo PDF y la liquidación de la misma tienda y quincena se reconocen y se actualizan.</p>}
+    </>
   )
 }
 
