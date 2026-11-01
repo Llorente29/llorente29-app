@@ -20,6 +20,6 @@ select clave, valor from (
     (pg_get_constraintdef((select oid from pg_constraint where conname = 'sale_service_type_check')) like '%dine_in%')::text union all
   select 6, 'ventas de antes del 01/11 00:00 UTC (igual antes y después)',
     (select count(*) from public.sale where created_at < timestamptz '2026-11-01 00:00:00+00')::text union all
-  select 7, 'ventas con service_type dine_in (antes 0, después 0)',
-    (select count(*) from public.sale where service_type = 'dine_in')::text
+  select 7, 'ventas de antes del 01/11 00:00 UTC con service_type dine_in (antes 0, después 0)',
+    (select count(*) from public.sale where service_type = 'dine_in' and created_at < timestamptz '2026-11-01 00:00:00+00')::text
 ) t order by o;
