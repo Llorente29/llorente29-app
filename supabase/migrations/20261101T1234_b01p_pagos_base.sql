@@ -38,27 +38,11 @@
 --
 -- No está en el camino del pedido. Dueño único: lo escriben funciones conta_*.
 
--- ── 0 · Los cierres, todos de entrada y en un solo orden ───────────────────
--- Crear una clave ajena cierra también la tabla a la que apunta (SHARE ROW
--- EXCLUSIVE: no deja escribir en ella hasta que acaba la transacción; leer,
--- sí). Si se cogen a medias, fichero abajo, se cruzan con quien escribe en
--- ellas en otro orden: el 01/11 dio 40P01 en staging (run 41309002393) al
--- deshacer. Así que se cogen al empezar, de la madre a la hija, como la S1b
--- de D, y con un límite: si alguna no se puede coger en 5 s, para sin
--- aplicar nada (y se vuelve a lanzar), en vez de esperar con las demás
--- cogidas. Las tablas nuevas son vacías: crear sus claves no recorre nada.
-set local lock_timeout = '5s';
-lock table public.accounts, public.company, public.supplier, public.treasury_account, public.supplier_invoice,
-           public.conta_pago_remesa, public.conta_pago_remesa_linea in share row exclusive mode;
--- Para medir cuánto quedan cogidas (Julio, 01/11): la hora de la base aquí y al
--- final; la diferencia es el tiempo que nadie puede escribir en esas tablas.
-select set_config('b01p.cierres_desde', clock_timestamp()::text, true);
-
 -- ── 1 · Quién puede pagar ──────────────────────────────────────────────────
 create table if not exists public.conta_pago_permiso (
   id               uuid primary key default gen_random_uuid(),
-  account_id       uuid not null references public.accounts(id) on delete cascade,
-  company_id       uuid not null references public.company(id) on delete cascade,
+  account_id       uuid not null,
+  company_id       uuid not null,
   user_id          uuid not null,
   user_name        text,
   granted_at       timestamptz not null default now(),
@@ -73,8 +57,8 @@ comment on table public.conta_pago_permiso is
 
 -- ── 2 · Los topes de cada empresa ──────────────────────────────────────────
 create table if not exists public.conta_pago_ajustes (
-  company_id       uuid primary key references public.company(id) on delete cascade,
-  account_id       uuid not null references public.accounts(id) on delete cascade,
+  company_id       uuid primary key,
+  account_id       uuid not null,
   tope_pago        numeric(14,2) not null default 3000 check (tope_pago > 0),
   tope_dia         numeric(14,2) not null default 10000 check (tope_dia > 0),
   updated_at       timestamptz not null default now(),
@@ -87,9 +71,9 @@ comment on table public.conta_pago_ajustes is
 -- ── 3 · Los pagos que salen juntos (un lote) y cada pago ───────────────────
 create table if not exists public.conta_pago_lote (
   id                    uuid primary key default gen_random_uuid(),
-  account_id            uuid not null references public.accounts(id) on delete cascade,
-  company_id            uuid not null references public.company(id) on delete cascade,
-  treasury_account_id   uuid not null references public.treasury_account(id) on delete restrict,
+  account_id            uuid not null,
+  company_id            uuid not null,
+  treasury_account_id   uuid not null,
   proveedor             text not null check (proveedor in ('revolut')),
   estado                text not null check (estado in ('esperando_segunda', 'listo', 'enviando', 'enviado', 'cancelado')),
   huella                text not null check (huella ~ '^[0-9a-f]{64}$'),
@@ -112,12 +96,12 @@ comment on table public.conta_pago_lote is
 
 create table if not exists public.conta_pago_salida (
   id                   uuid primary key default gen_random_uuid(),
-  account_id           uuid not null references public.accounts(id) on delete cascade,
-  company_id           uuid not null references public.company(id) on delete cascade,
+  account_id           uuid not null,
+  company_id           uuid not null,
   lote_id              uuid not null references public.conta_pago_lote(id) on delete cascade,
   -- Un pago no se queda nunca sin su factura ni sin su proveedor.
-  invoice_id           uuid not null references public.supplier_invoice(id) on delete restrict,
-  supplier_id          uuid not null references public.supplier(id) on delete restrict,
+  invoice_id           uuid not null,
+  supplier_id          uuid not null,
   amount               numeric(14,2) not null check (amount > 0),
   beneficiario         text not null,
   iban                 text not null,
@@ -130,8 +114,8 @@ create table if not exists public.conta_pago_salida (
   estado               text not null check (estado in ('esperando_segunda', 'lista', 'enviando', 'enviada', 'esperando_banco', 'pagada', 'rechazada', 'devuelta', 'cancelada')),
   estado_porque        text,
   estado_at            timestamptz not null default now(),
-  remesa_id            uuid references public.conta_pago_remesa(id) on delete restrict,
-  remesa_linea_id      uuid references public.conta_pago_remesa_linea(id) on delete restrict,
+  remesa_id            uuid,
+  remesa_linea_id      uuid,
   banco_id             text,
   created_at           timestamptz not null default now()
 );
@@ -145,7 +129,7 @@ comment on table public.conta_pago_salida is
 
 create table if not exists public.conta_pago_evento (
   id          uuid primary key default gen_random_uuid(),
-  account_id  uuid not null references public.accounts(id) on delete cascade,
+  account_id  uuid not null,
   lote_id     uuid not null references public.conta_pago_lote(id) on delete cascade,
   salida_id   uuid references public.conta_pago_salida(id) on delete cascade,
   at          timestamptz not null default now(),
@@ -178,7 +162,7 @@ comment on table public.conta_llave is
 create table if not exists public.conta_pago_reto (
   id               uuid primary key default gen_random_uuid(),
   user_id          uuid not null,
-  account_id       uuid references public.accounts(id) on delete cascade,
+  account_id       uuid,
   lote_id          uuid references public.conta_pago_lote(id) on delete cascade,
   proposito        text not null check (proposito in ('confirmar', 'activar_llave', 'registrar', 'crear_pin')),
   via              text not null check (via in ('llave', 'codigo')),
@@ -960,6 +944,62 @@ begin
     grant select on public.conta_pago_permiso, public.conta_pago_ajustes, public.conta_pago_lote, public.conta_pago_salida, public.conta_pago_evento to conta_lectura;
   end if;
 end $$;
+
+-- ── 9 · Las claves ajenas a las tablas de fuera, con los cierres en orden ───
+-- Crear una clave ajena cierra también la tabla a la que apunta (SHARE ROW
+-- EXCLUSIVE: no deja escribir en ella hasta que acaba la transacción; leer,
+-- sí). Por eso van aquí, al final y juntas: así esas tablas solo quedan
+-- cogidas lo que tardan estas órdenes y no todo el fichero. Medido el 01/11:
+-- cogidas desde el principio, unos 16 s en staging (psql manda cada orden a la
+-- base y espera; ~120 órdenes por la red), frente a 0,1 s en local.
+-- Los cierres se cogen de entrada y en un solo orden, de la madre a la hija,
+-- como la S1b de D: cogerlos a medias dio 40P01 en staging (run 41309002393)
+-- al deshacer. Con un límite: si alguno no se coge en 5 s, para sin aplicar
+-- nada (y se vuelve a lanzar). Las tablas nuevas están vacías: crear sus claves
+-- no recorre nada. «drop constraint if exists» deja pasarla dos veces (W05).
+set local lock_timeout = '5s';
+lock table public.accounts, public.company, public.supplier, public.treasury_account, public.supplier_invoice,
+           public.conta_pago_remesa, public.conta_pago_remesa_linea in share row exclusive mode;
+-- Para medir cuánto quedan cogidas (Julio, 01/11): la hora de la base aquí y al
+-- final; la diferencia es el tiempo que nadie puede escribir en esas tablas.
+select set_config('b01p.cierres_desde', clock_timestamp()::text, true);
+
+alter table public.conta_pago_permiso
+  drop constraint if exists conta_pago_permiso_account_id_fkey,
+  add constraint conta_pago_permiso_account_id_fkey foreign key (account_id) references public.accounts(id) on delete cascade,
+  drop constraint if exists conta_pago_permiso_company_id_fkey,
+  add constraint conta_pago_permiso_company_id_fkey foreign key (company_id) references public.company(id) on delete cascade;
+alter table public.conta_pago_ajustes
+  drop constraint if exists conta_pago_ajustes_company_id_fkey,
+  add constraint conta_pago_ajustes_company_id_fkey foreign key (company_id) references public.company(id) on delete cascade,
+  drop constraint if exists conta_pago_ajustes_account_id_fkey,
+  add constraint conta_pago_ajustes_account_id_fkey foreign key (account_id) references public.accounts(id) on delete cascade;
+alter table public.conta_pago_lote
+  drop constraint if exists conta_pago_lote_account_id_fkey,
+  add constraint conta_pago_lote_account_id_fkey foreign key (account_id) references public.accounts(id) on delete cascade,
+  drop constraint if exists conta_pago_lote_company_id_fkey,
+  add constraint conta_pago_lote_company_id_fkey foreign key (company_id) references public.company(id) on delete cascade,
+  drop constraint if exists conta_pago_lote_treasury_account_id_fkey,
+  add constraint conta_pago_lote_treasury_account_id_fkey foreign key (treasury_account_id) references public.treasury_account(id) on delete restrict;
+alter table public.conta_pago_salida
+  drop constraint if exists conta_pago_salida_account_id_fkey,
+  add constraint conta_pago_salida_account_id_fkey foreign key (account_id) references public.accounts(id) on delete cascade,
+  drop constraint if exists conta_pago_salida_company_id_fkey,
+  add constraint conta_pago_salida_company_id_fkey foreign key (company_id) references public.company(id) on delete cascade,
+  drop constraint if exists conta_pago_salida_invoice_id_fkey,
+  add constraint conta_pago_salida_invoice_id_fkey foreign key (invoice_id) references public.supplier_invoice(id) on delete restrict,
+  drop constraint if exists conta_pago_salida_supplier_id_fkey,
+  add constraint conta_pago_salida_supplier_id_fkey foreign key (supplier_id) references public.supplier(id) on delete restrict,
+  drop constraint if exists conta_pago_salida_remesa_id_fkey,
+  add constraint conta_pago_salida_remesa_id_fkey foreign key (remesa_id) references public.conta_pago_remesa(id) on delete restrict,
+  drop constraint if exists conta_pago_salida_remesa_linea_id_fkey,
+  add constraint conta_pago_salida_remesa_linea_id_fkey foreign key (remesa_linea_id) references public.conta_pago_remesa_linea(id) on delete restrict;
+alter table public.conta_pago_evento
+  drop constraint if exists conta_pago_evento_account_id_fkey,
+  add constraint conta_pago_evento_account_id_fkey foreign key (account_id) references public.accounts(id) on delete cascade;
+alter table public.conta_pago_reto
+  drop constraint if exists conta_pago_reto_account_id_fkey,
+  add constraint conta_pago_reto_account_id_fkey foreign key (account_id) references public.accounts(id) on delete cascade;
 
 -- Cuánto han estado cogidas las tablas de arriba (sin escribir en ellas) hasta aquí.
 do $$ begin

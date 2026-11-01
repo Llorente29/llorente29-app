@@ -4,29 +4,7 @@
 -- tablas del «Pagar» común. Solo añadía: nada de lo de antes cambia. Si ya
 -- hubiera pagos aprobados, se van con sus tablas (en el 2a no sale ninguno: el
 -- envío al banco es del 2b).
---
--- Los cierres, todos de entrada y en un solo orden (como la S1b de D, 01/11).
--- Quitar una clave ajena pide cierre exclusivo también sobre la tabla a la que
--- apunta. Primero esas, de la madre a la hija (accounts, company, supplier,
--- treasury_account, supplier_invoice y las remesas); después las de la 1234,
--- de la hija a la madre. Cogerlas a medias dio 40P01 en staging (run
--- 41309002393): teníamos unas y esperábamos otras, y quien escribía en ellas, al
--- revés. Si alguna no se puede coger en 5 s, para sin quitar nada. Una a una y
--- en ese orden (como hace «lock table» con una lista), y solo las que existen:
--- la vuelta atrás también se pasa sin la 1234 puesta (la prueba de staging
--- empieza así).
-set local lock_timeout = '5s';
-do $$
-declare t text;
-begin
-  foreach t in array array['accounts', 'company', 'supplier', 'treasury_account', 'supplier_invoice', 'conta_pago_remesa', 'conta_pago_remesa_linea',
-                           'conta_pago_pin', 'conta_pago_reto', 'conta_pago_evento', 'conta_pago_salida',
-                           'conta_llave', 'conta_pago_lote', 'conta_pago_ajustes', 'conta_pago_permiso'] loop
-    if to_regclass('public.' || t) is not null then
-      execute format('lock table public.%I in access exclusive mode', t);
-    end if;
-  end loop;
-end $$;
+
 
 drop function if exists public.conta_llave_usada(uuid, bigint);
 drop function if exists public.conta_llaves_de(uuid, text);
@@ -64,6 +42,31 @@ drop function if exists public._conta_pago_pagadores(uuid);
 drop function if exists public._conta_pago_puede(uuid, uuid);
 drop function if exists public._conta_pago_nombre(uuid);
 drop function if exists public._conta_pago_empresa(uuid);
+
+-- Los cierres, todos de entrada y en un solo orden (como la S1b de D, 01/11),
+-- justo antes de borrar las tablas: las funciones se quitan antes, sin coger
+-- nada de fuera, para que las tablas de mucho uso queden cogidas lo menos posible.
+-- Quitar una clave ajena pide cierre exclusivo también sobre la tabla a la que
+-- apunta. Primero esas, de la madre a la hija (accounts, company, supplier,
+-- treasury_account, supplier_invoice y las remesas); después las de la 1234,
+-- de la hija a la madre. Cogerlas a medias dio 40P01 en staging (run
+-- 41309002393): teníamos unas y esperábamos otras, y quien escribía en ellas, al
+-- revés. Si alguna no se puede coger en 5 s, para sin quitar nada. Una a una y
+-- en ese orden (como hace «lock table» con una lista), y solo las que existen:
+-- la vuelta atrás también se pasa sin la 1234 puesta (la prueba de staging
+-- empieza así).
+set local lock_timeout = '5s';
+do $$
+declare t text;
+begin
+  foreach t in array array['accounts', 'company', 'supplier', 'treasury_account', 'supplier_invoice', 'conta_pago_remesa', 'conta_pago_remesa_linea',
+                           'conta_pago_pin', 'conta_pago_reto', 'conta_pago_evento', 'conta_pago_salida',
+                           'conta_llave', 'conta_pago_lote', 'conta_pago_ajustes', 'conta_pago_permiso'] loop
+    if to_regclass('public.' || t) is not null then
+      execute format('lock table public.%I in access exclusive mode', t);
+    end if;
+  end loop;
+end $$;
 
 drop table if exists public.conta_pago_pin;
 drop table if exists public.conta_pago_reto;
