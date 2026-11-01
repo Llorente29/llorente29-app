@@ -126,3 +126,50 @@ test('leer solo las cabeceras: el paquete bien, el mismo otra vez y uno distinto
 
   expect(errores, errores.join('\n')).toEqual([])
 })
+
+// LAB2 (30/10) · Tanda 2: con las cabeceras como se esperan, cargar las filas.
+test('cargar las filas: las 51 del paquete, hoja a hoja; otra vez, sin duplicar', async ({ page }) => {
+  test.setTimeout(4 * 60_000)
+  const errores: string[] = []
+  page.on('pageerror', (e) => errores.push(e.message))
+  await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'sumied') })
+  const sola = await entrarComo(page, SOLA)
+  const marca = `${test.info().project.name}-filas-${Date.now()}`
+
+  await page.goto('/conta/laboral/importar-historial')
+  await expect(page.locator('[data-laboral-pagina="importar-historial"] [data-prueba="laboral-importar"]')).toBeVisible({ timeout: 30_000 })
+  const bytes = paquete(marca)
+  await leer(page, 'paquete con filas.xlsx', bytes)
+  await expect(page.locator('[data-prueba="importar-hecho"]')).toContainText('9 de 9 como se esperaban')
+
+  // Las 51 filas: Empresa 20 campos, Convenio 10 y 3 por cada una de las siete tablas.
+  await page.locator('[data-prueba="importar-cargar"]').click()
+  const hecho = page.locator('[data-prueba="importar-filas"]')
+  // Si la pantalla dice un error, que la prueba lo enseñe en vez de esperar al tiempo máximo.
+  await expect(page.locator('[data-prueba="importar-filas"], [data-prueba="importar-error"]')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
+  await expect(hecho).toContainText('Cargadas 51 filas de 9 hojas: Empresa 20 · Convenio 10 · Tablas_salariales 3', { timeout: 60_000 })
+  await expect(hecho).toContainText('51 nuevas.')
+  await captura(page, 'lab2-filas-cargadas')
+
+  // En la base, por la API: 51 filas en el lote de este fichero, con sus datos.
+  const lote = await rest<{ id: string }[]>(sola, 'GET',
+    `lab_import_lote?select=id&fichero_nombre=eq.${encodeURIComponent('paquete con filas.xlsx')}&order=subido_at.desc&limit=1`)
+  expect(lote.status, JSON.stringify(lote.datos)).toBe(200)
+  const filas = await rest<{ hoja: string; fila_n: number; datos: Record<string, unknown> }[]>(sola, 'GET',
+    `lab_import_fila?select=hoja,fila_n,datos&lote_id=eq.${lote.datos[0].id}&order=hoja,fila_n`)
+  expect(filas.status, JSON.stringify(filas.datos).slice(0, 300)).toBe(200)
+  expect(filas.datos).toHaveLength(51)
+  expect(filas.datos.find((f) => f.hoja === 'conceptos' && f.fila_n === 2)?.datos.concepto).toBe(`inventado ${marca} 2-1`)
+
+  // El mismo fichero otra vez: nada nuevo, nada duplicado.
+  await leer(page, 'paquete con filas.xlsx', bytes)
+  await page.locator('[data-prueba="importar-cargar"]').click()
+  await expect(page.locator('[data-prueba="importar-filas"], [data-prueba="importar-error"]')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
+  await expect(hecho).toContainText('Ninguna cambia: es lo mismo que ya estaba.', { timeout: 60_000 })
+  const otraVez = await rest<{ hoja: string }[]>(sola, 'GET', `lab_import_fila?select=hoja&lote_id=eq.${lote.datos[0].id}`)
+  expect(otraVez.datos).toHaveLength(51)
+
+  expect(errores, errores.join('\n')).toEqual([])
+})
