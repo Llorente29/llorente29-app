@@ -30557,7 +30557,7 @@ begin
     raise exception 'El periodo no es válido.' using errcode = '22023';
   end if;
 
-  with facturas as (
+  with facturas as materialized (
     select i.*, s.name as proveedor_nombre,
            (select jsonb_build_object('id', e.id, 'estado', e.status, 'solo', coalesce(e.validated_by_name, '') like 'Folvy (apunta solo%')
               from public.journal_entry e
@@ -30579,7 +30579,7 @@ begin
      where i.account_id = v_acc and (i.company_id = p_company or i.company_id is null)
        and i.status <> 'anulada'
        and coalesce(i.invoice_date, (i.created_at at time zone 'Europe/Madrid')::date) between p_desde and p_hasta
-  ), gasto0 as (
+  ), gasto0 as materialized (
     -- Lo que Folvy ha entendido: la cuenta del asiento si lo hay; si no, la de la ficha.
     select f.id, f.supplier_id,
            coalesce(
@@ -30590,13 +30590,18 @@ begin
                 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
                where k.company_id = p_company and k.entity = 'supplier' and k.entity_id = f.supplier_id::text and k.role = 'gasto' limit 1)) as entendido
       from facturas f
-  ), gasto as (
+  ), aprendidos as materialized (
     -- R5 · 6: sin cuenta en el asiento ni en la ficha, lo aprendido de sus
     -- facturas anteriores (0250), como en N23, con su porqué. Si no hay nada
     -- que aprender, también se dice (la pantalla explica qué hacer).
-    select g.id, g.entendido,
-           case when g.entendido is null and g.supplier_id is not null then public.conta_gasto_aprendido(p_company, g.supplier_id) end as aprendido
-      from gasto0 g
+    -- S01n · Una vez por PROVEEDOR, no por factura: lo aprendido solo depende
+    -- de la empresa y el proveedor. Y «materialized»: sin él, Postgres copiaba
+    -- la llamada en cada lectura de «aprendido» (unas 8 por factura).
+    select s.supplier_id, public.conta_gasto_aprendido(p_company, s.supplier_id) as aprendido
+      from (select distinct g.supplier_id from gasto0 g where g.entendido is null and g.supplier_id is not null) s
+  ), gasto as materialized (
+    select g.id, g.entendido, a.aprendido
+      from gasto0 g left join aprendidos a on a.supplier_id = g.supplier_id and g.entendido is null
   ), filas_f as (
     select jsonb_build_object(
       'id', f.id, 'tipo', 'factura',
@@ -30623,7 +30628,7 @@ begin
       'recepcion', f.recepcion, 'asiento', f.asiento,
       'llego', f.created_at) as fila
       from facturas f join gasto g on g.id = f.id
-  ), recepciones as (
+  ), recepciones as materialized (
     -- R6 · Una recepción cuyo papel es «factura» o «albarán-factura» ES una
     -- factura recibida. Desde el corte, Compras ya la hace factura con el mismo
     -- papel (0140) y sale arriba, en filas_f. Aquí, las que NO son factura:
@@ -30670,7 +30675,7 @@ begin
        and p.supplier_invoice_id is null
        and not exists (select 1 from public.supplier_invoice_receipt x join public.supplier_invoice si on si.id = x.supplier_invoice_id
                         where x.goods_receipt_id = g.id and si.status <> 'anulada')
-  ), recepciones_diez as (
+  ), recepciones_diez as materialized (
     select r.*,
            (select jsonb_build_object('id', e.id, 'serie', e.series, 'numero', e.number, 'fecha', e.entry_date)
               from public.journal_entry e join public.journal_line l on l.entry_id = e.id
