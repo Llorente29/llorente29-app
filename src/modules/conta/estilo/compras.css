@@ -170,6 +170,28 @@
 .cxc-correo-llegadas > li { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-top: 1px solid var(--cx-borde, #e5e7eb); }
 .cxc-correo-llegadas > li:first-child { border-top: 0; }
 .cxc-correo-llegadas > li[data-tono='mira'] .cxc-correo-que { color: var(--cx-ambar, #b45309); }
+/* S01j·2 · Qué salió de cada correo: Llegó · Qué salió · Estado · ⋯ (maqueta 1); en el móvil, una tarjeta (maqueta 4). */
+.cxc-llegada { display: grid; grid-template-columns: 120px minmax(0, 1fr) minmax(0, 240px) 48px; gap: 4px 16px; align-items: center; }
+.cxc-llegada-cuando { font-size: 13px; color: var(--cx-gris, #4a5a70); }
+.cxc-llegada-que { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.cxc-llegada-chip { justify-self: start; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; background: #eaf2f8; color: #24456b; }
+.cxc-llegada-chip[data-tono='bien'] { background: #e3f4ea; color: #1d6b3d; }
+.cxc-llegada-chip[data-tono='falta'] { background: #fff1dc; color: #8a4b00; }
+.cxc-llegada-chip[data-tono='mira'] { background: #ffe4e1; color: #8a1f17; }
+.cxc-correo-llegadas > li[data-tono='falta'] { background: #fff8ec; }
+.cxc-llegada-mas { position: relative; justify-self: end; }
+.cxc-llegada-mas > button { width: 44px; height: 44px; border: 1px solid var(--cx-borde, #cdd6e2); border-radius: 10px; background: #fff; cursor: pointer; font: inherit; }
+.cxc-llegada-menu { position: absolute; right: 0; top: 50px; z-index: 5; width: 300px; background: #fff; border: 1px solid #cdd6e2; border-radius: 12px; box-shadow: 0 8px 24px rgba(15, 27, 45, .14); padding: 6px; display: flex; flex-direction: column; }
+.cxc-llegada-menu > button, .cxc-llegada-menu > a { font: inherit; text-align: left; padding: 12px 14px; min-height: 44px; border: 0; border-radius: 8px; background: none; color: inherit; cursor: pointer; text-decoration: none; }
+.cxc-llegada-menu > button:hover, .cxc-llegada-menu > a:hover { background: #eef4ff; }
+.cxc-correo-releer { display: flex; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 767px) {
+  .cxc-llegada { grid-template-columns: minmax(0, 1fr) 48px; }
+  .cxc-llegada-cuando { grid-column: 1; grid-row: 1; }
+  .cxc-llegada-mas { grid-column: 2; grid-row: 1; }
+  .cxc-llegada-que, .cxc-llegada-chip { grid-column: 1 / -1; }
+  .cxc-llegada-menu { position: fixed; left: 8px; right: 8px; bottom: 8px; top: auto; width: auto; border-radius: 16px; box-shadow: 0 -6px 24px rgba(15, 27, 45, .12); }
+}
 /* S01c · La factura contra el albarán, línea a línea */
 .cxc-lineas { margin-top: 4px; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .cxc-lineas .cx-enlace { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; font-size: 13px; }

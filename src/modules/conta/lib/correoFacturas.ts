@@ -74,3 +74,83 @@ export function resumenLineas(c: ComparacionLineas): string {
   ].filter(Boolean)
   return partes.join(' · ')
 }
+
+// ── S01j·2 · Qué salió de cada correo (maquetas 1 y 2, aprobadas por Julio el 01/11) ──
+
+const NOMBRE_PLATAFORMA: Record<string, string> = { glovo: 'Glovo', justeat: 'Just Eat' }
+/** «Glovo» o «Just Eat», por la plataforma del correo; si no se sabe, null. */
+export const nombrePlataforma = (p: string | null | undefined): string | null => (p ? NOMBRE_PLATAFORMA[p] ?? null : null)
+
+/** «1–15/10», o «16/09–15/10» si cambia de mes; sin periodo, null. */
+export function periodoCorto(desde: string | null | undefined, hasta: string | null | undefined): string | null {
+  if (!desde || !hasta) return null
+  const [, md, dd] = desde.slice(0, 10).split('-')
+  const [, mh, dh] = hasta.slice(0, 10).split('-')
+  return md === mh ? `${Number(dd)}–${Number(dh)}/${mh}` : `${dd}/${md}–${dh}/${mh}`
+}
+
+export type TonoChip = 'bien' | 'mira' | 'falta' | 'nada'
+export interface QueSalio { titulo: string; texto: string | null; chip: { texto: string; tono: TonoChip } }
+
+/** «te ingresa 236,27 €» o, si sale negativa, «le debes 5,98 €». */
+export function frasePago(neto: number | null | undefined): string | null {
+  if (neto == null) return null
+  return neto < 0 ? `le debes ${eurosExactos(-neto)}` : `te ingresa ${eurosExactos(neto)}`
+}
+
+/**
+ * Lo que salió de un correo, en una línea de título, una de apoyo y su estado:
+ * la factura y la liquidación de Glovo (por su Excel), las de Just Eat (por su
+ * cuerpo), el Excel que se quedó sin leer, o el que no venía. Lo demás, como
+ * siempre (queSeHizo). Nunca se esconde lo que falta (regla 7).
+ */
+export function queSalio(l: LlegadaCorreo): QueSalio {
+  const plat = nombrePlataforma(l.plataforma) ?? l.liquidaciones?.[0]?.plataforma ?? null
+  const f = l.factura ?? (l.factura_comision ? { ...l.factura_comision, proveedor: null, casada: false } : null)
+  const nFactura = f ? (f.numero ?? f.codigo ?? 'sin número') : null
+  const liqs = l.liquidaciones ?? []
+  if (liqs.length > 0) {
+    const x = liqs[0]
+    const donde = [x.tienda, x.local, periodoCorto(x.desde, x.hasta)].filter(Boolean).join(' · ')
+    const deQue = liqs.length === 1 ? `liquidación de ${plat ?? x.plataforma ?? 'la plataforma'}` : `${liqs.length} liquidaciones de ${plat ?? x.plataforma ?? 'la plataforma'}`
+    const titulo = `${nFactura ? `Factura ${nFactura} y ` : ''}${nFactura ? deQue : deQue.charAt(0).toUpperCase() + deQue.slice(1)}${donde ? ` · ${donde}` : ''}`
+    const todasDeOtro = liqs.every((y) => y.otro_correo)
+    const pago = liqs.length === 1 ? frasePago(x.neto) : null
+    const texto = todasDeOtro
+      ? `Ya había entrado con otro correo: no se ha creado otra${liqs.length === 1 ? '' : 's'}.${pago ? ` ${pago.charAt(0).toUpperCase()}${pago.slice(1)}.` : ''}`
+      : pago
+    if (l.factura_comision?.en_revision) {
+      return { titulo, texto: l.factura_comision.nota ?? 'Su factura de comisión queda en revisión; la liquidación sí entró.', chip: { texto: 'En revisión · la factura', tono: 'mira' } }
+    }
+    if (!f) return { titulo, texto, chip: { texto: 'Entró la liquidación', tono: 'bien' } }
+    return { titulo, texto, chip: { texto: x.pago_el ? `Ligadas · se paga el ${x.pago_el.slice(8, 10)}/${x.pago_el.slice(5, 7)}` : 'Ligadas', tono: 'bien' } }
+  }
+  if (l.excel === 'sin_leer') {
+    return {
+      titulo: nFactura ? `Factura ${nFactura} de ${plat ?? 'Glovo'}` : `Correo de ${plat ?? 'Glovo'}`,
+      texto: 'Entró antes de que se leyera el Excel: la liquidación se quedó sin leer. Vuelve a leerlo desde el ⋯.',
+      chip: { texto: 'Falta leer el Excel', tono: 'falta' },
+    }
+  }
+  if (l.excel === 'no_traia' && f) {
+    return {
+      titulo: `Factura ${nFactura} de ${plat ?? 'Glovo'}`,
+      texto: 'Este correo no traía Excel: la liquidación de esta quincena sigue faltando.',
+      chip: { texto: 'Falta la liquidación', tono: 'falta' },
+    }
+  }
+  const q = queSeHizo(l)
+  const tono: TonoChip = q.tono === 'bien' ? 'bien' : q.tono === 'mira' ? 'mira' : q.tono === 'espera' ? 'falta' : 'nada'
+  const chip = q.tono === 'bien' ? 'Hecho' : q.tono === 'mira' ? 'Mírala' : q.tono === 'espera' ? 'Esperando' : 'Nada que hacer'
+  return { titulo: q.titulo, texto: q.texto, chip: { texto: chip, tono } }
+}
+
+/** Lo que se puede hacer con una llegada desde su ⋯ (solo lo que tiene sentido para ella). */
+export function accionesDeLlegada(l: LlegadaCorreo): ('releer' | 'releer_plataforma' | 'factura' | 'liquidacion')[] {
+  const a: ('releer' | 'releer_plataforma' | 'factura' | 'liquidacion')[] = []
+  if (l.email_id && l.resultado !== 'confirmacion') a.push('releer')
+  if (l.plataforma) a.push('releer_plataforma')
+  if (l.factura?.id || l.factura_comision?.id) a.push('factura')
+  if ((l.liquidaciones ?? []).length > 0) a.push('liquidacion')
+  return a
+}
