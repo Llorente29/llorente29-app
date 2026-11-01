@@ -1,0 +1,8 @@
+# S01o · PR 1 · la vuelta atrás, en orden inverso. Lo ya apuntado (asientos
+# validados, inalterables) no lo quita: se deshace antes desde «Apuntadas
+# solas» › «Deshacer», que lo anula con su contraasiento (es de administrador).
+cuenta: scripts/conta/produccion/cuentas/s01o-apunta-solo.sql
+supabase/vuelta-atras/20261101T1732_s01o_foodint.down.sql
+supabase/vuelta-atras/20261101T1731_s01o_plataforma_apunta_sola.down.sql
+supabase/vuelta-atras/20261101T1730_s01o_comision_por_numero.down.sql
+supabase/vuelta-atras/20261101T1729_s01o_ficha_publicidad.down.sql

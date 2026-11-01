@@ -1,0 +1,30 @@
+{
+ "_que": "S01o · PR 1 · contexto de producción de la tanda, medido en SOLO LECTURA el 01/11 a las 18:05Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen company_account_link (82 filas), company_purchase_setting (1, la de Foodint, con el interruptor apagado) y _conta_comision_buscar(uuid) (la 1730 la cambia con su respaldo); no existe nada de lo que crean la 1730 y la 1731; nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-01T18:05Z",
+ "tanda": {
+  "supabase/migrations/20261101T1729_s01o_ficha_publicidad.sql": "402671f560848dc66723b2cc1b4e1c5c",
+  "supabase/migrations/20261101T1730_s01o_comision_por_numero.sql": "b40210a3846bfd0d6f00c801db311970",
+  "supabase/migrations/20261101T1731_s01o_plataforma_apunta_sola.sql": "f9afa697e424856d3d10834076084bbb",
+  "supabase/migrations/20261101T1732_s01o_foodint.sql": "01d3dd4fefc9c2dd1b7aaece67ece397"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account_link",
+   "public.company_purchase_setting"
+  ],
+  "funciones": [
+   "public._conta_comision_buscar(uuid)"
+  ],
+  "filas": {
+   "public.company_account_link": 82,
+   "public.company_purchase_setting": 1
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -2,10 +2,10 @@
 --
 -- Vuelta atrás de la 1731: fuera la pasada, sus funciones y su tabla. Lo que ya
 -- apuntó (asientos validados, inalterables) se queda: se deshace con «Deshacer»
--- (que anula su asiento) antes de quitar esto, o con la vuelta atrás de la 1732.
+-- (que anula su asiento con su contraasiento) antes de quitar esto.
 do $$ begin
-  if exists (select 1 from pg_namespace where nspname = 'cron') then
-    perform cron.unschedule(jobid) from cron.job where jobname = 's01o-apunta-solo';
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if exists (select 1 from cron.job where jobname = 's01o-apunta-solo') then perform cron.unschedule('s01o-apunta-solo'); end if;
   end if;
 end $$;
 drop function if exists public._conta_plataformas_apuntar_todas();

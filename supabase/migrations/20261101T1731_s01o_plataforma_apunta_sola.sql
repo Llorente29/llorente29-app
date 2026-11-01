@@ -6,9 +6,10 @@
 -- plataformas de Foodint tenía asiento, ni propuesto.
 --
 -- «Seguro al 100 %» para una factura de plataforma, cada condición comprobable:
---   · el proveedor es una plataforma con subcuenta en su ficha, y su cuenta de gasto
---     sale de la ficha o de lo aprendido con confianza alta (todas sus facturas
---     anteriores validadas a una sola cuenta 6…; en Foodint, la que vino de Diez);
+--   · el proveedor es una plataforma con subcuenta y cuenta de gasto en su ficha
+--     (solo de la ficha: lo aprendido es «probable», no «seguro»); si la ficha
+--     tiene también cuenta de publicidad, la factura va a una u otra por sus
+--     líneas, y si mezcla las dos se queda: «No sé si es comisión o publicidad»;
 --   · tiene número y fecha, y no hay otra con el mismo número del mismo proveedor;
 --   · base + IVA = total, y el IVA es el 21 % de la base (el tipo de la ficha);
 --   · un CARGO va ligado a la liquidación que lleva su número (o, si la
@@ -52,7 +53,7 @@ returns jsonb language plpgsql stable security definer set search_path to 'publi
 declare
   v public.supplier_invoice; d jsonb; v_canal uuid; v_plat text; v_party uuid; v_prov text; v_gasto text; v_iva_tipo uuid; v_iva_cta text;
   cs public.channel_settlement; v_local uuid; v_num text; v_num_liq text; v_ref numeric; v_dif numeric; v_tarifa numeric := 0;
-  v_ligadas numeric; v_dt text; v_por text; v_n_gasto int;
+  v_ligadas numeric; v_dt text; v_por text; v_publi text; v_n_lin int := 0; v_n_pub int := 0; v_tipo text := 'comision';
 begin
   select * into v from public.supplier_invoice where id = p_invoice;
   if v.id is null then return jsonb_build_object('seguro', false, 'motivo', 'No está.'); end if;
@@ -64,6 +65,7 @@ begin
   v_canal := nullif(d->>'canal', '')::uuid;
   if v_canal is null then return jsonb_build_object('seguro', false, 'motivo', 'No es de una plataforma.'); end if;
   select sc.name into v_plat from public.sales_channel sc where sc.id = v_canal and sc.account_id = v.account_id;
+  v_plat := case v_plat when 'JustEat' then 'Just Eat' when 'UberEats' then 'Uber' else v_plat end;  -- su nombre para leer
   if v.invoice_number is null or v.invoice_date is null then return jsonb_build_object('seguro', false, 'motivo', 'Le falta el número o la fecha.'); end if;
   v_num := upper(regexp_replace(v.invoice_number, '[^A-Za-z0-9]', '', 'g'));
   if exists (select 1 from public.supplier_invoice o where o.account_id = v.account_id and o.id <> v.id and o.supplier_id = v.supplier_id
@@ -76,15 +78,21 @@ begin
   select a.code into v_gasto from public.company_account_link k join public.company_account a on a.id = k.company_account_id
    where k.account_id = v.account_id and k.company_id = v.company_id and k.entity = 'supplier' and k.entity_id = v.supplier_id::text and k.role = 'gasto' limit 1;
   select pr.party_id into v_party from public.party_role pr where pr.account_id = v.account_id and pr.role = 'supplier' and pr.supplier_id = v.supplier_id limit 1;
-  if v_prov is null then return jsonb_build_object('seguro', false, 'motivo', 'Su ficha no dice su subcuenta.'); end if;
+  if v_prov is null then return jsonb_build_object('seguro', false, 'motivo', format('Falta la subcuenta en la ficha de %s.', coalesce(v_plat, 'la plataforma')), 'falta_ficha', true); end if;
+  -- La cuenta de gasto: SOLO la de su ficha (Julio, 01/11: «probable» no es «seguro»). Si la ficha tiene
+  -- también cuenta de publicidad, la factura va a una u otra por sus líneas; si mezcla las dos, no se adivina.
+  select a.code into v_publi from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+   where k.account_id = v.account_id and k.company_id = v.company_id and k.entity = 'supplier' and k.entity_id = v.supplier_id::text and k.role = 'publicidad' limit 1;
   if v_gasto is null then
-    -- Lo aprendido con confianza alta (como conta_gasto_aprendido, 0250): todas sus facturas anteriores validadas fueron a UNA cuenta de gasto.
-    select min(a.code), count(distinct a.code) into v_gasto, v_n_gasto
-      from public.journal_entry e join public.journal_line l on l.entry_id = e.id join public.company_account a on a.id = l.company_account_id
-     where e.account_id = v.account_id and e.company_id = v.company_id and e.series = 2 and e.status = 'validado' and a.code like '6%'
-       and exists (select 1 from public.journal_line l2 join public.company_account a2 on a2.id = l2.company_account_id where l2.entry_id = e.id and a2.code = v_prov);
-    if v_n_gasto = 0 then return jsonb_build_object('seguro', false, 'motivo', 'Ni su ficha ni sus facturas anteriores dicen a qué cuenta de gasto va.'); end if;
-    if v_n_gasto > 1 then return jsonb_build_object('seguro', false, 'motivo', 'Sus facturas anteriores fueron a varias cuentas de gasto: no es seguro cuál.'); end if;
+    return jsonb_build_object('seguro', false, 'motivo', format('Falta la cuenta de gasto en la ficha de %s.', coalesce(v_plat, 'la plataforma')), 'falta_ficha', true);
+  end if;
+  if v_publi is not null then
+    select count(*), count(*) filter (where l.raw_text ~* 'publicitari|publicidad|\mads\M|marketing') into v_n_lin, v_n_pub
+      from public.supplier_invoice_line l where l.supplier_invoice_id = v.id;
+    if v_n_lin > 0 and v_n_pub = v_n_lin then v_gasto := v_publi; v_tipo := 'publicidad';
+    elsif v_n_pub > 0 or v_n_lin = 0 then
+      return jsonb_build_object('seguro', false, 'motivo', 'No sé si es comisión o publicidad.');
+    end if;
   end if;
   -- Los importes: base + IVA = total y el IVA es el 21 %.
   if v.grand_total is null or v.tax_base_total is null or v.tax_total is null
@@ -112,7 +120,7 @@ begin
     v_por := format('Abono de %s: un gasto negativo de la plataforma.%s', v_plat,
                     case when cs.id is null then ' Sin liquidación ligada.' else format(' Ligado a su liquidación del %s.', public._conta_s01o_periodo(cs.period_from, cs.period_to)) end);
     return jsonb_build_object('seguro', true, 'regla', 'abono', 'porque', v_por, 'liquidacion', cs.id, 'local', v_local,
-      'proveedor', v_prov, 'gasto', v_gasto, 'iva_tipo', v_iva_tipo, 'iva_cuenta', v_iva_cta, 'tercero', v_party, 'plataforma', v_plat);
+      'proveedor', v_prov, 'gasto', v_gasto, 'tipo', v_tipo, 'iva_tipo', v_iva_tipo, 'iva_cuenta', v_iva_cta, 'tercero', v_party, 'plataforma', v_plat);
   end if;
   if cs.id is null then return jsonb_build_object('seguro', false, 'motivo', 'No está ligada a su liquidación.'); end if;
   select coalesce(cs.location_id, ps.location_id) into v_local from public.platform_store ps where ps.id = cs.store_id;
@@ -144,14 +152,14 @@ begin
       return jsonb_build_object('seguro', false, 'motivo', format('La factura y su liquidación difieren en %s y no es la tarifa recurrente.', public.conta_euros_exactos(v_dif)));
     end if;
   end if;
-  v_por := format('Factura de %s de su liquidación del %s de %s (mismo número); %s.', v_plat, public._conta_s01o_periodo(cs.period_from, cs.period_to),
+  v_por := format('Factura %s de su liquidación del %s de %s (mismo número); %s.', case when v_tipo = 'publicidad' then 'de publicidad de ' else 'de ' end || v_plat, public._conta_s01o_periodo(cs.period_from, cs.period_to),
                   coalesce((select l.name from public.locations l where l.id = v_local and l.account_id = v.account_id), 'su local'), v_dt);
   if v_num_liq = '' then
-    v_por := format('Factura de %s ligada a su liquidación del %s de %s; %s.', v_plat, public._conta_s01o_periodo(cs.period_from, cs.period_to),
+    v_por := format('Factura %s ligada a su liquidación del %s de %s; %s.', case when v_tipo = 'publicidad' then 'de publicidad de ' else 'de ' end || v_plat, public._conta_s01o_periodo(cs.period_from, cs.period_to),
                     coalesce((select l.name from public.locations l where l.id = v_local and l.account_id = v.account_id), 'su local'), v_dt);
   end if;
   return jsonb_build_object('seguro', true, 'regla', 'plataforma', 'porque', v_por, 'liquidacion', cs.id, 'local', v_local,
-    'proveedor', v_prov, 'gasto', v_gasto, 'iva_tipo', v_iva_tipo, 'iva_cuenta', v_iva_cta, 'tercero', v_party, 'plataforma', v_plat);
+    'proveedor', v_prov, 'gasto', v_gasto, 'tipo', v_tipo, 'iva_tipo', v_iva_tipo, 'iva_cuenta', v_iva_cta, 'tercero', v_party, 'plataforma', v_plat);
 end $$;
 revoke all on function public._conta_plataforma_seguro(uuid) from public, anon, authenticated;
 
@@ -281,12 +289,17 @@ declare v public.supplier_invoice; a public.supplier_invoice_auto; v_quien text;
 begin
   select * into v from public.supplier_invoice where id = p_invoice for update;
   if v.id is null or not public.belongs_to_account(v.account_id) then raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501'; end if;
-  if not public.current_user_is_admin_or_manager_of(v.account_id) then raise exception 'Solo un administrador o un encargado deshace lo apuntado solo.' using errcode = '42501'; end if;
+  -- Anular un asiento validado es de administrador (journal_entry_anular): deshacer, también.
+  if not public.current_user_is_admin_of(v.account_id) then raise exception 'Solo un administrador deshace lo apuntado solo.' using errcode = '42501'; end if;
   select * into a from public.supplier_invoice_auto where invoice_id = v.id and estado = 'apuntada';
   if a.invoice_id is null then raise exception 'Esta factura no la apuntó Sumied sola.' using errcode = '22023'; end if;
   v_quien := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
   perform public.journal_entry_anular(a.entry_id, 'Deshecho lo apuntado solo por Sumied', current_date, v_quien);
   delete from public.supplier_invoice_payment where invoice_id = v.id and account_id = v.account_id and method = 'compensation' and created_by_name = 'Sumied · compensada con la liquidación';
+  if v.paid_at is not null then
+    insert into public.supplier_invoice_payment_log (account_id, invoice_id, action, paid_at, paid_method, actor_name)
+    values (v.account_id, v.id, 'unpaid', v.paid_at, v.paid_method, v_quien);
+  end if;
   update public.supplier_invoice set status = 'en_revision', paid_at = null, paid_method = null, paid_by_name = null, approved_at = null, approved_by_name = null, updated_at = now() where id = v.id;
   update public.supplier_invoice_auto set estado = 'deshecha', porque = format('Devuelta a «Por revisar» por %s.', v_quien), at = now() where invoice_id = v.id;
   return jsonb_build_object('texto', format('Devuelta a «Por revisar»: %s. Su asiento queda anulado con su contraasiento.', coalesce(v.invoice_number, 'la factura')));
@@ -297,18 +310,20 @@ grant execute on function public.conta_apuntada_sola_deshacer(uuid, text) to aut
 -- La pasada de todas las empresas con el interruptor encendido, cada media hora.
 create or replace function public._conta_plataformas_apuntar_todas()
 returns void language plpgsql security definer set search_path to 'public' as $$
-declare v_e uuid;
+declare v_e uuid; v_mal text[] := '{}';
 begin
   for v_e in select company_id from public.company_purchase_setting where post_safe_invoices loop
     begin perform public._conta_plataformas_apuntar(v_e);
-    exception when others then raise warning 'S01o: la pasada de %s ha fallado: %', v_e, sqlerrm; end;
+    exception when others then v_mal := v_mal || format('%s: %s', v_e, sqlerrm); end;
   end loop;
+  -- Las demás empresas ya han pasado; esto solo hace que cron la cuente como fallida (un warning lo cuenta como éxito: regla 8).
+  if cardinality(v_mal) > 0 then raise exception 'S01o: la pasada ha fallado en %', array_to_string(v_mal, ' · '); end if;
 end $$;
 revoke all on function public._conta_plataformas_apuntar_todas() from public, anon, authenticated;
 
 do $$ begin
-  if exists (select 1 from pg_namespace where nspname = 'cron') then
-    perform cron.unschedule(jobid) from cron.job where jobname = 's01o-apunta-solo';
+  if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    if exists (select 1 from cron.job where jobname = 's01o-apunta-solo') then perform cron.unschedule('s01o-apunta-solo'); end if;
     perform cron.schedule('s01o-apunta-solo', '7,37 * * * *', 'select public._conta_plataformas_apuntar_todas()');
   end if;
 end $$;
