@@ -1,0 +1,30 @@
+{
+ "_que": "S01i · contexto de producción medido en SOLO LECTURA el 01/11 a las 00:50Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen channel_settlement y supplier_invoice; existen bank_facturas_para_casar y conta_pagos_lista (se reemplazan con la misma firma); las funciones y la tabla nuevas no existen; nada en el camino del pedido; ninguna de las tres en el historial.",
+ "medido": "2026-11-01T00:50Z",
+ "tanda": {
+  "supabase/migrations/20261101T0050_s01i_comision_liquidacion.sql": "3408d2ee9556b47ee4df9bae197d08e6",
+  "supabase/migrations/20261101T0051_s01i_comision_sin_banco.sql": "19f8afdc84feea2698f73a00841811ae",
+  "supabase/migrations/20261101T0052_s01i_comisiones_foodint.sql": "8ae1199cb55a0635afec9a032af658df"
+ },
+ "contexto": {
+  "tablas": [
+   "public.channel_settlement",
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public.bank_facturas_para_casar(uuid)",
+   "public.conta_pagos_lista(uuid,date)"
+  ],
+  "filas": {
+   "public.channel_settlement": 262,
+   "public.supplier_invoice": 155
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
