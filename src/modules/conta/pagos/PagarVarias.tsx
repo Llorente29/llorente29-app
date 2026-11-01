@@ -100,17 +100,20 @@ export function DialogoPagarVarias({ empresaId, cuenta, facturas, alCerrar }: {
           const porQueNo = fuera.find((x) => x.fila === f)?.porque
           return (
             <li key={f.facturaId} data-prueba="fila-varias" data-sale={sale ? 'si' : porQueNo ? 'no' : 'comprobando'}>
-              <strong>{p?.beneficiario ?? f.proveedor}</strong> · {f.numero ?? 'sin número'}{p?.sePuede ? <> · IBAN ···{p.iban4} · {ETIQUETA_IBAN[p.ibanCheck ?? ''] ?? p.ibanCheck} · <strong>{eurosExactos(p.importe)}</strong></> : null}
-              {p?.sePuede && <span className="s-apoyo"> · {tt.texto}</span>}
-              {p?.sePuede && p.motivosTexto.length > 0 && <span className="s-apoyo"> · pide segunda: {p.motivosTexto.join(', ')}</span>}
+              {/* Cada parte en su bloque: el aviso no puede quedar encima de la casilla (e2e 41357286790, en el ordenador). */}
+              <div>
+                <strong>{p?.beneficiario ?? f.proveedor}</strong> · {f.numero ?? 'sin número'}{p?.sePuede ? <> · IBAN ···{p.iban4} · {ETIQUETA_IBAN[p.ibanCheck ?? ''] ?? p.ibanCheck} · <strong>{eurosExactos(p.importe)}</strong></> : null}
+                {p?.sePuede && <span className="s-apoyo"> · {tt.texto}</span>}
+                {p?.sePuede && p.motivosTexto.length > 0 && <span className="s-apoyo"> · pide segunda: {p.motivosTexto.join(', ')}</span>}
+                {!p && !f.error && <span className="s-apoyo"> · comprobando…</span>}
+              </div>
+              {porQueNo && <p className="s-aviso-lista" data-tono="duda" role="status">No sale: {porQueNo}</p>}
               {f.titular?.resultado === 'no_coincide' && (
-                <span className="pg-dialogo-campos">
+                <div className="pg-dialogo-campos">
                   <label className="s-check"><input type="checkbox" checked={f.pagarIgual} onChange={(e) => cambiar(f.facturaId, { pagarIgual: e.target.checked })} /> Lo he comprobado con el proveedor: pagar igual</label>
                   {f.pagarIgual && <Texto aria-label={`Por qué pagar igual a ${f.proveedor}`} valor={f.porque} alCambiar={(v) => cambiar(f.facturaId, { porque: v })} maxLength={200} />}
-                </span>
+                </div>
               )}
-              {porQueNo && <span className="s-aviso-lista" data-tono="duda" role="status"> No sale: {porQueNo}</span>}
-              {!p && !f.error && <span className="s-apoyo"> · comprobando…</span>}
             </li>
           )
         })}
