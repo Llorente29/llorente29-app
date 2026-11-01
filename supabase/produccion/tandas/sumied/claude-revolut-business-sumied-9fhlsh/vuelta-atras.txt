@@ -1,3 +1,3 @@
-# B01 Revolut · PR 2a · la vuelta atrás: quita las tablas y las funciones de la 1234.
-cuenta: scripts/conta/produccion/cuentas/b01p-pagos.sql
-supabase/vuelta-atras/20261101T1234_b01p_pagos_base.down.sql
+# B01 Revolut · PR 2b · la vuelta atrás: quita las funciones de la 1614 y deja el tipo y la vista como estaban (para si ya hay remesas «banco»).
+cuenta: scripts/conta/produccion/cuentas/b01p-salida.sql
+supabase/vuelta-atras/20261101T1614_b01p_pagos_salida.down.sql

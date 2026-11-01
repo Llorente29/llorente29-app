@@ -347,6 +347,11 @@ verify_jwt = false
 [functions.conta-revolut-conectar]
 verify_jwt = true
 
+# B01 Revolut · PR 2b (01/11). conta-pagar: la única que manda un pago a un
+# banco; con la sesión de quien paga. Quién puede qué lo decide la base.
+[functions.conta-pagar]
+verify_jwt = true
+
 # conta-revolut-leer: la lectura de cada hora. La despierta el cron
 # conta-revolut-despertar con x-cron-secret (CRON_SECRET), sin sesión; sin el
 # secreto, 401. verify_jwt = false.

@@ -9,7 +9,7 @@
 //   · el registro no lleva ni secretos ni el IBAN entero.
 import { describe, expect, it } from 'vitest'
 import { crearLlave } from '../../../../../supabase/functions/_shared/revolut/certificado.ts'
-import { baseDeRevolut, leerEmpresa, paraElRegistro, type ConexionRevolut, type Srv } from '../../../../../supabase/functions/_shared/revolut/servidor.ts'
+import { baseDeRevolut, leerEmpresa, paraElRegistro, ponerAlDiaPagos, type ConexionRevolut, type Srv } from '../../../../../supabase/functions/_shared/revolut/servidor.ts'
 
 const EMPRESA = '00000000-0000-4000-8000-0000000000e1'
 const IBAN = 'ES0099990000000000005678'
@@ -145,5 +145,40 @@ describe('baseDeRevolut.conocidos', () => {
     const b = baseSimulada({})
     await baseDeRevolut(b.srv).conocidos!('banco-1', Array.from({ length: 450 }, (_, i) => `t${i}:l1`))
     expect(b.consultasIn).toEqual([200, 200, 50])
+  })
+})
+
+// B01 · PR 2b · Los pagos que esperan al banco se ponen al día en cada lectura.
+describe('ponerAlDiaPagos', () => {
+  it('pregunta por cada pago (por su id o, sin él, por su request_id) y apunta lo que dice el banco', async () => {
+    const dice: Record<string, unknown>[] = []
+    const srv = {
+      async rpc(fn: string, args: Record<string, unknown> = {}) {
+        if (fn === 'conta_pago_por_saber') return { data: [
+          { salida: 's1', request_id: 'rq-1', banco_id: 'tx-1' },
+          { salida: 's2', request_id: 'rq-2', banco_id: null },
+          { salida: 's3', request_id: 'rq-3', banco_id: 'tx-3' },
+        ], error: null }
+        if (fn === 'conta_pago_banco_dice') { dice.push(args); return { data: { estado: args.p_estado, sin_cambio: args.p_salida === 's3' }, error: null } }
+        return { data: null, error: null }
+      },
+    } as unknown as Srv
+    const urls: string[] = []
+    const f = async (u: string) => {
+      urls.push(u.replace('https://sandbox-b2b.revolut.com/api/1.0', ''))
+      const json = u.includes('tx-1') ? { id: 'tx-1', state: 'completed', completed_at: '2026-11-01T10:00:00Z' }
+        : u.includes('rq-2') ? { id: 'tx-2', state: 'declined', reason_code: 'algo' } : { id: 'tx-3', state: 'pending' }
+      return new Response(JSON.stringify(json), { status: 200 })
+    }
+    const r = await ponerAlDiaPagos(srv, f, { company_id: EMPRESA, entorno: 'sandbox' } as ConexionRevolut, 'tok')
+    expect(r).toEqual({ preguntados: 3, cambiados: 2, fallos: 0 })
+    expect(urls).toEqual(['/transaction/tx-1', '/transaction/rq-2?id_type=request_id', '/transaction/tx-3'])
+    expect(dice.map((d) => [d.p_salida, d.p_estado, d.p_banco_id])).toEqual([['s1', 'pagada', 'tx-1'], ['s2', 'rechazada', 'tx-2'], ['s3', 'esperando_banco', 'tx-3']])
+  })
+
+  it('sin la 1614 (o sin pagos que esperen), no hace nada', async () => {
+    const srv = { async rpc() { return { data: null, error: { message: 'function conta_pago_por_saber does not exist' } } } } as unknown as Srv
+    expect(await ponerAlDiaPagos(srv, async () => { throw new Error('no tenía que llamar') }, { company_id: EMPRESA, entorno: 'sandbox' } as ConexionRevolut, 'tok'))
+      .toEqual({ preguntados: 0, cambiados: 0, fallos: 0 })
   })
 })

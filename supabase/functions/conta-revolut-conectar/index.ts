@@ -28,7 +28,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
 import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { crearLlave } from "../_shared/revolut/certificado.ts";
-import { clienteRevolut, entornoDe, FalloRevolut, dejanAvisar, paginaDeAutorizar, pedirToken, PERMISOS_AL_CONECTAR_TEXTO, registrarAviso, quitarAviso } from "../_shared/revolut/cliente.ts";
+import { clienteRevolut, entornoDe, FalloRevolut, dejanAvisar, paginaDeAutorizar, pedirToken, PERMISOS_AL_CONECTAR_TEXTO, PERMISOS_CON_PAGOS_TEXTO, registrarAviso, quitarAviso } from "../_shared/revolut/cliente.ts";
 import { ultimos4 } from "../_shared/revolut/lectura.ts";
 import { COLUMNAS_CONEXION, guardarSecreto, leerEmpresa, paraElRegistro, secreto, tokenDeAcceso, type ConexionRevolut } from "../_shared/revolut/servidor.ts";
 
@@ -125,7 +125,7 @@ Deno.serve(async (req) => {
         if (conexion && b.nuevo !== true && conexion.vuelta === vuelta && conexion.entorno === ENTORNO && ["certificado", "autorizar"].includes(conexion.estado)) {
           const { data } = await srv.from("revolut_conexion").select("certificado").eq("id", conexion.id).single();
           if (desde) await srv.from("revolut_conexion").update({ desde_historico: desde }).eq("id", conexion.id);
-          return json({ ok: true, certificado: data.certificado, vuelta, estado: conexion.estado });
+          return json({ ok: true, certificado: data?.certificado, vuelta, estado: conexion.estado });
         }
         const llave = await crearLlave(String(co.legal_name ?? co.trade_name ?? "Empresa"));
         await guardarSecreto(srv, empresa, "privada", llave.privadaPem);
@@ -147,9 +147,53 @@ Deno.serve(async (req) => {
         await srv.from("revolut_conexion").update({ estado: "autorizar", estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString() }).eq("id", conexion.id);
         return json({ ok: true, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISOS_AL_CONECTAR_TEXTO, estado: state }) });
       }
+      case "activar_pagos": {
+        // B01 · PR 2b · Volver a pasar por la página de autorizar de Revolut, ahora con PAY.
+        if (conexion?.estado !== "conectada") return mal("Revolut no está conectado en esta empresa: conéctalo antes de activar los pagos.");
+        if (conexion.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que se conectó. Desconéctalo y vuelve a conectar.");
+        const { data: admin } = await sb.rpc("current_user_is_admin_of", { p_account_id: co.account_id });
+        if (admin !== true) return mal("Solo un administrador activa los pagos.", 403);
+        // Sin llave ni PIN no podría dar la segunda aprobación (maqueta «Activar pagos», paso 1).
+        const [{ count: llaves }, { data: pin }] = await Promise.all([
+          srv.from("conta_llave").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).is("revoked_at", null),
+          srv.from("conta_pago_pin").select("bloqueado_at").eq("user_id", u.user.id).maybeSingle(),
+        ]);
+        if (!llaves && !(pin && !pin.bloqueado_at)) return mal("Antes de activar los pagos, activa tu llave de acceso o crea tu PIN de pago: con ellos darás la segunda aprobación.");
+        const clientId = await secreto(srv, empresa, "client_id");
+        if (!clientId) return mal("Falta el Client ID de esta empresa: desconecta Revolut y vuelve a conectar.");
+        const state = [...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("");
+        await srv.from("revolut_conexion").update({ estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString() }).eq("id", conexion.id);
+        return json({ ok: true, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISOS_CON_PAGOS_TEXTO, estado: state }) });
+      }
       case "vuelta": {
         const c = conexion!;
         if (c.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que empezaste. Cierra el asistente y vuelve a conectar: hay que copiar un certificado nuevo.");
+        // B01 · PR 2b · Una conexión que ya estaba conectada y vuelve de Revolut es «Activar pagos».
+        if (c.estado === "conectada") {
+          const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
+          if (!privada || !clientId) return mal("Falta la llave o el Client ID de esta empresa: desconecta Revolut y vuelve a conectar.");
+          let t;
+          try {
+            t = await pedirToken(fetch, c.entorno, { privadaPem: privada, clientId, vuelta: c.vuelta, codigo: String(b.code) });
+          } catch (e) {
+            await srv.from("revolut_conexion").update({ estado_oauth_huella: null, estado_oauth_at: null }).eq("id", c.id);
+            return mal(`No has autorizado los pagos en Revolut: ${e instanceof Error ? e.message : String(e)} Sumied sigue leyendo como antes; no ha cambiado nada.`);
+          }
+          if (t.renovacion) await guardarSecreto(srv, empresa, "renovacion", t.renovacion);
+          const { data: act, error: actErr } = await srv.rpc("conta_pago_activar", { p_company: empresa, p_user: u.user.id });
+          if (actErr) {
+            await srv.from("revolut_conexion").update({ estado_oauth_huella: null, estado_oauth_at: null }).eq("id", c.id);
+            return mal(actErr.message);
+          }
+          await srv.from("revolut_conexion").update({ permisos: PERMISOS_CON_PAGOS_TEXTO, estado_oauth_huella: null, estado_oauth_at: null, last_error: null }).eq("id", c.id);
+          const personas = ((act as Record<string, unknown>)?.personas as string[] | undefined) ?? [];
+          const { data: topes } = await sb.rpc("conta_pago_topes", { p_company: empresa });
+          const t2 = (topes ?? {}) as Record<string, number>;
+          const euros = (n: number) => `${Number(n ?? 0).toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
+          console.log(`[conta-revolut-conectar] ${empresa.slice(0, 8)}: pagos activados (${c.entorno}), ${personas.length} personas pagan`);
+          return json({ ok: true, pagos: true, personas,
+            texto: `Pagos activados con Revolut. Puede pagar: ${personas.join(", ") || quien}. Topes: ${euros(t2.tope_pago)} por pago y ${euros(t2.tope_dia)} al día.` });
+        }
         const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
         if (!privada || !clientId) return mal("Falta la llave o el Client ID de esta empresa. Empieza otra vez.");
         let t;
