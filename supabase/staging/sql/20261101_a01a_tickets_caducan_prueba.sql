@@ -37,13 +37,28 @@ insert into _s values
   ('huella', 'dd8f4ead3f4fe4bf6fbcbe10cd09f5dc');
 
 -- Un trabajo de A en su local, de hace p_hace.
-create function pg_temp.trabajo(p_hace interval) returns uuid language sql as $f$
-  insert into public.print_job (account_id, location_id, printer_id, doc_type, payload, created_at)
+create function pg_temp.trabajo(p_hace interval) returns uuid language plpgsql as $f$
+declare v_id uuid; v_st text;
+begin
+  insert into public.print_job (account_id, location_id, printer_id, doc_type, payload, status, created_at)
   values ((select v::uuid from _s where clave = 'a'), (select v::uuid from _s where clave = 'local'),
           (select id from public.printer where account_id = (select v::uuid from _s where clave = 'a') order by id limit 1),
-          'kitchen', '{"prueba": "A01a"}'::jsonb, now() - p_hace)
-  returning id;
-$f$;
+          'kitchen', '{"prueba": "A01a"}'::jsonb, 'pending', now() - p_hace)
+  returning id, status into v_id, v_st;
+  if v_id is null then raise exception 'PRUEBA A01a: el trabajo de prueba no se ha guardado.'; end if;
+  if v_st <> 'pending' then
+    raise notice 'A01a: un disparador de esta base deja el trabajo nuevo en «%»; se pone «pending» para la prueba.', v_st;
+    update public.print_job set status = 'pending' where id = v_id;
+  end if;
+  return v_id;
+end $f$;
+-- Lo que tiene print_job en esta base, para leerlo en el registro.
+do $$ begin
+  raise notice 'A01a · print_job aquí: CHECK de estado «%»; disparadores: %; vigía md5 %.',
+    (select pg_get_constraintdef(oid) from pg_constraint where conname = 'print_job_status_check'),
+    coalesce((select string_agg(tgname, ', ') from pg_trigger where tgrelid = 'public.print_job'::regclass and not tgisinternal), 'ninguno'),
+    left(md5(pg_get_functiondef('public.db_health_watchdog()'::regprocedure)), 8);
+end $$;
 create function pg_temp.avisos() returns bigint language sql as $f$
   select count(*) from public.system_alert_queue
    where location_id = (select v::uuid from _s where clave = 'local')
@@ -62,6 +77,7 @@ begin
   -- ROJO A PROPÓSITO: con lo de antes, un trabajo no puede caducar.
   begin
     update public.print_job set status = 'expired' where id = (select id from _ids where clave = 'viejo0');
+    if not found then raise exception 'PRUEBA A01a · 0: el trabajo de prueba no está.'; end if;
   exception when check_violation then v_ok := true;
   end;
   if not v_ok then raise exception 'PRUEBA A01a · 0: con lo de antes ya existe el estado «expired»: la prueba no mediría nada.'; end if;
