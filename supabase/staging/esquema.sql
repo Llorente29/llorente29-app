@@ -104080,6 +104080,17 @@ CREATE TABLE public.s01j3_comision_antes (
 
 
 --
+-- Name: s01o_ficha_puesta; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.s01o_ficha_puesta (
+    link_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    puesto_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: sale_capture; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -112951,6 +112962,14 @@ ALTER TABLE ONLY public.s01j2_local_puesto
 
 ALTER TABLE ONLY public.s01j3_comision_antes
     ADD CONSTRAINT s01j3_comision_antes_pkey PRIMARY KEY (settlement_id);
+
+
+--
+-- Name: s01o_ficha_puesta s01o_ficha_puesta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.s01o_ficha_puesta
+    ADD CONSTRAINT s01o_ficha_puesta_pkey PRIMARY KEY (link_id);
 
 
 --
@@ -139859,6 +139878,12 @@ ALTER TABLE public.s01j2_local_puesto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.s01j3_comision_antes ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: s01o_ficha_puesta; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.s01o_ficha_puesta ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: sale; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -162034,6 +162059,13 @@ GRANT ALL ON TABLE public.s01j2_local_puesto TO service_role;
 --
 
 GRANT ALL ON TABLE public.s01j3_comision_antes TO service_role;
+
+
+--
+-- Name: TABLE s01o_ficha_puesta; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.s01o_ficha_puesta TO service_role;
 
 
 --
