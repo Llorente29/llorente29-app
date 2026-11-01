@@ -8,3 +8,4 @@ conta-banco-agregador
 conta-revolut-aviso
 conta-revolut-conectar
 conta-revolut-leer
+conta-pagar

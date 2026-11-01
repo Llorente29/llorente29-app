@@ -1,13 +1,17 @@
 {
- "_que": "B01 Revolut · PR 2a · contexto de producción de la tanda (1234), medido en SOLO LECTURA el 01/11 a las 14:00Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ninguna de las 8 tablas ni de las 37 funciones que crea la 1234 (ni otra firma con su nombre), nada en el camino del pedido y nada en el historial.",
- "medido": "2026-11-01T14:00Z",
+ "_que": "B01 Revolut · PR 2c-1 · contexto de producción de la tanda (1703), medido en SOLO LECTURA el 01/11 a las 17:23Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe revolut_conexion (1 fila de verdad; la estadística de pg_class dice 0) y no tiene oauth_para; no existe conta_pago_dejar; nada en el camino del pedido; nada en el historial.",
+ "medido": "2026-11-01T17:23Z",
  "tanda": {
-  "supabase/migrations/20261101T1234_b01p_pagos_base.sql": "88715e88915bbaaee6a0cb56aca61455"
+  "supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql": "4b11c39d3d75045c4c9e0ee0f9e82dae"
  },
  "contexto": {
-  "tablas": [],
+  "tablas": [
+   "public.revolut_conexion"
+  ],
   "funciones": [],
-  "filas": {},
+  "filas": {
+   "public.revolut_conexion": 0
+  },
   "otras": {},
   "camino": {
    "tablas": [],

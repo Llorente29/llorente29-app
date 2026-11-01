@@ -27,6 +27,10 @@ export interface ConexionRevolut {
   conectadaPor: string | null
   lastOkAt: string | null
   lastError: string | null
+  /** Los permisos que tiene la conexión en Revolut («READ,WRITE» o «READ,WRITE,PAY»). B01 · 2c-1. */
+  permisos: string | null
+  /** A qué se fue la última vez a Revolut, si no volvió con el permiso (conectar, activar_pagos, dejar_de_pagar). */
+  oauthPara: 'conectar' | 'activar_pagos' | 'dejar_de_pagar' | null
 }
 
 export interface CuentaDeRevolut { id: string; nombre: string; divisa: string; saldo: number; iban: string | null; iban4: string }
@@ -55,17 +59,31 @@ export const NO_DISPONIBLE = 'no_disponible' as const
 export async function leerConexion(companyId: string): Promise<ConexionRevolut | null | typeof NO_DISPONIBLE> {
   // La tabla es nueva (2210): aún no está en src/types/database.ts, como las del C00 (services/bd.ts).
   const { data: fila, error } = await tabla('revolut_conexion')
-    .select('estado, entorno, certificado, vuelta, desde_historico, conectada_at, conectada_por_nombre, last_ok_at, last_error')
+    .select(COLUMNAS)
     .eq('company_id', companyId).maybeSingle()
   // Antes de que la base de este entorno tenga la tabla (la 2210): Revolut no está aquí todavía, y se dice.
   if (error && (error.code === 'PGRST205' || error.code === '42P01')) return NO_DISPONIBLE
+  // Antes de la 1703 (oauth_para): se lee sin ella. El front puede llegar antes que la base.
+  if (error && error.code === '42703') {
+    const r = await tabla('revolut_conexion').select(COLUMNAS.replace(', oauth_para', '')).eq('company_id', companyId).maybeSingle()
+    if (r.error) throw new Error(`No se ha podido leer la conexión con Revolut: ${r.error.message}`)
+    return r.data ? conexionDe(r.data as unknown as Record<string, string | null>) : null
+  }
   if (error) throw new Error(`No se ha podido leer la conexión con Revolut: ${error.message}`)
   if (!fila) return null
-  const data = fila as unknown as Record<string, string | null>
+  return conexionDe(fila as unknown as Record<string, string | null>)
+}
+
+const COLUMNAS = 'estado, entorno, certificado, vuelta, desde_historico, conectada_at, conectada_por_nombre, last_ok_at, last_error, permisos, oauth_para'
+
+function conexionDe(data: Record<string, string | null>): ConexionRevolut {
+  const para = data.oauth_para
   return {
     estado: data.estado as EstadoRevolut, entorno: data.entorno as 'sandbox' | 'produccion', certificado: String(data.certificado), vuelta: String(data.vuelta),
     desdeHistorico: data.desde_historico ?? null, conectadaAt: data.conectada_at ?? null, conectadaPor: data.conectada_por_nombre ?? null,
     lastOkAt: data.last_ok_at ?? null, lastError: data.last_error ?? null,
+    permisos: data.permisos ?? null,
+    oauthPara: para === 'conectar' || para === 'activar_pagos' || para === 'dejar_de_pagar' ? para : null,
   }
 }
 
@@ -84,10 +102,10 @@ export function recordarVuelta(camino: string, almacen: Pick<Storage, 'setItem'>
 }
 
 /** Lo que trae la dirección al volver de Revolut, si es una vuelta. */
-export function vueltaDeLaDireccion(buscar: string): { code: string; state: string } | { error: string } | null {
+export function vueltaDeLaDireccion(buscar: string): { code: string; state: string } | { error: string; state: string | null } | null {
   const q = new URLSearchParams(buscar)
   const error = q.get(PARAM_ERROR)
-  if (error) return { error }
+  if (error) return { error, state: q.get(PARAM_ESTADO) }
   const code = q.get(PARAM_CODIGO), state = q.get(PARAM_ESTADO)
   if (!code || !state) return null
   return { code, state }
@@ -143,3 +161,48 @@ export function desdePropuesto(hoy: Date, meses = 3): string {
   const d = new Date(Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() - meses, 1))
   return d.toISOString().slice(0, 10)
 }
+
+// ── Los pagos con Revolut (B01 · 2c-1, maqueta «Activar pagos», aprobada) ─────
+
+/** Si la conexión tiene el permiso de pagar (PAY), como lo apunta la base. */
+export const pagaConRevolut = (c: Pick<ConexionRevolut, 'permisos'> | null): boolean =>
+  !!c?.permisos && c.permisos.split(/[\s,]+/).includes('PAY')
+
+/** Quién paga en esta empresa (conta_pago_quien). */
+export interface QuienPaga { yoPuedo: boolean; soyAdmin: boolean; personas: { nombre: string; yo: boolean }[] }
+
+export interface LineaPagos {
+  nivel: 'ok' | 'aviso' | 'nada'
+  /** Lo que se lee después de «Revolut Business ·». */
+  texto: string
+  /** Lo que se puede pulsar, si eres administrador. */
+  botones: ('activar' | 'topes' | 'dejar' | 'quitar_en_revolut')[]
+  /** Para quien no es administrador: a quién pedírselo. */
+  pideselo: string | null
+}
+
+const lista = (n: string[]) => n.length <= 1 ? (n[0] ?? '') : `${n.slice(0, -1).join(', ')} o ${n[n.length - 1]}`
+
+/**
+ * La línea de los pagos en la tarjeta de Revolut, solo con Revolut conectado:
+ * «puede leer · aún no paga» con «Activar pagos», o «lee y paga» con «Topes y
+ * permisos» y «Dejar de pagar». Si se dejó de pagar y en Revolut se canceló,
+ * lo dice y deja volver a quitarlo allí.
+ */
+export function lineaPagos(c: ConexionRevolut | null, quien: QuienPaga | null, admins: string[] = []): LineaPagos | null {
+  if (!c || c.estado !== 'conectada') return null
+  const admin = !!quien?.soyAdmin
+  const pideselo = admin ? null : `Solo un administrador activa los pagos.${admins.length ? ` Pídeselo a ${lista(admins)}, ${admins.length === 1 ? 'que es administrador' : 'que son administradores'} de la cuenta.` : ''}`
+  if (pagaConRevolut(c)) {
+    const n = quien?.personas.length ?? 0
+    const quienes = n === 0 ? 'nadie tiene el permiso de pagar' : `puede pagar: ${lista(quien!.personas.map((p) => p.nombre))}`
+    return { nivel: 'ok', texto: `lee y paga · ${quienes}`, botones: admin ? ['topes', 'dejar'] : [], pideselo: null }
+  }
+  if (c.oauthPara === 'dejar_de_pagar') {
+    return { nivel: 'aviso', texto: 'no paga desde Sumied · Revolut aún tiene el permiso de pagar: quítaselo también allí', botones: admin ? ['quitar_en_revolut'] : [], pideselo: null }
+  }
+  return { nivel: 'nada', texto: 'puede leer · aún no paga', botones: admin ? ['activar'] : [], pideselo }
+}
+
+/** Euros sin céntimos, como en los topes: «3.000 €». */
+export const eurosTope = (n: number) => `${Math.round(n).toLocaleString('es-ES', { useGrouping: 'always' } as Intl.NumberFormatOptions)} €`

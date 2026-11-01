@@ -22,3 +22,24 @@ supabase/staging/sql/20261031_b01rv_revolut_prueba.sql
 # pide el correo y un contador que no sube la quita; y la vuelta atrás.
 supabase/migrations/20261101T1234_b01p_pagos_base.sql
 supabase/staging/sql/20261101_b01p_pagos_base_prueba.sql
+# B01 Revolut · PR 2b · La salida al banco. La 1614 cambia el CHECK del tipo de
+# remesa (amplía) y su vista: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999, con la 1234 puesta):
+# «Activar pagos» solo un administrador; mandar un lote listo como remesa
+# «banco», en el banco, con su línea pendiente del cargo; un IBAN nuevo, sin la
+# segunda no se manda y con ella queda confirmado en la línea y en la ficha; lo
+# que dice el banco (pagado, rechazado: la factura vuelve a tener lo pendiente);
+# un IBAN que cambia entre aprobar y mandar para; Bancos ofrece casar el cargo;
+# solo la clave de servicio; y la vuelta atrás (la vista de producción, cc12648e…).
+supabase/migrations/20261101T1614_b01p_pagos_salida.sql
+supabase/staging/sql/20261101_b01p_pagos_salida_prueba.sql
+# B01 Revolut · PR 2c-1 · Activar y dejar de pagar. La 1703 añade
+# revolut_conexion.oauth_para y conta_pago_dejar, con un CHECK sobre la columna
+# nueva (declarado como «cambia»).
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999, con la 1234 y la 1614
+# puestas): la vuelta atrás y la 1703 otra vez; oauth_para solo admite sus tres
+# valores; dejar de pagar quita los permisos al instante, cancela lo que
+# esperaba (y sus retos), deja lo ya salido y pone la conexión sin PAY;
+# «Aprobar y pagar» lo dice después; y solo la clave de servicio la llama.
+supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql
+supabase/staging/sql/20261101_b01p_dejar_de_pagar_prueba.sql

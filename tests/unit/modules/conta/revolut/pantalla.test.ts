@@ -9,7 +9,8 @@ import { SIN_CADUCIDAD } from '../../../../../supabase/functions/_shared/revolut
 
 const ahora = new Date('2026-10-31T12:00:00Z')
 const base: ConexionRevolut = { estado: 'conectada', entorno: 'sandbox', certificado: '-----BEGIN CERTIFICATE-----', vuelta: 'https://app.sumied.com/bancos/revolut/vuelta',
-  desdeHistorico: '2026-08-01', conectadaAt: '2026-10-31T10:00:00Z', conectadaPor: 'Ana Prueba', lastOkAt: '2026-10-31T11:55:00Z', lastError: null }
+  desdeHistorico: '2026-08-01', conectadaAt: '2026-10-31T10:00:00Z', conectadaPor: 'Ana Prueba', lastOkAt: '2026-10-31T11:55:00Z', lastError: null,
+  permisos: 'READ,WRITE', oauthPara: null }
 
 describe('comprobarClientId', () => {
   it('pegar el certificado en vez del Client ID lo dice con palabras normales', () => {
@@ -31,7 +32,9 @@ describe('la vuelta de Revolut', () => {
   })
   it('vueltaDeLaDireccion: el código y el state; o el error; o nada', () => {
     expect(vueltaDeLaDireccion('?revolut_code=c-1&revolut_state=s-1')).toEqual({ code: 'c-1', state: 's-1' })
-    expect(vueltaDeLaDireccion('?revolut_error=access_denied')).toEqual({ error: 'access_denied' })
+    expect(vueltaDeLaDireccion('?revolut_error=access_denied')).toEqual({ error: 'access_denied', state: null })
+    // 2c-1: sin el permiso, vuelve también el «state», para que la función diga qué ha quedado.
+    expect(vueltaDeLaDireccion(`?revolut_error=access_denied&revolut_state=${'a'.repeat(64)}`)).toEqual({ error: 'access_denied', state: 'a'.repeat(64) })
     expect(vueltaDeLaDireccion('?nuevo=banco')).toBeNull()
   })
   it('la página de vuelta no lleva a otra dirección que la de este sitio', async () => {

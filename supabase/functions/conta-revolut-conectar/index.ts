@@ -19,6 +19,13 @@
 //   · cuentas: las cuentas de Revolut, otra vez (para ligar después).
 //   · leer: lee ya (después de ligar), hasta hoy.
 //   · desconectar: borra secretos y cuentas conectadas; lo que entró se queda.
+//     Antes, deja de pagar (sin conexión no se paga).
+//   · activar_pagos (2b) y dejar_de_pagar (2c-1): vuelven a pasar por Revolut,
+//     con PAY y sin él. Dejar de pagar quita antes, en Sumied y al instante,
+//     el permiso de pagar (conta_pago_dejar): si la persona cancela en
+//     Revolut, en Sumied ya está quitado.
+//   · cancelada { state, error }: la persona ha vuelto de Revolut sin
+//     autorizar; se dice qué ha quedado según a qué se fue (oauth_para).
 //
 // Una cuenta de demostración no se conecta a Revolut (DM1): la puerta.
 // En ningún registro va un secreto, el client_id, un token ni un IBAN entero.
@@ -28,7 +35,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
 import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { crearLlave } from "../_shared/revolut/certificado.ts";
-import { clienteRevolut, entornoDe, FalloRevolut, dejanAvisar, paginaDeAutorizar, pedirToken, PERMISOS_AL_CONECTAR_TEXTO, registrarAviso, quitarAviso } from "../_shared/revolut/cliente.ts";
+import { clienteRevolut, entornoDe, FalloRevolut, dejanAvisar, paginaDeAutorizar, pedirToken, PERMISOS_AL_CONECTAR_TEXTO, PERMISOS_CON_PAGOS_TEXTO, registrarAviso, quitarAviso } from "../_shared/revolut/cliente.ts";
 import { ultimos4 } from "../_shared/revolut/lectura.ts";
 import { COLUMNAS_CONEXION, guardarSecreto, leerEmpresa, paraElRegistro, secreto, tokenDeAcceso, type ConexionRevolut } from "../_shared/revolut/servidor.ts";
 
@@ -40,6 +47,18 @@ const ENTORNO = entornoDe(Deno.env.get("REVOLUT_ENTORNO"));
 const DOMINIOS = new Set([...Object.values(MARCAS).flatMap((m) => m.dominios), ...(Deno.env.get("REVOLUT_DOMINIOS") ?? "").split(",").map((x) => x.trim()).filter(Boolean)]);
 /** Cuánto vale una autorización empezada (el «state»): lo que tarda una persona en pulsar en Revolut. */
 const MINUTOS_AUTORIZAR = 20;
+
+type OauthPara = "conectar" | "activar_pagos" | "dejar_de_pagar";
+/** Lo que ya ha pasado en Sumied cuando se deja de pagar, antes de ir a Revolut. */
+const DEJADO = "En Sumied ya están quitados los pagos: nadie puede pagar con Revolut desde aquí.";
+
+/** Qué ha quedado cuando la persona vuelve de Revolut sin autorizar, según a qué fue. */
+function textoCancelada(para: OauthPara | null): string {
+  if (para === "activar_pagos") return "No has autorizado los pagos en Revolut. Sumied sigue leyendo como antes; no ha cambiado nada.";
+  if (para === "dejar_de_pagar") return `${DEJADO} En Revolut no has cambiado el permiso: para quitárselo también allí, vuelve a pulsar «Quitar el permiso en Revolut».`;
+  if (para === "conectar") return "No has autorizado a Sumied en Revolut. Vuelve a pulsar «Autorizar en Revolut» cuando quieras.";
+  return "Revolut ha vuelto sin el permiso. Vuelve a empezar desde Bancos.";
+}
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 const mal = (texto: string, status = 200) => json({ ok: false, texto }, status);
@@ -91,11 +110,25 @@ Deno.serve(async (req) => {
   // La vuelta de Revolut trae el «state», no la empresa: se busca por su huella.
   let empresa = typeof b.empresa === "string" ? b.empresa : "";
   let conexion: ConexionRevolut | null = null;
+  let para: OauthPara | null = null;
+  if (accion === "cancelada") {
+    // Se vuelve sin autorizar: la autorización empezada deja de valer y se dice qué ha quedado.
+    const state = String(b.state ?? "");
+    if (!/^[0-9a-f]{64}$/.test(state)) return mal(textoCancelada(null));
+    const { data } = await srv.from("revolut_conexion").select("id, company_id, oauth_para").eq("estado_oauth_huella", await sha256(state)).maybeSingle();
+    if (!data) return mal(textoCancelada(null));
+    const { data: co0 } = await srv.from("company").select("account_id").eq("id", data.company_id).maybeSingle();
+    const { data: puede0 } = co0 ? await sb.rpc("current_user_is_admin_or_manager_of", { p_account_id: co0.account_id }) : { data: false };
+    if (puede0 !== true) return mal("Solo un administrador o un encargado de la empresa conecta un banco.", 403);
+    await srv.from("revolut_conexion").update({ estado_oauth_huella: null, estado_oauth_at: null }).eq("id", data.id);
+    return mal(textoCancelada(data.oauth_para as OauthPara | null));
+  }
   if (accion === "vuelta") {
     const state = String(b.state ?? ""), code = String(b.code ?? "");
     if (!/^[0-9a-f]{64}$/.test(state) || !code) return mal("Revolut ha vuelto sin el permiso. Vuelve a pulsar «Autorizar en Revolut».");
-    const { data } = await srv.from("revolut_conexion").select(`${COLUMNAS_CONEXION}, estado_oauth_at`).eq("estado_oauth_huella", await sha256(state)).maybeSingle();
+    const { data } = await srv.from("revolut_conexion").select(`${COLUMNAS_CONEXION}, estado_oauth_at, oauth_para`).eq("estado_oauth_huella", await sha256(state)).maybeSingle();
     if (!data) return mal("Esta autorización ya se usó o no es de Sumied. Vuelve a pulsar «Autorizar en Revolut».");
+    para = (data.oauth_para ?? null) as OauthPara | null;
     if (!data.estado_oauth_at || Date.now() - Date.parse(data.estado_oauth_at) > MINUTOS_AUTORIZAR * 60_000) return mal(`La autorización ha caducado (vale ${MINUTOS_AUTORIZAR} minutos). Vuelve a pulsar «Autorizar en Revolut».`);
     conexion = data as ConexionRevolut;
     empresa = conexion.company_id;
@@ -125,7 +158,7 @@ Deno.serve(async (req) => {
         if (conexion && b.nuevo !== true && conexion.vuelta === vuelta && conexion.entorno === ENTORNO && ["certificado", "autorizar"].includes(conexion.estado)) {
           const { data } = await srv.from("revolut_conexion").select("certificado").eq("id", conexion.id).single();
           if (desde) await srv.from("revolut_conexion").update({ desde_historico: desde }).eq("id", conexion.id);
-          return json({ ok: true, certificado: data.certificado, vuelta, estado: conexion.estado });
+          return json({ ok: true, certificado: data?.certificado, vuelta, estado: conexion.estado });
         }
         const llave = await crearLlave(String(co.legal_name ?? co.trade_name ?? "Empresa"));
         await guardarSecreto(srv, empresa, "privada", llave.privadaPem);
@@ -144,12 +177,88 @@ Deno.serve(async (req) => {
         if (motivo) return mal(motivo);
         await guardarSecreto(srv, empresa, "client_id", clientId);
         const state = [...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("");
-        await srv.from("revolut_conexion").update({ estado: "autorizar", estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString() }).eq("id", conexion.id);
+        await srv.from("revolut_conexion").update({ estado: "autorizar", estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString(), oauth_para: "conectar" }).eq("id", conexion.id);
         return json({ ok: true, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISOS_AL_CONECTAR_TEXTO, estado: state }) });
+      }
+      case "activar_pagos": {
+        // B01 · PR 2b · Volver a pasar por la página de autorizar de Revolut, ahora con PAY.
+        if (conexion?.estado !== "conectada") return mal("Revolut no está conectado en esta empresa: conéctalo antes de activar los pagos.");
+        if (conexion.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que se conectó. Desconéctalo y vuelve a conectar.");
+        const { data: admin } = await sb.rpc("current_user_is_admin_of", { p_account_id: co.account_id });
+        if (admin !== true) return mal("Solo un administrador activa los pagos.", 403);
+        // Sin llave ni PIN no podría dar la segunda aprobación (maqueta «Activar pagos», paso 1).
+        const [{ count: llaves }, { data: pin }] = await Promise.all([
+          srv.from("conta_llave").select("id", { count: "exact", head: true }).eq("user_id", u.user.id).is("revoked_at", null),
+          srv.from("conta_pago_pin").select("bloqueado_at").eq("user_id", u.user.id).maybeSingle(),
+        ]);
+        if (!llaves && !(pin && !pin.bloqueado_at)) return mal("Antes de activar los pagos, activa tu llave de acceso o crea tu PIN de pago: con ellos darás la segunda aprobación.");
+        const clientId = await secreto(srv, empresa, "client_id");
+        if (!clientId) return mal("Falta el Client ID de esta empresa: desconecta Revolut y vuelve a conectar.");
+        const state = [...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("");
+        await srv.from("revolut_conexion").update({ estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString(), oauth_para: "activar_pagos" }).eq("id", conexion.id);
+        return json({ ok: true, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISOS_CON_PAGOS_TEXTO, estado: state }) });
+      }
+      case "dejar_de_pagar": {
+        // B01 · 2c-1 (Julio, 01/11): primero, en Sumied y al instante, nadie paga.
+        // Después, a Revolut con READ y WRITE, para que el token deje de tener PAY.
+        const { data: admin } = await sb.rpc("current_user_is_admin_of", { p_account_id: co.account_id });
+        if (admin !== true) return mal("Solo un administrador deja de pagar con Revolut.", 403);
+        const { data: dej, error: dejErr } = await srv.rpc("conta_pago_dejar", { p_company: empresa, p_quien: u.user.id, p_quien_nombre: quien, p_motivo: `${quien} ha dejado de pagar con Revolut` });
+        if (dejErr) return mal(`No se ha podido dejar de pagar: ${dejErr.message}`);
+        const frase = String((dej as Record<string, unknown>)?.frase ?? "Ya no se puede pagar con Revolut desde Sumied.");
+        console.log(`[conta-revolut-conectar] ${empresa.slice(0, 8)}: deja de pagar (${(dej as Record<string, unknown>)?.permisos ?? 0} permisos, ${(dej as Record<string, unknown>)?.lotes ?? 0} lotes)`);
+        if (conexion?.estado !== "conectada" || conexion.entorno !== ENTORNO) return json({ ok: true, frase, texto: frase });
+        const clientId = await secreto(srv, empresa, "client_id");
+        if (!clientId) return json({ ok: true, frase, texto: `${frase} Falta el Client ID de esta empresa para quitar el permiso también en Revolut: desconecta Revolut y vuelve a conectar.` });
+        const state = [...crypto.getRandomValues(new Uint8Array(32))].map((x) => x.toString(16).padStart(2, "0")).join("");
+        await srv.from("revolut_conexion").update({ estado_oauth_huella: await sha256(state), estado_oauth_at: new Date().toISOString(), oauth_para: "dejar_de_pagar" }).eq("id", conexion.id);
+        return json({ ok: true, frase, texto: frase, url: paginaDeAutorizar(ENTORNO, { clientId, vuelta: conexion.vuelta, permisos: PERMISOS_AL_CONECTAR_TEXTO, estado: state }) });
       }
       case "vuelta": {
         const c = conexion!;
         if (c.entorno !== ENTORNO) return mal("Revolut ha cambiado de entorno desde que empezaste. Cierra el asistente y vuelve a conectar: hay que copiar un certificado nuevo.");
+        // B01 · PR 2b · Una conexión que ya estaba conectada y vuelve de Revolut es «Activar pagos»,
+        // o «Dejar de pagar» (2c-1), según a qué se fue.
+        if (c.estado === "conectada" && para === "dejar_de_pagar") {
+          const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
+          if (!privada || !clientId) return mal(`${DEJADO} Falta la llave o el Client ID de esta empresa para quitarlo también en Revolut: desconecta Revolut y vuelve a conectar.`);
+          let t;
+          try {
+            t = await pedirToken(fetch, c.entorno, { privadaPem: privada, clientId, vuelta: c.vuelta, codigo: String(b.code) });
+          } catch (e) {
+            await srv.from("revolut_conexion").update({ estado_oauth_huella: null, estado_oauth_at: null }).eq("id", c.id);
+            return mal(`${DEJADO} Revolut no ha cambiado el permiso: ${e instanceof Error ? e.message : String(e)} Para quitárselo también allí, vuelve a pulsar «Quitar el permiso en Revolut».`);
+          }
+          if (t.renovacion) await guardarSecreto(srv, empresa, "renovacion", t.renovacion);
+          await srv.from("revolut_conexion").update({ permisos: PERMISOS_AL_CONECTAR_TEXTO, estado_oauth_huella: null, estado_oauth_at: null, last_error: null, oauth_para: null }).eq("id", c.id);
+          console.log(`[conta-revolut-conectar] ${empresa.slice(0, 8)}: Revolut sin PAY (${c.entorno})`);
+          return json({ ok: true, pagos: false, texto: "Hecho. Revolut ya no tiene el permiso de pagar: Sumied sigue leyendo los movimientos como antes." });
+        }
+        if (c.estado === "conectada") {
+          const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
+          if (!privada || !clientId) return mal("Falta la llave o el Client ID de esta empresa: desconecta Revolut y vuelve a conectar.");
+          let t;
+          try {
+            t = await pedirToken(fetch, c.entorno, { privadaPem: privada, clientId, vuelta: c.vuelta, codigo: String(b.code) });
+          } catch (e) {
+            await srv.from("revolut_conexion").update({ estado_oauth_huella: null, estado_oauth_at: null }).eq("id", c.id);
+            return mal(`No has autorizado los pagos en Revolut: ${e instanceof Error ? e.message : String(e)} Sumied sigue leyendo como antes; no ha cambiado nada.`);
+          }
+          if (t.renovacion) await guardarSecreto(srv, empresa, "renovacion", t.renovacion);
+          const { data: act, error: actErr } = await srv.rpc("conta_pago_activar", { p_company: empresa, p_user: u.user.id });
+          if (actErr) {
+            await srv.from("revolut_conexion").update({ estado_oauth_huella: null, estado_oauth_at: null }).eq("id", c.id);
+            return mal(actErr.message);
+          }
+          await srv.from("revolut_conexion").update({ permisos: PERMISOS_CON_PAGOS_TEXTO, estado_oauth_huella: null, estado_oauth_at: null, last_error: null, oauth_para: null }).eq("id", c.id);
+          const personas = ((act as Record<string, unknown>)?.personas as string[] | undefined) ?? [];
+          const { data: topes } = await sb.rpc("conta_pago_topes", { p_company: empresa });
+          const t2 = (topes ?? {}) as Record<string, number>;
+          const euros = (n: number) => `${Number(n ?? 0).toLocaleString("es-ES", { maximumFractionDigits: 0 })} €`;
+          console.log(`[conta-revolut-conectar] ${empresa.slice(0, 8)}: pagos activados (${c.entorno}), ${personas.length} personas pagan`);
+          return json({ ok: true, pagos: true, personas,
+            texto: `Pagos activados con Revolut. Puede pagar: ${personas.join(", ") || quien}. Topes: ${euros(t2.tope_pago)} por pago y ${euros(t2.tope_dia)} al día.` });
+        }
         const [privada, clientId] = await Promise.all([secreto(srv, empresa, "privada"), secreto(srv, empresa, "client_id")]);
         if (!privada || !clientId) return mal("Falta la llave o el Client ID de esta empresa. Empieza otra vez.");
         let t;
@@ -196,6 +305,10 @@ Deno.serve(async (req) => {
       }
       case "desconectar": {
         if (!conexion || !["conectada", "certificado", "autorizar"].includes(conexion.estado)) return mal("Revolut no está conectado en esta empresa.");
+        // 2c-1: sin conexión no se paga. Primero, en Sumied, nadie paga y lo que esperaba no sale.
+        const { data: dej, error: dejErr } = await srv.rpc("conta_pago_dejar", { p_company: empresa, p_quien: u.user.id, p_quien_nombre: quien, p_motivo: "Revolut se ha desconectado" });
+        if (dejErr) return mal(`No se ha podido desconectar: antes hay que dejar de pagar, y ha fallado (${dejErr.message}).`);
+        const pagosFuera = Number((dej as Record<string, unknown>)?.permisos ?? 0) + Number((dej as Record<string, unknown>)?.lotes ?? 0) > 0 ? ` ${String((dej as Record<string, unknown>)?.frase ?? "")}` : "";
         // El aviso, fuera de Revolut si se puede (si no, deja de valer al quitar el permiso).
         if (conexion.webhook_id && conexion.estado === "conectada" && (await cuentaPuedeSalir(srv, co.account_id))) {
           try { await quitarAviso(fetch, conexion.entorno, await tokenDeAcceso(srv, fetch, conexion), conexion.webhook_id); } catch { /* sigue: desconectar no puede quedarse a medias */ }
@@ -203,7 +316,7 @@ Deno.serve(async (req) => {
         const { data, error } = await srv.rpc("conta_revolut_desconectar", { p_company: empresa, p_quien: u.user.id, p_quien_nombre: quien, p_desde_revolut: false });
         if (error) throw new Error(error.message);
         const n = Number((data as Record<string, unknown>)?.cuentas ?? 0);
-        return json({ ok: true, texto: `Desconectado. Sumied ya no lee ${n === 1 ? "la cuenta" : `las ${n} cuentas`} de Revolut. Lo que ya entró se queda. Quita también el certificado en Revolut › Ajustes › API.` });
+        return json({ ok: true, texto: `Desconectado. Sumied ya no lee ${n === 1 ? "la cuenta" : `las ${n} cuentas`} de Revolut. Lo que ya entró se queda. Quita también el certificado en Revolut › Ajustes › API.${pagosFuera}` });
       }
       default:
         return mal("No sé hacer eso.", 400);

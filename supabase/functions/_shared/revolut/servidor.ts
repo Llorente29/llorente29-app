@@ -18,7 +18,8 @@
 // solo los cuatro últimos y recuentos (T11).
 
 import { sincronizarEmpresa, type BaseAgregador, type ParteCuenta } from '../bancoAgregador.ts'
-import { clienteRevolut, entornoDe, FalloRevolut, pedirToken, type EntornoRevolut } from './cliente.ts'
+import { clienteRevolut, dejanPagar, entornoDe, FalloRevolut, pedirToken, type EntornoRevolut } from './cliente.ts'
+import { proveedorPagoRevolut } from './pago.ts'
 import { diaMadrid, OPCIONES_REVOLUT, proveedorRevolut } from './lectura.ts'
 
 type Fetch = (url: string, init?: RequestInit) => Promise<Response>
@@ -64,6 +65,9 @@ export async function tokenDeAcceso(srv: Srv, f: Fetch, c: ConexionRevolut, ahor
     return t.acceso
   } catch (e) {
     if (e instanceof FalloRevolut && e.permisoRetirado) {
+      // B01 · 2c-1: sin conexión no se paga. Si falla, se dice, pero se apunta la retirada igual.
+      const { error: dejErr } = await srv.rpc('conta_pago_dejar', { p_company: c.company_id, p_quien: null, p_quien_nombre: 'Revolut', p_motivo: 'Revolut ya no acepta el permiso de Sumied' })
+      if (dejErr) console.error(`[revolut] ${c.company_id.slice(0, 8)}: no se ha podido dejar de pagar (${dejErr.message})`)
       const { error } = await srv.rpc('conta_revolut_desconectar', { p_company: c.company_id, p_quien: null, p_quien_nombre: null, p_desde_revolut: true })
       if (error) throw new Error(`Revolut ya no acepta el permiso, y no se ha podido apuntar: ${error.message}`, { cause: e })
       throw new PermisoRetirado()
@@ -109,7 +113,31 @@ export function baseDeRevolut(srv: Srv): BaseAgregador {
   }
 }
 
-export interface ParteEmpresa { empresa: string; error: string | null; retirada: boolean; cuentas: ParteCuenta[] }
+export interface ParteEmpresa { empresa: string; error: string | null; retirada: boolean; cuentas: ParteCuenta[]; pagos?: { preguntados: number; cambiados: number; fallos: number } }
+
+/**
+ * B01 · PR 2b · Los pagos de la empresa que esperan al banco, al día: se le
+ * pregunta por cada uno (por su id en el banco o, si no lo hay, por su
+ * request_id) y se apunta lo que dice (conta_pago_banco_dice). Lo usan la
+ * lectura de cada hora y el aviso: así un pago pasa a pagado o a rechazado sin
+ * que nadie abra la pantalla. Sin la 1614 (o sin pagos), no hace nada.
+ */
+export async function ponerAlDiaPagos(srv: Srv, f: Fetch, c: ConexionRevolut, acceso: string) {
+  const out = { preguntados: 0, cambiados: 0, fallos: 0 }
+  const { data, error } = await srv.rpc('conta_pago_por_saber', { p_company: c.company_id })
+  if (error || !Array.isArray(data) || data.length === 0) return out
+  const banco = proveedorPagoRevolut(f, c.entorno, acceso) as ReturnType<typeof proveedorPagoRevolut> & { estado(id: string, porRequestId?: boolean): ReturnType<ReturnType<typeof proveedorPagoRevolut>['estado']> }
+  for (const p of data as { salida: string; request_id: string; banco_id: string | null }[]) {
+    out.preguntados++
+    try {
+      const e = p.banco_id ? await banco.estado(p.banco_id) : await banco.estado(p.request_id, true)
+      const r = await srv.rpc('conta_pago_banco_dice', { p_salida: p.salida, p_estado: e.estado, p_banco_id: e.bancoId, p_porque: 'porque' in e ? e.porque : null })
+      if (r.error) out.fallos++
+      else if (!(r.data as { sin_cambio?: boolean })?.sin_cambio) out.cambiados++
+    } catch { out.fallos++ }
+  }
+  return out
+}
 
 /**
  * Una lectura de una empresa: token, cuentas, movimientos hasta hoy, y cómo
@@ -123,6 +151,7 @@ export async function leerEmpresa(srv: Srv, f: Fetch, c: ConexionRevolut, ahora 
     const p = proveedorRevolut(clienteRevolut(f, c.entorno, acceso), hoy)
     parte.cuentas = await sincronizarEmpresa(baseDeRevolut(srv), p, { accountId: c.account_id, companyId: c.company_id, banco: 'Revolut', renovar: null }, hoy, hoy,
       { ...OPCIONES_REVOLUT, desdeInicial: c.desde_historico })
+    if (dejanPagar(c.permisos)) parte.pagos = await ponerAlDiaPagos(srv, f, c, acceso)
   } catch (e) {
     parte.retirada = e instanceof PermisoRetirado
     parte.error = e instanceof Error ? e.message : String(e)
@@ -140,7 +169,8 @@ export async function leerEmpresa(srv: Srv, f: Fetch, c: ConexionRevolut, ahora 
 /** Lo que va al registro de una lectura: nada secreto, solo los cuatro últimos y recuentos. */
 export function paraElRegistro(p: ParteEmpresa) {
   return { empresa: p.empresa.slice(0, 8), error: p.error, retirada: p.retirada,
-    cuentas: p.cuentas.map((x) => ({ iban4: x.iban4, estado: x.estado, leidos: x.leidos, nuevos: x.nuevos, repetidos: x.repetidos, continuidad: x.continuidad })) }
+    cuentas: p.cuentas.map((x) => ({ iban4: x.iban4, estado: x.estado, leidos: x.leidos, nuevos: x.nuevos, repetidos: x.repetidos, continuidad: x.continuidad })),
+    ...(p.pagos ? { pagos: p.pagos } : {}) }
 }
 
 export { entornoDe }
