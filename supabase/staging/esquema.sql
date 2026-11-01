@@ -10682,6 +10682,37 @@ end $$;
 
 
 --
+-- Name: _revolut_nombre_secreto(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._revolut_nombre_secreto(p_company uuid, p_que text) RETURNS text
+    LANGUAGE plpgsql IMMUTABLE
+    AS $$
+begin
+  if p_que not in ('privada', 'client_id', 'renovacion', 'aviso') then
+    raise exception 'Revolut no guarda «%» en el Vault.', p_que using errcode = '22023';
+  end if;
+  return 'revolut:' || p_company::text || ':' || p_que;
+end $$;
+
+
+--
+-- Name: _revolut_secretos_quitar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._revolut_secretos_quitar(p_company uuid) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'vault'
+    AS $$
+declare n integer;
+begin
+  delete from vault.secrets where name like 'revolut:' || p_company::text || ':%';
+  get diagnostics n = row_count;
+  return n;
+end $$;
+
+
+--
 -- Name: _s01_asiento_cobro(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -19476,7 +19507,12 @@ begin
     raise exception 'Un extracto sin saldos tiene que decir por qué no se ha podido comprobar.' using errcode = '23514';
   end if;
   -- Continuidad con el anterior de la cuenta (cuaderno 43, registro 11).
-  select * into v_prev from public.bank_statement where treasury_account_id = p_treasury and period_to < p_desde and closing_balance is not null
+  -- B01 Revolut (2212): lo de Revolut se lee varias veces el mismo día (cada
+  -- movimiento terminado entra en cuanto llega), así que su anterior puede
+  -- acabar el mismo día en que empieza este. Solo para esa fuente; para BBVA y
+  -- los ficheros, igual que antes.
+  select * into v_prev from public.bank_statement where treasury_account_id = p_treasury and closing_balance is not null
+     and (period_to < p_desde or (p_fuente = 'agregador:revolut' and source = p_fuente and period_to = p_desde))
    order by period_to desc, imported_at desc limit 1;
   if p_saldo_inicial is null then v_cont := 'sin_saldo';
   elsif v_prev.id is null then v_cont := 'primero';
@@ -42220,6 +42256,107 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_resumen_ventas(p_entry uuid) IS 'R15 · Lo que lleva el Resumen de ventas de un asiento de ventas de una plataforma: asiento, líneas, empresa, local, plataforma, pedidos y su documento si lo tiene. Solo para los de la cuenta.';
+
+
+--
+-- Name: conta_revolut_desconectar(uuid, uuid, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_revolut_desconectar(p_company uuid, p_quien uuid, p_quien_nombre text, p_desde_revolut boolean DEFAULT false) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.revolut_conexion; v_secretos integer; v_cuentas integer;
+begin
+  if auth.role() is distinct from 'service_role' then raise exception 'Solo la función de Revolut desconecta.' using errcode = '42501'; end if;
+  select * into v from public.revolut_conexion where company_id = p_company for update;
+  if v.id is null then raise exception 'Esta empresa no tiene Revolut conectado.' using errcode = 'P0002'; end if;
+  v_secretos := public._revolut_secretos_quitar(p_company);
+  delete from public.bank_aggregator_link where company_id = p_company and provider = 'revolut';
+  get diagnostics v_cuentas = row_count;
+  update public.revolut_conexion
+     set estado = case when p_desde_revolut then 'retirada' else 'desconectada' end,
+         desconectada_at = now(), desconectada_por_nombre = nullif(trim(p_quien_nombre), ''),
+         estado_oauth_huella = null, estado_oauth_at = null, permisos = null,
+         last_error = case when p_desde_revolut then 'Revolut ya no acepta el permiso: se ha quitado el certificado en Revolut o ha caducado.' else last_error end
+   where id = v.id;
+  return jsonb_build_object('estado', case when p_desde_revolut then 'retirada' else 'desconectada' end, 'cuentas', v_cuentas, 'secretos', v_secretos, 'quien', p_quien);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_revolut_desconectar(p_company uuid, p_quien uuid, p_quien_nombre text, p_desde_revolut boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_revolut_desconectar(p_company uuid, p_quien uuid, p_quien_nombre text, p_desde_revolut boolean) IS 'B01 Revolut. Deja la empresa sin Revolut: borra sus secretos del Vault y sus cuentas conectadas (bank_aggregator_link). Lo que ya entró se queda. Desde Sumied: desconectada; desde Revolut (el permiso ya no vale): retirada.';
+
+
+--
+-- Name: conta_revolut_despertar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_revolut_despertar() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_secreto text; v_url text;
+begin
+  if not exists (select 1 from public.revolut_conexion where estado = 'conectada') then return; end if;
+  select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+  select rtrim(decrypted_secret, '/') into v_url from vault.decrypted_secrets
+   where name = 'project_url' and decrypted_secret ~ '^https://[a-z0-9]+\.supabase\.co/?$';
+  if v_secreto is null or v_url is null then
+    raise exception 'Falta cron_secret o project_url en el Vault: no se puede despertar a conta-revolut-leer.' using errcode = '55000';
+  end if;
+  perform net.http_post(
+    url := v_url || '/functions/v1/conta-revolut-leer',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+    body := '{"por":"cron"}'::jsonb, timeout_milliseconds := 150000);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_revolut_despertar(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_revolut_despertar() IS 'B01 Revolut · Cada hora (cron conta-revolut-despertar): si hay alguna empresa con Revolut conectado, llama a conta-revolut-leer. La dirección, de project_url en el Vault (W10). Si falta algo, falla (cron lo apunta como failed), no calla.';
+
+
+--
+-- Name: conta_revolut_secreto(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_revolut_secreto(p_company uuid, p_que text) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'vault'
+    AS $$
+declare v text;
+begin
+  if auth.role() is distinct from 'service_role' then raise exception 'Solo las funciones de Revolut leen sus secretos.' using errcode = '42501'; end if;
+  select decrypted_secret into v from vault.decrypted_secrets where name = public._revolut_nombre_secreto(p_company, p_que);
+  return v;
+end $$;
+
+
+--
+-- Name: conta_revolut_secreto_poner(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_revolut_secreto_poner(p_company uuid, p_que text, p_valor text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'vault'
+    AS $$
+declare v_nombre text := public._revolut_nombre_secreto(p_company, p_que); v_id uuid;
+begin
+  if auth.role() is distinct from 'service_role' then raise exception 'Solo las funciones de Revolut guardan sus secretos.' using errcode = '42501'; end if;
+  if coalesce(p_valor, '') = '' then raise exception 'Un secreto vacío no se guarda.' using errcode = '22023'; end if;
+  select id into v_id from vault.secrets where name = v_nombre;
+  if v_id is null then
+    perform vault.create_secret(p_valor, v_nombre, 'B01 Revolut · ' || p_que);
+  else
+    perform vault.update_secret(v_id, p_valor, v_nombre, 'B01 Revolut · ' || p_que);
+  end if;
+end $$;
 
 
 --
@@ -89572,7 +89709,7 @@ CREATE TABLE public.bank_aggregator_link (
     last_from date,
     last_to date,
     CONSTRAINT bank_aggregator_link_last_status_check CHECK (((last_status IS NULL) OR (last_status = ANY (ARRAY['al_dia'::text, 'sin_movimientos'::text, 'permiso_caducado'::text, 'fallo'::text])))),
-    CONSTRAINT bank_aggregator_link_provider_check CHECK ((provider = ANY (ARRAY['simulado'::text, 'enable_banking'::text, 'open_banking_io'::text]))),
+    CONSTRAINT bank_aggregator_link_provider_check CHECK ((provider = ANY (ARRAY['simulado'::text, 'enable_banking'::text, 'open_banking_io'::text, 'revolut'::text]))),
     CONSTRAINT bank_aggregator_link_renew_url_check CHECK (((renew_url IS NULL) OR (renew_url ~ '^https://'::text))),
     CONSTRAINT bank_aggregator_link_status_check CHECK ((status = ANY (ARRAY['activo'::text, 'caducado'::text, 'revocado'::text])))
 );
@@ -101479,6 +101616,78 @@ COMMENT ON TABLE public.registro_jornada_firma IS 'L1a (28/10/2026). La persona 
 
 
 --
+-- Name: revolut_conexion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.revolut_conexion (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entorno text NOT NULL,
+    estado text DEFAULT 'certificado'::text NOT NULL,
+    certificado text NOT NULL,
+    certificado_huella text NOT NULL,
+    vuelta text NOT NULL,
+    permisos text,
+    desde_historico date,
+    estado_oauth_huella text,
+    estado_oauth_at timestamp with time zone,
+    conectada_at timestamp with time zone,
+    conectada_por uuid,
+    conectada_por_nombre text,
+    desconectada_at timestamp with time zone,
+    desconectada_por_nombre text,
+    last_run_at timestamp with time zone,
+    last_ok_at timestamp with time zone,
+    last_error text,
+    webhook_id text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT revolut_conexion_certificado_check CHECK ((certificado ~~ '-----BEGIN CERTIFICATE-----%'::text)),
+    CONSTRAINT revolut_conexion_certificado_huella_check CHECK ((certificado_huella ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT revolut_conexion_entorno_check CHECK ((entorno = ANY (ARRAY['sandbox'::text, 'produccion'::text]))),
+    CONSTRAINT revolut_conexion_estado_check CHECK ((estado = ANY (ARRAY['certificado'::text, 'autorizar'::text, 'conectada'::text, 'desconectada'::text, 'retirada'::text]))),
+    CONSTRAINT revolut_conexion_vuelta_check CHECK ((vuelta ~ '^https://[a-z0-9.-]+/bancos/revolut/vuelta$'::text))
+);
+
+
+--
+-- Name: TABLE revolut_conexion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.revolut_conexion IS 'B01 Revolut. La conexión de una empresa con Revolut Business: el estado del asistente, el certificado PÚBLICO que se pega en Revolut, la dirección de vuelta (la de la marca: app.sumied.com o app.folvy.app), el permiso dado y cómo fue la última lectura. Lo secreto (llave privada, client_id, token de renovación) va en el Vault, nunca aquí.';
+
+
+--
+-- Name: COLUMN revolut_conexion.estado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.revolut_conexion.estado IS 'B01 Revolut. certificado: creado, falta pegarlo y traer el client_id · autorizar: falta autorizar en Revolut · conectada · desconectada: desde Sumied · retirada: desde Revolut (la renovación del token falló porque el permiso ya no vale).';
+
+
+--
+-- Name: COLUMN revolut_conexion.desde_historico; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.revolut_conexion.desde_historico IS 'B01 Revolut. Desde qué día se trae el histórico la primera vez (lo dice la persona en el asistente).';
+
+
+--
+-- Name: COLUMN revolut_conexion.estado_oauth_huella; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.revolut_conexion.estado_oauth_huella IS 'B01 Revolut. SHA-256 del «state» de la autorización en curso (la vuelta solo vale si lo trae, y una vez). Nunca el valor.';
+
+
+--
+-- Name: COLUMN revolut_conexion.webhook_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.revolut_conexion.webhook_id IS 'B01 Revolut. El id del aviso (webhook) registrado en Revolut, si se pudo registrar (pide el permiso WRITE). Su secreto de firma, en el Vault (aviso).';
+
+
+--
 -- Name: sale_capture; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -110189,6 +110398,22 @@ ALTER TABLE ONLY public.registro_jornada_enlace
 
 ALTER TABLE ONLY public.registro_jornada_firma
     ADD CONSTRAINT registro_jornada_firma_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: revolut_conexion revolut_conexion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.revolut_conexion
+    ADD CONSTRAINT revolut_conexion_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: revolut_conexion revolut_conexion_una; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.revolut_conexion
+    ADD CONSTRAINT revolut_conexion_una UNIQUE (company_id);
 
 
 --
@@ -126421,6 +126646,22 @@ ALTER TABLE ONLY public.registro_jornada_firma
 
 
 --
+-- Name: revolut_conexion revolut_conexion_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.revolut_conexion
+    ADD CONSTRAINT revolut_conexion_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: revolut_conexion revolut_conexion_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.revolut_conexion
+    ADD CONSTRAINT revolut_conexion_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: recipe_item_purchase_format ripf_parent_same_item; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -136522,6 +136763,19 @@ CREATE POLICY registro_jornada_firma_leer ON public.registro_jornada_firma FOR S
 
 
 --
+-- Name: revolut_conexion; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.revolut_conexion ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: revolut_conexion revolut_conexion_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY revolut_conexion_select ON public.revolut_conexion FOR SELECT USING (( SELECT public.belongs_to_account(revolut_conexion.account_id) AS belongs_to_account));
+
+
+--
 -- Name: recipe_item_location_cost ril_cost_delete; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -140819,6 +141073,22 @@ GRANT ALL ON FUNCTION public._respaldar_funcion(p_firma text, p_migracion text) 
 
 REVOKE ALL ON FUNCTION public._restaurar_funcion(p_firma text, p_migracion text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._restaurar_funcion(p_firma text, p_migracion text) TO service_role;
+
+
+--
+-- Name: FUNCTION _revolut_nombre_secreto(p_company uuid, p_que text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._revolut_nombre_secreto(p_company uuid, p_que text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._revolut_nombre_secreto(p_company uuid, p_que text) TO service_role;
+
+
+--
+-- Name: FUNCTION _revolut_secretos_quitar(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._revolut_secretos_quitar(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._revolut_secretos_quitar(p_company uuid) TO service_role;
 
 
 --
@@ -146531,6 +146801,38 @@ GRANT ALL ON FUNCTION public.conta_resultado_por_local(p_company uuid, p_desde d
 REVOKE ALL ON FUNCTION public.conta_resumen_ventas(p_entry uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_resumen_ventas(p_entry uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_resumen_ventas(p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_revolut_desconectar(p_company uuid, p_quien uuid, p_quien_nombre text, p_desde_revolut boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_revolut_desconectar(p_company uuid, p_quien uuid, p_quien_nombre text, p_desde_revolut boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_revolut_desconectar(p_company uuid, p_quien uuid, p_quien_nombre text, p_desde_revolut boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_revolut_despertar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_revolut_despertar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_revolut_despertar() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_revolut_secreto(p_company uuid, p_que text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_revolut_secreto(p_company uuid, p_que text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_revolut_secreto(p_company uuid, p_que text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_revolut_secreto_poner(p_company uuid, p_que text, p_valor text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_revolut_secreto_poner(p_company uuid, p_que text, p_valor text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_revolut_secreto_poner(p_company uuid, p_que text, p_valor text) TO service_role;
 
 
 --
@@ -158019,6 +158321,15 @@ GRANT SELECT ON TABLE public.registro_jornada_enlace TO authenticated;
 
 GRANT ALL ON TABLE public.registro_jornada_firma TO service_role;
 GRANT SELECT ON TABLE public.registro_jornada_firma TO authenticated;
+
+
+--
+-- Name: TABLE revolut_conexion; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.revolut_conexion TO anon;
+GRANT ALL ON TABLE public.revolut_conexion TO authenticated;
+GRANT ALL ON TABLE public.revolut_conexion TO service_role;
 
 
 --
