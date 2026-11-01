@@ -4108,6 +4108,30 @@ end $$;
 
 
 --
+-- Name: _conta_liquidacion_pon_local(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_liquidacion_pon_local() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_texto text; v_tienda_local uuid;
+begin
+  if new.location_id is not null then return new; end if;
+  -- La vuelta atrás de la 1218 quita los locales que puso: con esta marca, no se vuelven a poner.
+  if current_setting('s01j2.no_poner_local', true) = '1' then return new; end if;
+  select ps.external_text, ps.location_id into v_texto, v_tienda_local
+    from public.platform_store ps where ps.id = new.store_id and ps.account_id = new.account_id;
+  -- La tienda con su local manda (la ficha lo lee de ella): no se repite aquí.
+  if v_tienda_local is not null then return new; end if;
+  v_texto := coalesce(v_texto, new.external_location_text);
+  if coalesce(btrim(v_texto), '') = '' then return new; end if;
+  new.location_id := public._conta_local_de_texto(new.account_id, array[v_texto]);
+  return new;
+end $$;
+
+
+--
 -- Name: _conta_liquidacion_solape(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4162,6 +4186,307 @@ CREATE FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_orig
   insert into public.conta_propuesta_pendiente (account_id, company_id, origen, origen_id, que, porque, donde)
   select c.account_id, c.id, p_origen, p_origen_id, p_que, p_porque, p_donde from public.company c where c.id = p_company
   on conflict (company_id, origen, origen_id) do update set que = excluded.que, porque = excluded.porque, donde = excluded.donde, at = now()
+$$;
+
+
+--
+-- Name: _conta_pago_aprobado_hoy(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_aprobado_hoy(p_company uuid) RETURNS numeric
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(sum(s.amount), 0)::numeric(14,2) from public.conta_pago_salida s
+   where s.company_id = p_company and s.estado not in ('cancelada', 'rechazada')
+     and (s.created_at at time zone 'Europe/Madrid')::date = (now() at time zone 'Europe/Madrid')::date
+$$;
+
+
+--
+-- Name: _conta_pago_de_la_cuenta(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_de_la_cuenta(p_account uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select exists (select 1 from public.user_profiles u
+                  where u.user_id = auth.uid() and u.account_id = p_account and u.active
+                    and u.account_id = public._cuenta_activa())
+      or public.current_user_is_admin()
+$$;
+
+
+--
+-- Name: _conta_pago_empresa(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_empresa(p_company uuid) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v uuid;
+begin
+  select account_id into v from public.company where id = p_company;
+  if v is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  if auth.uid() is not null and not public._conta_pago_de_la_cuenta(v) then
+    raise exception 'Esa empresa no es tuya.' using errcode = '42501';
+  end if;
+  return v;
+end $$;
+
+
+--
+-- Name: _conta_pago_evento(uuid, uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_evento(p_account uuid, p_lote uuid, p_salida uuid, p_por text, p_texto text) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  insert into public.conta_pago_evento (account_id, lote_id, salida_id, by_name, texto)
+  values (p_account, p_lote, p_salida, coalesce(p_por, 'Sumied'), p_texto)
+$$;
+
+
+--
+-- Name: _conta_pago_factura(uuid, uuid, numeric, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_factura(p_company uuid, p_invoice uuid, p_importe numeric, p_pagar_igual_porque text) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_inv public.supplier_invoice; v_s public.supplier; v_metodo text; v_iban text; v_pend numeric; v_imp numeric;
+  v_chk record; v_motivos text[] := '{}'; v_topes record;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  select * into v_inv from public.supplier_invoice where id = p_invoice and account_id = v_acc;
+  if v_inv.id is null or coalesce(v_inv.company_id, p_company) <> p_company then return jsonb_build_object('porque', 'Esa factura no es de la empresa.'); end if;
+  if v_inv.status <> 'aprobada' or v_inv.paid_at is not null then
+    return jsonb_build_object('porque', format('La factura %s no está por pagar (está %s).', coalesce(v_inv.invoice_number, ''), case when v_inv.paid_at is not null then 'pagada' else v_inv.status end));
+  end if;
+  select * into v_s from public.supplier where id = v_inv.supplier_id and account_id = v_acc;
+  if v_s.id is null then return jsonb_build_object('porque', format('La factura %s no tiene proveedor.', coalesce(v_inv.invoice_number, ''))); end if;
+  v_metodo := coalesce(v_inv.payment_method, v_s.payment_method);
+  if v_metodo in ('direct_debit', 'card', 'prepaid', 'cash', 'compensation') then
+    return jsonb_build_object('porque', format('La factura %s no se paga por transferencia: %s.', coalesce(v_inv.invoice_number, ''),
+      case v_metodo when 'direct_debit' then 'la paga el banco solo (domiciliada)' when 'card' then 'se paga con tarjeta'
+        when 'prepaid' then 'se paga del saldo prepago' when 'compensation' then 'se compensa con su liquidación' else 'se paga en efectivo' end));
+  end if;
+  v_iban := public._pc01e2_iban(v_s.iban);
+  if v_iban is null or not public._pc01e2b_iban_valido(v_iban) then
+    return jsonb_build_object('porque', format('%s no tiene un IBAN válido en su ficha: pónselo antes de pagar.', coalesce(v_s.name, 'Su proveedor')));
+  end if;
+  if public._pc01e2_iban(v_inv.read_iban) is not null and v_inv.iban_decision is null and public._pc01e2_iban(v_inv.read_iban) <> v_iban then
+    return jsonb_build_object('porque', format('La factura %s trae otro IBAN (···· %s) que el de la ficha de %s (···· %s): decide en su ficha si es el nuevo antes de pagarla.',
+      coalesce(v_inv.invoice_number, ''), right(public._pc01e2_iban(v_inv.read_iban), 4), v_s.name, right(v_iban, 4)));
+  end if;
+  if public._pc01e2_cuenta_proveedor(p_company, v_s.id) is null then
+    return jsonb_build_object('porque', format('%s no tiene su cuenta de proveedor (400) en el plan: sin ella el pago no tendría asiento.', v_s.name));
+  end if;
+  v_pend := public._conta_pago_pendiente(v_inv.id);
+  v_imp := coalesce(p_importe, v_pend);
+  if v_pend <= 0 then return jsonb_build_object('porque', format('A la factura %s no le queda nada por pagar fuera de remesas y pagos en marcha.', coalesce(v_inv.invoice_number, ''))); end if;
+  if v_imp <= 0 or v_imp > v_pend + 0.005 then
+    return jsonb_build_object('porque', format('A la factura %s le quedan %s por pagar: no se le pueden pagar %s.', coalesce(v_inv.invoice_number, ''),
+      public.conta_euros_exactos(v_pend), public.conta_euros_exactos(v_imp)));
+  end if;
+  select * into v_chk from public._pc01e2_iban_como_esta(v_s.id, v_iban);
+  if v_s.iban_unconfirmed_invoice_id is not null then v_motivos := v_motivos || 'iban_de_la_factura'::text;
+  elsif v_chk.estado = 'cambiado' then v_motivos := v_motivos || 'iban_cambiado'::text;
+  elsif v_chk.estado = 'primer_pago' then v_motivos := v_motivos || 'iban_nuevo'::text; end if;
+  select * into v_topes from public._conta_pago_topes(p_company);
+  if v_imp > v_topes.tope_pago then v_motivos := v_motivos || 'tope_pago'::text; end if;
+  if nullif(trim(coalesce(p_pagar_igual_porque, '')), '') is not null then v_motivos := v_motivos || 'pagar_igual'::text; end if;
+  return jsonb_build_object('porque', null, 'factura', v_inv.id, 'numero', v_inv.invoice_number, 'proveedor', v_s.id,
+    'beneficiario', coalesce(nullif(trim(v_s.legal_name), ''), v_s.name), 'iban', v_iban, 'iban4', right(v_iban, 4),
+    'iban_check', v_chk.estado, 'iban_nota', v_chk.nota, 'importe', v_imp, 'pendiente', v_pend,
+    'concepto', left(coalesce(nullif(v_inv.invoice_number, ''), 'Factura ' || to_char(v_inv.invoice_date, 'DD/MM/YYYY')), 140),
+    'motivos', to_jsonb(v_motivos));
+end $$;
+
+
+--
+-- Name: _conta_pago_huella(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_huella(p_lote uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select encode(sha256(convert_to(
+    l.id::text || '|' || l.treasury_account_id::text || '|' || l.proveedor || '|' ||
+    coalesce((select string_agg(s.id::text || ':' || to_char(s.amount, 'FM999999999990.00') || ':' || s.iban || ':' || s.beneficiario, ';' order by s.id)
+                from public.conta_pago_salida s where s.lote_id = l.id and s.estado <> 'cancelada'), ''), 'UTF8')), 'hex')
+    from public.conta_pago_lote l where l.id = p_lote
+$$;
+
+
+--
+-- Name: _conta_pago_motivo(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_motivo(p text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select case p when 'iban_nuevo' then 'IBAN nuevo' when 'iban_cambiado' then 'IBAN cambiado' when 'iban_de_la_factura' then 'IBAN leído de la factura'
+    when 'tope_pago' then 'por encima del tope por pago' when 'tope_dia' then 'por encima del tope del día'
+    when 'pagar_igual' then 'pagar igual con un titular que no coincide' else p end
+$$;
+
+
+--
+-- Name: _conta_pago_nombre(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_nombre(p_user uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(
+    (select display_name from public.user_profiles where user_id = p_user and active and display_name is not null order by created_at limit 1),
+    (select email from auth.users where id = p_user), 'Una persona')
+$$;
+
+
+--
+-- Name: _conta_pago_pagadores(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_pagadores(p_company uuid) RETURNS TABLE(user_id uuid, nombre text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select p.user_id, public._conta_pago_nombre(p.user_id)
+    from public.conta_pago_permiso p
+   where p.company_id = p_company and p.revoked_at is null and public._conta_pago_puede(p_company, p.user_id)
+   order by p.granted_at
+$$;
+
+
+--
+-- Name: _conta_pago_pendiente(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_pendiente(p_invoice uuid) RETURNS numeric
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select (coalesce((select r.pendiente from public.conta_recibida_pago r where r.invoice_id = p_invoice), 0)
+          - public._pc01e2_en_remesa(p_invoice)
+          - coalesce((select sum(s.amount) from public.conta_pago_salida s
+                       where s.invoice_id = p_invoice and s.remesa_linea_id is null
+                         and s.estado in ('esperando_segunda', 'lista', 'enviando', 'enviada', 'esperando_banco')), 0))::numeric(14,2)
+$$;
+
+
+--
+-- Name: _conta_pago_puede(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_puede(p_company uuid, p_user uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select p_user is not null and exists (
+    select 1 from public.conta_pago_permiso p
+      join public.company c on c.id = p.company_id
+      join public.user_profiles u on u.user_id = p.user_id and u.account_id = c.account_id and u.active
+     where p.company_id = p_company and p.user_id = p_user and p.revoked_at is null)
+$$;
+
+
+--
+-- Name: _conta_pago_puede_dar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_puede_dar(p_lote uuid, p_user uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_pago_lote; v_n int;
+begin
+  select * into v_l from public.conta_pago_lote where id = p_lote;
+  if v_l.id is null then return 'Ese pago no existe.'; end if;
+  if v_l.estado <> 'esperando_segunda' then return 'Ese pago ya no espera la segunda aprobación.'; end if;
+  if not public._conta_pago_puede(v_l.company_id, p_user) then return 'No tienes permiso para pagar en esta empresa.'; end if;
+  select count(*) into v_n from public._conta_pago_pagadores(v_l.company_id);
+  if v_n >= 2 and p_user = v_l.created_by then return 'Lo aprobaste tú: la segunda aprobación la tiene que dar otra persona que pueda pagar.'; end if;
+  if v_n < 2 and p_user <> v_l.created_by then return 'La segunda aprobación la da quien lo aprobó.'; end if;
+  return null;
+end $$;
+
+
+--
+-- Name: _conta_pago_salida_de(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_salida_de(p_company uuid, p_treasury uuid) RETURNS TABLE(proveedor text, banco text, puede boolean, porque text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_t public.treasury_account; v_c public.revolut_conexion;
+begin
+  select * into v_t from public.treasury_account where id = p_treasury and company_id = p_company and is_active;
+  if v_t.id is null then return query select null::text, null::text, false, 'Esa cuenta del banco no es de la empresa.'; return; end if;
+  if not exists (select 1 from public.bank_aggregator_link b where b.treasury_account_id = p_treasury and b.company_id = p_company and b.provider = 'revolut' and b.status = 'activo') then
+    return query select null::text, null::text, false, format('Desde «%s» no se puede pagar con Sumied: paga con la remesa o desde el banco.', v_t.name); return;
+  end if;
+  select * into v_c from public.revolut_conexion where company_id = p_company;
+  if v_c.id is null or v_c.estado <> 'conectada' then
+    return query select 'revolut'::text, 'Revolut'::text, false, 'Revolut no está conectado en esta empresa: conéctalo en Bancos › Cuentas y extractos.'; return;
+  end if;
+  if not ('PAY' = any (string_to_array(replace(coalesce(v_c.permisos, ''), ' ', ','), ','))) then
+    return query select 'revolut'::text, 'Revolut'::text, false, 'Revolut está conectado solo para leer: pulsa «Activar pagos» en Bancos › Cuentas y extractos.'; return;
+  end if;
+  return query select 'revolut'::text, 'Revolut'::text, true, null::text;
+end $$;
+
+
+--
+-- Name: _conta_pago_segunda_dar(uuid, uuid, text, text, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_segunda_dar(p_lote uuid, p_user uuid, p_huella_vista text, p_via text, p_dispositivo text, p_reto uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_pago_lote; v_no text; v_n int; v_nombre text := public._conta_pago_nombre(p_user);
+begin
+  select * into v_l from public.conta_pago_lote where id = p_lote for update;
+  v_no := public._conta_pago_puede_dar(p_lote, p_user);
+  if v_no is not null then return jsonb_build_object('ok', false, 'porque', v_no); end if;
+  if public._conta_pago_huella(v_l.id) <> v_l.huella or v_l.huella <> lower(coalesce(p_huella_vista, '')) then
+    if p_reto is not null then update public.conta_pago_reto set descartado_at = now() where id = p_reto; end if;
+    return jsonb_build_object('ok', false, 'porque', 'La lista de pagos ha cambiado desde que la viste: esta confirmación ya no vale. Vuelve a abrirla.');
+  end if;
+  if p_reto is not null then update public.conta_pago_reto set used_at = now() where id = p_reto; end if;
+  update public.conta_pago_lote set estado = 'listo', segunda_por = p_user, segunda_por_nombre = v_nombre, segunda_at = now(),
+    segunda_via = p_via, segunda_dispositivo = nullif(left(trim(coalesce(p_dispositivo, '')), 80), '') where id = v_l.id;
+  update public.conta_pago_salida set estado = 'lista', estado_at = now() where lote_id = v_l.id and estado = 'esperando_segunda';
+  get diagnostics v_n = row_count;
+  perform public._conta_pago_evento(v_l.account_id, v_l.id, null, v_nombre, format('Segunda aprobación: %s, con %s%s · %s.', v_nombre,
+    case when p_via = 'llave' then 'su llave' else 'su PIN de pago' end,
+    case when nullif(trim(coalesce(p_dispositivo, '')), '') is not null then ' (' || left(trim(p_dispositivo), 80) || ')' else '' end,
+    (select string_agg(public._conta_pago_motivo(m), ', ') from unnest(v_l.segunda_motivos) m)));
+  return jsonb_build_object('ok', true, 'lote', v_l.id, 'pagos', v_n, 'frase', format('Confirmado con %s a las %s: %s %s para mandar.',
+    case when p_via = 'llave' then 'tu llave' else 'tu PIN de pago' end, to_char(now() at time zone 'Europe/Madrid', 'HH24:MI'), v_n, case when v_n = 1 then 'pago listo' else 'pagos listos' end));
+end $$;
+
+
+--
+-- Name: _conta_pago_topes(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_pago_topes(p_company uuid) RETURNS TABLE(tope_pago numeric, tope_dia numeric)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce((select a.tope_pago from public.conta_pago_ajustes a where a.company_id = p_company), 3000)::numeric,
+         coalesce((select a.tope_dia from public.conta_pago_ajustes a where a.company_id = p_company), 10000)::numeric
 $$;
 
 
@@ -28942,10 +29267,22 @@ begin
              'liquidaciones', (select coalesce(jsonb_agg(jsonb_build_object('id', cs.id, 'plataforma', sc.name,
                                   'tienda', regexp_replace(coalesce(ps.external_text, cs.external_location_text, ''), '\s*\(.*$', ''),
                                   'local', lo.name, 'desde', cs.period_from, 'hasta', cs.period_to, 'neto', cs.net_payout,
-                                  'pago_el', cs.settlement_date) order by cs.period_from), '[]'::jsonb)
+                                  'pago_el', cs.settlement_date,
+                                  -- S01j·2 · Una liquidación que ya había entrado con otro correo (el mismo Excel reenviado dos veces).
+                                  'otro_correo', cs.inbound_email_id is distinct from l.email_id) order by cs.period_from), '[]'::jsonb)
                                  from channel_settlement cs left join sales_channel sc on sc.id = cs.channel_id
                                  left join platform_store ps on ps.id = cs.store_id left join locations lo on lo.id = coalesce(cs.location_id, ps.location_id)
-                                where cs.account_id = l.account_id and cs.inbound_email_id = l.email_id),
+                                where cs.account_id = l.account_id
+                                  and (cs.inbound_email_id = l.email_id
+                                       or cs.id::text in (select x->>'id' from jsonb_array_elements(case when jsonb_typeof(l.detail->'liquidaciones') = 'array' then l.detail->'liquidaciones' else '[]'::jsonb end) x))),
+             -- S01j·2 · De qué plataforma es (para «Volver a leer todo lo de…») y qué pasó con su Excel:
+             -- leído; sin leer (llegó antes de que se leyeran: se dejó como «no es un PDF»); o no venía.
+             'plataforma', case when l.from_address ~* 'glovo' or l.subject ~* 'glovo' then 'glovo'
+                                when l.from_address ~* 'just-?eat' or l.subject ~* 'just-?eat' then 'justeat' end,
+             'excel', case when jsonb_typeof(l.detail->'liquidaciones') = 'array' then 'leido'
+                           when exists (select 1 from jsonb_array_elements(case when jsonb_typeof(l.detail->'dejados') = 'array' then l.detail->'dejados' else '[]'::jsonb end) x
+                                         where x->>'nombre' ~* '\.xlsx?$') then 'sin_leer'
+                           when (l.from_address ~* 'glovo' or l.subject ~* 'glovo') and l.outcome <> 'confirmacion' then 'no_traia' end,
              'factura_comision', case when l.detail ? 'factura_id' then (select jsonb_build_object('id', fi.id, 'codigo', fi.code, 'numero', fi.invoice_number,
                                   'total', fi.grand_total, 'en_revision', fi.needs_review, 'nota', fi.notes)
                                  from supplier_invoice fi where fi.id = nullif(l.detail->>'factura_id', '')::uuid and fi.account_id = l.account_id) end) x
@@ -37111,6 +37448,63 @@ end $$;
 
 
 --
+-- Name: conta_liquidacion_ficha(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_liquidacion_ficha(p_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare cs public.channel_settlement; v_fac jsonb; v_correo jsonb; v_tienda text; v_local uuid; v_local_nombre text; v_marca text; v_canal text;
+begin
+  select * into cs from public.channel_settlement where id = p_id;
+  if cs.id is null or not public.belongs_to_account(cs.account_id) then
+    raise exception 'Esa liquidación no está en tu cuenta.' using errcode = '42501';
+  end if;
+  select sc.name into v_canal from public.sales_channel sc where sc.id = cs.channel_id and sc.account_id = cs.account_id;
+  select regexp_replace(coalesce(ps.external_text, cs.external_location_text, ''), '\s*\(.*$', ''), coalesce(cs.location_id, ps.location_id)
+    into v_tienda, v_local
+    from (select 1) x left join public.platform_store ps on ps.id = cs.store_id and ps.account_id = cs.account_id;
+  select lo.name into v_local_nombre from public.locations lo where lo.id = v_local and lo.account_id = cs.account_id;
+  select b.name into v_marca from public.brand b where b.id = cs.brand_id and b.account_id = cs.account_id;
+
+  -- Su factura de comisión: la ligada (S01i), o la que apunta la propia liquidación.
+  select jsonb_build_object('id', si.id, 'codigo', si.code, 'numero', si.invoice_number, 'fecha', si.invoice_date,
+           'base', si.tax_base_total, 'iva', si.tax_total, 'total', si.grand_total, 'estado', si.status, 'en_revision', si.needs_review)
+    into v_fac
+    from public.supplier_invoice si
+   where si.account_id = cs.account_id
+     and si.id = coalesce((select k.supplier_invoice_id from public.channel_settlement_invoice k
+                            where k.settlement_id = cs.id and k.account_id = cs.account_id order by k.created_at limit 1), cs.commission_invoice_id);
+
+  -- El correo del que salió: el suyo, o el primero que lo nombra.
+  select jsonb_build_object('email_id', l.email_id, 'fecha', l.received_at, 'de', l.from_address, 'asunto', l.subject, 'a', l.to_address,
+           'adjuntos', coalesce(l.detail->'dejados', '[]'::jsonb), 'company_id', l.company_id)
+    into v_correo
+    from public.inbound_email_log l
+   where l.account_id = cs.account_id
+     and (l.email_id = cs.inbound_email_id
+          or (cs.inbound_email_id is null and jsonb_typeof(l.detail->'liquidaciones') = 'array'
+              and exists (select 1 from jsonb_array_elements(l.detail->'liquidaciones') x where x->>'id' = cs.id::text)))
+   order by (l.email_id = cs.inbound_email_id) desc, l.received_at limit 1;
+
+  return jsonb_build_object(
+    'id', cs.id, 'plataforma', v_canal, 'canal_id', cs.channel_id, 'marca', coalesce(v_marca, nullif(cs.external_brand_text, '')), 'local', v_local_nombre, 'local_id', v_local,
+    'tienda', nullif(v_tienda, ''), 'referencia', cs.settlement_ref,
+    'desde', cs.period_from, 'hasta', cs.period_to, 'sin_periodo', cs.period_from is null,
+    'origen', cs.source,
+    'pedidos', cs.orders_count, 'ventas', cs.gross_sales, 'comision', cs.commission,
+    'otros', coalesce(cs.delivery_transport, 0) + coalesce(cs.min_order_fee, 0) + coalesce(cs.other_cost, 0) + coalesce(cs.promo_product, 0)
+             + coalesce(cs.promo_flash, 0) + coalesce(cs.incidents_cost, 0) + coalesce(cs.incidents_refund, 0) + coalesce(cs.access_fee, 0)
+             + coalesce(cs.prime_fee, 0) + coalesce(cs.recurring_fee, 0) + coalesce(cs.other_earnings, 0) + coalesce(cs.adjustments, 0),
+    'neto', cs.net_payout, 'pago_el', cs.settlement_date,
+    'cobrado_el', cs.collected_on, 'cobrado', cs.collected_amount,
+    'factura', v_fac, 'correo', v_correo,
+    'revisar', case when cs.needs_review then coalesce(cs.review_note, 'Hay algo que mirar.') end);
+end $_$;
+
+
+--
 -- Name: conta_liquidacion_pedidos(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -37648,6 +38042,111 @@ COMMENT ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_h
 
 
 --
+-- Name: conta_llave_de(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llave_de(p_user uuid, p_credential_id text, p_rp_id text) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object('id', id, 'public_key', public_key, 'algoritmo', algoritmo, 'sign_count', sign_count, 'dispositivo', dispositivo)
+    from public.conta_llave where user_id = p_user and credential_id = p_credential_id and rp_id = lower(p_rp_id) and revoked_at is null
+$$;
+
+
+--
+-- Name: conta_llave_guardar(uuid, uuid, text, text, text, integer, bigint, text, text, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llave_guardar(p_user uuid, p_reto uuid, p_reto_huella text, p_credential_id text, p_public_key text, p_algoritmo integer, p_sign_count bigint, p_rp_id text, p_dispositivo text, p_transports text[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_r public.conta_pago_reto; v_id uuid; v_codigo uuid;
+begin
+  select * into v_r from public.conta_pago_reto where id = p_reto and user_id = p_user and proposito = 'registrar' for update;
+  if v_r.id is null or v_r.used_at is not null or v_r.descartado_at is not null or v_r.expires_at < now() or lower(p_reto_huella) <> v_r.reto_huella then
+    raise exception 'Este intento de activar la llave ya no vale. Vuelve a empezar.' using errcode = '42501';
+  end if;
+  select id into v_codigo from public.conta_pago_reto where user_id = p_user and proposito = 'activar_llave' and used_at > now() - interval '10 minutes' and llave_id is null
+   order by used_at desc limit 1 for update;
+  if v_codigo is null then raise exception 'Para activar una llave nueva, confirma antes que eres tú con el código del correo.' using errcode = '42501'; end if;
+  insert into public.conta_llave (user_id, credential_id, public_key, algoritmo, sign_count, rp_id, dispositivo, transports)
+  values (p_user, p_credential_id, p_public_key, p_algoritmo, coalesce(p_sign_count, 0), lower(p_rp_id), nullif(left(trim(coalesce(p_dispositivo, '')), 80), ''), coalesce(p_transports, '{}'))
+  returning id into v_id;
+  update public.conta_pago_reto set used_at = now(), llave_id = v_id where id = p_reto;
+  update public.conta_pago_reto set llave_id = v_id where id = v_codigo;
+  return jsonb_build_object('llave', v_id, 'frase', format('Llave activada%s. Desde ahora confirmas los pagos con ella.',
+    case when nullif(trim(coalesce(p_dispositivo, '')), '') is not null then ' en ' || left(trim(p_dispositivo), 80) else '' end));
+end $$;
+
+
+--
+-- Name: conta_llave_quitar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llave_quitar(p_llave uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_k public.conta_llave;
+begin
+  select * into v_k from public.conta_llave where id = p_llave and user_id = auth.uid() and revoked_at is null for update;
+  if v_k.id is null then raise exception 'Esa llave no es tuya o ya está quitada.' using errcode = 'P0002'; end if;
+  update public.conta_llave set revoked_at = now(), revoked_by_name = coalesce(public.conta_nombre_actor(), 'Sumied') where id = p_llave;
+  return jsonb_build_object('frase', format('Llave quitada%s. Desde ese dispositivo, Sumied te pedirá tu PIN de pago.',
+    case when v_k.dispositivo is not null then ' (' || v_k.dispositivo || ')' else '' end));
+end $$;
+
+
+--
+-- Name: conta_llave_usada(uuid, bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llave_usada(p_llave uuid, p_sign_count bigint) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_k public.conta_llave;
+begin
+  select * into v_k from public.conta_llave where id = p_llave and revoked_at is null for update;
+  if v_k.id is null then return jsonb_build_object('ok', false, 'porque', 'Esa llave ya no está activa.'); end if;
+  if coalesce(p_sign_count, 0) > 0 and coalesce(p_sign_count, 0) <= v_k.sign_count then
+    update public.conta_llave set revoked_at = now(), revoked_by_name = 'Sumied (el contador de la llave no subió: puede estar copiada)' where id = p_llave;
+    return jsonb_build_object('ok', false, 'porque', 'Esta llave parece copiada (su contador no ha subido) y la hemos quitado. Confirma con tu PIN de pago y vuelve a activar tu llave con el código del correo.');
+  end if;
+  update public.conta_llave set sign_count = greatest(sign_count, coalesce(p_sign_count, 0)), last_used_at = now() where id = p_llave;
+  return jsonb_build_object('ok', true);
+end $$;
+
+
+--
+-- Name: conta_llaves_de(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llaves_de(p_user uuid, p_rp_id text) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object('credential_id', credential_id, 'transports', transports)), '[]'::jsonb)
+    from public.conta_llave where user_id = p_user and rp_id = lower(p_rp_id) and revoked_at is null
+$$;
+
+
+--
+-- Name: conta_llaves_mias(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llaves_mias() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object('id', id, 'direccion', rp_id, 'dispositivo', dispositivo, 'creada', created_at, 'usada', last_used_at) order by created_at), '[]'::jsonb)
+    from public.conta_llave where user_id = auth.uid() and revoked_at is null
+$$;
+
+
+--
 -- Name: conta_llegada_pdf_subido(uuid, text, text, text, integer, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -37721,7 +38220,7 @@ CREATE FUNCTION public.conta_local_direcciones_guardar(p_location uuid, p_direcc
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_acc uuid; v_nombre text; v_n int; v_inv uuid; v_buscadas int := 0; v_ligadas int := 0; v_r text;
+declare v_acc uuid; v_nombre text; v_n int; v_inv uuid; v_buscadas int := 0; v_ligadas int := 0; v_r text; v_locales int := 0;
 begin
   select account_id, name into v_acc, v_nombre from public.locations where id = p_location;
   if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Ese local no es de tu cuenta.' using errcode = '42501'; end if;
@@ -37733,6 +38232,12 @@ begin
   select distinct on (lower(btrim(d))) v_acc, p_location, btrim(d), coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor())
     from unnest(coalesce(p_direcciones, '{}'::text[])) d where btrim(coalesce(d, '')) <> '';
   get diagnostics v_n = row_count;
+  -- S01j·2 · Con la dirección nueva, las liquidaciones sin local que ahora lo tienen sin adivinar (por el texto de su tienda), antes de buscar facturas.
+  update public.channel_settlement cs set location_id = p_location, updated_at = now()
+    from public.platform_store ps
+   where cs.account_id = v_acc and cs.location_id is null and ps.id = cs.store_id and ps.account_id = v_acc and ps.location_id is null
+     and public._conta_local_de_texto(v_acc, array[coalesce(ps.external_text, cs.external_location_text)]) = p_location;
+  get diagnostics v_locales = row_count;
   -- Con la dirección nueva, las facturas de plataformas sin ligar pueden encontrar ya su liquidación (S01i).
   if to_regprocedure('public._conta_comision_buscar(uuid)') is not null then
     for v_inv in
@@ -37747,13 +38252,16 @@ begin
       if exists (select 1 from public.channel_settlement_invoice k where k.supplier_invoice_id = v_inv) then v_ligadas := v_ligadas + 1; end if;
     end loop;
   end if;
-  return jsonb_build_object('guardadas', v_n, 'buscadas', v_buscadas, 'ligadas', v_ligadas,
-    'texto', format('%s: %s.%s', v_nombre,
+  return jsonb_build_object('guardadas', v_n, 'buscadas', v_buscadas, 'ligadas', v_ligadas, 'liquidaciones', v_locales,
+    'texto', format('%s: %s.%s%s', v_nombre,
       case when v_n = 0 then 'sin otras direcciones' when v_n = 1 then 'guardada 1 otra dirección' else format('guardadas %s otras direcciones', v_n) end,
       case when v_buscadas = 0 then ''
            else format(' Vuelta a buscar la liquidación de %s %s sin ligar: %s.', v_buscadas,
              case when v_buscadas = 1 then 'factura de plataformas' else 'facturas de plataformas' end,
-             case when v_ligadas = 0 then 'ninguna se ha ligado aún' when v_ligadas = 1 then '1 ligada ahora' else format('%s ligadas ahora', v_ligadas) end) end));
+             case when v_ligadas = 0 then 'ninguna se ha ligado aún' when v_ligadas = 1 then '1 ligada ahora' else format('%s ligadas ahora', v_ligadas) end) end,
+      case when v_locales = 0 then ''
+           when v_locales = 1 then format(' Puesto %s en 1 liquidación que no tenía local.', v_nombre)
+           else format(' Puesto %s en %s liquidaciones que no tenían local.', v_nombre, v_locales) end));
 end $$;
 
 
@@ -38994,6 +39502,443 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_pago_a_mano(p_company uuid, p_invoice uuid, p_treasury uuid, p_fecha date, p_importe numeric) IS 'PC01 · E2 · «Ya la he pagado»: apunta el pago de una factura suelta (admite parcial). Espera el cargo para casarse en Bancos y tener su asiento.';
+
+
+--
+-- Name: conta_pago_aprobar(uuid, uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid := public._conta_pago_empresa(p_company); v_sal record; v_t record; v_lote uuid; v_f jsonb; v_p jsonb; v_s uuid;
+  v_vistas uuid[] := '{}'; v_total numeric := 0; v_n int := 0; v_motivos text[] := '{}'; v_m text; v_quien jsonb; v_huella text; v_yo text;
+begin
+  if not public._conta_pago_puede(p_company, auth.uid()) then
+    raise exception 'No tienes permiso para pagar en esta empresa.' using errcode = '42501';
+  end if;
+  select * into v_sal from public._conta_pago_salida_de(p_company, p_treasury);
+  if not v_sal.puede then raise exception '%', v_sal.porque using errcode = '23514'; end if;
+  if jsonb_typeof(p_facturas) <> 'array' or jsonb_array_length(p_facturas) = 0 then raise exception 'Elige al menos una factura.' using errcode = '22023'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('conta_pago_aprobar:' || p_company::text, 0));
+  v_yo := coalesce(public.conta_nombre_actor(), 'Sumied');
+  insert into public.conta_pago_lote (account_id, company_id, treasury_account_id, proveedor, estado, huella, created_by, created_by_name)
+  values (v_acc, p_company, p_treasury, v_sal.proveedor, 'esperando_segunda', repeat('0', 64), auth.uid(), v_yo)
+  returning id into v_lote;
+  for v_f in select * from jsonb_array_elements(p_facturas) loop
+    if (v_f->>'id')::uuid = any(v_vistas) then raise exception 'Una factura está dos veces.' using errcode = '23514'; end if;
+    v_vistas := v_vistas || (v_f->>'id')::uuid;
+    perform 1 from public.supplier_invoice where id = (v_f->>'id')::uuid and account_id = v_acc for update;
+    v_p := public._conta_pago_factura(p_company, (v_f->>'id')::uuid, nullif(v_f->>'importe', '')::numeric, v_f->>'pagar_igual_porque');
+    if v_p->>'porque' is not null then raise exception '%', v_p->>'porque' using errcode = '23514'; end if;
+    insert into public.conta_pago_salida (account_id, company_id, lote_id, invoice_id, supplier_id, amount, beneficiario, iban, iban_check, iban_nota,
+                                          concepto, motivos, pagar_igual_porque, estado)
+    values (v_acc, p_company, v_lote, (v_p->>'factura')::uuid, (v_p->>'proveedor')::uuid, (v_p->>'importe')::numeric, v_p->>'beneficiario', v_p->>'iban',
+            v_p->>'iban_check', v_p->>'iban_nota', v_p->>'concepto', array(select jsonb_array_elements_text(v_p->'motivos')),
+            nullif(trim(coalesce(v_f->>'pagar_igual_porque', '')), ''), 'esperando_segunda')
+    returning id into v_s;
+    v_motivos := v_motivos || array(select jsonb_array_elements_text(v_p->'motivos'));
+    v_total := v_total + (v_p->>'importe')::numeric; v_n := v_n + 1;
+    perform public._conta_pago_evento(v_acc, v_lote, v_s, v_yo, format('Aprueba pagar %s a %s (factura %s, IBAN ···· %s) desde %s.',
+      public.conta_euros_exactos((v_p->>'importe')::numeric), v_p->>'beneficiario', coalesce(v_p->>'numero', 'sin número'), v_p->>'iban4', v_sal.banco));
+  end loop;
+  select * into v_t from public._conta_pago_topes(p_company);
+  -- Lo aprobado hoy ya incluye este lote.
+  if public._conta_pago_aprobado_hoy(p_company) > v_t.tope_dia then v_motivos := v_motivos || 'tope_dia'::text; end if;
+  v_motivos := array(select distinct m from unnest(v_motivos) m order by m);
+  v_huella := public._conta_pago_huella(v_lote);
+  update public.conta_pago_lote set huella = v_huella, segunda_motivos = v_motivos,
+    estado = case when cardinality(v_motivos) = 0 then 'listo' else 'esperando_segunda' end where id = v_lote;
+  update public.conta_pago_salida set estado = case when cardinality(v_motivos) = 0 then 'lista' else 'esperando_segunda' end where lote_id = v_lote;
+  v_quien := public.conta_pago_quien(p_company);
+  if cardinality(v_motivos) > 0 then
+    perform public._conta_pago_evento(v_acc, v_lote, null, v_yo, format('Pide la segunda aprobación (%s): %s.',
+      (select string_agg(public._conta_pago_motivo(m), ', ') from unnest(v_motivos) m),
+      case when v_quien->>'segunda' = 'otra' then 'la tiene que dar otra persona que pueda pagar, con su llave'
+           else 'la da quien lo aprobó, con su llave o con su PIN de pago' end));
+  end if;
+  return jsonb_build_object('lote', v_lote, 'huella', v_huella, 'pagos', v_n, 'total', v_total,
+    'estado', case when cardinality(v_motivos) = 0 then 'listo' else 'esperando_segunda' end,
+    'segunda', case when cardinality(v_motivos) = 0 then null else jsonb_build_object('quien', v_quien->>'segunda', 'motivos', to_jsonb(v_motivos),
+      'motivos_texto', (select jsonb_agg(public._conta_pago_motivo(m)) from unnest(v_motivos) m),
+      'personas', (select coalesce(jsonb_agg(x->>'nombre'), '[]'::jsonb) from jsonb_array_elements(v_quien->'personas') x where not (x->>'yo')::boolean)) end,
+    'frase', case when cardinality(v_motivos) = 0 then format('Aprobado: %s %s, %s, desde %s. Listo para mandarlo.', v_n, case when v_n = 1 then 'pago' else 'pagos' end,
+                    public.conta_euros_exactos(v_total), v_sal.banco)
+                  when v_quien->>'segunda' = 'otra' then format('Aprobado por ti. Falta la segunda aprobación de otra persona que pueda pagar (%s). Hasta entonces no sale nada.',
+                    (select string_agg(public._conta_pago_motivo(m), ', ') from unnest(v_motivos) m))
+                  else format('Aprobado por ti. Confírmalo con tu llave (%s). Hasta entonces no sale nada.',
+                    (select string_agg(public._conta_pago_motivo(m), ', ') from unnest(v_motivos) m)) end);
+end $$;
+
+
+--
+-- Name: conta_pago_cancelar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_cancelar(p_lote uuid, p_porque text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_pago_lote; v_yo text := coalesce(public.conta_nombre_actor(), 'Sumied'); v_n int;
+begin
+  select * into v_l from public.conta_pago_lote where id = p_lote for update;
+  if v_l.id is null then raise exception 'Ese pago no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_pago_empresa(v_l.company_id);
+  if not (auth.uid() = v_l.created_by or public._conta_pago_puede(v_l.company_id, auth.uid())) then
+    raise exception 'No tienes permiso para pagar en esta empresa.' using errcode = '42501';
+  end if;
+  if v_l.estado not in ('esperando_segunda', 'listo') then raise exception 'Este pago ya se ha mandado al banco: no se puede cancelar desde aquí.' using errcode = '23514'; end if;
+  update public.conta_pago_lote set estado = 'cancelado', cancelado_at = now(), cancelado_por_nombre = v_yo,
+    cancelado_porque = coalesce(nullif(trim(coalesce(p_porque, '')), ''), 'No pagar') where id = p_lote;
+  update public.conta_pago_salida set estado = 'cancelada', estado_porque = coalesce(nullif(trim(coalesce(p_porque, '')), ''), 'No pagar'), estado_at = now()
+   where lote_id = p_lote and estado in ('esperando_segunda', 'lista');
+  get diagnostics v_n = row_count;
+  update public.conta_pago_reto set descartado_at = now() where lote_id = p_lote and used_at is null and descartado_at is null;
+  perform public._conta_pago_evento(v_l.account_id, p_lote, null, v_yo, format('No pagar: %s.', coalesce(nullif(trim(coalesce(p_porque, '')), ''), 'cancelado')));
+  return jsonb_build_object('frase', format('No ha salido nada: %s %s cancelado%s. Las facturas siguen por pagar.', v_n, case when v_n = 1 then 'pago' else 'pagos' end, case when v_n = 1 then '' else 's' end));
+end $$;
+
+
+--
+-- Name: conta_pago_lote_ver(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_lote_ver(p_lote uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_pago_lote; v_t public.treasury_account;
+begin
+  select * into v_l from public.conta_pago_lote where id = p_lote;
+  if v_l.id is null then raise exception 'Ese pago no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_pago_empresa(v_l.company_id);
+  select * into v_t from public.treasury_account where id = v_l.treasury_account_id;
+  return jsonb_build_object('lote', v_l.id, 'estado', v_l.estado, 'huella', v_l.huella, 'creado', v_l.created_at, 'aprobado_por', v_l.created_by_name,
+    'desde', jsonb_build_object('nombre', v_t.name, 'iban4', right(public._pc01e2_iban(v_t.iban), 4), 'banco', 'Revolut'),
+    'motivos', to_jsonb(v_l.segunda_motivos), 'motivos_texto', (select coalesce(jsonb_agg(public._conta_pago_motivo(m)), '[]'::jsonb) from unnest(v_l.segunda_motivos) m),
+    'puedo_dar', public._conta_pago_puede_dar(p_lote, auth.uid()) is null, 'no_puedo_porque', public._conta_pago_puede_dar(p_lote, auth.uid()),
+    'segunda', case when v_l.segunda_at is not null then jsonb_build_object('por', v_l.segunda_por_nombre, 'at', v_l.segunda_at, 'via', v_l.segunda_via, 'dispositivo', v_l.segunda_dispositivo) end,
+    'total', (select coalesce(sum(amount), 0) from public.conta_pago_salida where lote_id = p_lote and estado <> 'cancelada'),
+    'pagos', (select coalesce(jsonb_agg(jsonb_build_object('id', s.id, 'factura', s.invoice_id, 'concepto', s.concepto, 'beneficiario', s.beneficiario,
+                'iban4', right(s.iban, 4), 'iban_check', s.iban_check, 'importe', s.amount, 'estado', s.estado,
+                'motivos_texto', (select coalesce(jsonb_agg(public._conta_pago_motivo(m)), '[]'::jsonb) from unnest(s.motivos) m)) order by s.created_at), '[]'::jsonb)
+                from public.conta_pago_salida s where s.lote_id = p_lote),
+    'historial', (select coalesce(jsonb_agg(jsonb_build_object('at', e.at, 'por', e.by_name, 'texto', e.texto) order by e.at), '[]'::jsonb)
+                    from public.conta_pago_evento e where e.lote_id = p_lote));
+end $$;
+
+
+--
+-- Name: conta_pago_para_mi(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_para_mi(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  perform public._conta_pago_empresa(p_company);
+  return (select coalesce(jsonb_agg(jsonb_build_object('lote', l.id, 'aprobado_por', l.created_by_name, 'creado', l.created_at,
+            'total', (select sum(amount) from public.conta_pago_salida s where s.lote_id = l.id and s.estado <> 'cancelada'),
+            'pagos', (select count(*) from public.conta_pago_salida s where s.lote_id = l.id and s.estado <> 'cancelada')) order by l.created_at), '[]'::jsonb)
+            from public.conta_pago_lote l
+           where l.company_id = p_company and l.estado = 'esperando_segunda' and public._conta_pago_puede_dar(l.id, auth.uid()) is null
+             and l.created_by <> auth.uid());
+end $$;
+
+
+--
+-- Name: conta_pago_permiso_dar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_permiso_dar(p_company uuid, p_user uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid := public._conta_pago_empresa(p_company); v_n int; v_nombre text;
+begin
+  if not public.current_user_is_admin_of(v_acc) then raise exception 'Solo un administrador da el permiso de pagar.' using errcode = '42501'; end if;
+  if not exists (select 1 from public.user_profiles where user_id = p_user and account_id = v_acc and active) then
+    raise exception 'Esa persona no está activa en la cuenta.' using errcode = '23514';
+  end if;
+  v_nombre := public._conta_pago_nombre(p_user);
+  if public._conta_pago_puede(p_company, p_user) then
+    select count(*) into v_n from public._conta_pago_pagadores(p_company);
+    return jsonb_build_object('n', v_n, 'frase', format('%s ya podía pagar.', v_nombre));
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('conta_pago_permiso:' || p_company::text, 0));
+  update public.conta_pago_permiso set revoked_at = now(), revoked_by_name = 'Sumied (ya no estaba activa)'
+   where company_id = p_company and user_id = p_user and revoked_at is null;
+  insert into public.conta_pago_permiso (account_id, company_id, user_id, user_name, granted_by, granted_by_name)
+  values (v_acc, p_company, p_user, v_nombre, auth.uid(), coalesce(public.conta_nombre_actor(), 'Sumied'));
+  select count(*) into v_n from public._conta_pago_pagadores(p_company);
+  return jsonb_build_object('n', v_n, 'frase', format('%s ya puede pagar. %s', v_nombre,
+    case when v_n = 1 then 'Es la única persona que paga: confirma la segunda aprobación con su llave (o con su PIN de pago).'
+         else format('Pueden pagar %s personas: la segunda aprobación la da otra de ellas, con su llave o su PIN.', v_n) end));
+end $$;
+
+
+--
+-- Name: conta_pago_permiso_quitar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_permiso_quitar(p_company uuid, p_user uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid := public._conta_pago_empresa(p_company); v_n int; v_k int;
+begin
+  if not public.current_user_is_admin_of(v_acc) then raise exception 'Solo un administrador quita el permiso de pagar.' using errcode = '42501'; end if;
+  update public.conta_pago_permiso set revoked_at = now(), revoked_by_name = coalesce(public.conta_nombre_actor(), 'Sumied')
+   where company_id = p_company and user_id = p_user and revoked_at is null;
+  get diagnostics v_k = row_count;
+  select count(*) into v_n from public._conta_pago_pagadores(p_company);
+  return jsonb_build_object('n', v_n, 'frase', case when v_k = 0 then format('%s no podía pagar.', public._conta_pago_nombre(p_user))
+    else format('%s ya no puede pagar. %s', public._conta_pago_nombre(p_user),
+      case when v_n = 0 then 'Ahora no puede pagar nadie desde Sumied.' when v_n = 1 then 'Queda 1 persona que puede pagar.' else format('Quedan %s personas que pueden pagar.', v_n) end) end);
+end $$;
+
+
+--
+-- Name: conta_pago_pin_confirmar(uuid, uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_pin_confirmar(p_user uuid, p_lote uuid, p_pin_cifrado text, p_huella_vista text, p_dispositivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_p public.conta_pago_pin; v_no text; v_n int;
+begin
+  v_no := public._conta_pago_puede_dar(p_lote, p_user);
+  if v_no is not null then return jsonb_build_object('ok', false, 'porque', v_no); end if;
+  select * into v_p from public.conta_pago_pin where user_id = p_user for update;
+  if v_p.user_id is null then return jsonb_build_object('ok', false, 'sin_pin', true, 'porque', 'Todavía no tienes PIN de pago: créalo con el código del correo, o confirma con tu llave.'); end if;
+  if v_p.bloqueado_at is not null then
+    return jsonb_build_object('ok', false, 'bloqueado', true, 'porque', 'Tu PIN de pago está bloqueado. No ha salido ningún pago: siguen aprobados y esperando. Confírmalos con tu llave, o crea un PIN nuevo con el código del correo.');
+  end if;
+  if lower(coalesce(p_pin_cifrado, '')) <> v_p.pin_cifrado then
+    update public.conta_pago_pin set intentos = intentos + 1, bloqueado_at = case when intentos + 1 >= 5 then now() end where user_id = p_user returning intentos into v_n;
+    if v_n >= 5 then
+      perform public._conta_pago_evento((select account_id from public.conta_pago_lote where id = p_lote), p_lote, null, 'Sumied',
+        format('PIN de pago de %s bloqueado tras 5 fallos. No ha salido nada.', public._conta_pago_nombre(p_user)));
+      return jsonb_build_object('ok', false, 'bloqueado', true, 'aviso_correo', true, 'porque', 'Tu PIN de pago está bloqueado: 5 fallos. No ha salido ningún pago: siguen aprobados y esperando. Confírmalos con tu llave, o crea un PIN nuevo con el código del correo.');
+    end if;
+    return jsonb_build_object('ok', false, 'quedan', 5 - v_n, 'porque', format('Ese no es tu PIN de pago. Te %s %s %s. Con 5 fallos se bloquea y tendrás que recuperarlo con el código del correo. Los pagos siguen aprobados y esperando.',
+      case when 5 - v_n = 1 then 'queda' else 'quedan' end, 5 - v_n, case when 5 - v_n = 1 then 'intento' else 'intentos' end));
+  end if;
+  update public.conta_pago_pin set intentos = 0 where user_id = p_user;
+  return public._conta_pago_segunda_dar(p_lote, p_user, p_huella_vista, 'pin', p_dispositivo, null);
+end $$;
+
+
+--
+-- Name: conta_pago_pin_guardar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_pin_guardar(p_user uuid, p_pin_cifrado text, p_sal text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_codigo uuid; v_habia boolean;
+begin
+  select id into v_codigo from public.conta_pago_reto
+   where user_id = p_user and proposito = 'crear_pin' and used_at > now() - interval '10 minutes' and llave_id is null and descartado_at is null
+   order by used_at desc limit 1 for update;
+  if v_codigo is null then raise exception 'Para crear tu PIN de pago, confirma antes que eres tú con el código del correo.' using errcode = '42501'; end if;
+  update public.conta_pago_reto set descartado_at = now() where id = v_codigo;
+  select exists (select 1 from public.conta_pago_pin where user_id = p_user) into v_habia;
+  insert into public.conta_pago_pin (user_id, pin_cifrado, sal) values (p_user, lower(p_pin_cifrado), lower(p_sal))
+  on conflict (user_id) do update set pin_cifrado = excluded.pin_cifrado, sal = excluded.sal, intentos = 0, bloqueado_at = null, cambiado_at = now();
+  return jsonb_build_object('nuevo', not v_habia, 'frase', case when v_habia then 'PIN de pago cambiado. Te hemos avisado al correo.'
+    else 'PIN de pago guardado. Lo usarás cuando no tengas tu llave a mano.' end);
+end $$;
+
+
+--
+-- Name: conta_pago_pin_mio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_pin_mio() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object('tiene', exists (select 1 from public.conta_pago_pin where user_id = auth.uid()),
+    'bloqueado', exists (select 1 from public.conta_pago_pin where user_id = auth.uid() and bloqueado_at is not null),
+    'quedan', (select 5 - intentos from public.conta_pago_pin where user_id = auth.uid()))
+$$;
+
+
+--
+-- Name: conta_pago_pin_sal(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_pin_sal(p_user uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object('sal', sal, 'bloqueado', bloqueado_at is not null, 'quedan', 5 - intentos)
+    from public.conta_pago_pin where user_id = p_user
+$$;
+
+
+--
+-- Name: conta_pago_preparar(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_preparar(p_company uuid, p_invoice uuid, p_treasury uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid := public._conta_pago_empresa(p_company); v_f jsonb; v_sal record; v_t record; v_hoy numeric; v_motivos jsonb; v_quien jsonb;
+begin
+  v_f := public._conta_pago_factura(p_company, p_invoice, null, null);
+  select * into v_sal from public._conta_pago_salida_de(p_company, p_treasury);
+  v_quien := public.conta_pago_quien(p_company);
+  if v_f->>'porque' is null then
+    select * into v_t from public._conta_pago_topes(p_company);
+    v_hoy := public._conta_pago_aprobado_hoy(p_company);
+    v_motivos := v_f->'motivos';
+    if v_hoy + (v_f->>'importe')::numeric > v_t.tope_dia then v_motivos := v_motivos || '"tope_dia"'::jsonb; end if;
+    v_f := v_f || jsonb_build_object('motivos', v_motivos,
+      'motivos_texto', (select coalesce(jsonb_agg(public._conta_pago_motivo(m)), '[]'::jsonb) from jsonb_array_elements_text(v_motivos) m),
+      'tope_pago', v_t.tope_pago, 'tope_dia', v_t.tope_dia, 'aprobado_hoy', v_hoy);
+  end if;
+  return v_f || jsonb_build_object('se_puede', v_f->>'porque' is null and v_sal.puede and (v_quien->>'yo_puedo')::boolean,
+    'salida', jsonb_build_object('proveedor', v_sal.proveedor, 'banco', v_sal.banco, 'puede', v_sal.puede, 'porque', v_sal.porque),
+    'quien', v_quien,
+    'porque', coalesce(v_f->>'porque', v_sal.porque,
+      case when not (v_quien->>'yo_puedo')::boolean then
+        case when (v_quien->>'n')::int = 0 then 'Nadie tiene todavía el permiso de pagar en esta empresa: lo da un administrador al «Activar pagos».'
+             else format('No tienes permiso para pagar. Pídeselo a %s, que puede pagar.', (select string_agg(x->>'nombre', ' o ') from jsonb_array_elements(v_quien->'personas') x)) end end));
+end $$;
+
+
+--
+-- Name: conta_pago_quien(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_quien(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid := public._conta_pago_empresa(p_company); v_p jsonb;
+begin
+  select coalesce(jsonb_agg(jsonb_build_object('nombre', p.nombre, 'yo', p.user_id = auth.uid())), '[]'::jsonb) into v_p from public._conta_pago_pagadores(p_company) p;
+  return jsonb_build_object('yo_puedo', public._conta_pago_puede(p_company, auth.uid()), 'soy_admin', public.current_user_is_admin_of(v_acc),
+    'personas', v_p, 'n', jsonb_array_length(v_p),
+    'segunda', case when jsonb_array_length(v_p) >= 2 then 'otra' else 'la_misma' end);
+end $$;
+
+
+--
+-- Name: conta_pago_reto_crear(uuid, text, text, text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_reto_crear(p_user uuid, p_proposito text, p_via text, p_reto_huella text, p_lote uuid, p_correo_mascara text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_pago_lote; v_no text; v_id uuid; v_acc uuid;
+begin
+  if p_proposito = 'confirmar' then
+    select * into v_l from public.conta_pago_lote where id = p_lote for update;
+    v_no := public._conta_pago_puede_dar(p_lote, p_user);
+    if v_no is not null then raise exception '%', v_no using errcode = '42501'; end if;
+    v_acc := v_l.account_id;
+  elsif p_proposito = 'registrar' then
+    -- Registrar una llave nueva pide antes el código del correo, usado hace menos de 10 minutos y sin llave todavía.
+    if not exists (select 1 from public.conta_pago_reto r where r.user_id = p_user and r.proposito = 'activar_llave' and r.used_at > now() - interval '10 minutes' and r.llave_id is null) then
+      raise exception 'Para activar una llave nueva, confirma antes que eres tú con el código del correo.' using errcode = '42501';
+    end if;
+  elsif p_proposito not in ('activar_llave', 'crear_pin') then
+    raise exception 'Propósito de reto desconocido.' using errcode = '22023';
+  end if;
+  update public.conta_pago_reto set descartado_at = now()
+   where user_id = p_user and proposito = p_proposito and lote_id is not distinct from p_lote and used_at is null and descartado_at is null;
+  insert into public.conta_pago_reto (user_id, account_id, lote_id, proposito, via, reto_huella, huella_lote, correo_mascara, expires_at)
+  values (p_user, v_acc, case when p_proposito = 'confirmar' then p_lote end, p_proposito, p_via, lower(p_reto_huella), v_l.huella, p_correo_mascara, now() + interval '10 minutes')
+  returning id into v_id;
+  return jsonb_build_object('reto', v_id, 'caduca', now() + interval '10 minutes');
+end $$;
+
+
+--
+-- Name: conta_pago_reto_usar(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_reto_usar(p_reto uuid, p_user uuid, p_reto_huella text, p_dispositivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_r public.conta_pago_reto; v_n int;
+begin
+  select * into v_r from public.conta_pago_reto where id = p_reto for update;
+  if v_r.id is null or v_r.user_id <> p_user then return jsonb_build_object('ok', false, 'porque', 'Ese código no es tuyo. Pide otro.'); end if;
+  if v_r.used_at is not null then return jsonb_build_object('ok', false, 'porque', 'Ese código ya se usó: vale una sola vez. Pide otro.'); end if;
+  if v_r.descartado_at is not null then return jsonb_build_object('ok', false, 'porque', 'Ese código ya no vale: se pidió otro después, o el pago se canceló.'); end if;
+  if v_r.expires_at < now() then
+    return jsonb_build_object('ok', false, 'caducado', true, 'porque', format('Ha caducado. Valía 10 minutos y se pidió a las %s. Pide otro%s.',
+      to_char(v_r.created_at at time zone 'Europe/Madrid', 'HH24:MI'), case when v_r.proposito = 'confirmar' then ': los pagos siguen aprobados y esperando' else '' end));
+  end if;
+  if lower(p_reto_huella) <> v_r.reto_huella then
+    if v_r.via = 'llave' then
+      update public.conta_pago_reto set descartado_at = now() where id = p_reto;
+      return jsonb_build_object('ok', false, 'porque', 'La llave no ha firmado esto. Vuelve a pulsar el botón.');
+    end if;
+    update public.conta_pago_reto set intentos = intentos + 1 where id = p_reto returning intentos into v_n;
+    if v_n >= 3 then
+      update public.conta_pago_reto set descartado_at = now() where id = p_reto;
+      return jsonb_build_object('ok', false, 'porque', 'Tres códigos equivocados: este ya no vale. Pide otro.');
+    end if;
+    return jsonb_build_object('ok', false, 'quedan', 3 - v_n, 'porque', format('Ese código no es el que te hemos mandado. Te %s %s %s.',
+      case when 3 - v_n = 1 then 'queda' else 'quedan' end, 3 - v_n, case when 3 - v_n = 1 then 'intento' else 'intentos' end));
+  end if;
+  if v_r.proposito = 'confirmar' then
+    return public._conta_pago_segunda_dar(v_r.lote_id, p_user, v_r.huella_lote, 'llave', p_dispositivo, p_reto);
+  end if;
+  update public.conta_pago_reto set used_at = now() where id = p_reto;
+  return jsonb_build_object('ok', true, 'proposito', v_r.proposito);
+end $$;
+
+
+--
+-- Name: conta_pago_topes(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_topes(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_t record;
+begin
+  perform public._conta_pago_empresa(p_company);
+  select * into v_t from public._conta_pago_topes(p_company);
+  return jsonb_build_object('tope_pago', v_t.tope_pago, 'tope_dia', v_t.tope_dia, 'aprobado_hoy', public._conta_pago_aprobado_hoy(p_company));
+end $$;
+
+
+--
+-- Name: conta_pago_topes_poner(uuid, numeric, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_topes_poner(p_company uuid, p_tope_pago numeric, p_tope_dia numeric) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid := public._conta_pago_empresa(p_company);
+begin
+  if not public.current_user_is_admin_of(v_acc) then raise exception 'Solo un administrador cambia los topes de pago.' using errcode = '42501'; end if;
+  if p_tope_pago is null or p_tope_dia is null or p_tope_pago <= 0 or p_tope_dia <= 0 then raise exception 'Los dos topes tienen que ser mayores que cero.' using errcode = '22023'; end if;
+  if p_tope_pago > p_tope_dia then raise exception 'El tope por pago no puede ser mayor que el del día.' using errcode = '22023'; end if;
+  insert into public.conta_pago_ajustes (company_id, account_id, tope_pago, tope_dia, updated_by, updated_by_name)
+  values (p_company, v_acc, round(p_tope_pago, 2), round(p_tope_dia, 2), auth.uid(), coalesce(public.conta_nombre_actor(), 'Sumied'))
+  on conflict (company_id) do update set tope_pago = excluded.tope_pago, tope_dia = excluded.tope_dia,
+    updated_at = now(), updated_by = excluded.updated_by, updated_by_name = excluded.updated_by_name;
+  return jsonb_build_object('frase', format('Topes guardados: %s por pago y %s al día. Por encima, hace falta una segunda aprobación.',
+    public.conta_euros_exactos(round(p_tope_pago, 2)), public.conta_euros_exactos(round(p_tope_dia, 2))));
+end $$;
 
 
 --
@@ -93773,6 +94718,39 @@ COMMENT ON COLUMN public.conta_liquidacion_resolucion.brand_id IS 'V02 · E2. La
 
 
 --
+-- Name: conta_llave; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_llave (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    credential_id text NOT NULL,
+    public_key text NOT NULL,
+    algoritmo integer NOT NULL,
+    sign_count bigint DEFAULT 0 NOT NULL,
+    rp_id text NOT NULL,
+    dispositivo text,
+    transports text[] DEFAULT '{}'::text[] NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    last_used_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    revoked_by_name text,
+    CONSTRAINT conta_llave_algoritmo_check CHECK ((algoritmo = ANY (ARRAY['-7'::integer, '-257'::integer, '-8'::integer]))),
+    CONSTRAINT conta_llave_credential_id_check CHECK (((credential_id ~ '^[A-Za-z0-9_-]+$'::text) AND ((length(credential_id) >= 16) AND (length(credential_id) <= 1400)))),
+    CONSTRAINT conta_llave_public_key_check CHECK ((public_key ~ '^[A-Za-z0-9_-]+$'::text)),
+    CONSTRAINT conta_llave_rp_id_check CHECK ((rp_id ~ '^[a-z0-9.-]+$'::text)),
+    CONSTRAINT conta_llave_sign_count_check CHECK ((sign_count >= 0))
+);
+
+
+--
+-- Name: TABLE conta_llave; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_llave IS 'B01 Revolut · PR 2a · Las llaves de acceso (WebAuthn) de cada persona: solo la parte PÚBLICA. La privada no sale nunca del dispositivo. Una llave vale solo en su dirección (rp_id).';
+
+
+--
 -- Name: conta_lote_relectura; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -93836,6 +94814,140 @@ CREATE TABLE public.conta_mandato (
 --
 
 COMMENT ON TABLE public.conta_mandato IS 'PC01 · E3 · El mandato de domiciliación SEPA (CORE, recurrente) de un cliente: el enlace para firmarlo y la firma (quién, cuándo, desde dónde). Al firmarse, la ficha del cliente (customer_fiscal) queda con su IBAN, la referencia y la fecha.';
+
+
+--
+-- Name: conta_pago_ajustes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_ajustes (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    tope_pago numeric(14,2) DEFAULT 3000 NOT NULL,
+    tope_dia numeric(14,2) DEFAULT 10000 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_by uuid,
+    updated_by_name text,
+    CONSTRAINT conta_pago_ajustes_tope_dia_check CHECK ((tope_dia > (0)::numeric)),
+    CONSTRAINT conta_pago_ajustes_tope_pago_check CHECK ((tope_pago > (0)::numeric))
+);
+
+
+--
+-- Name: TABLE conta_pago_ajustes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_ajustes IS 'B01 Revolut · PR 2a · Los topes de pago de la empresa (P6). Sin fila, los de partida: 3.000 € por pago y 10.000 € al día. Por encima, segunda aprobación.';
+
+
+--
+-- Name: conta_pago_evento; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_evento (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    lote_id uuid NOT NULL,
+    salida_id uuid,
+    at timestamp with time zone DEFAULT now() NOT NULL,
+    by_name text,
+    texto text NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_pago_evento; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_evento IS 'B01 Revolut · PR 2a · El registro de cada pago: quién, cuándo y qué. Solo se añade.';
+
+
+--
+-- Name: conta_pago_lote; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_lote (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    treasury_account_id uuid NOT NULL,
+    proveedor text NOT NULL,
+    estado text NOT NULL,
+    huella text NOT NULL,
+    segunda_motivos text[] DEFAULT '{}'::text[] NOT NULL,
+    segunda_por uuid,
+    segunda_por_nombre text,
+    segunda_at timestamp with time zone,
+    segunda_via text,
+    segunda_dispositivo text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid NOT NULL,
+    created_by_name text,
+    cancelado_at timestamp with time zone,
+    cancelado_por_nombre text,
+    cancelado_porque text,
+    CONSTRAINT conta_pago_lote_estado_check CHECK ((estado = ANY (ARRAY['esperando_segunda'::text, 'listo'::text, 'enviando'::text, 'enviado'::text, 'cancelado'::text]))),
+    CONSTRAINT conta_pago_lote_huella_check CHECK ((huella ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT conta_pago_lote_proveedor_check CHECK ((proveedor = 'revolut'::text)),
+    CONSTRAINT conta_pago_lote_segunda_via_check CHECK ((segunda_via = ANY (ARRAY['llave'::text, 'pin'::text])))
+);
+
+
+--
+-- Name: TABLE conta_pago_lote; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_lote IS 'B01 Revolut · PR 2a · Los pagos que salen juntos con una sola aprobación (una factura, o las de una remesa). huella = sha256 de la lista exacta; la segunda aprobación es de esa huella.';
+
+
+--
+-- Name: conta_pago_permiso; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_permiso (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    user_name text,
+    granted_at timestamp with time zone DEFAULT now() NOT NULL,
+    granted_by uuid,
+    granted_by_name text,
+    revoked_at timestamp with time zone,
+    revoked_by_name text
+);
+
+
+--
+-- Name: TABLE conta_pago_permiso; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_permiso IS 'B01 Revolut · PR 2a · Quién puede pagar desde Sumied en cada empresa. Lo da un administrador (también a sí mismo, al «Activar pagos»). Quitarlo no borra la fila: le pone revoked_at.';
+
+
+--
+-- Name: conta_pago_pin; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_pin (
+    user_id uuid NOT NULL,
+    pin_cifrado text NOT NULL,
+    sal text NOT NULL,
+    intentos integer DEFAULT 0 NOT NULL,
+    bloqueado_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    cambiado_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_pago_pin_intentos_check CHECK (((intentos >= 0) AND (intentos <= 5))),
+    CONSTRAINT conta_pago_pin_pin_cifrado_check CHECK ((pin_cifrado ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT conta_pago_pin_sal_check CHECK ((sal ~ '^[0-9a-f]{32,64}$'::text))
+);
+
+
+--
+-- Name: TABLE conta_pago_pin; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_pin IS 'B01 Revolut · PR 2a · El PIN de pago de cada persona (plan B de la segunda aprobación): cifrado con HMAC-SHA256 y una clave que solo tiene la función que lo comprueba, con su sal. Se bloquea con 5 fallos; crearlo o recuperarlo pide el código del correo.';
 
 
 --
@@ -93946,6 +95058,83 @@ CREATE TABLE public.conta_pago_remesa_evento (
 --
 
 COMMENT ON TABLE public.conta_pago_remesa_evento IS 'PC01 · E2 · El historial de una remesa: lo que pasó, quién y cuándo (el bloque «Historial» de su ficha).';
+
+
+--
+-- Name: conta_pago_reto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_reto (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    user_id uuid NOT NULL,
+    account_id uuid,
+    lote_id uuid,
+    proposito text NOT NULL,
+    via text NOT NULL,
+    reto_huella text NOT NULL,
+    huella_lote text,
+    correo_mascara text,
+    intentos integer DEFAULT 0 NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    used_at timestamp with time zone,
+    descartado_at timestamp with time zone,
+    llave_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_pago_reto_check CHECK (((proposito = 'confirmar'::text) = (lote_id IS NOT NULL))),
+    CONSTRAINT conta_pago_reto_check1 CHECK (((proposito = ANY (ARRAY['confirmar'::text, 'registrar'::text])) = (via = 'llave'::text))),
+    CONSTRAINT conta_pago_reto_huella_lote_check CHECK ((huella_lote ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT conta_pago_reto_intentos_check CHECK (((intentos >= 0) AND (intentos <= 3))),
+    CONSTRAINT conta_pago_reto_proposito_check CHECK ((proposito = ANY (ARRAY['confirmar'::text, 'activar_llave'::text, 'registrar'::text, 'crear_pin'::text]))),
+    CONSTRAINT conta_pago_reto_reto_huella_check CHECK ((reto_huella ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT conta_pago_reto_via_check CHECK ((via = ANY (ARRAY['llave'::text, 'codigo'::text])))
+);
+
+
+--
+-- Name: TABLE conta_pago_reto; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_reto IS 'B01 Revolut · PR 2a · Un reto de un solo uso (10 minutos): confirmar un lote con la llave, el código del correo para activar una llave nueva o crear el PIN, y el reto para registrar la llave. Solo su huella (sha256), nunca el reto ni el código.';
+
+
+--
+-- Name: conta_pago_salida; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_salida (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    lote_id uuid NOT NULL,
+    invoice_id uuid NOT NULL,
+    supplier_id uuid,
+    amount numeric(14,2) NOT NULL,
+    beneficiario text NOT NULL,
+    iban text NOT NULL,
+    iban_check text NOT NULL,
+    iban_nota text,
+    concepto text NOT NULL,
+    motivos text[] DEFAULT '{}'::text[] NOT NULL,
+    pagar_igual_porque text,
+    request_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    estado text NOT NULL,
+    estado_porque text,
+    estado_at timestamp with time zone DEFAULT now() NOT NULL,
+    remesa_id uuid,
+    remesa_linea_id uuid,
+    banco_id text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_pago_salida_amount_check CHECK ((amount > (0)::numeric)),
+    CONSTRAINT conta_pago_salida_estado_check CHECK ((estado = ANY (ARRAY['esperando_segunda'::text, 'lista'::text, 'enviando'::text, 'enviada'::text, 'esperando_banco'::text, 'pagada'::text, 'rechazada'::text, 'devuelta'::text, 'cancelada'::text]))),
+    CONSTRAINT conta_pago_salida_iban_check_check CHECK ((iban_check = ANY (ARRAY['comprobado'::text, 'primer_pago'::text, 'cambiado'::text])))
+);
+
+
+--
+-- Name: TABLE conta_pago_salida; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_salida IS 'B01 Revolut · PR 2a · Un pago saliente de una factura por un banco con el que Sumied paga (hoy Revolut): importe, beneficiario e IBAN tal como se aprobaron, su request_id (para que el banco no lo haga dos veces y su cargo se case solo) y su estado.';
 
 
 --
@@ -102343,6 +103532,18 @@ COMMENT ON COLUMN public.revolut_conexion.webhook_id IS 'B01 Revolut. El id del 
 
 
 --
+-- Name: s01j2_local_puesto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.s01j2_local_puesto (
+    settlement_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    location_id uuid NOT NULL,
+    puesto_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: sale_capture; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -108384,6 +109585,22 @@ ALTER TABLE ONLY public.conta_liquidacion_resolucion
 
 
 --
+-- Name: conta_llave conta_llave_credential_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_llave
+    ADD CONSTRAINT conta_llave_credential_id_key UNIQUE (credential_id);
+
+
+--
+-- Name: conta_llave conta_llave_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_llave
+    ADD CONSTRAINT conta_llave_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_lote_relectura conta_lote_relectura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -108416,6 +109633,46 @@ ALTER TABLE ONLY public.conta_mandato
 
 
 --
+-- Name: conta_pago_ajustes conta_pago_ajustes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_ajustes
+    ADD CONSTRAINT conta_pago_ajustes_pkey PRIMARY KEY (company_id);
+
+
+--
+-- Name: conta_pago_evento conta_pago_evento_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_evento
+    ADD CONSTRAINT conta_pago_evento_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_lote conta_pago_lote_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_lote
+    ADD CONSTRAINT conta_pago_lote_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_permiso conta_pago_permiso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_permiso
+    ADD CONSTRAINT conta_pago_permiso_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_pin conta_pago_pin_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_pin
+    ADD CONSTRAINT conta_pago_pin_pkey PRIMARY KEY (user_id);
+
+
+--
 -- Name: conta_pago_remesa conta_pago_remesa_company_id_code_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -108445,6 +109702,30 @@ ALTER TABLE ONLY public.conta_pago_remesa_linea
 
 ALTER TABLE ONLY public.conta_pago_remesa
     ADD CONSTRAINT conta_pago_remesa_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_reto conta_pago_reto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_reto
+    ADD CONSTRAINT conta_pago_reto_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_request_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_request_id_key UNIQUE (request_id);
 
 
 --
@@ -111104,6 +112385,14 @@ ALTER TABLE ONLY public.recipe_item_purchase_format
 
 
 --
+-- Name: s01j2_local_puesto s01j2_local_puesto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.s01j2_local_puesto
+    ADD CONSTRAINT s01j2_local_puesto_pkey PRIMARY KEY (settlement_id);
+
+
+--
 -- Name: sale_capture sale_capture_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -113526,6 +114815,13 @@ CREATE UNIQUE INDEX conta_liquidacion_resolucion_uq ON public.conta_liquidacion_
 
 
 --
+-- Name: conta_llave_usuario_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_llave_usuario_idx ON public.conta_llave USING btree (user_id) WHERE (revoked_at IS NULL);
+
+
+--
 -- Name: conta_lote_relectura_lote; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -113537,6 +114833,27 @@ CREATE INDEX conta_lote_relectura_lote ON public.conta_lote_relectura USING btre
 --
 
 CREATE INDEX conta_mandato_tercero_idx ON public.conta_mandato USING btree (party_id, created_at DESC);
+
+
+--
+-- Name: conta_pago_evento_lote_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pago_evento_lote_idx ON public.conta_pago_evento USING btree (lote_id, at);
+
+
+--
+-- Name: conta_pago_lote_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pago_lote_empresa_idx ON public.conta_pago_lote USING btree (company_id, created_at);
+
+
+--
+-- Name: conta_pago_permiso_vivo; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_pago_permiso_vivo ON public.conta_pago_permiso USING btree (company_id, user_id) WHERE (revoked_at IS NULL);
 
 
 --
@@ -113565,6 +114882,34 @@ CREATE INDEX conta_pago_remesa_linea_proveedor_idx ON public.conta_pago_remesa_l
 --
 
 CREATE INDEX conta_pago_remesa_linea_remesa_idx ON public.conta_pago_remesa_linea USING btree (remesa_id);
+
+
+--
+-- Name: conta_pago_reto_usuario_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pago_reto_usuario_idx ON public.conta_pago_reto USING btree (user_id, proposito, created_at);
+
+
+--
+-- Name: conta_pago_salida_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pago_salida_empresa_idx ON public.conta_pago_salida USING btree (company_id, created_at);
+
+
+--
+-- Name: conta_pago_salida_lote_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pago_salida_lote_idx ON public.conta_pago_salida USING btree (lote_id);
+
+
+--
+-- Name: conta_pago_salida_viva; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_pago_salida_viva ON public.conta_pago_salida USING btree (invoice_id) WHERE (estado = ANY (ARRAY['esperando_segunda'::text, 'lista'::text, 'enviando'::text, 'enviada'::text, 'esperando_banco'::text]));
 
 
 --
@@ -118363,6 +119708,13 @@ CREATE TRIGGER s01i_liquidacion_llega AFTER INSERT OR UPDATE OF store_id, brand_
 
 
 --
+-- Name: channel_settlement s01j2_liquidacion_pon_local; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01j2_liquidacion_pon_local BEFORE INSERT OR UPDATE OF store_id, external_location_text, location_id ON public.channel_settlement FOR EACH ROW WHEN ((new.location_id IS NULL)) EXECUTE FUNCTION public._conta_liquidacion_pon_local();
+
+
+--
 -- Name: channel_settlement s01j_liquidacion_sustituye; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -122832,6 +124184,78 @@ ALTER TABLE ONLY public.conta_mandato
 
 
 --
+-- Name: conta_pago_ajustes conta_pago_ajustes_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_ajustes
+    ADD CONSTRAINT conta_pago_ajustes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_ajustes conta_pago_ajustes_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_ajustes
+    ADD CONSTRAINT conta_pago_ajustes_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_evento conta_pago_evento_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_evento
+    ADD CONSTRAINT conta_pago_evento_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_evento conta_pago_evento_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_evento
+    ADD CONSTRAINT conta_pago_evento_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_pago_lote(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_evento conta_pago_evento_salida_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_evento
+    ADD CONSTRAINT conta_pago_evento_salida_id_fkey FOREIGN KEY (salida_id) REFERENCES public.conta_pago_salida(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_lote conta_pago_lote_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_lote
+    ADD CONSTRAINT conta_pago_lote_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_lote conta_pago_lote_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_lote
+    ADD CONSTRAINT conta_pago_lote_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_permiso conta_pago_permiso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_permiso
+    ADD CONSTRAINT conta_pago_permiso_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_permiso conta_pago_permiso_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_permiso
+    ADD CONSTRAINT conta_pago_permiso_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_pago_remesa conta_pago_remesa_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -122925,6 +124349,54 @@ ALTER TABLE ONLY public.conta_pago_remesa_linea
 
 ALTER TABLE ONLY public.conta_pago_remesa
     ADD CONSTRAINT conta_pago_remesa_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id);
+
+
+--
+-- Name: conta_pago_reto conta_pago_reto_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_reto
+    ADD CONSTRAINT conta_pago_reto_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_reto conta_pago_reto_llave_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_reto
+    ADD CONSTRAINT conta_pago_reto_llave_id_fkey FOREIGN KEY (llave_id) REFERENCES public.conta_llave(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_pago_reto conta_pago_reto_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_reto
+    ADD CONSTRAINT conta_pago_reto_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_pago_lote(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_salida conta_pago_salida_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_salida
+    ADD CONSTRAINT conta_pago_salida_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_pago_lote(id) ON DELETE CASCADE;
 
 
 --
@@ -132829,6 +134301,19 @@ CREATE POLICY conta_liquidacion_resolucion_leer ON public.conta_liquidacion_reso
 
 
 --
+-- Name: conta_llave; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_llave ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_llave conta_llave_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_llave_leer ON public.conta_llave FOR SELECT TO authenticated USING ((user_id = auth.uid()));
+
+
+--
 -- Name: conta_lote_relectura; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -132846,6 +134331,64 @@ CREATE POLICY conta_lote_relectura_leer ON public.conta_lote_relectura FOR SELEC
 --
 
 ALTER TABLE public.conta_mandato ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_ajustes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_ajustes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_ajustes conta_pago_ajustes_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_pago_ajustes_leer ON public.conta_pago_ajustes FOR SELECT TO authenticated USING (public._conta_pago_de_la_cuenta(account_id));
+
+
+--
+-- Name: conta_pago_evento; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_evento ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_evento conta_pago_evento_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_pago_evento_leer ON public.conta_pago_evento FOR SELECT TO authenticated USING (public._conta_pago_de_la_cuenta(account_id));
+
+
+--
+-- Name: conta_pago_lote; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_lote ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_lote conta_pago_lote_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_pago_lote_leer ON public.conta_pago_lote FOR SELECT TO authenticated USING (public._conta_pago_de_la_cuenta(account_id));
+
+
+--
+-- Name: conta_pago_permiso; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_permiso ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_permiso conta_pago_permiso_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_pago_permiso_leer ON public.conta_pago_permiso FOR SELECT TO authenticated USING (public._conta_pago_de_la_cuenta(account_id));
+
+
+--
+-- Name: conta_pago_pin; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_pin ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: conta_pago_remesa; Type: ROW SECURITY; Schema: public; Owner: -
@@ -132884,6 +134427,25 @@ ALTER TABLE public.conta_pago_remesa_linea ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_pago_remesa_linea_leer ON public.conta_pago_remesa_linea FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_pago_reto; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_reto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_salida; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_salida ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_salida conta_pago_salida_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_pago_salida_leer ON public.conta_pago_salida FOR SELECT TO authenticated USING (public._conta_pago_de_la_cuenta(account_id));
 
 
 --
@@ -137661,6 +139223,12 @@ CREATE POLICY riuc_update ON public.recipe_item_unit_conversion FOR UPDATE USING
 
 
 --
+-- Name: s01j2_local_puesto; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.s01j2_local_puesto ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: sale; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -140550,6 +142118,14 @@ GRANT ALL ON FUNCTION public._conta_liquidacion_marcar(p_settlement uuid) TO ser
 
 
 --
+-- Name: FUNCTION _conta_liquidacion_pon_local(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_liquidacion_pon_local() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_liquidacion_pon_local() TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_liquidacion_solape(p_settlement uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -140571,6 +142147,128 @@ GRANT ALL ON FUNCTION public._conta_local_de_texto(p_account uuid, p_textos text
 
 REVOKE ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_aprobado_hoy(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_aprobado_hoy(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_aprobado_hoy(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_de_la_cuenta(p_account uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_de_la_cuenta(p_account uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_de_la_cuenta(p_account uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_pago_de_la_cuenta(p_account uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_empresa(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_empresa(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_empresa(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_evento(p_account uuid, p_lote uuid, p_salida uuid, p_por text, p_texto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_evento(p_account uuid, p_lote uuid, p_salida uuid, p_por text, p_texto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_evento(p_account uuid, p_lote uuid, p_salida uuid, p_por text, p_texto text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_factura(p_company uuid, p_invoice uuid, p_importe numeric, p_pagar_igual_porque text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_factura(p_company uuid, p_invoice uuid, p_importe numeric, p_pagar_igual_porque text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_factura(p_company uuid, p_invoice uuid, p_importe numeric, p_pagar_igual_porque text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_huella(p_lote uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_huella(p_lote uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_huella(p_lote uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_motivo(p text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_motivo(p text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_motivo(p text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_pago_motivo(p text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_nombre(p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_nombre(p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_nombre(p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_pagadores(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_pagadores(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_pagadores(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_pendiente(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_pendiente(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_pendiente(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_puede(p_company uuid, p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_puede(p_company uuid, p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_puede(p_company uuid, p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_puede_dar(p_lote uuid, p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_puede_dar(p_lote uuid, p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_puede_dar(p_lote uuid, p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_salida_de(p_company uuid, p_treasury uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_salida_de(p_company uuid, p_treasury uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_salida_de(p_company uuid, p_treasury uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_segunda_dar(p_lote uuid, p_user uuid, p_huella_vista text, p_via text, p_dispositivo text, p_reto uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_segunda_dar(p_lote uuid, p_user uuid, p_huella_vista text, p_via text, p_dispositivo text, p_reto uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_segunda_dar(p_lote uuid, p_user uuid, p_huella_vista text, p_via text, p_dispositivo text, p_reto uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_pago_topes(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_pago_topes(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_pago_topes(p_company uuid) TO service_role;
 
 
 --
@@ -146704,6 +148402,15 @@ GRANT ALL ON FUNCTION public.conta_liquidacion_factura_proponer(p_settlement uui
 
 
 --
+-- Name: FUNCTION conta_liquidacion_ficha(p_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_liquidacion_ficha(p_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_liquidacion_ficha(p_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_liquidacion_ficha(p_id uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_liquidacion_pedidos(p_settlement uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -146746,6 +148453,56 @@ GRANT ALL ON FUNCTION public.conta_liquidacion_resolver_tienda(p_company uuid, p
 REVOKE ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llave_de(p_user uuid, p_credential_id text, p_rp_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llave_de(p_user uuid, p_credential_id text, p_rp_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llave_de(p_user uuid, p_credential_id text, p_rp_id text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llave_guardar(p_user uuid, p_reto uuid, p_reto_huella text, p_credential_id text, p_public_key text, p_algoritmo integer, p_sign_count bigint, p_rp_id text, p_dispositivo text, p_transports text[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llave_guardar(p_user uuid, p_reto uuid, p_reto_huella text, p_credential_id text, p_public_key text, p_algoritmo integer, p_sign_count bigint, p_rp_id text, p_dispositivo text, p_transports text[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llave_guardar(p_user uuid, p_reto uuid, p_reto_huella text, p_credential_id text, p_public_key text, p_algoritmo integer, p_sign_count bigint, p_rp_id text, p_dispositivo text, p_transports text[]) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llave_quitar(p_llave uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llave_quitar(p_llave uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llave_quitar(p_llave uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_llave_quitar(p_llave uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llave_usada(p_llave uuid, p_sign_count bigint); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llave_usada(p_llave uuid, p_sign_count bigint) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llave_usada(p_llave uuid, p_sign_count bigint) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llaves_de(p_user uuid, p_rp_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llaves_de(p_user uuid, p_rp_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llaves_de(p_user uuid, p_rp_id text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llaves_mias(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llaves_mias() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llaves_mias() TO authenticated;
+GRANT ALL ON FUNCTION public.conta_llaves_mias() TO service_role;
 
 
 --
@@ -147032,6 +148789,145 @@ GRANT ALL ON FUNCTION public.conta_numero_texto(p numeric) TO service_role;
 REVOKE ALL ON FUNCTION public.conta_pago_a_mano(p_company uuid, p_invoice uuid, p_treasury uuid, p_fecha date, p_importe numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_pago_a_mano(p_company uuid, p_invoice uuid, p_treasury uuid, p_fecha date, p_importe numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_pago_a_mano(p_company uuid, p_invoice uuid, p_treasury uuid, p_fecha date, p_importe numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_cancelar(p_lote uuid, p_porque text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_cancelar(p_lote uuid, p_porque text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_cancelar(p_lote uuid, p_porque text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_cancelar(p_lote uuid, p_porque text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_lote_ver(p_lote uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_lote_ver(p_lote uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_lote_ver(p_lote uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_lote_ver(p_lote uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_para_mi(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_para_mi(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_para_mi(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_para_mi(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_permiso_dar(p_company uuid, p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_permiso_dar(p_company uuid, p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_permiso_dar(p_company uuid, p_user uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_permiso_dar(p_company uuid, p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_permiso_quitar(p_company uuid, p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_permiso_quitar(p_company uuid, p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_permiso_quitar(p_company uuid, p_user uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_permiso_quitar(p_company uuid, p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_pin_confirmar(p_user uuid, p_lote uuid, p_pin_cifrado text, p_huella_vista text, p_dispositivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_pin_confirmar(p_user uuid, p_lote uuid, p_pin_cifrado text, p_huella_vista text, p_dispositivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_pin_confirmar(p_user uuid, p_lote uuid, p_pin_cifrado text, p_huella_vista text, p_dispositivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_pin_guardar(p_user uuid, p_pin_cifrado text, p_sal text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_pin_guardar(p_user uuid, p_pin_cifrado text, p_sal text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_pin_guardar(p_user uuid, p_pin_cifrado text, p_sal text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_pin_mio(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_pin_mio() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_pin_mio() TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_pin_mio() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_pin_sal(p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_pin_sal(p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_pin_sal(p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_preparar(p_company uuid, p_invoice uuid, p_treasury uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_preparar(p_company uuid, p_invoice uuid, p_treasury uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_preparar(p_company uuid, p_invoice uuid, p_treasury uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_preparar(p_company uuid, p_invoice uuid, p_treasury uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_quien(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_quien(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_quien(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_quien(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_reto_crear(p_user uuid, p_proposito text, p_via text, p_reto_huella text, p_lote uuid, p_correo_mascara text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_reto_crear(p_user uuid, p_proposito text, p_via text, p_reto_huella text, p_lote uuid, p_correo_mascara text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_reto_crear(p_user uuid, p_proposito text, p_via text, p_reto_huella text, p_lote uuid, p_correo_mascara text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_reto_usar(p_reto uuid, p_user uuid, p_reto_huella text, p_dispositivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_reto_usar(p_reto uuid, p_user uuid, p_reto_huella text, p_dispositivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_reto_usar(p_reto uuid, p_user uuid, p_reto_huella text, p_dispositivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_topes(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_topes(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_topes(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_topes(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_topes_poner(p_company uuid, p_tope_pago numeric, p_tope_dia numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_topes_poner(p_company uuid, p_tope_pago numeric, p_tope_dia numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_topes_poner(p_company uuid, p_tope_pago numeric, p_tope_dia numeric) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pago_topes_poner(p_company uuid, p_tope_pago numeric, p_tope_dia numeric) TO service_role;
 
 
 --
@@ -156618,6 +158514,55 @@ GRANT ALL ON TABLE public.conta_liquidacion_resolucion TO service_role;
 
 
 --
+-- Name: TABLE conta_llave; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_llave TO service_role;
+
+
+--
+-- Name: COLUMN conta_llave.id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(id) ON TABLE public.conta_llave TO authenticated;
+
+
+--
+-- Name: COLUMN conta_llave.rp_id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(rp_id) ON TABLE public.conta_llave TO authenticated;
+
+
+--
+-- Name: COLUMN conta_llave.dispositivo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(dispositivo) ON TABLE public.conta_llave TO authenticated;
+
+
+--
+-- Name: COLUMN conta_llave.created_at; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(created_at) ON TABLE public.conta_llave TO authenticated;
+
+
+--
+-- Name: COLUMN conta_llave.last_used_at; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(last_used_at) ON TABLE public.conta_llave TO authenticated;
+
+
+--
+-- Name: COLUMN conta_llave.revoked_at; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT(revoked_at) ON TABLE public.conta_llave TO authenticated;
+
+
+--
 -- Name: TABLE conta_lote_relectura; Type: ACL; Schema: public; Owner: -
 --
 
@@ -156630,6 +158575,45 @@ GRANT SELECT ON TABLE public.conta_lote_relectura TO authenticated;
 --
 
 GRANT ALL ON TABLE public.conta_mandato TO service_role;
+
+
+--
+-- Name: TABLE conta_pago_ajustes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_ajustes TO service_role;
+GRANT SELECT ON TABLE public.conta_pago_ajustes TO authenticated;
+
+
+--
+-- Name: TABLE conta_pago_evento; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_evento TO service_role;
+GRANT SELECT ON TABLE public.conta_pago_evento TO authenticated;
+
+
+--
+-- Name: TABLE conta_pago_lote; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_lote TO service_role;
+GRANT SELECT ON TABLE public.conta_pago_lote TO authenticated;
+
+
+--
+-- Name: TABLE conta_pago_permiso; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_permiso TO service_role;
+GRANT SELECT ON TABLE public.conta_pago_permiso TO authenticated;
+
+
+--
+-- Name: TABLE conta_pago_pin; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_pin TO service_role;
 
 
 --
@@ -156655,6 +158639,21 @@ GRANT ALL ON TABLE public.conta_pago_remesa_estado TO service_role;
 
 GRANT ALL ON TABLE public.conta_pago_remesa_evento TO service_role;
 GRANT SELECT ON TABLE public.conta_pago_remesa_evento TO authenticated;
+
+
+--
+-- Name: TABLE conta_pago_reto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_reto TO service_role;
+
+
+--
+-- Name: TABLE conta_pago_salida; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_salida TO service_role;
+GRANT SELECT ON TABLE public.conta_pago_salida TO authenticated;
 
 
 --
@@ -159279,6 +161278,13 @@ GRANT SELECT ON TABLE public.registro_jornada_firma TO authenticated;
 GRANT ALL ON TABLE public.revolut_conexion TO anon;
 GRANT ALL ON TABLE public.revolut_conexion TO authenticated;
 GRANT ALL ON TABLE public.revolut_conexion TO service_role;
+
+
+--
+-- Name: TABLE s01j2_local_puesto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.s01j2_local_puesto TO service_role;
 
 
 --
