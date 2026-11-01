@@ -1,0 +1,6 @@
+# A01a · La 1906 y su prueba (ROLLBACK): con el vigía de antes un trabajo de
+# hace 3 h sigue pendiente (rojo a propósito); el viejo caduca y el reciente
+# no; un caducado no vuelve; el aviso sale una vez, otra al doblarse y
+# «Resuelto»; la impresión normal no cambia; y la vuelta atrás.
+supabase/migrations/20261101T1906_a01a_tickets_caducan.sql
+supabase/staging/sql/20261101_a01a_tickets_caducan_prueba.sql
