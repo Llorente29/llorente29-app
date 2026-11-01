@@ -411,3 +411,27 @@
   .cxfc-antes { padding: 10px 16px; }
   .cxfc-falta { padding: 14px 16px; }
 }
+
+/* ── B01 Revolut · PR 1 · La tarjeta de Revolut y su asistente (maquetas v2) ── */
+.cxb-revolut { display: flex; flex-direction: column; gap: 10px; }
+.cxb-revolut-cabeza { display: flex; align-items: center; gap: 12px; }
+.cxb-revolut-logo { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0; background: var(--cx-texto); color: var(--cx-blanco); font-weight: 700; }
+.cxb-revolut-cabeza .cxb-lista-texto { flex: 1; }
+.cxb-revolut-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.cx-peligro { color: var(--cx-rojo); }
+.cx-boton.cx-peligro { background: var(--cx-rojo); border-color: var(--cx-rojo); color: var(--cx-blanco); }
+.cxb-revolut-pasos { display: flex; gap: 8px; margin: 0 0 12px; padding: 0; list-style: none; }
+.cxb-revolut-pasos li { flex: 1; font-size: 13px; color: var(--cx-apoyo); padding-top: 8px; border-top: 5px solid var(--cx-linea); }
+.cxb-revolut-pasos li[data-estado="hecho"] { border-top-color: var(--cx-verde-oscuro); }
+.cxb-revolut-pasos li[data-estado="ahora"] { border-top-color: var(--cx-azul); color: var(--cx-texto); font-weight: 600; }
+.cxb-revolut-cert { font-size: 11px; line-height: 1.35; background: var(--cx-fondo); border: 1px solid var(--cx-linea); border-radius: 12px; padding: 10px; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-all; margin: 0; }
+.cxb-revolut-instrucciones { display: flex; flex-direction: column; gap: 6px; padding-left: 20px; margin: 0; }
+.cxb-revolut-instrucciones code { word-break: break-all; color: var(--cx-texto); }
+.cxb-revolut-esquema { display: flex; flex-direction: column; gap: 4px; border: 1px dashed var(--cx-borde-control); border-radius: 12px; padding: 10px; font-size: 13px; position: relative; }
+.cxb-revolut-esquema small { color: var(--cx-apoyo); font-size: 11px; align-self: flex-end; }
+@media (max-width: 767px) {
+  .cxb-revolut-cabeza { flex-wrap: wrap; }
+  .cxb-revolut-botones { width: 100%; }
+  .cxb-revolut-botones > button { flex: 1; }
+  .cxb-revolut-pasos li { font-size: 12px; }
+}

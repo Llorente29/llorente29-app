@@ -208,17 +208,36 @@ const masDias = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00
 /** Lo más atrás que se lee (el banco guarda unos 90 días). */
 export const DIAS_ATRAS = 89
 
+/** B01 Revolut · Lo que cambia de un proveedor a otro al decidir desde cuándo se lee. */
+export interface OpcionesLectura {
+  /** La fuente de los extractos de esta conexión (por defecto, la de open-banking.io, como antes). */
+  fuente?: string
+  /** La primera vez, sin nada suyo: desde este día (la carga del histórico que pide la persona). */
+  desdeInicial?: string | null
+  /** Lo más atrás que deja leer el banco (open-banking.io: 89). */
+  diasAtras?: number
+  /**
+   * B01 Revolut (respuesta 3): se vuelve a leer el último día leído, porque lo
+   * terminado entra en cuanto llega (hasta HOY, no hasta ayer). Solo para un
+   * proveedor cuyos movimientos terminados tienen un id que no cambia, y con
+   * una base que diga cuáles ya tiene (BaseAgregador.conocidos).
+   */
+  releerUltimoDia?: boolean
+}
+
 /**
  * Desde qué día se lee una cuenta. Si ya trajo algo la conexión, desde el día
- * siguiente al último. Si no, desde el principio del último extracto subido
- * (así lo ya subido por Norma 43 se reconoce y la continuidad se mide contra el
- * de antes); sin ninguno, los últimos 30 días. Nunca más de 89 días atrás.
+ * siguiente al último. Si no, desde el día que pidió la persona (si lo hay) o
+ * desde el principio del último extracto subido (así lo ya subido por Norma 43
+ * se reconoce y la continuidad se mide contra el de antes); sin ninguno, los
+ * últimos 30 días. Nunca más de `diasAtras` (89) días atrás.
  */
-export function desdeCuando(extractos: readonly { fuente: string; desde: string; hasta: string }[], hoy: string): string {
-  const tope = masDias(hoy, -DIAS_ATRAS)
-  const suyos = extractos.filter((e) => e.fuente === FUENTE_OBI).sort((a, b) => b.hasta.localeCompare(a.hasta))
-  const d = suyos[0] ? masDias(suyos[0].hasta, 1)
-    : [...extractos].sort((a, b) => b.hasta.localeCompare(a.hasta))[0]?.desde ?? masDias(hoy, -30)
+export function desdeCuando(extractos: readonly { fuente: string; desde: string; hasta: string }[], hoy: string, o: OpcionesLectura = {}): string {
+  const fuente = o.fuente ?? FUENTE_OBI
+  const tope = masDias(hoy, -(o.diasAtras ?? DIAS_ATRAS))
+  const suyos = extractos.filter((e) => e.fuente === fuente).sort((a, b) => b.hasta.localeCompare(a.hasta))
+  const d = suyos[0] ? masDias(suyos[0].hasta, o.releerUltimoDia ? 0 : 1)
+    : o.desdeInicial ?? [...extractos].sort((a, b) => b.hasta.localeCompare(a.hasta))[0]?.desde ?? masDias(hoy, -30)
   return d < tope ? tope : d
 }
 
@@ -230,6 +249,12 @@ export interface BaseAgregador {
   extractos(treasuryId: string): Promise<{ fuente: string; desde: string; hasta: string }[]>
   importar(args: Record<string, unknown>): Promise<Record<string, unknown>>
   apuntar(args: Record<string, unknown>): Promise<void>
+  /**
+   * B01 Revolut: de estas referencias del proveedor (reference_2), cuáles ya
+   * están en este banco. Con ella solo se manda lo nuevo, y una lectura sin
+   * nada nuevo no crea un extracto. Sin ella (BBVA), como antes.
+   */
+  conocidos?(treasuryId: string, referencias: string[]): Promise<Set<string>>
 }
 
 export type EstadoCuenta = 'al_dia' | 'sin_movimientos' | 'permiso_caducado' | 'fallo'
@@ -262,7 +287,7 @@ const euros = (c: number) => `${(c / 100).toFixed(2).replace('.', ',')} €`
  * para a las demás; su fallo queda apuntado con su porqué (y en el parte).
  */
 export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgregador & ConexionDelProveedor,
-  e: { accountId: string; companyId: string; banco: string; renovar: string | null }, hoy: string, ayer: string): Promise<ParteCuenta[]> {
+  e: { accountId: string; companyId: string; banco: string; renovar: string | null }, hoy: string, ayer: string, o: OpcionesLectura = {}): Promise<ParteCuenta[]> {
   const fallos = new Map((await p.refrescar()).map((f) => [f.cuenta, f.motivo]))
   const [cuentas, permisos, saldos, bancos] = await Promise.all([p.cuentas(''), p.permisos(), p.saldos(), base.bancos(e.accountId, e.companyId)])
   const out: ParteCuenta[] = []
@@ -294,7 +319,7 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
         await apuntar()
         continue
       }
-      const desde = desdeCuando(await base.extractos(banco.id), hoy)
+      const desde = desdeCuando(await base.extractos(banco.id), hoy, o)
       parte.desde = desde; parte.hasta = ayer
       if (desde > ayer) { parte.estado = 'sin_movimientos'; parte.mensaje = 'Ya estaba al día.'; await apuntar(); continue }
       const pag = await p.movimientos('', c.id, desde, ayer)
@@ -306,14 +331,31 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
         await apuntar(); continue
       }
       const sinSaldo = pag.saldoInicialCent === null || pag.saldoFinalCent === null
+      // B01 Revolut: las huellas, sobre el periodo entero (el orden en el día no
+      // cambia de una lectura a otra); y a la base, solo lo que no tiene aún.
+      let movs = paraImportar(pag.movimientos)
+      let yaEstaban = 0
+      let saldoInicialCent = pag.saldoInicialCent
+      if (base.conocidos) {
+        const conocidos = await base.conocidos(banco.id, movs.map((m) => String(m.ref2)))
+        const nuevos = movs.filter((m) => !conocidos.has(String(m.ref2)))
+        yaEstaban = movs.length - nuevos.length
+        movs = nuevos
+        if (!sinSaldo) saldoInicialCent = pag.saldoFinalCent! - nuevos.reduce((s, m) => s + Math.round(Number(m.importe) * 100), 0)
+        if (movs.length === 0) {
+          parte.estado = 'sin_movimientos'; parte.repetidos = yaEstaban; parte.desde = null; parte.hasta = null; parte.saldoFinalCent = pag.saldoFinalCent
+          parte.mensaje = `Nada nuevo desde la última lectura (${yaEstaban} ya estaban).`
+          await apuntar(); continue
+        }
+      }
       const r = await base.importar({
         p_treasury: banco.id, p_fuente: `agregador:${p.id}`, p_formato: `agregador:${p.id}`, p_fichero: `${p.nombre} · del ${desde} al ${ayer}`, p_sha256: null,
         p_desde: desde, p_hasta: ayer,
-        p_saldo_inicial: sinSaldo ? null : pag.saldoInicialCent! / 100, p_saldo_final: sinSaldo ? null : pag.saldoFinalCent! / 100,
+        p_saldo_inicial: sinSaldo ? null : saldoInicialCent! / 100, p_saldo_final: sinSaldo ? null : pag.saldoFinalCent! / 100,
         p_sin_comprobar: sinSaldo ? 'La conexión con el banco no ha dado el saldo contable: no se puede comprobar que empiece donde acabó el anterior.' : null,
-        p_iban_fichero: null, p_movs: paraImportar(pag.movimientos),
+        p_iban_fichero: null, p_movs: movs,
       })
-      parte.nuevos = Number(r.nuevos ?? 0); parte.repetidos = Number(r.repetidos ?? 0); parte.posiblesRepetidos = Number(r.posibles_repetidos ?? 0)
+      parte.nuevos = Number(r.nuevos ?? 0); parte.repetidos = Number(r.repetidos ?? 0) + yaEstaban; parte.posiblesRepetidos = Number(r.posibles_repetidos ?? 0)
       parte.continuidad = r.continuidad == null ? null : String(r.continuidad)
       parte.huecoCent = r.hueco == null ? null : Math.round(Number(r.hueco) * 100)
       parte.saldoFinalCent = pag.saldoFinalCent

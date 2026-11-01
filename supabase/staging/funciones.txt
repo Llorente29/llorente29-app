@@ -1,46 +1,10 @@
-# DM1 · PR 2a · La puerta de las demos (31/10): las 41 funciones que toca el
-# #409 (las carpetas cambiadas y las que importan un _shared tocado:
-# puerta.ts, hubriseToken.ts, diezDespacho.ts y verifactu/), menos
-# hubrise-webhook, que no se despliega por aquí (regla 1, la puerta de la
-# prohibida). Se despliegan en staging para que lo que no compile salga aquí y
-# no en producción.
-account-email
-availability-dispatch
-catcher-dispatch
-clockout-reminder
-compliance-doc-notify
-conta-asesoria
+# B01 Revolut · PR 1 · Conectar y leer (31/10): las funciones que toca la rama
+# claude/revolut-business-sumied-9fhlsh. Las tres de Revolut, nuevas, y
+# conta-banco-agregador, que importa _shared/bancoAgregador.ts (cambia: dos
+# opciones nuevas que solo usa Revolut). Se despliegan en staging para que lo
+# que no compile salga aquí y no en producción; staging solo habla con el
+# sandbox de Revolut (sin REVOLUT_ENTORNO=produccion).
 conta-banco-agregador
-conta-diez-cola
-conta-diez-enviar
-conta-diez-traspaso
-conta-hacienda
-conta-mandato-enviar
-conta-pago
-conta-recordatorios
-conta-stripe
-conta-venta-correo
-conta-verifactu
-customer-notify
-hubrise-brand-connect
-hubrise-callback-ensure
-hubrise-catalog-create
-hubrise-catalog-publish
-hubrise-connection-health
-hubrise-location-disconnect
-hubrise-location-dispatch
-hubrise-oauth-callback
-hubrise-oauth-start
-hubrise-order-status
-last-catalog-probe
-last-catalog-sync
-lastapp-backfill-sales
-lastapp-catalog-import
-lastapp-set-price
-order-advance
-shop-payment-intent
-social-publish
-social-token-refresh
-stripe-connect-onboard
-training-notify
-uber-promo-push
+conta-revolut-aviso
+conta-revolut-conectar
+conta-revolut-leer
