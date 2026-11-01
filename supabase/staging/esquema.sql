@@ -39505,6 +39505,31 @@ COMMENT ON FUNCTION public.conta_pago_a_mano(p_company uuid, p_invoice uuid, p_t
 
 
 --
+-- Name: conta_pago_activar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_activar(p_company uuid, p_user uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_n int; v_nombre text := public._conta_pago_nombre(p_user);
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  if not exists (select 1 from public.user_profiles where user_id = p_user and account_id = v_acc and role = 'admin' and active) then
+    raise exception 'Solo un administrador activa los pagos.' using errcode = '42501';
+  end if;
+  perform pg_advisory_xact_lock(hashtextextended('conta_pago_permiso:' || p_company::text, 0));
+  if not public._conta_pago_puede(p_company, p_user) then
+    insert into public.conta_pago_permiso (account_id, company_id, user_id, user_name, granted_by, granted_by_name)
+    values (v_acc, p_company, p_user, v_nombre, p_user, v_nombre || ' (al activar los pagos)');
+  end if;
+  select count(*) into v_n from public._conta_pago_pagadores(p_company);
+  return jsonb_build_object('n', v_n, 'personas', (select coalesce(jsonb_agg(nombre), '[]'::jsonb) from public._conta_pago_pagadores(p_company)));
+end $$;
+
+
+--
 -- Name: conta_pago_aprobar(uuid, uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -39574,6 +39599,52 @@ end $$;
 
 
 --
+-- Name: conta_pago_banco_dice(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_banco_dice(p_salida uuid, p_estado text, p_banco_id text, p_porque text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_s public.conta_pago_salida; v_l public.conta_pago_lote; v_banco text; v_texto text; v_quedan int;
+begin
+  if p_estado not in ('enviada', 'esperando_banco', 'pagada', 'rechazada', 'devuelta') then
+    raise exception 'Estado del banco desconocido: %.', p_estado using errcode = '22023';
+  end if;
+  select * into v_s from public.conta_pago_salida where id = p_salida for update;
+  if v_s.id is null then raise exception 'Ese pago no existe.' using errcode = 'P0002'; end if;
+  select * into v_l from public.conta_pago_lote where id = v_s.lote_id for update;
+  v_banco := initcap(v_l.proveedor);
+  -- Lo que ya acabó no vuelve atrás, salvo una devolución de lo pagado.
+  if v_s.estado in ('rechazada', 'devuelta', 'cancelada') or (v_s.estado = 'pagada' and p_estado <> 'devuelta') then
+    return jsonb_build_object('estado', v_s.estado, 'sin_cambio', true);
+  end if;
+  if v_s.estado = p_estado and v_s.banco_id is not distinct from coalesce(p_banco_id, v_s.banco_id) then
+    return jsonb_build_object('estado', v_s.estado, 'sin_cambio', true);
+  end if;
+  update public.conta_pago_salida set estado = p_estado, banco_id = coalesce(nullif(p_banco_id, ''), banco_id),
+    estado_porque = case when p_estado in ('rechazada', 'devuelta') then left(coalesce(nullif(trim(p_porque), ''), 'El banco no ha dicho por qué.'), 300) end,
+    estado_at = now() where id = p_salida;
+  if p_estado = 'rechazada' and v_s.remesa_linea_id is not null then
+    update public.conta_pago_remesa_linea set rejected_at = now(), rejected_by_name = v_banco,
+      reject_reason = left(coalesce(nullif(trim(p_porque), ''), 'El banco no ha dicho por qué.'), 300)
+     where id = v_s.remesa_linea_id and rejected_at is null;
+  end if;
+  v_texto := case p_estado
+    when 'enviada' then format('%s lo ha recibido.', v_banco)
+    when 'esperando_banco' then format('%s lo está procesando (o espera la aprobación en %s).', v_banco, v_banco)
+    when 'pagada' then format('%s lo ha confirmado: pagado.', v_banco)
+    when 'rechazada' then format('%s no ha hecho el pago: %s La factura sigue por pagar.', v_banco, coalesce(nullif(trim(p_porque), ''), 'no ha dicho por qué.'))
+    else format('%s ha devuelto el pago: %s', v_banco, coalesce(nullif(trim(p_porque), ''), 'no ha dicho por qué.')) end;
+  perform public._conta_pago_evento(v_s.account_id, v_s.lote_id, p_salida, v_banco, v_texto);
+  if v_s.remesa_id is not null then perform public._pc01e2_evento(v_s.account_id, v_s.remesa_id, v_s.remesa_linea_id, v_texto); end if;
+  select count(*) into v_quedan from public.conta_pago_salida where lote_id = v_s.lote_id and estado = 'enviando';
+  if v_quedan = 0 and v_l.estado = 'enviando' then update public.conta_pago_lote set estado = 'enviado' where id = v_s.lote_id; end if;
+  return jsonb_build_object('estado', p_estado, 'frase', v_texto);
+end $$;
+
+
+--
 -- Name: conta_pago_cancelar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -39627,6 +39698,81 @@ begin
                 from public.conta_pago_salida s where s.lote_id = p_lote),
     'historial', (select coalesce(jsonb_agg(jsonb_build_object('at', e.at, 'por', e.by_name, 'texto', e.texto) order by e.at), '[]'::jsonb)
                     from public.conta_pago_evento e where e.lote_id = p_lote));
+end $$;
+
+
+--
+-- Name: conta_pago_mandar_empezar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_mandar_empezar(p_lote uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_l public.conta_pago_lote; v_sal record; v_cuenta text; v_r uuid; v_code text; v_s public.conta_pago_salida;
+  v_inv public.supplier_invoice; v_sup public.supplier; v_lin uuid; v_pagos jsonb := '[]'::jsonb; v_total numeric := 0; v_n int := 0;
+begin
+  select * into v_l from public.conta_pago_lote where id = p_lote for update;
+  if v_l.id is null then raise exception 'Ese pago no existe.' using errcode = 'P0002'; end if;
+  if v_l.estado <> 'listo' then
+    raise exception 'Este pago no está listo para mandar (está %).', replace(v_l.estado, '_', ' ') using errcode = '23514';
+  end if;
+  if public._conta_pago_huella(p_lote) <> v_l.huella then
+    raise exception 'La lista de pagos ha cambiado desde que se aprobó: no se manda. Vuelve a aprobarla.' using errcode = '23514';
+  end if;
+  select * into v_sal from public._conta_pago_salida_de(v_l.company_id, v_l.treasury_account_id);
+  if not v_sal.puede then raise exception '%', v_sal.porque using errcode = '23514'; end if;
+  select b.external_account_id into v_cuenta from public.bank_aggregator_link b
+   where b.treasury_account_id = v_l.treasury_account_id and b.company_id = v_l.company_id and b.provider = v_l.proveedor and b.status = 'activo';
+  v_code := public._pc01e2_codigo(v_l.company_id, public.conta_hoy());
+  insert into public.conta_pago_remesa (account_id, company_id, code, kind, treasury_account_id, pay_date, created_by, created_by_name)
+  values (v_l.account_id, v_l.company_id, v_code, 'banco', v_l.treasury_account_id, public.conta_hoy(), v_l.created_by, v_l.created_by_name)
+  returning id into v_r;
+  for v_s in select * from public.conta_pago_salida where lote_id = p_lote and estado = 'lista' order by created_at, id for update loop
+    select * into v_inv from public.supplier_invoice where id = v_s.invoice_id for update;
+    if v_inv.status <> 'aprobada' or v_inv.paid_at is not null then
+      raise exception 'La factura % ya no está por pagar: no se manda ningún pago del lote.', coalesce(v_inv.invoice_number, '') using errcode = '23514';
+    end if;
+    -- Su propio importe ya está descontado de lo pendiente (es un pago vivo): basta con que no quede negativo.
+    if public._conta_pago_pendiente(v_inv.id) < -0.005 then
+      raise exception 'A la factura % ya no le queda %: se ha pagado por otro lado. No se manda ningún pago del lote.',
+        coalesce(v_inv.invoice_number, ''), public.conta_euros_exactos(v_s.amount) using errcode = '23514';
+    end if;
+    select * into v_sup from public.supplier where id = v_s.supplier_id;
+    if public._pc01e2_iban(v_sup.iban) is distinct from v_s.iban then
+      raise exception 'El IBAN de % ha cambiado en su ficha desde que se aprobó el pago: no se manda. Vuelve a aprobarlo.', coalesce(v_sup.name, 'su proveedor') using errcode = '23514';
+    end if;
+    insert into public.conta_pago_remesa_linea (account_id, company_id, remesa_id, invoice_id, supplier_id, amount, iban, iban_check, iban_note,
+                                                iban_confirmed_at, iban_confirmed_by, iban_confirmed_by_name)
+    values (v_l.account_id, v_l.company_id, v_r, v_s.invoice_id, v_s.supplier_id, v_s.amount, v_s.iban, v_s.iban_check, v_s.iban_nota,
+            case when v_s.iban_check <> 'comprobado' then v_l.segunda_at end,
+            case when v_s.iban_check <> 'comprobado' then v_l.segunda_por end,
+            case when v_s.iban_check <> 'comprobado' then v_l.segunda_por_nombre end)
+    returning id into v_lin;
+    -- La segunda aprobación de un IBAN nuevo, cambiado o leído de la factura lo confirma también en la ficha.
+    if v_s.iban_check <> 'comprobado' then
+      if v_l.segunda_at is null then
+        raise exception 'El IBAN ···· % pedía segunda aprobación y no la tiene: no se manda.', right(v_s.iban, 4) using errcode = '23514';
+      end if;
+      update public.supplier set iban_verified_at = now(), iban_unconfirmed_invoice_id = null, updated_at = now()
+       where id = v_s.supplier_id and public._pc01e2_iban(iban) = v_s.iban;
+      perform public._pc01e2_evento(v_l.account_id, v_r, v_lin, format('IBAN ···· %s de %s confirmado con la segunda aprobación de %s (%s).',
+        right(v_s.iban, 4), v_s.beneficiario, coalesce(v_l.segunda_por_nombre, 'una persona'), case v_l.segunda_via when 'llave' then 'su llave' else 'su PIN de pago' end));
+    end if;
+    update public.conta_pago_salida set remesa_id = v_r, remesa_linea_id = v_lin, estado = 'enviando', estado_at = now() where id = v_s.id;
+    v_pagos := v_pagos || jsonb_build_array(jsonb_build_object('salida', v_s.id, 'request_id', v_s.request_id, 'importe', v_s.amount,
+      'beneficiario', v_s.beneficiario, 'iban', v_s.iban, 'concepto', v_s.concepto));
+    v_total := v_total + v_s.amount; v_n := v_n + 1;
+  end loop;
+  if v_n = 0 then raise exception 'Este lote no tiene ningún pago para mandar.' using errcode = '23514'; end if;
+  update public.conta_pago_lote set estado = 'enviando' where id = p_lote;
+  perform public._pc01e2_evento(v_l.account_id, v_r, null, format('Se manda a %s: %s %s, %s, desde %s (aprobado por %s).',
+    v_sal.banco, v_n, case when v_n = 1 then 'pago' else 'pagos' end, public.conta_euros_exactos(v_total),
+    (select name from public.treasury_account where id = v_l.treasury_account_id), coalesce(v_l.created_by_name, 'una persona')));
+  perform public._conta_pago_evento(v_l.account_id, p_lote, null, 'Sumied', format('Se manda a %s (remesa %s).', v_sal.banco, v_code));
+  return jsonb_build_object('lote', p_lote, 'remesa', v_r, 'codigo', v_code, 'proveedor', v_l.proveedor, 'banco', v_sal.banco,
+    'company', v_l.company_id, 'cuenta', v_cuenta, 'pagos', v_pagos, 'total', v_total);
 end $$;
 
 
@@ -39780,6 +39926,20 @@ CREATE FUNCTION public.conta_pago_pin_sal(p_user uuid) RETURNS jsonb
     AS $$
   select jsonb_build_object('sal', sal, 'bloqueado', bloqueado_at is not null, 'quedan', 5 - intentos)
     from public.conta_pago_pin where user_id = p_user
+$$;
+
+
+--
+-- Name: conta_pago_por_saber(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_por_saber(p_company uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object('salida', s.id, 'request_id', s.request_id, 'banco_id', s.banco_id, 'estado', s.estado) order by s.created_at), '[]'::jsonb)
+    from public.conta_pago_salida s
+   where s.company_id = p_company and s.estado in ('enviando', 'enviada', 'esperando_banco')
 $$;
 
 
@@ -94971,7 +95131,7 @@ CREATE TABLE public.conta_pago_remesa (
     created_by_name text,
     validated_solo_at timestamp with time zone,
     validated_solo_entry uuid,
-    CONSTRAINT conta_pago_remesa_kind_check CHECK ((kind = ANY (ARRAY['fichero'::text, 'a_mano'::text])))
+    CONSTRAINT conta_pago_remesa_kind_check CHECK ((kind = ANY (ARRAY['fichero'::text, 'a_mano'::text, 'banco'::text])))
 );
 
 
@@ -94980,6 +95140,13 @@ CREATE TABLE public.conta_pago_remesa (
 --
 
 COMMENT ON TABLE public.conta_pago_remesa IS 'PC01 · E2 · Una remesa de transferencias a proveedores (fichero SEPA pain.001) o un pago a mano de una factura suelta (kind a_mano, sin fichero). Su estado se calcula: conta_pago_remesa_estado.';
+
+
+--
+-- Name: COLUMN conta_pago_remesa.kind; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_pago_remesa.kind IS 'PC01 · E2 · fichero: remesa SEPA que se descarga · a_mano: «Ya la he pagado» · banco (B01 Revolut · PR 2b): mandada por la API del banco desde Sumied.';
 
 
 --
@@ -95023,7 +95190,7 @@ CREATE VIEW public.conta_pago_remesa_estado WITH (security_invoker='true') AS
         CASE
             WHEN (COALESCE(l.vivas, (0)::bigint) = 0) THEN 'vacia'::text
             WHEN (l.pagadas = l.vivas) THEN 'pagada'::text
-            WHEN ((r.kind = 'a_mano'::text) OR (r.file_at IS NOT NULL)) THEN 'en_banco'::text
+            WHEN ((r.kind = ANY (ARRAY['a_mano'::text, 'banco'::text])) OR (r.file_at IS NOT NULL)) THEN 'en_banco'::text
             WHEN (l.por_confirmar > 0) THEN 'preparada'::text
             ELSE 'fichero'::text
         END AS estado
@@ -95035,7 +95202,7 @@ CREATE VIEW public.conta_pago_remesa_estado WITH (security_invoker='true') AS
 -- Name: VIEW conta_pago_remesa_estado; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.conta_pago_remesa_estado IS 'PC01 · E2 · El estado de cada remesa de pagos, calculado de sus líneas: preparada, fichero, en_banco, pagada o vacia.';
+COMMENT ON VIEW public.conta_pago_remesa_estado IS 'PC01 · E2 · El estado de cada remesa de pagos, calculado de sus líneas: preparada, fichero, en_banco, pagada o vacia. B01 · 2b: la del banco, en_banco desde que se manda.';
 
 
 --
@@ -148859,12 +149026,28 @@ GRANT ALL ON FUNCTION public.conta_pago_a_mano(p_company uuid, p_invoice uuid, p
 
 
 --
+-- Name: FUNCTION conta_pago_activar(p_company uuid, p_user uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_activar(p_company uuid, p_user uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_activar(p_company uuid, p_user uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_pago_aprobar(p_company uuid, p_treasury uuid, p_facturas jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_banco_dice(p_salida uuid, p_estado text, p_banco_id text, p_porque text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_banco_dice(p_salida uuid, p_estado text, p_banco_id text, p_porque text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_banco_dice(p_salida uuid, p_estado text, p_banco_id text, p_porque text) TO service_role;
 
 
 --
@@ -148883,6 +149066,14 @@ GRANT ALL ON FUNCTION public.conta_pago_cancelar(p_lote uuid, p_porque text) TO 
 REVOKE ALL ON FUNCTION public.conta_pago_lote_ver(p_lote uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_pago_lote_ver(p_lote uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_pago_lote_ver(p_lote uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_mandar_empezar(p_lote uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_mandar_empezar(p_lote uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_mandar_empezar(p_lote uuid) TO service_role;
 
 
 --
@@ -148943,6 +149134,14 @@ GRANT ALL ON FUNCTION public.conta_pago_pin_mio() TO service_role;
 
 REVOKE ALL ON FUNCTION public.conta_pago_pin_sal(p_user uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_pago_pin_sal(p_user uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_por_saber(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_por_saber(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_por_saber(p_company uuid) TO service_role;
 
 
 --
