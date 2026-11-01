@@ -1,0 +1,16 @@
+# S01j · Las liquidaciones de Glovo y Just Eat entran solas por correo, y se
+# recupera lo que falta (Julio, 01/11). Rama claude/s01j-liquidaciones-por-correo.
+#
+#   0845  añade conta_comision_del_correo (la factura de comisión escrita en el
+#         correo de Just Eat, como recibida «Por revisar», ligada a su
+#         liquidación) y conta_correo_releer_lista (qué correos puede volver a
+#         leer quien lo pide).
+#   0846  cambia channel_settlement: un disparador que, al entrar una
+#         liquidación de Just Eat o Glovo con el número de una antigua sin
+#         periodo (je:/glovo:) y sin nada ligado, se queda la nueva y quita la
+#         antigua.
+#
+# No toca ninguna fila al aplicarse. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01j-correo.sql
+supabase/migrations/20261101T0845_s01j_comision_del_correo.sql
+supabase/migrations/20261101T0846_s01j_antiguas_sin_periodo.sql

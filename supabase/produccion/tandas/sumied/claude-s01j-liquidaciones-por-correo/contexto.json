@@ -1,0 +1,24 @@
+{
+ "_que": "S01j · contexto de producción medido en SOLO LECTURA el 01/11 a las 08:53Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe channel_settlement (304 filas); las tres funciones nuevas no existen; nada en el camino del pedido; ninguna de las dos en el historial.",
+ "medido": "2026-11-01T08:53Z",
+ "tanda": {
+  "supabase/migrations/20261101T0845_s01j_comision_del_correo.sql": "e68777f61675ba0b4506a5e6d478c3fd",
+  "supabase/migrations/20261101T0846_s01j_antiguas_sin_periodo.sql": "014aeb07d94f66be9ffeff1462b4e2e4"
+ },
+ "contexto": {
+  "tablas": [
+   "public.channel_settlement"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.channel_settlement": 304
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

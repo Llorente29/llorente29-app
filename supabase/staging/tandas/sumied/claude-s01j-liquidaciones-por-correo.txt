@@ -1,0 +1,9 @@
+# S01j · las liquidaciones de Glovo y Just Eat por correo. La 0845 añade dos
+# funciones; la 0846 pone un disparador en channel_settlement (desde la rama,
+# solo en ROLLBACK). Su prueba (ROLLBACK): Glovo con su Excel y su factura
+# ligadas y sin duplicar al leer otra vez; Just Eat que sustituye a la antigua
+# sin periodo y su factura del correo; la que no suma; la antigua con cobro que
+# no se toca; volver a leer como persona; y la vuelta atrás.
+supabase/migrations/20261101T0845_s01j_comision_del_correo.sql
+supabase/migrations/20261101T0846_s01j_antiguas_sin_periodo.sql
+supabase/staging/sql/20261101_s01j_correo_prueba.sql

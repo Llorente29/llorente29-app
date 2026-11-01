@@ -1,0 +1,5 @@
+# S01j · la vuelta atrás: fuera el disparador y las dos funciones. Lo que ya
+# hubieran creado (facturas «Por revisar», liquidaciones del correo) se queda.
+cuenta: scripts/conta/produccion/cuentas/s01j-correo.sql
+supabase/vuelta-atras/20261101T0846_s01j_antiguas_sin_periodo.down.sql
+supabase/vuelta-atras/20261101T0845_s01j_comision_del_correo.down.sql
