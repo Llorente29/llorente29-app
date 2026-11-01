@@ -1,4 +1,4 @@
 {
- "_techo_4_trozos_min": 20,
- "_techo_porque": "Techo del trozo más largo de 4 con los ficheros MEDIDOS (los de este fichero). Lo comprueba tests/unit/e2e/trozos.test.ts. Solo cambia cuando cambia lo medido, en el mismo commit: un PR con una e2e nueva no lo toca (27/10, Respuesta 2 al V04). Desde el 26/10 el reparto de lo medido da 17,17 min. B01 Revolut · PR 1d (01/11): con conta/b01/revolut.spec.ts medido (35,5 s), el trozo más largo de 4 da 19,56 min; techo a 20."
+ "_techo_4_trozos_min": 21,
+ "_techo_porque": "Techo del trozo más largo de 4 con los ficheros MEDIDOS (los de este fichero). Lo comprueba tests/unit/e2e/trozos.test.ts. Solo cambia cuando cambia lo medido, en el mismo commit: un PR con una e2e nueva no lo toca (27/10, Respuesta 2 al V04). Desde el 26/10 el reparto de lo medido da 17,17 min. B01 Revolut · PR 1d (01/11): con conta/b01/revolut.spec.ts medido (35,5 s), el trozo más largo de 4 da 19,56 min; techo a 20. N1 · PR 1 (01/11): laboral/lab1-importar.spec.ts medido de verdad (45,4 s, antes 10,7) y marcas/cambios-last.spec.ts medido (13,9 s, para no pasar de una cuarta parte sin medir): el trozo más largo de 4 da 20,03 min; techo a 21."
 }

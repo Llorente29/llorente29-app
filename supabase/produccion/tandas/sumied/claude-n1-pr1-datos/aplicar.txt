@@ -1,0 +1,23 @@
+# N1 · PR 1 · Los datos de la ficha de Laboral y el volcado de Cegid (01/11/2026).
+# Rama claude/n1-pr1-datos. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. Sin autorizo.
+#
+#   1. 1937 — SOLO AÑADE: el permiso de Laboral (lab_permiso y
+#      current_user_ve_laboral), las tablas lab_* (persona, convenio y sus
+#      tablas, conceptos, contrato y sus condiciones, lo que cobra, 145,
+#      historial, centro → local) con RLS de solo lectura, y columnas nuevas
+#      que admiten nulos en documents.
+#   2. 1938 — SOLO AÑADE: el volcado (lab_centros_del_lote,
+#      lab_confirmar_centro, lab_volcar_lote) y sus ayudas.
+#   3. 1939 — CAMBIA EN CALIENTE, con su prueba de staging:
+#      empleados_datos_privados, misma firma, con current_user_ve_laboral.
+#      Nada en el camino del pedido.
+#
+# Antes (producción, solo lectura): ninguna tabla ni función nueva;
+# documents y empleados_datos_privados existen; 0 lotes de Cegid.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (en orden inverso).
+supabase/migrations/20261101T1937_n1_laboral_modelo.sql
+supabase/migrations/20261101T1938_n1_volcado_cegid.sql
+supabase/migrations/20261101T1939_n1_datos_privados_laboral.sql
+cuenta: scripts/conta/produccion/cuentas/n1-pr1-datos.sql

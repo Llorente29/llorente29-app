@@ -1,0 +1,7 @@
+# N1 · PR 1 · vuelta atrás, en orden inverso: empleados_datos_privados como
+# estaba (del respaldo), fuera el volcado y fuera el modelo. Lo ya volcado se
+# va con las tablas lab_*; las bajas creadas en employees se quedan (se ven
+# por lab_import_fila.destino_id del lote).
+supabase/vuelta-atras/20261101T1939_n1_datos_privados_laboral.down.sql
+supabase/vuelta-atras/20261101T1938_n1_volcado_cegid.down.sql
+supabase/vuelta-atras/20261101T1937_n1_laboral_modelo.down.sql

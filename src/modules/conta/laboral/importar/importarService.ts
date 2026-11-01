@@ -31,6 +31,10 @@ const MENSAJES: Record<string, string> = {
   TROZO_DEMASIADO_GRANDE: 'Un trozo de filas es demasiado grande para guardarlo de una vez.',
   FILA_MAL_FORMADA: 'Alguna fila del fichero no se ha podido leer bien.',
   HOJA_DESCONOCIDA: 'Una hoja del fichero no es de las que se esperan.',
+  // N1 · PR 1 (01/11): el volcado a las fichas.
+  SIN_FILAS: 'Ese lote no tiene filas todavía: primero «Cargar las filas en Sumied».',
+  LOCAL_DE_OTRA_CUENTA: 'Ese local no es de esta cuenta.',
+  SIN_CENTRO: 'Falta el nombre del centro de Cegid.',
 }
 
 /** El error de la base, en palabras de oficina. */
