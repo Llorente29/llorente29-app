@@ -12,3 +12,13 @@ supabase/migrations/20261031T2210_b01rv_revolut_conexion.sql
 supabase/migrations/20261031T2211_b01rv_revolut_proveedor.sql
 supabase/migrations/20261031T2212_b01rv_revolut_en_el_dia.sql
 supabase/staging/sql/20261031_b01rv_revolut_prueba.sql
+# B01 Revolut · PR 2a · La base del «Pagar» común. La 1234 solo añade: desde la
+# rama va de verdad después del ensayo (W05), si se puede pasar dos veces.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): sin permiso no se paga;
+# sin Revolut o solo para leer, tampoco; lo que no se paga por transferencia;
+# una segunda para varios pagos juntos; la llave; el PIN (5 fallos lo
+# bloquean, recuperarlo pide el correo, vale solo para la lista vista); con dos
+# personas, la da la otra; los topes; «No pagar»; quién ve qué; la llave nueva
+# pide el correo y un contador que no sube la quita; y la vuelta atrás.
+supabase/migrations/20261101T1234_b01p_pagos_base.sql
+supabase/staging/sql/20261101_b01p_pagos_base_prueba.sql

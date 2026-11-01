@@ -1,4 +1,3 @@
-# B01 Revolut · PR 1 · vuelta atrás, en orden inverso.
-supabase/vuelta-atras/20261031T2212_b01rv_revolut_en_el_dia.down.sql
-supabase/vuelta-atras/20261031T2211_b01rv_revolut_proveedor.down.sql
-supabase/vuelta-atras/20261031T2210_b01rv_revolut_conexion.down.sql
+# B01 Revolut · PR 2a · la vuelta atrás: quita las tablas y las funciones de la 1234.
+cuenta: scripts/conta/produccion/cuentas/b01p-pagos.sql
+supabase/vuelta-atras/20261101T1234_b01p_pagos_base.down.sql
