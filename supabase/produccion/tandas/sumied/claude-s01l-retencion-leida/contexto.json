@@ -1,0 +1,22 @@
+{
+ "_que": "S01l · contexto de producción medido en SOLO LECTURA el 01/11 a las 09:28Z: existe conta_factura_desde_lectura(uuid,uuid) (una sola firma, huella del cuerpo 1b5583c344a3765f55d136d555449a7f; se reemplaza con la misma firma); ningún cron ni disparador la usa; ninguna de las dos en el historial.",
+ "medido": "2026-11-01T09:28Z",
+ "tanda": {
+  "supabase/migrations/20261101T0920_s01l_retencion_leida.sql": "cff1aee82bc7afbdf7ba85a7731d58cf",
+  "supabase/migrations/20261101T0921_s01l_releer_foodint.sql": "aac2ba5c1024def9f4623eb655baa3a6"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_factura_desde_lectura(uuid,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
