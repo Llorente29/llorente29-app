@@ -363,3 +363,14 @@
 .cxab-dos .s-bloque-ficha { display: flex; flex-direction: column; gap: 6px; }
 .cxab-dos .s-apoyo { margin: 0; }
 @media (max-width: 720px) { .cxab-dos { grid-template-columns: minmax(0, 1fr); } }
+
+/* S01i · «Se paga con la liquidación» en la ficha de una factura de comisión. */
+.cxcm { display: flex; flex-direction: column; gap: 6px; background: var(--s-ok-fondo); border-color: var(--s-ok-fondo); }
+.cxcm[data-tono='duda'] { background: var(--s-duda-fondo); border-color: var(--s-duda-fondo); }
+.cxcm .s-apoyo { margin: 0; }
+.cxcm-etiqueta { font-size: var(--s-t-s); font-weight: 600; color: var(--s-ok); }
+.cxcm[data-tono='duda'] .cxcm-etiqueta { color: var(--s-duda); }
+.cxcm-lista { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cxcm-lista li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 10px; border-radius: 8px; background: var(--s-superficie); }
+.cxcm-lista li[data-sugerida='si'] { outline: 2px solid var(--s-ok); }
+@media (max-width: 720px) { .cxcm-lista li { flex-direction: column; align-items: stretch; } }

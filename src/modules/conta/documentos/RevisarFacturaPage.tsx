@@ -45,7 +45,9 @@ import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
-import { LiquidacionesDeLaFactura } from '@/modules/conta/documentos/LiquidacionesDeLaFactura'
+import { BloqueComision } from '@/modules/conta/documentos/BloqueComision'
+import { chipComision, estadoPagoComision } from '@/modules/conta/documentos/comision'
+import { leerComision } from '@/modules/conta/services/comisionService'
 import { completarFicha, deLaFactura, enUnaFrase } from '@/modules/conta/lib/fichaDesdeDocumento'
 import { altaEnFactura, fraseRelectura, hayQueReleer, type ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
 import { fraseAltaEnFactura } from '@/modules/conta/lib/altaProveedor'
@@ -129,6 +131,8 @@ export default function RevisarFacturaPage() {
   // S01h · 1 · Lo que anula, leído una vez: lo dicen igual «ANULA», su «Pago» y el «Estado» del bloque Pago.
   // `abono` va en la clave: al cargar aún no se sabe, y useLeer solo vuelve a leer cuando la clave cambia.
   const loQueAnula = useLeer(abono && accountId && invoiceId ? () => leerLoQueAnula(accountId, invoiceId) : null, `${accountId}:${invoiceId}:anula:${abono ? 'si' : 'no'}:${vuelta}`)
+  // S01i · Si es la factura de comisión de una plataforma: con qué liquidación va (lo decide la base; «no» si no es de una plataforma).
+  const comision = useLeer(invoiceId ? () => leerComision(invoiceId) : null, `${invoiceId}:comision:${vuelta}`)
   const envioDiez = useEnvioDiez(fac?.account_id, fac?.company_id).envio
   // C12: con el traspaso mensual, al validar no sale nada: va en el traspaso del mes.
   const enviaADiez = envioDiez?.alMomento === true
@@ -503,7 +507,7 @@ export default function RevisarFacturaPage() {
   const aMano_ = ficha?.fuente === 'manual'
 
   const estado = descartada ? { texto: 'No es una factura', tono: 'neutro' as const }
-    : validada ? (pagada ? { texto: 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
+    : validada ? (pagada ? { texto: chipComision(comision.datos, true) ?? 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
       : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : abono ? { texto: CHIP_ABONO, tono: 'seguro' as const } : { texto: 'Por revisar', tono: 'duda' as const }
   // S01h · La miga de un abono: «Por revisar», como la pestaña de la que viene (Julio, 31/10).
   const migasExtra = abono
@@ -622,15 +626,15 @@ export default function RevisarFacturaPage() {
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}
       {!descartada && <IvaNoDeducibleFicha accountId={accountId} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alGuardar={() => setVuelta((x) => x + 1)} />}
-      {!descartada && <LiquidacionesDeLaFactura accountId={accountId} supplierId={fac.proveedor?.id ?? null} invoiceId={invoiceId} fecha={fac.fecha} total={fac.total} soloLectura={descartada} quien={userName} />}
+      {!descartada && <BloqueComision e={comision} invoiceId={invoiceId} soloLectura={soloLectura} quien={userName} alLigar={() => setVuelta((x) => x + 1)} />}
       <BloqueGasto gastos={b.gastos} base={totales.base} cuentas={cuentas.datos ?? []} locales={ejeLocal ? locales.datos ?? [] : null} nombreEje={ejeLocal?.nombre ?? 'Local'}
         alCambiar={(g) => ed.poner('gastos', g)} cambio={ed.cambioDe('gastos')} alDeshacer={() => ed.deshacer('gastos')} soloLectura={soloLectura}
         tono={mGasto.tono} motivo={[mGasto.motivo, !ficha?.localId && ficha?.recepcion?.local ? `El local sale de la recepción del ${fechaEs(ficha.recepcion.fecha).slice(0, 5)}.` : null].filter(Boolean).join(' ')} />
       <BloquePago formaPago={b.formaPago} vence={b.vence} estadoPago={b.estadoPago} soloLectura={soloLectura}
-        motivoEstado={abono ? estadoPagoAbono(loQueAnula.datos) : undefined}
+        motivoEstado={abono ? estadoPagoAbono(loQueAnula.datos) : estadoPagoComision(comision.datos, !!pagada)}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'vence', x as string) }} cambioDe={ed.cambioDe} deshacer={ed.deshacer}
-        motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : mayuscula(vence.apoyo)}
-        tonoVence={vence.aviso && b.formaPago !== 'prepaid' ? 'revisar' : 'normal'}
+        motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : b.formaPago === 'compensation' ? 'Se descuenta de lo que te paga la liquidación: no espera a un vencimiento.' : mayuscula(vence.apoyo)}
+        tonoVence={vence.aviso && b.formaPago !== 'prepaid' && b.formaPago !== 'compensation' ? 'revisar' : 'normal'}
         motivoForma={extra.datos?.comoPagada ? 'Con la que se pagó.' : conTarjeta && !guardado?.formaPago ? 'Lo dice el documento: pagada con tarjeta. Al validarla, la caso con su cargo del banco.' : ficha?.formaPagoFicha ? 'La de su ficha.' : undefined}
         pagada={pagada ? `Pagada el ${fechaEs(pagada.fecha)}${extra.datos?.comoPagada ? ` · ${extra.datos.comoPagada}` : ''}.` : null} />
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
