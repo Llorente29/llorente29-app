@@ -40,6 +40,12 @@ test('N1 paso 0 · la ficha de hoy, pestaña a pestaña', async ({ page }) => {
   await page.goto('/personal', { timeout: 30_000 })
   await capturar(page, 0, 'lista')
 
+  // En hostelería, Personal abre «Insights» por defecto: la lista está en «Empleados».
+  const empleados = page.getByRole('button', { name: 'Empleados', exact: true })
+  // Puede haber otro «Empleados» en el menú: el de la página va después.
+  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => undefined)
+  if (await empleados.count()) await empleados.last().click()
+
   // La primera persona de la lista (una tarjeta con su nombre).
   const primera = page.locator('.grid.gap-3 > div.cursor-pointer').first()
   await expect(primera).toBeVisible({ timeout: 30_000 })
