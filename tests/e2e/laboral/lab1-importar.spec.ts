@@ -187,9 +187,13 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(e.message))
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'sumied') })
-  await entrarComo(page, SOLA)
+  const sola = await entrarComo(page, SOLA)
   const marca = `${test.info().project.name}-volcado-${Date.now()}`
   const centro = `Centro inventado ${marca}`
+  // La empresa sola no tiene centros: uno que se llama como el de Cegid, para
+  // que el local propuesto por el nombre sea él (se borra con la cuenta del carril).
+  const local = await rest<{ id: string }[]>(sola, 'POST', 'locations', { account_id: await cuentaDe(sola), name: centro })
+  expect(local.status, JSON.stringify(local.datos)).toBe(201)
   const bytes = paquete(marca, (libro) => {
     const t = HOJAS_CEGID.find((x) => x.id === 'trabajadores')!
     const c = HOJAS_CEGID.find((x) => x.id === 'contratos')!
@@ -225,8 +229,9 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(hecho).toContainText('0 personas y 0 contratos al día desde Cegid. De las 3 de Cegid, 3 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText('no tiene local confirmado')
 
-  // Confirmado (el primer local de la cuenta): las dos bajas entran; la de alta no se crea.
-  await page.locator('[data-prueba="volcado-centro"] select').selectOption({ index: 1 })
+  // Confirmado el propuesto (el que se llama igual): las dos bajas entran; la de alta no se crea.
+  await expect(page.locator('[data-prueba="volcado-centro"] select')).toHaveValue(local.datos[0].id)
+  await expect(page.locator('[data-prueba="volcado-confirmar"]')).toHaveText('Confirmar el propuesto')
   await page.locator('[data-prueba="volcado-confirmar"]').click()
   await expect(page.locator('[data-prueba="volcado-centro"]')).toContainText('Confirmado')
   await pasar()

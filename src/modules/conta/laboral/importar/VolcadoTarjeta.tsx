@@ -51,6 +51,11 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
         {volcando ? 'Pasando…' : 'Pasar a las fichas'}</Boton>}>
       {centros === null && !error && <p className="s-apoyo" role="status">Leyendo los centros del fichero…</p>}
       {centros !== null && centros.length === 0 && <p className="s-apoyo">El fichero no trae ningún centro de trabajo.</p>}
+      {centros !== null && centros.length > 0 && locations.length === 0 && (
+        <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="volcado-sin-locales">
+          La cuenta no tiene ningún centro todavía: créalos en Laboral › Centros y vuelve aquí para confirmarlos.
+        </p>
+      )}
       {centros !== null && centros.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
         <table className="s-tabla" data-prueba="volcado-centros">
