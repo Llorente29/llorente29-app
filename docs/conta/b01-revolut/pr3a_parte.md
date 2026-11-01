@@ -4,7 +4,7 @@ B01 · PR 3a · **Los núcleos de casar.** Decisión de Julio (01/11): sacar la 
 
 **La 2030**, en la base:
 - **Cada función que casa se parte en dos:**
-  - **un núcleo**, sin guarda, que nadie de fuera puede llamar (`revoke` a public, anon y authenticated);
+  - **un núcleo**, sin guarda, que nadie de fuera puede llamar (`revoke` a public, anon, authenticated y service_role: Supabase le da `execute` por defecto a la clave de servicio en cada función nueva, y lo cazó la prueba de staging);
   - **la pública de siempre**, que hace su guarda de siempre y llama a su núcleo, con la misma firma.
 
   | Pública (guarda de siempre) | Su núcleo |

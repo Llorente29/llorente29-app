@@ -8,7 +8,8 @@
 -- servicio, sin abrir las guardas de Bancos y sin copiar la lógica de casar:
 --
 --   · Cada función que casa se parte en dos: un NÚCLEO sin guarda, que nadie
---     de fuera puede llamar (revoke a public, anon y authenticated), y la
+--     de fuera puede llamar (revoke a public, anon, authenticated y
+--     service_role), y la
 --     pública de siempre, que hace su guarda de siempre y llama a su núcleo.
 --     Lo que hace la pública no cambia: la prueba de staging lo mide, antes =
 --     después, con el mismo caso a los dos lados.
@@ -492,9 +493,11 @@ begin
 end $function$;
 
 -- ── 4 · Nadie de fuera llama a un núcleo ──
-revoke all on function public._mark_supplier_invoice_paid_nucleo(uuid, date, text, text) from public, anon, authenticated;
-revoke all on function public._bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid) from public, anon, authenticated;
-revoke all on function public._conta_remesa_casar_nucleo(uuid, uuid, uuid[], text) from public, anon, authenticated;
+-- También a la clave de servicio: Supabase le da «execute» por defecto en cada función nueva. A un núcleo
+-- solo se llega desde dentro de la base; la entrada de la clave de servicio es conta_pago_casar_banco.
+revoke all on function public._mark_supplier_invoice_paid_nucleo(uuid, date, text, text) from public, anon, authenticated, service_role;
+revoke all on function public._bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid) from public, anon, authenticated, service_role;
+revoke all on function public._conta_remesa_casar_nucleo(uuid, uuid, uuid[], text) from public, anon, authenticated, service_role;
 comment on function public._mark_supplier_invoice_paid_nucleo(uuid, date, text, text) is
   'B01 · El núcleo de mark_supplier_invoice_paid, sin guarda: solo desde dentro de la base (los núcleos de casar). La guarda la pone mark_supplier_invoice_paid.';
 comment on function public._bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid) is

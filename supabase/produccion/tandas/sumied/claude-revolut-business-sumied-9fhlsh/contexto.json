@@ -2,7 +2,7 @@
  "_que": "B01 · PR 3a · contexto de producción de la tanda (2030), medido en SOLO LECTURA el 01/11 a las 20:25Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen bank_casar, conta_remesa_casar y mark_supplier_invoice_paid, con la huella de pg_get_functiondef de la que parte la migración (0f253b11, 57bb45e3 y 927ffeee); no existe ninguno de los tres núcleos ni conta_pago_casar_banco; nada en el camino del pedido; nada en el historial.",
  "medido": "2026-11-01T20:25Z",
  "tanda": {
-  "supabase/migrations/20261101T2030_b01n_nucleos_casar.sql": "6590d7ea00eacdb9cf12a675f5800f70"
+  "supabase/migrations/20261101T2030_b01n_nucleos_casar.sql": "ab468147e19695f42c7eea93b361a5ec"
  },
  "contexto": {
   "tablas": [],
