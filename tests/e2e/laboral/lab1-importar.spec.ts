@@ -173,3 +173,70 @@ test('cargar las filas: las 51 del paquete, hoja a hoja; otra vez, sin duplicar'
 
   expect(errores, errores.join('\n')).toEqual([])
 })
+
+// N1 · PR 1 (01/11) · Tercer paso: de las filas a las fichas. Un paquete con
+// dos bajas y una persona de alta que no está en el equipo, todas inventadas
+// (NIF con la marca del run: cada run, personas nuevas). El centro de Cegid se
+// confirma a mano: antes de confirmarlo, nadie entra.
+function filasDe(h: (typeof HOJAS_CEGID)[number], filas: Record<string, string>[]): XLSX.WorkSheet {
+  return XLSX.utils.aoa_to_sheet([[...h.columnas], ...filas.map((f) => h.columnas.map((c) => f[c] ?? ''))])
+}
+
+test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las bajas entran y otra vez no duplica', async ({ page }) => {
+  test.setTimeout(4 * 60_000)
+  const errores: string[] = []
+  page.on('pageerror', (e) => errores.push(e.message))
+  await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'sumied') })
+  await entrarComo(page, SOLA)
+  const marca = `${test.info().project.name}-volcado-${Date.now()}`
+  const centro = `Centro inventado ${marca}`
+  const bytes = paquete(marca, (libro) => {
+    const t = HOJAS_CEGID.find((x) => x.id === 'trabajadores')!
+    const c = HOJAS_CEGID.find((x) => x.id === 'contratos')!
+    libro.Sheets[t.nombre] = filasDe(t, [
+      { trabajador: '1', nombre: `Baja Inventada Uno ${marca}`, nif: `INV1${marca}`, centro, puesto: 'Ayudante', en_alta_hoy: 'N' },
+      { trabajador: '2', nombre: `Baja Inventada Dos ${marca}`, nif: `INV2${marca}`, centro, puesto: 'Ayudante', en_alta_hoy: 'N' },
+      { trabajador: '3', nombre: `Alta Inventada Tres ${marca}`, nif: `INV3${marca}`, centro, puesto: 'Ayudante', en_alta_hoy: 'S' },
+    ])
+    libro.Sheets[c.nombre] = filasDe(c, [
+      { trabajador: '1', contrato_n: '1', fecha_alta: '2023-01-10', fecha_fin: '2024-06-30', tipo_contrato: '401', centro },
+      { trabajador: '2', contrato_n: '1', fecha_alta: '2022-02-01', fecha_fin: '2022-08-31', tipo_contrato: '401', centro },
+    ])
+  })
+
+  await page.goto('/conta/laboral/importar-historial')
+  await expect(page.locator('[data-laboral-pagina="importar-historial"] [data-prueba="laboral-importar"]')).toBeVisible({ timeout: 30_000 })
+  await leer(page, 'paquete con bajas.xlsx', bytes)
+  await expect(page.locator('[data-prueba="importar-hecho"]')).toContainText('9 de 9 como se esperaban')
+  await page.locator('[data-prueba="importar-cargar"]').click()
+  await expect(page.locator('[data-prueba="importar-filas"], [data-prueba="importar-error"]')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
+
+  // El centro, sin confirmar: «Pasar a las fichas» no mete a nadie, y lo dice.
+  await expect(page.locator('[data-prueba="volcado-centro"]')).toHaveCount(1, { timeout: 30_000 })
+  await expect(page.locator('[data-prueba="volcado-sin-confirmar"]')).toContainText('Falta confirmar 1 centro')
+  const hecho = page.locator('[data-prueba="volcado-hecho"]')
+  const pasar = async () => {
+    await page.locator('[data-prueba="volcado-pasar"]').click()
+    await expect(page.locator('[data-prueba="volcado-hecho"], [data-prueba="volcado-error"]')).toBeVisible({ timeout: 60_000 })
+    await expect(page.locator('[data-prueba="volcado-error"]')).toHaveCount(0)
+  }
+  await pasar()
+  await expect(hecho).toContainText('0 personas y 0 contratos al día desde Cegid. De las 3 de Cegid, 3 no han entrado')
+  await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText('no tiene local confirmado')
+
+  // Confirmado (el primer local de la cuenta): las dos bajas entran; la de alta no se crea.
+  await page.locator('[data-prueba="volcado-centro"] select').selectOption({ index: 1 })
+  await page.locator('[data-prueba="volcado-confirmar"]').click()
+  await expect(page.locator('[data-prueba="volcado-centro"]')).toContainText('Confirmado')
+  await pasar()
+  await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 entran como bajas). De las 3 de Cegid, 1 no ha entrado')
+  await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Alta Inventada Tres ${marca}: en Cegid está de alta y no está en Folvy`)
+  await captura(page, 'n1-volcado-hecho')
+
+  // Otra vez: las mismas dos, que ya están; ningún contrato de más.
+  await pasar()
+  await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 ya estaban en el equipo)')
+
+  expect(errores, errores.join('\n')).toEqual([])
+})
