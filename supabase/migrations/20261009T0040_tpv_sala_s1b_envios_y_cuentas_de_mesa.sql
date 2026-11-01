@@ -93,6 +93,12 @@ begin
   end if;
 end $$;
 
+-- 01/11/2026: los cierres, todos de entrada y en el orden de los pedidos
+-- (sale y después sale_line). Sin esto, la S1b cogía primero cierres flojos
+-- (las claves ajenas de las tablas nuevas) y los subía después a exclusivo
+-- con los alter table: la misma forma que dio el 40P01 en su vuelta atrás.
+lock table public.sale, public.sale_line in access exclusive mode;
+
 -- ══ 1. Tablas nuevas ════════════════════════════════════════════════════
 
 create table if not exists public.sale_fire (

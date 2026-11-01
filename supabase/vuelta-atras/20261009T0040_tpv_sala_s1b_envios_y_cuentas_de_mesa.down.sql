@@ -15,6 +15,13 @@ begin
   raise notice 'ventas dine_in que pasan a pickup: %', n;
 end $$;
 
+-- 01/11/2026: los cierres, todos de entrada y en el orden de los pedidos
+-- (sale, sale_line y después lo de la S1b). Antes cogía sale_line antes que
+-- sale (al quitar sus columnas) mientras los pedidos y las tablets van al
+-- revés: el ensayo del 01/11 (run 41288564420) dio 40P01, interbloqueo, en el
+-- drop column de sale.
+lock table public.sale, public.sale_line, public.sale_fire, public.sale_line_void in access exclusive mode;
+
 -- 1. Las funciones que ya existían, a su forma de antes (inversa exacta).
 do $$
 declare v_def text; v_new text; c int;
