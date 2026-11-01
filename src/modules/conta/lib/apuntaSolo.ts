@@ -30,7 +30,7 @@ export function lineaDeArriba(a: ApuntadasSolas): string | null {
 export function motivoDeRevisar(motivo: string | undefined | null): { frase: string; ponerEnFicha: boolean } | null {
   const m = (motivo ?? '').trim()
   if (!m) return null
-  return { frase: m, ponerEnFicha: /^Falta la (cuenta de gasto|subcuenta) en la ficha de /.test(m) }
+  return { frase: m, ponerEnFicha: /^Falta (la cuenta de gasto|la subcuenta|su local) en la ficha de /.test(m) }
 }
 
 /** Normaliza lo que devuelve la base (jsonb) a lo que lee la pantalla. */
@@ -46,3 +46,21 @@ export function deLaBase(x: unknown): ApuntadasSolas {
     motivos: Object.fromEntries(Object.entries((o.motivos ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v ?? '')])),
   }
 }
+
+/** S01o·2 · Lo que dice la ficha de «Entrega mercancía». null: lo deduce Sumied. */
+export function textoEntregaMercancia(v: boolean | null): string {
+  if (v === true) return 'Sus facturas esperan su albarán y se casan con él.'
+  if (v === false) return 'Es de servicios: sus facturas no esperan albarán.'
+  return 'Sin decir: lo deduce Sumied (sí si ha tenido algún albarán o su gasto va a compras, 600–602).'
+}
+
+/** S01o·2 · Lo que dice el ROI contestado (o lo que se acaba de guardar). */
+export function textoRoi(enRoi: boolean, recienGuardado: boolean): string {
+  const pre = recienGuardado ? 'Guardado. ' : ''
+  return enRoi
+    ? `${pre}Tu empresa está en el ROI: lo que compras a un proveedor de la UE va sin IVA y lo declaras tú.`
+    : `${pre}Tu empresa no está en el ROI: el IVA español que te cobre un proveedor de la UE no se puede deducir y va al gasto.`
+}
+
+/** S01o·2 · El motivo que pide contestar el ROI (lo escribe la base, 0005). */
+export const motivoPideRoi = (m: string | null | undefined): boolean => !!m && /falta saber si estás en el ROI/.test(m)

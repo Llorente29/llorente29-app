@@ -31,7 +31,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaCompras, rutaFichaProveedor, rutaRecibidaAMano, rutaRevisarFactura } from '@/config/navegacion'
 import { leerApuntadasSolas, deshacerApuntadaSola } from '@/modules/conta/services/apuntaSoloService'
-import { SIN_APUNTADAS, lineaDeArriba, motivoDeRevisar } from '@/modules/conta/lib/apuntaSolo'
+import { SIN_APUNTADAS, lineaDeArriba, motivoDeRevisar, motivoPideRoi } from '@/modules/conta/lib/apuntaSolo'
+import { PreguntaRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -348,6 +349,12 @@ export default function DocumentosPage() {
       {f.pestana === 'solas' && (
         <p className="s-aviso-lista">Lo que Sumied tenía seguro al 100 %: su asiento ya está validado. Si alguna no es así, deshazla: su asiento se anula con su contraasiento y vuelve a «Por revisar».</p>
       )}
+      {/* S01o·2 · Una factura de la UE con IVA español espera saber si la empresa está en el ROI: la pregunta, aquí. */}
+      {accountId && f.pestana === 'por-revisar' && filas.some((x) => motivoPideRoi(mapa.get(x.id)?.motivo)) && (
+        <div className="s-aviso-lista" data-tono="duda">
+          <PreguntaRoi quien={{ accountId, companyId: activa.id, userId: userId ?? null }} alContestar={(t) => { setHecho(t); setVuelta((v) => v + 1) }} />
+        </div>
+      )}
       {solas.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No he podido leer las que apuntó Sumied sola: {solas.error} <button type="button" className="s-boton s-boton-enlace" onClick={solas.recargar}>Reintentar</button></p>}
       <AsientosDeCompras />
       <LoQueNoHePodido donde={DONDE.recibidas} />
@@ -471,7 +478,7 @@ function MotivoRevisar({ x, motivo }: { x: FilaDocumento; motivo: string | null 
   if (!m) return null
   return (
     <span className="s-apoyo" data-prueba="motivo-revisar">{m.frase}
-      {m.ponerEnFicha && x.proveedor.id && <>{' · '}<Link to={rutaFichaProveedor(x.proveedor.id)} onClick={(ev) => ev.stopPropagation()}>Ponerla</Link></>}
+      {m.ponerEnFicha && x.proveedor.id && <>{' · '}<Link to={rutaFichaProveedor(x.proveedor.id)} onClick={(ev) => ev.stopPropagation()}>{/su local/.test(m.frase) ? 'Ponerlo' : 'Ponerla'}</Link></>}
     </span>
   )
 }

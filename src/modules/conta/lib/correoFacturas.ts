@@ -37,6 +37,8 @@ export function queSeHizo(l: LlegadaCorreo): { titulo: string; texto: string | n
     return { titulo: 'No es una factura', texto: l.motivo ?? 'No trae número, total ni bases.', tono: 'nada' }
   }
   if (f && f.casada) return { titulo: `Factura leída y casada: ${nombre}`, texto: l.dicho, tono: l.dicho && /Difiere/.test(l.dicho) ? 'mira' : 'bien' }
+  // S01o·2 · Un proveedor de servicios no entrega mercancía: su factura no espera albarán.
+  if (f && f.espera_albaran === false) return { titulo: `Factura leída: ${nombre}`, texto: l.dicho ?? 'Es de servicios: no espera albarán.', tono: 'bien' }
   if (f) return { titulo: `Factura esperando su albarán: ${nombre}`, texto: l.dicho ?? 'Cuando llegue su albarán, la caso con él.', tono: 'espera' }
   if (l.llegada === 'error' || l.resultado === 'error') return { titulo: 'No se ha podido leer', texto: l.motivo, tono: 'mira' }
   if (l.resultado === 'apagada') return { titulo: 'La dirección estaba apagada', texto: 'No se ha leído.', tono: 'mira' }

@@ -39,6 +39,8 @@ export interface FichaProveedor {
   irpfWithholdingPct: number | null
   expenseCategoryId: string | null
   defaultLocationId: string | null
+  /** S01o·2 · «Entrega mercancía» (sus facturas esperan albarán). null: lo deduce Sumied. */
+  deliversGoods: boolean | null
   paymentMethod: PaymentMethod | null
   paymentTermsDays: number | null
   paymentFixedDays: number[]
