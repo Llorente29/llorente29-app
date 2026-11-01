@@ -38,10 +38,13 @@
 // la firma de svix, como en payroll-inbound.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { comprobarFirma, recibirCorreo, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PuertoEntrada, type QueEs, type Sobre } from "../_shared/facturasEntrada.ts";
+import * as XLSX from "npm:xlsx@0.18.5";
+import { corsHeaders } from "../_shared/cors.ts";
+import { comprobarFirma, recibirCorreo, releerCorreos, resumenReleidos, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PuertoEntrada, type QueEs, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const ANON = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const RESEND = Deno.env.get("RESEND_API_KEY") ?? "";
 const SECRETO = Deno.env.get("RESEND_FACTURAS_WEBHOOK_SECRET") ?? "";
 const BUCKET = "receipt-uploads";
@@ -50,25 +53,15 @@ const BUCKET_NOMINAS = "employee-documents"; // el de payroll-inbound
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 const hex = (b: ArrayBuffer) => [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, "0")).join("");
 
-Deno.serve(async (req) => {
-  if (req.method !== "POST") return json(405, { error: "usa POST" });
-  if (!SECRETO || !RESEND || !SERVICIO) return json(500, { error: "falta configurar el secreto del webhook, la clave de Resend o la de servicio" });
-
-  const cuerpo = await req.text();
-  const mal = await comprobarFirma(SECRETO, { id: req.headers.get("svix-id"), timestamp: req.headers.get("svix-timestamp"), firma: req.headers.get("svix-signature") }, cuerpo, Math.floor(Date.now() / 1000));
-  if (mal) return json(401, { error: mal });
-
-  let ev: { type?: string; data?: CorreoResend & Sobre };
-  try { ev = JSON.parse(cuerpo); } catch { return json(400, { error: "cuerpo no es JSON" }); }
-  if (ev.type !== "email.received" || !ev.data?.email_id) return json(200, { ignorado: ev.type ?? "sin tipo" });
-
-  const sb = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
+// El puerto de la entrada: la base, Resend y el almacén (lo usan el aviso de Resend y «Volver a leer»).
+// deno-lint-ignore no-explicit-any
+function puertoDe(sb: any): PuertoEntrada {
   const rpc = async <T>(f: string, a: Record<string, unknown>): Promise<T> => {
     const { data, error } = await sb.rpc(f, a);
     if (error) throw new Error(`${f}: ${error.message}`);
     return data as T;
   };
-  const puerto: PuertoEntrada = {
+  return {
     destino: async (lp, dom) => {
       const d = await rpc<{ company_id: string; account_id: string; activa: boolean; tipo?: ClaseDireccion } | null>("conta_entrada_destino", { p_local_part: lp, p_domain: dom });
       return d ? { companyId: d.company_id, accountId: d.account_id, activa: d.activa, tipo: d.tipo ?? "facturas" } : null;
@@ -151,6 +144,17 @@ Deno.serve(async (req) => {
       });
       return r.ok ? { ok: true, texto: `${nombre}: es una nómina, va a Laboral.` } : { ok: false, texto: `${nombre}: es una nómina, pero Laboral no la ha podido leer (${r.status}).` };
     },
+    // S01j · La primera hoja de un Excel (el de Glovo), como objetos por su cabecera.
+    hoja: async (bytes) => {
+      const libro = XLSX.read(bytes, { type: "array", cellDates: true });
+      const h = libro.Sheets[libro.SheetNames[0]];
+      return h ? XLSX.utils.sheet_to_json(h, { defval: null }) as Record<string, unknown>[] : [];
+    },
+    // S01j · La factura de comisión escrita en el correo (Just Eat), como recibida.
+    facturaComision: async ({ settlementId, datos, emailId }) => {
+      const r = await rpc<{ factura_id: string | null; estado: string; texto: string }>("conta_comision_del_correo", { p_settlement: settlementId, p: { ...datos, email_id: emailId } });
+      return { id: r.factura_id, estado: r.estado, texto: r.texto };
+    },
     leer: async (inboxId) => {
       const { data: l } = await sb.from("document_inbox").select("account_id, file_path").eq("id", inboxId).single();
       const r = await fetch(`${SUPABASE_URL}/functions/v1/ocr-albaran`, {
@@ -167,6 +171,50 @@ Deno.serve(async (req) => {
       return { estado: f.estado, texto: f.texto };
     },
   };
+}
+
+// S01j · «Volver a leer» desde Correo de facturas (POST ?releer=1): con la sesión de la
+// persona (no del aviso de Resend). La base dice qué correos de la empresa puede volver a leer
+// (conta_correo_releer_lista: administración o encargado; los de un remitente, como
+// mucho 60). Cada uno se pide otra vez a Resend y pasa por el camino de siempre.
+async function releer(req: Request): Promise<Response> {
+  const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!jwt) return json(401, { error: "Falta la sesión." });
+  let b: { company_id?: string; email_ids?: string[]; remitente?: string };
+  try { b = await req.json(); } catch { return json(400, { error: "cuerpo no es JSON" }); }
+  const comoPersona = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${jwt}` } } });
+  const { data: ids, error } = await comoPersona.rpc("conta_correo_releer_lista", { p_company: b.company_id ?? null, p_email_ids: b.email_ids ?? null, p_remitente: b.remitente ?? null });
+  if (error) return json(error.code === "42501" ? 403 : 400, { error: error.message });
+  const puerto = puertoDe(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }));
+  const rs = await releerCorreos((ids as string[] | null) ?? [], puerto, async (id) => {
+    const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
+    if (r.status === 404 || r.status === 410) return null;
+    if (!r.ok) throw new Error(`Resend contesta ${r.status}`);
+    return { ...(await r.json() as CorreoResend & Sobre), email_id: id };
+  });
+  return json(200, { texto: resumenReleidos(rs), correos: rs });
+}
+
+Deno.serve(async (req) => {
+  // S01j · «Volver a leer» llega de la pantalla (?releer=1), con su CORS; el aviso de Resend, sin él.
+  const esReleer = new URL(req.url).searchParams.get("releer") === "1";
+  if (esReleer && req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return json(405, { error: "usa POST" });
+  if (!SECRETO || !RESEND || !SERVICIO) return json(500, { error: "falta configurar el secreto del webhook, la clave de Resend o la de servicio" });
+  if (esReleer) {
+    const r = await releer(req);
+    return new Response(r.body, { status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
+  const cuerpo = await req.text();
+  const mal = await comprobarFirma(SECRETO, { id: req.headers.get("svix-id"), timestamp: req.headers.get("svix-timestamp"), firma: req.headers.get("svix-signature") }, cuerpo, Math.floor(Date.now() / 1000));
+  if (mal) return json(401, { error: mal });
+
+  let ev: { type?: string; data?: CorreoResend & Sobre };
+  try { ev = JSON.parse(cuerpo); } catch { return json(400, { error: "cuerpo no es JSON" }); }
+  if (ev.type !== "email.received" || !ev.data?.email_id) return json(200, { ignorado: ev.type ?? "sin tipo" });
+
+  const puerto = puertoDe(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }));
 
   try {
     const r = await recibirCorreo(ev.data, puerto);

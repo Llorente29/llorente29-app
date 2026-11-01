@@ -6,4 +6,5 @@
 # no se toca; volver a leer como persona; y la vuelta atrás.
 supabase/migrations/20261101T0845_s01j_comision_del_correo.sql
 supabase/migrations/20261101T0846_s01j_antiguas_sin_periodo.sql
+supabase/migrations/20261101T0847_s01j_correo_lo_que_salio.sql
 supabase/staging/sql/20261101_s01j_correo_prueba.sql

@@ -13,7 +13,8 @@
 --      factura en revisión con el porqué.
 --   4. Una antigua con algo ligado (un cobro) no se toca.
 --   5. conta_correo_releer_lista, como persona: los de Glovo de su empresa; un
---      remitente que no es Glovo ni Just Eat, error.
+--      remitente que no es Glovo ni Just Eat, error. Y conta_correo_facturas (0847):
+--      cada llegada, con su email_id y la liquidación que salió de ella.
 --   6. La vuelta atrás, y otra vez delante.
 
 begin;
@@ -30,6 +31,7 @@ set local statement_timeout = '300s';
 \i supabase/migrations/20261101T0051_s01i_comision_sin_banco.sql
 \i supabase/migrations/20261101T0845_s01j_comision_del_correo.sql
 \i supabase/migrations/20261101T0846_s01j_antiguas_sin_periodo.sql
+\i supabase/migrations/20261101T0847_s01j_correo_lo_que_salio.sql
 
 -- Preparar: dos plataformas inventadas (canal, proveedor y su tercero) en la cuenta D.
 do $$
@@ -158,17 +160,20 @@ begin
   raise notice 'PRUEBA S01j · 4: la antigua con su cobro se queda; la nueva entra al lado.';
 end $$;
 
--- 5 · conta_correo_releer_lista, como persona (administración de D).
+-- 5 · conta_correo_releer_lista y conta_correo_facturas (0847), como persona (administración de D).
+insert into public.company_inbound_address (account_id, company_id, kind, local_part, active)
+values (current_setting('prueba.acc')::uuid, current_setting('prueba.e')::uuid, 'facturas', 'facturas-prueba-s01j', true);
 insert into public.inbound_email_log (email_id, to_address, from_address, subject, company_id, account_id, outcome, detail)
-values ('correo-prueba-s01j-g1', 'facturas-prueba@entrada.folvy.app', 'reenvio@prueba.test', 'Fwd: Glovoapp Spain Platform S.L. - Factura 000000000001', current_setting('prueba.e')::uuid, current_setting('prueba.acc')::uuid, 'recibido', '{}'),
-       ('correo-prueba-s01j-o1', 'facturas-prueba@entrada.folvy.app', 'proveedor@prueba.test', 'Factura de otro proveedor', current_setting('prueba.e')::uuid, current_setting('prueba.acc')::uuid, 'recibido', '{}');
+values ('correo-prueba-s01j-g1', 'facturas-prueba-s01j@entrada.folvy.app', 'reenvio@prueba.test', 'Fwd: Glovoapp Spain Platform S.L. - Factura 000000000001', current_setting('prueba.e')::uuid, current_setting('prueba.acc')::uuid, 'recibido', '{}'),
+       ('correo-prueba-s01j-o1', 'facturas-prueba-s01j@entrada.folvy.app', 'proveedor@prueba.test', 'Factura de otro proveedor', current_setting('prueba.e')::uuid, current_setting('prueba.acc')::uuid, 'recibido', '{}'),
+       ('correo-prueba-s01j-1', 'facturas-prueba-s01j@entrada.folvy.app', 'reenvio@prueba.test', 'Fwd: Glovoapp Spain Platform S.L. - Factura 000000000002', current_setting('prueba.e')::uuid, current_setting('prueba.acc')::uuid, 'recibido', '{}');
 select set_config('request.jwt.claims', json_build_object('sub', 'c01d0000-0000-4000-8000-0000000000d1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
 declare v text[];
 begin
   v := public.conta_correo_releer_lista(current_setting('prueba.e')::uuid, null, 'glovo');
-  if v is distinct from array['correo-prueba-s01j-g1'] then raise exception 'PRUEBA S01j · 5: los de Glovo no son los suyos: %', v; end if;
+  if not (v @> array['correo-prueba-s01j-g1', 'correo-prueba-s01j-1'] and cardinality(v) = 2) then raise exception 'PRUEBA S01j · 5: los de Glovo no son los suyos: %', v; end if;
   v := public.conta_correo_releer_lista(current_setting('prueba.e')::uuid, array['correo-prueba-s01j-o1', 'no-es-de-esta-empresa'], null);
   if v is distinct from array['correo-prueba-s01j-o1'] then raise exception 'PRUEBA S01j · 5: por id, ha dado %', v; end if;
   begin
@@ -181,22 +186,31 @@ begin
     raise exception 'PRUEBA S01j · 5: la persona puede crear facturas desde un correo.';
   exception when insufficient_privilege then null;
   end;
-  raise notice 'PRUEBA S01j · 5: como persona: los de Glovo y los que nombra, solo de su empresa; crear la factura del correo no es suyo.';
+  -- 0847 · La llegada dice su email_id y la liquidación que salió de ella (la del paso 1, de su Excel).
+  if not exists (select 1 from jsonb_array_elements(public.conta_correo_facturas(current_setting('prueba.e')::uuid)->'llegadas') x
+                  where x->>'email_id' = 'correo-prueba-s01j-1' and jsonb_array_length(x->'liquidaciones') = 1
+                    and x->'liquidaciones'->0->>'desde' = '2026-10-01' and (x->'liquidaciones'->0->>'neto')::numeric = 236.27) then
+    raise exception 'PRUEBA S01j · 5: Correo de facturas no dice qué liquidación salió del correo: %', public.conta_correo_facturas(current_setting('prueba.e')::uuid);
+  end if;
+  raise notice 'PRUEBA S01j · 5: como persona: los de Glovo y los que nombra, solo de su empresa; crear la factura del correo no es suyo; cada llegada dice qué salió de ella.';
 end $$;
 reset role;
 select set_config('request.jwt.claims', '', true);
 
 -- 6 · La vuelta atrás, y otra vez delante.
+\i supabase/vuelta-atras/20261101T0847_s01j_correo_lo_que_salio.down.sql
 \i supabase/vuelta-atras/20261101T0846_s01j_antiguas_sin_periodo.down.sql
 \i supabase/vuelta-atras/20261101T0845_s01j_comision_del_correo.down.sql
 do $$ begin
   if to_regprocedure('public.conta_comision_del_correo(uuid,jsonb)') is not null or to_regprocedure('public.conta_correo_releer_lista(uuid,text[],text)') is not null
-     or exists (select 1 from pg_trigger where tgname = 's01j_liquidacion_sustituye') then
+     or exists (select 1 from pg_trigger where tgname = 's01j_liquidacion_sustituye')
+     or position('liquidaciones' in (select prosrc from pg_proc where oid = 'public.conta_correo_facturas(uuid)'::regprocedure)) > 0 then
     raise exception 'PRUEBA S01j · 6: la vuelta atrás no quita las funciones o el disparador.';
   end if;
-  raise notice 'PRUEBA S01j · 6: la vuelta atrás quita lo de la 0845 y la 0846.';
+  raise notice 'PRUEBA S01j · 6: la vuelta atrás quita lo de la 0845 y la 0846, y deja conta_correo_facturas como estaba.';
 end $$;
 \i supabase/migrations/20261101T0845_s01j_comision_del_correo.sql
 \i supabase/migrations/20261101T0846_s01j_antiguas_sin_periodo.sql
+\i supabase/migrations/20261101T0847_s01j_correo_lo_que_salio.sql
 
 rollback;
