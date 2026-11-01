@@ -20,7 +20,10 @@ begin
     raise notice 'S01l 0921: la llegada de Foodint no está o ya tiene su factura: no hay nada que hacer.';
     return;
   end if;
+  -- Como la entrada de correo: con el rol de servicio (la función lo pide), solo en esta transacción.
+  perform set_config('request.jwt.claims', '{"role": "service_role"}', true);
   r := public.conta_factura_desde_lectura(v_inbox, v_sesion);
+  perform set_config('request.jwt.claims', '', true);
   if r->>'estado' <> 'factura' or (select withholding_rate_id from public.supplier_invoice where id = (r->>'factura_id')::uuid) is null then
     raise exception 'S01l 0921: la factura de Foodint no ha entrado con su retención: %', r;
   end if;

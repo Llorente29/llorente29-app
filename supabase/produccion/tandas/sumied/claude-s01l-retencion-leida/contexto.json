@@ -3,7 +3,7 @@
  "medido": "2026-11-01T09:28Z",
  "tanda": {
   "supabase/migrations/20261101T0920_s01l_retencion_leida.sql": "cff1aee82bc7afbdf7ba85a7731d58cf",
-  "supabase/migrations/20261101T0921_s01l_releer_foodint.sql": "aac2ba5c1024def9f4623eb655baa3a6"
+  "supabase/migrations/20261101T0921_s01l_releer_foodint.sql": "c385dbfcbf460c73548d6fa29e9187df"
  },
  "contexto": {
   "tablas": [],
