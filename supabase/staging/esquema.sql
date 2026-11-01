@@ -3093,10 +3093,20 @@ CREATE FUNCTION public._conta_comision_buscar(p_invoice uuid) RETURNS text
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare r jsonb; v public.supplier_invoice;
+declare r jsonb; v public.supplier_invoice; v_suya uuid;
 begin
   select * into v from public.supplier_invoice where id = p_invoice;
   if v.id is null or v.status in ('anulada', 'descartada') then return null; end if;
+  -- S01o · Primero, por su número: la liquidación que nombra esta factura es la suya.
+  v_suya := public._conta_comision_de_su_numero(v.id);
+  if v_suya is not null then
+    if not exists (select 1 from public.channel_settlement_invoice k where k.supplier_invoice_id = v.id and k.settlement_id = v_suya) then
+      update public.channel_settlement set commission_invoice_id = null, updated_at = now()
+       where account_id = v.account_id and commission_invoice_id = v.id and id <> v_suya;
+      perform public._conta_comision_ligar(v.id, v_suya, 'sumied', 'Sumied (por su número)');
+    end if;
+    return 'ligada';
+  end if;
   r := public._conta_comision_estado(v.id);
   if r->>'estado' = 'no' then return 'no'; end if;
   update public.supplier_invoice set payment_method = 'compensation', updated_at = now() where id = v.id and payment_method is distinct from 'compensation';
@@ -3152,6 +3162,30 @@ begin
   return jsonb_build_object('canal', v_canal, 'desde', v_desde, 'hasta', v_hasta, 'marca', v_marca, 'local', v_local,
     'total', v.grand_total, 'direccion_leida', v_dir is not null);
 end $_$;
+
+
+--
+-- Name: _conta_comision_de_su_numero(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_comision_de_su_numero(p_invoice uuid) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; v_num text; v_canal uuid; v_ids uuid[];
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  v_num := upper(regexp_replace(coalesce(v.invoice_number, ''), '[^A-Za-z0-9]', '', 'g'));
+  if v.id is null or length(v_num) < 5 then return null; end if;
+  v_canal := (public._conta_comision_datos(v.id)->>'canal')::uuid;
+  if v_canal is null then return null; end if;
+  select array_agg(cs.id) into v_ids
+    from public.channel_settlement cs
+   where cs.account_id = v.account_id and cs.channel_id = v_canal
+     and v_num in (upper(regexp_replace(coalesce(cs.raw->'factura'->>'numero', ''), '[^A-Za-z0-9]', '', 'g')),
+                   upper(regexp_replace(coalesce(cs.settlement_ref, ''), '[^A-Za-z0-9]', '', 'g')));
+  return case when coalesce(array_length(v_ids, 1), 0) = 1 then v_ids[1] end;
+end $$;
 
 
 --
@@ -4649,6 +4683,12 @@ begin
     if cs.id is not null then
       select coalesce(cs.location_id, ps.location_id) into v_local from public.platform_store ps where ps.id = cs.store_id;
       v_local := coalesce(v_local, cs.location_id);
+    end if;
+    -- Sin liquidación, el local de la propia factura (la dirección de la tienda que lee). Si la empresa
+    -- pide el local en cada apunte (el eje «local»), validar no lo deja pasar sin él: se dice aquí.
+    v_local := coalesce(v_local, nullif(d->>'local', '')::uuid);
+    if v_local is null and exists (select 1 from public.conta_eje_analitico x where x.company_id = v.company_id and x.account_id = v.account_id and x.eje = 'local' and x.activo) then
+      return jsonb_build_object('seguro', false, 'motivo', case when cs.id is null then 'Es un abono sin liquidación ligada y no dice de qué local es.' else 'Su liquidación no dice de qué local es.' end);
     end if;
     v_por := format('Abono de %s: un gasto negativo de la plataforma.%s', v_plat,
                     case when cs.id is null then ' Sin liquidación ligada.' else format(' Ligado a su liquidación del %s.', public._conta_s01o_periodo(cs.period_from, cs.period_to)) end);
@@ -8374,6 +8414,95 @@ begin
   return coalesce(v_item.computed_cost, v_item.fixed_cost, 0);
 end;
 $$;
+
+
+--
+-- Name: _lab_campo(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_campo(p_lote uuid, p_hoja text, p_campo text) RETURNS text
+    LANGUAGE sql STABLE
+    AS $$
+  select public._lab_txt(f.datos, 'valor')
+    from public.lab_import_fila f
+   where f.lote_id = p_lote and f.hoja = p_hoja and public._lab_norm(f.datos ->> 'campo') = public._lab_norm(p_campo)
+   order by f.fila_n limit 1
+$$;
+
+
+--
+-- Name: _lab_fecha(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_fecha(t text) RETURNS date
+    LANGUAGE plpgsql IMMUTABLE
+    AS $_$
+begin
+  t := nullif(btrim(t), '');
+  if t is null then return null; end if;
+  if t ~ '^\d{4}-\d{2}-\d{2}' then return left(t, 10)::date; end if;
+  if t ~ '^\d{1,2}/\d{1,2}/\d{4}$' then return to_date(t, 'DD/MM/YYYY'); end if;
+  if t ~ '^\d{4,6}(\.\d+)?$' then return date '1899-12-30' + floor(t::numeric)::int; end if;
+  return null;
+exception when others then return null;
+end $_$;
+
+
+--
+-- Name: _lab_nif(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_nif(t text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$ select nullif(upper(regexp_replace(coalesce(t, ''), '[^A-Za-z0-9]', '', 'g')), '') $$;
+
+
+--
+-- Name: _lab_norm(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_norm(t text) RETURNS text
+    LANGUAGE sql STABLE
+    AS $$
+  select nullif(btrim(regexp_replace(lower(public.unaccent(coalesce(t, ''))), '[^a-z0-9]+', ' ', 'g')), '')
+$$;
+
+
+--
+-- Name: _lab_num(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_num(t text) RETURNS numeric
+    LANGUAGE plpgsql IMMUTABLE
+    AS $_$
+begin
+  t := replace(nullif(btrim(t), ''), ' ', '');
+  if t is null then return null; end if;
+  if t ~ ',' and t ~ '\.' then t := replace(replace(t, '.', ''), ',', '.');
+  elsif t ~ ',' then t := replace(t, ',', '.'); end if;
+  if t ~ '^-?\d+(\.\d+)?$' then return t::numeric; end if;
+  return null;
+end $_$;
+
+
+--
+-- Name: _lab_si(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_si(t text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select lower(btrim(coalesce(t, ''))) in ('s', 'si', 'sí', '1', 'true', 'x', 'yes', 'alta', 'de alta')
+$$;
+
+
+--
+-- Name: _lab_txt(jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._lab_txt(p jsonb, k text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$ select nullif(btrim(p ->> k), '') $$;
 
 
 --
@@ -47961,6 +48090,25 @@ $$;
 
 
 --
+-- Name: current_user_ve_laboral(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.current_user_ve_laboral(p_account_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select public.current_user_is_admin_of(p_account_id)
+      or exists (
+        select 1
+          from public.lab_permiso p
+          join public.user_profiles up on up.user_id = p.user_id and up.account_id = p.account_id and up.active
+         where p.account_id = p_account_id
+           and p.user_id = auth.uid()
+           and p.account_id = public._cuenta_activa());
+$$;
+
+
+--
 -- Name: current_user_ve_persona(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -60682,6 +60830,93 @@ $$;
 
 
 --
+-- Name: lab_centros_del_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_centros_del_lote(p_lote uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_lote public.lab_import_lote;
+begin
+  select * into v_lote from public.lab_import_lote where id = p_lote;
+  if v_lote.id is null or not public.current_user_is_admin_of(v_lote.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El volcado lo hace el administrador de la cuenta.';
+  end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'centro', c.centro,
+             'personas', c.personas,
+             'propuesto', (select jsonb_build_object('id', l.id, 'nombre', l.name)
+                             from public.locations l
+                            where l.account_id = v_lote.account_id
+                              and (public._lab_norm(l.name) like '%' || public._lab_norm(c.centro) || '%'
+                                   or public._lab_norm(c.centro) like '%' || public._lab_norm(l.name) || '%')
+                            order by abs(length(l.name) - length(c.centro)), l.name limit 1),
+             'confirmado', (select jsonb_build_object('id', l.id, 'nombre', l.name)
+                              from public.lab_centro_local cl join public.locations l on l.id = cl.location_id
+                             where cl.account_id = v_lote.account_id and cl.centro = c.centro))
+           order by c.centro)
+      from (select public._lab_txt(f.datos, 'centro') centro,
+                   count(distinct coalesce(public._lab_txt(f.datos, 'trabajador'), f.fila_n::text)) filter (where f.hoja = 'trabajadores') personas
+              from public.lab_import_fila f
+             where f.lote_id = p_lote and f.hoja in ('trabajadores', 'contratos') and public._lab_txt(f.datos, 'centro') is not null
+             group by 1) c), '[]'::jsonb);
+end $$;
+
+
+--
+-- Name: lab_confirmar_centro(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_confirmar_centro(p_lote uuid, p_centro text, p_location_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_lote public.lab_import_lote;
+begin
+  select * into v_lote from public.lab_import_lote where id = p_lote;
+  if v_lote.id is null or not public.current_user_is_admin_of(v_lote.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El local de cada centro lo confirma el administrador de la cuenta.';
+  end if;
+  if not exists (select 1 from public.locations where id = p_location_id and account_id = v_lote.account_id) then
+    raise exception 'LOCAL_DE_OTRA_CUENTA' using errcode = '22023', hint = 'El local tiene que ser de esta cuenta.';
+  end if;
+  if nullif(btrim(p_centro), '') is null then
+    raise exception 'SIN_CENTRO' using errcode = '22023';
+  end if;
+  insert into public.lab_centro_local (account_id, centro, location_id, confirmado_por)
+  values (v_lote.account_id, btrim(p_centro), p_location_id, auth.uid())
+  on conflict (account_id, centro) do update
+     set location_id = excluded.location_id, confirmado_por = excluded.confirmado_por, confirmado_at = now();
+  return public.lab_centros_del_lote(p_lote);
+end $$;
+
+
+--
+-- Name: lab_dar_permiso(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_dar_permiso(p_account_id uuid, p_user_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if not public.current_user_is_admin_of(p_account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El permiso de Laboral lo da el administrador de la cuenta.';
+  end if;
+  if not exists (select 1 from public.user_profiles where user_id = p_user_id and account_id = p_account_id and active) then
+    raise exception 'NO_ES_DE_LA_CUENTA' using errcode = '22023', hint = 'Solo se da a alguien que entra en esta cuenta.';
+  end if;
+  insert into public.lab_permiso (account_id, user_id, dado_por) values (p_account_id, p_user_id, auth.uid())
+  on conflict (account_id, user_id) do nothing;
+  return jsonb_build_object('con_permiso', (select count(*) from public.lab_permiso where account_id = p_account_id));
+end $$;
+
+
+--
 -- Name: lab_import_cargar_filas(uuid, text, integer, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -60834,6 +61069,330 @@ begin
     'quitadas', v_quitadas,
     'cargadas', (select count(*) from public.lab_import_fila where lote_id = p_lote),
     'completo', not exists (select 1 from jsonb_each(v_hojas) x where (x.value ->> 'esperadas') <> (x.value ->> 'cargadas')));
+end $$;
+
+
+--
+-- Name: lab_quitar_permiso(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_quitar_permiso(p_account_id uuid, p_user_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if not public.current_user_is_admin_of(p_account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El permiso de Laboral lo quita el administrador de la cuenta.';
+  end if;
+  delete from public.lab_permiso where account_id = p_account_id and user_id = p_user_id;
+  return jsonb_build_object('con_permiso', (select count(*) from public.lab_permiso where account_id = p_account_id));
+end $$;
+
+
+--
+-- Name: lab_volcar_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.lab_volcar_lote(p_lote uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_lote      public.lab_import_lote;
+  v_acc       uuid;
+  v_ccc       text;
+  v_conv_cod  text;
+  v_hoy       date := (now() at time zone 'Europe/Madrid')::date;
+  f           record;
+  v_emp       uuid;
+  v_loc       uuid;
+  v_alta      boolean;
+  v_nif       text;
+  v_nombre    text;
+  v_msg       text[];
+  v_estado    text;
+  v_contrato  uuid;
+  v_desde     date;
+  v_fin       date;
+  v_coef      numeric;
+  v_periodo   int;
+  v_bruto     numeric;
+  v_conv      numeric;
+  v_pact      numeric;
+  v_irpf      numeric;
+  v_base      numeric;
+  n_nuevas    int := 0;
+  n_ya        int := 0;
+  n_contratos int := 0;
+  n_aviso     int := 0;
+  n_error     int := 0;
+  v_sin_centro text[] := '{}';
+  v_no_cuadra jsonb := '[]';
+begin
+  select * into v_lote from public.lab_import_lote where id = p_lote;
+  if v_lote.id is null or not public.current_user_is_admin_of(v_lote.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'El volcado lo hace el administrador de la cuenta.';
+  end if;
+  if v_lote.estado <> 'leido' then
+    raise exception 'LOTE_NO_LEIDO' using errcode = '22023', hint = 'Se vuelca un lote leído y con sus filas cargadas.';
+  end if;
+  if not exists (select 1 from public.lab_import_fila where lote_id = p_lote and hoja = 'trabajadores') then
+    raise exception 'SIN_FILAS' using errcode = '22023', hint = 'Primero «Cargar las filas en Sumied».';
+  end if;
+  v_acc := v_lote.account_id;
+  v_ccc := public._lab_campo(p_lote, 'empresa', 'CCC');
+
+  -- 1 · Convenio, tablas salariales y conceptos.
+  if exists (select 1 from public.lab_import_fila where lote_id = p_lote and hoja = 'convenio') then
+    insert into public.lab_convenio (account_id, codigo, nombre, codigo_oficial, horas_anuales, horas_dia, vacaciones, paga_13, paga_14, datos, lote_id, updated_at)
+    select v_acc, coalesce(public._lab_campo(p_lote, 'convenio', 'código ERP10'), public._lab_campo(p_lote, 'empresa', 'convenio'), 'convenio'),
+           public._lab_campo(p_lote, 'convenio', 'nombre'), public._lab_campo(p_lote, 'convenio', 'código oficial'),
+           public._lab_num(public._lab_campo(p_lote, 'convenio', 'horas anuales')), public._lab_num(public._lab_campo(p_lote, 'convenio', 'horas día')),
+           public._lab_campo(p_lote, 'convenio', 'vacaciones'), public._lab_campo(p_lote, 'convenio', 'paga 13'), public._lab_campo(p_lote, 'convenio', 'paga 14'),
+           (select coalesce(jsonb_object_agg(datos ->> 'campo', datos -> 'valor'), '{}') from public.lab_import_fila where lote_id = p_lote and hoja = 'convenio' and datos ? 'valor'),
+           p_lote, now()
+    on conflict (account_id, codigo) do update
+       set nombre = excluded.nombre, codigo_oficial = excluded.codigo_oficial, horas_anuales = excluded.horas_anuales,
+           horas_dia = excluded.horas_dia, vacaciones = excluded.vacaciones, paga_13 = excluded.paga_13, paga_14 = excluded.paga_14,
+           datos = excluded.datos, lote_id = excluded.lote_id, updated_at = now();
+  end if;
+
+  insert into public.lab_convenio_tabla (account_id, convenio_codigo, categoria, categoria_nombre, concepto_codigo, concepto_nombre, importe, modo_pago, lote_id)
+  select distinct on (c, cat, con) v_acc, c, cat, public._lab_txt(datos, 'categoria_nombre'), con, public._lab_txt(datos, 'concepto_nombre'),
+         public._lab_num(datos ->> 'importe'), public._lab_txt(datos, 'modo_pago'), p_lote
+    from (select datos, public._lab_txt(datos, 'convenio') c, public._lab_txt(datos, 'categoria') cat, public._lab_txt(datos, 'concepto') con, fila_n
+            from public.lab_import_fila where lote_id = p_lote and hoja = 'tablas_salariales') t
+   where c is not null and cat is not null and con is not null
+   order by c, cat, con, fila_n desc
+  on conflict (account_id, convenio_codigo, categoria, concepto_codigo) do update
+     set categoria_nombre = excluded.categoria_nombre, concepto_nombre = excluded.concepto_nombre, importe = excluded.importe,
+         modo_pago = excluded.modo_pago, lote_id = excluded.lote_id;
+  update public.lab_import_fila set estado = 'ok', mensajes = '{}', destino_tabla = 'lab_convenio_tabla'
+   where lote_id = p_lote and hoja = 'tablas_salariales';
+
+  insert into public.lab_concepto (account_id, codigo, nombre, tipo, codigo_red, lote_id)
+  select distinct on (cod) v_acc, cod, public._lab_txt(datos, 'concepto'), public._lab_txt(datos, 'tipo'), public._lab_txt(datos, 'codigo_red'), p_lote
+    from (select datos, public._lab_txt(datos, 'codigo') cod, fila_n from public.lab_import_fila where lote_id = p_lote and hoja = 'conceptos') t
+   where cod is not null order by cod, fila_n desc
+  on conflict (account_id, codigo) do update
+     set nombre = excluded.nombre, tipo = excluded.tipo, codigo_red = excluded.codigo_red, lote_id = excluded.lote_id;
+  update public.lab_import_fila set estado = 'ok', mensajes = '{}', destino_tabla = 'lab_concepto'
+   where lote_id = p_lote and hoja = 'conceptos';
+
+  -- 2 · Las personas (hoja Trabajadores).
+  for f in select * from public.lab_import_fila where lote_id = p_lote and hoja = 'trabajadores' order by fila_n loop
+    v_msg := '{}'; v_estado := 'ok'; v_emp := null;
+    v_nif := public._lab_nif(f.datos ->> 'nif');
+    v_nombre := coalesce(public._lab_txt(f.datos, 'nombre'), 'fila ' || f.fila_n);
+    v_alta := public._lab_si(f.datos ->> 'en_alta_hoy');
+    select cl.location_id into v_loc from public.lab_centro_local cl
+     where cl.account_id = v_acc and cl.centro = public._lab_txt(f.datos, 'centro');
+
+    if v_nif is null then
+      v_estado := 'error'; v_msg := array[v_nombre || ': no trae NIF, y por el NIF se sabe quién es.'];
+    elsif v_loc is null then
+      v_estado := 'aviso';
+      v_msg := array[v_nombre || ': su centro «' || coalesce(public._lab_txt(f.datos, 'centro'), 'sin centro') || '» no tiene local confirmado. Confírmalo arriba y vuelve a volcar.'];
+      v_sin_centro := array_append(v_sin_centro, coalesce(public._lab_txt(f.datos, 'centro'), 'sin centro'));
+    else
+      select e.id into v_emp from public.employees e
+       where e.account_id = v_acc and public._lab_nif(e.dni) = v_nif
+       order by e.active desc, e.created_at limit 1;
+
+      if v_emp is null and v_alta then
+        v_estado := 'aviso';
+        v_msg := array[v_nombre || ': en Cegid está de alta y no está en Folvy. No se crea sola: dala de alta desde Equipo y vuelve a volcar.'];
+      elsif v_emp is null then
+        -- Una baja que falta (respuesta 6): sin local primero (la formación de bienvenida no la encuentra), después su local.
+        insert into public.employees (account_id, location_id, name, dni, birth_date, phone, email, position, active,
+                                      start_date, contract_type, weekly_hours)
+        values (v_acc, null, v_nombre, f.datos ->> 'nif', public._lab_fecha(f.datos ->> 'nacimiento'),
+                coalesce(public._lab_txt(f.datos, 'movil'), public._lab_txt(f.datos, 'telefono')), public._lab_txt(f.datos, 'email'),
+                public._lab_txt(f.datos, 'puesto'), false,
+                coalesce(public._lab_fecha(f.datos ->> 'antiguedad'), public._lab_fecha(f.datos ->> 'primera_alta')), null, 40)
+        returning id into v_emp;
+        update public.employees set location_id = v_loc where id = v_emp;
+        n_nuevas := n_nuevas + 1;
+        v_msg := array[v_nombre || ': de baja en Cegid y no estaba en Folvy: entra como baja.'];
+      else
+        n_ya := n_ya + 1;
+        -- De la que ya está, solo lo vacío; lo que no cuadra, como aviso.
+        update public.employees e
+           set dni = coalesce(nullif(e.dni, ''), f.datos ->> 'nif'),
+               birth_date = coalesce(e.birth_date, public._lab_fecha(f.datos ->> 'nacimiento')),
+               phone = coalesce(nullif(e.phone, ''), public._lab_txt(f.datos, 'movil'), public._lab_txt(f.datos, 'telefono')),
+               email = coalesce(nullif(e.email, ''), public._lab_txt(f.datos, 'email')),
+               position = coalesce(nullif(e.position, ''), public._lab_txt(f.datos, 'puesto'))
+         where e.id = v_emp;
+        if exists (select 1 from public.employees e where e.id = v_emp and e.active and not v_alta) then
+          v_estado := 'aviso'; v_msg := v_msg || (v_nombre || ': en Cegid está de baja y en Folvy sigue de alta. No se cambia sola: revísalo en su ficha.');
+        end if;
+        if exists (select 1 from public.employees e where e.id = v_emp and e.location_id is distinct from v_loc
+                     and not (v_loc = any (coalesce(e.assigned_locations, '{}')))) then
+          v_estado := 'aviso'; v_msg := v_msg || (v_nombre || ': en Cegid su centro es otro local que el de Folvy.');
+        end if;
+      end if;
+
+      if v_emp is not null then
+        insert into public.lab_persona (employee_id, account_id, codigo_cegid, naf, iban, nacionalidad, sexo, nivel_formativo,
+                                        domicilio, cp, poblacion, provincia, discapacidad, lote_id, fila_n, updated_at)
+        values (v_emp, v_acc, public._lab_txt(f.datos, 'trabajador'), public._lab_txt(f.datos, 'naf'), public._lab_txt(f.datos, 'iban'),
+                public._lab_txt(f.datos, 'nacionalidad'), public._lab_txt(f.datos, 'sexo'), public._lab_txt(f.datos, 'nivel_formativo'),
+                public._lab_txt(f.datos, 'domicilio'), public._lab_txt(f.datos, 'cp'), public._lab_txt(f.datos, 'poblacion'),
+                public._lab_txt(f.datos, 'provincia'), public._lab_txt(f.datos, 'minusvalia'), p_lote, f.fila_n, now())
+        on conflict (employee_id) do update
+           set codigo_cegid = excluded.codigo_cegid, naf = excluded.naf, iban = excluded.iban, nacionalidad = excluded.nacionalidad,
+               sexo = excluded.sexo, nivel_formativo = excluded.nivel_formativo, domicilio = excluded.domicilio, cp = excluded.cp,
+               poblacion = excluded.poblacion, provincia = excluded.provincia, discapacidad = excluded.discapacidad,
+               lote_id = excluded.lote_id, fila_n = excluded.fila_n, updated_at = now();
+      end if;
+    end if;
+
+    if v_estado = 'aviso' then n_aviso := n_aviso + 1; elsif v_estado = 'error' then n_error := n_error + 1; end if;
+    update public.lab_import_fila
+       set estado = v_estado, mensajes = v_msg, destino_tabla = case when v_emp is null then null else 'employees' end, destino_id = v_emp
+     where id = f.id;
+  end loop;
+
+  -- 3 · Los contratos (hoja Contratos), de las personas que entraron.
+  for f in select c.*, t.destino_id emp, public._lab_txt(t.datos, 'centro') centro_t
+             from public.lab_import_fila c
+             left join lateral (select x.destino_id, x.datos from public.lab_import_fila x
+                                 where x.lote_id = p_lote and x.hoja = 'trabajadores' and x.destino_id is not null
+                                   and public._lab_txt(x.datos, 'trabajador') = public._lab_txt(c.datos, 'trabajador') limit 1) t on true
+            where c.lote_id = p_lote and c.hoja = 'contratos' order by c.fila_n loop
+    v_msg := '{}'; v_estado := 'ok'; v_contrato := null;
+    v_nombre := coalesce(public._lab_txt(f.datos, 'nombre'), 'trabajador ' || coalesce(public._lab_txt(f.datos, 'trabajador'), '?'));
+    v_desde := public._lab_fecha(f.datos ->> 'fecha_alta');
+    v_fin := public._lab_fecha(f.datos ->> 'fecha_fin');
+    select cl.location_id into v_loc from public.lab_centro_local cl
+     where cl.account_id = v_acc and cl.centro = coalesce(public._lab_txt(f.datos, 'centro'), f.centro_t);
+    if f.emp is null then
+      v_estado := 'aviso'; v_msg := array['Contrato ' || coalesce(public._lab_txt(f.datos, 'contrato_n'), '?') || ' de ' || v_nombre || ': su persona no ha entrado (mira su fila en Trabajadores).'];
+    elsif v_desde is null then
+      v_estado := 'error'; v_msg := array['Contrato ' || coalesce(public._lab_txt(f.datos, 'contrato_n'), '?') || ' de ' || v_nombre || ': no trae fecha de alta.'];
+    else
+      insert into public.lab_contrato (account_id, employee_id, numero, clave, descripcion, fecha_alta, fecha_fin_prevista, fecha_baja,
+                                       origen, lote_id, fila_n, updated_at)
+      values (v_acc, f.emp, coalesce(public._lab_txt(f.datos, 'contrato_n'), '1'), public._lab_txt(f.datos, 'tipo_contrato'),
+              public._lab_txt(f.datos, 'tipo_contrato'), v_desde, v_fin, case when v_fin is not null and v_fin < v_hoy then v_fin end,
+              'cegid', p_lote, f.fila_n, now())
+      on conflict (account_id, employee_id, numero) do update
+         set clave = excluded.clave, descripcion = excluded.descripcion, fecha_alta = excluded.fecha_alta,
+             fecha_fin_prevista = excluded.fecha_fin_prevista, fecha_baja = coalesce(public.lab_contrato.fecha_baja, excluded.fecha_baja),
+             lote_id = excluded.lote_id, fila_n = excluded.fila_n, updated_at = now()
+      returning id into v_contrato;
+      n_contratos := n_contratos + 1;
+
+      v_coef := public._lab_num(f.datos ->> 'coef_parcial');
+      insert into public.lab_contrato_condicion (account_id, contrato_id, vigente_desde, grupo_cotizacion, grupo_desc, puesto,
+                                                 convenio_codigo, location_id, centro_cegid, cuenta_cotizacion, jornada, coef_parcial, lote_id, fila_n)
+      values (v_acc, v_contrato, v_desde, public._lab_txt(f.datos, 'grupo_cotizacion'), public._lab_txt(f.datos, 'grupo_desc'),
+              public._lab_txt(f.datos, 'puesto'), public._lab_txt(f.datos, 'convenio'), v_loc, coalesce(public._lab_txt(f.datos, 'centro'), f.centro_t),
+              v_ccc, case when v_coef is null or v_coef in (0, 1, 100, 1000) then 'completa' else 'parcial' end, v_coef, p_lote, f.fila_n)
+      on conflict (contrato_id, vigente_desde) do update
+         set grupo_cotizacion = excluded.grupo_cotizacion, grupo_desc = excluded.grupo_desc, puesto = excluded.puesto,
+             convenio_codigo = excluded.convenio_codigo, location_id = excluded.location_id, centro_cegid = excluded.centro_cegid,
+             cuenta_cotizacion = coalesce(public.lab_contrato_condicion.cuenta_cotizacion, excluded.cuenta_cotizacion),
+             jornada = excluded.jornada, coef_parcial = excluded.coef_parcial, lote_id = excluded.lote_id, fila_n = excluded.fila_n;
+    end if;
+    if v_estado = 'aviso' then n_aviso := n_aviso + 1; elsif v_estado = 'error' then n_error := n_error + 1; end if;
+    update public.lab_import_fila
+       set estado = v_estado, mensajes = v_msg, destino_tabla = case when v_contrato is null then null else 'lab_contrato' end, destino_id = v_contrato
+     where id = f.id;
+  end loop;
+
+  -- La baja de una baja: su último contrato, cerrado. Si no trae fecha de fin, se dice.
+  update public.lab_import_fila x set estado = 'aviso',
+         mensajes = x.mensajes || (coalesce(public._lab_txt(x.datos, 'nombre'), 'Una baja') || ': de baja, pero su último contrato no trae fecha de fin. Ponla en su ficha.')
+   where x.lote_id = p_lote and x.hoja = 'trabajadores' and x.destino_id is not null and not public._lab_si(x.datos ->> 'en_alta_hoy')
+     and not exists (select 1 from public.lab_contrato c where c.employee_id = x.destino_id and c.fecha_baja is not null)
+     and x.estado <> 'aviso';
+
+  -- 4 · Lo que cobra cada una: convenio + pactado, y la última nómina de Cegid al lado.
+  for f in select x.destino_id emp, x.datos from public.lab_import_fila x
+            where x.lote_id = p_lote and x.hoja = 'trabajadores' and x.destino_id is not null loop
+    select max(public._lab_num(n.datos ->> 'anio')::int * 100 + public._lab_num(n.datos ->> 'mes')::int) into v_periodo
+      from public.lab_import_fila n
+     where n.lote_id = p_lote and n.hoja = 'nominas' and public._lab_txt(n.datos, 'trabajador') = public._lab_txt(f.datos, 'trabajador');
+    select c.id, coalesce(cc.convenio_codigo, public._lab_txt(f.datos, 'convenio')) into v_contrato, v_conv_cod
+      from public.lab_contrato c left join public.lab_contrato_condicion cc on cc.contrato_id = c.id
+     where c.employee_id = f.emp order by c.fecha_alta desc nulls last, cc.vigente_desde desc nulls last limit 1;
+    v_desde := coalesce(make_date(v_periodo / 100, v_periodo % 100, 1),
+                        (select max(c.fecha_alta) from public.lab_contrato c where c.employee_id = f.emp), v_hoy);
+
+    delete from public.lab_persona_concepto where employee_id = f.emp and lote_id = p_lote;
+    update public.lab_persona_concepto set vigente_hasta = v_desde - 1
+     where employee_id = f.emp and vigente_hasta is null and vigente_desde < v_desde;
+
+    -- Lo del convenio, por su convenio y su categoría.
+    insert into public.lab_persona_concepto (account_id, employee_id, contrato_id, concepto_codigo, concepto_nombre, importe, periodicidad, origen, vigente_desde, lote_id)
+    select v_acc, f.emp, v_contrato, t.concepto_codigo, t.concepto_nombre, t.importe,
+           case when public._lab_norm(t.modo_pago) like '%paga%' then 'paga' else 'mes' end, 'convenio', v_desde, p_lote
+      from public.lab_convenio_tabla t
+     where t.account_id = v_acc and t.convenio_codigo = v_conv_cod and t.categoria = public._lab_txt(f.datos, 'categoria') and t.importe is not null;
+
+    -- Lo pactado: los devengos de su última nómina que no son del convenio.
+    if v_periodo is not null then
+      insert into public.lab_persona_concepto (account_id, employee_id, contrato_id, concepto_codigo, concepto_nombre, importe, periodicidad, origen, vigente_desde, lote_id)
+      select v_acc, f.emp, v_contrato, cod, max(nom), sum(imp), 'mes', 'pactado', v_desde, p_lote
+        from (select coalesce(public._lab_txt(n.datos, 'concepto_codigo'), public._lab_txt(n.datos, 'concepto')) cod,
+                     public._lab_txt(n.datos, 'concepto') nom, public._lab_num(n.datos ->> 'importe') imp,
+                     coalesce(public._lab_txt(n.datos, 'tipo'), k.tipo) tipo
+                from public.lab_import_fila n
+                left join public.lab_concepto k on k.account_id = v_acc and k.codigo = public._lab_txt(n.datos, 'concepto_codigo')
+               where n.lote_id = p_lote and n.hoja = 'nominas_conceptos'
+                 and public._lab_txt(n.datos, 'trabajador') = public._lab_txt(f.datos, 'trabajador')
+                 and public._lab_num(n.datos ->> 'anio')::int * 100 + public._lab_num(n.datos ->> 'mes')::int = v_periodo) n
+       where cod is not null and imp is not null
+         and public._lab_norm(tipo) !~ '(deduc|descuent|retenc|cotiz|aportac|irpf|seg soc)'
+         and not exists (select 1 from public.lab_persona_concepto p
+                          where p.employee_id = f.emp and p.lote_id = p_lote and p.origen = 'convenio' and p.concepto_codigo = n.cod)
+       group by cod;
+    end if;
+
+    select sum(importe) filter (where origen = 'convenio' and periodicidad = 'mes'), sum(importe) filter (where origen = 'pactado')
+      into v_conv, v_pact
+      from public.lab_persona_concepto where employee_id = f.emp and lote_id = p_lote;
+    select public._lab_num(n.datos ->> 'Devengado'), public._lab_num(n.datos ->> 'Retención'), public._lab_num(n.datos ->> 'Base I.R.P.F.')
+      into v_bruto, v_irpf, v_base
+      from public.lab_import_fila n
+     where n.lote_id = p_lote and n.hoja = 'nominas' and v_periodo is not null
+       and public._lab_txt(n.datos, 'trabajador') = public._lab_txt(f.datos, 'trabajador')
+       and public._lab_num(n.datos ->> 'anio')::int * 100 + public._lab_num(n.datos ->> 'mes')::int = v_periodo
+     order by n.fila_n limit 1;
+    update public.lab_persona
+       set bruto_cegid_mes = v_bruto,
+           bruto_cegid_periodo = case when v_periodo is null then null else lpad((v_periodo % 100)::text, 2, '0') || '/' || (v_periodo / 100) end,
+           bruto_conceptos_mes = coalesce(v_conv, 0) + coalesce(v_pact, 0),
+           irpf_cegid_pct = case when v_base > 0 then round(v_irpf / v_base * 100, 2) end
+     where employee_id = f.emp;
+    if v_bruto is not null and abs(v_bruto - (coalesce(v_conv, 0) + coalesce(v_pact, 0))) >= 0.01 then
+      v_no_cuadra := v_no_cuadra || jsonb_build_object('persona', public._lab_txt(f.datos, 'nombre'), 'cegid', v_bruto,
+                                                       'conceptos', coalesce(v_conv, 0) + coalesce(v_pact, 0));
+    end if;
+  end loop;
+  update public.lab_import_fila set estado = 'ok', mensajes = '{}', destino_tabla = 'lab_persona_concepto'
+   where lote_id = p_lote and hoja in ('nominas', 'nominas_conceptos');
+
+  update public.lab_import_lote
+     set resumen = coalesce(resumen, '{}') || jsonb_build_object('volcado', jsonb_build_object('at', now(), 'por', auth.uid()))
+   where id = p_lote;
+
+  return jsonb_build_object(
+    'personas', (select count(distinct destino_id) from public.lab_import_fila where lote_id = p_lote and hoja = 'trabajadores' and destino_id is not null),
+    'nuevas_de_baja', n_nuevas,
+    'ya_estaban', n_ya,
+    'contratos', (select count(*) from public.lab_contrato where lote_id = p_lote),
+    'trabajadores_en_cegid', (select count(*) from public.lab_import_fila where lote_id = p_lote and hoja = 'trabajadores'),
+    'contratos_en_cegid', (select count(*) from public.lab_import_fila where lote_id = p_lote and hoja = 'contratos'),
+    'avisos', n_aviso,
+    'errores', n_error,
+    'centros_sin_confirmar', (select coalesce(jsonb_agg(distinct c), '[]') from unnest(v_sin_centro) c),
+    'no_cuadra', v_no_cuadra,
+    'mensajes', (select coalesce(jsonb_agg(m order by hoja, fila_n), '[]')
+                   from (select hoja, fila_n, unnest(mensajes) m from public.lab_import_fila
+                          where lote_id = p_lote and estado in ('aviso', 'error')) x));
 end $$;
 
 
@@ -93673,8 +94232,8 @@ CREATE TABLE public.company_account_link (
     created_by uuid,
     CONSTRAINT company_account_link_entity_check CHECK ((entity = ANY (ARRAY['supplier'::text, 'customer'::text, 'bank_account'::text, 'expense_category'::text, 'tax_rate'::text, 'withholding_rate'::text]))),
     CONSTRAINT company_account_link_liquidacion_de_socio CHECK (((role <> 'liquidacion'::text) OR (entity = 'customer'::text))),
-    CONSTRAINT company_account_link_papel_de_tercero CHECK (((role <> ALL (ARRAY['gasto'::text, 'pago'::text, 'suplidos'::text, 'liquidacion'::text])) OR (entity = ANY (ARRAY['supplier'::text, 'customer'::text])))),
-    CONSTRAINT company_account_link_role_check CHECK ((role = ANY (ARRAY['principal'::text, 'soportado'::text, 'repercutido'::text, 'gasto'::text, 'pago'::text, 'suplidos'::text, 'liquidacion'::text]))),
+    CONSTRAINT company_account_link_papel_de_tercero CHECK (((role <> ALL (ARRAY['gasto'::text, 'pago'::text, 'suplidos'::text, 'liquidacion'::text, 'publicidad'::text])) OR (entity = ANY (ARRAY['supplier'::text, 'customer'::text])))),
+    CONSTRAINT company_account_link_role_check CHECK ((role = ANY (ARRAY['principal'::text, 'soportado'::text, 'repercutido'::text, 'gasto'::text, 'pago'::text, 'suplidos'::text, 'liquidacion'::text, 'publicidad'::text]))),
     CONSTRAINT company_account_link_source_check CHECK ((source = ANY (ARRAY['serie'::text, 'manual'::text, 'ai_accepted'::text, 'migrated'::text, 'aprendido_diez'::text])))
 );
 
@@ -97758,6 +98317,16 @@ CREATE TABLE public.documents (
     uploaded_role text DEFAULT 'gestor'::text NOT NULL,
     notes text DEFAULT ''::text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    carpeta text,
+    origen text,
+    caduca_el date,
+    visible_trabajador boolean,
+    firmado_at timestamp with time zone,
+    firmado_por uuid,
+    firma text,
+    archivado_at timestamp with time zone,
+    CONSTRAINT documents_carpeta_check CHECK ((carpeta = ANY (ARRAY['identidad'::text, 'contrato'::text, 'ss_sepe'::text, 'impuestos'::text, 'formacion'::text, 'nominas'::text, 'otros'::text]))),
+    CONSTRAINT documents_origen_check CHECK ((origen = ANY (ARRAY['ella'::text, 'sumied'::text, 'llego_solo'::text, 'formacion'::text, 'empresa'::text]))),
     CONSTRAINT documents_uploaded_role_check CHECK ((uploaded_role = ANY (ARRAY['gestor'::text, 'trabajador'::text])))
 );
 
@@ -100674,6 +101243,156 @@ CREATE TABLE public.kitchen_unit (
 
 
 --
+-- Name: lab_cambio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_cambio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    employee_id uuid,
+    tabla text NOT NULL,
+    registro_id uuid,
+    campo text,
+    antes jsonb,
+    despues jsonb,
+    fecha_efecto date,
+    motivo text,
+    quien uuid,
+    cuando timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: lab_centro_local; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_centro_local (
+    account_id uuid NOT NULL,
+    centro text NOT NULL,
+    location_id uuid NOT NULL,
+    confirmado_por uuid,
+    confirmado_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: lab_concepto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_concepto (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    codigo text NOT NULL,
+    nombre text,
+    tipo text,
+    codigo_red text,
+    lote_id uuid
+);
+
+
+--
+-- Name: lab_contrato; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_contrato (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    numero text NOT NULL,
+    clave text,
+    descripcion text,
+    fecha_alta date,
+    fecha_fin_prevista date,
+    fecha_baja date,
+    motivo_baja text,
+    periodo_prueba_dias integer,
+    antiguedad_reconocida date,
+    origen text DEFAULT 'sumied'::text NOT NULL,
+    lote_id uuid,
+    fila_n integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lab_contrato_origen_check CHECK ((origen = ANY (ARRAY['cegid'::text, 'sumied'::text])))
+);
+
+
+--
+-- Name: TABLE lab_contrato; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_contrato IS 'N1 (01/11/2026). Un contrato laboral, que no se pisa: lo que cambia sin ser otro contrato va en lab_contrato_condicion, con su fecha de efecto.';
+
+
+--
+-- Name: lab_contrato_condicion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_contrato_condicion (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    contrato_id uuid NOT NULL,
+    vigente_desde date NOT NULL,
+    vigente_hasta date,
+    grupo_cotizacion text,
+    grupo_desc text,
+    cno text,
+    categoria text,
+    puesto text,
+    convenio_codigo text,
+    location_id uuid,
+    centro_cegid text,
+    cuenta_cotizacion text,
+    jornada text,
+    coef_parcial numeric,
+    horas_semana numeric,
+    bonificaciones jsonb DEFAULT '[]'::jsonb NOT NULL,
+    motivo text,
+    lote_id uuid,
+    fila_n integer,
+    CONSTRAINT lab_contrato_condicion_jornada_check CHECK ((jornada = ANY (ARRAY['completa'::text, 'parcial'::text])))
+);
+
+
+--
+-- Name: lab_convenio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_convenio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    codigo text NOT NULL,
+    nombre text,
+    codigo_oficial text,
+    horas_anuales numeric,
+    horas_dia numeric,
+    vacaciones text,
+    paga_13 text,
+    paga_14 text,
+    datos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    lote_id uuid,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: lab_convenio_tabla; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_convenio_tabla (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    convenio_codigo text NOT NULL,
+    categoria text NOT NULL,
+    categoria_nombre text,
+    concepto_codigo text NOT NULL,
+    concepto_nombre text,
+    importe numeric,
+    modo_pago text,
+    lote_id uuid
+);
+
+
+--
 -- Name: lab_import_fila; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -100728,6 +101447,109 @@ CREATE TABLE public.lab_import_lote (
 --
 
 COMMENT ON TABLE public.lab_import_lote IS 'LAB1 · Una subida del paquete de historial de personal (Cegid). Desde la tanda 1 guarda las cabeceras de cada hoja y su comparación con lo esperado; ningún valor. Solo el administrador de la cuenta.';
+
+
+--
+-- Name: lab_modelo_145; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_modelo_145 (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    efecto_desde date NOT NULL,
+    situacion_familiar smallint,
+    nif_conyuge text,
+    discapacidad text,
+    movilidad_geografica boolean,
+    hijos jsonb DEFAULT '[]'::jsonb NOT NULL,
+    ascendientes jsonb DEFAULT '[]'::jsonb NOT NULL,
+    pension_compensatoria numeric,
+    anualidades_alimentos numeric,
+    prestamo_vivienda boolean,
+    tipo_voluntario_pct numeric,
+    document_id uuid,
+    firmado_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lab_modelo_145_situacion_familiar_check CHECK ((situacion_familiar = ANY (ARRAY[1, 2, 3])))
+);
+
+
+--
+-- Name: lab_permiso; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_permiso (
+    account_id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    dado_por uuid,
+    dado_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE lab_permiso; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_permiso IS 'N1 (01/11/2026). Quién tiene el permiso de Laboral en cada cuenta, además del administrador (que lo tiene siempre). Con él se ve el salario, el IRPF, el IBAN, los conceptos, el 145, el DNI y el nacimiento. Se da y se quita con lab_dar_permiso / lab_quitar_permiso.';
+
+
+--
+-- Name: lab_persona; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_persona (
+    employee_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    codigo_cegid text,
+    naf text,
+    iban text,
+    nacionalidad text,
+    sexo text,
+    nivel_formativo text,
+    domicilio text,
+    cp text,
+    poblacion text,
+    provincia text,
+    discapacidad text,
+    bruto_cegid_mes numeric,
+    bruto_cegid_periodo text,
+    bruto_conceptos_mes numeric,
+    irpf_cegid_pct numeric,
+    lote_id uuid,
+    fila_n integer,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE lab_persona; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.lab_persona IS 'N1 (01/11/2026). Lo privado de Laboral de cada persona (NAF, IBAN, domicilio…), fuera de employees. Solo lo ve quien tiene el permiso de Laboral (current_user_ve_laboral).';
+
+
+--
+-- Name: lab_persona_concepto; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.lab_persona_concepto (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    employee_id uuid NOT NULL,
+    contrato_id uuid,
+    concepto_codigo text NOT NULL,
+    concepto_nombre text,
+    importe numeric NOT NULL,
+    periodicidad text DEFAULT 'mes'::text NOT NULL,
+    origen text NOT NULL,
+    vigente_desde date NOT NULL,
+    vigente_hasta date,
+    lote_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT lab_persona_concepto_origen_check CHECK ((origen = ANY (ARRAY['convenio'::text, 'pactado'::text]))),
+    CONSTRAINT lab_persona_concepto_periodicidad_check CHECK ((periodicidad = ANY (ARRAY['mes'::text, 'paga'::text])))
+);
 
 
 --
@@ -111917,6 +112739,102 @@ ALTER TABLE ONLY public.kitchen_unit
 
 
 --
+-- Name: lab_cambio lab_cambio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_cambio
+    ADD CONSTRAINT lab_cambio_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_centro_local lab_centro_local_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_centro_local
+    ADD CONSTRAINT lab_centro_local_pkey PRIMARY KEY (account_id, centro);
+
+
+--
+-- Name: lab_concepto lab_concepto_account_id_codigo_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_concepto
+    ADD CONSTRAINT lab_concepto_account_id_codigo_key UNIQUE (account_id, codigo);
+
+
+--
+-- Name: lab_concepto lab_concepto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_concepto
+    ADD CONSTRAINT lab_concepto_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_contrato lab_contrato_account_id_employee_id_numero_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato
+    ADD CONSTRAINT lab_contrato_account_id_employee_id_numero_key UNIQUE (account_id, employee_id, numero);
+
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_contrato_id_vigente_desde_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato_condicion
+    ADD CONSTRAINT lab_contrato_condicion_contrato_id_vigente_desde_key UNIQUE (contrato_id, vigente_desde);
+
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato_condicion
+    ADD CONSTRAINT lab_contrato_condicion_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_contrato lab_contrato_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato
+    ADD CONSTRAINT lab_contrato_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_convenio lab_convenio_account_id_codigo_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio
+    ADD CONSTRAINT lab_convenio_account_id_codigo_key UNIQUE (account_id, codigo);
+
+
+--
+-- Name: lab_convenio lab_convenio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio
+    ADD CONSTRAINT lab_convenio_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_convenio_tabla lab_convenio_tabla_account_id_convenio_codigo_categoria_con_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio_tabla
+    ADD CONSTRAINT lab_convenio_tabla_account_id_convenio_codigo_categoria_con_key UNIQUE (account_id, convenio_codigo, categoria, concepto_codigo);
+
+
+--
+-- Name: lab_convenio_tabla lab_convenio_tabla_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio_tabla
+    ADD CONSTRAINT lab_convenio_tabla_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: lab_import_fila lab_import_fila_lote_id_hoja_fila_n_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -111938,6 +112856,38 @@ ALTER TABLE ONLY public.lab_import_fila
 
 ALTER TABLE ONLY public.lab_import_lote
     ADD CONSTRAINT lab_import_lote_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_modelo_145 lab_modelo_145_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_modelo_145
+    ADD CONSTRAINT lab_modelo_145_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_permiso lab_permiso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_permiso
+    ADD CONSTRAINT lab_permiso_pkey PRIMARY KEY (account_id, user_id);
+
+
+--
+-- Name: lab_persona_concepto lab_persona_concepto_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona_concepto
+    ADD CONSTRAINT lab_persona_concepto_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: lab_persona lab_persona_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona
+    ADD CONSTRAINT lab_persona_pkey PRIMARY KEY (employee_id);
 
 
 --
@@ -118672,6 +119622,13 @@ CREATE UNIQUE INDEX kitchen_station_one_default_per_location ON public.kitchen_s
 
 
 --
+-- Name: lab_cambio_persona; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lab_cambio_persona ON public.lab_cambio USING btree (employee_id, cuando DESC);
+
+
+--
 -- Name: lab_import_lote_cuenta; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -118683,6 +119640,13 @@ CREATE INDEX lab_import_lote_cuenta ON public.lab_import_lote USING btree (accou
 --
 
 CREATE UNIQUE INDEX lab_import_lote_huella_viva ON public.lab_import_lote USING btree (account_id, fichero_huella) WHERE (estado <> ALL (ARRAY['deshecho'::text, 'descartado'::text]));
+
+
+--
+-- Name: lab_persona_concepto_persona; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX lab_persona_concepto_persona ON public.lab_persona_concepto USING btree (employee_id, vigente_desde);
 
 
 --
@@ -127666,6 +128630,142 @@ ALTER TABLE ONLY public.kitchen_unit
 
 
 --
+-- Name: lab_cambio lab_cambio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_cambio
+    ADD CONSTRAINT lab_cambio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_cambio lab_cambio_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_cambio
+    ADD CONSTRAINT lab_cambio_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_centro_local lab_centro_local_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_centro_local
+    ADD CONSTRAINT lab_centro_local_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_centro_local lab_centro_local_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_centro_local
+    ADD CONSTRAINT lab_centro_local_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_concepto lab_concepto_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_concepto
+    ADD CONSTRAINT lab_concepto_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_concepto lab_concepto_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_concepto
+    ADD CONSTRAINT lab_concepto_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_contrato lab_contrato_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato
+    ADD CONSTRAINT lab_contrato_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato_condicion
+    ADD CONSTRAINT lab_contrato_condicion_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_contrato_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato_condicion
+    ADD CONSTRAINT lab_contrato_condicion_contrato_id_fkey FOREIGN KEY (contrato_id) REFERENCES public.lab_contrato(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato_condicion
+    ADD CONSTRAINT lab_contrato_condicion_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato_condicion
+    ADD CONSTRAINT lab_contrato_condicion_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_contrato lab_contrato_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato
+    ADD CONSTRAINT lab_contrato_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_contrato lab_contrato_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_contrato
+    ADD CONSTRAINT lab_contrato_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_convenio lab_convenio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio
+    ADD CONSTRAINT lab_convenio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_convenio lab_convenio_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio
+    ADD CONSTRAINT lab_convenio_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_convenio_tabla lab_convenio_tabla_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio_tabla
+    ADD CONSTRAINT lab_convenio_tabla_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_convenio_tabla lab_convenio_tabla_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_convenio_tabla
+    ADD CONSTRAINT lab_convenio_tabla_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
+
+
+--
 -- Name: lab_import_fila lab_import_fila_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -127687,6 +128787,102 @@ ALTER TABLE ONLY public.lab_import_fila
 
 ALTER TABLE ONLY public.lab_import_lote
     ADD CONSTRAINT lab_import_lote_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_modelo_145 lab_modelo_145_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_modelo_145
+    ADD CONSTRAINT lab_modelo_145_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_modelo_145 lab_modelo_145_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_modelo_145
+    ADD CONSTRAINT lab_modelo_145_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.documents(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_modelo_145 lab_modelo_145_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_modelo_145
+    ADD CONSTRAINT lab_modelo_145_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_permiso lab_permiso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_permiso
+    ADD CONSTRAINT lab_permiso_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_permiso lab_permiso_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_permiso
+    ADD CONSTRAINT lab_permiso_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_persona lab_persona_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona
+    ADD CONSTRAINT lab_persona_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_persona_concepto lab_persona_concepto_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona_concepto
+    ADD CONSTRAINT lab_persona_concepto_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_persona_concepto lab_persona_concepto_contrato_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona_concepto
+    ADD CONSTRAINT lab_persona_concepto_contrato_id_fkey FOREIGN KEY (contrato_id) REFERENCES public.lab_contrato(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_persona_concepto lab_persona_concepto_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona_concepto
+    ADD CONSTRAINT lab_persona_concepto_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_persona_concepto lab_persona_concepto_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona_concepto
+    ADD CONSTRAINT lab_persona_concepto_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
+
+
+--
+-- Name: lab_persona lab_persona_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona
+    ADD CONSTRAINT lab_persona_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE CASCADE;
+
+
+--
+-- Name: lab_persona lab_persona_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.lab_persona
+    ADD CONSTRAINT lab_persona_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.lab_import_lote(id) ON DELETE SET NULL;
 
 
 --
@@ -137843,6 +139039,97 @@ CREATE POLICY laa_read ON public.location_address_alias FOR SELECT USING ((accou
 
 
 --
+-- Name: lab_cambio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_cambio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_cambio lab_cambio_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_cambio_read ON public.lab_cambio FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_centro_local; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_centro_local ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_centro_local lab_centro_local_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_centro_local_read ON public.lab_centro_local FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_concepto; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_concepto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_concepto lab_concepto_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_concepto_read ON public.lab_concepto FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_contrato; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_contrato ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_contrato_condicion; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_contrato_condicion ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_contrato_condicion lab_contrato_condicion_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_contrato_condicion_read ON public.lab_contrato_condicion FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_contrato lab_contrato_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_contrato_read ON public.lab_contrato FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_convenio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_convenio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_convenio lab_convenio_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_convenio_read ON public.lab_convenio FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_convenio_tabla; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_convenio_tabla ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_convenio_tabla lab_convenio_tabla_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_convenio_tabla_read ON public.lab_convenio_tabla FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
 -- Name: lab_import_fila; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -137866,6 +139153,58 @@ ALTER TABLE public.lab_import_lote ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY lab_import_lote_leer ON public.lab_import_lote FOR SELECT TO authenticated USING (public.current_user_is_admin_of(account_id));
+
+
+--
+-- Name: lab_modelo_145; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_modelo_145 ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_modelo_145 lab_modelo_145_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_modelo_145_read ON public.lab_modelo_145 FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_permiso; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_permiso ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_permiso lab_permiso_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_permiso_read ON public.lab_permiso FOR SELECT TO authenticated USING ((public.current_user_is_admin_of(account_id) OR (user_id = auth.uid())));
+
+
+--
+-- Name: lab_persona; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_persona ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_persona_concepto; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.lab_persona_concepto ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: lab_persona_concepto lab_persona_concepto_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_persona_concepto_read ON public.lab_persona_concepto FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
+
+
+--
+-- Name: lab_persona lab_persona_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lab_persona_read ON public.lab_persona FOR SELECT TO authenticated USING (public.current_user_ve_laboral(account_id));
 
 
 --
@@ -142573,6 +143912,14 @@ GRANT ALL ON FUNCTION public._conta_comision_datos(p_invoice uuid) TO service_ro
 
 
 --
+-- Name: FUNCTION _conta_comision_de_su_numero(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_comision_de_su_numero(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_comision_de_su_numero(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_comision_estado(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -143627,6 +144974,62 @@ GRANT ALL ON FUNCTION public._kitchen_recompute_item_unguarded(p_item_id uuid) T
 
 REVOKE ALL ON FUNCTION public._kitchen_recompute_raw_cost_unguarded(p_item_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._kitchen_recompute_raw_cost_unguarded(p_item_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_campo(p_lote uuid, p_hoja text, p_campo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_campo(p_lote uuid, p_hoja text, p_campo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_campo(p_lote uuid, p_hoja text, p_campo text) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_fecha(t text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_fecha(t text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_fecha(t text) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_nif(t text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_nif(t text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_nif(t text) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_norm(t text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_norm(t text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_norm(t text) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_num(t text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_num(t text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_num(t text) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_si(t text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_si(t text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_si(t text) TO service_role;
+
+
+--
+-- Name: FUNCTION _lab_txt(p jsonb, k text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._lab_txt(p jsonb, k text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._lab_txt(p jsonb, k text) TO service_role;
 
 
 --
@@ -151152,6 +152555,15 @@ GRANT ALL ON FUNCTION public.current_user_manages_location(p_location_id uuid) T
 
 
 --
+-- Name: FUNCTION current_user_ve_laboral(p_account_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.current_user_ve_laboral(p_account_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.current_user_ve_laboral(p_account_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.current_user_ve_laboral(p_account_id uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION current_user_ve_persona(p_employee_id uuid, p_account_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -153029,6 +154441,33 @@ GRANT ALL ON FUNCTION public.kitchen_unarchive_item(p_item_id uuid) TO service_r
 
 
 --
+-- Name: FUNCTION lab_centros_del_lote(p_lote uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_centros_del_lote(p_lote uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_centros_del_lote(p_lote uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_centros_del_lote(p_lote uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION lab_confirmar_centro(p_lote uuid, p_centro text, p_location_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_confirmar_centro(p_lote uuid, p_centro text, p_location_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_confirmar_centro(p_lote uuid, p_centro text, p_location_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_confirmar_centro(p_lote uuid, p_centro text, p_location_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION lab_dar_permiso(p_account_id uuid, p_user_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_dar_permiso(p_account_id uuid, p_user_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_dar_permiso(p_account_id uuid, p_user_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_dar_permiso(p_account_id uuid, p_user_id uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION lab_import_cargar_filas(p_lote uuid, p_hoja text, p_desde integer, p_filas jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -153053,6 +154492,24 @@ GRANT ALL ON FUNCTION public.lab_import_leer_cabeceras(p_account_id uuid, p_fich
 REVOKE ALL ON FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.lab_import_terminar_filas(p_lote uuid, p_esperadas jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION lab_quitar_permiso(p_account_id uuid, p_user_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_quitar_permiso(p_account_id uuid, p_user_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_quitar_permiso(p_account_id uuid, p_user_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_quitar_permiso(p_account_id uuid, p_user_id uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION lab_volcar_lote(p_lote uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.lab_volcar_lote(p_lote uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.lab_volcar_lote(p_lote uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.lab_volcar_lote(p_lote uuid) TO service_role;
 
 
 --
@@ -161154,6 +162611,62 @@ GRANT ALL ON TABLE public.kitchen_unit TO service_role;
 
 
 --
+-- Name: TABLE lab_cambio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_cambio TO service_role;
+GRANT SELECT ON TABLE public.lab_cambio TO authenticated;
+
+
+--
+-- Name: TABLE lab_centro_local; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_centro_local TO service_role;
+GRANT SELECT ON TABLE public.lab_centro_local TO authenticated;
+
+
+--
+-- Name: TABLE lab_concepto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_concepto TO service_role;
+GRANT SELECT ON TABLE public.lab_concepto TO authenticated;
+
+
+--
+-- Name: TABLE lab_contrato; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_contrato TO service_role;
+GRANT SELECT ON TABLE public.lab_contrato TO authenticated;
+
+
+--
+-- Name: TABLE lab_contrato_condicion; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_contrato_condicion TO service_role;
+GRANT SELECT ON TABLE public.lab_contrato_condicion TO authenticated;
+
+
+--
+-- Name: TABLE lab_convenio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_convenio TO service_role;
+GRANT SELECT ON TABLE public.lab_convenio TO authenticated;
+
+
+--
+-- Name: TABLE lab_convenio_tabla; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_convenio_tabla TO service_role;
+GRANT SELECT ON TABLE public.lab_convenio_tabla TO authenticated;
+
+
+--
 -- Name: TABLE lab_import_fila; Type: ACL; Schema: public; Owner: -
 --
 
@@ -161167,6 +162680,38 @@ GRANT SELECT ON TABLE public.lab_import_fila TO authenticated;
 
 GRANT ALL ON TABLE public.lab_import_lote TO service_role;
 GRANT SELECT ON TABLE public.lab_import_lote TO authenticated;
+
+
+--
+-- Name: TABLE lab_modelo_145; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_modelo_145 TO service_role;
+GRANT SELECT ON TABLE public.lab_modelo_145 TO authenticated;
+
+
+--
+-- Name: TABLE lab_permiso; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_permiso TO service_role;
+GRANT SELECT ON TABLE public.lab_permiso TO authenticated;
+
+
+--
+-- Name: TABLE lab_persona; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_persona TO service_role;
+GRANT SELECT ON TABLE public.lab_persona TO authenticated;
+
+
+--
+-- Name: TABLE lab_persona_concepto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.lab_persona_concepto TO service_role;
+GRANT SELECT ON TABLE public.lab_persona_concepto TO authenticated;
 
 
 --
