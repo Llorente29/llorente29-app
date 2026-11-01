@@ -1,0 +1,10 @@
+# S01j·2 · Correo de facturas, la ficha de una liquidación y su local. 1215 y
+# 1217 cambian funciones (desde la rama, solo en ROLLBACK). Su prueba (ROLLBACK):
+# plataforma, Excel leído / sin leer / no venía, el Excel reenviado, la ficha (la
+# del correo, la antigua y la que no suma), el disparador, guardar otras
+# direcciones, la 1218 fuera de Foodint y la vuelta atrás.
+supabase/migrations/20261101T1215_s01j2_correo_que_salio.sql
+supabase/migrations/20261101T1216_s01j2_ficha_liquidacion.sql
+supabase/migrations/20261101T1217_s01j2_local_de_la_liquidacion.sql
+supabase/migrations/20261101T1218_s01j2_local_foodint.sql
+supabase/staging/sql/20261101_s01j2_correo_prueba.sql

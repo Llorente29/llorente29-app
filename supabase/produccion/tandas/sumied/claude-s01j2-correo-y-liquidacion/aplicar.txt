@@ -1,0 +1,19 @@
+# S01j·2 · «Correo de facturas» dice qué salió de cada correo, la ficha de una
+# liquidación, y el local de las liquidaciones por el texto de su tienda.
+# Rama claude/s01j2-correo-y-liquidacion.
+#
+#   1215  cambia conta_correo_facturas (misma firma): plataforma, estado del
+#         Excel y las liquidaciones que ya entraron con otro correo.
+#   1216  añade conta_liquidacion_ficha (la ficha de UNA liquidación).
+#   1217  añade el disparador que pone el local de una liquidación nueva por el
+#         texto de su tienda; cambia conta_local_direcciones_guardar (misma
+#         firma) para rellenar también las liquidaciones.
+#   1218  pone el local a las 29 liquidaciones de Foodint que hoy no lo tienen
+#         (autorizo: mueve filas), apuntadas para su vuelta atrás.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01j2-correo.sql
+supabase/migrations/20261101T1215_s01j2_correo_que_salio.sql
+supabase/migrations/20261101T1216_s01j2_ficha_liquidacion.sql
+supabase/migrations/20261101T1217_s01j2_local_de_la_liquidacion.sql
+supabase/migrations/20261101T1218_s01j2_local_foodint.sql

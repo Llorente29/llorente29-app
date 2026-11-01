@@ -1,5 +1,6 @@
 -- supabase/migrations/20261101T1217_s01j2_local_de_la_liquidacion.sql
 -- cambia: public.conta_local_direcciones_guardar · prueba: supabase/staging/sql/20261101_s01j2_correo_prueba.sql
+-- cambia: public.channel_settlement · prueba: supabase/staging/sql/20261101_s01j2_correo_prueba.sql
 --
 -- S01j·2 · El local de una liquidación de plataforma sale de la dirección de
 -- su tienda, con la misma función que la factura (_conta_local_de_texto, que

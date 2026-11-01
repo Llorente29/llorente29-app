@@ -76,6 +76,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     cierres: 'facturacion.cierres', cierre: 'facturacion.cierres',
     // V01 · Entrega 3 · Ventas › Liquidaciones y la ficha de una fila de plataforma.
     liquidacionesVentas: 'facturacion.liquidacionesVentas', liquidacionPlataforma: 'facturacion.liquidacionesVentas',
+    // S01j·2 · La ficha de UNA liquidación (de Correo de facturas y de su factura de comisión).
+    liquidacionFicha: 'facturacion.liquidacionesVentas',
     // PC01 · Entrega 2: Compras › Pagos (la lista, las remesas y la ficha de una) y «Repartidores», el nombre nuevo de Liquidaciones.
     repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
     // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
