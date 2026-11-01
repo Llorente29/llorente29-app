@@ -346,7 +346,7 @@ export default function DocumentosPage() {
         <p className="s-aviso-lista" data-tono="seguro" data-prueba="apuntadas-solas-arriba">{arriba} · <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ ver: 'solas' })}>Ver</button></p>
       )}
       {f.pestana === 'solas' && (
-        <p className="s-aviso-lista">Lo que Sumied tenía seguro al 100 %: su asiento está validado por «Folvy (apunta solo)». Si alguna no es así, deshazla: su asiento se anula con su contraasiento y vuelve a «Por revisar».</p>
+        <p className="s-aviso-lista">Lo que Sumied tenía seguro al 100 %: su asiento ya está validado. Si alguna no es así, deshazla: su asiento se anula con su contraasiento y vuelve a «Por revisar».</p>
       )}
       {solas.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No he podido leer las que apuntó Sumied sola: {solas.error} <button type="button" className="s-boton s-boton-enlace" onClick={solas.recargar}>Reintentar</button></p>}
       <AsientosDeCompras />
