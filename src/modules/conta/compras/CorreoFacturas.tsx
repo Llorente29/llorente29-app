@@ -30,6 +30,8 @@ export function CorreoFacturasAjustes() {
   const [vuelta, setVuelta] = useState(0)
   const datos = useLeer(activa ? () => leerCorreoFacturas(activa.id) : null, `${activa?.id}:${vuelta}:correo-facturas`)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  // S01j·2 · Lo que dijo «volver a leer»: aquí, porque al recargar la lista se desmonta y se perdería.
+  const [releido, setReleido] = useState<{ ok: boolean; texto: string } | null>(null)
   const d = datos.datos
   if (!activa) return null
   if (!d && !datos.error) return <Tarjeta titulo="Correo de facturas"><p className="cx-ayuda">Leyendo…</p></Tarjeta>
@@ -87,7 +89,8 @@ export function CorreoFacturasAjustes() {
       </Tarjeta>
 
       <Tarjeta titulo="Lo que ha llegado">
-        <LlegadasPorCorreo llegadas={d.llegadas ?? []} companyId={activa.id} alReleer={() => setVuelta((v) => v + 1)} />
+        <LlegadasPorCorreo llegadas={d.llegadas ?? []} companyId={activa.id} releido={releido}
+          alReleer={(r) => { setReleido(r); setVuelta((v) => v + 1) }} />
       </Tarjeta>
     </div>
   )
@@ -101,25 +104,28 @@ export function CorreoFacturasAjustes() {
  * liquidación») y arriba se vuelve a leer todo lo de una plataforma. Lo que
  * pasa al volver a leer se dice en pantalla (regla 8).
  */
-export function LlegadasPorCorreo({ llegadas, max, companyId, alReleer }: {
-  llegadas: readonly LlegadaCorreo[]; max?: number; companyId?: string; alReleer?: () => void
+export function LlegadasPorCorreo({ llegadas, max, companyId, releido = null, alReleer }: {
+  llegadas: readonly LlegadaCorreo[]; max?: number; companyId?: string
+  /** Lo que dijo la última vez que se volvió a leer (lo guarda quien la pinta: la lista se recarga). */
+  releido?: { ok: boolean; texto: string } | null
+  alReleer?: (r: { ok: boolean; texto: string }) => void
 }) {
   const [abierto, setAbierto] = useState<number | null>(null)
   const [leyendo, setLeyendo] = useState<string | null>(null)
-  const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  const [fallo, setFallo] = useState<string | null>(null)
+  const aviso = fallo ? { ok: false, texto: fallo } : releido
   const lista = max ? llegadas.slice(0, max) : llegadas
   if (lista.length === 0) return <p className="cx-ayuda" style={{ margin: 0 }}>Aún no ha llegado ningún correo a la dirección de facturas.</p>
   const hoy = new Date()
   const plataformas = companyId ? (['glovo', 'justeat'] as const).filter((p) => llegadas.some((l) => l.plataforma === p)) : []
   const releer = async (clave: string, que: Parameters<typeof releerCorreos>[1]) => {
     if (!companyId) return
-    setAbierto(null); setLeyendo(clave); setAviso(null)
+    setAbierto(null); setLeyendo(clave); setFallo(null)
     try {
       const r = await releerCorreos(companyId, que)
       const fuera = r.correos.some((c) => c.estado === 'ya_no_esta')
-      setAviso({ ok: !r.correos.some((c) => c.estado === 'error') && !fuera, texto: r.texto })
-      alReleer?.()
-    } catch (e) { setAviso({ ok: false, texto: `No se ha vuelto a leer: ${msg(e)}` }) }
+      alReleer?.({ ok: !r.correos.some((c) => c.estado === 'error') && !fuera, texto: r.texto })
+    } catch (e) { setFallo(`No se ha vuelto a leer: ${msg(e)}`) }
     finally { setLeyendo(null) }
   }
   return (
