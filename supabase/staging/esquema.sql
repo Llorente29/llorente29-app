@@ -3086,6 +3086,232 @@ end $$;
 
 
 --
+-- Name: _conta_comision_buscar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_comision_buscar(p_invoice uuid) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r jsonb; v public.supplier_invoice;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or v.status in ('anulada', 'descartada') then return null; end if;
+  r := public._conta_comision_estado(v.id);
+  if r->>'estado' = 'no' then return 'no'; end if;
+  update public.supplier_invoice set payment_method = 'compensation', updated_at = now() where id = v.id and payment_method is distinct from 'compensation';
+  if r->>'estado' = 'una' then
+    perform public._conta_comision_ligar(v.id, (r->>'liquidacion')::uuid, 'sumied', 'Sumied');
+  elsif r->>'estado' = 'fuera' then
+    perform public._conta_comision_pagar(v.id, true);
+  elsif r->>'estado' = 'ligada' then
+    perform public._conta_comision_pagar(v.id);
+  end if;
+  return r->>'estado';
+end $$;
+
+
+--
+-- Name: _conta_comision_datos(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_comision_datos(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v public.supplier_invoice; v_canal uuid; v_lineas text; m text[]; v_desde date; v_hasta date;
+  v_texto text; v_marca uuid; v_local uuid; v_dir text;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or v.supplier_id is null then return null; end if;
+  select pl.channel_id into v_canal
+    from public.party_role ps join public.party_role pl on pl.account_id = ps.account_id and pl.party_id = ps.party_id and pl.role = 'platform'
+   where ps.account_id = v.account_id and ps.role = 'supplier' and ps.supplier_id = v.supplier_id and pl.channel_id is not null
+   limit 1;
+  if v_canal is null then return null; end if;
+  select string_agg(l.raw_text, ' | ') into v_lineas from public.supplier_invoice_line l where l.supplier_invoice_id = v.id;
+  m := regexp_match(coalesce(v_lineas, ''), '(\d{2})/(\d{2})/(\d{2,4})\s*-\s*(\d{2})/(\d{2})/(\d{2,4})');
+  if m is not null then
+    v_desde := make_date(case when length(m[3]) = 2 then 2000 + m[3]::int else m[3]::int end, m[2]::int, m[1]::int);
+    v_hasta := make_date(case when length(m[6]) = 2 then 2000 + m[6]::int else m[6]::int end, m[5]::int, m[4]::int);
+  elsif v.reading->'factura'->'periodo'->>'hasta' ~ '^\d{4}-\d{2}-\d{2}$' then
+    v_desde := nullif(v.reading->'factura'->'periodo'->>'desde', '')::date;
+    v_hasta := (v.reading->'factura'->'periodo'->>'hasta')::date;
+  elsif v.invoice_date is not null and extract(day from v.invoice_date) = 15 then
+    v_desde := date_trunc('month', v.invoice_date)::date; v_hasta := v.invoice_date;
+  elsif v.invoice_date is not null and v.invoice_date = (date_trunc('month', v.invoice_date) + interval '1 month - 1 day')::date then
+    v_desde := date_trunc('month', v.invoice_date)::date + 15; v_hasta := v.invoice_date;
+  end if;
+  v_dir := nullif(btrim(coalesce(v.reading->'factura'->'tienda'->>'direccion', '')), '');
+  v_texto := lower(concat_ws(' | ', v.reading->'factura'->'destinatario'->>'nombre', v.reading->'factura'->'tienda'->>'nombre', v_dir));
+  select b.id into v_marca from public.brand b
+   where b.account_id = v.account_id and length(btrim(b.name)) >= 3 and position(lower(btrim(b.name)) in v_texto) > 0
+   order by length(b.name) desc limit 1;
+  v_local := public._conta_local_de_texto(v.account_id, array[v_dir, v.reading->'factura'->'tienda'->>'nombre', v.reading->'factura'->'destinatario'->>'nombre']);
+  return jsonb_build_object('canal', v_canal, 'desde', v_desde, 'hasta', v_hasta, 'marca', v_marca, 'local', v_local,
+    'total', v.grand_total, 'direccion_leida', v_dir is not null);
+end $_$;
+
+
+--
+-- Name: _conta_comision_estado(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_comision_estado(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v public.supplier_invoice; d jsonb; v_canal uuid; v_desde date; v_hasta date; v_marca uuid; v_local uuid;
+  v_cands jsonb; v_n int; v_exactas jsonb; v_primera date; v_lig uuid; v_porque text; v_plat text;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null then return jsonb_build_object('estado', 'no'); end if;
+  select settlement_id into v_lig from public.channel_settlement_invoice where supplier_invoice_id = v.id and account_id = v.account_id;
+  d := public._conta_comision_datos(v.id);
+  if d is null then return jsonb_build_object('estado', 'no'); end if;
+  v_canal := (d->>'canal')::uuid; v_desde := (d->>'desde')::date; v_hasta := (d->>'hasta')::date;
+  v_marca := (d->>'marca')::uuid; v_local := (d->>'local')::uuid;
+  select name into v_plat from public.sales_channel where id = v_canal;
+  if v_lig is not null then
+    -- Su liquidación, para la ficha: periodo, tienda, lo que factura, lo que suman sus facturas y lo que pagó.
+    return jsonb_build_object('estado', 'ligada', 'liquidacion', v_lig, 'plataforma', v_plat, 'datos', d,
+      'liq', (select jsonb_build_object('id', cs.id, 'desde', cs.period_from, 'hasta', cs.period_to,
+                'tienda', regexp_replace(coalesce(ps.external_text, cs.external_location_text, ''), '\s*\(.*$', ''),
+                'marca', (select name from public.brand where id = coalesce(cs.brand_id, ps.brand_id)),
+                'local', (select name from public.locations where id = coalesce(cs.location_id, ps.location_id)),
+                'a_facturar', public._conta_liquidacion_a_facturar(cs), 'te_pago', cs.net_payout, 'referencia', coalesce(cs.is_reference, false),
+                'fecha', coalesce(cs.settlement_date, cs.period_to),
+                'facturas', (select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'codigo', x.code, 'numero', x.invoice_number, 'total', x.grand_total) order by x.invoice_date, x.code), '[]'::jsonb)
+                               from public.channel_settlement_invoice k join public.supplier_invoice x on x.id = k.supplier_invoice_id where k.settlement_id = cs.id))
+                from public.channel_settlement cs left join public.platform_store ps on ps.id = cs.store_id where cs.id = v_lig));
+  end if;
+  select min(period_from) into v_primera from public.channel_settlement where account_id = v.account_id and channel_id = v_canal;
+  if v_hasta is not null and (v_primera is null or v_hasta < v_primera) then
+    return jsonb_build_object('estado', 'fuera', 'plataforma', v_plat, 'datos', d,
+      'porque', case when v_primera is null then format('No hay ninguna liquidación de %s en Sumied: se compensó fuera de Sumied.', v_plat)
+                     else format('Es de antes de la primera liquidación de %s en Sumied (%s): se compensó fuera de Sumied.', v_plat, to_char(v_primera, 'DD/MM/YYYY')) end);
+  end if;
+  -- Las que encajan: misma plataforma, el periodo se solapa, y su marca y su local si se saben.
+  with c as (
+    select cs.*, public._conta_liquidacion_a_facturar(cs) as a_facturar,
+           coalesce(cs.brand_id, ps.brand_id) as marca, coalesce(cs.location_id, ps.location_id,
+             public._conta_local_de_texto(cs.account_id, array[coalesce(ps.external_text, cs.external_location_text)])) as local,
+           coalesce(ps.external_text, cs.external_location_text) as tienda,
+           (select coalesce(sum(x.grand_total), 0) from public.channel_settlement_invoice k join public.supplier_invoice x on x.id = k.supplier_invoice_id
+             where k.settlement_id = cs.id) as ya_facturado
+      from public.channel_settlement cs left join public.platform_store ps on ps.id = cs.store_id
+     where cs.account_id = v.account_id and cs.channel_id = v_canal
+       and case when v_hasta is null then cs.period_to between v.invoice_date - 45 and v.invoice_date
+                else cs.period_from <= v_hasta and cs.period_to >= coalesce(v_desde, v_hasta) end),
+  f as (
+    select c.* from c
+     where (v_marca is null or c.marca = v_marca or (c.marca is null and position(lower((select name from public.brand where id = v_marca)) in lower(coalesce(c.tienda, ''))) > 0))
+       and (v_local is null or c.local = v_local))
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', f.id, 'desde', f.period_from, 'hasta', f.period_to, 'tienda', regexp_replace(coalesce(f.tienda, ''), '\s*\(.*$', ''),
+           'marca', (select name from public.brand where id = f.marca), 'local', (select name from public.locations where id = f.local),
+           'a_facturar', f.a_facturar, 'ya_facturado', f.ya_facturado, 'te_pago', f.net_payout, 'referencia', coalesce(f.is_reference, false),
+           'coincide', f.a_facturar is not null and (round(f.a_facturar * 100) = round(v.grand_total * 100)
+                                                     or round((f.a_facturar - f.ya_facturado) * 100) = round(v.grand_total * 100)))
+           order by f.period_to desc, f.id), '[]'::jsonb)
+    into v_cands from f;
+  v_n := jsonb_array_length(v_cands);
+  if v_hasta is null then
+    return jsonb_build_object('estado', 'sin_periodo', 'plataforma', v_plat, 'datos', d, 'candidatas', v_cands,
+      'porque', 'La factura no dice de qué semana o quincena es: elige su liquidación.');
+  end if;
+  -- Ligar sin preguntar solo con una de estas dos (01/11, medido en Foodint: con una sola candidata y
+  -- sin marca ni local se ligaban 12 facturas de Glovo de doce tiendas a la única liquidación de la quincena):
+  --   · coincide al céntimo una sola (con lo que factura la liquidación, o con lo que le falta por facturar);
+  --   · la factura dice su marca, encaja una sola y su periodo es exactamente el de la liquidación (una
+  --     liquidación de varias semanas no se queda la factura de una de ellas).
+  select coalesce(jsonb_agg(x), '[]'::jsonb) into v_exactas from jsonb_array_elements(v_cands) x where (x->>'coincide')::boolean;
+  if jsonb_array_length(v_exactas) = 1 then
+    return jsonb_build_object('estado', 'una', 'liquidacion', v_exactas->0->>'id', 'plataforma', v_plat, 'datos', d, 'candidatas', v_cands, 'por_importe', true);
+  end if;
+  if v_n = 1 and v_marca is not null and (v_cands->0->>'desde')::date = v_desde and (v_cands->0->>'hasta')::date = v_hasta then
+    return jsonb_build_object('estado', 'una', 'liquidacion', v_cands->0->>'id', 'plataforma', v_plat, 'datos', d, 'candidatas', v_cands);
+  end if;
+  if v_n >= 1 then
+    v_porque := format('%s de %s del %s al %s%s%s, y %s.',
+      case when v_n = 1 then 'Hay una liquidación' else 'Hay ' || v_n || ' liquidaciones' end, v_plat, to_char(coalesce(v_desde, v_hasta), 'DD/MM'), to_char(v_hasta, 'DD/MM'),
+      case when v_marca is not null then ' de ' || (select name from public.brand where id = v_marca) else '' end,
+      case when v_local is not null then ' en ' || (select name from public.locations where id = v_local) else '' end,
+      case when v_marca is null and v_local is null then 'la factura no dice de qué marca ni de qué local es'
+           when v_marca is null then 'la factura no dice de qué marca es'
+           when v_n = 1 then 'su periodo no es el de la factura'
+           when v_local is null then 'la factura no dice la dirección de la tienda'
+           else 'ninguna coincide sola al céntimo' end);
+    return jsonb_build_object('estado', 'varias', 'plataforma', v_plat, 'datos', d, 'candidatas', v_cands, 'porque', v_porque);
+  end if;
+  return jsonb_build_object('estado', 'falta', 'plataforma', v_plat, 'datos', d, 'candidatas', '[]'::jsonb,
+    'porque', format('Falta la liquidación: no hay ninguna de %s%s del %s al %s en Sumied. Se ligará sola cuando llegue.', v_plat,
+      case when v_marca is not null then ' de ' || (select name from public.brand where id = v_marca) else '' end,
+      to_char(coalesce(v_desde, v_hasta), 'DD/MM'), to_char(v_hasta, 'DD/MM/YYYY')));
+end $_$;
+
+
+--
+-- Name: _conta_comision_ligar(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_por text, p_quien text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; cs public.channel_settlement;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  select * into cs from public.channel_settlement where id = p_settlement and account_id = v.account_id;
+  if v.id is null or cs.id is null then raise exception 'Esa liquidación no es de la cuenta de la factura.' using errcode = '22023'; end if;
+  if cs.channel_id is distinct from (public._conta_comision_datos(v.id)->>'canal')::uuid then
+    raise exception 'Esa liquidación no es de la plataforma de la factura.' using errcode = '22023';
+  end if;
+  insert into public.channel_settlement_invoice (account_id, settlement_id, supplier_invoice_id, matched_by, matched_by_name)
+  values (v.account_id, cs.id, v.id, p_por, p_quien)
+  on conflict (supplier_invoice_id) do update set settlement_id = excluded.settlement_id, matched_by = excluded.matched_by,
+    matched_by_name = excluded.matched_by_name, created_at = now();
+  -- Mientras el resto de la base lea la columna de antes (se quita en otra tanda), la primera factura va también ahí.
+  update public.channel_settlement set commission_invoice_id = v.id, updated_at = now() where id = cs.id and commission_invoice_id is null;
+  update public.supplier_invoice set payment_method = 'compensation', updated_at = now() where id = v.id and payment_method is distinct from 'compensation';
+  perform public._conta_comision_pagar(v.id);
+end $$;
+
+
+--
+-- Name: _conta_comision_pagar(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_comision_pagar(p_invoice uuid, p_fuera boolean DEFAULT false) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; cs public.channel_settlement; v_fecha date; v_nota text; v_quien constant text := 'Sumied · compensada con la liquidación';
+begin
+  select * into v from public.supplier_invoice where id = p_invoice for update;
+  if v.id is null or v.status <> 'aprobada' or v.paid_at is not null or coalesce(v.grand_total, 0) = 0 then return false; end if;
+  if p_fuera then
+    v_fecha := v.invoice_date; v_nota := 'Compensada fuera de Sumied (antes de su primera liquidación en Sumied)';
+  else
+    select c.* into cs from public.channel_settlement_invoice k join public.channel_settlement c on c.id = k.settlement_id
+     where k.supplier_invoice_id = v.id and k.account_id = v.account_id;
+    if cs.id is null then return false; end if;
+    v_fecha := coalesce(cs.settlement_date, cs.period_to);
+    v_nota := format('Compensada con la liquidación del %s al %s', to_char(cs.period_from, 'DD/MM'), to_char(cs.period_to, 'DD/MM/YYYY'));
+  end if;
+  insert into public.supplier_invoice_payment (account_id, company_id, invoice_id, paid_on, amount, method, note, entry_id, created_by_name)
+  values (v.account_id, v.company_id, v.id, v_fecha, v.grand_total, 'compensation', v_nota, cs.journal_entry_id, v_quien);
+  update public.supplier_invoice set status = 'pagada', paid_at = v_fecha, paid_method = 'compensation', payment_method = 'compensation',
+         paid_by_name = v_quien, updated_at = now() where id = v.id;
+  insert into public.supplier_invoice_payment_log (account_id, invoice_id, action, paid_at, paid_method, actor_name)
+  values (v.account_id, v.id, 'paid', v_fecha, 'compensation', v_quien);
+  return true;
+end $$;
+
+
+--
 -- Name: _conta_corte(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3115,6 +3341,31 @@ CREATE FUNCTION public._conta_cuenta_aprendida(p_company uuid, p_410 text, p_gru
                   where l2.entry_id = e.id and a2.code = p_410)
    group by a.code order by count(*) desc, a.code limit 1
 $$;
+
+
+--
+-- Name: _conta_dir_coincide(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+  -- La calle tiene que estar. Si el texto pone un número detrás, tiene que ser el suyo («Inventada 120»
+  -- no es «Inventada, 12»); si no lo pone, la calle tiene que ir como calle («C. de Florencio Llorente»,
+  -- «(Camichi)»): «Empresa de Prueba» no es «Avenida de Prueba».
+  with d as (
+    select btrim(regexp_replace(regexp_replace(lower(coalesce(p_dir, '')), '^\s*(calle|c/|c\.|avenida|avda\.?|av\.|paseo|plaza|pza\.?)\s+(de\s+(la\s+|los\s+|las\s+)?)?', ''), '[,\s]*\d.*$', '')) as calle,
+           substring(coalesce(p_dir, '') from '(\d+)') as num,
+           regexp_replace(lower(coalesce(p_texto, '')), '\s+', ' ', 'g') as t),
+  e as (select calle, num, t, position(calle in t) as pos from d)
+  select coalesce(length(calle) >= 3 and pos > 0
+                  and case when substring(substr(t, pos + length(calle)) from '^[\s,.]{0,3}(\d+)') is not null
+                           then substring(substr(t, pos + length(calle)) from '^[\s,.]{0,3}(\d+)') = num
+                           -- Sin número, solo si va como calle: «C. de …», «Calle …», «Avenida …» o «(…)».
+                           else substr(t, 1, pos - 1) ~ '(\(|(calle|c/|c\.|avenida|avda\.?|av\.|paseo|plaza|pza\.?)\s*(de\s+(la\s+|los\s+|las\s+)?)?)\s*$' end, false)
+    from e
+$_$;
 
 
 --
@@ -3451,6 +3702,208 @@ end $$;
 
 
 --
+-- Name: channel_settlement; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.channel_settlement (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    channel_id uuid,
+    brand_id uuid,
+    location_id uuid,
+    external_brand_text text,
+    external_location_text text,
+    settlement_ref text,
+    period_from date,
+    period_to date,
+    settlement_date date,
+    period_grain text,
+    currency text DEFAULT 'EUR'::text NOT NULL,
+    orders_count integer,
+    gross_sales numeric,
+    base_amount numeric,
+    vat_amount numeric,
+    commission numeric DEFAULT 0,
+    delivery_transport numeric DEFAULT 0,
+    promo_product numeric DEFAULT 0,
+    promo_flash numeric DEFAULT 0,
+    offer_flash_credit numeric DEFAULT 0,
+    access_fee numeric DEFAULT 0,
+    prime_fee numeric DEFAULT 0,
+    recurring_fee numeric DEFAULT 0,
+    incidents_cost numeric DEFAULT 0,
+    incidents_refund numeric DEFAULT 0,
+    min_order_fee numeric DEFAULT 0,
+    other_cost numeric DEFAULT 0,
+    net_payout numeric,
+    accumulated_debt numeric,
+    source text DEFAULT 'import_csv'::text NOT NULL,
+    import_key text NOT NULL,
+    raw jsonb,
+    needs_review boolean DEFAULT false NOT NULL,
+    review_note text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    flow_type text DEFAULT 'own'::text NOT NULL,
+    is_debt_settlement boolean GENERATED ALWAYS AS (((net_payout IS NOT NULL) AND (net_payout < (0)::numeric))) STORED,
+    party_id uuid,
+    collected_on date,
+    collected_amount numeric,
+    collection_note text,
+    collected_by uuid,
+    collected_by_name text,
+    proposed_period_from date,
+    proposed_period_to date,
+    proposed_period_note text,
+    period_confirmed_at timestamp with time zone,
+    period_confirmed_by uuid,
+    journal_entry_id uuid,
+    other_earnings numeric,
+    promo_charges numeric,
+    ads_spend numeric,
+    item_promotions numeric,
+    chargebacks numeric,
+    adjustments numeric,
+    store_id uuid,
+    inbound_email_id text,
+    commission_invoice_id uuid,
+    is_reference boolean,
+    invoice_match_status text,
+    invoice_match_note text,
+    CONSTRAINT channel_settlement_cobro_completo CHECK (((collected_on IS NULL) = (collected_amount IS NULL))),
+    CONSTRAINT channel_settlement_flow_type_chk CHECK ((flow_type = ANY (ARRAY['own'::text, 'licensed'::text]))),
+    CONSTRAINT channel_settlement_invoice_match_status_check CHECK (((invoice_match_status IS NULL) OR (invoice_match_status = ANY (ARRAY['cobradas'::text, 'a_revisar'::text])))),
+    CONSTRAINT channel_settlement_periodo_propuesto CHECK ((((proposed_period_from IS NULL) = (proposed_period_to IS NULL)) AND ((proposed_period_from IS NULL) OR (proposed_period_to >= proposed_period_from))))
+);
+
+
+--
+-- Name: COLUMN channel_settlement.party_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.party_id IS 'C03. El tercero de la plataforma (party_role platform del mismo canal).';
+
+
+--
+-- Name: COLUMN channel_settlement.collected_amount; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.collected_amount IS 'C03. Lo que llegó al banco. Si no es el neto, la liquidación está «con diferencia» y la ficha dice la cifra; nunca se cuadra sola.';
+
+
+--
+-- Name: COLUMN channel_settlement.proposed_period_from; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.proposed_period_from IS 'C03. Periodo propuesto desde los pedidos que contiene (primero y último), «por confirmar». period_from/to no se tocan hasta confirmar.';
+
+
+--
+-- Name: COLUMN channel_settlement.journal_entry_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.journal_entry_id IS 'C04. El asiento de la liquidación: comisión y cargos, compensación con su 430 y, si aún no lo están, las ventas.';
+
+
+--
+-- Name: COLUMN channel_settlement.other_earnings; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.other_earnings IS 'D01 · «Otras ganancias» del resumen (Uber): a tu favor, signo del origen.';
+
+
+--
+-- Name: COLUMN channel_settlement.promo_charges; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.promo_charges IS 'D01 · «Otros cargos de la promoción» (Uber): va en su factura de comisión.';
+
+
+--
+-- Name: COLUMN channel_settlement.ads_spend; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.ads_spend IS 'D01 · «Gastos en anuncios» (Uber): va en su factura de comisión, a la cuenta de publicidad.';
+
+
+--
+-- Name: COLUMN channel_settlement.item_promotions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.item_promotions IS 'D01 · «Promociones en artículos» (Uber): NO va en la factura de comisión ni en los cargos del asiento. Se guarda aparte hasta que Julio decida cómo se apunta.';
+
+
+--
+-- Name: COLUMN channel_settlement.chargebacks; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.chargebacks IS 'D01 · «Importe neto del contracargo» (Uber): lo que la plataforma descuenta por pedidos con error.';
+
+
+--
+-- Name: COLUMN channel_settlement.adjustments; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.adjustments IS 'D01 · «Ajustes» (Uber).';
+
+
+--
+-- Name: COLUMN channel_settlement.store_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.store_id IS 'D01 · La tienda de la plataforma (platform_store) de la que es la liquidación.';
+
+
+--
+-- Name: COLUMN channel_settlement.inbound_email_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.inbound_email_id IS 'D01 · El correo (inbound_email_log.email_id) del que se leyó.';
+
+
+--
+-- Name: COLUMN channel_settlement.commission_invoice_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.commission_invoice_id IS 'D01 · Su factura de comisión (supplier_invoice). Si la tiene, el asiento de la liquidación ya no lleva la comisión: va en la factura (serie 2).';
+
+
+--
+-- Name: COLUMN channel_settlement.is_reference; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.is_reference IS 'D01 · De referencia: el periodo acaba antes del corte de la contabilidad (Bancos). Sin factura de comisión ni asiento de liquidación; su cobro sí se casa.';
+
+
+--
+-- Name: COLUMN channel_settlement.invoice_match_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.invoice_match_status IS 'PC01 · Al cobrarla: «cobradas» (sus facturas quedaron cobradas por sus pedidos) o «a_revisar» (no cuadran: no se cobró nada solo). Vacío: sin cobrar.';
+
+
+--
+-- Name: COLUMN channel_settlement.invoice_match_note; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.channel_settlement.invoice_match_note IS 'PC01 · Lo que pasó al cobrar sus facturas, en una frase (regla 8).';
+
+
+--
+-- Name: _conta_liquidacion_a_facturar(public.channel_settlement); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_liquidacion_a_facturar(p_cs public.channel_settlement) RETURNS numeric
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select case when jsonb_typeof(p_cs.raw->'factura') = 'object' and (p_cs.raw->'factura'->>'total') ~ '^-?[0-9.]+$'
+              then round((p_cs.raw->'factura'->>'total')::numeric, 2) end
+$_$;
+
+
+--
 -- Name: _conta_liquidacion_cobros(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3670,6 +4123,29 @@ CREATE FUNCTION public._conta_liquidacion_solape(p_settlement uuid) RETURNS text
    where c.id = p_settlement and c.store_id is not null
   having count(*) > 0
 $$;
+
+
+--
+-- Name: _conta_local_de_texto(uuid, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_local_de_texto(p_account uuid, p_textos text[]) RETURNS uuid
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public'
+    AS $_$
+declare t text; p text; v_n int; v_id uuid;
+begin
+  foreach t in array coalesce(p_textos, '{}'::text[]) loop
+    continue when t is null or btrim(t) = '';
+    foreach p in array array[regexp_replace(t, '\(.*$', ''), t] loop
+      select count(*), min(l.id::text)::uuid into v_n, v_id from public.locations l
+       where l.account_id = p_account and l.address is not null and public._conta_dir_coincide(p, l.address);
+      if v_n = 1 then return v_id; end if;
+      if v_n > 1 then return null; end if;
+    end loop;
+  end loop;
+  return null;
+end $_$;
 
 
 --
@@ -10920,6 +11396,54 @@ CREATE FUNCTION public._s01_redsys_estado(r public.conta_cobro_redsys) RETURNS t
   select case when r.company_id is null then null when r.comercio is null then 'falta_comercio' when r.clave_ref is null then 'falta_clave'
               when r.modo = 'real' then 'activo' else 'pruebas' end
 $$;
+
+
+--
+-- Name: _s01i_factura_comision(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01i_factura_comision() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  -- La vuelta atrás de la 0052 los aparta: deshace lo que hizo sin que se vuelva a ligar y pagar.
+  if current_setting('s01i.sin_buscar', true) = 'si' then return null; end if;
+  if new.status in ('anulada', 'descartada') or new.supplier_id is null then return null; end if;
+  begin
+    perform public._conta_comision_buscar(new.id);
+  exception when others then
+    -- Nunca impide guardar la factura: sigue sin ligar, y la ficha dice por qué.
+    raise log 'S01i · no se ha podido buscar la liquidación de la factura %: %', new.id, sqlerrm;
+  end;
+  return null;
+end $$;
+
+
+--
+-- Name: _s01i_liquidacion_llega(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01i_liquidacion_llega() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v uuid;
+begin
+  if current_setting('s01i.sin_buscar', true) = 'si' then return null; end if;
+  begin
+    for v in select si.id from public.supplier_invoice si
+               join public.party_role ps on ps.account_id = si.account_id and ps.role = 'supplier' and ps.supplier_id = si.supplier_id
+               join public.party_role pl on pl.account_id = ps.account_id and pl.party_id = ps.party_id and pl.role = 'platform' and pl.channel_id = new.channel_id
+              where si.account_id = new.account_id and si.status not in ('anulada', 'descartada', 'pagada')
+                and not exists (select 1 from public.channel_settlement_invoice k where k.supplier_invoice_id = si.id) loop
+      perform public._conta_comision_buscar(v);
+    end loop;
+  exception when others then
+    raise log 'S01i · no se han podido buscar las facturas de la liquidación %: %', new.id, sqlerrm;
+  end;
+  return null;
+end $$;
 
 
 --
@@ -19378,6 +19902,8 @@ CREATE FUNCTION public.bank_facturas_para_casar(p_company uuid) RETURNS TABLE(id
     left join public.party_role pr on pr.supplier_id = s.id and pr.role = 'supplier'
    where si.status in ('aprobada', 'en_revision') and si.paid_at is null and coalesce(si.grand_total, 0) > 0
      and (si.company_id is null or si.company_id = p_company)
+     -- S01i · Lo que se compensa (comisiones de plataformas, abonos) no se paga por banco.
+     and si.payment_method is distinct from 'compensation'
 $$;
 
 
@@ -28153,6 +28679,46 @@ CREATE FUNCTION public.conta_cobros_para_casar(p_company uuid) RETURNS jsonb
       join public.customer_invoice ci on ci.id = l.invoice_id left join public.party p on p.id = l.party_id
      where r.company_id = p_company and l.estado = 'cobrado' and l.abonado_el >= public.conta_hoy() - 56), '[]'::jsonb))
 $$;
+
+
+--
+-- Name: conta_comision_de_la_factura(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_comision_de_la_factura(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid;
+begin
+  select account_id into v_cuenta from public.supplier_invoice where id = p_invoice;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501'; end if;
+  return public._conta_comision_estado(p_invoice);
+end $$;
+
+
+--
+-- Name: conta_comision_ligar(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; cs public.channel_settlement; v_pagada boolean;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or not public.belongs_to_account(v.account_id) then raise exception 'Esa factura no es de tu cuenta.' using errcode = '42501'; end if;
+  if auth.uid() is not null and not public.current_user_is_admin_or_manager_of(v.account_id) then
+    raise exception 'Solo un administrador o un encargado de la cuenta liga facturas con liquidaciones.' using errcode = '42501';
+  end if;
+  perform public._conta_comision_ligar(v.id, p_settlement, 'persona', coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona'));
+  select * into cs from public.channel_settlement where id = p_settlement;
+  select status = 'pagada' into v_pagada from public.supplier_invoice where id = v.id;
+  return jsonb_build_object('liquidacion', cs.id, 'pagada', v_pagada,
+    'texto', format('Ligada con la liquidación del %s al %s%s', to_char(cs.period_from, 'DD/MM'), to_char(cs.period_to, 'DD/MM/YYYY'),
+      case when v_pagada then ': pagada por compensación, no se paga por banco.' else ': quedará pagada por compensación al validarla.' end));
+end $$;
 
 
 --
@@ -38211,6 +38777,8 @@ CREATE FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) RETURNS jso
      where si.account_id = (select account_id from public.company where id = p_company)
        and coalesce(si.company_id, p_company) = p_company
        and si.status in ('aprobada', 'pagada')
+       -- S01i · Lo que se compensa (comisiones de plataformas, abonos) no se paga por banco: no sale en Pagos.
+       and si.payment_method is distinct from 'compensation' and si.paid_method is distinct from 'compensation'
   )
   select jsonb_build_object(
     'filas', coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb),
@@ -90959,193 +91527,19 @@ COMMENT ON TABLE public.channel_review IS 'Valoraciones y comentarios de cliente
 
 
 --
--- Name: channel_settlement; Type: TABLE; Schema: public; Owner: -
+-- Name: channel_settlement_invoice; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.channel_settlement (
+CREATE TABLE public.channel_settlement_invoice (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     account_id uuid NOT NULL,
-    channel_id uuid,
-    brand_id uuid,
-    location_id uuid,
-    external_brand_text text,
-    external_location_text text,
-    settlement_ref text,
-    period_from date,
-    period_to date,
-    settlement_date date,
-    period_grain text,
-    currency text DEFAULT 'EUR'::text NOT NULL,
-    orders_count integer,
-    gross_sales numeric,
-    base_amount numeric,
-    vat_amount numeric,
-    commission numeric DEFAULT 0,
-    delivery_transport numeric DEFAULT 0,
-    promo_product numeric DEFAULT 0,
-    promo_flash numeric DEFAULT 0,
-    offer_flash_credit numeric DEFAULT 0,
-    access_fee numeric DEFAULT 0,
-    prime_fee numeric DEFAULT 0,
-    recurring_fee numeric DEFAULT 0,
-    incidents_cost numeric DEFAULT 0,
-    incidents_refund numeric DEFAULT 0,
-    min_order_fee numeric DEFAULT 0,
-    other_cost numeric DEFAULT 0,
-    net_payout numeric,
-    accumulated_debt numeric,
-    source text DEFAULT 'import_csv'::text NOT NULL,
-    import_key text NOT NULL,
-    raw jsonb,
-    needs_review boolean DEFAULT false NOT NULL,
-    review_note text,
+    settlement_id uuid NOT NULL,
+    supplier_invoice_id uuid NOT NULL,
+    matched_by text DEFAULT 'sumied'::text NOT NULL,
+    matched_by_name text,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    created_by_name text,
-    flow_type text DEFAULT 'own'::text NOT NULL,
-    is_debt_settlement boolean GENERATED ALWAYS AS (((net_payout IS NOT NULL) AND (net_payout < (0)::numeric))) STORED,
-    party_id uuid,
-    collected_on date,
-    collected_amount numeric,
-    collection_note text,
-    collected_by uuid,
-    collected_by_name text,
-    proposed_period_from date,
-    proposed_period_to date,
-    proposed_period_note text,
-    period_confirmed_at timestamp with time zone,
-    period_confirmed_by uuid,
-    journal_entry_id uuid,
-    other_earnings numeric,
-    promo_charges numeric,
-    ads_spend numeric,
-    item_promotions numeric,
-    chargebacks numeric,
-    adjustments numeric,
-    store_id uuid,
-    inbound_email_id text,
-    commission_invoice_id uuid,
-    is_reference boolean,
-    invoice_match_status text,
-    invoice_match_note text,
-    CONSTRAINT channel_settlement_cobro_completo CHECK (((collected_on IS NULL) = (collected_amount IS NULL))),
-    CONSTRAINT channel_settlement_flow_type_chk CHECK ((flow_type = ANY (ARRAY['own'::text, 'licensed'::text]))),
-    CONSTRAINT channel_settlement_invoice_match_status_check CHECK (((invoice_match_status IS NULL) OR (invoice_match_status = ANY (ARRAY['cobradas'::text, 'a_revisar'::text])))),
-    CONSTRAINT channel_settlement_periodo_propuesto CHECK ((((proposed_period_from IS NULL) = (proposed_period_to IS NULL)) AND ((proposed_period_from IS NULL) OR (proposed_period_to >= proposed_period_from))))
+    CONSTRAINT channel_settlement_invoice_matched_by_check CHECK ((matched_by = ANY (ARRAY['sumied'::text, 'persona'::text, 'antes'::text])))
 );
-
-
---
--- Name: COLUMN channel_settlement.party_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.party_id IS 'C03. El tercero de la plataforma (party_role platform del mismo canal).';
-
-
---
--- Name: COLUMN channel_settlement.collected_amount; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.collected_amount IS 'C03. Lo que llegó al banco. Si no es el neto, la liquidación está «con diferencia» y la ficha dice la cifra; nunca se cuadra sola.';
-
-
---
--- Name: COLUMN channel_settlement.proposed_period_from; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.proposed_period_from IS 'C03. Periodo propuesto desde los pedidos que contiene (primero y último), «por confirmar». period_from/to no se tocan hasta confirmar.';
-
-
---
--- Name: COLUMN channel_settlement.journal_entry_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.journal_entry_id IS 'C04. El asiento de la liquidación: comisión y cargos, compensación con su 430 y, si aún no lo están, las ventas.';
-
-
---
--- Name: COLUMN channel_settlement.other_earnings; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.other_earnings IS 'D01 · «Otras ganancias» del resumen (Uber): a tu favor, signo del origen.';
-
-
---
--- Name: COLUMN channel_settlement.promo_charges; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.promo_charges IS 'D01 · «Otros cargos de la promoción» (Uber): va en su factura de comisión.';
-
-
---
--- Name: COLUMN channel_settlement.ads_spend; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.ads_spend IS 'D01 · «Gastos en anuncios» (Uber): va en su factura de comisión, a la cuenta de publicidad.';
-
-
---
--- Name: COLUMN channel_settlement.item_promotions; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.item_promotions IS 'D01 · «Promociones en artículos» (Uber): NO va en la factura de comisión ni en los cargos del asiento. Se guarda aparte hasta que Julio decida cómo se apunta.';
-
-
---
--- Name: COLUMN channel_settlement.chargebacks; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.chargebacks IS 'D01 · «Importe neto del contracargo» (Uber): lo que la plataforma descuenta por pedidos con error.';
-
-
---
--- Name: COLUMN channel_settlement.adjustments; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.adjustments IS 'D01 · «Ajustes» (Uber).';
-
-
---
--- Name: COLUMN channel_settlement.store_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.store_id IS 'D01 · La tienda de la plataforma (platform_store) de la que es la liquidación.';
-
-
---
--- Name: COLUMN channel_settlement.inbound_email_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.inbound_email_id IS 'D01 · El correo (inbound_email_log.email_id) del que se leyó.';
-
-
---
--- Name: COLUMN channel_settlement.commission_invoice_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.commission_invoice_id IS 'D01 · Su factura de comisión (supplier_invoice). Si la tiene, el asiento de la liquidación ya no lleva la comisión: va en la factura (serie 2).';
-
-
---
--- Name: COLUMN channel_settlement.is_reference; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.is_reference IS 'D01 · De referencia: el periodo acaba antes del corte de la contabilidad (Bancos). Sin factura de comisión ni asiento de liquidación; su cobro sí se casa.';
-
-
---
--- Name: COLUMN channel_settlement.invoice_match_status; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.invoice_match_status IS 'PC01 · Al cobrarla: «cobradas» (sus facturas quedaron cobradas por sus pedidos) o «a_revisar» (no cuadran: no se cobró nada solo). Vacío: sin cobrar.';
-
-
---
--- Name: COLUMN channel_settlement.invoice_match_note; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.channel_settlement.invoice_match_note IS 'PC01 · Lo que pasó al cobrar sus facturas, en una frase (regla 8).';
 
 
 --
@@ -93551,7 +93945,7 @@ END, ''::text)) STORED,
     CONSTRAINT supplier_invoice_match_status_check CHECK ((match_status = ANY (ARRAY['sin_match'::text, 'ok'::text, 'con_diferencias'::text]))),
     CONSTRAINT supplier_invoice_pagada_con_fecha CHECK (((paid_at IS NULL) OR (status = 'pagada'::text))),
     CONSTRAINT supplier_invoice_paid_method_check CHECK (((paid_method IS NULL) OR (paid_method = ANY (ARRAY['transfer'::text, 'direct_debit'::text, 'card'::text, 'cash'::text, 'prepaid'::text, 'compensation'::text])))),
-    CONSTRAINT supplier_invoice_payment_method_check CHECK (((payment_method IS NULL) OR (payment_method = ANY (ARRAY['transfer'::text, 'direct_debit'::text, 'card'::text, 'cash'::text, 'prepaid'::text])))),
+    CONSTRAINT supplier_invoice_payment_method_check CHECK (((payment_method IS NULL) OR (payment_method = ANY (ARRAY['transfer'::text, 'direct_debit'::text, 'card'::text, 'cash'::text, 'prepaid'::text, 'compensation'::text])))),
     CONSTRAINT supplier_invoice_read_iban_format_check CHECK (((read_iban IS NULL) OR (read_iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
     CONSTRAINT supplier_invoice_reading_confidence_check CHECK ((reading_confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text]))),
     CONSTRAINT supplier_invoice_retencion_completa CHECK ((((withholding_rate_id IS NULL) = (withholding_amount IS NULL)) AND ((withholding_amount IS NULL) OR (withholding_amount >= (0)::numeric)))),
@@ -107193,6 +107587,22 @@ ALTER TABLE ONLY public.channel_review
 
 
 --
+-- Name: channel_settlement_invoice channel_settlement_invoice_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.channel_settlement_invoice
+    ADD CONSTRAINT channel_settlement_invoice_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: channel_settlement_invoice channel_settlement_invoice_una_liquidacion; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.channel_settlement_invoice
+    ADD CONSTRAINT channel_settlement_invoice_una_liquidacion UNIQUE (supplier_invoice_id);
+
+
+--
 -- Name: channel_settlement_order channel_settlement_order_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -112630,6 +113040,13 @@ CREATE UNIQUE INDEX channel_review_import_key ON public.channel_review USING btr
 
 
 --
+-- Name: channel_settlement_invoice_liquidacion; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX channel_settlement_invoice_liquidacion ON public.channel_settlement_invoice USING btree (settlement_id);
+
+
+--
 -- Name: channel_settlement_tienda_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -117649,6 +118066,20 @@ CREATE TRIGGER s01h_abono_validado AFTER UPDATE OF status ON public.journal_entr
 
 
 --
+-- Name: supplier_invoice s01i_factura_comision; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01i_factura_comision AFTER INSERT OR UPDATE OF supplier_id, reading, invoice_date, status ON public.supplier_invoice FOR EACH ROW WHEN ((pg_trigger_depth() = 0)) EXECUTE FUNCTION public._s01i_factura_comision();
+
+
+--
+-- Name: channel_settlement s01i_liquidacion_llega; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01i_liquidacion_llega AFTER INSERT OR UPDATE OF store_id, brand_id, location_id, period_from, period_to ON public.channel_settlement FOR EACH ROW WHEN ((pg_trigger_depth() = 0)) EXECUTE FUNCTION public._s01i_liquidacion_llega();
+
+
+--
 -- Name: accounts seed_appcc_after_insert_accounts; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -121053,6 +121484,30 @@ ALTER TABLE ONLY public.channel_settlement
 
 ALTER TABLE ONLY public.channel_settlement
     ADD CONSTRAINT channel_settlement_commission_invoice_id_fkey FOREIGN KEY (commission_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE SET NULL;
+
+
+--
+-- Name: channel_settlement_invoice channel_settlement_invoice_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.channel_settlement_invoice
+    ADD CONSTRAINT channel_settlement_invoice_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: channel_settlement_invoice channel_settlement_invoice_settlement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.channel_settlement_invoice
+    ADD CONSTRAINT channel_settlement_invoice_settlement_id_fkey FOREIGN KEY (settlement_id) REFERENCES public.channel_settlement(id) ON DELETE CASCADE;
+
+
+--
+-- Name: channel_settlement_invoice channel_settlement_invoice_supplier_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.channel_settlement_invoice
+    ADD CONSTRAINT channel_settlement_invoice_supplier_invoice_id_fkey FOREIGN KEY (supplier_invoice_id) REFERENCES public.supplier_invoice(id) ON DELETE CASCADE;
 
 
 --
@@ -131266,6 +131721,12 @@ ALTER TABLE public.channel_review ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.channel_settlement ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: channel_settlement_invoice; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.channel_settlement_invoice ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: channel_settlement_order; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -132720,6 +133181,20 @@ CREATE POLICY cs_read ON public.channel_settlement FOR SELECT USING ((account_id
 --
 
 CREATE POLICY cs_write ON public.channel_settlement USING (public.current_user_is_admin_of(account_id)) WITH CHECK (public.current_user_is_admin_of(account_id));
+
+
+--
+-- Name: channel_settlement_invoice csi_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY csi_read ON public.channel_settlement_invoice FOR SELECT USING ((account_id = ANY (public.current_user_account_ids())));
+
+
+--
+-- Name: channel_settlement_invoice csi_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY csi_write ON public.channel_settlement_invoice USING (public.current_user_is_admin_of(account_id)) WITH CHECK (public.current_user_is_admin_of(account_id));
 
 
 --
@@ -139527,6 +140002,46 @@ GRANT ALL ON FUNCTION public._conta_cierre_serie(p_company uuid, p_canal uuid) T
 
 
 --
+-- Name: FUNCTION _conta_comision_buscar(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_comision_buscar(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_comision_buscar(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_comision_datos(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_comision_datos(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_comision_datos(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_comision_estado(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_comision_estado(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_comision_estado(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_por text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_por text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_por text, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_comision_pagar(p_invoice uuid, p_fuera boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_comision_pagar(p_invoice uuid, p_fuera boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_comision_pagar(p_invoice uuid, p_fuera boolean) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_corte(p_company uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -139540,6 +140055,15 @@ GRANT ALL ON FUNCTION public._conta_corte(p_company uuid) TO service_role;
 
 REVOKE ALL ON FUNCTION public._conta_cuenta_aprendida(p_company uuid, p_410 text, p_grupo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_cuenta_aprendida(p_company uuid, p_410 text, p_grupo text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_dir_coincide(p_texto text, p_dir text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO anon;
+GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO service_role;
 
 
 --
@@ -139665,6 +140189,24 @@ GRANT ALL ON FUNCTION public._conta_iva_reapertura_cerrar() TO service_role;
 
 
 --
+-- Name: TABLE channel_settlement; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.channel_settlement TO anon;
+GRANT ALL ON TABLE public.channel_settlement TO authenticated;
+GRANT ALL ON TABLE public.channel_settlement TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_liquidacion_a_facturar(p_cs public.channel_settlement); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_liquidacion_a_facturar(p_cs public.channel_settlement) TO anon;
+GRANT ALL ON FUNCTION public._conta_liquidacion_a_facturar(p_cs public.channel_settlement) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_liquidacion_a_facturar(p_cs public.channel_settlement) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_liquidacion_cobros(p_settlement uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -139694,6 +140236,14 @@ GRANT ALL ON FUNCTION public._conta_liquidacion_marcar(p_settlement uuid) TO ser
 
 REVOKE ALL ON FUNCTION public._conta_liquidacion_solape(p_settlement uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_liquidacion_solape(p_settlement uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_local_de_texto(p_account uuid, p_textos text[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_local_de_texto(p_account uuid, p_textos text[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_local_de_texto(p_account uuid, p_textos text[]) TO service_role;
 
 
 --
@@ -141144,6 +141694,24 @@ GRANT ALL ON TABLE public.conta_cobro_redsys TO service_role;
 
 REVOKE ALL ON FUNCTION public._s01_redsys_estado(r public.conta_cobro_redsys) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._s01_redsys_estado(r public.conta_cobro_redsys) TO service_role;
+
+
+--
+-- Name: FUNCTION _s01i_factura_comision(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._s01i_factura_comision() TO anon;
+GRANT ALL ON FUNCTION public._s01i_factura_comision() TO authenticated;
+GRANT ALL ON FUNCTION public._s01i_factura_comision() TO service_role;
+
+
+--
+-- Name: FUNCTION _s01i_liquidacion_llega(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._s01i_liquidacion_llega() TO anon;
+GRANT ALL ON FUNCTION public._s01i_liquidacion_llega() TO authenticated;
+GRANT ALL ON FUNCTION public._s01i_liquidacion_llega() TO service_role;
 
 
 --
@@ -144349,6 +144917,24 @@ GRANT ALL ON FUNCTION public.conta_cobros_lista(p_company uuid, p_mes date) TO s
 GRANT ALL ON FUNCTION public.conta_cobros_para_casar(p_company uuid) TO anon;
 GRANT ALL ON FUNCTION public.conta_cobros_para_casar(p_company uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_cobros_para_casar(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_comision_de_la_factura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_comision_de_la_factura(p_invoice uuid) TO anon;
+GRANT ALL ON FUNCTION public.conta_comision_de_la_factura(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_comision_de_la_factura(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_quien_nombre text) TO anon;
+GRANT ALL ON FUNCTION public.conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_comision_ligar(p_invoice uuid, p_settlement uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -155220,12 +155806,12 @@ GRANT ALL ON TABLE public.channel_review TO service_role;
 
 
 --
--- Name: TABLE channel_settlement; Type: ACL; Schema: public; Owner: -
+-- Name: TABLE channel_settlement_invoice; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.channel_settlement TO anon;
-GRANT ALL ON TABLE public.channel_settlement TO authenticated;
-GRANT ALL ON TABLE public.channel_settlement TO service_role;
+GRANT ALL ON TABLE public.channel_settlement_invoice TO anon;
+GRANT ALL ON TABLE public.channel_settlement_invoice TO authenticated;
+GRANT ALL ON TABLE public.channel_settlement_invoice TO service_role;
 
 
 --
