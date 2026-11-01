@@ -49,6 +49,9 @@ import {
 import { crearRemesa, leerPagos } from '@/modules/conta/services/pagosService'
 import { DialogoPonerIban, DialogoPonerVencimiento, DialogoYaLaHePagado } from './DialogosPagos'
 import { EsperanMiSegunda } from '@/modules/conta/pagos/PagarConRevolut'
+import { DialogoPagarVarias } from '@/modules/conta/pagos/PagarVarias'
+import { cuentasParaPagar, textoPagarVarias } from '@/modules/conta/pagos/pagarService'
+import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
 
 const plural = (n: number, uno: string, varios: string) => `${n.toLocaleString('es-ES')} ${n === 1 ? uno : varios}`
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
@@ -103,8 +106,15 @@ export default function PagosPage() {
   // Sin elegir, el primero de los bancos con IBAN.
   const bancoId = bancoElegido || (conIban[0]?.id ?? '')
   const [ocupado, setOcupado] = useState(false)
-  const [aviso, setAviso] = useState<{ tono: 'seguro' | 'falta'; texto: string } | null>(null)
+  const [aviso, setAviso] = useState<{ tono: 'seguro' | 'duda' | 'falta'; texto: string } | null>(null)
   const [dialogo, setDialogo] = useState<null | 'ya' | 'vencimiento'>(null)
+  // B01 · PR 3b · Si «Desde» es una cuenta con la que se paga desde Sumied (Revolut) y puedes pagar,
+  // la salida principal es pagarlas con el banco; el fichero de la remesa sigue como segunda.
+  const cuentasBanco = useLeer(activa ? () => cuentasParaPagar(activa.id) : null, `${activa?.id}:cuentas-para-pagar`)
+  const quienPaga = useLeer(activa && (cuentasBanco.datos ?? []).length > 0 ? () => leerQuienPaga(activa.id) : null, `${activa?.id}:quien-paga:${(cuentasBanco.datos ?? []).length}`)
+  const cuentaBanco = (cuentasBanco.datos ?? []).find((c) => c.id === bancoId) ?? null
+  const porBanco = !!cuentaBanco && quienPaga.datos?.yoPuedo === true
+  const [varias, setVarias] = useState(false)
 
   const pagar = async () => {
     if (!activa || pagables.length === 0 || ocupado) return
@@ -124,7 +134,7 @@ export default function PagosPage() {
     const alPulsar = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null
       if (e.key !== 'Enter' || !pagables.length || dialogo || ponerIbanA || (t && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A'].includes(t.tagName))) return
-      e.preventDefault(); void pagar()
+      e.preventDefault(); if (porBanco) setVarias(true); else void pagar()
     }
     window.addEventListener('keydown', alPulsar)
     return () => window.removeEventListener('keydown', alPulsar)
@@ -238,12 +248,22 @@ export default function PagosPage() {
           <label className="pg-barra-campo"><span>Fecha de pago</span>
             <input type="date" value={fechaPago} min={hoy} onChange={(e) => setFechaPago(e.target.value || proximoLaborable(hoy))} aria-label="Fecha de pago" />
           </label>
-          <Boton variante="principal" onClick={() => void pagar()} disabled={pagables.length === 0 || ocupado || !bancoId}>
-            {ocupado ? 'Preparando…' : pagables.length === 1 ? 'Pagar 1 factura' : `Pagar ${pagables.length} facturas`} <kbd className="pg-kbd">Intro</kbd>
-          </Boton>
+          {porBanco && cuentaBanco ? <>
+            <Boton onClick={() => void pagar()} disabled={pagables.length === 0 || ocupado} data-prueba="preparar-fichero">{ocupado ? 'Preparando…' : 'Preparar el fichero SEPA'}</Boton>
+            <Boton variante="principal" onClick={() => { setAviso(null); setVarias(true) }} disabled={pagables.length === 0 || ocupado} data-prueba="pagar-con-banco">
+              {textoPagarVarias(pagables.length, cuentaBanco.banco)} <kbd className="pg-kbd">Intro</kbd>
+            </Boton>
+          </> : (
+            <Boton variante="principal" onClick={() => void pagar()} disabled={pagables.length === 0 || ocupado || !bancoId}>
+              {ocupado ? 'Preparando…' : pagables.length === 1 ? 'Pagar 1 factura' : `Pagar ${pagables.length} facturas`} <kbd className="pg-kbd">Intro</kbd>
+            </Boton>
+          )}
         </div>
       )}
-      {vivas.length > 0 && <p className="cx-ayuda pg-barra-nota">Te preparo la remesa (el fichero para subir al banco). Si pagas una sola, también puedes hacerlo a mano en tu banco: cuando llegue el cargo, la caso y la marco pagada.</p>}
+      {vivas.length > 0 && (porBanco && cuentaBanco
+        ? <p className="cx-ayuda pg-barra-nota">Desde {cuentaBanco.nombre} pagas con {cuentaBanco.banco} desde aquí: salen al momento, con una sola aprobación, y cuando llega su cargo lo caso solo con cada factura. Si prefieres el fichero para subir al banco, «Preparar el fichero SEPA».</p>
+        : <p className="cx-ayuda pg-barra-nota">Te preparo la remesa (el fichero para subir al banco). Si pagas una sola, también puedes hacerlo a mano en tu banco: cuando llegue el cargo, la caso y la marco pagada.</p>)}
+      {cuentasBanco.error && <p className="s-apoyo">No se ha podido saber si se puede pagar desde Sumied: {cuentasBanco.error}</p>}
 
       <div className="pg-notas">
         <p><strong>Pagada sola.</strong> Cuando el cargo llega al banco, Sumied lo casa con la factura o con la remesa entera, hace el asiento y la marca pagada. No hay que cambiar ningún estado a mano.</p>
@@ -255,6 +275,10 @@ export default function PagosPage() {
         <DialogoYaLaHePagado empresaId={activa.id} hoy={hoy} bancos={(losBancos.datos ?? []).filter((b) => b.kind === 'bank')}
           facturas={todas.filter((f) => estadoPago(f) !== 'pagada' && libre(f) >= 0.005)} elegida={vivas.length === 1 ? vivas[0].id : null}
           alCerrar={(frase) => { setDialogo(null); if (frase) { setAviso({ tono: 'seguro', texto: frase }); setVuelta((v) => v + 1) } }} />
+      )}
+      {varias && activa && cuentaBanco && (
+        <DialogoPagarVarias empresaId={activa.id} cuenta={cuentaBanco} facturas={pagables.map((f) => ({ id: f.id, proveedor: f.proveedor, numero: f.numero }))}
+          alCerrar={(a) => { setVarias(false); if (a) { setAviso({ tono: a.tono === 'ok' ? 'seguro' : a.tono, texto: a.texto }); setMarcadas(new Set()); setVuelta((v) => v + 1) } }} />
       )}
       {ponerIbanA && (
         <DialogoPonerIban proveedor={ponerIbanA}
