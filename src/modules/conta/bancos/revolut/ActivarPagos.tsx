@@ -176,7 +176,7 @@ export function AsistentePagos({ alCerrar }: { alCerrar: () => void }) {
   const { companyId, quien } = useBancos()
   const [paso, setPaso] = useState<PasoPagos>('llave')
   const mia = useLeer(() => leerMiSegunda(), 'mi-segunda-asistente')
-  const topes = useLeer(paso === 'topes' || paso === 'revolut' ? () => rpc<Topes>('conta_pago_topes', { p_company: companyId }) : null, `topes:${companyId}`)
+  const topes = useLeer(paso === 'topes' || paso === 'revolut' ? () => rpc<Topes>('conta_pago_topes', { p_company: companyId }) : null, `topes:${companyId}:${paso !== 'llave'}`)
   const [cambiarTopes, setCambiarTopes] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [haciendo, setHaciendo] = useState(false)
