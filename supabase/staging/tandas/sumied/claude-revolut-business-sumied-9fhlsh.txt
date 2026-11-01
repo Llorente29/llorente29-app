@@ -33,3 +33,13 @@ supabase/staging/sql/20261101_b01p_pagos_base_prueba.sql
 # solo la clave de servicio; y la vuelta atrás (la vista de producción, cc12648e…).
 supabase/migrations/20261101T1614_b01p_pagos_salida.sql
 supabase/staging/sql/20261101_b01p_pagos_salida_prueba.sql
+# B01 Revolut · PR 2c-1 · Activar y dejar de pagar. La 1703 añade
+# revolut_conexion.oauth_para y conta_pago_dejar, con un CHECK sobre la columna
+# nueva (declarado como «cambia»).
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999, con la 1234 y la 1614
+# puestas): la vuelta atrás y la 1703 otra vez; oauth_para solo admite sus tres
+# valores; dejar de pagar quita los permisos al instante, cancela lo que
+# esperaba (y sus retos), deja lo ya salido y pone la conexión sin PAY;
+# «Aprobar y pagar» lo dice después; y solo la clave de servicio la llama.
+supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql
+supabase/staging/sql/20261101_b01p_dejar_de_pagar_prueba.sql

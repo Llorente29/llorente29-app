@@ -1,20 +1,20 @@
-# B01 Revolut · PR 2b · La salida al banco, en la base. Rama
+# B01 Revolut · PR 2c-1 · Activar y dejar de pagar, en la base. Rama
 # claude/revolut-business-sumied-9fhlsh. Se ensaya y se aplica desde main
 # nombrando esta rama, antes de fusionar.
 #
 # (Las tandas anteriores de esta rama están aplicadas y en el historial de
-# producción con su huella: la del PR 1 —2210, 2211 y 2212, #415— y la del
-# PR 2a —1234, #426—; sus manifiestos, en la historia de git.)
+# producción con su huella: la del PR 1 —2210, 2211 y 2212, #415—, la del
+# PR 2a —1234, #426— y la del PR 2b —1614, #429—; sus manifiestos, en la
+# historia de git.)
 #
-#   1. 1614 — CAMBIA en caliente, declarado: el CHECK del tipo de remesa admite
-#      «banco» (solo amplía) y la vista conta_pago_remesa_estado la pone «en el
-#      banco» desde que se manda (antes de esto no hay ninguna). AÑADE las
-#      funciones de la clave de servicio: mandar un lote listo (como remesa
-#      «banco» de PC01, con su línea), lo que dice el banco y «Activar pagos».
+#   1. 1703 — AÑADE revolut_conexion.oauth_para (admite nulos: a qué se fue a
+#      Revolut) y la función conta_pago_dejar (solo la clave de servicio).
+#      CAMBIA en caliente, declarado: el CHECK de oauth_para, que solo mira la
+#      columna que añade el mismo fichero (revolut_conexion: 1 fila).
 #      Nada en el camino del pedido.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
-supabase/migrations/20261101T1614_b01p_pagos_salida.sql
-cuenta: scripts/conta/produccion/cuentas/b01p-salida.sql
+supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql
+cuenta: scripts/conta/produccion/cuentas/b01p-dejar.sql

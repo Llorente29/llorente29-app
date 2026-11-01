@@ -1,18 +1,16 @@
 {
- "_que": "B01 Revolut · PR 2b · contexto de producción de la tanda (1614), medido en SOLO LECTURA el 01/11 a las 16:40Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen conta_pago_remesa (su CHECK del tipo, conta_pago_remesa_kind_check, es fichero | a_mano) y la vista conta_pago_remesa_estado (md5 de su definición cc12648e…, la de la 0915), las dos con 0 filas; no existe ninguna de las cuatro funciones; nada en el camino del pedido; nada en el historial.",
- "medido": "2026-11-01T16:40Z",
+ "_que": "B01 Revolut · PR 2c-1 · contexto de producción de la tanda (1703), medido en SOLO LECTURA el 01/11 a las 17:23Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe revolut_conexion (1 fila de verdad; la estadística de pg_class dice 0) y no tiene oauth_para; no existe conta_pago_dejar; nada en el camino del pedido; nada en el historial.",
+ "medido": "2026-11-01T17:23Z",
  "tanda": {
-  "supabase/migrations/20261101T1614_b01p_pagos_salida.sql": "4c48fa6e558bbd0afc936050835478e5"
+  "supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql": "4b11c39d3d75045c4c9e0ee0f9e82dae"
  },
  "contexto": {
   "tablas": [
-   "public.conta_pago_remesa",
-   "public.conta_pago_remesa_estado"
+   "public.revolut_conexion"
   ],
   "funciones": [],
   "filas": {
-   "public.conta_pago_remesa": 0,
-   "public.conta_pago_remesa_estado": 0
+   "public.revolut_conexion": 0
   },
   "otras": {},
   "camino": {
