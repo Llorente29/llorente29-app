@@ -50,7 +50,17 @@ begin
     from generate_series(1, 1000) n;
 end $$;
 
--- 1 · Con la versión de antes: una llamada (o más) por factura.
+-- 1 · Con la versión de antes: una llamada (o más) por factura. Desde la rama,
+-- el workflow ya ha pasado la 1134 en esta transacción: se vuelve al cuerpo de
+-- antes desde su respaldo (y si no se ha pasado, ya es el de antes).
+do $$ begin
+  if (select md5(prosrc) from pg_proc where oid = 'public.conta_documentos_recibidos(uuid,date,date)'::regprocedure) = '6a1943f6f411e8fc4bd32dfe59fcef28' then
+    perform public._restaurar_funcion('public.conta_documentos_recibidos(uuid,date,date)', '20261101T1134_s01n_recibidas_rapidas');
+  end if;
+  if (select md5(prosrc) from pg_proc where oid = 'public.conta_documentos_recibidos(uuid,date,date)'::regprocedure) <> '3e5a1a7e07564eab372eea33e20cec05' then
+    raise exception 'PRUEBA S01n · 1: no tengo el cuerpo de antes (huella 3e5a1a7e…) para medirlo.';
+  end if;
+end $$;
 select set_config('request.jwt.claims', json_build_object('sub', 'c01d0000-0000-4000-8000-0000000000d1', 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
