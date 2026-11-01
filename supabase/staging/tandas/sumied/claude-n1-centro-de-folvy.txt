@@ -1,0 +1,6 @@
+# N1 · respuesta 3 · El local de Folvy manda: la 2248 (cambia
+# lab_centros_del_lote y lab_volcar_lote: solo en ROLLBACK) y su prueba
+# (ROLLBACK), con los cuatro casos de Julio, lo de antes como en producción, el
+# contrato corregido, otra vez sin duplicar y la vuelta atrás.
+supabase/migrations/20261101T2248_n1c_centro_de_folvy.sql
+supabase/staging/sql/20261101_n1c_centro_de_folvy_prueba.sql

@@ -1,0 +1,3 @@
+# N1 · respuesta 3 · vuelta atrás: lab_volcar_lote y lab_centros_del_lote como
+# estaban (del respaldo).
+supabase/vuelta-atras/20261101T2248_n1c_centro_de_folvy.down.sql

@@ -41,3 +41,11 @@ describe('lineaNoCuadra', () => {
     expect(lineaNoCuadra({ persona: 'X', cegid: 1000, conceptos: 1050.5 }).replace(/\s/g, ' ')).toMatch(/Diferencia: \+50,50 €\.$/)
   })
 })
+
+describe('«Sin centro en Cegid» (N1 · respuesta 3)', () => {
+  it('la fila de las que no traen centro se llama así en pantalla; las demás, por su centro', async () => {
+    const { SIN_CENTRO, nombreDelCentro } = await import('@/modules/conta/laboral/importar/volcado')
+    expect(nombreDelCentro(SIN_CENTRO)).toBe('Sin centro en Cegid')
+    expect(nombreDelCentro('Centro Inventado')).toBe('Centro Inventado')
+  })
+})

@@ -208,10 +208,13 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
       { trabajador: '1', nombre: `Baja Inventada Uno ${marca}`, nif: `INV1${marca}`, centro, puesto: 'Ayudante', en_alta_hoy: 'N' },
       { trabajador: '2', nombre: `Baja Inventada Dos ${marca}`, nif: `INV2${marca}`, centro, puesto: 'Ayudante', en_alta_hoy: 'N' },
       { trabajador: '3', nombre: `Alta Inventada Tres ${marca}`, nif: `INV3${marca}`, centro, puesto: 'Ayudante', en_alta_hoy: 'S' },
+      // N1 · respuesta 3: de baja, fuera del equipo y sin centro en Cegid.
+      { trabajador: '4', nombre: `Baja Inventada Cuatro ${marca}`, nif: `INV4${marca}`, puesto: 'Ayudante', en_alta_hoy: 'N' },
     ])
     libro.Sheets[c.nombre] = filasDe(c, [
       { trabajador: '1', contrato_n: '1', fecha_alta: '2023-01-10', fecha_fin: '2024-06-30', tipo_contrato: '401', centro },
       { trabajador: '2', contrato_n: '1', fecha_alta: '2022-02-01', fecha_fin: '2022-08-31', tipo_contrato: '401', centro },
+      { trabajador: '4', contrato_n: '1', fecha_alta: '2021-03-01', fecha_fin: '2021-09-30', tipo_contrato: '401' },
     ])
   })
 
@@ -223,9 +226,19 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(page.locator('[data-prueba="importar-filas"], [data-prueba="importar-error"]')).toBeVisible({ timeout: 60_000 })
   await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
 
-  // El centro, sin confirmar: «Pasar a las fichas» no mete a nadie, y lo dice.
-  await expect(page.locator('[data-prueba="volcado-centro"]')).toHaveCount(1, { timeout: 30_000 })
-  await expect(page.locator('[data-prueba="volcado-sin-confirmar"]')).toContainText('Falta confirmar 1 centro')
+  // El centro y «Sin centro en Cegid», sin confirmar: «Pasar a las fichas» no mete a nadie, y lo dice.
+  const filaCentro = page.locator('[data-prueba="volcado-centro"]').filter({ hasText: centro })
+  const filaSinCentro = page.locator('[data-prueba="volcado-centro"]').filter({ hasText: 'Sin centro en Cegid' })
+  await expect(filaCentro).toHaveCount(1, { timeout: 30_000 })
+  // La 2248 (N1 · respuesta 3) llega a staging de verdad cuando se fusiona en main
+  // (es un «cambia»: desde la rama, solo en ROLLBACK). Sin ella, staging no trae la
+  // fila «Sin centro en Cegid»: se prueba lo de antes y se apunta, nunca en silencio.
+  const conLa2248 = (await filaSinCentro.count()) === 1
+  if (!conLa2248) test.info().annotations.push({ type: 'sin la 2248', description: 'staging aún no tiene la 2248: la fila «Sin centro en Cegid» se prueba en main, después del real' })
+  if (conLa2248) {
+    await expect(filaSinCentro).toContainText('1')
+    await expect(page.locator('[data-prueba="volcado-sin-confirmar"]')).toContainText('Faltan confirmar 2 centros')
+  }
   const hecho = page.locator('[data-prueba="volcado-hecho"]')
   const pasar = async () => {
     await page.locator('[data-prueba="volcado-pasar"]').click()
@@ -233,22 +246,35 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
     await expect(page.locator('[data-prueba="volcado-error"]')).toHaveCount(0)
   }
   await pasar()
-  await expect(hecho).toContainText('0 personas y 0 contratos al día desde Cegid. De las 3 de Cegid, 3 no han entrado')
+  await expect(hecho).toContainText('0 personas y 0 contratos al día desde Cegid. De las 4 de Cegid, 4 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText('no tiene local confirmado')
+  if (conLa2248) await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Baja Inventada Cuatro ${marca}: no está en Folvy y Cegid no trae su centro`)
 
   // Confirmado el propuesto (el que se llama igual): las dos bajas entran; la de alta no se crea.
-  await expect(page.locator('[data-prueba="volcado-centro"] select')).toHaveValue(local.datos[0].id)
-  await expect(page.locator('[data-prueba="volcado-confirmar"]')).toHaveText('Confirmar el propuesto')
-  await page.locator('[data-prueba="volcado-confirmar"]').click()
-  await expect(page.locator('[data-prueba="volcado-centro"]')).toContainText('Confirmado')
+  await expect(filaCentro.locator('select')).toHaveValue(local.datos[0].id)
+  await expect(filaCentro.locator('[data-prueba="volcado-confirmar"]')).toHaveText('Confirmar el propuesto')
+  await filaCentro.locator('[data-prueba="volcado-confirmar"]').click()
+  await expect(filaCentro).toContainText('Confirmado')
   await pasar()
-  await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 entran como bajas). De las 3 de Cegid, 1 no ha entrado')
+  await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 entran como bajas). De las 4 de Cegid, 2 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Alta Inventada Tres ${marca}: en Cegid está de alta y no está en Folvy`)
+
+  // «Sin centro en Cegid»: se elige el local y entra la baja que faltaba.
+  if (conLa2248) {
+    await filaSinCentro.locator('select').selectOption(local.datos[0].id)
+    await filaSinCentro.locator('[data-prueba="volcado-confirmar"]').click()
+    await expect(filaSinCentro).toContainText('Confirmado')
+    await pasar()
+    await expect(hecho).toContainText('3 personas y 3 contratos al día desde Cegid (2 ya estaban en el equipo · 1 entra como baja). De las 4 de Cegid, 1 no ha entrado')
+    await expect(page.locator('[data-prueba="volcado-para-saber"]')).toContainText(`Baja Inventada Cuatro ${marca}: de baja en Cegid y no estaba en Folvy: entra como baja.`)
+  }
   await captura(page, 'n1-volcado-hecho')
 
-  // Otra vez: las mismas dos, que ya están; ningún contrato de más.
+  // Otra vez: las mismas, que ya están; ningún contrato de más.
   await pasar()
-  await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 ya estaban en el equipo)')
+  await expect(hecho).toContainText(conLa2248
+    ? '3 personas y 3 contratos al día desde Cegid (3 ya estaban en el equipo)'
+    : '2 personas y 2 contratos al día desde Cegid (2 ya estaban en el equipo)')
 
   expect(errores, errores.join('\n')).toEqual([])
 })

@@ -1,0 +1,22 @@
+{
+  "_que": "N1 · respuesta 3 · contexto de producción de la 2248, medido en SOLO LECTURA (las mismas preguntas que sql-contexto: existe, otras firmas, camino del pedido —nombre, disparadores y cron— e historial). Existen lab_centros_del_lote(uuid) y lab_volcar_lote(uuid) (de la 1938), sin otras firmas; nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-11-01T22:53Z",
+  "tanda": {
+    "supabase/migrations/20261101T2248_n1c_centro_de_folvy.sql": "967a294da49bcdb51993d483a407a865"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.lab_centros_del_lote(uuid)",
+      "public.lab_volcar_lote(uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

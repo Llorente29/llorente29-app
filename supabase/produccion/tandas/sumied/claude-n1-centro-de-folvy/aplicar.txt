@@ -1,0 +1,17 @@
+# N1 · respuesta 3 (01/11/2026) · El local de cada persona es el de su ficha
+# en Folvy; las que no están y no traen centro, en «Sin centro en Cegid».
+# Rama claude/n1-centro-de-folvy. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar. Sin autorizo.
+#
+#   1. 2248 — CAMBIA EN CALIENTE, con su prueba de staging:
+#      lab_centros_del_lote (la fila «Sin centro en Cegid») y lab_volcar_lote
+#      (la de Folvy lleva su local; los contratos, el de la ficha; «otro
+#      local» deja de ser aviso). Misma firma. Nada en el camino del pedido.
+#
+# Antes (producción, solo lectura, el lote de Foodint): 19 trabajadores (7 ok,
+# 12 aviso), 31 contratos (20 ok, 11 aviso); 10 personas con ficha, 20
+# contratos guardados; 9 contratos con un local distinto del de la ficha.
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261101T2248_n1c_centro_de_folvy.sql
+cuenta: scripts/conta/produccion/cuentas/n1c-centro-de-folvy.sql
