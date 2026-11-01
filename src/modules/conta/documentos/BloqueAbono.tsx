@@ -6,14 +6,12 @@
 // de importes de siempre, sin signo.
 import { Link } from 'react-router-dom'
 import { rutaRevisarFactura } from '@/config/navegacion'
-import { useLeer } from '@/modules/conta/libros/contexto'
-import { leerLoQueAnula } from '@/modules/conta/services/abonoService'
-import { textoAnula, textoIva, textoPago } from '@/modules/conta/documentos/abono'
+import { textoAnula, textoIva, textoPago, type LoQueAnula } from '@/modules/conta/documentos/abono'
 
-export function BloqueAbono({ accountId, invoiceId, total, base, cuota, fechaAsiento, vuelta }: {
-  accountId: string | null | undefined; invoiceId: string; total: number; base: number; cuota: number; fechaAsiento: string | null; vuelta: number
+/** Lo que anula lo lee la página (leerLoQueAnula) y lo comparte con «Pago», para que los dos digan lo mismo. */
+export function BloqueAbono({ a, total, base, cuota, fechaAsiento }: {
+  a: { datos: LoQueAnula | null; error: string | null }; total: number; base: number; cuota: number; fechaAsiento: string | null
 }) {
-  const a = useLeer(accountId ? () => leerLoQueAnula(accountId, invoiceId) : null, `${accountId}:${invoiceId}:anula:${vuelta}`)
   if (a.error) return <p className="cxf-error" role="status">{a.error}</p>
   if (!a.datos) return null
   const anula = textoAnula(a.datos, total)

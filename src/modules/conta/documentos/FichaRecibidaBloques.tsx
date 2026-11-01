@@ -321,7 +321,9 @@ export function BloqueGasto({ gastos, base, cuentas, locales, nombreEje, alCambi
 
 // ── Pago ─────────────────────────────────────────────────────────────────────
 
-export function BloquePago({ formaPago, vence, estadoPago, alCambiar, cambioDe, deshacer, motivoVence, tonoVence, motivoForma, pagada, soloLectura }: {
+export function BloquePago({ formaPago, vence, estadoPago, alCambiar, cambioDe, deshacer, motivoVence, tonoVence, motivoForma, pagada, soloLectura, motivoEstado }: {
+  /** S01h · 1 · Lo que dice «Estado» cuando no es lo de siempre (un abono: se compensa o queda a tu favor; nunca «se casará con el banco»). */
+  motivoEstado?: ReactNode
   formaPago: string
   vence: string
   estadoPago: string
@@ -349,7 +351,7 @@ export function BloquePago({ formaPago, vence, estadoPago, alCambiar, cambioDe, 
             : <Fecha id="cxf-vence" aria-label="Vence" valor={vence} alCambiar={(v) => alCambiar({ vence: v })} />}
         </CampoEditable>
         <CampoEditable etiqueta="Estado" cambio={cambioDe('estadoPago')} alDeshacer={() => deshacer('estadoPago')} prueba="campo-estado-pago"
-          motivo={pagada ?? (estadoPago === 'sin_pagar' ? 'Se casará sola con el banco.' : undefined)}>
+          motivo={pagada ?? motivoEstado ?? (estadoPago === 'sin_pagar' ? 'Se casará sola con el banco.' : undefined)}>
           <select className="s-control" aria-label="Estado del pago" value={estadoPago} disabled={soloLectura} onChange={(e) => alCambiar({ estadoPago: e.target.value })}>
             {ESTADOS_PAGO.map((f) => <option key={f.valor} value={f.valor}>{f.texto}</option>)}
           </select>
