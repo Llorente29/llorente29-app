@@ -113,7 +113,12 @@ export function baseDeRevolut(srv: Srv): BaseAgregador {
   }
 }
 
-export interface ParteEmpresa { empresa: string; error: string | null; retirada: boolean; cuentas: ParteCuenta[]; pagos?: { preguntados: number; cambiados: number; fallos: number } }
+export interface ParteEmpresa {
+  empresa: string; error: string | null; retirada: boolean; cuentas: ParteCuenta[]
+  pagos?: { preguntados: number; cambiados: number; fallos: number }
+  /** B01 · PR 3a · Los cargos de los pagos ya pagados, casados solos con su pago. */
+  casados?: { mirados: number; casados: number; fallos: number }
+}
 
 /**
  * B01 · PR 2b · Los pagos de la empresa que esperan al banco, al día: se le
@@ -139,6 +144,30 @@ export async function ponerAlDiaPagos(srv: Srv, f: Fetch, c: ConexionRevolut, ac
   return out
 }
 
+/** Cuántos días atrás se buscan pagos pagados cuyo cargo aún no se ha casado. */
+export const DIAS_PARA_CASAR = 60
+
+/**
+ * B01 · PR 3a · Los pagos que el banco ya ha pagado y cuyo cargo aún no está
+ * casado: para cada uno, conta_pago_casar_banco (clave de servicio) lo casa si
+ * su cargo ya ha entrado. Va después de traer los movimientos y de preguntar
+ * por los pagos, en la misma lectura. No lanza: un fallo se cuenta y la lectura sigue.
+ */
+export async function casarPagos(srv: Srv, companyId: string, ahora = new Date()) {
+  const out = { mirados: 0, casados: 0, fallos: 0 }
+  const desde = new Date(ahora.getTime() - DIAS_PARA_CASAR * 86_400_000).toISOString()
+  const { data, error } = await srv.from('conta_pago_salida').select('id').eq('company_id', companyId).eq('estado', 'pagada')
+    .not('remesa_linea_id', 'is', null).gte('estado_at', desde)
+  if (error || !Array.isArray(data)) return out
+  for (const p of data as { id: string }[]) {
+    out.mirados++
+    const r = await srv.rpc('conta_pago_casar_banco', { p_salida: p.id })
+    if (r.error) out.fallos++
+    else if ((r.data as { casado?: boolean } | null)?.casado) out.casados++
+  }
+  return out
+}
+
 /**
  * Una lectura de una empresa: token, cuentas, movimientos hasta hoy, y cómo
  * ha ido en revolut_conexion. No lanza: el fallo va en el parte, con su porqué.
@@ -152,6 +181,8 @@ export async function leerEmpresa(srv: Srv, f: Fetch, c: ConexionRevolut, ahora 
     parte.cuentas = await sincronizarEmpresa(baseDeRevolut(srv), p, { accountId: c.account_id, companyId: c.company_id, banco: 'Revolut', renovar: null }, hoy, hoy,
       { ...OPCIONES_REVOLUT, desdeInicial: c.desde_historico })
     if (dejanPagar(c.permisos)) parte.pagos = await ponerAlDiaPagos(srv, f, c, acceso)
+    // Aunque ya no se pague con Revolut: lo que pagó antes se casa igual cuando llega su cargo.
+    parte.casados = await casarPagos(srv, c.company_id, ahora)
   } catch (e) {
     parte.retirada = e instanceof PermisoRetirado
     parte.error = e instanceof Error ? e.message : String(e)
@@ -170,7 +201,7 @@ export async function leerEmpresa(srv: Srv, f: Fetch, c: ConexionRevolut, ahora 
 export function paraElRegistro(p: ParteEmpresa) {
   return { empresa: p.empresa.slice(0, 8), error: p.error, retirada: p.retirada,
     cuentas: p.cuentas.map((x) => ({ iban4: x.iban4, estado: x.estado, leidos: x.leidos, nuevos: x.nuevos, repetidos: x.repetidos, continuidad: x.continuidad })),
-    ...(p.pagos ? { pagos: p.pagos } : {}) }
+    ...(p.pagos ? { pagos: p.pagos } : {}), ...(p.casados ? { casados: p.casados } : {}) }
 }
 
 export { entornoDe }

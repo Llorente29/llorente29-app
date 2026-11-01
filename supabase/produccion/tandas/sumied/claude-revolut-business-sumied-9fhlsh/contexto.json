@@ -1,17 +1,17 @@
 {
- "_que": "B01 Revolut · PR 2c-1 · contexto de producción de la tanda (1703), medido en SOLO LECTURA el 01/11 a las 17:23Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existe revolut_conexion (1 fila de verdad; la estadística de pg_class dice 0) y no tiene oauth_para; no existe conta_pago_dejar; nada en el camino del pedido; nada en el historial.",
- "medido": "2026-11-01T17:23Z",
+ "_que": "B01 · PR 3a · contexto de producción de la tanda (2030), medido en SOLO LECTURA el 01/11 a las 20:25Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen bank_casar, conta_remesa_casar y mark_supplier_invoice_paid, con la huella de pg_get_functiondef de la que parte la migración (0f253b11, 57bb45e3 y 927ffeee); no existe ninguno de los tres núcleos ni conta_pago_casar_banco; nada en el camino del pedido; nada en el historial.",
+ "medido": "2026-11-01T20:25Z",
  "tanda": {
-  "supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql": "4b11c39d3d75045c4c9e0ee0f9e82dae"
+  "supabase/migrations/20261101T2030_b01n_nucleos_casar.sql": "6590d7ea00eacdb9cf12a675f5800f70"
  },
  "contexto": {
-  "tablas": [
-   "public.revolut_conexion"
+  "tablas": [],
+  "funciones": [
+   "public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)",
+   "public.conta_remesa_casar(uuid,uuid,uuid[])",
+   "public.mark_supplier_invoice_paid(uuid,date,text)"
   ],
-  "funciones": [],
-  "filas": {
-   "public.revolut_conexion": 0
-  },
+  "filas": {},
   "otras": {},
   "camino": {
    "tablas": [],

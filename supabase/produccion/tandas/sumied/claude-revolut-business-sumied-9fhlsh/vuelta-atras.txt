@@ -1,3 +1,3 @@
-# B01 Revolut · PR 2c-1 · la vuelta atrás: quita conta_pago_dejar, el CHECK y la columna oauth_para de la 1703.
-cuenta: scripts/conta/produccion/cuentas/b01p-dejar.sql
-supabase/vuelta-atras/20261101T1703_b01p_dejar_de_pagar.down.sql
+# B01 · PR 3a · la vuelta atrás: las tres públicas como estaban en producción (0f253b11, 57bb45e3 y 927ffeee), y fuera los núcleos y conta_pago_casar_banco.
+cuenta: scripts/conta/produccion/cuentas/b01n-nucleos.sql
+supabase/vuelta-atras/20261101T2030_b01n_nucleos_casar.down.sql

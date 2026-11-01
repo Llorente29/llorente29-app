@@ -1,20 +1,21 @@
-# B01 Revolut · PR 2c-1 · Activar y dejar de pagar, en la base. Rama
+# B01 · PR 3a · Los núcleos de casar. Rama
 # claude/revolut-business-sumied-9fhlsh. Se ensaya y se aplica desde main
 # nombrando esta rama, antes de fusionar.
 #
 # (Las tandas anteriores de esta rama están aplicadas y en el historial de
-# producción con su huella: la del PR 1 —2210, 2211 y 2212, #415—, la del
-# PR 2a —1234, #426— y la del PR 2b —1614, #429—; sus manifiestos, en la
+# producción con su huella: la del PR 1 —2210, 2211 y 2212—, la del PR 2a
+# —1234—, la del PR 2b —1614— y la del PR 2c-1 —1703—; sus manifiestos, en la
 # historia de git.)
 #
-#   1. 1703 — AÑADE revolut_conexion.oauth_para (admite nulos: a qué se fue a
-#      Revolut) y la función conta_pago_dejar (solo la clave de servicio).
-#      CAMBIA en caliente, declarado: el CHECK de oauth_para, que solo mira la
-#      columna que añade el mismo fichero (revolut_conexion: 1 fila).
-#      Nada en el camino del pedido.
+#   1. 2030 — CAMBIA en caliente, declarado: bank_casar, conta_remesa_casar y
+#      mark_supplier_invoice_paid, con la misma firma, pasan a hacer su guarda
+#      de siempre y llamar a su núcleo (antes = después, medido en la prueba
+#      de staging con el mismo caso a los dos lados). AÑADE los tres núcleos
+#      (nadie de fuera los llama) y conta_pago_casar_banco (solo la clave de
+#      servicio). Nada en el camino del pedido.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
-supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql
-cuenta: scripts/conta/produccion/cuentas/b01p-dejar.sql
+supabase/migrations/20261101T2030_b01n_nucleos_casar.sql
+cuenta: scripts/conta/produccion/cuentas/b01n-nucleos.sql
