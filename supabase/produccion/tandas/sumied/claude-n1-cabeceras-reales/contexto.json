@@ -1,0 +1,21 @@
+{
+  "_que": "N1 · respuesta 2 · contexto de producción de la 2154, medido en SOLO LECTURA con la consulta del analizador (sql-contexto). Existe _lab_campo(uuid,text,text) (de la 1938); nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-11-01T21:56Z",
+  "tanda": {
+    "supabase/migrations/20261101T2154_n1b_campo_del_fichero.sql": "cfdf48d1455cfe30f8691616c7ad1da2"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public._lab_campo(uuid,text,text)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

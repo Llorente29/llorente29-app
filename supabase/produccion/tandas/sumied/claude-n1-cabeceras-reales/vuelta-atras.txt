@@ -1,0 +1,2 @@
+# N1 · respuesta 2 · vuelta atrás: _lab_campo como estaba (del respaldo).
+supabase/vuelta-atras/20261101T2154_n1b_campo_del_fichero.down.sql
