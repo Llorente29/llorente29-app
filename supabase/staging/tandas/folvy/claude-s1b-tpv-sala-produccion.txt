@@ -1,0 +1,5 @@
+# S1b del TPV de sala, a producción · su prueba (ROLLBACK): staging ya la tiene
+# (aplicada sin registrar). Rojo a propósito (la S1b de antes la habría
+# duplicado); vuelta atrás; primera pasada; segunda pasada sin ningún cambio
+# en definiciones, columnas, CHECK, índices ni políticas; y vuelta atrás otra vez.
+supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
