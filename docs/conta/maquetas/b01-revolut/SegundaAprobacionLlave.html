@@ -134,9 +134,9 @@ section.banda{display:flex;flex-direction:column;gap:14px}
 <header class="cab">
   <h1>La segunda aprobación con tu llave · maqueta</h1>
   <p>Encargo B01 (bancos), PR 2. Sustituye a la pantalla 3b de las maquetas v2 cuando paga una sola persona. Empresa de staging «Taberna de Prueba Norte». Todos los nombres, IBAN y cifras son inventados. La ventana de huella, cara o Windows Hello es un esquema: la dibuja el sistema del dispositivo, no Sumied.</p>
-  <div class="aviso info" style="margin-top:14px;max-width:95ch;background:var(--pag-fondo);color:var(--pag-tinta);border:1px solid var(--pag-linea)"><span>3</span><span><b>Versión 3 (01/11), con el mensaje de Julio.</b>Con una sola persona que puede pagar, la segunda aprobación es la llave de acceso del dispositivo (huella, cara o Windows Hello), no un código. Una sola confirmación vale para todos los pagos que salen juntos. El código al correo queda como plan B, solo si el dispositivo no tiene llave.</span></div>
+  <div class="aviso info" style="margin-top:14px;max-width:95ch;background:var(--pag-fondo);color:var(--pag-tinta);border:1px solid var(--pag-linea)"><span>4</span><span><b>Versión 4 (01/11), con los dos mensajes de Julio.</b>La segunda aprobación es la llave de acceso del dispositivo (huella, cara o Windows Hello), y una sola confirmación vale para todos los pagos que salen juntos. El plan B ya no es un código al correo: es un <b style="display:inline">PIN de pago</b> de 6 cifras que crea cada persona que puede pagar. El correo queda solo para crear o recuperar el PIN y para activar la llave en un dispositivo nuevo.</span></div>
   <nav class="indice" aria-label="Pantallas">
-    <a href="#llave">A · Confirmar con la llave</a><a href="#primera">B · La primera vez en un dispositivo</a><a href="#planb">C · Plan B: el código al correo</a><a href="#hecho">D · Lo que dice después</a><a href="#notas">Cómo funciona</a>
+    <a href="#llave">A · Confirmar con la llave</a><a href="#primera">B · La primera vez en un dispositivo</a><a href="#planb">C · Plan B: el PIN de pago</a><a href="#hecho">D · Lo que dice después</a><a href="#notas">Cómo funciona</a>
   </nav>
 </header>
 
@@ -160,7 +160,7 @@ section.banda{display:flex;flex-direction:column;gap:14px}
               <div class="l tot"><span>Desde Revolut <span class="mono">·5678</span></span><span></span><b class="num">4.542,70 €</b></div>
             </div>
             <div class="fila entre"><span class="btn">No pagar</span><span class="btn pri">Confirmar con mi llave</span></div>
-            <span class="ayuda">¿No tienes tu llave en este ordenador? <u>Mándame un código al correo</u></span>
+            <span class="ayuda">¿No tienes tu llave en este ordenador, o prefieres no usarla? <u>Usar mi PIN de pago</u></span>
           </div>
         </div>
         <div class="velo"><div class="sis"><b style="font-size:15px">Windows Security</b><span style="font-size:13px">Sumied (app.sumied.com) quiere comprobar que eres tú.</span><div class="ico">◎</div><span style="text-align:center;font-size:13px">Toca el lector de huellas</span><span class="btn" style="align-self:flex-end;font-family:inherit">Cancelar</span><span class="pie">Esquema del sistema, no captura</span></div></div>
@@ -203,7 +203,7 @@ section.banda{display:flex;flex-direction:column;gap:14px}
             <p class="sub" style="margin:0">Con ella confirmas los pagos con tu huella, tu cara o el PIN de Windows, sin esperar un código. Se activa una vez por dispositivo.</p>
             <div class="aviso info"><span>i</span><span><b>Antes, confirma que eres tú con el código del correo.</b>Lo hemos mandado a a•••@taberna-prueba.es a las 09:40. Vale 10 minutos y una sola vez.</span></div>
             <div class="campo"><label for="codb">Código de 6 cifras</label><div class="in foco" id="codb" style="letter-spacing:.4em;font-size:18px">305 118</div></div>
-            <div class="fila entre"><span class="btn">Ahora no: usar el código esta vez</span><span class="btn pri">Activar mi llave</span></div>
+            <div class="fila entre"><span class="btn">Ahora no: usar mi PIN esta vez</span><span class="btn pri">Activar mi llave</span></div>
             <span class="ayuda">Tus llaves activas, y quitarlas: Ajustes › Tu cuenta › Llaves de acceso.</span>
           </div>
         </div>
@@ -216,7 +216,7 @@ section.banda{display:flex;flex-direction:column;gap:14px}
         <div class="scroll">
           <div class="aviso ok" role="status"><span>✓</span><span><b>Llave activada en este iPhone.</b>Desde ahora confirmas los pagos con Face ID. Te hemos avisado al correo.</span></div>
           <span class="btn pri grande">Seguir con los 3 pagos</span>
-          <p class="ayuda" style="margin:0">Si pierdes el móvil, quita su llave desde otro dispositivo en Ajustes › Tu cuenta › Llaves de acceso. Sin la llave, Sumied te vuelve a pedir el código del correo.</p>
+          <p class="ayuda" style="margin:0">Si pierdes el móvil, quita su llave desde otro dispositivo en Ajustes › Tu cuenta › Llaves de acceso. Sin la llave, Sumied te pide tu PIN de pago.</p>
         </div>
       </div>
     </div>
@@ -225,27 +225,54 @@ section.banda{display:flex;flex-direction:column;gap:14px}
 
 <!-- ═════════ C · PLAN B ═════════ -->
 <section class="banda" id="planb">
-  <h2>C · Plan B: el código al correo</h2>
-  <p class="nota">Solo cuando el dispositivo no tiene llave (no tiene lector, o Ana no la ha activado en él) o cuando Ana elige «Mándame un código al correo». La pantalla es la 3b de las maquetas v2, con la misma lista de pagos que la A: un código vale para todos los que salen juntos.</p>
+  <h2>C · Plan B: el PIN de pago</h2>
+  <p class="nota">Cuando el dispositivo no tiene llave, o cuando la persona prefiere no usarla, Sumied pide su PIN de pago: 6 cifras que crea ella misma, distintas de la contraseña. Vale solo para la lista exacta que se confirma, igual que la llave: un PIN para todos los pagos que salen juntos. Cinco intentos fallidos lo bloquean, y desbloquearlo pide el código del correo.</p>
   <div class="par">
-    <div class="movil"><p class="etq">Móvil · sin llave en este dispositivo</p>
-      <div class="tel">
-        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
-        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Segunda aprobación</b></div>
-        <div class="scroll">
-          <div class="aviso av"><span>!</span><span><b>Este dispositivo no tiene tu llave.</b>Te hemos mandado un código a a•••@taberna-prueba.es a las 09:41. Vale 10 minutos y una sola vez, para los 3 pagos.</span></div>
-          <div class="item"><div class="t"><b>3 pagos desde Revolut ·5678</b><small>Suministros Norte · Carnes Inventadas · Bebidas Ejemplo</small></div><b class="num">4.542,70 €</b></div>
-          <div class="campo"><label for="codc">Código de 6 cifras</label><div class="in foco" id="codc" style="letter-spacing:.4em;font-size:18px">_ _ _ _ _ _</div></div>
-          <span class="btn pri grande">Confirmar y pagar</span>
-          <span class="btn grande">No pagar</span>
-          <p class="ayuda" style="margin:0">Tres intentos. Si se acaban, los pagos se cancelan y no sale nada.</p>
+    <div class="lienzo"><p class="etq">Ordenador · sin llave en este ordenador: confirmar con el PIN (PIN equivocado)</p>
+      <div class="orden" style="height:600px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span class="si">Compras</span><span>Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo" style="align-items:center;justify-content:center">
+          <div class="carta" style="width:560px;display:flex;flex-direction:column;gap:14px">
+            <div class="pasos"><div class="paso hecho"><i></i>1 · Aprobado por ti, 09:41 ✓</div><div class="paso ahora"><i></i>2 · Confirmar con tu PIN de pago</div></div>
+            <p class="titulo">Confirma con tu PIN de pago los 3 pagos que salen ahora</p>
+            <p class="sub" style="margin:0">Este ordenador no tiene tu llave. Tu PIN vale para esta lista y nada más.</p>
+            <div class="item" style="background:var(--s-fondo);border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:center"><div style="flex:1"><b>3 pagos desde Revolut <span class="mono">·5678</span></b><br><small class="ayuda">Suministros Norte · Carnes Inventadas · Bebidas Ejemplo</small></div><b class="num">4.542,70 €</b></div>
+            <div class="campo"><label for="pin">PIN de pago (6 cifras)</label><div class="in mal" id="pin" style="letter-spacing:.6em;font-size:20px">● ● ● ● ● ●</div></div>
+            <div class="aviso mal" role="alert"><span>✕</span><span><b>Ese no es tu PIN de pago.</b>Te quedan 4 intentos. Con 5 fallos se bloquea y tendrás que recuperarlo con el código del correo. Los pagos siguen aprobados y esperando.</span></div>
+            <div class="fila entre"><span class="btn">No pagar</span><span class="btn pri">Confirmar y pagar</span></div>
+            <span class="ayuda"><u>He olvidado mi PIN</u> · <u>Usar mi llave</u></span>
+          </div>
         </div>
       </div>
     </div>
-    <div class="lienzo" style="flex:1 1 400px"><p class="etq">Con dos o más personas que pueden pagar</p>
+    <div class="movil"><p class="etq">Móvil · la primera vez: crear el PIN de pago</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Tu PIN de pago</b></div>
+        <div class="scroll">
+          <b style="font-size:17px">Crea tu PIN de pago</b>
+          <p class="ayuda" style="margin:0">Lo usarás cuando no tengas tu llave a mano. 6 cifras, distintas de tu contraseña. No sirven 123456 ni seis iguales.</p>
+          <div class="aviso info"><span>i</span><span><b>Antes, confirma que eres tú.</b>Te hemos mandado un código a a•••@taberna-prueba.es a las 09:40. Vale 10 minutos.</span></div>
+          <div class="campo"><label for="codm">Código del correo</label><div class="in" id="codm" style="letter-spacing:.4em;font-size:18px">305 118</div></div>
+          <div class="campo"><label for="pin1">Tu PIN nuevo</label><div class="in foco" id="pin1" style="letter-spacing:.6em;font-size:18px">● ● ● ● _ _</div></div>
+          <div class="campo"><label for="pin2">Repítelo</label><div class="in" id="pin2" style="letter-spacing:.6em;font-size:18px">_ _ _ _ _ _</div></div>
+          <span class="btn pri grande">Guardar mi PIN</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="par">
+    <div class="lienzo" style="flex:1 1 480px"><p class="etq">Bloqueado tras 5 fallos</p>
+      <div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:8px">
+        <div class="aviso mal" role="alert"><span>✕</span><span><b>Tu PIN de pago está bloqueado.</b>Se ha equivocado 5 veces. No ha salido ningún pago: siguen aprobados y esperando. Confírmalos con tu llave, o crea un PIN nuevo con el código que te mandamos al correo.</span></div>
+        <div class="fila" style="gap:8px;flex-wrap:wrap"><span class="btn pri">Crear un PIN nuevo</span><span class="btn">Usar mi llave</span></div>
+        <span class="ayuda">Te avisamos al correo cuando se bloquea y cuando lo cambias.</span>
+      </div>
+    </div>
+    <div class="lienzo" style="flex:1 1 480px"><p class="etq">Con dos o más personas que pueden pagar</p>
       <div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:8px">
         <div class="aviso av"><span>!</span><span><b>Lo tiene que aprobar otra persona.</b>Se lo hemos pedido a Luis Ejemplo (aviso en Sumied y, si no lo abre en 15 minutos, también al correo). Hasta que lo apruebe, no sale nada.</span></div>
-        <span class="ayuda">Igual que en la v2. Luis ve la misma lista y aprueba con su llave (o con su código, si su dispositivo no la tiene). Quien pidió el pago no puede dar la segunda aprobación.</span>
+        <span class="ayuda">Luis ve la misma lista y aprueba con su llave, o con su PIN de pago si su dispositivo no la tiene. Un «Aprobar» solo no vale. Quien pidió el pago no puede dar la segunda aprobación.</span>
       </div>
     </div>
   </div>
@@ -258,7 +285,7 @@ section.banda{display:flex;flex-direction:column;gap:14px}
     <div class="lienzo" style="flex:1 1 600px"><div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:10px;max-width:720px">
       <div class="aviso ok" role="status"><span>✓</span><span><b>Confirmado con tu llave a las 09:41.</b>3 pagos, 4.542,70 €, enviados a Revolut ·5678. Te avisamos cuando los confirme.</span></div>
       <div class="linea-tiempo"><span class="p ok"><i></i>Aprobado 09:41</span><span class="s"></span><span class="p ok"><i></i>Confirmado con tu llave 09:41</span><span class="s"></span><span class="p ahora"><i></i>Enviado a Revolut</span><span class="s"></span><span class="p"><i></i>Pagada</span></div>
-      <span class="ayuda">En el historial de cada factura: «Segunda aprobación: Ana Prueba, con su llave (Windows), 09:41 · IBAN nuevo». Con el plan B: «con el código del correo».</span>
+      <span class="ayuda">En el historial de cada factura: «Segunda aprobación: Ana Prueba, con su llave (Windows), 09:41 · IBAN nuevo». Con el plan B: «con su PIN de pago».</span>
     </div></div>
   </div>
 </section>
@@ -271,9 +298,10 @@ section.banda{display:flex;flex-direction:column;gap:14px}
     <li><b>Qué se firma.</b> La huella de la lista exacta de pagos (cada importe, IBAN, beneficiario y la cuenta de origen), con un reto de un solo uso que caduca a los 10 minutos. La función que paga no manda nada si la lista ha cambiado.</li>
     <li><b>Una llave por dirección.</b> El navegador ata la llave a la dirección: una llave activada en app.sumied.com no vale en app.folvy.app ni en staging. Quien entre por las dos marcas activa una en cada una.</li>
     <li><b>Activar una llave nueva pide el código del correo</b> y avisa al correo después. Si no, quien tuviera solo tu sesión abierta podría activar la suya y pagar.</li>
-    <li><b>El código al correo sigue existiendo</b>, solo como plan B: dispositivo sin llave, o la persona lo pide.</li>
+    <li><b>El PIN de pago es el plan B</b>: en un dispositivo sin llave, o si la persona lo prefiere. Se guarda cifrado con una clave del servidor (no se puede leer ni probar fuera de Sumied), vale solo para la lista que se confirma y se bloquea con 5 fallos.</li>
+    <li><b>El correo, solo para tres cosas</b>: crear el PIN, recuperarlo (también tras un bloqueo) y activar la llave en un dispositivo nuevo. Ningún pago se confirma con un código del correo.</li>
     <li><b>La primera aprobación no cambia</b>: «Aprobar y pagar» en la ficha. La llave es solo para la segunda.</li>
   </ul>
-  <div class="pregunta"><b>Para decidir, Julio:</b> con dos o más personas que pueden pagar, ¿la otra persona aprueba también con su llave (como aquí), o le basta con pulsar «Aprobar» en su sesión?</div>
+  <p class="ayuda" style="margin:0;color:var(--pag-suave)">Decidido el 01/11: con dos o más personas, la segunda también con su llave (o su PIN); un «Aprobar» solo no vale.</p>
 </section>
 </div>
