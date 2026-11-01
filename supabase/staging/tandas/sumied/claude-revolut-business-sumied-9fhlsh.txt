@@ -43,3 +43,14 @@ supabase/staging/sql/20261101_b01p_pagos_salida_prueba.sql
 # «Aprobar y pagar» lo dice después; y solo la clave de servicio la llama.
 supabase/migrations/20261101T1703_b01p_dejar_de_pagar.sql
 supabase/staging/sql/20261101_b01p_dejar_de_pagar_prueba.sql
+# B01 · PR 3a · Los núcleos de casar. La 2030 cambia bank_casar,
+# conta_remesa_casar y mark_supplier_invoice_paid (misma firma: guarda + núcleo)
+# y añade los núcleos y conta_pago_casar_banco: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999, con la 0915, la 1234 y la
+# 1614): la vuelta atrás deja las públicas de producción; ANTES = DESPUÉS con el
+# mismo caso a los dos lados de un savepoint (casar un pago a mano, un cargo con
+# su factura, una remesa de fichero que se valida sola, marcar a mano, las
+# guardas y lo que queda escrito); nadie de fuera llama a un núcleo; el cargo
+# de un pago por Revolut casado solo con la clave de servicio; y la vuelta atrás.
+supabase/migrations/20261101T2030_b01n_nucleos_casar.sql
+supabase/staging/sql/20261101_b01n_nucleos_prueba.sql

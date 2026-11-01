@@ -7,9 +7,10 @@
 //   · si Revolut ya no acepta el permiso, la empresa queda «retirada»;
 //   · conocidos pregunta a la base en trozos;
 //   · el registro no lleva ni secretos ni el IBAN entero.
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { crearLlave } from '../../../../../supabase/functions/_shared/revolut/certificado.ts'
-import { baseDeRevolut, leerEmpresa, paraElRegistro, ponerAlDiaPagos, type ConexionRevolut, type Srv } from '../../../../../supabase/functions/_shared/revolut/servidor.ts'
+import { baseDeRevolut, casarPagos, DIAS_PARA_CASAR, leerEmpresa, paraElRegistro, ponerAlDiaPagos, type ConexionRevolut, type Srv } from '../../../../../supabase/functions/_shared/revolut/servidor.ts'
 
 const EMPRESA = '00000000-0000-4000-8000-0000000000e1'
 const IBAN = 'ES0099990000000000005678'
@@ -45,6 +46,8 @@ function baseSimulada(secretos: Record<string, string>) {
         select: () => q,
         eq: (c: string, v: unknown) => { filtros.push([c, v]); return q },
         in: (c: string, v: string[]) => { enLista = [c, v]; consultasIn.push(v.length); return q },
+        not: () => q,
+        gte: () => q,
         update: (v: Record<string, unknown>) => { actualizaciones.push({ tabla, ...v }); return { eq: async () => ({ error: null }) } },
         then: (ok: (r: { data: unknown; error: null }) => void) => {
           let filas = tabla === 'bank_movement' ? movimientos as unknown as Record<string, unknown>[] : tablas[tabla] ?? []
@@ -187,3 +190,44 @@ describe('ponerAlDiaPagos', () => {
       .toEqual({ preguntados: 0, cambiados: 0, fallos: 0 })
   })
 })
+
+describe('B01 · PR 3a · casarPagos: el cargo de un pago ya pagado, casado solo', () => {
+  it('llama a conta_pago_casar_banco por cada pago pagado de la empresa, y cuenta los casados y los fallos', async () => {
+    const llamadas: Record<string, unknown>[] = []
+    const consulta: Record<string, unknown> = {}
+    const filas = [{ id: 's-1' }, { id: 's-2' }, { id: 's-3' }]
+    const q = {
+      select: () => q,
+      eq: (c: string, v: unknown) => { consulta[c] = v; return q },
+      not: (c: string, op: string, v: unknown) => { consulta[`not.${c}`] = `${op}.${v}`; return q },
+      gte: (c: string, v: unknown) => { consulta[`gte.${c}`] = v; return q },
+      then: (ok: (r: { data: unknown; error: null }) => void) => ok({ data: filas, error: null }),
+    }
+    const srv = {
+      from: (t: string) => { consulta.tabla = t; return q },
+      async rpc(fn: string, args: Record<string, unknown>) {
+        llamadas.push({ fn, ...args })
+        if (args.p_salida === 's-2') return { data: null, error: { message: 'Ese movimiento ya está casado' } }
+        return { data: { casado: args.p_salida === 's-1', porque: args.p_salida === 's-3' ? 'El cargo aún no ha llegado del banco.' : null }, error: null }
+      },
+    } as unknown as Srv
+    const r = await casarPagos(srv, EMPRESA, new Date('2026-11-01T12:00:00Z'))
+    expect(r).toEqual({ mirados: 3, casados: 1, fallos: 1 })
+    expect(llamadas.map((l) => l.p_salida)).toEqual(['s-1', 's-2', 's-3'])
+    expect(llamadas.every((l) => l.fn === 'conta_pago_casar_banco')).toBe(true)
+    expect(consulta).toMatchObject({ tabla: 'conta_pago_salida', company_id: EMPRESA, estado: 'pagada', 'not.remesa_linea_id': 'is.null' })
+    expect(consulta['gte.estado_at']).toBe(new Date(Date.parse('2026-11-01T12:00:00Z') - DIAS_PARA_CASAR * 86_400_000).toISOString())
+  })
+  it('sin la tabla (o sin permiso), no casa nada y no para la lectura', async () => {
+    const q = { select: () => q, eq: () => q, not: () => q, gte: () => q, then: (ok: (r: { data: unknown; error: unknown }) => void) => ok({ data: null, error: { message: 'no existe' } }) }
+    const srv = { from: () => q, async rpc() { throw new Error('no se tenía que llamar') } } as unknown as Srv
+    expect(await casarPagos(srv, EMPRESA)).toEqual({ mirados: 0, casados: 0, fallos: 0 })
+  })
+  it('la lectura de una empresa casa después de traer los movimientos y de preguntar por los pagos', () => {
+    const fuente = readFileSync('supabase/functions/_shared/revolut/servidor.ts', 'utf8')
+    const cuerpo = fuente.slice(fuente.indexOf('export async function leerEmpresa'))
+    expect(cuerpo.indexOf('sincronizarEmpresa(')).toBeLessThan(cuerpo.indexOf('ponerAlDiaPagos('))
+    expect(cuerpo.indexOf('ponerAlDiaPagos(')).toBeLessThan(cuerpo.indexOf('casarPagos('))
+  })
+})
+
