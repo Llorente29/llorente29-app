@@ -38,6 +38,19 @@
 --
 -- No está en el camino del pedido. Dueño único: lo escriben funciones conta_*.
 
+-- ── 0 · Los cierres, todos de entrada y en un solo orden ───────────────────
+-- Crear una clave ajena cierra también la tabla a la que apunta (SHARE ROW
+-- EXCLUSIVE: no deja escribir en ella hasta que acaba la transacción; leer,
+-- sí). Si se cogen a medias, fichero abajo, se cruzan con quien escribe en
+-- ellas en otro orden: el 01/11 dio 40P01 en staging (run 41309002393) al
+-- deshacer. Así que se cogen al empezar, de la madre a la hija, como la S1b
+-- de D, y con un límite: si alguna no se puede coger en 5 s, para sin
+-- aplicar nada (y se vuelve a lanzar), en vez de esperar con las demás
+-- cogidas. Las tablas nuevas son vacías: crear sus claves no recorre nada.
+set local lock_timeout = '5s';
+lock table public.accounts, public.company, public.supplier, public.treasury_account, public.supplier_invoice,
+           public.conta_pago_remesa, public.conta_pago_remesa_linea in share row exclusive mode;
+
 -- ── 1 · Quién puede pagar ──────────────────────────────────────────────────
 create table if not exists public.conta_pago_permiso (
   id               uuid primary key default gen_random_uuid(),
@@ -73,11 +86,7 @@ create table if not exists public.conta_pago_lote (
   id                    uuid primary key default gen_random_uuid(),
   account_id            uuid not null references public.accounts(id) on delete cascade,
   company_id            uuid not null references public.company(id) on delete cascade,
-  -- Sin clave ajena a las tablas de mucho uso (treasury_account, supplier_invoice,
-  -- supplier, las remesas): crearla o quitarla las bloquearía en exclusiva y se
-  -- cruzaría con quien escribe en ellas (staging, run 41309002393: 40P01 al
-  -- deshacer). Que sean de la empresa lo comprueban las funciones.
-  treasury_account_id   uuid not null,
+  treasury_account_id   uuid not null references public.treasury_account(id) on delete restrict,
   proveedor             text not null check (proveedor in ('revolut')),
   estado                text not null check (estado in ('esperando_segunda', 'listo', 'enviando', 'enviado', 'cancelado')),
   huella                text not null check (huella ~ '^[0-9a-f]{64}$'),
@@ -103,8 +112,9 @@ create table if not exists public.conta_pago_salida (
   account_id           uuid not null references public.accounts(id) on delete cascade,
   company_id           uuid not null references public.company(id) on delete cascade,
   lote_id              uuid not null references public.conta_pago_lote(id) on delete cascade,
-  invoice_id           uuid not null,
-  supplier_id          uuid,
+  -- Un pago no se queda nunca sin su factura ni sin su proveedor.
+  invoice_id           uuid not null references public.supplier_invoice(id) on delete restrict,
+  supplier_id          uuid not null references public.supplier(id) on delete restrict,
   amount               numeric(14,2) not null check (amount > 0),
   beneficiario         text not null,
   iban                 text not null,
@@ -117,8 +127,8 @@ create table if not exists public.conta_pago_salida (
   estado               text not null check (estado in ('esperando_segunda', 'lista', 'enviando', 'enviada', 'esperando_banco', 'pagada', 'rechazada', 'devuelta', 'cancelada')),
   estado_porque        text,
   estado_at            timestamptz not null default now(),
-  remesa_id            uuid,
-  remesa_linea_id      uuid,
+  remesa_id            uuid references public.conta_pago_remesa(id) on delete restrict,
+  remesa_linea_id      uuid references public.conta_pago_remesa_linea(id) on delete restrict,
   banco_id             text,
   created_at           timestamptz not null default now()
 );

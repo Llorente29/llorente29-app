@@ -28,6 +28,8 @@
 --      servicio no lo llama una persona.
 --  11. La llave nueva: registrarla pide antes el código del correo; un
 --      contador que no sube la quita (puede estar copiada).
+--  12. La integridad: una factura o un proveedor con un pago no se pueden
+--      borrar (23503, on delete restrict).
 -- ============================================================================
 
 \set ON_ERROR_STOP 1
@@ -411,5 +413,25 @@ begin
   raise notice 'PRUEBA B01 PR 2a · 11: registrar pide el correo; la llave es de su dirección; contador que no sube = quitada.';
 end $$;
 reset role;
+
+
+-- ── 12 · La integridad ──────────────────────────────────────────────────────
+do $$
+begin
+  begin
+    delete from public.supplier_invoice where id = (select v::uuid from _q where clave = 'f2');
+    raise exception 'PRUEBA B01 PR 2a · 12: se borró una factura con un pago.';
+  exception when foreign_key_violation then null; end;
+  begin
+    delete from public.supplier where id = (select v::uuid from _q where clave = 's2');
+    raise exception 'PRUEBA B01 PR 2a · 12: se borró un proveedor con pagos.';
+  exception when foreign_key_violation then null; end;
+  begin
+    insert into public.conta_pago_salida (account_id, company_id, lote_id, invoice_id, supplier_id, amount, beneficiario, iban, iban_check, concepto, estado)
+    select account_id, company_id, lote_id, gen_random_uuid(), supplier_id, 1, 'x', iban, 'comprobado', 'x', 'cancelada' from public.conta_pago_salida limit 1;
+    raise exception 'PRUEBA B01 PR 2a · 12: cupo un pago de una factura que no existe.';
+  exception when foreign_key_violation then null; end;
+  raise notice 'PRUEBA B01 PR 2a · 12: una factura o un proveedor con pagos no se borran; un pago sin factura no cabe.';
+end $$;
 
 rollback;
