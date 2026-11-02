@@ -303,7 +303,7 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
   // ── Facturas de proveedor aprobadas, sin asiento (regla 8) ──
   // D03 · 0790: lo que guarda la ficha (el gasto repartido y el asiento a mano). Mientras
   // la base no lo tenga (staging antes de aplicarla), se lee lo de siempre.
-  const SELECT = 'id, supplier_id, location_id, brand_id, source, doc_kind, corrects_invoice_id, issuer_name, issuer_tax_id, invoice_number, invoice_date, created_at, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
+  const SELECT = 'id, supplier_id, location_id, brand_id, source, doc_kind, corrects_invoice_id, issuer_name, issuer_tax_id, invoice_number, invoice_date, created_at, grand_total, withholding_rate_id, withholding_amount, vat_non_deductible, reading_confidence, supplier(name, tax_id, expense_category_id, country_code, tax_id_type, tax_id_check_status, vat_regime, default_location_id, default_common), reading, supplier_invoice_line(line_amount, vat_pct, expense_account_code), supplier_invoice_tax(vat_pct, base, vat_amount)'
   // D07b · 'pagada' también: una factura pagada en el banco antes de validarla (COHELDI T0626/657,
   // EUROPASTRY 2403975) está aprobada y sin asiento; sin ella aquí, su ficha decía «Estoy
   // comprobando la cuenta y el IVA» para siempre y no se podía validar.
@@ -433,7 +433,9 @@ async function facturasDeProveedor(accountId: string, companyId: string, desde: 
       id: String(f.id), numero: s(f.invoice_number), fecha, proveedor: lote?.proveedor ?? s(prov.name) ?? 'Proveedor', terceroId: partyPorProveedor.get(sup) ?? null,
       // Ficha completa (tablero 3b): una sola factura sin local guardado lleva el de su
       // recepción, el que la ficha enseña como PROPUESTO («el local sale de la recepción»).
-      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id) ?? (soloFactura ? localPropuesto ?? null : null), total: imp(n(f.grand_total)),
+      esSocio: socioPorProveedor.has(sup), tieneNif: lote?.tieneNif || !!s(prov.tax_id), localId: s(f.location_id) ?? ((soloFactura && localPropuesto) ? localPropuesto : s(prov.default_location_id)), total: imp(n(f.grand_total)),
+      // S01o·3 · Común a todos los locales por su ficha: queda común porque lo dice la ficha, no por no saberlo.
+      comunPorFicha: prov.default_common === true,
       // D01 · Una línea puede llevar su propia cuenta (la factura de comisión de una liquidación: comisión y anuncios).
       lineas: lote?.lineas ?? (f.source === 'liquidacion' ? deLineas : lc.lineas),
       ...(lote ? { cuotas: lote.cuotas, reparto: lote.reparto } : lc.cuotas ? { cuotas: lc.cuotas } : {}),

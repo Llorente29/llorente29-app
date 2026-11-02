@@ -12,11 +12,14 @@
 //   · S01o·2: Ajustes › Tus impuestos, «¿Estás en el ROI?»; «Por revisar», la
 //     pregunta del ROI y «Falta su local · Ponerlo» (la columna del ROI solo va en
 //     ROLLBACK a staging desde la rama: su lectura es INVENTADA).
+//   · S01o·3: la ficha › Contabilidad › «Local por defecto» trae «Común a todos
+//     los locales» y lo dice debajo (la columna solo va en ROLLBACK a staging: su
+//     lectura y su guardado son INVENTADOS).
 // Las capturas van a docs/conta/capturas/s01o/.
 
 import { mkdirSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
-import { CUENTA_A, entrarComo } from '../sesion'
+import { CUENTA_A, HERMANOS_RUIZ, entrarComo } from '../sesion'
 
 const DIR = 'docs/conta/capturas/s01o'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -139,5 +142,41 @@ test.describe('S01o·2 · el ROI y los motivos de las demás facturas', () => {
     await expect(local).toBeVisible()
     await expect(local.getByRole('link', { name: 'Ponerlo' })).toHaveAttribute('href', new RegExp(PROV2))
     await capturar(page, 's01o2-por-revisar-roi-y-local')
+  })
+})
+
+// ── S01o·3 ─────────────────────────────────────────────────────────────────
+const COMUN_AYUDA = 'Su gasto es de la empresa entera: sus facturas se apuntan comunes a todos los locales.'
+
+test.describe('S01o·3 · «Común a todos los locales» en la ficha del proveedor', () => {
+  test.describe.configure({ timeout: 180_000 })
+  test.use({ actionTimeout: 20_000 })
+  test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: 'ignoreErrors' }) })
+
+  test('Contabilidad › «Local por defecto»: se elige «Común a todos los locales» y lo dice', async ({ page }) => {
+    await entrarComo(page, CUENTA_A.email)
+    let fila: Record<string, unknown> = {}
+    let comun = false
+    await page.route(new RegExp(`/rest/v1/supplier\\?.*id=eq\\.${HERMANOS_RUIZ}`), async (r) => {
+      if (r.request().method() === 'PATCH') {
+        // El guardado no llega a staging (allí la columna no existe fuera del ROLLBACK).
+        comun = true
+        return json(r, { ...fila, default_common: true, default_location_id: null })
+      }
+      if (r.request().method() !== 'GET') return r.continue()
+      const real = await r.fetch()
+      const d = await real.json() as Record<string, unknown> | Record<string, unknown>[]
+      const una = (x: Record<string, unknown>) => ({ ...x, default_common: comun })
+      if (Array.isArray(d)) { fila = d[0] ?? {}; return json(r, d.map(una)) }
+      fila = d; return json(r, una(d))
+    })
+    await page.goto(`/kitchen/proveedores/${HERMANOS_RUIZ}/contabilidad`)
+    const sel = page.locator('[data-prueba="local-por-defecto"]')
+    await expect(sel.locator('option', { hasText: 'Común a todos los locales' })).toHaveCount(1)
+    await sel.selectOption({ label: 'Común a todos los locales' })
+    await expect(page.getByRole('status').getByText('Guardado: su gasto es común a todos los locales.')).toBeVisible()
+    await expect(sel).toHaveValue('__comun')
+    await expect(page.getByText(COMUN_AYUDA)).toBeVisible()
+    await capturar(page, 's01o3-ficha-comun')
   })
 })

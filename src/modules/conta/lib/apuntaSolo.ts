@@ -64,3 +64,10 @@ export function textoRoi(enRoi: boolean, recienGuardado: boolean): string {
 
 /** S01o·2 · El motivo que pide contestar el ROI (lo escribe la base, 0005). */
 export const motivoPideRoi = (m: string | null | undefined): boolean => !!m && /falta saber si estás en el ROI/.test(m)
+
+/** S01o·3 · Lo que dice la ficha de su local por defecto. */
+export function textoLocalPorDefecto(comun: boolean, local: string | null): string {
+  if (comun) return 'Su gasto es de la empresa entera: sus facturas se apuntan comunes a todos los locales.'
+  if (local) return `Sus facturas de servicios (sin recepción) se apuntan en ${local}.`
+  return 'Sin él, una factura suya de servicios no se apunta sola: «Falta su local».'
+}
