@@ -1,10 +1,10 @@
 -- scripts/conta/produccion/cuentas/b01o-olimpo.sql
 --
 -- B01 · Cola 2 (02/11) · LO QUE CUENTA LA TANDA DE OLIMPO, antes y después.
--- SOLO LEE, solo Foodint (regla 9). Es una tanda sin vuelta atrás: el ensayo
--- comprueba que después cada medida es su «esperado:». Cada medida cuenta LO
--- QUE FALTA POR ARREGLAR: en producción pasa de 1 o 2 a 0; en staging (sin
--- Foodint) es 0 antes y después. Así el mismo «esperado: … = 0» vale en los dos.
+-- SOLO LEE, solo Foodint (regla 9). Cada medida cuenta LO QUE FALTA POR
+-- ARREGLAR: en producción pasa de 1 o 2 a 0 con la tanda, y vuelve a 1 o 2 con
+-- su vuelta atrás (el ensayo lo compara «como antes»); en staging, sin Foodint,
+-- 0 siempre.
 -- Todas leen filas concretas por su id (o, la 6, los casados con una factura
 -- anulada): solo las cambia esta tanda.
 select clave, valor from (
@@ -24,9 +24,9 @@ select clave, valor from (
     -- quieta: los casados de un movimiento concreto, por su id; solo los cambia esta tanda
     (select count(*)::text from public.bank_match bm where bm.movement_id = '910ca451-c900-4fe4-97b0-9afd40cc287d' and bm.status = 'vivo'
       and not exists (select 1 from public.bank_match_item it where it.match_id = bm.id and it.supplier_invoice_id = '8f11ef90-8535-4d24-882c-5a1d743c5d43')) union all
-  select 5, 'los asientos 4/3312 y 4/3310 sin anular',
-    -- quieta: dos asientos concretos, por su id; solo los anula esta tanda
-    (select count(*)::text from public.journal_entry where id in ('cb8a8506-0110-4d20-9303-2e4a91e91e0f', '68821b3e-a0ce-4ac1-8132-312a6b3173a9') and status <> 'anulado') union all
+  select 5, 'los asientos 4/3312 y 4/3310 que siguen en el libro',
+    -- quieta: dos asientos concretos, por su id; solo los borra esta tanda
+    (select count(*)::text from public.journal_entry where id in ('cb8a8506-0110-4d20-9303-2e4a91e91e0f', '68821b3e-a0ce-4ac1-8132-312a6b3173a9')) union all
   select 6, 'casados vivos de Foodint con una factura anulada o descartada',
     -- quieta: hoy solo hay uno (el de Olimpo) y lo deshace esta tanda; uno nuevo a mitad del ensayo sería otro error que hay que ver
     (select count(distinct bm.id)::text from public.bank_match bm join public.bank_match_item it on it.match_id = bm.id join public.supplier_invoice si on si.id = it.supplier_invoice_id

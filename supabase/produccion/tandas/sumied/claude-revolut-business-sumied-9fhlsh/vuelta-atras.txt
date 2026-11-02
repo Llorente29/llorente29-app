@@ -1,2 +1,4 @@
-# B01 · Cola 2 · la 1300 no tiene vuelta atrás (sin-vuelta-atras: en aplicar.txt): un contraasiento no se borra.
+# B01 · Cola 2 · la vuelta atrás, en orden inverso: la 1300 (los casados nuevos fuera, los asientos 4/3312 y 4/3310 de vuelta desde el respaldo de la función de borrado, y los casados de antes como estaban) y la 1310 (el núcleo de casar de producción, sin el disparador ni _bank_casado_soltar).
 cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql
+supabase/vuelta-atras/20261102T1300_b01o_olimpo_recasar.down.sql
+supabase/vuelta-atras/20261102T1310_b01o_casar_sin_anuladas.down.sql

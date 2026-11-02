@@ -1,32 +1,35 @@
 -- ============================================================================
 -- B01 · Cola 2 · OLIMPO: CADA PAGO CON SU FACTURA (solo Foodint, arreglo de datos)
 -- ----------------------------------------------------------------------------
--- Visto bueno de Julio a la lista (02/11; docs/conta/b01-revolut/cola2_olimpo_casados.md).
--- Dos transferencias del 26/10 a Olimpo quedaron casadas el 30/10 con lo que
--- no era (propuestas calculadas el 29/10, antes de la S01c, y aceptadas
--- después sin recalcular):
+-- Visto bueno de Julio a la lista (02/11) y su decisión (respuesta B01·6): los
+-- asientos de pago mal casados se BORRAN, no se anulan con contraasiento (un
+-- error del programa se borra, como los 123 duplicados de Glovo y Just Eat).
 --
+-- Dos transferencias del 26/10 a Olimpo quedaron casadas el 30/10 con lo que no
+-- era (propuestas calculadas el 29/10, antes de la S01c, y aceptadas después):
 --   1. −363,67 («FACT: 26A/10966»), casado con la 26/13028, que la S01c anuló
---      (era el albarán). Se deshace (bank_deshacer: su asiento 4/3312, validado,
---      se anula con su contraasiento) y se casa con la 26A/10966, que queda
---      pagada el 26/10.
+--      (era el albarán). Asiento de pago 4/3312.
 --   2. −170,10 («FACT: 26A/10965»), casado «a cuenta» con el saldo de Olimpo en
---      el libro (asiento 4/3310, validado y sin tercero). Se deshace igual y se
---      casa con la 26A/10965, que queda pagada el 26/10. Si la 26A/10965 no
---      está aprobada, PARA sin tocar nada (decisión de Julio).
---
--- Por las funciones de siempre (bank_deshacer y bank_casar), como una persona:
--- la que aceptó las dos propuestas (bank_match.created_by), solo dentro de esta
--- transacción (request.jwt.claims), como la S01c. Así el rastro —el registro de
--- Bancos, los contraasientos, quién— es el de un arreglo hecho en la pantalla.
--- Los asientos de pago nuevos quedan «Por validar», como cualquier casado.
+--      el libro. Asiento de pago 4/3310 (sin tercero).
+-- Lo que hace, en este orden:
+--   a. suelta los dos casados (_bank_casado_soltar, de la 1310: deshechos, sin
+--      asiento, y el pago de la 26/13028 fuera);
+--   b. BORRA los asientos 4/3312 y 4/3310 con la función de borrado de Sumied
+--      (_conta_asientos_borrar, S01q): respaldo en conta_asiento_borrado,
+--      renumera la serie 4 y recalcula la cadena; nunca antes del corte;
+--   c. casa el −363,67 con la 26A/10966 y el −170,10 con la 26A/10965
+--      (bank_casar), que quedan pagadas el 26/10; sus asientos de pago nuevos,
+--      «Por validar».
+-- Como la persona que aceptó las dos propuestas (bank_match.created_by), solo
+-- dentro de esta transacción (request.jwt.claims), como la S01c.
 --
 -- Cada cosa se ancla y se comprueba antes de tocarla: si no está como se midió
--- el 02/11, PARA. Si ya está hecho (las dos pagadas con sus casados nuevos), no
--- hace nada. En staging no está Foodint: no hace nada.
---
--- SIN VUELTA ATRÁS, a propósito: un contraasiento no se borra. Va sola en su
--- tanda, con sus «esperado:» (manifiesto.sh). Nada en el camino del pedido.
+-- el 02/11 (o la 26A/10965 no está aprobada), PARA sin tocar nada. Si ya está
+-- hecho, no hace nada. En staging no está Foodint: no hace nada.
+-- Lo de antes (los dos casados, sus movimientos y el pago de la 26/13028) queda
+-- en conta_b01o_antes, para la vuelta atrás exacta.
+-- Va después de la 1310 (usa _bank_casado_soltar). Nada en el camino del pedido.
+-- Vuelta atrás: supabase/vuelta-atras/20261102T1300_b01o_olimpo_recasar.down.sql
 -- ============================================================================
 
 do $$
@@ -46,7 +49,7 @@ declare
   -- Olimpo: su cuenta y su tercero (los del asiento 4/3312)
   v_cuenta  constant text := '40000004';
   v_tercero constant uuid := 'dcdbb774-dcfe-4247-93f0-d21bf7d1c5cb';
-  v_quien uuid; b public.bank_match; m public.bank_movement; e public.journal_entry; f public.supplier_invoice; v_n int;
+  v_quien uuid; b public.bank_match; m public.bank_movement; e public.journal_entry; f public.supplier_invoice; v_n int; r jsonb;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
     raise notice 'B01 cola 2 · 1300: esta base no tiene a Foodint: no hay nada que arreglar.';
@@ -102,15 +105,33 @@ begin
     raise exception 'B01 cola 2 · 1300: la 26A/10966 o la 26A/10965 ya tienen un pago casado.';
   end if;
 
+  -- ── Lo de antes, para la vuelta atrás exacta ──────────────────────────────
+  create table if not exists public.conta_b01o_antes as
+    select bm.id match_id, bm.journal_entry_id, mv.id movement_id, mv.status mov_status, mv.confidence mov_confidence, mv.reason mov_reason, mv.proposal mov_proposal,
+           (select coalesce(jsonb_agg(to_jsonb(p)), '[]'::jsonb) from public.supplier_invoice_payment p where p.bank_match_id = bm.id) pagos
+      from public.bank_match bm join public.bank_movement mv on mv.id = bm.movement_id
+     where bm.id in (v_c1, v_c2);
+  alter table public.conta_b01o_antes enable row level security;
+  revoke all on table public.conta_b01o_antes from public, anon, authenticated;
+
   -- ── Como la persona que aceptó las propuestas ─────────────────────────────
   perform set_config('request.jwt.claims', json_build_object('sub', v_quien, 'role', 'authenticated')::text, true);
   if not public.current_user_is_admin_of(v_acc) then
-    raise exception 'B01 cola 2 · 1300: quien aceptó las propuestas ya no es administrador de Foodint: no puede anular los asientos.';
+    raise exception 'B01 cola 2 · 1300: quien aceptó las propuestas ya no es administrador de Foodint.';
   end if;
 
-  perform public.bank_deshacer(v_c1, 'El banco dice «FACT: 26A/10966»: la 26/13028 era el albarán, anulado por la S01c (arreglo de la cola 2, 02/11).');
-  perform public.bank_deshacer(v_c2, 'El banco dice «FACT: 26A/10965»: es esa factura, no el saldo del libro (arreglo de la cola 2, 02/11).');
+  -- a · Soltar los dos casados.
+  if public._bank_casado_soltar(v_c1, 'El banco dice «FACT: 26A/10966»: la 26/13028 era el albarán, anulado por la S01c (arreglo de la cola 2, 02/11).', 'Sumied · B01 cola 2, con el visto bueno de Julio') <> v_as1
+     or public._bank_casado_soltar(v_c2, 'El banco dice «FACT: 26A/10965»: es esa factura, no el saldo del libro (arreglo de la cola 2, 02/11).', 'Sumied · B01 cola 2, con el visto bueno de Julio') <> v_as2 then
+    raise exception 'B01 cola 2 · 1300: los casados no llevaban los asientos medidos.';
+  end if;
 
+  -- b · Borrar los dos asientos, con la función de borrado de Sumied.
+  r := public._conta_asientos_borrar((select company_id from public.journal_entry where id = v_as1), array[v_as1, v_as2],
+         'B01 · Olimpo: asiento de pago casado con lo que no era (cola 2, 02/11)', 'Sumied · B01 cola 2, con el visto bueno de Julio');
+  raise notice 'B01 cola 2 · 1300: %', r->>'texto';
+
+  -- c · Casar cada pago con su factura.
   perform public.bank_casar(v_mov1,
     jsonb_build_object('tipo', 'factura_recibida', 'facturas', jsonb_build_array(jsonb_build_object('id', v_f1, 'importe', 363.67)),
                        'cuenta_tercero', v_cuenta, 'tercero_id', v_tercero, 'concepto', 'Pago a OLIMPO GOURMET, S.L · 26A/10966', 'metodo', 'transfer'),
@@ -128,11 +149,15 @@ begin
   if (select count(*) from public.bank_match where id in (v_c1, v_c2) and status = 'deshecho') <> 2 then
     raise exception 'B01 cola 2 · 1300: los dos casados de antes no se han deshecho.';
   end if;
-  if (select count(*) from public.journal_entry where id in (v_as1, v_as2) and status = 'anulado' and voided_by_entry_id is not null) <> 2 then
-    raise exception 'B01 cola 2 · 1300: los asientos 4/3312 y 4/3310 no tienen su contraasiento.';
+  if exists (select 1 from public.journal_entry where id in (v_as1, v_as2)) then
+    raise exception 'B01 cola 2 · 1300: los asientos 4/3312 y 4/3310 siguen ahí.';
   end if;
-  if (select status from public.supplier_invoice where id = v_alb) <> 'anulada' or (select payment_entry_id from public.supplier_invoice where id = v_alb) is not null then
-    raise exception 'B01 cola 2 · 1300: la 26/13028 no ha quedado anulada y sin asiento de pago.';
+  if public._conta_cadena_rota((select company_id from public.bank_movement where id = v_mov1)) <> 0 then
+    raise exception 'B01 cola 2 · 1300: la cadena de huellas no cuadra después de borrar.';
   end if;
-  raise notice 'B01 cola 2 · 1300: el −363,67 con la 26A/10966 y el −170,10 con la 26A/10965, las dos pagadas el 26/10; 4/3312 y 4/3310 anulados con su contraasiento.';
+  if (select status from public.supplier_invoice where id = v_alb) <> 'anulada' or (select payment_entry_id from public.supplier_invoice where id = v_alb) is not null
+     or exists (select 1 from public.supplier_invoice_payment where invoice_id = v_alb) then
+    raise exception 'B01 cola 2 · 1300: la 26/13028 no ha quedado anulada y sin pago.';
+  end if;
+  raise notice 'B01 cola 2 · 1300: el −363,67 con la 26A/10966 y el −170,10 con la 26A/10965, las dos pagadas el 26/10; 4/3312 y 4/3310 borrados (lote %).', r->>'lote';
 end $$;

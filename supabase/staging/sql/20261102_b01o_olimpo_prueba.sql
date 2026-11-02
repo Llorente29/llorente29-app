@@ -11,7 +11,9 @@
 --   2. Casar con una factura anulada, o descartada, PARA con su porqué.
 --   3. Anular una factura casada (asiento propuesto): el casado se deshace, el
 --      asiento propuesto se quita y el movimiento vuelve a «Por aclarar» con su
---      motivo. Con el asiento validado: se anula con su contraasiento.
+--      motivo. Con el asiento validado: se BORRA con la función de borrado de
+--      Sumied (S01q, la 1837), sin contraasiento: queda en el respaldo y la
+--      cadena sigue íntegra.
 --   4. Descartar una factura casada hace lo mismo.
 --   5. Nadie de fuera llama a la función del disparador.
 --   6. La vuelta atrás deja el núcleo de producción byte a byte y quita el
@@ -32,6 +34,11 @@ select to_regprocedure('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,tex
 \else
 \i supabase/migrations/20261101T2030_b01n_nucleos_casar.sql
 \endif
+select to_regprocedure('public._conta_asientos_borrar(uuid,uuid[],text,text)') is not null as ya_esta_la_1837 \gset
+\if :ya_esta_la_1837
+\else
+\i supabase/migrations/20261102T1837_s01q_borrar_asientos.sql
+\endif
 select to_regprocedure('public._tg_factura_anulada_descasa()') is not null as ya_esta_la_1310 \gset
 \if :ya_esta_la_1310
 \i supabase/vuelta-atras/20261102T1310_b01o_casar_sin_anuladas.down.sql
@@ -39,6 +46,7 @@ select to_regprocedure('public._tg_factura_anulada_descasa()') is not null as ya
 
 -- 0 · La 1300 sin Foodint, y el núcleo de partida.
 \i supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql
+\i supabase/vuelta-atras/20261102T1300_b01o_olimpo_recasar.down.sql
 do $$ begin
   if md5(pg_get_functiondef('public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)'::regprocedure)) <> '246d303a4d2540f8d997b3e5f4a8a26a' then
     raise exception 'PRUEBA B01 cola 2 · 0: el núcleo de casar no es el de producción (246d303a).';
@@ -191,14 +199,22 @@ begin
   if exists (select 1 from public.journal_entry where id = (select v::uuid from _o where clave = 'a2')) then
     raise exception 'PRUEBA B01 cola 2 · 3: el asiento propuesto del pago sigue ahí.';
   end if;
-  if (select status from public.journal_entry where id = (select v::uuid from _o where clave = 'a3')) <> 'anulado'
-     or (select voided_by_entry_id from public.journal_entry where id = (select v::uuid from _o where clave = 'a3')) is null then
-    raise exception 'PRUEBA B01 cola 2 · 3: el asiento validado no se ha anulado con su contraasiento.';
+  if exists (select 1 from public.journal_entry where id = (select v::uuid from _o where clave = 'a3')) then
+    raise exception 'PRUEBA B01 cola 2 · 3: el asiento validado sigue ahí: se tenía que borrar (sin contraasiento).';
+  end if;
+  if exists (select 1 from public.journal_entry where reverses_entry_id = (select v::uuid from _o where clave = 'a3')) then
+    raise exception 'PRUEBA B01 cola 2 · 3: hay un contraasiento: el asiento se borra, no se anula.';
+  end if;
+  if not exists (select 1 from public.conta_asiento_borrado where que = 'asiento' and motivo like 'Su factura C2-3 se anuló%') then
+    raise exception 'PRUEBA B01 cola 2 · 3: el asiento borrado no está en el respaldo con su motivo.';
+  end if;
+  if public._conta_cadena_rota((select v::uuid from _o where clave = 'empresa')) <> 0 then
+    raise exception 'PRUEBA B01 cola 2 · 3: la cadena de huellas no cuadra después de borrar.';
   end if;
   if exists (select 1 from public.supplier_invoice where id in ((select v::uuid from _o where clave = 'f2'), (select v::uuid from _o where clave = 'f3')) and payment_entry_id is not null) then
     raise exception 'PRUEBA B01 cola 2 · 3: la factura anulada sigue con su asiento de pago.';
   end if;
-  raise notice 'PRUEBA B01 cola 2 · 3: anular una factura casada la descasa (propuesto: fuera; validado: contraasiento) y el pago vuelve a «Por aclarar».';
+  raise notice 'PRUEBA B01 cola 2 · 3: anular una factura casada la descasa (propuesto: fuera; validado: borrado, sin contraasiento) y el pago vuelve a «Por aclarar».';
 end $$;
 
 -- 4 · Descartar hace lo mismo.

@@ -24,54 +24,48 @@ select 'con «la referencia no coincide»', count(*), coalesce(sum(abs(b.amount)
 - Los otros 6 no traen número («FACTURA PENDIENTE» o nada): no hay nada que los contradiga.
 - Después del primer real, la primera cifra pasa a 0 (es uno de sus «esperado:»).
 
-## Primer real: los datos (la 1300, sola)
+## Un solo real, con vuelta atrás: la 1310 y la 1300
 
-**Lo que cambia, en el orden en que pasa:**
+Julio (02/11, respuestas B01·6 y B01·8): los asientos de pago mal casados **se borran**, no se anulan con contraasiento. Se borran con la función de borrado de Sumied de S (`_conta_asientos_borrar`, la 1837 del #449, ya en producción). Así la tanda tiene vuelta atrás, deja de ir sola y va en un solo real.
+
+**1310 · el arreglo de fondo** (va primero):
+1. **Bancos no casa con una factura anulada o descartada.** `_bank_casar_nucleo`, el texto de producción (246d303a, con guarda), lleva una comprobación más. Misma firma. La de antes, al respaldo.
+2. **`_bank_casado_soltar`** (nueva): suelta un casado para borrar su asiento sin contraasiento.
+   - Lo marca deshecho, con su motivo.
+   - Le quita el asiento y quita el asiento de pago de la factura. Su pago lo quita el disparador de siempre.
+   - Deja el movimiento por casar.
+   - La función de borrado de S no borra un asiento que algún casado nombre, aunque esté deshecho: por eso hace falta soltarlo antes.
+3. **Anular o descartar una factura la descasa:**
+   - con el asiento propuesto, `bank_deshacer` lo quita;
+   - con el asiento validado, se suelta y **se borra** con la función de S, con su regla de fechas: nunca antes del corte, ni lo enviado a Diez, ni lo declarado. Si no se puede, la anulación para con su motivo («No se borra nada. …»);
+   - el movimiento queda «Por aclarar» con «Su factura X se anuló el dd/mm/aaaa…».
+4. Una propuesta de otro motor se recalcula antes de aceptarla (front, `MOTOR_BANCOS`).
+
+**1300 · los datos de Olimpo** (va después; usa `_bank_casado_soltar`):
 
 | | Antes | Después |
 |---|---|---|
-| El −363,67 del 26/10 | casado con la 26/13028 (anulada, era el albarán) | casado con la **26A/10966** |
-| El −170,10 del 26/10 | casado «a cuenta» de Olimpo (saldo del libro) | casado con la **26A/10965** |
-| Asiento 4/3312 | validado | anulado, con su contraasiento |
-| Asiento 4/3310 (sin tercero) | validado | anulado, con su contraasiento |
-| La 26A/10966 | aprobada, sin pagar | **pagada el 26/10**, por transferencia |
-| La 26A/10965 | aprobada desde las 12:07, sin pagar | **pagada el 26/10**, por transferencia |
-| La 26/13028 | anulada, con asiento de pago | anulada, sin asiento de pago |
+| −363,67 del 26/10 | casado con la 26/13028 (anulada) | casado con la **26A/10966** |
+| −170,10 del 26/10 | «a cuenta» de Olimpo | casado con la **26A/10965** |
+| Asientos 4/3312 y 4/3310 | validados | **borrados** con la función de S: respaldo, la serie 4 renumerada y la cadena recalculada |
+| 26A/10966 y 26A/10965 | aprobadas, sin pagar | **pagadas el 26/10** |
+| 26/13028 | anulada, con asiento y pago | anulada, sin asiento ni pago |
 
-**Cómo se hace:**
-- Por `bank_deshacer` y `bank_casar`, como la persona que aceptó las dos propuestas el 30/10. Su id se lee del casado, no se escribe; los permisos (`request.jwt.claims`) solo valen dentro de la transacción, como la S01c.
-- Si esa persona ya no es administradora de Foodint, para: solo un administrador anula asientos.
-- **Los asientos de pago nuevos quedan «Por validar»**, como cualquier casado.
-- **Las anclas:** cada movimiento, cada casado, cada asiento y cada factura se comprueban antes de tocar nada (importe, día, concepto, tipo, estado). Si algo no está como se midió el 02/11, para.
-  - Si la 26A/10965 no está aprobada, para sin tocar nada.
-  - Si ya está hecho, no hace nada. En staging no está Foodint: no hace nada.
-- **Sin vuelta atrás, a propósito, y sola en su tanda**, como la 1013 de la S01c: un contraasiento no se borra.
-  - El ensayo comprueba las 7 medidas de `scripts/conta/produccion/cuentas/b01o-olimpo.sql` contra sus «esperado:».
-  - Cada medida cuenta **lo que falta por arreglar**. En producción, antes: 1, 1, 1, 1, 2, 1 y 1 (medido el 02/11), y después todas a 0. En staging, sin Foodint, 0 y 0. Así el mismo «= 0» vale en los dos.
-  - Cada una lleva su `-- quieta:` (filas concretas por su id, que solo cambia la tanda).
-  - El workflow pide `autorizo`.
-- **Contexto:** medido el 02/11 a las 12:00Z. La 1300 no crea ni altera objetos (todo va dentro de un DO); nada en el camino del pedido; nada en el historial. El analizador dice «sigue» porque no entra en las llamadas a funciones.
+- **El orden:** suelta los dos casados, borra los dos asientos y casa cada pago con su factura (`bank_casar`).
+- **Quién:** la persona que aceptó las propuestas (su id se lee del casado), solo dentro de la transacción. Los asientos de pago nuevos, «Por validar».
+- **Las anclas:** si algo no es como se midió, o la 26A/10965 no está aprobada, para. Si ya está hecho, no hace nada.
+- **La vuelta atrás** (`…1300….down.sql`):
+  1. deshace los casados nuevos;
+  2. devuelve los dos asientos desde el respaldo de la función de S, con su número y su huella;
+  3. deja los casados, los movimientos y el pago de la 26/13028 como estaban, desde `conta_b01o_antes`.
+- **Lo que cuenta** (`scripts/conta/produccion/cuentas/b01o-olimpo.sql`): siete medidas de lo que falta por arreglar. Antes: 1, 1, 1, 1, 2, 1 y 1. Con la tanda, 0. Con la vuelta atrás, como antes.
 
-## Segundo real: el arreglo de fondo (la 1310, con vuelta atrás)
-
-Después del primero, la carpeta de la tanda pasa a llevar la 1310.
-
-1. **Bancos no casa con una factura anulada.**
-   - `_bank_casar_nucleo` (el texto de producción, md5 `246d303a`, con una guarda que para si no es ese) con una comprobación más: con una factura anulada o descartada, para con «La factura X está anulada: no se casa un pago con ella. Vuelve a calcular la propuesta de este movimiento».
-   - Misma firma. La de antes, al respaldo.
-2. **Al anular o descartar una factura, lo que tenía casado vuelve a «Por aclarar».**
-   - Un disparador sobre `supplier_invoice` deshace cada pago casado con ella (`bank_deshacer`): el asiento propuesto se quita; el validado se anula con su contraasiento.
-   - El movimiento queda «Por aclarar» con «Su factura X se anuló el dd/mm/aaaa: este pago vuelve a estar por casar. Cásalo con la factura buena».
-   - Anular un asiento validado solo lo puede un administrador: si anula un encargado, la anulación para y lo dice.
-3. **Una propuesta guardada se vuelve a calcular antes de aceptarla, si el motor ha cambiado** (front, sin base):
-   - el motor lleva versión (`MOTOR_BANCOS`, `conciliacion.ts`) y cada propuesta guarda la suya;
-   - «Sí», «Confirmar los N» o el ticket, con una propuesta de otra versión (o de antes de hoy, sin versión): no casa, vuelve a pasar el motor por lo pendiente y dice «Esta propuesta se calculó con una versión anterior de Sumied y se ha vuelto a calcular con la de hoy. Mírala otra vez antes de confirmarla»;
-   - **la versión sube con cada cambio del motor:** `motorBancosVersion.test.ts` fija la huella de `conciliacion.ts` con su versión y sale en rojo si el fichero cambia y la versión no.
-
-**La 1310 en el analizador**, con el contexto medido el 02/11 a las 12:04Z:
-- **sigue**, sin `autorizo`;
-- cambia `_bank_casar_nucleo` y el disparador sobre `supplier_invoice` (297 filas), los dos declarados en la cabecera con su prueba;
-- nada en el camino del pedido.
+**Contexto:** medido el 02/11 a las 18:59Z.
+- El núcleo con su huella (246d303a); `supplier_invoice` con 297 filas.
+- Nada de lo nuevo existe todavía.
+- Nada en el camino del pedido; nada en el historial.
+- Las dos facturas, aprobadas y sin pagar; los dos casados, vivos.
+- **El analizador dice «sigue» para las dos**, sin `autorizo`. La 1300 mueve filas solo a través de funciones, dentro de un DO.
 
 ## Pruebas
 
@@ -79,7 +73,7 @@ Después del primero, la carpeta de la tanda pasa a llevar la 1310.
   - la 1300 en una base sin Foodint;
   - **antes = después** de casar un pago con su factura, con el núcleo de antes y con la 1310: lo que devuelve, la factura pagada, el casado y el asiento con sus líneas;
   - con una anulada o una descartada, para y lo dice;
-  - anular facturas casadas: con el asiento propuesto (se quita) y con el validado (contraasiento), y el pago a «Por aclarar» con su motivo;
+  - anular facturas casadas: con el asiento propuesto (se quita) y con el validado (**se borra** con la función de S: sin contraasiento, en el respaldo y con la cadena íntegra), y el pago a «Por aclarar» con su motivo;
   - descartar, igual;
   - nadie de fuera llama al disparador ni al núcleo;
   - la vuelta atrás deja el núcleo byte a byte (246d303a) y quita el disparador.

@@ -8,14 +8,18 @@
 --      descartada PARA, con «La factura X está anulada: no se casa un pago con
 --      ella. Vuelve a calcular la propuesta». Misma firma (create or replace,
 --      sin sobrecargas: regla 2). La de antes, al respaldo.
---   2. _tg_factura_anulada_descasa (NUEVA) y su disparador sobre
+--   2. _bank_casado_soltar (NUEVA): suelta un casado para borrar su asiento con
+--      la función de borrado de Sumied (_conta_asientos_borrar, S01q), sin
+--      contraasiento (Julio, 02/11: un error del programa se borra). La usa la
+--      1300 (Olimpo) y el disparador de abajo.
+--   3. _tg_factura_anulada_descasa (NUEVA) y su disparador sobre
 --      supplier_invoice: al anular o descartar una factura, cada pago casado con
---      ella se deshace por bank_deshacer (con su contraasiento si el asiento
---      estaba validado: eso solo lo puede un administrador, y si no lo es, la
---      anulación PARA y lo dice) y el movimiento vuelve a «Por aclarar» con su
---      motivo: «Su factura X se anuló el dd/mm/aaaa…». Nunca se queda colgando
---      de una anulada.
---   3. La tercera pieza —una propuesta guardada se vuelve a calcular antes de
+--      ella se deshace (asiento propuesto: bank_deshacer lo quita; validado: se
+--      suelta y se BORRA, con la regla de fechas de la función: nunca antes del
+--      corte; si no se puede, la anulación PARA con su motivo) y el movimiento
+--      vuelve a «Por aclarar» con su motivo: «Su factura X se anuló el
+--      dd/mm/aaaa…». Nunca se queda colgando de una anulada.
+--   4. La cuarta pieza —una propuesta guardada se vuelve a calcular antes de
 --      aceptarla si el motor ha cambiado— es del front (MOTOR_BANCOS).
 --
 -- Guarda: si _bank_casar_nucleo no es el medido, PARA antes de tocar nada.
@@ -313,25 +317,74 @@ end $function$;
 
 revoke all on function public._bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid) from public, anon, authenticated, service_role;
 
--- ── 2 · Anular o descartar una factura descasa sus pagos ───────────────────
+-- ── 2 · Soltar un casado para borrar su asiento (sin contraasiento) ────────
+-- Julio (02/11): un asiento de pago mal casado es un error del programa y se
+-- BORRA con la función de borrado de Sumied (_conta_asientos_borrar, S01q), no
+-- se anula con contraasiento. Esa función no borra un asiento que algún casado
+-- nombre: esto lo suelta antes. Marca el casado «deshecho» con su motivo, le
+-- quita el asiento, quita el asiento de pago de su factura (su pago,
+-- supplier_invoice_payment, lo quita el disparador pc01_casado_deshecho) y deja
+-- el movimiento por casar. Devuelve el asiento que tenía. Solo para casados cuya
+-- factura no queda pagada por él (la anulada de Olimpo, o la que se anula).
+create or replace function public._bank_casado_soltar(p_match uuid, p_motivo text, p_quien text)
+returns uuid language plpgsql security definer set search_path = public as $$
+declare b public.bank_match; v_pagada text;
+begin
+  select * into b from public.bank_match where id = p_match for update;
+  if b.id is null or b.status <> 'vivo' then raise exception 'No se suelta nada: ese casado no está vivo.' using errcode = '23514'; end if;
+  if b.kind = 'traspaso' then raise exception 'No se suelta nada: un traspaso se deshace por los dos lados, en Bancos.' using errcode = '23514'; end if;
+  if coalesce(trim(p_motivo), '') = '' then raise exception 'No se suelta nada: falta el motivo.' using errcode = '22023'; end if;
+  select si.invoice_number into v_pagada from public.bank_match_item it join public.supplier_invoice si on si.id = it.supplier_invoice_id
+   where it.match_id = b.id and it.marked_by_bank and si.status = 'pagada' limit 1;
+  if found then raise exception 'No se suelta nada: la factura % la deja pagada este casado. Deshazlo en Bancos.', coalesce(v_pagada, '') using errcode = '23514'; end if;
+  update public.bank_match set status = 'deshecho', undone_at = now(), undone_by = auth.uid(), undone_by_name = coalesce(nullif(trim(p_quien), ''), 'Sumied'),
+         undo_reason = trim(p_motivo), journal_entry_id = null
+   where id = b.id;
+  update public.supplier_invoice set payment_entry_id = null
+   where payment_entry_id = b.journal_entry_id and id in (select supplier_invoice_id from public.bank_match_item where match_id = b.id);
+  update public.bank_movement set status = 'pendiente', confidence = null, reason = null, proposal = null, updated_at = now() where id = b.movement_id;
+  perform public._bank_log(b.account_id, b.company_id, b.movement_id, b.id, null, 'deshecho', 'persona',
+    'Deshecho: ' || trim(p_motivo) || ' (su asiento se borra)', jsonb_build_object('asiento', b.journal_entry_id));
+  return b.journal_entry_id;
+end $$;
+revoke all on function public._bank_casado_soltar(uuid, text, text) from public, anon, authenticated, service_role;
+comment on function public._bank_casado_soltar(uuid, text, text) is 'B01 · Cola 2 (02/11). Suelta un casado vivo para borrar su asiento con _conta_asientos_borrar (sin contraasiento): deshecho, sin asiento, y el movimiento por casar. Solo desde una tanda o el disparador de anular factura.';
+
+-- ── 3 · Anular o descartar una factura descasa sus pagos ───────────────────
+-- Asiento propuesto: bank_deshacer lo quita. Asiento validado: se suelta y se
+-- BORRA con la función de borrado (respaldo, renumera, recalcula la cadena). Si
+-- no se puede borrar (antes del corte, en Diez, en una declaración…), la
+-- anulación PARA con su motivo («No se borra nada. …»).
 create or replace function public._tg_factura_anulada_descasa()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare r record; v_num text := coalesce(nullif(new.invoice_number, ''), new.code, 'sin número');
-        v_que text := case when new.status = 'anulada' then 'anuló' else 'descartó' end;
+declare r jsonb; v_casados jsonb; v_num text := coalesce(nullif(new.invoice_number, ''), new.code, 'sin número');
+        v_que text := case when new.status = 'anulada' then 'anuló' else 'descartó' end; v_e uuid; v_motivo text;
 begin
-  for r in select distinct b.id, b.movement_id from public.bank_match_item it join public.bank_match b on b.id = it.match_id
-            where it.supplier_invoice_id = new.id and b.status = 'vivo' loop
-    perform public.bank_deshacer(r.id, format('Su factura %s se %s: el pago vuelve a estar por casar.', v_num, v_que));
+  v_motivo := format('Su factura %s se %s: el pago vuelve a estar por casar.', v_num, v_que);
+  -- Primero la lista, y después se recorre: el borrado de asientos hace ALTER TABLE journal_entry,
+  -- y no puede con una consulta abierta sobre esa tabla en la misma sesión.
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'movement_id', x.movement_id, 'company_id', x.company_id, 'asiento', x.asiento)), '[]'::jsonb) into v_casados
+    from (select distinct b.id, b.movement_id, b.company_id, e.status as asiento
+            from public.bank_match_item it join public.bank_match b on b.id = it.match_id
+            left join public.journal_entry e on e.id = b.journal_entry_id
+           where it.supplier_invoice_id = new.id and b.status = 'vivo') x;
+  for r in select * from jsonb_array_elements(v_casados) loop
+    if r->>'asiento' = 'validado' then
+      v_e := public._bank_casado_soltar((r->>'id')::uuid, v_motivo, public.conta_nombre_actor());
+      perform public._conta_asientos_borrar((r->>'company_id')::uuid, array[v_e], v_motivo, public.conta_nombre_actor());
+    else
+      perform public.bank_deshacer((r->>'id')::uuid, v_motivo);
+    end if;
     update public.bank_movement
        set status = 'por_aclarar', confidence = 'duda', proposal = null, updated_at = now(),
            reason = format('Su factura %s se %s el %s: este pago vuelve a estar por casar. Cásalo con la factura buena.',
                            v_num, v_que, to_char(now() at time zone 'Europe/Madrid', 'DD/MM/YYYY'))
-     where id = r.movement_id;
+     where id = (r->>'movement_id')::uuid;
   end loop;
   return null;
 end $$;
 revoke all on function public._tg_factura_anulada_descasa() from public, anon, authenticated, service_role;
-comment on function public._tg_factura_anulada_descasa() is 'B01 · Cola 2 (02/11). Al anular o descartar una factura recibida, cada pago casado con ella se deshace (bank_deshacer) y su movimiento vuelve a «Por aclarar» con el motivo.';
+comment on function public._tg_factura_anulada_descasa() is 'B01 · Cola 2 (02/11). Al anular o descartar una factura recibida, cada pago casado con ella se deshace: asiento propuesto, fuera (bank_deshacer); validado, se borra con _conta_asientos_borrar (sin contraasiento). El movimiento vuelve a «Por aclarar» con el motivo.';
 
 drop trigger if exists tg_factura_anulada_descasa on public.supplier_invoice;
 create trigger tg_factura_anulada_descasa
