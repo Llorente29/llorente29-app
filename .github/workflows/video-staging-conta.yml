@@ -170,6 +170,8 @@ jobs:
           [ -f "$SALIDA/crudo.webm" ] || { echo "Sin grabación: no hay nada que montar."; exit 0; }
           [ -n "${VOZ_MODELO:-}" ] || echo "::warning::Sin modelo de voz: el vídeo sale sin voz."
           node scripts/video/montar.mjs "$SALIDA"
+          # La portada para las plataformas (YouTube, web, correo, WhatsApp), con capturas de esta grabación.
+          node scripts/video/miniatura.mjs "$SALIDA"
 
       - name: Revisar que no sale nada real (T11)
         if: always()

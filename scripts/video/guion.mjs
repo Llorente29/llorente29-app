@@ -210,7 +210,7 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
   page.on('pageerror', (e) => { errores.push(e.message); console.log(`[error de la página] ${e.message}`) })
   await interceptarPago(page, m)
   const foto = async (n) => {
-    await page.screenshot({ path: join(salida, 'capturas', `${n}.png`), scale: 'css' })
+    await page.screenshot({ path: join(salida, 'capturas', `${n}.png`), scale: 'css', style: '#__cursor,.__onda{display:none!important}' })
     writeFileSync(join(salida, 'capturas', `${n}.txt`), await page.locator('body').innerText().catch(() => ''))
   }
   const quieto = (ms) => page.waitForTimeout(ms)
