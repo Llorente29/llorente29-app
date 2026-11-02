@@ -59,7 +59,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // LS1 · Laboral: Equipo, una pantalla por su nombre y lo que «Llega en …».
-    laboral: 'laboral.equipo', laboralPagina: 'laboral.centros', laboralLlega: 'laboral.contrato',
+    laboral: 'laboral.equipo', laboralPagina: 'laboral.centros', laboralLlega: 'laboral.contrato', laboralPersona: 'laboral.equipo',
     // I01c (19/10): el trimestre, también el de una empresa por la ruta.
     impuestoTrimestre: 'impuestos.trimestre', impuestoTrimestreEmpresa: 'impuestos.trimestre',
     // S02 · Los modelos del año (390, 190, 180, 347, 349): se llega desde el calendario.

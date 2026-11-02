@@ -240,12 +240,19 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
     await expect(page.locator('[data-prueba="volcado-sin-confirmar"]')).toContainText('Faltan confirmar 2 centros')
   }
   const hecho = page.locator('[data-prueba="volcado-hecho"]')
-  const pasar = async () => {
+  // N1 · PR 2: con algún centro sin local, el primer clic avisa nombrándolo y no pasa nada; el segundo pasa el resto.
+  const pasar = async (sinLocal: string[] = []) => {
     await page.locator('[data-prueba="volcado-pasar"]').click()
+    if (sinLocal.length > 0) {
+      const antes = page.locator('[data-prueba="volcado-aviso-antes"]')
+      for (const n of sinLocal) await expect(antes).toContainText(`«${n}»`)
+      await expect(hecho).toHaveCount(0)
+      await page.locator('[data-prueba="volcado-pasar"]').click()
+    }
     await expect(page.locator('[data-prueba="volcado-hecho"], [data-prueba="volcado-error"]')).toBeVisible({ timeout: 60_000 })
     await expect(page.locator('[data-prueba="volcado-error"]')).toHaveCount(0)
   }
-  await pasar()
+  await pasar(conLa2248 ? [centro, 'Sin centro en Cegid'] : [centro])
   await expect(hecho).toContainText('0 personas y 0 contratos al día desde Cegid. De las 4 de Cegid, 4 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText('no tiene local confirmado')
   if (conLa2248) await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Baja Inventada Cuatro ${marca}: no está en Folvy y Cegid no trae su centro`)
@@ -255,14 +262,14 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(filaCentro.locator('[data-prueba="volcado-confirmar"]')).toHaveText('Confirmar el propuesto')
   await filaCentro.locator('[data-prueba="volcado-confirmar"]').click()
   await expect(filaCentro).toContainText('Confirmado')
-  await pasar()
+  await pasar(conLa2248 ? ['Sin centro en Cegid'] : [])
   await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 entran como bajas). De las 4 de Cegid, 2 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Alta Inventada Tres ${marca}: en Cegid está de alta y no está en Folvy`)
 
-  // «Sin centro en Cegid»: se elige el local y entra la baja que faltaba.
+  // «Sin centro en Cegid»: elegir el local ya lo confirma (N1 · PR 2) y entra la baja que faltaba.
   if (conLa2248) {
+    await expect(filaSinCentro).toContainText('Sin elegir')
     await filaSinCentro.locator('select').selectOption(local.datos[0].id)
-    await filaSinCentro.locator('[data-prueba="volcado-confirmar"]').click()
     await expect(filaSinCentro).toContainText('Confirmado')
     await pasar()
     await expect(hecho).toContainText('3 personas y 3 contratos al día desde Cegid (2 ya estaban en el equipo · 1 entra como baja). De las 4 de Cegid, 1 no ha entrado')
@@ -275,6 +282,32 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(hecho).toContainText(conLa2248
     ? '3 personas y 3 contratos al día desde Cegid (3 ya estaban en el equipo)'
     : '2 personas y 2 contratos al día desde Cegid (2 ya estaban en el equipo)')
+
+  // N1 · PR 2 · La ficha nueva de una de las bajas que acaban de entrar (Resumen,
+  // Contrato y salario, IRPF): el código delante, «Falta» donde Cegid no trae nada,
+  // y el IBAN (inventado, banco 9999) se guarda y lo dice.
+  const persona = await rest<{ id: string }[]>(sola, 'GET', `employees?select=id&name=eq.${encodeURIComponent(`Baja Inventada Uno ${marca}`)}`)
+  expect(persona.datos.length, JSON.stringify(persona.datos)).toBe(1)
+  await page.goto(`/conta/laboral/persona/${persona.datos[0].id}`)
+  const ficha = page.locator('[data-prueba="ficha-persona"]')
+  await expect(ficha.locator('h1')).toContainText(`Baja Inventada Uno ${marca}`, { timeout: 30_000 })
+  await expect(ficha).toContainText('De baja')
+  await expect(ficha.locator('[data-prueba="ficha-estudios"]')).toContainText('Falta')
+  await expect(ficha.locator('[data-prueba="ficha-de-antes"]')).toBeVisible()
+  await ficha.locator('[data-prueba="ficha-pestana-contrato"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-tipo"]')).toContainText('401 · ')
+  await expect(ficha.locator('[data-prueba="ficha-categoria"]')).toContainText('Falta la categoría')
+  await ficha.locator('[data-prueba="ficha-iban-cambiar"]').click()
+  await ficha.locator('[data-prueba="ficha-iban-campo"]').fill('ES49 9999 0000 0000 0000 0000')
+  await ficha.locator('[data-prueba="ficha-iban-guardar"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-hecho"]')).toContainText('IBAN no es válido')
+  await ficha.locator('[data-prueba="ficha-iban-campo"]').fill('ES49 9999 0000 0000 0000 0001')
+  await ficha.locator('[data-prueba="ficha-iban-guardar"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-hecho"]')).toContainText('Guardado: cobrará en ES49 …0001')
+  await expect(ficha.locator('[data-prueba="ficha-iban"]')).toContainText('ES49 9999 0000 0000 0000 0001')
+  await captura(page, 'n1-ficha-contrato')
+  await ficha.locator('[data-prueba="ficha-pestana-irpf"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-145"]')).toContainText('Falta')
 
   expect(errores, errores.join('\n')).toEqual([])
 })

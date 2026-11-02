@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { rutaFichaPersona } from '@/config/navegacion'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
@@ -129,6 +130,10 @@ export default function StaffPage() {
   const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile, addClockEntry } = useApp()
   const [mainTab, setMainTab] = useState<'insights' | 'list'>(voc.hosteleria ? 'insights' : 'list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // N1 · PR 2 (02/11): en Sumied, pulsar una persona abre su ficha nueva; la de
+  // antes sigue en ?employee=<id> (Seguridad Social, turnos, vacaciones…) hasta el paso 3.
+  const navegar = useNavigate()
+  const abrirPersona = (id: string) => (voc.sumied ? navegar(rutaFichaPersona(id)) : setSelectedId(id))
   const [search, setSearch] = useState('')
   const [locFilter, setLocFilter] = useState('todas')
   const [stateFilter, setStateFilter] = useState<'all' | 'active' | 'inactive'>('active')
@@ -331,7 +336,8 @@ export default function StaffPage() {
                 return (
                   <Card
                     key={emp.id}
-                    onClick={() => setSelectedId(emp.id)}
+                    onClick={() => abrirPersona(emp.id)}
+                    data-prueba="equipo-persona"
                     className={`p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-base ${!emp.active ? 'opacity-60' : ''}`}
                   >
                     <EmployeeAvatar employee={emp} size="md" showWorkingDot={isWorking} />
