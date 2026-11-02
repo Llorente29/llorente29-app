@@ -1,0 +1,14 @@
+# S01q · La guarda: una factura recibida no se apunta sola si ya está
+# contabilizada (su número en un asiento de la empresa, su proveedor por el
+# total) ni si es de un periodo cerrado. Rama claude/s01q-guarda-ya-contabilizada.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1311  cambia las dos pasadas (_conta_factura_apuntar y _conta_plataforma_apuntar)
+#         y Facturas recibidas (conta_documentos_recibidos), y amplía el CHECK de
+#         supplier_invoice_auto con «ya_contabilizada». AÑADE la guarda y su regla.
+#
+# No mueve ninguna fila: lo marca la pasada siguiente. Los 123 duplicados del
+# 01/11 se tratan en otra tanda, con la lista aprobada por Julio.
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01q-guarda.sql
+supabase/migrations/20261102T1311_s01q_ya_contabilizada.sql

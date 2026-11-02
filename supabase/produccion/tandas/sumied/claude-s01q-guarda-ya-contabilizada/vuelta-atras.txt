@@ -1,0 +1,4 @@
+# S01q · La guarda · la vuelta atrás: las pasadas y Facturas recibidas como
+# estaban, fuera la guarda y el CHECK de antes.
+cuenta: scripts/conta/produccion/cuentas/s01q-guarda.sql
+supabase/vuelta-atras/20261102T1311_s01q_ya_contabilizada.down.sql
