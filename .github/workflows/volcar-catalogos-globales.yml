@@ -13,8 +13,9 @@ name: Volcar los catálogos globales (producción, solo lectura)
 # de una cuenta no siembra nada, los lotes de Casa Lola no corren en local y la
 # foto de la demo no cargaría en staging, porque apunta a ellas.
 #
-# Qué lee: scripts/demo/catalogos-globales-volcar.sql. De course, training_path
-# y kitchen_unit, SOLO las filas sin cuenta; si una de ellas apunta a algo de
+# Qué lee: scripts/demo/catalogos-globales-volcar.sql. De course (por la vista
+# catalogo_curso_global, la 1218), training_path y kitchen_unit, SOLO las filas
+# sin cuenta; si una de ellas apunta a algo de
 # una cuenta, para sin volcar nada. Ninguna fila de ninguna cuenta.
 # Al registro y al resumen solo van números y huellas, por la puerta
 # (scripts/conta/salida-segura.mjs). La semilla va a la rama, no al registro.
@@ -110,8 +111,14 @@ jobs:
           DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
         run: |
           set -euo pipefail
-          "$PSQL" "$DB_URL" -X -A -t -q -v ON_ERROR_STOP=1 -f scripts/demo/catalogos-globales-volcar.sql > /tmp/cuerpo.sql 2> /tmp/volcar.err \
-            || { echo "::error::El volcado ha fallado (el detalle, en el fichero de errores del run, sin mostrarlo)."; exit 1; }
+          # Si falla, la causa va al resumen sin datos (catalogos-globales-causa.py:
+          # «permiso_denegado.<tabla>», «no_es_catalogo» u «otro_error»).
+          if ! "$PSQL" "$DB_URL" -X -A -t -q -v ON_ERROR_STOP=1 -f scripts/demo/catalogos-globales-volcar.sql > /tmp/cuerpo.sql 2> /tmp/volcar.err; then
+            python3 scripts/demo/catalogos-globales-causa.py /tmp/volcar.err > /tmp/causa.txt
+            cat /tmp/causa.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::El volcado ha fallado: la causa está en el resumen del run (permiso_denegado.<tabla>, no_es_catalogo u otro_error)."
+            exit 1
+          fi
           cat scripts/demo/catalogos-globales-cabecera.sql /tmp/cuerpo.sql > supabase/seeds/folvy/20261102T1100_dm1_catalogos_globales.sql
 
       - name: Comprobar la semilla (solo números al registro)
