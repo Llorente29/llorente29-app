@@ -27,7 +27,7 @@ begin
 end $$;
 
 -- 1 · La empresa, la cuenta y la persona, con nombre de bar de verdad.
-update public.company set trade_name = 'Taberna del Mercado', legal_name = 'Taberna del Mercado, S.L.'
+update public.company set trade_name = 'Taberna del Mercado', legal_name = 'Taberna del Mercado, S.L.', tax_id = 'B00000042'
  where id = :'empresa' and account_id = :'cuenta';
 update public.accounts set name = 'Taberna del Mercado' where id = :'cuenta';
 update public.user_profiles set display_name = 'Administración' where account_id = :'cuenta' and display_name = 'Admin Norte';
@@ -42,6 +42,12 @@ delete from public.bank_movement m
  using public.bank_aggregator_link l
  where l.treasury_account_id = m.treasury_account_id and l.provider = 'revolut' and m.company_id = :'empresa'
    and not exists (select 1 from public.bank_match b where b.movement_id = m.id);
+-- Y sus extractos (con el saldo del sandbox): sin ellos, Movimientos no compara
+-- con un saldo que ya no tiene sus movimientos.
+delete from public.bank_statement st
+ using public.bank_aggregator_link l
+ where l.treasury_account_id = st.treasury_account_id and l.provider = 'revolut' and st.company_id = :'empresa'
+   and not exists (select 1 from public.bank_movement m where m.statement_id = st.id);
 
 -- 3 · Los otros nombres de prueba que salen en Pagos, por nombres creíbles.
 update public.supplier set name = 'Suministros Hosteleros del Norte', legal_name = 'Suministros Hosteleros del Norte, S.L.'

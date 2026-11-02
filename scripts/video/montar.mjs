@@ -54,8 +54,8 @@ const ass = [
   '[Script Info]', 'ScriptType: v4.00+', 'PlayResX: 1920', 'PlayResY: 1080', 'WrapStyle: 0', '',
   '[V4+ Styles]',
   'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
-  // BorderStyle 3: caja opaca detrás; BackColour &H60…: negro al ~62 %.
-  'Style: Abajo,DejaVu Sans,54,&H00FFFFFF,&H00FFFFFF,&H60141414,&H60141414,1,0,0,0,100,100,0,0,3,18,0,2,160,160,70,1',
+  // BorderStyle 3: caja detrás; BackColour &H70…: negro al ~56 %.
+  'Style: Abajo,DejaVu Sans,46,&H00FFFFFF,&H00FFFFFF,&H70141414,&H70141414,1,0,0,0,100,100,0,0,3,16,0,2,200,200,64,1',
   '', '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
   ...pasos.map((p) => `Dialogue: 0,${hms(PORTADA + p.a + 0.15)},${hms(PORTADA + p.b - 0.1)},Abajo,,0,0,0,,${p.subtitulo.replace(/\n/g, '\\N')}`),
   '',

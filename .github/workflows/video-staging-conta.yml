@@ -152,6 +152,12 @@ jobs:
           [ -f "$SALIDA/crudo.webm" ] || { echo "Sin grabación: no hay nada que montar."; exit 0; }
           node scripts/video/montar.mjs "$SALIDA"
 
+      - name: Revisar que no sale nada real (T11)
+        if: always()
+        run: |
+          [ -d "$SALIDA/capturas" ] || { echo "Sin capturas."; exit 0; }
+          node scripts/video/revisar.mjs "$SALIDA"
+
       - name: Carril · borrar y soltar (pase lo que pase)
         if: always()
         env:
