@@ -19,6 +19,12 @@ export const TEXTO_BOTON: Record<Boton, string> = {
   'es-el-mismo': 'Es el mismo', 'son-dos': 'Son dos',
 }
 
+/**
+ * Cola 2 · Lo que dice Bancos cuando una propuesta se calculó con otro motor: no
+ * se acepta, se vuelve a calcular y se enseña otra vez para que la persona la mire.
+ */
+export const PROPUESTA_RECALCULADA = 'Esta propuesta se calculó con una versión anterior de Sumied y se ha vuelto a calcular con la de hoy. Mírala otra vez antes de confirmarla: puede haber cambiado.'
+
 export interface PropuestaGuardada {
   que?: string
   destino?: Record<string, unknown> | null
@@ -32,6 +38,8 @@ export interface PropuestaGuardada {
   preseleccionar?: boolean
   tarjetaDesconocida?: string | null
   alternativas?: { etiqueta: string; destino: Record<string, unknown> }[]
+  /** Cola 2 · La versión del motor que la calculó (conciliacion.ts, MOTOR_BANCOS). Sin ella, de antes del 02/11. */
+  motor?: string
   quedaPorCasarCent?: number | null
   facturaSinAprobar?: boolean
   /** S01d · Las cuentas de una regla con reparto cuyo importe no cuadró: la ventana abre con ellas. */
