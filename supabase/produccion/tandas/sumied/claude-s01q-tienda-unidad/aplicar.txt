@@ -1,0 +1,18 @@
+# S01q · PR A · La tienda de la plataforma es la unidad. Rama
+# claude/s01q-tienda-unidad. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1215  cambia conta_local_de_tienda y el disparador de las tiendas nuevas: el
+#         local, por la etiqueta del nombre por encima de la dirección (sin local
+#         si la etiqueta no es de ningún local); la marca, por el nombre. AÑADE
+#         _conta_tienda_etiqueta, _conta_clave_marca y conta_marca_de_tienda.
+#   1216  AÑADE conta_liquidaciones_mes: el mes en cuatro estados, por tienda;
+#         Glovo, por productos; las marcas cedidas, aparte.
+#   1217  Foodint (autorizo: mueve filas): 13 tiendas con su local bueno y 31 con
+#         su marca, con sus liquidaciones; lo de antes, guardado para la vuelta atrás.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01q-tiendas.sql
+supabase/migrations/20261102T1215_s01q_tienda_local_marca.sql
+supabase/migrations/20261102T1216_s01q_motor_mes.sql
+supabase/migrations/20261102T1217_s01q_foodint_tiendas.sql
