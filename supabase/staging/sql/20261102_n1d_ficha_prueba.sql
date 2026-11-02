@@ -18,6 +18,9 @@
 --       se cierra, no se pisa), su línea en el historial, y el mínimo ya sale;
 --       una que no es del convenio, no; el encargado, no.
 --   4 · el volcado: «en Cegid no traía centro», sin la clave interna.
+--   4b · la cuenta donde cobra (IBAN inventado, banco 9999): uno mal escrito
+--       no entra; el bueno, sí, con su línea en el historial (solo las cuatro
+--       últimas cifras) y quién; el encargado, no.
 --   5 · la vuelta atrás, en orden inverso.
 
 \set ON_ERROR_STOP 1
@@ -219,12 +222,45 @@ begin
 end $$;
 reset role;
 
+-- ── 4b · La cuenta donde cobra ──────────────────────────────────────────────
+select set_config('request.jwt.claims', json_build_object('sub', (select v from _s where clave = 'encargado'), 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$ begin
+  begin
+    perform public.lab_poner_iban((select v::uuid from _s where clave = 'e'), 'ES4999990000000000000001');
+    raise exception 'PRUEBA N1d · 4b: el encargado pone el IBAN.';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+select set_config('request.jwt.claims', json_build_object('sub', (select v from _s where clave = 'admin'), 'role', 'authenticated')::text, true);
+set local role authenticated;
+do $$
+declare e uuid := (select v::uuid from _s where clave = 'e'); r jsonb;
+begin
+  begin
+    perform public.lab_poner_iban(e, 'ES4899990000000000000001');
+    raise exception 'PRUEBA N1d · 4b: entra un IBAN con el dígito de control mal.';
+  exception when invalid_parameter_value then null;
+  end;
+  r := public.lab_poner_iban(e, 'es49 9999 0000 0000 0000 0001');
+  if not (r ->> 'cambia')::boolean or r ->> 'iban' <> 'ES4999990000000000000001'
+     or public.lab_ficha(e) -> 'persona' ->> 'iban' <> 'ES4999990000000000000001' then
+    raise exception 'PRUEBA N1d · 4b: el IBAN bueno no queda en la ficha: %.', r;
+  end if;
+  if (select despues #>> '{}' from public.lab_cambio where employee_id = e and campo = 'iban' and quien is not null) <> '…0001' then
+    raise exception 'PRUEBA N1d · 4b: el historial no lleva solo las cuatro últimas cifras, o no lleva quién.';
+  end if;
+  raise notice '4b · el IBAN: el mal escrito no entra; el bueno queda en la ficha, con su historial (…0001) y quién; el encargado, no';
+end $$;
+reset role;
+
 -- ── 5 · La vuelta atrás, en orden inverso ───────────────────────────────────
 \i supabase/vuelta-atras/20261102T0831_n1d_sin_centro_en_palabras.down.sql
 \i supabase/vuelta-atras/20261102T0830_n1d_ficha.down.sql
 \i supabase/vuelta-atras/20261102T0817_n1d_catalogos_oficiales.down.sql
 do $$ begin
-  if to_regclass('public.lab_catalogo') is not null or to_regprocedure('public.lab_ficha(uuid)') is not null
+  if to_regclass('public.lab_catalogo') is not null or to_regprocedure('public.lab_ficha(uuid)') is not null or to_regprocedure('public.lab_poner_iban(uuid,text)') is not null
      or position('no traía centro' in pg_get_functiondef('public.lab_volcar_lote(uuid)'::regprocedure)) > 0 then
     raise exception 'PRUEBA N1d · 5: la vuelta atrás no deja todo como estaba.';
   end if;

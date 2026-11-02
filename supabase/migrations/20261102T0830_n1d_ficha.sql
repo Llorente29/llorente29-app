@@ -16,6 +16,13 @@
 --      Lo privado (salario, IRPF, IBAN, NAF, DNI, nacimiento) solo va a quien
 --      ve Laboral (current_user_ve_laboral, 1937). El encargado recibe la ficha
 --      sin ello y con privado = false.
+--   3. lab_poner_iban(persona, iban): la cuenta donde cobra («Cómo cobra»,
+--      pantalla 2). Respuesta de Julio del 02/11: se escribe a mano (Julio los
+--      copia de las transferencias de BBVA); es el ÚNICO sitio del IBAN: el PR 4
+--      de B (pagar nóminas con Revolut) lo lee de lab_persona.iban. Solo quien
+--      ve Laboral; se comprueba el dígito de control (ISO 13616, módulo 97) y
+--      queda en el historial quién y cuándo (sin el IBAN entero: solo sus
+--      cuatro últimas cifras).
 --   2. lab_poner_categoria(contrato, categoria, motivo): la categoría del
 --      convenio, como una condición nueva del contrato con fecha de efecto hoy
 --      (no pisa la de antes, lab_contrato_condicion) y su línea en el historial
@@ -96,6 +103,12 @@ begin
       'local', (select jsonb_build_object('id', l.id, 'nombre', l.name) from public.locations l where l.id = e.location_id),
       'movil', e.phone, 'correo', e.email,
       'portal', exists (select 1 from public.user_profiles up where up.employee_id = e.id and up.active),
+      -- Para el botón del permiso de Laboral (solo lo ve el administrador).
+      'usuario_id', case when public.current_user_is_admin_of(e.account_id)
+                         then (select up.user_id from public.user_profiles up where up.employee_id = e.id and up.active limit 1) end,
+      'con_permiso_laboral', case when public.current_user_is_admin_of(e.account_id)
+                         then exists (select 1 from public.lab_permiso lpm join public.user_profiles up on up.user_id = lpm.user_id
+                                       where up.employee_id = e.id and lpm.account_id = e.account_id) end,
       'documento', case when v_priv then e.dni end,
       'nacimiento', case when v_priv then e.birth_date end,
       'naf', case when v_priv then lp.naf end,
@@ -190,3 +203,53 @@ begin
 end $$;
 revoke all on function public.lab_poner_categoria(uuid, text, text) from public, anon;
 grant execute on function public.lab_poner_categoria(uuid, text, text) to authenticated;
+
+-- El dígito de control de un IBAN (ISO 13616): las cuatro primeras al final,
+-- letras a números (A=10…Z=35), y el resto de dividir entre 97 tiene que ser 1.
+create or replace function public._lab_iban_valido(p_iban text)
+returns boolean language plpgsql immutable as $$
+declare v text; d text := ''; c text; r int := 0; i int;
+begin
+  v := upper(regexp_replace(coalesce(p_iban, ''), '[^A-Za-z0-9]', '', 'g'));
+  if v !~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$' then return false; end if;
+  v := substr(v, 5) || substr(v, 1, 4);
+  for i in 1 .. length(v) loop
+    c := substr(v, i, 1);
+    d := d || case when c ~ '[A-Z]' then (ascii(c) - 55)::text else c end;
+  end loop;
+  for i in 1 .. length(d) loop
+    r := (r * 10 + substr(d, i, 1)::int) % 97;
+  end loop;
+  return r = 1;
+end $$;
+revoke all on function public._lab_iban_valido(text) from public, anon, authenticated;
+
+create or replace function public.lab_poner_iban(p_employee_id uuid, p_iban text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  e  public.employees;
+  v  text := upper(regexp_replace(coalesce(p_iban, ''), '[^A-Za-z0-9]', '', 'g'));
+  v_antes text;
+begin
+  select * into e from public.employees where id = p_employee_id;
+  if e.id is null or not public.current_user_ve_laboral(e.account_id) then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'La cuenta donde cobra la pone quien tiene el permiso de Laboral.';
+  end if;
+  if v <> '' and not public._lab_iban_valido(v) then
+    raise exception 'IBAN_NO_VALIDO' using errcode = '22023', hint = 'Ese IBAN no es válido: revisa las cifras.';
+  end if;
+  select iban into v_antes from public.lab_persona where employee_id = e.id;
+  if v_antes is not distinct from nullif(v, '') then
+    return jsonb_build_object('iban', nullif(v, ''), 'cambia', false);
+  end if;
+  insert into public.lab_persona (employee_id, account_id, iban, updated_at) values (e.id, e.account_id, nullif(v, ''), now())
+  on conflict (employee_id) do update set iban = excluded.iban, updated_at = now();
+  insert into public.lab_cambio (account_id, employee_id, tabla, registro_id, campo, antes, despues, fecha_efecto, motivo, quien)
+  values (e.account_id, e.id, 'lab_persona', e.id, 'iban',
+          to_jsonb(case when v_antes is null then null else '…' || right(v_antes, 4) end),
+          to_jsonb(case when v = '' then null else '…' || right(v, 4) end),
+          (now() at time zone 'Europe/Madrid')::date, 'La cuenta donde cobra', auth.uid());
+  return jsonb_build_object('iban', nullif(v, ''), 'cambia', true);
+end $$;
+revoke all on function public.lab_poner_iban(uuid, text) from public, anon;
+grant execute on function public.lab_poner_iban(uuid, text) to authenticated;
