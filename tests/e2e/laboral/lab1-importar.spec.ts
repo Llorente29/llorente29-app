@@ -333,6 +333,22 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await ficha.locator('[data-prueba="ficha-pestana-irpf"]').click()
   await expect(ficha.locator('[data-prueba="ficha-145"]')).toContainText('Falta')
 
+  // N1 · PR 3 · Tiempo y turnos (maquetas 10 y 10b): la semana, el mes y lo que falta, dicho.
+  await ficha.locator('[data-prueba="ficha-pestana-tiempo"]').click()
+  const tiempo = ficha.locator('[data-prueba="ficha-tiempo"]')
+  await expect(tiempo.locator('[data-prueba="tiempo-mes"]')).toContainText('fichadas hasta hoy', { timeout: 30_000 })
+  // La bolsa acaba de leerse: con su cifra o con «Falta» y el porqué, nunca «…».
+  await expect(tiempo.locator('[data-prueba="tiempo-bolsa"]')).not.toContainText('…', { timeout: 30_000 })
+  // Sin cuadrante publicado (o sin local), el turno no se inventa: lo dice.
+  await expect(tiempo).toContainText(/no está publicado|Sin local en su ficha/)
+  const movil = test.info().project.name === 'movil'
+  await expect(tiempo.locator(movil ? '[data-prueba="tiempo-semana-movil"]' : '[data-prueba="tiempo-semana"]')).toBeVisible()
+  await expect(tiempo.locator(movil ? '[data-prueba="tiempo-semana"]' : '[data-prueba="tiempo-semana-movil"]')).toBeHidden()
+  await expect(tiempo.locator('[data-prueba="tiempo-registros"] tbody tr')).toHaveCount(3)
+  await tiempo.locator('[data-prueba="tiempo-anterior"]').click()
+  await expect(tiempo).toContainText('Esta semana · del ')
+  await captura(page, 'n1-ficha-tiempo')
+
   // N1 · PR 2 · En Equipo, el administrador ve quién tiene el permiso de Laboral (él, siempre).
   await page.goto('/conta/laboral')
   const permisos = page.locator('[data-prueba="permisos-laboral"]')

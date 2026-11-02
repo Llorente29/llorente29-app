@@ -20,19 +20,22 @@ import { CONTA, rutaConta } from '@/config/navegacion'
 import { SUMIED, conProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 import { fetchDocuments } from '@/services/documentsService'
 import type { DocumentFile } from '@/types/personal'
+import TiempoPestana from './tiempo/TiempoPestana'
 import { cambiarPermisoLaboral, leerFicha, ponerCategoria, ponerIban, type Ficha } from './fichaService'
 import {
   DE_DONDE, conCodigo, edad, euros, fecha, frasesMinimo, fraseResumen, ibanBonito, jornada, mesesDePagas,
   oficialSiDistinto, pais, porcentaje, proximoTrienio, finDePrueba, avisosDeLaFicha, vacacionesDelConvenio,
 } from './fichaTextos'
 
-type Pestana = 'resumen' | 'contrato' | 'irpf'
+type Pestana = 'resumen' | 'contrato' | 'irpf' | 'tiempo'
 const PESTANAS: { id: Pestana; texto: string }[] = [
   { id: 'resumen', texto: 'Resumen' },
   { id: 'contrato', texto: 'Contrato y salario' },
   { id: 'irpf', texto: 'Impuestos (IRPF)' },
+  // N1 · PR 3: el orden de la maqueta (Seguridad Social irá antes, cuando se construya).
+  { id: 'tiempo', texto: 'Tiempo y turnos' },
 ]
-const TITULO: Record<Pestana, string> = { resumen: '', contrato: 'Contrato y salario', irpf: 'Su IRPF, explicado' }
+const TITULO: Record<Pestana, string> = { resumen: '', contrato: 'Contrato y salario', irpf: 'Su IRPF, explicado', tiempo: 'Su tiempo y sus turnos' }
 
 const PENDIENTE_SS = 'Pendiente · Sumied lo hará cuando conecte con la Seguridad Social'
 const PENDIENTE_SEPE = 'Pendiente · Sumied lo hará cuando conecte con el SEPE'
@@ -112,13 +115,14 @@ export default function FichaPage() {
               <button key={p.id} type="button" role="tab" aria-selected={pestana === p.id} onClick={() => irA(p.id)} data-prueba={`ficha-pestana-${p.id}`}>{p.texto}</button>
             ))}
             <Link className="s-ficha-antes" to={fichaDeAntes(ficha.persona.id)} data-prueba="ficha-de-antes">
-              Seguridad Social, turnos, vacaciones, nóminas e historial: en la ficha de antes
+              Seguridad Social, vacaciones, nóminas e historial: en la ficha de antes
             </Link>
           </div>
 
           {pestana === 'resumen' && <Resumen ficha={ficha} docs={docs} irA={irA} />}
           {pestana === 'contrato' && <ContratoYSalario ficha={ficha} alCambiar={recargar} setHecho={setHecho} />}
           {pestana === 'irpf' && <Irpf ficha={ficha} />}
+          {pestana === 'tiempo' && <TiempoPestana ficha={ficha} />}
         </>
       )}
     </div>
@@ -266,8 +270,8 @@ function Resumen({ ficha, docs, irA }: { ficha: Ficha; docs: DocumentFile[] | nu
         )}
       </Tarjeta>
 
-      <Tarjeta titulo="Este mes" accion={<Link className="s-ficha-enlace" to={fichaDeAntes(p.id)}>Ver fichajes</Link>}>
-        <p className="s-apoyo">Sus horas, su bolsa de horas y sus vacaciones de este mes se ven en la ficha de antes, en «Tiempo y turnos», hasta que su pestaña nueva esté aprobada.</p>
+      <Tarjeta titulo="Este mes" accion={<button type="button" className="s-ficha-enlace" onClick={() => irA('tiempo')}>Ver fichajes</button>}>
+        <p className="s-apoyo">Sus horas, sus fichajes y su bolsa de horas, en «Tiempo y turnos». Sus vacaciones, de momento, en la ficha de antes.</p>
       </Tarjeta>
 
       <Tarjeta titulo="Sus documentos" accion={docs && docs.length > 0 && <Link className="s-ficha-enlace" to={fichaDeAntes(p.id)}>Ver los {docs.length}</Link>}>

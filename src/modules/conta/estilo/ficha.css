@@ -82,3 +82,39 @@
   .s-ficha-columnas { grid-template-columns: minmax(0, 1fr); }
   .s-ficha-antes { margin-left: 0; }
 }
+
+/* N1 · PR 3 · Tiempo y turnos (maquetas 10 y 10b). */
+.s-tiempo { display: flex; flex-direction: column; gap: var(--s-4); }
+.s-tiempo-acciones { display: flex; justify-content: flex-end; }
+.s-tiempo-aviso { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.s-tiempo-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+.s-tiempo-cifra { display: flex; flex-direction: column; gap: var(--s-1); }
+.s-tiempo-cifra[data-tono='duda'] { background: var(--s-duda-fondo); border-color: var(--s-duda); }
+.s-tiempo-e { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-tiempo-v { font-size: var(--s-t-cifra); font-weight: var(--s-peso-titulo); color: var(--s-tinta); }
+.s-tiempo-v-texto { font-size: var(--s-t-l); }
+.s-tiempo-s { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-tiempo-flechas { display: flex; gap: var(--s-3); }
+.s-tiempo-flechas button:disabled { color: var(--s-apoyo); cursor: default; text-decoration: none; }
+.s-tiempo-semana { display: grid; grid-template-columns: 7rem repeat(7, minmax(0, 1fr)); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); overflow: hidden; }
+.s-tiempo-semana > div { padding: var(--s-2); border-right: var(--s-linea) solid var(--s-borde-decorativo); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); font-size: var(--s-t-s); min-height: 2.5rem; }
+.s-tiempo-cab { background: var(--s-fondo); font-weight: var(--s-peso-fuerte); color: var(--s-apoyo); min-height: 0 !important; }
+.s-tiempo-lado { background: var(--s-fondo); color: var(--s-apoyo); }
+.s-tiempo-turno { display: inline-block; background: var(--s-accion-suave); color: var(--s-accion); border-radius: var(--s-radio-campo); padding: 0 var(--s-1); font-weight: var(--s-peso-fuerte); margin: 0 var(--s-1) var(--s-1) 0; }
+.s-tiempo-libre { color: var(--s-apoyo); }
+.s-tiempo-mal { color: var(--s-falta); font-weight: var(--s-peso-fuerte); }
+.s-tiempo-lista { display: none; list-style: none; margin: 0; padding: 0; }
+.s-tiempo-lista li { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr) auto; gap: var(--s-2); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); align-items: center; }
+.s-tiempo-lista li:last-child { border-bottom: none; }
+.s-tiempo-d { font-weight: var(--s-peso-fuerte); }
+.s-tiempo-d small { display: block; font-weight: normal; color: var(--s-apoyo); font-size: var(--s-t-s); }
+.s-tiempo-dos { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s-4); align-items: start; }
+.s-tiempo-registros .s-num { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 60rem) {
+  .s-tiempo-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .s-tiempo-cifras > :nth-child(n+3) { display: none; }
+  .s-tiempo-semana { display: none; }
+  .s-tiempo-lista { display: block; }
+  .s-tiempo-dos { grid-template-columns: minmax(0, 1fr); }
+  .s-tiempo-acciones { display: none; }
+}
