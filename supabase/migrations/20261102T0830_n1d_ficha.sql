@@ -33,13 +33,17 @@
 --
 -- Vuelta atrás: supabase/vuelta-atras/20261102T0830_n1d_ficha.down.sql
 
+-- plpgsql y no sql: una función sql comprueba al crearse que lab_catalogo
+-- existe, y staging pasa esta migración «de verdad» antes que la 0817 (semilla).
 create or replace function public._lab_cat(p_catalogo text, p_codigo text)
-returns jsonb language sql stable as $$
-  select case when p_codigo is null then null else coalesce(
+returns jsonb language plpgsql stable set search_path = public as $$
+begin
+  if p_codigo is null then return null; end if;
+  return coalesce(
     (select jsonb_build_object('codigo', c.codigo, 'calle', c.calle, 'oficial', c.oficial, 'vigente', c.vigente)
        from public.lab_catalogo c where c.catalogo = p_catalogo and c.codigo = btrim(p_codigo)),
-    jsonb_build_object('codigo', btrim(p_codigo), 'calle', null, 'oficial', null, 'desconocido', true)) end
-$$;
+    jsonb_build_object('codigo', btrim(p_codigo), 'calle', null, 'oficial', null, 'desconocido', true));
+end $$;
 revoke all on function public._lab_cat(text, text) from public, anon, authenticated;
 
 create or replace function public.lab_ficha(p_employee_id uuid)
