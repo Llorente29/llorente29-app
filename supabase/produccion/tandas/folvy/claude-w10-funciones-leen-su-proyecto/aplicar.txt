@@ -1,0 +1,22 @@
+# W10 · Staging no llama a producción (rehecho el 02/11/2026 desde main; era
+# el #380 del 28/10). Rama claude/w10-funciones-leen-su-proyecto. Se ensaya y
+# se aplica antes de fusionar, lanzado desde main nombrando la rama (W12b).
+#
+#   1. 0201 — SOLO AÑADE: _project_url(), _project_url_si_hay() y
+#      _aviso_falta_en_vault(). La dirección sale de project_url del Vault
+#      (Julio la creó a mano en los dos proyectos el 28/10).
+#   2. 0202 — CAMBIA EN CALIENTE las 24 funciones que llevan escrita la
+#      dirección de producción: la leen del Vault. Desde su texto de
+#      producción del 02/11, cambiando SOLO la dirección (y, en los dos
+#      disparadores de sale, si falta: no llamar, avisar y seguir). Guarda: en
+#      producción, las 24 con su huella del 02/11 y la dirección escrita igual
+#      a la del Vault; respaldo y vuelta atrás byte a byte.
+#      NECESITA «autorizo»: hay funciones del camino del pedido y de cron.
+#
+# Antes (producción, 02/11): 24 funciones con la dirección escrita; ninguna de
+# las tres nuevas; project_url en el Vault (huella a07a3bc4…).
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261102T0201_w10_project_url.sql
+supabase/migrations/20261102T0202_w10_funciones_leen_su_proyecto.sql
+cuenta: scripts/conta/produccion/cuentas/w10-funciones-leen-su-proyecto.sql
