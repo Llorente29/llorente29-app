@@ -114,7 +114,8 @@ begin
           current_setting('prueba.propia')::uuid, current_setting('prueba.norte')::uuid, date '2026-09-01', date '2026-09-15', date '2026-10-05',
           2, 20, -5, 15, 'excel_glovo', 'prueba-s01q-a', '{"promociones_local": 0}'::jsonb),
          (current_setting('prueba.acc')::uuid, current_setting('prueba.canal')::uuid, current_setting('prueba.plat')::uuid, current_setting('prueba.tb')::uuid,
-          current_setting('prueba.propia')::uuid, null, date '2026-09-01', date '2026-09-15', date '2026-10-05',
+          -- Con un local de las direcciones de sus clientes (S01j): la tienda sigue sin local.
+          current_setting('prueba.propia')::uuid, current_setting('prueba.sur')::uuid, date '2026-09-01', date '2026-09-15', date '2026-10-05',
           3, 40, -8, 32, 'excel_glovo', 'prueba-s01q-b', '{}'::jsonb);
 end $$;
 

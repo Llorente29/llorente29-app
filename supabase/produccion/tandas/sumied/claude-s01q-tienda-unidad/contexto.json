@@ -3,7 +3,7 @@
  "medido": "2026-11-02T11:30Z",
  "tanda": {
   "supabase/migrations/20261102T1215_s01q_tienda_local_marca.sql": "63ff61de6743d5206f9f45afc82704e9",
-  "supabase/migrations/20261102T1216_s01q_motor_mes.sql": "fc7c2638500d842d1cddaf0e735da074",
+  "supabase/migrations/20261102T1216_s01q_motor_mes.sql": "9943d647d55be760a2ff0fa0e5da94ac",
   "supabase/migrations/20261102T1217_s01q_foodint_tiendas.sql": "1d087d68932c0fbc9990dec43d9e3ed9"
  },
  "contexto": {

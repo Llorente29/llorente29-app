@@ -11,6 +11,8 @@
 -- que les pone la plataforma, y su marca y su local de Sumied.
 -- Las tiendas SIN local, o con local y SIN marca, no se comparan con lo vendido
 -- (sería todo el local): piden su local o su marca, y se cuadran por tienda.
+-- «Sin local» es el de la TIENDA: su liquidación puede traer uno sacado de las
+-- direcciones de sus clientes (S01j), y eso no dice de qué local es la tienda.
 -- GLOVO (Julio, 02/11): liquida los productos a precio de carta; nuestra caja
 -- guarda lo cobrado (con el envío y menos los descuentos que paga Glovo). Lo
 -- vendido de una tienda de Glovo es la suma de las LÍNEAS DE PRODUCTO de sus
@@ -43,11 +45,11 @@ begin
     -- ninguna) las de su canal, su marca y su local.
     select m.x,
       coalesce(
-        (select jsonb_agg(distinct jsonb_build_object('id', ps.id, 'nombre', ps.external_text))
+        (select jsonb_agg(distinct jsonb_build_object('id', ps.id, 'nombre', ps.external_text, 'local_id', ps.location_id))
            from jsonb_array_elements(m.x->'liquidaciones') l
            join public.channel_settlement cs on cs.id = (l->>'id')::uuid and cs.account_id = v_acc
            join public.platform_store ps on ps.id = cs.store_id),
-        (select jsonb_agg(jsonb_build_object('id', ps.id, 'nombre', ps.external_text))
+        (select jsonb_agg(jsonb_build_object('id', ps.id, 'nombre', ps.external_text, 'local_id', ps.location_id))
            from public.platform_store ps
           where ps.account_id = v_acc and ps.company_id = p_company and ps.channel_id = (m.x->>'canal_id')::uuid
             and ps.brand_id = (m.x->>'marca_id')::uuid and ps.location_id = (m.x->>'local_id')::uuid),
@@ -56,8 +58,15 @@ begin
       -- Glovo: todas sus liquidaciones son de Glovo, y la tienda tiene local y marca.
       (jsonb_array_length(coalesce(m.x->'liquidaciones', '[]'::jsonb)) > 0 and m.x->>'canal_id' is not null
         and m.x->>'local_id' is not null and m.x->>'marca_id' is not null
+        and not exists (select 1 from jsonb_array_elements(m.x->'liquidaciones') l join public.channel_settlement cs on cs.id = (l->>'id')::uuid
+                          join public.platform_store ps on ps.id = cs.store_id where ps.location_id is null)
         and not exists (select 1 from jsonb_array_elements(m.x->'liquidaciones') l where coalesce(l->>'origen', '') !~ 'glovo')) as glovo
       from m
+  ), t2 as (
+    select t.*,
+      t.x->>'canal_id' is not null and (t.x->>'local_id' is null
+        or exists (select 1 from jsonb_array_elements(t.tiendas) ti where ti->>'local_id' is null)) as sin_local
+      from t
   ), g as (
     select t.*,
       case when t.glovo then (
@@ -72,7 +81,7 @@ begin
          join public.channel_settlement cs on cs.id = (l->>'id')::uuid and cs.account_id = v_acc) as promos,
       (select sum((l->>'pedidos')::int) from jsonb_array_elements(coalesce(t.x->'liquidaciones', '[]'::jsonb)) l) as ped_liq,
       exists (select 1 from jsonb_array_elements(coalesce(t.x->'resoluciones', '[]'::jsonb)) r where r->>'pedido' is null) as resuelta
-      from t
+      from t2 t
   ), h as (
     select g.*,
       case when g.glovo and abs(round((g.v_prod - g.l_prod) * 100)) > g.tol then round(g.v_prod - g.l_prod, 2) end as dif_v,
@@ -96,6 +105,8 @@ begin
   ), e as (
     select k.*,
       case
+        -- Tienda sin local: pide su local (una vez por tienda); no se compara con lo vendido de ningún local.
+        when k.sin_local then 'te_necesita'
         when k.est = 'cuadra' then 'completa'
         when k.est = 'esperando_liquidacion' then 'aun_no_toca'
         when k.est = 'falta_liquidacion' then 'te_necesita'
@@ -106,6 +117,7 @@ begin
         else 'te_necesita'
       end as estado,
       case
+        when k.sin_local then 'elige_local'
         when k.est = 'falta_liquidacion' then 'pidela'
         when k.est = 'falta_factura' then 'subela'
         when k.est = 'esperando_cobro' then 'mira_el_banco'
@@ -126,7 +138,7 @@ begin
         'accion', case when e.estado in ('te_necesita', 'no_cuadra') then e.accion end,
         'cuando', case when e.estado = 'aun_no_toca' then e.x->>'plazo' end,
         'tiendas', e.tiendas,
-        'sin_local', e.x->>'canal_id' is not null and e.x->>'local_id' is null,
+        'sin_local', e.sin_local,
         'grupo', case when e.cedida then 'cedida' else 'plataforma' end,
         'diferencia', case when e.estado = 'no_cuadra' then case when e.glovo then coalesce(e.dif_v, e.dif_c) else (e.x->>'diferencia')::numeric end end,
         'frase', case
