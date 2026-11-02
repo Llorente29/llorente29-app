@@ -189,18 +189,36 @@ function filasDe(h: (typeof HOJAS_CEGID)[number], filas: Record<string, string>[
   return XLSX.utils.aoa_to_sheet([[...h.columnas], ...filas.map((f) => h.columnas.map((c) => f[c] ?? ''))])
 }
 
+/** Borra las personas y los locales inventados de la prueba del volcado cuyo nombre acaba en `cola` (comodín `*` de PostgREST). */
+async function limpiarVolcado(s: Sesion, cola: string): Promise<void> {
+  for (const empieza of ['Baja Inventada', 'Alta Inventada', 'Centro inventado']) {
+    const tabla = empieza.startsWith('Centro') ? 'locations' : 'employees'
+    const r = await rest(s, 'DELETE', `${tabla}?name=like.${encodeURIComponent(`${empieza} *${cola}`)}`)
+    expect([200, 204], `borrar ${tabla} «${empieza} …${cola}»: ${JSON.stringify(r.datos)}`).toContain(r.status)
+  }
+}
+
 test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las bajas entran y otra vez no duplica', async ({ page }) => {
   test.setTimeout(4 * 60_000)
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(e.message))
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'sumied') })
   const sola = await entrarComo(page, SOLA)
-  const marca = `${test.info().project.name}-volcado-${Date.now()}`
+  // Cada run, sus datos (Julio, 02/11): centro, local y personas llevan el número
+  // del run y el proyecto, así ordenador y móvil no comparten nada. «Sin centro en
+  // Cegid» es UNA clave por cuenta: la deja libre borrar el local al que apunta.
+  const run = process.env.GITHUB_RUN_ID ?? 'local'
+  const marca = `${test.info().project.name}-volcado-${run}-${Date.now()}`
   const centro = `Centro inventado ${marca}`
+  const cuenta = await cuentaDe(sola)
+  // Lo que dejó un run de esta prueba que murió antes de limpiar: sus locales
+  // (y con ellos, en cascada, sus centros confirmados) y sus personas.
+  await limpiarVolcado(sola, '-volcado-*')
   // La empresa sola no tiene centros: uno que se llama como el de Cegid, para
-  // que el local propuesto por el nombre sea él (se borra con la cuenta del carril).
-  const local = await rest<{ id: string }[]>(sola, 'POST', 'locations', { account_id: await cuentaDe(sola), name: centro })
+  // que el local propuesto por el nombre sea él.
+  const local = await rest<{ id: string }[]>(sola, 'POST', 'locations', { account_id: cuenta, name: centro })
   expect(local.status, JSON.stringify(local.datos)).toBe(201)
+  try {
   const bytes = paquete(marca, (libro) => {
     const t = HOJAS_CEGID.find((x) => x.id === 'trabajadores')!
     const c = HOJAS_CEGID.find((x) => x.id === 'contratos')!
@@ -314,4 +332,10 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(ficha.locator('[data-prueba="ficha-145"]')).toContainText('Falta')
 
   expect(errores, errores.join('\n')).toEqual([])
+  } finally {
+    // Al acabar, en verde o en rojo, lo suyo: sus personas y su local (con su
+    // centro y «Sin centro en Cegid», que apuntaban a él). El lote se queda: no se
+    // puede borrar desde la aplicación, y es de la cuenta del carril.
+    await limpiarVolcado(sola, marca)
+  }
 })
