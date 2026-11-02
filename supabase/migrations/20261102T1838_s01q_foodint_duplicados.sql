@@ -12,7 +12,8 @@
 --     Diez (la guarda del #448).
 --   · El IVA soportado del 4T baja 1.663,42 € (sus 123 filas del libro, que
 --     cuentan en noviembre y no se han presentado).
--- Para si algo no es lo medido. Sin Foodint (staging), no hace nada.
+-- Lo de antes de cada factura queda en conta_s01q_factura_antes, para la vuelta
+-- atrás exacta. Para si algo no es lo medido. Sin Foodint (staging), no hace nada.
 
 do $$
 declare
@@ -49,6 +50,14 @@ begin
    where v.company_id = v_e and v.book = 'received' and v.voided_at is null
      and public._conta_iva_dia_del_libro(v.book, v.deduction_year, v.deduction_period, v.received_date, v.issue_date, v.operation_date) between date '2026-10-01' and date '2026-12-31';
   select coalesce(sum(v.tax_amount), 0) into v_iva_borrado from public.vat_book_entry v where v.entry_id = any(v_entries);
+
+  -- Lo de antes de cada factura (su estado en la pasada y su enlace), para la vuelta atrás exacta.
+  create table if not exists public.conta_s01q_factura_antes as
+    select a.invoice_id, a.estado, a.porque, a.regla, a.entry_id, a.at, si.journal_entry_id
+      from public.supplier_invoice_auto a join public.supplier_invoice si on si.id = a.invoice_id
+     where a.invoice_id = any(v_facturas);
+  alter table public.conta_s01q_factura_antes enable row level security;
+  revoke all on table public.conta_s01q_factura_antes from public, anon, authenticated;
 
   r := public._conta_asientos_borrar(v_e, v_entries,
          'S01q · Duplicado: la factura ya estaba en Diez (la pasada del S01o del 01/11 la apuntó otra vez). Julio, 02/11.',

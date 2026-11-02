@@ -3,7 +3,7 @@
  "medido": "2026-11-02T17:45Z",
  "tanda": {
   "supabase/migrations/20261102T1837_s01q_borrar_asientos.sql": "f9189c3e6a659475e8a7a5e65e974fa9",
-  "supabase/migrations/20261102T1838_s01q_foodint_duplicados.sql": "53ec3783e69a29c0e9456451ab334eee"
+  "supabase/migrations/20261102T1838_s01q_foodint_duplicados.sql": "c5585993695035c7312707047018a496"
  },
  "contexto": {
   "tablas": [
