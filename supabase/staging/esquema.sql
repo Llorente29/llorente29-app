@@ -11769,6 +11769,30 @@ $$;
 
 
 --
+-- Name: _print_job_caducado_no_vuelve(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._print_job_caducado_no_vuelve() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+begin
+  if coalesce(current_setting('folvy.print_job_reabrir', true), '') <> 'on' then
+    raise exception 'print_job %: está caducado y no vuelve a la cola (una comanda vieja confunde a la cocina)', old.id
+      using errcode = 'P0001';
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: FUNCTION _print_job_caducado_no_vuelve(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._print_job_caducado_no_vuelve() IS 'A01a (01/11/2026). Un print_job caducado no cambia de estado: nunca se imprime. Solo la vuelta atrás lo reabre (folvy.print_job_reabrir = on).';
+
+
+--
 -- Name: _project_url(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -49738,58 +49762,12 @@ begin
       );
     end if;
 
-    -- Aviso 4 — tickets atascados en cola mas de 2h, POR LOCAL, y SOLO de
-    -- cuentas que operan.
-    --
-    -- `print_job` trae `account_id` y `location_id`, los dos NOT NULL: como en
-    -- el aviso 6, no habia que buscarlos, habia que dejar de tirarlos. El
-    -- viejo sumaba la tabla ENTERA y decia un numero que no es de nadie
-    -- (regla 9). Y el antirruido era global: un local tapaba al otro una hora.
-    --
-    -- El filtro de cuenta va en los DOS sitios —la puerta y el agrupado— a
-    -- proposito: si la puerta contara mas ancho que el agrupado, tendriamos un
-    -- `if` que se abre para no encolar nada. La misma vara a los dos lados.
-    select count(*) into v_stuck_print
-    from public.print_job
-    where status = 'pending' and created_at < now() - interval '2 hours'
-      and public.cuenta_opera(account_id);
-    if v_stuck_print > 0 then
-      perform public.encolar_alerta(
-        p_kind    => 'db-health',
-        p_subject => 'Tickets sin imprimir desde hace horas: ' || t.n || ' en cola',
-        p_message =>
-          t.n || ' ticket(s) llevan en cola sin imprimirse mas de 2 horas. El mas viejo espera '
-          || 'desde las ' || to_char(t.mas_viejo at time zone 'Europe/Madrid', 'HH24:MI')
-          || ' del ' || to_char(t.mas_viejo at time zone 'Europe/Madrid', 'DD/MM') || '.'
-          || chr(10) || chr(10)
-          || 'Mira la impresora del local: encendida, con papel y con la tablet conectada.'
-          || chr(10)
-          || 'Asi se acumularon los 76 de Carabanchel del 08/08, tres dias sin que nadie se enterara.',
-        p_debounce_kind   => 'db-health-print-stuck_'
-                             || coalesce(t.location_id::text, 'sin-local'),
-        p_debounce_window => interval '60 minutes',
-        p_account_id      => t.account_id,
-        p_location_id     => t.location_id,
-        p_brand_id        => NULL,
-        -- La severidad la decide el HORARIO, no una constante (Julio, 09/09).
-        -- `critico` quiere decir «actua ahora», y eso solo es verdad si el
-        -- local esta sirviendo: tickets atascados a las 21:00 con la cocina
-        -- abierta son pedidos perdiendose; el mismo dato a las 4 de la manana
-        -- no justifica despertar a nadie.
-        --
-        -- Se evalua POR FILA: dos locales del mismo grupo pueden estar uno
-        -- abierto y otro cerrado, y cada aviso se lleva la suya.
-        p_severity        => case
-                               when public.is_brand_open(t.location_id, NULL::uuid, now())
-                               then 'critico' else 'alto'
-                             end
-      )
-      from (select j.account_id, j.location_id, count(*) as n, min(j.created_at) as mas_viejo
-              from public.print_job j
-             where j.status = 'pending' and j.created_at < now() - interval '2 hours'
-               and public.cuenta_opera(j.account_id)
-             group by j.account_id, j.location_id) t;
-    end if;
+    -- Aviso 4 — tickets sin imprimir. Desde el A01a (01/11) vive en
+    -- print_job_vigia(): caduca lo que lleva más de 2 h pendiente (claim_print_jobs
+    -- ya no lo coge) y avisa UNA vez al abrirse el problema (más de 15 min sin
+    -- imprimir), otra si la cola se dobla y «Resuelto» al vaciarse. Antes
+    -- repetía el mismo aviso cada hora: 24 al día con los 17 de Alcalá del 29/10.
+    perform public.print_job_vigia();
 
     -- Aviso 5 — tickets encolados a una impresora marcada como inactiva, POR
     -- LOCAL, y SOLO de cuentas que operan.
@@ -70852,6 +70830,95 @@ CREATE FUNCTION public.price_drift_for(p_account_id uuid, p_item_id uuid, p_wind
   FROM agg
   WHERE agg.n > 0;
 $$;
+
+
+--
+-- Name: print_job_vigia(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.print_job_vigia() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  r  record;
+  a  public.print_job_aviso%rowtype;
+  v_impresos  integer;
+  v_caducados integer;
+begin
+  -- 1. Caduca lo que lleva más de 2 h pendiente: claim_print_jobs ya no lo coge.
+  update public.print_job
+     set status = 'expired', expired_at = now(),
+         expire_reason = 'Más de 2 h sin imprimir: ya no se imprime. Una comanda vieja impresa tarde confunde a la cocina.'
+   where status = 'pending' and created_at < now() - interval '2 hours';
+
+  -- 2. Abre o se dobla: lo pendiente más de 15 min, por local, de cuentas que operan.
+  for r in
+    select j.account_id, j.location_id, count(*)::integer as n, min(j.created_at) as mas_viejo
+      from public.print_job j
+     where j.status = 'pending' and j.created_at < now() - interval '15 minutes'
+       and public.cuenta_opera(j.account_id)
+     group by j.account_id, j.location_id
+  loop
+    select * into a from public.print_job_aviso where location_id = r.location_id;
+    if not found then
+      perform public.encolar_alerta(
+        p_kind => 'db-health',
+        p_subject => 'Tickets sin imprimir: ' || r.n || ' en cola',
+        p_message => r.n || ' ticket(s) llevan más de 15 minutos en cola sin imprimirse. El más viejo, desde las '
+          || to_char(r.mas_viejo at time zone 'Europe/Madrid', 'HH24:MI') || ' del '
+          || to_char(r.mas_viejo at time zone 'Europe/Madrid', 'DD/MM') || '.' || chr(10) || chr(10)
+          || 'Mira la impresora del local: encendida, con papel y con la tablet conectada.' || chr(10)
+          || 'Este aviso no se repite: vuelve solo si la cola se dobla, y avisa «Resuelto» al vaciarse. '
+          || 'Lo que pase de 2 horas caduca y ya no se imprime.',
+        p_account_id => r.account_id, p_location_id => r.location_id,
+        p_severity => case when public.is_brand_open(r.location_id, NULL::uuid, now()) then 'critico' else 'alto' end);
+      insert into public.print_job_aviso (location_id, account_id, alerted_n) values (r.location_id, r.account_id, r.n);
+    elsif r.n >= 2 * a.alerted_n then
+      perform public.encolar_alerta(
+        p_kind => 'db-health',
+        p_subject => 'Tickets sin imprimir: la cola se ha doblado, ' || r.n || ' en cola',
+        p_message => 'Eran ' || a.alerted_n || ' al avisar (' || to_char(a.alerted_at at time zone 'Europe/Madrid', 'HH24:MI')
+          || ') y ahora son ' || r.n || '. El más viejo, desde las '
+          || to_char(r.mas_viejo at time zone 'Europe/Madrid', 'HH24:MI') || '.' || chr(10) || chr(10)
+          || 'Mira la impresora del local: encendida, con papel y con la tablet conectada.',
+        p_account_id => r.account_id, p_location_id => r.location_id,
+        p_severity => case when public.is_brand_open(r.location_id, NULL::uuid, now()) then 'critico' else 'alto' end);
+      update public.print_job_aviso set alerted_n = r.n, alerted_at = now() where location_id = r.location_id;
+    end if;
+  end loop;
+
+  -- 3. Resuelto: ya no queda nada pendiente más de 15 min en ese local.
+  for a in
+    select pa.* from public.print_job_aviso pa
+     where not exists (select 1 from public.print_job j
+                        where j.location_id = pa.location_id and j.status = 'pending'
+                          and j.created_at < now() - interval '15 minutes'
+                          and public.cuenta_opera(j.account_id))
+  loop
+    select count(*) filter (where status = 'done'), count(*) filter (where status = 'expired')
+      into v_impresos, v_caducados
+      from public.print_job
+     where location_id = a.location_id and created_at <= a.opened_at
+       and coalesce(done_at, expired_at) >= a.opened_at;
+    perform public.encolar_alerta(
+      p_kind => 'db-health',
+      p_subject => 'Resuelto: ya no hay tickets sin imprimir',
+      p_message => 'La cola del local se ha vaciado. Desde el aviso de las '
+        || to_char(a.opened_at at time zone 'Europe/Madrid', 'HH24:MI') || ' del '
+        || to_char(a.opened_at at time zone 'Europe/Madrid', 'DD/MM') || ': '
+        || v_impresos || ' impreso(s) y ' || v_caducados || ' caducado(s), que ya no se imprimen.',
+      p_account_id => a.account_id, p_location_id => a.location_id, p_severity => 'info');
+    delete from public.print_job_aviso where location_id = a.location_id;
+  end loop;
+end $$;
+
+
+--
+-- Name: FUNCTION print_job_vigia(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.print_job_vigia() IS 'A01a (01/11/2026). La llama db_health_watchdog cada minuto: caduca los print_job de más de 2 h pendientes y avisa de tickets sin imprimir una vez al abrirse (más de 15 min), otra si la cola se dobla y «Resuelto» al vaciarse.';
 
 
 --
@@ -104101,9 +104168,11 @@ CREATE TABLE public.print_job (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     sent_at timestamp with time zone,
     done_at timestamp with time zone,
+    expired_at timestamp with time zone,
+    expire_reason text,
     CONSTRAINT print_job_doc_type_check CHECK ((doc_type = ANY (ARRAY['bag'::text, 'kitchen'::text, 'labels'::text]))),
     CONSTRAINT print_job_source_check CHECK ((source = ANY (ARRAY['auto'::text, 'manual'::text, 'reprint'::text]))),
-    CONSTRAINT print_job_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sent'::text, 'done'::text, 'error'::text, 'cancelled'::text])))
+    CONSTRAINT print_job_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sent'::text, 'done'::text, 'error'::text, 'cancelled'::text, 'expired'::text])))
 );
 
 
@@ -104112,6 +104181,41 @@ CREATE TABLE public.print_job (
 --
 
 COMMENT ON TABLE public.print_job IS 'Cola de impresión. payload = documento renderizado (inmutable). El adaptador del transporte lo recoge.';
+
+
+--
+-- Name: COLUMN print_job.expired_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.print_job.expired_at IS 'A01a (01/11/2026). Cuándo caducó: pendiente demasiado tiempo, ya no se imprime (una comanda vieja confunde a la cocina).';
+
+
+--
+-- Name: COLUMN print_job.expire_reason; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.print_job.expire_reason IS 'A01a (01/11/2026). Por qué caducó, dicho para quien lo lea.';
+
+
+--
+-- Name: print_job_aviso; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.print_job_aviso (
+    location_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    opened_at timestamp with time zone DEFAULT now() NOT NULL,
+    alerted_n integer NOT NULL,
+    alerted_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT print_job_aviso_alerted_n_check CHECK ((alerted_n > 0))
+);
+
+
+--
+-- Name: TABLE print_job_aviso; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.print_job_aviso IS 'A01a (01/11/2026). Un problema de «tickets sin imprimir» abierto por local: cuántos había la última vez que se avisó. Se borra al resolverse.';
 
 
 --
@@ -113922,6 +114026,14 @@ ALTER TABLE ONLY public.price_operation
 
 
 --
+-- Name: print_job_aviso print_job_aviso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_job_aviso
+    ADD CONSTRAINT print_job_aviso_pkey PRIMARY KEY (location_id);
+
+
+--
 -- Name: print_job print_job_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -121619,6 +121731,13 @@ CREATE TRIGGER pc01e2_proveedor_iban_cambiado BEFORE UPDATE OF iban ON public.su
 --
 
 CREATE TRIGGER pc01e2b_iban_de_la_factura AFTER INSERT OR UPDATE OF supplier_id, read_iban ON public.supplier_invoice FOR EACH ROW WHEN (((new.read_iban IS NOT NULL) AND (new.supplier_id IS NOT NULL))) EXECUTE FUNCTION public._pc01e2b_iban_de_la_factura();
+
+
+--
+-- Name: print_job print_job_caducado_no_vuelve; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER print_job_caducado_no_vuelve BEFORE UPDATE OF status ON public.print_job FOR EACH ROW WHEN (((old.status = 'expired'::text) AND (new.status IS DISTINCT FROM 'expired'::text))) EXECUTE FUNCTION public._print_job_caducado_no_vuelve();
 
 
 --
@@ -130354,6 +130473,22 @@ ALTER TABLE ONLY public.price_operation
 
 ALTER TABLE ONLY public.print_job
     ADD CONSTRAINT print_job_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: print_job_aviso print_job_aviso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_job_aviso
+    ADD CONSTRAINT print_job_aviso_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: print_job_aviso print_job_aviso_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.print_job_aviso
+    ADD CONSTRAINT print_job_aviso_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE CASCADE;
 
 
 --
@@ -140736,6 +140871,12 @@ CREATE POLICY price_operation_read ON public.price_operation FOR SELECT USING ((
 ALTER TABLE public.print_job ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: print_job_aviso; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.print_job_aviso ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: print_job print_job_delete; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -146030,6 +146171,15 @@ GRANT ALL ON FUNCTION public._pos_table_state(p_sale public.sale) TO service_rol
 GRANT ALL ON FUNCTION public._post_goods_receipt_lines(p_receipt_id uuid, p_only_unposted boolean) TO anon;
 GRANT ALL ON FUNCTION public._post_goods_receipt_lines(p_receipt_id uuid, p_only_unposted boolean) TO authenticated;
 GRANT ALL ON FUNCTION public._post_goods_receipt_lines(p_receipt_id uuid, p_only_unposted boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION _print_job_caducado_no_vuelve(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._print_job_caducado_no_vuelve() TO anon;
+GRANT ALL ON FUNCTION public._print_job_caducado_no_vuelve() TO authenticated;
+GRANT ALL ON FUNCTION public._print_job_caducado_no_vuelve() TO service_role;
 
 
 --
@@ -156172,6 +156322,14 @@ GRANT ALL ON FUNCTION public.price_drift_for(p_account_id uuid, p_item_id uuid, 
 
 
 --
+-- Name: FUNCTION print_job_vigia(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.print_job_vigia() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.print_job_vigia() TO service_role;
+
+
+--
 -- Name: FUNCTION propose_ai_action(p_account_id uuid, p_agent text, p_tool_name text, p_summary text, p_args jsonb, p_risk text, p_effect_preview jsonb, p_rollback_hint jsonb, p_target_table text, p_target_id uuid, p_session_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -163709,6 +163867,13 @@ GRANT SELECT ON TABLE public.price_operation TO authenticated;
 GRANT ALL ON TABLE public.print_job TO anon;
 GRANT ALL ON TABLE public.print_job TO authenticated;
 GRANT ALL ON TABLE public.print_job TO service_role;
+
+
+--
+-- Name: TABLE print_job_aviso; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.print_job_aviso TO service_role;
 
 
 --
