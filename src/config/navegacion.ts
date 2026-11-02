@@ -280,6 +280,8 @@ export const CONTA = {
     laboralPagina: 'laboral/:pagina',
     /** LS1 · Lo que llega más adelante (contrato y convenio, nóminas, seguros sociales, SEPE). */
     laboralLlega: 'laboral/llega/:que',
+    /** N1 · PR 2 (02/11) · La ficha nueva de una persona (Resumen, Contrato y salario, IRPF). */
+    laboralPersona: 'laboral/persona/:id',
     /** I01b · El IVA de un periodo (tablero 9): impuestos/iva/2026/3T. */
     impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
     /** I01c · El trimestre (maqueta_303_v2): impuestos/trimestre/2026/3T. */
@@ -369,6 +371,9 @@ export function indiceAjustes(solo = false): typeof INDICE_AJUSTES {
   if (!solo) return INDICE_AJUSTES
   return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !e.hueco) })).filter((g) => g.entradas.length > 0)
 }
+
+/** N1 · La ficha nueva de una persona en Sumied › Laboral. */
+export const rutaFichaPersona = (id: string): string => rutaConta(CONTA.rutas.laboralPersona, { id })
 
 /** Dirección absoluta de una ruta del módulo, con sus parámetros rellenos. */
 export function rutaConta(relativa: string, params: Record<string, string> = {}): string {

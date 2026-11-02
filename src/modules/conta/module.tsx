@@ -62,6 +62,7 @@ import { ClienteTrimestre } from '@/modules/conta/impuestos/despacho/ClienteTrim
 import InicioPage from '@/modules/conta/inicio/InicioPage'
 import LaboralPage from '@/modules/conta/laboral/LaboralPage'
 import LlegaPage from '@/modules/conta/laboral/LlegaPage'
+import FichaPage from '@/modules/conta/laboral/ficha/FichaPage'
 import PuertaPage from '@/modules/conta/puerta/PuertaPage'
 import QueEsperasPage from '@/modules/conta/puerta/QueEsperasPage'
 import FichaProveedorPage from '@/modules/conta/proveedor/FichaProveedorPage'
@@ -137,6 +138,7 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.laboral, element: enMarco(<LaboralPage />, '¿Quién está trabajando ahora?', true) },
     { path: CONTA.rutas.laboralPagina, element: enMarco(<LaboralPage />, '¿Quién no fichó ayer la salida?', true) },
     { path: CONTA.rutas.laboralLlega, element: enMarco(<LlegaPage />, '¿Cuándo llegan las nóminas?') },
+    { path: CONTA.rutas.laboralPersona, element: enMarco(<FichaPage />, '¿Cuánto cobra y qué contrato tiene?') },
     { path: CONTA.rutas.impuestos, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
     { path: CONTA.rutas.impuestosPestana, element: enMarco(<ImpuestosPage />, '¿Cuánto IVA pago este trimestre?') },
     { path: CONTA.rutas.impuestoIva, element: enMarco(<IvaPeriodoPage />, '¿Por qué pago más que el trimestre pasado?') },

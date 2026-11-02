@@ -1,0 +1,23 @@
+{
+  "_que": "N1 · PR 2 · paso 1 · contexto de producción de la 0817, la 0830 y la 0831, medido en SOLO LECTURA (las preguntas de sql-contexto: existe, otras firmas, camino del pedido —disparadores y cron— e historial). No existen las tablas lab_catalogo ni lab_catalogo_fuente, ni _lab_cat, lab_ficha, lab_poner_categoria, _lab_iban_valido ni lab_poner_iban; existe lab_volcar_lote(uuid) (2248), sin otras firmas; nada en el camino del pedido; nada en el historial.",
+  "medido": "2026-11-02T09:00Z",
+  "tanda": {
+    "supabase/migrations/20261102T0817_n1d_catalogos_oficiales.sql": "9cb8803d628d1d2907052d9ec45a4da3",
+    "supabase/migrations/20261102T0830_n1d_ficha.sql": "31642e5ae01bd33c3590ec7fa5fd798f",
+    "supabase/migrations/20261102T0831_n1d_sin_centro_en_palabras.sql": "44646999498b0aaabd1bfb71a361b1cb"
+  },
+  "contexto": {
+    "tablas": [],
+    "funciones": [
+      "public.lab_volcar_lote(uuid)"
+    ],
+    "filas": {},
+    "otras": {},
+    "camino": {
+      "tablas": [],
+      "funciones": []
+    },
+    "usos": {},
+    "registro": []
+  }
+}

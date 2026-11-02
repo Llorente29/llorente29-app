@@ -2,7 +2,9 @@
 //
 // N1 · PR 1 (01/11/2026) · El tercer paso del importador, con las filas ya
 // cargadas: cada centro de Cegid con su local (propuesto por el nombre; lo
-// confirma el administrador) y «Pasar a las fichas». Sin confirmar, nadie de
+// confirma el administrador) y «Pasar a las fichas». N1 · PR 2 (02/11): elegir
+// el local ya lo confirma (sin segundo botón), y si queda algún centro sin
+// elegir, «Pasar a las fichas» lo dice nombrándolo antes de pasar nada. Sin confirmar, nadie de
 // ese centro entra, y la pantalla lo dice. Al acabar, lo que ha quedado, con
 // números, los avisos uno por uno y lo que cobra que no cuadra con Cegid.
 
@@ -21,6 +23,8 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
   const [volcando, setVolcando] = useState(false)
   const [resultado, setResultado] = useState<ResultadoVolcado | null>(null)
   const [error, setError] = useState('')
+  const [guardando, setGuardando] = useState<string | null>(null)
+  const [avisoAntes, setAvisoAntes] = useState(false)
 
   useEffect(() => {
     let vivo = true
@@ -32,21 +36,31 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
   const valorDe = (c: CentroDelLote) => elegido[c.centro] ?? c.confirmado?.id ?? c.propuesto?.id ?? ''
   const sinConfirmar = (centros ?? []).filter((c) => !c.confirmado)
 
-  async function confirmar(c: CentroDelLote) {
-    const loc = valorDe(c)
+  async function confirmar(c: CentroDelLote, loc = valorDe(c)) {
     if (!loc) return
-    setError('')
-    try { setCentros(await confirmarCentro(loteId, c.centro, loc)) } catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido confirmar.') }
+    setError(''); setGuardando(c.centro)
+    try { setCentros(await confirmarCentro(loteId, c.centro, loc)); setAvisoAntes(false) }
+    catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido confirmar.') }
+    finally { setGuardando(null) }
+  }
+
+  /** Elegir el local en la lista ya lo confirma (Julio, N1·4). */
+  function elegir(c: CentroDelLote, loc: string) {
+    setElegido((x) => ({ ...x, [c.centro]: loc }))
+    if (loc) void confirmar(c, loc)
   }
 
   async function volcar() {
+    // Si queda algún centro sin elegir, se dice antes de pasar nada; un segundo clic pasa igual.
+    if (sinConfirmar.length > 0 && !avisoAntes) { setAvisoAntes(true); setResultado(null); return }
+    setAvisoAntes(false)
     setVolcando(true); setError(''); setResultado(null)
     try { setResultado(await volcarLote(loteId)) } catch (e) { setError(e instanceof Error ? e.message : 'No se ha podido pasar a las fichas.') } finally { setVolcando(false) }
   }
 
   return (
     <Tarjeta titulo="Pasar a las fichas" nivel={3}
-      apoyo="Quien ya está en el equipo se queda en el local de su ficha. Para quien entra ahora, cada centro de Cegid va a un local de la cuenta: te proponemos el que se llama igual; confírmalo. Si Cegid no trae su centro, elige uno en «Sin centro en Cegid». Nadie de un centro sin confirmar entra en las fichas."
+      apoyo="Quien ya está en el equipo se queda en el local de su ficha. Para quien entra ahora, cada centro de Cegid va a un local de la cuenta: te proponemos el que se llama igual; confírmalo o elige otro (al elegirlo queda confirmado). Si Cegid no trae su centro, elige uno en «Sin centro en Cegid». Nadie de un centro sin local entra en las fichas."
       accion={<Boton variante="principal" icono="subir" onClick={volcar} disabled={volcando || centros === null} data-prueba="volcado-pasar">
         {volcando ? 'Pasando…' : 'Pasar a las fichas'}</Boton>}>
       {centros === null && !error && <p className="s-apoyo" role="status">Leyendo los centros del fichero…</p>}
@@ -66,14 +80,16 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
                 <td>{nombreDelCentro(c.centro)}</td>
                 <td>{c.personas}</td>
                 <td>
-                  <Selector valor={valorDe(c)} alCambiar={(v) => setElegido((x) => ({ ...x, [c.centro]: v }))} opciones={opciones}
+                  <Selector valor={valorDe(c)} alCambiar={(v) => elegir(c, v)} opciones={opciones} disabled={guardando === c.centro}
                     aria-label={`Local para el centro ${nombreDelCentro(c.centro)}`} />
                 </td>
                 <td>
-                  {c.confirmado && valorDe(c) === c.confirmado.id
+                  {guardando === c.centro ? <span className="s-apoyo" role="status">Guardando…</span>
+                    : c.confirmado && valorDe(c) === c.confirmado.id
                     ? <Chip tono="seguro">Confirmado</Chip>
-                    : <Boton variante="secundario" onClick={() => confirmar(c)} disabled={!valorDe(c)} data-prueba="volcado-confirmar">
-                        {c.propuesto && !c.confirmado && valorDe(c) === c.propuesto.id ? 'Confirmar el propuesto' : 'Confirmar'}</Boton>}
+                    : c.propuesto && valorDe(c) === c.propuesto.id
+                    ? <Boton variante="secundario" onClick={() => confirmar(c)} data-prueba="volcado-confirmar">Confirmar el propuesto</Boton>
+                    : <Chip tono="duda">Sin elegir</Chip>}
                 </td>
               </tr>
             ))}
@@ -84,6 +100,11 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
       {centros !== null && sinConfirmar.length > 0 && (
         <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="volcado-sin-confirmar">
           {sinConfirmar.length === 1 ? 'Falta confirmar 1 centro' : `Faltan confirmar ${sinConfirmar.length} centros`}: {sinConfirmar.map((c) => nombreDelCentro(c.centro)).join(', ')}. Sus personas no entrarán hasta que lo confirmes.
+        </p>
+      )}
+      {avisoAntes && sinConfirmar.length > 0 && (
+        <p className="s-aviso-lista" data-tono="falta" role="alert" data-prueba="volcado-aviso-antes">
+          Antes de pasar: {sinConfirmar.length === 1 ? 'el centro' : 'los centros'} {sinConfirmar.map((c) => `«${nombreDelCentro(c.centro)}»`).join(', ')} no {sinConfirmar.length === 1 ? 'tiene' : 'tienen'} local, y sus {sinConfirmar.reduce((n, c) => n + c.personas, 0)} personas no entrarán en las fichas. Elige su local arriba, o pulsa otra vez «Pasar a las fichas» para pasar solo el resto.
         </p>
       )}
       {error && <p className="s-aviso-lista" data-tono="falta" role="alert" data-prueba="volcado-error">{error}</p>}

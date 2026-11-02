@@ -10,6 +10,9 @@ import { STAGING_URL, anonKey, type Sesion } from './sesion'
 
 export async function rest<T = unknown>(
   s: Sesion, metodo: 'GET' | 'POST' | 'PATCH' | 'DELETE', ruta: string, cuerpo?: unknown,
+  // «return=minimal» para borrar donde authenticated no lee todas las columnas
+  // (employees): devolver las filas es un RETURNING * y da 42501 (N1 · 6, 02/11).
+  prefer: 'return=representation' | 'return=minimal' = 'return=representation',
 ): Promise<{ status: number; datos: T }> {
   const r = await fetch(`${STAGING_URL}/rest/v1/${ruta}`, {
     method: metodo,
@@ -17,7 +20,7 @@ export async function rest<T = unknown>(
       apikey: anonKey(),
       Authorization: `Bearer ${s.access_token}`,
       'Content-Type': 'application/json',
-      Prefer: 'return=representation',
+      Prefer: prefer,
     },
     body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
   })
