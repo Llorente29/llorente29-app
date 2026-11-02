@@ -54,6 +54,9 @@ comment on table public.conta_pago_justificante is
 alter table public.conta_pago_justificante enable row level security;
 drop policy if exists conta_pago_justificante_leer on public.conta_pago_justificante;
 create policy conta_pago_justificante_leer on public.conta_pago_justificante for select to authenticated using (public._conta_pago_de_la_cuenta(account_id));
+-- En Supabase una tabla nueva de public nace con todos los permisos para anon y authenticated
+-- (los de por defecto): se quitan y solo se deja leer. Escriben solo las funciones del servicio.
+revoke all on public.conta_pago_justificante from anon, authenticated;
 grant select on public.conta_pago_justificante to authenticated;
 
 -- ── Los pagados sin justificante (la lectura de cada hora los hace) ──────────

@@ -24,6 +24,9 @@ do $$ begin
     raise exception 'PRUEBA B01 justificante · 0: la vuelta atrás no lo quita todo.';
   end if;
 end $$;
+-- Como Supabase: una tabla nueva de public nace con todos los permisos para anon y authenticated
+-- (en la base local no; staging lo cazó, run 41540710108). Dentro de la transacción: se deshace.
+alter default privileges in schema public grant all on tables to anon, authenticated;
 \i supabase/migrations/20261102T2140_b01p_justificante.sql
 \i supabase/migrations/20261102T2140_b01p_justificante.sql
 
