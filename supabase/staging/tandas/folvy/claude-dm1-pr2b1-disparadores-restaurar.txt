@@ -1,0 +1,7 @@
+# DM1 · PR 2b-1 · La 0024 (los disparadores se apartan mientras se restaura una
+# demo) y su prueba (ROLLBACK): con los de antes, restaurando, la venta sale
+# con su token (rojo a propósito); apagado, igual que antes; restaurando, sin
+# él; las 62 byte a byte con la de antes más la guarda; un usuario de la app
+# puede llamar a _restaurando_demo; y la vuelta atrás, byte a byte.
+supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql
+supabase/staging/sql/20261101_dm1_disparadores_restaurar_prueba.sql
