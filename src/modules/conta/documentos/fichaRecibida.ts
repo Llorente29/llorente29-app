@@ -37,7 +37,7 @@ export interface LineaGasto { cuenta: string; local: string; importe: string }
 /** Retención (IRPF) o recargo de equivalencia: su tipo y su importe. */
 export interface Adicional { tipo: string; importe: string }
 
-export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid'
+export type FormaPago = '' | 'transfer' | 'direct_debit' | 'card' | 'cash' | 'prepaid' | 'compensation'
 export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: '', texto: 'Sin decir' },
   { valor: 'transfer', texto: 'Transferencia' },
@@ -46,6 +46,8 @@ export const FORMAS_PAGO: { valor: FormaPago; texto: string }[] = [
   { valor: 'cash', texto: 'Efectivo' },
   // D06 · Riders: se paga del saldo prepago de Catcher (la 40700001), sin vencimiento que esperar.
   { valor: 'prepaid', texto: 'Saldo prepago Catcher (40700001)' },
+  // S01i · Las comisiones de las plataformas: se descuentan de lo que te paga la liquidación, no pasan por el banco.
+  { valor: 'compensation', texto: 'Compensación con la liquidación' },
 ]
 export const ESTADOS_PAGO: { valor: string; texto: string }[] = [
   { valor: 'sin_pagar', texto: 'Sin pagar' },
@@ -195,6 +197,19 @@ export function borradorDe(d: DatosParaBorrador): BorradorFicha {
 
 /** Los tipos de retención de siempre (IRPF): si el importe es uno de ellos sobre la base, ese. */
 export const TIPOS_RETENCION = [15, 7, 19, 1] as const
+/**
+ * S01l · La retención que traía el papel y no entró con la factura (su tipo no
+ * encajaba con ninguno: conta_factura_desde_lectura la deja fuera y en revisión).
+ * La ficha la propone para elegir su tipo. null si la factura ya tiene la suya o
+ * el papel no traía ninguna.
+ */
+export function retencionLeidaSinTipo(guardada: number | null, leida: { tipo: number | null; importe: number } | null | undefined): { importe: number; tipo: string; aviso: string } | null {
+  if (guardada || !leida || !leida.importe) return null
+  const importe = Math.abs(leida.importe)
+  const tipo = leida.tipo !== null && (TIPOS_RETENCION as readonly number[]).includes(Math.abs(leida.tipo)) ? String(Math.abs(leida.tipo)) : ''
+  return { importe, tipo, aviso: `La factura trae una retención de ${eurosExactos(importe)}: elige su tipo.` }
+}
+
 function tipoDeRetencion(base: number, importe: number): string {
   const t = TIPOS_RETENCION.find((x) => cent(cuotaIva(base, x)) === cent(Math.abs(importe)))
   return t === undefined ? '' : String(t)
@@ -347,6 +362,16 @@ export function cuentasDeLaPropuesta(lineas: readonly LineaPropuestaVista[], nom
 function devolucionDe(gasto: string, c: CuentasFicha): Cuenta | null {
   const p = plantillaDevolucion(gasto)
   return (p ? c.devoluciones?.find((d) => d.codigo.startsWith(p)) : null) ?? null
+}
+
+/**
+ * S01h · 2 · La cuenta a la que va de verdad el gasto en el asiento: la misma,
+ * salvo en un abono, que va a su 608x si la propuesta la trae (60000000 →
+ * 60800000). «A qué gasto va» enseña ésta, para decir lo mismo que el asiento.
+ */
+export function cuentaDelGastoEnAsiento(gasto: string, c: CuentasFicha | null): Cuenta | null {
+  if (!gasto || !c?.abono) return null
+  return devolucionDe(gasto, c)
 }
 
 export interface LineaVista {

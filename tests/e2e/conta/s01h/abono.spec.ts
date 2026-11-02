@@ -20,6 +20,7 @@
 //   · S01h · 1 · EL ASIENTO, línea a línea con su cuenta y su columna: Debe
 //     40000006 175,46; Haber 60800000 160,96, 47200004 1,06 y 47200010 13,44
 //     (en producción salía la 60000000 y el IVA sin cuenta al Debe);
+//   · S01h · 2 · «A qué gasto va» enseña esa misma 60800000;
 //   · IVA (resta en el 303) y Pago, y el «Estado» del pago dice lo mismo que
 //     el bloque, sin prometer el banco.
 // Las capturas van a docs/conta/capturas/s01h/.
@@ -147,6 +148,11 @@ test('S01h · la ficha de un abono: sin signo, lo que anula, el asiento al revé
       ['47200010', '', '13,44'],
     ])
     await expect(asiento.locator('tfoot tr')).toHaveAttribute('data-cuadra', 'si')
+    // S01h · 2 · «A qué gasto va» dice lo mismo que el asiento: la 60800000, no la 60000000.
+    const gasto = page.locator('[data-prueba="linea-gasto"]').first()
+    await expect(gasto).toContainText('60800000')
+    await expect(gasto).not.toContainText('60000000')
+    await expect(page.locator('[data-prueba="gasto-devolucion"]')).toContainText('(60000000 → 60800000), la misma que el asiento.')
     await expect(asiento).not.toContainText('Falta la cuenta')
 
     const tri = Math.ceil(Number(dia.slice(5, 7)) / 3)

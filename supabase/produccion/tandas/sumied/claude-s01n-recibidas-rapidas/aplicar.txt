@@ -1,0 +1,10 @@
+# S01n · Facturas recibidas e Inicio no cargaban: conta_documentos_recibidos
+# tardaba 16,9 s en Foodint (límite 8 s). Rama claude/s01n-recibidas-rapidas.
+#
+#   1134  cambia conta_documentos_recibidos (misma firma): lo aprendido, una vez
+#         por proveedor, y los CTE materializados. Mismo JSON; 124 ms.
+#
+# Ninguna fila cambia al aplicarse. Nada en el camino del pedido. El real lo
+# lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01n-recibidas.sql
+supabase/migrations/20261101T1134_s01n_recibidas_rapidas.sql

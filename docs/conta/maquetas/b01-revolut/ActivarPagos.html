@@ -1,0 +1,238 @@
+<title>Activar pagos con Revolut</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* Tablero de maquetas: cada pantalla es una banda con el ordenador a la izquierda y el móvil a la derecha.
+   La página sigue el tema; las pantallas son de Sumied (estilo N17) y se ven siempre en claro. */
+:root{
+  --pag-fondo:#EEF1F6; --pag-tinta:#0E1A2B; --pag-suave:#56627A; --pag-linea:#D9DFE8; --pag-acento:#2F5BFF;
+  /* Sumied (N17), fijos */
+  --s-fondo:#F5F7FA; --s-carta:#FFFFFF; --s-tinta:#0E1A2B; --s-suave:#5B677C; --s-linea:#E6EAF0;
+  --s-azul:#2F5BFF; --s-azul-claro:#EAF0FF; --s-menta:#E3FBF2; --s-verde:#0E8A5F; --s-ambar:#B26A00; --s-ambar-claro:#FFF4E0;
+  --s-rojo:#C2362B; --s-rojo-claro:#FDECEA; --s-rev:#191C1F;
+  --letra:'Geist','Helvetica Neue',Arial,sans-serif; --mono:'Geist Mono',ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--pag-fondo:#0D1320;--pag-tinta:#E7ECF5;--pag-suave:#9AA6BC;--pag-linea:#273147;--pag-acento:#7D98FF;color-scheme:dark}}
+:root[data-theme="dark"]{--pag-fondo:#0D1320;--pag-tinta:#E7ECF5;--pag-suave:#9AA6BC;--pag-linea:#273147;--pag-acento:#7D98FF;color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--pag-fondo);color:var(--pag-tinta);font-family:var(--letra);font-size:15px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 60px}
+.envoltura{max-width:1500px;margin:0 auto;display:flex;flex-direction:column;gap:44px}
+header.cab h1{font-size:30px;margin:0 0 6px;text-wrap:balance;letter-spacing:-.01em}
+header.cab p{margin:0;color:var(--pag-suave);max-width:75ch}
+.indice{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.indice a{color:var(--pag-acento);text-decoration:none;border:1px solid var(--pag-linea);border-radius:999px;padding:5px 12px;font-size:13px}
+section.banda{display:flex;flex-direction:column;gap:14px}
+.banda>h2{font-size:20px;margin:0}
+.banda>p.nota{margin:0;color:var(--pag-suave);max-width:80ch}
+.par{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+.lienzo{overflow-x:auto;max-width:100%;flex:1 1 820px;min-width:0}
+.etq{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--pag-suave);margin:0 0 6px}
+
+/* ── Pantalla de Sumied ───────────────────────────── */
+.orden{width:1080px;background:var(--s-fondo);color:var(--s-tinta);border-radius:20px;border:1px solid var(--pag-linea);display:flex;gap:14px;padding:14px;position:relative;font-size:14px}
+.menu{width:190px;flex-shrink:0;background:var(--s-carta);border:1px solid var(--s-linea);border-radius:18px;padding:14px 10px;display:flex;flex-direction:column;gap:2px}
+.menu b{font-size:15px;padding:4px 8px 12px}
+.menu span{padding:7px 10px;border-radius:10px;color:var(--s-suave)}
+.menu span.si{background:var(--s-azul-claro);color:var(--s-azul);font-weight:600}
+.cuerpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:12px}
+.pestanas{display:flex;gap:6px}
+.pestanas span{padding:6px 12px;border-radius:999px;color:var(--s-suave);font-size:13px}
+.pestanas span.si{background:var(--s-carta);border:1px solid var(--s-linea);color:var(--s-tinta);font-weight:600}
+.carta{background:var(--s-carta);border:1px solid var(--s-linea);border-radius:18px;padding:16px}
+.titulo{font-size:20px;font-weight:600;margin:0}
+.sub{color:var(--s-suave);margin:2px 0 0}
+.fila{display:flex;align-items:center;gap:12px}
+.entre{justify-content:space-between}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:12px;padding:9px 14px;font:600 14px var(--letra);border:1px solid var(--s-linea);background:var(--s-carta);color:var(--s-tinta);white-space:nowrap}
+.btn.pri{background:var(--s-azul);border-color:var(--s-azul);color:#fff}
+.btn.peligro{color:var(--s-rojo)}
+.btn.grande{width:100%;justify-content:center;padding:14px;font-size:16px;border-radius:14px}
+.chip{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:3px 9px;font-size:12px;font-weight:600}
+.chip.ok{background:var(--s-menta);color:var(--s-verde)}
+.chip.av{background:var(--s-ambar-claro);color:var(--s-ambar)}
+.chip.mal{background:var(--s-rojo-claro);color:var(--s-rojo)}
+.chip.azul{background:var(--s-azul-claro);color:var(--s-azul)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.num{font-variant-numeric:tabular-nums}
+.logo{width:36px;height:36px;border-radius:10px;display:grid;place-items:center;font-weight:700;color:#fff;flex-shrink:0}
+.logo.rev{background:var(--s-rev)} .logo.bbva{background:#1464A5;font-size:11px}
+.tabla{width:100%;border-collapse:collapse;font-size:13.5px}
+.tabla th{text-align:left;font-weight:500;color:var(--s-suave);font-size:12px;padding:8px 10px;border-bottom:1px solid var(--s-linea)}
+.tabla td{padding:10px;border-bottom:1px solid var(--s-linea);vertical-align:middle}
+.tabla td.d{text-align:right}
+.caja{width:18px;height:18px;border-radius:5px;border:1.5px solid #B9C2D0;display:inline-block;vertical-align:middle}
+.caja.si{background:var(--s-azul);border-color:var(--s-azul);position:relative}
+.caja.si::after{content:"";position:absolute;left:5px;top:1px;width:5px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.velo{position:absolute;inset:0;background:rgba(14,26,43,.38);border-radius:20px;display:grid;place-items:center}
+.dialogo{width:640px;background:var(--s-carta);border-radius:22px;padding:22px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(14,26,43,.25)}
+.pasos{display:flex;gap:8px}
+.paso{flex:1;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:var(--s-suave)}
+.paso i{height:5px;border-radius:9px;background:var(--s-linea)}
+.paso.hecho i{background:var(--s-verde)} .paso.ahora i{background:var(--s-azul)} .paso.ahora{color:var(--s-tinta);font-weight:600}
+.cert{font-family:var(--mono);font-size:11px;line-height:1.35;background:var(--s-fondo);border:1px solid var(--s-linea);border-radius:12px;padding:10px;color:var(--s-suave);white-space:pre;overflow:hidden}
+.campo{display:flex;flex-direction:column;gap:5px}
+.campo label{font-size:12.5px;color:var(--s-suave);font-weight:500}
+.campo .in{border:1.5px solid var(--s-linea);border-radius:12px;padding:10px 12px;font-family:var(--mono);font-size:13px;background:#fff}
+.campo .in.foco{border-color:var(--s-azul);box-shadow:0 0 0 3px var(--s-azul-claro)}
+.campo .in.mal{border-color:var(--s-rojo)}
+.ayuda{font-size:12.5px;color:var(--s-suave)}
+.aviso{border-radius:14px;padding:12px 14px;display:flex;gap:10px;align-items:flex-start;font-size:13.5px}
+.aviso.mal{background:var(--s-rojo-claro);color:#7D1D15}
+.aviso.av{background:var(--s-ambar-claro);color:#6E4200}
+.aviso.ok{background:var(--s-menta);color:#0A5A3E}
+.aviso.info{background:var(--s-azul-claro);color:#1E3A9E}
+.aviso b{display:block}
+/* Esquema de la web de Revolut: no es una captura */
+.esq{background:#F7F7F8;border:1px dashed #B9C2D0;border-radius:14px;padding:10px;display:flex;gap:10px;font-size:11.5px;color:#3A4250;position:relative}
+.esq .lat{width:110px;display:flex;flex-direction:column;gap:3px}
+.esq .lat span{padding:4px 6px;border-radius:6px}
+.esq .lat span.si{background:#191C1F;color:#fff}
+.esq .zona{flex:1;background:#fff;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px}
+.esq .marca{outline:2.5px solid var(--s-azul);outline-offset:2px;border-radius:6px}
+.esq .pie{position:absolute;right:10px;bottom:6px;font-size:10px;color:#7A8394}
+.resumen{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;font-size:14px}
+.resumen dt{color:var(--s-suave)} .resumen dd{margin:0;font-weight:600}
+.cifra{font-size:30px;font-weight:700;letter-spacing:-.02em}
+.linea-tiempo{display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--s-suave);flex-wrap:wrap}
+.linea-tiempo .p{display:flex;align-items:center;gap:6px}
+.linea-tiempo .p i{width:10px;height:10px;border-radius:50%;background:var(--s-linea)}
+.linea-tiempo .p.ok i{background:var(--s-verde)} .linea-tiempo .p.ahora i{background:var(--s-azul)} .linea-tiempo .p.mal i{background:var(--s-rojo)}
+.linea-tiempo .s{width:22px;height:1.5px;background:var(--s-linea)}
+
+/* ── Móvil ─────────────────────────── */
+.movil{width:340px;flex-shrink:0;max-width:100%}
+.tel{width:340px;height:700px;background:var(--s-fondo);color:var(--s-tinta);border-radius:40px;border:10px solid #0E1A2B;overflow:hidden;display:flex;flex-direction:column;position:relative;font-size:14px}
+.tel .barra{height:26px;display:flex;justify-content:space-between;padding:6px 20px 0;font-size:11px;font-weight:600}
+.tel .top{padding:6px 16px 10px;display:flex;align-items:center;gap:10px}
+.tel .top b{font-size:17px}
+.tel .scroll{flex:1;overflow:hidden;padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+.tel .hoja{position:absolute;left:0;right:0;bottom:0;background:var(--s-carta);border-radius:24px 24px 0 0;padding:14px 16px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:0 -10px 40px rgba(14,26,43,.18)}
+.tel .asa{width:40px;height:5px;border-radius:9px;background:var(--s-linea);margin:0 auto}
+.tel .velo{border-radius:0}
+.tel .fijo{position:absolute;left:0;right:0;bottom:0;background:var(--s-carta);border-top:1px solid var(--s-linea);padding:12px 14px 18px;display:flex;flex-direction:column;gap:8px}
+.tel .item{background:var(--s-carta);border:1px solid var(--s-linea);border-radius:14px;padding:11px 12px;display:flex;gap:10px;align-items:center}
+.tel .item .t{flex:1;min-width:0}
+.tel .item .t b{display:block;font-size:14px}
+.tel .item .t small{color:var(--s-suave);font-size:12px}
+.notas{display:flex;flex-direction:column;gap:6px;margin:0;padding-left:18px;color:var(--pag-suave);font-size:13.5px;max-width:95ch}
+@media (prefers-reduced-motion:no-preference){.btn.pri{transition:filter .15s}.btn.pri:hover{filter:brightness(1.08)}}
+.sis{width:300px;background:#FFFFFF;color:#1B1F24;border-radius:14px;border:1px dashed #9AA4B2;box-shadow:0 18px 50px rgba(14,26,43,.28);padding:16px;display:flex;flex-direction:column;gap:10px;position:relative;font-size:13px}
+.sis .pie{position:absolute;right:10px;bottom:6px;font-size:10px;color:#7A8394}
+.lista{display:flex;flex-direction:column;border:1px solid var(--s-linea);border-radius:14px;overflow:hidden}
+.lista .l{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-bottom:1px solid var(--s-linea)}
+.lista .l:last-child{border-bottom:0}
+.lista .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;flex-shrink:0;background:var(--s-azul-claro);color:var(--s-azul)}
+.lista .n.ok{background:var(--s-menta);color:var(--s-verde)}
+.lista .t{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.lista .t b{font-size:14px}
+.pregunta{border:1.5px solid var(--pag-acento);border-radius:14px;padding:12px 14px;max-width:95ch;color:var(--pag-tinta)}
+</style>
+
+<div class="envoltura">
+<header class="cab">
+  <h1>Activar pagos con Revolut · maqueta</h1>
+  <p>Encargo B01 (bancos), PR 2b y 2c. El paso que deja a Sumied pagar desde Revolut: hasta ahora la conexión solo lee (READ y WRITE). Empresa de staging «Taberna de Prueba Norte». Todos los nombres, IBAN y cifras son inventados. Lo que se ve de Revolut es un esquema, no una captura.</p>
+  <nav class="indice" aria-label="Pantallas">
+    <a href="#activar">A · Activar pagos</a><a href="#hecho">B · Pagos activados</a><a href="#otros">C · Quien no es administrador</a><a href="#notas">Cómo funciona</a>
+  </nav>
+</header>
+
+<!-- ═════════ A · ACTIVAR ═════════ -->
+<section class="banda" id="activar">
+  <h2>A · Activar pagos: tres pasos, en la misma ventana</h2>
+  <p class="nota">Se abre desde la línea de Revolut en Bancos › Cuentas y extractos («Revolut Business · puede leer · aún no paga · Activar pagos»). Solo lo ve un administrador. Al acabar, quien lo activa es la primera persona que puede pagar.</p>
+  <div class="par">
+    <div class="lienzo"><p class="etq">Ordenador · paso 3 de 3: autorizar en Revolut</p>
+      <div class="orden" style="height:720px">
+        <div class="menu"><b>Sumied</b><span>Inicio</span><span>Ventas</span><span>Compras</span><span class="si">Bancos</span><span>Impuestos</span><span>Libros</span><span>Laboral</span></div>
+        <div class="cuerpo">
+          <div class="pestanas"><span>Movimientos</span><span>Reglas</span><span class="si">Cuentas y extractos</span><span>Cierre del mes</span></div>
+          <div class="carta" style="display:flex;flex-direction:column;gap:14px;max-width:760px">
+            <div class="fila entre"><div class="fila"><span class="logo rev">R</span><div><p class="titulo" style="font-size:18px">Activar pagos con Revolut</p><p class="sub">Para pagar facturas desde Sumied con Revolut <span class="mono">·5678</span>. Unos 2 minutos.</p></div></div><span class="btn">Cerrar</span></div>
+            <div class="aviso info"><span>i</span><span><b>Sumied nunca paga solo.</b>Cada pago lo aprueba una persona que puede pagar. Con un IBAN nuevo, por encima de un tope o con un titular que no coincide, además hace falta la segunda aprobación con la llave o el PIN de pago.</span></div>
+            <div class="lista">
+              <div class="l"><span class="n ok">✓</span><div class="t"><b>1 · Tu llave y tu PIN de pago</b><span class="ayuda">Llave activada en este ordenador (Windows) y PIN de pago creado. Con ellos darás la segunda aprobación.</span></div></div>
+              <div class="l"><span class="n ok">✓</span><div class="t"><b>2 · Topes y quién paga</b><span class="ayuda">3.000 € por pago y 10.000 € al día. Podrás pagar tú, Ana Prueba. Más personas, después, en «Topes y permisos».</span></div><span class="btn" style="padding:6px 10px">Cambiar</span></div>
+              <div class="l" style="background:var(--s-azul-claro)"><span class="n">3</span><div class="t"><b>3 · Autoriza en Revolut el permiso de pagar</b>
+                <span class="ayuda">Revolut te pedirá entrar y pulsar «Activar acceso». El permiso nuevo es «Pagar» (PAY), además de leer, que ya tenía. Vuelves solo a esta ventana.</span>
+                <div class="esq" style="margin-top:6px"><div class="lat"><span>Inicio</span><span class="si">Acceso API</span></div><div class="zona"><b style="font-size:12px">Sumied quiere acceder a tu cuenta</b><span>• Ver cuentas y movimientos</span><span>• Crear beneficiarios y borradores</span><span class="marca" style="padding:2px 4px"><b>• Hacer pagos</b> (nuevo)</span><span style="align-self:flex-end;background:#191C1F;color:#fff;border-radius:6px;padding:3px 8px">Activar acceso</span></div><span class="pie">Esquema, no captura</span></div>
+              </div></div>
+            </div>
+            <div class="fila entre"><span class="btn">← Volver</span><span class="btn pri">Autorizar en Revolut</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · paso 1 de 3: sin llave en este móvil</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Activar pagos</b></div>
+        <div class="scroll">
+          <div class="pasos"><div class="paso ahora"><i></i>1 · Tu llave</div><div class="paso"><i></i>2 · Topes</div><div class="paso"><i></i>3 · Revolut</div></div>
+          <b style="font-size:17px">Antes de pagar, tu llave y tu PIN de pago</b>
+          <p class="ayuda" style="margin:0">Son tu segunda aprobación. Con la llave confirmas con Face ID; el PIN de pago es para cuando no la tengas a mano.</p>
+          <div class="item"><div class="t"><b>Llave en este iPhone</b><small>Face ID · pide el código del correo una vez</small></div><span class="btn" style="padding:6px 10px">Activar</span></div>
+          <div class="item"><div class="t"><b>PIN de pago</b><small>6 cifras · pide el código del correo una vez</small></div><span class="btn" style="padding:6px 10px">Crear</span></div>
+          <div class="aviso av"><span>!</span><span><b>Hace falta al menos uno de los dos.</b>Sin llave ni PIN no podrías dar la segunda aprobación, y un pago con un IBAN nuevo se quedaría esperando.</span></div>
+          <span class="btn pri grande">Seguir</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ul class="notas">
+    <li>Si Revolut vuelve sin el permiso de pagar («Cancelar» en Revolut): «No has autorizado los pagos en Revolut. Sumied sigue leyendo como antes; no ha cambiado nada». Se queda en el paso 3.</li>
+    <li>Si la empresa no tiene en Revolut los pagos por API (lo dice Revolut al autorizar): «Revolut no deja pagar por API a esta empresa. Actívalo en Revolut › Ajustes › API y vuelve a pulsar».</li>
+    <li>Los topes del paso 2 se pueden cambiar ahí mismo (solo un administrador); por defecto, 3.000 € y 10.000 €.</li>
+  </ul>
+</section>
+
+<!-- ═════════ B · HECHO ═════════ -->
+<section class="banda" id="hecho">
+  <h2>B · Pagos activados (regla 8)</h2>
+  <div class="par">
+    <div class="lienzo" style="flex:1 1 600px"><p class="etq">Ordenador · la línea de Revolut, después</p>
+      <div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:10px;max-width:760px">
+        <div class="aviso ok" role="status"><span>✓</span><span><b>Pagos activados con Revolut ·5678.</b>Puede pagar: Ana Prueba. Topes: 3.000 € por pago y 10.000 € al día. En Compras › Facturas recibidas ya sale «Pagar con Revolut».</span></div>
+        <div class="fila entre" style="flex-wrap:wrap;gap:8px"><span>Revolut Business · conectado por Ana Prueba el 31/10 · <span class="chip ok">lee y paga</span></span><div class="fila" style="gap:8px"><span class="btn">Topes y permisos</span><span class="btn peligro">Dejar de pagar</span></div></div>
+        <span class="ayuda">«Dejar de pagar» quita el permiso de pagar de Sumied (vuelve a solo leer) sin desconectar la cuenta. Lo que esté esperando la segunda aprobación se cancela y se dice cuántos.</span>
+      </div>
+    </div>
+    <div class="movil"><p class="etq">Móvil · pagos activados</p>
+      <div class="tel">
+        <div class="barra"><span>9:41</span><span>●●● 5G</span></div>
+        <div class="top"><span class="btn" style="padding:6px 10px">←</span><b>Activar pagos</b></div>
+        <div class="scroll">
+          <div class="aviso ok" role="status"><span>✓</span><span><b>Pagos activados con Revolut ·5678.</b>Puede pagar: Ana Prueba. Topes: 3.000 € y 10.000 € al día.</span></div>
+          <div class="item"><div class="t"><b>Tu llave</b><small>iPhone · Face ID</small></div><span class="chip ok">activa</span></div>
+          <div class="item"><div class="t"><b>Tu PIN de pago</b><small>para cuando no tengas la llave</small></div><span class="chip ok">creado</span></div>
+          <span class="btn pri grande">Ir a las facturas por pagar</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════ C · OTROS ═════════ -->
+<section class="banda" id="otros">
+  <h2>C · Quien no es administrador</h2>
+  <div class="carta" style="background:var(--s-carta);color:var(--s-tinta);display:flex;flex-direction:column;gap:8px;max-width:760px">
+    <div class="fila entre" style="flex-wrap:wrap;gap:8px"><span>Revolut Business · <span class="chip azul">puede leer</span> <span class="chip av">aún no paga</span></span><span class="btn" style="opacity:.55">Activar pagos</span></div>
+    <span class="ayuda">«Solo un administrador activa los pagos. Pídeselo a Ana Prueba o a Luis Ejemplo, que son administradores de la cuenta.» Con los pagos ya activados, quien no tiene el permiso de pagar ve en la factura: «Pídeselo a Ana Prueba, que puede pagar».</span>
+  </div>
+</section>
+
+<!-- ═════════ NOTAS ═════════ -->
+<section class="banda" id="notas">
+  <h2>Cómo funciona</h2>
+  <ul class="notas">
+    <li><b>El permiso de Revolut.</b> Al conectar se pidió leer (READ y WRITE). Activar pagos vuelve a pasar por la página de autorizar de Revolut con READ, WRITE y PAY, con el mismo certificado y la misma dirección de vuelta: no hay que tocar nada en Revolut › Ajustes › API.</li>
+    <li><b>El permiso de Sumied.</b> Al volver con PAY, quien activó (un administrador) queda como la primera persona que puede pagar. Más personas, en «Topes y permisos», también solo un administrador.</li>
+    <li><b>La llave o el PIN, antes.</b> El paso 1 no se salta: sin ninguno de los dos, la persona no podría dar la segunda aprobación. Activar la llave o crear el PIN pide el código del correo, una vez.</li>
+    <li><b>En staging</b> solo habla con el sandbox (W10), igual que al conectar.</li>
+    <li><b>Dejar de pagar</b> pide de nuevo READ y WRITE (sin PAY) en Revolut, y lo dice: «Sumied ya no puede pagar con Revolut ·5678. Sigue leyendo los movimientos».</li>
+  </ul>
+  <div class="pregunta"><b>Para decidir, Julio:</b> «Dejar de pagar» ¿pasa otra vez por Revolut para quitar el permiso PAY (así queda quitado en Revolut también), o basta con que Sumied deje de usarlo y quite los permisos de pagar de su lado?</div>
+</section>
+</div>

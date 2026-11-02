@@ -1,0 +1,12 @@
+# S01l · Una factura con retención que entra leída ya no falla (Julio, 01/11,
+# «LLORENTE29-FOOD-S.L.pdf»). Rama claude/s01l-retencion-leida.
+#
+#   0920  cambia conta_factura_desde_lectura (misma firma): la retención entra
+#         con su tipo (el leído, o el que da base × tipo = importe); si no
+#         encaja ninguno, sin retención, en revisión y con el aviso «elige su tipo».
+#   0921  datos de Foodint: vuelve a leer esa llegada con la función arreglada.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01l-retencion.sql
+supabase/migrations/20261101T0920_s01l_retencion_leida.sql
+supabase/migrations/20261101T0921_s01l_releer_foodint.sql

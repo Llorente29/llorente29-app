@@ -257,6 +257,8 @@ export const CONTA = {
     cobros: 'ventas/cobros',
     remesaCobros: 'ventas/cobros/remesas/:remesaId',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
+    /** S01j·2 · La ficha de UNA liquidación de plataforma: sus cifras, su factura de comisión y el correo del que salió. */
+    liquidacionFicha: 'ventas/liquidaciones/liquidacion/:id',
     /** E05 · Una quincena de Catcher subida: sus facturas, lo por aclarar, el pago y el saldo prepago. */
     loteCatcher: 'documentos/catcher/:loteId',
     /** Bancos (B01, maqueta N17Bancos): Movimientos, Reglas, Cuentas y extractos y Cierre del mes. */
@@ -321,6 +323,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
       { id: 'tablas', etiqueta: 'Tablas generales', ruta: 'ajustes/tablas' },
       // S01e: las series ya se crean en Tablas generales › Numeración de facturas: la entrada lleva allí y cuenta las que hay.
       { id: 'numeracion', etiqueta: 'Numeración', ruta: 'ajustes/tablas/numeracion' },
+      // S01o · El interruptor de la empresa: lo que Sumied sabe al 100 % se apunta solo.
+      { id: 'apuntar-solo', etiqueta: 'Apuntar solo lo seguro', ruta: 'ajustes/apuntar-solo' },
       { id: 'certificados', etiqueta: 'Certificados y accesos', ruta: 'ajustes/certificados', hueco: 'El certificado digital y los accesos a la sede de Hacienda llegan con la presentación de impuestos.' },
     ],
   },
@@ -431,6 +435,7 @@ export const rutaCierre = (cierreId: string): string => rutaConta(CONTA.rutas.ci
 /** V01 · Entrega 3 · Ventas › Liquidaciones (ver: plataformas · socios) y la ficha de una fila de plataforma. */
 export const rutaLiquidacionesVentas = (ver?: 'plataformas' | 'socios'): string => `${rutaConta(CONTA.rutas.liquidacionesVentas)}${ver ? `?ver=${ver}` : ''}`
 export const rutaLiquidacionPlataforma = (clave: string): string => rutaConta(CONTA.rutas.liquidacionPlataforma, { clave })
+export const rutaLiquidacionFicha = (id: string): string => rutaConta(CONTA.rutas.liquidacionFicha, { id })
 /** Lo de antes: llevan a Ventas › Facturas. */
 export const rutaFacturasEmitidas = rutaFacturasVenta
 export const rutaNuevaEmitida = rutaNuevaFacturaVenta

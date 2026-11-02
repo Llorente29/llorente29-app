@@ -177,7 +177,8 @@ export interface LiquidacionPlataforma {
   cobrado: { fecha: string; importe: number | null } | null
   /** Lo que factura la plataforma por esta liquidación (su parte de la factura de la semana). 0 si nada. */
   aFacturar: number
-  factura: { id: string; numero: string | null } | null
+  /** S01i · Sus facturas de comisión (channel_settlement_invoice): puede haber varias. */
+  facturas: { id: string; numero: string | null; total: number }[]
   deReferencia: boolean
   porAclarar: string | null
 }
@@ -187,10 +188,19 @@ const ddmm = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 export function estadoPlataforma(l: LiquidacionPlataforma): EstadoLiquidacionLista {
   if (l.deReferencia) return { texto: 'De referencia', tono: 'neutro', grupo: 'espera', detalle: 'De antes del cierre: sin factura ni asiento; su cobro se casa en Bancos.' }
   if (l.porAclarar) return { texto: 'Por aclarar', tono: 'duda', grupo: 'te-toca', detalle: l.porAclarar }
-  if (l.aFacturar > 0 && !l.factura) {
-    return { texto: 'Falta su factura', tono: 'duda', grupo: 'espera', detalle: `Su factura de comisión de la semana (${eurosExactos(l.aFacturar)} de esta liquidación) aún no ha llegado.` }
+  if (l.aFacturar > 0 && !l.facturas.length) {
+    return { texto: 'Falta la factura de comisión', tono: 'duda', grupo: 'espera', detalle: `Su factura de comisión (${eurosExactos(l.aFacturar)} de esta liquidación) aún no ha llegado.` }
   }
-  if (l.factura) return { texto: 'Con su factura', tono: 'seguro', grupo: 'hecha', detalle: `Enlazada con la factura de comisión${l.factura.numero ? ` ${l.factura.numero}` : ''}.` }
+  if (l.facturas.length) {
+    const nums = l.facturas.map((f) => f.numero).filter(Boolean).join(', ')
+    const suma = Math.round(l.facturas.reduce((t, f) => t + f.total, 0) * 100) / 100
+    const dif = Math.round((suma - l.aFacturar) * 100) / 100
+    const cuanto = l.facturas.length === 1 ? `Su factura de comisión${nums ? ` ${nums}` : ''}: ${eurosExactos(suma)}` : `Sus ${l.facturas.length} facturas de comisión (${nums}): ${eurosExactos(suma)}`
+    // Regla 7: la diferencia con lo que factura la liquidación se ve, no se esconde.
+    return dif === 0 || l.aFacturar <= 0
+      ? { texto: 'Factura de comisión · recibida', tono: 'seguro', grupo: 'hecha', detalle: `${cuanto}. Se paga por compensación con esta liquidación.` }
+      : { texto: 'Factura de comisión · recibida', tono: 'duda', grupo: 'hecha', detalle: `${cuanto}; la liquidación factura ${eurosExactos(l.aFacturar)}: diferencia de ${eurosExactos(dif)}.` }
+  }
   return l.comision > 0
     ? { texto: 'Sin factura aparte', tono: 'neutro', grupo: 'hecha', detalle: 'Su comisión va en la propia liquidación (la de Glovo, por ejemplo): no espera otra factura.' }
     : { texto: 'Sin comisión', tono: 'neutro', grupo: 'hecha', detalle: 'No trae comisión ni cargos que facturar.' }
@@ -204,10 +214,10 @@ export function filaPlataforma(l: LiquidacionPlataforma): FilaLiquidaciones {
   ].filter(Boolean) as string[]
   return {
     id: `plataforma:${l.id}`, tipo: 'plataforma', proveedor: l.canal, local: l.tienda, desde: l.desde, hasta: l.hasta,
-    periodo: `del ${ddmm(l.desde)} al ${ddmm(l.hasta)}/${l.hasta.slice(0, 4)}`, referencia: l.factura?.numero ?? null,
+    periodo: `del ${ddmm(l.desde)} al ${ddmm(l.hasta)}/${l.hasta.slice(0, 4)}`, referencia: l.facturas.map((f) => f.numero).filter(Boolean).join(', ') || null,
     importe: l.neto, apoyoImporte: partes.join(' · ').replace(/^./, (x) => x.toUpperCase()),
     estado: estadoPlataforma(l),
-    abrir: { a: 'sin-ficha', porque: `Es una liquidación de ${l.canal}: lo que te liquida de una semana. No es una factura ni tiene PDF; su factura de comisión llega aparte, cada semana, en Facturas recibidas, y se enlaza con las liquidaciones de su semana.` },
+    abrir: { a: 'sin-ficha', porque: `Es una liquidación de ${l.canal}: lo que te liquida de una semana. No es una factura ni tiene PDF; su factura de comisión llega aparte, en Facturas recibidas, se liga con su liquidación y se paga por compensación con ella.` },
   }
 }
 
@@ -222,7 +232,7 @@ export function semanasSinFactura(ls: readonly LiquidacionPlataforma[], hoy: str
   const corte = limite.toISOString().slice(0, 10)
   const porSemana = new Map<string, { canal: string; hasta: string; desde: string; n: number; importe: number }>()
   for (const l of ls) {
-    if (l.deReferencia || l.factura || l.aFacturar <= 0 || l.hasta > corte) continue
+    if (l.deReferencia || l.facturas.length || l.aFacturar <= 0 || l.hasta > corte) continue
     const k = `${l.canal}|${l.hasta}`
     const x = porSemana.get(k) ?? { canal: l.canal, hasta: l.hasta, desde: l.desde, n: 0, importe: 0 }
     x.n += 1; x.importe = Math.round((x.importe + l.aFacturar) * 100) / 100

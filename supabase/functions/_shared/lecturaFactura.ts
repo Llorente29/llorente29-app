@@ -44,6 +44,11 @@ export type FacturaModelo = {
   /** S01b · El teléfono y la web del proveedor, si el papel los trae. */
   supplier_phone?: string | null
   supplier_website?: string | null
+  /** S01i · La tienda o el local del cliente al que va (las plataformas: una factura por tienda) y el periodo que factura. */
+  store_name?: string | null
+  store_address?: string | null
+  period_from?: string | null
+  period_to?: string | null
 }
 
 /** Lo que devuelve el modelo con el modo factura: lo de siempre y «factura». */
@@ -96,6 +101,10 @@ export type FacturaLeida = {
   forma: FormaLeida
   /** De dónde salen las bases: el desglose del papel o, si no lo trae, las líneas. */
   desgloseDe: 'papel' | 'lineas' | 'ninguno'
+  /** S01i · La tienda del cliente (nombre y dirección) si el papel la trae: con ella la base liga la factura de una plataforma con su liquidación. */
+  tienda?: { nombre: string | null; direccion: string | null } | null
+  /** S01i · El periodo que factura (una semana, una quincena), si el papel lo dice. */
+  periodo?: { desde: string | null; hasta: string | null } | null
 }
 
 /** PC01 · E2b · Las formas de pago que puede traer una factura (las de supplier_invoice.payment_method). */
@@ -246,6 +255,8 @@ export function leerFactura(m: LecturaModelo, o: { hoy: string; minConfianza?: n
     numero, numeroClave: claveNumero(numero), fecha, vencimiento, clase, rectificaA: txt(f.corrects_number),
     tipos, base, cuota, recargo, retencion, total, iban: txt(f.iban)?.replace(/\s+/g, '').toUpperCase() ?? null,
     forma: formaDePago(txt(f.payment_method), txt(f.payment_terms_text)), desgloseDe,
+    tienda: txt(f.store_name) || txt(f.store_address) ? { nombre: txt(f.store_name), direccion: txt(f.store_address) } : null,
+    periodo: fechaIso(txt(f.period_to)) ? { desde: fechaIso(txt(f.period_from)), hasta: fechaIso(txt(f.period_to)) } : null,
   }
 
   // ── Comprobaciones ───────────────────────────────────────────────────────
@@ -353,7 +364,11 @@ export const PROMPT_FACTURA =
   `    "payment_terms_text": "<forma o plazo de pago tal cual aparece, o null>",\n` +
   `    "payment_method": "<transfer (transferencia), direct_debit (domiciliación o recibo), card (tarjeta), cash (efectivo), o null si no lo dice>",\n` +
   `    "supplier_phone": "<teléfono del PROVEEDOR que emite si aparece, o null>",\n` +
-  `    "supplier_website": "<web del PROVEEDOR que emite si aparece, o null>"\n` +
+  `    "supplier_website": "<web del PROVEEDOR que emite si aparece, o null>",\n` +
+  `    "store_name": "<la tienda o el local del CLIENTE al que va la factura, tal cual aparece, o null>",\n` +
+  `    "store_address": "<la dirección de esa tienda o local del cliente, tal cual aparece, o null>",\n` +
+  `    "period_from": "<primer día del periodo que factura YYYY-MM-DD si lo dice, o null>",\n` +
+  `    "period_to": "<último día del periodo que factura YYYY-MM-DD si lo dice, o null>"\n` +
   `  }\n` +
   `REGLAS DEL MODO FACTURA:\n` +
   `- "tax_breakdown" es el CUADRO DE IMPUESTOS del pie (una fila por tipo de IVA), tal cual aparece. Si el papel\n` +
@@ -367,4 +382,9 @@ export const PROMPT_FACTURA =
   `  cliente (donde se carga el recibo): ese NO va en "iban".\n` +
   `- "supplier_phone" y "supplier_website" son los del PROVEEDOR que emite, nunca los del cliente ni los de la\n` +
   `  plataforma por la que se pidió.\n` +
+  `- "store_name" y "store_address" son los de la TIENDA o LOCAL del cliente (una plataforma de reparto factura\n` +
+  `  por tienda: «Tienda», «Establecimiento», «Restaurante», o la dirección que acompaña al nombre del cliente).\n` +
+  `  No es la dirección fiscal del cliente si la factura trae las dos: va la de la tienda.\n` +
+  `- "period_from" y "period_to" son el periodo que se factura («Periodo», «del … al …», una semana o una quincena),\n` +
+  `  no la fecha de la factura.\n` +
   `- NO inventes NADA: lo que no esté, null.`

@@ -1,0 +1,7 @@
+# S01i · la vuelta atrás: lo que hizo la 0052 en Foodint (pagos, enlaces y
+# forma de pago que puso Sumied), los disparadores y Pagos y Bancos como
+# estaban, y fuera la tabla y las funciones.
+cuenta: scripts/conta/produccion/cuentas/s01i-comisiones.sql
+supabase/vuelta-atras/20261101T0052_s01i_comisiones_foodint.down.sql
+supabase/vuelta-atras/20261101T0051_s01i_comision_sin_banco.down.sql
+supabase/vuelta-atras/20261101T0050_s01i_comision_liquidacion.down.sql

@@ -58,7 +58,7 @@ export type Cerrojo = { abierto: true } | { abierto: false; motivo: string };
  * SIEMPRE_CON_FRENO, que no han salido nunca.
  */
 /** Tipos que el freno cierra con cualquier marca, Folvy incluida: son nuevos y aún no los ha abierto nadie. */
-export const SIEMPRE_CON_FRENO: readonly string[] = ['resumen_trimestre'];
+export const SIEMPRE_CON_FRENO: readonly string[] = ['resumen_trimestre', 'codigo_pago_conta', 'aviso_pago_conta'];
 
 export function cerrojoMarca(marca: Marca | null, plantilla: string, destino: string, abiertos: string | undefined | null): Cerrojo {
   // Los tipos nuevos del P01 van frenados también con Folvy: nunca han salido.
@@ -321,7 +321,55 @@ export function resumenTrimestre(m: Marca, data: Record<string, unknown>): Corre
   };
 }
 
+/**
+ * B01 Revolut · PR 2b · El código de un solo uso para crear o recuperar el PIN
+ * de pago o activar la llave de acceso en un dispositivo nuevo. Nunca para
+ * confirmar un pago (eso, la llave o el PIN).
+ * data: { codigo ('482913'), para ('crear_pin' | 'activar_llave'), hora ('09:41') }
+ */
+export function codigoPago(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const codigo = String(data.codigo ?? '').replace(/\D/g, '').slice(0, 6);
+  const para = data.para === 'activar_llave' ? 'activar tu llave de acceso en un dispositivo nuevo' : 'crear o recuperar tu PIN de pago';
+  const visible = codigo.replace(/(\d{3})(\d{3})/, '$1 $2');
+  const cuerpo = `${h1(`Tu código: ${esc(visible)}`, c)}${p(`Es para ${esc(para)} en ${esc(m.nombre)}. Vale 10 minutos y una sola vez.`, c)}
+    ${nota('Con este código no se puede pagar nada: los pagos se confirman con tu llave o tu PIN de pago. Si no lo has pedido tú, no lo uses y cambia tu contraseña.', c)}`;
+  return {
+    subject: `${m.nombre} · Tu código: ${visible}`,
+    html: marco(m, 'Tu código', cuerpo, `Te llega porque alguien ha pedido ${para} con tu cuenta de ${m.nombre}.`),
+    text: `Tu código: ${visible}\n\nEs para ${para} en ${m.nombre}. Vale 10 minutos y una sola vez.\n\n` +
+      `Con este código no se puede pagar nada: los pagos se confirman con tu llave o tu PIN de pago. Si no lo has pedido tú, no lo uses y cambia tu contraseña.\n\n${m.nombre}`,
+  };
+}
+
+/**
+ * B01 Revolut · PR 2b · Un aviso de seguridad de los pagos, siempre: llave
+ * activada, PIN creado o cambiado, PIN bloqueado.
+ * data: { que ('llave' | 'pin_creado' | 'pin_cambiado' | 'pin_bloqueado'), dispositivo?, cuando ('01/11 09:41') }
+ */
+export function avisoPago(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const cuando = String(data.cuando ?? '').trim();
+  const disp = String(data.dispositivo ?? '').trim();
+  const que = String(data.que ?? '');
+  const titulo = que === 'llave' ? 'Has activado una llave de acceso'
+    : que === 'pin_bloqueado' ? 'Tu PIN de pago se ha bloqueado'
+    : que === 'pin_cambiado' ? 'Tu PIN de pago ha cambiado' : 'Has creado tu PIN de pago';
+  const frase = que === 'llave' ? `Se ha activado una llave de acceso para confirmar pagos${disp ? ` en ${esc(disp)}` : ''}.`
+    : que === 'pin_bloqueado' ? 'Se ha equivocado 5 veces. No ha salido ningún pago: siguen aprobados y esperando. Confírmalos con tu llave, o crea un PIN nuevo con el código del correo.'
+    : que === 'pin_cambiado' ? 'Tu PIN de pago se ha cambiado.' : 'Ya tienes PIN de pago, para confirmar pagos cuando no tengas tu llave a mano.';
+  const cuerpo = `${h1(titulo, c)}${p(`${frase}${cuando ? ` (${esc(cuando)})` : ''}`, c)}
+    ${nota(`Si no has sido tú, entra en ${esc(m.nombre)}, quita la llave o el PIN en Ajustes › Tu cuenta y cambia tu contraseña cuanto antes.`, c)}`;
+  return {
+    subject: `${m.nombre} · ${titulo}`,
+    html: marco(m, titulo, cuerpo, `Te llega porque ha cambiado cómo confirmas los pagos en ${m.nombre}. Lo avisamos siempre.`),
+    text: `${titulo}\n\n${frase.replace(/<[^>]+>/g, '')}${cuando ? ` (${cuando})` : ''}\n\nSi no has sido tú, entra en ${m.nombre}, quita la llave o el PIN en Ajustes › Tu cuenta y cambia tu contraseña cuanto antes.\n\n${m.nombre}`,
+  };
+}
+
 export const PLANTILLAS_MARCA: Record<string, (m: Marca, d: Record<string, unknown>) => CorreoMarca> = {
+  codigo_pago_conta: codigoPago,
+  aviso_pago_conta: avisoPago,
   invitacion_asesoria: invitacionAsesoria,
   invitacion_conta: invitacion,
   contrasena_conta: contrasena,

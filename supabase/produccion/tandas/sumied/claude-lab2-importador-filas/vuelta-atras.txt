@@ -1,0 +1,4 @@
+# LAB2 · tanda 2 · vuelta atrás: fuera las dos funciones. Las filas cargadas
+# entre medias se quedan en lab_import_fila (las quita, si hiciera falta, la
+# vuelta atrás de la 0850).
+supabase/vuelta-atras/20261030T0950_lab2_importador_filas.down.sql

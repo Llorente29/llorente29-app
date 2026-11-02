@@ -65,6 +65,10 @@ node scripts/conta/antes-de-subir-sql.mjs
 node scripts/conta/sql-sin-where.mjs
 # W10a: el repositorio es público; ninguna línea añadida, en ningún fichero, trae un secreto.
 node scripts/conta/sin-secretos.mjs
+# W10 (02/11): ni la dirección de un proyecto ni un secreto escritos en una
+# migración nueva o cambiada (ni en su vuelta atrás): en staging, una dirección
+# escrita llama a producción.
+node scripts/conta/sql-sin-direccion.mjs
 # N1 (29/10): toda columna nueva de employees lleva su «grant select» para la
 # sesión o dice que es privada (desde la 0731, sin él la sesión no la ve).
 node scripts/conta/employees-columnas.mjs

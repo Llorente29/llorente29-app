@@ -3,6 +3,10 @@
   "ignoreCommand": "node scripts/vercel/saltar-build.mjs",
   "rewrites": [
     {
+      "source": "/bancos/revolut/vuelta",
+      "destination": "/revolut-vuelta.html"
+    },
+    {
       "source": "/E/:token",
       "has": [{ "type": "host", "value": "(?<marca>.*)" }],
       "destination": "https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/label-scan?t=:token&h=:marca"

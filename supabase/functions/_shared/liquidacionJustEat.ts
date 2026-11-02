@@ -21,6 +21,14 @@
 // No trae ningún ID de la tienda: Just Eat se reconoce por el nombre del
 // restaurante y su calle, hasta que llegue un documento suyo con ID.
 // Cuadrado al céntimo: ventas 144,02 − factura 32,79 − campaña 20,93 = 90,30.
+//
+// S01j·3 · Con saldo negativo (lo que se le debe a Just Eat), el correo no dice
+// «Recibirás de Just Eat»: dice «El importe que debes abonar a Just Eat es
+// -4,33€» (el importe en el mismo trozo o en el siguiente) y no trae «Será
+// abonado». Se lee igual: el neto es negativo. Y su factura puede no traer la
+// tabla «Base · IVA · Cuota»: entonces trae «Subtotal», «IVA 21%» y «Total
+// incluido IVA» (medido en los correos de Just Eat de saldo negativo, sin
+// copiar ninguno: la prueba usa uno inventado con la misma forma).
 
 import { centimos, trozos } from './liquidacionUber.ts'
 
@@ -36,6 +44,10 @@ export interface LiquidacionJustEat {
   ventas: number
   neto: number
   factura: { numero: string; base: number; iva: number; total: number }
+  /** S01j · La fecha de la factura («Fecha de factura»), si la trae. */
+  fechaFactura: string | null
+  /** S01j · El número del asunto («Just-eat invoice: 4126424»), si lo trae. */
+  numeroAsunto: string | null
   nifJustEat: string | null
   /** Lo demás que mueve el pago (campañas…): neto − ventas + factura. */
   otros: number
@@ -56,10 +68,21 @@ const euros = (s: string | undefined): number | null => {
 }
 const r2 = (x: number): number => Math.round(x * 100) / 100
 
+/** S01j·3 · «El importe que debes abonar a Just Eat es -4,33€»: el saldo es negativo. */
+const DEBES = /^El importe que debes abonar a Just Eat es\b/i
+
+/** Lo que se le debe a Just Eat, como neto (negativo): el importe va en el mismo trozo o en el siguiente. */
+function debes(ts: readonly string[]): number | null {
+  const i = ts.findIndex((t) => DEBES.test(t))
+  if (i < 0) return null
+  const v = euros(ts[i].replace(DEBES, '').trim()) ?? euros(ts[i + 1])
+  return v === null ? null : -Math.abs(v)
+}
+
 /** ¿Es una liquidación de Just Eat? Por el remitente o el asunto, y su cuerpo. */
 export function esLiquidacionJustEat(c: { from?: string | null; subject?: string | null }, ts: readonly string[]): boolean {
   const de = /just-?eat|justeat/i.test(`${c.from ?? ''} ${c.subject ?? ''}`)
-  const cuerpo = ts.some((t) => /^Recibirás de Just Eat$/i.test(t)) && ts.some((t) => /^Nº Factura\s+\S+/i.test(t))
+  const cuerpo = ts.some((t) => /^Recibirás de Just Eat$/i.test(t) || DEBES.test(t)) && ts.some((t) => /^Nº Factura\s+\S+/i.test(t))
   return de && cuerpo
 }
 
@@ -75,7 +98,7 @@ export function leerLiquidacionJustEat(c: { from?: string | null; subject?: stri
   const periodo = ts.find((t) => /^\d{1,2}\s+[a-záéíóú]+\s+\d{4}\s*-\s*\d{1,2}\s+[a-záéíóú]+\s+\d{4}$/i.test(t))
   const [d1, d2] = (periodo ?? '').split('-').map((x) => fechaLarga(x.trim()))
   if (!d1 || !d2) throw new NoEsLiquidacionJustEat('La liquidación de Just Eat no dice su periodo.')
-  const neto = euros(tras(ts, /^Recibirás de Just Eat$/i)) ?? euros(tras(ts, /^Tu balance en cuenta$/i))
+  const neto = euros(tras(ts, /^Recibirás de Just Eat$/i)) ?? debes(ts) ?? euros(tras(ts, /^Tu balance en cuenta$/i))
   const ventas = euros(tras(ts, /^Total de ventas$/i))
   const pedidos = Number(tras(ts, /^Número de pedidos$/i))
   const iFac = ts.findIndex((t) => /^Nº Factura\s+\S+/i.test(t))
@@ -83,7 +106,9 @@ export function leerLiquidacionJustEat(c: { from?: string | null; subject?: stri
   // Base, IVA y Cuota van como cabecera y luego sus valores: «27,10€», «21%», «5,69€».
   const iBase = ts.findIndex((t, k) => k > iFac && /^Base$/i.test(t))
   const valores = iBase < 0 ? [] : ts.slice(iBase + 1, iBase + 8).filter((t) => !/^(IVA|Cuota)$/i.test(t))
-  const base = euros(valores[0]); const iva = euros(valores[2])
+  // S01j·3 · Sin la tabla, «Subtotal» e «IVA 21%» (los correos de saldo negativo).
+  const base = euros(valores[0]) ?? euros(tras(ts, /^Subtotal$/i, iFac))
+  const iva = euros(valores[2]) ?? euros(tras(ts, /^IVA \d+(?:[.,]\d+)?\s*%$/i, iFac))
   const total = euros(tras(ts, /^Total incluido IVA$/i, iFac))
   if (neto === null || ventas === null || !Number.isFinite(pedidos) || !numero || base === null || iva === null || total === null) {
     throw new NoEsLiquidacionJustEat('A la liquidación de Just Eat le faltan importes (neto, ventas, pedidos o su factura).')
@@ -97,9 +122,12 @@ export function leerLiquidacionJustEat(c: { from?: string | null; subject?: stri
   const iFecha = ts.findIndex((t, k) => k > iFac && /^Fecha de factura/i.test(t))
   const nifs = ts.slice(iFac, iFecha < 0 ? iFac + 15 : iFecha).filter((t) => /^[A-Z]\d{8}$|^\d{8}[A-Z]$/.test(t))
   const pago = ts.find((t) => /^Será abonado antes del/i.test(t))
+  // S01j · La fecha de la factura: en el mismo trozo («Fecha de factura 16 octubre 2026») o en el siguiente.
+  const fechaFactura = iFecha < 0 ? null : fechaLarga(ts[iFecha].replace(/^Fecha de factura:?/i, '').trim()) ?? fechaLarga(ts[iFecha + 1] ?? '')
+  const numeroAsunto = /invoice:?\s*(\d{5,})/i.exec(c.subject ?? '')?.[1] ?? null
   return {
     restaurante, calle: calle ? calle.replace(/,/g, '').replace(/\s+/g, ' ').trim() : null, desde: d1, hasta: d2,
-    pagoEl: pago ? fechaLarga(pago) : null, pedidos, ventas, neto, factura: { numero, base, iva, total },
+    pagoEl: pago ? fechaLarga(pago) : null, pedidos, ventas, neto, factura: { numero, base, iva, total }, fechaFactura, numeroAsunto,
     nifJustEat: nifs.length ? nifs[nifs.length - 1] : null, otros: r2(neto - ventas + total), avisos,
   }
 }
@@ -113,5 +141,7 @@ export function paraRegistrarJustEat(l: LiquidacionJustEat, x: { emailId?: strin
     ventas: { total: l.ventas }, comision: l.factura.total, otros: l.otros, neto: l.neto,
     factura: { numero: l.factura.numero, base: l.factura.base, iva: l.factura.iva, total: l.factura.total },
     intermediario: { nombre: 'Just Eat Spain S.L.', nif: l.nifJustEat }, avisos: l.avisos,
+    // S01j · Para casar las antiguas sin periodo (import_csv_je, «je:<número>»).
+    referencia_asunto: l.numeroAsunto, fecha_factura: l.fechaFactura,
   }
 }

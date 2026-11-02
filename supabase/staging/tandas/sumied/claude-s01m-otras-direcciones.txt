@@ -1,0 +1,7 @@
+# S01m · otras direcciones de un local. La 0945 añade una tabla y una función;
+# la 0946 cambia _conta_local_de_texto (desde la rama, solo en ROLLBACK). Su
+# prueba (ROLLBACK): sin y con la otra dirección, la misma en dos locales, guardar
+# como persona y que la factura se ligue, y la vuelta atrás.
+supabase/migrations/20261101T0945_s01m_otras_direcciones.sql
+supabase/migrations/20261101T0946_s01m_local_por_otras.sql
+supabase/staging/sql/20261101_s01m_direcciones_prueba.sql

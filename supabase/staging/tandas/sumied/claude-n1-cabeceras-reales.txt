@@ -1,0 +1,6 @@
+# N1 · respuesta 2 · Las cabeceras reales del paquete de Cegid: la 2154 (cambia
+# _lab_campo: solo en ROLLBACK) y su prueba (ROLLBACK), que empieza por su
+# vuelta atrás si ya está: «CCC» encuentra el campo real, el exacto gana, el
+# volcado lleva el CCC al contrato, y la vuelta atrás.
+supabase/migrations/20261101T2154_n1b_campo_del_fichero.sql
+supabase/staging/sql/20261101_n1b_campo_del_fichero_prueba.sql

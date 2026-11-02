@@ -1,0 +1,29 @@
+{
+ "_que": "S01j·2 · contexto de producción medido en SOLO LECTURA el 01/11 a las 13:11Z: existen conta_correo_facturas(uuid) (cuerpo de la 0847, huella 68d34fa3c147c49e1c33efedf1084a2a) y conta_local_direcciones_guardar(uuid,text[],text) (cuerpo de la 0945, huella a25f1f1cfbeb84da514015991bdfdaa1), una sola firma cada una, que se reemplazan con la misma; conta_liquidacion_ficha, _conta_liquidacion_pon_local y s01j2_local_puesto no existen; channel_settlement tiene 400 filas; nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-01T13:11Z",
+ "tanda": {
+  "supabase/migrations/20261101T1215_s01j2_correo_que_salio.sql": "2ddb30cf4b445b49095fb38662bc95b2",
+  "supabase/migrations/20261101T1216_s01j2_ficha_liquidacion.sql": "0ed67f53199f52c8d4c7b76934b5aa46",
+  "supabase/migrations/20261101T1217_s01j2_local_de_la_liquidacion.sql": "fcbd9d47e5cfe37b7471d2f55c93a2c9",
+  "supabase/migrations/20261101T1218_s01j2_local_foodint.sql": "ff6f5f8e94287eb6aae34a30015f6d8d"
+ },
+ "contexto": {
+  "tablas": [
+   "public.channel_settlement"
+  ],
+  "funciones": [
+   "public.conta_correo_facturas(uuid)",
+   "public.conta_local_direcciones_guardar(uuid,text[],text)"
+  ],
+  "filas": {
+   "public.channel_settlement": 400
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

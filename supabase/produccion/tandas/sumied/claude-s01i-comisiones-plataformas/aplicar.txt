@@ -1,0 +1,19 @@
+# S01i · Las facturas de comisión de las plataformas se ligan a su
+# liquidación y se pagan solas, por compensación (Julio, 31/10 y 01/11).
+# Rama claude/s01i-comisiones-plataformas.
+#
+#   0050  añade channel_settlement_invoice (varias facturas por liquidación),
+#         el emparejamiento (plataforma, periodo, marca, local por la
+#         dirección, importe) y el pago por compensación.
+#   0051  cambia: payment_method admite «compensation»; Pagos y Bancos dejan
+#         fuera lo que se compensa; disparadores al llegar la factura, al
+#         aprobarla y al llegar una liquidación.
+#   0052  datos de Foodint (autorizo): a cada factura de plataforma, su
+#         liquidación; pagadas las aprobadas que encajan y las de antes de su
+#         plataforma en Sumied.
+#
+# Nada en el camino del pedido. Sin aplicar: el real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01i-comisiones.sql
+supabase/migrations/20261101T0050_s01i_comision_liquidacion.sql
+supabase/migrations/20261101T0051_s01i_comision_sin_banco.sql
+supabase/migrations/20261101T0052_s01i_comisiones_foodint.sql

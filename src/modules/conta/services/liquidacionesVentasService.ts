@@ -19,6 +19,7 @@
 // treasury_account_id) y treasury_account (name), de B01; bank_casar, de B02.
 // Regla 9: todo por la empresa (las funciones comprueban la cuenta de quien llama).
 
+import { deLaBase, type FichaLiquidacion } from '@/modules/conta/lib/fichaLiquidacion'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { cargarContexto, proponerDevolucionSinCobrar } from '@/modules/conta/services/propuestasLibroService'
 import { asientoDeGasto, grupoDeFila, periodo, r2, type GrupoPlataforma } from '@/modules/conta/lib/liquidacionesPlataforma'
@@ -171,4 +172,9 @@ export async function lineasDeRecepciones(accountId: string, codigo: ReadonlyMap
     }
   })
   return lineas
+}
+
+/** S01j·2 · La ficha de UNA liquidación de plataforma (conta_liquidacion_ficha, solo lee). */
+export async function leerFichaLiquidacion(id: string): Promise<FichaLiquidacion> {
+  return deLaBase(await rpc<Record<string, unknown>>('conta_liquidacion_ficha', { p_id: id }))
 }

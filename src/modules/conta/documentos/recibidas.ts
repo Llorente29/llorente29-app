@@ -6,8 +6,9 @@
 //   · Las pestañas de estado SUMAN «Todas» (encargo S02): cada fila cae en
 //     una sola. «Por revisar», «Por pagar» y «Pagadas» son las del patrón (en
 //     palabras de oficina, regla 6) y salen siempre; «Por aclarar» (falta algo:
-//     el proveedor, el PDF, el NIF) y «Otras» (repetidas, descartadas y las de
-//     antes del corte que llevó Diez) solo si tienen algo. Ninguna fila se
+//     el proveedor, el PDF, el NIF), «Apuntadas solas» (S01o) y «Apartadas» (antes
+//     «Otras»: repetidas, descartadas y las de antes del corte que llevó Diez) solo
+//     si tienen algo. Ninguna fila se
 //     queda fuera de una pestaña (regla 7).
 //   · «Por revisar» cuenta lo mismo que el chip de la barra (las facturas
 //     «para mirar» de los últimos 12 meses, recibidasParaRevisar): la ventana de
@@ -20,14 +21,17 @@ import { leerOrden, ordenar, type Sentido } from '@/modules/conta/diseno/plantil
 import { etiquetaSoporte, faltaElPdf, limites, ventanaParaRevisar, type Canal, type FilaDocumento } from './documentos'
 import type { ExtraFactura } from '@/modules/conta/services/documentosService'
 
-export type IdPestana = 'todas' | 'por-revisar' | 'por-aclarar' | 'por-pagar' | 'pagadas' | 'otras'
+export type IdPestana = 'todas' | 'por-revisar' | 'solas' | 'por-aclarar' | 'por-pagar' | 'pagadas' | 'otras'
 
 export const PESTANAS: { id: Exclude<IdPestana, 'todas'>; etiqueta: string; siempre: boolean }[] = [
   { id: 'por-revisar', etiqueta: 'Por revisar', siempre: true },
+  // S01o · Las que Sumied apuntó solas (estaban seguras al 100 %), con su porqué y «Deshacer». Solo si hay alguna.
+  { id: 'solas', etiqueta: 'Apuntadas solas', siempre: false },
   { id: 'por-aclarar', etiqueta: 'Por aclarar', siempre: false },
   { id: 'por-pagar', etiqueta: 'Por pagar', siempre: true },
   { id: 'pagadas', etiqueta: 'Pagadas', siempre: true },
-  { id: 'otras', etiqueta: 'Otras', siempre: false },
+  // S01o (Julio, 01/11): «Otras» decía poco; son las apartadas (repetidas, no son factura, en Diez, soporte).
+  { id: 'otras', etiqueta: 'Apartadas', siempre: false },
 ]
 
 /** D04 · Lo que cuenta la cola de la ficha («1 de 77 por revisar»): el nombre de su pestaña, en minúscula. */
@@ -47,7 +51,7 @@ export function pestanaDe(ver: string | null): IdPestana {
 export function pestanaDeFila(f: FilaDocumento, extra: ExtraFactura | undefined): Exclude<IdPestana, 'todas'> {
   if (f.estado === 'para_mirar') return 'por-revisar'
   if (f.estado === 'por_aclarar') return 'por-aclarar'
-  if (f.estado === 'apuntada') return extra?.pagada ? 'pagadas' : 'por-pagar'
+  if (f.estado === 'apuntada') return extra?.sola ? 'solas' : extra?.pagada ? 'pagadas' : 'por-pagar'
   return 'otras'
 }
 
@@ -60,7 +64,9 @@ export function estadoDeFila(f: FilaDocumento, extra: ExtraFactura | undefined):
       if (f.tipo === 'recepcion') return { texto: 'Aún no es factura', tono: 'duda' }
       if (!f.proveedor.id) return { texto: 'Proveedor nuevo', tono: 'duda' }
       return { texto: 'Por aclarar', tono: 'duda' }
-    case 'apuntada': return extra?.pagada ? { texto: 'Pagada', tono: 'seguro' } : { texto: 'Por pagar', tono: 'neutro' }
+    case 'apuntada':
+      if (extra?.sola) return { texto: 'Apuntada sola', tono: 'seguro' }
+      return extra?.pagada ? { texto: 'Pagada', tono: 'seguro' } : { texto: 'Por pagar', tono: 'neutro' }
     case 'repetida': return { texto: 'Repetida', tono: 'neutro' }
     case 'descartada': return { texto: 'No es una factura', tono: 'neutro' }
     case 'en_diez': return { texto: 'En Diez', tono: 'neutro' }
@@ -139,7 +145,7 @@ export function queEsOtra(f: FilaDocumento): string {
     case 'repetida': return 'Repetidas'
     case 'descartada': return 'No es una factura'
     case 'en_diez': return 'En Diez'
-    default: return 'Otras'
+    default: return 'Apartadas'
   }
 }
 

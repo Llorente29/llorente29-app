@@ -71,6 +71,7 @@
 
 import { esResumenUber, leerResumenUber, NoEsResumenUber, paraRegistrar, trozos, type ResumenUber } from './liquidacionUber.ts'
 import { esLiquidacionJustEat, leerLiquidacionJustEat, paraRegistrarJustEat } from './liquidacionJustEat.ts'
+import { esExcelGlovo, leerExcelGlovo, paraRegistrarGlovo } from './lectorGlovo.ts'
 import { queDiceElContenido, queDiceElNombre, type QueEs } from './queEs.ts'
 
 export { queDiceElContenido, queDiceElNombre, type QueEs }
@@ -253,6 +254,10 @@ export interface PuertoEntrada {
   liquidacion?(x: { companyId: string; datos: DatosLiquidacion }): Promise<{ id: string; yaEstaba: boolean; texto: string; factura: string | null }>
   /** Lo que la base sabe del remitente para esa empresa (conta_entrada_remitente), o null. «tipo»: lo que manda, aprendido en «Dime qué es». */
   remitente?(companyId: string, from: string): Promise<{ decision: 'no_facturas' | 'tipo'; motivo: string; tipo?: QueEs | null } | null>
+  /** S01j · Las filas de la primera hoja de un Excel, como objetos por su cabecera (el Excel de Glovo). */
+  hoja?(bytes: Uint8Array): Promise<Record<string, unknown>[]>
+  /** S01j · La factura de comisión que viene escrita en el correo (Just Eat), como recibida: conta_comision_del_correo. */
+  facturaComision?(x: { settlementId: string; datos: DatosLiquidacion; emailId: string }): Promise<{ id: string | null; estado: string; texto: string }>
   /** La puerta: sube a otro almacén (conta-entrada) lo que no es un PDF ni una foto. */
   subirA?(bucket: string, ruta: string, bytes: Uint8Array, tipo: string): Promise<void>
   /** La puerta: apunta en la bandeja qué es (y por quién lo sabe) y, si va en otro almacén, cuál. */
@@ -361,6 +366,13 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
   if (dest.tipo === 'liquidaciones') return recibirLiquidacion(c, { ...dest }, base, p)
   if (dest.tipo === 'documentos') return recibirDocumentos(c, { ...dest }, base, p)
 
+  // S01j · Just Eat manda la liquidación y su factura de comisión escritas en el cuerpo, sin
+  // adjuntos: aunque llegue a la dirección de facturas, se lee como en la de liquidaciones.
+  if (pareceDeJustEat(c) && p.liquidacion) {
+    const cuerpo = c.html || c.text ? { html: c.html ?? null, text: c.text ?? null } : p.cuerpo ? await p.cuerpo(c.email_id) : null
+    if (cuerpo && esLiquidacionJustEat({ from: c.from, subject: c.subject }, trozos(cuerpo))) return recibirLiquidacion(c, { ...dest }, base, p, cuerpo)
+  }
+
   // Un remitente que no manda facturas (sus justificantes, por ejemplo): se apunta y no se lee.
   const quien = c.from && p.remitente ? await p.remitente(dest.companyId, c.from) : null
   if (quien?.decision === 'no_facturas') {
@@ -368,7 +380,8 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
     return { resultado: 'no_es_factura', texto: `No se lee como factura: ${quien.motivo.replace(/\.$/, '')}. Queda apuntado en el registro de entrada.`, llegadas: [] }
   }
 
-  const { tomar, dejar } = clasificarAdjuntos(await p.adjuntos(c.email_id))
+  const todos = await p.adjuntos(c.email_id)
+  const { tomar, dejar } = clasificarAdjuntos(todos)
   const llegadas: ResultadoEntrada['llegadas'] = []
   const comun = { accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
 
@@ -384,18 +397,56 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
     const r = await p.leer(l.id)
     llegadas.push({ id: l.id, ...r })
   }
+  // S01j · El Excel de Glovo («invoice-<n>.XLSX») que viene con su factura: es su liquidación.
+  // Se lee con el mismo lector que el Excel subido a mano (la misma clave: no se duplica).
+  const liquidaciones = await excelesDeGlovo(c, dest, todos, dejar, p)
   // Sin ningún fichero útil, pero con un enlace de descarga: «Falta el PDF».
-  if (!llegadas.length) {
+  if (!llegadas.length && !liquidaciones.length) {
     for (const enlace of enlacesDeFactura(c)) {
       const l = await p.llegada({ ...comun, ruta: null, nombre: null, tipo: null, bytes: null, sha256: null, enlace })
       llegadas.push({ id: l.id, estado: 'falta_pdf', texto: 'Falta el PDF: el correo trae un enlace. Bájalo y súbelo.' })
     }
   }
-  await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length ? 'recibido' : 'sin_facturas', detalle: { tomados: llegadas.length, dejados: dejar } })
-  const texto = llegadas.length
-    ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
+  await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length || liquidaciones.length ? 'recibido' : 'sin_facturas',
+    detalle: { tomados: llegadas.length, dejados: dejar, ...(liquidaciones.length ? { liquidaciones: liquidaciones.map((l) => ({ id: l.id, ya_estaba: l.yaEstaba, plataforma: 'glovo' })) } : {}) } })
+  const deLiq = liquidaciones.length ? `; ${liquidaciones.map((l) => l.texto.replace(/\.$/, '')).join('; ')}` : ''
+  const texto = llegadas.length || liquidaciones.length
+    ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${deLiq}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ninguna factura${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarla.`
   return { resultado: 'recibido', texto, llegadas }
+}
+
+/** ¿Puede ser un correo de Glovo? (S01j: su Excel solo se mira si lo es.) */
+const pareceDeGlovo = (c: Pick<CorreoResend, 'from' | 'subject'>) => /glovo/i.test(`${c.from ?? ''} ${c.subject ?? ''}`)
+
+/**
+ * S01j · El Excel de Glovo de un correo, a su liquidación. Lo que no es un Excel
+ * de Glovo, o no se puede leer, se queda en «dejados» con su porqué (no se pierde).
+ */
+export async function excelesDeGlovo(c: CorreoResend, dest: Destino, todos: readonly AdjuntoResend[], dejar: { nombre: string; porque: string }[], p: PuertoEntrada):
+  Promise<{ id: string; yaEstaba: boolean; texto: string }[]> {
+  const hechas: { id: string; yaEstaba: boolean; texto: string }[] = []
+  if (!p.hoja || !p.liquidacion || !pareceDeGlovo(c)) return hechas
+  for (const d of [...dejar]) {
+    if (d.porque !== 'no es un PDF ni una foto' || !/\.xlsx?$/i.test(d.nombre)) continue
+    const a = todos.find((x) => (x.filename ?? 'sin nombre') === d.nombre)
+    if (!a?.download_url) continue
+    const i = dejar.indexOf(d)
+    try {
+      const bytes = await p.bajar(a.download_url)
+      if (bytes.length > MAX_BYTES) { dejar[i] = { nombre: d.nombre, porque: 'pasa de 10 MB' }; continue }
+      const filas = await p.hoja(bytes)
+      if (!esExcelGlovo(filas)) { dejar[i] = { nombre: d.nombre, porque: 'es un Excel, pero no el de la liquidación de Glovo' }; continue }
+      for (const ex of leerExcelGlovo(filas)) {
+        const r = await p.liquidacion({ companyId: dest.companyId, datos: { ...paraRegistrarGlovo({ excel: ex }), email_id: c.email_id } })
+        hechas.push({ id: r.id, yaEstaba: r.yaEstaba, texto: r.texto })
+      }
+      dejar.splice(i, 1)
+    } catch (x) {
+      dejar[i] = { nombre: d.nombre, porque: `el Excel de Glovo no se ha podido leer: ${x instanceof Error ? x.message : String(x)}` }
+    }
+  }
+  return hechas
 }
 
 // ── Las liquidaciones ────────────────────────────────────────────────────────
@@ -408,10 +459,18 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
   // V02 · E2: una liquidación de Just Eat (factura, estado de cuenta y pedidos en el correo).
   if (esLiquidacionJustEat({ from: c.from, subject: c.subject }, trozos(cuerpo))) {
     const je = leerLiquidacionJustEat({ from: c.from, subject: c.subject, html: cuerpo.html, text: cuerpo.text })
-    const r = await p.liquidacion({ companyId: destino.companyId, datos: paraRegistrarJustEat(je, { emailId: c.email_id }) })
+    const datos = paraRegistrarJustEat(je, { emailId: c.email_id })
+    // Si su factura no suma, la liquidación entra igual (sin factura: conta_liquidacion_registrar
+    // pararía) y la factura va aparte, en revisión con el porqué. No se inventa nada.
+    const cuadra = Math.round(je.factura.base * 100) + Math.round(je.factura.iva * 100) === Math.round(je.factura.total * 100)
+    const r = await p.liquidacion({ companyId: destino.companyId, datos: cuadra ? datos : { ...datos, factura: null } })
+    // S01j · Su factura de comisión, como recibida (con su número): la liga el S01i. Si no suma, en revisión con el porqué.
+    const f = p.facturaComision ? await p.facturaComision({ settlementId: r.id, datos, emailId: c.email_id }) : null
     await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
-      detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: je.avisos.length, plataforma: 'justeat' } })
-    return { resultado: 'liquidacion', texto: r.texto, llegadas: [] }
+      detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: je.avisos.length, plataforma: 'justeat',
+                 ...(f ? { factura_id: f.id, factura_estado: f.estado } : {}) } })
+    const texto = cuadra ? r.texto : `La liquidación de Just Eat del ${je.desde.slice(8, 10)}/${je.desde.slice(5, 7)} al ${je.hasta.slice(8, 10)}/${je.hasta.slice(5, 7)} ha entrado.`
+    return { resultado: 'liquidacion', texto: f ? `${texto} ${f.texto}` : texto, llegadas: [] }
   }
   let resumen: ResumenUber
   try {
@@ -589,4 +648,47 @@ async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: s
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ningún documento${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarlo.`
   return { resultado: 'documentos', texto, llegadas }
+}
+
+// ── S01j · Volver a leer lo que ya llegó ─────────────────────────────────────
+
+export type Releido = { emailId: string; estado: 'leido' | 'ya_no_esta' | 'error'; resultado: string | null; texto: string }
+
+export const YA_NO_ESTA = 'Este correo ya no está en el buzón: reenvíalo desde Gmail.'
+
+/**
+ * Vuelve a leer unos correos que ya llegaron: los pide otra vez a la entrada
+ * (Resend) y los pasa por el mismo camino que al llegar, sin pararse en «ya
+ * visto». No duplica nada: el mismo PDF se reconoce por su huella, la misma
+ * liquidación por su clave y la misma factura por su número. Si la entrada ya
+ * no tiene el correo, lo dice (el camino es reenviarlo desde Gmail).
+ */
+export async function releerCorreos(ids: readonly string[], p: PuertoEntrada, pedir: (id: string) => Promise<(CorreoResend & Sobre) | null>): Promise<Releido[]> {
+  const sinVisto: PuertoEntrada = { ...p, yaVisto: async () => false }
+  const out: Releido[] = []
+  for (const id of ids) {
+    let c: (CorreoResend & Sobre) | null
+    try { c = await pedir(id) } catch (x) { out.push({ emailId: id, estado: 'error', resultado: null, texto: `No se ha podido pedir: ${x instanceof Error ? x.message : String(x)}` }); continue }
+    if (!c) { out.push({ emailId: id, estado: 'ya_no_esta', resultado: null, texto: YA_NO_ESTA }); continue }
+    try {
+      const r = await recibirCorreo({ ...c, email_id: id }, sinVisto)
+      out.push({ emailId: id, estado: 'leido', resultado: r.resultado, texto: r.texto })
+    } catch (x) {
+      out.push({ emailId: id, estado: 'error', resultado: null, texto: `No se ha podido leer: ${x instanceof Error ? x.message : String(x)}` })
+    }
+  }
+  return out
+}
+
+/** Lo que dice la pantalla al acabar de volver a leer (regla 8: con contenido). */
+export function resumenReleidos(rs: readonly Releido[]): string {
+  const leidos = rs.filter((r) => r.estado === 'leido').length
+  const fuera = rs.filter((r) => r.estado === 'ya_no_esta').length
+  const mal = rs.filter((r) => r.estado === 'error').length
+  const partes = [
+    leidos ? `${leidos === 1 ? 'Leído otra vez 1 correo' : `Leídos otra vez ${leidos} correos`}` : null,
+    fuera ? `${fuera === 1 ? '1 ya no está en el buzón' : `${fuera} ya no están en el buzón`}: reenvíalos desde Gmail` : null,
+    mal ? `${mal === 1 ? '1 no se ha podido leer' : `${mal} no se han podido leer`}` : null,
+  ].filter(Boolean)
+  return partes.length ? `${partes.join('; ')}.` : 'No había ningún correo que volver a leer.'
 }

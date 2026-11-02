@@ -1,0 +1,27 @@
+{
+ "_que": "A01a · contexto de producción de la tanda, medido en SOLO LECTURA el 01/11 a las 17:47 UTC. Existe print_job (26.802 filas, fuera del camino del pedido); db_health_watchdog existe con una sola firma (md5 dd8f4ead) y corre por cron (camino del pedido para el analizador); no existen print_job_vigia, print_job_aviso ni el disparador. Nada de la tanda en el historial.",
+ "medido": "2026-11-01T17:47Z",
+ "tanda": {
+  "supabase/migrations/20261101T1906_a01a_tickets_caducan.sql": "958510ee124865141d32dfe946c600c2"
+ },
+ "contexto": {
+  "tablas": [
+   "public.print_job"
+  ],
+  "funciones": [
+   "public.db_health_watchdog()"
+  ],
+  "filas": {
+   "public.print_job": 26802
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": [
+    "public.db_health_watchdog()"
+   ]
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -51,6 +51,7 @@ import RemesasPagosPage from '@/modules/conta/compras/RemesasPagosPage'
 import CobrosPage from '@/modules/conta/ventas/CobrosPage'
 import RemesaCobrosPage from '@/modules/conta/ventas/RemesaCobrosPage'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
+import LiquidacionFichaPage from '@/modules/conta/ventas/LiquidacionFichaPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
 import ImpuestosPage from '@/modules/conta/impuestos/ImpuestosPage'
 import IvaPeriodoPage from '@/modules/conta/impuestos/IvaPeriodoPage'
@@ -183,6 +184,8 @@ export const contaModule: ModuleDefinition = {
     // V01 · Entrega 3 · Ventas › Liquidaciones (con «Vendo en hostelería»): plataformas y socios de marca, y la ficha de una fila de plataforma.
     { path: CONTA.rutas.liquidacionesVentas, element: enMarco(<LiquidacionesVentasPage />, '¿Me han pagado lo que vendí?', true) },
     { path: CONTA.rutas.liquidacionPlataforma, element: enMarco(<LiquidacionPlataformaPage />, '¿Por qué esta liquidación no cuadra?', true) },
+    // S01j·2 · La ficha de una liquidación (maqueta 3): de dónde salió y qué paga.
+    { path: CONTA.rutas.liquidacionFicha, element: enMarco(<LiquidacionFichaPage />, '¿Qué me paga esta liquidación?', true) },
     { path: CONTA.rutas.facturasEmitidas, element: <LlevarAVentas a={CONTA.rutas.facturasVenta} /> },
     { path: CONTA.rutas.nuevaEmitida, element: <LlevarAVentas a={CONTA.rutas.nuevaFacturaVenta} /> },
     { path: CONTA.rutas.asiento, element: enMarco(<AsientoPage />, '¿Por qué la comisión lleva IVA?', true) },

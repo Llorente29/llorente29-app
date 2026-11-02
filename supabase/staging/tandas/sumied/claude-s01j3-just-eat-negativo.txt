@@ -1,0 +1,8 @@
+# S01j·3 · La comisión de Just Eat con su signo. La 1540 cambia
+# conta_liquidacion_registrar (desde la rama, solo en ROLLBACK). Su prueba
+# (ROLLBACK): con la de antes el abono sale del revés; con la 1540 el abono, el
+# cargo y el saldo negativo cuadran; Glovo y Uber, igual; la 1541 fuera de
+# Foodint; y la vuelta atrás byte a byte.
+supabase/migrations/20261101T1540_s01j3_comision_con_signo.sql
+supabase/migrations/20261101T1541_s01j3_comision_foodint.sql
+supabase/staging/sql/20261101_s01j3_comision_prueba.sql

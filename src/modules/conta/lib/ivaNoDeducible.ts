@@ -5,9 +5,9 @@
 // sale en el libro de recibidas como no deducible y no entra en el 303 (tanda
 // 0850). Núcleo puro: sin red ni base.
 
-export type MotivoNoDeducible = 'no_a_nombre' | 'ticket_sin_nif' | 'otro'
+export type MotivoNoDeducible = 'no_a_nombre' | 'ticket_sin_nif' | 'otro' | 'sin_roi'
 
-/** Los motivos, en el orden en que se ofrecen. */
+/** Los motivos, en el orden en que se ofrecen. («sin_roi» no se ofrece: lo pone Sumied solo, S01o·2.) */
 export const MOTIVOS_NO_DEDUCIBLE: readonly { valor: MotivoNoDeducible; texto: string }[] = [
   { valor: 'no_a_nombre', texto: 'No está a nombre de la empresa' },
   { valor: 'ticket_sin_nif', texto: 'Es un ticket sin NIF' },
@@ -18,6 +18,7 @@ export const MOTIVOS_NO_DEDUCIBLE: readonly { valor: MotivoNoDeducible; texto: s
 export function porQueNoDeducible(motivo: string | null | undefined, texto?: string | null): string | null {
   if (motivo === 'no_a_nombre') return 'no está a nombre de la empresa'
   if (motivo === 'ticket_sin_nif') return 'es un ticket sin NIF'
+  if (motivo === 'sin_roi') return 'es de un proveedor de la UE que cobra IVA español y la empresa no está en el ROI'
   if (motivo === 'otro') return texto?.trim() || null
   return null
 }

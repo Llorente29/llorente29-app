@@ -1,0 +1,11 @@
+# S01i · las facturas de comisión de las plataformas. La 0050 añade la tabla
+# y las funciones; la 0051 cambia un CHECK, Pagos, Bancos y pone dos
+# disparadores (desde la rama, solo en ROLLBACK); la 0052 son datos de
+# Foodint (en staging no hace nada). Su prueba (ROLLBACK): la dirección, una
+# que encaja, dos de la misma marca, el local por la dirección, la que falta
+# y se liga al llegar su liquidación, la de antes de la plataforma, y la
+# vuelta atrás.
+supabase/migrations/20261101T0050_s01i_comision_liquidacion.sql
+supabase/migrations/20261101T0051_s01i_comision_sin_banco.sql
+supabase/migrations/20261101T0052_s01i_comisiones_foodint.sql
+supabase/staging/sql/20261101_s01i_comisiones_prueba.sql

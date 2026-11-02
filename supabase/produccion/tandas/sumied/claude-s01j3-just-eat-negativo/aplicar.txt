@@ -1,0 +1,15 @@
+# S01j·3 · La comisión de Just Eat con su signo (un abono es comisión
+# positiva), y las 5 de Foodint que se guardaron del revés.
+# Rama claude/s01j3-just-eat-negativo.
+#
+#   1540  cambia conta_liquidacion_registrar (misma firma): para Just Eat, la
+#         comisión es −(total de su factura), no −abs(). Se cambia sobre la
+#         definición viva, reemplazando el trozo exacto (para si no está una
+#         sola vez), con su respaldo.
+#   1541  corrige la comisión de las de Just Eat de Foodint cuya factura es un
+#         abono y se guardó del revés: 5 (autorizo: mueve filas).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01j3-comision.sql
+supabase/migrations/20261101T1540_s01j3_comision_con_signo.sql
+supabase/migrations/20261101T1541_s01j3_comision_foodint.sql

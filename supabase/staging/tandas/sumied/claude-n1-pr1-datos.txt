@@ -1,0 +1,10 @@
+# N1 · PR 1 · Los datos de la ficha de Laboral y el volcado de Cegid: la 1937
+# y la 1938 (solo añaden: desde la rama van de verdad, W05), la 1939 (cambia
+# empleados_datos_privados: solo en ROLLBACK) y su prueba (ROLLBACK), que
+# empieza por las vueltas atrás de lo que ya esté: el permiso, el volcado con
+# un centro sin confirmar y confirmado, otra vez sin duplicar, nadie más y la
+# vuelta atrás.
+supabase/migrations/20261101T1937_n1_laboral_modelo.sql
+supabase/migrations/20261101T1938_n1_volcado_cegid.sql
+supabase/migrations/20261101T1939_n1_datos_privados_laboral.sql
+supabase/staging/sql/20261101_n1_laboral_prueba.sql

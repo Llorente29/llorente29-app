@@ -1,0 +1,5 @@
+# S01l · la vuelta atrás: la factura que creó la 0921 (si nadie la ha tocado)
+# fuera y su llegada como estaba; conta_factura_desde_lectura como estaba.
+cuenta: scripts/conta/produccion/cuentas/s01l-retencion.sql
+supabase/vuelta-atras/20261101T0921_s01l_releer_foodint.down.sql
+supabase/vuelta-atras/20261101T0920_s01l_retencion_leida.down.sql

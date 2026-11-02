@@ -37,6 +37,7 @@ import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { DialogoBancoNuevo } from '@/modules/conta/bancos/DialogoBancoNuevo'
 import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 import { lineaConexion, type ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
+import { TarjetaRevolut } from '@/modules/conta/bancos/revolut/ConectarRevolut'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
 const COMUN = 'comun'
@@ -72,6 +73,8 @@ export function CuentasYExtractos() {
           <p>Aún no hay ningún banco. Dalo de alta con «{ACCION_NUEVO}»{(porDar.datos?.length ?? 0) > 0 ? ', o desde una de las cuentas del plan de abajo' : ''}. También puedes subir su primer extracto: trae el IBAN y te ofrezco darlo de alta con él.</p>
         </div>
       )}
+      {/* B01 Revolut · Conectar Revolut Business, y su estado (Al día · hace 5 min). */}
+      <TarjetaRevolut />
       {datos.bancos.map((b) => (
         <TarjetaBanco key={b.id} b={b} extractos={datos.extractos.filter((e) => e.cuentaId === b.id)} hacer={hacer}
           prellenar={query.get('banco') === b.id ? query.get('tarjeta') : null} />

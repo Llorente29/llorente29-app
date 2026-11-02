@@ -94,6 +94,11 @@ describe('el correo de facturas, en palabras', () => {
     expect(queSeHizo(l({ llegada: 'no_es_factura', motivo: 'No parece una factura.' })).titulo).toBe('No es una factura')
     expect(queSeHizo(l({ llegada: 'repetida', factura: { ...f, casada: false } })).titulo).toBe(`Repetida: 1/26A/10965 de ${PROV}`)
     expect(queSeHizo(l({ resultado: 'confirmacion', llegada: null })).titulo).toBe('Gmail pide confirmar el reenvío')
+    // S01i · Un correo sin PDF ni enlace (la factura de Just Eat va en el cuerpo): se queda, con su porqué, nunca «Recibido».
+    const sin = queSeHizo(l({ resultado: 'sin_facturas', llegada: null, motivo: null }))
+    expect(sin.titulo).toBe('Sin factura que leer')
+    expect(sin.texto).toMatch(/Just Eat\), aún no se lee: queda aquí apuntado/)
+    expect(sin.tono).toBe('mira')
   })
 })
 

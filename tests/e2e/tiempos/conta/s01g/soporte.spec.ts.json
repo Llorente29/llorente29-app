@@ -1,1 +1,1 @@
-{"segundos":60,"medido":"estimado a mano el 31/10 (cuatro pruebas de solo lectura con las respuestas interceptadas, como las de la ficha del S01e): se sustituye por el medido de la primera e2e en verde de claude/s01g-soporte-liquidaciones"}
+{"segundos":49,"medido":"e2e en verde de claude/s01g-soporte-liquidaciones, run 41191558379 (commit 16264c2d): 49 s el fichero, ordenador y móvil (antes, 60 s estimados a mano el 31/10)"}
