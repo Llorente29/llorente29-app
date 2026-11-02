@@ -1983,6 +1983,8 @@ CREATE FUNCTION public._clock_entry_audit_alta() RETURNS trigger
     AS $$
 declare v_up public.user_profiles; v_propia boolean; v_motivo text;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if exists (select 1 from public.clock_entry_audit a where a.clock_entry_id = new.id and a.action in ('create', 'create_manual')) then
     return null;
   end if;
@@ -2019,6 +2021,8 @@ CREATE FUNCTION public._clock_entry_quien_y_hora() RETURNS trigger
     AS $$
 declare v_cuenta uuid;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- fichar() ya ha comprobado quién y ha puesto la hora (L1a).
   if coalesce(current_setting('app.fichar', true), '') = 'on' then return new; end if;
   -- El servidor (funciones con la clave de servicio, SQL) no pasa por aquí.
@@ -6650,6 +6654,8 @@ CREATE FUNCTION public._employee_pin_guardar() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if nullif(btrim(new.pin), '') is not null then
     insert into public.employee_kiosk_pin (employee_id, pin, updated_at)
     values (new.id, btrim(new.pin), now())
@@ -7828,6 +7834,8 @@ CREATE FUNCTION public._f01c_receta_puesta() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   insert into public.f01_receta_puesta (account_id, recipe_item_id)
   select ri.account_id, ri.id
     from (select distinct n.parent_item_id from nuevas n) p
@@ -7961,6 +7969,8 @@ CREATE FUNCTION public._fill_acc_from_assignment() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.account_id is null then
     select ca.account_id into new.account_id from course_assignment ca where ca.id = new.assignment_id;
   end if;
@@ -7977,6 +7987,8 @@ CREATE FUNCTION public._fill_acc_from_employee() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.account_id is null then
     select e.account_id into new.account_id from employees e where e.id = new.employee_id;
   end if;
@@ -7993,6 +8005,8 @@ CREATE FUNCTION public._fill_acc_from_location() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.account_id is null then
     select l.account_id into new.account_id from locations l where l.id = new.location_id;
   end if;
@@ -9492,6 +9506,8 @@ CREATE FUNCTION public._menu_item_price_snapshot() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   insert into menu_item_price_history (menu_item_id, account_id, price, captured_at)
   values (new.id, new.account_id, new.price, now());
   return new;
@@ -10747,6 +10763,8 @@ CREATE FUNCTION public._pc01e2_proveedor_iban_cambiado() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if public._pc01e2_iban(old.iban) is not null and public._pc01e2_iban(new.iban) is distinct from public._pc01e2_iban(old.iban)
      and new.iban_changed_at is not distinct from old.iban_changed_at then
     new.iban_previous := old.iban;
@@ -12213,6 +12231,8 @@ CREATE FUNCTION public._registro_firma_invalidar() RETURNS trigger
     AS $$
 declare v_meses date[];
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if tg_op = 'UPDATE' then
     if new.type is not distinct from old.type
        and new.datetime is not distinct from old.datetime
@@ -12616,6 +12636,25 @@ begin
   select huella into v_h from public.funcion_respaldo where firma = p_firma and migracion = p_migracion;
   return v_h;
 end $$;
+
+
+--
+-- Name: _restaurando_demo(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._restaurando_demo() RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(current_setting('folvy.restaurando_demo', true), '') = 'on'
+$$;
+
+
+--
+-- Name: FUNCTION _restaurando_demo(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._restaurando_demo() IS 'DM1 2b-1 (01/11/2026). Verdadero solo mientras se restaura una demo (folvy.restaurando_demo = on, puesto con set_config local por la función de restaurar). Los disparadores de las tablas de la foto no hacen nada entonces.';
 
 
 --
@@ -14599,6 +14638,8 @@ CREATE FUNCTION public._ticket_tras_venta() RETURNS trigger
     AS $$
 declare v_id uuid; v_cancela boolean; v_cambia boolean;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   v_cancela := (new.status = 'cancelled' or new.order_status in ('cancelled', 'rejected', 'delivery_failed'))
                and not (old.status = 'cancelled' or old.order_status in ('cancelled', 'rejected', 'delivery_failed'));
   v_cambia := not v_cancela and old.status = 'closed' and new.status = 'closed'
@@ -14728,6 +14769,8 @@ CREATE FUNCTION public._trg_recipe_item_purchase_format_immutable() RETURNS trig
     LANGUAGE plpgsql
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if NEW.qty_in_base is distinct from OLD.qty_in_base then
     if exists (
       select 1 from goods_receipt_line grl
@@ -25057,6 +25100,8 @@ declare
     when 'withholding_rate' then 'withholding_rate' end;
   r record;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   for r in
     delete from public.company_account_link l using public.company_account a
      where a.id = l.company_account_id and l.entity = v_entity and l.entity_id = old.id::text
@@ -67403,6 +67448,8 @@ CREATE FUNCTION public.party_al_borrar_proveedor() RETURNS trigger
     AS $$
 declare v_party uuid;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   delete from public.party_role where supplier_id = old.id returning party_id into v_party;
   if v_party is not null and not exists (select 1 from public.party_role r where r.party_id = v_party) then
     delete from public.party where id = v_party;
@@ -67440,6 +67487,8 @@ CREATE FUNCTION public.party_desde_proveedor() RETURNS trigger
     AS $$
 declare v_party uuid; v_nif text := public.party_nif(new.tax_id); v_solo boolean;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if tg_op = 'INSERT' then
     if v_nif is not null then
       select id into v_party from party where account_id = new.account_id and tax_id = v_nif;
@@ -67521,6 +67570,8 @@ CREATE FUNCTION public.party_misma_cuenta() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if not exists (select 1 from party p where p.id = new.party_id and p.account_id = new.account_id) then
     raise exception 'Ese tercero no es de esta cuenta.' using errcode = '23514';
   end if;
@@ -72456,6 +72507,8 @@ CREATE FUNCTION public.recipe_line_prevent_cycle() RETURNS trigger
 DECLARE
   v_cycle_found boolean;
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Una línea no puede referenciarse a sí misma
   IF NEW.parent_item_id = NEW.child_item_id THEN
     RAISE EXCEPTION 'Ciclo en escandallo: un plato no puede contenerse a sí mismo (item %)', NEW.parent_item_id;
@@ -80038,6 +80091,8 @@ CREATE FUNCTION public.set_folvy_code() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.folvy_code IS NULL THEN
     NEW.folvy_code := public.next_folvy_code(NEW.account_id, NEW.type);
   END IF;
@@ -80054,6 +80109,8 @@ CREATE FUNCTION public.set_goods_receipt_code() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.code IS NULL OR NEW.code = '' THEN
     NEW.code := public.next_goods_receipt_code(NEW.account_id);
   END IF;
@@ -80070,6 +80127,8 @@ CREATE FUNCTION public.set_inventory_count_code() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.code IS NULL THEN
     NEW.code := public.next_inventory_count_code(NEW.account_id);
   END IF;
@@ -81476,6 +81535,8 @@ CREATE FUNCTION public.set_updated_at() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   NEW.updated_at = now();
   RETURN NEW;
 END;
@@ -83462,6 +83523,8 @@ CREATE FUNCTION public.supplier_tax_rates_ok() RETURNS trigger
 declare
   v_malos int;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.usual_tax_rate_ids is null or cardinality(new.usual_tax_rate_ids) = 0 then
     return new;
   end if;
@@ -84273,6 +84336,8 @@ DECLARE
   v_url      text;
   v_anon     text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6bXBuY2hsZ3VpYmNsdnh5eW50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE1NTksImV4cCI6MjA5Mzc0NzU1OX0.v5GsOW5hxwzJZA0z5Le26E9vAWflG1XFZ7ec2hvMphY';
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF new.service_type = 'own_delivery'
      AND new.order_status = 'accepted'
      AND new.carrier_order_id IS NULL
@@ -84347,6 +84412,8 @@ CREATE FUNCTION public.tg_auto_print_bag_on_ready() RETURNS trigger
     AS $$
 declare v_printer record; v_doc text; v_i int; v_on boolean := false;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.order_status = 'awaiting_collection'
      and old.order_status is distinct from new.order_status then
     begin
@@ -84451,6 +84518,8 @@ declare
   v_fire boolean := false;
   v_bag_on_ready boolean := false;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.order_status = 'accepted' then
     if TG_OP = 'INSERT' then v_fire := true;
     elsif old.order_status is distinct from new.order_status then v_fire := true;
@@ -84579,6 +84648,8 @@ declare
   v_action text;
   v_acct   uuid;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   select l.account_id into v_acct
   from public.employees e join public.locations l on l.id = e.location_id
   where e.id = coalesce(NEW.employee_id, OLD.employee_id);
@@ -84617,6 +84688,8 @@ CREATE FUNCTION public.tg_clock_entry_debounce() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if coalesce(new.source,'kiosko') in ('kiosko','movil','tablet') then
     if exists (
       select 1 from public.clock_entries c
@@ -84653,6 +84726,8 @@ declare
   v_last_at  timestamptz;
   v_ts       timestamptz;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Las correcciones del gestor no pasan por aqui: van por
   -- add_manual_clock_entry, que tiene su propia guarda y su p_force.
   if coalesce(new.source,'') = 'manual' then
@@ -84753,6 +84828,8 @@ CREATE FUNCTION public.tg_count_line_sella_el_motivo() RETURNS trigger
     AS $$
 DECLARE v_uid uuid; v_nom text;
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.reason_code IS NOT DISTINCT FROM OLD.reason_code THEN RETURN NEW; END IF;
   IF NEW.reason_code IS NULL OR NEW.reason_code = '' THEN
     NEW.reason_by := NULL; NEW.reason_by_name := NULL; RETURN NEW;
@@ -84783,6 +84860,8 @@ CREATE FUNCTION public.tg_count_line_solo_por_la_puerta() RETURNS trigger
 DECLARE
   v_sello text;
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Crear líneas sin contar es lo normal: `_generate_daily_count_core`,
   -- `build_inventory_count` y `request_recount` insertan con counted_qty NULL.
   IF TG_OP = 'INSERT' AND NEW.counted_qty IS NULL THEN
@@ -84831,6 +84910,8 @@ CREATE FUNCTION public.tg_dining_table_same_location() RETURNS trigger
     AS $$
 declare v_z dining_zone;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   select * into v_z from dining_zone where id = new.zone_id;
   if v_z.id is null or v_z.location_id <> new.location_id or v_z.account_id <> new.account_id then
     raise exception 'La zona no es de este local.';
@@ -84848,6 +84929,8 @@ CREATE FUNCTION public.tg_ensure_public_token() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF new.service_type = 'own_delivery'
      AND (new.public_token IS NULL OR new.public_token = '') THEN
      new.public_token := replace(gen_random_uuid()::text, '-', '');
@@ -84916,6 +84999,8 @@ CREATE FUNCTION public.tg_goods_receipt_compras_camino() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.status = 'confirmado' or (new.status = 'anulado' and exists (select 1 from goods_receipt_path where goods_receipt_id = new.id)) then
     begin
       perform public._compras_camino_guarda(new.id);
@@ -84944,6 +85029,8 @@ CREATE FUNCTION public.tg_goods_receipt_line_trust() RETURNS trigger
     AS $$
 DECLARE v_loc uuid;
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.discrepancy_reason IS NOT DISTINCT FROM OLD.discrepancy_reason THEN
     RETURN NEW;
   END IF;
@@ -85017,6 +85104,8 @@ CREATE FUNCTION public.tg_goods_receipt_recompute_average() RETURNS trigger
 declare
   v_item uuid;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if tg_table_name = 'goods_receipt' then
     for v_item in
       select distinct grl.recipe_item_id
@@ -85060,6 +85149,8 @@ DECLARE
   v_cap     numeric;
   v_teorico numeric;
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.counted_qty IS NULL THEN
     RETURN NEW;
   END IF;
@@ -85208,6 +85299,8 @@ CREATE FUNCTION public.tg_menu_item_inherit_stock_group() RETURNS trigger
 declare
   v_group uuid;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.stock_group_id is null and new.external_id is not null then
     select mi.stock_group_id into v_group
     from menu_item mi
@@ -85239,6 +85332,8 @@ declare
   v_actor uuid := auth.uid();   -- null si escribe un proceso sin JWT
   v_op    uuid := nullif(current_setting('folvy.operation_id', true), '')::uuid;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if tg_op = 'INSERT' then
     insert into menu_item_override_history (
       account_id, menu_item_id, location_id, channel_id, op,
@@ -85280,6 +85375,8 @@ CREATE FUNCTION public.tg_menu_item_override_touch() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   new.updated_at := now();
   return new;
 end;
@@ -85348,6 +85445,8 @@ CREATE FUNCTION public.tg_modifier_option_retiro() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Se apaga: se sella cuando y quien. Si el llamador ya dijo quien --A2c dice
   -- 'last'-- se respeta; si no, fue una persona desde la pantalla.
   IF OLD.is_active AND NOT NEW.is_active THEN
@@ -85411,6 +85510,8 @@ CREATE FUNCTION public.tg_notify_on_way_sale() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF new.service_type = 'own_delivery'
      AND new.delivery_state = 'in_delivery'
      AND old.delivery_state IS DISTINCT FROM new.delivery_state THEN
@@ -85456,6 +85557,8 @@ CREATE FUNCTION public.tg_ripf_invalida_revision() RETURNS trigger
 DECLARE
   v_item uuid := COALESCE(NEW.item_id, OLD.item_id);
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Marcar/desmarcar `use_in_count` es la decisión en sí: no la invalida.
   IF TG_OP = 'UPDATE'
      AND NEW.item_id     IS NOT DISTINCT FROM OLD.item_id
@@ -85520,6 +85623,8 @@ CREATE FUNCTION public.tg_sale_close_on_complete() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   perform public.close_sale(new.id);
   return null;
 end;
@@ -85542,6 +85647,8 @@ CREATE FUNCTION public.tg_sale_consumption_on_complete() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- 0) ANULACION (nuevo): la venta deja de ser valida -> devolver el stock.
   --    Salvo el cierre del dia (16/10): un pedido cerrado como no confirmado
   --    (unconfirmed_at) no se anula: lo cocinado, cocinado esta.
@@ -85578,6 +85685,8 @@ CREATE FUNCTION public.tg_sale_delivery_alarm() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.delivery_state is distinct from old.delivery_state
      and new.delivery_state in ('failed', 'canceled', 'cancelled') then
     new.delivery_alarm_at     := now();
@@ -85599,6 +85708,8 @@ CREATE FUNCTION public.tg_sale_entrega_desde_raw() RETURNS trigger
     AS $$
 declare r record;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.source not in ('lastapp', 'hubrise') then return new; end if;
   begin
     select * into r from public.sale_entrega_desde_raw(new.source, new.raw_tab);
@@ -85625,6 +85736,8 @@ CREATE FUNCTION public.tg_sale_line_consumption() RETURNS trigger
 declare
   v_sale_id uuid; v_sale record; v_n integer; v_state text; v_msg text; v_marca text;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   v_sale_id := new.sale_id;
   if v_sale_id is null then return new; end if;
 
@@ -85681,6 +85794,8 @@ CREATE FUNCTION public.tg_sale_seal_delivered() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.delivery_state is distinct from old.delivery_state
      and new.delivery_state in ('delivered','finish')
      and new.delivered_at is null then
@@ -85699,6 +85814,8 @@ CREATE FUNCTION public.tg_sale_seal_handed_to_courier() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.delivery_state is distinct from old.delivery_state
      and new.delivery_state = 'in_delivery'
      and new.handed_to_courier_at is null then
@@ -85717,6 +85834,8 @@ CREATE FUNCTION public.tg_sale_seal_kpi_hitos() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if tg_op = 'INSERT' then
     if new.accepted_at is null then
       new.accepted_at := now();
@@ -85758,6 +85877,8 @@ declare
   v_by         text;
   v_recalcular boolean;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Solo los pedidos que llegan de las plataformas. La tienda propia, el TPV
   -- y lo manual deciden su modalidad ellos mismos (hoy: 22 + 3 + 2 ventas).
   if coalesce(new.source, '') not in ('hubrise', 'lastapp') then return new; end if;
@@ -85821,6 +85942,8 @@ CREATE FUNCTION public.tg_sale_uber_quien_reparte() RETURNS trigger
     AS $$
 declare r record;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.source is distinct from 'hubrise' then return new; end if;
   if new.service_type is null or new.service_type not in ('own_delivery', 'platform_delivery') then return new; end if;
   if lower(coalesce(new.external_channel_text, '')) not like '%uber%' then return new; end if;
@@ -85858,6 +85981,8 @@ CREATE FUNCTION public.tg_sales_hourly_agg_sync() RETURNS trigger
     AS $$
 declare v_sale record; v_kind text; v_day date; v_hour smallint;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   select s.account_id, s.location_id, s.sold_at, coalesce(s.is_active,true) as act
     into v_sale from public.sale s
    where s.id = coalesce(new.sale_id, old.sale_id);
@@ -85907,6 +86032,8 @@ declare
   v_tpl text; v_day text; v_emp text; v_date date;
   v_conflicts text := '';
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.cells is null or new.cells = '{}'::jsonb then
     return new;
   end if;
@@ -86023,6 +86150,8 @@ CREATE FUNCTION public.tg_training_notice_on_assign() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF NEW.employee_id IS NOT NULL THEN
     PERFORM enqueue_training_notice(NEW.id, 'auto', NULL);
   END IF;
@@ -86709,6 +86838,8 @@ CREATE FUNCTION public.trg_article_supplier_recompute_cost() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- En DELETE NEW es null → usar OLD. La función re-deriva el coste del mejor
   -- proveedor/formato vigente para ese ingrediente (o lo marca needs_review).
   PERFORM public.kitchen_recompute_raw_cost(
@@ -86728,6 +86859,8 @@ CREATE FUNCTION public.trg_assign_onboarding_training_on_employee_insert() RETUR
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   perform public.assign_onboarding_training(new.id);
   return new;
 end;
@@ -86743,6 +86876,8 @@ CREATE FUNCTION public.trg_assign_onboarding_training_on_employee_update() RETUR
     SET search_path TO 'public'
     AS $$
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   if new.position is distinct from old.position then
     perform public.assign_onboarding_training(new.id);
   end if;
@@ -86800,6 +86935,8 @@ DECLARE
   v_family_name text;
   v_cat         uuid;
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- Solo actuar si hay familia y el IVA no está confirmado por un humano.
   IF NEW.family_id IS NULL THEN
     RETURN NEW;
@@ -86852,6 +86989,8 @@ declare
   v_url    text;
   v_secret text;
 begin
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   -- solo canales con empuje y estados empujables
   if new.source = 'lastapp' and new.order_status = any(v_pushable) then
     -- W10a: el secreto, del Vault (order_advance_secret); ya no va escrito.
@@ -86903,6 +87042,8 @@ CREATE FUNCTION public.trg_seal_recipe_version_item() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   PERFORM public._seal_recipe_version(NEW.id);
   RETURN NEW;
 END;
@@ -86918,6 +87059,8 @@ CREATE FUNCTION public.trg_seal_recipe_version_line() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 BEGIN
+  -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
+  if public._restaurando_demo() then return coalesce(new, old); end if;
   IF TG_OP = 'DELETE' THEN
     PERFORM public._seal_recipe_version(OLD.parent_item_id);
     RETURN OLD;
@@ -146560,6 +146703,15 @@ GRANT ALL ON FUNCTION public._resolver_fallo_de_consumo(p_sale_id uuid, p_movimi
 
 REVOKE ALL ON FUNCTION public._respaldar_funcion(p_firma text, p_migracion text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._respaldar_funcion(p_firma text, p_migracion text) TO service_role;
+
+
+--
+-- Name: FUNCTION _restaurando_demo(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._restaurando_demo() TO anon;
+GRANT ALL ON FUNCTION public._restaurando_demo() TO authenticated;
+GRANT ALL ON FUNCTION public._restaurando_demo() TO service_role;
 
 
 --
