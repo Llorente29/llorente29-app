@@ -43,9 +43,13 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
 - `cargos.sql`: los tres cargos de Revolut que vuelven, casados por el núcleo
   de verdad (`_bank_casar_nucleo`, como «folvy»).
 - `montar.mjs`: portada, tramos sin esperas, cierre y subtítulos; y la voz, si hay modelo.
+- `locucion.mjs`: lo que dice la voz, frase a frase, cada una pegada a un
+  gesto del guion. Los subtítulos son esas mismas frases. **Para cambiar lo
+  que se dice, se cambia aquí.**
 - `voz.py`: la voz con Piper (voz neuronal libre que corre en el runner, sin
-  llamar a ningún servicio), `es_ES-davefx-medium`, castellano de España. Dice
-  lo mismo que los subtítulos, cada frase al empezar su paso.
+  llamar a ningún servicio), `es_ES-davefx-medium`, castellano de España. Se
+  hace ANTES de grabar: el guion espera a que acabe cada frase antes del gesto
+  siguiente, así nunca se pisan.
 - `revisar.mjs`: busca en el texto de cada pantalla IBAN que no sean del
   9999, DNI, NIE, NIF que no sean de ceros, correos y nombres reales.
 - `reconocer.sql`: solo lectura, lo que tiene la empresa A del carril.

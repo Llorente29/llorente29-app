@@ -38,9 +38,24 @@ export function reloj() {
   const t0 = Date.now()
   const pasos = []
   const cortes = []
+  const dichos = []
   return {
     t: () => (Date.now() - t0) / 1000,
-    pasos, cortes,
+    pasos, cortes, dichos,
+    /**
+     * Una frase de la locución: se marca aquí (su subtítulo y su voz empiezan
+     * ahora), se hace el gesto que cuenta y se espera a que la voz acabe, con
+     * un respiro, antes del gesto siguiente. Dentro no puede haber esperas que
+     * se corten (sinVer): cortarían la frase.
+     */
+    async di(id, texto, dura, gesto) {
+      const a = Date.now()
+      dichos.push({ id, texto, dura, desde: (a - t0) / 1000 })
+      console.log(`  «${texto}»`)
+      if (gesto) await gesto()
+      const falta = dura + 0.55 - (Date.now() - a) / 1000
+      if (falta > 0) await new Promise((ok) => setTimeout(ok, falta * 1000))
+    },
     /** Empieza el paso: su subtítulo sale desde aquí hasta el siguiente. */
     marca(paso, subtitulo) { pasos.push({ paso, subtitulo, desde: (Date.now() - t0) / 1000 }); console.log(`· paso ${paso}: ${subtitulo}`) },
     /** Lo que pase dentro (esperas de red) no sale en el montaje. */

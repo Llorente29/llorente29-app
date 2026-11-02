@@ -32,6 +32,8 @@ import { join } from 'node:path'
 import { chromium } from 'playwright'
 import { CURSOR, raton, reloj, tarjeta } from './raton.mjs'
 import { FACTURAS, facturaHtml, totales } from './datos.mjs'
+import { FRASES, estimada } from './locucion.mjs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const URL_SUPA = process.env.VITE_SUPABASE_URL
 const ANON = process.env.VITE_SUPABASE_ANON_KEY
@@ -214,6 +216,13 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
   const quieto = (ms) => page.waitForTimeout(ms)
   const red = () => page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
 
+  // Lo que dura cada frase: la voz ya hecha (voz/frases.json, la deja voz.py antes de grabar) o, sin voz, estimada.
+  const rutaVoz = join(salida, 'voz', 'frases.json')
+  const hechas = existsSync(rutaVoz) ? JSON.parse(readFileSync(rutaVoz, 'utf8')) : []
+  const durasVoz = new Map(hechas.filter((f) => f.dura).map((f) => [f.id, f.dura]))
+  console.log(durasVoz.size ? `· voz hecha: ${durasVoz.size} frases` : '· sin voz: el ritmo va con duraciones estimadas')
+  const di = (id, gesto) => R.di(id, FRASES[id], durasVoz.get(id) ?? estimada(FRASES[id]), gesto)
+
   let inicio = 0
   try {
     // Pasos 1 y 2 · la factura que llegó por correo, leída y apuntada.
@@ -225,39 +234,44 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
       await page.evaluate(() => window.scrollTo(0, 0))
     })
     inicio = R.t()
-    await ra.ir(1400, 330, 700)
-    R.marca(1, 'La factura llega por correo y Sumied la lee sola')
-    // El PDF, de arriba abajo: el proveedor, sus líneas y el total.
+    R.marca(1)
+    await di('llega', async () => {
+      await ra.ir(700, 400, 500)
+      const cab = page.getByText(/^Llegó por correo/).first()
+      if (await cab.isVisible().catch(() => false)) await ra.a(cab, 900)
+    })
     const pdf = await page.locator('[data-prueba="papel-pdf"]').first().boundingBox()
-    if (pdf) {
+    await di('lee', async () => {
+      if (!pdf) return
       const x = pdf.x; const y = pdf.y; const w = pdf.width
-      await ra.ir(x + w * 0.3, y + 70, 900); await quieto(1300)
-      await ra.ir(x + w * 0.3, y + 340, 800); await quieto(900)
-      await ra.ir(x + w * 0.55, y + 420, 700); await quieto(900)
-      await ra.ir(x + w * 0.85, y + 630, 800); await quieto(1300)
-    }
-    // Lo que ha leído: proveedor, número, fecha y los importes, «igual que el PDF».
-    await ra.a(page.getByText('Proveedor y factura').first(), 900); await quieto(900)
-    await ra.ir(560, 258, 600); await quieto(900)
-    await ra.ir(790, 258, 500); await quieto(900)
+      await ra.ir(x + w * 0.3, y + 70, 900); await quieto(500)
+      await ra.ir(x + w * 0.85, y + 120, 700); await quieto(300)
+      await ra.ir(x + w * 0.25, y + 345, 800); await quieto(300)
+      await ra.ir(x + w * 0.25, y + 480, 900); await quieto(300)
+      await ra.ir(x + w * 0.75, y + 480, 700)
+    })
     const igual = page.locator('[data-prueba="contra-pdf"]').first()
-    if (await igual.isVisible().catch(() => false)) { await ra.a(igual, 900); await quieto(1800) }
+    await di('igual', async () => {
+      if (await igual.isVisible().catch(() => false)) await ra.a(igual, 1000)
+      else await ra.ir(560, 520, 900)
+    })
     await foto('1-factura')
 
-    R.marca(2, 'Si todo cuadra, la apunta sola. Si no, te dice por qué')
-    await ra.a(page.getByText('Ya está contabilizada').first(), 900)
-    await quieto(1800)
+    R.marca(2)
+    await di('apunta', () => ra.a(page.getByText('Ya está contabilizada').first(), 1000))
     const porQue = page.getByRole('button', { name: 'Por qué' }).or(page.getByRole('link', { name: 'Por qué' })).first()
-    if (await porQue.isVisible().catch(() => false)) {
-      await ra.clic(porQue, 800)
-      await quieto(900)
-      await ra.ir(560, 260, 900)
-      await quieto(3200)
-    } else await quieto(2500)
+    await di('porque', async () => {
+      if (await porQue.isVisible().catch(() => false)) {
+        await ra.clic(porQue, 800)
+        await quieto(500)
+        await ra.ir(420, 250, 700)
+        await ra.ir(420, 420, 2200)
+      }
+    })
     await foto('2-contabilizada')
 
     // Paso 3 · Pagos: lo que vence esta semana, y marcar las tres.
-    R.marca(3, 'Eliges lo que toca pagar')
+    R.marca(3)
     const menuPagos = page.getByRole('link', { name: 'Pagos', exact: true }).first()
     if (await menuPagos.isVisible().catch(() => false)) await ra.clic(menuPagos, 1000)
     else await page.goto(`${APP}/conta/compras/pagos`)
@@ -266,94 +280,103 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
       await page.getByRole('checkbox', { name: new RegExp(`^Marcar ${facturas[0].proveedor}`) }).waitFor({ timeout: 30_000 })
       await red(); await quieto(500)
     })
-    await quieto(700)
     const semana = page.getByText('Vence esta semana').first()
-    if (await semana.isVisible().catch(() => false)) { await ra.a(semana, 900); await quieto(1600) }
-    for (const f of facturas) {
-      const c = page.getByRole('checkbox', { name: new RegExp(`^Marcar ${f.proveedor}`) })
-      await ra.clic(c, 800)
-      await quieto(900)
-    }
+    await di('pagos', async () => {
+      await ra.a(page.getByText('Por pagar').first(), 900); await quieto(400)
+      if (await semana.isVisible().catch(() => false)) await ra.a(semana, 900)
+    })
+    await di('marcar', async () => {
+      for (const f of facturas) { await ra.clic(page.getByRole('checkbox', { name: new RegExp(`^Marcar ${f.proveedor}`) }), 650); await quieto(350) }
+    })
     const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
     const desde = barra.getByLabel('Desde qué banco se paga')
     const revolut = await desde.locator('option', { hasText: 'Revolut' }).first().getAttribute('value')
-    if ((await desde.inputValue()) !== revolut) {
-      await ra.clic(desde, 700)
-      await desde.selectOption(revolut)
-      await page.keyboard.press('Escape').catch(() => {})
-    } else { await ra.a(desde, 900); await quieto(1300) }
+    await di('desde', async () => {
+      await ra.a(desde, 900)
+      if ((await desde.inputValue()) !== revolut) {
+        await page.mouse.down(); await page.mouse.up()
+        await desde.selectOption(revolut)
+        await page.keyboard.press('Escape').catch(() => {})
+      }
+    })
     const pagar = barra.locator('[data-prueba="pagar-con-banco"]')
     await R.sinVer(() => pagar.filter({ hasText: /Pagar las 3 con Revolut/ }).waitFor({ timeout: 30_000 }))
-    await ra.a(pagar, 800)
-    await quieto(1800)
+    await di('boton', () => ra.a(pagar, 800))
     await foto('3-marcadas')
 
     // Paso 4 · la ventana: Revolut dice que el titular coincide; un IBAN nuevo pide la segunda.
-    await ra.clic(pagar, 400)
+    await ra.clic(pagar, 300)
     const dialogo = page.getByRole('dialog', { name: 'Pagar con Revolut' })
     const filas = dialogo.locator('[data-prueba="fila-varias"]')
     await R.sinVer(async () => {
       for (let i = 0; i < facturas.length; i++) await filas.nth(i).getByText('Revolut dice que coincide').waitFor({ timeout: 30_000 })
       await quieto(300)
     })
-    R.marca(4, 'Revolut comprueba a quién le pagas')
-    for (let i = 0; i < facturas.length; i++) { await ra.a(filas.nth(i), 800); await quieto(1700) }
-    const resumen = dialogo.locator('[data-prueba="resumen-varias"]')
-    if (await resumen.isVisible().catch(() => false)) { await ra.a(resumen, 700); await quieto(1500) }
+    R.marca(4)
+    await di('titular', async () => {
+      for (let i = 0; i < facturas.length; i++) { await ra.a(filas.nth(i), 800); await quieto(700) }
+    })
     const pide = dialogo.locator('[data-prueba="pide-segunda-varias"]')
-    if (await pide.isVisible().catch(() => false)) { await ra.a(pide, 700); await quieto(2600) }
+    await di('segunda', async () => {
+      await ra.a(filas.nth(1), 700); await quieto(900)
+      if (await pide.isVisible().catch(() => false)) await ra.a(pide, 900)
+    })
     await foto('4-titular')
 
     // Paso 5 · una sola aprobación para las tres, con el PIN de pago.
-    R.marca(5, 'Una aprobación para todas')
+    R.marca(5)
     const aprobar = dialogo.locator('[data-prueba="aprobar-y-pagar-varias"]')
-    await ra.a(aprobar, 800); await quieto(1300)
-    await ra.clic(aprobar, 300)
+    await di('una', async () => {
+      const resumen = dialogo.locator('[data-prueba="resumen-varias"]')
+      if (await resumen.isVisible().catch(() => false)) { await ra.a(resumen, 800); await quieto(500) }
+      await ra.a(aprobar, 800)
+    })
+    await ra.clic(aprobar, 200)
     const segunda = page.getByRole('dialog', { name: /Confirma con tu llave los 3 pagos/ })
     await R.sinVer(() => segunda.waitFor({ timeout: 30_000 }))
-    await quieto(700)
-    const lista2 = segunda.locator('[data-prueba="lista-segunda"]')
-    if (await lista2.isVisible().catch(() => false)) { await ra.a(lista2, 900); await quieto(2200) }
+    await quieto(500)
     await ra.clic(segunda.getByRole('button', { name: 'Usar mi PIN de pago' }), 800)
     const conPin = page.getByRole('dialog', { name: /Confirma con tu PIN de pago los 3 pagos/ })
     await R.sinVer(() => conPin.waitFor({ timeout: 30_000 }))
-    await quieto(900)
     const pin = conPin.locator('[data-prueba="pin-pago"]')
-    await ra.clic(pin, 800)
-    await pin.pressSequentially('407219', { delay: 230 })
-    await quieto(1300)
+    await di('pin', async () => {
+      await ra.clic(pin, 700)
+      await pin.pressSequentially('407219', { delay: 160 })
+      await ra.a(conPin.locator('[data-prueba="confirmar-pin"]'), 600)
+    })
     await foto('5-pin')
 
     // Paso 6 · enviado: Pagos lo dice y las tres pasan a pagadas.
-    R.marca(6, 'Pagado, sin salir de Sumied')
-    await ra.clic(conPin.locator('[data-prueba="confirmar-pin"]'), 900)
+    R.marca(6)
+    await ra.clic(conPin.locator('[data-prueba="confirmar-pin"]'), 300)
     const aviso = page.locator('[data-prueba="aviso-pagos"]')
     await R.sinVer(async () => { await aviso.filter({ hasText: 'Enviado a Revolut' }).waitFor({ timeout: 60_000 }); await red() })
-    await ra.a(aviso, 800)
-    await quieto(2800)
+    await di('enviado', () => ra.a(aviso, 900))
     const pagado = page.getByText(/Pagado en /).first()
-    if (await pagado.isVisible().catch(() => false)) { await ra.a(pagado, 900); await quieto(2400) }
+    await di('pagado', async () => { if (await pagado.isVisible().catch(() => false)) await ra.a(pagado, 900) })
     await foto('6-enviado')
 
     // Paso 7 · Bancos › Movimientos: los tres cargos, casados solos.
-    R.marca(7, 'El cargo vuelve solo y queda casado')
+    R.marca(7)
     const bancos = page.getByRole('link', { name: /^Bancos/ }).first()
-    await ra.clic(bancos, 1000)
+    await ra.clic(bancos, 900)
     await R.sinVer(async () => {
       await page.getByRole('heading', { level: 1, name: 'Movimientos' }).waitFor({ timeout: 30_000 })
-      await red(); await quieto(600)
+      await red(); await quieto(500)
     })
-    await quieto(800)
     const solos = page.getByRole('button', { name: /Casados solos/ }).or(page.getByRole('tab', { name: /Casados solos/ })).first()
-    await ra.clic(solos, 900)
-    await R.sinVer(async () => { await red(); await quieto(500) })
-    await quieto(1000)
+    await di('vuelve', async () => {
+      await ra.a(page.getByText(/casados solos/).first(), 900); await quieto(300)
+      await ra.a(solos, 700)
+    })
+    await ra.clic(solos, 200)
+    await R.sinVer(async () => { await red(); await quieto(400) })
     const casados = page.getByText(/^Casado con Pago /)
-    const n = await casados.count()
-    for (let i = 0; i < n; i++) { await ra.a(casados.nth(i), 800); await quieto(1800) }
-    const tira = page.getByText(/casados solos/).first()
-    if (await tira.isVisible().catch(() => false)) { await ra.a(tira, 900); await quieto(2200) }
-    await quieto(1200)
+    await di('casado', async () => {
+      const n = await casados.count()
+      for (let i = 0; i < n; i++) { await ra.a(casados.nth(i), 800); await quieto(600) }
+    })
+    await di('resumen', () => ra.ir(1100, 330, 1200))
     await foto('7-casados')
   } catch (e) {
     await foto('x-error').catch(() => {})
@@ -364,8 +387,8 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
   const video = page.video()
   await ctx.close()
   if (video) renameSync(await video.path(), join(salida, 'crudo.webm'))
-  writeFileSync(join(salida, 'tramos.json'), JSON.stringify({ inicio, fin, pasos: R.pasos, cortes: R.cortes, aprobaciones: m.aprobaciones, errores }, null, 2))
+  writeFileSync(join(salida, 'tramos.json'), JSON.stringify({ inicio, fin, pasos: R.pasos, dichos: R.dichos, cortes: R.cortes, aprobaciones: m.aprobaciones, errores }, null, 2))
   await navegador.close()
   console.log(`Grabado: ${fin.toFixed(1)} s, ${R.pasos.length} pasos, ${R.cortes.length} cortes, ${m.aprobaciones} aprobación(es).`)
-  if (R.pasos.length < 7) process.exitCode = 1
+  if (R.pasos.length < 7 || R.dichos.length < Object.keys(FRASES).length - 2) process.exitCode = 1
 }
