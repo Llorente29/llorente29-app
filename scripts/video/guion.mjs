@@ -205,12 +205,12 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
   }
   const page = await ctx.newPage()
   const R = reloj()
-  const ra = raton(page)
+  const ra = raton(page, R)
   const errores = []
   page.on('pageerror', (e) => { errores.push(e.message); console.log(`[error de la página] ${e.message}`) })
   await interceptarPago(page, m)
   const foto = async (n) => {
-    await page.screenshot({ path: join(salida, 'capturas', `${n}.png`) })
+    await page.screenshot({ path: join(salida, 'capturas', `${n}.png`), scale: 'css' })
     writeFileSync(join(salida, 'capturas', `${n}.txt`), await page.locator('body').innerText().catch(() => ''))
   }
   const quieto = (ms) => page.waitForTimeout(ms)
@@ -243,6 +243,7 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
     const pdf = await page.locator('[data-prueba="papel-pdf"]').first().boundingBox()
     await di('lee', async () => {
       if (!pdf) return
+      ra.mira(pdf)
       const x = pdf.x; const y = pdf.y; const w = pdf.width
       await ra.ir(x + w * 0.3, y + 70, 900); await quieto(500)
       await ra.ir(x + w * 0.85, y + 120, 700); await quieto(300)
@@ -387,7 +388,7 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
   const video = page.video()
   await ctx.close()
   if (video) renameSync(await video.path(), join(salida, 'crudo.webm'))
-  writeFileSync(join(salida, 'tramos.json'), JSON.stringify({ inicio, fin, pasos: R.pasos, dichos: R.dichos, cortes: R.cortes, aprobaciones: m.aprobaciones, errores }, null, 2))
+  writeFileSync(join(salida, 'tramos.json'), JSON.stringify({ inicio, fin, pasos: R.pasos, dichos: R.dichos, objetivos: R.objetivos, cortes: R.cortes, aprobaciones: m.aprobaciones, errores }, null, 2))
   await navegador.close()
   console.log(`Grabado: ${fin.toFixed(1)} s, ${R.pasos.length} pasos, ${R.cortes.length} cortes, ${m.aprobaciones} aprobación(es).`)
   if (R.pasos.length < 7 || R.dichos.length < Object.keys(FRASES).length - 2) process.exitCode = 1

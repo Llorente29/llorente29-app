@@ -39,9 +39,10 @@ export function reloj() {
   const pasos = []
   const cortes = []
   const dichos = []
+  const objetivos = []
   return {
     t: () => (Date.now() - t0) / 1000,
-    pasos, cortes, dichos,
+    pasos, cortes, dichos, objetivos,
     /**
      * Una frase de la locución: se marca aquí (su subtítulo y su voz empiezan
      * ahora), se hace el gesto que cuenta y se espera a que la voz acabe, con
@@ -66,10 +67,17 @@ export function reloj() {
   }
 }
 
-/** Mover el ratón como una persona: en unos pasos, con una pausa corta. */
-export function raton(page) {
+/**
+ * Mover el ratón como una persona: en unos pasos, con una pausa corta.
+ * Con el reloj (R), apunta en R.objetivos cada cosa a la que va (su caja, en
+ * píxeles de la grabación): el montaje amplía esa zona mientras se comenta.
+ */
+export function raton(page, R) {
   let x = 960; let y = 540
+  const apuntar = (c) => { if (R && c) R.objetivos.push({ t: R.t(), x: c.x, y: c.y, w: c.width, h: c.height }) }
   const a = {
+    /** Que el montaje mire esta caja (sin mover el ratón). */
+    mira: apuntar,
     async ir(nx, ny, ms = 650) {
       const pasos = Math.max(12, Math.round(ms / 16))
       // Con un poco de curva, de origen a destino.
@@ -84,6 +92,7 @@ export function raton(page) {
       await locator.scrollIntoViewIfNeeded()
       const c = await locator.boundingBox()
       if (!c) throw new Error('El elemento no se ve.')
+      apuntar(c)
       await a.ir(c.x + Math.min(c.width / 2, 60 + c.width / 4), c.y + c.height / 2, ms)
     },
     async clic(locator, ms) {
