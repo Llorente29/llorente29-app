@@ -1274,6 +1274,42 @@ end $$;
 
 
 --
+-- Name: _bank_casado_soltar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_casado_soltar(p_match uuid, p_motivo text, p_quien text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare b public.bank_match; v_pagada text;
+begin
+  select * into b from public.bank_match where id = p_match for update;
+  if b.id is null or b.status <> 'vivo' then raise exception 'No se suelta nada: ese casado no está vivo.' using errcode = '23514'; end if;
+  if b.kind = 'traspaso' then raise exception 'No se suelta nada: un traspaso se deshace por los dos lados, en Bancos.' using errcode = '23514'; end if;
+  if coalesce(trim(p_motivo), '') = '' then raise exception 'No se suelta nada: falta el motivo.' using errcode = '22023'; end if;
+  select si.invoice_number into v_pagada from public.bank_match_item it join public.supplier_invoice si on si.id = it.supplier_invoice_id
+   where it.match_id = b.id and it.marked_by_bank and si.status = 'pagada' limit 1;
+  if found then raise exception 'No se suelta nada: la factura % la deja pagada este casado. Deshazlo en Bancos.', coalesce(v_pagada, '') using errcode = '23514'; end if;
+  update public.bank_match set status = 'deshecho', undone_at = now(), undone_by = auth.uid(), undone_by_name = coalesce(nullif(trim(p_quien), ''), 'Sumied'),
+         undo_reason = trim(p_motivo), journal_entry_id = null
+   where id = b.id;
+  update public.supplier_invoice set payment_entry_id = null
+   where payment_entry_id = b.journal_entry_id and id in (select supplier_invoice_id from public.bank_match_item where match_id = b.id);
+  update public.bank_movement set status = 'pendiente', confidence = null, reason = null, proposal = null, updated_at = now() where id = b.movement_id;
+  perform public._bank_log(b.account_id, b.company_id, b.movement_id, b.id, null, 'deshecho', 'persona',
+    'Deshecho: ' || trim(p_motivo) || ' (su asiento se borra)', jsonb_build_object('asiento', b.journal_entry_id));
+  return b.journal_entry_id;
+end $$;
+
+
+--
+-- Name: FUNCTION _bank_casado_soltar(p_match uuid, p_motivo text, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._bank_casado_soltar(p_match uuid, p_motivo text, p_quien text) IS 'B01 · Cola 2 (02/11). Suelta un casado vivo para borrar su asiento con _conta_asientos_borrar (sin contraasiento): deshecho, sin asiento, y el movimiento por casar. Solo desde una tanda o el disparador de anular factura.';
+
+
+--
 -- Name: _bank_casar_nucleo(uuid, jsonb, text, text, jsonb, text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1340,6 +1376,11 @@ begin
     for v_f in select * from jsonb_array_elements(p_destino->'facturas') loop
       select * into v_inv from public.supplier_invoice where id = (v_f->>'id')::uuid and account_id = v_cuenta for update;
       if v_inv.id is null then raise exception 'Esa factura no es de la cuenta.' using errcode = '23514'; end if;
+      -- Cola 2 (02/11): nunca con una factura anulada o descartada (Olimpo, 30/10: una propuesta vieja casó un pago con el albarán anulado).
+      if v_inv.status = 'anulada' or v_inv.discarded_at is not null then
+        raise exception 'La factura % está %: no se casa un pago con ella. Vuelve a calcular la propuesta de este movimiento.',
+          coalesce(v_inv.invoice_number, v_inv.code, ''), case when v_inv.status = 'anulada' then 'anulada' else 'descartada' end using errcode = '23514';
+      end if;
       select coalesce(sum(i.amount), 0) into v_pagado from public.bank_match_item i join public.bank_match b on b.id = i.match_id
        where i.supplier_invoice_id = v_inv.id and b.status = 'vivo';
       if v_pagado + (v_f->>'importe')::numeric > coalesce(v_inv.grand_total, 0) + 0.005 then
@@ -14782,6 +14823,49 @@ begin
   update supplier_merge set undone_at = now(), undone_by = auth.uid(), undone_by_name = coalesce(p_quien_nombre, public.conta_nombre_actor()) where id = p_merge;
   return jsonb_build_object('fusion', p_merge, 'deshecha', true);
 end $_$;
+
+
+--
+-- Name: _tg_factura_anulada_descasa(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_factura_anulada_descasa() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r jsonb; v_casados jsonb; v_num text := coalesce(nullif(new.invoice_number, ''), new.code, 'sin número');
+        v_que text := case when new.status = 'anulada' then 'anuló' else 'descartó' end; v_e uuid; v_motivo text;
+begin
+  v_motivo := format('Su factura %s se %s: el pago vuelve a estar por casar.', v_num, v_que);
+  -- Primero la lista, y después se recorre: el borrado de asientos hace ALTER TABLE journal_entry,
+  -- y no puede con una consulta abierta sobre esa tabla en la misma sesión.
+  select coalesce(jsonb_agg(jsonb_build_object('id', x.id, 'movement_id', x.movement_id, 'company_id', x.company_id, 'asiento', x.asiento)), '[]'::jsonb) into v_casados
+    from (select distinct b.id, b.movement_id, b.company_id, e.status as asiento
+            from public.bank_match_item it join public.bank_match b on b.id = it.match_id
+            left join public.journal_entry e on e.id = b.journal_entry_id
+           where it.supplier_invoice_id = new.id and b.status = 'vivo') x;
+  for r in select * from jsonb_array_elements(v_casados) loop
+    if r->>'asiento' = 'validado' then
+      v_e := public._bank_casado_soltar((r->>'id')::uuid, v_motivo, public.conta_nombre_actor());
+      perform public._conta_asientos_borrar((r->>'company_id')::uuid, array[v_e], v_motivo, public.conta_nombre_actor());
+    else
+      perform public.bank_deshacer((r->>'id')::uuid, v_motivo);
+    end if;
+    update public.bank_movement
+       set status = 'por_aclarar', confidence = 'duda', proposal = null, updated_at = now(),
+           reason = format('Su factura %s se %s el %s: este pago vuelve a estar por casar. Cásalo con la factura buena.',
+                           v_num, v_que, to_char(now() at time zone 'Europe/Madrid', 'DD/MM/YYYY'))
+     where id = (r->>'movement_id')::uuid;
+  end loop;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION _tg_factura_anulada_descasa(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._tg_factura_anulada_descasa() IS 'B01 · Cola 2 (02/11). Al anular o descartar una factura recibida, cada pago casado con ella se deshace: asiento propuesto, fuera (bank_deshacer); validado, se borra con _conta_asientos_borrar (sin contraasiento). El movimiento vuelve a «Por aclarar» con el motivo.';
 
 
 --
@@ -123421,6 +123505,13 @@ CREATE TRIGGER tax_return_misma_cuenta BEFORE INSERT OR UPDATE ON public.tax_ret
 
 
 --
+-- Name: supplier_invoice tg_factura_anulada_descasa; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tg_factura_anulada_descasa AFTER UPDATE OF status, discarded_at ON public.supplier_invoice FOR EACH ROW WHEN ((((new.status = 'anulada'::text) AND (old.status IS DISTINCT FROM 'anulada'::text)) OR ((new.discarded_at IS NOT NULL) AND (old.discarded_at IS NULL)))) EXECUTE FUNCTION public._tg_factura_anulada_descasa();
+
+
+--
 -- Name: sale ticket_tras_venta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -145616,6 +145707,13 @@ GRANT ALL ON FUNCTION public._bank_ajustes(p_company uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION _bank_casado_soltar(p_match uuid, p_motivo text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_casado_soltar(p_match uuid, p_motivo text, p_quien text) FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION _bank_casar_nucleo(p_movement uuid, p_destino jsonb, p_confianza text, p_porque text, p_razones jsonb, p_por text, p_regla uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -148274,6 +148372,13 @@ GRANT ALL ON FUNCTION public._supplier_merge(p_queda uuid, p_se_va uuid, p_quien
 
 REVOKE ALL ON FUNCTION public._supplier_merge_undo(p_merge uuid, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._supplier_merge_undo(p_merge uuid, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION _tg_factura_anulada_descasa(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_factura_anulada_descasa() FROM PUBLIC;
 
 
 --
