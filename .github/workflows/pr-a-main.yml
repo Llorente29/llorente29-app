@@ -87,6 +87,17 @@ jobs:
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/conta/sin-secretos.mjs "$BASE" "$HEAD"
 
+      # W10 (02/11; era el #380): ninguna migración nueva o cambiada (ni su
+      # vuelta atrás) escribe la dirección de un proyecto de Supabase ni un
+      # secreto. 24 funciones llevaban la de producción escrita y staging,
+      # construido con las mismas migraciones, llamaba a producción. La
+      # dirección se lee con _project_url() y los secretos, del Vault.
+      - name: Ninguna dirección de proyecto ni secreto escritos en SQL (W10)
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/conta/sql-sin-direccion.mjs "$BASE" "$HEAD"
+
       # N1 (29/10): desde la 0731 la sesión solo lee las columnas de employees
       # que tienen su «grant select». Una columna nueva sin él deja la pantalla
       # que la pida en blanco («permission denied for table employees»). Cada

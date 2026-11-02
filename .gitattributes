@@ -10,3 +10,8 @@ supabase/migrations/20260827163135_adapt_hubrise_order_usa_hubrise_street_line.s
 # sus saltos CRLF, como está en producción (md5 e117089e…). Normalizarlos cambia
 # su huella y la prueba de staging no vería «lo de producción». Como binario.
 supabase/vuelta-atras/20261026T0642_pc01_sin_delete_sin_where.down.sql -text
+
+# W10 (02/11): las 24 funciones transcritas byte a byte desde pg_get_functiondef
+# de producción; cinco llevan CRLF. Normalizarlos las cambiaría más allá de la
+# dirección y la vuelta atrás no las dejaría como estaban. Como binario.
+supabase/migrations/20261102T0202_w10_funciones_leen_su_proyecto.sql -text
