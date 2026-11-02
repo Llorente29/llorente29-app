@@ -24,5 +24,6 @@ select clave, valor from (
         'set_product_availability_by_token', 'set_products_availability_bulk', 'set_products_availability_bulk_by_token',
         'system_alert_queue_drain', 'tg_auto_dispatch', 'trg_sale_push_status', 'verifactu_despertar', 'verifactu_despertar_cuadre')) union all
   select 5, 'project_url en el Vault (huella corta)',
+    -- quieta: lee un solo secreto por su nombre, que solo Julio crea o cambia a mano; ningún proceso escribe en él
     coalesce((select left(md5(decrypted_secret), 12) from vault.decrypted_secrets where name = 'project_url'), 'no existe')
 ) t order by o;
