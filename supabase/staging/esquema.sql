@@ -20677,6 +20677,29 @@ end $$;
 
 
 --
+-- Name: bank_agregador_lectura_apuntar(uuid, text, text, text, date, date, date, integer, integer, integer, integer, numeric, integer, numeric, text, numeric, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_agregador_lectura_apuntar(p_treasury uuid, p_proveedor text, p_estado text, p_mensaje text, p_desde date, p_hasta date, p_releido_desde date, p_leidos integer, p_nuevos integer, p_repetidos integer, p_pendientes integer, p_pendientes_importe numeric, p_tarde integer, p_tarde_importe numeric, p_continuidad text, p_hueco numeric, p_saldo_banco numeric) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_t public.treasury_account;
+begin
+  if auth.role() is distinct from 'service_role' then raise exception 'Solo la función de cada noche apunta sus lecturas.' using errcode = '42501'; end if;
+  select * into v_t from public.treasury_account where id = p_treasury;
+  if v_t.id is null then raise exception 'Esa cuenta del banco no existe.' using errcode = 'P0002'; end if;
+  insert into public.bank_aggregator_lectura (account_id, company_id, treasury_account_id, provider, status, message, period_from, period_to, reread_from,
+                                              read_count, new_count, repeated_count, pending_count, pending_amount, late_count, late_amount,
+                                              continuity, continuity_gap, bank_balance)
+  values (v_t.account_id, v_t.company_id, v_t.id, replace(coalesce(p_proveedor, ''), '-', '_'), coalesce(nullif(trim(p_estado), ''), 'desconocido'),
+          nullif(trim(p_mensaje), ''), p_desde, p_hasta, p_releido_desde,
+          coalesce(p_leidos, 0), coalesce(p_nuevos, 0), coalesce(p_repetidos, 0), coalesce(p_pendientes, 0), coalesce(p_pendientes_importe, 0),
+          coalesce(p_tarde, 0), coalesce(p_tarde_importe, 0), p_continuidad, p_hueco, p_saldo_banco);
+end $$;
+
+
+--
 -- Name: bank_agregador_quitar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -39082,6 +39105,213 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) IS 'V02 · E2. EL MOTOR: una fila por intermediario, local y periodo con sus cuatro piezas (lo vendido, la liquidación, su factura de comisión y el cobro), su estado y la frase. También los periodos con ventas y sin liquidación. Solo lee.';
+
+
+--
+-- Name: conta_liquidaciones_mes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date DEFAULT NULL::date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_hoy date := public.conta_hoy();
+  v_ini date := date_trunc('month', coalesce(p_mes, public.conta_hoy()))::date;
+  v_fin date; v_motor jsonb; v_filas jsonb; v_cedidas jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not public.belongs_to_account(v_acc) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  v_fin := (v_ini + interval '1 month')::date - 1;
+  -- Desde 5 semanas antes: lo vendido de un periodo que empezó el mes anterior.
+  v_motor := public.conta_liquidaciones(p_company, v_ini - 35, v_fin);
+
+  with m as (
+    select x from jsonb_array_elements(coalesce(v_motor, '[]'::jsonb)) x
+     where (x->>'hasta')::date between v_ini and v_fin
+  ), t as (
+    -- Las tiendas de cada fila: las de sus liquidaciones, o (si no ha llegado
+    -- ninguna) las de su canal, su marca y su local.
+    select m.x,
+      coalesce(
+        (select jsonb_agg(distinct jsonb_build_object('id', ps.id, 'nombre', ps.external_text, 'local_id', ps.location_id))
+           from jsonb_array_elements(m.x->'liquidaciones') l
+           join public.channel_settlement cs on cs.id = (l->>'id')::uuid and cs.account_id = v_acc
+           join public.platform_store ps on ps.id = cs.store_id),
+        (select jsonb_agg(jsonb_build_object('id', ps.id, 'nombre', ps.external_text, 'local_id', ps.location_id))
+           from public.platform_store ps
+          where ps.account_id = v_acc and ps.company_id = p_company and ps.channel_id = (m.x->>'canal_id')::uuid
+            and ps.brand_id = (m.x->>'marca_id')::uuid and ps.location_id = (m.x->>'local_id')::uuid),
+        '[]'::jsonb) as tiendas,
+      coalesce((select b.ownership_type = 'licensed' from public.brand b where b.id = (m.x->>'marca_id')::uuid and b.account_id = v_acc), false) as cedida,
+      -- Glovo: todas sus liquidaciones son de Glovo, y la tienda tiene local y marca.
+      (jsonb_array_length(coalesce(m.x->'liquidaciones', '[]'::jsonb)) > 0 and m.x->>'canal_id' is not null
+        and m.x->>'local_id' is not null and m.x->>'marca_id' is not null
+        and not exists (select 1 from jsonb_array_elements(m.x->'liquidaciones') l join public.channel_settlement cs on cs.id = (l->>'id')::uuid
+                          join public.platform_store ps on ps.id = cs.store_id where ps.location_id is null)
+        and not exists (select 1 from jsonb_array_elements(m.x->'liquidaciones') l where coalesce(l->>'origen', '') !~ 'glovo')) as glovo
+      from m
+  ), t2 as (
+    select t.*,
+      t.x->>'canal_id' is not null and (t.x->>'local_id' is null
+        or exists (select 1 from jsonb_array_elements(t.tiendas) ti where ti->>'local_id' is null)) as sin_local
+      from t
+  ), g as (
+    select t.*,
+      case when t.glovo then (
+        select coalesce(round(sum(sl.quantity * sl.unit_price), 2), 0)
+          from public.sale s join public.sale_line sl on sl.sale_id = s.id
+         where s.account_id = v_acc and s.channel_id = (t.x->>'canal_id')::uuid and s.location_id = (t.x->>'local_id')::uuid
+           and s.brand_id = (t.x->>'marca_id')::uuid and s.status = 'closed' and coalesce(s.is_active, true)
+           and (s.sold_at at time zone 'Europe/Madrid')::date between (t.x->>'desde')::date and (t.x->>'hasta')::date) end as v_prod,
+      coalesce((t.x->'piezas'->'liquidacion'->>'ventas')::numeric, 0) as l_prod,
+      greatest(1, jsonb_array_length(coalesce(t.x->'liquidaciones', '[]'::jsonb))) as tol,
+      (select coalesce(sum((cs.raw->>'promociones_local')::numeric), 0) from jsonb_array_elements(coalesce(t.x->'liquidaciones', '[]'::jsonb)) l
+         join public.channel_settlement cs on cs.id = (l->>'id')::uuid and cs.account_id = v_acc) as promos,
+      (select sum((l->>'pedidos')::int) from jsonb_array_elements(coalesce(t.x->'liquidaciones', '[]'::jsonb)) l) as ped_liq,
+      exists (select 1 from jsonb_array_elements(coalesce(t.x->'resoluciones', '[]'::jsonb)) r where r->>'pedido' is null) as resuelta
+      from t2 t
+  ), h as (
+    select g.*,
+      case when g.glovo and abs(round((g.v_prod - g.l_prod) * 100)) > g.tol then round(g.v_prod - g.l_prod, 2) end as dif_v,
+      case when g.glovo and g.x->'piezas'->'cobro'->>'esperado' is not null and g.x->'piezas'->'cobro'->>'llegado' is not null
+                and coalesce((g.x->'piezas'->'cobro'->>'por_cobrar')::int, 0) = 0
+                and abs(round(((g.x->'piezas'->'cobro'->>'esperado')::numeric - (g.x->'piezas'->'cobro'->>'llegado')::numeric) * 100)) > g.tol
+           then round((g.x->'piezas'->'cobro'->>'esperado')::numeric - (g.x->'piezas'->'cobro'->>'llegado')::numeric, 2) end as dif_c
+      from g
+  ), k as (
+    -- El estado del motor, y en Glovo el mismo orden con lo vendido por productos.
+    select h.*,
+      case
+        when not h.glovo or h.x->>'estado' in ('esperando_liquidacion', 'falta_liquidacion') then h.x->>'estado'
+        when coalesce((h.x->'piezas'->'liquidacion'->>'referencia')::boolean, false) then 'cuadra'
+        when (h.dif_v is not null or h.dif_c is not null) and not h.resuelta then 'diferencia'
+        when coalesce((h.x->'piezas'->'factura'->>'faltan')::int, 0) > 0 then 'falta_factura'
+        when coalesce((h.x->'piezas'->'cobro'->>'por_cobrar')::int, 0) > 0 then 'esperando_cobro'
+        else 'cuadra'
+      end as est
+      from h
+  ), e as (
+    select k.*,
+      case
+        -- Tienda sin local: pide su local (una vez por tienda); no se compara con lo vendido de ningún local.
+        when k.sin_local then 'te_necesita'
+        when k.est = 'cuadra' then 'completa'
+        when k.est = 'esperando_liquidacion' then 'aun_no_toca'
+        when k.est = 'falta_liquidacion' then 'te_necesita'
+        when k.est = 'falta_factura' then case when v_hoy > (k.x->>'plazo')::date then 'te_necesita' else 'aun_no_toca' end
+        when k.est = 'esperando_cobro' then case when v_hoy > (k.x->>'plazo')::date then 'te_necesita' else 'aun_no_toca' end
+        when k.est = 'diferencia' and k.x->>'canal_id' is not null and (k.x->>'local_id' is null or k.x->>'marca_id' is null) then 'te_necesita'
+        when k.est = 'diferencia' then 'no_cuadra'
+        else 'te_necesita'
+      end as estado,
+      case
+        when k.sin_local then 'elige_local'
+        when k.est = 'falta_liquidacion' then 'pidela'
+        when k.est = 'falta_factura' then 'subela'
+        when k.est = 'esperando_cobro' then 'mira_el_banco'
+        when k.est = 'diferencia' and k.x->>'canal_id' is not null and k.x->>'local_id' is null then 'elige_local'
+        when k.est = 'diferencia' and k.x->>'canal_id' is not null and k.x->>'marca_id' is null then 'elige_marca'
+        when k.est = 'diferencia' then 'ver_por_que'
+      end as accion
+      from k
+  )
+  select coalesce(jsonb_agg(
+      (e.x - 'estado' - 'frase' - 'diferencia')
+      || jsonb_build_object(
+        'estado', e.estado,
+        'estado_motor', e.x->>'estado',
+        'comparado', case when e.glovo then jsonb_build_object('como', 'productos', 'vendido', e.v_prod, 'liquidacion', e.l_prod,
+                                   'pedidos_nuestros', (e.x->'piezas'->'vendido'->'pedidos'->>'pedidos')::int, 'pedidos_liquidacion', e.ped_liq,
+                                   'promociones_local', e.promos) end,
+        'accion', case when e.estado in ('te_necesita', 'no_cuadra') then e.accion end,
+        'cuando', case when e.estado = 'aun_no_toca' then e.x->>'plazo' end,
+        'tiendas', e.tiendas,
+        'sin_local', e.sin_local,
+        'grupo', case when e.cedida then 'cedida' else 'plataforma' end,
+        'diferencia', case when e.estado = 'no_cuadra' then case when e.glovo then coalesce(e.dif_v, e.dif_c) else (e.x->>'diferencia')::numeric end end,
+        'frase', case
+          when e.estado = 'te_necesita' and e.accion = 'elige_local' then 'No sé de qué local es esta tienda: dímelo una vez y vale para todas sus liquidaciones. Mientras, se cuadra por tienda.'
+          when e.estado = 'te_necesita' and e.accion = 'elige_marca' then 'No sé de qué marca es esta tienda: dímelo una vez y se compara con lo que vendió esa marca en ese local.'
+          when e.estado = 'te_necesita' and e.accion = 'pidela' then 'No ha llegado su liquidación, y vendiste ' || public.conta_euros_exactos(coalesce((e.x->'piezas'->'vendido'->>'total')::numeric, 0))
+               || coalesce(' en ' || ((e.x->'piezas'->'vendido'->'pedidos'->>'pedidos')) || ' pedidos', '') || '. La plataforma la manda al correo de esta tienda: pide que la reenvíen a tu buzón de Sumied.'
+          when e.estado = 'te_necesita' and e.accion = 'subela' then 'Falta su factura de comisión, y ya tendría que haber llegado: súbela o pídesela a la plataforma.'
+          when e.estado = 'te_necesita' and e.accion = 'mira_el_banco' then 'El cobro ya tendría que estar en el banco: ' || public.conta_euros_exactos(coalesce((e.x->'piezas'->'cobro'->>'esperado')::numeric, 0)) || '. Mira si ha llegado con otro concepto.'
+          when e.estado = 'no_cuadra' and e.glovo and e.dif_v is not null then
+               'Tus ' || coalesce((e.x->'piezas'->'vendido'->'pedidos'->>'pedidos'), '0') || ' pedidos suman ' || public.conta_euros_exactos(e.v_prod)
+               || ' en productos a precio de carta y Glovo liquida ' || coalesce(e.ped_liq::text || ' pedidos por ', '') || public.conta_euros_exactos(e.l_prod) || ': '
+               || case when e.dif_v > 0 then public.conta_euros_exactos(e.dif_v) || ' de menos.' else public.conta_euros_exactos(-e.dif_v) || ' de más.' end
+               || case when e.ped_liq is not null and e.ped_liq <> coalesce((e.x->'piezas'->'vendido'->'pedidos'->>'pedidos')::int, 0)
+                       then ' No coinciden los pedidos: mira cuáles faltan.' else ' Los pedidos coinciden: mira el precio de alguno.' end
+          when e.estado = 'no_cuadra' and e.glovo then
+               'Glovo dice que paga ' || public.conta_euros_exactos((e.x->'piezas'->'cobro'->>'esperado')::numeric) || ' y al banco llegaron '
+               || public.conta_euros_exactos((e.x->'piezas'->'cobro'->>'llegado')::numeric) || '.'
+          when e.estado = 'completa' and e.glovo and e.x->>'estado' <> 'cuadra' then 'Cuadra: lo vendido (por productos), la liquidación, su factura y el cobro.'
+          when e.estado = 'aun_no_toca' then 'Aún no toca: hacia el ' || to_char((e.x->>'plazo')::date, 'DD/MM') || '. No tienes que hacer nada.'
+          else e.x->>'frase'
+        end)
+      order by e.x->>'canal', e.x->>'local' nulls first, e.x->>'marca', e.x->>'desde'), '[]'::jsonb)
+    into v_filas
+    from e;
+
+  -- Las marcas cedidas: una fila por socio, local y mes, con lo vendido de sus
+  -- marcas (todos los canales) y la liquidación mensual del socio.
+  with ag as (
+    select a.brand_id, a.party_id from public.brand_licensing_agreement a
+     where a.account_id = v_acc and coalesce(a.is_active, true) and a.archived_at is null
+  ), v as (
+    select ag.party_id, s.location_id, count(*) as pedidos, sum(s.total) as total,
+           jsonb_agg(distinct b.name) as marcas
+      from public.sale s join ag on ag.brand_id = s.brand_id
+      join public.brand b on b.id = s.brand_id and b.account_id = v_acc
+     where s.account_id = v_acc and s.status = 'closed' and coalesce(s.is_active, true)
+       and (s.sold_at at time zone 'Europe/Madrid')::date between v_ini and v_fin
+       and s.location_id in (select lc.location_id from public.location_company lc where lc.company_id = p_company
+                             union select l.id from public.locations l where l.account_id = v_acc
+                               and not exists (select 1 from public.location_company lc where lc.company_id = p_company))
+     group by ag.party_id, s.location_id
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'socio_id', v.party_id, 'socio', p.name, 'local_id', v.location_id, 'local', l.name,
+      'desde', v_ini, 'hasta', v_fin, 'marcas', v.marcas,
+      'vendido', jsonb_build_object('pedidos', v.pedidos, 'total', round(v.total, 2)),
+      'liquidacion', case when ls.id is not null then jsonb_build_object('id', ls.id, 'importe', coalesce(ls.amount, ls.net_settlement), 'confirmada', ls.confirmed_at is not null) end,
+      'estado', case when ls.id is not null then 'completa' when v_hoy <= v_fin + 15 then 'aun_no_toca' else 'te_necesita' end,
+      'cuando', case when ls.id is null and v_hoy <= v_fin + 15 then v_fin + 15 end,
+      'frase', case when ls.id is not null then 'Se cuadra con la liquidación de ' || coalesce(p.name, 'su socio') || ' de este mes.'
+                    when v_hoy <= v_fin + 15 then coalesce(p.name, 'Su socio') || ' liquida una vez al mes, por local: hacia el ' || to_char(v_fin + 15, 'DD/MM') || '. No tienes que hacer nada.'
+                    else 'Falta la liquidación del mes de ' || coalesce(p.name, 'su socio') || ': pídesela.' end,
+      'grupo', 'cedida')
+      order by p.name, l.name), '[]'::jsonb)
+    into v_cedidas
+    from v left join public.party p on p.id = v.party_id and p.account_id = v_acc
+    left join public.locations l on l.id = v.location_id and l.account_id = v_acc
+    left join lateral (
+      select x.* from public.licensed_settlement x
+       where x.account_id = v_acc and (x.company_id is null or x.company_id = p_company)
+         and x.location_id = v.location_id and (x.party_id is null or x.party_id = v.party_id)
+         and x.period_from <= v_fin and x.period_to >= v_ini
+       order by x.period_to desc limit 1) ls on true;
+
+  return jsonb_build_object(
+    'mes', v_ini, 'desde', v_ini, 'hasta', v_fin,
+    'filas', (select coalesce(jsonb_agg(f), '[]'::jsonb) from jsonb_array_elements(v_filas) f where f->>'grupo' = 'plataforma'),
+    'cedidas', v_cedidas || (select coalesce(jsonb_agg(f), '[]'::jsonb) from jsonb_array_elements(v_filas) f where f->>'grupo' = 'cedida'),
+    'resumen', (select jsonb_build_object(
+        'total', count(*),
+        'completa', count(*) filter (where f->>'estado' = 'completa'),
+        'aun_no_toca', count(*) filter (where f->>'estado' = 'aun_no_toca'),
+        'te_necesita', count(*) filter (where f->>'estado' = 'te_necesita'),
+        'no_cuadra', count(*) filter (where f->>'estado' = 'no_cuadra'))
+      from jsonb_array_elements(v_filas) f where f->>'grupo' = 'plataforma'));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_liquidaciones_mes(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) IS 'S01q · Las liquidaciones de un mes en cuatro estados (completa, aun_no_toca, te_necesita, no_cuadra), por tienda, con las marcas cedidas aparte (las liquida su socio).';
 
 
 --
@@ -93494,6 +93724,42 @@ COMMENT ON TABLE public.bank_aggregator_connection IS 'B01c. Qué empresa trae l
 
 
 --
+-- Name: bank_aggregator_lectura; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.bank_aggregator_lectura (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    treasury_account_id uuid NOT NULL,
+    provider text NOT NULL,
+    read_at timestamp with time zone DEFAULT now() NOT NULL,
+    status text NOT NULL,
+    message text,
+    period_from date,
+    period_to date,
+    reread_from date,
+    read_count integer DEFAULT 0 NOT NULL,
+    new_count integer DEFAULT 0 NOT NULL,
+    repeated_count integer DEFAULT 0 NOT NULL,
+    pending_count integer DEFAULT 0 NOT NULL,
+    pending_amount numeric(14,2) DEFAULT 0 NOT NULL,
+    late_count integer DEFAULT 0 NOT NULL,
+    late_amount numeric(14,2) DEFAULT 0 NOT NULL,
+    continuity text,
+    continuity_gap numeric(14,2),
+    bank_balance numeric(14,2)
+);
+
+
+--
+-- Name: TABLE bank_aggregator_lectura; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.bank_aggregator_lectura IS 'B01 · Cola 1b (02/11/2026). Cada lectura de cada cuenta por la conexión con el banco: lo leído, lo nuevo, los pendientes que no entran (solo entra lo contabilizado) y lo que llegó tarde de días ya leídos (se releen los últimos 7). La escribe solo la función de cada noche (bank_agregador_lectura_apuntar).';
+
+
+--
 -- Name: bank_aggregator_link; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -111108,6 +111374,14 @@ ALTER TABLE ONLY public.bank_aggregator_connection
 
 
 --
+-- Name: bank_aggregator_lectura bank_aggregator_lectura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_lectura
+    ADD CONSTRAINT bank_aggregator_lectura_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: bank_aggregator_link bank_aggregator_link_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -120416,6 +120690,13 @@ CREATE INDEX ix_aviso_empresa_cuenta ON public.aviso_empresa USING btree (accoun
 
 
 --
+-- Name: ix_bank_aggregator_lectura_cuenta; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ix_bank_aggregator_lectura_cuenta ON public.bank_aggregator_lectura USING btree (treasury_account_id, read_at DESC);
+
+
+--
 -- Name: ix_business_hours_exc; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -125043,6 +125324,30 @@ ALTER TABLE ONLY public.bank_aggregator_connection
 
 ALTER TABLE ONLY public.bank_aggregator_connection
     ADD CONSTRAINT bank_aggregator_connection_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_aggregator_lectura bank_aggregator_lectura_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_lectura
+    ADD CONSTRAINT bank_aggregator_lectura_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_aggregator_lectura bank_aggregator_lectura_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_lectura
+    ADD CONSTRAINT bank_aggregator_lectura_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: bank_aggregator_lectura bank_aggregator_lectura_treasury_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.bank_aggregator_lectura
+    ADD CONSTRAINT bank_aggregator_lectura_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE CASCADE;
 
 
 --
@@ -135860,6 +136165,19 @@ ALTER TABLE public.bank_aggregator_connection ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY bank_aggregator_connection_select ON public.bank_aggregator_connection FOR SELECT USING (( SELECT public.belongs_to_account(bank_aggregator_connection.account_id) AS belongs_to_account));
+
+
+--
+-- Name: bank_aggregator_lectura; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.bank_aggregator_lectura ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: bank_aggregator_lectura bank_aggregator_lectura_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY bank_aggregator_lectura_read ON public.bank_aggregator_lectura FOR SELECT USING (public.current_user_is_admin_or_manager_of(account_id));
 
 
 --
@@ -148373,6 +148691,14 @@ GRANT ALL ON FUNCTION public.bank_agregador_conexion_apuntar(p_conexion uuid, p_
 
 
 --
+-- Name: FUNCTION bank_agregador_lectura_apuntar(p_treasury uuid, p_proveedor text, p_estado text, p_mensaje text, p_desde date, p_hasta date, p_releido_desde date, p_leidos integer, p_nuevos integer, p_repetidos integer, p_pendientes integer, p_pendientes_importe numeric, p_tarde integer, p_tarde_importe numeric, p_continuidad text, p_hueco numeric, p_saldo_banco numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_agregador_lectura_apuntar(p_treasury uuid, p_proveedor text, p_estado text, p_mensaje text, p_desde date, p_hasta date, p_releido_desde date, p_leidos integer, p_nuevos integer, p_repetidos integer, p_pendientes integer, p_pendientes_importe numeric, p_tarde integer, p_tarde_importe numeric, p_continuidad text, p_hueco numeric, p_saldo_banco numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_agregador_lectura_apuntar(p_treasury uuid, p_proveedor text, p_estado text, p_mensaje text, p_desde date, p_hasta date, p_releido_desde date, p_leidos integer, p_nuevos integer, p_repetidos integer, p_pendientes integer, p_pendientes_importe numeric, p_tarde integer, p_tarde_importe numeric, p_continuidad text, p_hueco numeric, p_saldo_banco numeric) TO service_role;
+
+
+--
 -- Name: FUNCTION bank_agregador_quitar(p_treasury uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -151917,6 +152243,15 @@ GRANT ALL ON FUNCTION public.conta_liquidacion_resolver_tienda(p_company uuid, p
 REVOKE ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_liquidaciones_mes(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) TO service_role;
 
 
 --
@@ -161338,6 +161673,14 @@ GRANT ALL ON TABLE public.bank_agent_run TO service_role;
 GRANT ALL ON TABLE public.bank_aggregator_connection TO anon;
 GRANT ALL ON TABLE public.bank_aggregator_connection TO authenticated;
 GRANT ALL ON TABLE public.bank_aggregator_connection TO service_role;
+
+
+--
+-- Name: TABLE bank_aggregator_lectura; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.bank_aggregator_lectura TO authenticated;
+GRANT ALL ON TABLE public.bank_aggregator_lectura TO service_role;
 
 
 --
