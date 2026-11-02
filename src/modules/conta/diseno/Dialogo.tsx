@@ -49,8 +49,10 @@ export function Dialogo({ titulo, explicacion, acciones, alCerrar, children, lat
           <h2 id={idTitulo} className="s-dialogo-titulo">{titulo}</h2>
           <Boton variante="fantasma" icono="cerrar" className="s-dialogo-cerrar" aria-label="Cerrar" onClick={alCerrar}>{''}</Boton>
         </div>
-        {explicacion && <p className="s-dialogo-explicacion">{explicacion}</p>}
-        {children}
+        {lateral
+          // El panel: lo de en medio se desplaza y las acciones quedan siempre a la vista, abajo (maqueta v2).
+          ? <div className="s-dialogo-cuerpo">{explicacion && <p className="s-dialogo-explicacion">{explicacion}</p>}{children}</div>
+          : <>{explicacion && <p className="s-dialogo-explicacion">{explicacion}</p>}{children}</>}
         {acciones && <div className="s-dialogo-acciones">{acciones}</div>}
       </div>
     </div>

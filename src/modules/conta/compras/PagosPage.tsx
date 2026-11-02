@@ -85,9 +85,11 @@ export default function PagosPage() {
   const datos = useLeer(activa ? () => leerPagos(activa.id, hoy) : null, `${activa?.id}:${hoy}:${vuelta}:pagos`)
   const losBancos = useLeer(accountId && activa ? () => bancos.bancosDeLaEmpresa(accountId, activa.id) : null, `${accountId}:${activa?.id}:bancos-pagos`)
   const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
-  // Sobre la dirección de ESE momento (setQuery con función), no la del último pintado: si se pulsa una
-  // pestaña y enseguida se escribe en el buscador, el buscador no puede devolver la pestaña de antes (e2e 945).
-  const cambiar = (c: Record<string, string | null>) => setQuery((antes) => new URLSearchParams(conCambio(antes.toString(), c)), { replace: true })
+  // Sobre la dirección de ESE momento, no la del último pintado: si se pulsa una pestaña y enseguida se
+  // escribe en el buscador, el buscador no puede devolver la pestaña de antes (e2e 945). setQuery con
+  // función NO basta: recibe la dirección del último pintado. B01 · Cola 1e (02/11, medido en local con la
+  // e2e 41528093606: 7 de 10 volvían a «Vencidas»): se lee la del navegador, que cambia al momento.
+  const cambiar = (c: Record<string, string | null>) => setQuery(new URLSearchParams(conCambio(window.location.search.replace(/^\?/, ''), c)), { replace: true })
 
   const pestana = leerPestana(query.get('pestana'))
   const fl = { buscar: query.get('q') ?? '', hasta: query.get('hasta') || null, forma: (query.get('forma') || 'todas') as FormaPago | 'todas', local: query.get('local') || null }
