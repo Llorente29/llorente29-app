@@ -1,19 +1,32 @@
-# B01 · Cola 1b · El registro de cada lectura del banco. Rama
+# B01 · Cola 2 · Olimpo, primer real: cada pago con su factura. Rama
 # claude/revolut-business-sumied-9fhlsh. Se ensaya y se aplica desde main
 # nombrando esta rama, antes de fusionar.
 #
 # (Las tandas anteriores de esta rama están aplicadas y en el historial de
 # producción con su huella: la del PR 1 —2210, 2211 y 2212—, la del PR 2a
-# —1234—, la del PR 2b —1614—, la del PR 2c-1 —1703— y la del PR 3a —2030—;
-# sus manifiestos, en la historia de git.)
+# —1234—, la del PR 2b —1614—, la del PR 2c-1 —1703—, la del PR 3a —2030— y
+# la de la cola 1b —1205—; sus manifiestos, en la historia de git.)
 #
-#   1. 1205 — SOLO AÑADE: bank_aggregator_lectura (una fila por cuenta y por
-#      lectura: los pendientes que no entran y lo que llegó tarde) y
-#      bank_agregador_lectura_apuntar (solo la clave de servicio). Se puede
-#      pasar dos veces. Nada en el camino del pedido.
+#   1. 1300 — ARREGLA DATOS de Foodint, con el visto bueno de Julio a la lista
+#      (02/11): deshace los dos casados de Olimpo del 26/10 (sus asientos 4/3312
+#      y 4/3310, validados, se anulan con su contraasiento) y casa el −363,67 con
+#      la 26A/10966 y el −170,10 con la 26A/10965, que quedan pagadas el 26/10.
+#      Si la 26A/10965 no está aprobada, para sin tocar nada. Nada en el camino
+#      del pedido.
 #
-# Sin «autorizo»: no toca datos ni destruye nada.
+# SIN VUELTA ATRÁS, a propósito, y SOLA en su tanda (como la 1013 de la S01c):
+# un contraasiento no se borra. El ensayo comprueba lo esperado, línea a línea.
+# Después, esta carpeta pasa a llevar el arreglo de fondo, con su vuelta atrás,
+# en un segundo real.
+# Con «autorizo» (lo pide el workflow a toda tanda sin vuelta atrás).
 # Sin aplicar: lo lanza Julio.
-# Vuelta atrás: vuelta-atras.txt de esta carpeta.
-supabase/migrations/20261102T1205_b01q_lecturas_banco.sql
-cuenta: scripts/conta/produccion/cuentas/b01q-lecturas.sql
+supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql
+sin-vuelta-atras: supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql · motivo: deshace dos casados con asiento validado, y un contraasiento no se borra; lo de antes era el error que se arregla
+cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql
+esperado: b01o-olimpo · la 26A/10966: estado y día de pago = pagada 2026-10-26
+esperado: b01o-olimpo · la 26A/10965: estado y día de pago = pagada 2026-10-26
+esperado: b01o-olimpo · el −363,67 del 26/10: con qué está casado = factura_recibida 26A/10966
+esperado: b01o-olimpo · el −170,10 del 26/10: con qué está casado = factura_recibida 26A/10965
+esperado: b01o-olimpo · los asientos 4/3312 y 4/3310 = 4/3312 anulado, 4/3310 anulado
+esperado: b01o-olimpo · casados vivos de Foodint con una factura anulada o descartada = 0
+esperado: b01o-olimpo · la 26/13028: estado y asiento de pago = anulada sin asiento de pago

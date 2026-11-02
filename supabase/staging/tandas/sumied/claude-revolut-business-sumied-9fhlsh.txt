@@ -62,3 +62,15 @@ supabase/staging/sql/20261101_b01n_nucleos_prueba.sql
 # lee el administrador.
 supabase/migrations/20261102T1205_b01q_lecturas_banco.sql
 supabase/staging/sql/20261102_b01q_bancos_prueba.sql
+# B01 · Cola 2 · Olimpo. La 1300 arregla datos de Foodint (en staging no está:
+# no hace nada). La 1310 cambia _bank_casar_nucleo (misma firma) y pone un
+# disparador sobre supplier_invoice: desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): la 1300 sin Foodint;
+# ANTES = DESPUÉS de casar un pago con su factura, con el núcleo de antes y con
+# la 1310; casar con una anulada o descartada para; anular o descartar una
+# factura casada la descasa (propuesto: fuera; validado: contraasiento) y el
+# pago vuelve a «Por aclarar» con su motivo; nadie de fuera llama al disparador
+# ni al núcleo; y la vuelta atrás deja el núcleo de producción byte a byte.
+supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql
+supabase/migrations/20261102T1310_b01o_casar_sin_anuladas.sql
+supabase/staging/sql/20261102_b01o_olimpo_prueba.sql

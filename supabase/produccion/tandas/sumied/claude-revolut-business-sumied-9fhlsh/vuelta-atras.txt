@@ -1,3 +1,2 @@
-# B01 · Cola 1b · la vuelta atrás: fuera bank_aggregator_lectura y su función. La función de cada noche sigue sin ellas (no apunta la lectura y no para).
-cuenta: scripts/conta/produccion/cuentas/b01q-lecturas.sql
-supabase/vuelta-atras/20261102T1205_b01q_lecturas_banco.down.sql
+# B01 · Cola 2 · la 1300 no tiene vuelta atrás (sin-vuelta-atras: en aplicar.txt): un contraasiento no se borra.
+cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql

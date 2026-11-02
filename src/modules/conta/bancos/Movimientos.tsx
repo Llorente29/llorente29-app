@@ -40,10 +40,10 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaBancos } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
-import { diaMesCorto, eurosExactos, fechaLarga } from '@/modules/conta/lib/formato'
+import { diaMesCorto, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { TEXTO_BOTON, filaDe, limitesMes, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
-import type { Destino } from '@/modules/conta/lib/conciliacion'
+import { PROPUESTA_RECALCULADA, TEXTO_BOTON, filaDe, limitesMes, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { MOTOR_BANCOS, type Destino } from '@/modules/conta/lib/conciliacion'
 import {
   BANDEJAS, PILDORA, coincide, enBandeja, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, puntoDePartida, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
 } from '@/modules/conta/lib/conciliarVista'
@@ -159,12 +159,25 @@ export function Movimientos() {
 
   const confirmarPropuesta = async (m: MovimientoBanco) => {
     const p = m.propuesta!
+    // Cola 2 · Una propuesta calculada con otro motor no se acepta: se vuelve a calcular y se enseña otra vez.
+    if (p.motor !== MOTOR_BANCOS) {
+      await nucleo.conciliarPendientes(accountId, companyId, hoyEnMadrid())
+      recargar(); lectura.recargar()
+      throw new Error(PROPUESTA_RECALCULADA)
+    }
     await nucleo.confirmar(m.id, m.porque ?? p.que ?? 'Confirmado', p.destino as unknown as Destino, (m.confianza ?? 'probable'), p.reglaId ?? null)
   }
 
   /** Confirmar varios: cada uno igual que si fuera solo; lo que falle se dice uno a uno. */
   const confirmarVarios = (ids: readonly string[], clave: string) => con(clave, async () => {
     const ms = ids.map((id) => porId.get(id)!).filter(confirmable)
+    // Cola 2 · Con alguna propuesta de otro motor, se recalculan todas una vez y no se casa ninguna.
+    if (ms.some((m) => m.propuesta?.motor !== MOTOR_BANCOS)) {
+      await nucleo.conciliarPendientes(accountId, companyId, hoyEnMadrid())
+      recargar(); lectura.recargar()
+      setAviso({ tipo: 'error', texto: PROPUESTA_RECALCULADA })
+      return
+    }
     let bien = 0
     const mal: string[] = []
     for (const m of ms) {
