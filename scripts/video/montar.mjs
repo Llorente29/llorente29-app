@@ -141,7 +141,9 @@ filtros.push(`[2:v]scale=1920:1080,setsar=1,fps=30,format=yuv420p,fade=t=in:st=0
 partes.push('[p]', ...quedan.map((_, i) => `[t${i}]`), '[c]')
 filtros.push(`${partes.join('')}concat=n=${partes.length}:v=1:a=0[todo]`)
 filtros.push(`[todo]scale=w='trunc(${W}*(${Z})/2)*2':h='trunc(${H}*(${Z})/2)*2':eval=frame:flags=lanczos,` +
-  `crop=${W}:${H}:x='clip((${CX})*iw/${W}-${W / 2},0,iw-${W})':y='clip((${CY})*ih/${H}-${H / 2},0,ih-${H})'[zz]`)
+  // El recorte NO puede usar iw/ih: ffmpeg no los actualiza cuando el tamaño cambia en cada fotograma
+  // (se quedaba en 1920 y el recorte, clavado arriba a la izquierda: run 41495352215). Va con el zoom.
+  `crop=${W}:${H}:x='clip((${CX})*(${Z})-${W / 2},0,${W}*((${Z})-1))':y='clip((${CY})*(${Z})-${H / 2},0,${H}*((${Z})-1))'[zz]`)
 filtros.push(`[zz]ass=${join(salida, 'subtitulos.ass').replace(/:/g, '\\:')}[v]`)
 const mp4 = join(salida, 'factura-al-pago.mp4')
 const sinVoz = join(salida, 'factura-al-pago-sin-voz.mp4')
