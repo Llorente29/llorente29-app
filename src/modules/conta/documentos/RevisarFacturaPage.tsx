@@ -35,12 +35,15 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { BloquePagarConRevolut } from '@/modules/conta/pagos/PagarConRevolut'
+import { DialogoPagarVarias } from '@/modules/conta/pagos/PagarVarias'
+import { cuentasParaPagar } from '@/modules/conta/pagos/pagarService'
+import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
-import { hoyEnMadrid } from '@/modules/conta/lib/formato'
+import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
 import { MARCA } from '@/modules/conta/cuenta/marca'
@@ -439,6 +442,15 @@ export default function RevisarFacturaPage() {
 
   const inputCambiar = useRef<HTMLInputElement>(null)
 
+  // B01 · Cola 1d · «Pagar» en la propia ficha (Julio lo buscó aquí): una factura aprobada y por pagar, con una
+  // cuenta que paga desde Sumied y alguien que puede pagar, abre el mismo panel lateral que la lista de Pagos.
+  const puedePagarAqui = !!fac?.company_id && fac.estado === 'aprobada' && !!extra.datos && !extra.datos.pagada && !esAbono(facLeida)
+  const cuentasPago = useLeer(puedePagarAqui ? () => cuentasParaPagar(fac!.company_id!) : null, `${fac?.company_id}:${invoiceId}:cuentas-pagar:${vuelta}`)
+  const quienPagaFicha = useLeer(puedePagarAqui && (cuentasPago.datos ?? []).length > 0 ? () => leerQuienPaga(fac!.company_id!) : null, `${fac?.company_id}:quien-paga-ficha:${(cuentasPago.datos ?? []).length}`)
+  const cuentaPago = (cuentasPago.datos ?? [])[0] ?? null
+  const [pagarAqui, setPagarAqui] = useState(false)
+  const [avisoPago, setAvisoPago] = useState<{ tono: 'ok' | 'duda' | 'falta'; texto: string } | null>(null)
+
   if (f.error && !fac) {
     return (
       <div className="s-pagina">
@@ -644,7 +656,7 @@ export default function RevisarFacturaPage() {
         motivoEstado={abono ? estadoPagoAbono(loQueAnula.datos) : estadoPagoComision(comision.datos, !!pagada)}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'vence', x as string) }} cambioDe={ed.cambioDe} deshacer={ed.deshacer}
         motivoVence={b.formaPago === 'prepaid' ? 'Se paga del saldo prepago Catcher (40700001): no espera a un vencimiento.' : b.formaPago === 'compensation' ? 'Se descuenta de lo que te paga la liquidación: no espera a un vencimiento.' : mayuscula(vence.apoyo)}
-        tonoVence={vence.aviso && b.formaPago !== 'prepaid' && b.formaPago !== 'compensation' ? 'revisar' : 'normal'}
+        tonoVence={vence.aviso && !b.vence && b.formaPago !== 'prepaid' && b.formaPago !== 'compensation' ? 'revisar' : 'normal'}
         motivoForma={extra.datos?.comoPagada ? 'Con la que se pagó.' : conTarjeta && !guardado?.formaPago ? 'Lo dice el documento: pagada con tarjeta. Al validarla, la caso con su cargo del banco.' : ficha?.formaPagoFicha ? 'La de su ficha.' : undefined}
         pagada={pagada ? `Pagada el ${fechaEs(pagada.fecha)}${extra.datos?.comoPagada ? ` · ${extra.datos.comoPagada}` : ''}.` : null} />
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
@@ -719,8 +731,15 @@ export default function RevisarFacturaPage() {
         migasExtra={migasExtra}
         derecha={<NavegaFicha pos={pos + 1} total={ids.length} que={queCuentaLaCola(filtros.pestana)} anterior={anterior ? () => pedirSalir(() => ir(anterior)) : null} siguiente={siguiente ? () => pedirSalir(() => ir(siguiente)) : null} />}
         masAcciones={mas}
-        principal={botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
+        principal={botonValidar || (puedePagarAqui && cuentaPago && quienPagaFicha.datos?.yoPuedo
+          ? <Boton variante="principal" onClick={() => { setAvisoPago(null); setPagarAqui(true) }} data-prueba="pagar-ficha">Pagar · {eurosExactos(Math.abs(Number(fac.total ?? 0)))}</Boton>
+          : <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>)}
       />
+      {avisoPago && <p className="s-aviso-lista" data-tono={avisoPago.tono === 'ok' ? 'seguro' : avisoPago.tono} role={avisoPago.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-pagar-ficha">{avisoPago.texto}</p>}
+      {pagarAqui && cuentaPago && fac.company_id && (
+        <DialogoPagarVarias empresaId={fac.company_id} cuenta={cuentaPago} facturas={[{ id: fac.id, proveedor: fac.proveedor?.nombre ?? 'el proveedor', numero: fac.numero }]}
+          alCerrar={(a) => { setPagarAqui(false); if (a) { setAvisoPago(a); setVuelta((v) => v + 1) } }} />
+      )}
       <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} usuario={userId} reglaAnchos />
       <BotonPulgar>{botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
       {salida.aviso}

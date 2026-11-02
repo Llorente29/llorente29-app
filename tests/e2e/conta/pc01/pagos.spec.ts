@@ -119,6 +119,10 @@ async function simular(page: Page): Promise<Llamada[]> {
   await page.route(/\/rest\/v1\/rpc\/conta_pagos_lista(\?|$)/, (r) => json(r, {
     filas: FILAS, pagado_mes: 22107.88, pagadas_mes: 41, sin_plazo: [{ id: 's-sinplazo', nombre: 'Carnes Sin Plazo SL' }],
   }))
+  // B01 · Cola 1e · Una por revisar: sale en «Por pagar» con su vencimiento, pero no se puede marcar.
+  await page.route(/\/rest\/v1\/rpc\/conta_pagos_por_revisar(\?|$)/, (r) => json(r, [
+    fila({ id: 'f-revision', supplier_id: 's-limpieza', proveedor: 'Limpiezas Prueba SL', numero: 'LP-91', vence: dia(4), total: 180.15, pendiente: 180.15, estado: 'vence_semana', por_revisar: true }),
+  ]))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_pagos_crear(\?|$)/, apuntar('crear', () => ({
     remesa: 'r-15', codigo: 'R-2026/015', por_confirmar: 1,
     frase: 'Preparada la remesa R-2026/015: 1 pago, 1.105,30 €. Antes de descargar el fichero, confirma 1 IBAN que ha cambiado.',
@@ -155,12 +159,21 @@ test('Pagos: cifras, sin vencimiento, pestañas; pagar una (la domiciliada no en
   await expect(page.getByRole('heading', { level: 1, name: 'Pagos' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Compras y gastos', 'Pagos'])
 
-  // Las cifras de arriba: por pagar (6 facturas: todas las que quedan), esta semana, vencido y pagado en el mes.
+  // B01 · Cola 1e · Lo que toca pagar: vencido, esta semana, por revisar y pagado en el mes; y el botón grande.
   await expect(page.getByText('1.105,30 €').first()).toBeVisible({ timeout: 30_000 })
-  for (const t of ['Por pagar', 'Vence esta semana', 'Vencido']) await expect(page.locator('.pg-cifras').getByText(t, { exact: true })).toBeVisible()
-  await expect(page.locator('.pg-cifras')).toContainText('22.107,88')
-  await expect(page.locator('.pg-cifras')).toContainText('6 facturas')
-  await expect(page.locator('.pg-cifras')).toContainText('1 factura · 5 días')
+  const toca = page.locator('[data-prueba="lo-que-toca"]')
+  for (const t of ['Vencido', 'Vence esta semana', 'Por revisar']) await expect(toca.locator('.pg-cifras').getByText(t, { exact: true })).toBeVisible()
+  await expect(toca.locator('.pg-cifras')).toContainText('22.107,88')
+  await expect(toca.locator('.pg-cifras')).toContainText('1 factura · 5 días')
+  await expect(toca.locator('.pg-cifras')).toContainText('180,15')
+  await expect(toca.locator('.pg-cifras')).toContainText('1 factura · apruébalas para pagarlas')
+  await expect(toca.locator('[data-prueba="pagar-lo-de-esta-semana"]')).toContainText('Pagar lo de esta semana · 1 factura')
+  await expect(toca.locator('[data-prueba="pagar-lo-de-esta-semana"]')).toContainText('1.105,30 €')
+  await expect(toca.locator('[data-prueba="fuera-esta-semana"]')).toContainText('Inmuebles Prueba SL (la paga el banco solo (domiciliada))')
+  await expect(toca.locator('[data-prueba="fuera-esta-semana"]')).toContainText('Limpiezas Prueba SL (está por revisar: apruébala para pagarla)')
+  // La de por revisar sale en la lista, con su vencimiento, y no se puede marcar.
+  await expect(page.getByRole('checkbox', { name: /^No se puede marcar Limpiezas Prueba SL/ })).toBeDisabled()
+  await page.screenshot({ path: `${DIR}/b01-lo-que-toca-${lado(page)}.png`, fullPage: true })
 
   // El aviso de las que no tienen vencimiento: a uno de los dos proveedores se le pregunta.
   const sinVence = page.locator('[data-prueba="sin-vencimiento"]')

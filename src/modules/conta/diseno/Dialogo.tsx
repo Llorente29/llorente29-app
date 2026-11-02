@@ -10,12 +10,14 @@ import { Boton } from './Boton'
 
 const ENFOCABLES = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
 
-export function Dialogo({ titulo, explicacion, acciones, alCerrar, children }: {
+export function Dialogo({ titulo, explicacion, acciones, alCerrar, children, lateral }: {
   titulo: string
   explicacion?: ReactNode
   acciones?: ReactNode
   alCerrar: () => void
   children?: ReactNode
+  /** B01 · Cola 1e · Panel fijo a la derecha (en el móvil, sube desde abajo): lo que se decide sin perder de vista la lista. */
+  lateral?: boolean
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const cerrar = useRef(alCerrar)
@@ -41,8 +43,8 @@ export function Dialogo({ titulo, explicacion, acciones, alCerrar, children }: {
     return () => { window.removeEventListener('keydown', tecla); previo?.focus() }
   }, [])
   return (
-    <div className="s-velo cx" onMouseDown={(e) => { if (e.target === e.currentTarget) alCerrar() }}>
-      <div className="s-dialogo" role="dialog" aria-modal="true" aria-labelledby={idTitulo} ref={ref}>
+    <div className={lateral ? 's-velo s-velo-lateral cx' : 's-velo cx'} onMouseDown={(e) => { if (e.target === e.currentTarget) alCerrar() }}>
+      <div className={lateral ? 's-dialogo s-dialogo-lateral' : 's-dialogo'} role="dialog" aria-modal="true" aria-labelledby={idTitulo} ref={ref}>
         <div className="s-dialogo-cabeza">
           <h2 id={idTitulo} className="s-dialogo-titulo">{titulo}</h2>
           <Boton variante="fantasma" icono="cerrar" className="s-dialogo-cerrar" aria-label="Cerrar" onClick={alCerrar}>{''}</Boton>

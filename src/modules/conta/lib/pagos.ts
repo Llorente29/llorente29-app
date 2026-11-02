@@ -39,6 +39,8 @@ export interface FilaPago {
   ibanLeido4: string | null
   conCuenta: boolean
   remesa: { id: string; codigo: string; importe: number } | null
+  /** B01 · Cola 1e · Está por revisar: se ve en Pagos con su vencimiento, pero no se puede marcar hasta aprobarla. */
+  porRevisar?: boolean
 }
 
 const num = (x: unknown) => (x === null || x === undefined || x === '' ? 0 : Number(x))
@@ -55,6 +57,7 @@ export function filaPago(f: Record<string, unknown>): FilaPago {
     iban4: str(f.iban4), conIban: f.con_iban === true, conCuenta: f.con_cuenta === true,
     ibanSinConfirmar: f.iban_sin_confirmar === true, ibanDistinto: f.iban_distinto === true, ibanLeido4: str(f.iban_leido4),
     remesa: r ? { id: String(r.id), codigo: String(r.codigo), importe: num(r.importe) } : null,
+    porRevisar: f.por_revisar === true,
   }
 }
 
@@ -76,6 +79,7 @@ export const NOMBRE_ESTADO: Record<EstadoPago, string> = {
 
 /** El chip del estado (tablero 15): rojo vencida, ámbar lo que pide algo, verde pagada o en remesa. */
 export function chipEstado(f: FilaPago): { texto: string; tono: 'falta' | 'duda' | 'seguro' | 'neutro' } {
+  if (f.porRevisar) return { texto: 'Por revisar · apruébala para pagarla', tono: 'duda' }
   const e = estadoPago(f)
   if (e === 'vencida') return { texto: `Vencida · ${f.diasVencida ?? 0} ${f.diasVencida === 1 ? 'día' : 'días'}`, tono: 'falta' }
   if (e === 'en_remesa') return { texto: `En la remesa ${f.remesa!.codigo}`, tono: 'seguro' }
@@ -95,6 +99,7 @@ export const nombreForma = (f: FormaPago) => (f ? NOMBRE_FORMA[f] : 'Sin decir')
 
 /** Por qué no se puede meter en una remesa (null = sí se puede). */
 export function porQueNoEnRemesa(f: FilaPago): string | null {
+  if (f.porRevisar) return 'está por revisar: apruébala para pagarla'
   if (estadoPago(f) === 'pagada') return 'ya está pagada'
   if (libre(f) < 0.005) return `ya está en la remesa ${f.remesa!.codigo}`
   if (seCargaSola(f)) return f.forma === 'direct_debit' ? 'la paga el banco solo (domiciliada)' : f.forma === 'card' ? 'se paga con tarjeta' : 'se paga del saldo prepago'
@@ -133,8 +138,9 @@ export function enPestana(f: FilaPago, p: PestanaPagos): boolean {
   const e = estadoPago(f)
   switch (p) {
     case 'por_pagar': return e !== 'pagada'
-    case 'vencidas': return e === 'vencida'
-    case 'semana': return e === 'vence_semana'
+    // Las que están por revisar solo salen en «Por pagar» (con su vencimiento), nunca como vencidas o de la semana: no se pueden pagar todavía.
+    case 'vencidas': return !f.porRevisar && e === 'vencida'
+    case 'semana': return !f.porRevisar && e === 'vence_semana'
     case 'sin_vencimiento': return e === 'sin_vencimiento'
     case 'en_remesa': return e !== 'pagada' && f.remesa !== null
     case 'pagadas': return e === 'pagada'
@@ -151,12 +157,15 @@ export interface CifrasPagos {
   vencido: { importe: number; n: number; dias: number | null }
   pagadoMes: { importe: number; n: number }
   sinVencimiento: number
+  /** B01 · Cola 1e · Las que están por revisar (no se pueden pagar hasta aprobarlas). */
+  porRevisar: { importe: number; n: number }
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100
 
 export function cifrasPagos(filas: readonly FilaPago[], pagadoMes: number, pagadasMes: number): CifrasPagos {
-  const vivas = filas.filter((f) => estadoPago(f) !== 'pagada')
+  const rev = filas.filter((f) => f.porRevisar && estadoPago(f) !== 'pagada')
+  const vivas = filas.filter((f) => !f.porRevisar && estadoPago(f) !== 'pagada')
   const venc = vivas.filter((f) => f.estadoBase === 'vencida')
   const sem = vivas.filter((f) => f.estadoBase === 'vence_semana')
   return {
@@ -165,7 +174,25 @@ export function cifrasPagos(filas: readonly FilaPago[], pagadoMes: number, pagad
     vencido: { importe: r2(venc.reduce((t, f) => t + f.pendiente, 0)), n: venc.length, dias: venc.length ? Math.max(...venc.map((f) => f.diasVencida ?? 0)) : null },
     pagadoMes: { importe: r2(pagadoMes), n: pagadasMes },
     sinVencimiento: vivas.filter((f) => f.estadoBase === 'sin_vencimiento').length,
+    porRevisar: { importe: r2(rev.reduce((t, f) => t + f.pendiente, 0)), n: rev.length },
   }
+}
+
+/**
+ * B01 · Cola 1e · «Pagar lo de esta semana»: lo vencido y lo que vence esta
+ * semana que se puede pagar ya (aprobado, por transferencia, con IBAN, sin
+ * remesa). Lo que no se puede, no entra (se dice al lado del botón).
+ */
+export function loDeEstaSemana(filas: readonly FilaPago[]): { entran: FilaPago[]; fuera: FilaPago[]; total: number } {
+  const toca = filas.filter((f) => { const e = estadoPago(f); return e === 'vencida' || e === 'vence_semana' || (f.porRevisar && (f.estadoBase === 'vencida' || f.estadoBase === 'vence_semana')) })
+  const entran = toca.filter((f) => porQueNoEnRemesa(f) === null)
+  return { entran, fuera: toca.filter((f) => !entran.includes(f)), total: r2(entran.reduce((t, f) => t + libre(f), 0)) }
+}
+
+/** B01 · Cola 1e · Si el saldo del banco llega para lo marcado (null: no se sabe el saldo). */
+export function llega(saldo: number | null, total: number): boolean | null {
+  if (saldo === null) return null
+  return saldo + 0.005 >= total
 }
 
 // ── Filtros ─────────────────────────────────────────────────────────────────
@@ -189,10 +216,38 @@ export function filtrar(filas: readonly FilaPago[], p: PestanaPagos, fl: Filtros
     && (!fl.local || f.localId === fl.local))
 }
 
-/** Primero lo que vence antes; sin vencimiento al final; a igualdad, la factura más antigua. */
-export function ordenarPagos(filas: readonly FilaPago[]): FilaPago[] {
-  return [...filas].sort((a, b) => (a.vence ?? '9999') .localeCompare(b.vence ?? '9999') || (a.fecha ?? '').localeCompare(b.fecha ?? ''))
+export type ColumnaOrdenPagos = 'vence' | 'proveedor' | 'pendiente' | 'estado'
+export interface OrdenPagos { columna: ColumnaOrdenPagos; sentido: 'asc' | 'desc' }
+export const ORDEN_PAGOS_DEFECTO: OrdenPagos = { columna: 'vence', sentido: 'asc' }
+const PESO_ESTADO: Record<EstadoPago, number> = { vencida: 0, vence_semana: 1, por_pagar: 2, pagada_parte: 3, sin_vencimiento: 4, en_remesa: 5, pagada: 6 }
+
+/**
+ * Cola 1d · Ordenar por una columna, en los dos sentidos. Por defecto, por
+ * vencimiento, lo más cercano primero. Las «sin fecha» van siempre al final,
+ * en los dos sentidos. A igualdad, por vencimiento y la factura más antigua.
+ */
+export function ordenarPagos(filas: readonly FilaPago[], o: OrdenPagos = ORDEN_PAGOS_DEFECTO): FilaPago[] {
+  const s = o.sentido === 'asc' ? 1 : -1
+  const base = (a: FilaPago, b: FilaPago) => (a.vence ?? '9999').localeCompare(b.vence ?? '9999') || (a.fecha ?? '').localeCompare(b.fecha ?? '')
+  return [...filas].sort((a, b) => {
+    if (o.columna === 'vence') {
+      if (!a.vence !== !b.vence) return a.vence ? -1 : 1
+      return s * (a.vence ?? '').localeCompare(b.vence ?? '') || (a.fecha ?? '').localeCompare(b.fecha ?? '')
+    }
+    const c = o.columna === 'proveedor' ? a.proveedor.localeCompare(b.proveedor, 'es')
+      : o.columna === 'pendiente' ? a.pendiente - b.pendiente
+      : (a.porRevisar ? 2.5 : PESO_ESTADO[estadoPago(a)]) - (b.porRevisar ? 2.5 : PESO_ESTADO[estadoPago(b)])
+    return s * c || base(a, b)
+  })
 }
+
+/** El orden guardado («vence:asc»), o el de por defecto si no vale. */
+export function leerOrdenPagos(t: string | null): OrdenPagos {
+  const [c, d] = (t ?? '').split(':')
+  return ['vence', 'proveedor', 'pendiente', 'estado'].includes(c) && (d === 'asc' || d === 'desc') ? { columna: c as ColumnaOrdenPagos, sentido: d } : ORDEN_PAGOS_DEFECTO
+}
+/** Pulsar una columna: la misma, cambia de sentido; otra, ascendente. */
+export const cambiarOrden = (o: OrdenPagos, c: ColumnaOrdenPagos): OrdenPagos => (o.columna === c ? { columna: c, sentido: o.sentido === 'asc' ? 'desc' : 'asc' } : { columna: c, sentido: 'asc' })
 
 // ── La remesa ───────────────────────────────────────────────────────────────
 

@@ -15,9 +15,13 @@ const str = (x: unknown) => (x === null || x === undefined || x === '' ? null : 
 export interface DatosPagos { filas: FilaPago[]; pagadoMes: number; pagadasMes: number; sinPlazo: { id: string; nombre: string }[] }
 
 export async function leerPagos(companyId: string, mes: string): Promise<DatosPagos> {
-  const d = await rpc<Fila>('conta_pagos_lista', { p_company: companyId, p_mes: mes })
+  const [d, rev] = await Promise.all([
+    rpc<Fila>('conta_pagos_lista', { p_company: companyId, p_mes: mes }),
+    // B01 · Cola 1e · Las que están por revisar, con su vencimiento (sin la 2115, Pagos sigue como antes).
+    rpc<Fila[]>('conta_pagos_por_revisar', { p_company: companyId }).catch((e: unknown) => { console.warn('[pagos] sin las de por revisar', e); return [] as Fila[] }),
+  ])
   return {
-    filas: ((d?.filas as Fila[] | null) ?? []).map(filaPago),
+    filas: [...((d?.filas as Fila[] | null) ?? []), ...((rev as Fila[] | null) ?? [])].map(filaPago),
     pagadoMes: num(d?.pagado_mes), pagadasMes: num(d?.pagadas_mes),
     sinPlazo: ((d?.sin_plazo as Fila[] | null) ?? []).map((s) => ({ id: String(s.id), nombre: String(s.nombre) })),
   }

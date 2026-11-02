@@ -1,26 +1,19 @@
-# B01 · Cola 2 · Olimpo y el arreglo de fondo. Rama
+# B01 · Cola 1d y 1e · Pagar, como en la maqueta v2. Rama
 # claude/revolut-business-sumied-9fhlsh. Se ensaya y se aplica desde main
 # nombrando esta rama, antes de fusionar.
 #
 # (Las tandas anteriores de esta rama están aplicadas y en el historial de
 # producción con su huella: la del PR 1 —2210, 2211 y 2212—, la del PR 2a
-# —1234—, la del PR 2b —1614—, la del PR 2c-1 —1703—, la del PR 3a —2030— y
-# la de la cola 1b —1205—; sus manifiestos, en la historia de git.)
+# —1234—, la del PR 2b —1614—, la del PR 2c-1 —1703—, la del PR 3a —2030—, la
+# de la cola 1b —1205— y la de la cola 2 —1310 y 1300—; sus manifiestos, en la
+# historia de git.)
 #
-#   1. 1310 — CAMBIA en caliente, declarado: _bank_casar_nucleo (no casa con una
-#      factura anulada o descartada) y un disparador sobre supplier_invoice (al
-#      anularla, sus pagos casados se deshacen: el asiento propuesto se quita y
-#      el validado se BORRA con la función de borrado de Sumied, S01q). AÑADE
-#      _bank_casado_soltar. Nada en el camino del pedido.
-#   2. 1300 — ARREGLA DATOS de Foodint (Julio, 02/11: «borrar, no
-#      contraasiento»): suelta los dos casados de Olimpo del 26/10, BORRA sus
-#      asientos 4/3312 y 4/3310 con _conta_asientos_borrar y casa el −363,67 con
-#      la 26A/10966 y el −170,10 con la 26A/10965, que quedan pagadas el 26/10.
-#      Si la 26A/10965 no está aprobada, para sin tocar nada. Mueve filas: con
-#      «autorizo».
+#   1. 2115 — SOLO AÑADE: conta_pagos_por_revisar (las facturas en revisión y
+#      sin pagar, con las columnas de conta_pagos_lista y «por_revisar»). Pagos
+#      las enseña con su vencimiento, sin poder marcarlas. Se puede pasar dos
+#      veces. Nada en el camino del pedido.
 #
-# Las dos con vuelta atrás (la 1300, desde conta_b01o_antes y el respaldo de la
-# función de borrado). Sin aplicar: lo lanza Julio.
-supabase/migrations/20261102T1310_b01o_casar_sin_anuladas.sql
-supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql
-cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql
+# Sin «autorizo»: no toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+supabase/migrations/20261102T2115_b01p_pagos_por_revisar.sql
+cuenta: scripts/conta/produccion/cuentas/b01p-pagar.sql

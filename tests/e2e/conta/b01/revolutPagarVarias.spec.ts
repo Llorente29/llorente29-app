@@ -120,7 +120,9 @@ test.describe('B01 Revolut · pagar varias facturas con Revolut', () => {
 
     // 2 · La ventana: el titular de la segunda no coincide.
     await barra.locator('[data-prueba="pagar-con-banco"]').click()
-    const dialogo = page.getByRole('dialog', { name: 'Pagar con Revolut' })
+    // B01 · Cola 1e · La ventana es ahora el panel lateral: «Pagar 2 facturas», con el saldo, «Sale ahora» y lo que comprueba Sumied.
+    const dialogo = page.getByRole('dialog', { name: 'Pagar 2 facturas' })
+    await expect(dialogo.locator('[data-prueba="sale-ahora"]')).toContainText('Sale ahora.')
     const filas = dialogo.locator('[data-prueba="fila-varias"]')
     await expect(filas.nth(0)).toHaveAttribute('data-sale', 'si', { timeout: 30_000 })
     await expect(filas.nth(0)).toContainText('✓ Revolut dice que coincide')

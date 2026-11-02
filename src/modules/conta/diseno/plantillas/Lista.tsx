@@ -107,6 +107,8 @@ export interface SeleccionLista {
   marcadas: ReadonlySet<string>
   alMarcar: (id: string, marcada: boolean) => void
   alMarcarTodas: (marcadas: boolean) => void
+  /** B01 · Cola 1e · Una fila que no se puede marcar, con su porqué (la casilla, apagada y con el motivo). */
+  bloqueo?: (id: string) => string | null
 }
 
 export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbrir, filaActual, orden, alOrdenar, vacio, pie, movil, tarjeta, seleccion }: {
@@ -136,8 +138,10 @@ export function TablaLista<T>({ etiqueta, columnas, filas, clave, nombre, alAbri
   const algunas = !!seleccion && !todas && filas.some((f) => seleccion.marcadas.has(clave(f)))
   const casilla = (f: T) => {
     const id = clave(f)
+    const no = seleccion!.bloqueo?.(id) ?? null
     return (
-      <input type="checkbox" className="s-lista-casilla" aria-label={`Marcar ${nombre(f)}`} checked={seleccion!.marcadas.has(id)}
+      <input type="checkbox" className="s-lista-casilla" aria-label={no ? `No se puede marcar ${nombre(f)}: ${no}` : `Marcar ${nombre(f)}`} title={no ?? undefined}
+        disabled={!!no} checked={!no && seleccion!.marcadas.has(id)}
         onClick={(e) => e.stopPropagation()} onChange={(e) => seleccion!.alMarcar(id, e.target.checked)} />
     )
   }
