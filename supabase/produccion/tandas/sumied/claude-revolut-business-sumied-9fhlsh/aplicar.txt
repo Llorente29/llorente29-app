@@ -12,8 +12,13 @@
 #      sin pagar, con las columnas de conta_pagos_lista y «por_revisar»). Pagos
 #      las enseña con su vencimiento, sin poder marcarlas. Se puede pasar dos
 #      veces. Nada en el camino del pedido.
+#   2. 2140 — SOLO AÑADE: el justificante de un pago. supplier.justificante_al_pagar
+#      (admite nulos), la tabla conta_pago_justificante (con su RLS) y sus
+#      funciones (las del servicio y conta_factura_justificantes). Se puede
+#      pasar dos veces. Nada en el camino del pedido.
 #
 # Sin «autorizo»: no toca datos ni destruye nada.
 # Sin aplicar: lo lanza Julio.
 supabase/migrations/20261102T2115_b01p_pagos_por_revisar.sql
+supabase/migrations/20261102T2140_b01p_justificante.sql
 cuenta: scripts/conta/produccion/cuentas/b01p-pagar.sql

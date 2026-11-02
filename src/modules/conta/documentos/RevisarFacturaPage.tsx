@@ -35,6 +35,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { BloquePagarConRevolut } from '@/modules/conta/pagos/PagarConRevolut'
+import { BloqueJustificantes } from '@/modules/conta/pagos/Justificante'
 import { DialogoPagarVarias } from '@/modules/conta/pagos/PagarVarias'
 import { cuentasParaPagar } from '@/modules/conta/pagos/pagarService'
 import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
@@ -664,6 +665,8 @@ export default function RevisarFacturaPage() {
       {fac.company_id && fac.estado === 'aprobada' && extra.datos && !pagada && !abono && !descartada && (
         <BloquePagarConRevolut empresaId={fac.company_id} facturaId={fac.id} />
       )}
+      {/* B01 · Cola 1e · El justificante de lo que el banco ya ha confirmado: verlo, por correo y por WhatsApp. */}
+      {fac.company_id && <BloqueJustificantes facturaId={fac.id} numero={b.numero || null} empresa={activa?.nombre ?? ''} quien={userName ?? null} />}
       <AsientoQueSeCrea titulo={fac.asiento ? 'Su asiento' : 'El asiento que se crea'} lineas={lineasAsiento} nota={notaAsiento}
         alEditar={!fac.asiento && !soloLectura ? () => setAMano((x) => !x) : undefined}
         vacio={fac.asiento ? (asientoReal.error ? `No se ha podido leer su asiento${fac.asiento.numero ? ` (el ${fac.asiento.numero})` : ''}: ${asientoReal.error}` : 'Leyendo su asiento…')

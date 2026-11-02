@@ -17,6 +17,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
+import { hacerJustificantes } from "../_shared/justificantePago.ts";
+import { piezasJustificante } from "../_shared/justificanteServidor.ts";
 import { COLUMNAS_CONEXION, leerEmpresa, paraElRegistro, type ConexionRevolut } from "../_shared/revolut/servidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -40,6 +42,9 @@ Deno.serve(async (req) => {
   if (!(await cuentaPuedeSalir(srv, conexion.account_id))) return json({ ok: true, leida: false, demo: true });
 
   const p = await leerEmpresa(srv, fetch, conexion);
+  // B01 · Cola 1e · Los pagos que el banco ya ha confirmado, con su justificante.
+  const jus = await hacerJustificantes(srv, conexion.company_id, piezasJustificante(srv));
+  if (jus.hechos || jus.fallos) console.log(`[conta-revolut-aviso] justificantes: ${jus.hechos} hechos, ${jus.mandados} mandados, ${jus.fallos} fallos`);
   console.log(`[conta-revolut-aviso] ${evento || "aviso"} ${JSON.stringify(paraElRegistro(p))}`);
   return json({ ok: true, leida: true });
 });

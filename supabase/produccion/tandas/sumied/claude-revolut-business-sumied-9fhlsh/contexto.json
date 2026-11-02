@@ -1,19 +1,9 @@
 {
- "_que": "B01 · Cola 1e · contexto de producción de la tanda (2115), medido en SOLO LECTURA el 02/11 a las 20:47Z: no existe conta_pagos_por_revisar ni otra con ese nombre; nada en el camino del pedido ni en el cron; nada en el historial. La 1300 y la 1310 (Olimpo) ya están en el historial.",
- "medido": "2026-11-02T20:47Z",
+ "_que": "B01 · Cola 1e · contexto de producción de la tanda (2115 y 2140), medido en SOLO LECTURA el 02/11 a las 21:47Z: no existe ninguna de las funciones nuevas ni conta_pago_justificante; supplier existe (102 filas, la columna nueva nace nula); nada en el camino del pedido ni en el cron; nada en el historial.",
+ "medido": "2026-11-02T21:47Z",
  "tanda": {
-  "supabase/migrations/20261102T2115_b01p_pagos_por_revisar.sql": "76c4b8247e292c9e4447e4a8d4b12e78"
+  "supabase/migrations/20261102T2115_b01p_pagos_por_revisar.sql": "76c4b8247e292c9e4447e4a8d4b12e78",
+  "supabase/migrations/20261102T2140_b01p_justificante.sql": "58fad51e93c897d749a11b90d09cc38a"
  },
- "contexto": {
-  "tablas": [],
-  "funciones": [],
-  "filas": {},
-  "otras": {},
-  "camino": {
-   "tablas": [],
-   "funciones": []
-  },
-  "usos": {},
-  "registro": []
- }
+ "contexto": {"tablas":["public.supplier"],"funciones":[],"filas":{"public.supplier":102},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }

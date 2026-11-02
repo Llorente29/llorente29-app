@@ -141,3 +141,8 @@ html:has(.pg-barra) { scroll-padding-bottom: 120px; }
 .pg-panel-desde { display: grid; gap: 2px; padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio, 8px); }
 .pg-panel-comprueba { margin: 0; padding-left: var(--s-5); display: grid; gap: var(--s-1); }
 .pg-panel-comprueba [data-bien="no"] { color: var(--s-duda); }
+
+/* ── B01 · Cola 1e · El justificante del pago, en la ficha de la factura ── */
+.pg-justificante { display: grid; gap: var(--s-2); }
+.pg-justificante-que { margin: 0; }
+.pg-justificante-botones { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }

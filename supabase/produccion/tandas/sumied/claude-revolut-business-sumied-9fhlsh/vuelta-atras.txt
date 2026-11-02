@@ -1,3 +1,5 @@
-# B01 · Cola 1e · la vuelta atrás: fuera conta_pagos_por_revisar (Pagos sigue como antes sin ella).
+# B01 · Cola 1e · la vuelta atrás, en orden inverso: fuera el justificante (la casilla, la tabla y sus
+# funciones; la ficha sigue sin el bloque) y fuera conta_pagos_por_revisar (Pagos sigue como antes sin ella).
 cuenta: scripts/conta/produccion/cuentas/b01p-pagar.sql
+supabase/vuelta-atras/20261102T2140_b01p_justificante.down.sql
 supabase/vuelta-atras/20261102T2115_b01p_pagos_por_revisar.down.sql
