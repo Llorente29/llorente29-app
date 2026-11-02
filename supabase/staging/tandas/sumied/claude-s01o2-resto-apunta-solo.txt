@@ -1,0 +1,12 @@
+# S01o · PR 2 · Las demás facturas se apuntan solas y los fallos de Anthropic.
+# 2210, 2211 y 2212 cambian funciones vivas; 0005 añade; 0006 es de Foodint y en
+# staging no hace nada. Su prueba (ROLLBACK, cuenta D, datos inventados): la clave
+# de NIF; repetidas sin proveedor; un servicio no espera albarán; una segura se
+# apunta sola con su local por defecto; los motivos (sin gasto, la lectura dudó,
+# sin local); no viene a nombre y la UE sin ROI, con su IVA al gasto; la vuelta atrás.
+supabase/migrations/20261101T2210_s01o2_nif_y_repetidas.sql
+supabase/migrations/20261101T2211_s01o2_entrega_mercancia.sql
+supabase/migrations/20261101T2212_s01o2_iva_no_deducible_solo.sql
+supabase/migrations/20261102T0005_s01o2_factura_apunta_sola.sql
+supabase/migrations/20261102T0006_s01o2_foodint.sql
+supabase/staging/sql/20261101_s01o2_resto_prueba.sql

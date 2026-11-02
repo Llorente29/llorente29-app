@@ -1,0 +1,27 @@
+# S01o · PR 2 · Las demás facturas con la ficha completa se apuntan solas, y los
+# tres fallos de Anthropic. Rama claude/s01o2-resto-apunta-solo. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2210  cambia supplier_invoice_repetida, conta_factura_desde_lectura y el
+#         disparador de repetidas: una sola clave de NIF (sin «EU VAT», «VAT»,
+#         «NIF», «ES») y repetidas también sin proveedor (NIF leído + número + total).
+#   2211  cambia _compras_casar_solo y conta_correo_facturas: «Entrega mercancía»
+#         en la ficha (vacío: sí si ha tenido albarán o su gasto va a 600–602); un
+#         servicio no espera albarán y las notas viejas dejan de salir.
+#   2212  cambia conta_motivos_para_validar (regla 11) y añade el ROI de la
+#         empresa, el motivo «sin_roi» (el CHECK amplía) y el IVA no deducible
+#         solo: «no viene a nombre de la empresa» y «de la UE sin ROI».
+#   0005  AÑADE la regla «segura» fuera de plataforma, su apunte y su pasada (cron
+#         9 y 39). Usa el interruptor y «Apuntadas solas» del S01o.
+#   0006  Foodint (autorizo: mueve filas): NO está en el ROI (Julio, 01/11);
+#         Anthropic con su NIF «IE4276970QH» y la 62900005 en su ficha; sus 4
+#         facturas sin proveedor: la factura de cada par ligada, el recibo como
+#         «Repetida» con ella (justificante del pago); su IVA, no deducible.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01o2-resto.sql
+supabase/migrations/20261101T2210_s01o2_nif_y_repetidas.sql
+supabase/migrations/20261101T2211_s01o2_entrega_mercancia.sql
+supabase/migrations/20261101T2212_s01o2_iva_no_deducible_solo.sql
+supabase/migrations/20261102T0005_s01o2_factura_apunta_sola.sql
+supabase/migrations/20261102T0006_s01o2_foodint.sql

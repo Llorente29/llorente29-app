@@ -1,0 +1,39 @@
+{
+ "_que": "S01o · PR 2 · contexto de producción de la tanda, medido en SOLO LECTURA el 01/11 a las 23:15Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las 7 tablas que toca (company_tax_profile cuenta 0 por estadística: tiene la fila de Foodint); no existe ninguna función de las que crea; las que cambia sobre su definición viva (supplier_invoice_repetida, conta_factura_desde_lectura, tg_supplier_invoice_no_repetida, _compras_casar_solo, conta_correo_facturas y conta_motivos_para_validar) existen y se cambian con su respaldo; nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-01T23:15Z",
+ "tanda": {
+  "supabase/migrations/20261101T2210_s01o2_nif_y_repetidas.sql": "818d35746a6568b4ea4cfb0a0db49d6f",
+  "supabase/migrations/20261101T2211_s01o2_entrega_mercancia.sql": "4e9e0df23bd24d435ddc94d8bf5a004b",
+  "supabase/migrations/20261101T2212_s01o2_iva_no_deducible_solo.sql": "3167b2d4d420f19086d31f508745f485",
+  "supabase/migrations/20261102T0005_s01o2_factura_apunta_sola.sql": "39d30674bb93b9d6d9b79076d8f3dea4",
+  "supabase/migrations/20261102T0006_s01o2_foodint.sql": "112ee72e5c95f4b3ef78befbbc5d2160"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_account_link",
+   "public.company_tax_profile",
+   "public.document_activity",
+   "public.document_inbox",
+   "public.supplier",
+   "public.supplier_invoice",
+   "public.supplier_invoice_tax"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_account_link": 82,
+   "public.company_tax_profile": 0,
+   "public.document_activity": 618,
+   "public.document_inbox": 271,
+   "public.supplier": 102,
+   "public.supplier_invoice": 297,
+   "public.supplier_invoice_tax": 260
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

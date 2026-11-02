@@ -71,3 +71,34 @@ describe('S01o · «Apuntadas solas» es una pestaña más, y las pestañas sigu
     expect(filasDeLaLista(filas, mapa, filtrosDe(new URLSearchParams('ver=solas'))).map((x) => x.id)).toEqual(['1'])
   })
 })
+
+describe('S01o·2 · lo que dice la pantalla de las demás facturas', () => {
+  it('«Falta su local» también lleva a la ficha', async () => {
+    const { motivoDeRevisar: m } = await import('@/modules/conta/lib/apuntaSolo')
+    expect(m('Falta su local en la ficha de Proveedor Inventado, S.L..')?.ponerEnFicha).toBe(true)
+    expect(m('La lectura dudó: No cuadra: bases + IVA no es el total.')?.ponerEnFicha).toBe(false)
+  })
+  it('el ROI se dice en una frase, y el motivo que lo pide se reconoce', async () => {
+    const { textoRoi, motivoPideRoi } = await import('@/modules/conta/lib/apuntaSolo')
+    expect(textoRoi(false, true)).toBe('Guardado. Tu empresa no está en el ROI: el IVA español que te cobre un proveedor de la UE no se puede deducir y va al gasto.')
+    expect(motivoPideRoi('Es de un proveedor de la UE que cobra IVA español: falta saber si estás en el ROI (Ajustes › Tus impuestos).')).toBe(true)
+    expect(motivoPideRoi('Falta su local en la ficha de X.')).toBe(false)
+  })
+  it('«Entrega mercancía»: lo que dice la ficha en cada caso', async () => {
+    const { textoEntregaMercancia } = await import('@/modules/conta/lib/apuntaSolo')
+    expect(textoEntregaMercancia(false)).toBe('Es de servicios: sus facturas no esperan albarán.')
+    expect(textoEntregaMercancia(null)).toMatch(/lo deduce Sumied/)
+  })
+  it('una llegada de un servicio no dice «esperando su albarán»', async () => {
+    const { queSeHizo } = await import('@/modules/conta/lib/correoFacturas')
+    const l = { resultado: 'factura', llegada: 'factura', motivo: null, dicho: null,
+      factura: { id: 'f', codigo: null, numero: 'INV0000000001', total: 12.1, proveedor: 'Servicios Inventados', casada: false, espera_albaran: false } } as never
+    expect(queSeHizo(l).titulo).toBe('Factura leída: INV0000000001 de Servicios Inventados')
+    const l2 = { ...(l as object), factura: { id: 'f', codigo: null, numero: 'INV0000000002', total: 1, proveedor: 'Mercancía Inventada', casada: false, espera_albaran: true } } as never
+    expect(queSeHizo(l2).titulo).toBe('Factura esperando su albarán: INV0000000002 de Mercancía Inventada')
+  })
+  it('el IVA no deducible por no estar en el ROI tiene su porqué', async () => {
+    const { porQueNoDeducible } = await import('@/modules/conta/lib/ivaNoDeducible')
+    expect(porQueNoDeducible('sin_roi')).toBe('es de un proveedor de la UE que cobra IVA español y la empresa no está en el ROI')
+  })
+})

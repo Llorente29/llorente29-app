@@ -163,7 +163,7 @@ export async function apuntarHueco(recepcion: string, motivo: string): Promise<s
 /** S01c · Un correo que llegó a la dirección de facturas y lo que se hizo con él. */
 export interface LlegadaCorreo {
   fecha: string; de: string | null; asunto: string | null; resultado: string; llegada: string | null; motivo: string | null
-  factura: { id: string; codigo: string | null; numero: string | null; total: number | null; proveedor: string | null; casada: boolean } | null
+  factura: { id: string; codigo: string | null; numero: string | null; total: number | null; proveedor: string | null; casada: boolean; espera_albaran?: boolean } | null
   dicho: string | null
   /** S01j·2 · Para «Volver a leer» y lo que salió del correo. */
   email_id?: string | null
