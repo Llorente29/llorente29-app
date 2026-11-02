@@ -23,6 +23,9 @@ select to_regclass('public.catalogo_curso_global') is not null as dm1_1218_aplic
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'conta_lectura') then
     execute 'create role conta_lectura nologin';
+    -- En staging, postgres no es superusuario: para entrar como el rol (paso 3)
+    -- tiene que poder hacer SET ROLE, sin heredar sus permisos. Se va con el ROLLBACK.
+    execute format('grant conta_lectura to %I with set true, inherit false', current_user);
   end if;
 end $$;
 
