@@ -1112,6 +1112,22 @@ $$;
 
 
 --
+-- Name: _aviso_clave(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._aviso_clave(p_debounce_kind text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $_$
+  select regexp_replace(
+           regexp_replace(
+             regexp_replace(p_debounce_kind, '_[0-9a-f]{32}$', ''),
+           '_\d{8}$', ''),
+         '_(critico|alto|aviso|CRITICO|ALTO|AVISO)$', '')
+$_$;
+
+
+--
 -- Name: _aviso_falta_en_vault(text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1223,6 +1239,72 @@ begin
   return jsonb_build_object('resultado', 'peticion', 'peticion_id', v_peticion.id, 'hora', v_hhmm,
     'texto', format('Hecho: le hemos pedido a tu encargado que apunte tu salida a las %s. Lo verás en tu portal cuando la apruebe.', v_hhmm));
 end $$;
+
+
+--
+-- Name: _aviso_pasadas_desde(text, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._aviso_pasadas_desde(p_tarea text, p_desde timestamp with time zone) RETURNS integer
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+  select count(*)::integer
+    from cron.job_run_details d join cron.job j on j.jobid = d.jobid
+   where j.jobname = p_tarea and d.status = 'succeeded' and d.start_time > p_desde
+$$;
+
+
+--
+-- Name: _aviso_poner_en_cola(text, text, text, text, uuid, uuid, uuid, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._aviso_poner_en_cola(p_kind text, p_subject text, p_message text, p_debounce_kind text, p_account_id uuid, p_location_id uuid, p_brand_id uuid, p_severity text, p_rango integer) RETURNS bigint
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare
+  k_techo constant integer := 10;
+  v_hoy timestamptz := (date_trunc('day', now() at time zone 'Europe/Madrid')) at time zone 'Europe/Madrid';
+  v_id bigint;
+begin
+  if p_rango < 3 and (select count(*) from public.system_alert_queue
+                       where created_at >= v_hoy and public._aviso_rango(severity, debounce_kind) < 3
+                         and debounce_kind is distinct from 'aviso-techo-diario') >= k_techo then
+    insert into public.aviso_callado (kind, subject, message, debounce_kind, account_id, location_id, brand_id, severity, motivo)
+    values (p_kind, p_subject, p_message, p_debounce_kind, p_account_id, p_location_id, p_brand_id, p_severity, 'techo diario');
+    if not exists (select 1 from public.system_alert_queue
+                    where debounce_kind = 'aviso-techo-diario' and created_at >= v_hoy) then
+      insert into public.system_alert_queue (kind, subject, message, debounce_kind, severity)
+      values ('aviso-techo', 'Techo de avisos alcanzado: hoy ya van ' || k_techo,
+              'Hoy ya han salido ' || k_techo || ' avisos. Hasta mañana solo salen los críticos; los demás se guardan '
+              || 'sin mandar en aviso_callado (empezando por: ' || coalesce(p_subject, p_kind) || ').',
+              'aviso-techo-diario', 'aviso');
+    end if;
+    return null;
+  end if;
+  insert into public.system_alert_queue (kind, subject, message, debounce_kind, account_id, location_id, brand_id, severity)
+  values (p_kind, p_subject, p_message, p_debounce_kind, p_account_id, p_location_id, p_brand_id, p_severity)
+  returning id into v_id;
+  return v_id;
+end $$;
+
+
+--
+-- Name: _aviso_rango(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) RETURNS integer
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO ''
+    AS $_$
+  select case lower(coalesce(p_severity,
+                             substring(p_debounce_kind from '_(critico|alto|aviso|CRITICO|ALTO|AVISO)(?:_\d{8})?$'),
+                             'alto'))
+           when 'aviso' then 1 when 'medio' then 1 when 'bajo' then 1
+           when 'critico' then 3 when 'crítico' then 3
+           else 2 end
+$_$;
 
 
 SET default_tablespace = '';
@@ -9700,6 +9782,24 @@ CREATE FUNCTION public._label_token_nuevo() RETURNS text
                   1 + (get_byte(b.bytes, g.i) % 36), 1), '')
     from (select extensions.gen_random_bytes(12) as bytes) b,
          generate_series(0, 11) as g(i);
+$$;
+
+
+--
+-- Name: _last_horas_en_horario(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._last_horas_en_horario(p_desde timestamp with time zone, p_ahora timestamp with time zone DEFAULT now()) RETURNS numeric
+    LANGUAGE sql STABLE
+    SET search_path TO ''
+    AS $$
+  select case when p_desde is null then 999::numeric else
+    coalesce((select sum(greatest(0, extract(epoch from (
+                 least(p_ahora at time zone 'UTC', d + interval '24 hours')
+               - greatest(p_desde at time zone 'UTC', d + interval '12 hours')))))
+                from generate_series(date_trunc('day', p_desde at time zone 'UTC'),
+                                     date_trunc('day', p_ahora at time zone 'UTC'), interval '1 day') d), 0) / 3600.0
+  end
 $$;
 
 
@@ -20561,6 +20661,41 @@ $$;
 --
 
 COMMENT ON FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone) IS 'L1a PR 3: los olvidos de salida que tocan avisar ahora, en hora de Madrid. Una entrada abierta con turno publicado que acabó hace más de forgot_clockout_min; sin turno, a las 12 h. WhatsApp solo dentro de la franja de la empresa y en la primera hora; si no, solo el portal (status skipped, con el motivo). La usa enqueue_clockout_reminders.';
+
+
+--
+-- Name: avisos_resolver(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.avisos_resolver() RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO ''
+    AS $$
+declare r record; v_n integer := 0;
+begin
+  for r in
+    select p.*, t.tarea from public.aviso_problema p join public.aviso_tipo t on t.kind = p.kind
+     where p.resuelto_at is null
+     order by p.visto_at
+     for update of p skip locked
+  loop
+    if public._aviso_pasadas_desde(r.tarea, r.visto_at) >= 2 then
+      update public.aviso_problema set resuelto_at = now() where clave = r.clave;
+      v_n := v_n + 1;
+      if not r.sin_resuelto then
+        perform public._aviso_poner_en_cola(
+          r.kind, 'Resuelto · ' || coalesce(r.asunto, r.kind),
+          'Ya no se ve: el vigía (' || r.tarea || ') ha pasado dos veces sin encontrarlo. '
+          || 'Abierto desde el ' || to_char(r.abierto_at at time zone 'Europe/Madrid', 'DD/MM HH24:MI')
+          || '; visto por última vez el ' || to_char(r.visto_at at time zone 'Europe/Madrid', 'DD/MM HH24:MI')
+          || ' (' || r.veces || ' veces).',
+          null, r.account_id, r.location_id, null, 'aviso', 1);
+      end if;
+    end if;
+  end loop;
+  delete from public.aviso_callado where created_at < now() - interval '30 days';
+  return v_n;
+end $$;
 
 
 --
@@ -42025,6 +42160,40 @@ COMMENT ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) IS 'PC0
 
 
 --
+-- Name: conta_pagos_por_revisar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pagos_por_revisar(p_company uuid) RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  with f as (
+    select si.id, si.supplier_id, s.name as proveedor, si.invoice_number as numero, si.invoice_date as fecha, rp.vence, rp.total, rp.pagado, rp.pendiente,
+           rp.estado, rp.dias_vencida, coalesce(si.payment_method, s.payment_method) as forma, si.location_id, lo.name as local,
+           right(public._pc01e2_iban(s.iban), 4) as iban4, (public._pc01e2_iban(s.iban) is not null) as con_iban,
+           (s.iban_unconfirmed_invoice_id is not null) as iban_sin_confirmar, right(public._pc01e2_iban(si.read_iban), 4) as iban_leido4,
+           false as iban_distinto, true as con_cuenta, null::jsonb as remesa, true as por_revisar
+      from public.supplier_invoice si
+      join public.conta_recibida_pago rp on rp.invoice_id = si.id
+      left join public.supplier s on s.id = si.supplier_id
+      left join public.locations lo on lo.id = si.location_id
+     where si.account_id = (select account_id from public.company where id = p_company)
+       and coalesce(si.company_id, p_company) = p_company
+       and si.status = 'en_revision' and si.paid_at is null and si.discarded_at is null
+       and si.payment_method is distinct from 'compensation'
+  )
+  select coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb)
+$$;
+
+
+--
+-- Name: FUNCTION conta_pagos_por_revisar(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_pagos_por_revisar(p_company uuid) IS 'B01 · Cola 1e (02/11). Las facturas recibidas en revisión y sin pagar, con las columnas de conta_pagos_lista y por_revisar = true: Pagos las enseña con su vencimiento, sin poder marcarlas.';
+
+
+--
 -- Name: conta_pais_nombre(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -52497,6 +52666,10 @@ CREATE FUNCTION public.encolar_alerta(p_kind text, p_subject text, p_message tex
 DECLARE
   v_id bigint;
   v_cuenta uuid;
+  v_clave text;
+  v_rango integer;
+  v_p public.aviso_problema%ROWTYPE;
+  v_asunto text := p_subject;
 BEGIN
   -- DM1 · PR 2a (31/10): una cuenta de demo no cuenta en los avisos. La del
   -- aviso, o la de su local, o la de su marca; sin ninguna, sigue como antes.
@@ -52506,6 +52679,45 @@ BEGIN
     (SELECT b.account_id FROM public.brand b WHERE b.id = p_brand_id));
   IF v_cuenta IS NOT NULL AND NOT public.cuenta_puede_salir(v_cuenta) THEN
     RETURN NULL;
+  END IF;
+
+  v_rango := public._aviso_rango(p_severity, p_debounce_kind);
+
+  -- A01-1 (02/11): un correo por problema, para los tipos con vigía programado.
+  -- Abre: un correo. Sigue abierto: ninguno. Empeora (sube de severidad): uno.
+  -- Se resuelve: lo dice avisos_resolver(). Si esto falla, se avisa y se sigue
+  -- por el camino de siempre: un aviso nunca tumba al que lo encola.
+  IF p_debounce_kind IS NOT NULL AND EXISTS (SELECT 1 FROM public.aviso_tipo t WHERE t.kind = p_kind) THEN
+    BEGIN
+      v_clave := public._aviso_clave(p_debounce_kind);
+      INSERT INTO public.aviso_problema (clave, kind, account_id, location_id, asunto, rango_enviado, resuelto_at)
+      VALUES (v_clave, p_kind, p_account_id, p_location_id, p_subject, 0, now())
+      ON CONFLICT (clave) DO NOTHING;
+      SELECT * INTO v_p FROM public.aviso_problema WHERE clave = v_clave FOR UPDATE;
+
+      IF v_p.resuelto_at IS NULL THEN
+        IF v_rango <= v_p.rango_enviado THEN
+          UPDATE public.aviso_problema SET visto_at = now(), veces = veces + 1 WHERE clave = v_clave;
+          RETURN NULL;
+        END IF;
+        UPDATE public.aviso_problema
+           SET visto_at = now(), veces = veces + 1, rango_enviado = v_rango, asunto = p_subject
+         WHERE clave = v_clave;
+        v_asunto := 'Empeora · ' || p_subject;
+      ELSE
+        -- Nuevo, o vuelve después de resuelto: es un problema nuevo.
+        UPDATE public.aviso_problema
+           SET kind = p_kind, account_id = p_account_id, location_id = p_location_id, asunto = p_subject,
+               abierto_at = now(), visto_at = now(), veces = 1, rango_enviado = v_rango,
+               resuelto_at = NULL, sin_resuelto = false
+         WHERE clave = v_clave;
+      END IF;
+
+      RETURN public._aviso_poner_en_cola(p_kind, v_asunto, p_message, p_debounce_kind,
+                                         p_account_id, p_location_id, p_brand_id, p_severity, v_rango);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'encolar_alerta: la regla de un correo por problema ha fallado (%), sigue por el camino de siempre', SQLERRM;
+    END;
   END IF;
 
   -- El antirruido, igual que antes. Devuelve NULL cuando NO encola, para que
@@ -52530,14 +52742,9 @@ BEGIN
     END IF;
   END IF;
 
-  INSERT INTO public.system_alert_queue
-    (kind, subject, message, debounce_kind, account_id, location_id, brand_id, severity)
-  VALUES
-    (p_kind, p_subject, p_message, p_debounce_kind,
-     p_account_id, p_location_id, p_brand_id, p_severity)
-  RETURNING id INTO v_id;
-
-  RETURN v_id;
+  -- A01-1: con el techo diario (10 al día; lo crítico pasa siempre).
+  RETURN public._aviso_poner_en_cola(p_kind, p_subject, p_message, p_debounce_kind,
+                                     p_account_id, p_location_id, p_brand_id, p_severity, v_rango);
 END;
 $$;
 
@@ -63103,7 +63310,7 @@ begin
        where ei.source = 'lastapp' and ei.is_active = true
          and ei.account_id = v_acc.account_id
     ) x
-    where x.max_synced is null or x.max_synced < now() - interval '3 hours';
+    where x.max_synced is null or public._last_horas_en_horario(x.max_synced) > 3;
 
     v_de_esta := v_de_esta || jsonb_build_object('espejo_rancio', coalesce(v_n, 0));
     if coalesce(v_n, 0) > 0 then
@@ -94088,6 +94295,51 @@ COMMENT ON COLUMN public.availability_push_log.source IS 'lastapp|hubrise|other 
 
 
 --
+-- Name: aviso_callado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aviso_callado (
+    id bigint NOT NULL,
+    kind text,
+    subject text,
+    message text,
+    debounce_kind text,
+    account_id uuid,
+    location_id uuid,
+    brand_id uuid,
+    severity text,
+    motivo text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE aviso_callado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.aviso_callado IS 'A01-1 (02/11/2026). Los avisos que no se mandaron por el techo diario (10 al día, lo crítico pasa siempre). Se guardan 30 días.';
+
+
+--
+-- Name: aviso_callado_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.aviso_callado_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: aviso_callado_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.aviso_callado_id_seq OWNED BY public.aviso_callado.id;
+
+
+--
 -- Name: aviso_empresa; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -94116,6 +94368,50 @@ CREATE TABLE public.aviso_empresa (
 --
 
 COMMENT ON TABLE public.aviso_empresa IS 'L1a PR 3: lo que la empresa tiene que saber el mismo día: un fichaje fuera del radio (no el habitual) y que los avisos de olvido dejan de salir. Lo enseña «Equipo» y sale por correo a los administradores y a los encargados del local (clockout-reminder).';
+
+
+--
+-- Name: aviso_problema; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aviso_problema (
+    clave text NOT NULL,
+    kind text NOT NULL,
+    account_id uuid,
+    location_id uuid,
+    asunto text,
+    abierto_at timestamp with time zone DEFAULT now() NOT NULL,
+    visto_at timestamp with time zone DEFAULT now() NOT NULL,
+    veces integer DEFAULT 1 NOT NULL,
+    rango_enviado integer DEFAULT 2 NOT NULL,
+    resuelto_at timestamp with time zone,
+    sin_resuelto boolean DEFAULT false NOT NULL
+);
+
+
+--
+-- Name: TABLE aviso_problema; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.aviso_problema IS 'A01-1 (02/11/2026). Un problema por clave (la del vigía sin fecha, md5 ni severidad). Abierto si resuelto_at es null. rango_enviado: la severidad del último correo (1 aviso, 2 alto, 3 crítico). sin_resuelto: los que ya estaban abiertos el día que entró la regla; al resolverse no mandan correo.';
+
+
+--
+-- Name: aviso_tipo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aviso_tipo (
+    kind text NOT NULL,
+    tarea text NOT NULL,
+    nota text
+);
+
+
+--
+-- Name: TABLE aviso_tipo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.aviso_tipo IS 'A01-1 (02/11/2026). Los tipos de aviso que siguen «un correo por problema», con la tarea de cron de su vigía: un problema se da por resuelto cuando esa tarea corre bien dos veces sin volver a verlo.';
 
 
 --
@@ -110872,6 +111168,13 @@ ALTER TABLE ONLY auth.refresh_tokens ALTER COLUMN id SET DEFAULT nextval('auth.r
 
 
 --
+-- Name: aviso_callado id; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_callado ALTER COLUMN id SET DEFAULT nextval('public.aviso_callado_id_seq'::regclass);
+
+
+--
 -- Name: c01b_movimiento_registro id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -111926,6 +112229,14 @@ ALTER TABLE ONLY public.availability_push_log
 
 
 --
+-- Name: aviso_callado aviso_callado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_callado
+    ADD CONSTRAINT aviso_callado_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: aviso_empresa aviso_empresa_clave_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -111939,6 +112250,22 @@ ALTER TABLE ONLY public.aviso_empresa
 
 ALTER TABLE ONLY public.aviso_empresa
     ADD CONSTRAINT aviso_empresa_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: aviso_problema aviso_problema_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_problema
+    ADD CONSTRAINT aviso_problema_pkey PRIMARY KEY (clave);
+
+
+--
+-- Name: aviso_tipo aviso_tipo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aviso_tipo
+    ADD CONSTRAINT aviso_tipo_pkey PRIMARY KEY (kind);
 
 
 --
@@ -117902,6 +118229,13 @@ CREATE UNIQUE INDEX article_supplier_preferido_key ON public.article_supplier US
 --
 
 CREATE UNIQUE INDEX article_supplier_sin_codigo_key ON public.article_supplier USING btree (recipe_item_id, supplier_id) WHERE (supplier_code IS NULL);
+
+
+--
+-- Name: aviso_problema_abiertos; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX aviso_problema_abiertos ON public.aviso_problema USING btree (kind) WHERE (resuelto_at IS NULL);
 
 
 --
@@ -136741,6 +137075,12 @@ CREATE POLICY availability_push_log_read ON public.availability_push_log FOR SEL
 
 
 --
+-- Name: aviso_callado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.aviso_callado ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: aviso_empresa; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -136752,6 +137092,18 @@ ALTER TABLE public.aviso_empresa ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY aviso_empresa_leer ON public.aviso_empresa FOR SELECT TO authenticated USING ((public.current_user_is_admin_of(account_id) OR (public.current_user_is_admin_or_manager_of(account_id) AND ((location_id IS NULL) OR (location_id = ANY (public.current_user_location_ids()))))));
 
+
+--
+-- Name: aviso_problema; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.aviso_problema ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: aviso_tipo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.aviso_tipo ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: bank_account_iban; Type: ROW SECURITY; Schema: public; Owner: -
@@ -145674,6 +146026,15 @@ GRANT ALL ON FUNCTION public._availability_panel_core(p_account_id uuid, p_locat
 
 
 --
+-- Name: FUNCTION _aviso_clave(p_debounce_kind text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._aviso_clave(p_debounce_kind text) TO anon;
+GRANT ALL ON FUNCTION public._aviso_clave(p_debounce_kind text) TO authenticated;
+GRANT ALL ON FUNCTION public._aviso_clave(p_debounce_kind text) TO service_role;
+
+
+--
 -- Name: FUNCTION _aviso_falta_en_vault(p_que text, p_venta uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -145687,6 +146048,31 @@ GRANT ALL ON FUNCTION public._aviso_falta_en_vault(p_que text, p_venta uuid) TO 
 
 REVOKE ALL ON FUNCTION public._aviso_olvido_responder(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone, p_via text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._aviso_olvido_responder(p_log_id uuid, p_respuesta text, p_hora timestamp with time zone, p_via text) TO service_role;
+
+
+--
+-- Name: FUNCTION _aviso_pasadas_desde(p_tarea text, p_desde timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._aviso_pasadas_desde(p_tarea text, p_desde timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._aviso_pasadas_desde(p_tarea text, p_desde timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION _aviso_poner_en_cola(p_kind text, p_subject text, p_message text, p_debounce_kind text, p_account_id uuid, p_location_id uuid, p_brand_id uuid, p_severity text, p_rango integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._aviso_poner_en_cola(p_kind text, p_subject text, p_message text, p_debounce_kind text, p_account_id uuid, p_location_id uuid, p_brand_id uuid, p_severity text, p_rango integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._aviso_poner_en_cola(p_kind text, p_subject text, p_message text, p_debounce_kind text, p_account_id uuid, p_location_id uuid, p_brand_id uuid, p_severity text, p_rango integer) TO service_role;
+
+
+--
+-- Name: FUNCTION _aviso_rango(p_severity text, p_debounce_kind text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) TO anon;
+GRANT ALL ON FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) TO authenticated;
+GRANT ALL ON FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) TO service_role;
 
 
 --
@@ -147372,6 +147758,15 @@ GRANT ALL ON FUNCTION public._lab_txt(p jsonb, k text) TO service_role;
 GRANT ALL ON FUNCTION public._label_token_nuevo() TO anon;
 GRANT ALL ON FUNCTION public._label_token_nuevo() TO authenticated;
 GRANT ALL ON FUNCTION public._label_token_nuevo() TO service_role;
+
+
+--
+-- Name: FUNCTION _last_horas_en_horario(p_desde timestamp with time zone, p_ahora timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._last_horas_en_horario(p_desde timestamp with time zone, p_ahora timestamp with time zone) TO anon;
+GRANT ALL ON FUNCTION public._last_horas_en_horario(p_desde timestamp with time zone, p_ahora timestamp with time zone) TO authenticated;
+GRANT ALL ON FUNCTION public._last_horas_en_horario(p_desde timestamp with time zone, p_ahora timestamp with time zone) TO service_role;
 
 
 --
@@ -149321,6 +149716,14 @@ GRANT ALL ON FUNCTION public.avisos_empresa_por_enviar(p_limite integer) TO serv
 
 REVOKE ALL ON FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.avisos_olvido_debidos(p_ahora timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION avisos_resolver(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.avisos_resolver() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.avisos_resolver() TO service_role;
 
 
 --
@@ -153506,6 +153909,15 @@ GRANT ALL ON FUNCTION public.conta_pago_topes_poner(p_company uuid, p_tope_pago 
 GRANT ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) TO anon;
 GRANT ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pagos_por_revisar(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pagos_por_revisar(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pagos_por_revisar(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pagos_por_revisar(p_company uuid) TO service_role;
 
 
 --
@@ -162354,11 +162766,41 @@ GRANT ALL ON TABLE public.availability_push_log TO service_role;
 
 
 --
+-- Name: TABLE aviso_callado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.aviso_callado TO service_role;
+
+
+--
+-- Name: SEQUENCE aviso_callado_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.aviso_callado_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.aviso_callado_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.aviso_callado_id_seq TO service_role;
+
+
+--
 -- Name: TABLE aviso_empresa; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.aviso_empresa TO authenticated;
 GRANT ALL ON TABLE public.aviso_empresa TO service_role;
+
+
+--
+-- Name: TABLE aviso_problema; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.aviso_problema TO service_role;
+
+
+--
+-- Name: TABLE aviso_tipo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.aviso_tipo TO service_role;
 
 
 --
