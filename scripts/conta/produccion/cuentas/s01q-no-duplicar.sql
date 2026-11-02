@@ -9,6 +9,11 @@
 --   4. Serie 2 de 2026: «3320 · 2999» → «3318 · 2997» (seguida, sin huecos).
 --   5. Asientos con huella: 15.392 → 15.390. (La cadena la comprueban la tanda y el parte.)
 --   6. Facturas recibidas que ya están en otro asiento vivo (la regla 1): 2 → 0.
+--   7 a 10. El borrador del 303 del 4T de 2026 (S01q·8, «A»), recalculado: su
+--      resultado, su IVA soportado y repercutido (de sus líneas) y cuándo se
+--      calculó. Antes: «zero · 0.00», 520,03, 2.005,31 y el 30/10 a las 12:02:10.
+--      Después: lo que dé el recálculo, que recoge también lo cambiado desde el
+--      30/10 (los 123 borrados del #449). La vuelta atrás lo deja como estaba.
 select clave, valor from (
   select 1 o, 'Asientos 2/3272 y 2/3273 (Vercel y Supabase, 29/10)' clave,
     (select count(*)::text from public.journal_entry e
@@ -43,5 +48,19 @@ select clave, valor from (
                        and length(upper(regexp_replace(si.invoice_number, '[^A-Za-z0-9]', '', 'g'))) >= 4
                        and exists (select 1 from public.journal_line l join public.company_account_link k on k.company_account_id = l.company_account_id
                                     and k.entity = 'supplier' and k.entity_id = si.supplier_id::text and k.role = 'principal'
-                                    where l.entry_id = e.id and l.credit - l.debit > 0)))
+                                    where l.entry_id = e.id and l.credit - l.debit > 0))) union all
+  select 7, 'El 303 del 4T de 2026: estado, resultado y a pagar',
+    (select t.status || ' · ' || t.result_kind || ' · ' || coalesce(t.amount::text, '—') from public.tax_return t
+      where t.id = '8ae554ae-4853-42c9-b5b0-346840223d47' and t.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710') union all
+  select 8, 'El 303 del 4T: IVA soportado (deducible de sus líneas)',
+    (select coalesce(sum((l.frozen->>'deducible')::numeric), 0)::text from public.tax_return_line l
+      where l.tax_return_id = '8ae554ae-4853-42c9-b5b0-346840223d47' and l.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
+        and l.frozen->>'libro' in ('received', 'investment')) union all
+  select 9, 'El 303 del 4T: IVA repercutido (cuota de sus líneas)',
+    (select coalesce(sum((l.frozen->>'cuota')::numeric), 0)::text from public.tax_return_line l
+      where l.tax_return_id = '8ae554ae-4853-42c9-b5b0-346840223d47' and l.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
+        and l.frozen->>'libro' in ('issued', 'not_subject')) union all
+  select 10, 'El 303 del 4T: calculado el',
+    (select to_char(t.calculated_at at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') from public.tax_return t
+      where t.id = '8ae554ae-4853-42c9-b5b0-346840223d47' and t.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710')
 ) q order by o;

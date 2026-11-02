@@ -13,8 +13,17 @@
 --     se enlazan aquí, a su asiento medido.
 --   · El IVA soportado del 4T baja 10,57 € (4,20 + 6,37: sus 2 filas del libro,
 --     que cuentan en octubre y no se han presentado).
--- Lo de antes de cada factura queda en conta_s01q7_factura_antes, para la vuelta
--- atrás exacta. Para si algo no es lo medido. Sin Foodint (staging), no hace nada.
+--   · Los 2 asientos están en el BORRADOR del 303 del 4T de 2026 (sin presentar,
+--     calculado el 30/10): Julio, 02/11, respuesta S01q·8, «A». En la misma
+--     transacción: se sacan sus 2 líneas del borrador, se borran los asientos y
+--     se vuelve a calcular el borrador con conta_impuesto_303_calcular. Si el 303
+--     no está en borrador (alguien lo ha revisado o presentado), para sin hacer
+--     nada. El recálculo recoge también lo que ha cambiado desde el 30/10, como
+--     el borrado de los 123 (#449).
+-- Lo de antes de cada factura queda en conta_s01q7_factura_antes, y el 303 entero
+-- (la declaración, sus líneas, sus cajas y sus comprobaciones) en
+-- conta_s01q7_303_antes, para la vuelta atrás exacta (con su calculated_at). Para
+-- si algo no es lo medido. Sin Foodint (staging), no hace nada.
 
 do $$
 declare
@@ -26,7 +35,8 @@ declare
                        'num_factura', 'AJBFQADA-0006', 'diez', 'd26f4850-6663-461e-ab75-af7bc06499b5', 'diez_numero', 3129),
     jsonb_build_object('asiento', '0f8ebdb5-0000-4e28-807d-e685e5890209', 'numero', 3273, 'factura', '7eddb982-81ef-444c-8d88-1e68d5d7c34f',
                        'num_factura', 'EFWCEJ-00007', 'diez', '68ba052f-4733-4238-baf1-133ae8c551e5', 'diez_numero', 3130));
-  x jsonb; v_entries uuid[]; v_facturas uuid[]; v_iva_antes numeric; v_iva_despues numeric; v_iva_borrado numeric; r jsonb; v_ok int;
+  v_303 constant uuid := '8ae554ae-4853-42c9-b5b0-346840223d47';
+  x jsonb; v_entries uuid[]; v_facturas uuid[]; v_iva_antes numeric; v_iva_despues numeric; v_iva_borrado numeric; r jsonb; v_ok int; v_n int;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
     raise notice 'S01q·7: sin la cuenta de Foodint, no hay nada que borrar.';
@@ -56,6 +66,30 @@ begin
     v_entries := v_entries || (x->>'asiento')::uuid;
     v_facturas := v_facturas || (x->>'factura')::uuid;
   end loop;
+
+  -- El 303 del 4T: en borrador y sin presentar; y lo que tiene de estos 2 asientos, solo sus 2 líneas.
+  if not exists (select 1 from public.tax_return t where t.id = v_303 and t.company_id = v_e and t.form_code = '303'
+                    and t.fiscal_year = 2026 and t.period = '4T' and t.status = 'draft' and t.filed_at is null) then
+    raise exception 'S01q·7: el 303 del 4T de 2026 ya no está en borrador (lo han revisado o presentado): no se borra nada.';
+  end if;
+  select count(*) into v_n from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id where l.entry_id = any(v_entries);
+  if v_n <> 2 or exists (select 1 from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id
+                          where l.entry_id = any(v_entries) and t.tax_return_id <> v_303) then
+    raise exception 'S01q·7: los 2 asientos tenían que estar solo en el borrador del 303 del 4T, con 2 líneas, y están en % líneas o en otra declaración: no se borra nada.', v_n;
+  end if;
+
+  -- El 303 entero, como está (para la vuelta atrás exacta, con su calculated_at).
+  create table if not exists public.conta_s01q7_303_antes as
+    select 'declaracion'::text as que, to_jsonb(t) as fila from public.tax_return t where t.id = v_303
+    union all select 'linea', to_jsonb(l) from public.tax_return_line l where l.tax_return_id = v_303
+    union all select 'caja', to_jsonb(b) from public.tax_return_box b where b.tax_return_id = v_303
+    union all select 'comprobacion', to_jsonb(c) from public.tax_return_check c where c.tax_return_id = v_303;
+  alter table public.conta_s01q7_303_antes enable row level security;
+  revoke all on table public.conta_s01q7_303_antes from public, anon, authenticated;
+
+  -- 1 · Fuera del borrador las 2 líneas de estos asientos (la copia, arriba).
+  delete from public.tax_return_line t using public.journal_line l
+   where l.id = t.journal_line_id and l.entry_id = any(v_entries) and t.tax_return_id = v_303;
 
   -- El IVA soportado del 4T, antes (la misma vara después).
   select coalesce(sum(v.tax_amount), 0) into v_iva_antes from public.vat_book_entry v
@@ -93,4 +127,16 @@ begin
     raise exception 'S01q·7: el IVA soportado del 4T tenía que bajar 10,57 € y baja % € (de % a %): no se borra nada.', v_iva_antes - v_iva_despues, v_iva_antes, v_iva_despues;
   end if;
   raise notice 'S01q·7: IVA soportado del 4T, de % a % € (−10,57 €). 2 facturas «Ya contabilizada en Diez».', v_iva_antes, v_iva_despues;
+
+  -- 3 · El borrador del 303 del 4T, otra vez calculado (si ya no está en borrador, para).
+  if not exists (select 1 from public.tax_return t where t.id = v_303 and t.status = 'draft' and t.filed_at is null) then
+    raise exception 'S01q·7: el 303 del 4T de 2026 ya no está en borrador al ir a recalcularlo: no se borra nada.';
+  end if;
+  r := public.conta_impuesto_303_calcular(v_e, 2026, '4T');
+  if exists (select 1 from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id where l.entry_id = any(v_entries))
+     or not exists (select 1 from public.tax_return t where t.id = v_303 and t.status = 'draft' and t.calculated_at > now() - interval '1 minute') then
+    raise exception 'S01q·7: el borrador del 303 no ha quedado recalculado sin los 2 asientos: no se borra nada.';
+  end if;
+  raise notice 'S01q·7: el borrador del 303 del 4T, recalculado: %', (select format('%s · %s €, %s líneas', t.result_kind, t.amount,
+    (select count(*) from public.tax_return_line l where l.tax_return_id = t.id)) from public.tax_return t where t.id = v_303);
 end $$;

@@ -1,7 +1,7 @@
 -- supabase/staging/sql/20261102_s01q_no_duplicar_prueba.sql
 --
--- SOLO STAGING. Prueba del S01q·7 · que Sumied no pueda duplicar (20261102T2010 y
--- 2011). Todo en una transacción con ROLLBACK. Datos inventados, en la cuenta D.
+-- SOLO STAGING. Prueba del S01q·7 · que Sumied no pueda duplicar (20261102T2139,
+-- 2010 y 2011). Todo en una transacción con ROLLBACK. Datos inventados, en la cuenta D.
 -- La 2010 es de Foodint y en staging no hace nada. Intenta duplicar por cada
 -- camino y comprueba que sale el mensaje:
 --   1. Regla 1 · la pasada: una factura que Diez ya tiene con otro total no se
@@ -13,6 +13,7 @@
 --   5. Regla 2 · antes del corte: ni al proponer ni al cambiar la fecha.
 --   6. Regla 3 · una factura emitida, un asiento.
 --   7. Regla 4 · un pago o un cobro no pasa del total.
+--   9. S01q·8 · el borrado dice en qué declaración está un asiento (borrador o presentada) y no lo borra.
 --   8. La vuelta atrás, y otra vez delante.
 
 begin;
@@ -24,6 +25,7 @@ end $$;
 set local statement_timeout = '300s';
 -- sin usuario: prepara datos inventados como propietaria; el camino de la pantalla se prueba con los claims del usuario de la cuenta D.
 
+\i supabase/migrations/20261102T2139_s01q_borrar_dice_borrador.sql
 \i supabase/migrations/20261102T2010_s01q_borrar_vercel_supabase.sql
 \i supabase/migrations/20261102T2011_s01q_no_duplicar.sql
 
@@ -272,10 +274,56 @@ begin
   raise notice 'PRUEBA S01q·7 · 7 (cobrada): «%»', v_msg;
 end $$;
 
+-- 9 · S01q·8 · El borrado dice en qué declaración está un asiento: en borrador, «sácalo del
+--     borrador y recalcúlalo después»; presentada, «ya presentado». En los dos, no borra.
+do $$
+declare r jsonb; v_id uuid; v_linea uuid; v_b uuid; v_f uuid; v_msg text;
+begin
+  r := public._journal_entry_proponer(pg_temp.p('e')::uuid,
+         jsonb_build_object('series', 2, 'fecha', pg_temp.p('corte')::date + 3, 'concepto', 'Asiento inventado S01q·8', 'source_type', 'manual', 'confianza', 'seguro', 'porque', 'Prueba.'),
+         pg_temp.lineas(7), null, 'Prueba S01q·8', null);
+  v_id := (r->>'id')::uuid;
+  perform public._journal_entry_validar(v_id, 'Prueba S01q·8');
+  select id into v_linea from public.journal_line where entry_id = v_id order by position limit 1;
+  insert into public.tax_return (account_id, company_id, form_code, fiscal_year, cadence, period, due_date, status, sequence)
+  values (pg_temp.p('acc')::uuid, pg_temp.p('e')::uuid, '303', 2026, 'quarterly', '4T', date '2027-01-30', 'draft', 9) returning id into v_b;
+  insert into public.tax_return_line (tax_return_id, account_id, company_id, journal_line_id, frozen)
+  values (v_b, pg_temp.p('acc')::uuid, pg_temp.p('e')::uuid, v_linea, '{"libro": "received"}');
+  begin
+    perform public._conta_asientos_borrar(pg_temp.p('e')::uuid, array[v_id], 'Prueba S01q·8.', 'Prueba S01q·8');
+  exception when others then v_msg := sqlerrm;
+  end;
+  if v_msg is null or v_msg not like 'No se borra nada. El asiento 2/% está en el borrador del 303 del 4T de 2026: no se borra mientras esté ahí. Sácalo del borrador y recalcúlalo después.' then
+    raise exception 'PRUEBA S01q·8 · 9: en un borrador, no lo dice o lo borra: %', v_msg;
+  end if;
+  raise notice 'PRUEBA S01q·8 · 9 (borrador): «%»', v_msg;
+  delete from public.tax_return_line where tax_return_id = v_b;
+  insert into public.tax_return (account_id, company_id, form_code, fiscal_year, cadence, period, due_date, status, sequence,
+                                 filed_at, filed_via, aeat_csv, result_kind, amount)
+  values (pg_temp.p('acc')::uuid, pg_temp.p('e')::uuid, '303', 2026, 'quarterly', '4T', date '2027-01-30', 'filed', 10,
+          now(), 'outside', 'CSVINVENTADO0000', 'zero', 0) returning id into v_f;
+  insert into public.tax_return_line (tax_return_id, account_id, company_id, journal_line_id, frozen)
+  values (v_f, pg_temp.p('acc')::uuid, pg_temp.p('e')::uuid, v_linea, '{"libro": "received"}');
+  v_msg := null;
+  begin
+    perform public._conta_asientos_borrar(pg_temp.p('e')::uuid, array[v_id], 'Prueba S01q·8.', 'Prueba S01q·8');
+  exception when others then v_msg := sqlerrm;
+  end;
+  if v_msg is null or v_msg not like 'No se borra nada. El asiento 2/% está en el 303 del 4T de 2026, ya presentado: no se borra.' then
+    raise exception 'PRUEBA S01q·8 · 9: en una presentada, no lo dice o lo borra: %', v_msg;
+  end if;
+  if not exists (select 1 from public.journal_entry where id = v_id) then raise exception 'PRUEBA S01q·8 · 9: el asiento se ha borrado.'; end if;
+  raise notice 'PRUEBA S01q·8 · 9 (presentada): «%»', v_msg;
+end $$;
+
 -- 8 · La vuelta atrás, y otra vez delante.
 \i supabase/vuelta-atras/20261102T2011_s01q_no_duplicar.down.sql
 \i supabase/vuelta-atras/20261102T2010_s01q_borrar_vercel_supabase.down.sql
+\i supabase/vuelta-atras/20261102T2139_s01q_borrar_dice_borrador.down.sql
 do $$ begin
+  if pg_get_functiondef('public._conta_asientos_borrar(uuid,uuid[],text,text)'::regprocedure) like '%%S01q·8%%' then
+    raise exception 'PRUEBA S01q·7 · 8: la vuelta atrás no devuelve _conta_asientos_borrar a la de antes.';
+  end if;
   if exists (select 1 from pg_trigger where tgname in ('trg_journal_entry_factura_una_vez', 'trg_journal_entry_no_antes_del_corte', 'trg_customer_invoice_un_asiento',
                                                         'trg_supplier_invoice_payment_tope', 'trg_customer_invoice_payment_tope'))
      or to_regclass('public.ux_customer_invoice_entry') is not null then
@@ -284,6 +332,7 @@ do $$ begin
   raise notice 'PRUEBA S01q·7 · 8: la vuelta atrás quita las cuatro reglas.';
 end $$;
 -- Delante otra vez: lo que la prueba ha dejado (la factura con dos asientos, tras «No es repetida») no lo impide.
+\i supabase/migrations/20261102T2139_s01q_borrar_dice_borrador.sql
 \i supabase/migrations/20261102T2011_s01q_no_duplicar.sql
 
 rollback;
