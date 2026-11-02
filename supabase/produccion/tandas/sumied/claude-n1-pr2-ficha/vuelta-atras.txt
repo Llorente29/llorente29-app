@@ -1,0 +1,4 @@
+# N1 · PR 2 · paso 1 · vuelta atrás, en orden inverso.
+supabase/vuelta-atras/20261102T0831_n1d_sin_centro_en_palabras.down.sql
+supabase/vuelta-atras/20261102T0830_n1d_ficha.down.sql
+supabase/vuelta-atras/20261102T0817_n1d_catalogos_oficiales.down.sql

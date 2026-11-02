@@ -1,0 +1,8 @@
+# N1 · PR 2 · paso 1: la 0817 y la 0830 (solo añaden: desde la rama van de
+# verdad, W05), la 0831 (cambia lab_volcar_lote: solo en ROLLBACK) y su prueba
+# (ROLLBACK): los catálogos con su fuente, la ficha con y sin permiso, poner la
+# categoría, el volcado en palabras y la vuelta atrás.
+supabase/migrations/20261102T0817_n1d_catalogos_oficiales.sql
+supabase/migrations/20261102T0830_n1d_ficha.sql
+supabase/migrations/20261102T0831_n1d_sin_centro_en_palabras.sql
+supabase/staging/sql/20261102_n1d_ficha_prueba.sql
