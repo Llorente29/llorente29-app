@@ -227,8 +227,12 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
 
   // El centro y «Sin centro en Cegid», sin confirmar: «Pasar a las fichas» no mete a nadie, y lo dice.
-  const filaCentro = page.locator('[data-prueba="volcado-centro"]').filter({ hasText: centro })
-  const filaSinCentro = page.locator('[data-prueba="volcado-centro"]').filter({ hasText: 'Sin centro en Cegid' })
+  // Por la PRIMERA celda (el nombre del centro): el desplegable de cada fila lleva
+  // en sus opciones el local que se llama como el centro, y un filtro por el texto
+  // de la fila entera cogía también la de «Sin centro en Cegid» (2 filas, no 1).
+  const filaDe = (nombre: string) => page.locator('[data-prueba="volcado-centro"]').filter({ has: page.locator('td:first-child', { hasText: nombre }) })
+  const filaCentro = filaDe(centro)
+  const filaSinCentro = filaDe('Sin centro en Cegid')
   await expect(filaCentro).toHaveCount(1, { timeout: 30_000 })
   // La 2248 (N1 · respuesta 3) llega a staging de verdad cuando se fusiona en main
   // (es un «cambia»: desde la rama, solo en ROLLBACK). Sin ella, staging no trae la
