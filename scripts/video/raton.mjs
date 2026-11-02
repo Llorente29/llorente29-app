@@ -53,7 +53,7 @@ export function reloj() {
       dichos.push({ id, texto, dura, desde: (a - t0) / 1000 })
       console.log(`  «${texto}»`)
       if (gesto) await gesto()
-      const falta = dura + 0.55 - (Date.now() - a) / 1000
+      const falta = dura + 0.9 - (Date.now() - a) / 1000
       if (falta > 0) await new Promise((ok) => setTimeout(ok, falta * 1000))
     },
     /** Empieza el paso: su subtítulo sale desde aquí hasta el siguiente. */

@@ -57,7 +57,7 @@ const total = PORTADA + durCuerpo + CIERRE
 const dichos = (T.dichos ?? []).map((d, i, xs) => {
   const a = PORTADA + aMontaje(d.desde)
   const sig = i + 1 < xs.length ? PORTADA + aMontaje(xs[i + 1].desde) : PORTADA + durCuerpo
-  return { ...d, a, b: Math.min(sig - 0.05, a + (vozDe.get(d.id)?.dura ?? d.dura) + 0.6) }
+  return { ...d, a, b: Math.min(sig - 0.05, a + (vozDe.get(d.id)?.dura ?? d.dura) + 0.8) }
 })
 const tarjetas = [
   { id: 'portada', texto: textoDe('portada', ''), a: 0.35, b: PORTADA - 0.2, sinSubtitulo: true },
