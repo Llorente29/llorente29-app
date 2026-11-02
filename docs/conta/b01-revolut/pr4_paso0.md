@@ -4,6 +4,8 @@ Medido en producción el 02/11/2026, en solo lectura y con `account_id` (regla 9
 
 ## Lo primero, antes que el PR 4
 
+> **Corregido el 02/11 por la tarde:** Revolut se conectó en producción ese mismo día, a las 10:52 de Madrid, después de esta medida (08:00), con permiso de pagar. Lo que sigue de este apartado es la foto de las 08:00.
+
 **En producción, Foodint no tiene Revolut conectado.** `revolut_conexion` tiene una sola fila:
 - entorno `sandbox`;
 - estado `certificado`: se subió el certificado y no se llegó a conectar;
