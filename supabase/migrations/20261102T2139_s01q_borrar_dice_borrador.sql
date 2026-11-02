@@ -28,6 +28,11 @@ declare
                      where l.entry_id = e.id) d on true
      where e.id = any(p_entries)$t$;
 begin
+  -- Ya cambiada (pasada dos veces): no hay nada que hacer.
+  if (length(v_def) - length(replace(v_def, v_despues, ''))) / length(v_despues) = 1 then
+    raise notice 'S01q·8: _conta_asientos_borrar ya dice en qué declaración está un asiento.';
+    return;
+  end if;
   v_n := (length(v_def) - length(replace(v_def, v_antes, ''))) / length(v_antes);
   if v_n <> 1 then raise exception 'S01q·8: _conta_asientos_borrar no tiene una sola vez el trozo que se cambia (lo tiene % veces): no se cambia nada.', v_n; end if;
   execute replace(v_def, v_antes, v_despues);

@@ -2,7 +2,7 @@
  "_que": "S01q·7 y S01q·8 · No duplicar · contexto de producción, medido en SOLO LECTURA el 02/11 a las 20:50Z: no existe ninguna función, disparador ni el índice que crea la 2011; la 2139 cambia _conta_asientos_borrar (solo el mensaje cuando un asiento está en una declaración); la 2010 saca 2 de las 215 líneas del borrador del 303 del 4T de 2026 (8ae554ae…, draft, sin presentar, calculado el 30/10), borra con _conta_asientos_borrar 2 asientos validados (2/3272 y 2/3273, del 29/10, 4 líneas, 1 fila de IVA y 1 documento cada uno; ninguno enviado a Diez ni casado), renumera y vuelve a encadenar los de después (serie 2, 3274–3320, ninguno en Diez), enlaza sus 2 facturas a su asiento de Diez y vuelve a calcular el borrador del 303 con conta_impuesto_303_calcular. Las reglas, medidas hoy: la 1 salta solo con esos 2 (de 146 asientos de facturas recibidas); la 2, la 3 y la 4, 0. Nada en el camino del pedido; ninguna en el historial.",
  "medido": "2026-11-02T20:50Z",
  "tanda": {
-  "supabase/migrations/20261102T2139_s01q_borrar_dice_borrador.sql": "98b0950adcb5b0062f053653449ae285",
+  "supabase/migrations/20261102T2139_s01q_borrar_dice_borrador.sql": "8a87d619d49306ad126c41877f17bba0",
   "supabase/migrations/20261102T2010_s01q_borrar_vercel_supabase.sql": "81f4cc016823acbadd2ccebc1ea3b0f2",
   "supabase/migrations/20261102T2011_s01q_no_duplicar.sql": "bd3e1421b24d0788853694299d30afd0"
  },
