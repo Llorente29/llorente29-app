@@ -127,6 +127,9 @@ async function simular(page: Page): Promise<Llamada[]> {
     remesa: 'r-15', codigo: 'R-2026/015', por_confirmar: 1,
     frase: 'Preparada la remesa R-2026/015: 1 pago, 1.105,30 €. Antes de descargar el fichero, confirma 1 IBAN que ha cambiado.',
   })))
+  // B01 · 2c-2 (#432) · De qué tipo es cada remesa (fichero o por el banco) es una lectura de la tabla.
+  // Las remesas de aquí son simuladas (r-15 no es un uuid: staging contesta 400): ninguna es por el banco.
+  await page.route(/\/rest\/v1\/conta_pago_remesa(\?|$)/, (r) => json(r, []))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_ficha(\?|$)/, (r) => json(r, REMESA(confirmado ? 'fichero' : 'preparada', confirmado)))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_iban_confirmar(\?|$)/, (r) => {
     confirmado = true
@@ -323,6 +326,9 @@ test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada
     return json(r, { casado: 'c-1', pagos: 1, pagadas: 1, validado_solo: true,
       frase: 'Casado con la remesa R-2026/015: 1 pago, 1.105,30 €. 1 factura queda pagada y su asiento validado solo: el cargo cuadra con la remesa.' })
   })
+  // B01 · 2c-2 (#432) · De qué tipo es cada remesa (fichero o por el banco) es una lectura de la tabla.
+  // Las remesas de aquí son simuladas (r-15 no es un uuid: staging contesta 400): ninguna es por el banco.
+  await page.route(/\/rest\/v1\/conta_pago_remesa(\?|$)/, (r) => json(r, []))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_ficha(\?|$)/, (r) => json(r, REMESA('pagada', true)))
 
   await page.goto(`/conta/bancos?banco=${bancoId}&mes=2026-10&mov=${mov.datos[0].id}`)

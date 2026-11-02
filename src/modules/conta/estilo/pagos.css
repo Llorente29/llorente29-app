@@ -65,6 +65,10 @@
 .pg-barra-campo input::-webkit-calendar-picker-indicator { filter: invert(1); }
 .pg-kbd { margin-left: var(--s-2); padding: 0 6px; border: var(--s-linea) solid rgba(255, 255, 255, .6); border-radius: 4px; font-size: var(--s-t-xs); font-family: inherit; }
 .pg-barra-nota { margin: calc(-1 * var(--s-2)) 0 0; }
+/* B01 · Con la barra fija abajo, lo que se lleva a la vista (una casilla, con el teclado) no queda debajo de ella.
+   En html, como el de la cabecera (marco.css): los tokens viven en .cx. En el móvil la barra va en columna. */
+html:has(.pg-barra) { scroll-padding-bottom: 120px; }
+@media (max-width: 767px) { html:has(.pg-barra) { scroll-padding-bottom: 300px; } }
 
 /* Los avisos de abajo (tres en Pagos, dos en la remesa) */
 .pg-notas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
