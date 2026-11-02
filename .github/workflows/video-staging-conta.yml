@@ -145,11 +145,27 @@ jobs:
           node scripts/video/factura-al-pago.mjs reconocer "$SALIDA"
           node scripts/video/factura-al-pago.mjs grabar "$SALIDA"
 
+      # La voz: Piper (voz neuronal libre, corre aquí sin llamar a ningún servicio),
+      # con la voz de castellano de España es_ES-davefx-medium. Si no se puede
+      # bajar, el vídeo sale igual, sin voz, y el run lo dice.
+      - name: Voz · Piper y su modelo de castellano
+        id: voz
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          pip install -q piper-tts
+          mkdir -p "$RUNNER_TEMP/voz"
+          base=https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium
+          curl -sSfL -o "$RUNNER_TEMP/voz/es_ES-davefx-medium.onnx" "$base/es_ES-davefx-medium.onnx"
+          curl -sSfL -o "$RUNNER_TEMP/voz/es_ES-davefx-medium.onnx.json" "$base/es_ES-davefx-medium.onnx.json"
+          echo "VOZ_MODELO=$RUNNER_TEMP/voz/es_ES-davefx-medium.onnx" >> "$GITHUB_ENV"
+
       - name: Montar con ffmpeg
         if: always()
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || { echo "Sin grabación: no hay nada que montar."; exit 0; }
+          [ -n "${VOZ_MODELO:-}" ] || echo "::warning::Sin modelo de voz: el vídeo sale sin voz."
           node scripts/video/montar.mjs "$SALIDA"
 
       - name: Revisar que no sale nada real (T11)
@@ -181,7 +197,7 @@ jobs:
           [ -d "$SALIDA" ] || exit 0
           RAMA="video-salida/${GITHUB_REF_NAME//\//-}"
           cd "$SALIDA"
-          rm -f crudo.webm
+          rm -f crudo.webm voz/*.wav
           git init -q -b salida
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

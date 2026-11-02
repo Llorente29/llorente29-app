@@ -17,7 +17,8 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
 
 | Fichero | Qué es |
 |---|---|
-| `factura-al-pago.mp4` | El vídeo: 1920×1080, H.264, subtítulos quemados, sin voz |
+| `factura-al-pago.mp4` | El vídeo: 1920×1080, H.264, subtítulos quemados y voz |
+| `factura-al-pago-sin-voz.mp4`, `voz.m4a` | El mismo sin voz, y la voz sola (pista aparte) |
 | `pasos/` | Un fotograma de cada paso, a mitad de su subtítulo |
 | `fotogramas/` | Uno cada 2 s, para revisarlo sin abrir el vídeo |
 | `capturas/` | La pantalla de cada paso y su texto (lo que lee `revisar.mjs`) |
@@ -41,7 +42,10 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
   facturas aprobadas. Para si la cuenta es la plantilla.
 - `cargos.sql`: los tres cargos de Revolut que vuelven, casados por el núcleo
   de verdad (`_bank_casar_nucleo`, como «folvy»).
-- `montar.mjs`: portada, tramos sin esperas, cierre y subtítulos.
+- `montar.mjs`: portada, tramos sin esperas, cierre y subtítulos; y la voz, si hay modelo.
+- `voz.py`: la voz con Piper (voz neuronal libre que corre en el runner, sin
+  llamar a ningún servicio), `es_ES-davefx-medium`, castellano de España. Dice
+  lo mismo que los subtítulos, cada frase al empezar su paso.
 - `revisar.mjs`: busca en el texto de cada pantalla IBAN que no sean del
   9999, DNI, NIE, NIF que no sean de ceros, correos y nombres reales.
 - `reconocer.sql`: solo lectura, lo que tiene la empresa A del carril.

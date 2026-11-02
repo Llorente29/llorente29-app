@@ -17,7 +17,7 @@
 // Cortes: lo que hay entre [desde, hasta] de un corte (las esperas de red) no
 // entra. El subtítulo de cada paso va desde que empieza hasta el siguiente.
 
-import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, rmSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 
@@ -90,3 +90,30 @@ unPaso('0-portada', PORTADA / 2)
 pasos.forEach((p) => unPaso(String(p.paso), PORTADA + (p.a + p.b) / 2))
 unPaso('9-cierre', PORTADA + durCuerpo + CIERRE / 2)
 writeFileSync(join(salida, 'montaje.json'), JSON.stringify({ total, portada: PORTADA, cierre: CIERRE, quedan, pasos: pasos.map(({ paso, subtitulo, a, b }) => ({ paso, subtitulo, desde: PORTADA + a, hasta: PORTADA + b })) }, null, 2))
+
+// 5 · La voz (si el workflow ha dejado un modelo de Piper en VOZ_MODELO): dice
+// lo mismo que los subtítulos, cada frase al empezar su paso, en una pista
+// aparte. Deja también la pista suelta (voz.m4a) y el vídeo sin voz.
+const modelo = process.env.VOZ_MODELO
+if (modelo) {
+  const dir = join(salida, 'voz'); rmSync(dir, { recursive: true, force: true }); mkdirSync(dir)
+  const frases = [
+    { texto: 'De la factura al pago, sin teclear nada.', en: 0.35 },
+    ...pasos.map((p) => ({ texto: `${p.subtitulo}.`, en: PORTADA + p.a + 0.4, hasta: PORTADA + p.b })),
+    { texto: 'Sumied. Contabilidad que se hace sola.', en: PORTADA + durCuerpo + 0.4, hasta: total },
+  ].map((f, i) => ({ ...f, salida: join(dir, `f${i}.wav`) }))
+  const rutaFrases = join(dir, 'frases.json')
+  writeFileSync(rutaFrases, JSON.stringify(frases))
+  execFileSync('python3', ['scripts/video/voz.py', modelo, rutaFrases], { stdio: 'inherit' })
+  const hechas = JSON.parse(readFileSync(rutaFrases, 'utf8'))
+  for (const f of hechas) if (f.hasta && f.en + f.dura > f.hasta) console.log(`AVISO: «${f.texto}» dura ${f.dura.toFixed(1)} s y se pisa con el paso siguiente.`)
+  const entradas = hechas.flatMap((f) => ['-i', f.salida])
+  const mezcla = hechas.map((f, i) => `[${i}:a]aresample=48000,adelay=${Math.round(f.en * 1000)}:all=1[a${i}]`).join(';') +
+    `;${hechas.map((_, i) => `[a${i}]`).join('')}amix=inputs=${hechas.length}:normalize=0,apad,atrim=0:${total.toFixed(2)},loudnorm=I=-16:TP=-1.5[voz]`
+  const m4a = join(salida, 'voz.m4a')
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...entradas, '-filter_complex', mezcla, '-map', '[voz]', '-c:a', 'aac', '-b:a', '160k', m4a])
+  const sinVoz = join(salida, 'factura-al-pago-sin-voz.mp4')
+  renameSync(mp4, sinVoz)
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', sinVoz, '-i', m4a, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-shortest', '-movflags', '+faststart', mp4])
+  console.log(`Con voz: ${mp4} (y ${sinVoz}, y la pista suelta ${m4a}).`)
+}
