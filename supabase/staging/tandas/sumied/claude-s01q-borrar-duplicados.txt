@@ -1,0 +1,8 @@
+# S01q · Borrar duplicados: 1837 añade el borrado de asientos (respaldo,
+# renumeración, cadena); 1838 es de Foodint y en staging no hace nada. Su prueba
+# (ROLLBACK, cuenta D, asientos inventados): borrar dos de cinco renumera y
+# recalcula la cadena; el siguiente, sin hueco; deshacer lo devuelve todo; antes
+# del corte no se borra; nadie de fuera lo llama; la vuelta atrás.
+supabase/migrations/20261102T1837_s01q_borrar_asientos.sql
+supabase/migrations/20261102T1838_s01q_foodint_duplicados.sql
+supabase/staging/sql/20261102_s01q_borrar_prueba.sql
