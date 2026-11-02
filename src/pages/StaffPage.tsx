@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaFichaPersona } from '@/config/navegacion'
+import PermisosLaboralTarjeta from '@/modules/conta/laboral/permisos/PermisosLaboralTarjeta'
 import { useApp } from '../context/AppContext'
 import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
 import { Button, Input, Select, Textarea, Badge, Card, Tabs, Modal, Label, Alert } from '../components/ui'
@@ -127,7 +128,7 @@ function findCorrectionTarget(
 
 export default function StaffPage() {
   const voc = useProductoLaboral()
-  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile, addClockEntry } = useApp()
+  const { staff, locations, createEmployee, saveEmployee, removeEmployee, gestoriaConfig, activeAccountId, userProfile, addClockEntry, roleInActiveAccount } = useApp()
   const [mainTab, setMainTab] = useState<'insights' | 'list'>(voc.hosteleria ? 'insights' : 'list')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // N1 · PR 2 (02/11): en Sumied, pulsar una persona abre su ficha nueva; la de
@@ -258,6 +259,8 @@ export default function StaffPage() {
 
       {mainTab === 'list' && (
         <>
+          {/* N1 · PR 2 (02/11): en Sumied, el administrador ve quién tiene el permiso de Laboral. */}
+          {voc.sumied && roleInActiveAccount === 'admin' && <PermisosLaboralTarjeta />}
           {/* Banner de contratos / periodos de prueba próximos a vencer */}
           {expiringEvents.length > 0 && (
             <div className="bg-warning-bg border-2 border-warning/30 rounded-lg p-3 space-y-2">

@@ -333,6 +333,11 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await ficha.locator('[data-prueba="ficha-pestana-irpf"]').click()
   await expect(ficha.locator('[data-prueba="ficha-145"]')).toContainText('Falta')
 
+  // N1 · PR 2 · En Equipo, el administrador ve quién tiene el permiso de Laboral (él, siempre).
+  await page.goto('/conta/laboral')
+  const permisos = page.locator('[data-prueba="permisos-laboral"]')
+  await expect(permisos.locator('[data-prueba="permisos-laboral-fila"]').first()).toContainText('Lo tiene siempre, por ser administrador de la cuenta', { timeout: 30_000 })
+
   expect(errores, errores.join('\n')).toEqual([])
   } finally {
     // Al acabar, en verde o en rojo, lo suyo: sus personas y su local (con su
