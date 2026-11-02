@@ -2599,6 +2599,8 @@ begin
   if f.id is null or f.supplier_id is null or f.status in ('anulada', 'descartada') or f.grand_total is null then return null; end if;
   if exists (select 1 from supplier_invoice_receipt where supplier_invoice_id = f.id) then return null; end if;
   select * into s from supplier where id = f.supplier_id;
+  -- S01o·2 · Un proveedor de servicios no entrega mercancía: su factura no espera albarán.
+  if public._conta_entrega_mercancia(s.id) is false then return null; end if;
   -- Los que esperan factura de este proveedor, recibidos hasta la fecha de la factura, con su total leído.
   create temp table if not exists _s01c_cand (id uuid, code text, doc text, fecha date, total numeric) on commit drop;
   delete from _s01c_cand where true;
@@ -3682,6 +3684,32 @@ $_$;
 
 
 --
+-- Name: _conta_entrega_mercancia(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_entrega_mercancia(p_supplier uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select case when p_supplier is null then null else coalesce(
+    (select s.delivers_goods from public.supplier s where s.id = p_supplier),
+    exists (select 1 from public.goods_receipt g where g.supplier_id = p_supplier)
+      or exists (select 1 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+                  where k.entity = 'supplier' and k.entity_id = p_supplier::text and k.role = 'gasto' and a.code ~ '^60[0-2]')
+      or exists (select 1 from public.supplier_invoice x join public.journal_entry e on e.source_type = 'supplier_invoice' and e.source_id = x.id and e.status = 'validado'
+                   join public.journal_line l on l.entry_id = e.id join public.company_account a on a.id = l.company_account_id
+                  where x.supplier_id = p_supplier and a.code ~ '^60[0-2]')) end
+$$;
+
+
+--
+-- Name: FUNCTION _conta_entrega_mercancia(p_supplier uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) IS 'S01o·2 · ¿Entrega mercancía (sus facturas esperan albarán)? La ficha manda; si no dice, sí con algún albarán o con gasto en 600–602.';
+
+
+--
 -- Name: _conta_factura_apuntar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4216,6 +4244,44 @@ end $$;
 
 
 --
+-- Name: _conta_iva_no_deducible_auto(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_iva_no_deducible_auto(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; c public.company; v_dest text; v_empresa text; v_clase text; v_roi boolean; v_m jsonb := '[]'::jsonb; v_iva boolean;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null then return null; end if;
+  select * into c from public.company where id = v.company_id and account_id = v.account_id;
+  v_empresa := coalesce(nullif(btrim(c.legal_name), ''), 'la empresa');
+  v_iva := exists (select 1 from public.supplier_invoice_tax t where t.supplier_invoice_id = v.id and coalesce(t.vat_pct, 0) > 0 and coalesce(t.vat_amount, 0) <> 0);
+  if not v_iva then return jsonb_build_object('no_deducible', false, 'motivos', v_m); end if;
+  -- No viene a nombre de la empresa: leída de su documento, y su destinatario sin el NIF de la empresa.
+  if v.reading ? 'factura' and coalesce(v.source, '') not in ('lote', 'liquidacion') and public._conta_nif_clave(c.tax_id) is not null then
+    v_dest := public._conta_nif_clave(v.reading->'factura'->'destinatario'->>'nif');
+    if v_dest is distinct from public._conta_nif_clave(c.tax_id) then
+      v_m := v_m || jsonb_build_object('motivo', 'no_a_nombre', 'texto', format('No viene a nombre de %s: el IVA no se puede deducir y va al gasto.', v_empresa));
+    end if;
+  end if;
+  -- Sin ROI: proveedor de la UE que cobra IVA español.
+  select public.conta_proveedor_iva_clase(s.country_code, s.tax_id_type, s.tax_id, s.tax_id_check_status, s.vat_regime) into v_clase
+    from public.supplier s where s.id = v.supplier_id and s.account_id = v.account_id;
+  if v_clase = 'intracomunitaria' then
+    select p.en_roi into v_roi from public.company_tax_profile p where p.company_id = v.company_id and p.account_id = v.account_id;
+    if v_roi is false then
+      v_m := v_m || jsonb_build_object('motivo', 'sin_roi', 'texto', format('Es de un proveedor de la UE que cobra IVA español y %s no está en el ROI: el IVA no se puede deducir y va al gasto.', v_empresa));
+    elsif v_roi is null then
+      return jsonb_build_object('no_deducible', jsonb_array_length(v_m) > 0, 'motivos', v_m, 'falta_roi', true);
+    end if;
+  end if;
+  return jsonb_build_object('no_deducible', jsonb_array_length(v_m) > 0, 'motivos', v_m);
+end $$;
+
+
+--
 -- Name: _conta_iva_reabrir_se_puede_deshacer(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4720,6 +4786,25 @@ begin
   end loop;
   return null;
 end $_$;
+
+
+--
+-- Name: _conta_nif_clave(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_nif_clave(p text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select nullif(regexp_replace(regexp_replace(upper(regexp_replace(coalesce(p, ''), '[^A-Za-z0-9]', '', 'g')),
+                                              '^(EUVAT|NIFIVA|VATNO|VAT|NIF|CIF|TVA)', ''), '^ES(?=[A-Z0-9]{9}$)', ''), '')
+$_$;
+
+
+--
+-- Name: FUNCTION _conta_nif_clave(p text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_nif_clave(p text) IS 'S01o·2 · La clave de un NIF para compararlo: sin etiquetas (EU VAT, VAT, NIF, CIF), sin lo que no es letra o cifra y sin el ES de un NIF español.';
 
 
 --
@@ -30128,9 +30213,12 @@ begin
     select jsonb_build_object('fecha', l.received_at, 'de', l.from_address, 'asunto', l.subject, 'resultado', l.outcome,
              'llegada', d.status, 'motivo', d.reason,
              'factura', case when si.id is not null then jsonb_build_object('id', si.id, 'codigo', si.code, 'numero', si.invoice_number, 'total', si.grand_total,
-                                                                         'proveedor', sp.name, 'casada', exists (select 1 from supplier_invoice_receipt r where r.supplier_invoice_id = si.id)) end,
+                                                                         'proveedor', sp.name, 'casada', exists (select 1 from supplier_invoice_receipt r where r.supplier_invoice_id = si.id),
+                                                                         'espera_albaran', public._conta_entrega_mercancia(si.supplier_id) is not false) end,
              'dicho', (select da.text from document_activity da where da.supplier_invoice_id = coalesce(d.supplier_invoice_id, d.duplicate_of_invoice_id)
-                         and da.action in ('casada', 'propuesta') order by da.created_at desc limit 1),
+                         and da.action in ('casada', 'propuesta')
+                         -- S01o·2 · «Espera su albarán» de un proveedor de servicios: queda en el historial, no sale aquí.
+                         and not (coalesce((da.detail->>'espera_albaran')::boolean, false) and public._conta_entrega_mercancia(si.supplier_id) is false) order by da.created_at desc limit 1),
              -- S01j · Para «Volver a leer», y lo que salió del correo: sus liquidaciones (y la factura de comisión de Just Eat).
              'email_id', l.email_id,
              'liquidaciones', (select coalesce(jsonb_agg(jsonb_build_object('id', cs.id, 'plataforma', sc.name,
@@ -32569,7 +32657,7 @@ begin
   v_nif := f->'proveedor'->>'nif';
   select s.id into v_prov from public.supplier s
    where s.account_id = v_in.account_id and s.archived_at is null and v_nif is not null
-     and regexp_replace(upper(regexp_replace(coalesce(s.tax_id, ''), '[^A-Za-z0-9]', '', 'g')), '^ES(?=[A-Z0-9]{9}$)', '') = v_nif
+     and public._conta_nif_clave(s.tax_id) = public._conta_nif_clave(v_nif)
    order by s.created_at limit 1;
 
   -- ¿Repetida?
@@ -40133,6 +40221,8 @@ begin
          where l.entry_id = p_entry and l.vat_book in ('received', 'investment')
            and not case v_p.clase
                  when 'intracomunitaria' then t.treatment = 'intra_eu'
+                   -- S01o·2: el IVA español de un proveedor de la UE, apuntado como NO deducible (al gasto): sin ROI o no a nombre de la empresa.
+                   or (t.treatment = 'taxed' and l.vat_deductible = 'no')
                  when 'isp_extranjero' then t.treatment = 'reverse_charge'
                  when 'isp_nacional' then t.treatment = 'reverse_charge'
                  when 'nacional' then t.treatment in ('taxed', 'exempt', 'not_subject')
@@ -83164,10 +83254,10 @@ COMMENT ON FUNCTION public.supplier_invoice_not_duplicate(p_invoice_id uuid, p_q
 CREATE FUNCTION public.supplier_invoice_repetida(p_account uuid, p_supplier uuid, p_nif text, p_numero text, p_fecha date, p_total numeric, p_excluir uuid DEFAULT NULL::uuid) RETURNS TABLE(nivel text, invoice_id uuid, invoice_number text, invoice_date date, grand_total numeric)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
-    AS $_$
+    AS $$
 declare
   v_clave text := public.conta_clave_numero(p_numero);
-  v_nif text := nullif(regexp_replace(upper(regexp_replace(coalesce(p_nif, ''), '[^A-Za-z0-9]', '', 'g')), '^ES(?=[A-Z0-9]{9}$)', ''), '');
+  v_nif text := public._conta_nif_clave(p_nif);
 begin
   if not (public.belongs_to_account(p_account) or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'Esa cuenta no es tuya.' using errcode = '42501';
@@ -83179,7 +83269,9 @@ begin
      where i.account_id = p_account and i.status <> 'anulada' and i.not_duplicate_confirmed_at is null
        and (p_excluir is null or i.id <> p_excluir)
        and ((p_supplier is not null and i.supplier_id = p_supplier)
-            or (v_nif is not null and regexp_replace(upper(regexp_replace(coalesce(s.tax_id, ''), '[^A-Za-z0-9]', '', 'g')), '^ES(?=[A-Z0-9]{9}$)', '') = v_nif))
+            or (v_nif is not null and public._conta_nif_clave(s.tax_id) = v_nif)
+            -- S01o·2: también las que entraron sin proveedor, por el NIF que se leyó en ellas.
+            or (v_nif is not null and i.supplier_id is null and public._conta_nif_clave(i.reading->'factura'->'proveedor'->>'nif') = v_nif))
   ), repetida as (
     select v.* from vivas v
      where v_clave is not null and public.conta_clave_numero(v.invoice_number) = v_clave
@@ -83195,7 +83287,7 @@ begin
       and v.invoice_date = p_fecha and round(v.grand_total * 100) = round(p_total * 100)
       and not exists (select 1 from repetida)
     order by v.created_at limit 1);
-end $_$;
+end $$;
 
 
 --
@@ -85376,6 +85468,41 @@ $$;
 
 
 --
+-- Name: tg_s01o2_iva_no_deducible(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_s01o2_iva_no_deducible() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r jsonb;
+begin
+  if new.vat_non_deductible_reason is not null or new.status in ('anulada', 'descartada', 'repetida') then return null; end if;
+  if exists (select 1 from public.journal_entry e where e.source_type = 'supplier_invoice' and e.source_id = new.id and e.status = 'validado') then return null; end if;
+  r := public._conta_iva_no_deducible_auto(new.id);
+  if coalesce((r->>'no_deducible')::boolean, false) then
+    update public.supplier_invoice set vat_non_deductible = true, vat_non_deductible_reason = r->'motivos'->0->>'motivo', updated_at = now()
+     where id = new.id and vat_non_deductible_reason is null;
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: tg_s01o2_iva_no_deducible_linea(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_s01o2_iva_no_deducible_linea() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  update public.supplier_invoice set reading = reading where id = new.supplier_invoice_id and vat_non_deductible_reason is null;
+  return null;
+end $$;
+
+
+--
 -- Name: tg_sale_close_on_complete(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -85853,7 +85980,7 @@ declare
   v_otra public.supplier_invoice;
   v_k text := public.conta_clave_numero(new.invoice_number);
 begin
-  if new.status in ('anulada', 'descartada') or new.not_duplicate_confirmed_at is not null or new.supplier_id is null
+  if new.status in ('anulada', 'descartada') or new.not_duplicate_confirmed_at is not null or (new.supplier_id is null and public._conta_nif_clave(new.reading->'factura'->'proveedor'->>'nif') is null)
      or v_k is null or new.grand_total is null then return new; end if;
   -- En un cambio, solo si cambia lo que decide (número, proveedor, total o que deje de estar anulada o descartada).
   if tg_op = 'UPDATE' and v_k is not distinct from public.conta_clave_numero(old.invoice_number)
@@ -85861,7 +85988,11 @@ begin
      and round(new.grand_total * 100) is not distinct from round(old.grand_total * 100)
      and not (old.status in ('anulada', 'descartada') and new.status not in ('anulada', 'descartada')) then return new; end if;
   select * into v_otra from public.supplier_invoice i
-   where i.account_id = new.account_id and i.supplier_id = new.supplier_id
+   where i.account_id = new.account_id
+     and (i.supplier_id = new.supplier_id
+          -- S01o·2: sin proveedor, por el NIF leído (la factura y el recibo del mismo número).
+          or (new.supplier_id is null and i.supplier_id is null
+              and public._conta_nif_clave(i.reading->'factura'->'proveedor'->>'nif') = public._conta_nif_clave(new.reading->'factura'->'proveedor'->>'nif')))
      and public.conta_clave_numero(i.invoice_number) = v_k
      and round(i.grand_total * 100) = round(new.grand_total * 100)
      and i.id <> new.id and i.status not in ('anulada', 'descartada') and i.not_duplicate_confirmed_at is null
@@ -95176,6 +95307,7 @@ CREATE TABLE public.company_tax_profile (
     sales_tax_rate_code text,
     journal_autovalidate_sales_day boolean DEFAULT false NOT NULL,
     sales_day_close_time time without time zone DEFAULT '02:00:00'::time without time zone,
+    en_roi boolean,
     CONSTRAINT company_tax_profile_account_digits_check CHECK (((account_digits >= 6) AND (account_digits <= 12))),
     CONSTRAINT company_tax_profile_chart_kind_check CHECK ((chart_kind = ANY (ARRAY['pymes'::text, 'normal'::text]))),
     CONSTRAINT company_tax_profile_tax_territory_check CHECK ((tax_territory = ANY (ARRAY['peninsula_baleares'::text, 'canarias'::text, 'ceuta_melilla'::text]))),
@@ -95210,6 +95342,13 @@ COMMENT ON COLUMN public.company_tax_profile.journal_autovalidate_sales_day IS '
 --
 
 COMMENT ON COLUMN public.company_tax_profile.sales_day_close_time IS 'Cierre del día: a esta hora (de Madrid) se dan por terminadas las ventas del día anterior. Un pedido de marca propia que siga abierto se cierra como no confirmado. Vacío = 2:00.';
+
+
+--
+-- Name: COLUMN company_tax_profile.en_roi; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.company_tax_profile.en_roi IS 'S01o·2 · ¿Está la empresa en el ROI (registro de operadores intracomunitarios)? Vacío: no se sabe (se pregunta).';
 
 
 --
@@ -96909,7 +97048,7 @@ END, ''::text)) STORED,
     CONSTRAINT supplier_invoice_retencion_completa CHECK ((((withholding_rate_id IS NULL) = (withholding_amount IS NULL)) AND ((withholding_amount IS NULL) OR (withholding_amount >= (0)::numeric)))),
     CONSTRAINT supplier_invoice_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'ocr'::text, 'lote'::text, 'liquidacion'::text]))),
     CONSTRAINT supplier_invoice_status_check CHECK ((status = ANY (ARRAY['borrador'::text, 'en_revision'::text, 'aprobada'::text, 'con_discrepancias'::text, 'pagada'::text, 'anulada'::text, 'descartada'::text]))),
-    CONSTRAINT supplier_invoice_vat_non_deductible_reason_check CHECK (((vat_non_deductible_reason IS NULL) OR (vat_non_deductible_reason = ANY (ARRAY['no_a_nombre'::text, 'ticket_sin_nif'::text, 'otro'::text]))))
+    CONSTRAINT supplier_invoice_vat_non_deductible_reason_check CHECK (((vat_non_deductible_reason IS NULL) OR (vat_non_deductible_reason = ANY (ARRAY['no_a_nombre'::text, 'ticket_sin_nif'::text, 'otro'::text, 'sin_roi'::text]))))
 );
 
 
@@ -105389,6 +105528,17 @@ CREATE TABLE public.s01j3_comision_antes (
 
 
 --
+-- Name: s01o2_foodint_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.s01o2_foodint_antes (
+    tabla text NOT NULL,
+    fila uuid NOT NULL,
+    datos jsonb NOT NULL
+);
+
+
+--
 -- Name: s01o_ficha_puesta; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -106697,6 +106847,7 @@ CREATE TABLE public.supplier (
     iban_unconfirmed_invoice_id uuid,
     data_from_invoice jsonb,
     invoice_arrival text,
+    delivers_goods boolean,
     CONSTRAINT supplier_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT supplier_created_from_check CHECK ((created_from = 'factura'::text)),
     CONSTRAINT supplier_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
@@ -106854,6 +107005,13 @@ COMMENT ON COLUMN public.supplier.data_from_invoice IS 'S01b · De qué factura 
 --
 
 COMMENT ON COLUMN public.supplier.invoice_arrival IS 'S01c. Cuándo llegan sus facturas: al_momento (o nulo) o inicio_mes_siguiente (todas juntas a primeros del mes siguiente, como Amirsa). Solo cambia hasta cuándo es normal esperarlas.';
+
+
+--
+-- Name: COLUMN supplier.delivers_goods; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.delivers_goods IS 'S01o·2 · «Entrega mercancía» (sus facturas esperan albarán). Vacío: lo deduce _conta_entrega_mercancia.';
 
 
 --
@@ -114410,6 +114568,14 @@ ALTER TABLE ONLY public.s01j3_comision_antes
 
 
 --
+-- Name: s01o2_foodint_antes s01o2_foodint_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.s01o2_foodint_antes
+    ADD CONSTRAINT s01o2_foodint_antes_pkey PRIMARY KEY (tabla, fila);
+
+
+--
 -- Name: s01o_ficha_puesta s01o_ficha_puesta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -121780,6 +121946,20 @@ CREATE TRIGGER s01j2_liquidacion_pon_local BEFORE INSERT OR UPDATE OF store_id, 
 --
 
 CREATE TRIGGER s01j_liquidacion_sustituye AFTER INSERT ON public.channel_settlement FOR EACH ROW WHEN ((pg_trigger_depth() = 0)) EXECUTE FUNCTION public._s01j_liquidacion_sustituye();
+
+
+--
+-- Name: supplier_invoice s01o2_iva_no_deducible; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01o2_iva_no_deducible AFTER INSERT OR UPDATE OF reading, supplier_id ON public.supplier_invoice FOR EACH ROW EXECUTE FUNCTION public.tg_s01o2_iva_no_deducible();
+
+
+--
+-- Name: supplier_invoice_tax s01o2_iva_no_deducible_linea; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01o2_iva_no_deducible_linea AFTER INSERT ON public.supplier_invoice_tax FOR EACH ROW EXECUTE FUNCTION public.tg_s01o2_iva_no_deducible_linea();
 
 
 --
@@ -141741,6 +141921,12 @@ ALTER TABLE public.s01j2_local_puesto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.s01j3_comision_antes ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: s01o2_foodint_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.s01o2_foodint_antes ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: s01o_ficha_puesta; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -144500,6 +144686,15 @@ GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO se
 
 
 --
+-- Name: FUNCTION _conta_entrega_mercancia(p_supplier uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_entrega_mercancia(p_supplier uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_factura_apuntar(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -144638,6 +144833,15 @@ GRANT ALL ON FUNCTION public._conta_iva_marcar_libro() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_iva_no_deducible_auto(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_iva_no_deducible_auto(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_iva_no_deducible_auto(p_invoice uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_iva_no_deducible_auto(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_iva_reabrir_se_puede_deshacer(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -144717,6 +144921,15 @@ GRANT ALL ON FUNCTION public._conta_liquidacion_solape(p_settlement uuid) TO ser
 
 REVOKE ALL ON FUNCTION public._conta_local_de_texto(p_account uuid, p_textos text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_local_de_texto(p_account uuid, p_textos text[]) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_nif_clave(p text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_nif_clave(p text) TO anon;
+GRANT ALL ON FUNCTION public._conta_nif_clave(p text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_nif_clave(p text) TO service_role;
 
 
 --
@@ -158563,6 +158776,24 @@ GRANT ALL ON FUNCTION public.tg_ripf_invalida_revision() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_s01o2_iva_no_deducible(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.tg_s01o2_iva_no_deducible() TO anon;
+GRANT ALL ON FUNCTION public.tg_s01o2_iva_no_deducible() TO authenticated;
+GRANT ALL ON FUNCTION public.tg_s01o2_iva_no_deducible() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_s01o2_iva_no_deducible_linea(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.tg_s01o2_iva_no_deducible_linea() TO anon;
+GRANT ALL ON FUNCTION public.tg_s01o2_iva_no_deducible_linea() TO authenticated;
+GRANT ALL ON FUNCTION public.tg_s01o2_iva_no_deducible_linea() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_sale_close_on_complete(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -164213,6 +164444,13 @@ GRANT ALL ON TABLE public.s01j2_local_puesto TO service_role;
 --
 
 GRANT ALL ON TABLE public.s01j3_comision_antes TO service_role;
+
+
+--
+-- Name: TABLE s01o2_foodint_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.s01o2_foodint_antes TO service_role;
 
 
 --
