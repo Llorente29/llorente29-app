@@ -1,0 +1,9 @@
+# S01q·7 · Que Sumied no pueda duplicar: 2010 es de Foodint y en staging no hace
+# nada; 2011 añade las reglas 1 a 4. Su prueba (ROLLBACK, cuenta D, datos
+# inventados) intenta duplicar por cada camino —la pasada, la pantalla y una
+# tanda— y comprueba que sale el mensaje; sin falsos («No es repetida» y otro
+# número que empieza igual); antes del corte; una emitida, un asiento; pagos y
+# cobros de más; la vuelta atrás.
+supabase/migrations/20261102T2010_s01q_borrar_vercel_supabase.sql
+supabase/migrations/20261102T2011_s01q_no_duplicar.sql
+supabase/staging/sql/20261102_s01q_no_duplicar_prueba.sql
