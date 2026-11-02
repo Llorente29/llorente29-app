@@ -11,8 +11,8 @@
 #      NECESITA «autorizo»: las de sale, sale_line, stock y modificadores
 #      están en el camino del pedido.
 #
-# Antes (producción, 01/11): ninguna lleva la guarda; huella conjunta de las
-# 62, 585e7aff; nada de la tanda en el historial.
+# Antes (producción, 02/11, tras la S1b y el W10): ninguna lleva la guarda; huella conjunta de las
+# 62, 9b18b1cb; nada de la tanda en el historial.
 # Sin aplicar: el real lo lanza Julio.
 # Vuelta atrás: vuelta-atras.txt de esta carpeta.
 supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql

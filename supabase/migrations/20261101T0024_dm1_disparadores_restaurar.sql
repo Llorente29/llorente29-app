@@ -75,12 +75,14 @@
 --     Ninguna pantalla ni API lo puede poner; lo pondrá la función de restaurar
 --     con set_config(…, true), que dura lo que dura su transacción.
 --   · Las 62 funciones de disparador de las 58 tablas que carga la foto de
---     Casa Lola: el texto de producción del 01/11 con UNA sola línea más, la
+--     Casa Lola: el texto de producción del 01/11 (tres, del 02/11: las que
+--     cambiaron la S1b —tg_auto_print_on_accept— y el W10 —tg_auto_dispatch y
+--     trg_sale_push_status—) con UNA sola línea más, la
 --     primera del cuerpo: si se está restaurando, devuelve la fila y no hace
 --     nada. Con el ajuste apagado —siempre, salvo al restaurar— son idénticas:
 --     la prueba de staging lo comprueba byte a byte, función a función.
 --
--- Guarda: cada una tiene que ser la medida el 01/11 en producción (su md5); si
+-- Guarda: cada una tiene que ser la medida en producción (su md5); si
 -- no, para antes de tocar ninguna. Cada una se respalda antes.
 -- Lleva «autorizo»: las de sale, sale_line, stock y modificadores están en el
 -- camino del pedido.
@@ -90,190 +92,190 @@
 do $$
 begin
   if md5(pg_get_functiondef('public._clock_entry_audit_alta()'::regprocedure)) <> '777af23da53473e53ef9ea1d93efac51' then
-    raise exception 'DM1 2b-1 PARADA: _clock_entry_audit_alta() no es la medida el 01/11 (md5 777af23d…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _clock_entry_audit_alta() no es la medida el 01/11 en producción (md5 777af23d…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._clock_entry_quien_y_hora()'::regprocedure)) <> '6f2768478b5250123661e853f196c7a4' then
-    raise exception 'DM1 2b-1 PARADA: _clock_entry_quien_y_hora() no es la medida el 01/11 (md5 6f276847…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _clock_entry_quien_y_hora() no es la medida el 01/11 en producción (md5 6f276847…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._employee_pin_guardar()'::regprocedure)) <> '15484f14c234101cf051ed69cba1187d' then
-    raise exception 'DM1 2b-1 PARADA: _employee_pin_guardar() no es la medida el 01/11 (md5 15484f14…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _employee_pin_guardar() no es la medida el 01/11 en producción (md5 15484f14…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._f01c_receta_puesta()'::regprocedure)) <> '9ee4a9b22a8b55f7b54667d2b32beccb' then
-    raise exception 'DM1 2b-1 PARADA: _f01c_receta_puesta() no es la medida el 01/11 (md5 9ee4a9b2…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _f01c_receta_puesta() no es la medida el 01/11 en producción (md5 9ee4a9b2…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._fill_acc_from_assignment()'::regprocedure)) <> 'ef8483c3f1136c5d39abf686b6d8ff2b' then
-    raise exception 'DM1 2b-1 PARADA: _fill_acc_from_assignment() no es la medida el 01/11 (md5 ef8483c3…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _fill_acc_from_assignment() no es la medida el 01/11 en producción (md5 ef8483c3…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._fill_acc_from_employee()'::regprocedure)) <> 'a34caffde3015b08d8640c1162ca1508' then
-    raise exception 'DM1 2b-1 PARADA: _fill_acc_from_employee() no es la medida el 01/11 (md5 a34caffd…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _fill_acc_from_employee() no es la medida el 01/11 en producción (md5 a34caffd…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._fill_acc_from_location()'::regprocedure)) <> 'f44f079967f65e7a274d7ec211817aa3' then
-    raise exception 'DM1 2b-1 PARADA: _fill_acc_from_location() no es la medida el 01/11 (md5 f44f0799…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _fill_acc_from_location() no es la medida el 01/11 en producción (md5 f44f0799…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._menu_item_price_snapshot()'::regprocedure)) <> '3b48b3f4a5d24935304d9f2fe8bcdc87' then
-    raise exception 'DM1 2b-1 PARADA: _menu_item_price_snapshot() no es la medida el 01/11 (md5 3b48b3f4…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _menu_item_price_snapshot() no es la medida el 01/11 en producción (md5 3b48b3f4…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._pc01e2_proveedor_iban_cambiado()'::regprocedure)) <> '4c101f2b35583fa84a4d0d326345b92a' then
-    raise exception 'DM1 2b-1 PARADA: _pc01e2_proveedor_iban_cambiado() no es la medida el 01/11 (md5 4c101f2b…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _pc01e2_proveedor_iban_cambiado() no es la medida el 01/11 en producción (md5 4c101f2b…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._registro_firma_invalidar()'::regprocedure)) <> 'a23b4477b93fed11667edf6c28358b2b' then
-    raise exception 'DM1 2b-1 PARADA: _registro_firma_invalidar() no es la medida el 01/11 (md5 a23b4477…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _registro_firma_invalidar() no es la medida el 01/11 en producción (md5 a23b4477…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._ticket_tras_venta()'::regprocedure)) <> 'e16f2d6e1e9b4aa4e8364ec7701fb65d' then
-    raise exception 'DM1 2b-1 PARADA: _ticket_tras_venta() no es la medida el 01/11 (md5 e16f2d6e…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _ticket_tras_venta() no es la medida el 01/11 en producción (md5 e16f2d6e…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public._trg_recipe_item_purchase_format_immutable()'::regprocedure)) <> '7e8dd3cf2ea8dedf0bc40a784a96969c' then
-    raise exception 'DM1 2b-1 PARADA: _trg_recipe_item_purchase_format_immutable() no es la medida el 01/11 (md5 7e8dd3cf…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: _trg_recipe_item_purchase_format_immutable() no es la medida el 01/11 en producción (md5 7e8dd3cf…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.company_account_link_sin_dueno()'::regprocedure)) <> 'b32cd9f103ccbb29f38b44f15a59c61d' then
-    raise exception 'DM1 2b-1 PARADA: company_account_link_sin_dueno() no es la medida el 01/11 (md5 b32cd9f1…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: company_account_link_sin_dueno() no es la medida el 01/11 en producción (md5 b32cd9f1…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.party_al_borrar_proveedor()'::regprocedure)) <> 'c5fdd9a2402eec11acdee6a7f74a3919' then
-    raise exception 'DM1 2b-1 PARADA: party_al_borrar_proveedor() no es la medida el 01/11 (md5 c5fdd9a2…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: party_al_borrar_proveedor() no es la medida el 01/11 en producción (md5 c5fdd9a2…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.party_desde_proveedor()'::regprocedure)) <> '04d17f7f40af4ec4f25e49c660d672cb' then
-    raise exception 'DM1 2b-1 PARADA: party_desde_proveedor() no es la medida el 01/11 (md5 04d17f7f…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: party_desde_proveedor() no es la medida el 01/11 en producción (md5 04d17f7f…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.party_misma_cuenta()'::regprocedure)) <> 'd5affd2f80f065ff4ff62c727dfafd10' then
-    raise exception 'DM1 2b-1 PARADA: party_misma_cuenta() no es la medida el 01/11 (md5 d5affd2f…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: party_misma_cuenta() no es la medida el 01/11 en producción (md5 d5affd2f…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.recipe_line_prevent_cycle()'::regprocedure)) <> 'c40896ea8aa5c030a5751d846642b26e' then
-    raise exception 'DM1 2b-1 PARADA: recipe_line_prevent_cycle() no es la medida el 01/11 (md5 c40896ea…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: recipe_line_prevent_cycle() no es la medida el 01/11 en producción (md5 c40896ea…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.set_folvy_code()'::regprocedure)) <> 'fab80e2e3d96fe6fa357773b37fbebeb' then
-    raise exception 'DM1 2b-1 PARADA: set_folvy_code() no es la medida el 01/11 (md5 fab80e2e…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: set_folvy_code() no es la medida el 01/11 en producción (md5 fab80e2e…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.set_goods_receipt_code()'::regprocedure)) <> '527ab4be90f8481b9728648b59f8780a' then
-    raise exception 'DM1 2b-1 PARADA: set_goods_receipt_code() no es la medida el 01/11 (md5 527ab4be…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: set_goods_receipt_code() no es la medida el 01/11 en producción (md5 527ab4be…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.set_inventory_count_code()'::regprocedure)) <> 'fdb1128f6cedbbc2915c69e6639a9c3c' then
-    raise exception 'DM1 2b-1 PARADA: set_inventory_count_code() no es la medida el 01/11 (md5 fdb1128f…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: set_inventory_count_code() no es la medida el 01/11 en producción (md5 fdb1128f…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.set_updated_at()'::regprocedure)) <> '914509d020712d0c31f308be3acaa811' then
-    raise exception 'DM1 2b-1 PARADA: set_updated_at() no es la medida el 01/11 (md5 914509d0…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: set_updated_at() no es la medida el 01/11 en producción (md5 914509d0…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.supplier_tax_rates_ok()'::regprocedure)) <> 'ceb70df5f04ae907b166756d941d4d2a' then
-    raise exception 'DM1 2b-1 PARADA: supplier_tax_rates_ok() no es la medida el 01/11 (md5 ceb70df5…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: supplier_tax_rates_ok() no es la medida el 01/11 en producción (md5 ceb70df5…). Reescribirla pisaría ese cambio.';
   end if;
-  if md5(pg_get_functiondef('public.tg_auto_dispatch()'::regprocedure)) <> 'fc5659aacd7677a628166484343f7902' then
-    raise exception 'DM1 2b-1 PARADA: tg_auto_dispatch() no es la medida el 01/11 (md5 fc5659aa…). Reescribirla pisaría ese cambio.';
+  if md5(pg_get_functiondef('public.tg_auto_dispatch()'::regprocedure)) <> '0e3583ba85a5ee53cae142fc842189b6' then
+    raise exception 'DM1 2b-1 PARADA: tg_auto_dispatch() no es la medida el 02/11 en producción (md5 0e3583ba…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_auto_print_bag_on_ready()'::regprocedure)) <> 'f06f29b7849b5ae0e8e735954b308e81' then
-    raise exception 'DM1 2b-1 PARADA: tg_auto_print_bag_on_ready() no es la medida el 01/11 (md5 f06f29b7…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_auto_print_bag_on_ready() no es la medida el 01/11 en producción (md5 f06f29b7…). Reescribirla pisaría ese cambio.';
   end if;
-  if md5(pg_get_functiondef('public.tg_auto_print_on_accept()'::regprocedure)) <> '23b33e25deae70c7251fce4caab8a3ec' then
-    raise exception 'DM1 2b-1 PARADA: tg_auto_print_on_accept() no es la medida el 01/11 (md5 23b33e25…). Reescribirla pisaría ese cambio.';
+  if md5(pg_get_functiondef('public.tg_auto_print_on_accept()'::regprocedure)) <> '811636a0d9fa594dc5bf9d59a445cd7f' then
+    raise exception 'DM1 2b-1 PARADA: tg_auto_print_on_accept() no es la medida el 02/11 en producción (md5 811636a0…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_clock_entry_audit()'::regprocedure)) <> 'd4af7767621fc0b4bc634850f62ab0e6' then
-    raise exception 'DM1 2b-1 PARADA: tg_clock_entry_audit() no es la medida el 01/11 (md5 d4af7767…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_clock_entry_audit() no es la medida el 01/11 en producción (md5 d4af7767…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_clock_entry_debounce()'::regprocedure)) <> 'e0f402960721d9b80696be5926802b88' then
-    raise exception 'DM1 2b-1 PARADA: tg_clock_entry_debounce() no es la medida el 01/11 (md5 e0f40296…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_clock_entry_debounce() no es la medida el 01/11 en producción (md5 e0f40296…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_clock_entry_orden()'::regprocedure)) <> '226014a78448af5a00ded9fd87bf25dd' then
-    raise exception 'DM1 2b-1 PARADA: tg_clock_entry_orden() no es la medida el 01/11 (md5 226014a7…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_clock_entry_orden() no es la medida el 01/11 en producción (md5 226014a7…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_count_line_sella_el_motivo()'::regprocedure)) <> 'f5b0a268fe613d19af83a6caae913932' then
-    raise exception 'DM1 2b-1 PARADA: tg_count_line_sella_el_motivo() no es la medida el 01/11 (md5 f5b0a268…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_count_line_sella_el_motivo() no es la medida el 01/11 en producción (md5 f5b0a268…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_count_line_solo_por_la_puerta()'::regprocedure)) <> 'e72e1dcaa9cf068720db29e2149473c8' then
-    raise exception 'DM1 2b-1 PARADA: tg_count_line_solo_por_la_puerta() no es la medida el 01/11 (md5 e72e1dca…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_count_line_solo_por_la_puerta() no es la medida el 01/11 en producción (md5 e72e1dca…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_dining_table_same_location()'::regprocedure)) <> '9328713052c96f745c931edcd985d178' then
-    raise exception 'DM1 2b-1 PARADA: tg_dining_table_same_location() no es la medida el 01/11 (md5 93287130…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_dining_table_same_location() no es la medida el 01/11 en producción (md5 93287130…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_ensure_public_token()'::regprocedure)) <> 'bf4edcd890e94cfe12f700cab9488409' then
-    raise exception 'DM1 2b-1 PARADA: tg_ensure_public_token() no es la medida el 01/11 (md5 bf4edcd8…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_ensure_public_token() no es la medida el 01/11 en producción (md5 bf4edcd8…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_goods_receipt_compras_camino()'::regprocedure)) <> '483e8ca1e1d9c8d97d210ee443dd768a' then
-    raise exception 'DM1 2b-1 PARADA: tg_goods_receipt_compras_camino() no es la medida el 01/11 (md5 483e8ca1…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_goods_receipt_compras_camino() no es la medida el 01/11 en producción (md5 483e8ca1…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_goods_receipt_line_trust()'::regprocedure)) <> '845a0fa72933e41d986a1ecdcf2f7fe9' then
-    raise exception 'DM1 2b-1 PARADA: tg_goods_receipt_line_trust() no es la medida el 01/11 (md5 845a0fa7…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_goods_receipt_line_trust() no es la medida el 01/11 en producción (md5 845a0fa7…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_goods_receipt_recompute_average()'::regprocedure)) <> 'f054cf6b6cf915561fb044232956739f' then
-    raise exception 'DM1 2b-1 PARADA: tg_goods_receipt_recompute_average() no es la medida el 01/11 (md5 f054cf6b…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_goods_receipt_recompute_average() no es la medida el 01/11 en producción (md5 f054cf6b…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_inventory_count_line_sanity()'::regprocedure)) <> '5173a1a0197adc4644bc965ab21bd9d9' then
-    raise exception 'DM1 2b-1 PARADA: tg_inventory_count_line_sanity() no es la medida el 01/11 (md5 5173a1a0…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_inventory_count_line_sanity() no es la medida el 01/11 en producción (md5 5173a1a0…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_menu_item_inherit_stock_group()'::regprocedure)) <> '097fb185913d5b9438d76dca1b74bcc1' then
-    raise exception 'DM1 2b-1 PARADA: tg_menu_item_inherit_stock_group() no es la medida el 01/11 (md5 097fb185…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_menu_item_inherit_stock_group() no es la medida el 01/11 en producción (md5 097fb185…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_menu_item_override_history()'::regprocedure)) <> '2e7e50bb125f232886c6ccb0875f1fea' then
-    raise exception 'DM1 2b-1 PARADA: tg_menu_item_override_history() no es la medida el 01/11 (md5 2e7e50bb…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_menu_item_override_history() no es la medida el 01/11 en producción (md5 2e7e50bb…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_menu_item_override_touch()'::regprocedure)) <> 'b1d7993fd8e43234584da574b963ea47' then
-    raise exception 'DM1 2b-1 PARADA: tg_menu_item_override_touch() no es la medida el 01/11 (md5 b1d7993f…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_menu_item_override_touch() no es la medida el 01/11 en producción (md5 b1d7993f…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_modifier_option_retiro()'::regprocedure)) <> '0db453292b6c90dc9f7952cd85b6d9cb' then
-    raise exception 'DM1 2b-1 PARADA: tg_modifier_option_retiro() no es la medida el 01/11 (md5 0db45329…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_modifier_option_retiro() no es la medida el 01/11 en producción (md5 0db45329…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_notify_on_way_sale()'::regprocedure)) <> 'b0a87674a47347a1287d5e9e472d7913' then
-    raise exception 'DM1 2b-1 PARADA: tg_notify_on_way_sale() no es la medida el 01/11 (md5 b0a87674…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_notify_on_way_sale() no es la medida el 01/11 en producción (md5 b0a87674…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_ripf_invalida_revision()'::regprocedure)) <> '1ede61258ee571bdb177c6e0485fb9b0' then
-    raise exception 'DM1 2b-1 PARADA: tg_ripf_invalida_revision() no es la medida el 01/11 (md5 1ede6125…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_ripf_invalida_revision() no es la medida el 01/11 en producción (md5 1ede6125…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_close_on_complete()'::regprocedure)) <> 'f2e4536d8f98f910e878e0f4713a38ff' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_close_on_complete() no es la medida el 01/11 (md5 f2e4536d…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_close_on_complete() no es la medida el 01/11 en producción (md5 f2e4536d…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_consumption_on_complete()'::regprocedure)) <> '101a974c8718ab34642116290edad11f' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_consumption_on_complete() no es la medida el 01/11 (md5 101a974c…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_consumption_on_complete() no es la medida el 01/11 en producción (md5 101a974c…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_delivery_alarm()'::regprocedure)) <> 'ba6a1691cde96035efd4a5acd47b6680' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_delivery_alarm() no es la medida el 01/11 (md5 ba6a1691…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_delivery_alarm() no es la medida el 01/11 en producción (md5 ba6a1691…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_entrega_desde_raw()'::regprocedure)) <> 'b4e15953795bf84d835373ffbd7387cc' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_entrega_desde_raw() no es la medida el 01/11 (md5 b4e15953…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_entrega_desde_raw() no es la medida el 01/11 en producción (md5 b4e15953…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_line_consumption()'::regprocedure)) <> '01778790ef0ddc94492167b17eb336ad' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_line_consumption() no es la medida el 01/11 (md5 01778790…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_line_consumption() no es la medida el 01/11 en producción (md5 01778790…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_seal_delivered()'::regprocedure)) <> '82f888730217608485f717d1a1bad8a2' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_seal_delivered() no es la medida el 01/11 (md5 82f88873…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_seal_delivered() no es la medida el 01/11 en producción (md5 82f88873…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_seal_handed_to_courier()'::regprocedure)) <> 'b47812189a674109f0d4db840e30b14b' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_seal_handed_to_courier() no es la medida el 01/11 (md5 b4781218…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_seal_handed_to_courier() no es la medida el 01/11 en producción (md5 b4781218…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_seal_kpi_hitos()'::regprocedure)) <> 'dc128fb0163b0b27b121a27aa76600b5' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_seal_kpi_hitos() no es la medida el 01/11 (md5 dc128fb0…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_seal_kpi_hitos() no es la medida el 01/11 en producción (md5 dc128fb0…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_service_type_por_interruptor()'::regprocedure)) <> 'a64d282e3ac20b01eda5344d744396af' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_service_type_por_interruptor() no es la medida el 01/11 (md5 a64d282e…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_service_type_por_interruptor() no es la medida el 01/11 en producción (md5 a64d282e…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sale_uber_quien_reparte()'::regprocedure)) <> '36330ca478de3866b553442a7a550d04' then
-    raise exception 'DM1 2b-1 PARADA: tg_sale_uber_quien_reparte() no es la medida el 01/11 (md5 36330ca4…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sale_uber_quien_reparte() no es la medida el 01/11 en producción (md5 36330ca4…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_sales_hourly_agg_sync()'::regprocedure)) <> '6e7780e1b9c8829218d359f4bff55327' then
-    raise exception 'DM1 2b-1 PARADA: tg_sales_hourly_agg_sync() no es la medida el 01/11 (md5 6e7780e1…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_sales_hourly_agg_sync() no es la medida el 01/11 en producción (md5 6e7780e1…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_schedule_reject_vacation_conflicts()'::regprocedure)) <> 'f5183c2f66d5cbdd2110a410736a2e4e' then
-    raise exception 'DM1 2b-1 PARADA: tg_schedule_reject_vacation_conflicts() no es la medida el 01/11 (md5 f5183c2f…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_schedule_reject_vacation_conflicts() no es la medida el 01/11 en producción (md5 f5183c2f…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.tg_training_notice_on_assign()'::regprocedure)) <> 'd9fc4d6a22515ad62606b487151966d6' then
-    raise exception 'DM1 2b-1 PARADA: tg_training_notice_on_assign() no es la medida el 01/11 (md5 d9fc4d6a…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: tg_training_notice_on_assign() no es la medida el 01/11 en producción (md5 d9fc4d6a…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.trg_article_supplier_recompute_cost()'::regprocedure)) <> '3ab2a028a02abff37e8f0710658a3282' then
-    raise exception 'DM1 2b-1 PARADA: trg_article_supplier_recompute_cost() no es la medida el 01/11 (md5 3ab2a028…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: trg_article_supplier_recompute_cost() no es la medida el 01/11 en producción (md5 3ab2a028…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.trg_assign_onboarding_training_on_employee_insert()'::regprocedure)) <> 'baed351f05cc905e9d01ba04bf57d350' then
-    raise exception 'DM1 2b-1 PARADA: trg_assign_onboarding_training_on_employee_insert() no es la medida el 01/11 (md5 baed351f…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: trg_assign_onboarding_training_on_employee_insert() no es la medida el 01/11 en producción (md5 baed351f…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.trg_assign_onboarding_training_on_employee_update()'::regprocedure)) <> '2f6137a03ca6dc0e5d990a0516b420d2' then
-    raise exception 'DM1 2b-1 PARADA: trg_assign_onboarding_training_on_employee_update() no es la medida el 01/11 (md5 2f6137a0…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: trg_assign_onboarding_training_on_employee_update() no es la medida el 01/11 en producción (md5 2f6137a0…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.trg_propose_vat_on_family()'::regprocedure)) <> '02d64b1312909588e06969e113b2d991' then
-    raise exception 'DM1 2b-1 PARADA: trg_propose_vat_on_family() no es la medida el 01/11 (md5 02d64b13…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: trg_propose_vat_on_family() no es la medida el 01/11 en producción (md5 02d64b13…). Reescribirla pisaría ese cambio.';
   end if;
-  if md5(pg_get_functiondef('public.trg_sale_push_status()'::regprocedure)) <> '385240cb080367a355ee3a0a5d693eb6' then
-    raise exception 'DM1 2b-1 PARADA: trg_sale_push_status() no es la medida el 01/11 (md5 385240cb…). Reescribirla pisaría ese cambio.';
+  if md5(pg_get_functiondef('public.trg_sale_push_status()'::regprocedure)) <> '3c2984d46c0f690c1c64ce7765736041' then
+    raise exception 'DM1 2b-1 PARADA: trg_sale_push_status() no es la medida el 02/11 en producción (md5 3c2984d4…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.trg_seal_recipe_version_item()'::regprocedure)) <> '3a5dbce533634377b04a8a44a265656f' then
-    raise exception 'DM1 2b-1 PARADA: trg_seal_recipe_version_item() no es la medida el 01/11 (md5 3a5dbce5…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: trg_seal_recipe_version_item() no es la medida el 01/11 en producción (md5 3a5dbce5…). Reescribirla pisaría ese cambio.';
   end if;
   if md5(pg_get_functiondef('public.trg_seal_recipe_version_line()'::regprocedure)) <> '8c0f299873057715545cdb6d06e5c7f3' then
-    raise exception 'DM1 2b-1 PARADA: trg_seal_recipe_version_line() no es la medida el 01/11 (md5 8c0f2998…). Reescribirla pisaría ese cambio.';
+    raise exception 'DM1 2b-1 PARADA: trg_seal_recipe_version_line() no es la medida el 01/11 en producción (md5 8c0f2998…). Reescribirla pisaría ese cambio.';
   end if;
 end $$;
 
@@ -891,7 +893,7 @@ DECLARE
   v_timeout  int;
   v_courier  uuid;
   v_secret   text;
-  v_url      text := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch';
+  v_url      text;
   v_anon     text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6bXBuY2hsZ3VpYmNsdnh5eW50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE1NTksImV4cCI6MjA5Mzc0NzU1OX0.v5GsOW5hxwzJZA0z5Le26E9vAWflG1XFZ7ec2hvMphY';
 BEGIN
   -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
@@ -935,6 +937,15 @@ BEGIN
       END IF;
 
     ELSIF v_carrier = 'catcher' THEN
+      -- W10: la dirección del propio proyecto, del Vault (project_url). Si
+      -- falta, no se llama a nadie y queda dicho en system_alert; el pedido
+      -- sigue (este disparador está en el camino del pedido).
+      v_url := public._project_url_si_hay();
+      IF v_url IS NULL THEN
+        PERFORM public._aviso_falta_en_vault('catcher-dispatch', new.id);
+        RETURN new;
+      END IF;
+      v_url := v_url || '/functions/v1/catcher-dispatch';
       SELECT decrypted_secret INTO v_secret
         FROM vault.decrypted_secrets WHERE name = 'catcher_dispatch_secret';
       PERFORM net.http_post(
@@ -1068,6 +1079,10 @@ begin
     elsif old.order_status is distinct from new.order_status then v_fire := true;
     end if;
   end if;
+
+  -- TPV sala (S1): una MESA imprime por envíos (pos_table_fire), nunca el
+  -- pedido entero al aceptarse.
+  if v_fire and new.table_id is not null then v_fire := false; end if;
 
   if v_fire then
     begin
@@ -2225,6 +2240,7 @@ declare
     'in_preparation','awaiting_collection','awaiting_shipment',
     'in_delivery','completed','rejected','cancelled','delivery_failed'
   ];
+  v_url    text;
   v_secret text;
 begin
   -- DM1 · 2b-1: mientras se restaura una demo, nada (la foto ya lo trae hecho).
@@ -2246,8 +2262,15 @@ begin
       end;
       return new;
     end if;
+    -- W10: la dirección del propio proyecto, del Vault (project_url). Si
+    -- falta, no se llama a nadie y queda dicho; el pedido sigue.
+    v_url := public._project_url_si_hay();
+    if v_url is null then
+      perform public._aviso_falta_en_vault('order-advance', new.id);
+      return new;
+    end if;
     perform net.http_post(
-      url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/order-advance',
+      url     := v_url || '/functions/v1/order-advance',
       headers := jsonb_build_object(
         'Content-Type',            'application/json',
         'x-order-advance-secret',  v_secret

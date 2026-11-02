@@ -1,8 +1,8 @@
 {
- "_que": "DM1 · PR 2b-1 · contexto de producción de la tanda (0024), medido en SOLO LECTURA el 31/10 a las 23:24 UTC. No existe _restaurando_demo; las 62 funciones de disparador existen con una sola firma y con la huella que guarda el fichero; 28 están en el camino del pedido. Nada de la tanda en el historial.",
- "medido": "2026-10-31T23:24Z",
+ "_que": "DM1 · PR 2b-1 · contexto de producción de la tanda (0024), medido en SOLO LECTURA el 02/11 a las 07:52 UTC (otra vez: después de la S1b y el W10 cambiaron tres de las 62). No existe _restaurando_demo; las 62 funciones de disparador existen con una sola firma y con la huella que guarda el fichero; 28 están en el camino del pedido. Nada de la tanda en el historial.",
+ "medido": "2026-11-02T07:52Z",
  "tanda": {
-  "supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql": "4f911c483dbabe93909dee5c335fdd7a"
+  "supabase/migrations/20261101T0024_dm1_disparadores_restaurar.sql": "ec45817a624dc82bc52fc65e5587d331"
  },
  "contexto": {
   "tablas": [],
