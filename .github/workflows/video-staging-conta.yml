@@ -145,6 +145,11 @@ jobs:
         timeout-minutes: 30
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          # La voz de pago (si están): secretos del repositorio, no de producción.
+          VOZ_ELEVENLABS_KEY: ${{ secrets.VOZ_ELEVENLABS_KEY }}
+          VOZ_ELEVENLABS_ID: ${{ vars.VOZ_ELEVENLABS_ID }}
+          VOZ_GOOGLE_KEY: ${{ secrets.VOZ_GOOGLE_KEY }}
+          VOZ_GOOGLE_NOMBRE: ${{ vars.VOZ_GOOGLE_NOMBRE }}
         run: |
           set -euo pipefail
           mkdir -p "$SALIDA"
@@ -160,7 +165,11 @@ jobs:
           node scripts/video/factura-al-pago.mjs reconocer "$SALIDA"
           # La locución, ANTES de grabar: el guion espera a que acabe cada frase.
           node scripts/video/locucion.mjs "$SALIDA"
-          if [ -n "${VOZ_MODELO:-}" ]; then python3 scripts/video/voz.py "$VOZ_MODELO" "$SALIDA/voz/frases.json"; else echo "::warning::Sin modelo de voz: se graba con el ritmo estimado y el vídeo sale sin voz."; fi
+          # La voz: la de pago si hay su clave (ElevenLabs o Google, voz_nube.py); si no, Piper.
+          set +e; python3 scripts/video/voz_nube.py "$SALIDA/voz/frases.json"; r=$?; set -e
+          if [ "$r" = 3 ]; then
+            if [ -n "${VOZ_MODELO:-}" ]; then python3 scripts/video/voz.py "$VOZ_MODELO" "$SALIDA/voz/frases.json"; else echo "::warning::Sin voz: se graba con el ritmo estimado y el vídeo sale sin voz."; fi
+          elif [ "$r" != 0 ]; then echo "::error::La voz de pago ha fallado (arriba, el porqué)."; exit 1; fi
           node scripts/video/factura-al-pago.mjs grabar "$SALIDA"
 
       - name: Montar con ffmpeg

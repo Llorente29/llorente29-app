@@ -53,6 +53,9 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
   hace ANTES de grabar: el guion espera a que acabe cada frase antes del gesto
   siguiente, así nunca se pisan.
 - `miniatura.mjs`: la portada para las plataformas, en los dos tamaños.
+- `voz_nube.py`: la voz de pago, si está su clave en los secretos del
+  repositorio: `VOZ_ELEVENLABS_KEY` (y la variable `VOZ_ELEVENLABS_ID`, la voz)
+  o `VOZ_GOOGLE_KEY` (y `VOZ_GOOGLE_NOMBRE`). Sin ninguna, Piper.
 - `revisar.mjs`: busca en el texto de cada pantalla IBAN que no sean del
   9999, DNI, NIE, NIF que no sean de ceros, correos y nombres reales.
 - `reconocer.sql`: solo lectura, lo que tiene la empresa A del carril.
