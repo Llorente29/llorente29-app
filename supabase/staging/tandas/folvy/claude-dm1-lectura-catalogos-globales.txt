@@ -1,0 +1,6 @@
+# DM1 · 2b-2 · La 1218 y su prueba (ROLLBACK): con un conta_lectura de prueba,
+# antes no lee ningún catálogo (rojo a propósito); después lee los 15 y la
+# vista de cursos globales, nunca course, y la vista solo enseña cursos sin
+# cuenta; y la vuelta atrás.
+supabase/migrations/20261102T1218_dm1_lectura_catalogos_globales.sql
+supabase/staging/sql/20261102_dm1_lectura_catalogos_globales_prueba.sql

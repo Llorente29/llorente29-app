@@ -11,7 +11,9 @@
 -- apunta a ellas (unidades, familias plantilla, planes, cursos…).
 --
 -- Solo catálogos: kitchen_unit, course y training_path tienen account_id, y de
--- ellas van SOLO las filas sin cuenta. Si una de esas filas apunta a algo de una
+-- ellas van SOLO las filas sin cuenta. course se lee por la vista
+-- public.catalogo_curso_global (la 1218): conta_lectura no lee la tabla, que
+-- tiene cursos de cuentas. Si una de esas filas apunta a algo de una
 -- cuenta (un curso adoptado o hecho de una receta, un paso de un itinerario de
 -- una cuenta), PARA: no sería un catálogo.
 --
@@ -21,15 +23,15 @@
 
 do $guarda$
 begin
-  if exists (select 1 from public.course where account_id is null
-              and (adopted_from_course_id is not null or source_recipe_item_id is not null)) then
+  if exists (select 1 from public.catalogo_curso_global
+              where adopted_from_course_id is not null or source_recipe_item_id is not null) then
     raise exception 'Un curso global apunta a algo de una cuenta: no es un catálogo. No se vuelca nada.';
   end if;
   if exists (select 1 from public.training_path_item i
                join public.training_path p on p.id = i.path_id
-               join public.course c on c.id = i.course_id
-              where p.account_id is null and c.account_id is not null) then
-    raise exception 'Un itinerario global usa un curso de una cuenta: no es un catálogo. No se vuelca nada.';
+              where p.account_id is null
+                and not exists (select 1 from public.catalogo_curso_global c where c.id = i.course_id)) then
+    raise exception 'Un itinerario global usa un curso que no es global: no es un catálogo. No se vuelca nada.';
   end if;
 end $guarda$;
 
@@ -49,7 +51,7 @@ tablas(orden, t, j) as (
                                              from public.ingredient_family_template x left join fam on fam.code = x.code) union all
   select 8, 'ingredient_template', (select jsonb_agg(to_jsonb(x) order by x.id) from public.ingredient_template x) union all
   select 9, 'ingredient_template_allergen', (select jsonb_agg(to_jsonb(x) order by x.template_id, x.allergen_code) from public.ingredient_template_allergen x) union all
-  select 10, 'course', (select jsonb_agg(to_jsonb(x) order by x.id) from public.course x where x.account_id is null) union all
+  select 10, 'course', (select jsonb_agg(to_jsonb(x) order by x.id) from public.catalogo_curso_global x) union all
   select 11, 'training_path', (select jsonb_agg(to_jsonb(x) order by x.id) from public.training_path x where x.account_id is null) union all
   select 12, 'training_path_item', (select jsonb_agg(to_jsonb(i) order by i.id) from public.training_path_item i
                                       join public.training_path p on p.id = i.path_id where p.account_id is null) union all
