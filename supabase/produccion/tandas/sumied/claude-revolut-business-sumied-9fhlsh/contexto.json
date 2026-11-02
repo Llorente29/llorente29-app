@@ -3,7 +3,7 @@
  "medido": "2026-11-02T18:59Z",
  "tanda": {
   "supabase/migrations/20261102T1310_b01o_casar_sin_anuladas.sql": "b3b4b6f58ebed597fc34f30b71ffa23a",
-  "supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql": "c7023060d85fa514a02c357696a25b60"
+  "supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql": "8d79a7c352000ed33c3944026d3e9ce6"
  },
  "contexto": {
   "tablas": [

@@ -49,7 +49,7 @@ declare
   -- Olimpo: su cuenta y su tercero (los del asiento 4/3312)
   v_cuenta  constant text := '40000004';
   v_tercero constant uuid := 'dcdbb774-dcfe-4247-93f0-d21bf7d1c5cb';
-  v_quien uuid; b public.bank_match; m public.bank_movement; e public.journal_entry; f public.supplier_invoice; v_n int; r jsonb;
+  v_quien uuid; b public.bank_match; m public.bank_movement; e public.journal_entry; f public.supplier_invoice; v_n int; r jsonb; v_empresa uuid;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
     raise notice 'B01 cola 2 · 1300: esta base no tiene a Foodint: no hay nada que arreglar.';
@@ -127,7 +127,10 @@ begin
   end if;
 
   -- b · Borrar los dos asientos, con la función de borrado de Sumied.
-  r := public._conta_asientos_borrar((select company_id from public.journal_entry where id = v_as1), array[v_as1, v_as2],
+  -- La empresa, antes y en su variable: la función hace ALTER TABLE journal_entry y no puede
+  -- con una consulta abierta sobre esa tabla en la misma llamada (55006, el primer ensayo).
+  select company_id into v_empresa from public.journal_entry where id = v_as1;
+  r := public._conta_asientos_borrar(v_empresa, array[v_as1, v_as2],
          'B01 · Olimpo: asiento de pago casado con lo que no era (cola 2, 02/11)', 'Sumied · B01 cola 2, con el visto bueno de Julio');
   raise notice 'B01 cola 2 · 1300: %', r->>'texto';
 
@@ -152,7 +155,7 @@ begin
   if exists (select 1 from public.journal_entry where id in (v_as1, v_as2)) then
     raise exception 'B01 cola 2 · 1300: los asientos 4/3312 y 4/3310 siguen ahí.';
   end if;
-  if public._conta_cadena_rota((select company_id from public.bank_movement where id = v_mov1)) <> 0 then
+  if public._conta_cadena_rota(v_empresa) <> 0 then
     raise exception 'B01 cola 2 · 1300: la cadena de huellas no cuadra después de borrar.';
   end if;
   if (select status from public.supplier_invoice where id = v_alb) <> 'anulada' or (select payment_entry_id from public.supplier_invoice where id = v_alb) is not null
