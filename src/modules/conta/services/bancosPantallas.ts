@@ -16,6 +16,7 @@ import { limitesMes, type ExtractoDeshecho, type MovimientoBanco, type Propuesta
 import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
 import type { LineaRegla } from '@/modules/conta/lib/reparto'
+import { estadoHueco, type EstadoHueco } from '@/modules/conta/lib/huecoBanco'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -32,6 +33,8 @@ export interface Extracto {
   id: string; cuentaId: string; fichero: string | null; formato: string; desde: string; hasta: string; saldoInicialCent: number | null; saldoFinalCent: number | null
   movimientos: number; nuevos: number; repetidos: number; cuadra: boolean | null; sinComprobar: string | null; continuidad: string; huecoCent: number | null
   subido: string; quien: string | null
+  /** Cola 1b · Con hueco: si ya se rellenó con lo que el banco dio tarde, si se sigue releyendo o si es el proveedor. */
+  hueco: EstadoHueco | null
 }
 export interface BancoVista extends BancoFolvy {
   cuentaNombre: string | null
@@ -94,8 +97,22 @@ export async function leerDatosBancos(accountId: string, companyId: string): Pro
     id: String(e.id), cuentaId: String(e.treasury_account_id), fichero: s(e.file_name), formato: String(e.format), desde: String(e.period_from), hasta: String(e.period_to),
     saldoInicialCent: e.opening_balance === null ? null : cent(e.opening_balance), saldoFinalCent: e.closing_balance === null ? null : cent(e.closing_balance), movimientos: Number(e.movements_count), nuevos: Number(e.new_count), repetidos: Number(e.repeated_count),
     cuadra: e.balanced === null ? null : !!e.balanced, sinComprobar: s(e.unchecked_reason), continuidad: String(e.continuity), huecoCent: e.continuity_gap === null ? null : cent(e.continuity_gap),
-    subido: String(e.imported_at), quien: s(e.imported_by_name),
+    subido: String(e.imported_at), quien: s(e.imported_by_name), hueco: null,
   }))
+  // Cola 1b · Lo que llegó tarde (extractos «:tarde») rellena los huecos de su cuenta.
+  const deTarde = ext.filter((e) => e.formato.endsWith(':tarde'))
+  if (ext.some((e) => e.continuidad === 'hueco' && e.huecoCent !== null)) {
+    const movsTarde = deTarde.length === 0 ? [] : await leer(tabla('bank_movement').select('statement_id, treasury_account_id, op_date, amount')
+      .in('statement_id', deTarde.map((e) => e.id)), 'lo que llegó tarde').catch((err: unknown) => { console.warn('[bancos] no se pudo leer lo que llegó tarde', err); return [] as Fila[] })
+    const subidoDe = Object.fromEntries(deTarde.map((e) => [e.id, e.subido]))
+    const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
+    for (const e of ext) {
+      if (e.continuidad !== 'hueco' || e.huecoCent === null) continue
+      const tarde = movsTarde.filter((m) => String(m.treasury_account_id) === e.cuentaId)
+        .map((m) => ({ fecha: String(m.op_date), importeCent: cent(m.amount), subido: subidoDe[String(m.statement_id)] ?? '' }))
+      e.hueco = estadoHueco({ desde: e.desde, hasta: e.hasta, formato: e.formato, huecoCent: e.huecoCent, subido: e.subido }, tarde, hoy)
+    }
+  }
   const tjs: Tarjeta[] = tarjetas.map((t) => ({ id: String(t.id), cuentaId: String(t.treasury_account_id), ultimos4: String(t.last4), titular: String(t.holder_name), localId: s(t.location_id) }))
   const porBanco: Record<string, number> = {}
   for (const d of [...dudas, ...porValidar]) porBanco[String(d.treasury_account_id)] = (porBanco[String(d.treasury_account_id)] ?? 0) + 1

@@ -37,6 +37,7 @@ import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
 import { DialogoBancoNuevo } from '@/modules/conta/bancos/DialogoBancoNuevo'
 import { ACCION_NUEVO, PARAM_NUEVO, VALOR_NUEVO } from '@/modules/conta/bancos/bancoNuevo'
 import { lineaConexion, type ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
+import { textoHueco } from '@/modules/conta/lib/huecoBanco'
 import { TarjetaRevolut } from '@/modules/conta/bancos/revolut/ConectarRevolut'
 
 type Aviso = { tipo: 'ok' | 'error'; texto: string } | null
@@ -239,7 +240,9 @@ function TarjetaBanco({ b, extractos, hacer, prellenar }: { b: BancoVista; extra
                   <td className="cxl-der">{e.movimientos}<span className="cxl-apoyo">{e.nuevos} nuevos{e.repetidos ? ` · ${e.repetidos} ya estaban` : ''}</span></td>
                   <td>{e.cuadra ? <>Cuadra<span className="cxl-apoyo">saldo final {eurosExactos(e.saldoFinalCent! / 100)}</span></> : <span className="cxl-ambar-celda">Sin comprobar<span className="cxl-apoyo">{e.sinComprobar}</span></span>}</td>
                   <td>{e.continuidad === 'sigue' ? 'Sigue al anterior' : e.continuidad === 'primero' ? 'El primero' : e.continuidad === 'hueco'
-                    ? <span className="cxl-ambar-celda">Falta un trozo: {eurosExactos(e.huecoCent! / 100)}</span> : 'Sin saldos'}</td>
+                    ? (() => { const h = textoHueco(e.huecoCent!, e.hueco ?? { tipo: 'fichero' }); return h.aviso
+                      ? <span className="cxl-ambar-celda" data-prueba="hueco">{h.texto}</span> : <span data-prueba="hueco">{h.texto}</span> })()
+                    : e.formato.endsWith(':tarde') ? <>Llegó tarde<span className="cxl-apoyo">rellena días ya leídos</span></> : 'Sin saldos'}</td>
                   <td className="cxl-movil-oculta">{fechaLarga(e.subido)}<span className="cxl-apoyo">{e.quien ?? ''}</span></td>
                   <td><button type="button" className="cx-boton-sec" aria-label={`Deshacer el extracto ${e.fichero ?? ''} del ${fechaLarga(e.desde)} al ${fechaLarga(e.hasta)}`}
                     onClick={() => setDeshacer(e)}>Deshacer…</button></td>
