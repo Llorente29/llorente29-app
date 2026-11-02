@@ -3371,6 +3371,18 @@ end $$;
 
 
 --
+-- Name: _conta_clave_marca(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_clave_marca(p_texto text) RETURNS text
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $_$
+  select nullif(regexp_replace(regexp_replace(lower(public.unaccent(replace(replace(coalesce(p_texto, ''), '´', ''''), '’', ''''))), '[^a-z0-9]+', '', 'g'), 's$', ''), '')
+$_$;
+
+
+--
 -- Name: _conta_comision_buscar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5762,6 +5774,25 @@ $_$;
 
 
 --
+-- Name: _conta_tienda_etiqueta(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tienda_etiqueta(p_texto text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+  select nullif(btrim(substring(coalesce(p_texto, '') from '\s-\s[A-Z]{2,4}\s-\s(.*?)\s*\([^()]*\)\s*$')), '')
+$_$;
+
+
+--
+-- Name: FUNCTION _conta_tienda_etiqueta(p_texto text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_tienda_etiqueta(p_texto text) IS 'S01q · La etiqueta del nombre de una tienda de plataforma («Marca - MAD - Camichi 4 (dirección)» → «Camichi 4»), o null.';
+
+
+--
 -- Name: _conta_tienda_local_por_direccion(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5770,7 +5801,12 @@ CREATE FUNCTION public._conta_tienda_local_por_direccion() RETURNS trigger
     SET search_path TO 'public'
     AS $$
 begin
-  if new.location_id is not null or new.external_text is null then return new; end if;
+  if new.external_text is null then return new; end if;
+  -- S01q · La marca, por su nombre, si no la trae.
+  if new.brand_id is null then
+    new.brand_id := public.conta_marca_de_tienda(new.account_id, new.external_text);
+  end if;
+  if new.location_id is not null then return new; end if;
   new.location_id := public.conta_local_de_tienda(new.account_id, new.external_text);
   if new.location_id is null then
     -- Avisa, pero nunca impide que entre la liquidación.
@@ -5778,7 +5814,7 @@ begin
       perform public.encolar_alerta(
         p_kind            => 'tienda_sin_local',
         p_subject         => 'Una tienda de plataforma no casa con ningún local',
-        p_message         => format('La tienda «%s» (%s) ha llegado con una dirección que no es la de ningún local de la cuenta. Sus liquidaciones salen sin local en Ventas › Liquidaciones hasta que se le ponga.',
+        p_message         => format('La tienda «%s» (%s) ha llegado y no sé de qué local es. Sus liquidaciones salen como «Tienda sin local» en Ventas › Liquidaciones hasta que se lo digas.',
                                     new.external_text, coalesce(new.provider, 'plataforma')),
         p_debounce_kind   => 'tienda_sin_local:' || new.account_id::text || ':' || md5(new.external_text),
         p_debounce_window => interval '7 days',
@@ -39459,20 +39495,24 @@ CREATE FUNCTION public.conta_local_de_tienda(p_account uuid, p_texto text) RETUR
     SET search_path TO 'public'
     AS $_$
 declare
-  v_dir text;
-  v_clave text;
-  v_ids uuid[];
+  v_etiqueta text; v_dir text; v_clave text; v_ids uuid[];
 begin
   if p_account is null or p_texto is null then return null; end if;
-  -- La dirección va entre los últimos paréntesis: «Marca (Calle …, Madrid, ES, 28027)».
-  -- Sin paréntesis, el texto entero. De la dirección, lo de antes de la primera coma.
+  -- S01q · 2. La etiqueta manda sobre la dirección. Si no casa con un solo local, sin local.
+  v_etiqueta := public._conta_tienda_etiqueta(p_texto);
+  if v_etiqueta is not null then
+    return public._conta_local_de_texto(p_account, array[v_etiqueta]);
+  end if;
+  -- 3. La dirección va entre los últimos paréntesis: «Marca (Calle …, Madrid, ES, 28027)».
+  -- Sin paréntesis, el texto entero. Con las otras direcciones del local (S01m).
   v_dir := coalesce(substring(p_texto from '\(([^()]*)\)\s*$'), p_texto);
+  v_ids := array_remove(array[public._conta_local_de_texto(p_account, array[split_part(v_dir, ',', 1)])], null);
+  if coalesce(array_length(v_ids, 1), 0) = 1 then return v_ids[1]; end if;
+  -- Como antes: la dirección exacta de un solo local.
   v_clave := public.conta_clave_direccion(split_part(v_dir, ',', 1));
   if v_clave is null then return null; end if;
-  select array_agg(l.id) into v_ids
-    from public.locations l
-   where l.account_id = p_account
-     and public.conta_clave_direccion(l.address) = v_clave;
+  select array_agg(l.id) into v_ids from public.locations l
+   where l.account_id = p_account and public.conta_clave_direccion(l.address) = v_clave;
   if coalesce(array_length(v_ids, 1), 0) <> 1 then return null; end if;
   return v_ids[1];
 end $_$;
@@ -40285,6 +40325,42 @@ begin
   get diagnostics v_n = row_count;
   return jsonb_build_object('vueltas', v_n, 'quien', v_quien);
 end $$;
+
+
+--
+-- Name: conta_marca_de_tienda(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_nombre text; v_clave text; v_ids uuid[];
+begin
+  if p_account is null or p_texto is null then return null; end if;
+  v_nombre := regexp_replace(p_texto, '^\s*S\.?\s*L\.?\s+', '', 'i');
+  v_nombre := regexp_replace(v_nombre, '\s+-\s+[A-Z]{2,4}\s+-\s+.*$', '');
+  v_nombre := regexp_replace(v_nombre, '\s*\(.*$', '');
+  v_clave := public._conta_clave_marca(v_nombre);
+  if v_clave is null then return null; end if;
+  select array_agg(b.id) into v_ids from public.brand b
+   where b.account_id = p_account and b.archived_at is null and public._conta_clave_marca(b.name) = v_clave;
+  if coalesce(array_length(v_ids, 1), 0) = 1 then return v_ids[1]; end if;
+  if coalesce(array_length(v_ids, 1), 0) > 1 then return null; end if;
+  -- Ninguna igual: una sola cuyo nombre empieza por el de la tienda («Smash Brothers» → «Smash Brothers Burgers»).
+  if length(v_clave) < 6 then return null; end if;
+  select array_agg(b.id) into v_ids from public.brand b
+   where b.account_id = p_account and b.archived_at is null and public._conta_clave_marca(b.name) like v_clave || '%';
+  if coalesce(array_length(v_ids, 1), 0) <> 1 then return null; end if;
+  return v_ids[1];
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_marca_de_tienda(p_account uuid, p_texto text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) IS 'S01q · La marca de una tienda de plataforma por su nombre («S.L.  Meraki Pita - MAD - Camichi 4 (…)» → Meraki Pita): una sola marca de la cuenta con ese nombre, o null.';
 
 
 --
@@ -145441,6 +145517,15 @@ GRANT ALL ON FUNCTION public._conta_cierre_serie(p_company uuid, p_canal uuid) T
 
 
 --
+-- Name: FUNCTION _conta_clave_marca(p_texto text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_clave_marca(p_texto text) TO anon;
+GRANT ALL ON FUNCTION public._conta_clave_marca(p_texto text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_clave_marca(p_texto text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_comision_buscar(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -146003,6 +146088,15 @@ GRANT ALL ON FUNCTION public._conta_s01o_periodo(p_desde date, p_hasta date) TO 
 GRANT ALL ON FUNCTION public._conta_tienda_direccion(p_texto text) TO anon;
 GRANT ALL ON FUNCTION public._conta_tienda_direccion(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_tienda_direccion(p_texto text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tienda_etiqueta(p_texto text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_tienda_etiqueta(p_texto text) TO anon;
+GRANT ALL ON FUNCTION public._conta_tienda_etiqueta(p_texto text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_tienda_etiqueta(p_texto text) TO service_role;
 
 
 --
@@ -152471,6 +152565,15 @@ GRANT ALL ON FUNCTION public.conta_mapeo_cambiar(p_company uuid, p_model text, p
 REVOKE ALL ON FUNCTION public.conta_mapeo_volver_al_estandar(p_company uuid, p_model text, p_statement text, p_prefix text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_mapeo_volver_al_estandar(p_company uuid, p_model text, p_statement text, p_prefix text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_mapeo_volver_al_estandar(p_company uuid, p_model text, p_statement text, p_prefix text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_marca_de_tienda(p_account uuid, p_texto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) TO service_role;
 
 
 --
