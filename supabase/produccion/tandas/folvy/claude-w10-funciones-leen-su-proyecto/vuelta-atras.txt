@@ -1,0 +1,4 @@
+# W10 · vuelta atrás, en orden inverso: las 24 como estaban (0202) y fuera
+# las tres funciones nuevas (0201).
+supabase/vuelta-atras/20261102T0202_w10_funciones_leen_su_proyecto.down.sql
+supabase/vuelta-atras/20261102T0201_w10_project_url.down.sql
