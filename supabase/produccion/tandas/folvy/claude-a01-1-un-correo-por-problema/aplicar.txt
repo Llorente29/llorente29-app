@@ -1,0 +1,21 @@
+# A01-1 · Un correo por problema, nunca cada hora, y techo de 10 al día
+# (02/11/2026). Rama claude/a01-1-un-correo-por-problema. Se ensaya y se aplica
+# antes de fusionar, lanzado desde main nombrando la rama (W12b).
+#
+#   1. 1936 — CAMBIA EN CALIENTE (declarada, con su prueba): encolar_alerta con
+#      la regla 2 (un problema = la clave del vigía sin fecha, md5 ni
+#      severidad; abre, empeora y se resuelve con dos pasadas del vigía) y el
+#      techo diario (10; lo crítico pasa; lo de más, a aviso_callado);
+#      avisos_resolver() cada 10 min; y last_catalog_watchdog mide las 3 h del
+#      espejo de Last solo de 12 a 24 UTC (el falso aviso de las 12:00:01).
+#      Guarda de md5 y respaldo de las dos.
+#      El analizador dice «sigue», sin «autorizo». A encolar_alerta la llega a
+#      llamar algún disparador de ventas: si lo nuevo falla, avisa y sigue por el
+#      camino de siempre (un «exception» propio).
+#
+# Antes (producción, 02/11 18:38 UTC): encolar_alerta 3e00b834,
+# last_catalog_watchdog c48e0f7b, sin tablas ni tarea; nada en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261102T1936_a01_un_correo_por_problema.sql
+cuenta: scripts/conta/produccion/cuentas/a01-1-un-correo-por-problema.sql
