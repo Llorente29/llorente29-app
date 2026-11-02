@@ -106,9 +106,16 @@ describe('Glovo · la liquidación I170326000540680 (Excel y PDF)', () => {
     expect(quincenaDe('2026-02-28')).toEqual(['2026-02-16', '2026-02-28'])
   })
 
-  it('un pedido con una promoción a cargo del local se dice (aún no se ha visto ninguna)', () => {
-    const conPromo = filas.map((f, i) => (i === 0 ? { ...f, 'Promoción producto asumida por partner': -2 } : f))
-    expect(paraRegistrarGlovo({ excel: leerExcelGlovo(conPromo)[0] }).avisos[0]).toMatch(/promoción producto asumida por partner/)
+  it('S01q · las promociones a cargo del local se leen, en positivo, y no cambian los productos (precio de carta)', () => {
+    const conPromo = filas.map((f, i) => (i === 0 ? { ...f, 'Promoción producto asumida por partner': -2, 'Promoción de oferta flash a cargo del partner': -1.5 } : f))
+    const d = paraRegistrarGlovo({ excel: leerExcelGlovo(conPromo)[0] })
+    expect([d.promociones_local, d.ventas.total, d.avisos]).toEqual([3.5, 218, []])
+    expect(paraRegistrarGlovo({ excel }).promociones_local).toBe(0)
+  })
+
+  it('S01q · una incidencia sobre productos sigue diciéndose (aún no se ha visto ninguna)', () => {
+    const conIncidencia = filas.map((f, i) => (i === 0 ? { ...f, 'Coste de incidencias sobre productos': -2 } : f))
+    expect(paraRegistrarGlovo({ excel: leerExcelGlovo(conIncidencia)[0] }).avisos[0]).toMatch(/coste de incidencias sobre productos/)
   })
 
   it('el PDF leído en el navegador (las piezas de pdfjs, por líneas) da lo mismo que pdftotext', () => {

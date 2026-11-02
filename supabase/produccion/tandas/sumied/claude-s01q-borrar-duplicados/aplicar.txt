@@ -1,0 +1,17 @@
+# S01q · Se BORRAN los 123 asientos duplicados del 01/11 (Julio, 02/11, S01q·3 y
+# S01q·5: «A, renumerar, sí»). Rama claude/s01q-borrar-duplicados. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1837  AÑADE la única forma de borrar asientos validados: respaldo y registro
+#         (conta_asiento_borrado), renumera su serie, recalcula la cadena de
+#         huellas desde el primer borrado y la comprueba; y su «deshacer». Los dos
+#         disparadores «inalterable» se desactivan solo dentro de la transacción.
+#   1838  Foodint (autorizo: borra filas): los 123 de la lista aprobada (9.584,37 €),
+#         la serie 2 seguida desde el 3292, la cadena íntegra, cada factura «Ya
+#         contabilizada en Diez», y el IVA soportado del 4T, 1.663,42 € menos.
+#         Para si algo no es lo medido.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01q-borrar.sql
+supabase/migrations/20261102T1837_s01q_borrar_asientos.sql
+supabase/migrations/20261102T1838_s01q_foodint_duplicados.sql

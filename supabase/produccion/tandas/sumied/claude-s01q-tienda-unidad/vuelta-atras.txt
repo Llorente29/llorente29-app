@@ -1,0 +1,7 @@
+# S01q · PR A · la vuelta atrás, en orden inverso: las tiendas y sus
+# liquidaciones vuelven a lo de antes (guardado por la 1217), fuera la vista del
+# mes, y el local otra vez por la dirección.
+cuenta: scripts/conta/produccion/cuentas/s01q-tiendas.sql
+supabase/vuelta-atras/20261102T1217_s01q_foodint_tiendas.down.sql
+supabase/vuelta-atras/20261102T1216_s01q_motor_mes.down.sql
+supabase/vuelta-atras/20261102T1215_s01q_tienda_local_marca.down.sql
