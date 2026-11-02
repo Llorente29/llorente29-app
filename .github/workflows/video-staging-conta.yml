@@ -143,20 +143,14 @@ jobs:
           export VIDEO_CUENTA="$CUENTA" VIDEO_EMPRESA="$EMPRESA"
           psql "$DB_URL" -X -v cuenta="$CUENTA" -v empresa="$EMPRESA" -f scripts/video/reconocer.sql > "$SALIDA/reconocer.txt" 2>&1 || true
           node scripts/video/factura-al-pago.mjs reconocer "$SALIDA"
-          if [ -f scripts/video/guion.mjs ]; then
-            if [ -f scripts/video/sembrar.sql ]; then
-              psql "$DB_URL" -X -v ON_ERROR_STOP=1 -1 -v cuenta="$CUENTA" -v empresa="$EMPRESA" -f scripts/video/sembrar.sql > "$SALIDA/sembrar.txt" 2>&1 \
-                || { cat "$SALIDA/sembrar.txt"; echo "::error::La siembra ha fallado."; exit 1; }
-            fi
-            node scripts/video/factura-al-pago.mjs grabar "$SALIDA"
-          fi
+          node scripts/video/factura-al-pago.mjs grabar "$SALIDA"
 
       - name: Montar con ffmpeg
-        if: hashFiles('scripts/video/montar.sh') != ''
+        if: always()
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || { echo "Sin grabación: no hay nada que montar."; exit 0; }
-          bash scripts/video/montar.sh "$SALIDA"
+          node scripts/video/montar.mjs "$SALIDA"
 
       - name: Carril · borrar y soltar (pase lo que pase)
         if: always()
