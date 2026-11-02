@@ -27,7 +27,7 @@
 import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 import { OpenBankingClient } from "npm:@open-banking-io/client@1.3.0";
-import { proveedorOpenBankingIo, sincronizarEmpresa, type BaseAgregador, type ParteCuenta } from "../_shared/bancoAgregador.ts";
+import { proveedorOpenBankingIo, RELEER_DIAS_OBI, sincronizarEmpresa, type BaseAgregador, type ParteCuenta } from "../_shared/bancoAgregador.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -59,6 +59,19 @@ function baseDe(srv: SupabaseClient): BaseAgregador {
     async apuntar(args) {
       const { error } = await srv.rpc("bank_agregador_apuntar", args);
       if (error) throw fallo("No se ha podido apuntar cómo ha ido", error);
+    },
+    // Cola 1b · Lo que ya está en Folvy de los días que se releen (para no duplicar).
+    async movimientosEnFolvy(treasuryId, desde, hasta) {
+      const { data, error } = await srv.from("bank_movement").select("op_date, amount, reference_2")
+        .eq("treasury_account_id", treasuryId).gte("op_date", desde).lte("op_date", hasta).limit(5000);
+      if (error) throw fallo("No se ha podido mirar lo que ya estaba", error);
+      return ((data ?? []) as { op_date: string; amount: number | string; reference_2: string | null }[])
+        .map((m) => ({ fecha: String(m.op_date), importeCent: Math.round(Number(m.amount) * 100), ref2: m.reference_2 ?? null }));
+    },
+    // Cola 1b · El registro de cada lectura (pendientes y lo que llegó tarde). Sin la tabla (antes de la tanda), no para.
+    async registrar(args) {
+      const { error } = await srv.rpc("bank_agregador_lectura_apuntar", args);
+      if (error && !/bank_agregador_lectura_apuntar|schema cache|does not exist/i.test(error.message)) throw fallo("No se ha podido apuntar la lectura", error);
     },
   };
 }
@@ -94,7 +107,8 @@ Deno.serve(async (req) => {
       if (!credenciales) throw new Error(`Falta el secreto ${c.secret_name} en las funciones de Supabase: sin él no se puede abrir la conexión.`);
       const cliente = OpenBankingClient.fromCredentials(credenciales);
       cuentas = await sincronizarEmpresa(baseDe(srv), proveedorOpenBankingIo(cliente, hoy),
-        { accountId: c.account_id, companyId: c.company_id, banco: c.bank_name, renovar: c.renew_url }, hoy, ayer);
+        { accountId: c.account_id, companyId: c.company_id, banco: c.bank_name, renovar: c.renew_url }, hoy, ayer,
+        { releerDias: RELEER_DIAS_OBI });
     } catch (e) {
       fallo = e instanceof Error ? e.message : String(e);
     }
@@ -104,6 +118,7 @@ Deno.serve(async (req) => {
   }
   const mal = partes.some((p) => p.error || p.cuentas.some((x) => x.estado === "fallo"));
   console.log(`[conta-banco-agregador] ${hoy}: ${JSON.stringify(partes.map((p) => ({ banco: p.banco, error: p.error,
-    cuentas: p.cuentas.map((x) => ({ iban4: x.iban4, estado: x.estado, leidos: x.leidos, nuevos: x.nuevos, repetidos: x.repetidos, continuidad: x.continuidad })) })))}`);
+    cuentas: p.cuentas.map((x) => ({ iban4: x.iban4, estado: x.estado, leidos: x.leidos, nuevos: x.nuevos, repetidos: x.repetidos, continuidad: x.continuidad,
+      pendientes: x.pendientes, tarde: x.tarde })) })))}`);
   return json({ hoy, ayer, partes }, mal ? 500 : 200);
 });

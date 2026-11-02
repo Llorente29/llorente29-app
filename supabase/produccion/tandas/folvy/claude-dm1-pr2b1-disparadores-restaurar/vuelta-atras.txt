@@ -1,0 +1,3 @@
+# DM1 · PR 2b-1 · vuelta atrás: las 62 funciones de disparador como estaban,
+# del respaldo y con su huella, y fuera _restaurando_demo().
+supabase/vuelta-atras/20261101T0024_dm1_disparadores_restaurar.down.sql

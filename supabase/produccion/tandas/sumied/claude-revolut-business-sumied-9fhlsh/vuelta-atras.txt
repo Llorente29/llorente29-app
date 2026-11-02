@@ -1,3 +1,4 @@
-# B01 · PR 3a · la vuelta atrás: las tres públicas como estaban en producción (0f253b11, 57bb45e3 y 927ffeee), y fuera los núcleos y conta_pago_casar_banco.
-cuenta: scripts/conta/produccion/cuentas/b01n-nucleos.sql
-supabase/vuelta-atras/20261101T2030_b01n_nucleos_casar.down.sql
+# B01 · Cola 2 · la vuelta atrás, en orden inverso: la 1300 (los casados nuevos fuera, los asientos 4/3312 y 4/3310 de vuelta desde el respaldo de la función de borrado, y los casados de antes como estaban) y la 1310 (el núcleo de casar de producción, sin el disparador ni _bank_casado_soltar).
+cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql
+supabase/vuelta-atras/20261102T1300_b01o_olimpo_recasar.down.sql
+supabase/vuelta-atras/20261102T1310_b01o_casar_sin_anuladas.down.sql

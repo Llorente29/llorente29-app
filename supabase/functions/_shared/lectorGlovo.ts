@@ -26,9 +26,12 @@
 // envío + 12,00 de mínimo de pedido) − factura 43,23 = ingreso 236,27. El IVA de
 // la factura se calcula sobre su base total (7,50), no pedido a pedido (7,51).
 //
-// Lo que no se ha visto aún (promociones a cargo del local, incidencias,
-// devoluciones): si una liquidación las trae, se dice en «avisos» y el neto que
-// vale es el del PDF.
+// Lo que no se ha visto aún (incidencias, devoluciones): si una liquidación las
+// trae, se dice en «avisos» y el neto que vale es el del PDF.
+// S01q (02/11) · Las promociones a cargo del local se leen y se guardan
+// («promociones_local», en positivo). No cambian «Productos»: Glovo liquida el
+// precio de carta, igual que las líneas de producto de los pedidos de la caja, y
+// así se compara lo vendido (Julio, 02/11).
 
 import { eurosExactos } from './euros.ts'
 
@@ -43,6 +46,8 @@ export interface DatosRegistrar {
   pedidos: number | null
   ventas: { total: number; base?: number | null; iva?: number | null }
   pedidos_total?: number | null
+  /** S01q · Promociones a cargo del local (en positivo); null si el documento no lo dice. */
+  promociones_local?: number | null
   comision: number
   otros: number
   neto: number
@@ -72,6 +77,8 @@ export interface ExcelGlovo {
   productos: number
   entrega: number
   comisionBase: number
+  /** S01q · Las promociones a cargo del local, sumadas y en positivo. */
+  promocionesLocal: number
   sinVer: string[]
 }
 
@@ -100,8 +107,9 @@ const fechaDe = (v: unknown): string => {
   throw new NoEsLiquidacionGlovo(`«${s}» no es una fecha.`)
 }
 
-const COLS_SIN_VER = ['promoción producto asumida por partner', 'promoción de oferta flash a cargo del partner', 'promoción df asumida por partner',
-  'coste de incidencias sobre productos', 'devoluciones de incidencias sobre productos', 'glovos ya remunerados', 'tasa de servicio pagada en efectivo'] as const
+/** S01q · Las promociones a cargo del local: se leen (en positivo). */
+const COLS_PROMO_LOCAL = ['promoción producto asumida por partner', 'promoción de oferta flash a cargo del partner', 'promoción df asumida por partner'] as const
+const COLS_SIN_VER = ['coste de incidencias sobre productos', 'devoluciones de incidencias sobre productos', 'glovos ya remunerados', 'tasa de servicio pagada en efectivo'] as const
 
 /** ¿Son las filas del Excel de Glovo? (las de la primera hoja, como objetos por su cabecera). */
 export const esExcelGlovo = (filas: readonly Record<string, unknown>[]): boolean => {
@@ -121,13 +129,14 @@ export function leerExcelGlovo(filas: readonly Record<string, unknown>[]): Excel
     let x = porNumero.get(numero)
     if (!x) {
       x = { numero, fechaFactura: fechaDe(f['fecha de factura']), tienda: String(f['nombre de la tienda'] ?? '').trim(), direccion: String(f['dirección de la tienda'] ?? '').trim(),
-            tiendaId: String(f['id de la tienda'] ?? '').trim(), pedidos: 0, productos: 0, entrega: 0, comisionBase: 0, sinVer: [] }
+            tiendaId: String(f['id de la tienda'] ?? '').trim(), pedidos: 0, productos: 0, entrega: 0, comisionBase: 0, promocionesLocal: 0, sinVer: [] }
       porNumero.set(numero, x)
     }
     x.pedidos += 1
     x.productos = r2(x.productos - n(f['productos']))
     x.entrega = r2(x.entrega - n(f['servicio de entrega']) - n(f['recargo por mínimo de pedido']))
     x.comisionBase = r2(x.comisionBase + n(f['amount 1']))
+    for (const c of COLS_PROMO_LOCAL) x.promocionesLocal = r2(x.promocionesLocal + Math.abs(n(f[c])))
     for (const c of COLS_SIN_VER) if (n(f[c]) !== 0 && !x.sinVer.includes(c)) x.sinVer.push(c)
   }
   if (!porNumero.size) throw new NoEsLiquidacionGlovo('El Excel no trae ningún pedido.')
@@ -198,7 +207,7 @@ export function paraRegistrarGlovo(x: { excel?: ExcelGlovo | null; pdf?: PdfGlov
   const tienda = excel ? nombreTienda(excel.tienda, excel.direccion) : pdf!.tienda
   return {
     proveedor: 'glovo', origen: excel ? 'excel' : 'pdf', tienda, tienda_id: excel?.tiendaId ?? null, desde, hasta,
-    pedidos: excel?.pedidos ?? null, ventas: { total: productos }, comision: total, otros: entrega, neto,
+    pedidos: excel?.pedidos ?? null, ventas: { total: productos }, promociones_local: excel ? excel.promocionesLocal : null, comision: total, otros: entrega, neto,
     referencia: (excel ?? pdf)!.numero, pago_el: pdf?.pagoEl ?? null,
     factura: { numero: (excel ?? pdf)!.numero, base, iva, total }, intermediario: GLOVO, avisos,
   }

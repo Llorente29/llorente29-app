@@ -16,7 +16,10 @@ import { useFicha } from '@/modules/conta/proveedor/contexto'
 import { SusCuentas } from '@/modules/conta/proveedor/SusCuentas'
 import { MARCA } from '../cuenta/marca'
 import { useState } from 'react'
-import { textoEntregaMercancia } from '@/modules/conta/lib/apuntaSolo'
+import { textoEntregaMercancia, textoLocalPorDefecto } from '@/modules/conta/lib/apuntaSolo'
+
+/** El valor de «Común a todos los locales» en el selector (no es el id de ningún local). */
+const COMUN = '__comun'
 
 /**
  * S01o·2 · Cómo le compras: si entrega mercancía (sus facturas esperan su
@@ -49,13 +52,18 @@ function ComoLeCompras() {
       <p className="cx-ayuda" style={{ margin: 0 }}>{textoEntregaMercancia(f.deliversGoods)}</p>
       <label className="cx-campo">
         <span className="cx-etiqueta">Local por defecto</span>
-        <select value={f.defaultLocationId ?? ''} data-prueba="local-por-defecto"
-          onChange={(e) => void cambiar({ defaultLocationId: e.target.value || null }, e.target.value ? `Guardado: sus facturas sin recepción van a ${datos.locales.find((l) => l.id === e.target.value)?.name ?? 'ese local'}.` : 'Guardado: sin local por defecto.')}>
+        <select value={f.defaultCommon ? COMUN : (f.defaultLocationId ?? '')} data-prueba="local-por-defecto"
+          onChange={(e) => {
+            const v = e.target.value
+            if (v === COMUN) void cambiar({ defaultCommon: true, defaultLocationId: null }, 'Guardado: su gasto es común a todos los locales.')
+            else void cambiar({ defaultCommon: false, defaultLocationId: v || null }, v ? `Guardado: sus facturas sin recepción van a ${datos.locales.find((l) => l.id === v)?.name ?? 'ese local'}.` : 'Guardado: sin local por defecto.')
+          }}>
           <option value="">Ninguno</option>
+          <option value={COMUN}>Común a todos los locales</option>
           {datos.locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
         </select>
       </label>
-      <p className="cx-ayuda" style={{ margin: 0 }}>{local ? `Sus facturas de servicios (sin recepción) se apuntan en ${local.name}.` : 'Sin él, una factura suya de servicios no se apunta sola: «Falta su local».'}</p>
+      <p className="cx-ayuda" style={{ margin: 0 }}>{textoLocalPorDefecto(f.defaultCommon, local?.name ?? null)}</p>
       <div role="status" aria-live="polite">{hecho && <div className="cx-guardado">{hecho}</div>}</div>
       {fallo && <div className="cx-error" role="alert">{fallo}</div>}
     </div>

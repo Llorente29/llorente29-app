@@ -387,6 +387,8 @@ export interface EntradaFactura {
   ivaNoDeducible?: boolean
   /** D07 · Por qué no se deduce, dicho para la persona («el ticket no lleva NIF»). Sin él, «no va a nombre de tu empresa». */
   motivoNoDeducible?: string | null
+  /** S01o·3 · Su ficha dice que es común a todos los locales. */
+  comunPorFicha?: boolean
   /**
    * D01 · Liquidaciones: el IVA tal como lo dice la factura, por tipo (la de
    * comisión de Uber: la base del total y su cuota, que a veces no es base ×
@@ -501,7 +503,11 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
     if (totalNd !== cent(f.total)) { avisos.push(`Base + IVA = ${eurosExactos(deCent(totalNd))}, y la factura dice ${eurosExactos(f.total)}.`); confs.push('duda') }
     const porQueNd = f.motivoNoDeducible ?? 'la factura no va a nombre de tu empresa'
     razones.push({ decision: 'IVA no deducible: más gasto', porque: `${porQueNd}: su IVA no se descuenta. Va a su gasto, no a la 472; sale en el libro de recibidas como no deducible y no entra en el 303` })
-    if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+    if (!loc) {
+    // S01o·3 · Común porque lo dice su ficha: no es una duda.
+    if (f.comunPorFicha) razones.push({ decision: 'Común', porque: 'su ficha dice que es común a todos los locales' })
+    else { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  }
     return {
       sinPropuesta: null,
       propuesta: {
@@ -560,7 +566,11 @@ export function facturaProveedor(f: EntradaFactura, c: CuentasFactura): { propue
     confs.push('duda')
   }
   if (partes) razones.push({ decision: `Gasto a partes iguales: ${partes.map((p) => p.nombre).join(' y ')}`, porque: 'la factura reparte entre varios locales: su gasto se parte a partes iguales entre los del lote; el IVA y el proveedor quedan comunes' })
-  else if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  else if (!loc) {
+    // S01o·3 · Común porque lo dice su ficha: no es una duda.
+    if (f.comunPorFicha) razones.push({ decision: 'Común', porque: 'su ficha dice que es común a todos los locales' })
+    else { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  }
   razones.unshift({ decision: 'IVA soportado por tipo', porque: 'una 472 por tipo, con su base, al libro de recibidas' })
   return {
     sinPropuesta: null,
@@ -611,7 +621,11 @@ function autoliquidada(f: EntradaFactura, c: CuentasFactura, gastos: Map<string,
     confs.push('duda')
   }
   if (f.faltaNumero) { avisos.push('Falta el número de la factura: sin él no se valida ni va a Diez.'); confs.push('duda') }
-  if (!loc) { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  if (!loc) {
+    // S01o·3 · Común porque lo dice su ficha: no es una duda.
+    if (f.comunPorFicha) razones.push({ decision: 'Común', porque: 'su ficha dice que es común a todos los locales' })
+    else { razones.push({ decision: 'Común', porque: 'la factura no dice de qué local es: queda común y el informe la reparte' }); confs.push('probable') }
+  }
   razones.unshift({ decision: `Autoliquidación al ${t.porcentaje} % (${eurosExactos(cuota)})`, porque: `${a.porque} El IVA lo declaras y lo deduces tú: 472 y 477 por la misma cuota, al libro de recibidas.` })
   return {
     sinPropuesta: null,

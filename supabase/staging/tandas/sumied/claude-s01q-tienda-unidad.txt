@@ -1,0 +1,10 @@
+# S01q · PR A · La tienda de la plataforma es la unidad. 1215 cambia el local y
+# la marca de una tienda nueva; 1216 añade el mes en cuatro estados; 1217 es de
+# Foodint y en staging no hace nada. Su prueba (ROLLBACK, cuenta D, datos
+# inventados): el local por la etiqueta, sin local, por la dirección y lo puesto;
+# la marca por el nombre; el mes (Glovo por productos, la tienda sin local, la
+# cedida aparte); la vuelta atrás.
+supabase/migrations/20261102T1215_s01q_tienda_local_marca.sql
+supabase/migrations/20261102T1216_s01q_motor_mes.sql
+supabase/migrations/20261102T1217_s01q_foodint_tiendas.sql
+supabase/staging/sql/20261102_s01q_tienda_prueba.sql

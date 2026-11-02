@@ -1,0 +1,8 @@
+# S01o · 3 · «Común a todos los locales» como local por defecto de un proveedor.
+# 0929 añade la columna y cambia _conta_factura_segura; 0930 es de Foodint y en
+# staging no hace nada. Su prueba (ROLLBACK, cuenta D, datos inventados): sin local
+# ni «común», «Falta su local»; con «común», apuntada sola, todo común y sin local,
+# validada y su porqué lo dice; la vuelta atrás.
+supabase/migrations/20261102T0929_s01o3_comun_por_defecto.sql
+supabase/migrations/20261102T0930_s01o3_anthropic_comun.sql
+supabase/staging/sql/20261102_s01o3_comun_prueba.sql

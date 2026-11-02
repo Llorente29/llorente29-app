@@ -1,17 +1,20 @@
 {
- "_que": "B01 · PR 3a · contexto de producción de la tanda (2030), medido en SOLO LECTURA el 01/11 a las 20:25Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen bank_casar, conta_remesa_casar y mark_supplier_invoice_paid, con la huella de pg_get_functiondef de la que parte la migración (0f253b11, 57bb45e3 y 927ffeee); no existe ninguno de los tres núcleos ni conta_pago_casar_banco; nada en el camino del pedido; nada en el historial.",
- "medido": "2026-11-01T20:25Z",
+ "_que": "B01 · Cola 2 · contexto de producción de la tanda (1310 y 1300), medido en SOLO LECTURA el 02/11 a las 18:59Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: _bank_casar_nucleo existe con la huella de la que parte la 1310 (246d303a); supplier_invoice, 297 filas; no existen _bank_casado_soltar, _tg_factura_anulada_descasa ni conta_b01o_antes; nada en el camino del pedido; nada en el historial. Las dos facturas de Olimpo, aprobadas y sin pagar; los dos casados, vivos.",
+ "medido": "2026-11-02T18:59Z",
  "tanda": {
-  "supabase/migrations/20261101T2030_b01n_nucleos_casar.sql": "ab468147e19695f42c7eea93b361a5ec"
+  "supabase/migrations/20261102T1310_b01o_casar_sin_anuladas.sql": "b3b4b6f58ebed597fc34f30b71ffa23a",
+  "supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql": "8d79a7c352000ed33c3944026d3e9ce6"
  },
  "contexto": {
-  "tablas": [],
-  "funciones": [
-   "public.bank_casar(uuid,jsonb,text,text,jsonb,text,uuid)",
-   "public.conta_remesa_casar(uuid,uuid,uuid[])",
-   "public.mark_supplier_invoice_paid(uuid,date,text)"
+  "tablas": [
+   "public.supplier_invoice"
   ],
-  "filas": {},
+  "funciones": [
+   "public._bank_casar_nucleo(uuid,jsonb,text,text,jsonb,text,uuid)"
+  ],
+  "filas": {
+   "public.supplier_invoice": 297
+  },
   "otras": {},
   "camino": {
    "tablas": [],

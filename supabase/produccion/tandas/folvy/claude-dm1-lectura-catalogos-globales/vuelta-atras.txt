@@ -1,0 +1,3 @@
+# DM1 · 2b-2 · vuelta atrás: conta_lectura deja de leer los 15 catálogos y la
+# vista se va.
+supabase/vuelta-atras/20261102T1218_dm1_lectura_catalogos_globales.down.sql
