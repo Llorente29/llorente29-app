@@ -1,0 +1,5 @@
+# S01o · 3 · la vuelta atrás, en orden inverso. La tanda no apunta nada (lo apunta
+# la pasada); lo que ya apuntara se deshace desde «Apuntadas solas» › «Deshacer».
+cuenta: scripts/conta/produccion/cuentas/s01o3-comun.sql
+supabase/vuelta-atras/20261102T0930_s01o3_anthropic_comun.down.sql
+supabase/vuelta-atras/20261102T0929_s01o3_comun_por_defecto.down.sql
