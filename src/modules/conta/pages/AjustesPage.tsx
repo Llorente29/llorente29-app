@@ -32,6 +32,7 @@ import { VerifactuAjustes } from '@/modules/conta/verifactu/VerifactuAjustes'
 import { CobrosAjustes } from '@/modules/conta/ventas/CobrosAjustes'
 import { CorreoFacturasAjustes } from '@/modules/conta/compras/CorreoFacturas'
 import { ApuntarSoloAjustes } from '@/modules/conta/compras/ApuntarSoloAjustes'
+import { ApartadoRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
 import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
@@ -103,6 +104,8 @@ function Entrada({ id }: { id: string }) {
         <>
           {cabeza}
           <TusImpuestos {...p} />
+          {/* S01o·2 · ¿Estás en el ROI? */}
+          <ApartadoRoi quien={quien} movil={movil} />
           {/* P01 · La marca de la CUENTA: con ella sale Impuestos › Tus clientes. */}
           <ApartadoAsesoria quien={quien} movil={movil} />
           <ParaPresentar d={d} movil={movil} hoy={hoy} />

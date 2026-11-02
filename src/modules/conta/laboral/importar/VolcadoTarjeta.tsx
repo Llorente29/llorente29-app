@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { useApp } from '@/context/AppContext'
 import { Boton, Chip, Selector, Tarjeta } from '@/modules/conta/diseno'
 import {
-  centrosDelLote, confirmarCentro, lineaNoCuadra, resumenVolcado, volcarLote,
+  centrosDelLote, confirmarCentro, lineaNoCuadra, nombreDelCentro, resumenVolcado, volcarLote,
   type CentroDelLote, type ResultadoVolcado,
 } from './volcado'
 
@@ -46,7 +46,7 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
 
   return (
     <Tarjeta titulo="Pasar a las fichas" nivel={3}
-      apoyo="Cada centro de Cegid va a un local de la cuenta. Te proponemos el que se llama igual; confírmalo. Nadie de un centro sin confirmar entra en las fichas."
+      apoyo="Quien ya está en el equipo se queda en el local de su ficha. Para quien entra ahora, cada centro de Cegid va a un local de la cuenta: te proponemos el que se llama igual; confírmalo. Si Cegid no trae su centro, elige uno en «Sin centro en Cegid». Nadie de un centro sin confirmar entra en las fichas."
       accion={<Boton variante="principal" icono="subir" onClick={volcar} disabled={volcando || centros === null} data-prueba="volcado-pasar">
         {volcando ? 'Pasando…' : 'Pasar a las fichas'}</Boton>}>
       {centros === null && !error && <p className="s-apoyo" role="status">Leyendo los centros del fichero…</p>}
@@ -63,11 +63,11 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
           <tbody>
             {centros.map((c) => (
               <tr key={c.centro} data-prueba="volcado-centro">
-                <td>{c.centro}</td>
+                <td>{nombreDelCentro(c.centro)}</td>
                 <td>{c.personas}</td>
                 <td>
                   <Selector valor={valorDe(c)} alCambiar={(v) => setElegido((x) => ({ ...x, [c.centro]: v }))} opciones={opciones}
-                    aria-label={`Local para el centro ${c.centro}`} />
+                    aria-label={`Local para el centro ${nombreDelCentro(c.centro)}`} />
                 </td>
                 <td>
                   {c.confirmado && valorDe(c) === c.confirmado.id
@@ -83,7 +83,7 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
       )}
       {centros !== null && sinConfirmar.length > 0 && (
         <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="volcado-sin-confirmar">
-          {sinConfirmar.length === 1 ? 'Falta confirmar 1 centro' : `Faltan confirmar ${sinConfirmar.length} centros`}: {sinConfirmar.map((c) => c.centro).join(', ')}. Sus personas no entrarán hasta que lo confirmes.
+          {sinConfirmar.length === 1 ? 'Falta confirmar 1 centro' : `Faltan confirmar ${sinConfirmar.length} centros`}: {sinConfirmar.map((c) => nombreDelCentro(c.centro)).join(', ')}. Sus personas no entrarán hasta que lo confirmes.
         </p>
       )}
       {error && <p className="s-aviso-lista" data-tono="falta" role="alert" data-prueba="volcado-error">{error}</p>}
@@ -97,6 +97,14 @@ export default function VolcadoTarjeta({ loteId }: { loteId: string }) {
               <p className="s-apoyo"><strong>Lo que cobra no cuadra con su última nómina de Cegid ({resultado.noCuadra.length}):</strong></p>
               <ul className="s-importar-lotes" data-prueba="volcado-no-cuadra">
                 {resultado.noCuadra.map((x) => <li key={x.persona}>{lineaNoCuadra(x)}</li>)}
+              </ul>
+            </>
+          )}
+          {resultado.paraSaber.length > 0 && (
+            <>
+              <p className="s-apoyo"><strong>Para saber ({resultado.paraSaber.length}):</strong></p>
+              <ul className="s-importar-lotes" data-prueba="volcado-para-saber">
+                {resultado.paraSaber.map((m, i) => <li key={i}>{m}</li>)}
               </ul>
             </>
           )}

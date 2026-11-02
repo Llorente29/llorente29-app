@@ -89,3 +89,20 @@ describe('los trozos y lo que dice el botón', () => {
       .toBe('Faltan filas: hay 700 cargadas y el fichero trae 1.200: Nominas 700 de 1.200. 700 nuevas.')
   })
 })
+
+// N1 · Respuesta 2 (01/11): el paquete de verdad empieza Empresa y Convenio con
+// la fila «campo | valor». No es un campo: no se carga ni se cuenta.
+describe('la fila «campo | valor» del paquete de verdad', () => {
+  it('no se carga, y se cuenta igual que en las cabeceras', () => {
+    const libro = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet([
+      ['campo', 'valor'], ['Código cuenta de cotización (CCC)', '28000000000'], ['Centro de trabajo 1', 'Centro Inventado'],
+    ]), 'Empresa')
+    const [empresa] = filasDelLibro(libro)
+    expect(empresa.filas).toEqual([
+      { campo: 'Código cuenta de cotización (CCC)', valor: '28000000000' },
+      { campo: 'Centro de trabajo 1', valor: 'Centro Inventado' },
+    ])
+    expect(cabecerasDelLibro(libro)[0].filas).toBe(empresa.filas.length)
+  })
+})

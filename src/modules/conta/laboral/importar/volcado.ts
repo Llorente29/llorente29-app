@@ -33,7 +33,15 @@ export interface ResultadoVolcado {
   centrosSinConfirmar: string[]
   noCuadra: NoCuadra[]
   mensajes: string[]
+  /** N1 · respuesta 3: lo que no es un aviso pero se cuenta (el local de Folvy que manda, las bajas que entran). */
+  paraSaber: string[]
 }
+
+/** N1 · respuesta 3: la fila de las personas que no están en Folvy y cuyo centro no trae Cegid. */
+export const SIN_CENTRO = '__sin_centro__'
+
+/** El nombre de un centro en la pantalla. */
+export const nombreDelCentro = (centro: string) => centro === SIN_CENTRO ? 'Sin centro en Cegid' : centro
 
 // lab_centros_del_lote, lab_confirmar_centro y lab_volcar_lote son de la 1938 y
 // aún no están en database.ts. Se llaman como método de supabase (con su
@@ -74,6 +82,7 @@ export async function volcarLote(loteId: string): Promise<ResultadoVolcado> {
     centrosSinConfirmar: (r.centros_sin_confirmar as string[] | undefined) ?? [],
     noCuadra: ((r.no_cuadra as NoCuadra[] | undefined) ?? []).map((x) => ({ persona: x.persona, cegid: Number(x.cegid), conceptos: Number(x.conceptos) })),
     mensajes: (r.mensajes as string[] | undefined) ?? [],
+    paraSaber: (r.para_saber as string[] | undefined) ?? [],
   }
 }
 

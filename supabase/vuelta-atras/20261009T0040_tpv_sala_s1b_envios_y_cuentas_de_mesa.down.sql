@@ -15,6 +15,17 @@ begin
   raise notice 'ventas dine_in que pasan a pickup: %', n;
 end $$;
 
+-- 01/11/2026: los cierres, todos de entrada y en un solo orden. Borrar una
+-- clave ajena pide cierre exclusivo también sobre la tabla a la que apunta:
+-- sale.table_id → dining_table; sale_fire y sale_line_void → accounts,
+-- locations, kds_device y void_reason. Esas primero, después sale, sale_line
+-- y lo de la S1b. Quien lee la sala (dining_table y luego sale) y las tablets
+-- (kds_device y luego sale) van en ese orden. El ensayo (run 41288564420) y
+-- staging (run 41291697233) dieron 40P01 en el drop column de sale: teníamos
+-- sale y esperábamos dining_table; el otro, al revés.
+lock table public.accounts, public.locations, public.kds_device, public.dining_table, public.void_reason,
+           public.sale, public.sale_line, public.sale_fire, public.sale_line_void in access exclusive mode;
+
 -- 1. Las funciones que ya existían, a su forma de antes (inversa exacta).
 do $$
 declare v_def text; v_new text; c int;

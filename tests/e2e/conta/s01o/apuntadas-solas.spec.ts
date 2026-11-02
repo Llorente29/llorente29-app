@@ -9,6 +9,9 @@
 //   · «Apuntadas solas»: su porqué y «Deshacer», que dice lo que ha hecho (regla 8);
 //   · «Por revisar»: por qué la miras tú, y «Ponerla» si falta la cuenta de la ficha;
 //   · Ajustes › Apuntar solo lo seguro: el interruptor, con lo que hace.
+//   · S01o·2: Ajustes › Tus impuestos, «¿Estás en el ROI?»; «Por revisar», la
+//     pregunta del ROI y «Falta su local · Ponerlo» (la columna del ROI solo va en
+//     ROLLBACK a staging desde la rama: su lectura es INVENTADA).
 // Las capturas van a docs/conta/capturas/s01o/.
 
 import { mkdirSync } from 'node:fs'
@@ -86,5 +89,55 @@ test.describe('S01o · lo que Sumied sabe al 100 % se apunta solo', () => {
     await expect(page.locator('[data-prueba="apuntar-solo"]')).toBeVisible()
     await expect(page.getByText('Facturas recibidas › «Apuntadas solas»').first()).toBeVisible()
     await capturar(page, 'ajustes-apuntar-solo')
+  })
+})
+
+// ── S01o·2 ─────────────────────────────────────────────────────────────────
+const UE = 'e2e01f0b-0000-4000-8000-000000000001'
+const LOCAL = 'e2e01f0b-0000-4000-8000-000000000002'
+const PROV2 = 'e2e01f0b-0000-4000-8000-0000000000bb'
+const MOTIVO_ROI = 'Es de un proveedor de la UE que cobra IVA español: falta saber si estás en el ROI (Ajustes › Tus impuestos).'
+const MOTIVO_LOCAL = 'Falta su local en la ficha de Servicios Inventados, S.L..'
+
+const facturaPr2 = (id: string, numero: string, total: number) => ({
+  id, tipo: 'factura', estado: 'para_mirar', proveedor: { id: PROV2, nombre: 'Proveedor Inventado' }, numero, fecha: '2026-10-28', total, canal: 'correo', confianza: null,
+  porque: null, entendido: null, recepcion: null, asiento: null, llego: '2026-10-28T08:00:00Z',
+})
+
+async function conRoiSinContestar(page: Page) {
+  await page.route(/\/rest\/v1\/company_tax_profile\?.*select=en_roi/, (r) => json(r, [{ en_roi: null }]))
+}
+
+test.describe('S01o·2 · el ROI y los motivos de las demás facturas', () => {
+  test.describe.configure({ timeout: 180_000 })
+  test.use({ actionTimeout: 20_000 })
+  test.afterEach(async ({ page }) => { await page.unrouteAll({ behavior: 'ignoreErrors' }) })
+
+  test('Ajustes › Tus impuestos pregunta si estás en el ROI, con Sí y No', async ({ page }) => {
+    await entrarComo(page, CUENTA_A.email)
+    await conRoiSinContestar(page)
+    await page.goto('/conta/ajustes/impuestos')
+    const p = page.locator('[data-prueba="pregunta-roi"]').first()
+    await expect(p).toBeVisible()
+    await expect(p.getByRole('button', { name: 'Sí' })).toBeVisible()
+    await expect(p.getByRole('button', { name: 'No' })).toBeVisible()
+    await capturar(page, 's01o2-ajustes-roi')
+  })
+
+  test('«Por revisar»: la de la UE trae la pregunta del ROI, y «Falta su local» lleva a la ficha', async ({ page }) => {
+    await entrarComo(page, CUENTA_A.email)
+    await conRoiSinContestar(page)
+    await page.route(/\/rest\/v1\/rpc\/conta_documentos_recibidos/, async (r) => {
+      const real = await r.fetch()
+      const d = await real.json() as { filas: unknown[] }
+      await json(r, { ...d, filas: [facturaPr2(UE, 'INV0000000003', 24.2), facturaPr2(LOCAL, 'INV0000000004', 12.1), ...d.filas] })
+    })
+    await page.route(/\/rest\/v1\/rpc\/conta_apuntadas_solas/, (r) => json(r, { semana: 0, filas: [], motivos: { [UE]: MOTIVO_ROI, [LOCAL]: MOTIVO_LOCAL } }))
+    await page.goto('/conta/documentos?ver=por-revisar')
+    await expect(page.locator('[data-prueba="pregunta-roi"]').first()).toBeVisible()
+    const local = page.locator('[data-prueba="motivo-revisar"]').filter({ hasText: MOTIVO_LOCAL }).first()
+    await expect(local).toBeVisible()
+    await expect(local.getByRole('link', { name: 'Ponerlo' })).toHaveAttribute('href', new RegExp(PROV2))
+    await capturar(page, 's01o2-por-revisar-roi-y-local')
   })
 })

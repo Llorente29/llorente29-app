@@ -13,7 +13,7 @@
 //   · Solo las nueve hojas esperadas: una pestaña que no se espera no se lee.
 
 import * as XLSX from 'xlsx'
-import { HOJAS_CEGID, normalizar } from './cegidCabeceras'
+import { HOJAS_CEGID, esCabeceraCampoValor, normalizar } from './cegidCabeceras'
 
 export type Valor = string | number | boolean
 export type Fila = Record<string, Valor>
@@ -61,7 +61,8 @@ export function filasDelLibro(libro: XLSX.WorkBook): HojaConFilas[] {
     const crudas = XLSX.utils.sheet_to_json(libro.Sheets[nombre], { header: 1, raw: true, defval: null, blankrows: false }) as unknown[][]
     if (h.clase === 'campo_valor') {
       const filas: Fila[] = []
-      for (const r of crudas) {
+      for (const [i, r] of crudas.entries()) {
+        if (i === 0 && esCabeceraCampoValor(r[0], r[1])) continue  // la fila «campo | valor» no es un campo
         const campo = valorDeCelda(r[0])
         if (campo === undefined) continue
         const valor = valorDeCelda(r[1])

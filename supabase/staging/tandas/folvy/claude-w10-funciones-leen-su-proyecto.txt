@@ -1,0 +1,8 @@
+# W10 · La 0201 y la 0202 (las 24 funciones leen la dirección de su proyecto
+# del Vault) y su prueba (ROLLBACK): las 24 llevan la dirección escrita (rojo
+# a propósito); aplicadas, ninguna; una venta de Last que cambia de estado
+# llama a order-advance de ESTE proyecto (y sin secreto, a nadie);
+# tg_auto_dispatch igual; sin sobrecargas; y la vuelta atrás, byte a byte.
+supabase/migrations/20261102T0201_w10_project_url.sql
+supabase/migrations/20261102T0202_w10_funciones_leen_su_proyecto.sql
+supabase/staging/sql/20261102_w10_funciones_leen_su_proyecto_prueba.sql

@@ -1,0 +1,16 @@
+# N1 · respuesta 2 (01/11/2026) · Las cabeceras reales del paquete de Cegid.
+# Rama claude/n1-cabeceras-reales. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar. Sin autorizo.
+#
+#   1. 2154 — CAMBIA EN CALIENTE, con su prueba de staging: _lab_campo, misma
+#      firma, encuentra el campo también por el código entre paréntesis del
+#      fichero («CCC» → «Código cuenta de cotización (CCC)»). Sin esto, el
+#      volcado (1938) dejaría vacía la cuenta de cotización de cada contrato.
+#      Nada en el camino del pedido.
+#
+# Antes (producción, solo lectura): _lab_campo de la 1938; 1 lote de Cegid
+# («leido», 0 filas: solo cabeceras).
+# Sin aplicar: lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261101T2154_n1b_campo_del_fichero.sql
+cuenta: scripts/conta/produccion/cuentas/n1b-campo-del-fichero.sql

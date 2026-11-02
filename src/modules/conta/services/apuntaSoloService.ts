@@ -6,6 +6,7 @@
 // lo seguro» de la empresa (D01, company_purchase_setting).
 
 import { rpc, tabla, mensaje } from '@/modules/conta/services/bd'
+import { ponerEnPerfil } from '@/modules/conta/services/altaService'
 import { deLaBase, type ApuntadasSolas } from '@/modules/conta/lib/apuntaSolo'
 
 export async function leerApuntadasSolas(companyId: string): Promise<ApuntadasSolas> {
@@ -34,4 +35,16 @@ export async function leerAjusteApuntarSolo(accountId: string, companyId: string
 /** Guarda el interruptor (conta_ajustes_compras_guardar, D01) sin tocar «recibe la mercancía». */
 export async function guardarApuntarSolo(companyId: string, actual: AjusteApuntarSolo, encendido: boolean, quien: string | null): Promise<void> {
   await rpc('conta_ajustes_compras_guardar', { p_company: companyId, p_recibe: actual.recibeMercancia, p_apuntar_seguro: encendido, p_quien_nombre: quien })
+}
+
+/** S01o·2 · ¿Está la empresa en el ROI? null: sin contestar. */
+export async function leerRoi(accountId: string, companyId: string): Promise<boolean | null> {
+  const { data, error } = await tabla('company_tax_profile').select('en_roi').eq('account_id', accountId).eq('company_id', companyId)
+  if (error) throw new Error(mensaje('No se ha podido leer si estás en el ROI', error))
+  const v = ((data ?? []) as Record<string, unknown>[])[0]?.en_roi
+  return typeof v === 'boolean' ? v : null
+}
+
+export async function guardarRoi(accountId: string, companyId: string, enRoi: boolean): Promise<void> {
+  await ponerEnPerfil(accountId, companyId, 'en_roi', enRoi)
 }
