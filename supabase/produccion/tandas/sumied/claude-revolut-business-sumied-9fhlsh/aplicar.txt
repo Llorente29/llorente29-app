@@ -15,7 +15,9 @@
 #      del pedido.
 #
 # SIN VUELTA ATRÁS, a propósito, y SOLA en su tanda (como la 1013 de la S01c):
-# un contraasiento no se borra. El ensayo comprueba lo esperado, línea a línea.
+# un contraasiento no se borra. El ensayo comprueba lo esperado, línea a línea:
+# cada medida cuenta lo que falta por arreglar (en producción, de 1 o 2 a 0; en
+# staging, sin Foodint, 0 y 0).
 # Después, esta carpeta pasa a llevar el arreglo de fondo, con su vuelta atrás,
 # en un segundo real.
 # Con «autorizo» (lo pide el workflow a toda tanda sin vuelta atrás).
@@ -23,10 +25,10 @@
 supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql
 sin-vuelta-atras: supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql · motivo: deshace dos casados con asiento validado, y un contraasiento no se borra; lo de antes era el error que se arregla
 cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql
-esperado: b01o-olimpo · la 26A/10966: estado y día de pago = pagada 2026-10-26
-esperado: b01o-olimpo · la 26A/10965: estado y día de pago = pagada 2026-10-26
-esperado: b01o-olimpo · el −363,67 del 26/10: con qué está casado = factura_recibida 26A/10966
-esperado: b01o-olimpo · el −170,10 del 26/10: con qué está casado = factura_recibida 26A/10965
-esperado: b01o-olimpo · los asientos 4/3312 y 4/3310 = 4/3312 anulado, 4/3310 anulado
+esperado: b01o-olimpo · la 26A/10966 sin pagar el 26/10 = 0
+esperado: b01o-olimpo · la 26A/10965 sin pagar el 26/10 = 0
+esperado: b01o-olimpo · el −363,67 del 26/10 casado con lo que no es la 26A/10966 = 0
+esperado: b01o-olimpo · el −170,10 del 26/10 casado con lo que no es la 26A/10965 = 0
+esperado: b01o-olimpo · los asientos 4/3312 y 4/3310 sin anular = 0
 esperado: b01o-olimpo · casados vivos de Foodint con una factura anulada o descartada = 0
-esperado: b01o-olimpo · la 26/13028: estado y asiento de pago = anulada sin asiento de pago
+esperado: b01o-olimpo · la 26/13028 con asiento de pago = 0

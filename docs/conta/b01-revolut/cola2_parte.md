@@ -46,7 +46,9 @@ select 'con «la referencia no coincide»', count(*), coalesce(sum(abs(b.amount)
   - Si la 26A/10965 no está aprobada, para sin tocar nada.
   - Si ya está hecho, no hace nada. En staging no está Foodint: no hace nada.
 - **Sin vuelta atrás, a propósito, y sola en su tanda**, como la 1013 de la S01c: un contraasiento no se borra.
-  - El ensayo comprueba las 7 medidas de `scripts/conta/produccion/cuentas/b01o-olimpo.sql` contra sus «esperado:»: las dos facturas «pagada 2026-10-26», cada pago con su factura, los dos asientos «anulado», 0 casados con anuladas y la 26/13028 sin asiento de pago.
+  - El ensayo comprueba las 7 medidas de `scripts/conta/produccion/cuentas/b01o-olimpo.sql` contra sus «esperado:».
+  - Cada medida cuenta **lo que falta por arreglar**. En producción, antes: 1, 1, 1, 1, 2, 1 y 1 (medido el 02/11), y después todas a 0. En staging, sin Foodint, 0 y 0. Así el mismo «= 0» vale en los dos.
+  - Cada una lleva su `-- quieta:` (filas concretas por su id, que solo cambia la tanda).
   - El workflow pide `autorizo`.
 - **Contexto:** medido el 02/11 a las 12:00Z. La 1300 no crea ni altera objetos (todo va dentro de un DO); nada en el camino del pedido; nada en el historial. El analizador dice «sigue» porque no entra en las llamadas a funciones.
 
