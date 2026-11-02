@@ -3739,6 +3739,9 @@ declare
 begin
   select * into v from public.supplier_invoice where id = p_invoice for update;
   if v.id is null then return jsonb_build_object('apuntada', false, 'motivo', 'No está.'); end if;
+  -- S01q · La guarda: ya contabilizada (se enlaza y se dice) o de un periodo cerrado.
+  s := public._conta_factura_guarda(v.id);
+  if s is not null then return s; end if;
   if not coalesce((select ps.post_safe_invoices from public.company_purchase_setting ps where ps.company_id = v.company_id), false) then
     return jsonb_build_object('apuntada', false, 'motivo', 'La empresa tiene apagado «Apuntar solo lo que Sumied tiene seguro».');
   end if;
@@ -3797,6 +3800,50 @@ begin
   on conflict (invoice_id) do update set estado = 'apuntada', regla = excluded.regla, porque = excluded.porque, entry_id = excluded.entry_id, at = now();
   return jsonb_build_object('apuntada', true, 'porque', s->>'porque', 'asiento', v_entry);
 end $$;
+
+
+--
+-- Name: _conta_factura_guarda(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_factura_guarda(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; d jsonb; v_corte date; v_motivo text;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null then return null; end if;
+  d := public._conta_factura_ya_contabilizada(v.id);
+  if d is not null then
+    v_motivo := 'Ya contabilizada en ' || case when (d->>'migrado')::boolean then 'Diez' else 'el diario' end
+                || ' (asiento ' || (d->>'serie') || '/' || (d->>'numero') || ', ' || to_char((d->>'fecha')::date, 'DD/MM/YYYY') || '): no se vuelve a apuntar.';
+    update public.supplier_invoice set journal_entry_id = (d->>'id')::uuid, updated_at = now()
+     where id = v.id and journal_entry_id is distinct from (d->>'id')::uuid;
+    insert into public.supplier_invoice_auto (invoice_id, account_id, company_id, estado, porque, entry_id)
+    values (v.id, v.account_id, v.company_id, 'ya_contabilizada', v_motivo, (d->>'id')::uuid)
+    on conflict (invoice_id) do update set estado = 'ya_contabilizada', porque = excluded.porque, entry_id = excluded.entry_id, at = now()
+     where supplier_invoice_auto.estado <> 'apuntada';
+    return jsonb_build_object('apuntada', false, 'motivo', v_motivo, 'ya_contabilizada', true, 'asiento', d->>'id');
+  end if;
+  v_corte := public._conta_corte(v.company_id);
+  if v_corte is not null and v.invoice_date < v_corte then
+    v_motivo := 'Su fecha (' || to_char(v.invoice_date, 'DD/MM/YYYY') || ') es de un periodo ya cerrado (lo lleva Diez hasta el '
+                || to_char(v_corte - 1, 'DD/MM/YYYY') || ') y no la encuentro allí: no se apunta sola. Míralo tú.';
+    insert into public.supplier_invoice_auto (invoice_id, account_id, company_id, estado, porque)
+    values (v.id, v.account_id, v.company_id, 'no', v_motivo)
+    on conflict (invoice_id) do update set porque = excluded.porque, at = now() where supplier_invoice_auto.estado = 'no';
+    return jsonb_build_object('apuntada', false, 'motivo', v_motivo);
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_factura_guarda(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_factura_guarda(p_invoice uuid) IS 'S01q · Antes de apuntar sola una factura: si ya está contabilizada la enlaza y lo dice; si es de un periodo cerrado, lo dice. null si se puede seguir.';
 
 
 --
@@ -3903,6 +3950,51 @@ begin
   return jsonb_build_object('seguro', true, 'regla', 'factura', 'porque', v_por || case when v_local is null and coalesce(s.default_common, false) then ' Común a todos los locales, como dice su ficha.' else '' end, 'proveedor', v_prov, 'gasto', v_gasto, 'tercero', v_party,
     'local', v_local, 'no_deducible', v_nd, 'deducible', v_ded, 'lineas', v_lineas, 'base', v.tax_base_total, 'iva', v.tax_total, 'total', v.grand_total);
 end $$;
+
+
+--
+-- Name: _conta_factura_ya_contabilizada(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_factura_ya_contabilizada(p_invoice uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v public.supplier_invoice; v_num text; v_party uuid; r record;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or v.supplier_id is null or v.grand_total is null then return null; end if;
+  v_num := upper(regexp_replace(coalesce(v.invoice_number, ''), '[^A-Za-z0-9]', '', 'g'));
+  if length(v_num) < 4 then return null; end if;
+  select pr.party_id into v_party from public.party_role pr
+   where pr.account_id = v.account_id and pr.role = 'supplier' and pr.supplier_id = v.supplier_id limit 1;
+  select e.id, e.series, e.number, e.entry_date, e.source_type into r
+    from public.journal_entry e
+   where e.account_id = v.account_id and e.company_id = v.company_id and e.status = 'validado'
+     and e.voided_at is null and e.reverses_entry_id is null
+     and not (e.source_type = 'supplier_invoice' and e.source_id = v.id)
+     and (upper(regexp_replace(coalesce(e.concept, ''), '[^A-Za-z0-9]', '', 'g')) like '%' || v_num || '%'
+          or upper(regexp_replace(coalesce(e.document_ref, ''), '[^A-Za-z0-9]', '', 'g')) = v_num)
+     and exists (
+       select 1 from public.journal_line l
+        where l.entry_id = e.id
+          and (case when v.grand_total >= 0 then l.credit - l.debit else l.debit - l.credit end) = abs(v.grand_total)
+          and (l.company_account_id in (select k.company_account_id from public.company_account_link k
+                                         where k.account_id = v.account_id and k.company_id = v.company_id and k.entity = 'supplier'
+                                           and k.entity_id = v.supplier_id::text and k.role = 'principal')
+               or (v_party is not null and l.party_id = v_party)))
+   order by abs(e.entry_date - v.invoice_date), e.entry_date
+   limit 1;
+  if r.id is null then return null; end if;
+  return jsonb_build_object('id', r.id, 'serie', r.series, 'numero', r.number, 'fecha', r.entry_date, 'migrado', r.source_type = 'migrated');
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_factura_ya_contabilizada(p_invoice uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_factura_ya_contabilizada(p_invoice uuid) IS 'S01q · El asiento validado de la empresa que ya lleva esta factura (su número en el concepto o el justificante, su proveedor por el total), o null.';
 
 
 --
@@ -5170,6 +5262,9 @@ declare
 begin
   select * into v from public.supplier_invoice where id = p_invoice for update;
   if v.id is null then return jsonb_build_object('apuntada', false, 'motivo', 'No está.'); end if;
+  -- S01q · La guarda: ya contabilizada (se enlaza y se dice) o de un periodo cerrado.
+  s := public._conta_factura_guarda(v.id);
+  if s is not null then return s; end if;
   if not coalesce((select ps.post_safe_invoices from public.company_purchase_setting ps where ps.company_id = v.company_id), false) then
     return jsonb_build_object('apuntada', false, 'motivo', 'La empresa tiene apagado «Apuntar solo lo que Sumied tiene seguro».');
   end if;
@@ -32003,6 +32098,10 @@ begin
              where e.account_id = v_acc and e.company_id = p_company and e.source_type = 'supplier_invoice' and e.source_id = i.id
                and e.status in ('propuesto', 'borrador', 'validado')
              order by (e.status = 'validado') desc, e.created_at desc limit 1) as asiento,
+           -- S01q · Ya contabilizada en Diez: enlazada a su asiento traído.
+           (select jsonb_build_object('id', e.id, 'serie', e.series, 'numero', e.number, 'fecha', e.entry_date)
+              from public.journal_entry e
+             where e.id = i.journal_entry_id and e.account_id = v_acc and e.company_id = p_company and e.status = 'validado') as diez,
            (select jsonb_build_object('fecha', gr.receipt_date, 'local', l.name)
               from public.supplier_invoice_receipt r join public.goods_receipt gr on gr.id = r.goods_receipt_id
               left join public.locations l on l.id = gr.location_id
@@ -32046,6 +32145,7 @@ begin
       'id', f.id, 'tipo', 'factura',
       -- S01 (0160): la descartada sale, con su estado y su porqué (regla 7: no se esconde).
       'estado', case when f.status = 'descartada' then 'descartada'
+                     when f.asiento is null and f.diez is not null then 'en_diez'
                      when f.asiento->>'estado' = 'validado' then 'apuntada'
                      when f.supplier_id is null or f.reading_confidence = 'duda' or f.status = 'con_discrepancias' then 'por_aclarar'
                      else 'para_mirar' end,
@@ -32057,14 +32157,16 @@ begin
       'llegada_tipo', f.llegada_tipo,
       'previas', f.previas,
       'confianza', f.reading_confidence,
-      'porque', case when f.status = 'descartada'
+      'porque', case when f.asiento is null and f.diez is not null
+                  then 'Ya contabilizada en Diez (asiento ' || (f.diez->>'serie') || '/' || (f.diez->>'numero') || ', ' || to_char((f.diez->>'fecha')::date, 'DD/MM/YYYY') || '): no se vuelve a apuntar.'
+                  when f.status = 'descartada'
                   then 'No es una factura: ' || coalesce(f.discard_reason, 'sin motivo') || ' (' || coalesce(f.discarded_by_name, 'una persona') || ', ' || to_char(f.discarded_at at time zone 'Europe/Madrid', 'DD/MM/YYYY') || ').'
                   else coalesce(f.reading->'porque'->>0, case when f.supplier_id is null then 'No reconozco el emisor: dime quién es.' end) end,
       'entendido', coalesce(g.entendido, case when g.aprendido->>'cuenta' is not null then jsonb_build_object(
                      'cuenta', g.aprendido->>'cuenta', 'nombre', g.aprendido->>'nombre', 'origen', g.aprendido->>'origen', 'sin_confirmar', true) end),
       'aprendido', case when g.aprendido is not null then jsonb_build_object('cuenta', g.aprendido->>'cuenta', 'facturas', coalesce((g.aprendido->>'facturas')::int, 0),
                      'confianza', g.aprendido->>'confianza', 'porque', g.aprendido->>'porque') end,
-      'recepcion', f.recepcion, 'asiento', f.asiento,
+      'recepcion', f.recepcion, 'asiento', f.asiento, 'diez', f.diez,
       'llego', f.created_at) as fila
       from facturas f join gasto g on g.id = f.id
   ), recepciones as materialized (
@@ -108045,7 +108147,7 @@ CREATE TABLE public.supplier_invoice_auto (
     porque text,
     entry_id uuid,
     at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT supplier_invoice_auto_estado_check CHECK ((estado = ANY (ARRAY['apuntada'::text, 'no'::text, 'deshecha'::text])))
+    CONSTRAINT supplier_invoice_auto_estado_check CHECK ((estado = ANY (ARRAY['apuntada'::text, 'no'::text, 'deshecha'::text, 'ya_contabilizada'::text])))
 );
 
 
@@ -145616,11 +145718,27 @@ GRANT ALL ON FUNCTION public._conta_factura_apuntar(p_invoice uuid) TO service_r
 
 
 --
+-- Name: FUNCTION _conta_factura_guarda(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_factura_guarda(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_factura_guarda(p_invoice uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_factura_segura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public._conta_factura_segura(p_invoice uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_factura_segura(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_factura_ya_contabilizada(p_invoice uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_factura_ya_contabilizada(p_invoice uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_factura_ya_contabilizada(p_invoice uuid) TO service_role;
 
 
 --
