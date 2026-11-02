@@ -1,0 +1,30 @@
+{
+ "_que": "S1b del TPV de sala · contexto de producción de la tanda, medido en SOLO LECTURA el 01/11 a las 08:11 UTC (09:11 Madrid). Existen sale (21.039 filas) y sale_line (83.279), las dos en el camino del pedido; order_for_print con una sola firma (text,uuid) y sin usos en la base; ninguna de las 21 funciones nuevas ni sale_fire ni sale_line_void. Nada de la S1b en el historial.",
+ "medido": "2026-11-01T08:11Z",
+ "tanda": {
+  "supabase/migrations/20261009T0040_tpv_sala_s1b_envios_y_cuentas_de_mesa.sql": "ac8227cce08e8a6bead9e218765530e8"
+ },
+ "contexto": {
+  "tablas": [
+   "public.sale",
+   "public.sale_line"
+  ],
+  "funciones": [
+   "public.order_for_print(text,uuid)"
+  ],
+  "filas": {
+   "public.sale": 21039,
+   "public.sale_line": 83279
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [
+    "public.sale",
+    "public.sale_line"
+   ],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

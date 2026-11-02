@@ -1,4 +1,19 @@
+-- cambia: public.sale · prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
+-- cambia: public.sale_line · prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
+-- cambia: public.tg_auto_print_on_accept · prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
+-- cambia: public.upsert_pos_sale · prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
+-- cambia: public.pos_open_sales · prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
+-- cambia: public.order_for_print · prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql
 -- TPV · Sala · S1 · parte B — mesas, comensales y envíos a cocina.
+--
+-- 01/11/2026 · CORREGIDA PARA PASAR DOS VECES (Julio, antes de subirla a
+-- producción, donde nunca se aplicó: el historial solo tiene la S1a). Los
+-- cuatro cambios de la sección 6 se saltan si ya están hechos (por su
+-- comentario «TPV sala (S1)», y order_for_print por tener ya la firma de tres);
+-- la primera vez hacen exactamente lo de antes. Lo demás ya era
+-- «if not exists» / «create or replace». Staging la tenía aplicada sin
+-- registrar, y pasarla otra vez habría duplicado dos añadidos y parado en
+-- order_for_print. Prueba: supabase/staging/sql/20261101_s1b_dos_veces_prueba.sql.
 --
 -- REQUIERE la parte A (20261008T1315_tpv_sala_s1a_zonas_y_mesas.sql):
 -- dining_zone, dining_table, dining_config y void_reason ya existen.
@@ -77,6 +92,16 @@ begin
     raise exception 'tpv_sala_s1: son las % en Madrid — dentro de la banda de servicio (12:15–00:30). Esperar.', v_h;
   end if;
 end $$;
+
+-- 01/11/2026: los cierres, todos de entrada y en un solo orden. Primero las
+-- tablas a las que apuntan las claves ajenas que crea (y que su vuelta atrás
+-- tiene que borrar, con cierre exclusivo también sobre ellas): accounts,
+-- locations, kds_device, dining_table y void_reason; después sale y sale_line.
+-- Quien lee la sala (dining_table y luego sale) y las tablets (kds_device y
+-- luego sale) van en ese orden. Coger sale antes dio 40P01 en la vuelta atrás
+-- (ensayo y staging del 01/11). Son unos segundos, con los locales cerrados.
+lock table public.accounts, public.locations, public.kds_device, public.dining_table, public.void_reason,
+           public.sale, public.sale_line in access exclusive mode;
 
 -- ══ 1. Tablas nuevas ════════════════════════════════════════════════════
 
@@ -731,61 +756,203 @@ declare
 begin
   -- 6.1 tg_auto_print_on_accept: una mesa no imprime el pedido entero.
   v_def := pg_get_functiondef('public.tg_auto_print_on_accept()'::regprocedure);
+  -- 01/11: si ya está (el comentario de abajo), no se añade otra vez.
+  if position('-- TPV sala (S1): una MESA imprime por envíos' in v_def) > 0 then
+    raise notice 'tpv_sala_s1: tg_auto_print_on_accept ya lo tiene — sin cambios';
+  else
   select count(*) into c from regexp_matches(v_def, '\n  if v_fire then\n', 'g');
   if c <> 1 then raise exception 'tpv_sala_s1: tg_auto_print_on_accept, «if v_fire then» aparece % veces (se esperaba 1) — parar', c; end if;
   v_new := regexp_replace(v_def, '\n  if v_fire then\n',
     E'\n  -- TPV sala (S1): una MESA imprime por envíos (pos_table_fire), nunca el\n  -- pedido entero al aceptarse.\n  if v_fire and new.table_id is not null then v_fire := false; end if;\n\n  if v_fire then\n');
   execute v_new;
+  end if;
 
   -- 6.2 upsert_pos_sale: no toca cuentas de mesa.
   v_def := pg_get_functiondef('public.upsert_pos_sale(uuid,uuid,uuid,uuid,text,jsonb,text,text,text)'::regprocedure);
+  if position('-- TPV sala (S1): una cuenta de mesa no pasa por aquí' in v_def) > 0 then
+    raise notice 'tpv_sala_s1: upsert_pos_sale ya lo tiene — sin cambios';
+  else
   select count(*) into c from regexp_matches(v_def, E'    if v_result\\.id is null then\n      raise exception ''upsert_pos_sale: venta inexistente o de otra cuenta/local'';\n    end if;\n', 'g');
   if c <> 1 then raise exception 'tpv_sala_s1: upsert_pos_sale, guarda de venta aparece % veces (se esperaba 1) — parar', c; end if;
   v_new := regexp_replace(v_def,
     E'(    if v_result\\.id is null then\n      raise exception ''upsert_pos_sale: venta inexistente o de otra cuenta/local'';\n    end if;\n)',
     E'\\1    -- TPV sala (S1): una cuenta de mesa no pasa por aquí. Su borrar-y-reinsertar\n    -- destruiría las líneas ya enviadas a cocina.\n    if v_result.table_id is not null then\n      raise exception ''upsert_pos_sale: es la cuenta de una mesa — se trabaja desde Sala'';\n    end if;\n');
   execute v_new;
+  end if;
 
   -- 6.3 pos_open_sales: las mesas viven en Sala.
   v_def := pg_get_functiondef('public.pos_open_sales(uuid,uuid,integer)'::regprocedure);
+  if position(E'    and s.status = ''open''\n    and s.table_id is null\n' in v_def) > 0 then
+    raise notice 'tpv_sala_s1: pos_open_sales ya lo tiene — sin cambios';
+  else
   select count(*) into c from regexp_matches(v_def, E'    and s\\.status = ''open''\n', 'g');
   if c <> 1 then raise exception 'tpv_sala_s1: pos_open_sales, filtro de status aparece % veces (se esperaba 1) — parar', c; end if;
   v_new := regexp_replace(v_def, E'    and s\\.status = ''open''\n', E'    and s.status = ''open''\n    and s.table_id is null\n');
   execute v_new;
+  end if;
 
-  -- 6.4 order_for_print + p_fire_id. AÑADIR PARÁMETRO = DROP + CREATE (regla 2).
-  select p.proacl::text into v_acl_before from pg_proc p where p.oid = 'public.order_for_print(text,uuid)'::regprocedure;
-  v_def := pg_get_functiondef('public.order_for_print(text,uuid)'::regprocedure);
+end $$;
 
-  select count(*) into c from regexp_matches(v_def, 'public\.order_for_print\(p_device_token text, p_sale_id uuid\)', 'g');
-  if c <> 1 then raise exception 'tpv_sala_s1: order_for_print, firma aparece % veces — parar', c; end if;
-  v_new := regexp_replace(v_def, 'public\.order_for_print\(p_device_token text, p_sale_id uuid\)',
-                          'public.order_for_print(p_device_token text, p_sale_id uuid, p_fire_id uuid DEFAULT NULL::uuid)');
+-- 6.4 order_for_print + p_fire_id. AÑADIR PARÁMETRO = DROP + CREATE (regla 2).
+-- 01/11/2026: ESCRITA, no por sustitución en vivo, para que el analizador vea
+-- el drop + create (con execute dinámico solo veía el drop, y el front la usa).
+-- El texto es el de producción del 01/11 (md5 a9878591…, ya con la R03) con las
+-- MISMAS tres sustituciones de antes: la firma con p_fire_id, el filtro de
+-- envío y anuladas, y la cabecera de mesa. Si producción ha cambiado desde
+-- entonces, para: pisarla borraría ese cambio. Donde ya tiene la firma de tres
+-- (staging), la guarda no aplica y la deja como esta (la misma cada vez).
+do $$
+begin
+  if to_regprocedure('public.order_for_print(text,uuid,uuid)') is null then
+    if md5(pg_get_functiondef('public.order_for_print(text,uuid)'::regprocedure)) <> 'a987859161734deb07ec9e4301cb349d' then
+      raise exception 'tpv_sala_s1: order_for_print no es la medida el 01/11 (md5 a9878591…) — parar: pisarla borraría ese cambio';
+    end if;
+  end if;
+end $$;
 
-  select count(*) into c from regexp_matches(v_new, 'where sl\.sale_id = p_sale_id and sl\.parent_sale_line_id is null\n', 'g');
-  if c <> 1 then raise exception 'tpv_sala_s1: order_for_print, filtro de padres aparece % veces — parar', c; end if;
-  v_new := regexp_replace(v_new, 'where sl\.sale_id = p_sale_id and sl\.parent_sale_line_id is null\n',
-    E'where sl.sale_id = p_sale_id and sl.parent_sale_line_id is null\n      -- TPV sala (S1): con envío, solo sus líneas; nunca las anuladas.\n      and (p_fire_id is null or sl.fire_id = p_fire_id)\n      and sl.voided_at is null\n');
+drop function if exists public.order_for_print(text, uuid);
 
-  select count(*) into c from regexp_matches(v_new, E'\n  return v_result;\nend;', 'g');
-  if c <> 1 then raise exception 'tpv_sala_s1: order_for_print, «return v_result» aparece % veces — parar', c; end if;
-  v_new := regexp_replace(v_new, E'\n  return v_result;\nend;',
-    E'\n  -- TPV sala (S1): mesa, zona, comensales y envío para la cabecera del ticket.\n  if v_result is not null then\n    v_result := v_result || coalesce((\n      select jsonb_build_object(\n        ''table_name'', dt.name, ''zone_name'', z.name, ''covers'', s.covers,\n        ''served_by_name'', s.served_by_name,\n        ''fire_number'', f.fire_number, ''fired_at'', f.fired_at,\n        ''fire_count'', (select count(*) from sale_fire ff where ff.sale_id = s.id))\n      from sale s\n      join dining_table dt on dt.id = s.table_id\n      join dining_zone z on z.id = dt.zone_id\n      left join sale_fire f on f.id = p_fire_id and f.sale_id = s.id\n      where s.id = p_sale_id and s.account_id = v_account_id), ''{}''::jsonb);\n  end if;\n\n  return v_result;\nend;');
+CREATE OR REPLACE FUNCTION public.order_for_print(p_device_token text, p_sale_id uuid, p_fire_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_device      kds_device;
+  v_account_id  uuid;
+  v_result      jsonb;
+begin
+  v_device := public.kds_resolve_device(p_device_token);
+  if v_device.id is null then
+    raise exception 'order_for_print: token no válido';
+  end if;
+  v_account_id := v_device.account_id;
 
-  drop function public.order_for_print(text, uuid);
-  execute v_new;
-  grant execute on function public.order_for_print(text, uuid, uuid) to anon, authenticated, service_role;
+  -- Pobla descuento por línea (Last + HubRise) just-in-time. No falla si no hay.
+  begin
+    perform public.fill_line_discounts(p_sale_id);
+    -- C9 L1: acuña los tokens de etiqueta si no existen. Idempotente: la
+    -- reimpresion pasa por aqui otra vez y devuelve LOS MISMOS.
+    perform public.ensure_label_tokens(p_sale_id);
+  exception when others then
+    null;  -- el ticket no se cae por un descuento mal formado
+  end;
 
+  with v as (
+    select s.id, s.external_ref, s.external_tab_ref,
+           s.platform_order_code, s.pos_short_code, s.platform_order_ref,
+           s.order_status, s.status, s.service_type, s.source,
+           s.brand_id, s.channel_id, s.external_channel_text,
+           s.customer_name, s.customer_phone, s.delivery_address,
+           s.expected_time, s.customer_note, s.delivery_address_fixed, s.delivery_address_fixed_by, s.customer_phone_code, s.delivery_instructions, s.order_customer_note, s.delivery_by_reason,
+           s.total, s.paid, s.payment_method, s.discount_amount, s.delivery_cost,
+           coalesce(s.opened_at, s.sold_at, s.created_at) as entro_at, s.raw_tab
+    from sale s
+    where s.id = p_sale_id and s.account_id = v_account_id
+  ),
+  notas as (
+    select v.id as sale_id, (prod->>'organizationProductId') as ext_pid,
+           nullif(btrim(prod->>'comments'), '') as note
+    from v
+    cross join lateral (select safe_jsonb(v.raw_tab) as tab) rt
+    cross join lateral (select coalesce(rt.tab -> 'products', rt.tab -> 'bills' -> 0 -> 'products') as products) p
+    cross join lateral jsonb_array_elements(case when jsonb_typeof(p.products)='array' then p.products else '[]'::jsonb end) as prod
+    where nullif(btrim(prod->>'comments'),'') is not null and (prod->>'organizationProductId') is not null
+  ),
+  padres as (
+    select sl.sale_id, sl.id as line_id, btrim(regexp_replace(regexp_replace(sl.product_name, '[‍️←-⇿⌀-⏿①-⓿─-➿⬀-⯿\U0001F000-\U0001FAFF]', '', 'g'), '\s{2,}', ' ', 'g')) as product_name, sl.quantity, sl.line_type,
+           sl.menu_item_id, sl.external_product_id, sl.unit_price, sl.line_total, sl.kitchen_note,
+           sl.original_unit_price, sl.discount_label,
+           mi.category as menu_category, df.name as family, df.color as family_color, df.icon as family_icon,
+           array(select case a.allergen_code when 'gluten' then 'Gluten' when 'milk' then 'Lácteos' when 'eggs' then 'Huevos' when 'sulphites' then 'Sulfitos' when 'mustard' then 'Mostaza' when 'soy' then 'Soja' when 'sesame' then 'Sésamo' when 'celery' then 'Apio' when 'nuts' then 'Frutos de cáscara' when 'fish' then 'Pescado' when 'molluscs' then 'Moluscos' when 'crustaceans' then 'Crustáceos' when 'peanuts' then 'Cacahuetes' when 'lupin' then 'Altramuces' else initcap(a.allergen_code) end from recipe_item_allergen a where a.recipe_item_id = ri.id and a.state='contains') as allergens
+    from sale_line sl
+    left join menu_item mi on mi.id = sl.menu_item_id
+    left join recipe_item ri on ri.id = mi.recipe_item_id
+    left join recipe_family df on df.id = ri.family_id
+    where sl.sale_id = p_sale_id and sl.parent_sale_line_id is null
+      -- TPV sala (S1): con envío, solo sus líneas; nunca las anuladas.
+      and (p_fire_id is null or sl.fire_id = p_fire_id)
+      and sl.voided_at is null
+  ),
+  hijas as (
+    select sl.parent_sale_line_id, sl.sale_id, sl.id as line_id, btrim(regexp_replace(regexp_replace(sl.product_name, '[‍️←-⇿⌀-⏿①-⓿─-➿⬀-⯿\U0001F000-\U0001FAFF]', '', 'g'), '\s{2,}', ' ', 'g')) as product_name, sl.quantity,
+           sl.line_type, sl.external_product_id, sl.menu_item_id, mg.group_type,
+           dfh.name as family, dfh.color as family_color, mih.category as menu_category,
+           case when sl.line_type='combo_item' then 1 when mg.group_type='removal' then 2
+                when mg.group_type='extras' then 3 when mg.group_type in ('choice','side') then 4
+                when mg.group_type in ('cross_sell','info') then 6 else 5 end as sort_rank
+    from sale_line sl
+    left join modifier_option mo on mo.id = sl.modifier_option_id
+    left join modifier_group mg on mg.id = mo.modifier_group_id
+    left join menu_item mih on mih.id = sl.menu_item_id
+    left join recipe_item rih on rih.id = mih.recipe_item_id
+    left join recipe_family dfh on dfh.id = rih.family_id
+    where sl.sale_id = p_sale_id and sl.parent_sale_line_id is not null
+  )
+  select to_jsonb(t) into v_result from (
+    select v.id as sale_id, v.external_ref, v.external_tab_ref,
+           v.platform_order_code, v.pos_short_code, v.platform_order_ref, v.order_status, v.status, v.service_type, v.source,
+           b.name as brand, b.logo_url as brand_logo_url, b.color as brand_color,
+           b.shop_url as brand_shop_url, b.qr_caption as brand_qr_caption, b.ownership_type as brand_ownership_type,
+           public.label_token_bolsa(v.id) as bag_token,
+           coalesce(ch.name, v.external_channel_text) as channel, v.channel_id,
+           v.customer_name, v.customer_phone, v.delivery_address, v.expected_time, v.customer_note, v.delivery_address_fixed, v.delivery_address_fixed_by, v.customer_phone_code, v.delivery_instructions, v.order_customer_note, v.delivery_by_reason,
+           v.total, v.paid, v.payment_method, v.discount_amount, v.delivery_cost, v.entro_at,
+           safe_jsonb(v.raw_tab)->'delivery' as delivery_detail,
+           (select jsonb_agg(jsonb_build_object(
+              'line_id', l.line_id, 'name', l.product_name, 'qty', l.quantity, 'menu_item_id', l.menu_item_id,
+              'unit_tokens', public.label_tokens_for(l.line_id),
+              'unit_price', l.unit_price, 'line_total', l.line_total,
+              'original_unit_price', l.original_unit_price, 'discount_label', l.discount_label,
+              'allergens', l.allergens,
+              'family', l.family, 'family_color', l.family_color, 'family_icon', l.family_icon,
+              'menu_category', l.menu_category, 'has_recipe', (l.menu_item_id is not null),
+              'customer_note', coalesce((select n.note from notas n where n.sale_id = l.sale_id and n.ext_pid = l.external_product_id limit 1), l.kitchen_note),
+              'children', coalesce((select jsonb_agg(jsonb_build_object(
+                  'line_id', h.line_id, 'name', h.product_name, 'qty', h.quantity, 'line_type', h.line_type,
+                  'unit_tokens', public.label_tokens_for(h.line_id),
+                  'group_type', h.group_type, 'menu_item_id', h.menu_item_id, 'family', h.family,
+                  'family_color', h.family_color, 'menu_category', h.menu_category
+                ) order by h.sort_rank, h.product_name) from hijas h where h.parent_sale_line_id = l.line_id), '[]'::jsonb)
+            ) order by l.product_name) from padres l) as lineas
+    from v
+    left join brand b on b.id = v.brand_id
+    left join sales_channel ch on ch.id = v.channel_id
+  ) t;
+
+  -- TPV sala (S1): mesa, zona, comensales y envío para la cabecera del ticket.
+  if v_result is not null then
+    v_result := v_result || coalesce((
+      select jsonb_build_object(
+        'table_name', dt.name, 'zone_name', z.name, 'covers', s.covers,
+        'served_by_name', s.served_by_name,
+        'fire_number', f.fire_number, 'fired_at', f.fired_at,
+        'fire_count', (select count(*) from sale_fire ff where ff.sale_id = s.id))
+      from sale s
+      join dining_table dt on dt.id = s.table_id
+      join dining_zone z on z.id = dt.zone_id
+      left join sale_fire f on f.id = p_fire_id and f.sale_id = s.id
+      where s.id = p_sale_id and s.account_id = v_account_id), '{}'::jsonb);
+  end if;
+
+  return v_result;
+end;
+$function$;
+
+grant execute on function public.order_for_print(text, uuid, uuid) to anon, authenticated, service_role;
+
+do $$
+declare v_acl_after text;
+begin
   select p.proacl::text into v_acl_after from pg_proc p where p.oid = 'public.order_for_print(text,uuid,uuid)'::regprocedure;
   -- Los permisos de antes eran PUBLIC + anon + authenticated + service_role.
   if v_acl_after is null
      or position('anon=X' in v_acl_after) = 0
      or position('authenticated=X' in v_acl_after) = 0
      or position('service_role=X' in v_acl_after) = 0 then
-    raise exception 'tpv_sala_s1: permisos de order_for_print no restaurados (antes %, ahora %) — parar', v_acl_before, v_acl_after;
+    raise exception 'tpv_sala_s1: permisos de order_for_print no restaurados (ahora %) — parar', v_acl_after;
   end if;
-  raise notice 'order_for_print permisos antes %, ahora %', v_acl_before, v_acl_after;
-
   if (select count(*) from pg_proc where proname = 'order_for_print' and pronamespace = 'public'::regnamespace) <> 1 then
     raise exception 'tpv_sala_s1: order_for_print tiene más de una firma — parar';
   end if;

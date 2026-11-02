@@ -1,0 +1,24 @@
+# S1b del TPV de sala, a producción (01/11/2026, Julio). Rama
+# claude/s1b-tpv-sala-produccion. Va antes que el #380. Se ensaya y se aplica
+# antes de fusionar, lanzado desde main nombrando la rama (W12b).
+#
+#   1. 20261009T0040 — la S1b, en main desde el 09/10 y nunca aplicada en
+#      producción (el historial solo tiene la S1a). Corregida el 01/11 para
+#      pasar dos veces: cada cambio de la sección 6 se salta si ya está hecho;
+#      la primera vez, lo mismo que antes.
+#      Añade sale_fire, sale_line_void, 8 columnas en sale/sale_line y 21
+#      funciones; cambia el CHECK de service_type (+ dine_in) y, sobre la
+#      definición VIVA, tg_auto_print_on_accept, upsert_pos_sale,
+#      pos_open_sales y order_for_print (+ p_fire_id, drop + create).
+#      NECESITA «autorizo»: camino del pedido.
+#      FUERA DE BANDA: toma ACCESS EXCLUSIVE sobre sale y sale_line y su guarda
+#      para entre las 12:15 y las 00:30 (Madrid). El real, con los locales
+#      cerrados.
+#
+# Antes (producción, 01/11): ni sale_fire ni las columnas nuevas; ninguna de
+# las 21 funciones; los 6 trozos que busca la sección 6, una vez cada uno;
+# order_for_print con una sola firma (text,uuid). Nada en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261009T0040_tpv_sala_s1b_envios_y_cuentas_de_mesa.sql
+cuenta: scripts/conta/produccion/cuentas/s1b-tpv-sala.sql
