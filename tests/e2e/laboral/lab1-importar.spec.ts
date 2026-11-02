@@ -193,8 +193,10 @@ function filasDe(h: (typeof HOJAS_CEGID)[number], filas: Record<string, string>[
 async function limpiarVolcado(s: Sesion, cola: string): Promise<void> {
   for (const empieza of ['Baja Inventada', 'Alta Inventada', 'Centro inventado']) {
     const tabla = empieza.startsWith('Centro') ? 'locations' : 'employees'
-    const r = await rest(s, 'DELETE', `${tabla}?name=like.${encodeURIComponent(`${empieza} *${cola}`)}`)
-    expect([200, 204], `borrar ${tabla} «${empieza} …${cola}»: ${JSON.stringify(r.datos)}`).toContain(r.status)
+    // Sin devolver las filas: authenticated no lee todas las columnas de employees
+    // y un RETURNING * da 42501 (N1 · 6). No se abre ningún permiso por esto.
+    const r = await rest(s, 'DELETE', `${tabla}?name=like.${encodeURIComponent(`${empieza} *${cola}`)}`, undefined, 'return=minimal')
+    expect(r.status, `borrar ${tabla} «${empieza} …${cola}»: ${JSON.stringify(r.datos)}`).toBe(204)
   }
 }
 
