@@ -1,0 +1,19 @@
+# A01a · Un ticket viejo caduca y el aviso deja de repetirse (01/11/2026).
+# Rama claude/a01a-tickets-caducan. Se ensaya y se aplica antes de fusionar,
+# lanzado desde main nombrando la rama (W12b).
+#
+#   1. 1906 — print_job admite «expired» (con expired_at y expire_reason; un
+#      caducado no vuelve a la cola); print_job_vigia() caduca lo de más de 2 h
+#      y avisa una vez al abrirse (más de 15 min), otra si se dobla y
+#      «Resuelto» al vaciarse; db_health_watchdog la llama en lugar de su
+#      Aviso 4 (guarda de md5 y respaldo); y los 17 de Alcalá del 29/10
+#      caducan por su cuenta y sus ids.
+#      NECESITA «autorizo»: db_health_watchdog corre por cron y la tanda
+#      cambia datos (los 17).
+#
+# Antes (producción, 01/11): 17 print_job pending de Foodint Alcalá del 29/10;
+# db_health_watchdog md5 dd8f4ead; 23 avisos «Tickets sin imprimir» en 24 h.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261101T1906_a01a_tickets_caducan.sql
+cuenta: scripts/conta/produccion/cuentas/a01a-tickets-caducan.sql

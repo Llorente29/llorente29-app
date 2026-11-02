@@ -1,0 +1,3 @@
+# A01a · vuelta atrás: el vigía como estaba, fuera lo nuevo y los caducados
+# (también los 17 de Alcalá) otra vez «pending».
+supabase/vuelta-atras/20261101T1906_a01a_tickets_caducan.down.sql
