@@ -1,6 +1,6 @@
 B01 · Cola 1d y 1e · **Pagar, como en la maqueta v2** (aprobada por Julio el 02/11, respuestas B01·7 y B01·8). Va en dos partes, en el mismo PR:
-- **A**, en este commit: la pantalla de Pagos, el panel, el saldo y la ficha.
-- **B**, la siguiente: el justificante.
+- **A**: la pantalla de Pagos, el panel, el saldo y la ficha.
+- **B**: el justificante del pago.
 
 Maqueta: https://claude.ai/artifact/R5AYjQR88fwKU46AuMaFTU (versión 2).
 
@@ -36,10 +36,9 @@ Maqueta: https://claude.ai/artifact/R5AYjQR88fwKU46AuMaFTU (versión 2).
 ## Tanda
 
 - **2115, solo añade:** `conta_pagos_por_revisar`.
-  - Se puede pasar dos veces; nada en el camino del pedido.
-  - El analizador dice **sigue**, sin `autorizo`.
-  - Contexto: medido el 02/11 a las 20:47Z.
-- **Lo que cuenta** (`b01p-pagar.sql`): la función, 0 → 1. Las facturas de Foodint por estado, iguales.
+- **2140, solo añade:** el justificante (la casilla del proveedor, la tabla y sus funciones).
+- Las dos se pueden pasar dos veces; nada en el camino del pedido. El analizador dice **sigue** para las dos, sin `autorizo`. Contexto: medido el 02/11 a las 21:47Z.
+- **Lo que cuenta** (`b01p-pagar.sql`): las funciones nuevas (0 → 1 y 0 → 6), la tabla y la casilla (0 → 2). Las facturas y los proveedores de Foodint, iguales.
 - **El real lo lanza Julio.**
 
 ## Pruebas
@@ -61,13 +60,47 @@ Maqueta: https://claude.ai/artifact/R5AYjQR88fwKU46AuMaFTU (versión 2).
   - `pc01/pagos.spec.ts` (ordenador y móvil): lo que toca pagar, el botón grande, lo que se queda fuera y la de por revisar sin casilla;
   - `b01/revolutPagarVarias.spec.ts`: el panel «Pagar 2 facturas» con «Sale ahora».
 
-## Lo que falta (parte B)
+## Parte B · el justificante del pago
 
-- **El justificante:**
-  - un PDF con la marca de la empresa;
-  - se genera cuando Revolut confirma que la transferencia ha salido, y queda en la ficha de cada factura;
-  - «Mandar al proveedor» por correo, si su ficha lo tiene marcado (casilla nueva);
-  - «Enviar por WhatsApp» con un enlace público que caduca a los 30 días.
-  
-  La API de Revolut no da comprobante de transferencias.
-- **Las e2e de la parte B,** y los pagos de punta a punta en el sandbox de staging.
+La API de Revolut no da comprobante de una transferencia (solo de los gastos con tarjeta): lo hace Sumied cuando el banco confirma que el pago ha salido.
+
+**La base (2140, solo añade):**
+- `supplier.justificante_al_pagar` (admite nulos): «Mandar el justificante al pagar», en la ficha del proveedor.
+- `conta_pago_justificante`: uno por pago confirmado, con su PDF (en `conta-documentos`) y la **clave** del enlace público (32 bytes al azar, 43 letras), que **caduca a los 30 días**. La lee la cuenta (RLS); solo escriben las funciones del servicio (sin los permisos por defecto de Supabase).
+- Las funciones: las del servicio (los que faltan, sus datos con el IBAN ya tapado, guardarlo una vez, apuntar el correo, el enlace público) y `conta_factura_justificantes` para la ficha.
+
+**El servidor (`_shared/justificantePago.ts`, puro y con unitarias):**
+- **El PDF:** la franja y el nombre de la empresa que paga (su color), el importe, quién paga y desde dónde, a quién, **la cuenta tapada salvo los 4 últimos**, la factura, el concepto, la hora de Madrid y la referencia del banco.
+- **Cuándo:** la lectura de cada hora, el aviso de Revolut y «Pagar» (`conta-pagar`) hacen el de cada pago confirmado de los últimos 60 días que no lo tenga. No lanza: lo que falle, lo vuelve a intentar la siguiente.
+- **El correo:** solo si la ficha del proveedor tiene la casilla y un correo. Sale de `pagos@sumied.com` con el nombre de la empresa y las respuestas a su correo, con el PDF. **Cerrado** («justificante_pago») hasta que Julio lo abra; cerrado, no se manda nada y queda escrito por qué.
+
+**El enlace público (`conta-justificante`, nueva, sin sesión):**
+- Con la clave entera, el PDF y nada más. Con otra, «Este enlace no vale». Pasados los 30 días: «Este justificante ha caducado; pídelo a quien te pagó».
+- «Mandar al proveedor» (POST, con la sesión de un administrador o encargado), por la misma función.
+
+**La pantalla:**
+- **La ficha de la factura**, «Justificante del pago»: lo pagado, cuánto le queda al enlace, «Ver el justificante», «Mandar al proveedor» (sin la casilla, lleva a marcarla) y **«Enviar por WhatsApp»** (`wa.me` con su teléfono y el mensaje con el enlace; sin teléfono, «falta su teléfono, ponlo» lleva a sus contactos). Caducado, lo dice.
+- **La ficha del proveedor**, «Cómo le compras»: la casilla, con lo que hace.
+
+**Pruebas:**
+- Staging (`20261102_b01p_justificante_prueba.sql`, ROLLBACK, con los permisos por defecto de Supabase): sin confirmar no hay; pagado, sí, con el IBAN tapado y uno solo; el enlace solo con la clave entera, y caduca; la ficha a su cuenta y no a otra; lo del servicio no lo llama nadie más. En rojo sin el tapado del IBAN y sin el `revoke`.
+- Unitarias (`revolut/justificante.test.ts`, 15): la clave, el PDF, el correo con su freno, hacer los que faltan, WhatsApp y la caducidad.
+- e2e (`b01/justificante.spec.ts`, ordenador y móvil): la ficha (ver, WhatsApp con y sin teléfono, la casilla, el caducado y «Mandar») y el enlace público de verdad con claves que no son de nadie.
+
+## Funciones a desplegar a mano
+
+### Sumied
+
+- conta-justificante
+- conta-pagar
+- conta-revolut-aviso
+- conta-revolut-leer
+
+### Folvy
+
+ninguna
+
+## Producto
+
+- Sumied
+- Común
