@@ -154,7 +154,7 @@ execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
   '-i', join(salida, 'crudo.webm'),
   '-loop', '1', '-t', CIERRE.toFixed(2), '-i', join(salida, 'cierre.png'),
   '-filter_complex', filtros.join(';'), '-map', '[v]',
-  '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', sinVoz], { stdio: 'inherit' })
+  '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', sinVoz], { stdio: 'inherit' })
 console.log(`Montado: ${total.toFixed(1)} s (crudo ${T.fin.toFixed(1)} s, ${cortes.length} cortes, ${quedan.length} tramos, ${dichos.length} frases).`)
 
 // 5 · La voz: cada frase en su sitio, en una pista aparte. Sin voz hecha, el vídeo va sin voz.
