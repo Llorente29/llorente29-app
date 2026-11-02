@@ -1,0 +1,5 @@
+# A01-1 · La 1936 y su prueba (ROLLBACK): con lo de antes, el mismo problema con
+# otra fecha manda otro correo (rojo a propósito); abre, sigue, empeora, se
+# resuelve con dos pasadas y vuelve; el techo; el espejo de Last; y la vuelta atrás.
+supabase/migrations/20261102T1936_a01_un_correo_por_problema.sql
+supabase/staging/sql/20261102_a01_un_correo_por_problema_prueba.sql
