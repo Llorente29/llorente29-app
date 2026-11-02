@@ -102,3 +102,25 @@ describe('S01o·2 · lo que dice la pantalla de las demás facturas', () => {
     expect(porQueNoDeducible('sin_roi')).toBe('es de un proveedor de la UE que cobra IVA español y la empresa no está en el ROI')
   })
 })
+
+describe('S01o·3 · «Común a todos los locales» como local por defecto', () => {
+  it('la ficha lo dice en una frase', async () => {
+    const { textoLocalPorDefecto } = await import('@/modules/conta/lib/apuntaSolo')
+    expect(textoLocalPorDefecto(true, null)).toBe('Su gasto es de la empresa entera: sus facturas se apuntan comunes a todos los locales.')
+    expect(textoLocalPorDefecto(false, 'Local Inventado')).toBe('Sus facturas de servicios (sin recepción) se apuntan en Local Inventado.')
+    expect(textoLocalPorDefecto(false, null)).toMatch(/Falta su local/)
+  })
+  it('el asiento propuesto a mano de un proveedor común va común sin bajar a «probable»', async () => {
+    const { facturaProveedor } = await import('@/modules/conta/lib/asientosPropuestos')
+    const base = {
+      id: 'f', numero: 'INV0000000009', fecha: '2026-10-20', proveedor: 'Software Inventado', terceroId: 't', esSocio: false, tieneNif: true, localId: null, total: 121,
+      lineas: [{ base: 100, tipo: { id: 'iva21', porcentaje: 21 }, cuentaGasto: '62900005' }], cuotas: [{ porcentaje: 21, base: 100, cuota: 21 }], retencion: null,
+    }
+    const cuentas = { proveedor: '41000035', retencion: '47510000', ivaSoportado: (p: number) => (p === 21 ? '47200021' : null) } as never
+    const comun = facturaProveedor({ ...base, comunPorFicha: true } as never, cuentas).propuesta!
+    const sinSaber = facturaProveedor(base as never, cuentas).propuesta!
+    expect(comun.razones.some((r) => r.porque === 'su ficha dice que es común a todos los locales')).toBe(true)
+    expect(comun.lineas.every((l) => l.comun && !l.localId)).toBe(true)
+    expect(sinSaber.razones.some((r) => r.porque.startsWith('la factura no dice de qué local es'))).toBe(true)
+  })
+})

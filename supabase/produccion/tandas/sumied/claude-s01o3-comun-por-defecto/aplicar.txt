@@ -1,0 +1,14 @@
+# S01o · 3 · «Común a todos los locales» como local por defecto de un proveedor.
+# Rama claude/s01o3-comun-por-defecto. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   0929  AÑADE supplier.default_common y cambia _conta_factura_segura: con «común»
+#         en la ficha, una factura de servicios sin local se apunta sola, todo el
+#         asiento común y sin local, y su porqué lo dice. «Falta su local» deja de salir.
+#   0930  Foodint (autorizo: mueve una fila): la ficha de Anthropic, «Común a todos
+#         los locales» (Julio, 02/11). Ninguna otra ficha.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01o3-comun.sql
+supabase/migrations/20261102T0929_s01o3_comun_por_defecto.sql
+supabase/migrations/20261102T0930_s01o3_anthropic_comun.sql
