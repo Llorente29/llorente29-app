@@ -17,7 +17,8 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
 
 | Fichero | Qué es |
 |---|---|
-| `factura-al-pago.mp4` | El vídeo: 1920×1080, H.264, subtítulos quemados y voz |
+| `factura-al-pago.zip` | **Todo junto para descargar**: el vídeo, el vídeo sin voz y las dos portadas |
+| `factura-al-pago.mp4` | El vídeo: 1920×1080, H.264, subtítulos quemados y voz. Empieza con la portada (lo que enseñan WhatsApp y el correo) y la lleva dentro como carátula |
 | `factura-al-pago-sin-voz.mp4`, `voz.m4a` | El mismo sin voz, y la voz sola (pista aparte) |
 | `miniatura-16x9.jpg`, `miniatura-1x1.jpg` | La portada para subirlo o mandarlo: 1280×720 (YouTube, web, correo, LinkedIn) y 1080×1080 (WhatsApp, Instagram). Con capturas de esta misma grabación |
 | `pasos/` | Un fotograma de cada paso, a mitad de su subtítulo |

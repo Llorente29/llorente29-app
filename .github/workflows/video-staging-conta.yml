@@ -169,9 +169,12 @@ jobs:
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || { echo "Sin grabación: no hay nada que montar."; exit 0; }
           [ -n "${VOZ_MODELO:-}" ] || echo "::warning::Sin modelo de voz: el vídeo sale sin voz."
-          node scripts/video/montar.mjs "$SALIDA"
           # La portada para las plataformas (YouTube, web, correo, WhatsApp), con capturas de esta grabación.
+          # Antes del montaje: es también el primer fotograma del vídeo y su carátula.
           node scripts/video/miniatura.mjs "$SALIDA"
+          node scripts/video/montar.mjs "$SALIDA"
+          # Todo junto, para descargarlo de una vez.
+          (cd "$SALIDA" && zip -q -j factura-al-pago.zip factura-al-pago.mp4 factura-al-pago-sin-voz.mp4 miniatura-16x9.jpg miniatura-1x1.jpg)
 
       - name: Revisar que no sale nada real (T11)
         if: always()

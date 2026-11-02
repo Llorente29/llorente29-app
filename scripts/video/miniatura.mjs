@@ -78,11 +78,14 @@ const cuadrada = `<div class="lienzo" style="width:1080px;height:1080px">
 </div>`
 
 const navegador = await chromium.launch()
-for (const [nombre, html, w, h] of [['miniatura-16x9.jpg', horizontal, 1280, 720], ['miniatura-1x1.jpg', cuadrada, 1080, 1080]]) {
-  const p = await navegador.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 })
+// portada-video.png: la misma horizontal, sin el botón de play, a 1920×1080: es el PRIMER fotograma del
+// vídeo (montar.mjs la usa de portada). WhatsApp y el correo enseñan ese fotograma como vista previa.
+const sinPlay = horizontal.replace(/<div class="play"[^]*?<\/div>/, '')
+for (const [nombre, html, w, h, k] of [['miniatura-16x9.jpg', horizontal, 1280, 720, 1], ['miniatura-1x1.jpg', cuadrada, 1080, 1080, 1], ['portada-video.png', sinPlay, 1280, 720, 1.5]]) {
+  const p = await navegador.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: k })
   await p.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${CSS}</style></head><body>${html}</body></html>`)
   await p.evaluate(() => document.fonts.ready)
-  await p.screenshot({ path: join(salida, nombre), type: 'jpeg', quality: 90 })
+  await p.screenshot({ path: join(salida, nombre), ...(nombre.endsWith('.jpg') ? { type: 'jpeg', quality: 90 } : {}) })
   await p.close()
   console.log(`· ${nombre}`)
 }

@@ -7,7 +7,9 @@
 //   crudo.webm       la grabación de Playwright (1920×1080)
 //   tramos.json      { inicio, fin, pasos: [{ paso, desde }], dichos: [{ id, texto, dura, desde }], cortes: [[desde, hasta]] }
 //                    en segundos desde el principio de crudo.webm
-//   portada.png, cierre.png   las dos tarjetas (las hace el guion)
+//   portada.png, cierre.png   las dos tarjetas (las hace el guion); si está portada-video.png
+//                    (miniatura.mjs), ésa es la portada: el primer fotograma, el que enseñan WhatsApp y el correo
+//   miniatura-16x9.jpg  si está, va dentro del MP4 como carátula
 //   voz/frases.json  la voz ya hecha, antes de grabar (voz.py): { id, texto, salida, dura } por frase
 // Deja:
 //   factura-al-pago.mp4          H.264, 1920×1080, 30 fps, subtítulos quemados y la voz
@@ -30,7 +32,7 @@ const rutaVoz = join(salida, 'voz', 'frases.json')
 const voz = existsSync(rutaVoz) ? JSON.parse(readFileSync(rutaVoz, 'utf8')).filter((f) => f.dura && existsSync(f.salida)) : []
 const vozDe = new Map(voz.map((f) => [f.id, f]))
 const textoDe = (id, defecto) => vozDe.get(id)?.texto ?? defecto
-const PORTADA = Math.max(2.5, (vozDe.get('portada')?.dura ?? 0) + 1.0)
+const PORTADA = Math.max(3.5, (vozDe.get('portada')?.dura ?? 0) + 1.2)
 const CIERRE = Math.max(3.5, (vozDe.get('cierre')?.dura ?? 0) + 1.6)
 
 // 1 · Lo que se queda del crudo: [inicio, fin] menos los cortes.
@@ -148,7 +150,7 @@ filtros.push(`[zz]ass=${join(salida, 'subtitulos.ass').replace(/:/g, '\\:')}[v]`
 const mp4 = join(salida, 'factura-al-pago.mp4')
 const sinVoz = join(salida, 'factura-al-pago-sin-voz.mp4')
 execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
-  '-loop', '1', '-t', PORTADA.toFixed(2), '-i', join(salida, 'portada.png'),
+  '-loop', '1', '-t', PORTADA.toFixed(2), '-i', join(salida, existsSync(join(salida, 'portada-video.png')) ? 'portada-video.png' : 'portada.png'),
   '-i', join(salida, 'crudo.webm'),
   '-loop', '1', '-t', CIERRE.toFixed(2), '-i', join(salida, 'cierre.png'),
   '-filter_complex', filtros.join(';'), '-map', '[v]',
@@ -184,3 +186,15 @@ pasos.forEach((p) => unPaso(String(p.paso), (p.a + p.b) / 2))
 unPaso('9-cierre', PORTADA + durCuerpo + CIERRE / 2)
 writeFileSync(join(salida, 'montaje.json'), JSON.stringify({ total, portada: PORTADA, cierre: CIERRE, quedan, pasos,
   dichos: dichos.map(({ id, texto, a, b }) => ({ id, texto, desde: a, hasta: b })) }, null, 2))
+
+// 7 · La carátula dentro del MP4 (la que enseñan el explorador de archivos y muchos móviles).
+const caratula = join(salida, 'miniatura-16x9.jpg')
+if (existsSync(caratula)) {
+  for (const f of [mp4, sinVoz].filter((x) => existsSync(x))) {
+    const tmp = f.replace(/\.mp4$/, '.tmp.mp4')
+    execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', f, '-i', caratula, '-map', '0', '-map', '1', '-c', 'copy',
+      '-disposition:v:1', 'attached_pic', '-movflags', '+faststart', tmp])
+    renameSync(tmp, f)
+  }
+  console.log('Con su carátula dentro.')
+}
