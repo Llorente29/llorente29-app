@@ -54,3 +54,11 @@ supabase/staging/sql/20261101_b01p_dejar_de_pagar_prueba.sql
 # de un pago por Revolut casado solo con la clave de servicio; y la vuelta atrás.
 supabase/migrations/20261101T2030_b01n_nucleos_casar.sql
 supabase/staging/sql/20261101_b01n_nucleos_prueba.sql
+# B01 · Cola 1b · El registro de cada lectura del banco. La 1205 solo añade:
+# desde la rama va de verdad después del ensayo (W05), si se puede pasar dos veces.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): la vuelta atrás y la 1205
+# dos veces; solo la clave de servicio apunta una lectura; lo apuntado (los
+# pendientes y lo que llegó tarde) es de la cuenta y la empresa del banco; y lo
+# lee el administrador.
+supabase/migrations/20261102T1205_b01q_lecturas_banco.sql
+supabase/staging/sql/20261102_b01q_bancos_prueba.sql
