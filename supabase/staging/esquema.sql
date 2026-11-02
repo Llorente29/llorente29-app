@@ -13454,7 +13454,7 @@ begin
       raise warning '_set_brand_closure_core: secret ausente en Vault, no se empuja al despachador';
     else
       perform net.http_post(
-        url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url     := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object(
           'Content-Type',                   'application/json',
           'x-availability-dispatch-secret', v_secret
@@ -28624,7 +28624,7 @@ begin
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-banco-agregador.' using errcode = '55000';
   end if;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-banco-agregador',
+    url := public._project_url() || '/functions/v1/conta-banco-agregador',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := '{}'::jsonb, timeout_milliseconds := 150000);
 end $$;
@@ -31011,7 +31011,7 @@ begin
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-diez-cola.' using errcode = '55000';
   end if;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-diez-cola',
+    url := public._project_url() || '/functions/v1/conta-diez-cola',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := '{}'::jsonb, timeout_milliseconds := 150000);
 end $$;
@@ -39760,7 +39760,7 @@ begin
   values (v_l.account_id, v_l.id, trim(p_quien_nombre))
   returning id into v_id;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-lote-releer',
+    url := public._project_url() || '/functions/v1/conta-lote-releer',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := jsonb_build_object('lote', v_l.id, 'relectura', v_id), timeout_milliseconds := 150000);
   return v_id;
@@ -43778,7 +43778,7 @@ begin
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-recibida-pdf.' using errcode = '55000';
   end if;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-recibida-pdf',
+    url := public._project_url() || '/functions/v1/conta-recibida-pdf',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := '{}'::jsonb, timeout_milliseconds := 150000);
 end $$;
@@ -44287,7 +44287,7 @@ begin
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-recordatorios.' using errcode = '55000';
   end if;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-recordatorios',
+    url := public._project_url() || '/functions/v1/conta-recordatorios',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := '{}'::jsonb, timeout_milliseconds := 150000);
 end $$;
@@ -49631,7 +49631,7 @@ begin
 
       if v_secret is not null then
         perform net.http_post(
-          url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+          url     := public._project_url() || '/functions/v1/system-alert',
           headers := jsonb_build_object('Content-Type','application/json','x-cron-secret', v_secret),
           body    := jsonb_build_object(
                        'kind',    'db-health',
@@ -61955,7 +61955,7 @@ begin
        and a.suspended_at is null and a.archived_at is null and a.deleted_at is null
   loop
     perform net.http_post(
-      url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/lastapp-catalog-import',
+      url     := public._project_url() || '/functions/v1/lastapp-catalog-import',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-internal-key', v_secret),
       body    := jsonb_build_object(
                    'account_id', v_row.account_id,
@@ -61991,7 +61991,7 @@ begin
     where source = 'lastapp' and is_active = true
   loop
     perform net.http_post(
-      url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/last-catalog-sync',
+      url     := public._project_url() || '/functions/v1/last-catalog-sync',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-internal-key', v_secret),
       body    := jsonb_build_object('account_id', v_row.account_id, 'external_org_id', v_row.external_org_id),
       timeout_milliseconds := 60000
@@ -71660,7 +71660,7 @@ begin
   end if;
 
   perform net.http_post(
-    url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/hubrise-location-dispatch',
+    url     := public._project_url() || '/functions/v1/hubrise-location-dispatch',
     headers := jsonb_build_object(
       'Content-Type',                       'application/json',
       'x-location-status-dispatch-secret',  v_secret
@@ -75016,7 +75016,7 @@ begin
   if v_secret is null then raise exception 'secreto del agente no configurado'; end if;
 
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/social-agent',
+    url := public._project_url() || '/functions/v1/social-agent',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'x-agent-secret', v_secret
@@ -80249,7 +80249,7 @@ begin
   end if;
 
   perform net.http_post(
-    url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/hubrise-location-dispatch',
+    url     := public._project_url() || '/functions/v1/hubrise-location-dispatch',
     headers := jsonb_build_object(
       'Content-Type',                       'application/json',
       'x-location-status-dispatch-secret',  v_secret
@@ -80364,7 +80364,7 @@ begin
   end if;
 
   perform net.http_post(
-    url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/hubrise-location-dispatch',
+    url     := public._project_url() || '/functions/v1/hubrise-location-dispatch',
     headers := jsonb_build_object(
       'Content-Type',                       'application/json',
       'x-location-status-dispatch-secret',  v_secret
@@ -80564,7 +80564,7 @@ begin
       -- confunda un ref de opcion con un sku de producto. expires_at lo pone el
       -- despachador desde available_until, igual que en los productos.
       perform net.http_post(
-        url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object('Content-Type','application/json','x-availability-dispatch-secret', v_secret),
         body := jsonb_build_object(
           'account_id', v_acct,
@@ -80641,7 +80641,7 @@ BEGIN
     IF v_sec IS NOT NULL THEN
       -- UN solo empujon con todos los refs, no uno por copia.
       PERFORM net.http_post(
-        url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object('Content-Type','application/json','x-availability-dispatch-secret', v_sec),
         body := jsonb_build_object(
           'account_id', v_acct,
@@ -81038,7 +81038,7 @@ begin
     select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'availability_dispatch_secret';
     if v_secret is not null then
       perform net.http_post(
-        url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object('Content-Type','application/json','x-availability-dispatch-secret', v_secret),
         body := jsonb_build_object(
           'account_id', v_account_id, 'matriculas', to_jsonb(v_matriculas),
@@ -81104,7 +81104,7 @@ begin
     select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'availability_dispatch_secret';
     if v_secret is not null then
       perform net.http_post(
-        url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object('Content-Type','application/json','x-availability-dispatch-secret', v_secret),
         body := jsonb_build_object(
           'account_id', v_account_id, 'matriculas', to_jsonb(v_matriculas),
@@ -81201,7 +81201,7 @@ begin
     select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'availability_dispatch_secret';
     if v_secret is not null then
       perform net.http_post(
-        url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object('Content-Type','application/json','x-availability-dispatch-secret', v_secret),
         body := jsonb_build_object(
           'account_id', v_account_id, 'matriculas', to_jsonb(v_all_matr),
@@ -81291,7 +81291,7 @@ begin
     select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'availability_dispatch_secret';
     if v_secret is not null then
       perform net.http_post(
-        url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/availability-dispatch',
+        url := public._project_url() || '/functions/v1/availability-dispatch',
         headers := jsonb_build_object('Content-Type','application/json','x-availability-dispatch-secret', v_secret),
         body := jsonb_build_object(
           'account_id', v_account_id, 'matriculas', to_jsonb(v_all_matr),
@@ -83670,7 +83670,7 @@ begin
       for update skip locked
     loop
       select net.http_post(
-        url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/system-alert',
+        url     := public._project_url() || '/functions/v1/system-alert',
         headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secret),
         body    := jsonb_build_object(
         'subject', v_row.subject, 'message', v_row.message, 'kind', v_row.kind,
@@ -84270,7 +84270,7 @@ DECLARE
   v_timeout  int;
   v_courier  uuid;
   v_secret   text;
-  v_url      text := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/catcher-dispatch';
+  v_url      text;
   v_anon     text := 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh6bXBuY2hsZ3VpYmNsdnh5eW50Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzgxNzE1NTksImV4cCI6MjA5Mzc0NzU1OX0.v5GsOW5hxwzJZA0z5Le26E9vAWflG1XFZ7ec2hvMphY';
 BEGIN
   IF new.service_type = 'own_delivery'
@@ -84312,6 +84312,15 @@ BEGIN
       END IF;
 
     ELSIF v_carrier = 'catcher' THEN
+      -- W10: la dirección del propio proyecto, del Vault (project_url). Si
+      -- falta, no se llama a nadie y queda dicho en system_alert; el pedido
+      -- sigue (este disparador está en el camino del pedido).
+      v_url := public._project_url_si_hay();
+      IF v_url IS NULL THEN
+        PERFORM public._aviso_falta_en_vault('catcher-dispatch', new.id);
+        RETURN new;
+      END IF;
+      v_url := v_url || '/functions/v1/catcher-dispatch';
       SELECT decrypted_secret INTO v_secret
         FROM vault.decrypted_secrets WHERE name = 'catcher_dispatch_secret';
       PERFORM net.http_post(
@@ -86840,6 +86849,7 @@ declare
     'in_preparation','awaiting_collection','awaiting_shipment',
     'in_delivery','completed','rejected','cancelled','delivery_failed'
   ];
+  v_url    text;
   v_secret text;
 begin
   -- solo canales con empuje y estados empujables
@@ -86859,8 +86869,15 @@ begin
       end;
       return new;
     end if;
+    -- W10: la dirección del propio proyecto, del Vault (project_url). Si
+    -- falta, no se llama a nadie y queda dicho; el pedido sigue.
+    v_url := public._project_url_si_hay();
+    if v_url is null then
+      perform public._aviso_falta_en_vault('order-advance', new.id);
+      return new;
+    end if;
     perform net.http_post(
-      url     := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/order-advance',
+      url     := v_url || '/functions/v1/order-advance',
       headers := jsonb_build_object(
         'Content-Type',            'application/json',
         'x-order-advance-secret',  v_secret
@@ -88728,7 +88745,7 @@ begin
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-verifactu.' using errcode = '55000';
   end if;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-verifactu',
+    url := public._project_url() || '/functions/v1/conta-verifactu',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := '{}'::jsonb, timeout_milliseconds := 150000);
 end $$;
@@ -88758,7 +88775,7 @@ begin
     raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-verifactu.' using errcode = '55000';
   end if;
   perform net.http_post(
-    url := 'https://xzmpnchlguibclvxyynt.supabase.co/functions/v1/conta-verifactu',
+    url := public._project_url() || '/functions/v1/conta-verifactu',
     headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
     body := '{"accion":"cuadre"}'::jsonb, timeout_milliseconds := 150000);
 end $$;
