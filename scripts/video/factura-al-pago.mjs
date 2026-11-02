@@ -52,9 +52,9 @@ async function sesion() {
 }
 
 async function contexto(navegador, s, conVideo) {
-  // VIDEO_ESCALA (2 por defecto): la página se pinta al doble de píxeles y se graba así (3840×2160),
-  // para que el zoom del montaje amplíe texto nítido y no píxeles. Las coordenadas siguen en 1920×1080.
-  const k = Number(process.env.VIDEO_ESCALA || 2)
+  // VIDEO_ESCALA (1 por defecto). Con 2, Playwright NO graba la página al doble: deja la imagen de
+  // 1920×1080 en una esquina de un lienzo de 3840×2160 (run 41494067639). Se queda en 1.
+  const k = Number(process.env.VIDEO_ESCALA || 1)
   const ctx = await navegador.newContext({
     viewport: { width: 1920, height: 1080 }, deviceScaleFactor: conVideo ? k : 1, locale: 'es-ES', timezoneId: 'Europe/Madrid',
     ...(conVideo ? { recordVideo: { dir: conVideo, size: { width: 1920 * k, height: 1080 * k } } } : {}),
