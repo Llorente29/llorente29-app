@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 import { folvyVersion } from './build/folvyVersionPlugin'
+import { novedadesPlugin } from './build/novedadesPlugin'
 import { guardaVistaPrevia } from './build/guardaVistaPrevia'
 import { indexDeMarcas } from './build/indexDeMarca'
 
@@ -13,7 +14,8 @@ export default defineConfig({
   // que no vaya contra staging-conta (05/10, la del C02 iba contra producción).
   // indexDeMarcas escribe dist/marcas/<id>/index.html con las metas de cada
   // marca (C06): lo que lee la vista previa de un enlace. El de Folvy no cambia.
-  plugins: [react(), folvyVersion(), guardaVistaPrevia(), indexDeMarcas()],
+  // NV1: novedadesPlugin junta novedades/pr-*.json en dist/novedades.json y sella cuáles conoce esta build.
+  plugins: [react(), folvyVersion(), novedadesPlugin(), guardaVistaPrevia(), indexDeMarcas()],
   base: '/',
   resolve: {
     alias: {

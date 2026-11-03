@@ -253,6 +253,8 @@ export const CONTA = {
      * sigue en compras/liquidacion/:liqId, que la barra marca en Ventas).
      */
     liquidacionesVentas: 'ventas/liquidaciones',
+    /** NV1 · Ayuda › Novedades: lo que cambia en cada versión. */
+    novedades: 'ayuda/novedades',
     /** PC01 · E3 · Ventas › Cobros (tablero cobros-1): lo que te deben tus clientes, las remesas de recibos y la ficha de una (cobros-2). */
     cobros: 'ventas/cobros',
     remesaCobros: 'ventas/cobros/remesas/:remesaId',
@@ -380,6 +382,9 @@ export function rutaConta(relativa: string, params: Record<string, string> = {})
   const rellena = relativa.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, n: string) => encodeURIComponent(params[n] ?? ''))
   return `/${CONTA.modulo}/${rellena}`.replace(/\/+$/, '')
 }
+
+/** NV1 · Las novedades: en Sumied, Ayuda › Novedades; en Folvy, Configuración › Novedades. */
+export const rutaNovedades = (producto: 'sumied' | 'folvy'): string => (producto === 'sumied' ? rutaConta(CONTA.rutas.novedades) : '/configuracion/novedades')
 
 export const rutaTuEmpresa = (): string => rutaConta(CONTA.rutas.empresa)
 export const rutaApartadoEmpresa = (apartado: string): string => rutaConta(CONTA.rutas.empresaApartado, { apartado })
