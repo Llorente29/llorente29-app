@@ -1,0 +1,30 @@
+{
+ "_que": "S01q·10 · contexto de producción, medido en SOLO LECTURA el 03/11 a las 09:20Z: no existe ninguna de las funciones ni disparadores que crea la 0744; la 0741 cambia conta_impuesto_303_cajas (solo la marca «extranjera sin autoliquidar» de una recibida con IVA no deducible: en todas las cuentas, 2 líneas, las de Anthropic Ireland); la 0742 cambia _conta_proponer_plataforma y _conta_plataforma_entrada (misma firma, con respaldo); la 0743 borra las 27 propuestas de liquidación de Glovo de Foodint (156 líneas, sin número, cadena, libro de IVA ni documentos), las rehace y recalcula el borrador del 303 del 4T. La regla hermana, medida en todas las cuentas: hoy solo la incumplen esas 27. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-03T09:20Z",
+ "tanda": {
+  "supabase/migrations/20261103T0741_s01q_303_no_deducible.sql": "668ae5415a97b1c204945e1b3fc628d7",
+  "supabase/migrations/20261103T0742_s01q_plataforma_rehace.sql": "c05864107de09cfb3cda3c1fb2051296",
+  "supabase/migrations/20261103T0743_s01q_glovo_rehacer.sql": "ea40d9be822773d5bdd5c44f83004b32",
+  "supabase/migrations/20261103T0744_s01q_liquidacion_no_repite.sql": "fcb0036d304d317af385d9ff654a2dbc"
+ },
+ "contexto": {
+  "tablas": [
+   "public.journal_entry",
+   "public.journal_line"
+  ],
+  "funciones": [
+   "public._conta_proponer_plataforma(uuid,uuid,text)"
+  ],
+  "filas": {
+   "public.journal_entry": 15846,
+   "public.journal_line": 39614
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
