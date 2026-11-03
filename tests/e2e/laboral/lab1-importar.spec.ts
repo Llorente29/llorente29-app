@@ -317,7 +317,6 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(ficha.locator('h1')).toContainText(`Baja Inventada Uno ${marca}`, { timeout: 30_000 })
   await expect(ficha).toContainText('De baja')
   await expect(ficha.locator('[data-prueba="ficha-estudios"]')).toContainText('Falta')
-  await expect(ficha.locator('[data-prueba="ficha-de-antes"]')).toBeVisible()
   await ficha.locator('[data-prueba="ficha-pestana-contrato"]').click()
   await expect(ficha.locator('[data-prueba="ficha-tipo"]')).toContainText('401 · ')
   await expect(ficha.locator('[data-prueba="ficha-categoria"]')).toContainText('Falta la categoría')

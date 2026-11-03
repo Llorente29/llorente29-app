@@ -140,7 +140,7 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
             <span className="s-tiempo-v">{textoBolsa(bolsa.currentPeriod.delta)}</span>
             <span className="s-tiempo-s">{bolsa.currentPeriod.delta > 0 ? 'horas de más, a compensar con descanso' : bolsa.currentPeriod.delta < 0 ? 'horas que debe' : 'al día'} · {bolsa.currentPeriod.periodLabel}</span>
           </> : bolsa === null || !empleado || !local
-            ? <><span className="s-tiempo-v s-ficha-falta">Falta</span><span className="s-tiempo-s">{!local ? 'no tiene local' : 'no se ha podido calcular'}</span></>
+            ? <><span className="s-tiempo-v s-persona-falta">Falta</span><span className="s-tiempo-s">{!local ? 'no tiene local' : 'no se ha podido calcular'}</span></>
             : <span className="s-tiempo-v">…</span>}
         </section>
         <section className="s-tarjeta s-tiempo-cifra" data-tono={mes.sinSalida.length > 0 ? 'duda' : undefined} data-prueba="tiempo-corregir">
@@ -157,8 +157,8 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
 
       <Tarjeta titulo={`Esta semana · ${textoSemana(lunes)}`}
         accion={<span className="s-tiempo-flechas">
-          <button type="button" className="s-ficha-enlace" onClick={() => setSemana((s) => s - 1)} data-prueba="tiempo-anterior">‹ Anterior</button>
-          <button type="button" className="s-ficha-enlace" onClick={() => setSemana((s) => s + 1)} disabled={semana >= 0}>Siguiente ›</button>
+          <button type="button" className="s-persona-enlace" onClick={() => setSemana((s) => s - 1)} data-prueba="tiempo-anterior">‹ Anterior</button>
+          <button type="button" className="s-persona-enlace" onClick={() => setSemana((s) => s + 1)} disabled={semana >= 0}>Siguiente ›</button>
         </span>}>
         <div className="s-tiempo-semana" data-prueba="tiempo-semana">
           <div className="s-tiempo-cab" />
@@ -179,7 +179,7 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
             </li>
           ))}
         </ul>
-        <p className="s-ficha-nota">
+        <p className="s-persona-nota">
           {turnos === null ? 'El cuadrante de esta semana no está publicado: el turno sale cuando se publique. '
             : !p.local ? 'Sin local en su ficha: no hay cuadrante del que sacar el turno. '
             : `El turno sale del cuadrante de ${p.local.nombre}. `}
@@ -189,11 +189,11 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
 
       <div className="s-tiempo-dos">
         <Tarjeta titulo="Su jornada">
-          <dl className="s-ficha-datos s-ficha-datos-anchos">
-            <div className="s-ficha-dato"><dt>Por contrato</dt><dd>{horasSemana ? `${horasSemana} horas a la semana` : <span className="s-ficha-falta">Falta</span>}{contrato?.jornada === 'completa' ? ' · a jornada completa' : contrato?.jornada === 'parcial' ? ' · a tiempo parcial' : ''}</dd></div>
-            <div className="s-ficha-dato"><dt>Al año, según convenio</dt><dd>{contrato?.convenio?.horas_anuales ? `${Number(contrato.convenio.horas_anuales).toLocaleString('es-ES')} horas` : <span className="s-ficha-falta">Falta</span>}</dd></div>
-            <div className="s-ficha-dato"><dt>Horario</dt><dd>{p.local ? <>Sale del cuadrante de {p.local.nombre}. <Link className="s-ficha-enlace" to={rutaConta(CONTA.rutas.laboralPagina, { pagina: 'calendario' })}>Ver sus turnos</Link></> : <span className="s-ficha-falta">Falta: no tiene local</span>}</dd></div>
-            <div className="s-ficha-dato"><dt>Descanso</dt><dd><span className="s-ficha-falta">Falta</span> <small className="s-ficha-oficial">el convenio cargado no lo trae</small></dd></div>
+          <dl className="s-persona-datos s-persona-datos-anchos">
+            <div className="s-persona-dato"><dt>Por contrato</dt><dd>{horasSemana ? `${horasSemana} horas a la semana` : <span className="s-persona-falta">Falta</span>}{contrato?.jornada === 'completa' ? ' · a jornada completa' : contrato?.jornada === 'parcial' ? ' · a tiempo parcial' : ''}</dd></div>
+            <div className="s-persona-dato"><dt>Al año, según convenio</dt><dd>{contrato?.convenio?.horas_anuales ? `${Number(contrato.convenio.horas_anuales).toLocaleString('es-ES')} horas` : <span className="s-persona-falta">Falta</span>}</dd></div>
+            <div className="s-persona-dato"><dt>Horario</dt><dd>{p.local ? <>Sale del cuadrante de {p.local.nombre}. <Link className="s-persona-enlace" to={rutaConta(CONTA.rutas.laboralPagina, { pagina: 'calendario' })}>Ver sus turnos</Link></> : <span className="s-persona-falta">Falta: no tiene local</span>}</dd></div>
+            <div className="s-persona-dato"><dt>Descanso</dt><dd><span className="s-persona-falta">Falta</span> <small className="s-persona-oficial">el convenio cargado no lo trae</small></dd></div>
           </dl>
         </Tarjeta>
         <Tarjeta titulo="Sus registros de jornada">
