@@ -1,0 +1,8 @@
+# B01 · Respuesta 15 · Pagos rápido. La 1815 cambia dos funciones (misma firma,
+# SECURITY DEFINER): desde la rama, solo en ROLLBACK.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): la vuelta atrás las deja
+# como estaban y la 1815 dos veces; como el administrador, el mismo resultado
+# con las de antes y con las nuevas, byte a byte; otra cuenta no ve nada; ni
+# anon ni PUBLIC las llaman.
+supabase/migrations/20261103T1815_b01q_pagos_lista_rapida.sql
+supabase/staging/sql/20261103_b01q_pagos_lista_prueba.sql

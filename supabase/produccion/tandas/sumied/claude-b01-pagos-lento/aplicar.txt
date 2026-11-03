@@ -1,0 +1,13 @@
+# B01 · Respuesta 15 (03/11) · Compras › Pagos no abría en producción. Rama
+# claude/b01-pagos-lento. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1. 1815 — CAMBIA EN CALIENTE (declarado en su cabecera, con su prueba de
+#      staging): conta_pagos_lista y conta_pagos_por_revisar pasan a SECURITY
+#      DEFINER con una sola comprobación de la cuenta (misma firma, mismo
+#      cuerpo salvo esa línea). Fuera del camino del pedido y del cron.
+#
+# Sin «autorizo»: no toca datos ni destruye nada.
+# Sin aplicar: lo lanza Julio.
+supabase/migrations/20261103T1815_b01q_pagos_lista_rapida.sql
+cuenta: scripts/conta/produccion/cuentas/b01q-pagos-lista.sql
