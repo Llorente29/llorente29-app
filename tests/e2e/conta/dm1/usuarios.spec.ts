@@ -4,7 +4,7 @@
 // staging (cuentas inventadas). Lo de dos cuentas a la vez (ve solo la
 // abierta, al leer y al escribir) lo prueba la de staging en SQL
 // (supabase/staging/sql/20261030_dm1_cuenta_activa_prueba.sql) y el caso real.
-//   1. El administrador de A abre Ajustes › Usuarios: «Quién entra» con sus
+//   1. El administrador de A abre Ajustes › Usuarios: «Con acceso» (Accesos 1) con sus
 //      usuarios y «Invitar a una persona» con su empresa marcada y el permiso.
 //      Sin correo, el botón lo dice en palabras y no manda nada (regla 8).
 //   2. Con una sola cuenta, el botón de empresa enseña su lista de siempre: la
@@ -20,8 +20,10 @@ test('Ajustes › Usuarios: quién entra e «Invitar a una persona»; con una cu
   await page.goto('/conta/ajustes/personas?marca=sumied', { timeout: 30_000 })
 
   const usuarios = page.locator('[data-prueba="ajustes-usuarios"]')
-  await expect(usuarios).toContainText('Quién entra', { timeout: 30_000 })
-  await expect(usuarios).toContainText(/\d+ con acceso/)
+  // Accesos 1 (03/11, tablero 5): «Con acceso» y «Pendientes».
+  await expect(usuarios).toContainText('Con acceso', { timeout: 30_000 })
+  await expect(usuarios).toContainText(/\d+ (persona|personas)/)
+  await expect(usuarios).toContainText('Pendientes')
 
   const invitar = page.locator('[data-prueba="invitar-persona"]')
   await expect(invitar).toContainText('Invitar a una persona')

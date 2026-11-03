@@ -28,13 +28,13 @@ do $$ begin
     raise exception 'PRUEBA DM1 Accesos: esta base tiene cuentas de producción. No se toca nada.';
   end if;
 end $$;
-set local statement_timeout = '60s';
+set local statement_timeout = '180s';
 
 -- ── 0 · Lo de antes ─────────────────────────────────────────────────────────
-select to_regclass('public.invitacion') is not null as dm1_inv_aplicada \gset
-\if :dm1_inv_aplicada
-\i supabase/vuelta-atras/20261103T0812_dm1_invitaciones.down.sql
-\endif
+-- La 0812 solo añade y se puede pasar dos veces: no hace falta deshacerla aquí
+-- (el manifiesto la aplica antes, en esta misma transacción). Borrar su tabla
+-- toca también accounts (la clave ajena) y en staging choca con quien escribe
+-- ahí: se deshace una sola vez, en el paso 7.
 
 create temp table _s (clave text primary key, v text) on commit drop;
 grant select, insert, update on _s to authenticated, anon;

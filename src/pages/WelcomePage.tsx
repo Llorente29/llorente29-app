@@ -55,6 +55,7 @@ import {
 import { CON_MARCA, MARCA } from '../marca/marca'
 import { PieEntrada } from '../marca/PiezasMarca'
 import BienvenidaMarca from '../marca/BienvenidaMarca'
+import AceptarInvitacion from '../marca/AceptarInvitacion'
 
 type FormState = 'idle' | 'submitting' | 'error'
 
@@ -63,7 +64,16 @@ type FormState = 'idle' | 'submitting' | 'error'
 // 50-300ms reales.
 const SESSION_PROCESSING_TIMEOUT_MS = 3000
 
+// DM1 · Accesos 1 (03/11/2026): el enlace de «Invitar a una persona» llega aquí
+// con ?invitacion=<token> (tablero 8). Esa pantalla es otra; sin el parámetro,
+// la bienvenida de siempre, sin cambiar nada.
 export default function WelcomePage() {
+  const invitacion = new URLSearchParams(window.location.search).get('invitacion')
+  if (invitacion) return <AceptarInvitacion token={invitacion} />
+  return <WelcomeDeSiempre />
+}
+
+function WelcomeDeSiempre() {
   const navigate = useNavigate()
   const { user, isAuthenticated, isAuthResolved, signOut } = useAuth()
   const { refreshUserProfile, activeAccountId } = useApp()

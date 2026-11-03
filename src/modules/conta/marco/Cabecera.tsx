@@ -22,6 +22,8 @@ import { Icono, Tecla } from '@/modules/conta/diseno'
 import { colorDeEmpresa, inicialDeEmpresa } from './colorEmpresa'
 import { useMisEmpresas } from '@/modules/multitenancy/hooks/useMisEmpresas'
 import { VariasEmpresas } from './VariasEmpresas'
+import { InvitacionesMias } from '@/modules/multitenancy/components/InvitacionesMias'
+import { useMisInvitaciones } from '@/modules/multitenancy/hooks/useMisInvitaciones'
 
 /** El cuadrado de la empresa: su logo si lo subió; si no, su inicial en su color. */
 export function CuadradoEmpresa({ nombre, color, logo }: { nombre: string; color: string; logo: string | null }) {
@@ -36,6 +38,8 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
   // DM1 · PR 1: con varias cuentas (una asesoría), sus sociedades agrupadas por cuenta.
   const cuentas = useMisEmpresas()
   const varias = cuentas.length > 1
+  // DM1 · Accesos 1 (tablero 7): las invitaciones pendientes de quien entra.
+  const invitaciones = useMisInvitaciones()
   const [busca, setBusca] = useState('')
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -58,16 +62,23 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
           <span className="s-empresa-nombre">{activa.nombre}</span>
           {razon && <span className="s-empresa-razon">{razon}</span>}
         </span>
+        {invitaciones.length > 0 && (
+          <span className="s-chip s-empresa-invitaciones" data-tono="duda" data-prueba="empresa-invitaciones">
+            {invitaciones.length} {invitaciones.length === 1 ? 'invitación' : 'invitaciones'}
+          </span>
+        )}
         <Icono nombre="desplegar" />
       </button>
       {abierto && varias && (
         <div className={`s-menu s-menu-empresas${movil ? ' s-menu-hoja' : ''}`} role="group" aria-label={movil ? 'Cambiar de empresa' : 'Tus empresas'}>
+          <InvitacionesMias invitaciones={invitaciones} />
           <span className={movil ? 's-hoja-titulo' : 's-menu-titulo'}>{movil ? 'Cambiar de empresa' : 'Tus empresas'}</span>
           <VariasEmpresas cuentas={cuentas} sociedadAbierta={activa.id} elegirEnEsta={elegir} cerrar={() => setAbierto(false)} />
         </div>
       )}
       {abierto && !varias && (
         <div className="s-menu s-menu-empresas" role="group" aria-label="Tus empresas">
+          <InvitacionesMias invitaciones={invitaciones} />
           <span className="s-menu-titulo">Tus empresas</span>
           {empresas.length > 1 && (
             <label className="s-menu-buscar">

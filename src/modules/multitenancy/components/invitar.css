@@ -31,3 +31,27 @@
 .s-usuarios-nombre { color: var(--s-tinta); }
 .s-usuarios-rol { color: var(--s-apoyo); font-size: var(--s-t-s); }
 @media (max-width: 900px) { .s-usuarios { grid-template-columns: minmax(0, 1fr); } }
+
+/* DM1 · Accesos 1 (03/11, tableros 5 a 7): quién tiene acceso, pendientes,
+ * quitar y las invitaciones del selector. Solo con los valores del sistema. */
+.s-accesos { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+.s-accesos-hecho { margin: 0; padding: var(--s-3) var(--s-4); border-radius: var(--s-radio-bloque); background: var(--s-ok-fondo); color: var(--s-ok); border: var(--s-linea) solid currentColor; font-weight: var(--s-peso-medio); }
+.s-accesos-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.s-accesos-fila { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-1) var(--s-3); align-items: center; padding: var(--s-3) 0; border-top: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-accesos-fila:first-child { border-top: 0; }
+.s-accesos-quien { display: flex; flex-direction: column; min-width: 0; }
+.s-accesos-nombre { color: var(--s-tinta); font-weight: var(--s-peso-medio); overflow-wrap: anywhere; }
+.s-accesos-tu { color: var(--s-apoyo); font-weight: normal; }
+.s-accesos-nota { color: var(--s-apoyo); font-size: var(--s-t-s); overflow-wrap: anywhere; }
+.s-accesos-acciones { display: flex; gap: var(--s-2); }
+.s-accesos-quitar, .s-accesos-quitar:hover { color: var(--s-falta); }
+.s-boton-peligro, .s-boton-peligro:hover { background: var(--s-falta); border-color: var(--s-falta); }
+@media (max-width: 600px) {
+  .s-accesos-fila { grid-template-columns: minmax(0, 1fr) auto; }
+  .s-accesos-fila > :last-child { grid-column: 1 / -1; }
+}
+.s-invitaciones { display: flex; flex-direction: column; gap: var(--s-2); margin: var(--s-1); }
+.s-invitaciones-una { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-3); border-radius: var(--s-radio-bloque); background: var(--s-duda-fondo); color: var(--s-tinta); font-size: var(--s-t-s); }
+.s-invitaciones-acciones { display: flex; gap: var(--s-2); }
+.s-invitaciones-hecho { margin: 0; color: var(--s-ok); font-size: var(--s-t-s); font-weight: var(--s-peso-medio); }
+.s-empresa-invitaciones { margin-left: var(--s-2); white-space: nowrap; }

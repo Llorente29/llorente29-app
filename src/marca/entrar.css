@@ -80,3 +80,8 @@
 .mx-casilla { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; color: var(--mx-tinta); cursor: pointer; }
 .mx-casilla input { margin-top: 3px; width: 16px; height: 16px; accent-color: var(--mx-azul); flex-shrink: 0; }
 .mx-input[readonly] { background: #F5F7FA; color: var(--mx-apoyo); }
+
+/* DM1 · Accesos 1 (03/11): las empresas de una invitación (tablero 8). */
+.mx-invitacion-empresas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.mx-invitacion-empresas li { display: flex; justify-content: space-between; align-items: center; gap: 12px; border: 1px solid var(--mx-borde); border-radius: 10px; padding: 10px 12px; }
+.mx-invitacion-permiso { background: var(--mx-menta); color: var(--mx-verde-texto); border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }

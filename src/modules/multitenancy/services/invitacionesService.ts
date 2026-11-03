@@ -58,8 +58,8 @@ export async function verInvitacion(token: string): Promise<InvitacionDelEnlace>
 }
 
 /** Crea el usuario de quien no lo tiene, con su contraseña, y entra. */
-export async function crearUsuarioYEntrar(token: string, correo: string, contrasena: string): Promise<string[]> {
-  const { data, error } = await db().functions.invoke('invitacion-aceptar', { body: { accion: 'crear', token, contrasena } })
+export async function crearUsuarioYEntrar(token: string, correo: string, contrasena: string, acepto: boolean): Promise<string[]> {
+  const { data, error } = await db().functions.invoke('invitacion-aceptar', { body: { accion: 'crear', token, contrasena, acepto } })
   if (error) throw new Error(await motivoDe(error))
   const { error: e2 } = await db().auth.signInWithPassword({ email: correo, password: contrasena })
   if (e2) throw new Error('Tu usuario está creado, pero no se ha podido entrar: entra con tu correo y tu contraseña.')

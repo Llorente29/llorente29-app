@@ -6,6 +6,7 @@
 // (Ajustes › Usuarios) y en Folvy (Configuración › Usuarios y accesos).
 // El correo lo escribe quien invita; no se guarda en ningún sitio más que en
 // el usuario (T11). Al acabar dice lo que ha pasado (regla 8).
+// Desde el 03/11 (Accesos 1) la invitación se acepta: queda en «Pendientes».
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
@@ -22,7 +23,13 @@ const PERMISOS = [
   { valor: 'manager', texto: 'Encargado' },
 ] as const
 
-export function InvitarPersona({ alCerrar, alInvitar }: { alCerrar?: () => void; alInvitar?: () => void }) {
+export function InvitarPersona({ alCerrar, alInvitar, avisoFuera = false }: {
+  alCerrar?: () => void
+  /** Recibe la frase de lo que ha pasado (regla 8). */
+  alInvitar?: (frase: string) => void
+  /** La frase la enseña quien la monta (arriba de la lista, tablero 5): aquí no se repite. */
+  avisoFuera?: boolean
+}) {
   const [cuentas, setCuentas] = useState<CuentaMia[] | null>(null)
   const [correo, setCorreo] = useState('')
   const [elegidas, setElegidas] = useState<Record<string, string>>({})
@@ -62,10 +69,10 @@ export function InvitarPersona({ alCerrar, alInvitar }: { alCerrar?: () => void;
         throw new Error(motivo)
       }
       const r = data as { frase: string; enlace: string | null }
-      setHecho(r.frase)
+      if (!avisoFuera) setHecho(r.frase)
       setEnlace(r.enlace)
       setCorreo('')
-      alInvitar?.()
+      alInvitar?.(r.frase)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -77,7 +84,7 @@ export function InvitarPersona({ alCerrar, alInvitar }: { alCerrar?: () => void;
     <section className="cx-colores s-raiz s-invitar" data-prueba="invitar-persona" aria-labelledby="invitar-titulo">
       <header className="s-invitar-cabeza">
         <h2 id="invitar-titulo" className="s-invitar-titulo">Invitar a una persona</h2>
-        <p className="s-invitar-apoyo">Le llega un correo para entrar. Si ya tiene usuario, se le añaden estas empresas.</p>
+        <p className="s-invitar-apoyo">Le llega un correo con un enlace. Si ya tiene usuario, acepta y le aparecen estas empresas.</p>
       </header>
       <div className="s-invitar-cuerpo">
         <Campo etiqueta="Correo">

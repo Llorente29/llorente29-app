@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react'
 import { Users, RefreshCw, ShieldCheck, Briefcase, User, Ban, MapPin, AlertTriangle, Lock, Check, ChevronRight, UserPlus } from 'lucide-react'
 import { InvitarPersona } from '@/modules/multitenancy/components/InvitarPersona'
+import { AccesosYPendientes } from '@/modules/multitenancy/components/AccesosYPendientes'
 import { useApp } from '../context/AppContext'
 import { usePermissions } from '@/modules/multitenancy/hooks/usePermissions'
 import { Button, Card, Badge, Modal, Label, Select, Alert } from '../components/ui'
@@ -46,7 +47,10 @@ const ROLE_ICONS: Record<UserRole, typeof ShieldCheck> = {
 }
 
 export default function UsuariosAccesosPage() {
-  const { locations, authUserId, accountsLoading, activeAccountId } = useApp()
+  const { locations, authUserId, accountsLoading, activeAccountId, activeAccount, userProfile } = useApp()
+  // DM1 · Accesos 1 (03/11, tablero 5): la frase de la última invitación y volver a leer las pendientes.
+  const [avisoInvitar, setAvisoInvitar] = useState('')
+  const [vueltaAccesos, setVueltaAccesos] = useState(0)
   const { isFullAccess } = usePermissions()
   const [users, setUsers] = useState<UserListItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -155,7 +159,8 @@ export default function UsuariosAccesosPage() {
         </div>
       </div>
 
-      {invitando && <InvitarPersona alCerrar={() => setInvitando(false)} alInvitar={() => reload(activeAccountId)} />}
+      {invitando && <InvitarPersona avisoFuera alCerrar={() => setInvitando(false)}
+        alInvitar={(frase) => { setAvisoInvitar(frase); setVueltaAccesos((v) => v + 1); reload(activeAccountId) }} />}
 
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -256,6 +261,12 @@ export default function UsuariosAccesosPage() {
             )
           })}
         </div>
+      )}
+
+      {/* DM1 · Accesos 1 (03/11, tableros 5 y 6): quién tiene acceso, las pendientes y quitar. */}
+      {activeAccountId && userProfile?.role === 'admin' && (
+        <AccesosYPendientes accountId={activeAccountId} empresa={activeAccount?.name ?? 'esta empresa'}
+          aviso={avisoInvitar} vuelta={vueltaAccesos} />
       )}
 
       {/* Modal de edición */}
