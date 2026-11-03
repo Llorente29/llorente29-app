@@ -158,14 +158,15 @@ end $$;
 do $$
 declare v_msg text; v_err text; v_n text;
 begin
-  select e.series || '/' || e.number into v_n from public.journal_entry e where e.id = (select v::uuid from _p where k = 'asiento_S01Q10-0001');
+  -- El asiento de su factura, con su número y su fecha (una recibida se asienta el día que entra).
+  select e.series || '/' || e.number || ' del ' || to_char(e.entry_date, 'DD/MM/YYYY') into v_n from public.journal_entry e where e.id = (select v::uuid from _p where k = 'asiento_S01Q10-0001');
   begin
     insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit)
     values (pg_temp.p('cuenta'), pg_temp.p('empresa'), (select v::uuid from _p where k = 'prop1'), 9,
             (select id from public.company_account where company_id = pg_temp.p('empresa') and code = '62300000'), 1, 0);
   exception when others then v_msg := sqlerrm; v_err := sqlstate;
   end;
-  if v_err is distinct from '23505' or v_msg is distinct from format('La comisión de esta liquidación ya está contabilizada en el asiento %s del 18/10/2026 (su factura S01Q10-0001): aquí solo se compensa.', v_n) then
+  if v_err is distinct from '23505' or v_msg is distinct from format('La comisión de esta liquidación ya está contabilizada en el asiento %s (su factura S01Q10-0001): aquí solo se compensa.', v_n) then
     raise exception 'PRUEBA S01q·10 · 5: la comisión se apunta otra vez: % / %', v_err, v_msg;
   end if;
   raise notice 'PRUEBA S01q·10 · 5 (comisión): «%»', v_msg;
