@@ -1,0 +1,4 @@
+# DM1 · La contabilidad de demo de Casa Lola · vuelta atrás: todo lo de su
+# empresa fuera, sus proveedores otra vez sin NIF, sin marca de demo y sin la
+# función.
+supabase/vuelta-atras/20261103T1350_dm1_casa_lola_contabilidad.down.sql
