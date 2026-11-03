@@ -1,0 +1,84 @@
+/* src/modules/conta/estilo/ficha.css
+ *
+ * N1 · PR 2 · Paso 1 (02/11/2026) · La ficha nueva de una persona (Laboral ›
+ * Equipo › persona), fiel a las pantallas 1 a 3 de la maqueta aprobada.
+ * Solo tokens del sistema (--s-*). */
+
+.s-ficha { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-6); max-width: 90rem; }
+.s-ficha-migas { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.s-ficha-migas a, .s-ficha-miga, .s-ficha-enlace {
+  color: var(--s-accion); text-decoration: none; background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+}
+.s-ficha-migas a:hover, .s-ficha-miga:hover, .s-ficha-enlace:hover { text-decoration: underline; }
+.s-ficha-enlace { font-size: var(--s-t-s); font-weight: var(--s-peso-fuerte); }
+.s-ficha-h1 { margin: 0; font-size: var(--s-t-xl); font-weight: var(--s-peso-titulo); color: var(--s-tinta); display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.s-ficha-titulo-fila { display: flex; justify-content: space-between; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+
+.s-ficha-cabecera { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-4); align-items: center; }
+.s-ficha-avatar {
+  width: 5.5rem; height: 5.5rem; border-radius: 50%; display: grid; place-items: center; overflow: hidden;
+  background: var(--s-fondo); color: var(--s-tinta); font-size: 1.75rem; font-weight: var(--s-peso-titulo);
+  border: var(--s-linea) solid var(--s-borde-decorativo);
+}
+.s-ficha-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.s-ficha-frase { margin: var(--s-1) 0 0; color: var(--s-apoyo); font-size: var(--s-t-l); line-height: 1.5; }
+.s-ficha-botones { display: flex; flex-direction: column; gap: var(--s-2); align-items: stretch; }
+.s-ficha-menu { position: relative; display: flex; flex-direction: column; }
+.s-ficha-menu-lista {
+  position: absolute; right: 0; top: calc(100% + var(--s-1)); z-index: 5; min-width: 18rem; list-style: none; margin: 0; padding: var(--s-1);
+  background: var(--s-superficie); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.s-ficha-menu-lista button, .s-ficha-menu-lista a {
+  display: block; width: 100%; text-align: left; padding: var(--s-2); background: none; border: none; font: inherit; color: var(--s-tinta); cursor: pointer; text-decoration: none;
+}
+.s-ficha-menu-lista button:hover, .s-ficha-menu-lista a:hover { background: var(--s-fondo); }
+.s-ficha-menu-nota { padding: var(--s-2); font-size: var(--s-t-s); color: var(--s-apoyo); }
+
+.s-ficha-avisos { display: flex; flex-direction: column; gap: var(--s-2); }
+.s-ficha-pestanas { display: flex; gap: var(--s-4); align-items: flex-end; flex-wrap: wrap; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.s-ficha-pestanas button {
+  background: none; border: none; padding: var(--s-2) var(--s-1); font: inherit; color: var(--s-apoyo); cursor: pointer; border-bottom: 2px solid transparent;
+}
+.s-ficha-pestanas button[aria-selected='true'] { color: var(--s-tinta); font-weight: var(--s-peso-fuerte); border-bottom-color: var(--s-accion); }
+.s-ficha-antes { margin-left: auto; padding: var(--s-2) 0; font-size: var(--s-t-s); color: var(--s-accion); }
+
+.s-ficha-rejilla { display: grid; grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr)); gap: var(--s-4); align-items: start; }
+.s-ficha-columnas { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--s-4); align-items: start; }
+.s-ficha-principal, .s-ficha-lateral { display: flex; flex-direction: column; gap: var(--s-4); min-width: 0; }
+
+.s-ficha-datos { margin: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-ficha-dato { display: grid; grid-template-columns: minmax(7rem, 2fr) minmax(0, 3fr); gap: var(--s-3); }
+.s-ficha-datos-anchos .s-ficha-dato { grid-template-columns: minmax(9rem, 1fr) minmax(0, 2fr); }
+.s-ficha-datos-cifras .s-ficha-dato dd { text-align: right; font-weight: var(--s-peso-fuerte); }
+.s-ficha-dato dt { color: var(--s-apoyo); }
+.s-ficha-dato dd { margin: 0; color: var(--s-tinta); overflow-wrap: anywhere; }
+.s-ficha-oficial { display: block; font-size: var(--s-t-s); color: var(--s-apoyo); font-weight: normal; }
+.s-ficha-falta { color: var(--s-duda); font-weight: var(--s-peso-fuerte); }
+.s-ficha-nota {
+  margin: var(--s-3) 0 0; padding: var(--s-2) var(--s-3); font-size: var(--s-t-s); color: var(--s-apoyo);
+  background: var(--s-fondo); border-radius: var(--s-radio-bloque);
+}
+.s-ficha-chips { list-style: none; margin: var(--s-3) 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.s-ficha-grande { margin: 0; font-size: var(--s-t-cifra); font-weight: var(--s-peso-titulo); color: var(--s-tinta); display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
+.s-ficha-enorme { margin: 0; font-size: 3rem; font-weight: var(--s-peso-titulo); color: var(--s-tinta); display: flex; gap: var(--s-3); align-items: center; flex-wrap: wrap; }
+.s-ficha-sub { margin: 0 0 var(--s-3); color: var(--s-apoyo); font-size: var(--s-t-s); }
+.s-ficha-docs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s-2); }
+.s-ficha-docs li { display: flex; justify-content: space-between; gap: var(--s-3); }
+.s-ficha-docs .s-ficha-sub { margin: 0; white-space: nowrap; }
+.s-ficha-conceptos { width: 100%; }
+.s-ficha-conceptos .s-num { text-align: right; font-variant-numeric: tabular-nums; }
+.s-ficha-conceptos tfoot th { border-top: var(--s-linea) solid var(--s-borde-decorativo); text-align: left; }
+.s-ficha-conceptos tfoot th.s-num { text-align: right; }
+.s-ficha-elegir { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.s-ficha-iban { display: flex; flex-direction: column; gap: var(--s-2); }
+.s-ficha-iban label { display: flex; flex-direction: column; gap: var(--s-1); color: var(--s-apoyo); font-size: var(--s-t-s); }
+.s-ficha-iban input { font-family: var(--s-letra-cifras); letter-spacing: 0.04em; }
+.s-ficha-iban-botones { display: flex; gap: var(--s-2); }
+
+@media (max-width: 60rem) {
+  .s-ficha { padding: var(--s-4); }
+  .s-ficha-cabecera { grid-template-columns: auto minmax(0, 1fr); }
+  .s-ficha-botones { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; }
+  .s-ficha-columnas { grid-template-columns: minmax(0, 1fr); }
+  .s-ficha-antes { margin-left: 0; }
+}

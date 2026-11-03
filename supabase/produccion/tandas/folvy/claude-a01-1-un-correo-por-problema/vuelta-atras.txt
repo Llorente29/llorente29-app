@@ -1,0 +1,3 @@
+# A01-1 · vuelta atrás: fuera la tarea, las dos funciones como estaban (del
+# respaldo) y fuera lo nuevo.
+supabase/vuelta-atras/20261102T1936_a01_un_correo_por_problema.down.sql
