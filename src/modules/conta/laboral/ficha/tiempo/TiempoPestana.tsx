@@ -199,7 +199,7 @@ export default function TiempoPestana({ ficha, hueco }: { ficha: Ficha; hueco?: 
         <Tarjeta titulo="Su jornada">
           <dl className="s-persona-datos s-persona-datos-anchos">
             <div className="s-persona-dato"><dt>Por contrato</dt><dd>{horasSemana ? `${horasSemana} horas a la semana` : <span className="s-persona-falta">Falta</span>}{contrato?.jornada === 'completa' ? ' · a jornada completa' : contrato?.jornada === 'parcial' ? ' · a tiempo parcial' : ''}</dd></div>
-            <div className="s-persona-dato"><dt>Al año, según convenio</dt><dd>{contrato?.convenio?.horas_anuales ? `${Number(contrato.convenio.horas_anuales).toLocaleString('es-ES')} horas` : <span className="s-persona-falta">Falta</span>}</dd></div>
+            <div className="s-persona-dato"><dt>Al año, según convenio</dt><dd>{contrato?.convenio?.horas_anuales ? `${new Intl.NumberFormat('es-ES', { useGrouping: 'always' }).format(Number(contrato.convenio.horas_anuales))} horas` : <span className="s-persona-falta">Falta</span>}</dd></div>
             <div className="s-persona-dato"><dt>Horario</dt><dd>{p.local ? <>Sale del cuadrante de {p.local.nombre}. <Link className="s-persona-enlace" to={rutaConta(CONTA.rutas.laboralPagina, { pagina: 'calendario' })}>Ver sus turnos</Link></> : <span className="s-persona-falta">Falta: no tiene local</span>}</dd></div>
             <div className="s-persona-dato"><dt>Descanso</dt><dd><span className="s-persona-falta">Falta</span> <small className="s-persona-oficial">el convenio cargado no lo trae</small></dd></div>
           </dl>
