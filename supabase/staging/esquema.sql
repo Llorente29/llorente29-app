@@ -43191,7 +43191,7 @@ end $$;
 --
 
 CREATE FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) RETURNS jsonb
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
   with f as (
@@ -43210,14 +43210,14 @@ CREATE FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) RETURNS jso
       join public.conta_recibida_pago rp on rp.invoice_id = si.id
       left join public.supplier s on s.id = si.supplier_id
       left join public.locations lo on lo.id = si.location_id
-     where si.account_id = (select account_id from public.company where id = p_company)
+     where si.account_id = (select c.account_id from public.company c where c.id = p_company and public.belongs_to_account(c.account_id))
        and coalesce(si.company_id, p_company) = p_company
        and si.status in ('aprobada', 'pagada')
        -- S01i · Lo que se compensa (comisiones de plataformas, abonos) no se paga por banco: no sale en Pagos.
        and si.payment_method is distinct from 'compensation' and si.paid_method is distinct from 'compensation'
   )
   select jsonb_build_object(
-    'filas', coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb),
+    'filas', coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha, f.id) from f), '[]'::jsonb),
     'pagado_mes', (select coalesce(sum(p.amount), 0) from public.supplier_invoice_payment p join f on f.id = p.invoice_id
                     where p.entry_id is not null and p.paid_on >= date_trunc('month', p_mes)::date and p.paid_on < (date_trunc('month', p_mes) + interval '1 month')::date),
     'pagadas_mes', (select count(distinct p.invoice_id) from public.supplier_invoice_payment p join f on f.id = p.invoice_id
@@ -43231,7 +43231,7 @@ $$;
 -- Name: FUNCTION conta_pagos_lista(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) IS 'PC01 · E2 · Compras › Pagos: las recibidas por pagar y pagadas de la empresa, con su estado, su remesa y lo pagado en el mes.';
+COMMENT ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) IS 'B01·15 (03/11) · Compras › Pagos: las facturas por pagar de una empresa, con lo pagado y su estado (conta_recibida_pago). SECURITY DEFINER con una sola comprobación de la cuenta (belongs_to_account) al leer la empresa: antes, con la RLS fila a fila, tardaba 22,8 s en Foodint.';
 
 
 --
@@ -43239,7 +43239,7 @@ COMMENT ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) IS 'PC0
 --
 
 CREATE FUNCTION public.conta_pagos_por_revisar(p_company uuid) RETURNS jsonb
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
   with f as (
@@ -43252,12 +43252,12 @@ CREATE FUNCTION public.conta_pagos_por_revisar(p_company uuid) RETURNS jsonb
       join public.conta_recibida_pago rp on rp.invoice_id = si.id
       left join public.supplier s on s.id = si.supplier_id
       left join public.locations lo on lo.id = si.location_id
-     where si.account_id = (select account_id from public.company where id = p_company)
+     where si.account_id = (select c.account_id from public.company c where c.id = p_company and public.belongs_to_account(c.account_id))
        and coalesce(si.company_id, p_company) = p_company
        and si.status = 'en_revision' and si.paid_at is null and si.discarded_at is null
        and si.payment_method is distinct from 'compensation'
   )
-  select coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb)
+  select coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha, f.id) from f), '[]'::jsonb)
 $$;
 
 
@@ -43265,7 +43265,7 @@ $$;
 -- Name: FUNCTION conta_pagos_por_revisar(p_company uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_pagos_por_revisar(p_company uuid) IS 'B01 · Cola 1e (02/11). Las facturas recibidas en revisión y sin pagar, con las columnas de conta_pagos_lista y por_revisar = true: Pagos las enseña con su vencimiento, sin poder marcarlas.';
+COMMENT ON FUNCTION public.conta_pagos_por_revisar(p_company uuid) IS 'B01·15 (03/11) · Compras › Pagos: las facturas en revisión y sin pagar, para enseñarlas sin poder marcarlas. SECURITY DEFINER con una sola comprobación de la cuenta, como conta_pagos_lista.';
 
 
 --
@@ -156026,7 +156026,7 @@ GRANT ALL ON FUNCTION public.conta_pago_topes_poner(p_company uuid, p_tope_pago 
 -- Name: FUNCTION conta_pagos_lista(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) TO anon;
+REVOKE ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) TO service_role;
 
