@@ -16,3 +16,16 @@ export async function leerNoPropuesto(companyId: string, donde: Donde): Promise<
     id: String(x.id), origen: String(x.origen), que: String(x.que), porque: String(x.porque), at: String(x.at),
   }))
 }
+
+/**
+ * S01q · PR C · Lo que no se ha podido proponer de las liquidaciones, por su
+ * origen (la liquidación de plataforma o la del socio): Ventas › Liquidaciones
+ * lo dice en su fila, con sus palabras, en vez de en una lista aparte.
+ */
+export async function leerNoPropuestoPorOrigen(companyId: string): Promise<Map<string, string>> {
+  const { data, error } = await tabla('conta_propuesta_pendiente').select('origen_id, porque')
+    .eq('company_id', companyId).in('origen', ['channel_settlement', 'licensed_settlement'])
+  if (error && /does not exist|could not find|relation/i.test(error.message)) return new Map()
+  if (error) throw new Error(mensaje('No se ha podido leer lo que no se ha propuesto', error))
+  return new Map(((data ?? []) as Record<string, unknown>[]).map((x) => [String(x.origen_id), String(x.porque)]))
+}

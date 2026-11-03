@@ -23,12 +23,12 @@ test('D07 · Compras › Liquidaciones dice que las de plataforma están en Vent
   await page.goto('/conta/compras/liquidaciones?tipo=plataforma')
   await expect(page.locator('[data-prueba="liquidaciones-en-ventas"]')).toBeVisible({ timeout: 30_000 })
 
-  // V02 · Pantallas: Ventas › Liquidaciones es la de los tableros 28 y 29 (su e2e, en
-  // v02/liquidaciones.spec.ts). Aquí, que abre con su banda y sin errores; la ficha de
+  // S01q · PR C: Ventas › Liquidaciones es la del mes (su e2e, en
+  // s01q/liquidaciones-mes.spec.ts). Aquí, que abre con su resumen y sin errores; la ficha de
   // una de plataforma, por local, la abre v01/liquidaciones.spec.ts.
   await page.goto('/conta/ventas/liquidaciones')
   await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('[data-prueba="banda-liquidaciones"] h2')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase')).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('alert')).toHaveCount(0)
   expect(errores).toEqual([])
 })

@@ -40,7 +40,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
-import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaBancos, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaLiquidaciones, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
+import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaBancos, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaLiquidacionesVentas, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu, refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
@@ -158,7 +158,7 @@ function FacturasDePlataforma({ accountId, companyId, hoy }: { accountId: string
     <div className="cx-aviso" role="status" aria-label="Facturas de comisión que faltan" data-prueba="falta-factura-plataforma">
       {semanas.slice(0, 3).map((x) => <p key={`${x.canal}|${x.hasta}`}>{fraseSemanaSinFactura(x)}</p>)}
       {semanas.length > 3 && <p>Y {semanas.length - 3} semanas más.</p>}
-      <Link to={`${rutaLiquidaciones()}?tipo=plataforma`}>Ver las liquidaciones de plataforma</Link>
+      <Link to={rutaLiquidacionesVentas()} data-prueba="inicio-a-liquidaciones">Ver las liquidaciones del mes</Link>
     </div>
   )
 }
