@@ -663,7 +663,7 @@ export default function RevisarFacturaPage() {
       {extra.error && <p className="s-apoyo">No se ha podido saber si está pagada: {extra.error}</p>}
       {/* B01 · 2c-2 · Pagar con el banco desde Sumied: solo una factura aprobada y por pagar (lo demás lo dice la base al preparar). */}
       {fac.company_id && fac.estado === 'aprobada' && extra.datos && !pagada && !abono && !descartada && (
-        <BloquePagarConRevolut empresaId={fac.company_id} facturaId={fac.id} />
+        <BloquePagarConRevolut empresaId={fac.company_id} facturaId={fac.id} refresco={vuelta} />
       )}
       {/* B01 · Cola 1e · El justificante de lo que el banco ya ha confirmado: verlo, por correo y por WhatsApp. */}
       {fac.company_id && <BloqueJustificantes facturaId={fac.id} numero={b.numero || null} empresa={activa?.nombre ?? ''} quien={userName ?? null} />}
@@ -725,6 +725,12 @@ export default function RevisarFacturaPage() {
     </div>
   )
 
+  // B01 · Cola 1e · «Pagar · X €» arriba (y en la barra de abajo del móvil): abre el panel lateral de Pagos,
+  // en el móvil la hoja desde abajo (maqueta v2, pantalla 5). Nada del pago en la columna estrecha.
+  const botonPagar = puedePagarAqui && cuentaPago && quienPagaFicha.datos?.yoPuedo
+    ? <Boton variante="principal" onClick={() => { setAvisoPago(null); setPagarAqui(true) }} data-prueba="pagar-ficha">Pagar · {eurosExactos(Math.abs(Number(fac.total ?? 0)))}</Boton>
+    : null
+
   return (
     <div className="s-pagina" data-prueba="ficha-recibida" data-origen={aMano_ ? 'a-mano' : 'sola'}>
       <EncabezadoPagina
@@ -734,9 +740,7 @@ export default function RevisarFacturaPage() {
         migasExtra={migasExtra}
         derecha={<NavegaFicha pos={pos + 1} total={ids.length} que={queCuentaLaCola(filtros.pestana)} anterior={anterior ? () => pedirSalir(() => ir(anterior)) : null} siguiente={siguiente ? () => pedirSalir(() => ir(siguiente)) : null} />}
         masAcciones={mas}
-        principal={botonValidar || (puedePagarAqui && cuentaPago && quienPagaFicha.datos?.yoPuedo
-          ? <Boton variante="principal" onClick={() => { setAvisoPago(null); setPagarAqui(true) }} data-prueba="pagar-ficha">Pagar · {eurosExactos(Math.abs(Number(fac.total ?? 0)))}</Boton>
-          : <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>)}
+        principal={botonValidar || botonPagar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
       />
       {avisoPago && <p className="s-aviso-lista" data-tono={avisoPago.tono === 'ok' ? 'seguro' : avisoPago.tono} role={avisoPago.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-pagar-ficha">{avisoPago.texto}</p>}
       {pagarAqui && cuentaPago && fac.company_id && (
@@ -744,7 +748,7 @@ export default function RevisarFacturaPage() {
           alCerrar={(a) => { setPagarAqui(false); if (a) { setAvisoPago(a); setVuelta((v) => v + 1) } }} />
       )}
       <Ficha datos={datos} documento={documento} documentoOculto={marco?.documentoOculto ?? false} usuario={userId} reglaAnchos />
-      <BotonPulgar>{botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
+      <BotonPulgar>{botonValidar || botonPagar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}</BotonPulgar>
       {salida.aviso}
       {noEs !== null && <NoEsFactura inicial={noEs} alCerrar={() => setNoEs(null)} alDescartar={(m) => descartar(m)} fallo={falloDescarte} />}
     </div>

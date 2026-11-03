@@ -27,9 +27,18 @@ export function telefonoWhatsApp(telefono: string | null | undefined): string | 
 
 const euros = (x: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions).format(x)
 
-export function textoWhatsApp(o: { empresa: string; numero: string | null; importe: number; enlace: string }): string {
-  const que = o.numero ? `la factura ${o.numero}` : 'tu factura'
-  return `Hola: te hemos pagado ${que} (${euros(o.importe)} €). El justificante, aquí: ${o.enlace} · ${o.empresa}`
+/** El mensaje de WhatsApp (maqueta v2, pantalla 6): «Hola, os hemos pagado la factura BP-2210 (288,40 €) hoy a las 13:04. Justificante: …». */
+export function textoWhatsApp(o: { empresa: string; numero: string | null; importe: number; enlace: string; pagadoAt?: string | null }, ahora = new Date()): string {
+  const que = o.numero ? `la factura ${o.numero}` : 'vuestra factura'
+  let cuando = ''
+  if (o.pagadoAt) {
+    const madrid = (d: Date, op: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', ...op }).format(d)
+    const d = new Date(o.pagadoAt)
+    const hora = madrid(d, { hour: '2-digit', minute: '2-digit', hour12: false })
+    const dia = madrid(d, { day: '2-digit', month: '2-digit' })
+    cuando = dia === madrid(ahora, { day: '2-digit', month: '2-digit' }) ? ` hoy a las ${hora}` : ` el ${dia} a las ${hora}`
+  }
+  return `Hola, os hemos pagado ${que} (${euros(o.importe)} €)${cuando}. Justificante: ${o.enlace}${o.empresa ? ` · ${o.empresa}` : ''}`
 }
 
 /** El enlace de wa.me con el mensaje escrito; null sin un teléfono que valga. */

@@ -227,7 +227,7 @@ export function TablaAsiento<L extends LineaAsientoVista>({ lineas, etiqueta = '
                 <tr data-a-mano={l.aMano ? '' : undefined} data-linea={clave}>
                   <td className="s-asiento-codigo">{enlace ? <Link to={enlace} className="s-asiento-codigo-enlace" title={`El mayor de la ${l.codigo}`}>{l.codigo}</Link> : l.codigo}</td>
                   <td className="s-asiento-col-nombre">
-                    <span className="s-asiento-cuenta">{l.nombre}</span>
+                    <span className="s-asiento-cuenta" title={l.nombre}>{l.nombre}</span>
                     {l.aMano && <span className="s-asiento-a-mano">Cambiado a mano</span>}
                     {!vacia(deApoyo) && <span className="s-asiento-apoyo">{deApoyo}</span>}
                     {datos.length > 0 && (

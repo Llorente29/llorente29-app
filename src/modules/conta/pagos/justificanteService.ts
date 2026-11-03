@@ -10,6 +10,8 @@ export interface JustificantePago {
   id: string; clave: string; creado: string; caduca: string; importe: number; pagadoAt: string
   correoA: string | null; correoAt: string | null; correoTexto: string | null
   proveedor: string; supplierId: string; alPagar: boolean; telefono: string | null; correo: string | null
+  /** Desde dónde salió: «Revolut» y la cuenta (···9254). */
+  banco: string | null; desdeIban4: string | null
 }
 
 type Fila = Record<string, unknown>
@@ -28,6 +30,7 @@ export async function leerJustificantes(facturaId: string): Promise<Justificante
     id: String(j.id), clave: String(j.clave), creado: String(j.creado), caduca: String(j.caduca), importe: Number(j.importe), pagadoAt: String(j.pagado_at),
     correoA: str(j.correo_a), correoAt: str(j.correo_at), correoTexto: str(j.correo_texto),
     proveedor: String(j.proveedor ?? ''), supplierId: String(j.supplier_id), alPagar: j.al_pagar === true, telefono: str(j.telefono), correo: str(j.correo),
+    banco: str(j.banco), desdeIban4: str(j.desde_iban4),
   }))
 }
 

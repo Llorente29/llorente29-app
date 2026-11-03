@@ -30,16 +30,16 @@ const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-/** Una página sencilla para lo que no es el PDF (caducado o que no existe). */
-function pagina(titulo: string, texto: string, status: number) {
-  const h = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  return new Response(
-    `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">` +
-      `<title>${h(titulo)}</title></head><body style="margin:0;font:16px/1.5 system-ui,sans-serif;color:#0b1f3b;background:#f4f7fb">` +
-      `<main style="max-width:480px;margin:15vh auto;padding:24px;background:#fff;border-radius:12px;border:1px solid #e2e8f0">` +
-      `<h1 style="font-size:20px;margin:0 0 8px">${h(titulo)}</h1><p style="margin:0;color:#4a5b73">${h(texto)}</p></main></body></html>`,
-    { status, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" } },
-  );
+/**
+ * Lo que no es el PDF (caducado o que no existe), en TEXTO PLANO: en su dominio,
+ * Supabase no deja que una función sirva HTML (lo entrega como texto, para que
+ * nadie se haga pasar por otro), y el proveedor vería las etiquetas. Medido en
+ * la e2e 41586077241: el 404 llegaba, la página no.
+ */
+function aviso(titulo: string, texto: string, status: number) {
+  return new Response(`${titulo}\n\n${texto}\n`, {
+    status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
+  });
 }
 
 Deno.serve(async (req) => {
@@ -49,14 +49,14 @@ Deno.serve(async (req) => {
   // ── El enlace público ─────────────────────────────────────────────────────
   if (req.method === "GET") {
     const clave = new URL(req.url).searchParams.get("c") ?? "";
-    if (!CLAVE.test(clave)) return pagina("Este enlace no vale", "No es el enlace de ningún justificante. Pídelo a quien te pagó.", 404);
+    if (!CLAVE.test(clave)) return aviso("Este enlace no vale", "No es el enlace de ningún justificante. Pídelo a quien te pagó.", 404);
     const { data: j } = await srv.rpc("conta_justificante_publico", { p_clave: clave });
-    if (!j) return pagina("Este enlace no vale", "No es el enlace de ningún justificante. Pídelo a quien te pagó.", 404);
-    if (j.caducado) return pagina("Justificante caducado", "Este justificante ha caducado; pídelo a quien te pagó.", 410);
+    if (!j) return aviso("Este enlace no vale", "No es el enlace de ningún justificante. Pídelo a quien te pagó.", 404);
+    if (j.caducado) return aviso("Justificante caducado", "Este justificante ha caducado; pídelo a quien te pagó.", 410);
     const { data: pdf, error } = await srv.storage.from(BUCKET_JUSTIFICANTES).download(j.pdf_path);
     if (error || !pdf) {
       console.error("[conta-justificante] no se ha podido leer un PDF");
-      return pagina("No se ha podido abrir", "El justificante no se ha podido abrir ahora mismo. Vuelve a probar en un rato.", 503);
+      return aviso("No se ha podido abrir", "El justificante no se ha podido abrir ahora mismo. Vuelve a probar en un rato.", 503);
     }
     return new Response(pdf, {
       headers: {

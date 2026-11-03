@@ -50,6 +50,7 @@ import { crearRemesa, leerPagos } from '@/modules/conta/services/pagosService'
 import { DialogoPonerIban, DialogoPonerVencimiento, DialogoYaLaHePagado } from './DialogosPagos'
 import { EsperanMiSegunda } from '@/modules/conta/pagos/PagarConRevolut'
 import { DialogoPagarVarias } from '@/modules/conta/pagos/PagarVarias'
+import { ResultadoPago } from '@/modules/conta/pagos/ResultadoPago'
 import { cuentasParaPagar, textoPagarVarias } from '@/modules/conta/pagos/pagarService'
 import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
 
@@ -124,6 +125,8 @@ export default function PagosPage() {
   const cuentaBanco = (cuentasBanco.datos ?? []).find((c) => c.id === bancoId) ?? null
   const porBanco = !!cuentaBanco && quienPaga.datos?.yoPuedo === true
   const [varias, setVarias] = useState(false)
+  // B01 · Cola 1e · El último pago mandado desde aquí: debajo de la frase, cómo va cada factura (maqueta v2, pantalla 4).
+  const [loteHecho, setLoteHecho] = useState<string | null>(null)
   // B01 · Cola 1e · «Pagar lo de esta semana»: lo vencido y lo de esta semana que se puede pagar, marcado de una vez.
   const semana = useMemo(() => loDeEstaSemana(todas), [todas])
   const pagarLoDeEstaSemana = () => {
@@ -219,6 +222,7 @@ export default function PagosPage() {
 
       {datos.error && <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer los pagos: {datos.error}</p>}
       {aviso && <p className="s-aviso-lista" data-tono={aviso.tono} role={aviso.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-pagos">{aviso.texto}</p>}
+      {loteHecho && activa && <ResultadoPago empresaId={activa.id} lote={loteHecho} />}
       {/* B01 · 2c-2 · Con dos o más personas que pagan: lo que espera tu segunda aprobación. */}
       {activa && <EsperanMiSegunda empresaId={activa.id} alCambiar={() => setVuelta((v) => v + 1)} />}
       {cif && (
@@ -325,7 +329,7 @@ export default function PagosPage() {
       )}
       {varias && activa && cuentaBanco && (
         <DialogoPagarVarias empresaId={activa.id} cuenta={cuentaBanco} facturas={pagables.map((f) => ({ id: f.id, proveedor: f.proveedor, numero: f.numero }))}
-          alCerrar={(a) => { setVarias(false); if (a) { setAviso({ tono: a.tono === 'ok' ? 'seguro' : a.tono, texto: a.texto }); setMarcadas(new Set()); setVuelta((v) => v + 1) } }} />
+          alCerrar={(a) => { setVarias(false); if (a) { setAviso({ tono: a.tono === 'ok' ? 'seguro' : a.tono, texto: a.texto }); setLoteHecho(a.lote ?? null); setMarcadas(new Set()); setVuelta((v) => v + 1) } }} />
       )}
       {ponerIbanA && (
         <DialogoPonerIban proveedor={ponerIbanA}

@@ -35,7 +35,7 @@ export interface DatosJustificante {
   concepto: string
   referencia: string | null
   banco: string
-  empresa: { nombre: string; razon: string | null; nif: string | null; color: string | null; email: string | null }
+  empresa: { nombre: string; razon: string | null; nif: string | null; color: string | null; email: string | null; direccion?: string | null }
   desde: { nombre: string | null; iban4: string | null }
   proveedor: { nombre: string; nif: string | null; iban4: string; iban_pais: string; al_pagar: boolean; correo: string | null }
   factura: { numero: string | null; fecha: string | null; total: number | string | null }
@@ -105,39 +105,67 @@ export function filasJustificante(d: DatosJustificante): [string, string][] {
   return filas
 }
 
-/** El PDF, en bytes. Solo de un pago que el banco ha confirmado. */
+/** Las iniciales de la empresa para la marca del PDF («Taberna de Prueba Norte» → «TP»). */
+export function iniciales(nombre: string): string {
+  const p = nombre.replace(/[,.]/g, ' ').split(/\s+/).filter((x) => x && !/^(de|del|la|las|el|los|y|s\.?l\.?|s\.?a\.?)$/i.test(x))
+  return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() || 'S'
+}
+
+/** El PDF, en bytes. Solo de un pago que el banco ha confirmado. Como la maqueta v2 (pantalla 6). */
 export function justificantePagoPdf(JsPDF: JsPdfCtor, d: DatosJustificante): Uint8Array {
   if (d.estado !== 'pagada') throw new Error('Este pago no está confirmado por el banco: no lleva justificante.')
   const doc = new JsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-  const W = 210, M = 18
+  const W = 210, M = 18, D = W - M
   const marca = colorEmpresa(d.empresa.color)
   const color = (c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2])
   const letra = (estilo: 'normal' | 'bold', tam: number) => { doc.setFont('helvetica', estilo); doc.setFontSize(tam) }
+  const linea = (y: number) => { doc.setDrawColor(LINEA[0], LINEA[1], LINEA[2]); doc.line(M, y, D, y) }
+  const razon = d.empresa.razon || d.empresa.nombre
+  const [fechaPago, horaPago] = fechaHoraMadrid(d.pagado_at).split(' a las ')
 
-  // La franja del color de la empresa y su nombre: la marca de quien paga.
-  doc.setFillColor(marca[0], marca[1], marca[2]); doc.rect(0, 0, W, 6, 'F')
-  let y = M + 6
-  color(TINTA); letra('bold', 15); doc.text(d.empresa.nombre, M, y)
-  letra('normal', 9); color(GRIS); doc.text('Justificante de pago', W - M, y, { align: 'right' })
-  y += 14
-  letra('normal', 10); color(GRIS); doc.text('Importe pagado', M, y)
-  y += 9
-  color(marca); letra('bold', 24); doc.text(`${euros(Number(d.importe))} €`, M, y)
+  // La marca de quien paga: sus iniciales en su color, la razón social, el NIF y la dirección.
+  doc.setFillColor(marca[0], marca[1], marca[2]); doc.roundedRect(M, M, 14, 14, 3, 3, 'F')
+  doc.setTextColor(255, 255, 255); letra('bold', 12); doc.text(iniciales(d.empresa.nombre), M + 7, M + 9.2, { align: 'center' })
+  color(TINTA); letra('bold', 13); doc.text(razon, M + 18, M + 5.5)
+  letra('normal', 8.5); color(GRIS); doc.text([d.empresa.nif, d.empresa.direccion].filter(Boolean).join(' · ') || ' ', M + 18, M + 11)
+  letra('bold', 12); color(TINTA); doc.text('Justificante de pago', D, M + 5.5, { align: 'right' })
+  letra('normal', 9); color(GRIS); doc.text(`${fechaPago} · ${horaPago}`, D, M + 11, { align: 'right' })
+  let y = M + 22
+  linea(y); y += 10
+
+  // A quién y cuánto.
+  letra('normal', 9); color(GRIS); doc.text('Pagado a', M, y); doc.text('Importe', D, y, { align: 'right' })
+  y += 7
+  letra('bold', 13); color(TINTA); doc.text(doc.splitTextToSize(d.proveedor.nombre, 110), M, y)
+  color(marca); letra('bold', 22); doc.text(`${euros(Number(d.importe))} €`, D, y + 2, { align: 'right' })
   y += 6
-  doc.setDrawColor(LINEA[0], LINEA[1], LINEA[2]); doc.line(M, y, W - M, y)
-  y += 9
-  for (const [k, v] of filasJustificante(d)) {
+  letra('normal', 9.5); color(GRIS); doc.text(ibanTapado(d.proveedor.iban_pais, d.proveedor.iban4), M, y)
+  y += 10
+  linea(y); y += 7
+
+  // La factura que paga.
+  letra('bold', 8.5); color(GRIS)
+  doc.text('Factura', M, y); doc.text('Fecha', M + 80, y); doc.text('Pagado', D, y, { align: 'right' })
+  y += 6
+  letra('normal', 10); color(TINTA)
+  doc.text(d.factura.numero || d.concepto || '—', M, y)
+  doc.text(d.factura.fecha ? fecha(d.factura.fecha) : '—', M + 80, y)
+  doc.text(`${euros(Number(d.importe))} €`, D, y, { align: 'right' })
+  y += 5
+  linea(y); y += 9
+
+  // Desde dónde y la referencia del banco.
+  const filas: [string, string][] = [['Desde', `${d.banco} Business${d.desde.iban4 ? ` · cuenta ···${d.desde.iban4}` : ''}`]]
+  if (d.referencia) filas.push([`Referencia de ${d.banco}`, d.referencia])
+  for (const [k, v] of filas) {
     letra('normal', 9); color(GRIS); doc.text(k, M, y)
-    letra('bold', 10); color(TINTA)
-    const t = doc.splitTextToSize(v, W - 2 * M - 45)
-    doc.text(t, M + 45, y)
-    y += 7 * Math.max(1, Array.isArray(t) ? t.length : 1)
+    letra('bold', 10); color(TINTA); doc.text(v, M + 50, y)
+    y += 7
   }
   y += 4
-  doc.line(M, y, W - M, y)
-  y += 8
-  letra('normal', 8); color(GRIS)
-  doc.text(doc.splitTextToSize(`Transferencia hecha por ${d.empresa.nombre} desde ${d.banco} y confirmada por ${d.banco}. Justificante hecho por Sumied con lo que dice el banco; el IBAN va tapado salvo los 4 últimos.`, W - 2 * M), M, y)
+  linea(y); y += 8
+  letra('normal', 8.5); color(GRIS)
+  doc.text(doc.splitTextToSize(`Transferencia SEPA enviada y confirmada por ${d.banco} el ${fechaPago} a las ${horaPago} (hora de Madrid). Justificante generado por Sumied para ${razon}; el IBAN va tapado salvo los 4 últimos.`, D - M), M, y)
   return new Uint8Array(doc.output('arraybuffer'))
 }
 

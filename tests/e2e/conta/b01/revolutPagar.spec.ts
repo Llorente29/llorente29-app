@@ -129,26 +129,31 @@ test.describe('B01 Revolut · pagar una factura con Revolut', () => {
       await expect(bloque.locator('[data-prueba="pideselo"]')).toHaveText('Pídeselo a Persona Prueba, que puede pagar.', { timeout: 30_000 })
       await expect(bloque.getByRole('button', { name: 'Pagar con Revolut' })).toHaveCount(0)
 
-      // 2 · Quien puede: el panel.
+      // 2 · Quien puede: «Pagar · X €» arriba abre el panel lateral (B01 · Cola 1e, maqueta v2, pantallas 2 y 5).
+      // En la columna de la ficha no queda nada del pago (Julio, 03/11).
       m.yoPuedo = true
       await page.reload()
-      await bloque.getByRole('button', { name: 'Pagar con Revolut' }).click({ timeout: 30_000 })
-      const resumen = bloque.locator('[data-prueba="resumen-pago"]')
-      await expect(resumen).toContainText('1.028,50 €')
-      await expect(resumen).toContainText(beneficiario)
-      await expect(resumen).toContainText('···1234 · nuevo')
-      await expect(resumen).toContainText(numero)
-      await expect(bloque.locator('[data-prueba="titular"]')).toHaveText('✓ Revolut dice que coincide')
-      await expect(bloque.locator('[data-prueba="pide-segunda"]')).toContainText('Hace falta una segunda aprobación (IBAN nuevo).')
+      await expect(page.locator('[data-prueba="ficha-recibida"]')).toBeVisible({ timeout: 30_000 })
+      await expect(page.locator('[data-prueba="pagar-con-banco"]')).toHaveCount(0)
+      await page.locator('[data-prueba="pagar-ficha"]').click({ timeout: 30_000 })
+      const panel = page.getByRole('dialog', { name: 'Pagar 1 factura' })
+      const fila = panel.locator('[data-prueba="fila-varias"]')
+      await expect(fila).toHaveAttribute('data-sale', 'si', { timeout: 30_000 })
+      await expect(fila).toContainText(`${beneficiario} · ${numero}`)
+      await expect(fila).toContainText('1.028,50 €')
+      await expect(fila).toContainText('IBAN ···1234 · nuevo')
+      await expect(fila).toContainText('✓ Revolut dice que coincide')
+      await expect(panel.locator('[data-prueba="sale-ahora"]')).toContainText('Sale ahora.')
+      await expect(panel.locator('[data-prueba="pide-segunda-varias"]')).toContainText('Hace falta una segunda aprobación (IBAN nuevo).')
       await capturar(page, 'q1-pagar-con-revolut')
 
       // 3 · Aprobar, la segunda con el PIN, y a Revolut.
-      await bloque.locator('[data-prueba="aprobar-y-pagar"]').click()
-      const segunda = page.getByRole('dialog', { name: 'Confirma con tu llave el pago que sale ahora' })
+      await panel.locator('[data-prueba="aprobar-y-pagar-varias"]').click()
+      const segunda = page.getByRole('dialog', { name: /^Confirma con tu llave / })
       await expect(segunda.locator('[data-prueba="lista-segunda"]')).toContainText(`${beneficiario} · ${numero} · IBAN ···1234 · IBAN nuevo · 1.028,50 €`)
       await capturar(page, 'q2-segunda-con-llave')
       await segunda.getByRole('button', { name: 'Usar mi PIN de pago' }).click()
-      const conPin = page.getByRole('dialog', { name: 'Confirma con tu PIN de pago el pago que sale ahora' })
+      const conPin = page.getByRole('dialog', { name: /^Confirma con tu PIN de pago / })
       await conPin.locator('[data-prueba="pin-pago"]').fill('000000')
       await conPin.locator('[data-prueba="confirmar-pin"]').click()
       await expect(conPin.getByRole('alert')).toContainText('Ese no es tu PIN de pago. Te quedan 4 intentos.')
@@ -156,9 +161,9 @@ test.describe('B01 Revolut · pagar una factura con Revolut', () => {
       await conPin.locator('[data-prueba="pin-pago"]').fill('407219')
       await conPin.locator('[data-prueba="confirmar-pin"]').click()
       await expect(page.getByRole('dialog')).toHaveCount(0)
-      await expect(bloque.getByRole('status').filter({ hasText: 'Enviado a Revolut: 1 pago. Te avisamos cuando lo confirme.' })).toBeVisible()
-      await expect(bloque.locator('[data-prueba="pago-estado"]')).toContainText('Enviado a Revolut. Te avisamos cuando lo confirme. · 1.028,50 €')
-      await expect(bloque.getByRole('button', { name: 'Pagar con Revolut' })).toHaveCount(0)
+      await expect(page.locator('[data-prueba="aviso-pagar-ficha"]')).toContainText('Enviado a Revolut: 1 pago. Te avisamos cuando lo confirme.')
+      // Con el pago en marcha, la columna solo dice en qué está.
+      await expect(page.locator('[data-prueba="pago-estado"]')).toContainText('Enviado a Revolut. Te avisamos cuando lo confirme. · 1.028,50 €', { timeout: 30_000 })
       await capturar(page, 'q4-enviado-a-revolut')
 
       // Lo que se mandó: una aprobación de esta factura desde la cuenta de Revolut, el PIN con la huella de la lista, y el envío del lote.

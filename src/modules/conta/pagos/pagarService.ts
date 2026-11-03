@@ -236,3 +236,12 @@ export const textoPagarVarias = (n: number, banco: string) => n === 1 ? `Pagar 1
 /** B01 · Cola 1e · La confirmación con contenido (regla 8): «Pagadas 3 facturas · 708,70 € desde Revolut · el cargo se casará solo.» */
 export const textoPagadas = (n: number, total: number, banco: string) =>
   `Pagadas ${n === 1 ? '1 factura' : `${n} facturas`} · ${eurosExactos(Math.round(total * 100) / 100)} desde ${banco} · el cargo se casará solo.`
+
+/** B01 · Cola 1e · Lo que dice el banco de cada pago, en palabras (la confirmación de Pagos, maqueta v2, pantalla 4). */
+export function queDiceElBanco(estado: string, banco: string): { texto: string; tono: 'seguro' | 'duda' | 'falta' } {
+  if (estado === 'pagada') return { texto: 'Salió', tono: 'seguro' }
+  if (estado === 'rechazada' || estado === 'devuelta' || estado === 'cancelada') return { texto: estado === 'devuelta' ? 'Devuelto' : 'No ha salido', tono: 'falta' }
+  if (estado === 'esperando_segunda' || estado === 'lista') return { texto: 'Esperando la segunda aprobación', tono: 'duda' }
+  return { texto: `Pendiente en ${banco}`, tono: 'duda' }
+}
+

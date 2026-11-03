@@ -4,11 +4,13 @@
 // (Julio, 02/11, B01·7 y B01·8). Lo hace Sumied cuando el banco confirma que
 // el pago ha salido (la API de Revolut no da comprobante de una transferencia).
 //
-//   · «Ver el justificante»: el PDF, por su enlace público (30 días).
-//   · «Mandar al proveedor»: por correo, solo si su ficha tiene marcada
-//     «Mandar el justificante al pagar»; si no, lo dice y lleva a marcarla.
+// Como la maqueta v2 (pantalla 5, «pagada, con su justificante»):
+//   · «Justificante de pago»: cuándo salió, desde dónde y el importe;
+//   · «Descargar el PDF», por su enlace público (30 días);
 //   · «Enviar por WhatsApp»: wa.me con su teléfono y el enlace. Sin teléfono,
-//     el botón lo dice y lleva a ponerlo en sus contactos.
+//     «Pon el teléfono de … para enviarlo por WhatsApp» lleva a sus contactos;
+//   · «Mandar al proveedor» (correo): solo sale si su ficha tiene marcada
+//     «Mandar el justificante al pagar»; si no, una línea lleva a marcarla.
 // Cada botón confirma o falla en pantalla (regla 8).
 
 import { useState } from 'react'
@@ -23,6 +25,12 @@ import { leerJustificantes, mandarJustificanteAlProveedor } from '@/modules/cont
 
 const URL_BASE = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
 const diaMes = (iso: string) => new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+/** «02/11 13:04», en la hora de Madrid. */
+function diaHora(iso: string): string {
+  const p = new Intl.DateTimeFormat('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(iso))
+  const v = (t: string) => p.find((x) => x.type === t)?.value ?? ''
+  return `${v('day').padStart(2, '0')}/${v('month').padStart(2, '0')} ${v('hour')}:${v('minute')}`
+}
 
 export function BloqueJustificantes({ facturaId, numero, empresa, quien }: { facturaId: string; numero: string | null; empresa: string; quien: string | null }) {
   const [vuelta, setVuelta] = useState(0)
@@ -45,35 +53,38 @@ export function BloqueJustificantes({ facturaId, numero, empresa, quien }: { fac
   }
 
   return (
-    <BloqueFicha titulo="Justificante del pago">
+    <BloqueFicha titulo="Justificante de pago">
       {js.map((j) => {
         const enlace = enlaceJustificante(URL_BASE, j.clave)
-        const wa = enlaceWhatsApp(j.telefono, textoWhatsApp({ empresa, numero, importe: j.importe, enlace }))
+        const wa = enlaceWhatsApp(j.telefono, textoWhatsApp({ empresa, numero, importe: j.importe, enlace, pagadoAt: j.pagadoAt }))
         const caducado = haCaducado(j.caduca)
         return (
           <div key={j.id} className="pg-justificante" data-prueba="justificante">
-            <p className="pg-justificante-que">
-              <strong>{eurosExactos(j.importe)}</strong> pagados a {j.proveedor} el {diaMes(j.pagadoAt)}, confirmado por el banco.
-              {' '}<span className="s-apoyo">{caducaEn(j.caduca)} (el PDF sigue aquí).</span>
-            </p>
-            {j.correoAt && <p className="s-apoyo" data-prueba="justificante-mandado">Mandado a {j.correoA} el {diaMes(j.correoAt)}.</p>}
-            {!j.correoAt && j.correoTexto && <p className="s-apoyo" data-prueba="justificante-sin-mandar">{j.correoTexto}</p>}
+            <dl className="pg-justificante-datos">
+              <div><dt>Salió</dt><dd>{diaHora(j.pagadoAt)}</dd></div>
+              <div><dt>Desde</dt><dd>{[j.banco ?? 'el banco', j.desdeIban4 ? `···${j.desdeIban4}` : null].filter(Boolean).join(' ')}</dd></div>
+              <div><dt>Importe</dt><dd className="s-cifra">{eurosExactos(j.importe)}</dd></div>
+            </dl>
             <div className="pg-justificante-botones">
-              {!caducado && <a className="cx-boton-sec" href={enlace} target="_blank" rel="noreferrer" data-prueba="justificante-ver">Ver el justificante</a>}
-              {j.alPagar
-                ? <Boton variante="secundario" onClick={() => void mandar(j.id)} disabled={mandando === j.id} data-prueba="justificante-correo">
-                    {mandando === j.id ? 'Mandando…' : j.correoAt ? 'Mandar otra vez al proveedor' : 'Mandar al proveedor'}
-                  </Boton>
-                : <Link className="cx-boton-sec" to={rutaFichaProveedor(j.supplierId, 'contabilidad')} data-prueba="justificante-correo-marcar"
-                    title="Su ficha no tiene marcada «Mandar el justificante al pagar»">Mandar al proveedor: márcalo en su ficha</Link>}
-              {caducado
-                ? <span className="s-apoyo">El enlace para WhatsApp ha caducado.</span>
-                : wa
-                  ? <a className="cx-boton-sec" href={wa} target="_blank" rel="noreferrer" data-prueba="justificante-whatsapp">Enviar por WhatsApp</a>
-                  : <Link className="cx-boton-sec" to={`${rutaFichaProveedor(j.supplierId, 'contactos')}?nuevo=1`} data-prueba="justificante-whatsapp-sin-telefono">
-                      Enviar por WhatsApp: falta su teléfono, ponlo
-                    </Link>}
+              {!caducado && <a className="s-boton s-boton-principal" href={enlace} target="_blank" rel="noreferrer" data-prueba="justificante-ver">Descargar el PDF</a>}
+              {!caducado && wa && <a className="s-boton s-boton-secundario" href={wa} target="_blank" rel="noreferrer" data-prueba="justificante-whatsapp">Enviar por WhatsApp</a>}
+              {j.alPagar && (
+                <Boton variante="secundario" onClick={() => void mandar(j.id)} disabled={mandando === j.id} data-prueba="justificante-correo">
+                  {mandando === j.id ? 'Mandando…' : j.correoAt ? 'Mandar otra vez al proveedor' : 'Mandar al proveedor'}
+                </Boton>
+              )}
             </div>
+            {!caducado && !wa && (
+              <Link className="pg-justificante-falta" to={`${rutaFichaProveedor(j.supplierId, 'contactos')}?nuevo=1`} data-prueba="justificante-whatsapp-sin-telefono">
+                Pon el teléfono de {j.proveedor} para enviarlo por WhatsApp
+              </Link>
+            )}
+            {j.correoAt && <p className="s-apoyo" data-prueba="justificante-mandado">Mandado por correo a {j.correoA} el {diaMes(j.correoAt)}.</p>}
+            {!j.correoAt && j.correoTexto && <p className="s-apoyo" data-prueba="justificante-sin-mandar">{j.correoTexto}</p>}
+            {!j.alPagar && (
+              <p className="s-apoyo">«Mandar al proveedor» no sale: su ficha no tiene marcado «Mandar el justificante al pagar». <Link to={rutaFichaProveedor(j.supplierId, 'contabilidad')} data-prueba="justificante-correo-marcar">Marcarlo</Link></p>
+            )}
+            <p className="s-apoyo">{caducado ? 'El enlace para WhatsApp ha caducado; el PDF sigue en Sumied.' : `${caducaEn(j.caduca)}.`}</p>
           </div>
         )
       })}

@@ -93,11 +93,13 @@ test.describe('B01 · el justificante de un pago', () => {
       })
 
       await page.goto(`/conta/documentos/recibidas/${x.factura}`)
-      const bloque = page.getByRole('region', { name: 'Justificante del pago' })
+      const bloque = page.getByRole('region', { name: 'Justificante de pago' })
       await expect(bloque).toBeVisible({ timeout: 30_000 })
       const js = bloque.locator('[data-prueba="justificante"]')
       await expect(js).toHaveCount(3)
-      await expect(js.nth(0)).toContainText(`363,00 € pagados a ${nombre}`)
+      // Como la maqueta (pantalla 5): cuándo salió, desde dónde y el importe.
+      await expect(js.nth(0).locator('dl')).toContainText('Salió')
+      await expect(js.nth(0).locator('dl')).toContainText('363,00 €')
       await expect(js.nth(0)).toContainText('El enlace caduca en 27 días')
 
       // Con teléfono: «Ver» va al enlace público y WhatsApp a wa.me con su número, el enlace y la factura.
@@ -111,16 +113,19 @@ test.describe('B01 · el justificante de un pago', () => {
 
       // Sin teléfono: lo dice y lleva a sus contactos. Sin la casilla: lleva a su ficha a marcarla.
       const sinTel = js.nth(1).locator('[data-prueba="justificante-whatsapp-sin-telefono"]')
-      await expect(sinTel).toHaveText('Enviar por WhatsApp: falta su teléfono, ponlo')
-      await expect(sinTel).toHaveAttribute('href', new RegExp(`/proveedor/${x.proveedor}/contactos\\?nuevo=1$`))
+      await expect(sinTel).toHaveText(`Pon el teléfono de ${nombre} para enviarlo por WhatsApp`)
+      await expect(js.nth(1).locator('[data-prueba="justificante-whatsapp"]')).toHaveCount(0)
+      await expect(sinTel).toHaveAttribute('href', new RegExp(`/proveedor(es)?/${x.proveedor}/contactos\\?nuevo=1$`))
       const marcar = js.nth(1).locator('[data-prueba="justificante-correo-marcar"]')
-      await expect(marcar).toHaveText('Mandar al proveedor: márcalo en su ficha')
-      await expect(marcar).toHaveAttribute('href', new RegExp(`/proveedor/${x.proveedor}/contabilidad$`))
+      await expect(marcar).toHaveText('Marcarlo')
+      await expect(js.nth(1).locator('[data-prueba="justificante-correo"]')).toHaveCount(0)
+      await expect(js.nth(0).locator('[data-prueba="justificante-correo"]')).toHaveText('Mandar al proveedor')
+      await expect(marcar).toHaveAttribute('href', new RegExp(`/proveedor(es)?/${x.proveedor}/contabilidad$`))
 
       // El caducado: sin «Ver» ni WhatsApp, y lo dice.
-      await expect(js.nth(2)).toContainText('El enlace ha caducado')
       await expect(js.nth(2).locator('[data-prueba="justificante-ver"]')).toHaveCount(0)
-      await expect(js.nth(2)).toContainText('El enlace para WhatsApp ha caducado.')
+      await expect(js.nth(2)).toContainText('El enlace para WhatsApp ha caducado; el PDF sigue en Sumied.')
+      await expect(js.nth(2).locator('[data-prueba="justificante-whatsapp"]')).toHaveCount(0)
       await capturar(page, 'b01-justificante-ficha')
 
       // Con la casilla: «Mandar al proveedor» dice qué ha pasado (cerrado, hoy).
@@ -140,8 +145,10 @@ test.describe('B01 · el justificante de un pago', () => {
     for (const c of ['e2eNoEsDeNadieAAAAAAAAAAAAAAAAAAAAAAAAAAAA0', 'corta', "'; select 1 --"]) {
       const r = await page.goto(`${STAGING_URL}/functions/v1/conta-justificante?c=${encodeURIComponent(c)}`)
       expect(r?.status(), `la clave «${c}»`).toBe(404)
-      await expect(page.getByRole('heading', { level: 1 })).toHaveText('Este enlace no vale')
-      await expect(page.locator('main')).toContainText('No es el enlace de ningún justificante. Pídelo a quien te pagó.')
+      // En texto plano: Supabase no deja servir HTML desde una función (e2e 41586077241).
+      expect(r?.headers()['content-type'], `la clave «${c}»`).toMatch(/^text\/plain/)
+      const cuerpo = (await r!.text()).trim()
+      expect(cuerpo).toBe('Este enlace no vale\n\nNo es el enlace de ningún justificante. Pídelo a quien te pagó.')
     }
   })
 })

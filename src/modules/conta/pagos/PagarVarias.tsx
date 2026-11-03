@@ -23,7 +23,8 @@ import {
 } from '@/modules/conta/pagos/pagarService'
 import { SegundaAprobacion } from '@/modules/conta/pagos/PagarConRevolut'
 
-type Aviso = { tono: 'ok' | 'duda' | 'falta'; texto: string }
+/** Lo que dice al cerrar; con «lote», Pagos enseña cómo va cada pago (maqueta v2, pantalla 4). */
+type Aviso = { tono: 'ok' | 'duda' | 'falta'; texto: string; lote?: string }
 const ETIQUETA_IBAN: Record<string, string> = { comprobado: '✓ comprobado', primer_pago: 'nuevo', cambiado: 'cambiado' }
 
 export function DialogoPagarVarias({ empresaId, cuenta, facturas, alCerrar }: {
@@ -77,7 +78,7 @@ export function DialogoPagarVarias({ empresaId, cuenta, facturas, alCerrar }: {
       if (r.estado === 'listo') {
         const m = await mandar(empresaId, r.lote)
         // Regla 8: lo que ha pasado, con su contenido.
-        alCerrar({ tono: m.ok ? 'ok' : 'falta', texto: m.ok
+        alCerrar({ tono: m.ok ? 'ok' : 'falta', lote: r.lote, texto: m.ok
           ? `${textoPagadas(salen.length, total, cuenta.banco)} ${m.texto}`
           : `${r.frase} ${m.texto}` })
       } else if (r.segunda?.quien === 'otra') {
@@ -89,43 +90,33 @@ export function DialogoPagarVarias({ empresaId, cuenta, facturas, alCerrar }: {
     setHaciendo(false)
   }
 
-  if (lote) return <SegundaAprobacion empresaId={empresaId} lote={lote} alCerrar={(a) => alCerrar(a)} />
+  if (lote) return <SegundaAprobacion empresaId={empresaId} lote={lote} alCerrar={(a) => alCerrar(a ? { ...a, lote } : null)} />
   const n = salen.length
   return (
     <Dialogo lateral titulo={facturas.length === 1 ? 'Pagar 1 factura' : `Pagar ${facturas.length} facturas`} alCerrar={() => alCerrar(null)}
-      explicacion={`Una transferencia por factura, desde ${cuenta.banco}. Cada IBAN se comprueba con ${cuenta.banco} antes de aprobar.`}
       acciones={<>
         <Boton onClick={() => alCerrar(null)}>Cancelar</Boton>
         <Boton variante="principal" disabled={haciendo || comprobando > 0 || n === 0 || noLlega} onClick={() => void aprobarYPagar()} data-prueba="aprobar-y-pagar-varias">
           {haciendo ? 'Aprobando…' : comprobando > 0 ? `Comprobando ${comprobando}…` : `Aprobar y pagar · ${eurosExactos(total)}`}
         </Boton>
       </>}>
-      <div className="pg-panel-desde" data-prueba="panel-desde">
-        <span className="s-apoyo">Desde</span>
-        <strong>{cuenta.nombre}{cuenta.iban4 ? ` ···${cuenta.iban4}` : ''}</strong>
-        {saldo !== null
-          ? <span className="s-cifra" data-prueba="saldo-antes-despues">{eurosExactos(saldo)} → <strong>{eurosExactos(Math.round((saldo - total) * 100) / 100)}</strong></span>
-          : <span className="s-apoyo">sin saldo leído todavía</span>}
-        {cuenta.saldoLeido && <span className="s-apoyo">saldo de las {new Date(cuenta.saldoLeido).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}</span>}
-      </div>
-      <p className="s-apoyo" data-prueba="sale-ahora"><strong>Sale ahora.</strong> {cuenta.banco} paga al momento.</p>
-      {noLlega && (
-        <p className="s-aviso-lista" data-tono="falta" role="alert" data-prueba="no-llega">{`En ${cuenta.banco} hay ${eurosExactos(saldo!)}; hacen falta ${eurosExactos(total)}.`} Pasa dinero a {cuenta.banco} o quita facturas.</p>
-      )}
-      <ul className="s-lista" data-prueba="lista-varias">
+      {/* Maqueta v2, pantalla 2: las facturas (una transferencia por factura), desde, cuándo, lo que comprueba Sumied. */}
+      <ul className="pg-panel-facturas" data-prueba="lista-varias">
         {filas.map((f) => {
           const p = f.preparado
           const tt = f.titularError ? { tono: 'duda' as const, texto: f.titularError } : textoTitular(f.titular, p?.beneficiario ?? f.proveedor, cuenta.banco)
           const sale = salen.includes(f)
           const porQueNo = fuera.find((x) => x.fila === f)?.porque
           return (
-            <li key={f.facturaId} data-prueba="fila-varias" data-sale={sale ? 'si' : porQueNo ? 'no' : 'comprobando'}>
-              {/* Cada parte en su bloque: el aviso no puede quedar encima de la casilla (e2e 41357286790, en el ordenador). */}
-              <div>
-                <strong>{p?.beneficiario ?? f.proveedor}</strong> · {f.numero ?? 'sin número'}{p?.sePuede ? <> · IBAN ···{p.iban4} · {ETIQUETA_IBAN[p.ibanCheck ?? ''] ?? p.ibanCheck} · <strong>{eurosExactos(p.importe)}</strong></> : null}
-                {p?.sePuede && <span className="s-apoyo"> · {tt.texto}</span>}
-                {p?.sePuede && p.motivosTexto.length > 0 && <span className="s-apoyo"> · pide segunda: {p.motivosTexto.join(', ')}</span>}
-                {!p && !f.error && <span className="s-apoyo"> · comprobando…</span>}
+            <li key={f.facturaId} className="pg-panel-factura" data-prueba="fila-varias" data-sale={sale ? 'si' : porQueNo ? 'no' : 'comprobando'}>
+              <div className="pg-panel-par">
+                <span className="pg-panel-quien">{p?.beneficiario ?? f.proveedor} · {f.numero ?? 'sin número'}</span>
+                <span className="s-cifra">{p?.sePuede ? eurosExactos(p.importe) : '—'}</span>
+              </div>
+              <div className="pg-panel-detalle">
+                {p?.sePuede && <>IBAN ···{p.iban4} · {ETIQUETA_IBAN[p.ibanCheck ?? ''] ?? p.ibanCheck} · {tt.texto}</>}
+                {p?.sePuede && p.motivosTexto.length > 0 && <> · pide segunda: {p.motivosTexto.join(', ')}</>}
+                {!p && !f.error && 'comprobando…'}
               </div>
               {porQueNo && <p className="s-aviso-lista" data-tono="duda" role="status">No sale: {porQueNo}</p>}
               {f.titular?.resultado === 'no_coincide' && (
@@ -137,12 +128,35 @@ export function DialogoPagarVarias({ empresaId, cuenta, facturas, alCerrar }: {
             </li>
           )
         })}
+        {comprobando === 0 && n > 0 && (
+          <li className="pg-panel-par pg-panel-total"><strong>{n === 1 ? '1 transferencia' : `${n} transferencias, una por factura`}</strong><strong className="s-cifra">{eurosExactos(total)}</strong></li>
+        )}
       </ul>
+      <div className="pg-panel-desde" data-prueba="panel-desde">
+        <span className="s-apoyo">Desde</span>
+        <div className="pg-panel-par">
+          <span><strong>{cuenta.nombre}</strong>{cuenta.iban4 ? <span className="s-apoyo"> ···{cuenta.iban4}</span> : null}</span>
+          {saldo !== null
+            ? <span className="s-cifra" data-prueba="saldo-antes-despues">{eurosExactos(saldo)} → <strong>{eurosExactos(Math.round((saldo - total) * 100) / 100)}</strong></span>
+            : <span className="s-apoyo">sin saldo leído todavía</span>}
+        </div>
+        {cuenta.saldoLeido && <span className="s-apoyo">Saldo de las {new Date(cuenta.saldoLeido).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}</span>}
+      </div>
+      <div className="pg-panel-cuando">
+        <div className="pg-panel-par"><span className="s-apoyo">Cuándo</span><strong>Sale ahora</strong></div>
+        <p className="s-apoyo" data-prueba="sale-ahora"><strong>Sale ahora.</strong> {cuenta.banco} paga al momento.</p>
+      </div>
+      {noLlega && (
+        <p className="s-aviso-lista" data-tono="falta" role="alert" data-prueba="no-llega">{`En ${cuenta.banco} hay ${eurosExactos(saldo!)}; hacen falta ${eurosExactos(total)}.`} Pasa dinero a {cuenta.banco} o quita facturas.</p>
+      )}
       {comprobando === 0 && n > 0 && (
-        <ul className="pg-panel-comprueba" data-prueba="lo-que-comprueba">
-          <li data-bien={titularBien === n ? 'si' : 'no'}>Titular: {cuenta.banco} dice que coincide en {titularBien} de {n}.</li>
-          {motivos.length > 0 ? <li data-bien="no">Pide segunda aprobación: {motivos.join(', ')}.</li> : <li data-bien="si">Sin segunda aprobación: los topes y los IBAN, bien.</li>}
-        </ul>
+        <div className="pg-panel-comprueba-caja">
+          <span className="s-apoyo">Lo que comprueba Sumied</span>
+          <ul className="pg-panel-comprueba" data-prueba="lo-que-comprueba">
+            <li data-bien={titularBien === n ? 'si' : 'no'}>Titular: {cuenta.banco} dice que coincide en {titularBien} de {n}.</li>
+            {motivos.length > 0 ? <li data-bien="no">Pide segunda aprobación: {motivos.join(', ')}.</li> : <li data-bien="si">Sin segunda aprobación: los topes y los IBAN, bien.</li>}
+          </ul>
+        </div>
       )}
       {comprobando === 0 && (
         <p className="s-apoyo" role="status" data-prueba="resumen-varias">
