@@ -142,3 +142,16 @@
   .s-persona-pestanas { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: var(--s-3); }
   .s-persona-pestanas::-webkit-scrollbar { display: none; }
 }
+.s-persona-titulo-acciones { display: flex; gap: var(--s-2); margin-left: auto; }
+.s-persona-titulo-acciones:empty { display: none; }
+.s-tiempo-v { white-space: nowrap; }
+@media (max-width: 60rem) {
+  .s-persona .s-tarjeta-cabeza { flex-wrap: wrap; }
+  .s-persona .s-persona-dato, .s-persona .s-persona-datos-anchos .s-persona-dato { grid-template-columns: minmax(6.5rem, 2fr) minmax(0, 3fr); }
+  .s-persona .s-tiempo-registros td, .s-persona .s-tiempo-registros th { white-space: normal; }
+  .s-persona .s-tiempo-registros td:nth-child(2) { white-space: nowrap; }
+  .s-tiempo-v { font-size: var(--s-t-xl); }
+}
+@media (max-width: 60rem) {
+  .s-persona .s-tiempo-registros .s-chip { white-space: normal; }
+}

@@ -8,6 +8,7 @@
 // inventado.
 
 import { useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useApp } from '@/context/AppContext'
 import { Boton, BotonEnlace, Chip, Tarjeta } from '@/modules/conta/diseno'
@@ -20,14 +21,15 @@ import { getSchedule, listShiftTemplatesByIds } from '@/services/schedulerServic
 import { getEffectiveCloseDay, getEmployeeBalanceState, type EmployeeBalanceStateExtended } from '@/services/hoursBalanceService'
 import type { Ficha } from '../fichaService'
 import {
-  avisoSinSalida, filasDeLaSemana, lunesConDesplazamiento, mesConAnio, minutosPorMes, resumenDelMes, textoBolsa, textoSemana,
+  avisoSinSalida, diasSinSalida, filasDeLaSemana, lunesConDesplazamiento, mesConAnio, minutosPorMes, resumenDelMes, textoBolsa, textoSemana,
   turnosDeLaSemana, ultimosMeses, type TurnoDelDia,
 } from './tiempoTextos'
 
 const aMarcas = (d: DatosInforme | null): MarcaJornada[] =>
   (d?.marcas ?? []).map((m) => ({ id: m.id, tipo: m.tipo, hora: m.hora, anulada: m.anulada }))
 
-export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
+/** `hueco`: la fila del título de la ficha, donde va el botón del PDF (maqueta 10). */
+export default function TiempoPestana({ ficha, hueco }: { ficha: Ficha; hueco?: HTMLElement | null }) {
   const p = ficha.persona
   const { staff, locations, activeAccountId } = useApp()
   const ahora = useMemo(() => new Date(), [])
@@ -86,7 +88,9 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
   const mes = resumenDelMes(marcas, hoy, ahora)
   const filas = filasDeLaSemana(lunes, marcas, turnos ?? null, ahora)
   const porMes = minutosPorMes(marcas, meses, ahora)
-  const ultimoSinSalida = mes.sinSalida[mes.sinSalida.length - 1]
+  // Por corregir: este mes y el anterior (la maqueta 10, el 1 de noviembre, avisa del jueves 29 de octubre).
+  const porCorregir = diasSinSalida(marcas, `${meses[1]}-01`, hoy, ahora)
+  const ultimoSinSalida = porCorregir[porCorregir.length - 1]
   const turnosDelSinSalida = ultimoSinSalida && turnos ? turnos[ultimoSinSalida] : null
   const mesAnterior = meses[1]
   const firmaDe = (m: string) => firmas?.find((f) => f.mes.slice(0, 7) === m && !f.invalidadaAt)
@@ -110,16 +114,20 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
     return <Chip tono="duda">Sin firmar</Chip>
   }
 
+  const boton = (
+      <div className="s-tiempo-acciones">
+          <Boton variante="secundario" onClick={() => void pdf()} disabled={!informe || descargando} data-prueba="tiempo-pdf">
+            {descargando ? 'Preparando…' : 'Descargar su registro de jornada (PDF)'}</Boton>
+        </div>
+  )
+
   if (errorInforme) {
     return <Tarjeta titulo="No se ha podido leer su tiempo" tono="falta"><p className="s-apoyo" role="alert">{errorInforme}</p></Tarjeta>
   }
 
   return (
     <div className="s-tiempo" data-prueba="ficha-tiempo">
-      <div className="s-tiempo-acciones">
-        <Boton variante="secundario" onClick={() => void pdf()} disabled={!informe || descargando} data-prueba="tiempo-pdf">
-          {descargando ? 'Preparando…' : 'Descargar su registro de jornada (PDF)'}</Boton>
-      </div>
+      {hueco ? createPortal(boton, hueco) : boton}
 
       {ultimoSinSalida && (
         <div className="s-aviso-lista s-tiempo-aviso" data-tono="duda" data-prueba="tiempo-aviso">
@@ -143,10 +151,10 @@ export default function TiempoPestana({ ficha }: { ficha: Ficha }) {
             ? <><span className="s-tiempo-v s-persona-falta">Falta</span><span className="s-tiempo-s">{!local ? 'no tiene local' : 'no se ha podido calcular'}</span></>
             : <span className="s-tiempo-v">…</span>}
         </section>
-        <section className="s-tarjeta s-tiempo-cifra" data-tono={mes.sinSalida.length > 0 ? 'duda' : undefined} data-prueba="tiempo-corregir">
+        <section className="s-tarjeta s-tiempo-cifra" data-tono={porCorregir.length > 0 ? 'duda' : undefined} data-prueba="tiempo-corregir">
           <span className="s-tiempo-e">Fichajes por corregir</span>
-          <span className="s-tiempo-v">{informe ? mes.sinSalida.length : '…'}</span>
-          <span className="s-tiempo-s">{mes.sinSalida.length === 0 ? 'ninguno este mes' : mes.sinSalida.length === 1 ? 'sin salida' : 'días sin salida'}</span>
+          <span className="s-tiempo-v">{informe ? porCorregir.length : '…'}</span>
+          <span className="s-tiempo-s">{porCorregir.length === 0 ? 'ninguno este mes ni el anterior' : `${porCorregir.length === 1 ? 'sin salida' : 'días sin salida'} · ${porCorregir.map((d) => d.slice(8, 10).replace(/^0/, '')).join(', ')}`}</span>
         </section>
         <section className="s-tarjeta s-tiempo-cifra" data-prueba="tiempo-firma">
           <span className="s-tiempo-e">Registro de {mesConAnio(mesAnterior).split(' ')[0].toLowerCase()}</span>

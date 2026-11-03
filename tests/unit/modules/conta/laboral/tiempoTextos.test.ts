@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  avisoSinSalida, diasDeLaSemana, filasDeLaSemana, lunesConDesplazamiento, mesConAnio, minutosPorMes, resumenDelMes,
+  avisoSinSalida, diasDeLaSemana, diasSinSalida, filasDeLaSemana, lunesConDesplazamiento, mesConAnio, minutosPorMes, resumenDelMes,
   textoBolsa, textoSemana, turnosDeLaSemana, ultimosMeses,
 } from '../../../../../src/modules/conta/laboral/ficha/tiempo/tiempoTextos'
 import type { Schedule, ShiftTemplate } from '../../../../../src/types/scheduler'
@@ -69,6 +69,10 @@ describe('el mes y los registros', () => {
     const r = resumenDelMes(MARCAS, '2026-10-31', new Date('2026-10-31T22:00:00Z'))
     expect(r.minutosTrabajados).toBe(8 * 60 + 6 + 7 * 60 + 58 + 8 * 60 + 17)
     expect(r.sinSalida).toEqual(['2026-10-29'])
+  })
+  it('por corregir: este mes y el anterior (el 1 de noviembre avisa del 29 de octubre, como la maqueta)', () => {
+    expect(diasSinSalida(MARCAS, '2026-10-01', '2026-11-01', AHORA)).toEqual(['2026-10-29'])
+    expect(diasSinSalida(MARCAS, '2026-11-01', '2026-11-01', AHORA)).toEqual([])
   })
   it('los tres últimos meses y sus horas', () => {
     expect(ultimosMeses('2026-11-02', 3)).toEqual(['2026-11', '2026-10', '2026-09'])

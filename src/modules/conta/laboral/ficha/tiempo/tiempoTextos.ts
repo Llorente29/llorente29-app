@@ -99,6 +99,11 @@ export function resumenDelMes(marcas: MarcaJornada[], hoy: string, ahora: Date):
   }
 }
 
+/** Los días entre `desde` y `hasta` con una entrada que no tendrá salida, del más antiguo al más reciente. */
+export function diasSinSalida(marcas: MarcaJornada[], desde: string, hasta: string, ahora: Date): string[] {
+  return jornadasPorDia(marcas, desde, hasta, ahora).filter((d) => d.tramos.some((t) => t.estado === 'sin_salida')).map((d) => d.dia)
+}
+
 /** Minutos trabajados de cada mes (AAAA-MM) de los que se piden. */
 export function minutosPorMes(marcas: MarcaJornada[], meses: string[], ahora: Date): Record<string, number> {
   const hoy = diaMadrid(ahora.toISOString())

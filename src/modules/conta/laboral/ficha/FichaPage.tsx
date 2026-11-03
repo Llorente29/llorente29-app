@@ -65,6 +65,8 @@ export default function FichaPage() {
   const [ficha, setFicha] = useState<Ficha | null>(null)
   const [error, setError] = useState('')
   const [docs, setDocs] = useState<DocumentFile[] | null>(null)
+  // La fila del título de cada pestaña, para los botones que la pestaña pone ahí.
+  const [huecoTitulo, setHuecoTitulo] = useState<HTMLDivElement | null>(null)
   const [hecho, setHecho] = useState<{ tono: 'seguro' | 'falta'; texto: string } | null>(null)
 
   // Cada recarga sube la vuelta; el efecto lee la ficha al cambiar la persona o la vuelta.
@@ -104,7 +106,8 @@ export default function FichaPage() {
           {pestana === 'resumen'
             ? <Cabecera ficha={ficha} cuenta={activeAccountId} alCambiar={recargar} irA={irA} setHecho={setHecho} />
             : <div className="s-persona-titulo-fila"><h1 className="s-persona-h1">{TITULO[pestana]}</h1>
-                {pestana === 'contrato' && <Boton variante="principal" onClick={() => document.getElementById('ficha-convenio')?.scrollIntoView({ behavior: 'smooth' })}>Cambiar algo del contrato</Boton>}</div>}
+                {pestana === 'contrato' && <Boton variante="principal" onClick={() => document.getElementById('ficha-convenio')?.scrollIntoView({ behavior: 'smooth' })}>Cambiar algo del contrato</Boton>}
+                <div ref={setHuecoTitulo} className="s-persona-titulo-acciones" /></div>}
 
           {hecho && <p className="s-aviso-lista" data-tono={hecho.tono} role={hecho.tono === 'seguro' ? 'status' : 'alert'} data-prueba="ficha-hecho">{hecho.texto}</p>}
 
@@ -119,7 +122,7 @@ export default function FichaPage() {
           {pestana === 'resumen' && <Resumen ficha={ficha} docs={docs} irA={irA} />}
           {pestana === 'contrato' && <ContratoYSalario ficha={ficha} alCambiar={recargar} setHecho={setHecho} />}
           {pestana === 'irpf' && <Irpf ficha={ficha} />}
-          {pestana === 'tiempo' && <TiempoPestana ficha={ficha} />}
+          {pestana === 'tiempo' && <TiempoPestana ficha={ficha} hueco={huecoTitulo} />}
         </>
       )}
     </div>
