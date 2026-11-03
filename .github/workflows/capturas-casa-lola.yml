@@ -1,0 +1,78 @@
+# .github/workflows/capturas-casa-lola.yml
+#
+# DM1·8 (03/11) · Las capturas de Casa Lola para la guía de la gestoría, en
+# producción (https://app.sumied.com), con el usuario que Julio creó solo para
+# esto: invitado a Casa Lola con «Todo», y que solo se usa para leer.
+#
+#   · Solo a mano y solo desde main: el usuario y su contraseña son los secretos
+#     CAPTURAS_CASA_LOLA_CORREO y CAPTURAS_CASA_LOLA_CLAVE, y nunca se imprimen.
+#   · scripts/capturas/casa-lola.mjs: entra, abre Inicio, Compras, Bancos,
+#     Impuestos y Pagos a 1440 px y guarda la página entera. Para sin guardar
+#     nada si ve otra empresa, Llorente29, Foodint o la banda de pruebas; tapa
+#     los correos.
+#   · Publica en el artefacto del run y en la rama capturas/casa-lola (un solo
+#     commit, sin historia, que se reescribe en cada run): ahí las ve la sesión
+#     principal. Vercel no la despliega (scripts/vercel/saltar-build.mjs se salta
+#     capturas/*).
+name: Capturas de Casa Lola (producción)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: capturas-casa-lola
+  cancel-in-progress: false
+
+jobs:
+  capturas:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias y el navegador
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Las cinco pantallas
+        env:
+          CAPTURAS_CORREO: ${{ secrets.CAPTURAS_CASA_LOLA_CORREO }}
+          CAPTURAS_CLAVE: ${{ secrets.CAPTURAS_CASA_LOLA_CLAVE }}
+          CAPTURAS_DIR: capturas/casa-lola
+        run: node scripts/capturas/casa-lola.mjs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: capturas-casa-lola
+          path: capturas/casa-lola
+          retention-days: 30
+
+      - name: Publicarlas en capturas/casa-lola
+        run: |
+          set -euo pipefail
+          tmp="$RUNNER_TEMP/publicar"; mkdir -p "$tmp"; cp -r capturas "$tmp/"
+          cd "$tmp"
+          git init -q -b capturas/casa-lola
+          git config user.name "folvy-e2e"; git config user.email "e2e@folvy.invalid"
+          git add capturas
+          git commit -q -m "Capturas de Casa Lola para la guía de la gestoría (run ${GITHUB_RUN_ID})"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/capturas/casa-lola
+          {
+            echo "## Capturas de Casa Lola"
+            echo
+            echo "En la rama \`capturas/casa-lola\` y en el artefacto «capturas-casa-lola» de este run:"
+            for f in capturas/casa-lola/*.png; do echo "- https://github.com/${GITHUB_REPOSITORY}/blob/capturas/casa-lola/$f"; done
+          } >> "$GITHUB_STEP_SUMMARY"
