@@ -1,0 +1,2 @@
+# A01 · techo · vuelta atrás: _aviso_poner_en_cola como la dejó el #450.
+supabase/vuelta-atras/20261103T0012_a01_techo_un_solo_aviso.down.sql

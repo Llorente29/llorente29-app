@@ -1,0 +1,5 @@
+# A01 · techo · La 0012 y su prueba (ROLLBACK): con la de antes, el techo lleno
+# no toma candado (rojo a propósito); un aviso normal no lo toma; con el techo
+# lleno lo toma, sale un solo aviso de techo y el crítico pasa; y la vuelta atrás.
+supabase/migrations/20261103T0012_a01_techo_un_solo_aviso.sql
+supabase/staging/sql/20261103_a01_techo_un_solo_aviso_prueba.sql
