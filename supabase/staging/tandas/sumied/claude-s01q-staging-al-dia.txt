@@ -6,10 +6,11 @@
 # de noche). Ninguna migración posterior cambia sus funciones. No hay tanda de
 # producción: producción ya las tiene. Su prueba compara la huella de cada
 # función con la de producción (medida el 03/11) y mira sus disparadores y su
-# cron: staging igual que producción.
-supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
-supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
-supabase/migrations/20261028T0905_s01_propuestas_socio.sql
-supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
-supabase/migrations/20261028T1025_s01_pasada_de_noche.sql
+# cron: staging igual que producción. Van con «otra vez:» (F01): sus líneas ya
+# están en el manifiesto de la S01 y, si no, no contarían como nuevas.
+otra vez: supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
+otra vez: supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
+otra vez: supabase/migrations/20261028T0905_s01_propuestas_socio.sql
+otra vez: supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
+otra vez: supabase/migrations/20261028T1025_s01_pasada_de_noche.sql
 supabase/staging/sql/20261103_s01q_staging_al_dia_prueba.sql
