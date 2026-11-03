@@ -40532,7 +40532,7 @@ begin
        and not exists (select 1 from liq_sel l where l.rol is not distinct from e.rol and l.local_id is not distinct from e.local_id
                          and l.marca_id is not distinct from e.marca_id and l.d1 <= e.d2 and l.d2 >= e.d1)
   ),
-  filas as (
+  filas as materialized (
     select g.*, r.party_id, r.channel_id, r.nombre, r.dias, r.margen, r.cada,
            coalesce(ch.name, r.nombre, 'Intermediario') as canal, l.name as local, l.active as local_abierto, br.name as marca,
            -- Lo vendido: los pedidos cerrados de su canal, su local y su marca (la
@@ -40741,7 +40741,7 @@ begin
       t.x->>'canal_id' is not null and (t.x->>'local_id' is null
         or exists (select 1 from jsonb_array_elements(t.tiendas) ti where ti->>'local_id' is null)) as sin_local
       from t
-  ), g as (
+  ), g as materialized (
     select t.*,
       case when t.glovo then (
         select coalesce(round(sum(sl.quantity * sl.unit_price), 2), 0)
@@ -40764,7 +40764,7 @@ begin
                 and abs(round(((g.x->'piezas'->'cobro'->>'esperado')::numeric - (g.x->'piezas'->'cobro'->>'llegado')::numeric) * 100)) > g.tol
            then round((g.x->'piezas'->'cobro'->>'esperado')::numeric - (g.x->'piezas'->'cobro'->>'llegado')::numeric, 2) end as dif_c
       from g
-  ), k as (
+  ), k as materialized (
     -- El estado del motor, y en Glovo el mismo orden con lo vendido por productos.
     select h.*,
       case
