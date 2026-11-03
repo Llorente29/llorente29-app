@@ -54,14 +54,14 @@ if ELEVEN:
         if i + 1 < len(frases) and frases[i + 1]["id"] not in ("cierre",):
             cuerpo["next_text"] = frases[i + 1]["texto"]
         try:
-            pcm = pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=pcm_44100", cuerpo, {"xi-api-key": ELEVEN})
+            pcm = pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=pcm_24000", cuerpo, {"xi-api-key": ELEVEN})
         except urllib.error.HTTPError as e:
             if "language_code" in cuerpo and e.code in (400, 422):
                 cuerpo.pop("language_code")
-                pcm = pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=pcm_44100", cuerpo, {"xi-api-key": ELEVEN})
+                pcm = pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=pcm_24000", cuerpo, {"xi-api-key": ELEVEN})
             else:
                 sys.exit(f"ElevenLabs: HTTP {e.code} {e.read()[:300]!r}")
-        wav_pcm(f["salida"], pcm, 44100)
+        wav_pcm(f["salida"], pcm, 24000)
 elif GOOGLE:
     nombre = os.environ.get("VOZ_GOOGLE_NOMBRE", "").strip() or "es-ES-Chirp3-HD-Charon"
     print(f"Voz: Google · {nombre}")
