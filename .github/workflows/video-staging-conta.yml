@@ -87,6 +87,20 @@ jobs:
       - name: Dependencias
         run: npm ci
 
+      # Las pantallas que se graban: las de esta rama, o las de la rama que diga
+      # scripts/video/rama-app.txt (solo su src: la que aún no está en main y ya
+      # está en staging, como el Pagar nuevo del B01·12). Sin ese fichero, las de aquí.
+      - name: Las pantallas de la rama que se graba
+        run: |
+          set -euo pipefail
+          R=$(grep -v '^\s*#' scripts/video/rama-app.txt 2>/dev/null | head -1 | tr -d '[:space:]' || true)
+          if [ -z "$R" ]; then echo "Pantallas de esta rama."; exit 0; fi
+          [[ "$R" =~ ^[A-Za-z0-9._/-]+$ ]] || { echo "::error::rama-app.txt: «$R» no es un nombre de rama."; exit 1; }
+          git fetch -q --depth=1 origin "$R"
+          git checkout FETCH_HEAD -- src
+          echo "### Pantallas de \`$R\` ($(git rev-parse --short FETCH_HEAD))" >> "$GITHUB_STEP_SUMMARY"
+          echo "Pantallas de $R ($(git rev-parse --short FETCH_HEAD))."
+
       - name: Build contra staging-conta
         run: npm run build
 

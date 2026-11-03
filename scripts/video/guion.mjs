@@ -138,9 +138,11 @@ async function interceptarPago(page, m) {
     desde: { nombre: 'Revolut Business', iban4: '4781', banco: 'Revolut' }, motivos: ['iban_nuevo'], motivos_texto: ['IBAN nuevo'],
     puedo_dar: true, no_puedo_porque: null, segunda: null, total: m.total,
     pagos: m.facturas.map((f, i) => ({ id: `s-${i}`, factura: f.id, concepto: f.numero, beneficiario: f.proveedor, iban4: f.iban.slice(-4),
-      iban_check: f.ibanNuevo ? 'primer_pago' : 'comprobado', importe: f.total, estado: m.enviado ? 'enviado' : 'esperando_segunda',
+      iban_check: f.ibanNuevo ? 'primer_pago' : 'comprobado', importe: f.total, estado: m.enviado ? 'pagada' : 'esperando_segunda',
       motivos_texto: f.ibanNuevo ? ['IBAN nuevo'] : [] })),
     historial: [] }))
+  // B01 · Cola 1e · El justificante de cada pago (ResultadoPago lo lee de conta_pago_justificante).
+  await page.route(/\/rest\/v1\/conta_pago_justificante\?/, (r) => json(r, m.enviado ? m.facturas.map((_, i) => ({ salida_id: `s-${i}`, clave: `video-v01-${i}` })) : []))
   await page.route('**/functions/v1/conta-pagar', async (r) => {
     const b = JSON.parse(r.request().postData() ?? '{}')
     if (b.accion === 'titular') { await new Promise((ok) => setTimeout(ok, 500)); return json(r, { ok: true, titular: { resultado: 'coincide' } }) }
@@ -271,65 +273,60 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
     })
     await foto('2-contabilizada')
 
-    // Paso 3 · Pagos: lo que vence esta semana, y marcar las tres.
+    // Paso 3 · Pagos (B01·12, el panel): «Pagar lo de esta semana» marca lo que toca y abre el panel.
     R.marca(3)
     const menuPagos = page.getByRole('link', { name: 'Pagos', exact: true }).first()
     if (await menuPagos.isVisible().catch(() => false)) await ra.clic(menuPagos, 1000)
     else await page.goto(`${APP}/conta/compras/pagos`)
+    const loDeEstaSemana = page.locator('[data-prueba="pagar-lo-de-esta-semana"]')
     await R.sinVer(async () => {
       await page.getByRole('heading', { level: 1, name: 'Pagos' }).waitFor({ timeout: 30_000 })
-      await page.getByRole('checkbox', { name: new RegExp(`^Marcar ${facturas[0].proveedor}`) }).waitFor({ timeout: 30_000 })
+      await loDeEstaSemana.waitFor({ timeout: 30_000 })
       await red(); await quieto(500)
     })
-    const semana = page.getByText('Vence esta semana').first()
     await di('pagos', async () => {
-      await ra.a(page.getByText('Por pagar').first(), 900); await quieto(400)
-      if (await semana.isVisible().catch(() => false)) await ra.a(semana, 900)
+      await ra.a(page.locator('[data-prueba="lo-que-toca"] h2').first(), 900); await quieto(400)
+      const semana = page.getByText('Vence esta semana').first()
+      if (await semana.isVisible().catch(() => false)) await ra.a(semana, 800)
     })
-    await di('marcar', async () => {
-      for (const f of facturas) { await ra.clic(page.getByRole('checkbox', { name: new RegExp(`^Marcar ${f.proveedor}`) }), 650); await quieto(350) }
+    await di('semana', async () => {
+      await ra.a(loDeEstaSemana, 900); await quieto(600)
+      await ra.clic(loDeEstaSemana, 200)
     })
-    const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
-    const desde = barra.getByLabel('Desde qué banco se paga')
-    const revolut = await desde.locator('option', { hasText: 'Revolut' }).first().getAttribute('value')
-    await di('desde', async () => {
-      await ra.a(desde, 900)
-      if ((await desde.inputValue()) !== revolut) {
-        await page.mouse.down(); await page.mouse.up()
-        await desde.selectOption(revolut)
-        await page.keyboard.press('Escape').catch(() => {})
-      }
-    })
-    const pagar = barra.locator('[data-prueba="pagar-con-banco"]')
-    await R.sinVer(() => pagar.filter({ hasText: /Pagar las 3 con Revolut/ }).waitFor({ timeout: 30_000 }))
-    await di('boton', () => ra.a(pagar, 800))
-    await foto('3-marcadas')
-
-    // Paso 4 · la ventana: Revolut dice que el titular coincide; un IBAN nuevo pide la segunda.
-    await ra.clic(pagar, 300)
-    const dialogo = page.getByRole('dialog', { name: 'Pagar con Revolut' })
-    const filas = dialogo.locator('[data-prueba="fila-varias"]')
+    const panel = page.locator('[data-prueba="panel-pagar"]')
+    const filas = panel.locator('[data-prueba="fila-varias"]')
     await R.sinVer(async () => {
+      await panel.waitFor({ timeout: 30_000 })
+      await filas.nth(facturas.length - 1).waitFor({ timeout: 30_000 })
       for (let i = 0; i < facturas.length; i++) await filas.nth(i).getByText('Revolut dice que coincide').waitFor({ timeout: 30_000 })
       await quieto(300)
     })
+    const n = await filas.count()
+    if (n !== facturas.length) throw new Error(`«Pagar lo de esta semana» ha marcado ${n} facturas y el guion espera ${facturas.length}.`)
+    await foto('3-marcadas')
+
+    // Paso 4 · el panel: Revolut comprueba el titular de cada IBAN; un IBAN nuevo pide la segunda; el saldo llega.
     R.marca(4)
     await di('titular', async () => {
-      for (let i = 0; i < facturas.length; i++) { await ra.a(filas.nth(i), 800); await quieto(700) }
+      for (let i = 0; i < facturas.length; i++) { await ra.a(filas.nth(i), 800); await quieto(600) }
     })
-    const pide = dialogo.locator('[data-prueba="pide-segunda-varias"]')
+    const pide = panel.locator('[data-prueba="pide-segunda-varias"]')
     await di('segunda', async () => {
-      await ra.a(filas.nth(1), 700); await quieto(900)
       if (await pide.isVisible().catch(() => false)) await ra.a(pide, 900)
+      else await ra.a(filas.nth(1), 900)
     })
+    const desde = panel.locator('[data-prueba="panel-desde"]')
+    await di('desde', async () => { if (await desde.isVisible().catch(() => false)) await ra.a(desde, 900) })
     await foto('4-titular')
+    // Para la portada de las plataformas: el panel, solo (sin el cursor).
+    await panel.screenshot({ path: join(salida, 'capturas', 'm-panel.png'), style: '#__cursor,.__onda{display:none!important}' }).catch(() => {})
 
     // Paso 5 · una sola aprobación para las tres, con el PIN de pago.
     R.marca(5)
-    const aprobar = dialogo.locator('[data-prueba="aprobar-y-pagar-varias"]')
+    const aprobar = page.locator('[data-prueba="aprobar-y-pagar-varias"]')
     await di('una', async () => {
-      const resumen = dialogo.locator('[data-prueba="resumen-varias"]')
-      if (await resumen.isVisible().catch(() => false)) { await ra.a(resumen, 800); await quieto(500) }
+      const resumen = panel.locator('[data-prueba="resumen-varias"]')
+      if (await resumen.isVisible().catch(() => false)) { await ra.a(resumen, 800); await quieto(400) }
       await ra.a(aprobar, 800)
     })
     await ra.clic(aprobar, 200)
@@ -347,12 +344,24 @@ export async function grabar({ salida, sesion, contexto, APP, EMPRESA_A, CUENTA_
     })
     await foto('5-pin')
 
-    // Paso 6 · enviado: Pagos lo dice y las tres pasan a pagadas.
+    // Paso 6 · pagado: la frase con su contenido y, debajo, cada pago con lo que dice Revolut y su justificante.
     R.marca(6)
     await ra.clic(conPin.locator('[data-prueba="confirmar-pin"]'), 300)
     const aviso = page.locator('[data-prueba="aviso-pagos"]')
-    await R.sinVer(async () => { await aviso.filter({ hasText: 'Enviado a Revolut' }).waitFor({ timeout: 60_000 }); await red() })
+    const resultado = page.locator('[data-prueba="resultado-pago"]')
+    await R.sinVer(async () => {
+      await aviso.filter({ hasText: /Pagadas 3 facturas|Enviado a Revolut/ }).waitFor({ timeout: 60_000 })
+      await resultado.waitFor({ timeout: 30_000 }).catch(() => {})
+      await red(); await page.evaluate(() => window.scrollTo(0, 0)); await quieto(400)
+    })
     await di('enviado', () => ra.a(aviso, 900))
+    await di('justificante', async () => {
+      if (await resultado.isVisible().catch(() => false)) {
+        await ra.a(resultado, 900); await quieto(500)
+        const ver = resultado.locator('[data-prueba="resultado-ver"]').first()
+        if (await ver.isVisible().catch(() => false)) await ra.a(ver, 800)
+      }
+    })
     const pagado = page.getByText(/Pagado en /).first()
     await di('pagado', async () => { if (await pagado.isVisible().catch(() => false)) await ra.a(pagado, 900) })
     await foto('6-enviado')

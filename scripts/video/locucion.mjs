@@ -25,18 +25,18 @@ export const FRASES = {
   apunta: 'Si todo cuadra, la apunta sola en tu contabilidad, con su asiento ya validado.',
   porque: 'Y te enseña por qué: cada requisito de la factura, comprobado. Si algo no encaja, te avisa y te dice qué falta.',
   // Paso 3 · elegir qué pagar
-  pagos: 'En Pagos ves lo que debes y cuándo vence. Esta semana vencen tres facturas.',
-  marcar: 'Marcas las que toca pagar.',
-  desde: 'Eliges pagar desde tu cuenta de Revolut, conectada a Sumied.',
-  boton: 'Y un solo botón: pagar las tres.',
+  pagos: 'En Pagos ves lo que toca pagar hoy: lo vencido y lo que vence esta semana.',
+  semana: 'Un solo botón: pagar lo de esta semana. Sumied marca las facturas que tocan.',
   // Paso 4 · Revolut comprueba
   titular: 'Antes de pagar, Revolut comprueba que el titular de cada IBAN es de verdad tu proveedor.',
   segunda: 'Si un proveedor estrena IBAN, Sumied pide una segunda confirmación. Es el engaño más común con facturas falsas.',
+  desde: 'Salen de tu cuenta de Revolut, conectada a Sumied, y ves el saldo antes y después.',
   // Paso 5 · una aprobación
   una: 'Una sola aprobación vale para todos los pagos.',
   pin: 'Confirmas con tu PIN de pago, y listo.',
   // Paso 6 · pagado
   enviado: 'Hecho: los tres pagos salen por Revolut, sin entrar en el banco.',
+  justificante: 'Cada pago sale con su justificante, listo para mandárselo al proveedor.',
   pagado: 'Y Pagos ya los cuenta como pagados este mes.',
   // Paso 7 · el cargo vuelve
   vuelve: 'Cuando el cargo llega al banco, Sumied lo reconoce solo.',

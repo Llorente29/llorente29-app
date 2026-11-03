@@ -26,6 +26,13 @@ const logo = readFileSync('public/marcas/sumied/sumied-logo-horizontal.svg', 'ut
 // Las zonas de cada captura (en píxeles de la captura, 1920×1080): la ventana
 // «Pagar con Revolut» y la lista de los tres cargos casados solos.
 const ZONA_PAGAR = { x: 700, y: 288, w: 520, h: 505 }
+// B01·12 (03/11): el pago es un panel lateral. Si el guion ha dejado su captura (capturas/m-panel.png),
+// la portada usa el panel (su parte de arriba: las facturas, lo que dice Revolut y el saldo).
+const PANEL = join(salida, 'capturas', 'm-panel.png')
+const conPanel = existsSync(PANEL)
+const pagarCaja = (ancho, alto, zonaAncho) => conPanel
+  ? `<div class="cap" style="width:${ancho}px;height:${alto}px;overflow:hidden"><img src="${png(PANEL)}" style="width:100%;display:block"></div>`
+  : recorte(png(pagar), ZONA_PAGAR, zonaAncho, 'cap')
 const ZONA_CASADOS = { x: 252, y: 476, w: 1000, h: 262 }
 
 /** Un recorte de una captura como <div> con fondo, escalado a ancho px. */
@@ -59,7 +66,7 @@ const horizontal = `<div class="lienzo" style="width:1280px;height:720px">
     <h1 style="margin-top:20px;font-size:62px">De la factura<br>al pago, <em>sin teclear nada</em></h1>
     <p class="sub" style="margin-top:22px;font-size:25px">La lee, la apunta, la paga con Revolut y la concilia sola.</p>
   </div>
-  <div style="position:absolute;right:56px;top:70px;transform:rotate(1.5deg)">${recorte(png(pagar), ZONA_PAGAR, 470, 'cap')}</div>
+  <div style="position:absolute;right:56px;top:70px;transform:rotate(1.5deg)">${pagarCaja(430, 560, 470)}</div>
   <div style="position:absolute;right:250px;top:470px;transform:rotate(-2deg)">${recorte(png(casados), ZONA_CASADOS, 560, 'cap')}</div>
   <div class="sello" style="right:60px;bottom:52px;font-size:22px;padding:10px 18px">✓ Casado solo con su factura</div>
   <div class="play" style="width:118px;height:118px;left:604px;top:520px"><style>.play:after{border-width:26px 0 26px 42px}</style></div>
@@ -71,7 +78,7 @@ const cuadrada = `<div class="lienzo" style="width:1080px;height:1080px">
     <h1 style="margin-top:40px;font-size:76px">De la factura al pago,<br><em>sin teclear nada</em></h1>
     <p class="sub" style="margin-top:22px;font-size:30px">La lee, la apunta, la paga con Revolut y la concilia sola.</p>
   </div>
-  <div style="position:absolute;left:70px;top:470px;transform:rotate(-1.5deg)">${recorte(png(pagar), ZONA_PAGAR, 500, 'cap')}</div>
+  <div style="position:absolute;left:70px;top:470px;transform:rotate(-1.5deg)">${pagarCaja(440, 500, 500)}</div>
   <div style="position:absolute;right:50px;top:640px;transform:rotate(2deg)">${recorte(png(casados), ZONA_CASADOS, 470, 'cap')}</div>
   <div class="sello" style="right:60px;top:560px;font-size:26px;padding:12px 20px">✓ Casado solo</div>
   <div class="etiqueta" style="position:absolute;left:70px;bottom:56px;font-size:26px;padding:10px 22px">▶ Vídeo · 2 minutos</div>
