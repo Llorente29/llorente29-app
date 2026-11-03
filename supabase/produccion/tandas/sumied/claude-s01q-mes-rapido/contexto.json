@@ -1,0 +1,19 @@
+{
+ "_que": "S01q·11 · contexto de producción, medido en SOLO LECTURA el 03/11 a las 14:29Z: la 1527 cambia conta_liquidaciones y conta_liquidaciones_mes (misma firma, con respaldo; solo sus CTE «filas», «g» y «k» pasan a «as materialized», cada trozo comprobado una sola vez en producción y en staging, con los mismos md5 en los dos: 58608c41… y efd587be…). No crea, no borra ni toca filas. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-03T14:29Z",
+ "tanda": {
+  "supabase/migrations/20261103T1527_s01q_mes_rapido.sql": "840ec01fe29fdf31c5cb032213bb4b16"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
