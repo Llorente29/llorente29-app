@@ -38,14 +38,18 @@ begin
 end $$;
 
 -- 0 · La 1815 guarda las de antes; su vuelta atrás las restaura del respaldo. Lo que devuelven, como el administrador.
-create temp table _acl0 on commit drop as select oid, proacl::text acl, md5(pg_get_functiondef(oid)) h from pg_proc
- where oid in ('public.conta_pagos_lista(uuid,date)'::regprocedure, 'public.conta_pagos_por_revisar(uuid)'::regprocedure);
+-- Lo de producción el 03/11 (y de staging, igual): las huellas de pg_get_functiondef y los permisos, en su orden.
+-- (Staging aplica la tanda antes de esta prueba, en la misma transacción: lo que hay al empezar puede ser ya la 1815.)
+create temp table _acl0 (oid regprocedure, acl text, h text) on commit drop;
+insert into _acl0 values
+  ('public.conta_pagos_lista(uuid,date)', '{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}', '72fee8648c9f0ff1772cd8ae38bd2c6d'),
+  ('public.conta_pagos_por_revisar(uuid)', '{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}', '0f60410ce0370d0fd834316aac9b35e8');
 \i supabase/migrations/20261103T1815_b01q_pagos_lista_rapida.sql
 \i supabase/vuelta-atras/20261103T1815_b01q_pagos_lista_rapida.down.sql
 do $$ begin
-  if exists (select 1 from _acl0 a join pg_proc p on p.oid = a.oid where p.proacl::text is distinct from a.acl or md5(pg_get_functiondef(p.oid)) <> a.h) then
+  if exists (select 1 from _acl0 a join pg_proc p on p.oid = a.oid::oid where p.proacl::text is distinct from a.acl or md5(pg_get_functiondef(p.oid)) <> a.h) then
     raise exception 'PRUEBA B01·15 · 0: la vuelta atrás no deja las funciones o sus permisos como estaban (%).',
-      (select string_agg(p.oid::regprocedure::text || ' ' || a.acl || ' → ' || p.proacl::text, '; ') from _acl0 a join pg_proc p on p.oid = a.oid);
+      (select string_agg(p.oid::regprocedure::text || ' ' || a.acl || ' → ' || p.proacl::text, '; ') from _acl0 a join pg_proc p on p.oid = a.oid::oid);
   end if;
 end $$;
 do $$ begin
