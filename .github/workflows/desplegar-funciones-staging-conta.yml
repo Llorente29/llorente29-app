@@ -96,7 +96,9 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # La CLI fija (B01, 03/11): con «latest», la 3.0.0 (02/11, 12:18 UTC) empezó a pedir
+          # confirmación y el despliegue no desplegaba nada. La cambia una persona, a propósito.
+          version: 2.122.1
 
       - name: Desplegar en staging-conta (verify_jwt declarado, o el vivo)
         env:
@@ -116,7 +118,8 @@ jobs:
             elif [ "$VIVO" = "true" ] || [ "$VIVO" = "false" ]; then JWT=$VIVO; ORIGEN="lo vivo en staging"
             else echo "::error::$f es nueva en staging y no está declarada en config.toml: no se adivina su verify_jwt."; exit 1; fi
             FLAG=""; [ "$JWT" = "false" ] && FLAG="--no-verify-jwt"
-            supabase functions deploy "$f" --project-ref "$REF" $FLAG
+            supabase functions deploy "$f" --project-ref "$REF" --yes $FLAG \
+              || { echo "::error::No se ha desplegado $f: mira la salida de la CLI justo encima. No se sigue con las demás."; exit 1; }
             echo "| \`$f\` | $JWT | $ORIGEN |" >> "$GITHUB_STEP_SUMMARY"
           done
 

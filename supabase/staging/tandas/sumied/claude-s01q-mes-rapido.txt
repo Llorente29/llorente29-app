@@ -1,0 +1,6 @@
+# S01q·11 · Ventas › Liquidaciones en menos de 2 s: 1527 (las CTE encadenadas
+# de conta_liquidaciones y conta_liquidaciones_mes, «as materialized»). Su
+# prueba (ROLLBACK, empresa A): lo mismo que antes en cinco meses y en el motor,
+# las dos con sus «materialized» y nada más cambiado, otra vez, y la vuelta atrás.
+supabase/migrations/20261103T1527_s01q_mes_rapido.sql
+supabase/staging/sql/20261103_s01q_mes_rapido_prueba.sql

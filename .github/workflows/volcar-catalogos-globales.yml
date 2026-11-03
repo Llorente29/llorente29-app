@@ -1,0 +1,142 @@
+name: Volcar los catálogos globales (producción, solo lectura)
+
+# QUÉ HACE (DM1 · 2b-2, decisión de Julio del 02/11)
+# Lee de producción los catálogos GLOBALES de Folvy —los que no son de ninguna
+# cuenta: unidades, alérgenos, módulos y planes, plantillas de familias y de
+# ingredientes, cursos e itinerarios globales, planes de APPCC, etiquetas,
+# cortes y cocinas— y los deja como semilla en una rama nueva,
+# datos/dm1-catalogos-globales-<run>, en
+# supabase/seeds/folvy/20261102T1100_dm1_catalogos_globales.sql, con sus
+# mismos id. De esa rama la coge el PR del 2b-2.
+#
+# Por qué: en local y en staging esas tablas están vacías. Sin ellas, el alta
+# de una cuenta no siembra nada, los lotes de Casa Lola no corren en local y la
+# foto de la demo no cargaría en staging, porque apunta a ellas.
+#
+# Qué lee: scripts/demo/catalogos-globales-volcar.sql. De course (por la vista
+# catalogo_curso_global, la 1218), training_path y kitchen_unit, SOLO las filas
+# sin cuenta; si una de ellas apunta a algo de
+# una cuenta, para sin volcar nada. Ninguna fila de ninguna cuenta.
+# Al registro y al resumen solo van números y huellas, por la puerta
+# (scripts/conta/salida-segura.mjs). La semilla va a la rama, no al registro.
+#
+# QUÉ NO HACE: no escribe en la base (conta_lectura, sesión read-only y la
+# guarda de siempre, scripts/conta/produccion/guarda-lectura.sql). No toca
+# main: empuja una rama nueva cada vez, con el token del run (que no lanza
+# otros workflows).
+# OJO: el «Run workflow» solo existe cuando este fichero está en main.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: volcar-catalogos-globales
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  # W09: psql y pg_dump dejan de esperar a conectar a los 15 s (el #728 esperó casi una hora).
+  PGCONNECT_TIMEOUT: '15'
+
+jobs:
+  volcar:
+    # W12b (30/10): el secreto vive en el entorno «lectura», que solo admite
+    # ejecuciones de main.
+    environment: lectura
+    name: Catálogos globales · PRODUCCIÓN
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PROD_REF: xzmpnchlguibclvxyynt
+      STAGING_REF: oseymswjlzplqoxrfjzi
+      FOODINT: 51ad1792-6629-4ef7-833a-b57b09a86710
+      PSQL: /usr/lib/postgresql/17/bin/psql
+      PGAPPNAME: gha-volcar-catalogos-${{ github.run_id }}
+      PGOPTIONS: '-c default_transaction_read_only=on'
+      SEMILLA: supabase/seeds/folvy/20261102T1100_dm1_catalogos_globales.sql
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Guarda 1 y 2 · producción, y no con el usuario de escritura
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura. Abortado sin conectar.")
+              raise SystemExit(1)
+          PY
+          case "$DB_URL" in *"$STAGING_REF"*) echo "::error::La URL apunta a STAGING."; exit 1 ;; esac
+          case "$DB_URL" in *"$PROD_REF"*) echo "La URL es de producción." ;; *) echo "::error::La URL no es de producción."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - name: Guarda 3 y 4 · Foodint al otro lado, sesión de solo lectura y sin permisos de escritura
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          r=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select (select count(*) from public.supplier where account_id = '$FOODINT') > 0
+               and current_setting('transaction_read_only') = 'on'
+          " 2>&1) || { echo "::error::No se ha podido comprobar la guarda 3."; exit 1; }
+          [ "$r" = "t" ] || { echo "::error::Falla la guarda 3: o no está Foodint, o la sesión no es de solo lectura."; exit 1; }
+          f=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -f scripts/conta/produccion/guarda-lectura.sql 2>&1) || { echo "::error::No se ha podido comprobar la guarda 4."; exit 1; }
+          [ -z "$f" ] || { echo "::error::Falla la guarda 4: el usuario podría escribir."; exit 1; }
+
+      - name: Volcar los catálogos a la semilla
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          # Si falla, la causa va al resumen sin datos (catalogos-globales-causa.py:
+          # «permiso_denegado.<tabla>», «no_es_catalogo» u «otro_error»).
+          if ! "$PSQL" "$DB_URL" -X -A -t -q -v ON_ERROR_STOP=1 -f scripts/demo/catalogos-globales-volcar.sql > /tmp/cuerpo.sql 2> /tmp/volcar.err; then
+            python3 scripts/demo/catalogos-globales-causa.py /tmp/volcar.err > /tmp/causa.txt
+            cat /tmp/causa.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::El volcado ha fallado: la causa está en el resumen del run (permiso_denegado.<tabla>, no_es_catalogo u otro_error)."
+            exit 1
+          fi
+          cat scripts/demo/catalogos-globales-cabecera.sql /tmp/cuerpo.sql > supabase/seeds/folvy/20261102T1100_dm1_catalogos_globales.sql
+
+      - name: Comprobar la semilla (solo números al registro)
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          # Cuenta tablas, filas y huellas a un fichero; al resumen, por la puerta.
+          python3 scripts/demo/catalogos-globales-comprobar.py "$SEMILLA" > /tmp/numeros.txt \
+            || { echo "::error::La semilla no tiene las 16 tablas, o el delimitador sale dentro de algún dato."; exit 1; }
+          cat /tmp/numeros.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Empujar la rama con la semilla
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898281+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "datos/dm1-catalogos-globales-$GITHUB_RUN_ID" > /tmp/git.log 2>&1
+          git add "$SEMILLA" >> /tmp/git.log 2>&1
+          git commit -m "DM1 · 2b-2 · Catálogos globales de Folvy, volcados de producción (run $GITHUB_RUN_ID)" >> /tmp/git.log 2>&1
+          git push origin "datos/dm1-catalogos-globales-$GITHUB_RUN_ID" >> /tmp/git.log 2>&1 || { echo "::error::No se ha podido empujar la rama."; exit 1; }

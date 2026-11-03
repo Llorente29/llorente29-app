@@ -1,0 +1,17 @@
+# A01 · El techo, un solo aviso al día (03/11/2026). Arreglo del #450.
+# Rama claude/a01-techo-un-solo-aviso. Se ensaya y se aplica antes de fusionar,
+# lanzado desde main nombrando la rama (W12b).
+#
+#   1. 0012 — CAMBIA EN CALIENTE (declarada, con su prueba): _aviso_poner_en_cola
+#      toma un candado de la transacción con el techo lleno, antes de mirar si
+#      ya salió el aviso de techo. El 02/11 a las 22:30 UTC salieron dos (ids 1430
+#      y 1431) porque dos vigías corrieron a la vez. Guarda de md5 y respaldo.
+#      El analizador dice «sigue», sin «autorizo». Va fuera del servicio
+#      (Julio): a encolar_alerta la llega a llamar algún disparador de ventas.
+#
+# Antes (producción, 03/11 00:09 de Madrid): _aviso_poner_en_cola md5 5364a265,
+# la del #450; nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261103T0012_a01_techo_un_solo_aviso.sql
+cuenta: scripts/conta/produccion/cuentas/a01-techo-un-solo-aviso.sql

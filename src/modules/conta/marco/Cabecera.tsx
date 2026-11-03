@@ -14,7 +14,7 @@
 
 import { useMemo, useState, type ReactNode, type RefCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { rutaAltaEmpresa, rutaConta } from '@/config/navegacion'
+import { rutaAltaEmpresa, rutaConta, rutaNovedades } from '@/config/navegacion'
 import { LogoHorizontal } from '@/marca/PiezasMarca'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDesplegable } from '@/modules/conta/marco/nuevo/useDesplegable'
@@ -123,6 +123,9 @@ function Ayuda() {
             <li><span className="s-chip" data-tono="seguro">Hecho</span> ya está</li>
           </ul>
           <p className="s-menu-nota">Todo se puede hacer igual con el ratón.</p>
+          <div className="s-menu-separador" />
+          {/* NV1: lo que cambia en cada versión. */}
+          <Link className="s-menu-item" to={rutaNovedades('sumied')} data-prueba="ayuda-novedades">Novedades</Link>
         </div>
       )}
     </div>

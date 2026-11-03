@@ -1,0 +1,32 @@
+{
+ "_que": "S01q · PR A · contexto de producción de la tanda, medido en SOLO LECTURA el 02/11 a las 11:30Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen las 3 tablas que toca (platform_store_tramo cuenta 0 por estadística: tiene las de Foodint); existen las 2 funciones que cambia (conta_local_de_tienda y el disparador de las tiendas), con su respaldo; no existe ninguna de las que crea; nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-02T11:30Z",
+ "tanda": {
+  "supabase/migrations/20261102T1215_s01q_tienda_local_marca.sql": "63ff61de6743d5206f9f45afc82704e9",
+  "supabase/migrations/20261102T1216_s01q_motor_mes.sql": "9943d647d55be760a2ff0fa0e5da94ac",
+  "supabase/migrations/20261102T1217_s01q_foodint_tiendas.sql": "1d087d68932c0fbc9990dec43d9e3ed9"
+ },
+ "contexto": {
+  "tablas": [
+   "public.channel_settlement",
+   "public.platform_store",
+   "public.platform_store_tramo"
+  ],
+  "funciones": [
+   "public._conta_tienda_local_por_direccion()",
+   "public.conta_local_de_tienda(uuid,text)"
+  ],
+  "filas": {
+   "public.channel_settlement": 400,
+   "public.platform_store": 40,
+   "public.platform_store_tramo": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

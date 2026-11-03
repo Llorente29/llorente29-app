@@ -1,0 +1,28 @@
+# DM1 · La contabilidad de demo de Casa Lola (03/11/2026). Encargo DM1·3
+# urgente: Julio enseña hoy Sumied a una gestoría con Casa Lola.
+# Rama claude/dm1-casa-lola-contabilidad. Se ensaya y se aplica antes de
+# fusionar, lanzado desde main nombrando la rama (W12b).
+#
+#   1. 1350 — crea public.demo_contabilidad_sembrar(cuenta) (solo la
+#      plataforma) y la llama para Casa Lola, después de marcarla como demo
+#      (accounts.is_demo, la puerta del PR 2a). Siembra su contabilidad por los
+#      caminos de la app, como su administrador «Demo Folvy»: empresa, plan,
+#      ventas del cierre del día (las de Folvy, al 08/10, y cuatro semanas
+#      inventadas hasta el 01/11), 18 recibidas de sus 6 proveedores, 12
+#      liquidaciones de plataforma y tienda, el extracto (42 movimientos, 40
+#      casados y 3 sin casar: dos sueltos y el cargo del 303), el 303 del 3T
+#      presentado fuera y sin contabilizar, y el del 4T en borrador. Todo
+#      inventado (T11). Los agentes «Datos maestros» y «Libro diario», en verde
+#      para Casa Lola (DM1·4: el primer real se deshizo por ellos).
+#      Solo escribe en Casa Lola. Fuera del camino del pedido: lee sus ventas,
+#      no las cambia (están todas cerradas). Con «autorizo» (el update de
+#      accounts.is_demo).
+#
+# Antes (producción, 03/11 11:55 UTC): Casa Lola sin marca de demo, sin
+# empresa, sin plan, sin asientos ni banco; la función no existe; nada de la
+# tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (Casa Lola vuelve a estar
+# sin empresa ni marca, y la función se quita).
+supabase/migrations/20261103T1350_dm1_casa_lola_contabilidad.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-casa-lola-contabilidad.sql

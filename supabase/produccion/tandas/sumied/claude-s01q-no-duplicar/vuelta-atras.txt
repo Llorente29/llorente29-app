@@ -1,0 +1,9 @@
+# S01q·7 · la vuelta atrás, en orden inverso: primero fuera las reglas 1 a 4 (si
+# no, la regla 1 no dejaría volver a los 2 asientos); después los 2 asientos
+# vuelven desde el respaldo con su número y su huella de antes, las 2 facturas
+# como estaban y el borrador del 303 del 4T como estaba (con su calculated_at);
+# al final, _conta_asientos_borrar la de antes.
+cuenta: scripts/conta/produccion/cuentas/s01q-no-duplicar.sql
+supabase/vuelta-atras/20261102T2011_s01q_no_duplicar.down.sql
+supabase/vuelta-atras/20261102T2010_s01q_borrar_vercel_supabase.down.sql
+supabase/vuelta-atras/20261102T2139_s01q_borrar_dice_borrador.down.sql

@@ -12,21 +12,29 @@
 
 import { rpc, tabla } from '@/modules/conta/services/bd'
 import { pagar } from '@/modules/conta/pagos/llaveNavegador'
+import { eurosExactos } from '@/modules/conta/lib/formato'
 
-export interface CuentaParaPagar { id: string; nombre: string; iban4: string | null; banco: string }
+export interface CuentaParaPagar {
+  id: string; nombre: string; iban4: string | null; banco: string
+  /** B01 · Cola 1e · El saldo que dio el banco en la última lectura (null: no se sabe) y cuándo se leyó. */
+  saldo?: number | null; saldoLeido?: string | null
+}
 
 /** Las cuentas desde las que se puede pagar con Sumied: ligadas a Revolut y activas. */
 export async function cuentasParaPagar(companyId: string): Promise<CuentaParaPagar[]> {
-  const { data: links, error } = await tabla('bank_aggregator_link').select('treasury_account_id')
+  const { data: links, error } = await tabla('bank_aggregator_link').select('treasury_account_id, bank_balance, last_run_at')
     .eq('company_id', companyId).eq('provider', 'revolut').eq('status', 'activo')
   if (error) throw new Error(`No se han podido leer las cuentas del banco: ${error.message}`)
-  const ids = ((links ?? []) as unknown as { treasury_account_id: string }[]).map((l) => l.treasury_account_id)
+  const ls = (links ?? []) as unknown as { treasury_account_id: string; bank_balance: number | string | null; last_run_at: string | null }[]
+  const saldoDe = new Map(ls.map((l) => [l.treasury_account_id, { saldo: l.bank_balance === null ? null : Number(l.bank_balance), leido: l.last_run_at }]))
+  const ids = ls.map((l) => l.treasury_account_id)
   if (!ids.length) return []
   const { data: cuentas, error: e2 } = await tabla('treasury_account').select('id, name, iban, is_active').in('id', ids)
   if (e2) throw new Error(`No se han podido leer las cuentas del banco: ${e2.message}`)
   return ((cuentas ?? []) as unknown as { id: string; name: string; iban: string | null; is_active: boolean }[])
     .filter((c) => c.is_active)
-    .map((c) => ({ id: c.id, nombre: c.name, iban4: c.iban ? c.iban.replace(/\s/g, '').slice(-4) : null, banco: 'Revolut' }))
+    .map((c) => ({ id: c.id, nombre: c.name, iban4: c.iban ? c.iban.replace(/\s/g, '').slice(-4) : null, banco: 'Revolut',
+      saldo: saldoDe.get(c.id)?.saldo ?? null, saldoLeido: saldoDe.get(c.id)?.leido ?? null }))
 }
 
 export interface Preparado {
@@ -224,3 +232,16 @@ export function quienesSalen(filas: readonly FilaVarias[]): { salen: FilaVarias[
 
 /** El texto del botón principal de la barra de Pagos: con el nombre del banco de «Desde». */
 export const textoPagarVarias = (n: number, banco: string) => n === 1 ? `Pagar 1 con ${banco}` : `Pagar las ${n} con ${banco}`
+
+/** B01 · Cola 1e · La confirmación con contenido (regla 8): «Pagadas 3 facturas · 708,70 € desde Revolut · el cargo se casará solo.» */
+export const textoPagadas = (n: number, total: number, banco: string) =>
+  `Pagadas ${n === 1 ? '1 factura' : `${n} facturas`} · ${eurosExactos(Math.round(total * 100) / 100)} desde ${banco} · el cargo se casará solo.`
+
+/** B01 · Cola 1e · Lo que dice el banco de cada pago, en palabras (la confirmación de Pagos, maqueta v2, pantalla 4). */
+export function queDiceElBanco(estado: string, banco: string): { texto: string; tono: 'seguro' | 'duda' | 'falta' } {
+  if (estado === 'pagada') return { texto: 'Salió', tono: 'seguro' }
+  if (estado === 'rechazada' || estado === 'devuelta' || estado === 'cancelada') return { texto: estado === 'devuelta' ? 'Devuelto' : 'No ha salido', tono: 'falta' }
+  if (estado === 'esperando_segunda' || estado === 'lista') return { texto: 'Esperando la segunda aprobación', tono: 'duda' }
+  return { texto: `Pendiente en ${banco}`, tono: 'duda' }
+}
+

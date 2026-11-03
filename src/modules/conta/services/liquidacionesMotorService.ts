@@ -21,6 +21,7 @@ import { cargarContexto } from '@/modules/conta/services/propuestasLibroService'
 import { asientoDeGasto } from '@/modules/conta/lib/liquidacionesPlataforma'
 import type { Periodo } from '@/modules/conta/lib/plazoPlataforma'
 import { filaMotor, type FilaMotor } from '@/modules/conta/lib/liquidacionesMotor'
+import { mesDesdeBase, type MesLiquidaciones } from '@/modules/conta/lib/liquidacionesMes'
 import { esInformeUber, leerInformeUber, paraRegistrarInforme, type DatosRegistrar } from '@/modules/conta/lib/lectorUberPagos'
 import { esExcelGlovo, leerExcelGlovo, leerPdfGlovo, paraRegistrarGlovo, type ExcelGlovo, type PdfGlovo } from '@/modules/conta/lib/lectorGlovo'
 import { textoDePaginas, type PiezaPdf } from '@/modules/conta/lib/textoPdf'
@@ -187,4 +188,31 @@ export async function leerLocales(accountId: string): Promise<{ id: string; nomb
   const { data, error } = await tabla('locations').select('id, name, active').eq('account_id', accountId).order('name')
   if (error) throw new Error(mensaje('No se han podido leer tus locales', error))
   return ((data ?? []) as Record<string, unknown>[]).map((l) => ({ id: String(l.id), nombre: String(l.name), abierto: l.active !== false }))
+}
+
+// ── S01q · PR C · El mes en una pantalla ────────────────────────────────────
+
+/** Las liquidaciones de un mes en cuatro estados, por plataforma y tienda (conta_liquidaciones_mes, 20261102T1216). */
+export async function leerLiquidacionesMes(companyId: string, mes: string): Promise<MesLiquidaciones> {
+  const r = await rpc<Record<string, unknown>>('conta_liquidaciones_mes', { p_company: companyId, p_mes: mes })
+  return mesDesdeBase(r ?? {})
+}
+
+/**
+ * «¿De qué local es esta tienda?»: le da su local y le deja su marca y su banco
+ * (conta_tienda_plataforma_asignar los pone los tres; platform_store: id,
+ * brand_id, treasury_account_id, external_text). Vale para todas sus
+ * liquidaciones, las de antes y las que vengan.
+ */
+export async function darLocalATienda(accountId: string, storeId: string, localId: string, quien: string | null): Promise<string> {
+  const { data, error } = await tabla('platform_store').select('id, brand_id, treasury_account_id, external_text').eq('account_id', accountId).eq('id', storeId).maybeSingle()
+  if (error) throw new Error(mensaje('No se ha podido leer la tienda', error))
+  if (!data) throw new Error('Esa tienda ya no está.')
+  const t = data as Record<string, unknown>
+  await rpc('conta_tienda_plataforma_asignar', {
+    p_store: storeId, p_marca: t.brand_id ?? null, p_local: localId, p_banco: t.treasury_account_id ?? null, p_quien_nombre: quien,
+  })
+  const { data: l } = await tabla('locations').select('name').eq('account_id', accountId).eq('id', localId).maybeSingle()
+  const local = String((l as Record<string, unknown> | null)?.name ?? 'su local')
+  return `Guardado: «${String(t.external_text ?? 'la tienda')}» es de ${local}. Vale para todas sus liquidaciones, las de antes y las que vengan.`
 }

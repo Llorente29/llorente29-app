@@ -1,0 +1,2 @@
+# DM1·6 · vuelta atrás: borra la contabilidad de Casa Lola y la siembra con la función de la 1350, como estaba.
+supabase/vuelta-atras/20261103T1525_dm1_casa_lola_gastos.down.sql

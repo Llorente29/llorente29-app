@@ -7,9 +7,9 @@
 //     - Si la empresa no paga con ningún banco desde Sumied, no sale nada.
 //     - Si hay un pago en marcha, dice en qué está y lo que se puede hacer.
 //     - Si no puedes pagar: «Pídeselo a …, que puede pagar».
-//     - Si puedes: «Pagar con Revolut» abre el panel: desde, el IBAN, el
-//       titular (lo que dice el banco), el importe, el concepto, por qué hace
-//       falta la segunda aprobación y «Aprobar y pagar».
+//     - Si puedes y no hay pago en marcha, no sale: «Pagar · X €» de arriba abre
+//       el panel lateral de Pagos (B01 · Cola 1e, Julio 03/11: nada del pago en
+//       la columna estrecha; maqueta v2, pantallas 2 y 5).
 //   · SegundaAprobacion: la lista exacta y «Confirmar con mi llave», o el PIN
 //     de pago. Una confirmación para todos los pagos que salen juntos. Con
 //     dos o más personas que pagan, la da otra (ella ve la misma pantalla).
@@ -17,14 +17,13 @@
 // Cada botón dice lo que ha pasado (regla 8).
 
 import { useState } from 'react'
-import { Boton, Campo, Dialogo, Selector, Texto } from '@/modules/conta/diseno'
+import { Boton, Campo, Dialogo, Texto } from '@/modules/conta/diseno'
 import { BloqueFicha } from '@/modules/conta/diseno/plantillas'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { hayLlaves, nombreDelDispositivo, pagar, textoDeFalloLlave, usarLlave, type OpcionesConfirmar } from '@/modules/conta/pagos/llaveNavegador'
 import {
-  aprobar, cancelar, cuentasParaPagar, lineaDelPago, mandar, pagoDeLaFactura, paraMi, preguntarEstado, preparar, textoTitular, titular, verLote,
-  type Titular,
+  cancelar, cuentasParaPagar, lineaDelPago, mandar, pagoDeLaFactura, paraMi, preguntarEstado, verLote,
 } from '@/modules/conta/pagos/pagarService'
 import { leerQuienPaga } from '@/modules/conta/bancos/revolut/pagosRevolut'
 
@@ -33,14 +32,12 @@ const Mensaje = ({ a }: { a: Aviso | null }) => a
   ? <p className="s-aviso-lista" data-tono={a.tono === 'ok' ? 'ok' : a.tono} role={a.tono === 'falta' ? 'alert' : 'status'}>{a.texto}</p>
   : null
 
-const ETIQUETA_IBAN: Record<string, string> = { comprobado: '✓ comprobado', primer_pago: 'nuevo', cambiado: 'cambiado' }
 
-export function BloquePagarConRevolut({ empresaId, facturaId }: { empresaId: string; facturaId: string }) {
+export function BloquePagarConRevolut({ empresaId, facturaId, refresco = 0 }: { empresaId: string; facturaId: string; refresco?: number }) {
   const [vuelta, setVuelta] = useState(0)
   const cuentas = useLeer(() => cuentasParaPagar(empresaId), `pagar-cuentas:${empresaId}`)
   const quien = useLeer(() => leerQuienPaga(empresaId), `pagar-quien:${empresaId}`)
-  const vivo = useLeer(() => pagoDeLaFactura(facturaId), `pagar-vivo:${facturaId}:${vuelta}`)
-  const [panel, setPanel] = useState(false)
+  const vivo = useLeer(() => pagoDeLaFactura(facturaId), `pagar-vivo:${facturaId}:${vuelta}:${refresco}`)
   const [lote, setLote] = useState<string | null>(null)
   const [aviso, setAviso] = useState<Aviso | null>(null)
   const [haciendo, setHaciendo] = useState(false)
@@ -61,6 +58,9 @@ export function BloquePagarConRevolut({ empresaId, facturaId }: { empresaId: str
   const p = vivo.datos
   const linea = p ? lineaDelPago(p, banco) : null
 
+  // B01 · Cola 1e (Julio, 03/11): nada del pago en la columna estrecha. Sin un pago en marcha y pudiendo
+  // pagar, el bloque no sale: «Pagar · X €» de arriba abre el panel lateral (maqueta v2, pantallas 2 y 5).
+  if (!linea?.vivo && yoPuedo && !aviso && !lote) return null
   const preguntar = async () => {
     if (!p) return
     setHaciendo(true); setAviso(null)
@@ -86,16 +86,8 @@ export function BloquePagarConRevolut({ empresaId, facturaId }: { empresaId: str
             {(p?.estado === 'enviando' || p?.estado === 'enviada' || p?.estado === 'esperando_banco') && <Boton disabled={haciendo} onClick={() => void preguntar()}>{haciendo ? 'Preguntando…' : `Preguntar a ${banco}`}</Boton>}
           </div>
         )}
-        {!linea?.vivo && !panel && yoPuedo && (
-          <Boton variante="principal" onClick={() => { setAviso(null); setPanel(true) }} data-prueba="abrir-pagar">Pagar con {banco}</Boton>
-        )}
         {!linea?.vivo && !yoPuedo && (
           <p className="s-apoyo" data-prueba="pideselo">Pídeselo a {quien.datos.personas.map((x) => x.nombre).join(' o ')}, que puede pagar.</p>
-        )}
-        {panel && !linea?.vivo && (
-          <PanelPagar empresaId={empresaId} facturaId={facturaId} cuentas={lista}
-            alCerrar={() => setPanel(false)}
-            alAprobar={(r) => { setPanel(false); setAviso({ tono: r.estado === 'listo' ? 'ok' : 'duda', texto: r.frase }); recargar(); if (r.abrirSegunda) setLote(r.lote) }} />
         )}
         <Mensaje a={aviso} />
       </div>
@@ -104,89 +96,6 @@ export function BloquePagarConRevolut({ empresaId, facturaId }: { empresaId: str
   )
 }
 
-function PanelPagar({ empresaId, facturaId, cuentas, alCerrar, alAprobar }: {
-  empresaId: string; facturaId: string; cuentas: { id: string; nombre: string; iban4: string | null; banco: string }[]
-  alCerrar: () => void
-  alAprobar: (r: { lote: string; estado: 'listo' | 'esperando_segunda'; frase: string; abrirSegunda: boolean }) => void
-}) {
-  const [cuentaId, setCuentaId] = useState(cuentas[0].id)
-  const prep = useLeer(() => preparar(empresaId, facturaId, cuentaId), `pagar-preparar:${facturaId}:${cuentaId}`)
-  const d = prep.datos
-  // El titular, en cuanto se puede pagar: lo pregunta el banco antes de aprobar.
-  const tit = useLeer(d?.sePuede ? () => titular(empresaId, facturaId, cuentaId) : null, `pagar-titular:${facturaId}:${cuentaId}:${d?.sePuede === true}`)
-  const t: Titular | null = tit.datos && tit.datos.ok ? tit.datos.titular : null
-  const [pagarIgual, setPagarIgual] = useState(false)
-  const [porque, setPorque] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [haciendo, setHaciendo] = useState(false)
-  const noCoincide = t?.resultado === 'no_coincide'
-  const banco = cuentas.find((c) => c.id === cuentaId)?.banco ?? 'el banco'
-
-  const aprobarYPagar = async () => {
-    if (!d) return
-    if (noCoincide && (!pagarIgual || !porque.trim())) { setError('El titular no coincide: compruébalo con el proveedor y, si es su cuenta, marca «pagar igual» y di por qué.'); return }
-    setHaciendo(true); setError(null)
-    try {
-      const r = await aprobar(empresaId, cuentaId, facturaId, noCoincide ? porque.trim() : null)
-      if (r.estado === 'listo') {
-        const m = await mandar(empresaId, r.lote)
-        alAprobar({ lote: r.lote, estado: 'listo', frase: `${r.frase} ${m.texto}`, abrirSegunda: false })
-      } else {
-        alAprobar({ lote: r.lote, estado: 'esperando_segunda', frase: r.frase, abrirSegunda: r.segunda?.quien !== 'otra' })
-      }
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)) }
-    setHaciendo(false)
-  }
-
-  const tt = textoTitular(t, d?.beneficiario ?? null, banco)
-  return (
-    <div className="pg-dialogo-campos" data-prueba="panel-pagar">
-      {cuentas.length > 1 && (
-        <Campo etiqueta="Desde" ayuda="Solo salen las cuentas con las que se puede pagar desde Sumied.">{(c) => (
-          <Selector {...c} valor={cuentaId} alCambiar={(v) => { setCuentaId(v); setPagarIgual(false); setPorque('') }}
-            opciones={cuentas.map((x) => ({ valor: x.id, texto: `${x.banco} · ${x.nombre}${x.iban4 ? ` ···${x.iban4}` : ''}` }))} />
-        )}</Campo>
-      )}
-      {prep.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{prep.error}</p>}
-      {!d && !prep.error && <p className="s-apoyo" role="status">Preparando el pago…</p>}
-      {d && !d.sePuede && <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="no-se-puede">{d.porque}</p>}
-      {d && d.sePuede && <>
-        <dl className="s-resumen" data-prueba="resumen-pago">
-          <dt>Importe</dt><dd><strong>{eurosExactos(d.importe)}</strong></dd>
-          <dt>A</dt><dd>{d.beneficiario}</dd>
-          <dt>IBAN</dt><dd>···{d.iban4} · {ETIQUETA_IBAN[d.ibanCheck ?? ''] ?? d.ibanCheck}{d.ibanNota ? ` · ${d.ibanNota}` : ''}</dd>
-          <dt>Desde</dt><dd>{cuentas.find((c) => c.id === cuentaId)?.nombre}{cuentas.find((c) => c.id === cuentaId)?.iban4 ? ` ···${cuentas.find((c) => c.id === cuentaId)?.iban4}` : ''}</dd>
-          <dt>Concepto</dt><dd>{d.concepto}</dd>
-          <dt>Titular</dt><dd data-prueba="titular">{tit.datos && !tit.datos.ok ? tit.datos.texto : tt.texto}</dd>
-        </dl>
-        {noCoincide && (
-          <div className="pg-dialogo-campos">
-            <label className="s-check"><input type="checkbox" checked={pagarIgual} onChange={(e) => setPagarIgual(e.target.checked)} /> Lo he comprobado con el proveedor: pagar igual</label>
-            {pagarIgual && <Campo etiqueta="Por qué (queda escrito con tu nombre)">{(c) => <Texto {...c} valor={porque} alCambiar={setPorque} maxLength={200} />}</Campo>}
-          </div>
-        )}
-        {(d.motivosTexto.length > 0 || (noCoincide && pagarIgual)) && (
-          <p className="s-aviso-lista" data-tono="duda" role="status" data-prueba="pide-segunda">
-            {`Hace falta una segunda aprobación (${[...d.motivosTexto, ...(noCoincide && pagarIgual && !d.motivos.includes('pagar_igual') ? ['pagar igual con un titular que no coincide'] : [])].join(', ')}). `}
-            {d.quien.segunda === 'otra'
-              ? 'La da otra persona que pueda pagar, con su llave o su PIN. Hasta entonces no sale nada.'
-              : 'La confirmas tú con tu llave, o con tu PIN de pago, en una pantalla aparte. Hasta entonces no sale nada.'}
-          </p>
-        )}
-      </>}
-      {error && <p className="s-aviso-lista" data-tono="falta" role="alert">{error}</p>}
-      <div className="s-fila-campos">
-        <Boton onClick={alCerrar}>Cancelar</Boton>
-        <Boton variante="principal" disabled={!d?.sePuede || haciendo || (noCoincide && !pagarIgual)} onClick={() => void aprobarYPagar()} data-prueba="aprobar-y-pagar">
-          {haciendo ? 'Aprobando…' : 'Aprobar y pagar'}
-        </Boton>
-      </div>
-      <p className="s-apoyo">Queda en el registro: quién, cuándo y qué.</p>
-    </div>
-  )
-}
-
-/** La segunda aprobación de un lote: la lista exacta, con la llave o con el PIN (maqueta v4). */
 export function SegundaAprobacion({ empresaId, lote, alCerrar }: { empresaId: string; lote: string; alCerrar: (a: Aviso | null) => void }) {
   const l = useLeer(() => verLote(lote), `lote:${lote}`)
   const [conPin, setConPin] = useState(!hayLlaves())

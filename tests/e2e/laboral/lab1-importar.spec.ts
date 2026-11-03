@@ -189,18 +189,38 @@ function filasDe(h: (typeof HOJAS_CEGID)[number], filas: Record<string, string>[
   return XLSX.utils.aoa_to_sheet([[...h.columnas], ...filas.map((f) => h.columnas.map((c) => f[c] ?? ''))])
 }
 
+/** Borra las personas y los locales inventados de la prueba del volcado cuyo nombre acaba en `cola` (comodín `*` de PostgREST). */
+async function limpiarVolcado(s: Sesion, cola: string): Promise<void> {
+  for (const empieza of ['Baja Inventada', 'Alta Inventada', 'Centro inventado']) {
+    const tabla = empieza.startsWith('Centro') ? 'locations' : 'employees'
+    // Sin devolver las filas: authenticated no lee todas las columnas de employees
+    // y un RETURNING * da 42501 (N1 · 6). No se abre ningún permiso por esto.
+    const r = await rest(s, 'DELETE', `${tabla}?name=like.${encodeURIComponent(`${empieza} *${cola}`)}`, undefined, 'return=minimal')
+    expect(r.status, `borrar ${tabla} «${empieza} …${cola}»: ${JSON.stringify(r.datos)}`).toBe(204)
+  }
+}
+
 test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las bajas entran y otra vez no duplica', async ({ page }) => {
   test.setTimeout(4 * 60_000)
   const errores: string[] = []
   page.on('pageerror', (e) => errores.push(e.message))
   await page.addInitScript(() => { window.sessionStorage.setItem('producto.marca', 'sumied') })
   const sola = await entrarComo(page, SOLA)
-  const marca = `${test.info().project.name}-volcado-${Date.now()}`
+  // Cada run, sus datos (Julio, 02/11): centro, local y personas llevan el número
+  // del run y el proyecto, así ordenador y móvil no comparten nada. «Sin centro en
+  // Cegid» es UNA clave por cuenta: la deja libre borrar el local al que apunta.
+  const run = process.env.GITHUB_RUN_ID ?? 'local'
+  const marca = `${test.info().project.name}-volcado-${run}-${Date.now()}`
   const centro = `Centro inventado ${marca}`
+  const cuenta = await cuentaDe(sola)
+  // Lo que dejó un run de esta prueba que murió antes de limpiar: sus locales
+  // (y con ellos, en cascada, sus centros confirmados) y sus personas.
+  await limpiarVolcado(sola, '-volcado-*')
   // La empresa sola no tiene centros: uno que se llama como el de Cegid, para
-  // que el local propuesto por el nombre sea él (se borra con la cuenta del carril).
-  const local = await rest<{ id: string }[]>(sola, 'POST', 'locations', { account_id: await cuentaDe(sola), name: centro })
+  // que el local propuesto por el nombre sea él.
+  const local = await rest<{ id: string }[]>(sola, 'POST', 'locations', { account_id: cuenta, name: centro })
   expect(local.status, JSON.stringify(local.datos)).toBe(201)
+  try {
   const bytes = paquete(marca, (libro) => {
     const t = HOJAS_CEGID.find((x) => x.id === 'trabajadores')!
     const c = HOJAS_CEGID.find((x) => x.id === 'contratos')!
@@ -227,8 +247,12 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(page.locator('[data-prueba="importar-error"]')).toHaveCount(0)
 
   // El centro y «Sin centro en Cegid», sin confirmar: «Pasar a las fichas» no mete a nadie, y lo dice.
-  const filaCentro = page.locator('[data-prueba="volcado-centro"]').filter({ hasText: centro })
-  const filaSinCentro = page.locator('[data-prueba="volcado-centro"]').filter({ hasText: 'Sin centro en Cegid' })
+  // Por la PRIMERA celda (el nombre del centro): el desplegable de cada fila lleva
+  // en sus opciones el local que se llama como el centro, y un filtro por el texto
+  // de la fila entera cogía también la de «Sin centro en Cegid» (2 filas, no 1).
+  const filaDe = (nombre: string) => page.locator('[data-prueba="volcado-centro"]').filter({ has: page.locator('td:first-child', { hasText: nombre }) })
+  const filaCentro = filaDe(centro)
+  const filaSinCentro = filaDe('Sin centro en Cegid')
   await expect(filaCentro).toHaveCount(1, { timeout: 30_000 })
   // La 2248 (N1 · respuesta 3) llega a staging de verdad cuando se fusiona en main
   // (es un «cambia»: desde la rama, solo en ROLLBACK). Sin ella, staging no trae la
@@ -240,12 +264,19 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
     await expect(page.locator('[data-prueba="volcado-sin-confirmar"]')).toContainText('Faltan confirmar 2 centros')
   }
   const hecho = page.locator('[data-prueba="volcado-hecho"]')
-  const pasar = async () => {
+  // N1 · PR 2: con algún centro sin local, el primer clic avisa nombrándolo y no pasa nada; el segundo pasa el resto.
+  const pasar = async (sinLocal: string[] = []) => {
     await page.locator('[data-prueba="volcado-pasar"]').click()
+    if (sinLocal.length > 0) {
+      const antes = page.locator('[data-prueba="volcado-aviso-antes"]')
+      for (const n of sinLocal) await expect(antes).toContainText(`«${n}»`)
+      await expect(hecho).toHaveCount(0)
+      await page.locator('[data-prueba="volcado-pasar"]').click()
+    }
     await expect(page.locator('[data-prueba="volcado-hecho"], [data-prueba="volcado-error"]')).toBeVisible({ timeout: 60_000 })
     await expect(page.locator('[data-prueba="volcado-error"]')).toHaveCount(0)
   }
-  await pasar()
+  await pasar(conLa2248 ? [centro, 'Sin centro en Cegid'] : [centro])
   await expect(hecho).toContainText('0 personas y 0 contratos al día desde Cegid. De las 4 de Cegid, 4 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText('no tiene local confirmado')
   if (conLa2248) await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Baja Inventada Cuatro ${marca}: no está en Folvy y Cegid no trae su centro`)
@@ -255,14 +286,14 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
   await expect(filaCentro.locator('[data-prueba="volcado-confirmar"]')).toHaveText('Confirmar el propuesto')
   await filaCentro.locator('[data-prueba="volcado-confirmar"]').click()
   await expect(filaCentro).toContainText('Confirmado')
-  await pasar()
+  await pasar(conLa2248 ? ['Sin centro en Cegid'] : [])
   await expect(hecho).toContainText('2 personas y 2 contratos al día desde Cegid (2 entran como bajas). De las 4 de Cegid, 2 no han entrado')
   await expect(page.locator('[data-prueba="volcado-avisos"]')).toContainText(`Alta Inventada Tres ${marca}: en Cegid está de alta y no está en Folvy`)
 
-  // «Sin centro en Cegid»: se elige el local y entra la baja que faltaba.
+  // «Sin centro en Cegid»: elegir el local ya lo confirma (N1 · PR 2) y entra la baja que faltaba.
   if (conLa2248) {
+    await expect(filaSinCentro).toContainText('Sin elegir')
     await filaSinCentro.locator('select').selectOption(local.datos[0].id)
-    await filaSinCentro.locator('[data-prueba="volcado-confirmar"]').click()
     await expect(filaSinCentro).toContainText('Confirmado')
     await pasar()
     await expect(hecho).toContainText('3 personas y 3 contratos al día desde Cegid (2 ya estaban en el equipo · 1 entra como baja). De las 4 de Cegid, 1 no ha entrado')
@@ -276,5 +307,57 @@ test('pasar a las fichas: sin el centro confirmado nadie entra; confirmado, las 
     ? '3 personas y 3 contratos al día desde Cegid (3 ya estaban en el equipo)'
     : '2 personas y 2 contratos al día desde Cegid (2 ya estaban en el equipo)')
 
+  // N1 · PR 2 · La ficha nueva de una de las bajas que acaban de entrar (Resumen,
+  // Contrato y salario, IRPF): el código delante, «Falta» donde Cegid no trae nada,
+  // y el IBAN (inventado, banco 9999) se guarda y lo dice.
+  const persona = await rest<{ id: string }[]>(sola, 'GET', `employees?select=id&name=eq.${encodeURIComponent(`Baja Inventada Uno ${marca}`)}`)
+  expect(persona.datos.length, JSON.stringify(persona.datos)).toBe(1)
+  await page.goto(`/conta/laboral/persona/${persona.datos[0].id}`)
+  const ficha = page.locator('[data-prueba="ficha-persona"]')
+  await expect(ficha.locator('h1')).toContainText(`Baja Inventada Uno ${marca}`, { timeout: 30_000 })
+  await expect(ficha).toContainText('De baja')
+  await expect(ficha.locator('[data-prueba="ficha-estudios"]')).toContainText('Falta')
+  await ficha.locator('[data-prueba="ficha-pestana-contrato"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-tipo"]')).toContainText('401 · ')
+  await expect(ficha.locator('[data-prueba="ficha-categoria"]')).toContainText('Falta la categoría')
+  await ficha.locator('[data-prueba="ficha-iban-cambiar"]').click()
+  await ficha.locator('[data-prueba="ficha-iban-campo"]').fill('ES49 9999 0000 0000 0000 0000')
+  await ficha.locator('[data-prueba="ficha-iban-guardar"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-hecho"]')).toContainText('IBAN no es válido')
+  await ficha.locator('[data-prueba="ficha-iban-campo"]').fill('ES49 9999 0000 0000 0000 0001')
+  await ficha.locator('[data-prueba="ficha-iban-guardar"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-hecho"]')).toContainText('Guardado: cobrará en ES49 …0001')
+  await expect(ficha.locator('[data-prueba="ficha-iban"]')).toContainText('ES49 9999 0000 0000 0000 0001')
+  await captura(page, 'n1-ficha-contrato')
+  await ficha.locator('[data-prueba="ficha-pestana-irpf"]').click()
+  await expect(ficha.locator('[data-prueba="ficha-145"]')).toContainText('Falta')
+
+  // N1 · PR 3 · Tiempo y turnos (maquetas 10 y 10b): la semana, el mes y lo que falta, dicho.
+  await ficha.locator('[data-prueba="ficha-pestana-tiempo"]').click()
+  const tiempo = ficha.locator('[data-prueba="ficha-tiempo"]')
+  await expect(tiempo.locator('[data-prueba="tiempo-mes"]')).toContainText('fichadas hasta hoy', { timeout: 30_000 })
+  // La bolsa acaba de leerse: con su cifra o con «Falta» y el porqué, nunca «…».
+  await expect(tiempo.locator('[data-prueba="tiempo-bolsa"]')).not.toContainText('…', { timeout: 30_000 })
+  // Sin cuadrante publicado (o sin local), el turno no se inventa: lo dice.
+  await expect(tiempo).toContainText(/no está publicado|Sin local en su ficha/)
+  const movil = test.info().project.name === 'movil'
+  await expect(tiempo.locator(movil ? '[data-prueba="tiempo-semana-movil"]' : '[data-prueba="tiempo-semana"]')).toBeVisible()
+  await expect(tiempo.locator(movil ? '[data-prueba="tiempo-semana"]' : '[data-prueba="tiempo-semana-movil"]')).toBeHidden()
+  await expect(tiempo.locator('[data-prueba="tiempo-registros"] tbody tr')).toHaveCount(3)
+  await tiempo.locator('[data-prueba="tiempo-anterior"]').click()
+  await expect(tiempo).toContainText('Esta semana · del ')
+  await captura(page, 'n1-ficha-tiempo')
+
+  // N1 · PR 2 · En Equipo, el administrador ve quién tiene el permiso de Laboral (él, siempre).
+  await page.goto('/conta/laboral')
+  const permisos = page.locator('[data-prueba="permisos-laboral"]')
+  await expect(permisos.locator('[data-prueba="permisos-laboral-fila"]').first()).toContainText('Lo tiene siempre, por ser administrador de la cuenta', { timeout: 30_000 })
+
   expect(errores, errores.join('\n')).toEqual([])
+  } finally {
+    // Al acabar, en verde o en rojo, lo suyo: sus personas y su local (con su
+    // centro y «Sin centro en Cegid», que apuntaban a él). El lote se queda: no se
+    // puede borrar desde la aplicación, y es de la cuenta del carril.
+    await limpiarVolcado(sola, marca)
+  }
 })

@@ -1,0 +1,65 @@
+name: Novedades · al fusionar el PR
+
+# QUÉ HACE (NV1, Julio, 03/11)
+# Al fusionar un PR a main, su sección «## Novedades» (las frases en palabras de
+# usuario que ya comprobó pr-a-main.yml) va a novedades/pr-<N>.json, un fichero
+# por PR: dos PR no tocan nunca el mismo (T12). Un commit «Novedades · #N»
+# encima de la main más nueva, que solo toca ese fichero.
+#
+# Ese commit SÍ se construye en Vercel (saltar-build.mjs solo se salta el de
+# capturas): es el despliegue que lleva la frase, y con él el cartel de versión
+# nueva la enseña. Si el PR no trae novedades («ninguna» en los dos grupos), no
+# se escribe nada.
+# Lo empuja el token de este workflow: no lanza otros workflows. Si alguien
+# empuja a la vez, vuelve a empezar desde la main nueva (3 veces).
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: novedades-a-main
+  cancel-in-progress: false
+
+jobs:
+  novedades:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PR: ${{ github.event.pull_request.number }}
+      FECHA: ${{ github.event.pull_request.merged_at }}
+      PR_CUERPO: ${{ github.event.pull_request.body }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: A main, en novedades/pr-<N>.json
+        run: |
+          set -euo pipefail
+          git config user.name "folvy-novedades"
+          git config user.email "novedades@folvy.invalid"
+          for vuelta in 1 2 3; do
+            node scripts/pr/novedades-escribir.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+            [ -f "novedades/pr-$PR.json" ] || exit 0
+            git add "novedades/pr-$PR.json"
+            if git diff --cached --quiet; then echo "Las novedades de #$PR ya estaban en main." | tee -a "$GITHUB_STEP_SUMMARY"; exit 0; fi
+            git commit -q -m "Novedades · #$PR"
+            if git push -q origin HEAD:main; then
+              echo "Novedades de #$PR en main ($(git rev-parse --short HEAD)): el despliegue de este commit las publica." | tee -a "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            echo "main se ha movido: vuelta $vuelta, desde la nueva."
+            git fetch -q --depth=1 origin main
+            git reset -q --hard origin/main
+          done
+          echo "::error::No se pudieron dejar las novedades de #$PR en main después de 3 vueltas."
+          exit 1

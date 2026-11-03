@@ -1,0 +1,64 @@
+/* src/shell/version/cartel.css
+ * NV1 · El cartel de versión nueva y la página de novedades, fieles a la
+ * maqueta aprobada (lienzo «Cartel de novedades», 03/11). Los mismos en Folvy
+ * y en Sumied: el nombre lo pone la marca.
+ */
+.nvc {
+  --nvc-tinta: #172443; --nvc-texto: #1b2333; --nvc-apoyo: #4A5B73; --nvc-borde: #DCE5F0;
+  --nvc-azul: #1E63C9; --nvc-azul-hover: #174ea0; --nvc-azul-suave: #E7F1FB; --nvc-borde-boton: #B9C6D8;
+  --nvc-nuevo: #0B6B67; --nvc-nuevo-fondo: #EAF9F8;
+  position: fixed; z-index: 60; background: #fff; color: var(--nvc-texto);
+  box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; font-family: inherit;
+}
+.nvc *, .nvp * { box-sizing: border-box; }
+.nvc[data-forma='cartel'] {
+  right: 32px; bottom: 32px; width: 420px; max-width: calc(100vw - 32px);
+  border: 1px solid var(--nvc-borde); border-radius: 12px; box-shadow: 0 8px 24px rgba(23, 36, 67, 0.14); padding: 20px 20px 16px;
+}
+.nvc[data-forma='hoja'] {
+  left: 0; right: 0; bottom: 0; border-top: 1px solid var(--nvc-borde); border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 24px rgba(23, 36, 67, 0.14); padding: 20px 16px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+.nvc-asa { width: 40px; height: 4px; border-radius: 2px; background: var(--nvc-borde); align-self: center; }
+.nvc-cab { display: flex; align-items: center; gap: 10px; }
+.nvc-icono { width: 28px; height: 28px; border-radius: 14px; background: var(--nvc-azul-suave); display: flex; align-items: center; justify-content: center; flex: none; }
+.nvc-titulo { margin: 0; font-size: 16px; font-weight: 600; color: var(--nvc-tinta); line-height: 1.3; }
+.nvc[data-forma='hoja'] .nvc-titulo { font-size: 17px; }
+.nvc-lista { list-style: disc outside; margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.45; color: var(--nvc-texto); }
+.nvc[data-forma='hoja'] .nvc-lista { font-size: 15px; }
+.nvc-lista b { font-weight: 600; color: var(--nvc-tinta); }
+.nvc-mas { list-style: none; margin-left: -18px; color: var(--nvc-apoyo); }
+.nvc-nota { margin: 0; font-size: 12px; color: var(--nvc-apoyo); }
+.nvc-pie { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 4px; }
+.nvc-botones { display: flex; gap: 8px; }
+.nvc-enlace { white-space: nowrap; font-size: 14px; font-weight: 500; color: var(--nvc-azul); text-decoration: none; }
+.nvc-enlace:hover { color: var(--nvc-azul-hover); text-decoration: underline; }
+.nvc-boton { white-space: nowrap; height: 40px; padding: 0 14px; border-radius: 6px; font: inherit; font-size: 14px; cursor: pointer; }
+.nvc-boton:focus-visible, .nvc-enlace:focus-visible { outline: 2px solid var(--nvc-azul); outline-offset: 2px; }
+.nvc-boton-blanco { border: 1px solid var(--nvc-borde-boton); background: #fff; color: var(--nvc-tinta); }
+.nvc-boton-azul { border: 0; background: var(--nvc-azul); color: #fff; font-weight: 600; padding: 0 16px; }
+.nvc-boton-azul:hover { background: var(--nvc-azul-hover); }
+.nvc[data-forma='hoja'] .nvc-boton-azul { height: 48px; width: 100%; border-radius: 8px; font-size: 16px; }
+.nvc[data-forma='hoja'] .nvc-pie { margin-top: 0; }
+.nvc[data-forma='hoja'] .nvc-enlace { font-size: 15px; padding: 10px 0; }
+.nvc-boton-luego { height: 44px; padding: 0 12px; border: 0; background: none; color: var(--nvc-apoyo); font: inherit; font-size: 15px; cursor: pointer; }
+
+/* Ayuda › Novedades */
+.nvp { max-width: 720px; padding: 40px 48px; display: flex; flex-direction: column; gap: 24px; color: #1b2333; }
+.nvp-cab { display: flex; flex-direction: column; gap: 6px; }
+.nvp-miga { font-size: 13px; color: #4A5B73; }
+.nvp-titulo { margin: 0; font-size: 28px; font-weight: 700; color: #172443; }
+.nvp-frase { margin: 0; font-size: 14px; color: #4A5B73; }
+.nvp-dias { list-style: none; margin: 0; padding: 0; border-top: 1px solid #DCE5F0; }
+.nvp-dia { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; padding: 18px 0; border-bottom: 1px solid #DCE5F0; }
+.nvp-fecha { display: flex; flex-direction: column; gap: 6px; font-size: 14px; font-weight: 600; color: #172443; }
+.nvp-nuevo { align-self: flex-start; font-size: 12px; font-weight: 600; color: #0B6B67; background: #EAF9F8; border-radius: 10px; padding: 2px 8px; }
+.nvp-cosas { display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5; }
+.nvp-cosas b { color: #172443; }
+.nvp-cosas a { color: #1E63C9; }
+.nvp-vacio { margin: 0; color: #4A5B73; font-size: 14px; }
+@media (max-width: 640px) {
+  .nvp { padding: 24px 16px; }
+  .nvp-dia { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .nvp-fecha { flex-direction: row; align-items: center; gap: 8px; }
+}

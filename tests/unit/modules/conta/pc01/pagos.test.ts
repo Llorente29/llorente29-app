@@ -49,6 +49,15 @@ describe('el estado de cada fila (tablero 15)', () => {
     expect(chipEstado(GESTORIA)).toEqual({ texto: 'En la remesa R-2026/014', tono: 'seguro' })
     expect(porQueNoEnRemesa(GESTORIA)).toBe('ya está en la remesa R-2026/014')
   })
+  it('B01·12 · la que no se puede pagar lo dice en su fila (y no se deja marcar): nunca «0» con una marcada', () => {
+    expect(chipEstado(SIN_IBAN)).toEqual({ texto: 'Sin IBAN · ponlo para pagarla', tono: 'duda' })
+    const sinCuenta = f({ id: 'sincuenta', proveedor: 'Verduras Prueba', con_cuenta: false, estado: 'vencida', dias_vencida: 2 })
+    expect(chipEstado(sinCuenta)).toEqual({ texto: 'Sin cuenta 400 · no se puede pagar', tono: 'duda' })
+    expect(porQueNoEnRemesa(sinCuenta)).toBe('Verduras Prueba no tiene su cuenta de proveedor (400)')
+    // La que ya está en una remesa o pagada sigue diciendo eso, aunque le falte la cuenta.
+    expect(chipEstado({ ...GESTORIA, conCuenta: false })).toEqual({ texto: 'En la remesa R-2026/014', tono: 'seguro' })
+    expect(chipEstado({ ...PAGADA, conCuenta: false })).toEqual({ texto: 'Pagada', tono: 'seguro' })
+  })
   it('sin IBAN en su ficha no entra (Foodint: 1 proveedor de 71 lo tiene)', () => {
     expect(porQueNoEnRemesa(SIN_IBAN)).toBe('Limpiezas Brillo SL no tiene IBAN en su ficha')
     expect(porQueNoEnRemesa(f({ con_cuenta: false, proveedor: 'Sin 400' }))).toBe('Sin 400 no tiene su cuenta de proveedor (400)')

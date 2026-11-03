@@ -1,3 +1,5 @@
-# B01 · PR 3a · la vuelta atrás: las tres públicas como estaban en producción (0f253b11, 57bb45e3 y 927ffeee), y fuera los núcleos y conta_pago_casar_banco.
-cuenta: scripts/conta/produccion/cuentas/b01n-nucleos.sql
-supabase/vuelta-atras/20261101T2030_b01n_nucleos_casar.down.sql
+# B01 · Cola 1e · la vuelta atrás, en orden inverso: fuera el justificante (la casilla, la tabla y sus
+# funciones; la ficha sigue sin el bloque) y fuera conta_pagos_por_revisar (Pagos sigue como antes sin ella).
+cuenta: scripts/conta/produccion/cuentas/b01p-pagar.sql
+supabase/vuelta-atras/20261102T2140_b01p_justificante.down.sql
+supabase/vuelta-atras/20261102T2115_b01p_pagos_por_revisar.down.sql

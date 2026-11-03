@@ -1,0 +1,16 @@
+# S01q·10 · STAGING AL DÍA con lo de la S01 que producción tiene y staging no
+# (Julio, 03/11, «(A)»). Medido el 03/11: de la tanda claude-s01-pr3-propuestas-
+# solas, staging tiene la 0735, la 0753, la 1103 y la 0800, y le faltan estas
+# cinco (las funciones que proponen solas lo recibido sin factura, lo pagado
+# después, las liquidaciones de los socios y de las plataformas, y la pasada
+# de noche). Ninguna migración posterior cambia sus funciones. No hay tanda de
+# producción: producción ya las tiene. Su prueba compara la huella de cada
+# función con la de producción (medida el 03/11) y mira sus disparadores y su
+# cron: staging igual que producción. Van con «otra vez:» (F01): sus líneas ya
+# están en el manifiesto de la S01 y, si no, no contarían como nuevas.
+otra vez: supabase/migrations/20261028T0830_s01_propuestas_recibido.sql
+otra vez: supabase/migrations/20261028T0849_s01_propuestas_pagado_despues.sql
+otra vez: supabase/migrations/20261028T0905_s01_propuestas_socio.sql
+otra vez: supabase/migrations/20261028T0929_s01_propuestas_plataforma.sql
+otra vez: supabase/migrations/20261028T1025_s01_pasada_de_noche.sql
+supabase/staging/sql/20261103_s01q_staging_al_dia_prueba.sql

@@ -277,6 +277,8 @@ p.s-menu-nota, li.s-menu-nota { padding: var(--s-1) var(--s-2); }
 
 /* Lo que se enfoca o se lleva a la vista no queda debajo de la cabecera fija (WCAG 2.4.11). */
 html:has(.s-cabecera) { scroll-padding-top: 72px; }   /* 3 + 56 + aire: los tokens viven en .cx, no en html */
+/* B01 · En el móvil la cabecera lleva debajo la fila de la empresa y el periodo (hasta dos líneas): más alta. */
+@media (max-width: 767px) { html:has(.s-cab-fila-movil) { scroll-padding-top: 150px; } }
 .cxm { --cxm-alto-arriba: calc(var(--s-alto-cabecera) + var(--s-franja-empresa)); }
 
 /* ── El móvil ────────────────────────────────────────────────────────── */

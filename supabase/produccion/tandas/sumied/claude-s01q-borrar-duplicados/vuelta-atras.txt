@@ -1,0 +1,7 @@
+# S01q · Borrar duplicados · la vuelta atrás, en orden inverso: los 123 asientos
+# vuelven desde el respaldo (con sus líneas, su IVA y sus documentos), la serie 2
+# y la cadena a su número y su huella de antes, y las facturas otra vez apuntadas;
+# después, fuera las funciones de borrar.
+cuenta: scripts/conta/produccion/cuentas/s01q-borrar.sql
+supabase/vuelta-atras/20261102T1838_s01q_foodint_duplicados.down.sql
+supabase/vuelta-atras/20261102T1837_s01q_borrar_asientos.down.sql

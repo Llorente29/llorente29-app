@@ -59,7 +59,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     bancos: 'bancos.movimientos', bancosPestana: 'bancos.reglas',
     impuestos: 'impuestos.calendario', impuestosPestana: 'impuestos.calendario', impuestoIva: 'impuestos.calendario',
     // LS1 · Laboral: Equipo, una pantalla por su nombre y lo que «Llega en …».
-    laboral: 'laboral.equipo', laboralPagina: 'laboral.centros', laboralLlega: 'laboral.contrato',
+    laboral: 'laboral.equipo', laboralPagina: 'laboral.centros', laboralLlega: 'laboral.contrato', laboralPersona: 'laboral.equipo',
     // I01c (19/10): el trimestre, también el de una empresa por la ruta.
     impuestoTrimestre: 'impuestos.trimestre', impuestoTrimestreEmpresa: 'impuestos.trimestre',
     // S02 · Los modelos del año (390, 190, 180, 347, 349): se llega desde el calendario.
@@ -68,6 +68,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     impuestosCliente: 'despacho',
     // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
     aceptarAsesoria: null,
+    // NV1: Ayuda › Novedades no es una pestaña del menú.
+    novedades: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
     // V01 · Entrega 2: «Ventas» a secas lleva a Cierres del día.
     ventas: 'facturacion.cierres',

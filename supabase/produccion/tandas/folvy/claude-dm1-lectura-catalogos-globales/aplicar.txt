@@ -1,0 +1,16 @@
+# DM1 · 2b-2 · conta_lectura puede leer los catálogos globales (02/11/2026).
+# Rama claude/dm1-lectura-catalogos-globales. Se ensaya y se aplica antes de
+# fusionar, lanzado desde main nombrando la rama (W12b).
+#
+#   1. 1218 — SOLO AÑADE: SELECT para conta_lectura en los 15 catálogos
+#      globales (sin filas de ninguna cuenta: medido) y la vista nueva
+#      catalogo_curso_global, solo con los cursos sin cuenta (course tiene 23
+#      de 42 de cuentas: la tabla no entra). Para que el volcado del #443
+#      pueda leerlos. Fuera del camino del pedido; sin «autorizo».
+#
+# Antes (producción, 02/11 11:16 UTC): conta_lectura lee 0 de las 16; la vista
+# no existe; nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261102T1218_dm1_lectura_catalogos_globales.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-lectura-catalogos-globales.sql

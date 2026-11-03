@@ -1,0 +1,4 @@
+# B01 · Respuesta 15 · la vuelta atrás: las dos funciones como estaban (md5 de
+# pg_get_functiondef 72fee864… y 0f60410c…), sin SECURITY DEFINER.
+cuenta: scripts/conta/produccion/cuentas/b01q-pagos-lista.sql
+supabase/vuelta-atras/20261103T1815_b01q_pagos_lista_rapida.down.sql

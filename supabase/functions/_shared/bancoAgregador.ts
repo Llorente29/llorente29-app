@@ -35,7 +35,11 @@ import { huellas, huellasSuaves, limpiarConcepto, limpiarContraparte, movimiento
 
 export interface CuentaAgregador { id: string; iban: string; titular: string | null; divisa: string }
 export interface MovimientoAgregador { id: string; fecha: string; fechaValor: string | null; importeCent: number; concepto: string; contraparte: string | null }
-export interface PaginaAgregador { saldoInicialCent: number | null; saldoFinalCent: number | null; movimientos: MovimientoAgregador[] }
+export interface PaginaAgregador {
+  saldoInicialCent: number | null; saldoFinalCent: number | null; movimientos: MovimientoAgregador[]
+  /** Cola 1b · Lo que el banco da todavía pendiente en el periodo y no entra (solo lo contabilizado entra). */
+  pendientes?: { n: number; cent: number }
+}
 export interface ProveedorAgregador {
   id: string
   nombre: string
@@ -142,11 +146,56 @@ async function todosLosMovimientos(c: ClienteOpenBankingIo, cuenta: string, desd
   throw new Error(`La cuenta ${cuenta} tiene más de ${100 * LIMITE} movimientos entre el ${desde} y el ${hasta}: no los traigo a medias.`)
 }
 
-const ibanLimpio = (iban: string | null) => (iban ?? '').replace(/\s+/g, '').toUpperCase()
+export const ibanLimpio = (iban: string | null) => (iban ?? '').replace(/\s+/g, '').toUpperCase()
+
+// ── B01·14 · Mirar lo que da open-banking.io, sin importar nada ─────────────
+// Los traspasos del 30/10 (+3.308,46 € a ···6536 y +798,36 € a ···4525) no han
+// llegado nunca por la conexión, ni al releer: el saldo del banco dice que
+// entraron y la lectura no apunta qué le dio el proveedor de esos días. Esto lo
+// dice, cuenta a cuenta: lo que devuelve con el filtro de fechas (lo que pide
+// la lectura) y sin él (por si el movimiento está con otra fecha o sin la
+// contable), con sus tres fechas, el importe y el estado. Sin conceptos ni
+// nombres: no hacen falta para saber si está.
+
+/** Un movimiento tal como lo da open-banking.io: sus tres fechas, el importe con signo y el estado. */
+export interface VistoObi { id: string; contable: string | null; valor: string | null; operacion: string | null; importeCent: number; estado: string | null }
+
+export function vistoDeObi(t: TransaccionObi): VistoObi {
+  const bruto = centimos(t.amount)
+  const ind = (t.creditDebitIndicator ?? '').toUpperCase()
+  return {
+    id: t.id, contable: t.bookingDate?.slice(0, 10) ?? null, valor: t.valueDate?.slice(0, 10) ?? null, operacion: t.transactionDate?.slice(0, 10) ?? null,
+    importeCent: ind === 'DBIT' ? -Math.abs(bruto) : ind === 'CRDT' ? Math.abs(bruto) : bruto, estado: t.status,
+  }
+}
+
+/** ¿Alguna de sus fechas cae entre `desde` y `hasta` (los dos incluidos)? */
+export const tocaLosDias = (v: VistoObi, desde: string, hasta: string) => [v.contable, v.valor, v.operacion].some((f) => !!f && f >= desde && f <= hasta)
+
+/**
+ * Lo que da una cuenta para esos días: con el filtro de fechas que usa la
+ * lectura y, aparte, lo que sin filtro tiene alguna fecha en esos días y el
+ * filtro no ha dado. Nunca importa ni escribe nada.
+ */
+export async function mirarCuenta(c: ClienteOpenBankingIo, cuenta: string, desde: string, hasta: string):
+  Promise<{ conFiltro: VistoObi[]; soloSinFiltro: VistoObi[]; totalSinFiltro: number }> {
+  const conFiltro = (await todosLosMovimientos(c, cuenta, desde, hasta)).map(vistoDeObi)
+  const todos: TransaccionObi[] = []
+  const LIMITE = 200
+  for (let i = 0; i < 100; i++) {
+    const p = await c.getTransactions(cuenta, { limit: LIMITE, offset: todos.length })
+    todos.push(...p.items)
+    if (p.items.length < LIMITE || todos.length >= p.total) break
+  }
+  const ya = new Set(conFiltro.map((v) => v.id))
+  const soloSinFiltro = todos.map(vistoDeObi).filter((v) => tocaLosDias(v, desde, hasta) && !ya.has(v.id))
+  return { conFiltro, soloSinFiltro, totalSinFiltro: todos.length }
+}
 
 /** open-banking.io como proveedor, con lo que además sabe de la conexión. `hoy`: el día de Madrid en que se lee. */
-export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): ProveedorAgregador & ConexionDelProveedor {
+export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): ProveedorAgregador & ConexionDelProveedor & { ultimoRefresco(): { cuentas: number; nuevos: number } | null } {
   let cuentasObi: Promise<CuentaObi[]> | null = null
+  let refresco: { cuentas: number; nuevos: number } | null = null
   const leerCuentas = () => (cuentasObi ??= c.getAccounts())
   return {
     id: PROVEEDOR_OBI,
@@ -158,16 +207,23 @@ export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): Pr
       const cuentaObi = (await leerCuentas()).find((a) => a.id === cuenta)
       if (!cuentaObi) throw new Error(`La cuenta ${cuenta} ya no está en la conexión.`)
       // Se lee hasta hoy (no hasta `hasta`): lo de después del periodo hace falta para saber su saldo final.
-      const leidos = (await todosLosMovimientos(c, cuenta, desde, hoy)).filter(contabilizado).map(movimientoDeOpenBankingIo)
+      const todas = await todosLosMovimientos(c, cuenta, desde, hoy)
+      const leidos = todas.filter(contabilizado).map(movimientoDeOpenBankingIo)
         .filter((m) => m.fecha >= desde && m.fecha <= hoy).sort((a, b) => a.fecha.localeCompare(b.fecha))
       const dentro = leidos.filter((m) => m.fecha <= hasta)
+      // Cola 1b: lo pendiente no entra, pero se cuenta (y queda en el registro de la lectura).
+      const pend = todas.filter((t) => !contabilizado(t)).map(movimientoDeOpenBankingIo).filter((m) => m.fecha >= desde && m.fecha <= hasta)
+      const pendientes = { n: pend.length, cent: pend.reduce((t, m) => t + m.importeCent, 0) }
       const saldo = saldoDelBanco(cuentaObi.balances ?? [], hoy)
-      if (!saldo || saldo.fecha < hasta) return { saldoInicialCent: null, saldoFinalCent: null, movimientos: dentro }
+      if (!saldo || saldo.fecha < hasta) return { saldoInicialCent: null, saldoFinalCent: null, movimientos: dentro, pendientes }
       const final = saldoAlCerrar(saldo, leidos, hasta)
-      return { saldoInicialCent: final - dentro.reduce((t, m) => t + m.importeCent, 0), saldoFinalCent: final, movimientos: dentro }
+      return { saldoInicialCent: final - dentro.reduce((t, m) => t + m.importeCent, 0), saldoFinalCent: final, movimientos: dentro, pendientes }
     },
+    // B01·14 · Lo que ha traído del banco al ponerse al día, para el registro de la noche.
+    ultimoRefresco: () => refresco,
     async refrescar() {
       const r = await c.syncAll()
+      refresco = { cuentas: r.accounts ?? 0, nuevos: r.newTransactions ?? 0 }
       return (r.failures ?? []).map((f) => ({ cuenta: f.accountId, motivo: f.reason }))
     },
     async permisos() {
@@ -223,6 +279,49 @@ export interface OpcionesLectura {
    * una base que diga cuáles ya tiene (BaseAgregador.conocidos).
    */
   releerUltimoDia?: boolean
+  /**
+   * Cola 1b (Julio, 02/11): cada lectura vuelve a leer también los últimos N
+   * días, por si el banco ha dado tarde algo de un día ya leído (un movimiento
+   * que estaba pendiente, o que contabilizó después con su fecha). Lo que ya
+   * está en Folvy no se duplica (`yaEstan`); lo nuevo de esos días entra en un
+   * extracto propio, «llegó tarde», sin saldos (su continuidad la da el hueco
+   * que rellena). BBVA: 7.
+   */
+  releerDias?: number
+}
+
+/** Cola 1b · Los días que vuelve a leer cada noche la conexión de BBVA. */
+export const RELEER_DIAS_OBI = 7
+/** Cola 1b · El formato del extracto de lo que el banco dio tarde (días ya leídos). */
+export const FORMATO_TARDE = (proveedor: string) => `agregador:${proveedor}:tarde`
+
+/** Un movimiento que ya está en Folvy: su día, su importe y, si entró por la conexión, la referencia del proveedor. */
+export interface MovimientoEnFolvy { fecha: string; importeCent: number; ref2: string | null }
+
+/**
+ * Cola 1b · De lo que da el banco para unos días ya leídos, lo que NO está en
+ * Folvy. Primero por la referencia del proveedor (lo que entró por la
+ * conexión); lo demás, por día e importe, uno a uno (lo que entró por un
+ * Norma 43 no lleva esa referencia): dos cafés iguales el mismo día son dos.
+ */
+export function quitarLoQueYaEsta(delBanco: readonly MovimientoAgregador[], enFolvy: readonly MovimientoEnFolvy[]): MovimientoAgregador[] {
+  const ids = new Set(enFolvy.map((m) => m.ref2).filter((x): x is string => !!x))
+  const porId = delBanco.filter((m) => !ids.has(m.id))
+  const usados = new Set(delBanco.filter((m) => ids.has(m.id)).map((m) => m.id))
+  const quedan = new Map<string, number>()
+  for (const m of enFolvy) {
+    if (m.ref2 && usados.has(m.ref2)) continue
+    const k = `${m.fecha}|${m.importeCent}`
+    quedan.set(k, (quedan.get(k) ?? 0) + 1)
+  }
+  const out: MovimientoAgregador[] = []
+  for (const m of porId) {
+    const k = `${m.fecha}|${m.importeCent}`
+    const n = quedan.get(k) ?? 0
+    if (n > 0) quedan.set(k, n - 1)
+    else out.push(m)
+  }
+  return out
 }
 
 /**
@@ -255,6 +354,10 @@ export interface BaseAgregador {
    * nada nuevo no crea un extracto. Sin ella (BBVA), como antes.
    */
   conocidos?(treasuryId: string, referencias: string[]): Promise<Set<string>>
+  /** Cola 1b · Lo que ya está en Folvy de un banco entre dos días (para releer sin duplicar). */
+  movimientosEnFolvy?(treasuryId: string, desde: string, hasta: string): Promise<MovimientoEnFolvy[]>
+  /** Cola 1b · El registro de cada lectura de cada cuenta: cuántos pendientes deja fuera y cuánto llegó tarde. */
+  registrar?(args: Record<string, unknown>): Promise<void>
 }
 
 export type EstadoCuenta = 'al_dia' | 'sin_movimientos' | 'permiso_caducado' | 'fallo'
@@ -277,6 +380,16 @@ export interface ParteCuenta {
   saldoBancoCent: number | null
   saldoFinalCent: number | null
   caduca: string | null
+  /** Cola 1b · Lo que el banco daba pendiente y no entra. */
+  pendientes: number
+  pendientesCent: number
+  /** Cola 1b · Lo que llegó tarde de días ya leídos y ha entrado ahora. */
+  tarde: number
+  tardeCent: number
+  desdeReleido: string | null
+  /** B01·14 · Cuántos movimientos contabilizados dio el banco de los días releídos (ya estuvieran o no), y cuánto suman. */
+  releidosDelBanco?: number
+  releidosDelBancoCent?: number
 }
 
 const euros = (c: number) => `${(c / 100).toFixed(2).replace('.', ',')} €`
@@ -299,6 +412,7 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
       banco: banco?.nombre ?? null, cuentaProveedor: c.id, iban4: c.iban.slice(-4), estado: 'al_dia', mensaje: '', desde: null, hasta: null,
       leidos: 0, nuevos: 0, repetidos: 0, posiblesRepetidos: 0, continuidad: null, huecoCent: null,
       saldoBancoCent: saldo?.cent ?? null, saldoFinalCent: null, caduca: permiso.caduca,
+      pendientes: 0, pendientesCent: 0, tarde: 0, tardeCent: 0, desdeReleido: null,
     }
     out.push(parte)
     if (!banco) {
@@ -306,11 +420,26 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
       parte.mensaje = `La cuenta ···${parte.iban4} está conectada pero no es ningún banco de la empresa en Folvy: no se trae.`
       continue
     }
-    const apuntar = (extra: Record<string, unknown> = {}) => base.apuntar({
-      p_treasury: banco.id, p_proveedor: p.id, p_cuenta_proveedor: c.id, p_conexion: permiso.conexion, p_banco: e.banco, p_caduca: permiso.caduca, p_renovar: e.renovar,
-      p_estado: parte.estado, p_mensaje: parte.mensaje, p_saldo_banco: saldo ? saldo.cent / 100 : null, p_saldo_fecha: saldo?.fecha ?? null,
-      p_nuevos: parte.nuevos, p_repetidos: parte.repetidos, p_desde: parte.desde, p_hasta: parte.hasta, ...extra,
-    })
+    const apuntar = async (extra: Record<string, unknown> = {}) => {
+      // Cola 1b: lo pendiente que no entra se dice también en el texto de la cuenta.
+      if (parte.pendientes > 0 && !parte.mensaje.includes('pendiente')) {
+        parte.mensaje += ` ${parte.pendientes === 1 ? 'Hay 1 movimiento pendiente' : `Hay ${parte.pendientes} movimientos pendientes`} en el banco (${euros(parte.pendientesCent)}) que aún no ${parte.pendientes === 1 ? 'entra' : 'entran'}: entrará cuando el banco lo contabilice.`
+      }
+      await base.apuntar({
+        p_treasury: banco.id, p_proveedor: p.id, p_cuenta_proveedor: c.id, p_conexion: permiso.conexion, p_banco: e.banco, p_caduca: permiso.caduca, p_renovar: e.renovar,
+        p_estado: parte.estado, p_mensaje: parte.mensaje, p_saldo_banco: saldo ? saldo.cent / 100 : null, p_saldo_fecha: saldo?.fecha ?? null,
+        p_nuevos: parte.nuevos, p_repetidos: parte.repetidos, p_desde: parte.desde, p_hasta: parte.hasta, ...extra,
+      })
+      if (base.registrar) {
+        await base.registrar({
+          p_treasury: banco.id, p_proveedor: p.id, p_estado: parte.estado, p_mensaje: parte.mensaje, p_desde: parte.desde, p_hasta: parte.hasta,
+          p_releido_desde: parte.desdeReleido, p_leidos: parte.leidos, p_nuevos: parte.nuevos, p_repetidos: parte.repetidos,
+          p_pendientes: parte.pendientes, p_pendientes_importe: parte.pendientesCent / 100, p_tarde: parte.tarde, p_tarde_importe: parte.tardeCent / 100,
+          p_continuidad: parte.continuidad, p_hueco: parte.huecoCent === null ? null : parte.huecoCent / 100,
+          p_saldo_banco: saldo ? saldo.cent / 100 : null,
+        })
+      }
+    }
     try {
       const motivo = fallos.get(c.id)
       if (permiso.renovar || motivo === 'reconnect_needed' || motivo === 'consent_withdrawn') {
@@ -319,15 +448,54 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
         await apuntar()
         continue
       }
-      const desde = desdeCuando(await base.extractos(banco.id), hoy, o)
+      const extractos = await base.extractos(banco.id)
+      const desde = desdeCuando(extractos, hoy, o)
+      // Cola 1b: con lectura anterior suya, se vuelven a leer también los últimos `releerDias` días.
+      let desdeLeer = desde
+      if (o.releerDias && base.movimientosEnFolvy && extractos.some((x) => x.fuente === (o.fuente ?? FUENTE_OBI))) {
+        const tope = masDias(hoy, -(o.diasAtras ?? DIAS_ATRAS))
+        const r = masDias(hoy, -o.releerDias)
+        const d = r < tope ? tope : r
+        if (d < desde) desdeLeer = d
+      }
       parte.desde = desde; parte.hasta = ayer
-      if (desde > ayer) { parte.estado = 'sin_movimientos'; parte.mensaje = 'Ya estaba al día.'; await apuntar(); continue }
-      const pag = await p.movimientos('', c.id, desde, ayer)
+      if (desdeLeer > ayer) { parte.estado = 'sin_movimientos'; parte.mensaje = 'Ya estaba al día.'; await apuntar(); continue }
+      let pag = await p.movimientos('', c.id, desdeLeer, ayer)
+      parte.pendientes = pag.pendientes?.n ?? 0; parte.pendientesCent = pag.pendientes?.cent ?? 0
+      if (desdeLeer < desde) {
+        // Lo de los días ya leídos: solo lo que no está en Folvy, en su propio extracto («llegó tarde»).
+        parte.desdeReleido = desdeLeer
+        const hastaViejo = masDias(desde, -1) < ayer ? masDias(desde, -1) : ayer
+        const viejos = pag.movimientos.filter((m) => m.fecha < desde)
+        parte.releidosDelBanco = viejos.length
+        parte.releidosDelBancoCent = viejos.reduce((t, m) => t + m.importeCent, 0)
+        const tarde = viejos.length ? quitarLoQueYaEsta(viejos, await base.movimientosEnFolvy!(banco.id, desdeLeer, hastaViejo)) : []
+        if (tarde.length) {
+          const primero = tarde.map((m) => m.fecha).sort()[0]
+          const r = await base.importar({
+            p_treasury: banco.id, p_fuente: `agregador:${p.id}`, p_formato: FORMATO_TARDE(p.id), p_fichero: `${p.nombre} · lo que el banco dio tarde, del ${primero} al ${hastaViejo}`,
+            p_sha256: null, p_desde: primero, p_hasta: hastaViejo, p_saldo_inicial: null, p_saldo_final: null,
+            p_sin_comprobar: `Lo que el banco dio tarde de días ya leídos (cada lectura vuelve a leer los últimos ${o.releerDias} días). No lleva saldos: rellena el hueco del extracto de esos días.`,
+            p_iban_fichero: null, p_movs: paraImportar(tarde),
+          })
+          parte.tarde = Number(r.nuevos ?? 0)
+          parte.tardeCent = tarde.reduce((t, m) => t + m.importeCent, 0)
+        }
+        const normales = pag.movimientos.filter((m) => m.fecha >= desde)
+        pag = { ...pag, movimientos: normales,
+          saldoInicialCent: pag.saldoFinalCent === null ? null : pag.saldoFinalCent - normales.reduce((t, m) => t + m.importeCent, 0) }
+        if (desde > ayer) {
+          parte.estado = 'sin_movimientos'; parte.desde = null; parte.hasta = null
+          parte.mensaje = parte.tarde ? `Ya estaba al día. Al releer desde el ${desdeLeer}, han llegado tarde ${parte.tarde} (${euros(parte.tardeCent)}).` : 'Ya estaba al día.'
+          await apuntar(); continue
+        }
+      }
       parte.leidos = pag.movimientos.length
       // Sin movimientos no se crea un extracto vacío: la próxima noche se vuelve a leer desde el mismo día.
+      const tardeTexto = parte.tarde ? ` Al releer desde el ${parte.desdeReleido}, han llegado tarde ${parte.tarde} (${euros(parte.tardeCent)}).` : ''
       if (pag.movimientos.length === 0) {
         parte.estado = 'sin_movimientos'; parte.desde = null; parte.hasta = null
-        parte.mensaje = motivo ? `El banco no ha dado movimientos nuevos (dice: ${motivo}).` : `Sin movimientos nuevos del ${desde} al ${ayer}.`
+        parte.mensaje = (motivo ? `El banco no ha dado movimientos nuevos (dice: ${motivo}).` : `Sin movimientos nuevos del ${desde} al ${ayer}.`) + tardeTexto
         await apuntar(); continue
       }
       const sinSaldo = pag.saldoInicialCent === null || pag.saldoFinalCent === null
@@ -360,7 +528,7 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
       parte.huecoCent = r.hueco == null ? null : Math.round(Number(r.hueco) * 100)
       parte.saldoFinalCent = pag.saldoFinalCent
       parte.mensaje = `${parte.nuevos} nuevos y ${parte.repetidos} que ya estaban, del ${desde} al ${ayer}`
-        + (parte.continuidad === 'hueco' && parte.huecoCent !== null ? `. No empieza donde acabó el anterior: faltan ${euros(parte.huecoCent)}.` : '.')
+        + (parte.continuidad === 'hueco' && parte.huecoCent !== null ? `. No empieza donde acabó el anterior: faltan ${euros(parte.huecoCent)}.` : '.') + tardeTexto
       await apuntar()
     } catch (err) {
       parte.estado = 'fallo'

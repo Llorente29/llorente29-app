@@ -16,6 +16,9 @@ name: PR a main · funciones y título
 #   5. (W12, 29/10) ningún DNI, NIE, NAF ni IBAN que parezca real en lo que
 #      añade el PR, sus commits o su descripción (regla T11,
 #      scripts/ci/datos-personales.mjs).
+#   6. (NV1, 03/11) la descripción dice qué cambia para quien lo usa, en
+#      «## Novedades» con «### Sumied» y «### Folvy» (o «ninguna»), sin jerga:
+#      es lo que enseña el cartel de versión nueva (scripts/pr/novedades.mjs).
 # Lo que no puede ver: el mensaje que se escribe AL FUSIONAR. Ese lo vigila
 # quien fusiona (CLAUDE.md), y si se cuela, deploy-edge-functions no corre:
 # se despliega a mano con su `funciones`.
@@ -60,7 +63,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Título, producto y funciones a desplegar a mano
+      - name: Título, producto, funciones a desplegar a mano y novedades
         env:
           PR_TITULO: ${{ github.event.pull_request.title }}
           PR_CUERPO: ${{ github.event.pull_request.body }}

@@ -1,0 +1,3 @@
+# S01q·11 · la vuelta atrás: las dos funciones, las de antes (desde su respaldo).
+cuenta: scripts/conta/produccion/cuentas/s01q-mes-rapido.sql
+supabase/vuelta-atras/20261103T1527_s01q_mes_rapido.down.sql

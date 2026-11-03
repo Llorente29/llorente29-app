@@ -58,4 +58,12 @@ describe('la autorrepercusión: la base y el agente «libro», con la misma exce
     expect(base).toMatch(/v_isp_472 <> v_auto_477/)
     expect(agente).toMatch(/la 477 de la autorrepercusión no casa con la 472 autoliquidada/)
   })
+  it('pero solo si el asiento lleva IVA autoliquidado (la base: «v_hay_isp and»): la liquidación de un 303 no se mide así', () => {
+    // DM1·5 (03/11): sin la condición, la liquidación del 303 de Casa Lola salía en rojo en el agente y la base la validaba.
+    expect(base).toMatch(/if v_hay_isp and v_isp_472 <> v_auto_477 then/)
+    const regla = agente.slice(agente.indexOf("when a.template_code like '477%' and l.tax_rate_id is null\n            and exists"),
+                               agente.indexOf("then 'la 477 de la autorrepercusión no casa con la 472 autoliquidada'"))
+    expect(regla.length).toBeGreaterThan(0)
+    expect(regla).toMatch(/and exists \(select 1 from public\.journal_line l4[\s\S]*treatment in \('intra_eu', 'reverse_charge'\)\)/)
+  })
 })

@@ -1,0 +1,14 @@
+# S01q·11 · Ventas › Liquidaciones en menos de 2 s (Julio, 03/11: «el tiempo del
+# mes, antes de fusionar»). Rama claude/s01q-mes-rapido. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar; el #461 (la pantalla) se
+# fusiona después.
+#
+#   1527  conta_liquidaciones y conta_liquidaciones_mes: sus CTE encadenadas
+#         («filas»; «g» y «k») se calculan una vez («as materialized»). Misma
+#         firma, con respaldo; el resto del texto, igual. Medido en producción
+#         (solo lectura, copias en pg_temp): octubre de Foodint de 8.716 ms a
+#         1.037; agosto de 11.790 a 820; el resultado, idéntico.
+#
+# Nada en el camino del pedido. No toca filas. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01q-mes-rapido.sql
+supabase/migrations/20261103T1527_s01q_mes_rapido.sql

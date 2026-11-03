@@ -253,6 +253,8 @@ export const CONTA = {
      * sigue en compras/liquidacion/:liqId, que la barra marca en Ventas).
      */
     liquidacionesVentas: 'ventas/liquidaciones',
+    /** NV1 · Ayuda › Novedades: lo que cambia en cada versión. */
+    novedades: 'ayuda/novedades',
     /** PC01 · E3 · Ventas › Cobros (tablero cobros-1): lo que te deben tus clientes, las remesas de recibos y la ficha de una (cobros-2). */
     cobros: 'ventas/cobros',
     remesaCobros: 'ventas/cobros/remesas/:remesaId',
@@ -280,6 +282,8 @@ export const CONTA = {
     laboralPagina: 'laboral/:pagina',
     /** LS1 · Lo que llega más adelante (contrato y convenio, nóminas, seguros sociales, SEPE). */
     laboralLlega: 'laboral/llega/:que',
+    /** N1 · PR 2 (02/11) · La ficha nueva de una persona (Resumen, Contrato y salario, IRPF). */
+    laboralPersona: 'laboral/persona/:id',
     /** I01b · El IVA de un periodo (tablero 9): impuestos/iva/2026/3T. */
     impuestoIva: 'impuestos/iva/:ejercicio/:periodo',
     /** I01c · El trimestre (maqueta_303_v2): impuestos/trimestre/2026/3T. */
@@ -370,11 +374,17 @@ export function indiceAjustes(solo = false): typeof INDICE_AJUSTES {
   return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !e.hueco) })).filter((g) => g.entradas.length > 0)
 }
 
+/** N1 · La ficha nueva de una persona en Sumied › Laboral. */
+export const rutaFichaPersona = (id: string): string => rutaConta(CONTA.rutas.laboralPersona, { id })
+
 /** Dirección absoluta de una ruta del módulo, con sus parámetros rellenos. */
 export function rutaConta(relativa: string, params: Record<string, string> = {}): string {
   const rellena = relativa.replace(/:([A-Za-z_][A-Za-z0-9_]*)/g, (_, n: string) => encodeURIComponent(params[n] ?? ''))
   return `/${CONTA.modulo}/${rellena}`.replace(/\/+$/, '')
 }
+
+/** NV1 · Las novedades: en Sumied, Ayuda › Novedades; en Folvy, Configuración › Novedades. */
+export const rutaNovedades = (producto: 'sumied' | 'folvy'): string => (producto === 'sumied' ? rutaConta(CONTA.rutas.novedades) : '/configuracion/novedades')
 
 export const rutaTuEmpresa = (): string => rutaConta(CONTA.rutas.empresa)
 export const rutaApartadoEmpresa = (apartado: string): string => rutaConta(CONTA.rutas.empresaApartado, { apartado })

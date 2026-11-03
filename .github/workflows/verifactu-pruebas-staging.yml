@@ -53,7 +53,9 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # La CLI fija (B01, 03/11): con «latest», la 3.0.0 (02/11, 12:18 UTC) empezó a pedir
+          # confirmación y el despliegue no desplegaba nada. La cambia una persona, a propósito.
+          version: 2.122.1
 
       - name: Guardas · staging y no producción; pruebas solo contra prewww1
         env:
@@ -75,7 +77,8 @@ jobs:
           mkdir -p /tmp/vp
           TOK=$(openssl rand -hex 24); echo "::add-mask::$TOK"; printf '%s' "$TOK" > /tmp/vp/token
           supabase secrets set --project-ref "$REF" "VERIFACTU_PRUEBAS_TOKEN=$TOK" CONTA_VERIFACTU=pruebas > /dev/null
-          supabase functions deploy "$FN" --project-ref "$REF" > /tmp/vp/despliegue.txt 2>&1
+          supabase functions deploy "$FN" --project-ref "$REF" --yes > /tmp/vp/despliegue.txt 2>&1 \
+            || { echo "::error::No se ha desplegado $FN: $(tail -n 1 /tmp/vp/despliegue.txt)"; exit 1; }
           echo "Desplegada en staging-conta, con la puerta en pruebas."
 
       - name: Conexión · una consulta con el certificado de pruebas (abre o no el candado)

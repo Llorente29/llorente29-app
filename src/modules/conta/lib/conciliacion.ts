@@ -197,6 +197,17 @@ export function facturasEnConcepto(texto: string): string[] {
   return out
 }
 
+/**
+ * Cola 2 (Julio, 02/11) · LA VERSIÓN DEL MOTOR. Se guarda con cada propuesta
+ * (bancosNucleo.conciliarPendientes) y, antes de aceptarla, Bancos la compara:
+ * una propuesta calculada con otro motor se vuelve a calcular y se enseña de
+ * nuevo, sin casar nada (Olimpo, 30/10: una propuesta del 29/10 se aceptó
+ * después de que la S01c cambiase el motor, y casó un pago con una factura
+ * anulada). Cada cambio de este fichero sube la versión: lo vigila
+ * tests/unit/modules/conta/motorBancosVersion.test.ts.
+ */
+export const MOTOR_BANCOS = '2026-11-02.1'
+
 /** De dónde sale la propuesta: la píldora de la fila (N17b). */
 export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo' | 'pasarela'
 

@@ -1,0 +1,23 @@
+# S01q·7 · Que Sumied no pueda duplicar (Julio, 02/11, respuestas S01q·7 «sí, sí, a» y S01q·8 «A»).
+# Rama claude/s01q-no-duplicar. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   2139  El borrado dice en qué declaración está un asiento (modelo, periodo y
+#         año) y si es un borrador («sácalo del borrador y recalcúlalo
+#         después») o ya está presentada. No toca ninguna declaración (S01q·8).
+#   2010  Foodint (autorizo: borra filas): se BORRAN los asientos 2/3272 y 2/3273
+#         del 29/10 (Vercel AJBFQADA-0006 y Supabase EFWCEJ-00007), que Diez ya
+#         tiene en el 2/3129 y el 2/3130, con _conta_asientos_borrar: la serie 2
+#         seguida desde el 3272, la cadena recalculada, cada factura «Ya
+#         contabilizada en Diez» y el IVA soportado del 4T, 10,57 € menos. Para si
+#         algo no es lo medido.
+#   2011  Las reglas 1 a 4, en la base: una factura recibida no se contabiliza
+#         dos veces; ningún asiento de Sumied antes del corte; una factura
+#         emitida, un asiento; un pago o un cobro no pasa del total. Al empezar
+#         mide lo que hay y para si algo ya las rompe.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01q-no-duplicar.sql
+supabase/migrations/20261102T2139_s01q_borrar_dice_borrador.sql
+supabase/migrations/20261102T2010_s01q_borrar_vercel_supabase.sql
+supabase/migrations/20261102T2011_s01q_no_duplicar.sql

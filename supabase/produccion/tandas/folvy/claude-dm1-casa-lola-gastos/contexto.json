@@ -1,0 +1,41 @@
+{
+ "_que": "DM1·6 · Casa Lola con los gastos de un restaurante · contexto de producción de la tanda (1525), medido en SOLO LECTURA el 03/11 a las 14:40 UTC. Existe demo_contabilidad_sembrar (la de la 1350); nada de la tanda en el historial. Casa Lola: marcada como demo, una empresa, 117 asientos validados, 39 movimientos casados y 3 sin casar, 303 del 3T presentado sin contabilizar.",
+ "medido": "2026-11-03T14:40Z",
+ "tanda": {
+  "supabase/migrations/20261103T1525_dm1_casa_lola_gastos.sql": "5004a264a1ad2cdd928256b0e1f72709"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_match_item",
+   "public.company",
+   "public.customer_fiscal",
+   "public.journal_entry",
+   "public.journal_line",
+   "public.party",
+   "public.party_role",
+   "public.supplier_invoice_payment_log",
+   "public.supplier_invoice_tax"
+  ],
+  "funciones": [
+   "public.demo_contabilidad_sembrar(uuid)"
+  ],
+  "filas": {
+   "public.bank_match_item": 37,
+   "public.company": 0,
+   "public.customer_fiscal": 3,
+   "public.journal_entry": 15846,
+   "public.journal_line": 41892,
+   "public.party": 104,
+   "public.party_role": 121,
+   "public.supplier_invoice_payment_log": 225,
+   "public.supplier_invoice_tax": 311
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,6 @@
+# DM1 · La contabilidad de demo de Casa Lola · la 1350 y su prueba (ROLLBACK):
+# sobre un doble inventado de Casa Lola, sin la marca no siembra (rojo a
+# propósito); con ella, todo sale; ninguna otra cuenta cambia; otra vez encima
+# para; la vuelta atrás deja el doble como estaba.
+supabase/migrations/20261103T1350_dm1_casa_lola_contabilidad.sql
+supabase/staging/sql/20261103_dm1_casa_lola_contabilidad_prueba.sql
