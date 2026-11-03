@@ -14,6 +14,8 @@
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { cuentaPuedeSalir } from "../_shared/puerta.ts";
+import { hacerJustificantes } from "../_shared/justificantePago.ts";
+import { piezasJustificante } from "../_shared/justificanteServidor.ts";
 import { COLUMNAS_CONEXION, leerEmpresa, paraElRegistro, type ConexionRevolut, type ParteEmpresa } from "../_shared/revolut/servidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -37,6 +39,9 @@ Deno.serve(async (req) => {
   for (const c of (data ?? []) as ConexionRevolut[]) {
     if (!(await cuentaPuedeSalir(srv, c.account_id))) { partes.push({ empresa: c.company_id, demo: true }); continue; }
     partes.push(await leerEmpresa(srv, fetch, c));
+    // B01 · Cola 1e · Los pagos que el banco ya ha confirmado, con su justificante.
+    const jus = await hacerJustificantes(srv, c.company_id, piezasJustificante(srv));
+    if (jus.hechos || jus.fallos) console.log(`[conta-revolut-leer] ${c.company_id.slice(0, 8)} justificantes: ${jus.hechos} hechos, ${jus.mandados} mandados, ${jus.fallos} fallos`);
   }
   const malas = partes.filter((p): p is ParteEmpresa => !("demo" in p) && (!!p.error || p.cuentas.some((x) => x.estado === "fallo")));
   console.log(`[conta-revolut-leer] ${JSON.stringify(partes.map((p) => ("demo" in p ? { empresa: p.empresa.slice(0, 8), demo: true } : paraElRegistro(p))))}`);

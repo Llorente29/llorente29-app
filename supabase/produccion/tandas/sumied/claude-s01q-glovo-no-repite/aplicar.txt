@@ -1,0 +1,24 @@
+# S01q·10 · Que la liquidación no repita lo ya contabilizado, las 27 de Glovo
+# rehechas y el 303 con el IVA no deducible (Julio, 03/11: «sí, esperar, no
+# deducible»). Rama claude/s01q-glovo-no-repite. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   0741  El 303: una recibida con IVA no deducible de un proveedor de fuera no
+#         se marca «sin autoliquidar» (solo cambia las 2 de Anthropic Ireland).
+#   0742  La propuesta de una liquidación se rehace sola cuando su liquidación
+#         cambia (llega su factura o pasa a ser de referencia); una validada no
+#         se toca nunca. Si su factura de comisión no está contabilizada, espera
+#         y lo dice.
+#   0743  Foodint (autorizo: borra y rehace filas): las 27 propuestas de Glovo,
+#         rehechas (13 de referencia sin propuesta, 13 solo compensan, la del
+#         I170326000551592 espera), y el borrador del 303 del 4T recalculado.
+#   0744  Regla hermana de la 1: ni la comisión ni su IVA en el asiento de una
+#         liquidación cuya factura ya está contabilizada, ni asiento si es de
+#         referencia.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01q-glovo-rehacer.sql
+supabase/migrations/20261103T0741_s01q_303_no_deducible.sql
+supabase/migrations/20261103T0742_s01q_plataforma_rehace.sql
+supabase/migrations/20261103T0743_s01q_glovo_rehacer.sql
+supabase/migrations/20261103T0744_s01q_liquidacion_no_repite.sql

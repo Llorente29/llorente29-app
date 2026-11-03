@@ -1,0 +1,8 @@
+# S01q·10 · la vuelta atrás, en orden inverso: fuera la regla hermana; las 27
+# propuestas de antes y el 303 como estaba (con su calculated_at); las dos
+# funciones de la propuesta y la de las casillas, las de antes.
+cuenta: scripts/conta/produccion/cuentas/s01q-glovo-rehacer.sql
+supabase/vuelta-atras/20261103T0744_s01q_liquidacion_no_repite.down.sql
+supabase/vuelta-atras/20261103T0743_s01q_glovo_rehacer.down.sql
+supabase/vuelta-atras/20261103T0742_s01q_plataforma_rehace.down.sql
+supabase/vuelta-atras/20261103T0741_s01q_303_no_deducible.down.sql

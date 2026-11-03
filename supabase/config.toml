@@ -187,6 +187,11 @@ verify_jwt = true
 [functions.conta-recibida-pdf]
 verify_jwt = false
 
+# B01 · Cola 1e · El justificante de un pago: el enlace público (GET con la clave,
+# sin sesión) y «Mandar al proveedor» (POST, comprueba la sesión dentro).
+[functions.conta-justificante]
+verify_jwt = false
+
 [functions.conta-lote-releer]
 verify_jwt = false
 

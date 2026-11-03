@@ -32,6 +32,8 @@ import {
 import { iban4, type ProveedorPago } from "../_shared/pagos/proveedorPago.ts";
 import { entornoDe, FalloRevolut } from "../_shared/revolut/cliente.ts";
 import { proveedorPagoRevolut } from "../_shared/revolut/pago.ts";
+import { hacerJustificantes } from "../_shared/justificantePago.ts";
+import { piezasJustificante } from "../_shared/justificanteServidor.ts";
 import { COLUMNAS_CONEXION, tokenDeAcceso, type ConexionRevolut } from "../_shared/revolut/servidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -222,6 +224,9 @@ Deno.serve(async (req) => {
             }
           }
           console.log(`[conta-pagar] mandar ${lote.slice(0, 8)} (${m.codigo}): ${bien} bien, ${mal_} rechazados, ${dudosos} sin saber`);
+          // B01 · Cola 1e · Lo que el banco ya ha confirmado, con su justificante (y por correo si el proveedor lo pide).
+          const jus = await hacerJustificantes(srv, empresa, piezasJustificante(srv));
+          if (jus.hechos || jus.fallos) console.log(`[conta-pagar] justificantes: ${jus.hechos} hechos, ${jus.mandados} mandados, ${jus.fallos} fallos`);
           const n = m.pagos.length;
           const texto = mal_ === 0 && dudosos === 0
             ? `Enviado a ${m.banco}: ${n} ${n === 1 ? "pago" : "pagos"}. Te avisamos cuando lo confirme.`
@@ -238,6 +243,8 @@ Deno.serve(async (req) => {
             if (!r.sin_cambio) cambiados++;
           } catch (e) { console.error(`[conta-pagar] estado ${String(p.id).slice(0, 8)}: ${e instanceof Error ? e.message : e}`); }
         }
+        const jus = await hacerJustificantes(srv, empresa, piezasJustificante(srv));
+        if (jus.hechos || jus.fallos) console.log(`[conta-pagar] justificantes: ${jus.hechos} hechos, ${jus.mandados} mandados, ${jus.fallos} fallos`);
         return json({ ok: true, preguntados: (pend ?? []).length, cambiados });
       }
       default:

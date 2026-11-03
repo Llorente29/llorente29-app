@@ -119,10 +119,17 @@ async function simular(page: Page): Promise<Llamada[]> {
   await page.route(/\/rest\/v1\/rpc\/conta_pagos_lista(\?|$)/, (r) => json(r, {
     filas: FILAS, pagado_mes: 22107.88, pagadas_mes: 41, sin_plazo: [{ id: 's-sinplazo', nombre: 'Carnes Sin Plazo SL' }],
   }))
+  // B01 · Cola 1e · Una por revisar: sale en «Por pagar» con su vencimiento, pero no se puede marcar.
+  await page.route(/\/rest\/v1\/rpc\/conta_pagos_por_revisar(\?|$)/, (r) => json(r, [
+    fila({ id: 'f-revision', supplier_id: 's-limpieza', proveedor: 'Limpiezas Prueba SL', numero: 'LP-91', vence: dia(4), total: 180.15, pendiente: 180.15, estado: 'vence_semana', por_revisar: true }),
+  ]))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_pagos_crear(\?|$)/, apuntar('crear', () => ({
     remesa: 'r-15', codigo: 'R-2026/015', por_confirmar: 1,
     frase: 'Preparada la remesa R-2026/015: 1 pago, 1.105,30 €. Antes de descargar el fichero, confirma 1 IBAN que ha cambiado.',
   })))
+  // B01 · 2c-2 (#432) · De qué tipo es cada remesa (fichero o por el banco) es una lectura de la tabla.
+  // Las remesas de aquí son simuladas (r-15 no es un uuid: staging contesta 400): ninguna es por el banco.
+  await page.route(/\/rest\/v1\/conta_pago_remesa(\?|$)/, (r) => json(r, []))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_ficha(\?|$)/, (r) => json(r, REMESA(confirmado ? 'fichero' : 'preparada', confirmado)))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_iban_confirmar(\?|$)/, (r) => {
     confirmado = true
@@ -155,12 +162,21 @@ test('Pagos: cifras, sin vencimiento, pestañas; pagar una (la domiciliada no en
   await expect(page.getByRole('heading', { level: 1, name: 'Pagos' })).toBeVisible({ timeout: 30_000 })
   await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Compras y gastos', 'Pagos'])
 
-  // Las cifras de arriba: por pagar (6 facturas: todas las que quedan), esta semana, vencido y pagado en el mes.
+  // B01 · Cola 1e · Lo que toca pagar: vencido, esta semana, por revisar y pagado en el mes; y el botón grande.
   await expect(page.getByText('1.105,30 €').first()).toBeVisible({ timeout: 30_000 })
-  for (const t of ['Por pagar', 'Vence esta semana', 'Vencido']) await expect(page.locator('.pg-cifras').getByText(t, { exact: true })).toBeVisible()
-  await expect(page.locator('.pg-cifras')).toContainText('22.107,88')
-  await expect(page.locator('.pg-cifras')).toContainText('6 facturas')
-  await expect(page.locator('.pg-cifras')).toContainText('1 factura · 5 días')
+  const toca = page.locator('[data-prueba="lo-que-toca"]')
+  for (const t of ['Vencido', 'Vence esta semana', 'Por revisar']) await expect(toca.locator('.pg-cifras').getByText(t, { exact: true })).toBeVisible()
+  await expect(toca.locator('.pg-cifras')).toContainText('22.107,88')
+  await expect(toca.locator('.pg-cifras')).toContainText('1 factura · 5 días')
+  await expect(toca.locator('.pg-cifras')).toContainText('180,15')
+  await expect(toca.locator('.pg-cifras')).toContainText('1 factura · apruébalas para pagarlas')
+  await expect(toca.locator('[data-prueba="pagar-lo-de-esta-semana"]')).toContainText('Pagar lo de esta semana · 1 factura')
+  await expect(toca.locator('[data-prueba="pagar-lo-de-esta-semana"]')).toContainText('1.105,30 €')
+  await expect(toca.locator('[data-prueba="fuera-esta-semana"]')).toContainText('Inmuebles Prueba SL (la paga el banco solo (domiciliada))')
+  await expect(toca.locator('[data-prueba="fuera-esta-semana"]')).toContainText('Limpiezas Prueba SL (está por revisar: apruébala para pagarla)')
+  // La de por revisar sale en la lista, con su vencimiento, y no se puede marcar.
+  await expect(page.getByRole('checkbox', { name: /^No se puede marcar Limpiezas Prueba SL/ })).toBeDisabled()
+  await page.screenshot({ path: `${DIR}/b01-lo-que-toca-${lado(page)}.png`, fullPage: true })
 
   // El aviso de las que no tienen vencimiento: a uno de los dos proveedores se le pregunta.
   const sinVence = page.locator('[data-prueba="sin-vencimiento"]')
@@ -177,26 +193,28 @@ test('Pagos: cifras, sin vencimiento, pestañas; pagar una (la domiciliada no en
   // El buscador encuentra por importe, con coma.
   await page.getByRole('searchbox', { name: 'Buscar un pago' }).fill('1.105,30')
   await expect(page.getByRole('checkbox', { name: /^Marcar Distribuciones/ })).toBeVisible()
-  await expect(page.getByRole('checkbox', { name: /^Marcar Inmuebles/ })).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: /Inmuebles/ })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Buscar un pago' }).fill('')
   // De vuelta en «Por pagar» y sin buscar: las seis que quedan, también la domiciliada. Si no, el
   // registro dice dónde está la pantalla y qué enseña (e2e 945 y la de la zona: no se veía la fila).
   try {
     await expect(pestanas.getByRole('tab', { name: /Por pagar/ })).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await expect(page.getByRole('searchbox', { name: 'Buscar un pago' })).toHaveValue('')
-    await expect(page.getByRole('checkbox', { name: /^Marcar Inmuebles/ })).toBeVisible({ timeout: 15_000 })
+    // B01·12 · La domiciliada sale, y no se deja marcar: dice por qué (en su casilla y en su fila).
+    await expect(page.getByRole('checkbox', { name: /^No se puede marcar Inmuebles Prueba SL.*: la paga el banco solo \(domiciliada\)$/ })).toBeDisabled({ timeout: 15_000 })
   } catch (e) {
     console.log(`[diagnóstico pagos] dirección: ${page.url()}`)
     console.log(`[diagnóstico pagos] lista:\n${await page.locator('.pg-caja').ariaSnapshot().catch((x: Error) => x.message)}`)
     throw e
   }
 
-  // Marcar la transferencia vencida y la domiciliada: la barra dice cuál no entra y por qué.
+  // B01·12 · Sin barra de abajo: marcar abre el panel lateral, con la factura, desde qué banco y qué día.
   await page.getByRole('checkbox', { name: /^Marcar Distribuciones Cárnicas/ }).check()
-  await page.getByRole('checkbox', { name: /^Marcar Inmuebles/ }).check()
-  const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
-  await expect(barra).toContainText('1 seleccionada · 1.105,30 €')
-  await expect(barra).toContainText('1 no entra: la paga el banco solo (domiciliada)')
+  await expect(page.locator('.pg-barra')).toHaveCount(0)
+  const barra = page.getByRole('dialog', { name: 'Pagar 1 factura' })
+  await expect(barra.locator('[data-prueba="lista-remesa"]')).toContainText('Distribuciones Cárnicas Prueba SL · DCV-2026/1184')
+  await expect(barra.locator('.pg-panel-total')).toContainText('1 transferencia')
+  await expect(barra.locator('.pg-panel-total')).toContainText('1.105,30 €')
   await expect(barra.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
   await expect(barra.getByLabel('Desde qué banco se paga')).not.toHaveValue('')
   expect(await page.locator('main, .pg-pagina').first().innerText()).not.toMatch(TECNICAS)
@@ -310,6 +328,9 @@ test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada
     return json(r, { casado: 'c-1', pagos: 1, pagadas: 1, validado_solo: true,
       frase: 'Casado con la remesa R-2026/015: 1 pago, 1.105,30 €. 1 factura queda pagada y su asiento validado solo: el cargo cuadra con la remesa.' })
   })
+  // B01 · 2c-2 (#432) · De qué tipo es cada remesa (fichero o por el banco) es una lectura de la tabla.
+  // Las remesas de aquí son simuladas (r-15 no es un uuid: staging contesta 400): ninguna es por el banco.
+  await page.route(/\/rest\/v1\/conta_pago_remesa(\?|$)/, (r) => json(r, []))
   await page.route(/\/rest\/v1\/rpc\/conta_remesa_ficha(\?|$)/, (r) => json(r, REMESA('pagada', true)))
 
   await page.goto(`/conta/bancos?banco=${bancoId}&mes=2026-10&mov=${mov.datos[0].id}`)
@@ -341,9 +362,10 @@ test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada
 })
 
 
-test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueba y lo dice (E2b)', async ({ page }) => {
+test('«Poner IBAN» en su aviso: solo a quien le falta para entrar, lo comprueba y lo dice (E2b)', async ({ page }) => {
   test.setTimeout(90_000)
   const errores = vigilar(page)
+  const movil = lado(page) === 'movil'
   await entrarComo(page, CUENTA_A.email)
   const llamadas = await simular(page)
   // La de Inmuebles, además de domiciliada, sin IBAN: no tiene que ofrecer «Poner IBAN».
@@ -359,12 +381,12 @@ test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueb
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ iban4: '5416', frase: 'IBAN de Carnes Sin Plazo SL puesto (···· 5416). Queda apuntado: Ana Prueba, el 26/10 a las 19:40.' }) })
   })
   await page.goto('/conta/compras/pagos')
-  await expect(page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ }).check()
-  await page.getByRole('checkbox', { name: /^Marcar Inmuebles/ }).check()
-  const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
-  await expect(barra).toContainText('Carnes Sin Plazo SL: Carnes Sin Plazo SL no tiene IBAN en su ficha')
-  await expect(barra).toContainText('Inmuebles Prueba SL: la paga el banco solo (domiciliada)')
+  // B01·12 · Sin IBAN no se deja marcar, lo dice en su fila, y el aviso ofrece ponerlo (a la domiciliada, no).
+  const sinIbanCasilla = page.getByRole('checkbox', { name: /^No se puede marcar Carnes Sin Plazo SL.*: Carnes Sin Plazo SL no tiene IBAN en su ficha$/ })
+  await expect(sinIbanCasilla).toBeDisabled({ timeout: 30_000 })
+  if (!movil) await expect(page.getByText('Sin IBAN · ponlo para pagarla')).toBeVisible()
+  const barra = page.locator('[data-prueba="sin-iban"]')
+  await expect(barra).toContainText('Carnes Sin Plazo SL no tiene IBAN.')
   await expect(barra.getByRole('button', { name: /^Poner IBAN/ })).toHaveCount(1)
 
   await barra.getByRole('button', { name: 'Poner IBAN · Carnes Sin Plazo SL' }).click()
@@ -378,9 +400,11 @@ test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueb
   await dialogo.getByRole('button', { name: 'Guardar el IBAN' }).click()
   await expect(page.locator('[data-prueba="aviso-pagos"]')).toHaveText('IBAN de Carnes Sin Plazo SL puesto (···· 5416). Queda apuntado: Ana Prueba, el 26/10 a las 19:40.', { timeout: 30_000 })
   expect(llamadas.find((l) => l.f === 'poner_iban')!.cuerpo).toEqual({ p_supplier: 's-sinplazo', p_iban: 'ES1000492352082414205416' })
-  // Ya tiene IBAN: entra en la remesa sin desmarcar nada, y no queda «Poner IBAN».
-  await expect(barra).toContainText('1 seleccionada · 212,40 €', { timeout: 30_000 })
-  await expect(barra.getByRole('button', { name: /^Poner IBAN/ })).toHaveCount(0)
-  await expect(barra.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
+  // Ya tiene IBAN: se puede marcar, y no queda «Poner IBAN»; al marcarla, el panel con su importe.
+  await expect(barra).toHaveCount(0, { timeout: 30_000 })
+  await page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ }).check()
+  const panel = page.getByRole('dialog', { name: 'Pagar 1 factura' })
+  await expect(panel.locator('[data-prueba="lista-remesa"]')).toContainText('212,40 €')
+  await expect(panel.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
   expect(errores).toEqual([])
 })

@@ -190,6 +190,26 @@ th.s-lista-cifra { text-align: right; }
 .s-asiento-col-cuenta { width: 1%; white-space: nowrap; }
 .s-asiento-codigo { font-size: var(--s-t-l); font-weight: var(--s-peso-titulo); color: var(--s-tinta); font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .s-asiento-cuenta { color: var(--s-tinta); overflow-wrap: anywhere; }
+/* B01 · Cola 1e (Julio, 03/11) · En una columna estrecha (la ficha con el documento al lado), el asiento no se
+   aprieta: la cuenta y su nombre en una línea, cortando con «…» y el nombre entero al pasar el ratón (title);
+   los importes alineados y sin barra horizontal. Ancho de la caja, no de la ventana: container query. */
+.s-asiento-marco { container-type: inline-size; }
+@container (max-width: 620px) {
+  .s-asiento-tabla { table-layout: fixed; }
+  .s-asiento-tabla th, .s-asiento-tabla td { padding-left: var(--s-2); padding-right: var(--s-2); }
+  .s-asiento-tabla .s-asiento-col-cuenta { width: 6.5em; }
+  .s-asiento-tabla th.s-lista-cifra { width: 7.5em; }
+  .s-asiento-tabla .s-asiento-codigo { font-size: var(--s-t-m); }
+  .s-asiento-cuenta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; overflow-wrap: normal; }
+  .s-asiento-tabla td.s-lista-cifra { white-space: nowrap; }
+}
+@container (max-width: 400px) {
+  .s-asiento-tabla { font-size: var(--s-t-s); }
+  .s-asiento-tabla th, .s-asiento-tabla td { padding-left: var(--s-1); padding-right: var(--s-1); }
+  .s-asiento-tabla .s-asiento-col-cuenta { width: 5.6em; }
+  .s-asiento-tabla th.s-lista-cifra { width: 5.4em; }
+  .s-asiento-tabla .s-asiento-codigo { font-size: var(--s-t-s); }
+}
 .s-asiento-a-mano {
   margin-left: var(--s-2); padding: 0 var(--s-1); border-radius: var(--s-radio-boton); font-size: var(--s-t-xs); font-weight: var(--s-peso-fuerte);
   background: var(--s-duda-fondo); color: var(--s-duda); white-space: nowrap;
