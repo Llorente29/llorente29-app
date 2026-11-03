@@ -3363,6 +3363,32 @@ end $$;
 
 
 --
+-- Name: _conta_aprendizaje(uuid, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_aprendizaje(p_company uuid, p_clave text, p_lineas jsonb, p_razones jsonb) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with c as (
+    select x.proposed_code, x.chosen_code, x.created_by_name, x.created_at,
+           row_number() over (partition by x.proposed_code order by x.created_at desc) as rn
+      from public.journal_correction x where x.company_id = p_company and x.origin_key = p_clave
+  ), ultima as (select * from c where rn = 1),
+  l as (
+    select o, case when u.chosen_code is not null and u.chosen_code <> l.v->>'cuenta' then l.v || jsonb_build_object('cuenta', u.chosen_code) else l.v end as v,
+           (u.chosen_code is not null and u.chosen_code <> l.v->>'cuenta') as cambia
+      from jsonb_array_elements(p_lineas) with ordinality l(v, o) left join ultima u on u.proposed_code = l.v->>'cuenta'
+  ), ult as (select * from c order by created_at desc limit 1)
+  select case when not exists (select 1 from l where cambia) then jsonb_build_object('lineas', p_lineas, 'razones', p_razones)
+    else jsonb_build_object('lineas', (select jsonb_agg(v order by o) from l),
+      'razones', p_razones || jsonb_build_array(jsonb_build_object('decision', 'Lo has corregido antes',
+        'porque', (select 'en la anterior del mismo origen cambiaste ' || proposed_code || ' por ' || chosen_code
+                          || coalesce(' (' || nullif(created_by_name, '') || ')', '') || ': lo hago igual' from ult)))) end
+$$;
+
+
+--
 -- Name: _conta_asientos_borrado_deshacer(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4063,6 +4089,37 @@ $$;
 
 
 --
+-- Name: _conta_cuotas_y_redondeo(jsonb, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric) RETURNS jsonb
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  with b as (
+    select (l->>'tipo')::numeric as tipo, sum(round((l->>'base')::numeric, 2)) as base
+      from jsonb_array_elements(coalesce(p_lineas, '[]'::jsonb)) l group by 1
+  ), f as (
+    select tipo, base, sign(base) * round(abs(base * 100 * tipo) / 100) / 100 as cuota from b
+  ), s as (
+    select coalesce(sum(round(base * 100) + round(cuota * 100)), 0) as suma, count(*) as n from f
+  )
+  select case when abs(round(p_total * 100) - s.suma) > s.n then null
+    else jsonb_build_object(
+      'porTipo', coalesce((select jsonb_agg(jsonb_build_object('tipo', tipo, 'base', base, 'cuota', cuota) order by tipo) from f), '[]'::jsonb),
+      'redondeo', (round(p_total * 100) - s.suma) / 100) end
+  from s
+$$;
+
+
+--
+-- Name: FUNCTION _conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric) IS 'S01 · PR 3: cuotasYRedondeo() del navegador: {porTipo: [{tipo, base, cuota}], redondeo} o null si el documento no cuadra por más de un céntimo por tipo.';
+
+
+--
 -- Name: _conta_dir_coincide(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4085,6 +4142,19 @@ CREATE FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) RETURNS boo
                            else substr(t, 1, pos - 1) ~ '(\(|(calle|c/|c\.|avenida|avda\.?|av\.|paseo|plaza|pza\.?)\s*(de\s+(la\s+|los\s+|las\s+)?)?)\s*$' end, false)
     from e
 $_$;
+
+
+--
+-- Name: _conta_enlace(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_enlace(p_company uuid, p_entity text, p_entity_id text, p_role text) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select ca.code from public.company_account_link k join public.company_account ca on ca.id = k.company_account_id
+   where k.company_id = p_company and k.entity = p_entity and k.entity_id = p_entity_id and k.role = p_role order by ca.code limit 1
+$$;
 
 
 --
@@ -4488,6 +4558,19 @@ begin
   -- Las demás empresas ya han pasado; esto solo hace que cron la cuente como fallida (regla 8).
   if cardinality(v_mal) > 0 then raise exception 'S01o·2: la pasada ha fallado en %', array_to_string(v_mal, ' · '); end if;
 end $$;
+
+
+--
+-- Name: _conta_hoja(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_hoja(p_company uuid, p_template text) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select ca.code from public.company_account ca where ca.company_id = p_company and ca.kind = 'template'
+     and ca.status is distinct from 'cerrada' and ca.template_code = p_template order by ca.code limit 1
+$$;
 
 
 --
@@ -5758,6 +5841,275 @@ end $$;
 
 
 --
+-- Name: _conta_plataforma_entrada(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_plataforma_entrada(p_company uuid, p_liq uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+  with l as (
+    select cs.* from public.channel_settlement cs join public.company co on co.id = p_company and co.account_id = cs.account_id where cs.id = p_liq
+  ), k as (
+    select l.*, ch.name as canal_n,
+           (select pr.party_id from public.party_role pr where pr.account_id = l.account_id and pr.role = 'platform' and pr.channel_id = l.channel_id
+             order by pr.party_id limit 1) as party,
+           (select r.id from public.tax_rate r where r.code = 'iva_general' and r.tax_system = 'iva' and r.valid_to is null and (r.is_system or r.account_id = l.account_id)
+             order by r.is_system, r.id limit 1) as t21,
+           l.source = 'import_csv_glovo' as glovo, coalesce(l.source, '') like 'correo\_%' as correo,
+           coalesce(l.collected_on, l.settlement_date) as fecha
+      from l left join public.sales_channel ch on ch.id = l.channel_id and ch.account_id = l.account_id
+  ), m as (
+    select k.*,
+           (select pr.supplier_id from public.party_role pr where pr.account_id = k.account_id and pr.role = 'supplier' and pr.party_id = k.party and pr.supplier_id is not null
+             order by pr.supplier_id limit 1) as sup,
+           'Liquidación ' || coalesce(k.canal_n, 'de plataforma') || coalesce(' · ' || nullif(k.settlement_ref, ''), '') as que,
+           exists (select 1 from public.bank_match_item bi join public.bank_match bm on bm.id = bi.match_id
+                    where bi.account_id = k.account_id and bi.channel_settlement_id = k.id and bm.status = 'vivo') as en_bancos,
+           (select jsonb_build_object('total', si.grand_total, 'numero', si.invoice_number) from public.supplier_invoice si
+             where si.id = k.commission_invoice_id and si.account_id = k.account_id) as factura,
+           coalesce(case when jsonb_typeof(k.raw->'factura'->'total') = 'number' then (k.raw->'factura'->>'total')::numeric
+                         when (k.raw->'factura'->>'total') ~ '^-?[0-9]+(\.[0-9]+)?$' then (k.raw->'factura'->>'total')::numeric end, 0) as su_parte
+      from k
+  ), n as (
+    select m.*,
+           case when m.party is not null then public._conta_enlace(p_company, 'customer', m.party::text, 'principal') end as c430,
+           case when m.sup is not null then public._conta_enlace(p_company, 'supplier', m.sup::text, 'principal') end as c410,
+           case when m.t21 is not null then public._conta_enlace(p_company, 'tax_rate', m.t21::text, 'soportado') end as c472,
+           case when m.factura is null then null
+                else m.factura || jsonb_build_object('total', case when m.su_parte > 0 then m.su_parte else (m.factura->>'total')::numeric end) end as fa
+      from m
+  )
+  select case
+    when not exists (select 1 from n) then jsonb_build_object('que', 'Liquidación de plataforma', 'sin_propuesta', 'No existe.')
+    when n.is_reference is true then jsonb_build_object('que', n.que, 'fecha', n.fecha,
+      'sin_propuesta', coalesce(nullif(n.review_note, ''), 'De referencia: es de antes del cierre de la contabilidad; no lleva factura ni asiento.'))
+    when n.c430 is null or n.c410 is null or n.c472 is null or n.t21 is null then jsonb_build_object('que', n.que, 'fecha', n.fecha,
+      'sin_propuesta', 'Falta su 430, su 410 o la 472 del 21 %: revisa su ficha (Plataformas).')
+    when n.correo and n.needs_review is true then jsonb_build_object('que', n.que, 'fecha', n.fecha,
+      'sin_propuesta', coalesce(nullif(n.review_note, ''), 'Por aclarar: revisa la liquidación antes de asentarla.'))
+    when n.correo and n.fa is null and (round(coalesce(n.commission, 0) * 100) <> 0 or round(coalesce(n.other_cost, 0) * 100) <> 0
+                                        or round(coalesce(n.promo_charges, 0) * 100) <> 0 or round(coalesce(n.ads_spend, 0) * 100) <> 0) then
+      jsonb_build_object('que', n.que, 'fecha', n.fecha,
+        'sin_propuesta', 'Falta su factura de comisión (la liquidación la propone al leerse): sin ella, la comisión no se asienta aquí.')
+    else jsonb_build_object('que', n.que, 'fecha', n.fecha, 'clave', 'channel_settlement:' || coalesce(n.channel_id::text, 'null'),
+      'e', jsonb_build_object(
+        'id', n.id, 'fecha', n.settlement_date, 'ref', nullif(n.settlement_ref, ''), 'plataforma', coalesce(n.canal_n, 'la plataforma'),
+        'flujo', case when n.flow_type = 'licensed' then 'licensed' else 'own' end,
+        'ventas', coalesce(n.gross_sales, 0), 'comision', abs(coalesce(n.commission, 0)),
+        'cargos', case when n.glovo then '[]'::jsonb else coalesce((
+            select jsonb_agg(jsonb_build_object('concepto', x.concepto, 'importe', abs(x.v)) order by x.o)
+              from (values (1, 'Transporte', n.delivery_transport), (2, 'Promociones a tu cargo', n.promo_product), (3, 'Promoción flash', n.promo_flash),
+                           (4, 'Cuota de acceso', n.access_fee), (5, 'Cuota prime', n.prime_fee), (6, 'Cuota recurrente', n.recurring_fee),
+                           (7, 'Incidencias (espera del repartidor y otras)', n.incidents_cost), (8, 'Pedido mínimo', n.min_order_fee), (9, 'Otros cargos', n.other_cost)) x(o, concepto, v)
+             where coalesce(x.v, 0) <> 0), '[]'::jsonb) end,
+        'devoluciones', case when n.glovo then 0 else abs(coalesce(n.incidents_refund, 0)) end,
+        'neto', case when n.net_payout is null then null when n.glovo then n.net_payout - coalesce(n.accumulated_debt, 0) else n.net_payout end,
+        'cobrado', case when n.collected_on is not null and not n.en_bancos then jsonb_build_object('fecha', n.collected_on, 'importe', coalesce(n.collected_amount, 0)) end,
+        'cobroEnBancos', n.en_bancos,
+        'pedidos', jsonb_build_object('total', (select coalesce(sum(d.pedidos), 0) from public.conta_dias_por_asentar(p_company, coalesce(n.period_from, n.fecha), coalesce(n.period_to, n.fecha)) d
+                                                 where n.location_id is null or d.location_id = n.location_id), 'asentados', 0),
+        'localId', n.location_id, 'facturaAparte', n.fa,
+        'apartado', case when n.correo then jsonb_build_array(
+            jsonb_build_object('concepto', 'Promociones en artículos', 'importe', abs(coalesce(n.item_promotions, 0))),
+            jsonb_build_object('concepto', 'Contracargos', 'importe', abs(coalesce(n.chargebacks, 0))),
+            jsonb_build_object('concepto', 'Otras ganancias', 'importe', abs(coalesce(n.other_earnings, 0))),
+            jsonb_build_object('concepto', 'Ajustes', 'importe', abs(coalesce(n.adjustments, 0)))) else '[]'::jsonb end),
+      'c', jsonb_build_object(
+        'cliente430', n.c430, 'proveedor410', n.c410,
+        'comision', coalesce(public._conta_hoja(p_company, '623'), '62300000'), 'otrosCargos', coalesce(public._conta_hoja(p_company, '629'), '62900000'),
+        'iva21', jsonb_build_object('cuenta', n.c472, 'tipoId', n.t21),
+        'banco', (select public._conta_enlace(p_company, 'bank_account', t.id::text, 'principal') from public.treasury_account t
+                   where t.account_id = n.account_id and t.company_id = p_company and t.kind = 'bank' and t.is_active is not false
+                     and (t.location_id is not distinct from n.location_id or t.location_id is null)
+                   order by (t.location_id is not distinct from n.location_id) desc, (t.location_id is null) desc, t.id limit 1),
+        'pendienteSocio', case when n.brand_id is not null then (
+            select public._conta_enlace(p_company, 'customer', a.party_id::text, 'liquidacion') from public.brand_licensing_agreement a
+             where a.account_id = n.account_id and a.brand_id = n.brand_id and a.party_id is not null order by a.party_id limit 1) end,
+        'serieTesoreria', case when (select b.treasury_series from public.bank_settings b where b.company_id = p_company and b.account_id = n.account_id limit 1) = 4 then 4 else 3 end))
+    end
+  from (select 1) uno left join n on true
+$_$;
+
+
+--
+-- Name: FUNCTION _conta_plataforma_entrada(p_company uuid, p_liq uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_plataforma_entrada(p_company uuid, p_liq uuid) IS 'S01 · PR 3: lo que el servicio del navegador preparaba para liquidacionPlataforma(): {que, fecha, clave, e, c} o {que, fecha, sin_propuesta}. Solo lee.';
+
+
+--
+-- Name: _conta_plataforma_regla(jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_plataforma_regla(e jsonb, c jsonb) RETURNS jsonb
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+declare
+  -- El local, tal cual llega (un uuid; o nada: común).
+  loc jsonb := coalesce(e->'localId', 'null'::jsonb); comun boolean := coalesce(jsonb_typeof(e->'localId'), 'null') = 'null';
+  v_plat text := e->>'plataforma'; v_cabeza text; v_serie int := coalesce((c->>'serieTesoreria')::int, 3);
+  v_cobrado jsonb := case when jsonb_typeof(e->'cobrado') = 'object' then e->'cobrado' end;
+  v_banco text := c->>'banco'; v_fa jsonb := case when jsonb_typeof(e->'facturaAparte') = 'object' then e->'facturaAparte' end;
+  lin jsonb := '[]'::jsonb; raz jsonb := '[]'::jsonb; avi jsonb := '[]'::jsonb; v_duda boolean := false;
+  v_cargos jsonb; v_base numeric; v_iva numeric; v_total numeric; v_neto numeric := nullif(e->>'neto', '')::numeric;
+  v_ventas numeric := coalesce((e->>'ventas')::numeric, 0); v_dev numeric := coalesce((e->>'devoluciones')::numeric, 0);
+  v_ped_total int := coalesce((e->'pedidos'->>'total')::int, 0); v_ped_asent int := coalesce((e->'pedidos'->>'asentados')::int, 0);
+  v_apart jsonb; v_fecha text;
+begin
+  v_cabeza := 'Liquidación ' || v_plat || coalesce(' · ' || nullif(e->>'ref', ''), '');
+  v_fecha := coalesce(v_cobrado->>'fecha', e->>'fecha');
+
+  -- Marca cedida: el dinero de sus ventas es del socio; entra al banco y se le debe.
+  if e->>'flujo' = 'licensed' then
+    if v_cobrado is null or v_banco is null or (c->>'pendienteSocio') is null then
+      return jsonb_build_object('sin_propuesta', case when v_cobrado is null then 'Liquidación de una marca cedida aún sin cobrar: se asienta cuando llegue al banco.'
+                                                       else 'Falta la cuenta pendiente con el socio o el banco del local.' end);
+    end if;
+    return jsonb_build_object('avisos', '[]'::jsonb, 'propuesta', jsonb_build_object(
+      'entrada', jsonb_build_object('series', v_serie, 'fecha', v_cobrado->>'fecha', 'concepto', v_cabeza || ' (marca cedida)', 'source_type', 'channel_settlement',
+        'source_id', e->>'id', 'confianza', 'probable',
+        'porque', 'Lo cobrado por las ventas de una marca cedida es del socio: queda pendiente hasta su liquidación mensual.',
+        'razones', jsonb_build_array(jsonb_build_object('decision', 'No es ingreso tuyo', 'porque', 'son ventas del socio cobradas por cuenta de él', 'cita', 'PGC de Pymes, NRV 16.ª')),
+        'party_id', null, 'documento', null),
+      'lineas', jsonb_build_array(
+        jsonb_build_object('cuenta', v_banco, 'debe', (v_cobrado->>'importe')::numeric, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c->>'pendienteSocio', 'debe', 0, 'haber', (v_cobrado->>'importe')::numeric, 'concepto', 'Ventas del socio cobradas por ti',
+          'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null))));
+  end if;
+
+  -- D01 · Su factura de comisión va aparte (serie 2): aquí solo se compensa, y el cobro.
+  if v_fa is not null then
+    raz := jsonb_build_array(jsonb_build_object('decision', 'Comisión en su factura',
+             'porque', 'la comisión, los cargos y su IVA van en la factura de ' || v_plat || coalesce(' ' || nullif(v_fa->>'numero', ''), '') || ' (serie 2): aquí solo se compensa'));
+    if round(coalesce((v_fa->>'total')::numeric, 0) * 100) <> 0 then
+      lin := lin || jsonb_build_array(
+        jsonb_build_object('cuenta', c->>'proveedor410', 'debe', (v_fa->>'total')::numeric, 'haber', 0,
+          'concepto', 'Factura de ' || v_plat || coalesce(' ' || nullif(v_fa->>'numero', ''), '') || ', compensada',
+          'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c->>'cliente430', 'debe', 0, 'haber', (v_fa->>'total')::numeric, 'concepto', 'Compensada con su factura',
+          'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+    end if;
+    if nullif(v_fa->>'numero', '') is null then
+      avi := avi || to_jsonb('Su factura de comisión aún no tiene número: la compensación lo llevará cuando llegue.'::text); v_duda := true;
+    end if;
+    if v_cobrado is not null and v_banco is not null then
+      lin := lin || jsonb_build_array(
+        jsonb_build_object('cuenta', v_banco, 'debe', (v_cobrado->>'importe')::numeric, 'haber', 0, 'concepto', 'Cobro al banco',
+          'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c->>'cliente430', 'debe', 0, 'haber', (v_cobrado->>'importe')::numeric, 'concepto', 'Cobro de la liquidación',
+          'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+    else
+      raz := raz || jsonb_build_array(case
+        when coalesce((e->>'cobroEnBancos')::boolean, false) then jsonb_build_object('decision', 'Cobro en Bancos', 'porque', 'el movimiento del banco ya está casado con esta liquidación y lleva su propio asiento')
+        when v_neto is not null and round(v_neto * 100) <= 0 then jsonb_build_object('decision', 'Sin cobro', 'porque', 'el neto no es positivo: no hay transferencia y pasa a la siguiente liquidación')
+        else jsonb_build_object('decision', 'Cobro aún no', 'porque', 'cuando llegue al banco se casa con esta liquidación (Bancos)') end);
+    end if;
+    select jsonb_agg(x order by o) into v_apart from jsonb_array_elements(coalesce(e->'apartado', '[]'::jsonb)) with ordinality a(x, o)
+     where round(coalesce((x->>'importe')::numeric, 0) * 100) <> 0;
+    if v_apart is not null then
+      avi := avi || to_jsonb('Queda en su 430 sin apuntar, hasta decidir cómo: '
+               || (select string_agg((x->>'concepto') || ' ' || public.conta_euros_exactos((x->>'importe')::numeric), ' · ' order by o) from jsonb_array_elements(v_apart) with ordinality a(x, o)) || '.');
+      v_duda := true;
+    end if;
+    if jsonb_array_length(lin) < 2 then return jsonb_build_object('sin_propuesta', 'La liquidación no trae factura que compensar ni cobro: no hay nada que asentar.'); end if;
+    return jsonb_build_object('avisos', avi, 'propuesta', jsonb_build_object(
+      'entrada', jsonb_build_object('series', v_serie, 'fecha', v_fecha, 'concepto', v_cabeza, 'source_type', 'channel_settlement', 'source_id', e->>'id',
+        'confianza', case when v_duda then 'duda' else 'probable' end,
+        'porque', 'Su factura de comisión, compensada con lo que te debe' || case when v_cobrado is not null then ', y el cobro al banco' else '' end || '; las ventas ya están en sus días.',
+        'razones', raz, 'party_id', null, 'documento', null),
+      'lineas', lin));
+  end if;
+
+  -- Comisión y cargos con su IVA, compensados con lo que te debe; y el cobro.
+  select coalesce(jsonb_agg(x order by o), '[]'::jsonb) into v_cargos from jsonb_array_elements(coalesce(e->'cargos', '[]'::jsonb)) with ordinality a(x, o)
+   where round(abs(coalesce((x->>'importe')::numeric, 0)) * 100) <> 0;
+  v_base := round(coalesce((e->>'comision')::numeric, 0) + coalesce((select sum((x->>'importe')::numeric) from jsonb_array_elements(v_cargos) x), 0), 2);
+  v_iva := sign(v_base) * round(abs(v_base * 100 * 21) / 100) / 100;
+  v_total := round(v_base + v_iva, 2);
+  if round(coalesce((e->>'comision')::numeric, 0) * 100) <> 0 then
+    lin := lin || jsonb_build_array(jsonb_build_object('cuenta', c->>'comision', 'debe', (e->>'comision')::numeric, 'haber', 0, 'concepto', 'Comisión ' || v_plat,
+             'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+  end if;
+  lin := lin || coalesce((select jsonb_agg(jsonb_build_object('cuenta', c->>'otrosCargos', 'debe', (x->>'importe')::numeric, 'haber', 0, 'concepto', x->>'concepto',
+             'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null) order by o)
+             from jsonb_array_elements(v_cargos) with ordinality a(x, o)), '[]'::jsonb);
+  if round(v_base * 100) <> 0 then
+    lin := lin || jsonb_build_array(
+      jsonb_build_object('cuenta', c->'iva21'->>'cuenta', 'debe', v_iva, 'haber', 0, 'concepto', 'IVA soportado 21 %', 'local_id', loc, 'comun', comun,
+        'marca_id', null, 'tercero_id', null, 'documento', null,
+        'iva', jsonb_build_object('tipo_id', c->'iva21'->>'tipoId', 'base', v_base, 'libro', 'received', 'deducible', 'yes', 'facturas', 1), 'retencion', null),
+      jsonb_build_object('cuenta', c->>'proveedor410', 'debe', 0, 'haber', v_total, 'concepto', 'Factura de ' || v_plat, 'local_id', loc, 'comun', comun,
+        'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+      jsonb_build_object('cuenta', c->>'proveedor410', 'debe', v_total, 'haber', 0, 'concepto', 'Compensada con tus ventas', 'local_id', loc, 'comun', comun,
+        'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+      jsonb_build_object('cuenta', c->>'cliente430', 'debe', 0, 'haber', v_total, 'concepto', 'Compensada con su factura', 'local_id', loc, 'comun', comun,
+        'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+    raz := raz || jsonb_build_array(jsonb_build_object('decision', 'Comisión y cargos: ' || public.conta_euros_exactos(v_base) || ' + IVA 21 %',
+             'porque', 'la plataforma te factura su servicio; los cargos (espera del repartidor y demás) son gasto con IVA dentro de su factura y nunca tocan la venta'));
+    if jsonb_array_length(v_cargos) > 0 then
+      raz := raz || jsonb_build_array(jsonb_build_object('decision', jsonb_array_length(v_cargos) || ' cargo' || case when jsonb_array_length(v_cargos) = 1 then '' else 's' end || ' aparte de la comisión',
+               'porque', (select string_agg((x->>'concepto') || ' ' || public.conta_euros_exactos((x->>'importe')::numeric), ' · ' order by o) from jsonb_array_elements(v_cargos) with ordinality a(x, o))));
+    end if;
+  end if;
+  if v_cobrado is not null and v_banco is not null then
+    lin := lin || jsonb_build_array(
+      jsonb_build_object('cuenta', v_banco, 'debe', (v_cobrado->>'importe')::numeric, 'haber', 0, 'concepto', 'Cobro al banco', 'local_id', loc, 'comun', comun,
+        'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+      jsonb_build_object('cuenta', c->>'cliente430', 'debe', 0, 'haber', (v_cobrado->>'importe')::numeric, 'concepto', 'Cobro de la liquidación', 'local_id', loc, 'comun', comun,
+        'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+  else
+    raz := raz || jsonb_build_array(case when coalesce((e->>'cobroEnBancos')::boolean, false)
+      then jsonb_build_object('decision', 'Cobro en Bancos', 'porque', 'el movimiento del banco ya está casado con esta liquidación y lleva su propio asiento')
+      else jsonb_build_object('decision', 'Cobro aún no', 'porque', 'cuando llegue al banco se casa con esta liquidación (Bancos)') end);
+  end if;
+  -- Regla 7: las ventas ya van por los resúmenes del día; aquí nunca.
+  if v_ped_asent < v_ped_total then
+    avi := avi || to_jsonb((v_ped_total - v_ped_asent) || ' de ' || v_ped_total || ' pedidos del periodo aún no están en un resumen del día: esta liquidación no los asienta (irían dos veces); revisa los días que faltan.');
+    v_duda := true;
+  else
+    raz := raz || jsonb_build_array(jsonb_build_object('decision', 'Sin ventas',
+             'porque', case when v_ped_total <> 0 then 'los ' || v_ped_total || ' pedidos del periodo ya están' else 'las ventas del periodo van' end
+                       || ' en sus resúmenes del día: aquí solo la comisión, los cargos y el cobro'));
+  end if;
+  if round(v_dev * 100) <> 0 then
+    raz := raz || jsonb_build_array(jsonb_build_object('decision', 'Devoluciones (' || public.conta_euros_exactos(v_dev) || ') fuera',
+             'porque', 'van al resumen del día en que se producen, con su pedido', 'cita', 'Ley 37/1992, art. 80.Dos'));
+  end if;
+  -- 1 céntimo es el redondeo del IVA (Glovo lo calcula pedido a pedido).
+  if v_neto is not null and abs(round((v_ventas - v_dev - v_total) * 100) - round(v_neto * 100)) > 1 then
+    avi := avi || to_jsonb('Ventas − devoluciones − factura = ' || public.conta_euros_exactos(round(v_ventas - v_dev - v_total, 2)) || ', y la plataforma dice neto '
+             || public.conta_euros_exactos(v_neto) || ': la comisión puede venir con el IVA dentro o falta un cargo.');
+    v_duda := true;
+  end if;
+  if v_cobrado is not null and v_neto is not null and round((v_cobrado->>'importe')::numeric * 100) <> round(v_neto * 100) then
+    avi := avi || to_jsonb('Al banco llegaron ' || public.conta_euros_exactos((v_cobrado->>'importe')::numeric) || ' y el neto es ' || public.conta_euros_exactos(v_neto) || '.');
+    v_duda := true;
+  end if;
+  if v_banco is null and v_cobrado is not null then
+    avi := avi || to_jsonb('El local no tiene su cuenta del banco: ponla en Tablas › Bancos.'::text); v_duda := true;
+  end if;
+  if jsonb_array_length(lin) < 2 then return jsonb_build_object('sin_propuesta', 'La liquidación no trae comisión, cargos ni cobro: no hay nada que asentar.'); end if;
+  return jsonb_build_object('avisos', avi, 'propuesta', jsonb_build_object(
+    'entrada', jsonb_build_object('series', v_serie, 'fecha', v_fecha, 'concepto', v_cabeza, 'source_type', 'channel_settlement', 'source_id', e->>'id',
+      'confianza', case when v_duda then 'duda' else 'seguro' end,
+      'porque', 'Comisión y cargos con su IVA, compensados con lo que te debe' || case when v_cobrado is not null then ', y el cobro al banco' else '' end || '; las ventas ya están en sus días.',
+      'razones', raz, 'party_id', null, 'documento', null),
+    'lineas', lin));
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_plataforma_regla(e jsonb, c jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_plataforma_regla(e jsonb, c jsonb) IS 'S01 · PR 3: liquidacionPlataforma() y liquidacionConFacturaAparte() del navegador, puras: {propuesta, avisos} (razones sin los avisos) o {sin_propuesta}.';
+
+
+--
 -- Name: _conta_plataforma_seguro(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5962,6 +6314,375 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) IS 'S01 · PR 3: una propuesta ya hecha ({entrada, lineas}, la forma de aJson) al libro por _journal_entry_proponer, y fuera su «no he podido».';
+
+
+--
+-- Name: _conta_proponer_plataforma(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_proponer_plataforma(p_company uuid, p_liq uuid, p_quien text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare x jsonb; v_res jsonb; v_fecha date;
+begin
+  if exists (select 1 from public.journal_entry e where e.company_id = p_company and e.source_type = 'channel_settlement' and e.source_id = p_liq
+               and e.status in ('propuesto', 'borrador', 'validado')) then
+    return jsonb_build_object('propuestas', 0, 'yaEstaban', 1, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+  end if;
+  select coalesce(collected_on, settlement_date) into v_fecha from public.channel_settlement where id = p_liq;
+  if v_fecha is null or not public.conta_dia_abierto(p_company, v_fecha) then
+    return jsonb_build_object('propuestas', 0, 'yaEstaban', 0, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+  end if;
+  x := public.conta_propuestas_plataforma(p_company, p_liq);
+  if x ? 'sin_propuesta' then
+    perform public._conta_no_propuesta(p_company, 'channel_settlement', p_liq::text, x->>'que', x->>'sin_propuesta', 'Ventas › Liquidaciones');
+    return jsonb_build_object('propuestas', 0, 'yaEstaban', 0, 'descartadas', 0, 'sinPropuesta', jsonb_build_array(jsonb_build_object('que', x->>'que', 'porque', x->>'sin_propuesta')));
+  end if;
+  v_res := public._conta_proponer(p_company, x->'propuesta', p_quien);
+  return jsonb_build_object('propuestas', case when (v_res->>'descartada')::boolean or (v_res->>'existente')::boolean then 0 else 1 end,
+    'yaEstaban', case when (v_res->>'existente')::boolean then 1 else 0 end, 'descartadas', case when (v_res->>'descartada')::boolean then 1 else 0 end, 'sinPropuesta', '[]'::jsonb);
+end $$;
+
+
+--
+-- Name: _conta_proponer_socio(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_proponer_socio(p_company uuid, p_liq uuid, p_quien text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare x jsonb; q jsonb; v_res jsonb; v_prop int := 0; v_ya int := 0; v_desc int := 0; l public.licensed_settlement;
+begin
+  -- La de «compras, aportaciones y comisión»: si ya tiene asiento vivo, ya estaba; y va el último día de su mes, si está abierto.
+  select * into l from public.licensed_settlement where id = p_liq;
+  if l.formula = 'compras_aportaciones_comision' then
+    if exists (select 1 from public.journal_entry e where e.company_id = p_company and e.source_type = 'licensed_settlement' and e.source_id = l.id
+                 and e.status in ('propuesto', 'borrador', 'validado')) then
+      return jsonb_build_object('propuestas', 0, 'yaEstaban', 1, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+    end if;
+    if not public.conta_dia_abierto(p_company, l.period_to) then
+      return jsonb_build_object('propuestas', 0, 'yaEstaban', 0, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+    end if;
+  end if;
+  x := public.conta_propuestas_socio(p_company, p_liq);
+  if x ? 'sin_propuesta' then
+    perform public._conta_no_propuesta(p_company, 'licensed_settlement', p_liq::text, x->>'que', x->>'sin_propuesta', 'Ventas › Liquidaciones');
+    return jsonb_build_object('propuestas', 0, 'yaEstaban', 0, 'descartadas', 0, 'sinPropuesta', jsonb_build_array(jsonb_build_object('que', x->>'que', 'porque', x->>'sin_propuesta')));
+  end if;
+  for q in select * from jsonb_array_elements(x->'propuestas') loop
+    continue when not public.conta_dia_abierto(p_company, (q->'entrada'->>'fecha')::date);
+    v_res := public._conta_proponer(p_company, q, p_quien);
+    if (v_res->>'descartada')::boolean then v_desc := v_desc + 1;
+    elsif (v_res->>'existente')::boolean then v_ya := v_ya + 1;
+    else v_prop := v_prop + 1; end if;
+  end loop;
+  -- Se ha podido: lo de antes, fuera (aunque el día de alguna estuviera cerrado).
+  delete from public.conta_propuesta_pendiente where company_id = p_company and origen = 'licensed_settlement' and origen_id = p_liq::text;
+  return jsonb_build_object('propuestas', v_prop, 'yaEstaban', v_ya, 'descartadas', v_desc, 'sinPropuesta', '[]'::jsonb);
+end $$;
+
+
+--
+-- Name: _conta_propuesta_ventas(uuid, uuid, date, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+with
+emp as (
+  select c.id, c.account_id, t.sales_tax_rate_code from public.company c
+    left join public.company_tax_profile t on t.company_id = c.id
+   where c.id = p_company
+),
+tipo as (
+  select r.id, r.rate, public.conta_numero_texto(r.rate) as txt from public.tax_rate r, emp
+   where r.code = emp.sales_tax_rate_code and r.tax_system = 'iva' and r.valid_to is null
+     and (r.is_system or r.account_id = emp.account_id)
+   order by r.is_system, r.id limit 1
+),
+hoja as (
+  select a.template_code, min(a.code) as code from public.company_account a
+   where a.company_id = p_company and a.kind = 'template' and a.status is distinct from 'cerrada' and a.template_code in ('700', '708')
+   group by 1
+),
+cta as (
+  select (select code from hoja where template_code = '700') as ventas,
+         coalesce((select code from hoja where template_code = '708'), (select code from hoja where template_code = '700')) as devoluciones,
+         (select a.code from public.company_account_link k join public.company_account a on a.id = k.company_account_id, tipo
+           where k.company_id = p_company and k.entity = 'tax_rate' and k.entity_id = tipo.id::text and k.role = 'repercutido'
+           order by a.code limit 1) as iva477
+),
+marca_cta as (
+  select m.brand_id, m.papel, a.code from public.conta_ventas_marca m join public.company_account a on a.id = m.company_account_id
+   where m.company_id = p_company and a.status is distinct from 'cerrada'
+),
+canal as (
+  select ch.id, ch.name,
+         (select a.code from public.party_role pr
+            join public.company_account_link k on k.company_id = p_company and k.entity = 'customer' and k.entity_id = pr.party_id::text and k.role = 'principal'
+            join public.company_account a on a.id = k.company_account_id
+           where pr.account_id = ch.account_id and pr.role = 'platform' and pr.channel_id = ch.id
+           order by pr.party_id, a.code limit 1) as cuenta,
+         (select a.code from public.conta_ventas_canal_cuenta v join public.company_account a on a.id = v.company_account_id and a.company_id = v.company_id
+           where v.company_id = p_company and v.channel_id = ch.id and v.papel = 'promociones' and a.status is distinct from 'cerrada') as promo,
+         (select a.code from public.conta_ventas_canal_cuenta v join public.company_account a on a.id = v.company_account_id and a.company_id = v.company_id
+           where v.company_id = p_company and v.channel_id = ch.id and v.papel = 'envios' and a.status is distinct from 'cerrada') as envios
+    from public.sales_channel ch, emp where ch.account_id = emp.account_id
+),
+cta_canal as (select (select promo from canal where id = p_canal) as promo, (select envios from canal where id = p_canal) as envios),
+nombre_canal as (select case when p_canal is null then 'sin canal' else coalesce((select name from canal where id = p_canal), 'un canal') end as n),
+marca_nombre as (select b.id, b.name from public.brand b, emp where b.account_id = emp.account_id),
+loc as (select coalesce((select l.name from public.locations l, emp where l.id = p_location and l.account_id = emp.account_id), 'local') as nombre),
+ped as (
+  -- S01 · PR 3: con p_venta, solo ese pedido, como vendido de una marca propia (el
+  -- no confirmado que una liquidación paga es venta de su día). Sin él, como siempre.
+  select x.id, x.codigo, x.canal_id, x.marca_id,
+         case when p_venta is null then x.propia else true end as propia,
+         case when p_venta is null then x.estado else 'closed' end as estado,
+         x.total, x.base, x.cuota, x.tipos, x.ord
+    from public.conta_pedidos_del_dia(p_company, p_location, p_dia) with ordinality as x(id, codigo, canal_id, marca_id, propia, estado, total, base, cuota, tipos, ord)
+   where x.canal_id is not distinct from p_canal and (p_marca is null or x.marca_id = p_marca)
+     and (p_venta is null or x.id = p_venta)
+),
+-- C06b (16/10): el descuento, el envío y quién repartió cada pedido (conta_cargos_de_pedidos).
+carg as (
+  select c.* from emp, public.conta_cargos_de_pedidos(emp.account_id, (select coalesce(array_agg(id), '{}') from ped where propia and estado = 'closed')) c
+),
+fila0 as (
+  select p.*, round(coalesce(c.descuento, 0) * 100) as c_desc, round(coalesce(c.envio, 0) * 100) as c_env,
+         coalesce(c.clase, 'ninguno') as clase, c.por_que,
+         -- Un envío que la plataforma no paga (aclarado así) sale de la venta y del cobro.
+         round(p.total * 100) - case when c.clase = 'fuera' then round(c.envio * 100) else 0 end as c_total
+    from ped p left join carg c on c.id = p.id
+   where p.propia and p.estado = 'closed'
+),
+fila as (
+  select p.*,
+         (p.clase <> 'fuera' and p.base is not null and p.cuota is not null and round(p.base * 100) + round(p.cuota * 100) = round(p.total * 100)) as trae,
+         exists (select 1 from unnest(p.tipos) t where t <> tipo.rate) as otro,
+         case when p.clase <> 'fuera' and p.base is not null and p.cuota is not null and round(p.base * 100) + round(p.cuota * 100) = round(p.total * 100)
+              then round(p.base * 100)
+              else sign(p.c_total) * round(abs(p.c_total) * 100 / (100 + tipo.rate)) end as c_base
+    from fila0 p, tipo
+),
+fila2 as (
+  select f.*, case when f.trae then round(f.cuota * 100) else f.c_total - f.c_base end as c_cuota,
+         -- La promoción en base, al tipo de la venta; el envío cobrado, igual. Sin su subcuenta, se quedan en la venta (y se avisa).
+         case when cc.promo is not null and f.c_desc > 0 then round(f.c_desc * 100 / (100 + tipo.rate)) else 0 end as c_promo,
+         case when cc.envios is not null and f.clase = 'cobrado' and f.c_env > 0 then round(f.c_env * 100 / (100 + tipo.rate)) else 0 end as c_envio
+    from fila f, tipo, cta_canal cc
+),
+dev as (
+  select o.*, round(o.importe * 100) as c_imp,
+         sign(o.importe) * round(abs(round(o.importe * 100)) * 100 / (100 + tipo.rate)) as c_base
+    from public.conta_devoluciones_del_dia(p_company, p_location, p_dia) with ordinality as o(pedido_id, codigo, canal_id, marca_id, propia, importe, ord), tipo
+   where o.propia and o.canal_id is not distinct from p_canal and (p_marca is null or o.marca_id = p_marca)
+     and p_venta is null
+),
+dev2 as (select d.*, d.c_imp - d.c_base as c_cuota, coalesce(d.codigo, d.pedido_id::text) as ref from dev d),
+tot as (
+  select count(*) as n, coalesce(sum(c_total), 0) as c_total, coalesce(sum(c_base), 0) as c_base, coalesce(sum(c_cuota), 0) as c_cuota,
+         bool_or(not trae) as calculada, count(*) filter (where otro) as otro,
+         coalesce(sum(c_promo), 0) as c_promo, count(*) filter (where c_promo > 0) as n_promo, coalesce(sum(c_desc) filter (where c_promo > 0), 0) as c_desc,
+         count(*) filter (where c_desc > 0 and c_promo = 0) as n_promo_sin_cuenta,
+         coalesce(sum(c_envio), 0) as c_envio, count(*) filter (where c_envio > 0) as n_envio, coalesce(sum(c_env) filter (where c_envio > 0), 0) as c_env,
+         count(*) filter (where clase = 'cobrado' and c_env > 0 and c_envio = 0) as n_envio_sin_cuenta,
+         count(*) filter (where clase = 'por_aclarar') as n_aclarar,
+         count(*) filter (where clase = 'fuera') as n_fuera, coalesce(sum(c_env) filter (where clase = 'fuera'), 0) as c_fuera
+    from fila2
+),
+-- La venta de cada marca, a precio de carta: lo pagado + su promoción − el envío cobrado.
+por_marca as (select marca_id, sum(c_base + c_promo - c_envio) as c, min(ord) as o from fila2 group by marca_id),
+sin_cuenta as (
+  select nombre_canal.n as nombre from nombre_canal
+   where ((select count(*) from fila2) > 0 or (select count(*) from dev2) > 0)
+     and (p_canal is null or (select cuenta from canal where canal.id = p_canal) is null)
+),
+sin_subcuenta as (  -- marcas sin su 7000000x o su 7080000x, en orden de aparición y sin repetir
+  select coalesce((select name from marca_nombre where id = z.marca_id), case when z.marca_id is null then 'sin marca' else 'una marca' end) as nombre, min(z.o) as o
+    from (select pm.marca_id, pm.o from por_marca pm
+           where pm.marca_id is null or not exists (select 1 from marca_cta mc where mc.brand_id = pm.marca_id and mc.papel = 'ventas')
+          union all
+          select d.marca_id, 100000000 + d.ord from dev2 d
+           where d.marca_id is null or not exists (select 1 from marca_cta mc where mc.brand_id = d.marca_id and mc.papel = 'devoluciones')) z
+   group by 1
+),
+cnt as (
+  select (select count(*) from ped where not propia and estado = 'closed') as cedidas,
+         (select coalesce(sum(round(total * 100)), 0) from ped where not propia and estado = 'closed') as c_cedidas,
+         (select count(*) from ped where estado = 'cancelled') as cancelados,
+         (select count(*) from ped where estado = 'open' and propia) as abiertos,
+         (select count(*) from dev2) as devs,
+         (select coalesce(sum(c_imp), 0) from dev2) as c_devs
+),
+lineas as (
+  select jsonb_agg(l.j order by l.k1, l.k2, l.k3) as j from (
+    select 1 as k1, 0 as k2, 0 as k3, jsonb_build_object('cuenta', (select cuenta from canal where canal.id = p_canal), 'debe', round(tot.c_total / 100, 2), 'haber', 0,
+             'concepto', 'Cobra ' || nombre_canal.n,
+             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null) as j
+      from tot, nombre_canal where tot.n > 0
+    union all
+    select 2, pm.o, 0, jsonb_build_object('cuenta', coalesce((select code from marca_cta mc where mc.brand_id = pm.marca_id and mc.papel = 'ventas'), cta.ventas),
+             'debe', 0, 'haber', round(pm.c / 100, 2),
+             'concepto', 'Ventas ' || coalesce((select name from marca_nombre where id = pm.marca_id), case when pm.marca_id is null then 'sin marca' else 'una marca' end),
+             'local_id', p_location, 'comun', false, 'marca_id', pm.marca_id, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null)
+      from por_marca pm, cta
+    union all
+    select 2, -1, 0, jsonb_build_object('cuenta', cc.promo, 'debe', round(tot.c_promo / 100, 2), 'haber', 0,
+             'concepto', 'Promociones ' || nombre_canal.n || ' · ' || tot.n_promo || ' pedido' || case when tot.n_promo = 1 then '' else 's' end,
+             'local_id', p_location, 'comun', false, 'marca_id', p_marca, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null)
+      from tot, cta_canal cc, nombre_canal where tot.c_promo > 0
+    union all
+    select 2, 1000000000, 0, jsonb_build_object('cuenta', cc.envios, 'debe', 0, 'haber', round(tot.c_envio / 100, 2),
+             'concepto', 'Envíos cobrados · ' || tot.n_envio || ' pedido' || case when tot.n_envio = 1 then '' else 's' end,
+             'local_id', p_location, 'comun', false, 'marca_id', p_marca, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null)
+      from tot, cta_canal cc where tot.c_envio > 0
+    union all
+    select 3, 0, 0, jsonb_build_object('cuenta', cta.iva477, 'debe', 0, 'haber', round(tot.c_cuota / 100, 2), 'concepto', 'IVA repercutido ' || tipo.txt || ' %',
+             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', null,
+             'iva', jsonb_build_object('tipo_id', tipo.id, 'base', round(tot.c_base / 100, 2), 'libro', 'issued', 'deducible', null, 'facturas', tot.n), 'retencion', null)
+      from tot, cta, tipo where tot.n > 0
+    union all
+    select 4, d.ord, 1, jsonb_build_object('cuenta', coalesce((select code from marca_cta mc where mc.brand_id = d.marca_id and mc.papel = 'devoluciones'), cta.devoluciones),
+             'debe', round(d.c_base / 100, 2), 'haber', 0,
+             'concepto', 'Reembolso al cliente · ' || coalesce((select name from marca_nombre where id = d.marca_id), case when d.marca_id is null then 'sin marca' else 'una marca' end)
+                         || ' · pedido ' || coalesce(d.ref, 'sin código'),
+             'local_id', p_location, 'comun', false, 'marca_id', d.marca_id, 'tercero_id', null, 'documento', d.ref, 'iva', null, 'retencion', null)
+      from dev2 d, cta
+    union all
+    select 4, d.ord, 2, jsonb_build_object('cuenta', cta.iva477, 'debe', round(d.c_cuota / 100, 2), 'haber', 0, 'concepto', trim('IVA del reembolso ' || coalesce(d.ref, '')),
+             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', d.ref,
+             'iva', jsonb_build_object('tipo_id', tipo.id, 'base', round(d.c_base / 100, 2), 'libro', 'issued', 'deducible', null, 'facturas', 1), 'retencion', null)
+      from dev2 d, cta, tipo
+    union all
+    select 4, d.ord, 3, jsonb_build_object('cuenta', (select cuenta from canal where canal.id = p_canal), 'debe', 0, 'haber', round(d.c_imp / 100, 2),
+             'concepto', 'Devuelve ' || nombre_canal.n,
+             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', d.ref, 'iva', null, 'retencion', null)
+      from dev2 d, nombre_canal
+  ) l
+),
+razones as (
+  select jsonb_agg(r.j order by r.k) as j from (
+    select 1 as k, jsonb_build_object('decision', tot.n || ' ticket' || case when tot.n = 1 then '' else 's' end || ' de tus marcas, ' || public.conta_euros_exactos(round(tot.c_total / 100, 2)),
+             'porque', 'una factura simplificada por pedido, anotadas juntas en un asiento resumen del día con base y cuota por tipo',
+             'cita', 'Código de Comercio, art. 28.2; RD 1624/1992 (Reglamento del IVA), art. 63.4') as j from tot
+    union all
+    select 2, jsonb_build_object('decision', 'IVA al ' || tipo.txt || ' %', 'porque', 'reparto de comida = servicio de restauración: criterio de tu empresa',
+             'cita', 'Ley 37/1992, art. 91.Uno.2.2.º') from tipo
+    union all
+    select 2.1, jsonb_build_object('decision', 'Promociones: ' || tot.n_promo || ' pedido' || case when tot.n_promo = 1 then '' else 's' end
+               || ', ' || public.conta_euros_exactos(round(tot.c_desc / 100, 2)) || ' con el IVA dentro',
+             'porque', 'la venta va a precio de carta en su marca y la promoción, en su subcuenta (' || cc.promo || '), resta; el IVA va sobre lo que paga el cliente',
+             'cita', 'Ley 37/1992, art. 78.Tres.2.º') from tot, cta_canal cc where tot.c_promo > 0
+    union all
+    select 2.2, jsonb_build_object('decision', 'Envíos cobrados: ' || tot.n_envio || ' pedido' || case when tot.n_envio = 1 then '' else 's' end
+               || ', ' || public.conta_euros_exactos(round(tot.c_env / 100, 2)) || ' con el IVA dentro',
+             'porque', 'lo repartimos nosotros: el envío es del restaurante y va a su subcuenta (' || cc.envios || '), con su local; forma parte de la base, al tipo de la venta',
+             'cita', 'Ley 37/1992, art. 78.Dos.1.º') from tot, cta_canal cc where tot.c_envio > 0
+    union all
+    select 2.3, jsonb_build_object('decision', 'Fuera: el envío de ' || tot.n_fuera || ' pedido' || case when tot.n_fuera = 1 then '' else 's' end
+               || ' (' || public.conta_euros_exactos(round(tot.c_fuera / 100, 2)) || ')',
+             'porque', 'lo repartió la plataforma y su liquidación no lo paga: no es venta del restaurante ni lo cobra la plataforma para él') from tot where tot.n_fuera > 0
+    union all
+    select 3, jsonb_build_object('decision', cnt.devs || ' devolución' || case when cnt.devs = 1 then '' else 'es' end || ' de ' || public.conta_euros_exactos(round(cnt.c_devs / 100, 2)),
+             'porque', 'la plataforma devolvió al cliente después de la venta: menos venta y menos IVA, contra lo que cobra la plataforma, el día en que se produce',
+             'cita', 'Ley 37/1992, art. 80.Dos') from cnt where cnt.devs > 0
+    union all
+    select 4, jsonb_build_object('decision', 'Base calculada',
+             'porque', 'algún pedido no trae la base imponible: la calculo del total al ' || tipo.txt || ' % (el tipo de tus ventas); no la invento, la deduzco y lo digo')
+      from tot, tipo where tot.calculada
+    union all
+    select 5, jsonb_build_object('decision', 'Fuera: ' || cnt.cedidas || ' pedido' || case when cnt.cedidas = 1 then '' else 's' end || ' de marcas cedidas (' || public.conta_euros_exactos(round(cnt.c_cedidas / 100, 2)) || ')',
+             'porque', 'son ventas del socio y su IVA es del socio: entran solo en su liquidación mensual, que comparas con estos tickets',
+             'cita', 'Ley 37/1992, art. 11.Dos.15.º') from cnt where cnt.cedidas > 0
+    union all
+    select 6, jsonb_build_object('decision', 'Fuera: ' || cnt.cancelados || ' cancelado' || case when cnt.cancelados = 1 then '' else 's' end,
+             'porque', 'cancelado antes de entregar no es venta') from cnt where cnt.cancelados > 0
+    union all  -- los avisos van detrás, como «Mira esto», en el orden del núcleo: otro tipo y después la subcuenta
+    select 7, jsonb_build_object('decision', 'Mira esto',
+             'porque', tot.otro || ' pedido' || case when tot.otro = 1 then ' trae' else 's traen' end || ' en sus líneas un tipo distinto del ' || tipo.txt || ' %: mira cuáles antes de validar.')
+      from tot, tipo where tot.otro > 0
+    union all
+    select 8, jsonb_build_object('decision', 'Mira esto',
+             'porque', (select string_agg(nombre, ', ' order by o) from sin_subcuenta)
+                       || case when (select count(*) from sin_subcuenta) = 1 then ' no tiene' else ' no tienen' end
+                       || ' su subcuenta de ventas o de reembolsos: va a la general (' || cta.ventas || ' / ' || cta.devoluciones || '). Enlázala antes de validar.')
+      from cta where exists (select 1 from sin_subcuenta)
+    union all
+    select 9, jsonb_build_object('decision', 'Mira esto',
+             'porque', 'Por aclarar: ' || tot.n_aclarar || ' pedido' || case when tot.n_aclarar = 1 then '' else 's' end || ' con envío y sin saber si es del restaurante ('
+                       || (select string_agg(coalesce(f.codigo, left(f.id::text, 8)) || ' · ' || coalesce((select name from marca_nombre where id = f.marca_id), 'sin marca')
+                                             || ' · envío ' || public.conta_euros_exactos(round(f.c_env / 100.0, 2)) || ' · ' || coalesce(f.por_que, 'sin decir quién repartió'), '; ' order by f.ord)
+                             from fila2 f where f.clase = 'por_aclarar')
+                       || '). Se resuelve con la liquidación de esa semana: si la plataforma lo paga, va a Envíos cobrados; si no, sale de la venta y del cobro. Hasta entonces no se valida.')
+      from tot where tot.n_aclarar > 0
+    union all
+    select 10, jsonb_build_object('decision', 'Mira esto',
+             'porque', tot.n_promo_sin_cuenta || ' pedido' || case when tot.n_promo_sin_cuenta = 1 then ' lleva' else 's llevan' end || ' promoción y ' || nombre_canal.n
+                       || ' no tiene su subcuenta de promociones: queda restada de la venta. Enlázala antes de validar.')
+      from tot, nombre_canal where tot.n_promo_sin_cuenta > 0
+    union all
+    select 11, jsonb_build_object('decision', 'Mira esto',
+             'porque', tot.n_envio_sin_cuenta || ' pedido' || case when tot.n_envio_sin_cuenta = 1 then ' lleva' else 's llevan' end || ' envío cobrado y ' || nombre_canal.n
+                       || ' no tiene su subcuenta de envíos: queda dentro de la venta. Enlázala antes de validar.')
+      from tot, nombre_canal where tot.n_envio_sin_cuenta > 0
+  ) r
+),
+resumen as (
+  select jsonb_build_object(
+    'location_id', p_location, 'sales_day', p_dia,
+    'unit_key', coalesce(p_canal::text, 'sin-canal') || coalesce(':' || p_marca::text, ''), 'channel_id', p_canal, 'brand_id', p_marca,
+    'tickets_count', tot.n, 'total', round(tot.c_total / 100, 2),
+    'by_rate', jsonb_build_array(jsonb_build_object('tax_rate_id', tipo.id, 'rate', public.conta_numero_texto(tipo.rate)::numeric, 'base', round(tot.c_base / 100, 2), 'cuota', round(tot.c_cuota / 100, 2), 'calculated', coalesce(tot.calculada, false))),
+    'by_channel', case when tot.n > 0 then jsonb_build_array(jsonb_build_object('channel_id', p_canal, 'total', round(tot.c_total / 100, 2))) else '[]'::jsonb end,
+    'by_brand', coalesce((select jsonb_agg(jsonb_build_object('brand_id', marca_id, 'base', round(c / 100, 2)) order by o) from por_marca), '[]'),
+    'detail_hash', encode(sha256(convert_to(
+        coalesce((select string_agg(id::text, '|' order by id::text collate "C") from fila2), '') || '#' || tot.c_total::bigint::text, 'UTF8')), 'hex'),
+    'sale_ids', coalesce((select jsonb_agg(id order by id::text collate "C") from fila2), '[]'),
+    'base_calculated', coalesce(tot.calculada, false)) as j
+  from tot left join tipo on true
+)
+select case
+  when (select id from tipo) is null or cta.iva477 is null or cta.ventas is null then
+    jsonb_build_object('sin_propuesta', 'Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.')
+  when tot.n = 0 and cnt.devs = 0 then
+    jsonb_build_object('sin_propuesta', case when cnt.cedidas > 0 then 'Ese día solo hubo ventas de marcas cedidas: van en la liquidación del socio.' else 'Ese día no hubo ventas de tus marcas.' end)
+  when cnt.abiertos > 0 then
+    jsonb_build_object('sin_propuesta', 'El cierre del día aún no ha pasado por este día: ' || cnt.abiertos || ' pedido' || case when cnt.abiertos = 1 then '' else 's' end
+      || ' de tus marcas ' || case when cnt.abiertos = 1 then 'sigue abierto' else 'siguen abiertos' end || '. Pasa cada hora a los 7 minutos; vuelve a proponer después.')
+  when exists (select 1 from sin_cuenta) then
+    jsonb_build_object('sin_propuesta', 'No sé a qué cuenta va lo que cobra ' || (select nombre from sin_cuenta)
+      || ': enlaza su 430 en su ficha (Clientes y proveedores › Plataformas).')
+  when tot.n > 0 and abs(tot.c_cuota - sign(tot.c_base) * round(abs(tot.c_base * (select rate from tipo)) / 100)) > floor(0.55 * tot.n + 0.5) then
+    jsonb_build_object('sin_propuesta', 'La cuota de los tickets (' || public.conta_euros_exactos(round(tot.c_cuota / 100, 2)) || ') se aleja de la base × '
+      || (select txt from tipo) || ' % más de medio céntimo por ticket: hay pedidos con otro tipo.')
+  else jsonb_build_object(
+    'entrada', jsonb_build_object(
+      'series', 1, 'fecha', p_dia,
+      'concepto', 'Ventas ' || nombre_canal.n || coalesce(' · ' || (select name from marca_nombre where id = p_marca), '') || ' · ' || loc.nombre,
+      'source_type', 'sales_day', 'source_id', null,
+      'confianza', case when tot.otro > 0 or exists (select 1 from sin_subcuenta) or tot.n_aclarar > 0 or tot.n_promo_sin_cuenta > 0 or tot.n_envio_sin_cuenta > 0 then 'duda'
+                        when tot.calculada then 'probable' else 'seguro' end,
+      'porque', tot.n || case when tot.n = 1 then ' ticket de tus marcas en ' || nombre_canal.n || ' cuadra' else ' tickets de tus marcas en ' || nombre_canal.n || ' cuadran' end
+                || ' con lo que cobra, al céntimo'
+                || case when tot.calculada then '; base calculada al ' || (select txt from tipo) || ' %' else '' end || '.',
+      'razones', razones.j, 'party_id', null, 'documento', null),
+    'lineas', lineas.j,
+    'resumen', resumen.j)
+  end
+from tot, cnt, cta, loc, lineas, razones, resumen, nombre_canal
+$$;
+
+
+--
+-- Name: FUNCTION _conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) IS 'S01 · PR 3: la propuesta de ventas de una unidad (plataforma y marca) de un día y local; con p_venta, solo ese pedido como vendido (lo que una liquidación paga después). La única copia de la regla de ventas en la base.';
 
 
 --
@@ -6403,6 +7124,19 @@ CREATE FUNCTION public._conta_tienda_nombre(p_texto text) RETURNS text
     AS $_$
   select nullif(btrim(regexp_replace(coalesce(p_texto, ''), '\s*\([^()]*\)\s*$', '')), '')
 $_$;
+
+
+--
+-- Name: _conta_tipo_iva(uuid, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tipo_iva(p_cuenta uuid, p_rate numeric) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select r.id from public.tax_rate r where r.tax_system = 'iva' and r.valid_to is null and r.code like 'iva\_%' and r.rate = p_rate
+     and (r.is_system or r.account_id = p_cuenta) order by r.is_system, r.code limit 1
+$$;
 
 
 --
@@ -29011,6 +29745,34 @@ end $$;
 
 
 --
+-- Name: conta_aprendizaje(uuid, text, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; r jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then
+    raise exception 'Esa empresa no es de tu cuenta.' using errcode = '42501';
+  end if;
+  r := public._conta_aprendizaje(p_company, p_clave,
+         coalesce((select jsonb_agg(jsonb_build_object('cuenta', x) order by o) from unnest(p_cuentas) with ordinality u(x, o)), '[]'::jsonb), '[]'::jsonb);
+  return jsonb_build_object('cuentas', coalesce((select jsonb_agg(l->'cuenta' order by o) from jsonb_array_elements(r->'lineas') with ordinality z(l, o)), '[]'::jsonb),
+                            'razon', r->'razones'->0);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]) IS 'S01 · PR 3: regla 11 para las facturas recibidas del navegador: {cuentas, razon} con lo aprendido del origen (la de SQL, _conta_aprendizaje). Solo lee.';
+
+
+--
 -- Name: conta_apuntada_sola_deshacer(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -43103,6 +43865,169 @@ COMMENT ON FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date, 
 
 
 --
+-- Name: conta_proponer_pagados_despues(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proponer_pagados_despues(p_company uuid, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; r record; x jsonb; v_res jsonb;
+        v_prop int := 0; v_ya int := 0; v_desc int := 0; v_sin jsonb := '[]'::jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
+  end if;
+  -- Sin rango: el pago llega después; solo lo que cae en un día abierto (como el navegador).
+  for r in select * from public.conta_no_confirmados_pagados(p_company) loop
+    continue when r.location_id is null or not public.conta_dia_abierto(p_company, r.dia);
+    x := public.conta_propuesta_pagado_despues(p_company, to_jsonb(r));
+    if x ? 'sin_propuesta' then
+      perform public._conta_no_propuesta(p_company, 'sales_adjustment', r.sale_id::text, x->>'que', x->>'sin_propuesta', 'Ventas › Cierres del día');
+      v_sin := v_sin || jsonb_build_array(jsonb_build_object('que', x->>'que', 'porque', x->>'sin_propuesta'));
+      continue;
+    end if;
+    v_res := public._conta_proponer(p_company, x->'propuesta', p_quien);
+    if (v_res->>'descartada')::boolean then v_desc := v_desc + 1;
+    elsif (v_res->>'existente')::boolean then v_ya := v_ya + 1;
+    else v_prop := v_prop + 1; end if;
+  end loop;
+  return jsonb_build_object('propuestas', v_prop, 'yaEstaban', v_ya, 'descartadas', v_desc, 'sinPropuesta', v_sin);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proponer_pagados_despues(p_company uuid, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proponer_pagados_despues(p_company uuid, p_quien text) IS 'S01 · PR 3: propone los no confirmados que una liquidación paga, con su día abierto (navegador, pasada de noche, al leer la liquidación); lo que no puede, a conta_propuesta_pendiente (Ventas › Cierres del día). No valida.';
+
+
+--
+-- Name: conta_proponer_plataformas(uuid, date, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; r record; x jsonb; v_prop int := 0; v_ya int := 0; v_desc int := 0; v_sin jsonb := '[]'::jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
+  end if;
+  for r in select cs.id from public.channel_settlement cs
+            where cs.account_id = v_cuenta and cs.settlement_date >= p_desde and cs.settlement_date <= p_hasta order by cs.settlement_date desc loop
+    x := public._conta_proponer_plataforma(p_company, r.id, p_quien);
+    v_prop := v_prop + (x->>'propuestas')::int; v_ya := v_ya + (x->>'yaEstaban')::int; v_desc := v_desc + (x->>'descartadas')::int; v_sin := v_sin || (x->'sinPropuesta');
+  end loop;
+  return jsonb_build_object('propuestas', v_prop, 'yaEstaban', v_ya, 'descartadas', v_desc, 'sinPropuesta', v_sin);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text) IS 'S01 · PR 3: propone las liquidaciones de plataforma de un rango (navegador, pasada de noche); lo que no puede, a conta_propuesta_pendiente (Ventas › Liquidaciones). No valida.';
+
+
+--
+-- Name: conta_proponer_recibidos(uuid, date, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_mes date; v_fin date; a record; x jsonb; q jsonb; v_res jsonb;
+        v_prop int := 0; v_ya int := 0; v_desc int := 0; v_sin jsonb := '[]'::jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
+  end if;
+  -- Los meses ya acabados (su último día, pasado) del rango, con ese día abierto.
+  for v_mes in select d::date from generate_series(date_trunc('month', p_desde), p_hasta, interval '1 month') d loop
+    v_fin := (v_mes + interval '1 month - 1 day')::date;
+    continue when not (v_fin < public.conta_hoy() and v_fin <= p_hasta and public.conta_dia_abierto(p_company, v_fin));
+    for a in select id from public._compras_fin_de_mes(p_company, v_mes) loop
+      x := public.conta_propuestas_recibido(a.id);
+      if x ? 'sin_propuesta' then
+        perform public._conta_no_propuesta(p_company, 'purchase_accrual', a.id::text, x->>'que', x->>'sin_propuesta', 'Compras y gastos › Facturas recibidas');
+        v_sin := v_sin || jsonb_build_array(jsonb_build_object('que', x->>'que', 'porque', x->>'sin_propuesta'));
+        continue;
+      end if;
+      for q in select * from jsonb_array_elements(x->'propuestas') loop
+        continue when not public.conta_dia_abierto(p_company, (q->'entrada'->>'fecha')::date);
+        v_res := public._conta_proponer(p_company, q, p_quien);
+        if (v_res->>'descartada')::boolean then v_desc := v_desc + 1;
+        elsif (v_res->>'existente')::boolean then v_ya := v_ya + 1;
+        else v_prop := v_prop + 1; end if;
+      end loop;
+    end loop;
+  end loop;
+  return jsonb_build_object('propuestas', v_prop, 'yaEstaban', v_ya, 'descartadas', v_desc, 'sinPropuesta', v_sin);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text) IS 'S01 · PR 3: propone lo recibido sin factura de los meses acabados del rango (navegador y pasada de noche); lo que no puede, a conta_propuesta_pendiente (Compras y gastos › Facturas recibidas). No valida.';
+
+
+--
+-- Name: conta_proponer_socios(uuid, date, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; r record; x jsonb; v_prop int := 0; v_ya int := 0; v_desc int := 0; v_sin jsonb := '[]'::jsonb;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  -- Una persona, solo si administra o encarga la cuenta; desde un disparador propone Sumied.
+  if auth.uid() is not null and pg_trigger_depth() = 0 and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta propone asientos.' using errcode = '42501';
+  end if;
+  for r in select l.id from public.licensed_settlement l
+            where l.account_id = v_cuenta and l.company_id = p_company and l.formula = 'documentos' and l.status = 'confirmada'
+              and l.period_to >= (date_trunc('month', p_desde) - interval '2 months')::date and l.period_from <= p_hasta
+            order by l.period_to desc loop
+    x := public._conta_proponer_socio(p_company, r.id, p_quien);
+    v_prop := v_prop + (x->>'propuestas')::int; v_ya := v_ya + (x->>'yaEstaban')::int; v_desc := v_desc + (x->>'descartadas')::int; v_sin := v_sin || (x->'sinPropuesta');
+  end loop;
+  for r in select l.id from public.licensed_settlement l
+            where l.account_id = v_cuenta and l.formula = 'compras_aportaciones_comision' and l.status in ('confirmada', 'saldada')
+              and l.period_to >= p_desde and l.period_to <= p_hasta
+            order by l.period_to desc loop
+    x := public._conta_proponer_socio(p_company, r.id, p_quien);
+    v_prop := v_prop + (x->>'propuestas')::int; v_ya := v_ya + (x->>'yaEstaban')::int; v_desc := v_desc + (x->>'descartadas')::int; v_sin := v_sin || (x->'sinPropuesta');
+  end loop;
+  return jsonb_build_object('propuestas', v_prop, 'yaEstaban', v_ya, 'descartadas', v_desc, 'sinPropuesta', v_sin);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text) IS 'S01 · PR 3: propone las liquidaciones del socio de un rango (navegador, pasada de noche); lo que no puede, a conta_propuesta_pendiente (Ventas › Liquidaciones). No valida.';
+
+
+--
 -- Name: conta_propuesta_nomina(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -43172,6 +44097,63 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) IS 'S01 · PR 3: la regla de una nómina (nomina() del navegador), en SQL puro: {entrada, lineas} como aJson, o {sin_propuesta}. Solo lee.';
+
+
+--
+-- Name: conta_propuesta_pagado_despues(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_propuesta_pagado_despues(p_company uuid, p_pago jsonb) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with x as (
+    select (p_pago->>'sale_id')::uuid as id, (p_pago->>'location_id')::uuid as loc, (p_pago->>'dia')::date as dia,
+           p_pago->>'codigo' as codigo, (p_pago->>'canal_id')::uuid as canal, (p_pago->>'marca_id')::uuid as marca,
+           p_pago->>'settlement_ref' as ref, (p_pago->>'settlement_date')::date as fecha_liq,
+           coalesce((p_pago->>'dia_validado')::boolean, false) as validado
+  ), n as (
+    select x.*, coalesce(x.codigo, 'sin código') as cod,
+           case when x.canal is null then 'sin canal'
+                else coalesce((select ch.name from public.sales_channel ch join public.company c on c.account_id = ch.account_id
+                                where ch.id = x.canal and c.id = p_company), 'un canal') end as canal_n,
+           extract(day from x.dia)::int || ' de ' || (array['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'])[extract(month from x.dia)::int] as dia_n,
+           case when x.ref is not null then 'la liquidación ' || x.ref
+                  || coalesce(' del ' || extract(day from x.fecha_liq)::int || ' de ' || (array['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'])[extract(month from x.fecha_liq)::int], '')
+                else 'su liquidación' end as liq,
+           'Pedido ' || coalesce(x.codigo, 'sin código') || ' del ' || to_char(x.dia, 'DD/MM/YYYY') || ', pagado después' as que,
+           exists (select 1 from public.conta_pedidos_del_dia(p_company, x.loc, x.dia) d where d.id = x.id) as esta
+      from x
+  ), v as (
+    select n.*, case when n.esta then public._conta_propuesta_ventas(p_company, n.loc, n.dia, n.canal, n.marca, n.id) end as j from n
+  )
+  select case
+    when v.id is null then jsonb_build_object('que', 'Pedido pagado después', 'sin_propuesta', 'No existe.')
+    when not v.esta then jsonb_build_object('que', v.que, 'sin_propuesta', 'No encuentro el pedido en su día: puede que ya no esté activo.')
+    when v.j ? 'sin_propuesta' then jsonb_build_object('que', v.que, 'sin_propuesta', v.j->>'sin_propuesta')
+    else jsonb_build_object('que', v.que, 'propuesta', jsonb_build_object(
+      'entrada', (v.j->'entrada') || jsonb_build_object(
+        'concepto', 'Venta del ' || v.dia_n || ' pagada después · ' || v.canal_n || ' · pedido ' || v.cod,
+        'source_type', 'sales_adjustment', 'source_id', v.id, 'documento', v.codigo,
+        'porque', v.canal_n || ' ha pagado el pedido ' || v.cod || ', que se cerró sin confirmar el ' || v.dia_n,
+        'razones', jsonb_build_array(
+            jsonb_build_object('decision', 'Es venta de su día',
+              'porque', 'al cierre del día seguía abierto y se cerró como no confirmado; ' || v.liq || ' lo paga, y la liquidación de la plataforma tiene la última palabra'),
+            jsonb_build_object('decision', case when v.validado then 'Va aparte del asiento del día, que está validado y no se toca' else 'Va aparte del asiento del día' end,
+              'porque', 'ese pedido no está en el asiento del día, así que no puede contarse dos veces'))
+          || coalesce((select jsonb_agg(r order by o) from jsonb_array_elements(v.j->'entrada'->'razones') with ordinality t(r, o)
+                        where not (r->>'decision' ~ '^[0-9]+ tickets? de tus marcas')), '[]'::jsonb)),
+      'lineas', v.j->'lineas'))
+    end
+  from (select 1) uno left join v on true
+$$;
+
+
+--
+-- Name: FUNCTION conta_propuesta_pagado_despues(p_company uuid, p_pago jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_propuesta_pagado_despues(p_company uuid, p_pago jsonb) IS 'S01 · PR 3: la regla del no confirmado que una liquidación paga (noConfirmadoPagado() del navegador), en SQL puro, sobre la regla de ventas (_conta_propuesta_ventas con ese pedido): {que, propuesta} como aJson, o {que, sin_propuesta}. Solo lee.';
 
 
 --
@@ -43382,281 +44364,7 @@ CREATE FUNCTION public.conta_propuesta_ventas_unidad(p_company uuid, p_location 
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-with
-emp as (
-  select c.id, c.account_id, t.sales_tax_rate_code from public.company c
-    left join public.company_tax_profile t on t.company_id = c.id
-   where c.id = p_company
-),
-tipo as (
-  select r.id, r.rate, public.conta_numero_texto(r.rate) as txt from public.tax_rate r, emp
-   where r.code = emp.sales_tax_rate_code and r.tax_system = 'iva' and r.valid_to is null
-     and (r.is_system or r.account_id = emp.account_id)
-   order by r.is_system, r.id limit 1
-),
-hoja as (
-  select a.template_code, min(a.code) as code from public.company_account a
-   where a.company_id = p_company and a.kind = 'template' and a.status is distinct from 'cerrada' and a.template_code in ('700', '708')
-   group by 1
-),
-cta as (
-  select (select code from hoja where template_code = '700') as ventas,
-         coalesce((select code from hoja where template_code = '708'), (select code from hoja where template_code = '700')) as devoluciones,
-         (select a.code from public.company_account_link k join public.company_account a on a.id = k.company_account_id, tipo
-           where k.company_id = p_company and k.entity = 'tax_rate' and k.entity_id = tipo.id::text and k.role = 'repercutido'
-           order by a.code limit 1) as iva477
-),
-marca_cta as (
-  select m.brand_id, m.papel, a.code from public.conta_ventas_marca m join public.company_account a on a.id = m.company_account_id
-   where m.company_id = p_company and a.status is distinct from 'cerrada'
-),
-canal as (
-  select ch.id, ch.name,
-         (select a.code from public.party_role pr
-            join public.company_account_link k on k.company_id = p_company and k.entity = 'customer' and k.entity_id = pr.party_id::text and k.role = 'principal'
-            join public.company_account a on a.id = k.company_account_id
-           where pr.account_id = ch.account_id and pr.role = 'platform' and pr.channel_id = ch.id
-           order by pr.party_id, a.code limit 1) as cuenta,
-         (select a.code from public.conta_ventas_canal_cuenta v join public.company_account a on a.id = v.company_account_id and a.company_id = v.company_id
-           where v.company_id = p_company and v.channel_id = ch.id and v.papel = 'promociones' and a.status is distinct from 'cerrada') as promo,
-         (select a.code from public.conta_ventas_canal_cuenta v join public.company_account a on a.id = v.company_account_id and a.company_id = v.company_id
-           where v.company_id = p_company and v.channel_id = ch.id and v.papel = 'envios' and a.status is distinct from 'cerrada') as envios
-    from public.sales_channel ch, emp where ch.account_id = emp.account_id
-),
-cta_canal as (select (select promo from canal where id = p_canal) as promo, (select envios from canal where id = p_canal) as envios),
-nombre_canal as (select case when p_canal is null then 'sin canal' else coalesce((select name from canal where id = p_canal), 'un canal') end as n),
-marca_nombre as (select b.id, b.name from public.brand b, emp where b.account_id = emp.account_id),
-loc as (select coalesce((select l.name from public.locations l, emp where l.id = p_location and l.account_id = emp.account_id), 'local') as nombre),
-ped as (
-  select x.* from public.conta_pedidos_del_dia(p_company, p_location, p_dia) with ordinality as x(id, codigo, canal_id, marca_id, propia, estado, total, base, cuota, tipos, ord)
-   where x.canal_id is not distinct from p_canal and (p_marca is null or x.marca_id = p_marca)
-),
--- C06b (16/10): el descuento, el envío y quién repartió cada pedido (conta_cargos_de_pedidos).
-carg as (
-  select c.* from emp, public.conta_cargos_de_pedidos(emp.account_id, (select coalesce(array_agg(id), '{}') from ped where propia and estado = 'closed')) c
-),
-fila0 as (
-  select p.*, round(coalesce(c.descuento, 0) * 100) as c_desc, round(coalesce(c.envio, 0) * 100) as c_env,
-         coalesce(c.clase, 'ninguno') as clase, c.por_que,
-         -- Un envío que la plataforma no paga (aclarado así) sale de la venta y del cobro.
-         round(p.total * 100) - case when c.clase = 'fuera' then round(c.envio * 100) else 0 end as c_total
-    from ped p left join carg c on c.id = p.id
-   where p.propia and p.estado = 'closed'
-),
-fila as (
-  select p.*,
-         (p.clase <> 'fuera' and p.base is not null and p.cuota is not null and round(p.base * 100) + round(p.cuota * 100) = round(p.total * 100)) as trae,
-         exists (select 1 from unnest(p.tipos) t where t <> tipo.rate) as otro,
-         case when p.clase <> 'fuera' and p.base is not null and p.cuota is not null and round(p.base * 100) + round(p.cuota * 100) = round(p.total * 100)
-              then round(p.base * 100)
-              else sign(p.c_total) * round(abs(p.c_total) * 100 / (100 + tipo.rate)) end as c_base
-    from fila0 p, tipo
-),
-fila2 as (
-  select f.*, case when f.trae then round(f.cuota * 100) else f.c_total - f.c_base end as c_cuota,
-         -- La promoción en base, al tipo de la venta; el envío cobrado, igual. Sin su subcuenta, se quedan en la venta (y se avisa).
-         case when cc.promo is not null and f.c_desc > 0 then round(f.c_desc * 100 / (100 + tipo.rate)) else 0 end as c_promo,
-         case when cc.envios is not null and f.clase = 'cobrado' and f.c_env > 0 then round(f.c_env * 100 / (100 + tipo.rate)) else 0 end as c_envio
-    from fila f, tipo, cta_canal cc
-),
-dev as (
-  select o.*, round(o.importe * 100) as c_imp,
-         sign(o.importe) * round(abs(round(o.importe * 100)) * 100 / (100 + tipo.rate)) as c_base
-    from public.conta_devoluciones_del_dia(p_company, p_location, p_dia) with ordinality as o(pedido_id, codigo, canal_id, marca_id, propia, importe, ord), tipo
-   where o.propia and o.canal_id is not distinct from p_canal and (p_marca is null or o.marca_id = p_marca)
-),
-dev2 as (select d.*, d.c_imp - d.c_base as c_cuota, coalesce(d.codigo, d.pedido_id::text) as ref from dev d),
-tot as (
-  select count(*) as n, coalesce(sum(c_total), 0) as c_total, coalesce(sum(c_base), 0) as c_base, coalesce(sum(c_cuota), 0) as c_cuota,
-         bool_or(not trae) as calculada, count(*) filter (where otro) as otro,
-         coalesce(sum(c_promo), 0) as c_promo, count(*) filter (where c_promo > 0) as n_promo, coalesce(sum(c_desc) filter (where c_promo > 0), 0) as c_desc,
-         count(*) filter (where c_desc > 0 and c_promo = 0) as n_promo_sin_cuenta,
-         coalesce(sum(c_envio), 0) as c_envio, count(*) filter (where c_envio > 0) as n_envio, coalesce(sum(c_env) filter (where c_envio > 0), 0) as c_env,
-         count(*) filter (where clase = 'cobrado' and c_env > 0 and c_envio = 0) as n_envio_sin_cuenta,
-         count(*) filter (where clase = 'por_aclarar') as n_aclarar,
-         count(*) filter (where clase = 'fuera') as n_fuera, coalesce(sum(c_env) filter (where clase = 'fuera'), 0) as c_fuera
-    from fila2
-),
--- La venta de cada marca, a precio de carta: lo pagado + su promoción − el envío cobrado.
-por_marca as (select marca_id, sum(c_base + c_promo - c_envio) as c, min(ord) as o from fila2 group by marca_id),
-sin_cuenta as (
-  select nombre_canal.n as nombre from nombre_canal
-   where ((select count(*) from fila2) > 0 or (select count(*) from dev2) > 0)
-     and (p_canal is null or (select cuenta from canal where canal.id = p_canal) is null)
-),
-sin_subcuenta as (  -- marcas sin su 7000000x o su 7080000x, en orden de aparición y sin repetir
-  select coalesce((select name from marca_nombre where id = z.marca_id), case when z.marca_id is null then 'sin marca' else 'una marca' end) as nombre, min(z.o) as o
-    from (select pm.marca_id, pm.o from por_marca pm
-           where pm.marca_id is null or not exists (select 1 from marca_cta mc where mc.brand_id = pm.marca_id and mc.papel = 'ventas')
-          union all
-          select d.marca_id, 100000000 + d.ord from dev2 d
-           where d.marca_id is null or not exists (select 1 from marca_cta mc where mc.brand_id = d.marca_id and mc.papel = 'devoluciones')) z
-   group by 1
-),
-cnt as (
-  select (select count(*) from ped where not propia and estado = 'closed') as cedidas,
-         (select coalesce(sum(round(total * 100)), 0) from ped where not propia and estado = 'closed') as c_cedidas,
-         (select count(*) from ped where estado = 'cancelled') as cancelados,
-         (select count(*) from ped where estado = 'open' and propia) as abiertos,
-         (select count(*) from dev2) as devs,
-         (select coalesce(sum(c_imp), 0) from dev2) as c_devs
-),
-lineas as (
-  select jsonb_agg(l.j order by l.k1, l.k2, l.k3) as j from (
-    select 1 as k1, 0 as k2, 0 as k3, jsonb_build_object('cuenta', (select cuenta from canal where canal.id = p_canal), 'debe', round(tot.c_total / 100, 2), 'haber', 0,
-             'concepto', 'Cobra ' || nombre_canal.n,
-             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null) as j
-      from tot, nombre_canal where tot.n > 0
-    union all
-    select 2, pm.o, 0, jsonb_build_object('cuenta', coalesce((select code from marca_cta mc where mc.brand_id = pm.marca_id and mc.papel = 'ventas'), cta.ventas),
-             'debe', 0, 'haber', round(pm.c / 100, 2),
-             'concepto', 'Ventas ' || coalesce((select name from marca_nombre where id = pm.marca_id), case when pm.marca_id is null then 'sin marca' else 'una marca' end),
-             'local_id', p_location, 'comun', false, 'marca_id', pm.marca_id, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null)
-      from por_marca pm, cta
-    union all
-    select 2, -1, 0, jsonb_build_object('cuenta', cc.promo, 'debe', round(tot.c_promo / 100, 2), 'haber', 0,
-             'concepto', 'Promociones ' || nombre_canal.n || ' · ' || tot.n_promo || ' pedido' || case when tot.n_promo = 1 then '' else 's' end,
-             'local_id', p_location, 'comun', false, 'marca_id', p_marca, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null)
-      from tot, cta_canal cc, nombre_canal where tot.c_promo > 0
-    union all
-    select 2, 1000000000, 0, jsonb_build_object('cuenta', cc.envios, 'debe', 0, 'haber', round(tot.c_envio / 100, 2),
-             'concepto', 'Envíos cobrados · ' || tot.n_envio || ' pedido' || case when tot.n_envio = 1 then '' else 's' end,
-             'local_id', p_location, 'comun', false, 'marca_id', p_marca, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null)
-      from tot, cta_canal cc where tot.c_envio > 0
-    union all
-    select 3, 0, 0, jsonb_build_object('cuenta', cta.iva477, 'debe', 0, 'haber', round(tot.c_cuota / 100, 2), 'concepto', 'IVA repercutido ' || tipo.txt || ' %',
-             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', null,
-             'iva', jsonb_build_object('tipo_id', tipo.id, 'base', round(tot.c_base / 100, 2), 'libro', 'issued', 'deducible', null, 'facturas', tot.n), 'retencion', null)
-      from tot, cta, tipo where tot.n > 0
-    union all
-    select 4, d.ord, 1, jsonb_build_object('cuenta', coalesce((select code from marca_cta mc where mc.brand_id = d.marca_id and mc.papel = 'devoluciones'), cta.devoluciones),
-             'debe', round(d.c_base / 100, 2), 'haber', 0,
-             'concepto', 'Reembolso al cliente · ' || coalesce((select name from marca_nombre where id = d.marca_id), case when d.marca_id is null then 'sin marca' else 'una marca' end)
-                         || ' · pedido ' || coalesce(d.ref, 'sin código'),
-             'local_id', p_location, 'comun', false, 'marca_id', d.marca_id, 'tercero_id', null, 'documento', d.ref, 'iva', null, 'retencion', null)
-      from dev2 d, cta
-    union all
-    select 4, d.ord, 2, jsonb_build_object('cuenta', cta.iva477, 'debe', round(d.c_cuota / 100, 2), 'haber', 0, 'concepto', trim('IVA del reembolso ' || coalesce(d.ref, '')),
-             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', d.ref,
-             'iva', jsonb_build_object('tipo_id', tipo.id, 'base', round(d.c_base / 100, 2), 'libro', 'issued', 'deducible', null, 'facturas', 1), 'retencion', null)
-      from dev2 d, cta, tipo
-    union all
-    select 4, d.ord, 3, jsonb_build_object('cuenta', (select cuenta from canal where canal.id = p_canal), 'debe', 0, 'haber', round(d.c_imp / 100, 2),
-             'concepto', 'Devuelve ' || nombre_canal.n,
-             'local_id', p_location, 'comun', false, 'marca_id', null, 'tercero_id', null, 'documento', d.ref, 'iva', null, 'retencion', null)
-      from dev2 d, nombre_canal
-  ) l
-),
-razones as (
-  select jsonb_agg(r.j order by r.k) as j from (
-    select 1 as k, jsonb_build_object('decision', tot.n || ' ticket' || case when tot.n = 1 then '' else 's' end || ' de tus marcas, ' || public.conta_euros_exactos(round(tot.c_total / 100, 2)),
-             'porque', 'una factura simplificada por pedido, anotadas juntas en un asiento resumen del día con base y cuota por tipo',
-             'cita', 'Código de Comercio, art. 28.2; RD 1624/1992 (Reglamento del IVA), art. 63.4') as j from tot
-    union all
-    select 2, jsonb_build_object('decision', 'IVA al ' || tipo.txt || ' %', 'porque', 'reparto de comida = servicio de restauración: criterio de tu empresa',
-             'cita', 'Ley 37/1992, art. 91.Uno.2.2.º') from tipo
-    union all
-    select 2.1, jsonb_build_object('decision', 'Promociones: ' || tot.n_promo || ' pedido' || case when tot.n_promo = 1 then '' else 's' end
-               || ', ' || public.conta_euros_exactos(round(tot.c_desc / 100, 2)) || ' con el IVA dentro',
-             'porque', 'la venta va a precio de carta en su marca y la promoción, en su subcuenta (' || cc.promo || '), resta; el IVA va sobre lo que paga el cliente',
-             'cita', 'Ley 37/1992, art. 78.Tres.2.º') from tot, cta_canal cc where tot.c_promo > 0
-    union all
-    select 2.2, jsonb_build_object('decision', 'Envíos cobrados: ' || tot.n_envio || ' pedido' || case when tot.n_envio = 1 then '' else 's' end
-               || ', ' || public.conta_euros_exactos(round(tot.c_env / 100, 2)) || ' con el IVA dentro',
-             'porque', 'lo repartimos nosotros: el envío es del restaurante y va a su subcuenta (' || cc.envios || '), con su local; forma parte de la base, al tipo de la venta',
-             'cita', 'Ley 37/1992, art. 78.Dos.1.º') from tot, cta_canal cc where tot.c_envio > 0
-    union all
-    select 2.3, jsonb_build_object('decision', 'Fuera: el envío de ' || tot.n_fuera || ' pedido' || case when tot.n_fuera = 1 then '' else 's' end
-               || ' (' || public.conta_euros_exactos(round(tot.c_fuera / 100, 2)) || ')',
-             'porque', 'lo repartió la plataforma y su liquidación no lo paga: no es venta del restaurante ni lo cobra la plataforma para él') from tot where tot.n_fuera > 0
-    union all
-    select 3, jsonb_build_object('decision', cnt.devs || ' devolución' || case when cnt.devs = 1 then '' else 'es' end || ' de ' || public.conta_euros_exactos(round(cnt.c_devs / 100, 2)),
-             'porque', 'la plataforma devolvió al cliente después de la venta: menos venta y menos IVA, contra lo que cobra la plataforma, el día en que se produce',
-             'cita', 'Ley 37/1992, art. 80.Dos') from cnt where cnt.devs > 0
-    union all
-    select 4, jsonb_build_object('decision', 'Base calculada',
-             'porque', 'algún pedido no trae la base imponible: la calculo del total al ' || tipo.txt || ' % (el tipo de tus ventas); no la invento, la deduzco y lo digo')
-      from tot, tipo where tot.calculada
-    union all
-    select 5, jsonb_build_object('decision', 'Fuera: ' || cnt.cedidas || ' pedido' || case when cnt.cedidas = 1 then '' else 's' end || ' de marcas cedidas (' || public.conta_euros_exactos(round(cnt.c_cedidas / 100, 2)) || ')',
-             'porque', 'son ventas del socio y su IVA es del socio: entran solo en su liquidación mensual, que comparas con estos tickets',
-             'cita', 'Ley 37/1992, art. 11.Dos.15.º') from cnt where cnt.cedidas > 0
-    union all
-    select 6, jsonb_build_object('decision', 'Fuera: ' || cnt.cancelados || ' cancelado' || case when cnt.cancelados = 1 then '' else 's' end,
-             'porque', 'cancelado antes de entregar no es venta') from cnt where cnt.cancelados > 0
-    union all  -- los avisos van detrás, como «Mira esto», en el orden del núcleo: otro tipo y después la subcuenta
-    select 7, jsonb_build_object('decision', 'Mira esto',
-             'porque', tot.otro || ' pedido' || case when tot.otro = 1 then ' trae' else 's traen' end || ' en sus líneas un tipo distinto del ' || tipo.txt || ' %: mira cuáles antes de validar.')
-      from tot, tipo where tot.otro > 0
-    union all
-    select 8, jsonb_build_object('decision', 'Mira esto',
-             'porque', (select string_agg(nombre, ', ' order by o) from sin_subcuenta)
-                       || case when (select count(*) from sin_subcuenta) = 1 then ' no tiene' else ' no tienen' end
-                       || ' su subcuenta de ventas o de reembolsos: va a la general (' || cta.ventas || ' / ' || cta.devoluciones || '). Enlázala antes de validar.')
-      from cta where exists (select 1 from sin_subcuenta)
-    union all
-    select 9, jsonb_build_object('decision', 'Mira esto',
-             'porque', 'Por aclarar: ' || tot.n_aclarar || ' pedido' || case when tot.n_aclarar = 1 then '' else 's' end || ' con envío y sin saber si es del restaurante ('
-                       || (select string_agg(coalesce(f.codigo, left(f.id::text, 8)) || ' · ' || coalesce((select name from marca_nombre where id = f.marca_id), 'sin marca')
-                                             || ' · envío ' || public.conta_euros_exactos(round(f.c_env / 100.0, 2)) || ' · ' || coalesce(f.por_que, 'sin decir quién repartió'), '; ' order by f.ord)
-                             from fila2 f where f.clase = 'por_aclarar')
-                       || '). Se resuelve con la liquidación de esa semana: si la plataforma lo paga, va a Envíos cobrados; si no, sale de la venta y del cobro. Hasta entonces no se valida.')
-      from tot where tot.n_aclarar > 0
-    union all
-    select 10, jsonb_build_object('decision', 'Mira esto',
-             'porque', tot.n_promo_sin_cuenta || ' pedido' || case when tot.n_promo_sin_cuenta = 1 then ' lleva' else 's llevan' end || ' promoción y ' || nombre_canal.n
-                       || ' no tiene su subcuenta de promociones: queda restada de la venta. Enlázala antes de validar.')
-      from tot, nombre_canal where tot.n_promo_sin_cuenta > 0
-    union all
-    select 11, jsonb_build_object('decision', 'Mira esto',
-             'porque', tot.n_envio_sin_cuenta || ' pedido' || case when tot.n_envio_sin_cuenta = 1 then ' lleva' else 's llevan' end || ' envío cobrado y ' || nombre_canal.n
-                       || ' no tiene su subcuenta de envíos: queda dentro de la venta. Enlázala antes de validar.')
-      from tot, nombre_canal where tot.n_envio_sin_cuenta > 0
-  ) r
-),
-resumen as (
-  select jsonb_build_object(
-    'location_id', p_location, 'sales_day', p_dia,
-    'unit_key', coalesce(p_canal::text, 'sin-canal') || coalesce(':' || p_marca::text, ''), 'channel_id', p_canal, 'brand_id', p_marca,
-    'tickets_count', tot.n, 'total', round(tot.c_total / 100, 2),
-    'by_rate', jsonb_build_array(jsonb_build_object('tax_rate_id', tipo.id, 'rate', public.conta_numero_texto(tipo.rate)::numeric, 'base', round(tot.c_base / 100, 2), 'cuota', round(tot.c_cuota / 100, 2), 'calculated', coalesce(tot.calculada, false))),
-    'by_channel', case when tot.n > 0 then jsonb_build_array(jsonb_build_object('channel_id', p_canal, 'total', round(tot.c_total / 100, 2))) else '[]'::jsonb end,
-    'by_brand', coalesce((select jsonb_agg(jsonb_build_object('brand_id', marca_id, 'base', round(c / 100, 2)) order by o) from por_marca), '[]'),
-    'detail_hash', encode(sha256(convert_to(
-        coalesce((select string_agg(id::text, '|' order by id::text collate "C") from fila2), '') || '#' || tot.c_total::bigint::text, 'UTF8')), 'hex'),
-    'sale_ids', coalesce((select jsonb_agg(id order by id::text collate "C") from fila2), '[]'),
-    'base_calculated', coalesce(tot.calculada, false)) as j
-  from tot left join tipo on true
-)
-select case
-  when (select id from tipo) is null or cta.iva477 is null or cta.ventas is null then
-    jsonb_build_object('sin_propuesta', 'Falta el IVA de tus ventas (Tu empresa) o su 477, o la 700 en el plan.')
-  when tot.n = 0 and cnt.devs = 0 then
-    jsonb_build_object('sin_propuesta', case when cnt.cedidas > 0 then 'Ese día solo hubo ventas de marcas cedidas: van en la liquidación del socio.' else 'Ese día no hubo ventas de tus marcas.' end)
-  when cnt.abiertos > 0 then
-    jsonb_build_object('sin_propuesta', 'El cierre del día aún no ha pasado por este día: ' || cnt.abiertos || ' pedido' || case when cnt.abiertos = 1 then '' else 's' end
-      || ' de tus marcas ' || case when cnt.abiertos = 1 then 'sigue abierto' else 'siguen abiertos' end || '. Pasa cada hora a los 7 minutos; vuelve a proponer después.')
-  when exists (select 1 from sin_cuenta) then
-    jsonb_build_object('sin_propuesta', 'No sé a qué cuenta va lo que cobra ' || (select nombre from sin_cuenta)
-      || ': enlaza su 430 en su ficha (Clientes y proveedores › Plataformas).')
-  when tot.n > 0 and abs(tot.c_cuota - sign(tot.c_base) * round(abs(tot.c_base * (select rate from tipo)) / 100)) > floor(0.55 * tot.n + 0.5) then
-    jsonb_build_object('sin_propuesta', 'La cuota de los tickets (' || public.conta_euros_exactos(round(tot.c_cuota / 100, 2)) || ') se aleja de la base × '
-      || (select txt from tipo) || ' % más de medio céntimo por ticket: hay pedidos con otro tipo.')
-  else jsonb_build_object(
-    'entrada', jsonb_build_object(
-      'series', 1, 'fecha', p_dia,
-      'concepto', 'Ventas ' || nombre_canal.n || coalesce(' · ' || (select name from marca_nombre where id = p_marca), '') || ' · ' || loc.nombre,
-      'source_type', 'sales_day', 'source_id', null,
-      'confianza', case when tot.otro > 0 or exists (select 1 from sin_subcuenta) or tot.n_aclarar > 0 or tot.n_promo_sin_cuenta > 0 or tot.n_envio_sin_cuenta > 0 then 'duda'
-                        when tot.calculada then 'probable' else 'seguro' end,
-      'porque', tot.n || case when tot.n = 1 then ' ticket de tus marcas en ' || nombre_canal.n || ' cuadra' else ' tickets de tus marcas en ' || nombre_canal.n || ' cuadran' end
-                || ' con lo que cobra, al céntimo'
-                || case when tot.calculada then '; base calculada al ' || (select txt from tipo) || ' %' else '' end || '.',
-      'razones', razones.j, 'party_id', null, 'documento', null),
-    'lineas', lineas.j,
-    'resumen', resumen.j)
-  end
-from tot, cnt, cta, loc, lineas, razones, resumen, nombre_canal
+  select public._conta_propuesta_ventas(p_company, p_location, p_dia, p_canal, p_marca, null)
 $$;
 
 
@@ -43665,6 +44373,521 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_propuesta_ventas_unidad(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid) IS 'C04b R5: la propuesta del asiento de ventas de una unidad (canal, o canal y marca) de un día y un local (espejo de ventasDelDia con unidad), o {sin_propuesta: por qué}. Solo lee.';
+
+
+--
+-- Name: conta_propuestas_de_noche(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_propuestas_de_noche(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_cuenta uuid; v_hoy date := public.conta_hoy(); v_desde date;
+  v_quien constant text := 'Sumied (pasada de noche)';
+  v_res jsonb := '{}'::jsonb; v_fallos jsonb := '[]'::jsonb; x jsonb;
+  v_validadas int := 0; r record;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  -- La llama el cron (sin nadie) o un administrador o encargado de la cuenta.
+  if auth.uid() is not null and not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta pasa la pasada de noche.' using errcode = '42501';
+  end if;
+  v_desde := public.conta_primer_dia_abierto(p_company, v_hoy - 120);
+  if v_desde is null or v_desde > v_hoy then
+    return jsonb_build_object('desde', null, 'hasta', v_hoy, 'nada', 'No hay ningún día abierto en los últimos 120 días.');
+  end if;
+
+  -- 1 · Los cinco orígenes. Cada uno en su bloque: si uno falla, los demás siguen y se dice.
+  begin x := public.conta_proponer_nominas(p_company, v_desde, v_hoy, v_quien); v_res := v_res || jsonb_build_object('nominas', x);
+  exception when others then v_fallos := v_fallos || to_jsonb(format('nóminas: %s (%s)', sqlerrm, sqlstate)); end;
+  begin x := public.conta_proponer_recibidos(p_company, v_desde, v_hoy, v_quien); v_res := v_res || jsonb_build_object('recibido', x);
+  exception when others then v_fallos := v_fallos || to_jsonb(format('recibido sin factura: %s (%s)', sqlerrm, sqlstate)); end;
+  begin x := public.conta_proponer_pagados_despues(p_company, v_quien); v_res := v_res || jsonb_build_object('pagado', x);
+  exception when others then v_fallos := v_fallos || to_jsonb(format('pagado después: %s (%s)', sqlerrm, sqlstate)); end;
+  begin x := public.conta_proponer_socios(p_company, v_desde, v_hoy, v_quien); v_res := v_res || jsonb_build_object('socio', x);
+  exception when others then v_fallos := v_fallos || to_jsonb(format('socio de marca: %s (%s)', sqlerrm, sqlstate)); end;
+  begin x := public.conta_proponer_plataformas(p_company, v_desde, v_hoy, v_quien); v_res := v_res || jsonb_build_object('plataforma', x);
+  exception when others then v_fallos := v_fallos || to_jsonb(format('plataforma: %s (%s)', sqlerrm, sqlstate)); end;
+
+  -- 2 · Solo lo «seguro» de ventas, si la empresa lo tiene encendido (como el botón).
+  if exists (select 1 from public.company_tax_profile p
+              where p.company_id = p_company and p.account_id = v_cuenta and p.journal_autovalidate_sales_day) then
+    for r in
+      select e.id, e.entry_date from public.journal_entry e
+       where e.account_id = v_cuenta and e.company_id = p_company
+         and e.source_type = 'sales_day' and e.status = 'propuesto' and e.confidence = 'seguro'
+         and e.entry_date between v_desde and v_hoy
+         and not exists (select 1 from jsonb_array_elements(coalesce(e.reasons, '[]'::jsonb)) z where z->>'decision' = 'Mira esto')
+       order by e.entry_date, e.id
+    loop
+      begin
+        perform public._journal_entry_validar(r.id, 'Folvy (validación automática de ventas)');
+        v_validadas := v_validadas + 1;
+      exception when others then
+        v_fallos := v_fallos || to_jsonb(format('validar las ventas del %s: %s (%s)', to_char(r.entry_date, 'DD/MM/YYYY'), sqlerrm, sqlstate));
+      end;
+    end loop;
+  end if;
+
+  return v_res || jsonb_build_object('desde', v_desde, 'hasta', v_hoy, 'validadasSolas', v_validadas, 'fallos', v_fallos);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_propuestas_de_noche(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_propuestas_de_noche(p_company uuid) IS 'S01 · PR 3 · Entrega 5: la pasada de noche de una empresa. Propone lo que se haya quedado atrás de los cinco orígenes (nóminas, recibido sin factura, pagado después, socio y plataforma) y valida solo las ventas del día «seguro» sin «Mira esto» si la empresa lo tiene encendido. Devuelve lo hecho y los fallos, sin parar en el primero.';
+
+
+--
+-- Name: conta_propuestas_de_noche_todas(); Type: PROCEDURE; Schema: public; Owner: -
+--
+
+CREATE PROCEDURE public.conta_propuestas_de_noche_todas()
+    LANGUAGE plpgsql
+    AS $$
+declare
+  r        record;
+  v_p      jsonb;
+  v_fallos text[] := '{}';
+begin
+  if extract(hour from (now() at time zone 'Europe/Madrid')) <> 3 then return; end if;
+  for r in select c.id from public.company c where coalesce(c.is_active, true) order by c.id loop
+    begin
+      v_p := public.conta_propuestas_de_noche(r.id);
+      if jsonb_array_length(coalesce(v_p->'fallos', '[]'::jsonb)) > 0 then
+        v_fallos := v_fallos || format('%s: %s', r.id, (select string_agg(f, ' · ') from jsonb_array_elements_text(v_p->'fallos') f));
+      end if;
+    exception when others then
+      v_fallos := v_fallos || format('%s: %s (%s)', r.id, sqlerrm, sqlstate);
+    end;
+    commit;
+  end loop;
+  if cardinality(v_fallos) > 0 then
+    raise exception 'Pasada de noche: falló en % empresa(s): %', cardinality(v_fallos), array_to_string(v_fallos, ' · ');
+  end if;
+end
+$$;
+
+
+--
+-- Name: PROCEDURE conta_propuestas_de_noche_todas(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON PROCEDURE public.conta_propuestas_de_noche_todas() IS 'S01 · PR 3 · Entrega 5: la pasada de noche de cada empresa activa, confirmando una a una. La llama el cron conta-propuestas-de-noche; solo trabaja a las 3 de Madrid. Si alguna falla, termina con error.';
+
+
+--
+-- Name: conta_propuestas_plataforma(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_propuestas_plataforma(p_company uuid, p_liq uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare g jsonb; r jsonb; ap jsonb;
+begin
+  g := public._conta_plataforma_entrada(p_company, p_liq);
+  if g ? 'sin_propuesta' then return g; end if;
+  r := public._conta_plataforma_regla(g->'e', g->'c');
+  if r ? 'sin_propuesta' then return jsonb_build_object('que', g->>'que', 'fecha', g->>'fecha', 'sin_propuesta', r->>'sin_propuesta'); end if;
+  ap := public._conta_aprendizaje(p_company, g->>'clave', r->'propuesta'->'lineas', r->'propuesta'->'entrada'->'razones');
+  return jsonb_build_object('que', g->>'que', 'fecha', g->>'fecha', 'propuesta', jsonb_build_object(
+    'entrada', (r->'propuesta'->'entrada') || jsonb_build_object('razones', (ap->'razones')
+               || coalesce((select jsonb_agg(jsonb_build_object('decision', 'Mira esto', 'porque', a #>> '{}') order by o)
+                              from jsonb_array_elements(r->'avisos') with ordinality z(a, o)), '[]'::jsonb)),
+    'lineas', ap->'lineas'));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_propuestas_plataforma(p_company uuid, p_liq uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_propuestas_plataforma(p_company uuid, p_liq uuid) IS 'S01 · PR 3: la propuesta de una liquidación de plataforma, con lo aprendido: {que, fecha, propuesta} como aJson, o {que, fecha, sin_propuesta}. Solo lee.';
+
+
+--
+-- Name: conta_propuestas_recibido(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_propuestas_recibido(p_accrual uuid) RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  with a as (
+    select pa.*, s.name as prov_nombre, s.expense_category_id,
+           (array['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'])[extract(month from pa.month)::int] as nombre_mes,
+           (date_trunc('month', pa.month) + interval '1 month - 1 day')::date as fin,
+           (date_trunc('month', pa.month) + interval '1 month')::date as uno,
+           to_char(pa.month, 'MM/YYYY') as mm_aaaa,
+           (select l.name from public.locations l where l.id = pa.location_id) as nombre_local,
+           (select pr.party_id from public.party_role pr where pr.account_id = pa.account_id and pr.role = 'supplier' and pr.supplier_id = pa.supplier_id
+             order by pr.party_id limit 1) as tercero
+      from public.purchase_accrual pa left join public.supplier s on s.id = pa.supplier_id
+     where pa.id = p_accrual
+  ), c as (
+    select a.*,
+      coalesce(
+        (select ca.code from public.company_account_link k join public.company_account ca on ca.id = k.company_account_id
+          where k.company_id = a.company_id and k.entity = 'supplier' and k.entity_id = a.supplier_id::text and k.role = 'gasto' limit 1),
+        case when a.expense_category_id is not null then
+          (select ca.code from public.company_account_link k join public.company_account ca on ca.id = k.company_account_id
+            where k.company_id = a.company_id and k.entity = 'expense_category' and k.entity_id = a.expense_category_id::text and k.role = 'principal' limit 1) end) as gasto,
+      (select ca.code from public.company_account ca where ca.company_id = a.company_id and ca.kind = 'template'
+          and ca.status is distinct from 'cerrada' and ca.template_code = '4009' order by ca.code limit 1) as pendiente,
+      round(a.base, 2) as base2,
+      coalesce(a.prov_nombre, 'Proveedor') as proveedor,
+      'Recibido sin factura · ' || coalesce(a.prov_nombre, 'proveedor') || ' · ' || to_char(a.month, 'MM/YYYY') as que,
+      (select string_agg(coalesce(r->>'code', 'sin código') || ' (' || to_char((r->>'fecha')::date, 'DD/MM')
+                         || case when r->>'base' is null then ', sin importe' else ', ' || public.conta_euros_exactos((r->>'base')::numeric) end || ')', ', ' order by o)
+         from jsonb_array_elements(a.receipts) with ordinality x(r, o)) as de_donde,
+      jsonb_array_length(coalesce(a.receipts, '[]'::jsonb)) as n_recepciones
+      from a
+  ), p as (
+    select c.*,
+      jsonb_build_array(
+        jsonb_build_object('decision', n_recepciones || ' recepción(es) sin factura a ' || to_char(fin, 'DD/MM'), 'porque', de_donde),
+        jsonb_build_object('decision', 'Gasto contra facturas pendientes de recibir',
+                           'porque', 'el género ya es tuyo aunque la factura llegue después; el día 1 se da la vuelta y el gasto lo pone la factura'))
+      || case when without_base > 0 then jsonb_build_array(jsonb_build_object('decision', 'Mira esto', 'porque', without_base || ' recepción(es) sin importe no están en la cifra.'))
+              else '[]'::jsonb end as razones,
+      case when without_base > 0 then 'duda' else 'seguro' end as confianza,
+      case when nombre_local is not null then ' · ' || nombre_local else '' end as donde
+      from c
+  )
+  select case
+    when not exists (select 1 from a) then jsonb_build_object('que', 'Recibido sin factura', 'sin_propuesta', 'No existe.')
+    when p.gasto is null then jsonb_build_object('que', p.que,
+      'sin_propuesta', format('A %s le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de %s se propone.', p.proveedor, p.nombre_mes))
+    when p.pendiente is null then jsonb_build_object('que', p.que, 'sin_propuesta', 'Falta en tu plan la cuenta de facturas pendientes de recibir (4009).')
+    when round(p.base * 100) <= 0 then jsonb_build_object('que', p.que,
+      'sin_propuesta', format('Lo recibido sin factura de %s en %s no trae importe: no hay nada que apuntar.', p.proveedor, p.nombre_mes))
+    else jsonb_build_object('que', p.que, 'propuestas', (
+      select jsonb_agg(jsonb_build_object(
+        'entrada', jsonb_build_object('series', 2, 'fecha', v.fecha, 'concepto', v.concepto, 'source_type', v.tipo, 'source_id', p.id,
+                                      'confianza', p.confianza, 'porque', v.porque, 'razones', p.razones, 'party_id', p.tercero, 'documento', null),
+        'lineas', jsonb_build_array(
+          jsonb_build_object('cuenta', p.gasto, 'debe', case when v.al_reves then 0 else p.base2 end, 'haber', case when v.al_reves then p.base2 else 0 end,
+                             'concepto', null, 'local_id', p.location_id, 'comun', p.location_id is null, 'marca_id', null, 'tercero_id', null,
+                             'documento', null, 'iva', null, 'retencion', null),
+          jsonb_build_object('cuenta', p.pendiente, 'debe', case when v.al_reves then p.base2 else 0 end, 'haber', case when v.al_reves then 0 else p.base2 end,
+                             'concepto', null, 'local_id', p.location_id, 'comun', p.location_id is null, 'marca_id', null, 'tercero_id', p.tercero,
+                             'documento', null, 'iva', null, 'retencion', null))) order by v.o)
+        from (values
+          (1, p.fin, 'purchase_accrual', 'Recibido sin factura · ' || p.proveedor || p.donde || ' · ' || p.nombre_mes, false,
+              'Lo recibido de ' || p.proveedor || ' en ' || p.nombre_mes || ' sin factura todavía.'),
+          (2, p.uno, 'purchase_accrual_reversal', 'Contrario del recibido sin factura · ' || p.proveedor || p.donde || ' · ' || p.nombre_mes, true,
+              'Da la vuelta al del ' || to_char(p.fin, 'DD/MM') || ': el gasto lo pone su factura.')) v(o, fecha, tipo, concepto, al_reves, porque)))
+    end
+  from (select 1) uno left join p on true
+$$;
+
+
+--
+-- Name: FUNCTION conta_propuestas_recibido(p_accrual uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_propuestas_recibido(p_accrual uuid) IS 'S01 · PR 3: la regla de lo recibido sin factura (finDeMesCompras() del navegador), en SQL puro: {que, propuestas: [del mes, contrario]} como aJson, o {que, sin_propuesta}. Solo lee.';
+
+
+--
+-- Name: conta_propuestas_socio(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_propuestas_socio(p_company uuid, p_liq uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  l public.licensed_settlement; v_cuenta uuid; v_socio text; v_local text; v_que text; loc uuid; comun boolean;
+  sup uuid; v_cat uuid; c_cliente text; c_proveedor text; c_compras text; c_705 text; c_669 text; c_769 text;
+  d jsonb; em jsonb; rc jsonb; v_saldo_doc numeric; v_saldo numeric; v_bloq text; v_rara text;
+  cr jsonb; ce jsonb; t jsonb; v_cta text; v_tipo uuid;
+  lr jsonb := '[]'::jsonb; le jsonb := '[]'::jsonb; ar jsonb := '[]'::jsonb; ae jsonb := '[]'::jsonb;
+  v_serv bigint; v_merc bigint; v_menor bigint; v_r numeric; v_idx int; v_lado text; v_imp numeric; v_que_doc text; v_calc text;
+  -- fórmula compras, aportaciones y comisión
+  c_400 text; c_430 text; c_pend text; c_477 text; t21 uuid; t10 uuid; t10_rate numeric; v_faltan text[]; v_cobradas numeric;
+  lin jsonb := '[]'::jsonb; avisos jsonb := '[]'::jsonb; razones jsonb; v_compras bigint := 0; v_cuota numeric; v_factura bigint; v_iva_com numeric;
+  v_contra_liq bigint; v_contra_com bigint; v_neto bigint; v_ap jsonb;
+  v_meses text[] := array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+begin
+  select * into l from public.licensed_settlement where id = p_liq;
+  if l.id is null then return jsonb_build_object('que', 'Liquidación del socio', 'sin_propuesta', 'No existe.'); end if;
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is distinct from l.account_id then return jsonb_build_object('que', 'Liquidación del socio', 'sin_propuesta', 'No es de esta cuenta.'); end if;
+  loc := l.location_id; comun := loc is null;
+  v_local := coalesce((select name from public.locations where id = loc and account_id = v_cuenta), 'local');
+
+  -- ════ Fórmula «documentos» (liquidacionMensual) ════
+  if l.formula = 'documentos' then
+    sup := l.supplier_id;
+    select coalesce((select name from public.party where id = l.party_id), (select name from public.supplier where id = sup), 'el socio'),
+           (select expense_category_id from public.supplier where id = sup)
+      into v_socio, v_cat;
+    v_que := 'Liquidación de ' || v_socio || ' · ' || coalesce(l.settlement_ref, '') || ' · ' || v_local;
+    c_cliente := public._conta_enlace(p_company, 'customer', l.party_id::text, 'principal');
+    c_proveedor := public._conta_enlace(p_company, 'supplier', sup::text, 'principal');
+    c_compras := coalesce(public._conta_enlace(p_company, 'supplier', sup::text, 'gasto'),
+                          case when v_cat is not null then public._conta_enlace(p_company, 'expense_category', v_cat::text, 'principal') end);
+    c_705 := public._conta_hoja(p_company, '705'); c_669 := public._conta_hoja(p_company, '669'); c_769 := public._conta_hoja(p_company, '769');
+    d := coalesce(l.detail, '{}'::jsonb); em := coalesce(d->'emitida', '{}'::jsonb); rc := coalesce(d->'recibida', '{}'::jsonb);
+    v_saldo_doc := case when d->'transaccion'->'saldo' is not null and jsonb_typeof(d->'transaccion'->'saldo') = 'object' then coalesce((d->'transaccion'->'saldo'->>'importe')::numeric, 0) end;
+    select string_agg(x, ' ' order by o) into v_bloq from jsonb_array_elements_text(coalesce(d->'bloqueos', '[]'::jsonb)) with ordinality b(x, o);
+    if v_bloq is not null then return jsonb_build_object('que', v_que, 'sin_propuesta', v_bloq); end if;
+    if c_proveedor is null then return jsonb_build_object('que', v_que, 'sin_propuesta', v_socio || ' no tiene su cuenta de proveedor (Contabilidad de su ficha).'); end if;
+    if c_cliente is null then return jsonb_build_object('que', v_que, 'sin_propuesta', v_socio || ' no tiene su cuenta de cliente: es a quien le facturas.'); end if;
+    if c_compras is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'A ' || v_socio || ' le falta el tipo de gasto: ponlo en su ficha y su factura se propone.'); end if;
+    select x->>'concepto' into v_rara from jsonb_array_elements(coalesce(em->'lineas', '[]'::jsonb)) with ordinality e(x, o)
+     where not (x->>'concepto' ~* 'mercader') and not (x->>'concepto' ~* '(servicio|fee|comisi|reparto|delivery|env[ií]o)') order by o limit 1;
+    if v_rara is not null then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'En la factura que le haces, Sumied no sabe si «' || v_rara || '» es un servicio o una venta de mercaderías: dímelo.');
+    end if;
+    if jsonb_array_length(coalesce(em->'lineas', '[]'::jsonb)) > 0 and c_705 is null then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'Falta en tu plan la cuenta de ingresos por servicios (705).');
+    end if;
+    cr := public._conta_cuotas_y_redondeo(rc->'lineas', coalesce((rc->>'total')::numeric, 0));
+    ce := public._conta_cuotas_y_redondeo(em->'lineas', coalesce((em->>'total')::numeric, 0));
+    if cr is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'Su factura ' || coalesce(rc->>'numero', 'undefined') || ' no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.'); end if;
+    if ce is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'La factura que le haces ' || coalesce(em->>'numero', 'undefined') || ' no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.'); end if;
+    v_saldo := (round(coalesce((em->>'total')::numeric, 0) * 100) - round(coalesce((rc->>'total')::numeric, 0) * 100)) / 100;
+    if v_saldo_doc is not null and round(v_saldo_doc * 100) <> round(v_saldo * 100) then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'La transacción dice ' || public.conta_euros_exactos(v_saldo_doc) || ' de saldo y las dos facturas dan ' || public.conta_euros_exactos(v_saldo) || '.');
+    end if;
+    if l.received_invoice_id is null then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'Su factura ' || coalesce(rc->>'numero', '') || ' aún no está registrada en Compras: confirma la liquidación y se propone.');
+    end if;
+
+    -- 1 · Su factura: la compra.
+    lr := jsonb_build_array(jsonb_build_object('cuenta', c_compras,
+            'debe', (select coalesce(round(sum((x->>'base')::numeric), 2), 0) from jsonb_array_elements(coalesce(rc->'lineas', '[]'::jsonb)) x), 'haber', 0,
+            'concepto', null, 'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', rc->>'numero', 'iva', null, 'retencion', null));
+    for t in select * from jsonb_array_elements(cr->'porTipo') loop
+      continue when (t->>'tipo')::numeric = 0;
+      v_tipo := public._conta_tipo_iva(v_cuenta, (t->>'tipo')::numeric);
+      v_cta := case when v_tipo is not null then public._conta_enlace(p_company, 'tax_rate', v_tipo::text, 'soportado') end;
+      if v_cta is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'No hay 472 del ' || public.conta_numero_texto((t->>'tipo')::numeric) || ' % en tu plan.'); end if;
+      lr := lr || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'debe', (t->>'cuota')::numeric, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+              'marca_id', null, 'tercero_id', null, 'documento', rc->>'numero',
+              'iva', jsonb_build_object('tipo_id', v_tipo, 'base', (t->>'base')::numeric, 'libro', 'received', 'deducible', 'yes', 'facturas', 1), 'retencion', null));
+    end loop;
+    lr := lr || jsonb_build_array(jsonb_build_object('cuenta', c_proveedor, 'debe', 0, 'haber', (rc->>'total')::numeric, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', rc->>'numero', 'iva', null, 'retencion', null));
+    -- Pagas su total: si es más que lo calculado, la diferencia es gasto (debe); si es menos, ingreso (haber).
+    v_r := (cr->>'redondeo')::numeric;
+    if round(v_r * 100) <> 0 then
+      v_que_doc := 'su factura ' || coalesce(rc->>'numero', '');
+      v_calc := public.conta_euros_exactos((round((rc->>'total')::numeric * 100) - round(v_r * 100)) / 100);
+      v_imp := abs(v_r);
+      v_cta := case when v_r > 0 then c_669 else c_769 end;
+      if v_cta is not null then
+        lr := lr || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'debe', case when v_r > 0 then v_imp else 0 end, 'haber', case when v_r > 0 then 0 else v_imp end,
+                'concepto', 'Redondeo del total de ' || v_que_doc, 'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+        ar := ar || to_jsonb(upper(left(v_que_doc, 1)) || substr(v_que_doc, 2) || ' dice ' || public.conta_euros_exactos((rc->>'total')::numeric) || '; base y cuota de cada tipo dan '
+                || v_calc || '. Las cuotas van como en la factura y el ' || case when v_imp = 0.01 then 'céntimo' else 'redondeo' end || ', a «redondeos».');
+      else
+        v_lado := case when ((lr->0->>'debe')::numeric) <> 0 then 'debe' else 'haber' end;
+        lr := jsonb_set(lr, array['0', v_lado], to_jsonb((round((lr->0->>v_lado)::numeric * 100) + (case when v_lado = 'debe' then 1 else -1 end) * round(v_r * 100)) / 100));
+        ar := ar || to_jsonb(upper(left(v_que_doc, 1)) || substr(v_que_doc, 2) || ' dice ' || public.conta_euros_exactos((rc->>'total')::numeric) || ' y base y cuota dan '
+                || v_calc || ': el redondeo va a la línea principal (no hay 669/769 en tu plan).');
+      end if;
+    end if;
+
+    -- 2 · La que le haces: el ingreso (entera a la 705, V01 · Entrega 3).
+    select coalesce(sum(round((x->>'base')::numeric * 100)) filter (where x->>'concepto' ~* '(servicio|fee|comisi|reparto|delivery|env[ií]o)'), 0),
+           coalesce(sum(round((x->>'base')::numeric * 100)) filter (where x->>'concepto' ~* 'mercader'), 0)
+      into v_serv, v_merc from jsonb_array_elements(coalesce(em->'lineas', '[]'::jsonb)) x;
+    le := jsonb_build_array(jsonb_build_object('cuenta', c_cliente, 'debe', (em->>'total')::numeric, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', em->>'numero', 'iva', null, 'retencion', null));
+    if v_serv + v_merc <> 0 then
+      le := le || jsonb_build_array(jsonb_build_object('cuenta', c_705, 'debe', 0, 'haber', (v_serv + v_merc) / 100.0,
+              'concepto', case when v_merc <> 0 then 'Servicios por sus ventas y el género aportado' else 'Servicios por sus ventas' end,
+              'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', em->>'numero', 'iva', null, 'retencion', null));
+    end if;
+    for t in select * from jsonb_array_elements(ce->'porTipo') loop
+      continue when (t->>'tipo')::numeric = 0;
+      v_tipo := public._conta_tipo_iva(v_cuenta, (t->>'tipo')::numeric);
+      v_cta := case when v_tipo is not null then public._conta_enlace(p_company, 'tax_rate', v_tipo::text, 'repercutido') end;
+      if v_cta is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'No hay 477 del ' || public.conta_numero_texto((t->>'tipo')::numeric) || ' % en tu plan.'); end if;
+      le := le || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'debe', 0, 'haber', (t->>'cuota')::numeric, 'concepto', null, 'local_id', loc, 'comun', comun,
+              'marca_id', null, 'tercero_id', null, 'documento', em->>'numero',
+              'iva', jsonb_build_object('tipo_id', v_tipo, 'base', (t->>'base')::numeric, 'libro', 'issued', 'deducible', null, 'facturas', 1), 'retencion', null));
+    end loop;
+    -- Cobras su total: si es menos que lo calculado, la diferencia es gasto (debe); si es más, ingreso (haber).
+    v_r := (ce->>'redondeo')::numeric;
+    if round(v_r * 100) <> 0 then
+      v_que_doc := 'la factura que le haces ' || coalesce(em->>'numero', '');
+      v_calc := public.conta_euros_exactos((round((em->>'total')::numeric * 100) - round(v_r * 100)) / 100);
+      v_imp := abs(v_r);
+      v_cta := case when v_r < 0 then c_669 else c_769 end;
+      if v_cta is not null then
+        le := le || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'debe', case when v_r < 0 then v_imp else 0 end, 'haber', case when v_r < 0 then 0 else v_imp end,
+                'concepto', 'Redondeo del total de ' || v_que_doc, 'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+        ae := ae || to_jsonb(upper(left(v_que_doc, 1)) || substr(v_que_doc, 2) || ' dice ' || public.conta_euros_exactos((em->>'total')::numeric) || '; base y cuota de cada tipo dan '
+                || v_calc || '. Las cuotas van como en la factura y el ' || case when v_imp = 0.01 then 'céntimo' else 'redondeo' end || ', a «redondeos».');
+      else
+        v_idx := case when jsonb_array_length(le) > 1 then 1 else 0 end;
+        v_lado := case when ((le->v_idx->>'debe')::numeric) <> 0 then 'debe' else 'haber' end;
+        le := jsonb_set(le, array[v_idx::text, v_lado], to_jsonb((round((le->v_idx->>v_lado)::numeric * 100) + (case when v_lado = 'debe' then 1 else -1 end) * round(v_r * 100) * -1) / 100));
+        ae := ae || to_jsonb(upper(left(v_que_doc, 1)) || substr(v_que_doc, 2) || ' dice ' || public.conta_euros_exactos((em->>'total')::numeric) || ' y base y cuota dan '
+                || v_calc || ': el redondeo va a la línea principal (no hay 669/769 en tu plan).');
+      end if;
+    end if;
+
+    -- 3 · La compensación: su factura se paga con lo que te debe.
+    v_menor := least(round((em->>'total')::numeric * 100), round((rc->>'total')::numeric * 100));
+    return jsonb_build_object('que', v_que, 'propuestas', jsonb_build_array(
+      jsonb_build_object(
+        'entrada', jsonb_build_object('series', 2, 'fecha', rc->>'fecha', 'concepto', 'Factura ' || v_socio || ' · ' || coalesce(rc->>'numero', ''),
+          'source_type', 'supplier_invoice', 'source_id', l.received_invoice_id,
+          'confianza', case when round((cr->>'redondeo')::numeric * 100) <> 0 then 'probable' else 'seguro' end,
+          'porque', 'Lo que te factura cada mes: compra, con su IVA por tipo, a su cuenta de proveedor.',
+          'razones', jsonb_build_array(jsonb_build_object('decision', 'Su factura de la liquidación del mes', 'porque', 'no factura las entregas: sus albaranes no se apuntan uno a uno'))
+                     || coalesce((select jsonb_agg(jsonb_build_object('decision', 'Mira esto', 'porque', a #>> '{}') order by o) from jsonb_array_elements(ar) with ordinality z(a, o)), '[]'::jsonb),
+          'party_id', l.party_id, 'documento', rc->>'numero'),
+        'lineas', lr),
+      jsonb_build_object(
+        'entrada', jsonb_build_object('series', 4, 'fecha', em->>'fecha', 'concepto', 'Le facturas a ' || v_socio || ' · ' || coalesce(em->>'numero', ''),
+          'source_type', 'licensed_settlement', 'source_id', l.id,
+          'confianza', case when round((ce->>'redondeo')::numeric * 100) <> 0 then 'probable' else 'seguro' end,
+          'porque', 'La factura que le haces (la extiende él en tu nombre): ingreso con su IVA, a su cuenta de cliente, con su número en el libro de expedidas.',
+          'razones', jsonb_build_array(
+                       jsonb_build_object('decision', 'Servicios a la 705, el género que pones tú a la 700', 'porque', 'cada línea por lo que es'),
+                       jsonb_build_object('decision', 'Nº ' || coalesce(em->>'numero', '') || ' en el libro de expedidas', 'porque', 'es una factura tuya aunque la haya extendido él'))
+                     || coalesce((select jsonb_agg(jsonb_build_object('decision', 'Mira esto', 'porque', a #>> '{}') order by o) from jsonb_array_elements(ae) with ordinality z(a, o)), '[]'::jsonb),
+          'party_id', l.party_id, 'documento', em->>'numero'),
+        'lineas', le),
+      jsonb_build_object(
+        'entrada', jsonb_build_object('series', 4, 'fecha', greatest(em->>'fecha', rc->>'fecha'),
+          'concepto', 'Compensación con ' || v_socio || ' · ' || coalesce(em->>'numero', '') || ' y ' || coalesce(rc->>'numero', ''),
+          'source_type', 'supplier_payment', 'source_id', l.received_invoice_id, 'confianza', 'seguro',
+          'porque', case when v_saldo >= 0
+                         then 'Su factura se paga con lo que te debe. Te paga ' || public.conta_euros_exactos(v_saldo) || ': es lo que queda en su cuenta de cliente, y llega por el banco.'
+                         else 'Lo que le facturas se descuenta de su factura. Le pagas ' || public.conta_euros_exactos(-v_saldo) || ': es lo que queda en su cuenta de proveedor.' end,
+          'razones', jsonb_build_array(jsonb_build_object('decision', 'Una factura contra otra', 'porque', 'así lo liquida: se paga la diferencia')),
+          'party_id', l.party_id, 'documento', null),
+        'lineas', jsonb_build_array(
+          jsonb_build_object('cuenta', c_proveedor, 'debe', v_menor / 100.0, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', rc->>'numero', 'iva', null, 'retencion', null),
+          jsonb_build_object('cuenta', c_cliente, 'debe', 0, 'haber', v_menor / 100.0, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', em->>'numero', 'iva', null, 'retencion', null)))));
+  end if;
+
+  -- ════ Fórmula «compras, aportaciones y comisión» (liquidacionSocio) ════
+  if l.formula = 'compras_aportaciones_comision' then
+    v_socio := coalesce((select name from public.party where id = l.party_id and account_id = v_cuenta), 'el socio');
+    v_que := 'Liquidación de ' || v_socio || ' · ' || v_local || ' · ' || to_char(l.period_to, 'MM/YYYY');
+    sup := (select pr.supplier_id from public.party_role pr where pr.account_id = v_cuenta and pr.role = 'supplier' and pr.party_id = l.party_id and pr.supplier_id is not null
+             order by pr.supplier_id limit 1);
+    c_400 := case when sup is not null then public._conta_enlace(p_company, 'supplier', sup::text, 'principal') end;
+    c_430 := public._conta_enlace(p_company, 'customer', l.party_id::text, 'principal');
+    c_pend := public._conta_enlace(p_company, 'customer', l.party_id::text, 'liquidacion');
+    c_705 := public._conta_hoja(p_company, '705');
+    t21 := (select r.id from public.tax_rate r where r.code = 'iva_general' and r.tax_system = 'iva' and r.valid_to is null and (r.is_system or r.account_id = v_cuenta) order by r.is_system, r.id limit 1);
+    select r.id, r.rate into t10, t10_rate from public.tax_rate r where r.code = 'iva_reducido' and r.tax_system = 'iva' and r.valid_to is null and (r.is_system or r.account_id = v_cuenta)
+     order by r.is_system, r.id limit 1;
+    c_477 := case when t21 is not null then public._conta_enlace(p_company, 'tax_rate', t21::text, 'repercutido') end;
+    v_faltan := array_remove(array[case when c_400 is null then 'su 400' end, case when c_430 is null then 'su 430' end,
+                                   case when c_pend is null then 'su «Liquidación pendiente»' end, case when c_705 is null then 'la 705' end,
+                                   case when c_477 is null then 'la 477 del 21 %' end], null);
+    if cardinality(v_faltan) > 0 or t21 is null then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'Falta ' || array_to_string(v_faltan, ', ') || ': revisa su ficha (Contabilidad).');
+    end if;
+    -- Lo cobrado por cuenta de él ese mes en ese local: las liquidaciones de sus marcas cedidas.
+    v_cobradas := coalesce((select sum(cs.collected_amount) from public.channel_settlement cs
+                             where cs.account_id = v_cuenta and cs.flow_type = 'licensed'
+                               and cs.brand_id in (select a.brand_id from public.brand_licensing_agreement a where a.account_id = v_cuenta and a.party_id = l.party_id)
+                               and cs.collected_on >= l.period_from and cs.collected_on <= l.period_to
+                               and (loc is null or cs.location_id is null or cs.location_id = loc)), 0);
+    -- Su resumen mensual: las compras, al 10 % (los albaranes no traen IVA).
+    if round(coalesce(l.purchases_amount, 0) * 100) <> 0 and t10 is not null then
+      v_cuota := sign(l.purchases_amount) * round(abs(round(l.purchases_amount, 2) * 100 * t10_rate) / 100) / 100;
+      v_cta := public._conta_enlace(p_company, 'tax_rate', t10::text, 'soportado');
+      lin := lin || jsonb_build_array(jsonb_build_object('cuenta', coalesce(public._conta_hoja(p_company, '600'), '60000000'), 'debe', l.purchases_amount, 'haber', 0,
+               'concepto', null, 'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null));
+      if v_cuota <> 0 and v_cta is not null then
+        lin := lin || jsonb_build_array(jsonb_build_object('cuenta', v_cta, 'debe', v_cuota, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+                 'marca_id', null, 'tercero_id', null, 'documento', null,
+                 'iva', jsonb_build_object('tipo_id', t10, 'base', l.purchases_amount, 'libro', 'received', 'deducible', 'yes', 'facturas', 1), 'retencion', null));
+      elsif v_cuota <> 0 then
+        avisos := avisos || to_jsonb('No hay 472 del ' || public.conta_numero_texto(t10_rate) || ' %.');
+      end if;
+      v_compras := round(l.purchases_amount * 100) + round(v_cuota * 100);
+    end if;
+    if v_compras <> 0 then
+      lin := lin || jsonb_build_array(jsonb_build_object('cuenta', c_400, 'debe', 0, 'haber', v_compras / 100.0, 'concepto', 'Su resumen mensual (compras)',
+               'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null));
+    end if;
+    v_iva_com := sign(coalesce(l.commission_amount, 0)) * round(abs(round(coalesce(l.commission_amount, 0), 2) * 100 * 21) / 100) / 100;
+    v_factura := round(coalesce(l.commission_amount, 0) * 100) + round(v_iva_com * 100);
+    if v_factura <> 0 then
+      lin := lin || jsonb_build_array(
+        jsonb_build_object('cuenta', c_430, 'debe', v_factura / 100.0, 'haber', 0, 'concepto', 'Tu factura de comisión', 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c_705, 'debe', 0, 'haber', coalesce(l.commission_amount, 0), 'concepto', 'Comisión sobre sus ventas', 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', null, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c_477, 'debe', 0, 'haber', v_iva_com, 'concepto', null, 'local_id', loc, 'comun', comun, 'marca_id', null, 'tercero_id', null, 'documento', null,
+          'iva', jsonb_build_object('tipo_id', t21, 'base', coalesce(l.commission_amount, 0), 'libro', 'issued', 'deducible', null, 'facturas', 1), 'retencion', null));
+    end if;
+    -- La compensación: tu comisión se cobra primero de lo cobrado por cuenta de él y, si no llega, de sus compras.
+    v_contra_liq := least(round(v_cobradas * 100), v_factura);
+    if v_contra_liq > 0 then
+      lin := lin || jsonb_build_array(
+        jsonb_build_object('cuenta', c_pend, 'debe', v_contra_liq / 100.0, 'haber', 0, 'concepto', 'Compensación con lo cobrado por cuenta de él', 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c_430, 'debe', 0, 'haber', v_contra_liq / 100.0, 'concepto', 'Compensación con lo cobrado por cuenta de él', 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null));
+    end if;
+    v_contra_com := least(v_compras, v_factura - v_contra_liq);
+    if v_contra_com > 0 then
+      lin := lin || jsonb_build_array(
+        jsonb_build_object('cuenta', c_400, 'debe', v_contra_com / 100.0, 'haber', 0, 'concepto', 'Compensación con sus compras', 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null),
+        jsonb_build_object('cuenta', c_430, 'debe', 0, 'haber', v_contra_com / 100.0, 'concepto', 'Compensación con sus compras', 'local_id', loc, 'comun', comun,
+          'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null));
+    end if;
+    if jsonb_array_length(lin) < 2 then return jsonb_build_object('que', v_que, 'sin_propuesta', 'La liquidación del socio está a cero.'); end if;
+    v_neto := v_compras + round(v_cobradas * 100) - v_factura;
+    razones := jsonb_build_array(
+      jsonb_build_object('decision', 'Su resumen mensual es la factura de compra', 'porque', 'lo que te llega con albarán a su nombre sirve para contrastar, no se asienta'),
+      jsonb_build_object('decision', 'Tu comisión, ingreso por servicios (705) con IVA 21 %', 'porque', 'es lo único tuyo de sus ventas', 'cita', 'Ley 37/1992, art. 11.Dos.15.º'))
+      || case when round(v_cobradas * 100) <> 0 then jsonb_build_array(jsonb_build_object('decision', 'Lo cobrado por cuenta de él, en su cuenta de liquidación',
+               'porque', 'no es tuyo ni es lo que le compras: se compensa con tu comisión y el resto se le paga', 'cita', 'PGC de Pymes, NRV 16.ª')) else '[]'::jsonb end;
+    if round(coalesce(l.purchases_amount, 0) * 100) <> 0 then
+      avisos := avisos || to_jsonb('El IVA de sus compras va al ' || coalesce(public.conta_numero_texto(t10_rate), '10') || ' %: los albaranes no lo traen. Compruébalo con su resumen mensual.');
+    end if;
+    if round(coalesce(l.contributions_amount, 0) * 100) <> 0 then
+      -- toLocaleString('es-ES') del navegador: separa los miles solo desde 10.000.
+      avisos := avisos || to_jsonb('Sus aportaciones del mes (' || case when abs(l.contributions_amount) >= 10000 then replace(public.conta_euros_exactos(l.contributions_amount), ' €', '')
+                                     else replace(to_char(round(l.contributions_amount, 2), 'FM999999990.00'), '.', ',') end || ' €) no entran aquí: van por el banco cuando llegan.');
+    end if;
+    v_ap := public._conta_aprendizaje(p_company, 'licensed_settlement:' || l.party_id::text, lin, razones);
+    return jsonb_build_object('que', v_que, 'propuestas', jsonb_build_array(jsonb_build_object(
+      'entrada', jsonb_build_object('series', 4, 'fecha', l.period_to, 'concepto', 'Liquidación ' || v_socio,
+        'source_type', 'licensed_settlement', 'source_id', l.id,
+        'confianza', case when jsonb_array_length(avisos) > 0 then 'duda' else 'seguro' end,
+        'porque', 'Su resumen mensual como compra, tu comisión como ingreso con IVA, y se compensan: '
+                  || case when v_neto >= 0 then 'le pagas ' || public.conta_euros_exactos(v_neto / 100.0) else 'te paga ' || public.conta_euros_exactos(-v_neto / 100.0) end || '.',
+        'razones', (v_ap->'razones') || coalesce((select jsonb_agg(jsonb_build_object('decision', 'Mira esto', 'porque', a #>> '{}') order by o)
+                                                    from jsonb_array_elements(avisos) with ordinality z(a, o)), '[]'::jsonb),
+        'party_id', l.party_id, 'documento', null),
+      'lineas', v_ap->'lineas')));
+  end if;
+
+  return jsonb_build_object('que', 'Liquidación de ' || coalesce((select name from public.party where id = l.party_id), 'el socio'),
+    'sin_propuesta', 'Esta liquidación (fórmula «' || coalesce(l.formula, 'sin fórmula') || '») no se asienta sola: es de antes de la contabilidad.');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_propuestas_socio(p_company uuid, p_liq uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_propuestas_socio(p_company uuid, p_liq uuid) IS 'S01 · PR 3: la regla del socio de marca (liquidacionMensual y liquidacionSocio del navegador), en SQL: {que, propuestas: [...]} como aJson, o {que, sin_propuesta}. Solo lee.';
 
 
 --
@@ -86241,6 +87464,33 @@ COMMENT ON FUNCTION public.tg_clock_entry_orden() IS 'Orden de los fichajes que 
 
 
 --
+-- Name: tg_conta_liquidacion_pedidos_proponer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_conta_liquidacion_pedidos_proponer() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c record; s record;
+begin
+  for c in select distinct co.id from public.company co
+            where co.is_active and co.account_id in (select n.account_id from nuevas n
+                                                      where n.sale_id is not null and coalesce(n.matched, false) and coalesce(n.products, 0) > 0) loop
+    begin
+      perform public.conta_proponer_pagados_despues(c.id, 'Sumied (al leer la liquidación)');
+    exception when others then
+      for s in select distinct n.sale_id from nuevas n join public.company co on co.id = c.id and co.account_id = n.account_id
+                where n.sale_id is not null and coalesce(n.matched, false) and coalesce(n.products, 0) > 0 loop
+        perform public._conta_no_propuesta(c.id, 'sales_adjustment', s.sale_id::text, 'Pedido pagado después',
+          'No he podido proponerlo al leer la liquidación: ' || sqlerrm, 'Ventas › Cierres del día');
+      end loop;
+    end;
+  end loop;
+  return null;
+end $$;
+
+
+--
 -- Name: tg_conta_nomina_proponer(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -86255,6 +87505,53 @@ begin
     perform public._conta_no_propuesta(new.company_id, 'payroll', new.id::text, 'Nóminas de ' || to_char(new.period_month, 'MM/YYYY'),
       'No he podido proponerla al llegar: ' || sqlerrm, 'Contabilidad › Asientos');
   end;
+  return null;
+end $$;
+
+
+--
+-- Name: tg_conta_plataforma_proponer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_conta_plataforma_proponer() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c record;
+begin
+  for c in select co.id from public.company co where co.is_active and co.account_id = new.account_id loop
+    begin
+      perform public._conta_proponer_plataforma(c.id, new.id, 'Sumied (al leer la liquidación)');
+    exception when others then
+      perform public._conta_no_propuesta(c.id, 'channel_settlement', new.id::text, 'Liquidación de plataforma',
+        'No he podido proponerla al leerla: ' || sqlerrm, 'Ventas › Liquidaciones');
+    end;
+  end loop;
+  return null;
+end $$;
+
+
+--
+-- Name: tg_conta_socio_proponer(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_conta_socio_proponer() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c record;
+begin
+  -- Las de «documentos» son de su empresa; las otras, de cada empresa activa de la
+  -- cuenta (como el navegador y la pasada de las ventas).
+  for c in select co.id from public.company co
+            where co.is_active and co.account_id = new.account_id and (new.company_id is null or co.id = new.company_id) loop
+    begin
+      perform public._conta_proponer_socio(c.id, new.id, 'Sumied (al recibir su liquidación)');
+    exception when others then
+      perform public._conta_no_propuesta(c.id, 'licensed_settlement', new.id::text, 'Liquidación del socio',
+        'No he podido proponerla al recibirla: ' || sqlerrm, 'Ventas › Liquidaciones');
+    end;
+  end loop;
   return null;
 end $$;
 
@@ -98568,7 +99865,7 @@ CREATE TABLE public.conta_pago_justificante (
     correo_a text,
     correo_at timestamp with time zone,
     correo_texto text,
-    CONSTRAINT conta_pago_justificante_clave_check CHECK ((clave ~ '^[A-Za-z0-9_-]{43}$'::text))
+    CONSTRAINT conta_pago_justificante_clave_check CHECK ((clave ~ '^[A-Za-z0-9_-]{43}(-c[0-9]+)?$'::text))
 );
 
 
@@ -123840,10 +125137,31 @@ CREATE TRIGGER conta_diez_base_guarda BEFORE INSERT OR UPDATE ON public.conta_di
 
 
 --
+-- Name: channel_settlement_order conta_liquidacion_pedidos_proponer_al_casar; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_liquidacion_pedidos_proponer_al_casar AFTER UPDATE ON public.channel_settlement_order REFERENCING NEW TABLE AS nuevas FOR EACH STATEMENT EXECUTE FUNCTION public.tg_conta_liquidacion_pedidos_proponer();
+
+
+--
+-- Name: channel_settlement_order conta_liquidacion_pedidos_proponer_al_entrar; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_liquidacion_pedidos_proponer_al_entrar AFTER INSERT ON public.channel_settlement_order REFERENCING NEW TABLE AS nuevas FOR EACH STATEMENT EXECUTE FUNCTION public.tg_conta_liquidacion_pedidos_proponer();
+
+
+--
 -- Name: payroll_summary conta_nomina_proponer; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER conta_nomina_proponer AFTER INSERT ON public.payroll_summary FOR EACH ROW EXECUTE FUNCTION public.tg_conta_nomina_proponer();
+
+
+--
+-- Name: channel_settlement conta_plataforma_proponer; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_plataforma_proponer AFTER INSERT OR UPDATE OF commission_invoice_id, collected_on, collected_amount, needs_review, is_reference, net_payout ON public.channel_settlement FOR EACH ROW EXECUTE FUNCTION public.tg_conta_plataforma_proponer();
 
 
 --
@@ -123858,6 +125176,13 @@ CREATE TRIGGER conta_programa_anterior_apuntar AFTER INSERT OR DELETE OR UPDATE 
 --
 
 CREATE TRIGGER conta_programa_anterior_guarda BEFORE INSERT OR UPDATE ON public.conta_programa_anterior FOR EACH ROW EXECUTE FUNCTION public.conta_programa_anterior_guarda();
+
+
+--
+-- Name: licensed_settlement conta_socio_proponer; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_socio_proponer AFTER INSERT OR UPDATE OF status ON public.licensed_settlement FOR EACH ROW WHEN (((new.status = ANY (ARRAY['confirmada'::text, 'saldada'::text])) AND (new.formula = ANY (ARRAY['documentos'::text, 'compras_aportaciones_comision'::text])))) EXECUTE FUNCTION public.tg_conta_socio_proponer();
 
 
 --
@@ -146923,6 +148248,14 @@ GRANT ALL ON FUNCTION public._conta_abono_validado() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_aprendizaje(p_company uuid, p_clave text, p_lineas jsonb, p_razones jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_aprendizaje(p_company uuid, p_clave text, p_lineas jsonb, p_razones jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_aprendizaje(p_company uuid, p_clave text, p_lineas jsonb, p_razones jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_asientos_borrado_deshacer(p_lote uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -147049,12 +148382,29 @@ GRANT ALL ON FUNCTION public._conta_cuenta_aprendida(p_company uuid, p_410 text,
 
 
 --
+-- Name: FUNCTION _conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric) TO anon;
+GRANT ALL ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total numeric) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_dir_coincide(p_texto text, p_dir text); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO anon;
 GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_enlace(p_company uuid, p_entity text, p_entity_id text, p_role text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_enlace(p_company uuid, p_entity text, p_entity_id text, p_role text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_enlace(p_company uuid, p_entity text, p_entity_id text, p_role text) TO service_role;
 
 
 --
@@ -147120,6 +148470,14 @@ GRANT ALL ON FUNCTION public._conta_facturas_apuntar(p_company uuid) TO service_
 
 REVOKE ALL ON FUNCTION public._conta_facturas_apuntar_todas() FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_facturas_apuntar_todas() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_hoja(p_company uuid, p_template text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_hoja(p_company uuid, p_template text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_hoja(p_company uuid, p_template text) TO service_role;
 
 
 --
@@ -147476,6 +148834,22 @@ GRANT ALL ON FUNCTION public._conta_plataforma_apuntar(p_invoice uuid) TO servic
 
 
 --
+-- Name: FUNCTION _conta_plataforma_entrada(p_company uuid, p_liq uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_plataforma_entrada(p_company uuid, p_liq uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_plataforma_entrada(p_company uuid, p_liq uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_plataforma_regla(e jsonb, c jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_plataforma_regla(e jsonb, c jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_plataforma_regla(e jsonb, c jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_plataforma_seguro(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -147505,6 +148879,30 @@ GRANT ALL ON FUNCTION public._conta_plataformas_apuntar_todas() TO service_role;
 
 REVOKE ALL ON FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_proponer_plataforma(p_company uuid, p_liq uuid, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_proponer_plataforma(p_company uuid, p_liq uuid, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_proponer_plataforma(p_company uuid, p_liq uuid, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_proponer_socio(p_company uuid, p_liq uuid, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_proponer_socio(p_company uuid, p_liq uuid, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_proponer_socio(p_company uuid, p_liq uuid, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_propuesta_ventas(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid, p_venta uuid) TO service_role;
 
 
 --
@@ -147614,6 +149012,14 @@ GRANT ALL ON FUNCTION public._conta_tienda_local_por_direccion() TO service_role
 GRANT ALL ON FUNCTION public._conta_tienda_nombre(p_texto text) TO anon;
 GRANT ALL ON FUNCTION public._conta_tienda_nombre(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_tienda_nombre(p_texto text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tipo_iva(p_cuenta uuid, p_rate numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tipo_iva(p_cuenta uuid, p_rate numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tipo_iva(p_cuenta uuid, p_rate numeric) TO service_role;
 
 
 --
@@ -151862,6 +153268,15 @@ GRANT ALL ON FUNCTION public.conta_al_dia() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_aprendizaje(p_company uuid, p_clave text, p_cuentas text[]) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_apuntada_sola_deshacer(p_invoice uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -154603,12 +156018,56 @@ GRANT ALL ON FUNCTION public.conta_proponer_nominas(p_company uuid, p_desde date
 
 
 --
+-- Name: FUNCTION conta_proponer_pagados_despues(p_company uuid, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proponer_pagados_despues(p_company uuid, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proponer_pagados_despues(p_company uuid, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proponer_pagados_despues(p_company uuid, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proponer_plataformas(p_company uuid, p_desde date, p_hasta date, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proponer_recibidos(p_company uuid, p_desde date, p_hasta date, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_proponer_socios(p_company uuid, p_desde date, p_hasta date, p_quien text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_propuesta_nomina(p_payroll uuid); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) TO anon;
 GRANT ALL ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_propuesta_nomina(p_payroll uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_propuesta_pagado_despues(p_company uuid, p_pago jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_propuesta_pagado_despues(p_company uuid, p_pago jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_propuesta_pagado_despues(p_company uuid, p_pago jsonb) TO service_role;
 
 
 --
@@ -154625,6 +156084,48 @@ GRANT ALL ON FUNCTION public.conta_propuesta_ventas_dia(p_company uuid, p_locati
 
 REVOKE ALL ON FUNCTION public.conta_propuesta_ventas_unidad(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_propuesta_ventas_unidad(p_company uuid, p_location uuid, p_dia date, p_canal uuid, p_marca uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_propuestas_de_noche(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_propuestas_de_noche(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_propuestas_de_noche(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_propuestas_de_noche(p_company uuid) TO service_role;
+
+
+--
+-- Name: PROCEDURE conta_propuestas_de_noche_todas(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON PROCEDURE public.conta_propuestas_de_noche_todas() FROM PUBLIC;
+GRANT ALL ON PROCEDURE public.conta_propuestas_de_noche_todas() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_propuestas_plataforma(p_company uuid, p_liq uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_propuestas_plataforma(p_company uuid, p_liq uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_propuestas_plataforma(p_company uuid, p_liq uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_propuestas_recibido(p_accrual uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.conta_propuestas_recibido(p_accrual uuid) TO anon;
+GRANT ALL ON FUNCTION public.conta_propuestas_recibido(p_accrual uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_propuestas_recibido(p_accrual uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_propuestas_socio(p_company uuid, p_liq uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_propuestas_socio(p_company uuid, p_liq uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_propuestas_socio(p_company uuid, p_liq uuid) TO service_role;
 
 
 --
@@ -161150,11 +162651,35 @@ GRANT ALL ON FUNCTION public.tg_clock_entry_orden() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_conta_liquidacion_pedidos_proponer(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_conta_liquidacion_pedidos_proponer() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_conta_liquidacion_pedidos_proponer() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_conta_nomina_proponer(); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.tg_conta_nomina_proponer() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.tg_conta_nomina_proponer() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_conta_plataforma_proponer(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_conta_plataforma_proponer() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_conta_plataforma_proponer() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_conta_socio_proponer(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_conta_socio_proponer() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_conta_socio_proponer() TO service_role;
 
 
 --
