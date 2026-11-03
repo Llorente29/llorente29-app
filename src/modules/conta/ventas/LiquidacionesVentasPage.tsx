@@ -88,12 +88,22 @@ export default function LiquidacionesVentasPage() {
   const elegir = useRef<HTMLInputElement>(null)
   const elegirFactura = useRef<HTMLInputElement>(null)
 
-  const clave = `${accountId}:${activa?.id}:${hosteleria}:${vuelta}`
-  const datos = useLeer(accountId && activa && ver === 'mes' ? () => leerLiquidacionesMes(activa.id, mes) : null, `${clave}:mes:${mes}`)
-  const quienes = useLeer(accountId ? () => leerIntermediarios(accountId) : null, `${clave}:quienes`)
-  const locales = useLeer(accountId && hosteleria ? () => leerLocales(accountId) : null, `${accountId}:locales`)
-  const sinPropuesta = useLeer(accountId && activa && ver === 'mes' ? () => leerNoPropuestoPorOrigen(accountId, activa.id) : null, `${clave}:sin-propuesta`)
-  const socios = useLeer(accountId && activa && hosteleria && ver === 'socios' ? () => leerLiquidaciones(accountId, activa.id, hoy) : null, `${clave}:socios`)
+  // Cada lectura, con la clave de lo que la enciende y nada más (S01q·11): una clave a la que le falta
+  // lo que la enciende no vuelve a leer (los locales llegaban vacíos), y una que lleva lo que no usa
+  // relee por nada y, mientras, la lista se desmonta (la fila abierta se cerraba).
+  const empresa = `${accountId}:${activa?.id}:${vuelta}`
+  const datos = useLeer(accountId && activa && ver === 'mes' ? () => leerLiquidacionesMes(activa.id, mes) : null, `${empresa}:mes:${mes}:${ver}`)
+  const quienes = useLeer(accountId ? () => leerIntermediarios(accountId) : null, `${accountId}:${vuelta}:quienes`)
+  // Los locales, siempre: la pregunta de la tienda sin local los necesita, con hostelería o sin ella.
+  const locales = useLeer(accountId ? () => leerLocales(accountId) : null, `${accountId}:locales`)
+  const sinPropuesta = useLeer(accountId && activa && ver === 'mes' ? () => leerNoPropuestoPorOrigen(accountId, activa.id) : null, `${empresa}:sin-propuesta:${ver}`)
+  const socios = useLeer(accountId && activa && hosteleria && ver === 'socios' ? () => leerLiquidaciones(accountId, activa.id, hoy) : null, `${empresa}:${hosteleria}:socios:${ver}`)
+  // Mientras se relee el mismo mes (después de Guardar, Reclamar…), se sigue viendo el de antes: la
+  // lista no se desmonta y la fila abierta sigue abierta, con lo que tenía escrito.
+  const [ultimo, setUltimo] = useState<MesLiquidaciones | null>(null)
+  if (datos.datos && datos.datos !== ultimo) setUltimo(datos.datos)
+  // Lo escrito en la fila abierta («Lo reclamo», su frase) vive aquí, no en la fila: sobrevive a que se vuelva a pintar.
+  const [borrador, setBorrador] = useState<Borrador>({ clave: null, tipo: null, frase: '' })
 
   const recargar = () => setVuelta((v) => v + 1)
   const conAviso = async (hacer: () => Promise<ReactNode>) => {
@@ -129,7 +139,7 @@ export default function LiquidacionesVentasPage() {
     )
   }
 
-  const m = datos.datos ?? null
+  const m = datos.datos ?? (ultimo && ultimo.mes === mes && !datos.error ? ultimo : null)
   const intermediarios = quienes.datos ?? []
   const partyDe = (f: FilaMes) => intermediarios.find((i) => i.id === f.motor.intermediarioId)?.partyId ?? null
   const grupos = m ? agrupar(m.filas, filtros) : null
@@ -268,10 +278,10 @@ export default function LiquidacionesVentasPage() {
         <details key={g.canal} className="cxlm-grupo" open data-prueba="grupo-plataforma">
           <summary><span>{g.canal}</span><span className="cxlm-cuenta">{cuenta(g.filas, true)}</span></summary>
           {g.tiendas.map((t) => (
-            <Tienda key={t.clave} t={t} sinPropuesta={sinPropuesta.datos ?? null} abierta={abierta} ocupado={ocupado} locales={locales.datos ?? []} hayRecorrido={recorrido.length > 0}
+            <Tienda key={t.clave} t={t} sinPropuesta={sinPropuesta.datos ?? null} borrador={borrador} alBorrador={setBorrador} abierta={abierta} ocupado={ocupado} locales={locales.datos ?? []} hayRecorrido={recorrido.length > 0}
               alBoton={alBoton} alAbrir={(f) => setAbierta(abierta === f.clave ? null : f.clave)} alSiguiente={(f) => abrir(siguiente(f.clave))}
               alGuardarLocal={(storeId, localId) => void conAviso(() => darLocalATienda(accountId!, storeId, localId, quien))}
-              alResolver={(f, x) => conAviso(async () => { const r = await resolverDiferencia(accountId!, activa.id, f.motor, partyDe(f), x, quien); setAbierta(null); return r })}
+              alResolver={(f, x) => conAviso(async () => { const r = await resolverDiferencia(accountId!, activa.id, f.motor, partyDe(f), x, quien); setAbierta(null); setBorrador({ clave: null, tipo: null, frase: '' }); return r })}
               alLlegada={(id, imp) => conAviso(() => reclamacionLlegada(id, hoy, imp, null, quien))} />
           ))}
         </details>
@@ -353,10 +363,13 @@ function Ayuda() {
 
 // ── Una tienda y sus periodos ───────────────────────────────────────────────
 
+/** Lo escrito en la fila abierta: de qué fila es, qué se ha elegido y su frase. */
+type Borrador = { clave: string | null; tipo: 'gasto' | 'reclamacion' | null; frase: string }
+
 type Resolver = (f: FilaMes, x: { tipo: 'gasto' | 'reclamacion'; importe: number; frase: string }) => Promise<void>
 
-function Tienda({ t, sinPropuesta, abierta, ocupado, locales, hayRecorrido, alBoton, alAbrir, alSiguiente, alGuardarLocal, alResolver, alLlegada }: {
-  t: GrupoTienda; sinPropuesta: Map<string, SinPropuesta> | null; abierta: string | null; ocupado: boolean; locales: { id: string; nombre: string; abierto: boolean }[]; hayRecorrido: boolean
+function Tienda({ t, sinPropuesta, borrador, alBorrador, abierta, ocupado, locales, hayRecorrido, alBoton, alAbrir, alSiguiente, alGuardarLocal, alResolver, alLlegada }: {
+  t: GrupoTienda; sinPropuesta: Map<string, SinPropuesta> | null; borrador: Borrador; alBorrador: (b: Borrador) => void; abierta: string | null; ocupado: boolean; locales: { id: string; nombre: string; abierto: boolean }[]; hayRecorrido: boolean
   alBoton: (f: FilaMes) => void; alAbrir: (f: FilaMes) => void; alSiguiente: (f: FilaMes) => void
   alGuardarLocal: (storeId: string, localId: string) => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
 }) {
@@ -371,15 +384,15 @@ function Tienda({ t, sinPropuesta, abierta, ocupado, locales, hayRecorrido, alBo
       </summary>
       {t.filas.map((f, i) => (
         <Fila key={f.clave} f={f} sinPropuesta={[...new Set(f.motor.liquidaciones.map((x) => sinPropuesta?.get(x.id)?.porque).filter((x): x is string => !!x))]} abierta={abierta === f.clave} ocupado={ocupado} hayRecorrido={hayRecorrido}
-          alBoton={alBoton} alAbrir={alAbrir} alSiguiente={alSiguiente} alResolver={alResolver} alLlegada={alLlegada}
+          borrador={borrador} alBorrador={alBorrador} alBoton={alBoton} alAbrir={alAbrir} alSiguiente={alSiguiente} alResolver={alResolver} alLlegada={alLlegada}
           pregunta={i === 0 && tiendaSinLocal ? <PreguntaLocal tienda={tiendaSinLocal.nombre} canal={f.canal} locales={locales} ocupado={ocupado} alGuardar={(l) => alGuardarLocal(tiendaSinLocal.id, l)} /> : null} />
       ))}
     </details>
   )
 }
 
-function Fila({ f, sinPropuesta, abierta, ocupado, hayRecorrido, pregunta, alBoton, alAbrir, alSiguiente, alResolver, alLlegada }: {
-  f: FilaMes; sinPropuesta: string[]; abierta: boolean; ocupado: boolean; hayRecorrido: boolean; pregunta: ReactNode
+function Fila({ f, sinPropuesta, borrador, alBorrador, abierta, ocupado, hayRecorrido, pregunta, alBoton, alAbrir, alSiguiente, alResolver, alLlegada }: {
+  f: FilaMes; sinPropuesta: string[]; borrador: Borrador; alBorrador: (b: Borrador) => void; abierta: boolean; ocupado: boolean; hayRecorrido: boolean; pregunta: ReactNode
   alBoton: (f: FilaMes) => void; alAbrir: (f: FilaMes) => void; alSiguiente: (f: FilaMes) => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
 }) {
   const tono = TONO[f.estado]
@@ -403,7 +416,7 @@ function Fila({ f, sinPropuesta, abierta, ocupado, hayRecorrido, pregunta, alBot
       {/* Lo que no se ha podido apuntar solo, con sus palabras (Julio, S01q·10: «la pantalla tiene que decirlo con esas palabras»). */}
       {sinPropuesta.map((t) => <p key={t} className="cxlm-nota cxlm-sin-propuesta" data-prueba="sin-propuesta">{t}</p>)}
       {pregunta}
-      {abierta && <Abierta f={f} ocupado={ocupado} hayRecorrido={hayRecorrido} alSiguiente={() => alSiguiente(f)} alResolver={alResolver} alLlegada={alLlegada} />}
+      {abierta && <Abierta f={f} borrador={borrador} alBorrador={alBorrador} ocupado={ocupado} hayRecorrido={hayRecorrido} alSiguiente={() => alSiguiente(f)} alResolver={alResolver} alLlegada={alLlegada} />}
     </div>
   )
 }
@@ -427,14 +440,17 @@ function PreguntaLocal({ tienda, canal, locales, ocupado, alGuardar }: {
 
 // ── La fila abierta ─────────────────────────────────────────────────────────
 
-function Abierta({ f, ocupado, hayRecorrido, alSiguiente, alResolver, alLlegada }: {
-  f: FilaMes; ocupado: boolean; hayRecorrido: boolean; alSiguiente: () => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
+function Abierta({ f, borrador, alBorrador, ocupado, hayRecorrido, alSiguiente, alResolver, alLlegada }: {
+  f: FilaMes; borrador: Borrador; alBorrador: (b: Borrador) => void; ocupado: boolean; hayRecorrido: boolean; alSiguiente: () => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
 }) {
   const m = f.motor
   const l = m.liquidacion
   const dif = f.estado === 'no_cuadra' ? f.diferencia ?? m.diferencia ?? 0 : 0
-  const [tipo, setTipo] = useState<'gasto' | 'reclamacion' | null>(null)
-  const [frase, setFrase] = useState('')
+  const mio = borrador.clave === f.clave
+  const tipo = mio ? borrador.tipo : null
+  const frase = mio ? borrador.frase : ''
+  const setTipo = (t: 'gasto' | 'reclamacion') => alBorrador({ clave: f.clave, tipo: t, frase })
+  const setFrase = (x: string) => alBorrador({ clave: f.clave, tipo, frase: x })
   const pendientes = m.resoluciones.filter((r) => r.tipo === 'reclamacion' && !r.llegoEl)
   const facturas = m.liquidaciones.filter((x) => x.factura)
   const otros = l.otros ?? (l.pagan !== null ? Math.round((l.pagan - l.ventas + l.comision + (f.comparado?.promociones ?? 0)) * 100) / 100 : null)
