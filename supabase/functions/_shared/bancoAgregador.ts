@@ -146,11 +146,56 @@ async function todosLosMovimientos(c: ClienteOpenBankingIo, cuenta: string, desd
   throw new Error(`La cuenta ${cuenta} tiene más de ${100 * LIMITE} movimientos entre el ${desde} y el ${hasta}: no los traigo a medias.`)
 }
 
-const ibanLimpio = (iban: string | null) => (iban ?? '').replace(/\s+/g, '').toUpperCase()
+export const ibanLimpio = (iban: string | null) => (iban ?? '').replace(/\s+/g, '').toUpperCase()
+
+// ── B01·14 · Mirar lo que da open-banking.io, sin importar nada ─────────────
+// Los traspasos del 30/10 (+3.308,46 € a ···6536 y +798,36 € a ···4525) no han
+// llegado nunca por la conexión, ni al releer: el saldo del banco dice que
+// entraron y la lectura no apunta qué le dio el proveedor de esos días. Esto lo
+// dice, cuenta a cuenta: lo que devuelve con el filtro de fechas (lo que pide
+// la lectura) y sin él (por si el movimiento está con otra fecha o sin la
+// contable), con sus tres fechas, el importe y el estado. Sin conceptos ni
+// nombres: no hacen falta para saber si está.
+
+/** Un movimiento tal como lo da open-banking.io: sus tres fechas, el importe con signo y el estado. */
+export interface VistoObi { id: string; contable: string | null; valor: string | null; operacion: string | null; importeCent: number; estado: string | null }
+
+export function vistoDeObi(t: TransaccionObi): VistoObi {
+  const bruto = centimos(t.amount)
+  const ind = (t.creditDebitIndicator ?? '').toUpperCase()
+  return {
+    id: t.id, contable: t.bookingDate?.slice(0, 10) ?? null, valor: t.valueDate?.slice(0, 10) ?? null, operacion: t.transactionDate?.slice(0, 10) ?? null,
+    importeCent: ind === 'DBIT' ? -Math.abs(bruto) : ind === 'CRDT' ? Math.abs(bruto) : bruto, estado: t.status,
+  }
+}
+
+/** ¿Alguna de sus fechas cae entre `desde` y `hasta` (los dos incluidos)? */
+export const tocaLosDias = (v: VistoObi, desde: string, hasta: string) => [v.contable, v.valor, v.operacion].some((f) => !!f && f >= desde && f <= hasta)
+
+/**
+ * Lo que da una cuenta para esos días: con el filtro de fechas que usa la
+ * lectura y, aparte, lo que sin filtro tiene alguna fecha en esos días y el
+ * filtro no ha dado. Nunca importa ni escribe nada.
+ */
+export async function mirarCuenta(c: ClienteOpenBankingIo, cuenta: string, desde: string, hasta: string):
+  Promise<{ conFiltro: VistoObi[]; soloSinFiltro: VistoObi[]; totalSinFiltro: number }> {
+  const conFiltro = (await todosLosMovimientos(c, cuenta, desde, hasta)).map(vistoDeObi)
+  const todos: TransaccionObi[] = []
+  const LIMITE = 200
+  for (let i = 0; i < 100; i++) {
+    const p = await c.getTransactions(cuenta, { limit: LIMITE, offset: todos.length })
+    todos.push(...p.items)
+    if (p.items.length < LIMITE || todos.length >= p.total) break
+  }
+  const ya = new Set(conFiltro.map((v) => v.id))
+  const soloSinFiltro = todos.map(vistoDeObi).filter((v) => tocaLosDias(v, desde, hasta) && !ya.has(v.id))
+  return { conFiltro, soloSinFiltro, totalSinFiltro: todos.length }
+}
 
 /** open-banking.io como proveedor, con lo que además sabe de la conexión. `hoy`: el día de Madrid en que se lee. */
-export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): ProveedorAgregador & ConexionDelProveedor {
+export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): ProveedorAgregador & ConexionDelProveedor & { ultimoRefresco(): { cuentas: number; nuevos: number } | null } {
   let cuentasObi: Promise<CuentaObi[]> | null = null
+  let refresco: { cuentas: number; nuevos: number } | null = null
   const leerCuentas = () => (cuentasObi ??= c.getAccounts())
   return {
     id: PROVEEDOR_OBI,
@@ -174,8 +219,11 @@ export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): Pr
       const final = saldoAlCerrar(saldo, leidos, hasta)
       return { saldoInicialCent: final - dentro.reduce((t, m) => t + m.importeCent, 0), saldoFinalCent: final, movimientos: dentro, pendientes }
     },
+    // B01·14 · Lo que ha traído del banco al ponerse al día, para el registro de la noche.
+    ultimoRefresco: () => refresco,
     async refrescar() {
       const r = await c.syncAll()
+      refresco = { cuentas: r.accounts ?? 0, nuevos: r.newTransactions ?? 0 }
       return (r.failures ?? []).map((f) => ({ cuenta: f.accountId, motivo: f.reason }))
     },
     async permisos() {
@@ -339,6 +387,9 @@ export interface ParteCuenta {
   tarde: number
   tardeCent: number
   desdeReleido: string | null
+  /** B01·14 · Cuántos movimientos contabilizados dio el banco de los días releídos (ya estuvieran o no), y cuánto suman. */
+  releidosDelBanco?: number
+  releidosDelBancoCent?: number
 }
 
 const euros = (c: number) => `${(c / 100).toFixed(2).replace('.', ',')} €`
@@ -416,6 +467,8 @@ export async function sincronizarEmpresa(base: BaseAgregador, p: ProveedorAgrega
         parte.desdeReleido = desdeLeer
         const hastaViejo = masDias(desde, -1) < ayer ? masDias(desde, -1) : ayer
         const viejos = pag.movimientos.filter((m) => m.fecha < desde)
+        parte.releidosDelBanco = viejos.length
+        parte.releidosDelBancoCent = viejos.reduce((t, m) => t + m.importeCent, 0)
         const tarde = viejos.length ? quitarLoQueYaEsta(viejos, await base.movimientosEnFolvy!(banco.id, desdeLeer, hastaViejo)) : []
         if (tarde.length) {
           const primero = tarde.map((m) => m.fecha).sort()[0]
