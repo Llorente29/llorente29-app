@@ -68,6 +68,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     impuestosCliente: 'despacho',
     // La página de aceptar una invitación a la asesoría no es de ningún producto (va sin marco).
     aceptarAsesoria: null,
+    // NV1: Ayuda › Novedades no es una pestaña del menú.
+    novedades: null,
     // Ventas sobra (la sustituye Facturación): su dirección no es de ningún producto.
     // V01 · Entrega 2: «Ventas» a secas lleva a Cierres del día.
     ventas: 'facturacion.cierres',

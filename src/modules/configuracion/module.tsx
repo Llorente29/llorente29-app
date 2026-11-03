@@ -29,6 +29,7 @@ import RepartoSettingsPage from '@/pages/RepartoSettingsPage'
 import QuienRepartePage from '@/modules/reparto/pages/QuienRepartePage'
 import UsuariosAccesosPage from '@/pages/UsuariosAccesosPage'
 import FacturasPedidosPage from './FacturasPedidosPage'
+import NovedadesPage from '@/shell/version/NovedadesPage'
 
 export const configuracionModule: ModuleDefinition = {
   id: 'configuracion',
@@ -52,6 +53,8 @@ export const configuracionModule: ModuleDefinition = {
     { path: 'usuarios',  element: <UsuariosAccesosPage /> },
     // V04: la serie de los tiques de cada local y quién factura cada marca.
     { path: 'facturas-pedidos', element: <FacturasPedidosPage /> },
+    // NV1: las novedades de Folvy (las de Sumied están en su Ayuda › Novedades).
+    { path: 'novedades', element: <NovedadesPage miga="Configuración › Novedades" /> },
   ],
 
   sidebar: {
