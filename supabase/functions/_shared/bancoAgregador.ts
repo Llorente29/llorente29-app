@@ -228,7 +228,14 @@ export function proveedorOpenBankingIo(c: ClienteOpenBankingIo, hoy: string): Pr
     },
     async permisos() {
       const out: Record<string, { conexion: string | null; caduca: string | null; renovar: boolean }> = {}
-      for (const x of await c.getConnections()) for (const id of x.accountIds ?? []) out[id] = { conexion: x.sessionId ?? null, caduca: x.validUntil ?? null, renovar: !x.isLive }
+      // B01·16 (03/11) · Al renovar el permiso, el de antes sigue en la lista, con las mismas cuentas, hasta
+      // que se cierra (y después, como no vivo). Manda el vivo; entre dos vivos, el que caduca más tarde. Antes
+      // mandaba el último de la lista: con el de antes cerrado, la lectura habría dado las cuentas por caducadas.
+      for (const x of await c.getConnections()) for (const id of x.accountIds ?? []) {
+        const este = { conexion: x.sessionId ?? null, caduca: x.validUntil ?? null, renovar: !x.isLive }
+        const antes = out[id]
+        if (!antes || (antes.renovar && !este.renovar) || (antes.renovar === este.renovar && (este.caduca ?? '') > (antes.caduca ?? ''))) out[id] = este
+      }
       for (const a of await leerCuentas()) if (a.needsReconnect) out[a.id] = { conexion: out[a.id]?.conexion ?? null, caduca: out[a.id]?.caduca ?? null, renovar: true }
       return out
     },
