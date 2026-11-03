@@ -193,26 +193,28 @@ test('Pagos: cifras, sin vencimiento, pestañas; pagar una (la domiciliada no en
   // El buscador encuentra por importe, con coma.
   await page.getByRole('searchbox', { name: 'Buscar un pago' }).fill('1.105,30')
   await expect(page.getByRole('checkbox', { name: /^Marcar Distribuciones/ })).toBeVisible()
-  await expect(page.getByRole('checkbox', { name: /^Marcar Inmuebles/ })).toHaveCount(0)
+  await expect(page.getByRole('checkbox', { name: /Inmuebles/ })).toHaveCount(0)
   await page.getByRole('searchbox', { name: 'Buscar un pago' }).fill('')
   // De vuelta en «Por pagar» y sin buscar: las seis que quedan, también la domiciliada. Si no, el
   // registro dice dónde está la pantalla y qué enseña (e2e 945 y la de la zona: no se veía la fila).
   try {
     await expect(pestanas.getByRole('tab', { name: /Por pagar/ })).toHaveAttribute('aria-selected', 'true', { timeout: 15_000 })
     await expect(page.getByRole('searchbox', { name: 'Buscar un pago' })).toHaveValue('')
-    await expect(page.getByRole('checkbox', { name: /^Marcar Inmuebles/ })).toBeVisible({ timeout: 15_000 })
+    // B01·12 · La domiciliada sale, y no se deja marcar: dice por qué (en su casilla y en su fila).
+    await expect(page.getByRole('checkbox', { name: /^No se puede marcar Inmuebles Prueba SL.*: la paga el banco solo \(domiciliada\)$/ })).toBeDisabled({ timeout: 15_000 })
   } catch (e) {
     console.log(`[diagnóstico pagos] dirección: ${page.url()}`)
     console.log(`[diagnóstico pagos] lista:\n${await page.locator('.pg-caja').ariaSnapshot().catch((x: Error) => x.message)}`)
     throw e
   }
 
-  // Marcar la transferencia vencida y la domiciliada: la barra dice cuál no entra y por qué.
+  // B01·12 · Sin barra de abajo: marcar abre el panel lateral, con la factura, desde qué banco y qué día.
   await page.getByRole('checkbox', { name: /^Marcar Distribuciones Cárnicas/ }).check()
-  await page.getByRole('checkbox', { name: /^Marcar Inmuebles/ }).check()
-  const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
-  await expect(barra).toContainText('1 seleccionada · 1.105,30 €')
-  await expect(barra).toContainText('1 no entra: la paga el banco solo (domiciliada)')
+  await expect(page.locator('.pg-barra')).toHaveCount(0)
+  const barra = page.getByRole('dialog', { name: 'Pagar 1 factura' })
+  await expect(barra.locator('[data-prueba="lista-remesa"]')).toContainText('Distribuciones Cárnicas Vallecas SL · DCV-2026/1184')
+  await expect(barra.locator('.pg-panel-total')).toContainText('1 transferencia')
+  await expect(barra.locator('.pg-panel-total')).toContainText('1.105,30 €')
   await expect(barra.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
   await expect(barra.getByLabel('Desde qué banco se paga')).not.toHaveValue('')
   expect(await page.locator('main, .pg-pagina').first().innerText()).not.toMatch(TECNICAS)
@@ -360,9 +362,10 @@ test('Bancos propone sola la remesa que espera justo ese cargo; la ficha, pagada
 })
 
 
-test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueba y lo dice (E2b)', async ({ page }) => {
+test('«Poner IBAN» en su aviso: solo a quien le falta para entrar, lo comprueba y lo dice (E2b)', async ({ page }) => {
   test.setTimeout(90_000)
   const errores = vigilar(page)
+  const movil = lado(page) === 'movil'
   await entrarComo(page, CUENTA_A.email)
   const llamadas = await simular(page)
   // La de Inmuebles, además de domiciliada, sin IBAN: no tiene que ofrecer «Poner IBAN».
@@ -378,12 +381,12 @@ test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueb
     return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ iban4: '5416', frase: 'IBAN de Carnes Sin Plazo SL puesto (···· 5416). Queda apuntado: Ana Prueba, el 26/10 a las 19:40.' }) })
   })
   await page.goto('/conta/compras/pagos')
-  await expect(page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ })).toBeVisible({ timeout: 30_000 })
-  await page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ }).check()
-  await page.getByRole('checkbox', { name: /^Marcar Inmuebles/ }).check()
-  const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
-  await expect(barra).toContainText('Carnes Sin Plazo SL: Carnes Sin Plazo SL no tiene IBAN en su ficha')
-  await expect(barra).toContainText('Inmuebles Prueba SL: la paga el banco solo (domiciliada)')
+  // B01·12 · Sin IBAN no se deja marcar, lo dice en su fila, y el aviso ofrece ponerlo (a la domiciliada, no).
+  const sinIbanCasilla = page.getByRole('checkbox', { name: /^No se puede marcar Carnes Sin Plazo SL.*: Carnes Sin Plazo SL no tiene IBAN en su ficha$/ })
+  await expect(sinIbanCasilla).toBeDisabled({ timeout: 30_000 })
+  if (!movil) await expect(page.getByText('Sin IBAN · ponlo para pagarla')).toBeVisible()
+  const barra = page.locator('[data-prueba="sin-iban"]')
+  await expect(barra).toContainText('Carnes Sin Plazo SL no tiene IBAN.')
   await expect(barra.getByRole('button', { name: /^Poner IBAN/ })).toHaveCount(1)
 
   await barra.getByRole('button', { name: 'Poner IBAN · Carnes Sin Plazo SL' }).click()
@@ -397,9 +400,11 @@ test('«Poner IBAN» en la barra: solo a quien le falta para entrar, lo comprueb
   await dialogo.getByRole('button', { name: 'Guardar el IBAN' }).click()
   await expect(page.locator('[data-prueba="aviso-pagos"]')).toHaveText('IBAN de Carnes Sin Plazo SL puesto (···· 5416). Queda apuntado: Ana Prueba, el 26/10 a las 19:40.', { timeout: 30_000 })
   expect(llamadas.find((l) => l.f === 'poner_iban')!.cuerpo).toEqual({ p_supplier: 's-sinplazo', p_iban: 'ES1000492352082414205416' })
-  // Ya tiene IBAN: entra en la remesa sin desmarcar nada, y no queda «Poner IBAN».
-  await expect(barra).toContainText('1 seleccionada · 212,40 €', { timeout: 30_000 })
-  await expect(barra.getByRole('button', { name: /^Poner IBAN/ })).toHaveCount(0)
-  await expect(barra.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
+  // Ya tiene IBAN: se puede marcar, y no queda «Poner IBAN»; al marcarla, el panel con su importe.
+  await expect(barra).toHaveCount(0, { timeout: 30_000 })
+  await page.getByRole('checkbox', { name: /^Marcar Carnes Sin Plazo/ }).check()
+  const panel = page.getByRole('dialog', { name: 'Pagar 1 factura' })
+  await expect(panel.locator('[data-prueba="lista-remesa"]')).toContainText('212,40 €')
+  await expect(panel.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
   expect(errores).toEqual([])
 })

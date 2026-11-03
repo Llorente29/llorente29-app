@@ -81,6 +81,15 @@ export const NOMBRE_ESTADO: Record<EstadoPago, string> = {
 export function chipEstado(f: FilaPago): { texto: string; tono: 'falta' | 'duda' | 'seguro' | 'neutro' } {
   if (f.porRevisar) return { texto: 'Por revisar · apruébala para pagarla', tono: 'duda' }
   const e = estadoPago(f)
+  if (e !== 'en_remesa' && e !== 'pagada' && !seCargaSola(f)) {
+    // B01·12 (03/11): la que no se puede pagar lo dice en su fila, como «Por revisar», y no se deja marcar.
+    if (libre(f) >= 0.005) {
+      if (f.forma === 'cash') return { texto: 'En efectivo · no se paga desde aquí', tono: 'neutro' }
+      if (!f.conIban) return { texto: 'Sin IBAN · ponlo para pagarla', tono: 'duda' }
+      if (f.ibanDistinto) return { texto: 'Otro IBAN · decide en su ficha', tono: 'duda' }
+      if (!f.conCuenta) return { texto: 'Sin cuenta 400 · no se puede pagar', tono: 'duda' }
+    }
+  }
   if (e === 'vencida') return { texto: `Vencida · ${f.diasVencida ?? 0} ${f.diasVencida === 1 ? 'día' : 'días'}`, tono: 'falta' }
   if (e === 'en_remesa') return { texto: `En la remesa ${f.remesa!.codigo}`, tono: 'seguro' }
   if (e === 'pagada') return { texto: 'Pagada', tono: 'seguro' }

@@ -86,6 +86,14 @@ begin
       select account_id, company_id, gen_random_uuid(), invoice_id, supplier_id, 'corta', 'x' from public.conta_pago_salida where id = p;
   exception when check_violation or foreign_key_violation then ok := true; end;
   if not ok then raise exception 'PRUEBA B01 justificante · 1: admite una clave corta.'; end if;
+  -- B01·12 · La copia del carril de las e2e le pone «-c1» a la clave: vale; otro sufijo, no.
+  update public.conta_pago_justificante set clave = repeat('A', 43) || '-c1' where salida_id = p;
+  ok := false;
+  begin
+    update public.conta_pago_justificante set clave = repeat('A', 43) || '-x1' where salida_id = p;
+  exception when check_violation then ok := true; end;
+  if not ok then raise exception 'PRUEBA B01 justificante · 1: admite una clave con un sufijo que no es del carril.'; end if;
+  update public.conta_pago_justificante set clave = repeat('A', 43) where salida_id = p;
   perform public.conta_pago_justificante_correo((g->>'id')::uuid, 'pagos@ejemplo.invalid', 'Mandado el justificante a pagos@ejemplo.invalid.', null);
   if (select correo_a from public.conta_pago_justificante where salida_id = p) <> 'pagos@ejemplo.invalid' then raise exception 'PRUEBA B01 justificante · 1: no apunta el correo.'; end if;
 end $$;

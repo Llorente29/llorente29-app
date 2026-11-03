@@ -3,7 +3,7 @@
  "medido": "2026-11-02T21:47Z",
  "tanda": {
   "supabase/migrations/20261102T2115_b01p_pagos_por_revisar.sql": "76c4b8247e292c9e4447e4a8d4b12e78",
-  "supabase/migrations/20261102T2140_b01p_justificante.sql": "8e1c7ddc271417532bfc0e1236ef8bab"
+  "supabase/migrations/20261102T2140_b01p_justificante.sql": "192a25679460441f04c2e4a1de207fe0"
  },
  "contexto": {
   "tablas": [

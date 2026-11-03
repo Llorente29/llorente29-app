@@ -40,7 +40,7 @@ create table if not exists public.conta_pago_justificante (
   salida_id    uuid not null unique references public.conta_pago_salida(id) on delete cascade,
   invoice_id   uuid not null,
   supplier_id  uuid not null,
-  clave        text not null unique check (clave ~ '^[A-Za-z0-9_-]{43}$'),
+  clave        text not null unique,
   pdf_path     text not null,
   created_at   timestamptz not null default now(),
   caduca_at    timestamptz not null default now() + interval '30 days',
@@ -49,6 +49,10 @@ create table if not exists public.conta_pago_justificante (
   correo_texto text
 );
 create index if not exists conta_pago_justificante_factura_idx on public.conta_pago_justificante (invoice_id);
+-- La clave: 43 letras de base64url. Con «-cN» detrás, la copia del carril de las e2e (scripts/e2e/carril/
+-- clonar.sql le pone el sufijo a cada clave única; B01·12, run 41591555671). Quitar y poner: se pasa dos veces.
+alter table public.conta_pago_justificante drop constraint if exists conta_pago_justificante_clave_check;
+alter table public.conta_pago_justificante add constraint conta_pago_justificante_clave_check check (clave ~ '^[A-Za-z0-9_-]{43}(-c[0-9]+)?$');
 comment on table public.conta_pago_justificante is
   'B01 · Cola 1e · El justificante de un pago que el banco ha confirmado: su PDF (conta-documentos) y la clave del enlace público, que caduca a los 30 días. Uno por pago.';
 alter table public.conta_pago_justificante enable row level security;
@@ -151,7 +155,7 @@ returns jsonb language sql stable security definer set search_path = public as $
   select jsonb_build_object('pdf_path', j.pdf_path, 'caducado', j.caduca_at <= now(), 'numero', si.invoice_number)
     from public.conta_pago_justificante j
     left join public.supplier_invoice si on si.id = j.invoice_id
-   where p_clave ~ '^[A-Za-z0-9_-]{43}$' and j.clave = p_clave
+   where p_clave ~ '^[A-Za-z0-9_-]{43}(-c[0-9]+)?$' and j.clave = p_clave
 $$;
 revoke all on function public.conta_justificante_publico(text) from public, anon, authenticated;
 grant execute on function public.conta_justificante_publico(text) to service_role;

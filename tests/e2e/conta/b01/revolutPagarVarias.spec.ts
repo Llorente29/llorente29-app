@@ -111,15 +111,13 @@ test.describe('B01 Revolut · pagar varias facturas con Revolut', () => {
     // 1 · Marcar las dos y elegir la cuenta de Revolut.
     await page.goto('/conta/compras/pagos')
     await expect(page.getByRole('heading', { level: 1, name: 'Pagos' })).toBeVisible({ timeout: 30_000 })
+    // B01·12 · Sin barra de abajo: al marcar se abre el panel (sin velo: se sigue marcando), desde Revolut por defecto.
     for (const f of FACTURAS) await page.getByRole('checkbox', { name: new RegExp(`^Marcar ${f.proveedor}`) }).check()
-    const barra = page.getByRole('region', { name: 'Pagar las seleccionadas' })
-    await barra.getByLabel('Desde qué banco se paga').selectOption(cuentaRevolut)
-    await expect(barra.locator('[data-prueba="pagar-con-banco"]')).toContainText('Pagar las 2 con Revolut', { timeout: 30_000 })
-    await expect(barra.locator('[data-prueba="preparar-fichero"]')).toHaveText('Preparar el fichero SEPA')
+    await expect(page.locator('.pg-barra')).toHaveCount(0)
+    await expect(page.getByRole('dialog', { name: 'Pagar 2 facturas' }).locator('[data-prueba="sale-ahora"]')).toHaveText('Sale ahora.', { timeout: 30_000 })
     await capturar(page, 'v1-pagar-las-2')
 
     // 2 · La ventana: el titular de la segunda no coincide.
-    await barra.locator('[data-prueba="pagar-con-banco"]').click()
     // B01 · Cola 1e · La ventana es ahora el panel lateral: «Pagar 2 facturas», con el saldo, «Sale ahora» y lo que comprueba Sumied.
     const dialogo = page.getByRole('dialog', { name: 'Pagar 2 facturas' })
     await expect(dialogo.locator('[data-prueba="sale-ahora"]')).toContainText('Sale ahora.')
