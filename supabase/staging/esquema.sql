@@ -3451,9 +3451,17 @@ begin
     select format('El asiento %s/%s se envió a Diez: no se borra aquí.', e.series, e.number)
       from public.journal_entry e where e.id = any(p_entries) and exists (select 1 from public.external_send x where x.entry_id = e.id)
     union all
-    select format('El asiento %s/%s está en una declaración: no se borra.', e.series, e.number)
-      from public.journal_entry e where e.id = any(p_entries)
-       and exists (select 1 from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id where l.entry_id = e.id)
+    -- S01q·8 · En qué declaración está, y si es un borrador o ya está presentada.
+    select format(case when d.status in ('pending', 'draft', 'reviewed') and d.filed_at is null
+                       then 'El asiento %s/%s está en el borrador del %s del %s de %s: no se borra mientras esté ahí. Sácalo del borrador y recalcúlalo después.'
+                       else 'El asiento %s/%s está en el %s del %s de %s, ya presentado: no se borra.' end,
+                  e.series, e.number, d.form_code, d.period, d.fiscal_year)
+      from public.journal_entry e
+      join lateral (select distinct tr.status, tr.filed_at, tr.form_code, tr.period, tr.fiscal_year
+                      from public.tax_return_line t join public.journal_line l on l.id = t.journal_line_id
+                      join public.tax_return tr on tr.id = t.tax_return_id
+                     where l.entry_id = e.id) d on true
+     where e.id = any(p_entries)
     union all
     select format('El asiento %s/%s %s: deshazlo antes.', e.series, e.number, q.que)
       from public.journal_entry e cross join lateral (
@@ -4177,6 +4185,56 @@ begin
   on conflict (invoice_id) do update set estado = 'apuntada', regla = excluded.regla, porque = excluded.porque, entry_id = excluded.entry_id, at = now();
   return jsonb_build_object('apuntada', true, 'porque', s->>'porque', 'asiento', v_entry);
 end $$;
+
+
+--
+-- Name: _conta_factura_en_otro_asiento(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_factura_en_otro_asiento(p_invoice uuid, p_entry uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v public.supplier_invoice; v_num text; v_re text; d jsonb;
+begin
+  select * into v from public.supplier_invoice where id = p_invoice;
+  if v.id is null or v.not_duplicate_confirmed_at is not null or v.supplier_id is null then return null; end if;
+  v_num := upper(regexp_replace(coalesce(v.invoice_number, ''), '[^A-Za-z0-9]', '', 'g'));
+  if length(v_num) < 4 then return null; end if;
+  -- El número, con cualquier separador entre sus caracteres, y solo (no dentro de otro más largo).
+  v_re := '(^|[^A-Z0-9])' || array_to_string(regexp_split_to_array(v_num, ''), '[^A-Z0-9]*') || '($|[^A-Z0-9])';
+  -- Su proveedor, en su lado, por el neto del asiento: un asiento que le carga y le
+  -- abona lo mismo (la propuesta de liquidación que compensa la comisión) no la lleva.
+  select jsonb_build_object('id', e.id, 'serie', e.series, 'numero', e.number, 'fecha', e.entry_date, 'migrado', e.source_type = 'migrated',
+           'importe', q.importe)
+    into d
+    from public.journal_entry e
+    cross join lateral (
+      select sum(case when v.grand_total >= 0 then l.credit - l.debit else l.debit - l.credit end) importe
+        from public.journal_line l
+       where l.entry_id = e.id
+         and (l.company_account_id in (select k.company_account_id from public.company_account_link k
+                                        where k.company_id = v.company_id and k.entity = 'supplier' and k.entity_id = v.supplier_id::text and k.role = 'principal')
+              or l.party_id in (select pr.party_id from public.party_role pr
+                                 where pr.account_id = v.account_id and pr.role = 'supplier' and pr.supplier_id = v.supplier_id))) q
+   where e.company_id = v.company_id and e.account_id = v.account_id
+     and e.id is distinct from p_entry
+     and e.status <> 'anulado' and e.source_type <> 'reversal'
+     and not exists (select 1 from public.journal_entry o where o.reverses_entry_id = e.id)
+     and not (e.source_type = 'supplier_invoice' and e.source_id = v.id)
+     and (upper(coalesce(e.concept, '')) ~ v_re or upper(coalesce(e.document_ref, '')) ~ v_re)
+     and q.importe > 0
+   order by (e.source_type = 'migrated') desc, e.entry_date, e.number nulls last
+   limit 1;
+  return d;
+end $_$;
+
+
+--
+-- Name: FUNCTION _conta_factura_en_otro_asiento(p_invoice uuid, p_entry uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_factura_en_otro_asiento(p_invoice uuid, p_entry uuid) IS 'S01q·7 · Regla 1: el otro asiento vivo que ya lleva esta factura recibida (su número y su proveedor en su lado, con cualquier total), o null.';
 
 
 --
@@ -6230,6 +6288,38 @@ CREATE FUNCTION public._conta_s01o_periodo(p_desde date, p_hasta date) RETURNS t
   select case when p_desde is null or p_hasta is null then 'sin periodo'
               when to_char(p_desde, 'MM') = to_char(p_hasta, 'MM') then extract(day from p_desde)::int || '–' || extract(day from p_hasta)::int || '/' || to_char(p_hasta, 'MM')
               else to_char(p_desde, 'DD/MM') || '–' || to_char(p_hasta, 'DD/MM') end
+$$;
+
+
+--
+-- Name: _conta_s01q_como_se_pago(text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_s01q_como_se_pago(p_method text, p_banco boolean) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case when p_banco then 'por el banco'
+              when p_method = 'transfer' then 'por transferencia'
+              when p_method = 'compensation' then 'por compensación'
+              when p_method = 'prepaid' then 'por adelantado'
+              when p_method = 'plataforma' then 'por la plataforma'
+              when p_method = 'traido_diez' then 'en Diez'
+              when p_method = 'card' then 'con tarjeta'
+              when p_method = 'cash' then 'en efectivo'
+              else 'a mano' end
+$$;
+
+
+--
+-- Name: _conta_s01q_euros(numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_s01q_euros(p numeric) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select translate(to_char(round(p, 2), 'FM999,999,999,990.00'), ',.', '.,')
 $$;
 
 
@@ -33515,6 +33605,37 @@ $$;
 
 
 --
+-- Name: conta_factura_justificantes(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_factura_justificantes(p_factura uuid) RETURNS jsonb
+    LANGUAGE sql STABLE
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'id', j.id, 'clave', j.clave, 'creado', j.created_at, 'caduca', j.caduca_at, 'importe', s.amount, 'pagado_at', s.estado_at,
+           'correo_a', j.correo_a, 'correo_at', j.correo_at, 'correo_texto', j.correo_texto,
+           'proveedor', s.beneficiario, 'supplier_id', j.supplier_id, 'al_pagar', coalesce(sp.justificante_al_pagar, false),
+           'telefono', (select sc.phone from public.supplier_contact sc where sc.supplier_id = j.supplier_id and nullif(trim(sc.phone), '') is not null
+                         order by sc.is_primary desc nulls last, sc.created_at limit 1),
+           'correo', (select sc.email from public.supplier_contact sc where sc.supplier_id = j.supplier_id and nullif(trim(sc.email), '') is not null
+                       order by sc.is_primary desc nulls last, sc.created_at limit 1))
+         order by j.created_at desc), '[]'::jsonb)
+    from public.conta_pago_justificante j
+    join public.conta_pago_salida s on s.id = j.salida_id
+    left join public.supplier sp on sp.id = j.supplier_id
+   where j.invoice_id = p_factura
+$$;
+
+
+--
+-- Name: FUNCTION conta_factura_justificantes(p_factura uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_factura_justificantes(p_factura uuid) IS 'B01 · Cola 1e (02/11). Los justificantes de los pagos de una factura, con la clave de su enlace, cuándo caduca, si se mandó por correo y el teléfono y el correo del proveedor.';
+
+
+--
 -- Name: conta_factura_para_revisar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -38784,6 +38905,21 @@ end $$;
 
 
 --
+-- Name: conta_justificante_publico(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_justificante_publico(p_clave text) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+  select jsonb_build_object('pdf_path', j.pdf_path, 'caducado', j.caduca_at <= now(), 'numero', si.invoice_number)
+    from public.conta_pago_justificante j
+    left join public.supplier_invoice si on si.id = j.invoice_id
+   where p_clave ~ '^[A-Za-z0-9_-]{43}$' and j.clave = p_clave
+$_$;
+
+
+--
 -- Name: conta_lectura_proveedor_releida(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -41680,6 +41816,106 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_pago_dejar(p_company uuid, p_quien uuid, p_quien_nombre text, p_motivo text) IS 'B01 Revolut · 2c-1 · Dejar de pagar, en Sumied y al instante: sin permisos de pago, sin lo que esperaba (cancelado) y la conexión sin PAY. Lo que ya salió al banco sigue su camino.';
+
+
+--
+-- Name: conta_pago_justificante_correo(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_justificante_correo(p_id uuid, p_a text, p_texto text, p_quien text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_j public.conta_pago_justificante; v_s public.conta_pago_salida;
+begin
+  select * into v_j from public.conta_pago_justificante where id = p_id for update;
+  if v_j.id is null then raise exception 'Ese justificante no existe.' using errcode = 'P0002'; end if;
+  if p_a is not null then
+    update public.conta_pago_justificante set correo_a = p_a, correo_at = now(), correo_texto = left(p_texto, 300) where id = p_id;
+  else
+    update public.conta_pago_justificante set correo_texto = left(p_texto, 300) where id = p_id;
+  end if;
+  select * into v_s from public.conta_pago_salida where id = v_j.salida_id;
+  perform public._conta_pago_evento(v_j.account_id, v_s.lote_id, v_s.id, coalesce(nullif(trim(p_quien), ''), 'Sumied'), left(p_texto, 300));
+  return jsonb_build_object('ok', true);
+end $$;
+
+
+--
+-- Name: conta_pago_justificante_datos(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_justificante_datos(p_salida uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object(
+    'salida', s.id, 'account_id', s.account_id, 'company_id', s.company_id, 'invoice_id', s.invoice_id, 'supplier_id', s.supplier_id,
+    'estado', s.estado, 'pagado_at', s.estado_at, 'importe', s.amount, 'concepto', s.concepto, 'referencia', s.banco_id,
+    'banco', initcap(l.proveedor),
+    'empresa', jsonb_build_object('nombre', coalesce(nullif(c.trade_name, ''), c.legal_name), 'razon', c.legal_name, 'nif', c.tax_id,
+                                  'color', c.color, 'logo_path', c.logo_path, 'email', c.email),
+    'desde', jsonb_build_object('nombre', t.name, 'iban4', right(regexp_replace(coalesce(t.iban, ''), '\s', '', 'g'), 4)),
+    'proveedor', jsonb_build_object('nombre', s.beneficiario, 'nif', sp.tax_id, 'iban4', right(regexp_replace(s.iban, '\s', '', 'g'), 4),
+                                    'iban_pais', left(regexp_replace(s.iban, '\s', '', 'g'), 2),
+                                    'al_pagar', coalesce(sp.justificante_al_pagar, false),
+                                    'correo', (select sc.email from public.supplier_contact sc
+                                                where sc.supplier_id = s.supplier_id and nullif(trim(sc.email), '') is not null
+                                                order by sc.is_primary desc nulls last, sc.created_at limit 1)),
+    'factura', jsonb_build_object('numero', si.invoice_number, 'fecha', si.invoice_date, 'total', si.grand_total),
+    'justificante', (select jsonb_build_object('id', j.id, 'clave', j.clave, 'pdf_path', j.pdf_path, 'correo_at', j.correo_at)
+                       from public.conta_pago_justificante j where j.salida_id = s.id))
+    from public.conta_pago_salida s
+    join public.conta_pago_lote l on l.id = s.lote_id
+    join public.company c on c.id = s.company_id
+    left join public.treasury_account t on t.id = l.treasury_account_id
+    left join public.supplier sp on sp.id = s.supplier_id
+    left join public.supplier_invoice si on si.id = s.invoice_id
+   where s.id = p_salida
+$$;
+
+
+--
+-- Name: conta_pago_justificante_guardar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_justificante_guardar(p_salida uuid, p_clave text, p_pdf_path text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_s public.conta_pago_salida; v_j public.conta_pago_justificante;
+begin
+  select * into v_s from public.conta_pago_salida where id = p_salida;
+  if v_s.id is null then raise exception 'Ese pago no existe.' using errcode = 'P0002'; end if;
+  if v_s.estado <> 'pagada' then
+    raise exception 'Este pago no está confirmado por el banco (está %): no lleva justificante.', replace(v_s.estado, '_', ' ') using errcode = '23514';
+  end if;
+  insert into public.conta_pago_justificante (account_id, company_id, salida_id, invoice_id, supplier_id, clave, pdf_path)
+  values (v_s.account_id, v_s.company_id, v_s.id, v_s.invoice_id, v_s.supplier_id, p_clave, p_pdf_path)
+  on conflict (salida_id) do nothing
+  returning * into v_j;
+  if v_j.id is null then
+    select * into v_j from public.conta_pago_justificante where salida_id = p_salida;
+    return to_jsonb(v_j) || jsonb_build_object('nuevo', false);
+  end if;
+  perform public._conta_pago_evento(v_s.account_id, v_s.lote_id, v_s.id, 'Sumied', 'Hecho el justificante del pago: queda en la ficha de la factura.');
+  return to_jsonb(v_j) || jsonb_build_object('nuevo', true);
+end $$;
+
+
+--
+-- Name: conta_pago_justificante_por_hacer(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pago_justificante_por_hacer(p_company uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(s.id order by s.estado_at), '[]'::jsonb)
+    from public.conta_pago_salida s
+   where s.company_id = p_company and s.estado = 'pagada' and s.estado_at > now() - interval '60 days'
+     and not exists (select 1 from public.conta_pago_justificante j where j.salida_id = s.id)
+$$;
 
 
 --
@@ -86103,6 +86339,25 @@ COMMENT ON FUNCTION public.tg_count_line_solo_por_la_puerta() IS 'Rechaza cualqu
 
 
 --
+-- Name: tg_customer_invoice_un_asiento(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_customer_invoice_un_asiento() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare o public.customer_invoice;
+begin
+  if new.entry_id is null then return new; end if;
+  if tg_op = 'UPDATE' and new.entry_id is not distinct from old.entry_id then return new; end if;
+  select * into o from public.customer_invoice where entry_id = new.entry_id and id <> new.id limit 1;
+  if o.id is null then return new; end if;
+  raise exception using errcode = '23505', message = format('Este asiento ya es el de la factura %s del %s. Una factura, un asiento.',
+    coalesce(o.number_text, o.series_code || '-' || o.number::text, 'sin número'), to_char(o.issue_date, 'DD/MM/YYYY'));
+end $$;
+
+
+--
 -- Name: tg_dining_table_same_location(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -86416,6 +86671,47 @@ $$;
 
 
 --
+-- Name: tg_invoice_payment_tope(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_invoice_payment_tope() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_total numeric; v_s int; v_otros numeric; v_n int; u record; v_cobro boolean := tg_table_name = 'customer_invoice_payment';
+begin
+  if tg_op = 'UPDATE' and new.amount is not distinct from old.amount and new.invoice_id is not distinct from old.invoice_id then return new; end if;
+  if v_cobro then
+    select total into v_total from public.customer_invoice where id = new.invoice_id for update;
+    select coalesce(sum(amount), 0), count(*) into v_otros, v_n from public.customer_invoice_payment where invoice_id = new.invoice_id and id <> new.id;
+    select paid_on, amount, method, bank_match_id is not null as banco into u from public.customer_invoice_payment
+     where invoice_id = new.invoice_id and id <> new.id order by paid_on desc, created_at desc limit 1;
+  else
+    select grand_total into v_total from public.supplier_invoice where id = new.invoice_id for update;
+    select coalesce(sum(amount), 0), count(*) into v_otros, v_n from public.supplier_invoice_payment where invoice_id = new.invoice_id and id <> new.id;
+    select paid_on, amount, method, bank_match_id is not null as banco into u from public.supplier_invoice_payment
+     where invoice_id = new.invoice_id and id <> new.id order by paid_on desc, created_at desc limit 1;
+  end if;
+  if v_total is null then return new; end if;
+  v_s := case when v_total < 0 then -1 else 1 end;
+  if v_s * (v_otros + new.amount) <= abs(v_total) + 0.005 then return new; end if;
+  if v_n > 0 and v_s * v_otros >= abs(v_total) - 0.005 then
+    raise exception using errcode = '23505', message = format('Esta factura ya está %s: %s € %sel %s %s. Para %s otra vez, deshaz antes %s.',
+      case when v_cobro then 'cobrada' else 'pagada' end,
+      public._conta_s01q_euros(abs(v_otros)),
+      case when v_n > 1 then format('en %s %s, el último ', v_n, case when v_cobro then 'cobros' else 'pagos' end) else '' end,
+      to_char(u.paid_on, 'DD/MM'), public._conta_s01q_como_se_pago(u.method, u.banco),
+      case when v_cobro then 'cobrarla' else 'pagarla' end,
+      case when v_n > 1 then case when v_cobro then 'esos cobros' else 'esos pagos' end else case when v_cobro then 'ese cobro' else 'ese pago' end end);
+  end if;
+  raise exception using errcode = '23505', message = format('Esta factura es de %s € y ya tiene %s € %s: este %s de %s € pasa del total.',
+    public._conta_s01q_euros(abs(v_total)), public._conta_s01q_euros(abs(v_otros)),
+    case when v_cobro then 'cobrados' else 'pagados' end, case when v_cobro then 'cobro' else 'pago' end, public._conta_s01q_euros(abs(new.amount)));
+end $$;
+
+
+--
 -- Name: tg_journal_entry_envio_por_aclarar(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -86439,6 +86735,32 @@ COMMENT ON FUNCTION public.tg_journal_entry_envio_por_aclarar() IS 'C06b (16/10)
 
 
 --
+-- Name: tg_journal_entry_factura_una_vez(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_journal_entry_factura_una_vez() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare d jsonb;
+begin
+  if new.source_type is distinct from 'supplier_invoice' or new.source_id is null or new.status = 'anulado' then return new; end if;
+  if tg_op = 'UPDATE' and not ((new.status = 'validado' and old.status is distinct from 'validado')
+                               or new.source_id is distinct from old.source_id or new.source_type is distinct from old.source_type) then
+    return new;
+  end if;
+  d := public._conta_factura_en_otro_asiento(new.source_id, new.id);
+  if d is null then return new; end if;
+  raise exception using errcode = '23505', message = format(
+    'Esta factura ya está contabilizada en el asiento %s del %s, %s, por %s €. No se apunta dos veces. Si es otra factura con el mismo número, márcala «No es repetida».',
+    case when d->>'numero' is null then 'sin número todavía' else (d->>'serie') || '/' || (d->>'numero') end,
+    to_char((d->>'fecha')::date, 'DD/MM/YYYY'),
+    case when (d->>'migrado')::boolean then 'traído de Diez' else 'de Sumied' end,
+    public._conta_s01q_euros((d->>'importe')::numeric));
+end $$;
+
+
+--
 -- Name: tg_journal_entry_liquidacion_anulada(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -86457,6 +86779,26 @@ begin
      set status = case when status in ('booked', 'offset') then 'filed' else status end, liquidation_entry_id = null, updated_at = now()
    where liquidation_entry_id = new.id;
   return new;
+end $$;
+
+
+--
+-- Name: tg_journal_entry_no_antes_del_corte(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_journal_entry_no_antes_del_corte() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_corte date;
+begin
+  if new.source_type in ('migrated', 'opening', 'closing') then return new; end if;
+  if tg_op = 'UPDATE' and new.entry_date is not distinct from old.entry_date then return new; end if;
+  v_corte := public._conta_corte(new.company_id);
+  if v_corte is null or new.entry_date >= v_corte then return new; end if;
+  raise exception using errcode = '23514', message = format('No se apunta: el día %s es de antes del corte (%s). Ese periodo lo lleva %s.',
+    to_char(new.entry_date, 'DD/MM/YYYY'), to_char(v_corte, 'DD/MM/YYYY'),
+    case when exists (select 1 from public.fiscal_year y where y.company_id = new.company_id and y.origin_program = 'diez') then 'Diez' else 'la contabilidad de antes' end);
 end $$;
 
 
@@ -98206,6 +98548,35 @@ COMMENT ON TABLE public.conta_pago_evento IS 'B01 Revolut · PR 2a · El registr
 
 
 --
+-- Name: conta_pago_justificante; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pago_justificante (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    salida_id uuid NOT NULL,
+    invoice_id uuid NOT NULL,
+    supplier_id uuid NOT NULL,
+    clave text NOT NULL,
+    pdf_path text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    caduca_at timestamp with time zone DEFAULT (now() + '30 days'::interval) NOT NULL,
+    correo_a text,
+    correo_at timestamp with time zone,
+    correo_texto text,
+    CONSTRAINT conta_pago_justificante_clave_check CHECK ((clave ~ '^[A-Za-z0-9_-]{43}$'::text))
+);
+
+
+--
+-- Name: TABLE conta_pago_justificante; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pago_justificante IS 'B01 · Cola 1e · El justificante de un pago que el banco ha confirmado: su PDF (conta-documentos) y la clave del enlace público, que caduca a los 30 días. Uno por pago.';
+
+
+--
 -- Name: conta_pago_lote; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -108473,6 +108844,7 @@ CREATE TABLE public.supplier (
     invoice_arrival text,
     delivers_goods boolean,
     default_common boolean DEFAULT false NOT NULL,
+    justificante_al_pagar boolean,
     CONSTRAINT supplier_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT supplier_created_from_check CHECK ((created_from = 'factura'::text)),
     CONSTRAINT supplier_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
@@ -108644,6 +109016,13 @@ COMMENT ON COLUMN public.supplier.delivers_goods IS 'S01o·2 · «Entrega mercan
 --
 
 COMMENT ON COLUMN public.supplier.default_common IS 'S01o·3 · Su gasto es común a todos los locales (sin local por defecto): sus facturas se apuntan comunes.';
+
+
+--
+-- Name: COLUMN supplier.justificante_al_pagar; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.justificante_al_pagar IS 'B01 · Cola 1e · «Mandar el justificante al pagar»: con true, cuando el banco confirma un pago a este proveedor, Sumied le manda por correo su justificante. Nula o false: no se manda solo.';
 
 
 --
@@ -113363,6 +113742,30 @@ ALTER TABLE ONLY public.conta_pago_ajustes
 
 ALTER TABLE ONLY public.conta_pago_evento
     ADD CONSTRAINT conta_pago_evento_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_justificante conta_pago_justificante_clave_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_justificante
+    ADD CONSTRAINT conta_pago_justificante_clave_key UNIQUE (clave);
+
+
+--
+-- Name: conta_pago_justificante conta_pago_justificante_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_justificante
+    ADD CONSTRAINT conta_pago_justificante_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pago_justificante conta_pago_justificante_salida_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_justificante
+    ADD CONSTRAINT conta_pago_justificante_salida_id_key UNIQUE (salida_id);
 
 
 --
@@ -118758,6 +119161,13 @@ CREATE INDEX conta_pago_evento_lote_idx ON public.conta_pago_evento USING btree 
 
 
 --
+-- Name: conta_pago_justificante_factura_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pago_justificante_factura_idx ON public.conta_pago_justificante USING btree (invoice_id);
+
+
+--
 -- Name: conta_pago_lote_empresa_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -122923,6 +123333,13 @@ CREATE UNIQUE INDEX ux_cso_import ON public.channel_settlement_order USING btree
 
 
 --
+-- Name: ux_customer_invoice_entry; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX ux_customer_invoice_entry ON public.customer_invoice USING btree (entry_id) WHERE (entry_id IS NOT NULL);
+
+
+--
 -- Name: ux_customer_notification_event; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -124155,6 +124572,20 @@ CREATE TRIGGER trg_customer_invoice_line_inalterable BEFORE INSERT OR DELETE OR 
 
 
 --
+-- Name: customer_invoice_payment trg_customer_invoice_payment_tope; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_customer_invoice_payment_tope BEFORE INSERT OR UPDATE OF amount, invoice_id ON public.customer_invoice_payment FOR EACH ROW EXECUTE FUNCTION public.tg_invoice_payment_tope();
+
+
+--
+-- Name: customer_invoice trg_customer_invoice_un_asiento; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_customer_invoice_un_asiento BEFORE INSERT OR UPDATE OF entry_id ON public.customer_invoice FOR EACH ROW EXECUTE FUNCTION public.tg_customer_invoice_un_asiento();
+
+
+--
 -- Name: delivery_assignment trg_da_touch; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -124435,6 +124866,13 @@ CREATE TRIGGER trg_journal_entry_envio_por_aclarar BEFORE UPDATE OF status ON pu
 
 
 --
+-- Name: journal_entry trg_journal_entry_factura_una_vez; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_factura_una_vez BEFORE INSERT OR UPDATE OF status, source_id, source_type ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public.tg_journal_entry_factura_una_vez();
+
+
+--
 -- Name: journal_entry trg_journal_entry_inalterable; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -124460,6 +124898,13 @@ CREATE TRIGGER trg_journal_entry_libro_registro AFTER UPDATE OF status ON public
 --
 
 CREATE TRIGGER trg_journal_entry_misma_cuenta BEFORE INSERT OR UPDATE ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public.conta_misma_cuenta();
+
+
+--
+-- Name: journal_entry trg_journal_entry_no_antes_del_corte; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_no_antes_del_corte BEFORE INSERT OR UPDATE OF entry_date ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public.tg_journal_entry_no_antes_del_corte();
 
 
 --
@@ -125034,6 +125479,13 @@ CREATE TRIGGER trg_supplier_invoice_aprobacion BEFORE INSERT OR UPDATE OF status
 --
 
 CREATE TRIGGER trg_supplier_invoice_no_repetida BEFORE INSERT OR UPDATE OF invoice_number, supplier_id, status, not_duplicate_confirmed_at, grand_total ON public.supplier_invoice FOR EACH ROW EXECUTE FUNCTION public.tg_supplier_invoice_no_repetida();
+
+
+--
+-- Name: supplier_invoice_payment trg_supplier_invoice_payment_tope; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_supplier_invoice_payment_tope BEFORE INSERT OR UPDATE OF amount, invoice_id ON public.supplier_invoice_payment FOR EACH ROW EXECUTE FUNCTION public.tg_invoice_payment_tope();
 
 
 --
@@ -128216,6 +128668,14 @@ ALTER TABLE ONLY public.conta_pago_evento
 
 ALTER TABLE ONLY public.conta_pago_evento
     ADD CONSTRAINT conta_pago_evento_salida_id_fkey FOREIGN KEY (salida_id) REFERENCES public.conta_pago_salida(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pago_justificante conta_pago_justificante_salida_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pago_justificante
+    ADD CONSTRAINT conta_pago_justificante_salida_id_fkey FOREIGN KEY (salida_id) REFERENCES public.conta_pago_salida(id) ON DELETE CASCADE;
 
 
 --
@@ -138695,6 +139155,19 @@ CREATE POLICY conta_pago_evento_leer ON public.conta_pago_evento FOR SELECT TO a
 
 
 --
+-- Name: conta_pago_justificante; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pago_justificante ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pago_justificante conta_pago_justificante_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_pago_justificante_leer ON public.conta_pago_justificante FOR SELECT TO authenticated USING (public._conta_pago_de_la_cuenta(account_id));
+
+
+--
 -- Name: conta_pago_lote; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -146599,6 +147072,14 @@ GRANT ALL ON FUNCTION public._conta_factura_apuntar(p_invoice uuid) TO service_r
 
 
 --
+-- Name: FUNCTION _conta_factura_en_otro_asiento(p_invoice uuid, p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_factura_en_otro_asiento(p_invoice uuid, p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_factura_en_otro_asiento(p_invoice uuid, p_entry uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_factura_guarda(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -147078,6 +147559,22 @@ REVOKE ALL ON FUNCTION public._conta_remesa_casar_nucleo(p_movement uuid, p_reme
 GRANT ALL ON FUNCTION public._conta_s01o_periodo(p_desde date, p_hasta date) TO anon;
 GRANT ALL ON FUNCTION public._conta_s01o_periodo(p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_s01o_periodo(p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_s01q_como_se_pago(p_method text, p_banco boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_s01q_como_se_pago(p_method text, p_banco boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_s01q_como_se_pago(p_method text, p_banco boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_s01q_euros(p numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_s01q_euros(p numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_s01q_euros(p numeric) TO service_role;
 
 
 --
@@ -152418,6 +152915,15 @@ GRANT ALL ON FUNCTION public.conta_factura_es_de_plataforma(p_invoice uuid) TO s
 
 
 --
+-- Name: FUNCTION conta_factura_justificantes(p_factura uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_factura_justificantes(p_factura uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_factura_justificantes(p_factura uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_factura_justificantes(p_factura uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_factura_para_revisar(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -153264,6 +153770,14 @@ GRANT ALL ON FUNCTION public.conta_json_seguro(p text) TO service_role;
 
 
 --
+-- Name: FUNCTION conta_justificante_publico(p_clave text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_justificante_publico(p_clave text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_justificante_publico(p_clave text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_lectura_proveedor_releida(p_invoice uuid, p_session uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -153764,6 +154278,38 @@ GRANT ALL ON FUNCTION public.conta_pago_casar_banco(p_salida uuid) TO service_ro
 
 REVOKE ALL ON FUNCTION public.conta_pago_dejar(p_company uuid, p_quien uuid, p_quien_nombre text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_pago_dejar(p_company uuid, p_quien uuid, p_quien_nombre text, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_justificante_correo(p_id uuid, p_a text, p_texto text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_justificante_correo(p_id uuid, p_a text, p_texto text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_justificante_correo(p_id uuid, p_a text, p_texto text, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_justificante_datos(p_salida uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_justificante_datos(p_salida uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_justificante_datos(p_salida uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_justificante_guardar(p_salida uuid, p_clave text, p_pdf_path text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_justificante_guardar(p_salida uuid, p_clave text, p_pdf_path text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_justificante_guardar(p_salida uuid, p_clave text, p_pdf_path text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pago_justificante_por_hacer(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pago_justificante_por_hacer(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pago_justificante_por_hacer(p_company uuid) TO service_role;
 
 
 --
@@ -160627,6 +161173,14 @@ GRANT ALL ON FUNCTION public.tg_count_line_solo_por_la_puerta() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_customer_invoice_un_asiento(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_customer_invoice_un_asiento() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_customer_invoice_un_asiento() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_dining_table_same_location(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -160696,6 +161250,14 @@ GRANT ALL ON FUNCTION public.tg_inventory_count_line_sanity() TO service_role;
 
 
 --
+-- Name: FUNCTION tg_invoice_payment_tope(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_invoice_payment_tope() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_invoice_payment_tope() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_journal_entry_envio_por_aclarar(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -160705,12 +161267,28 @@ GRANT ALL ON FUNCTION public.tg_journal_entry_envio_por_aclarar() TO service_rol
 
 
 --
+-- Name: FUNCTION tg_journal_entry_factura_una_vez(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_journal_entry_factura_una_vez() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_journal_entry_factura_una_vez() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_journal_entry_liquidacion_anulada(); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() TO authenticated;
 GRANT ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_journal_entry_no_antes_del_corte(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_journal_entry_no_antes_del_corte() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_journal_entry_no_antes_del_corte() TO service_role;
 
 
 --
@@ -163750,6 +164328,14 @@ GRANT SELECT ON TABLE public.conta_pago_ajustes TO authenticated;
 
 GRANT ALL ON TABLE public.conta_pago_evento TO service_role;
 GRANT SELECT ON TABLE public.conta_pago_evento TO authenticated;
+
+
+--
+-- Name: TABLE conta_pago_justificante; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pago_justificante TO service_role;
+GRANT SELECT ON TABLE public.conta_pago_justificante TO authenticated;
 
 
 --
