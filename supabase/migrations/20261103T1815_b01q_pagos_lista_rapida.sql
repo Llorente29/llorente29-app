@@ -32,7 +32,13 @@
 -- Medido como Julio, en transacción revertida: ver el parte del PR.
 -- No toca datos. Nada en el camino del pedido.
 -- Vuelta atrás: supabase/vuelta-atras/20261103T1815_b01q_pagos_lista_rapida.down.sql
+-- (restaura las dos del respaldo y deja los permisos y los comentarios de antes).
 -- ============================================================================
+
+-- Las de antes, guardadas tal cual (funcion_respaldo): la vuelta atrás las
+-- restaura de ahí, byte a byte, sin copiarlas a mano.
+select public._respaldar_funcion('public.conta_pagos_lista(uuid,date)', '20261103T1815_b01q_pagos_lista_rapida');
+select public._respaldar_funcion('public.conta_pagos_por_revisar(uuid)', '20261103T1815_b01q_pagos_lista_rapida');
 
 CREATE OR REPLACE FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date)
  RETURNS jsonb

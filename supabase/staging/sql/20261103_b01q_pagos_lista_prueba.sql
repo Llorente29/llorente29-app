@@ -4,8 +4,9 @@
 -- sola comprobación de la cuenta. Todo en una transacción con ROLLBACK. Datos
 -- INVENTADOS (IBAN del banco 9999, T11), en la cuenta D.
 --
---   0. La vuelta atrás las deja sin SECURITY DEFINER; la 1815 las vuelve a
---      poner con él (dos veces).
+--   0. La 1815 y su vuelta atrás dejan las dos funciones y sus permisos como
+--      estaban, byte a byte; la 1815 otra vez (dos veces) las deja con
+--      SECURITY DEFINER.
 --   1. Con la sesión del administrador de la cuenta, el MISMO resultado con
 --      las de antes y con las nuevas (las mismas filas, campo a campo), y trae
 --      lo esperado: la aprobada por pagar, la pagada en parte con su pendiente,
@@ -36,8 +37,17 @@ begin
   insert into public.supplier_invoice_payment (account_id, invoice_id, amount, paid_on) values (a, f, 100.00, '2026-11-02');
 end $$;
 
--- 0 · Las de antes (la vuelta atrás) y lo que devuelven, como el administrador.
+-- 0 · La 1815 guarda las de antes; su vuelta atrás las restaura del respaldo. Lo que devuelven, como el administrador.
+create temp table _acl0 on commit drop as select oid, proacl::text acl, md5(pg_get_functiondef(oid)) h from pg_proc
+ where oid in ('public.conta_pagos_lista(uuid,date)'::regprocedure, 'public.conta_pagos_por_revisar(uuid)'::regprocedure);
+\i supabase/migrations/20261103T1815_b01q_pagos_lista_rapida.sql
 \i supabase/vuelta-atras/20261103T1815_b01q_pagos_lista_rapida.down.sql
+do $$ begin
+  if exists (select 1 from _acl0 a join pg_proc p on p.oid = a.oid where p.proacl::text is distinct from a.acl or md5(pg_get_functiondef(p.oid)) <> a.h) then
+    raise exception 'PRUEBA B01·15 · 0: la vuelta atrás no deja las funciones o sus permisos como estaban (%).',
+      (select string_agg(p.oid::regprocedure::text || ' ' || a.acl || ' → ' || p.proacl::text, '; ') from _acl0 a join pg_proc p on p.oid = a.oid);
+  end if;
+end $$;
 do $$ begin
   if (select bool_or(prosecdef) from pg_proc where oid in ('public.conta_pagos_lista(uuid,date)'::regprocedure, 'public.conta_pagos_por_revisar(uuid)'::regprocedure)) then
     raise exception 'PRUEBA B01·15 · 0: la vuelta atrás no las deja como estaban (SECURITY DEFINER).';
