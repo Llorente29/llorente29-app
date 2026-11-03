@@ -60,7 +60,15 @@ export type Cerrojo = { abierto: true } | { abierto: false; motivo: string };
 /** Tipos que el freno cierra con cualquier marca, Folvy incluida: son nuevos y aún no los ha abierto nadie. */
 export const SIEMPRE_CON_FRENO: readonly string[] = ['resumen_trimestre', 'codigo_pago_conta', 'aviso_pago_conta'];
 
+/**
+ * Tipos abiertos con cualquier marca sin pasar por el secreto: los que Julio
+ * pide abiertos en su propio PR. DM1 · Accesos 1 (03/11): invitacion_persona,
+ * para que la invitación a la gestoría salga con la marca Sumied.
+ */
+export const ABIERTOS_SIEMPRE: readonly string[] = ['invitacion_persona'];
+
 export function cerrojoMarca(marca: Marca | null, plantilla: string, destino: string, abiertos: string | undefined | null): Cerrojo {
+  if (ABIERTOS_SIEMPRE.includes(plantilla)) return { abierto: true };
   // Los tipos nuevos del P01 van frenados también con Folvy: nunca han salido.
   if (!marca || (marca.id === 'folvy' && !SIEMPRE_CON_FRENO.includes(plantilla))) return { abierto: true };
   const para = destino.trim().toLowerCase();

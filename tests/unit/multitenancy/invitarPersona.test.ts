@@ -2,6 +2,8 @@
 // pasado (regla 8). Correos inventados, de dominio de pruebas.
 import { describe, it, expect } from 'vitest'
 import { fraseDelEnvio, leerInvitacion, leerReenvio, lista } from '../../../supabase/functions/invitar-persona/pedido'
+import { cerrojoMarca, PLANTILLAS_MARCA } from '../../../supabase/functions/send-email/marca'
+import { MARCAS } from '../../../supabase/functions/_shared/marcas'
 
 const A = '00000000-0000-4000-8000-00000000000a'
 const B = '00000000-0000-4000-8000-00000000000b'
@@ -34,5 +36,21 @@ describe('DM1 · invitar a una persona', () => {
   it('reenviar: una invitación por su id', () => {
     expect(leerReenvio({ id: A, marca: 'sumied' })).toEqual({ ok: true, pedido: { id: A, marca: 'sumied' } })
     expect(leerReenvio({ id: 'x' }).ok).toBe(false)
+  })
+  it('el correo de invitación sale con la marca Sumied y con Folvy, sin abrirlo en el secreto (Julio, 03/11)', () => {
+    expect(cerrojoMarca(MARCAS.sumied, 'invitacion_persona', 'persona@prueba.test', undefined)).toEqual({ abierto: true })
+    expect(cerrojoMarca(MARCAS.folvy, 'invitacion_persona', 'persona@prueba.test', undefined)).toEqual({ abierto: true })
+    // Los demás de Sumied siguen cerrados hasta que Julio los abra.
+    expect(cerrojoMarca(MARCAS.sumied, 'invitacion_conta', 'persona@prueba.test', undefined).abierto).toBe(false)
+  })
+  it('el correo dice quién invita, a qué empresas y con qué permiso, y lleva el enlace', () => {
+    const c = PLANTILLAS_MARCA.invitacion_persona(MARCAS.sumied, {
+      invita: 'Administración de Prueba', diasCaducidad: 7, enlace: 'https://app.sumied.com/welcome?invitacion=abc',
+      empresas: [{ nombre: 'Casa Demo', permiso: 'Todo' }],
+    })
+    expect(c.subject).toBe('Sumied · Te invitan a Casa Demo')
+    expect(c.text).toContain('Administración de Prueba te invita a entrar en Sumied')
+    expect(c.text).toContain('- Casa Demo · Todo')
+    expect(c.html).toContain('https://app.sumied.com/welcome?invitacion=abc')
   })
 })

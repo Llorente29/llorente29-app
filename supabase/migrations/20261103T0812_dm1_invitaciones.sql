@@ -31,7 +31,12 @@ create table if not exists public.invitacion (
   id                 uuid primary key default gen_random_uuid(),
   lote               uuid not null,
   correo             text not null check (correo = lower(btrim(correo)) and correo ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'),
-  account_id         uuid not null references public.accounts(id) on delete cascade,
+  -- Sin clave ajena a accounts, a propósito (03/11): borrar esta tabla con
+  -- ella coge accounts en exclusiva (quita sus disparadores), y en staging la
+  -- vuelta atrás se interbloqueó con quien leía accounts. La empresa la
+  -- comprueba invitacion_crear (hay que ser su administrador), y una de una
+  -- cuenta borrada no sale en ningún sitio (todas las lecturas cruzan accounts).
+  account_id         uuid not null,
   rol                text not null check (rol in ('admin', 'manager')),
   estado             text not null default 'pendiente' check (estado in ('pendiente', 'aceptada', 'anulada')),
   token_hash         text not null,

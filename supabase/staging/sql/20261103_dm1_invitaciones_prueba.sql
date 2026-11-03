@@ -32,9 +32,8 @@ set local statement_timeout = '180s';
 
 -- ── 0 · Lo de antes ─────────────────────────────────────────────────────────
 -- La 0812 solo añade y se puede pasar dos veces: no hace falta deshacerla aquí
--- (el manifiesto la aplica antes, en esta misma transacción). Borrar su tabla
--- toca también accounts (la clave ajena) y en staging choca con quien escribe
--- ahí: se deshace una sola vez, en el paso 7.
+-- (el manifiesto la aplica antes, en esta misma transacción). Se deshace una
+-- sola vez, en el paso 7, que mira además que no coja accounts en exclusiva.
 
 create temp table _s (clave text primary key, v text) on commit drop;
 grant select, insert, update on _s to authenticated, anon;
@@ -222,10 +221,15 @@ select set_config('request.jwt.claims', '', true);
 -- ── 7 · La vuelta atrás ─────────────────────────────────────────────────────
 \i supabase/vuelta-atras/20261103T0812_dm1_invitaciones.down.sql
 do $$ begin
+  -- Sin clave ajena, borrar la tabla no coge accounts en exclusiva (el 03/11,
+  -- con ella, se interbloqueó aquí con quien leía accounts).
+  if exists (select 1 from pg_locks where relation = 'public.accounts'::regclass and pid = pg_backend_pid() and mode = 'AccessExclusiveLock') then
+    raise exception 'PRUEBA DM1 Accesos · 7: la vuelta atrás coge accounts en exclusiva.';
+  end if;
   if to_regclass('public.invitacion') is not null or to_regprocedure('public.invitacion_aceptar(uuid[])') is not null then
     raise exception 'PRUEBA DM1 Accesos · 7: queda algo de lo nuevo.';
   end if;
-  raise notice 'DM1 Accesos · 7: la vuelta atrás quita la tabla y las funciones.';
+  raise notice 'DM1 Accesos · 7: la vuelta atrás quita la tabla y las funciones, sin coger accounts en exclusiva.';
 end $$;
 
 rollback;
