@@ -86,3 +86,7 @@ for f in frases:
         f["dura"] = r.getnframes() / float(r.getframerate())
     print(f"{f['dura']:5.2f} s · {f['texto']}")
 json.dump(frases, open(ruta, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+# Con qué voz se ha hecho (sin la clave): para saberlo sin abrir el registro del run.
+open(os.path.join(os.path.dirname(ruta), "proveedor.txt"), "w", encoding="utf-8").write(
+    f"ElevenLabs · voz {os.environ.get('VOZ_ELEVENLABS_ID', '').strip()} · {os.environ.get('VOZ_ELEVENLABS_MODELO', 'eleven_multilingual_v2')}\n" if ELEVEN
+    else f"Google · {os.environ.get('VOZ_GOOGLE_NOMBRE', '').strip() or 'es-ES-Chirp3-HD-Charon'}\n")
