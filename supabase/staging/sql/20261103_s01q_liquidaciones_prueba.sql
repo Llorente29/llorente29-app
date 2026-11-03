@@ -152,6 +152,9 @@ begin
     raise exception 'PRUEBA S01q·10 · 4: una validada se ha tocado.';
   end if;
   raise notice 'PRUEBA S01q·10 · 4: la validada sigue igual: %', v_antes;
+  -- Se le quita la factura otra vez: si no, al volver a poner la regla (paso 7), su
+  -- comprobación de inicio la encontraría (validada con la comisión y su factura).
+  update public.channel_settlement set commission_invoice_id = null where id = v_liq;
 end $$;
 
 -- 5 · La regla hermana de la 1.
