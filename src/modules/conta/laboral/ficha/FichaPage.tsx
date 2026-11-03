@@ -20,19 +20,22 @@ import { CONTA, rutaConta } from '@/config/navegacion'
 import { SUMIED, conProductoLaboral } from '@/modules/personal/laboral/productoLaboral'
 import { fetchDocuments } from '@/services/documentsService'
 import type { DocumentFile } from '@/types/personal'
+import TiempoPestana from './tiempo/TiempoPestana'
 import { cambiarPermisoLaboral, leerFicha, ponerCategoria, ponerIban, type Ficha } from './fichaService'
 import {
   DE_DONDE, conCodigo, edad, euros, fecha, frasesMinimo, fraseResumen, ibanBonito, jornada, mesesDePagas,
   oficialSiDistinto, pais, porcentaje, proximoTrienio, finDePrueba, avisosDeLaFicha, vacacionesDelConvenio,
 } from './fichaTextos'
 
-type Pestana = 'resumen' | 'contrato' | 'irpf'
+type Pestana = 'resumen' | 'contrato' | 'irpf' | 'tiempo'
 const PESTANAS: { id: Pestana; texto: string }[] = [
   { id: 'resumen', texto: 'Resumen' },
   { id: 'contrato', texto: 'Contrato y salario' },
   { id: 'irpf', texto: 'Impuestos (IRPF)' },
+  // N1 · PR 3: el orden de la maqueta (Seguridad Social irá antes, cuando se construya).
+  { id: 'tiempo', texto: 'Tiempo y turnos' },
 ]
-const TITULO: Record<Pestana, string> = { resumen: '', contrato: 'Contrato y salario', irpf: 'Su IRPF, explicado' }
+const TITULO: Record<Pestana, string> = { resumen: '', contrato: 'Contrato y salario', irpf: 'Su IRPF, explicado', tiempo: 'Su tiempo y sus turnos' }
 
 const PENDIENTE_SS = 'Pendiente · Sumied lo hará cuando conecte con la Seguridad Social'
 const PENDIENTE_SEPE = 'Pendiente · Sumied lo hará cuando conecte con el SEPE'
@@ -44,13 +47,13 @@ const fichaDeAntes = (id: string) => `${rutaConta(CONTA.rutas.laboral)}?employee
 /** Una fila «etiqueta · valor» de las tarjetas de datos. */
 function Dato({ etiqueta, children, oficial, prueba }: { etiqueta: string; children: ReactNode; oficial?: string; prueba?: string }) {
   return (
-    <div className="s-ficha-dato" data-prueba={prueba}>
+    <div className="s-persona-dato" data-prueba={prueba}>
       <dt>{etiqueta}</dt>
-      <dd>{children}{oficial && <small className="s-ficha-oficial">{oficial}</small>}</dd>
+      <dd>{children}{oficial && <small className="s-persona-oficial">{oficial}</small>}</dd>
     </div>
   )
 }
-const Falta = ({ children = 'Falta' }: { children?: ReactNode }) => <span className="s-ficha-falta">{children}</span>
+const Falta = ({ children = 'Falta' }: { children?: ReactNode }) => <span className="s-persona-falta">{children}</span>
 
 export default function FichaPage() {
   const { id = '' } = useParams<{ id: string }>()
@@ -62,6 +65,8 @@ export default function FichaPage() {
   const [ficha, setFicha] = useState<Ficha | null>(null)
   const [error, setError] = useState('')
   const [docs, setDocs] = useState<DocumentFile[] | null>(null)
+  // La fila del título de cada pestaña, para los botones que la pestaña pone ahí.
+  const [huecoTitulo, setHuecoTitulo] = useState<HTMLDivElement | null>(null)
   const [hecho, setHecho] = useState<{ tono: 'seguro' | 'falta'; texto: string } | null>(null)
 
   // Cada recarga sube la vuelta; el efecto lee la ficha al cambiar la persona o la vuelta.
@@ -82,10 +87,10 @@ export default function FichaPage() {
   }, [id])
 
   const contenido = (
-    <div className="s-ficha" data-prueba="ficha-persona">
-      <nav className="s-ficha-migas" aria-label="Dónde estás">
+    <div className="s-persona" data-prueba="ficha-persona">
+      <nav className="s-persona-migas" aria-label="Dónde estás">
         <Link to={rutaConta(CONTA.rutas.laboral)}>Equipo</Link>
-        {ficha && <> › {pestana === 'resumen' ? <span>{ficha.persona.nombre}</span> : <button type="button" className="s-ficha-miga" onClick={() => irA('resumen')}>{ficha.persona.nombre}</button>}</>}
+        {ficha && <> › {pestana === 'resumen' ? <span>{ficha.persona.nombre}</span> : <button type="button" className="s-persona-miga" onClick={() => irA('resumen')}>{ficha.persona.nombre}</button>}</>}
         {pestana !== 'resumen' && <> › <span>{PESTANAS.find((p) => p.id === pestana)?.texto}</span></>}
       </nav>
 
@@ -100,25 +105,24 @@ export default function FichaPage() {
         <>
           {pestana === 'resumen'
             ? <Cabecera ficha={ficha} cuenta={activeAccountId} alCambiar={recargar} irA={irA} setHecho={setHecho} />
-            : <div className="s-ficha-titulo-fila"><h1 className="s-ficha-h1">{TITULO[pestana]}</h1>
-                {pestana === 'contrato' && <Boton variante="principal" onClick={() => document.getElementById('ficha-convenio')?.scrollIntoView({ behavior: 'smooth' })}>Cambiar algo del contrato</Boton>}</div>}
+            : <div className="s-persona-titulo-fila"><h1 className="s-persona-h1">{TITULO[pestana]}</h1>
+                {pestana === 'contrato' && <Boton variante="principal" onClick={() => document.getElementById('ficha-convenio')?.scrollIntoView({ behavior: 'smooth' })}>Cambiar algo del contrato</Boton>}
+                <div ref={setHuecoTitulo} className="s-persona-titulo-acciones" /></div>}
 
           {hecho && <p className="s-aviso-lista" data-tono={hecho.tono} role={hecho.tono === 'seguro' ? 'status' : 'alert'} data-prueba="ficha-hecho">{hecho.texto}</p>}
 
           {pestana === 'resumen' && <Avisos ficha={ficha} />}
 
-          <div role="tablist" aria-label="Qué ver de la persona" className="s-ficha-pestanas">
+          <div role="tablist" aria-label="Qué ver de la persona" className="s-persona-pestanas">
             {PESTANAS.map((p) => (
               <button key={p.id} type="button" role="tab" aria-selected={pestana === p.id} onClick={() => irA(p.id)} data-prueba={`ficha-pestana-${p.id}`}>{p.texto}</button>
             ))}
-            <Link className="s-ficha-antes" to={fichaDeAntes(ficha.persona.id)} data-prueba="ficha-de-antes">
-              Seguridad Social, turnos, vacaciones, nóminas e historial: en la ficha de antes
-            </Link>
           </div>
 
           {pestana === 'resumen' && <Resumen ficha={ficha} docs={docs} irA={irA} />}
           {pestana === 'contrato' && <ContratoYSalario ficha={ficha} alCambiar={recargar} setHecho={setHecho} />}
           {pestana === 'irpf' && <Irpf ficha={ficha} />}
+          {pestana === 'tiempo' && <TiempoPestana ficha={ficha} hueco={huecoTitulo} />}
         </>
       )}
     </div>
@@ -152,29 +156,29 @@ function Cabecera({ ficha, cuenta, alCambiar, irA, setHecho }: {
   }
 
   return (
-    <section className="s-tarjeta s-ficha-cabecera" aria-label="La persona">
-      <div className="s-ficha-avatar" aria-hidden="true">{p.foto ? <img src={p.foto} alt="" /> : iniciales}</div>
-      <div className="s-ficha-quien">
-        <h1 className="s-ficha-h1">{p.nombre}
+    <section className="s-tarjeta s-persona-cabecera" aria-label="La persona">
+      <div className="s-persona-avatar" aria-hidden="true">{p.foto ? <img src={p.foto} alt="" /> : iniciales}</div>
+      <div className="s-persona-quien">
+        <h1 className="s-persona-h1">{p.nombre}
           <Chip tono={p.activa ? 'seguro' : 'neutro'}>{p.activa ? 'De alta' : 'De baja'}</Chip>
           <Chip tono="neutro">{p.portal ? 'Entra en su portal' : 'No entra en su portal'}</Chip>
           {p.con_permiso_laboral && <Chip tono="accion">Con permiso de Laboral</Chip>}
         </h1>
-        <p className="s-ficha-frase" data-prueba="ficha-frase">{fraseResumen(ficha) || 'Aún no hay contrato en Sumied.'}</p>
+        <p className="s-persona-frase" data-prueba="ficha-frase">{fraseResumen(ficha) || 'Aún no hay contrato en Sumied.'}</p>
       </div>
-      <div className="s-ficha-botones">
+      <div className="s-persona-botones">
         <Boton variante="principal" onClick={() => irA('contrato')}>Cambiar algo del contrato</Boton>
-        <div className="s-ficha-menu">
+        <div className="s-persona-menu">
           <Boton variante="secundario" aria-expanded={abierto} onClick={() => setAbierto((x) => !x)} data-prueba="ficha-mas-acciones">Más acciones</Boton>
           {abierto && (
-            <ul className="s-ficha-menu-lista" role="menu">
+            <ul className="s-persona-menu-lista" role="menu">
               {puedeDarPermiso && (
                 <li role="none"><button type="button" role="menuitem" onClick={() => void permiso()} disabled={ocupado} data-prueba="ficha-permiso">
                   {p.con_permiso_laboral ? 'Quitarle el permiso de Laboral' : 'Darle el permiso de Laboral'}
                 </button></li>
               )}
               {p.con_permiso_laboral !== null && p.usuario_id === null && (
-                <li role="none" className="s-ficha-menu-nota">El permiso de Laboral solo se puede dar a quien entra en su portal.</li>
+                <li role="none" className="s-persona-menu-nota">El permiso de Laboral solo se puede dar a quien entra en su portal.</li>
               )}
               <li role="none"><Link role="menuitem" to={fichaDeAntes(p.id)}>Abrir la ficha de antes</Link></li>
             </ul>
@@ -189,7 +193,7 @@ function Avisos({ ficha }: { ficha: Ficha }) {
   const avisos = avisosDeLaFicha(ficha, hoyISO())
   if (avisos.length === 0) return null
   return (
-    <div className="s-ficha-avisos" data-prueba="ficha-avisos">
+    <div className="s-persona-avisos" data-prueba="ficha-avisos">
       {avisos.map((a) => <p key={a.clave} className="s-aviso-lista" data-tono={a.tono}>{a.texto}</p>)}
     </div>
   )
@@ -203,25 +207,25 @@ function Resumen({ ficha, docs, irA }: { ficha: Ficha; docs: DocumentFile[] | nu
   const hoy = hoyISO()
   const prueba = ct ? finDePrueba(ct, hoy) : null
   return (
-    <div className="s-ficha-rejilla">
+    <div className="s-persona-rejilla">
       <Tarjeta titulo="Quién es" nivel={2}>
-        <dl className="s-ficha-datos">
+        <dl className="s-persona-datos">
           <Dato etiqueta="Documento">{priv ? (p.documento ?? <Falta />) : <Falta>{SOLO_CON_PERMISO}</Falta>}</Dato>
           <Dato etiqueta="Nacimiento">{priv ? (p.nacimiento ? `${fecha(p.nacimiento)} · ${edad(p.nacimiento, hoy)} años` : <Falta />) : <Falta>{SOLO_CON_PERMISO}</Falta>}</Dato>
           <Dato etiqueta="Nacionalidad">{pais(p.nacionalidad) ?? <Falta />}</Dato>
-          <Dato etiqueta="Nº de la Seguridad Social">{priv ? (p.naf ?? <Falta />) : <Falta>{SOLO_CON_PERMISO}</Falta>}</Dato>
+          <Dato etiqueta="Nº Seguridad Social">{priv ? (p.naf ?? <Falta />) : <Falta>{SOLO_CON_PERMISO}</Falta>}</Dato>
           <Dato etiqueta="Domicilio">{priv ? (p.domicilio ?? <Falta />) : <Falta>{SOLO_CON_PERMISO}</Falta>}</Dato>
           <Dato etiqueta="Móvil">{p.movil ?? <Falta />}</Dato>
           <Dato etiqueta="Correo">{p.correo ?? <Falta />}</Dato>
           <Dato etiqueta="Estudios" prueba="ficha-estudios"><Falta /></Dato>
         </dl>
-        {p.de_cegid && <p className="s-ficha-nota">Estos datos vinieron del fichero de Cegid. «Estudios» falta porque el que traía Cegid era su valor por defecto, no el de la persona.</p>}
+        {p.de_cegid && <p className="s-persona-nota">Estos datos vinieron del fichero de Cegid. «Estudios» falta porque el que traía Cegid era su valor por defecto, no el de la persona.</p>}
       </Tarjeta>
 
-      <Tarjeta titulo="Su contrato" accion={<button type="button" className="s-ficha-enlace" onClick={() => irA('contrato')}>Ver entero</button>}>
+      <Tarjeta titulo="Su contrato" accion={<button type="button" className="s-persona-enlace" onClick={() => irA('contrato')}>Ver entero</button>}>
         {!ct ? <p className="s-apoyo">Aún no hay contrato en Sumied.</p> : (
           <>
-            <dl className="s-ficha-datos">
+            <dl className="s-persona-datos">
               <Dato etiqueta="Tipo">{ct.tipo ? conCodigo(ct.tipo) : <Falta />}</Dato>
               <Dato etiqueta="Desde">{ct.desde ? `${fecha(ct.desde)}${prueba ? ` · ${prueba.texto}` : ''}` : <Falta />}</Dato>
               <Dato etiqueta="Puesto">{ct.puesto ?? p.puesto ?? <Falta />}</Dato>
@@ -230,52 +234,52 @@ function Resumen({ ficha, docs, irA }: { ficha: Ficha; docs: DocumentFile[] | nu
               <Dato etiqueta="Grupo">{ct.grupo ? conCodigo(ct.grupo, 'Grupo') : <Falta />}</Dato>
               <Dato etiqueta="Jornada">{jornada(ct) || <Falta />}{ct.horas_semana ? ` · ${ct.horas_semana} h a la semana` : ''}</Dato>
             </dl>
-            <ul className="s-ficha-chips">
+            <ul className="s-persona-chips">
               <li><Chip tono="neutro" titulo={PENDIENTE_SS}>Su alta en la Seguridad Social: pendiente</Chip></li>
               <li><Chip tono="neutro" titulo={PENDIENTE_SEPE}>Aviso del contrato al SEPE: pendiente</Chip></li>
             </ul>
-            <p className="s-ficha-nota">{PENDIENTE_SS}. El aviso al SEPE (Contrat@), igual.</p>
+            <p className="s-persona-nota">{PENDIENTE_SS}. El aviso al SEPE (Contrat@), igual.</p>
           </>
         )}
       </Tarjeta>
 
-      <Tarjeta titulo="Lo que cobra" accion={priv && <button type="button" className="s-ficha-enlace" onClick={() => irA('contrato')}>Ver los conceptos</button>}>
+      <Tarjeta titulo="Lo que cobra" accion={priv && <button type="button" className="s-persona-enlace" onClick={() => irA('contrato')}>Ver los conceptos</button>}>
         {!priv || !s ? <p className="s-apoyo">{SOLO_CON_PERMISO}.</p> : (
           <>
-            <p className="s-ficha-grande" data-prueba="ficha-bruto">{s.bruto_mes != null ? euros(s.bruto_mes) : <Falta />}</p>
-            <p className="s-ficha-sub">brutos al mes · en {s.pagas} pagas</p>
-            <dl className="s-ficha-datos s-ficha-datos-cifras">
+            <p className="s-persona-grande" data-prueba="ficha-bruto">{s.bruto_mes != null ? euros(s.bruto_mes) : <Falta />}</p>
+            <p className="s-persona-sub">brutos al mes · en {s.pagas} pagas</p>
+            <dl className="s-persona-datos s-persona-datos-cifras">
               <Dato etiqueta="Neto al mes, aproximado">{s.nomina_cegid?.liquido != null ? euros(s.nomina_cegid.liquido) : <Falta />}</Dato>
               <Dato etiqueta="Le cuesta a la empresa al mes">{s.nomina_cegid?.coste != null ? euros(s.nomina_cegid.coste) : <Falta />}</Dato>
               <Dato etiqueta="Cobra por">{p.iban ? `Transferencia · ${ibanBonito(p.iban, true)}` : <Falta>Falta su IBAN</Falta>}</Dato>
             </dl>
-            {s.nomina_cegid && <p className="s-ficha-nota">El neto y el coste son los de su última nómina de Cegid ({s.nomina_cegid.periodo}).</p>}
+            {s.nomina_cegid && <p className="s-persona-nota">El neto y el coste son los de su última nómina de Cegid ({s.nomina_cegid.periodo}).</p>}
           </>
         )}
       </Tarjeta>
 
-      <Tarjeta titulo="Su IRPF" accion={priv && <button type="button" className="s-ficha-enlace" onClick={() => irA('irpf')}>Ver por qué</button>}>
+      <Tarjeta titulo="Su IRPF" accion={priv && <button type="button" className="s-persona-enlace" onClick={() => irA('irpf')}>Ver por qué</button>}>
         {!priv || !i ? <p className="s-apoyo">{SOLO_CON_PERMISO}.</p> : (
           <>
-            <p className="s-ficha-grande">{i.pct != null ? porcentaje(i.pct) : <Falta />} {i.nomina_cegid && <Chip tono="neutro">de su nómina de Cegid · {i.nomina_cegid.periodo}</Chip>}</p>
+            <p className="s-persona-grande">{i.pct != null ? porcentaje(i.pct) : <Falta />} {i.nomina_cegid && <Chip tono="neutro">de su nómina de Cegid · {i.nomina_cegid.periodo}</Chip>}</p>
             {i.modelo_145?.situacion
               ? <p className="s-apoyo">{conCodigo(i.modelo_145.situacion)}.</p>
-              : <p className="s-apoyo"><Falta>Faltan sus datos para el IRPF (familia, hijos…)</Falta> <small className="s-ficha-oficial">modelo 145</small></p>}
-            <p className="s-ficha-nota">Pendiente · Sumied lo calculará solo cuando haga las nóminas. Hasta entonces, es el que puso Cegid.</p>
+              : <p className="s-apoyo"><Falta>Faltan sus datos para el IRPF (familia, hijos…)</Falta> <small className="s-persona-oficial">modelo 145</small></p>}
+            <p className="s-persona-nota">Pendiente · Sumied lo calculará solo cuando haga las nóminas. Hasta entonces, es el que puso Cegid.</p>
           </>
         )}
       </Tarjeta>
 
-      <Tarjeta titulo="Este mes" accion={<Link className="s-ficha-enlace" to={fichaDeAntes(p.id)}>Ver fichajes</Link>}>
-        <p className="s-apoyo">Sus horas, su bolsa de horas y sus vacaciones de este mes se ven en la ficha de antes, en «Tiempo y turnos», hasta que su pestaña nueva esté aprobada.</p>
+      <Tarjeta titulo="Este mes" accion={<button type="button" className="s-persona-enlace" onClick={() => irA('tiempo')}>Ver fichajes</button>}>
+        <p className="s-apoyo">Sus horas, sus fichajes y su bolsa de horas, en «Tiempo y turnos». Sus vacaciones, de momento, en la ficha de antes.</p>
       </Tarjeta>
 
-      <Tarjeta titulo="Sus documentos" accion={docs && docs.length > 0 && <Link className="s-ficha-enlace" to={fichaDeAntes(p.id)}>Ver los {docs.length}</Link>}>
+      <Tarjeta titulo="Sus documentos" accion={docs && docs.length > 0 && <Link className="s-persona-enlace" to={fichaDeAntes(p.id)}>Ver los {docs.length}</Link>}>
         {docs === null ? <p className="s-apoyo" role="status">Leyendo…</p>
           : docs.length === 0 ? <p className="s-apoyo">No tiene ningún documento todavía.</p>
           : (
-            <ul className="s-ficha-docs" data-prueba="ficha-documentos">
-              {docs.slice(0, 4).map((d) => <li key={d.id}><span>{d.name}</span><span className="s-ficha-sub">{fecha(d.createdAt)}</span></li>)}
+            <ul className="s-persona-docs" data-prueba="ficha-documentos">
+              {docs.slice(0, 4).map((d) => <li key={d.id}><span>{d.name}</span><span className="s-persona-sub">{fecha(d.createdAt)}</span></li>)}
             </ul>
           )}
       </Tarjeta>
@@ -299,10 +303,10 @@ function ContratoYSalario({ ficha, alCambiar, setHecho }: {
   const minimo = s ? frasesMinimo(s) : null
 
   return (
-    <div className="s-ficha-columnas">
-      <div className="s-ficha-principal">
+    <div className="s-persona-columnas">
+      <div className="s-persona-principal">
         <Tarjeta titulo="El contrato">
-          <dl className="s-ficha-datos s-ficha-datos-anchos">
+          <dl className="s-persona-datos s-persona-datos-anchos">
             <Dato etiqueta="Tipo de contrato" oficial={oficialSiDistinto(ct.tipo)} prueba="ficha-tipo">{ct.tipo ? conCodigo(ct.tipo) : <Falta />}</Dato>
             <Dato etiqueta="Empieza">{ct.desde ? `${fecha(ct.desde)} · ${ct.hasta ? `acaba el ${fecha(ct.hasta)}` : 'sin fecha de fin'}` : <Falta />}</Dato>
             <Dato etiqueta="Periodo de prueba">{ct.prueba_dias ? `${ct.prueba_dias} días${prueba ? ` · ${prueba.texto}` : ''}` : <Falta />}</Dato>
@@ -317,7 +321,7 @@ function ContratoYSalario({ ficha, alCambiar, setHecho }: {
 
         <span id="ficha-convenio" />
         <Tarjeta titulo="Convenio y jornada">
-          <dl className="s-ficha-datos s-ficha-datos-anchos">
+          <dl className="s-persona-datos s-persona-datos-anchos">
             <Dato etiqueta="Convenio">{ct.convenio ? `${ct.convenio.nombre ?? `Código ${ct.convenio.codigo}`}${ct.convenio.cargado ? '' : ' · sin cargar en Sumied'}` : <Falta />}</Dato>
             <Dato etiqueta="Categoría" prueba="ficha-categoria">
               {ct.categoria ? (ct.categoria_nombre ?? ct.categoria) : <ElegirCategoria ficha={ficha} alCambiar={alCambiar} setHecho={setHecho} />}
@@ -328,18 +332,18 @@ function ContratoYSalario({ ficha, alCambiar, setHecho }: {
         </Tarjeta>
       </div>
 
-      <div className="s-ficha-lateral">
+      <div className="s-persona-lateral">
         <Tarjeta titulo="Lo que cobra cada mes" compacta={false}>
           {!s ? <p className="s-apoyo">{SOLO_CON_PERMISO}.</p> : mensuales.length === 0 ? <p className="s-apoyo"><Falta>Aún no tiene conceptos de salario.</Falta></p> : (
             <>
-              <table className="s-tabla s-ficha-conceptos" data-prueba="ficha-conceptos">
+              <table className="s-tabla s-persona-conceptos" data-prueba="ficha-conceptos">
                 <thead><tr><th>Concepto</th><th>De dónde sale</th><th className="s-num">€ al mes</th></tr></thead>
                 <tbody>
                   {mensuales.map((c) => <tr key={`${c.origen}-${c.codigo}`}><td>{c.nombre ?? c.codigo}</td><td>{DE_DONDE[c.origen]}</td><td className="s-num">{euros(c.importe)}</td></tr>)}
                 </tbody>
                 <tfoot><tr><th colSpan={2}>Total bruto</th><th className="s-num">{euros(s.bruto_mes)}</th></tr></tfoot>
               </table>
-              {extras > 0 && <p className="s-ficha-nota">Además, {extras} {extras === 1 ? 'paga extra' : 'pagas extra'}: se cobran aparte{meses ? `, en ${meses}` : ''}.</p>}
+              {extras > 0 && <p className="s-persona-nota">Además, {extras} {extras === 1 ? 'paga extra' : 'pagas extra'}: se cobran aparte{meses ? `, en ${meses}` : ''}.</p>}
             </>
           )}
         </Tarjeta>
@@ -358,7 +362,7 @@ function ContratoYSalario({ ficha, alCambiar, setHecho }: {
             if (ct.hasta && ct.hasta >= hoy) filas.push([ct.hasta, 'Acaba su contrato'])
             filas.sort((a, b) => a[0].localeCompare(b[0]))
             return filas.length === 0 ? <p className="s-apoyo">Nada apuntado.</p> : (
-              <dl className="s-ficha-datos">{filas.map(([f, t]) => <Dato key={f + t} etiqueta={fecha(f)}>{t}</Dato>)}</dl>
+              <dl className="s-persona-datos">{filas.map(([f, t]) => <Dato key={f + t} etiqueta={fecha(f)}>{t}</Dato>)}</dl>
             )
           })()}
         </Tarjeta>
@@ -391,7 +395,7 @@ function ElegirCategoria({ ficha, alCambiar, setHecho }: {
     } finally { setOcupado(false) }
   }
   return (
-    <span className="s-ficha-elegir">
+    <span className="s-persona-elegir">
       <Falta>Falta la categoría</Falta>
       <Selector valor={valor} alCambiar={setValor} opciones={opciones} aria-label="Su categoría del convenio" data-prueba="ficha-categoria-elegir" />
       <Boton variante="secundario" onClick={() => void guardar()} disabled={!valor || ocupado} data-prueba="ficha-categoria-guardar">{ocupado ? 'Guardando…' : 'Guardar'}</Boton>
@@ -426,19 +430,19 @@ function ComoCobra({ ficha, alCambiar, setHecho }: {
         ? <p className="s-apoyo" data-prueba="ficha-iban">Transferencia a <strong>{ibanBonito(p.iban)}</strong></p>
         : <p className="s-apoyo" data-prueba="ficha-iban"><Falta>Falta su IBAN</Falta></p>)}
       {editando && (
-        <form className="s-ficha-iban" onSubmit={(e) => { e.preventDefault(); void guardar() }}>
+        <form className="s-persona-iban" onSubmit={(e) => { e.preventDefault(); void guardar() }}>
           <label>
             <span>Su IBAN (cuenta donde cobra)</span>
             <input className="s-control" value={texto} onChange={(e) => setTexto(e.target.value)} autoComplete="off" spellCheck={false}
               placeholder="ES00 0000 0000 0000 0000 0000" data-prueba="ficha-iban-campo" />
           </label>
-          <div className="s-ficha-iban-botones">
+          <div className="s-persona-iban-botones">
             <Boton variante="principal" type="submit" disabled={ocupado || !texto.trim()} data-prueba="ficha-iban-guardar">{ocupado ? 'Guardando…' : 'Guardar'}</Boton>
             <Boton variante="fantasma" onClick={() => setEditando(false)}>Cancelar</Boton>
           </div>
         </form>
       )}
-      <p className="s-ficha-nota">Solo lo cambia quien tiene el permiso de Laboral, y queda en el historial quién y cuándo. Las nóminas se pagan a esta cuenta.</p>
+      <p className="s-persona-nota">Solo lo cambia quien tiene el permiso de Laboral, y queda en el historial quién y cuándo. Las nóminas se pagan a esta cuenta.</p>
     </Tarjeta>
   )
 }
@@ -450,12 +454,12 @@ function Irpf({ ficha }: { ficha: Ficha }) {
   if (!ficha.privado || !i) return <Tarjeta titulo="Su IRPF"><p className="s-apoyo">{SOLO_CON_PERMISO}.</p></Tarjeta>
   const m = i.modelo_145
   return (
-    <div className="s-ficha-columnas">
-      <div className="s-ficha-principal">
+    <div className="s-persona-columnas">
+      <div className="s-persona-principal">
         <Tarjeta>
-          <p className="s-ficha-enorme" data-prueba="ficha-irpf">{i.pct != null ? porcentaje(i.pct) : <Falta />}
+          <p className="s-persona-enorme" data-prueba="ficha-irpf">{i.pct != null ? porcentaje(i.pct) : <Falta />}
             {i.nomina_cegid && <Chip tono="neutro">De su nómina de Cegid · {i.nomina_cegid.periodo}</Chip>}</p>
-          <p className="s-ficha-frase">
+          <p className="s-persona-frase">
             {i.nomina_cegid?.retencion != null
               ? <>En su última nómina de Cegid le retuvimos <strong>{euros(i.nomina_cegid.retencion)}</strong>{i.nomina_cegid.base_irpf != null ? <> sobre <strong>{euros(i.nomina_cegid.base_irpf)}</strong> que cuentan para el IRPF</> : null}.</>
               : 'Es el tipo que puso Cegid en su última nómina.'}
@@ -465,10 +469,10 @@ function Irpf({ ficha }: { ficha: Ficha }) {
           <p className="s-apoyo"><Chip tono="neutro">Pendiente</Chip> Sumied lo calculará solo, con el mismo cálculo que el programa de Hacienda, cuando haga las nóminas. Hasta entonces, el tipo es el que puso Cegid y no se explica aquí.</p>
         </Tarjeta>
       </div>
-      <div className="s-ficha-lateral">
-        <Tarjeta titulo={<>Sus datos para el IRPF (familia, hijos…) <small className="s-ficha-oficial">modelo 145</small></>}>
+      <div className="s-persona-lateral">
+        <Tarjeta titulo={<>Sus datos para el IRPF (familia, hijos…) <small className="s-persona-oficial">modelo 145</small></>}>
           {!m ? <p className="s-apoyo" data-prueba="ficha-145"><Falta>Falta: aún no nos los ha dado.</Falta></p> : (
-            <dl className="s-ficha-datos" data-prueba="ficha-145">
+            <dl className="s-persona-datos" data-prueba="ficha-145">
               <Dato etiqueta="Situación familiar" oficial={oficialSiDistinto(m.situacion)}>{m.situacion ? conCodigo(m.situacion) : <Falta />}</Dato>
               <Dato etiqueta="Hijos">{m.hijos === 0 ? 'Ninguno' : m.hijos}</Dato>
               <Dato etiqueta="Ascendientes">{m.ascendientes === 0 ? 'Ninguno a su cargo' : m.ascendientes}</Dato>
@@ -476,7 +480,7 @@ function Irpf({ ficha }: { ficha: Ficha }) {
               {m.tipo_voluntario != null && <Dato etiqueta="Ha pedido un tipo más alto">{porcentaje(m.tipo_voluntario)}</Dato>}
             </dl>
           )}
-          {m && <p className="s-ficha-nota">{m.firmado_at ? `Lo firmó el ${fecha(m.firmado_at)}.` : 'Sin firmar.'} Vale desde el {fecha(m.efecto_desde)}.</p>}
+          {m && <p className="s-persona-nota">{m.firmado_at ? `Lo firmó el ${fecha(m.firmado_at)}.` : 'Sin firmar.'} Vale desde el {fecha(m.efecto_desde)}.</p>}
         </Tarjeta>
       </div>
     </div>
