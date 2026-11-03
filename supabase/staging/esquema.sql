@@ -5273,6 +5273,25 @@ COMMENT ON FUNCTION public._conta_liquidacion_cobros(p_settlement uuid) IS 'PC01
 
 
 --
+-- Name: _conta_liquidacion_comision_asiento(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_liquidacion_comision_asiento(p_liq uuid) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object('serie', e.series, 'numero', e.number, 'fecha', e.entry_date, 'migrado', e.source_type = 'migrated', 'factura', si.invoice_number)
+    from public.channel_settlement cs
+    join public.supplier_invoice si on si.id = cs.commission_invoice_id and si.account_id = cs.account_id
+    join public.journal_entry e on e.status = 'validado'
+         and ((e.source_type = 'supplier_invoice' and e.source_id = si.id) or e.id = si.journal_entry_id)
+   where cs.id = p_liq
+   order by (e.source_type = 'supplier_invoice') desc, e.entry_date
+   limit 1
+$$;
+
+
+--
 -- Name: _conta_liquidacion_factura_enganchar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5347,6 +5366,29 @@ begin
     update public.supplier_invoice set reading = jsonb_set(coalesce(reading, '{}'::jsonb), '{requisitos}', v_req), updated_at = now()
      where id = v_cs.commission_invoice_id;
   end if;
+end $$;
+
+
+--
+-- Name: _conta_liquidacion_no_repite(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_liquidacion_no_repite(p_liq uuid, p_company uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cs public.channel_settlement; d jsonb;
+begin
+  select * into v_cs from public.channel_settlement where id = p_liq;
+  if v_cs.id is null then return null; end if;
+  if coalesce(v_cs.is_reference, false) then
+    return format('Esta liquidación es de referencia (de antes del corte, el %s): no lleva asiento.', to_char(public._conta_corte(p_company), 'DD/MM/YYYY'));
+  end if;
+  d := public._conta_liquidacion_comision_asiento(p_liq);
+  if d is null then return null; end if;
+  return format('La comisión de esta liquidación ya está contabilizada en el asiento %s del %s%s (su factura %s): aquí solo se compensa.',
+    (d->>'serie') || '/' || coalesce(d->>'numero', '—'), to_char((d->>'fecha')::date, 'DD/MM/YYYY'),
+    case when (d->>'migrado')::boolean then ', traído de Diez' else '' end, coalesce(d->>'factura', 'sin número'));
 end $$;
 
 
@@ -5868,6 +5910,16 @@ CREATE FUNCTION public._conta_plataforma_entrada(p_company uuid, p_liq uuid) RET
                     where bi.account_id = k.account_id and bi.channel_settlement_id = k.id and bm.status = 'vivo') as en_bancos,
            (select jsonb_build_object('total', si.grand_total, 'numero', si.invoice_number) from public.supplier_invoice si
              where si.id = k.commission_invoice_id and si.account_id = k.account_id) as factura,
+           -- S01q·10 · Su factura de comisión, sin contabilizar (ni en Sumied ni en Diez): la liquidación espera.
+           case when k.commission_invoice_id is not null
+                 and not exists (select 1 from public.journal_entry s where s.account_id = k.account_id and s.source_type = 'supplier_invoice'
+                                    and s.source_id = k.commission_invoice_id and s.status = 'validado')
+                 and not exists (select 1 from public.supplier_invoice si join public.journal_entry d on d.id = si.journal_entry_id
+                                  where si.id = k.commission_invoice_id and si.account_id = k.account_id and d.status = 'validado')
+                then (select 'Sin propuesta hasta que se aclare su factura de comisión ' || coalesce(nullif(si.invoice_number, ''), 'sin número') || ': '
+                             || coalesce(nullif(lower(left(a.porque, 1)) || substr(a.porque, 2), ''), 'aún no está contabilizada.')
+                        from public.supplier_invoice si left join public.supplier_invoice_auto a on a.invoice_id = si.id
+                       where si.id = k.commission_invoice_id and si.account_id = k.account_id) end as fa_espera,
            coalesce(case when jsonb_typeof(k.raw->'factura'->'total') = 'number' then (k.raw->'factura'->>'total')::numeric
                          when (k.raw->'factura'->>'total') ~ '^-?[0-9]+(\.[0-9]+)?$' then (k.raw->'factura'->>'total')::numeric end, 0) as su_parte
       from k
@@ -5886,6 +5938,7 @@ CREATE FUNCTION public._conta_plataforma_entrada(p_company uuid, p_liq uuid) RET
       'sin_propuesta', coalesce(nullif(n.review_note, ''), 'De referencia: es de antes del cierre de la contabilidad; no lleva factura ni asiento.'))
     when n.c430 is null or n.c410 is null or n.c472 is null or n.t21 is null then jsonb_build_object('que', n.que, 'fecha', n.fecha,
       'sin_propuesta', 'Falta su 430, su 410 o la 472 del 21 %: revisa su ficha (Plataformas).')
+    when n.fa is not null and n.fa_espera is not null then jsonb_build_object('que', n.que, 'fecha', n.fecha, 'sin_propuesta', n.fa_espera)
     when n.correo and n.needs_review is true then jsonb_build_object('que', n.que, 'fecha', n.fecha,
       'sin_propuesta', coalesce(nullif(n.review_note, ''), 'Por aclarar: revisa la liquidación antes de asentarla.'))
     when n.correo and n.fa is null and (round(coalesce(n.commission, 0) * 100) <> 0 or round(coalesce(n.other_cost, 0) * 100) <> 0
@@ -6324,15 +6377,30 @@ CREATE FUNCTION public._conta_proponer_plataforma(p_company uuid, p_liq uuid, p_
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare x jsonb; v_res jsonb; v_fecha date;
+declare x jsonb; v_res jsonb; v_fecha date; v_prev public.journal_entry; v_cs public.channel_settlement; v_vieja boolean := false;
 begin
-  if exists (select 1 from public.journal_entry e where e.company_id = p_company and e.source_type = 'channel_settlement' and e.source_id = p_liq
-               and e.status in ('propuesto', 'borrador', 'validado')) then
-    return jsonb_build_object('propuestas', 0, 'yaEstaban', 1, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+  select * into v_prev from public.journal_entry e
+   where e.company_id = p_company and e.source_type = 'channel_settlement' and e.source_id = p_liq and e.status in ('propuesto', 'borrador', 'validado')
+   order by (e.status = 'validado') desc, (e.status = 'borrador') desc, e.created_at desc limit 1;
+  if v_prev.id is not null then
+    -- S01q·10: solo una «propuesta» que ya no vale se rehace; validada o en borrador, nunca.
+    if v_prev.status = 'propuesto' then
+      select * into v_cs from public.channel_settlement where id = p_liq;
+      v_vieja := coalesce(v_cs.is_reference, false)
+              or (v_cs.commission_invoice_id is not null
+                  and exists (select 1 from public.journal_line l join public.company_account ca on ca.id = l.company_account_id
+                               where l.entry_id = v_prev.id and (ca.code like '6%' or l.vat_book = 'received')));
+    end if;
+    if not v_vieja then
+      return jsonb_build_object('propuestas', 0, 'yaEstaban', 1, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+    end if;
   end if;
   select coalesce(collected_on, settlement_date) into v_fecha from public.channel_settlement where id = p_liq;
   if v_fecha is null or not public.conta_dia_abierto(p_company, v_fecha) then
-    return jsonb_build_object('propuestas', 0, 'yaEstaban', 0, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+    return jsonb_build_object('propuestas', 0, 'yaEstaban', case when v_prev.id is not null then 1 else 0 end, 'descartadas', 0, 'sinPropuesta', '[]'::jsonb);
+  end if;
+  if v_vieja then
+    delete from public.journal_entry e where e.id = v_prev.id and e.status = 'propuesto';
   end if;
   x := public.conta_propuestas_plataforma(p_company, p_liq);
   if x ? 'sin_propuesta' then
@@ -35891,7 +35959,9 @@ CREATE FUNCTION public.conta_impuesto_303_cajas(v public.vat_book_entry) RETURNS
         when v.book = 'issued' and v.invoice_type like 'R%' then 'rectificativa_expedida'
         when v.book in ('received', 'investment') and v.invoice_type like 'R%' and (v.reverse_charge or v.operation_key = '09') then 'rectificativa_isp'
         when v.book in ('received', 'investment') and not v.reverse_charge and v.operation_key <> '09'
-             and coalesce(v.counterpart_country, 'ES') <> 'ES' then 'extranjera_sin_isp'
+             and coalesce(v.counterpart_country, 'ES') <> 'ES'
+             -- S01q·10: con IVA no deducible no entra en el 303: no hay nada que autoliquidar.
+             and not (coalesce(v.deductible_amount, 0) = 0 and coalesce(v.tax_amount, 0) <> 0) then 'extranjera_sin_isp'
         when v.book = 'issued' and v.qualification = 'S1' and not v.reverse_charge and v.tax_rate not in (4, 10, 21) then 'tipo'
         else null end as no_sabe) n
     cross join lateral (select n.no_sabe,
@@ -88087,6 +88157,37 @@ end $$;
 
 
 --
+-- Name: tg_journal_entry_liquidacion_no_repite(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_journal_entry_liquidacion_no_repite() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_msg text;
+begin
+  if new.source_type is distinct from 'channel_settlement' or new.source_id is null or new.status = 'anulado' then return new; end if;
+  if tg_op = 'INSERT' then
+    if exists (select 1 from public.channel_settlement cs where cs.id = new.source_id and coalesce(cs.is_reference, false)) then
+      v_msg := public._conta_liquidacion_no_repite(new.source_id, new.company_id);
+      raise exception using errcode = '23514', message = v_msg;
+    end if;
+    return new;
+  end if;
+  -- Al validarla: si ya llevaba gasto o IVA soportado de antes.
+  if new.status = 'validado' and old.status is distinct from 'validado'
+     and exists (select 1 from public.journal_line l join public.company_account ca on ca.id = l.company_account_id
+                  where l.entry_id = new.id and (ca.code like '6%' or l.vat_book = 'received')) then
+    v_msg := public._conta_liquidacion_no_repite(new.source_id, new.company_id);
+    if v_msg is not null then
+      raise exception using errcode = case when v_msg like 'Esta liquidación es de referencia%' then '23514' else '23505' end, message = v_msg;
+    end if;
+  end if;
+  return new;
+end $$;
+
+
+--
 -- Name: tg_journal_entry_no_antes_del_corte(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -88134,6 +88235,26 @@ begin
     end if;
   end loop;
   return null;
+end $$;
+
+
+--
+-- Name: tg_journal_line_liquidacion_no_repite(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.tg_journal_line_liquidacion_no_repite() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e public.journal_entry; v_code text; v_msg text;
+begin
+  select * into v_e from public.journal_entry where id = new.entry_id;
+  if v_e.source_type is distinct from 'channel_settlement' or v_e.status = 'anulado' or v_e.source_id is null then return new; end if;
+  select code into v_code from public.company_account where id = new.company_account_id;
+  if coalesce(v_code, '') not like '6%' and new.vat_book is distinct from 'received' then return new; end if;
+  v_msg := public._conta_liquidacion_no_repite(v_e.source_id, v_e.company_id);
+  if v_msg is null then return new; end if;
+  raise exception using errcode = case when v_msg like 'Esta liquidación es de referencia%' then '23514' else '23505' end, message = v_msg;
 end $$;
 
 
@@ -126226,6 +126347,13 @@ CREATE TRIGGER trg_journal_entry_libro_registro AFTER UPDATE OF status ON public
 
 
 --
+-- Name: journal_entry trg_journal_entry_liquidacion_no_repite; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_liquidacion_no_repite BEFORE INSERT OR UPDATE OF status ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public.tg_journal_entry_liquidacion_no_repite();
+
+
+--
 -- Name: journal_entry trg_journal_entry_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -126272,6 +126400,13 @@ CREATE TRIGGER trg_journal_line_inalterable BEFORE INSERT OR DELETE OR UPDATE ON
 --
 
 CREATE TRIGGER trg_journal_line_iva_reabierto AFTER INSERT OR UPDATE ON public.journal_line FOR EACH ROW EXECUTE FUNCTION public._conta_iva_marcar_apunte();
+
+
+--
+-- Name: journal_line trg_journal_line_liquidacion_no_repite; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_line_liquidacion_no_repite BEFORE INSERT ON public.journal_line FOR EACH ROW EXECUTE FUNCTION public.tg_journal_line_liquidacion_no_repite();
 
 
 --
@@ -148642,6 +148777,14 @@ GRANT ALL ON FUNCTION public._conta_liquidacion_cobros(p_settlement uuid) TO ser
 
 
 --
+-- Name: FUNCTION _conta_liquidacion_comision_asiento(p_liq uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_liquidacion_comision_asiento(p_liq uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_liquidacion_comision_asiento(p_liq uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_liquidacion_factura_enganchar(p_settlement uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -148655,6 +148798,14 @@ GRANT ALL ON FUNCTION public._conta_liquidacion_factura_enganchar(p_settlement u
 
 REVOKE ALL ON FUNCTION public._conta_liquidacion_marcar(p_settlement uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_liquidacion_marcar(p_settlement uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_liquidacion_no_repite(p_liq uuid, p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_liquidacion_no_repite(p_liq uuid, p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_liquidacion_no_repite(p_liq uuid, p_company uuid) TO service_role;
 
 
 --
@@ -162816,6 +162967,14 @@ GRANT ALL ON FUNCTION public.tg_journal_entry_liquidacion_anulada() TO service_r
 
 
 --
+-- Name: FUNCTION tg_journal_entry_liquidacion_no_repite(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_journal_entry_liquidacion_no_repite() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_journal_entry_liquidacion_no_repite() TO service_role;
+
+
+--
 -- Name: FUNCTION tg_journal_entry_no_antes_del_corte(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -162829,6 +162988,14 @@ GRANT ALL ON FUNCTION public.tg_journal_entry_no_antes_del_corte() TO service_ro
 
 REVOKE ALL ON FUNCTION public.tg_journal_entry_pago_modelo() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.tg_journal_entry_pago_modelo() TO service_role;
+
+
+--
+-- Name: FUNCTION tg_journal_line_liquidacion_no_repite(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.tg_journal_line_liquidacion_no_repite() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.tg_journal_line_liquidacion_no_repite() TO service_role;
 
 
 --
