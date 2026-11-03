@@ -53,7 +53,9 @@ jobs:
 
       - uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # La CLI fija (B01, 03/11): con «latest», la 3.0.0 (02/11, 12:18 UTC) empezó a pedir
+          # confirmación y el despliegue no desplegaba nada. La cambia una persona, a propósito.
+          version: 2.122.1
 
       - name: Guardas · staging y no producción; solo pruebas de la AEAT
         env:
@@ -80,7 +82,8 @@ jobs:
           supabase secrets set --project-ref "$REF" "VERIFACTU_SONDA_TOKEN=$TOK" > /dev/null
           mkdir -p "supabase/functions/$FN"
           cp "$SRC" "supabase/functions/$FN/index.ts"
-          supabase functions deploy "$FN" --project-ref "$REF" --no-verify-jwt > "$RUNNER_TEMP/despliegue.txt" 2>&1
+          supabase functions deploy "$FN" --project-ref "$REF" --yes --no-verify-jwt > "$RUNNER_TEMP/despliegue.txt" 2>&1 \
+            || { echo "::error::No se ha desplegado $FN: $(tail -n 1 "$RUNNER_TEMP/despliegue.txt")"; exit 1; }
           echo "Sonda desplegada en staging-conta."
 
       # Lo que sale al registro y al resumen, solo por la puerta (D01 R2): números

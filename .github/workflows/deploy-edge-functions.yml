@@ -186,7 +186,9 @@ jobs:
       - uses: supabase/setup-cli@v1
         if: steps.lista.outputs.funciones != ''
         with:
-          version: latest
+          # La CLI fija (B01, 03/11): con «latest», la 3.0.0 (02/11, 12:18 UTC) empezó a pedir
+          # confirmación y el despliegue no desplegaba nada. La cambia una persona, a propósito.
+          version: 2.122.1
 
       - name: Desplegar, conservando el verify_jwt que cada una tiene HOY
         if: steps.lista.outputs.funciones != ''
@@ -233,7 +235,7 @@ jobs:
               if grep -qE "^\[functions\.$f\]" supabase/config.toml; then
                 echo "$f es nueva y está declarada en config.toml. El CLI aplica lo declarado."
                 DECL=$(awk -v f="[functions.$f]" '$0==f{found=1;next} /^\[/{found=0} found && /^[[:space:]]*verify_jwt[[:space:]]*=/{sub(/^[^=]*=[[:space:]]*/,""); gsub(/[[:space:]]/,""); print; exit}' supabase/config.toml)
-                supabase functions deploy "$f" --project-ref "$REF" \
+                supabase functions deploy "$f" --project-ref "$REF" --yes \
                   && echo "| \`$f\` | ${DECL:-declarado} (nueva) | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY" \
                   || { echo "| \`$f\` | ${DECL:-declarado} (nueva) | :x: |" >> "$GITHUB_STEP_SUMMARY"; FALLOS=1; }
               else
@@ -297,7 +299,7 @@ jobs:
             fi
 
             echo "→ $f (verify_jwt=$JWT, segun $ORIGEN)$NOTA"
-            if supabase functions deploy "$f" --project-ref "$REF" $FLAG; then
+            if supabase functions deploy "$f" --project-ref "$REF" --yes $FLAG; then
               echo "| \`$f\` | $JWT [$ORIGEN]$NOTA | :white_check_mark: |" >> "$GITHUB_STEP_SUMMARY"
             else
               echo "| \`$f\` | $JWT [$ORIGEN]$NOTA | :x: |" >> "$GITHUB_STEP_SUMMARY"
