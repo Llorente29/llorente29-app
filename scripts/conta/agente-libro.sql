@@ -118,7 +118,14 @@ select json_build_object(
                    where l2.entry_id = e.id and a2.template_code like '472%' and t2.treatment in ('intra_eu', 'reverse_charge')))
          then 'apunte de IVA sin base, tipo ni libro'
        -- I01d (0300): la 477 de la autorrepercusión casa con la 472 autoliquidada, al céntimo.
+       -- DM1·5 (03/11): solo si el asiento LLEVA IVA autoliquidado, como la regla 10 de
+       -- conta_motivos_para_validar («v_hay_isp and v_isp_472 <> v_auto_477»). Sin esto, la
+       -- liquidación de un 303 (477 al debe sin tipo, ninguna 472 autoliquidada) salía en rojo:
+       -- la de Casa Lola deshizo el primer real del #460.
        when a.template_code like '477%' and l.tax_rate_id is null
+            and exists (select 1 from public.journal_line l4 join public.company_account a4 on a4.id = l4.company_account_id
+                          join public.tax_rate t4 on t4.id = l4.tax_rate_id
+                         where l4.entry_id = e.id and a4.template_code like '472%' and t4.treatment in ('intra_eu', 'reverse_charge'))
             and (select coalesce(sum(l2.debit - l2.credit), 0) from public.journal_line l2 join public.company_account a2 on a2.id = l2.company_account_id
                    join public.tax_rate t2 on t2.id = l2.tax_rate_id
                   where l2.entry_id = e.id and a2.template_code like '472%' and t2.treatment in ('intra_eu', 'reverse_charge'))
