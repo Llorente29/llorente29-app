@@ -67,7 +67,12 @@ const LOCAL = { norte: 'c01a0000-0000-4000-8000-0000000000a2', sur: 'c01a0000-00
 const TIENDA_SIN_LOCAL = 'f0000000-0000-4000-8000-0000000000f1'
 const LIQ_ESPERA = 'f0000000-0000-4000-8000-00000000e0e1'
 type Estado = 'completa' | 'aun_no_toca' | 'te_necesita' | 'no_cuadra'
-let n = 0
+/** Un uuid fijo para un nombre: la misma tienda (o marca) tiene el mismo id en cada lectura. */
+const idDe = (prefijo: string, nombre: string) => {
+  let h = 0
+  for (const c of nombre) h = (h * 31 + c.charCodeAt(0)) >>> 0
+  return `${prefijo}-0000-4000-8000-${h.toString(16).padStart(12, '0').slice(-12)}`
+}
 
 /** Una fila del mes (conta_liquidaciones_mes): la del motor con su estado de cuatro, su frase y su botón. */
 function fila(o: {
@@ -76,14 +81,13 @@ function fila(o: {
   liq?: { ventas: number; comision: number; pagan: number; pedidos: number; factura?: { numero: string; total: number } | null; id?: string } | null
   faltan?: number; llegado?: number | null; diferencia?: number | null
 }) {
-  n += 1
   const nombre = { glovo: 'Glovo', uber: 'Uber Eats', je: 'Just Eat' }[o.canal]
   const l = o.liq ?? null
   const localNombre = o.local ? { norte: 'Norte Centro', sur: 'Sur Prueba', oeste: 'Oeste Prueba' }[o.local] : null
-  const tiendaId = o.local ? `f0000000-0000-4000-8000-${String(1000 + n).padStart(12, '0')}` : TIENDA_SIN_LOCAL
+  const tiendaId = o.local ? idDe('f0000000', o.tienda) : TIENDA_SIN_LOCAL
   return {
     clave: `${o.canal}:${o.tienda}:${o.desde}`, canal: nombre, intermediario: nombre, intermediario_id: ROL[o.canal], canal_id: CANAL[o.canal],
-    local_id: o.local ? LOCAL[o.local] : null, local: localNombre, marca_id: `e0200000-0000-4000-8000-0000000${String(10000 + n)}`, marca: o.marca,
+    local_id: o.local ? LOCAL[o.local] : null, local: localNombre, marca_id: idDe('e0200000', o.marca), marca: o.marca,
     desde: o.desde, hasta: o.hasta, estado: o.estado, estado_motor: o.motor, frase: o.frase ?? 'Cuadra: lo vendido, la liquidación, su factura y el cobro.',
     accion: o.accion ?? null, cuando: o.cuando ?? null, sin_local: o.local === null, grupo: 'plataforma', diferencia: o.diferencia ?? null, comparado: null,
     tiendas: [{ id: tiendaId, nombre: o.tienda, local_id: o.local ? LOCAL[o.local] : null }],
@@ -93,9 +97,9 @@ function fila(o: {
       factura: { faltan: o.faltan ?? 0 },
       cobro: { esperado: l?.pagan ?? null, llegado: o.llegado ?? null, por_cobrar: l && o.llegado == null ? 1 : 0 },
     },
-    liquidaciones: l ? [{ id: l.id ?? `f0000000-0000-4000-8000-${String(2000 + n).padStart(12, '0')}`, tienda: o.tienda, ref: null, origen: 'correo', pedidos: l.pedidos, ventas: l.ventas,
+    liquidaciones: l ? [{ id: l.id ?? idDe('f1000000', `${o.tienda}:${o.desde}`), tienda: o.tienda, ref: null, origen: 'correo', pedidos: l.pedidos, ventas: l.ventas,
       pedidos_total: l.ventas, comision: l.comision, neto: l.pagan, cobrado: o.llegado ?? null, cobrado_el: o.llegado != null ? '2026-10-21' : null, referencia: false, por_aclarar: null,
-      a_facturar: null, factura: l.factura ? { id: `f0000000-0000-4000-8000-${String(3000 + n).padStart(12, '0')}`, numero: l.factura.numero, total: l.factura.total } : null,
+      a_facturar: null, factura: l.factura ? { id: idDe('f2000000', `${o.tienda}:${o.desde}`), numero: l.factura.numero, total: l.factura.total } : null,
       casada_en_banco: o.llegado != null, facturas_cobradas: null, facturas_nota: null }] : [],
     resoluciones: [], reclamado_sin_llegar: 0, avisos: [], plazo: o.cuando ?? o.hasta,
   }
@@ -164,7 +168,10 @@ async function simular(page: Page, caso: keyof typeof CASOS): Promise<Llamada[]>
     { id: ROL.glovo, party_id: 'p-glovo', channel_id: CANAL.glovo, settlement_every: 'fortnightly', payout_days_after: 20 },
     { id: ROL.je, party_id: 'p-je', channel_id: CANAL.je, settlement_every: 'fortnightly', payout_days_after: 4 }]))
   await page.route(/\/rest\/v1\/party\?/, (r) => json(r, [{ id: 'p-uber', name: 'Uber Eats' }, { id: 'p-glovo', name: 'Glovo' }, { id: 'p-je', name: 'Just Eat' }]))
-  await page.route(/\/rest\/v1\/conta_propuesta_pendiente\?/, (r) => json(r, caso === 'nocuadra' ? [{ origen_id: LIQ_ESPERA, porque: ESPERA }] : []))
+  await page.route(/\/rest\/v1\/conta_propuesta_pendiente\?/, (r) => json(r, caso === 'nocuadra'
+    ? [{ origen: 'channel_settlement', origen_id: LIQ_ESPERA, que: 'Liquidación Glovo · 16–31 oct', porque: ESPERA }] : []))
+  await page.route(/\/rest\/v1\/locations\?/, (r) => json(r, [{ id: LOCAL.norte, name: 'Norte Centro', active: true }, { id: LOCAL.sur, name: 'Sur Prueba', active: true }]))
+  await page.route(/\/rest\/v1\/channel_settlement\?/, (r) => json(r, [{ id: LIQ_ESPERA, period_to: '2026-10-31' }]))
   await page.route(/\/rest\/v1\/rpc\/conta_correo_facturas(\?|$)/, (r) => json(r, { direccion: 'facturas-prueba@buzon.example', llegadas: [] }))
   await page.route(/\/rest\/v1\/platform_store\?/, (r) => json(r, { id: TIENDA_SIN_LOCAL, brand_id: 'e0200000-0000-4000-8000-00000000b0b0', treasury_account_id: null, external_text: 'Tacos Prueba - MAD - C. Prueba Este' }))
   await page.route(/\/rest\/v1\/rpc\/conta_tienda_plataforma_asignar(\?|$)/, (r) => { llamadas.push({ f: 'asignar', cuerpo: r.request().postDataJSON() }); return json(r, { id: TIENDA_SIN_LOCAL }) })
@@ -265,15 +272,16 @@ test('3 · Tienda sin local: la pregunta, «Guardar» y lo que dice', async ({ p
   await expect(pregunta).toHaveCount(1)
   await expect(pregunta).toContainText('¿De qué local es esta tienda? Glovo la llama «Tacos Prueba - MAD - C. Prueba Este».')
   await expect(pregunta).toContainText('Vale para todas sus liquidaciones, las de antes y las que vengan.')
+  await expect(pregunta.getByLabel('Local de la tienda').locator('option')).toHaveText(['Elige el local…', 'Norte Centro', 'Sur Prueba'])
   // El filtro de local tiene «Tienda sin local».
   await expect(page.getByLabel('Local', { exact: true }).locator('option', { hasText: 'Tienda sin local' })).toHaveCount(1)
   await alLado(page, 'sinlocal')
   const local = pregunta.getByLabel('Local de la tienda')
-  const opcion = await local.locator('option').nth(1).getAttribute('value')
-  test.skip(!opcion, 'La cuenta A de staging no tiene ningún local.')
-  await local.selectOption(opcion!)
+  const opcion = LOCAL.norte
+  await local.selectOption(opcion)
   await pregunta.getByRole('button', { name: 'Guardar' }).click()
   await expect(page.locator('[data-prueba="liquidaciones-aviso"]')).toContainText('Guardado: «Tacos Prueba - MAD - C. Prueba Este» es de ')
+  await page.route(/\/rest\/v1\/locations\?/, (r) => r.fallback())
   // Le da el local y le deja su marca (no la borra).
   expect(llamadas.find((x) => x.f === 'asignar')?.cuerpo).toMatchObject({ p_store: TIENDA_SIN_LOCAL, p_local: opcion, p_marca: 'e0200000-0000-4000-8000-00000000b0b0', p_banco: null })
   expect(errores).toEqual([])
@@ -304,7 +312,8 @@ test('4 · «No cuadra» abierta, las marcas cedidas, lo que espera a su factura
   expect(llamadas.find((x) => x.f === 'resolver')?.cuerpo).toMatchObject({ p_intermediario: ROL.uber, p_local: LOCAL.norte, p_tipo: 'reclamacion', p_importe: 52.59 })
 
   // Lo que espera a su factura de comisión, en su fila y con sus palabras (S01q·10).
-  await expect(page.locator('[data-prueba="sin-propuesta"]')).toHaveText(ESPERA)
+  await expect(page.locator('[data-prueba="fila-liquidacion"] [data-prueba="sin-propuesta"]')).toHaveText(ESPERA)
+  await expect(page.locator('[data-prueba="sin-fila"]')).toHaveCount(0)
   // Las marcas cedidas, aparte.
   const cedidas = page.locator('[data-prueba="grupo-cedidas"]')
   await expect(cedidas.locator('> summary')).toContainText('Marcas cedidas · se cuadran con Socio Prueba')

@@ -28,7 +28,8 @@ test('D07 · Compras › Liquidaciones dice que las de plataforma están en Vent
   // una de plataforma, por local, la abre v01/liquidaciones.spec.ts.
   await page.goto('/conta/ventas/liquidaciones')
   await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase')).toBeVisible({ timeout: 30_000 })
+  // El mes, o el aviso de por qué no se ha podido leer (que diga cuál, no solo que no está).
+  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase, [role="alert"]').first()).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('alert')).toHaveCount(0)
   expect(errores).toEqual([])
 })

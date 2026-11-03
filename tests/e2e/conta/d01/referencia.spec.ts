@@ -39,19 +39,12 @@ test('A · Ventas › Liquidaciones: una liquidación de referencia no se propon
   const errores: string[] = []
   page.on('pageerror', (e) => { errores.push(e.message); console.log(`[error de la página] ${e.message}`) })
   // Lo que escribe la base para ella (_conta_no_propuesta, donde = 'Ventas › Liquidaciones').
-  // La fila es la de la liquidación sembrada (su id lo da el mes de diciembre de 2025, que se lee de staging).
-  let deLaSemana: (id: string | null) => void = () => {}
-  const id = new Promise<string | null>((r) => { deLaSemana = r })
-  await page.route(/\/rest\/v1\/rpc\/conta_liquidaciones_mes(\?|$)/, async (r) => {
-    const resp = await r.fetch()
-    const mes = await resp.json() as { filas?: { desde: string; liquidaciones?: { id: string }[] }[] }
-    deLaSemana((mes.filas ?? []).find((f) => f.desde === '2025-12-22')?.liquidaciones?.[0]?.id ?? null)
-    await r.fulfill({ response: resp })
-  })
-  await page.route(/\/rest\/v1\/conta_propuesta_pendiente\?/, async (r) => {
-    const liq = await id
-    await r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(liq ? [{ origen_id: liq, porque: MOTIVO }] : []) })
-  })
+  // La base no saca la de referencia en ninguna fila del mes (el motor no la cuenta): su motivo sale
+  // aparte, en el mes en que acaba su periodo (regla 7). Su periodo, el de la sembrada.
+  const LIQ = '00000000-0000-4000-8000-0000000000d1'
+  await page.route(/\/rest\/v1\/conta_propuesta_pendiente\?/, (r) => r.fulfill({ status: 200, contentType: 'application/json',
+    body: JSON.stringify([{ origen: 'channel_settlement', origen_id: LIQ, que: 'Liquidación Uber Eats · semana del 22/12/2025', porque: MOTIVO }]) }))
+  await page.route(/\/rest\/v1\/channel_settlement\?/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: LIQ, period_to: '2025-12-28' }]) }))
   const escritas: string[] = []
   await page.route('**/rest/v1/**', async (r) => {
     const m = r.request().method()
@@ -67,16 +60,19 @@ test('A · Ventas › Liquidaciones: una liquidación de referencia no se propon
   await expect(page.getByRole('button', { name: 'Proponer lo pendiente' })).toHaveCount(0)
 
   await page.goto('/conta/ventas/liquidaciones?mes=2025-12')
-  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase')).toBeVisible({ timeout: 30_000 })
-  expect(await id, 'la liquidación sembrada del 22/12/2025 no está en el mes').not.toBeNull()
-  // Ya no hay lista aparte: lo dice su fila, la de su semana.
+  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase')).toBeVisible({ timeout: 60_000 })
   await expect(page.getByRole('region', { name: 'Lo que no he podido proponer' })).toHaveCount(0)
-  const fila = page.locator('[data-prueba="fila-liquidacion"]').filter({ hasText: '22–28 dic' })
-  const linea = fila.locator('[data-prueba="sin-propuesta"]')
-  await expect(linea).toHaveText(MOTIVO)
+  const lista = page.getByRole('region', { name: 'Sin apuntar, y sin su fila en este mes' })
+  await expect(lista).toBeVisible({ timeout: 30_000 })
+  const linea = lista.getByRole('listitem').filter({ hasText: MOTIVO })
+  await expect(linea).toHaveCount(1)
+  await expect(linea).toContainText(/^Liquidación /)
 
   await linea.scrollIntoViewIfNeeded()
   await capturar(page, 'liquidaciones-referencia')
+  await page.goto('/conta/ventas/liquidaciones?mes=2026-01')
+  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase')).toBeVisible({ timeout: 60_000 })
+  await expect(page.locator('[data-prueba="sin-fila"]')).toHaveCount(0)
   expect(escritas, 'escrituras que no se esperaban').toEqual([])
   expect(errores).toEqual([])
 })

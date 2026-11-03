@@ -49,7 +49,7 @@ import { leerLiquidaciones } from '@/modules/conta/services/liquidacionesService
 import { leerCorreoFacturas } from '@/modules/conta/services/comprasService'
 import { subirFacturas } from '@/modules/conta/services/documentosService'
 import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
-import { leerNoPropuestoPorOrigen } from '@/modules/conta/services/noPropuestoService'
+import { leerNoPropuestoPorOrigen, type SinPropuesta } from '@/modules/conta/services/noPropuestoService'
 import { Socios } from '@/modules/conta/ventas/SociosDeMarca'
 
 const ACEPTA = '.csv,.xlsx,.xls,.pdf,text/csv,application/pdf'
@@ -92,7 +92,7 @@ export default function LiquidacionesVentasPage() {
   const datos = useLeer(accountId && activa && ver === 'mes' ? () => leerLiquidacionesMes(activa.id, mes) : null, `${clave}:mes:${mes}`)
   const quienes = useLeer(accountId ? () => leerIntermediarios(accountId) : null, `${clave}:quienes`)
   const locales = useLeer(accountId && hosteleria ? () => leerLocales(accountId) : null, `${accountId}:locales`)
-  const sinPropuesta = useLeer(activa && ver === 'mes' ? () => leerNoPropuestoPorOrigen(activa.id) : null, `${clave}:sin-propuesta`)
+  const sinPropuesta = useLeer(accountId && activa && ver === 'mes' ? () => leerNoPropuestoPorOrigen(accountId, activa.id) : null, `${clave}:sin-propuesta`)
   const socios = useLeer(accountId && activa && hosteleria && ver === 'socios' ? () => leerLiquidaciones(accountId, activa.id, hoy) : null, `${clave}:socios`)
 
   const recargar = () => setVuelta((v) => v + 1)
@@ -282,6 +282,8 @@ export default function LiquidacionesVentasPage() {
         <p className="cxlm-vacio">Las marcas cedidas ({m.cedidas.length}) no salen con estos filtros: se cuadran con su socio, no con una plataforma.</p>
       )}
 
+      {m && sinPropuesta.datos && <SinFila m={m} sinPropuesta={sinPropuesta.datos} />}
+
       <BotonPulgar><Boton variante="principal" ancho onClick={() => elegir.current?.click()} disabled={ocupado}>Subir una liquidación</Boton></BotonPulgar>
 
       {pidiendo && (
@@ -354,7 +356,7 @@ function Ayuda() {
 type Resolver = (f: FilaMes, x: { tipo: 'gasto' | 'reclamacion'; importe: number; frase: string }) => Promise<void>
 
 function Tienda({ t, sinPropuesta, abierta, ocupado, locales, hayRecorrido, alBoton, alAbrir, alSiguiente, alGuardarLocal, alResolver, alLlegada }: {
-  t: GrupoTienda; sinPropuesta: Map<string, string> | null; abierta: string | null; ocupado: boolean; locales: { id: string; nombre: string; abierto: boolean }[]; hayRecorrido: boolean
+  t: GrupoTienda; sinPropuesta: Map<string, SinPropuesta> | null; abierta: string | null; ocupado: boolean; locales: { id: string; nombre: string; abierto: boolean }[]; hayRecorrido: boolean
   alBoton: (f: FilaMes) => void; alAbrir: (f: FilaMes) => void; alSiguiente: (f: FilaMes) => void
   alGuardarLocal: (storeId: string, localId: string) => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
 }) {
@@ -368,7 +370,7 @@ function Tienda({ t, sinPropuesta, abierta, ocupado, locales, hayRecorrido, alBo
         <span className="cxlm-cuenta">{cuenta(t.filas)}</span>
       </summary>
       {t.filas.map((f, i) => (
-        <Fila key={f.clave} f={f} sinPropuesta={[...new Set(f.motor.liquidaciones.map((x) => sinPropuesta?.get(x.id)).filter((x): x is string => !!x))]} abierta={abierta === f.clave} ocupado={ocupado} hayRecorrido={hayRecorrido}
+        <Fila key={f.clave} f={f} sinPropuesta={[...new Set(f.motor.liquidaciones.map((x) => sinPropuesta?.get(x.id)?.porque).filter((x): x is string => !!x))]} abierta={abierta === f.clave} ocupado={ocupado} hayRecorrido={hayRecorrido}
           alBoton={alBoton} alAbrir={alAbrir} alSiguiente={alSiguiente} alResolver={alResolver} alLlegada={alLlegada}
           pregunta={i === 0 && tiendaSinLocal ? <PreguntaLocal tienda={tiendaSinLocal.nombre} canal={f.canal} locales={locales} ocupado={ocupado} alGuardar={(l) => alGuardarLocal(tiendaSinLocal.id, l)} /> : null} />
       ))}
@@ -505,9 +507,28 @@ function Abierta({ f, ocupado, hayRecorrido, alSiguiente, alResolver, alLlegada 
   )
 }
 
+// ── Lo que no se pudo apuntar y no tiene fila en el mes ─────────────────────
+
+/**
+ * Regla 7: lo que no se ha podido apuntar solo y cuya liquidación no sale en
+ * ninguna fila del mes (una de referencia, por ejemplo) no se esconde: sale
+ * aquí, en el mes en que acaba su periodo, con sus palabras.
+ */
+function SinFila({ m, sinPropuesta }: { m: MesLiquidaciones; sinPropuesta: Map<string, SinPropuesta> }) {
+  const enFila = new Set([...m.filas.flatMap((f) => f.motor.liquidaciones.map((x) => x.id)), ...m.cedidas.flatMap((c) => (c.liquidacion ? [c.liquidacion.id] : []))])
+  const sueltas = [...sinPropuesta.values()].filter((x) => !enFila.has(x.origenId) && x.hasta !== null && x.hasta >= m.desde && x.hasta <= m.hasta)
+  if (!sueltas.length) return null
+  return (
+    <section className="cxlm-grupo cxlm-sin-fila" aria-label="Sin apuntar, y sin su fila en este mes" data-prueba="sin-fila">
+      <h2 className="cxlm-sin-fila-titulo">Sin apuntar, y sin su fila en este mes · {sueltas.length}</h2>
+      <ul>{sueltas.map((x) => <li key={x.origenId}><strong>{x.que}</strong>: <span data-prueba="sin-propuesta">{x.porque}</span></li>)}</ul>
+    </section>
+  )
+}
+
 // ── Las marcas cedidas ──────────────────────────────────────────────────────
 
-function Cedidas({ cedidas, local, sinPropuesta }: { cedidas: CedidaMes[]; local: string | null; sinPropuesta: Map<string, string> | null }) {
+function Cedidas({ cedidas, local, sinPropuesta }: { cedidas: CedidaMes[]; local: string | null; sinPropuesta: Map<string, SinPropuesta> | null }) {
   const vistas = cedidas.filter((c) => !local || (local !== SIN_LOCAL && c.localId === local))
   const socios = [...new Set(cedidas.map((c) => c.socio))]
   const n = { completa: 0, aun_no_toca: 0, te_necesita: 0, no_cuadra: 0 } as Record<EstadoMes, number>
@@ -530,7 +551,7 @@ function Cedidas({ cedidas, local, sinPropuesta }: { cedidas: CedidaMes[]; local
             <span className="cxlm-est"><span className="cxlm-chip" data-tono={TONO[c.estado]}>{NOMBRE_ESTADO[c.estado]}</span>
               {c.liquidacion && <Link className="cxlm-btn" to={rutaLiquidacion(c.liquidacion.id)}>Ver</Link>}
             </span>
-            {c.liquidacion && sinPropuesta?.get(c.liquidacion.id) && <p className="cxlm-nota cxlm-sin-propuesta" data-prueba="sin-propuesta">{sinPropuesta.get(c.liquidacion.id)}</p>}
+            {c.liquidacion && sinPropuesta?.get(c.liquidacion.id) && <p className="cxlm-nota cxlm-sin-propuesta" data-prueba="sin-propuesta">{sinPropuesta.get(c.liquidacion.id)!.porque}</p>}
             <p className="cxlm-nota">Vendiste {c.vendido.pedidos} {c.vendido.pedidos === 1 ? 'pedido' : 'pedidos'} ({euros(c.vendido.total)}). {c.frase}</p>
           </div>
         </div>
