@@ -76,9 +76,31 @@ if ELEVEN:
         if exacto or parecido:
             modelo = (exacto or parecido)[0]["model_id"]
         elif not tts:
+            # Sin la lista (la clave solo tiene «Texto a voz»: 401): candidatos por su forma habitual.
             modelo = pedido
         else:
             print(f"::warning::No hay ningún modelo «{pedido}» en ElevenLabs; se usa {modelo}. Los que hay: {[m.get('model_id') for m in tts]}")
+    candidatos = [modelo]
+    if not tts and pedido and not pedido.startswith("eleven_"):
+        v = pedido.lower().replace(" ", "").replace("eleven", "").lstrip("_")
+        candidatos = [f"eleven_{v}", f"eleven_{v}_alpha", f"eleven_{v}_preview", f"eleven_{v}_beta", pedido]
+
+    def probar(m):
+        """¿Existe el modelo? Una frase corta: model_not_found → no."""
+        try:
+            pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=mp3_44100_128", {"text": "Hola.", "model_id": m}, {"xi-api-key": ELEVEN})
+            return True
+        except urllib.error.HTTPError as e:
+            cuerpo_error = e.read()[:300]
+            if b"model_not_found" in cuerpo_error or b"model" in cuerpo_error and e.code in (400, 404, 422):
+                print(f"  {m}: no existe ({e.code})")
+                return False
+            sys.exit(f"ElevenLabs ({m}): HTTP {e.code} {cuerpo_error!r}")
+    if len(candidatos) > 1:
+        bueno = next((m for m in candidatos if probar(m)), None)
+        if not bueno:
+            sys.exit(f"ElevenLabs: ningún modelo «{pedido}» ({', '.join(candidatos)}). Pon el identificador exacto en voz-elevenlabs.txt, o dale a la clave el permiso de leer los modelos.")
+        modelo = bueno
     print(f"Voz: ElevenLabs · {modelo}")
     # 03/11 (Julio: «suena a lata»): MP3 a 44,1 kHz, el de la web (el PCM a 44,1 kHz es solo de Pro, y
     # el de 24 kHz perdía los agudos), y SIN voice_settings: los de la propia voz, como en su prueba.
