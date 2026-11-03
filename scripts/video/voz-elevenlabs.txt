@@ -1,5 +1,8 @@
-# La voz de ElevenLabs del vídeo (su id; no es secreto). Manda sobre la variable VOZ_ELEVENLABS_ID.
-# Antes: bsEDAkNZWaEolZ7vEeVJ (03/11, la primera que eligió Julio).
-TbcXaMnSerONT83CTICz
-# El modelo, como en «Texto a voz» de la web (Julio probó la voz con V4).
+# La voz de los vídeos (Julio, 03/11, 22:58: «esta es la voz que quiero»). ÚNICO sitio de la voz:
+# voz_nube.py no lee ninguna variable. Sin el secreto VOZ_ELEVENLABS_KEY, el vídeo para en rojo.
+# El id de la voz de ElevenLabs (no es secreto).
+bsEDAkNZWaEolZ7vEeVJ
+# El modelo, como en «Texto a voz» de su web.
 modelo: v4
+# Solo para una prueba hecha a mano: con «piper: sí» (sin la almohadilla) se usa la voz libre Piper.
+# piper: sí

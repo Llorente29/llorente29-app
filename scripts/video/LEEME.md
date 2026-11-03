@@ -44,18 +44,24 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
   facturas aprobadas. Para si la cuenta es la plantilla.
 - `cargos.sql`: los tres cargos de Revolut que vuelven, casados por el núcleo
   de verdad (`_bank_casar_nucleo`, como «folvy»).
-- `montar.mjs`: portada, tramos sin esperas, cierre y subtítulos; y la voz, si hay modelo.
+- `montar.mjs`: portada, tramos sin esperas, cierre, subtítulos y la voz.
 - `locucion.mjs`: lo que dice la voz, frase a frase, cada una pegada a un
   gesto del guion. Los subtítulos son esas mismas frases. **Para cambiar lo
   que se dice, se cambia aquí.**
-- `voz.py`: la voz con Piper (voz neuronal libre que corre en el runner, sin
-  llamar a ningún servicio), `es_ES-davefx-medium`, castellano de España. Se
-  hace ANTES de grabar: el guion espera a que acabe cada frase antes del gesto
-  siguiente, así nunca se pisan.
+- `voz-elevenlabs.txt`: **la voz de los vídeos, y el único sitio donde está**:
+  el id de la voz de ElevenLabs (`bsEDAkNZWaEolZ7vEeVJ`, la que eligió Julio
+  el 03/11) y `modelo: v4`. Ninguna variable del repositorio la cambia.
+- `voz_nube.py`: hace la voz con ElevenLabs, ANTES de grabar (el guion espera
+  a que acabe cada frase antes del gesto siguiente, así nunca se pisan). La
+  clave va en el secreto `VOZ_ELEVENLABS_KEY`; **sin él, el vídeo para en rojo**
+  y no sale con otra voz.
+- `voz.py`: Piper, la voz libre (`es_ES-davefx-medium`), solo para una prueba
+  hecha a mano: se usa si `voz-elevenlabs.txt` lleva la línea `piper: sí`.
 - `miniatura.mjs`: la portada para las plataformas, en los dos tamaños.
-- `voz_nube.py`: la voz de pago, si está su clave en los secretos del
-  repositorio: `VOZ_ELEVENLABS_KEY` (y la variable `VOZ_ELEVENLABS_ID`, la voz)
-  o `VOZ_GOOGLE_KEY` (y `VOZ_GOOGLE_NOMBRE`). Sin ninguna, Piper.
+- `carril-unicos.py`: parche AL VUELO de `scripts/e2e/carril/clonar.sql`, solo
+  en el runner del vídeo, para que el carril clone aunque la plantilla tenga
+  pagos de verdad (`conta_pago_salida.request_id`). El arreglo de verdad va en
+  `clonar.sql`, en otro encargo: afecta a todas las e2e.
 - `revisar.mjs`: busca en el texto de cada pantalla IBAN que no sean del
   9999, DNI, NIE, NIF que no sean de ceros, correos y nombres reales.
 - `reconocer.sql`: solo lectura, lo que tiene la empresa A del carril.

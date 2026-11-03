@@ -115,14 +115,15 @@ jobs:
           r=$(psql "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select count(*) from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710','00000000-0000-0000-0000-000000000001')")
           if [ "$r" != "0" ]; then echo "::error::Al otro lado hay cuentas de producción. Abortado."; exit 1; fi
 
-      # La voz: Piper (voz neuronal libre, corre aquí sin llamar a ningún servicio),
-      # con la voz de castellano de España es_ES-davefx-medium. Si no se puede
-      # bajar, el vídeo sale igual, sin voz, y el run lo dice.
-      - name: Voz · Piper y su modelo de castellano
-        id: voz
-        continue-on-error: true
+      # La voz de los vídeos es la de ElevenLabs que fija scripts/video/voz-elevenlabs.txt
+      # (Julio, 03/11). Piper (voz libre, corre aquí) SOLO si ese fichero pide
+      # «piper: sí»: una prueba hecha a mano. Si se pide y no se puede bajar, rojo.
+      - name: Voz · Piper, solo si voz-elevenlabs.txt lo pide
         run: |
           set -euo pipefail
+          if ! grep -Eiq '^[[:space:]]*piper:[[:space:]]*s[ií][[:space:]]*$' scripts/video/voz-elevenlabs.txt; then
+            echo "Voz de ElevenLabs (voz-elevenlabs.txt): Piper no hace falta."; exit 0
+          fi
           pip install -q piper-tts
           mkdir -p "$RUNNER_TEMP/voz"
           base=https://huggingface.co/rhasspy/piper-voices/resolve/main/es/es_ES/davefx/medium
@@ -161,11 +162,8 @@ jobs:
         timeout-minutes: 30
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
-          # La voz de pago (si están): secretos del repositorio, no de producción.
+          # La clave de ElevenLabs: secreto del repositorio, no de producción. La voz, de voz-elevenlabs.txt.
           VOZ_ELEVENLABS_KEY: ${{ secrets.VOZ_ELEVENLABS_KEY }}
-          VOZ_ELEVENLABS_ID: ${{ vars.VOZ_ELEVENLABS_ID }}
-          VOZ_GOOGLE_KEY: ${{ secrets.VOZ_GOOGLE_KEY }}
-          VOZ_GOOGLE_NOMBRE: ${{ vars.VOZ_GOOGLE_NOMBRE }}
         run: |
           set -euo pipefail
           mkdir -p "$SALIDA"
@@ -181,11 +179,13 @@ jobs:
           node scripts/video/factura-al-pago.mjs reconocer "$SALIDA"
           # La locución, ANTES de grabar: el guion espera a que acabe cada frase.
           node scripts/video/locucion.mjs "$SALIDA"
-          # La voz: la de pago si hay su clave (ElevenLabs o Google, voz_nube.py); si no, Piper.
+          # La voz: la de ElevenLabs de voz-elevenlabs.txt. Sin su clave, o si falla, el vídeo para (rojo).
+          # Código 3: el fichero pide Piper a mano.
           set +e; python3 scripts/video/voz_nube.py "$SALIDA/voz/frases.json"; r=$?; set -e
           if [ "$r" = 3 ]; then
-            if [ -n "${VOZ_MODELO:-}" ]; then python3 scripts/video/voz.py "$VOZ_MODELO" "$SALIDA/voz/frases.json"; else echo "::warning::Sin voz: se graba con el ritmo estimado y el vídeo sale sin voz."; fi
-          elif [ "$r" != 0 ]; then echo "::error::La voz de pago ha fallado (arriba, el porqué)."; exit 1; fi
+            [ -n "${VOZ_MODELO:-}" ] || { echo "::error::voz-elevenlabs.txt pide Piper y no se ha podido instalar."; exit 1; }
+            python3 scripts/video/voz.py "$VOZ_MODELO" "$SALIDA/voz/frases.json"
+          elif [ "$r" != 0 ]; then echo "::error::Sin la voz de ElevenLabs no se graba el vídeo (arriba, el porqué)."; exit 1; fi
           node scripts/video/factura-al-pago.mjs grabar "$SALIDA"
 
       - name: Montar con ffmpeg
@@ -193,7 +193,6 @@ jobs:
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || { echo "Sin grabación: no hay nada que montar."; exit 0; }
-          [ -n "${VOZ_MODELO:-}" ] || echo "::warning::Sin modelo de voz: el vídeo sale sin voz."
           # La portada para las plataformas (YouTube, web, correo, WhatsApp), con capturas de esta grabación.
           # Antes del montaje: es también el primer fotograma del vídeo y su carátula.
           node scripts/video/miniatura.mjs "$SALIDA"
