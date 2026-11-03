@@ -72,14 +72,21 @@ begin
   end if;
 end $$;
 
--- La función de la 1350, tal cual estaba (la respaldó la 1525; se comprueba su huella).
-select public._restaurar_funcion('public.demo_contabilidad_sembrar(uuid)', '20261103T1525_dm1_casa_lola_gastos');
+-- La función de la 1350, tal cual estaba (la respaldó la 1525; se comprueba su huella). Sin respaldo es que no
+-- existía antes de la 1525 (staging, donde la 1350 no se aplicó de verdad): se quita.
+do $$ begin
+  if exists (select 1 from public.funcion_respaldo where firma = 'public.demo_contabilidad_sembrar(uuid)' and migracion = '20261103T1525_dm1_casa_lola_gastos') then
+    perform public._restaurar_funcion('public.demo_contabilidad_sembrar(uuid)', '20261103T1525_dm1_casa_lola_gastos');
+  else
+    drop function if exists public.demo_contabilidad_sembrar(uuid);
+  end if;
+end $$;
 
 do $$
 declare v_acc constant uuid := coalesce(nullif(current_setting('demo.cuenta', true), ''), '623d946a-a0ce-4f34-8c00-9761dfed8331')::uuid; v jsonb;
 begin
-  if not exists (select 1 from public.accounts where id = v_acc and is_demo) then
-    raise notice 'DEMO: la cuenta % no está o no es de demo (esto no es producción): no se siembra nada.', v_acc;
+  if not exists (select 1 from public.accounts where id = v_acc and is_demo) or to_regprocedure('public.demo_contabilidad_sembrar(uuid)') is null then
+    raise notice 'DEMO: la cuenta % no está, no es de demo o no hay semilla (esto no es producción): no se siembra nada.', v_acc;
     return;
   end if;
   -- Las de trabajo de la siembra de la 1525, si van en la misma transacción (la prueba de staging).
