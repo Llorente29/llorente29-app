@@ -7,6 +7,7 @@
 # (run 41607275962). Igual que con las claves primarias, cada uuid de una columna
 # única recibe su id del carril. No se cambia el fichero del repositorio (lo
 # usan todas las e2e): esto lo apunta el parte para quien lleve el carril.
+# Desde el #453 clonar.sql ya lo hace él mismo: entonces este parche no toca nada.
 import sys
 
 ruta = sys.argv[1]
@@ -25,6 +26,9 @@ extra = """  -- V01 (parche del vídeo): también los uuid de una columna ÚNICA
 """
 if extra in s:
     print("clonar.sql ya lleva el parche.")
+elif "i.indisunique and not i.indisprimary and i.indnatts = 1" in s:
+    # Desde el #453 (B01·13, 03/11) clonar.sql ya renueva los uuid únicos él mismo: no hace falta nada.
+    print("clonar.sql ya renueva los uuid únicos (#453): el parche no hace falta.")
 elif s.count(ancla) != 1:
     sys.exit("carril-unicos.py: no encuentro dónde poner el parche en clonar.sql (¿ha cambiado?).")
 else:
