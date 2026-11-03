@@ -1,0 +1,3 @@
+# La voz de ElevenLabs del vídeo (su id; no es secreto). Manda sobre la variable VOZ_ELEVENLABS_ID.
+# Antes: bsEDAkNZWaEolZ7vEeVJ (03/11, la primera que eligió Julio).
+TbcXaMnSerONT83CTICz

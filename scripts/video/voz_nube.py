@@ -42,6 +42,12 @@ def wav_pcm(salida, pcm, hz):
 
 if ELEVEN:
     voz = os.environ.get("VOZ_ELEVENLABS_ID", "").strip()
+    # scripts/video/voz-elevenlabs.txt, si lleva un id, manda sobre la variable (la voz queda escrita en el repositorio).
+    fichero = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voz-elevenlabs.txt")
+    if os.path.exists(fichero):
+        ids = [l.strip() for l in open(fichero, encoding="utf-8") if l.strip() and not l.lstrip().startswith("#")]
+        if ids:
+            voz = ids[0]
     if not voz:
         sys.exit("Falta VOZ_ELEVENLABS_ID: el id de la voz de ElevenLabs.")
     modelo = os.environ.get("VOZ_ELEVENLABS_MODELO", "eleven_multilingual_v2")
@@ -88,5 +94,5 @@ for f in frases:
 json.dump(frases, open(ruta, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 # Con qué voz se ha hecho (sin la clave): para saberlo sin abrir el registro del run.
 open(os.path.join(os.path.dirname(ruta), "proveedor.txt"), "w", encoding="utf-8").write(
-    f"ElevenLabs · voz {os.environ.get('VOZ_ELEVENLABS_ID', '').strip()} · {os.environ.get('VOZ_ELEVENLABS_MODELO', 'eleven_multilingual_v2')}\n" if ELEVEN
+    f"ElevenLabs · voz {voz} · {os.environ.get('VOZ_ELEVENLABS_MODELO', 'eleven_multilingual_v2')}\n" if ELEVEN
     else f"Google · {os.environ.get('VOZ_GOOGLE_NOMBRE', '').strip() or 'es-ES-Chirp3-HD-Charon'}\n")
