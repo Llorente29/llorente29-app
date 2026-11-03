@@ -9,3 +9,6 @@ conta-revolut-aviso
 conta-revolut-conectar
 conta-revolut-leer
 conta-pagar
+# B01 · Cola 1e · El justificante de un pago: la función pública nueva (y las
+# tres de arriba, que lo hacen al confirmar el banco: _shared/justificantePago.ts).
+conta-justificante

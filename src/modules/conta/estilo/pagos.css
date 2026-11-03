@@ -9,7 +9,7 @@
 .pg-pagina { display: flex; flex-direction: column; gap: var(--s-4); }
 
 /* Cifras: «Vencido» en rojo cuando hay algo vencido (la tercera). */
-.pg-cifras[data-vencido='si'] .s-bandeja-cifra:nth-child(3) .s-bandeja-cifra-valor { color: var(--s-falta); }
+.pg-cifras[data-vencido='si'] .s-bandeja-cifra:nth-child(1) .s-bandeja-cifra-valor { color: var(--s-falta); }
 
 /* El aviso ámbar («21 facturas no tienen vencimiento»; el IBAN que cambió) */
 .pg-aviso-ambar {
@@ -65,6 +65,10 @@
 .pg-barra-campo input::-webkit-calendar-picker-indicator { filter: invert(1); }
 .pg-kbd { margin-left: var(--s-2); padding: 0 6px; border: var(--s-linea) solid rgba(255, 255, 255, .6); border-radius: 4px; font-size: var(--s-t-xs); font-family: inherit; }
 .pg-barra-nota { margin: calc(-1 * var(--s-2)) 0 0; }
+/* B01 · Con la barra fija abajo, lo que se lleva a la vista (una casilla, con el teclado) no queda debajo de ella.
+   En html, como el de la cabecera (marco.css): los tokens viven en .cx. En el móvil la barra va en columna. */
+html:has(.pg-barra) { scroll-padding-bottom: 120px; }
+@media (max-width: 767px) { html:has(.pg-barra) { scroll-padding-bottom: 300px; } }
 
 /* Los avisos de abajo (tres en Pagos, dos en la remesa) */
 .pg-notas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-3); }
@@ -125,4 +129,78 @@
   .pg-barra-campo { justify-content: space-between; }
   .pg-pasos { grid-template-columns: minmax(0, 1fr); }
   .pg-tabla th:nth-child(4), .pg-tabla td:nth-child(4) { display: none; }
+}
+
+/* ── B01 · Cola 1e · Lo que toca pagar, el saldo y el panel (maqueta v2 de Pagar) ── */
+/* Una columna que puede encogerse (minmax(0, 1fr)): sin ella, en el móvil las cuatro cifras empujaban la página a 420 px. */
+.pg-toca { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); padding: var(--s-4); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-fondo); }
+.pg-toca-titulo { margin: 0; font-size: var(--s-t-l, 1.05rem); }
+.pg-toca-boton { width: 100%; display: flex; justify-content: space-between; gap: var(--s-3); padding-block: var(--s-3); font-size: var(--s-t-l, 1.05rem); }
+/* En el móvil no cabe en una línea: el texto y el importe parten, sin ensanchar la página. */
+.pg-toca-boton .s-boton-texto { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--s-1) var(--s-3); white-space: normal; line-height: 1.3; text-align: left; }
+.pg-saldo { display: inline-grid; grid-auto-flow: row; gap: 0; padding: 2px var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio, 8px); font-size: var(--s-t-s, .8rem); line-height: 1.3; }
+.pg-saldo-llega { color: var(--s-ok); }
+.pg-saldo-no { color: var(--s-falta); font-weight: 600; }
+.pg-panel-desde { display: grid; gap: var(--s-1); padding: var(--s-3); border: 2px solid var(--s-accion); border-radius: var(--s-radio, 8px); }
+/* El panel como la maqueta v2 (pantalla 2): filas «quién · número | importe», con el total abajo. */
+.pg-panel-facturas { list-style: none; margin: 0; padding: var(--s-3); display: grid; gap: var(--s-2); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio, 8px); }
+.pg-panel-factura { display: grid; gap: 2px; }
+.pg-panel-par { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s-3); min-width: 0; }
+.pg-panel-par > .s-cifra { flex: none; white-space: nowrap; }
+.pg-panel-quien { min-width: 0; overflow-wrap: anywhere; }
+.pg-panel-detalle { font-size: var(--s-t-s); color: var(--s-apoyo); }
+.pg-panel-detalle:empty { display: none; }
+.pg-panel-total { border-top: var(--s-linea) solid var(--s-borde-decorativo); padding-top: var(--s-2); }
+.pg-panel-cuando { display: grid; gap: 2px; padding: var(--s-3); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio, 8px); }
+.pg-panel-cuando p { margin: 0; font-size: var(--s-t-s); }
+.pg-panel-comprueba-caja { display: grid; gap: var(--s-1); }
+.pg-panel-comprueba { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s-1); }
+.pg-panel-comprueba li { display: flex; gap: var(--s-2); align-items: baseline; }
+.pg-panel-comprueba li::before { flex: none; width: 1.2em; text-align: center; font-weight: var(--s-peso-fuerte); }
+.pg-panel-comprueba [data-bien="si"]::before { content: '✓'; color: var(--s-ok); }
+.pg-panel-comprueba [data-bien="no"]::before { content: '!'; color: var(--s-duda); }
+.pg-panel-comprueba [data-bien="no"] { color: var(--s-duda); }
+
+/* ── B01 · Cola 1e · El justificante del pago, en la ficha de la factura ── */
+.pg-justificante { display: grid; gap: var(--s-2); }
+.pg-justificante-que { margin: 0; }
+.pg-justificante-botones { display: flex; flex-wrap: wrap; gap: var(--s-2); align-items: center; }
+.pg-justificante-datos { display: grid; gap: var(--s-1); margin: 0; }
+.pg-justificante-datos > div { display: flex; justify-content: space-between; gap: var(--s-3); padding: var(--s-1) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.pg-justificante-datos dt { color: var(--s-apoyo); }
+.pg-justificante-datos dd { margin: 0; font-weight: var(--s-peso-fuerte); text-align: right; }
+.pg-justificante-falta { font-size: var(--s-t-s); }
+.pg-justificante p { margin: 0; }
+
+/* ── B01 · Cola 1e · Pagado: cómo va cada factura (maqueta v2, pantalla 4) ── */
+.pg-resultado { display: grid; gap: var(--s-2); padding: var(--s-4); border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque); background: var(--s-superficie); overflow-x: auto; }
+.pg-resultado-tabla { width: 100%; border-collapse: collapse; }
+.pg-resultado-tabla th { text-align: left; font-size: var(--s-t-s); color: var(--s-apoyo); font-weight: var(--s-peso-medio); padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+.pg-resultado-tabla th.s-lista-cifra { text-align: right; }
+.pg-resultado-tabla td { padding: var(--s-2) var(--s-3); border-bottom: var(--s-linea) solid var(--s-borde-decorativo); vertical-align: baseline; }
+.pg-resultado-pie { display: flex; flex-wrap: wrap; gap: var(--s-3); align-items: center; justify-content: space-between; }
+.pg-resultado-pie p { margin: 0; flex: 1 1 280px; }
+@media (max-width: 767px) {
+  .pg-resultado-tabla thead { display: none; }
+  .pg-resultado-tabla tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--s-3); padding: var(--s-2) 0; border-bottom: var(--s-linea) solid var(--s-borde-decorativo); }
+  .pg-resultado-tabla td { padding: 0; border: 0; }
+}
+
+/* B01·12 (03/11) · El panel de Pagos: fijo a la derecha y sin velo, la lista sigue a la vista (maqueta v2,
+   pantalla 2); en el móvil, la hoja desde abajo. Ya no hay barra de abajo. */
+.pg-panel-fijo { position: fixed; top: 0; right: 0; bottom: 0; z-index: 60; display: flex; pointer-events: none; }
+.pg-panel-fijo > .s-dialogo { pointer-events: auto; box-shadow: -8px 0 24px rgb(0 0 0 / 12%); }
+.pg-panel-esc { margin-left: auto; font-size: var(--s-t-xs); }
+.pg-pagina[data-panel='si'] { padding-right: min(420px, 40vw); }
+.pg-panel-campos { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-3); }
+.pg-panel-campo { display: flex; flex-direction: column; gap: var(--s-1); min-width: 0; }
+.pg-panel-campo select, .pg-panel-campo input { width: 100%; min-width: 0; }
+.pg-panel-sepa { border-top: var(--s-linea) solid var(--s-borde-decorativo); padding-top: var(--s-3); display: flex; flex-direction: column; gap: var(--s-2); }
+.pg-panel-sepa > summary { cursor: pointer; color: var(--s-accion); font-weight: 600; }
+.pg-panel-sepa[open] { gap: var(--s-3); }
+@media (max-width: 720px) {
+  .pg-panel-fijo { top: auto; left: 0; align-items: flex-end; min-height: 0; }
+  .pg-panel-fijo > .s-dialogo { max-height: 62vh; box-shadow: 0 -8px 24px rgb(0 0 0 / 14%); }
+  .pg-pagina[data-panel='si'] { padding-right: 0; padding-bottom: 62vh; }
+  .pg-panel-campos { grid-template-columns: minmax(0, 1fr); }
 }

@@ -98,6 +98,20 @@ begin
   loop
     execute format('insert into _k select %I, pg_temp.en_carril(%I, %s) from %I where %I is not null on conflict do nothing', c.attname, c.attname, n, c.temp, c.attname);
   end loop;
+  -- B01·13 (03/11) · Un uuid ÚNICO que no es la clave primaria ni apunta a otra
+  -- fila (el request_id de un pago a Revolut, un id externo) es la identidad de
+  -- la fila, como su id: copiado tal cual choca con el de la plantilla (e2e a
+  -- mano de 06a72e23: conta_pago_salida_request_id_key). Se renueva como un id
+  -- más, también donde salga dentro de un texto o un json. Solo los índices de
+  -- UNA columna: en uno de varias, las demás (la empresa, la cuenta) ya cambian.
+  for c in
+    select distinct cx.tabla, cx.temp, a.attname from _copia cx
+      join pg_index i on i.indrelid = cx.tabla and i.indisunique and not i.indisprimary and i.indnatts = 1
+      join pg_attribute a on a.attrelid = cx.tabla and a.attnum = i.indkey[0] and a.atttypid = 'uuid'::regtype
+     where not exists (select 1 from pg_constraint fk where fk.conrelid = cx.tabla and fk.contype = 'f' and a.attnum = any (fk.conkey))
+  loop
+    execute format('insert into _k select %I, pg_temp.en_carril(%I, %s) from %I where %I is not null on conflict do nothing', c.attname, c.attname, n, c.temp, c.attname);
+  end loop;
   create temp table _correo (viejo text primary key, nuevo text not null) on commit drop;
   insert into _correo select lower(u.email), pg_temp.correo_en_carril(lower(u.email), n)
     from auth.users u where u.id in (select id from _plantilla_usuarios) and u.email is not null;

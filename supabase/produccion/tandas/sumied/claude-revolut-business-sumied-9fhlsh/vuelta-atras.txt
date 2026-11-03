@@ -1,4 +1,5 @@
-# B01 · Cola 2 · la vuelta atrás, en orden inverso: la 1300 (los casados nuevos fuera, los asientos 4/3312 y 4/3310 de vuelta desde el respaldo de la función de borrado, y los casados de antes como estaban) y la 1310 (el núcleo de casar de producción, sin el disparador ni _bank_casado_soltar).
-cuenta: scripts/conta/produccion/cuentas/b01o-olimpo.sql
-supabase/vuelta-atras/20261102T1300_b01o_olimpo_recasar.down.sql
-supabase/vuelta-atras/20261102T1310_b01o_casar_sin_anuladas.down.sql
+# B01 · Cola 1e · la vuelta atrás, en orden inverso: fuera el justificante (la casilla, la tabla y sus
+# funciones; la ficha sigue sin el bloque) y fuera conta_pagos_por_revisar (Pagos sigue como antes sin ella).
+cuenta: scripts/conta/produccion/cuentas/b01p-pagar.sql
+supabase/vuelta-atras/20261102T2140_b01p_justificante.down.sql
+supabase/vuelta-atras/20261102T2115_b01p_pagos_por_revisar.down.sql
