@@ -17,9 +17,16 @@
 --       Si sembrara, la guarda no mediría nada.
 --   1 · con la marca: la empresa, el plan, las ventas del cierre del día
 --       validadas, las 18 recibidas (las de octubre, sin pagar), las 12
---       liquidaciones, el extracto con todo casado menos dos, el 303 del 3T
---       presentado, contabilizado y pagado (su cargo casado) y el del 4T en
+--       liquidaciones, el extracto con todo casado menos tres (dos sueltos y el
+--       cargo del 303), el 303 del 3T presentado sin contabilizar y el del 4T en
 --       borrador. Cada asiento validado, con su huella y su número de cadena.
+--   1b · LOS AGENTES (DM1·4): «Datos maestros e impuestos» y «Libro diario», los
+--       de agentes.sh con sus mismos jueces, sobre lo sembrado: nada en rojo de
+--       la cuenta del doble (los de otras cuentas de staging no cuentan).
+--   1c · ROJO A PROPÓSITO, quitando cada arreglo: con el 111 en el perfil (sin
+--       nóminas ni su 190), «Datos maestros» en rojo; con el 303 contabilizado,
+--       «Libro diario» en rojo (su regla de la autorrepercusión; lo decide
+--       Julio). Se deshace con un savepoint.
 --   2 · ninguna otra cuenta cambia: las mismas empresas y asientos que antes.
 --   3 · otra vez sobre la misma cuenta: para (ya tiene empresa).
 --   4 · la vuelta atrás, apuntada al doble: el doble vuelve a como estaba,
@@ -126,20 +133,52 @@ begin
   select count(*) into n from public.supplier_invoice where account_id = c and company_id = e and status = 'aprobada' and invoice_date = date '2026-10-31';
   if n <> 6 then raise exception 'PRUEBA · 1: % de octubre por pagar; tocaban 6.', n; end if;
   select count(*) into n from public.bank_movement where account_id = c and company_id = e and status = 'pendiente';
-  if n <> 2 then raise exception 'PRUEBA · 1: % movimientos sin casar; tocaban 2.', n; end if;
+  if n <> 3 then raise exception 'PRUEBA · 1: % movimientos sin casar; tocaban 3 (dos sueltos y el cargo del 303).', n; end if;
   select count(*) into n from public.bank_movement where account_id = c and company_id = e and status <> 'casado' and status <> 'pendiente';
   if n > 0 then raise exception 'PRUEBA · 1: % movimientos ni casados ni pendientes.', n; end if;
   select * into t3 from public.tax_return where account_id = c and company_id = e and form_code = '303' and period = '3T';
-  if t3.status is distinct from 'paid' or t3.result_kind is distinct from 'to_pay' or t3.liquidation_entry_id is null or t3.bank_match_id is null or t3.filed_via is distinct from 'outside' then
-    raise exception 'PRUEBA · 1: el 303 del 3T no está presentado, contabilizado y pagado: %', to_jsonb(t3);
+  if t3.status is distinct from 'filed' or t3.result_kind is distinct from 'to_pay' or t3.liquidation_entry_id is not null or t3.filed_via is distinct from 'outside' then
+    raise exception 'PRUEBA · 1: el 303 del 3T no está presentado y sin contabilizar: %', to_jsonb(t3);
   end if;
   select * into t4 from public.tax_return where account_id = c and company_id = e and form_code = '303' and period = '4T';
   if t4.status is distinct from 'draft' or t4.result_kind is null then raise exception 'PRUEBA · 1: el 303 del 4T no está en borrador calculado: %', to_jsonb(t4); end if;
   select count(*) into n from public.vat_book_entry where account_id = c and company_id = e and book = 'received';
   if n <> 18 + 9 then raise exception 'PRUEBA · 1: % apuntes en el libro de recibidas; tocaban 27 (18 facturas y 9 comisiones).', n; end if;
   if (select count(*) from public.supplier where account_id = c and tax_id is null) > 0 then raise exception 'PRUEBA · 1: un proveedor sin NIF.'; end if;
-  raise notice 'PRUEBA DM1 Casa Lola · 1: todo sale (3T % a pagar, pagado; 4T % en borrador).', t3.amount, t4.amount;
+  raise notice 'PRUEBA DM1 Casa Lola · 1: todo sale (3T % a pagar, presentado; 4T % en borrador).', t3.amount, t4.amount;
 end $$;
+
+-- ── 1b · Los agentes, con sus jueces: nada en rojo del doble ────────────────
+\i scripts/conta/staging/agentes-volcar.sql
+\set rojos `bash scripts/conta/staging/agentes-rojos.sh de0c0000`
+select set_config('prueba.rojos', :'rojos', true) \g /dev/null
+do $$ declare r text[] := string_to_array(current_setting('prueba.rojos'), ' '); begin
+  if r[1]::int < 0 then raise exception 'PRUEBA DM1 Casa Lola · 1b: los jueces de los agentes no han escrito su informe.'; end if;
+  if r[1]::int <> 0 or r[2]::int <> 0 then
+    raise exception 'PRUEBA DM1 Casa Lola · 1b: en rojo para el doble: % en «Datos maestros», % en «Libro diario».', r[1], r[2];
+  end if;
+  raise notice 'PRUEBA DM1 Casa Lola · 1b: los dos agentes, sin nada en rojo del doble.';
+end $$;
+
+-- ── 1c · Rojo a propósito: sin cada arreglo, cada agente lo ve ──────────────
+savepoint sin_arreglos;
+update public.company_tax_profile set tax_forms = tax_forms || array['111']
+ where account_id = (select v from _d where clave = 'cuenta');
+do $$ begin
+  perform set_config('request.jwt.claims', json_build_object('sub', (select v from _d where clave = 'admin'), 'role', 'authenticated')::text, true);
+  perform public.conta_impuesto_303_contabilizar((select t.id from public.tax_return t
+    where t.account_id = (select v from _d where clave = 'cuenta') and t.form_code = '303' and t.period = '3T'));
+  perform set_config('request.jwt.claims', '', true);
+end $$;
+\i scripts/conta/staging/agentes-volcar.sql
+\set rojos `bash scripts/conta/staging/agentes-rojos.sh de0c0000`
+select set_config('prueba.rojos', :'rojos', true) \g /dev/null
+do $$ declare r text[] := string_to_array(current_setting('prueba.rojos'), ' '); begin
+  if r[1]::int < 1 then raise exception 'PRUEBA DM1 Casa Lola · 1c: con el 111 sin su 190, «Datos maestros» no lo ve.'; end if;
+  if r[2]::int < 1 then raise exception 'PRUEBA DM1 Casa Lola · 1c: con el 303 contabilizado, «Libro diario» no lo ve.'; end if;
+  raise notice 'PRUEBA DM1 Casa Lola · 1c (rojo a propósito): sin los arreglos, % en rojo en «Datos maestros» y % en «Libro diario».', r[1], r[2];
+end $$;
+rollback to savepoint sin_arreglos;
 
 -- ── 2 · Ninguna otra cuenta cambia ──────────────────────────────────────────
 do $$ declare o record; begin

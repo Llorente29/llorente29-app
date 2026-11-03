@@ -10,11 +10,13 @@
 #      ventas del cierre del día (las de Folvy, al 08/10, y cuatro semanas
 #      inventadas hasta el 01/11), 18 recibidas de sus 6 proveedores, 12
 #      liquidaciones de plataforma y tienda, el extracto (42 movimientos, 40
-#      casados y 2 sin casar), el 303 del 3T presentado fuera, contabilizado y
-#      pagado, y el del 4T en borrador. Todo inventado (T11).
+#      casados y 3 sin casar: dos sueltos y el cargo del 303), el 303 del 3T
+#      presentado fuera y sin contabilizar, y el del 4T en borrador. Todo
+#      inventado (T11). Los agentes «Datos maestros» y «Libro diario», en verde
+#      para Casa Lola (DM1·4: el primer real se deshizo por ellos).
 #      Solo escribe en Casa Lola. Fuera del camino del pedido: lee sus ventas,
-#      no las cambia (están todas cerradas). Sin «autorizo» (el analizador dice
-#      «sigue»).
+#      no las cambia (están todas cerradas). Con «autorizo» (el update de
+#      accounts.is_demo).
 #
 # Antes (producción, 03/11 11:55 UTC): Casa Lola sin marca de demo, sin
 # empresa, sin plan, sin asientos ni banco; la función no existe; nada de la

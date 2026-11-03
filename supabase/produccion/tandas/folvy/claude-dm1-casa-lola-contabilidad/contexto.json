@@ -2,7 +2,7 @@
  "_que": "DM1 · Casa Lola con contabilidad de demo · contexto de producción de la tanda (1350), medido en SOLO LECTURA el 03/11 a las 11:55 UTC. Existe public.accounts; no existe demo_contabilidad_sembrar. Nada de la tanda en el historial. Casa Lola (623d946a…) sin empresa, sin plan y sin asientos.",
  "medido": "2026-11-03T11:55Z",
  "tanda": {
-  "supabase/migrations/20261103T1350_dm1_casa_lola_contabilidad.sql": "5145efdb7d67f9b25be0fe0fbb65db59"
+  "supabase/migrations/20261103T1350_dm1_casa_lola_contabilidad.sql": "56b97c963442700156a624c60d6ef5c7"
  },
  "contexto": {
   "tablas": [

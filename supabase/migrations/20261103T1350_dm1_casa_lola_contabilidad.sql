@@ -20,7 +20,7 @@
 -- (conta_proponer_dias, con las ventas de Folvy de la cuenta), las recibidas
 -- (asiento como el de «se apunta sola»), el extracto (bank_importar), el
 -- casado (bank_casar), el 303 (calcular, apuntar el justificante como
--- presentado fuera, contabilizar y casar su cargo). Así la cadena de huellas,
+-- presentado fuera; sin contabilizar, ver el paso 13). Así la cadena de huellas,
 -- el libro de IVA y las pantallas salen solos, sin escribir a mano en ellos.
 --
 -- Todo inventado y que se ve inventado (T11): NIF de todo ceros con su control
@@ -35,6 +35,16 @@
 -- media diaria de septiembre de cada canal.
 --
 -- Solo toca la cuenta que recibe: cada consulta lleva su account_id (regla 9).
+-- DM1·4 (03/11): el primer real se deshizo solo porque los agentes «Datos
+-- maestros» y «Libro diario» salieron en rojo. Arreglado en la semilla: sin
+-- 111 ni 115 (sin nóminas ni alquiler, no tocan; pedían su 190 y su 180); el
+-- banco con su local (la comisión del TPV salía «común» sin reparto); los datos
+-- que piden el 200 y el depósito (forma, constitución, registro, contacto,
+-- DEHú, CNAE, administradora y socia, plantilla, auditoría), inventados; y el
+-- 303 del 3T presentado SIN contabilizar (la regla de la autorrepercusión del
+-- «Libro diario» pone en rojo su liquidación: lo decide Julio). La prueba de
+-- staging corre los dos agentes y los pone en rojo a propósito.
+--
 -- Vuelta atrás: supabase/vuelta-atras/20261103T1350_dm1_casa_lola_contabilidad.down.sql
 
 create or replace function public.demo_contabilidad_sembrar(p_account uuid)
@@ -70,19 +80,30 @@ begin
   -- 1 · La empresa, su perfil, el ejercicio 2026, el local, el banco y la serie.
   insert into public.company (account_id, legal_name, trade_name, tax_id, tax_id_type, entity_kind,
                               fiscal_street_type, fiscal_street, fiscal_number, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country,
-                              setup_step, created_by)
+                              legal_form_code, incorporated_on, registry_name, registry_volume, registry_folio, registry_sheet, registry_entry,
+                              phone, email, dehu_email, setup_step, created_by)
   values (p_account, 'Casa Lola Restauración, S.L.', 'Casa Lola', 'B00000018', 'nif_es', 'company',
-          'Calle', 'de la Demostración', '1', '28001', 'Madrid', 'Madrid', 'ES', 'nombre', v_actor)
+          'Calle', 'de la Demostración', '1', '28001', 'Madrid', 'Madrid', 'ES',
+          -- Lo que piden el 200 y el depósito de cuentas, inventado y que se ve inventado (T11).
+          'nif_b', date '2024-01-15', 'Registro Mercantil de Madrid', '00000', '1', 'M-000000', '1',
+          '900000000', 'contabilidad.casalola@example.invalid', 'notificaciones.casalola@example.invalid', 'nombre', v_actor)
   returning id into v_emp;
   insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
-  values (v_emp, p_account, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['111', '115', '200', '202', '303', '347', '390'], 'iva_reducido');
+  values (v_emp, p_account, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['200', '202', '303', '347', '390'], 'iva_reducido');
   insert into public.fiscal_year (account_id, company_id, code, starts_on, ends_on, created_by)
   values (p_account, v_emp, 2026, date '2026-01-01', date '2026-12-31', v_actor) returning id into v_fy;
+  update public.fiscal_year set average_staff_fixed = 6, average_staff_temporary = 2, is_audited = false where id = v_fy and account_id = p_account;
+  -- La actividad (CNAE 5611, restaurantes) y la administradora y socia única, inventada (DNI de todo ceros).
+  insert into public.company_activity (account_id, company_id, kind, iae_code, cnae_version, cnae_code, description, started_on, is_main, created_by)
+  values (p_account, v_emp, 'business', '1_6714', '2025', '5611', 'Restaurante de dos tenedores', date '2024-01-15', true, v_actor);
+  insert into public.company_person (account_id, company_id, full_name, tax_id, roles, ownership_pct, started_on, signs_accounts, created_by)
+  values (p_account, v_emp, 'Administradora Demo', '00000000T', array['administrator', 'partner'], 100, date '2024-01-15', true, v_actor);
   update public.company set setup_step = 'hecho', setup_completed_at = now() where id = v_emp;
   insert into public.location_company (location_id, company_id, account_id, created_by)
   select l.id, v_emp, p_account, v_actor from public.locations l where l.account_id = p_account;
-  insert into public.treasury_account (account_id, company_id, kind, name, iban, pgc_hint, is_default, created_by)
-  values (p_account, v_emp, 'bank', 'Cuenta principal', 'ES8999990000150000000001', '572', true, v_actor) returning id into v_banco;
+  -- Con su local (Casa Lola tiene uno): lo que se casa con el banco lleva local, no «común» sin reparto.
+  insert into public.treasury_account (account_id, company_id, kind, name, iban, pgc_hint, is_default, created_by, location_id)
+  values (p_account, v_emp, 'bank', 'Cuenta principal', 'ES8999990000150000000001', '572', true, v_actor, v_loc) returning id into v_banco;
   insert into public.invoice_series (account_id, company_id, code, name, doc_type, digits, is_default, created_by)
   values (p_account, v_emp, 'F', 'Facturas', 'invoice', 6, true, v_actor);
 
@@ -297,7 +318,7 @@ begin
       'concepto', 'IMPUESTOS AEAT MODELO 303 3T 2026', 'clase', 'impuesto'));
   end if;
 
-  -- Y dos sin casar, para que la demo enseñe qué pide la mano.
+  -- Y dos sin casar (más el cargo del 303), para que la demo enseñe qué pide la mano.
   v_movs := v_movs || jsonb_build_array(
     jsonb_build_object('fecha', date '2026-10-28', 'importe', -186.40, 'concepto', 'RECIBO SEGURO MULTIRRIESGO LOCAL POLIZA DEMO-0001', 'clase', 'suelto'),
     jsonb_build_object('fecha', date '2026-10-30', 'importe', 350.00, 'concepto', 'TRANSF. RECIBIDA DEVOLUCION FIANZA DEMO', 'clase', 'suelto'));
@@ -339,18 +360,14 @@ begin
     perform public.journal_entry_validar(v_e, v_quien);
   end loop;
 
-  -- 13 · El 303 del 3T, presentado (fuera, con su justificante apuntado), contabilizado y su cargo casado.
+  -- 13 · El 303 del 3T, presentado (fuera, con su justificante apuntado). SIN contabilizar ni casar su cargo
+  -- (DM1·4, 03/11): el agente «Libro diario» pone en rojo la liquidación del 303 (su regla de la autorrepercusión
+  -- no la exceptúa) y no hay ninguna validada en producción con la que comparar; lo decide Julio. Su cargo queda
+  -- en el banco sin casar: «Contabilizar» y casarlo es lo que haría la persona.
   perform public.conta_impuesto_justificante_apuntar(v_emp, jsonb_build_object(
     'modelo', '303', 'ejercicio', 2026, 'periodo', '3T', 'presentada', '2026-10-19', 'csv', 'DEMO000000000000', 'justificante', '3030000000001',
     'nif', 'B00000018', 'resultado', v_303_imp,
     'casillas', (select jsonb_object_agg(b.box, b.value) from public.tax_return_box b where b.tax_return_id = v_303 and b.account_id = p_account and b.value is not null)));
-  perform public.conta_impuesto_303_contabilizar(v_303);
-  if v_303_imp > 0 then
-    select b.id into v_id from public.bank_movement b where b.account_id = p_account and b.treasury_account_id = v_banco
-       and b.op_date = date '2026-10-20' and b.amount = -v_303_imp limit 1;
-    perform public.conta_impuesto_casar_cargo(v_303, v_id);
-    v_casados := v_casados + 1;
-  end if;
 
   -- 14 · El 303 del cuarto trimestre, en borrador.
   v_303_4t := public.conta_impuesto_303_calcular(v_emp, 2026, '4T');
@@ -359,7 +376,7 @@ begin
   perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
   perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
   return jsonb_build_object('empresa', v_emp, 'asientos', v_n, 'dias_de_ventas', v_dias, 'recibidas', v_recibidas, 'liquidaciones', v_liq,
-                            'movimientos', (select count(*) from _demo_mov), 'casados', v_casados, 'sin_casar', 2,
+                            'movimientos', (select count(*) from _demo_mov), 'casados', v_casados, 'sin_casar', (select count(*) from _demo_mov) - v_casados,
                             'iva_3t', v_303_imp, 'iva_4t', v_303_4t);
 end $$;
 comment on function public.demo_contabilidad_sembrar(uuid) is
