@@ -21,8 +21,10 @@
 -- (supplier_invoice, supplier_invoice_payment, supplier, locations, company,
 -- company_account_link, conta_pago_remesa*) filtran solo por la cuenta: nada
 -- de lo que ve un usuario cambia. El cuerpo es el de antes, letra a letra,
--- salvo esa línea. Mismas firmas: create or replace (regla 2: no cambia
--- ningún parámetro).
+-- salvo esa línea y el desempate del orden (f.id: dos facturas con el mismo
+-- vencimiento y la misma fecha salían en un orden que dependía del plan; Pagos
+-- las vuelve a ordenar en pantalla). Mismas firmas: create or replace (regla 2:
+-- no cambia ningún parámetro).
 --
 -- Los permisos, los de conta_pagos_por_revisar para las dos: authenticated y
 -- service_role (conta_pagos_lista se podía llamar también como anon y PUBLIC).
@@ -61,7 +63,7 @@ AS $function$
        and si.payment_method is distinct from 'compensation' and si.paid_method is distinct from 'compensation'
   )
   select jsonb_build_object(
-    'filas', coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb),
+    'filas', coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha, f.id) from f), '[]'::jsonb),
     'pagado_mes', (select coalesce(sum(p.amount), 0) from public.supplier_invoice_payment p join f on f.id = p.invoice_id
                     where p.entry_id is not null and p.paid_on >= date_trunc('month', p_mes)::date and p.paid_on < (date_trunc('month', p_mes) + interval '1 month')::date),
     'pagadas_mes', (select count(distinct p.invoice_id) from public.supplier_invoice_payment p join f on f.id = p.invoice_id
@@ -91,7 +93,7 @@ AS $function$
        and si.status = 'en_revision' and si.paid_at is null and si.discarded_at is null
        and si.payment_method is distinct from 'compensation'
   )
-  select coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha) from f), '[]'::jsonb)
+  select coalesce((select jsonb_agg(to_jsonb(f) order by f.vence nulls last, f.fecha, f.id) from f), '[]'::jsonb)
 $function$;
 
 revoke all on function public.conta_pagos_lista(uuid, date) from public, anon;

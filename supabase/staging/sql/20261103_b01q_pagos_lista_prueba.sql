@@ -7,7 +7,7 @@
 --   0. La vuelta atrás las deja sin SECURITY DEFINER; la 1815 las vuelve a
 --      poner con él (dos veces).
 --   1. Con la sesión del administrador de la cuenta, el MISMO resultado con
---      las de antes y con las nuevas (las dos funciones, byte a byte), y trae
+--      las de antes y con las nuevas (las mismas filas, campo a campo), y trae
 --      lo esperado: la aprobada por pagar, la pagada en parte con su pendiente,
 --      la que está en revisión en la otra.
 --   2. Con la sesión de otra cuenta, nada: ni filas, ni pagado en el mes, ni
@@ -64,10 +64,14 @@ do $$
 declare e uuid := (select v::uuid from _r where clave = 'empresa');
   l jsonb := public.conta_pagos_lista(e, '2026-11-03'); rv jsonb := public.conta_pagos_por_revisar(e); x jsonb;
 begin
-  if l::text <> (select v from _r where clave = 'antes_lista') then
+  -- Las mismas filas (por su id) y lo mismo de todo lo demás; el orden de dos que empatan podía variar antes.
+  if (select jsonb_agg(f order by f->>'id') from jsonb_array_elements(l->'filas') f) is distinct from
+     (select jsonb_agg(f order by f->>'id') from jsonb_array_elements((select v::jsonb from _r where clave = 'antes_lista')->'filas') f)
+     or (l - 'filas') <> ((select v::jsonb from _r where clave = 'antes_lista') - 'filas') then
     raise exception 'PRUEBA B01·15 · 1: conta_pagos_lista no devuelve lo mismo que antes (antes % · ahora %).', (select v from _r where clave = 'antes_lista'), l;
   end if;
-  if rv::text <> (select v from _r where clave = 'antes_revisar') then
+  if (select jsonb_agg(f order by f->>'id') from jsonb_array_elements(rv) f) is distinct from
+     (select jsonb_agg(f order by f->>'id') from jsonb_array_elements((select v::jsonb from _r where clave = 'antes_revisar')) f) then
     raise exception 'PRUEBA B01·15 · 1: conta_pagos_por_revisar no devuelve lo mismo que antes (antes % · ahora %).', (select v from _r where clave = 'antes_revisar'), rv;
   end if;
   select f into x from jsonb_array_elements(l->'filas') f where f->>'numero' = 'P15-APR';

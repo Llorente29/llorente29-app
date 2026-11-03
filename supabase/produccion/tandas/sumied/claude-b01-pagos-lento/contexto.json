@@ -2,7 +2,7 @@
  "_que": "B01 · Respuesta 15 · contexto de producción de la tanda (1815), medido en SOLO LECTURA el 03/11 a las 17:40Z: existen las dos funciones (conta_pagos_lista(uuid,date) y conta_pagos_por_revisar(uuid)), sin otras firmas; ninguna en el camino del pedido ni en el cron; nada en el historial.",
  "medido": "2026-11-03T17:40Z",
  "tanda": {
-  "supabase/migrations/20261103T1815_b01q_pagos_lista_rapida.sql": "f4cfe9353dd2f01726ea19f7e92d35f3"
+  "supabase/migrations/20261103T1815_b01q_pagos_lista_rapida.sql": "0a0cd2832efcdf3f8d0ba78f8eb79db1"
  },
  "contexto": {
   "tablas": [],
