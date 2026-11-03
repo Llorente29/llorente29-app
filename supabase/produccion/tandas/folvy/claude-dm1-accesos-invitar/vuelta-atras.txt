@@ -1,0 +1,3 @@
+# DM1 · Accesos 1 · vuelta atrás: fuera las funciones y la tabla de
+# invitaciones (los accesos ya aceptados se quedan).
+supabase/vuelta-atras/20261103T0812_dm1_invitaciones.down.sql

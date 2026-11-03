@@ -1,0 +1,6 @@
+# DM1 · Accesos 1 · La 0812 y su prueba (ROLLBACK): con un acceso a B metido a
+# mano, la comprobación lo ve (rojo a propósito); invitar, aceptar (ve solo A,
+# como Encargado), el encargado no ve nada de esto, anular y reenviar, quitar
+# el acceso y la vuelta atrás.
+supabase/migrations/20261103T0812_dm1_invitaciones.sql
+supabase/staging/sql/20261103_dm1_invitaciones_prueba.sql

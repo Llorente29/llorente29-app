@@ -1,0 +1,19 @@
+{
+ "_que": "DM1 · Accesos 1 · contexto de producción de la tanda (0812), medido en SOLO LECTURA el 03/11 a las 09:00 UTC. No existe la tabla invitacion ni ninguna de sus once funciones. Nada de la tanda en el historial.",
+ "medido": "2026-11-03T09:00Z",
+ "tanda": {
+  "supabase/migrations/20261103T0812_dm1_invitaciones.sql": "5956dad8ac1acd147f33d543ef3e4d8a"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
