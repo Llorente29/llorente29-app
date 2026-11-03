@@ -14,5 +14,6 @@ select clave, valor from (
     (strpos(pg_get_functiondef('public.conta_liquidaciones_mes(uuid,date)'::regprocedure), 'k as materialized (') > 0)::int::text
   union all
   select 4, 'Respaldos de la 1527 (antes 0, después 2)',
+    -- quieta: solo cuenta los respaldos con el nombre de esta migración, que solo escribe ella.
     (select count(*)::text from public.funcion_respaldo where migracion = '20261103T1527_s01q_mes_rapido')
 ) t order by o;
