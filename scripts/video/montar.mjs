@@ -166,9 +166,9 @@ if (sonidos.length) {
   }
   const entradas = sonidos.flatMap((d) => ['-i', vozDe.get(d.id).salida])
   const mezcla = sonidos.map((d, i) => `[${i}:a]aresample=48000,adelay=${Math.round(d.a * 1000)}:all=1[a${i}]`).join(';') +
-    `;${sonidos.map((_, i) => `[a${i}]`).join('')}amix=inputs=${sonidos.length}:normalize=0,apad,atrim=0:${total.toFixed(2)},loudnorm=I=-16:TP=-1.5[voz]`
+    `;${sonidos.map((_, i) => `[a${i}]`).join('')}amix=inputs=${sonidos.length}:normalize=0,apad,atrim=0:${total.toFixed(2)},alimiter=limit=0.95:level=false[voz]`
   const m4a = join(salida, 'voz.m4a')
-  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...entradas, '-filter_complex', mezcla, '-map', '[voz]', '-c:a', 'aac', '-b:a', '160k', m4a])
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...entradas, '-filter_complex', mezcla, '-map', '[voz]', '-c:a', 'aac', '-b:a', '192k', m4a])
   execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', sinVoz, '-i', m4a, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-shortest', '-movflags', '+faststart', mp4])
   console.log(`Con voz: ${sonidos.length} frases.`)
 } else {

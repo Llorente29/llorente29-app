@@ -52,22 +52,28 @@ if ELEVEN:
         sys.exit("Falta VOZ_ELEVENLABS_ID: el id de la voz de ElevenLabs.")
     modelo = os.environ.get("VOZ_ELEVENLABS_MODELO", "eleven_multilingual_v2")
     print(f"Voz: ElevenLabs · {modelo}")
+    # 03/11 (Julio: «suena a lata»): MP3 a 44,1 kHz, el de la web (el PCM a 44,1 kHz es solo de Pro, y
+    # el de 24 kHz perdía los agudos), y SIN voice_settings: los de la propia voz, como en su prueba.
+    import subprocess
     for i, f in enumerate(frases):
-        cuerpo = {"text": f["texto"], "model_id": modelo, "language_code": "es",
-                  "voice_settings": {"stability": 0.45, "similarity_boost": 0.8, "style": 0.25, "use_speaker_boost": True}}
+        cuerpo = {"text": f["texto"], "model_id": modelo, "language_code": "es"}
         if i > 0 and frases[i - 1]["id"] not in ("portada",):
             cuerpo["previous_text"] = frases[i - 1]["texto"]
         if i + 1 < len(frases) and frases[i + 1]["id"] not in ("cierre",):
             cuerpo["next_text"] = frases[i + 1]["texto"]
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=mp3_44100_128"
         try:
-            pcm = pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=pcm_24000", cuerpo, {"xi-api-key": ELEVEN})
+            mp3 = pedir(url, cuerpo, {"xi-api-key": ELEVEN})
         except urllib.error.HTTPError as e:
             if "language_code" in cuerpo and e.code in (400, 422):
                 cuerpo.pop("language_code")
-                pcm = pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=pcm_24000", cuerpo, {"xi-api-key": ELEVEN})
+                mp3 = pedir(url, cuerpo, {"xi-api-key": ELEVEN})
             else:
                 sys.exit(f"ElevenLabs: HTTP {e.code} {e.read()[:300]!r}")
-        wav_pcm(f["salida"], pcm, 24000)
+        tmp = f["salida"] + ".mp3"
+        open(tmp, "wb").write(mp3)
+        subprocess.run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", tmp, "-ar", "44100", "-ac", "1", f["salida"]], check=True)
+        os.remove(tmp)
 elif GOOGLE:
     nombre = os.environ.get("VOZ_GOOGLE_NOMBRE", "").strip() or "es-ES-Chirp3-HD-Charon"
     print(f"Voz: Google · {nombre}")
