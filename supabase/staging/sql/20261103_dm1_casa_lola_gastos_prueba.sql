@@ -30,18 +30,18 @@ set local statement_timeout = '600s';
 -- Doble inventado de Casa Lola para probar la semilla (local y prueba de staging).
 create temp table _d (clave text primary key, v uuid) on commit drop;
 insert into _d values
-  ('cuenta', 'de0c0000-0000-4000-8000-00000000c01a'), ('local', 'de0c0000-0000-4000-8000-00000000c01b'),
-  ('marca', 'de0c0000-0000-4000-8000-00000000c01c'), ('admin', 'de0c0000-0000-4000-8000-00000000c01d'),
-  ('glovo', 'de0c0000-0000-4000-8000-0000000000c1'), ('uber', 'de0c0000-0000-4000-8000-0000000000c2'),
-  ('shop', 'de0c0000-0000-4000-8000-0000000000c3'), ('justeat', 'de0c0000-0000-4000-8000-0000000000c4'),
-  ('salon', 'de0c0000-0000-4000-8000-0000000000c5');
+  ('cuenta', 'de0c0001-0000-4000-8000-00000000c01a'), ('local', 'de0c0001-0000-4000-8000-00000000c01b'),
+  ('marca', 'de0c0001-0000-4000-8000-00000000c01c'), ('admin', 'de0c0001-0000-4000-8000-00000000c01d'),
+  ('glovo', 'de0c0001-0000-4000-8000-0000000000c1'), ('uber', 'de0c0001-0000-4000-8000-0000000000c2'),
+  ('shop', 'de0c0001-0000-4000-8000-0000000000c3'), ('justeat', 'de0c0001-0000-4000-8000-0000000000c4'),
+  ('salon', 'de0c0001-0000-4000-8000-0000000000c5');
 
 insert into public.accounts (id, name, slug, country, currency, timezone, business_type)
 select v, 'Casa Lola (doble de prueba)', 'casa-lola-doble-' || substr(md5(random()::text), 1, 6), 'ES', 'EUR', 'Europe/Madrid', 'restaurante' from _d where clave = 'cuenta';
 insert into public.locations (id, account_id, name, active, is_billable)
 select (select v from _d where clave = 'local'), (select v from _d where clave = 'cuenta'), 'Casa Lola', true, true;
 insert into public.brand (id, account_id, name, slug, is_active)
-select (select v from _d where clave = 'marca'), (select v from _d where clave = 'cuenta'), 'Casa Lola', 'casa-lola-doble', true;
+select (select v from _d where clave = 'marca'), (select v from _d where clave = 'cuenta'), 'Casa Lola', 'casa-lola-doble-2', true;
 insert into public.sales_channel (id, account_id, name, slug, is_active, channel_type)
 select d.v, (select v from _d where clave = 'cuenta'), n.nombre, n.slug, true, n.tipo
   from (values ('glovo', 'Glovo', 'delivery'), ('uber', 'Uber', 'delivery'), ('shop', 'Shop', 'takeaway'),
@@ -52,7 +52,7 @@ select (select v from _d where clave = 'cuenta'), n.nombre, n.legal, (select v f
   from (values ('Frutas y Verduras Hermanos Vega', 'Hermanos Vega Frutas y Verduras, S.L.'), ('Carnes Sierra Norte', 'Cárnicas Sierra Norte, S.L.'),
                ('Pescados del Cantábrico', 'Pescados del Cantábrico Madrid, S.L.'), ('Distribuciones Castilla', 'Distribuciones Alimentarias Castilla, S.A.'),
                ('Bodegas y Bebidas Madrid', 'Bodegas y Bebidas Madrid, S.L.'), ('Panadería La Espiga', 'Panadería La Espiga, S.L.')) n(nombre, legal);
-insert into auth.users (id, email) select v, 'demo.casalola.doble@example.invalid' from _d where clave = 'admin';
+insert into auth.users (id, email) select v, 'demo.casalola.doble2@example.invalid' from _d where clave = 'admin';
 insert into public.user_profiles (user_id, account_id, role, active, display_name, terms_accepted_at, welcome_completed_at)
 select (select v from _d where clave = 'admin'), (select v from _d where clave = 'cuenta'), 'admin', true, 'Demo Folvy', now(), now();
 
@@ -131,7 +131,7 @@ end $$;
 
 -- ── 1b · Los agentes, con sus jueces: nada en rojo del doble ────────────────
 \i scripts/conta/staging/agentes-volcar.sql
-\set rojos `bash scripts/conta/staging/agentes-rojos.sh de0c0000`
+\set rojos `bash scripts/conta/staging/agentes-rojos.sh de0c0001`
 select set_config('prueba.rojos', :'rojos', true) \g /dev/null
 do $$ declare r text[] := string_to_array(current_setting('prueba.rojos'), ' '); begin
   if r[1]::int < 0 then raise exception 'PRUEBA DM1·6 · 1b: los jueces de los agentes no han escrito su informe.'; end if;
@@ -151,7 +151,7 @@ update public.journal_entry set concept = concept || ' (tocado)'
               order by e.entry_date limit 1);
 alter table public.journal_entry enable trigger trg_journal_entry_inalterable;
 \i scripts/conta/staging/agentes-volcar.sql
-\set rojos `bash scripts/conta/staging/agentes-rojos.sh de0c0000`
+\set rojos `bash scripts/conta/staging/agentes-rojos.sh de0c0001`
 select set_config('prueba.rojos', :'rojos', true) \g /dev/null
 do $$ declare r text[] := string_to_array(current_setting('prueba.rojos'), ' '); begin
   if r[1]::int < 1 then raise exception 'PRUEBA DM1·6 · 1c: con el 111 sin el 190, «Datos maestros» no lo ve.'; end if;
