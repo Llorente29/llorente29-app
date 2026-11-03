@@ -42,6 +42,7 @@ insert into _s values
   ('a', 'c01a0000-0000-4000-8000-00000000000a'), ('b', 'c01b0000-0000-4000-8000-00000000000b'),
   ('admin_a', 'c01a0000-0000-4000-8000-0000000000a1'), ('encargado', 'c01a0000-0000-4000-8000-0000000000a6'),
   ('invitada', 'd1a10000-0000-4000-8000-0000000000e1'), ('correo', 'invitada.dm1@example.invalid'),
+  ('falsa', 'd1a10000-0000-4000-8000-0000000000e2'), ('correo_falsa', 'falsa.dm1@example.invalid'),
   ('otra', 'otra.dm1@example.invalid');
 
 do $$ begin
@@ -51,16 +52,22 @@ do $$ begin
   end if;
 end $$;
 -- La persona nueva: un usuario sin ninguna empresa (se va con el ROLLBACK).
-insert into auth.users (id, email) values ((select v::uuid from _s where clave = 'invitada'), (select v from _s where clave = 'correo'));
+insert into auth.users (id, email) values ((select v::uuid from _s where clave = 'invitada'), (select v from _s where clave = 'correo')),
+  ((select v::uuid from _s where clave = 'falsa'), (select v from _s where clave = 'correo_falsa'));
 
 -- Como quien sea.
 create or replace function pg_temp.como(p_quien text) returns void language sql as $f$
   select set_config('request.jwt.claims', json_build_object('sub', (select v from _s where clave = p_quien), 'role', 'authenticated')::text, true)
 $f$;
 -- ¿Ve solo A? Devuelve qué ve de más, o null si ve justo A (o nada si p_ninguna).
+-- _cuenta_activa guarda la cuenta de cada persona en un ajuste de la transacción
+-- (folvy.cuenta_activa). En la app cada petición es otra transacción; aquí va
+-- todo en una, así que se vacía antes de mirar: como una petición nueva.
 create or replace function pg_temp.ve_de_mas(p_ninguna boolean) returns text language plpgsql as $f$
-declare v_ids uuid[] := public.current_user_account_ids(); v_b int;
+declare v_ids uuid[]; v_b int;
 begin
+  perform set_config('folvy.cuenta_activa', '', true);
+  v_ids := public.current_user_account_ids();
   select count(*) into v_b from public.supplier where account_id = (select v::uuid from _s where clave = 'b');
   if v_b > 0 then return 've ' || v_b || ' proveedores de B'; end if;
   if p_ninguna then
@@ -71,10 +78,13 @@ begin
   return null;
 end $f$;
 
--- ROJO A PROPÓSITO: un acceso a B metido a mano. La comprobación lo tiene que ver.
+-- ROJO A PROPÓSITO: otra persona inventada con un acceso a B metido a mano (lo
+-- que NO debe pasar). La comprobación lo tiene que ver. Es otra persona para no
+-- tener que borrarlo: en staging la prueba no es superusuario y user_profiles
+-- tiene sus reglas.
 insert into public.user_profiles (user_id, account_id, role, active, display_name)
-values ((select v::uuid from _s where clave = 'invitada'), (select v::uuid from _s where clave = 'b'), 'manager', true, 'Fallo a propósito (prueba DM1)');
-select pg_temp.como('invitada');
+values ((select v::uuid from _s where clave = 'falsa'), (select v::uuid from _s where clave = 'b'), 'manager', true, 'Fallo a propósito (prueba DM1)');
+select pg_temp.como('falsa');
 set local role authenticated;
 select pg_temp.ve_de_mas(true) as de_mas \gset
 reset role;
@@ -85,7 +95,6 @@ do $$ begin raise notice 'DM1 Accesos · 0 (rojo a propósito): con un acceso a 
 \else
 do $$ begin raise exception 'PRUEBA DM1 Accesos · 0: con un acceso a B metido a mano, la comprobación no ve nada: no mediría nada.'; end $$;
 \endif
-delete from public.user_profiles where user_id = (select v::uuid from _s where clave = 'invitada');
 
 -- ── 1 · Recién aplicada ─────────────────────────────────────────────────────
 \i supabase/migrations/20261103T0812_dm1_invitaciones.sql
