@@ -22,6 +22,18 @@ set local statement_timeout = '300s';
 -- sin usuario: la tanda la aplica el dueño de las funciones (como el workflow); las dos se leen con los claims del administrador de A, porque miran que la empresa sea de quien pregunta.
 select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
 
+-- El workflow aplica la 1527 del manifiesto antes de esta prueba, en la misma
+-- transacción: si las dos llegan ya cambiadas, se dejan como estaban (desde su
+-- respaldo), para medir de verdad «lo de antes».
+do $$ begin
+  if strpos(pg_get_functiondef('public.conta_liquidaciones_mes(uuid,date)'::regprocedure), 'materialized') > 0
+     or strpos(pg_get_functiondef('public.conta_liquidaciones(uuid,date,date)'::regprocedure), 'materialized') > 0 then
+    perform public._restaurar_funcion('public.conta_liquidaciones_mes(uuid,date)', '20261103T1527_s01q_mes_rapido');
+    perform public._restaurar_funcion('public.conta_liquidaciones(uuid,date,date)', '20261103T1527_s01q_mes_rapido');
+    raise notice 'PRUEBA S01q·11 · 0: llegaban aplicadas; vueltas a como estaban para medir lo de antes.';
+  end if;
+end $$;
+
 create temp table _antes (que text primary key, r jsonb, ms numeric) on commit drop;
 create temp table _md5 (f text primary key, antes text) on commit drop;
 insert into _md5 values
