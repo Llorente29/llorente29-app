@@ -62940,7 +62940,8 @@ begin
         -- Manda Folvy (respuesta 3): no es un aviso, es una línea para saber.
         if v_loc is not null and v_loc is distinct from v_loc_folvy then
           v_msg := v_msg || (v_nombre || ': se deja el local de Folvy (' || coalesce((select name from public.locations where id = v_loc_folvy), 'sin local')
-                             || '); en Cegid ponía ' || v_centro || '.');
+                             || case when v_centro = '__sin_centro__' then '); en Cegid no traía centro.'
+                                     else '); en Cegid ponía ' || v_centro || '.' end);
         end if;
       end if;
 
