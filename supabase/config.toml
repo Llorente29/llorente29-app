@@ -258,6 +258,13 @@ verify_jwt = false
 [functions.invitar-persona]
 verify_jwt = true
 
+# (03/11) DM1 · Accesos 1. invitacion-aceptar: la página del enlace de la
+# invitación (/welcome?invitacion=…), SIN sesión. Su frontera es el token (32
+# bytes al azar, la base guarda su huella), pendiente y sin caducar; y crear
+# usuario solo vale para un correo que no lo tiene: verify_jwt = false.
+[functions.invitacion-aceptar]
+verify_jwt = false
+
 # DM1 · PR 2a (31/10): el verify_jwt que tienen VIVO en producción (leído el 31/10),
 # escrito aquí para que desplegar-funciones-staging-conta no tenga que adivinarlo.
 

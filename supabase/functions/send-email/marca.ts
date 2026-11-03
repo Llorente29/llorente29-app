@@ -367,11 +367,48 @@ export function avisoPago(m: Marca, data: Record<string, unknown>): CorreoMarca 
   };
 }
 
+/**
+ * DM1 · Accesos 1 (03/11/2026). Invitar a una persona a una o varias empresas.
+ * data: { invita, empresas: [{ nombre, permiso }], enlace, diasCaducidad }
+ * Vale para quien no tiene usuario (pone su contraseña) y para quien ya lo
+ * tiene (entra y acepta): el enlace lleva a la invitación y ella decide.
+ */
+export function invitacionPersona(m: Marca, data: Record<string, unknown>): CorreoMarca {
+  const c = coloresDe(m);
+  const invita = String(data.invita ?? '').trim();
+  const empresas = (Array.isArray(data.empresas) ? data.empresas : [])
+    .map((e) => e as Record<string, unknown>)
+    .map((e) => ({ nombre: String(e.nombre ?? '').trim(), permiso: String(e.permiso ?? '').trim() }))
+    .filter((e) => e.nombre);
+  const url = urlSegura(data.enlace);
+  const diasN = Number(data.diasCaducidad);
+  const dias = Number.isFinite(diasN) && diasN > 0 ? Math.floor(diasN) : 7;
+  const quien = invita ? esc(invita) : 'Alguien';
+  const titulo = empresas.length === 1 ? `Te invitan a ${esc(empresas[0].nombre)}` : 'Te invitan a varias empresas';
+  const lista = empresas.map((e) => `<li><strong>${esc(e.nombre)}</strong>${e.permiso ? ` · ${esc(e.permiso)}` : ''}</li>`).join('');
+  const cuerpo = `${h1(titulo, c)}${p(`${quien} te invita a entrar en ${esc(m.nombre)}:`, c)}
+    <ul style="margin:0 0 16px;padding-left:20px;color:${c.tinta};line-height:1.6;">${lista}</ul>
+    ${p('Si aún no tienes usuario, el enlace te deja poner tu contraseña. Si ya lo tienes, entra y acepta: las empresas aparecen en tu lista.', c)}
+    ${url ? boton(url, 'Ver la invitación', c) : p('<em>El enlace no está disponible. Pide a quien te invitó que te la reenvíe.</em>', c)}
+    ${nota(`La invitación caduca a los ${dias} días. Si el botón no funciona, copia esta dirección en tu navegador:<br /><span style="color:${c.tinta};word-break:break-all;">${url}</span>`, c)}`;
+  const texto = `${invita || 'Alguien'} te invita a entrar en ${m.nombre}:\n\n` +
+    empresas.map((e) => `- ${e.nombre}${e.permiso ? ` · ${e.permiso}` : ''}`).join('\n') +
+    `\n\nSi aún no tienes usuario, el enlace te deja poner tu contraseña. Si ya lo tienes, entra y acepta.\n\n` +
+    `Ver la invitación: ${url || '(enlace no disponible; pide que te la reenvíen)'}\n\nCaduca a los ${dias} días.\n\n${m.nombre}`;
+  const tituloTexto = empresas.length === 1 ? `Te invitan a ${empresas[0].nombre}` : 'Te invitan a varias empresas';
+  return {
+    subject: `${m.nombre} · ${tituloTexto}`,
+    html: marco(m, tituloTexto, cuerpo, `Te llega porque ${invita || 'alguien'} ha escrito tu correo para darte acceso en ${m.nombre}.`),
+    text: texto,
+  };
+}
+
 export const PLANTILLAS_MARCA: Record<string, (m: Marca, d: Record<string, unknown>) => CorreoMarca> = {
   codigo_pago_conta: codigoPago,
   aviso_pago_conta: avisoPago,
   invitacion_asesoria: invitacionAsesoria,
   invitacion_conta: invitacion,
+  invitacion_persona: invitacionPersona,
   contrasena_conta: contrasena,
   contrasena_cambiada_conta: contrasenaCambiada,
   resumen_trimestre: resumenTrimestre,

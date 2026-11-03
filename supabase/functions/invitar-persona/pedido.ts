@@ -2,7 +2,8 @@
 //
 // DM1 · PR 1 (30/10/2026). Lo de invitar-persona que no necesita Deno, para
 // probarlo solo (tests/unit/multitenancy/invitarPersona.test.ts): leer el
-// pedido y decir en palabras lo que ha pasado (regla 8).
+// pedido y decir en palabras lo que ha pasado (regla 8). Desde el 03/11
+// (Accesos 1) la invitación se acepta: la frase dice que se ha enviado.
 
 export type Rol = 'admin' | 'manager'
 export interface PedidoInvitacion {
@@ -39,27 +40,23 @@ export function lista(nombres: string[]): string {
   return `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`
 }
 
-export interface Resultado {
-  nuevo: boolean
-  anadidas: string[]
-  yaEstaba: string[]
-  enviada: boolean
-  motivo: string | null
+/** Cómo se dice cada permiso en la pantalla y en el correo. */
+export const NOMBRE_PERMISO: Record<Rol, string> = { admin: 'Todo', manager: 'Encargado' }
+
+export function leerReenvio(b: Record<string, unknown> | null): { ok: true; pedido: { id: string; marca: 'folvy' | 'sumied' } } | { ok: false; error: string } {
+  const id = String(b?.id ?? '')
+  if (!UUID.test(id)) return { ok: false, error: 'Esa invitación no es válida.' }
+  return { ok: true, pedido: { id, marca: b?.marca === 'sumied' ? 'sumied' : 'folvy' } }
 }
 
-/** Lo que dice la pantalla al acabar: qué ha pasado, con contenido (regla 8). */
-export function fraseDelResultado(correo: string, r: Resultado): string {
-  const partes: string[] = []
-  if (r.anadidas.length) {
-    partes.push(r.nuevo
-      ? `Invitación a ${correo} para ${lista(r.anadidas)}.`
-      : `${correo} ya tenía usuario: se le ha dado acceso a ${lista(r.anadidas)}. Entra con su contraseña de siempre y elige la empresa arriba.`)
+/**
+ * Lo que dice la pantalla al acabar (regla 8), con contenido:
+ * «Invitación enviada a … para Foodint (Todo) y Casa Lola (Encargado). …»
+ */
+export function fraseDelEnvio(correo: string, empresas: { nombre: string; permiso: string }[], enviada: boolean, motivo: string | null, reenvio = false): string {
+  const para = lista(empresas.map((e) => `${e.nombre} (${e.permiso})`))
+  if (!enviada) {
+    return `${reenvio ? 'Invitación renovada' : 'Invitación guardada'} para ${correo} en ${para}, pero el correo no ha salido${motivo ? ` (${motivo})` : ''}. Sale en Pendientes: reenvíala más tarde.`
   }
-  if (r.yaEstaba.length) partes.push(`Ya entraba en ${lista(r.yaEstaba)}: no se ha cambiado nada ahí.`)
-  if (r.nuevo) {
-    partes.push(r.enviada
-      ? 'Le ha llegado un correo para poner su contraseña; el enlace caduca en 7 días.'
-      : `El correo no ha salido${r.motivo ? ` (${r.motivo})` : ''}: vuelve a invitarla más tarde y le llegará otro.`)
-  }
-  return partes.join(' ')
+  return `${reenvio ? 'Invitación reenviada' : 'Invitación enviada'} a ${correo} para ${para}. Le llega un correo con un enlace que vale 7 días; hasta que acepte, sale en Pendientes.`
 }

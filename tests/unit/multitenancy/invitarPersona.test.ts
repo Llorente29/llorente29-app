@@ -1,7 +1,7 @@
 // DM1 · PR 1 (30/10/2026). invitar-persona: leer el pedido y decir lo que ha
 // pasado (regla 8). Correos inventados, de dominio de pruebas.
 import { describe, it, expect } from 'vitest'
-import { fraseDelResultado, leerInvitacion, lista } from '../../../supabase/functions/invitar-persona/pedido'
+import { fraseDelEnvio, leerInvitacion, leerReenvio, lista } from '../../../supabase/functions/invitar-persona/pedido'
 
 const A = '00000000-0000-4000-8000-00000000000a'
 const B = '00000000-0000-4000-8000-00000000000b'
@@ -22,13 +22,17 @@ describe('DM1 · invitar a una persona', () => {
     const r = leerInvitacion({ correo: 'a@prueba.test', cuentas: [{ account_id: A, rol: 'admin' }], marca: 'otra' })
     expect(r.ok && r.pedido.marca).toBe('folvy')
   })
-  it('dice lo que ha pasado, con contenido', () => {
+  it('dice lo que ha pasado, con contenido (Julio, 03/11)', () => {
     expect(lista(['Bar Prueba', 'Restaurante Ejemplo', 'Casa Demo'])).toBe('Bar Prueba, Restaurante Ejemplo y Casa Demo')
-    expect(fraseDelResultado('a@prueba.test', { nuevo: true, anadidas: ['Bar Prueba', 'Casa Demo'], yaEstaba: [], enviada: true, motivo: null }))
-      .toBe('Invitación a a@prueba.test para Bar Prueba y Casa Demo. Le ha llegado un correo para poner su contraseña; el enlace caduca en 7 días.')
-    expect(fraseDelResultado('a@prueba.test', { nuevo: false, anadidas: ['Casa Demo'], yaEstaba: ['Bar Prueba'], enviada: false, motivo: null }))
-      .toBe('a@prueba.test ya tenía usuario: se le ha dado acceso a Casa Demo. Entra con su contraseña de siempre y elige la empresa arriba. Ya entraba en Bar Prueba: no se ha cambiado nada ahí.')
-    expect(fraseDelResultado('a@prueba.test', { nuevo: true, anadidas: ['Casa Demo'], yaEstaba: [], enviada: false, motivo: 'los correos de invitación están cerrados' }))
-      .toContain('El correo no ha salido (los correos de invitación están cerrados): vuelve a invitarla más tarde')
+    expect(fraseDelEnvio('a@prueba.test', [{ nombre: 'Bar Prueba', permiso: 'Todo' }, { nombre: 'Casa Demo', permiso: 'Encargado' }], true, null))
+      .toBe('Invitación enviada a a@prueba.test para Bar Prueba (Todo) y Casa Demo (Encargado). Le llega un correo con un enlace que vale 7 días; hasta que acepte, sale en Pendientes.')
+    expect(fraseDelEnvio('a@prueba.test', [{ nombre: 'Casa Demo', permiso: 'Todo' }], true, null, true))
+      .toMatch(/^Invitación reenviada a a@prueba.test para Casa Demo \(Todo\)\./)
+    expect(fraseDelEnvio('a@prueba.test', [{ nombre: 'Casa Demo', permiso: 'Todo' }], false, 'los correos de invitación están cerrados'))
+      .toBe('Invitación guardada para a@prueba.test en Casa Demo (Todo), pero el correo no ha salido (los correos de invitación están cerrados). Sale en Pendientes: reenvíala más tarde.')
+  })
+  it('reenviar: una invitación por su id', () => {
+    expect(leerReenvio({ id: A, marca: 'sumied' })).toEqual({ ok: true, pedido: { id: A, marca: 'sumied' } })
+    expect(leerReenvio({ id: 'x' }).ok).toBe(false)
   })
 })
