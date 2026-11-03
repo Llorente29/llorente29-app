@@ -102,6 +102,29 @@ select :'cuenta', :'empresa', s.id, (select id from public.locations where accou
                ('Bebidas Sierra Norte', 'SN/2026/3310', 472.80, 92.47, 565.27)) as x(proveedor, numero, base, iva, total)
   join public.supplier s on s.account_id = :'cuenta' and s.name = x.proveedor;
 
+-- 6 · (03/11) La plantilla trae ahora facturas de demostración del B01 (otra sesión) que vencen
+--     esta semana o ya han vencido, de proveedores «… Prueba …». En el carril, y solo para el vídeo:
+--     «Pagar lo de esta semana» tiene que marcar las tres del vídeo y nada más. Las demás por pagar
+--     pasan a vencer dentro de tres semanas (salvo las de tarjeta o domiciliadas, que no entran nunca).
+update public.supplier_invoice si set due_date = current_date + 21
+  from public.supplier s
+ where s.id = si.supplier_id and si.account_id = :'cuenta' and si.status = 'aprobada' and si.paid_at is null
+   and si.due_date is not null and si.due_date <= current_date + 7
+   and si.invoice_number not in ('CC-26-0942', 'SN/2026/3310', 'FV-2026/1187')
+   and coalesce(si.payment_method, s.payment_method, 'transfer') not in ('card', 'direct_debit');
+-- Y los nombres de proveedor con «Prueba», sin él (los que salen en Pagos).
+update public.supplier set
+  name = case
+    when name ilike 'Bebidas Prueba Sur%' then 'Bebidas del Sur'
+    when name ilike 'Carnes Prueba Centro%' then 'Carnes Centro'
+    when name ilike 'Verduras Prueba%' then 'Verduras La Vega'
+    when name ilike 'Panadería de Prueba%' then 'Panadería El Horno'
+    when name ilike 'Hielo Prueba%' then 'Hielos del Norte'
+    when name ilike 'Limpiezas Prueba%' then 'Limpiezas Brillo'
+    else trim(regexp_replace(name, '\s*\mPrueba\M', '', 'g')) end,
+  legal_name = case when legal_name is null then null else trim(regexp_replace(legal_name, '\s*\mPrueba\M', '', 'g')) end
+ where account_id = :'cuenta' and (name ilike '%prueba%' or legal_name ilike '%prueba%');
+
 select s.name, s.tax_id, right(s.iban, 4) as iban4,
        (select a.code from public.company_account_link l join public.company_account a on a.id = l.company_account_id
          where l.company_id = :'empresa' and l.entity = 'supplier' and l.entity_id = s.id::text and l.role = 'principal') as subcuenta
