@@ -1,0 +1,5 @@
+# DM1·8 · Casa Lola: apertura, 11 nóminas y pago con Revolut · la 2320 y su prueba (ROLLBACK), sobre un doble
+# propio (de0c0002…) sembrado con la 1350 y la 1525: la 2320 encima, cada 572 con su extracto, los agentes en
+# verde, rojo a propósito, ninguna otra cuenta cambia y la vuelta atrás lo deja como lo dejó la 1525.
+supabase/migrations/20261103T2320_dm1_casa_lola_ajustes.sql
+supabase/staging/sql/20261103_dm1_casa_lola_ajustes_prueba.sql
