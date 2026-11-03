@@ -110,6 +110,7 @@ test.describe('B01 · el justificante de un pago', () => {
       const texto = decodeURIComponent(wa!.split('?text=')[1])
       expect(texto).toContain(`la factura ${numero} (363,00 €)`)
       expect(texto).toContain(enlace)
+      expect(texto.endsWith('\n\nEnviado con Sumied · sumied.com')).toBe(true)
 
       // Sin teléfono: lo dice y lleva a sus contactos. Sin la casilla: lleva a su ficha a marcarla.
       const sinTel = js.nth(1).locator('[data-prueba="justificante-whatsapp-sin-telefono"]')
@@ -148,7 +149,7 @@ test.describe('B01 · el justificante de un pago', () => {
       // En texto plano: Supabase no deja servir HTML desde una función (e2e 41586077241).
       expect(r?.headers()['content-type'], `la clave «${c}»`).toMatch(/^text\/plain/)
       const cuerpo = (await r!.text()).trim()
-      expect(cuerpo).toBe('Este enlace no vale\n\nNo es el enlace de ningún justificante. Pídelo a quien te pagó.')
+      expect(cuerpo).toBe('Este enlace no vale\n\nNo es el enlace de ningún justificante. Pídelo a quien te pagó.\n\nJustificante generado por Sumied · sumied.com — la contabilidad que paga a tus proveedores sola')
     }
   })
 })

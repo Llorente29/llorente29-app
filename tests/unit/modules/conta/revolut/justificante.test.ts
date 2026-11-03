@@ -7,10 +7,10 @@
 import { jsPDF } from 'jspdf'
 import { describe, expect, it, vi } from 'vitest'
 import {
-  CLAVE, correoJustificante, filasJustificante, hacerJustificantes, ibanTapado, justificantePagoPdf, mandarJustificante, nuevaClave,
+  CLAVE, correoJustificante, FIRMA_SUMIED, filasJustificante, PIE_JUSTIFICANTE, hacerJustificantes, ibanTapado, justificantePagoPdf, mandarJustificante, nuevaClave,
   nombreJustificante, rutaJustificante, type DatosJustificante,
 } from '../../../../../supabase/functions/_shared/justificantePago'
-import { caducaEn, enlaceJustificante, enlaceWhatsApp, telefonoWhatsApp, textoWhatsApp } from '@/modules/conta/lib/justificante'
+import { caducaEn, enlaceJustificante, enlaceWhatsApp, FIRMA_SUMIED as FIRMA_WHATSAPP, telefonoWhatsApp, textoWhatsApp } from '@/modules/conta/lib/justificante'
 
 const D: DatosJustificante = {
   salida: '00000000-0000-4000-8000-0000000000a1', account_id: '00000000-0000-4000-8000-0000000000c1', company_id: '00000000-0000-4000-8000-0000000000e1',
@@ -53,6 +53,9 @@ describe('el PDF', () => {
     expect(t).toContain('Bar Prueba')
     expect(t).toContain('2115')
     expect(t).not.toContain('ES0799990000000000002115')
+    // B01·13 · El pie de Sumied, abajo.
+    expect(PIE_JUSTIFICANTE).toBe('Justificante generado por Sumied · sumied.com — la contabilidad que paga a tus proveedores sola')
+    expect(t).toContain('la contabilidad que paga a tus proveedores sola')
   })
   it('un pago que el banco no ha confirmado no tiene PDF', () => {
     expect(() => justificantePagoPdf(jsPDF, { ...D, estado: 'enviada' })).toThrow('no está confirmado')
@@ -82,6 +85,10 @@ describe('el correo', () => {
     expect(cuerpo.to).toEqual(['pagos@ejemplo.invalid'])
     expect(cuerpo.reply_to).toBe('admin@ejemplo.invalid')
     expect(cuerpo.attachments[0].filename).toBe('Justificante-DCV-2026-1184.pdf')
+    // B01·13 · La última línea del correo, la misma que la del WhatsApp.
+    expect(correoJustificante(D).texto.split('\n').at(-1)).toBe('Enviado con Sumied · sumied.com')
+    expect(correoJustificante(D).html).toContain('<p>Enviado con Sumied · sumied.com</p>')
+    expect(FIRMA_WHATSAPP).toBe(FIRMA_SUMIED)
     expect(correoJustificante(D).texto).toContain('Bar Prueba te ha pagado la factura DCV-2026/1184: 1.105,30 € por transferencia desde Revolut, el 02/11/2026.')
   })
   it('un correo que no vale no se manda', async () => {
@@ -148,13 +155,13 @@ describe('WhatsApp y el enlace', () => {
     const enlace = enlaceJustificante('https://x.supabase.co/', 'A'.repeat(43))
     expect(enlace).toBe(`https://x.supabase.co/functions/v1/conta-justificante?c=${'A'.repeat(43)}`)
     const texto = textoWhatsApp({ empresa: 'Bar Prueba', numero: '26A/10966', importe: 363.67, enlace })
-    expect(texto).toBe(`Hola, os hemos pagado la factura 26A/10966 (363,67 €). Justificante: ${enlace} · Bar Prueba`)
+    expect(texto).toBe(`Hola, os hemos pagado la factura 26A/10966 (363,67 €). Justificante: ${enlace} · Bar Prueba\n\nEnviado con Sumied · sumied.com`)
     // Como la maqueta (pantalla 6): con la hora de Madrid, «hoy» o el día.
     const ahora = new Date('2026-11-02T15:00:00Z')
     expect(textoWhatsApp({ empresa: '', numero: 'BP-2210', importe: 288.4, enlace: 'E', pagadoAt: '2026-11-02T12:04:00Z' }, ahora))
-      .toBe('Hola, os hemos pagado la factura BP-2210 (288,40 €) hoy a las 13:04. Justificante: E')
+      .toBe('Hola, os hemos pagado la factura BP-2210 (288,40 €) hoy a las 13:04. Justificante: E\n\nEnviado con Sumied · sumied.com')
     expect(textoWhatsApp({ empresa: '', numero: 'BP-2210', importe: 288.4, enlace: 'E', pagadoAt: '2026-10-30T12:04:00Z' }, ahora))
-      .toBe('Hola, os hemos pagado la factura BP-2210 (288,40 €) el 30/10 a las 13:04. Justificante: E')
+      .toBe('Hola, os hemos pagado la factura BP-2210 (288,40 €) el 30/10 a las 13:04. Justificante: E\n\nEnviado con Sumied · sumied.com')
     expect(enlaceWhatsApp('600000000', texto)).toBe(`https://wa.me/34600000000?text=${encodeURIComponent(texto)}`)
     expect(enlaceWhatsApp(null, texto)).toBeNull()
   })

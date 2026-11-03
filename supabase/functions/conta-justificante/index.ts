@@ -21,7 +21,7 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
-import { CLAVE, correoValido, mandarJustificante, nombreJustificante, type DatosJustificante } from "../_shared/justificantePago.ts";
+import { CLAVE, correoValido, mandarJustificante, nombreJustificante, PIE_JUSTIFICANTE, type DatosJustificante } from "../_shared/justificantePago.ts";
 import { BUCKET_JUSTIFICANTES } from "../_shared/justificanteServidor.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -37,7 +37,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
  * la e2e 41586077241: el 404 llegaba, la página no.
  */
 function aviso(titulo: string, texto: string, status: number) {
-  return new Response(`${titulo}\n\n${texto}\n`, {
+  return new Response(`${titulo}\n\n${texto}\n\n${PIE_JUSTIFICANTE}\n`, {
     status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex" },
   });
 }

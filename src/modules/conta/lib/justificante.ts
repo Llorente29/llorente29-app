@@ -28,6 +28,9 @@ export function telefonoWhatsApp(telefono: string | null | undefined): string | 
 const euros = (x: number) => new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions).format(x)
 
 /** El mensaje de WhatsApp (maqueta v2, pantalla 6): «Hola, os hemos pagado la factura BP-2210 (288,40 €) hoy a las 13:04. Justificante: …». */
+/** B01·13 · La última línea del WhatsApp (la misma que el correo: _shared/justificantePago.ts, FIRMA_SUMIED). */
+export const FIRMA_SUMIED = 'Enviado con Sumied · sumied.com'
+
 export function textoWhatsApp(o: { empresa: string; numero: string | null; importe: number; enlace: string; pagadoAt?: string | null }, ahora = new Date()): string {
   const que = o.numero ? `la factura ${o.numero}` : 'vuestra factura'
   let cuando = ''
@@ -38,7 +41,7 @@ export function textoWhatsApp(o: { empresa: string; numero: string | null; impor
     const dia = madrid(d, { day: '2-digit', month: '2-digit' })
     cuando = dia === madrid(ahora, { day: '2-digit', month: '2-digit' }) ? ` hoy a las ${hora}` : ` el ${dia} a las ${hora}`
   }
-  return `Hola, os hemos pagado ${que} (${euros(o.importe)} €)${cuando}. Justificante: ${o.enlace}${o.empresa ? ` · ${o.empresa}` : ''}`
+  return `Hola, os hemos pagado ${que} (${euros(o.importe)} €)${cuando}. Justificante: ${o.enlace}${o.empresa ? ` · ${o.empresa}` : ''}\n\n${FIRMA_SUMIED}`
 }
 
 /** El enlace de wa.me con el mensaje escrito; null sin un teléfono que valga. */

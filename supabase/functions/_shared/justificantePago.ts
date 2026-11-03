@@ -23,6 +23,10 @@ import { cerrojoMarca } from '../send-email/marca.ts'
 export const PLANTILLA_JUSTIFICANTE = 'justificante_pago'
 export const BUZON_JUSTIFICANTES = 'pagos@sumied.com'
 export const DIAS_ENLACE = 30
+/** B01·13 (Julio, 03/11) · El pie del justificante (PDF y página pública). */
+export const PIE_JUSTIFICANTE = 'Justificante generado por Sumied · sumied.com — la contabilidad que paga a tus proveedores sola'
+/** B01·13 · La última línea del correo y del WhatsApp. */
+export const FIRMA_SUMIED = 'Enviado con Sumied · sumied.com'
 
 export interface DatosJustificante {
   salida: string
@@ -165,7 +169,9 @@ export function justificantePagoPdf(JsPDF: JsPdfCtor, d: DatosJustificante): Uin
   y += 4
   linea(y); y += 8
   letra('normal', 8.5); color(GRIS)
-  doc.text(doc.splitTextToSize(`Transferencia SEPA enviada y confirmada por ${d.banco} el ${fechaPago} a las ${horaPago} (hora de Madrid). Justificante generado por Sumied para ${razon}; el IBAN va tapado salvo los 4 últimos.`, D - M), M, y)
+  doc.text(doc.splitTextToSize(`Transferencia SEPA enviada y confirmada por ${d.banco} el ${fechaPago} a las ${horaPago} (hora de Madrid). Justificante hecho para ${razon}; el IBAN va tapado salvo los 4 últimos.`, D - M), M, y)
+  // B01·13 · El pie, abajo del todo.
+  letra('normal', 8); color(GRIS); doc.text(PIE_JUSTIFICANTE, 105, 287, { align: 'center' })
   return new Uint8Array(doc.output('arraybuffer'))
 }
 
@@ -190,6 +196,8 @@ export function correoJustificante(d: DatosJustificante): { asunto: string; text
     '',
     'Un saludo,',
     d.empresa.nombre,
+    '',
+    FIRMA_SUMIED,
   ]
   return { asunto, texto: lineas.join('\n'), html: lineas.map((l) => (l ? `<p>${html(l)}</p>` : '')).join('') }
 }
