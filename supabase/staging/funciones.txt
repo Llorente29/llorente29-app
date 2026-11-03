@@ -1,11 +1,8 @@
-# B01 Revolut · PR 1 · Conectar y leer (31/10): las funciones que toca la rama
-# claude/revolut-business-sumied-9fhlsh. Las tres de Revolut, nuevas, y
-# conta-banco-agregador, que importa _shared/bancoAgregador.ts (cambia: dos
-# opciones nuevas que solo usa Revolut). Se despliegan en staging para que lo
-# que no compile salga aquí y no en producción; staging solo habla con el
-# sandbox de Revolut (sin REVOLUT_ENTORNO=produccion).
-conta-banco-agregador
-conta-revolut-aviso
-conta-revolut-conectar
-conta-revolut-leer
-conta-pagar
+# DM1 · Accesos 1 (03/11): las funciones que toca la rama
+# claude/dm1-accesos-invitar. invitar-persona (crea la invitación y manda el
+# correo nuevo), invitacion-aceptar (nueva: la página del enlace, sin sesión) y
+# send-email (la plantilla invitacion_persona). Se despliegan en staging para
+# la e2e de invitar y aceptar, y para que lo que no compile salga aquí.
+invitar-persona
+invitacion-aceptar
+send-email

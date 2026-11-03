@@ -6,7 +6,7 @@
 //
 //   · «ver»    { token }                 qué empresas, con qué permiso, quién
 //       invita y si ese correo ya tiene usuario. Nada más.
-//   · «crear»  { token, contrasena }     solo si el correo NO tiene usuario:
+//   · «crear»  { token, contrasena, acepto }  solo si el correo NO tiene usuario:
 //       lo crea con su contraseña (el enlace demuestra que el correo es suyo:
 //       llega a su buzón) y le da las empresas de la invitación. Después la
 //       página entra con ese correo y esa contraseña.
@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
     if (tieneUsuario) return json(409, { error: 'Ya tienes usuario con este correo: entra con él y acepta la invitación en tu lista de empresas.' })
     const contrasena = String(cuerpo?.contrasena ?? '')
     if (!CONTRASENA.test(contrasena)) return json(400, { error: 'La contraseña necesita 8 caracteres como mínimo, con una minúscula, una mayúscula y un número.' })
+    if (cuerpo?.acepto !== true) return json(400, { error: 'Acepta los Términos y Condiciones y la Política de Privacidad para entrar.' })
 
     const { data: nuevo, error: nuevoErr } = await admin.auth.admin.createUser({ email: correo, password: contrasena, email_confirm: true })
     if (nuevoErr || !nuevo.user) {
@@ -76,6 +77,13 @@ Deno.serve(async (req) => {
       console.error('[invitacion-aceptar] acceso no dado', darErr.code)
       return json(500, { error: 'No se ha podido darte acceso. Vuelve a intentarlo.' })
     }
+    // Ha puesto su contraseña y aceptado los términos aquí: su bienvenida está hecha
+    // (como en /welcome); si no, la aplicación le volvería a pedir la contraseña.
+    const ahora = new Date().toISOString()
+    const { error: bienvErr } = await admin.from('user_profiles')
+      .update({ terms_accepted_at: ahora, welcome_completed_at: ahora, last_password_change_at: ahora })
+      .eq('user_id', nuevo.user.id)
+    if (bienvErr) console.error('[invitacion-aceptar] bienvenida no apuntada', bienvErr.code)
     console.log(`[invitacion-aceptar] usuario creado · ${(dadas as string[] | null)?.length ?? 0} empresa(s)`)
     return json(200, { status: 'ok', correo, empresas: dadas })
   } catch (e) {
