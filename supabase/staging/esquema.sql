@@ -1273,6 +1273,9 @@ begin
                          and debounce_kind is distinct from 'aviso-techo-diario') >= k_techo then
     insert into public.aviso_callado (kind, subject, message, debounce_kind, account_id, location_id, brand_id, severity, motivo)
     values (p_kind, p_subject, p_message, p_debounce_kind, p_account_id, p_location_id, p_brand_id, p_severity, 'techo diario');
+    -- A01 (03/11): dos vigías a la vez mandaban dos avisos de techo. Con el
+    -- candado, el segundo espera al primero y ya ve el suyo.
+    perform pg_advisory_xact_lock(4101, 1);
     if not exists (select 1 from public.system_alert_queue
                     where debounce_kind = 'aviso-techo-diario' and created_at >= v_hoy) then
       insert into public.system_alert_queue (kind, subject, message, debounce_kind, severity)
