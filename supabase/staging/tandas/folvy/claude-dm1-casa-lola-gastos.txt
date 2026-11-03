@@ -1,0 +1,5 @@
+# DM1·6 · Casa Lola con los gastos · la 1525 y su prueba (ROLLBACK), sobre un doble sembrado con la 1350: la 1525
+# encima, los agentes en verde, rojo a propósito sin el 190 y con una huella tocada, ninguna otra cuenta cambia, y
+# la vuelta atrás lo deja como lo dejó la 1350.
+supabase/migrations/20261103T1525_dm1_casa_lola_gastos.sql
+supabase/staging/sql/20261103_dm1_casa_lola_gastos_prueba.sql
