@@ -1,7 +1,8 @@
 // tests/e2e/conta/v02/liquidaciones.spec.ts
 //
-// V02 · Pantallas · Ventas › Liquidaciones (tableros 28 y 29), en el ordenador
-// y en el móvil. Sustituye a la lista del V01.
+// V02 · Pantallas · Ventas › Liquidaciones, en el ordenador y en el móvil.
+// S01q · PR C (03/11): la pantalla es ya la del mes (su e2e, s01q/liquidaciones-mes.spec.ts);
+// aquí quedan «Subir una liquidación» con el informe de Uber y la otra actividad.
 //
 // La base de la tanda (20261026T0125_v02p_motor_por_tienda) es «cambia»:
 // staging la ensaya en ROLLBACK desde la rama y no la tiene hasta que esté en
@@ -28,31 +29,12 @@
 //      «Apuntar a mano» a alguien nuevo, que se da de alta.
 // Las capturas, al lado de su tablero (docs/conta/v02/tableros), en el artefacto.
 
-import { readFileSync } from 'node:fs'
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { CUENTA_A, CUENTA_D, entrarComo } from '../sesion'
-import { barraAbiertaSiPlegada } from '../barra'
 
 const DIR = 'docs/conta/capturas/v02'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
 const foto = (page: Page, nombre: string) => page.screenshot({ path: `${DIR}/${nombre}-${lado(page)}.png`, fullPage: true })
-
-/** La captura AL LADO de su tablero: el aprobado a la izquierda y la pantalla de verdad a la derecha. */
-async function alLado(page: Page, nombre: string, tablero: string, numero: number) {
-  const l = lado(page)
-  const pantalla = await page.screenshot({ fullPage: true })
-  const imagen = readFileSync(`docs/conta/v02/tableros/${tablero}`)
-  const ancho = l === 'movil' ? 390 : 1440
-  const otra = await page.context().newPage()
-  await otra.setViewportSize({ width: ancho * 2 + 48, height: 900 })
-  await otra.setContent(`<body style="margin:0;padding:16px;background:#E9EEF5;font:600 14px system-ui;color:#172443">
-    <div style="display:flex;gap:16px;align-items:flex-start">
-      <figure style="margin:0;width:${ancho}px;overflow:hidden"><figcaption style="margin:0 0 8px">Tablero ${numero} (aprobado)</figcaption><img style="${l === 'movil' ? 'width:1440px;max-width:none' : 'width:100%'}" src="data:image/png;base64,${imagen.toString('base64')}"></figure>
-      <figure style="margin:0;width:${ancho}px"><figcaption style="margin:0 0 8px">La pantalla (staging)</figcaption><img style="width:100%" src="data:image/png;base64,${pantalla.toString('base64')}"></figure>
-    </div></body>`)
-  await otra.screenshot({ path: `${DIR}/al-lado-${nombre}-${l}.png`, fullPage: true })
-  await otra.close()
-}
 
 function vigilar(page: Page): string[] {
   const errores: string[] = []
@@ -163,104 +145,12 @@ async function simular(page: Page, motor: unknown[], quienes: Quien[]): Promise<
 /** Las palabras de técnico que no salen (encargo, punto 6). */
 const TECNICAS = /\b(motor|settlement|canal_id|party|rol|clave|json|null|undefined|NaN)\b/i
 
-test('Hostelería: la banda del mes, la tienda cambiada, Este mes con sus cuatro piezas y Cuándo te pagan', async ({ page }) => {
-  test.setTimeout(90_000)
-  const errores = vigilar(page)
-  const movil = lado(page) === 'movil'
-  await entrarComo(page, CUENTA_A.email)
-  const llamadas = await simular(page, motorHosteleria(), quienesHosteleria)
-  await page.goto('/conta/ventas/liquidaciones')
-  await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('listitem')).toHaveText(['Ventas', 'Liquidaciones'])
-
-  // La banda: 6 de 10 cuadradas, 2 les falta una pieza, 2 no cuadran.
-  const banda = page.locator('[data-prueba="banda-liquidaciones"]')
-  await expect(banda.getByRole('heading', { level: 2 })).toHaveText('Cuadradas 6 de 10 liquidaciones')
-  for (const t of ['6 cuadradas', '2 les falta una pieza', '2 no cuadran']) await expect(banda.getByRole('listitem').filter({ hasText: t })).toBeVisible()
-  await expect(banda.getByText('Te han pagado')).toBeVisible()
-  if (!movil) await expect(banda.getByText(/vendidos por plataformas · comisiones .* \(\d+(,\d)? %\)/)).toBeVisible()
-
-  // La tienda cambiada: «Sí, desde el…» la confirma y lo dice (regla 8).
-  const cambio = page.locator('[data-prueba="tienda-cambiada"]')
-  await expect(cambio.getByText('Uber Eats dice que una tienda ha cambiado')).toBeVisible()
-  await expect(cambio.getByText(/llega como «Burger Club \(Calle Prueba 1\)»\. Lo vendido antes se queda con su marca y su local\./)).toBeVisible()
-
-  // Este mes: primero lo que necesita algo; cada tarjeta, sus cuatro píldoras y un botón.
-  const mes = page.locator('[data-prueba="este-mes"]')
-  const tarjetas = mes.locator('[data-prueba="tarjeta-liquidacion"]')
-  await expect(tarjetas).toHaveCount(5)
-  await expect(tarjetas.nth(0)).toHaveAttribute('data-situacion', 'no_cuadra')
-  const meraki = tarjetas.filter({ hasText: 'Uber Eats · Pita Prueba · Norte Centro' }).filter({ hasText: 'No cuadra' })
-  await expect(meraki.getByRole('list', { name: 'Las cuatro piezas' }).getByRole('listitem')).toHaveText([/Lo vendido/, /La liquidación/, /Su factura/, /El cobro/])
-  await expect(meraki.locator('.cxlq-pieza[data-tono="mal"]')).toHaveText(/La liquidación/)
-  await expect(meraki.getByText('liquida 52,59 € de más')).toBeVisible()
-  await expect(meraki.getByRole('button', { name: 'Ver por qué' })).toBeVisible()
-  await expect(tarjetas.filter({ hasText: 'Glovo' }).getByRole('button', { name: 'Subirla' })).toBeVisible()
-  await expect(tarjetas.filter({ hasText: 'Falta su factura de comisión' }).getByRole('button', { name: 'Pedírsela' })).toBeVisible()
-  await expect(tarjetas.filter({ hasText: 'Cuadrada' }).first().getByRole('button', { name: 'Ver' })).toBeVisible()
-  await expect(mes.getByText('Y 5 cuadradas más')).toBeVisible()
-
-  // Cuándo te pagan: el ritmo de la ficha de cada uno.
-  const cuando = page.getByRole('region', { name: 'Cuándo te pagan' })
-  await expect(cuando.getByRole('listitem').filter({ hasText: 'Uber Eats' })).toContainText('el lunes')
-  await expect(cuando.getByRole('listitem').filter({ hasText: 'Glovo' })).toContainText('con una de retraso')
-  await expect(page.getByRole('region', { name: '¿Prefieres apuntarla tú?' }).getByRole('button', { name: 'Apuntar a mano' })).toBeVisible()
-  // Nada de «Conectar» que no haga nada, ni palabras de técnico.
-  await expect(page.getByRole('button', { name: /^Conectar/ })).toHaveCount(0)
-  expect(await page.locator('.cxlq').innerText()).not.toMatch(TECNICAS)
-
-  if (!movil) {
-    // En la barra, Liquidaciones encima del bloque «Hostelería».
-    await barraAbiertaSiPlegada(page)
-    const paginas = page.getByRole('list', { name: 'Páginas de Ventas' })
-    await expect(paginas.getByRole('link', { name: 'Liquidaciones' })).toHaveAttribute('aria-current', 'page')
-    const textos = await paginas.innerText()
-    expect(textos.indexOf('Liquidaciones')).toBeLessThan(textos.search(/hosteler[ií]a/i))
-  }
-  await foto(page, 'liquidaciones')
-  await alLado(page, 'liquidaciones', 'liquidaciones-28-hosteleria.png', 28)
-
-  // «Pedir las N que faltan»: el envío automático está cerrado y lo dice.
-  await banda.getByRole('button', { name: /^Pedir (la que falta|las \d+ que faltan)$/ }).click()
-  await expect(page.locator('[data-prueba="liquidaciones-aviso"]')).toContainText('no he mandado nada')
-
-  // «Ver por qué»: se resuelve en una frase, con la marca de su tienda.
-  await meraki.getByRole('button', { name: 'Ver por qué' }).click()
-  const ver = page.getByRole('dialog', { name: /Uber Eats · Pita Prueba · Norte Centro/ })
-  await expect(ver.getByText('sus pedidos suman 1079,28 €', { exact: false }).or(ver.getByText('sus pedidos suman 1.079,28 €', { exact: false }))).toBeVisible()
-  await expect(ver.getByText('antes de promociones', { exact: false })).toBeVisible()
-  // Liquida de más: no es un gasto; se reclama.
-  await expect(ver.getByLabel(/^Es un gasto/)).toHaveCount(0)
-  await ver.getByLabel('En una frase, por qué').fill('Dos pedidos que Uber pagó y en caja están cancelados')
-  await foto(page, 'ver-por-que')
-  await ver.getByRole('button', { name: 'Apuntarlo' }).click()
-  await expect(page.locator('[data-prueba="liquidaciones-aviso"]')).toHaveText('Apuntado: reclamas 52,59 € a Uber Eats. Te lo recuerdo hasta que llegue.')
-  expect(llamadas.find((x) => x.f === 'resolver')?.cuerpo).toMatchObject({ p_intermediario: ROL.uber, p_local: NORTE, p_marca: MARCA.pita, p_tipo: 'reclamacion', p_importe: 52.59 })
-
-  // «Sí, desde el…»: la tienda cambiada se confirma, desde el primer día de su periodo.
-  await cambio.getByRole('button', { name: /^Sí, desde el \d\d\/\d\d$/ }).click()
-  await expect(page.locator('[data-prueba="liquidaciones-aviso"]')).toContainText('es la misma tienda. Lo vendido antes se queda con su marca y su local.')
-  expect(llamadas.find((x) => x.f === 'tienda')?.cuerpo).toMatchObject({ p_cambio: 'cambio-1', p_confirmar: true })
-
-  // «Pedírsela»: el correo escrito, que se manda desde el tuyo.
-  await tarjetas.filter({ hasText: 'Falta su factura de comisión' }).getByRole('button', { name: 'Pedírsela' }).click()
-  const pedir = page.getByRole('dialog', { name: 'Pedírsela · Uber Eats' })
-  await expect(pedir.getByLabel('Texto')).toHaveValue(/Nos falta la factura de comisiones del \d\d\/\d\d al \d\d\/\d\d \(Burger Prueba, Norte Centro\)/)
-  await expect(pedir.getByText('el envío automático aún no está abierto', { exact: false })).toBeVisible()
-  await pedir.getByRole('button', { name: 'Cancelar' }).click()
-
-  // «Ver todas»: todas, también las cuadradas (regla 7).
-  await mes.getByRole('button', { name: 'Ver todas' }).click()
-  await expect(page.locator('[data-prueba="todas"] [data-prueba="tarjeta-liquidacion"]')).toHaveCount(10)
-  expect(errores).toEqual([])
-})
-
 test('Hostelería: «Subir una liquidación» con el informe de Uber registra una por tienda y lo dice', async ({ page }) => {
   const errores = vigilar(page)
   await entrarComo(page, CUENTA_A.email)
   const llamadas = await simular(page, motorHosteleria(), quienesHosteleria)
   await page.goto('/conta/ventas/liquidaciones')
-  await expect(page.locator('[data-prueba="banda-liquidaciones"] h2')).toBeVisible({ timeout: 30_000 })
+  await expect(page.locator('[data-prueba="resumen-liquidaciones"]')).toBeVisible({ timeout: 30_000 })
   await page.getByLabel('Elegir la liquidación').setInputFiles('tests/unit/modules/conta/v02/fixtures/liquidaciones/uber-detalles-pago-20261024.csv')
   const aviso = page.locator('[data-prueba="liquidaciones-aviso"]')
   await expect(aviso).toContainText('nuevas de 8; las demás ya estaban.', { timeout: 30_000 })
@@ -276,37 +166,31 @@ test('Hostelería: «Subir una liquidación» con el informe de Uber registra un
 test('Otra actividad (sin hostelería): el datáfono, Amazon y Stripe, sin plataformas de reparto, y apuntar a mano', async ({ page }) => {
   test.setTimeout(90_000)
   const errores = vigilar(page)
-  const movil = lado(page) === 'movil'
   await entrarComo(page, CUENTA_D.email)
   const llamadas = await simular(page, motorPapeleria(), quienesPapeleria)
+  // S01q · PR C: la pantalla lee el mes (conta_liquidaciones_mes); las mismas tres, en sus cuatro estados.
+  const deCuatro: Record<string, [string, string | null]> = { cuadra: ['completa', null], falta_factura: ['te_necesita', 'subela'], falta_liquidacion: ['te_necesita', 'pidela'] }
+  const filas = motorPapeleria().map((f) => ({ ...f, estado: deCuatro[f.estado][0], estado_motor: f.estado, accion: deCuatro[f.estado][1], sin_local: false, grupo: 'plataforma', tiendas: [], cuando: null, comparado: null }))
+  await page.route(/\/rest\/v1\/rpc\/conta_liquidaciones_mes(\?|$)/, (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+    mes: `${delMes(1).slice(0, 7)}-01`, desde: `${delMes(1).slice(0, 7)}-01`, hasta: delMes(28), filas, cedidas: [],
+    resumen: { total: 3, completa: 1, aun_no_toca: 0, te_necesita: 2, no_cuadra: 0 } }) }))
   await page.goto('/conta/ventas/liquidaciones')
   await expect(page.getByRole('heading', { level: 1, name: 'Liquidaciones' })).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText('Lo que te pagan quienes cobran por ti: el datáfono, Amazon, Stripe, PayPal…', { exact: false })).toBeVisible()
-  const banda = page.locator('[data-prueba="banda-liquidaciones"]')
-  await expect(banda.getByRole('heading', { level: 2 })).toHaveText('Cuadradas 1 de 3 liquidaciones')
-  if (!movil) await expect(banda.getByText('cobrados por quienes te pagan', { exact: false })).toBeVisible()
-  const tarjetas = page.locator('[data-prueba="este-mes"] [data-prueba="tarjeta-liquidacion"]')
-  await expect(tarjetas).toHaveCount(3)
-  await expect(tarjetas.filter({ hasText: 'Stripe · todos los locales' }).getByRole('button', { name: 'Subirla' })).toBeVisible()
-  await expect(tarjetas.filter({ hasText: 'Amazon' }).getByRole('button', { name: 'Pedírsela' })).toBeVisible()
-  const cuando = page.getByRole('region', { name: 'Cuándo te pagan' })
-  await expect(cuando.getByRole('listitem').filter({ hasText: 'Datáfono BBVA' })).toContainText('sin ritmo todavía')
-  // Sin plataformas de reparto, ni socios de marca, ni «Conectar».
-  await expect(page.getByText(/Uber|Glovo|Just Eat|plataformas/)).toHaveCount(0)
+  await expect(page.getByText('Lo que te pagan quienes cobran por ti (el datáfono, Amazon, Stripe, PayPal…)', { exact: false })).toBeVisible()
+  await expect(page.locator('[data-prueba="resumen-liquidaciones"] .cxlm-frase')).toHaveText(/: 1 de 3 completa · 2 te necesitan$/)
+  const grupos = page.locator('[data-prueba="grupo-plataforma"]')
+  await expect(grupos.filter({ hasText: 'Stripe' }).getByRole('button', { name: 'Pídela' })).toBeVisible()
+  await expect(grupos.filter({ hasText: 'Amazon' }).getByRole('button', { name: 'Súbela' })).toBeVisible()
+  // Sin hostelería: ni filtro de local, ni plataformas de reparto, ni socios de marca, ni «Conectar».
+  await expect(page.getByLabel('Local', { exact: true })).toHaveCount(0)
+  await expect(page.getByText(/Uber|Glovo|Just Eat/)).toHaveCount(0)
   await expect(page.getByRole('button', { name: /^Conectar/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Más acciones', exact: true }).click()
   await expect(page.getByRole('button', { name: /^Socios de marca/ })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Más acciones', exact: true }).click()
-  expect(await page.locator('.cxlq').innerText()).not.toMatch(TECNICAS)
-  await foto(page, 'liquidaciones-otra')
-  await alLado(page, 'liquidaciones-otra', 'liquidaciones-29-otro-negocio.png', 29)
-
-  // «Ver las N pendientes»: lleva a lo que necesita algo.
-  await banda.getByRole('button', { name: /^Ver (la pendiente|las \d+ pendientes)$/ }).click()
-  await expect(page.locator('[data-prueba="este-mes"]')).toBeInViewport()
+  expect(await page.locator('.cxlm').innerText()).not.toMatch(TECNICAS)
 
   // «Apuntar a mano» a alguien nuevo (PayPal): se da de alta y se apunta, y lo dice.
-  await page.getByRole('region', { name: '¿Prefieres apuntarla tú?' }).getByRole('button', { name: 'Apuntar a mano' }).click()
+  await page.getByRole('button', { name: /^Apuntar a mano/ }).click()
   const d = page.getByRole('dialog', { name: 'Apuntar a mano una liquidación' })
   await d.getByLabel('Quién te paga').selectOption({ label: 'Otro (Amazon, Stripe, PayPal, el datáfono…)' })
   await d.getByLabel('Su nombre').fill('PayPal')

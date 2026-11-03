@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Liquidaciones S01q</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#5d6670;--li:#e3e6ea;--ok:#1f8a4c;--okb:#e6f4ec;--gr:#8a939c;--grb:#eef0f2;--am:#b26a00;--amb:#fff3dd;--rd:#c2362f;--rdb:#fdeceb;--ac:#2b59c3}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#14171b;--card:#1c2025;--tx:#e8eaed;--mu:#9aa3ad;--li:#2c3238;--okb:#173324;--grb:#262b31;--amb:#3a2c12;--rdb:#3a1c1a;--ac:#7ea2ff}}
+:root[data-theme="dark"]{--bg:#14171b;--card:#1c2025;--tx:#e8eaed;--mu:#9aa3ad;--li:#2c3238;--okb:#173324;--grb:#262b31;--amb:#3a2c12;--rdb:#3a1c1a;--ac:#7ea2ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.barra{display:flex;flex-wrap:wrap;gap:8px;padding:12px 16px;border-bottom:1px solid var(--li);background:var(--card);position:sticky;top:0;z-index:2}
+.barra button{border:1px solid var(--li);background:var(--card);color:var(--tx);border-radius:999px;padding:6px 12px;cursor:pointer;font:inherit}
+.barra button[aria-pressed=true]{background:var(--tx);color:var(--card);border-color:var(--tx)}
+.lienzo{padding:20px 16px;display:flex;justify-content:center}
+.pant{width:100%;max-width:1080px}.movil .pant{max-width:390px;border:1px solid var(--li);border-radius:24px;padding:12px;background:var(--bg)}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mu);margin:0 0 14px}
+.cab{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.mes{display:flex;align-items:center;gap:6px;border:1px solid var(--li);border-radius:10px;padding:4px 8px;background:var(--card)}
+.mes b{min-width:110px;text-align:center}.ico{border:0;background:none;color:var(--tx);cursor:pointer;font-size:16px}
+.btn{border:1px solid var(--li);background:var(--card);color:var(--tx);border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:#fff}
+.resumen{background:var(--card);border:1px solid var(--li);border-radius:14px;padding:16px;margin-bottom:12px}
+.frase{font-size:17px;font-weight:600;margin-bottom:10px}
+.bar{display:flex;height:10px;border-radius:6px;overflow:hidden;background:var(--grb)}.bar i{display:block}
+.ley{display:flex;gap:14px;flex-wrap:wrap;color:var(--mu);font-size:13px;margin-top:8px}.ley span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;background:var(--c)}
+.ayuda{background:var(--card);border:1px solid var(--li);border-radius:14px;padding:10px 16px;margin-bottom:12px}
+.ayuda summary{cursor:pointer;font-weight:600}.ayuda p{margin:8px 0;color:var(--mu)}
+.video{display:inline-flex;gap:6px;align-items:center;color:var(--ac);font-weight:600}
+.filtros{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.filtros select,.filtros label{border:1px solid var(--li);background:var(--card);color:var(--tx);border-radius:8px;padding:6px 8px;font:inherit}
+.grupo{background:var(--card);border:1px solid var(--li);border-radius:14px;margin-bottom:12px;overflow:hidden}
+.grupo>summary{list-style:none;display:flex;justify-content:space-between;align-items:center;padding:12px 16px;cursor:pointer;font-weight:700;font-size:15px}
+.grupo>summary::-webkit-details-marker,.tienda>summary::-webkit-details-marker{display:none}
+.cuenta{font-weight:500;color:var(--mu);font-size:13px}
+.tienda{border-top:1px solid var(--li)}.tienda>summary{list-style:none;display:flex;justify-content:space-between;gap:10px;padding:10px 16px;cursor:pointer;background:color-mix(in srgb,var(--bg) 50%,var(--card))}
+.tn{font-weight:600}.tp{color:var(--mu);font-size:12px}
+.fila{border-top:1px solid var(--li);padding:10px 16px;display:grid;grid-template-columns:120px 1fr 110px 150px;gap:10px;align-items:center}
+.movil .fila{grid-template-columns:1fr auto;}
+.movil .piezas{grid-column:1/-1}
+.per{font-weight:600}.piezas{display:flex;gap:6px;flex-wrap:wrap}
+.pz{font-size:12px;border-radius:999px;padding:2px 8px;background:var(--grb);color:var(--mu);white-space:nowrap}.pz.si{background:var(--okb);color:var(--ok)}.pz.no{background:var(--amb);color:var(--am)}.pz.mal{background:var(--rdb);color:var(--rd)}
+.imp{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.est{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.chip{font-size:12px;font-weight:700;border-radius:6px;padding:2px 8px}
+.c-ok{background:var(--okb);color:var(--ok)}.c-gr{background:var(--grb);color:var(--gr)}.c-am{background:var(--amb);color:var(--am)}.c-rd{background:var(--rdb);color:var(--rd)}
+.nota{grid-column:1/-1;font-size:13px;color:var(--mu);margin-top:-4px}
+.nota b{color:var(--tx)}
+.abierta{grid-column:1/-1;border:1px solid var(--li);border-radius:12px;padding:12px;margin-top:4px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.movil .abierta{grid-template-columns:1fr}
+.blq h4{margin:0 0 6px;font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:var(--mu)}
+.tabla{width:100%;border-collapse:collapse;font-size:13px}.tabla td{padding:3px 0;border-bottom:1px dashed var(--li)}.tabla td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.tabla small{display:block;color:var(--mu)}
+.preg{grid-column:1/-1;background:var(--amb);border-radius:10px;padding:10px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.preg select{padding:6px;border-radius:8px;border:1px solid var(--li)}
+.causa{grid-column:1/-1;background:var(--rdb);border-radius:10px;padding:10px 12px}
+a{color:var(--ac)}
+</style></head><body>
+<div class="barra" role="toolbar" aria-label="Maqueta">
+  <button data-caso="completo" aria-pressed="true">Mes completo</button>
+  <button data-caso="huecos" aria-pressed="false">Mes con huecos</button>
+  <button data-caso="sinlocal" aria-pressed="false">Tienda sin local</button>
+  <button data-caso="nocuadra" aria-pressed="false">«No cuadra» abierta</button>
+  <span style="flex:1"></span>
+  <button data-vista="ordenador" aria-pressed="true">Ordenador</button>
+  <button data-vista="movil" aria-pressed="false">Móvil</button>
+</div>
+<div class="lienzo" id="lienzo"><div class="pant" id="pant"></div></div>
+<script>
+const P = (t, k) => `<span class="pz ${k}">${t}</span>`
+const piezas = (v, l, f, c) => `<div class="piezas">${P('Vendido '+v[0], v[1])}${P('Liquidación '+l[0], l[1])}${P('Factura '+f[0], f[1])}${P('Cobro '+c[0], c[1])}</div>`
+const EST = { ok:['Completa','c-ok'], gr:['Aún no toca','c-gr'], am:['Te necesita','c-am'], rd:['No cuadra','c-rd'] }
+function fila(per, pz, imp, est, nota, accion, abierta='') {
+  return `<div class="fila"><div class="per">${per}</div>${pz}<div class="imp">${imp}</div>
+   <div class="est"><span class="chip ${EST[est][1]}">${EST[est][0]}</span>${accion ? `<button class="btn ${est==='am'||est==='rd'?'pri':''}">${accion}</button>` : ''}</div>
+   ${nota ? `<div class="nota">${nota}</div>` : ''}${abierta}</div>`
+}
+const okP = piezas(['✓','si'],['✓','si'],['✓','si'],['✓','si'])
+function tienda(nombre, marcaLocal, cuenta, filas, abierta=true) {
+  return `<details class="tienda" ${abierta?'open':''}><summary><span><span class="tn">${nombre}</span><br><span class="tp">${marcaLocal}</span></span><span class="cuenta">${cuenta}</span></summary>${filas}</details>`
+}
+function grupo(nombre, cuenta, tiendas) { return `<details class="grupo" open><summary>${nombre}<span class="cuenta">${cuenta}</span></summary>${tiendas}</details>` }
+function cabecera(frase, b) {
+  const tot = b.reduce((a, x) => a + x[0], 0)
+  return `<h1>Liquidaciones</h1><p class="sub">Lo que te pagan las plataformas, tienda a tienda y periodo a periodo.</p>
+  <div class="cab"><div class="mes"><button class="ico" aria-label="Mes anterior">‹</button><b>Octubre 2026</b><button class="ico" aria-label="Mes siguiente">›</button></div>
+   <span style="flex:1"></span><button class="btn">Exportar a Excel</button><button class="btn">Ver el recorrido</button></div>
+  <div class="resumen"><div class="frase">${frase}</div><div class="bar">${b.map(x => `<i style="width:${x[0]/tot*100}%;background:var(${x[1]})"></i>`).join('')}</div>
+   <div class="ley"><span style="--c:var(--ok)">Completas</span><span style="--c:var(--gr)">Aún no toca</span><span style="--c:var(--am)">Te necesitan</span><span style="--c:var(--rd)">No cuadran</span></div></div>
+  <details class="ayuda"><summary>¿Cómo funciona?</summary>
+   <p><b>Una liquidación</b> es el papel con el que la plataforma te dice lo que vendiste por ella, lo que se queda y lo que te paga.</p>
+   <p><b>Cada periodo tiene cuatro piezas:</b> lo que vendiste (tus pedidos), la liquidación, su factura de comisión (lo que se queda la plataforma) y el cobro que llega a tu banco.</p>
+   <p><b>Completa:</b> están las cuatro y cuadran. <b>Aún no toca:</b> todavía no ha llegado su fecha. <b>Te necesita:</b> falta algo y te decimos qué. <b>No cuadra:</b> las cifras no coinciden y te decimos por qué.</p>
+   <span class="video">▶ Ver cómo se hace (2 min)</span></details>
+  <div class="filtros"><select aria-label="Plataforma"><option>Todas las plataformas</option><option>Glovo</option><option>Just Eat</option><option>Uber Eats</option></select>
+   <select aria-label="Local"><option>Todos los locales</option><option>Alcalá</option><option>Carabanchel</option><option>Plaza Castilla</option><option>Tienda sin local</option></select>
+   <label><input type="checkbox"> Solo lo que te necesita</label></div>`
+}
+const C = {
+ completo: () => cabecera('Octubre: completo · 42 de 42 periodos con sus cuatro piezas', [[42,'--ok']]) +
+  grupo('Glovo', '18 de 18 completas', tienda('Meraki Pita - MAD - Prueba Sur 4', 'Meraki Pita · Carabanchel', '2 de 2',
+     fila('1–15 oct', okP, '1.204,30 €', 'ok', '', '') + fila('16–31 oct', okP, '1.388,12 €', 'ok', '', ''), false) +
+     tienda('Milanesa House - MAD - C. Prueba Norte', 'Milanesa House · Alcalá', '2 de 2', fila('1–15 oct', okP, '842,55 €', 'ok','', '') + fila('16–31 oct', okP, '901,10 €', 'ok','', ''), false)) +
+  grupo('Just Eat', '8 de 8 completas', tienda('Meraki Pita (Calle Prueba Oeste 75)', 'Meraki Pita · Plaza Castilla', '2 de 2', fila('1–15 oct', okP, '312,40 €','ok','','') + fila('16–31 oct', okP, '298,75 €','ok','',''), false)) +
+  grupo('Uber Eats', '16 de 16 completas', tienda('Bendito Burrito (Calle Prueba Norte 29)', 'Bendito Burrito · Alcalá', '4 de 4', fila('5–11 oct', okP, '96,20 €','ok','','') + fila('12–18 oct', okP, '74,80 €','ok','',''), false)),
+ huecos: () => cabecera('Octubre: 30 de 42 completas · 6 aún no toca · 6 te necesitan', [[30,'--ok'],[6,'--gr'],[6,'--am']]) +
+  grupo('Glovo', '12 completas · 6 aún no toca', tienda('Meraki Pita - MAD - Prueba Sur 4', 'Meraki Pita · Carabanchel', '1 completa · 1 aún no toca',
+     fila('1–15 oct', okP, '1.204,30 €','ok','','') +
+     fila('16–31 oct', piezas(['✓','si'],['—',''],['—',''],['—','']), '—', 'gr', 'Glovo manda la liquidación de la segunda quincena hacia el <b>04/11</b> y paga hacia el <b>10/11</b>. No tienes que hacer nada.', ''))) +
+  grupo('Uber Eats', '10 completas · 6 te necesitan', tienda('Dos Coyotes (Calle Prueba Sur 4)', 'Dos Coyotes · Carabanchel', '0 de 4 · 4 te necesitan',
+     fila('28 sep–4 oct', piezas(['✓','si'],['falta','no'],['falta','no'],['—','']), '—', 'am', 'No nos ha llegado su liquidación, y vendiste <b>27 pedidos (612,40 €)</b>. Uber la manda a la dirección de correo de esta tienda: <b>pide que la reenvíen a tu buzón de Sumied</b>.', 'Pídela') +
+     fila('5–11 oct', piezas(['✓','si'],['falta','no'],['falta','no'],['—','']), '—', 'am', 'Igual: vendiste 30 pedidos (684,10 €) y falta su liquidación.', 'Pídela')) +
+     tienda('Mila\'s Sandwiches (Calle Prueba Norte 29)', 'Mila\'s Sandwiches · Alcalá', '3 completas · 1 te necesita',
+     fila('19–25 oct', piezas(['✓','si'],['✓','si'],['falta','no'],['✓','si']), '58,30 €', 'am', 'Falta su factura de comisión. Uber la manda unos días después: si no llega antes del <b>05/11</b>, súbela.', 'Súbela'))),
+ sinlocal: () => cabecera('Octubre: 38 de 42 completas · 2 aún no toca · 2 te necesitan', [[38,'--ok'],[2,'--gr'],[2,'--am']]) +
+  grupo('Glovo', '2 te necesitan', tienda('French Tacos Club - MAD - C. Prueba Este', 'Sin marca · <b>Tienda sin local</b>', '2 te necesitan',
+     fila('1–15 oct', piezas(['?','no'],['✓','si'],['✓','si'],['✓','si']), '418,20 €', 'am', '',  '',
+      `<div class="preg"><b>¿De qué local es esta tienda?</b> Glovo la llama «C. Prueba Este» y pone la dirección Avenida Prueba 106.
+        <select aria-label="Local de la tienda"><option>Elige el local…</option><option>Alcalá</option><option>Carabanchel</option><option>Plaza Castilla</option></select><button class="btn pri">Guardar</button>
+        <span class="tp" style="flex-basis:100%">Vale para todas sus liquidaciones, las de antes y las que vengan. Mientras tanto se cuadra igual: la liquidación, su factura y su cobro ya están.</span></div>`) +
+     fila('16–31 oct', piezas(['?','no'],['—',''],['—',''],['—','']), '—', 'gr', 'Glovo la manda hacia el <b>04/11</b>.', ''))),
+ nocuadra: () => cabecera('Octubre: 39 de 42 completas · 2 aún no toca · 1 no cuadra', [[39,'--ok'],[2,'--gr'],[1,'--rd']]) +
+  grupo('Uber Eats', '1 no cuadra', tienda('Meraki Pita (Calle Prueba Norte 29)', 'Meraki Pita · Alcalá', '1 no cuadra',
+     fila('12–18 oct', piezas(['✓','si'],['✓','si'],['✓','si'],['✓','si']), '1.079,28 €', 'rd', 'La liquidación dice <b>52,59 € más</b> de lo que vendiste.', 'Ver por qué',
+     `<div class="abierta">
+       <div class="causa"><b>Por qué no cuadra:</b> Uber cuenta 3 pedidos que en tu caja no están (del 18/10 entre las 23:40 y las 23:58). Lo más probable es que se cerraran pasada la medianoche. <b>Qué hacer:</b> mira esos 3 pedidos; si son de esta semana, márcalo y queda cuadrada. <button class="btn pri">Son de esta semana</button> <button class="btn">No lo sé, pregúntaselo a Uber</button></div>
+       <div class="blq"><h4>La liquidación</h4><table class="tabla">
+         <tr><td>Pedidos<small>Cuántos pedidos te pagan</small></td><td>41</td></tr>
+         <tr><td>Ventas<small>Lo que pagaron tus clientes</small></td><td>1.079,28 €</td></tr>
+         <tr><td>Comisión<small>Lo que se queda Uber por cada pedido</small></td><td>−323,78 €</td></tr>
+         <tr><td>Promociones<small>Descuentos que pagas tú</small></td><td>−41,20 €</td></tr>
+         <tr><td>Publicidad<small>Anuncios dentro de Uber</small></td><td>−20,00 €</td></tr>
+         <tr><td>Otros<small>Ajustes y devoluciones</small></td><td>0,00 €</td></tr>
+         <tr><td><b>Lo que te pagan</b></td><td><b>694,30 €</b></td></tr></table></div>
+       <div class="blq"><h4>Lo que vendiste</h4><p style="margin:0">38 pedidos · 1.026,69 €<br><a href="#">Ver los pedidos de este periodo</a></p>
+         <h4 style="margin-top:12px">La factura de comisión</h4><p style="margin:0">UBER-2026-104512 · 391,77 €<br><span class="tp">Apuntada sola por Sumied: es de Uber, de esta semana y de esta tienda, y cuadra al céntimo con la liquidación.</span><br><a href="#">Ver su asiento</a> · <a href="#">Deshacer</a></p>
+         <h4 style="margin-top:12px">El cobro</h4><p style="margin:0">21/10 · 694,30 € · BBVA, «PORTIER EATS SPAIN» ✓</p></div>
+      </div>`))),
+}
+let caso = 'completo', vista = 'ordenador'
+function pinta() { document.getElementById('pant').innerHTML = C[caso](); document.getElementById('lienzo').className = 'lienzo ' + (vista === 'movil' ? 'movil' : '') }
+document.querySelectorAll('[data-caso]').forEach(b => b.onclick = () => { caso = b.dataset.caso; document.querySelectorAll('[data-caso]').forEach(x => x.setAttribute('aria-pressed', x === b)); pinta() })
+document.querySelectorAll('[data-vista]').forEach(b => b.onclick = () => { vista = b.dataset.vista; document.querySelectorAll('[data-vista]').forEach(x => x.setAttribute('aria-pressed', x === b)); pinta() })
+pinta()
+</script></body></html>
