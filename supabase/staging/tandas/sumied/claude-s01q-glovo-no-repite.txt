@@ -1,0 +1,11 @@
+# S01q·10 · La liquidación no repite lo ya contabilizado: 0741 (el 303 con IVA no
+# deducible de fuera), 0742 (la propuesta se rehace sola), 0743 (Foodint: en
+# staging no hace nada) y 0744 (regla hermana de la 1). Su prueba (ROLLBACK,
+# empresa A, datos inventados): el camino del fallo de las 27, esperar a la
+# factura sin contabilizar, la de referencia, la validada que no se toca, la
+# regla con sus mensajes, el 303 y la vuelta atrás.
+supabase/migrations/20261103T0741_s01q_303_no_deducible.sql
+supabase/migrations/20261103T0742_s01q_plataforma_rehace.sql
+supabase/migrations/20261103T0743_s01q_glovo_rehacer.sql
+supabase/migrations/20261103T0744_s01q_liquidacion_no_repite.sql
+supabase/staging/sql/20261103_s01q_liquidaciones_prueba.sql

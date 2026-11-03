@@ -19,6 +19,10 @@
 --      Lo recoge la pasada de noche cuando la factura se contabiliza.
 -- Misma firma las dos, con su respaldo. No toca filas.
 --
+-- sin hueco: el fichero no retira nada al aplicarse; el «delete from journal_entry»
+-- va dentro de la función, solo quita una PROPUESTA que ya no vale y en la misma
+-- llamada la vuelve a proponer (o dice por qué no).
+--
 -- cambia: public._conta_proponer_plataforma · prueba: supabase/staging/sql/20261103_s01q_liquidaciones_prueba.sql
 -- cambia: public._conta_plataforma_entrada · prueba: supabase/staging/sql/20261103_s01q_liquidaciones_prueba.sql
 
