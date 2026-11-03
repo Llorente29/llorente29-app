@@ -34381,6 +34381,7 @@ CREATE FUNCTION public.conta_factura_justificantes(p_factura uuid) RETURNS jsonb
            'id', j.id, 'clave', j.clave, 'creado', j.created_at, 'caduca', j.caduca_at, 'importe', s.amount, 'pagado_at', s.estado_at,
            'correo_a', j.correo_a, 'correo_at', j.correo_at, 'correo_texto', j.correo_texto,
            'proveedor', s.beneficiario, 'supplier_id', j.supplier_id, 'al_pagar', coalesce(sp.justificante_al_pagar, false),
+           'banco', initcap(l.proveedor), 'desde', t.name, 'desde_iban4', right(regexp_replace(coalesce(t.iban, ''), '\s', '', 'g'), 4),
            'telefono', (select sc.phone from public.supplier_contact sc where sc.supplier_id = j.supplier_id and nullif(trim(sc.phone), '') is not null
                          order by sc.is_primary desc nulls last, sc.created_at limit 1),
            'correo', (select sc.email from public.supplier_contact sc where sc.supplier_id = j.supplier_id and nullif(trim(sc.email), '') is not null
@@ -34388,6 +34389,8 @@ CREATE FUNCTION public.conta_factura_justificantes(p_factura uuid) RETURNS jsonb
          order by j.created_at desc), '[]'::jsonb)
     from public.conta_pago_justificante j
     join public.conta_pago_salida s on s.id = j.salida_id
+    join public.conta_pago_lote l on l.id = s.lote_id
+    left join public.treasury_account t on t.id = l.treasury_account_id
     left join public.supplier sp on sp.id = j.supplier_id
    where j.invoice_id = p_factura
 $$;
@@ -39680,7 +39683,7 @@ CREATE FUNCTION public.conta_justificante_publico(p_clave text) RETURNS jsonb
   select jsonb_build_object('pdf_path', j.pdf_path, 'caducado', j.caduca_at <= now(), 'numero', si.invoice_number)
     from public.conta_pago_justificante j
     left join public.supplier_invoice si on si.id = j.invoice_id
-   where p_clave ~ '^[A-Za-z0-9_-]{43}$' and j.clave = p_clave
+   where p_clave ~ '^[A-Za-z0-9_-]{43}(-c[0-9]+)?$' and j.clave = p_clave
 $_$;
 
 
@@ -42619,7 +42622,8 @@ CREATE FUNCTION public.conta_pago_justificante_datos(p_salida uuid) RETURNS json
     'estado', s.estado, 'pagado_at', s.estado_at, 'importe', s.amount, 'concepto', s.concepto, 'referencia', s.banco_id,
     'banco', initcap(l.proveedor),
     'empresa', jsonb_build_object('nombre', coalesce(nullif(c.trade_name, ''), c.legal_name), 'razon', c.legal_name, 'nif', c.tax_id,
-                                  'color', c.color, 'logo_path', c.logo_path, 'email', c.email),
+                                  'color', c.color, 'logo_path', c.logo_path, 'email', c.email,
+                                  'direccion', nullif(concat_ws(', ', nullif(trim(concat_ws(' ', c.fiscal_street, c.fiscal_number)), ''), nullif(trim(c.fiscal_city), '')), '')),
     'desde', jsonb_build_object('nombre', t.name, 'iban4', right(regexp_replace(coalesce(t.iban, ''), '\s', '', 'g'), 4)),
     'proveedor', jsonb_build_object('nombre', s.beneficiario, 'nif', sp.tax_id, 'iban4', right(regexp_replace(s.iban, '\s', '', 'g'), 4),
                                     'iban_pais', left(regexp_replace(s.iban, '\s', '', 'g'), 2),
