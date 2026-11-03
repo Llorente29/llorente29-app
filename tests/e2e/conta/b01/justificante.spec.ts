@@ -145,10 +145,20 @@ test.describe('B01 · el justificante de un pago', () => {
     // Sin sesión: es lo que abre el proveedor desde WhatsApp.
     for (const c of ['e2eNoEsDeNadieAAAAAAAAAAAAAAAAAAAAAAAAAAAA0', 'corta', "'; select 1 --"]) {
       const r = await page.goto(`${STAGING_URL}/functions/v1/conta-justificante?c=${encodeURIComponent(c)}`)
+      const cuerpo = (await r!.text()).trim()
+      // B01·13 · Una clave con pinta de SQL («'; select 1 --») la corta el cortafuegos de Cloudflare que
+      // Supabase tiene delante, ANTES de llegar a la función: 403, «server: cloudflare», su página HTML y sin
+      // «sb-request-id» (medido desde staging el 03/11 con pg_net; e2e 41609431355). Vale, siempre que no
+      // enseñe nada del justificante. Lo que sí llega a la función da 404 en texto plano.
+      if (r?.status() === 403) {
+        expect(r.headers()['server'], `la clave «${c}»: un 403 que no es del cortafuegos`).toBe('cloudflare')
+        expect(r.headers()['sb-request-id'], `la clave «${c}»: el 403 llegó a Supabase`).toBeUndefined()
+        expect(cuerpo).not.toMatch(/%PDF|Justificante de pago|Pagado a/)
+        continue
+      }
       expect(r?.status(), `la clave «${c}»`).toBe(404)
       // En texto plano: Supabase no deja servir HTML desde una función (e2e 41586077241).
       expect(r?.headers()['content-type'], `la clave «${c}»`).toMatch(/^text\/plain/)
-      const cuerpo = (await r!.text()).trim()
       expect(cuerpo).toBe('Este enlace no vale\n\nNo es el enlace de ningún justificante. Pídelo a quien te pagó.\n\nJustificante generado por Sumied · sumied.com — la contabilidad que paga a tus proveedores sola')
     }
   })

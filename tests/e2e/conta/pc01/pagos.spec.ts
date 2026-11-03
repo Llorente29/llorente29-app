@@ -212,7 +212,7 @@ test('Pagos: cifras, sin vencimiento, pestañas; pagar una (la domiciliada no en
   await page.getByRole('checkbox', { name: /^Marcar Distribuciones Cárnicas/ }).check()
   await expect(page.locator('.pg-barra')).toHaveCount(0)
   const barra = page.getByRole('dialog', { name: 'Pagar 1 factura' })
-  await expect(barra.locator('[data-prueba="lista-remesa"]')).toContainText('Distribuciones Cárnicas Vallecas SL · DCV-2026/1184')
+  await expect(barra.locator('[data-prueba="lista-remesa"]')).toContainText('Distribuciones Cárnicas Prueba SL · DCV-2026/1184')
   await expect(barra.locator('.pg-panel-total')).toContainText('1 transferencia')
   await expect(barra.locator('.pg-panel-total')).toContainText('1.105,30 €')
   await expect(barra.getByRole('button', { name: /Pagar 1 factura/ })).toBeEnabled()
