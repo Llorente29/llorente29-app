@@ -519,6 +519,7 @@ export default function RevisarFacturaPage() {
     lectura: ficha.lectura ? { cuando: ficha.lectura.cuando, archivo: ficha.lectura.archivo } : fac.llegada && lectura ? { cuando: fac.llegada.cuando, archivo: fac.llegada.archivo } : null,
     creada: ficha.creada,
   } : null
+  const sinAsientoAprobada = !validada && !descartada && (fac.estado === 'aprobada' || fac.estado === 'pagada')
   const frase = origen ? deDondeVino(origen) : 'Leyendo de dónde vino…'
   const hechos = ficha && origen ? historialDe({
     ...origen, marca: MARCA.nombre, aprobada: ficha.aprobada,
@@ -529,7 +530,12 @@ export default function RevisarFacturaPage() {
 
   const estado = descartada ? { texto: 'No es una factura', tono: 'neutro' as const }
     : validada ? (pagada ? { texto: chipComision(comision.datos, true) ?? 'Pagada', tono: 'seguro' as const } : { texto: 'Por pagar', tono: 'neutro' as const })
-      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : abono ? { texto: CHIP_ABONO, tono: 'seguro' as const } : { texto: 'Por revisar', tono: 'duda' as const }
+      : sinProveedor ? { texto: 'Proveedor nuevo', tono: 'duda' as const } : abono ? { texto: CHIP_ABONO, tono: 'seguro' as const }
+        // B01·14 (03/11) · Aprobada (o ya pagada) pero sin asiento validado: lo dice, con el vencimiento a la
+        // vista. No cambia cuándo se contabiliza: el asiento sigue saliendo al validar.
+        : sinAsientoAprobada ? (pagada ? { texto: 'Pagada · el asiento se apunta al validar', tono: 'seguro' as const }
+          : { texto: vence.valor === 'sin vencimiento' ? 'Aprobada · sin vencimiento' : `Aprobada · vence el ${vence.valor}`, tono: 'neutro' as const })
+        : { texto: 'Por revisar', tono: 'duda' as const }
   // S01h · La miga de un abono: «Por revisar», como la pestaña de la que viene (Julio, 31/10).
   const migasExtra = abono
     ? [...(!validada && !descartada ? [{ etiqueta: 'Por revisar', a: rutaRecibidaEnAsientos() }] : []), { etiqueta: `Abono${fac.numero ? ` ${fac.numero}` : ''}` }]
@@ -742,7 +748,7 @@ export default function RevisarFacturaPage() {
       <EncabezadoPagina
         titulo={titulo}
         estado={estado}
-        frase={<span data-prueba="de-donde-vino">{frase}</span>}
+        frase={<><span data-prueba="de-donde-vino">{frase}</span>{sinAsientoAprobada && !abono && !sinProveedor && <span data-prueba="asiento-al-validar">. El asiento se apunta al validar.</span>}</>}
         migasExtra={migasExtra}
         derecha={<NavegaFicha pos={pos + 1} total={ids.length} que={queCuentaLaCola(filtros.pestana)} anterior={anterior ? () => pedirSalir(() => ir(anterior)) : null} siguiente={siguiente ? () => pedirSalir(() => ir(siguiente)) : null} />}
         masAcciones={mas}
