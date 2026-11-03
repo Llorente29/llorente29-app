@@ -50,6 +50,17 @@ function ComoLeCompras() {
         <span className="cx-etiqueta" style={{ margin: 0 }}>Entrega mercancía</span>
       </label>
       <p className="cx-ayuda" style={{ margin: 0 }}>{textoEntregaMercancia(f.deliversGoods)}</p>
+      {/* B01 · Cola 1e · El justificante: cuando el banco confirma un pago a este proveedor, se le manda por correo. */}
+      <label className="cx-campo" style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <input type="checkbox" checked={f.justificanteAlPagar} data-prueba="justificante-al-pagar"
+          onChange={(e) => void cambiar({ justificanteAlPagar: e.target.checked }, e.target.checked
+            ? 'Guardado: cuando el banco confirme un pago, le mandamos el justificante a su correo.'
+            : 'Guardado: el justificante no se le manda solo; puedes mandarlo desde la factura.')} />
+        <span className="cx-etiqueta" style={{ margin: 0 }}>Mandar el justificante al pagar</span>
+      </label>
+      <p className="cx-ayuda" style={{ margin: 0 }}>{f.justificanteAlPagar
+        ? 'Cuando pagas desde Sumied y el banco lo confirma, le llega el justificante en PDF al correo de su contacto principal.'
+        : 'Cuando pagas desde Sumied, el justificante queda en la factura; desde ahí lo mandas por correo o por WhatsApp.'}</p>
       <label className="cx-campo">
         <span className="cx-etiqueta">Local por defecto</span>
         <select value={f.defaultCommon ? COMUN : (f.defaultLocationId ?? '')} data-prueba="local-por-defecto"

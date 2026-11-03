@@ -74,3 +74,18 @@ supabase/staging/sql/20261102_b01q_bancos_prueba.sql
 supabase/migrations/20261102T1310_b01o_casar_sin_anuladas.sql
 supabase/migrations/20261102T1300_b01o_olimpo_recasar.sql
 supabase/staging/sql/20261102_b01o_olimpo_prueba.sql
+# B01 · Cola 1e · Pagar. La 2115 solo añade: desde la rama va de verdad después
+# del ensayo (W05), si se puede pasar dos veces.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): la vuelta atrás y la 2115
+# dos veces; trae las en revisión de la empresa con su vencimiento y no las
+# aprobadas, descartadas ni las que se compensan; otra cuenta no ve nada.
+supabase/migrations/20261102T2115_b01p_pagos_por_revisar.sql
+supabase/staging/sql/20261102_b01p_pagar_prueba.sql
+# B01 · Cola 1e · El justificante. La 2140 solo añade: desde la rama va de verdad
+# después del ensayo (W05), si se puede pasar dos veces.
+# Su prueba (ROLLBACK, cuenta D, IBAN del banco 9999): la vuelta atrás y la 2140
+# dos veces; sin confirmar no hay justificante; pagado, sí, con el IBAN tapado y
+# uno solo; el enlace público solo con la clave entera, y caduca; la ficha de la
+# factura lo enseña a su cuenta y no a otra; lo del servicio no lo llama nadie más.
+supabase/migrations/20261102T2140_b01p_justificante.sql
+supabase/staging/sql/20261102_b01p_justificante_prueba.sql

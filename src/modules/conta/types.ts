@@ -41,6 +41,8 @@ export interface FichaProveedor {
   defaultLocationId: string | null
   /** S01o·2 · «Entrega mercancía» (sus facturas esperan albarán). null: lo deduce Sumied. */
   deliversGoods: boolean | null
+  /** B01 · Cola 1e · «Mandar el justificante al pagar»: cuando el banco confirma un pago, se le manda por correo. */
+  justificanteAlPagar: boolean
   /** S01o·3 · «Común a todos los locales»: su gasto es de la empresa entera, sin local. */
   defaultCommon: boolean
   paymentMethod: PaymentMethod | null
