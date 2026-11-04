@@ -447,7 +447,10 @@ begin
     'cerrado', case when v_lock.id is not null then jsonb_build_object('el', v_lock.locked_at, 'por', v_lock.locked_by_name, 'tipo', v_lock.kind, 'cambios', v_cambios) end,
     'faltan', (select count(*) from jsonb_array_elements(v_bloques) b where b->>'estado' in ('rojo', 'ambar')),
     'sin_medir', (select count(*) from jsonb_array_elements(v_bloques) b where b->>'estado' = 'sin_medir'),
-    'listo', not exists (select 1 from jsonb_array_elements(v_bloques) b where b->>'estado' in ('rojo', 'ambar', 'sin_medir')),
+    -- Julio (S01p·4): «sin medir» no impide cerrar, pero no se calla: el mes
+    -- sale «listo, con N sin medir» y cerrar pide el porqué de cada uno.
+    'listo', not exists (select 1 from jsonb_array_elements(v_bloques) b where b->>'estado' in ('rojo', 'ambar')),
+    'por_justificar', (select coalesce(jsonb_agg(b->>'codigo'), '[]'::jsonb) from jsonb_array_elements(v_bloques) b where b->>'estado' = 'sin_medir'),
     'no_aplican', (select count(*) from jsonb_array_elements(v_bloques) b where b->>'estado' = 'no_aplica'),
     'bloques', v_bloques);
 end $$;

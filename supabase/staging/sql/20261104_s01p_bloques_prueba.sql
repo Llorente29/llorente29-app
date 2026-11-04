@@ -12,7 +12,8 @@
 --   2. Octubre de A: los 9 bloques, siempre (regla 7), cada uno con un estado
 --      de los cinco, su frase y sus cifras; el IVA, «no aplica» (no es fin de
 --      trimestre); «listo» y «faltan» cuadran con ellos.
---   3. Diciembre de A: el IVA sí aplica; las amortizaciones, nunca en verde.
+--   3. Diciembre de A: el IVA sí aplica; las amortizaciones, nunca en verde, y
+--      salen para justificar al cerrar (no impiden cerrar: Julio, S01p·4).
 --   4. Permisos: anon no puede; una persona de otra cuenta recibe 42501.
 --   5. Otra vez la 1720: las mismas respuestas. La vuelta atrás las quita, y
 --      otra vez delante.
@@ -61,7 +62,7 @@ begin
     end if;
     if jsonb_array_length(b->'ejemplos') > 5 then raise exception 'PRUEBA S01p bloques 2: más de 5 ejemplos en %', b->>'codigo'; end if;
   end loop;
-  if (r->>'listo')::boolean <> not exists (select 1 from jsonb_array_elements(r->'bloques') x where x->>'estado' not in ('verde', 'no_aplica')) then
+  if (r->>'listo')::boolean <> not exists (select 1 from jsonb_array_elements(r->'bloques') x where x->>'estado' in ('rojo', 'ambar')) then
     raise exception 'PRUEBA S01p bloques 2: «listo» no cuadra con los bloques.';
   end if;
   if (r->>'faltan')::int <> (select count(*) from jsonb_array_elements(r->'bloques') x where x->>'estado' in ('rojo', 'ambar')) then
@@ -76,7 +77,9 @@ begin
   if (select x->>'estado' from jsonb_array_elements(r->'bloques') x where x->>'codigo' = 'repite') = 'verde' then
     raise exception 'PRUEBA S01p bloques 3: «Lo que se repite» en verde sin registro de bienes.';
   end if;
-  if (r->>'listo')::boolean then raise exception 'PRUEBA S01p bloques 3: diciembre «listo» con algo sin medir.'; end if;
+  -- «sin medir» no impide cerrar (Julio, S01p·4), pero sale para justificarlo.
+  if not (r->'por_justificar') ? 'repite' then raise exception 'PRUEBA S01p bloques 3: «Lo que se repite» no sale para justificar: %', r->'por_justificar'; end if;
+  if (r->>'sin_medir')::int <> jsonb_array_length(r->'por_justificar') then raise exception 'PRUEBA S01p bloques 3: «sin_medir» no cuadra con lo que hay que justificar.'; end if;
   insert into _r values ('diciembre', r);
 
   raise notice 'PRUEBA S01p bloques 1-3: bien. Octubre %, diciembre %.',
