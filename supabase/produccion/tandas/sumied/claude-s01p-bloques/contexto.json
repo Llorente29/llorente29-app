@@ -1,0 +1,19 @@
+{
+ "_que": "S01p · 3 · los bloques de «Cerrar el mes» · contexto de producción, medido en SOLO LECTURA el 04/11 a las 16:04Z con la consulta de contexto del workflow: la 1720 solo añade funciones (ninguna existe hoy, ni otra con su nombre). Las que reutiliza (bank_meses_estado, belongs_to_account, conta_esperadas_del_mes, conta_liquidaciones_mes, conta_sin_confirmar_no_cobrados) son stable en producción. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T16:04Z",
+ "tanda": {
+  "supabase/migrations/20261104T1720_s01p_bloques.sql": "ae4615a8e72f2bca4bb231596167090f"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

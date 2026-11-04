@@ -1,0 +1,6 @@
+# S01p · 3 · Los bloques de «Cerrar el mes» (1720, solo añade funciones). Su
+# prueba (ROLLBACK, cuenta A): todas stable, los nueve bloques siempre con su
+# estado y su frase, el IVA solo a fin de trimestre, permisos, otra vez y la
+# vuelta atrás.
+supabase/migrations/20261104T1720_s01p_bloques.sql
+supabase/staging/sql/20261104_s01p_bloques_prueba.sql
