@@ -1,0 +1,29 @@
+{
+ "_que": "S01p·2 · contexto de producción, medido en SOLO LECTURA el 04/11 a las 09:45Z con la consulta de contexto del workflow (analizar.mjs sql-contexto): la 1120 añade dos columnas a company, la tabla conta_mes_cambio, conta_empresa_dias_guardar, conta_mes_cambios, _s01p_iva_presentado_el y dos disparadores en journal_entry, y cambia conta_mes_cerrado y conta_primer_dia_abierto (misma firma, con respaldo; huellas 163d4d28… y ce7736a5…, iguales en staging). La 1121 cambia una fila de company (Foodint). Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T09:45Z",
+ "tanda": {
+  "supabase/migrations/20261104T1120_s01p_candado.sql": "7edc8db13376d5e4d7b21f63e4f47027",
+  "supabase/migrations/20261104T1121_s01p_dias_foodint.sql": "59d28275b522ae8b6e95114347b4d00f"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company",
+   "public.journal_entry"
+  ],
+  "funciones": [
+   "public.conta_mes_cerrado(uuid,date)",
+   "public.conta_primer_dia_abierto(uuid,date)"
+  ],
+  "filas": {
+   "public.company": 0,
+   "public.journal_entry": 15601
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
