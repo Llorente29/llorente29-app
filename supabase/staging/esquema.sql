@@ -3004,6 +3004,18 @@ begin
      and (p.supplier_invoice_id is null or si.status = 'anulada' or si.invoice_date > v_fin)
    group by g.supplier_id, g.location_id;
 
+  -- S01p: lo periodificado que ya no hace falta (su albarán tiene factura del
+  -- mes) o que ha cambiado, con asientos solo propuestos o en borrador: fuera
+  -- esos asientos (una propuesta no deja rastro en el libro), para que se quite
+  -- o se rehaga abajo. Lo validado no se toca: se corrige en el libro diario.
+  delete from journal_entry e using purchase_accrual a where a.company_id = p_empresa and a.month = v_ini and e.company_id = p_empresa
+     and e.source_type in ('purchase_accrual', 'purchase_accrual_reversal') and e.source_id = a.id
+     and e.status in ('propuesto', 'borrador')
+     and not exists (select 1 from journal_entry v where v.company_id = p_empresa and v.source_id = a.id
+                      and v.source_type in ('purchase_accrual', 'purchase_accrual_reversal') and v.status = 'validado')
+     and not exists (select 1 from _fin_de_mes x where x.supplier_id = a.supplier_id and x.location_id is not distinct from a.location_id
+                      and x.base = a.base and x.receipts = a.receipts);
+
   -- Lo que ya no está (se facturó dentro del mes) y no tiene asiento: fuera.
   delete from purchase_accrual a
    where a.company_id = p_empresa and a.month = v_ini
@@ -15922,6 +15934,39 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._tg_factura_anulada_descasa() IS 'B01 · Cola 2 (02/11). Al anular o descartar una factura recibida, cada pago casado con ella se deshace: asiento propuesto, fuera (bank_deshacer); validado, se borra con _conta_asientos_borrar (sin contraasiento). El movimiento vuelve a «Por aclarar» con el motivo.';
+
+
+--
+-- Name: _tg_s01p_albaran_facturado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_s01p_albaran_facturado() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_a record; v_empresa uuid;
+begin
+  if new.supplier_invoice_id is not distinct from old.supplier_invoice_id then return null; end if;
+  v_empresa := coalesce(new.company_id,
+    (select c.id from public.company c where c.account_id = new.account_id and c.is_active
+      group by c.id having (select count(*) from public.company k where k.account_id = new.account_id and k.is_active) = 1));
+  for v_a in
+    select distinct a.company_id, a.month from public.purchase_accrual a
+     where a.account_id = new.account_id and (v_empresa is null or a.company_id = v_empresa)
+       and a.receipts @> jsonb_build_array(jsonb_build_object('id', new.goods_receipt_id))
+       and not exists (select 1 from public.journal_entry v where v.company_id = a.company_id and v.source_id = a.id
+                        and v.source_type in ('purchase_accrual', 'purchase_accrual_reversal') and v.status = 'validado')
+  loop
+    begin
+      perform public.conta_proponer_recibidos(v_a.company_id, v_a.month, (v_a.month + interval '1 month - 1 day')::date, 'Sumied');
+    exception when others then
+      perform public._conta_no_propuesta(v_a.company_id, 'purchase_accrual', v_a.month::text, 'Recibido sin factura de ' || to_char(v_a.month, 'MM/YYYY'),
+        'Un albarán ha recibido su factura y no se ha podido rehacer lo recibido sin factura del mes: ' || sqlerrm,
+        'Compras y gastos › Facturas recibidas');
+    end;
+  end loop;
+  return null;
+end $$;
 
 
 --
@@ -101613,6 +101658,25 @@ COMMENT ON TABLE public.conta_s01p_prestamo_antes IS 'S01p · 1042 · El cuadro 
 
 
 --
+-- Name: conta_s01p_recibido_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_s01p_recibido_antes (
+    tabla text NOT NULL,
+    id uuid NOT NULL,
+    fila jsonb NOT NULL,
+    guardado_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_s01p_recibido_antes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_s01p_recibido_antes IS 'S01p · 1641 · Lo recibido sin factura de octubre de Foodint que se quitó (periodificación, asientos y apuntes), para su vuelta atrás.';
+
+
+--
 -- Name: conta_tienda_local_antes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -116076,6 +116140,14 @@ ALTER TABLE ONLY public.conta_s01p_prestamo_antes
 
 
 --
+-- Name: conta_s01p_recibido_antes conta_s01p_recibido_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_s01p_recibido_antes
+    ADD CONSTRAINT conta_s01p_recibido_antes_pkey PRIMARY KEY (tabla, id);
+
+
+--
 -- Name: conta_tienda_local_antes conta_tienda_local_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -126234,6 +126306,13 @@ CREATE TRIGGER s01o2_iva_no_deducible AFTER INSERT OR UPDATE OF reading, supplie
 --
 
 CREATE TRIGGER s01o2_iva_no_deducible_linea AFTER INSERT ON public.supplier_invoice_tax FOR EACH ROW EXECUTE FUNCTION public.tg_s01o2_iva_no_deducible_linea();
+
+
+--
+-- Name: goods_receipt_path s01p_albaran_facturado; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01p_albaran_facturado AFTER UPDATE OF supplier_invoice_id ON public.goods_receipt_path FOR EACH ROW EXECUTE FUNCTION public._tg_s01p_albaran_facturado();
 
 
 --
@@ -141610,6 +141689,12 @@ ALTER TABLE public.conta_s01p_factura_antes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conta_s01p_prestamo_antes ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_s01p_recibido_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_s01p_recibido_antes ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_tienda_local_antes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -151612,6 +151697,14 @@ GRANT ALL ON FUNCTION public._supplier_merge_undo(p_merge uuid, p_quien_nombre t
 --
 
 REVOKE ALL ON FUNCTION public._tg_factura_anulada_descasa() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _tg_s01p_albaran_facturado(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_s01p_albaran_facturado() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._tg_s01p_albaran_facturado() TO service_role;
 
 
 --
@@ -167093,6 +167186,13 @@ GRANT ALL ON TABLE public.conta_s01p_factura_antes TO service_role;
 --
 
 GRANT ALL ON TABLE public.conta_s01p_prestamo_antes TO service_role;
+
+
+--
+-- Name: TABLE conta_s01p_recibido_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_s01p_recibido_antes TO service_role;
 
 
 --
