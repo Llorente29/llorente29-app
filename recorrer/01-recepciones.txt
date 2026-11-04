@@ -1,0 +1,412 @@
+http://127.0.0.1:4173/supply/recepciones
+
+folvy
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+Recepciones
+
+Registra lo que llega del proveedor. Al confirmar, entra a stock.
+
+Recibir pedido
+Escanear albarán
+Nueva recepción
+ALB-00017
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+09 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00014
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+08 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00018
+Confirmado
+
+Proveedor
+
+Lácteos Prueba Ocho, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+07 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00016
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+06 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00004
+Confirmado
+
+Proveedor
+
+Verduras del Huerto Prueba, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+05 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00002
+Confirmado
+
+Proveedor
+
+Marcas del Sur
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+05 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00013
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+03 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00003
+Confirmado
+
+Proveedor
+
+Marcas del Sur
+
+Local
+
+Norte Mercado
+
+Fecha
+
+03 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00015
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+02 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00001
+Confirmado
+
+Proveedor
+
+Marcas del Sur
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+02 oct 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00008
+Confirmado
+
+Proveedor
+
+Carnes Prueba del Valle, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+28 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00005
+Confirmado
+
+Proveedor
+
+Bodega Prueba Ribera, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+25 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00011
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+24 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00009
+Confirmado
+
+Proveedor
+
+Carnes Prueba del Valle, S.L.
+
+Local
+
+Norte Mercado
+
+Fecha
+
+18 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00007
+Confirmado
+
+Proveedor
+
+Carnes Prueba del Valle, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+15 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00012
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Norte Mercado
+
+Fecha
+
+12 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00010
+Confirmado
+
+Proveedor
+
+Distribuciones Prueba Aurora, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+10 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+ALB-00006
+Confirmado
+
+Proveedor
+
+Carnes Prueba del Valle, S.L.
+
+Local
+
+Taberna del Mercado
+
+Fecha
+
+04 sept 2026
+
+Nº albarán
+
+—
+
+Anular y corregir
+Anular
+Inicio
+3
+Pendientes
+Safety
+Sales
+Kitchen
+Connect
+Supply
+Orders
+Social
+Shop
+Conta

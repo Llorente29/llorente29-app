@@ -1,0 +1,45 @@
+http://127.0.0.1:4173/supply/recepciones
+
+folvy
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+Recepciones
+
+Haz una foto del albarán. El pedido se busca solo.
+
+Escanear albarán
+
+Hazle una foto — el sistema busca el pedido por ti.
+
+PEDIDOS PENDIENTES
+
+Sin pedidos pendientes a la vista. Escanea el albarán y ya está.
+
+OTRA FORMA DE RECIBIR
+
+Contar a mano
+
+Sin foto: eliges proveedor y cuentas lo que llega.
+
+Inicio
+3
+Pendientes
+Safety
+Sales
+Kitchen
+Connect
+Supply
+Orders
+Social
+Shop
+Conta

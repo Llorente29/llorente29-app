@@ -1,0 +1,37 @@
+http://127.0.0.1:4173/supply/recepciones
+
+folvy
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+
+Frutas y Verduras La Huerta · resumen
+
+Todo revisado
+
+4 línea(s) del albarán.
+
+Falta un artículo — añadirlo
+Atrás
+Recibir y meter al stock
+Inicio
+3
+Pendientes
+Safety
+Sales
+Kitchen
+Connect
+Supply
+Orders
+Social
+Shop
+Conta

@@ -1,0 +1,59 @@
+http://127.0.0.1:4173/supply/recepciones
+
+folvy
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+
+Frutas y Verduras La Huerta · 3 de 4
+
+El albarán dice
+
+Patata agria, saco 25 kg · 2 caja
+
+Patata agria
+
+viene en saco 25 kgs de 25 kg
+
+Cambiar
+
+¿Cuántos saco 25 kgs han llegado?
+
+−
+
+2
+
+saco 25 kgs
+
++
+
+Entran 50 kg al almacén
+
+Importe de esta línea
+
+el albarán dice 37,50 €
+
+No lo tengo claro — que lo mire la oficina
+Atrás
+Siguiente
+Inicio
+3
+Pendientes
+Safety
+Sales
+Kitchen
+Connect
+Supply
+Orders
+Social
+Shop
+Conta
