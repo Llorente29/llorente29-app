@@ -1,0 +1,9 @@
+# S01p·1 · Los arreglos de antes de «Cerrar el mes»: 1040 (lo que le falta a un
+# mes el día que sea; lo quincenal sin día; la factura sabe su asiento), 1041
+# (las facturas de antes, con copia) y 1042 (el préstamo de Foodint; en staging
+# no está y no hace nada). Su prueba (ROLLBACK, empresa A): cada arreglo, otra
+# vez sin cambios, la vuelta atrás con las huellas de producción y otra vez delante.
+supabase/migrations/20261104T1040_s01p_arreglos.sql
+supabase/migrations/20261104T1041_s01p_factura_asiento_datos.sql
+supabase/migrations/20261104T1042_s01p_prestamo_octubre_foodint.sql
+supabase/staging/sql/20261104_s01p_arreglos_prueba.sql
