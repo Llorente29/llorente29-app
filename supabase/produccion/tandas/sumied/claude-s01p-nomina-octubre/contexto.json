@@ -1,0 +1,8 @@
+{
+ "_que": "S01p · la nómina de octubre de Foodint · contexto de producción, medido en SOLO LECTURA el 04/11 a las 22:05Z: la 2310 añade _s01p_nomina_proponer (no existe) y propone un asiento nuevo (serie 9, 31/10; hoy no hay ninguno en esa fecha y serie, ni sueldos en octubre). Las cinco cuentas están en el plan y el ejercicio 2026, abierto. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T22:05Z",
+ "tanda": {
+  "supabase/migrations/20261104T2310_s01p_nomina_octubre.sql": "cda5dcc1e0ba8e855fb8c0e6b2558c60"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
