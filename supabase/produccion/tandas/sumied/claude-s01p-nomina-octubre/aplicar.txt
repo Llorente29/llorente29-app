@@ -1,0 +1,12 @@
+# S01p · La nómina de octubre de Foodint, solo a contabilidad (Julio, S01p·9 y
+# S01p·11). Rama claude/s01p-nomina-octubre. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   2310  Añade _s01p_nomina_proponer y propone (no valida) el asiento del
+#         devengo de octubre de Foodint desde los totales de las 6 nóminas:
+#         640 7.268,20 y 642 2.814,08 (Alcalá) contra 476 3.286,51, 4751 145,36
+#         y 465 6.650,41; serie 9, 31/10. Ni Laboral ni el portal del empleado.
+#
+# Nada en el camino del pedido. El real lo lanza Julio, que valida el asiento.
+cuenta: scripts/conta/produccion/cuentas/s01p-nomina.sql
+supabase/migrations/20261104T2310_s01p_nomina_octubre.sql
