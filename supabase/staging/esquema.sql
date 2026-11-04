@@ -14472,6 +14472,55 @@ end $$;
 
 
 --
+-- Name: _s01p_asiento_de_factura(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_asiento_de_factura(p_factura uuid, p_cuenta uuid) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(
+    (select e.id from public.supplier_invoice f
+       join public.journal_entry e on e.id = f.journal_entry_id and e.account_id = f.account_id
+      where f.id = p_factura and f.account_id = p_cuenta and e.status <> 'anulado'
+        and not (e.source_type = 'supplier_invoice' and e.source_id = p_factura)),
+    (select e.id from public.journal_entry e
+      where e.source_type = 'supplier_invoice' and e.source_id = p_factura and e.account_id = p_cuenta
+        and e.status <> 'anulado'
+      order by e.created_at desc, e.id desc limit 1))
+$$;
+
+
+--
+-- Name: FUNCTION _s01p_asiento_de_factura(p_factura uuid, p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._s01p_asiento_de_factura(p_factura uuid, p_cuenta uuid) IS 'S01p · El asiento que contabiliza una factura recibida: el de otro origen que ya tenía y sigue vivo (un migrado de Diez); si no, el suyo vivo (por source_id); si no, ninguno.';
+
+
+--
+-- Name: _s01p_factura_su_asiento(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta uuid) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  update public.supplier_invoice f
+     set journal_entry_id = public._s01p_asiento_de_factura(f.id, f.account_id)
+   where f.id = p_factura and f.account_id = p_cuenta
+     and f.journal_entry_id is distinct from public._s01p_asiento_de_factura(f.id, f.account_id)
+$$;
+
+
+--
+-- Name: FUNCTION _s01p_factura_su_asiento(p_factura uuid, p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta uuid) IS 'S01p · Deja en supplier_invoice.journal_entry_id el asiento que la contabiliza (_s01p_asiento_de_factura).';
+
+
+--
 -- Name: _sale_line_raw_consumption(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -15861,6 +15910,26 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._tg_factura_anulada_descasa() IS 'B01 · Cola 2 (02/11). Al anular o descartar una factura recibida, cada pago casado con ella se deshace: asiento propuesto, fuera (bank_deshacer); validado, se borra con _conta_asientos_borrar (sin contraasiento). El movimiento vuelve a «Por aclarar» con el motivo.';
+
+
+--
+-- Name: _tg_s01p_factura_su_asiento(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_s01p_factura_su_asiento() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if tg_op <> 'DELETE' and new.source_type = 'supplier_invoice' and new.source_id is not null then
+    perform public._s01p_factura_su_asiento(new.source_id, new.account_id);
+  end if;
+  if tg_op <> 'INSERT' and old.source_type = 'supplier_invoice' and old.source_id is not null
+     and (tg_op = 'DELETE' or old.source_id is distinct from new.source_id or old.source_type is distinct from new.source_type) then
+    perform public._s01p_factura_su_asiento(old.source_id, old.account_id);
+  end if;
+  return null;
+end $$;
 
 
 --
@@ -34132,22 +34201,19 @@ end $$;
 
 
 --
--- Name: conta_esperadas_no_llegadas(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+-- Name: conta_esperadas_del_mes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.conta_esperadas_no_llegadas(p_company uuid, p_hoy date DEFAULT ((now() AT TIME ZONE 'Europe/Madrid'::text))::date) RETURNS TABLE(expected_id uuid, supplier_id uuid, supplier_name text, label text, periodo date, ultima date, pedida text)
+CREATE FUNCTION public.conta_esperadas_del_mes(p_company uuid, p_mes date) RETURNS TABLE(expected_id uuid, supplier_id uuid, supplier_name text, label text, periodo date, ultima date, pedida text)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_acc uuid; v_mes date;
+declare v_acc uuid; v_mes date := date_trunc('month', p_mes)::date;
 begin
   select account_id into v_acc from public.company where id = p_company;
   if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'Esa empresa no está.' using errcode = 'P0002';
   end if;
-  -- Antes del día 15 todavía se espera la del mes anterior; desde el 15, falta.
-  v_mes := (date_trunc('month', p_hoy) - interval '1 month')::date;
-  if extract(day from p_hoy) < 15 then return; end if;
   return query
   select x.id, x.supplier_id, s.name, coalesce(x.label, s.name), v_mes,
          greatest((select max(i.invoice_date) from public.supplier_invoice i where i.account_id = v_acc and i.supplier_id = x.supplier_id and i.status <> 'anulada'),
@@ -34169,6 +34235,34 @@ begin
                       where e.account_id = v_acc and e.company_id = p_company and e.series = 2 and e.status = 'validado'
                         and e.entry_date >= v_mes and e.entry_date < (v_mes + interval '1 month')::date)
    order by s.name;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_esperadas_del_mes(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_esperadas_del_mes(p_company uuid, p_mes date) IS 'S01p · Lo que se esperaba en el mes y no ha llegado (ni factura ni asiento validado del proveedor), el día que sea. La usan el aviso de Compras (desde el 15 del mes siguiente) y Cerrar el mes.';
+
+
+--
+-- Name: conta_esperadas_no_llegadas(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_esperadas_no_llegadas(p_company uuid, p_hoy date DEFAULT ((now() AT TIME ZONE 'Europe/Madrid'::text))::date) RETURNS TABLE(expected_id uuid, supplier_id uuid, supplier_name text, label text, periodo date, ultima date, pedida text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (public.belongs_to_account(v_acc) or coalesce(auth.role(), '') = 'service_role') then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  -- Antes del día 15 todavía se espera la del mes anterior; desde el 15, falta.
+  -- (Cerrar el mes no espera al 15: usa conta_esperadas_del_mes directamente.)
+  if extract(day from p_hoy) < 15 then return; end if;
+  return query select * from public.conta_esperadas_del_mes(p_company, (date_trunc('month', p_hoy) - interval '1 month')::date);
 end $$;
 
 
@@ -45552,7 +45646,7 @@ begin
                       where i.account_id = v_acc and i.supplier_id = r.supplier_id and i.status <> 'anulada'
                         and i.location_id in (select lc.location_id from public.location_company lc where lc.company_id = p_company and lc.account_id = v_acc)) end,
       'cadencia', r.cadencia,
-      'dia', case r.cadencia when 'mensual' then case when r.dia_mediano >= 28 then 31 else r.dia_mediano end when 'quincenal' then 0 end,
+      'dia', case r.cadencia when 'mensual' then case when r.dia_mediano >= 28 then 31 else r.dia_mediano end end,  -- quincenal: el 15 y fin de mes, sin día (S01p)
       'cada', case when r.cadencia = 'varias' then r.cada end,
       'meses', r.meses, 'dias_por_mes', r.dias_por_mes) as x
       from (
@@ -101310,6 +101404,46 @@ COMMENT ON TABLE public.conta_s01_cobros_antes IS 'S01 2238 · Copia previa: de 
 
 
 --
+-- Name: conta_s01p_factura_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_s01p_factura_antes (
+    id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    journal_entry_id uuid,
+    guardado_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_s01p_factura_antes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_s01p_factura_antes IS 'S01p · 1041 · Lo que tenía supplier_invoice.journal_entry_id antes de la 1041, para su vuelta atrás.';
+
+
+--
+-- Name: conta_s01p_prestamo_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_s01p_prestamo_antes (
+    id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    schedule jsonb,
+    principal numeric,
+    installments integer,
+    guardado_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_s01p_prestamo_antes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_s01p_prestamo_antes IS 'S01p · 1042 · El cuadro del préstamo de Foodint antes de añadirle la cuota de octubre, para su vuelta atrás.';
+
+
+--
 -- Name: conta_tienda_local_antes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -115749,6 +115883,22 @@ ALTER TABLE ONLY public.conta_s01_cobros_antes
 
 
 --
+-- Name: conta_s01p_factura_antes conta_s01p_factura_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_s01p_factura_antes
+    ADD CONSTRAINT conta_s01p_factura_antes_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_s01p_prestamo_antes conta_s01p_prestamo_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_s01p_prestamo_antes
+    ADD CONSTRAINT conta_s01p_prestamo_antes_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_tienda_local_antes conta_tienda_local_antes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -125900,6 +126050,13 @@ CREATE TRIGGER s01o2_iva_no_deducible AFTER INSERT OR UPDATE OF reading, supplie
 --
 
 CREATE TRIGGER s01o2_iva_no_deducible_linea AFTER INSERT ON public.supplier_invoice_tax FOR EACH ROW EXECUTE FUNCTION public.tg_s01o2_iva_no_deducible_linea();
+
+
+--
+-- Name: journal_entry s01p_factura_su_asiento; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01p_factura_su_asiento AFTER INSERT OR DELETE OR UPDATE OF status, source_id, source_type ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._tg_s01p_factura_su_asiento();
 
 
 --
@@ -141206,6 +141363,18 @@ ALTER TABLE public.conta_respaldo_liquidacion_factura ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conta_s01_cobros_antes ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_s01p_factura_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_s01p_factura_antes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_s01p_prestamo_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_s01p_prestamo_antes ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_tienda_local_antes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -151015,6 +151184,22 @@ GRANT ALL ON FUNCTION public._s01j_liquidacion_sustituye() TO service_role;
 
 
 --
+-- Name: FUNCTION _s01p_asiento_de_factura(p_factura uuid, p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_asiento_de_factura(p_factura uuid, p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._s01p_asiento_de_factura(p_factura uuid, p_cuenta uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _s01p_factura_su_asiento(p_factura uuid, p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _sale_line_raw_consumption(p_sale_line_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -151183,6 +151368,14 @@ GRANT ALL ON FUNCTION public._supplier_merge_undo(p_merge uuid, p_quien_nombre t
 --
 
 REVOKE ALL ON FUNCTION public._tg_factura_anulada_descasa() FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _tg_s01p_factura_su_asiento(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_s01p_factura_su_asiento() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._tg_s01p_factura_su_asiento() TO service_role;
 
 
 --
@@ -154778,6 +154971,15 @@ GRANT ALL ON FUNCTION public.conta_envio_aclarar(p_sale uuid, p_decision text, p
 REVOKE ALL ON FUNCTION public.conta_esperadas_aprender(p_company uuid, p_hoy date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_esperadas_aprender(p_company uuid, p_hoy date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_esperadas_aprender(p_company uuid, p_hoy date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_esperadas_del_mes(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_esperadas_del_mes(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_esperadas_del_mes(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_esperadas_del_mes(p_company uuid, p_mes date) TO service_role;
 
 
 --
@@ -166591,6 +166793,20 @@ GRANT ALL ON TABLE public.conta_respaldo_liquidacion_factura TO service_role;
 --
 
 GRANT ALL ON TABLE public.conta_s01_cobros_antes TO service_role;
+
+
+--
+-- Name: TABLE conta_s01p_factura_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_s01p_factura_antes TO service_role;
+
+
+--
+-- Name: TABLE conta_s01p_prestamo_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_s01p_prestamo_antes TO service_role;
 
 
 --
