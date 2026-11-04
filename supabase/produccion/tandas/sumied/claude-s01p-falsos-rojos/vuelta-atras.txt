@@ -1,0 +1,3 @@
+# S01p · 5 · la vuelta atrás: las cinco funciones desde su respaldo, y fuera el ayudante.
+cuenta: scripts/conta/produccion/cuentas/s01p-falsos-rojos.sql
+supabase/vuelta-atras/20261104T1905_s01p_falsos_rojos.down.sql
