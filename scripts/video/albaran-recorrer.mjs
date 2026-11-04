@@ -40,7 +40,7 @@ function albaranHtml(a, fecha) {
     h1{font-size:26px;margin:0 0 4px}.p{color:#555}table{width:100%;border-collapse:collapse;margin-top:18px}
     th,td{padding:8px;border-bottom:1px solid #ccc;text-align:left}.n{text-align:right}.t{margin-top:16px;text-align:right;font-size:18px;font-weight:700}
   </style></head><body><h1>${a.proveedor}</h1><div class="p">NIF ${a.nif} · Mercamadrid, nave 12</div>
-  <h2 style="margin-top:22px">ALBARÁN Nº ${a.numero}</h2><div class="p">Fecha ${fecha.split('-').reverse().join('/')} · Entregar en: Taberna de Prueba Norte</div>
+  <h2 style="margin-top:22px">ALBARÁN Nº ${a.numero}</h2><div class="p">Fecha ${fecha.split('-').reverse().join('/')} · Entregar en: Taberna del Mercado</div>
   <table><tr><th>Código</th><th>Artículo</th><th class="n">Cant.</th><th class="n">Precio</th><th class="n">Importe</th></tr>${filas}</table>
   <div class="t">Base ${base.toFixed(2).replace('.', ',')} €</div></body></html>`
 }
@@ -73,7 +73,7 @@ async function interceptarLectura(page, s, CUENTA_A, a, fecha) {
       session_id: sesionId, status: 'ok', ai_model: 'simulado (vídeo V02)', ai_latency_ms: 1800,
       parsed: { confidence: 0.96, lines: lineas, document: {
         supplier_name: a.proveedor, supplier_tax_id: a.nif, supplier_phone: null, supplier_email: null, supplier_address: 'Mercamadrid, nave 12',
-        supplier_health_registry: null, doc_number: a.numero, doc_date: fecha, doc_type: 'albaran', ship_to: 'Taberna de Prueba Norte', bill_to_name: null,
+        supplier_health_registry: null, doc_number: a.numero, doc_date: fecha, doc_type: 'albaran', ship_to: 'Taberna del Mercado', bill_to_name: null,
         handwritten: false, tax_base_total: base, tax_total: null, grand_total: null } },
       validation: { base_declared: base, lines_sum: base, diff_pct: 0, cuadra: true, needs_review: false, reasons: [] },
     }) })
@@ -112,7 +112,12 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
   p.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
   await interceptarLectura(p, s, CUENTA_A, ALBARAN, fecha)
   try {
-    await p.goto(`${APP}/supply/recepciones`); await foto(p, 'recepciones')
+    await p.goto(`${APP}/supply/recepciones`)
+    // El local: sin él, «Recibir y meter al stock» no se enciende (el stock entra en un local).
+    const local = p.locator('select').filter({ has: p.locator('option', { hasText: 'Taberna del Mercado' }) }).first()
+    if (await local.isVisible().catch(() => false)) { await local.selectOption({ label: 'Taberna del Mercado' }); await p.waitForTimeout(1500) }
+    else console.log('· no encuentro el selector del local')
+    await foto(p, 'recepciones')
     await pulsa(p, /Recibir pedido/); await foto(p, 'recibir')
     await pulsa(p, /Escanear albarán/); await foto(p, 'escanear')
     await p.locator('input[type=file]').last().setInputFiles(fotoAlbaran)

@@ -70,6 +70,10 @@ begin
     end if;
   end loop;
 
+  -- El local y la cuenta, con nombre de bar (el de la cabecera y el de «Entregar en»).
+  update public.locations set name = 'Taberna del Mercado' where account_id = c and name = 'Norte Centro';
+  update public.accounts set name = 'Taberna del Mercado' where id = c;
+
   -- La oficina aprueba aparte: la recepción de cocina queda esperándola.
   update public.supply_settings set require_separate_approval = true where account_id = c;
   if not found then
