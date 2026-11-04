@@ -80,9 +80,9 @@ declare
   e uuid; n int; v_que text;
 begin
   insert into public.fiscal_period_lock (account_id, company_id, fiscal_year_id, month, kind, locked_by_name)
-  values (v_acc, c, y, '2026-08-01', 'manual', 'PRUEBA'), (v_acc, c, y, '2026-07-01', 'migrated', 'PRUEBA');
+  values (v_acc, c, y, '2026-08-01', 'manual', 'PRUEBA'), (v_acc, c, y, '2026-03-01', 'migrated', 'PRUEBA');
   if public.conta_mes_cerrado(c, '2026-08-10') then raise exception 'PRUEBA S01p·2 · 2: un mes cerrado por una persona sigue bloqueando.'; end if;
-  if not public.conta_mes_cerrado(c, '2026-07-10') then raise exception 'PRUEBA S01p·2 · 2: el mes del corte con Diez ya no bloquea.'; end if;
+  if not public.conta_mes_cerrado(c, '2026-03-10') then raise exception 'PRUEBA S01p·2 · 2: el mes del corte con Diez ya no bloquea.'; end if;
 
   -- Un traspaso de 12,34 € entre dos bancos de A (sin gasto, ingreso ni IVA), validado y anulado como en la pantalla.
   e := pg_temp.asiento('2026-08-10');
@@ -106,7 +106,7 @@ begin
   -- En un mes abierto no se apunta nada.
   -- El contraasiento de la anulación es del 15/09, un mes abierto: no se apunta.
   if exists (select 1 from public.conta_mes_cambio c2 join public.journal_entry r on r.id = c2.entry_id where r.reverses_entry_id = e) then raise exception 'PRUEBA S01p·2 · 2: un mes abierto apunta cambios.'; end if;
-  raise notice 'PRUEBA S01p·2 · 2 en verde: agosto cerrado admite y apunta (%); julio, del corte, sigue sin admitir nada; un mes abierto no apunta.', v_que;
+  raise notice 'PRUEBA S01p·2 · 2 en verde: agosto cerrado admite y apunta (%); marzo, del corte, sigue sin admitir nada; un mes abierto no apunta.', v_que;
 end $$;
 
 -- 3 · El trimestre presentado no admite nada.
