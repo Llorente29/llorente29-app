@@ -1,0 +1,17 @@
+{
+ "_que": "S01p · 4 · la factura con su fecha y las 22 de octubre · contexto de producción, medido en SOLO LECTURA el 04/11 a las 21:07Z con la consulta de contexto del workflow: la 2210 cambia _conta_recibida_no_antes_de_entrar (misma firma, con respaldo); la 2211 borra y vuelve a apuntar 22 asientos de Foodint (journal_entry, journal_line, journal_entry_document, supplier_invoice, document_activity, conta_liquidacion_resolucion) y rehace el borrador del 303 del 4T (tax_return_line), con la copia conta_s01p4_303_antes (no existe). Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T21:07Z",
+ "tanda": {
+  "supabase/migrations/20261104T2210_s01p_fecha_de_la_factura.sql": "4630323186a0ec61f838cff19e66ad7c",
+  "supabase/migrations/20261104T2211_s01p_22_a_octubre.sql": "4be03effc2e7a339bf7663a09ce00903"
+ },
+ "contexto": {
+  "tablas": ["public.conta_liquidacion_resolucion", "public.document_activity", "public.journal_entry", "public.journal_entry_document", "public.journal_line", "public.supplier_invoice", "public.tax_return_line"],
+  "funciones": ["public._conta_recibida_no_antes_de_entrar(uuid,jsonb)"],
+  "filas": {"public.conta_liquidacion_resolucion": 0, "public.document_activity": 618, "public.journal_entry": 15601, "public.journal_entry_document": 1473, "public.journal_line": 38804, "public.supplier_invoice": 337, "public.tax_return_line": 398},
+  "otras": {},
+  "camino": {"tablas": [], "funciones": []},
+  "usos": {},
+  "registro": []
+ }
+}

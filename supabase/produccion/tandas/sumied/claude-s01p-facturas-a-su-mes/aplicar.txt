@@ -1,0 +1,16 @@
+# S01p · 4 · La factura recibida, con su fecha; y las 22 de octubre de Foodint,
+# a octubre (Julio, S01p·1 decisión 3 y S01p·9). Rama
+# claude/s01p-facturas-a-su-mes. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   2210  _conta_recibida_no_antes_de_entrar (misma firma, con respaldo): su
+#         fecha de factura, salvo trimestre con el 303 presentado (o día no
+#         abierto): el primer día abierto. Sustituye a la V04.
+#   2211  DATOS de Foodint: las 22 facturas de octubre asentadas en noviembre
+#         (2.544,14 €), borradas y vueltas a apuntar con la fecha de su factura
+#         (camino A), con el 303 del 4T recalculado. Mueve filas: «autorizo».
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-facturas-a-su-mes.sql
+supabase/migrations/20261104T2210_s01p_fecha_de_la_factura.sql
+supabase/migrations/20261104T2211_s01p_22_a_octubre.sql
