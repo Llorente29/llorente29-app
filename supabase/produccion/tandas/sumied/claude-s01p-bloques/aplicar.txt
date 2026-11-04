@@ -1,0 +1,11 @@
+# S01p · 3 · Los bloques de «Cerrar el mes», en la base (Julio, respuesta
+# S01p·1, paso 3). Rama claude/s01p-bloques. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1720  Una función stable por bloque (ventas, compras, plataformas, bancos,
+#         justificantes, laboral, lo que se repite, asientos e IVA) y
+#         conta_cierre_mes, que las junta. Solo añade funciones; no toca filas.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-bloques.sql
+supabase/migrations/20261104T1720_s01p_bloques.sql
