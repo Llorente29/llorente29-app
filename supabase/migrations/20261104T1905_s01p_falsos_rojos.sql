@@ -9,16 +9,21 @@
 --      «arrendamiento del mes»: es la de noviembre. El rojo es de verdad; el
 --      bloque dice ahora qué mes falta y que la última es de un mes posterior.
 --   2. La cuota del 03/10 (674,36 €) se pagó el 05/10 y se casó a mano el 29/10
---      contra la 520 entera; el contrato se dio de alta el 30/10. El rojo es de
---      verdad (115,68 € de intereses sin separar); el bloque lo dice así.
+--      contra la 520 entera (asiento 3294). Sus intereses se apuntaron DOS veces
+--      contra la 52000001: el 3291 (05/10) y el 3313 (30/10, «corrige el 3294»),
+--      115,68 € cada uno (S01p·6, medido por la sesión principal). El bloque
+--      mira ahora cada cuota por lo que hay en el libro: pagada, y sus intereses
+--      una vez; dos o más, «intereses apuntados dos veces».
 --   3. Plataformas: 36 de los 38 son de Uber y 2 de Just Eat. La semana del
 --      28/09 al 04/10 va a octubre porque el motor da cada semana al mes en que
 --      acaba (la del 26/10 al 01/11 va a noviembre): nada se pide dos veces. Es
 --      de verdad; el bloque enseña ahora de qué canal es cada cosa.
---   4. Justificantes: los 87 son casados a mano contra una cuenta. Ahora se
---      justifican el cobro contra la 430 que tiene su liquidación (mismo
---      importe) y lo de la 520/170 con su contrato de préstamo; el resto sale por
---      tipo (cobros sin su liquidación, pólizas sin contrato, gastos sin factura…).
+--   4. Justificantes: los 87 son casados a mano contra una cuenta. Decisiones
+--      de Julio (S01p·6): el cobro de plataforma, solo casado con su liquidación,
+--      uno a uno (nunca por importe); lo de la 520/170, con su contrato; el pago
+--      de la nómina (465), con la nómina del mes anterior que tiene su PDF (si
+--      no lo tiene: «falta el PDF de la nómina de MM/AAAA»); la 5201, «falta el
+--      contrato de la póliza». El resto sale por tipo.
 --   5. «Sin medir» decía 0 con dos dentro: ahora cuenta también las partes sin
 --      medir de un bloque en rojo (Revolut en Bancos, las amortizaciones, Laboral
 --      sin el mes), y salen en «por_justificar».
@@ -102,21 +107,33 @@ begin
             or exists (select 1 from public.journal_entry_document d where d.entry_id = m.journal_entry_id)
             or exists (select 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id
                         where l.entry_id = m.journal_entry_id and a.code !~ '^572' and (a.code ~ '^626' or a.code ~ '^407'))
-            -- S01p·5: un cobro contra la 430 se justifica con su liquidación (la de la cuenta, mismo importe, acabada en los 25 días de antes)…
-            or (m.amount > 0 and exists (select 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id
-                                          where l.entry_id = m.journal_entry_id and a.code ~ '^430')
-                and exists (select 1 from public.channel_settlement s where s.account_id = v_acc and abs(s.net_payout - m.amount) <= 0.02
-                               and s.period_to between m.op_date - 25 and m.op_date))
-            -- …y lo de la 520/170, con su contrato de préstamo (el cuadro es el documento).
+            -- S01p·6: un cobro de plataforma se justifica solo casado con su liquidación, uno a uno (kind
+            -- 'liquidacion', arriba), nunca por importe. Lo de la 520/170, con su contrato (el cuadro es el documento).
+            -- El pago de la nómina (465), con la nómina del mes anterior que tenga su PDF (abajo, nomina_pdf).
             or exists (select 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id
                          join public.recurring_contract c on c.company_id = p_company and c.account_id = v_acc and c.is_active
                                                          and a.code in (c.capital_account, c.short_capital_account, c.long_capital_account)
-                        where l.entry_id = m.journal_entry_id)) ok,
+                        where l.entry_id = m.journal_entry_id)
+            or (n.id is not null and n.con_pdf)) ok,
+           n.id is not null and not n.con_pdf nomina_sin_pdf,
            (select string_agg(distinct left(a.code, 3), '+') from public.journal_line l join public.company_account a on a.id = l.company_account_id
              where l.entry_id = m.journal_entry_id and a.code !~ '^572') contra
-      from m)
-  , t as (select c.*, case when c.contra ~ '430' then 'cobros de clientes o plataformas sin su liquidación'
-                           when c.contra ~ '(520|170|171|521)' then 'préstamos o pólizas sin su contrato'
+      from m
+      -- La nómina del mes anterior al pago: el asiento validado con 640 y 465 al haber; con su PDF o sin él.
+      left join lateral (
+        select e.id, exists (select 1 from public.journal_entry_document d where d.entry_id = e.id) con_pdf
+          from public.journal_entry e
+         where exists (select 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id
+                        where l.entry_id = m.journal_entry_id and a.code ~ '^465')
+           and e.company_id = p_company and e.account_id = v_acc and e.status = 'validado'
+           and e.entry_date between (date_trunc('month', m.op_date) - interval '1 month')::date and (date_trunc('month', m.op_date) - interval '1 day')::date
+           and exists (select 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id where l.entry_id = e.id and a.code ~ '^640')
+           and exists (select 1 from public.journal_line l join public.company_account a on a.id = l.company_account_id where l.entry_id = e.id and a.code ~ '^465' and l.credit > 0)
+         order by exists (select 1 from public.journal_entry_document d where d.entry_id = e.id) desc, e.entry_date desc limit 1) n on true)
+  , t as (select c.*, case when c.nomina_sin_pdf then format('falta el PDF de la nómina de %s', to_char(c.op_date - interval '1 month', 'MM/YYYY'))
+                           when c.contra ~ '430' then 'cobros de clientes o plataformas sin casar con su liquidación'
+                           when c.contra ~ '5201' then 'falta el contrato de la póliza'
+                           when c.contra ~ '(520|170|171|521)' then 'falta el contrato del préstamo'
                            when c.contra ~ '(400|410)' then 'pagos a proveedores sin su factura'
                            when c.contra ~ '465' then 'pagos de nómina sin su nómina'
                            when c.contra ~ '(475|476)' then 'pagos a Hacienda o a la Seguridad Social sin su modelo'
@@ -212,22 +229,38 @@ declare
   v_fin date := (date_trunc('month', p_mes) + interval '1 month - 1 day')::date;
   v_cuotas int; v_cuotas_mal int; v_cuotas_ej jsonb; v_alq int; v_alq_ej jsonb; v_rsf int; v_estado text;
 begin
-  select count(*), count(*) filter (where not exists (select 1 from public.bank_match m where m.contract_id = c.id and m.undone_at is null
-                                                       and m.contract_due_date = (f->>'fecha')::date)),
-         jsonb_agg(jsonb_build_object('contrato', c.name, 'fecha', f->>'fecha', 'cuota', (f->>'cuota')::numeric,
-           -- S01p·5: si el banco la pagó y se casó de otra forma (a mano, contra la cuenta), se dice: los intereses quedan sin separar.
-           'que', coalesce((select format('pagada el %s, pero casada a mano: cásala con su fila para separar %s de intereses',
-                                          to_char(b.op_date, 'DD/MM'), public._s01p_euros((f->>'intereses')::numeric))
-                              from public.bank_movement b join public.bank_match k on k.movement_id = b.id and k.undone_at is null
-                             where b.company_id = p_company and b.account_id = v_acc and b.treasury_account_id = c.treasury_account_id
-                               and b.status = 'casado' and abs(abs(b.amount) - abs((f->>'cuota')::numeric)) <= 0.02
-                               and b.op_date between (f->>'fecha')::date - 5 and (f->>'fecha')::date + 10
-                             order by abs(b.op_date - (f->>'fecha')::date) limit 1),
-                           'cuota sin pagar ni casar con su fila del cuadro')))
-           filter (where not exists (select 1 from public.bank_match m where m.contract_id = c.id and m.undone_at is null and m.contract_due_date = (f->>'fecha')::date))
+  -- S01p·6: cada cuota del mes, mirada por lo que hay en el libro. Su pago (casado con su fila, o casado
+  -- a mano: el movimiento del banco por el importe de la cuota) y sus intereses: los apuntes a la cuenta
+  -- de intereses del contrato por el importe de la fila, en el asiento del pago o en otro, del día de la
+  -- cuota al fin del mes siguiente. Uno, bien; ninguno, faltan; dos o más, apuntados dos veces (en
+  -- octubre de Foodint, los asientos 3291 y 3313, de 115,68 € los dos).
+  with q as (
+    select c.id, c.name, (f->>'fecha')::date fecha, (f->>'cuota')::numeric cuota, coalesce((f->>'intereses')::numeric, 0) intereses,
+           exists (select 1 from public.bank_match m where m.contract_id = c.id and m.undone_at is null and m.contract_due_date = (f->>'fecha')::date) con_fila,
+           (select b.op_date from public.bank_movement b join public.bank_match k on k.movement_id = b.id and k.undone_at is null
+             where b.company_id = p_company and b.account_id = v_acc and b.treasury_account_id = c.treasury_account_id
+               and b.status = 'casado' and abs(abs(b.amount) - abs((f->>'cuota')::numeric)) <= 0.02
+               and b.op_date between (f->>'fecha')::date - 5 and (f->>'fecha')::date + 10
+             order by abs(b.op_date - (f->>'fecha')::date) limit 1) pagada,
+           (select coalesce(array_agg(distinct e.number order by e.number), '{}')
+              from public.journal_line l join public.journal_entry e on e.id = l.entry_id join public.company_account a on a.id = l.company_account_id
+             where e.company_id = p_company and e.account_id = v_acc and e.status = 'validado' and a.code = c.interest_account
+               and abs(l.debit - coalesce((f->>'intereses')::numeric, 0)) <= 0.02
+               and e.entry_date between (f->>'fecha')::date - 5 and ((date_trunc('month', (f->>'fecha')::date) + interval '2 month - 1 day')::date)) asientos_int
+      from public.recurring_contract c cross join lateral jsonb_array_elements(case when jsonb_typeof(c.schedule) = 'array' then c.schedule else '[]'::jsonb end) f
+     where c.company_id = p_company and c.account_id = v_acc and c.is_active and (f->>'fecha')::date between v_ini and v_fin),
+  e as (
+    select q.*, case when q.intereses > 0 and cardinality(q.asientos_int) >= 2
+                       then format('intereses apuntados dos veces (%s de %s, asientos %s)', cardinality(q.asientos_int), public._s01p_euros(q.intereses), array_to_string(q.asientos_int, ' y '))
+                     when q.pagada is null and not q.con_fila then 'cuota sin pagar ni casar con su fila del cuadro'
+                     when q.intereses > 0 and cardinality(q.asientos_int) = 0 and not q.con_fila
+                       then format('pagada el %s y casada a mano, sin sus intereses (%s): cásala con su fila', to_char(q.pagada, 'DD/MM'), public._s01p_euros(q.intereses))
+                end que
+      from q)
+  select count(*), count(*) filter (where que is not null),
+         jsonb_agg(jsonb_build_object('contrato', name, 'fecha', fecha, 'cuota', cuota, 'que', que)) filter (where que is not null)
     into v_cuotas, v_cuotas_mal, v_cuotas_ej
-    from public.recurring_contract c cross join lateral jsonb_array_elements(case when jsonb_typeof(c.schedule) = 'array' then c.schedule else '[]'::jsonb end) f
-   where c.company_id = p_company and c.account_id = v_acc and c.is_active and (f->>'fecha')::date between v_ini and v_fin;
+    from e;
   select count(*), jsonb_agg(jsonb_build_object('alquiler', n.supplier_name, 'ultima', n.ultima,
                  'que', format('falta la de %s%s', to_char(v_ini, 'MM/YYYY'),
                                case when n.ultima > v_fin then format(' (la última, del %s, es de un mes posterior)', to_char(n.ultima, 'DD/MM')) else '' end)))
@@ -241,8 +274,8 @@ begin
   return public._s01p_bloque('repite', 'Lo que se repite', v_estado,
     concat_ws(' · ',
       'Amortizaciones: sin medir, falta el registro de bienes',
-      case when v_cuotas_mal > 0 then format('%s de %s cuotas sin casar con su fila', v_cuotas_mal, v_cuotas)
-           when v_cuotas > 0 then format('las %s cuotas del mes, casadas', v_cuotas) end,
+      case when v_cuotas_mal > 0 then format('%s de %s cuotas con algo que mirar', v_cuotas_mal, v_cuotas)
+           when v_cuotas > 0 then format('las %s cuotas del mes, pagadas y con sus intereses', v_cuotas) end,
       case when v_alq > 0 then format('%s facturas de alquiler sin llegar', v_alq) end,
       case when v_rsf > 0 then format('%s «recibido sin factura» por validar', v_rsf) end),
     jsonb_build_object('amortizaciones', 'sin_medir', 'cuotas', v_cuotas, 'cuotas_sin_casar', v_cuotas_mal, 'alquileres_sin_llegar', v_alq, 'recibido_sin_factura_por_validar', v_rsf),
