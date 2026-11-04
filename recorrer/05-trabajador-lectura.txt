@@ -1,0 +1,56 @@
+http://127.0.0.1:4173/
+
+Recepciones
+Escanear albarán
+
+Haz una foto (o sube el PDF) del albarán. La IA lo lee y te propone las líneas; tú revisas y confirmas.
+
+Lectura coherente: las líneas suman 200,30 y la base imponible es 200,30.
+Ver albarán
+
+Proveedor
+
+Frutas y Verduras La Huerta
+
+CIF/NIF
+
+B00000018
+
+Nº documento
+
+FV-26-4418
+
+Fecha
+
+2026-11-04
+
+Tipo
+
+albaran
+
+Entregar en
+
+Taberna del Mercado
+
+Facturar a
+
+—
+
+Base imponible
+
+200,30
+
+Total
+
+—
+
+Código	Artículo	Cant.	Ud.	€/ud (neto)	Importe	Lote / Cad.
+TOM-10	Tomate pera, caja 10 kg	4	caja	14,90	59,60	—
+LEC-12	Lechuga romana, caja 12 ud	3	caja	11,40	34,20	—
+PAT-25	Patata agria, saco 25 kg	2	caja	18,75	37,50	—
+ACE-05	Aceite de oliva virgen extra, garrafa 5 l	2	caja	34,50	69,00	—
+
+Confianza de lectura: 96% · 1.8s
+
+Escanear otro
+Crear recepción desde esto

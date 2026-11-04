@@ -1,0 +1,35 @@
+http://127.0.0.1:4173/
+
+Frutas y Verduras La Huerta · 2 de 4
+
+El albarán dice
+
+Lechuga romana, caja 12 ud · 3 caja
+
+Lechuga romana
+
+viene en cajas de 12 unidades
+
+Cambiar
+
+¿Cuántos cajas han llegado?
+
+−
+
+2
+
+cajas
+
++
+
+Entran 24 unidades al almacén
+
+1,43 €/ud · +50% sobre lo habitual
+
+Importe de esta línea
+
+el albarán dice 34,20 €
+
+No lo tengo claro — que lo mire la oficina
+Atrás
+Siguiente

@@ -1,0 +1,33 @@
+http://127.0.0.1:4173/
+
+Frutas y Verduras La Huerta · 3 de 4
+
+El albarán dice
+
+Patata agria, saco 25 kg · 2 caja
+
+Patata agria
+
+viene en sacos de 25 kg
+
+Cambiar
+
+¿Cuántos sacos han llegado?
+
+−
+
+2
+
+sacos
+
++
+
+Entran 50 kg al almacén
+
+Importe de esta línea
+
+el albarán dice 37,50 €
+
+No lo tengo claro — que lo mire la oficina
+Atrás
+Siguiente

@@ -1,0 +1,72 @@
+http://127.0.0.1:4173/supply/recepciones
+
+folvy
+Inicio
+Pendientes
+4
+Folvy Team
+Folvy Safety
+Folvy Sales
+Folvy Kitchen
+Folvy Connect
+Folvy Supply
+Folvy Orders
+Folvy Social
+Folvy Shop
+Folvy Conta
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+
+FOLVY SUPPLY
+
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+Volver
+Albarán ALB-00019 · Frutas y Verduras La Huerta
+
+Trabajador de Prueba lo recibió hoy a las 07:57 en Taberna del Mercado
+
+✓ La mercancía ya está en el almacén
+Fecha del albarán
+04 nov 2026
+Nº de albarán
+FV-26-4418
+Total del albarán
+—
+Tu trabajo aquí
+Verificar, no recontar
+Cambiar proveedor o nº
+Las 4 líneas están decididas
+✓
+Tomate pera
+4 cajas · 40 kg al almacén · Albarán: 59,60 € · Al almacén: 59,60 € · 1,49 € la kg
+Corregir
+✓
+Lechuga romana
+2 cajas · 24 unidades al almacén · Albarán: 34,20 € · Al almacén: 34,20 € · 1,43 € la unidad
+Corregir
+✓
+Patata agria
+2 sacos · 50 kg al almacén · Albarán: 37,50 € · Al almacén: 37,50 € · 0,75 € la kg
+Corregir
+✓
+Aceite de oliva virgen
+2 garrafas · 10 l al almacén · Albarán: 69,00 € · Al almacén: 69,00 € · 6,90 € la l
+Corregir
+Lo que has verificado suma
+200,30 € de 200,30 €
+Dejar a medias
+Verificado — cerrar albarán
+
+El botón se enciende cuando las 4 líneas tengan decisión, la cabecera tenga proveedor y nº de albarán y, si faltan líneas por leer, digas por qué. Ninguna línea se pierde en silencio: o entra al almacén, o dices tú que no es mercancía.
+
+Albarán
+Ampliar

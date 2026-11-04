@@ -1,0 +1,82 @@
+http://127.0.0.1:4173/supply
+
+folvy
+Inicio
+Pendientes
+3
+Folvy Team
+Folvy Safety
+Folvy Sales
+Folvy Kitchen
+Folvy Connect
+Folvy Supply
+Folvy Orders
+Folvy Social
+Folvy Shop
+Folvy Conta
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+
+FOLVY SUPPLY
+
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+Pedidos
+PED-00001
+Recibido parcial
+Proveedor
+Frutas y Verduras La Huerta
+Entrega en
+Taberna del Mercado
+Fecha del pedido
+03 nov 2026
+Entrega esperada
+04 nov 2026
+
+Pedido del vídeo V02
+
+Total estimado
+200,30 €
+Falta 1 de 4
+
+Esto es lo que se pidió y no ha llegado. Lo demás está completo.
+
+Este proveedor no comunica por el grupo de CTB: la reclamación hay que hacerla por su vía de siempre.
+Artículo	Pedido	Llegó	Falta
+Lechuga romana · Caja	3	2	1
+Ver 3 líneas completas
+Líneas del pedido
+Añadir línea
+Ingrediente	Cantidad	Precio est.	Total est.	
+Tomate pera	
+4 caja
+Caja (10 kg)
+	14,90 € / caja	59,60 €	
+
+Lechuga romana	
+3 caja
+Caja (12 ud)
+	11,40 € / caja	34,20 €	
+
+Patata agria	
+2 saco
+Saco (25 kg)
+	18,75 € / saco	37,50 €	
+
+Aceite de oliva virgen	
+2 garrafa
+Garrafa (5 l)
+	34,50 € / garrafa	69,00 €	
+
+Total	200,30 €	
+Descargar PDF
+Registrar recepción
+Cerrar pendiente

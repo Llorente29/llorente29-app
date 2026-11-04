@@ -1,0 +1,114 @@
+http://127.0.0.1:4173/supply/recepciones
+
+folvy
+Inicio
+Pendientes
+3
+Folvy Team
+Folvy Safety
+Folvy Sales
+Folvy Kitchen
+Folvy Connect
+Folvy Supply
+Folvy Orders
+Folvy Social
+Folvy Shop
+Folvy Conta
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+
+FOLVY SUPPLY
+
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+Recepciones
+
+Registra lo que llega del proveedor. Al confirmar, entra a stock.
+
+Recibir pedido
+Escanear albarán
+Nueva recepción
+Código	Proveedor	Local	Fecha	Nº albarán	Estado	Acción
+ALB-00019	Frutas y Verduras La Huerta	Taberna del Mercado	04 nov 2026	FV-26-4418	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00017	Distribuciones Aurora, S.L.	Taberna del Mercado	09 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00014	Distribuciones Aurora, S.L.	Taberna del Mercado	08 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00018	Lácteos Ochoa, S.L.	Taberna del Mercado	07 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00016	Distribuciones Aurora, S.L.	Taberna del Mercado	06 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00004	Verduras del Huerto, S.L.	Taberna del Mercado	05 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00002	Marcas del Sur	Taberna del Mercado	05 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00013	Distribuciones Aurora, S.L.	Taberna del Mercado	03 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00003	Marcas del Sur	Norte Mercado	03 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00015	Distribuciones Aurora, S.L.	Taberna del Mercado	02 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00001	Marcas del Sur	Taberna del Mercado	02 oct 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00008	Carnes del Valle, S.L.	Taberna del Mercado	28 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00005	Bodega Ribera, S.L.	Taberna del Mercado	25 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00011	Distribuciones Aurora, S.L.	Taberna del Mercado	24 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00009	Carnes del Valle, S.L.	Norte Mercado	18 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00007	Carnes del Valle, S.L.	Taberna del Mercado	15 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00012	Distribuciones Aurora, S.L.	Norte Mercado	12 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00010	Distribuciones Aurora, S.L.	Taberna del Mercado	10 sept 2026	—	Confirmado	
+Anular y corregir
+Anular
+
+ALB-00006	Carnes del Valle, S.L.	Taberna del Mercado	04 sept 2026	—	Confirmado	
+Anular y corregir
+Anular

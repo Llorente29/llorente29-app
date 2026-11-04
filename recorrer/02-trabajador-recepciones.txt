@@ -1,0 +1,19 @@
+http://127.0.0.1:4173/
+
+Recepciones
+
+Haz una foto del albarán. El pedido se busca solo.
+
+Escanear albarán
+
+Hazle una foto — el sistema busca el pedido por ti.
+
+PEDIDOS PENDIENTES
+
+Sin pedidos pendientes a la vista. Escanea el albarán y ya está.
+
+OTRA FORMA DE RECIBIR
+
+Contar a mano
+
+Sin foto: eliges proveedor y cuentas lo que llega.

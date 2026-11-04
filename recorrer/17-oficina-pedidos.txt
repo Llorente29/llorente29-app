@@ -1,0 +1,44 @@
+http://127.0.0.1:4173/supply
+
+folvy
+Inicio
+Pendientes
+3
+Folvy Team
+Folvy Safety
+Folvy Sales
+Folvy Kitchen
+Folvy Connect
+Folvy Supply
+Folvy Orders
+Folvy Social
+Folvy Shop
+Folvy Conta
+Todos los locales
+Norte Mercado
+Taberna del Mercado
+AN
+
+FOLVY SUPPLY
+
+Pedidos
+Recepciones
+Pendientes
+Facturas
+Proveedores
+Almacén
+Cómo se cuenta
+Comunicar a CTB
+Pedidos
+
+Pedidos a proveedores. Pide, recibe y controla el gasto.
+
+Nuevo pedido
+Todos
+Pendiente de recepción
+Saneado (colgados)
+CÓDIGO	PROVEEDOR	FECHA	ENTREGA	TOTAL EST.	ESTADO	
+PED-00001	Frutas y Verduras La Huerta	03 nov 2026	04 nov 2026	—	
+Recibido parcial
+3 de 4 · faltan 1
+	

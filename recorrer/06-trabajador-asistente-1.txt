@@ -1,0 +1,33 @@
+http://127.0.0.1:4173/
+
+Frutas y Verduras La Huerta · 1 de 4
+
+El albarán dice
+
+Tomate pera, caja 10 kg · 4 caja
+
+Tomate pera
+
+viene en cajas de 10 kg
+
+Cambiar
+
+¿Cuántos cajas han llegado?
+
+−
+
+4
+
+cajas
+
++
+
+Entran 40 kg al almacén
+
+Importe de esta línea
+
+el albarán dice 59,60 €
+
+No lo tengo claro — que lo mire la oficina
+Atrás
+Siguiente

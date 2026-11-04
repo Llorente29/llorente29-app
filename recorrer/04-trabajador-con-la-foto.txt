@@ -1,0 +1,18 @@
+http://127.0.0.1:4173/
+
+Recepciones
+Escanear albarán
+
+Haz una foto (o sube el PDF) del albarán. La IA lo lee y te propone las líneas; tú revisas y confirmas.
+
+Añade el albarán
+
+Una o varias páginas. Hazle una foto o sube un archivo.
+
+Hacer foto
+Elegir archivo
+
+1 archivo(s):
+
+albaran.png
+Leer albarán
