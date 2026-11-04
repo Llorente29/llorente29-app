@@ -1,0 +1,11 @@
+[
+ {
+  "id": "481-1",
+  "pr": 481,
+  "fecha": "2026-11-04T23:28:05Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "una factura se contabiliza con su fecha, aunque entre más tarde. Solo pasa al primer día abierto si su trimestre ya tiene el IVA presentado.",
+  "ruta": null
+ }
+]
