@@ -10,6 +10,10 @@
 
 \set ON_ERROR_STOP 1
 select set_config('video.cuenta', :'cuenta', false);
+-- Los disparadores de Folvy (el coste de un artículo al cambiar su catálogo) miran quién lo pide:
+-- la persona administradora de A del carril (su id es el de la cuenta con «a1» al final), como en la app.
+select set_config('request.jwt.claims', json_build_object('sub', regexp_replace(:'cuenta', '00000000000a$', '0000000000a1'), 'role', 'authenticated')::text, true),
+       set_config('request.jwt.claim.sub', regexp_replace(:'cuenta', '00000000000a$', '0000000000a1'), true);
 
 do $$
 declare
