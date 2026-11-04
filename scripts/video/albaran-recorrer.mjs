@@ -100,7 +100,8 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
     await page.waitForTimeout(1200)
     const f = `${String(++n).padStart(2, '0')}-${nombre}`
-    await page.screenshot({ path: join(dir, `${f}.png`), scale: 'css' })
+    // El móvil, a su resolución de pantalla (2x): el zoom de las fotos y del vídeo amplía texto nítido.
+    await page.screenshot({ path: join(dir, `${f}.png`), scale: (page.viewportSize()?.width ?? 1920) < 768 ? 'device' : 'css' })
     writeFileSync(join(dir, `${f}.txt`), `${page.url()}\n\n${await page.locator('body').innerText().catch(() => '')}`)
     console.log(`· ${f}`)
   }
@@ -149,9 +150,17 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
   const q = await o.newPage()
   try {
     await q.goto(`${APP}/supply/recepciones`); await foto(q, 'oficina-lista')
-    const abrir = q.getByRole('button', { name: /Revisar|Verificar|Aprobar/ }).first()
-    if (await abrir.isVisible().catch(() => false)) { await abrir.click(); await foto(q, 'oficina-revision') }
-    else console.log('· en la lista no hay ningún botón «Revisar», «Verificar» ni «Aprobar»')
+    await pulsa(q, /Verificar y confirmar/)
+    await q.getByText('Verificar, no recontar').first().waitFor({ timeout: 45_000 })
+    await q.waitForTimeout(1500)
+    await foto(q, 'oficina-revision')
+    const cerrar = q.getByRole('button', { name: /Verificado — cerrar albarán/ }).first()
+    await cerrar.scrollIntoViewIfNeeded(); await q.waitForTimeout(800)
+    await foto(q, 'oficina-revision-abajo')
+    await cerrar.click()
+    await q.waitForTimeout(2500)
+    // Si pide confirmar algo antes de cerrar (un aviso de coste…), se ve en la captura.
+    await foto(q, 'oficina-aprobado')
   } catch (e) { console.log(`LA OFICINA HA PARADO: ${e.message.split('\n')[0]}`); await foto(q, 'x-oficina-parado').catch(() => {}) }
   await o.close()
   await navegador.close()
