@@ -12,8 +12,8 @@
 --   3. Octubre y diciembre de A: los nueve bloques; «sin_medir» y
 --      «por_justificar» cuadran con el ayudante; «listo» con rojos y ámbar.
 --      Las cifras nuevas están: por canal, por tipo y el 642 de fuera.
---   4. Otra vez la 1905: lo mismo. La vuelta atrás deja las cinco como las dejó
---      la 1720 (huella) y quita el ayudante; y otra vez delante.
+--   4. Otra vez la 1905: lo mismo. La vuelta atrás deja las cinco con la huella
+--      de la 1720 en producción y quita el ayudante; y otra vez delante.
 
 begin;
 do $$ begin
@@ -25,13 +25,12 @@ set local statement_timeout = '300s';
 -- sin usuario: la prueba cambia las funciones (hace falta el dueño); las llama con los «claims» del administrador de A, que es lo que miran.
 select set_config('request.jwt.claims', '{"sub":"c01a0000-0000-4000-8000-0000000000a1","role":"authenticated"}', true);
 
+-- Las huellas de la 1720, medidas en producción el 04/11 (el workflow aplica la 1905 del manifiesto antes que
+-- esta prueba, en la misma transacción: medirlas aquí daría las de la 1905).
 create temp table _h (f text primary key, md5 text) on commit drop;
-insert into _h select p.proname, md5(pg_get_functiondef(p.oid)) from pg_proc p join pg_namespace n on n.oid = p.pronamespace
- where n.nspname = 'public' and p.proname in ('conta_cierre_bloque_plataformas', 'conta_cierre_bloque_justificantes', 'conta_cierre_bloque_laboral',
-                                              'conta_cierre_bloque_repite', 'conta_cierre_mes');
-do $$ begin
-  if (select count(*) from _h) <> 5 then raise exception 'PRUEBA S01p falsos rojos: faltan funciones de la 1720 (hay %).', (select count(*) from _h); end if;
-end $$;
+insert into _h values ('conta_cierre_bloque_justificantes', 'c1508f3dd49b9a821e75b159dbe18004'), ('conta_cierre_bloque_laboral', 'acf984648132b1bdaeeadc0954a0a5b5'),
+  ('conta_cierre_bloque_plataformas', '1d1b3e0147047e5853b80e9427a122fc'), ('conta_cierre_bloque_repite', '984c800897d3315c06348706fc697af2'),
+  ('conta_cierre_mes', '9544b61aac0fab745e8233d7662d96b1');
 
 \i supabase/migrations/20261104T1905_s01p_falsos_rojos.sql
 
