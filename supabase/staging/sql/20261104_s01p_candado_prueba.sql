@@ -86,8 +86,8 @@ begin
 
   -- Un traspaso de 12,34 € entre dos bancos de A (sin gasto, ingreso ni IVA), validado y anulado como en la pantalla.
   e := pg_temp.asiento('2026-08-10');
-  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit)
-  select v_acc, c, e, x.n, a.id, x.d, x.h
+  insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, is_common)
+  select v_acc, c, e, x.n, a.id, x.d, x.h, true
     from (values (1, 12.34, 0::numeric), (2, 0::numeric, 12.34)) x(n, d, h)
     join lateral (select id from public.company_account
                    where company_id = c and kind <> 'template' and status is distinct from 'cerrada' and code ~ '^572'
