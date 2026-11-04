@@ -1,0 +1,3 @@
+# S01p·12 · la vuelta atrás: la 4751 sin retención (si sigue propuesto), la función de antes y fuera la nueva.
+cuenta: scripts/conta/produccion/cuentas/s01p-nomina-retencion.sql
+supabase/vuelta-atras/20261105T0045_s01p_nomina_retencion.down.sql
