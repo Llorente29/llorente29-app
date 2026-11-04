@@ -14521,6 +14521,18 @@ COMMENT ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta uui
 
 
 --
+-- Name: _s01p_iva_presentado_el(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select public.conta_iva_presentado(p_company, p_fecha) is not null
+$$;
+
+
+--
 -- Name: _sale_line_raw_consumption(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -15929,6 +15941,64 @@ begin
     perform public._s01p_factura_su_asiento(old.source_id, old.account_id);
   end if;
   return null;
+end $$;
+
+
+--
+-- Name: _tg_s01p_mes_cambio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_s01p_mes_cambio() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.fiscal_period_lock; v_imp numeric; v_que text; v_mes date;
+begin
+  for v_que, v_mes in
+    select x.que, x.mes from (values
+      -- Validado o anulado en un mes cerrado.
+      (case when tg_op = 'INSERT' and new.status = 'validado' then 'validado'
+            when tg_op = 'UPDATE' and new.status = 'validado' and old.status is distinct from 'validado' then 'validado'
+            when tg_op = 'UPDATE' and new.status = 'anulado' and old.status = 'validado' then 'anulado' end,
+       date_trunc('month', new.entry_date)::date),
+      -- Un validado que cambia de fecha: entra en un mes cerrado o sale de él.
+      (case when tg_op = 'UPDATE' and new.status = 'validado' and old.status = 'validado'
+                 and date_trunc('month', new.entry_date) <> date_trunc('month', old.entry_date) then 'entra' end,
+       date_trunc('month', new.entry_date)::date),
+      (case when tg_op = 'UPDATE' and new.status = 'validado' and old.status = 'validado'
+                 and date_trunc('month', new.entry_date) <> date_trunc('month', old.entry_date) then 'sale' end,
+       date_trunc('month', old.entry_date)::date)) x(que, mes)
+     where x.que is not null
+  loop
+    select * into v_l from public.fiscal_period_lock
+     where company_id = new.company_id and month = v_mes and reopened_at is null and kind = 'manual';
+    continue when v_l.id is null;
+    select coalesce(sum(l.debit), 0) into v_imp from public.journal_line l where l.entry_id = new.id;
+    insert into public.conta_mes_cambio (account_id, company_id, lock_id, month, entry_id, que, importe, concepto, hecho_por, hecho_por_nombre)
+    values (new.account_id, new.company_id, v_l.id, v_mes, new.id, v_que, v_imp, left(new.concept, 200), auth.uid(),
+            coalesce(new.validated_by_name, public.conta_nombre_actor()));
+  end loop;
+  return null;
+end $$;
+
+
+--
+-- Name: _tg_s01p_trimestre_presentado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_s01p_trimestre_presentado() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_p jsonb;
+begin
+  if tg_op = 'UPDATE' and new.entry_date is not distinct from old.entry_date then return new; end if;
+  if public._conta_iva_exento(new.source_type, new.source_id, new.company_id) then return new; end if;
+  v_p := public.conta_iva_presentado(new.company_id, new.entry_date);
+  if v_p is null then return new; end if;
+  raise exception '%', public.conta_iva_presentado_mensaje(new.company_id, v_p,
+                         case when new.source_type = 'supplier_invoice' then 'factura' else 'corregir' end)
+    using errcode = '23514', hint = 'iva_presentado';
 end $$;
 
 
@@ -33819,6 +33889,36 @@ end $$;
 
 
 --
+-- Name: conta_empresa_dias_guardar(uuid, smallint, smallint[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_empresa_dias_guardar(p_company uuid, p_dia_cierre smallint, p_dias_nomina smallint[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_dias smallint[];
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.current_user_is_admin_of(v_cuenta) then
+    raise exception 'Solo un administrador de la cuenta puede cambiar los días de la empresa.' using errcode = '42501';
+  end if;
+  if p_dia_cierre is not null and p_dia_cierre not between 1 and 28 then
+    raise exception 'El día de cierre va del 1 al 28 del mes siguiente.' using errcode = '22023';
+  end if;
+  select array_agg(distinct d order by d) into v_dias from unnest(coalesce(p_dias_nomina, '{}'::smallint[])) d;
+  if v_dias is not null and (cardinality(v_dias) > 4 or exists (select 1 from unnest(v_dias) d where d not between 1 and 31)) then
+    raise exception 'Los días de pago de la nómina van del 1 al 31, como mucho cuatro.' using errcode = '22023';
+  end if;
+  update public.company set month_close_day = p_dia_cierre, payroll_pay_days = v_dias where id = p_company;
+  return jsonb_build_object('dia_cierre', p_dia_cierre, 'dias_nomina', to_jsonb(v_dias),
+    'mensaje', concat_ws(' ',
+      case when p_dia_cierre is null then 'Sin día de cierre.' else format('Cada mes se cierra el día %s del siguiente.', p_dia_cierre) end,
+      case when v_dias is null then 'Sin días de pago de la nómina.'
+           else format('La nómina se paga el %s del mes siguiente.', array_to_string(v_dias, ' y el ')) end));
+end $$;
+
+
+--
 -- Name: conta_enlace_pago_cobrado(text, text, text, numeric, text, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -42007,6 +42107,23 @@ COMMENT ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) I
 
 
 --
+-- Name: conta_mes_cambios(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_mes_cambios(p_company uuid, p_mes date) RETURNS TABLE(cambio_id uuid, entry_id uuid, que text, importe numeric, concepto text, hecho_por_nombre text, hecho_at timestamp with time zone)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select c.id, c.entry_id, c.que, c.importe, c.concepto, c.hecho_por_nombre, c.hecho_at
+    from public.conta_mes_cambio c
+    join public.fiscal_period_lock l on l.id = c.lock_id and l.reopened_at is null
+   where c.company_id = p_company and c.month = date_trunc('month', p_mes)::date
+     and public.belongs_to_account(c.account_id)
+   order by c.hecho_at, c.id
+$$;
+
+
+--
 -- Name: conta_mes_cerrado(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -42014,9 +42131,14 @@ CREATE FUNCTION public.conta_mes_cerrado(p_company uuid, p_fecha date) RETURNS b
     LANGUAGE sql STABLE
     SET search_path TO 'public'
     AS $$
+  -- S01p: solo los meses que no admiten nada (el corte con Diez y los cerrados
+  -- por un impuesto presentado). Los que cierra una persona se marcan
+  -- (conta_mes_cambio), no se bloquean: el candado de verdad es el trimestre
+  -- con el 303 presentado (conta_iva_presentado).
   select exists (
     select 1 from public.fiscal_period_lock
-     where company_id = p_company and month = date_trunc('month', p_fecha)::date and reopened_at is null)
+     where company_id = p_company and month = date_trunc('month', p_fecha)::date and reopened_at is null
+       and kind in ('migrated', 'tax_filed'))
 $$;
 
 
@@ -43774,6 +43896,7 @@ CREATE FUNCTION public.conta_primer_dia_abierto(p_company uuid, p_fecha date) RE
   select min(d)::date
     from generate_series(p_fecha, p_fecha + 400, interval '1 day') d
    where not public.conta_mes_cerrado(p_company, d::date)
+     and not public._s01p_iva_presentado_el(p_company, d::date)   -- S01p: ni en un trimestre con el 303 presentado
      and exists (select 1 from public.fiscal_year y
                   where y.company_id = p_company and y.status = 'open' and d::date between y.starts_on and y.ends_on
                     and (y.imported_until is null or d::date > y.imported_until))
@@ -98476,11 +98599,15 @@ CREATE TABLE public.company (
     is_hospitality boolean,
     logo_path text,
     color text,
+    month_close_day smallint,
+    payroll_pay_days smallint[],
     CONSTRAINT company_alta_completa CHECK (((setup_completed_at IS NULL) OR ((legal_name IS NOT NULL) AND (tax_id IS NOT NULL) AND (entity_kind IS NOT NULL)))),
     CONSTRAINT company_color_formato CHECK (((color IS NULL) OR (color ~ '^#[0-9A-Fa-f]{6}$'::text))),
     CONSTRAINT company_dehu_email_valido CHECK (((dehu_email IS NULL) OR (dehu_email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'::text))),
     CONSTRAINT company_entity_kind_check CHECK ((entity_kind = ANY (ARRAY['company'::text, 'self_employed'::text]))),
     CONSTRAINT company_fiscal_country_check CHECK ((fiscal_country ~ '^[A-Z]{2}$'::text)),
+    CONSTRAINT company_month_close_day_check CHECK (((month_close_day IS NULL) OR ((month_close_day >= 1) AND (month_close_day <= 28)))),
+    CONSTRAINT company_payroll_pay_days_check CHECK (((payroll_pay_days IS NULL) OR (((cardinality(payroll_pay_days) >= 1) AND (cardinality(payroll_pay_days) <= 4)) AND (1 <= ALL (payroll_pay_days)) AND (31 >= ALL (payroll_pay_days))))),
     CONSTRAINT company_postal_code_es CHECK (((fiscal_postal_code IS NULL) OR (fiscal_country <> 'ES'::text) OR (fiscal_postal_code ~ '^[0-9]{5}$'::text))),
     CONSTRAINT company_setup_step_check CHECK ((setup_step = ANY (ARRAY['nif'::text, 'nombre'::text, 'actividad'::text, 'impuestos'::text, 'cuentas'::text, 'banco'::text, 'hecho'::text]))),
     CONSTRAINT company_tax_id_type_check CHECK ((tax_id_type = ANY (ARRAY['nif_es'::text, 'vat_eu'::text, 'foreign'::text])))
@@ -98541,6 +98668,20 @@ COMMENT ON COLUMN public.company.logo_path IS 'S01 (17/10): ruta del logo de la 
 --
 
 COMMENT ON COLUMN public.company.color IS 'S02 (22/10): el color de la empresa, ''#RRGGBB'': la franja de 3 px de la cabecera y el cuadrado de su inicial. Nula = el de serie por su inicial (marco/colorEmpresa.ts).';
+
+
+--
+-- Name: COLUMN company.month_close_day; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.company.month_close_day IS 'S01p · El día del mes siguiente en que se cierra un mes (con la información que haya ese día). Vacío: sin poner.';
+
+
+--
+-- Name: COLUMN company.payroll_pay_days; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.company.payroll_pay_days IS 'S01p · Los días del mes siguiente en que se paga la nómina del mes. Vacío: sin poner.';
 
 
 --
@@ -100365,6 +100506,34 @@ CREATE TABLE public.conta_mandato (
 --
 
 COMMENT ON TABLE public.conta_mandato IS 'PC01 · E3 · El mandato de domiciliación SEPA (CORE, recurrente) de un cliente: el enlace para firmarlo y la firma (quién, cuándo, desde dónde). Al firmarse, la ficha del cliente (customer_fiscal) queda con su IBAN, la referencia y la fecha.';
+
+
+--
+-- Name: conta_mes_cambio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_mes_cambio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    lock_id uuid NOT NULL,
+    month date NOT NULL,
+    entry_id uuid NOT NULL,
+    que text NOT NULL,
+    importe numeric DEFAULT 0 NOT NULL,
+    concepto text,
+    hecho_por uuid,
+    hecho_por_nombre text,
+    hecho_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_mes_cambio_que_check CHECK ((que = ANY (ARRAY['validado'::text, 'anulado'::text, 'entra'::text, 'sale'::text])))
+);
+
+
+--
+-- Name: TABLE conta_mes_cambio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_mes_cambio IS 'S01p · Lo que se apuntó en un mes ya cerrado por una persona: qué asiento, qué le pasó (validado, anulado, entra o sale por cambio de fecha), cuánto, quién y cuándo.';
 
 
 --
@@ -115635,6 +115804,14 @@ ALTER TABLE ONLY public.conta_mandato
 
 
 --
+-- Name: conta_mes_cambio conta_mes_cambio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_mes_cambio
+    ADD CONSTRAINT conta_mes_cambio_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_pago_ajustes conta_pago_ajustes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -121076,6 +121253,13 @@ CREATE INDEX conta_mandato_tercero_idx ON public.conta_mandato USING btree (part
 
 
 --
+-- Name: conta_mes_cambio_mes; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_mes_cambio_mes ON public.conta_mes_cambio USING btree (company_id, month, hecho_at);
+
+
+--
 -- Name: conta_pago_evento_lote_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -126060,6 +126244,13 @@ CREATE TRIGGER s01p_factura_su_asiento AFTER INSERT OR DELETE OR UPDATE OF statu
 
 
 --
+-- Name: journal_entry s01p_mes_cambio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER s01p_mes_cambio AFTER INSERT OR UPDATE OF status, entry_date ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._tg_s01p_mes_cambio();
+
+
+--
 -- Name: accounts seed_appcc_after_insert_accounts; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -126806,6 +126997,13 @@ CREATE TRIGGER trg_journal_dismissal_misma_cuenta BEFORE INSERT OR UPDATE ON pub
 --
 
 CREATE TRIGGER trg_journal_entry_0_iva_presentado BEFORE UPDATE ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._conta_iva_candado_asiento();
+
+
+--
+-- Name: journal_entry trg_journal_entry_0_trimestre_presentado; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_0_trimestre_presentado BEFORE INSERT OR UPDATE OF entry_date ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._tg_s01p_trimestre_presentado();
 
 
 --
@@ -130599,6 +130797,30 @@ ALTER TABLE ONLY public.conta_mandato
 
 ALTER TABLE ONLY public.conta_mandato
     ADD CONSTRAINT conta_mandato_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_mes_cambio conta_mes_cambio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_mes_cambio
+    ADD CONSTRAINT conta_mes_cambio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_mes_cambio conta_mes_cambio_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_mes_cambio
+    ADD CONSTRAINT conta_mes_cambio_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_mes_cambio conta_mes_cambio_lock_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_mes_cambio
+    ADD CONSTRAINT conta_mes_cambio_lock_id_fkey FOREIGN KEY (lock_id) REFERENCES public.fiscal_period_lock(id) ON DELETE CASCADE;
 
 
 --
@@ -141100,6 +141322,19 @@ CREATE POLICY conta_lote_relectura_leer ON public.conta_lote_relectura FOR SELEC
 ALTER TABLE public.conta_mandato ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_mes_cambio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_mes_cambio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_mes_cambio conta_mes_cambio_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_mes_cambio_select ON public.conta_mes_cambio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_pago_ajustes; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -151200,6 +151435,15 @@ GRANT ALL ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta u
 
 
 --
+-- Name: FUNCTION _s01p_iva_presentado_el(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) TO authenticated;
+GRANT ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) TO service_role;
+
+
+--
 -- Name: FUNCTION _sale_line_raw_consumption(p_sale_line_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -151376,6 +151620,22 @@ REVOKE ALL ON FUNCTION public._tg_factura_anulada_descasa() FROM PUBLIC;
 
 REVOKE ALL ON FUNCTION public._tg_s01p_factura_su_asiento() FROM PUBLIC;
 GRANT ALL ON FUNCTION public._tg_s01p_factura_su_asiento() TO service_role;
+
+
+--
+-- Name: FUNCTION _tg_s01p_mes_cambio(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_s01p_mes_cambio() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._tg_s01p_mes_cambio() TO service_role;
+
+
+--
+-- Name: FUNCTION _tg_s01p_trimestre_presentado(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_s01p_trimestre_presentado() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._tg_s01p_trimestre_presentado() TO service_role;
 
 
 --
@@ -154841,6 +155101,15 @@ GRANT ALL ON FUNCTION public.conta_ejercicio_sin_solapes() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_empresa_dias_guardar(p_company uuid, p_dia_cierre smallint, p_dias_nomina smallint[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_empresa_dias_guardar(p_company uuid, p_dia_cierre smallint, p_dias_nomina smallint[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_empresa_dias_guardar(p_company uuid, p_dia_cierre smallint, p_dias_nomina smallint[]) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_empresa_dias_guardar(p_company uuid, p_dia_cierre smallint, p_dias_nomina smallint[]) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_enlace_pago_cobrado(p_sesion text, p_stripe text, p_pago_ref text, p_importe numeric, p_metodo text, p_fecha date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -156233,6 +156502,15 @@ GRANT ALL ON FUNCTION public.conta_mapeo_volver_al_estandar(p_company uuid, p_mo
 REVOKE ALL ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_marca_de_tienda(p_account uuid, p_texto text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_mes_cambios(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_mes_cambios(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_mes_cambios(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_mes_cambios(p_company uuid, p_mes date) TO service_role;
 
 
 --
@@ -166568,6 +166846,14 @@ GRANT SELECT ON TABLE public.conta_lote_relectura TO authenticated;
 --
 
 GRANT ALL ON TABLE public.conta_mandato TO service_role;
+
+
+--
+-- Name: TABLE conta_mes_cambio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_mes_cambio TO authenticated;
+GRANT ALL ON TABLE public.conta_mes_cambio TO service_role;
 
 
 --
