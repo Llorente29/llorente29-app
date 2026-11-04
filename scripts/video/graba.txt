@@ -1,3 +1,3 @@
 # Qué vídeo graba el workflow y en qué fase: «<vídeo> <fase>» (scripts/video/<vídeo>.mjs).
 # Sin este fichero: factura-al-pago grabar (el V01).
-albaran-a-oficina reconocer
+albaran-a-oficina recorrer

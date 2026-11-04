@@ -18,7 +18,7 @@ import { chromium } from 'playwright'
 import { enCarril, correoDelCarril } from '../e2e/carril.mjs'
 
 const [modo, salida] = process.argv.slice(2)
-if (!['reconocer'].includes(modo) || !salida) { console.error('uso: albaran-a-oficina.mjs reconocer <salida>'); process.exit(2) }
+if (!['reconocer', 'recorrer'].includes(modo) || !salida) { console.error('uso: albaran-a-oficina.mjs reconocer|recorrer <salida>'); process.exit(2) }
 const URL_SUPA = process.env.VITE_SUPABASE_URL
 const ANON = process.env.VITE_SUPABASE_ANON_KEY
 const CLAVE = process.env.CLAVE_PRUEBAS
@@ -114,3 +114,4 @@ async function reconocer() {
 }
 
 if (modo === 'reconocer') await reconocer()
+if (modo === 'recorrer') { const { recorrer } = await import('./albaran-recorrer.mjs'); await recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSONAS }) }
