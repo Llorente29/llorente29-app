@@ -6957,21 +6957,22 @@ CREATE FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entr
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_fecha date := (p_entry->>'fecha')::date; v_entro date; v_nueva date; v_aviso text;
+declare v_fecha date := (p_entry->>'fecha')::date; v_nueva date; v_p jsonb; v_aviso text;
 begin
-  if p_entry->>'source_type' is distinct from 'supplier_invoice' or nullif(p_entry->>'source_id', '') is null then return p_entry; end if;
-  select (si.created_at at time zone 'Europe/Madrid')::date into v_entro
-    from public.supplier_invoice si join public.company c on c.id = p_company and c.account_id = si.account_id
-   where si.id = (p_entry->>'source_id')::uuid;
-  if v_entro is null or v_fecha is null or v_fecha >= v_entro then return p_entry; end if;
-  v_nueva := coalesce(public.conta_primer_dia_iva_abierto(p_company, v_entro), v_entro);
-  v_aviso := format('Esta factura entró el %s: se contabiliza el %s%s.', to_char(v_entro, 'DD/MM'), to_char(v_nueva, 'DD/MM'),
-                    case when v_nueva <> v_entro then ', el primer día abierto' else '' end);
+  if p_entry->>'source_type' is distinct from 'supplier_invoice' or v_fecha is null then return p_entry; end if;
+  -- S01p·4: su fecha, salvo que no esté abierta (303 presentado, corte con Diez, ejercicio cerrado).
+  v_nueva := public.conta_primer_dia_iva_abierto(p_company, v_fecha);
+  if v_nueva is null or v_nueva = v_fecha then return p_entry; end if;
+  v_p := public.conta_iva_presentado(p_company, v_fecha);
+  v_aviso := case when v_p is not null
+                  then format('El IVA del %s de %s ya está presentado: esta factura del %s se contabiliza el %s, el primer día abierto.',
+                              v_p->>'periodo', v_p->>'ejercicio', to_char(v_fecha, 'DD/MM/YYYY'), to_char(v_nueva, 'DD/MM/YYYY'))
+                  else format('El %s no está abierto en el libro: esta factura se contabiliza el %s, el primer día abierto.',
+                              to_char(v_fecha, 'DD/MM/YYYY'), to_char(v_nueva, 'DD/MM/YYYY')) end;
   return p_entry || jsonb_build_object('fecha', v_nueva, 'aviso', v_aviso,
     'razones', coalesce(p_entry->'razones', '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
       'decision', v_aviso,
-      'porque', format('Una factura recibida no se contabiliza antes del día en que entró (el %s): su IVA se deduce desde ese día, y así el asiento y su IVA caen en el mismo trimestre. Su fecha de factura no cambia.',
-                       to_char(v_entro, 'DD/MM/YYYY')))));
+      'porque', 'Una factura recibida se contabiliza con su fecha, salvo que su trimestre tenga el 303 presentado o su día no esté abierto: entonces, el primer día abierto. Su fecha de factura no cambia.')));
 end $$;
 
 
@@ -6979,7 +6980,7 @@ end $$;
 -- Name: FUNCTION _conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) IS 'V04 (1350). La propuesta de una factura recibida, sin fecha anterior al día en que entró (supplier_invoice.created_at, en Madrid): si la lleva, va a ese día o al primer día abierto y sin presentar desde él, con su aviso y su razón. La usa _journal_entry_proponer.';
+COMMENT ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) IS 'S01p·4 (2210; antes V04, 1350). La propuesta de una factura recibida va con su fecha de factura, salvo que su trimestre tenga el 303 presentado o su día no esté abierto: entonces, al primer día abierto (conta_primer_dia_iva_abierto), con su aviso y su razón. Un mes cerrado por una persona no frena. La usa _journal_entry_proponer.';
 
 
 --
@@ -14574,6 +14575,156 @@ COMMENT ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta uui
 
 
 --
+-- Name: _s01p_facturas_a_su_fecha(uuid, uuid[], uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_facturas_a_su_fecha(p_company uuid, p_entries uuid[], p_303 uuid, p_quien uuid, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_n int; v_debe_antes numeric; v_debe_despues numeric; v_iva_antes numeric; v_iva_despues numeric;
+  v_desde date; v_hasta date; v_anio int; v_periodo text; r jsonb; v_lote uuid; b record; v_nuevo uuid; v_fecha date; v_factura uuid;
+  v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true);
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or coalesce(array_length(p_entries, 1), 0) = 0 then raise exception 'S01p·4: sin empresa o sin asientos.'; end if;
+  -- Cada uno: validado, de una factura recibida, con fecha distinta de la de su factura; ni enviado a Diez ni casado.
+  select count(*) into v_n from public.journal_entry e join public.supplier_invoice i on i.id = e.source_id and i.journal_entry_id = e.id
+   where e.id = any(p_entries) and e.company_id = p_company and e.status = 'validado' and e.source_type = 'supplier_invoice'
+     and i.invoice_date is not null and e.entry_date <> i.invoice_date;
+  if v_n <> array_length(p_entries, 1) then raise exception 'S01p·4: % de los % asientos no son de una factura recibida validada con otra fecha: no se mueve nada.', array_length(p_entries, 1) - v_n, array_length(p_entries, 1); end if;
+  if exists (select 1 from public.external_send x where x.entry_id = any(p_entries)) or exists (select 1 from public.bank_match k where k.journal_entry_id = any(p_entries)) then
+    raise exception 'S01p·4: alguno se ha enviado a Diez o está casado en el banco: no se mueve nada.';
+  end if;
+  select coalesce(sum(l.debit), 0) into v_debe_antes from public.journal_line l where l.entry_id = any(p_entries);
+
+  -- El 303 del periodo: en borrador y sin presentar; copia entera y fuera sus líneas (si no, no se puede renumerar lo de detrás).
+  select t.fiscal_year, t.period, f.desde, f.hasta into v_anio, v_periodo, v_desde, v_hasta
+    from public.tax_return t cross join lateral public.conta_impuesto_periodo_fechas(t.fiscal_year, t.period) f
+   where t.id = p_303 and t.company_id = p_company and t.form_code = '303' and t.status = 'draft' and t.filed_at is null;
+  if v_anio is null then raise exception 'S01p·4: el 303 indicado no está en borrador (o no es de la empresa): no se mueve nada.'; end if;
+  if exists (select 1 from public.journal_entry e join public.supplier_invoice i on i.journal_entry_id = e.id
+              where e.id = any(p_entries) and (i.invoice_date not between v_desde and v_hasta or e.entry_date not between v_desde and v_hasta)) then
+    raise exception 'S01p·4: alguno sale del trimestre del 303 (su factura o su asiento): no se mueve nada.';
+  end if;
+  create table if not exists public.conta_s01p4_303_antes as
+    select 'declaracion'::text as que, to_jsonb(t) as fila from public.tax_return t where t.id = p_303
+    union all select 'linea', to_jsonb(l) from public.tax_return_line l where l.tax_return_id = p_303
+    union all select 'caja', to_jsonb(x) from public.tax_return_box x where x.tax_return_id = p_303
+    union all select 'comprobacion', to_jsonb(c) from public.tax_return_check c where c.tax_return_id = p_303;
+  alter table public.conta_s01p4_303_antes enable row level security;
+  revoke all on table public.conta_s01p4_303_antes from public, anon, authenticated;
+  select coalesce(sum(v.tax_amount), 0) into v_iva_antes from public.vat_book_entry v
+   where v.company_id = p_company and v.voided_at is null
+     and public._conta_iva_dia_del_libro(v.book, v.deduction_year, v.deduction_period, v.received_date, v.issue_date, v.operation_date) between v_desde and v_hasta;
+  delete from public.tax_return_line t where t.tax_return_id = p_303;
+
+  -- Se borran (respaldo, serie renumerada, cadena).
+  r := public._conta_asientos_borrar(p_company, p_entries, p_motivo, 'Tanda S01p·4');
+  v_lote := (r->>'lote')::uuid;
+
+  -- Cada uno otra vez, con la fecha de su factura, validado como quien la lanza (como en la pantalla).
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', p_quien, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_acc::text, true);
+  for b in select * from public.conta_asiento_borrado where lote = v_lote and que = 'asiento'
+            order by (asiento->>'document_date')::date nulls last, (asiento->>'number')::int loop
+    v_factura := (b.asiento->>'source_id')::uuid;
+    select i.invoice_date into v_fecha from public.supplier_invoice i where i.id = v_factura and i.account_id = v_acc;
+    if jsonb_array_length(coalesce(b.enlaces->'factura_pago', '[]')) > 0 or jsonb_array_length(coalesce(b.enlaces->'diez_autorizo', '[]')) > 0
+       or jsonb_array_length(coalesce(b.enlaces->'iva_reabierto', '[]')) > 0 then
+      raise exception 'S01p·4: el asiento %/% tiene un pago, un autorizo de Diez o un IVA reabierto: no se mueve nada.', b.asiento->>'series', b.numero_antes;
+    end if;
+    v_nuevo := gen_random_uuid();
+    insert into public.journal_entry
+    select * from jsonb_populate_record(null::public.journal_entry, b.asiento || jsonb_build_object(
+      'id', v_nuevo, 'entry_date', v_fecha, 'status', 'propuesto', 'number', null, 'chain_seq', null, 'prev_hash', null, 'hash', null,
+      'validated_at', null, 'validated_by', null, 'validated_by_name', null, 'updated_at', now(),
+      'confidence', 'seguro', 'reason', 'S01p·4: el mismo asiento de su factura, con la fecha de su factura (antes ' || (b.asiento->>'series') || '/' || b.numero_antes || ', del ' || to_char((b.asiento->>'entry_date')::date, 'DD/MM') || ').'));
+    insert into public.journal_line
+    select x.* from jsonb_array_elements(b.lineas) j,
+           jsonb_populate_record(null::public.journal_line, j || jsonb_build_object('id', gen_random_uuid(), 'entry_id', v_nuevo)) x;
+    insert into public.journal_entry_document
+    select x.* from jsonb_array_elements(b.documentos) j,
+           jsonb_populate_record(null::public.journal_entry_document, j || jsonb_build_object('id', gen_random_uuid(), 'entry_id', v_nuevo)) x;
+    update public.document_activity set journal_entry_id = v_nuevo where id in (select (j #>> '{}')::uuid from jsonb_array_elements(coalesce(b.enlaces->'actividad', '[]')) j);
+    update public.conta_liquidacion_resolucion set entry_id = v_nuevo where id in (select (j #>> '{}')::uuid from jsonb_array_elements(coalesce(b.enlaces->'resolucion', '[]')) j);
+    perform public.journal_entry_validar(v_nuevo, 'Julio (tanda S01p·4)');
+    update public.supplier_invoice set journal_entry_id = v_nuevo, updated_at = now() where id = v_factura and account_id = v_acc;
+  end loop;
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+
+  -- Lo que queda: cada factura con su asiento validado con su fecha; los mismos euros; la cadena entera.
+  select count(*) into v_n from public.supplier_invoice i join public.journal_entry e on e.id = i.journal_entry_id
+   where i.id in (select (cb.asiento->>'source_id')::uuid from public.conta_asiento_borrado cb where cb.lote = v_lote and cb.que = 'asiento')
+     and e.status = 'validado' and e.entry_date = i.invoice_date;
+  if v_n <> array_length(p_entries, 1) then raise exception 'S01p·4: solo % de las % facturas quedan con su asiento validado con su fecha: no se mueve nada.', v_n, array_length(p_entries, 1); end if;
+  select coalesce(sum(l.debit), 0) into v_debe_despues from public.journal_line l join public.supplier_invoice i on i.journal_entry_id = l.entry_id
+   where i.id in (select (cb.asiento->>'source_id')::uuid from public.conta_asiento_borrado cb where cb.lote = v_lote and cb.que = 'asiento');
+  if v_debe_despues <> v_debe_antes then raise exception 'S01p·4: el debe pasa de % a %: no se mueve nada.', v_debe_antes, v_debe_despues; end if;
+  if public._conta_cadena_rota(p_company) <> 0 then raise exception 'S01p·4: la cadena de huellas no cuadra después: no se mueve nada.'; end if;
+
+  -- El borrador del 303, otra vez calculado; el IVA del trimestre, igual.
+  r := public.conta_impuesto_303_calcular(p_company, v_anio, v_periodo);
+  if not exists (select 1 from public.tax_return t where t.id = p_303 and t.status = 'draft' and t.filed_at is null and t.calculated_at > now() - interval '1 minute') then
+    raise exception 'S01p·4: el borrador del 303 no ha quedado recalculado: no se mueve nada.';
+  end if;
+  select coalesce(sum(v.tax_amount), 0) into v_iva_despues from public.vat_book_entry v
+   where v.company_id = p_company and v.voided_at is null
+     and public._conta_iva_dia_del_libro(v.book, v.deduction_year, v.deduction_period, v.received_date, v.issue_date, v.operation_date) between v_desde and v_hasta;
+  if v_iva_antes <> v_iva_despues then raise exception 'S01p·4: el IVA del trimestre no podía cambiar y pasa de % a %: no se mueve nada.', v_iva_antes, v_iva_despues; end if;
+  return jsonb_build_object('lote', v_lote, 'movidos', v_n, 'debe', v_debe_despues, 'iva', v_iva_despues,
+    'texto', format('%s facturas con su asiento en la fecha de su factura (debe %s). IVA del %s sin cambios: %s.', v_n, v_debe_despues, v_periodo, v_iva_despues));
+end $$;
+
+
+--
+-- Name: FUNCTION _s01p_facturas_a_su_fecha(p_company uuid, p_entries uuid[], p_303 uuid, p_quien uuid, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._s01p_facturas_a_su_fecha(p_company uuid, p_entries uuid[], p_303 uuid, p_quien uuid, p_motivo text) IS 'S01p·4 (2211). Borra asientos validados de facturas recibidas con otra fecha y los vuelve a apuntar, desde su respaldo, con la fecha de su factura (números al final de su serie: el oficial es el de Diez); saca y recalcula el borrador del 303 del trimestre. Solo una tanda.';
+
+
+--
+-- Name: _s01p_facturas_a_su_fecha_deshacer(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_facturas_a_su_fecha_deshacer(p_company uuid, p_303 uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_lote uuid; v_nuevos uuid[]; r jsonb;
+begin
+  select lote into v_lote from public.conta_asiento_borrado
+   where company_id = p_company and que = 'asiento' and deshecho_at is null and motivo like 'S01p·4 · %' and motivo not like 'S01p·4 · Vuelta atrás%'
+   order by at desc limit 1;
+  if v_lote is null then return jsonb_build_object('texto', 'Nada que deshacer.'); end if;
+  select array_agg(i.journal_entry_id) into v_nuevos from public.supplier_invoice i
+   where i.id in (select (cb.asiento->>'source_id')::uuid from public.conta_asiento_borrado cb where cb.lote = v_lote and cb.que = 'asiento')
+     and i.journal_entry_id is not null;
+  delete from public.tax_return_line where tax_return_id = p_303;
+  if v_nuevos is not null then
+    r := public._conta_asientos_borrar(p_company, v_nuevos, 'S01p·4 · Vuelta atrás: se quitan los asientos con la fecha de su factura para devolver los de antes.', 'Vuelta atrás S01p·4');
+  end if;
+  r := public._conta_asientos_borrado_deshacer(v_lote);
+  if to_regclass('public.conta_s01p4_303_antes') is not null then
+    delete from public.tax_return_line where tax_return_id = p_303;
+    delete from public.tax_return_box where tax_return_id = p_303;
+    delete from public.tax_return_check where tax_return_id = p_303;
+    update public.tax_return t set status = a.status, amount = a.amount, result_kind = a.result_kind, calculated_at = a.calculated_at, updated_at = a.updated_at
+      from (select (jsonb_populate_record(null::public.tax_return, fila)).* from public.conta_s01p4_303_antes where que = 'declaracion') a
+     where t.id = a.id;
+    insert into public.tax_return_line select (jsonb_populate_record(null::public.tax_return_line, fila)).* from public.conta_s01p4_303_antes where que = 'linea';
+    insert into public.tax_return_box select (jsonb_populate_record(null::public.tax_return_box, fila)).* from public.conta_s01p4_303_antes where que = 'caja';
+    insert into public.tax_return_check select (jsonb_populate_record(null::public.tax_return_check, fila)).* from public.conta_s01p4_303_antes where que = 'comprobacion';
+    drop table public.conta_s01p4_303_antes;
+  end if;
+  return r;
+end $$;
+
+
+--
 -- Name: _s01p_iva_presentado_el(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -14583,6 +14734,59 @@ CREATE FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) RET
     AS $$
   select public.conta_iva_presentado(p_company, p_fecha) is not null
 $$;
+
+
+--
+-- Name: _s01p_nomina_proponer(uuid, date, uuid, jsonb, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_y uuid; v_e uuid; v_bruto numeric := (p_cifras->>'bruto')::numeric; v_sst numeric := (p_cifras->>'ss_trabajador')::numeric;
+  v_irpf numeric := (p_cifras->>'irpf')::numeric; v_liq numeric := (p_cifras->>'liquido')::numeric; v_sse numeric := (p_cifras->>'ss_empresa')::numeric;
+  l record; v_pos int := 0; v_cta uuid; v_n int;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'S01p nómina: esa empresa no está.'; end if;
+  if v_bruto - v_sst - v_irpf <> v_liq then
+    raise exception 'S01p nómina: no cuadra (bruto % − Seguridad Social % − IRPF % ≠ líquido %): no se propone nada.', v_bruto, v_sst, v_irpf, v_liq;
+  end if;
+  if not exists (select 1 from public.locations where id = p_local and account_id = v_acc) then raise exception 'S01p nómina: ese local no es de la cuenta.'; end if;
+  -- Ya hay nómina del mes (un asiento vivo con 640): no se duplica.
+  select count(*) into v_n from public.journal_entry e
+   where e.company_id = p_company and e.status <> 'anulado' and date_trunc('month', e.entry_date) = date_trunc('month', p_fecha)
+     and exists (select 1 from public.journal_line jl join public.company_account a on a.id = jl.company_account_id where jl.entry_id = e.id and a.code like (p_cuentas->>'sueldos') || '%');
+  if v_n > 0 then raise exception 'S01p nómina: ya hay % asiento(s) con sueldos en ese mes: no se propone otro.', v_n; end if;
+  select id into v_y from public.fiscal_year where company_id = p_company and p_fecha between starts_on and ends_on;
+  if v_y is null then raise exception 'S01p nómina: no hay ejercicio para el %.', p_fecha; end if;
+
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, confidence, reason, created_by_name)
+  values (v_acc, p_company, v_y, 9, p_fecha, p_concepto, 'payroll', 'propuesto', 'seguro',
+          format('Nóminas del mes, una sola vez a contabilidad (S01p): bruto %s, Seguridad Social de la empresa %s, del trabajador %s, IRPF %s, líquido %s; %s personas.',
+                 v_bruto, v_sse, v_sst, v_irpf, v_liq, p_cifras->>'personas'), 'Julio (tanda S01p)')
+  returning id into v_e;
+  for l in select * from (values
+      (p_cuentas->>'sueldos', v_bruto, 0::numeric, true), (p_cuentas->>'ss_empresa', v_sse, 0, true),
+      (p_cuentas->>'ss', 0, v_sst + v_sse, false), (p_cuentas->>'irpf', 0, v_irpf, false), (p_cuentas->>'pendiente', 0, v_liq, false)) x(cuenta, debe, haber, en_local)
+    where debe <> 0 or haber <> 0 loop
+    select id into v_cta from public.company_account where company_id = p_company and code = l.cuenta;
+    if v_cta is null then raise exception 'S01p nómina: la cuenta % no está en el plan de la empresa.', l.cuenta; end if;
+    v_pos := v_pos + 1;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, is_common)
+    values (v_acc, p_company, v_e, v_pos, v_cta, l.debe, l.haber, case when l.en_local then p_local end, not l.en_local);
+  end loop;
+  return v_e;
+end $$;
+
+
+--
+-- Name: FUNCTION _s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text) IS 'S01p. Propone (no valida) el asiento del devengo de las nóminas de un mes desde sus totales, sin tocar Laboral ni el portal del empleado; para si no cuadra o si el mes ya tiene sueldos. Solo una tanda.';
 
 
 --
@@ -152115,12 +152319,33 @@ GRANT ALL ON FUNCTION public._s01p_factura_su_asiento(p_factura uuid, p_cuenta u
 
 
 --
+-- Name: FUNCTION _s01p_facturas_a_su_fecha(p_company uuid, p_entries uuid[], p_303 uuid, p_quien uuid, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_facturas_a_su_fecha(p_company uuid, p_entries uuid[], p_303 uuid, p_quien uuid, p_motivo text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _s01p_facturas_a_su_fecha_deshacer(p_company uuid, p_303 uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_facturas_a_su_fecha_deshacer(p_company uuid, p_303 uuid) FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION _s01p_iva_presentado_el(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) TO authenticated;
 GRANT ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha date) TO service_role;
+
+
+--
+-- Name: FUNCTION _s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text) FROM PUBLIC;
 
 
 --
