@@ -1,0 +1,4 @@
+# S01p · 4 · la vuelta atrás, en orden inverso: las 22 a noviembre desde su respaldo (y el 303 como estaba); la regla V04 desde su respaldo.
+cuenta: scripts/conta/produccion/cuentas/s01p-facturas-a-su-mes.sql
+supabase/vuelta-atras/20261104T2211_s01p_22_a_octubre.down.sql
+supabase/vuelta-atras/20261104T2210_s01p_fecha_de_la_factura.down.sql

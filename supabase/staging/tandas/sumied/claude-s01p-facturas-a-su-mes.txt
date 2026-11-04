@@ -1,0 +1,7 @@
+# S01p · 4 · La factura con su fecha (2210, cambia una función) y las 22 de
+# Foodint (2211; en staging no hace nada). Su prueba (ROLLBACK, cuenta A): mes
+# abierto, mes cerrado por una persona y trimestre con el 303 presentado; lo que
+# no es una factura; la 2211 sin Foodint; la vuelta atrás.
+supabase/migrations/20261104T2210_s01p_fecha_de_la_factura.sql
+supabase/migrations/20261104T2211_s01p_22_a_octubre.sql
+supabase/staging/sql/20261104_s01p_facturas_a_su_mes_prueba.sql
