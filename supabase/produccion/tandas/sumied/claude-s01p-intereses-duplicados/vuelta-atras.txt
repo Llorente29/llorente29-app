@@ -1,0 +1,3 @@
+# S01p·6 · la vuelta atrás: el 4/3313 desde su respaldo (número y huella) y el 303 del 4T como estaba.
+cuenta: scripts/conta/produccion/cuentas/s01p-intereses.sql
+supabase/vuelta-atras/20261104T1925_s01p_intereses_duplicados.down.sql

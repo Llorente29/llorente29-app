@@ -1,0 +1,12 @@
+# S01p·6 · Foodint: se borra el 4/3313, que repite los intereses de la cuota de
+# octubre del préstamo BBVA (se queda el 4/3291, del 05/10). Rama
+# claude/s01p-intereses-duplicados. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1925  DATOS de Foodint: copia del 303 del 4T (borrador), fuera sus líneas,
+#         _conta_asientos_borrar del 4/3313 (respaldo, serie 4 renumerada,
+#         cadena) y el 303 recalculado. Mueve filas: va con «autorizo».
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-intereses.sql
+supabase/migrations/20261104T1925_s01p_intereses_duplicados.sql

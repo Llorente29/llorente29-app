@@ -1,0 +1,23 @@
+{
+ "_que": "S01p·6 · el 4/3313 duplicado · contexto de producción, medido en SOLO LECTURA el 04/11 a las 18:59Z con la consulta de contexto del workflow: la 1925 crea la copia conta_s01p6_303_antes (no existe), saca las líneas del borrador del 303 del 4T (tax_return_line, 387 filas en la tabla; 276 de ese 303), borra el 4/3313 con _conta_asientos_borrar y recalcula el 303. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T18:59Z",
+ "tanda": {
+  "supabase/migrations/20261104T1925_s01p_intereses_duplicados.sql": "ab1262c996172abb93a27f6c71163676"
+ },
+ "contexto": {
+  "tablas": [
+   "public.tax_return_line"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.tax_return_line": 387
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

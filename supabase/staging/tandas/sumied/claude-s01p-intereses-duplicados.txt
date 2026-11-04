@@ -1,0 +1,5 @@
+# S01p·6 · Borrar el 4/3313 duplicado: 1925 es de Foodint y en staging no hace
+# nada. Su prueba (ROLLBACK): sin Foodint, ni la tanda ni su vuelta atrás tocan
+# nada. El borrado en sí lo prueba la de S01q (20261102_s01q_borrar_prueba.sql).
+supabase/migrations/20261104T1925_s01p_intereses_duplicados.sql
+supabase/staging/sql/20261104_s01p_intereses_prueba.sql
