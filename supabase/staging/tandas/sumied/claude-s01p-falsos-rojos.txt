@@ -1,0 +1,6 @@
+# S01p · 5 · Los falsos rojos (1905: cambia cinco funciones de la 1720 y añade
+# un ayudante). Su prueba (ROLLBACK, cuenta A): siguen stable, el ayudante,
+# octubre y diciembre con «sin medir» y «por justificar» que cuadran, las cifras
+# nuevas, otra vez y la vuelta atrás con las huellas de la 1720.
+supabase/migrations/20261104T1905_s01p_falsos_rojos.sql
+supabase/staging/sql/20261104_s01p_falsos_rojos_prueba.sql

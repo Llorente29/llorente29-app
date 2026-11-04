@@ -1,0 +1,14 @@
+# S01p · 5 · Los falsos rojos de «Cerrar el mes» (Julio, respuesta S01p·5,
+# 04/11). Rama claude/s01p-falsos-rojos. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1905  Cambia cinco funciones de la 1720 con la misma firma (con respaldo):
+#         plataformas por canal, justificantes (cobro con su liquidación, 520
+#         con su contrato, lo que falta por tipo), laboral (el devengo solo de
+#         la nómina), lo que se repite (la cuota pagada a mano, el alquiler con
+#         su mes) y conta_cierre_mes (lo sin medir dentro de un rojo). Añade
+#         _s01p_sin_medir. No toca filas.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-falsos-rojos.sql
+supabase/migrations/20261104T1905_s01p_falsos_rojos.sql

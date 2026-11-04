@@ -1,0 +1,25 @@
+{
+ "_que": "S01p · 5 · los falsos rojos · contexto de producción, medido en SOLO LECTURA el 04/11 a las 18:32Z con la consulta de contexto del workflow: la 1905 cambia cinco funciones de la 1720 (misma firma, con respaldo) y añade _s01p_sin_medir, que no existe. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T18:32Z",
+ "tanda": {
+  "supabase/migrations/20261104T1905_s01p_falsos_rojos.sql": "c8d12b9b1d4f510a2dbacd42836f7346"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_cierre_bloque_justificantes(uuid,date)",
+   "public.conta_cierre_bloque_laboral(uuid,date)",
+   "public.conta_cierre_bloque_plataformas(uuid,date)",
+   "public.conta_cierre_bloque_repite(uuid,date)",
+   "public.conta_cierre_mes(uuid,date)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
