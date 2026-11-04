@@ -11,7 +11,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
-import { FOLVY, fotoEnMarco } from './marco.mjs'
+import { FOLVY, HUECO, K, fotoEnMarco } from './marco.mjs'
 
 const [dir, salida] = process.argv.slice(2)
 if (!dir || !salida) { console.error('uso: albaran-fotos.mjs <carpeta del recorrido> <salida>'); process.exit(2) }
@@ -21,9 +21,9 @@ const png = (f) => `data:image/png;base64,${readFileSync(f).toString('base64')}`
 const logo = () => readFileSync('public/folvy_logo_transparente.svg', 'utf8')
 const FUENTES = '<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">'
 
-/** El subtítulo, como lo quema el montaje (montar.mjs: DejaVu Sans 52, negrita, caja al 62 %). */
-const subtitulo = (t) => t ? `<div style="position:absolute;left:180px;right:180px;bottom:48px;text-align:center">
-  <span style="display:inline;font:700 52px/1.32 'DejaVu Sans',Arial,sans-serif;color:#fff;background:rgba(20,20,20,.62);padding:6px 18px;
+/** El subtítulo, como lo quema el montaje (montar.mjs: DejaVu Sans, negrita, caja al 62 %). */
+const subtitulo = (t) => t ? `<div style="position:absolute;left:180px;right:180px;bottom:36px;text-align:center">
+  <span style="display:inline;font:700 44px/1.32 'DejaVu Sans',Arial,sans-serif;color:#fff;background:rgba(20,20,20,.62);padding:6px 18px;
   -webkit-box-decoration-break:clone;box-decoration-break:clone">${t}</span></div>` : ''
 
 async function lienzo(navegador, ruta, cuerpo, { sub, fondoPagina } = {}) {
@@ -61,19 +61,23 @@ const escena = async (n, nombre, f) => { const ruta = join(salida, `${n}-${nombr
 
 await escena(0, 'portada', (r) => lienzo(navegador, r, tarjeta('Del albarán a la oficina, sin papeles')))
 
+/** Un punto de la pantalla del móvil (en px de 390×844) en el 1920×1080 de la composición. */
+const enMarco = (x, y) => [HUECO.x + x * K, HUECO.y + y * K]
 const movil = async (n, nombre, re, sub, zoom) => {
   const c = captura(re)
   if (!c) { console.log(`· ${n}-${nombre}: no hay captura (${re})`); return }
   await escena(n, nombre, async (r) => {
     const tmp = `${r}.marco.png`
-    await fotoEnMarco(navegador, c, tmp, { zoom })
-    await lienzo(navegador, r, `<img src="${png(tmp)}" style="position:absolute;inset:0;width:1920px;height:1080px">`, { sub })
+    await fotoEnMarco(navegador, c, tmp)
+    // El zoom, sobre la composición entera (como en el vídeo): se acerca el teléfono hacia lo que se comenta.
+    const [cx, cy] = zoom ? enMarco(zoom.x, zoom.y) : [960, 540]
+    await lienzo(navegador, r, oficina(tmp, zoom?.z ?? 1, cx, cy), { sub })
   })
 }
-await movil(1, 'escanear', /-recibir\.png$/, 'Llega el proveedor. En cocina abres Folvy en el móvil y escaneas el albarán.', { z: 1.25, x: 0, y: 100 })
-await movil(2, 'lectura', /-leido\.png$/, 'Folvy lee el albarán: el proveedor, el número y cada línea.', { z: 1.2, x: 0, y: 220 })
-await movil(3, 'contar', /-lechuga-2\.png$/, 'Cuentas lo que llega. Faltan cajas: lo ajustas y Folvy lo apunta.', { z: 1.25, x: 0, y: 140 })
-await movil(4, 'recibido', /-recibido\.png$/, 'Recibido: el stock ya está dentro.', { z: 1.15, x: 0, y: 80 })
+await movil(1, 'escanear', /-recibir\.png$/, 'Llega el proveedor. En cocina abres Folvy en el móvil y escaneas el albarán.', { z: 1.3, x: 195, y: 260 })
+await movil(2, 'lectura', /-leido\.png$/, 'Folvy lee el albarán: el proveedor, el número y cada línea.', { z: 1.3, x: 195, y: 470 })
+await movil(3, 'contar', /-lechuga-2\.png$/, 'Cuentas lo que llega. Faltan cajas: lo ajustas y Folvy lo apunta.', { z: 1.3, x: 195, y: 330 })
+await movil(4, 'recibido', /-recibido\.png$/, 'Recibido: el stock ya está dentro.', { z: 1.2, x: 195, y: 260 })
 
 const of5 = captura(/-oficina-revision\.png$/)
 if (of5) await escena(5, 'oficina', (r) => lienzo(navegador, r, oficina(of5, 1.35, 1000, 520), { sub: 'En la oficina lo ves al momento, con cada precio comprobado.' }))
