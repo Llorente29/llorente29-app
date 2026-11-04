@@ -74,16 +74,16 @@ const movil = async (n, nombre, re, sub, zoom) => {
     await lienzo(navegador, r, oficina(tmp, zoom?.z ?? 1, cx, cy), { sub })
   })
 }
-await movil(1, 'escanear', /-recibir\.png$/, 'Llega el proveedor. En cocina abres Folvy en el móvil y escaneas el albarán.', { z: 1.3, x: 195, y: 260 })
-await movil(2, 'lectura', /-leido\.png$/, 'Folvy lee el albarán: el proveedor, el número y cada línea.', { z: 1.3, x: 195, y: 470 })
-await movil(3, 'contar', /-lechuga-2\.png$/, 'Cuentas lo que llega. Faltan cajas: lo ajustas y Folvy lo apunta.', { z: 1.3, x: 195, y: 330 })
-await movil(4, 'recibido', /-recibido\.png$/, 'Recibido: el stock ya está dentro.', { z: 1.2, x: 195, y: 260 })
+await movil(1, 'escanear', /-recibir\.png$/, 'Llega el proveedor. En cocina abres Folvy en el móvil y escaneas el albarán.')
+await movil(2, 'lectura', /-leido\.png$/, 'Folvy lee el albarán: el proveedor, el número y cada línea.')
+await movil(3, 'contar', /-lechuga-2\.png$/, 'Cuentas lo que llega. Faltan cajas: lo ajustas y Folvy lo apunta.')
+await movil(4, 'recibido', /-recibido\.png$/, 'Recibido: el stock ya está dentro.')
 
 const of5 = captura(/-oficina-revision\.png$/)
-if (of5) await escena(5, 'oficina', (r) => lienzo(navegador, r, oficina(of5, 1.35, 1000, 520), { sub: 'En la oficina lo ves al momento, con cada precio comprobado.' }))
+if (of5) await escena(5, 'oficina', (r) => lienzo(navegador, r, oficina(of5, 1.3, 860, 450), { sub: 'En la oficina lo ves al momento: cada línea, lo que entra al almacén y a qué precio.' }))
 else console.log('· 5-oficina: no hay captura')
 const of6 = captura(/-oficina-aprobado\.png$/)
-if (of6) await escena(6, 'aprobado', (r) => lienzo(navegador, r, oficina(of6, 1.3, 960, 300), { sub: 'Lo apruebas, y queda listo para casarlo con la factura.' }))
+if (of6) await escena(6, 'aprobado', (r) => lienzo(navegador, r, oficina(of6, 1.25, 820, 330), { sub: 'Lo verificas, se cierra el albarán y Folvy te lo confirma.' }))
 else console.log('· 6-aprobado: no hay captura')
 
 await escena(7, 'cierre', (r) => lienzo(navegador, r, tarjeta('Folvy · la cocina en orden', 'app.folvy.app')))
