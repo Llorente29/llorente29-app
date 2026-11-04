@@ -11,6 +11,7 @@
 // crea de verdad en el carril (como la crearía la función) y solo lo leído se
 // inventa. Todo lo demás, de verdad.
 
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { chromium } from 'playwright'
@@ -20,7 +21,7 @@ const ANON = process.env.VITE_SUPABASE_ANON_KEY
 
 /** El albarán inventado (T11: NIF de ceros; nombres de proveedor sin personas). */
 export const ALBARAN = {
-  proveedor: 'Hermanos Ruiz', nif: 'B91000018', numero: 'AR-26-4418',
+  proveedor: 'Frutas y Verduras La Huerta', nif: 'B00000018', numero: 'FV-26-4418',
   lineas: [
     { codigo: 'TOM-10', texto: 'Tomate pera, caja 10 kg', cantidad: 4, precio: 14.9, iva: 4 },
     { codigo: 'LEC-12', texto: 'Lechuga romana, caja 12 ud', cantidad: 3, precio: 11.4, iva: 4 },
@@ -84,6 +85,10 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
   mkdirSync(dir, { recursive: true })
   const navegador = await chromium.launch({ args: ['--lang=es-ES'], env: { ...process.env, LANG: 'es_ES.UTF-8', LANGUAGE: 'es_ES:es' } })
   const fecha = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
+  // La siembra (albaran-sembrar.sql) y cómo casa cada línea después (albaran-casado.sql).
+  const psql = (f, stop) => execFileSync('psql', [process.env.DB_URL, '-X', ...(stop ? ['-1', '-v', 'ON_ERROR_STOP=1'] : []), '-v', `cuenta=${CUENTA_A}`, '-f', f], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
+  writeFileSync(join(dir, 'sembrar.txt'), psql('scripts/video/albaran-sembrar.sql', true))
+  try { writeFileSync(join(dir, 'casado.txt'), psql('scripts/video/albaran-casado.sql', false)) } catch (e) { writeFileSync(join(dir, 'casado.txt'), String(e.stdout ?? '') + String(e.stderr ?? e.message)) }
   // La foto del albarán.
   const pa = await navegador.newPage({ viewport: { width: 900, height: 1100 } })
   await pa.setContent(albaranHtml(ALBARAN, fecha))
@@ -117,7 +122,13 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
     await foto(p, 'leido')
     await pulsa(p, /Crear recepción desde esto/)
     await p.waitForTimeout(2500); await foto(p, 'asistente-1')
-    for (let i = 2; i <= 12; i++) {
+    for (let i = 2; i <= 14; i++) {
+      // En la 2.ª línea (la lechuga), una incidencia: llegan 2 cajas de las 3 del albarán.
+      const txt = await p.locator('body').innerText().catch(() => '')
+      if (/Lechuga romana/.test(txt)) {
+        const cant = p.locator('input[inputmode=decimal], input[type=number]').first()
+        if (await cant.isVisible().catch(() => false)) { await cant.fill('2'); await p.waitForTimeout(800); await foto(p, `asistente-${i}-lechuga-2`) }
+      }
       const sig = p.getByRole('button', { name: /^Siguiente/ }).first()
       if (!(await sig.isVisible().catch(() => false))) break
       if (await sig.isDisabled().catch(() => false)) { await foto(p, `asistente-${i}-apagado`); break }
@@ -132,10 +143,9 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
   const q = await o.newPage()
   try {
     await q.goto(`${APP}/supply/recepciones`); await foto(q, 'oficina-lista')
-    const fila = q.getByText(ALBARAN.proveedor).first()
-    const abrir = q.getByRole('button', { name: /Revisar|Verificar|Abrir|Aprobar/ }).first()
+    const abrir = q.getByRole('button', { name: /Revisar|Verificar|Aprobar/ }).first()
     if (await abrir.isVisible().catch(() => false)) { await abrir.click(); await foto(q, 'oficina-revision') }
-    else if (await fila.isVisible().catch(() => false)) { await fila.click(); await foto(q, 'oficina-revision') }
+    else console.log('· en la lista no hay ningún botón «Revisar», «Verificar» ni «Aprobar»')
   } catch (e) { console.log(`LA OFICINA HA PARADO: ${e.message.split('\n')[0]}`); await foto(q, 'x-oficina-parado').catch(() => {}) }
   await o.close()
   await navegador.close()
