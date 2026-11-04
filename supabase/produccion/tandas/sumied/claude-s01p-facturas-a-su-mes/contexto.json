@@ -3,7 +3,7 @@
  "medido": "2026-11-04T21:07Z",
  "tanda": {
   "supabase/migrations/20261104T2210_s01p_fecha_de_la_factura.sql": "4630323186a0ec61f838cff19e66ad7c",
-  "supabase/migrations/20261104T2211_s01p_22_a_octubre.sql": "4be03effc2e7a339bf7663a09ce00903"
+  "supabase/migrations/20261104T2211_s01p_22_a_octubre.sql": "8710dbbb6d2cde98e49dd77a7af327e8"
  },
  "contexto": {
   "tablas": ["public.conta_liquidacion_resolucion", "public.document_activity", "public.journal_entry", "public.journal_entry_document", "public.journal_line", "public.supplier_invoice", "public.tax_return_line"],

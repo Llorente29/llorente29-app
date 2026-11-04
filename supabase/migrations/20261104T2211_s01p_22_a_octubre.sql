@@ -120,12 +120,12 @@ begin
 
   -- Lo que queda: las 22 facturas, cada una con su asiento validado con su fecha; los mismos euros.
   select count(*) into v_n from public.supplier_invoice i join public.journal_entry e on e.id = i.journal_entry_id
-   where i.id in (select (b.asiento->>'source_id')::uuid from public.conta_asiento_borrado b where b.lote = v_lote and b.que = 'asiento')
+   where i.id in (select (cb.asiento->>'source_id')::uuid from public.conta_asiento_borrado cb where cb.lote = v_lote and cb.que = 'asiento')
      and e.status = 'validado' and e.entry_date = i.invoice_date and e.series = 2;
   if v_n <> 22 then raise exception 'S01p·4: solo % de las 22 quedan con su asiento validado con la fecha de su factura: no se mueve nada.', v_n; end if;
   select coalesce(sum(l.debit), 0) into v_debe_despues from public.journal_line l join public.journal_entry e on e.id = l.entry_id
    join public.supplier_invoice i on i.journal_entry_id = e.id
-   where i.id in (select (b.asiento->>'source_id')::uuid from public.conta_asiento_borrado b where b.lote = v_lote and b.que = 'asiento');
+   where i.id in (select (cb.asiento->>'source_id')::uuid from public.conta_asiento_borrado cb where cb.lote = v_lote and cb.que = 'asiento');
   if v_debe_despues <> v_debe_antes then raise exception 'S01p·4: el debe de las 22 pasa de % a %: no se mueve nada.', v_debe_antes, v_debe_despues; end if;
 
   -- 5 · El borrador del 303 del 4T, otra vez calculado; el IVA del 4T, igual.
