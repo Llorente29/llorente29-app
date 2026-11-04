@@ -1,10 +1,10 @@
 // scripts/video/albaran-recorrer.mjs — V02 · el recorrido de verdad, para ver cada pantalla (aún sin vídeo).
 //
-// En el móvil (390×844), con la persona administradora de A del carril:
-// Recepciones › Recibir pedido › Escanear albarán › la foto › Leer albarán ›
-// Crear recepción › el asistente, pantalla a pantalla › Recibido. Después, en el
-// ordenador, la lista de recepciones y la revisión de oficina de la que acaba de
-// entrar. Una captura (y su texto) en cada paso, en <salida>/recorrer.
+// En el móvil (390×844, a 2x), como TRABAJADOR en su app (TrabajadorApp): Inicio ›
+// Recepciones (con el pedido) › Escanear albarán › la foto › Leer › el asistente,
+// pantalla a pantalla › Recibido. Después, en el ordenador, la oficina: la lista,
+// la revisión, cerrar, la confianza del local y la ficha del pedido. Una captura
+// (y su texto) en cada paso, en <salida>/recorrer.
 //
 // LA LECTURA, SIMULADA (decisión de Julio, 03/11): la foto se sube de verdad;
 // la función ocr-albaran se intercepta en el navegador. La sesión de lectura se
@@ -96,72 +96,99 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
   await pa.screenshot({ path: fotoAlbaran }); await pa.close()
 
   let n = 0
-  const foto = async (page, nombre) => {
+  const foto = async (page, nombre, { entera = false } = {}) => {
     await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
     await page.waitForTimeout(1200)
     const f = `${String(++n).padStart(2, '0')}-${nombre}`
-    // El móvil, a su resolución de pantalla (2x): el zoom de las fotos y del vídeo amplía texto nítido.
-    await page.screenshot({ path: join(dir, `${f}.png`), scale: (page.viewportSize()?.width ?? 1920) < 768 ? 'device' : 'css' })
+    // El móvil, a su resolución de pantalla (2x). «entera»: además, la página de arriba abajo.
+    const escala = (page.viewportSize()?.width ?? 1920) < 768 ? 'device' : 'css'
+    await page.screenshot({ path: join(dir, `${f}.png`), scale: escala })
+    if (entera) await page.screenshot({ path: join(dir, `${f}-entera.png`), scale: escala, fullPage: true })
     writeFileSync(join(dir, `${f}.txt`), `${page.url()}\n\n${await page.locator('body').innerText().catch(() => '')}`)
     console.log(`· ${f}`)
   }
   const pulsa = async (page, re, t = 15_000) => { const b = page.getByRole('button', { name: re }).first(); await b.waitFor({ timeout: t }); await b.click() }
-
-  const s = await sesion(PERSONAS.admin)
-  const m = await contexto(navegador, s, true)
-  const p = await m.newPage()
-  p.on('pageerror', (e) => console.log(`[error de la página] ${e.message}`))
-  await interceptarLectura(p, s, CUENTA_A, ALBARAN, fecha)
-  try {
-    await p.goto(`${APP}/supply/recepciones`)
-    // El local: sin él, «Recibir y meter al stock» no se enciende (el stock entra en un local).
-    const local = p.locator('select').filter({ has: p.locator('option', { hasText: 'Taberna del Mercado' }) }).first()
-    if (await local.isVisible().catch(() => false)) { await local.selectOption({ label: 'Taberna del Mercado' }); await p.waitForTimeout(1500) }
+  const elegirLocal = async (page) => {
+    const local = page.locator('select').filter({ has: page.locator('option', { hasText: 'Taberna del Mercado' }) }).first()
+    if (await local.isVisible().catch(() => false)) { await local.selectOption({ label: 'Taberna del Mercado' }); await page.waitForTimeout(1500) }
     else console.log('· no encuentro el selector del local')
-    await foto(p, 'recepciones')
-    await pulsa(p, /Recibir pedido/); await foto(p, 'recibir')
-    await pulsa(p, /Escanear albarán/); await foto(p, 'escanear')
-    await p.locator('input[type=file]').last().setInputFiles(fotoAlbaran)
-    await foto(p, 'con-la-foto')
+  }
+
+  // ── LA COCINA: el trabajador, en SU app (TrabajadorApp), no la web de gestión ──
+  const sAdmin = await sesion(PERSONAS.admin)
+  const sTrab = await sesion(PERSONAS.trabajador)
+  const m = await contexto(navegador, sTrab, true)
+  const p = await m.newPage()
+  p.on('pageerror', (e) => console.log(`[error de la página · trabajador] ${e.message}`))
+  await interceptarLectura(p, sAdmin, CUENTA_A, ALBARAN, fecha)
+  try {
+    await p.goto(`${APP}/`)
+    await p.getByText('Recepciones').first().waitFor({ timeout: 30_000 })
+    await foto(p, 'trabajador-inicio', { entera: true })
+    await p.getByText('Recepciones').first().click()
+    await p.getByText(/Escanear albarán/).first().waitFor({ timeout: 20_000 })
+    await foto(p, 'trabajador-recepciones', { entera: true })
+    await pulsa(p, /Escanear albarán/); await foto(p, 'trabajador-camara', { entera: true })
+    const entrada = p.locator('input[type=file]:not([capture])')
+    await ((await entrada.count()) ? entrada.first() : p.locator('input[type=file]').last()).setInputFiles(fotoAlbaran)
+    await foto(p, 'trabajador-con-la-foto')
     await pulsa(p, /Leer albarán/)
     await p.getByRole('button', { name: /Crear recepción desde esto/ }).first().waitFor({ timeout: 45_000 })
-    await foto(p, 'leido')
+    await foto(p, 'trabajador-lectura', { entera: true })
     await pulsa(p, /Crear recepción desde esto/)
-    await p.waitForTimeout(2500); await foto(p, 'asistente-1')
+    await p.waitForTimeout(2500); await foto(p, 'trabajador-asistente-1', { entera: true })
+    let lechuga = false
     for (let i = 2; i <= 14; i++) {
-      // En la 2.ª línea (la lechuga), una incidencia: llegan 2 cajas de las 3 del albarán.
+      // La lechuga: llegan 2 cajas de las 3 del albarán.
       const txt = await p.locator('body').innerText().catch(() => '')
-      if (/Lechuga romana/.test(txt) && !/lechuga-2/.test(String(p.__hecho ?? ''))) {
+      if (!lechuga && /Lechuga romana/.test(txt)) {
         const menos = p.getByRole('button', { name: 'Uno menos' }).first()
-        if (await menos.isVisible().catch(() => false)) { await menos.click(); p.__hecho = 'lechuga-2'; await p.waitForTimeout(900); await foto(p, `asistente-${i}-lechuga-2`) }
+        if (await menos.isVisible().catch(() => false)) { await menos.click(); lechuga = true; await p.waitForTimeout(900); await foto(p, `trabajador-asistente-${i}-lechuga-2-de-3`, { entera: true }) }
         else console.log('· no encuentro el botón «−» de la cantidad')
       }
       const sig = p.getByRole('button', { name: /^Siguiente/ }).first()
       if (!(await sig.isVisible().catch(() => false))) break
-      if (await sig.isDisabled().catch(() => false)) { await foto(p, `asistente-${i}-apagado`); break }
-      await sig.click(); await p.waitForTimeout(1200); await foto(p, `asistente-${i}`)
+      if (await sig.isDisabled().catch(() => false)) { await foto(p, `trabajador-asistente-${i}-apagado`, { entera: true }); break }
+      await sig.click(); await p.waitForTimeout(1200); await foto(p, `trabajador-asistente-${i}`, { entera: true })
     }
     const recibir = p.getByRole('button', { name: /Recibir y meter al stock|Meter al stock y avisar a oficina/ }).first()
-    if (await recibir.isVisible().catch(() => false)) { await recibir.click(); await p.waitForTimeout(3000); await foto(p, 'recibido') }
-  } catch (e) { console.log(`EL RECORRIDO DEL MÓVIL HA PARADO: ${e.message.split('\n')[0]}`); await foto(p, 'x-movil-parado').catch(() => {}) }
+    if (await recibir.isVisible().catch(() => false)) {
+      if (await recibir.isDisabled().catch(() => false)) await foto(p, 'trabajador-recibir-apagado', { entera: true })
+      else { await recibir.click(); await p.waitForTimeout(3000); await foto(p, 'trabajador-recibido', { entera: true }) }
+    } else console.log('· no encuentro «Recibir y meter al stock»')
+  } catch (e) { console.log(`EL RECORRIDO DEL TRABAJADOR HA PARADO: ${e.message.split('\n')[0]}`); await foto(p, 'x-trabajador-parado', { entera: true }).catch(() => {}) }
   await m.close()
 
-  const o = await contexto(navegador, s, false)
+  // ── LA OFICINA: la persona administradora, en el ordenador ──
+  const o = await contexto(navegador, sAdmin, false)
   const q = await o.newPage()
+  q.on('pageerror', (e) => console.log(`[error de la página · oficina] ${e.message}`))
   try {
-    await q.goto(`${APP}/supply/recepciones`); await foto(q, 'oficina-lista')
+    await q.goto(`${APP}/supply/recepciones`); await elegirLocal(q)
+    await foto(q, 'oficina-lista', { entera: true })
     await pulsa(q, /Verificar y confirmar/)
     await q.getByText('Verificar, no recontar').first().waitFor({ timeout: 45_000 })
     await q.waitForTimeout(1500)
-    await foto(q, 'oficina-revision')
+    await foto(q, 'oficina-revision', { entera: true })
     const cerrar = q.getByRole('button', { name: /Verificado — cerrar albarán/ }).first()
-    await cerrar.scrollIntoViewIfNeeded(); await q.waitForTimeout(800)
-    await foto(q, 'oficina-revision-abajo')
     await cerrar.click()
     await q.waitForTimeout(2500)
-    // Si pide confirmar algo antes de cerrar (un aviso de coste…), se ve en la captura.
-    await foto(q, 'oficina-aprobado')
-  } catch (e) { console.log(`LA OFICINA HA PARADO: ${e.message.split('\n')[0]}`); await foto(q, 'x-oficina-parado').catch(() => {}) }
+    await foto(q, 'oficina-cerrado', { entera: true })
+  } catch (e) { console.log(`LA OFICINA HA PARADO: ${e.message.split('\n')[0]}`); await foto(q, 'x-oficina-parado', { entera: true }).catch(() => {}) }
+  // La confianza del local, después de cerrar (la lista, con el local elegido).
+  try {
+    await q.goto(`${APP}/supply/recepciones`); await elegirLocal(q)
+    await q.getByText(/Confirmación directa activa|¿Sigue haciendo falta revisar\?/).first().waitFor({ timeout: 15_000 }).catch(() => console.log('· no sale la confianza del local'))
+    await foto(q, 'oficina-confianza', { entera: true })
+  } catch (e) { console.log(`LA CONFIANZA HA PARADO: ${e.message.split('\n')[0]}`) }
+  // La ficha del pedido, después: ¿«Recibido parcial», lo que falta y «Reclamar»?
+  try {
+    await q.goto(`${APP}/supply`); await elegirLocal(q)
+    await foto(q, 'oficina-pedidos', { entera: true })
+    await q.getByText('Frutas y Verduras La Huerta').first().click({ timeout: 15_000 })
+    await q.waitForTimeout(2500)
+    await foto(q, 'oficina-pedido-ficha', { entera: true })
+  } catch (e) { console.log(`EL PEDIDO HA PARADO: ${e.message.split('\n')[0]}`); await foto(q, 'x-pedido-parado', { entera: true }).catch(() => {}) }
   await o.close()
   await navegador.close()
 }

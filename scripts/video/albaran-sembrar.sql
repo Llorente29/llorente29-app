@@ -19,6 +19,8 @@ do $$
 declare
   c uuid := current_setting('video.cuenta')::uuid;
   prov uuid; u_kg uuid; u_l uuid; u_ud uuid; it uuid; fmt uuid; x record;
+  trabajador uuid := regexp_replace(c::text, '00000000000a$', '0000000000a7')::uuid;
+  loc uuid; ped uuid; pos int := 0;
 begin
   if split_part(c::text, '-', 2) = '0000' then raise exception 'V02: % es la plantilla, no un carril. No se siembra nada.', c; end if;
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
@@ -39,10 +41,10 @@ begin
   -- Los cuatro artículos, su formato de compra y su fila en el catálogo del proveedor. El precio del
   -- catálogo va por unidad de base (kg, l, ud). La patata, a 0,70 €/kg: en el albarán llega a 0,75 (+7 %).
   for x in select * from (values
-      ('Tomate pera',            'kg', 'Caja 10 kg',   10::numeric, 'TOM-10', 'Tomate pera, caja 10 kg',              1.49::numeric),
-      ('Lechuga romana',         'ud', 'Caja 12 ud',   12::numeric, 'LEC-12', 'Lechuga romana, caja 12 ud',           0.95::numeric),
-      ('Patata agria',           'kg', 'Saco 25 kg',   25::numeric, 'PAT-25', 'Patata agria, saco 25 kg',             0.70::numeric),
-      ('Aceite de oliva virgen', 'l',  'Garrafa 5 l',   5::numeric, 'ACE-05', 'Aceite de oliva virgen extra, garrafa 5 l', 6.90::numeric)
+      ('Tomate pera',            'kg', 'Caja',         10::numeric, 'TOM-10', 'Tomate pera, caja 10 kg',              1.49::numeric),
+      ('Lechuga romana',         'ud', 'Caja',         12::numeric, 'LEC-12', 'Lechuga romana, caja 12 ud',           0.95::numeric),
+      ('Patata agria',           'kg', 'Saco',         25::numeric, 'PAT-25', 'Patata agria, saco 25 kg',             0.70::numeric),
+      ('Aceite de oliva virgen', 'l',  'Garrafa',       5::numeric, 'ACE-05', 'Aceite de oliva virgen extra, garrafa 5 l', 6.90::numeric)
     ) as t(nombre, unidad, formato, en_base, codigo, en_albaran, precio)
   loop
     select id into it from public.recipe_item where account_id = c and name = x.nombre and type = 'raw' limit 1;
@@ -70,9 +72,39 @@ begin
     end if;
   end loop;
 
+  -- Los proveedores de prueba de la plantilla, con nombres que parezcan de verdad (sin «Prueba»).
+  update public.supplier s set name = n.nuevo, legal_name = case when s.legal_name is null then null else n.nuevo end
+    from (select id, case when name ilike 'Lácteos Prueba Ocho%' then 'Lácteos Ochoa, S.L.'
+                          else trim(regexp_replace(name, '\s*Prueba\s*', ' ', 'g')) end as nuevo
+            from public.supplier where account_id = c and name ilike '%Prueba%') n
+   where s.id = n.id
+     and not exists (select 1 from public.supplier o where o.account_id = c and o.name = n.nuevo and o.id <> s.id);
+  update public.supplier set name = regexp_replace(trim(name), '\s+,', ',', 'g') where account_id = c and name ~ '\s,';
+
   -- El local y la cuenta, con nombre de bar (el de la cabecera y el de «Entregar en»).
   update public.locations set name = 'Taberna del Mercado' where account_id = c and name = 'Norte Centro';
   update public.accounts set name = 'Taberna del Mercado' where id = c;
+
+  -- El pedido a La Huerta, enviado y para hoy, en el local de la ficha del trabajador: la recepción lo
+  -- tiene que encontrar sola (mismo proveedor, mismo local, fecha cercana).
+  select e.location_id into loc from public.user_profiles up join public.employees e on e.id = up.employee_id where up.id = trabajador;
+  if loc is null then select id into loc from public.locations where account_id = c and name = 'Taberna del Mercado' limit 1; end if;
+  raise notice 'V02: el trabajador % tiene la ficha en el local %', trabajador, (select name from public.locations where id = loc);
+  insert into public.purchase_order (account_id, location_id, supplier_id, order_date, expected_date, status, origin, currency, is_active, created_by_name, notes)
+  values (c, loc, prov, current_date - 1, current_date, 'enviado', 'manual', 'EUR', true, 'Vídeo V02', 'Pedido del vídeo V02')
+  returning id into ped;
+  for x in select ri.id as item, ri.name, f.id as fmt, q.cant, q.precio from (values
+      ('Tomate pera', 'Caja', 4::numeric, 14.90::numeric), ('Lechuga romana', 'Caja', 3, 11.40),
+      ('Patata agria', 'Saco', 2, 18.75), ('Aceite de oliva virgen', 'Garrafa', 2, 34.50)) as q(nombre, formato, cant, precio)
+    join public.recipe_item ri on ri.account_id = c and ri.name = q.nombre and ri.type = 'raw'
+    join public.recipe_item_purchase_format f on f.item_id = ri.id and f.account_id = c and f.name = q.formato
+  loop
+    pos := pos + 1;
+    insert into public.purchase_order_line (account_id, purchase_order_id, recipe_item_id, product_name, qty_ordered, purchase_format_id, est_unit_price, est_line_total, position)
+    values (c, ped, x.item, x.name, x.cant, x.fmt, x.precio, round(x.cant * x.precio, 2), pos);
+  end loop;
+  if pos <> 4 then raise exception 'V02: el pedido tiene % líneas, no 4.', pos; end if;
+  raise notice 'V02: pedido % con 4 líneas', (select code from public.purchase_order where id = ped);
 
   -- La oficina aprueba aparte: la recepción de cocina queda esperándola.
   update public.supply_settings set require_separate_approval = true where account_id = c;

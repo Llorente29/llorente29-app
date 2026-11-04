@@ -31,6 +31,7 @@ const CLAVE_STORAGE = 'sb-oseymswjlzplqoxrfjzi-auth-token'
 const PERSONAS = {
   admin: correoDelCarril('a.admin@prueba.folvy.test', CARRIL),
   encargado: correoDelCarril('a.encargado@prueba.folvy.test', CARRIL),
+  trabajador: correoDelCarril('a.trabajador@prueba.folvy.test', CARRIL),
 }
 export const CUENTA_A = enCarril('c01a0000-0000-4000-8000-00000000000a', CARRIL)
 
@@ -69,7 +70,7 @@ async function reconocer() {
   }
   const intento = async (nombre, f) => { try { await f() } catch (e) { console.log(`· ${nombre}: ${e.message.split('\n')[0]}`) } }
 
-  for (const [quien, correo] of Object.entries(PERSONAS)) {
+  for (const [quien, correo] of Object.entries(PERSONAS).filter(([k]) => k !== 'trabajador')) {
     let s
     try { s = await sesion(correo) } catch (e) { console.log(`· ${quien}: ${e.message}`); continue }
     // El móvil.
