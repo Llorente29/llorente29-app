@@ -26,7 +26,9 @@
 --   6. cedidas_70    · ninguna venta de una marca cedida en el grupo 70.
 --   7. socio_gasto   · nada comprado a nombre del socio de marca como gasto (grupo 6).
 --   8. resultado     · ningún 6/7 sin local ni «común»; lo común con su regla de reparto al 100 %.
---   9. mes_cerrado   · ningún asiento validado en un mes cerrado después de cerrarlo.
+--   9. mes_cerrado   · ningún asiento validado en un mes que no admite nada (corte o
+--                      impuesto presentado) después de cerrarlo. Los cerrados por una
+--                      persona admiten lo que llega después y lo apuntan (S01p).
 --  10. propuestas    · lo propuesto hace más de 7 días (aviso, no error).
 --  11. cierre_dia    · ningún pedido de marca propia sigue abierto en un día ya
 --                      cerrado (encargo del 09/10): si lo hay, el cierre del día
@@ -196,7 +198,10 @@ select json_build_object(
       'numero', e.number, 'fecha', e.entry_date, 'cerrado', k.locked_at, 'validado', e.validated_at)), '[]')
     from libro e
     join public.fiscal_period_lock k on k.company_id = e.company_id and k.month = date_trunc('month', e.entry_date)::date
-   where e.source_type not in ('migrated') and e.validated_at > k.locked_at and (k.reopened_at is null or e.validated_at < k.reopened_at)),
+   -- S01p (decisión 3 de Julio, 04/11): un mes cerrado por una persona («manual») admite lo que llega
+   -- después y lo apunta en conta_mes_cambio; rojo solo en los que no admiten nada (corte e impuesto presentado).
+   where e.source_type not in ('migrated') and k.kind in ('migrated', 'tax_filed')
+     and e.validated_at > k.locked_at and (k.reopened_at is null or e.validated_at < k.reopened_at)),
 
   'cierre_dia', (select coalesce(json_agg(json_build_object('account_id', x.account_id, 'company_id', x.company_id,
       'pedidos', x.pedidos, 'importe', x.importe, 'dia', x.dia,

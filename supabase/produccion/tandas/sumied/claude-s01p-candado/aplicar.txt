@@ -1,0 +1,18 @@
+# S01p·2 · Los dos días de la empresa y el candado del cierre, según la decisión
+# 3 de Julio (04/11). Rama claude/s01p-candado. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1120  company: el día de cierre y los días de pago de la nómina (vacíos
+#         hasta que alguien los pone; conta_empresa_dias_guardar). Un mes
+#         cerrado por una persona admite lo que llega después y lo apunta
+#         (conta_mes_cambio); conta_mes_cerrado bloquea solo el corte y lo
+#         presentado. El trimestre con el 303 presentado no admite nada, con IVA
+#         o sin él, al crear y al cambiar la fecha. Cambia dos funciones con la
+#         misma firma, con respaldo.
+#   1121  DATOS de Foodint: se cierra el 7; la nómina, el 5 y el 6.
+#
+# Nada en el camino del pedido. La 1121 mueve una fila: va con «autorizo».
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-candado.sql
+supabase/migrations/20261104T1120_s01p_candado.sql
+supabase/migrations/20261104T1121_s01p_dias_foodint.sql

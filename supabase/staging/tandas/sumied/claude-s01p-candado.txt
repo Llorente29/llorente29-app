@@ -1,0 +1,9 @@
+# S01p·2 · El candado del cierre (decisión 3 de Julio): 1120 (los dos días de la
+# empresa; el mes cerrado por una persona apunta, no bloquea; el trimestre
+# presentado no admite nada) y 1121 (los días de Foodint; en staging no está y no
+# hace nada). Su prueba (ROLLBACK, empresa A): los días, el mes que apunta, el
+# trimestre que rechaza al crear y al cambiar la fecha, otra vez sin cambios, la
+# vuelta atrás con las huellas de producción y otra vez delante.
+supabase/migrations/20261104T1120_s01p_candado.sql
+supabase/migrations/20261104T1121_s01p_dias_foodint.sql
+supabase/staging/sql/20261104_s01p_candado_prueba.sql
