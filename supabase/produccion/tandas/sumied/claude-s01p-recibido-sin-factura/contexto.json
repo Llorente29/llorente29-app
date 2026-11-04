@@ -1,0 +1,26 @@
+{
+ "_que": "S01p · lo recibido sin factura · contexto de producción, medido en SOLO LECTURA el 04/11 a las 15:55Z con la consulta de contexto del workflow: la 1640 cambia _compras_fin_de_mes (misma firma, con respaldo; huella 8882936c…, igual en staging) y añade un disparador en goods_receipt_path; la 1641 quita 1 periodificación y 2 asientos propuestos de Foodint (octubre), con copia. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T15:55Z",
+ "tanda": {
+  "supabase/migrations/20261104T1640_s01p_recibido_con_factura.sql": "f837afca546d7c4d2453b6b352a466c4",
+  "supabase/migrations/20261104T1641_s01p_recibido_foodint.sql": "d0cd10352bca5b3c4a90d3b6e0154670"
+ },
+ "contexto": {
+  "tablas": [
+   "public.goods_receipt_path",
+   "public.journal_entry"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.goods_receipt_path": 176,
+   "public.journal_entry": 15601
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

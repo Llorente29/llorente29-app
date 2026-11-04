@@ -1,0 +1,16 @@
+# S01p · Lo recibido sin factura se retira cuando llega la factura (Julio,
+# respuesta S01p·3, 04/11). Rama claude/s01p-recibido-sin-factura. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1640  _compras_fin_de_mes quita las propuestas de lo periodificado que ya
+#         no hace falta o que ha cambiado (lo validado no se toca), y un
+#         disparador lo rehace en cuanto un albarán recibe su factura. Cambia una
+#         función con la misma firma, con respaldo.
+#   1641  DATOS de Foodint: octubre, rehecho; se van la periodificación de
+#         Olimpo Gourmet (149,44 €) y su pareja propuesta. Con copia.
+#
+# Nada en el camino del pedido. La 1641 mueve filas: va con «autorizo».
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-recibido.sql
+supabase/migrations/20261104T1640_s01p_recibido_con_factura.sql
+supabase/migrations/20261104T1641_s01p_recibido_foodint.sql
