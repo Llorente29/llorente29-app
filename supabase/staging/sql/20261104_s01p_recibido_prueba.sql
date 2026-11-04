@@ -51,8 +51,9 @@ end $$;
 
 -- La pareja propuesta de cada una (como la deja la pasada de la noche): 31/10 y su contrario el 01/11.
 create function pg_temp.pareja(p_acc uuid) returns void language sql as $$
-  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id, status)
-  select a.account_id, a.company_id, y.id, 2, x.d, 'PRUEBA S01p recibido sin factura', x.t, a.id, 'propuesto'
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id, status, confidence, reason)
+  select a.account_id, a.company_id, y.id, 2, x.d, 'PRUEBA S01p recibido sin factura', x.t, a.id, 'propuesto',
+         'seguro', 'PRUEBA S01p: lo recibido sin factura del mes, como lo propone la pasada de la noche.'
     from public.purchase_accrual a
     cross join (values (date '2026-10-31', 'purchase_accrual'), (date '2026-11-01', 'purchase_accrual_reversal')) x(d, t)
     join public.fiscal_year y on y.company_id = a.company_id and x.d between y.starts_on and y.ends_on

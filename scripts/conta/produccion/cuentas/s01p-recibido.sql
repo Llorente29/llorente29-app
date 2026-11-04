@@ -10,10 +10,11 @@ select clave, valor from (
   select 2, 'Disparador s01p_albaran_facturado en goods_receipt_path (antes 0, después 1)',
     (select count(*)::text from pg_trigger where tgname = 's01p_albaran_facturado' and tgrelid = 'public.goods_receipt_path'::regclass)
   union all
-  -- corte: octubre de 2026, empresa de Foodint.
+  -- corte: octubre de 2026, empresa de Foodint, calculadas antes del 04/11 16:30Z (purchase_accrual no tiene created_at: su fecha es computed_at).
   select 3, 'Periodificaciones de octubre de Foodint (antes 1, después 0)',
     (select count(*)::text from public.purchase_accrual
-      where company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and month = '2026-10-01')
+      where company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and month = '2026-10-01'
+        and computed_at < timestamptz '2026-11-04 16:30:00+00')
   union all
   -- corte: asientos del 31/10 y el 01/11 de 2026, empresa de Foodint.
   select 4, 'Asientos propuestos de lo recibido sin factura de octubre de Foodint (antes 2, después 0)',
