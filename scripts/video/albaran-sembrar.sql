@@ -36,12 +36,13 @@ begin
   select id into u_ud from public.kitchen_unit where account_id = c and abbreviation = 'ud' order by is_base desc limit 1;
   if u_kg is null or u_l is null or u_ud is null then raise exception 'V02: faltan las unidades kg, l o ud en la cuenta del carril.'; end if;
 
-  -- Los cuatro artículos, su formato de compra y su fila en el catálogo del proveedor.
+  -- Los cuatro artículos, su formato de compra y su fila en el catálogo del proveedor. El precio del
+  -- catálogo va por unidad de base (kg, l, ud). La patata, a 0,70 €/kg: en el albarán llega a 0,75 (+7 %).
   for x in select * from (values
-      ('Tomate pera',            'kg', 'Caja 10 kg',   10::numeric, 'TOM-10', 'Tomate pera, caja 10 kg',              14.90::numeric),
-      ('Lechuga romana',         'ud', 'Caja 12 ud',   12::numeric, 'LEC-12', 'Lechuga romana, caja 12 ud',           11.40::numeric),
-      ('Patata agria',           'kg', 'Saco 25 kg',   25::numeric, 'PAT-25', 'Patata agria, saco 25 kg',             17.50::numeric),
-      ('Aceite de oliva virgen', 'l',  'Garrafa 5 l',   5::numeric, 'ACE-05', 'Aceite de oliva virgen extra, garrafa 5 l', 34.50::numeric)
+      ('Tomate pera',            'kg', 'Caja 10 kg',   10::numeric, 'TOM-10', 'Tomate pera, caja 10 kg',              1.49::numeric),
+      ('Lechuga romana',         'ud', 'Caja 12 ud',   12::numeric, 'LEC-12', 'Lechuga romana, caja 12 ud',           0.95::numeric),
+      ('Patata agria',           'kg', 'Saco 25 kg',   25::numeric, 'PAT-25', 'Patata agria, saco 25 kg',             0.70::numeric),
+      ('Aceite de oliva virgen', 'l',  'Garrafa 5 l',   5::numeric, 'ACE-05', 'Aceite de oliva virgen extra, garrafa 5 l', 6.90::numeric)
     ) as t(nombre, unidad, formato, en_base, codigo, en_albaran, precio)
   loop
     select id into it from public.recipe_item where account_id = c and name = x.nombre and type = 'raw' limit 1;

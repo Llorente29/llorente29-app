@@ -125,9 +125,10 @@ export async function recorrer({ salida, sesion, contexto, APP, CUENTA_A, PERSON
     for (let i = 2; i <= 14; i++) {
       // En la 2.ª línea (la lechuga), una incidencia: llegan 2 cajas de las 3 del albarán.
       const txt = await p.locator('body').innerText().catch(() => '')
-      if (/Lechuga romana/.test(txt)) {
-        const cant = p.locator('input[inputmode=decimal], input[type=number]').first()
-        if (await cant.isVisible().catch(() => false)) { await cant.fill('2'); await p.waitForTimeout(800); await foto(p, `asistente-${i}-lechuga-2`) }
+      if (/Lechuga romana/.test(txt) && !/lechuga-2/.test(String(p.__hecho ?? ''))) {
+        const menos = p.getByRole('button', { name: 'Uno menos' }).first()
+        if (await menos.isVisible().catch(() => false)) { await menos.click(); p.__hecho = 'lechuga-2'; await p.waitForTimeout(900); await foto(p, `asistente-${i}-lechuga-2`) }
+        else console.log('· no encuentro el botón «−» de la cantidad')
       }
       const sig = p.getByRole('button', { name: /^Siguiente/ }).first()
       if (!(await sig.isVisible().catch(() => false))) break
