@@ -6,18 +6,20 @@
 --   3. Los apuntes de alquiler propuestos de octubre y noviembre de 2026 (0 → 2) y lo que deben al arrendador 1 (0 → 1.596,68).
 --   4. Lo validado de 2026 en la 621, la 472 y la 4751: no cambia (la tanda solo propone).
 select clave, valor from (
-  -- corte: los 5 alquileres esperados de Foodint medidos el 05/11 (por su id)
+  -- corte: los 5 alquileres esperados de Foodint medidos el 05/11 (por su id, creados antes del 06/11/2026)
   select 1 o, 'Alquileres esperados de Foodint cubiertos por un contrato' clave,
     (select count(*)::text from public.supplier_expected_invoice x
       where x.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and x.kind = 'alquiler' and x.covered_by_recurring_id is not null
+        and x.created_at < timestamptz '2026-11-06 00:00+00'
         and x.id in ('f2c13b5e-ee18-4281-8f1e-1508486e9b36', '6bfc4317-570f-4c5c-8cd9-ccaa8f74a6ae', '42b1c16f-238d-4d09-8510-33e0a03a27ca',
                      'c7d5e755-e8c9-42d7-930f-7f6de6914ff1', 'bbb2a2e7-9e5b-463b-a899-785f448abc08')) valor
   union all
-  -- corte: los 5 alquileres esperados de Foodint medidos el 05/11 (por su id)
+  -- corte: los 5 alquileres esperados de Foodint medidos el 05/11 (por su id, creados antes del 06/11/2026)
   select 2, 'Alquileres esperados de Foodint terminados el 30/09/2026',
     (select count(*)::text from public.supplier_expected_invoice x
       where x.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and x.kind = 'alquiler'
         and to_jsonb(x)->>'ends_on' = '2026-09-30'
+        and x.created_at < timestamptz '2026-11-06 00:00+00'
         and x.id in ('f2c13b5e-ee18-4281-8f1e-1508486e9b36', '6bfc4317-570f-4c5c-8cd9-ccaa8f74a6ae', '42b1c16f-238d-4d09-8510-33e0a03a27ca',
                      'c7d5e755-e8c9-42d7-930f-7f6de6914ff1', 'bbb2a2e7-9e5b-463b-a899-785f448abc08'))
   union all
