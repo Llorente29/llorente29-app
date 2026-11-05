@@ -1,0 +1,9 @@
+{
+ "_que": "S01p·15 · los alquileres del mes · contexto de producción, medido en SOLO LECTURA el 2026-11-05T10:27Z: la 1140 añade columnas a recurring_contract y a supplier_expected_invoice, una tabla (recurring_contract_month) y tres funciones, y cambia conta_esperadas_del_mes y conta_cierre_bloque_repite (existen, misma firma, con respaldo); la 1141 crea el contrato de Carabanchel, termina el 30/09 los 3 alquileres esperados de Plaza Castilla (update de filas que existen) y propone octubre y noviembre. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-05T10:27Z",
+ "tanda": {
+  "supabase/migrations/20261105T1140_s01p_alquiler_del_mes.sql": "3abfb51efd97dd79cd45fcef95b6e2ff",
+  "supabase/migrations/20261105T1141_s01p_alquileres_foodint.sql": "3d95c9e13d541e5af7cb8441d098572b"
+ },
+ "contexto": {"tablas": ["public.recurring_contract", "public.supplier_expected_invoice"], "funciones": ["public.conta_cierre_bloque_repite(uuid,date)", "public.conta_esperadas_del_mes(uuid,date)"], "filas": {"public.recurring_contract": 0, "public.supplier_expected_invoice": 0}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

@@ -1,0 +1,17 @@
+# S01p·15 · Los alquileres que no mandan factura se apuntan solos desde su
+# contrato (Julio, 05/11). Rama claude/s01p-alquileres. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar.
+#
+#   1140  La regla: el contrato de alquiler (columnas nuevas de recurring_contract,
+#         «exento» solo con certificado), el mes del contrato (tabla nueva), el
+#         fin de un alquiler esperado, el apunte del mes propuesto solo (con su
+#         retención del 115 y su local), la pasada de cada día, y lo que se espera
+#         y «Lo que se repite» (cambian, con respaldo).
+#   1141  Foodint: el contrato de Carabanchel (sin retención hasta octubre, el
+#         19 % desde noviembre), Plaza Castilla terminado el 30/09, y octubre y
+#         noviembre propuestos. Cambia filas que existen: «autorizo».
+#
+# Nada en el camino del pedido. El real lo lanza Julio, que después valida los dos apuntes.
+cuenta: scripts/conta/produccion/cuentas/s01p-alquileres.sql
+supabase/migrations/20261105T1140_s01p_alquiler_del_mes.sql
+supabase/migrations/20261105T1141_s01p_alquileres_foodint.sql
