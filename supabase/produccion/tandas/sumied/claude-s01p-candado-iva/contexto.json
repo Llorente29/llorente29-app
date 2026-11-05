@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·13 · el candado, solo para lo que lleva IVA · contexto de producción, medido en SOLO LECTURA el 05/11 a las 07:20Z: la 0830 cambia cuatro funciones que existen (con respaldo) y conta_motivos_para_validar por reemplazo exacto dentro de un DO (huella 3f7ee5dbee6904c7c5cf892696f71c3f, la misma en staging y en la base local), añade siete funciones y dos disparadores, y en conta_mes_cambio (0 filas) quita el no nulo de lock_id y añade una columna que admite nulos. No mueve ningún asiento. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-05T07:20Z",
+ "tanda": {
+  "supabase/migrations/20261105T0830_s01p_candado_iva.sql": "2c3723171d1729f06c2246f8eb6efb3b"
+ },
+ "contexto": {"tablas": ["public.conta_mes_cambio", "public.journal_entry", "public.journal_line"], "funciones": ["public._tg_s01p_mes_cambio()", "public._tg_s01p_trimestre_presentado()", "public.conta_traspaso_lista(uuid,date)", "public.tg_journal_entry_no_antes_del_corte()"], "filas": {"public.conta_mes_cambio": 0, "public.journal_entry": 15601, "public.journal_line": 38804}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

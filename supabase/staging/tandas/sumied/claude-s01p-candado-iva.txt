@@ -1,0 +1,10 @@
+# S01p·13 · El candado, solo para lo que lleva IVA (0830: cambia validar, los
+# disparadores del trimestre presentado y del corte, las marcas de «apuntado
+# tarde» y la lista del traspaso a Diez; añade el candado de las retenciones y
+# que lo traído no se anula). Su prueba (ROLLBACK, cuenta A, traída hasta el
+# 30/09 con julio del corte y el 303 y el 111 del 3T presentados): un pago de
+# caja de julio se crea, se VALIDA y queda marcado; la factura recibida, la 472
+# y la 4751 de julio, paradas; lo traído no se toca; el traspaso de octubre lo
+# recoge; el banco de antes del corte, parado; la vuelta atrás.
+supabase/migrations/20261105T0830_s01p_candado_iva.sql
+supabase/staging/sql/20261105_s01p_candado_iva_prueba.sql
