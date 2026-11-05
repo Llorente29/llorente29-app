@@ -3375,6 +3375,118 @@ end $$;
 
 
 --
+-- Name: _conta_alquiler_del_mes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_alquiler_del_mes(p_contract uuid, p_mes date) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select e.id from public.recurring_contract_month m
+    join public.journal_entry e on e.source_type = 'manual' and e.source_id = m.id and e.company_id = m.company_id and e.status <> 'anulado'
+   where m.contract_id = p_contract and m.month = date_trunc('month', p_mes)::date
+   order by e.created_at limit 1
+$$;
+
+
+--
+-- Name: _conta_alquiler_proponer(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_alquiler_proponer(p_contract uuid, p_mes date) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  c public.recurring_contract; v_mes date := date_trunc('month', p_mes)::date; v_dia date; v_y uuid; v_e uuid;
+  v_iva_pct numeric; v_ret_pct numeric; v_base numeric; v_iva numeric; v_ret numeric := 0; v_con_ret boolean;
+  v_cta record; v_pos int := 0; v_razon text; l record; v_m uuid;
+begin
+  select * into c from public.recurring_contract where id = p_contract;
+  if c.id is null or c.kind <> 'alquiler' then raise exception 'S01p alquiler: ese contrato de alquiler no está.'; end if;
+  if not c.is_active or c.propose_from is null or v_mes < date_trunc('month', c.propose_from)::date
+     or (c.starts_on is not null and v_mes < date_trunc('month', c.starts_on)::date)
+     or (c.ends_on is not null and v_mes > c.ends_on) then
+    return null;   -- ese mes no le toca
+  end if;
+  v_e := public._conta_alquiler_del_mes(c.id, v_mes);
+  if v_e is not null then return v_e; end if;   -- una vez por mes
+  if c.location_id is null or c.vat_rate_id is null or c.creditor_account is null or c.expense_account is null then
+    raise exception 'S01p alquiler: a «%» le falta el local, el IVA o las cuentas: no se propone.', c.name;
+  end if;
+  v_dia := make_date(extract(year from v_mes)::int, extract(month from v_mes)::int, coalesce(c.day_of_month, 1));
+  select id into v_y from public.fiscal_year where company_id = c.company_id and v_dia between starts_on and ends_on;
+  if v_y is null then raise exception 'S01p alquiler: no hay ejercicio para el %.', to_char(v_dia, 'DD/MM/YYYY'); end if;
+
+  select rate into v_iva_pct from public.tax_rate where id = c.vat_rate_id;
+  v_con_ret := not c.withholding_exempt and (c.withholding_since is null or v_dia >= c.withholding_since);
+  if v_con_ret then
+    if c.withholding_rate_id is null or c.withholding_account is null then
+      raise exception 'S01p alquiler: «%» lleva retención y le falta su tipo o su cuenta: no se propone.', c.name;
+    end if;
+    select rate into v_ret_pct from public.withholding_rate where id = c.withholding_rate_id;
+  end if;
+  v_base := c.amount;
+  v_iva := round(v_base * v_iva_pct / 100, 2);
+  if v_con_ret then v_ret := round(v_base * v_ret_pct / 100, 2); end if;
+
+  v_razon := format('Alquiler de %s desde su contrato: renta %s + IVA %s %%%s = %s.',
+                    to_char(v_mes, 'MM/YYYY'), public._s01p_euros(v_base), trim(to_char(v_iva_pct, 'FM990.##')),
+                    case when v_con_ret then format(' − retención %s %% del 115', trim(to_char(v_ret_pct, 'FM990.##')))
+                         when c.withholding_exempt then ', exento de retención (con su certificado)'
+                         else format(', sin retención (la lleva desde el %s)', to_char(c.withholding_since, 'DD/MM/YYYY')) end,
+                    public._s01p_euros(v_base + v_iva - v_ret))
+              || case when c.document_uploaded_at is null then ' Falta el contrato.' else '' end;
+
+  insert into public.recurring_contract_month (account_id, company_id, contract_id, month) values (c.account_id, c.company_id, c.id, v_mes)
+  on conflict (contract_id, month) do update set month = excluded.month returning id into v_m;
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id, status,
+                                    party_id, document_ref, document_date, confidence, reason, created_by_name)
+  values (c.account_id, c.company_id, v_y, 2, v_dia, format('Alquiler %s · %s', to_char(v_mes, 'MM/YYYY'), c.name), 'manual', v_m, 'propuesto',
+          c.party_id, format('ALQ-%s', to_char(v_mes, 'YYYYMM')), v_dia, 'seguro', v_razon, 'Sumied (alquiler del mes)')
+  returning id into v_e;
+
+  for l in select * from (values
+      (c.expense_account, v_base, 0::numeric, 'gasto'), (c.vat_account, v_iva, 0::numeric, 'iva'),
+      (c.withholding_account, 0::numeric, v_ret, 'retencion'), (c.creditor_account, 0::numeric, v_base + v_iva - v_ret, 'arrendador')) x(cuenta, debe, haber, que)
+    where debe <> 0 or haber <> 0 loop
+    select a.id into v_cta from public.company_account a where a.company_id = c.company_id and a.code = l.cuenta;
+    if v_cta.id is null then raise exception 'S01p alquiler: la cuenta % no está en la empresa.', l.cuenta; end if;
+    v_pos := v_pos + 1;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept, location_id, is_common,
+                                     party_id, tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents,
+                                     withholding_rate_id, withholding_base, withholding_model)
+    values (c.account_id, c.company_id, v_e, v_pos, v_cta.id, l.debe, l.haber, format('Alquiler %s', to_char(v_mes, 'MM/YYYY')), c.location_id, false,
+            case when l.que = 'arrendador' then c.party_id end,
+            case when l.que = 'iva' then c.vat_rate_id end, case when l.que = 'iva' then v_base end,
+            case when l.que = 'iva' then 'received' end, case when l.que = 'iva' then 'yes' end, 1,
+            case when l.que = 'retencion' then c.withholding_rate_id end, case when l.que = 'retencion' then v_base end,
+            case when l.que = 'retencion' then '115' end);
+  end loop;
+  return v_e;
+end $$;
+
+
+--
+-- Name: _conta_alquileres_proponer_todas(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_alquileres_proponer_todas() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare c record; v_mal text[] := '{}';
+begin
+  for c in select id, name from public.recurring_contract where kind = 'alquiler' and is_active and propose_from is not null loop
+    begin perform public._conta_alquiler_proponer(c.id, (now() at time zone 'Europe/Madrid')::date);
+    exception when others then v_mal := v_mal || format('%s: %s', c.name, sqlerrm); end;
+  end loop;
+  -- Los demás contratos ya han pasado; esto solo hace que cron la cuente como fallida (regla 8).
+  if cardinality(v_mal) > 0 then raise exception 'S01p alquiler: la pasada ha fallado en %', array_to_string(v_mal, ' · '); end if;
+end $$;
+
+
+--
 -- Name: _conta_aprendizaje(uuid, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6915,6 +7027,7 @@ CREATE TABLE public.supplier_expected_invoice (
     rhythm_set_by text,
     active_set_by text,
     location_set_by text,
+    ends_on date,
     CONSTRAINT supplier_expected_invoice_cadence_check CHECK ((cadence = ANY (ARRAY['mensual'::text, 'quincenal'::text, 'semanal'::text, 'varias'::text]))),
     CONSTRAINT supplier_expected_invoice_gap_check CHECK (((gap_days IS NULL) OR ((gap_days >= 1) AND (gap_days <= 90)))),
     CONSTRAINT supplier_expected_invoice_kind_check CHECK ((kind = ANY (ARRAY['proveedor'::text, 'alquiler'::text, 'riders'::text, 'nominas'::text, 'banco'::text, 'intermediario'::text, 'otro'::text]))),
@@ -6966,6 +7079,13 @@ COMMENT ON COLUMN public.supplier_expected_invoice.active_set_by IS 'V02d · «p
 --
 
 COMMENT ON COLUMN public.supplier_expected_invoice.location_set_by IS 'V02d · «persona» si una persona puso o quitó el local. Sumied nunca cambia el local de lo que ya está apuntado.';
+
+
+--
+-- Name: COLUMN supplier_expected_invoice.ends_on; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_expected_invoice.ends_on IS 'S01p·15 · Hasta cuándo se espera (un contrato terminado): desde el mes siguiente no se pide. Se sigue viendo, con su fecha de fin.';
 
 
 --
@@ -31863,6 +31983,7 @@ declare
   v_acc uuid := public._s01p_cuenta_de(p_company); v_ini date := date_trunc('month', p_mes)::date;
   v_fin date := (date_trunc('month', p_mes) + interval '1 month - 1 day')::date;
   v_cuotas int; v_cuotas_mal int; v_cuotas_ej jsonb; v_alq int; v_alq_ej jsonb; v_rsf int; v_estado text;
+  v_solo int; v_solo_falta int; v_solo_validar int; v_solo_ej jsonb; v_term int; v_term_ej jsonb; v_term_txt text;
 begin
   -- S01p·6: cada cuota del mes, mirada por lo que hay en el libro. Su pago (casado con su fila, o casado
   -- a mano: el movimiento del banco por el importe de la cuota) y sus intereses: los apuntes a la cuenta
@@ -31896,25 +32017,56 @@ begin
          jsonb_agg(jsonb_build_object('contrato', name, 'fecha', fecha, 'cuota', cuota, 'que', que)) filter (where que is not null)
     into v_cuotas, v_cuotas_mal, v_cuotas_ej
     from e;
-  select count(*), jsonb_agg(jsonb_build_object('alquiler', n.supplier_name, 'ultima', n.ultima,
+  -- Los alquileres que esperan factura (conta_esperadas_del_mes ya no cuenta los que se apuntan solos ni los terminados).
+  select count(*), jsonb_agg(jsonb_build_object('alquiler', n.supplier_name, 'ultima', n.ultima, 'como', 'espera factura',
                  'que', format('falta la de %s%s', to_char(v_ini, 'MM/YYYY'),
                                case when n.ultima > v_fin then format(' (la última, del %s, es de un mes posterior)', to_char(n.ultima, 'DD/MM')) else '' end)))
     into v_alq, v_alq_ej
     from public.conta_esperadas_del_mes(p_company, v_ini) n join public.supplier_expected_invoice x on x.id = n.expected_id
    where x.kind = 'alquiler';
+  -- S01p·14: los que se apuntan solos, desde su contrato: propuesto (por validar), validado, o falta proponerlo.
+  with s as (
+    select c.name, e.status,
+           case when e.id is null then 'falta proponerlo: no hay apunte del mes'
+                when e.status = 'validado' then null
+                else 'propuesto, por validar' end
+           || case when c.document_uploaded_at is null then ' · falta el contrato' else '' end que
+      from public.recurring_contract c
+      left join lateral (select x.id, x.status from public.journal_entry x where x.id = public._conta_alquiler_del_mes(c.id, v_ini)) e on true
+     where c.company_id = p_company and c.account_id = v_acc and c.kind = 'alquiler' and c.is_active
+       and c.propose_from is not null and date_trunc('month', c.propose_from)::date <= v_ini
+       and (c.starts_on is null or date_trunc('month', c.starts_on)::date <= v_ini) and (c.ends_on is null or c.ends_on >= v_ini))
+  select count(*), count(*) filter (where status is null), count(*) filter (where status in ('propuesto', 'borrador')),
+         jsonb_agg(jsonb_build_object('alquiler', name, 'como', 'se apunta solo', 'que', coalesce(que, 'validado'))) filter (where que is not null)
+    into v_solo, v_solo_falta, v_solo_validar, v_solo_ej
+    from s;
+  -- S01p·15: los terminados se dicen, no se esconden (regla 7).
+  select count(*), string_agg(distinct to_char(x.ends_on, 'DD/MM'), ', '),
+         jsonb_agg(jsonb_build_object('alquiler', coalesce(x.label, sp.name), 'como', 'terminado', 'que', format('terminado el %s: no se pide', to_char(x.ends_on, 'DD/MM/YYYY'))))
+    into v_term, v_term_txt, v_term_ej
+    from public.supplier_expected_invoice x join public.supplier sp on sp.id = x.supplier_id
+   where x.company_id = p_company and x.account_id = v_acc and x.kind = 'alquiler' and x.active
+     and x.ends_on is not null and x.ends_on < v_ini and x.ends_on >= (v_ini - interval '12 months')::date;
   select count(*) into v_rsf from public.journal_entry e join public.purchase_accrual a on a.id = e.source_id
    where a.company_id = p_company and a.account_id = v_acc and a.month = v_ini and e.source_type = 'purchase_accrual' and e.status in ('propuesto', 'borrador');
 
-  v_estado := case when v_cuotas_mal > 0 or v_alq > 0 then 'rojo' else 'sin_medir' end;  -- sin el registro de bienes, nunca verde
+  v_estado := case when v_cuotas_mal > 0 or v_alq > 0 or v_solo_falta > 0 then 'rojo' else 'sin_medir' end;  -- sin el registro de bienes, nunca verde
   return public._s01p_bloque('repite', 'Lo que se repite', v_estado,
     concat_ws(' · ',
       'Amortizaciones: sin medir, falta el registro de bienes',
       case when v_cuotas_mal > 0 then format('%s de %s cuotas con algo que mirar', v_cuotas_mal, v_cuotas)
            when v_cuotas > 0 then format('las %s cuotas del mes, pagadas y con sus intereses', v_cuotas) end,
-      case when v_alq > 0 then format('%s facturas de alquiler sin llegar', v_alq) end,
+      case when v_alq > 0 then format('%s %s de alquiler sin llegar', v_alq, case when v_alq = 1 then 'factura' else 'facturas' end) end,
+      case when v_solo_falta > 0 then format('%s %s que se apunta solo sin proponer', v_solo_falta, case when v_solo_falta = 1 then 'alquiler' else 'alquileres' end) end,
+      case when v_solo_validar > 0 then format('%s %s del mes por validar', v_solo_validar, case when v_solo_validar = 1 then 'alquiler' else 'alquileres' end) end,
+      case when v_solo > 0 and v_solo_falta = 0 and v_solo_validar = 0 then format('%s %s del mes, validado', v_solo, case when v_solo = 1 then 'alquiler' else 'alquileres' end) end,
+      case when v_term > 0 then format('%s %s terminado el %s: no se pide', v_term, case when v_term = 1 then 'alquiler' else 'alquileres' end, v_term_txt) end,
       case when v_rsf > 0 then format('%s «recibido sin factura» por validar', v_rsf) end),
-    jsonb_build_object('amortizaciones', 'sin_medir', 'cuotas', v_cuotas, 'cuotas_sin_casar', v_cuotas_mal, 'alquileres_sin_llegar', v_alq, 'recibido_sin_factura_por_validar', v_rsf),
-    coalesce(v_cuotas_ej, '[]'::jsonb) || coalesce(v_alq_ej, '[]'::jsonb), 'compras/esperando');
+    jsonb_build_object('amortizaciones', 'sin_medir', 'cuotas', v_cuotas, 'cuotas_sin_casar', v_cuotas_mal, 'alquileres_sin_llegar', v_alq,
+                       'alquileres_solos', v_solo, 'alquileres_solos_sin_proponer', v_solo_falta, 'alquileres_solos_por_validar', v_solo_validar,
+                       'alquileres_terminados', v_term, 'recibido_sin_factura_por_validar', v_rsf),
+    coalesce(v_cuotas_ej, '[]'::jsonb) || coalesce(v_alq_ej, '[]'::jsonb) || coalesce(v_solo_ej, '[]'::jsonb) || coalesce(v_term_ej, '[]'::jsonb),
+    'compras/esperando');
 end $$;
 
 
@@ -35380,6 +35532,12 @@ begin
     from public.supplier_expected_invoice x
     join public.supplier s on s.id = x.supplier_id and s.account_id = v_acc
    where x.company_id = p_company and x.account_id = v_acc and x.active
+     -- S01p·15: un contrato terminado no se pide desde el mes siguiente a su fin.
+     and (x.ends_on is null or x.ends_on >= v_mes)
+     -- S01p·14: lo que cubre un contrato que se apunta solo no espera factura.
+     and not exists (select 1 from public.recurring_contract c
+                      where c.id = x.covered_by_recurring_id and c.account_id = v_acc and c.is_active and c.kind = 'alquiler'
+                        and c.propose_from is not null and c.propose_from <= v_mes)
      and not exists (select 1 from public.supplier_invoice i where i.account_id = v_acc and i.supplier_id = x.supplier_id and i.status <> 'anulada'
                         and i.invoice_date >= v_mes and i.invoice_date < (v_mes + interval '1 month')::date)
      and not exists (select 1 from public.journal_entry e
@@ -110429,12 +110587,29 @@ CREATE TABLE public.recurring_contract (
     document_name text,
     document_kind text,
     document_uploaded_at timestamp with time zone,
+    location_id uuid,
+    vat_rate_id uuid,
+    withholding_rate_id uuid,
+    vat_account text,
+    withholding_account text,
+    creditor_account text,
+    day_of_month smallint,
+    propose_from date,
+    starts_on date,
+    ends_on date,
+    withholding_since date,
+    withholding_exempt boolean DEFAULT false NOT NULL,
+    exempt_document_name text,
+    exempt_document_uploaded_at timestamp with time zone,
+    CONSTRAINT recurring_contract_alquiler_dia CHECK (((day_of_month IS NULL) OR ((day_of_month >= 1) AND (day_of_month <= 28)))),
+    CONSTRAINT recurring_contract_alquiler_fechas CHECK (((starts_on IS NULL) OR (ends_on IS NULL) OR (ends_on >= starts_on))),
     CONSTRAINT recurring_contract_amount_check CHECK ((amount > (0)::numeric)),
     CONSTRAINT recurring_contract_concept_contains_check CHECK ((length(TRIM(BOTH FROM concept_contains)) > 0)),
     CONSTRAINT recurring_contract_confirmations_check CHECK ((confirmations >= 0)),
     CONSTRAINT recurring_contract_cuadro CHECK (((schedule IS NULL) OR (jsonb_typeof(schedule) = 'array'::text))),
     CONSTRAINT recurring_contract_cuentas CHECK ((((kind = ANY (ARRAY['prestamo'::text, 'aplazamiento'::text, 'poliza'::text])) AND (capital_account IS NOT NULL) AND (interest_account IS NOT NULL)) OR ((kind <> ALL (ARRAY['prestamo'::text, 'aplazamiento'::text, 'poliza'::text])) AND (expense_account IS NOT NULL)))),
     CONSTRAINT recurring_contract_document_kind_check CHECK (((document_kind IS NULL) OR (document_kind = ANY (ARRAY['excel'::text, 'pdf'::text, 'a_mano'::text])))),
+    CONSTRAINT recurring_contract_exento_con_certificado CHECK (((NOT withholding_exempt) OR ((exempt_document_name IS NOT NULL) AND (exempt_document_uploaded_at IS NOT NULL)))),
     CONSTRAINT recurring_contract_importe CHECK (((kind = 'poliza'::text) OR (amount IS NOT NULL))),
     CONSTRAINT recurring_contract_installments_check CHECK (((installments IS NULL) OR (installments > 0))),
     CONSTRAINT recurring_contract_kind_check CHECK ((kind = ANY (ARRAY['prestamo'::text, 'alquiler'::text, 'otro'::text, 'aplazamiento'::text, 'poliza'::text]))),
@@ -110490,6 +110665,49 @@ COMMENT ON COLUMN public.recurring_contract.document_name IS 'S01d. El cuadro o 
 --
 
 COMMENT ON COLUMN public.recurring_contract.document_uploaded_at IS 'S01e. Cuándo se subió el cuadro que tiene el contrato. Nulo en los de antes del S01e (la ficha usa created_at).';
+
+
+--
+-- Name: COLUMN recurring_contract.propose_from; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.propose_from IS 'S01p·14 · Alquiler: el primer mes que se apunta solo (antes, lo apuntado viene de otro sitio: en Foodint, de Diez hasta septiembre). Sin él, no se propone nada.';
+
+
+--
+-- Name: COLUMN recurring_contract.withholding_since; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.withholding_since IS 'S01p·15 · Alquiler: desde qué día lleva retención del 115 (antes, no la llevaba). Nulo = siempre.';
+
+
+--
+-- Name: COLUMN recurring_contract.withholding_exempt; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.recurring_contract.withholding_exempt IS 'S01p·15 · Alquiler exento de retención: solo con su certificado de Hacienda (exempt_document_*).';
+
+
+--
+-- Name: recurring_contract_month; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.recurring_contract_month (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    contract_id uuid NOT NULL,
+    month date NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT recurring_contract_month_month_check CHECK ((month = (date_trunc('month'::text, (month)::timestamp with time zone))::date))
+);
+
+
+--
+-- Name: TABLE recurring_contract_month; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.recurring_contract_month IS 'S01p·14 · Un mes de un contrato que se apunta solo (el alquiler del mes): el origen (source_id) de su asiento.';
 
 
 --
@@ -119794,6 +120012,22 @@ ALTER TABLE ONLY public.recipe_item_version
 
 ALTER TABLE ONLY public.recipe_line
     ADD CONSTRAINT recipe_line_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: recurring_contract_month recurring_contract_month_contract_id_month_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract_month
+    ADD CONSTRAINT recurring_contract_month_contract_id_month_key UNIQUE (contract_id, month);
+
+
+--
+-- Name: recurring_contract_month recurring_contract_month_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract_month
+    ADD CONSTRAINT recurring_contract_month_pkey PRIMARY KEY (id);
 
 
 --
@@ -136893,6 +137127,38 @@ ALTER TABLE ONLY public.recurring_contract
 
 
 --
+-- Name: recurring_contract recurring_contract_location_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract
+    ADD CONSTRAINT recurring_contract_location_id_fkey FOREIGN KEY (location_id) REFERENCES public.locations(id) ON DELETE SET NULL;
+
+
+--
+-- Name: recurring_contract_month recurring_contract_month_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract_month
+    ADD CONSTRAINT recurring_contract_month_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: recurring_contract_month recurring_contract_month_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract_month
+    ADD CONSTRAINT recurring_contract_month_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: recurring_contract_month recurring_contract_month_contract_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract_month
+    ADD CONSTRAINT recurring_contract_month_contract_id_fkey FOREIGN KEY (contract_id) REFERENCES public.recurring_contract(id) ON DELETE CASCADE;
+
+
+--
 -- Name: recurring_contract recurring_contract_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -136906,6 +137172,22 @@ ALTER TABLE ONLY public.recurring_contract
 
 ALTER TABLE ONLY public.recurring_contract
     ADD CONSTRAINT recurring_contract_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE SET NULL;
+
+
+--
+-- Name: recurring_contract recurring_contract_vat_rate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract
+    ADD CONSTRAINT recurring_contract_vat_rate_id_fkey FOREIGN KEY (vat_rate_id) REFERENCES public.tax_rate(id);
+
+
+--
+-- Name: recurring_contract recurring_contract_withholding_rate_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.recurring_contract
+    ADD CONSTRAINT recurring_contract_withholding_rate_id_fkey FOREIGN KEY (withholding_rate_id) REFERENCES public.withholding_rate(id);
 
 
 --
@@ -147406,6 +147688,19 @@ CREATE POLICY recipe_line_update ON public.recipe_line FOR UPDATE USING (public.
 ALTER TABLE public.recurring_contract ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: recurring_contract_month; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.recurring_contract_month ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: recurring_contract_month recurring_contract_month_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY recurring_contract_month_select ON public.recurring_contract_month FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: recurring_contract recurring_contract_select; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -150259,6 +150554,30 @@ GRANT ALL ON FUNCTION public._conta_abono_ligar() TO service_role;
 GRANT ALL ON FUNCTION public._conta_abono_validado() TO anon;
 GRANT ALL ON FUNCTION public._conta_abono_validado() TO authenticated;
 GRANT ALL ON FUNCTION public._conta_abono_validado() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_alquiler_del_mes(p_contract uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_alquiler_del_mes(p_contract uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_alquiler_del_mes(p_contract uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_alquiler_proponer(p_contract uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_alquiler_proponer(p_contract uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_alquiler_proponer(p_contract uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_alquileres_proponer_todas(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_alquileres_proponer_todas() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_alquileres_proponer_todas() TO service_role;
 
 
 --
@@ -171000,6 +171319,14 @@ GRANT ALL ON TABLE public.recipe_line TO service_role;
 GRANT ALL ON TABLE public.recurring_contract TO anon;
 GRANT ALL ON TABLE public.recurring_contract TO authenticated;
 GRANT ALL ON TABLE public.recurring_contract TO service_role;
+
+
+--
+-- Name: TABLE recurring_contract_month; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.recurring_contract_month TO authenticated;
+GRANT ALL ON TABLE public.recurring_contract_month TO service_role;
 
 
 --
