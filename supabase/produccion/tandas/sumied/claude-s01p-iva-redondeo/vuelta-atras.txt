@@ -1,0 +1,3 @@
+# S01p·16 · la vuelta atrás: conta_motivos_para_validar desde su respaldo y fuera _conta_iva_tolerancia.
+cuenta: scripts/conta/produccion/cuentas/s01p-iva-redondeo.sql
+supabase/vuelta-atras/20261105T1510_s01p_iva_redondeo.down.sql

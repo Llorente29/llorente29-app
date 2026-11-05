@@ -242,6 +242,12 @@
 .cxf-totales strong { color: var(--s-tinta); }
 .cxf-total { margin-left: auto; font-size: var(--s-t-m); }
 .cxf-contra { display: inline-flex; align-items: center; gap: var(--s-1); font-weight: var(--s-peso-medio); }
+/* S01p·16 · La cuota de la factura: la calculada al lado, pequeña y en gris; la nota de redondeo debajo, en gris, sin bloquear. */
+.cxf-cuota { display: flex; align-items: center; gap: var(--s-1); min-width: 0; }
+.cxf-cuota .s-control { flex: 1 1 auto; min-width: 0; }
+.cxf-calculada { color: var(--s-apoyo); font-size: var(--s-t-s); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cxf-cuota-nota { grid-column: 1 / -1; margin: 0; color: var(--s-apoyo); font-size: var(--s-t-s); }
+.cxf-contra-cuenta { color: var(--s-apoyo); font-weight: normal; }
 .cxf-contra[data-igual='si'] { color: var(--s-ok); }
 .cxf-contra[data-igual='no'], .cxf-contra[data-igual='redondeo'] { color: var(--s-duda); background: var(--s-duda-fondo); padding: 0 var(--s-2); border-radius: var(--s-radio-pildora); }
 .cxf-antes { display: flex; flex-direction: column; gap: var(--s-1); }

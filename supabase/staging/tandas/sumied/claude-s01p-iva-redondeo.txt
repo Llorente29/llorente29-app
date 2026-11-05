@@ -1,0 +1,6 @@
+# S01p·16 · El IVA redondeado línea a línea (1510: cambia conta_motivos_para_validar).
+# Su prueba (ROLLBACK, cuenta A): una como la de Uber (3 líneas, 40,69 frente a
+# 40,67) se VALIDA; 1 línea con 0,02 € y 3 líneas con 0,04 €, no; sin factura,
+# 0,02 € sí y 0,03 € no; la vuelta atrás.
+supabase/migrations/20261105T1510_s01p_iva_redondeo.sql
+supabase/staging/sql/20261105_s01p_iva_redondeo_prueba.sql

@@ -93,7 +93,7 @@ describe('base, IVA y total contra el PDF', () => {
     // Sin líneas de más decimales, el mismo céntimo es una diferencia de verdad.
     const sin = contraElPdf(totalesDe(borradorDe(ORANGE)), { base: 28.8843, iva: 6.0657, total: 34.95 })
     expect(sin.igual).toBe(false)
-    expect(sin.texto).toMatch(/^0,01\s€ más que el PDF \(34,95\s€\)$/)
+    expect(sin.texto).toMatch(/^No cuadra con el PDF: 0,01\s€ más \(el PDF dice 34,95\s€\)$/)
     // Dos céntimos ya no son redondeo.
     expect(contraElPdf(totalesDe(borradorDe(ORANGE)), { base: 28.8843, iva: 6.0657, total: 34.94 }, 'pdf', { masDecimales: true }).igual).toBe(false)
   })
@@ -103,7 +103,7 @@ describe('base, IVA y total contra el PDF', () => {
     expect(iva[0].cuota).toBe('5,20')
     const c = contraElPdf(totalesDe({ ...b, iva }), PDF_COHELDI)
     expect(c.igual).toBe(false)
-    expect(c.texto).toMatch(/^2,70\s€ más que el PDF/)
+    expect(c.texto).toMatch(/^No cuadra con el PDF: 2,70\s€ más/)
   })
   it('lo que no es un importe se dice', () => {
     const b = borradorDe(COHELDI)

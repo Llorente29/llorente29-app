@@ -230,6 +230,59 @@ export function otroTipo(iva: readonly LineaIva[], tipos: readonly number[] = [2
   return { base: '', tipo: t === undefined ? '' : String(t), cuota: '' }
 }
 
+// ── S01p·16 · Las celdas calculan, y el IVA redondeado línea a línea ─────────
+
+/**
+ * Lo que se acepta entre la cuota de un tipo y su base × tipo, en céntimos: 1
+ * por línea de la factura con ese tipo (Uber redondea cada línea y suma); 2 si
+ * no se sabe cuántas hay. La misma regla que la base (_conta_iva_tolerancia).
+ */
+export function toleranciaCuota(lineas: readonly { iva: number | null }[] | null | undefined, tipo: number): number {
+  const n = (lineas ?? []).filter((l) => l.iva !== null && Number(l.iva) === tipo).length
+  return n > 0 ? n : 2
+}
+
+/** La cuota escrita (la de la factura) frente a base × tipo. null si coinciden o no se puede calcular. */
+export interface CuotaDeLaFactura { calculada: number; diferencia: number; redondeo: boolean }
+export function cuotaDeLaFactura(l: LineaIva, toleranciaCent: number): CuotaDeLaFactura | null {
+  const base = leerImporteEs(l.base), cuota = leerImporteEs(l.cuota)
+  const tipo = l.tipo === '' ? null : Number(l.tipo)
+  if (base === null || cuota === null || tipo === null || !Number.isFinite(tipo)) return null
+  const calculada = cuotaIva(base, tipo)
+  const d = cent(cuota) - cent(calculada)
+  if (d === 0) return null
+  return { calculada, diferencia: deCent(d), redondeo: Math.abs(d) <= toleranciaCent }
+}
+
+/** «Redondeo de Uber: 0,02 €, se apunta lo que dice la factura». */
+export function textoRedondeo(proveedor: string | null | undefined, diferencia: number): string {
+  return `Redondeo de ${proveedor || 'la factura'}: ${eurosExactos(Math.abs(diferencia))}, se apunta lo que dice la factura`
+}
+
+/** Al cambiar la base (o el tipo de la retención), la retención con tipo se rehace sobre la base. */
+export function rehacerRetencion(r: Adicional | null, base: number): Adicional | null {
+  if (!r || r.tipo === '') return r
+  const t = Number(r.tipo)
+  return Number.isFinite(t) ? { ...r, importe: importeEs(cuotaIva(base, t)) } : r
+}
+
+/**
+ * Cambio el total: la base hacia atrás, total ÷ (1 + tipo − retención), y de
+ * ella la cuota y la retención. Solo con un tipo de IVA y sin recargo; si no,
+ * null (con varios tipos no se sabe cómo repartirlo).
+ */
+export function desdeElTotal(b: { iva: readonly LineaIva[]; retencion: Adicional | null; recargo: Adicional | null }, total: number): { iva: LineaIva[]; retencion: Adicional | null } | null {
+  if (b.iva.length !== 1 || b.recargo) return null
+  const tipo = b.iva[0].tipo === '' ? null : Number(b.iva[0].tipo)
+  if (tipo === null || !Number.isFinite(tipo)) return null
+  const ret = b.retencion && b.retencion.tipo !== '' && Number.isFinite(Number(b.retencion.tipo)) ? Number(b.retencion.tipo) : 0
+  const base = deCent(Math.round(cent(total) / (1 + tipo / 100 - ret / 100)))
+  return {
+    iva: [{ ...b.iva[0], base: importeEs(base), cuota: importeEs(cuotaIva(base, tipo)) }],
+    retencion: rehacerRetencion(b.retencion, base),
+  }
+}
+
 // ── Los totales y el PDF ─────────────────────────────────────────────────────
 
 export interface Totales {
@@ -278,7 +331,7 @@ export function contraElPdf(t: Totales, pdf: ImportesDelPdf, fuente: 'pdf' | 'fa
   // asiento, sale un céntimo arriba o abajo: es redondeo, se dice en ámbar pero no es «Revisa esto».
   if (Math.abs(d) === 1 && o.masDecimales) return { igual: true, redondeo: true, texto: `1 céntimo de redondeo: sus líneas traen más de dos decimales (${quien} dice ${eurosExactos(pdf.total)})` }
   const cuanto = eurosExactos(deCent(Math.abs(d)))
-  return { igual: false, texto: `${d > 0 ? `${cuanto} más` : `${cuanto} menos`} que ${quien} (${eurosExactos(pdf.total)})` }
+  return { igual: false, texto: `No cuadra con ${quien}: ${d > 0 ? `${cuanto} más` : `${cuanto} menos`} (${quien} dice ${eurosExactos(pdf.total)})` }
 }
 
 /** ¿Alguna línea trae más de dos decimales? (la Orange: 21,4463). */

@@ -70,7 +70,7 @@ import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useAnalitica, useMarco } from '@/modules/conta/marco/nuevo/contexto'
 import { PorNivel } from '@/modules/conta/textos/PorNivel'
 import { useTexto } from '@/modules/conta/textos/useTexto'
-import { comprobacionesSinContradecir, textoSinPapel } from '@/modules/conta/documentos/RevisarFacturaPage.textos'
+import { comprobacionesConRedondeo, comprobacionesSinContradecir, textoSinPapel } from '@/modules/conta/documentos/RevisarFacturaPage.textos'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
 import type { GrupoDeAcciones } from '@/modules/conta/marco/acciones'
 import { Boton, Tecla } from '@/modules/conta/diseno'
@@ -472,8 +472,9 @@ export default function RevisarFacturaPage() {
   const sinProveedor = !prov
   const lectura = fac.lectura
   const nifDeLaFactura = lectura?.factura?.proveedor?.nif ?? fac.propuesto?.nif ?? null
-  const comprobaciones: Comprobacion[] = comprobacionesSinContradecir(lectura?.comprobaciones ?? [], !!(prov?.nif || nifDeLaFactura))
-    .map((c) => ({ ...c, grave: (lectura?.comprobaciones ?? []).find((x) => x.id === c.id)?.grave }))
+  // S01p·16 · La cuota con céntimos de redondeo (0,01 € por línea con ese tipo) no es «Revisa esto»: lo dice en gris.
+  const comprobaciones: Comprobacion[] = comprobacionesConRedondeo(comprobacionesSinContradecir(lectura?.comprobaciones ?? [], !!(prov?.nif || nifDeLaFactura)), original.iva, fac.lineas, prov?.nombre ?? null)
+    .map((c) => ({ ...c, grave: c.redondeo ? false : (lectura?.comprobaciones ?? []).find((x) => x.id === c.id)?.grave }))
   const vence = vencimientoAEnsenar(fac.vence, fac.fecha, plazo.datos ?? null)
   const pagada = extra.datos?.pagada ? { fecha: extra.datos.pagada } : null
   const leidaDeFichero = !!(lectura || fac.leido_en_recepcion || ficha?.lectura)
@@ -649,6 +650,7 @@ export default function RevisarFacturaPage() {
       {abono && !descartada && <BloqueAbono a={loQueAnula} total={totales.total} base={totales.base} cuota={totales.iva} fechaAsiento={fac.fecha} />}
       <BloqueImportesIva iva={b.iva} retencion={b.retencion} recargo={b.recargo} tipos={tiposIva.datos ?? [21, 10, 4, 0]} totales={totales} pdf={pdf}
         fuente={leidaDeFichero ? 'pdf' : 'factura'} soloLectura={soloLectura} masDecimales={masDecimales} abono={abono}
+        lineasFactura={fac.lineas} proveedor={prov?.nombre ?? null}
         alCambiar={(c) => { for (const [k, x] of Object.entries(c)) ed.poner(k as 'iva', x as BorradorFicha['iva']) }}
         cambioDe={ed.cambioDe} deshacer={ed.deshacer} />
       {mImportes.tono === 'revisar' && <p className="cxf-error" role="status">{mImportes.motivo}</p>}
