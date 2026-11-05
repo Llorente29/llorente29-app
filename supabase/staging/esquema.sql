@@ -14747,7 +14747,7 @@ CREATE FUNCTION public._s01p_nomina_proponer(p_company uuid, p_fecha date, p_loc
 declare
   v_acc uuid; v_y uuid; v_e uuid; v_bruto numeric := (p_cifras->>'bruto')::numeric; v_sst numeric := (p_cifras->>'ss_trabajador')::numeric;
   v_irpf numeric := (p_cifras->>'irpf')::numeric; v_liq numeric := (p_cifras->>'liquido')::numeric; v_sse numeric := (p_cifras->>'ss_empresa')::numeric;
-  l record; v_pos int := 0; v_cta uuid; v_n int;
+  l record; v_pos int := 0; v_cta uuid; v_n int; v_base_irpf numeric := (p_cifras->>'base_irpf')::numeric; v_trabajo uuid;
 begin
   select account_id into v_acc from public.company where id = p_company;
   if v_acc is null then raise exception 'S01p nómina: esa empresa no está.'; end if;
@@ -14760,6 +14760,11 @@ begin
    where e.company_id = p_company and e.status <> 'anulado' and date_trunc('month', e.entry_date) = date_trunc('month', p_fecha)
      and exists (select 1 from public.journal_line jl join public.company_account a on a.id = jl.company_account_id where jl.entry_id = e.id and a.code like (p_cuentas->>'sueldos') || '%');
   if v_n > 0 then raise exception 'S01p nómina: ya hay % asiento(s) con sueldos en ese mes: no se propone otro.', v_n; end if;
+  -- S01p·12: la retención de la 4751 lleva su tipo (rendimientos del trabajo), su base (la base de
+  -- IRPF de las nóminas, tal como sale en cada una) y su modelo (111), como las nóminas de Casa Lola.
+  if v_irpf <> 0 and v_base_irpf is null then raise exception 'S01p nómina: falta la base de IRPF de las nóminas: no se propone nada.'; end if;
+  select id into v_trabajo from public.withholding_rate where code = 'trabajo' and is_system and valid_to is null;
+  if v_irpf <> 0 and v_trabajo is null then raise exception 'S01p nómina: no está el tipo de retención de rendimientos del trabajo.'; end if;
   select id into v_y from public.fiscal_year where company_id = p_company and p_fecha between starts_on and ends_on;
   if v_y is null then raise exception 'S01p nómina: no hay ejercicio para el %.', p_fecha; end if;
 
@@ -14775,8 +14780,12 @@ begin
     select id into v_cta from public.company_account where company_id = p_company and code = l.cuenta;
     if v_cta is null then raise exception 'S01p nómina: la cuenta % no está en el plan de la empresa.', l.cuenta; end if;
     v_pos := v_pos + 1;
-    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, is_common)
-    values (v_acc, p_company, v_e, v_pos, v_cta, l.debe, l.haber, case when l.en_local then p_local end, not l.en_local);
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, location_id, is_common,
+                                     withholding_rate_id, withholding_base, withholding_model)
+    values (v_acc, p_company, v_e, v_pos, v_cta, l.debe, l.haber, case when l.en_local then p_local end, not l.en_local,
+            case when l.cuenta = p_cuentas->>'irpf' then v_trabajo end,
+            case when l.cuenta = p_cuentas->>'irpf' then v_base_irpf end,
+            case when l.cuenta = p_cuentas->>'irpf' then '111' end);
   end loop;
   return v_e;
 end $$;
@@ -14787,6 +14796,30 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text) IS 'S01p. Propone (no valida) el asiento del devengo de las nóminas de un mes desde sus totales, sin tocar Laboral ni el portal del empleado; para si no cuadra o si el mes ya tiene sueldos. Solo una tanda.';
+
+
+--
+-- Name: _s01p_nomina_retencion_poner(uuid, text, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._s01p_nomina_retencion_poner(p_entry uuid, p_cuenta text, p_base numeric) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_trabajo uuid; v_n int;
+begin
+  select id into v_trabajo from public.withholding_rate where code = 'trabajo' and is_system and valid_to is null;
+  if v_trabajo is null then raise exception 'S01p nómina: no está el tipo de retención de rendimientos del trabajo.'; end if;
+  if not exists (select 1 from public.journal_entry where id = p_entry and status = 'propuesto' and source_type = 'payroll' and series = 9) then
+    raise exception 'S01p nómina: ese asiento no es una nómina propuesta: no se toca.';
+  end if;
+  select count(*) into v_n from public.journal_line jl join public.company_account a on a.id = jl.company_account_id
+   where jl.entry_id = p_entry and a.code = p_cuenta and jl.credit > 0 and jl.withholding_rate_id is null and jl.withholding_base is null and jl.withholding_model is null;
+  if v_n <> 1 then raise exception 'S01p nómina: tenía que haber una línea de la % sin retención y hay %: no se toca.', p_cuenta, v_n; end if;
+  update public.journal_line jl set withholding_rate_id = v_trabajo, withholding_base = p_base, withholding_model = '111'
+    from public.company_account a
+   where a.id = jl.company_account_id and jl.entry_id = p_entry and a.code = p_cuenta and jl.credit > 0 and jl.withholding_rate_id is null;
+end $$;
 
 
 --
@@ -152346,6 +152379,13 @@ GRANT ALL ON FUNCTION public._s01p_iva_presentado_el(p_company uuid, p_fecha dat
 --
 
 REVOKE ALL ON FUNCTION public._s01p_nomina_proponer(p_company uuid, p_fecha date, p_local uuid, p_cifras jsonb, p_cuentas jsonb, p_concepto text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _s01p_nomina_retencion_poner(p_entry uuid, p_cuenta text, p_base numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._s01p_nomina_retencion_poner(p_entry uuid, p_cuenta text, p_base numeric) FROM PUBLIC;
 
 
 --
