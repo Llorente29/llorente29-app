@@ -3401,6 +3401,54 @@ $$;
 
 
 --
+-- Name: _conta_asiento_lleva_iva(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_asiento_lleva_iva(p_entry uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e record; v_l record;
+begin
+  select e.company_id, e.source_type, e.source_id into v_e from public.journal_entry e where e.id = p_entry;
+  if not found or public._conta_iva_exento(v_e.source_type, v_e.source_id, v_e.company_id) then return null; end if;
+  if v_e.source_type = 'supplier_invoice' then return 'viene de una factura recibida'; end if;
+  if v_e.source_type = 'customer_invoice' then return 'viene de una factura emitida'; end if;
+  if v_e.source_type in ('sales_day', 'sales_adjustment') then return 'son ventas, con su IVA repercutido'; end if;
+  select l.position, a.code into v_l
+    from public.journal_line l left join public.company_account a on a.id = l.company_account_id
+   where l.entry_id = p_entry
+     and (l.vat_book is not null or l.tax_rate_id is not null or l.tax_base is not null
+          or a.code like '472%' or a.code like '477%')
+   order by l.position, l.id limit 1;
+  if v_l.position is null and v_l.code is null then return null; end if;
+  return format('línea %s, %s', coalesce(v_l.position::text, '?'), coalesce(v_l.code, 'sin cuenta'));
+end $$;
+
+
+--
+-- Name: _conta_asiento_lleva_retencion(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_asiento_lleva_retencion(p_entry uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e record; v_l record;
+begin
+  select e.company_id, e.source_type, e.source_id into v_e from public.journal_entry e where e.id = p_entry;
+  if not found or public._conta_iva_exento(v_e.source_type, v_e.source_id, v_e.company_id) then return null; end if;
+  select l.position, a.code into v_l
+    from public.journal_line l left join public.company_account a on a.id = l.company_account_id
+   where l.entry_id = p_entry
+     and public._conta_linea_retencion(l.company_account_id, l.withholding_rate_id, l.withholding_base, l.withholding_model)
+   order by l.position, l.id limit 1;
+  if v_l.position is null and v_l.code is null then return null; end if;
+  return format('línea %s, %s', coalesce(v_l.position::text, '?'), coalesce(v_l.code, 'sin cuenta'));
+end $$;
+
+
+--
 -- Name: _conta_asientos_borrado_deshacer(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4957,6 +5005,19 @@ end $$;
 
 
 --
+-- Name: _conta_linea_retencion(uuid, uuid, numeric, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_linea_retencion(p_account uuid, p_rate uuid, p_base numeric, p_model text) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select p_rate is not null or p_base is not null or p_model is not null
+      or exists (select 1 from public.company_account a where a.id = p_account and a.code like '4751%')
+$$;
+
+
+--
 -- Name: channel_settlement; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -5506,6 +5567,18 @@ $$;
 
 
 --
+-- Name: _conta_origen_con_iva(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_origen_con_iva(p_tipo text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(p_tipo in ('supplier_invoice', 'customer_invoice', 'sales_day', 'sales_adjustment'), false)
+$$;
+
+
+--
 -- Name: _conta_pago_aprobado_hoy(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5804,6 +5877,49 @@ CREATE FUNCTION public._conta_pago_topes(p_company uuid) RETURNS TABLE(tope_pago
   select coalesce((select a.tope_pago from public.conta_pago_ajustes a where a.company_id = p_company), 3000)::numeric,
          coalesce((select a.tope_dia from public.conta_pago_ajustes a where a.company_id = p_company), 10000)::numeric
 $$;
+
+
+--
+-- Name: _conta_periodo_admite(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_periodo_admite(p_entry uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e public.journal_entry; v_y public.fiscal_year; v_traido boolean; v_mes boolean; v_iva jsonb; v_ret jsonb; v_t text;
+begin
+  select * into v_e from public.journal_entry where id = p_entry;
+  if v_e.id is null or v_e.source_type in ('migrated', 'opening', 'closing') then return null; end if;
+  if auth.uid() is not null and not public.belongs_to_account(v_e.account_id) then return null; end if;
+  select * into v_y from public.fiscal_year where id = v_e.fiscal_year_id;
+  v_traido := v_y.imported_until is not null and v_e.entry_date <= v_y.imported_until;
+  v_mes := public.conta_mes_cerrado(v_e.company_id, v_e.entry_date);
+  v_iva := public.conta_iva_presentado(v_e.company_id, v_e.entry_date);
+  if v_traido or v_mes or v_iva is not null then
+    v_t := public._conta_asiento_lleva_iva(v_e.id);
+    if v_t is not null then
+      if v_iva is not null then
+        return format('No se puede: el IVA %s ya está presentado y este asiento lleva IVA (%s).',
+                      public.conta_iva_periodo_frase('de', v_iva->>'periodo', (v_iva->>'ejercicio')::int), v_t);
+      end if;
+      return format('No se puede: el mes de %s está cerrado%s y este asiento lleva IVA (%s).',
+                    to_char(v_e.entry_date, 'MM/YYYY'),
+                    case when v_traido then format(' (hasta el %s lo lleva %s)', to_char(v_y.imported_until, 'DD/MM/YYYY'),
+                                                   case when lower(v_y.origin_program) = 'diez' then 'Diez' else coalesce(v_y.origin_program, 'la contabilidad de antes') end)
+                         else '' end, v_t);
+    end if;
+  end if;
+  v_ret := public._conta_retenciones_presentado(v_e.company_id, v_e.entry_date);
+  if v_ret is not null then
+    v_t := public._conta_asiento_lleva_retencion(v_e.id);
+    if v_t is not null then
+      return format('No se puede: el %s %s ya está presentado y este asiento lleva retención (%s).',
+                    v_ret->>'modelo', public.conta_iva_periodo_frase('de', v_ret->>'periodo', (v_ret->>'ejercicio')::int), v_t);
+    end if;
+  end if;
+  return null;
+end $$;
 
 
 --
@@ -7081,6 +7197,54 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._conta_remesa_casar_nucleo(p_movement uuid, p_remesa uuid, p_lineas uuid[], p_por text) IS 'B01 · El núcleo de conta_remesa_casar, sin guarda: solo desde dentro de la base. La guarda la pone conta_remesa_casar (persona) o conta_pago_casar_banco (clave de servicio).';
+
+
+--
+-- Name: _conta_retencion_candado_apunte(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_retencion_candado_apunte() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e record; v_p jsonb; v_cod text;
+begin
+  if not public._conta_linea_retencion(new.company_account_id, new.withholding_rate_id, new.withholding_base, new.withholding_model)
+     and not (tg_op = 'UPDATE' and public._conta_linea_retencion(old.company_account_id, old.withholding_rate_id, old.withholding_base, old.withholding_model)) then
+    return new;
+  end if;
+  select e.company_id, e.entry_date, e.source_type, e.source_id into v_e from public.journal_entry e where e.id = new.entry_id;
+  if not found or public._conta_iva_exento(v_e.source_type, v_e.source_id, v_e.company_id) then return new; end if;
+  v_p := public._conta_retenciones_presentado(v_e.company_id, v_e.entry_date);
+  if v_p is null then return new; end if;
+  select a.code into v_cod from public.company_account a where a.id = new.company_account_id;
+  raise exception '%', format('No se puede: el %s %s ya está presentado y este apunte lleva retención (línea %s, %s).',
+                              v_p->>'modelo', public.conta_iva_periodo_frase('de', v_p->>'periodo', (v_p->>'ejercicio')::int),
+                              coalesce(new.position::text, '?'), coalesce(v_cod, 'sin cuenta'))
+    using errcode = '23514', hint = 'retenciones_presentadas';
+end $$;
+
+
+--
+-- Name: _conta_retenciones_presentado(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_retenciones_presentado(p_company uuid, p_fecha date) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+  select jsonb_build_object('id', r.id, 'modelo', r.form_code, 'ejercicio', r.fiscal_year, 'periodo', r.period,
+                            'desde', f.desde, 'hasta', f.hasta)
+    from public.tax_return r
+   cross join lateral public.conta_impuesto_periodo_fechas(r.fiscal_year, r.period) f
+   where p_fecha is not null and r.company_id = p_company and r.form_code in ('111', '115')
+     and r.fiscal_year = extract(year from p_fecha)::int
+     and r.period ~ '^([1-4]T|0[1-9]|1[0-2])$'
+     and r.status in ('filed', 'booked', 'paid', 'offset', 'refunded')
+     and p_fecha between f.desde and f.hasta
+   order by r.form_code, r.sequence desc, r.filed_at desc nulls last
+   limit 1
+$_$;
 
 
 --
@@ -16289,33 +16453,67 @@ CREATE FUNCTION public._tg_s01p_mes_cambio() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_l public.fiscal_period_lock; v_imp numeric; v_que text; v_mes date;
+declare v_l public.fiscal_period_lock; v_imp numeric; v_que text; v_mes date; v_dia date; v_motivo text; v_y public.fiscal_year;
 begin
-  for v_que, v_mes in
-    select x.que, x.mes from (values
+  for v_que, v_mes, v_dia in
+    select x.que, date_trunc('month', x.dia)::date, x.dia from (values
       -- Validado o anulado en un mes cerrado.
       (case when tg_op = 'INSERT' and new.status = 'validado' then 'validado'
             when tg_op = 'UPDATE' and new.status = 'validado' and old.status is distinct from 'validado' then 'validado'
             when tg_op = 'UPDATE' and new.status = 'anulado' and old.status = 'validado' then 'anulado' end,
-       date_trunc('month', new.entry_date)::date),
+       new.entry_date),
       -- Un validado que cambia de fecha: entra en un mes cerrado o sale de él.
       (case when tg_op = 'UPDATE' and new.status = 'validado' and old.status = 'validado'
                  and date_trunc('month', new.entry_date) <> date_trunc('month', old.entry_date) then 'entra' end,
-       date_trunc('month', new.entry_date)::date),
+       new.entry_date),
       (case when tg_op = 'UPDATE' and new.status = 'validado' and old.status = 'validado'
                  and date_trunc('month', new.entry_date) <> date_trunc('month', old.entry_date) then 'sale' end,
-       date_trunc('month', old.entry_date)::date)) x(que, mes)
+       old.entry_date)) x(que, dia)
      where x.que is not null
   loop
+    v_l := null; v_motivo := null;
     select * into v_l from public.fiscal_period_lock
-     where company_id = new.company_id and month = v_mes and reopened_at is null and kind = 'manual';
-    continue when v_l.id is null;
+     where company_id = new.company_id and month = v_mes and reopened_at is null
+     order by (kind = 'manual') desc, locked_at desc nulls last limit 1;
+    if v_l.id is not null and v_l.kind = 'manual' then
+      v_motivo := 'manual';
+    elsif new.source_type in ('migrated', 'opening', 'closing') then
+      continue;   -- S01p·13: lo traído y los de apertura y cierre no son «apuntado tarde».
+    elsif v_l.id is not null then
+      v_motivo := v_l.kind;
+    else
+      select * into v_y from public.fiscal_year where company_id = new.company_id and v_dia between starts_on and ends_on;
+      if v_y.imported_until is not null and v_dia <= v_y.imported_until then v_motivo := 'traido';
+      elsif public.conta_iva_presentado(new.company_id, v_dia) is not null then v_motivo := 'iva_presentado';
+      end if;
+    end if;
+    continue when v_motivo is null;
     select coalesce(sum(l.debit), 0) into v_imp from public.journal_line l where l.entry_id = new.id;
-    insert into public.conta_mes_cambio (account_id, company_id, lock_id, month, entry_id, que, importe, concepto, hecho_por, hecho_por_nombre)
+    insert into public.conta_mes_cambio (account_id, company_id, lock_id, month, entry_id, que, importe, concepto, hecho_por, hecho_por_nombre, motivo)
     values (new.account_id, new.company_id, v_l.id, v_mes, new.id, v_que, v_imp, left(new.concept, 200), auth.uid(),
-            coalesce(new.validated_by_name, public.conta_nombre_actor()));
+            coalesce(new.validated_by_name, public.conta_nombre_actor()), v_motivo);
   end loop;
   return null;
+end $$;
+
+
+--
+-- Name: _tg_s01p_traido_no_se_anula(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_s01p_traido_no_se_anula() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  -- Solo anular: cambiar o borrar uno validado ya lo para journal_entry_inalterable, y la
+  -- importación de Diez tiene que poder dejarlos validados.
+  if old.source_type = 'migrated' and old.status = 'validado' and new.status = 'anulado' then
+    raise exception 'Este asiento es traído de %: no se anula ni se cambia en Sumied. Se corrige allí.',
+                    case when lower(coalesce(old.external_program, 'diez')) = 'diez' then 'Diez' else old.external_program end
+      using errcode = '42501';
+  end if;
+  return new;
 end $$;
 
 
@@ -16333,6 +16531,11 @@ begin
   if public._conta_iva_exento(new.source_type, new.source_id, new.company_id) then return new; end if;
   v_p := public.conta_iva_presentado(new.company_id, new.entry_date);
   if v_p is null then return new; end if;
+  -- S01p·13: lo que no lleva IVA entra (queda marcado en conta_mes_cambio).
+  if not public._conta_origen_con_iva(new.source_type)
+     and not (tg_op = 'UPDATE' and public._conta_asiento_lleva_iva(new.id) is not null) then
+    return new;
+  end if;
   raise exception '%', public.conta_iva_presentado_mensaje(new.company_id, v_p,
                          case when new.source_type = 'supplier_invoice' then 'factura' else 'corregir' end)
     using errcode = '23514', hint = 'iva_presentado';
@@ -43114,17 +43317,12 @@ begin
       motivo := format('Primero hay que traer el histórico de %s de %s.',
         case lower(v_y.origin_program) when 'diez' then 'Diez' else v_y.origin_program end, v_y.code); return next;
     end if;
-    if v_y.imported_until is not null and v_e.entry_date <= v_y.imported_until then
-      orden := 6; codigo := 'traido';
-      motivo := format('Hasta el %s el ejercicio %s es traído de %s: la fecha abierta más cercana es el %s.',
-        to_char(v_y.imported_until, 'DD/MM/YYYY'), v_y.code, v_y.origin_program,
-        to_char(public.conta_primer_dia_abierto(v_e.company_id, v_y.imported_until + 1), 'DD/MM/YYYY')); return next;
-    end if;
-    if public.conta_mes_cerrado(v_e.company_id, v_e.entry_date) then
-      orden := 7; codigo := 'mes_cerrado';
-      motivo := format('El mes de %s está cerrado: la fecha abierta más cercana es el %s.',
-        to_char(v_e.entry_date, 'MM/YYYY'),
-        coalesce(to_char(public.conta_primer_dia_abierto(v_e.company_id, v_e.entry_date), 'DD/MM/YYYY'), 'ninguna')); return next;
+    -- S01p·13: un periodo cerrado (el corte con Diez, un mes cerrado por un
+    -- impuesto, un trimestre con el 303 presentado) admite lo que no lleva IVA
+    -- ni retención presentada. El porqué, en _conta_periodo_admite.
+    motivo := public._conta_periodo_admite(v_e.id);
+    if motivo is not null then
+      orden := 6; codigo := 'periodo_cerrado'; return next;
     end if;
 
     -- C05 (respuesta 3), copiado de la vigente: un asiento de cierre o de
@@ -49597,8 +49795,13 @@ CREATE FUNCTION public.conta_traspaso_lista(p_company uuid, p_mes date) RETURNS 
               else 'manuales' end
     from public.journal_entry e
    where e.company_id = p_company
-     and e.entry_date >= date_trunc('month', p_mes)::date
-     and e.entry_date < (date_trunc('month', p_mes) + interval '1 month')::date
+     and ((e.entry_date >= date_trunc('month', p_mes)::date
+           and e.entry_date < (date_trunc('month', p_mes) + interval '1 month')::date)
+          -- S01p·13: lo apuntado tarde en un mes ya cerrado.
+          or (e.entry_date < date_trunc('month', p_mes)::date
+              and exists (select 1 from public.conta_mes_cambio c
+                           where c.company_id = e.company_id and c.entry_id = e.id and c.que in ('validado', 'entra')
+                             and c.hecho_at < (date_trunc('month', p_mes) + interval '2 months'))))
      and public._conta_traspaso_va(e.id)
    order by 2
 $$;
@@ -89616,6 +89819,14 @@ begin
   if tg_op = 'UPDATE' and new.entry_date is not distinct from old.entry_date then return new; end if;
   v_corte := public._conta_corte(new.company_id);
   if v_corte is null or new.entry_date >= v_corte then return new; end if;
+  -- S01p·13: lo que apunta una persona (un asiento a mano, un pago, una nómina)
+  -- entra con su fecha real si no lleva IVA; queda marcado y va a Diez en el
+  -- siguiente traspaso. Lo automático (banco, ventas, liquidaciones, facturas)
+  -- sigue parado: ese periodo ya lo tiene Diez y se duplicaría.
+  if new.source_type in ('manual', 'supplier_payment', 'customer_payment', 'payroll')
+     and not (tg_op = 'UPDATE' and public._conta_asiento_lleva_iva(new.id) is not null) then
+    return new;
+  end if;
   raise exception using errcode = '23514', message = format('No se apunta: el día %s es de antes del corte (%s). Ese periodo lo lleva %s.',
     to_char(new.entry_date, 'DD/MM/YYYY'), to_char(v_corte, 'DD/MM/YYYY'),
     case when exists (select 1 from public.fiscal_year y where y.company_id = new.company_id and y.origin_program = 'diez') then 'Diez' else 'la contabilidad de antes' end);
@@ -101367,7 +101578,7 @@ CREATE TABLE public.conta_mes_cambio (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     account_id uuid NOT NULL,
     company_id uuid NOT NULL,
-    lock_id uuid NOT NULL,
+    lock_id uuid,
     month date NOT NULL,
     entry_id uuid NOT NULL,
     que text NOT NULL,
@@ -101376,6 +101587,7 @@ CREATE TABLE public.conta_mes_cambio (
     hecho_por uuid,
     hecho_por_nombre text,
     hecho_at timestamp with time zone DEFAULT now() NOT NULL,
+    motivo text,
     CONSTRAINT conta_mes_cambio_que_check CHECK ((que = ANY (ARRAY['validado'::text, 'anulado'::text, 'entra'::text, 'sale'::text])))
 );
 
@@ -101385,6 +101597,13 @@ CREATE TABLE public.conta_mes_cambio (
 --
 
 COMMENT ON TABLE public.conta_mes_cambio IS 'S01p · Lo que se apuntó en un mes ya cerrado por una persona: qué asiento, qué le pasó (validado, anulado, entra o sale por cambio de fecha), cuánto, quién y cuándo.';
+
+
+--
+-- Name: COLUMN conta_mes_cambio.motivo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_mes_cambio.motivo IS 'S01p·13 · Por qué estaba cerrado: el tipo de candado del mes (manual, migrated, tax_filed), o sin candado: traido (antes de imported_until) o iva_presentado (trimestre con el 303 presentado).';
 
 
 --
@@ -127885,6 +128104,13 @@ CREATE TRIGGER trg_journal_entry_0_iva_presentado BEFORE UPDATE ON public.journa
 
 
 --
+-- Name: journal_entry trg_journal_entry_0_traido_no_se_anula; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_0_traido_no_se_anula BEFORE UPDATE OF status ON public.journal_entry FOR EACH ROW EXECUTE FUNCTION public._tg_s01p_traido_no_se_anula();
+
+
+--
 -- Name: journal_entry trg_journal_entry_0_trimestre_presentado; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -127966,6 +128192,13 @@ CREATE CONSTRAINT TRIGGER trg_journal_entry_valida_con_pdf AFTER UPDATE OF statu
 --
 
 CREATE TRIGGER trg_journal_line_0_iva_presentado BEFORE INSERT OR UPDATE ON public.journal_line FOR EACH ROW EXECUTE FUNCTION public._conta_iva_candado_apunte();
+
+
+--
+-- Name: journal_line trg_journal_line_0_retencion_presentada; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_line_0_retencion_presentada BEFORE INSERT OR UPDATE ON public.journal_line FOR EACH ROW EXECUTE FUNCTION public._conta_retencion_candado_apunte();
 
 
 --
@@ -150037,6 +150270,24 @@ GRANT ALL ON FUNCTION public._conta_aprendizaje(p_company uuid, p_clave text, p_
 
 
 --
+-- Name: FUNCTION _conta_asiento_lleva_iva(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_asiento_lleva_iva(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_asiento_lleva_iva(p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_asiento_lleva_iva(p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_asiento_lleva_retencion(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_asiento_lleva_retencion(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_asiento_lleva_retencion(p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_asiento_lleva_retencion(p_entry uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_asientos_borrado_deshacer(p_lote uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -150393,6 +150644,14 @@ GRANT ALL ON FUNCTION public._conta_iva_reapertura_cerrar() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_linea_retencion(p_account uuid, p_rate uuid, p_base numeric, p_model text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_linea_retencion(p_account uuid, p_rate uuid, p_base numeric, p_model text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_linea_retencion(p_account uuid, p_rate uuid, p_base numeric, p_model text) TO service_role;
+
+
+--
 -- Name: TABLE channel_settlement; Type: ACL; Schema: public; Owner: -
 --
 
@@ -150489,6 +150748,15 @@ GRANT ALL ON FUNCTION public._conta_nif_clave(p text) TO service_role;
 
 REVOKE ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_no_propuesta(p_company uuid, p_origen text, p_origen_id text, p_que text, p_porque text, p_donde text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_origen_con_iva(p_tipo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_origen_con_iva(p_tipo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_origen_con_iva(p_tipo text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_origen_con_iva(p_tipo text) TO service_role;
 
 
 --
@@ -150611,6 +150879,15 @@ GRANT ALL ON FUNCTION public._conta_pago_segunda_dar(p_lote uuid, p_user uuid, p
 
 REVOKE ALL ON FUNCTION public._conta_pago_topes(p_company uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_pago_topes(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_periodo_admite(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_periodo_admite(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_periodo_admite(p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_periodo_admite(p_entry uuid) TO service_role;
 
 
 --
@@ -150748,6 +151025,22 @@ GRANT ALL ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, 
 --
 
 REVOKE ALL ON FUNCTION public._conta_remesa_casar_nucleo(p_movement uuid, p_remesa uuid, p_lineas uuid[], p_por text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _conta_retencion_candado_apunte(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_retencion_candado_apunte() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_retencion_candado_apunte() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_retenciones_presentado(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_retenciones_presentado(p_company uuid, p_fecha date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_retenciones_presentado(p_company uuid, p_fecha date) TO service_role;
 
 
 --
@@ -152590,6 +152883,14 @@ GRANT ALL ON FUNCTION public._tg_s01p_factura_su_asiento() TO service_role;
 
 REVOKE ALL ON FUNCTION public._tg_s01p_mes_cambio() FROM PUBLIC;
 GRANT ALL ON FUNCTION public._tg_s01p_mes_cambio() TO service_role;
+
+
+--
+-- Name: FUNCTION _tg_s01p_traido_no_se_anula(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_s01p_traido_no_se_anula() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._tg_s01p_traido_no_se_anula() TO service_role;
 
 
 --
