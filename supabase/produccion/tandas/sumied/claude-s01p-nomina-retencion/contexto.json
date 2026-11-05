@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·12 · la retención de la nómina de octubre · contexto de producción, medido en SOLO LECTURA el 05/11 a las 23:43Z: la 0045 cambia _s01p_nomina_proponer (existe, misma firma, con respaldo), añade _s01p_nomina_retencion_poner (no existe) y corrige una línea de journal_line (la 4751 del asiento propuesto de la nómina de octubre de Foodint, que hoy solo tiene ese motivo para no validarse). Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T23:43Z",
+ "tanda": {
+  "supabase/migrations/20261105T0045_s01p_nomina_retencion.sql": "ae6eb2ab5bfab2100d7fa5a59db75d4c"
+ },
+ "contexto": {"tablas": ["public.journal_line"], "funciones": ["public._s01p_nomina_proponer(uuid,date,uuid,jsonb,jsonb,text)"], "filas": {"public.journal_line": 38804}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
