@@ -1,0 +1,6 @@
+# DL1 · Uber con los saldos limpios (1702: añade una función y, en Foodint,
+# propone diez asientos). Su prueba (ROLLBACK, cuenta A): propone y cuadra, con
+# y sin IVA, validado mueve la 430, no duplica, no propone lo que no cuadra, y
+# la vuelta atrás.
+supabase/migrations/20261105T1702_dl1_uber_saldos.sql
+supabase/staging/sql/20261105_dl1_uber_saldos_prueba.sql

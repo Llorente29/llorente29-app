@@ -1,0 +1,14 @@
+# DL1 · Uber con los saldos limpios a 31/10 (Julio, DL1·7 a DL1·10). Rama
+# claude/dl1-uber-saldos. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1702  Añade _dl1_asiento_proponer y propone (no valida) diez asientos en
+#         Foodint: la apertura de Uber (01/01, contra la 113), las promociones
+#         de enero a junio (fin de cada mes, 70009001 y 63400000, sin IVA), lo
+#         que paga Uber en octubre (31/10, 70009001 y 477 al 10 %) y las
+#         facturas de Uber de octubre compensadas (31/10 y 05/11). Cada uno
+#         pasa las reglas de validar antes de seguir.
+#
+# Nada en el camino del pedido. El real lo lanza Julio, que valida los asientos.
+cuenta: scripts/conta/produccion/cuentas/dl1-uber.sql
+supabase/migrations/20261105T1702_dl1_uber_saldos.sql

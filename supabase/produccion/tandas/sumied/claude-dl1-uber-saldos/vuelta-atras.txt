@@ -1,0 +1,3 @@
+# DL1 · la vuelta atrás: fuera los asientos propuestos (si siguen propuestos) y la función.
+cuenta: scripts/conta/produccion/cuentas/dl1-uber.sql
+supabase/vuelta-atras/20261105T1702_dl1_uber_saldos.down.sql
