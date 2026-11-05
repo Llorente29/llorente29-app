@@ -203,7 +203,7 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
           )
         })}
         {totalEditable && (
-          <div className="cxf-iva-linea" role="group" aria-label="Total de la factura" data-prueba="linea-total">
+          <div className="cxf-iva-linea" role="group" aria-label="Importe total">
             <span className="cxf-iva-rotulo">{abono ? 'Total a tu favor' : 'Total de la factura'}</span>
             <span />
             <input className="s-control s-cifra cxf-importe" aria-label="Total de la factura" inputMode="decimal"
