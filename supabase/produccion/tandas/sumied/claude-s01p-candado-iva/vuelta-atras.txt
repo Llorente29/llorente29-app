@@ -1,0 +1,3 @@
+# S01p·13 · la vuelta atrás: las cinco funciones desde su respaldo, fuera los dos disparadores y las funciones nuevas, y conta_mes_cambio como estaba.
+cuenta: scripts/conta/produccion/cuentas/s01p-candado-iva.sql
+supabase/vuelta-atras/20261105T0830_s01p_candado_iva.down.sql

@@ -1,0 +1,16 @@
+# S01p·13 · El candado, solo para lo que lleva IVA (Julio, 05/11). Rama
+# claude/s01p-candado-iva. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. La necesita la tanda del DL1 del 09/11.
+#
+#   0830  En un periodo cerrado (el corte con Diez, un mes «migrated» o
+#         «tax_filed», un trimestre con el 303 presentado) se crea y se valida
+#         lo que no lleva IVA; lo que lleva IVA sigue parado. La retención, con
+#         el 111/115 presentado, parada. Lo traído de Diez no se anula. Lo
+#         apuntado tarde queda en conta_mes_cambio y va en el siguiente traspaso
+#         a Diez. Cambia cinco funciones del candado (con respaldo) y quita el
+#         «no nulo» de conta_mes_cambio.lock_id: «autorizo». No mueve ningún
+#         asiento: la cuenta tiene que salir igual antes y después.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-candado-iva.sql
+supabase/migrations/20261105T0830_s01p_candado_iva.sql
