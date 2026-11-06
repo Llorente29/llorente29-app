@@ -1,0 +1,21 @@
+# DM1·8 · Casa Lola: el asiento de apertura del banco, la nómina de 11 personas y un pago con Revolut (03/11/2026).
+# Decidido por Julio a las 22:35. Rama claude/dm1-casa-lola-ajustes. Se ensaya y se aplica antes de fusionar,
+# lanzado desde main (W12b).
+#
+#   1. 2320 — Como la 1525: BORRA la contabilidad de demo de Casa Lola (solo si es de demo; con «autorizo»),
+#      CAMBIA demo_contabilidad_sembrar (respaldada) y la SIEMBRA otra vez con:
+#        · el asiento de apertura del 01/01 (el banco a 10.000 €, contra capital y reservas): la 57200002 cuadra
+#          con el extracto, menos lo que falta por casar (los dos sueltos de la demo);
+#        · la nómina de 11 personas, las mismas 11 de Folvy (antes 18): el 111 y sus cargos con la nueva;
+#        · un pago con Revolut como el de Coheldi en Foodint: la cuenta Revolut con su 572, el traspaso de 10.000 €
+#          desde la principal, el lote con su segunda aprobación, la salida pagada, la remesa «banco» y el cargo
+#          casado; la factura, pagada. Su justificante en PDF, con la función de la demo (PR siguiente). Sin correo.
+#      Solo Casa Lola. Fuera del camino del pedido. Mientras dura, el borrado apaga el candado de journal_entry
+#      (como S01q, 1837): ese rato las demás cuentas esperan para escribir asientos (13 s en el real de la 1525).
+#      Fuera de las horas de servicio.
+#
+# Antes (producción, 03/11 22:50 UTC): la semilla de la 1525, tal cual; nada de la tanda en el historial.
+# Sin aplicar: el real lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta (Casa Lola como la dejó la 1525).
+supabase/migrations/20261103T2320_dm1_casa_lola_ajustes.sql
+cuenta: scripts/conta/produccion/cuentas/dm1-casa-lola-ajustes.sql

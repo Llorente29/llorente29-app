@@ -1,0 +1,43 @@
+{
+ "_que": "DM1·8 · Casa Lola: apertura, 11 nóminas y pago con Revolut · contexto de producción de la tanda (2320), medido en SOLO LECTURA el 03/11 a las 22:50 UTC. Existe demo_contabilidad_sembrar (la de la 1525); nada de la tanda en el historial. Casa Lola: 169 asientos validados, 38 recibidas, 4 nóminas de 18 personas, una sola cuenta de banco.",
+ "medido": "2026-11-03T22:50Z",
+ "tanda": {
+  "supabase/migrations/20261103T2320_dm1_casa_lola_ajustes.sql": "879cb63245e2fc4f803e1eb0fee8a091"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_match_item",
+   "public.company",
+   "public.conta_pago_evento",
+   "public.customer_fiscal",
+   "public.journal_entry",
+   "public.journal_line",
+   "public.party",
+   "public.party_role",
+   "public.supplier_invoice_payment_log",
+   "public.supplier_invoice_tax"
+  ],
+  "funciones": [
+   "public.demo_contabilidad_sembrar(uuid)"
+  ],
+  "filas": {
+   "public.bank_match_item": 81,
+   "public.company": 0,
+   "public.conta_pago_evento": 0,
+   "public.customer_fiscal": 3,
+   "public.journal_entry": 15601,
+   "public.journal_line": 38804,
+   "public.party": 109,
+   "public.party_role": 121,
+   "public.supplier_invoice_payment_log": 260,
+   "public.supplier_invoice_tax": 311
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
