@@ -9,10 +9,9 @@
 #         ya no está por aclarar, para. No se borran ni se casan.
 #
 # Nada en el camino del pedido. El real lo lanza Julio.
+# Lo que se espera en la cuenta después del real (antes: 3 · −3.308,46 · −798,36 · 0 · 53):
+#   los 3 sin ignorar → 0; ···6536 y ···4525 a 04/11, Sumied menos el banco → 0,00 y 0,00;
+#   los ignorados sin contar los 3 y los por aclarar más los 3, como antes.
+#   (Con vuelta atrás, el ensayo comprueba que todo vuelve a como antes.)
 cuenta: scripts/conta/produccion/cuentas/b01r-cargos-anulados.sql
 supabase/migrations/20261106T2350_b01r_cargos_anulados.sql
-esperado: b01r-cargos-anulados · De los 3 cargos anulados del 30/10, sin ignorar con su motivo = 0
-esperado: b01r-cargos-anulados · ···6536 a 04/11, Sumied menos el banco = 0.00
-esperado: b01r-cargos-anulados · ···4525 a 04/11, Sumied menos el banco = 0.00
-esperado: b01r-cargos-anulados · Foodint: ignorados sin contar los 3 = como antes
-esperado: b01r-cargos-anulados · Foodint: por aclarar más los 3 = como antes
