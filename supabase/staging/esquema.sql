@@ -8321,6 +8321,55 @@ $$;
 
 
 --
+-- Name: _dl1_asiento_proponer(uuid, date, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_y uuid; v_e uuid; l jsonb; v_pos int := 0; v_cta uuid; v_debe numeric := 0; v_haber numeric := 0; v_mal text;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'DL1: esa empresa no está.'; end if;
+  if exists (select 1 from public.journal_entry where company_id = p_company and account_id = v_acc and concept = p_concepto and status <> 'anulado') then
+    raise exception 'DL1: ya hay un asiento vivo «%»: no se propone otro.', p_concepto;
+  end if;
+  select id into v_y from public.fiscal_year where company_id = p_company and account_id = v_acc and p_fecha between starts_on and ends_on;
+  if v_y is null then raise exception 'DL1: no hay ejercicio para el %.', p_fecha; end if;
+  for l in select * from jsonb_array_elements(p_lineas) loop
+    v_debe := v_debe + coalesce((l->>'debe')::numeric, 0); v_haber := v_haber + coalesce((l->>'haber')::numeric, 0);
+  end loop;
+  if v_debe <> v_haber or v_debe = 0 then raise exception 'DL1: «%» no cuadra (debe %, haber %).', p_concepto, v_debe, v_haber; end if;
+
+  insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, status, confidence, reason, created_by_name)
+  values (v_acc, p_company, v_y, 4, p_fecha, p_concepto, 'manual', 'propuesto', 'seguro', p_porque, 'Julio (tanda DL1)')
+  returning id into v_e;
+  for l in select * from jsonb_array_elements(p_lineas) loop
+    select id into v_cta from public.company_account where company_id = p_company and account_id = v_acc and code = l->>'cuenta';
+    if v_cta is null then raise exception 'DL1: la cuenta % no está en el plan de la empresa.', l->>'cuenta'; end if;
+    v_pos := v_pos + 1;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept, location_id, is_common,
+                                     party_id, tax_rate_id, tax_base, vat_book, tax_documents)
+    values (v_acc, p_company, v_e, v_pos, v_cta, coalesce((l->>'debe')::numeric, 0), coalesce((l->>'haber')::numeric, 0), l->>'concepto', null, true,
+            nullif(l->>'tercero', '')::uuid, nullif(l->'iva'->>'tipo', '')::uuid, (l->'iva'->>'base')::numeric,
+            case when l ? 'iva' then 'issued' end, 1);
+  end loop;
+  select string_agg(m.motivo, ' · ' order by m.orden) into v_mal from public.conta_motivos_para_validar(v_e) m;
+  if v_mal is not null then raise exception 'DL1: «%» no se podría validar: %', p_concepto, v_mal; end if;
+  return v_e;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb) IS 'DL1. Propone (no valida) un asiento manual de la serie 4 desde sus líneas; para si no cuadra, si ya hay uno vivo con ese concepto o si no se podría validar. Solo una tanda.';
+
+
+--
 -- Name: _documento_trabajador_puede(text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -151595,6 +151644,13 @@ GRANT ALL ON FUNCTION public._delivery_zone_account_of_location(p_location_id uu
 GRANT ALL ON FUNCTION public._distancia_metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) TO anon;
 GRANT ALL ON FUNCTION public._distancia_metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) TO authenticated;
 GRANT ALL ON FUNCTION public._distancia_metros(p_lat1 double precision, p_lng1 double precision, p_lat2 double precision, p_lng2 double precision) TO service_role;
+
+
+--
+-- Name: FUNCTION _dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb) FROM PUBLIC;
 
 
 --
