@@ -1,0 +1,18 @@
+# G02 · Quitar de la cuenta Foodint las dos empresas de prueba de QBO (Julio,
+# 06/11, respuestas a la tarea 1). Rama conta/g02-limpieza-foodint. Se ensaya y
+# se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1335  Foodint (autorizo: borra filas): las dos empresas de prueba que se
+#         dieron de alta por error el 06/11 y todo lo que cuelga de ellas (16
+#         tablas: plan de cuentas, ejercicio, obligaciones, perfil fiscal, los 4
+#         esperados de QBO, el cierre del día sin propuesta…), por id y por la
+#         cuenta de Foodint; y Foodint deja de estar marcada como asesoría.
+#         Recuentos exactos (el cierre del día: todas «sin propuesta» y sin
+#         asiento); si algo no es lo medido, para. Cada fila borrada queda en
+#         public.conta_g02_copia para la vuelta atrás, con los mismos ids.
+#
+# La copia se queda hasta que Julio confirme que Foodint está bien; se quita en
+# otra tanda. «Asesoría QBO» no se toca. Nada en el camino del pedido. El real
+# lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g02-limpieza-foodint.sql
+supabase/migrations/20261106T1335_g02_limpieza_foodint.sql
