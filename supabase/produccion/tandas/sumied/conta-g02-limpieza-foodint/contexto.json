@@ -1,0 +1,31 @@
+{
+ "_que": "G02 · Quitar de Foodint las dos empresas de prueba de QBO · contexto de producción, medido en SOLO LECTURA el 06/11 a las 12:40Z con la consulta del workflow (analizar.mjs sql-contexto). La 1335 borra filas de 16 tablas colgadas de las dos empresas de prueba (por id y por la cuenta de Foodint) y las dos empresas, quita la marca de asesoría de Foodint y crea public.conta_g02_copia. sales_day_proposal_log está en el patrón del camino del pedido (sales_.*): solo se borran filas «sin_propuesta», sin asiento, de dos empresas que no son de ningún local; ninguna función ni disparador del pedido cambia. Ningún fichero en el historial.",
+ "medido": "2026-11-06T12:40Z",
+ "tanda": {
+  "supabase/migrations/20261106T1335_g02_limpieza_foodint.sql": "4e677def253df69db08a709b4352213a"
+ },
+ "contexto": {
+  "tablas": [
+   "public.accounts",
+   "public.company",
+   "public.conta_programa_anterior_registro",
+   "public.sales_day_proposal_log"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.accounts": 2,
+   "public.company": 7,
+   "public.conta_programa_anterior_registro": 0,
+   "public.sales_day_proposal_log": 755
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [
+    "public.sales_day_proposal_log"
+   ],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
