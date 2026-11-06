@@ -1,0 +1,17 @@
+# B01·19 · Los tres cargos de la Seguridad Social del 30/10 que el BBVA anuló
+# (Julio, 06/11). Rama claude/b01-cargos-anulados. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   2350  Añade _b01r_ignorar_anulados y, en Foodint, deja de lado con
+#         bank_ignorar (como Julio, con su usuario) los tres cargos: −3.308,46
+#         en ···6536 y −483,36 y −315,00 en ···4525, con el motivo «Anulado por
+#         el banco: no había saldo». Por su id, su importe y su fecha; si alguno
+#         ya no está por aclarar, para. No se borran ni se casan.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+# Lo que se espera en la cuenta después del real (antes: 3 · −3.308,46 · −798,36 · 0 · 53):
+#   los 3 sin ignorar → 0; ···6536 y ···4525 a 04/11, Sumied menos el banco → 0,00 y 0,00;
+#   los ignorados sin contar los 3 y los por aclarar más los 3, como antes.
+#   (Con vuelta atrás, el ensayo comprueba que todo vuelve a como antes.)
+cuenta: scripts/conta/produccion/cuentas/b01r-cargos-anulados.sql
+supabase/migrations/20261106T2350_b01r_cargos_anulados.sql

@@ -1,0 +1,7 @@
+# B01·19 · 2350: los cargos que el banco anuló dejan de contar con bank_ignorar,
+# como la persona y con su motivo. Su prueba (ROLLBACK, cuenta D): para con un
+# importe, una fecha, una empresa, uno casado o alguien de otra cuenta, sin dejar
+# nada; con el administrador, los tres ignorados con su línea en el historial; y
+# la vuelta atrás los devuelve a «por aclarar».
+supabase/migrations/20261106T2350_b01r_cargos_anulados.sql
+supabase/staging/sql/20261106_b01r_cargos_anulados_prueba.sql
