@@ -43,7 +43,7 @@ describe('G01 · conversión de suscripciones', () => {
   it('una gestión laboral con su empleado es una línea; sin el nombre, no se convierte y dice por qué', () => {
     const r = convertir('empresa-a', [sus('SB1', 'GESTION LABORAL EMPLEADO UNO PRUEBA', 2420), sus('SB2', 'GESTION LABORAL', 2420)], MANDATOS)
     expect(r.lineas.map((l) => [l.suscripcionId, l.empleado])).toEqual([['SB1', 'EMPLEADO UNO PRUEBA']])
-    expect(r.noConvertidas).toEqual([{ suscripcionId: 'SB2', clienteGcId: 'CU1', emisor: 'empresa-a', nombre: 'GESTION LABORAL',
+    expect(r.noConvertidas).toEqual([{ codigo: 'laboral_sin_empleado', suscripcionId: 'SB2', clienteGcId: 'CU1', emisor: 'empresa-a', nombre: 'GESTION LABORAL',
       porque: 'Es gestión laboral sin el nombre del empleado: no se sabe de quién es la línea.' }])
   })
 
@@ -69,6 +69,7 @@ describe('G01 · conversión de suscripciones', () => {
       sus('SB5', 'GESTORIA MENSUAL', 9075, { cada: 3 }),
     ], MANDATOS)
     expect(r.lineas).toEqual([])
+    expect(r.noConvertidas.map((n) => n.codigo)).toEqual(['sin_cliente', 'semanal', 'otra_moneda', 'cada_varios'])
     expect(r.noConvertidas.map((n) => [n.suscripcionId, n.porque])).toEqual([
       ['SB1', 'Su mandato no es de ningún cliente leído de esta cuenta.'],
       ['SB2', 'Se cobra cada semana: la gestoría dice cómo se pasa a una tarifa.'],

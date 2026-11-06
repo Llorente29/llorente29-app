@@ -59,7 +59,12 @@ export interface TarifaImportada {
   periodo: 'mes' | 'anio'
 }
 
+export type PorqueNoConvertida =
+  | 'sin_cliente' | 'otra_moneda' | 'importe_cero' | 'semanal' | 'intervalo_desconocido' | 'cada_varios' | 'sin_nombre' | 'laboral_sin_empleado'
+
 export interface NoConvertida {
+  /** El porqué, como dato (conta_gc_importacion.porque_codigo). */
+  codigo: PorqueNoConvertida
   suscripcionId: string
   clienteGcId: string | null
   emisor: string
@@ -112,23 +117,23 @@ export function convertir(
   for (const s of suscripciones) {
     if (s.estado !== 'active') continue
     const cliente = s.mandatoId ? clienteDeMandato.get(s.mandatoId) ?? null : null
-    const fuera = (porque: string) => noConvertidas.push({ suscripcionId: s.id, clienteGcId: cliente, emisor, nombre: s.nombre, porque })
-    if (!cliente) { fuera('Su mandato no es de ningún cliente leído de esta cuenta.'); continue }
-    if (s.moneda !== 'EUR') { fuera(`Cobra en ${s.moneda || 'una moneda sin decir'}, no en euros.`); continue }
-    if (s.importeCent <= 0) { fuera('Su importe es cero.'); continue }
+    const fuera = (codigo: PorqueNoConvertida, porque: string) => noConvertidas.push({ codigo, suscripcionId: s.id, clienteGcId: cliente, emisor, nombre: s.nombre, porque })
+    if (!cliente) { fuera('sin_cliente', 'Su mandato no es de ningún cliente leído de esta cuenta.'); continue }
+    if (s.moneda !== 'EUR') { fuera('otra_moneda', `Cobra en ${s.moneda || 'una moneda sin decir'}, no en euros.`); continue }
+    if (s.importeCent <= 0) { fuera('importe_cero', 'Su importe es cero.'); continue }
     if (s.intervalo !== 'monthly' && s.intervalo !== 'yearly') {
-      fuera(s.intervalo === 'weekly' ? 'Se cobra cada semana: la gestoría dice cómo se pasa a una tarifa.' : `Se cobra «${s.intervalo}», que Sumied no sabe pasar a una tarifa.`)
+      fuera(s.intervalo === 'weekly' ? 'semanal' : 'intervalo_desconocido', s.intervalo === 'weekly' ? 'Se cobra cada semana: la gestoría dice cómo se pasa a una tarifa.' : `Se cobra «${s.intervalo}», que Sumied no sabe pasar a una tarifa.`)
       continue
     }
-    if (s.cada !== 1) { fuera(`Se cobra cada ${s.cada} ${s.intervalo === 'monthly' ? 'meses' : 'años'}: la gestoría dice cómo se pasa a una tarifa.`); continue }
+    if (s.cada !== 1) { fuera('cada_varios', `Se cobra cada ${s.cada} ${s.intervalo === 'monthly' ? 'meses' : 'años'}: la gestoría dice cómo se pasa a una tarifa.`); continue }
     const periodo = s.intervalo === 'yearly' ? 'anio' : 'mes'
     const { tipo, detalle } = clasificar(s.nombre)
-    if (!s.nombre.trim()) { fuera('No tiene nombre: no se sabe qué servicio es.'); continue }
+    if (!s.nombre.trim()) { fuera('sin_nombre', 'No tiene nombre: no se sabe qué servicio es.'); continue }
 
     let servicio: ServicioImportado
     if (tipo === 'gestoria') servicio = { clave: 'gestoria_mensual', nombre: 'Gestoría mensual', forma: 'fijo_mes', porConfirmar: false }
     else if (tipo === 'laboral') {
-      if (!detalle) { fuera('Es gestión laboral sin el nombre del empleado: no se sabe de quién es la línea.'); continue }
+      if (!detalle) { fuera('laboral_sin_empleado', 'Es gestión laboral sin el nombre del empleado: no se sabe de quién es la línea.'); continue }
       servicio = { clave: 'gestion_laboral', nombre: 'Gestión laboral', forma: 'por_empleado', porConfirmar: false }
     } else {
       servicio = { clave: claveLiteral(s.nombre), nombre: s.nombre.trim(), forma: periodo === 'anio' ? 'fijo_anio' : 'fijo_mes', porConfirmar: true }
