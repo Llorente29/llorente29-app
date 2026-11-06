@@ -1,3 +1,4 @@
-# DL1 · la vuelta atrás: fuera los asientos propuestos (si siguen propuestos) y la función.
+# DL1 · la vuelta atrás de la 1702 (ya aplicada): quita sus asientos solo si siguen propuestos.
+# La 1750 no tiene vuelta atrás (se declara en aplicar.txt): un asiento validado se anula con un contraasiento.
 cuenta: scripts/conta/produccion/cuentas/dl1-uber.sql
 supabase/vuelta-atras/20261105T1702_dl1_uber_saldos.down.sql

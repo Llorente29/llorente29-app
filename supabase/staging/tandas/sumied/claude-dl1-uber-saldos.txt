@@ -4,3 +4,9 @@
 # la vuelta atrás.
 supabase/migrations/20261105T1702_dl1_uber_saldos.sql
 supabase/staging/sql/20261105_dl1_uber_saldos_prueba.sql
+# DL1·11 · 1750: valida por tanda los asientos que el libro diario no enseña. Su
+# prueba (ROLLBACK, cuenta A): valida como la persona (también en un mes
+# cerrado sin IVA), para con uno ya validado, con un importe distinto, con otro
+# de otra empresa y con uno con IVA en el mes cerrado, sin dejar nada validado.
+supabase/migrations/20261106T1750_dl1_uber_validar.sql
+supabase/staging/sql/20261106_dl1_uber_validar_prueba.sql

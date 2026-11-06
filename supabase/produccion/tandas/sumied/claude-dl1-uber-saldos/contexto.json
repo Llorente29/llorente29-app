@@ -1,8 +1,8 @@
 {
- "_que": "DL1 · Uber con los saldos limpios · contexto de producción, medido en SOLO LECTURA el 05/11 a las 16:20Z: la 1702 añade _dl1_asiento_proponer (no existe) y propone diez asientos nuevos en Foodint (serie 4, manuales; hoy no hay ninguno de la tanda DL1). Las cuentas 43000002, 41000003, 70009001, 63400000, 47700000 y 11300000 están en el plan y el ejercicio 2026, abierto. Nada en el camino del pedido; ninguna en el historial.",
- "medido": "2026-11-05T16:20Z",
+ "_que": "DL1·11 · validar por tanda los 12 asientos de Uber · contexto de producción, medido en SOLO LECTURA el 06/11 a las 16:55Z: la 1750 añade _dl1_validar (no existe) y valida 12 asientos propuestos de Foodint (los 7 de la 1702 hasta el 30/09 y las 5 liquidaciones de Uber de octubre), los 12 con cero motivos para no validarse. La 1702 ya está en el historial (real del 06/11) y por eso ya no está en la tanda. Nada en el camino del pedido.",
+ "medido": "2026-11-06T16:55Z",
  "tanda": {
-  "supabase/migrations/20261105T1702_dl1_uber_saldos.sql": "41417789165e11890fb7af5bfa53cb07"
+  "supabase/migrations/20261106T1750_dl1_uber_validar.sql": "47ac31c222e32184797d963675fbe717"
  },
  "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
 }
