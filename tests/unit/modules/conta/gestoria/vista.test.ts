@@ -1,7 +1,7 @@
 // G01 · Tarea 4. Lo que deciden las pantallas de Clientes y cuotas sin pintar.
 import { describe, expect, it } from 'vitest'
 import {
-  CHIPS, contarChips, empleadosDe, fichaDe, figura, filtrarPorChip, filtrarPorEmisor, leerImporte, letrasDeServicios, mesesDesde, textoDiferencias,
+  CHIPS, comoResolver, contarChips, palabrasDeServicios, sinLinea, textoCobro, empleadosDe, fichaDe, figura, filtrarPorChip, filtrarPorEmisor, leerImporte, letrasDeServicios, mesesDesde, textoDiferencias,
   textoMandato, type ClienteGestoria, type Diferencia,
 } from '@/modules/conta/gestoria/vista'
 import type { Linea, Tarifa } from '../../../../../supabase/functions/conta-gocardless-leer/comparacion'
@@ -38,6 +38,12 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
     expect([figura('B00000001'), figura('00000001R'), figura('X0000000T'), figura(null)]).toEqual(['Sociedad', 'Autónomo', 'Autónomo', null])
     expect(empleadosDe([linea('a', 'gestion_laboral', { empleado: 'EMPLEADA UNO' }), linea('b', 'gestion_laboral', { empleado: 'EMPLEADO DOS', hasta: '2026-10' })], '2026-11')).toBe(1)
     expect(textoMandato('pending_customer_approval').texto).toBe('Por firmar')
+    expect([textoCobro('paid_out').texto, textoCobro('submitted').texto, textoCobro('charged_back').texto, textoCobro('failed').texto]).toEqual(['Cobrado', 'Pendiente', 'Devuelto', 'Devuelto'])
+    expect(palabrasDeServicios([linea('a', 'gestion_laboral'), linea('c', 'gestoria_mensual')])).toBe('Contabilidad, Laboral')
+    expect(comoResolver(dif('totales_distintos', '1'))).toEqual(['linea_o_baja', 'revisada'])
+    expect(comoResolver(dif('gocardless_sin_ficha', null))).toEqual(['enlazar', 'revisada'])
+    expect(comoResolver(dif('falla_a_menudo', '1'))).toEqual(['revisada'])
+    expect(sinLinea([{ id: 'SB1', emisor: A, nombre: 'x', alMesCent: 1 }, { id: 'SB9', emisor: A, nombre: 'y', alMesCent: 1 }], [linea('g', 'gestoria_mensual', { suscripcionId: 'SB1' })], A).map((x) => x.id)).toEqual(['SB9'])
     expect(textoMandato(null).texto).toBe('Sin mandato')
     expect(textoDiferencias([])).toBe('Ninguna')
     expect(textoDiferencias([dif('mandato_por_firmar', '1')])).toBe('Mandato pendiente de firma')
@@ -52,8 +58,11 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
     const f = fichaDe('1', A, '2026-11', lineas, tarifas, [{ id: 'SB1', emisor: A, nombre: 'GESTORIA MENSUAL', alMesCent: 6050 }, { id: 'SB2', emisor: A, nombre: 'GESTION LABORAL EMPLEADA UNO', alMesCent: 2420 }])
     const laboral = f.servicios.find((s) => s.servicio === 'gestion_laboral')!
     expect(laboral.tarifa).toBe('24,20 € al mes · tarifa general')
-    expect(laboral.filas).toEqual([{ texto: 'Gestión laboral · EMPLEADA UNO', importe: '24,20 €' }, { texto: 'Gestión laboral · EMPLEADO DOS', importe: '24,20 €' }])
-    expect(f.servicios.find((s) => s.servicio === 'gestoria_mensual')!.tarifa).toBe('60,50 € al mes · tarifa propia')
+    expect(laboral.filas).toEqual([{ lineaId: 'l1', texto: 'EMPLEADA UNO', importe: '24,20 €' }, { lineaId: 'l2', texto: 'EMPLEADO DOS', importe: '24,20 €' }])
+    expect(laboral.total).toBe('48,40 €')
+    // El fijo, una sola fila: sin repetir la línea.
+    const fijo = f.servicios.find((s) => s.servicio === 'gestoria_mensual')!
+    expect([fijo.tarifa, fijo.filas, fijo.total]).toEqual(['60,50 € al mes · tarifa propia', [], '60,50 €'])
     expect(f.comparacion.sumiedCent).toBe(10890)
     expect(f.diferencia[0]).toBe('Sumied 108,90 € y GoCardless 84,70 € al mes: Sumied 24,20 € más.')
     const cuadra = fichaDe('1', A, '2026-11', lineas.slice(0, 2), tarifas, [{ id: 'SB1', emisor: A, nombre: 'x', alMesCent: 6050 }, { id: 'SB2', emisor: A, nombre: 'y', alMesCent: 2420 }])

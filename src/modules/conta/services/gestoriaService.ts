@@ -23,7 +23,7 @@ export interface DatosGestoria {
   filas: ClienteGestoria[]
   lineas: Linea[]
   tarifas: Tarifa[]
-  suscripciones: (SuscripcionActiva & { clienteId: string | null })[]
+  suscripciones: (SuscripcionActiva & { clienteId: string | null; gcClienteId: string | null })[]
   servicios: Servicio[]
 }
 
@@ -36,7 +36,7 @@ async function leer(nombre: string, select: string, filtro: (q: ReturnType<typeo
 
 export async function leerGestoria(accountId: string): Promise<DatosGestoria> {
   const cuenta = (q: ReturnType<typeof tabla>) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq('account_id', accountId)
-  const [clientes, lineas, servicios, tarifas, susc, gcClientes, mandatos, cobros, difs] = await Promise.all([
+  const [clientes, lineas, servicios, tarifas, susc, gcClientes, mandatos, cobros, difs, decisiones] = await Promise.all([
     leer('conta_consulta_clientes', 'cliente_id, cliente, nif, situacion, servicios, forma_de_pago_en_bitrix, emisor_id, emisor, forma_de_cobro, cliente_en_gocardless, mandato',
       (q) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq('cuenta_id', accountId)),
     leer('conta_linea', 'id, party_id, company_id, servicio_id, tipo, detalle, empleado_nombre, importe_propio, periodo, desde, hasta, suscripcion_gc_id', cuenta),
@@ -47,7 +47,10 @@ export async function leerGestoria(accountId: string): Promise<DatosGestoria> {
     leer('conta_gc_mandato', 'company_id, gc_id, gc_cliente_id, estado', cuenta),
     leer('conta_gc_cobro', 'company_id, mandato_gc_id, estado, fecha, importe, motivo', cuenta),
     leer('conta_gestoria_diferencia', 'id, company_id, party_id, gc_cliente_id, tipo, porque, vigente', cuenta),
+    leer('conta_gestoria_decision', 'company_id, tipo, suscripcion_gc_id', cuenta),
   ])
+  // Lo que una persona dijo que no se cuente (una baja que GoCardless sigue cobrando) no suma al comparar.
+  const noContar = new Set(decisiones.filter((d) => d.tipo === 'no_contar').map((d) => `${d.company_id}|${d.suscripcion_gc_id}`))
   const serv = new Map(servicios.map((s) => [String(s.id), { id: String(s.id), emisorId: String(s.company_id), clave: String(s.clave), nombre: String(s.nombre), forma: String(s.forma) }]))
   const delGc = new Map(gcClientes.map((g) => [`${g.company_id}|${g.gc_id}`, g]))
   const ls: Linea[] = lineas.filter((l) => l.tipo === 'cuota' && serv.has(String(l.servicio_id))).map((l) => {
@@ -63,9 +66,10 @@ export async function leerGestoria(accountId: string): Promise<DatosGestoria> {
     periodo: t.periodo === 'anio' ? 'anio' : 'mes', desde: mes(t.desde), hasta: t.hasta ? mes(t.hasta) : null,
   }))
   const esteMes = new Date().toISOString().slice(0, 7)
-  const ss = susc.filter((s) => s.estado === 'active' && mes(s.inicio) <= esteMes).map((s) => ({
+  const ss = susc.filter((s) => s.estado === 'active' && mes(s.inicio) <= esteMes && !noContar.has(`${s.company_id}|${s.gc_id}`)).map((s) => ({
     id: String(s.gc_id), emisor: String(s.company_id), nombre: String(s.nombre ?? ''), alMesCent: cent(s.al_mes),
     clienteId: str(delGc.get(`${s.company_id}|${s.gc_cliente_id}`)?.party_id),
+    gcClienteId: str(s.gc_cliente_id),
   }))
   const mandatoDe = new Map(mandatos.map((m) => [`${m.company_id}|${m.gc_id}`, String(m.gc_cliente_id ?? '')]))
   const cobrosDe = (emisor: string, gc: string | null): Cobro[] => !gc ? [] : cobros
@@ -168,3 +172,16 @@ export async function guardarTarifa(a: { empresa: string; servicio: string; clie
     p_company: a.empresa, p_servicio: a.servicio, p_party: a.cliente, p_importe: a.importe, p_periodo: a.periodo, p_desde: a.desde, p_motivo: a.motivo,
   })
 }
+
+// ── Lo que se hace desde la ficha (la 2000): cada una devuelve su frase ──────
+const frase = async (nombre: string, args: Record<string, unknown>) => (await rpc<{ frase: string }>(nombre, args)).frase
+export const altaEmpleado = (empresa: string, cliente: string, servicio: string, empleado: string, desde: string) =>
+  frase('conta_gestoria_alta_empleado', { p_company: empresa, p_party: cliente, p_servicio: servicio, p_empleado: empleado, p_desde: desde })
+export const bajaLinea = (linea: string, mes: string) => frase('conta_gestoria_baja_linea', { p_linea: linea, p_mes: mes })
+export const lineaDesdeGc = (empresa: string, suscripcion: string, servicio: string, empleado: string | null) =>
+  frase('conta_gestoria_linea_desde_gc', { p_company: empresa, p_suscripcion: suscripcion, p_servicio: servicio, p_empleado: empleado })
+export const noContar = (empresa: string, suscripcion: string, motivo: string | null) =>
+  frase('conta_gestoria_no_contar', { p_company: empresa, p_suscripcion: suscripcion, p_motivo: motivo })
+export const enlazar = (empresa: string, gcCliente: string, cliente: string) =>
+  frase('conta_gestoria_enlazar', { p_company: empresa, p_gc_cliente: gcCliente, p_party: cliente })
+export const revisada = (diferencia: string, motivo: string) => frase('conta_gestoria_revisada', { p_diferencia: diferencia, p_motivo: motivo })

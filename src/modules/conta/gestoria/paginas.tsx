@@ -6,6 +6,7 @@
 // así se prueban y se capturan con datos inventados).
 
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { rutaTarifasGestoria } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -14,7 +15,8 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { rpc } from '@/modules/conta/services/bd'
 import {
-  cambiarReintentos, conectarBitrix, conectarGocardless, guardarTarifa, leerBitrix, leerConexiones, leerGestoria, leerGocardless,
+  altaEmpleado, bajaLinea, cambiarReintentos, conectarBitrix, conectarGocardless, enlazar, guardarTarifa, leerBitrix, leerConexiones, leerGestoria, leerGocardless,
+  lineaDesdeGc, noContar, revisada,
 } from '@/modules/conta/services/gestoriaService'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ClientesCuotas } from './ClientesCuotas'
@@ -39,11 +41,13 @@ export default function ClientesCuotasPage() {
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos) return <TarjetaCargando />
   return <ClientesCuotas datos={d.datos} emisores={empresas.map((e) => ({ id: e.id, nombre: e.nombre }))} mes={hoyEnMadrid().slice(0, 7)} movil={movil}
-    rutaTarifas={rutaTarifasGestoria()} alLeer={() => void leer()} leyendo={leyendo} aviso={aviso} />
+    rutaTarifas={rutaTarifasGestoria()} tarifasDe={(cliente, emisor) => `${rutaTarifasGestoria()}?${new URLSearchParams({ cliente, empresa: emisor })}`}
+    acciones={{ altaEmpleado, bajaLinea, lineaDesdeGc, noContar, enlazar, revisada }} alHecho={() => d.recargar()} alLeer={() => void leer()} leyendo={leyendo} aviso={aviso} />
 }
 
 export function TarifasPage() {
   const { accountId, cargando } = useCuentaConta()
+  const [params] = useSearchParams()
   const { empresas } = useEmpresas()
   const d = useLeer(!cargando && accountId ? () => leerGestoria(accountId) : null, `${accountId}:gestoria-tarifas`)
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer las tarifas: ${d.error}`} reintentar={d.recargar} />
@@ -52,6 +56,7 @@ export function TarifasPage() {
   for (const f of d.datos.filas) if (f.clienteId) vistos.set(f.clienteId, f.nombre)
   const clientes = [...vistos.entries()].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
   return <Tarifas datos={d.datos} emisores={empresas.map((e) => ({ id: e.id, nombre: e.nombre }))} clientes={clientes} mes={hoyEnMadrid().slice(0, 7)}
+    inicial={{ cliente: params.get('cliente'), empresa: params.get('empresa') }}
     alGuardar={async (a) => { const r = await guardarTarifa(a); d.recargar(); return r }} />
 }
 

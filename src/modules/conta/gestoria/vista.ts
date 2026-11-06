@@ -40,7 +40,7 @@ export interface ClienteGestoria {
   emisor: string
   /** Lo que dice Bitrix24 (de referencia). */
   bitrix: { situacion: string | null; formaPago: string | null; servicios: string[] } | null
-  formaCobro: 'gocardless' | 'transferencia' | 'remesa' | 'tarjeta' | null
+  formaCobro: 'gocardless' | 'transferencia' | 'tarjeta' | 'efectivo' | null
   /** El estado del mandato en GoCardless, tal cual (active, pending_customer_approval…). */
   mandato: string | null
   cobros: Cobro[]
@@ -80,7 +80,9 @@ export function letrasDeServicios(lineas: readonly Linea[]): ('C' | 'L' | 'S')[]
   for (const l of lineas) s.add(l.servicio === 'gestoria_mensual' ? 'C' : l.servicio === 'gestion_laboral' ? 'L' : 'S')
   return (['C', 'L', 'S'] as const).filter((x) => s.has(x))
 }
-export const NOMBRE_LETRA = { C: 'Contabilidad y gestoría', L: 'Laboral', S: 'Otros servicios' } as const
+export const NOMBRE_LETRA = { C: 'Contabilidad', L: 'Laboral', S: 'Otros servicios' } as const
+/** Las palabras de lo que se le cobra («Contabilidad, Laboral»). */
+export const palabrasDeServicios = (lineas: readonly Linea[]) => letrasDeServicios(lineas).map((x) => NOMBRE_LETRA[x]).join(', ')
 
 /** Sociedad o autónomo, por el NIF (la letra del principio). Sin NIF, no se dice. */
 export function figura(nif: string | null): 'Sociedad' | 'Autónomo' | null {
@@ -95,7 +97,7 @@ export const empleadosDe = (lineas: readonly Linea[], mes: Mes) =>
   lineas.filter((l) => l.servicio === 'gestion_laboral' && l.empleado && vale(l.desde, l.hasta, mes)).length
 
 export const FORMA_COBRO: Record<string, string> = {
-  gocardless: 'Domiciliación', remesa: 'Remesa del banco', transferencia: 'Transferencia', tarjeta: 'Tarjeta',
+  gocardless: 'Domiciliación', transferencia: 'Transferencia', tarjeta: 'Tarjeta', efectivo: 'Efectivo',
 }
 
 export function textoMandato(estado: string | null): { texto: string; tono: 'verde' | 'ambar' | 'gris' } {
@@ -114,21 +116,23 @@ export function textoMandato(estado: string | null): { texto: string; tono: 'ver
 
 export function textoCobro(estado: string): { texto: string; tono: 'verde' | 'ambar' | 'rojo' | 'gris' } {
   if (['paid_out', 'confirmed'].includes(estado)) return { texto: 'Cobrado', tono: 'verde' }
-  if (['pending_submission', 'submitted', 'pending_customer_approval'].includes(estado)) return { texto: 'En camino', tono: 'ambar' }
-  if (['failed', 'charged_back', 'customer_approval_denied'].includes(estado)) return { texto: estado === 'charged_back' ? 'Devuelto' : 'Fallido', tono: 'rojo' }
+  if (['pending_submission', 'submitted', 'pending_customer_approval'].includes(estado)) return { texto: 'Pendiente', tono: 'ambar' }
+  if (['failed', 'charged_back', 'customer_approval_denied'].includes(estado)) return { texto: 'Devuelto', tono: 'rojo' }
   if (estado === 'cancelled') return { texto: 'Cancelado', tono: 'gris' }
   return { texto: estado, tono: 'gris' }
 }
 
 /** Lo de la ficha: cada servicio con su tarifa, los empleados debajo y lo que cobra GoCardless. */
 export interface Ficha {
-  servicios: { servicio: string; nombre: string; tarifa: string; filas: { texto: string; importe: string }[]; totalCent: number }[]
+  /** Cada servicio con su tarifa; `filas`, solo si se cobra por trabajador (o tiene varias líneas): cada una con su línea, para darla de baja. */
+  servicios: { servicio: string; nombre: string; porEmpleado: boolean; tarifa: string; filas: { lineaId: string; texto: string; importe: string }[]; total: string; totalCent: number }[]
   comparacion: Comparacion
   /** La diferencia en palabras: «Cuadra con GoCardless» o la explicación. */
   diferencia: string[]
 }
 
-export function fichaDe(clienteId: string, emisor: string, mes: Mes, lineas: Linea[], tarifas: Tarifa[], suscripciones: SuscripcionActiva[]): Ficha {
+export function fichaDe(clienteId: string, emisor: string, mes: Mes, lineas: Linea[], tarifas: Tarifa[], suscripciones: SuscripcionActiva[],
+  porEmpleado: (servicio: string) => boolean = (s) => s === 'gestion_laboral'): Ficha {
   const comp = comparar(clienteId, mes, lineas.filter((l) => l.emisor === emisor), tarifas, suscripciones.filter((s) => s.emisor === emisor))
   const delMes = new Map(comp.lineas.map((x) => [x.lineaId, x]))
   const porServicio = new Map<string, Linea[]>()
@@ -136,18 +140,34 @@ export function fichaDe(clienteId: string, emisor: string, mes: Mes, lineas: Lin
   const servicios = [...porServicio.entries()].map(([servicio, ls]) => {
     const t = tarifaDelMes(tarifas, clienteId, emisor, servicio, mes)
     const tarifa = t ? `${euros(t.tarifa.importeCent)} ${t.tarifa.periodo === 'anio' ? 'al año' : 'al mes'} · ${t.propia ? 'tarifa propia' : 'tarifa general'}` : 'Sin tarifa'
-    const filas = ls.map((l) => {
+    const pe = porEmpleado(servicio)
+    // Un servicio fijo con una sola línea es una fila («Gestoría mensual · 60,50 €»): sin desglose.
+    const filas = !pe && ls.length === 1 ? [] : ls.map((l) => {
       const d = delMes.get(l.id)
-      const quien = l.empleado ?? l.detalle
-      return { texto: quien ? `${l.nombreServicio} · ${quien}` : `${l.nombreServicio} · cuota del mes`, importe: d?.alMesCent == null ? 'Sin tarifa' : euros(d.alMesCent) }
+      return { lineaId: l.id, texto: l.empleado ?? l.detalle ?? l.nombreServicio, importe: d?.alMesCent == null ? 'Sin tarifa' : euros(d.alMesCent) }
     })
+    const sinTarifa = ls.some((l) => delMes.get(l.id)?.alMesCent == null)
     const totalCent = ls.reduce((s, l) => s + (delMes.get(l.id)?.alMesCent ?? 0), 0)
-    return { servicio, nombre: ls[0].nombreServicio, tarifa, filas, totalCent }
+    return { servicio, nombre: ls[0].nombreServicio, porEmpleado: pe, tarifa, filas, totalCent, total: sinTarifa && totalCent === 0 ? 'Sin tarifa' : euros(totalCent) }
   })
   const diferencia = comp.diferenciaCent === 0
     ? [`Cuadra con GoCardless: ${euros(comp.sumiedCent)} al mes en los dos.`]
     : [`Sumied ${euros(comp.sumiedCent)} y GoCardless ${euros(comp.gocardlessCent)} al mes: ${comp.diferenciaCent > 0 ? 'Sumied' : 'GoCardless'} ${euros(Math.abs(comp.diferenciaCent))} más.`, ...comp.explicaciones]
   return { servicios, comparacion: comp, diferencia }
+}
+
+/** Lo que se puede hacer con una diferencia desde la ficha. */
+export type Resolver = 'linea_o_baja' | 'enlazar' | 'revisada'
+export function comoResolver(d: Diferencia): Resolver[] {
+  if (d.tipo === 'totales_distintos' || d.tipo === 'suscripcion_sin_convertir') return ['linea_o_baja', 'revisada']
+  if (d.tipo === 'gocardless_sin_ficha') return ['enlazar', 'revisada']
+  return ['revisada']
+}
+
+/** Lo que cobra GoCardless a un cliente y no es ninguna línea en Sumied (para «Añadirla como línea» o «No la cuentes»). */
+export function sinLinea(suscripciones: readonly SuscripcionActiva[], lineas: readonly Linea[], emisor: string): SuscripcionActiva[] {
+  const conLinea = new Set(lineas.map((l) => l.suscripcionId).filter(Boolean))
+  return suscripciones.filter((s) => s.emisor === emisor && !conLinea.has(s.id))
 }
 
 /** La frase de una diferencia para la tabla: cuántas y la primera. */

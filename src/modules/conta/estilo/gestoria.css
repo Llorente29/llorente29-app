@@ -45,11 +45,30 @@
 .cxg-ficha-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .cxg-ficha-titulo { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
 .cxg-ficha-sub { margin: 12px 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--cx-apoyo); }
-.cxg-ficha-difs { margin: 0; padding: 10px 12px 10px 28px; background: var(--cx-ambar-suave); color: var(--cx-ambar); border-radius: var(--cx-radio-caja); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.cxg-ficha-difs { display: flex; flex-direction: column; gap: 8px; }
+.cxg-dif-caja { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--cx-ambar-suave); border-radius: var(--cx-radio-caja); }
+.cxg-dif-texto { margin: 0; color: var(--cx-ambar); font-size: 13px; line-height: 1.4; }
+.cxg-sus { display: flex; flex-direction: column; gap: 6px; }
+.cxg-sus-texto { margin: 0; font-size: 13px; }
+.cxg-acciones { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; }
+.cxg-boton { display: inline-flex; align-items: center; min-height: 30px; padding: 0 10px; border-radius: var(--cx-radio-boton); border: 1px solid var(--cx-borde-control); background: var(--cx-blanco); color: var(--cx-texto); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; text-decoration: none; }
+.cxg-boton:hover { border-color: var(--cx-azul-borde); }
+.cxg-boton:disabled { opacity: 0.6; cursor: default; }
+.cxg-boton-principal { background: var(--cx-azul); border-color: var(--cx-azul); color: var(--cx-blanco); }
+.cxg-paso { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; padding: 10px; background: var(--cx-blanco); border: 1px solid var(--cx-azul-borde); border-radius: var(--cx-radio-caja); }
+.cxg-paso-aviso { margin: 0; font-size: 13px; color: var(--cx-texto); }
+.cxg-paso-botones { display: flex; gap: 12px; align-items: center; }
+.cxg-campo { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--cx-apoyo); }
+.cxg-campo input, .cxg-campo select { height: 32px; font: inherit; font-size: 14px; color: var(--cx-texto); border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-boton); padding: 0 8px; background: var(--cx-blanco); min-width: 0; }
+.cxg-servicio-fila { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.cxg-servicio-der { display: inline-flex; gap: 10px; align-items: center; }
+.cxg-servicio-filas li { display: flex; flex-direction: column; gap: 6px; padding: 3px 0; }
+.cxg-leyenda { display: flex; gap: 14px; margin: 8px 0 0; font-size: 12px; color: var(--cx-apoyo); }
+.cxg-leyenda span { display: inline-flex; gap: 5px; align-items: center; }
+.cxg-emisor { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--cx-apoyo); }
 .cxg-servicio { padding: 8px 0; border-bottom: 1px solid var(--cx-linea); }
 .cxg-servicio-cabeza { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }
 .cxg-servicio-filas { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-.cxg-servicio-filas li { display: flex; justify-content: space-between; gap: 10px; }
 .cxg-totales { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 8px; }
 .cxg-totales div { display: flex; flex-direction: column; gap: 2px; }
 .cxg-totales dt { font-size: 12px; color: var(--cx-apoyo); }
@@ -86,6 +105,8 @@
 .cxg-tabla-tarifas .cxg-der { text-align: right; }
 
 /* Móvil */
+.cxg-solo-movil { display: none; }
+.cxg-nowrap { white-space: nowrap; }
 .cxg-tarjeta-movil { display: flex; flex-direction: column; gap: 4px; }
 .cxg-tarjeta-fila { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 @media (max-width: 1100px) { .cxg-con-ficha { grid-template-columns: minmax(0, 1fr) 320px; } }
@@ -95,4 +116,6 @@
   .cxg-fila-campos { grid-template-columns: minmax(0, 1fr); }
   .cxg-interruptor-fila { padding: 10px; }
   .cxg-totales dd { font-size: 18px; }
+  .cxg-col-desde { display: none; }
+  .cxg-solo-movil { display: block; }
 }

@@ -20,20 +20,25 @@ import { cumpleFiltros, type CampoFiltro } from '@/modules/conta/ui/tabla/tablaD
 import { Vacio } from '@/modules/conta/ui/piezas'
 import {
   CHIPS, FORMA_COBRO, NOMBRE_LETRA, contarChips, empleadosDe, euros, figura, filtrarPorChip, filtrarPorEmisor, fichaDe, letrasDeServicios,
-  textoCobro, textoDiferencias, textoMandato, type ClienteGestoria,
+  palabrasDeServicios, sinLinea, textoCobro, textoDiferencias, textoMandato, type ClienteGestoria,
 } from '@/modules/conta/gestoria/vista'
 import type { DatosGestoria } from '@/modules/conta/services/gestoriaService'
-import { FichaCliente } from '@/modules/conta/gestoria/FichaCliente'
+import { FichaCliente, type AccionesFicha } from '@/modules/conta/gestoria/FichaCliente'
 
 const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(2, 4)}`
 
-export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLeer, leyendo, aviso }: {
+export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, tarifasDe, acciones, alHecho, alLeer, leyendo, aviso }: {
   datos: DatosGestoria
   emisores: { id: string; nombre: string }[]
   /** El mes que se compara («2026-11»). */
   mes: string
   movil: boolean
   rutaTarifas: string
+  /** Tarifas ya rellena con un cliente y su emisor. */
+  tarifasDe: (cliente: string, emisor: string) => string
+  acciones: AccionesFicha
+  /** Después de hacer algo en la ficha: se vuelve a leer. */
+  alHecho: (frase: string) => void
   alLeer: () => void
   leyendo: boolean
   aviso: { ok: boolean; texto: string } | null
@@ -51,9 +56,16 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
     }
     return m
   }, [datos.lineas])
+  const porEmpleado = useMemo(() => new Set(datos.servicios.filter((s) => s.forma === 'por_empleado').map((s) => s.clave)), [datos.servicios])
+  // Lo que cobra GoCardless a cada fila: por su cliente de Sumied o, sin ficha, por su cliente de GoCardless.
+  const suscDe = (f: ClienteGestoria) => datos.suscripciones.filter((s) => s.emisor === f.emisorId
+    && (f.clienteId ? s.clienteId === f.clienteId : s.gcClienteId === f.diferencias.find((d) => d.gcClienteId)?.gcClienteId))
   const fichas = useMemo(() => new Map(datos.filas.map((f) => [f.id, f.clienteId
-    ? fichaDe(f.clienteId, f.emisorId, mes, lineasDe.get(`${f.clienteId}|${f.emisorId}`) ?? [], datos.tarifas, datos.suscripciones.filter((s) => s.clienteId === f.clienteId))
-    : null])), [datos, lineasDe, mes])
+    ? fichaDe(f.clienteId, f.emisorId, mes, lineasDe.get(`${f.clienteId}|${f.emisorId}`) ?? [], datos.tarifas, suscDe(f), (s) => porEmpleado.has(s))
+    : null])), [datos, lineasDe, mes, porEmpleado]) // eslint-disable-line react-hooks/exhaustive-deps
+  /** ¿Se le cobra por GoCardless? Si no (transferencia, sin mandato ni cobros), «Total hoy en GoCardless» dice «—», no 0. */
+  const conGc = (f: ClienteGestoria) => suscDe(f).length > 0 || f.cobros.length > 0 || f.mandato !== null
+  const totalGc = (f: ClienteGestoria) => suscDe(f).reduce((t, s) => t + s.alMesCent, 0)
 
   const delEmisor = filtrarPorEmisor(datos.filas, emisor)
   const numeros = contarChips(delEmisor)
@@ -72,13 +84,13 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
     { id: 'cliente', titulo: 'Cliente', celda: (f) => <span className="cxg-cliente"><strong>{f.nombre}</strong>{f.nif && <span className="cxg-apoyo-fila">{f.nif}</span>}</span>, exportar: (f) => f.nombre, pesoPdf: 3 },
     ...(emisor ? [] : [{ id: 'emisor', titulo: 'Emisor', celda: (f: ClienteGestoria) => f.emisor, exportar: (f: ClienteGestoria) => f.emisor, pesoPdf: 2 }]),
     { id: 'figura', titulo: 'Figura', ancho: '84px', celda: (f) => figura(f.nif) ?? '—', exportar: (f) => figura(f.nif) ?? '' },
-    { id: 'servicios', titulo: 'Servicios', ancho: '86px', celda: (f) => <span className="cxg-letras">{letrasDeServicios(lin(f)).map((x) => <abbr key={x} title={NOMBRE_LETRA[x]} className="cxg-letra" data-letra={x}>{x}</abbr>)}</span>, exportar: (f) => letrasDeServicios(lin(f)).join(' ') },
+    { id: 'servicios', titulo: 'Servicios', ancho: '86px', celda: (f) => <span className="cxg-letras" aria-label={palabrasDeServicios(lin(f))}>{letrasDeServicios(lin(f)).map((x) => <abbr key={x} title={NOMBRE_LETRA[x]} className="cxg-letra" data-letra={x}>{x}</abbr>)}</span>, exportar: (f) => palabrasDeServicios(lin(f)) },
     { id: 'empleados', titulo: 'Empleados', ancho: '100px', cifra: true, celda: (f) => empleadosDe(lin(f), mes) || '—', exportar: (f) => empleadosDe(lin(f), mes) },
     { id: 'sumied', titulo: 'Total al mes en Sumied', ancho: '120px', cifra: true, celda: (f) => { const x = fichas.get(f.id); return x ? euros(x.comparacion.sumiedCent) : '—' }, exportar: (f) => (fichas.get(f.id)?.comparacion.sumiedCent ?? 0) / 100 },
-    { id: 'gocardless', titulo: 'Total hoy en GoCardless', ancho: '124px', cifra: true, celda: (f) => { const x = fichas.get(f.id); const d = x?.comparacion.diferenciaCent ?? 0; return x ? <span className={d !== 0 ? 'cxg-distinto' : undefined}>{euros(x.comparacion.gocardlessCent)}</span> : '—' }, exportar: (f) => (fichas.get(f.id)?.comparacion.gocardlessCent ?? 0) / 100 },
+    { id: 'gocardless', titulo: 'Total hoy en GoCardless', ancho: '124px', cifra: true, celda: (f) => { if (!conGc(f)) return <span title="No se le cobra por GoCardless">—</span>; const x = fichas.get(f.id); const d = x?.comparacion.diferenciaCent ?? 0; return <span className={x && d !== 0 ? 'cxg-distinto' : undefined}>{euros(totalGc(f))}</span> }, exportar: (f) => (conGc(f) ? totalGc(f) / 100 : '') },
     { id: 'forma', titulo: 'Forma de cobro', ancho: '106px', celda: (f) => (f.formaCobro ? FORMA_COBRO[f.formaCobro] : 'Sin decir'), exportar: (f) => (f.formaCobro ? FORMA_COBRO[f.formaCobro] : '') },
     { id: 'mandato', titulo: 'Mandato', ancho: '118px', celda: (f) => { const m = textoMandato(f.mandato); return <span className="cxg-estado" data-tono={m.tono}>{m.texto}</span> }, exportar: (f) => textoMandato(f.mandato).texto },
-    { id: 'ultimo', titulo: 'Último cobro', ancho: '92px', celda: (f) => { const c = f.cobros[0]; if (!c) return '—'; const t = textoCobro(c.estado); return <span className="cxg-cobro" title={`${t.texto}${c.motivo ? ` · ${c.motivo}` : ''}`}><span className="cxg-punto" data-tono={t.tono} aria-hidden="true" />{fechaCorta(c.fecha)}<span className="cx-oculto"> · {t.texto}</span></span> }, exportar: (f) => f.cobros[0]?.fecha ?? '' },
+    { id: 'ultimo', titulo: 'Último cobro', ancho: '150px', celda: (f) => { const c = f.cobros[0]; if (!c) return '—'; const t = textoCobro(c.estado); return <span className="cxg-cobro" title={c.motivo ?? undefined}><span className="cxg-punto" data-tono={t.tono} aria-hidden="true" />{fechaCorta(c.fecha)} · {t.texto}</span> }, exportar: (f) => (f.cobros[0] ? `${f.cobros[0].fecha} ${textoCobro(f.cobros[0].estado).texto}` : '') },
     { id: 'diferencias', titulo: 'Diferencias', ancho: '200px', celda: (f) => <span className={f.diferencias.length ? 'cxg-dif' : 'cxg-apoyo-fila'}>{textoDiferencias(f.diferencias)}</span>, exportar: (f) => f.diferencias.map((d) => d.porque).join(' · ') },
   ]
 
@@ -86,13 +98,25 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
   const conFicha = !!abiertaFila && !movil
   const visibles = conFicha ? columnas.filter((c) => !['emisor', 'figura', 'forma', 'ultimo'].includes(c.id)) : columnas
 
+  const clientes = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const f of datos.filas) if (f.clienteId) m.set(f.clienteId, f.nombre)
+    return [...m].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+  }, [datos.filas])
+  const fichaAbierta = abiertaFila && (
+    <FichaCliente key={abiertaFila.id} fila={abiertaFila} ficha={fichas.get(abiertaFila.id) ?? null} mes={mes} lineas={lin(abiertaFila)}
+      servicios={datos.servicios.filter((s) => s.emisorId === abiertaFila.emisorId)} sinLinea={sinLinea(suscDe(abiertaFila), lin(abiertaFila), abiertaFila.emisorId)}
+      clientes={clientes} rutaTarifas={abiertaFila.clienteId ? tarifasDe(abiertaFila.clienteId, abiertaFila.emisorId) : null}
+      acciones={acciones} alHecho={alHecho} alCerrar={() => setAbierto(null)} />
+  )
+
   const tarjeta = (f: ClienteGestoria) => {
     const x = fichas.get(f.id)
     const m = textoMandato(f.mandato)
     return (
       <div className="cxg-tarjeta-movil">
         <div className="cxg-tarjeta-fila"><strong>{f.nombre}</strong><span className="cxg-cifra">{x ? euros(x.comparacion.sumiedCent) : '—'}</span></div>
-        <div className="cxg-tarjeta-fila cxg-apoyo-fila"><span>{emisor ? '' : `${f.emisor} · `}{letrasDeServicios(lin(f)).join(' ') || 'Sin líneas'}{empleadosDe(lin(f), mes) ? ` · ${empleadosDe(lin(f), mes)} ${empleadosDe(lin(f), mes) === 1 ? 'empleado' : 'empleados'}` : ''}</span><span className="cxg-estado" data-tono={m.tono}>{m.texto}</span></div>
+        <div className="cxg-tarjeta-fila cxg-apoyo-fila"><span>{emisor ? '' : `${f.emisor} · `}{palabrasDeServicios(lin(f)) || 'Sin líneas'}{empleadosDe(lin(f), mes) ? ` · ${empleadosDe(lin(f), mes)} ${empleadosDe(lin(f), mes) === 1 ? 'empleado' : 'empleados'}` : ''}</span><span className="cxg-estado" data-tono={m.tono}>{m.texto}</span></div>
         {f.diferencias.length > 0 && <div className="cxg-dif">{textoDiferencias(f.diferencias)}</div>}
       </div>
     )
@@ -102,7 +126,7 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
     <div className="cxg-pagina">
       <PeriodoEnBarra>
         <label className="cxg-emisor">
-          <span className="cx-oculto">Emisor</span>
+          <span>Empresa que factura</span>
           <select value={emisor ?? ''} onChange={(e) => { setEmisor(e.target.value || null); setAbierto(null) }}>
             {emisores.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
             <option value="">{emisores.length === 2 ? 'Los dos' : 'Todos'}</option>
@@ -118,7 +142,7 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
 
       {/* En el móvil, la ficha ocupa la pantalla; «Cerrar» vuelve a la lista. */}
       {movil && abiertaFila ? (
-        <div className="cxg-lado"><FichaCliente fila={abiertaFila} ficha={fichas.get(abiertaFila.id) ?? null} alCerrar={() => setAbierto(null)} /></div>
+        <div className="cxg-lado">{fichaAbierta}</div>
       ) : (
       <div className={conFicha ? 'cxg-cuerpo cxg-con-ficha' : 'cxg-cuerpo'}>
         <section aria-label="Clientes" className="cxg-lista">
@@ -135,10 +159,11 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
               ? <Vacio titulo="Aún no hay clientes." explicacion="Salen cuando se conecta Bitrix24 y la cuenta de GoCardless de cada empresa, en Ajustes › Cobros. Después se leen solos cada noche." />
               : <Vacio titulo="Ningún cliente con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros." />}
           />
+          {!movil && <p className="cxg-leyenda"><span>Servicios:</span><span><abbr className="cxg-letra" data-letra="C">C</abbr> Contabilidad</span><span><abbr className="cxg-letra" data-letra="L">L</abbr> Laboral</span><span><abbr className="cxg-letra" data-letra="S">S</abbr> Otros servicios</span></p>}
         </section>
         {conFicha && abiertaFila && (
           <aside className="cxg-lado" aria-label={`Ficha de ${abiertaFila.nombre}`}>
-            <FichaCliente fila={abiertaFila} ficha={fichas.get(abiertaFila.id) ?? null} alCerrar={() => setAbierto(null)} />
+            {fichaAbierta}
           </aside>
         )}
       </div>

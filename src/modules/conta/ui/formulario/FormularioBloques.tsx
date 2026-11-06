@@ -62,6 +62,10 @@ export interface PropsFormularioBloques {
   subcuentas?: readonly Subcuenta[]
   /** Lo que ha pasado al guardar o validar (regla 8), con contenido. */
   aviso?: { texto: string; tono: 'ok' | 'mal' } | null
+  /** G01 · «Guardar» como botón principal (azul), cuando no hay «Validar y siguiente». */
+  guardarPrincipal?: boolean
+  /** G01 · Las teclas del pie; null las quita (en un formulario sin subcuentas ni documentos no hacen nada). */
+  teclas?: string | null
   /** El panel del documento, a la derecha. */
   documento?: ReactNode
 }
@@ -130,9 +134,9 @@ export function FormularioBloques(p: PropsFormularioBloques) {
       </div>
       {p.aviso && <p className={p.aviso.tono === 'ok' ? 'cxf-aviso cxf-aviso-ok' : 'cxf-aviso cxf-aviso-mal'} role={p.aviso.tono === 'ok' ? 'status' : 'alert'}>{p.aviso.texto}</p>}
       <footer className="cxf-pie">
-        {p.alGuardar && <button type="submit" className="cxm-boton" aria-keyshortcuts="Control+S"><span>Guardar</span><Tecla>Ctrl S</Tecla></button>}
+        {p.alGuardar && <button type="submit" className={p.guardarPrincipal ? 'cxm-boton cxm-boton-principal' : 'cxm-boton'} aria-keyshortcuts="Control+S"><span>Guardar</span><Tecla>Ctrl S</Tecla></button>}
         {p.alValidar && <button type="button" className="cxm-boton cxm-boton-principal" onClick={p.alValidar} aria-keyshortcuts="Control+Enter"><span>Validar y siguiente</span><Tecla>Ctrl Intro</Tecla></button>}
-        <span className="cxf-teclas">Intro siguiente campo · F4 buscar subcuenta · Av Pág / Re Pág documento</span>
+        {p.teclas !== null && <span className="cxf-teclas">{p.teclas ?? 'Intro siguiente campo · F4 buscar subcuenta · Av Pág / Re Pág documento'}</span>}
       </footer>
     </form>
   )

@@ -166,6 +166,8 @@
 .cxm.cxm-es-movil .cxf-bloque { grid-column: span 6 !important; }
 .cxm.cxm-es-movil .cxf-rejilla { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .cxm.cxm-es-movil .cxf-campo { grid-column: span 2 !important; }
+/* G01 · En el móvil, los bloques uno debajo de otro (antes, los de ancho 3 iban de dos en dos y cortaban los campos). */
+.cxm.cxm-es-movil .cxf-bloque { grid-column: 1 / -1 !important; }
 .cxm.cxm-es-movil .cxf-input { height: 40px; }
 .cxm.cxm-es-movil .cxf-teclas { display: none; }
 
