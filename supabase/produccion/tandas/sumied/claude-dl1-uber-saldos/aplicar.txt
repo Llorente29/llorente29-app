@@ -21,11 +21,10 @@
 cuenta: scripts/conta/produccion/cuentas/dl1-uber-validar.sql
 supabase/migrations/20261106T1750_dl1_uber_validar.sql
 sin-vuelta-atras: supabase/migrations/20261106T1750_dl1_uber_validar.sql · motivo: un asiento validado no vuelve a propuesto; se anula con un contraasiento.
-esperado: dl1-uber-validar · Los 12 de Uber · propuestos = 0
-esperado: dl1-uber-validar · Los 12 de Uber · validados por Julio = 12
-esperado: dl1-uber-validar · 43000002 validado en la apertura = 1754.35
-esperado: dl1-uber-validar · 43000002 validado a 30/06 = 375.90
-esperado: dl1-uber-validar · 43000002 validado a 31/10 = 7387.89
+esperado: dl1-uber-validar · De los 12 de Uber, sin validar por Julio = 0
+esperado: dl1-uber-validar · 43000002 validado en la apertura, menos el objetivo = 0.00
+esperado: dl1-uber-validar · 43000002 validado a 30/06, menos el objetivo = 0.00
+esperado: dl1-uber-validar · 43000002 validado a 31/10, menos el objetivo = 0.00
 esperado: dl1-uber-validar · 41000003 de Uber validado a 31/10 = 0.00
 esperado: dl1-uber-validar · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
 esperado: dl1-uber-validar · IVA de Foodint 477 del 1T al 3T de 2026 = como antes
