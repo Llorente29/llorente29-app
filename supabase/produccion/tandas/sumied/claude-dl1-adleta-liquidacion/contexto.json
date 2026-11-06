@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · Adleta, lo no liquidado · contexto de producción, medido en SOLO LECTURA el 06/11 a las 21:20Z: la 2213 añade _dl1_factura_emitir (no existe) y emite dos facturas nuevas a Adleta (hoy no hay ninguna; la serie F de Foodint está vacía) con conta_venta_guardar y conta_venta_emitir; usa _dl1_venta_proponer y _dl1_validar (en producción). La 43000006 está en +1.759,18. Verifactu, apagado para Foodint. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-06T21:20Z",
+ "tanda": {
+  "supabase/migrations/20261106T2213_dl1_adleta_liquidacion.sql": "36df0e43320f2a51f974f6ecc5226e30"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

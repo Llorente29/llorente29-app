@@ -1,0 +1,2 @@
+# DL1 · Adleta, lo no liquidado: la 2213 no tiene vuelta atrás (se declara en aplicar.txt): una factura emitida se corrige con una rectificativa.
+cuenta: scripts/conta/produccion/cuentas/dl1-adleta-liquidacion.sql

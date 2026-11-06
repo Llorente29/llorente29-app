@@ -1,0 +1,6 @@
+# DL1 · Adleta, lo no liquidado (2213: añade una función y, en Foodint, emite
+# dos facturas a Adleta y reparte su 705 por local). Su prueba (ROLLBACK, cuenta
+# A): emite como la persona en la serie F con fecha de hoy y su asiento
+# validado, no repite, y reparte por local.
+supabase/migrations/20261106T2213_dl1_adleta_liquidacion.sql
+supabase/staging/sql/20261106_dl1_adleta_liquidacion_prueba.sql
