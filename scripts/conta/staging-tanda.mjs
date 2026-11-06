@@ -189,7 +189,7 @@ export function llamadasAlAplicar(sql) {
  * medido en staging)? null si sí; si no, el porqué de la primera operación que no.
  * Solo migraciones: una prueba de staging nunca va de verdad.
  */
-export function porQueNoSoloAnade(fichero, sql, contexto) {
+export function porQueNoSoloAnade(fichero, sql, contexto, creadoPorOtros = new Set()) {
   if (!/^supabase\/migrations\//.test(fichero)) return 'no es una migración: solo en ROLLBACK'
   const ops = analizarFichero(fichero, sql)
   if (!ops.length) return 'no hace nada que se pueda medir'
@@ -210,6 +210,14 @@ export function porQueNoSoloAnade(fichero, sql, contexto) {
     otrasFirmas: (o) => [...funciones].filter((x) => sinFirma(x) === sinFirma(o.objeto) && x !== o.objeto),
     enCamino: () => false,
     opsDelFichero: ops,
+  }
+  // G01 (06/11): una columna en una tabla que crea OTRO fichero de la tanda y
+  // aún no está en staging depende de ese fichero (que va solo en ROLLBACK, o
+  // no): aplicada sola, falla (la 1932 sobre la tabla de la 1530).
+  for (const o of ops) {
+    if (o.tipo !== 'columna') continue
+    const t = sinFirma(o.objeto)
+    if (creadoPorOtros.has(t) && !tablas.has(t) && !deLaTanda.has(t)) return `${o.accion} ${o.tipo} ${o.objeto}: la tabla la crea otro fichero de la tanda y aún no está en staging`
   }
   for (const o of ops) {
     const c = categoria(o, ctx)
@@ -370,8 +378,10 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const [fCtx, ...fs] = args
     const raw = JSON.parse(readFileSync(fCtx, 'utf8'))
     const contexto = raw.contexto ?? raw
+    const opsDe = Object.fromEntries(fs.map((f) => [f, analizarFichero(f, readFileSync(f, 'utf8'))]))
     for (const f of fs) {
-      const p = porQueNoSoloAnade(f, readFileSync(f, 'utf8'), contexto)
+      const otros = creadosPorLaTanda(Object.fromEntries(Object.entries(opsDe).filter(([g]) => g !== f)))
+      const p = porQueNoSoloAnade(f, readFileSync(f, 'utf8'), contexto, otros)
       if (p) console.error(`${f}: solo en ROLLBACK (${p})`)
       else console.log(f)
     }

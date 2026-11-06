@@ -101,6 +101,12 @@ end $$;`
   it('la 0460 de D (columna que admite nulos, su comentario y un CHECK que solo mira esa columna) solo añade', () => {
     expect(porQueNoSoloAnade('supabase/migrations/20261202T0460_s02_color_empresa.sql', S02, conCompany)).toBeNull()
   })
+  it('G01 · una columna en una tabla que crea otro fichero de la tanda (aún no en staging) no es «solo añadir»', () => {
+    const ruta = 'supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql'
+    const otros = new Set(['public.conta_cobro_gocardless'])
+    expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), { tablas: [], funciones: [] }, otros)).toMatch(/columna public\.conta_cobro_gocardless: la tabla la crea otro fichero de la tanda/)
+    expect(porQueNoSoloAnade(ruta, readFileSync(ruta, 'utf8'), { tablas: ['public.conta_cobro_gocardless'], funciones: [] }, otros)).toBeNull()
+  })
   it('un CHECK que mira una columna que ya existía no es «solo añadir»', () => {
     const sql = S02.replace('check (color is null', 'check (legal_name is null')
     expect(porQueNoSoloAnade('supabase/migrations/x.sql', sql, conCompany)).toMatch(/restriccion public\.company/)
