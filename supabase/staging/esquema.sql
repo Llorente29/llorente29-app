@@ -8386,6 +8386,53 @@ COMMENT ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p
 
 
 --
+-- Name: _dl1_validar(uuid, uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_validar(p_company uuid, p_actor uuid, p_nombre text, p_asientos jsonb) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; a jsonb; v_e public.journal_entry; v_importe numeric; v_claims text := current_setting('request.jwt.claims', true);
+  v_activa text := current_setting('folvy.cuenta_activa', true); v_n int := 0; r record;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'DL1 validar: esa empresa no está.'; end if;
+  if jsonb_array_length(p_asientos) = 0 then raise exception 'DL1 validar: no hay asientos que validar.'; end if;
+  for a in select * from jsonb_array_elements(p_asientos) loop
+    select * into v_e from public.journal_entry where id = (a->>'id')::uuid and account_id = v_acc and company_id = p_company;
+    if v_e.id is null then raise exception 'DL1 validar: el asiento % no está en la empresa.', a->>'id'; end if;
+    if v_e.status <> 'propuesto' then raise exception 'DL1 validar: el asiento % ya no está propuesto (está %): no se valida nada.', a->>'id', v_e.status; end if;
+    select coalesce(sum(debit), 0) into v_importe from public.journal_line where entry_id = v_e.id and account_id = v_acc;
+    if v_importe <> (a->>'importe')::numeric then
+      raise exception 'DL1 validar: el asiento % suma % y se esperaba %: no se valida nada.', a->>'id', v_importe, a->>'importe';
+    end if;
+  end loop;
+
+  -- Como si lo pulsara la persona: su usuario y su cuenta activa, solo en esta transacción.
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  for r in select e.id from public.journal_entry e
+            where e.id in (select (x->>'id')::uuid from jsonb_array_elements(p_asientos) x)
+            order by e.entry_date, e.created_at, e.id loop
+    perform public.journal_entry_validar(r.id, p_nombre);
+    v_n := v_n + 1;
+  end loop;
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_validar(p_company uuid, p_actor uuid, p_nombre text, p_asientos jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_validar(p_company uuid, p_actor uuid, p_nombre text, p_asientos jsonb) IS 'DL1. Valida, como una persona de la cuenta y con journal_entry_validar, una lista de asientos propuestos anclados por id e importe; para si alguno ya no está propuesto, no suma lo esperado o no se puede validar. Solo una tanda.';
+
+
+--
 -- Name: _documento_trabajador_puede(text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -151676,6 +151723,13 @@ GRANT ALL ON FUNCTION public._distancia_metros(p_lat1 double precision, p_lng1 d
 --
 
 REVOKE ALL ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _dl1_validar(p_company uuid, p_actor uuid, p_nombre text, p_asientos jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_validar(p_company uuid, p_actor uuid, p_nombre text, p_asientos jsonb) FROM PUBLIC;
 
 
 --
