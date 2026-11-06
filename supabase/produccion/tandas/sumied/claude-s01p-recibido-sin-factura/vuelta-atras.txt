@@ -1,0 +1,5 @@
+# S01p · la vuelta atrás, en orden inverso: lo de Foodint desde su copia; la
+# función desde su respaldo, y fuera el disparador.
+cuenta: scripts/conta/produccion/cuentas/s01p-recibido.sql
+supabase/vuelta-atras/20261104T1641_s01p_recibido_foodint.down.sql
+supabase/vuelta-atras/20261104T1640_s01p_recibido_con_factura.down.sql

@@ -1,0 +1,11 @@
+# S01p·16 · Las facturas de Uber no se podían validar: redondean el IVA en cada
+# línea y suman (Julio, 05/11). Rama claude/s01p-iva-redondeo. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1510  conta_motivos_para_validar (con respaldo): la cuota acepta hasta 0,01 €
+#         por línea de la factura con ese tipo (0,02 € si no se sabe). Medido:
+#         en Foodint, solo cambian las 3 de Uber propuestas, con 0,02 € como mucho.
+#
+# Nada en el camino del pedido. El real lo lanza Julio, que después valida las 3.
+cuenta: scripts/conta/produccion/cuentas/s01p-iva-redondeo.sql
+supabase/migrations/20261105T1510_s01p_iva_redondeo.sql

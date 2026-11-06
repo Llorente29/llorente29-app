@@ -1,0 +1,6 @@
+# S01p·1 · la vuelta atrás, en orden inverso: el préstamo y las facturas desde
+# su copia; las dos funciones desde su respaldo, y fuera lo añadido.
+cuenta: scripts/conta/produccion/cuentas/s01p-arreglos.sql
+supabase/vuelta-atras/20261104T1042_s01p_prestamo_octubre_foodint.down.sql
+supabase/vuelta-atras/20261104T1041_s01p_factura_asiento_datos.down.sql
+supabase/vuelta-atras/20261104T1040_s01p_arreglos.down.sql

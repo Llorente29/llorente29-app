@@ -9,6 +9,8 @@
 //   · la cuenta de sus facturas, en palabras, sin «sin decidir · aún no hay
 //     nada aprendido».
 
+import { cuotaDeLaFactura, textoRedondeo, toleranciaCuota, type LineaIva } from './fichaRecibida'
+
 export interface ComprobacionVista { id: string; ok: boolean; texto: string }
 
 /** Lo que va en el sitio de la factura cuando no se puede enseñar. */
@@ -42,4 +44,24 @@ export function comprobacionesSinContradecir(com: readonly ComprobacionVista[], 
 export function cuentaDeSusFacturas(gasto: { cuenta: string; nombre: string; origen: string } | null): { valor: string; apoyo: string } {
   if (gasto) return { valor: `${gasto.nombre} · ${gasto.cuenta}`, apoyo: gasto.origen }
   return { valor: 'Aún sin cuenta fija', apoyo: 'aún no sé en qué cuenta van las de este proveedor; abajo, en «Cómo se apunta», la que propongo para esta' }
+}
+
+/**
+ * S01p·16 · La comprobación de la lectura «El IVA al 21 % debería ser…» con
+ * céntimos de redondeo (Uber redondea cada línea y suma): con hasta 0,01 € por
+ * línea de la factura con ese tipo (0,02 € si no se sabe), deja de ser «Revisa
+ * esto» y dice el redondeo, en gris. Con más, se queda como estaba. La misma
+ * regla que validar (_conta_iva_tolerancia).
+ */
+export function comprobacionesConRedondeo<C extends ComprobacionVista>(com: readonly C[], iva: readonly LineaIva[], lineas: readonly { iva: number | null }[] | null | undefined, proveedor: string | null): (C & { redondeo?: boolean })[] {
+  return com.map((c) => {
+    const m = /^cuota_(\d+(?:\.\d+)?)$/.exec(c.id)
+    if (c.ok || !m) return c
+    const tipo = Number(m[1])
+    const l = iva.find((x) => x.tipo !== '' && Number(x.tipo) === tipo)
+    if (!l) return c
+    const r = cuotaDeLaFactura(l, toleranciaCuota(lineas, tipo))
+    if (r && !r.redondeo) return c
+    return { ...c, ok: true, redondeo: true, texto: r ? `${textoRedondeo(proveedor, r.diferencia)}.` : c.texto }
+  })
 }

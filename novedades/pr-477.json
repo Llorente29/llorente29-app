@@ -1,0 +1,11 @@
+[
+ {
+  "id": "477-1",
+  "pr": 477,
+  "fecha": "2026-11-04T18:17:18Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "Cuando llega la factura de un albarán que se había apuntado como recibido sin factura, ese apunte provisional se quita solo.",
+  "ruta": null
+ }
+]

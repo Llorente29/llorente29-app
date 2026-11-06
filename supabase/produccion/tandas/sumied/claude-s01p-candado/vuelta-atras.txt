@@ -1,0 +1,5 @@
+# S01p·2 · la vuelta atrás, en orden inverso: los días de Foodint, vacíos; las
+# dos funciones desde su respaldo, y fuera lo añadido.
+cuenta: scripts/conta/produccion/cuentas/s01p-candado.sql
+supabase/vuelta-atras/20261104T1121_s01p_dias_foodint.down.sql
+supabase/vuelta-atras/20261104T1120_s01p_candado.down.sql

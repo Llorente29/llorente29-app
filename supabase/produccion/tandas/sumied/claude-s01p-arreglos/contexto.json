@@ -1,0 +1,31 @@
+{
+ "_que": "S01p·1 · contexto de producción, medido en SOLO LECTURA el 04/11 a las 10:12Z con la consulta de contexto del workflow (analizar.mjs sql-contexto): la 1040 añade conta_esperadas_del_mes, _s01p_asiento_de_factura, _s01p_factura_su_asiento, _tg_s01p_factura_su_asiento y el disparador s01p_factura_su_asiento en journal_entry, y cambia conta_esperadas_no_llegadas y conta_puerta_fuentes_proponer (misma firma, con respaldo; huellas 02533ec6… y dec4e7e6…, iguales en staging). La 1041 cambia supplier_invoice.journal_entry_id en 147 filas (todas de Foodint, de nada a su asiento). La 1042 cambia una fila de recurring_contract (Foodint). Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T10:12Z",
+ "tanda": {
+  "supabase/migrations/20261104T1040_s01p_arreglos.sql": "01412ff14ec7737f478671f8412da38e",
+  "supabase/migrations/20261104T1041_s01p_factura_asiento_datos.sql": "eb4cb2bf768984dbf815921cd24af697",
+  "supabase/migrations/20261104T1042_s01p_prestamo_octubre_foodint.sql": "b2d25ca8e6b36d1c45a53344176ccc62"
+ },
+ "contexto": {
+  "tablas": [
+   "public.journal_entry",
+   "public.recurring_contract",
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public.conta_esperadas_no_llegadas(uuid,date)"
+  ],
+  "filas": {
+   "public.journal_entry": 15601,
+   "public.recurring_contract": 0,
+   "public.supplier_invoice": 382
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

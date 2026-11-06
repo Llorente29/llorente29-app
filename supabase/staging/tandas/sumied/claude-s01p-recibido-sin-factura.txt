@@ -1,0 +1,8 @@
+# S01p · Lo recibido sin factura se retira cuando llega la factura: 1640 (la
+# regla y el disparador) y 1641 (octubre de Foodint; en staging no está y no hace
+# nada). Su prueba (ROLLBACK, cuenta A): el albarán solo y el de una
+# periodificación con varios reciben su factura, la que no cambia conserva sus
+# propuestas, otra vez sin cambios, y la vuelta atrás con la huella de producción.
+supabase/migrations/20261104T1640_s01p_recibido_con_factura.sql
+supabase/migrations/20261104T1641_s01p_recibido_foodint.sql
+supabase/staging/sql/20261104_s01p_recibido_prueba.sql

@@ -24,7 +24,7 @@ import { AVISO_NIF_LEIDO_MAL, casaNif } from './paraValidar'
 /** El veredicto mientras su asiento se prepara: no es «No está lista», es «Comprobando…». */
 export const TITULO_PREPARANDO = 'Preparando su asiento…'
 
-export interface Comprobacion { id: string; ok: boolean; texto: string; grave?: boolean }
+export interface Comprobacion { id: string; ok: boolean; texto: string; grave?: boolean; /** S01p·16 · Céntimos de redondeo de la cuota: se apunta la de la factura. */ redondeo?: boolean }
 
 export interface DatosVeredicto {
   validada: boolean
@@ -196,6 +196,9 @@ export function motivoImportes(comprobaciones: readonly Comprobacion[]): MotivoC
   const malas = comprobaciones.filter((c) => !c.ok && (c.id === 'suma' || c.id === 'total' || c.id.startsWith('cuota_') || c.id.startsWith('recargo_') || c.id === 'retencion'))
   if (malas.length > 0) return { tono: 'revisar', motivo: frase(malas[0].texto) }
   if (comprobaciones.length === 0) return { tono: 'normal', motivo: 'No viene de leer un fichero: compruébalos con la factura.' }
+  // S01p·16 · Con céntimos de redondeo en la cuota, se dice (en gris), no «al céntimo».
+  const redondeo = comprobaciones.find((c) => c.redondeo)
+  if (redondeo) return { tono: 'normal', motivo: redondeo.texto }
   return { tono: 'ok', motivo: 'Cuadran con el PDF, al céntimo.' }
 }
 

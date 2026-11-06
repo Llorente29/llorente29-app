@@ -1,0 +1,9 @@
+# S01p·15 · Los alquileres del mes (1140: la regla; 1141: Foodint, que en
+# staging no toca nada). Su prueba (ROLLBACK, cuenta A, arrendadores de mentira):
+# octubre y noviembre propuestos solos y VALIDADOS (sin retención y con el 19 %,
+# que entra en el 115 del 4T); uno por mes; exento solo con certificado; lo que
+# se espera (el que manda factura sí, el que se apunta solo y el terminado no);
+# «Lo que se repite» lo dice; la vuelta atrás.
+supabase/migrations/20261105T1140_s01p_alquiler_del_mes.sql
+supabase/migrations/20261105T1141_s01p_alquileres_foodint.sql
+supabase/staging/sql/20261105_s01p_alquiler_del_mes_prueba.sql

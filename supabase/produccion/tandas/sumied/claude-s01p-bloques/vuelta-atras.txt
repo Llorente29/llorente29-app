@@ -1,0 +1,3 @@
+# S01p · 3 · la vuelta atrás: fuera las funciones de los bloques.
+cuenta: scripts/conta/produccion/cuentas/s01p-bloques.sql
+supabase/vuelta-atras/20261104T1720_s01p_bloques.down.sql

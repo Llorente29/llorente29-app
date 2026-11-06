@@ -1,0 +1,4 @@
+# S01p·15 · la vuelta atrás: primero los datos de Foodint (los apuntes propuestos, el contrato, Plaza Castilla sin fin), luego la regla.
+cuenta: scripts/conta/produccion/cuentas/s01p-alquileres.sql
+supabase/vuelta-atras/20261105T1141_s01p_alquileres_foodint.down.sql
+supabase/vuelta-atras/20261105T1140_s01p_alquiler_del_mes.down.sql

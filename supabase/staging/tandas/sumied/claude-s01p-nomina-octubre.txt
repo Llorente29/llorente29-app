@@ -1,0 +1,6 @@
+# S01p · La nómina de octubre solo a contabilidad (2310: añade una función y,
+# en Foodint, propone el asiento). Su prueba (ROLLBACK, cuenta A): propone y
+# cuadra, no duplica, no propone lo que no cuadra, no toca Laboral ni el portal,
+# y la vuelta atrás.
+supabase/migrations/20261104T2310_s01p_nomina_octubre.sql
+supabase/staging/sql/20261104_s01p_nomina_prueba.sql

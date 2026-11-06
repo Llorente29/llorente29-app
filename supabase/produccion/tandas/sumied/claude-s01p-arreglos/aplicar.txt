@@ -1,0 +1,20 @@
+# S01p·1 · Los arreglos de antes de «Cerrar el mes» (Julio, 04/11, respuesta
+# S01p·1). Rama claude/s01p-arreglos. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1040  conta_esperadas_del_mes (nueva: lo que le falta a un mes, el día que
+#         sea); el aviso de Compras la usa (igual que antes, desde el 15);
+#         conta_puerta_fuentes_proponer sin el día 0 de lo quincenal; y el
+#         disparador que deja en cada factura recibida el asiento que la
+#         contabiliza. Cambia dos funciones con la misma firma, con respaldo.
+#   1041  DATOS: las 147 facturas de Foodint que tienen su asiento y no lo
+#         decían. Los 130 enlaces a migrados de Diez no se tocan. Con copia.
+#   1042  DATOS de Foodint: la cuota del 03/10 en el cuadro del préstamo BBVA
+#         (558,68 de capital y 115,68 de intereses, al 3,90 % del cuadro). Con copia.
+#
+# Nada en el camino del pedido. La 1041 y la 1042 mueven filas: van con
+# «autorizo». El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-arreglos.sql
+supabase/migrations/20261104T1040_s01p_arreglos.sql
+supabase/migrations/20261104T1041_s01p_factura_asiento_datos.sql
+supabase/migrations/20261104T1042_s01p_prestamo_octubre_foodint.sql

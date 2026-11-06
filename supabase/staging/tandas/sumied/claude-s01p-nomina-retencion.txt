@@ -1,0 +1,7 @@
+# S01p·12 · La retención de la nómina (0045: cambia _s01p_nomina_proponer y
+# añade _s01p_nomina_retencion_poner; en Foodint corrige una línea). Su prueba
+# (ROLLBACK, cuenta A): propone con retención y VALIDA, y entra en el 111 del 4T;
+# una propuesta sin retención se corrige y se VALIDA; sin base no propone; la
+# vuelta atrás.
+supabase/migrations/20261105T0045_s01p_nomina_retencion.sql
+supabase/staging/sql/20261105_s01p_nomina_retencion_prueba.sql

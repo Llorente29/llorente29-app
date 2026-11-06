@@ -404,6 +404,61 @@ test('D03 · cambiar un importe de IVA rehace el asiento como vista previa y no 
 
 // ── 3 · Salir con un cambio sin guardar ─────────────────────────────────────
 
+// S01p·16 (Julio, 05/11): «Si yo pongo una base o un total debería recalcular». Con un tipo de IVA:
+// la base rehace la cuota y el total; la cuota escrita a mano se respeta, con la calculada al lado en
+// gris; el total rehace la base hacia atrás; y debajo, «Base + IVA = total · Igual que el PDF».
+test('S01p·16 · las celdas calculan: base → cuota y total; la cuota de la factura con la calculada al lado; el total hacia atrás', async ({ page }) => {
+  test.setTimeout(120_000)
+  const s = await entrarComo(page, CUENTA_A.email)
+  const errores = vigilar(page)
+  let p: Preparada | null = null
+  try {
+    p = await prepararRecibida(s, 'sola', `PS01P16-${lado(page)}-${sello()}`, UNA_AL_21)
+    await abrir(page, p)
+    const importes = region(page, 'Importes por tipo de IVA')
+    const tot = importes.locator('[data-prueba="totales-iva"]')
+    await expect(importes.getByLabel('Base al 21 %')).toHaveValue('100,00')
+    await expect(importes.locator('[data-prueba="contra-pdf"]')).toContainText(/Base \+ IVA = total ·\s*Igual que el PDF/)
+
+    // La base: rehace la cuota y el total.
+    await importes.getByLabel('Base al 21 %').fill('200,00')
+    await expect(importes.getByLabel('Cuota al 21 %')).toHaveValue('42,00')
+    await expect(importes.getByLabel('Total de la factura')).toHaveValue('242,00')
+    await expect(tot).toContainText(/Total\s*242,00\s€/)
+    await expect(importes.locator('[data-prueba="contra-pdf"]')).toContainText('No cuadra con el PDF: 121,00')
+
+    // La cuota a mano: se respeta, con la calculada al lado; solo cambia el total.
+    await importes.getByLabel('Cuota al 21 %').fill('42,05')
+    await expect(importes.getByLabel('Base al 21 %')).toHaveValue('200,00')
+    await expect(importes.locator('[data-prueba="cuota-calculada"]')).toHaveText('calculada 42,00')
+    await expect(importes.locator('[data-prueba="cuota-de-la-factura"]')).toContainText('Cuota de la factura')
+    await expect(importes.getByLabel('Total de la factura')).toHaveValue('242,05')
+
+    // El foco: de la cuota, al total.
+    await importes.getByLabel('Cuota al 21 %').focus()
+    await page.keyboard.press('Tab')
+    await expect(importes.getByLabel('Total de la factura')).toBeFocused()
+
+    // El total: la base hacia atrás (÷ 1,21), y la cuota de ella.
+    await importes.getByLabel('Total de la factura').fill('121,00')
+    await page.keyboard.press('Tab')
+    await expect(importes.getByLabel('Base al 21 %')).toHaveValue('100,00')
+    await expect(importes.getByLabel('Cuota al 21 %')).toHaveValue('21,00')
+    await expect(importes.locator('[data-prueba="cuota-calculada"]')).toHaveCount(0)
+    await expect(importes.locator('[data-prueba="contra-pdf"]')).toContainText(/Base \+ IVA = total ·\s*Igual que el PDF/)
+
+    // La captura, con la cuota de la factura a la vista (para el PR: antes y después).
+    await importes.getByLabel('Cuota al 21 %').fill('21,02')
+    await expect(importes.locator('[data-prueba="cuota-calculada"]')).toHaveText('calculada 21,00')
+    mkdirSync(DIR, { recursive: true })
+    await page.mouse.move(0, 0)
+    await importes.screenshot({ path: `${DIR}/importes-calculan-${lado(page)}.png` })
+    expect(errores).toEqual([])
+  } finally {
+    await limpiar(s, [p])
+  }
+})
+
 test('D03 · salir con un cambio sin guardar, por el menú y con ‹ ›: avisa, «Seguir editando» lo conserva y «Salir sin guardar» lo pierde', async ({ page }) => {
   test.setTimeout(150_000)
   const s = await entrarComo(page, CUENTA_A.email)

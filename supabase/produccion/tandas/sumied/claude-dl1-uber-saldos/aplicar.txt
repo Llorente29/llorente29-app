@@ -1,0 +1,30 @@
+# DL1 · Uber con los saldos limpios a 31/10 (Julio, DL1·7 a DL1·11). Rama
+# claude/dl1-uber-saldos. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+# Ya aplicada (real de Julio, 06/11), y por eso fuera de esta lista:
+#   1702  supabase/migrations/20261105T1702_dl1_uber_saldos.sql
+#         Añade _dl1_asiento_proponer y propone diez asientos en Foodint: la
+#         apertura de Uber (01/01, contra la 113), las promociones de enero a
+#         junio (70009001 y 63400000, sin IVA), lo que paga Uber en octubre
+#         (31/10, 70009001 y 477 al 10 %) y las facturas de Uber de octubre
+#         compensadas (31/10 y 05/11). Julio validó los tres de octubre y
+#         noviembre (4/3351, 4/3352 y 4/3353).
+#
+# Ahora (DL1·11):
+#   1750  Valida los 12 que el libro diario no enseña: los 7 de la 1702 con
+#         fecha hasta el 30/09 y las 5 liquidaciones de Uber de octubre
+#         (147,86). Con journal_entry_validar, como si los pulsara Julio, por
+#         su id y su importe; si alguno no se puede validar, para.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-uber-validar.sql
+supabase/migrations/20261106T1750_dl1_uber_validar.sql
+sin-vuelta-atras: supabase/migrations/20261106T1750_dl1_uber_validar.sql · motivo: un asiento validado no vuelve a propuesto; se anula con un contraasiento.
+esperado: dl1-uber-validar · De los 12 de Uber, sin validar por Julio = 0
+esperado: dl1-uber-validar · 43000002 validado en la apertura, menos el objetivo = 0.00
+esperado: dl1-uber-validar · 43000002 validado a 30/06, menos el objetivo = 0.00
+esperado: dl1-uber-validar · 43000002 validado a 31/10, menos el objetivo = 0.00
+esperado: dl1-uber-validar · 41000003 de Uber validado a 31/10 = 0.00
+esperado: dl1-uber-validar · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-uber-validar · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

@@ -1,0 +1,20 @@
+[
+ {
+  "id": "486-1",
+  "pr": 486,
+  "fecha": "2026-11-06T16:47:16Z",
+  "producto": "sumied",
+  "apartado": "Facturas recibidas",
+  "frase": "las que redondean el IVA en cada línea, como las de Uber, ya se pueden validar: Sumied acepta hasta 0,01 € de redondeo por línea y apunta el IVA que dice la factura.",
+  "ruta": null
+ },
+ {
+  "id": "486-2",
+  "pr": 486,
+  "fecha": "2026-11-06T16:47:16Z",
+  "producto": "sumied",
+  "apartado": "Importes por tipo de IVA",
+  "frase": "al cambiar la base, el tipo o el total, se recalcula el resto. La cuota escrita a mano se respeta, con la calculada al lado.",
+  "ruta": null
+ }
+]

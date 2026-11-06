@@ -1,0 +1,3 @@
+# S01p · la vuelta atrás: fuera el asiento propuesto (si sigue propuesto) y la función.
+cuenta: scripts/conta/produccion/cuentas/s01p-nomina.sql
+supabase/vuelta-atras/20261104T2310_s01p_nomina_octubre.down.sql

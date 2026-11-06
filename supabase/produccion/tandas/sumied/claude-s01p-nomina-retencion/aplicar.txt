@@ -1,0 +1,13 @@
+# S01p·12 · La nómina de octubre de Foodint no se podía validar: a la 4751 le
+# faltaba su retención (Julio, 05/11 00:40). Rama claude/s01p-nomina-retencion.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0045  _s01p_nomina_proponer (misma firma, con respaldo) pone la retención;
+#         _s01p_nomina_retencion_poner, nueva; y en Foodint, solo la línea de la
+#         4751 del asiento propuesto de octubre: tipo trabajo, base 7.268,20,
+#         modelo 111. Comprueba que entonces se puede validar. Cambia una fila
+#         que existe: «autorizo».
+#
+# Nada en el camino del pedido. El real lo lanza Julio, que después valida el asiento.
+cuenta: scripts/conta/produccion/cuentas/s01p-nomina-retencion.sql
+supabase/migrations/20261105T0045_s01p_nomina_retencion.sql

@@ -1,0 +1,26 @@
+{
+ "_que": "S01p · 4 · la factura con su fecha y las 22 de octubre · contexto de producción, medido en SOLO LECTURA el 04/11 a las 21:51Z: la 2210 cambia _conta_recibida_no_antes_de_entrar (misma firma, con respaldo); la 2211 añade _s01p_facturas_a_su_fecha y _s01p_facturas_a_su_fecha_deshacer (no existen) y las llama para las 22 de Foodint, que se borran y se vuelven a apuntar con la fecha de su factura (journal_entry, journal_line, journal_entry_document, supplier_invoice, document_activity) y rehacen el borrador del 303 del 4T (tax_return_line). Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-04T21:51Z",
+ "tanda": {
+  "supabase/migrations/20261104T2210_s01p_fecha_de_la_factura.sql": "4630323186a0ec61f838cff19e66ad7c",
+  "supabase/migrations/20261104T2211_s01p_22_a_octubre.sql": "5bbd78645e775ef46993c126a2c9019d"
+ },
+ "contexto": {
+  "tablas": [
+   "public.supplier_invoice"
+  ],
+  "funciones": [
+   "public._conta_recibida_no_antes_de_entrar(uuid,jsonb)"
+  ],
+  "filas": {
+   "public.supplier_invoice": 337
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
