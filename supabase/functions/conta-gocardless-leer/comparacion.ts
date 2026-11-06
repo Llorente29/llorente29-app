@@ -84,6 +84,7 @@ export function mesSiguiente(mes: Mes): Mes {
   return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
 }
 export function euros(cent: number): string {
+  // eslint-disable-next-line no-restricted-syntax -- cálculo local: «cent» es siempre un entero (céntimos), nunca null
   const s = (Math.abs(cent) / 100).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return `${cent < 0 ? '−' : ''}${s} €`
 }

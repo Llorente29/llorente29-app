@@ -54,6 +54,8 @@ export interface PlanLectura {
   diferenciasDelCasado: Diferencia[]
   /** El cliente de Sumied de cada cliente de esta cuenta de GoCardless casado. */
   partyDeCliente: Map<string, string>
+  /** El cliente de Sumied de cada ficha de Bitrix24. */
+  partyDeBitrix: Map<string, string>
   cobroCliente: Record<string, unknown>[]
   mandatosSumied: { gcMandatoId: string; fila: Record<string, unknown> }[]
   servicios: ServicioImportado[]
@@ -134,7 +136,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
 
   return {
     filas: { clientes, mandatos, suscripciones, cobros }, nuevos, cambiados, iguales,
-    parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, cobroCliente, mandatosSumied,
+    parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeBitrix, cobroCliente, mandatosSumied,
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {
       mandatosVivos: datos.mandatos.filter((m) => MANDATO_VIVO.includes(m.estado)).length,
@@ -164,10 +166,8 @@ export function planDiferencias(
 ): { diferencias: DiferenciaAEscribir[]; abono: ReturnType<typeof abonoContraTesoreria> } {
   const clienteDeMandato = new Map(datos.mandatos.filter((m) => m.clienteId).map((m) => [m.id, m.clienteId!]))
   const activas = datos.suscripciones.filter((x) => x.estado === 'active')
-  const partyDeBitrix = (b: string | null) => (b ? null : null)
-  void partyDeBitrix
   const out: DiferenciaAEscribir[] = plan.diferenciasDelCasado.map((d) => ({ tipo: d.tipo, porque_codigo: d.tipo, porque: d.porque, company_id: d.emisor,
-    party_id: null, bitrix_id: d.bitrixId, gc_cliente_id: d.clienteGcId, datos: { emisor: d.emisor, bitrix: d.bitrixId, gocardless: d.clienteGcId } }))
+    party_id: d.bitrixId ? plan.partyDeBitrix.get(d.bitrixId) ?? null : null, bitrix_id: d.bitrixId, gc_cliente_id: d.clienteGcId, datos: { emisor: d.emisor, bitrix: d.bitrixId, gocardless: d.clienteGcId } }))
   for (const n of sinConvertir) {
     if (!activas.some((x) => x.id === n.suscripcion)) continue
     out.push({ tipo: 'suscripcion_sin_convertir', porque_codigo: n.codigo, porque: `«${n.nombre}»: ${n.porque}`, company_id: empresa, party_id: n.partyId,
