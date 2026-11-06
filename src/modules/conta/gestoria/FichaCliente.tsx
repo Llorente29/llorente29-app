@@ -220,7 +220,10 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
               <div><dt>Lo que cobra hoy GoCardless</dt><dd className={c.diferenciaCent ? 'cxg-cifra cxg-distinto' : 'cxg-cifra'}>{euros(c.gocardlessCent)}</dd></div>
             </dl>
           )}
-          {ficha && <div className="cxg-explica" data-tono={c?.diferenciaCent ? 'ambar' : 'verde'}>{ficha.diferencia.map((t, i) => <p key={i}>{t}</p>)}</div>}
+          {/* Si arriba ya sale «Sumied y GoCardless no dan el mismo total» (con su botón), aquí no se repite. */}
+          {ficha && !fila.diferencias.some((d) => d.tipo === 'totales_distintos') && (
+            <div className="cxg-explica" data-tono={c?.diferenciaCent ? 'ambar' : 'verde'}>{ficha.diferencia.map((t, i) => <p key={i}>{t}</p>)}</div>
+          )}
         </section>
       )}
 
