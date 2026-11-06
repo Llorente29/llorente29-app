@@ -1,0 +1,129 @@
+Inicio
+65
+Contabilidad
+15
+Ventas
+Compras y gastos
+35
+Facturas recibidas
+27
+2
+Pagos
+Repartidores
+Bancos
+15
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna del Mercado
+Taberna del Mercado, S.L.
+Buscar o hacer algo
+Ctrl K
+A
+Administración
+Compras y gastos
+Facturas recibidas
+Frutas y Verduras La Huerta FV-2026/1187
+Frutas y Verduras La Huerta · FV-2026/1187
+Por pagar
+
+Llegó por correo el 06/11
+
+Más acciones
+Pagar · 294,77 €
+Ya está contabilizada
+
+Tiene su asiento validado (el 3): no hay nada que hacer.
+
+✓ Número de factura (art. 6.1.a).
+✓ Fecha de expedición (art. 6.1.b).
+✓ Nombre de quien la expide (art. 6.1.c).
+✓ NIF de quien la expide, con forma válida (art. 6.1.d).
+✓ Nombre y NIF del destinatario (art. 6.1.c y d).
+✓ Está a nombre de esta empresa (su NIF).
+✓ Tipos de IVA aplicados (art. 6.1.h): el 4 % y el 10 %.
+✓ Cuotas de IVA: las de cada base (art. 6.1.i).
+✓ Base + IVA = total.
+Ocultar
+Proveedor y factura
+Proveedor
+NIF de su ficha · NIF B00000018
+Nº de factura
+No hay otra con su número y su total.
+Fecha de la factura
+Importes por tipo de IVA
+Base
+Tipo de IVA
+Cuota
+21 %
+10 %
+4 %
+Sin IVA (0 %)
+21 %
+10 %
+4 %
+Sin IVA (0 %)
+Base 279,45
+IVA 15,32
+Total 294,77 €
+Base + IVA = total ·
+Igual que el PDF
+IVA
+
+Su IVA se deduce: va a la 472 y al 303.
+
+A qué gasto va
+Cuenta de gasto
+Local
+Importe
+60000000
+Compras de mercaderías
+Común (se reparte)
+Norte Mercado
+Taberna del Mercado
+
+Es la cuenta de su ficha.
+
+Pago
+Forma de pago
+Sin decir
+Transferencia
+Domiciliación
+Tarjeta
+Efectivo
+Saldo prepago Catcher (40700001)
+Compensación con la liquidación
+La de su ficha.
+Vence
+Lo dice la factura, igual que su ficha (15 días)
+Estado
+Sin pagar
+Pagada
+Se casará sola con el banco.
+Su asiento
+Cuenta	Nombre	Debe	Haber
+60000000	
+Bebidas y producto que vendes tal cual
+	279,45	
+47200004	
+IVA soportado 4 %
+	8,42	
+47200010	
+IVA soportado 10 %
+	6,90	
+40000006	
+Proveedores · Frutas y Verduras La Huerta
+		294,77
+
+Cuadra	Totales	294,77	294,77
+
+Ver el asiento 3 · Validado.
+
+FV-2026-1187.pdf
+Historial
+06/11 · Se dio de alta la factura (Sumied)
+06/11 · Aprobada (Administración)
+06/11 · Se propuso su asiento
+06/11 · Contabilizada: asiento 3 (Administración)

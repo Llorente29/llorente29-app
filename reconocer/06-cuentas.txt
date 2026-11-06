@@ -1,0 +1,253 @@
+http://127.0.0.1:4173/conta/bancos/cuentas?banco=64369fb9-1e08-447b-aad0-1bb7c12a8be1
+
+BUILD LOCAL
+· NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados
+F
+Folvy
+Inicio
+67
+Contabilidad
+15
+Ventas
+Compras y gastos
+33
+Bancos
+19
+Movimientos
+19
+Préstamos y aplazamientos
+Cuentas y extractos
+Reglas
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna de Prueba Norte
+Taberna de Prueba Norte, S.L.
+Buscar o hacer algo
+Ctrl K
+A
+Admin Norte
+Bancos
+Cuentas y extractos
+Cuentas y extractos
+
+Tus cuentas del banco, sus tarjetas de débito y lo que se ha subido de cada una.
+
++ Nuevo banco o tarjeta
+Casados solos
+3
+Más acciones
+Subir extracto
+R
+Revolut Business
+Al día · hace 4 días
+Cuentas
+Desconectar
+Pagos · puede leer · aún no paga
+Activar pagos
+Cuenta principal · 57200001
+ES91 2100 0418 4502 0005 1332
+Nombre corto en la barra
+Local
+Común a todos
+Norte Centro
+Norte Mercado
+Tarjetas de débito · 0
+
+Sus pagos salen en el extracto de esta cuenta. Con la tarjeta dada de alta sé quién la lleva y a quién pedirle el ticket.
+
+Últimos 4 dígitos
+Quién la lleva
+¿De qué local?
+Elige…
+Común a todos
+Norte Centro
+Norte Mercado
+Añadir tarjeta
+
+Solo los 4 últimos dígitos: el número entero no se guarda nunca.
+
+Extractos · 0
+
+Aún no se ha subido ninguno. Suelta su Norma 43 o su Excel en cualquier pantalla de Bancos.
+
+Revolut · European suppliers · 57200002
+GB11 REVO 0429 0993 4147 81
+Nombre corto en la barra
+Local
+Común a todos
+Norte Centro
+Norte Mercado
+Conectada con Revolut · actualizada el 03/11 a las 09:49
+Tarjetas de débito · 0
+
+Sus pagos salen en el extracto de esta cuenta. Con la tarjeta dada de alta sé quién la lleva y a quién pedirle el ticket.
+
+Últimos 4 dígitos
+Quién la lleva
+¿De qué local?
+Elige…
+Común a todos
+Norte Centro
+Norte Mercado
+Añadir tarjeta
+
+Solo los 4 últimos dígitos: el número entero no se guarda nunca.
+
+Extractos · 2
+PERIODO	FICHERO	MOVIMIENTOS	CUADRE	CON EL ANTERIOR	SUBIDO	
+DESHACER
+
+01/08/2026 – 01/11/2026	Revolut Business · del 2026-08-01 al 2026-11-01
+agregador:revolut
+	2
+2 nuevos
+	Cuadra
+saldo final 3.280,00 €
+	El primero	01/11/2026
+	Deshacer…
+01/11/2026 – 01/11/2026	Revolut Business · del 2026-11-01 al 2026-11-01
+agregador:revolut
+	2
+2 nuevos
+	Cuadra
+saldo final 3.268,37 €
+	Sigue al anterior	01/11/2026
+	Deshacer…
+Banco B01 · Norte · 57200911
+ES02 0182 9101 3200 0000 0011
+Nombre corto en la barra
+Local
+Común a todos
+Norte Centro
+Norte Mercado
+Tarjetas de débito · 0
+
+Sus pagos salen en el extracto de esta cuenta. Con la tarjeta dada de alta sé quién la lleva y a quién pedirle el ticket.
+
+Últimos 4 dígitos
+Quién la lleva
+¿De qué local?
+Elige…
+Común a todos
+Norte Centro
+Norte Mercado
+Añadir tarjeta
+
+Solo los 4 últimos dígitos: el número entero no se guarda nunca.
+
+Extractos · 2
+PERIODO	FICHERO	MOVIMIENTOS	CUADRE	CON EL ANTERIOR	SUBIDO	
+DESHACER
+
+01/10/2026 – 13/10/2026	b01-tres-cuentas.n43
+Norma 43
+	8
+8 nuevos
+	Cuadra
+saldo final 44.237,80 €
+	El primero	13/10/2026
+Admin Norte
+	Deshacer…
+01/10/2026 – 13/10/2026	b01-tres-cuentas.n43
+Norma 43
+	8
+0 nuevos · 8 ya estaban
+	Cuadra
+saldo final 44.237,80 €
+	El primero	13/10/2026
+Admin Norte
+	Deshacer…
+Banco B01 · Sur · 57200912
+ES65 0182 9102 8700 0000 0012
+Nombre corto en la barra
+Local
+Común a todos
+Norte Centro
+Norte Mercado
+Tarjetas de débito · 0
+
+Sus pagos salen en el extracto de esta cuenta. Con la tarjeta dada de alta sé quién la lleva y a quién pedirle el ticket.
+
+Últimos 4 dígitos
+Quién la lleva
+¿De qué local?
+Elige…
+Común a todos
+Norte Centro
+Norte Mercado
+Añadir tarjeta
+
+Solo los 4 últimos dígitos: el número entero no se guarda nunca.
+
+Extractos · 2
+PERIODO	FICHERO	MOVIMIENTOS	CUADRE	CON EL ANTERIOR	SUBIDO	
+DESHACER
+
+01/10/2026 – 13/10/2026	b01-tres-cuentas.n43
+Norma 43
+	3
+3 nuevos
+	Cuadra
+saldo final 9.451,60 €
+	El primero	13/10/2026
+Admin Norte
+	Deshacer…
+01/10/2026 – 13/10/2026	b01-tres-cuentas.n43
+Norma 43
+	3
+0 nuevos · 3 ya estaban
+	Cuadra
+saldo final 9.451,60 €
+	El primero	13/10/2026
+Admin Norte
+	Deshacer…
+Banco B01 · Mercado · 57200913
+ES64 0182 9103 2100 0000 0013
+Nombre corto en la barra
+Local
+Común a todos
+Norte Centro
+Norte Mercado
+Tarjetas de débito · 0
+
+Sus pagos salen en el extracto de esta cuenta. Con la tarjeta dada de alta sé quién la lleva y a quién pedirle el ticket.
+
+Últimos 4 dígitos
+Quién la lleva
+¿De qué local?
+Elige…
+Común a todos
+Norte Centro
+Norte Mercado
+Añadir tarjeta
+
+Solo los 4 últimos dígitos: el número entero no se guarda nunca.
+
+Extractos · 2
+PERIODO	FICHERO	MOVIMIENTOS	CUADRE	CON EL ANTERIOR	SUBIDO	
+DESHACER
+
+01/10/2026 – 13/10/2026	b01-tres-cuentas.n43
+Norma 43
+	3
+3 nuevos
+	Cuadra
+saldo final 4.220,00 €
+	El primero	13/10/2026
+Admin Norte
+	Deshacer…
+01/10/2026 – 13/10/2026	b01-tres-cuentas.n43
+Norma 43
+	4
+1 nuevos · 3 ya estaban
+	Cuadra
+saldo final 4.185,25 €
+	El primero	13/10/2026
+Admin Norte
+	Deshacer…
+Cuentas del plan que aún no son un banco
+
+Ninguna: cada cuenta de bancos del plan ya tiene su banco aquí. Para uno que aún no está en el plan, «+ Nuevo banco o tarjeta».

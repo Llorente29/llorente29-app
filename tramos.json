@@ -1,0 +1,413 @@
+{
+  "inicio": 4.934,
+  "fin": 123.491,
+  "pasos": [
+    {
+      "paso": 1,
+      "desde": 4.934
+    },
+    {
+      "paso": 2,
+      "desde": 23.907
+    },
+    {
+      "paso": 3,
+      "desde": 38.918
+    },
+    {
+      "paso": 4,
+      "desde": 54.253
+    },
+    {
+      "paso": 5,
+      "desde": 76.258
+    },
+    {
+      "paso": 6,
+      "desde": 86.345
+    },
+    {
+      "paso": 7,
+      "desde": 103.564
+    }
+  ],
+  "dichos": [
+    {
+      "id": "llega",
+      "texto": "Tu proveedor te manda la factura por correo, como siempre.",
+      "dura": 3.28,
+      "desde": 4.934
+    },
+    {
+      "id": "lee",
+      "texto": "Sumied abre el PDF y lo lee entero: el proveedor, el número, la fecha, cada línea y cada tipo de IVA.",
+      "dura": 8.4,
+      "desde": 9.131
+    },
+    {
+      "id": "igual",
+      "texto": "Y comprueba que lo que ha leído cuadra con el PDF, al céntimo.",
+      "dura": 4.48,
+      "desde": 18.434
+    },
+    {
+      "id": "apunta",
+      "texto": "Si todo cuadra, la apunta sola en tu contabilidad, con su asiento ya validado.",
+      "dura": 5.2,
+      "desde": 23.907
+    },
+    {
+      "id": "porque",
+      "texto": "Y te enseña por qué: cada requisito de la factura, comprobado. Si algo no encaja, te avisa y te dice qué falta.",
+      "dura": 7.92,
+      "desde": 30.009
+    },
+    {
+      "id": "pagos",
+      "texto": "En Pagos ves lo que toca pagar hoy: lo vencido y lo que vence esta semana.",
+      "dura": 5.12,
+      "desde": 41.413
+    },
+    {
+      "id": "semana",
+      "texto": "Un solo botón: pagar lo de esta semana. Sumied marca las facturas que tocan.",
+      "dura": 5.52,
+      "desde": 47.434
+    },
+    {
+      "id": "titular",
+      "texto": "Antes de pagar, Revolut comprueba que el titular de cada IBAN es de verdad tu proveedor.",
+      "dura": 5.44,
+      "desde": 54.253
+    },
+    {
+      "id": "segunda",
+      "texto": "Si un proveedor estrena IBAN, Sumied pide una segunda confirmación. Es el engaño más común con facturas falsas.",
+      "dura": 8.08,
+      "desde": 60.595
+    },
+    {
+      "id": "desde",
+      "texto": "Salen de tu cuenta de Revolut, conectada a Sumied, y ves el saldo antes y después.",
+      "dura": 5.6,
+      "desde": 69.579
+    },
+    {
+      "id": "una",
+      "texto": "Una sola aprobación vale para todos los pagos.",
+      "dura": 3.04,
+      "desde": 76.258
+    },
+    {
+      "id": "pin",
+      "texto": "Confirmas con tu PIN de pago, y listo.",
+      "dura": 2.72,
+      "desde": 82.641
+    },
+    {
+      "id": "enviado",
+      "texto": "Hecho: los tres pagos salen por Revolut, sin entrar en el banco.",
+      "dura": 4.48,
+      "desde": 88.788
+    },
+    {
+      "id": "justificante",
+      "texto": "Cada pago sale con su justificante, listo para mandárselo al proveedor.",
+      "dura": 4.56,
+      "desde": 94.168
+    },
+    {
+      "id": "pagado",
+      "texto": "Y Pagos ya los cuenta como pagados este mes.",
+      "dura": 2.96,
+      "desde": 99.631
+    },
+    {
+      "id": "vuelve",
+      "texto": "Cuando el cargo llega al banco, Sumied lo reconoce solo.",
+      "dura": 3.84,
+      "desde": 105.61
+    },
+    {
+      "id": "casado",
+      "texto": "Cada cargo queda casado con su factura, y su asiento, hecho. Sin conciliar a mano.",
+      "dura": 5.6,
+      "desde": 111.281
+    },
+    {
+      "id": "resumen",
+      "texto": "Tres facturas, del correo al banco, sin teclear un solo dato.",
+      "dura": 4.72,
+      "desde": 117.783
+    }
+  ],
+  "objetivos": [
+    {
+      "t": 5.607,
+      "x": 252,
+      "y": 134.140625,
+      "w": 168,
+      "h": 17
+    },
+    {
+      "t": 9.131,
+      "x": 957,
+      "y": 235.03125,
+      "w": 926,
+      "h": 1309
+    },
+    {
+      "t": 18.456,
+      "x": 636,
+      "y": 584.890625,
+      "w": 235,
+      "h": 17.546875
+    },
+    {
+      "t": 23.942,
+      "x": 301,
+      "y": 186.03125,
+      "w": 521,
+      "h": 21.59375
+    },
+    {
+      "t": 30.04,
+      "x": 834,
+      "y": 186.03125,
+      "w": 53,
+      "h": 16
+    },
+    {
+      "t": 38.942,
+      "x": 44,
+      "y": 311.78125,
+      "w": 176,
+      "h": 36
+    },
+    {
+      "t": 41.443,
+      "x": 269,
+      "y": 186.21875,
+      "w": 1614,
+      "h": 21.59375
+    },
+    {
+      "t": 43.006,
+      "x": 697.5,
+      "y": 236.8125,
+      "w": 349.5,
+      "h": 17.546875
+    },
+    {
+      "t": 47.455,
+      "x": 269,
+      "y": 346.703125,
+      "w": 1614,
+      "h": 46.796875
+    },
+    {
+      "t": 49.288,
+      "x": 269,
+      "y": 346.703125,
+      "w": 1614,
+      "h": 46.796875
+    },
+    {
+      "t": 54.325,
+      "x": 1537,
+      "y": 85,
+      "w": 346,
+      "h": 77.59375
+    },
+    {
+      "t": 56.072,
+      "x": 1537,
+      "y": 170.59375,
+      "w": 346,
+      "h": 57.34375
+    },
+    {
+      "t": 57.671,
+      "x": 1537,
+      "y": 235.9375,
+      "w": 346,
+      "h": 77.59375
+    },
+    {
+      "t": 60.606,
+      "x": 1524,
+      "y": 735.828125,
+      "w": 372,
+      "h": 107
+    },
+    {
+      "t": 69.616,
+      "x": 1524,
+      "y": 379.78125,
+      "w": 372,
+      "h": 117
+    },
+    {
+      "t": 76.309,
+      "x": 1524,
+      "y": 679.328125,
+      "w": 372,
+      "h": 40.5
+    },
+    {
+      "t": 77.787,
+      "x": 1644.5,
+      "y": 1024,
+      "w": 251.5,
+      "h": 36
+    },
+    {
+      "t": 80.22,
+      "x": 1644.5,
+      "y": 1024,
+      "w": 251.5,
+      "h": 36
+    },
+    {
+      "t": 81.341,
+      "x": 724,
+      "y": 682.671875,
+      "w": 147,
+      "h": 20.25
+    },
+    {
+      "t": 82.679,
+      "x": 724,
+      "y": 647.21875,
+      "w": 472,
+      "h": 36
+    },
+    {
+      "t": 85.005,
+      "x": 1044,
+      "y": 755.65625,
+      "w": 152,
+      "h": 36
+    },
+    {
+      "t": 86.391,
+      "x": 1044,
+      "y": 755.65625,
+      "w": 152,
+      "h": 36
+    },
+    {
+      "t": 88.803,
+      "x": 252,
+      "y": 169.03125,
+      "w": 1648,
+      "h": 44.890625
+    },
+    {
+      "t": 94.186,
+      "x": 252,
+      "y": 229.921875,
+      "w": 1648,
+      "h": 190.046875
+    },
+    {
+      "t": 95.836,
+      "x": 1638.875,
+      "y": 291.46875,
+      "w": 22,
+      "h": 17
+    },
+    {
+      "t": 99.67,
+      "x": 1512.5,
+      "y": 503.5625,
+      "w": 349.5,
+      "h": 17.546875
+    },
+    {
+      "t": 103.626,
+      "x": 12,
+      "y": 395.78125,
+      "w": 208,
+      "h": 44
+    },
+    {
+      "t": 106.419,
+      "x": 1217.328125,
+      "y": 231.421875,
+      "w": 111,
+      "h": 17.546875
+    },
+    {
+      "t": 107.803,
+      "x": 657,
+      "y": 413.390625,
+      "w": 152,
+      "h": 44
+    },
+    {
+      "t": 110.369,
+      "x": 657,
+      "y": 413.390625,
+      "w": 152,
+      "h": 44
+    },
+    {
+      "t": 111.36,
+      "x": 271,
+      "y": 511.28125,
+      "w": 558,
+      "h": 18.890625
+    },
+    {
+      "t": 112.985,
+      "x": 271,
+      "y": 595.609375,
+      "w": 544,
+      "h": 18.890625
+    },
+    {
+      "t": 114.569,
+      "x": 271,
+      "y": 679.9375,
+      "w": 544,
+      "h": 18.890625
+    }
+  ],
+  "cortes": [
+    [
+      0.002,
+      4.934
+    ],
+    [
+      40.575,
+      41.412
+    ],
+    [
+      53.854,
+      54.164
+    ],
+    [
+      80.726,
+      80.824
+    ],
+    [
+      82.629,
+      82.641
+    ],
+    [
+      86.994,
+      88.788
+    ],
+    [
+      105.072,
+      105.61
+    ],
+    [
+      110.878,
+      111.28
+    ]
+  ],
+  "aprobaciones": 1,
+  "errores": []
+}

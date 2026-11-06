@@ -1,0 +1,2 @@
+Pantallas leídas: 7
+Nada real: ni IBAN fuera del 9999, ni DNI/NIE, ni NIF que no sea de ceros, ni correos, ni nombres de la lista.

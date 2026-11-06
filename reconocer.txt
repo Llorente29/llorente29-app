@@ -1,0 +1,117 @@
+Pager usage is off.
+== empresa
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                ?column?                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"id": "3b34403a-a7d7-4a48-a8d7-737e8cababdc", "color": null, "email": null, "phone": "910000000", "tax_id": "B28000016", "website": null, "is_active": true, "logo_path": null, "account_id": "c01a0000-0001-4000-8000-00000000000a", "created_by": "c01a0000-0001-4000-8000-0000000000a1", "dehu_email": "avisos@prueba.folvy.test", "dehu_phone": null, "legal_name": "Taberna de Prueba Norte, S.L.", "setup_step": "hecho", "trade_name": "Taberna de Prueba Norte", "updated_by": "c01a0000-0001-4000-8000-0000000000a1", "entity_kind": "company", "fiscal_city": "Madrid", "tax_id_type": "nif_es", "fiscal_extra": null, "fiscal_number": "12", "fiscal_street": "de la Prueba", "registry_name": "Madrid", "fiscal_country": "ES", "is_hospitality": true, "registry_entry": "1.ª", "registry_folio": "1", "registry_sheet": "M-700000", "fiscal_province": "Madrid", "incorporated_on": "2020-01-15", "legal_form_code": "nif_b", "month_close_day": null, "registry_volume": "40000", "tax_office_code": null, "payroll_pay_days": null, "fiscal_postal_code": "28001", "fiscal_street_type": "Calle", "setup_completed_at": "2026-10-02T19:16:45.70158+00:00", "tax_id_verified_at": null}
+(1 row)
+
+== proveedores (30)
+                  id                  |                name                 |                legal_name                 |  tax_id   |  iban8   | payment_method | payment_terms_days 
+--------------------------------------+-------------------------------------+-------------------------------------------+-----------+----------+----------------+--------------------
+ 87569694-4f62-44e6-8e34-3008f788ebc7 | Bebidas Prueba Sur                  | Bebidas Prueba Sur, S.L.                  | B00000101 | 00002210 | transfer       |                   
+ c01a0000-0001-4000-8000-0000000000a4 | Bebidas Sol                         |                                           | B91000026 |          |                |                   
+ c0c00000-0001-4000-8000-000000000002 | Bodega Prueba Ribera, S.L.          |                                           | B00000091 |          |                |                   
+ c2640733-235c-4fc6-8f40-055683fc09b2 | Carnes Prueba Centro                | Carnes Prueba Centro, S.L.                | B00000102 | 00000811 | transfer       |                   
+ c0c00000-0001-4000-8000-000000000003 | Carnes Prueba del Valle, S.L.       |                                           | B00000109 |          |                |                   
+ e0500000-0001-4000-8000-000000000002 | Catcher Marketplace                 | Catcher Marketplace SL                    | B00000125 |          |                |                   
+ c0300000-0001-4000-8000-000000000003 | Distribuciones Antiguas             | Distribuciones Antiguas, S.L.             | B91030031 |          |                |                   
+ c0c00000-0001-4000-8000-000000000004 | Distribuciones Prueba Aurora, S.L.  |                                           | B00000117 |          |                |                   
+ c01a0000-0001-4000-8000-0000000000a3 | Hermanos Ruiz                       | Hermanos Ruiz Distribución, S.L.          | B91000018 | 00051332 | card           |                 30
+ fc717b21-775a-4b27-b6b0-0f02ef157a97 | Hielo Prueba                        | Hielo Prueba, S.L.                        | B00000105 | 00000077 | transfer       |                   
+ d1c00000-0001-4000-8000-000000000001 | Lácteos Prueba Ocho, S.L.           |                                           | B00000141 |          |                |                   
+ 1194ecb3-6db6-4169-9e43-ebe673260b01 | Limpiezas Prueba                    | Limpiezas Prueba, S.L.                    | B00000106 | 00000091 | transfer       |                   
+ fec7e903-bd09-49ef-817b-cc24e83bc2fb | Locales del Norte (alquiler)        | Locales del Norte, S.L.                   | B28000024 |          |                |                   
+ d1c00000-0001-4000-8000-000000000002 | Marca Prueba Cedida, S.L.           |                                           | B00000158 |          |                |                   
+ c0300000-0001-4000-8000-000000000002 | Marcas del Sur                      | Marcas del Sur, S.L.                      | B91030023 |          |                |                   
+ d0100000-0001-4000-8000-000000000001 | Mayorista Prueba Alfa               | Mayorista Prueba Alfa, S.A.               | A00000018 |          |                |                 30
+ c1b0a000-0001-4000-8000-0000000000a6 | Mercados del Norte                  |                                           | B91000034 |          |                |                   
+ bd973c92-744c-452a-8a0d-3004362ae4cc | Panadería de Prueba                 | Panadería de Prueba, S.L.                 | B00000104 | 00000118 | transfer       |                   
+ c01a0000-0001-4000-8000-0000000000a5 | Panadería Luna                      |                                           |           | 34567892 |                |                   
+ c0300000-0001-4000-8000-000000000001 | Plataforma Norte                    | Plataforma Norte Spain, S.L.              | B91030015 |          |                |                   
+ e0500000-0001-4000-8000-000000000001 | Riders                              | Riders                                    |           |          |                |                   
+ b0100000-0001-4000-8000-000000000001 | Suministros B01 del Norte           | Suministros B01 del Norte, S.L.           |           |          |                |                   
+ d0100000-0001-4000-8000-000000000002 | Suministros Eléctricos Prueba Norte | Suministros Eléctricos Prueba Norte, S.L. | B00000026 |          |                |                   
+ c0c00000-0001-4000-8000-000000000001 | Verduras del Huerto Prueba, S.L.    |                                           |           |          |                |                   
+ 9810a95c-380b-4596-a1ab-7d5d8005f5af | Verduras Prueba                     | Verduras Prueba, S.L.                     | B00000103 | 00004471 | transfer       |                   
+(25 rows)
+
+== recibidas por estado
+   status    | count | sin_pagar 
+-------------+-------+-----------
+ aprobada    |    13 |        13
+ en_revision |    10 |        10
+ pagada      |     6 |         0
+(3 rows)
+
+== recibidas (20 últimas), una fila entera de ejemplo
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  to_jsonb                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"id": "30c2c241-f0b7-4f2c-a31c-ac60ca500f01", "code": "FAC-00029", "notes": null, "source": "manual", "status": "pagada", "paid_at": "2026-11-03", "paid_by": null, "reading": null, "batch_id": null, "brand_id": null, "doc_kind": "invoice", "due_date": "2026-10-31", "inbox_id": null, "read_iban": null, "tax_total": 10.07, "account_id": "c01a0000-0001-4000-8000-00000000000a", "company_id": "3b34403a-a7d7-4a48-a8d7-737e8cababdc", "created_at": "2026-11-03T08:48:31.915398+00:00", "created_by": null, "number_key": "H71", "updated_at": "2026-11-03T08:48:31.915398+00:00", "approved_at": "2026-11-02T08:48:31.915398+00:00", "approved_by": null, "grand_total": 58.00, "issuer_name": null, "location_id": null, "paid_method": "transfer", "supplier_id": "fc717b21-775a-4b27-b6b0-0f02ef157a97", "discarded_at": null, "discarded_by": null, "invoice_date": "2026-10-20", "match_status": "sin_match", "needs_review": false, "paid_by_name": "Julio", "ai_session_id": null, "iban_decision": null, "issuer_tax_id": null, "discard_reason": null, "invoice_number": "H-71", "issuer_address": null, "no_document_at": null, "payment_method": "transfer", "tax_base_total": 47.93, "arrival_channel": null, "created_by_name": "Datos del vídeo B01", "due_date_set_at": null, "due_date_set_by": null, "entry_overrides": null, "surcharge_total": null, "approved_by_name": "Datos del vídeo B01", "iban_decision_at": null, "iban_decision_by": null, "journal_entry_id": null, "payment_entry_id": null, "raw_document_url": null, "withholding_base": null, "discarded_by_name": null, "due_date_set_name": null, "no_document_reason": null, "reading_confidence": null, "vat_non_deductible": false, "withholding_amount": null, "corrects_invoice_id": null, "no_document_by_name": null, "withholding_rate_id": null, "iban_decision_by_name": null, "status_before_discard": null, "vat_non_deductible_note": null, "vat_non_deductible_reason": null, "not_duplicate_confirmed_at": null, "not_duplicate_confirmed_by": null, "not_duplicate_confirmed_by_name": null}
+(1 row)
+
+                  id                  |   status    | invoice_number | invoice_date | grand_total |              proveedor              | payment_method 
+--------------------------------------+-------------+----------------+--------------+-------------+-------------------------------------+----------------
+ 30c2c241-f0b7-4f2c-a31c-ac60ca500f01 | pagada      | H-71           | 2026-10-20   |       58.00 | Hielo Prueba                        | transfer
+ a5c46a0e-df0d-45b0-86a7-534a15a7ab60 | pagada      | BP-2198        | 2026-10-15   |      150.00 | Bebidas Prueba Sur                  | transfer
+ 4f70fbdc-0029-464f-8cd2-0224fdd26ce8 | aprobada    | PAN-118        | 2026-10-21   |      212.75 | Panadería de Prueba                 | transfer
+ cf552f99-6132-485c-acf5-ec9d41eeea42 | aprobada    | V-4471         | 2026-10-25   |       96.30 | Verduras Prueba                     | transfer
+ 67a489a6-b4d0-49f0-a1b9-70d8f64df60d | aprobada    | F-26/0811      | 2026-10-22   |      324.00 | Carnes Prueba Centro                | transfer
+ c5f219c4-2ac4-4ee0-98da-491010a64d1e | aprobada    | LP-0091        | 2026-10-27   |      180.15 | Limpiezas Prueba                    | transfer
+ 6d6cc84c-bec7-4072-8eef-3aa6a5a24384 | aprobada    | H-77           | 2026-10-26   |       58.00 | Hielo Prueba                        | transfer
+ c12cfc1e-caa4-49b9-b9f7-ace9862a9841 | aprobada    | BP-2210        | 2026-10-20   |      288.40 | Bebidas Prueba Sur                  | transfer
+ dc6f3a25-3cdc-4705-a764-792ce0be9822 | en_revision | ES_F_2001_26_7 | 2026-09-30   |        5.69 | Riders                              | 
+ c10eb964-333b-4af3-8b38-4608fc80c4a8 | en_revision | ES_I_1002_26_7 | 2026-09-30   |        9.92 | Riders                              | 
+ 1fc7b343-8630-4e45-a9c4-1db7f5288824 | en_revision | ES_I_1003_26_7 | 2026-09-30   |        4.84 | Riders                              | 
+ 89f65587-5fa2-49b2-a767-de7fe12b7b1d | en_revision | ES_I_1001_26_7 | 2026-09-30   |       24.68 | Riders                              | 
+ 0b2e7ad3-c0f0-4e13-a985-c13ae69cdbc1 | en_revision | CMS_2026_09_2  | 2026-09-30   |        9.56 | Catcher Marketplace                 | 
+ 4f5a1c4d-afca-42c2-af6a-76610e538db3 | en_revision | LP-7           | 2026-10-07   |      132.00 | Lácteos Prueba Ocho, S.L.           | 
+ d0100000-0001-4000-8000-0000000000f2 | en_revision | 2026/0512      | 2026-10-09   |      498.88 | Suministros Eléctricos Prueba Norte | 
+ d0100000-0001-4000-8000-0000000000f1 | en_revision | F-2026-1022    | 2026-10-11   |     1411.47 | Mayorista Prueba Alfa               | 
+ d0100000-0001-4000-8000-0000000000f3 | en_revision |                | 2026-10-07   |       47.07 |                                     | 
+ b0100000-0001-4000-8000-000000000f78 | aprobada    | B01-0478       | 2026-10-01   |      600.00 | Suministros B01 del Norte           | 
+ b0100000-0001-4000-8000-000000000f77 | pagada      | B01-0477       | 2026-09-28   |      498.88 | Suministros B01 del Norte           | 
+ c0500000-0001-4000-8000-000000000101 | aprobada    | AB-2026-031    | 2026-10-02   |      -55.00 | Hermanos Ruiz                       | 
+(20 rows)
+
+== bancos de la empresa
+                  id                  |             name             | kind | iban4 | is_active 
+--------------------------------------+------------------------------+------+-------+-----------
+ b0100000-0001-4000-8000-0000000000b3 | Banco B01 · Mercado          | bank | 0013  | t
+ b0100000-0001-4000-8000-0000000000b1 | Banco B01 · Norte            | bank | 0011  | t
+ b0100000-0001-4000-8000-0000000000b2 | Banco B01 · Sur              | bank | 0012  | t
+ 3315cb3a-ad31-44ea-958b-253b1ae8811f | Cuenta principal             | bank | 1332  | t
+ 64369fb9-1e08-447b-aad0-1bb7c12a8be1 | Revolut · European suppliers | bank | 4781  | t
+(5 rows)
+
+== movimientos por estado
+   status    | count 
+-------------+-------
+ casado      |     4
+ pendiente   |     4
+ por_aclarar |     6
+ propuesto   |     5
+(4 rows)
+
+== un movimiento casado de ejemplo, con su casado
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         to_jsonb                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ {"fx": null, "id": "d3c86f68-3637-4522-bcd5-7d6b13f5b580", "amount": -1500.00, "reason": "Sale de Banco B01 · Norte y entra en Banco B01 · Sur el mismo día, mismo importe.", "status": "casado", "card_id": null, "op_date": "2026-10-06", "own_code": "000", "proposal": null, "account_id": "c01a0000-0001-4000-8000-00000000000a", "company_id": "3b34403a-a7d7-4a48-a8d7-737e8cababdc", "confidence": "seguro", "created_at": "2026-10-13T16:42:53.432275+00:00", "receipt_at": null, "updated_at": "2026-11-01T10:45:11.540829+00:00", "value_date": "2026-10-06", "common_code": "04", "document_no": null, "fingerprint": "2026-10-06|-150000||||1", "reference_1": null, "reference_2": null, "bank_concept": "TRASPASO A CUENTA B01 SUR", "counterparty": null, "receipt_path": null, "statement_id": "e455fcea-dcef-487e-9ac8-b3e00a2c4f37", "clean_concept": "Traspaso a cuenta B01 SUR", "movement_type": null, "before_cutover": false, "ignored_reason": null, "soft_fingerprint": "2026-10-06|-150000|1", "treasury_account_id": "b0100000-0001-4000-8000-0000000000b1"}
+(1 row)
+
+psql:scripts/video/reconocer.sql:31: ERROR:  column i.movement_id does not exist
+LINE 2: ...atch_item i join public.bank_movement m on m.id = i.movement...
+                                                             ^
+HINT:  Perhaps you meant to reference the column "b.movement_id".
+psql:scripts/video/reconocer.sql:33: ERROR:  column i.movement_id does not exist
+LINE 1: ...atch_item i join public.bank_movement m on m.id = i.movement...
+                                                             ^
+== enlace con el agregador (Revolut)
+ provider |         treasury_account_id          
+----------+--------------------------------------
+ revolut  | 64369fb9-1e08-447b-aad0-1bb7c12a8be1
+(1 row)
+
+== personas de la cuenta (nombre que sale en la app)
+psql:scripts/video/reconocer.sql:37: ERROR:  relation "public.profiles" does not exist
+LINE 1: select to_jsonb(p) - 'avatar_url' from public.profiles p whe...
+                                               ^

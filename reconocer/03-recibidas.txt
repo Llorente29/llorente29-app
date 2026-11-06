@@ -1,0 +1,194 @@
+http://127.0.0.1:4173/conta/documentos?ver=recibidas
+
+BUILD LOCAL
+· NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados
+F
+Folvy
+Inicio
+67
+Contabilidad
+15
+Ventas
+Compras y gastos
+33
+Facturas recibidas
+25
+2
+Pagos
+Repartidores
+Bancos
+19
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna de Prueba Norte
+Taberna de Prueba Norte, S.L.
+Buscar o hacer algo
+Ctrl K
+A
+Admin Norte
+Compras y gastos
+Facturas recibidas
+Facturas recibidas
+
+Las facturas de tus proveedores. Las que se reciben en el local entran solas.
+
+Exportar
+Más acciones
+Subir factura
+Asientos de compras por validar · 1
+
+Los propongo yo: lo recibido sin factura al cerrar el mes (y su contrario el día 1) y los pagos a proveedor. Míralos y valídalos aquí.
+
+Pago a proveedor · 30 sept
+Pago desde el Saldo prepago Catcher · 2.ª quincena de septiembre de 2026
+54,69 €
+Ver sus apuntes
+Validar
+Lo que no he podido proponer, y por qué · 5
+
+Lo propongo solo en cuanto llega lo que lo origina y cada noche; esto no he podido. Cuando lo arregles, sale de aquí la próxima vez que lo intente.
+
+Recibido sin factura · Verduras del Huerto Prueba, S.L. · 10/2026 · A Verduras del Huerto Prueba, S.L. le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de octubre se propone.
+Recibido sin factura · Carnes Prueba del Valle, S.L. · 09/2026 · A Carnes Prueba del Valle, S.L. le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de septiembre se propone.
+Recibido sin factura · Carnes Prueba del Valle, S.L. · 10/2026 · A Carnes Prueba del Valle, S.L. le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de octubre se propone.
+Recibido sin factura · Carnes Prueba del Valle, S.L. · 10/2026 · A Carnes Prueba del Valle, S.L. le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de octubre se propone.
+Recibido sin factura · Carnes Prueba del Valle, S.L. · 09/2026 · A Carnes Prueba del Valle, S.L. le falta el tipo de gasto: ponlo en su ficha y lo recibido sin factura de septiembre se propone.
+Todas
+30
+Por revisar
+25
+Por aclarar
+3
+Por pagar
+2
+Pagadas
+0
+Revisarlas de una en una
+Buscar factura
+Fecha: Últimos 12 meses
+Últimos 12 meses
+Noviembre 2026
+Octubre 2026
+Septiembre 2026
+Agosto 2026
+Julio 2026
+Junio 2026
+Mayo 2026
+Abril 2026
+Marzo 2026
+Febrero 2026
+Enero 2026
+Diciembre 2025
+Proveedor: Todos
+Todos
+Bebidas Prueba Sur
+Carnes Prueba Centro
+Catcher Marketplace
+Hermanos Ruiz
+Hielo Prueba
+Lácteos Prueba Ocho, S.L.
+Limpiezas Prueba
+Locales del Norte (alquiler)
+Mayorista Prueba Alfa
+Panadería de Prueba
+Panadería Luna
+Riders
+Suministros B01 del Norte
+Suministros Eléctricos Prueba Norte
+Verduras Prueba
+Local: Todos
+Todos
+Común
+Norte Centro
+Norte Mercado
+Más filtros
+Marcar las que están listas (0)
+	Fecha ↓	Proveedor	Nº de factura	Local	Base	IVA	Total	¿Lista para validar?	
+	27/10	
+Limpiezas Prueba
+	LP-0091	Común	148,88 €	31,27 €	180,15 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	26/10	
+Hielo Prueba
+	H-77	Común	47,93 €	10,07 €	58,00 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	25/10	
+Verduras Prueba
+	V-4471	Común	87,55 €	8,75 €	96,30 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	22/10	
+Carnes Prueba Centro
+	F-26/0811	Común	294,55 €	29,45 €	324,00 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	21/10	
+Panadería de Prueba
+	PAN-118	Común	193,41 €	19,34 €	212,75 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	20/10	
+Hielo Prueba
+	H-71	Común	47,93 €	10,07 €	58,00 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	20/10	
+Bebidas Prueba Sur
+	BP-2210	Común	262,18 €	26,22 €	288,40 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	15/10	
+Bebidas Prueba Sur
+	BP-2198	Común	136,36 €	13,64 €	150,00 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	11/10	
+Mayorista Prueba Alfa
+Propuesto: Compras de mercaderías
+	F-2026-1022	Común	1.283,15 €	128,32 €	1.411,47 €	No está lista. No sé de qué local es: elígelo en «A qué gasto va» (si no, queda común y el informe lo reparte).	›
+	09/10	
+Suministros Eléctricos Prueba Norte
+	2026/0512	Común	412,30 €	86,58 €	498,88 €	No está lista. A Suministros Eléctricos Prueba Norte le falta el tipo de gasto: ponlo en su ficha y la factura se propone.	›
+	07/10	
+Lácteos Prueba Ocho, S.L.
+	LP-7	Norte Centro	120,00 €	12,00 €	132,00 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	02/10	
+Panadería Luna
+	L-0431	Norte Centro	138,45 €	13,85 €	152,30 €	No está lista. A Panadería Luna le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.	›
+	01/10	
+Suministros B01 del Norte
+	B01-0478	Norte Centro	495,87 €	104,13 €	600,00 €	No está lista. A Suministros B01 del Norte le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.	›
+	01/10	
+Locales del Norte (alquiler)
+Propuesto: Arrendamientos y cánones
+	A-2026-10	Norte Mercado	—	—	1.530,00 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	30/09	
+Riders
+	ES_I_1003_26_7	Norte Centro	4,00 €	0,84 €	4,84 €	No está lista. A RIDER INVENTADO TRES le falta el tipo de gasto: ponlo en su ficha y la factura se propone.	›
+	30/09	
+Riders
+	ES_I_1001_26_7	Común	20,40 €	4,28 €	24,68 €	No está lista. A RIDER INVENTADO UNO le falta el tipo de gasto: ponlo en su ficha y la factura se propone.	›
+	30/09	
+Riders
+	ES_I_1002_26_7	Norte Mercado	8,20 €	1,72 €	9,92 €	No está lista. A RIDER INVENTADA DOS le falta el tipo de gasto: ponlo en su ficha y la factura se propone.	›
+	30/09	
+Riders
+	ES_F_2001_26_7	Norte Mercado	4,70 €	0,99 €	5,69 €	No está lista. A FLOTA INVENTADA, S.L. le falta el tipo de gasto: ponlo en su ficha y la factura se propone.	›
+	30/09	
+Panadería Luna
+	L-412	Norte Centro	79,45 €	7,95 €	87,40 €	No está lista. A Panadería Luna le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.	›
+	30/09	
+Panadería Luna
+	L-0412	Norte Centro	79,45 €	7,95 €	87,40 €	No está lista. A Panadería Luna le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.	›
+	28/09	
+Suministros B01 del Norte
+	B01-0477	Norte Centro	412,30 €	86,58 €	498,88 €	No está lista. A Suministros B01 del Norte le falta el NIF: ponlo en su ficha. Sin él no se puede deducir el IVA.	›
+	24/09	
+Hermanos Ruiz
+Propuesto: Compras de mercaderías
+	F-2026-0915	Norte Centro	1.166,50 €	116,65 €	1.283,15 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	10/09	
+Hermanos Ruiz
+Propuesto: Compras de mercaderías
+	F-2026-0871	Norte Centro	876,73 €	87,67 €	964,40 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	27/08	
+Hermanos Ruiz
+Propuesto: Compras de mercaderías
+	F-2026-0802	Norte Centro	1.002,50 €	100,25 €	1.102,75 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+	13/08	
+Hermanos Ruiz
+Propuesto: Compras de mercaderías
+	F-2026-0760	Norte Centro	716,64 €	71,66 €	788,30 €	No está lista. Falta su PDF: súbelo o márcala «Sin PDF» con su motivo para poder validarla.	›
+25 facturas por revisar
+Base 8.039,43 €
+IVA 980,23 €
+Total 10.549,66 €
