@@ -2,7 +2,7 @@
  "_que": "G01 · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 06/11 a las 16:40Z con la consulta del workflow (analizar.mjs sql-contexto). La 1530 solo añade (16 tablas nuevas que no existen, 3 vistas, funciones nuevas, columnas que admiten nulos en conta_cobro_cliente y conta_mandato, y la lectura de cada noche). La 1531 cambia en caliente conta_pasarela_cuenta (0 filas), party (109 filas: solo amplía su CHECK de origen), conta_mandato (0 filas) y _s01_cuenta_pasarela (con su respaldo). Nada en el camino del pedido. Ningún fichero en el historial.",
  "medido": "2026-11-06T16:40Z",
  "tanda": {
-  "supabase/migrations/20261106T1530_g01_clientes_cuotas.sql": "8ae717afd72a2fc3f7bfde5174ecfc98",
+  "supabase/migrations/20261106T1530_g01_clientes_cuotas.sql": "0d619acf1e89df8dab9076f242720954",
   "supabase/migrations/20261106T1531_g01_gocardless_cobro.sql": "eb18eefca963053ab8ae0407e20f1b16"
  },
  "contexto": {

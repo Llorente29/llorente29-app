@@ -551,7 +551,7 @@ select
   c.servicios,
   c.forma_pago_bitrix                                  as forma_de_pago_en_bitrix,
   e.id                                                 as emisor_id,
-  e.name                                               as emisor,
+  coalesce(e.trade_name, e.legal_name)                 as emisor,
   cc.forma_cobro                                       as forma_de_cobro,
   cc.gc_cliente_id                                     as cliente_en_gocardless,
   (select m.estado from public.conta_gc_mandato m where m.company_id = e.id and m.gc_cliente_id = cc.gc_cliente_id
@@ -579,7 +579,7 @@ select
   l.id                             as linea_id,
   l.party_id                       as cliente_id,
   p.name                           as cliente,
-  e.name                           as emisor,
+  coalesce(e.trade_name, e.legal_name) as emisor,
   s.nombre                         as servicio,
   s.forma                          as se_cobra,
   l.tipo,
@@ -606,7 +606,7 @@ select
   d.datos,
   d.party_id       as cliente_id,
   p.name           as cliente,
-  e.name           as emisor,
+  coalesce(e.trade_name, e.legal_name) as emisor,
   d.bitrix_id      as ficha_en_bitrix,
   d.gc_cliente_id  as cliente_en_gocardless,
   l.empezada_at    as leida_el
