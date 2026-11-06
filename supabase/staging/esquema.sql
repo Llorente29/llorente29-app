@@ -4733,6 +4733,71 @@ end $$;
 
 
 --
+-- Name: _conta_gestoria_apuntar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gestoria_apuntar() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_fila jsonb := to_jsonb(coalesce(new, old));
+begin
+  insert into public.conta_gestoria_cambio (account_id, tabla, registro_id, accion, desde_mes, antes, despues, quien, quien_name)
+  values ((v_fila->>'account_id')::uuid, tg_table_name, (v_fila->>'id')::uuid,
+          case tg_op when 'INSERT' then 'alta' when 'UPDATE' then 'cambio' else 'borrado' end,
+          coalesce((v_fila->>'desde')::date, (v_fila->>'mes')::date),
+          case when tg_op = 'INSERT' then null else to_jsonb(old) end,
+          case when tg_op = 'DELETE' then null else to_jsonb(new) end,
+          auth.uid(),
+          coalesce(v_fila->>'updated_by_name', v_fila->>'resuelta_por_name', v_fila->>'created_by_name', v_fila->>'pedida_por_name'));
+  return null;
+end $$;
+
+
+--
+-- Name: _conta_gestoria_euros(numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gestoria_euros(p_importe numeric) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select replace(replace(replace(to_char(round(coalesce(p_importe, 0), 2), 'FM999,999,990.00'), ',', '#'), '.', ','), '#', '.') || ' €'
+$$;
+
+
+--
+-- Name: _conta_gestoria_mes(date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gestoria_mes(p_mes date) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select (array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'])[extract(month from p_mes)::int]
+$$;
+
+
+--
+-- Name: _conta_gestoria_puede(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gestoria_puede(p_company uuid) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta cambia lo que se cobra a un cliente.' using errcode = '42501';
+  end if;
+  return v_cuenta;
+end $$;
+
+
+--
 -- Name: _conta_hoja(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -14699,7 +14764,7 @@ CREATE FUNCTION public._s01_cuenta_pasarela(p_company uuid, p_proveedor text) RE
     AS $$
 declare v_cuenta uuid; v_plan text; v_d int; v_code text; v_ca uuid; v_ta uuid; v_nombre text; v_existe text;
 begin
-  if p_proveedor not in ('stripe', 'redsys') then raise exception 'Proveedor: stripe o redsys.' using errcode = '22023'; end if;
+  if p_proveedor not in ('stripe', 'redsys', 'gocardless') then raise exception 'Proveedor: stripe, redsys o gocardless.' using errcode = '22023'; end if;
   perform pg_advisory_xact_lock(hashtextextended('conta_pasarela:' || p_company::text || ':' || p_proveedor, 0));
   select code into v_existe from public.conta_pasarela_cuenta where company_id = p_company and proveedor = p_proveedor;
   if v_existe is not null then return v_existe; end if;
@@ -14709,12 +14774,12 @@ begin
   select p.account_digits into v_d from public.company_tax_profile p where p.company_id = p_company;
   v_code := public.company_account_siguiente(p_company, '572', coalesce(v_d, 8));
   if v_code is null then raise exception 'No queda numeración libre en 572 para la cuenta de la pasarela.' using errcode = '23514'; end if;
-  v_nombre := case p_proveedor when 'stripe' then 'Stripe · por abonar' else 'TPV del banco · por abonar' end;
+  v_nombre := case p_proveedor when 'stripe' then 'Stripe · por abonar' when 'gocardless' then 'GoCardless · por abonar' else 'TPV del banco · por abonar' end;
   insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, source, created_by_name)
   values (v_cuenta, p_company, v_plan, v_code, '572', v_nombre, v_nombre, 'own', 'manual', 'Sumied')
   returning id into v_ca;
   insert into public.treasury_account (account_id, company_id, kind, name, short_name)
-  values (v_cuenta, p_company, 'pasarela', v_nombre, case p_proveedor when 'stripe' then 'Stripe' else 'TPV' end)
+  values (v_cuenta, p_company, 'pasarela', v_nombre, case p_proveedor when 'stripe' then 'Stripe' when 'gocardless' then 'GoCardless' else 'TPV' end)
   returning id into v_ta;
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
   values (v_cuenta, p_company, v_ca, 'bank_account', v_ta::text, 'principal', 'manual');
@@ -31238,6 +31303,98 @@ COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada ho
 
 
 --
+-- Name: conta_bitrix_guardar_conexion(uuid, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_guardar_conexion(p_account uuid, p_entorno text, p_url text, p_portal text, p_quien text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_ref uuid; v_nombre text := 'conta_bitrix:' || p_account::text;
+begin
+  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
+  if p_entorno not in ('real', 'pruebas') then raise exception 'Entorno: real o pruebas.' using errcode = '22023'; end if;
+  if coalesce(trim(p_url), '') !~ '^https://[A-Za-z0-9.-]+/rest/[0-9]+/[A-Za-z0-9]+/?$' then
+    raise exception 'La dirección de Bitrix24 es como https://<tu portal>/rest/<número>/<clave>/ (Bitrix24 › Aplicaciones › Webhooks › Webhook entrante).' using errcode = '22023';
+  end if;
+  select url_ref into v_ref from public.conta_crm_bitrix where account_id = p_account for update;
+  if v_ref is null or not exists (select 1 from vault.secrets where id = v_ref) then
+    select id into v_ref from vault.secrets where name = v_nombre;
+  end if;
+  if v_ref is not null then
+    perform vault.update_secret(v_ref, trim(p_url), v_nombre, 'Dirección de lectura de Bitrix24 de una cuenta de Sumied');
+  else
+    v_ref := vault.create_secret(trim(p_url), v_nombre, 'Dirección de lectura de Bitrix24 de una cuenta de Sumied');
+  end if;
+  insert into public.conta_crm_bitrix (account_id, entorno, url_ref, portal, conectada_at, conectada_por_name, updated_at)
+  values (p_account, p_entorno, v_ref, p_portal, now(), p_quien, now())
+  on conflict (account_id) do update set entorno = excluded.entorno, url_ref = excluded.url_ref, portal = excluded.portal,
+    conectada_at = excluded.conectada_at, conectada_por_name = excluded.conectada_por_name, updated_at = now();
+end $_$;
+
+
+--
+-- Name: conta_bitrix_guardar_fichas(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_guardar_fichas(p_account uuid, p_fichas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare f jsonb; v_party uuid; v_huella text; v_antes text; v_nif text; v_nuevos int := 0; v_cambiados int := 0; v_iguales int := 0;
+begin
+  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
+  for f in select * from jsonb_array_elements(coalesce(p_fichas, '[]'::jsonb)) loop
+    if coalesce(f->>'bitrixId', '') = '' then continue; end if;
+    v_huella := md5(f::text);
+    v_nif := nullif(public.party_nif(nullif(f->>'nif', '')), '');
+    select c.party_id, c.huella into v_party, v_antes from public.conta_gestoria_cliente c where c.account_id = p_account and c.bitrix_id = f->>'bitrixId';
+    if v_party is null then
+      insert into public.party (account_id, name, tax_id, source, created_by_name)
+      values (p_account, coalesce(nullif(trim(f->>'nombre'), ''), 'Empresa ' || (f->>'bitrixId') || ' de Bitrix24'), v_nif, 'crm', 'Bitrix24')
+      returning id into v_party;
+      v_nuevos := v_nuevos + 1;
+    elsif v_antes is distinct from v_huella then
+      update public.party set name = coalesce(nullif(trim(f->>'nombre'), ''), name), tax_id = coalesce(v_nif, tax_id), updated_at = now()
+       where id = v_party and account_id = p_account;
+      v_cambiados := v_cambiados + 1;
+    else
+      v_iguales := v_iguales + 1;
+      update public.conta_gestoria_cliente set leido_at = now() where party_id = v_party;
+      continue;
+    end if;
+    insert into public.customer_fiscal (party_id, account_id, legal_name, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province)
+    values (v_party, p_account, nullif(trim(f->>'nombre'), ''), nullif(f->>'calle', ''), nullif(f->>'cp', ''), nullif(f->>'poblacion', ''), nullif(f->>'provincia', ''))
+    on conflict (party_id) do update set legal_name = coalesce(excluded.legal_name, customer_fiscal.legal_name),
+      fiscal_street = excluded.fiscal_street, fiscal_postal_code = excluded.fiscal_postal_code, fiscal_city = excluded.fiscal_city,
+      fiscal_province = excluded.fiscal_province, updated_at = now();
+    insert into public.conta_gestoria_cliente (party_id, account_id, bitrix_id, situacion, servicios, forma_pago_bitrix, emisor_segun_bitrix, ficha, huella, leido_at)
+    values (v_party, p_account, f->>'bitrixId', nullif(f->>'situacion', ''),
+            coalesce(array(select jsonb_array_elements_text(f->'servicios')), '{}'), nullif(f->>'formaPago', ''),
+            (select id from public.company where id::text = f->>'emisorSegunBitrix' and account_id = p_account),
+            f, v_huella, now())
+    on conflict (party_id) do update set situacion = excluded.situacion, servicios = excluded.servicios, forma_pago_bitrix = excluded.forma_pago_bitrix,
+      emisor_segun_bitrix = excluded.emisor_segun_bitrix, ficha = excluded.ficha, huella = excluded.huella, leido_at = now();
+  end loop;
+  return jsonb_build_object('nuevos', v_nuevos, 'cambiados', v_cambiados, 'iguales', v_iguales);
+end $$;
+
+
+--
+-- Name: conta_bitrix_secreto(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_secreto(p_account uuid) RETURNS TABLE(entorno text, url text, mapa jsonb)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select b.entorno, s.decrypted_secret, b.mapa
+    from public.conta_crm_bitrix b join vault.decrypted_secrets s on s.id = b.url_ref
+   where b.account_id = p_account
+$$;
+
+
+--
 -- Name: conta_canal_de_factura(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -36385,6 +36542,332 @@ COMMENT ON FUNCTION public.conta_gasto_aprendido(p_company uuid, p_supplier uuid
 
 
 --
+-- Name: conta_gestoria_alta_empleado(uuid, uuid, uuid, text, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_alta_empleado(p_company uuid, p_party uuid, p_servicio uuid, p_empleado text, p_desde date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_mes date := date_trunc('month', p_desde)::date;
+        v_serv public.conta_servicio; v_cliente text; v_id uuid; v_importe numeric; v_nombre text := upper(trim(coalesce(p_empleado, '')));
+begin
+  select * into v_serv from public.conta_servicio where id = p_servicio and company_id = p_company;
+  if v_serv.id is null then raise exception 'Ese servicio no es de esta empresa.' using errcode = 'P0002'; end if;
+  if v_serv.forma <> 'por_empleado' then raise exception '«%» no se cobra por trabajador.', v_serv.nombre using errcode = '22023'; end if;
+  select name into v_cliente from public.party where id = p_party and account_id = v_cuenta;
+  if v_cliente is null then raise exception 'Ese cliente no es de esta cuenta.' using errcode = 'P0002'; end if;
+  if v_nombre = '' then raise exception 'Escribe el nombre del trabajador.' using errcode = '22023'; end if;
+  if v_mes is null then raise exception 'Di desde qué mes.' using errcode = '22023'; end if;
+  if exists (select 1 from public.conta_linea where company_id = p_company and party_id = p_party and servicio_id = p_servicio
+               and upper(empleado_nombre) = v_nombre and (hasta is null or hasta >= v_mes)) then
+    raise exception '% ya está de alta en % de %.', v_nombre, v_serv.nombre, v_cliente using errcode = '23505';
+  end if;
+  insert into public.conta_linea (account_id, company_id, party_id, servicio_id, empleado_nombre, origen, periodo, desde, created_by_name)
+  values (v_cuenta, p_company, p_party, p_servicio, v_nombre, 'manual', 'mes', v_mes, public.conta_nombre_actor())
+  returning id into v_id;
+  v_importe := public.conta_linea_al_mes(v_id, v_mes);
+  return jsonb_build_object('id', v_id, 'frase', format('Alta de %s en %s de %s desde %s: %s.', v_nombre, lower(v_serv.nombre), v_cliente,
+    public._conta_gestoria_mes(v_mes), case when v_importe is null then 'aún sin tarifa' else public._conta_gestoria_euros(v_importe) || ' al mes' end));
+end $$;
+
+
+--
+-- Name: conta_gestoria_baja_linea(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_baja_linea(p_linea uuid, p_mes date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_linea; v_mes date := date_trunc('month', p_mes)::date; v_serv text; v_cliente text; v_quien text;
+begin
+  select * into v_l from public.conta_linea where id = p_linea;
+  if v_l.id is null then raise exception 'Esa línea no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_gestoria_puede(v_l.company_id);
+  if v_mes is null then raise exception 'Di desde qué mes es la baja.' using errcode = '22023'; end if;
+  if v_mes < v_l.desde then raise exception 'La baja no puede ser antes del alta (%).', public._conta_gestoria_mes(v_l.desde) using errcode = '22023'; end if;
+  update public.conta_linea set hasta = v_mes, updated_at = now(), updated_by_name = public.conta_nombre_actor() where id = p_linea;
+  select s.nombre into v_serv from public.conta_servicio s where s.id = v_l.servicio_id;
+  select name into v_cliente from public.party where id = v_l.party_id;
+  v_quien := coalesce(v_l.empleado_nombre, nullif(v_l.detalle, ''), v_serv);
+  return jsonb_build_object('id', p_linea, 'frase', format('Baja de %s en %s de %s: %s se cobra entero y ya no se cobra desde %s.',
+    v_quien, lower(v_serv), v_cliente, public._conta_gestoria_mes(v_mes), public._conta_gestoria_mes((v_mes + interval '1 month')::date)));
+end $$;
+
+
+--
+-- Name: conta_gestoria_despertar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_despertar() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_secreto text; r record;
+begin
+  if extract(hour from (now() at time zone 'Europe/Madrid')) <> 4 then return; end if;
+  if not exists (select 1 from public.conta_crm_bitrix) and not exists (select 1 from public.conta_cobro_gocardless) then return; end if;
+  select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+  if v_secreto is null then
+    raise exception 'Falta cron_secret en el Vault: no se puede despertar la lectura de la gestoría.' using errcode = '55000';
+  end if;
+  for r in select account_id from public.conta_crm_bitrix where url_ref is not null loop
+    perform net.http_post(url := public._project_url() || '/functions/v1/conta-bitrix-leer',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+      body := jsonb_build_object('accion', 'leer', 'cuenta', r.account_id, 'por', 'cada_noche'), timeout_milliseconds := 150000);
+  end loop;
+  for r in select g.company_id from public.conta_cobro_gocardless g
+            where g.token_ref is not null and not exists (select 1 from public.conta_crm_bitrix b where b.account_id = g.account_id and b.url_ref is not null) loop
+    perform net.http_post(url := public._project_url() || '/functions/v1/conta-gocardless-leer',
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+      body := jsonb_build_object('accion', 'leer', 'empresa', r.company_id, 'por', 'cada_noche'), timeout_milliseconds := 150000);
+  end loop;
+end $$;
+
+
+--
+-- Name: conta_gestoria_enlazar(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_enlazar(p_company uuid, p_gc_cliente text, p_party uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_gc text; v_cliente text; v_frase text;
+begin
+  select coalesce(nombre, gc_id) into v_gc from public.conta_gc_cliente where company_id = p_company and gc_id = p_gc_cliente;
+  if v_gc is null then raise exception 'Ese cliente no está en lo leído de GoCardless.' using errcode = 'P0002'; end if;
+  select name into v_cliente from public.party where id = p_party and account_id = v_cuenta;
+  if v_cliente is null then raise exception 'Ese cliente no es de esta cuenta.' using errcode = 'P0002'; end if;
+  update public.conta_gc_cliente set party_id = p_party, casado_por = 'persona' where company_id = p_company and gc_id = p_gc_cliente;
+  insert into public.conta_cobro_cliente (company_id, party_id, account_id, forma_cobro, gc_cliente_id, gc_casado_por, updated_by_name)
+  values (p_company, p_party, v_cuenta, 'gocardless', p_gc_cliente, 'persona', public.conta_nombre_actor())
+  on conflict (company_id, party_id) do update set gc_cliente_id = excluded.gc_cliente_id, gc_casado_por = 'persona',
+    forma_cobro = coalesce(public.conta_cobro_cliente.forma_cobro, 'gocardless'), updated_at = now(), updated_by_name = excluded.updated_by_name;
+  v_frase := format('Enlazado: %s de GoCardless es %s. Desde ahora sus cobros salen en su ficha.', v_gc, v_cliente);
+  insert into public.conta_gestoria_decision (account_id, company_id, tipo, party_id, gc_cliente_id, frase, quien, quien_name)
+  values (v_cuenta, p_company, 'enlace', p_party, p_gc_cliente, v_frase, auth.uid(), public.conta_nombre_actor());
+  update public.conta_gestoria_diferencia set vigente = false
+   where company_id = p_company and vigente and tipo = 'gocardless_sin_ficha' and gc_cliente_id = p_gc_cliente;
+  return jsonb_build_object('frase', v_frase);
+end $$;
+
+
+--
+-- Name: conta_gestoria_linea_desde_gc(uuid, text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_linea_desde_gc(p_company uuid, p_suscripcion text, p_servicio uuid, p_empleado text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_s public.conta_gc_suscripcion; v_party uuid; v_cliente text;
+        v_serv public.conta_servicio; v_mes date; v_id uuid; v_frase text; v_empleado text := nullif(upper(trim(coalesce(p_empleado, ''))), '');
+begin
+  select * into v_s from public.conta_gc_suscripcion where company_id = p_company and gc_id = p_suscripcion;
+  if v_s.gc_id is null then raise exception 'Esa suscripción no está en lo leído de GoCardless.' using errcode = 'P0002'; end if;
+  select g.party_id into v_party from public.conta_gc_cliente g where g.company_id = p_company and g.gc_id = v_s.gc_cliente_id;
+  if v_party is null then raise exception 'El cliente de GoCardless aún no está enlazado con ninguna ficha: enlázalo primero.' using errcode = '22023'; end if;
+  if exists (select 1 from public.conta_linea where company_id = p_company and suscripcion_gc_id = p_suscripcion) then
+    raise exception 'Ya hay una línea con lo que cobra «%».', v_s.nombre using errcode = '23505';
+  end if;
+  select * into v_serv from public.conta_servicio where id = p_servicio and company_id = p_company;
+  if v_serv.id is null then raise exception 'Ese servicio no es de esta empresa.' using errcode = 'P0002'; end if;
+  if v_serv.forma = 'por_empleado' and v_empleado is null then raise exception 'Escribe de qué trabajador es.' using errcode = '22023'; end if;
+  select name into v_cliente from public.party where id = v_party;
+  v_mes := greatest(date_trunc('month', coalesce(v_s.inicio, current_date))::date, date_trunc('month', current_date)::date);
+  insert into public.conta_linea (account_id, company_id, party_id, servicio_id, empleado_nombre, origen, periodo, desde, suscripcion_gc_id, created_by_name)
+  values (v_cuenta, p_company, v_party, p_servicio, case when v_serv.forma = 'por_empleado' then v_empleado end, 'gocardless',
+          case when v_serv.forma = 'fijo_anio' then 'anio' else 'mes' end, v_mes, p_suscripcion, public.conta_nombre_actor())
+  returning id into v_id;
+  insert into public.conta_gc_importacion (company_id, suscripcion_gc_id, account_id, gc_cliente_id, party_id, nombre, importe, resultado, linea_id)
+  values (p_company, p_suscripcion, v_cuenta, v_s.gc_cliente_id, v_party, v_s.nombre, v_s.importe, 'linea', v_id)
+  on conflict (company_id, suscripcion_gc_id) do update set resultado = 'linea', linea_id = excluded.linea_id, porque_codigo = null, porque = null;
+  v_frase := format('Añadida como línea: %s%s de %s desde %s (GoCardless cobra %s al mes).', v_serv.nombre, coalesce(' · ' || v_empleado, ''), v_cliente,
+    public._conta_gestoria_mes(v_mes), public._conta_gestoria_euros(v_s.al_mes));
+  insert into public.conta_gestoria_decision (account_id, company_id, tipo, party_id, gc_cliente_id, suscripcion_gc_id, frase, quien, quien_name)
+  values (v_cuenta, p_company, 'linea_desde_gc', v_party, v_s.gc_cliente_id, p_suscripcion, v_frase, auth.uid(), public.conta_nombre_actor());
+  update public.conta_gestoria_diferencia set vigente = false
+   where company_id = p_company and party_id = v_party and vigente and tipo in ('totales_distintos', 'suscripcion_sin_convertir');
+  return jsonb_build_object('id', v_id, 'frase', v_frase);
+end $$;
+
+
+--
+-- Name: conta_gestoria_no_contar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_no_contar(p_company uuid, p_suscripcion text, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_s public.conta_gc_suscripcion; v_party uuid; v_cliente text; v_frase text;
+begin
+  select * into v_s from public.conta_gc_suscripcion where company_id = p_company and gc_id = p_suscripcion;
+  if v_s.gc_id is null then raise exception 'Esa suscripción no está en lo leído de GoCardless.' using errcode = 'P0002'; end if;
+  select g.party_id, coalesce(p.name, g.nombre) into v_party, v_cliente
+    from public.conta_gc_cliente g left join public.party p on p.id = g.party_id where g.company_id = p_company and g.gc_id = v_s.gc_cliente_id;
+  v_frase := format('No se cuenta «%s» (%s al mes) de %s: es una baja. GoCardless la seguirá cobrando hasta que la canceles allí.',
+    v_s.nombre, public._conta_gestoria_euros(v_s.al_mes), coalesce(v_cliente, v_s.gc_cliente_id));
+  insert into public.conta_gestoria_decision (account_id, company_id, tipo, party_id, gc_cliente_id, suscripcion_gc_id, motivo, frase, quien, quien_name)
+  values (v_cuenta, p_company, 'no_contar', v_party, v_s.gc_cliente_id, p_suscripcion, nullif(trim(p_motivo), ''), v_frase, auth.uid(), public.conta_nombre_actor());
+  update public.conta_gestoria_diferencia set vigente = false
+   where company_id = p_company and vigente and tipo in ('totales_distintos', 'suscripcion_sin_convertir')
+     and (party_id = v_party or gc_cliente_id = v_s.gc_cliente_id);
+  return jsonb_build_object('frase', v_frase);
+end $$;
+
+
+--
+-- Name: conta_gestoria_revisada(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_revisada(p_diferencia uuid, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_d public.conta_gestoria_diferencia; v_cuenta uuid; v_cliente text; v_frase text;
+begin
+  select * into v_d from public.conta_gestoria_diferencia where id = p_diferencia;
+  if v_d.id is null or v_d.company_id is null then raise exception 'Esa diferencia no existe.' using errcode = 'P0002'; end if;
+  v_cuenta := public._conta_gestoria_puede(v_d.company_id);
+  if nullif(trim(coalesce(p_motivo, '')), '') is null then raise exception 'Di por qué está bien así: queda apuntado.' using errcode = '22023'; end if;
+  select name into v_cliente from public.party where id = v_d.party_id;
+  v_frase := format('Revisado%s: «%s». Por qué: %s.', coalesce(' en ' || v_cliente, ''), v_d.porque, trim(p_motivo));
+  insert into public.conta_gestoria_decision (account_id, company_id, tipo, party_id, gc_cliente_id, diferencia_tipo, porque, motivo, frase, quien, quien_name)
+  values (v_cuenta, v_d.company_id, 'revisada', v_d.party_id, v_d.gc_cliente_id, v_d.tipo, v_d.porque, trim(p_motivo), v_frase, auth.uid(), public.conta_nombre_actor());
+  update public.conta_gestoria_diferencia set vigente = false where id = p_diferencia;
+  return jsonb_build_object('frase', v_frase);
+end $$;
+
+
+--
+-- Name: conta_gestoria_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_mes date := date_trunc('month', p_desde)::date; v_quien text; v_serv public.conta_servicio; v_cliente text;
+        v_id uuid; v_afecta int; v_meses text[] := array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta cambia una tarifa.' using errcode = '42501';
+  end if;
+  select * into v_serv from public.conta_servicio where id = p_servicio and company_id = p_company;
+  if v_serv.id is null then raise exception 'Ese servicio no es de esta empresa.' using errcode = 'P0002'; end if;
+  if p_party is not null and not exists (select 1 from public.party where id = p_party and account_id = v_cuenta) then
+    raise exception 'Ese cliente no es de esta cuenta.' using errcode = 'P0002';
+  end if;
+  if p_importe is null or p_importe < 0 then raise exception 'El importe tiene que ser cero o más.' using errcode = '22023'; end if;
+  if p_periodo not in ('mes', 'anio', 'unidad') then raise exception 'Cada cuánto: al mes, al año o por unidad.' using errcode = '22023'; end if;
+  if v_mes is null then raise exception 'Di desde qué mes vale.' using errcode = '22023'; end if;
+  v_quien := public.conta_nombre_actor();
+
+  -- La que valía ese mes (o después) para lo mismo, se cierra el mes de antes.
+  update public.conta_tarifa t set hasta = (v_mes - interval '1 month')::date, motivo = coalesce(nullif(trim(p_motivo), ''), t.motivo)
+   where t.company_id = p_company and t.servicio_id = p_servicio and t.party_id is not distinct from p_party
+     and t.desde < v_mes and (t.hasta is null or t.hasta >= v_mes);
+  delete from public.conta_tarifa t
+   where t.company_id = p_company and t.servicio_id = p_servicio and t.party_id is not distinct from p_party and t.desde >= v_mes;
+  insert into public.conta_tarifa (account_id, company_id, servicio_id, party_id, importe, periodo, desde, motivo, origen, created_by, created_by_name)
+  values (v_cuenta, p_company, p_servicio, p_party, round(p_importe, 2), p_periodo, v_mes, nullif(trim(p_motivo), ''), 'manual', auth.uid(), v_quien)
+  returning id into v_id;
+
+  -- A cuántas líneas afecta: las de alta ese mes o después, sin importe propio
+  -- (con la general, las de los clientes que no tienen propia).
+  select count(*) into v_afecta from public.conta_linea l
+   where l.company_id = p_company and l.servicio_id = p_servicio and l.importe_propio is null
+     and (l.hasta is null or l.hasta >= v_mes)
+     and (case when p_party is null
+               then not exists (select 1 from public.conta_tarifa x where x.company_id = p_company and x.servicio_id = p_servicio and x.party_id = l.party_id
+                                  and x.desde <= v_mes and (x.hasta is null or x.hasta >= v_mes))
+               else l.party_id = p_party end);
+  select name into v_cliente from public.party where id = p_party;
+  return jsonb_build_object('id', v_id, 'afecta', v_afecta,
+    'frase', format('%s%s: %s desde %s. Afecta a %s %s.',
+      case when v_serv.clave = 'gestion_laboral' then 'Tarifa laboral' else 'Tarifa de ' || lower(v_serv.nombre) end,
+      case when p_party is null then ' general' else ' de ' || v_cliente end,
+      replace(replace(replace(to_char(round(p_importe, 2), 'FM999,999,990.00'), ',', '#'), '.', ','), '#', '.') || ' €',
+      v_meses[extract(month from v_mes)::int],
+      v_afecta,
+      case when v_serv.forma = 'por_empleado' then case when v_afecta = 1 then 'empleado' else 'empleados' end
+           else case when v_afecta = 1 then 'línea' else 'líneas' end end));
+end $$;
+
+
+--
+-- Name: conta_gocardless_guardar_conexion(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gocardless_guardar_conexion(p_company uuid, p_entorno text, p_token text, p_quien text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_ref uuid; v_nombre text := 'conta_gocardless:' || p_company::text;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  if p_entorno not in ('real', 'pruebas') then raise exception 'Entorno: real o pruebas.' using errcode = '22023'; end if;
+  if coalesce(trim(p_token), '') = '' then raise exception 'Falta el token de GoCardless.' using errcode = '22023'; end if;
+  select token_ref into v_ref from public.conta_cobro_gocardless where company_id = p_company for update;
+  if v_ref is null or not exists (select 1 from vault.secrets where id = v_ref) then
+    select id into v_ref from vault.secrets where name = v_nombre;
+  end if;
+  if v_ref is not null then
+    perform vault.update_secret(v_ref, trim(p_token), v_nombre, 'Token de solo lectura de GoCardless de una empresa de Sumied');
+  else
+    v_ref := vault.create_secret(trim(p_token), v_nombre, 'Token de solo lectura de GoCardless de una empresa de Sumied');
+  end if;
+  insert into public.conta_cobro_gocardless (company_id, account_id, entorno, token_ref, conectada_at, conectada_por_name, updated_at)
+  values (p_company, v_cuenta, p_entorno, v_ref, now(), p_quien, now())
+  on conflict (company_id) do update set entorno = excluded.entorno, token_ref = excluded.token_ref,
+    conectada_at = excluded.conectada_at, conectada_por_name = excluded.conectada_por_name, updated_at = now();
+end $$;
+
+
+--
+-- Name: conta_gocardless_reintentos(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gocardless_reintentos(p_company uuid, p_encendido boolean) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_nombre text;
+begin
+  select account_id, coalesce(trade_name, legal_name) into v_cuenta, v_nombre from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'La empresa no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'Solo un administrador o un encargado de la cuenta cambia los reintentos.' using errcode = '42501';
+  end if;
+  update public.conta_cobro_gocardless set reintentos_inteligentes = coalesce(p_encendido, false), updated_at = now() where company_id = p_company;
+  if not found then raise exception 'Esta empresa aún no tiene conectada su cuenta de GoCardless.' using errcode = 'P0002'; end if;
+  return jsonb_build_object('encendido', coalesce(p_encendido, false),
+    'frase', case when p_encendido then format('Reintentos inteligentes encendidos para %s. Se usarán cuando Sumied cobre; hoy no se cobra nada.', v_nombre)
+                  else format('Reintentos inteligentes apagados para %s.', v_nombre) end);
+end $$;
+
+
+--
+-- Name: conta_gocardless_secreto(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gocardless_secreto(p_company uuid) RETURNS TABLE(account_id uuid, entorno text, token text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select g.account_id, g.entorno, s.decrypted_secret
+    from public.conta_cobro_gocardless g join vault.decrypted_secrets s on s.id = g.token_ref
+   where g.company_id = p_company
+$$;
+
+
+--
 -- Name: conta_hacer_principal(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -41493,6 +41976,40 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_libro_iva_deducir_en(p_company uuid, p_claves jsonb, p_year integer, p_period text, p_motivo text) IS 'I01c (0290) · Marca (o quita, con periodo null) «deducida en» en las recibidas de la empresa por sus claves de Diez. Todas o ninguna.';
+
+
+--
+-- Name: conta_linea_al_mes(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_linea_al_mes(p_linea uuid, p_mes date) RETURNS numeric
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare l public.conta_linea; t public.conta_tarifa; v_mes date := date_trunc('month', p_mes)::date;
+begin
+  select * into l from public.conta_linea where id = p_linea;
+  if l.id is null then return null; end if;
+  -- Una persona con sesión solo ve las líneas de sus cuentas; el servidor y la base, todas.
+  if auth.uid() is not null and not public.belongs_to_account(l.account_id) then return null; end if;
+  -- Fuera de sus meses, la línea no cuenta.
+  if l.desde > v_mes or (l.hasta is not null and l.hasta < v_mes) then return 0; end if;
+  if l.importe_propio is not null then
+    return case l.periodo when 'anio' then round(l.importe_propio / 12, 2) when 'unidad' then null else l.importe_propio end;
+  end if;
+  select * into t from public.conta_tarifa x
+   where x.company_id = l.company_id and x.servicio_id = l.servicio_id and x.party_id = l.party_id
+     and x.desde <= v_mes and (x.hasta is null or x.hasta >= v_mes)
+   order by x.desde desc limit 1;
+  if t.id is null then
+    select * into t from public.conta_tarifa x
+     where x.company_id = l.company_id and x.servicio_id = l.servicio_id and x.party_id is null
+       and x.desde <= v_mes and (x.hasta is null or x.hasta >= v_mes)
+     order by x.desde desc limit 1;
+  end if;
+  if t.id is null then return null; end if;   -- sin tarifa: no se inventa un precio
+  return case t.periodo when 'anio' then round(t.importe / 12, 2) when 'unidad' then null else t.importe end;
+end $$;
 
 
 --
@@ -100956,7 +101473,12 @@ CREATE TABLE public.conta_cobro_cliente (
     account_id uuid NOT NULL,
     sin_recordatorios boolean DEFAULT false NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_by_name text
+    updated_by_name text,
+    forma_cobro text,
+    gc_cliente_id text,
+    gc_casado_por text,
+    CONSTRAINT conta_cobro_cliente_forma_cobro_check CHECK (((forma_cobro IS NULL) OR (forma_cobro = ANY (ARRAY['gocardless'::text, 'transferencia'::text, 'tarjeta'::text, 'efectivo'::text])))),
+    CONSTRAINT conta_cobro_cliente_gc_casado_por_check CHECK (((gc_casado_por IS NULL) OR (gc_casado_por = ANY (ARRAY['nif'::text, 'correo'::text, 'persona'::text]))))
 );
 
 
@@ -100965,6 +101487,69 @@ CREATE TABLE public.conta_cobro_cliente (
 --
 
 COMMENT ON TABLE public.conta_cobro_cliente IS 'PC01 · E4 · Lo que se decide de un cliente al cobrarle: si se le mandan recordatorios.';
+
+
+--
+-- Name: COLUMN conta_cobro_cliente.forma_cobro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_cliente.forma_cobro IS 'G01 · Cómo cobra este emisor a este cliente: gocardless (domiciliación SEPA), transferencia, tarjeta o efectivo.';
+
+
+--
+-- Name: COLUMN conta_cobro_cliente.gc_cliente_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_cliente.gc_cliente_id IS 'G01 · El cliente en la cuenta de GoCardless de este emisor (CU…).';
+
+
+--
+-- Name: COLUMN conta_cobro_cliente.gc_casado_por; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_cliente.gc_casado_por IS 'G01 · Cómo se casó con Bitrix24: por NIF, por correo o lo confirmó una persona.';
+
+
+--
+-- Name: conta_cobro_gocardless; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cobro_gocardless (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    entorno text NOT NULL,
+    token_ref uuid,
+    acreedor_id text,
+    por_defecto boolean DEFAULT true NOT NULL,
+    conectada_at timestamp with time zone,
+    conectada_por_name text,
+    ultima_lectura_at timestamp with time zone,
+    mandatos_vivos integer,
+    lineas_activas integer,
+    al_mes numeric(14,2),
+    abono jsonb,
+    abono_treasury_id uuid,
+    abono_coincide boolean,
+    abono_porque text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    reintentos_inteligentes boolean DEFAULT false NOT NULL,
+    CONSTRAINT conta_cobro_gocardless_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
+);
+
+
+--
+-- Name: TABLE conta_cobro_gocardless; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cobro_gocardless IS 'G01 · La cuenta de GoCardless de una empresa emisora: domiciliación SEPA. El token de solo lectura, en Vault (token_ref, «conta_gocardless:<empresa>»). por_defecto: GoCardless es la forma de cobro de sus clientes. abono: la cuenta en la que abona GoCardless (/creditor_bank_accounts), comparada con su tesorería.';
+
+
+--
+-- Name: COLUMN conta_cobro_gocardless.reintentos_inteligentes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_gocardless.reintentos_inteligentes IS 'G01 · «Reintentos inteligentes» de GoCardless: apagado por defecto. Solo se guarda (todavía no se cobra nada); puede tener coste según el plan de GoCardless.';
 
 
 --
@@ -101195,6 +101780,439 @@ COMMENT ON TABLE public.conta_cobro_stripe IS 'PC01 · E4 · La cuenta de Stripe
 
 
 --
+-- Name: conta_gc_cliente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_cliente (
+    company_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    nombre text,
+    correo text,
+    nif text,
+    party_id uuid,
+    casado_por text,
+    mandatos_vivos integer DEFAULT 0 NOT NULL,
+    suscripciones_activas integer DEFAULT 0 NOT NULL,
+    huella text,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gc_cliente_casado_por_check CHECK (((casado_por IS NULL) OR (casado_por = ANY (ARRAY['nif'::text, 'correo'::text, 'persona'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_gc_cliente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_cliente IS 'G01 · Un cliente de la cuenta de GoCardless de un emisor, como se leyó, y con qué cliente de la gestoría casa (y cómo).';
+
+
+--
+-- Name: conta_gc_cobro; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_cobro (
+    company_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    mandato_gc_id text,
+    suscripcion_gc_id text,
+    estado text,
+    fecha date,
+    importe numeric(14,2),
+    moneda text,
+    motivo text,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_gc_cobro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_cobro IS 'G01 · Los cobros de GoCardless de los últimos 6 meses, como se leyeron: estado, fecha, importe y, si falló, por qué.';
+
+
+--
+-- Name: conta_gc_mandato; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_mandato (
+    company_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    gc_cliente_id text,
+    estado text,
+    referencia text,
+    esquema text,
+    creado timestamp with time zone,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_gc_mandato; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_mandato IS 'G01 · Cada mandato de la cuenta de GoCardless de un emisor, como se leyó: su estado en GoCardless (active, pending_customer_approval…). El de un cliente casado va además a conta_mandato, con origen gocardless.';
+
+
+--
+-- Name: conta_gc_suscripcion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_suscripcion (
+    company_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    gc_cliente_id text,
+    mandato_gc_id text,
+    nombre text,
+    importe numeric(14,2),
+    moneda text,
+    intervalo text,
+    cada integer,
+    estado text,
+    al_mes numeric(14,2),
+    inicio date,
+    fin date,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_gc_suscripcion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_suscripcion IS 'G01 · Lo que cobra hoy GoCardless (cada «suscripción», como se leyó): para comparar con lo que sale de las tarifas. al_mes: lo anual entre 12.';
+
+
+--
+-- Name: conta_gestoria_cliente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_cliente (
+    party_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    bitrix_id text,
+    situacion text,
+    servicios text[] DEFAULT '{}'::text[] NOT NULL,
+    forma_pago_bitrix text,
+    emisor_segun_bitrix uuid,
+    ficha jsonb,
+    huella text,
+    cuenta_propia_account_id uuid,
+    leido_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gestoria_cliente_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_cliente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_cliente IS 'G01 · Un cliente de la gestoría (su party): su ficha de Bitrix24 (bitrix_id, situación, servicios C/L/S, «Forma de pago» y lo demás en ficha, solo referencia). cuenta_propia_account_id: la cuenta de Sumied del cliente, cuando tenga la suya (fase 2); hoy, vacía.';
+
+
+--
+-- Name: conta_gestoria_diferencia; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_diferencia (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    lectura_id uuid NOT NULL,
+    company_id uuid,
+    party_id uuid,
+    bitrix_id text,
+    gc_cliente_id text,
+    tipo text NOT NULL,
+    porque_codigo text NOT NULL,
+    porque text NOT NULL,
+    datos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    vigente boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['bitrix_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_bitrix'::text, 'correo_repetido_en_bitrix'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_diferencia; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_diferencia IS 'G01 · Lo que no cuadra en una lectura (regla 7: se enseña, no se esconde). El porqué, como dato (tipo, porque_codigo y datos) y en palabras (porque). vigente: de la última lectura; las de antes se quedan como historia.';
+
+
+--
+-- Name: conta_linea; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_linea (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    party_id uuid NOT NULL,
+    servicio_id uuid NOT NULL,
+    tipo text DEFAULT 'cuota'::text NOT NULL,
+    detalle text,
+    empleado_nombre text,
+    employee_id uuid,
+    origen text NOT NULL,
+    importe_propio numeric(14,2),
+    periodo text DEFAULT 'mes'::text NOT NULL,
+    desde date NOT NULL,
+    hasta date,
+    suscripcion_gc_id text,
+    solicitud_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_by_name text,
+    CONSTRAINT conta_linea_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
+    CONSTRAINT conta_linea_check1 CHECK (((tipo <> 'suelto'::text) OR ((hasta = desde) AND (importe_propio IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(detalle, ''::text))) > 0)))),
+    CONSTRAINT conta_linea_check2 CHECK (((origen <> 'solicitud'::text) OR (solicitud_id IS NOT NULL))),
+    CONSTRAINT conta_linea_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
+    CONSTRAINT conta_linea_importe_propio_check CHECK (((importe_propio IS NULL) OR (importe_propio >= (0)::numeric))),
+    CONSTRAINT conta_linea_origen_check CHECK ((origen = ANY (ARRAY['gocardless'::text, 'manual'::text, 'solicitud'::text, 'laboral'::text]))),
+    CONSTRAINT conta_linea_periodo_check CHECK ((periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'unidad'::text]))),
+    CONSTRAINT conta_linea_tipo_check CHECK ((tipo = ANY (ARRAY['cuota'::text, 'suelto'::text])))
+);
+
+
+--
+-- Name: TABLE conta_linea; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_linea IS 'G01 · Una línea del recibo de un cliente: un servicio (y su detalle: la sociedad o el empleado). Cuenta de su mes «desde» a su mes «hasta» (incluido; la baja se cobra entera el mes de la baja). Su precio: importe_propio, o la tarifa propia o general. tipo «suelto»: un trabajo fuera de la cuota, de un solo mes, con su concepto e importe. origen: gocardless (importada), manual, solicitud o laboral (fase 2, con employee_id).';
+
+
+--
+-- Name: party; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.party (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    name text NOT NULL,
+    tax_id text,
+    archived_at timestamp with time zone,
+    archived_note text,
+    source text DEFAULT 'manual'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT party_name_check CHECK ((length(TRIM(BOTH FROM name)) > 0)),
+    CONSTRAINT party_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'supplier'::text, 'migrated'::text, 'ticket'::text, 'crm'::text]))),
+    CONSTRAINT party_tax_id_check CHECK (((tax_id IS NULL) OR (tax_id = public.party_nif(tax_id))))
+);
+
+
+--
+-- Name: TABLE party; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.party IS 'C03. El tercero: una ficha por alguien, con los papeles que tenga (party_role). El nombre de un tercero con papel de proveedor es el de su supplier (lo mantiene el disparador).';
+
+
+--
+-- Name: COLUMN party.tax_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.party.tax_id IS 'C03. NIF normalizado (party_nif). Único por cuenta: un NIF, un tercero.';
+
+
+--
+-- Name: COLUMN party.archived_note; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.party.archived_note IS 'C03. Lo que enseña la franja de archivado: «histórico de 2024».';
+
+
+--
+-- Name: conta_consulta_clientes; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_clientes WITH (security_invoker='true') AS
+ SELECT c.account_id AS cuenta_id,
+    c.party_id AS cliente_id,
+    p.name AS cliente,
+    p.tax_id AS nif,
+    c.situacion,
+    c.servicios,
+    c.forma_pago_bitrix AS forma_de_pago_en_bitrix,
+    e.id AS emisor_id,
+    COALESCE(e.trade_name, e.legal_name) AS emisor,
+    cc.forma_cobro AS forma_de_cobro,
+    cc.gc_cliente_id AS cliente_en_gocardless,
+    ( SELECT m.estado
+           FROM public.conta_gc_mandato m
+          WHERE ((m.company_id = e.id) AND (m.gc_cliente_id = cc.gc_cliente_id))
+          ORDER BY m.creado DESC NULLS LAST
+         LIMIT 1) AS mandato,
+    ( SELECT count(*) AS count
+           FROM public.conta_linea l
+          WHERE ((l.party_id = c.party_id) AND (l.company_id = e.id) AND (l.tipo = 'cuota'::text) AND (l.desde <= (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date) AND ((l.hasta IS NULL) OR (l.hasta >= (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date)))) AS lineas_de_alta,
+    ( SELECT sum(public.conta_linea_al_mes(l.id, (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date)) AS sum
+           FROM public.conta_linea l
+          WHERE ((l.party_id = c.party_id) AND (l.company_id = e.id))) AS al_mes_en_sumied,
+    ( SELECT sum(s.al_mes) AS sum
+           FROM (public.conta_gc_suscripcion s
+             JOIN public.conta_gc_cliente g ON (((g.company_id = s.company_id) AND (g.gc_id = s.gc_cliente_id))))
+          WHERE ((g.party_id = c.party_id) AND (s.company_id = e.id) AND (s.estado = 'active'::text))) AS al_mes_en_gocardless,
+    ( SELECT max(b.fecha) AS max
+           FROM (public.conta_gc_cobro b
+             JOIN public.conta_gc_mandato m ON (((m.company_id = b.company_id) AND (m.gc_id = b.mandato_gc_id))))
+          WHERE ((m.gc_cliente_id = cc.gc_cliente_id) AND (b.company_id = e.id))) AS ultimo_cobro,
+    ( SELECT count(*) AS count
+           FROM public.conta_gestoria_diferencia d
+          WHERE ((d.party_id = c.party_id) AND d.vigente)) AS diferencias,
+    c.cuenta_propia_account_id AS cuenta_propia_id,
+    c.leido_at AS leido_de_bitrix
+   FROM (((public.conta_gestoria_cliente c
+     JOIN public.party p ON ((p.id = c.party_id)))
+     LEFT JOIN public.company e ON ((e.account_id = c.account_id)))
+     LEFT JOIN public.conta_cobro_cliente cc ON (((cc.party_id = c.party_id) AND (cc.company_id = e.id))));
+
+
+--
+-- Name: VIEW conta_consulta_clientes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_clientes IS 'G01 · Para el asistente (solo lectura): cada cliente de la gestoría con cada emisor de la cuenta, su forma de cobro, su mandato, lo que suma al mes en Sumied y en GoCardless, su último cobro y sus diferencias.';
+
+
+--
+-- Name: conta_gestoria_lectura; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_lectura (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid,
+    origen text NOT NULL,
+    entorno text NOT NULL,
+    por text NOT NULL,
+    quien_name text,
+    empezada_at timestamp with time zone DEFAULT now() NOT NULL,
+    acabada_at timestamp with time zone,
+    estado text DEFAULT 'en_marcha'::text NOT NULL,
+    nuevos integer,
+    cambiados integer,
+    iguales integer,
+    con_diferencias integer,
+    mensaje text,
+    CONSTRAINT conta_gestoria_lectura_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text]))),
+    CONSTRAINT conta_gestoria_lectura_estado_check CHECK ((estado = ANY (ARRAY['en_marcha'::text, 'bien'::text, 'mal'::text, 'no_lee'::text]))),
+    CONSTRAINT conta_gestoria_lectura_origen_check CHECK ((origen = ANY (ARRAY['bitrix'::text, 'gocardless'::text]))),
+    CONSTRAINT conta_gestoria_lectura_por_check CHECK ((por = ANY (ARRAY['persona'::text, 'cada_noche'::text, 'conexion'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_lectura; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_lectura IS 'G01 · Cada lectura de Bitrix24 o de una cuenta de GoCardless: quién o qué la lanzó, cómo acabó y cuántos clientes salen nuevos, cambiados, iguales y con diferencias.';
+
+
+--
+-- Name: conta_consulta_diferencias; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_diferencias WITH (security_invoker='true') AS
+ SELECT d.account_id AS cuenta_id,
+    d.id AS diferencia_id,
+    d.tipo,
+    d.porque_codigo,
+    d.porque,
+    d.datos,
+    d.party_id AS cliente_id,
+    p.name AS cliente,
+    COALESCE(e.trade_name, e.legal_name) AS emisor,
+    d.bitrix_id AS ficha_en_bitrix,
+    d.gc_cliente_id AS cliente_en_gocardless,
+    l.empezada_at AS leida_el
+   FROM (((public.conta_gestoria_diferencia d
+     JOIN public.conta_gestoria_lectura l ON ((l.id = d.lectura_id)))
+     LEFT JOIN public.party p ON ((p.id = d.party_id)))
+     LEFT JOIN public.company e ON ((e.id = d.company_id)))
+  WHERE d.vigente;
+
+
+--
+-- Name: VIEW conta_consulta_diferencias; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_diferencias IS 'G01 · Para el asistente (solo lectura): lo que no cuadra en la última lectura, con su porqué como dato (tipo, porque_codigo, datos) y en palabras.';
+
+
+--
+-- Name: conta_servicio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_servicio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    clave text NOT NULL,
+    nombre text NOT NULL,
+    forma text NOT NULL,
+    unidad text,
+    por_confirmar boolean DEFAULT false NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    CONSTRAINT conta_servicio_check CHECK (((forma = 'por_uso'::text) = (unidad IS NOT NULL))),
+    CONSTRAINT conta_servicio_clave_check CHECK ((length(TRIM(BOTH FROM clave)) > 0)),
+    CONSTRAINT conta_servicio_forma_check CHECK ((forma = ANY (ARRAY['fijo_mes'::text, 'fijo_anio'::text, 'por_empleado'::text, 'por_uso'::text]))),
+    CONSTRAINT conta_servicio_nombre_check CHECK ((length(TRIM(BOTH FROM nombre)) > 0)),
+    CONSTRAINT conta_servicio_unidad_check CHECK (((unidad IS NULL) OR (unidad = ANY (ARRAY['nomina'::text, 'modelo'::text, 'factura'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_servicio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_servicio IS 'G01 · El catálogo de servicios de una empresa emisora. forma: fijo al mes, fijo al año, por empleado de alta o por uso (unidad: nómina, modelo presentado o factura registrada; la cantidad la dará Sumied en la fase 2). por_confirmar: importado con su nombre literal hasta que la gestoría diga qué es.';
+
+
+--
+-- Name: conta_consulta_lineas; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_lineas WITH (security_invoker='true') AS
+ SELECT l.account_id AS cuenta_id,
+    l.id AS linea_id,
+    l.party_id AS cliente_id,
+    p.name AS cliente,
+    COALESCE(e.trade_name, e.legal_name) AS emisor,
+    s.nombre AS servicio,
+    s.forma AS se_cobra,
+    l.tipo,
+    l.detalle,
+    l.empleado_nombre AS empleado,
+    l.origen,
+    l.desde,
+    l.hasta,
+    l.importe_propio,
+    public.conta_linea_al_mes(l.id, (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date) AS al_mes_este_mes
+   FROM (((public.conta_linea l
+     JOIN public.party p ON ((p.id = l.party_id)))
+     JOIN public.company e ON ((e.id = l.company_id)))
+     JOIN public.conta_servicio s ON ((s.id = l.servicio_id)));
+
+
+--
+-- Name: VIEW conta_consulta_lineas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_lineas IS 'G01 · Para el asistente (solo lectura): cada línea de cada cliente, con su servicio, emisor, empleado, origen, meses y lo que vale este mes.';
+
+
+--
 -- Name: conta_contrasena_intento; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -101226,6 +102244,34 @@ ALTER TABLE public.conta_contrasena_intento ALTER COLUMN id ADD GENERATED ALWAYS
     NO MAXVALUE
     CACHE 1
 );
+
+
+--
+-- Name: conta_crm_bitrix; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_crm_bitrix (
+    account_id uuid NOT NULL,
+    entorno text NOT NULL,
+    url_ref uuid,
+    portal text,
+    mapa jsonb,
+    campos_medidos jsonb,
+    conectada_at timestamp with time zone,
+    conectada_por_name text,
+    ultima_lectura_at timestamp with time zone,
+    empresas_leidas integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_crm_bitrix_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
+);
+
+
+--
+-- Name: TABLE conta_crm_bitrix; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_crm_bitrix IS 'G01 · El Bitrix24 de una cuenta (uno para todos sus emisores). La dirección con su clave, en Vault (url_ref, «conta_bitrix:<cuenta>»); portal: solo el nombre del portal, sin clave. mapa: el de campos (UF_CRM_… → Sumied), propuesto con crm.company.fields; campos_medidos: lo que devolvió.';
 
 
 --
@@ -101735,6 +102781,92 @@ COMMENT ON VIEW public.conta_factura_cobro IS 'PC01 · El estado de cobro de cad
 
 
 --
+-- Name: conta_gc_importacion; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_importacion (
+    company_id uuid NOT NULL,
+    suscripcion_gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    gc_cliente_id text,
+    party_id uuid,
+    nombre text,
+    importe numeric(14,2),
+    resultado text NOT NULL,
+    linea_id uuid,
+    porque_codigo text,
+    porque text,
+    importada_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gc_importacion_resultado_check CHECK ((resultado = ANY (ARRAY['linea'::text, 'no_convertida'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_importacion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_importacion IS 'G01 · La importación, una sola vez, de cada suscripción de GoCardless: la línea en que se convirtió o por qué no se convirtió (porque_codigo y su frase).';
+
+
+--
+-- Name: conta_gestoria_cambio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_cambio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    tabla text NOT NULL,
+    registro_id uuid NOT NULL,
+    accion text NOT NULL,
+    desde_mes date,
+    antes jsonb,
+    despues jsonb,
+    quien uuid,
+    quien_name text,
+    cuando timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gestoria_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'cambio'::text, 'borrado'::text]))),
+    CONSTRAINT conta_gestoria_cambio_tabla_check CHECK ((tabla = ANY (ARRAY['conta_tarifa'::text, 'conta_linea'::text, 'conta_solicitud'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_cambio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_cambio IS 'G01 · Cada cambio de una tarifa, una línea o una solicitud: quién, cuándo, desde qué mes, y cómo estaba antes y después.';
+
+
+--
+-- Name: conta_gestoria_decision; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_decision (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    tipo text NOT NULL,
+    party_id uuid,
+    gc_cliente_id text,
+    suscripcion_gc_id text,
+    diferencia_tipo text,
+    porque text,
+    motivo text,
+    frase text NOT NULL,
+    quien uuid,
+    quien_name text,
+    cuando timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gestoria_decision_tipo_check CHECK ((tipo = ANY (ARRAY['enlace'::text, 'no_contar'::text, 'revisada'::text, 'linea_desde_gc'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_decision; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_decision IS 'G01 · Lo que una persona decide en la ficha de un cliente sobre lo que no cuadra: enlazar un cliente de GoCardless, no contar una suscripción, convertirla en línea o dar una diferencia por revisada. Quién, cuándo y por qué. La lectura de cada noche lo respeta.';
+
+
+--
 -- Name: conta_liquidacion_resolucion; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -101866,8 +102998,8 @@ CREATE TABLE public.conta_mandato (
     party_id uuid NOT NULL,
     ref text NOT NULL,
     status text DEFAULT 'por_firmar'::text NOT NULL,
-    token text NOT NULL,
-    expires_at timestamp with time zone NOT NULL,
+    token text,
+    expires_at timestamp with time zone,
     sent_to text,
     sent_at timestamp with time zone,
     iban text,
@@ -101881,7 +103013,12 @@ CREATE TABLE public.conta_mandato (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by uuid,
     created_by_name text,
+    origen text DEFAULT 'sumied'::text NOT NULL,
+    gc_mandato_id text,
+    gc_estado text,
+    CONSTRAINT conta_mandato_firma_en_sumied CHECK (((origen <> 'sumied'::text) OR ((token IS NOT NULL) AND (expires_at IS NOT NULL)))),
     CONSTRAINT conta_mandato_iban_check CHECK (((iban IS NULL) OR (iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
+    CONSTRAINT conta_mandato_origen_check CHECK ((origen = ANY (ARRAY['sumied'::text, 'gocardless'::text]))),
     CONSTRAINT conta_mandato_status_check CHECK ((status = ANY (ARRAY['por_firmar'::text, 'firmado'::text, 'anulado'::text])))
 );
 
@@ -101891,6 +103028,27 @@ CREATE TABLE public.conta_mandato (
 --
 
 COMMENT ON TABLE public.conta_mandato IS 'PC01 · E3 · El mandato de domiciliación SEPA (CORE, recurrente) de un cliente: el enlace para firmarlo y la firma (quién, cuándo, desde dónde). Al firmarse, la ficha del cliente (customer_fiscal) queda con su IBAN, la referencia y la fecha.';
+
+
+--
+-- Name: COLUMN conta_mandato.origen; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_mandato.origen IS 'G01 · De dónde viene: sumied (lo firma el cliente en Sumied) o gocardless (leído de su cuenta de GoCardless).';
+
+
+--
+-- Name: COLUMN conta_mandato.gc_mandato_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_mandato.gc_mandato_id IS 'G01 · El mandato en GoCardless (MD…).';
+
+
+--
+-- Name: COLUMN conta_mandato.gc_estado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_mandato.gc_estado IS 'G01 · Su estado en GoCardless, tal cual (active, pending_customer_approval, cancelled…).';
 
 
 --
@@ -102298,7 +103456,7 @@ CREATE TABLE public.conta_pasarela_cuenta (
     company_account_id uuid NOT NULL,
     code text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_pasarela_cuenta_proveedor_check CHECK ((proveedor = ANY (ARRAY['stripe'::text, 'redsys'::text])))
+    CONSTRAINT conta_pasarela_cuenta_proveedor_check CHECK ((proveedor = ANY (ARRAY['stripe'::text, 'redsys'::text, 'gocardless'::text])))
 );
 
 
@@ -103022,6 +104180,75 @@ CREATE TABLE public.conta_s01p_recibido_antes (
 --
 
 COMMENT ON TABLE public.conta_s01p_recibido_antes IS 'S01p · 1641 · Lo recibido sin factura de octubre de Foodint que se quitó (periodificación, asientos y apuntes), para su vuelta atrás.';
+
+
+--
+-- Name: conta_solicitud; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_solicitud (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    party_id uuid NOT NULL,
+    tipo text NOT NULL,
+    empleado_nombre text NOT NULL,
+    mes date NOT NULL,
+    nota text,
+    estado text DEFAULT 'pedida'::text NOT NULL,
+    pedida_at timestamp with time zone DEFAULT now() NOT NULL,
+    pedida_por_name text,
+    resuelta_at timestamp with time zone,
+    resuelta_por_name text,
+    motivo_rechazo text,
+    CONSTRAINT conta_solicitud_check CHECK (((estado <> 'rechazada'::text) OR (length(TRIM(BOTH FROM COALESCE(motivo_rechazo, ''::text))) > 0))),
+    CONSTRAINT conta_solicitud_check1 CHECK (((estado = 'pedida'::text) = (resuelta_at IS NULL))),
+    CONSTRAINT conta_solicitud_empleado_nombre_check CHECK ((length(TRIM(BOTH FROM empleado_nombre)) > 0)),
+    CONSTRAINT conta_solicitud_estado_check CHECK ((estado = ANY (ARRAY['pedida'::text, 'hecha'::text, 'rechazada'::text]))),
+    CONSTRAINT conta_solicitud_mes_check CHECK ((EXTRACT(day FROM mes) = (1)::numeric)),
+    CONSTRAINT conta_solicitud_tipo_check CHECK ((tipo = ANY (ARRAY['alta'::text, 'baja'::text])))
+);
+
+
+--
+-- Name: TABLE conta_solicitud; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_solicitud IS 'G01 · La petición de alta o baja de un trabajador que hace el cliente. QBO la da por hecha (y la línea sale con origen «solicitud») o la rechaza con su motivo.';
+
+
+--
+-- Name: conta_tarifa; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_tarifa (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    servicio_id uuid NOT NULL,
+    party_id uuid,
+    importe numeric(14,2) NOT NULL,
+    periodo text NOT NULL,
+    desde date NOT NULL,
+    hasta date,
+    motivo text,
+    origen text DEFAULT 'manual'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT conta_tarifa_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
+    CONSTRAINT conta_tarifa_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
+    CONSTRAINT conta_tarifa_importe_check CHECK ((importe >= (0)::numeric)),
+    CONSTRAINT conta_tarifa_origen_check CHECK ((origen = ANY (ARRAY['manual'::text, 'gocardless'::text]))),
+    CONSTRAINT conta_tarifa_periodo_check CHECK ((periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'unidad'::text])))
+);
+
+
+--
+-- Name: TABLE conta_tarifa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_tarifa IS 'G01 · La tarifa de un servicio de un emisor: general (party_id vacío) o propia de un cliente, que manda sobre la general. Vale de su mes «desde» a su mes «hasta» (incluido; vacío: sigue). periodo: al mes, al año o por unidad (los servicios por uso). Cada cambio, en conta_gestoria_cambio.';
 
 
 --
@@ -108758,49 +109985,6 @@ COMMENT ON COLUMN public.parte_plataformas.pedido_corto IS 'El G/U/J que ve una 
 --
 
 COMMENT ON COLUMN public.parte_plataformas.origen IS 'aviso = salió de los avisos que ya están en la base. listado = salió del listado del día pedido a la plataforma, que es lo único que ve un pedido cuyo aviso nunca llegó.';
-
-
---
--- Name: party; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.party (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    account_id uuid NOT NULL,
-    name text NOT NULL,
-    tax_id text,
-    archived_at timestamp with time zone,
-    archived_note text,
-    source text DEFAULT 'manual'::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    created_by_name text,
-    CONSTRAINT party_name_check CHECK ((length(TRIM(BOTH FROM name)) > 0)),
-    CONSTRAINT party_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'supplier'::text, 'migrated'::text, 'ticket'::text]))),
-    CONSTRAINT party_tax_id_check CHECK (((tax_id IS NULL) OR (tax_id = public.party_nif(tax_id))))
-);
-
-
---
--- Name: TABLE party; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.party IS 'C03. El tercero: una ficha por alguien, con los papeles que tenga (party_role). El nombre de un tercero con papel de proveedor es el de su supplier (lo mantiene el disparador).';
-
-
---
--- Name: COLUMN party.tax_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.party.tax_id IS 'C03. NIF normalizado (party_nif). Único por cuenta: un NIF, un tercero.';
-
-
---
--- Name: COLUMN party.archived_note; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.party.archived_note IS 'C03. Lo que enseña la franja de archivado: «histórico de 2024».';
 
 
 --
@@ -117052,6 +118236,14 @@ ALTER TABLE ONLY public.conta_cobro_cliente
 
 
 --
+-- Name: conta_cobro_gocardless conta_cobro_gocardless_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cobro_gocardless
+    ADD CONSTRAINT conta_cobro_gocardless_pkey PRIMARY KEY (company_id);
+
+
+--
 -- Name: conta_cobro_redsys conta_cobro_redsys_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -117113,6 +118305,14 @@ ALTER TABLE ONLY public.conta_cobro_stripe
 
 ALTER TABLE ONLY public.conta_contrasena_intento
     ADD CONSTRAINT conta_contrasena_intento_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_crm_bitrix conta_crm_bitrix_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_crm_bitrix
+    ADD CONSTRAINT conta_crm_bitrix_pkey PRIMARY KEY (account_id);
 
 
 --
@@ -117217,6 +118417,102 @@ ALTER TABLE ONLY public.conta_enlace_pago
 
 ALTER TABLE ONLY public.conta_envio_aclarado
     ADD CONSTRAINT conta_envio_aclarado_pkey PRIMARY KEY (sale_id);
+
+
+--
+-- Name: conta_gc_cliente conta_gc_cliente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cliente
+    ADD CONSTRAINT conta_gc_cliente_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
+-- Name: conta_gc_cobro conta_gc_cobro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro
+    ADD CONSTRAINT conta_gc_cobro_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
+-- Name: conta_gc_importacion conta_gc_importacion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_importacion
+    ADD CONSTRAINT conta_gc_importacion_pkey PRIMARY KEY (company_id, suscripcion_gc_id);
+
+
+--
+-- Name: conta_gc_mandato conta_gc_mandato_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_mandato
+    ADD CONSTRAINT conta_gc_mandato_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
+-- Name: conta_gc_suscripcion conta_gc_suscripcion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_suscripcion
+    ADD CONSTRAINT conta_gc_suscripcion_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
+-- Name: conta_gestoria_cambio conta_gestoria_cambio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cambio
+    ADD CONSTRAINT conta_gestoria_cambio_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_account_id_bitrix_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_account_id_bitrix_id_key UNIQUE (account_id, bitrix_id);
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_pkey PRIMARY KEY (party_id);
+
+
+--
+-- Name: conta_gestoria_decision conta_gestoria_decision_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_decision
+    ADD CONSTRAINT conta_gestoria_decision_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_gestoria_diferencia conta_gestoria_diferencia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_diferencia
+    ADD CONSTRAINT conta_gestoria_diferencia_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_gestoria_lectura conta_gestoria_lectura_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_lectura
+    ADD CONSTRAINT conta_gestoria_lectura_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_linea conta_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_pkey PRIMARY KEY (id);
 
 
 --
@@ -117553,6 +118849,38 @@ ALTER TABLE ONLY public.conta_s01p_prestamo_antes
 
 ALTER TABLE ONLY public.conta_s01p_recibido_antes
     ADD CONSTRAINT conta_s01p_recibido_antes_pkey PRIMARY KEY (tabla, id);
+
+
+--
+-- Name: conta_servicio conta_servicio_company_id_clave_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio
+    ADD CONSTRAINT conta_servicio_company_id_clave_key UNIQUE (company_id, clave);
+
+
+--
+-- Name: conta_servicio conta_servicio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio
+    ADD CONSTRAINT conta_servicio_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_solicitud conta_solicitud_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_solicitud
+    ADD CONSTRAINT conta_solicitud_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_tarifa conta_tarifa_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tarifa
+    ADD CONSTRAINT conta_tarifa_pkey PRIMARY KEY (id);
 
 
 --
@@ -122714,6 +124042,55 @@ CREATE INDEX conta_enlace_pago_sesion_idx ON public.conta_enlace_pago USING btre
 
 
 --
+-- Name: conta_gc_cobro_mandato_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_cobro_mandato_idx ON public.conta_gc_cobro USING btree (company_id, mandato_gc_id, fecha);
+
+
+--
+-- Name: conta_gestoria_cambio_registro_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gestoria_cambio_registro_idx ON public.conta_gestoria_cambio USING btree (registro_id, cuando);
+
+
+--
+-- Name: conta_gestoria_decision_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gestoria_decision_empresa_idx ON public.conta_gestoria_decision USING btree (company_id, tipo);
+
+
+--
+-- Name: conta_gestoria_diferencia_vigente_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gestoria_diferencia_vigente_idx ON public.conta_gestoria_diferencia USING btree (account_id, tipo) WHERE vigente;
+
+
+--
+-- Name: conta_gestoria_lectura_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gestoria_lectura_cuenta_idx ON public.conta_gestoria_lectura USING btree (account_id, empezada_at DESC);
+
+
+--
+-- Name: conta_linea_cliente_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_linea_cliente_idx ON public.conta_linea USING btree (party_id, company_id);
+
+
+--
+-- Name: conta_linea_suscripcion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_linea_suscripcion_idx ON public.conta_linea USING btree (company_id, suscripcion_gc_id) WHERE (suscripcion_gc_id IS NOT NULL);
+
+
+--
 -- Name: conta_liquidacion_resolucion_contacto_uq; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -122739,6 +124116,13 @@ CREATE INDEX conta_llave_usuario_idx ON public.conta_llave USING btree (user_id)
 --
 
 CREATE INDEX conta_lote_relectura_lote ON public.conta_lote_relectura USING btree (batch_id, pedida_en DESC);
+
+
+--
+-- Name: conta_mandato_gocardless_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_mandato_gocardless_idx ON public.conta_mandato USING btree (company_id, gc_mandato_id) WHERE (gc_mandato_id IS NOT NULL);
 
 
 --
@@ -122858,6 +124242,13 @@ CREATE INDEX conta_recordatorio_empresa_idx ON public.conta_recordatorio USING b
 --
 
 CREATE INDEX conta_redsys_aviso_pedido_idx ON public.conta_redsys_aviso USING btree (pedido);
+
+
+--
+-- Name: conta_tarifa_buscar_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_tarifa_buscar_idx ON public.conta_tarifa USING btree (company_id, servicio_id, party_id, desde);
 
 
 --
@@ -127439,6 +128830,13 @@ CREATE TRIGGER conta_diez_base_guarda BEFORE INSERT OR UPDATE ON public.conta_di
 
 
 --
+-- Name: conta_linea conta_linea_apuntar; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_linea_apuntar AFTER INSERT OR DELETE OR UPDATE ON public.conta_linea FOR EACH ROW EXECUTE FUNCTION public._conta_gestoria_apuntar();
+
+
+--
 -- Name: channel_settlement_order conta_liquidacion_pedidos_proponer_al_casar; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -127485,6 +128883,20 @@ CREATE TRIGGER conta_programa_anterior_guarda BEFORE INSERT OR UPDATE ON public.
 --
 
 CREATE TRIGGER conta_socio_proponer AFTER INSERT OR UPDATE OF status ON public.licensed_settlement FOR EACH ROW WHEN (((new.status = ANY (ARRAY['confirmada'::text, 'saldada'::text])) AND (new.formula = ANY (ARRAY['documentos'::text, 'compras_aportaciones_comision'::text])))) EXECUTE FUNCTION public.tg_conta_socio_proponer();
+
+
+--
+-- Name: conta_solicitud conta_solicitud_apuntar; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_solicitud_apuntar AFTER INSERT OR DELETE OR UPDATE ON public.conta_solicitud FOR EACH ROW EXECUTE FUNCTION public._conta_gestoria_apuntar();
+
+
+--
+-- Name: conta_tarifa conta_tarifa_apuntar; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_tarifa_apuntar AFTER INSERT OR DELETE OR UPDATE ON public.conta_tarifa FOR EACH ROW EXECUTE FUNCTION public._conta_gestoria_apuntar();
 
 
 --
@@ -131949,6 +133361,30 @@ ALTER TABLE ONLY public.conta_cobro_cliente
 
 
 --
+-- Name: conta_cobro_gocardless conta_cobro_gocardless_abono_treasury_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cobro_gocardless
+    ADD CONSTRAINT conta_cobro_gocardless_abono_treasury_id_fkey FOREIGN KEY (abono_treasury_id) REFERENCES public.treasury_account(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_cobro_gocardless conta_cobro_gocardless_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cobro_gocardless
+    ADD CONSTRAINT conta_cobro_gocardless_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cobro_gocardless conta_cobro_gocardless_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cobro_gocardless
+    ADD CONSTRAINT conta_cobro_gocardless_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_cobro_redsys conta_cobro_redsys_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -132082,6 +133518,14 @@ ALTER TABLE ONLY public.conta_cobro_stripe
 
 ALTER TABLE ONLY public.conta_cobro_stripe
     ADD CONSTRAINT conta_cobro_stripe_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_crm_bitrix conta_crm_bitrix_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_crm_bitrix
+    ADD CONSTRAINT conta_crm_bitrix_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --
@@ -132234,6 +133678,270 @@ ALTER TABLE ONLY public.conta_envio_aclarado
 
 ALTER TABLE ONLY public.conta_envio_aclarado
     ADD CONSTRAINT conta_envio_aclarado_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cliente conta_gc_cliente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cliente
+    ADD CONSTRAINT conta_gc_cliente_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cliente conta_gc_cliente_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cliente
+    ADD CONSTRAINT conta_gc_cliente_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cliente conta_gc_cliente_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cliente
+    ADD CONSTRAINT conta_gc_cliente_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gc_cobro conta_gc_cobro_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro
+    ADD CONSTRAINT conta_gc_cobro_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cobro conta_gc_cobro_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro
+    ADD CONSTRAINT conta_gc_cobro_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_importacion conta_gc_importacion_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_importacion
+    ADD CONSTRAINT conta_gc_importacion_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_importacion conta_gc_importacion_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_importacion
+    ADD CONSTRAINT conta_gc_importacion_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_importacion conta_gc_importacion_linea_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_importacion
+    ADD CONSTRAINT conta_gc_importacion_linea_id_fkey FOREIGN KEY (linea_id) REFERENCES public.conta_linea(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gc_importacion conta_gc_importacion_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_importacion
+    ADD CONSTRAINT conta_gc_importacion_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gc_mandato conta_gc_mandato_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_mandato
+    ADD CONSTRAINT conta_gc_mandato_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_mandato conta_gc_mandato_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_mandato
+    ADD CONSTRAINT conta_gc_mandato_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_suscripcion conta_gc_suscripcion_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_suscripcion
+    ADD CONSTRAINT conta_gc_suscripcion_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_suscripcion conta_gc_suscripcion_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_suscripcion
+    ADD CONSTRAINT conta_gc_suscripcion_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_cambio conta_gestoria_cambio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cambio
+    ADD CONSTRAINT conta_gestoria_cambio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_cuenta_propia_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_cuenta_propia_account_id_fkey FOREIGN KEY (cuenta_propia_account_id) REFERENCES public.accounts(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_emisor_segun_bitrix_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_emisor_segun_bitrix_fkey FOREIGN KEY (emisor_segun_bitrix) REFERENCES public.company(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_decision conta_gestoria_decision_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_decision
+    ADD CONSTRAINT conta_gestoria_decision_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_decision conta_gestoria_decision_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_decision
+    ADD CONSTRAINT conta_gestoria_decision_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_decision conta_gestoria_decision_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_decision
+    ADD CONSTRAINT conta_gestoria_decision_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gestoria_diferencia conta_gestoria_diferencia_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_diferencia
+    ADD CONSTRAINT conta_gestoria_diferencia_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_diferencia conta_gestoria_diferencia_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_diferencia
+    ADD CONSTRAINT conta_gestoria_diferencia_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_diferencia conta_gestoria_diferencia_lectura_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_diferencia
+    ADD CONSTRAINT conta_gestoria_diferencia_lectura_id_fkey FOREIGN KEY (lectura_id) REFERENCES public.conta_gestoria_lectura(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_diferencia conta_gestoria_diferencia_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_diferencia
+    ADD CONSTRAINT conta_gestoria_diferencia_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gestoria_lectura conta_gestoria_lectura_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_lectura
+    ADD CONSTRAINT conta_gestoria_lectura_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_lectura conta_gestoria_lectura_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_lectura
+    ADD CONSTRAINT conta_gestoria_lectura_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_linea conta_linea_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_linea conta_linea_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_linea conta_linea_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_linea conta_linea_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_linea conta_linea_servicio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_servicio_id_fkey FOREIGN KEY (servicio_id) REFERENCES public.conta_servicio(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_linea conta_linea_solicitud_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_solicitud_id_fkey FOREIGN KEY (solicitud_id) REFERENCES public.conta_solicitud(id) ON DELETE SET NULL;
 
 
 --
@@ -132762,6 +134470,78 @@ ALTER TABLE ONLY public.conta_recordatorio
 
 ALTER TABLE ONLY public.conta_redsys_aviso
     ADD CONSTRAINT conta_redsys_aviso_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_servicio conta_servicio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio
+    ADD CONSTRAINT conta_servicio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_servicio conta_servicio_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio
+    ADD CONSTRAINT conta_servicio_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_solicitud conta_solicitud_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_solicitud
+    ADD CONSTRAINT conta_solicitud_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_solicitud conta_solicitud_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_solicitud
+    ADD CONSTRAINT conta_solicitud_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_solicitud conta_solicitud_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_solicitud
+    ADD CONSTRAINT conta_solicitud_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tarifa conta_tarifa_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tarifa
+    ADD CONSTRAINT conta_tarifa_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tarifa conta_tarifa_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tarifa
+    ADD CONSTRAINT conta_tarifa_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tarifa conta_tarifa_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tarifa
+    ADD CONSTRAINT conta_tarifa_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_tarifa conta_tarifa_servicio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_tarifa
+    ADD CONSTRAINT conta_tarifa_servicio_id_fkey FOREIGN KEY (servicio_id) REFERENCES public.conta_servicio(id) ON DELETE CASCADE;
 
 
 --
@@ -142657,6 +144437,19 @@ CREATE POLICY conta_cobro_cliente_leer ON public.conta_cobro_cliente FOR SELECT 
 
 
 --
+-- Name: conta_cobro_gocardless; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cobro_gocardless ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cobro_gocardless conta_cobro_gocardless_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cobro_gocardless_leer ON public.conta_cobro_gocardless FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_cobro_redsys; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -142719,6 +144512,19 @@ CREATE POLICY conta_cobro_stripe_leer ON public.conta_cobro_stripe FOR SELECT TO
 --
 
 ALTER TABLE public.conta_contrasena_intento ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_crm_bitrix; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_crm_bitrix ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_crm_bitrix conta_crm_bitrix_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_crm_bitrix_leer ON public.conta_crm_bitrix FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
 
 --
 -- Name: conta_diez_autorizo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -142839,6 +144645,149 @@ ALTER TABLE public.conta_envio_aclarado ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_envio_aclarado_select ON public.conta_envio_aclarado FOR SELECT TO authenticated USING ((account_id = ANY (( SELECT public.current_user_account_ids() AS current_user_account_ids)::uuid[])));
+
+
+--
+-- Name: conta_gc_cliente; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_cliente ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_cliente conta_gc_cliente_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_cliente_leer ON public.conta_gc_cliente FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_cobro; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_cobro ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_cobro conta_gc_cobro_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_cobro_leer ON public.conta_gc_cobro FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_importacion; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_importacion ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_importacion conta_gc_importacion_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_importacion_leer ON public.conta_gc_importacion FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_mandato; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_mandato ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_mandato conta_gc_mandato_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_mandato_leer ON public.conta_gc_mandato FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_suscripcion; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_suscripcion ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_suscripcion conta_gc_suscripcion_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_suscripcion_leer ON public.conta_gc_suscripcion FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gestoria_cambio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_cambio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_cambio conta_gestoria_cambio_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_cambio_leer ON public.conta_gestoria_cambio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gestoria_cliente; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_cliente ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_cliente_leer ON public.conta_gestoria_cliente FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gestoria_decision; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_decision ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_decision conta_gestoria_decision_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_decision_leer ON public.conta_gestoria_decision FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gestoria_diferencia; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_diferencia ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_diferencia conta_gestoria_diferencia_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_diferencia_leer ON public.conta_gestoria_diferencia FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gestoria_lectura; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_lectura ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_lectura conta_gestoria_lectura_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_lectura_leer ON public.conta_gestoria_lectura FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_linea; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_linea ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_linea conta_linea_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_linea_leer ON public.conta_linea FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -143179,6 +145128,45 @@ ALTER TABLE public.conta_s01p_prestamo_antes ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.conta_s01p_recibido_antes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_servicio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_servicio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_servicio conta_servicio_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_servicio_leer ON public.conta_servicio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_solicitud; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_solicitud ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_solicitud conta_solicitud_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_solicitud_leer ON public.conta_solicitud FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_tarifa; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_tarifa ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_tarifa conta_tarifa_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_tarifa_leer ON public.conta_tarifa FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
 
 --
 -- Name: conta_tienda_local_antes; Type: ROW SECURITY; Schema: public; Owner: -
@@ -150989,6 +152977,40 @@ GRANT ALL ON FUNCTION public._conta_facturas_apuntar_todas() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_gestoria_apuntar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gestoria_apuntar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gestoria_apuntar() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gestoria_euros(p_importe numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gestoria_euros(p_importe numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gestoria_euros(p_importe numeric) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_gestoria_euros(p_importe numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gestoria_mes(p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gestoria_mes(p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gestoria_mes(p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_gestoria_mes(p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gestoria_puede(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gestoria_puede(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gestoria_puede(p_company uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_hoja(p_company uuid, p_template text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -156144,6 +158166,30 @@ GRANT ALL ON FUNCTION public.conta_banco_agregador_despertar() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_bitrix_guardar_conexion(p_account uuid, p_entorno text, p_url text, p_portal text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_guardar_conexion(p_account uuid, p_entorno text, p_url text, p_portal text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_guardar_conexion(p_account uuid, p_entorno text, p_url text, p_portal text, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_guardar_fichas(p_account uuid, p_fichas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_guardar_fichas(p_account uuid, p_fichas jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_guardar_fichas(p_account uuid, p_fichas jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_secreto(p_account uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_secreto(p_account uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_secreto(p_account uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_canal_de_factura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -157245,6 +159291,102 @@ GRANT ALL ON FUNCTION public.conta_gasto_aprendido(p_company uuid, p_supplier uu
 
 
 --
+-- Name: FUNCTION conta_gestoria_alta_empleado(p_company uuid, p_party uuid, p_servicio uuid, p_empleado text, p_desde date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_alta_empleado(p_company uuid, p_party uuid, p_servicio uuid, p_empleado text, p_desde date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_alta_empleado(p_company uuid, p_party uuid, p_servicio uuid, p_empleado text, p_desde date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_alta_empleado(p_company uuid, p_party uuid, p_servicio uuid, p_empleado text, p_desde date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_baja_linea(p_linea uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_baja_linea(p_linea uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_baja_linea(p_linea uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_baja_linea(p_linea uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_despertar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_despertar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_despertar() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_enlazar(p_company uuid, p_gc_cliente text, p_party uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_enlazar(p_company uuid, p_gc_cliente text, p_party uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_enlazar(p_company uuid, p_gc_cliente text, p_party uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_enlazar(p_company uuid, p_gc_cliente text, p_party uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_linea_desde_gc(p_company uuid, p_suscripcion text, p_servicio uuid, p_empleado text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_linea_desde_gc(p_company uuid, p_suscripcion text, p_servicio uuid, p_empleado text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_linea_desde_gc(p_company uuid, p_suscripcion text, p_servicio uuid, p_empleado text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_linea_desde_gc(p_company uuid, p_suscripcion text, p_servicio uuid, p_empleado text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_no_contar(p_company uuid, p_suscripcion text, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_no_contar(p_company uuid, p_suscripcion text, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_no_contar(p_company uuid, p_suscripcion text, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_no_contar(p_company uuid, p_suscripcion text, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_revisada(p_diferencia uuid, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_revisada(p_diferencia uuid, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_revisada(p_diferencia uuid, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_revisada(p_diferencia uuid, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gocardless_guardar_conexion(p_company uuid, p_entorno text, p_token text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gocardless_guardar_conexion(p_company uuid, p_entorno text, p_token text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gocardless_guardar_conexion(p_company uuid, p_entorno text, p_token text, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gocardless_reintentos(p_company uuid, p_encendido boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gocardless_reintentos(p_company uuid, p_encendido boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gocardless_reintentos(p_company uuid, p_encendido boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gocardless_reintentos(p_company uuid, p_encendido boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gocardless_secreto(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gocardless_secreto(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gocardless_secreto(p_company uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_hacer_principal(p_actividad uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -158051,6 +160193,15 @@ GRANT ALL ON FUNCTION public.conta_lectura_proveedor_releida(p_invoice uuid, p_s
 REVOKE ALL ON FUNCTION public.conta_libro_iva_deducir_en(p_company uuid, p_claves jsonb, p_year integer, p_period text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_libro_iva_deducir_en(p_company uuid, p_claves jsonb, p_year integer, p_period text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_libro_iva_deducir_en(p_company uuid, p_claves jsonb, p_year integer, p_period text, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_linea_al_mes(p_linea uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_linea_al_mes(p_linea uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_linea_al_mes(p_linea uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_linea_al_mes(p_linea uuid, p_mes date) TO service_role;
 
 
 --
@@ -168470,6 +170621,14 @@ GRANT SELECT ON TABLE public.conta_cobro_cliente TO authenticated;
 
 
 --
+-- Name: TABLE conta_cobro_gocardless; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cobro_gocardless TO service_role;
+GRANT SELECT ON TABLE public.conta_cobro_gocardless TO authenticated;
+
+
+--
 -- Name: TABLE conta_cobro_remesa; Type: ACL; Schema: public; Owner: -
 --
 
@@ -168520,6 +170679,110 @@ GRANT SELECT ON TABLE public.conta_cobro_stripe TO authenticated;
 
 
 --
+-- Name: TABLE conta_gc_cliente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_cliente TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_cliente TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_cobro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_cobro TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_cobro TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_mandato; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_mandato TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_mandato TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_suscripcion; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_suscripcion TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_suscripcion TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_cliente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_cliente TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_cliente TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_diferencia; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_diferencia TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_diferencia TO authenticated;
+
+
+--
+-- Name: TABLE conta_linea; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_linea TO service_role;
+GRANT SELECT ON TABLE public.conta_linea TO authenticated;
+
+
+--
+-- Name: TABLE party; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.party TO authenticated;
+GRANT ALL ON TABLE public.party TO service_role;
+
+
+--
+-- Name: TABLE conta_consulta_clientes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_clientes TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_clientes TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_lectura; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_lectura TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_lectura TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_diferencias; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_diferencias TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_diferencias TO authenticated;
+
+
+--
+-- Name: TABLE conta_servicio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_servicio TO service_role;
+GRANT SELECT ON TABLE public.conta_servicio TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_lineas; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_lineas TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_lineas TO authenticated;
+
+
+--
 -- Name: TABLE conta_contrasena_intento; Type: ACL; Schema: public; Owner: -
 --
 
@@ -168533,6 +170796,14 @@ GRANT ALL ON TABLE public.conta_contrasena_intento TO service_role;
 GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO service_role;
+
+
+--
+-- Name: TABLE conta_crm_bitrix; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_crm_bitrix TO service_role;
+GRANT SELECT ON TABLE public.conta_crm_bitrix TO authenticated;
 
 
 --
@@ -168640,6 +170911,30 @@ GRANT SELECT ON TABLE public.customer_invoice_payment TO authenticated;
 GRANT ALL ON TABLE public.conta_factura_cobro TO anon;
 GRANT ALL ON TABLE public.conta_factura_cobro TO authenticated;
 GRANT ALL ON TABLE public.conta_factura_cobro TO service_role;
+
+
+--
+-- Name: TABLE conta_gc_importacion; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_importacion TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_importacion TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_cambio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_cambio TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_cambio TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_decision; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_decision TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_decision TO authenticated;
 
 
 --
@@ -168967,6 +171262,22 @@ GRANT ALL ON TABLE public.conta_s01p_prestamo_antes TO service_role;
 --
 
 GRANT ALL ON TABLE public.conta_s01p_recibido_antes TO service_role;
+
+
+--
+-- Name: TABLE conta_solicitud; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_solicitud TO service_role;
+GRANT SELECT ON TABLE public.conta_solicitud TO authenticated;
+
+
+--
+-- Name: TABLE conta_tarifa; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_tarifa TO service_role;
+GRANT SELECT ON TABLE public.conta_tarifa TO authenticated;
 
 
 --
@@ -171002,14 +173313,6 @@ GRANT ALL ON TABLE public.order_acceptance_config TO service_role;
 
 GRANT ALL ON TABLE public.parte_plataformas TO authenticated;
 GRANT ALL ON TABLE public.parte_plataformas TO service_role;
-
-
---
--- Name: TABLE party; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.party TO authenticated;
-GRANT ALL ON TABLE public.party TO service_role;
 
 
 --
