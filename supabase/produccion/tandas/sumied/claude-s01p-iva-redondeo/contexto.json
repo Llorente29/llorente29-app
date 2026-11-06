@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·16 · el IVA redondeado línea a línea · contexto de producción, medido en SOLO LECTURA el 2026-11-05T14:11Z: la 1510 añade _conta_iva_tolerancia (no existe) y cambia conta_motivos_para_validar por reemplazo exacto dentro de un DO, con respaldo (huella 9b352ea4ae6d1c73437d4eed3762d38a, la misma en staging). No mueve ninguna fila. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-05T14:11Z",
+ "tanda": {
+  "supabase/migrations/20261105T1510_s01p_iva_redondeo.sql": "88a2a93742a715c299f769a91169b833"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

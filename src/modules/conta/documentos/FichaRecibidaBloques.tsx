@@ -14,10 +14,11 @@ import { Boton, Fecha, Icono, Tecla } from '@/modules/conta/diseno'
 import { BloqueFicha, BuscarCuentaHoja, MarcaCambiado, type CambioCampo, type CuentaHoja, type TonoCampo } from '@/modules/conta/diseno/plantillas'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import {
-  ESTADOS_PAGO, FORMAS_PAGO, TIPOS_RETENCION, contraElPdf, cuadraElGasto, diaDeHecho, gastosConImporte, importeEs, otroTipo, rehacerCuota, textoTipo,
-  ACEPTA_PAPEL, type Adicional, type HechoHistorial, type LineaGasto, type LineaIva, type Totales,
+  ESTADOS_PAGO, FORMAS_PAGO, TIPOS_RETENCION, contraElPdf, cuadraElGasto, cuotaDeLaFactura, desdeElTotal, diaDeHecho, gastosConImporte, importeEs, otroTipo,
+  rehacerCuota, rehacerRetencion, textoRedondeo, textoTipo, toleranciaCuota, totalesDe, ACEPTA_PAPEL, type Adicional, type HechoHistorial, type LineaGasto, type LineaIva, type Totales,
 } from './fichaRecibida'
 import { cuotaIva } from '@/modules/conta/lib/libro'
+import { leerImporteEs } from '@/modules/conta/lib/recibidaAMano'
 
 type Cambio = CambioCampo | undefined
 
@@ -115,7 +116,7 @@ export function BloqueProveedorFactura({ proveedorId, numero, fecha, proveedores
 
 // ── Importes por tipo de IVA ────────────────────────────────────────────────
 
-export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false, abono = false }: {
+export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf, fuente, alCambiar, cambioDe, deshacer, soloLectura, errores = [], masDecimales = false, abono = false, lineasFactura, proveedor }: {
   /** S01h · Un abono: todo va a tu favor, sin signo; el total se llama «Total a tu favor». */
   abono?: boolean
   iva: readonly LineaIva[]
@@ -135,15 +136,32 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
   errores?: readonly string[]
   /** Sus líneas traen más de dos decimales: 1 céntimo de diferencia es redondeo. */
   masDecimales?: boolean
+  /** S01p·16 · Las líneas de la factura con su IVA: cuántas hay de cada tipo dice cuánto redondeo se acepta. */
+  lineasFactura?: readonly { iva: number | null }[]
+  /** S01p·16 · Para «Redondeo de Uber: 0,02 €…». */
+  proveedor?: string | null
 }) {
   const ofrecidos = [...new Set([...tipos, ...iva.map((l) => Number(l.tipo)).filter((x) => Number.isFinite(x))])].sort((a, b) => b - a)
+  // S01p·16 · Cambio la base o el tipo: se rehacen la cuota, el total y la retención con tipo (sobre la base nueva).
   const poner = (i: number, l: Partial<LineaIva>, rehacer: boolean) => {
     const nuevas = iva.map((x, k) => (k === i ? (rehacer ? rehacerCuota({ ...x, ...l }) : { ...x, ...l }) : x))
-    alCambiar({ iva: nuevas })
+    if (rehacer && retencion) alCambiar({ iva: nuevas, retencion: rehacerRetencion(retencion, totalesDe({ iva: nuevas, retencion, recargo }).base) })
+    else alCambiar({ iva: nuevas })
   }
+  // S01p·16 · El total se puede escribir (con un tipo de IVA): la base sale hacia atrás. Mientras se escribe, lo escrito.
+  const [totalEscrito, setTotalEscrito] = useState<string | null>(null)
+  const ponerTotal = (texto: string) => {
+    const t = leerImporteEs(texto)
+    const r = t === null ? null : desdeElTotal({ iva, retencion, recargo }, t)
+    if (r) alCambiar(r)
+    setTotalEscrito(null)
+  }
+  const totalEditable = !soloLectura && iva.length === 1 && !recargo && iva[0].tipo !== ''
   const contra = pdf ? contraElPdf(totales, pdf, fuente, { masDecimales }) : null
   const cIva = cambioDe('iva'), cRet = cambioDe('retencion'), cRec = cambioDe('recargo')
   const base = totales.base
+  // S01p·16 · La cuota que no es base × tipo: la de la factura, con la calculada al lado; con céntimos de redondeo, en gris.
+  const deLaFactura = iva.map((l) => cuotaDeLaFactura(l, toleranciaCuota(lineasFactura, Number(l.tipo))))
   return (
     <BloqueFicha
       titulo="Importes por tipo de IVA"
@@ -168,14 +186,34 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
                 {l.tipo === '' && <option value="">— Elige el tipo</option>}
                 {ofrecidos.map((t) => <option key={t} value={String(t)}>{textoTipo(t)}</option>)}
               </select>
-              <input className="s-control s-cifra cxf-importe" aria-label={`Cuota ${de}`} inputMode="decimal" value={l.cuota} readOnly={soloLectura}
-                onChange={(e) => poner(i, { cuota: e.target.value }, false)} />
+              <span className="cxf-cuota">
+                <input className="s-control s-cifra cxf-importe" aria-label={`Cuota ${de}`} inputMode="decimal" value={l.cuota} readOnly={soloLectura}
+                  onChange={(e) => poner(i, { cuota: e.target.value }, false)} />
+                {deLaFactura[i] && <small className="cxf-calculada" data-prueba="cuota-calculada">calculada {importeEs(deLaFactura[i]!.calculada)}</small>}
+              </span>
               {!soloLectura && iva.length > 1
                 ? <button type="button" className="cxf-quitar" aria-label={`Quitar la línea ${de}`} onClick={() => alCambiar({ iva: iva.filter((_, k) => k !== i) })}><Icono nombre="cerrar" /></button>
                 : <span />}
+              {deLaFactura[i] && (
+                <p className="cxf-cuota-nota" data-prueba={deLaFactura[i]!.redondeo ? 'redondeo-cuota' : 'cuota-de-la-factura'}>
+                  {deLaFactura[i]!.redondeo ? textoRedondeo(proveedor, deLaFactura[i]!.diferencia) : 'Cuota de la factura: se apunta la que dice'}
+                </p>
+              )}
             </div>
           )
         })}
+        {totalEditable && (
+          <div className="cxf-iva-linea" role="group" aria-label="Importe total">
+            <span className="cxf-iva-rotulo">{abono ? 'Total a tu favor' : 'Total de la factura'}</span>
+            <span />
+            <input className="s-control s-cifra cxf-importe" aria-label="Total de la factura" inputMode="decimal"
+              value={totalEscrito ?? importeEs(totales.total)}
+              onChange={(e) => setTotalEscrito(e.target.value)}
+              onBlur={(e) => { if (totalEscrito !== null) ponerTotal(e.target.value) }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && totalEscrito !== null) { e.preventDefault(); ponerTotal(e.currentTarget.value) } }} />
+            <span />
+          </div>
+        )}
         {retencion && (
           <div className="cxf-iva-linea" role="group" aria-label="Retención (IRPF)" data-prueba="linea-retencion" data-cambiado={cRet ? '' : undefined}>
             <span className="cxf-iva-rotulo">Retención (IRPF)</span>
@@ -217,7 +255,7 @@ export function BloqueImportesIva({ iva, retencion, recargo, tipos, totales, pdf
           <span className="cxf-total">{abono ? 'Total a tu favor' : 'Total'} <strong className="s-cifra">{eurosExactos(totales.total)}</strong></span>
           {contra && (
             <span className="cxf-contra" data-igual={contra.redondeo ? 'redondeo' : contra.igual === true ? 'si' : contra.igual === false ? 'no' : undefined} data-prueba="contra-pdf">
-              {contra.igual === true && !contra.redondeo && <Icono nombre="ok" />} {contra.texto}
+              <span className="cxf-contra-cuenta">Base + IVA{totales.recargo ? ' + recargo' : ''}{totales.retencion ? ' − retención' : ''} = total ·</span> {contra.texto}{contra.igual === true && !contra.redondeo && <Icono nombre="ok" />}
             </span>
           )}
         </div>
