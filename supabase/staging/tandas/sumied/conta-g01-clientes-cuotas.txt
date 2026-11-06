@@ -1,0 +1,12 @@
+# G01 · Asesoría QBO: la 1530 solo añade; la 1531 cambia en caliente
+# (gocardless en las pasarelas, crm como origen de party, el mandato de
+# GoCardless sin enlace de firma y _s01_cuenta_pasarela). Su prueba (ROLLBACK,
+# una empresa de staging y datos inventados) pasa las dos, prueba cada cambio,
+# lo que vale una línea un mes (la tarifa propia manda; lo anual, entre 12; el
+# mes de la baja, entero), las reglas, Vault, las vistas, y sus dos vueltas
+# atrás.
+supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
+supabase/migrations/20261106T1531_g01_gocardless_cobro.sql
+supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql
+supabase/migrations/20261106T2000_g01_ficha_acciones.sql
+supabase/staging/sql/20261106_g01_clientes_cuotas_prueba.sql

@@ -12,3 +12,8 @@ conta-pagar
 # B01 · Cola 1e · El justificante de un pago: la función pública nueva (y las
 # tres de arriba, que lo hacen al confirmar el banco: _shared/justificantePago.ts).
 conta-justificante
+# G01 · Asesoría QBO · Tarea 3 (06/11): la lectura de GoCardless y de Bitrix24,
+# nuevas, de la rama conta/g01-clientes-cuotas. En staging solo hablan con el
+# sandbox de GoCardless y con un Bitrix24 de pruebas.
+conta-gocardless-leer
+conta-bitrix-leer
