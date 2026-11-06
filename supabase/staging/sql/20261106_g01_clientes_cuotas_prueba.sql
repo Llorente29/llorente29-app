@@ -284,7 +284,8 @@ begin
          (select md5(pg_get_functiondef('public._s01_cuenta_pasarela(uuid,text)'::regprocedure))) as funcion,
          (select attnotnull from pg_attribute where attrelid = 'public.conta_mandato'::regclass and attname = 'token') as token_obligatorio
     into x;
-  if (x.pasarela, x.origen, x.funcion, x.token_obligatorio) is distinct from (select pasarela, origen, funcion, token_obligatorio from _antes) then
+  if exists (select 1 from _antes y where y.pasarela is distinct from x.pasarela or y.origen is distinct from x.origen
+              or y.funcion is distinct from x.funcion or y.token_obligatorio is distinct from x.token_obligatorio) then
     raise exception 'PRUEBA G01 · 10: la vuelta atrás no deja las restricciones o la función como antes.';
   end if;
   if to_regclass('public.conta_linea') is not null or to_regclass('public.conta_consulta_clientes') is not null
