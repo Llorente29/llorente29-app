@@ -1,10 +1,11 @@
 {
- "_que": "G01 · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 06/11 a las 16:40Z con la consulta del workflow (analizar.mjs sql-contexto). La 1530 solo añade (16 tablas nuevas que no existen, 3 vistas, funciones nuevas, columnas que admiten nulos en conta_cobro_cliente y conta_mandato, y la lectura de cada noche). La 1531 cambia en caliente conta_pasarela_cuenta (0 filas), party (109 filas: solo amplía su CHECK de origen), conta_mandato (0 filas) y _s01_cuenta_pasarela (con su respaldo). Nada en el camino del pedido. Ningún fichero en el historial. La 1932 (tarea 4) solo añade: una columna con valor por defecto en conta_cobro_gocardless (que no existe en producción: la crea la 1530) y dos funciones nuevas; el contexto de producción no cambia.",
+ "_que": "G01 · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 06/11 a las 16:40Z con la consulta del workflow (analizar.mjs sql-contexto). La 1530 solo añade (16 tablas nuevas que no existen, 3 vistas, funciones nuevas, columnas que admiten nulos en conta_cobro_cliente y conta_mandato, y la lectura de cada noche). La 1531 cambia en caliente conta_pasarela_cuenta (0 filas), party (109 filas: solo amplía su CHECK de origen), conta_mandato (0 filas) y _s01_cuenta_pasarela (con su respaldo). Nada en el camino del pedido. Ningún fichero en el historial. La 1932 (tarea 4) solo añade: una columna con valor por defecto en conta_cobro_gocardless (que no existe en producción: la crea la 1530) y dos funciones nuevas; el contexto de producción no cambia. La 2000 (tarea 4b) solo añade: una tabla nueva (conta_gestoria_decision) y funciones nuevas; el contexto de producción no cambia.",
  "medido": "2026-11-06T16:40Z",
  "tanda": {
   "supabase/migrations/20261106T1530_g01_clientes_cuotas.sql": "90fb9f1f3f86cfaed1b7776ae15421b2",
   "supabase/migrations/20261106T1531_g01_gocardless_cobro.sql": "eb18eefca963053ab8ae0407e20f1b16",
-  "supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql": "6f4388dc716a2689c691a0740b00be45"
+  "supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql": "6f4388dc716a2689c691a0740b00be45",
+  "supabase/migrations/20261106T2000_g01_ficha_acciones.sql": "a6847a793a9376dd361902163731f5ca"
  },
  "contexto": {
   "tablas": [

@@ -83,6 +83,12 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     const propias = await leerFilas<{ party_id: string; servicio: { clave: string } | null }>(db.from('conta_tarifa')
       .select('party_id, servicio:servicio_id(clave)').eq('company_id', empresa).not('party_id', 'is', null), 'las tarifas propias')
     const { data: conex } = await db.from('conta_cobro_gocardless').select('por_defecto').eq('company_id', empresa).single()
+    // G01 · 4b · Lo decidido en la ficha: enlaces, suscripciones que no se cuentan y diferencias revisadas.
+    const decisiones = await leerFilas<{ tipo: string; party_id: string | null; gc_cliente_id: string | null; suscripcion_gc_id: string | null; diferencia_tipo: string | null; porque: string | null }>(
+      db.from('conta_gestoria_decision').select('tipo, party_id, gc_cliente_id, suscripcion_gc_id, diferencia_tipo, porque').eq('company_id', empresa), 'lo decidido en la ficha')
+    const enlaces = new Map(decisiones.filter((d) => d.tipo === 'enlace' && d.gc_cliente_id && d.party_id).map((d) => [d.gc_cliente_id!, d.party_id!]))
+    const noContar = new Set(decisiones.filter((d) => d.tipo === 'no_contar' && d.suscripcion_gc_id).map((d) => d.suscripcion_gc_id!))
+    const revisadas = new Set(decisiones.filter((d) => d.tipo === 'revisada').map((d) => `${d.diferencia_tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
 
     const antes: Antes = {
       huellas: new Map(huellas.map((x) => [x.gc_id, x.huella])),
@@ -93,6 +99,7 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       porDefecto: (conex as { por_defecto?: boolean } | null)?.por_defecto !== false,
       importadas: new Set(importadas.map((x) => x.suscripcion_gc_id)),
       tarifasPropias: new Set(propias.filter((t) => t.servicio).map((t) => `${t.party_id}|${t.servicio!.clave}`)),
+      enlaces,
     }
     const plan = planLectura(empresa, cuenta, datos, antes, hoy, nombreEmisor)
 
@@ -154,7 +161,7 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       importePropioCent: l.importe_propio === null ? null : Math.round(Number(l.importe_propio) * 100), periodo: l.periodo as 'mes' | 'anio',
       desde: mes(l.desde), hasta: l.hasta ? mes(l.hasta) : null, suscripcionId: (l.suscripcion_gc_id as string | null) ?? null }))
     const tes = await leerFilas<{ id: string; name: string; iban: string | null }>(db.from('treasury_account').select('id, name, iban').eq('company_id', empresa).eq('kind', 'bank'), 'la tesorería')
-    const dif = planDiferencias(empresa, datos, plan, hoy,
+    const dif = planDiferencias(empresa, { ...datos, suscripciones: datos.suscripciones.filter((x) => !noContar.has(x.id)) }, plan, hoy,
       sinConvertir.map((n) => ({ suscripcion: String(n.suscripcion_gc_id), gcCliente: n.gc_cliente_id, partyId: n.party_id, nombre: String(n.nombre ?? ''),
         codigo: String(n.porque_codigo ?? 'sin_convertir'), porque: String(n.porque ?? '') })),
       lineasDe, tarifas, tes.map((t) => ({ id: t.id, nombre: t.name, iban: t.iban })))
@@ -162,6 +169,8 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // Las de antes de esta empresa, y las del casado (de la cuenta), dejan de ser las vigentes.
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).eq('company_id', empresa)
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', TIPOS_DEL_CASADO)
+    // Lo revisado no vuelve a salir mientras diga lo mismo.
+    dif.diferencias = dif.diferencias.filter((d) => !revisadas.has(`${d.tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
     for (const trozo of enTrozos(dif.diferencias)) {
       const { error } = await db.from('conta_gestoria_diferencia').insert(trozo.map((d) => ({ account_id: cuenta, lectura_id: lectura, ...d })))
       if (error) throw new Error(`No se han podido guardar las diferencias: ${error.message}`)

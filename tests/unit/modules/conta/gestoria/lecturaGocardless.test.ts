@@ -73,6 +73,18 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     expect(p2.cobroCliente.find((c) => c.party_id === 'P1')?.forma_cobro).toBe('transferencia')
   })
 
+  it('4b · lo enlazado a mano en la ficha manda sobre el casado y ya no sale «sin ficha»', async () => {
+    const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
+    // Sin la ficha de P2 en Bitrix24, CU002 (con mandato vivo) sale «sin ficha».
+    const fichas = antes().fichas.filter((f) => f.partyId !== 'P2')
+    const sin = planLectura(A, 'cuenta', d, antes({ fichas }), HOY, nombre)
+    expect(sin.diferenciasDelCasado.some((x) => x.tipo === 'gocardless_sin_ficha' && x.clienteGcId === 'CU002')).toBe(true)
+    const con = planLectura(A, 'cuenta', d, antes({ fichas, enlaces: new Map([['CU002', 'P2']]) }), HOY, nombre)
+    expect(con.partyDeCliente.get('CU002')).toBe('P2')
+    expect(con.cobroCliente.find((c) => c.gc_cliente_id === 'CU002')).toMatchObject({ party_id: 'P2', gc_casado_por: 'persona' })
+    expect(con.diferenciasDelCasado.some((x) => x.tipo === 'gocardless_sin_ficha' && x.clienteGcId === 'CU002')).toBe(false)
+  })
+
   it('las diferencias, cada una con su porqué como dato', async () => {
     const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
     const p = planLectura(A, 'cuenta', d, antes(), HOY, nombre)

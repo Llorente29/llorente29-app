@@ -38,6 +38,8 @@ export interface Antes {
   importadas: Set<string>
   /** Las tarifas propias que ya hay: «cliente|clave del servicio». */
   tarifasPropias: Set<string>
+  /** G01 · 4b · Lo que una persona enlazó en la ficha: cliente de GoCardless → cliente de Sumied (manda sobre el casado). */
+  enlaces?: Map<string, string>
 }
 
 export interface PlanLectura {
@@ -98,11 +100,15 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
   const casado = casar(antes.fichas, [...deEsta, ...antes.otrosEmisores.filter((c) => c.emisor !== empresa)], nombreEmisor)
   const partyDeBitrix = new Map(antes.fichas.map((f) => [f.bitrixId, f.partyId]))
   const partyDeCliente = new Map<string, string>()
-  const porDe = new Map<string, Pareja['por']>()
+  const porDe = new Map<string, Pareja['por'] | 'persona'>()
   for (const p of casado.parejas.filter((x) => x.emisor === empresa)) {
     const party = partyDeBitrix.get(p.bitrixId)
     if (party) { partyDeCliente.set(p.clienteGcId, party); porDe.set(p.clienteGcId, p.por) }
   }
+  // Lo enlazado a mano en la ficha manda: ese cliente ya no sale «sin ficha».
+  const enlaces = antes.enlaces ?? new Map<string, string>()
+  for (const [gc, party] of enlaces) if (deEsta.some((c) => c.id === gc)) { partyDeCliente.set(gc, party); porDe.set(gc, 'persona') }
+  casado.diferencias = casado.diferencias.filter((d) => !(d.tipo === 'gocardless_sin_ficha' && d.clienteGcId && enlaces.has(d.clienteGcId)))
   for (const f of clientes) {
     const party = partyDeCliente.get(String(f.gc_id))
     Object.assign(f, { party_id: party ?? null, casado_por: party ? porDe.get(String(f.gc_id)) : null })

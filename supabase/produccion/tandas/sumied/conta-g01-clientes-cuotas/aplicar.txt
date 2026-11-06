@@ -17,6 +17,10 @@
 #   1932  Añade (tarea 4): el interruptor «Reintentos inteligentes», apagado por
 #         defecto (solo se guarda), y las funciones de las pantallas para
 #         guardar una tarifa «desde el mes» y encender o apagar los reintentos.
+#   2000  Añade (tarea 4b): lo que se hace desde la ficha del cliente (alta y
+#         baja de un trabajador, lo de GoCardless como línea o sin contar,
+#         enlazar con una ficha, dar una diferencia por revisada) y la tabla
+#         de esas decisiones, que respeta la lectura de cada noche.
 #
 # No lee ni escribe nada en GoCardless ni en Bitrix24: eso lo hacen sus
 # funciones cuando se conecten. Nada en el camino del pedido. El real lo lanza
@@ -25,3 +29,4 @@ cuenta: scripts/conta/produccion/cuentas/g01-clientes-cuotas.sql
 supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
 supabase/migrations/20261106T1531_g01_gocardless_cobro.sql
 supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql
+supabase/migrations/20261106T2000_g01_ficha_acciones.sql

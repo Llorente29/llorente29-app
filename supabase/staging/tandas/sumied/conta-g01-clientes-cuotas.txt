@@ -8,4 +8,5 @@
 supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
 supabase/migrations/20261106T1531_g01_gocardless_cobro.sql
 supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql
+supabase/migrations/20261106T2000_g01_ficha_acciones.sql
 supabase/staging/sql/20261106_g01_clientes_cuotas_prueba.sql

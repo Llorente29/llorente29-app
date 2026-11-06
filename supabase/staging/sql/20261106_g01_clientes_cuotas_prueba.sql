@@ -50,7 +50,8 @@ select 'CHECK ((proveedor = ANY (ARRAY[''stripe''::text, ''redsys''::text])))'::
 -- Si el ensayo ya las pasó en esta transacción, no se vuelven a pasar.
 select to_regclass('public.conta_linea') is not null as ya_esta_la_1530,
        exists (select 1 from public.funcion_respaldo where migracion = '20261106T1531_g01_gocardless_cobro') as ya_esta_la_1531,
-       to_regprocedure('public.conta_tarifa_guardar(uuid,uuid,uuid,numeric,text,date,text)') is not null as ya_esta_la_1932 \gset
+       to_regprocedure('public.conta_tarifa_guardar(uuid,uuid,uuid,numeric,text,date,text)') is not null as ya_esta_la_1932,
+       to_regclass('public.conta_gestoria_decision') is not null as ya_esta_la_2000 \gset
 \if :ya_esta_la_1530
 \else
 \i supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
@@ -62,6 +63,10 @@ select to_regclass('public.conta_linea') is not null as ya_esta_la_1530,
 \if :ya_esta_la_1932
 \else
 \i supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql
+\endif
+\if :ya_esta_la_2000
+\else
+\i supabase/migrations/20261106T2000_g01_ficha_acciones.sql
 \endif
 
 savepoint datos;
@@ -252,6 +257,25 @@ begin
   raise notice 'G01 · 9: las vistas salen y son de solo lectura. OK';
 end $$;
 
+-- 9c (preparación) · Lo leído de GoCardless (inventado) y tres diferencias, para
+-- probar en 9b lo que se hace desde la ficha (la 2000).
+do $$
+declare e uuid := (select empresa from _e); a uuid := (select cuenta from _e); uno uuid; dos uuid; l uuid;
+begin
+  select party_id into uno from public.conta_gestoria_cliente where account_id = a and bitrix_id = 'G01-1';
+  select party_id into dos from public.conta_gestoria_cliente where account_id = a and bitrix_id = 'G01-2';
+  insert into public.conta_gc_cliente (company_id, gc_id, account_id, nombre, party_id, casado_por) values
+    (e, 'CU-G01-A', a, 'ACADEMIA PRUEBA G01 SIN FICHA', null, null), (e, 'CU-G01-B', a, 'CLIENTE PRUEBA G01 UNO', uno, 'nif');
+  insert into public.conta_gc_suscripcion (company_id, gc_id, account_id, gc_cliente_id, nombre, importe, moneda, intervalo, cada, estado, al_mes, inicio) values
+    (e, 'SB-G01-1', a, 'CU-G01-B', 'GESTION LABORAL', 24.20, 'EUR', 'monthly', 1, 'active', 24.20, date '2026-01-05'),
+    (e, 'SB-G01-2', a, 'CU-G01-B', 'GESTION LABORAL ANTIGUA', 24.20, 'EUR', 'monthly', 1, 'active', 24.20, date '2026-01-05');
+  insert into public.conta_gestoria_lectura (account_id, company_id, origen, entorno, por) values (a, e, 'gocardless', 'pruebas', 'persona') returning id into l;
+  insert into public.conta_gestoria_diferencia (account_id, lectura_id, company_id, party_id, gc_cliente_id, tipo, porque_codigo, porque) values
+    (a, l, e, null, 'CU-G01-A', 'gocardless_sin_ficha', 'sin_ficha', 'En GoCardless y sin ficha en Bitrix24.'),
+    (a, l, e, uno, 'CU-G01-B', 'totales_distintos', 'gocardless_mas', 'GoCardless cobra «GESTION LABORAL», que no es ninguna línea en Sumied.'),
+    (a, l, e, dos, null, 'falla_a_menudo', 'tres_o_mas_fallos', '3 cobros fallidos desde el 1 de mayo.');
+end $$;
+
 -- 9b · Como una persona de la cuenta (authenticated, con su sub): ve en las
 -- vistas las líneas de su cuenta y ninguna de otra, y no escribe en las tablas.
 create temp table _u on commit drop as
@@ -294,6 +318,65 @@ begin
       raise exception 'PRUEBA G01 · 9b: los reintentos no se encienden.';
     end if;
   end;
+  -- La 2000, como la usa la ficha: alta y baja de un trabajador, lo de GoCardless como línea o sin contar, enlazar y dar por revisada.
+  declare r jsonb; e uuid := (select empresa from _e); lab uuid; uno uuid; dos uuid; lin uuid; dif uuid;
+  begin
+    select id into lab from public.conta_servicio where company_id = e and clave = 'gestion_laboral';
+    select party_id into uno from public.conta_gestoria_cliente where account_id = a and bitrix_id = 'G01-1';
+    select party_id into dos from public.conta_gestoria_cliente where account_id = a and bitrix_id = 'G01-2';
+    r := public.conta_gestoria_alta_empleado(e, uno, lab, 'empleada cuatro prueba', date '2026-12-01');
+    if r->>'frase' <> 'Alta de EMPLEADA CUATRO PRUEBA en gestión laboral de CLIENTE PRUEBA G01 UNO, S.L. desde diciembre: 27,50 € al mes.' then
+      raise exception 'PRUEBA G01 · 9b: la frase del alta no es la esperada: %', r->>'frase';
+    end if;
+    lin := (r->>'id')::uuid;
+    begin
+      perform public.conta_gestoria_alta_empleado(e, uno, lab, 'Empleada Cuatro Prueba', date '2027-01-01');
+      raise exception 'PRUEBA G01 · 9b: se da de alta dos veces al mismo trabajador.';
+    exception when unique_violation then null;
+    end;
+    r := public.conta_gestoria_baja_linea(lin, date '2027-02-15');
+    if (select hasta from public.conta_linea where id = lin) <> date '2027-02-01'
+       or r->>'frase' <> 'Baja de EMPLEADA CUATRO PRUEBA en gestión laboral de CLIENTE PRUEBA G01 UNO, S.L.: febrero se cobra entero y ya no se cobra desde marzo.' then
+      raise exception 'PRUEBA G01 · 9b: la baja no deja cobrar entero su mes: %', r->>'frase';
+    end if;
+    if public.conta_linea_al_mes(lin, date '2027-02-01') <> 27.50 or public.conta_linea_al_mes(lin, date '2027-03-01') <> 0 then
+      raise exception 'PRUEBA G01 · 9b: el mes de la baja no vale entero o el siguiente sigue valiendo.';
+    end if;
+    if not exists (select 1 from public.conta_gestoria_cambio where registro_id = lin and accion = 'alta')
+       or not exists (select 1 from public.conta_gestoria_cambio where registro_id = lin and accion = 'cambio') then
+      raise exception 'PRUEBA G01 · 9b: el alta o la baja no quedan en el registro.';
+    end if;
+    r := public.conta_gestoria_linea_desde_gc(e, 'SB-G01-1', lab, 'Empleado cinco prueba');
+    if not exists (select 1 from public.conta_linea where suscripcion_gc_id = 'SB-G01-1' and party_id = uno and empleado_nombre = 'EMPLEADO CINCO PRUEBA')
+       or exists (select 1 from public.conta_gestoria_diferencia where party_id = uno and tipo = 'totales_distintos' and vigente) then
+      raise exception 'PRUEBA G01 · 9b: «Añadirla como línea» no la añade o la diferencia sigue: %', r->>'frase';
+    end if;
+    r := public.conta_gestoria_no_contar(e, 'SB-G01-2', 'Se fue en octubre');
+    if not exists (select 1 from public.conta_gestoria_decision where tipo = 'no_contar' and suscripcion_gc_id = 'SB-G01-2' and motivo = 'Se fue en octubre') then
+      raise exception 'PRUEBA G01 · 9b: «No la cuentes» no queda apuntado.';
+    end if;
+    r := public.conta_gestoria_enlazar(e, 'CU-G01-A', dos);
+    if (select party_id from public.conta_gc_cliente where company_id = e and gc_id = 'CU-G01-A') is distinct from dos
+       or (select gc_casado_por from public.conta_cobro_cliente where company_id = e and party_id = dos) <> 'persona'
+       or exists (select 1 from public.conta_gestoria_diferencia where gc_cliente_id = 'CU-G01-A' and vigente) then
+      raise exception 'PRUEBA G01 · 9b: «Enlazar con una ficha» no enlaza: %', r->>'frase';
+    end if;
+    select id into dif from public.conta_gestoria_diferencia where party_id = dos and tipo = 'falla_a_menudo' and vigente;
+    begin
+      perform public.conta_gestoria_revisada(dif, '  ');
+      raise exception 'PRUEBA G01 · 9b: se da por revisada sin decir por qué.';
+    exception when invalid_parameter_value then null;
+    end;
+    r := public.conta_gestoria_revisada(dif, 'Ha cambiado de banco');
+    if (select vigente from public.conta_gestoria_diferencia where id = dif) or (select count(*) from public.conta_gestoria_decision where company_id = e) <> 4 then
+      raise exception 'PRUEBA G01 · 9b: «Ya lo he revisado» no la quita o no queda apuntado: %', r->>'frase';
+    end if;
+    begin
+      insert into public.conta_gestoria_decision (account_id, company_id, tipo, frase) values (a, e, 'revisada', 'x');
+      raise exception 'PRUEBA G01 · 9b: la persona escribe una decisión directamente.';
+    exception when insufficient_privilege then null;
+    end;
+  end;
   raise notice 'G01 · 9b: como persona, solo lo de su cuenta, y sin escribir directamente; la tarifa «desde diciembre» y los reintentos, por sus funciones. OK';
 end $$;
 reset role;
@@ -301,6 +384,7 @@ select set_config('request.jwt.claims', '', true);
 
 -- 10 · La vuelta atrás de las dos: sin los datos de la prueba, todo como antes.
 rollback to savepoint datos;
+\i supabase/vuelta-atras/20261106T2000_g01_ficha_acciones.down.sql
 \i supabase/vuelta-atras/20261106T1932_g01_tarifas_y_reintentos.down.sql
 \i supabase/vuelta-atras/20261106T1531_g01_gocardless_cobro.down.sql
 \i supabase/vuelta-atras/20261106T1530_g01_clientes_cuotas.down.sql
@@ -317,7 +401,8 @@ begin
     raise exception 'PRUEBA G01 · 10: la vuelta atrás no deja todo como antes: pasarela %, origen %, función %, enlace obligatorio %.',
       (select pasarela from _antes) = x.pasarela, (select origen from _antes) = x.origen, (select funcion from _antes) = x.funcion, x.token_obligatorio;
   end if;
-  if to_regclass('public.conta_linea') is not null or to_regclass('public.conta_consulta_clientes') is not null
+  if to_regclass('public.conta_linea') is not null or to_regclass('public.conta_gestoria_decision') is not null
+     or to_regprocedure('public.conta_gestoria_enlazar(uuid,text,uuid)') is not null or to_regclass('public.conta_consulta_clientes') is not null
      or exists (select 1 from information_schema.columns where table_name = 'conta_mandato' and column_name = 'origen')
      or exists (select 1 from information_schema.columns where table_name = 'conta_cobro_cliente' and column_name = 'forma_cobro') then
     raise exception 'PRUEBA G01 · 10: la vuelta atrás deja tablas, vistas o columnas.';
