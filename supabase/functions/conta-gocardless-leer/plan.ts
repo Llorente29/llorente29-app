@@ -139,7 +139,8 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeBitrix, cobroCliente, mandatosSumied,
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {
-      mandatosVivos: datos.mandatos.filter((m) => MANDATO_VIVO.includes(m.estado)).length,
+      // «Mandatos activos», como los cuenta GoCardless (status active). El casado usa todos los vivos (también los que van camino del banco).
+      mandatosVivos: datos.mandatos.filter((m) => m.estado === 'active').length,
       lineasActivas: activas.length,
       alMesCent: activas.filter((x) => x.moneda === 'EUR').reduce((t, x) => t + (alMesCent(x) ?? 0), 0),
       abono: datos.abonos[0] ?? null,
@@ -185,7 +186,8 @@ export function planDiferencias(
   }
   const mes = hoy.slice(0, 7)
   for (const [gc, party] of plan.partyDeCliente) {
-    const gcActivas = activas.filter((x) => x.mandatoId && clienteDeMandato.get(x.mandatoId) === gc && x.moneda === 'EUR')
+    // Solo lo que ya cobra este mes: en GoCardless «start_date» es el primer cobro (una recién creada empieza el mes que viene).
+    const gcActivas = activas.filter((x) => x.mandatoId && clienteDeMandato.get(x.mandatoId) === gc && x.moneda === 'EUR' && (x.inicio ?? hoy).slice(0, 7) <= mes)
       .map((x) => ({ id: x.id, emisor: empresa, nombre: x.nombre, alMesCent: alMesCent(x) ?? 0 }))
     const r = comparar(party, mes, lineasDe(party), tarifas, gcActivas)
     if (r.diferenciaCent !== 0) {

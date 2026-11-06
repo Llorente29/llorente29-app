@@ -102,4 +102,20 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     const sin = planDiferencias(A, d, p, HOY, [], lineasDe, tarifas, [])
     expect(sin.diferencias.find((x) => x.tipo === 'abono_en_otra_cuenta')?.porque_codigo).toBe('abono_no_casa')
   })
+
+  it('en vivo se vio: una suscripción que empieza el mes que viene no cuenta este mes, ni cuenta como activo un mandato camino del banco', async () => {
+    const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
+    const nuevas = { ...d,
+      suscripciones: d.suscripciones.map((x) => ({ ...x, inicio: '2026-12-05' })),
+      mandatos: d.mandatos.map((m) => (m.id === 'MD002' ? { ...m, estado: 'pending_submission' } : m)) }
+    const p = planLectura(A, 'cuenta', nuevas, antes(), HOY, nombre)
+    expect(p.resumen.mandatosVivos).toBe(1)
+    expect(p.parejas).toHaveLength(2)
+    const lineasDe = (party: string): Linea[] => p.lineas.filter((l) => l.partyId === party).map((l) => ({ id: l.suscripcionId, emisor: A, servicio: l.servicio,
+      nombreServicio: l.servicio, detalle: l.detalle, empleado: l.empleado, importePropioCent: l.importePropioCent, periodo: l.periodo, desde: l.desdeMes, hasta: null,
+      suscripcionId: l.suscripcionId }))
+    const tarifas: Tarifa[] = p.tarifas.map((t) => ({ emisor: A, servicio: t.servicio, clienteId: t.partyId, importeCent: t.importeCent, periodo: t.periodo, desde: t.desde, hasta: null }))
+    const r = planDiferencias(A, nuevas, p, HOY, [], lineasDe, tarifas, [{ id: 't1', nombre: 'Banco de prueba', iban: 'ES0099990000000000000034' }])
+    expect(r.diferencias.filter((x) => x.tipo === 'totales_distintos')).toEqual([])
+  })
 })
