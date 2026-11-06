@@ -8451,6 +8451,42 @@ COMMENT ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p
 
 
 --
+-- Name: _dl1_factura_emitir(uuid, uuid, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_factura_emitir(p_company uuid, p_actor uuid, p_nombre text, p_datos jsonb, p_lineas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true);
+  v_g jsonb; v_r jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'DL1 factura: esa empresa no está.'; end if;
+  if exists (select 1 from public.customer_invoice where company_id = p_company and account_id = v_acc and status <> 'anulada'
+              and notes = p_datos->>'notas') then
+    raise exception 'DL1 factura: ya hay una factura viva con las notas «%»: no se emite otra.', p_datos->>'notas';
+  end if;
+  -- Como si la emitiera la persona: su usuario y su cuenta activa, solo en esta transacción.
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  v_g := public.conta_venta_guardar(p_company, null, p_datos, p_lineas, p_nombre);
+  v_r := public.conta_venta_emitir((v_g->>'id')::uuid, p_nombre);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_factura_emitir(p_company uuid, p_actor uuid, p_nombre text, p_datos jsonb, p_lineas jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_factura_emitir(p_company uuid, p_actor uuid, p_nombre text, p_datos jsonb, p_lineas jsonb) IS 'DL1. Guarda y emite una factura de venta con el camino de la aplicación (conta_venta_guardar y conta_venta_emitir), como una persona de la cuenta; para si ya hay una viva con las mismas notas. Solo una tanda.';
+
+
+--
 -- Name: _dl1_validar(uuid, uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -153798,6 +153834,13 @@ GRANT ALL ON FUNCTION public._distancia_metros(p_lat1 double precision, p_lng1 d
 --
 
 REVOKE ALL ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _dl1_factura_emitir(p_company uuid, p_actor uuid, p_nombre text, p_datos jsonb, p_lineas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_factura_emitir(p_company uuid, p_actor uuid, p_nombre text, p_datos jsonb, p_lineas jsonb) FROM PUBLIC;
 
 
 --
