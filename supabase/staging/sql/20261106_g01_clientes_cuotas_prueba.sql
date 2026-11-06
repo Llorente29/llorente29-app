@@ -49,7 +49,8 @@ select 'CHECK ((proveedor = ANY (ARRAY[''stripe''::text, ''redsys''::text])))'::
 
 -- Si el ensayo ya las pasó en esta transacción, no se vuelven a pasar.
 select to_regclass('public.conta_linea') is not null as ya_esta_la_1530,
-       exists (select 1 from public.funcion_respaldo where migracion = '20261106T1531_g01_gocardless_cobro') as ya_esta_la_1531 \gset
+       exists (select 1 from public.funcion_respaldo where migracion = '20261106T1531_g01_gocardless_cobro') as ya_esta_la_1531,
+       to_regprocedure('public.conta_tarifa_guardar(uuid,uuid,uuid,numeric,text,date,text)') is not null as ya_esta_la_1932 \gset
 \if :ya_esta_la_1530
 \else
 \i supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
@@ -57,6 +58,10 @@ select to_regclass('public.conta_linea') is not null as ya_esta_la_1530,
 \if :ya_esta_la_1531
 \else
 \i supabase/migrations/20261106T1531_g01_gocardless_cobro.sql
+\endif
+\if :ya_esta_la_1932
+\else
+\i supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql
 \endif
 
 savepoint datos;
@@ -250,7 +255,7 @@ end $$;
 -- 9b · Como una persona de la cuenta (authenticated, con su sub): ve en las
 -- vistas las líneas de su cuenta y ninguna de otra, y no escribe en las tablas.
 create temp table _u on commit drop as
-select p.user_id::text as sub from public.user_profiles p where p.account_id = (select cuenta from _e) and p.active order by p.created_at limit 1;
+select p.user_id::text as sub from public.user_profiles p where p.account_id = (select cuenta from _e) and p.active and p.role in ('admin', 'manager') order by p.created_at limit 1;
 grant select on _e, _u to authenticated;
 select coalesce((select sub from _u), '') as sub_prueba \gset
 select set_config('request.jwt.claims', json_build_object('sub', :'sub_prueba', 'role', 'authenticated')::text, true);
@@ -258,7 +263,7 @@ set local role authenticated;
 do $$
 declare a uuid := (select cuenta from _e); n int;
 begin
-  if (select sub from _u) is null then raise notice 'G01 · 9b: la empresa de staging no tiene ninguna persona activa: se salta.'; return; end if;
+  if (select sub from _u) is null then raise notice 'G01 · 9b: la empresa de staging no tiene ninguna persona administradora o encargada activa: se salta.'; return; end if;
   select count(*) into n from public.conta_consulta_lineas where cuenta_id = a and cliente like 'CLIENTE PRUEBA G01%';
   if n < 5 then raise exception 'PRUEBA G01 · 9b: la persona de la cuenta no ve sus líneas (%).', n; end if;
   select count(*) into n from public.conta_consulta_lineas where cuenta_id <> a;
@@ -272,13 +277,31 @@ begin
     raise exception 'PRUEBA G01 · 9b: la persona escribe una tarifa directamente.';
   exception when insufficient_privilege then null;
   end;
-  raise notice 'G01 · 9b: como persona, solo lo de su cuenta, y sin escribir. OK';
+  -- La 1932, como la usa la pantalla: la tarifa propia «desde diciembre», con su frase; y los reintentos.
+  declare r jsonb; e uuid := (select empresa from _e); lab uuid; uno uuid;
+  begin
+    select id into lab from public.conta_servicio where company_id = e and clave = 'gestion_laboral';
+    select party_id into uno from public.conta_gestoria_cliente where account_id = a and bitrix_id = 'G01-1';
+    r := public.conta_tarifa_guardar(e, lab, uno, 27.50, 'mes', date '2026-12-15', 'Prueba G01: sube en diciembre');
+    if r->>'frase' <> 'Tarifa laboral de CLIENTE PRUEBA G01 UNO, S.L.: 27,50 € desde diciembre. Afecta a 1 empleado.' then
+      raise exception 'PRUEBA G01 · 9b: la frase de la tarifa no es la esperada: %', r->>'frase';
+    end if;
+    if (select hasta from public.conta_tarifa where company_id = e and servicio_id = lab and party_id = uno and importe = 24.20) is distinct from date '2026-11-01' then
+      raise exception 'PRUEBA G01 · 9b: la tarifa de antes no queda cerrada en noviembre.';
+    end if;
+    r := public.conta_gocardless_reintentos(e, true);
+    if not (r->>'encendido')::boolean or not (select reintentos_inteligentes from public.conta_cobro_gocardless where company_id = e) then
+      raise exception 'PRUEBA G01 · 9b: los reintentos no se encienden.';
+    end if;
+  end;
+  raise notice 'G01 · 9b: como persona, solo lo de su cuenta, y sin escribir directamente; la tarifa «desde diciembre» y los reintentos, por sus funciones. OK';
 end $$;
 reset role;
 select set_config('request.jwt.claims', '', true);
 
 -- 10 · La vuelta atrás de las dos: sin los datos de la prueba, todo como antes.
 rollback to savepoint datos;
+\i supabase/vuelta-atras/20261106T1932_g01_tarifas_y_reintentos.down.sql
 \i supabase/vuelta-atras/20261106T1531_g01_gocardless_cobro.down.sql
 \i supabase/vuelta-atras/20261106T1530_g01_clientes_cuotas.down.sql
 do $$

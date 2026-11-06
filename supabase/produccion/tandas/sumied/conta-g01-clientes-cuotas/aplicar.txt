@@ -14,6 +14,9 @@
 #   1531  Cambia en caliente (con su prueba de staging): gocardless en
 #         conta_pasarela_cuenta, crm como origen de party, el mandato de
 #         GoCardless sin enlace de firma y _s01_cuenta_pasarela.
+#   1932  Añade (tarea 4): el interruptor «Reintentos inteligentes», apagado por
+#         defecto (solo se guarda), y las funciones de las pantallas para
+#         guardar una tarifa «desde el mes» y encender o apagar los reintentos.
 #
 # No lee ni escribe nada en GoCardless ni en Bitrix24: eso lo hacen sus
 # funciones cuando se conecten. Nada en el camino del pedido. El real lo lanza
@@ -21,3 +24,4 @@
 cuenta: scripts/conta/produccion/cuentas/g01-clientes-cuotas.sql
 supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
 supabase/migrations/20261106T1531_g01_gocardless_cobro.sql
+supabase/migrations/20261106T1932_g01_tarifas_y_reintentos.sql

@@ -1,6 +1,8 @@
-# G01 · la vuelta atrás, en orden inverso: primero la 1531 (para si ya hay una
+# G01 · la vuelta atrás, en orden inverso: primero la 1932 (las funciones de
+# las pantallas y los reintentos), después la 1531 (para si ya hay una
 # cuenta de GoCardless, un cliente de Bitrix24 o un mandato de GoCardless) y
 # después la 1530 (fuera lo nuevo y los secretos de las conexiones en Vault).
 cuenta: scripts/conta/produccion/cuentas/g01-clientes-cuotas.sql
+supabase/vuelta-atras/20261106T1932_g01_tarifas_y_reintentos.down.sql
 supabase/vuelta-atras/20261106T1531_g01_gocardless_cobro.down.sql
 supabase/vuelta-atras/20261106T1530_g01_clientes_cuotas.down.sql
