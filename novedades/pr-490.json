@@ -1,0 +1,20 @@
+[
+ {
+  "id": "490-1",
+  "pr": 490,
+  "fecha": "2026-11-06T21:53:57Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "en las asesorías, los clientes de la gestoría con lo que se les cobra en Sumied y lo que cobra GoCardless, lo que no cuadra y cómo resolverlo desde la ficha.",
+  "ruta": null
+ },
+ {
+  "id": "490-2",
+  "pr": 490,
+  "fecha": "2026-11-06T21:53:57Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "conectar la cuenta de GoCardless de cada empresa y el Bitrix24 de la cuenta.",
+  "ruta": null
+ }
+]
