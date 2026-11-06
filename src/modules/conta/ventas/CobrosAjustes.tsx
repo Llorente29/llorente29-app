@@ -19,6 +19,7 @@ import { Boton, Campo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import { leerDias, textoDias } from '@/modules/conta/lib/cobros'
 import { guardarAjustesCobro, leerRecordatorios, recordatoriosCliente } from '@/modules/conta/services/cobrosService'
 import { ComoTePagan } from './ComoTePagan'
+import { CobrosGestoriaAjustes } from '@/modules/conta/gestoria/paginas'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -63,6 +64,7 @@ export function CobrosAjustes() {
 
   return (
     <div className="pg-dialogo-campos" data-prueba="ajustes-cobros">
+      <CobrosGestoriaAjustes />
       {activa && <ComoTePagan empresaId={activa.id} editar />}
       <Tarjeta titulo="Recordatorios"
         apoyo="Se mandan solos a las facturas por cobrar que no se cobran por remesa ni por una plataforma, con el nombre de tu empresa y la factura en PDF. Se paran solos cuando cobras."

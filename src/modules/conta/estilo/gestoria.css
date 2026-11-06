@@ -1,0 +1,94 @@
+/* src/modules/conta/estilo/gestoria.css
+ *
+ * G01 · Tarea 4 · Clientes y cuotas, su ficha, las Tarifas y las tarjetas de
+ * GoCardless y Bitrix24 en Ajustes › Cobros. Solo tokens de tokens.css.
+ */
+
+.cxg-pagina { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.cxg-cuerpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+.cxg-con-ficha { grid-template-columns: minmax(0, 1fr) 380px; }
+.cxg-lista { min-width: 0; }
+.cxg-lado { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow: auto; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); }
+
+.cxg-emisor select { height: 30px; font: inherit; font-weight: 600; border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-boton); background: var(--cx-blanco); color: var(--cx-texto); padding: 0 8px; }
+
+.cxg-cliente { display: flex; flex-direction: column; min-width: 0; }
+.cxg-cliente strong { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cxg-apoyo-fila { color: var(--cx-apoyo); font-size: 12px; }
+.cxg-apoyo { color: var(--cx-apoyo); margin: 0; font-size: 13px; line-height: 1.45; }
+.cxg-cifra { font-family: var(--cx-letra-cifras); font-variant-numeric: tabular-nums; }
+.cxg-mono { font-family: var(--cx-letra-cifras); font-size: 12px; }
+.cxg-der { text-align: right; }
+.cxg-distinto { color: var(--cx-ambar); font-weight: 600; }
+.cxg-dif { color: var(--cx-ambar); font-size: 12px; }
+
+.cxg-letras { display: inline-flex; gap: 3px; }
+.cxg-letra { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 4px; font-size: 11px; font-weight: 700; text-decoration: none; background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxg-letra[data-letra='C'] { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cxg-letra[data-letra='L'] { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxg-letra[data-letra='S'] { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+
+.cxg-estado { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxg-estado[data-tono='verde'] { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxg-estado[data-tono='ambar'] { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxg-cobro { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.cxg-punto { width: 8px; height: 8px; border-radius: 50%; background: var(--cx-apoyo); flex: none; }
+.cxg-punto[data-tono='verde'] { background: var(--cx-verde-oscuro); }
+.cxg-punto[data-tono='ambar'] { background: var(--cx-ambar); }
+.cxg-punto[data-tono='rojo'] { background: var(--cx-rojo); }
+
+/* La ficha */
+.cxg-ficha { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.cxg-ficha-cabeza { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.cxg-ficha-titulo { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+.cxg-ficha-sub { margin: 0 0 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.4px; text-transform: uppercase; color: var(--cx-apoyo); }
+.cxg-ficha-difs { margin: 0; padding: 10px 12px 10px 28px; background: var(--cx-ambar-suave); color: var(--cx-ambar); border-radius: var(--cx-radio-caja); font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
+.cxg-servicio { padding: 8px 0; border-bottom: 1px solid var(--cx-linea); }
+.cxg-servicio-cabeza { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.cxg-servicio-filas { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.cxg-servicio-filas li { display: flex; justify-content: space-between; gap: 10px; }
+.cxg-totales { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0 8px; }
+.cxg-totales div { display: flex; flex-direction: column; gap: 2px; }
+.cxg-totales dt { font-size: 12px; color: var(--cx-apoyo); }
+.cxg-totales dd { margin: 0; font-size: 20px; font-weight: 600; }
+.cxg-explica { padding: 8px 12px; border-radius: var(--cx-radio-caja); font-size: 13px; background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxg-explica[data-tono='ambar'] { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxg-explica p { margin: 2px 0; }
+.cxg-cobros { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.cxg-cobros li { display: grid; grid-template-columns: 84px 80px minmax(0, 1fr); gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--cx-linea); align-items: center; }
+.cxg-cobros .cxg-cobro { white-space: normal; }
+
+/* Datos en dos columnas (ficha y ajustes) */
+.cxg-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px 16px; margin: 0; }
+.cxg-datos div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cxg-datos dt { font-size: 12px; color: var(--cx-apoyo); }
+.cxg-datos dd { margin: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+
+/* Ajustes › Cobros */
+.cxg-fila-campos { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 12px; }
+.cxg-nota { margin: 0; padding: 8px 12px; border-radius: var(--cx-radio-caja); font-size: 13px; background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxg-interruptor-fila { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 12px; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); }
+.cxg-interruptor-fila strong { font-size: 14px; }
+.cxg-interruptor { position: relative; flex: none; width: 44px; height: 26px; border-radius: 999px; border: 1px solid var(--cx-borde-control); background: var(--cx-neutro-suave); cursor: pointer; padding: 0; margin-top: 2px; }
+.cxg-interruptor[data-on] { background: var(--cx-azul); border-color: var(--cx-azul); }
+.cxg-interruptor:disabled { opacity: 0.6; cursor: default; }
+.cxg-interruptor:focus-visible { outline: 2px solid var(--cx-azul-borde); outline-offset: 2px; }
+.cxg-interruptor-bola { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--cx-blanco); box-shadow: var(--cx-sombra-entrada); transition: transform 0.15s; }
+.cxg-interruptor[data-on] .cxg-interruptor-bola { transform: translateX(18px); }
+
+/* Tarifas */
+.cxg-tabla-tarifas { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cxg-tabla-tarifas th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: var(--cx-apoyo); padding: 6px 8px; border-bottom: 1px solid var(--cx-linea); }
+.cxg-tabla-tarifas td { padding: 6px 8px; border-bottom: 1px solid var(--cx-linea); }
+.cxg-tabla-tarifas .cxg-der { text-align: right; }
+
+/* Móvil */
+.cxg-tarjeta-movil { display: flex; flex-direction: column; gap: 4px; }
+.cxg-tarjeta-fila { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+@media (max-width: 1100px) { .cxg-con-ficha { grid-template-columns: minmax(0, 1fr) 320px; } }
+@media (max-width: 760px) {
+  .cxg-con-ficha { grid-template-columns: minmax(0, 1fr); }
+  .cxg-fila-campos { grid-template-columns: minmax(0, 1fr); }
+  .cxg-interruptor-fila { padding: 10px; }
+  .cxg-totales dd { font-size: 18px; }
+}

@@ -174,6 +174,8 @@ export const PRODUCTOS: Producto[] = [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       // PC01 · E3 · Cobros (tableros cobros-1 y cobros-2): lo que te deben, las remesas de recibos y los devueltos.
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: R.cobros, prefijos: [R.cobros] },
+      // G01 · Clientes y cuotas (solo asesoría): los clientes de la gestoría, sus tarifas y lo que cobra GoCardless.
+      { id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas], solo: 'asesoria' },
       // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te
       // pagan quienes cobran por ti: plataformas, el datáfono, Amazon, Stripe…),
       // encima del bloque «Hostelería». La ficha de la del socio de marca (y la de

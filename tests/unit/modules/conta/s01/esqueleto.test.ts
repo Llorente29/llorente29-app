@@ -83,7 +83,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // PC01 · Entrega 2: Compras › Pagos (la lista, las remesas y la ficha de una) y «Repartidores», el nombre nuevo de Liquidaciones.
     repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
     // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
-    cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros',
+    cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros', clientesCuotas: 'facturacion.clientesCuotas', tarifasGestoria: 'facturacion.clientesCuotas',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -132,7 +132,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
     // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te pagan quienes
     // cobran por ti), encima del bloque «Hostelería»; sin hostelería, sin plataformas.
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Liquidaciones', 'Cierres del día'])
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Clientes y cuotas', 'Liquidaciones', 'Cierres del día'])
+    // G01 · Clientes y cuotas, solo en una cuenta de asesoría.
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'clientesCuotas')).toMatchObject({ solo: 'asesoria' })
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
     expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
@@ -153,6 +155,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'laboral', 'impuestos', 'contactos', 'ajustes'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }).map((p) => p.id)).toContain('laboral')
     expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, asesoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'clientesCuotas', 'liquidacionesVentas'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
