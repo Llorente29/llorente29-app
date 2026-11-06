@@ -5117,6 +5117,22 @@ end $$;
 
 
 --
+-- Name: _conta_iva_tolerancia(uuid, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_iva_tolerancia(p_entry uuid, p_tipo numeric) RETURNS numeric
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  -- Las líneas de la factura con ese tipo: 0,01 € por línea. Sin saberlo, 0,02 €.
+  select coalesce((select nullif(count(*), 0) * 0.01
+                     from public.journal_entry e
+                     join public.supplier_invoice_line x on x.supplier_invoice_id = e.source_id
+                    where e.id = p_entry and e.source_type = 'supplier_invoice' and x.vat_pct = p_tipo), 0.02)
+$$;
+
+
+--
 -- Name: _conta_linea_retencion(uuid, uuid, numeric, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -43589,7 +43605,7 @@ begin
              and abs(l.tax_base) <> l.debit + l.credit
           then format('un apunte sin IVA es su base: el importe %s no es la base %s', l.debit + l.credit, l.tax_base)
         when l.tax_rate_id is not null and t.treatment is distinct from 'exempt'
-             and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(1, floor(l.tax_documents / 2.0)) / 100
+             and abs(round(l.tax_base * t.rate / 100, 2) - (l.debit + l.credit)) > greatest(greatest(1, floor(l.tax_documents / 2.0)) / 100, public._conta_iva_tolerancia(p_entry, t.rate))
           then format('la cuota %s no es la base %s × %s %% = %s', l.debit + l.credit, l.tax_base, t.rate, round(l.tax_base * t.rate / 100, 2))
         when a.template_code like '4751%' and l.withholding_rate_id is null and not v_cierre
              and not (l.withholding_model is not null and l.withholding_period is not null)
@@ -151009,6 +151025,15 @@ GRANT ALL ON FUNCTION public._conta_iva_reabrir_se_puede_deshacer() TO service_r
 
 REVOKE ALL ON FUNCTION public._conta_iva_reapertura_cerrar() FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_iva_reapertura_cerrar() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_iva_tolerancia(p_entry uuid, p_tipo numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_iva_tolerancia(p_entry uuid, p_tipo numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_iva_tolerancia(p_entry uuid, p_tipo numeric) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_iva_tolerancia(p_entry uuid, p_tipo numeric) TO service_role;
 
 
 --
