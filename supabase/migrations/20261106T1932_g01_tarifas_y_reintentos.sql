@@ -7,7 +7,7 @@
 --      «Reintentos inteligentes» de GoCardless (Julio, tarea 4), apagado por
 --      defecto. En este encargo solo se guarda: todavía no se cobra nada, y
 --      puede tener coste según el plan de GoCardless (lo dice la pantalla).
---   2. conta_tarifa_guardar: guarda la tarifa general o la propia de un
+--   2. conta_gestoria_tarifa_guardar: guarda la tarifa general o la propia de un
 --      cliente «desde el mes» que se diga. Si ya había una que valía ese mes,
 --      la cierra el mes de antes (su «hasta») y abre la nueva: cada cambio
 --      queda en conta_gestoria_cambio (el disparador de la 1530). Devuelve la
@@ -15,13 +15,16 @@
 --      <cliente>: 24,20 € desde diciembre. Afecta a 3 empleados».
 --   3. conta_gocardless_reintentos: enciende o apaga el interruptor.
 -- Las dos funciones, para una persona administradora o encargada de la cuenta.
+-- Nombre: conta_gestoria_tarifa_guardar, no conta_tarifa_guardar, que ya es
+-- la de las tarifas de los proveedores (E05, 20261112T0120): la misma con
+-- otros argumentos sería una sobrecarga, y el análisis de la tanda la para.
 -- Vuelta atrás: supabase/vuelta-atras/20261106T1932_g01_tarifas_y_reintentos.down.sql
 
 alter table public.conta_cobro_gocardless add column if not exists reintentos_inteligentes boolean not null default false;
 comment on column public.conta_cobro_gocardless.reintentos_inteligentes is
   'G01 · «Reintentos inteligentes» de GoCardless: apagado por defecto. Solo se guarda (todavía no se cobra nada); puede tener coste según el plan de GoCardless.';
 
-create or replace function public.conta_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text)
+create or replace function public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_cuenta uuid; v_mes date := date_trunc('month', p_desde)::date; v_quien text; v_serv public.conta_servicio; v_cliente text;
         v_id uuid; v_afecta int; v_meses text[] := array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
@@ -71,8 +74,8 @@ begin
       case when v_serv.forma = 'por_empleado' then case when v_afecta = 1 then 'empleado' else 'empleados' end
            else case when v_afecta = 1 then 'línea' else 'líneas' end end));
 end $$;
-revoke all on function public.conta_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text) from public, anon;
-grant execute on function public.conta_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text) to authenticated;
+revoke all on function public.conta_gestoria_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text) from public, anon;
+grant execute on function public.conta_gestoria_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text) to authenticated;
 
 create or replace function public.conta_gocardless_reintentos(p_company uuid, p_encendido boolean)
 returns jsonb language plpgsql security definer set search_path = public as $$

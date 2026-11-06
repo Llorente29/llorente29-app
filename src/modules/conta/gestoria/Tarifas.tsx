@@ -3,7 +3,7 @@
 // G01 · Tarea 4 · Ventas › Clientes y cuotas › Tarifas: cambiar la tarifa
 // general de un servicio o la propia de un cliente «desde el mes» que se diga
 // (FormularioBloques). La que valía ese mes se cierra el mes de antes y queda
-// apuntado quién y por qué (conta_tarifa_guardar, en la base). Al guardar, la
+// apuntado quién y por qué (conta_gestoria_tarifa_guardar, en la base). Al guardar, la
 // frase con contenido: «Tarifa laboral de <cliente>: 24,20 € desde diciembre.
 // Afecta a 3 empleados». Debajo, las tarifas que valen este mes.
 

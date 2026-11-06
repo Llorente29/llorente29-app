@@ -5,5 +5,5 @@
 -- sin prueba con datos: la prueba de staging (20261106_g01_clientes_cuotas_prueba.sql) la pasa en ROLLBACK con las otras dos y comprueba que todo queda como antes; el ensayo de producción la pasa entera, en ROLLBACK.
 
 drop function if exists public.conta_gocardless_reintentos(uuid, boolean);
-drop function if exists public.conta_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text);
+drop function if exists public.conta_gestoria_tarifa_guardar(uuid, uuid, uuid, numeric, text, date, text);
 alter table public.conta_cobro_gocardless drop column if exists reintentos_inteligentes;

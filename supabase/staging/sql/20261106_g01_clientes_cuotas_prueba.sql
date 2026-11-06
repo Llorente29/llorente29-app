@@ -50,7 +50,7 @@ select 'CHECK ((proveedor = ANY (ARRAY[''stripe''::text, ''redsys''::text])))'::
 -- Si el ensayo ya las pasó en esta transacción, no se vuelven a pasar.
 select to_regclass('public.conta_linea') is not null as ya_esta_la_1530,
        exists (select 1 from public.funcion_respaldo where migracion = '20261106T1531_g01_gocardless_cobro') as ya_esta_la_1531,
-       to_regprocedure('public.conta_tarifa_guardar(uuid,uuid,uuid,numeric,text,date,text)') is not null as ya_esta_la_1932,
+       to_regprocedure('public.conta_gestoria_tarifa_guardar(uuid,uuid,uuid,numeric,text,date,text)') is not null as ya_esta_la_1932,
        to_regclass('public.conta_gestoria_decision') is not null as ya_esta_la_2000 \gset
 \if :ya_esta_la_1530
 \else
@@ -306,7 +306,7 @@ begin
   begin
     select id into lab from public.conta_servicio where company_id = e and clave = 'gestion_laboral';
     select party_id into uno from public.conta_gestoria_cliente where account_id = a and bitrix_id = 'G01-1';
-    r := public.conta_tarifa_guardar(e, lab, uno, 27.50, 'mes', date '2026-12-15', 'Prueba G01: sube en diciembre');
+    r := public.conta_gestoria_tarifa_guardar(e, lab, uno, 27.50, 'mes', date '2026-12-15', 'Prueba G01: sube en diciembre');
     if r->>'frase' <> 'Tarifa laboral de CLIENTE PRUEBA G01 UNO, S.L.: 27,50 € desde diciembre. Afecta a 1 empleado.' then
       raise exception 'PRUEBA G01 · 9b: la frase de la tarifa no es la esperada: %', r->>'frase';
     end if;

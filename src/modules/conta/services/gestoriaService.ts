@@ -3,7 +3,7 @@
 // G01 · Tarea 4 · Lo que leen y hacen las pantallas de Clientes y cuotas, las
 // Tarifas y Ajustes › Cobros (GoCardless y Bitrix24). Lee las tablas de la
 // 1530 (con su RLS: solo lo de la cuenta) y la vista conta_consulta_clientes;
-// guarda por las funciones de la base (conta_tarifa_guardar y
+// guarda por las funciones de la base (conta_gestoria_tarifa_guardar y
 // conta_gocardless_reintentos, de la 1932) y conecta o lee por las funciones
 // conta-gocardless-leer y conta-bitrix-leer. Cada cosa vuelve con su frase.
 
@@ -168,7 +168,7 @@ export async function cambiarReintentos(empresa: string, encendido: boolean): Pr
 }
 
 export async function guardarTarifa(a: { empresa: string; servicio: string; cliente: string | null; importe: number; periodo: 'mes' | 'anio'; desde: string; motivo: string | null }): Promise<{ frase: string; afecta: number }> {
-  return rpc<{ frase: string; afecta: number }>('conta_tarifa_guardar', {
+  return rpc<{ frase: string; afecta: number }>('conta_gestoria_tarifa_guardar', {
     p_company: a.empresa, p_servicio: a.servicio, p_party: a.cliente, p_importe: a.importe, p_periodo: a.periodo, p_desde: a.desde, p_motivo: a.motivo,
   })
 }
