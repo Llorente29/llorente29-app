@@ -1,0 +1,21 @@
+# DL1 · Adleta (Lobbers): lo que no liquidó, del 16/05 al 10/07 (Julio, DL1·14
+# y su respuesta del 06/11). Rama claude/dl1-adleta-liquidacion. Se ensaya y
+# se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2213  Añade _dl1_factura_emitir y emite, como Julio y con el camino de la
+#         aplicación, dos facturas de Llorente29 a Adleta en la serie F, con la
+#         fecha del día en que se emiten y la fecha de operación en el concepto:
+#         A (12/06–10/07, Folvy) 2.005,56 + 200,56 y B (16/05–11/06, estimada)
+#         2.597,89 + 259,79. Y reparte la 705 de cada una por local, validado.
+#         La 43000006 pasa de +1.759,18 a +6.822,98. Verifactu, apagado.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-adleta-liquidacion.sql
+supabase/migrations/20261106T2213_dl1_adleta_liquidacion.sql
+sin-vuelta-atras: supabase/migrations/20261106T2213_dl1_adleta_liquidacion.sql · motivo: una factura emitida tiene su número y se corrige con una rectificativa; un asiento validado, con un contraasiento.
+esperado: dl1-adleta-liquidacion · Facturas de la DL1 a Adleta emitidas, menos 2 = 0
+esperado: dl1-adleta-liquidacion · Repartos por local de las facturas a Adleta validados por Julio, menos 2 = 0
+esperado: dl1-adleta-liquidacion · 43000006 validado, menos lo que debe Adleta (6.822,98) = 0.00
+esperado: dl1-adleta-liquidacion · IVA repercutido de Adleta del 4T, menos 1.468,58 = 0.00
+esperado: dl1-adleta-liquidacion · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-adleta-liquidacion · IVA de Foodint 477 del 1T al 3T de 2026 = como antes
