@@ -219,6 +219,16 @@ export function porQueNoSoloAnade(fichero, sql, contexto, creadoPorOtros = new S
     const t = sinFirma(o.objeto)
     if (creadoPorOtros.has(t) && !tablas.has(t) && !deLaTanda.has(t)) return `${o.accion} ${o.tipo} ${o.objeto}: la tabla la crea otro fichero de la tanda y aún no está en staging`
   }
+  // Y lo mismo con cualquier otra cosa que nombre (una tabla como tipo de una
+  // variable, en una consulta…): la 2000 declara variables de tipo
+  // public.conta_servicio, que crea la 1530.
+  // Sin comentarios, pero con los cuerpos de las funciones: es donde se usan.
+  const texto = sql.replace(/--.*$/gm, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  for (const t of creadoPorOtros) {
+    if (t.includes('(') || tablas.has(t) || deLaTanda.has(t)) continue
+    const nombre = t.replace(/^public\./, '')
+    if (new RegExp(`\\bpublic\\.${nombre}\\b`, 'i').test(texto)) return `usa ${t}, que crea otro fichero de la tanda y aún no está en staging`
+  }
   for (const o of ops) {
     const c = categoria(o, ctx)
     if (c.cat === 'añade') continue
