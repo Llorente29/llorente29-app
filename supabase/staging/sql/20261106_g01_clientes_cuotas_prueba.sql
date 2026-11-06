@@ -35,12 +35,17 @@ end $$;
 set local statement_timeout = '120s';
 set local lock_timeout = '120s';
 
--- Lo de antes, para comparar al final.
+-- Lo de antes, para comparar al final. El ensayo de staging puede haber pasado
+-- ya la tanda en esta transacción, así que «antes» no se mide ahora: las
+-- restricciones como eran (las de producción y staging el 06/11) y la huella
+-- de _s01_cuenta_pasarela de su respaldo (la misma con la que la compara su
+-- vuelta atrás), o la de ahora si la 1531 aún no ha pasado.
 create temp table _antes on commit drop as
-select (select pg_get_constraintdef(oid) from pg_constraint where conname = 'conta_pasarela_cuenta_proveedor_check') as pasarela,
-       (select pg_get_constraintdef(oid) from pg_constraint where conname = 'party_source_check') as origen,
-       (select md5(pg_get_functiondef('public._s01_cuenta_pasarela(uuid,text)'::regprocedure))) as funcion,
-       (select attnotnull from pg_attribute where attrelid = 'public.conta_mandato'::regclass and attname = 'token') as token_obligatorio;
+select 'CHECK ((proveedor = ANY (ARRAY[''stripe''::text, ''redsys''::text])))'::text as pasarela,
+       'CHECK ((source = ANY (ARRAY[''manual''::text, ''supplier''::text, ''migrated''::text, ''ticket''::text])))'::text as origen,
+       coalesce((select huella from public.funcion_respaldo where firma = 'public._s01_cuenta_pasarela(uuid,text)' and migracion = '20261106T1531_g01_gocardless_cobro'),
+                md5(pg_get_functiondef('public._s01_cuenta_pasarela(uuid,text)'::regprocedure))) as funcion,
+       true as token_obligatorio;
 
 -- Si el ensayo ya las pasó en esta transacción, no se vuelven a pasar.
 select to_regclass('public.conta_linea') is not null as ya_esta_la_1530,
@@ -286,7 +291,8 @@ begin
     into x;
   if exists (select 1 from _antes y where y.pasarela is distinct from x.pasarela or y.origen is distinct from x.origen
               or y.funcion is distinct from x.funcion or y.token_obligatorio is distinct from x.token_obligatorio) then
-    raise exception 'PRUEBA G01 · 10: la vuelta atrás no deja las restricciones o la función como antes.';
+    raise exception 'PRUEBA G01 · 10: la vuelta atrás no deja todo como antes: pasarela %, origen %, función %, enlace obligatorio %.',
+      (select pasarela from _antes) = x.pasarela, (select origen from _antes) = x.origen, (select funcion from _antes) = x.funcion, x.token_obligatorio;
   end if;
   if to_regclass('public.conta_linea') is not null or to_regclass('public.conta_consulta_clientes') is not null
      or exists (select 1 from information_schema.columns where table_name = 'conta_mandato' and column_name = 'origen')
