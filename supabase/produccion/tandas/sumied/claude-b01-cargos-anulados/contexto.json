@@ -1,0 +1,8 @@
+{
+ "_que": "B01·19 · los tres cargos del 30/10 que el BBVA anuló · contexto de producción, medido en SOLO LECTURA el 06/11 a las 23:20Z: la 2350 añade _b01r_ignorar_anulados (no existe) y deja de lado con bank_ignorar tres movimientos de Foodint que están por aclarar (−3.308,46 en ···6536, −483,36 y −315,00 en ···4525). Ensayada a mano en una transacción revertida: los tres quedan ignorados con su motivo y su línea en el historial. Nada en el camino del pedido.",
+ "medido": "2026-11-06T23:20Z",
+ "tanda": {
+  "supabase/migrations/20261106T2350_b01r_cargos_anulados.sql": "a3ca7f2b89573f6efbf6a20dded360f1"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
