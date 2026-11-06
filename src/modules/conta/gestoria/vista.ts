@@ -95,7 +95,7 @@ export const empleadosDe = (lineas: readonly Linea[], mes: Mes) =>
   lineas.filter((l) => l.servicio === 'gestion_laboral' && l.empleado && vale(l.desde, l.hasta, mes)).length
 
 export const FORMA_COBRO: Record<string, string> = {
-  gocardless: 'Domiciliación (GoCardless)', remesa: 'Remesa del banco', transferencia: 'Transferencia', tarjeta: 'Tarjeta',
+  gocardless: 'Domiciliación', remesa: 'Remesa del banco', transferencia: 'Transferencia', tarjeta: 'Tarjeta',
 }
 
 export function textoMandato(estado: string | null): { texto: string; tono: 'verde' | 'ambar' | 'gris' } {
@@ -138,8 +138,8 @@ export function fichaDe(clienteId: string, emisor: string, mes: Mes, lineas: Lin
     const tarifa = t ? `${euros(t.tarifa.importeCent)} ${t.tarifa.periodo === 'anio' ? 'al año' : 'al mes'} · ${t.propia ? 'tarifa propia' : 'tarifa general'}` : 'Sin tarifa'
     const filas = ls.map((l) => {
       const d = delMes.get(l.id)
-      const quien = l.empleado ?? l.detalle ?? l.nombreServicio
-      return { texto: `${l.nombreServicio}${quien !== l.nombreServicio ? ` · ${quien}` : ''}`, importe: d?.alMesCent == null ? 'Sin tarifa' : euros(d.alMesCent) }
+      const quien = l.empleado ?? l.detalle
+      return { texto: quien ? `${l.nombreServicio} · ${quien}` : `${l.nombreServicio} · cuota del mes`, importe: d?.alMesCent == null ? 'Sin tarifa' : euros(d.alMesCent) }
     })
     const totalCent = ls.reduce((s, l) => s + (delMes.get(l.id)?.alMesCent ?? 0), 0)
     return { servicio, nombre: ls[0].nombreServicio, tarifa, filas, totalCent }

@@ -73,14 +73,18 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
     ...(emisor ? [] : [{ id: 'emisor', titulo: 'Emisor', celda: (f: ClienteGestoria) => f.emisor, exportar: (f: ClienteGestoria) => f.emisor, pesoPdf: 2 }]),
     { id: 'figura', titulo: 'Figura', ancho: '84px', celda: (f) => figura(f.nif) ?? '—', exportar: (f) => figura(f.nif) ?? '' },
     { id: 'servicios', titulo: 'Servicios', ancho: '86px', celda: (f) => <span className="cxg-letras">{letrasDeServicios(lin(f)).map((x) => <abbr key={x} title={NOMBRE_LETRA[x]} className="cxg-letra" data-letra={x}>{x}</abbr>)}</span>, exportar: (f) => letrasDeServicios(lin(f)).join(' ') },
-    { id: 'empleados', titulo: 'Empleados', ancho: '84px', cifra: true, celda: (f) => empleadosDe(lin(f), mes) || '—', exportar: (f) => empleadosDe(lin(f), mes) },
+    { id: 'empleados', titulo: 'Empleados', ancho: '100px', cifra: true, celda: (f) => empleadosDe(lin(f), mes) || '—', exportar: (f) => empleadosDe(lin(f), mes) },
     { id: 'sumied', titulo: 'Total al mes en Sumied', ancho: '120px', cifra: true, celda: (f) => { const x = fichas.get(f.id); return x ? euros(x.comparacion.sumiedCent) : '—' }, exportar: (f) => (fichas.get(f.id)?.comparacion.sumiedCent ?? 0) / 100 },
     { id: 'gocardless', titulo: 'Total hoy en GoCardless', ancho: '124px', cifra: true, celda: (f) => { const x = fichas.get(f.id); const d = x?.comparacion.diferenciaCent ?? 0; return x ? <span className={d !== 0 ? 'cxg-distinto' : undefined}>{euros(x.comparacion.gocardlessCent)}</span> : '—' }, exportar: (f) => (fichas.get(f.id)?.comparacion.gocardlessCent ?? 0) / 100 },
-    { id: 'forma', titulo: 'Forma de cobro', ancho: '120px', celda: (f) => (f.formaCobro ? FORMA_COBRO[f.formaCobro] : 'Sin decir'), exportar: (f) => (f.formaCobro ? FORMA_COBRO[f.formaCobro] : '') },
-    { id: 'mandato', titulo: 'Mandato', ancho: '104px', celda: (f) => { const m = textoMandato(f.mandato); return <span className="cxg-estado" data-tono={m.tono}>{m.texto}</span> }, exportar: (f) => textoMandato(f.mandato).texto },
-    { id: 'ultimo', titulo: 'Último cobro', ancho: '108px', celda: (f) => { const c = f.cobros[0]; if (!c) return '—'; const t = textoCobro(c.estado); return <span className="cxg-cobro"><span className="cxg-punto" data-tono={t.tono} aria-hidden="true" />{fechaCorta(c.fecha)} · {t.texto}</span> }, exportar: (f) => f.cobros[0]?.fecha ?? '' },
-    { id: 'diferencias', titulo: 'Diferencias', ancho: '180px', celda: (f) => <span className={f.diferencias.length ? 'cxg-dif' : 'cxg-apoyo-fila'}>{textoDiferencias(f.diferencias)}</span>, exportar: (f) => f.diferencias.map((d) => d.porque).join(' · ') },
+    { id: 'forma', titulo: 'Forma de cobro', ancho: '106px', celda: (f) => (f.formaCobro ? FORMA_COBRO[f.formaCobro] : 'Sin decir'), exportar: (f) => (f.formaCobro ? FORMA_COBRO[f.formaCobro] : '') },
+    { id: 'mandato', titulo: 'Mandato', ancho: '118px', celda: (f) => { const m = textoMandato(f.mandato); return <span className="cxg-estado" data-tono={m.tono}>{m.texto}</span> }, exportar: (f) => textoMandato(f.mandato).texto },
+    { id: 'ultimo', titulo: 'Último cobro', ancho: '92px', celda: (f) => { const c = f.cobros[0]; if (!c) return '—'; const t = textoCobro(c.estado); return <span className="cxg-cobro" title={`${t.texto}${c.motivo ? ` · ${c.motivo}` : ''}`}><span className="cxg-punto" data-tono={t.tono} aria-hidden="true" />{fechaCorta(c.fecha)}<span className="cx-oculto"> · {t.texto}</span></span> }, exportar: (f) => f.cobros[0]?.fecha ?? '' },
+    { id: 'diferencias', titulo: 'Diferencias', ancho: '200px', celda: (f) => <span className={f.diferencias.length ? 'cxg-dif' : 'cxg-apoyo-fila'}>{textoDiferencias(f.diferencias)}</span>, exportar: (f) => f.diferencias.map((d) => d.porque).join(' · ') },
   ]
+
+  // Con la ficha abierta, lo que ya dice la ficha sale de la tabla: así cabe el cliente.
+  const conFicha = !!abiertaFila && !movil
+  const visibles = conFicha ? columnas.filter((c) => !['emisor', 'figura', 'forma', 'ultimo'].includes(c.id)) : columnas
 
   const tarjeta = (f: ClienteGestoria) => {
     const x = fichas.get(f.id)
@@ -88,7 +92,7 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
     return (
       <div className="cxg-tarjeta-movil">
         <div className="cxg-tarjeta-fila"><strong>{f.nombre}</strong><span className="cxg-cifra">{x ? euros(x.comparacion.sumiedCent) : '—'}</span></div>
-        <div className="cxg-tarjeta-fila cxg-apoyo-fila"><span>{emisor ? '' : `${f.emisor} · `}{letrasDeServicios(lin(f)).join(' ') || 'Sin líneas'}{empleadosDe(lin(f), mes) ? ` · ${empleadosDe(lin(f), mes)} empleados` : ''}</span><span className="cxg-estado" data-tono={m.tono}>{m.texto}</span></div>
+        <div className="cxg-tarjeta-fila cxg-apoyo-fila"><span>{emisor ? '' : `${f.emisor} · `}{letrasDeServicios(lin(f)).join(' ') || 'Sin líneas'}{empleadosDe(lin(f), mes) ? ` · ${empleadosDe(lin(f), mes)} ${empleadosDe(lin(f), mes) === 1 ? 'empleado' : 'empleados'}` : ''}</span><span className="cxg-estado" data-tono={m.tono}>{m.texto}</span></div>
         {f.diferencias.length > 0 && <div className="cxg-dif">{textoDiferencias(f.diferencias)}</div>}
       </div>
     )
@@ -112,29 +116,33 @@ export function ClientesCuotas({ datos, emisores, mes, movil, rutaTarifas, alLee
       <h2 className="cx-oculto">Clientes y cuotas</h2>
       {aviso && <p className="s-aviso-lista" data-tono={aviso.ok ? 'seguro' : 'falta'} role={aviso.ok ? 'status' : 'alert'}>{aviso.texto}</p>}
 
-      <div className={abiertaFila && !movil ? 'cxg-cuerpo cxg-con-ficha' : 'cxg-cuerpo'}>
+      {/* En el móvil, la ficha ocupa la pantalla; «Cerrar» vuelve a la lista. */}
+      {movil && abiertaFila ? (
+        <div className="cxg-lado"><FichaCliente fila={abiertaFila} ficha={fichas.get(abiertaFila.id) ?? null} alCerrar={() => setAbierto(null)} /></div>
+      ) : (
+      <div className={conFicha ? 'cxg-cuerpo cxg-con-ficha' : 'cxg-cuerpo'}>
         <section aria-label="Clientes" className="cxg-lista">
           <TablaDensa<ClienteGestoria>
             etiqueta="Clientes y cuotas" nombreFila={['cliente', 'clientes']} filas={filas} total={delEmisor.length}
-            clave={(f) => f.id} columnas={columnas} movil={movil} tarjeta={tarjeta}
+            clave={(f) => f.id} columnas={visibles} movil={movil} tarjeta={tarjeta}
             teTocaHoy={CHIPS.map((c) => ({ id: c.id, etiqueta: c.etiqueta, numero: numeros[c.id], activo: chip === c.id, alPulsar: () => setChip(chip === c.id ? null : c.id) }))}
             vistas={{ lista: [{ id: 'todos', texto: 'Todos', n: delEmisor.length }, ...(chip ? [{ id: chip, texto: CHIPS.find((c) => c.id === chip)!.etiqueta, n: filas.length }] : [])],
               activa: chip ?? 'todos', alElegir: (id) => setChip(id === 'todos' ? null : id) }}
             filtros={{ campos, valores: filtros, alCambiar: setFiltros }}
             exportar={{ nombre: 'Clientes y cuotas', titulo: 'Clientes y cuotas', subtitulo: emisores.find((e) => e.id === emisor)?.nombre ?? 'Todos los emisores' }}
             abierta={abierto} alAbrir={(f) => setAbierto(abierto === f.id ? null : f.id)}
-            detalle={movil ? (f) => <FichaCliente fila={f} ficha={fichas.get(f.id) ?? null} alCerrar={() => setAbierto(null)} /> : undefined}
             vacio={datos.filas.length === 0
               ? <Vacio titulo="Aún no hay clientes." explicacion="Salen cuando se conecta Bitrix24 y la cuenta de GoCardless de cada empresa, en Ajustes › Cobros. Después se leen solos cada noche." />
               : <Vacio titulo="Ningún cliente con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros." />}
           />
         </section>
-        {abiertaFila && !movil && (
+        {conFicha && abiertaFila && (
           <aside className="cxg-lado" aria-label={`Ficha de ${abiertaFila.nombre}`}>
             <FichaCliente fila={abiertaFila} ficha={fichas.get(abiertaFila.id) ?? null} alCerrar={() => setAbierto(null)} />
           </aside>
         )}
       </div>
+      )}
     </div>
   )
 }

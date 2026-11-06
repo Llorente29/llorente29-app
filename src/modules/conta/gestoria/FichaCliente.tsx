@@ -25,9 +25,10 @@ export function FichaCliente({ fila, ficha, alCerrar }: { fila: ClienteGestoria;
         <button type="button" className="cx-enlace" onClick={alCerrar}>Cerrar</button>
       </div>
 
-      {fila.diferencias.length > 0 && (
+      {/* La de los totales se explica abajo, junto a las cifras. */}
+      {fila.diferencias.some((d) => d.tipo !== 'totales_distintos') && (
         <ul className="cxg-ficha-difs" aria-label="Lo que no cuadra">
-          {fila.diferencias.map((d) => <li key={d.id}>{d.porque}</li>)}
+          {fila.diferencias.filter((d) => d.tipo !== 'totales_distintos').map((d) => <li key={d.id}>{d.porque}</li>)}
         </ul>
       )}
 
