@@ -1,0 +1,5 @@
+# G02 · la vuelta atrás: las dos empresas de prueba vuelven a Foodint con todo lo
+# suyo, con los mismos ids, desde public.conta_g02_copia; Foodint vuelve a estar
+# marcada como asesoría con su fecha y su persona de antes; y se quita la copia.
+cuenta: scripts/conta/produccion/cuentas/g02-limpieza-foodint.sql
+supabase/vuelta-atras/20261106T1335_g02_limpieza_foodint.down.sql
