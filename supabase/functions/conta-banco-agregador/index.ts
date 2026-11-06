@@ -157,9 +157,11 @@ async function mirar(srv: SupabaseClient, m: { desde?: string; hasta?: string })
       const cuentas = [];
       for (const a of await cliente.getAccounts()) {
         const iban = ibanLimpio(a.iban);
-        cuentas.push({ iban4: iban ? iban.slice(-4) : null, ...(await mirarCuenta(cliente, a.id, m.desde, m.hasta)) });
+        // B01·16 · Con su id en open-banking.io: el de bank_aggregator_link.external_account_id, para ver si un permiso renovado lo cambia.
+        cuentas.push({ iban4: iban ? iban.slice(-4) : null, id: a.id, pideReconectar: a.needsReconnect, ...(await mirarCuenta(cliente, a.id, m.desde, m.hasta)) });
       }
-      const conexiones = (await cliente.getConnections()).map((x) => ({ estado: x.status, viva: x.isLive, valeHasta: x.validUntil, ultimaPuestaAlDia: x.lastSyncedAt }));
+      const conexiones = (await cliente.getConnections()).map((x) => ({ permiso: x.sessionId, estado: x.status, viva: x.isLive, valeHasta: x.validUntil,
+        ultimaPuestaAlDia: x.lastSyncedAt, cuentas: x.accountIds }));
       out.push({ banco: c.bank_name, refresco: { cuentas: r.accounts, nuevos: r.newTransactions, fallos: r.failures }, conexiones, cuentas });
     } catch (e) {
       out.push({ banco: c.bank_name, error: e instanceof Error ? e.message : String(e) });

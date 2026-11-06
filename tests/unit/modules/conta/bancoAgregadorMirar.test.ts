@@ -83,3 +83,21 @@ describe('la lectura apunta lo que dio el banco de los días releídos y lo que 
     expect(p.ultimoRefresco()).toEqual({ cuentas: 1, nuevos: 4 })
   })
 })
+
+describe('dos permisos para las mismas cuentas: el renovado y el de antes (B01·16)', () => {
+  const con = (sessionId: string, validUntil: string, isLive: boolean) => ({ sessionId, aspspName: 'BBVA', validUntil, status: 'Active', isLive, accountIds: ['a'] })
+  const conConexiones = (xs: ReturnType<typeof con>[]): ClienteOpenBankingIo => ({ ...cliente([]), getConnections: async () => xs })
+  it('manda el vivo, venga antes o después en la lista', async () => {
+    const vivo = con('nuevo', '2027-02-01T00:00:00Z', true), cerrado = con('viejo', '2027-01-27T00:00:00Z', false)
+    for (const lista of [[vivo, cerrado], [cerrado, vivo]]) {
+      const p = await proveedorOpenBankingIo(conConexiones(lista), '2026-11-03').permisos()
+      expect(p.a).toEqual({ conexion: 'nuevo', caduca: '2027-02-01T00:00:00Z', renovar: false })
+    }
+  })
+  it('entre dos vivos, el que caduca más tarde; si no hay ninguno vivo, hay que renovar', async () => {
+    const p = await proveedorOpenBankingIo(conConexiones([con('nuevo', '2027-02-01T00:00:00Z', true), con('viejo', '2027-01-27T00:00:00Z', true)]), '2026-11-03').permisos()
+    expect(p.a.conexion).toBe('nuevo')
+    const q = await proveedorOpenBankingIo(conConexiones([con('viejo', '2027-01-27T00:00:00Z', false)]), '2026-11-03').permisos()
+    expect(q.a.renovar).toBe(true)
+  })
+})
