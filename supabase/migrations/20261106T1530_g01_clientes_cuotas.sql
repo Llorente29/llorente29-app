@@ -617,7 +617,7 @@ left join public.company e on e.id = d.company_id
 where d.vigente;
 comment on view public.conta_consulta_diferencias is 'G01 · Para el asistente (solo lectura): lo que no cuadra en la última lectura, con su porqué como dato (tipo, porque_codigo, datos) y en palabras.';
 
-revoke all on table public.conta_consulta_clientes, public.conta_consulta_lineas, public.conta_consulta_diferencias from public, anon;
+revoke all on table public.conta_consulta_clientes, public.conta_consulta_lineas, public.conta_consulta_diferencias from public, anon, authenticated;
 grant select on table public.conta_consulta_clientes, public.conta_consulta_lineas, public.conta_consulta_diferencias to authenticated;
 do $$ begin
   if exists (select 1 from pg_roles where rolname = 'conta_lectura') then
