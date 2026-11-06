@@ -61,7 +61,7 @@ function Etiqueta({ texto, children }: { texto: string; children: ReactNode }) {
   return <label className="cxg-campo"><span>{texto}</span>{children}</label>
 }
 
-export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, clientes, rutaTarifas, acciones, alHecho, alCerrar }: {
+export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, clientes, rutaTarifas, conGocardless = true, conBitrix = true, acciones, alHecho, alCerrar }: {
   fila: ClienteGestoria
   ficha: Ficha | null
   /** El mes que se mira («2026-11»). */
@@ -75,6 +75,9 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
   /** Los clientes de la cuenta, para «Enlazar con una ficha». */
   clientes: { id: string; nombre: string }[]
   rutaTarifas: string | null
+  /** Lo conectado (cada conector se enciende aparte): sin él, lo suyo no sale. */
+  conGocardless?: boolean
+  conBitrix?: boolean
   acciones: AccionesFicha
   /** Después de hacer algo: la frase, y se vuelve a leer. */
   alHecho: (frase: string) => void
@@ -217,11 +220,11 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
           {c && (
             <dl className="cxg-totales">
               <div><dt>Total al mes en Sumied</dt><dd className="cxg-cifra">{euros(c.sumiedCent)}</dd></div>
-              <div><dt>Lo que cobra hoy GoCardless</dt><dd className={c.diferenciaCent ? 'cxg-cifra cxg-distinto' : 'cxg-cifra'}>{euros(c.gocardlessCent)}</dd></div>
+              {conGocardless && <div><dt>Lo que cobra hoy GoCardless</dt><dd className={c.diferenciaCent ? 'cxg-cifra cxg-distinto' : 'cxg-cifra'}>{euros(c.gocardlessCent)}</dd></div>}
             </dl>
           )}
-          {/* Si arriba ya sale «Sumied y GoCardless no dan el mismo total» (con su botón), aquí no se repite. */}
-          {ficha && !fila.diferencias.some((d) => d.tipo === 'totales_distintos') && (
+          {/* Si arriba ya sale «Sumied y GoCardless no dan el mismo total» (con su botón), aquí no se repite. Sin GoCardless, no hay con qué comparar. */}
+          {conGocardless && ficha && !fila.diferencias.some((d) => d.tipo === 'totales_distintos') && (
             <div className="cxg-explica" data-tono={c?.diferenciaCent ? 'ambar' : 'verde'}>{ficha.diferencia.map((t, i) => <p key={i}>{t}</p>)}</div>
           )}
         </section>
@@ -231,10 +234,11 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
         <h3 className="cxg-ficha-sub">Cómo se le cobra</h3>
         <dl className="cxg-datos">
           <div><dt>Forma de cobro</dt><dd>{fila.formaCobro ? FORMA_COBRO[fila.formaCobro] : 'Sin decir'}</dd></div>
-          <div><dt>Mandato</dt><dd><span className="cxg-estado" data-tono={m.tono}>{m.texto}</span></dd></div>
+          {conGocardless && <div><dt>Mandato</dt><dd><span className="cxg-estado" data-tono={m.tono}>{m.texto}</span></dd></div>}
         </dl>
-        <h3 className="cxg-ficha-sub">Últimos cobros</h3>
-        {fila.cobros.length === 0 ? <p className="cxg-apoyo">Ningún cobro de GoCardless en los últimos 6 meses.</p> : (
+        {!conGocardless && <p className="cxg-apoyo">GoCardless no está conectado en {fila.emisor}: los mandatos y los cobros domiciliados salen al conectarlo en Ajustes › Cobros.</p>}
+        {conGocardless && <h3 className="cxg-ficha-sub">Últimos cobros</h3>}
+        {!conGocardless ? null : fila.cobros.length === 0 ? <p className="cxg-apoyo">Ningún cobro de GoCardless en los últimos 6 meses.</p> : (
           <ul className="cxg-cobros">
             {fila.cobros.map((x, i) => {
               const t = textoCobro(x.estado)
@@ -250,7 +254,7 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
         )}
       </section>
 
-      <section aria-label="Lo que dice Bitrix24">
+      {conBitrix && <section aria-label="Lo que dice Bitrix24">
         <h3 className="cxg-ficha-sub">Lo que dice Bitrix24</h3>
         {!fila.bitrix ? <p className="cxg-apoyo">No tiene ficha en Bitrix24.</p> : (
           <dl className="cxg-datos">
@@ -260,7 +264,7 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
           </dl>
         )}
         <p className="cxg-apoyo">De referencia: Sumied no cambia la ficha de Bitrix24.</p>
-      </section>
+      </section>}
     </div>
   )
 }

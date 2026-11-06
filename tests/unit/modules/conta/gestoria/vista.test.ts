@@ -1,7 +1,7 @@
 // G01 · Tarea 4. Lo que deciden las pantallas de Clientes y cuotas sin pintar.
 import { describe, expect, it } from 'vitest'
 import {
-  CHIPS, comoResolver, contarChips, palabrasDeServicios, sinLinea, textoCobro, empleadosDe, fichaDe, figura, filtrarPorChip, filtrarPorEmisor, leerImporte, letrasDeServicios, mesesDesde, textoDiferencias,
+  CHIPS, comoResolver, queSeVe, contarChips, palabrasDeServicios, sinLinea, textoCobro, empleadosDe, fichaDe, figura, filtrarPorChip, filtrarPorEmisor, leerImporte, letrasDeServicios, mesesDesde, textoDiferencias,
   textoMandato, type ClienteGestoria, type Diferencia,
 } from '@/modules/conta/gestoria/vista'
 import type { Linea, Tarifa } from '../../../../../supabase/functions/conta-gocardless-leer/comparacion'
@@ -67,6 +67,16 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
     expect(f.diferencia[0]).toBe('Sumied 108,90 € y GoCardless 84,70 € al mes: Sumied 24,20 € más.')
     const cuadra = fichaDe('1', A, '2026-11', lineas.slice(0, 2), tarifas, [{ id: 'SB1', emisor: A, nombre: 'x', alMesCent: 6050 }, { id: 'SB2', emisor: A, nombre: 'y', alMesCent: 2420 }])
     expect(cuadra.diferencia).toEqual(['Cuadra con GoCardless: 84,70 € al mes en los dos.'])
+  })
+
+  it('se adapta a lo conectado: sin GoCardless no sale lo suyo; sin Bitrix24, tampoco lo que los cruza', () => {
+    const todo = queSeVe({ gocardless: new Set([A, B]), bitrix: true }, null, [A, B])
+    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 7, []])
+    const soloGc = queSeVe({ gocardless: new Set([A]), bitrix: false }, null, [A, B])
+    expect([soloGc.gocardless, soloGc.bitrix, soloGc.chips, soloGc.sinGocardless]).toEqual([true, false, ['sin-convertir', 'totales', 'por-firmar', 'fallan'], [B]])
+    const deB = queSeVe({ gocardless: new Set([A]), bitrix: true }, B, [A, B])
+    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, []])
+    expect(queSeVe({ gocardless: new Set(), bitrix: false }, null, [A, B]).chips).toEqual([])
   })
 
   it('las tarifas: los meses que se eligen y el importe con coma', () => {

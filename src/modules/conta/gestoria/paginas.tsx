@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { rutaTarifasGestoria } from '@/config/navegacion'
+import { rutaAjustes, rutaTarifasGestoria } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
@@ -29,18 +29,27 @@ export default function ClientesCuotasPage() {
   const { accountId, cargando } = useCuentaConta()
   const { empresas } = useEmpresas()
   const movil = useIsMobile()
-  const d = useLeer(!cargando && accountId ? () => leerGestoria(accountId) : null, `${accountId}:gestoria`)
+  // Los clientes y lo conectado (cada conector se enciende aparte, por conexión).
+  const d = useLeer(!cargando && accountId ? async () => {
+    const [datos, conexiones] = await Promise.all([leerGestoria(accountId), leerConexiones(accountId)])
+    return { datos, conectados: { gocardless: new Set(conexiones.gocardless.filter((g) => g.conectada).map((g) => g.emisorId)), bitrix: !!conexiones.bitrix?.conectada } }
+  } : null, `${accountId}:gestoria`)
   const [leyendo, setLeyendo] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
   const leer = async () => {
     if (!accountId) return
     setLeyendo(true); setAviso(null)
-    try { setAviso({ ok: true, texto: await leerBitrix(accountId) }); d.recargar() }
+    // Con Bitrix24, su lectura lanza después la de GoCardless; sin él, GoCardless de cada empresa conectada.
+    try {
+      const c = d.datos?.conectados
+      const frases = c?.bitrix ? [await leerBitrix(accountId)] : await Promise.all([...(c?.gocardless ?? [])].map((e) => leerGocardless(e)))
+      setAviso({ ok: true, texto: frases.join(' ') }); d.recargar()
+    }
     catch (e) { setAviso({ ok: false, texto: msg(e) }) } finally { setLeyendo(false) }
   }
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos) return <TarjetaCargando />
-  return <ClientesCuotas datos={d.datos} emisores={empresas.map((e) => ({ id: e.id, nombre: e.nombre }))} mes={hoyEnMadrid().slice(0, 7)} movil={movil}
+  return <ClientesCuotas datos={d.datos.datos} conectados={d.datos.conectados} rutaConectar={rutaAjustes('cobros')} emisores={empresas.map((e) => ({ id: e.id, nombre: e.nombre }))} mes={hoyEnMadrid().slice(0, 7)} movil={movil}
     rutaTarifas={rutaTarifasGestoria()} tarifasDe={(cliente, emisor) => `${rutaTarifasGestoria()}?${new URLSearchParams({ cliente, empresa: emisor })}`}
     acciones={{ altaEmpleado, bajaLinea, lineaDesdeGc, noContar, enlazar, revisada }} alHecho={() => d.recargar()} alLeer={() => void leer()} leyendo={leyendo} aviso={aviso} />
 }

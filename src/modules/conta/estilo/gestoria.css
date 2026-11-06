@@ -119,3 +119,6 @@
   .cxg-col-desde { display: none; }
   .cxg-solo-movil { display: block; }
 }
+
+/* G01 · Lo que no está conectado, en una línea gris con su enlace. */
+.cxg-conectores { margin: 0; padding: 8px 12px; font-size: 13px; color: var(--cx-apoyo); background: var(--cx-neutro-suave); border-radius: var(--cx-radio-caja); }

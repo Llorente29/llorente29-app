@@ -48,15 +48,33 @@ export interface ClienteGestoria {
 }
 
 /** Los chips de «Te toca hoy», en su orden, con su texto. Fase 1: sin «Empleado que no está en Laboral». */
-export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; etiqueta: string }[] = [
-  { id: 'sin-cobro', tipos: ['bitrix_sin_cobro'], etiqueta: 'En Bitrix24 sin cobro en GoCardless' },
-  { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en Bitrix24' },
-  { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Bitrix24 y GoCardless no coinciden en el emisor' },
-  { id: 'sin-convertir', tipos: ['suscripcion_sin_convertir'], etiqueta: 'Suscripción sin convertir en tarifa' },
-  { id: 'totales', tipos: ['totales_distintos'], etiqueta: 'Sumied y GoCardless no dan el mismo total' },
-  { id: 'por-firmar', tipos: ['mandato_por_firmar'], etiqueta: 'Mandato pendiente de firma' },
-  { id: 'fallan', tipos: ['falla_a_menudo'], etiqueta: 'Fallan a menudo (3 o más en 6 meses)' },
+export type Conector = 'gocardless' | 'bitrix'
+/** Cada chip, con los conectores que necesita: sin ellos, no sale (no hay nada que comparar). */
+export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; etiqueta: string; necesita: readonly Conector[] }[] = [
+  { id: 'sin-cobro', tipos: ['bitrix_sin_cobro'], etiqueta: 'En Bitrix24 sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en Bitrix24', necesita: ['bitrix', 'gocardless'] },
+  { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Bitrix24 y GoCardless no coinciden en el emisor', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-convertir', tipos: ['suscripcion_sin_convertir'], etiqueta: 'Suscripción sin convertir en tarifa', necesita: ['gocardless'] },
+  { id: 'totales', tipos: ['totales_distintos'], etiqueta: 'Sumied y GoCardless no dan el mismo total', necesita: ['gocardless'] },
+  { id: 'por-firmar', tipos: ['mandato_por_firmar'], etiqueta: 'Mandato pendiente de firma', necesita: ['gocardless'] },
+  { id: 'fallan', tipos: ['falla_a_menudo'], etiqueta: 'Fallan a menudo (3 o más en 6 meses)', necesita: ['gocardless'] },
 ]
+
+/** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
+export interface Conectados { gocardless: ReadonlySet<string>; bitrix: boolean }
+
+/**
+ * Qué se ve con lo conectado, para la empresa elegida (o todas, con null):
+ * lo de GoCardless (su total, el mandato, los cobros y sus chips) si alguna de
+ * las elegidas lo tiene; lo de Bitrix24 (sus chips y «Lo que dice Bitrix24»)
+ * si la cuenta lo tiene. Los chips que cruzan los dos piden los dos.
+ */
+export function queSeVe(c: Conectados, emisor: string | null, emisores: readonly string[]) {
+  const elegidas = emisor ? [emisor] : emisores
+  const gocardless = elegidas.some((e) => c.gocardless.has(e))
+  const tiene = (n: Conector) => (n === 'gocardless' ? gocardless : c.bitrix)
+  return { gocardless, bitrix: c.bitrix, chips: CHIPS.filter((x) => x.necesita.every(tiene)).map((x) => x.id), sinGocardless: elegidas.filter((e) => !c.gocardless.has(e)) }
+}
 
 /** Cuántos clientes tiene cada chip (un cliente con dos diferencias del mismo chip cuenta una vez). */
 export function contarChips(filas: readonly ClienteGestoria[]): Record<string, number> {

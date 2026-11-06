@@ -171,6 +171,9 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', TIPOS_DEL_CASADO)
     // Lo revisado no vuelve a salir mientras diga lo mismo.
     dif.diferencias = dif.diferencias.filter((d) => !revisadas.has(`${d.tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
+    // Sin Bitrix24 conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.
+    const { data: bx } = await db.from('conta_crm_bitrix').select('url_ref').eq('account_id', cuenta).maybeSingle()
+    if (!(bx as { url_ref?: string | null } | null)?.url_ref) dif.diferencias = dif.diferencias.filter((d) => !TIPOS_DEL_CASADO.includes(d.tipo))
     for (const trozo of enTrozos(dif.diferencias)) {
       const { error } = await db.from('conta_gestoria_diferencia').insert(trozo.map((d) => ({ account_id: cuenta, lectura_id: lectura, ...d })))
       if (error) throw new Error(`No se han podido guardar las diferencias: ${error.message}`)
