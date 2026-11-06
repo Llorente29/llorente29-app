@@ -1,0 +1,21 @@
+# DL1 · Adleta (43000006, Lobbers): las autofacturas que faltan en los libros
+# (Julio, DL1·12 y DL1·13, 06/11). Rama claude/dl1-adleta. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2052  Añade _dl1_venta_proponer y apunta y valida (como Julio) cinco
+#         asientos en Foodint, serie 1, la 705 por local y la 477 al 10 %:
+#         LF-2026-001 (abril 1-15), el ajuste de Uber (abril 1-15), LF-2026-002
+#         (abril 16-30) y LF-2026-004 (mayo 1-15), con fecha del 01/10 (su IVA,
+#         1.008,23, al 4T); y la 2.ª quincena de diciembre de 2025 (cobrada el
+#         19/01), el 01/01 contra la 113. La 43000006 pasa de −12.075,14 a
+#         +1.759,18, lo que Adleta debe de lo liquidado.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-adleta.sql
+supabase/migrations/20261106T2052_dl1_adleta_autofacturas.sql
+sin-vuelta-atras: supabase/migrations/20261106T2052_dl1_adleta_autofacturas.sql · motivo: los asientos se validan; un asiento validado se anula con un contraasiento.
+esperado: dl1-adleta · Asientos de Adleta de la DL1 validados por Julio, menos 5 = 0
+esperado: dl1-adleta · 43000006 validado, menos lo que debe Adleta (1.759,18) = 0.00
+esperado: dl1-adleta · IVA repercutido de Adleta de la DL1 (4T), menos 1.008,23 = 0.00
+esperado: dl1-adleta · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-adleta · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

@@ -1,0 +1,6 @@
+# DL1 · Adleta (2052: añade una función y, en Foodint, apunta y valida cinco
+# asientos). Su prueba (ROLLBACK, cuenta A): autofactura con la 705 por local y
+# la 477 con su IVA, validada como la persona; una a 01/01 contra la 113 en un
+# mes cerrado; no duplica, no acepta un local ajeno ni lo que no cuadra.
+supabase/migrations/20261106T2052_dl1_adleta_autofacturas.sql
+supabase/staging/sql/20261106_dl1_adleta_prueba.sql

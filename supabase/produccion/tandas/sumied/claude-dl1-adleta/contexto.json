@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · Adleta · contexto de producción, medido en SOLO LECTURA el 06/11 a las 20:00Z: la 2052 añade _dl1_venta_proponer (no existe) y apunta y valida cinco asientos nuevos en Foodint (hoy no hay ninguno de Adleta LF-2026); usa _dl1_validar (en producción desde la 1750). La 43000006 está en −12.075,14. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-06T20:00Z",
+ "tanda": {
+  "supabase/migrations/20261106T2052_dl1_adleta_autofacturas.sql": "0b21541a1a5835c71cec177067bc82c4"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
