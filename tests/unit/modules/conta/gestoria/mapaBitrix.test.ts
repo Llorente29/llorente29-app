@@ -79,3 +79,47 @@ describe('G01 · mapa de Bitrix24', () => {
       .rejects.toThrow('Bitrix24 ha contestado «QUERY_LIMIT_EXCEEDED»: Too many requests.')
   })
 })
+
+import { emisorDeFormaDePago, proponerMapa } from '../../../../../supabase/functions/conta-bitrix-leer/mapa'
+
+const EMISORES = [{ id: 'empresa-a', nombre: 'EMISOR PRUEBA ALFA, S.L.' }, { id: 'empresa-b', nombre: 'GOMEZ RUIZ, PERSONA PRUEBA' }]
+
+describe('G01 · el mapa, propuesto desde crm.company.fields', () => {
+  it('«Forma de pago» → el emisor cuyo nombre tiene sus palabras («… Nuevo» es el mismo)', () => {
+    expect(emisorDeFormaDePago('Emisor Prueba Alfa', EMISORES)).toBe('empresa-a')
+    expect(emisorDeFormaDePago('Emisor Prueba Alfa Nuevo', EMISORES)).toBe('empresa-a')
+    expect(emisorDeFormaDePago('Persona Prueba Gómez', EMISORES)).toBe('empresa-b')
+    expect(emisorDeFormaDePago('Otra cosa', EMISORES)).toBeNull()
+  })
+
+  it('propone cada campo por su etiqueta, con sus opciones, y dice lo que no encaja', () => {
+    const medidos = {
+      TITLE: { title: 'Nombre de la empresa' },
+      ADDRESS: { title: 'Dirección' },
+      UF_CRM_P1: { formLabel: 'NIF', type: 'string' },
+      UF_CRM_P2: { listLabel: 'Situación', type: 'enumeration', items: [{ ID: '11', VALUE: 'Activo' }, { ID: '12', VALUE: 'Baja' }, { ID: '13', VALUE: 'Moroso' }, { ID: '14', VALUE: 'Solo renta' }, { ID: '15', VALUE: 'Prospecto' }] },
+      UF_CRM_P3: { formLabel: 'Servicios', type: 'enumeration', isMultiple: true, items: [{ ID: '21', VALUE: 'C' }, { ID: '22', VALUE: 'L' }, { ID: '23', VALUE: 'S' }] },
+      UF_CRM_P4: { formLabel: 'Forma de pago', type: 'enumeration', items: [{ ID: '31', VALUE: 'Emisor Prueba Alfa' }, { ID: '32', VALUE: 'Emisor Prueba Alfa Nuevo' }, { ID: '33', VALUE: 'Persona Prueba Gomez' }] },
+      UF_CRM_P5: { formLabel: 'Cuota Mensual', type: 'money' },
+      UF_CRM_P6: { formLabel: 'Población', type: 'string' },
+      UF_CRM_P7: { formLabel: 'Población', type: 'string' },
+      UF_CRM_P8: { formLabel: 'Comercial asignado', type: 'string' },
+    }
+    const p = proponerMapa('Gestoría de prueba', medidos, EMISORES)
+    const cod = (campo: string) => p.queEsCadaUno.find((x) => x.campo === campo)?.codigo ?? null
+    expect(cod('nif')).toBe('UF_CRM_P1')
+    expect(cod('calle')).toBe('ADDRESS')
+    expect(cod('situacion')).toBe('UF_CRM_P2')
+    expect(cod('Cuota mensual')).toBe('UF_CRM_P5')
+    expect(cod('poblacion')).toBeNull()
+    expect(p.queEsCadaUno.find((x) => x.campo === 'poblacion')?.nota).toMatch(/^dudoso: UF_CRM_P6/)
+    expect(p.queEsCadaUno.find((x) => x.campo === 'provincia')?.nota).toBe('ningún campo de Bitrix24 se llama así')
+    expect(p.queEsCadaUno.find((x) => x.campo === 'situacion')?.nota).toBe('opciones sin significado en Sumied: Prospecto')
+    expect(p.mapa.campos.find((c) => c.campo === 'servicios')?.opciones).toEqual({ '21': 'C', '22': 'L', '23': 'S' })
+    expect(p.mapa.formaPagoAEmisor).toEqual({ 'Emisor Prueba Alfa': 'empresa-a', 'Emisor Prueba Alfa Nuevo': 'empresa-a', 'Persona Prueba Gomez': 'empresa-b' })
+    expect(p.sinUsar).toEqual([{ codigo: 'UF_CRM_P6', etiqueta: 'POBLACION' }, { codigo: 'UF_CRM_P7', etiqueta: 'POBLACION' }, { codigo: 'UF_CRM_P8', etiqueta: 'COMERCIAL ASIGNADO' }])
+    // Y la ficha se lee con el mapa propuesto.
+    const f = leerEmpresa({ ID: '9', TITLE: 'CLIENTE PRUEBA', UF_CRM_P1: 'B00000009', UF_CRM_P2: '13', UF_CRM_P3: ['21', '23'], UF_CRM_P4: '32', UF_CRM_P5: '90,75' }, p.mapa)
+    expect(f).toMatchObject({ nif: 'B00000009', situacion: 'moroso', servicios: ['C', 'S'], emisorSegunBitrix: 'empresa-a', cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075 }] })
+  })
+})

@@ -1,0 +1,23 @@
+# G01 · Asesoría QBO: GoCardless y Bitrix24 conectados, clientes, servicios,
+# tarifas, líneas, solicitudes y lo leído (Julio, respuestas a las tareas 1 y
+# 2). Rama conta/g01-clientes-cuotas. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1530  Añade: las conexiones (GoCardless por empresa emisora, Bitrix24 por
+#         cuenta; el token y la dirección en Vault), el cliente de la gestoría,
+#         servicios (fijo al mes, al año, por empleado o por uso), tarifas
+#         (general y propia, con «desde» y «hasta» por mes), líneas (también
+#         los trabajos sueltos), solicitudes, el registro de cambios, lo leído
+#         de GoCardless, las lecturas y sus diferencias (con su porqué como
+#         dato), las tres vistas de consulta del asistente y la lectura de
+#         cada noche. Columnas nuevas en conta_cobro_cliente y conta_mandato.
+#   1531  Cambia en caliente (con su prueba de staging): gocardless en
+#         conta_pasarela_cuenta, crm como origen de party, el mandato de
+#         GoCardless sin enlace de firma y _s01_cuenta_pasarela.
+#
+# No lee ni escribe nada en GoCardless ni en Bitrix24: eso lo hacen sus
+# funciones cuando se conecten. Nada en el camino del pedido. El real lo lanza
+# Julio.
+cuenta: scripts/conta/produccion/cuentas/g01-clientes-cuotas.sql
+supabase/migrations/20261106T1530_g01_clientes_cuotas.sql
+supabase/migrations/20261106T1531_g01_gocardless_cobro.sql
