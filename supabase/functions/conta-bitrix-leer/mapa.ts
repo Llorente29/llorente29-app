@@ -48,6 +48,22 @@ export interface MapaBitrix {
    * Es solo referencia: el emisor de verdad lo dice la cuenta de GoCardless.
    */
   formaPagoAEmisor: Record<string, string>
+  /**
+   * G01b · Los campos de Sumied que la propuesta no ha podido decidir: ninguno
+   * o varios campos de Bitrix24 encajan. Se guardan con el mapa y salen en
+   * «Qué es cada campo» para que una persona elija (antes era una nota del
+   * informe de la conexión que no guardaba ni veía nadie).
+   */
+  dudas?: DudaDelMapa[]
+}
+
+export interface DudaDelMapa {
+  campo: CampoSumied
+  /** Para cuota_referencia: cuál («Laboral»…). */
+  etiqueta?: string
+  porque: 'ninguno' | 'varios'
+  /** Los que encajan, con su etiqueta en Bitrix24 (vacío si ninguno). */
+  candidatos: { codigo: string; etiqueta: string }[]
 }
 
 /**
@@ -273,8 +289,9 @@ const QUIEN_ES: { campo: CampoSumied; etiqueta?: string; patron: RegExp; lista?:
   { campo: 'servicios', patron: /^SERVICIOS( CONTRATADOS)?$/, lista: true },
   { campo: 'forma_pago', patron: /^FORMA DE PAGO$/ },
   { campo: 'cuota_referencia', etiqueta: 'Cuota mensual', patron: /^CUOTA MENSUAL$/ },
-  { campo: 'cuota_referencia', etiqueta: 'Laboral', patron: /^(CUOTA )?LABORAL$/ },
-  { campo: 'cuota_referencia', etiqueta: 'ContaSimple', patron: /^(CUOTA )?CONTA ?SIMPLE$/ },
+  // G01b · En el portal de QBO se llaman «Cuota Mensual Laboral» y «… ContaSimple»; las que acaban en «z» no son (Julio, 07/11).
+  { campo: 'cuota_referencia', etiqueta: 'Laboral', patron: /^(CUOTA (MENSUAL )?)?LABORAL$/ },
+  { campo: 'cuota_referencia', etiqueta: 'ContaSimple', patron: /^(CUOTA (MENSUAL )?)?CONTA ?SIMPLE$/ },
   { campo: 'cuota_referencia', etiqueta: 'Tarifa recurrente', patron: /^TARIFA RECURRENTE$/ },
 ]
 
@@ -334,6 +351,7 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
     { campo: 'telefono', codigo: 'PHONE', etiquetaEnBitrix: 'Teléfono', nota: null },
   ]
   const usados = new Set<string>()
+  const dudas: DudaDelMapa[] = []
   const formaPagoAEmisor: Record<string, string> = {}
   const propios = Object.entries(medidos).filter(([k]) => k.startsWith('UF_CRM_'))
   for (const q of QUIEN_ES) {
@@ -349,6 +367,8 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
         continue
       }
       campos.push({ codigo: null, campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}) })
+      dudas.push({ campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}), porque: candidatos.length ? 'varios' : 'ninguno',
+        candidatos: candidatos.map(([k, c]) => ({ codigo: k, etiqueta: [c.formLabel, c.listLabel, c.title].find((x) => x && x.trim()) ?? k })) })
       queEsCadaUno.push({ campo: nombreCampo, codigo: null, etiquetaEnBitrix: null,
         nota: candidatos.length === 0 ? 'ningún campo de Bitrix24 se llama así' : `dudoso: ${candidatos.map(([k, c]) => `${k} («${etiquetaDe(c)}»)`).join(', ')}` })
       continue
@@ -375,5 +395,5 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
     queEsCadaUno.push({ campo: nombreCampo, codigo, etiquetaEnBitrix: [c.formLabel, c.listLabel, c.title].find((x) => x && x.trim()) ?? codigo, nota })
   }
   const sinUsar = propios.filter(([k]) => !usados.has(k)).map(([codigo, c]) => ({ codigo, etiqueta: etiquetaDe(c) || codigo }))
-  return { mapa: { nombre, campos, formaPagoAEmisor }, queEsCadaUno, sinUsar }
+  return { mapa: { nombre, campos, formaPagoAEmisor, dudas }, queEsCadaUno, sinUsar }
 }

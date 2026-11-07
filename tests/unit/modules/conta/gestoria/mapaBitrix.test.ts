@@ -122,4 +122,74 @@ describe('G01 · el mapa, propuesto desde crm.company.fields', () => {
     const f = leerEmpresa({ ID: '9', TITLE: 'CLIENTE PRUEBA', UF_CRM_P1: 'B00000009', UF_CRM_P2: '13', UF_CRM_P3: ['21', '23'], UF_CRM_P4: '32', UF_CRM_P5: '90,75' }, p.mapa)
     expect(f).toMatchObject({ nif: 'B00000009', situacion: 'moroso', servicios: ['C', 'S'], emisorSegunBitrix: 'empresa-a', cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075 }] })
   })
+
+  it('G01b · cuando varios campos encajan, la duda se guarda con el mapa (con las etiquetas como las del portal de QBO)', () => {
+    const medidos = {
+      TITLE: { title: 'Nombre de la empresa' },
+      ADDRESS: { title: 'Dirección' },
+      UF_CRM_N1: { formLabel: 'CIF/NIF', type: 'string' },
+      UF_CRM_N2: { formLabel: 'CIF - Compañía', type: 'string' },
+      UF_CRM_N3: { formLabel: 'DNI / NIF ( Solo para clientes existentes )', type: 'string' },
+      UF_CRM_S1: { formLabel: 'Situación del Cliente', type: 'enumeration', items: [{ ID: '1', VALUE: 'ACTIVO' }, { ID: '2', VALUE: 'GRAVE DESAPARECIDO' }] },
+      UF_CRM_S2: { formLabel: 'Estado', type: 'enumeration', items: [{ ID: '3', VALUE: '1er Contacto' }] },
+      UF_CRM_L1: { formLabel: 'Cuota Mensual Laboral', type: 'double' },
+      UF_CRM_L2: { formLabel: 'Cuota Mensual Laboral z', type: 'money' },
+      UF_CRM_K1: { formLabel: 'Cuota Mensual ContaSimple', type: 'double' },
+      UF_CRM_K2: { formLabel: 'Cuota Mensual ContaSimple z', type: 'money' },
+    }
+    const p = proponerMapa('Gestoría de prueba', medidos, EMISORES)
+    const duda = (campo: string, etiqueta?: string) => p.mapa.dudas?.find((d) => d.campo === campo && (!etiqueta || d.etiqueta === etiqueta))
+    expect(duda('nif')).toEqual({ campo: 'nif', porque: 'varios', candidatos: [
+      { codigo: 'UF_CRM_N1', etiqueta: 'CIF/NIF' }, { codigo: 'UF_CRM_N2', etiqueta: 'CIF - Compañía' }, { codigo: 'UF_CRM_N3', etiqueta: 'DNI / NIF ( Solo para clientes existentes )' }] })
+    expect(duda('situacion')?.candidatos.map((c) => c.etiqueta)).toEqual(['Situación del Cliente', 'Estado'])
+    expect(duda('provincia')).toMatchObject({ porque: 'ninguno', candidatos: [] })
+    // Las cuotas buenas son las que no llevan «z» (Julio, 07/11): una sola encaja, y no queda duda.
+    expect(p.mapa.campos.filter((c) => c.campo === 'cuota_referencia').map((c) => [c.etiqueta, c.codigo])).toEqual(expect.arrayContaining([['Laboral', 'UF_CRM_L1'], ['ContaSimple', 'UF_CRM_K1']]))
+    expect(duda('cuota_referencia', 'Laboral')).toBeUndefined()
+    expect(duda('cuota_referencia', 'ContaSimple')).toBeUndefined()
+  })
+})
+
+import { camposDelRecuento, centDe, contar, gruposValidos, textoDe } from '../../../../../supabase/functions/conta-bitrix-leer/recuento'
+
+describe('G01b · el recuento de los campos dudosos: solo números', () => {
+  const medidos = {
+    UF_CRM_N1: { formLabel: 'CIF/NIF' }, UF_CRM_N2: { formLabel: 'CIF - Compañía' },
+    UF_CRM_C1: { formLabel: 'Calle, casa núm.' }, UF_CRM_C2: { formLabel: 'Dirección Fiscal', type: 'address' },
+    UF_CRM_S1: { formLabel: 'Situación del Cliente', items: [{ ID: '1', VALUE: 'ACTIVO' }, { ID: '2', VALUE: 'MOROSO' }] },
+    UF_CRM_Q1: { formLabel: 'Cuota Mensual', type: 'double' }, UF_CRM_Q2: { formLabel: 'Cuota Mensual z', type: 'money' },
+  }
+  const grupos = { texto: { nif: ['UF_CRM_N1', 'UF_CRM_N2'], calle: ['UF_CRM_C1', 'UF_CRM_C2'] }, situacion: 'UF_CRM_S1', cuotas: ['UF_CRM_Q1', 'UF_CRM_Q2'] }
+  const filas = [
+    { ID: '1', UF_CRM_N1: 'B00000001', UF_CRM_N2: 'b-00000001', UF_CRM_C1: 'Calle Prueba 1', UF_CRM_C2: 'Calle Prueba, 1|;|99', UF_CRM_S1: '1', UF_CRM_Q1: 60.5, UF_CRM_Q2: '60.5|EUR' },
+    { ID: '2', UF_CRM_N1: 'B00000002', UF_CRM_N2: 'B00000003', UF_CRM_C1: '', UF_CRM_C2: ['', 'Otra Calle 2|;|7'], UF_CRM_S1: '2', UF_CRM_Q1: '0', UF_CRM_Q2: '' },
+    { ID: '3', UF_CRM_N1: ' ', UF_CRM_N2: null, UF_CRM_C1: null, UF_CRM_C2: null, UF_CRM_S1: '', UF_CRM_Q1: '24,20', UF_CRM_Q2: null },
+    { ID: '4', UF_CRM_S1: '99' },
+  ]
+
+  it('cuenta rellenas, más de uno y que no coinciden (sin tildes ni signos); situación por opción; cuotas con importe y su suma', () => {
+    const r = contar(filas, grupos, medidos)
+    expect(r.total).toBe(4)
+    expect(r.texto.nif).toEqual({ campos: [{ codigo: 'UF_CRM_N1', etiqueta: 'CIF/NIF', rellenas: 2 }, { codigo: 'UF_CRM_N2', etiqueta: 'CIF - Compañía', rellenas: 2 }], masDeUno: 2, noCoinciden: 1 })
+    expect(r.texto.calle).toEqual({ campos: [{ codigo: 'UF_CRM_C1', etiqueta: 'Calle, casa núm.', rellenas: 1 }, { codigo: 'UF_CRM_C2', etiqueta: 'Dirección Fiscal', rellenas: 2 }], masDeUno: 1, noCoinciden: 0 })
+    expect(r.situacion).toEqual({ codigo: 'UF_CRM_S1', etiqueta: 'Situación del Cliente', opciones: [{ id: '1', texto: 'ACTIVO', fichas: 1 }, { id: '2', texto: 'MOROSO', fichas: 1 }], vacias: 1, otras: 1 })
+    expect(r.cuotas).toEqual([{ codigo: 'UF_CRM_Q1', etiqueta: 'Cuota Mensual', conImporte: 2, sumaCent: 8470 }, { codigo: 'UF_CRM_Q2', etiqueta: 'Cuota Mensual z', conImporte: 1, sumaCent: 6050 }])
+    // Solo números y etiquetas: ningún valor de una ficha sale del recuento.
+    expect(JSON.stringify(r)).not.toMatch(/B0000000|Calle Prueba|Otra Calle/)
+  })
+
+  it('los valores de Bitrix24: dirección antes de «|», el primero con algo de una lista, importes con coma o con moneda', () => {
+    expect(textoDe('Calle Prueba, 1|;|99')).toBe('Calle Prueba, 1')
+    expect(textoDe(['', 'Otra|x'])).toBe('Otra')
+    expect(textoDe({ a: 1 })).toBe('')
+    expect([centDe('24,20'), centDe('60.5|EUR'), centDe(12), centDe(''), centDe('nada')]).toEqual([2420, 6050, 1200, null, null])
+  })
+
+  it('pide a Bitrix24 solo el id y esos campos, y no acepta otra cosa que códigos', () => {
+    expect(camposDelRecuento(grupos)).toEqual(['ID', 'UF_CRM_N1', 'UF_CRM_N2', 'UF_CRM_C1', 'UF_CRM_C2', 'UF_CRM_S1', 'UF_CRM_Q1', 'UF_CRM_Q2'])
+    expect(gruposValidos(grupos)).toEqual(grupos)
+    expect(gruposValidos({ ...grupos, cuotas: ['DROP TABLE'] })).toBeNull()
+    expect(gruposValidos({ ...grupos, texto: { nif: [] } })).toBeNull()
+    expect(gruposValidos(null)).toBeNull()
+  })
 })
