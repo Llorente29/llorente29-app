@@ -8,7 +8,13 @@ name: Recuento de campos de Bitrix24 (solo lectura)
 #   · NIF y calle: cuántas tienen relleno cada campo candidato, cuántas más de
 #     uno y en cuántas no coinciden;
 #   · la situación: cuántas hay en cada opción de «Situación del Cliente»;
-#   · las cuotas: cuántas tienen importe y (si se pide) la suma de cada una.
+#   · las cuotas: cuántas tienen importe y (si se pide) la suma de cada una;
+#   · (07/11, tras el «ux_party_nif» de la primera lectura con el mapa
+#     confirmado) los NIF repetidos: cuántos salen en más de una ficha y
+#     cuántas fichas suman; con la misma situación o distinta; activa y de
+#     baja a la vez; de qué tipo (DNI, NIE, CIF); y si mezclan una ficha con
+#     nombre de sociedad y otra de persona. El nombre se lee solo para eso y
+#     no sale.
 #
 # SOLO LEE de Bitrix24 (crm.company.fields y crm.company.list) y NO ESCRIBE
 # nada, ni en Sumied ni en Bitrix24. La dirección del webhook, con su clave, la
@@ -40,7 +46,7 @@ on:
       grupos:
         description: 'Los campos a contar (códigos del Bitrix24 de QBO, medidos el 07/11). Solo cambiarlo si se sabe lo que se hace.'
         required: true
-        default: '{"texto":{"nif":["UF_CRM_1694696476571","UF_CRM_68DD6DC33A148","UF_CRM_698E04783FB03"],"calle":["UF_CRM_6728B7610B3ED","UF_CRM_6728B7627CAB4","UF_CRM_1694769585578","UF_CRM_1694769047761","ADDRESS"]},"situacion":"UF_CRM_1727086646502","cuotas":["UF_CRM_1727364305055","UF_CRM_1727359351013","UF_CRM_1727359417190","UF_CRM_1727364185647","UF_CRM_1727364202951","UF_CRM_1727364226237"]}'
+        default: '{"texto":{"nif":["UF_CRM_1694696476571","UF_CRM_68DD6DC33A148","UF_CRM_698E04783FB03"],"calle":["UF_CRM_6728B7610B3ED","UF_CRM_6728B7627CAB4","UF_CRM_1694769585578","UF_CRM_1694769047761","ADDRESS"]},"situacion":"UF_CRM_1727086646502","cuotas":["UF_CRM_1727364305055","UF_CRM_1727359351013","UF_CRM_1727359417190","UF_CRM_1727364185647","UF_CRM_1727364202951","UF_CRM_1727364226237"],"repetidos":{"nif":"UF_CRM_1694696476571","nombre":"TITLE"}}'
 
 concurrency:
   group: recuento-bitrix-conta
@@ -126,6 +132,23 @@ jobs:
               echo "| Campo en Bitrix24 | Código | Fichas con importe |"; echo "|---|---|---:|"
               jq -r '.cuotas[] | "| \(.etiqueta) | `\(.codigo)` | \(.conImporte) |"' /tmp/r.json
               echo; echo "Las sumas no salen («importes = no»)."
+            fi
+            if [ "$(jq -r 'has("repetidos")' /tmp/r.json)" = "true" ]; then
+              echo; echo "### NIF repetidos ($(jq -r '.repetidos.campoNif.etiqueta' /tmp/r.json), \`$(jq -r '.repetidos.campoNif.codigo' /tmp/r.json)\`)"; echo
+              echo "Solo números: ni nombres ni NIF. El NIF se compara como la base (mayúsculas, solo letras y números). La situación, según el $(jq -r '.repetidos.situacionSegun' /tmp/r.json)."; echo
+              echo "| Qué | Cuántos |"; echo "|---|---:|"
+              jq -r '.repetidos | "| Fichas con NIF | \(.fichasConNif) |",
+                "| NIF que salen en más de una ficha | \(.nifRepetidos) |",
+                "| Fichas que suman esos NIF | \(.fichasEnRepetidos) |",
+                "| Fichas del NIF más repetido | \(.maximoPorNif) |",
+                "| Repetidos con la misma situación | \(.mismaSituacion) |",
+                "| Repetidos con situaciones distintas | \(.distintaSituacion) |",
+                "| … de ellos, una ficha activa y otra de baja | \(.activaYBaja) |",
+                "| Repetidos que son DNI | \(.porTipo.DNI) |",
+                "| Repetidos que son NIE | \(.porTipo.NIE) |",
+                "| Repetidos que son CIF | \(.porTipo.CIF) |",
+                "| Repetidos de otro formato | \(.porTipo.otro) |",
+                "| Repetidos entre una ficha con nombre de sociedad y otra de persona | \(.sociedadYPersona) |"' /tmp/r.json
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Recuento hecho: $(jq -r '.total' /tmp/r.json) fichas. El resultado, en el resumen del run."

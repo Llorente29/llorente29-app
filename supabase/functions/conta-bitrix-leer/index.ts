@@ -106,11 +106,13 @@ Deno.serve(async (req) => {
     try {
       const { data: sec, error: secErr } = await admin.rpc('conta_bitrix_secreto', { p_account: cuenta })
       if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
-      const s = (sec as { entorno: Entorno; url: string }[] | null)?.[0]
+      const s = (sec as { entorno: Entorno; url: string; mapa: MapaBitrix | null }[] | null)?.[0]
       if (!s?.url) return json(400, { error: 'Esta cuenta no tiene conectado Bitrix24.' })
       const puerta = await puedeLeer(admin, cuenta, s.entorno)
       if (!puerta.lee) return json(400, { error: puerta.porque })
-      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar)) })
+      // G01b · Para los repetidos, la situación como la dice el mapa confirmado (si lo está y es el mismo campo).
+      const sit = s.mapa?.confirmado ? s.mapa.campos.find((c) => c.campo === 'situacion' && c.codigo === grupos.situacion)?.opciones ?? null : null
+      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar, sit)) })
     } catch (e) {
       console.error('[conta-bitrix-leer] recuento', e instanceof Error ? e.message : String(e))
       return json(500, { error: e instanceof Error ? e.message : 'No se ha podido contar.' })

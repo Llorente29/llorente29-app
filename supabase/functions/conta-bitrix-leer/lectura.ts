@@ -49,13 +49,13 @@ export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, es
  * campos a contar (de 50 en 50, una petición cada 500 ms). Solo lee. Si el
  * portal no tiene alguno de los campos, para y lo dice.
  */
-export async function leerParaRecuento(pedir: Pedir, url: string, grupos: GruposRecuento, esperar: (ms: number) => Promise<void>) {
+export async function leerParaRecuento(pedir: Pedir, url: string, grupos: GruposRecuento, esperar: (ms: number) => Promise<void>, opcionesConfirmadas?: Record<string, string> | null) {
   const medidos = await medirCampos(pedir, url)
   const select = camposDelRecuento(grupos)
   const faltan = select.filter((c) => c !== 'ID' && !medidos[c])
   if (faltan.length) throw new FalloBitrix(`Este Bitrix24 no tiene estos campos: ${faltan.join(', ')}.`)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
-  return { ...contar(r.filas, grupos, medidos), peticiones: r.peticiones }
+  return { ...contar(r.filas, grupos, medidos, opcionesConfirmadas), peticiones: r.peticiones }
 }
 
 /** La frase de la lectura (regla 8). */
