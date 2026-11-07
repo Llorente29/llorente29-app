@@ -25,6 +25,8 @@ export interface GruposRecuento {
   cuotas: string[]
   /** G01b · Para los NIF repetidos: el campo del NIF y el del nombre (solo para saber si suena a sociedad; no sale). */
   repetidos?: { nif: string; nombre: string }
+  /** G01c · Contar también los contactos (sus campos se miden en el portal: no hace falta dar códigos). */
+  contactos?: boolean
 }
 
 /** G01b · Los NIF que salen en más de una ficha: solo números (Julio, 07/11, tras el «ux_party_nif»). */
@@ -100,7 +102,7 @@ export function simularUnion(filas: readonly Record<string, unknown>[], nif: str
 }
 
 /** G01b · Los campos que el recuento no puede pedir nunca (contraseñas, certificados). */
-export const camposSensiblesDe = (codigos: readonly string[], medidos: Record<string, CampoMedido>) => codigos.filter((c) => esCampoSensible(medidos[c]))
+export const camposSensiblesDe = (codigos: readonly string[], medidos: Record<string, CampoMedido>) => codigos.filter((c) => esCampoSensible(medidos[c], c))
 
 export function contarRepetidos(
   filas: readonly Record<string, unknown>[], r: { nif: string; nombre: string }, situacion: string,
@@ -204,5 +206,6 @@ export function gruposValidos(x: unknown): GruposRecuento | null {
   if (!o || typeof o !== 'object' || !o.texto || typeof o.texto !== 'object' || !ok(o.situacion) || !Array.isArray(o.cuotas) || !o.cuotas.every(ok)) return null
   for (const [k, v] of Object.entries(o.texto)) if (!/^[a-z_]{1,20}$/.test(k) || !Array.isArray(v) || !v.length || !v.every(ok)) return null
   if (o.repetidos !== undefined && (!o.repetidos || typeof o.repetidos !== 'object' || !ok(o.repetidos.nif) || !ok(o.repetidos.nombre))) return null
+  if (o.contactos !== undefined && typeof o.contactos !== 'boolean') return null
   return o as GruposRecuento
 }

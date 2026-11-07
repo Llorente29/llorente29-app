@@ -7,7 +7,8 @@
 
 import { ESPERA_MS, camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
 import { camposDelRecuento, camposSensiblesDe, contar, type GruposRecuento } from './recuento.ts'
-import { esCampoSensible } from './clientes.ts'
+import { esCampoSensible, nifComoLaBase } from './clientes.ts'
+import { camposDeContactos, contarContactos } from './contactos.ts'
 
 export type Pedir = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
   Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
@@ -31,10 +32,10 @@ async function llamar(pedir: Pedir, url: string, nombre: string, cuerpo: Record<
 }
 
 /** crm.company.fields: lo que es cada campo del portal (también los propios UF_CRM_…). */
-export async function medirCampos(pedir: Pedir, url: string): Promise<Record<string, CampoMedido>> {
-  const r = await llamar(pedir, url, 'crm.company.fields', {}) as { result?: Record<string, CampoMedido>; error?: string; error_description?: string } | null
+export async function medirCampos(pedir: Pedir, url: string, de: 'company' | 'contact' = 'company'): Promise<Record<string, CampoMedido>> {
+  const r = await llamar(pedir, url, `crm.${de}.fields`, {}) as { result?: Record<string, CampoMedido>; error?: string; error_description?: string } | null
   if (r?.error) throw new FalloBitrix(`Bitrix24 ha contestado «${r.error}»${r.error_description ? `: ${r.error_description}` : ''}.`)
-  if (!r?.result || typeof r.result !== 'object') throw new FalloBitrix('Bitrix24 no ha devuelto los campos de las empresas.')
+  if (!r?.result || typeof r.result !== 'object') throw new FalloBitrix(`Bitrix24 no ha devuelto los campos de ${de === 'company' ? 'las empresas' : 'los contactos'}.`)
   return r.result
 }
 
@@ -47,7 +48,7 @@ export async function medirCampos(pedir: Pedir, url: string): Promise<Record<str
 export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, esperar: (ms: number) => Promise<void>): Promise<{ fichas: FichaBitrix[]; total: number | null; peticiones: number; bloqueados: string[] }> {
   const medidos = await medirCampos(pedir, url)
   const pedidos = camposQueSePiden(mapa)
-  const bloqueados = pedidos.filter((c) => esCampoSensible(medidos[c]))
+  const bloqueados = pedidos.filter((c) => esCampoSensible(medidos[c], c))
   const select = pedidos.filter((c) => !bloqueados.includes(c))
   await esperar(ESPERA_MS)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
@@ -69,7 +70,15 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
   const sensibles = camposSensiblesDe(select, medidos)
   if (sensibles.length) throw new FalloBitrix(`Estos campos guardan contraseñas o certificados y no se leen nunca: ${sensibles.join(', ')}.`)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
-  return { ...contar(r.filas, grupos, medidos, opcionesConfirmadas), peticiones: r.peticiones }
+  const base = contar(r.filas, grupos, medidos, opcionesConfirmadas)
+  if (!grupos.contactos) return { ...base, peticiones: r.peticiones }
+  // G01c · Los contactos: sus campos (etiqueta y tipo), y cada contacto con solo el enlace a la empresa y los candidatos.
+  await esperar(ESPERA_MS)
+  const deContacto = await medirCampos(pedir, url, 'contact')
+  await esperar(ESPERA_MS)
+  const rc = await leerTodas((start) => llamar(pedir, url, 'crm.contact.list', { select: camposDeContactos(deContacto), order: { ID: 'ASC' }, start }), esperar)
+  const nifs = new Set(grupos.repetidos ? r.filas.map((f) => nifComoLaBase(f[grupos.repetidos!.nif])).filter((x): x is string => !!x) : [])
+  return { ...base, contactos: contarContactos(rc.filas, deContacto, nifs), peticiones: r.peticiones + rc.peticiones + 2 }
 }
 
 /** La frase de la lectura (regla 8). */

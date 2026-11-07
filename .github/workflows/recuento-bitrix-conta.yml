@@ -18,6 +18,11 @@ name: Recuento de campos de Bitrix24 (solo lectura)
 #   · (07/11, la unión) lo que saldría con la regla: cuántos clientes, cuántas
 #     fichas se unen, cuántas entran sin NIF y cuántas fichas y clientes hay en
 #     cada situación. Solo números; no cambia nada.
+#   · (G01c, 07/11) los CONTACTOS: sus campos (etiqueta y tipo, para decidir el
+#     mapa), cuántos hay con y sin empresa, el relleno de los candidatos a NIF,
+#     situación, dirección y cuota, cada situación, los NIF (con los RIF
+#     aparte), los repetidos entre contactos y con una empresa, y cuántos tienen
+#     empresa y datos de cliente. Nunca un campo de contraseñas, ficheros o IBAN.
 #
 # SOLO LEE de Bitrix24 (crm.company.fields y crm.company.list) y NO ESCRIBE
 # nada, ni en Sumied ni en Bitrix24. La dirección del webhook, con su clave, la
@@ -49,7 +54,7 @@ on:
       grupos:
         description: 'Los campos a contar (códigos del Bitrix24 de QBO, medidos el 07/11). Solo cambiarlo si se sabe lo que se hace.'
         required: true
-        default: '{"texto":{"nif":["UF_CRM_1694696476571","UF_CRM_68DD6DC33A148","UF_CRM_698E04783FB03"],"calle":["UF_CRM_6728B7610B3ED","UF_CRM_6728B7627CAB4","UF_CRM_1694769585578","UF_CRM_1694769047761","ADDRESS"]},"situacion":"UF_CRM_1727086646502","cuotas":["UF_CRM_1727364305055","UF_CRM_1727359351013","UF_CRM_1727359417190","UF_CRM_1727364185647","UF_CRM_1727364202951","UF_CRM_1727364226237"],"repetidos":{"nif":"UF_CRM_1694696476571","nombre":"TITLE"}}'
+        default: '{"texto":{"nif":["UF_CRM_1694696476571","UF_CRM_68DD6DC33A148","UF_CRM_698E04783FB03"],"calle":["UF_CRM_6728B7610B3ED","UF_CRM_6728B7627CAB4","UF_CRM_1694769585578","UF_CRM_1694769047761","ADDRESS"]},"situacion":"UF_CRM_1727086646502","cuotas":["UF_CRM_1727364305055","UF_CRM_1727359351013","UF_CRM_1727359417190","UF_CRM_1727364185647","UF_CRM_1727364202951","UF_CRM_1727364226237"],"repetidos":{"nif":"UF_CRM_1694696476571","nombre":"TITLE"},"contactos":true}'
 
 concurrency:
   group: recuento-bitrix-conta
@@ -166,6 +171,36 @@ jobs:
               echo; echo "| Situación | Fichas | Clientes |"; echo "|---|---:|---:|"
               jq -r '.union as $u | [["activo","Activo"],["moroso","Moroso"],["solo_renta","Solo la renta"],["sin_clasificar","Sin clasificar"],["baja","De baja"],["sin_situacion","Sin situación en Bitrix24"]][]
                 | "| \(.[1]) | \($u.fichasPorSituacion[.[0]]) | \($u.clientesPorSituacion[.[0]]) |"' /tmp/r.json
+            fi
+            if [ "$(jq -r 'has("contactos")' /tmp/r.json)" = "true" ]; then
+              echo; echo "## Contactos (solo números)"; echo
+              jq -r '.contactos | "**\(.total) contactos**: \(.sinEmpresa) sin empresa (clientes por sí mismos) y \(.conEmpresa) con empresa (personas de contacto; \(.conVariasEmpresas) con varias). Enlace con la empresa: `\(.enlace // "ninguno")`. Campos que no se leen nunca (contraseñas, ficheros, IBAN): \(.bloqueados)."' /tmp/r.json
+              echo; echo "- **Con empresa y con datos de cliente** (situación o cuota propias; irían a «Pendiente de revisar»): **$(jq -r '.contactos.conEmpresaYDatosDeCliente' /tmp/r.json)**"
+              for g in nif situacion direccion cuotas; do
+                case "$g" in nif) t="NIF";; situacion) t="Situación";; direccion) t="Dirección";; *) t="Cuotas";; esac
+                echo; echo "### Campos que pueden ser · $t"; echo
+                echo "| Campo | Código | Tipo | Con algo | Con algo (sin empresa) |"; echo "|---|---|---|---:|---:|"
+                jq -r --arg g "$g" '.contactos.candidatos[$g][] | "| \(.etiqueta) | `\(.codigo)` | \(.tipo) | \(.conAlgo) | \(.conAlgoSinEmpresa) |"' /tmp/r.json
+                [ "$(jq -r --arg g "$g" '.contactos.candidatos[$g] | length' /tmp/r.json)" = "0" ] && echo "| (ninguno) | | | | |"
+              done
+              if [ "$(jq -r '.contactos.situacion != null' /tmp/r.json)" = "true" ]; then
+                echo; echo "### $(jq -r '.contactos.situacion.etiqueta' /tmp/r.json) (\`$(jq -r '.contactos.situacion.codigo' /tmp/r.json)\`)"; echo
+                echo "| Opción | Propuesta en Sumied | Sin empresa | Con empresa |"; echo "|---|---|---:|---:|"
+                jq -r '.contactos.situacion.opciones[] | "| \(.texto) | \(.propuesta) | \(.sinEmpresa) | \(.conEmpresa) |"' /tmp/r.json
+                jq -r '.contactos.situacion | "| (vacía) | | \(.vaciasSinEmpresa) | \(.vaciasConEmpresa) |"' /tmp/r.json
+              fi
+              if [ "$(jq -r '.contactos.nif != null' /tmp/r.json)" = "true" ]; then
+                echo; echo "### NIF de los contactos sin empresa ($(jq -r '.contactos.nif.etiqueta' /tmp/r.json), \`$(jq -r '.contactos.nif.codigo' /tmp/r.json)\`)"; echo
+                echo "| Qué | Cuántos |"; echo "|---|---:|"
+                jq -r '.contactos.nif | "| Contactos sin empresa con NIF | \(.sinEmpresaConNif) |",
+                  "| DNI | \(.porTipo.DNI) |", "| NIE | \(.porTipo.NIE) |", "| CIF | \(.porTipo.CIF) |", "| RIF de Venezuela | \(.porTipo.RIF) |", "| Otro formato | \(.porTipo.otro) |",
+                  "| NIF que salen en más de un contacto | \(.repetidosEntreContactos.nifs) (\(.repetidosEntreContactos.contactos) contactos) |",
+                  "| NIF que ya son de una empresa | \(.conNifDeUnaEmpresa.nifs) (\(.conNifDeUnaEmpresa.contactos) contactos) |"' /tmp/r.json
+              fi
+              echo; echo "<details><summary>Todos los campos de contacto del portal ($(jq -r '.contactos.campos | length' /tmp/r.json)): etiqueta, código y tipo</summary>"; echo
+              echo "| Campo | Código | Tipo |"; echo "|---|---|---|"
+              jq -r '.contactos.campos[] | "| \(.etiqueta) | `\(.codigo)` | \(.tipo) |"' /tmp/r.json
+              echo; echo "</details>"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Recuento hecho: $(jq -r '.total' /tmp/r.json) fichas. El resultado, en el resumen del run."
