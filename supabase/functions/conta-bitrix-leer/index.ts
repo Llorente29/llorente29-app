@@ -52,13 +52,15 @@ async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_n
     const unir = !!mapa.union
     const clientes = agrupar(fichas, unir)
     let suma = { nuevos: 0, cambiados: 0, iguales: 0 }
+    let juntados = 0
     const errores: ErrorAlGuardar[] = []
     // De 150 en 150 clientes; cada uno en su subtransacción: uno que falla no tumba la lectura.
     for (let i = 0; i < clientes.length; i += 150) {
       const { data, error } = await db.rpc('conta_bitrix_guardar_clientes', { p_account: cuenta, p_clientes: clientes.slice(i, i + 150).map(paraGuardar) })
       if (error) throw new Error(`No se han podido guardar las fichas: ${error.message}`)
-      const r = data as typeof suma & { errores: ErrorAlGuardar[] }
+      const r = data as typeof suma & { errores: ErrorAlGuardar[]; juntados?: number }
       suma = { nuevos: suma.nuevos + r.nuevos, cambiados: suma.cambiados + r.cambiados, iguales: suma.iguales + r.iguales }
+      juntados += r.juntados ?? 0
       errores.push(...(r.errores ?? []))
     }
     // Lo que sale en «Pendiente de revisar»: las de la lectura de antes dejan de ser las vigentes.
@@ -86,12 +88,13 @@ async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_n
     const union = resumenDeUnion(clientes)
     const partes = [fraseDeBitrix(fichas.length, suma, por === 'conexion'), fraseDelReparto(reparto, !!mapa.confirmado)]
     if (unir) partes.push(`En Sumied, ${miles(union.clientes)} clientes: ${miles(union.clientesUnidos)} con varias fichas (${miles(union.fichasUnidas)} fichas) y ${miles(union.sinNifPorFormato + union.sinNifPorMuchas)} sin NIF.`)
+    if (juntados) partes.push(`${miles(juntados)} ${juntados === 1 ? 'cliente que ya estaba por separado se ha juntado' : 'clientes que ya estaban por separado se han juntado'} con el de su NIF (el otro, archivado; queda el rastro).`)
     if (errores.length) partes.push(`${miles(errores.length)} ${errores.length === 1 ? 'cliente no se ha guardado' : 'clientes no se han guardado'}: en «Pendiente de revisar», con su porqué.`)
     if (bloqueados.length) partes.push(`No se leen nunca (contraseñas o certificados): ${bloqueados.join(', ')}.`)
     const frase = partes.join(' ')
     await acabar({ estado: 'bien', ...suma, mensaje: frase })
     const avisos = fichas.flatMap((f) => f.avisos.map((a) => `${f.bitrixId}: ${a}`)).slice(0, 50)
-    return { frase, lee: true, empresas: fichas.length, ...suma, activas: reparto.activo, reparto, union: unir ? union : null, noGuardados: errores.length,
+    return { frase, lee: true, empresas: fichas.length, ...suma, juntados, activas: reparto.activo, reparto, union: unir ? union : null, noGuardados: errores.length,
       confirmado: !!mapa.confirmado, avisos }
   } catch (e) {
     await acabar({ estado: 'mal', mensaje: e instanceof Error ? e.message : String(e) })
@@ -203,9 +206,17 @@ Deno.serve(async (req) => {
       const puerta = await puedeLeer(admin, cuenta, s.entorno)
       if (!puerta.lee) return json(400, { error: puerta.porque })
       const { fichas } = await leerFichas(fetch, s.url, s.mapa, esperar)
+      // Qué cliente de Sumied es hoy cada ficha: para decir cuántos clientes ya creados se juntan.
+      const clienteDeFicha = new Map<string, string>()
+      for (let desde = 0; ; desde += 1000) {
+        const { data, error } = await admin.from('conta_gestoria_ficha').select('bitrix_id, party_id').eq('account_id', cuenta).order('bitrix_id').range(desde, desde + 999)
+        if (error) throw new Error(`No se han podido leer las fichas de Sumied: ${error.message}`)
+        for (const x of (data ?? []) as { bitrix_id: string; party_id: string }[]) clienteDeFicha.set(x.bitrix_id, x.party_id)
+        if ((data ?? []).length < 1000) break
+      }
       const { data: acc } = await admin.from('accounts').select('name').eq('id', cuenta).single()
       return json(200, { ok: true, empresa: (acc as { name?: string } | null)?.name ?? 'La cuenta', portal: portalDe(s.url), leido: new Date().toISOString(),
-        aplicada: !!s.mapa.union, ...ensayoDeUnion(fichas) })
+        aplicada: !!s.mapa.union, ...ensayoDeUnion(fichas, clienteDeFicha) })
     }
     if (cuerpo.accion === 'leer') {
       const res = await leer(admin, cuenta, esCron ? 'cada_noche' : 'persona', quien)

@@ -116,3 +116,33 @@ describe('G01b · la frase de la lectura: cuántas en cada situación, con NIF y
     expect([miles(7), miles(1437), miles(1234567)]).toEqual(['7', '1.437', '1.234.567'])
   })
 })
+
+import { camposQueSePiden } from '../../../../../supabase/functions/conta-bitrix-leer/mapa'
+import { leerFichas } from '../../../../../supabase/functions/conta-bitrix-leer/lectura'
+
+describe('G01b · la dirección se pide a Bitrix24 (en producción salía «Con dirección: 0»)', () => {
+  it('reproduce el fallo: las fuentes de la dirección van en mapa.direcciones, no en mapa.campos, y no se pedían', () => {
+    const pedidos = camposQueSePiden(MAPA)
+    for (const c of ['UF_CRM_FISCAL', 'UF_CRM_SOCIAL', 'ADDRESS', 'ADDRESS_POSTAL_CODE', 'ADDRESS_CITY', 'ADDRESS_PROVINCE', 'UF_CRM_CALLE', 'UF_CRM_CALLE_CP', 'UF_CRM_CALLE_POB', 'UF_CRM_CALLE_PROV'])
+      expect(pedidos).toContain(c)
+  })
+
+  it('y la lectura las trae: la ficha sale con su dirección', async () => {
+    const pedidas: string[][] = []
+    const medidos = Object.fromEntries(['TITLE', 'UF_CRM_S', 'UF_CRM_FISCAL', 'UF_CRM_SOCIAL', 'ADDRESS', 'ADDRESS_POSTAL_CODE', 'ADDRESS_CITY', 'ADDRESS_PROVINCE',
+      'UF_CRM_CALLE', 'UF_CRM_CALLE_CP', 'UF_CRM_CALLE_POB', 'UF_CRM_CALLE_PROV', 'UF_CRM_CP_SUELTO', 'UF_CRM_POB_SUELTA'].map((k) => [k, { title: k, type: 'string' }]))
+    const fila = { ID: '7', TITLE: 'CLIENTE PRUEBA', UF_CRM_FISCAL: 'Calle Inventada 7, 28000 Madrid|;|1' }
+    const pedir = async (url: string, init: { body: string }) => {
+      const metodo = url.split('/').pop()!.replace('.json', '')
+      const cuerpo = JSON.parse(init.body) as { select?: string[] }
+      if (cuerpo.select) pedidas.push(cuerpo.select)
+      // Bitrix24 solo devuelve los campos que se le piden en «select».
+      const res = metodo === 'crm.company.fields' ? { result: medidos }
+        : { result: [Object.fromEntries(Object.entries(fila).filter(([k]) => (cuerpo.select ?? []).includes(k)))], total: 1 }
+      return { ok: true, status: 200, json: async () => res }
+    }
+    const r = await leerFichas(pedir, 'https://portal.test/rest/1/abc/', MAPA, async () => {})
+    expect(pedidas[0]).toContain('UF_CRM_FISCAL')
+    expect(r.fichas[0]).toMatchObject({ calle: 'Calle Inventada 7, 28000 Madrid', cp: '28000', direccionDe: 'Dirección Fiscal' })
+  })
+})

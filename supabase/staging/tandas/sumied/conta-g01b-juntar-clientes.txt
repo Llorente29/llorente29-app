@@ -1,0 +1,5 @@
+# G01b · Juntar los clientes ya creados: la 1336 añade el rastro y la función
+# de juntar, y cambia en caliente guardar los clientes. Su prueba (ROLLBACK,
+# datos inventados) reproduce lo de producción del 07/11 y prueba la vuelta atrás.
+supabase/migrations/20261107T1336_g01b_juntar_clientes.sql
+supabase/staging/sql/20261107_g01b_juntar_clientes_prueba.sql

@@ -155,7 +155,18 @@ describe('G01b · lo que sale en «Pendiente de revisar» y el ensayo', () => {
     const e = ensayoDeUnion(fichas)
     expect(e.resumen).toMatchObject({ fichas: 4, clientes: 3, clientesUnidos: 1, fichasUnidas: 2, sinNifPorFormato: 1 })
     expect(e.unidos).toEqual([{ nif: '00000000T', situacion: 'activo', fichas: [
-      { bitrixId: '1', nombre: 'CLIENTE PRUEBA 1', situacion: 'baja', situacionTexto: 'BAJA' }, { bitrixId: '2', nombre: 'CLIENTE PRUEBA 2', situacion: 'activo', situacionTexto: 'ACTIVO' }] }])
+      { bitrixId: '1', nombre: 'CLIENTE PRUEBA 1', situacion: 'baja', situacionTexto: 'BAJA' }, { bitrixId: '2', nombre: 'CLIENTE PRUEBA 2', situacion: 'activo', situacionTexto: 'ACTIVO' }], clientesHoy: 0 }])
+    expect(e.seJuntan).toBe(0)
     expect(e.sinNif).toEqual([{ bitrixId: '3', nombre: 'CLIENTE PRUEBA 3', nifEnBitrix: ' 123 ', motivo: 'nif_no_valido', fichasConSuNif: 1 }])
+  })
+})
+
+describe('G01b · el ensayo dice qué clientes ya creados se juntan (producción, 07/11: 18 NIF que ya eran 2 clientes cada uno)', () => {
+  it('cuenta los clientes de hoy de cada NIF y cuántos se retiran', () => {
+    const f = (bitrixId: string, nif: string) => ({ bitrixId, nif, nifEnBitrix: nif, situacion: 'activo' as const, situacionTexto: 'ACTIVO', nombre: `CLIENTE PRUEBA ${bitrixId}` })
+    const e = ensayoDeUnion([f('1', '00000000T'), f('2', '00000000T'), f('3', 'B00000000'), f('4', 'B00000000'), f('5', 'X0000000T'), f('6', 'X0000000T')],
+      new Map([['1', 'P1'], ['2', 'P2'], ['3', 'P3'], ['4', 'P3']]))
+    expect(e.unidos.map((u) => [u.nif, u.clientesHoy])).toEqual([['00000000T', 2], ['B00000000', 1], ['X0000000T', 0]])
+    expect(e.seJuntan).toBe(1)
   })
 })
