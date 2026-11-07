@@ -2547,6 +2547,41 @@ COMMENT ON FUNCTION public._cocina_en_calma(p_location_id uuid, p_quiet_minutes 
 
 
 --
+-- Name: _company_sector_al_dia(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._company_sector_al_dia() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO ''
+    AS $$
+begin
+  if tg_op = 'UPDATE' and new.sector is not distinct from old.sector and new.is_hospitality is distinct from old.is_hospitality then
+    -- Ha cambiado la marca de hostelería: el sector la sigue.
+    if new.is_hospitality then
+      new.sector := 'hosteleria';
+    elsif new.is_hospitality is not null and coalesce(old.sector, 'hosteleria') = 'hosteleria' then
+      new.sector := 'general';
+    end if;
+  elsif new.sector is not null and (tg_op = 'INSERT' or new.sector is distinct from old.sector) then
+    -- Ha cambiado el sector (o llega con él): la marca de hostelería lo sigue.
+    if (new.sector = 'hosteleria') is distinct from coalesce(new.is_hospitality, false) then
+      new.is_hospitality := (new.sector = 'hosteleria');
+    end if;
+  elsif tg_op = 'INSERT' and new.is_hospitality is not null then
+    new.sector := case when new.is_hospitality then 'hosteleria' else 'general' end;
+  end if;
+  return new;
+end $$;
+
+
+--
+-- Name: FUNCTION _company_sector_al_dia(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._company_sector_al_dia() IS 'G03. Mantiene company.is_hospitality igual que company.sector, en los dos sentidos, mientras haya algo que lea is_hospitality.';
+
+
+--
 -- Name: _compras_base_recepcion(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -101250,6 +101285,7 @@ CREATE TABLE public.company (
     color text,
     month_close_day smallint,
     payroll_pay_days smallint[],
+    sector text,
     CONSTRAINT company_alta_completa CHECK (((setup_completed_at IS NULL) OR ((legal_name IS NOT NULL) AND (tax_id IS NOT NULL) AND (entity_kind IS NOT NULL)))),
     CONSTRAINT company_color_formato CHECK (((color IS NULL) OR (color ~ '^#[0-9A-Fa-f]{6}$'::text))),
     CONSTRAINT company_dehu_email_valido CHECK (((dehu_email IS NULL) OR (dehu_email ~ '^[^@\s]+@[^@\s]+\.[^@\s]+$'::text))),
@@ -101258,6 +101294,7 @@ CREATE TABLE public.company (
     CONSTRAINT company_month_close_day_check CHECK (((month_close_day IS NULL) OR ((month_close_day >= 1) AND (month_close_day <= 28)))),
     CONSTRAINT company_payroll_pay_days_check CHECK (((payroll_pay_days IS NULL) OR (((cardinality(payroll_pay_days) >= 1) AND (cardinality(payroll_pay_days) <= 4)) AND (1 <= ALL (payroll_pay_days)) AND (31 >= ALL (payroll_pay_days))))),
     CONSTRAINT company_postal_code_es CHECK (((fiscal_postal_code IS NULL) OR (fiscal_country <> 'ES'::text) OR (fiscal_postal_code ~ '^[0-9]{5}$'::text))),
+    CONSTRAINT company_sector_valido CHECK ((sector = ANY (ARRAY['general'::text, 'hosteleria'::text, 'gestoria'::text]))),
     CONSTRAINT company_setup_step_check CHECK ((setup_step = ANY (ARRAY['nif'::text, 'nombre'::text, 'actividad'::text, 'impuestos'::text, 'cuentas'::text, 'banco'::text, 'hecho'::text]))),
     CONSTRAINT company_tax_id_type_check CHECK ((tax_id_type = ANY (ARRAY['nif_es'::text, 'vat_eu'::text, 'foreign'::text])))
 );
@@ -101331,6 +101368,13 @@ COMMENT ON COLUMN public.company.month_close_day IS 'S01p · El día del mes sig
 --
 
 COMMENT ON COLUMN public.company.payroll_pay_days IS 'S01p · Los días del mes siguiente en que se paga la nómina del mes. Vacío: sin poner.';
+
+
+--
+-- Name: COLUMN company.sector; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.company.sector IS 'G03. El sector de la empresa: general, hosteleria o gestoria. Decide qué se enciende (src/modules/conta/sectores/sectores.ts). Se propone en el alta según la actividad y se cambia en Ajustes › Tu empresa. is_hospitality se mantiene igual que él (company_sector_al_dia) hasta que se quite.';
 
 
 --
@@ -129772,6 +129816,13 @@ CREATE TRIGGER company_relation_misma_cuenta BEFORE INSERT OR UPDATE ON public.c
 
 
 --
+-- Name: company company_sector_al_dia; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER company_sector_al_dia BEFORE INSERT OR UPDATE OF sector, is_hospitality ON public.company FOR EACH ROW EXECUTE FUNCTION public._company_sector_al_dia();
+
+
+--
 -- Name: company_tax_facts company_tax_facts_misma_cuenta; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -153671,6 +153722,15 @@ REVOKE ALL ON FUNCTION public._cocina_en_calma(p_location_id uuid, p_quiet_minut
 GRANT ALL ON FUNCTION public._cocina_en_calma(p_location_id uuid, p_quiet_minutes integer) TO anon;
 GRANT ALL ON FUNCTION public._cocina_en_calma(p_location_id uuid, p_quiet_minutes integer) TO authenticated;
 GRANT ALL ON FUNCTION public._cocina_en_calma(p_location_id uuid, p_quiet_minutes integer) TO service_role;
+
+
+--
+-- Name: FUNCTION _company_sector_al_dia(); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._company_sector_al_dia() TO anon;
+GRANT ALL ON FUNCTION public._company_sector_al_dia() TO authenticated;
+GRANT ALL ON FUNCTION public._company_sector_al_dia() TO service_role;
 
 
 --
