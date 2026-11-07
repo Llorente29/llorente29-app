@@ -21,6 +21,8 @@ import {
 } from '../../../../supabase/functions/conta-bitrix-leer/mapa'
 
 export type { CampoMedido, MapaBitrix, Situacion }
+export type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
+import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
 export const SITUACIONES_SUMIED: readonly { valor: Situacion; texto: string }[] = [
   { valor: 'activo', texto: 'Activo' },
@@ -152,4 +154,87 @@ export function opcionesDeCampos(medidos: Record<string, CampoMedido>, filtro?: 
   return Object.keys(medidos).filter((k) => !esCampoSensible(medidos[k], k) && (!filtro || filtro(medidos[k])))
     .map((k) => ({ valor: k, texto: `${etiquetaDe(medidos, k)} · ${k}` }))
     .sort((a, b) => a.texto.localeCompare(b.texto, 'es'))
+}
+
+// ── G01c · Elegir un campo sin códigos, y el mapa de contactos ──────────────
+
+/** El tipo de un campo de Bitrix24, en palabras de oficina. */
+export function tipoEnPalabras(tipo: string | undefined): string {
+  switch (tipo) {
+    case 'string': return 'Texto'
+    case 'enumeration': case 'crm_status': return 'Lista'
+    case 'address': return 'Dirección'
+    case 'money': return 'Importe'
+    case 'double': case 'integer': return 'Número'
+    case 'date': return 'Fecha'
+    case 'datetime': return 'Fecha y hora'
+    case 'boolean': case 'char': return 'Sí o no'
+    case 'crm_multifield': return 'Varios valores'
+    case 'employee': case 'user': return 'Persona del equipo'
+    case 'url': return 'Enlace'
+    default: return tipo?.startsWith('crm') ? 'Enlace del CRM' : 'Otro'
+  }
+}
+
+export interface CampoParaElegir { valor: string; etiqueta: string; tipo: string; propio: boolean }
+
+/**
+ * Los campos para elegir: por su etiqueta, con su tipo en palabras y si es
+ * propio del portal o de serie de Bitrix24. Nunca el código (UF_CRM_…), ni los
+ * que guardan contraseñas, certificados o el IBAN.
+ */
+export function camposParaElegir(medidos: Record<string, CampoMedido>, filtro?: (c: CampoMedido) => boolean): CampoParaElegir[] {
+  return Object.keys(medidos).filter((k) => !esCampoSensible(medidos[k], k) && (!filtro || filtro(medidos[k])))
+    .map((k) => ({ valor: k, etiqueta: etiquetaDe(medidos, k), tipo: tipoEnPalabras(medidos[k]?.type), propio: k.startsWith('UF_CRM_') }))
+    .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es') || Number(a.propio) - Number(b.propio))
+}
+
+const normal = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+/** Los campos cuyo nombre o tipo tiene todas las palabras buscadas (sin tildes ni mayúsculas). */
+export function buscarCampos(campos: readonly CampoParaElegir[], texto: string): CampoParaElegir[] {
+  const palabras = normal(texto).split(' ').filter(Boolean)
+  if (!palabras.length) return [...campos]
+  return campos.filter((c) => { const t = normal(`${c.etiqueta} ${c.tipo}`); return palabras.every((p) => t.includes(p)) })
+}
+
+export interface EleccionContactos { nif: string | null; direccion: string | null; cuota: string | null; tipoCliente: string | null }
+
+/**
+ * Lo que se propone para los contactos (Julio, 07/11): NIF = «NIF/NIE»;
+ * dirección = ADDRESS; cuota de referencia = «Tarifa Recurrente»; y «Tipo de
+ * cliente» como dato de referencia (los contactos no tienen situación). Si el
+ * mapa ya está guardado, lo de él.
+ */
+export function propuestaContactos(medidos: Record<string, CampoMedido>, guardado?: Partial<EleccionContactos> | null): EleccionContactos {
+  const por = (re: RegExp) => Object.keys(medidos).find((k) => !esCampoSensible(medidos[k], k) && re.test(normal(etiquetaDe(medidos, k)))) ?? null
+  const vale = (k: string | null | undefined) => (k && medidos[k] && !esCampoSensible(medidos[k], k) ? k : null)
+  return {
+    nif: vale(guardado?.nif) ?? por(/^nif ?\/ ?nie$/) ?? por(/\b(nif|dni|nie)\b/),
+    direccion: vale(guardado?.direccion) ?? (medidos.ADDRESS ? 'ADDRESS' : null),
+    cuota: vale(guardado?.cuota) ?? por(/^tarifa recurrente$/),
+    tipoCliente: vale(guardado?.tipoCliente) ?? por(/^tipo de cliente$/),
+  }
+}
+
+export function loQueFaltaContactos(e: EleccionContactos): string[] {
+  const out: string[] = []
+  if (!e.nif) out.push('El NIF: ningún campo elegido. Sin él, ningún contacto se une con su empresa.')
+  if (!e.direccion) out.push('La dirección: ningún campo elegido.')
+  return out
+}
+
+/** Cuántos contactos hay de cada (de la última lectura o del recuento). */
+export interface ResumenContactos { contactos: number; clientes: number; seUnenAEmpresa: number; personas: number; fuera: number; pendientes: number }
+
+/** El mapa de contactos que se confirma, con lo elegido. */
+export function mapaContactosDe(e: EleccionContactos, medidos: Record<string, CampoMedido>): MapaContactos {
+  const estandar = e.direccion === 'ADDRESS'
+  const si = (k: string) => (medidos[k] ? k : null)
+  const tipo = e.tipoCliente ? medidos[e.tipoCliente] : null
+  return {
+    nif: e.nif,
+    direccion: e.direccion ? { calle: e.direccion, ...(estandar ? { cp: si('ADDRESS_POSTAL_CODE'), poblacion: si('ADDRESS_CITY'), provincia: si('ADDRESS_PROVINCE') } : {}) } : null,
+    cuota: e.cuota, tipoCliente: e.tipoCliente,
+    textosTipo: tipo?.items?.length ? Object.fromEntries(tipo.items.map((it) => [String(it.ID), it.VALUE])) : undefined,
+  }
 }

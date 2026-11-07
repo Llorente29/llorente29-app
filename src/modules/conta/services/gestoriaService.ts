@@ -13,6 +13,8 @@ import type { Linea, SuscripcionActiva, Tarifa } from '../../../../supabase/func
 import type { ClienteGestoria, Cobro, Diferencia, TipoDiferencia } from '@/modules/conta/gestoria/vista'
 import type { CampoMedido, MapaBitrix } from '../../../../supabase/functions/conta-bitrix-leer/mapa'
 import type { DatosEnsayo } from '@/modules/conta/gestoria/pdfUnion'
+import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
+import type { ResumenContactos } from '@/modules/conta/gestoria/queEsCadaCampo'
 
 type Fila = Record<string, unknown>
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
@@ -156,6 +158,8 @@ export interface ConexionBitrix {
   /** G01b · El mapa guardado (con su «confirmado») y lo medido del portal, para «Qué es cada campo». */
   mapa: MapaBitrix | null
   medidos: Record<string, CampoMedido> | null
+  /** G01c · Los contactos: su mapa, lo medido y cuántos hay de cada (llega con la base de los contactos). */
+  contactos?: { mapa: MapaContactos | null; medidos: Record<string, CampoMedido> | null; resumen: ResumenContactos | null } | null
 }
 
 export async function leerConexiones(accountId: string): Promise<{ gocardless: ConexionGc[]; bitrix: ConexionBitrix | null }> {

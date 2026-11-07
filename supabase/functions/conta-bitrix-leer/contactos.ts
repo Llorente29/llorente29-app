@@ -179,9 +179,7 @@ export function contarContactos(filas: readonly Record<string, unknown>[], m: Re
       if (!n) continue
       sinEmpresaConNif++
       porNif.set(n, (porNif.get(n) ?? 0) + 1)
-      const t = tipoDeNif(n)
-      if (t === 'otro' && esRif(n)) porTipo.RIF++
-      else porTipo[t]++
+      porTipo[tipoDeNif(n)]++
     }
     const rep = [...porNif.values()].filter((v) => v > 1)
     r.nif = { codigo: nifC.codigo, etiqueta: nifC.etiqueta, sinEmpresaConNif, porTipo,

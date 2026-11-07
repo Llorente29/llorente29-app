@@ -219,7 +219,7 @@ describe('G01b · los NIF repetidos del recuento: solo números', () => {
     expect(r).toEqual({
       campoNif: { codigo: 'UF_N', etiqueta: 'CIF/NIF' }, fichasConNif: 8,
       nifRepetidos: 3, fichasEnRepetidos: 7, maximoPorNif: 3, mismaSituacion: 1, distintaSituacion: 2, activaYBaja: 1,
-      porTipo: { DNI: 1, NIE: 1, CIF: 1, otro: 0 }, sociedadYPersona: 1, situacionSegun: 'texto de la opción',
+      porTipo: { DNI: 1, NIE: 1, CIF: 1, RIF: 0, otro: 0 }, sociedadYPersona: 1, situacionSegun: 'texto de la opción',
     })
     // Ningún NIF ni nombre sale del resultado.
     const txt = JSON.stringify(r)

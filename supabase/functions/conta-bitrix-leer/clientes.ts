@@ -35,16 +35,36 @@ export function nifComoLaBase(v: unknown): string | null {
   return t || null
 }
 
-/** DNI (8 cifras y letra), NIE (X, Y o Z, 7 cifras y letra), CIF (letra de sociedad, 7 cifras y control) u otro. */
-export function tipoDeNif(n: string): 'DNI' | 'NIE' | 'CIF' | 'otro' {
+/**
+ * DNI (8 cifras y letra), NIE (X, Y o Z, 7 cifras y letra), CIF (letra de
+ * sociedad, 7 cifras y control), RIF de Venezuela (J, V, E, G o P y 9 cifras;
+ * G01c, Julio 07/11: identificador fiscal extranjero) u otro.
+ */
+export function tipoDeNif(n: string): 'DNI' | 'NIE' | 'CIF' | 'RIF' | 'otro' {
   if (/^[0-9]{8}[A-Z]$/.test(n)) return 'DNI'
   if (/^[XYZ][0-9]{7}[A-Z]$/.test(n)) return 'NIE'
   if (/^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n)) return 'CIF'
+  if (/^[JVEGP][0-9]{9}$/.test(n)) return 'RIF'
   return 'otro'
 }
 
+/**
+ * G01c · El identificador fiscal extranjero de un NIF, si lo es: el RIF de
+ * Venezuela se guarda en el número del cliente (party.tax_id) con tipo
+ * «foreign» y país VE (customer_fiscal), no como NIF español.
+ */
+export const idExtranjeroDe = (n: string | null): { tipo: 'foreign'; pais: string } | null =>
+  n && tipoDeNif(n) === 'RIF' ? { tipo: 'foreign', pais: 'VE' } : null
+
 /** Lo que la unión necesita de cada ficha. */
-export interface FichaParaUnir { bitrixId: string; nif: string | null; situacion: Situacion | null }
+export interface FichaParaUnir {
+  bitrixId: string; nif: string | null; situacion: Situacion | null
+  /** G01c · De qué viene: una empresa (lo de siempre) o un contacto de Bitrix24. Sus ids son numeraciones distintas. */
+  origen?: 'empresa' | 'contacto'
+}
+
+/** La clave de una ficha: el id de Bitrix24, y «contacto-» delante si es un contacto (una empresa y un contacto pueden tener el mismo id). */
+export const claveDeFicha = (f: FichaParaUnir) => (f.origen === 'contacto' ? `contacto-${f.bitrixId}` : f.bitrixId)
 
 export type Motivo = 'repetidas' | 'nif_no_valido' | 'nif_en_muchas'
 
@@ -61,9 +81,14 @@ export interface Cliente<F extends FichaParaUnir> {
   motivo: Motivo | null
   /** En qué cuántas fichas sale su NIF en Bitrix24 (para los motivos). */
   fichasConSuNif: number
+  /** G01c · Si su número es un identificador fiscal extranjero (el RIF de Venezuela): tipo y país. */
+  idExtranjero: { tipo: 'foreign'; pais: string } | null
 }
 
 const porId = (a: FichaParaUnir, b: FichaParaUnir) => {
+  // G01c · Primero las empresas y después los contactos; dentro, por id.
+  const oa = a.origen === 'contacto' ? 1 : 0, ob = b.origen === 'contacto' ? 1 : 0
+  if (oa !== ob) return oa - ob
   const na = Number(a.bitrixId), nb = Number(b.bitrixId)
   return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : a.bitrixId.localeCompare(b.bitrixId)
 }
@@ -77,7 +102,8 @@ export function agrupar<F extends FichaParaUnir>(fichas: readonly F[], unir: boo
   const cuantas = new Map<string, number>()
   for (const n of nifDe.values()) if (n) cuantas.set(n, (cuantas.get(n) ?? 0) + 1)
   const sola = (f: F, nif: string | null, motivo: Motivo | null): Cliente<F> =>
-    ({ clave: `ficha:${f.bitrixId}`, nif, principal: f, fichas: [f], situacion: f.situacion, motivo, fichasConSuNif: nifDe.get(f) ? cuantas.get(nifDe.get(f)!) ?? 1 : 0 })
+    ({ clave: `ficha:${claveDeFicha(f)}`, nif, principal: f, fichas: [f], situacion: f.situacion, motivo,
+      fichasConSuNif: nifDe.get(f) ? cuantas.get(nifDe.get(f)!) ?? 1 : 0, idExtranjero: idExtranjeroDe(nif) })
   if (!unir) return fichas.map((f) => sola(f, nifDe.get(f) ?? null, null))
 
   const grupos = new Map<string, F[]>()
@@ -92,7 +118,7 @@ export function agrupar<F extends FichaParaUnir>(fichas: readonly F[], unir: boo
   for (const [nif, fs] of grupos) {
     const orden = [...fs].sort((a, b) => rango(a.situacion) - rango(b.situacion) || porId(a, b))
     out.push({ clave: `nif:${nif}`, nif, principal: orden[0], fichas: [...fs].sort(porId), situacion: masViva(fs.map((f) => f.situacion)),
-      motivo: fs.length > 1 ? 'repetidas' : null, fichasConSuNif: fs.length })
+      motivo: fs.length > 1 ? 'repetidas' : null, fichasConSuNif: fs.length, idExtranjero: idExtranjeroDe(nif) })
   }
   return out.sort((a, b) => porId(a.principal, b.principal))
 }

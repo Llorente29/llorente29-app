@@ -42,7 +42,7 @@ export interface ResultadoRepetidos {
   /** El mismo NIF en una ficha activa y en otra de baja. */
   activaYBaja: number
   /** De qué tipo es cada NIF repetido: DNI, NIE, CIF u otro. */
-  porTipo: { DNI: number; NIE: number; CIF: number; otro: number }
+  porTipo: { DNI: number; NIE: number; CIF: number; RIF: number; otro: number }
   /** Repetidos entre una ficha con nombre de sociedad (S.L., S.A., C.B.…) y otra con nombre de persona. */
   sociedadYPersona: number
   /** De dónde sale la situación: del mapa confirmado o, si no lo hay, de su texto. */
@@ -126,7 +126,7 @@ export function contarRepetidos(
   const out: ResultadoRepetidos = {
     campoNif: { codigo: r.nif, etiqueta: etiqueta(medidos, r.nif) }, fichasConNif,
     nifRepetidos: 0, fichasEnRepetidos: 0, maximoPorNif: 0, mismaSituacion: 0, distintaSituacion: 0, activaYBaja: 0,
-    porTipo: { DNI: 0, NIE: 0, CIF: 0, otro: 0 }, sociedadYPersona: 0,
+    porTipo: { DNI: 0, NIE: 0, CIF: 0, RIF: 0, otro: 0 }, sociedadYPersona: 0,
     situacionSegun: opcionesConfirmadas ? 'mapa confirmado' : 'texto de la opción',
   }
   for (const [nif, x] of porNif) {
