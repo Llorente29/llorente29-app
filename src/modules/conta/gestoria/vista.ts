@@ -39,7 +39,11 @@ export interface ClienteGestoria {
   emisorId: string
   emisor: string
   /** Lo que dice Bitrix24 (de referencia). */
-  bitrix: { situacion: string | null; formaPago: string | null; servicios: string[] } | null
+  bitrix: {
+    situacion: string | null; formaPago: string | null; servicios: string[]
+    /** G01b · El texto de la situación en Bitrix24 (para «Sin clasificar»), la dirección y de qué campo sale, y las otras, de referencia. */
+    situacionTexto?: string | null; direccion?: string | null; direccionDe?: string | null; otrasDirecciones?: { etiqueta: string; texto: string }[]
+  } | null
   formaCobro: 'gocardless' | 'transferencia' | 'tarjeta' | 'efectivo' | null
   /** El estado del mandato en GoCardless, tal cual (active, pending_customer_approval…). */
   mandato: string | null

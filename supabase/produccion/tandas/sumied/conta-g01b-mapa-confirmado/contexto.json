@@ -1,0 +1,8 @@
+{
+ "_que": "G01b · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 07/11 a las 09:40Z con la consulta del workflow (analizar.mjs sql-contexto). La 0915 cambia en caliente conta_gestoria_cliente (1.437 filas, todas con la situación vacía: el CHECK solo amplía) y añade la función conta_bitrix_confirmar_mapa, que no existe. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-07T09:40Z",
+ "tanda": {
+  "supabase/migrations/20261107T0915_g01b_mapa_confirmado.sql": "ec3dba83c837a7215d4cb411cda2ba2c"
+ },
+ "contexto": {"tablas":["public.conta_gestoria_cliente"],"funciones":[],"filas":{"public.conta_gestoria_cliente":1437},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

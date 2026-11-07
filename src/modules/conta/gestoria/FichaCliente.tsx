@@ -24,7 +24,12 @@ import {
 import type { Linea, SuscripcionActiva } from '../../../../supabase/functions/conta-gocardless-leer/comparacion'
 import type { Servicio } from '@/modules/conta/services/gestoriaService'
 
-const SITUACION: Record<string, string> = { activo: 'Activo', baja: 'De baja', moroso: 'Moroso', solo_renta: 'Solo la renta' }
+const SITUACION: Record<string, string> = { activo: 'Activo', baja: 'De baja', moroso: 'Moroso', solo_renta: 'Solo la renta', sin_clasificar: 'Sin clasificar' }
+/** G01b · La situación en palabras: «Sin clasificar» lleva su texto de Bitrix24; vacía, «Sin situación en Bitrix24». */
+const situacionEnPalabras = (b: NonNullable<ClienteGestoria['bitrix']>) =>
+  !b.situacion ? 'Sin situación en Bitrix24'
+    : b.situacion === 'sin_clasificar' ? `Sin clasificar${b.situacionTexto ? ` («${b.situacionTexto}» en Bitrix24)` : ''}`
+    : SITUACION[b.situacion] ?? b.situacion
 const fecha = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const nombreMes = (valor: string, opciones: { valor: string; texto: string }[]) => opciones.find((o) => o.valor === valor)?.texto ?? valor
@@ -258,9 +263,13 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
         <h3 className="cxg-ficha-sub">Lo que dice Bitrix24</h3>
         {!fila.bitrix ? <p className="cxg-apoyo">No tiene ficha en Bitrix24.</p> : (
           <dl className="cxg-datos">
-            <div><dt>Situación</dt><dd>{fila.bitrix.situacion ? SITUACION[fila.bitrix.situacion] ?? fila.bitrix.situacion : '—'}</dd></div>
+            <div><dt>Situación</dt><dd>{situacionEnPalabras(fila.bitrix)}</dd></div>
             <div><dt>Forma de pago</dt><dd>{fila.bitrix.formaPago ?? '—'}</dd></div>
             <div><dt>Servicios</dt><dd>{fila.bitrix.servicios.length ? fila.bitrix.servicios.join(', ') : '—'}</dd></div>
+            <div><dt>Dirección{fila.bitrix.direccionDe ? ` (de «${fila.bitrix.direccionDe}»)` : ''}</dt><dd>{fila.bitrix.direccion ?? 'Sin dirección en Bitrix24'}</dd></div>
+            {(fila.bitrix.otrasDirecciones ?? []).map((o, i) => (
+              <div key={i}><dt>Otra dirección · {o.etiqueta}</dt><dd className="cxg-apoyo-dd">{o.texto}</dd></div>
+            ))}
           </dl>
         )}
         <p className="cxg-apoyo">De referencia: Sumied no cambia la ficha de Bitrix24.</p>
