@@ -445,7 +445,7 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
   const dudas: DudaDelMapa[] = []
   const formaPagoAEmisor: Record<string, string> = {}
   // G01b · Los campos con contraseñas o certificados no se proponen nunca.
-  const propios = Object.entries(medidos).filter(([k, c]) => k.startsWith('UF_CRM_') && !esCampoSensible(c))
+  const propios = Object.entries(medidos).filter(([k, c]) => k.startsWith('UF_CRM_') && !esCampoSensible(c, k))
   for (const q of QUIEN_ES) {
     const nombreCampo = q.etiqueta ?? q.campo
     const candidatos = propios.filter(([, c]) => q.patron.test(etiquetaDe(c)))
