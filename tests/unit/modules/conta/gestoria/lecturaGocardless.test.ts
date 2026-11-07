@@ -56,6 +56,17 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     expect(p.resumen).toMatchObject({ mandatosVivos: 2, lineasActivas: 9, alMesCent: 34372 })
     expect(fraseDeLectura('EMISOR PRUEBA ALFA, S.L.', p, 8, 3, true))
       .toBe('Conectada la cuenta de GoCardless de EMISOR PRUEBA ALFA, S.L.: 2 mandatos activos y 9 líneas leídas (343,72 € al mes). 8 convertidas en línea, 1 sin convertir; 3 con diferencias.')
+
+    expect(p.resumen.sinCasar).toBe(0)
+  })
+
+  it('G01c · las suscripciones activas que esperan a casar se dicen, no salen como «0 sin convertir»', async () => {
+    const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
+    // Sin ninguna ficha del CRM con la que casar, ninguna de las 9 activas se importa: las 9 esperan.
+    const p = planLectura(A, 'cuenta', d, { ...antes(), fichas: [] }, HOY, nombre)
+    expect([p.lineas.length, p.noConvertidas.length, p.resumen.sinCasar]).toEqual([0, 0, 9])
+    expect(fraseDeLectura('EMISOR PRUEBA ALFA, S.L.', p, 0, 2)).toContain(
+      '0 convertidas en línea, 0 sin convertir; 2 con diferencias. 9 suscripciones activas siguen sin línea porque su cliente de GoCardless no está casado con ningún cliente de Sumied (salen en «En GoCardless sin ficha en tu CRM»).')
   })
 
   it('la segunda lectura no vuelve a importar, ni pisa la forma de cobro, ni crea otra tarifa', async () => {

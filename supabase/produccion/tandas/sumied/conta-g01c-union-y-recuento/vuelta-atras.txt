@@ -1,0 +1,4 @@
+# G01c · la vuelta atrás de la 2115: las dos funciones como estaban y sin la
+# columna; la unión aplicada se queda en el mapa.
+cuenta: scripts/conta/produccion/cuentas/g01c-union-aplicada.sql
+supabase/vuelta-atras/20261107T2115_g01c_union_aplicada.down.sql
