@@ -178,8 +178,16 @@ jobs:
           read -r CUENTA EMPRESA <<< "$IDS"
           echo "VIDEO_CUENTA=$CUENTA" >> "$GITHUB_ENV"; echo "VIDEO_EMPRESA=$EMPRESA" >> "$GITHUB_ENV"
           export VIDEO_CUENTA="$CUENTA" VIDEO_EMPRESA="$EMPRESA"
-          psql "$DB_URL" -X -v cuenta="$CUENTA" -v empresa="$EMPRESA" -f scripts/video/reconocer.sql > "$SALIDA/reconocer.txt" 2>&1 || true
-          node scripts/video/factura-al-pago.mjs reconocer "$SALIDA"
+          # Qué vídeo y en qué fase: scripts/video/graba.txt («<vídeo> <fase>»; sin él, «factura-al-pago grabar»).
+          # Cada vídeo es scripts/video/<vídeo>.mjs; su .sql, si lo hay, es su reconocimiento de la base (solo lectura).
+          read -r VIDEO FASE <<< "$(grep -v '^[[:space:]]*#' scripts/video/graba.txt 2>/dev/null | grep -v '^[[:space:]]*$' | head -1 || true)"
+          VIDEO=${VIDEO:-factura-al-pago}; FASE=${FASE:-grabar}
+          [[ "$VIDEO" =~ ^[a-z0-9-]+$ && "$FASE" =~ ^[a-z-]+$ ]] || { echo "::error::graba.txt: «$VIDEO $FASE» no vale."; exit 1; }
+          echo "### Vídeo «$VIDEO», fase «$FASE»" >> "$GITHUB_STEP_SUMMARY"
+          SQL=scripts/video/reconocer.sql; [ -f "scripts/video/$VIDEO.sql" ] && SQL="scripts/video/$VIDEO.sql"
+          psql "$DB_URL" -X -v cuenta="$CUENTA" -v empresa="$EMPRESA" -f "$SQL" > "$SALIDA/reconocer.txt" 2>&1 || true
+          if [ "$FASE" != grabar ]; then node "scripts/video/$VIDEO.mjs" "$FASE" "$SALIDA"; exit 0; fi
+          node "scripts/video/$VIDEO.mjs" reconocer "$SALIDA"
           # La locución, ANTES de grabar: el guion espera a que acabe cada frase.
           node scripts/video/locucion.mjs "$SALIDA"
           # La voz: la de ElevenLabs de voz-elevenlabs.txt. Sin su clave, o si falla, el vídeo para (rojo).
@@ -189,7 +197,7 @@ jobs:
             [ -n "${VOZ_MODELO:-}" ] || { echo "::error::voz-elevenlabs.txt pide Piper y no se ha podido instalar."; exit 1; }
             python3 scripts/video/voz.py "$VOZ_MODELO" "$SALIDA/voz/frases.json"
           elif [ "$r" != 0 ]; then echo "::error::Sin la voz de ElevenLabs no se graba el vídeo (arriba, el porqué)."; exit 1; fi
-          node scripts/video/factura-al-pago.mjs grabar "$SALIDA"
+          node "scripts/video/$VIDEO.mjs" grabar "$SALIDA"
 
       - name: Montar con ffmpeg
         if: always()
