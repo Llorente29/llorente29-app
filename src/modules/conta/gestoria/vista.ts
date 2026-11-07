@@ -18,6 +18,8 @@ import {
 export type TipoDiferencia =
   | 'bitrix_sin_cobro' | 'gocardless_sin_ficha' | 'emisor_distinto' | 'nif_repetido_en_bitrix' | 'correo_repetido_en_bitrix'
   | 'nif_distinto' | 'suscripcion_sin_convertir' | 'totales_distintos' | 'mandato_por_firmar' | 'falla_a_menudo' | 'abono_en_otra_cuenta'
+  // G01b · De la lectura de Bitrix24: un cliente con varias fichas, una ficha que entra sin NIF y una que no se ha podido guardar.
+  | 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada'
 
 export interface Diferencia {
   id: string
@@ -43,6 +45,8 @@ export interface ClienteGestoria {
     situacion: string | null; formaPago: string | null; servicios: string[]
     /** G01b · El texto de la situación en Bitrix24 (para «Sin clasificar»), la dirección y de qué campo sale, y las otras, de referencia. */
     situacionTexto?: string | null; direccion?: string | null; direccionDe?: string | null; otrasDirecciones?: { etiqueta: string; texto: string }[]
+    /** G01b · Las otras fichas de Bitrix24 del mismo cliente (el mismo NIF, con la unión aplicada). */
+    otrasFichas?: { bitrixId: string; nombre: string; situacion: string | null; situacionTexto: string | null }[]
   } | null
   formaCobro: 'gocardless' | 'transferencia' | 'tarjeta' | 'efectivo' | null
   /** El estado del mandato en GoCardless, tal cual (active, pending_customer_approval…). */
@@ -62,6 +66,10 @@ export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; eti
   { id: 'totales', tipos: ['totales_distintos'], etiqueta: 'Sumied y GoCardless no dan el mismo total', necesita: ['gocardless'] },
   { id: 'por-firmar', tipos: ['mandato_por_firmar'], etiqueta: 'Mandato pendiente de firma', necesita: ['gocardless'] },
   { id: 'fallan', tipos: ['falla_a_menudo'], etiqueta: 'Fallan a menudo (3 o más en 6 meses)', necesita: ['gocardless'] },
+  // G01b · De la lectura de Bitrix24 (Julio, 07/11).
+  { id: 'repetidas', tipos: ['fichas_repetidas'], etiqueta: 'Fichas repetidas en Bitrix24', necesita: ['bitrix'] },
+  { id: 'sin-nif', tipos: ['nif_no_valido'], etiqueta: 'NIF de Bitrix24 que no se usa', necesita: ['bitrix'] },
+  { id: 'no-guardada', tipos: ['ficha_no_guardada'], etiqueta: 'Fichas de Bitrix24 sin guardar', necesita: ['bitrix'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
@@ -183,6 +191,8 @@ export type Resolver = 'linea_o_baja' | 'enlazar' | 'revisada'
 export function comoResolver(d: Diferencia): Resolver[] {
   if (d.tipo === 'totales_distintos' || d.tipo === 'suscripcion_sin_convertir') return ['linea_o_baja', 'revisada']
   if (d.tipo === 'gocardless_sin_ficha') return ['enlazar', 'revisada']
+  // G01b · Lo de Bitrix24 se corrige en Bitrix24: la próxima lectura lo renueva (no hay empresa a la que apuntar la revisión).
+  if (d.tipo === 'fichas_repetidas' || d.tipo === 'nif_no_valido' || d.tipo === 'ficha_no_guardada') return []
   return ['revisada']
 }
 

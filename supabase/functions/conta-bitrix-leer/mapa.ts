@@ -17,6 +17,8 @@
 //   · Los campos propios se llaman UF_CRM_…; los de lista devuelven el id de
 //     la opción, no su texto: el mapa dice qué significa cada id.
 
+import { esCampoSensible } from './clientes.ts'
+
 export const POR_PAGINA = 50
 export const ESPERA_MS = 500
 
@@ -80,6 +82,11 @@ export interface MapaBitrix {
    * confirmar, no se guarda la situación de nadie (Julio, 07/11).
    */
   confirmado?: { quien: string | null; cuando: string } | null
+  /**
+   * G01b · Quién aplicó la unión de las fichas repetidas (clientes.ts) y
+   * cuándo, después de ver el ensayo en PDF. Sin aplicar, cada ficha va sola.
+   */
+  union?: { quien: string | null; cuando: string } | null
 }
 
 export interface DudaDelMapa {
@@ -143,6 +150,8 @@ export interface FichaBitrix {
   bitrixId: string
   nombre: string
   nif: string | null
+  /** G01b · El NIF tal cual está en Bitrix24 (para el ensayo de la unión, cuando no se usa). */
+  nifEnBitrix: string | null
   calle: string | null
   cp: string | null
   poblacion: string | null
@@ -212,7 +221,7 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
   const f: FichaBitrix = {
     bitrixId: String(fila.ID ?? ''),
     nombre: '',
-    nif: null, calle: null, cp: null, poblacion: null, provincia: null,
+    nif: null, nifEnBitrix: null, calle: null, cp: null, poblacion: null, provincia: null,
     correos: [], telefonos: [],
     situacion: null, situacionTexto: null, direccionDe: null, otrasDirecciones: [], servicios: [], formaPago: null, emisorSegunBitrix: null,
     cuotasReferencia: [], avisos: [],
@@ -227,7 +236,7 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
     const opcion = (t: string | null) => (t && c.opciones ? c.opciones[t] ?? t : t)
     switch (c.campo) {
       case 'nombre': f.nombre = textoDe(crudo) ?? ''; break
-      case 'nif': f.nif = normalizarNif(textoDe(crudo)); break
+      case 'nif': f.nifEnBitrix = textoDe(crudo); f.nif = normalizarNif(f.nifEnBitrix); break
       case 'calle': f.calle = textoDe(crudo); break
       case 'cp': f.cp = textoDe(crudo); break
       case 'poblacion': f.poblacion = textoDe(crudo); break
@@ -429,7 +438,8 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
   const usados = new Set<string>()
   const dudas: DudaDelMapa[] = []
   const formaPagoAEmisor: Record<string, string> = {}
-  const propios = Object.entries(medidos).filter(([k]) => k.startsWith('UF_CRM_'))
+  // G01b · Los campos con contraseñas o certificados no se proponen nunca.
+  const propios = Object.entries(medidos).filter(([k, c]) => k.startsWith('UF_CRM_') && !esCampoSensible(c))
   for (const q of QUIEN_ES) {
     const nombreCampo = q.etiqueta ?? q.campo
     const candidatos = propios.filter(([, c]) => q.patron.test(etiquetaDe(c)))

@@ -14,6 +14,7 @@
 // situación, ACTIVO, BAJA…, MOROSO y SOLO RENTA a lo suyo y lo demás «Sin
 // clasificar»; las cuotas, las que no acaban en «z».
 
+import { esCampoSensible } from '../../../../supabase/functions/conta-bitrix-leer/clientes'
 import {
   proponerMapa, situacionDeTexto,
   type CampoDelMapa, type CampoMedido, type FuenteDireccion, type MapaBitrix, type Situacion,
@@ -58,7 +59,7 @@ const unicoCon = (medidos: Record<string, CampoMedido>, patron: RegExp, tipo?: (
 }
 const codigoDe = (campos: readonly CampoDelMapa[], campo: string, etiqueta?: string) =>
   campos.find((c) => c.campo === campo && (etiqueta === undefined || c.etiqueta === etiqueta))?.codigo ?? null
-const existe = (medidos: Record<string, CampoMedido>, k: string | null | undefined) => (k && medidos[k] ? k : null)
+const existe = (medidos: Record<string, CampoMedido>, k: string | null | undefined) => (k && medidos[k] && !esCampoSensible(medidos[k]) ? k : null)
 
 /** Cada opción de la situación, con lo que es en Sumied: lo que diga el mapa guardado o, si no, la propuesta por su texto. */
 export function opcionesDeSituacion(codigo: string | null, medidos: Record<string, CampoMedido>, antes?: Record<string, string>): Record<string, Situacion> {
@@ -142,9 +143,13 @@ export function mapaParaConfirmar(mapa: MapaBitrix | null, e: Eleccion, medidos:
   return { nombre: base.nombre, campos, formaPagoAEmisor: base.formaPagoAEmisor ?? {}, direcciones, dudas: [] }
 }
 
-/** Los campos medidos para un selector: por su etiqueta, con su código. */
+/**
+ * Los campos medidos para un selector: por su etiqueta, con su código. G01b ·
+ * Nunca los que guardan contraseñas o certificados (clientes.ts ·
+ * esCampoSensible): no salen para elegir.
+ */
 export function opcionesDeCampos(medidos: Record<string, CampoMedido>, filtro?: (c: CampoMedido) => boolean): { valor: string; texto: string }[] {
-  return Object.keys(medidos).filter((k) => !filtro || filtro(medidos[k]))
+  return Object.keys(medidos).filter((k) => !esCampoSensible(medidos[k]) && (!filtro || filtro(medidos[k])))
     .map((k) => ({ valor: k, texto: `${etiquetaDe(medidos, k)} · ${k}` }))
     .sort((a, b) => a.texto.localeCompare(b.texto, 'es'))
 }

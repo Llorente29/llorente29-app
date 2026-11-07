@@ -1,0 +1,6 @@
+# G01b · La unión de las fichas repetidas: la 1110 cambia en caliente el CHECK
+# de las diferencias y confirmar el mapa, y añade la tabla de fichas, guardar
+# los clientes uno a uno y aplicar la unión. Su prueba (ROLLBACK, datos
+# inventados) prueba cada cosa y su vuelta atrás.
+supabase/migrations/20261107T1110_g01b_union_fichas.sql
+supabase/staging/sql/20261107_g01b_union_fichas_prueba.sql

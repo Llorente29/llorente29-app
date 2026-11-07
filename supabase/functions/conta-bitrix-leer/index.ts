@@ -12,13 +12,17 @@
 //   · { accion: 'leer', cuenta } — «Leer ahora» o la lectura de cada noche
 //     (x-cron-secret). Al acabar, lanza la lectura de cada cuenta de
 //     GoCardless de la cuenta, que casa con lo recién leído.
+//   · G01b · { accion: 'ensayo_union', cuenta } — «Ver qué se va a unir (PDF)»:
+//     lee Bitrix24 y devuelve al navegador de quien está dentro de la cuenta
+//     lo que haría la unión (clientes.ts). No escribe nada ni lo registra.
 //
 // La cuenta de demostración solo lee el Bitrix24 de pruebas (salida.ts).
 
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { MAPA_QBO, proponerMapa, type MapaBitrix } from './mapa.ts'
-import { fraseDeBitrix, fraseDelReparto, leerFichas, leerParaRecuento, medirCampos, portalDe, repartoDe } from './lectura.ts'
+import { fraseDeBitrix, fraseDelReparto, leerFichas, leerParaRecuento, medirCampos, miles, portalDe, repartoDe } from './lectura.ts'
+import { agrupar, diferenciasDeLectura, ensayoDeUnion, paraGuardar, resumenDeUnion, type ErrorAlGuardar } from './clientes.ts'
 import { gruposValidos } from './recuento.ts'
 import { revisarClave } from './clave.ts'
 import { puedeLeer, type Entorno } from './salida.ts'
@@ -43,21 +47,52 @@ async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_n
   const puerta = await puedeLeer(db, cuenta, s.entorno)
   if (!puerta.lee) { await acabar({ estado: 'no_lee', mensaje: puerta.porque }); return { frase: puerta.porque, lee: false } }
   try {
-    const { fichas } = await leerFichas(fetch, s.url, mapa, esperar)
+    const { fichas, bloqueados } = await leerFichas(fetch, s.url, mapa, esperar)
+    // G01b · Las fichas, en clientes: con la unión aplicada, un NIF = un cliente (clientes.ts); si no, cada ficha sola.
+    const unir = !!mapa.union
+    const clientes = agrupar(fichas, unir)
     let suma = { nuevos: 0, cambiados: 0, iguales: 0 }
-    for (let i = 0; i < fichas.length; i += 200) {
-      const { data, error } = await db.rpc('conta_bitrix_guardar_fichas', { p_account: cuenta, p_fichas: fichas.slice(i, i + 200) })
+    const errores: ErrorAlGuardar[] = []
+    // De 150 en 150 clientes; cada uno en su subtransacción: uno que falla no tumba la lectura.
+    for (let i = 0; i < clientes.length; i += 150) {
+      const { data, error } = await db.rpc('conta_bitrix_guardar_clientes', { p_account: cuenta, p_clientes: clientes.slice(i, i + 150).map(paraGuardar) })
       if (error) throw new Error(`No se han podido guardar las fichas: ${error.message}`)
-      const r = data as typeof suma
+      const r = data as typeof suma & { errores: ErrorAlGuardar[] }
       suma = { nuevos: suma.nuevos + r.nuevos, cambiados: suma.cambiados + r.cambiados, iguales: suma.iguales + r.iguales }
+      errores.push(...(r.errores ?? []))
+    }
+    // Lo que sale en «Pendiente de revisar»: las de la lectura de antes dejan de ser las vigentes.
+    const difs = diferenciasDeLectura(clientes, errores, unir)
+    const tipos = ['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada']
+    const { error: eViejas } = await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', tipos)
+    if (eViejas) throw new Error(`No se han podido renovar las diferencias: ${eViejas.message}`)
+    if (difs.length) {
+      const ids = [...new Set(difs.map((d) => d.bitrix_id).filter(Boolean))]
+      const partyDe = new Map<string, string>()
+      for (let i = 0; i < ids.length; i += 200) {
+        const { data } = await db.from('conta_gestoria_cliente').select('party_id, bitrix_id').eq('account_id', cuenta).in('bitrix_id', ids.slice(i, i + 200))
+        for (const x of (data ?? []) as { party_id: string; bitrix_id: string }[]) partyDe.set(x.bitrix_id, x.party_id)
+      }
+      for (let i = 0; i < difs.length; i += 200) {
+        const { error } = await db.from('conta_gestoria_diferencia').insert(difs.slice(i, i + 200).map((d) => ({
+          account_id: cuenta, lectura_id: lectura, tipo: d.tipo, porque_codigo: d.porque_codigo, porque: d.porque, bitrix_id: d.bitrix_id || null,
+          party_id: d.tipo === 'ficha_no_guardada' ? null : partyDe.get(d.bitrix_id) ?? null, datos: d.datos })))
+        if (error) throw new Error(`No se han podido guardar las diferencias: ${error.message}`)
+      }
     }
     await db.from('conta_crm_bitrix').update({ ultima_lectura_at: new Date().toISOString(), empresas_leidas: fichas.length, updated_at: new Date().toISOString() }).eq('account_id', cuenta)
     // G01b · Y cuántas quedan en cada situación, con NIF y con dirección (regla 8: la confirmación lleva contenido).
     const reparto = repartoDe(fichas)
-    const frase = `${fraseDeBitrix(fichas.length, suma, por === 'conexion')} ${fraseDelReparto(reparto, !!mapa.confirmado)}`
+    const union = resumenDeUnion(clientes)
+    const partes = [fraseDeBitrix(fichas.length, suma, por === 'conexion'), fraseDelReparto(reparto, !!mapa.confirmado)]
+    if (unir) partes.push(`En Sumied, ${miles(union.clientes)} clientes: ${miles(union.clientesUnidos)} con varias fichas (${miles(union.fichasUnidas)} fichas) y ${miles(union.sinNifPorFormato + union.sinNifPorMuchas)} sin NIF.`)
+    if (errores.length) partes.push(`${miles(errores.length)} ${errores.length === 1 ? 'cliente no se ha guardado' : 'clientes no se han guardado'}: en «Pendiente de revisar», con su porqué.`)
+    if (bloqueados.length) partes.push(`No se leen nunca (contraseñas o certificados): ${bloqueados.join(', ')}.`)
+    const frase = partes.join(' ')
     await acabar({ estado: 'bien', ...suma, mensaje: frase })
     const avisos = fichas.flatMap((f) => f.avisos.map((a) => `${f.bitrixId}: ${a}`)).slice(0, 50)
-    return { frase, lee: true, empresas: fichas.length, ...suma, activas: reparto.activo, reparto, confirmado: !!mapa.confirmado, avisos }
+    return { frase, lee: true, empresas: fichas.length, ...suma, activas: reparto.activo, reparto, union: unir ? union : null, noGuardados: errores.length,
+      confirmado: !!mapa.confirmado, avisos }
   } catch (e) {
     await acabar({ estado: 'mal', mensaje: e instanceof Error ? e.message : String(e) })
     throw e
@@ -157,12 +192,27 @@ Deno.serve(async (req) => {
       await leerGocardlessDeLaCuenta(admin, cuenta, supabaseUrl)
       return json(200, { ok: true, ...res, portal, queEsCadaUno: propuesta.queEsCadaUno, sinUsar: propuesta.sinUsar })
     }
+    if (cuerpo.accion === 'ensayo_union') {
+      // G01b · Lo que haría la unión, para el PDF que descarga quien está dentro de la cuenta. No escribe nada ni lo registra.
+      if (esCron) return json(403, { error: 'El ensayo lo pide una persona.' })
+      const { data: sec, error: secErr } = await admin.rpc('conta_bitrix_secreto', { p_account: cuenta })
+      if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
+      const s = (sec as { entorno: Entorno; url: string; mapa: MapaBitrix | null }[] | null)?.[0]
+      if (!s?.url || !s.mapa) return json(400, { error: 'Esta cuenta no tiene conectado Bitrix24.' })
+      if (!s.mapa.confirmado) return json(400, { error: 'Primero hay que confirmar el mapa en «Qué es cada campo»: sin él no se sabe la situación de cada ficha.' })
+      const puerta = await puedeLeer(admin, cuenta, s.entorno)
+      if (!puerta.lee) return json(400, { error: puerta.porque })
+      const { fichas } = await leerFichas(fetch, s.url, s.mapa, esperar)
+      const { data: acc } = await admin.from('accounts').select('name').eq('id', cuenta).single()
+      return json(200, { ok: true, empresa: (acc as { name?: string } | null)?.name ?? 'La cuenta', portal: portalDe(s.url), leido: new Date().toISOString(),
+        aplicada: !!s.mapa.union, ...ensayoDeUnion(fichas) })
+    }
     if (cuerpo.accion === 'leer') {
       const res = await leer(admin, cuenta, esCron ? 'cada_noche' : 'persona', quien)
       await leerGocardlessDeLaCuenta(admin, cuenta, supabaseUrl)
       return json(200, { ok: true, ...res })
     }
-    return json(400, { error: 'Acción: conectar o leer.' })
+    return json(400, { error: 'Acción: conectar, leer o ensayo_union.' })
   } catch (e) {
     // En el registro, el qué y nunca la dirección con su clave (T11).
     console.error('[conta-bitrix-leer]', e instanceof Error ? e.message : String(e))

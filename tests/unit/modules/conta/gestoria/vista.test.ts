@@ -26,7 +26,9 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
     expect(n['sin-cobro']).toBe(0)
     expect(CHIPS.map((c) => c.etiqueta)).toEqual([
       'En Bitrix24 sin cobro en GoCardless', 'En GoCardless sin ficha en Bitrix24', 'Bitrix24 y GoCardless no coinciden en el emisor',
-      'Suscripción sin convertir en tarifa', 'Sumied y GoCardless no dan el mismo total', 'Mandato pendiente de firma', 'Fallan a menudo (3 o más en 6 meses)'])
+      'Suscripción sin convertir en tarifa', 'Sumied y GoCardless no dan el mismo total', 'Mandato pendiente de firma', 'Fallan a menudo (3 o más en 6 meses)',
+      // G01b · De la lectura de Bitrix24.
+      'Fichas repetidas en Bitrix24', 'NIF de Bitrix24 que no se usa', 'Fichas de Bitrix24 sin guardar'])
     expect(filtrarPorChip(filas, 'fallan').map((f) => f.clienteId)).toEqual(['2'])
     expect(filtrarPorChip(filas, null)).toHaveLength(3)
     expect(filtrarPorEmisor(filas, B).map((f) => f.clienteId)).toEqual(['3'])
@@ -71,11 +73,12 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
 
   it('se adapta a lo conectado: sin GoCardless no sale lo suyo; sin Bitrix24, tampoco lo que los cruza', () => {
     const todo = queSeVe({ gocardless: new Set([A, B]), bitrix: true }, null, [A, B])
-    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 7, []])
+    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 10, []])
     const soloGc = queSeVe({ gocardless: new Set([A]), bitrix: false }, null, [A, B])
     expect([soloGc.gocardless, soloGc.bitrix, soloGc.chips, soloGc.sinGocardless]).toEqual([true, false, ['sin-convertir', 'totales', 'por-firmar', 'fallan'], [B]])
     const deB = queSeVe({ gocardless: new Set([A]), bitrix: true }, B, [A, B])
-    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, []])
+    // G01b · Lo de Bitrix24 solo pide Bitrix24.
+    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, ['repetidas', 'sin-nif', 'no-guardada']])
     expect(queSeVe({ gocardless: new Set(), bitrix: false }, null, [A, B]).chips).toEqual([])
   })
 

@@ -15,7 +15,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { rpc } from '@/modules/conta/services/bd'
 import {
-  altaEmpleado, bajaLinea, cambiarReintentos, conectarBitrix, confirmarMapaBitrix, conectarGocardless, enlazar, guardarTarifa, leerBitrix, leerConexiones, leerGestoria, leerGocardless,
+  altaEmpleado, aplicarUnion, bajaLinea, cambiarReintentos, conectarBitrix, confirmarMapaBitrix, ensayoUnion, conectarGocardless, enlazar, guardarTarifa, leerBitrix, leerConexiones, leerGestoria, leerGocardless,
   lineaDesdeGc, noContar, revisada,
 } from '@/modules/conta/services/gestoriaService'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -87,6 +87,7 @@ export function CobrosGestoriaAjustes() {
       reintentos: (e, on) => cambiarReintentos(e, on),
       conectarBitrix: (en, u) => tras(conectarBitrix(accountId, en, u)), leerBitrix: () => tras(leerBitrix(accountId)),
       confirmarMapa: (m) => tras(confirmarMapaBitrix(accountId, m)),
+      ensayoUnion: () => ensayoUnion(accountId), aplicarUnion: () => tras(aplicarUnion(accountId)),
     }} />
 }
 
