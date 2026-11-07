@@ -21,8 +21,14 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { MAPA_QBO, proponerMapa, type MapaBitrix } from './mapa.ts'
-import { fraseDeBitrix, fraseDelReparto, leerFichas, leerParaRecuento, medirCampos, miles, portalDe, repartoDe } from './lectura.ts'
-import { agrupar, diferenciasDeLectura, ensayoDeUnion, nifComoLaBase, paraGuardar, resumenDeUnion, type ErrorAlGuardar } from './clientes.ts'
+import { fraseDeBitrix, fraseDelReparto, leerContactos, leerFichas, leerParaRecuento, medirCampos, portalDe, repartoDe } from './lectura.ts'
+import { ensayoDeUnion, nifComoLaBase } from '../_shared/crm/clientes.ts'
+import { claveDeFicha } from '../_shared/crm/ficha.ts'
+import { fichasDeClientes, guardarLectura, type LecturaDelCrm } from '../_shared/crm/leer.ts'
+import type { MapaContactos } from './contactosClientes.ts'
+
+/** G01c · Este adaptador es el de Bitrix24: su CRM en conta_crm. */
+const CRM = 'bitrix24'
 import { gruposValidos } from './recuento.ts'
 import { revisarClave } from './clave.ts'
 import { puedeLeer, type Entorno } from './salida.ts'
@@ -30,6 +36,39 @@ import { puedeLeer, type Entorno } from './salida.ts'
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+/** G01c · Los clientes de GoCardless ya leídos en Sumied (NIF y correo): una señal de cliente de los contactos. Se usan dentro: no salen. */
+async function gocardlessDe(db: SupabaseClient, cuenta: string) {
+  const gocardless = { nifs: new Set<string>(), correos: new Set<string>() }
+  for (let desde = 0; ; desde += 1000) {
+    const { data, error } = await db.from('conta_gc_cliente').select('nif, correo').eq('account_id', cuenta).order('gc_id').range(desde, desde + 999)
+    if (error) throw new Error(`No se han podido leer los clientes de GoCardless: ${error.message}`)
+    for (const g of (data ?? []) as { nif: string | null; correo: string | null }[]) {
+      const n = nifComoLaBase(g.nif)
+      if (n) gocardless.nifs.add(n)
+      if (g.correo?.trim()) gocardless.correos.add(g.correo.trim().toLowerCase())
+    }
+    if ((data ?? []).length < 1000) break
+  }
+  return gocardless
+}
+
+/** G01c · El mapa de contactos guardado (confirmado o no) de la conexión con Bitrix24. */
+async function mapaContactosDe(db: SupabaseClient, cuenta: string): Promise<MapaContactos | null> {
+  const { data, error } = await db.from('conta_crm').select('mapa_contactos').eq('account_id', cuenta).eq('crm', CRM).maybeSingle()
+  if (error) throw new Error(`No se ha podido leer el mapa de contactos: ${error.message}`)
+  return ((data as { mapa_contactos?: MapaContactos | null } | null)?.mapa_contactos) ?? null
+}
+
+/** G01c · Lo que lee el adaptador de Bitrix24: las empresas y los contactos, a fichas neutras. */
+async function leerDeBitrix(db: SupabaseClient, cuenta: string, url: string, mapa: MapaBitrix) {
+  const { fichas, bloqueados } = await leerFichas(fetch, url, mapa, esperar)
+  const guardado = await mapaContactosDe(db, cuenta)
+  const c = await leerContactos(fetch, url, guardado, esperar, await gocardlessDe(db, cuenta))
+  const lectura: LecturaDelCrm = { crm: CRM, empresas: fichas, unir: !!mapa.union,
+    contactos: c.mapa ? { contactos: c.contactos, confirmado: !!guardado?.confirmado } : null }
+  return { lectura, bloqueados, medidosContactos: c.medidos }
+}
 
 async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_noche' | 'conexion', quien: string | null) {
   const { data: sec, error: secErr } = await db.rpc('conta_bitrix_secreto', { p_account: cuenta })
@@ -47,55 +86,23 @@ async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_n
   const puerta = await puedeLeer(db, cuenta, s.entorno)
   if (!puerta.lee) { await acabar({ estado: 'no_lee', mensaje: puerta.porque }); return { frase: puerta.porque, lee: false } }
   try {
-    const { fichas, bloqueados } = await leerFichas(fetch, s.url, mapa, esperar)
-    // G01b · Las fichas, en clientes: con la unión aplicada, un NIF = un cliente (clientes.ts); si no, cada ficha sola.
-    const unir = !!mapa.union
-    const clientes = agrupar(fichas, unir)
-    let suma = { nuevos: 0, cambiados: 0, iguales: 0 }
-    let juntados = 0
-    const errores: ErrorAlGuardar[] = []
-    // De 150 en 150 clientes; cada uno en su subtransacción: uno que falla no tumba la lectura.
-    for (let i = 0; i < clientes.length; i += 150) {
-      const { data, error } = await db.rpc('conta_bitrix_guardar_clientes', { p_account: cuenta, p_clientes: clientes.slice(i, i + 150).map(paraGuardar) })
-      if (error) throw new Error(`No se han podido guardar las fichas: ${error.message}`)
-      const r = data as typeof suma & { errores: ErrorAlGuardar[]; juntados?: number }
-      suma = { nuevos: suma.nuevos + r.nuevos, cambiados: suma.cambiados + r.cambiados, iguales: suma.iguales + r.iguales }
-      juntados += r.juntados ?? 0
-      errores.push(...(r.errores ?? []))
-    }
-    // Lo que sale en «Pendiente de revisar»: las de la lectura de antes dejan de ser las vigentes.
-    const difs = diferenciasDeLectura(clientes, errores, unir)
-    const tipos = ['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada']
-    const { error: eViejas } = await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', tipos)
-    if (eViejas) throw new Error(`No se han podido renovar las diferencias: ${eViejas.message}`)
-    if (difs.length) {
-      const ids = [...new Set(difs.map((d) => d.bitrix_id).filter(Boolean))]
-      const partyDe = new Map<string, string>()
-      for (let i = 0; i < ids.length; i += 200) {
-        const { data } = await db.from('conta_gestoria_cliente').select('party_id, bitrix_id').eq('account_id', cuenta).in('bitrix_id', ids.slice(i, i + 200))
-        for (const x of (data ?? []) as { party_id: string; bitrix_id: string }[]) partyDe.set(x.bitrix_id, x.party_id)
-      }
-      for (let i = 0; i < difs.length; i += 200) {
-        const { error } = await db.from('conta_gestoria_diferencia').insert(difs.slice(i, i + 200).map((d) => ({
-          account_id: cuenta, lectura_id: lectura, tipo: d.tipo, porque_codigo: d.porque_codigo, porque: d.porque, bitrix_id: d.bitrix_id || null,
-          party_id: d.tipo === 'ficha_no_guardada' ? null : partyDe.get(d.bitrix_id) ?? null, datos: d.datos })))
-        if (error) throw new Error(`No se han podido guardar las diferencias: ${error.message}`)
-      }
-    }
-    await db.from('conta_crm_bitrix').update({ ultima_lectura_at: new Date().toISOString(), empresas_leidas: fichas.length, updated_at: new Date().toISOString() }).eq('account_id', cuenta)
+    // Lo propio de Bitrix24 (adaptador), y lo demás en el núcleo neutro (_shared/crm/leer.ts).
+    const { lectura: leido, bloqueados, medidosContactos } = await leerDeBitrix(db, cuenta, s.url, mapa)
+    const fichas = leido.empresas
+    const g = await guardarLectura(db, cuenta, lectura, leido)
+    const ahora = new Date().toISOString()
+    const { error: eCrm } = await db.from('conta_crm').update({ ultima_lectura_at: ahora, empresas_leidas: fichas.length, campos_medidos_contactos: medidosContactos,
+      ...(g.contactosLeidos ? { contactos_leidos: g.contactosLeidos } : {}), updated_at: ahora }).eq('account_id', cuenta).eq('crm', CRM)
+    if (eCrm) throw new Error(`No se ha podido guardar lo leído de los contactos: ${eCrm.message}`)
     // G01b · Y cuántas quedan en cada situación, con NIF y con dirección (regla 8: la confirmación lleva contenido).
     const reparto = repartoDe(fichas)
-    const union = resumenDeUnion(clientes)
-    const partes = [fraseDeBitrix(fichas.length, suma, por === 'conexion'), fraseDelReparto(reparto, !!mapa.confirmado)]
-    if (unir) partes.push(`En Sumied, ${miles(union.clientes)} clientes: ${miles(union.clientesUnidos)} con varias fichas (${miles(union.fichasUnidas)} fichas) y ${miles(union.sinNifPorFormato + union.sinNifPorMuchas)} sin NIF.`)
-    if (juntados) partes.push(`${miles(juntados)} ${juntados === 1 ? 'cliente que ya estaba por separado se ha juntado' : 'clientes que ya estaban por separado se han juntado'} con el de su NIF (el otro, archivado; queda el rastro).`)
-    if (errores.length) partes.push(`${miles(errores.length)} ${errores.length === 1 ? 'cliente no se ha guardado' : 'clientes no se han guardado'}: en «Pendiente de revisar», con su porqué.`)
-    if (bloqueados.length) partes.push(`No se leen nunca (contraseñas o certificados): ${bloqueados.join(', ')}.`)
+    const partes = [fraseDeBitrix(fichas.length, g.suma, por === 'conexion'), fraseDelReparto(reparto, !!mapa.confirmado), ...g.frases]
+    if (bloqueados.length) partes.push(`No se leen nunca (contraseñas, certificados o datos bancarios): ${bloqueados.join(', ')}.`)
     const frase = partes.join(' ')
-    await acabar({ estado: 'bien', ...suma, mensaje: frase })
-    const avisos = fichas.flatMap((f) => f.avisos.map((a) => `${f.bitrixId}: ${a}`)).slice(0, 50)
-    return { frase, lee: true, empresas: fichas.length, ...suma, juntados, activas: reparto.activo, reparto, union: unir ? union : null, noGuardados: errores.length,
-      confirmado: !!mapa.confirmado, avisos }
+    await acabar({ estado: 'bien', ...g.suma, mensaje: frase })
+    const avisos = fichas.flatMap((f) => f.avisos.map((a) => `${f.idExterno}: ${a}`)).slice(0, 50)
+    return { frase, lee: true, empresas: fichas.length, ...g.suma, juntados: g.juntados, activas: reparto.activo, reparto, union: leido.unir ? g.union : null,
+      noGuardados: g.errores.length, confirmado: !!mapa.confirmado, contactos: g.contactosLeidos?.resumen ?? null, avisos }
   } catch (e) {
     await acabar({ estado: 'mal', mensaje: e instanceof Error ? e.message : String(e) })
     throw e
@@ -150,21 +157,8 @@ Deno.serve(async (req) => {
       if (!puerta.lee) return json(400, { error: puerta.porque })
       // G01b · Para los repetidos, la situación como la dice el mapa confirmado (si lo está y es el mismo campo).
       const sit = s.mapa?.confirmado ? s.mapa.campos.find((c) => c.campo === 'situacion' && c.codigo === grupos.situacion)?.opciones ?? null : null
-      // G01c · Los clientes de GoCardless ya leídos en Sumied (NIF y correo), para contar los contactos casados con uno.
-      // Se usan aquí dentro para contar: no salen del recuento.
-      const gocardless = { nifs: new Set<string>(), correos: new Set<string>() }
-      if (grupos.contactos) {
-        for (let desde = 0; ; desde += 1000) {
-          const { data, error } = await admin.from('conta_gc_cliente').select('nif, correo').eq('account_id', cuenta).order('gc_id').range(desde, desde + 999)
-          if (error) throw new Error(`No se han podido leer los clientes de GoCardless: ${error.message}`)
-          for (const g of (data ?? []) as { nif: string | null; correo: string | null }[]) {
-            const n = nifComoLaBase(g.nif)
-            if (n) gocardless.nifs.add(n)
-            if (g.correo?.trim()) gocardless.correos.add(g.correo.trim().toLowerCase())
-          }
-          if ((data ?? []).length < 1000) break
-        }
-      }
+      // G01c · Los clientes de GoCardless ya leídos en Sumied (NIF y correo), para contar los contactos casados con uno. No salen del recuento.
+      const gocardless = grupos.contactos ? await gocardlessDe(admin, cuenta) : { nifs: new Set<string>(), correos: new Set<string>() }
       return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar, sit, gocardless)) })
     } catch (e) {
       console.error('[conta-bitrix-leer] recuento', e instanceof Error ? e.message : String(e))
@@ -204,7 +198,7 @@ Deno.serve(async (req) => {
       const { error } = await admin.rpc('conta_bitrix_guardar_conexion', { p_account: cuenta, p_entorno: entorno, p_url: url, p_portal: portal, p_quien: quien })
       if (error) return json(400, { error: error.message })
       // G01b · Lo medido y el mapa (con sus dudas) se guardan de verdad: si no se puede, se dice.
-      const { error: eMapa } = await admin.from('conta_crm_bitrix').update({ mapa: propuesta.mapa, campos_medidos: medidos, updated_at: new Date().toISOString() }).eq('account_id', cuenta)
+      const { error: eMapa } = await admin.from('conta_crm').update({ mapa: propuesta.mapa, campos_medidos: medidos, updated_at: new Date().toISOString() }).eq('account_id', cuenta).eq('crm', CRM)
       if (eMapa) return json(500, { error: `Conectado, pero no se ha podido guardar el mapa de los campos: ${eMapa.message}` })
       const res = await leer(admin, cuenta, 'conexion', quien)
       await leerGocardlessDeLaCuenta(admin, cuenta, supabaseUrl)
@@ -220,13 +214,16 @@ Deno.serve(async (req) => {
       if (!s.mapa.confirmado) return json(400, { error: 'Primero hay que confirmar el mapa en «Qué es cada campo»: sin él no se sabe la situación de cada ficha.' })
       const puerta = await puedeLeer(admin, cuenta, s.entorno)
       if (!puerta.lee) return json(400, { error: puerta.porque })
-      const { fichas } = await leerFichas(fetch, s.url, s.mapa, esperar)
+      // G01c · Con los contactos que entran como clientes (con su mapa confirmado): un contacto con el NIF de una empresa se une a ella.
+      const { lectura: leido } = await leerDeBitrix(admin, cuenta, s.url, s.mapa)
+      const { fichas } = fichasDeClientes(leido)
       // Qué cliente de Sumied es hoy cada ficha: para decir cuántos clientes ya creados se juntan.
       const clienteDeFicha = new Map<string, string>()
       for (let desde = 0; ; desde += 1000) {
-        const { data, error } = await admin.from('conta_gestoria_ficha').select('bitrix_id, party_id').eq('account_id', cuenta).order('bitrix_id').range(desde, desde + 999)
+        const { data, error } = await admin.from('conta_gestoria_ficha').select('tipo_ficha, id_externo, party_id').eq('account_id', cuenta).eq('crm', CRM).eq('de_empresa', '')
+          .order('id_externo').range(desde, desde + 999)
         if (error) throw new Error(`No se han podido leer las fichas de Sumied: ${error.message}`)
-        for (const x of (data ?? []) as { bitrix_id: string; party_id: string }[]) clienteDeFicha.set(x.bitrix_id, x.party_id)
+        for (const x of (data ?? []) as { tipo_ficha: 'empresa' | 'contacto'; id_externo: string; party_id: string }[]) clienteDeFicha.set(claveDeFicha({ tipoFicha: x.tipo_ficha, idExterno: x.id_externo }), x.party_id)
         if ((data ?? []).length < 1000) break
       }
       const { data: acc } = await admin.from('accounts').select('name').eq('id', cuenta).single()

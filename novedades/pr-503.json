@@ -1,0 +1,20 @@
+[
+ {
+  "id": "503-1",
+  "pr": 503,
+  "fecha": "2026-11-07T19:42:16Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "los contactos de Bitrix24 entran en Sumied como clientes o como personas de contacto, con su mapa en «Qué es cada campo › Contactos», sus cifras en tarjetas y la lista de los que se quedan fuera o van a revisar.",
+  "ruta": null
+ },
+ {
+  "id": "503-2",
+  "pr": 503,
+  "fecha": "2026-11-07T19:42:16Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "la ficha dice si el cliente viene de una empresa o de un contacto y enseña sus personas de contacto; los RIF de Venezuela quedan como identificador fiscal extranjero.",
+  "ruta": null
+ }
+]

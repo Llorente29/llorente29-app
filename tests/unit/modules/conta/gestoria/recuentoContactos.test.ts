@@ -7,7 +7,7 @@ import {
   camposDeContactos, candidatosDeContacto, contactosDeNegociaciones, contarContactos, empresasDeItems, esRif, estadosAPedir, paginaDeItems, type ExtrasContactos,
 } from '../../../../../supabase/functions/conta-bitrix-leer/contactos'
 import { leerParaRecuento } from '../../../../../supabase/functions/conta-bitrix-leer/lectura'
-import { esCampoSensible } from '../../../../../supabase/functions/conta-bitrix-leer/clientes'
+import { esCampoSensible } from '../../../../../supabase/functions/conta-bitrix-leer/sensibles'
 import { gruposValidos } from '../../../../../supabase/functions/conta-bitrix-leer/recuento'
 
 const MEDIDOS = {

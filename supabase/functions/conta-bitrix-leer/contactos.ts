@@ -22,7 +22,8 @@
 //     señales de cliente (NIF, Tarifa Recurrente, negociación, GoCardless).
 //     Hasta que Julio decida, ningún contacto se guarda como cliente.
 
-import { esCampoSensible, nifComoLaBase, tipoDeNif } from './clientes.ts'
+import { nifComoLaBase, tipoDeNif } from '../_shared/crm/clientes.ts'
+import { esCampoSensible } from './sensibles.ts'
 import { type CampoMedido } from './mapa.ts'
 
 const sinTildes = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
@@ -179,9 +180,7 @@ export function contarContactos(filas: readonly Record<string, unknown>[], m: Re
       if (!n) continue
       sinEmpresaConNif++
       porNif.set(n, (porNif.get(n) ?? 0) + 1)
-      const t = tipoDeNif(n)
-      if (t === 'otro' && esRif(n)) porTipo.RIF++
-      else porTipo[t]++
+      porTipo[tipoDeNif(n)]++
     }
     const rep = [...porNif.values()].filter((v) => v > 1)
     r.nif = { codigo: nifC.codigo, etiqueta: nifC.etiqueta, sinEmpresaConNif, porTipo,

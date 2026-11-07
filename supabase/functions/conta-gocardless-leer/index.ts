@@ -23,6 +23,7 @@ import { aEuros, fraseDeLectura, planDiferencias, planLectura, TIPOS_DEL_CASADO,
 import type { Linea, Tarifa } from './comparacion.ts'
 import type { FichaParaCasar } from './casado.ts'
 import { puedeLeer } from './salida.ts'
+import { refDeFicha } from '../_shared/crm/ficha.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -68,13 +69,14 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // Lo que ya hay en Sumied.
     const huellas = await leerFilas<{ gc_id: string; huella: string | null }>(db.from('conta_gc_cliente').select('gc_id, huella').eq('company_id', empresa), 'lo leído antes')
     const fichasDb = await leerFilas<Record<string, unknown>>(db.from('conta_gestoria_cliente')
-      .select('party_id, bitrix_id, situacion, forma_pago_bitrix, emisor_segun_bitrix, ficha, party:party_id(name, tax_id)').eq('account_id', cuenta), 'las fichas de Bitrix24')
-    const fichas: Antes['fichas'] = fichasDb.filter((f) => f.bitrix_id).map((f) => {
+      .select('party_id, crm, tipo_ficha, id_externo, situacion, forma_pago_crm, emisor_segun_crm, ficha, party:party_id(name, tax_id)').eq('account_id', cuenta), 'las fichas del CRM')
+    // G01c · Cada ficha por su referencia neutra (CRM, tipo e id): una empresa y un contacto pueden tener el mismo id.
+    const fichas: Antes['fichas'] = fichasDb.filter((f) => f.id_externo).map((f) => {
       const party = (f.party ?? {}) as { name?: string; tax_id?: string | null }
       const ficha = (f.ficha ?? {}) as { correos?: string[] }
-      return { partyId: String(f.party_id), bitrixId: String(f.bitrix_id), nombre: party.name ?? String(f.bitrix_id), nif: party.tax_id ?? null,
+      return { partyId: String(f.party_id), claveFicha: refDeFicha(String(f.crm), f.tipo_ficha as 'empresa' | 'contacto', String(f.id_externo)), nombre: party.name ?? String(f.id_externo), nif: party.tax_id ?? null,
         correos: ficha.correos ?? [], situacion: (f.situacion as FichaParaCasar['situacion']) ?? null,
-        formaPago: (f.forma_pago_bitrix as string | null) ?? null, emisorSegunBitrix: (f.emisor_segun_bitrix as string | null) ?? null }
+        formaPago: (f.forma_pago_crm as string | null) ?? null, emisorSegunCrm: (f.emisor_segun_crm as string | null) ?? null }
     })
     const otros = await leerFilas<Record<string, unknown>>(db.from('conta_gc_cliente')
       .select('company_id, gc_id, nombre, nif, correo, mandatos_vivos, suscripciones_activas').eq('account_id', cuenta).neq('company_id', empresa), 'las otras cuentas de GoCardless')
@@ -171,9 +173,9 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', TIPOS_DEL_CASADO)
     // Lo revisado no vuelve a salir mientras diga lo mismo.
     dif.diferencias = dif.diferencias.filter((d) => !revisadas.has(`${d.tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
-    // Sin Bitrix24 conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.
-    const { data: bx } = await db.from('conta_crm_bitrix').select('url_ref').eq('account_id', cuenta).maybeSingle()
-    if (!(bx as { url_ref?: string | null } | null)?.url_ref) dif.diferencias = dif.diferencias.filter((d) => !TIPOS_DEL_CASADO.includes(d.tipo))
+    // Sin un CRM conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.
+    const { data: bx } = await db.from('conta_crm').select('url_ref').eq('account_id', cuenta).not('url_ref', 'is', null).limit(1)
+    if (!((bx ?? []) as { url_ref?: string | null }[]).length) dif.diferencias = dif.diferencias.filter((d) => !TIPOS_DEL_CASADO.includes(d.tipo))
     for (const trozo of enTrozos(dif.diferencias)) {
       const { error } = await db.from('conta_gestoria_diferencia').insert(trozo.map((d) => ({ account_id: cuenta, lectura_id: lectura, ...d })))
       if (error) throw new Error(`No se han podido guardar las diferencias: ${error.message}`)
@@ -184,7 +186,7 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await db.from('conta_cobro_gocardless').update({ ultima_lectura_at: ahora, mandatos_vivos: plan.resumen.mandatosVivos, lineas_activas: plan.resumen.lineasActivas,
       al_mes: aEuros(plan.resumen.alMesCent), abono: plan.resumen.abono, abono_treasury_id: dif.abono.coincide ? dif.abono.tesoreriaId : null,
       abono_coincide: dif.abono.coincide, abono_porque: dif.abono.coincide ? null : dif.abono.porque, updated_at: ahora }).eq('company_id', empresa)
-    const conDiferencias = new Set(dif.diferencias.map((d) => d.party_id ?? d.gc_cliente_id ?? d.bitrix_id ?? d.tipo)).size
+    const conDiferencias = new Set(dif.diferencias.map((d) => d.party_id ?? d.gc_cliente_id ?? d.id_externo ?? d.tipo)).size
     const frase = fraseDeLectura(nombreEmisor(empresa), plan, convertidas, conDiferencias, por === 'conexion')
     await acabar({ estado: 'bien', nuevos: plan.nuevos, cambiados: plan.cambiados, iguales: plan.iguales, con_diferencias: conDiferencias, mensaje: frase })
     return { frase, lee: true, mandatosVivos: plan.resumen.mandatosVivos, lineas: plan.resumen.lineasActivas, alMes: aEuros(plan.resumen.alMesCent),
