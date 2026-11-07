@@ -11,10 +11,10 @@ const DATOS: DatosEnsayo = {
     clientesPorSituacion: { activo: 3, moroso: 0, solo_renta: 0, sin_clasificar: 1, baja: 1, sin_situacion: 0 },
     fichasPorSituacion: { activo: 3, moroso: 0, solo_renta: 0, sin_clasificar: 1, baja: 2, sin_situacion: 0 } },
   unidos: [{ nif: '00000000T', situacion: 'activo', fichas: [
-    { bitrixId: '11', nombre: 'CLIENTE PRUEBA UNO', situacion: 'baja', situacionTexto: 'BAJA DE GESTORIA ❌' },
-    { bitrixId: '12', nombre: 'CLIENTE PRUEBA UNO, S.L.', situacion: 'activo', situacionTexto: 'ACTIVO' }], clientesHoy: 2 }],
+    { idExterno: '11', nombre: 'CLIENTE PRUEBA UNO', situacion: 'baja', situacionTexto: 'BAJA DE GESTORIA ❌' },
+    { idExterno: '12', nombre: 'CLIENTE PRUEBA UNO, S.L.', situacion: 'activo', situacionTexto: 'ACTIVO' }], clientesHoy: 2 }],
   seJuntan: 1,
-  sinNif: [{ bitrixId: '13', nombre: 'CLIENTE PRUEBA DOS', nifEnBitrix: '123', motivo: 'nif_no_valido', fichasConSuNif: 1 }],
+  sinNif: [{ idExterno: '13', nombre: 'CLIENTE PRUEBA DOS', nifEnCrm: '123', motivo: 'nif_no_valido', fichasConSuNif: 1 }],
 }
 
 // El texto de un PDF de jsPDF sin comprimir: lo que va entre paréntesis en cada «Tj».

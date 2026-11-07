@@ -144,7 +144,7 @@ export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes,
         </label>
       </PeriodoEnBarra>
       <AccionesPantalla>
-        <BotonAccion principal onClick={alLeer} disabled={leyendo || nada}>{leyendo ? `Leyendo ${[conectados.bitrix ? 'Bitrix24' : null, conectados.gocardless.size ? 'GoCardless' : null].filter(Boolean).join(' y ')}…` : 'Leer ahora'}</BotonAccion>
+        <BotonAccion principal onClick={alLeer} disabled={leyendo || nada}>{leyendo ? `Leyendo ${[conectados.bitrix ? 'tu CRM' : null, conectados.gocardless.size ? 'GoCardless' : null].filter(Boolean).join(' y ')}…` : 'Leer ahora'}</BotonAccion>
         <Link to={rutaTarifas} className="cxm-boton">Tarifas</Link>
       </AccionesPantalla>
       <h2 className="cx-oculto">Clientes y cuotas</h2>
@@ -153,7 +153,7 @@ export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes,
       {(ve.sinGocardless.length > 0 || !conectados.bitrix) && (
         <p className="cxg-conectores">
           {[ve.sinGocardless.length > 0 ? `GoCardless no está conectado en ${ve.sinGocardless.map(nombreDe).join(' ni en ')}: ${ve.gocardless ? 'en sus clientes no sale' : 'no sale'} lo que cobra, el mandato ni los cobros.` : null,
-            !conectados.bitrix ? 'Bitrix24 no está conectado: no sale lo que dice su ficha ni lo que lo compara con GoCardless.' : null].filter(Boolean).join(' ')}
+            !conectados.bitrix ? 'Tu CRM no está conectado: no sale lo que dice su ficha ni lo que lo compara con GoCardless.' : null].filter(Boolean).join(' ')}
           {' '}<Link to={rutaConectar} className="pg-enlace">Conectar en Ajustes › Cobros</Link>
         </p>
       )}
@@ -174,7 +174,7 @@ export function ClientesCuotas({ datos, emisores, conectados, rutaConectar, mes,
             exportar={{ nombre: 'Clientes y cuotas', titulo: 'Clientes y cuotas', subtitulo: emisores.find((e) => e.id === emisor)?.nombre ?? 'Todos los emisores' }}
             abierta={abierto} alAbrir={(f) => setAbierto(abierto === f.id ? null : f.id)}
             vacio={datos.filas.length === 0
-              ? <Vacio titulo="Aún no hay clientes." explicacion="Salen cuando se conecta Bitrix24 y la cuenta de GoCardless de cada empresa, en Ajustes › Cobros. Después se leen solos cada noche." />
+              ? <Vacio titulo="Aún no hay clientes." explicacion="Salen cuando se conecta tu CRM y la cuenta de GoCardless de cada empresa, en Ajustes › Cobros. Después se leen solos cada noche." />
               : <Vacio titulo="Ningún cliente con lo que hay puesto." explicacion="Prueba con «Todos» o quita los filtros." />}
           />
           {!movil && <p className="cxg-leyenda"><span>Servicios:</span><span><abbr className="cxg-letra" data-letra="C">C</abbr> Contabilidad</span><span><abbr className="cxg-letra" data-letra="L">L</abbr> Laboral</span><span><abbr className="cxg-letra" data-letra="S">S</abbr> Otros servicios</span></p>}

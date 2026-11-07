@@ -1,0 +1,5 @@
+# G01c · La unión aplicada no se pierde al confirmar el mapa: la 2115 y su
+# prueba (ROLLBACK, datos inventados), que reproduce lo de producción del 07/11
+# y prueba la vuelta atrás.
+supabase/migrations/20261107T2115_g01c_union_aplicada.sql
+supabase/staging/sql/20261107_g01c_union_aplicada_prueba.sql

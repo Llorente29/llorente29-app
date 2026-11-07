@@ -1,0 +1,51 @@
+{
+ "_que": "G01c · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 07/11 a las 19:35Z (analizar.mjs sql-contexto). La 1925 crea conta_crm (nueva, con la fila de conta_crm_bitrix copiada y las dos tablas en espejo); cambia las claves de conta_gestoria_ficha (1.437), conta_gestoria_cliente (1.419) y añade columnas a conta_gestoria_diferencia (1.040); cambia en caliente las dos vistas de consulta y seis funciones (con su respaldo). conta_gestoria_despertar la llama el cron de cada noche (por eso sale en el camino). Las funciones que usan conta_crm_bitrix son las cinco que la tanda reemplaza. Ningún fichero en el historial.",
+ "medido": "2026-11-07T19:35Z",
+ "tanda": {
+  "supabase/migrations/20261107T1925_g01c_crm_y_contactos.sql": "a7a9fbcca8757db0ba3db470eb5a62bc"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_consulta_clientes",
+   "public.conta_consulta_diferencias",
+   "public.conta_crm_bitrix",
+   "public.conta_gestoria_cliente",
+   "public.conta_gestoria_diferencia",
+   "public.conta_gestoria_ficha",
+   "vault.secrets"
+  ],
+  "funciones": [
+   "public.conta_bitrix_aplicar_union(uuid)",
+   "public.conta_bitrix_confirmar_mapa(uuid,jsonb)",
+   "public.conta_bitrix_guardar_clientes(uuid,jsonb)",
+   "public.conta_bitrix_secreto(uuid)",
+   "public.conta_gestoria_despertar()"
+  ],
+  "filas": {
+   "public.conta_consulta_clientes": 0,
+   "public.conta_consulta_diferencias": 0,
+   "public.conta_crm_bitrix": 0,
+   "public.conta_gestoria_cliente": 1419,
+   "public.conta_gestoria_diferencia": 1040,
+   "public.conta_gestoria_ficha": 1437,
+   "vault.secrets": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": [
+    "public.conta_gestoria_despertar()"
+   ]
+  },
+  "usos": {
+   "public.conta_crm_bitrix": [
+    "función conta_bitrix_aplicar_union(uuid)",
+    "función conta_bitrix_confirmar_mapa(uuid,jsonb)",
+    "función conta_bitrix_guardar_conexion(uuid,text,text,text,text)",
+    "función conta_bitrix_secreto(uuid)",
+    "función conta_gestoria_despertar()"
+   ]
+  },
+  "registro": []
+ }
+}

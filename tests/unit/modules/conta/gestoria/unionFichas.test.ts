@@ -1,15 +1,16 @@
 // G01b · La unión de las fichas repetidas de Bitrix24 y los campos que no se
 // leen nunca (Julio, 07/11). NIF de ceros, nombres de prueba y códigos
 // UF_CRM_ inventados (T11); las etiquetas, como las del portal de QBO.
+import { esCampoSensible } from '../../../../../supabase/functions/conta-bitrix-leer/sensibles'
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_FICHAS_POR_NIF, agrupar, esCampoSensible, masViva, nifComoLaBase, resumenDeUnion, tipoDeNif, type FichaParaUnir,
-} from '../../../../../supabase/functions/conta-bitrix-leer/clientes'
+  MAX_FICHAS_POR_NIF, agrupar, masViva, nifComoLaBase, resumenDeUnion, tipoDeNif, type FichaParaUnir,
+} from '../../../../../supabase/functions/_shared/crm/clientes'
 import { camposQueSePiden, proponerMapa, type MapaBitrix, type Situacion } from '../../../../../supabase/functions/conta-bitrix-leer/mapa'
 import { leerFichas, leerParaRecuento } from '../../../../../supabase/functions/conta-bitrix-leer/lectura'
 import { simularUnion } from '../../../../../supabase/functions/conta-bitrix-leer/recuento'
 
-const f = (bitrixId: string, nif: string | null, situacion: Situacion | null): FichaParaUnir => ({ bitrixId, nif, situacion })
+const f = (idExterno: string, nif: string | null, situacion: Situacion | null): FichaParaUnir => ({ idExterno, nif, situacion })
 
 describe('G01b · la unión de las fichas por NIF', () => {
   const fichas = [
@@ -25,19 +26,19 @@ describe('G01b · la unión de las fichas por NIF', () => {
     const c = agrupar(fichas, true)
     const uno = c.find((x) => x.clave === 'nif:00000000T')!
     expect(uno).toMatchObject({ nif: '00000000T', situacion: 'activo', motivo: 'repetidas', fichasConSuNif: 3 })
-    expect(uno.principal.bitrixId).toBe('11')
-    expect(uno.fichas.map((x) => x.bitrixId)).toEqual(['10', '11', '12'])
+    expect(uno.principal.idExterno).toBe('11')
+    expect(uno.fichas.map((x) => x.idExterno)).toEqual(['10', '11', '12'])
     expect(c.find((x) => x.clave === 'nif:B00000000')).toMatchObject({ situacion: 'solo_renta', motivo: 'repetidas' })
-    expect(c.find((x) => x.clave === 'nif:X0000000T')).toMatchObject({ situacion: null, motivo: null, fichas: [{ bitrixId: '30' }] })
+    expect(c.find((x) => x.clave === 'nif:X0000000T')).toMatchObject({ situacion: null, motivo: null, fichas: [{ idExterno: '30' }] })
   })
 
   it('un NIF sin formato de DNI, NIE o CIF, o en 10 fichas o más, no se usa: cada ficha sola, sin NIF y a revisar', () => {
     const c = agrupar(fichas, true)
-    expect(c.filter((x) => x.motivo === 'nif_no_valido').map((x) => [x.clave, x.nif])).toEqual([['ficha:40', null], ['ficha:41', null]])
+    expect(c.filter((x) => x.motivo === 'nif_no_valido').map((x) => [x.clave, x.nif])).toEqual([['ficha:empresa:40', null], ['ficha:empresa:41', null]])
     const muchas = c.filter((x) => x.motivo === 'nif_en_muchas')
     expect(muchas).toHaveLength(MAX_FICHAS_POR_NIF)
     expect(muchas.every((x) => x.nif === null && x.fichas.length === 1 && x.fichasConSuNif === MAX_FICHAS_POR_NIF)).toBe(true)
-    expect(c.find((x) => x.clave === 'ficha:50')).toMatchObject({ nif: null, motivo: null })
+    expect(c.find((x) => x.clave === 'ficha:empresa:50')).toMatchObject({ nif: null, motivo: null })
     // 9 fichas con el mismo NIF sí se unen.
     expect(agrupar(Array.from({ length: MAX_FICHAS_POR_NIF - 1 }, (_, i) => f(String(i), 'Y0000000Z', 'baja')), true)).toHaveLength(1)
   })
@@ -46,7 +47,7 @@ describe('G01b · la unión de las fichas por NIF', () => {
     const c = agrupar(fichas, false)
     expect(c).toHaveLength(fichas.length)
     expect(c.every((x) => x.motivo === null && x.fichas.length === 1)).toBe(true)
-    expect(c.find((x) => x.clave === 'ficha:11')?.nif).toBe('00000000T')
+    expect(c.find((x) => x.clave === 'ficha:empresa:11')?.nif).toBe('00000000T')
   })
 
   it('el resumen: clientes, fichas unidas, sin NIF y cada situación, de clientes y de fichas', () => {
@@ -129,43 +130,44 @@ describe('G01b · los campos con contraseñas o certificados no se leen nunca', 
   })
 })
 
-import { diferenciasDeLectura, ensayoDeUnion } from '../../../../../supabase/functions/conta-bitrix-leer/clientes'
+import { diferenciasDeLectura, ensayoDeUnion } from '../../../../../supabase/functions/_shared/crm/clientes'
 
 describe('G01b · lo que sale en «Pendiente de revisar» y el ensayo', () => {
-  const ficha = (bitrixId: string, nif: string | null, situacion: Situacion | null) =>
-    ({ bitrixId, nif, nifEnBitrix: nif ? ` ${nif} ` : null, situacion, situacionTexto: situacion ? situacion.toUpperCase() : null, nombre: `CLIENTE PRUEBA ${bitrixId}` })
+  const ficha = (idExterno: string, nif: string | null, situacion: Situacion | null) =>
+    ({ idExterno, nif, nifEnCrm: nif ? ` ${nif} ` : null, situacion, situacionTexto: situacion ? situacion.toUpperCase() : null, nombre: `CLIENTE PRUEBA ${idExterno}` })
   const fichas = [ficha('1', '00000000T', 'baja'), ficha('2', '00000000T', 'activo'), ficha('3', '123', 'activo'), ficha('4', null, 'activo')]
 
   it('con la unión: el cliente unido y la ficha sin NIF, con su porqué y sin el NIF en el texto', () => {
-    const d = diferenciasDeLectura(agrupar(fichas, true), [], true)
-    expect(d.map((x) => [x.tipo, x.porque_codigo, x.bitrix_id])).toEqual([['fichas_repetidas', 'mismo_nif_distinta_situacion', '2'], ['nif_no_valido', 'formato', '3']])
-    expect(d[0].porque).toBe('Sale en 2 fichas de Bitrix24 con el mismo NIF (1, 2: de baja, activa). En Sumied es un solo cliente, «Activo».')
-    expect(d[1].porque).toBe('Su NIF en Bitrix24 (ficha 3) no tiene formato de DNI, NIE ni CIF: entra sin NIF.')
+    const d = diferenciasDeLectura(agrupar(fichas, true), [], true, 'Bitrix24')
+    expect(d.map((x) => [x.tipo, x.porque_codigo, x.tipo_ficha, x.id_externo])).toEqual([['fichas_repetidas', 'mismo_nif_distinta_situacion', 'empresa', '2'], ['nif_no_valido', 'formato', 'empresa', '3']])
+    expect(d[0].porque).toBe('Sale en 2 fichas de Bitrix24 con el mismo NIF (ficha 1, ficha 2: de baja, activa). En Sumied es un solo cliente, «Activo».')
+    expect(d[1].porque).toBe('Su NIF en Bitrix24 (ficha 3) no tiene formato de DNI, NIE, CIF ni RIF: entra sin NIF.')
     expect(JSON.stringify(d)).not.toContain('00000000T')
   })
 
   it('sin la unión: la ficha que choca no se guarda, sale con su porqué y dice que se unirá; la lectura sigue', () => {
-    const errores = [{ bitrixIds: ['2'], nombre: 'CLIENTE PRUEBA 2', emisor: null, codigo: '23505', porque: 'su NIF ya es de otro cliente de Sumied' }]
-    const d = diferenciasDeLectura(agrupar(fichas, false), errores, false)
-    expect(d).toEqual([{ tipo: 'ficha_no_guardada', porque_codigo: 'nif_de_otro', bitrix_id: '2', datos: { bitrixIds: ['2'], nombre: 'CLIENTE PRUEBA 2', emisor: null },
-      porque: '«CLIENTE PRUEBA 2» (ficha 2 de Bitrix24) no se ha guardado: su NIF ya es de otro cliente de Sumied. Se unirá a su cliente cuando se aplique la unión en Ajustes › Cobros › Bitrix24.' }])
+    const errores = [{ idsExternos: ['2'], nombre: 'CLIENTE PRUEBA 2', emisor: null, codigo: '23505', porque: 'su NIF ya es de otro cliente de Sumied' }]
+    const d = diferenciasDeLectura(agrupar(fichas, false), errores, false, 'Bitrix24')
+    expect(d).toEqual([{ tipo: 'ficha_no_guardada', porque_codigo: 'nif_de_otro', tipo_ficha: 'empresa', id_externo: '2', datos: { idsExternos: ['2'], nombre: 'CLIENTE PRUEBA 2', emisor: null },
+      porque: '«CLIENTE PRUEBA 2» (ficha 2 de Bitrix24) no se ha guardado: su NIF ya es de otro cliente de Sumied. Se unirá a su cliente cuando se aplique la unión en Ajustes › Cobros › Tu CRM.' }])
   })
 
   it('el ensayo: el resumen, cada cliente unido con sus fichas y cada ficha sin NIF con el suyo tal cual y su motivo', () => {
     const e = ensayoDeUnion(fichas)
     expect(e.resumen).toMatchObject({ fichas: 4, clientes: 3, clientesUnidos: 1, fichasUnidas: 2, sinNifPorFormato: 1 })
     expect(e.unidos).toEqual([{ nif: '00000000T', situacion: 'activo', fichas: [
-      { bitrixId: '1', nombre: 'CLIENTE PRUEBA 1', situacion: 'baja', situacionTexto: 'BAJA' }, { bitrixId: '2', nombre: 'CLIENTE PRUEBA 2', situacion: 'activo', situacionTexto: 'ACTIVO' }], clientesHoy: 0 }])
+      { idExterno: '1', tipoFicha: 'empresa', nombre: 'CLIENTE PRUEBA 1', situacion: 'baja', situacionTexto: 'BAJA' },
+      { idExterno: '2', tipoFicha: 'empresa', nombre: 'CLIENTE PRUEBA 2', situacion: 'activo', situacionTexto: 'ACTIVO' }], clientesHoy: 0 }])
     expect(e.seJuntan).toBe(0)
-    expect(e.sinNif).toEqual([{ bitrixId: '3', nombre: 'CLIENTE PRUEBA 3', nifEnBitrix: ' 123 ', motivo: 'nif_no_valido', fichasConSuNif: 1 }])
+    expect(e.sinNif).toEqual([{ idExterno: '3', tipoFicha: 'empresa', nombre: 'CLIENTE PRUEBA 3', nifEnCrm: ' 123 ', motivo: 'nif_no_valido', fichasConSuNif: 1 }])
   })
 })
 
 describe('G01b · el ensayo dice qué clientes ya creados se juntan (producción, 07/11: 18 NIF que ya eran 2 clientes cada uno)', () => {
   it('cuenta los clientes de hoy de cada NIF y cuántos se retiran', () => {
-    const f = (bitrixId: string, nif: string) => ({ bitrixId, nif, nifEnBitrix: nif, situacion: 'activo' as const, situacionTexto: 'ACTIVO', nombre: `CLIENTE PRUEBA ${bitrixId}` })
+    const f = (idExterno: string, nif: string) => ({ idExterno, nif, nifEnCrm: nif, situacion: 'activo' as const, situacionTexto: 'ACTIVO', nombre: `CLIENTE PRUEBA ${idExterno}` })
     const e = ensayoDeUnion([f('1', '00000000T'), f('2', '00000000T'), f('3', 'B00000000'), f('4', 'B00000000'), f('5', 'X0000000T'), f('6', 'X0000000T')],
-      new Map([['1', 'P1'], ['2', 'P2'], ['3', 'P3'], ['4', 'P3']]))
+      new Map([['empresa:1', 'P1'], ['empresa:2', 'P2'], ['empresa:3', 'P3'], ['empresa:4', 'P3']]))
     expect(e.unidos.map((u) => [u.nif, u.clientesHoy])).toEqual([['00000000T', 2], ['B00000000', 1], ['X0000000T', 0]])
     expect(e.seJuntan).toBe(1)
   })

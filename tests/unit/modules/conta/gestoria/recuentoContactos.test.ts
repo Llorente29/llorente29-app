@@ -6,8 +6,9 @@ import { describe, expect, it } from 'vitest'
 import {
   camposDeContactos, candidatosDeContacto, contactosDeNegociaciones, contarContactos, empresasDeItems, esRif, estadosAPedir, paginaDeItems, type ExtrasContactos,
 } from '../../../../../supabase/functions/conta-bitrix-leer/contactos'
-import { leerParaRecuento } from '../../../../../supabase/functions/conta-bitrix-leer/lectura'
-import { esCampoSensible } from '../../../../../supabase/functions/conta-bitrix-leer/clientes'
+import { leerContactos, leerParaRecuento } from '../../../../../supabase/functions/conta-bitrix-leer/lectura'
+import { repartirContactos, resumenDeContactos } from '../../../../../supabase/functions/_shared/crm/contactos'
+import { esCampoSensible } from '../../../../../supabase/functions/conta-bitrix-leer/sensibles'
 import { gruposValidos } from '../../../../../supabase/functions/conta-bitrix-leer/recuento'
 
 const MEDIDOS = {
@@ -119,5 +120,13 @@ describe('G01c · el recuento de los contactos', () => {
     expect(pedidas[6].cuerpo).toEqual({ filter: { ENTITY_ID: 'CONTACT_TYPE' } })
     expect(r.contactos).toMatchObject({ conEmpresa: 2, nifDeUnaEmpresa: { contactos: 1, enlazadosAEsaEmpresa: 1 } })
     expect(r.contactos.senalesSinEmpresa).toMatchObject({ gocardless: 2, negociacion: 1 })
+    // G01c (Julio, 07/11) · El reparto, con la regla de la lectura. Aquí crm.item.list solo enlaza el 4: 1, 2, 3, 6, 9 (tarifa) y 7 (solo
+    // negociación, a revisar) son clientes; 4 se une a la empresa 70 por su NIF; 5 (COMPANY_ID 72) es persona de contacto; 8, fuera.
+    const reparto = (r.contactos as unknown as { reparto: unknown }).reparto
+    expect(reparto).toEqual({ contactos: 9, clientes: 6, seUnenAEmpresa: 1, personas: 1, fuera: 1, pendientes: 1 })
+    // Y es lo mismo que cuenta la lectura con los mismos contactos (leerContactos + repartirContactos).
+    const l = await leerContactos(pedir, 'https://portal.test/rest/1/abc/', null, async () => {}, { nifs: new Set(['00000000T']), correos: new Set() })
+    const nifs = new Set(['B00000001'])
+    expect(resumenDeContactos(l.contactos, repartirContactos(l.contactos, nifs, 'Bitrix24'), nifs)).toEqual(reparto)
   })
 })
