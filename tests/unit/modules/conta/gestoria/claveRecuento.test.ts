@@ -5,8 +5,12 @@
 import { describe, expect, it } from 'vitest'
 import { clavesValidas, formatoDe, revisarClave } from '../../../../../supabase/functions/conta-bitrix-leer/clave'
 
-const ANTIGUA = 'eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.firmaInventada000'
-const NUEVA = 'sb_secret_000000000000000000000000_00000000'
+// Inventadas y armadas por trozos: con su forma completa escrita, el vigía de
+// secretos (scripts/staging/esquema.mjs) las tomaría por claves de verdad.
+const jwt = (a: string, b: string, c: string) => ['eyJ' + a, b, c].join('.')
+const secreta = (resto: string) => 'sb_' + 'secret_' + resto
+const ANTIGUA = jwt('0'.repeat(16), '0'.repeat(16), '0'.repeat(16))
+const NUEVA = secreta('0'.repeat(24))
 const PROYECTO = { antigua: ANTIGUA, nuevas: JSON.stringify({ default: NUEVA }) }
 
 /** La comprobación de antes (#494), tal cual. */
@@ -20,12 +24,14 @@ describe('G01b · la clave de servicio del recuento', () => {
 
   it('la antigua sigue valiendo, y también una nueva con otro nombre', () => {
     expect(revisarClave(ANTIGUA, PROYECTO)).toEqual({ vale: true })
-    expect(revisarClave('sb_secret_otra', { antigua: ANTIGUA, nuevas: JSON.stringify({ default: NUEVA, recuento: 'sb_secret_otra' }) })).toEqual({ vale: true })
+    const otra = secreta('1'.repeat(24))
+    expect(revisarClave(otra, { antigua: ANTIGUA, nuevas: JSON.stringify({ default: NUEVA, recuento: otra }) })).toEqual({ vale: true })
     expect(revisarClave(` ${NUEVA} `, PROYECTO)).toEqual({ vale: true })
   })
 
   it('lo que no es una clave del proyecto no pasa, y el porqué dice el formato, nunca la clave', () => {
-    for (const mala of ['sb_secret_de_otro_proyecto', 'eyJotra.firma.cualquiera', 'sb_publishable_000', '', null]) {
+    const deOtroProyecto = secreta('2'.repeat(24))
+    for (const mala of [deOtroProyecto, jwt('1'.repeat(16), '1'.repeat(16), '1'.repeat(16)), 'sb_publishable_000', '', null]) {
       const r = revisarClave(mala, PROYECTO)
       expect(r.vale).toBe(false)
       if (!r.vale) {
@@ -34,7 +40,7 @@ describe('G01b · la clave de servicio del recuento', () => {
         if (mala) expect(r.porque).not.toContain(mala)
       }
     }
-    expect(revisarClave('sb_secret_de_otro_proyecto', PROYECTO)).toEqual({ vale: false,
+    expect(revisarClave(deOtroProyecto, PROYECTO)).toEqual({ vale: false,
       porque: 'ha llegado una clave nueva (sb_secret_…) y no es la antigua (JWT) ni la nueva (sb_secret_…) del proyecto' })
     expect(revisarClave(NUEVA, { antigua: '', nuevas: '' })).toEqual({ vale: false,
       porque: 'ha llegado una clave nueva (sb_secret_…) y no es ninguna: la función no tiene claves de servicio del proyecto' })
