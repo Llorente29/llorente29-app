@@ -98,7 +98,8 @@ test.describe('B01·20 · El cargo que el banco anula', () => {
       await expect(aviso).toBeVisible()
       await expect(aviso).toContainText('El banco anuló este cargo: no había saldo')
       await expect(aviso).toContainText('Lo apuntó el 14/10 y, como no había saldo, lo anuló.')
-      await expect(aviso).toContainText('ADEUDO TGSS CUOTAS OCTUBRE INVENTADO')
+      // El concepto limpio, como en el resto de Bancos (el del banco, tal cual, va en el panel del movimiento).
+      await expect(aviso).toContainText('Adeudo TGSS cuotas octubre INVENTADO')
       await expect(page.getByTestId('anulado-cifras')).toContainText(`banco ${euros(finalCent)} €. Sin él: los dos, ${euros(finalCent)} €.`)
       await expect(aviso.getByRole('button', { name: 'Quitarlo' })).toBeVisible()
       await expect(aviso.getByRole('button', { name: 'No, es bueno' })).toBeVisible()
