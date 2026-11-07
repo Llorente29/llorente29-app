@@ -49,10 +49,11 @@ values ('f4e8032d-510a-4e57-914c-4b67732d8655', 'PRUEBA G03 GESTORIA UNO SL', 'B
        ('623d946a-a0ce-4f34-8c00-9761dfed8331', 'PRUEBA G03 RESTAURANTE SL', 'B00000003', null);
 -- La 1945 ya está: al crearlas con is_hospitality, ya llevan sector. Se les quita para que las rellene la 1946.
 update public.company set sector = null where account_id in ('f4e8032d-510a-4e57-914c-4b67732d8655', '623d946a-a0ce-4f34-8c00-9761dfed8331');
--- Y todas las de staging, sin sector (como en producción antes de la 1946), salvo una puesta a mano.
+-- Y todas las de staging, sin sector (como en producción antes de la 1946), salvo una puesta a mano:
+-- la primera empresa de A (se busca por su cuenta: su id cambia de una base a otra).
 update public.company set sector = null;
-update public.company set sector = 'gestoria' where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb';
-create temp table _a_mano on commit drop as select id, is_hospitality from public.company where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb';
+update public.company set sector = 'gestoria' where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1);
+create temp table _a_mano on commit drop as select id, is_hospitality from public.company where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1);
 
 savepoint antes_1946;
 -- La guarda: si la cuenta de la gestoría no tiene sus 2 empresas, PARA sin poner nada.
@@ -62,7 +63,7 @@ insert into public.company (account_id, legal_name, tax_id) values ('f4e8032d-51
 \set ON_ERROR_STOP 1
 rollback to savepoint antes_1946;
 do $$ begin
-  if exists (select 1 from public.company where sector is not null and id <> '22c1a825-457c-4def-a8db-1e7d5a8173fb') then
+  if exists (select 1 from public.company where sector is not null and id <> (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1)) then
     raise exception 'PRUEBA G03 · 3: con 3 empresas en la gestoría, la 1946 ha puesto sectores.';
   end if;
   raise notice 'G03 · 3: con una empresa de más en la cuenta anclada, la 1946 para sin poner nada. OK';
@@ -86,7 +87,7 @@ begin
     raise exception 'PRUEBA G03 · 2: la empresa con el sector puesto a mano ha cambiado.';
   end if;
   -- Fuera de las dos cuentas ancladas, is_hospitality no cambia en ninguna (las nulas que no son hostelería siguen nulas).
-  select count(*) into n from public.company c join _antes a using (id) where c.is_hospitality is distinct from a.is_hospitality and c.id <> '22c1a825-457c-4def-a8db-1e7d5a8173fb';
+  select count(*) into n from public.company c join _antes a using (id) where c.is_hospitality is distinct from a.is_hospitality and c.id <> (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1);
   if n <> 0 then raise exception 'PRUEBA G03 · 2: la 1946 ha cambiado is_hospitality de % empresa(s) fuera de las anclas.', n; end if;
   select count(*) into n from public.company c join _antes a using (id) where a.is_hospitality is not true and c.sector = 'hosteleria';
   if n <> 0 then raise exception 'PRUEBA G03 · 2: % empresa(s) sin hostelería han quedado de hostelería.', n; end if;
@@ -100,23 +101,23 @@ do $$
 declare s text; h boolean;
 begin
   -- Ajustes de hoy (guardarHosteleria): escribe is_hospitality; el sector la sigue.
-  update public.company set is_hospitality = true where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb' returning sector, is_hospitality into s, h;
+  update public.company set is_hospitality = true where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1) returning sector, is_hospitality into s, h;
   if s is distinct from 'hosteleria' then raise exception 'PRUEBA G03 · 4a: con is_hospitality sí, el sector quedó en %.', s; end if;
-  update public.company set is_hospitality = false where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb' returning sector into s;
+  update public.company set is_hospitality = false where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1) returning sector into s;
   if s is distinct from 'general' then raise exception 'PRUEBA G03 · 4b: de hostelería a no, el sector quedó en %.', s; end if;
   -- Ajustes del G03: escribe el sector; is_hospitality lo sigue.
-  update public.company set sector = 'hosteleria' where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb' returning is_hospitality into h;
+  update public.company set sector = 'hosteleria' where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1) returning is_hospitality into h;
   if h is distinct from true then raise exception 'PRUEBA G03 · 4c: con sector hostelería, is_hospitality quedó en %.', h; end if;
-  update public.company set sector = 'gestoria' where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb' returning is_hospitality into h;
+  update public.company set sector = 'gestoria' where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1) returning is_hospitality into h;
   if h is distinct from false then raise exception 'PRUEBA G03 · 4d: con sector gestoría, is_hospitality quedó en %.', h; end if;
   -- Una gestoría que dice «no» a hostelería sigue siendo gestoría.
-  update public.company set is_hospitality = false where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb' returning sector into s;
+  update public.company set is_hospitality = false where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1) returning sector into s;
   if s is distinct from 'gestoria' then raise exception 'PRUEBA G03 · 4e: una gestoría que dice no a hostelería pasó a %.', s; end if;
   -- Las dos a la vez: manda el sector.
-  update public.company set sector = 'general', is_hospitality = true where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb' returning sector, is_hospitality into s, h;
+  update public.company set sector = 'general', is_hospitality = true where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1) returning sector, is_hospitality into s, h;
   if s <> 'general' or h then raise exception 'PRUEBA G03 · 4f: con las dos a la vez quedó % · %.', s, h; end if;
   begin
-    update public.company set sector = 'agencia_viajes' where id = '22c1a825-457c-4def-a8db-1e7d5a8173fb';
+    update public.company set sector = 'agencia_viajes' where id = (select id from public.company where account_id = 'c01a0000-0000-4000-8000-00000000000a' order by created_at, id limit 1);
     raise exception 'PRUEBA G03 · 4g: entró un sector que no existe.';
   exception when check_violation then raise notice 'G03 · 4g: un sector que no existe no entra (23514).';
   end;
