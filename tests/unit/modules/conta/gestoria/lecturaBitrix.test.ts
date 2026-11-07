@@ -32,7 +32,9 @@ describe('G01 · Bitrix24 con respuestas grabadas', () => {
     const pedidas: { metodo: string; cuerpo: Record<string, unknown> }[] = []
     const esperas: number[] = []
     const medidos = await medirCampos(fetchGrabado(), URL_PRUEBA)
-    const { mapa } = proponerMapa('Gestoría de prueba', medidos, EMISORES)
+    const { mapa: propuesto } = proponerMapa('Gestoría de prueba', medidos, EMISORES)
+    // G01b · La situación se guarda solo con el mapa confirmado.
+    const mapa = { ...propuesto, confirmado: { quien: null, cuando: '2026-11-07T10:00:00Z' } }
     const r = await leerFichas(fetchGrabado(pedidas), URL_PRUEBA, mapa, async (ms) => { esperas.push(ms) })
     expect(r.fichas).toHaveLength(60)
     expect(r).toMatchObject({ total: 60, peticiones: 2 })

@@ -19,6 +19,8 @@ const MAPA: MapaBitrix = {
     { codigo: 'UF_CRM_PRUEBA_CUOTA', campo: 'cuota_referencia', etiqueta: 'Cuota mensual' },
   ],
   formaPagoAEmisor: { 'Emisor A': 'empresa-a', 'Emisor A Nuevo': 'empresa-a', 'Emisor B': 'empresa-b' },
+  // G01b · Sin confirmar en «Qué es cada campo» no se guarda la situación de nadie.
+  confirmado: { quien: 'persona-de-prueba', cuando: '2026-11-07T10:00:00Z' },
 }
 
 describe('G01 · mapa de Bitrix24', () => {
@@ -48,9 +50,11 @@ describe('G01 · mapa de Bitrix24', () => {
 
   it('lo que el mapa no conoce no se inventa: se dice', () => {
     const f = leerEmpresa({ ID: '502', UF_CRM_PRUEBA_SITUACION: '99', UF_CRM_PRUEBA_PAGO: '77' }, MAPA)
-    expect(f.situacion).toBeNull()
+    // G01b · Una opción que el mapa no conoce queda «sin clasificar», con su texto (aquí, el id).
+    expect(f.situacion).toBe('sin_clasificar')
+    expect(f.situacionTexto).toBe('99')
     expect(f.emisorSegunBitrix).toBeNull()
-    expect(f.avisos).toEqual(['Situación «99» que el mapa no conoce.', '«Forma de pago» dice «77», que el mapa no sabe de qué emisor es.', 'Sin nombre en Bitrix24.'])
+    expect(f.avisos).toEqual(['Situación «99» sin clasificar en Sumied.', '«Forma de pago» dice «77», que el mapa no sabe de qué emisor es.', 'Sin nombre en Bitrix24.'])
   })
 
   it('los importes de referencia, en céntimos', () => {
@@ -118,9 +122,12 @@ describe('G01 · el mapa, propuesto desde crm.company.fields', () => {
     expect(p.mapa.campos.find((c) => c.campo === 'servicios')?.opciones).toEqual({ '21': 'C', '22': 'L', '23': 'S' })
     expect(p.mapa.formaPagoAEmisor).toEqual({ 'Emisor Prueba Alfa': 'empresa-a', 'Emisor Prueba Alfa Nuevo': 'empresa-a', 'Persona Prueba Gomez': 'empresa-b' })
     expect(p.sinUsar).toEqual([{ codigo: 'UF_CRM_P6', etiqueta: 'POBLACION' }, { codigo: 'UF_CRM_P7', etiqueta: 'POBLACION' }, { codigo: 'UF_CRM_P8', etiqueta: 'COMERCIAL ASIGNADO' }])
-    // Y la ficha se lee con el mapa propuesto.
-    const f = leerEmpresa({ ID: '9', TITLE: 'CLIENTE PRUEBA', UF_CRM_P1: 'B00000009', UF_CRM_P2: '13', UF_CRM_P3: ['21', '23'], UF_CRM_P4: '32', UF_CRM_P5: '90,75' }, p.mapa)
-    expect(f).toMatchObject({ nif: 'B00000009', situacion: 'moroso', servicios: ['C', 'S'], emisorSegunBitrix: 'empresa-a', cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075 }] })
+    // Y la ficha se lee con el mapa propuesto: sin confirmar, sin situación; confirmado, con ella.
+    const fila = { ID: '9', TITLE: 'CLIENTE PRUEBA', UF_CRM_P1: 'B00000009', UF_CRM_P2: '13', UF_CRM_P3: ['21', '23'], UF_CRM_P4: '32', UF_CRM_P5: '90,75' }
+    expect(p.mapa.confirmado ?? null).toBeNull()
+    expect(leerEmpresa(fila, p.mapa)).toMatchObject({ situacion: null, situacionTexto: null })
+    const f = leerEmpresa(fila, { ...p.mapa, confirmado: { quien: null, cuando: '2026-11-07T10:00:00Z' } })
+    expect(f).toMatchObject({ nif: 'B00000009', situacion: 'moroso', situacionTexto: 'Moroso', servicios: ['C', 'S'], emisorSegunBitrix: 'empresa-a', cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075 }] })
   })
 
   it('G01b · cuando varios campos encajan, la duda se guarda con el mapa (con las etiquetas como las del portal de QBO)', () => {

@@ -1,0 +1,15 @@
+# G01b · El mapa de Bitrix24, confirmado por una persona en «Qué es cada
+# campo» (Julio, 07/11, tras el recuento del run 42358085266). Rama
+# conta/g01b-mapa-confirmado. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   0915  Cambia en caliente (con su prueba de staging): el CHECK de la
+#         situación de conta_gestoria_cliente admite «sin_clasificar» (solo
+#         amplía; 1.437 filas, todas sin situación). Añade
+#         conta_bitrix_confirmar_mapa (la persona confirma el mapa; la
+#         función comprueba los códigos contra lo medido del portal).
+#
+# No lee ni escribe nada en Bitrix24. Nada en el camino del pedido. El real
+# lo lanza Julio; la confirmación del mapa y la lectura nueva, también.
+cuenta: scripts/conta/produccion/cuentas/g01b-mapa-confirmado.sql
+supabase/migrations/20261107T0915_g01b_mapa_confirmado.sql

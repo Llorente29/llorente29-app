@@ -62,3 +62,43 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
 export function fraseDeBitrix(n: number, r: { nuevos: number; cambiados: number; iguales: number }, conectada = false): string {
   return `${conectada ? 'Conectado Bitrix24' : 'Leído Bitrix24'}: ${n} empresas (${r.nuevos} nuevas, ${r.cambiados} cambiadas, ${r.iguales} iguales).`
 }
+
+/** Un número con el punto de los miles (1.437), también con cuatro cifras. */
+export const miles = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+
+export interface RepartoDeFichas {
+  total: number
+  activo: number; baja: number; moroso: number; solo_renta: number; sin_clasificar: number; sin_situacion: number
+  conNif: number; conDireccion: number
+}
+
+/** G01b · Cuántas fichas quedan en cada situación, y con NIF y dirección (Julio, 07/11). */
+export function repartoDe(fichas: readonly Pick<FichaBitrix, 'situacion' | 'nif' | 'calle'>[]): RepartoDeFichas {
+  const r: RepartoDeFichas = { total: fichas.length, activo: 0, baja: 0, moroso: 0, solo_renta: 0, sin_clasificar: 0, sin_situacion: 0, conNif: 0, conDireccion: 0 }
+  for (const f of fichas) {
+    if (f.situacion) r[f.situacion]++
+    else r.sin_situacion++
+    if (f.nif) r.conNif++
+    if (f.calle) r.conDireccion++
+  }
+  return r
+}
+
+/**
+ * G01b · La frase del reparto: «1.437 fichas: 327 activas, 12 de baja, …».
+ * Sin el mapa confirmado no hay situación que contar, y se dice por qué.
+ */
+export function fraseDelReparto(r: RepartoDeFichas, confirmado: boolean): string {
+  const fichas = `${miles(r.total)} ${r.total === 1 ? 'ficha' : 'fichas'}`
+  const nifDir = `Con NIF: ${miles(r.conNif)}; con dirección: ${miles(r.conDireccion)}.`
+  if (!confirmado) return `${fichas}. La situación no se guarda hasta confirmar el mapa en «Qué es cada campo». ${nifDir}`
+  const partes = [
+    `${miles(r.activo)} ${r.activo === 1 ? 'activa' : 'activas'}`,
+    `${miles(r.baja)} de baja`,
+    `${miles(r.moroso)} ${r.moroso === 1 ? 'morosa' : 'morosas'}`,
+    `${miles(r.solo_renta)} solo renta`,
+    `${miles(r.sin_clasificar)} sin clasificar`,
+    `${miles(r.sin_situacion)} sin situación en Bitrix24`,
+  ]
+  return `${fichas}: ${partes.join(', ')}. ${nifDir}`
+}

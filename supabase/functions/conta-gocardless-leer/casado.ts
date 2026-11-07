@@ -19,7 +19,7 @@ export interface FichaParaCasar {
   nombre: string
   nif: string | null
   correos: string[]
-  situacion: 'activo' | 'baja' | 'moroso' | 'solo_renta' | null
+  situacion: 'activo' | 'baja' | 'moroso' | 'solo_renta' | 'sin_clasificar' | null
   formaPago: string | null
   emisorSegunBitrix: string | null
 }
@@ -58,8 +58,12 @@ export interface Diferencia {
   porque: string
 }
 
-/** Una ficha que se cobra: activa o morosa. Las de baja y «solo renta» no esperan cobro mensual. */
-export const SE_COBRA: readonly string[] = ['activo', 'moroso']
+/**
+ * Una ficha que se cobra: solo la activa (Julio, G01b, 07/11: lo que no sea
+ * activo, también la morosa y la «sin clasificar», no cuenta para «Activos en
+ * Bitrix24 sin cobro»).
+ */
+export const SE_COBRA: readonly string[] = ['activo']
 
 export function casar(
   fichas: FichaParaCasar[],
@@ -134,8 +138,8 @@ export function casar(
     if (!f.situacion || !SE_COBRA.includes(f.situacion) || conCobro.has(f.bitrixId)) continue
     diferencias.push({ tipo: 'bitrix_sin_cobro', bitrixId: f.bitrixId, emisor: f.emisorSegunBitrix, clienteGcId: null,
       porque: casadas.has(f.bitrixId)
-        ? `«${f.nombre}» está ${f.situacion === 'moroso' ? 'moroso' : 'activo'} en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.`
-        : `«${f.nombre}» está ${f.situacion === 'moroso' ? 'moroso' : 'activo'} en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).` })
+        ? `«${f.nombre}» está activo en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.`
+        : `«${f.nombre}» está activo en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).` })
   }
   return { parejas, diferencias }
 }

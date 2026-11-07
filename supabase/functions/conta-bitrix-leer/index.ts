@@ -18,7 +18,7 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { MAPA_QBO, proponerMapa, type MapaBitrix } from './mapa.ts'
-import { fraseDeBitrix, leerFichas, leerParaRecuento, medirCampos, portalDe } from './lectura.ts'
+import { fraseDeBitrix, fraseDelReparto, leerFichas, leerParaRecuento, medirCampos, portalDe, repartoDe } from './lectura.ts'
 import { gruposValidos } from './recuento.ts'
 import { revisarClave } from './clave.ts'
 import { puedeLeer, type Entorno } from './salida.ts'
@@ -52,10 +52,12 @@ async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_n
       suma = { nuevos: suma.nuevos + r.nuevos, cambiados: suma.cambiados + r.cambiados, iguales: suma.iguales + r.iguales }
     }
     await db.from('conta_crm_bitrix').update({ ultima_lectura_at: new Date().toISOString(), empresas_leidas: fichas.length, updated_at: new Date().toISOString() }).eq('account_id', cuenta)
-    const frase = fraseDeBitrix(fichas.length, suma, por === 'conexion')
+    // G01b · Y cuántas quedan en cada situación, con NIF y con dirección (regla 8: la confirmación lleva contenido).
+    const reparto = repartoDe(fichas)
+    const frase = `${fraseDeBitrix(fichas.length, suma, por === 'conexion')} ${fraseDelReparto(reparto, !!mapa.confirmado)}`
     await acabar({ estado: 'bien', ...suma, mensaje: frase })
     const avisos = fichas.flatMap((f) => f.avisos.map((a) => `${f.bitrixId}: ${a}`)).slice(0, 50)
-    return { frase, lee: true, empresas: fichas.length, ...suma, activas: fichas.filter((f) => f.situacion === 'activo').length, avisos }
+    return { frase, lee: true, empresas: fichas.length, ...suma, activas: reparto.activo, reparto, confirmado: !!mapa.confirmado, avisos }
   } catch (e) {
     await acabar({ estado: 'mal', mensaje: e instanceof Error ? e.message : String(e) })
     throw e

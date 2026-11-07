@@ -122,3 +122,26 @@
 
 /* G01 · Lo que no está conectado, en una línea gris con su enlace. */
 .cxg-conectores { margin: 0; padding: 8px 12px; font-size: 13px; color: var(--cx-apoyo); background: var(--cx-neutro-suave); border-radius: var(--cx-radio-caja); }
+
+/* G01b · «Qué es cada campo» (Ajustes › Cobros › Bitrix24): Sumied a la izquierda, el campo de Bitrix24 a la derecha. */
+.cxg-mapa { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--cx-borde-campo); }
+.cxg-mapa-estado { margin: 0; padding: 8px 12px; border-radius: var(--cx-radio-caja); font-size: 13px; background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxg-mapa-faltan { margin: 4px 0 0; padding-left: 18px; }
+.cxg-mapa-cabeza { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 12px; font-size: 12px; color: var(--cx-apoyo); }
+.cxg-mapa-fila { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 12px; align-items: start; padding: 8px 0; border-bottom: 1px solid var(--cx-neutro-suave); }
+.cxg-mapa-sumied { display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
+.cxg-mapa-bitrix { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cxg-mapa-bitrix select { max-width: min(100%, 520px); }
+.cxg-mapa-opciones, .cxg-mapa-fuentes { max-width: 560px; }
+.cxg-mapa-opciones, .cxg-mapa-fuentes { margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cxg-mapa-opciones { list-style: none; }
+.cxg-mapa-fuentes { padding-left: 22px; }
+.cxg-mapa-fuentes li { display: flex; flex-direction: column; gap: 2px; }
+.cxg-mapa-opciones li { display: grid; grid-template-columns: minmax(0, 1fr) 170px; gap: 8px; align-items: center; font-size: 13px; }
+.cxg-mapa-falta { color: var(--cx-rojo); font-weight: 600; }
+@media (max-width: 760px) {
+  .cxg-mapa-cabeza { display: none; }
+  .cxg-mapa-fila { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .cxg-mapa-opciones li { grid-template-columns: minmax(0, 1fr); }
+}
+.cxg-datos dd.cxg-apoyo-dd { font-weight: 400; color: var(--cx-apoyo); }

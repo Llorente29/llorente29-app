@@ -1,0 +1,6 @@
+# G01b · El mapa confirmado: la 0915 cambia en caliente el CHECK de la
+# situación (admite «sin_clasificar») y añade conta_bitrix_confirmar_mapa. Su
+# prueba (ROLLBACK, datos inventados) prueba el CHECK, quién puede confirmar,
+# los códigos contra lo medido, las opciones de la situación y su vuelta atrás.
+supabase/migrations/20261107T0915_g01b_mapa_confirmado.sql
+supabase/staging/sql/20261107_g01b_mapa_confirmado_prueba.sql

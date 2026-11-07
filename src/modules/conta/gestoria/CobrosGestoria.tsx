@@ -10,13 +10,16 @@
 //     una vez el token de solo lectura (GoCardless › Developers › Create ›
 //     Access token, de solo lectura).
 //   · la tarjeta «Bitrix24 · tus clientes» (uno para toda la cuenta): pegar una
-//     vez la dirección que da Bitrix24 y «Leer ahora».
+//     vez la dirección que da Bitrix24 y «Leer ahora»; y, conectado, «Qué es cada
+//     campo» (G01b): el mapa que una persona confirma.
 // Cada botón dice lo que ha hecho, con su contenido (regla 8): «Conectada la
 // cuenta de GoCardless de QBO INTEGRITY S.L.: 208 mandatos activos y …».
 
 import { useState } from 'react'
 import { Boton, Campo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import type { ConexionBitrix, ConexionGc } from '@/modules/conta/services/gestoriaService'
+import type { MapaBitrix } from './queEsCadaCampo'
+import { QueEsCadaCampo } from './QueEsCadaCampo'
 
 const fechaHora = (iso: string | null) => {
   if (!iso) return null
@@ -32,6 +35,8 @@ export interface AccionesGestoria {
   reintentos: (emisor: string, encendido: boolean) => Promise<string>
   conectarBitrix: (entorno: 'real' | 'pruebas', url: string) => Promise<string>
   leerBitrix: () => Promise<string>
+  /** G01b · Confirmar el mapa en «Qué es cada campo» y leer de nuevo. */
+  confirmarMapa: (mapa: MapaBitrix) => Promise<string>
 }
 
 export function Interruptor({ encendido, alCambiar, etiqueta, descrito, disabled }: {
@@ -148,6 +153,7 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
             <div><dt>Clientes leídos</dt><dd className="cxg-cifra">{c!.empresasLeidas == null ? '—' : miles(c!.empresasLeidas)}</dd></div>
           </dl>
           <div><Boton onClick={() => void hacer(acciones.leerBitrix)} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
+          <QueEsCadaCampo mapa={c!.mapa} medidos={c!.medidos} alConfirmar={acciones.confirmarMapa} />
         </div>
       ) : (
         <div className="pg-dialogo-campos">
