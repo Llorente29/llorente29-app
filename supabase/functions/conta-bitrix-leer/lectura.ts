@@ -7,7 +7,10 @@
 
 import { ESPERA_MS, camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
 import { camposDelRecuento, camposSensiblesDe, contar, type GruposRecuento } from './recuento.ts'
-import { esCampoSensible, nifComoLaBase } from './clientes.ts'
+import { nifComoLaBase } from '../_shared/crm/clientes.ts'
+import type { FichaContactoCrm } from '../_shared/crm/ficha.ts'
+import { esCampoSensible } from './sensibles.ts'
+import { camposDeContactoQueSePiden, leerContacto, mapaContactosDe, propuestaContactos, type MapaContactos } from './contactosClientes.ts'
 import { camposDeContactos, contactosDeNegociaciones, contarContactos, empresasDeItems, estadosAPedir, paginaDeItems } from './contactos.ts'
 
 export type Pedir = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
@@ -100,6 +103,47 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
     empresasDe: empresasDeItems(ri.filas), conNegociacion: contactosDeNegociaciones(rn.filas), nifDeEmpresa, gocardless, estados,
   })
   return { ...base, contactos, peticiones }
+}
+
+/**
+ * G01c · Los contactos de Bitrix24, a fichas neutras: sus campos medidos
+ * (crm.contact.fields), cada contacto con solo los campos del mapa
+ * (crm.contact.list), sus empresas (crm.item.list, companyIds: crm.contact.list
+ * no trae COMPANY_IDS, según la documentación oficial), las negociaciones
+ * (crm.item.list de negociaciones, contactIds) y los textos de «Tipo de
+ * cliente» si es de tipo crm_status (crm.status.list). Sin el mapa confirmado,
+ * con el que se propone (para decir cuántos hay de cada antes de confirmar).
+ * Solo lee.
+ */
+export async function leerContactos(pedir: Pedir, url: string, guardado: MapaContactos | null, esperar: (ms: number) => Promise<void>,
+  gocardless: { nifs: ReadonlySet<string>; correos: ReadonlySet<string> }): Promise<{ medidos: Record<string, CampoMedido>; mapa: MapaContactos | null; contactos: FichaContactoCrm[]; peticiones: number }> {
+  let peticiones = 0
+  const otra = async <T>(f: () => Promise<T>) => { await esperar(ESPERA_MS); peticiones++; return f() }
+  const medidos = await otra(() => medirCampos(pedir, url, 'contact'))
+  const base = guardado?.confirmado ? guardado : mapaContactosDe(propuestaContactos(medidos, guardado ? { nif: guardado.nif, direccion: guardado.direccion?.calle ?? null, cuota: guardado.cuota, tipoCliente: guardado.tipoCliente } : null), medidos)
+  if (!base.nif && !base.direccion && !base.cuota) return { medidos, mapa: null, contactos: [], peticiones }
+  // Un campo con una contraseña, un certificado o el IBAN no se pide nunca, aunque esté en el mapa por error.
+  const select = camposDeContactoQueSePiden(base).filter((c) => c === 'ID' || (medidos[c] && !esCampoSensible(medidos[c], c)))
+  await esperar(ESPERA_MS)
+  const rc = await leerTodas((start) => llamar(pedir, url, 'crm.contact.list', { select, order: { ID: 'ASC' }, start }), esperar)
+  peticiones += rc.peticiones
+  await esperar(ESPERA_MS)
+  const ri = await leerTodas(async (start) => paginaDeItems(await llamar(pedir, url, 'crm.item.list', { entityTypeId: 3, select: ['id', 'companyIds'], order: { id: 'ASC' }, start })), esperar)
+  peticiones += ri.peticiones
+  await esperar(ESPERA_MS)
+  const rn = await leerTodas(async (start) => paginaDeItems(await llamar(pedir, url, 'crm.item.list', { entityTypeId: 2, select: ['id', 'contactIds'], order: { id: 'ASC' }, start })), esperar)
+  peticiones += rn.peticiones
+  let textos = base.textosTipo
+  const tipo = base.tipoCliente ? medidos[base.tipoCliente] as (CampoMedido & { statusType?: string }) | undefined : undefined
+  if (!textos && tipo?.type === 'crm_status' && tipo.statusType) {
+    const st = await otra(() => llamar(pedir, url, 'crm.status.list', { filter: { ENTITY_ID: tipo.statusType } })) as { result?: { STATUS_ID: string; NAME: string }[] } | null
+    textos = Object.fromEntries((st?.result ?? []).map((x) => [String(x.STATUS_ID), String(x.NAME)]))
+  }
+  const mapa: MapaContactos = { ...base, ...(textos ? { textosTipo: textos } : {}) }
+  const empresasDe = empresasDeItems(ri.filas)
+  const conNegociacion = contactosDeNegociaciones(rn.filas)
+  const contactos = rc.filas.map((f) => leerContacto(f, mapa, { empresas: empresasDe.get(String(f.ID)) ?? [], conNegociacion: conNegociacion.has(String(f.ID)), gocardless }))
+  return { medidos, mapa, contactos, peticiones }
 }
 
 /** La frase de la lectura (regla 8). */

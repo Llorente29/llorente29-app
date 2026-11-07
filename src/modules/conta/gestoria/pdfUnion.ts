@@ -16,7 +16,7 @@
 // Limpio y de oficina: una tabla por bloque, sin códigos UF_CRM.
 
 import { jsPDF } from 'jspdf'
-import type { EnsayoDeUnion } from '../../../../supabase/functions/conta-bitrix-leer/clientes'
+import type { EnsayoDeUnion } from '../../../../supabase/functions/_shared/crm/clientes'
 
 export interface DatosEnsayo extends EnsayoDeUnion {
   empresa: string
@@ -146,7 +146,7 @@ export function pdfDelEnsayo(d: DatosEnsayo): jsPDF {
   for (const u of d.unidos) {
     inicio.add(filasUnidos.length)
     u.fichas.forEach((f, i) => filasUnidos.push([
-      i === 0 ? u.nif : '', f.nombre, f.bitrixId,
+      i === 0 ? u.nif : '', f.nombre, f.idExterno,
       f.situacion === 'sin_clasificar' && f.situacionTexto ? `Sin clasificar («${f.situacionTexto}»)` : enPalabras(f.situacion),
       i === 0 ? enPalabras(u.situacion) : '',
       i === 0 ? (u.clientesHoy >= 2 ? `${u.clientesHoy} clientes: se juntan` : u.clientesHoy === 1 ? '1 cliente' : 'Nuevo') : '',
@@ -159,7 +159,7 @@ export function pdfDelEnsayo(d: DatosEnsayo): jsPDF {
   // 3 · Las fichas que entran sin NIF.
   tabla(`Fichas que entran sin NIF (${miles(d.sinNif.length)})`, 'Su NIF no se usa: cada una entra como un cliente aparte, sin NIF, y sale en «Pendiente de revisar».',
     [{ titulo: 'Ficha en Bitrix24', peso: 3.2 }, { titulo: 'Id', peso: 0.8 }, { titulo: 'NIF tal cual', peso: 1.6 }, { titulo: 'Motivo', peso: 2.4 }],
-    d.sinNif.map((f) => [f.nombre, f.bitrixId, f.nifEnBitrix ?? '', f.motivo === 'nif_en_muchas' ? `${MOTIVO.nif_en_muchas} (${f.fichasConSuNif})` : MOTIVO.nif_no_valido]))
+    d.sinNif.map((f) => [f.nombre, f.idExterno, f.nifEnCrm ?? '', f.motivo === 'nif_en_muchas' ? `${MOTIVO.nif_en_muchas} (${f.fichasConSuNif})` : MOTIVO.nif_no_valido]))
 
   pie()
   return doc

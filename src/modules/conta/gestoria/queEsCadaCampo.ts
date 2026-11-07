@@ -14,13 +14,15 @@
 // situación, ACTIVO, BAJA…, MOROSO y SOLO RENTA a lo suyo y lo demás «Sin
 // clasificar»; las cuotas, las que no acaban en «z».
 
-import { esCampoSensible } from '../../../../supabase/functions/conta-bitrix-leer/clientes'
+import { esCampoSensible } from '../../../../supabase/functions/conta-bitrix-leer/sensibles'
 import {
   proponerMapa, situacionDeTexto,
   type CampoDelMapa, type CampoMedido, type FuenteDireccion, type MapaBitrix, type Situacion,
 } from '../../../../supabase/functions/conta-bitrix-leer/mapa'
 
 export type { CampoMedido, MapaBitrix, Situacion }
+export type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
+import type { EleccionContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
 export const SITUACIONES_SUMIED: readonly { valor: Situacion; texto: string }[] = [
   { valor: 'activo', texto: 'Activo' },
@@ -153,3 +155,55 @@ export function opcionesDeCampos(medidos: Record<string, CampoMedido>, filtro?: 
     .map((k) => ({ valor: k, texto: `${etiquetaDe(medidos, k)} · ${k}` }))
     .sort((a, b) => a.texto.localeCompare(b.texto, 'es'))
 }
+
+// ── G01c · Elegir un campo sin códigos, y el mapa de contactos ──────────────
+
+/** El tipo de un campo de Bitrix24, en palabras de oficina. */
+export function tipoEnPalabras(tipo: string | undefined): string {
+  switch (tipo) {
+    case 'string': return 'Texto'
+    case 'enumeration': case 'crm_status': return 'Lista'
+    case 'address': return 'Dirección'
+    case 'money': return 'Importe'
+    case 'double': case 'integer': return 'Número'
+    case 'date': return 'Fecha'
+    case 'datetime': return 'Fecha y hora'
+    case 'boolean': case 'char': return 'Sí o no'
+    case 'crm_multifield': return 'Varios valores'
+    case 'employee': case 'user': return 'Persona del equipo'
+    case 'url': return 'Enlace'
+    default: return tipo?.startsWith('crm') ? 'Enlace del CRM' : 'Otro'
+  }
+}
+
+export interface CampoParaElegir { valor: string; etiqueta: string; tipo: string; propio: boolean }
+
+/**
+ * Los campos para elegir: por su etiqueta, con su tipo en palabras y si es
+ * propio del portal o de serie de Bitrix24. Nunca el código (UF_CRM_…), ni los
+ * que guardan contraseñas, certificados o el IBAN.
+ */
+export function camposParaElegir(medidos: Record<string, CampoMedido>, filtro?: (c: CampoMedido) => boolean): CampoParaElegir[] {
+  return Object.keys(medidos).filter((k) => !esCampoSensible(medidos[k], k) && (!filtro || filtro(medidos[k])))
+    .map((k) => ({ valor: k, etiqueta: etiquetaDe(medidos, k), tipo: tipoEnPalabras(medidos[k]?.type), propio: k.startsWith('UF_CRM_') }))
+    .sort((a, b) => a.etiqueta.localeCompare(b.etiqueta, 'es') || Number(a.propio) - Number(b.propio))
+}
+
+const normal = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
+/** Los campos cuyo nombre o tipo tiene todas las palabras buscadas (sin tildes ni mayúsculas). */
+export function buscarCampos(campos: readonly CampoParaElegir[], texto: string): CampoParaElegir[] {
+  const palabras = normal(texto).split(' ').filter(Boolean)
+  if (!palabras.length) return [...campos]
+  return campos.filter((c) => { const t = normal(`${c.etiqueta} ${c.tipo}`); return palabras.every((p) => t.includes(p)) })
+}
+
+export function loQueFaltaContactos(e: EleccionContactos): string[] {
+  const out: string[] = []
+  if (!e.nif) out.push('El NIF: ningún campo elegido. Sin él, ningún contacto se une con su empresa.')
+  if (!e.direccion) out.push('La dirección: ningún campo elegido.')
+  return out
+}
+
+// G01c · La propuesta y el mapa de contactos viven en el adaptador de Bitrix24 (la lectura propone lo mismo que la pantalla).
+export { mapaContactosDe, propuestaContactos, type EleccionContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
+export type { ResumenContactos, ContactosLeidos } from '../../../../supabase/functions/_shared/crm/contactos'

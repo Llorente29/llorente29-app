@@ -54,7 +54,7 @@ export function UnionDeFichas({ mapa, alEnsayar, alAplicar, descargar = descarga
     <section className="cxg-mapa" aria-labelledby="unir-fichas" data-prueba="unir-fichas">
       <h3 id="unir-fichas" className="cxg-ficha-sub">Unir las fichas repetidas</h3>
       <p className="cxg-apoyo">
-        Un mismo NIF es un solo cliente en Sumied, con todas sus fichas de Bitrix24 enlazadas, y su situación es la más viva de ellas
+        Un mismo NIF es un solo cliente en Sumied, con todas sus fichas de tu CRM enlazadas (empresas y contactos), y su situación es la más viva de ellas
         (activo, moroso, solo la renta, sin clasificar, de baja). Un NIF sin formato de DNI, NIE o CIF, o que sale en 10 fichas o más, no se usa:
         esas fichas entran sin NIF, cada una aparte. Todo sale en «Pendiente de revisar».
       </p>
@@ -65,7 +65,7 @@ export function UnionDeFichas({ mapa, alEnsayar, alAplicar, descargar = descarga
 
       <div className="cxg-paso-botones">
         <button type="button" className="cxg-boton" onClick={() => void ensayar()} disabled={!confirmado || !!ocupado}>
-          {ocupado === 'ensayo' ? 'Leyendo Bitrix24…' : 'Ver qué se va a unir (PDF)'}</button>
+          {ocupado === 'ensayo' ? 'Leyendo tu CRM…' : 'Ver qué se va a unir (PDF)'}</button>
         {!union && !abierto && (
           <button type="button" className="cxg-boton cxg-boton-principal" onClick={() => setAbierto(true)} disabled={!confirmado || !!ocupado}>Aplicar la unión y leer</button>
         )}
@@ -73,7 +73,7 @@ export function UnionDeFichas({ mapa, alEnsayar, alAplicar, descargar = descarga
       {!union && abierto && (
         <div className="cxg-paso" role="group" aria-label="Aplicar la unión">
           <p className="cxg-paso-aviso">
-            Desde ahora, cada lectura une en un solo cliente las fichas con el mismo NIF, y se leen de nuevo las fichas de Bitrix24 (solo se lee: no se cambia nada en Bitrix24).
+            Desde ahora, cada lectura une en un solo cliente las fichas con el mismo NIF, y se leen de nuevo las fichas de tu CRM (solo se lee: no se cambia nada en él).
             {visto ? ` Según el ensayo de hace un momento: ${miles(visto.resumen.clientes)} clientes, ${miles(visto.resumen.fichasUnidas)} fichas unidas y ${miles(visto.resumen.sinNifPorFormato + visto.resumen.sinNifPorMuchas)} sin NIF.` : ' Revisa antes el PDF del ensayo.'}
           </p>
           <div className="cxg-paso-botones">

@@ -18,8 +18,10 @@ import {
 export type TipoDiferencia =
   | 'bitrix_sin_cobro' | 'gocardless_sin_ficha' | 'emisor_distinto' | 'nif_repetido_en_bitrix' | 'correo_repetido_en_bitrix'
   | 'nif_distinto' | 'suscripcion_sin_convertir' | 'totales_distintos' | 'mandato_por_firmar' | 'falla_a_menudo' | 'abono_en_otra_cuenta'
-  // G01b · De la lectura de Bitrix24: un cliente con varias fichas, una ficha que entra sin NIF y una que no se ha podido guardar.
+  // G01b · De la lectura del CRM: un cliente con varias fichas, una ficha que entra sin NIF y una que no se ha podido guardar.
   | 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada'
+  // G01c · Un contacto con solo una negociación, y uno con empresa y con datos de cliente.
+  | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos'
 
 export interface Diferencia {
   id: string
@@ -40,13 +42,18 @@ export interface ClienteGestoria {
   nif: string | null
   emisorId: string
   emisor: string
-  /** Lo que dice Bitrix24 (de referencia). */
+  /** Lo que dice su CRM (de referencia). */
   bitrix: {
     situacion: string | null; formaPago: string | null; servicios: string[]
     /** G01b · El texto de la situación en Bitrix24 (para «Sin clasificar»), la dirección y de qué campo sale, y las otras, de referencia. */
     situacionTexto?: string | null; direccion?: string | null; direccionDe?: string | null; otrasDirecciones?: { etiqueta: string; texto: string }[]
-    /** G01b · Las otras fichas de Bitrix24 del mismo cliente (el mismo NIF, con la unión aplicada). */
-    otrasFichas?: { bitrixId: string; nombre: string; situacion: string | null; situacionTexto: string | null }[]
+    /** G01b · Las otras fichas del CRM del mismo cliente (el mismo NIF, con la unión aplicada). */
+    otrasFichas?: { idExterno: string; tipoFicha?: 'empresa' | 'contacto'; nombre: string; situacion: string | null; situacionTexto: string | null }[]
+    /** G01c · Si su ficha principal es una empresa o un contacto del CRM, y «Tipo de cliente» (de un contacto, de referencia). */
+    tipoFicha?: 'empresa' | 'contacto'
+    tipoCliente?: string | null
+    /** G01c · Sus personas de contacto (los contactos del CRM con su empresa). */
+    personas?: { nombre: string; correos: string[]; telefonos: string[] }[]
   } | null
   formaCobro: 'gocardless' | 'transferencia' | 'tarjeta' | 'efectivo' | null
   /** El estado del mandato en GoCardless, tal cual (active, pending_customer_approval…). */
@@ -59,17 +66,20 @@ export interface ClienteGestoria {
 export type Conector = 'gocardless' | 'bitrix'
 /** Cada chip, con los conectores que necesita: sin ellos, no sale (no hay nada que comparar). */
 export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; etiqueta: string; necesita: readonly Conector[] }[] = [
-  { id: 'sin-cobro', tipos: ['bitrix_sin_cobro'], etiqueta: 'En Bitrix24 sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
-  { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en Bitrix24', necesita: ['bitrix', 'gocardless'] },
-  { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Bitrix24 y GoCardless no coinciden en el emisor', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-cobro', tipos: ['bitrix_sin_cobro'], etiqueta: 'En tu CRM sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en tu CRM', necesita: ['bitrix', 'gocardless'] },
+  { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Tu CRM y GoCardless no coinciden en el emisor', necesita: ['bitrix', 'gocardless'] },
   { id: 'sin-convertir', tipos: ['suscripcion_sin_convertir'], etiqueta: 'Suscripción sin convertir en tarifa', necesita: ['gocardless'] },
   { id: 'totales', tipos: ['totales_distintos'], etiqueta: 'Sumied y GoCardless no dan el mismo total', necesita: ['gocardless'] },
   { id: 'por-firmar', tipos: ['mandato_por_firmar'], etiqueta: 'Mandato pendiente de firma', necesita: ['gocardless'] },
   { id: 'fallan', tipos: ['falla_a_menudo'], etiqueta: 'Fallan a menudo (3 o más en 6 meses)', necesita: ['gocardless'] },
-  // G01b · De la lectura de Bitrix24 (Julio, 07/11).
-  { id: 'repetidas', tipos: ['fichas_repetidas'], etiqueta: 'Fichas repetidas en Bitrix24', necesita: ['bitrix'] },
-  { id: 'sin-nif', tipos: ['nif_no_valido'], etiqueta: 'NIF de Bitrix24 que no se usa', necesita: ['bitrix'] },
-  { id: 'no-guardada', tipos: ['ficha_no_guardada'], etiqueta: 'Fichas de Bitrix24 sin guardar', necesita: ['bitrix'] },
+  // G01b · De la lectura del CRM (Julio, 07/11).
+  { id: 'repetidas', tipos: ['fichas_repetidas'], etiqueta: 'Fichas repetidas en tu CRM', necesita: ['bitrix'] },
+  { id: 'sin-nif', tipos: ['nif_no_valido'], etiqueta: 'NIF de tu CRM que no se usa', necesita: ['bitrix'] },
+  { id: 'no-guardada', tipos: ['ficha_no_guardada'], etiqueta: 'Fichas de tu CRM sin guardar', necesita: ['bitrix'] },
+  // G01c · Los contactos (Julio, 07/11).
+  { id: 'contacto-negociacion', tipos: ['contacto_solo_negociacion'], etiqueta: 'Contacto con solo una negociación', necesita: ['bitrix'] },
+  { id: 'contacto-con-datos', tipos: ['contacto_empresa_con_datos'], etiqueta: 'Contacto con empresa y con datos de cliente', necesita: ['bitrix'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
@@ -191,8 +201,8 @@ export type Resolver = 'linea_o_baja' | 'enlazar' | 'revisada'
 export function comoResolver(d: Diferencia): Resolver[] {
   if (d.tipo === 'totales_distintos' || d.tipo === 'suscripcion_sin_convertir') return ['linea_o_baja', 'revisada']
   if (d.tipo === 'gocardless_sin_ficha') return ['enlazar', 'revisada']
-  // G01b · Lo de Bitrix24 se corrige en Bitrix24: la próxima lectura lo renueva (no hay empresa a la que apuntar la revisión).
-  if (d.tipo === 'fichas_repetidas' || d.tipo === 'nif_no_valido' || d.tipo === 'ficha_no_guardada') return []
+  // G01b · Lo del CRM se corrige en el CRM: la próxima lectura lo renueva (no hay empresa a la que apuntar la revisión).
+  if (['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos'].includes(d.tipo)) return []
   return ['revisada']
 }
 

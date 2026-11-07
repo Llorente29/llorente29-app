@@ -1,0 +1,18 @@
+# G01c · Los contactos del CRM y la clave neutra (Julio, 07/11). Rama
+# conta/g01c-contactos. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. Con «autorizo»: cambian las claves de las fichas, los
+# clientes y la conexión (conta_crm_bitrix pasa a ser conta_crm, con una vista
+# de lo de antes).
+#
+#   1925  Primera de dos tandas: AÑADE y COPIA, no quita nada. conta_crm (la
+#         conexión con el CRM, una fila por cuenta y CRM), la clave neutra
+#         (crm, tipo_ficha, id_externo) en fichas, clientes y diferencias,
+#         copiada de bitrix_id; las personas de contacto; el mapa de los
+#         contactos; el RIF como identificador fiscal extranjero; y las
+#         funciones neutras, con las de siempre pasando a ellas.
+#
+# Lo publicado sigue funcionando hasta la fusión (lee y escribe lo de antes).
+# La segunda tanda (G01c, tarea 6) quita lo de antes. No lee ni escribe en el
+# CRM. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g01c-crm-y-contactos.sql
+supabase/migrations/20261107T1925_g01c_crm_y_contactos.sql

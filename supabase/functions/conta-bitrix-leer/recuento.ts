@@ -12,7 +12,8 @@
 //     qué situaciones, de qué tipo y si mezclan sociedad y persona.
 
 import { situacionDeTexto, type CampoMedido, type Situacion } from './mapa.ts'
-import { agrupar, esCampoSensible, nifComoLaBase, resumenDeUnion, tipoDeNif, type ResumenDeUnion } from './clientes.ts'
+import { agrupar, nifComoLaBase, resumenDeUnion, tipoDeNif, type ResumenDeUnion } from '../_shared/crm/clientes.ts'
+import { esCampoSensible } from './sensibles.ts'
 
 export { nifComoLaBase, tipoDeNif }
 
@@ -42,7 +43,7 @@ export interface ResultadoRepetidos {
   /** El mismo NIF en una ficha activa y en otra de baja. */
   activaYBaja: number
   /** De qué tipo es cada NIF repetido: DNI, NIE, CIF u otro. */
-  porTipo: { DNI: number; NIE: number; CIF: number; otro: number }
+  porTipo: { DNI: number; NIE: number; CIF: number; RIF: number; otro: number }
   /** Repetidos entre una ficha con nombre de sociedad (S.L., S.A., C.B.…) y otra con nombre de persona. */
   sociedadYPersona: number
   /** De dónde sale la situación: del mapa confirmado o, si no lo hay, de su texto. */
@@ -98,7 +99,7 @@ export function situacionDeFila(situacion: string, medidos: Record<string, Campo
 /** G01b · Lo que saldría con la regla de la unión: las fichas, en clientes (solo números). */
 export function simularUnion(filas: readonly Record<string, unknown>[], nif: string, situacion: string, medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null): ResumenDeUnion {
   const sit = situacionDeFila(situacion, medidos, opcionesConfirmadas)
-  return resumenDeUnion(agrupar(filas.map((f) => ({ bitrixId: String(f.ID ?? ''), nif: textoDe(f[nif]) || null, situacion: sit(textoDe(f[situacion])) })), true))
+  return resumenDeUnion(agrupar(filas.map((f) => ({ idExterno: String(f.ID ?? ''), nif: textoDe(f[nif]) || null, situacion: sit(textoDe(f[situacion])) })), true))
 }
 
 /** G01b · Los campos que el recuento no puede pedir nunca (contraseñas, certificados). */
@@ -126,7 +127,7 @@ export function contarRepetidos(
   const out: ResultadoRepetidos = {
     campoNif: { codigo: r.nif, etiqueta: etiqueta(medidos, r.nif) }, fichasConNif,
     nifRepetidos: 0, fichasEnRepetidos: 0, maximoPorNif: 0, mismaSituacion: 0, distintaSituacion: 0, activaYBaja: 0,
-    porTipo: { DNI: 0, NIE: 0, CIF: 0, otro: 0 }, sociedadYPersona: 0,
+    porTipo: { DNI: 0, NIE: 0, CIF: 0, RIF: 0, otro: 0 }, sociedadYPersona: 0,
     situacionSegun: opcionesConfirmadas ? 'mapa confirmado' : 'texto de la opción',
   }
   for (const [nif, x] of porNif) {

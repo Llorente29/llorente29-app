@@ -10,13 +10,13 @@
 
 import { useMemo, useState } from 'react'
 import { Selector } from '@/modules/conta/diseno'
+import { ElegirCampo } from './ElegirCampo'
 import {
-  FUENTES, SITUACIONES_SUMIED, eleccionInicial, etiquetaDe, loQueFalta, mapaParaConfirmar, opcionesDeCampos, opcionesDeSituacion, resumenDeOpciones, sePuedeConfirmar,
+  FUENTES, SITUACIONES_SUMIED, camposParaElegir, eleccionInicial, etiquetaDe, loQueFalta, mapaParaConfirmar, opcionesDeSituacion, resumenDeOpciones, sePuedeConfirmar,
   type CampoMedido, type Eleccion, type MapaBitrix, type Situacion,
 } from './queEsCadaCampo'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
-const NINGUNO = { valor: '', texto: '— Ninguno —' }
 const fechaHora = (iso: string) => {
   const d = new Date(iso)
   return `${d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', timeZone: 'Europe/Madrid' })} a las ${d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Madrid' })}`
@@ -31,7 +31,9 @@ function Fila({ sumied, apoyo, children }: { sumied: string; apoyo?: string; chi
   )
 }
 
-export function QueEsCadaCampo({ mapa, medidos, alConfirmar }: {
+export function QueEsCadaCampo({ mapa, medidos, alConfirmar, sinTitulo }: {
+  /** G01c · Dentro de las pestañas (CamposDeBitrix), sin su título: lo pone la pestaña. */
+  sinTitulo?: boolean
   mapa: MapaBitrix | null
   medidos: Record<string, CampoMedido> | null
   /** Guarda el mapa confirmado y lee de nuevo: devuelve las frases de las dos cosas. */
@@ -42,8 +44,9 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar }: {
   const [abierto, setAbierto] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
-  const todos = useMemo(() => (medidos ? [NINGUNO, ...opcionesDeCampos(medidos)] : []), [medidos])
-  const listas = useMemo(() => (medidos ? [NINGUNO, ...opcionesDeCampos(medidos, (c) => !!c.items?.length)] : []), [medidos])
+  // G01c · Sin códigos y con búsqueda: cada campo por su etiqueta y su tipo en palabras.
+  const todos = useMemo(() => (medidos ? camposParaElegir(medidos) : []), [medidos])
+  const listas = useMemo(() => (medidos ? camposParaElegir(medidos, (c) => !!c.items?.length) : []), [medidos])
 
   if (!medidos || !e) {
     return <p className="s-aviso-lista" data-tono="falta" role="alert">Faltan los campos medidos del portal: vuelve a conectar Bitrix24 para ver qué es cada campo.</p>
@@ -62,8 +65,8 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar }: {
   }
 
   return (
-    <section className="cxg-mapa" aria-labelledby="que-es-cada-campo" data-prueba="que-es-cada-campo">
-      <h3 id="que-es-cada-campo" className="cxg-ficha-sub">Qué es cada campo</h3>
+    <section className="cxg-mapa" aria-label="Qué es cada campo · Empresas" data-prueba="que-es-cada-campo">
+      {!sinTitulo && <h3 id="que-es-cada-campo" className="cxg-ficha-sub">Qué es cada campo</h3>}
       {confirmado
         ? <p className="cxg-mapa-estado" data-tono="verde" role="status">Confirmado{confirmado.quien ? ` por ${confirmado.quien}` : ''} el {fechaHora(confirmado.cuando)}. Si cambias algo, vuelve a confirmarlo.</p>
         : <p className="s-aviso-lista" data-tono="falta" role="alert">Sin confirmar: no se guarda la situación de nadie. Revisa cada campo y confírmalo abajo.</p>}
@@ -77,13 +80,12 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar }: {
       <div className="cxg-mapa-cabeza" aria-hidden="true"><span>En Sumied</span><span>Sale de este campo de Bitrix24</span></div>
 
       <Fila sumied="NIF" apoyo="El de la ficha fiscal del cliente.">
-        <Selector aria-label="NIF: campo de Bitrix24" valor={e.nif ?? ''} alCambiar={(v) => cambiar({ nif: v || null })} opciones={todos} />
+        <ElegirCampo etiqueta="NIF: campo de Bitrix24" valor={e.nif} alCambiar={(v) => cambiar({ nif: v })} campos={todos} />
       </Fila>
 
       <Fila sumied="Situación del cliente" apoyo="Solo «Activo» espera un cobro cada mes.">
-        <Selector aria-label="Situación del cliente: campo de Bitrix24" valor={e.situacion ?? ''} opciones={listas}
-          alCambiar={(v) => {
-            const s = v || null
+        <ElegirCampo etiqueta="Situación del cliente: campo de Bitrix24" valor={e.situacion} campos={listas}
+          alCambiar={(s) => {
             const antes = mapa?.campos.find((c) => c.campo === 'situacion' && c.codigo === s)?.opciones
             cambiar({ situacion: s, opciones: opcionesDeSituacion(s, medidos, antes) })
           }} />
@@ -107,8 +109,8 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar }: {
         <ol className="cxg-mapa-fuentes">
           {e.direcciones.map((d, i) => (
             <li key={i}>
-              <Selector aria-label={`Dirección, ${i + 1}.ª fuente`} valor={d.calle ?? ''} opciones={todos}
-                alCambiar={(v) => cambiar({ direcciones: e.direcciones.map((x, j) => (j === i ? { ...x, calle: v || null } : x)) })} />
+              <ElegirCampo etiqueta={`Dirección, ${i + 1}.ª fuente`} valor={d.calle} campos={todos}
+                alCambiar={(v) => cambiar({ direcciones: e.direcciones.map((x, j) => (j === i ? { ...x, calle: v } : x)) })} />
               {d.calle && (d.cp || d.poblacion || d.provincia) && (
                 <span className="cxg-apoyo">Con {[d.cp && `código postal de «${etiquetaDe(medidos, d.cp)}»`, d.poblacion && `población de «${etiquetaDe(medidos, d.poblacion)}»`, d.provincia && `provincia de «${etiquetaDe(medidos, d.provincia)}»`].filter(Boolean).join(', ')}.</span>
               )}
@@ -123,14 +125,14 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar }: {
 
       {e.cuotas.map((c, i) => (
         <Fila key={c.etiqueta} sumied={`Cuota de referencia · ${c.etiqueta}`} apoyo={i === 0 ? 'Solo de referencia: Sumied no calcula nada con ella.' : undefined}>
-          <Selector aria-label={`Cuota ${c.etiqueta}: campo de Bitrix24`} valor={c.codigo ?? ''} opciones={todos}
-            alCambiar={(v) => cambiar({ cuotas: e.cuotas.map((x, j) => (j === i ? { ...x, codigo: v || null } : x)) })} />
+          <ElegirCampo etiqueta={`Cuota ${c.etiqueta}: campo de Bitrix24`} valor={c.codigo} campos={todos}
+            alCambiar={(v) => cambiar({ cuotas: e.cuotas.map((x, j) => (j === i ? { ...x, codigo: v } : x)) })} />
         </Fila>
       ))}
 
       {otros.map((c) => (
         <Fila key={`${c.campo}-${c.codigo}`} sumied={NOMBRES[c.campo] ?? c.campo}>
-          <span className={c.codigo ? undefined : 'cxg-mapa-falta'}>{c.codigo ? `${etiquetaDe(medidos, c.codigo)} · ${c.codigo}` : 'Ningún campo'}</span>
+          <span className={c.codigo ? undefined : 'cxg-mapa-falta'}>{c.codigo ? etiquetaDe(medidos, c.codigo) : 'Ningún campo'}</span>
         </Fila>
       ))}
 

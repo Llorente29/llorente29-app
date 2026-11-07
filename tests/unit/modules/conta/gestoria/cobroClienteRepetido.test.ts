@@ -14,8 +14,8 @@ const datos = (clientes: DatosGc['clientes'], mandatos: DatosGc['mandatos']): Da
 const antes = (extra: Partial<Antes> = {}): Antes => ({
   huellas: new Map(), otrosEmisores: [], formaAntes: new Map(), porDefecto: true, importadas: new Set(), tarifasPropias: new Set(),
   fichas: [
-    { partyId: 'P1', bitrixId: 'F1', nombre: 'CLIENTE PRUEBA UNO', nif: 'B00000001', correos: ['uno@prueba.test'], situacion: 'activo', formaPago: null, emisorSegunBitrix: null },
-    { partyId: 'P2', bitrixId: 'F2', nombre: 'CLIENTE PRUEBA DOS', nif: 'B00000002', correos: [], situacion: 'activo', formaPago: null, emisorSegunBitrix: null },
+    { partyId: 'P1', claveFicha: 'F1', nombre: 'CLIENTE PRUEBA UNO', nif: 'B00000001', correos: ['uno@prueba.test'], situacion: 'activo', formaPago: null, emisorSegunCrm: null },
+    { partyId: 'P2', claveFicha: 'F2', nombre: 'CLIENTE PRUEBA DOS', nif: 'B00000002', correos: [], situacion: 'activo', formaPago: null, emisorSegunCrm: null },
   ],
   ...extra,
 })

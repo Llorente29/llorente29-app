@@ -43,8 +43,8 @@ describe('G01 · Bitrix24 con respuestas grabadas', () => {
     const lista = pedidas.filter((p) => p.metodo === 'crm.company.list')
     expect(lista.map((p) => p.cuerpo.start)).toEqual([0, 50])
     expect(lista[0].cuerpo.select).not.toContain('UF_CRM_105')
-    expect(r.fichas[0]).toMatchObject({ bitrixId: '1', nif: 'B00000001', situacion: 'activo', servicios: ['C', 'L'], emisorSegunBitrix: 'empresa-a', correos: ['cliente1@prueba.test'] })
-    expect(r.fichas.find((f) => f.bitrixId === '3')?.emisorSegunBitrix).toBe('empresa-b')
+    expect(r.fichas[0]).toMatchObject({ idExterno: '1', nif: 'B00000001', situacion: 'activo', servicios: ['C', 'L'], emisorSegunCrm: 'empresa-a', correos: ['cliente1@prueba.test'] })
+    expect(r.fichas.find((f) => f.idExterno === '3')?.emisorSegunCrm).toBe('empresa-b')
     expect(r.fichas.filter((f) => f.situacion === 'baja')).toHaveLength(6)
   })
 

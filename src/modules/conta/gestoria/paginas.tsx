@@ -15,7 +15,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { rpc } from '@/modules/conta/services/bd'
 import {
-  altaEmpleado, aplicarUnion, bajaLinea, cambiarReintentos, conectarBitrix, confirmarMapaBitrix, ensayoUnion, conectarGocardless, enlazar, guardarTarifa, leerBitrix, leerConexiones, leerGestoria, leerGocardless,
+  altaEmpleado, aplicarUnion, bajaLinea, cambiarReintentos, conectarBitrix, confirmarMapaBitrix, confirmarMapaContactos, ensayoUnion, conectarGocardless, enlazar, guardarTarifa, leerBitrix, leerConexiones, leerGestoria, leerGocardless,
   lineaDesdeGc, noContar, revisada,
 } from '@/modules/conta/services/gestoriaService'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
@@ -78,7 +78,7 @@ export function CobrosGestoriaAjustes() {
     if (!(soy?.asesoria === true || (soy?.clientes ?? 0) > 0)) return null
     return leerConexiones(accountId)
   } : null, `${accountId}:conexiones-gestoria`)
-  if (d.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer GoCardless y Bitrix24: {d.error}</p>
+  if (d.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer GoCardless y tu CRM: {d.error}</p>
   if (!d.datos || !accountId) return null
   const tras = async (p: Promise<string>) => { const f = await p; d.recargar(); return f }
   return <CobrosGestoria emisores={empresas.map((e) => ({ id: e.id, nombre: e.razonSocial ?? e.nombre }))} gocardless={d.datos.gocardless} bitrix={d.datos.bitrix}
@@ -86,7 +86,7 @@ export function CobrosGestoriaAjustes() {
       conectarGc: (e, en, t) => tras(conectarGocardless(e, en, t)), leerGc: (e) => tras(leerGocardless(e)),
       reintentos: (e, on) => cambiarReintentos(e, on),
       conectarBitrix: (en, u) => tras(conectarBitrix(accountId, en, u)), leerBitrix: () => tras(leerBitrix(accountId)),
-      confirmarMapa: (m) => tras(confirmarMapaBitrix(accountId, m)),
+      confirmarMapa: (m) => tras(confirmarMapaBitrix(accountId, m)), confirmarMapaContactos: (m) => tras(confirmarMapaContactos(accountId, m)),
       ensayoUnion: () => ensayoUnion(accountId), aplicarUnion: () => tras(aplicarUnion(accountId)),
     }} />
 }
