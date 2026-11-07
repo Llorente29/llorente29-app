@@ -20,6 +20,7 @@ import { corsHeaders } from '../_shared/cors.ts'
 import { MAPA_QBO, proponerMapa, type MapaBitrix } from './mapa.ts'
 import { fraseDeBitrix, leerFichas, leerParaRecuento, medirCampos, portalDe } from './lectura.ts'
 import { gruposValidos } from './recuento.ts'
+import { revisarClave } from './clave.ts'
 import { puedeLeer, type Entorno } from './salida.ts'
 
 const json = (status: number, body: unknown) =>
@@ -90,8 +91,14 @@ Deno.serve(async (req) => {
   // no se devuelve) y no escribe nada: ni la lectura, ni las fichas. Devuelve
   // solo números.
   if (cuerpo.accion === 'recuento') {
-    const servicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    if (!servicio || req.headers.get('x-internal-key') !== servicio) return json(403, { error: 'El recuento solo se lanza desde su workflow, con la clave de servicio.' })
+    // La clave de servicio, en cualquiera de sus dos formatos (la antigua o la nueva sb_secret_…).
+    const clave = revisarClave(req.headers.get('x-internal-key'), {
+      antigua: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', nuevas: Deno.env.get('SUPABASE_SECRET_KEYS') ?? '',
+    })
+    if (!clave.vale) {
+      console.error('[conta-bitrix-leer] recuento sin la clave de servicio:', clave.porque)
+      return json(403, { error: `El recuento solo se lanza desde su workflow, con la clave de servicio: ${clave.porque}.` })
+    }
     const grupos = gruposValidos(cuerpo.grupos)
     if (!grupos) return json(400, { error: 'Faltan los campos a contar: texto (por grupo), situacion y cuotas, con sus códigos de Bitrix24.' })
     try {

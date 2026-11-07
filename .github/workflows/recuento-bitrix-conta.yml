@@ -66,10 +66,19 @@ jobs:
           set -euo pipefail
           REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
           [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
-          KEY=$(curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" \
-                | jq -r '.[] | select(.name == "service_role") | .api_key' | head -1)
+          # G01b (07/11): el primer recuento salió con 403 porque la función solo
+          # comparaba con la clave antigua. Se pide la nueva (secreta, «default»)
+          # si el proyecto la tiene y, si no, la antigua (service_role); la
+          # función acepta las dos. Del formato se dice cuál es; de la clave, nada.
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
           [ -n "$KEY" ] && [ "$KEY" != "null" ] || { echo "::error::No se pudo obtener la clave de servicio."; exit 1; }
           echo "::add-mask::$KEY"
+          case "$KEY" in sb_secret_*) echo "Clave de servicio: la nueva (sb_secret_…)."; echo "FORMATO=nueva" >> "$GITHUB_ENV" ;;
+                         eyJ*) echo "Clave de servicio: la antigua (JWT)."; echo "FORMATO=antigua" >> "$GITHUB_ENV" ;;
+                         *) echo "::error::La clave de servicio no tiene un formato conocido."; exit 1 ;; esac
           echo "REF=$REF" >> "$GITHUB_ENV"
           echo "KEY=$KEY" >> "$GITHUB_ENV"
 
@@ -84,8 +93,10 @@ jobs:
           [[ "$IMPORTES" == "si" || "$IMPORTES" == "no" ]] || { echo "::error::«importes» es «si» o «no»."; exit 1; }
           echo "$GRUPOS" | jq -e . > /dev/null || { echo "::error::«grupos» no es un JSON."; exit 1; }
           jq -n --arg c "$CUENTA" --argjson g "$GRUPOS" '{accion: "recuento", cuenta: $c, grupos: $g}' > /tmp/cuerpo.json
+          # La nueva no es un JWT: no va en «Authorization» (Supabase la rechazaría ahí), sino en «apikey».
+          if [ "$FORMATO" = "nueva" ]; then CABECERA="apikey: $KEY"; else CABECERA="Authorization: Bearer $KEY"; fi
           code=$(curl -s -o /tmp/r.json -w '%{http_code}' -X POST "https://$REF.supabase.co/functions/v1/conta-bitrix-leer" \
-                 -H "Authorization: Bearer $KEY" -H "x-internal-key: $KEY" -H 'Content-Type: application/json' --data @/tmp/cuerpo.json)
+                 -H "$CABECERA" -H "x-internal-key: $KEY" -H 'Content-Type: application/json' --data @/tmp/cuerpo.json)
           if [ "$code" != "200" ]; then
             echo "::error::La función ha contestado $code: $(jq -r '.error // "sin mensaje"' /tmp/r.json 2>/dev/null || echo 'sin mensaje')"
             exit 1
