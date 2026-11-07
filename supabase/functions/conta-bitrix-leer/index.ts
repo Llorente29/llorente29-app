@@ -22,7 +22,7 @@ import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { MAPA_QBO, proponerMapa, type MapaBitrix } from './mapa.ts'
 import { fraseDeBitrix, fraseDelReparto, leerFichas, leerParaRecuento, medirCampos, miles, portalDe, repartoDe } from './lectura.ts'
-import { agrupar, diferenciasDeLectura, ensayoDeUnion, paraGuardar, resumenDeUnion, type ErrorAlGuardar } from './clientes.ts'
+import { agrupar, diferenciasDeLectura, ensayoDeUnion, nifComoLaBase, paraGuardar, resumenDeUnion, type ErrorAlGuardar } from './clientes.ts'
 import { gruposValidos } from './recuento.ts'
 import { revisarClave } from './clave.ts'
 import { puedeLeer, type Entorno } from './salida.ts'
@@ -150,7 +150,22 @@ Deno.serve(async (req) => {
       if (!puerta.lee) return json(400, { error: puerta.porque })
       // G01b · Para los repetidos, la situación como la dice el mapa confirmado (si lo está y es el mismo campo).
       const sit = s.mapa?.confirmado ? s.mapa.campos.find((c) => c.campo === 'situacion' && c.codigo === grupos.situacion)?.opciones ?? null : null
-      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar, sit)) })
+      // G01c · Los clientes de GoCardless ya leídos en Sumied (NIF y correo), para contar los contactos casados con uno.
+      // Se usan aquí dentro para contar: no salen del recuento.
+      const gocardless = { nifs: new Set<string>(), correos: new Set<string>() }
+      if (grupos.contactos) {
+        for (let desde = 0; ; desde += 1000) {
+          const { data, error } = await admin.from('conta_gc_cliente').select('nif, correo').eq('account_id', cuenta).order('gc_id').range(desde, desde + 999)
+          if (error) throw new Error(`No se han podido leer los clientes de GoCardless: ${error.message}`)
+          for (const g of (data ?? []) as { nif: string | null; correo: string | null }[]) {
+            const n = nifComoLaBase(g.nif)
+            if (n) gocardless.nifs.add(n)
+            if (g.correo?.trim()) gocardless.correos.add(g.correo.trim().toLowerCase())
+          }
+          if ((data ?? []).length < 1000) break
+        }
+      }
+      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar, sit, gocardless)) })
     } catch (e) {
       console.error('[conta-bitrix-leer] recuento', e instanceof Error ? e.message : String(e))
       return json(500, { error: e instanceof Error ? e.message : 'No se ha podido contar.' })

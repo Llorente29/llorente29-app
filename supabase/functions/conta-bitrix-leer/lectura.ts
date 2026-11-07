@@ -8,7 +8,7 @@
 import { ESPERA_MS, camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
 import { camposDelRecuento, camposSensiblesDe, contar, type GruposRecuento } from './recuento.ts'
 import { esCampoSensible, nifComoLaBase } from './clientes.ts'
-import { camposDeContactos, contarContactos } from './contactos.ts'
+import { camposDeContactos, contactosDeNegociaciones, contarContactos, empresasDeItems, estadosAPedir, paginaDeItems } from './contactos.ts'
 
 export type Pedir = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
   Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
@@ -61,7 +61,8 @@ export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, es
  * campos a contar (de 50 en 50, una petición cada 500 ms). Solo lee. Si el
  * portal no tiene alguno de los campos, para y lo dice.
  */
-export async function leerParaRecuento(pedir: Pedir, url: string, grupos: GruposRecuento, esperar: (ms: number) => Promise<void>, opcionesConfirmadas?: Record<string, string> | null) {
+export async function leerParaRecuento(pedir: Pedir, url: string, grupos: GruposRecuento, esperar: (ms: number) => Promise<void>, opcionesConfirmadas?: Record<string, string> | null,
+  gocardless: { nifs: ReadonlySet<string>; correos: ReadonlySet<string> } = { nifs: new Set(), correos: new Set() }) {
   const medidos = await medirCampos(pedir, url)
   const select = camposDelRecuento(grupos)
   const faltan = select.filter((c) => c !== 'ID' && !medidos[c])
@@ -72,13 +73,33 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
   const base = contar(r.filas, grupos, medidos, opcionesConfirmadas)
   if (!grupos.contactos) return { ...base, peticiones: r.peticiones }
-  // G01c · Los contactos: sus campos (etiqueta y tipo), y cada contacto con solo el enlace a la empresa y los candidatos.
-  await esperar(ESPERA_MS)
-  const deContacto = await medirCampos(pedir, url, 'contact')
+  // G01c · Los contactos: sus campos (etiqueta y tipo) y cada contacto con solo los candidatos.
+  let peticiones = r.peticiones
+  const otra = async <T>(f: () => Promise<T>) => { await esperar(ESPERA_MS); peticiones++; return f() }
+  const deContacto = await otra(() => medirCampos(pedir, url, 'contact'))
   await esperar(ESPERA_MS)
   const rc = await leerTodas((start) => llamar(pedir, url, 'crm.contact.list', { select: camposDeContactos(deContacto), order: { ID: 'ASC' }, start }), esperar)
-  const nifs = new Set(grupos.repetidos ? r.filas.map((f) => nifComoLaBase(f[grupos.repetidos!.nif])).filter((x): x is string => !!x) : [])
-  return { ...base, contactos: contarContactos(rc.filas, deContacto, nifs), peticiones: r.peticiones + rc.peticiones + 2 }
+  peticiones += rc.peticiones
+  // El enlace con la empresa: crm.contact.list no trae COMPANY_IDS (documentación oficial); crm.item.list sí (companyIds).
+  await esperar(ESPERA_MS)
+  const ri = await leerTodas(async (start) => paginaDeItems(await llamar(pedir, url, 'crm.item.list', { entityTypeId: 3, select: ['id', 'companyIds'], order: { id: 'ASC' }, start })), esperar)
+  peticiones += ri.peticiones
+  // Las negociaciones: crm.deal.list no trae CONTACT_IDS; crm.item.list (entityTypeId = 2) sí (contactIds).
+  await esperar(ESPERA_MS)
+  const rn = await leerTodas(async (start) => paginaDeItems(await llamar(pedir, url, 'crm.item.list', { entityTypeId: 2, select: ['id', 'contactIds'], order: { id: 'ASC' }, start })), esperar)
+  peticiones += rn.peticiones
+  // Los textos de las listas de tipo crm_status (el tipo de contacto…).
+  const estados: Record<string, Record<string, string>> = {}
+  for (const e of estadosAPedir(deContacto)) {
+    const st = await otra(() => llamar(pedir, url, 'crm.status.list', { filter: { ENTITY_ID: e.entidad } })) as { result?: { STATUS_ID: string; NAME: string }[] } | null
+    estados[e.codigo] = Object.fromEntries((st?.result ?? []).map((x) => [String(x.STATUS_ID), String(x.NAME)]))
+  }
+  const nifDeEmpresa = new Map<string, string>()
+  if (grupos.repetidos) for (const f of r.filas) { const n = nifComoLaBase(f[grupos.repetidos.nif]); if (n) nifDeEmpresa.set(String(f.ID), n) }
+  const contactos = contarContactos(rc.filas, deContacto, {
+    empresasDe: empresasDeItems(ri.filas), conNegociacion: contactosDeNegociaciones(rn.filas), nifDeEmpresa, gocardless, estados,
+  })
+  return { ...base, contactos, peticiones }
 }
 
 /** La frase de la lectura (regla 8). */
