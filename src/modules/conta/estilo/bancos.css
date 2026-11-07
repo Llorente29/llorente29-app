@@ -435,3 +435,26 @@
   .cxb-revolut-botones > button { flex: 1; }
   .cxb-revolut-pasos li { font-size: 12px; }
 }
+
+/* B01·20 · El cargo que el banco anula (maqueta aprobada por Julio, 07/11, fiel): el aviso en ámbar,
+   el cargo en una tarjeta blanca con sus dos botones, y las dos cifras debajo. */
+.cxb-anulado { background: var(--s-duda-fondo); border: 1px solid #F0C98A; border-radius: 10px; padding: 14px 16px; margin: 0 0 var(--s-4, 18px); }
+.cxb-anulado-titulo { font-size: 16px; font-weight: 700; color: var(--s-duda); margin: 0 0 6px; }
+.cxb-anulado-porque { margin: 0 0 10px; color: var(--s-tinta); }
+.cxb-anulado-cargo { display: flex; align-items: center; gap: 14px; background: var(--s-superficie); border: 1px solid var(--s-borde-decorativo); border-radius: 8px; padding: 10px 12px; margin: 0 0 8px; }
+.cxb-anulado-fecha { width: 58px; color: var(--s-apoyo); font-variant-numeric: tabular-nums; }
+.cxb-anulado-concepto { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cxb-anulado-importe { width: 110px; text-align: right; font-family: var(--s-letra-cifras); font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.cxb-anulado-botones { display: flex; gap: 8px; }
+.cxb-anulado-pie-botones { display: flex; justify-content: flex-end; margin: 0 0 8px; }
+.cxb-anulado-cifras { font-size: 13px; color: var(--s-apoyo); margin: 6px 0 0; }
+/* Lo apartado: el importe tachado y su etiqueta (no cuenta). */
+.cxn-fila .cxb-importe.cxn-tachado, .cxn-panel-importe.cxn-tachado { text-decoration: line-through; color: var(--s-apoyo); }
+.cxn-pildora-apartado { background: #EEF1F5; color: var(--s-apoyo); }
+@media (max-width: 767px) {
+  .cxb-anulado-cargo { flex-wrap: wrap; }
+  .cxb-anulado-concepto { flex-basis: calc(100% - 72px); }
+  .cxb-anulado-importe { width: auto; }
+  .cxb-anulado-botones { width: 100%; }
+  .cxb-anulado-botones > button { flex: 1; }
+}
