@@ -33,6 +33,7 @@ import { CambiarDeEmpresa } from '@/modules/conta/alta/CambiarDeEmpresa'
 import { rutaImpuestos, rutaTuEmpresa } from '@/config/navegacion'
 import { leerSoyAsesoria, marcarAsesoria } from '@/modules/conta/services/despachoService'
 import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
+import { esSector, sectorPropuesto, type Propuesta } from '@/modules/conta/sectores/sectores'
 import { useCuentaConta, leerDatosDeLaCuenta, type DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
@@ -40,10 +41,11 @@ import { TarjetaCargando, ErrorConReintento, MarcaIA } from '@/modules/conta/ui/
 import { Flecha, Microfono } from '@/modules/conta/ui/Icono'
 import { BARRA_PREGUNTAR, TEXTO_MUY_PRONTO } from '@/modules/conta/marco/muyPronto'
 import {
-  PASOS, pasoSiguiente, preguntaActual, territorioPorCp, textoDuda, todasLasPreguntas,
+  PASOS, pasoSiguiente, preguntaActual, primeraDelPaso, territorioPorCp, textoDuda, todasLasPreguntas,
   type ClavePregunta, type ContextoAlta, type PasoAlta, type Pregunta,
 } from '@/modules/conta/alta/guion'
 import { esHosteleriaPorCodigos, esHosteleriaPorGrupos, gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
+import { propuestaGuardada } from '@/modules/conta/alta/sectorDelAlta'
 import {
   TOTAL_PUNTOS, cuantosHechos, loQueLlevamos, puntoQuePide, respuestasParaVolver, sePuedeVolver,
   type ClavePunto, type Punto,
@@ -51,11 +53,11 @@ import {
 import { entender } from '@/modules/conta/alta/entender'
 import {
   fraseActividadAMano, fraseActividades, fraseAlquiler, fraseHosteleria, fraseCuentas, fraseDireccion, fraseDuda, fraseModelos, fraseNif,
-  fraseAsesoria, fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSinNif, type Frase,
+  fraseAsesoria, fraseNombre, frasePeriodo, fraseRetenido70, fraseRetiene, fraseSector, fraseSinNif, type Frase,
 } from '@/modules/conta/alta/frases'
 import {
   anadirBanco, apuntarDuda, buscarParaGrupos, crearEmpresa, ponerDireccion, ponerEnPerfil, ponerNombre, ponerPaso,
-  ponerHosteleriaDelAlta, quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
+  ponerSectorDelAlta, quitarActividadesDelAlta, terminarAlta, type DireccionAlta,
 } from '@/modules/conta/services/altaService'
 import { anadirActividadConIa, ponerConIa } from '@/modules/conta/services/iaService'
 import { calcularObligaciones, guardarRespuestasDelAlta } from '@/modules/conta/services/impuestosService'
@@ -120,6 +122,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const [ocupado, setOcupado] = useState(false)
   const [propuestas, setPropuestas] = useState<{ texto: string; lista: PropuestaActividad[]; marcadas: string[] } | null>(null)
   const [aMano, setAMano] = useState(false)
+  /** G03 · El sector que se acaba de proponer (hasta que la empresa se vuelve a leer). */
+  const [sectorDelAlta, setSectorDelAlta] = useState<Propuesta | null>(null)
   const [muyPronto, setMuyPronto] = useState(false)
   const [hoja, setHoja] = useState(false)
   const [texto, setTexto] = useState('')
@@ -148,6 +152,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
     cuenta, tipo: d?.empresa.entityKind ?? null, cp: d?.empresa.fiscalPostalCode ?? null,
     clases: (d?.actividades ?? []).filter((a) => a.endedOn === null).map((a) => a.kind), respuestas: vistas, hoy,
     marca: MARCA.id,
+    sector: sectorDelAlta ?? (d ? propuestaGuardada(d.empresa.sector ?? null, d.empresa.hosteleria ?? null, d.actividades) : null),
   } : null
   const pregunta = ctx && !propuestas && !aMano ? preguntaActual(paso, ctx) : null
 
@@ -186,7 +191,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
    * lo que la IA acababa de apuntar delante, en la misma burbuja.
    */
   function fijarPregunta(p: Pregunta) {
-    const primera = ctx ? todasLasPreguntas(paso, ctx)[0]?.clave === p.clave : false
+    const primera = ctx ? primeraDelPaso(paso, ctx) === p.clave : false
     setMensajes((m) => {
       const previo = m[m.length - 1]?.junto ? m[m.length - 1] : null
       const base = previo ? m.slice(0, -1) : m
@@ -342,6 +347,15 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
           datos.recargar()
           return
         }
+        case 'sector': {
+          // G03 · Confirma la propuesta o la cambia. «No lo sé» deja la propuesta.
+          const s = !noLoSe && esSector(valor) ? valor : (esSector(p.normal) ? p.normal : 'general')
+          if (s !== p.normal) await ponerSectorDelAlta(accountId, id!, s)
+          setSectorDelAlta({ sector: s, duda: false })
+          refrescarContextoEsqueleto()
+          apuntado(fraseSector(s))
+          break
+        }
         case 'asesoria': {
           // P01 · Con «Sí», la cuenta queda como asesoría (conta_despacho_marcar). «No» y «No lo sé» no tocan nada.
           if (valor === 'si' && !noLoSe) {
@@ -406,9 +420,13 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       // S01: la marca de hostelería, por lo que hace (se cambia en Ajustes › Empresa).
       // Va en la MISMA frase que las actividades: la pregunta siguiente se pega
       // a la última frase apuntada, y tiene que seguir en la burbuja del «Entendido».
+      // G03: el sector, propuesto por lo que hace; con Sumied, la pregunta siguiente lo confirma.
       const hosteleria = esHosteleriaPorGrupos(elegidas.map((x) => x.clave)) || elegidas.some((x) => esHosteleriaPorCodigos(x.iae?.code ?? null, x.cnae?.code ?? null))
-      await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
-      apuntado([...fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
+      const propuesta = sectorPropuesto({ hosteleria, grupos: elegidas.map((x) => x.clave), codigos: elegidas.map((x) => ({ iae: x.iae?.code ?? null, cnae: x.cnae?.code ?? null })) })
+      await ponerSectorDelAlta(accountId!, companyId, propuesta.sector)
+      setSectorDelAlta(propuesta)
+      const frase = fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva)
+      apuntado(MARCA.id === 'sumied' ? frase : [...frase, { t: ' ' }, ...fraseHosteleria(propuesta.sector === 'hosteleria')])
       setPropuestas(null)
       await avanzar('impuestos')
     })
@@ -427,8 +445,11 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       const iva = await ponerIvaVentas(companyId, [{ iaeCode: a.iae?.code ?? null, cnaeCode: a.cnae?.code ?? null }])
       setAMano(false)
       const hosteleria = esHosteleriaPorCodigos(a.iae?.code ?? null, a.cnae?.code ?? null)
-      await ponerHosteleriaDelAlta(accountId!, companyId, hosteleria)
-      apuntado([...fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva), { t: ' ' }, ...fraseHosteleria(hosteleria)])
+      const propuesta = sectorPropuesto({ hosteleria, grupos: [], codigos: [{ iae: a.iae?.code ?? null, cnae: a.cnae?.code ?? null }] })
+      await ponerSectorDelAlta(accountId!, companyId, propuesta.sector)
+      setSectorDelAlta(propuesta)
+      const frase = fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva)
+      apuntado(MARCA.id === 'sumied' ? frase : [...frase, { t: ' ' }, ...fraseHosteleria(propuesta.sector === 'hosteleria')])
       await avanzar('impuestos')
     })
   }
@@ -541,7 +562,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const ultimo = mensajes[mensajes.length - 1]
   const juntoConPregunta = pregunta && ultimo?.de === 'folvy' && ultimo.junto ? ultimo : null
   const visibles = juntoConPregunta ? mensajes.slice(0, -1) : mensajes
-  const primeraDelPaso = pregunta && ctx ? todasLasPreguntas(paso, ctx)[0]?.clave === pregunta.clave : false
+  const primeraDelPaso_ = pregunta && ctx ? primeraDelPaso(paso, ctx) === pregunta.clave : false
 
   const bocadillo = pregunta ? <Bocadillo key={pregunta.clave} texto={pregunta.ayuda} fuera={marco === 'ventana' && !movil} /> : null
 
@@ -553,7 +574,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         )}
         {visibles.map((m) => <Burbuja key={m.id} de={m.de}>{m.texto}</Burbuja>)}
         {pregunta && (
-          <Burbuja de="folvy"><BurbujaPregunta previo={juntoConPregunta?.texto ?? null} pregunta={pregunta} primera={primeraDelPaso} /></Burbuja>
+          <Burbuja de="folvy"><BurbujaPregunta previo={juntoConPregunta?.texto ?? null} pregunta={pregunta} primera={primeraDelPaso_} /></Burbuja>
         )}
         {pregunta && !(marco === 'ventana' && !movil) && bocadillo}
         {paso === 'hecho' && mensajes.length === 0 && (

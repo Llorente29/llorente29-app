@@ -83,6 +83,13 @@ async function paginas(page: Page, apartado: string) {
 const nombres = (lista: Locator) => lista.locator('.s-barra-nombre')
 async function abrirUsuario(page: Page) { await enElCajon(page); await page.getByRole('button', { name: /\. Tus preferencias$/ }).click() }
 // exact: con el menú abierto, «Quitar «…» de Favoritos» también lleva la palabra.
+/** G03 · La densidad, en el menú del usuario; lo dice (regla 8). */
+async function densidad(page: Page, cual: 'Cómoda' | 'Compacta') {
+  await abrirUsuario(page)
+  await page.getByRole('group', { name: 'Densidad' }).getByRole('button', { name: new RegExp(`^${cual}`) }).click()
+  await expect(page.getByRole('status').filter({ hasText: `Densidad: ${cual.toLowerCase()}, filas de ${cual === 'Cómoda' ? 56 : 40} px.` })).toBeVisible()
+  await page.keyboard.press('Escape')
+}
 async function abrirFavoritos(page: Page) { await enElCajon(page); await page.getByRole('button', { name: 'Favoritos', exact: true }).click() }
 async function nivel(page: Page, cual: 'Sin experiencia' | 'Medio' | 'Experto') {
   await abrirUsuario(page)
@@ -417,38 +424,96 @@ test('Favoritos: se fija desde el menú, se guarda en la base y sigue en otro na
   }
 })
 
-test('Ajustes › Empresa: la marca de hostelería se cambia, lo dice y el esqueleto cambia sin recargar', async ({ page }) => {
+/** G03 · Lo que dice el sector en Ajustes › Tu empresa. */
+const sectorEs = (page: Page) => page.getByTestId('sector-empresa')
+/** G03 · Cambia el sector con su aviso de antes y el de después (reglas 7 y 8). */
+async function ponerSector(page: Page, a: 'General' | 'Hostelería' | 'Gestoría o asesoría', antes: RegExp, despues: RegExp, captura?: string) {
+  await page.getByRole('group', { name: '¿De qué sector es tu negocio?' }).getByRole('button', { name: new RegExp(`^${a}`) }).click()
+  const pregunta = page.getByRole('region', { name: '¿Cambiar el sector?' })
+  await expect(pregunta).toContainText(antes)
+  await expect(pregunta).toContainText('No se borra nada.')
+  if (captura) await capturar(page, captura)
+  await pregunta.getByRole('button', { name: `Cambiar a ${a}` }).click()
+  await expect(page.getByText(despues)).toBeVisible()
+  await expect(sectorEs(page)).toHaveText(a)
+}
+
+test('G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y después, y el menú y las puertas lo siguen', async ({ page }) => {
+  test.setTimeout(240_000)
   const errores: string[] = []
   await entrarComo(page, CUENTA_D.email)
   vigilar(page, errores)
+  // D es General (sin hostelería): Clientes y cuotas no sale, ni entrando por su dirección.
+  await page.goto('/conta/ventas/clientes-y-cuotas')
+  await expect(page.getByText('Esto sale en las empresas del sector Gestoría. Puedes cambiar el sector en Ajustes › Tu empresa.')).toBeVisible({ timeout: 30_000 })
+  await capturar(page, 'g03-puerta-sin-gestoria')
+  await page.goto('/conta/ventas/clientes-y-cuotas/tarifas')
+  await expect(page.getByText('Esto sale en las empresas del sector Gestoría. Puedes cambiar el sector en Ajustes › Tu empresa.')).toBeVisible({ timeout: 30_000 })
   // La entrada «Empresa» directamente: en el móvil, /conta/ajustes es la lista de entradas.
   await page.goto('/conta/ajustes/empresa')
-  const marca = page.getByRole('group', { name: '¿Es un negocio de hostelería?' })
-  await expect(page.getByTestId('es-hosteleria')).toHaveText('No', { timeout: 30_000 })
+  await expect(sectorEs(page)).toHaveText('General', { timeout: 30_000 })
+  await capturar(page, 'g03-ajustes-general')
   try {
-    await marca.getByRole('button', { name: 'Sí, es hostelería' }).click()
-    // Regla 8: dice qué sale.
-    await expect(page.getByText(/^Hecho: es de hostelería\. Ya salen Liquidaciones/)).toBeVisible()
-    await expect(page.getByTestId('es-hosteleria')).toHaveText('Sí')
-    // El esqueleto lo lee otra vez: Liquidaciones sale en Compras y gastos sin recargar.
-    // S02: sus páginas, debajo del apartado en la barra; «Por revisar» ya no es una de ellas.
+    // A Hostelería: dice qué saldrá, y después qué ha salido.
+    await ponerSector(page, 'Hostelería', /^Pasar a Hostelería\. Saldrá: Cierres del día, Repartidores, Plataformas, Socios de marca/,
+      /^Hecho: tu negocio es ahora del sector Hostelería\. Ya salen: Cierres del día, Repartidores/, 'g03-aviso-a-hosteleria')
+    await capturar(page, 'g03-ajustes-hosteleria')
+    // El esqueleto lo lee otra vez: Repartidores sale en Compras y gastos sin recargar.
     if (lado(page) === 'ordenador') await barra(page).getByRole('link', { name: 'Compras y gastos', exact: true }).click()
     else await page.goto('/conta/compras')
-    // El enlace de «Compras y gastos» lleva a su primera página, Facturas recibidas (/conta/documentos).
     await expect(page).toHaveURL(/\/conta\/(compras|documentos)/)
     await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Pagos', 'Repartidores'])
     await cerrarCajon(page)
-  } finally {
-    // Pase lo que pase, D vuelve a no ser de hostelería (las demás pruebas lo cuentan).
+
+    // A Gestoría: sale Clientes y cuotas y deja de salir lo de hostelería.
     await page.goto('/conta/ajustes/empresa')
-    await expect(page.getByTestId('es-hosteleria')).not.toHaveText('', { timeout: 30_000 })
-    if ((await page.getByTestId('es-hosteleria').textContent()) !== 'No') {
-      await marca.getByRole('button', { name: 'No', exact: true }).click()
-      await expect(page.getByText(/^Hecho: no es de hostelería\./)).toBeVisible()
+    await expect(sectorEs(page)).toHaveText('Hostelería', { timeout: 30_000 })
+    await ponerSector(page, 'Gestoría o asesoría', /^Pasar a Gestoría o asesoría\. Saldrá: Clientes y cuotas, Tarifa y paquetes, CRM y GoCardless en Ajustes › Cobros\. Dejará de salir: Cierres del día/,
+      /^Hecho: tu negocio es ahora del sector Gestoría o asesoría\. Ya salen: Clientes y cuotas/, 'g03-aviso-a-gestoria')
+    await capturar(page, 'g03-ajustes-gestoria')
+    await page.goto('/conta/ventas/facturas')
+    await expect(nombres(await paginas(page, 'Ventas'))).toHaveText(['Facturas', 'Cobros', 'Clientes y cuotas', 'Liquidaciones'])
+    await capturar(page, 'g03-menu-gestoria')
+    await cerrarCajon(page)
+    // Y su dirección ya abre la pantalla (sin el aviso).
+    await page.goto('/conta/ventas/clientes-y-cuotas')
+    await expect(page.locator('.cx-hueso')).toHaveCount(0, { timeout: 30_000 })
+    await expect(page.getByText('Esto sale en las empresas del sector Gestoría.', { exact: false })).toHaveCount(0)
+
+    // En compacta, la misma tarjeta (cómoda es la de serie; el móvil, su proyecto).
+    if (lado(page) === 'ordenador') {
+      await page.goto('/conta/ajustes/empresa')
+      await expect(sectorEs(page)).toHaveText('Gestoría o asesoría', { timeout: 30_000 })
+      await densidad(page, 'Compacta')
+      try { await capturar(page, 'g03-ajustes-gestoria-compacta') } finally { await densidad(page, 'Cómoda') }
+    }
+  } finally {
+    // Pase lo que pase, D vuelve a General (las demás pruebas lo cuentan).
+    await page.goto('/conta/ajustes/empresa')
+    await expect(sectorEs(page)).not.toHaveText('', { timeout: 30_000 })
+    if ((await sectorEs(page).textContent()) !== 'General') {
+      await ponerSector(page, 'General', /^Pasar a General\. Dejará de salir:/, /^Hecho: tu negocio es ahora del sector General\./)
     }
   }
   await page.goto('/conta/compras')
   await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Pagos'])
+  await page.goto('/conta/ventas/facturas')
+  await expect(nombres(await paginas(page, 'Ventas'))).toHaveText(['Facturas', 'Cobros', 'Liquidaciones'])
+  expect(errores).toEqual([])
+})
+
+test('G03 · una empresa de hostelería (como Foodint) ve el menú de siempre', async ({ page }) => {
+  const errores: string[] = []
+  await entrarComo(page, CUENTA_A.email)
+  vigilar(page, errores)
+  await page.goto('/conta/ventas/facturas')
+  await expect(nombres(await paginas(page, 'Ventas'))).toHaveText(['Facturas', 'Cobros', 'Liquidaciones', 'Cierres del día'])
+  await capturar(page, 'g03-menu-hosteleria')
+  await cerrarCajon(page)
+  await page.goto('/conta/compras')
+  await expect(nombres(await paginas(page, 'Compras y gastos'))).toHaveText(['Facturas recibidas', 'Pagos', 'Repartidores'])
+  await page.goto('/conta/ajustes/empresa')
+  await expect(sectorEs(page)).toHaveText('Hostelería', { timeout: 30_000 })
   expect(errores).toEqual([])
 })
 

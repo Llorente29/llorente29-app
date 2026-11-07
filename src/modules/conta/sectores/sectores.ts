@@ -101,7 +101,9 @@ const GRUPOS_GESTORIA = new Set(['gestoria'])
  * catálogos de la base (iae_heading: tarifas del IAE, RDL 1175/1990;
  * cnae_code: CNAE-2025, RD 10/2025). En iae_heading el código lleva su
  * sección delante («1_842», «2_722»).
- *   · Seguros: IAE 1_842 (servicios financieros y contables), 2_722
+ *   · Seguros: IAE 1_842 (servicios financieros y contables), 1_8497
+ *     (servicios de gestión administrativa; solo ese epígrafe del grupo 849,
+ *     que es también mensajería o seguridad: Julio, 07/11), 2_722
  *     (gestores administrativos), 2_726 (graduados sociales), 2_741
  *     (economistas); CNAE 69.20 (contabilidad, teneduría, auditoría y
  *     asesoría fiscal).
@@ -109,17 +111,17 @@ const GRUPOS_GESTORIA = new Set(['gestoria'])
  *     jurídicas) y 70.20 (consultoría de gestión empresarial; la 70.22 de la
  *     CNAE-2009 no existe en la CNAE-2025).
  */
-const IAE_GESTORIA = new Set(['1_842', '2_722', '2_726', '2_741'])
+/** Grupos (tres cifras) o epígrafes (cuatro): vale el código o lo que cuelga de él. */
+const IAE_GESTORIA = ['1_842', '1_8497', '2_722', '2_726', '2_741']
 const CNAE_GESTORIA = new Set(['6920'])
 const CNAE_GESTORIA_DUDA = new Set(['6910', '7020'])
 
-/** El grupo o epígrafe del IAE, sin lo que cuelga debajo: «2_7221» → «2_722». */
-const grupoIae = (iae: string | null): string => /^([123])_(\d{3})/.exec(iae ?? '')?.slice(1, 3).join('_') ?? ''
+const esIaeGestoria = (iae: string | null): boolean => !!iae && IAE_GESTORIA.some((c) => iae === c || (iae.startsWith(c) && /^\d+$/.test(iae.slice(c.length))))
 const claseCnae = (cnae: string | null): string => (cnae ?? '').replace(/\D/g, '').slice(0, 4)
 
 /** ¿Estos códigos proponen Gestoría? `duda`: la propone, pero la pregunta va abierta. */
 export function gestoriaPorCodigos(iae: string | null, cnae: string | null): 'si' | 'duda' | 'no' {
-  if (IAE_GESTORIA.has(grupoIae(iae)) || CNAE_GESTORIA.has(claseCnae(cnae))) return 'si'
+  if (esIaeGestoria(iae) || CNAE_GESTORIA.has(claseCnae(cnae))) return 'si'
   return CNAE_GESTORIA_DUDA.has(claseCnae(cnae)) ? 'duda' : 'no'
 }
 
@@ -147,4 +149,21 @@ export function loQueEnciendeLaEmpresa(fila: Record<string, unknown> | null, cue
   if (!fila) return { sector: null, hosteleria: false, gestoria: false }
   const sector = sectorDeFila(fila, cuentaAsesoria)
   return { sector, hosteleria: enciende(sector, 'hosteleria'), gestoria: enciende(sector, 'gestoria') }
+}
+
+// ── Sus palabras ────────────────────────────────────────────────────────────
+
+/** «Gestoría o asesoría» → «gestoría o asesoría», para dentro de una frase. */
+export const enMinuscula = (s: Sector): string => PAQUETES[s].etiqueta.charAt(0).toLowerCase() + PAQUETES[s].etiqueta.slice(1)
+
+/** La pregunta del alta, con la propuesta ya dicha (Diseño del G03): «Por lo que me cuentas, eres una gestoría. ¿Es así?». */
+export function preguntaDelSector(p: Propuesta): string {
+  if (p.duda) return 'Por lo que me cuentas, puede que seas una gestoría o una asesoría. ¿Lo eres?'
+  if (p.sector === 'general') return 'Por lo que me cuentas, tu negocio no es de hostelería ni una gestoría. ¿Es así?'
+  return `Por lo que me cuentas, eres ${PAQUETES[p.sector].enLaFrase}. ¿Es así?`
+}
+
+/** Las opciones de la pregunta, con la propuesta la primera (va marcada). */
+export function opcionesDelSector(propuesto: Sector): { valor: Sector; texto: string }[] {
+  return [propuesto, ...SECTORES.filter((s) => s !== propuesto)].map((s) => ({ valor: s, texto: PAQUETES[s].etiqueta }))
 }

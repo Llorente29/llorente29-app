@@ -13,6 +13,7 @@
 // Nombres de la base entre comillas (regla 40): company, company_tax_profile,
 // company_doubt, treasury_account, legal_form, iae_heading, cnae_code.
 
+import type { Sector } from '@/modules/conta/sectores/sectores'
 import { tabla, mensaje } from '@/modules/conta/services/bd'
 import { ponerConIa } from '@/modules/conta/services/iaService'
 import { normalizarNif, tipoEntidadPorNif } from '@/modules/conta/lib/nif'
@@ -152,10 +153,12 @@ export async function quitarActividadesDelAlta(companyId: string): Promise<void>
 }
 
 /**
- * S01 · La marca de hostelería que pone el alta, por la actividad. Mientras el
- * alta está a medias, volver a «A qué te dedicas» la vuelve a poner.
+ * G03 · El sector que propone el alta por la actividad (company.sector; su
+ * disparador deja is_hospitality igual). Mientras el alta está a medias,
+ * volver a «A qué te dedicas» lo vuelve a proponer; la persona lo confirma o
+ * lo cambia en la pregunta siguiente.
  */
-export async function ponerHosteleriaDelAlta(accountId: string, companyId: string, esHosteleria: boolean): Promise<void> {
-  const { error } = await tabla('company').update({ is_hospitality: esHosteleria }).eq('id', companyId).eq('account_id', accountId)
-  if (error) throw new Error(mensaje('No se ha guardado si es de hostelería', error))
+export async function ponerSectorDelAlta(accountId: string, companyId: string, sector: Sector): Promise<void> {
+  const { error } = await tabla('company').update({ sector }).eq('id', companyId).eq('account_id', accountId)
+  if (error) throw new Error(mensaje('No se ha guardado el sector', error))
 }

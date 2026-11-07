@@ -43,3 +43,13 @@ export function fraseDelCambio(c: Cambio): string {
   partes.push('No se borra nada.')
   return partes.join(' ')
 }
+
+/** Lo que se dice después de cambiar (regla 8: con contenido, no un visto). */
+export function fraseDespuesDelCambio(de: Sector, a: Sector): string {
+  const c = cambioDeSector(de, a)
+  const partes = [`Hecho: tu negocio es ahora del sector ${PAQUETES[a].etiqueta}.`]
+  if (c.saldra.length) partes.push(`Ya salen: ${c.saldra.join(', ')}.`)
+  if (c.dejaraDeSalir.length) partes.push(`Dejan de salir: ${c.dejaraDeSalir.join(', ')}.`)
+  partes.push('No se ha borrado nada.')
+  return partes.join(' ')
+}

@@ -52,6 +52,7 @@ import RemesasPagosPage from '@/modules/conta/compras/RemesasPagosPage'
 import CobrosPage from '@/modules/conta/ventas/CobrosPage'
 import RemesaCobrosPage from '@/modules/conta/ventas/RemesaCobrosPage'
 import ClientesCuotasPage, { TarifasPage } from '@/modules/conta/gestoria/paginas'
+import { SoloGestoria } from '@/modules/conta/sectores/SoloConSector'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import LiquidacionFichaPage from '@/modules/conta/ventas/LiquidacionFichaPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
@@ -169,8 +170,9 @@ export const contaModule: ModuleDefinition = {
     { path: CONTA.rutas.remesaPagos, element: enMarco(<RemesaPagosPage />, '¿Por qué esta remesa está parada?', true) },
     { path: CONTA.rutas.cobros, element: enMarco(<CobrosPage />, '¿Quién me debe y cuándo lo cobro?', true) },
     { path: CONTA.rutas.remesaCobros, element: enMarco(<RemesaCobrosPage />, '¿Qué pasa con esta remesa de recibos?', true) },
-    { path: CONTA.rutas.clientesCuotas, element: enMarco(<ClientesCuotasPage />, '¿Qué cobro a cada cliente y cuadra con GoCardless?', true) },
-    { path: CONTA.rutas.tarifasGestoria, element: enMarco(<TarifasPage />, '¿Cuánto cobro por cada servicio?', true) },
+    // G03 · Solo en una empresa del sector Gestoría, también entrando por la dirección.
+    { path: CONTA.rutas.clientesCuotas, element: enMarco(<SoloGestoria><ClientesCuotasPage /></SoloGestoria>, '¿Qué cobro a cada cliente y cuadra con GoCardless?', true) },
+    { path: CONTA.rutas.tarifasGestoria, element: enMarco(<SoloGestoria><TarifasPage /></SoloGestoria>, '¿Cuánto cobro por cada servicio?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },

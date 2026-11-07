@@ -236,8 +236,17 @@ test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → ase
   try {
     await page.goto('/conta/alta?marca=sumied')
     await hastaLaActividad(page, `Alta e2e Sumied ${Date.now()}`)
-    await decir(page, 'somos dark kitchen, solo reparto de comida a domicilio por plataformas')
+    // G03: «gestoría» se reconoce como actividad, y justo después se pregunta el sector, con la propuesta marcada.
+    await decir(page, 'somos una gestoría')
     await page.getByRole('button', { name: 'Añadir las marcadas' }).click()
+    await expect(log(page).getByText('Por lo que me cuentas, eres una gestoría. ¿Es así?')).toBeVisible()
+    await page.getByRole('button', { name: 'Gestoría o asesoría', exact: true }).click()
+    await expect(log(page).getByText(/^Apuntado: sector Gestoría o asesoría\. Además de lo de siempre, salen Clientes y cuotas/)).toBeVisible()
+    // Queda en la empresa, no solo en la pantalla (y con su disparador, is_hospitality en no).
+    const empresa = await rest<{ sector: string; is_hospitality: boolean | null }[]>(s, 'GET', `company?account_id=eq.${CUENTA_C.id}&select=sector,is_hospitality`)
+    expect(empresa.datos).toEqual([{ sector: 'gestoria', is_hospitality: null }])
+    // «Ahora, tus impuestos.» sigue en la del IVA.
+    await expect(log(page).getByText(/Ahora, tus impuestos\. ¿Presentas el IVA cada tres meses\?/).last()).toBeVisible()
     await page.getByRole('button', { name: 'Sí, cada tres meses' }).click()
     await page.getByRole('button', { name: 'Sí', exact: true }).click()
     await expect(log(page).getByText('¿Pagas el alquiler de un local con retención?')).toBeVisible()
