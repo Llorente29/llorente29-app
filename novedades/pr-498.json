@@ -1,0 +1,20 @@
+[
+ {
+  "id": "498-1",
+  "pr": 498,
+  "fecha": "2026-11-07T11:47:56Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "«Unir las fichas repetidas» en la tarjeta de Bitrix24: un ensayo en PDF de lo que se va a unir y el botón para aplicarlo. «Qué es cada campo» ya no ofrece campos con contraseñas o certificados.",
+  "ruta": null
+ },
+ {
+  "id": "498-2",
+  "pr": 498,
+  "fecha": "2026-11-07T11:47:56Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "tres avisos nuevos en «Te toca hoy» (fichas repetidas, NIF que no se usa, fichas sin guardar), y la ficha enseña las otras fichas del mismo NIF.",
+  "ruta": null
+ }
+]
