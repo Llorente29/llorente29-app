@@ -4403,6 +4403,29 @@ end $$;
 
 
 --
+-- Name: _conta_crm_campo_sensible(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_crm_campo_sensible(p_codigo text, p_campo jsonb) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $_$
+  select coalesce(p_codigo, '') in ('BANKING_DETAILS')
+      or coalesce(p_campo->>'type', '') in ('file', 'password')
+      or exists (select 1 from unnest(array[p_campo->>'formLabel', p_campo->>'listLabel', p_campo->>'title']) t
+                  where t is not null and regexp_replace(translate(upper(t), 'ÁÉÍÓÚÜÑ', 'AEIOUUN'), '\s+', ' ', 'g')
+                    ~ '(^|[^A-Z0-9@])(CLAVE|CLAVES|CONTRASENA|CONTRASENAS|PASSWORD|PASSWD|PASS|PIN|USUARIO|USER|LOGIN|CREDENCIAL|CREDENCIALES|TOKEN|SECRETO|CL@VE|IBAN|DETALLES DEL PAGO)($|[^A-Z0-9])')
+$_$;
+
+
+--
+-- Name: FUNCTION _conta_crm_campo_sensible(p_codigo text, p_campo jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_crm_campo_sensible(p_codigo text, p_campo jsonb) IS 'G01c · ¿Un campo del CRM guarda una contraseña, un certificado o datos bancarios? Por su tipo, su código o su etiqueta. No se lee nunca.';
+
+
+--
 -- Name: _conta_crm_desde_bitrix(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34165,7 +34188,7 @@ CREATE FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_ti
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_b public.conta_crm; v_medidos jsonb; v_cod text; v_faltan text[] := '{}'; v_sit jsonb; v_it jsonb; v_op text; v_sin_op text[] := '{}';
+declare v_b public.conta_crm; v_medidos jsonb; v_cod text; v_faltan text[] := '{}'; v_sensibles text[] := '{}'; v_sit jsonb; v_it jsonb; v_op text; v_sin_op text[] := '{}';
         v_quien text := public.conta_nombre_actor(); v_mapa jsonb; v_n int; v_frase text; v_nombre text := public._conta_crm_nombre(p_crm);
         v_validas constant text[] := array['activo', 'baja', 'moroso', 'solo_renta', 'sin_clasificar'];
         v_cuando text := to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
@@ -34193,6 +34216,15 @@ begin
     if cardinality(v_faltan) > 0 then
       raise exception 'Los contactos de este % no tienen estos campos: %.', v_nombre, array_to_string(v_faltan, ', ') using errcode = '22023';
     end if;
+    -- G01c (07/11) · Un campo con una contraseña, un certificado o datos bancarios no se lee nunca, aunque se elija por error.
+    select coalesce(array_agg(x order by x), '{}') into v_sensibles from (
+      select distinct coalesce(nullif(trim(v_medidos->k->>'formLabel'), ''), nullif(trim(v_medidos->k->>'listLabel'), ''), v_medidos->k->>'title', k) x
+        from (values (p_mapa->>'nif'), (p_mapa->>'cuota'), (p_mapa->>'tipoCliente'), (p_mapa->'direccion'->>'calle'), (p_mapa->'direccion'->>'cp'),
+                     (p_mapa->'direccion'->>'poblacion'), (p_mapa->'direccion'->>'provincia')) v(k)
+       where coalesce(k, '') <> '' and public._conta_crm_campo_sensible(k, v_medidos->k)) s;
+    if cardinality(v_sensibles) > 0 then
+      raise exception 'Estos campos guardan contraseñas, certificados o datos bancarios y no se leen nunca: %.', array_to_string(v_sensibles, ', ') using errcode = '22023';
+    end if;
     v_mapa := jsonb_build_object('nif', p_mapa->'nif', 'direccion', p_mapa->'direccion', 'cuota', p_mapa->'cuota', 'tipoCliente', p_mapa->'tipoCliente',
       'textosTipo', coalesce(p_mapa->'textosTipo', '{}'::jsonb), 'confirmado', jsonb_build_object('quien', v_quien, 'cuando', v_cuando));
     update public.conta_crm set mapa_contactos = v_mapa, updated_at = now() where account_id = p_account and crm = p_crm;
@@ -34212,6 +34244,18 @@ begin
   end loop;
   if cardinality(v_faltan) > 0 then
     raise exception 'Este % no tiene estos campos: %.', v_nombre, array_to_string(v_faltan, ', ') using errcode = '22023';
+  end if;
+  -- G01b (1110) · Un campo con una contraseña, un certificado o datos bancarios no se lee nunca, aunque se elija por error.
+  select coalesce(array_agg(x order by x), '{}') into v_sensibles from (
+    select distinct coalesce(nullif(trim(m->>'formLabel'), ''), nullif(trim(m->>'listLabel'), ''), m->>'title', k) x
+      from jsonb_each(v_medidos) e(k, m)
+     where k in (select c->>'codigo' from jsonb_array_elements(p_mapa->'campos') c
+                 union all
+                 select y from jsonb_array_elements(coalesce(p_mapa->'direcciones', '[]'::jsonb)) d,
+                   lateral (values (d->>'calle'), (d->>'cp'), (d->>'poblacion'), (d->>'provincia')) v(y))
+       and public._conta_crm_campo_sensible(k, m)) s;
+  if cardinality(v_sensibles) > 0 then
+    raise exception 'Estos campos guardan contraseñas, certificados o datos bancarios y no se leen nunca: %.', array_to_string(v_sensibles, ', ') using errcode = '22023';
   end if;
   select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
   if v_n <> 1 then raise exception 'Falta decir qué campo de % es la situación del cliente.', v_nombre using errcode = '22023'; end if;
@@ -34384,6 +34428,47 @@ COMMENT ON FUNCTION public.conta_crm_guardar_clientes(p_account uuid, p_crm text
 
 
 --
+-- Name: conta_crm_guardar_conexion(uuid, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_guardar_conexion(p_account uuid, p_crm text, p_entorno text, p_url text, p_portal text, p_quien text) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_ref uuid; v_nombre text := 'conta_crm:' || p_crm || ':' || p_account::text; v_crm text := public._conta_crm_nombre(p_crm);
+begin
+  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
+  if p_entorno not in ('real', 'pruebas') then raise exception 'Entorno: real o pruebas.' using errcode = '22023'; end if;
+  -- Cómo es la dirección de cada CRM (otro CRM, otra línea).
+  if p_crm = 'bitrix24' and coalesce(trim(p_url), '') !~ '^https://[A-Za-z0-9.-]+/rest/[0-9]+/[A-Za-z0-9]+/?$' then
+    raise exception 'La dirección de Bitrix24 es como https://<tu portal>/rest/<número>/<clave>/ (Bitrix24 › Aplicaciones › Webhooks › Webhook entrante).' using errcode = '22023';
+  elsif p_crm <> 'bitrix24' then
+    raise exception 'Sumied aún no sabe conectar %.', v_crm using errcode = '22023';
+  end if;
+  select url_ref into v_ref from public.conta_crm where account_id = p_account and crm = p_crm for update;
+  if v_ref is null or not exists (select 1 from vault.secrets where id = v_ref) then
+    select id into v_ref from vault.secrets where name = v_nombre;
+  end if;
+  if v_ref is not null then
+    perform vault.update_secret(v_ref, trim(p_url), v_nombre, 'Dirección de lectura del CRM de una cuenta de Sumied');
+  else
+    v_ref := vault.create_secret(trim(p_url), v_nombre, 'Dirección de lectura del CRM de una cuenta de Sumied');
+  end if;
+  insert into public.conta_crm (account_id, crm, entorno, url_ref, portal, conectada_at, conectada_por_name, updated_at)
+  values (p_account, p_crm, p_entorno, v_ref, p_portal, now(), p_quien, now())
+  on conflict (account_id, crm) do update set entorno = excluded.entorno, url_ref = excluded.url_ref, portal = excluded.portal,
+    conectada_at = excluded.conectada_at, conectada_por_name = excluded.conectada_por_name, updated_at = now();
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_crm_guardar_conexion(p_account uuid, p_crm text, p_entorno text, p_url text, p_portal text, p_quien text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_guardar_conexion(p_account uuid, p_crm text, p_entorno text, p_url text, p_portal text, p_quien text) IS 'G01c · Guarda la conexión con el CRM de una cuenta: la dirección en Vault («conta_crm:<crm>:<cuenta>») y la fila de conta_crm. Solo el servidor.';
+
+
+--
 -- Name: conta_crm_guardar_personas(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34421,6 +34506,27 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) IS 'G01c · Las personas de contacto de un CRM (los contactos con empresa): una ficha por contacto y empresa, colgando del cliente de esa empresa. Las que ya no lo son se quitan. Solo el servidor.';
+
+
+--
+-- Name: conta_crm_secreto(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_secreto(p_account uuid, p_crm text) RETURNS TABLE(entorno text, url text, mapa jsonb)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select b.entorno, s.decrypted_secret, b.mapa
+    from public.conta_crm b join vault.decrypted_secrets s on s.id = b.url_ref
+   where b.account_id = p_account and b.crm = p_crm
+$$;
+
+
+--
+-- Name: FUNCTION conta_crm_secreto(p_account uuid, p_crm text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_secreto(p_account uuid, p_crm text) IS 'G01c · La conexión con el CRM de una cuenta (entorno, dirección de Vault y mapa). Solo el servidor.';
 
 
 --
@@ -102755,7 +102861,7 @@ CREATE TABLE public.conta_gestoria_diferencia (
     tipo_ficha text,
     id_externo text,
     CONSTRAINT conta_gestoria_diferencia_ficha_check CHECK ((((id_externo IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))),
-    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['bitrix_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_bitrix'::text, 'correo_repetido_en_bitrix'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text])))
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['bitrix_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_bitrix'::text, 'correo_repetido_en_bitrix'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'crm_sin_cobro'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text])))
 );
 
 
@@ -102932,7 +103038,7 @@ CREATE TABLE public.conta_gestoria_lectura (
     mensaje text,
     CONSTRAINT conta_gestoria_lectura_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text]))),
     CONSTRAINT conta_gestoria_lectura_estado_check CHECK ((estado = ANY (ARRAY['en_marcha'::text, 'bien'::text, 'mal'::text, 'no_lee'::text]))),
-    CONSTRAINT conta_gestoria_lectura_origen_check CHECK ((origen = ANY (ARRAY['bitrix'::text, 'gocardless'::text]))),
+    CONSTRAINT conta_gestoria_lectura_origen_check CHECK ((origen = ANY (ARRAY['bitrix'::text, 'gocardless'::text, 'crm'::text]))),
     CONSTRAINT conta_gestoria_lectura_por_check CHECK ((por = ANY (ARRAY['persona'::text, 'cada_noche'::text, 'conexion'::text])))
 );
 
@@ -154083,6 +154189,15 @@ GRANT ALL ON FUNCTION public._conta_crm_a_bitrix() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_crm_campo_sensible(p_codigo text, p_campo jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_crm_campo_sensible(p_codigo text, p_campo jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_crm_campo_sensible(p_codigo text, p_campo jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_crm_campo_sensible(p_codigo text, p_campo jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_crm_desde_bitrix(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -160029,11 +160144,27 @@ GRANT ALL ON FUNCTION public.conta_crm_guardar_clientes(p_account uuid, p_crm te
 
 
 --
+-- Name: FUNCTION conta_crm_guardar_conexion(p_account uuid, p_crm text, p_entorno text, p_url text, p_portal text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_guardar_conexion(p_account uuid, p_crm text, p_entorno text, p_url text, p_portal text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_guardar_conexion(p_account uuid, p_crm text, p_entorno text, p_url text, p_portal text, p_quien text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_secreto(p_account uuid, p_crm text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_secreto(p_account uuid, p_crm text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_secreto(p_account uuid, p_crm text) TO service_role;
 
 
 --
