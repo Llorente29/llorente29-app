@@ -138,16 +138,17 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar, sinTitulo }: {
 
       {!abierto ? (
         <div><button type="button" className="cxg-boton cxg-boton-principal" onClick={() => setAbierto(true)} disabled={ocupado || !sePuedeConfirmar(e)}>
-          {confirmado ? 'Confirmar los cambios y leer' : 'Confirmar el mapa y leer'}</button></div>
+          {/* G01c (Julio, 07/11) · Dice qué pestaña confirma: se confundió una con la otra. */}
+          {confirmado ? 'Confirmar los cambios del mapa de Empresas y leer' : 'Confirmar el mapa de Empresas y leer'}</button></div>
       ) : (
-        <div className="cxg-paso" role="group" aria-label="Confirmar el mapa">
+        <div className="cxg-paso" role="group" aria-label="Confirmar el mapa de Empresas">
           <p className="cxg-paso-aviso">
             Se guarda este mapa con tu nombre y se leen de nuevo las fichas de Bitrix24 (solo se lee: no se cambia nada en Bitrix24).
             Desde ahora se guarda la situación de cada ficha. Las opciones de «{etiquetaDe(medidos, e.situacion!)}»: {resumenDeOpciones(e)}.
             {faltan.length > 0 && ` Se confirma sin: ${faltan.map((f) => f.split(':')[0].toLowerCase()).join(', ')}.`}
           </p>
           <div className="cxg-paso-botones">
-            <button type="button" className="cxg-boton cxg-boton-principal" onClick={() => void confirmar()} disabled={ocupado}>{ocupado ? 'Confirmando y leyendo…' : 'Confirmar y leer'}</button>
+            <button type="button" className="cxg-boton cxg-boton-principal" onClick={() => void confirmar()} disabled={ocupado}>{ocupado ? 'Confirmando y leyendo…' : 'Confirmar el mapa de Empresas'}</button>
             <button type="button" className="cx-enlace" onClick={() => setAbierto(false)} disabled={ocupado}>Cancelar</button>
           </div>
         </div>

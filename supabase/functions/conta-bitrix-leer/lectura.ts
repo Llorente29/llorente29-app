@@ -7,7 +7,7 @@
 
 import { ESPERA_MS, camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
 import { camposDelRecuento, camposSensiblesDe, contar, type GruposRecuento } from './recuento.ts'
-import { nifComoLaBase } from '../_shared/crm/clientes.ts'
+import { nifComoLaBase, nifsQueUnen } from '../_shared/crm/clientes.ts'
 import type { FichaContactoCrm } from '../_shared/crm/ficha.ts'
 import { repartirContactos, resumenDeContactos, type ResumenContactos } from '../_shared/crm/contactos.ts'
 import { esCampoSensible } from './sensibles.ts'
@@ -111,7 +111,7 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
   let reparto: ResumenContactos | null = null
   if (conElQueSeLee) {
     const fichas = rc.filas.map((f) => leerContacto(f, conElQueSeLee, { empresas: empresasDe.get(String(f.ID)) ?? [], conNegociacion: conNegociacion.has(String(f.ID)), gocardless }))
-    const nifs = new Set(nifDeEmpresa.values())
+    const nifs = nifsQueUnen([...nifDeEmpresa.values()], fichas.map((c) => c.nif))
     reparto = resumenDeContactos(fichas, repartirContactos(fichas, nifs, 'Bitrix24'), nifs)
   }
   return { ...base, contactos: { ...contactos, reparto }, peticiones }

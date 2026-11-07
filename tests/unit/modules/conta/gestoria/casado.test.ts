@@ -50,13 +50,13 @@ describe('G01 · casado de clientes', () => {
     expect(r.parejas).toEqual([])
     expect(r.diferencias.map((d) => [d.tipo, d.claveFicha ?? d.clienteGcId])).toEqual([
       ['gocardless_sin_ficha', 'CU5'],
-      ['bitrix_sin_cobro', '1'],
+      ['crm_sin_cobro', '1'],
     ])
   })
 
   it('casado pero sin cobro mensual también es «en Bitrix24 sin cobro», con otra frase', () => {
     const r = casar([ficha('1', { nif: 'B00000001' })], [cliente('a', 'CU1', { nif: 'B00000001', suscripcionesActivas: 0 })], nombre)
-    expect(r.diferencias).toEqual([{ tipo: 'bitrix_sin_cobro', claveFicha: '1', emisor: null, clienteGcId: null,
+    expect(r.diferencias).toEqual([{ tipo: 'crm_sin_cobro', claveFicha: '1', emisor: null, clienteGcId: null,
       porque: '«CLIENTE PRUEBA 1» está activo en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.' }])
   })
 
@@ -64,6 +64,6 @@ describe('G01 · casado de clientes', () => {
     const r = casar([ficha('1', { nif: 'B00000001' }), ficha('2', { nif: 'B00000001' })],
       [cliente('a', 'CU1', { nif: 'B00000001' }), cliente('b', 'CU2', { nif: 'B00000001' })], nombre)
     expect(r.parejas).toEqual([])
-    expect(r.diferencias.filter((d) => d.tipo === 'nif_repetido_en_bitrix')).toHaveLength(1)
+    expect(r.diferencias.filter((d) => d.tipo === 'nif_repetido_en_crm')).toHaveLength(1)
   })
 })

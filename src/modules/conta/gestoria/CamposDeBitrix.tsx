@@ -140,16 +140,16 @@ export function QueEsCadaCampoContactos({ mapa, medidos, resumen, leidos, alConf
         <Fila key={k} sumied={k === 'NAME' ? 'Nombre' : k === 'EMAIL' ? 'Correo' : 'Teléfono'}><span>{etiquetaDe(medidos, k)}{k === 'NAME' ? ', con el segundo nombre y los apellidos' : ''}</span></Fila>
       ))}
       {!abierto ? (
-        <div><button type="button" className="cxg-boton cxg-boton-principal" onClick={() => setAbierto(true)} disabled={ocupado}>{confirmado ? 'Confirmar los cambios y leer' : 'Confirmar el mapa de contactos y leer'}</button></div>
+        <div><button type="button" className="cxg-boton cxg-boton-principal" onClick={() => setAbierto(true)} disabled={ocupado}>{confirmado ? 'Confirmar los cambios del mapa de Contactos y leer' : 'Confirmar el mapa de Contactos y leer'}</button></div>
       ) : (
-        <div className="cxg-paso" role="group" aria-label="Confirmar el mapa de contactos">
+        <div className="cxg-paso" role="group" aria-label="Confirmar el mapa de Contactos">
           <p className="cxg-paso-aviso">
             Se guarda este mapa con tu nombre y se leen de nuevo las empresas y los contactos de Bitrix24 (solo se lee: no se cambia nada en Bitrix24).
             {resumen ? ` Según la última medida: ${miles(resumen.clientes)} contactos entran como clientes, ${miles(resumen.personas)} como personas de contacto y ${miles(resumen.fuera)} se quedan fuera.` : ''}
             {faltan.length > 0 && ` Se confirma sin: ${faltan.map((f) => f.split(':')[0].toLowerCase()).join(', ')}.`}
           </p>
           <div className="cxg-paso-botones">
-            <button type="button" className="cxg-boton cxg-boton-principal" onClick={() => void confirmar()} disabled={ocupado}>{ocupado ? 'Confirmando y leyendo…' : 'Confirmar y leer'}</button>
+            <button type="button" className="cxg-boton cxg-boton-principal" onClick={() => void confirmar()} disabled={ocupado}>{ocupado ? 'Confirmando y leyendo…' : 'Confirmar el mapa de Contactos'}</button>
             <button type="button" className="cx-enlace" onClick={() => setAbierto(false)} disabled={ocupado}>Cancelar</button>
           </div>
         </div>
