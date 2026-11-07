@@ -38,10 +38,16 @@ export interface Marco {
    */
   ponerEntradasCinta: (entradas: EntradasCinta | null) => void
   /**
-   * S01 · ¿La empresa activa es de hostelería? (company.is_hospitality). Null
-   * mientras no se sabe: lo de hostelería no sale hasta saberlo.
+   * S01 · ¿La empresa activa es de hostelería? G03: lo dice su sector
+   * (sectores/sectores.ts). Null mientras no se sabe: lo de hostelería no sale
+   * hasta saberlo.
    */
   hosteleria: boolean | null
+  /**
+   * G03 · ¿El sector de la empresa activa es Gestoría? (sectores/sectores.ts).
+   * Null mientras no se sabe: lo de gestoría no sale hasta saberlo.
+   */
+  gestoria?: boolean | null
   /** S01 · Los ejes de analítica de la empresa; null mientras no se sabe o si no se pueden leer. */
   analitica: Analitica | null
   /** S01 (paso 4) · El nivel de quien mira: cambia palabras y ayuda, nunca posiciones. */
@@ -170,6 +176,16 @@ export function useNivel(): Nivel {
 export function useHosteleria(): boolean {
   const marco = useContext(MarcoContexto)
   return marco ? marco.hosteleria === true : true
+}
+
+/**
+ * G03 · Lo de gestoría (Clientes y cuotas, Tarifa y paquetes, CRM y
+ * GoCardless): sale solo si el sector de la empresa activa es Gestoría. Null
+ * mientras se lee. Fuera del marco no hay empresa activa: no sale.
+ */
+export function useGestoria(): boolean | null {
+  const marco = useContext(MarcoContexto)
+  return marco ? marco.gestoria ?? null : false
 }
 
 const DE_SERIE_LOCAL: EjeVista = { nombre: 'Local', plural: 'Locales' }

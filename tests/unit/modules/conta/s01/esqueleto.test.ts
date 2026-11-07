@@ -133,8 +133,8 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te pagan quienes
     // cobran por ti), encima del bloque «Hostelería»; sin hostelería, sin plataformas.
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Clientes y cuotas', 'Liquidaciones', 'Cierres del día'])
-    // G01 · Clientes y cuotas, solo en una cuenta de asesoría.
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'clientesCuotas')).toMatchObject({ solo: 'asesoria' })
+    // G01 · Clientes y cuotas. G03 (Julio, 07/11): solo con el sector Gestoría de la empresa, no con «la cuenta es asesoría».
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'clientesCuotas')).toMatchObject({ solo: 'gestoria' })
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
     expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
@@ -155,7 +155,9 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'laboral', 'impuestos', 'contactos', 'ajustes'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }).map((p) => p.id)).toContain('laboral')
     expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
-    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, asesoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'clientesCuotas', 'liquidacionesVentas'])
+    // G03: la cuenta de asesoría sola ya no la enciende; el sector Gestoría, sí.
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, asesoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, gestoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'clientesCuotas', 'liquidacionesVentas'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
