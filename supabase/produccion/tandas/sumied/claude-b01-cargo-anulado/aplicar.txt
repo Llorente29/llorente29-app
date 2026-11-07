@@ -1,0 +1,14 @@
+# B01·20 · El cargo que el banco anula (maqueta aprobada por Julio, 07/11).
+# Rama claude/b01-cargo-anulado. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   0055  Añade dos columnas que admiten nulos en bank_movement (not_cancelled_at
+#         y not_cancelled_by: «No, es bueno») y cinco funciones nuevas: el
+#         detector (_bank_cargos_anulados), lo que lee la pantalla
+#         (bank_cargos_anulados), «Quitarlo» (bank_anulado_quitar, con
+#         bank_deshacer y bank_ignorar), «No, es bueno» (bank_anulado_es_bueno)
+#         y deshacer un «Apartar» (bank_desapartar). No cambia ningún movimiento.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01s-cargo-anulado.sql
+supabase/migrations/20261107T0055_b01s_cargo_anulado.sql
