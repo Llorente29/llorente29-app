@@ -131,6 +131,7 @@ export function pdfDelEnsayo(d: DatosEnsayo): jsPDF {
     ['Clientes que resultan en Sumied', miles(r.clientes)],
     ['Clientes con varias fichas (se unen)', miles(r.clientesUnidos)],
     ['Fichas que se unen', miles(r.fichasUnidas)],
+    ['Clientes de Sumied ya creados por separado que se juntan (se retiran, archivados)', miles(d.seJuntan ?? 0)],
     ['Fichas que entran sin NIF: formato no válido', miles(r.sinNifPorFormato)],
     ['Fichas que entran sin NIF: su NIF sale en 10 fichas o más', miles(r.sinNifPorMuchas)],
   ])
@@ -148,10 +149,11 @@ export function pdfDelEnsayo(d: DatosEnsayo): jsPDF {
       i === 0 ? u.nif : '', f.nombre, f.bitrixId,
       f.situacion === 'sin_clasificar' && f.situacionTexto ? `Sin clasificar («${f.situacionTexto}»)` : enPalabras(f.situacion),
       i === 0 ? enPalabras(u.situacion) : '',
+      i === 0 ? (u.clientesHoy >= 2 ? `${u.clientesHoy} clientes: se juntan` : u.clientesHoy === 1 ? '1 cliente' : 'Nuevo') : '',
     ]))
   }
-  tabla(`Clientes que se unen (${miles(d.unidos.length)})`, 'Cada NIF repetido es un solo cliente en Sumied, con todas sus fichas de Bitrix24 enlazadas.',
-    [{ titulo: 'NIF', peso: 1.3 }, { titulo: 'Ficha en Bitrix24', peso: 3.2 }, { titulo: 'Id', peso: 0.8 }, { titulo: 'Situación de la ficha', peso: 1.9 }, { titulo: 'Queda en Sumied', peso: 1.5 }],
+  tabla(`Clientes que se unen (${miles(d.unidos.length)})`, 'Cada NIF repetido es un solo cliente en Sumied, con todas sus fichas de Bitrix24 enlazadas. Si hoy ya son varios clientes, se juntan: lo de la gestoría y el cobro pasa al que queda y el otro se archiva, con su rastro.',
+    [{ titulo: 'NIF', peso: 1.3 }, { titulo: 'Ficha en Bitrix24', peso: 3 }, { titulo: 'Id', peso: 0.7 }, { titulo: 'Situación de la ficha', peso: 1.8 }, { titulo: 'Queda en Sumied', peso: 1.4 }, { titulo: 'Hoy en Sumied', peso: 1.4 }],
     filasUnidos, (i) => inicio.has(i))
 
   // 3 · Las fichas que entran sin NIF.

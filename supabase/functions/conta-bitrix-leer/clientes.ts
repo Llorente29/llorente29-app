@@ -211,16 +211,25 @@ export function diferenciasDeLectura<F extends FichaParaUnir & { nombre?: string
 /** Para el ensayo en PDF (lo descarga quien está dentro de la cuenta; no se guarda ni se registra). */
 export interface EnsayoDeUnion {
   resumen: ResumenDeUnion
-  unidos: { nif: string; situacion: Situacion | null; fichas: { bitrixId: string; nombre: string; situacion: Situacion | null; situacionTexto: string | null }[] }[]
+  /** G01b (07/11) · Clientes de Sumied ya creados por separado que se juntan con otro (se retiran, archivados). */
+  seJuntan: number
+  unidos: { nif: string; situacion: Situacion | null; fichas: { bitrixId: string; nombre: string; situacion: Situacion | null; situacionTexto: string | null }[]
+    /** Cuántos clientes de Sumied son hoy esas fichas (0: ninguno aún; 2 o más: se juntan en uno). */
+    clientesHoy: number }[]
   sinNif: { bitrixId: string; nombre: string; nifEnBitrix: string | null; motivo: 'nif_no_valido' | 'nif_en_muchas'; fichasConSuNif: number }[]
 }
 
-export function ensayoDeUnion<F extends FichaParaUnir & { nombre: string; situacionTexto: string | null; nifEnBitrix: string | null }>(fichas: readonly F[]): EnsayoDeUnion {
+export function ensayoDeUnion<F extends FichaParaUnir & { nombre: string; situacionTexto: string | null; nifEnBitrix: string | null }>(
+  fichas: readonly F[], clienteDeFicha: ReadonlyMap<string, string> = new Map(),
+): EnsayoDeUnion {
   const clientes = agrupar(fichas, true)
+  const unidos = clientes.filter((c) => c.motivo === 'repetidas').map((c) => ({ nif: c.nif!, situacion: c.situacion,
+    fichas: c.fichas.map((f) => ({ bitrixId: f.bitrixId, nombre: f.nombre, situacion: f.situacion, situacionTexto: f.situacionTexto })),
+    clientesHoy: new Set(c.fichas.map((f) => clienteDeFicha.get(f.bitrixId)).filter(Boolean)).size }))
   return {
     resumen: resumenDeUnion(clientes),
-    unidos: clientes.filter((c) => c.motivo === 'repetidas').map((c) => ({ nif: c.nif!, situacion: c.situacion,
-      fichas: c.fichas.map((f) => ({ bitrixId: f.bitrixId, nombre: f.nombre, situacion: f.situacion, situacionTexto: f.situacionTexto })) })),
+    seJuntan: unidos.reduce((t, u) => t + Math.max(0, u.clientesHoy - 1), 0),
+    unidos,
     sinNif: clientes.filter((c) => c.motivo === 'nif_no_valido' || c.motivo === 'nif_en_muchas').map((c) => ({
       bitrixId: c.principal.bitrixId, nombre: c.principal.nombre, nifEnBitrix: c.principal.nifEnBitrix ?? c.principal.nif,
       motivo: c.motivo as 'nif_no_valido' | 'nif_en_muchas', fichasConSuNif: c.fichasConSuNif })),

@@ -12,7 +12,8 @@ const DATOS: DatosEnsayo = {
     fichasPorSituacion: { activo: 3, moroso: 0, solo_renta: 0, sin_clasificar: 1, baja: 2, sin_situacion: 0 } },
   unidos: [{ nif: '00000000T', situacion: 'activo', fichas: [
     { bitrixId: '11', nombre: 'CLIENTE PRUEBA UNO', situacion: 'baja', situacionTexto: 'BAJA DE GESTORIA ❌' },
-    { bitrixId: '12', nombre: 'CLIENTE PRUEBA UNO, S.L.', situacion: 'activo', situacionTexto: 'ACTIVO' }] }],
+    { bitrixId: '12', nombre: 'CLIENTE PRUEBA UNO, S.L.', situacion: 'activo', situacionTexto: 'ACTIVO' }], clientesHoy: 2 }],
+  seJuntan: 1,
   sinNif: [{ bitrixId: '13', nombre: 'CLIENTE PRUEBA DOS', nifEnBitrix: '123', motivo: 'nif_no_valido', fichasConSuNif: 1 }],
 }
 
@@ -32,6 +33,9 @@ describe('G01b · el PDF del ensayo de la unión', () => {
     expect(t).toContain('00000000T')
     expect(t).not.toContain('❌')
     expect(t).toContain('No tiene formato de DNI, NIE ni CIF')
+    expect(t).toContain('Hoy en Sumied')
+    expect(t).toContain('2 clientes: se juntan')
+    expect(t).toContain('Clientes de Sumied ya creados por separado que se juntan')
     expect(t).toContain('Página 1 de 1')
     expect(t).not.toMatch(/UF_CRM/)
   })

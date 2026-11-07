@@ -41,7 +41,7 @@ export function UnionDeFichas({ mapa, alEnsayar, alAplicar, descargar = descarga
       descargar(d)
       setVisto(d)
       const r = d.resumen
-      setAviso({ ok: true, texto: `PDF descargado: ${miles(r.fichas)} fichas darían ${miles(r.clientes)} clientes; ${miles(r.fichasUnidas)} fichas se unen en ${miles(r.clientesUnidos)} clientes y ${miles(r.sinNifPorFormato + r.sinNifPorMuchas)} entran sin NIF. No se ha cambiado nada.` })
+      setAviso({ ok: true, texto: `PDF descargado: ${miles(r.fichas)} fichas darían ${miles(r.clientes)} clientes; ${miles(r.fichasUnidas)} fichas se unen en ${miles(r.clientesUnidos)} clientes y ${miles(r.sinNifPorFormato + r.sinNifPorMuchas)} entran sin NIF${d.seJuntan ? `; ${miles(d.seJuntan)} ${d.seJuntan === 1 ? 'cliente ya creado se junta' : 'clientes ya creados se juntan'} con el de su NIF` : ''}. No se ha cambiado nada.` })
     } catch (e) { setAviso({ ok: false, texto: msg(e) }) } finally { setOcupado(null) }
   }
   const aplicar = async () => {

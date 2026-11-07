@@ -127,10 +127,16 @@ export const MAPA_QBO: MapaBitrix = {
   formaPagoAEmisor: {},
 }
 
-/** Lo que se pide a crm.company.list: el id y solo los campos del mapa que tienen código. */
+/**
+ * Lo que se pide a crm.company.list: el id y solo los campos del mapa que
+ * tienen código. G01b (07/11) · También los de las fuentes de la dirección
+ * (mapa.direcciones): antes no se pedían, Bitrix24 no los devolvía y la
+ * lectura con el mapa confirmado dijo «Con dirección: 0».
+ */
 export function camposQueSePiden(mapa: MapaBitrix): string[] {
   const out = new Set<string>(['ID'])
   for (const c of mapa.campos) if (c.codigo) out.add(c.codigo)
+  for (const d of mapa.direcciones ?? []) for (const k of [d.calle, d.cp, d.poblacion, d.provincia]) if (k) out.add(k)
   return [...out]
 }
 
