@@ -32,11 +32,13 @@ export function ElegirCampo({ etiqueta, valor, campos, alCambiar, deshabilitado 
   if (!abierto) {
     return (
       <div className="cxg-elegir" data-prueba="elegir-campo">
-        {elegido
-          ? <span className="cxg-elegir-actual"><strong>{elegido.etiqueta}</strong><span className="cxg-elegir-tipo">{elegido.tipo}{elegido.propio ? '' : ' · de serie en Bitrix24'}</span></span>
-          : <span className="cxg-elegir-actual cxg-mapa-falta">Ningún campo</span>}
-        <button type="button" className="cx-enlace" aria-label={`Cambiar · ${etiqueta}`} disabled={deshabilitado}
-          onClick={() => { setAbierto(true); setTimeout(() => caja.current?.focus(), 0) }}>{elegido ? 'Cambiar' : 'Elegir'}</button>
+        {/* G01c (Julio, 07/11) · «Cambiar» siempre pegado al nombre del campo; el tipo, debajo. */}
+        <span className="cxg-elegir-linea">
+          {elegido ? <strong>{elegido.etiqueta}</strong> : <span className="cxg-mapa-falta">Ningún campo</span>}
+          <button type="button" className="cx-enlace" aria-label={`Cambiar · ${etiqueta}`} disabled={deshabilitado}
+            onClick={() => { setAbierto(true); setTimeout(() => caja.current?.focus(), 0) }}>{elegido ? 'Cambiar' : 'Elegir'}</button>
+        </span>
+        {elegido && <span className="cxg-elegir-tipo">{elegido.tipo}{elegido.propio ? '' : ' · de serie en Bitrix24'}</span>}
       </div>
     )
   }

@@ -11,17 +11,20 @@
 //   · con el NIF de una empresa → se une a ese cliente.
 // Y el mapa: NIF, dirección, cuota de referencia y «Tipo de cliente» (de
 // referencia, no situación). Sin códigos: cada campo por su etiqueta y su tipo.
+// Julio (07/11, tras la captura): las seis cifras en tarjetas, y en «Se quedan
+// fuera» y «A Pendiente de revisar», «Ver cuáles» con su lista dentro de Sumied.
 
 import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ElegirCampo } from './ElegirCampo'
 import { QueEsCadaCampo } from './QueEsCadaCampo'
 import {
   camposParaElegir, etiquetaDe, loQueFaltaContactos, mapaContactosDe, propuestaContactos,
-  type CampoMedido, type EleccionContactos, type MapaBitrix, type ResumenContactos,
+  type CampoMedido, type ContactosLeidos, type EleccionContactos, type MapaBitrix, type ResumenContactos,
 } from './queEsCadaCampo'
 import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
+const confirmadoYa = (m: MapaContactos | null) => !!m?.confirmado
 const miles = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 const fechaHora = (iso: string) => {
   const d = new Date(iso)
@@ -39,10 +42,42 @@ function Fila({ sumied, apoyo, children }: { sumied: string; apoyo?: string; chi
 }
 
 
-export function QueEsCadaCampoContactos({ mapa, medidos, resumen, alConfirmar }: {
+/** G01c · Una cifra en su tarjeta, como las de «Clientes y cuotas»; con «Ver cuáles» si tiene lista. */
+function Tarjeta({ n, texto, tono, verCuales, abierta, alVer }: { n: number; texto: string; tono?: 'ambar'; verCuales?: boolean; abierta?: boolean; alVer?: () => void }) {
+  return (
+    <li className="cxg-cifra-tarjeta" data-tono={tono && n > 0 ? tono : undefined}>
+      <span className="cxg-cifra-tarjeta-n">{miles(n)}</span>
+      <span className="cxg-cifra-tarjeta-texto">{texto}</span>
+      {verCuales && n > 0 && <button type="button" className="cx-enlace" aria-expanded={abierta} onClick={alVer}>{abierta ? 'Ocultar la lista' : 'Ver cuáles'}</button>}
+    </li>
+  )
+}
+
+/** G01c · La lista de «Ver cuáles»: cada contacto con su nombre y por qué, dentro de Sumied (regla 7: se enseñan todos). */
+function ListaDeContactos({ titulo, lista }: { titulo: string; lista: ContactosLeidos['fuera'] }) {
+  const [texto, setTexto] = useState('')
+  const normal = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  const vistos = texto.trim() ? lista.filter((c) => normal(`${c.nombre} ${c.idExterno}`).includes(normal(texto.trim()))) : lista
+  return (
+    <section className="cxg-lista-contactos" aria-label={titulo}>
+      <div className="cxg-lista-contactos-cabeza">
+        <h4 className="cxg-ficha-sub">{titulo} <span className="cxg-apoyo">({miles(lista.length)})</span></h4>
+        {lista.length > 8 && <input className="s-control" type="search" value={texto} onChange={(e) => setTexto(e.target.value)} placeholder="Busca por nombre" aria-label={`Buscar · ${titulo}`} />}
+      </div>
+      <ul>
+        {vistos.map((c) => <li key={c.idExterno}><strong>{c.nombre}</strong> <span className="cxg-apoyo">· contacto {c.idExterno} · {c.porque}</span></li>)}
+        {vistos.length === 0 && <li className="cxg-apoyo">Ninguno con «{texto.trim()}».</li>}
+      </ul>
+    </section>
+  )
+}
+
+export function QueEsCadaCampoContactos({ mapa, medidos, resumen, leidos, alConfirmar }: {
   mapa: MapaContactos | null
   medidos: Record<string, CampoMedido> | null
   resumen: ResumenContactos | null
+  /** Las listas de «Ver cuáles» (de la última lectura). */
+  leidos?: ContactosLeidos | null
   alConfirmar: (mapa: MapaContactos) => Promise<string>
 }) {
   const [e, setE] = useState<EleccionContactos | null>(() => (medidos ? propuestaContactos(medidos, mapa ? {
@@ -50,6 +85,7 @@ export function QueEsCadaCampoContactos({ mapa, medidos, resumen, alConfirmar }:
   const [abierto, setAbierto] = useState(false)
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
+  const [ver, setVer] = useState<'fuera' | 'pendientes' | null>(null)
   const todos = useMemo(() => (medidos ? camposParaElegir(medidos) : []), [medidos])
   const listas = useMemo(() => (medidos ? camposParaElegir(medidos, (c) => !!c.items?.length || c.type === 'crm_status') : []), [medidos])
   if (!medidos || !e) {
@@ -68,15 +104,18 @@ export function QueEsCadaCampoContactos({ mapa, medidos, resumen, alConfirmar }:
       <div className="cxg-contactos-regla">
         <p className="cxg-apoyo"><strong>Qué es cada contacto en Sumied.</strong> Un contacto con empresa es persona de contacto de esa empresa (de todas, si tiene varias). Un contacto sin empresa es cliente si tiene NIF, Tarifa Recurrente, una negociación o un cliente de GoCardless; si su única señal es una negociación, sale también en «Pendiente de revisar». Uno con el NIF de una empresa se une a ese cliente. Los demás no entran.</p>
         {resumen && (
-          <dl className="cxg-datos">
-            <div><dt>Contactos en Bitrix24</dt><dd className="cxg-cifra">{miles(resumen.contactos)}</dd></div>
-            <div><dt>Entran como clientes</dt><dd className="cxg-cifra">{miles(resumen.clientes)}</dd></div>
-            <div><dt>Se unen al cliente de una empresa</dt><dd className="cxg-cifra">{miles(resumen.seUnenAEmpresa)}</dd></div>
-            <div><dt>Personas de contacto de una empresa</dt><dd className="cxg-cifra">{miles(resumen.personas)}</dd></div>
-            <div><dt>Se quedan fuera (sin empresa ni señal)</dt><dd className="cxg-cifra">{miles(resumen.fuera)}</dd></div>
-            <div><dt>A «Pendiente de revisar»</dt><dd className="cxg-cifra">{miles(resumen.pendientes)}</dd></div>
-          </dl>
+          <ul className="cxg-cifras" aria-label="Cuántos contactos hay de cada">
+            <Tarjeta n={resumen.contactos} texto="Contactos en Bitrix24" />
+            <Tarjeta n={resumen.clientes} texto="Entran como clientes" />
+            <Tarjeta n={resumen.seUnenAEmpresa} texto="Se unen al cliente de una empresa" />
+            <Tarjeta n={resumen.personas} texto="Personas de contacto de una empresa" />
+            <Tarjeta n={resumen.fuera} texto="Se quedan fuera (sin empresa ni señal)" verCuales={!!leidos} abierta={ver === 'fuera'} alVer={() => setVer(ver === 'fuera' ? null : 'fuera')} />
+            <Tarjeta n={resumen.pendientes} texto="A «Pendiente de revisar»" tono="ambar" verCuales={!!leidos} abierta={ver === 'pendientes'} alVer={() => setVer(ver === 'pendientes' ? null : 'pendientes')} />
+          </ul>
         )}
+        {resumen && !confirmadoYa(mapa) && <p className="cxg-apoyo">Son los de la última lectura, con el mapa de abajo: hasta confirmarlo no entra ninguno.</p>}
+        {leidos && ver === 'fuera' && <ListaDeContactos titulo="Se quedan fuera" lista={leidos.fuera} />}
+        {leidos && ver === 'pendientes' && <ListaDeContactos titulo="A «Pendiente de revisar»" lista={leidos.pendientes} />}
       </div>
       {confirmado
         ? <p className="cxg-mapa-estado" data-tono="verde" role="status">Confirmado{confirmado.quien ? ` por ${confirmado.quien}` : ''} el {fechaHora(confirmado.cuando)}.</p>
@@ -123,7 +162,7 @@ export function QueEsCadaCampoContactos({ mapa, medidos, resumen, alConfirmar }:
 /** Las dos pestañas, con el mismo aspecto que la de siempre. */
 export function CamposDeBitrix({ empresas, contactos, inicial = 'empresas' }: {
   empresas: { mapa: MapaBitrix | null; medidos: Record<string, CampoMedido> | null; alConfirmar: (m: MapaBitrix) => Promise<string> }
-  contactos: { mapa: MapaContactos | null; medidos: Record<string, CampoMedido> | null; resumen: ResumenContactos | null; alConfirmar: (m: MapaContactos) => Promise<string> }
+  contactos: { mapa: MapaContactos | null; medidos: Record<string, CampoMedido> | null; resumen: ResumenContactos | null; leidos?: ContactosLeidos | null; alConfirmar: (m: MapaContactos) => Promise<string> }
   inicial?: 'empresas' | 'contactos'
 }) {
   const [pestana, setPestana] = useState<'empresas' | 'contactos'>(inicial)
@@ -146,7 +185,7 @@ export function CamposDeBitrix({ empresas, contactos, inicial = 'empresas' }: {
       <div role="tabpanel" id={`panel-${pestana}`} aria-labelledby={`campos-${pestana}`}>
         {pestana === 'empresas'
           ? <QueEsCadaCampo mapa={empresas.mapa} medidos={empresas.medidos} alConfirmar={empresas.alConfirmar} sinTitulo />
-          : <QueEsCadaCampoContactos mapa={contactos.mapa} medidos={contactos.medidos} resumen={contactos.resumen} alConfirmar={contactos.alConfirmar} />}
+          : <QueEsCadaCampoContactos mapa={contactos.mapa} medidos={contactos.medidos} resumen={contactos.resumen} leidos={contactos.leidos} alConfirmar={contactos.alConfirmar} />}
       </div>
     </div>
   )

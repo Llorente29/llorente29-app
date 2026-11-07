@@ -14,7 +14,7 @@
 // situación, ACTIVO, BAJA…, MOROSO y SOLO RENTA a lo suyo y lo demás «Sin
 // clasificar»; las cuotas, las que no acaban en «z».
 
-import { esCampoSensible } from '../../../../supabase/functions/conta-bitrix-leer/clientes'
+import { esCampoSensible } from '../../../../supabase/functions/conta-bitrix-leer/sensibles'
 import {
   proponerMapa, situacionDeTexto,
   type CampoDelMapa, type CampoMedido, type FuenteDireccion, type MapaBitrix, type Situacion,
@@ -22,7 +22,7 @@ import {
 
 export type { CampoMedido, MapaBitrix, Situacion }
 export type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
-import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
+import type { EleccionContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
 export const SITUACIONES_SUMIED: readonly { valor: Situacion; texto: string }[] = [
   { valor: 'activo', texto: 'Activo' },
@@ -197,25 +197,6 @@ export function buscarCampos(campos: readonly CampoParaElegir[], texto: string):
   return campos.filter((c) => { const t = normal(`${c.etiqueta} ${c.tipo}`); return palabras.every((p) => t.includes(p)) })
 }
 
-export interface EleccionContactos { nif: string | null; direccion: string | null; cuota: string | null; tipoCliente: string | null }
-
-/**
- * Lo que se propone para los contactos (Julio, 07/11): NIF = «NIF/NIE»;
- * dirección = ADDRESS; cuota de referencia = «Tarifa Recurrente»; y «Tipo de
- * cliente» como dato de referencia (los contactos no tienen situación). Si el
- * mapa ya está guardado, lo de él.
- */
-export function propuestaContactos(medidos: Record<string, CampoMedido>, guardado?: Partial<EleccionContactos> | null): EleccionContactos {
-  const por = (re: RegExp) => Object.keys(medidos).find((k) => !esCampoSensible(medidos[k], k) && re.test(normal(etiquetaDe(medidos, k)))) ?? null
-  const vale = (k: string | null | undefined) => (k && medidos[k] && !esCampoSensible(medidos[k], k) ? k : null)
-  return {
-    nif: vale(guardado?.nif) ?? por(/^nif ?\/ ?nie$/) ?? por(/\b(nif|dni|nie)\b/),
-    direccion: vale(guardado?.direccion) ?? (medidos.ADDRESS ? 'ADDRESS' : null),
-    cuota: vale(guardado?.cuota) ?? por(/^tarifa recurrente$/),
-    tipoCliente: vale(guardado?.tipoCliente) ?? por(/^tipo de cliente$/),
-  }
-}
-
 export function loQueFaltaContactos(e: EleccionContactos): string[] {
   const out: string[] = []
   if (!e.nif) out.push('El NIF: ningún campo elegido. Sin él, ningún contacto se une con su empresa.')
@@ -223,18 +204,6 @@ export function loQueFaltaContactos(e: EleccionContactos): string[] {
   return out
 }
 
-/** Cuántos contactos hay de cada (de la última lectura o del recuento). */
-export interface ResumenContactos { contactos: number; clientes: number; seUnenAEmpresa: number; personas: number; fuera: number; pendientes: number }
-
-/** El mapa de contactos que se confirma, con lo elegido. */
-export function mapaContactosDe(e: EleccionContactos, medidos: Record<string, CampoMedido>): MapaContactos {
-  const estandar = e.direccion === 'ADDRESS'
-  const si = (k: string) => (medidos[k] ? k : null)
-  const tipo = e.tipoCliente ? medidos[e.tipoCliente] : null
-  return {
-    nif: e.nif,
-    direccion: e.direccion ? { calle: e.direccion, ...(estandar ? { cp: si('ADDRESS_POSTAL_CODE'), poblacion: si('ADDRESS_CITY'), provincia: si('ADDRESS_PROVINCE') } : {}) } : null,
-    cuota: e.cuota, tipoCliente: e.tipoCliente,
-    textosTipo: tipo?.items?.length ? Object.fromEntries(tipo.items.map((it) => [String(it.ID), it.VALUE])) : undefined,
-  }
-}
+// G01c · La propuesta y el mapa de contactos viven en el adaptador de Bitrix24 (la lectura propone lo mismo que la pantalla).
+export { mapaContactosDe, propuestaContactos, type EleccionContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
+export type { ResumenContactos, ContactosLeidos } from '../../../../supabase/functions/_shared/crm/contactos'

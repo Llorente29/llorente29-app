@@ -22,7 +22,8 @@
 //     señales de cliente (NIF, Tarifa Recurrente, negociación, GoCardless).
 //     Hasta que Julio decida, ningún contacto se guarda como cliente.
 
-import { esCampoSensible, nifComoLaBase, tipoDeNif } from './clientes.ts'
+import { nifComoLaBase, tipoDeNif } from '../_shared/crm/clientes.ts'
+import { esCampoSensible } from './sensibles.ts'
 import { type CampoMedido } from './mapa.ts'
 
 const sinTildes = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()

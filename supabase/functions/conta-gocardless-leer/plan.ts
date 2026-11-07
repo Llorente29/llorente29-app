@@ -16,6 +16,11 @@ import { casar, type ClienteParaCasar, type Diferencia, type FichaParaCasar, typ
 import { convertir, type LineaImportada, type NoConvertida, type ServicioImportado, type TarifaImportada } from './conversion.ts'
 import { comparar, euros, type Linea, type Tarifa } from './comparacion.ts'
 import type { DatosGc } from './lectura.ts'
+import { deRef } from '../_shared/crm/ficha.ts'
+
+/** G01c · Las columnas de la ficha del CRM de una diferencia (de la referencia «crm|tipo|id» del casado). */
+const SIN_FICHA = { crm: null, tipo_ficha: null, id_externo: null } as const
+const fichaDe = (ref: string | null) => (ref ? (({ crm, tipoFicha, idExterno }) => ({ crm, tipo_ficha: tipoFicha, id_externo: idExterno }))(deRef(ref)) : SIN_FICHA)
 
 export const TIPOS_DEL_CASADO = ['bitrix_sin_cobro', 'gocardless_sin_ficha', 'emisor_distinto', 'nif_repetido_en_bitrix', 'correo_repetido_en_bitrix', 'nif_distinto']
 
@@ -57,7 +62,7 @@ export interface PlanLectura {
   /** El cliente de Sumied de cada cliente de esta cuenta de GoCardless casado. */
   partyDeCliente: Map<string, string>
   /** El cliente de Sumied de cada ficha de Bitrix24. */
-  partyDeBitrix: Map<string, string>
+  partyDeFicha: Map<string, string>
   cobroCliente: Record<string, unknown>[]
   mandatosSumied: { gcMandatoId: string; fila: Record<string, unknown> }[]
   servicios: ServicioImportado[]
@@ -100,11 +105,11 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
   const deEsta: ClienteParaCasar[] = datos.clientes.map((c) => ({ emisor: empresa, id: c.id, nombre: c.nombre, nif: c.nif, correo: c.correo,
     mandatosVivos: vivosDe.get(c.id) ?? 0, suscripcionesActivas: activasDe.get(c.id) ?? 0 }))
   const casado = casar(antes.fichas, [...deEsta, ...antes.otrosEmisores.filter((c) => c.emisor !== empresa)], nombreEmisor)
-  const partyDeBitrix = new Map(antes.fichas.map((f) => [f.bitrixId, f.partyId]))
+  const partyDeFicha = new Map(antes.fichas.map((f) => [f.claveFicha, f.partyId]))
   const partyDeCliente = new Map<string, string>()
   const porDe = new Map<string, Pareja['por'] | 'persona'>()
   for (const p of casado.parejas.filter((x) => x.emisor === empresa)) {
-    const party = partyDeBitrix.get(p.bitrixId)
+    const party = partyDeFicha.get(p.claveFicha)
     if (party) { partyDeCliente.set(p.clienteGcId, party); porDe.set(p.clienteGcId, p.por) }
   }
   // Lo enlazado a mano en la ficha manda: ese cliente ya no sale «sin ficha».
@@ -162,7 +167,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
 
   return {
     filas: { clientes, mandatos, suscripciones, cobros }, nuevos, cambiados, iguales,
-    parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeBitrix, cobroCliente, mandatosSumied,
+    parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeFicha, cobroCliente, mandatosSumied,
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {
       // «Mandatos activos», como los cuenta GoCardless (status active). El casado usa todos los vivos (también los que van camino del banco).
@@ -181,7 +186,10 @@ export interface DiferenciaAEscribir {
   porque: string
   company_id: string | null
   party_id: string | null
-  bitrix_id: string | null
+  /** G01c · La ficha del CRM (crm, tipo de ficha e id externo), si la diferencia es de una. */
+  crm: string | null
+  tipo_ficha: 'empresa' | 'contacto' | null
+  id_externo: string | null
   gc_cliente_id: string | null
   datos: Record<string, unknown>
 }
@@ -195,21 +203,22 @@ export function planDiferencias(
   const clienteDeMandato = new Map(datos.mandatos.filter((m) => m.clienteId).map((m) => [m.id, m.clienteId!]))
   const activas = datos.suscripciones.filter((x) => x.estado === 'active')
   const out: DiferenciaAEscribir[] = plan.diferenciasDelCasado.map((d) => ({ tipo: d.tipo, porque_codigo: d.tipo, porque: d.porque, company_id: d.emisor,
-    party_id: d.bitrixId ? plan.partyDeBitrix.get(d.bitrixId) ?? null : null, bitrix_id: d.bitrixId, gc_cliente_id: d.clienteGcId, datos: { emisor: d.emisor, bitrix: d.bitrixId, gocardless: d.clienteGcId } }))
+    party_id: d.claveFicha ? plan.partyDeFicha.get(d.claveFicha) ?? null : null, ...fichaDe(d.claveFicha), gc_cliente_id: d.clienteGcId,
+    datos: { emisor: d.emisor, ficha: d.claveFicha ? deRef(d.claveFicha).idExterno : null, gocardless: d.clienteGcId } }))
   for (const n of sinConvertir) {
     if (!activas.some((x) => x.id === n.suscripcion)) continue
     out.push({ tipo: 'suscripcion_sin_convertir', porque_codigo: n.codigo, porque: `«${n.nombre}»: ${n.porque}`, company_id: empresa, party_id: n.partyId,
-      bitrix_id: null, gc_cliente_id: n.gcCliente, datos: { suscripcion: n.suscripcion } })
+      ...SIN_FICHA, gc_cliente_id: n.gcCliente, datos: { suscripcion: n.suscripcion } })
   }
   for (const m of datos.mandatos.filter((x) => MANDATO_POR_FIRMAR.includes(x.estado) && x.clienteId)) {
     out.push({ tipo: 'mandato_por_firmar', porque_codigo: m.estado, porque: `El mandato ${m.referencia ?? m.id} está pendiente de la firma del cliente.`,
-      company_id: empresa, party_id: plan.partyDeCliente.get(m.clienteId!) ?? null, bitrix_id: null, gc_cliente_id: m.clienteId, datos: { mandato: m.id } })
+      company_id: empresa, party_id: plan.partyDeCliente.get(m.clienteId!) ?? null, ...SIN_FICHA, gc_cliente_id: m.clienteId, datos: { mandato: m.id } })
   }
   const fallidos = new Map<string, number>()
   for (const p of datos.cobros) { const c = p.mandatoId ? clienteDeMandato.get(p.mandatoId) : undefined; if (c && COBRO_FALLIDO.includes(p.estado)) fallidos.set(c, (fallidos.get(c) ?? 0) + 1) }
   for (const [c, n] of fallidos) if (n >= 3) {
     out.push({ tipo: 'falla_a_menudo', porque_codigo: 'tres_o_mas_fallos', porque: `${n} cobros fallidos en los últimos 6 meses.`, company_id: empresa,
-      party_id: plan.partyDeCliente.get(c) ?? null, bitrix_id: null, gc_cliente_id: c, datos: { fallidos: n, desde: datos.desde } })
+      party_id: plan.partyDeCliente.get(c) ?? null, ...SIN_FICHA, gc_cliente_id: c, datos: { fallidos: n, desde: datos.desde } })
   }
   const mes = hoy.slice(0, 7)
   for (const [gc, party] of plan.partyDeCliente) {
@@ -220,13 +229,13 @@ export function planDiferencias(
     if (r.diferenciaCent !== 0) {
       out.push({ tipo: 'totales_distintos', porque_codigo: r.diferenciaCent > 0 ? 'sumied_mas' : 'gocardless_mas',
         porque: `Sumied ${euros(r.sumiedCent)} y GoCardless ${euros(r.gocardlessCent)} al mes. ${r.explicaciones.join(' ')}`.trim(), company_id: empresa,
-        party_id: party, bitrix_id: null, gc_cliente_id: gc, datos: { mes, sumied: aEuros(r.sumiedCent), gocardless: aEuros(r.gocardlessCent), explicaciones: r.explicaciones } })
+        party_id: party, ...SIN_FICHA, gc_cliente_id: gc, datos: { mes, sumied: aEuros(r.sumiedCent), gocardless: aEuros(r.gocardlessCent), explicaciones: r.explicaciones } })
     }
   }
   const abono = plan.resumen.abono
   const casaAbono = abono ? abonoContraTesoreria(abono, tesoreria) : { coincide: false as const, porque: 'GoCardless no tiene ninguna cuenta de abono activa.' }
   if (!casaAbono.coincide) out.push({ tipo: 'abono_en_otra_cuenta', porque_codigo: abono ? 'abono_no_casa' : 'sin_cuenta_de_abono', porque: casaAbono.porque,
-    company_id: empresa, party_id: null, bitrix_id: null, gc_cliente_id: null, datos: { banco: abono?.banco ?? null, termina_en: abono?.terminaEn ?? null } })
+    company_id: empresa, party_id: null, ...SIN_FICHA, gc_cliente_id: null, datos: { banco: abono?.banco ?? null, termina_en: abono?.terminaEn ?? null } })
   return { diferencias: out, abono: casaAbono }
 }
 

@@ -14,9 +14,9 @@ const nombre = (id: string) => (id === A ? 'EMISOR PRUEBA ALFA, S.L.' : 'Emisor 
 const antes = (extra: Partial<Antes> = {}): Antes => ({
   huellas: new Map(), otrosEmisores: [], formaAntes: new Map(), porDefecto: true, importadas: new Set(), tarifasPropias: new Set(),
   fichas: [
-    { partyId: 'P1', bitrixId: 'F1', nombre: 'CLIENTE PRUEBA UNO, S.L.', nif: 'B00000001', correos: [], situacion: 'activo', formaPago: 'Emisor Prueba Alfa', emisorSegunBitrix: A },
-    { partyId: 'P2', bitrixId: 'F2', nombre: 'CLIENTE PRUEBA DOS', nif: null, correos: ['dos@prueba.test'], situacion: 'moroso', formaPago: null, emisorSegunBitrix: null },
-    { partyId: 'P3', bitrixId: 'F3', nombre: 'CLIENTE PRUEBA TRES', nif: 'B00000003', correos: [], situacion: 'activo', formaPago: null, emisorSegunBitrix: null },
+    { partyId: 'P1', claveFicha: 'F1', nombre: 'CLIENTE PRUEBA UNO, S.L.', nif: 'B00000001', correos: [], situacion: 'activo', formaPago: 'Emisor Prueba Alfa', emisorSegunCrm: A },
+    { partyId: 'P2', claveFicha: 'F2', nombre: 'CLIENTE PRUEBA DOS', nif: null, correos: ['dos@prueba.test'], situacion: 'moroso', formaPago: null, emisorSegunCrm: null },
+    { partyId: 'P3', claveFicha: 'F3', nombre: 'CLIENTE PRUEBA TRES', nif: 'B00000003', correos: [], situacion: 'activo', formaPago: null, emisorSegunCrm: null },
   ],
   ...extra,
 })
@@ -43,7 +43,7 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
     const p = planLectura(A, 'cuenta', d, antes(), HOY, nombre)
     expect({ nuevos: p.nuevos, cambiados: p.cambiados, iguales: p.iguales }).toEqual({ nuevos: 3, cambiados: 0, iguales: 0 })
-    expect(p.parejas.map((x) => [x.clienteGcId, x.bitrixId, x.por])).toEqual([['CU001', 'F1', 'nif'], ['CU002', 'F2', 'correo']])
+    expect(p.parejas.map((x) => [x.clienteGcId, x.claveFicha, x.por])).toEqual([['CU001', 'F1', 'nif'], ['CU002', 'F2', 'correo']])
     expect(p.cobroCliente.map((c) => [c.party_id, c.forma_cobro, c.gc_cliente_id])).toEqual([['P1', 'gocardless', 'CU001'], ['P2', 'gocardless', 'CU002']])
     expect(p.mandatosSumied.map((m) => [m.gcMandatoId, m.fila.status, m.fila.origen])).toEqual([['MD001', 'firmado', 'gocardless'], ['MD002', 'firmado', 'gocardless']])
     // El cliente con 7 líneas y el de B: 8 líneas; la laboral sin nombre no se convierte; la cancelada no se importa.

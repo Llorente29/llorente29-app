@@ -17,7 +17,11 @@
 //   · Los campos propios se llaman UF_CRM_…; los de lista devuelven el id de
 //     la opción, no su texto: el mapa dice qué significa cada id.
 
-import { esCampoSensible } from './clientes.ts'
+import { importeACent, normalizarNif, type FichaCrm, type Servicio, type Situacion } from '../_shared/crm/ficha.ts'
+import { esCampoSensible } from './sensibles.ts'
+
+/** Lo neutro, también desde aquí (el adaptador lo usa y lo reexporta). */
+export { importeACent, normalizarNif, type Servicio, type Situacion }
 
 export const POR_PAGINA = 50
 export const ESPERA_MS = 500
@@ -28,9 +32,7 @@ export type CampoSumied =
   | 'situacion' | 'servicios' | 'forma_pago' | 'cuota_referencia'
 
 /** G01b · «sin_clasificar»: una opción de Bitrix24 sin significado en Sumied (GRAVE DESAPARECIDO, las «Vzla»…), con su texto. */
-export type Situacion = 'activo' | 'baja' | 'moroso' | 'solo_renta' | 'sin_clasificar'
 /** Los servicios contratados que enseña la tabla: C (contabilidad), L (laboral), S (otros servicios). */
-export type Servicio = 'C' | 'L' | 'S'
 
 export interface CampoDelMapa {
   /** El código del campo en Bitrix24 (TITLE, EMAIL, UF_CRM_…). Null: está en el mapa, pero falta medirlo en el portal. */
@@ -145,40 +147,8 @@ export function camposSinCodigo(mapa: MapaBitrix): string[] {
   return mapa.campos.filter((c) => !c.codigo).map((c) => c.etiqueta ?? c.campo)
 }
 
-export function normalizarNif(v: string | null | undefined): string | null {
-  if (!v) return null
-  let n = v.toUpperCase().replace(/[\s.\-_/]/g, '')
-  if (n.startsWith('ES') && n.length > 9) n = n.slice(2)
-  return n === '' ? null : n
-}
-
-export interface FichaBitrix {
-  bitrixId: string
-  nombre: string
-  nif: string | null
-  /** G01b · El NIF tal cual está en Bitrix24 (para el ensayo de la unión, cuando no se usa). */
-  nifEnBitrix: string | null
-  calle: string | null
-  cp: string | null
-  poblacion: string | null
-  provincia: string | null
-  correos: string[]
-  telefonos: string[]
-  situacion: Situacion | null
-  /** G01b · El texto de la situación en Bitrix24 (el de la opción), para «Sin clasificar». */
-  situacionTexto: string | null
-  /** G01b · De qué campo sale la dirección y las otras direcciones que tiene, de referencia. */
-  direccionDe: string | null
-  otrasDirecciones: { etiqueta: string; texto: string }[]
-  servicios: Servicio[]
-  /** El texto de «Forma de pago», tal cual, y el emisor que dice (si el mapa lo sabe). */
-  formaPago: string | null
-  emisorSegunBitrix: string | null
-  /** Las cuotas de Bitrix24: solo referencia, no se usan para calcular nada. */
-  cuotasReferencia: { etiqueta: string; importeCent: number | null; texto: string }[]
-  /** Lo que no se ha podido leer, en palabras. */
-  avisos: string[]
-}
+/** G01c · La ficha de una empresa de Bitrix24: la ficha neutra del núcleo (_shared/crm/ficha.ts). */
+export type FichaBitrix = FichaCrm
 
 const textoDe = (v: unknown): string | null => {
   if (v === null || v === undefined) return null
@@ -212,24 +182,14 @@ export function textoDeDireccion(v: unknown): string | null {
 /** Un código postal español (5 cifras) dentro de un texto de dirección. */
 const cpDelTexto = (t: string | null) => (t ? /\b(\d{5})\b/.exec(t)?.[1] ?? null : null)
 
-/** «24,20», «24.20», «1.234,50 €», «24|EUR» → céntimos; null si no es un número. */
-export function importeACent(v: string | null): number | null {
-  if (!v) return null
-  let t = v.split('|')[0].replace(/[€\s]/g, '')
-  if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.')
-  else t = t.replace(/,/g, '')
-  const n = Number(t)
-  return Number.isFinite(n) ? Math.round(n * 100) : null
-}
-
 /** Una empresa de crm.company.list → la ficha del cliente, solo con los campos del mapa. */
 export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): FichaBitrix {
   const f: FichaBitrix = {
-    bitrixId: String(fila.ID ?? ''),
+    idExterno: String(fila.ID ?? ''),
     nombre: '',
-    nif: null, nifEnBitrix: null, calle: null, cp: null, poblacion: null, provincia: null,
+    nif: null, nifEnCrm: null, calle: null, cp: null, poblacion: null, provincia: null,
     correos: [], telefonos: [],
-    situacion: null, situacionTexto: null, direccionDe: null, otrasDirecciones: [], servicios: [], formaPago: null, emisorSegunBitrix: null,
+    situacion: null, situacionTexto: null, direccionDe: null, otrasDirecciones: [], servicios: [], formaPago: null, emisorSegunCrm: null,
     cuotasReferencia: [], avisos: [],
   }
   const conFuentes = (mapa.direcciones?.length ?? 0) > 0
@@ -242,7 +202,7 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
     const opcion = (t: string | null) => (t && c.opciones ? c.opciones[t] ?? t : t)
     switch (c.campo) {
       case 'nombre': f.nombre = textoDe(crudo) ?? ''; break
-      case 'nif': f.nifEnBitrix = textoDe(crudo); f.nif = normalizarNif(f.nifEnBitrix); break
+      case 'nif': f.nifEnCrm = textoDe(crudo); f.nif = normalizarNif(f.nifEnCrm); break
       case 'calle': f.calle = textoDe(crudo); break
       case 'cp': f.cp = textoDe(crudo); break
       case 'poblacion': f.poblacion = textoDe(crudo); break
@@ -273,8 +233,8 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
       case 'forma_pago': {
         const t = opcion(textoDe(crudo))
         f.formaPago = t
-        f.emisorSegunBitrix = t ? mapa.formaPagoAEmisor[t] ?? null : null
-        if (t && !f.emisorSegunBitrix) f.avisos.push(`«Forma de pago» dice «${t}», que el mapa no sabe de qué emisor es.`)
+        f.emisorSegunCrm = t ? mapa.formaPagoAEmisor[t] ?? null : null
+        if (t && !f.emisorSegunCrm) f.avisos.push(`«Forma de pago» dice «${t}», que el mapa no sabe de qué emisor es.`)
         break
       }
       case 'cuota_referencia': {
@@ -296,7 +256,7 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
       f.otrasDirecciones.push({ etiqueta: d.etiqueta, texto: [calle, cp, poblacion, provincia].filter(Boolean).join(', ') })
     }
   }
-  if (!f.nombre) { f.nombre = `Empresa ${f.bitrixId} de Bitrix24`; f.avisos.push('Sin nombre en Bitrix24.') }
+  if (!f.nombre) { f.nombre = `Empresa ${f.idExterno} de Bitrix24`; f.avisos.push('Sin nombre en Bitrix24.') }
   return f
 }
 

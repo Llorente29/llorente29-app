@@ -1,0 +1,6 @@
+# G01c · La clave neutra y los contactos del CRM: la 1925 añade y copia (con
+# su vuelta atrás). Su prueba (ROLLBACK, datos inventados) comprueba que no se
+# pierde nada, que lo publicado sigue funcionando, los contactos, las
+# personas de contacto, el RIF, el mapa y la vuelta atrás.
+supabase/migrations/20261107T1925_g01c_crm_y_contactos.sql
+supabase/staging/sql/20261107_g01c_crm_y_contactos_prueba.sql

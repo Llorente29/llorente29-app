@@ -1,24 +1,30 @@
-// supabase/functions/conta-bitrix-leer/clientes.ts
+// supabase/functions/_shared/crm/clientes.ts
 //
-// G01b · La unión de las fichas de Bitrix24 en clientes de Sumied (Julio,
+// G01c · Del núcleo neutro: no sabe de qué CRM vienen las fichas (las lee su
+// adaptador; hoy, Bitrix24 en conta-bitrix-leer). Antes en
+// conta-bitrix-leer/clientes.ts.
+//
+// G01b · La unión de las fichas del CRM en clientes de Sumied (Julio,
 // 07/11, tras el recuento de repetidos: 21 NIF en 52 fichas, uno en 12, dos
 // de otro formato). Puro: lo usan la lectura, el ensayo en PDF y el recuento,
 // así los tres dicen lo mismo.
 //   1. Mismo NIF = un solo cliente, con todas sus fichas enlazadas. Sale en
-//      «Pendiente de revisar» como «Fichas repetidas en Bitrix24».
+//      «Pendiente de revisar» como «Fichas repetidas en tu CRM».
 //   2. Su situación, la más viva de sus fichas: activo > moroso > solo renta >
 //      sin clasificar > baja (y, detrás, la ficha sin situación).
 //   3. Un NIF sin formato de DNI, NIE o CIF, o que salga en 10 fichas o más,
 //      no se usa como NIF: esas fichas entran como clientes sin NIF, cada una
 //      por separado, y salen en «Pendiente de revisar».
 // Mientras la unión no se aplica (lo hace una persona en Ajustes › Cobros ›
-// Bitrix24, después de ver el ensayo), cada ficha va sola, como antes.
+// Tu CRM, después de ver el ensayo), cada ficha va sola, como antes.
 
-import { normalizarNif, type Situacion } from './mapa.ts'
+import { claveDeFicha, normalizarNif, type Situacion, type TipoFicha } from './ficha.ts'
+
+export { claveDeFicha }
 
 export const MAX_FICHAS_POR_NIF = 10
 
-/** De la más viva a la menos; null (sin situación en Bitrix24) va la última. */
+/** De la más viva a la menos; null (sin situación en el CRM) va la última. */
 export const VIVEZA: readonly (Situacion | null)[] = ['activo', 'moroso', 'solo_renta', 'sin_clasificar', 'baja', null]
 const rango = (s: Situacion | null) => { const i = VIVEZA.indexOf(s); return i < 0 ? VIVEZA.length : i }
 
@@ -58,13 +64,13 @@ export const idExtranjeroDe = (n: string | null): { tipo: 'foreign'; pais: strin
 
 /** Lo que la unión necesita de cada ficha. */
 export interface FichaParaUnir {
-  bitrixId: string; nif: string | null; situacion: Situacion | null
-  /** G01c · De qué viene: una empresa (lo de siempre) o un contacto de Bitrix24. Sus ids son numeraciones distintas. */
-  origen?: 'empresa' | 'contacto'
+  idExterno: string; nif: string | null; situacion: Situacion | null
+  /** G01c · Una empresa (si no lo dice) o un contacto del CRM. Sus ids son numeraciones distintas: la clave lleva el tipo (ficha.ts · claveDeFicha). */
+  tipoFicha?: TipoFicha
 }
 
-/** La clave de una ficha: el id de Bitrix24, y «contacto-» delante si es un contacto (una empresa y un contacto pueden tener el mismo id). */
-export const claveDeFicha = (f: FichaParaUnir) => (f.origen === 'contacto' ? `contacto-${f.bitrixId}` : f.bitrixId)
+/** Cómo se nombra una ficha en un porqué: «ficha 7» o «contacto 7». */
+export const fichaEnPalabras = (f: { tipoFicha?: TipoFicha; idExterno: string }) => `${f.tipoFicha === 'contacto' ? 'contacto' : 'ficha'} ${f.idExterno}`
 
 export type Motivo = 'repetidas' | 'nif_no_valido' | 'nif_en_muchas'
 
@@ -79,7 +85,7 @@ export interface Cliente<F extends FichaParaUnir> {
   situacion: Situacion | null
   /** Por qué sale en «Pendiente de revisar» (null: no sale). */
   motivo: Motivo | null
-  /** En qué cuántas fichas sale su NIF en Bitrix24 (para los motivos). */
+  /** En qué cuántas fichas sale su NIF en el CRM (para los motivos). */
   fichasConSuNif: number
   /** G01c · Si su número es un identificador fiscal extranjero (el RIF de Venezuela): tipo y país. */
   idExtranjero: { tipo: 'foreign'; pais: string } | null
@@ -87,10 +93,10 @@ export interface Cliente<F extends FichaParaUnir> {
 
 const porId = (a: FichaParaUnir, b: FichaParaUnir) => {
   // G01c · Primero las empresas y después los contactos; dentro, por id.
-  const oa = a.origen === 'contacto' ? 1 : 0, ob = b.origen === 'contacto' ? 1 : 0
+  const oa = a.tipoFicha === 'contacto' ? 1 : 0, ob = b.tipoFicha === 'contacto' ? 1 : 0
   if (oa !== ob) return oa - ob
-  const na = Number(a.bitrixId), nb = Number(b.bitrixId)
-  return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : a.bitrixId.localeCompare(b.bitrixId)
+  const na = Number(a.idExterno), nb = Number(b.idExterno)
+  return Number.isFinite(na) && Number.isFinite(nb) ? na - nb : a.idExterno.localeCompare(b.idExterno)
 }
 
 /**
@@ -156,45 +162,26 @@ export function resumenDeUnion<F extends FichaParaUnir>(clientes: readonly Clien
   return r
 }
 
-// ── Campos que no se leen nunca ─────────────────────────────────────────────
-// En el Bitrix24 de QBO hay campos con contraseñas («Clave Certificado
-// Digital…», «Usuario vinculado») y con los certificados (ficheros). Ni se
-// piden a Bitrix24 ni salen para elegir en «Qué es cada campo», aunque alguien
-// los elija por error (Julio, 07/11). Por su etiqueta y por su tipo.
-
-/** Etiquetas de un campo con una contraseña o un acceso. */
-// G01c (Julio, 07/11) · También el IBAN y «Detalles del pago» (BANKING_DETAILS, que puede llevarlo): no se leen nunca.
-export const ETIQUETA_SENSIBLE = /\b(CLAVE|CLAVES|CONTRASENA|CONTRASENAS|PASSWORD|PASSWD|PASS|PIN|USUARIO|USER|LOGIN|CREDENCIAL|CREDENCIALES|TOKEN|SECRETO|CL@VE|IBAN|DETALLES DEL PAGO)\b/
-/** Los campos estándar de Bitrix24 que no se leen nunca, por su código (sus etiquetas cambian con el idioma del portal). */
-export const CODIGOS_SENSIBLES: readonly string[] = ['BANKING_DETAILS']
-/** Tipos de campo que no se leen: los ficheros (los certificados) y las contraseñas. */
-export const TIPOS_SENSIBLES: readonly string[] = ['file', 'password']
-
-export interface CampoConEtiqueta { type?: string; title?: string; formLabel?: string; listLabel?: string }
-const sinTildes = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim()
-
-/** ¿Este campo de Bitrix24 no se puede leer nunca? Por su tipo o por cualquiera de sus etiquetas. */
-export function esCampoSensible(c: CampoConEtiqueta | null | undefined, codigo?: string): boolean {
-  if (codigo && CODIGOS_SENSIBLES.includes(codigo)) return true
-  if (!c) return false
-  if (c.type && TIPOS_SENSIBLES.includes(c.type)) return true
-  return [c.formLabel, c.listLabel, c.title].some((t) => !!t && ETIQUETA_SENSIBLE.test(sinTildes(t)))
-}
-
 // ── Lo que se guarda y lo que sale en «Pendiente de revisar» ────────────────
 
-/** Lo que se manda a conta_bitrix_guardar_clientes por cada cliente. */
+/** Lo que se manda a conta_crm_guardar_clientes por cada cliente (el identificador extranjero, solo si lo es: no cambia la huella de los demás). */
 export const paraGuardar = <F extends FichaParaUnir>(c: Cliente<F>) =>
-  ({ clave: c.clave, nif: c.nif, situacion: c.situacion, motivo: c.motivo, principal: c.principal, fichas: c.fichas })
+  ({ clave: c.clave, nif: c.nif, situacion: c.situacion, motivo: c.motivo, principal: c.principal, fichas: c.fichas, ...(c.idExtranjero ? { idExtranjero: c.idExtranjero } : {}) })
 
 /** Lo que devuelve la base de un cliente que no se ha podido guardar. */
-export interface ErrorAlGuardar { bitrixIds: string[]; nombre: string | null; emisor: string | null; codigo: string; porque: string }
+export interface ErrorAlGuardar {
+  idsExternos: string[]; tipoFicha?: TipoFicha; nombre: string | null; emisor: string | null; codigo: string; porque: string
+  /** La clave de su ficha principal («empresa:7»). */
+  principal?: string
+}
 
-export interface DiferenciaDeBitrix {
-  tipo: 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada'
+/** Una diferencia de la lectura del CRM, para conta_gestoria_diferencia (crm, tipo_ficha e id_externo los pone quien guarda). */
+export interface DiferenciaDeCrm {
+  tipo: 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada' | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos'
   porque_codigo: string
   porque: string
-  bitrix_id: string
+  tipo_ficha: TipoFicha
+  id_externo: string
   datos: Record<string, unknown>
 }
 
@@ -203,37 +190,40 @@ const enPalabras = (s: Situacion | null) => (s ? PALABRA[s] ?? s : 'sin situaci�
 const QUEDA: Record<string, string> = { activo: 'Activo', moroso: 'Moroso', solo_renta: 'Solo la renta', sin_clasificar: 'Sin clasificar', baja: 'De baja' }
 
 /**
- * Lo que sale en «Pendiente de revisar» de una lectura de Bitrix24: cada
- * cliente unido, cada ficha que entra sin NIF y cada una que no se ha podido
- * guardar, con su porqué (regla 7: se enseña, no se esconde). Sin NIF en el
- * texto: el porqué lo dice con palabras.
+ * Lo que sale en «Pendiente de revisar» de una lectura del CRM: cada cliente
+ * unido, cada ficha que entra sin NIF y cada una que no se ha podido guardar,
+ * con su porqué (regla 7: se enseña, no se esconde). Sin NIF en el texto: el
+ * porqué lo dice con palabras. «crm»: el nombre del CRM conectado, para las
+ * frases («Bitrix24»).
  */
 export function diferenciasDeLectura<F extends FichaParaUnir & { nombre?: string }>(
-  clientes: readonly Cliente<F>[], errores: readonly ErrorAlGuardar[], unir: boolean,
-): DiferenciaDeBitrix[] {
-  const fallidos = new Set(errores.flatMap((e) => e.bitrixIds))
-  const out: DiferenciaDeBitrix[] = []
+  clientes: readonly Cliente<F>[], errores: readonly ErrorAlGuardar[], unir: boolean, crm: string,
+): DiferenciaDeCrm[] {
+  const fallidos = new Set(errores.map((e) => e.principal ?? `${e.tipoFicha ?? 'empresa'}:${e.idsExternos[0] ?? ''}`))
+  const out: DiferenciaDeCrm[] = []
   for (const c of clientes) {
-    if (fallidos.has(c.principal.bitrixId)) continue
+    if (fallidos.has(claveDeFicha(c.principal))) continue
+    const p = { tipo_ficha: c.principal.tipoFicha ?? 'empresa', id_externo: c.principal.idExterno } as const
     if (c.motivo === 'repetidas') {
       const sits = c.fichas.map((f) => enPalabras(f.situacion))
-      out.push({ tipo: 'fichas_repetidas', porque_codigo: new Set(c.fichas.map((f) => f.situacion)).size > 1 ? 'mismo_nif_distinta_situacion' : 'mismo_nif',
-        bitrix_id: c.principal.bitrixId, datos: { bitrixIds: c.fichas.map((f) => f.bitrixId), situacion: c.situacion },
-        porque: `Sale en ${c.fichas.length} fichas de Bitrix24 con el mismo NIF (${c.fichas.map((f) => f.bitrixId).join(', ')}: ${sits.join(', ')}). En Sumied es un solo cliente, ${QUEDA[c.situacion ?? ''] ? `«${QUEDA[c.situacion!]}»` : 'sin situación'}.` })
+      out.push({ tipo: 'fichas_repetidas', porque_codigo: new Set(c.fichas.map((f) => f.situacion)).size > 1 ? 'mismo_nif_distinta_situacion' : 'mismo_nif', ...p,
+        datos: { fichas: c.fichas.map((f) => claveDeFicha(f)), situacion: c.situacion },
+        porque: `Sale en ${c.fichas.length} fichas de ${crm} con el mismo NIF (${c.fichas.map(fichaEnPalabras).join(', ')}: ${sits.join(', ')}). En Sumied es un solo cliente, ${QUEDA[c.situacion ?? ''] ? `«${QUEDA[c.situacion!]}»` : 'sin situación'}.` })
     } else if (c.motivo === 'nif_no_valido' || c.motivo === 'nif_en_muchas') {
-      out.push({ tipo: 'nif_no_valido', porque_codigo: c.motivo === 'nif_no_valido' ? 'formato' : 'en_muchas', bitrix_id: c.principal.bitrixId,
-        datos: { bitrixIds: [c.principal.bitrixId], fichasConSuNif: c.fichasConSuNif },
+      out.push({ tipo: 'nif_no_valido', porque_codigo: c.motivo === 'nif_no_valido' ? 'formato' : 'en_muchas', ...p,
+        datos: { fichas: [claveDeFicha(c.principal)], fichasConSuNif: c.fichasConSuNif },
         porque: c.motivo === 'nif_no_valido'
-          ? `Su NIF en Bitrix24 (ficha ${c.principal.bitrixId}) no tiene formato de DNI, NIE ni CIF: entra sin NIF.`
-          : `Su NIF sale en ${c.fichasConSuNif} fichas de Bitrix24: entra sin NIF y por separado (ficha ${c.principal.bitrixId}).` })
+          ? `Su NIF en ${crm} (${fichaEnPalabras(c.principal)}) no tiene formato de DNI, NIE, CIF ni RIF: entra sin NIF.`
+          : `Su NIF sale en ${c.fichasConSuNif} fichas de ${crm}: entra sin NIF y por separado (${fichaEnPalabras(c.principal)}).` })
     }
   }
   for (const e of errores) {
     const choca = /NIF ya es de otro cliente/.test(e.porque)
-    out.push({ tipo: 'ficha_no_guardada', porque_codigo: choca ? 'nif_de_otro' : e.codigo || 'error', bitrix_id: e.bitrixIds[0] ?? '',
-      datos: { bitrixIds: e.bitrixIds, nombre: e.nombre, emisor: e.emisor },
-      porque: `«${e.nombre ?? 'Sin nombre'}» (ficha ${e.bitrixIds.join(', ')} de Bitrix24) no se ha guardado: ${e.porque}.`
-        + (choca && !unir ? ' Se unirá a su cliente cuando se aplique la unión en Ajustes › Cobros › Bitrix24.' : '') })
+    const tipo = e.tipoFicha ?? 'empresa'
+    out.push({ tipo: 'ficha_no_guardada', porque_codigo: choca ? 'nif_de_otro' : e.codigo || 'error', tipo_ficha: tipo, id_externo: e.idsExternos[0] ?? '',
+      datos: { idsExternos: e.idsExternos, nombre: e.nombre, emisor: e.emisor },
+      porque: `«${e.nombre ?? 'Sin nombre'}» (${tipo === 'contacto' ? 'contacto' : 'ficha'} ${e.idsExternos.join(', ')} de ${crm}) no se ha guardado: ${e.porque}.`
+        + (choca && !unir ? ' Se unirá a su cliente cuando se aplique la unión en Ajustes › Cobros › Tu CRM.' : '') })
   }
   return out
 }
@@ -243,25 +233,25 @@ export interface EnsayoDeUnion {
   resumen: ResumenDeUnion
   /** G01b (07/11) · Clientes de Sumied ya creados por separado que se juntan con otro (se retiran, archivados). */
   seJuntan: number
-  unidos: { nif: string; situacion: Situacion | null; fichas: { bitrixId: string; nombre: string; situacion: Situacion | null; situacionTexto: string | null }[]
-    /** Cuántos clientes de Sumied son hoy esas fichas (0: ninguno aún; 2 o más: se juntan en uno). */
+  unidos: { nif: string; situacion: Situacion | null; fichas: { idExterno: string; tipoFicha: TipoFicha; nombre: string; situacion: Situacion | null; situacionTexto: string | null }[]
+    /** Cuántos clientes de Sumied son hoy esas fichas (0: ninguno aún; 2 o más: se juntan en uno). clienteDeFicha va por claveDeFicha. */
     clientesHoy: number }[]
-  sinNif: { bitrixId: string; nombre: string; nifEnBitrix: string | null; motivo: 'nif_no_valido' | 'nif_en_muchas'; fichasConSuNif: number }[]
+  sinNif: { idExterno: string; tipoFicha: TipoFicha; nombre: string; nifEnCrm: string | null; motivo: 'nif_no_valido' | 'nif_en_muchas'; fichasConSuNif: number }[]
 }
 
-export function ensayoDeUnion<F extends FichaParaUnir & { nombre: string; situacionTexto: string | null; nifEnBitrix: string | null }>(
+export function ensayoDeUnion<F extends FichaParaUnir & { nombre: string; situacionTexto: string | null; nifEnCrm: string | null }>(
   fichas: readonly F[], clienteDeFicha: ReadonlyMap<string, string> = new Map(),
 ): EnsayoDeUnion {
   const clientes = agrupar(fichas, true)
   const unidos = clientes.filter((c) => c.motivo === 'repetidas').map((c) => ({ nif: c.nif!, situacion: c.situacion,
-    fichas: c.fichas.map((f) => ({ bitrixId: f.bitrixId, nombre: f.nombre, situacion: f.situacion, situacionTexto: f.situacionTexto })),
-    clientesHoy: new Set(c.fichas.map((f) => clienteDeFicha.get(f.bitrixId)).filter(Boolean)).size }))
+    fichas: c.fichas.map((f) => ({ idExterno: f.idExterno, tipoFicha: f.tipoFicha ?? 'empresa', nombre: f.nombre, situacion: f.situacion, situacionTexto: f.situacionTexto })),
+    clientesHoy: new Set(c.fichas.map((f) => clienteDeFicha.get(claveDeFicha(f))).filter(Boolean)).size }))
   return {
     resumen: resumenDeUnion(clientes),
     seJuntan: unidos.reduce((t, u) => t + Math.max(0, u.clientesHoy - 1), 0),
     unidos,
     sinNif: clientes.filter((c) => c.motivo === 'nif_no_valido' || c.motivo === 'nif_en_muchas').map((c) => ({
-      bitrixId: c.principal.bitrixId, nombre: c.principal.nombre, nifEnBitrix: c.principal.nifEnBitrix ?? c.principal.nif,
+      idExterno: c.principal.idExterno, tipoFicha: c.principal.tipoFicha ?? 'empresa', nombre: c.principal.nombre, nifEnCrm: c.principal.nifEnCrm ?? c.principal.nif,
       motivo: c.motivo as 'nif_no_valido' | 'nif_en_muchas', fichasConSuNif: c.fichasConSuNif })),
   }
 }

@@ -150,7 +150,7 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
   }
   const conectada = !!c?.conectada
   return (
-    <Tarjeta titulo="Bitrix24 · tus clientes"
+    <Tarjeta titulo={`Tu CRM · ${c?.nombre ?? 'Bitrix24'}`}
       apoyo="La ficha de cada cliente: quién es, si está activo, qué servicios tiene y con qué empresa se le factura. Uno para todas tus empresas."
       accion={<Estado conectada={conectada} entorno={c?.entorno ?? 'real'} />}>
       {conectada ? (
@@ -162,7 +162,7 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
           </dl>
           <div><Boton onClick={() => void hacer(acciones.leerBitrix)} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
           <CamposDeBitrix empresas={{ mapa: c!.mapa, medidos: c!.medidos, alConfirmar: acciones.confirmarMapa }}
-            contactos={{ mapa: c!.contactos?.mapa ?? null, medidos: c!.contactos?.medidos ?? null, resumen: c!.contactos?.resumen ?? null,
+            contactos={{ mapa: c!.contactos?.mapa ?? null, medidos: c!.contactos?.medidos ?? null, resumen: c!.contactos?.resumen ?? null, leidos: c!.contactos?.leidos ?? null,
               alConfirmar: acciones.confirmarMapaContactos ?? (async () => { throw new Error('Confirmar el mapa de contactos aún no está publicado en este entorno.') }) }} />
           <UnionDeFichas mapa={c!.mapa} alEnsayar={acciones.ensayoUnion} alAplicar={acciones.aplicarUnion} />
         </div>

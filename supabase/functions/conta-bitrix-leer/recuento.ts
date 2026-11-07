@@ -12,7 +12,8 @@
 //     qué situaciones, de qué tipo y si mezclan sociedad y persona.
 
 import { situacionDeTexto, type CampoMedido, type Situacion } from './mapa.ts'
-import { agrupar, esCampoSensible, nifComoLaBase, resumenDeUnion, tipoDeNif, type ResumenDeUnion } from './clientes.ts'
+import { agrupar, nifComoLaBase, resumenDeUnion, tipoDeNif, type ResumenDeUnion } from '../_shared/crm/clientes.ts'
+import { esCampoSensible } from './sensibles.ts'
 
 export { nifComoLaBase, tipoDeNif }
 
@@ -98,7 +99,7 @@ export function situacionDeFila(situacion: string, medidos: Record<string, Campo
 /** G01b · Lo que saldría con la regla de la unión: las fichas, en clientes (solo números). */
 export function simularUnion(filas: readonly Record<string, unknown>[], nif: string, situacion: string, medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null): ResumenDeUnion {
   const sit = situacionDeFila(situacion, medidos, opcionesConfirmadas)
-  return resumenDeUnion(agrupar(filas.map((f) => ({ bitrixId: String(f.ID ?? ''), nif: textoDe(f[nif]) || null, situacion: sit(textoDe(f[situacion])) })), true))
+  return resumenDeUnion(agrupar(filas.map((f) => ({ idExterno: String(f.ID ?? ''), nif: textoDe(f[nif]) || null, situacion: sit(textoDe(f[situacion])) })), true))
 }
 
 /** G01b · Los campos que el recuento no puede pedir nunca (contraseñas, certificados). */

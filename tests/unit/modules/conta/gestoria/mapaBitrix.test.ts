@@ -42,8 +42,8 @@ describe('G01 · mapa de Bitrix24', () => {
       UF_CRM_PRUEBA_SITUACION: '11', UF_CRM_PRUEBA_SERVICIOS: ['22', '21'], UF_CRM_PRUEBA_PAGO: '32', UF_CRM_PRUEBA_CUOTA: '90,75|EUR',
     }, MAPA)
     expect(f).toMatchObject({
-      bitrixId: '501', nombre: 'CLIENTE PRUEBA UNO, S.L.', nif: 'B00000001', correos: ['uno@prueba.test'], telefonos: ['600000000'],
-      situacion: 'activo', servicios: ['C', 'L'], formaPago: 'Emisor A Nuevo', emisorSegunBitrix: 'empresa-a',
+      idExterno: '501', nombre: 'CLIENTE PRUEBA UNO, S.L.', nif: 'B00000001', correos: ['uno@prueba.test'], telefonos: ['600000000'],
+      situacion: 'activo', servicios: ['C', 'L'], formaPago: 'Emisor A Nuevo', emisorSegunCrm: 'empresa-a',
       cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075, texto: '90,75|EUR' }], avisos: [],
     })
   })
@@ -53,7 +53,7 @@ describe('G01 · mapa de Bitrix24', () => {
     // G01b · Una opción que el mapa no conoce queda «sin clasificar», con su texto (aquí, el id).
     expect(f.situacion).toBe('sin_clasificar')
     expect(f.situacionTexto).toBe('99')
-    expect(f.emisorSegunBitrix).toBeNull()
+    expect(f.emisorSegunCrm).toBeNull()
     expect(f.avisos).toEqual(['Situación «99» sin clasificar en Sumied.', '«Forma de pago» dice «77», que el mapa no sabe de qué emisor es.', 'Sin nombre en Bitrix24.'])
   })
 
@@ -127,7 +127,7 @@ describe('G01 · el mapa, propuesto desde crm.company.fields', () => {
     expect(p.mapa.confirmado ?? null).toBeNull()
     expect(leerEmpresa(fila, p.mapa)).toMatchObject({ situacion: null, situacionTexto: null })
     const f = leerEmpresa(fila, { ...p.mapa, confirmado: { quien: null, cuando: '2026-11-07T10:00:00Z' } })
-    expect(f).toMatchObject({ nif: 'B00000009', situacion: 'moroso', situacionTexto: 'Moroso', servicios: ['C', 'S'], emisorSegunBitrix: 'empresa-a', cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075 }] })
+    expect(f).toMatchObject({ nif: 'B00000009', situacion: 'moroso', situacionTexto: 'Moroso', servicios: ['C', 'S'], emisorSegunCrm: 'empresa-a', cuotasReferencia: [{ etiqueta: 'Cuota mensual', importeCent: 9075 }] })
   })
 
   it('G01b · cuando varios campos encajan, la duda se guarda con el mapa (con las etiquetas como las del portal de QBO)', () => {
