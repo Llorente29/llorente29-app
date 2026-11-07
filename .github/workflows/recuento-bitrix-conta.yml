@@ -19,10 +19,13 @@ name: Recuento de campos de Bitrix24 (solo lectura)
 #     fichas se unen, cuántas entran sin NIF y cuántas fichas y clientes hay en
 #     cada situación. Solo números; no cambia nada.
 #   · (G01c, 07/11) los CONTACTOS: sus campos (etiqueta y tipo, para decidir el
-#     mapa), cuántos hay con y sin empresa, el relleno de los candidatos a NIF,
-#     situación, dirección y cuota, cada situación, los NIF (con los RIF
-#     aparte), los repetidos entre contactos y con una empresa, y cuántos tienen
-#     empresa y datos de cliente. Nunca un campo de contraseñas, ficheros o IBAN.
+#     mapa), cuántos hay con y sin empresa (el enlace sale de crm.item.list,
+#     companyIds: crm.contact.list no lo trae), sus listas de cliente («Tipo de
+#     cliente», tipo, servicio, campaña) con cada opción, las señales de
+#     cliente de los que no tienen empresa (NIF, Tarifa Recurrente, una
+#     negociación, un cliente de GoCardless por NIF o correo), los que tienen el
+#     NIF de una empresa y si están enlazados a ella, y los de empresa con datos
+#     de cliente. Nunca un campo de contraseñas, ficheros o IBAN.
 #
 # SOLO LEE de Bitrix24 (crm.company.fields y crm.company.list) y NO ESCRIBE
 # nada, ni en Sumied ni en Bitrix24. La dirección del webhook, con su clave, la
@@ -174,8 +177,21 @@ jobs:
             fi
             if [ "$(jq -r 'has("contactos")' /tmp/r.json)" = "true" ]; then
               echo; echo "## Contactos (solo números)"; echo
-              jq -r '.contactos | "**\(.total) contactos**: \(.sinEmpresa) sin empresa (clientes por sí mismos) y \(.conEmpresa) con empresa (personas de contacto; \(.conVariasEmpresas) con varias). Enlace con la empresa: `\(.enlace // "ninguno")`. Campos que no se leen nunca (contraseñas, ficheros, IBAN): \(.bloqueados)."' /tmp/r.json
+              jq -r '.contactos | "**\(.total) contactos**: \(.sinEmpresa) sin empresa y \(.conEmpresa) con empresa (\(.conVariasEmpresas) con varias). El enlace con la empresa sale de \(.enlace); \(.soloEmpresaPrincipal) solo tenían la empresa principal. Campos que no se leen nunca (contraseñas, ficheros, IBAN): \(.bloqueados)."' /tmp/r.json
+              echo; echo "### Contactos sin empresa: señales de cliente"; echo
+              echo "| Señal | Contactos |"; echo "|---|---:|"
+              jq -r '.contactos.senalesSinEmpresa | "| Con NIF | \(.nif) |", "| Con Tarifa Recurrente | \(.tarifaRecurrente) |", "| En alguna negociación | \(.negociacion) |",
+                "| Con un cliente de GoCardless (por NIF o correo) | \(.gocardless) |", "| **Con alguna de estas** | **\(.alguna)** |", "| Con ninguna | \(.ninguna) |"' /tmp/r.json
+              echo; echo "### Contactos con el NIF de una empresa"; echo
+              echo "| Qué | Contactos |"; echo "|---|---:|"
+              jq -r '.contactos.nifDeUnaEmpresa | "| Con el NIF de una empresa | \(.contactos) |", "| … enlazados a esa empresa | \(.enlazadosAEsaEmpresa) |",
+                "| … enlazados a otra empresa | \(.enlazadosAOtra) |", "| … sin enlace a ninguna | \(.sinEnlace) |"' /tmp/r.json
               echo; echo "- **Con empresa y con datos de cliente** (situación o cuota propias; irían a «Pendiente de revisar»): **$(jq -r '.contactos.conEmpresaYDatosDeCliente' /tmp/r.json)**"
+              for i in $(jq -r '.contactos.listas | keys[]' /tmp/r.json); do
+                echo; echo "### $(jq -r --argjson i "$i" '.contactos.listas[$i].etiqueta' /tmp/r.json) (\`$(jq -r --argjson i "$i" '.contactos.listas[$i].codigo' /tmp/r.json)\`)"; echo
+                echo "| Opción | Sin empresa | Con empresa |"; echo "|---|---:|---:|"
+                jq -r --argjson i "$i" '.contactos.listas[$i] | (.opciones[] | "| \(.texto) | \(.sinEmpresa) | \(.conEmpresa) |"), "| (vacía) | \(.vaciasSinEmpresa) | \(.vaciasConEmpresa) |"' /tmp/r.json
+              done
               for g in nif situacion direccion cuotas; do
                 case "$g" in nif) t="NIF";; situacion) t="Situación";; direccion) t="Dirección";; *) t="Cuotas";; esac
                 echo; echo "### Campos que pueden ser · $t"; echo
@@ -183,19 +199,12 @@ jobs:
                 jq -r --arg g "$g" '.contactos.candidatos[$g][] | "| \(.etiqueta) | `\(.codigo)` | \(.tipo) | \(.conAlgo) | \(.conAlgoSinEmpresa) |"' /tmp/r.json
                 [ "$(jq -r --arg g "$g" '.contactos.candidatos[$g] | length' /tmp/r.json)" = "0" ] && echo "| (ninguno) | | | | |"
               done
-              if [ "$(jq -r '.contactos.situacion != null' /tmp/r.json)" = "true" ]; then
-                echo; echo "### $(jq -r '.contactos.situacion.etiqueta' /tmp/r.json) (\`$(jq -r '.contactos.situacion.codigo' /tmp/r.json)\`)"; echo
-                echo "| Opción | Propuesta en Sumied | Sin empresa | Con empresa |"; echo "|---|---|---:|---:|"
-                jq -r '.contactos.situacion.opciones[] | "| \(.texto) | \(.propuesta) | \(.sinEmpresa) | \(.conEmpresa) |"' /tmp/r.json
-                jq -r '.contactos.situacion | "| (vacía) | | \(.vaciasSinEmpresa) | \(.vaciasConEmpresa) |"' /tmp/r.json
-              fi
               if [ "$(jq -r '.contactos.nif != null' /tmp/r.json)" = "true" ]; then
                 echo; echo "### NIF de los contactos sin empresa ($(jq -r '.contactos.nif.etiqueta' /tmp/r.json), \`$(jq -r '.contactos.nif.codigo' /tmp/r.json)\`)"; echo
                 echo "| Qué | Cuántos |"; echo "|---|---:|"
                 jq -r '.contactos.nif | "| Contactos sin empresa con NIF | \(.sinEmpresaConNif) |",
                   "| DNI | \(.porTipo.DNI) |", "| NIE | \(.porTipo.NIE) |", "| CIF | \(.porTipo.CIF) |", "| RIF de Venezuela | \(.porTipo.RIF) |", "| Otro formato | \(.porTipo.otro) |",
-                  "| NIF que salen en más de un contacto | \(.repetidosEntreContactos.nifs) (\(.repetidosEntreContactos.contactos) contactos) |",
-                  "| NIF que ya son de una empresa | \(.conNifDeUnaEmpresa.nifs) (\(.conNifDeUnaEmpresa.contactos) contactos) |"' /tmp/r.json
+                  "| NIF que salen en más de un contacto | \(.repetidosEntreContactos.nifs) (\(.repetidosEntreContactos.contactos) contactos) |"' /tmp/r.json
               fi
               echo; echo "<details><summary>Todos los campos de contacto del portal ($(jq -r '.contactos.campos | length' /tmp/r.json)): etiqueta, código y tipo</summary>"; echo
               echo "| Campo | Código | Tipo |"; echo "|---|---|---|"
