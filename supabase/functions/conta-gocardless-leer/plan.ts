@@ -64,7 +64,9 @@ export interface PlanLectura {
   tarifas: (TarifaImportada & { partyId: string; desde: string })[]
   lineas: (LineaImportada & { partyId: string; desdeMes: string; nombreSuscripcion: string })[]
   noConvertidas: (NoConvertida & { partyId: string | null; importeCent: number | null })[]
-  resumen: { mandatosVivos: number; lineasActivas: number; alMesCent: number; abono: CuentaAbonoGc | null }
+  resumen: { mandatosVivos: number; lineasActivas: number; alMesCent: number; abono: CuentaAbonoGc | null
+    /** G01b · Clientes de Sumied con más de un cliente en esta cuenta de GoCardless (para la forma de cobro se usa uno). */
+    clientesConVariosEnGc: number }
 }
 
 export function planLectura(empresa: string, cuenta: string, datos: DatosGc, antes: Antes, hoy: string, nombreEmisor: (id: string) => string): PlanLectura {
@@ -113,7 +115,25 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     const party = partyDeCliente.get(String(f.gc_id))
     Object.assign(f, { party_id: party ?? null, casado_por: party ? porDe.get(String(f.gc_id)) : null })
   }
-  const cobroCliente = [...partyDeCliente].map(([gc, party]) => ({
+  // G01b (07/11) · Un cliente de Sumied, UNA fila en conta_cobro_cliente (clave company_id, party_id): si casan con él
+  // dos o más clientes de esta cuenta de GoCardless, la tanda los llevaba todos y la base la rechazaba entera
+  // («ON CONFLICT DO UPDATE command cannot affect row a second time»). Se queda uno: el enlazado a mano; si no, el
+  // de más mandatos activos; después, el de más suscripciones activas; y si empatan, el de id más bajo. Lo dice la frase.
+  const elegido = new Map<string, string>()
+  const mejor = (a: string, b: string) => {
+    const k = (g: string) => [porDe.get(g) === 'persona' ? 1 : 0, vivosDe.get(g) ?? 0, activasDe.get(g) ?? 0]
+    const [ka, kb] = [k(a), k(b)]
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] > kb[i] ? a : b
+    return a < b ? a : b
+  }
+  const cuantosGc = new Map<string, number>()
+  for (const [gc, party] of partyDeCliente) {
+    cuantosGc.set(party, (cuantosGc.get(party) ?? 0) + 1)
+    const ya = elegido.get(party)
+    elegido.set(party, ya ? mejor(ya, gc) : gc)
+  }
+  const clientesConVariosEnGc = [...cuantosGc.values()].filter((n) => n > 1).length
+  const cobroCliente = [...elegido].map(([party, gc]) => ({
     company_id: empresa, party_id: party, account_id: cuenta, gc_cliente_id: gc, gc_casado_por: porDe.get(gc),
     forma_cobro: antes.formaAntes.get(party) ?? (antes.porDefecto ? 'gocardless' : null), updated_at: ahora, updated_by_name: 'GoCardless' }))
 
@@ -150,6 +170,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
       lineasActivas: activas.length,
       alMesCent: activas.filter((x) => x.moneda === 'EUR').reduce((t, x) => t + (alMesCent(x) ?? 0), 0),
       abono: datos.abonos[0] ?? null,
+      clientesConVariosEnGc,
     },
   }
 }
@@ -212,5 +233,8 @@ export function planDiferencias(
 /** La frase de la lectura (regla 8: con contenido). */
 export function fraseDeLectura(emisor: string, plan: PlanLectura, convertidas: number, conDiferencias: number, conectada = false): string {
   return `${conectada ? 'Conectada' : 'Leída'} la cuenta de GoCardless de ${emisor}: ${plan.resumen.mandatosVivos} mandatos activos y ${plan.resumen.lineasActivas} líneas leídas` +
-    ` (${euros(plan.resumen.alMesCent)} al mes). ${convertidas} convertidas en línea, ${plan.noConvertidas.length} sin convertir; ${conDiferencias} con diferencias.`
+    ` (${euros(plan.resumen.alMesCent)} al mes). ${convertidas} convertidas en línea, ${plan.noConvertidas.length} sin convertir; ${conDiferencias} con diferencias.` +
+    (plan.resumen.clientesConVariosEnGc
+      ? ` ${plan.resumen.clientesConVariosEnGc} ${plan.resumen.clientesConVariosEnGc === 1 ? 'cliente de Sumied tiene' : 'clientes de Sumied tienen'} más de un cliente en esta cuenta de GoCardless: para la forma de cobro se usa el enlazado a mano o, si no, el de más mandatos activos.`
+      : '')
 }
