@@ -7,9 +7,11 @@
 //   · cada grupo de texto (NIF, calle): cuántas fichas tienen relleno cada
 //     campo, cuántas tienen más de uno y en cuántas no coinciden;
 //   · la situación: cuántas fichas hay en cada opción (y vacías);
-//   · las cuotas: cuántas tienen importe y la suma de cada una.
+//   · las cuotas: cuántas tienen importe y la suma de cada una;
+//   · (G01b, 07/11) los NIF repetidos: cuántos salen en más de una ficha, con
+//     qué situaciones, de qué tipo y si mezclan sociedad y persona.
 
-import type { CampoMedido } from './mapa.ts'
+import { normalizarNif, situacionDeTexto, type CampoMedido } from './mapa.ts'
 
 export interface GruposRecuento {
   /** Campos de texto que pueden ser lo mismo, por grupo («nif», «calle»). */
@@ -18,6 +20,28 @@ export interface GruposRecuento {
   situacion: string
   /** Los campos de importe. */
   cuotas: string[]
+  /** G01b · Para los NIF repetidos: el campo del NIF y el del nombre (solo para saber si suena a sociedad; no sale). */
+  repetidos?: { nif: string; nombre: string }
+}
+
+/** G01b · Los NIF que salen en más de una ficha: solo números (Julio, 07/11, tras el «ux_party_nif»). */
+export interface ResultadoRepetidos {
+  campoNif: { codigo: string; etiqueta: string }
+  fichasConNif: number
+  nifRepetidos: number
+  fichasEnRepetidos: number
+  /** Cuántas fichas tiene el NIF más repetido. */
+  maximoPorNif: number
+  mismaSituacion: number
+  distintaSituacion: number
+  /** El mismo NIF en una ficha activa y en otra de baja. */
+  activaYBaja: number
+  /** De qué tipo es cada NIF repetido: DNI, NIE, CIF u otro. */
+  porTipo: { DNI: number; NIE: number; CIF: number; otro: number }
+  /** Repetidos entre una ficha con nombre de sociedad (S.L., S.A., C.B.…) y otra con nombre de persona. */
+  sociedadYPersona: number
+  /** De dónde sale la situación: del mapa confirmado o, si no lo hay, de su texto. */
+  situacionSegun: 'mapa confirmado' | 'texto de la opción'
 }
 
 export interface ResultadoTexto { campos: { codigo: string; etiqueta: string; rellenas: number }[]; masDeUno: number; noCoinciden: number }
@@ -26,6 +50,7 @@ export interface ResultadoRecuento {
   texto: Record<string, ResultadoTexto>
   situacion: { codigo: string; etiqueta: string; opciones: { id: string; texto: string; fichas: number }[]; vacias: number; otras: number }
   cuotas: { codigo: string; etiqueta: string; conImporte: number; sumaCent: number }[]
+  repetidos?: ResultadoRepetidos
 }
 
 const etiqueta = (m: Record<string, CampoMedido>, codigo: string) => {
@@ -53,7 +78,65 @@ export function centDe(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null
 }
 
-export function contar(filas: readonly Record<string, unknown>[], g: GruposRecuento, medidos: Record<string, CampoMedido>): ResultadoRecuento {
+/** El NIF como lo compara la base: el de la lectura (normalizarNif) y después solo letras y números en mayúsculas (party_nif). */
+export const nifComoLaBase = (v: unknown): string | null => {
+  const n = normalizarNif(textoDe(v) || null)
+  const t = (n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  return t || null
+}
+
+/** DNI (8 cifras y letra), NIE (X, Y o Z, 7 cifras y letra), CIF (letra de sociedad, 7 cifras y control) u otro. */
+export function tipoDeNif(n: string): 'DNI' | 'NIE' | 'CIF' | 'otro' {
+  if (/^[0-9]{8}[A-Z]$/.test(n)) return 'DNI'
+  if (/^[XYZ][0-9]{7}[A-Z]$/.test(n)) return 'NIE'
+  if (/^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n)) return 'CIF'
+  return 'otro'
+}
+
+/** ¿El nombre suena a sociedad? (S.L., S.L.U., S.A., S.C., C.B., sociedad, limitada, anónima, cooperativa). */
+export const suenaASociedad = (nombre: string) =>
+  /(^|[^A-Z])(S ?L ?U?|S ?A ?U?|S ?C ?P?|C ?B|SOCIEDAD|LIMITADA|ANONIMA|COOPERATIVA)($|[^A-Z])/.test(normal(nombre.replace(/\./g, ' ')))
+
+export function contarRepetidos(
+  filas: readonly Record<string, unknown>[], r: { nif: string; nombre: string }, situacion: string,
+  medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null,
+): ResultadoRepetidos {
+  const texto = new Map((medidos[situacion]?.items ?? []).map((it) => [String(it.ID), it.VALUE]))
+  const sitDe = (id: string) => (id ? (opcionesConfirmadas ? opcionesConfirmadas[id] ?? 'sin_clasificar' : situacionDeTexto(texto.get(id) ?? id)) : 'vacia')
+  const porNif = new Map<string, { sits: Set<string>; soc: boolean; persona: boolean; n: number }>()
+  let fichasConNif = 0
+  for (const f of filas) {
+    const nif = nifComoLaBase(f[r.nif])
+    if (!nif) continue
+    fichasConNif++
+    const x = porNif.get(nif) ?? { sits: new Set<string>(), soc: false, persona: false, n: 0 }
+    x.n++
+    x.sits.add(sitDe(textoDe(f[situacion])))
+    if (suenaASociedad(textoDe(f[r.nombre]))) x.soc = true
+    else x.persona = true
+    porNif.set(nif, x)
+  }
+  const out: ResultadoRepetidos = {
+    campoNif: { codigo: r.nif, etiqueta: etiqueta(medidos, r.nif) }, fichasConNif,
+    nifRepetidos: 0, fichasEnRepetidos: 0, maximoPorNif: 0, mismaSituacion: 0, distintaSituacion: 0, activaYBaja: 0,
+    porTipo: { DNI: 0, NIE: 0, CIF: 0, otro: 0 }, sociedadYPersona: 0,
+    situacionSegun: opcionesConfirmadas ? 'mapa confirmado' : 'texto de la opción',
+  }
+  for (const [nif, x] of porNif) {
+    if (x.n < 2) continue
+    out.nifRepetidos++
+    out.fichasEnRepetidos += x.n
+    out.maximoPorNif = Math.max(out.maximoPorNif, x.n)
+    if (x.sits.size > 1) out.distintaSituacion++
+    else out.mismaSituacion++
+    if (x.sits.has('activo') && x.sits.has('baja')) out.activaYBaja++
+    out.porTipo[tipoDeNif(nif)]++
+    if (x.soc && x.persona) out.sociedadYPersona++
+  }
+  return out
+}
+
+export function contar(filas: readonly Record<string, unknown>[], g: GruposRecuento, medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null): ResultadoRecuento {
   const texto: Record<string, ResultadoTexto> = {}
   for (const [grupo, codigos] of Object.entries(g.texto)) {
     const rellenas = codigos.map(() => 0)
@@ -100,11 +183,13 @@ export function contar(filas: readonly Record<string, unknown>[], g: GruposRecue
       opciones: items.map((it) => ({ id: String(it.ID), texto: it.VALUE, fichas: porId.get(String(it.ID)) ?? 0 })), vacias, otras,
     },
     cuotas,
+    ...(g.repetidos ? { repetidos: contarRepetidos(filas, g.repetidos, g.situacion, medidos, opcionesConfirmadas) } : {}),
   }
 }
 
 /** Todos los campos que hay que pedir a crm.company.list. */
-export const camposDelRecuento = (g: GruposRecuento): string[] => ['ID', ...new Set([...Object.values(g.texto).flat(), g.situacion, ...g.cuotas])]
+export const camposDelRecuento = (g: GruposRecuento): string[] =>
+  ['ID', ...new Set([...Object.values(g.texto).flat(), g.situacion, ...g.cuotas, ...(g.repetidos ? [g.repetidos.nif, g.repetidos.nombre] : [])])]
 
 /** Los grupos válidos: códigos de Bitrix24 (TITLE, ADDRESS, UF_CRM_…) y nada más. */
 export function gruposValidos(x: unknown): GruposRecuento | null {
@@ -112,5 +197,6 @@ export function gruposValidos(x: unknown): GruposRecuento | null {
   const o = x as Partial<GruposRecuento> | null
   if (!o || typeof o !== 'object' || !o.texto || typeof o.texto !== 'object' || !ok(o.situacion) || !Array.isArray(o.cuotas) || !o.cuotas.every(ok)) return null
   for (const [k, v] of Object.entries(o.texto)) if (!/^[a-z_]{1,20}$/.test(k) || !Array.isArray(v) || !v.length || !v.every(ok)) return null
+  if (o.repetidos !== undefined && (!o.repetidos || typeof o.repetidos !== 'object' || !ok(o.repetidos.nif) || !ok(o.repetidos.nombre))) return null
   return o as GruposRecuento
 }

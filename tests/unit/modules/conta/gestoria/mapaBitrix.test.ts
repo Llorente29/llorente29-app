@@ -200,3 +200,52 @@ describe('G01b · el recuento de los campos dudosos: solo números', () => {
     expect(gruposValidos(null)).toBeNull()
   })
 })
+
+import { contarRepetidos, nifComoLaBase, suenaASociedad, tipoDeNif } from '../../../../../supabase/functions/conta-bitrix-leer/recuento'
+
+describe('G01b · los NIF repetidos del recuento: solo números', () => {
+  // Inventados (T11): NIF de ceros y nombres de prueba.
+  const medidos = { UF_N: { formLabel: 'CIF/NIF' }, UF_S: { listLabel: 'Situación del Cliente', items: [{ ID: 1, VALUE: 'ACTIVO' }, { ID: 2, VALUE: 'BAJA DE GESTORIA ❌' }, { ID: 3, VALUE: 'MOROSO' }, { ID: 4, VALUE: 'Vzla Activo' }] } }
+  const f = (nif: string | null, sit: string | null, nombre: string) => ({ UF_N: nif, UF_S: sit, TITLE: nombre })
+  const filas = [
+    f('00000000T', '1', 'PERSONA PRUEBA UNO'), f('00000000-t', '2', 'PERSONA PRUEBA UNO, S.L.'),                       // DNI · activa y baja · sociedad y persona
+    f('B00000000', '1', 'EMPRESA PRUEBA, S.L.'), f('b 00000000', '1', 'EMPRESA PRUEBA SL'), f('ESB00000000', '1', 'EMPRESA PRUEBA S.L.'), // CIF · misma situación · 3 fichas
+    f('X0000000T', '3', 'PERSONA PRUEBA DOS'), f('X0000000T', '4', 'PERSONA PRUEBA DOS'),                               // NIE · distinta, sin activa y baja
+    f('Y0000000Z', '1', 'PERSONA PRUEBA TRES'), f(null, '1', 'SIN NIF'), f('  ', '2', 'NIF VACÍO'),
+  ]
+
+  it('cuenta los NIF repetidos como los compara la base, con sus situaciones, su tipo y si mezclan sociedad y persona', () => {
+    const r = contarRepetidos(filas, { nif: 'UF_N', nombre: 'TITLE' }, 'UF_S', medidos)
+    expect(r).toEqual({
+      campoNif: { codigo: 'UF_N', etiqueta: 'CIF/NIF' }, fichasConNif: 8,
+      nifRepetidos: 3, fichasEnRepetidos: 7, maximoPorNif: 3, mismaSituacion: 1, distintaSituacion: 2, activaYBaja: 1,
+      porTipo: { DNI: 1, NIE: 1, CIF: 1, otro: 0 }, sociedadYPersona: 1, situacionSegun: 'texto de la opción',
+    })
+    // Ningún NIF ni nombre sale del resultado.
+    const txt = JSON.stringify(r)
+    for (const x of ['00000000T', 'B00000000', 'X0000000T', 'PRUEBA']) expect(txt).not.toContain(x)
+  })
+
+  it('con el mapa confirmado, la situación es la que dice el mapa, no su texto', () => {
+    const dos = [f('X0000000T', '1', 'A'), f('X0000000T', '4', 'A')]
+    // Por su texto, «Vzla Activo» es «sin clasificar»: dos situaciones distintas.
+    expect(contarRepetidos(dos, { nif: 'UF_N', nombre: 'TITLE' }, 'UF_S', medidos)).toMatchObject({ distintaSituacion: 1, situacionSegun: 'texto de la opción' })
+    // Si la persona dijo en el mapa que es «activo», la misma.
+    expect(contarRepetidos(dos, { nif: 'UF_N', nombre: 'TITLE' }, 'UF_S', medidos, { '1': 'activo', '2': 'baja', '3': 'moroso', '4': 'activo' }))
+      .toMatchObject({ nifRepetidos: 1, mismaSituacion: 1, activaYBaja: 0, situacionSegun: 'mapa confirmado' })
+  })
+
+  it('el NIF como la base, su tipo y el nombre de sociedad', () => {
+    expect([nifComoLaBase('es-b.00000000'), nifComoLaBase(' 00000000-t '), nifComoLaBase(''), nifComoLaBase(null)]).toEqual(['B00000000', '00000000T', null, null])
+    expect([tipoDeNif('00000000T'), tipoDeNif('X0000000T'), tipoDeNif('B00000000'), tipoDeNif('123')]).toEqual(['DNI', 'NIE', 'CIF', 'otro'])
+    expect(['EMPRESA PRUEBA, S.L.', 'EMPRESA PRUEBA SLU', 'PRUEBA S.A.', 'BAR PRUEBA C.B.', 'PRUEBA SOCIEDAD COOPERATIVA'].every(suenaASociedad)).toBe(true)
+    expect(['PERSONA PRUEBA', 'JOSE S LOPEZ PRUEBA', 'SALA PRUEBA'].some(suenaASociedad)).toBe(false)
+  })
+
+  it('los grupos admiten «repetidos» solo con códigos de campo, y se piden sus dos campos', () => {
+    const g = { texto: { nif: ['UF_N'] }, situacion: 'UF_S', cuotas: [], repetidos: { nif: 'UF_N', nombre: 'TITLE' } }
+    expect(gruposValidos(g)).toEqual(g)
+    expect(gruposValidos({ ...g, repetidos: { nif: 'UF_N', nombre: 'drop table' } })).toBeNull()
+    expect(camposDelRecuento(g)).toEqual(['ID', 'UF_N', 'UF_S', 'TITLE'])
+  })
+})
