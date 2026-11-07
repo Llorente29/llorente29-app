@@ -18,7 +18,8 @@
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { MAPA_QBO, proponerMapa, type MapaBitrix } from './mapa.ts'
-import { fraseDeBitrix, leerFichas, medirCampos, portalDe } from './lectura.ts'
+import { fraseDeBitrix, leerFichas, leerParaRecuento, medirCampos, portalDe } from './lectura.ts'
+import { gruposValidos } from './recuento.ts'
 import { puedeLeer, type Entorno } from './salida.ts'
 
 const json = (status: number, body: unknown) =>
@@ -83,6 +84,30 @@ Deno.serve(async (req) => {
   const cuenta = String(cuerpo.cuenta ?? '')
   if (!/^[0-9a-f-]{36}$/i.test(cuenta)) return json(400, { error: 'Falta la cuenta.' })
 
+  // G01b · El recuento de los campos dudosos (Julio, 07/11): solo con la clave de
+  // servicio, desde el workflow «Recuento de campos de Bitrix24» lanzado a mano
+  // desde main. Solo lee de Bitrix24 (la dirección sale de Vault aquí dentro y
+  // no se devuelve) y no escribe nada: ni la lectura, ni las fichas. Devuelve
+  // solo números.
+  if (cuerpo.accion === 'recuento') {
+    const servicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    if (!servicio || req.headers.get('x-internal-key') !== servicio) return json(403, { error: 'El recuento solo se lanza desde su workflow, con la clave de servicio.' })
+    const grupos = gruposValidos(cuerpo.grupos)
+    if (!grupos) return json(400, { error: 'Faltan los campos a contar: texto (por grupo), situacion y cuotas, con sus códigos de Bitrix24.' })
+    try {
+      const { data: sec, error: secErr } = await admin.rpc('conta_bitrix_secreto', { p_account: cuenta })
+      if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
+      const s = (sec as { entorno: Entorno; url: string }[] | null)?.[0]
+      if (!s?.url) return json(400, { error: 'Esta cuenta no tiene conectado Bitrix24.' })
+      const puerta = await puedeLeer(admin, cuenta, s.entorno)
+      if (!puerta.lee) return json(400, { error: puerta.porque })
+      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar)) })
+    } catch (e) {
+      console.error('[conta-bitrix-leer] recuento', e instanceof Error ? e.message : String(e))
+      return json(500, { error: e instanceof Error ? e.message : 'No se ha podido contar.' })
+    }
+  }
+
   const secreto = Deno.env.get('CRON_SECRET') ?? ''
   const esCron = secreto !== '' && req.headers.get('x-cron-secret') === secreto
   let quien: string | null = null
@@ -114,7 +139,9 @@ Deno.serve(async (req) => {
       const propuesta = proponerMapa((acc as { name?: string } | null)?.name ?? 'Cuenta', medidos, emisores)
       const { error } = await admin.rpc('conta_bitrix_guardar_conexion', { p_account: cuenta, p_entorno: entorno, p_url: url, p_portal: portal, p_quien: quien })
       if (error) return json(400, { error: error.message })
-      await admin.from('conta_crm_bitrix').update({ mapa: propuesta.mapa, campos_medidos: medidos, updated_at: new Date().toISOString() }).eq('account_id', cuenta)
+      // G01b · Lo medido y el mapa (con sus dudas) se guardan de verdad: si no se puede, se dice.
+      const { error: eMapa } = await admin.from('conta_crm_bitrix').update({ mapa: propuesta.mapa, campos_medidos: medidos, updated_at: new Date().toISOString() }).eq('account_id', cuenta)
+      if (eMapa) return json(500, { error: `Conectado, pero no se ha podido guardar el mapa de los campos: ${eMapa.message}` })
       const res = await leer(admin, cuenta, 'conexion', quien)
       await leerGocardlessDeLaCuenta(admin, cuenta, supabaseUrl)
       return json(200, { ok: true, ...res, portal, queEsCadaUno: propuesta.queEsCadaUno, sinUsar: propuesta.sinUsar })

@@ -1,0 +1,120 @@
+name: Recuento de campos de Bitrix24 (solo lectura)
+
+# QUÉ HACE (G01b, 07/11)
+# Con el Bitrix24 real de QBO conectado, la propuesta del mapa dejó sin código
+# el NIF, la calle, la situación y dos cuotas, porque encajaban varios campos.
+# Para decidir con datos, la función conta-bitrix-leer (acción «recuento»)
+# cuenta, de todas las fichas:
+#   · NIF y calle: cuántas tienen relleno cada campo candidato, cuántas más de
+#     uno y en cuántas no coinciden;
+#   · la situación: cuántas hay en cada opción de «Situación del Cliente»;
+#   · las cuotas: cuántas tienen importe y (si se pide) la suma de cada una.
+#
+# SOLO LEE de Bitrix24 (crm.company.fields y crm.company.list) y NO ESCRIBE
+# nada, ni en Sumied ni en Bitrix24. La dirección del webhook, con su clave, la
+# saca la función de Vault por dentro y no la devuelve: no pasa por aquí.
+#
+# CUÁNDO: después de fusionar el PR que la trae, cuando deploy-edge-functions
+# haya desplegado conta-bitrix-leer (si no, la función contesta 400 «Acción:
+# conectar o leer.» y este workflow PARA diciéndolo).
+#
+# QUÉ SALE AQUÍ: solo números y las etiquetas de los campos. Ni nombres, ni
+# NIF, ni direcciones. El repositorio es público y este resumen también: las
+# SUMAS de las cuotas solo salen si se pide «importes = si».
+#
+# Usa el secreto SUPABASE_ACCESS_TOKEN (el del despliegue) para pedir la clave
+# de servicio a la Management API en el momento, enmascarada; no hay secreto
+# nuevo. Lo lanza Julio (T10).
+
+on:
+  workflow_dispatch:
+    inputs:
+      cuenta:
+        description: 'Cuenta (account_id). Por defecto, Asesoría QBO.'
+        required: true
+        default: 'f4e8032d-510a-4e57-914c-4b67732d8655'
+      importes:
+        description: '¿Sacar la SUMA de cada cuota? El resumen es público: «si» o «no».'
+        required: true
+        default: 'no'
+      grupos:
+        description: 'Los campos a contar (códigos del Bitrix24 de QBO, medidos el 07/11). Solo cambiarlo si se sabe lo que se hace.'
+        required: true
+        default: '{"texto":{"nif":["UF_CRM_1694696476571","UF_CRM_68DD6DC33A148","UF_CRM_698E04783FB03"],"calle":["UF_CRM_6728B7610B3ED","UF_CRM_6728B7627CAB4","UF_CRM_1694769585578","UF_CRM_1694769047761","ADDRESS"]},"situacion":"UF_CRM_1727086646502","cuotas":["UF_CRM_1727364305055","UF_CRM_1727359351013","UF_CRM_1727359417190","UF_CRM_1727364185647","UF_CRM_1727364202951","UF_CRM_1727364226237"]}'
+
+concurrency:
+  group: recuento-bitrix-conta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contar:
+    # W12b (30/10): el secreto vive en el entorno «despliegue», que solo admite
+    # ejecuciones de main.
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Proyecto y clave (enmascarada)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          KEY=$(curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" \
+                | jq -r '.[] | select(.name == "service_role") | .api_key' | head -1)
+          [ -n "$KEY" ] && [ "$KEY" != "null" ] || { echo "::error::No se pudo obtener la clave de servicio."; exit 1; }
+          echo "::add-mask::$KEY"
+          echo "REF=$REF" >> "$GITHUB_ENV"
+          echo "KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Contar (solo lee de Bitrix24; no escribe nada)
+        env:
+          CUENTA: ${{ inputs.cuenta }}
+          IMPORTES: ${{ inputs.importes }}
+          GRUPOS: ${{ inputs.grupos }}
+        run: |
+          set -euo pipefail
+          [[ "$CUENTA" =~ ^[0-9a-f-]{36}$ ]] || { echo "::error::La cuenta no es un uuid."; exit 1; }
+          [[ "$IMPORTES" == "si" || "$IMPORTES" == "no" ]] || { echo "::error::«importes» es «si» o «no»."; exit 1; }
+          echo "$GRUPOS" | jq -e . > /dev/null || { echo "::error::«grupos» no es un JSON."; exit 1; }
+          jq -n --arg c "$CUENTA" --argjson g "$GRUPOS" '{accion: "recuento", cuenta: $c, grupos: $g}' > /tmp/cuerpo.json
+          code=$(curl -s -o /tmp/r.json -w '%{http_code}' -X POST "https://$REF.supabase.co/functions/v1/conta-bitrix-leer" \
+                 -H "Authorization: Bearer $KEY" -H "x-internal-key: $KEY" -H 'Content-Type: application/json' --data @/tmp/cuerpo.json)
+          if [ "$code" != "200" ]; then
+            echo "::error::La función ha contestado $code: $(jq -r '.error // "sin mensaje"' /tmp/r.json 2>/dev/null || echo 'sin mensaje')"
+            exit 1
+          fi
+          {
+            echo "## Recuento de Bitrix24 · $(jq -r '.portal' /tmp/r.json) ($(jq -r '.entorno' /tmp/r.json))"
+            echo
+            echo "**$(jq -r '.total' /tmp/r.json) fichas**, leídas en $(jq -r '.peticiones' /tmp/r.json) peticiones. Solo lectura: no se ha escrito nada."
+            for g in $(jq -r '.texto | keys[]' /tmp/r.json); do
+              echo; echo "### ${g^^}"; echo
+              echo "| Campo en Bitrix24 | Código | Fichas con algo |"; echo "|---|---|---:|"
+              jq -r --arg g "$g" '.texto[$g].campos[] | "| \(.etiqueta) | `\(.codigo)` | \(.rellenas) |"' /tmp/r.json
+              echo
+              echo "- Con más de uno relleno: **$(jq -r --arg g "$g" '.texto[$g].masDeUno' /tmp/r.json)**"
+              echo "- De esas, en las que no coinciden: **$(jq -r --arg g "$g" '.texto[$g].noCoinciden' /tmp/r.json)**"
+            done
+            echo; echo "### $(jq -r '.situacion.etiqueta' /tmp/r.json) (\`$(jq -r '.situacion.codigo' /tmp/r.json)\`)"; echo
+            echo "| Opción | Fichas |"; echo "|---|---:|"
+            jq -r '.situacion.opciones[] | "| \(.texto) | \(.fichas) |"' /tmp/r.json
+            echo "| (vacía) | $(jq -r '.situacion.vacias' /tmp/r.json) |"
+            echo "| (otro valor) | $(jq -r '.situacion.otras' /tmp/r.json) |"
+            echo; echo "### Cuotas"; echo
+            if [ "$IMPORTES" = "si" ]; then
+              echo "| Campo en Bitrix24 | Código | Fichas con importe | Suma |"; echo "|---|---|---:|---:|"
+              jq -r '.cuotas[] | "| \(.etiqueta) | `\(.codigo)` | \(.conImporte) | \((.sumaCent / 100) | tostring) € |"' /tmp/r.json
+            else
+              echo "| Campo en Bitrix24 | Código | Fichas con importe |"; echo "|---|---|---:|"
+              jq -r '.cuotas[] | "| \(.etiqueta) | `\(.codigo)` | \(.conImporte) |"' /tmp/r.json
+              echo; echo "Las sumas no salen («importes = no»)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Recuento hecho: $(jq -r '.total' /tmp/r.json) fichas. El resultado, en el resumen del run."

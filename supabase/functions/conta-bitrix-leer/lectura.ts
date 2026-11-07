@@ -6,6 +6,7 @@
 // Solo lee: crm.company.fields y crm.company.list. Nunca escribe en Bitrix24.
 
 import { camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
+import { camposDelRecuento, contar, type GruposRecuento } from './recuento.ts'
 
 export type Pedir = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
   Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
@@ -41,6 +42,20 @@ export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, es
   const select = camposQueSePiden(mapa)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
   return { fichas: r.filas.map((f) => leerEmpresa(f, mapa)), total: r.total, peticiones: r.peticiones }
+}
+
+/**
+ * G01b · El recuento: los campos medidos y todas las fichas con solo los
+ * campos a contar (de 50 en 50, una petición cada 500 ms). Solo lee. Si el
+ * portal no tiene alguno de los campos, para y lo dice.
+ */
+export async function leerParaRecuento(pedir: Pedir, url: string, grupos: GruposRecuento, esperar: (ms: number) => Promise<void>) {
+  const medidos = await medirCampos(pedir, url)
+  const select = camposDelRecuento(grupos)
+  const faltan = select.filter((c) => c !== 'ID' && !medidos[c])
+  if (faltan.length) throw new FalloBitrix(`Este Bitrix24 no tiene estos campos: ${faltan.join(', ')}.`)
+  const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
+  return { ...contar(r.filas, grupos, medidos), peticiones: r.peticiones }
 }
 
 /** La frase de la lectura (regla 8). */
