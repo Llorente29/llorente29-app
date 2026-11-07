@@ -4,7 +4,7 @@
 // cambiar (sectores/cambio.ts).
 
 import { describe, expect, it } from 'vitest'
-import { PAQUETES, SECTORES, enciende, esGestoriaPorCodigos, loQueEnciendeLaEmpresa, sectorDeFila, sectorPropuesto } from '@/modules/conta/sectores/sectores'
+import { PAQUETES, SECTORES, enciende, gestoriaPorCodigos, loQueEnciendeLaEmpresa, sectorDeFila, sectorPropuesto } from '@/modules/conta/sectores/sectores'
 import { cambioDeSector, fraseDelCambio, loQueSaleCon, paginasQueEnciende } from '@/modules/conta/sectores/cambio'
 import { PRODUCTOS, cumple } from '@/modules/conta/esqueleto/productos'
 
@@ -100,15 +100,43 @@ describe('el aviso al cambiar de sector', () => {
 })
 
 describe('lo que se propone en el alta', () => {
-  it('hostelería gana; si no, gestoría por grupo o por código; si no, general', () => {
-    expect(sectorPropuesto({ hosteleria: true, grupos: ['gestoria'], codigos: [] })).toBe('hosteleria')
-    expect(sectorPropuesto({ hosteleria: false, grupos: ['gestoria'], codigos: [] })).toBe('gestoria')
-    expect(sectorPropuesto({ hosteleria: false, grupos: [], codigos: [{ iae: null, cnae: '69.20' }] })).toBe('gestoria')
-    expect(sectorPropuesto({ hosteleria: false, grupos: [], codigos: [{ iae: '1_842', cnae: null }] })).toBe('gestoria')
-    expect(sectorPropuesto({ hosteleria: false, grupos: ['panaderia'], codigos: [{ iae: '1_644', cnae: '10.71' }] })).toBe('general')
+  const p = (codigos: { iae: string | null; cnae: string | null }[], grupos: string[] = [], hosteleria = false) => sectorPropuesto({ hosteleria, grupos, codigos })
+
+  it('hostelería gana; un grupo de gestoría propone gestoría; sin nada, general', () => {
+    expect(p([], ['gestoria'], true)).toEqual({ sector: 'hosteleria', duda: false })
+    expect(p([], ['gestoria'])).toEqual({ sector: 'gestoria', duda: false })
+    expect(p([{ iae: '1_644', cnae: '10.71' }], ['panaderia'])).toEqual({ sector: 'general', duda: false })
   })
 
-  it('el código de abogados (69.10) no es gestoría', () => {
-    expect(esGestoriaPorCodigos(null, '69.10')).toBe(false)
+  // Los códigos, tal como están en iae_heading y cnae_code (medido el 07/11/2026).
+  it.each([
+    ['1_842', 'servicios financieros y contables'], ['2_722', 'gestores administrativos'],
+    ['2_726', 'graduados sociales'], ['2_741', 'economistas'],
+  ])('IAE %s (%s) propone gestoría', (iae) => {
+    expect(p([{ iae, cnae: null }])).toEqual({ sector: 'gestoria', duda: false })
+  })
+
+  it('un epígrafe que cuelga de un grupo cuenta como su grupo', () => {
+    expect(gestoriaPorCodigos('2_7221', null)).toBe('si')
+  })
+
+  it('CNAE 69.20 propone gestoría; 69.10 y 70.20, con duda', () => {
+    expect(p([{ iae: null, cnae: '69.20' }])).toEqual({ sector: 'gestoria', duda: false })
+    expect(p([{ iae: null, cnae: '6910' }])).toEqual({ sector: 'gestoria', duda: true })
+    expect(p([{ iae: null, cnae: '70.20' }])).toEqual({ sector: 'gestoria', duda: true })
+  })
+
+  it('un código seguro gana a uno con duda', () => {
+    expect(p([{ iae: null, cnae: '6910' }, { iae: '2_722', cnae: null }])).toEqual({ sector: 'gestoria', duda: false })
+  })
+
+  it('lo de al lado no es gestoría: abogados por el IAE (2_731), administradores de fincas (2_723), sedes centrales (70.10)', () => {
+    expect(gestoriaPorCodigos('2_731', null)).toBe('no')
+    expect(gestoriaPorCodigos('2_723', null)).toBe('no')
+    expect(gestoriaPorCodigos(null, '70.10')).toBe('no')
+  })
+
+  it('la sección cuenta: el 722 de la sección 1 no es el de gestores administrativos', () => {
+    expect(gestoriaPorCodigos('1_722', null)).toBe('no')
   })
 })

@@ -97,25 +97,49 @@ export function sectorDeFila(fila: Record<string, unknown> | null, cuentaAsesori
 const GRUPOS_GESTORIA = new Set(['gestoria'])
 
 /**
- * Por los códigos elegidos a mano. CNAE-2025 69.20 (contabilidad, teneduría,
- * auditoría y asesoría fiscal) e IAE 1_842 (servicios financieros y
- * contables). Pendiente de que Julio confirme los códigos (hechos del negocio).
+ * Los códigos que proponen Gestoría, comprobados el 07/11/2026 contra los
+ * catálogos de la base (iae_heading: tarifas del IAE, RDL 1175/1990;
+ * cnae_code: CNAE-2025, RD 10/2025). En iae_heading el código lleva su
+ * sección delante («1_842», «2_722»).
+ *   · Seguros: IAE 1_842 (servicios financieros y contables), 2_722
+ *     (gestores administrativos), 2_726 (graduados sociales), 2_741
+ *     (economistas); CNAE 69.20 (contabilidad, teneduría, auditoría y
+ *     asesoría fiscal).
+ *   · Proponen, pero preguntan (Julio, 07/11): CNAE 69.10 (actividades
+ *     jurídicas) y 70.20 (consultoría de gestión empresarial; la 70.22 de la
+ *     CNAE-2009 no existe en la CNAE-2025).
  */
-export function esGestoriaPorCodigos(iae: string | null, cnae: string | null): boolean {
-  const i = /^1_(\d+)/.exec(iae ?? '')?.[1] ?? ''
-  const c = (cnae ?? '').replace(/\D/g, '')
-  return /^842/.test(i) || /^6920/.test(c)
+const IAE_GESTORIA = new Set(['1_842', '2_722', '2_726', '2_741'])
+const CNAE_GESTORIA = new Set(['6920'])
+const CNAE_GESTORIA_DUDA = new Set(['6910', '7020'])
+
+/** El grupo o epígrafe del IAE, sin lo que cuelga debajo: «2_7221» → «2_722». */
+const grupoIae = (iae: string | null): string => /^([123])_(\d{3})/.exec(iae ?? '')?.slice(1, 3).join('_') ?? ''
+const claseCnae = (cnae: string | null): string => (cnae ?? '').replace(/\D/g, '').slice(0, 4)
+
+/** ¿Estos códigos proponen Gestoría? `duda`: la propone, pero la pregunta va abierta. */
+export function gestoriaPorCodigos(iae: string | null, cnae: string | null): 'si' | 'duda' | 'no' {
+  if (IAE_GESTORIA.has(grupoIae(iae)) || CNAE_GESTORIA.has(claseCnae(cnae))) return 'si'
+  return CNAE_GESTORIA_DUDA.has(claseCnae(cnae)) ? 'duda' : 'no'
+}
+
+export interface Propuesta {
+  sector: Sector
+  /** Se propone, pero sin darlo por hecho: «¿Eres una gestoría o asesoría?» en vez de «eres una gestoría. ¿Es así?». */
+  duda: boolean
 }
 
 /**
- * El sector que se propone en el alta. Hostelería gana a gestoría si salen las
- * dos (es lo de hoy: lo que daba de comer era hostelería). La persona lo
- * confirma o lo cambia.
+ * El sector que se propone en el alta. Solo se propone: la persona lo
+ * confirma o lo cambia. Hostelería gana si sale (es lo de hoy); después,
+ * gestoría segura, gestoría con duda y, si no, general.
  */
-export function sectorPropuesto(a: { hosteleria: boolean; grupos: readonly string[]; codigos: readonly { iae: string | null; cnae: string | null }[] }): Sector {
-  if (a.hosteleria) return 'hosteleria'
-  if (a.grupos.some((g) => GRUPOS_GESTORIA.has(g)) || a.codigos.some((c) => esGestoriaPorCodigos(c.iae, c.cnae))) return 'gestoria'
-  return 'general'
+export function sectorPropuesto(a: { hosteleria: boolean; grupos: readonly string[]; codigos: readonly { iae: string | null; cnae: string | null }[] }): Propuesta {
+  if (a.hosteleria) return { sector: 'hosteleria', duda: false }
+  const porCodigo = a.codigos.map((c) => gestoriaPorCodigos(c.iae, c.cnae))
+  if (a.grupos.some((g) => GRUPOS_GESTORIA.has(g)) || porCodigo.includes('si')) return { sector: 'gestoria', duda: false }
+  if (porCodigo.includes('duda')) return { sector: 'gestoria', duda: true }
+  return { sector: 'general', duda: false }
 }
 
 /** Lo que el contexto del menú recibe de la empresa: su sector y lo que enciende. Sin empresa, nada. */

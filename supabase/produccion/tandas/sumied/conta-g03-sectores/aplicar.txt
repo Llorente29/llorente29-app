@@ -1,0 +1,17 @@
+# G03 · «¿De qué sector es tu negocio?»: el sector de cada empresa.
+# Rama conta/g03-sectores. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1945  Añade company.sector (admite nulos), su CHECK, y el disparador que
+#         mantiene is_hospitality igual que el sector en los dos sentidos
+#         (is_hospitality no se borra en este encargo).
+#   1946  Datos (autorizo): el sector de las 7 empresas de hoy, por cuenta:
+#         Asesoría QBO, gestoría; Casa Lola, hostelería (de «sin decir»); el
+#         resto, por is_hospitality. Solo cambia is_hospitality de Casa Lola.
+#
+# El front publicado no lee sector hasta la fusión, y la rama funciona con la
+# columna y sin ella. Nada en el camino del pedido: company no es del pedido
+# y el disparador solo mira sector e is_hospitality.
+cuenta: scripts/conta/produccion/cuentas/g03-sectores.sql
+supabase/migrations/20261107T1945_g03_sector.sql
+supabase/migrations/20261107T1946_g03_sector_de_hoy.sql

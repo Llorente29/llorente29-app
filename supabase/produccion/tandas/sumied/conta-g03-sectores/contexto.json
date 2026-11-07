@@ -1,0 +1,9 @@
+{
+ "_que": "G03 · contexto de producción, medido en SOLO LECTURA el 07/11 a las 19:28Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1945 añade company.sector, su CHECK, _company_sector_al_dia() y su disparador, que no existen; company existe (7 filas), fuera del camino del pedido. La 1946 cambia datos de company (autorizo). Ningún fichero en el historial.",
+ "medido": "2026-11-07T19:28Z",
+ "tanda": {
+  "supabase/migrations/20261107T1945_g03_sector.sql": "994c8785da2f107e89eecf7c4bf9ebe5",
+  "supabase/migrations/20261107T1946_g03_sector_de_hoy.sql": "0a460100380c175a1c4c86d8d046b112"
+ },
+ "contexto": {"tablas":["public.company"],"funciones":[],"filas":{"public.company":7},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
