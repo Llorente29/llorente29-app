@@ -1409,6 +1409,42 @@ end $$;
 
 
 --
+-- Name: _bank_cargos_anulados(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._bank_cargos_anulados(p_company uuid) RETURNS TABLE(statement_id uuid, treasury_account_id uuid, dia date, saldo_banco numeric, hueco numeric, ids uuid[])
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with recursive s as (
+    select st.id, st.treasury_account_id, st.closing_balance, round(st.continuity_gap * 100)::bigint as gap_c
+      from public.bank_statement st
+     where st.company_id = p_company and st.continuity = 'hueco' and st.continuity_gap > 0 and st.closing_balance is not null
+       and not exists (select 1 from public.bank_statement o
+                        where o.treasury_account_id = st.treasury_account_id and o.id <> st.id
+                          and o.continuity = 'hueco' and o.continuity_gap = -st.continuity_gap)
+  ), c as (
+    select s.id as sid, m.id, m.op_date, round(-m.amount * 100)::bigint as cent,
+           row_number() over (partition by s.id, m.op_date order by m.id) as n
+      from s join public.bank_movement m on m.statement_id = s.id and m.treasury_account_id = s.treasury_account_id
+     where m.amount < 0 and m.status <> 'ignorado' and m.not_cancelled_at is null
+  ), r (sid, op_date, ids, total, ult) as (
+    select c.sid, c.op_date, array[c.id], c.cent, c.n from c join s on s.id = c.sid where c.n <= 15 and c.cent <= s.gap_c
+    union all
+    select r.sid, r.op_date, r.ids || c.id, r.total + c.cent, c.n
+      from r join c on c.sid = r.sid and c.op_date = r.op_date and c.n > r.ult and c.n <= 15 join s on s.id = r.sid
+     where cardinality(r.ids) < 4 and r.total + c.cent <= s.gap_c
+  ), hit as (
+    select r.sid, r.op_date, r.ids from r join s on s.id = r.sid where r.total = s.gap_c
+  ), unica as (
+    select h.sid from hit h group by h.sid having count(*) = 1
+  )
+  select s.id, s.treasury_account_id, h.op_date, s.closing_balance, s.gap_c / 100.0, h.ids
+    from s join unica u on u.sid = s.id join hit h on h.sid = s.id
+$$;
+
+
+--
 -- Name: _bank_casado_soltar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -23353,6 +23389,53 @@ end $$;
 
 
 --
+-- Name: bank_anulado_es_bueno(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_anulado_es_bueno(p_company uuid, p_extracto uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare a record;
+begin
+  perform public._bank_cuenta_de_empresa(p_company);
+  select * into a from public._bank_cargos_anulados(p_company) x where x.statement_id = p_extracto;
+  if a.statement_id is null then
+    raise exception 'Ese aviso ya no está: vuelve a cargar.' using errcode = 'P0002';
+  end if;
+  update public.bank_movement set not_cancelled_at = now(), not_cancelled_by = auth.uid(), updated_at = now() where id = any(a.ids);
+  return jsonb_build_object('n', cardinality(a.ids), 'suma', a.hueco, 'dia', a.dia);
+end $$;
+
+
+--
+-- Name: bank_anulado_quitar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_anulado_quitar(p_company uuid, p_extracto uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_motivo constant text := 'Anulado por el banco: no había saldo';
+  a record; v_id uuid; v_match uuid; v_n int := 0; v_d int := 0;
+begin
+  perform public._bank_cuenta_de_empresa(p_company);
+  select * into a from public._bank_cargos_anulados(p_company) x where x.statement_id = p_extracto;
+  if a.statement_id is null then
+    raise exception 'Ese aviso ya no está: el banco y Sumied ya cuadran o algo ha cambiado. Vuelve a cargar.' using errcode = 'P0002';
+  end if;
+  foreach v_id in array a.ids loop
+    select b.id into v_match from public.bank_match b where b.movement_id = v_id and b.status = 'vivo' limit 1;
+    if v_match is not null then perform public.bank_deshacer(v_match, v_motivo); v_d := v_d + 1; end if;
+    perform public.bank_ignorar(v_id, v_motivo);
+    v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('n', v_n, 'suma', a.hueco, 'dia', a.dia, 'saldo_banco', a.saldo_banco, 'deshechos', v_d);
+end $$;
+
+
+--
 -- Name: bank_asientos_sin_movimiento(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -23371,6 +23454,32 @@ CREATE FUNCTION public.bank_asientos_sin_movimiento(p_company uuid, p_desde date
      and je.source_type not in ('bank', 'opening', 'closing') and je.entry_date between p_desde and p_hasta
      and not exists (select 1 from public.bank_match b where b.journal_entry_id = je.id and b.status = 'vivo')
 $$;
+
+
+--
+-- Name: bank_cargos_anulados(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_cargos_anulados(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  perform public._bank_cuenta_de_empresa(p_company);
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'extracto', a.statement_id, 'banco', a.treasury_account_id, 'dia', a.dia,
+             'saldo_banco', a.saldo_banco, 'hueco', a.hueco,
+             'cargos', (select jsonb_agg(jsonb_build_object(
+                          'id', m.id, 'fecha', m.op_date, 'importe', m.amount,
+                          'concepto', coalesce(nullif(m.clean_concept, ''), m.bank_concept),
+                          'casado', (select e.concept from public.bank_match b left join public.journal_entry e on e.id = b.journal_entry_id
+                                      where b.movement_id = m.id and b.status = 'vivo' limit 1),
+                          'esta_casado', m.status = 'casado') order by m.amount, m.id)
+                          from public.bank_movement m where m.id = any(a.ids)))
+           order by a.dia, a.statement_id)
+      from public._bank_cargos_anulados(p_company) a), '[]'::jsonb);
+end $$;
 
 
 --
@@ -23759,6 +23868,27 @@ CREATE FUNCTION public.bank_cuentas_por_dar_de_alta(p_company uuid) RETURNS TABL
      and not exists (select 1 from public.company_account_link l where l.company_account_id = ca.id and l.entity = 'bank_account')
    order by ca.code
 $$;
+
+
+--
+-- Name: bank_desapartar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.bank_desapartar(p_movement uuid) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_m public.bank_movement;
+begin
+  select * into v_m from public.bank_movement where id = p_movement for update;
+  if v_m.id is null then raise exception 'Ese movimiento no existe.' using errcode = 'P0002'; end if;
+  perform public._bank_cuenta_de_empresa(v_m.company_id);
+  if v_m.status <> 'ignorado' then raise exception 'Ese movimiento no está apartado.' using errcode = '23514'; end if;
+  update public.bank_movement set status = 'pendiente', ignored_reason = null, reason = null, confidence = null, proposal = null, updated_at = now()
+   where id = p_movement;
+  perform public._bank_log(v_m.account_id, v_m.company_id, p_movement, null, null, 'deshecho', 'persona',
+    'Deshecho el «Apartado»: ' || v_m.ignored_reason, '{}'::jsonb);
+end $$;
 
 
 --
@@ -31386,6 +31516,71 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada hora (cron conta-banco-agregador-despertar, solo en producción): a las 3 de Madrid, si hay alguna empresa conectada, llama a conta-banco-agregador. Si falta el secreto, falla (cron lo apunta como failed), no calla.';
+
+
+--
+-- Name: conta_bitrix_confirmar_mapa(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_b public.conta_crm_bitrix; v_c jsonb; v_cod text; v_faltan text[] := '{}'; v_sit jsonb; v_it jsonb; v_op text;
+        v_sin_op text[] := '{}'; v_quien text := public.conta_nombre_actor(); v_mapa jsonb; v_n int; v_frase text;
+        v_validas constant text[] := array['activo', 'baja', 'moroso', 'solo_renta', 'sin_clasificar'];
+begin
+  if not public.current_user_is_admin_or_manager_of(p_account) then
+    raise exception 'Solo un administrador o un encargado de la cuenta confirma el mapa de Bitrix24.' using errcode = '42501';
+  end if;
+  select * into v_b from public.conta_crm_bitrix where account_id = p_account for update;
+  if v_b.account_id is null then raise exception 'Esta cuenta no tiene conectado Bitrix24.' using errcode = 'P0002'; end if;
+  if v_b.campos_medidos is null then raise exception 'Faltan los campos medidos del portal: vuelve a conectar Bitrix24.' using errcode = 'P0002'; end if;
+  if jsonb_typeof(p_mapa) is distinct from 'object' or jsonb_typeof(p_mapa->'campos') is distinct from 'array' then
+    raise exception 'El mapa no trae sus campos.' using errcode = '22023';
+  end if;
+
+  -- Cada código del mapa (campos y fuentes de la dirección) tiene que existir en lo medido del portal.
+  for v_cod in
+    select c->>'codigo' from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> ''
+    union all
+    select x from jsonb_array_elements(coalesce(p_mapa->'direcciones', '[]'::jsonb)) d,
+           lateral (values (d->>'calle'), (d->>'cp'), (d->>'poblacion'), (d->>'provincia')) v(x) where coalesce(x, '') <> ''
+  loop
+    if not (v_b.campos_medidos ? v_cod) then v_faltan := v_faltan || v_cod; end if;
+  end loop;
+  if cardinality(v_faltan) > 0 then
+    raise exception 'Este Bitrix24 no tiene estos campos: %.', array_to_string(v_faltan, ', ') using errcode = '22023';
+  end if;
+
+  -- La situación: un solo campo, y cada opción suya dice qué es en Sumied.
+  select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
+  if v_n <> 1 then raise exception 'Falta decir qué campo de Bitrix24 es la situación del cliente.' using errcode = '22023'; end if;
+  select c into v_sit from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
+  for v_it in select * from jsonb_array_elements(coalesce(v_b.campos_medidos->(v_sit->>'codigo')->'items', '[]'::jsonb)) loop
+    v_op := v_sit->'opciones'->>(v_it->>'ID');
+    if v_op is null or not (v_op = any (v_validas)) then v_sin_op := v_sin_op || (v_it->>'VALUE'); end if;
+  end loop;
+  if cardinality(v_sin_op) > 0 then
+    raise exception 'Falta decir qué es en Sumied: %.', array_to_string(v_sin_op, ', ') using errcode = '22023';
+  end if;
+
+  v_mapa := (p_mapa - 'dudas') || jsonb_build_object('dudas', '[]'::jsonb,
+    'confirmado', jsonb_build_object('quien', v_quien, 'cuando', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')));
+  update public.conta_crm_bitrix set mapa = v_mapa, updated_at = now() where account_id = p_account;
+
+  select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> '';
+  v_frase := format('Mapa de Bitrix24 confirmado por %s: %s campos y %s fuentes de la dirección. La situación se guarda desde la próxima lectura.',
+    coalesce(v_quien, 'una persona de la cuenta'), v_n, jsonb_array_length(coalesce(p_mapa->'direcciones', '[]'::jsonb)));
+  return jsonb_build_object('frase', v_frase, 'confirmado', v_mapa->'confirmado');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) IS 'G01b · «Qué es cada campo»: una persona administradora o encargada confirma el mapa de Bitrix24 de la cuenta (con quién y cuándo). Sin confirmar, la lectura no guarda la situación de nadie.';
 
 
 --
@@ -99115,6 +99310,8 @@ CREATE TABLE public.bank_movement (
     receipt_at timestamp with time zone,
     counterparty text,
     movement_type text,
+    not_cancelled_at timestamp with time zone,
+    not_cancelled_by uuid,
     CONSTRAINT bank_movement_common_code_check CHECK (((common_code IS NULL) OR (common_code ~ '^\d{2}$'::text))),
     CONSTRAINT bank_movement_confidence_check CHECK (((confidence IS NULL) OR (confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text])))),
     CONSTRAINT bank_movement_ignorado_con_porque CHECK (((status = 'ignorado'::text) = (ignored_reason IS NOT NULL))),
@@ -99149,6 +99346,13 @@ COMMENT ON COLUMN public.bank_movement.counterparty IS 'B02. A quién pagas o qu
 --
 
 COMMENT ON COLUMN public.bank_movement.movement_type IS 'B02. El tipo de movimiento del banco (Norma 43: descripción del concepto común o etiqueta del propio; BBVA Excel: CONCEPTO), aparte del concepto.';
+
+
+--
+-- Name: COLUMN bank_movement.not_cancelled_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.bank_movement.not_cancelled_at IS 'B01·20 · «No, es bueno»: quien lo dijo cuándo; el aviso de cargo anulado por el banco no vuelve para este cargo.';
 
 
 --
@@ -101990,7 +102194,7 @@ CREATE TABLE public.conta_gestoria_cliente (
     cuenta_propia_account_id uuid,
     leido_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_gestoria_cliente_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text]))))
+    CONSTRAINT conta_gestoria_cliente_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text, 'sin_clasificar'::text]))))
 );
 
 
@@ -152450,6 +152654,13 @@ GRANT ALL ON FUNCTION public._bank_ajustes(p_company uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION _bank_cargos_anulados(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._bank_cargos_anulados(p_company uuid) FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION _bank_casado_soltar(p_match uuid, p_motivo text, p_quien text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -156594,12 +156805,39 @@ GRANT ALL ON FUNCTION public.bank_ajustes_guardar(p_company uuid, p_serie smalli
 
 
 --
+-- Name: FUNCTION bank_anulado_es_bueno(p_company uuid, p_extracto uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_anulado_es_bueno(p_company uuid, p_extracto uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_anulado_es_bueno(p_company uuid, p_extracto uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_anulado_es_bueno(p_company uuid, p_extracto uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_anulado_quitar(p_company uuid, p_extracto uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_anulado_quitar(p_company uuid, p_extracto uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_anulado_quitar(p_company uuid, p_extracto uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_anulado_quitar(p_company uuid, p_extracto uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION bank_asientos_sin_movimiento(p_company uuid, p_desde date, p_hasta date); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.bank_asientos_sin_movimiento(p_company uuid, p_desde date, p_hasta date) TO anon;
 GRANT ALL ON FUNCTION public.bank_asientos_sin_movimiento(p_company uuid, p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_asientos_sin_movimiento(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_cargos_anulados(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_cargos_anulados(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_cargos_anulados(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_cargos_anulados(p_company uuid) TO service_role;
 
 
 --
@@ -156681,6 +156919,15 @@ GRANT ALL ON FUNCTION public.bank_cuenta_nueva(p_company uuid, p_kind text, p_no
 GRANT ALL ON FUNCTION public.bank_cuentas_por_dar_de_alta(p_company uuid) TO anon;
 GRANT ALL ON FUNCTION public.bank_cuentas_por_dar_de_alta(p_company uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.bank_cuentas_por_dar_de_alta(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION bank_desapartar(p_movement uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.bank_desapartar(p_movement uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.bank_desapartar(p_movement uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.bank_desapartar(p_movement uuid) TO service_role;
 
 
 --
@@ -158263,6 +158510,15 @@ GRANT ALL ON FUNCTION public.conta_asiento_envio(p_entry uuid) TO service_role;
 
 REVOKE ALL ON FUNCTION public.conta_banco_agregador_despertar() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_banco_agregador_despertar() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) TO service_role;
 
 
 --
