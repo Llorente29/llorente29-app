@@ -4868,6 +4868,90 @@ $$;
 
 
 --
+-- Name: _conta_gestoria_juntar(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_gestoria_juntar(p_cuenta uuid, p_queda uuid, p_se_va uuid, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_a public.party; v_b public.party; v_mov jsonb := '{}'::jsonb; v_quedan jsonb := '[]'::jsonb; v_filas jsonb; v_n int := 0; v_cont int; v_t text;
+        v_nif boolean := false; v_resumen text; v_id uuid;
+begin
+  if p_queda = p_se_va then raise exception 'es el mismo cliente' using errcode = '22023'; end if;
+  select * into v_a from public.party where id = p_queda and account_id = p_cuenta for update;
+  select * into v_b from public.party where id = p_se_va and account_id = p_cuenta for update;
+  if v_a.id is null or v_b.id is null then raise exception 'los clientes que se juntan no son de esta cuenta' using errcode = 'P0001'; end if;
+
+  -- Lo contable no se mueve aquí: si el que se retira lo tiene, no se junta (se hace a mano con «Fusionar con…»).
+  select (select count(*) from public.customer_invoice where party_id = p_se_va) + (select count(*) from public.journal_entry where party_id = p_se_va)
+       + (select count(*) from public.journal_line where party_id = p_se_va) + (select count(*) from public.vat_book_entry where party_id = p_se_va)
+       + (select count(*) from public.bank_match_item where party_id = p_se_va) + (select count(*) from public.channel_settlement where party_id = p_se_va)
+       + (select count(*) from public.licensed_settlement where party_id = p_se_va) + (select count(*) from public.brand_licensing_agreement where party_id = p_se_va)
+       + (select count(*) from public.brand_partner_contribution where party_id = p_se_va) + (select count(*) from public.conta_liquidacion_resolucion where party_id = p_se_va)
+       + (select count(*) from public.party_role where party_id = p_se_va) + (select count(*) from public.platform_store where party_id = p_se_va)
+       + (select count(*) from public.company_account_link where entity = 'customer' and entity_id = p_se_va::text)
+    into v_cont;
+  if v_cont > 0 then
+    raise exception 'el cliente que se retira tiene % documentos, apuntes o papeles de contabilidad: se juntan a mano en Clientes y proveedores › «Fusionar con…»', v_cont
+      using errcode = 'P0001';
+  end if;
+
+  -- Lo de la gestoría y el cobro: se mueve entero al que queda, guardando las filas como estaban.
+  foreach v_t in array array['conta_linea', 'conta_tarifa', 'conta_mandato', 'conta_solicitud', 'conta_gc_cliente', 'conta_gc_importacion',
+                             'conta_gestoria_decision', 'conta_gestoria_diferencia', 'conta_recordatorio', 'conta_cobro_remesa_linea',
+                             'payment_method', 'recurring_contract', 'conta_gestoria_ficha'] loop
+    execute format('select coalesce(jsonb_agg(to_jsonb(x)), ''[]''::jsonb) from public.%I x where x.party_id = $1', v_t) into v_filas using p_se_va;
+    if jsonb_array_length(v_filas) > 0 then
+      execute format('update public.%I set party_id = $1 where party_id = $2', v_t) using p_queda, p_se_va;
+      v_mov := v_mov || jsonb_build_object(v_t, v_filas); v_n := v_n + jsonb_array_length(v_filas);
+    end if;
+  end loop;
+
+  -- La forma de cobro, empresa a empresa, si el que queda no tiene ya una con esa empresa.
+  select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) into v_filas from public.conta_cobro_cliente x
+   where x.party_id = p_se_va and not exists (select 1 from public.conta_cobro_cliente y where y.party_id = p_queda and y.company_id = x.company_id);
+  if jsonb_array_length(v_filas) > 0 then
+    update public.conta_cobro_cliente x set party_id = p_queda
+     where x.party_id = p_se_va and not exists (select 1 from public.conta_cobro_cliente y where y.party_id = p_queda and y.company_id = x.company_id);
+    v_mov := v_mov || jsonb_build_object('conta_cobro_cliente', v_filas); v_n := v_n + jsonb_array_length(v_filas);
+  end if;
+  if exists (select 1 from public.conta_cobro_cliente where party_id = p_se_va) then v_quedan := v_quedan || jsonb_build_array('forma_de_cobro'); end if;
+  if exists (select 1 from public.customer_fiscal where party_id = p_se_va) then v_quedan := v_quedan || jsonb_build_array('datos_fiscales'); end if;
+
+  -- Su fila de la gestoría: al rastro (sus fichas ya están en el que queda).
+  select coalesce(jsonb_agg(to_jsonb(x)), '[]'::jsonb) into v_filas from public.conta_gestoria_cliente x where x.party_id = p_se_va;
+  delete from public.conta_gestoria_cliente where party_id = p_se_va;
+  v_mov := v_mov || jsonb_build_object('conta_gestoria_cliente_retirada', v_filas);
+
+  -- El NIF, si el que queda no tiene (el índice único por cuenta obliga a soltarlo antes).
+  if v_a.tax_id is null and v_b.tax_id is not null then
+    update public.party set tax_id = null where id = p_se_va;
+    update public.party set tax_id = v_b.tax_id where id = p_queda;
+    v_nif := true;
+  end if;
+
+  update public.party set archived_at = coalesce(archived_at, now()), archived_note = format('Unido con %s: %s.', v_a.name, p_motivo), updated_at = now()
+   where id = p_se_va;
+  v_resumen := format('%s unido con %s (%s): %s %s movido%s%s.', v_b.name, v_a.name, p_motivo, v_n, case when v_n = 1 then 'dato' else 'datos' end,
+    case when v_n = 1 then '' else 's' end, case when v_nif then ', con su NIF' else '' end);
+  insert into public.conta_gestoria_union (account_id, kept_party_id, gone_party_id, motivo, moved, kept_on_gone, summary, done_by_name)
+  values (p_cuenta, p_queda, p_se_va, p_motivo,
+          v_mov || jsonb_build_object('nif', v_nif, 'antes', jsonb_build_object('archived_at', v_b.archived_at, 'archived_note', v_b.archived_note, 'tax_id', v_b.tax_id)),
+          v_quedan, v_resumen, coalesce(public.conta_nombre_actor(), 'Bitrix24 · unión'))
+  returning id into v_id;
+  return jsonb_build_object('union', v_id, 'resumen', v_resumen, 'movidos', v_n);
+end $_$;
+
+
+--
+-- Name: FUNCTION _conta_gestoria_juntar(p_cuenta uuid, p_queda uuid, p_se_va uuid, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_gestoria_juntar(p_cuenta uuid, p_queda uuid, p_se_va uuid, p_motivo text) IS 'G01b · Junta dos clientes de la misma cuenta (el mismo NIF en Bitrix24): mueve lo de la gestoría y el cobro al que queda, archiva el otro y deja el rastro en conta_gestoria_union. Si el que se retira tiene contabilidad, no junta.';
+
+
+--
 -- Name: _conta_gestoria_mes(date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -31653,7 +31737,7 @@ CREATE FUNCTION public.conta_bitrix_guardar_clientes(p_account uuid, p_clientes 
     SET search_path TO 'public'
     AS $$
 declare c jsonb; f jsonb; v_p jsonb; v_ids text[]; v_partes uuid[]; v_party uuid; v_huella text; v_antes text; v_nif text; v_nif_bitrix text;
-        v_motivo text; v_nuevos int := 0; v_cambiados int := 0; v_iguales int := 0; v_errores jsonb := '[]'::jsonb; v_otras jsonb; v_porque text;
+        v_motivo text; v_otro uuid; v_juntados int := 0; v_nuevos int := 0; v_cambiados int := 0; v_iguales int := 0; v_errores jsonb := '[]'::jsonb; v_otras jsonb; v_porque text;
 begin
   if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
   for c in select * from jsonb_array_elements(coalesce(p_clientes, '[]'::jsonb)) loop
@@ -31670,7 +31754,25 @@ begin
         select party_id from public.conta_gestoria_ficha where account_id = p_account and bitrix_id = any(v_ids)
         union select party_id from public.conta_gestoria_cliente where account_id = p_account and bitrix_id = any(v_ids)) x;
       if cardinality(v_partes) > 1 then
-        raise exception 'sus % fichas de Bitrix24 ya son % clientes distintos en Sumied', cardinality(v_ids), cardinality(v_partes) using errcode = 'P0001';
+        -- G01b (07/11) · Sin la unión aplicada, no se junta nada.
+        if c->>'clave' not like 'nif:%' then
+          raise exception 'sus % fichas de Bitrix24 ya son % clientes distintos en Sumied', cardinality(v_ids), cardinality(v_partes) using errcode = 'P0001';
+        end if;
+        -- Con ella, los clientes ya creados por separado se juntan en uno: el que ya tenía la ficha principal; si no, el que
+        -- más tiene colgado de la gestoría (líneas, mandatos, GoCardless); si no, el más antiguo. Los otros, retirados.
+        select x into v_party from unnest(v_partes) x
+         order by (exists (select 1 from public.conta_gestoria_cliente g where g.party_id = x and g.bitrix_id = v_p->>'bitrixId'))::int desc,
+                  ((select count(*) from public.conta_linea l where l.party_id = x) + (select count(*) from public.conta_mandato m where m.party_id = x)
+                   + (select count(*) from public.conta_gc_cliente k where k.party_id = x)) desc,
+                  (select p.created_at from public.party p where p.id = x), x
+         limit 1;
+        foreach v_otro in array v_partes loop
+          if v_otro <> v_party then
+            perform public._conta_gestoria_juntar(p_account, v_party, v_otro, 'el mismo NIF en Bitrix24 (fichas ' || array_to_string(v_ids, ', ') || ')');
+            v_juntados := v_juntados + 1;
+          end if;
+        end loop;
+        v_partes := array[v_party];
       end if;
       v_party := v_partes[1];
       -- Por su NIF, solo con la unión aplicada (clave «nif:…»): sin aplicar no se une nada, ni a escondidas.
@@ -31731,7 +31833,7 @@ begin
         'emisor', v_p->>'emisorSegunBitrix', 'codigo', sqlstate, 'porque', v_porque));
     end;
   end loop;
-  return jsonb_build_object('nuevos', v_nuevos, 'cambiados', v_cambiados, 'iguales', v_iguales, 'errores', v_errores);
+  return jsonb_build_object('nuevos', v_nuevos, 'cambiados', v_cambiados, 'iguales', v_iguales, 'juntados', v_juntados, 'errores', v_errores);
 end $$;
 
 
@@ -103333,6 +103435,32 @@ COMMENT ON TABLE public.conta_gestoria_ficha IS 'G01b · Cada ficha de Bitrix24 
 
 
 --
+-- Name: conta_gestoria_union; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_union (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    kept_party_id uuid NOT NULL,
+    gone_party_id uuid NOT NULL,
+    motivo text NOT NULL,
+    moved jsonb NOT NULL,
+    kept_on_gone jsonb DEFAULT '[]'::jsonb NOT NULL,
+    summary text NOT NULL,
+    done_at timestamp with time zone DEFAULT now() NOT NULL,
+    done_by_name text,
+    CONSTRAINT conta_gestoria_union_check CHECK ((kept_party_id <> gone_party_id))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_union; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_union IS 'G01b · Cada vez que la unión de Bitrix24 junta dos clientes de Sumied (el mismo NIF): cuál queda, cuál se retira (archivado), qué se movió fila a fila (moved, con las filas como estaban), lo que se quedó en el retirado y por qué.';
+
+
+--
 -- Name: conta_liquidacion_resolucion; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -118982,6 +119110,14 @@ ALTER TABLE ONLY public.conta_gestoria_lectura
 
 
 --
+-- Name: conta_gestoria_union conta_gestoria_union_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_union
+    ADD CONSTRAINT conta_gestoria_union_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_linea conta_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -124555,6 +124691,13 @@ CREATE INDEX conta_gestoria_ficha_party_idx ON public.conta_gestoria_ficha USING
 --
 
 CREATE INDEX conta_gestoria_lectura_cuenta_idx ON public.conta_gestoria_lectura USING btree (account_id, empezada_at DESC);
+
+
+--
+-- Name: conta_gestoria_union_cuenta; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gestoria_union_cuenta ON public.conta_gestoria_union USING btree (account_id, done_at DESC);
 
 
 --
@@ -134391,6 +134534,30 @@ ALTER TABLE ONLY public.conta_gestoria_lectura
 
 ALTER TABLE ONLY public.conta_gestoria_lectura
     ADD CONSTRAINT conta_gestoria_lectura_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_union conta_gestoria_union_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_union
+    ADD CONSTRAINT conta_gestoria_union_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_union conta_gestoria_union_gone_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_union
+    ADD CONSTRAINT conta_gestoria_union_gone_party_id_fkey FOREIGN KEY (gone_party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_union conta_gestoria_union_kept_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_union
+    ADD CONSTRAINT conta_gestoria_union_kept_party_id_fkey FOREIGN KEY (kept_party_id) REFERENCES public.party(id) ON DELETE CASCADE;
 
 
 --
@@ -145288,6 +145455,19 @@ CREATE POLICY conta_gestoria_lectura_leer ON public.conta_gestoria_lectura FOR S
 
 
 --
+-- Name: conta_gestoria_union; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_union ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_union conta_gestoria_union_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_union_leer ON public.conta_gestoria_union FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_linea; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -153524,6 +153704,14 @@ GRANT ALL ON FUNCTION public._conta_gestoria_apuntar() TO service_role;
 REVOKE ALL ON FUNCTION public._conta_gestoria_euros(p_importe numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_gestoria_euros(p_importe numeric) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_gestoria_euros(p_importe numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_gestoria_juntar(p_cuenta uuid, p_queda uuid, p_se_va uuid, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_gestoria_juntar(p_cuenta uuid, p_queda uuid, p_se_va uuid, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_gestoria_juntar(p_cuenta uuid, p_queda uuid, p_se_va uuid, p_motivo text) TO service_role;
 
 
 --
@@ -171545,6 +171733,14 @@ GRANT SELECT ON TABLE public.conta_gestoria_decision TO authenticated;
 
 GRANT ALL ON TABLE public.conta_gestoria_ficha TO service_role;
 GRANT SELECT ON TABLE public.conta_gestoria_ficha TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_union; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_union TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_union TO authenticated;
 
 
 --
