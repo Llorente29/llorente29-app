@@ -52,6 +52,8 @@ export interface PanelProps {
   alBuscarFactura: () => void
   alApuntarSinFactura: () => void
   alApartar: () => void
+  /** B01·20 · Deshacer un «Apartar»: el movimiento vuelve a contar. */
+  alDesapartar?: () => void
   alCerrar: () => void
 }
 
@@ -101,7 +103,7 @@ export function PanelMovimiento(p: PanelProps) {
           <h3>{quienEs(m)}</h3>
           <span className="cx-ayuda">{diaMesCorto(m.fecha)}{m.tipo ? ` · ${m.tipo}` : ''}</span>
         </div>
-        <span className={`cxn-panel-importe${m.importeCent > 0 ? ' cxb-entra' : ''}`}>{eurosExactos(m.importeCent / 100)}</span>
+        <span className={`cxn-panel-importe${m.importeCent > 0 ? ' cxb-entra' : ''}${m.estado === 'ignorado' ? ' cxn-tachado' : ''}`}>{eurosExactos(m.importeCent / 100)}</span>
         <button type="button" className="cxn-cerrar" onClick={p.alCerrar} aria-label="Cerrar el panel">×</button>
       </div>
 
@@ -109,6 +111,19 @@ export function PanelMovimiento(p: PanelProps) {
         <h4>Lo que dice el banco, tal cual</h4>
         <p className="cxn-banco-literal">{textoDelBanco(m) || '—'}</p>
       </section>
+
+      {m.estado === 'ignorado' && (
+        <section className="cxn-bloque" aria-label="Apartado">
+          <h4>Apartado: no cuenta</h4>
+          <p><span className="cxn-pildora cxn-pildora-apartado">{m.motivoIgnorado ?? 'Apartado'}</span></p>
+          <p className="cx-ayuda">No va a contabilidad ni suma en el saldo. Si no era así, deshazlo y vuelve a contar.</p>
+          {p.alDesapartar && (
+            <div className="cxn-acciones">
+              <button type="button" className="cx-boton-sec" disabled={p.ocupado} onClick={p.alDesapartar}>{p.ocupado ? 'Deshaciendo…' : 'Deshacer'}</button>
+            </div>
+          )}
+        </section>
+      )}
 
       {m.estado === 'casado' && m.casado && (
         <section className="cxn-bloque" aria-label="Casado">

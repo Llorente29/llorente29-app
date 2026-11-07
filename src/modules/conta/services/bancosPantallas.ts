@@ -17,6 +17,7 @@ import { LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { ConexionCuenta } from '@/modules/conta/lib/agregadorBanco'
 import type { LineaRegla } from '@/modules/conta/lib/reparto'
 import { estadoHueco, type EstadoHueco } from '@/modules/conta/lib/huecoBanco'
+import { avisoDeFila, type AvisoAnulado } from '@/modules/conta/lib/cargoAnulado'
 
 type Fila = Record<string, unknown>
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
@@ -301,6 +302,27 @@ export const recordarIban = (bancoId: string, iban: string) => rpc<void>('bank_i
 export const corregirIban = (bancoId: string, iban: string) => rpc<void>('bank_cuenta_iban_corregir', { p_treasury: bancoId, p_iban: iban })
 export const localDeCuenta = (bancoId: string, localId: string | null, comun: boolean) => rpc<void>('bank_cuenta_local', { p_treasury: bancoId, p_local: localId, p_comun: comun })
 export const ignorar = (movimientoId: string, motivo: string) => rpc<void>('bank_ignorar', { p_movement: movimientoId, p_motivo: motivo })
+
+/** B01·20 · Deshacer un «Apartar»: vuelve a pendiente, con su línea en el historial. */
+export const desapartar = (movimientoId: string) => rpc<void>('bank_desapartar', { p_movement: movimientoId })
+
+/** B01·20 · Los cargos que el banco anuló (la base decide cuándo hay aviso). */
+export async function cargosAnulados(companyId: string): Promise<AvisoAnulado[]> {
+  const filas = await rpc<Record<string, unknown>[] | null>('bank_cargos_anulados', { p_company: companyId })
+  return (filas ?? []).map(avisoDeFila)
+}
+
+/** B01·20 · «Quitarlo»: deshace el casado si lo hay y aparta los cargos del aviso con su motivo. */
+export async function quitarAnulado(companyId: string, extracto: string): Promise<{ n: number; sumaCent: number; dia: string; saldoBancoCent: number; deshechos: number }> {
+  const r = await rpc<Record<string, unknown>>('bank_anulado_quitar', { p_company: companyId, p_extracto: extracto })
+  return { n: Number(r.n), sumaCent: Math.round(Number(r.suma) * 100), dia: String(r.dia), saldoBancoCent: Math.round(Number(r.saldo_banco) * 100), deshechos: Number(r.deshechos) }
+}
+
+/** B01·20 · «No, es bueno»: el aviso no vuelve para esos cargos. */
+export async function anuladoEsBueno(companyId: string, extracto: string): Promise<{ n: number; sumaCent: number; dia: string }> {
+  const r = await rpc<Record<string, unknown>>('bank_anulado_es_bueno', { p_company: companyId, p_extracto: extracto })
+  return { n: Number(r.n), sumaCent: Math.round(Number(r.suma) * 100), dia: String(r.dia) }
+}
 
 export async function cuentasPorDarDeAlta(companyId: string): Promise<{ codigo: string; nombre: string; ibanEnNombre: string | null }[]> {
   const filas = await rpc<Fila[]>('bank_cuentas_por_dar_de_alta', { p_company: companyId })

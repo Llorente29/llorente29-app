@@ -49,8 +49,10 @@ import {
 } from '@/modules/conta/lib/conciliarVista'
 import { bancos as nucleo } from '@/modules/conta/services/bancosService'
 import {
-  facturasParaCasar, guardarRegla, ignorar, leerMovimientos, resolverRepetido, saldosContables, subirTicket, ultimaPasada, type FacturaPendiente,
+  anuladoEsBueno, cargosAnulados, desapartar, facturasParaCasar, guardarRegla, ignorar, leerMovimientos, quitarAnulado, resolverRepetido, saldosContables, subirTicket, ultimaPasada, type FacturaPendiente,
 } from '@/modules/conta/services/bancosPantallas'
+import { AvisoCargoAnulado } from '@/modules/conta/bancos/AvisoCargoAnulado'
+import { textoDesapartado, textoEsBueno, textoQuitado, type AvisoAnulado } from '@/modules/conta/lib/cargoAnulado'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
 import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
@@ -85,6 +87,8 @@ export function Movimientos() {
   const [busca, setBusca] = useState('')
   const [todas, setTodas] = useState(false)
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null)
+  // B01·20 · Lo que dicen «Quitarlo» y «No, es bueno» sale arriba, donde estaba el aviso.
+  const [avisoArriba, setAvisoArriba] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [dialogo, setDialogo] = useState<{ que: 'cuenta' | 'factura' | 'apartar'; m: MovimientoBanco } | null>(null)
   // El movimiento del panel va en la dirección (?mov=), como la bandeja: si algo de arriba vuelve a
@@ -110,7 +114,7 @@ export function Movimientos() {
   const vispera = fechaCorte ? new Date(Date.parse(`${fechaCorte}T12:00:00Z`) - 86400000).toISOString().slice(0, 10) : null
   const lectura = useLeerConservando(banco ? async () => {
     const cuentas = banco.cuenta ? [banco.cuenta] : []
-    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente, remesas, cobros] = await Promise.all([
+    const [movs, saldos, antes, pasada, facturas, esperan, unaFuente, remesas, cobros, anulados] = await Promise.all([
       leerMovimientos(accountId, banco.id, mes),
       saldosContables(companyId, corte, cuentas),
       vispera && corte >= (fechaCorte ?? '') ? saldosContables(companyId, vispera, cuentas) : Promise.resolve(null),
@@ -125,10 +129,13 @@ export function Movimientos() {
       remesasParaCasar(companyId).catch((e: unknown) => { console.warn('[bancos] no se pudieron leer las remesas que esperan su cargo', e); return [] }),
       // PC01 · E3: las remesas de recibos que esperan su abono y los recibos que pueden volver devueltos (Ventas › Cobros).
       cobrosParaCasar(companyId).catch((e: unknown) => { console.warn('[bancos] no se pudieron leer los cobros que esperan el banco', e); return { abonos: [], devoluciones: [] } }),
+      // B01·20 · Los cargos que el banco anuló, de este banco (la base decide cuándo hay aviso).
+      cargosAnulados(companyId).catch((e: unknown) => { console.warn('[bancos] no se pudieron leer los cargos anulados', e); return [] as AvisoAnulado[] }),
     ])
     const espera = new Map<string, string>([...esperan].map(([id, ms]) => [id, ms[0]?.motivo || 'La base no lo validaría todavía.']))
     const fila = unaFuente?.find((f) => (banco.cuenta && f.cuenta === banco.cuenta) || f.treasuryAccountId === banco.id) ?? null
-    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila, remesas, cobros }
+    return { movs, libroCent: banco.cuenta ? saldos[banco.cuenta] ?? 0 : null, libroAntesCent: banco.cuenta && antes ? antes[banco.cuenta] ?? 0 : null, pasada, facturas, espera, fila, remesas, cobros,
+      anulados: anulados.filter((a) => a.banco === banco.id) }
   } : null, `${banco?.id}:${mes}`, String(vuelta))
 
   const movs = useMemo(() => lectura.datos?.movs ?? [], [lectura.datos])
@@ -153,7 +160,7 @@ export function Movimientos() {
 
   const hecho = (texto: string) => { setAviso({ tipo: 'ok', texto }); refrescarCuentasMenu(); recargar(); lectura.recargar() }
   const fallo = (e: unknown) => setAviso({ tipo: 'error', texto: e instanceof Error ? e.message : String(e) })
-  const con = async (id: string, f: () => Promise<void>) => { setOcupado(id); setAviso(null); try { await f() } catch (e) { fallo(e) } finally { setOcupado(null) } }
+  const con = async (id: string, f: () => Promise<void>) => { setOcupado(id); setAviso(null); setAvisoArriba(id.startsWith('anulado-')); try { await f() } catch (e) { fallo(e) } finally { setOcupado(null) } }
   const quien = (m: MovimientoBanco) => `${diaMesCorto(m.fecha)} de ${euros(m.importeCent)}`
   const ir = (b: Bandeja) => { const p = new URLSearchParams(query); p.set('ver', b); p.delete('mov'); setQuery(p, { replace: true }); setFoco(0) }
 
@@ -191,6 +198,7 @@ export function Movimientos() {
     switch (b) {
       case 'ver': if (m.casado?.asientoId) navegar(rutaAsiento(m.casado.asientoId)); return
       case 'deshacer': return deshacer(m)
+      case 'desapartar': return desapartarM(m)
       case 'si': case 'si-sin-ticket': return con(m.id, async () => {
         await confirmarPropuesta(m)
         hecho(`Casado: ${m.propuesta?.que ?? 'el movimiento'} (${quien(m)}). Su asiento espera en «Por validar»${b === 'si-sin-ticket' ? ', sin ticket' : ''}.`)
@@ -207,6 +215,22 @@ export function Movimientos() {
       })
     }
   }
+
+  // B01·20 · El cargo que el banco anula: «Quitarlo», «No, es bueno» y deshacer un apartado.
+  const quitar = (a: AvisoAnulado) => con(`anulado-${a.extracto}`, async () => {
+    const r = await quitarAnulado(companyId, a.extracto)
+    hecho(textoQuitado(r))
+  })
+  const esBueno = (a: AvisoAnulado) => con(`anulado-${a.extracto}`, async () => {
+    const r = await anuladoEsBueno(companyId, a.extracto)
+    hecho(textoEsBueno(r))
+  })
+  const desapartarM = (m: MovimientoBanco) => con(m.id, async () => {
+    await desapartar(m.id)
+    // Vuelve a pendiente: el motor lo mira otra vez para proponer con qué casarlo.
+    await nucleo.conciliarPendientes(accountId, companyId, hoyEnMadrid()).catch((e: unknown) => console.warn('[bancos] no se pudo volver a mirar lo pendiente', e))
+    hecho(textoDesapartado({ fecha: m.fecha, importeCent: m.importeCent }, m.motivoIgnorado))
+  })
 
   const deshacer = (m: MovimientoBanco) => con(m.id, async () => {
     await nucleo.deshacer(m.casado!.id, 'Deshecho desde Bancos › Movimientos')
@@ -318,12 +342,19 @@ export function Movimientos() {
       alBuscarFactura={() => setDialogo({ que: 'factura', m: elegidoM })}
       alApuntarSinFactura={() => setDialogo({ que: 'cuenta', m: elegidoM })}
       alApartar={() => setDialogo({ que: 'apartar', m: elegidoM })}
+      alDesapartar={() => desapartarM(elegidoM)}
       alCerrar={() => setElegido(null)} />
   )
 
   return (
     <section className="cxb-movimientos cxn-conciliar" aria-label={`Movimientos de ${banco.nombre}`}>
       {/* S02 · PR 2: el título, el banco y el mes y «Subir extracto» van en el encabezado de la página (BancosPage). */}
+
+      {/* B01·20 · El cargo que el banco anuló: el aviso, en la cuenta, antes que nada. */}
+      {lectura.datos.anulados.map((a) => (
+        <AvisoCargoAnulado key={a.extracto} aviso={a} ocupado={ocupado === `anulado-${a.extracto}`} alQuitar={() => quitar(a)} alEsBueno={() => esBueno(a)} />
+      ))}
+      {aviso && aviso.tipo === 'ok' && avisoArriba && <div className="cx-guardado" role="status" data-testid="aviso-arriba">{aviso.texto}</div>}
 
       {/* El cuadre: en el banco − en contabilidad = te falta por casar, y la barra. */}
       <div className="cxn-cuadre" data-testid="cuadre">
@@ -394,7 +425,7 @@ export function Movimientos() {
         </label>
       </div>
 
-      {aviso && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
+      {aviso && !(aviso.tipo === 'ok' && avisoArriba) && <div className={aviso.tipo === 'ok' ? 'cx-guardado' : 'cx-error'} role={aviso.tipo === 'ok' ? 'status' : 'alert'}>{aviso.texto}</div>}
 
       {bandeja !== 'casados' && bandeja !== 'aclarar' && bandeja !== 'validar' && seleccionables.length > 0 && (
         <div className="cxn-bloque-barra" role="region" aria-label="Confirmar en bloque">
@@ -481,12 +512,12 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
         <strong>{quienEs(m)}{n > 1 && <span className="cxn-iguales"> · {n} iguales</span>}</strong>
         <span className="cxn-texto-banco">{textoDelBanco(m)}{m.tarjeta && ` · tarjeta de ${m.tarjeta.titular} (···${m.tarjeta.ultimos4})`}</span>
       </span>
-      <span role="gridcell" className={`cxb-importe ${m.importeCent > 0 ? 'cxb-entra' : ''}`}>{signo(m.importeCent)}{n > 1 && <span className="cxn-por"> × {n}</span>}</span>
+      <span role="gridcell" className={`cxb-importe ${m.importeCent > 0 ? 'cxb-entra' : ''}${m.estado === 'ignorado' ? ' cxn-tachado' : ''}`}>{signo(m.importeCent)}{n > 1 && <span className="cxn-por"> × {n}</span>}</span>
       <span role="gridcell" className="cxn-propongo">
         <span className="cxn-propongo-linea">
           <span className={`cxb-punto cxb-punto-${tono === 'casado' ? 'verde' : tono}`} title={verde ? 'Lo casaría solo' : f.estado} /><span className="cx-oculto">{verde ? 'Lo casaría solo' : f.estado}</span>
           {origen && <span className="cxn-pildora">{origen}</span>}
-          <strong>{f.titulo}</strong>
+          {m.estado === 'ignorado' ? <span className="cxn-pildora cxn-pildora-apartado" data-testid={`apartado-${m.id}`}>{f.titulo}</span> : <strong>{f.titulo}</strong>}
           {m.propuesta?.facturaSinAprobar && m.estado !== 'casado' && <span className="cxn-pildora cxn-pildora-ambar">factura sin aprobar</span>}
         </span>
         <span className="cxn-porque">{f.porque}</span>
@@ -496,7 +527,7 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
           <button type="button" className="cx-boton" disabled={!!ocupado} onClick={alConfirmarIguales}>{ocupado === m.id ? '…' : `Confirmar las ${n}`}</button>
         ) : f.botones.map((b) => (
           <button key={b} type="button" className={b === principal ? 'cx-boton' : 'cx-boton-sec'} disabled={!!ocupado} onClick={() => alPulsar(b)}>
-            {ocupado === m.id && (b === 'si' || b === 'deshacer' || b === 'si-sin-ticket' || b === 'subir-foto' || b === 'es-el-mismo' || b === 'son-dos') ? '…' : texto(b)}
+            {ocupado === m.id && (b === 'si' || b === 'deshacer' || b === 'si-sin-ticket' || b === 'subir-foto' || b === 'es-el-mismo' || b === 'son-dos' || b === 'desapartar') ? '…' : texto(b)}
           </button>
         ))}
       </span>
