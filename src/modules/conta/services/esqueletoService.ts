@@ -3,9 +3,9 @@
 // S01 · Lo que el esqueleto lee de la base:
 //   · las preferencias de la persona (conta_user_pref: una fila por cuenta y
 //     usuario; RLS: cada uno la suya);
-//   · lo que decide qué sale: si la EMPRESA es de hostelería
-//     (company.is_hospitality, la marca explícita que pidió Julio el 17/10: los
-//     datos solo sugieren), si trabaja con Diez (conta_diez_base, y C07: con
+//   · lo que decide qué sale: el SECTOR de la empresa (G03: company.sector y
+//     su paquete en sectores/sectores.ts; hasta que la columna esté,
+//     company.is_hospitality, la marca explícita que pidió Julio el 17/10), si trabaja con Diez (conta_diez_base, y C07: con
 //     «Enviar a Diez» encendido, conta_diez_envio_empresa) y qué
 //     interruptores de producto tiene la CUENTA (feature_flags:
 //     conta_facturacion, conta_laboral, conta_impuestos; sin caducidad).
@@ -16,6 +16,7 @@
 // existe hoy en producción, comprobado el 17/10 en information_schema.
 
 import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
+import { loQueEnciendeLaEmpresa } from '@/modules/conta/sectores/sectores'
 import { leerEnvioEmpresa } from '@/modules/conta/services/envioDiezService'
 import { supabase } from '@/lib/supabase'
 import { aFila, deFila, type Preferencias } from '@/modules/conta/esqueleto/preferencias'
@@ -42,7 +43,7 @@ export async function guardarPreferencias(accountId: string, userId: string, cam
   return deFila(data as Record<string, unknown>)
 }
 
-/** Hostelería y Diez de la empresa, e interruptores de la cuenta. */
+/** El sector y Diez de la empresa, e interruptores de la cuenta. */
 export async function leerContexto(accountId: string, companyId: string | null): Promise<Contexto> {
   const [empresa, diez, flags, ejes] = await Promise.all([
     companyId
@@ -65,15 +66,20 @@ export async function leerContexto(accountId: string, companyId: string | null):
     .filter((f) => f.enabled === true && (f.expires_at == null || new Date(String(f.expires_at)).getTime() > ahora))
     .map((f) => String(f.feature_key))
   const fila = empresa.data as Record<string, unknown> | null
+  const asesoria = await esAsesoria(accountId)
+  // G03 · El sector de la empresa (company.sector; sin la columna, lo de hoy) y lo que enciende su paquete.
+  const { sector, hosteleria, gestoria } = loQueEnciendeLaEmpresa(companyId ? fila : null, asesoria)
   return {
-    hosteleria: fila?.is_hospitality === true,
+    hosteleria,
+    gestoria,
+    sector,
     diez: !!diez.data && enviaADiez,
     interruptores: new Set(encendidos),
     logoEmpresa: typeof fila?.logo_path === 'string' && fila.logo_path ? await urlDelLogo(fila.logo_path) : null,
     // S02 · company.color llega con la 0460; con «*», hasta que esté aplicada no se pide por nombre.
     colorEmpresa: typeof fila?.color === 'string' && FORMATO_COLOR.test(fila.color) ? fila.color : null,
     analitica: ejes ? analiticaDe(ejes) : null,
-    asesoria: await esAsesoria(accountId),
+    asesoria,
   }
 }
 

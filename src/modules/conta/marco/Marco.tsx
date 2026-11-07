@@ -149,6 +149,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     ponerDatosCinta: setDatosCinta,
     ponerEntradasCinta: setEntradasCinta,
     hosteleria: ctxListo ? ctx.hosteleria : null,
+    gestoria: ctxListo ? ctx.gestoria === true : null,
     analitica: ctxListo ? ctx.analitica ?? null : null,
     nivel: prefs.nivel,
     ponerConPropias: setPropias,
@@ -158,7 +159,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     abrirBuscador,
     colorEmpresa: ctx.colorEmpresa ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, ejercicios, activa?.id, abrirBuscador])
+  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, ejercicios, activa?.id, abrirBuscador])
 
   // Lo que se puede fijar desde aquí: esta página y sus acciones.
   const fijables: Orden[] = [
