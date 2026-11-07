@@ -76,14 +76,14 @@ async function leerDeBitrix(db: SupabaseClient, cuenta: string, url: string, map
 }
 
 async function leer(db: SupabaseClient, cuenta: string, por: 'persona' | 'cada_noche' | 'conexion', quien: string | null) {
-  const { data: sec, error: secErr } = await db.rpc('conta_bitrix_secreto', { p_account: cuenta })
+  const { data: sec, error: secErr } = await db.rpc('conta_crm_secreto', { p_account: cuenta, p_crm: CRM })
   if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
   const s = (sec as { entorno: Entorno; url: string; mapa: MapaBitrix | null }[] | null)?.[0]
   if (!s?.url) throw new Error('Esta cuenta no tiene conectado Bitrix24.')
   const mapa = s.mapa ?? MAPA_QBO
 
   const { data: lect, error: lectErr } = await db.from('conta_gestoria_lectura')
-    .insert({ account_id: cuenta, origen: 'bitrix', entorno: s.entorno, por, quien_name: quien }).select('id').single()
+    .insert({ account_id: cuenta, origen: 'crm', entorno: s.entorno, por, quien_name: quien }).select('id').single()
   if (lectErr) throw new Error(`No se ha podido apuntar la lectura: ${lectErr.message}`)
   const lectura = (lect as { id: string }).id
   const acabar = (campos: Record<string, unknown>) => db.from('conta_gestoria_lectura').update({ acabada_at: new Date().toISOString(), ...campos }).eq('id', lectura)
@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     const grupos = gruposValidos(cuerpo.grupos)
     if (!grupos) return json(400, { error: 'Faltan los campos a contar: texto (por grupo), situacion y cuotas, con sus códigos de Bitrix24.' })
     try {
-      const { data: sec, error: secErr } = await admin.rpc('conta_bitrix_secreto', { p_account: cuenta })
+      const { data: sec, error: secErr } = await admin.rpc('conta_crm_secreto', { p_account: cuenta, p_crm: CRM })
       if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
       const s = (sec as { entorno: Entorno; url: string; mapa: MapaBitrix | null }[] | null)?.[0]
       if (!s?.url) return json(400, { error: 'Esta cuenta no tiene conectado Bitrix24.' })
@@ -201,7 +201,7 @@ Deno.serve(async (req) => {
       const emisores = ((emp ?? []) as { id: string; legal_name: string | null; trade_name: string | null }[]).map((e) => ({ id: e.id, nombre: e.legal_name || e.trade_name || '' }))
       const { data: acc } = await admin.from('accounts').select('name').eq('id', cuenta).single()
       const propuesta = proponerMapa((acc as { name?: string } | null)?.name ?? 'Cuenta', medidos, emisores)
-      const { error } = await admin.rpc('conta_bitrix_guardar_conexion', { p_account: cuenta, p_entorno: entorno, p_url: url, p_portal: portal, p_quien: quien })
+      const { error } = await admin.rpc('conta_crm_guardar_conexion', { p_account: cuenta, p_crm: CRM, p_entorno: entorno, p_url: url, p_portal: portal, p_quien: quien })
       if (error) return json(400, { error: error.message })
       // G01b · Lo medido y el mapa (con sus dudas) se guardan de verdad: si no se puede, se dice.
       const { error: eMapa } = await admin.from('conta_crm').update({ mapa: propuesta.mapa, campos_medidos: medidos, updated_at: new Date().toISOString() }).eq('account_id', cuenta).eq('crm', CRM)
@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     if (cuerpo.accion === 'ensayo_union') {
       // G01b · Lo que haría la unión, para el PDF que descarga quien está dentro de la cuenta. No escribe nada ni lo registra.
       if (esCron) return json(403, { error: 'El ensayo lo pide una persona.' })
-      const { data: sec, error: secErr } = await admin.rpc('conta_bitrix_secreto', { p_account: cuenta })
+      const { data: sec, error: secErr } = await admin.rpc('conta_crm_secreto', { p_account: cuenta, p_crm: CRM })
       if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
       const s = (sec as { entorno: Entorno; url: string; mapa: MapaBitrix | null }[] | null)?.[0]
       if (!s?.url || !s.mapa) return json(400, { error: 'Esta cuenta no tiene conectado Bitrix24.' })

@@ -79,7 +79,7 @@ async function personasDeContacto(accountId: string): Promise<Map<string, { nomb
 export async function leerGestoria(accountId: string): Promise<DatosGestoria> {
   const cuenta = (q: ReturnType<typeof tabla>) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq('account_id', accountId)
   const [clientes, lineas, servicios, tarifas, susc, gcClientes, mandatos, cobros, difs, decisiones, fichas] = await Promise.all([
-    leer('conta_consulta_clientes', 'cliente_id, cliente, nif, situacion, servicios, forma_de_pago_en_bitrix, emisor_id, emisor, forma_de_cobro, cliente_en_gocardless, mandato',
+    leer('conta_consulta_clientes', 'cliente_id, cliente, nif, situacion, servicios, forma_de_pago_en_el_crm, emisor_id, emisor, forma_de_cobro, cliente_en_gocardless, mandato',
       (q) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq('cuenta_id', accountId)),
     leer('conta_linea', 'id, party_id, company_id, servicio_id, tipo, detalle, empleado_nombre, importe_propio, periodo, desde, hasta, suscripcion_gc_id', cuenta),
     leer('conta_servicio', 'id, company_id, clave, nombre, forma', cuenta),
@@ -132,7 +132,7 @@ export async function leerGestoria(accountId: string): Promise<DatosGestoria> {
     const gc = str(c.cliente_en_gocardless)
     return {
       id: `${id}|${emisor}`, clienteId: id, nombre: String(c.cliente ?? ''), nif: str(c.nif), emisorId: emisor, emisor: String(c.emisor ?? ''),
-      bitrix: { situacion: str(c.situacion), formaPago: str(c.forma_de_pago_en_bitrix), servicios: Array.isArray(c.servicios) ? (c.servicios as unknown[]).map(String) : [], ...extraDeFicha(fichaDe.get(id)),
+      bitrix: { situacion: str(c.situacion), formaPago: str(c.forma_de_pago_en_el_crm), servicios: Array.isArray(c.servicios) ? (c.servicios as unknown[]).map(String) : [], ...extraDeFicha(fichaDe.get(id)),
         personas: personasDe.get(id) ?? [] },
       formaCobro: (str(c.forma_de_cobro) as ClienteGestoria['formaCobro']) ?? null, mandato: str(c.mandato), cobros: cobrosDe(emisor, gc),
       diferencias: ds.filter((d) => d.clienteId === id && (d.emisorId === null || d.emisorId === emisor)),
@@ -193,19 +193,9 @@ export interface ConexionBitrix {
   contactos?: { mapa: MapaContactos | null; medidos: Record<string, CampoMedido> | null; resumen: ResumenContactos | null; leidos: ContactosLeidos | null } | null
 }
 
-/**
- * G01c · La conexión con el CRM (conta_crm, una fila por CRM; hoy, Bitrix24).
- * Mientras la base de un entorno no tenga aún la 1925, la de antes
- * (conta_crm_bitrix); la segunda tanda del G01c quita esta vuelta.
- */
-async function leerCrm(cuenta: (q: ReturnType<typeof tabla>) => unknown): Promise<Fila[]> {
-  try {
-    return await leer('conta_crm', 'crm, entorno, portal, url_ref, conectada_at, ultima_lectura_at, empresas_leidas, mapa, campos_medidos, mapa_contactos, campos_medidos_contactos, contactos_leidos', cuenta)
-  } catch (e) {
-    if (!/conta_crm|does not exist|schema cache|PGRST205|42P01/i.test(e instanceof Error ? e.message : String(e))) throw e
-    return leer('conta_crm_bitrix', 'entorno, portal, url_ref, conectada_at, ultima_lectura_at, empresas_leidas, mapa, campos_medidos', cuenta)
-  }
-}
+/** G01c · La conexión con el CRM (conta_crm, una fila por cuenta y CRM; hoy, Bitrix24). */
+const leerCrm = (cuenta: (q: ReturnType<typeof tabla>) => unknown) =>
+  leer('conta_crm', 'crm, entorno, portal, url_ref, conectada_at, ultima_lectura_at, empresas_leidas, mapa, campos_medidos, mapa_contactos, campos_medidos_contactos, contactos_leidos', cuenta)
 
 export async function leerConexiones(accountId: string): Promise<{ gocardless: ConexionGc[]; bitrix: ConexionBitrix | null }> {
   const cuenta = (q: ReturnType<typeof tabla>) => (q as unknown as { eq: (c: string, v: string) => unknown }).eq('account_id', accountId)

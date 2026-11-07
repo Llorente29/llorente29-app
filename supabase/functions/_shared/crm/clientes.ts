@@ -62,6 +62,25 @@ export function tipoDeNif(n: string): 'DNI' | 'NIE' | 'CIF' | 'RIF' | 'otro' {
 export const idExtranjeroDe = (n: string | null): { tipo: 'foreign'; pais: string } | null =>
   n && tipoDeNif(n) === 'RIF' ? { tipo: 'foreign', pais: 'VE' } : null
 
+/**
+ * G01c (Julio, 07/11) · Los NIF de las empresas por los que la unión de verdad
+ * une: con formato (DNI, NIE, CIF o RIF) y en menos de 10 fichas, contando
+ * también las de los contactos con ese NIF (que se unen a ellas). Lo usan qué
+ * es cada contacto (contactos.ts) y el recuento, para decir lo mismo que la
+ * unión: un contacto con un NIF sin formato igual al de una empresa no «se une
+ * a su empresa» (la unión no une por él), es cliente aparte.
+ */
+export function nifsQueUnen(nifsDeEmpresas: readonly (string | null)[], nifsDeContactos: readonly (string | null)[] = []): Set<string> {
+  const cuantas = new Map<string, number>()
+  for (const v of [...nifsDeEmpresas, ...nifsDeContactos]) { const n = nifComoLaBase(v); if (n) cuantas.set(n, (cuantas.get(n) ?? 0) + 1) }
+  const out = new Set<string>()
+  for (const v of nifsDeEmpresas) {
+    const n = nifComoLaBase(v)
+    if (n && tipoDeNif(n) !== 'otro' && (cuantas.get(n) ?? 0) < MAX_FICHAS_POR_NIF) out.add(n)
+  }
+  return out
+}
+
 /** Lo que la unión necesita de cada ficha. */
 export interface FichaParaUnir {
   idExterno: string; nif: string | null; situacion: Situacion | null

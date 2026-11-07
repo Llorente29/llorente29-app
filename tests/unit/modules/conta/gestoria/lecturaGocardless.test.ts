@@ -109,7 +109,7 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
       p.noConvertidas.map((n) => ({ suscripcion: n.suscripcionId, gcCliente: n.clienteGcId, partyId: n.partyId, nombre: n.nombre, codigo: n.codigo, porque: n.porque })),
       lineasDe, tarifas, tes)
     expect(r.diferencias.map((x) => [x.tipo, x.porque_codigo, x.party_id ?? x.gc_cliente_id])).toEqual([
-      ['bitrix_sin_cobro', 'bitrix_sin_cobro', 'P3'],
+      ['crm_sin_cobro', 'crm_sin_cobro', 'P3'],
       ['suscripcion_sin_convertir', 'laboral_sin_empleado', 'P2'],
       ['mandato_por_firmar', 'pending_customer_approval', 'CU003'],
       ['falla_a_menudo', 'tres_o_mas_fallos', 'P2'],

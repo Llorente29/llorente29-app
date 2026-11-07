@@ -2,7 +2,7 @@
 // fuera, y la unión con las empresas (la regla de Julio, 07/11, tras el
 // recuento #5). NIF de ceros, nombres de prueba y códigos inventados (T11).
 import { describe, expect, it } from 'vitest'
-import { agrupar, claveDeFicha, idExtranjeroDe, nifComoLaBase, tipoDeNif } from '../../../../../supabase/functions/_shared/crm/clientes'
+import { agrupar, claveDeFicha, idExtranjeroDe, nifComoLaBase, nifsQueUnen, tipoDeNif } from '../../../../../supabase/functions/_shared/crm/clientes'
 import { leerContacto, type FichaContacto, type MapaContactos } from '../../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 import { destinoDe, repartirContactos, resumenDeContactos } from '../../../../../supabase/functions/_shared/crm/contactos'
 import type { Situacion } from '../../../../../supabase/functions/_shared/crm/ficha'
@@ -73,6 +73,20 @@ describe('G01c · qué es cada contacto', () => {
     expect(r.pendientes[0].porque).toMatch(/^Contacto con solo una negociación: ¿es cliente\?/)
     expect(r.pendientes[1].porque).toMatch(/^Contacto con empresa y con datos de cliente/)
     expect(r.pendientes[0].porque).toContain('de Bitrix24')
+  })
+
+  it('G01c (producción, 07/11: 115 → 116) · un NIF sin formato igual al de una empresa no «se une»: la unión no une por él', () => {
+    // Empresa 700 con NIF «123» (sin formato) y un contacto con el mismo: la lectura lo contaba como «se une» y quedaba cliente aparte.
+    const empresas = [{ idExterno: '700', nif: '123', situacion: 'activo' as const, tipoFicha: 'empresa' as const }]
+    const cs = [con({ ID: '6', UF_CRM_EJ_NIF: '123' }), con({ ID: '7', UF_CRM_EJ_NIF: 'B00000001' })]
+    const nifs = nifsQueUnen([...empresas.map((e) => e.nif), 'B00000001'], cs.map((c) => c.nif))
+    expect([...nifs]).toEqual(['B00000001'])
+    const r = repartirContactos(cs, nifs, 'Bitrix24')
+    expect(resumenDeContactos(cs, r, nifs)).toMatchObject({ clientes: 1, seUnenAEmpresa: 1 })
+    // Y lo que hace la unión con la empresa y el contacto del NIF sin formato: cada uno por su lado.
+    expect(agrupar([...empresas, cs[0] as FichaContacto], true).map((c) => c.clave)).toEqual(['ficha:empresa:700', 'ficha:contacto:6'])
+    // Un NIF en 10 fichas o más (contando los contactos) tampoco une.
+    expect([...nifsQueUnen(Array(9).fill('B00000002'), ['B00000002'])]).toEqual([])
   })
 
   it('cuántos hay de cada: los que se unen a una empresa, aparte de los clientes', () => {

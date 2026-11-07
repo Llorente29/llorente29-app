@@ -1,0 +1,14 @@
+# G01c · PR A de la clave neutra (Julio, 07/11): lo publicado deja de usar lo
+# de Bitrix24 en la base. Rama conta/g01c-crm-neutro-a. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar.
+#
+#   2310  Añade lo neutro que les falta a las funciones (conta_crm_secreto,
+#         conta_crm_guardar_conexion, _conta_crm_campo_sensible), amplía los
+#         CHECK de los tipos de «Pendiente de revisar» y del origen de las
+#         lecturas, y cambia en caliente confirmar el mapa (con su respaldo):
+#         vuelve a parar los campos que no se leen nunca.
+#
+# No lee ni escribe en el CRM. Nada en el camino del pedido. El real lo lanza
+# Julio. El PR B, después de publicar este, quita lo de antes.
+cuenta: scripts/conta/produccion/cuentas/g01c-crm-neutro-a.sql
+supabase/migrations/20261107T2310_g01c_crm_neutro_a.sql

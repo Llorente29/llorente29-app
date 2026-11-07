@@ -1,0 +1,5 @@
+# G01c · PR A de la clave neutra: la 2310 y su prueba (ROLLBACK, datos
+# inventados): campos que no se leen nunca, confirmar el mapa, la conexión con
+# el CRM en Vault, los tipos y el origen neutros, y la vuelta atrás.
+supabase/migrations/20261107T2310_g01c_crm_neutro_a.sql
+supabase/staging/sql/20261107_g01c_crm_neutro_a_prueba.sql

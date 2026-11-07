@@ -1,0 +1,8 @@
+{
+ "_que": "G01c · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 07/11 a las 22:15Z (analizar.mjs sql-contexto). La 2310 añade tres funciones nuevas, amplía los CHECK de conta_gestoria_diferencia (6.559 filas) y conta_gestoria_lectura (27) y cambia en caliente conta_crm_confirmar_mapa (misma firma, con su respaldo; la llama una persona). La conexión nueva escribe en Vault como la de antes. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-07T22:15Z",
+ "tanda": {
+  "supabase/migrations/20261107T2310_g01c_crm_neutro_a.sql": "ef15e3aa21579c8849dc5b33d8c656eb"
+ },
+ "contexto": {"tablas":["public.conta_gestoria_diferencia","public.conta_gestoria_lectura","vault.secrets"],"funciones":["public.conta_crm_confirmar_mapa(uuid,text,text,jsonb)"],"filas":{"public.conta_gestoria_diferencia":6559,"public.conta_gestoria_lectura":27,"vault.secrets":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

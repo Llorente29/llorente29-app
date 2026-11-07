@@ -14,7 +14,7 @@
 // Devuelve las frases de la lectura (regla 8: la confirmación lleva contenido).
 
 import type { SupabaseClient } from 'npm:@supabase/supabase-js@2'
-import { agrupar, diferenciasDeLectura, nifComoLaBase, paraGuardar, resumenDeUnion, type DiferenciaDeCrm, type ErrorAlGuardar } from './clientes.ts'
+import { agrupar, diferenciasDeLectura, nifsQueUnen, paraGuardar, resumenDeUnion, type DiferenciaDeCrm, type ErrorAlGuardar } from './clientes.ts'
 import { personaDeContacto, repartirContactos, resumenDeContactos, type ContactosLeidos, type Reparto } from './contactos.ts'
 import { claveDeFicha, nombreDelCrm, type FichaContactoCrm, type FichaCrm } from './ficha.ts'
 
@@ -36,7 +36,8 @@ export const TIPOS_DE_LA_LECTURA = ['fichas_repetidas', 'nif_no_valido', 'ficha_
 
 /** Las fichas que entran como clientes: las empresas y, con el mapa de contactos confirmado, los contactos que son clientes. */
 export function fichasDeClientes(l: LecturaDelCrm): { fichas: FichaCrm[]; reparto: Reparto | null; nifs: Set<string> } {
-  const nifs = new Set(l.empresas.map((f) => nifComoLaBase(f.nif)).filter((n): n is string => !!n))
+  // Solo los NIF por los que la unión de verdad une (clientes.ts · nifsQueUnen): lo mismo que hará agrupar.
+  const nifs = nifsQueUnen(l.empresas.map((f) => f.nif), (l.contactos?.contactos ?? []).map((c) => c.nif))
   if (!l.contactos) return { fichas: l.empresas, reparto: null, nifs }
   const reparto = repartirContactos(l.contactos.contactos, nifs, nombreDelCrm(l.crm))
   return { fichas: l.contactos.confirmado ? [...l.empresas, ...reparto.clientes] : l.empresas, reparto, nifs }

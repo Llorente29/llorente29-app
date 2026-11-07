@@ -95,7 +95,7 @@ describe('G01b · solo «activo» espera cobro', () => {
     const ficha = (claveFicha: string, situacion: 'activo' | 'baja' | 'moroso' | 'solo_renta' | 'sin_clasificar' | null) =>
       ({ claveFicha, nombre: `CLIENTE PRUEBA ${claveFicha}`, nif: null, correos: [], situacion, formaPago: null, emisorSegunCrm: null })
     const r = casar([ficha('1', 'activo'), ficha('2', 'moroso'), ficha('3', 'baja'), ficha('4', 'solo_renta'), ficha('5', 'sin_clasificar'), ficha('6', null)], [], () => '')
-    expect(r.diferencias.filter((d) => d.tipo === 'bitrix_sin_cobro').map((d) => [d.claveFicha, d.porque]))
+    expect(r.diferencias.filter((d) => d.tipo === 'crm_sin_cobro').map((d) => [d.claveFicha, d.porque]))
       .toEqual([['1', '«CLIENTE PRUEBA 1» está activo en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).']])
   })
 })

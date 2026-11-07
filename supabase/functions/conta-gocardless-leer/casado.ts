@@ -43,11 +43,11 @@ export interface Pareja {
 }
 
 export type TipoDiferencia =
-  | 'bitrix_sin_cobro'
+  | 'crm_sin_cobro'
   | 'gocardless_sin_ficha'
   | 'emisor_distinto'
-  | 'nif_repetido_en_bitrix'
-  | 'correo_repetido_en_bitrix'
+  | 'nif_repetido_en_crm'
+  | 'correo_repetido_en_crm'
   | 'nif_distinto'
 
 export interface Diferencia {
@@ -92,7 +92,7 @@ export function casar(
       else if (v.length > 1) {
         if (!avisadoNif.has(c.nif)) {
           avisadoNif.add(c.nif)
-          diferencias.push({ tipo: 'nif_repetido_en_bitrix', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
+          diferencias.push({ tipo: 'nif_repetido_en_crm', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
             porque: `El NIF ${c.nif} está en ${v.length} fichas de Bitrix24 (${v.map((x) => x.nombre).join(', ')}): no se sabe cuál es.` })
         }
         continue
@@ -104,7 +104,7 @@ export function casar(
       else if (v.length > 1) {
         if (!avisadoCorreo.has(c.correo)) {
           avisadoCorreo.add(c.correo)
-          diferencias.push({ tipo: 'correo_repetido_en_bitrix', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
+          diferencias.push({ tipo: 'correo_repetido_en_crm', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
             porque: `El correo ${c.correo} está en ${v.length} fichas de Bitrix24: no se sabe cuál es.` })
         }
         continue
@@ -136,7 +136,7 @@ export function casar(
   }).map((p) => p.claveFicha))
   for (const f of fichas) {
     if (!f.situacion || !SE_COBRA.includes(f.situacion) || conCobro.has(f.claveFicha)) continue
-    diferencias.push({ tipo: 'bitrix_sin_cobro', claveFicha: f.claveFicha, emisor: f.emisorSegunCrm, clienteGcId: null,
+    diferencias.push({ tipo: 'crm_sin_cobro', claveFicha: f.claveFicha, emisor: f.emisorSegunCrm, clienteGcId: null,
       porque: casadas.has(f.claveFicha)
         ? `«${f.nombre}» está activo en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.`
         : `«${f.nombre}» está activo en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).` })
