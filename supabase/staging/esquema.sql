@@ -34109,7 +34109,7 @@ begin
     raise exception 'Primero hay que confirmar el mapa en «Qué es cada campo».' using errcode = '22023';
   end if;
   v_union := jsonb_build_object('quien', v_quien, 'cuando', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
-  update public.conta_crm set mapa = mapa || jsonb_build_object('union', v_union), updated_at = now() where account_id = p_account and crm = p_crm;
+  update public.conta_crm set union_aplicada = v_union, mapa = mapa || jsonb_build_object('union', v_union), updated_at = now() where account_id = p_account and crm = p_crm;
   return jsonb_build_object('frase', format('Unión aplicada por %s: la próxima lectura une las fichas de %s con el mismo NIF en un solo cliente.',
     coalesce(v_quien, 'una persona de la cuenta'), v_nombre), 'union', v_union);
 end $$;
@@ -34188,7 +34188,9 @@ begin
   if cardinality(v_sin_op) > 0 then
     raise exception 'Falta decir qué es en Sumied: %.', array_to_string(v_sin_op, ', ') using errcode = '22023';
   end if;
-  v_mapa := (p_mapa - 'dudas') || jsonb_build_object('dudas', '[]'::jsonb, 'confirmado', jsonb_build_object('quien', v_quien, 'cuando', v_cuando));
+  -- G01c (07/11, 20:05 UTC) · La unión aplicada no es del mapa: confirmar el mapa no la quita (la que manda es conta_crm.union_aplicada).
+  v_mapa := (p_mapa - 'dudas' - 'union' - 'confirmado') || jsonb_build_object('dudas', '[]'::jsonb, 'confirmado', jsonb_build_object('quien', v_quien, 'cuando', v_cuando))
+    || case when v_b.union_aplicada is not null then jsonb_build_object('union', v_b.union_aplicada) else '{}'::jsonb end;
   update public.conta_crm set mapa = v_mapa, updated_at = now() where account_id = p_account and crm = p_crm;
   select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> '';
   v_frase := format('Mapa de %s confirmado por %s: %s campos y %s fuentes de la dirección. La situación se guarda desde la próxima lectura.',
@@ -103051,6 +103053,7 @@ CREATE TABLE public.conta_crm (
     empresas_leidas integer,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    union_aplicada jsonb,
     CONSTRAINT conta_crm_crm_check CHECK ((crm ~ '^[a-z0-9_]+$'::text)),
     CONSTRAINT conta_crm_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
 );
@@ -103103,6 +103106,13 @@ COMMENT ON COLUMN public.conta_crm.campos_medidos_contactos IS 'G01c · Los camp
 --
 
 COMMENT ON COLUMN public.conta_crm.contactos_leidos IS 'G01c · De la última lectura: cuántos contactos hay de cada (resumen) y cuáles se quedan fuera o van a «Pendiente de revisar», con su porqué (para «Ver cuáles»).';
+
+
+--
+-- Name: COLUMN conta_crm.union_aplicada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.union_aplicada IS 'G01c · La unión de las fichas aplicada (mismo NIF = un cliente): quién y cuándo. Fuera del mapa, para que confirmarlo no la quite. La lectura la lee de aquí.';
 
 
 --
