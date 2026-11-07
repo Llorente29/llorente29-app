@@ -10,8 +10,9 @@
 --   1. Aplicar la unión la deja en conta_crm.union_aplicada y en el mapa.
 --   2. Confirmar el mapa (con el que manda la pantalla, que no la lleva) la
 --      conserva en los dos sitios. Con la función de antes, se perdía.
---   3. La vuelta atrás: las dos funciones como antes, sin la columna, y la
---      unión en el mapa.
+--   3. La vuelta atrás deja todo como estaba: las dos funciones como antes,
+--      sin la columna; la unión repuesta por la tanda, fuera del mapa (antes
+--      no estaba), y la aplicada por una persona, en el mapa.
 --
 -- sin usuario: lo que no hace una persona (rellenar la columna) lo hace la migración; aplicar la unión y confirmar el mapa se prueban como la persona.
 
@@ -76,7 +77,10 @@ end $$;
 reset role;
 select set_config('request.jwt.claims', '', true);
 
--- 3 · La vuelta atrás.
+-- 3 · La vuelta atrás. Antes, otra conexión inventada como la de producción: la unión, repuesta por la tanda.
+insert into public.conta_crm (account_id, crm, entorno, mapa, union_aplicada)
+select cuenta, 'crm_prueba', 'pruebas', '{"campos":[],"union":{"quien":"PERSONA PRUEBA","cuando":"2026-11-07T13:02:31Z","repuesta":"x"}}'::jsonb,
+       '{"quien":"PERSONA PRUEBA","cuando":"2026-11-07T13:02:31Z","repuesta":"x"}'::jsonb from _u;
 \i supabase/vuelta-atras/20261107T2115_g01c_union_aplicada.down.sql
 do $$
 declare f record; a uuid := (select cuenta from _u);
@@ -89,9 +93,12 @@ begin
     raise exception 'PRUEBA G01c-U · 3: queda la columna.';
   end if;
   if (select mapa->'union'->>'cuando' from public.conta_crm where account_id = a and crm = 'bitrix24') is null then
-    raise exception 'PRUEBA G01c-U · 3: la vuelta atrás se lleva la unión del mapa.';
+    raise exception 'PRUEBA G01c-U · 3: la vuelta atrás se lleva del mapa la unión que aplicó una persona.';
   end if;
-  raise notice 'G01c-U · 3: la vuelta atrás deja las funciones como antes y la unión en el mapa. OK';
+  if (select mapa ? 'union' from public.conta_crm where account_id = a and crm = 'crm_prueba') then
+    raise exception 'PRUEBA G01c-U · 3: la vuelta atrás deja en el mapa la unión que repuso la tanda (antes no estaba).';
+  end if;
+  raise notice 'G01c-U · 3: la vuelta atrás deja las funciones como antes, quita la unión repuesta y deja la de una persona. OK';
 end $$;
 
 rollback;

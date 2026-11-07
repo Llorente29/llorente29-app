@@ -2,7 +2,7 @@
 --
 -- G01c · La unión aplicada · LO QUE CUENTA LA TANDA, antes y después. SOLO
 -- LEE. La misma vara a los dos lados (regla 31). Medido antes el 07/11. Lo que
--- tiene que pasar con la tanda (y la vuelta atrás la deja en el mapa):
+-- tiene que pasar con la tanda (y volver con su vuelta atrás):
 --   1. Conexiones con un CRM de antes del 07/11 19:00 UTC: 1 → 1.
 --   2. Conexiones con la unión aplicada en el mapa: 0 → 1 (la repuesta).
 select clave, valor from (

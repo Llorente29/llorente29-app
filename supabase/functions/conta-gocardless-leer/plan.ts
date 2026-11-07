@@ -71,7 +71,9 @@ export interface PlanLectura {
   noConvertidas: (NoConvertida & { partyId: string | null; importeCent: number | null })[]
   resumen: { mandatosVivos: number; lineasActivas: number; alMesCent: number; abono: CuentaAbonoGc | null
     /** G01b · Clientes de Sumied con más de un cliente en esta cuenta de GoCardless (para la forma de cobro se usa uno). */
-    clientesConVariosEnGc: number }
+    clientesConVariosEnGc: number
+    /** G01c (Julio, 07/11) · Suscripciones activas que siguen sin línea porque su cliente de GoCardless no está casado con ningún cliente de Sumied. */
+    sinCasar: number }
 }
 
 export function planLectura(empresa: string, cuenta: string, datos: DatosGc, antes: Antes, hoy: string, nombreEmisor: (id: string) => string): PlanLectura {
@@ -176,6 +178,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
       alMesCent: activas.filter((x) => x.moneda === 'EUR').reduce((t, x) => t + (alMesCent(x) ?? 0), 0),
       abono: datos.abonos[0] ?? null,
       clientesConVariosEnGc,
+      sinCasar: activas.filter((x) => !antes.importadas.has(x.id) && !porImportar.includes(x)).length,
     },
   }
 }
@@ -243,6 +246,10 @@ export function planDiferencias(
 export function fraseDeLectura(emisor: string, plan: PlanLectura, convertidas: number, conDiferencias: number, conectada = false): string {
   return `${conectada ? 'Conectada' : 'Leída'} la cuenta de GoCardless de ${emisor}: ${plan.resumen.mandatosVivos} mandatos activos y ${plan.resumen.lineasActivas} líneas leídas` +
     ` (${euros(plan.resumen.alMesCent)} al mes). ${convertidas} convertidas en línea, ${plan.noConvertidas.length} sin convertir; ${conDiferencias} con diferencias.` +
+    // G01c (Julio, 07/11) · Las que esperan a casar no son «0 sin convertir»: se dicen (regla 7).
+    (plan.resumen.sinCasar
+      ? ` ${plan.resumen.sinCasar} ${plan.resumen.sinCasar === 1 ? 'suscripción activa sigue' : 'suscripciones activas siguen'} sin línea porque su cliente de GoCardless no está casado con ningún cliente de Sumied (salen en «En GoCardless sin ficha en tu CRM»).`
+      : '') +
     (plan.resumen.clientesConVariosEnGc
       ? ` ${plan.resumen.clientesConVariosEnGc} ${plan.resumen.clientesConVariosEnGc === 1 ? 'cliente de Sumied tiene' : 'clientes de Sumied tienen'} más de un cliente en esta cuenta de GoCardless: para la forma de cobro se usa el enlazado a mano o, si no, el de más mandatos activos.`
       : '')
