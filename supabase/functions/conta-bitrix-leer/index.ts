@@ -53,19 +53,24 @@ async function gocardlessDe(db: SupabaseClient, cuenta: string) {
   return gocardless
 }
 
-/** G01c · El mapa de contactos guardado (confirmado o no) de la conexión con Bitrix24. */
-async function mapaContactosDe(db: SupabaseClient, cuenta: string): Promise<MapaContactos | null> {
-  const { data, error } = await db.from('conta_crm').select('mapa_contactos').eq('account_id', cuenta).eq('crm', CRM).maybeSingle()
-  if (error) throw new Error(`No se ha podido leer el mapa de contactos: ${error.message}`)
-  return ((data as { mapa_contactos?: MapaContactos | null } | null)?.mapa_contactos) ?? null
+/**
+ * G01c · De la conexión con Bitrix24 en conta_crm: el mapa de contactos
+ * guardado (confirmado o no) y la unión aplicada. La unión se lee de su
+ * columna, no del mapa: confirmar el mapa la quitaba (07/11, 20:05 UTC).
+ */
+async function deLaConexion(db: SupabaseClient, cuenta: string): Promise<{ mapaContactos: MapaContactos | null; unionAplicada: boolean }> {
+  const { data, error } = await db.from('conta_crm').select('mapa_contactos, union_aplicada').eq('account_id', cuenta).eq('crm', CRM).maybeSingle()
+  if (error) throw new Error(`No se ha podido leer la conexión con el CRM: ${error.message}`)
+  const d = data as { mapa_contactos?: MapaContactos | null; union_aplicada?: unknown } | null
+  return { mapaContactos: d?.mapa_contactos ?? null, unionAplicada: !!d?.union_aplicada }
 }
 
 /** G01c · Lo que lee el adaptador de Bitrix24: las empresas y los contactos, a fichas neutras. */
 async function leerDeBitrix(db: SupabaseClient, cuenta: string, url: string, mapa: MapaBitrix) {
   const { fichas, bloqueados } = await leerFichas(fetch, url, mapa, esperar)
-  const guardado = await mapaContactosDe(db, cuenta)
+  const { mapaContactos: guardado, unionAplicada } = await deLaConexion(db, cuenta)
   const c = await leerContactos(fetch, url, guardado, esperar, await gocardlessDe(db, cuenta))
-  const lectura: LecturaDelCrm = { crm: CRM, empresas: fichas, unir: !!mapa.union,
+  const lectura: LecturaDelCrm = { crm: CRM, empresas: fichas, unir: unionAplicada,
     contactos: c.mapa ? { contactos: c.contactos, confirmado: !!guardado?.confirmado } : null }
   return { lectura, bloqueados, medidosContactos: c.medidos }
 }
@@ -159,7 +164,8 @@ Deno.serve(async (req) => {
       const sit = s.mapa?.confirmado ? s.mapa.campos.find((c) => c.campo === 'situacion' && c.codigo === grupos.situacion)?.opciones ?? null : null
       // G01c · Los clientes de GoCardless ya leídos en Sumied (NIF y correo), para contar los contactos casados con uno. No salen del recuento.
       const gocardless = grupos.contactos ? await gocardlessDe(admin, cuenta) : { nifs: new Set<string>(), correos: new Set<string>() }
-      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar, sit, gocardless)) })
+      const { mapaContactos } = grupos.contactos ? await deLaConexion(admin, cuenta) : { mapaContactos: null }
+      return json(200, { ok: true, entorno: s.entorno, portal: portalDe(s.url), ...(await leerParaRecuento(fetch, s.url, grupos, esperar, sit, gocardless, mapaContactos)) })
     } catch (e) {
       console.error('[conta-bitrix-leer] recuento', e instanceof Error ? e.message : String(e))
       return json(500, { error: e instanceof Error ? e.message : 'No se ha podido contar.' })
@@ -228,7 +234,7 @@ Deno.serve(async (req) => {
       }
       const { data: acc } = await admin.from('accounts').select('name').eq('id', cuenta).single()
       return json(200, { ok: true, empresa: (acc as { name?: string } | null)?.name ?? 'La cuenta', portal: portalDe(s.url), leido: new Date().toISOString(),
-        aplicada: !!s.mapa.union, ...ensayoDeUnion(fichas, clienteDeFicha) })
+        aplicada: leido.unir, ...ensayoDeUnion(fichas, clienteDeFicha) })
     }
     if (cuerpo.accion === 'leer') {
       const res = await leer(admin, cuenta, esCron ? 'cada_noche' : 'persona', quien)

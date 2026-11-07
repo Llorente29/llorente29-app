@@ -9,6 +9,7 @@ import { ESPERA_MS, camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, 
 import { camposDelRecuento, camposSensiblesDe, contar, type GruposRecuento } from './recuento.ts'
 import { nifComoLaBase } from '../_shared/crm/clientes.ts'
 import type { FichaContactoCrm } from '../_shared/crm/ficha.ts'
+import { repartirContactos, resumenDeContactos, type ResumenContactos } from '../_shared/crm/contactos.ts'
 import { esCampoSensible } from './sensibles.ts'
 import { camposDeContactoQueSePiden, leerContacto, mapaContactosDe, propuestaContactos, type MapaContactos } from './contactosClientes.ts'
 import { camposDeContactos, contactosDeNegociaciones, contarContactos, empresasDeItems, estadosAPedir, paginaDeItems } from './contactos.ts'
@@ -65,7 +66,7 @@ export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, es
  * portal no tiene alguno de los campos, para y lo dice.
  */
 export async function leerParaRecuento(pedir: Pedir, url: string, grupos: GruposRecuento, esperar: (ms: number) => Promise<void>, opcionesConfirmadas?: Record<string, string> | null,
-  gocardless: { nifs: ReadonlySet<string>; correos: ReadonlySet<string> } = { nifs: new Set(), correos: new Set() }) {
+  gocardless: { nifs: ReadonlySet<string>; correos: ReadonlySet<string> } = { nifs: new Set(), correos: new Set() }, mapaContactos: MapaContactos | null = null) {
   const medidos = await medirCampos(pedir, url)
   const select = camposDelRecuento(grupos)
   const faltan = select.filter((c) => c !== 'ID' && !medidos[c])
@@ -81,7 +82,11 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
   const otra = async <T>(f: () => Promise<T>) => { await esperar(ESPERA_MS); peticiones++; return f() }
   const deContacto = await otra(() => medirCampos(pedir, url, 'contact'))
   await esperar(ESPERA_MS)
-  const rc = await leerTodas((start) => llamar(pedir, url, 'crm.contact.list', { select: camposDeContactos(deContacto), order: { ID: 'ASC' }, start }), esperar)
+  // G01c · Con los campos del mapa con el que lee la lectura, para contar el reparto con su misma regla.
+  const conElQueSeLee = mapaConElQueSeLee(deContacto, mapaContactos)
+  const pedidos = [...new Set([...camposDeContactos(deContacto), ...(conElQueSeLee ? camposDeContactoQueSePiden(conElQueSeLee) : [])])]
+    .filter((c) => c === 'ID' || (deContacto[c] && !esCampoSensible(deContacto[c], c)))
+  const rc = await leerTodas((start) => llamar(pedir, url, 'crm.contact.list', { select: pedidos, order: { ID: 'ASC' }, start }), esperar)
   peticiones += rc.peticiones
   // El enlace con la empresa: crm.contact.list no trae COMPANY_IDS (documentación oficial); crm.item.list sí (companyIds).
   await esperar(ESPERA_MS)
@@ -99,10 +104,28 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
   }
   const nifDeEmpresa = new Map<string, string>()
   if (grupos.repetidos) for (const f of r.filas) { const n = nifComoLaBase(f[grupos.repetidos.nif]); if (n) nifDeEmpresa.set(String(f.ID), n) }
-  const contactos = contarContactos(rc.filas, deContacto, {
-    empresasDe: empresasDeItems(ri.filas), conNegociacion: contactosDeNegociaciones(rn.filas), nifDeEmpresa, gocardless, estados,
-  })
-  return { ...base, contactos, peticiones }
+  const empresasDe = empresasDeItems(ri.filas)
+  const conNegociacion = contactosDeNegociaciones(rn.filas)
+  const contactos = contarContactos(rc.filas, deContacto, { empresasDe, conNegociacion, nifDeEmpresa, gocardless, estados })
+  // G01c (Julio, 07/11) · Y el reparto con la regla de la lectura (_shared/crm/contactos.ts · repartirContactos): los mismos números.
+  let reparto: ResumenContactos | null = null
+  if (conElQueSeLee) {
+    const fichas = rc.filas.map((f) => leerContacto(f, conElQueSeLee, { empresas: empresasDe.get(String(f.ID)) ?? [], conNegociacion: conNegociacion.has(String(f.ID)), gocardless }))
+    const nifs = new Set(nifDeEmpresa.values())
+    reparto = resumenDeContactos(fichas, repartirContactos(fichas, nifs, 'Bitrix24'), nifs)
+  }
+  return { ...base, contactos: { ...contactos, reparto }, peticiones }
+}
+
+/**
+ * G01c · El mapa de contactos con el que se leen (y se cuentan): el confirmado
+ * o, sin confirmar, el que se propone. Lo usan la lectura y el recuento, así
+ * los dos dicen lo mismo. Null si no hay nada que leer.
+ */
+export function mapaConElQueSeLee(medidos: Record<string, CampoMedido>, guardado: MapaContactos | null): MapaContactos | null {
+  const base = guardado?.confirmado ? guardado
+    : mapaContactosDe(propuestaContactos(medidos, guardado ? { nif: guardado.nif, direccion: guardado.direccion?.calle ?? null, cuota: guardado.cuota, tipoCliente: guardado.tipoCliente } : null), medidos)
+  return base.nif || base.direccion || base.cuota ? base : null
 }
 
 /**
@@ -120,8 +143,8 @@ export async function leerContactos(pedir: Pedir, url: string, guardado: MapaCon
   let peticiones = 0
   const otra = async <T>(f: () => Promise<T>) => { await esperar(ESPERA_MS); peticiones++; return f() }
   const medidos = await otra(() => medirCampos(pedir, url, 'contact'))
-  const base = guardado?.confirmado ? guardado : mapaContactosDe(propuestaContactos(medidos, guardado ? { nif: guardado.nif, direccion: guardado.direccion?.calle ?? null, cuota: guardado.cuota, tipoCliente: guardado.tipoCliente } : null), medidos)
-  if (!base.nif && !base.direccion && !base.cuota) return { medidos, mapa: null, contactos: [], peticiones }
+  const base = mapaConElQueSeLee(medidos, guardado)
+  if (!base) return { medidos, mapa: null, contactos: [], peticiones }
   // Un campo con una contraseña, un certificado o el IBAN no se pide nunca, aunque esté en el mapa por error.
   const select = camposDeContactoQueSePiden(base).filter((c) => c === 'ID' || (medidos[c] && !esCampoSensible(medidos[c], c)))
   await esperar(ESPERA_MS)

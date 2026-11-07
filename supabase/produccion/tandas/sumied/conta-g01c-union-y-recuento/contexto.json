@@ -1,0 +1,8 @@
+{
+ "_que": "G01c · Asesoría QBO · contexto de producción, medido en SOLO LECTURA el 07/11 a las 20:25Z (analizar.mjs sql-contexto). La 2115 añade una columna a conta_crm (1 fila), la rellena y cambia en caliente conta_crm_aplicar_union y conta_crm_confirmar_mapa (misma firma, con su respaldo; las llama una persona desde Ajustes). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-07T20:25Z",
+ "tanda": {
+  "supabase/migrations/20261107T2115_g01c_union_aplicada.sql": "279a8d6b5e0e4684cedc2ef723b67002"
+ },
+ "contexto": {"tablas":["public.conta_crm"],"funciones":["public.conta_crm_aplicar_union(uuid,text)","public.conta_crm_confirmar_mapa(uuid,text,text,jsonb)"],"filas":{"public.conta_crm":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
