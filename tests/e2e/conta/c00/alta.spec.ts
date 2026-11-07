@@ -229,6 +229,9 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
 // empresa y sin ser asesoría).
 test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → asesoría, y al terminar, «Impuestos de tus clientes»', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe: basta un tamaño')
+  // G03: con la pregunta del sector, el alta entera (y su último paso, que espera hasta 45 s) no cabe en los 60 s
+  // de serie: la e2e 42418931805 se cortó a 1,0 min sin ningún fallo de la página ni de la base.
+  test.setTimeout(120_000)
   const s = await entrarComo(page, CUENTA_C.email)
   await borrarEmpresas(s, CUENTA_C.id, true)
   const desmarcar = () => rest(s, 'POST', 'rpc/conta_despacho_marcar', { p_account: CUENTA_C.id, p_es: false })
