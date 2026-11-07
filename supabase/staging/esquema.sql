@@ -4343,6 +4343,71 @@ $$;
 
 
 --
+-- Name: _conta_crm_a_bitrix(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_crm_a_bitrix() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if pg_trigger_depth() > 1 then return null; end if;
+  if tg_op = 'DELETE' then
+    if old.crm = 'bitrix24' then delete from public.conta_crm_bitrix where account_id = old.account_id; end if;
+    return null;
+  end if;
+  if new.crm <> 'bitrix24' then return null; end if;
+  insert into public.conta_crm_bitrix (account_id, entorno, url_ref, portal, mapa, campos_medidos, conectada_at, conectada_por_name, ultima_lectura_at, empresas_leidas, created_at, updated_at)
+  values (new.account_id, new.entorno, new.url_ref, new.portal, new.mapa, new.campos_medidos, new.conectada_at, new.conectada_por_name, new.ultima_lectura_at, new.empresas_leidas,
+          new.created_at, new.updated_at)
+  on conflict (account_id) do update set entorno = excluded.entorno, url_ref = excluded.url_ref, portal = excluded.portal, mapa = excluded.mapa,
+    campos_medidos = excluded.campos_medidos, conectada_at = excluded.conectada_at, conectada_por_name = excluded.conectada_por_name,
+    ultima_lectura_at = excluded.ultima_lectura_at, empresas_leidas = excluded.empresas_leidas, updated_at = excluded.updated_at;
+  return null;
+end $$;
+
+
+--
+-- Name: _conta_crm_desde_bitrix(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_crm_desde_bitrix() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  if pg_trigger_depth() > 1 then return null; end if;
+  if tg_op = 'DELETE' then delete from public.conta_crm where account_id = old.account_id and crm = 'bitrix24'; return null; end if;
+  insert into public.conta_crm (account_id, crm, entorno, url_ref, portal, mapa, campos_medidos, conectada_at, conectada_por_name, ultima_lectura_at, empresas_leidas, created_at, updated_at)
+  values (new.account_id, 'bitrix24', new.entorno, new.url_ref, new.portal, new.mapa, new.campos_medidos, new.conectada_at, new.conectada_por_name, new.ultima_lectura_at,
+          new.empresas_leidas, new.created_at, new.updated_at)
+  on conflict (account_id, crm) do update set entorno = excluded.entorno, url_ref = excluded.url_ref, portal = excluded.portal, mapa = excluded.mapa,
+    campos_medidos = excluded.campos_medidos, conectada_at = excluded.conectada_at, conectada_por_name = excluded.conectada_por_name,
+    ultima_lectura_at = excluded.ultima_lectura_at, empresas_leidas = excluded.empresas_leidas, updated_at = excluded.updated_at;
+  return null;
+end $$;
+
+
+--
+-- Name: _conta_crm_nombre(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_crm_nombre(p_crm text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case p_crm when 'bitrix24' then 'Bitrix24' else p_crm end
+$$;
+
+
+--
+-- Name: FUNCTION _conta_crm_nombre(p_crm text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_crm_nombre(p_crm text) IS 'G01c · El nombre de un CRM para las frases («bitrix24» → «Bitrix24»).';
+
+
+--
 -- Name: _conta_cuenta_aprendida(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -31622,31 +31687,18 @@ COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada ho
 --
 
 CREATE FUNCTION public.conta_bitrix_aplicar_union(p_account uuid) RETURNS jsonb
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_b public.conta_crm_bitrix; v_quien text := public.conta_nombre_actor(); v_union jsonb;
-begin
-  if not public.current_user_is_admin_or_manager_of(p_account) then
-    raise exception 'Solo un administrador o un encargado de la cuenta aplica la unión de las fichas de Bitrix24.' using errcode = '42501';
-  end if;
-  select * into v_b from public.conta_crm_bitrix where account_id = p_account for update;
-  if v_b.account_id is null then raise exception 'Esta cuenta no tiene conectado Bitrix24.' using errcode = 'P0002'; end if;
-  if v_b.mapa->'confirmado' is null or v_b.mapa->'confirmado' = 'null'::jsonb then
-    raise exception 'Primero hay que confirmar el mapa en «Qué es cada campo».' using errcode = '22023';
-  end if;
-  v_union := jsonb_build_object('quien', v_quien, 'cuando', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
-  update public.conta_crm_bitrix set mapa = mapa || jsonb_build_object('union', v_union), updated_at = now() where account_id = p_account;
-  return jsonb_build_object('frase', format('Unión aplicada por %s: la próxima lectura une las fichas de Bitrix24 con el mismo NIF en un solo cliente.',
-    coalesce(v_quien, 'una persona de la cuenta')), 'union', v_union);
-end $$;
+  select public.conta_crm_aplicar_union(p_account, 'bitrix24')
+$$;
 
 
 --
 -- Name: FUNCTION conta_bitrix_aplicar_union(p_account uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_bitrix_aplicar_union(p_account uuid) IS 'G01b · Aplica la unión de las fichas repetidas de Bitrix24 (mismo NIF = un cliente), después de ver el ensayo en PDF. Sin aplicar, la lectura no une nada.';
+COMMENT ON FUNCTION public.conta_bitrix_aplicar_union(p_account uuid) IS 'G01c · De paso, mientras dura el cambio: conta_crm_aplicar_union con «bitrix24». La quita la tanda siguiente.';
 
 
 --
@@ -31654,78 +31706,18 @@ COMMENT ON FUNCTION public.conta_bitrix_aplicar_union(p_account uuid) IS 'G01b �
 --
 
 CREATE FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) RETURNS jsonb
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_b public.conta_crm_bitrix; v_c jsonb; v_cod text; v_faltan text[] := '{}'; v_sit jsonb; v_it jsonb; v_op text;
-        v_sin_op text[] := '{}'; v_quien text := public.conta_nombre_actor(); v_mapa jsonb; v_n int; v_frase text;
-        v_validas constant text[] := array['activo', 'baja', 'moroso', 'solo_renta', 'sin_clasificar'];
-begin
-  if not public.current_user_is_admin_or_manager_of(p_account) then
-    raise exception 'Solo un administrador o un encargado de la cuenta confirma el mapa de Bitrix24.' using errcode = '42501';
-  end if;
-  select * into v_b from public.conta_crm_bitrix where account_id = p_account for update;
-  if v_b.account_id is null then raise exception 'Esta cuenta no tiene conectado Bitrix24.' using errcode = 'P0002'; end if;
-  if v_b.campos_medidos is null then raise exception 'Faltan los campos medidos del portal: vuelve a conectar Bitrix24.' using errcode = 'P0002'; end if;
-  if jsonb_typeof(p_mapa) is distinct from 'object' or jsonb_typeof(p_mapa->'campos') is distinct from 'array' then
-    raise exception 'El mapa no trae sus campos.' using errcode = '22023';
-  end if;
-
-  -- Cada código del mapa (campos y fuentes de la dirección) tiene que existir en lo medido del portal.
-  for v_cod in
-    select c->>'codigo' from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> ''
-    union all
-    select x from jsonb_array_elements(coalesce(p_mapa->'direcciones', '[]'::jsonb)) d,
-           lateral (values (d->>'calle'), (d->>'cp'), (d->>'poblacion'), (d->>'provincia')) v(x) where coalesce(x, '') <> ''
-  loop
-    if not (v_b.campos_medidos ? v_cod) then v_faltan := v_faltan || v_cod; end if;
-  end loop;
-  if cardinality(v_faltan) > 0 then
-    raise exception 'Este Bitrix24 no tiene estos campos: %.', array_to_string(v_faltan, ', ') using errcode = '22023';
-  end if;
-
-  -- G01b · Un campo con una contraseña o un certificado no se lee nunca, aunque se elija por error (por su tipo o su etiqueta).
-  select coalesce(array_agg(x order by x), '{}') into v_faltan from (
-    select distinct coalesce(nullif(trim(m->>'formLabel'), ''), nullif(trim(m->>'listLabel'), ''), m->>'title', k) x
-      from jsonb_each(v_b.campos_medidos) e(k, m)
-     where k in (select c->>'codigo' from jsonb_array_elements(p_mapa->'campos') c
-                 union all
-                 select y from jsonb_array_elements(coalesce(p_mapa->'direcciones', '[]'::jsonb)) d,
-                   lateral (values (d->>'calle'), (d->>'cp'), (d->>'poblacion'), (d->>'provincia')) v(y))
-       and public._conta_bitrix_campo_sensible(m)) s;
-  if cardinality(v_faltan) > 0 then
-    raise exception 'Estos campos guardan contraseñas o certificados y no se leen nunca: %.', array_to_string(v_faltan, ', ') using errcode = '22023';
-  end if;
-
-  -- La situación: un solo campo, y cada opción suya dice qué es en Sumied.
-  select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
-  if v_n <> 1 then raise exception 'Falta decir qué campo de Bitrix24 es la situación del cliente.' using errcode = '22023'; end if;
-  select c into v_sit from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
-  for v_it in select * from jsonb_array_elements(coalesce(v_b.campos_medidos->(v_sit->>'codigo')->'items', '[]'::jsonb)) loop
-    v_op := v_sit->'opciones'->>(v_it->>'ID');
-    if v_op is null or not (v_op = any (v_validas)) then v_sin_op := v_sin_op || (v_it->>'VALUE'); end if;
-  end loop;
-  if cardinality(v_sin_op) > 0 then
-    raise exception 'Falta decir qué es en Sumied: %.', array_to_string(v_sin_op, ', ') using errcode = '22023';
-  end if;
-
-  -- G01b · La unión aplicada se conserva al volver a confirmar.
-  v_mapa := (p_mapa - 'dudas' - 'union') || jsonb_build_object('union', v_b.mapa->'union') || jsonb_build_object('dudas', '[]'::jsonb,
-    'confirmado', jsonb_build_object('quien', v_quien, 'cuando', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')));
-  update public.conta_crm_bitrix set mapa = v_mapa, updated_at = now() where account_id = p_account;
-
-  select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> '';
-  v_frase := format('Mapa de Bitrix24 confirmado por %s: %s campos y %s fuentes de la dirección. La situación se guarda desde la próxima lectura.',
-    coalesce(v_quien, 'una persona de la cuenta'), v_n, jsonb_array_length(coalesce(p_mapa->'direcciones', '[]'::jsonb)));
-  return jsonb_build_object('frase', v_frase, 'confirmado', v_mapa->'confirmado');
-end $$;
+  select public.conta_crm_confirmar_mapa(p_account, 'bitrix24', 'empresa', p_mapa)
+$$;
 
 
 --
 -- Name: FUNCTION conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) IS 'G01b · «Qué es cada campo»: una persona administradora o encargada confirma el mapa de Bitrix24 de la cuenta (con quién y cuándo). Sin confirmar, la lectura no guarda la situación de nadie.';
+COMMENT ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa jsonb) IS 'G01c · De paso, mientras dura el cambio: conta_crm_confirmar_mapa con «bitrix24» y las empresas. La quita la tanda siguiente.';
 
 
 --
@@ -31733,108 +31725,18 @@ COMMENT ON FUNCTION public.conta_bitrix_confirmar_mapa(p_account uuid, p_mapa js
 --
 
 CREATE FUNCTION public.conta_bitrix_guardar_clientes(p_account uuid, p_clientes jsonb) RETURNS jsonb
-    LANGUAGE plpgsql SECURITY DEFINER
+    LANGUAGE sql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare c jsonb; f jsonb; v_p jsonb; v_ids text[]; v_partes uuid[]; v_party uuid; v_huella text; v_antes text; v_nif text; v_nif_bitrix text;
-        v_motivo text; v_otro uuid; v_juntados int := 0; v_nuevos int := 0; v_cambiados int := 0; v_iguales int := 0; v_errores jsonb := '[]'::jsonb; v_otras jsonb; v_porque text;
-begin
-  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
-  for c in select * from jsonb_array_elements(coalesce(p_clientes, '[]'::jsonb)) loop
-    v_p := c->'principal';
-    v_ids := array(select x->>'bitrixId' from jsonb_array_elements(coalesce(c->'fichas', '[]'::jsonb)) x where coalesce(x->>'bitrixId', '') <> '');
-    if coalesce(v_p->>'bitrixId', '') = '' or cardinality(v_ids) = 0 then continue; end if;
-    begin
-      v_huella := md5(c::text);
-      v_motivo := nullif(c->>'motivo', '');
-      v_nif := nullif(public.party_nif(nullif(c->>'nif', '')), '');
-      v_nif_bitrix := nullif(public.party_nif(nullif(v_p->>'nif', '')), '');
-      -- El cliente: el de sus fichas (si ya estaban) o, si no, el de su NIF.
-      select coalesce(array_agg(distinct x.party_id), '{}') into v_partes from (
-        select party_id from public.conta_gestoria_ficha where account_id = p_account and bitrix_id = any(v_ids)
-        union select party_id from public.conta_gestoria_cliente where account_id = p_account and bitrix_id = any(v_ids)) x;
-      if cardinality(v_partes) > 1 then
-        -- G01b (07/11) · Sin la unión aplicada, no se junta nada.
-        if c->>'clave' not like 'nif:%' then
-          raise exception 'sus % fichas de Bitrix24 ya son % clientes distintos en Sumied', cardinality(v_ids), cardinality(v_partes) using errcode = 'P0001';
-        end if;
-        -- Con ella, los clientes ya creados por separado se juntan en uno: el que ya tenía la ficha principal; si no, el que
-        -- más tiene colgado de la gestoría (líneas, mandatos, GoCardless); si no, el más antiguo. Los otros, retirados.
-        select x into v_party from unnest(v_partes) x
-         order by (exists (select 1 from public.conta_gestoria_cliente g where g.party_id = x and g.bitrix_id = v_p->>'bitrixId'))::int desc,
-                  ((select count(*) from public.conta_linea l where l.party_id = x) + (select count(*) from public.conta_mandato m where m.party_id = x)
-                   + (select count(*) from public.conta_gc_cliente k where k.party_id = x)) desc,
-                  (select p.created_at from public.party p where p.id = x), x
-         limit 1;
-        foreach v_otro in array v_partes loop
-          if v_otro <> v_party then
-            perform public._conta_gestoria_juntar(p_account, v_party, v_otro, 'el mismo NIF en Bitrix24 (fichas ' || array_to_string(v_ids, ', ') || ')');
-            v_juntados := v_juntados + 1;
-          end if;
-        end loop;
-        v_partes := array[v_party];
-      end if;
-      v_party := v_partes[1];
-      -- Por su NIF, solo con la unión aplicada (clave «nif:…»): sin aplicar no se une nada, ni a escondidas.
-      if v_party is null and v_nif is not null and c->>'clave' like 'nif:%' then
-        select id into v_party from public.party where account_id = p_account and tax_id = v_nif;
-        if exists (select 1 from public.conta_gestoria_cliente g where g.party_id = v_party and g.bitrix_id <> all(v_ids)) then
-          raise exception 'su NIF ya es de otro cliente de Sumied, con otra ficha de Bitrix24' using errcode = 'P0001';
-        end if;
-      end if;
-      select g.huella into v_antes from public.conta_gestoria_cliente g where g.party_id = v_party;
-      if v_party is null then
-        insert into public.party (account_id, name, tax_id, source, created_by_name)
-        values (p_account, coalesce(nullif(trim(v_p->>'nombre'), ''), 'Empresa ' || (v_p->>'bitrixId') || ' de Bitrix24'), v_nif, 'crm', 'Bitrix24')
-        returning id into v_party;
-        v_nuevos := v_nuevos + 1;
-      elsif v_antes is distinct from v_huella then
-        -- Un NIF que no se usa (sin formato o en 10 fichas o más) se quita si era el que se le puso antes.
-        update public.party set name = coalesce(nullif(trim(v_p->>'nombre'), ''), name),
-               tax_id = case when v_motivo in ('nif_no_valido', 'nif_en_muchas') and tax_id is not distinct from v_nif_bitrix then null else coalesce(v_nif, tax_id) end,
-               updated_at = now()
-         where id = v_party and account_id = p_account;
-        v_cambiados := v_cambiados + 1;
-      else
-        v_iguales := v_iguales + 1;
-        update public.conta_gestoria_cliente set leido_at = now() where party_id = v_party;
-        update public.conta_gestoria_ficha set leido_at = now() where account_id = p_account and bitrix_id = any(v_ids);
-        continue;
-      end if;
-      insert into public.customer_fiscal (party_id, account_id, legal_name, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province)
-      values (v_party, p_account, nullif(trim(v_p->>'nombre'), ''), nullif(v_p->>'calle', ''), nullif(v_p->>'cp', ''), nullif(v_p->>'poblacion', ''), nullif(v_p->>'provincia', ''))
-      on conflict (party_id) do update set legal_name = coalesce(excluded.legal_name, customer_fiscal.legal_name),
-        fiscal_street = excluded.fiscal_street, fiscal_postal_code = excluded.fiscal_postal_code, fiscal_city = excluded.fiscal_city,
-        fiscal_province = excluded.fiscal_province, updated_at = now();
-      -- Las otras fichas del cliente, para la ficha («Lo que dice Bitrix24»).
-      select coalesce(jsonb_agg(jsonb_build_object('bitrixId', x->>'bitrixId', 'nombre', x->>'nombre', 'situacion', x->'situacion', 'situacionTexto', x->'situacionTexto')), '[]'::jsonb)
-        into v_otras from jsonb_array_elements(c->'fichas') x where x->>'bitrixId' <> v_p->>'bitrixId';
-      insert into public.conta_gestoria_cliente (party_id, account_id, bitrix_id, situacion, servicios, forma_pago_bitrix, emisor_segun_bitrix, ficha, huella, leido_at)
-      values (v_party, p_account, v_p->>'bitrixId', nullif(c->>'situacion', ''),
-              coalesce(array(select jsonb_array_elements_text(v_p->'servicios')), '{}'), nullif(v_p->>'formaPago', ''),
-              (select id from public.company where id::text = v_p->>'emisorSegunBitrix' and account_id = p_account),
-              v_p || jsonb_build_object('otrasFichas', v_otras, 'motivo', v_motivo), v_huella, now())
-      on conflict (party_id) do update set bitrix_id = excluded.bitrix_id, situacion = excluded.situacion, servicios = excluded.servicios,
-        forma_pago_bitrix = excluded.forma_pago_bitrix, emisor_segun_bitrix = excluded.emisor_segun_bitrix, ficha = excluded.ficha,
-        huella = excluded.huella, leido_at = now();
-      for f in select * from jsonb_array_elements(c->'fichas') loop
-        insert into public.conta_gestoria_ficha (account_id, bitrix_id, party_id, situacion, ficha, huella, leido_at)
-        values (p_account, f->>'bitrixId', v_party, nullif(f->>'situacion', ''), f, md5(f::text), now())
-        on conflict (account_id, bitrix_id) do update set party_id = excluded.party_id, situacion = excluded.situacion,
-          ficha = excluded.ficha, huella = excluded.huella, leido_at = now();
-      end loop;
-      -- Una ficha que ya no es de este cliente deja de colgar de él (la recoge el suyo).
-      delete from public.conta_gestoria_ficha where account_id = p_account and party_id = v_party and bitrix_id <> all(v_ids);
-    exception when others then
-      v_porque := case when sqlstate = '23505' and sqlerrm like '%ux_party_nif%' then 'su NIF ya es de otro cliente de Sumied'
-                       when sqlstate = '23505' then 'choca con otro cliente de Sumied (' || sqlerrm || ')'
-                       else sqlerrm end;
-      v_errores := v_errores || jsonb_build_array(jsonb_build_object('bitrixIds', to_jsonb(v_ids), 'nombre', v_p->>'nombre',
-        'emisor', v_p->>'emisorSegunBitrix', 'codigo', sqlstate, 'porque', v_porque));
-    end;
-  end loop;
-  return jsonb_build_object('nuevos', v_nuevos, 'cambiados', v_cambiados, 'iguales', v_iguales, 'juntados', v_juntados, 'errores', v_errores);
-end $$;
+  select public.conta_crm_guardar_clientes(p_account, 'bitrix24', p_clientes)
+$$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_guardar_clientes(p_account uuid, p_clientes jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_guardar_clientes(p_account uuid, p_clientes jsonb) IS 'G01c · De paso, mientras dura el cambio: conta_crm_guardar_clientes con «bitrix24». La quita la tanda siguiente.';
 
 
 --
@@ -31852,7 +31754,7 @@ begin
   if coalesce(trim(p_url), '') !~ '^https://[A-Za-z0-9.-]+/rest/[0-9]+/[A-Za-z0-9]+/?$' then
     raise exception 'La dirección de Bitrix24 es como https://<tu portal>/rest/<número>/<clave>/ (Bitrix24 › Aplicaciones › Webhooks › Webhook entrante).' using errcode = '22023';
   end if;
-  select url_ref into v_ref from public.conta_crm_bitrix where account_id = p_account for update;
+  select url_ref into v_ref from public.conta_crm where account_id = p_account and crm = 'bitrix24' for update;
   if v_ref is null or not exists (select 1 from vault.secrets where id = v_ref) then
     select id into v_ref from vault.secrets where name = v_nombre;
   end if;
@@ -31861,9 +31763,9 @@ begin
   else
     v_ref := vault.create_secret(trim(p_url), v_nombre, 'Dirección de lectura de Bitrix24 de una cuenta de Sumied');
   end if;
-  insert into public.conta_crm_bitrix (account_id, entorno, url_ref, portal, conectada_at, conectada_por_name, updated_at)
-  values (p_account, p_entorno, v_ref, p_portal, now(), p_quien, now())
-  on conflict (account_id) do update set entorno = excluded.entorno, url_ref = excluded.url_ref, portal = excluded.portal,
+  insert into public.conta_crm (account_id, crm, entorno, url_ref, portal, conectada_at, conectada_por_name, updated_at)
+  values (p_account, 'bitrix24', p_entorno, v_ref, p_portal, now(), p_quien, now())
+  on conflict (account_id, crm) do update set entorno = excluded.entorno, url_ref = excluded.url_ref, portal = excluded.portal,
     conectada_at = excluded.conectada_at, conectada_por_name = excluded.conectada_por_name, updated_at = now();
 end $_$;
 
@@ -31924,8 +31826,8 @@ CREATE FUNCTION public.conta_bitrix_secreto(p_account uuid) RETURNS TABLE(entorn
     SET search_path TO 'public'
     AS $$
   select b.entorno, s.decrypted_secret, b.mapa
-    from public.conta_crm_bitrix b join vault.decrypted_secrets s on s.id = b.url_ref
-   where b.account_id = p_account
+    from public.conta_crm b join vault.decrypted_secrets s on s.id = b.url_ref
+   where b.account_id = p_account and b.crm = 'bitrix24'
 $$;
 
 
@@ -34186,6 +34088,302 @@ $_$;
 --
 
 COMMENT ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p_admin_user_id uuid, p_admin_nombre text, p_marca text, p_motivo text, p_creada_por uuid) IS 'C06 · Alta de una cuenta SOLO de contabilidad: sin Cocina, con el interruptor conta (quién y por qué) y su apunte en platform_audit_log. Solo service_role (edge function conta-crear-cuenta).';
+
+
+--
+-- Name: conta_crm_aplicar_union(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_b public.conta_crm; v_quien text := public.conta_nombre_actor(); v_union jsonb; v_nombre text := public._conta_crm_nombre(p_crm);
+begin
+  if not public.current_user_is_admin_or_manager_of(p_account) then
+    raise exception 'Solo un administrador o un encargado de la cuenta aplica la unión de las fichas de %.', v_nombre using errcode = '42501';
+  end if;
+  select * into v_b from public.conta_crm where account_id = p_account and crm = p_crm for update;
+  if v_b.account_id is null then raise exception 'Esta cuenta no tiene conectado %.', v_nombre using errcode = 'P0002'; end if;
+  if v_b.mapa->'confirmado' is null or v_b.mapa->'confirmado' = 'null'::jsonb then
+    raise exception 'Primero hay que confirmar el mapa en «Qué es cada campo».' using errcode = '22023';
+  end if;
+  v_union := jsonb_build_object('quien', v_quien, 'cuando', to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"'));
+  update public.conta_crm set mapa = mapa || jsonb_build_object('union', v_union), updated_at = now() where account_id = p_account and crm = p_crm;
+  return jsonb_build_object('frase', format('Unión aplicada por %s: la próxima lectura une las fichas de %s con el mismo NIF en un solo cliente.',
+    coalesce(v_quien, 'una persona de la cuenta'), v_nombre), 'union', v_union);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_crm_aplicar_union(p_account uuid, p_crm text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text) IS 'G01c · Una persona administradora o encargada aplica la unión de las fichas de su CRM (mismo NIF = un cliente).';
+
+
+--
+-- Name: conta_crm_confirmar_mapa(uuid, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_b public.conta_crm; v_medidos jsonb; v_cod text; v_faltan text[] := '{}'; v_sit jsonb; v_it jsonb; v_op text; v_sin_op text[] := '{}';
+        v_quien text := public.conta_nombre_actor(); v_mapa jsonb; v_n int; v_frase text; v_nombre text := public._conta_crm_nombre(p_crm);
+        v_validas constant text[] := array['activo', 'baja', 'moroso', 'solo_renta', 'sin_clasificar'];
+        v_cuando text := to_char(now() at time zone 'utc', 'YYYY-MM-DD"T"HH24:MI:SS"Z"');
+begin
+  if not public.current_user_is_admin_or_manager_of(p_account) then
+    raise exception 'Solo un administrador o un encargado de la cuenta confirma el mapa de %.', v_nombre using errcode = '42501';
+  end if;
+  if p_tipo_ficha not in ('empresa', 'contacto') then raise exception 'El mapa es de las empresas o de los contactos.' using errcode = '22023'; end if;
+  select * into v_b from public.conta_crm where account_id = p_account and crm = p_crm for update;
+  if v_b.account_id is null then raise exception 'Esta cuenta no tiene conectado %.', v_nombre using errcode = 'P0002'; end if;
+  v_medidos := case p_tipo_ficha when 'empresa' then v_b.campos_medidos else v_b.campos_medidos_contactos end;
+  if v_medidos is null then
+    raise exception '%', case p_tipo_ficha when 'empresa' then format('Faltan los campos medidos del portal: vuelve a conectar %s.', v_nombre)
+      else format('Aún no se han medido los campos de contacto del portal: lee %s y vuelve a confirmarlo.', v_nombre) end using errcode = 'P0002';
+  end if;
+  if jsonb_typeof(p_mapa) is distinct from 'object' then raise exception 'El mapa no trae sus campos.' using errcode = '22023'; end if;
+
+  if p_tipo_ficha = 'contacto' then
+    for v_cod in
+      select x from (values (p_mapa->>'nif'), (p_mapa->>'cuota'), (p_mapa->>'tipoCliente'), (p_mapa->'direccion'->>'calle'), (p_mapa->'direccion'->>'cp'),
+                            (p_mapa->'direccion'->>'poblacion'), (p_mapa->'direccion'->>'provincia')) v(x) where coalesce(x, '') <> ''
+    loop
+      if not (v_medidos ? v_cod) then v_faltan := v_faltan || v_cod; end if;
+    end loop;
+    if cardinality(v_faltan) > 0 then
+      raise exception 'Los contactos de este % no tienen estos campos: %.', v_nombre, array_to_string(v_faltan, ', ') using errcode = '22023';
+    end if;
+    v_mapa := jsonb_build_object('nif', p_mapa->'nif', 'direccion', p_mapa->'direccion', 'cuota', p_mapa->'cuota', 'tipoCliente', p_mapa->'tipoCliente',
+      'textosTipo', coalesce(p_mapa->'textosTipo', '{}'::jsonb), 'confirmado', jsonb_build_object('quien', v_quien, 'cuando', v_cuando));
+    update public.conta_crm set mapa_contactos = v_mapa, updated_at = now() where account_id = p_account and crm = p_crm;
+    v_frase := format('Mapa de los contactos de %s confirmado por %s. Los contactos entran en Sumied desde la próxima lectura.', v_nombre, coalesce(v_quien, 'una persona de la cuenta'));
+    return jsonb_build_object('frase', v_frase, 'confirmado', v_mapa->'confirmado');
+  end if;
+
+  -- Las empresas: lo de siempre (G01b · 0915).
+  if jsonb_typeof(p_mapa->'campos') is distinct from 'array' then raise exception 'El mapa no trae sus campos.' using errcode = '22023'; end if;
+  for v_cod in
+    select c->>'codigo' from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> ''
+    union all
+    select x from jsonb_array_elements(coalesce(p_mapa->'direcciones', '[]'::jsonb)) d,
+           lateral (values (d->>'calle'), (d->>'cp'), (d->>'poblacion'), (d->>'provincia')) v(x) where coalesce(x, '') <> ''
+  loop
+    if not (v_medidos ? v_cod) then v_faltan := v_faltan || v_cod; end if;
+  end loop;
+  if cardinality(v_faltan) > 0 then
+    raise exception 'Este % no tiene estos campos: %.', v_nombre, array_to_string(v_faltan, ', ') using errcode = '22023';
+  end if;
+  select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
+  if v_n <> 1 then raise exception 'Falta decir qué campo de % es la situación del cliente.', v_nombre using errcode = '22023'; end if;
+  select c into v_sit from jsonb_array_elements(p_mapa->'campos') c where c->>'campo' = 'situacion' and coalesce(c->>'codigo', '') <> '';
+  for v_it in select * from jsonb_array_elements(coalesce(v_medidos->(v_sit->>'codigo')->'items', '[]'::jsonb)) loop
+    v_op := v_sit->'opciones'->>(v_it->>'ID');
+    if v_op is null or not (v_op = any (v_validas)) then v_sin_op := v_sin_op || (v_it->>'VALUE'); end if;
+  end loop;
+  if cardinality(v_sin_op) > 0 then
+    raise exception 'Falta decir qué es en Sumied: %.', array_to_string(v_sin_op, ', ') using errcode = '22023';
+  end if;
+  v_mapa := (p_mapa - 'dudas') || jsonb_build_object('dudas', '[]'::jsonb, 'confirmado', jsonb_build_object('quien', v_quien, 'cuando', v_cuando));
+  update public.conta_crm set mapa = v_mapa, updated_at = now() where account_id = p_account and crm = p_crm;
+  select count(*) into v_n from jsonb_array_elements(p_mapa->'campos') c where coalesce(c->>'codigo', '') <> '';
+  v_frase := format('Mapa de %s confirmado por %s: %s campos y %s fuentes de la dirección. La situación se guarda desde la próxima lectura.',
+    v_nombre, coalesce(v_quien, 'una persona de la cuenta'), v_n, jsonb_array_length(coalesce(p_mapa->'direcciones', '[]'::jsonb)));
+  return jsonb_build_object('frase', v_frase, 'confirmado', v_mapa->'confirmado');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) IS 'G01c · «Qué es cada campo»: una persona administradora o encargada confirma el mapa de las empresas o de los contactos de su CRM (con quién y cuándo).';
+
+
+--
+-- Name: conta_crm_guardar_clientes(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_guardar_clientes(p_account uuid, p_crm text, p_clientes jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare c jsonb; f jsonb; v_p jsonb; v_claves text[]; v_ids text[]; v_clave_p text; v_tipo_p text; v_id_p text; v_partes uuid[]; v_party uuid; v_huella text; v_antes text;
+        v_nif text; v_nif_crm text; v_motivo text; v_otro uuid; v_ext jsonb; v_juntados int := 0; v_nuevos int := 0; v_cambiados int := 0; v_iguales int := 0;
+        v_errores jsonb := '[]'::jsonb; v_otras jsonb; v_porque text; v_emisor uuid; v_es_bitrix boolean := p_crm = 'bitrix24';
+begin
+  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
+  if coalesce(p_crm, '') !~ '^[a-z0-9_]+$' then raise exception 'Falta el CRM.' using errcode = '22023'; end if;
+  for c in select * from jsonb_array_elements(coalesce(p_clientes, '[]'::jsonb)) loop
+    v_p := c->'principal';
+    -- La clave de cada ficha: su tipo y su id externo.
+    v_claves := array(select coalesce(nullif(x->>'tipoFicha', ''), 'empresa') || ':' || coalesce(nullif(x->>'idExterno', ''), x->>'bitrixId')
+                        from jsonb_array_elements(coalesce(c->'fichas', '[]'::jsonb)) x where coalesce(nullif(x->>'idExterno', ''), x->>'bitrixId', '') <> '');
+    v_ids := array(select coalesce(nullif(x->>'idExterno', ''), x->>'bitrixId') from jsonb_array_elements(coalesce(c->'fichas', '[]'::jsonb)) x
+                    where coalesce(nullif(x->>'idExterno', ''), x->>'bitrixId', '') <> '');
+    v_tipo_p := coalesce(nullif(v_p->>'tipoFicha', ''), 'empresa');
+    v_id_p := coalesce(nullif(v_p->>'idExterno', ''), v_p->>'bitrixId');
+    v_clave_p := v_tipo_p || ':' || v_id_p;
+    if coalesce(v_id_p, '') = '' or cardinality(v_claves) = 0 then continue; end if;
+    begin
+      v_huella := md5(c::text);
+      v_motivo := nullif(c->>'motivo', '');
+      v_nif := nullif(public.party_nif(nullif(c->>'nif', '')), '');
+      v_nif_crm := nullif(public.party_nif(nullif(v_p->>'nif', '')), '');
+      v_ext := case when jsonb_typeof(c->'idExtranjero') = 'object' then c->'idExtranjero' end;
+      v_emisor := (select id from public.company where id::text = coalesce(v_p->>'emisorSegunCrm', v_p->>'emisorSegunBitrix') and account_id = p_account);
+      -- El cliente: el de sus fichas (si ya estaban) o, si no, el de su NIF.
+      select coalesce(array_agg(distinct x.party_id), '{}') into v_partes from (
+        select party_id from public.conta_gestoria_ficha where account_id = p_account and crm = p_crm and de_empresa = '' and (tipo_ficha || ':' || id_externo) = any(v_claves)
+        union select party_id from public.conta_gestoria_cliente where account_id = p_account and crm = p_crm and (tipo_ficha || ':' || id_externo) = any(v_claves)) x;
+      if cardinality(v_partes) > 1 then
+        -- G01b (07/11) · Sin la unión aplicada, no se junta nada.
+        if c->>'clave' not like 'nif:%' then
+          raise exception 'sus % fichas de % ya son % clientes distintos en Sumied', cardinality(v_claves), public._conta_crm_nombre(p_crm), cardinality(v_partes) using errcode = 'P0001';
+        end if;
+        -- Con ella, los clientes ya creados por separado se juntan en uno: el que ya tenía la ficha principal; si no, el que
+        -- más tiene colgado de la gestoría (líneas, mandatos, GoCardless); si no, el más antiguo. Los otros, retirados.
+        select x into v_party from unnest(v_partes) x
+         order by (exists (select 1 from public.conta_gestoria_cliente g where g.party_id = x and g.crm = p_crm and (g.tipo_ficha || ':' || g.id_externo) = v_clave_p))::int desc,
+                  ((select count(*) from public.conta_linea l where l.party_id = x) + (select count(*) from public.conta_mandato m where m.party_id = x)
+                   + (select count(*) from public.conta_gc_cliente k where k.party_id = x)) desc,
+                  (select p.created_at from public.party p where p.id = x), x
+         limit 1;
+        foreach v_otro in array v_partes loop
+          if v_otro <> v_party then
+            perform public._conta_gestoria_juntar(p_account, v_party, v_otro,
+              'el mismo NIF en ' || public._conta_crm_nombre(p_crm) || ' (fichas ' || array_to_string(v_ids, ', ') || ')');
+            v_juntados := v_juntados + 1;
+          end if;
+        end loop;
+        v_partes := array[v_party];
+      end if;
+      v_party := v_partes[1];
+      -- Por su NIF, solo con la unión aplicada (clave «nif:…»): sin aplicar no se une nada, ni a escondidas.
+      if v_party is null and v_nif is not null and c->>'clave' like 'nif:%' then
+        select id into v_party from public.party where account_id = p_account and tax_id = v_nif;
+        if exists (select 1 from public.conta_gestoria_cliente g where g.party_id = v_party and g.id_externo is not null
+                    and (g.crm <> p_crm or (g.tipo_ficha || ':' || g.id_externo) <> all(v_claves))) then
+          raise exception 'su NIF ya es de otro cliente de Sumied, con otra ficha de %', public._conta_crm_nombre(p_crm) using errcode = 'P0001';
+        end if;
+      end if;
+      select g.huella into v_antes from public.conta_gestoria_cliente g where g.party_id = v_party;
+      if v_party is null then
+        insert into public.party (account_id, name, tax_id, source, created_by_name)
+        values (p_account, coalesce(nullif(trim(v_p->>'nombre'), ''),
+                  case when v_tipo_p = 'contacto' then 'Contacto ' else 'Empresa ' end || v_id_p || ' de ' || public._conta_crm_nombre(p_crm)), v_nif, 'crm', public._conta_crm_nombre(p_crm))
+        returning id into v_party;
+        v_nuevos := v_nuevos + 1;
+      elsif v_antes is distinct from v_huella then
+        -- Un NIF que no se usa (sin formato o en 10 fichas o más) se quita si era el que se le puso antes.
+        update public.party set name = coalesce(nullif(trim(v_p->>'nombre'), ''), name),
+               tax_id = case when v_motivo in ('nif_no_valido', 'nif_en_muchas') and tax_id is not distinct from v_nif_crm then null else coalesce(v_nif, tax_id) end,
+               updated_at = now()
+         where id = v_party and account_id = p_account;
+        v_cambiados := v_cambiados + 1;
+      else
+        v_iguales := v_iguales + 1;
+        update public.conta_gestoria_cliente set leido_at = now() where party_id = v_party;
+        update public.conta_gestoria_ficha set leido_at = now()
+         where account_id = p_account and crm = p_crm and de_empresa = '' and (tipo_ficha || ':' || id_externo) = any(v_claves);
+        continue;
+      end if;
+      -- G01c · Un identificador fiscal extranjero (el RIF de Venezuela): su tipo y su país. Lo demás, como estaba.
+      insert into public.customer_fiscal (party_id, account_id, legal_name, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province, tax_id_type, country_code)
+      values (v_party, p_account, nullif(trim(v_p->>'nombre'), ''), nullif(v_p->>'calle', ''), nullif(v_p->>'cp', ''), nullif(v_p->>'poblacion', ''), nullif(v_p->>'provincia', ''),
+              v_ext->>'tipo', coalesce(v_ext->>'pais', 'ES'))
+      on conflict (party_id) do update set legal_name = coalesce(excluded.legal_name, customer_fiscal.legal_name),
+        fiscal_street = excluded.fiscal_street, fiscal_postal_code = excluded.fiscal_postal_code, fiscal_city = excluded.fiscal_city,
+        fiscal_province = excluded.fiscal_province,
+        tax_id_type = case when v_ext is not null then excluded.tax_id_type else customer_fiscal.tax_id_type end,
+        country_code = case when v_ext is not null then excluded.country_code else customer_fiscal.country_code end,
+        updated_at = now();
+      -- Las otras fichas del cliente, para la ficha («Lo que dice tu CRM»).
+      select coalesce(jsonb_agg(jsonb_build_object('idExterno', coalesce(nullif(x->>'idExterno', ''), x->>'bitrixId'), 'tipoFicha', coalesce(nullif(x->>'tipoFicha', ''), 'empresa'),
+               'nombre', x->>'nombre', 'situacion', x->'situacion', 'situacionTexto', x->'situacionTexto')), '[]'::jsonb)
+        into v_otras from jsonb_array_elements(c->'fichas') x
+       where coalesce(nullif(x->>'tipoFicha', ''), 'empresa') || ':' || coalesce(nullif(x->>'idExterno', ''), x->>'bitrixId') <> v_clave_p;
+      -- bitrix_id, solo mientras dura el cambio y en las empresas de Bitrix24 (lo que lee lo publicado).
+      insert into public.conta_gestoria_cliente (party_id, account_id, crm, tipo_ficha, id_externo, bitrix_id, situacion, servicios, forma_pago_crm, forma_pago_bitrix,
+                                                 emisor_segun_crm, emisor_segun_bitrix, ficha, huella, leido_at)
+      values (v_party, p_account, p_crm, v_tipo_p, v_id_p, case when v_es_bitrix and v_tipo_p = 'empresa' then v_id_p end, nullif(c->>'situacion', ''),
+              coalesce(array(select jsonb_array_elements_text(coalesce(v_p->'servicios', '[]'::jsonb))), '{}'), nullif(v_p->>'formaPago', ''), nullif(v_p->>'formaPago', ''),
+              v_emisor, v_emisor, v_p || jsonb_build_object('otrasFichas', v_otras, 'motivo', v_motivo), v_huella, now())
+      on conflict (party_id) do update set crm = excluded.crm, tipo_ficha = excluded.tipo_ficha, id_externo = excluded.id_externo, bitrix_id = excluded.bitrix_id,
+        situacion = excluded.situacion, servicios = excluded.servicios, forma_pago_crm = excluded.forma_pago_crm, forma_pago_bitrix = excluded.forma_pago_bitrix,
+        emisor_segun_crm = excluded.emisor_segun_crm, emisor_segun_bitrix = excluded.emisor_segun_bitrix, ficha = excluded.ficha, huella = excluded.huella, leido_at = now();
+      for f in select * from jsonb_array_elements(c->'fichas') loop
+        insert into public.conta_gestoria_ficha (account_id, crm, tipo_ficha, id_externo, de_empresa, bitrix_id, party_id, situacion, ficha, huella, leido_at)
+        values (p_account, p_crm, coalesce(nullif(f->>'tipoFicha', ''), 'empresa'), coalesce(nullif(f->>'idExterno', ''), f->>'bitrixId'), '',
+                case when v_es_bitrix and coalesce(nullif(f->>'tipoFicha', ''), 'empresa') = 'empresa' then coalesce(nullif(f->>'idExterno', ''), f->>'bitrixId') end,
+                v_party, nullif(f->>'situacion', ''), f, md5(f::text), now())
+        on conflict (account_id, crm, tipo_ficha, id_externo, de_empresa) do update set party_id = excluded.party_id, situacion = excluded.situacion,
+          ficha = excluded.ficha, huella = excluded.huella, leido_at = now();
+      end loop;
+      -- Una ficha que ya no es de este cliente deja de colgar de él (la recoge el suyo). Sus personas de contacto, no: las guarda guardar_personas.
+      delete from public.conta_gestoria_ficha
+       where account_id = p_account and party_id = v_party and crm = p_crm and de_empresa = '' and (tipo_ficha || ':' || id_externo) <> all(v_claves);
+    exception when others then
+      v_porque := case when sqlstate = '23505' and sqlerrm like '%ux_party_nif%' then 'su NIF ya es de otro cliente de Sumied'
+                       when sqlstate = '23505' then 'choca con otro cliente de Sumied (' || sqlerrm || ')'
+                       else sqlerrm end;
+      v_errores := v_errores || jsonb_build_array(jsonb_build_object('idsExternos', to_jsonb(v_ids), 'bitrixIds', to_jsonb(v_ids), 'tipoFicha', v_tipo_p, 'principal', v_clave_p,
+        'nombre', v_p->>'nombre', 'emisor', coalesce(v_p->>'emisorSegunCrm', v_p->>'emisorSegunBitrix'), 'codigo', sqlstate, 'porque', v_porque));
+    end;
+  end loop;
+  return jsonb_build_object('nuevos', v_nuevos, 'cambiados', v_cambiados, 'iguales', v_iguales, 'juntados', v_juntados, 'errores', v_errores);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_crm_guardar_clientes(p_account uuid, p_crm text, p_clientes jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_guardar_clientes(p_account uuid, p_crm text, p_clientes jsonb) IS 'G01c · Guarda los clientes leídos de un CRM (cada uno con sus fichas: empresas y contactos), con la unión por NIF si está aplicada y el identificador fiscal extranjero. Solo el servidor.';
+
+
+--
+-- Name: conta_crm_guardar_personas(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare x jsonb; v_party uuid; v_guardadas int := 0; v_sin_cliente int := 0; v_quitadas int := 0; v_claves text[] := '{}';
+begin
+  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
+  if coalesce(p_crm, '') !~ '^[a-z0-9_]+$' then raise exception 'Falta el CRM.' using errcode = '22023'; end if;
+  -- Cada persona: { empresa: id externo de la empresa, contacto: { idExterno, nombre, correos, telefonos } }. Todas a la vez: las que no vienen, se quitan.
+  for x in select * from jsonb_array_elements(coalesce(p_personas, '[]'::jsonb)) loop
+    if coalesce(x->>'empresa', '') = '' or coalesce(x->'contacto'->>'idExterno', '') = '' then continue; end if;
+    v_party := null;
+    select party_id into v_party from public.conta_gestoria_ficha
+     where account_id = p_account and crm = p_crm and tipo_ficha = 'empresa' and id_externo = x->>'empresa' and de_empresa = '';
+    if v_party is null then v_sin_cliente := v_sin_cliente + 1; continue; end if;
+    insert into public.conta_gestoria_ficha (account_id, crm, tipo_ficha, id_externo, de_empresa, party_id, situacion, ficha, huella, leido_at)
+    values (p_account, p_crm, 'contacto', x->'contacto'->>'idExterno', x->>'empresa', v_party, null, x->'contacto', md5((x->'contacto')::text), now())
+    on conflict (account_id, crm, tipo_ficha, id_externo, de_empresa) do update set party_id = excluded.party_id, ficha = excluded.ficha, huella = excluded.huella, leido_at = now();
+    v_claves := v_claves || ((x->'contacto'->>'idExterno') || '@' || (x->>'empresa'));
+    v_guardadas := v_guardadas + 1;
+  end loop;
+  -- Las que ya no lo son (el contacto dejó la empresa en el CRM) dejan de estar.
+  delete from public.conta_gestoria_ficha
+   where account_id = p_account and crm = p_crm and tipo_ficha = 'contacto' and de_empresa <> '' and (id_externo || '@' || de_empresa) <> all(v_claves);
+  get diagnostics v_quitadas = row_count;
+  return jsonb_build_object('guardadas', v_guardadas, 'sinCliente', v_sin_cliente, 'quitadas', v_quitadas);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) IS 'G01c · Las personas de contacto de un CRM (los contactos con empresa): una ficha por contacto y empresa, colgando del cliente de esa empresa. Las que ya no lo son se quitan. Solo el servidor.';
 
 
 --
@@ -37139,21 +37337,24 @@ CREATE FUNCTION public.conta_gestoria_despertar() RETURNS void
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare v_secreto text; r record;
+declare v_secreto text; r record; v_funcion text;
 begin
   if extract(hour from (now() at time zone 'Europe/Madrid')) <> 4 then return; end if;
-  if not exists (select 1 from public.conta_crm_bitrix) and not exists (select 1 from public.conta_cobro_gocardless) then return; end if;
+  if not exists (select 1 from public.conta_crm) and not exists (select 1 from public.conta_cobro_gocardless) then return; end if;
   select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
   if v_secreto is null then
     raise exception 'Falta cron_secret en el Vault: no se puede despertar la lectura de la gestoría.' using errcode = '55000';
   end if;
-  for r in select account_id from public.conta_crm_bitrix where url_ref is not null loop
-    perform net.http_post(url := public._project_url() || '/functions/v1/conta-bitrix-leer',
+  for r in select account_id, crm from public.conta_crm where url_ref is not null loop
+    -- La función de lectura de cada CRM (otro CRM, otra línea).
+    v_funcion := case r.crm when 'bitrix24' then 'conta-bitrix-leer' end;
+    continue when v_funcion is null;
+    perform net.http_post(url := public._project_url() || '/functions/v1/' || v_funcion,
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
       body := jsonb_build_object('accion', 'leer', 'cuenta', r.account_id, 'por', 'cada_noche'), timeout_milliseconds := 150000);
   end loop;
   for r in select g.company_id from public.conta_cobro_gocardless g
-            where g.token_ref is not null and not exists (select 1 from public.conta_crm_bitrix b where b.account_id = g.account_id and b.url_ref is not null) loop
+            where g.token_ref is not null and not exists (select 1 from public.conta_crm b where b.account_id = g.account_id and b.url_ref is not null) loop
     perform net.http_post(url := public._project_url() || '/functions/v1/conta-gocardless-leer',
       headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
       body := jsonb_build_object('accion', 'leer', 'empresa', r.company_id, 'por', 'cada_noche'), timeout_milliseconds := 150000);
@@ -102448,7 +102649,13 @@ CREATE TABLE public.conta_gestoria_cliente (
     cuenta_propia_account_id uuid,
     leido_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_gestoria_cliente_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text, 'sin_clasificar'::text]))))
+    crm text,
+    tipo_ficha text,
+    id_externo text,
+    forma_pago_crm text,
+    emisor_segun_crm uuid,
+    CONSTRAINT conta_gestoria_cliente_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text, 'sin_clasificar'::text])))),
+    CONSTRAINT conta_gestoria_cliente_tipo_check CHECK ((((id_externo IS NULL) AND (crm IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])))))
 );
 
 
@@ -102457,6 +102664,27 @@ CREATE TABLE public.conta_gestoria_cliente (
 --
 
 COMMENT ON TABLE public.conta_gestoria_cliente IS 'G01 · Un cliente de la gestoría (su party): su ficha de Bitrix24 (bitrix_id, situación, servicios C/L/S, «Forma de pago» y lo demás en ficha, solo referencia). cuenta_propia_account_id: la cuenta de Sumied del cliente, cuando tenga la suya (fase 2); hoy, vacía.';
+
+
+--
+-- Name: COLUMN conta_gestoria_cliente.id_externo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_cliente.id_externo IS 'G01c · El id de su ficha principal en su CRM (con crm y tipo_ficha).';
+
+
+--
+-- Name: COLUMN conta_gestoria_cliente.forma_pago_crm; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_cliente.forma_pago_crm IS 'G01c · La «Forma de pago» que dice su CRM (de referencia).';
+
+
+--
+-- Name: COLUMN conta_gestoria_cliente.emisor_segun_crm; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_cliente.emisor_segun_crm IS 'G01c · El emisor que dice su CRM.';
 
 
 --
@@ -102477,7 +102705,11 @@ CREATE TABLE public.conta_gestoria_diferencia (
     datos jsonb DEFAULT '{}'::jsonb NOT NULL,
     vigente boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['bitrix_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_bitrix'::text, 'correo_repetido_en_bitrix'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text])))
+    crm text,
+    tipo_ficha text,
+    id_externo text,
+    CONSTRAINT conta_gestoria_diferencia_ficha_check CHECK ((((id_externo IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))),
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['bitrix_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_bitrix'::text, 'correo_repetido_en_bitrix'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text])))
 );
 
 
@@ -102613,7 +102845,12 @@ CREATE VIEW public.conta_consulta_clientes WITH (security_invoker='true') AS
            FROM public.conta_gestoria_diferencia d
           WHERE ((d.party_id = c.party_id) AND d.vigente)) AS diferencias,
     c.cuenta_propia_account_id AS cuenta_propia_id,
-    c.leido_at AS leido_de_bitrix
+    c.leido_at AS leido_de_bitrix,
+    c.crm,
+    c.tipo_ficha,
+    c.id_externo AS ficha_en_el_crm,
+    c.forma_pago_crm AS forma_de_pago_en_el_crm,
+    c.leido_at AS leido_del_crm
    FROM (((public.conta_gestoria_cliente c
      JOIN public.party p ON ((p.id = c.party_id)))
      LEFT JOIN public.company e ON ((e.account_id = c.account_id)))
@@ -102677,7 +102914,10 @@ CREATE VIEW public.conta_consulta_diferencias WITH (security_invoker='true') AS
     COALESCE(e.trade_name, e.legal_name) AS emisor,
     d.bitrix_id AS ficha_en_bitrix,
     d.gc_cliente_id AS cliente_en_gocardless,
-    l.empezada_at AS leida_el
+    l.empezada_at AS leida_el,
+    d.crm,
+    d.tipo_ficha,
+    d.id_externo AS ficha_en_el_crm
    FROM (((public.conta_gestoria_diferencia d
      JOIN public.conta_gestoria_lectura l ON ((l.id = d.lectura_id)))
      LEFT JOIN public.party p ON ((p.id = d.party_id)))
@@ -102791,6 +103031,81 @@ ALTER TABLE public.conta_contrasena_intento ALTER COLUMN id ADD GENERATED ALWAYS
 
 
 --
+-- Name: conta_crm; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_crm (
+    account_id uuid NOT NULL,
+    crm text NOT NULL,
+    entorno text NOT NULL,
+    url_ref uuid,
+    portal text,
+    mapa jsonb,
+    campos_medidos jsonb,
+    mapa_contactos jsonb,
+    campos_medidos_contactos jsonb,
+    contactos_leidos jsonb,
+    conectada_at timestamp with time zone,
+    conectada_por_name text,
+    ultima_lectura_at timestamp with time zone,
+    empresas_leidas integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_crm_crm_check CHECK ((crm ~ '^[a-z0-9_]+$'::text)),
+    CONSTRAINT conta_crm_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
+);
+
+
+--
+-- Name: TABLE conta_crm; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_crm IS 'G01c · La conexión con el CRM de cada cuenta (una fila por cuenta y CRM): entorno, portal, la dirección en Vault (url_ref, sin clave aquí), y por cada tipo de ficha su mapa, lo medido del portal y lo leído. Hasta el G01c, conta_crm_bitrix.';
+
+
+--
+-- Name: COLUMN conta_crm.crm; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.crm IS 'G01c · Qué CRM es («bitrix24»).';
+
+
+--
+-- Name: COLUMN conta_crm.mapa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.mapa IS 'El mapa de las EMPRESAS del CRM (qué es cada campo), confirmado por una persona.';
+
+
+--
+-- Name: COLUMN conta_crm.campos_medidos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.campos_medidos IS 'Los campos de las EMPRESAS del portal, medidos.';
+
+
+--
+-- Name: COLUMN conta_crm.mapa_contactos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.mapa_contactos IS 'G01c · El mapa de los CONTACTOS (NIF, dirección, cuota de referencia, «Tipo de cliente»), confirmado por una persona. Sin confirmar no entra ningún contacto.';
+
+
+--
+-- Name: COLUMN conta_crm.campos_medidos_contactos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.campos_medidos_contactos IS 'G01c · Los campos de los CONTACTOS del portal, medidos en cada lectura.';
+
+
+--
+-- Name: COLUMN conta_crm.contactos_leidos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.contactos_leidos IS 'G01c · De la última lectura: cuántos contactos hay de cada (resumen) y cuáles se quedan fuera o van a «Pendiente de revisar», con su porqué (para «Ver cuáles»).';
+
+
+--
 -- Name: conta_crm_bitrix; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -102815,7 +103130,7 @@ CREATE TABLE public.conta_crm_bitrix (
 -- Name: TABLE conta_crm_bitrix; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.conta_crm_bitrix IS 'G01 · El Bitrix24 de una cuenta (uno para todos sus emisores). La dirección con su clave, en Vault (url_ref, «conta_bitrix:<cuenta>»); portal: solo el nombre del portal, sin clave. mapa: el de campos (UF_CRM_… → Sumied), propuesto con crm.company.fields; campos_medidos: lo que devolvió.';
+COMMENT ON TABLE public.conta_crm_bitrix IS 'G01c · Mientras dura el cambio: el espejo de conta_crm de Bitrix24 (lo que se escribe en una se copia a la otra). La quita la tanda siguiente. G01 · El Bitrix24 de una cuenta (uno para todos sus emisores). La dirección con su clave, en Vault (url_ref, «conta_bitrix:<cuenta>»); portal: solo el nombre del portal, sin clave. mapa: el de campos (UF_CRM_… → Sumied), propuesto con crm.company.fields; campos_medidos: lo que devolvió.';
 
 
 --
@@ -103416,14 +103731,19 @@ COMMENT ON TABLE public.conta_gestoria_decision IS 'G01 · Lo que una persona de
 
 CREATE TABLE public.conta_gestoria_ficha (
     account_id uuid NOT NULL,
-    bitrix_id text NOT NULL,
+    bitrix_id text,
     party_id uuid NOT NULL,
     situacion text,
     ficha jsonb,
     huella text,
     leido_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_gestoria_ficha_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text, 'sin_clasificar'::text]))))
+    crm text DEFAULT 'bitrix24'::text NOT NULL,
+    tipo_ficha text DEFAULT 'empresa'::text NOT NULL,
+    id_externo text NOT NULL,
+    de_empresa text DEFAULT ''::text NOT NULL,
+    CONSTRAINT conta_gestoria_ficha_situacion_check CHECK (((situacion IS NULL) OR (situacion = ANY (ARRAY['activo'::text, 'baja'::text, 'moroso'::text, 'solo_renta'::text, 'sin_clasificar'::text])))),
+    CONSTRAINT conta_gestoria_ficha_tipo_check CHECK (((tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])) AND ((de_empresa = ''::text) OR (tipo_ficha = 'contacto'::text))))
 );
 
 
@@ -103432,6 +103752,41 @@ CREATE TABLE public.conta_gestoria_ficha (
 --
 
 COMMENT ON TABLE public.conta_gestoria_ficha IS 'G01b · Cada ficha de Bitrix24 y el cliente de Sumied del que es. Un cliente puede tener varias (el mismo NIF, tras aplicar la unión); la de su situación más viva es la de conta_gestoria_cliente.';
+
+
+--
+-- Name: COLUMN conta_gestoria_ficha.bitrix_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_ficha.bitrix_id IS 'Hasta el G01c: el id de Bitrix24. Sustituida por crm + tipo_ficha + id_externo; la quita la tanda siguiente.';
+
+
+--
+-- Name: COLUMN conta_gestoria_ficha.crm; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_ficha.crm IS 'G01c · De qué CRM es la ficha («bitrix24»).';
+
+
+--
+-- Name: COLUMN conta_gestoria_ficha.tipo_ficha; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_ficha.tipo_ficha IS 'G01c · Una empresa o un contacto del CRM (sus ids son numeraciones distintas).';
+
+
+--
+-- Name: COLUMN conta_gestoria_ficha.id_externo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_ficha.id_externo IS 'G01c · El id de la ficha en su CRM.';
+
+
+--
+-- Name: COLUMN conta_gestoria_ficha.de_empresa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_ficha.de_empresa IS 'G01c · En una persona de contacto, el id externo de su empresa (cuelga del cliente de esa empresa); vacío en las fichas de un cliente.';
 
 
 --
@@ -118910,6 +119265,14 @@ ALTER TABLE ONLY public.conta_crm_bitrix
 
 
 --
+-- Name: conta_crm conta_crm_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_crm
+    ADD CONSTRAINT conta_crm_pkey PRIMARY KEY (account_id, crm);
+
+
+--
 -- Name: conta_diez_autorizo conta_diez_autorizo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -119070,6 +119433,14 @@ ALTER TABLE ONLY public.conta_gestoria_cliente
 
 
 --
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_ficha_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_ficha_key UNIQUE (account_id, crm, tipo_ficha, id_externo);
+
+
+--
 -- Name: conta_gestoria_cliente conta_gestoria_cliente_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -119098,7 +119469,7 @@ ALTER TABLE ONLY public.conta_gestoria_diferencia
 --
 
 ALTER TABLE ONLY public.conta_gestoria_ficha
-    ADD CONSTRAINT conta_gestoria_ficha_pkey PRIMARY KEY (account_id, bitrix_id);
+    ADD CONSTRAINT conta_gestoria_ficha_pkey PRIMARY KEY (account_id, crm, tipo_ficha, id_externo, de_empresa);
 
 
 --
@@ -129440,6 +129811,20 @@ CREATE TRIGGER company_tax_profile_tax_forms BEFORE INSERT OR UPDATE OF tax_form
 
 
 --
+-- Name: conta_crm conta_crm_a_bitrix; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_crm_a_bitrix AFTER INSERT OR DELETE OR UPDATE ON public.conta_crm FOR EACH ROW EXECUTE FUNCTION public._conta_crm_a_bitrix();
+
+
+--
+-- Name: conta_crm_bitrix conta_crm_bitrix_a_crm; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER conta_crm_bitrix_a_crm AFTER INSERT OR DELETE OR UPDATE ON public.conta_crm_bitrix FOR EACH ROW EXECUTE FUNCTION public._conta_crm_desde_bitrix();
+
+
+--
 -- Name: conta_diez_base conta_diez_base_apuntar; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -134145,6 +134530,14 @@ ALTER TABLE ONLY public.conta_cobro_stripe
 
 
 --
+-- Name: conta_crm conta_crm_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_crm
+    ADD CONSTRAINT conta_crm_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_crm_bitrix conta_crm_bitrix_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -134438,6 +134831,14 @@ ALTER TABLE ONLY public.conta_gestoria_cliente
 
 ALTER TABLE ONLY public.conta_gestoria_cliente
     ADD CONSTRAINT conta_gestoria_cliente_emisor_segun_bitrix_fkey FOREIGN KEY (emisor_segun_bitrix) REFERENCES public.company(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_gestoria_cliente conta_gestoria_cliente_emisor_segun_crm_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_cliente
+    ADD CONSTRAINT conta_gestoria_cliente_emisor_segun_crm_fkey FOREIGN KEY (emisor_segun_crm) REFERENCES public.company(id) ON DELETE SET NULL;
 
 
 --
@@ -145178,6 +145579,12 @@ CREATE POLICY conta_cobro_stripe_leer ON public.conta_cobro_stripe FOR SELECT TO
 ALTER TABLE public.conta_contrasena_intento ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_crm; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_crm ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_crm_bitrix; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -145188,6 +145595,13 @@ ALTER TABLE public.conta_crm_bitrix ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_crm_bitrix_leer ON public.conta_crm_bitrix FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_crm conta_crm_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_crm_leer ON public.conta_crm FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -153591,6 +154005,31 @@ GRANT ALL ON FUNCTION public._conta_corte(p_company uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_crm_a_bitrix(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_crm_a_bitrix() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_crm_a_bitrix() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_crm_desde_bitrix(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_crm_desde_bitrix() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_crm_desde_bitrix() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_crm_nombre(p_crm text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_crm_nombre(p_crm text) TO anon;
+GRANT ALL ON FUNCTION public._conta_crm_nombre(p_crm text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_crm_nombre(p_crm text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_cuenta_aprendida(p_company uuid, p_410 text, p_grupo text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -159491,6 +159930,40 @@ GRANT ALL ON FUNCTION public.conta_correo_releer_lista(p_company uuid, p_email_i
 
 REVOKE ALL ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p_admin_user_id uuid, p_admin_nombre text, p_marca text, p_motivo text, p_creada_por uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_crear_cuenta_sola(p_nombre text, p_slug text, p_admin_user_id uuid, p_admin_nombre text, p_marca text, p_motivo text, p_creada_por uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_aplicar_union(p_account uuid, p_crm text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_crm_aplicar_union(p_account uuid, p_crm text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_crm_confirmar_mapa(p_account uuid, p_crm text, p_tipo_ficha text, p_mapa jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_guardar_clientes(p_account uuid, p_crm text, p_clientes jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_guardar_clientes(p_account uuid, p_crm text, p_clientes jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_guardar_clientes(p_account uuid, p_crm text, p_clientes jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text, p_personas jsonb) TO service_role;
 
 
 --
@@ -171586,6 +172059,14 @@ GRANT ALL ON TABLE public.conta_contrasena_intento TO service_role;
 GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO service_role;
+
+
+--
+-- Name: TABLE conta_crm; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_crm TO service_role;
+GRANT SELECT ON TABLE public.conta_crm TO authenticated;
 
 
 --
