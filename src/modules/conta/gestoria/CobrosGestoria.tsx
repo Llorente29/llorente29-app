@@ -20,6 +20,8 @@ import { Boton, Campo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import type { ConexionBitrix, ConexionGc } from '@/modules/conta/services/gestoriaService'
 import type { MapaBitrix } from './queEsCadaCampo'
 import { QueEsCadaCampo } from './QueEsCadaCampo'
+import { UnionDeFichas } from './UnionDeFichas'
+import type { DatosEnsayo } from './pdfUnion'
 
 const fechaHora = (iso: string | null) => {
   if (!iso) return null
@@ -37,6 +39,9 @@ export interface AccionesGestoria {
   leerBitrix: () => Promise<string>
   /** G01b · Confirmar el mapa en «Qué es cada campo» y leer de nuevo. */
   confirmarMapa: (mapa: MapaBitrix) => Promise<string>
+  /** G01b · El ensayo de la unión (los datos del PDF) y aplicarla y leer. */
+  ensayoUnion: () => Promise<DatosEnsayo>
+  aplicarUnion: () => Promise<string>
 }
 
 export function Interruptor({ encendido, alCambiar, etiqueta, descrito, disabled }: {
@@ -154,6 +159,7 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
           </dl>
           <div><Boton onClick={() => void hacer(acciones.leerBitrix)} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
           <QueEsCadaCampo mapa={c!.mapa} medidos={c!.medidos} alConfirmar={acciones.confirmarMapa} />
+          <UnionDeFichas mapa={c!.mapa} alEnsayar={acciones.ensayoUnion} alAplicar={acciones.aplicarUnion} />
         </div>
       ) : (
         <div className="pg-dialogo-campos">

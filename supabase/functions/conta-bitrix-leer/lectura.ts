@@ -5,8 +5,9 @@
 // inventadas: tests/unit/modules/conta/gestoria/lecturaBitrix.test.ts).
 // Solo lee: crm.company.fields y crm.company.list. Nunca escribe en Bitrix24.
 
-import { camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
-import { camposDelRecuento, contar, type GruposRecuento } from './recuento.ts'
+import { ESPERA_MS, camposQueSePiden, leerEmpresa, leerTodas, type CampoMedido, type FichaBitrix, type MapaBitrix } from './mapa.ts'
+import { camposDelRecuento, camposSensiblesDe, contar, type GruposRecuento } from './recuento.ts'
+import { esCampoSensible } from './clientes.ts'
 
 export type Pedir = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
   Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
@@ -37,11 +38,21 @@ export async function medirCampos(pedir: Pedir, url: string): Promise<Record<str
   return r.result
 }
 
-/** Todas las empresas, de 50 en 50, una petición cada 500 ms, con solo los campos del mapa. */
-export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, esperar: (ms: number) => Promise<void>): Promise<{ fichas: FichaBitrix[]; total: number | null; peticiones: number }> {
-  const select = camposQueSePiden(mapa)
+/**
+ * Todas las empresas, de 50 en 50, una petición cada 500 ms, con solo los
+ * campos del mapa. G01b · Antes, los campos del portal: uno con una contraseña
+ * o un certificado (clientes.ts · esCampoSensible) no se pide nunca, aunque
+ * esté en el mapa por error; se quita y se dice cuál («bloqueados»).
+ */
+export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, esperar: (ms: number) => Promise<void>): Promise<{ fichas: FichaBitrix[]; total: number | null; peticiones: number; bloqueados: string[] }> {
+  const medidos = await medirCampos(pedir, url)
+  const pedidos = camposQueSePiden(mapa)
+  const bloqueados = pedidos.filter((c) => esCampoSensible(medidos[c]))
+  const select = pedidos.filter((c) => !bloqueados.includes(c))
+  await esperar(ESPERA_MS)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
-  return { fichas: r.filas.map((f) => leerEmpresa(f, mapa)), total: r.total, peticiones: r.peticiones }
+  return { fichas: r.filas.map((f) => leerEmpresa(f, mapa)), total: r.total, peticiones: r.peticiones + 1,
+    bloqueados: bloqueados.map((c) => [medidos[c]?.formLabel, medidos[c]?.listLabel, medidos[c]?.title].find((x) => x && x.trim())?.trim() ?? c) }
 }
 
 /**
@@ -54,6 +65,9 @@ export async function leerParaRecuento(pedir: Pedir, url: string, grupos: Grupos
   const select = camposDelRecuento(grupos)
   const faltan = select.filter((c) => c !== 'ID' && !medidos[c])
   if (faltan.length) throw new FalloBitrix(`Este Bitrix24 no tiene estos campos: ${faltan.join(', ')}.`)
+  // G01b · Un campo con una contraseña o un certificado no se cuenta nunca.
+  const sensibles = camposSensiblesDe(select, medidos)
+  if (sensibles.length) throw new FalloBitrix(`Estos campos guardan contraseñas o certificados y no se leen nunca: ${sensibles.join(', ')}.`)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
   return { ...contar(r.filas, grupos, medidos, opcionesConfirmadas), peticiones: r.peticiones }
 }

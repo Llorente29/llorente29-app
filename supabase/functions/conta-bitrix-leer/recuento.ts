@@ -11,7 +11,10 @@
 //   · (G01b, 07/11) los NIF repetidos: cuántos salen en más de una ficha, con
 //     qué situaciones, de qué tipo y si mezclan sociedad y persona.
 
-import { normalizarNif, situacionDeTexto, type CampoMedido } from './mapa.ts'
+import { situacionDeTexto, type CampoMedido, type Situacion } from './mapa.ts'
+import { agrupar, esCampoSensible, nifComoLaBase, resumenDeUnion, tipoDeNif, type ResumenDeUnion } from './clientes.ts'
+
+export { nifComoLaBase, tipoDeNif }
 
 export interface GruposRecuento {
   /** Campos de texto que pueden ser lo mismo, por grupo («nif», «calle»). */
@@ -51,6 +54,8 @@ export interface ResultadoRecuento {
   situacion: { codigo: string; etiqueta: string; opciones: { id: string; texto: string; fichas: number }[]; vacias: number; otras: number }
   cuotas: { codigo: string; etiqueta: string; conImporte: number; sumaCent: number }[]
   repetidos?: ResultadoRepetidos
+  /** G01b · Lo que saldría con la regla de la unión (clientes.ts), solo números. */
+  union?: ResumenDeUnion
 }
 
 const etiqueta = (m: Record<string, CampoMedido>, codigo: string) => {
@@ -78,31 +83,31 @@ export function centDe(v: unknown): number | null {
   return Number.isFinite(n) ? Math.round(n * 100) : null
 }
 
-/** El NIF como lo compara la base: el de la lectura (normalizarNif) y después solo letras y números en mayúsculas (party_nif). */
-export const nifComoLaBase = (v: unknown): string | null => {
-  const n = normalizarNif(textoDe(v) || null)
-  const t = (n ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-  return t || null
-}
-
-/** DNI (8 cifras y letra), NIE (X, Y o Z, 7 cifras y letra), CIF (letra de sociedad, 7 cifras y control) u otro. */
-export function tipoDeNif(n: string): 'DNI' | 'NIE' | 'CIF' | 'otro' {
-  if (/^[0-9]{8}[A-Z]$/.test(n)) return 'DNI'
-  if (/^[XYZ][0-9]{7}[A-Z]$/.test(n)) return 'NIE'
-  if (/^[ABCDEFGHJNPQRSUVW][0-9]{7}[0-9A-J]$/.test(n)) return 'CIF'
-  return 'otro'
-}
-
 /** ¿El nombre suena a sociedad? (S.L., S.L.U., S.A., S.C., C.B., sociedad, limitada, anónima, cooperativa). */
 export const suenaASociedad = (nombre: string) =>
   /(^|[^A-Z])(S ?L ?U?|S ?A ?U?|S ?C ?P?|C ?B|SOCIEDAD|LIMITADA|ANONIMA|COOPERATIVA)($|[^A-Z])/.test(normal(nombre.replace(/\./g, ' ')))
+
+/** La situación de una ficha por el id de su opción: la del mapa confirmado o, si no lo hay, la de su texto. Null si está vacía. */
+export function situacionDeFila(situacion: string, medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null) {
+  const texto = new Map((medidos[situacion]?.items ?? []).map((it) => [String(it.ID), it.VALUE]))
+  return (id: string): Situacion | null => (id ? ((opcionesConfirmadas ? opcionesConfirmadas[id] ?? 'sin_clasificar' : situacionDeTexto(texto.get(id) ?? id)) as Situacion) : null)
+}
+
+/** G01b · Lo que saldría con la regla de la unión: las fichas, en clientes (solo números). */
+export function simularUnion(filas: readonly Record<string, unknown>[], nif: string, situacion: string, medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null): ResumenDeUnion {
+  const sit = situacionDeFila(situacion, medidos, opcionesConfirmadas)
+  return resumenDeUnion(agrupar(filas.map((f) => ({ bitrixId: String(f.ID ?? ''), nif: textoDe(f[nif]) || null, situacion: sit(textoDe(f[situacion])) })), true))
+}
+
+/** G01b · Los campos que el recuento no puede pedir nunca (contraseñas, certificados). */
+export const camposSensiblesDe = (codigos: readonly string[], medidos: Record<string, CampoMedido>) => codigos.filter((c) => esCampoSensible(medidos[c]))
 
 export function contarRepetidos(
   filas: readonly Record<string, unknown>[], r: { nif: string; nombre: string }, situacion: string,
   medidos: Record<string, CampoMedido>, opcionesConfirmadas?: Record<string, string> | null,
 ): ResultadoRepetidos {
-  const texto = new Map((medidos[situacion]?.items ?? []).map((it) => [String(it.ID), it.VALUE]))
-  const sitDe = (id: string) => (id ? (opcionesConfirmadas ? opcionesConfirmadas[id] ?? 'sin_clasificar' : situacionDeTexto(texto.get(id) ?? id)) : 'vacia')
+  const sit = situacionDeFila(situacion, medidos, opcionesConfirmadas)
+  const sitDe = (id: string) => sit(id) ?? 'vacia'
   const porNif = new Map<string, { sits: Set<string>; soc: boolean; persona: boolean; n: number }>()
   let fichasConNif = 0
   for (const f of filas) {
@@ -183,7 +188,8 @@ export function contar(filas: readonly Record<string, unknown>[], g: GruposRecue
       opciones: items.map((it) => ({ id: String(it.ID), texto: it.VALUE, fichas: porId.get(String(it.ID)) ?? 0 })), vacias, otras,
     },
     cuotas,
-    ...(g.repetidos ? { repetidos: contarRepetidos(filas, g.repetidos, g.situacion, medidos, opcionesConfirmadas) } : {}),
+    ...(g.repetidos ? { repetidos: contarRepetidos(filas, g.repetidos, g.situacion, medidos, opcionesConfirmadas),
+      union: simularUnion(filas, g.repetidos.nif, g.situacion, medidos, opcionesConfirmadas) } : {}),
   }
 }
 

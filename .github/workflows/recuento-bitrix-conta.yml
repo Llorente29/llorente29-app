@@ -15,6 +15,9 @@ name: Recuento de campos de Bitrix24 (solo lectura)
 #     baja a la vez; de qué tipo (DNI, NIE, CIF); y si mezclan una ficha con
 #     nombre de sociedad y otra de persona. El nombre se lee solo para eso y
 #     no sale.
+#   · (07/11, la unión) lo que saldría con la regla: cuántos clientes, cuántas
+#     fichas se unen, cuántas entran sin NIF y cuántas fichas y clientes hay en
+#     cada situación. Solo números; no cambia nada.
 #
 # SOLO LEE de Bitrix24 (crm.company.fields y crm.company.list) y NO ESCRIBE
 # nada, ni en Sumied ni en Bitrix24. La dirección del webhook, con su clave, la
@@ -149,6 +152,20 @@ jobs:
                 "| Repetidos que son CIF | \(.porTipo.CIF) |",
                 "| Repetidos de otro formato | \(.porTipo.otro) |",
                 "| Repetidos entre una ficha con nombre de sociedad y otra de persona | \(.sociedadYPersona) |"' /tmp/r.json
+            fi
+            if [ "$(jq -r 'has("union")' /tmp/r.json)" = "true" ]; then
+              echo; echo "### Con la regla de la unión (ensayo: no se ha cambiado nada)"; echo
+              echo "Mismo NIF = un cliente; su situación, la más viva de sus fichas; un NIF sin formato de DNI, NIE o CIF, o en 10 fichas o más, no se usa. Solo números."; echo
+              echo "| Qué | Cuántos |"; echo "|---|---:|"
+              jq -r '.union | "| Fichas de Bitrix24 | \(.fichas) |",
+                "| Clientes que resultan en Sumied | \(.clientes) |",
+                "| Clientes con varias fichas | \(.clientesUnidos) |",
+                "| Fichas que se unen | \(.fichasUnidas) |",
+                "| Fichas que entran sin NIF (formato no válido) | \(.sinNifPorFormato) |",
+                "| Fichas que entran sin NIF (en 10 fichas o más) | \(.sinNifPorMuchas) |"' /tmp/r.json
+              echo; echo "| Situación | Fichas | Clientes |"; echo "|---|---:|---:|"
+              jq -r '.union as $u | [["activo","Activo"],["moroso","Moroso"],["solo_renta","Solo la renta"],["sin_clasificar","Sin clasificar"],["baja","De baja"],["sin_situacion","Sin situación en Bitrix24"]][]
+                | "| \(.[1]) | \($u.fichasPorSituacion[.[0]]) | \($u.clientesPorSituacion[.[0]]) |"' /tmp/r.json
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Recuento hecho: $(jq -r '.total' /tmp/r.json) fichas. El resultado, en el resumen del run."

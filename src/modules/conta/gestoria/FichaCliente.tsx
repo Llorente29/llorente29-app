@@ -267,6 +267,10 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
             <div><dt>Forma de pago</dt><dd>{fila.bitrix.formaPago ?? '—'}</dd></div>
             <div><dt>Servicios</dt><dd>{fila.bitrix.servicios.length ? fila.bitrix.servicios.join(', ') : '—'}</dd></div>
             <div><dt>Dirección{fila.bitrix.direccionDe ? ` (de «${fila.bitrix.direccionDe}»)` : ''}</dt><dd>{fila.bitrix.direccion ?? 'Sin dirección en Bitrix24'}</dd></div>
+            {(fila.bitrix.otrasFichas ?? []).length > 0 && (
+              <div><dt>Otras fichas con el mismo NIF</dt><dd className="cxg-apoyo-dd">{fila.bitrix.otrasFichas!.map((o) =>
+                `${o.nombre} (ficha ${o.bitrixId}: ${o.situacion === 'sin_clasificar' && o.situacionTexto ? `«${o.situacionTexto}»` : o.situacion ? SITUACION[o.situacion] ?? o.situacion : 'sin situación'})`).join(' · ')}</dd></div>
+            )}
             {(fila.bitrix.otrasDirecciones ?? []).map((o, i) => (
               <div key={i}><dt>Otra dirección · {o.etiqueta}</dt><dd className="cxg-apoyo-dd">{o.texto}</dd></div>
             ))}
