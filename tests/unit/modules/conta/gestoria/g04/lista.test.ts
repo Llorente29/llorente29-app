@@ -76,6 +76,9 @@ describe('G04 · Te deben: devuelto en GoCardless y sin cobrar después, con man
     const r = teDeben(cargos, new Set(['e']), '2026-11-08')
     expect([r.cargos.map((x) => x.id), r.totalCent, r.clientes, r.masDe60, r.masDe60Cent]).toEqual([['a', 'b'], 21780, 1, 1, 10890])
   })
+  it('con la marca de la base («cobrado después»), sale igual que si estuviera el cobro', () => {
+    expect(teDeben([cargo('x', { suscripcionId: 's9', cobradoDespues: true }), cargo('y', { suscripcionId: 's9' })], new Set(), '2026-11-08').cargos.map((c) => c.id)).toEqual(['y'])
+  })
   it('«Cobrado por otra vía» lo saca', () => {
     expect(teDeben(cargos, new Set(['a', 'b', 'e']), '2026-11-08').totalCent).toBe(0)
   })

@@ -3,7 +3,7 @@
 // clientes e importes inventados (T11), salvo Gestoría mensual 60,50 €.
 import { describe, expect, it } from 'vitest'
 import {
-  PALABRA_DE_PRECIO, fallosDeForma, importeDeForma, mesDeFecha, porSeparado, precioDelMes, reciboDelMes,
+  PALABRA_DE_PRECIO, fallosDeForma, importeDeForma, mesDeFecha, parteDelMes, porSeparado, precioDelMes, reciboDelMes,
   type Asignacion, type Catalogo, type Forma, type Precio,
 } from '../../../../../../supabase/functions/_shared/tarifa/precio'
 
@@ -150,5 +150,45 @@ describe('G04 · el recibo de un cliente en un mes', () => {
     ]
     const r = reciboDelMes(catalogo(precios), a, 'c1', E, '2026-11')
     expect([r.lineas.length, r.totalCent, r.sinPrecio, r.lineas[0].dePrecio, r.lineas[0].cuenta]).toEqual([1, 0, 1, 'sin_precio', 'Sin precio en la tarifa ni para este cliente'])
+  })
+})
+
+describe('G04 · altas y bajas a mitad de mes: un ajuste de la gestoría', () => {
+  const precios = [p('lab', LABORAL, { tipo: 'por_trabajador', importeCent: 2420 }), p('ges', GESTORIA, { tipo: 'fijo', periodo: 'mes', importeCent: 6050 })]
+  // Noviembre tiene 30 días. Un alta el 16 (15 días) y una baja el 10 (10 días).
+  const ts = [
+    { nombre: 'Persona Prueba Uno', desde: '2026-01', hasta: null },
+    { nombre: 'Persona Prueba Alta', desde: '2026-11', hasta: null, altaEl: '2026-11-16' },
+    { nombre: 'Persona Prueba Baja', desde: '2026-01', hasta: '2026-11', bajaEl: '2026-11-10' },
+  ]
+  const a: Asignacion[] = [
+    { id: 'l', clienteId: 'c1', empresaId: E, objetivo: LABORAL, desde: '2026-01', hasta: null, trabajadores: ts },
+    { id: 'g', clienteId: 'c1', empresaId: E, objetivo: GESTORIA, desde: '2026-11', hasta: null, altaEl: '2026-11-16' },
+  ]
+  it('la parte del mes: días de alta entre los días del mes', () => {
+    expect(parteDelMes('2026-11', '2026-11-16', null)).toEqual({ parte: 0.5, dias: 15, delMes: 30 })
+    expect(parteDelMes('2026-11', null, '2026-11-10')).toEqual({ parte: 1 / 3, dias: 10, delMes: 30 })
+    expect(parteDelMes('2026-12', '2026-11-16', null).parte).toBe(1) // el mes siguiente, entero
+    expect(parteDelMes('2027-02', null, null).delMes).toBe(28)
+  })
+  it('por defecto, «mes entero» (lo de hoy): los tres trabajadores y la gestoría, enteros', () => {
+    const r = reciboDelMes(catalogo(precios), a, 'c1', E, '2026-11')
+    expect(r.lineas.map((l) => [l.importeCent, l.cuenta])).toEqual([[7260, '3 × 24,20 €'], [6050, '60,50 € al mes']])
+    expect(reciboDelMes({ ...catalogo(precios), ajustes: { mitadDeMes: 'mes_entero' } }, a, 'c1', E, '2026-11').totalCent).toBe(13310)
+  })
+  it('«proporcional»: el alta, 15/30; la baja, 10/30; la gestoría que empieza el 16, la mitad', () => {
+    const r = reciboDelMes({ ...catalogo(precios), ajustes: { mitadDeMes: 'proporcional' } }, a, 'c1', E, '2026-11')
+    // 24,20 + 24,20 × 15/30 (12,10) + 24,20 × 10/30 (8,07) = 44,37 €; gestoría 60,50 × 15/30 = 30,25 €
+    expect(r.lineas.map((l) => [l.importeCent, l.cuenta])).toEqual([
+      [4437, '1 × 24,20 € + 24,20 € × 15/30 días + 24,20 € × 10/30 días'],
+      [3025, '60,50 € al mes × 15/30 días'],
+    ])
+    // En diciembre, el alta ya cuenta entera y la baja ya no está.
+    expect(reciboDelMes({ ...catalogo(precios), ajustes: { mitadDeMes: 'proporcional' } }, a, 'c1', E, '2026-12').totalCent).toBe(2 * 2420 + 6050)
+  })
+  it('en proporcional, un paquete o unos tramos cuentan a cada trabajador entero', () => {
+    const tramos = p('t', LABORAL, { tipo: 'tramos', tramos: [{ desde: 1, hasta: 5, importeCent: 10000, porUnidad: false }] })
+    const r = reciboDelMes({ ...catalogo([tramos]), ajustes: { mitadDeMes: 'proporcional' } }, [a[0]], 'c1', E, '2026-11')
+    expect(r.totalCent).toBe(10000)
   })
 })

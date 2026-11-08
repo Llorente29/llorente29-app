@@ -23,9 +23,14 @@
 //   · Un precio y una asignación valen de su mes «desde» a su mes «hasta»
 //     (incluido; sin «hasta», sigue). Si dos precios valen el mismo mes, el de
 //     «desde» más reciente.
-//   · Un trabajador cuenta el mes si está de alta ese mes: el mes del alta y el
-//     de la baja se cobran enteros (la regla de hoy en conta_gestoria_baja_linea:
-//     «se cobra entero y ya no se cobra desde el mes siguiente»).
+//   · Un trabajador cuenta el mes si está de alta ese mes. Las altas y bajas a
+//     mitad de mes son un AJUSTE DE LA GESTORÍA (Julio, 08/11), no código:
+//       - «mes entero» (por defecto, lo de hoy en conta_gestoria_baja_linea: «se
+//         cobra entero y ya no se cobra desde el mes siguiente»);
+//       - «proporcional»: los días de alta del mes entre los días del mes, al
+//         céntimo. Vale para lo que va por trabajador y para un servicio fijo
+//         que empieza o acaba a mitad de mes. En tramos y paquetes el número de
+//         trabajadores decide el tramo: cada uno cuenta entero.
 //   · Un paquete: su precio, y si el cliente se pasa del límite de trabajadores
 //     de una de sus líneas, cada uno de más al importe del exceso.
 //
@@ -90,7 +95,15 @@ export interface Paquete {
   excesoPorTrabajadorCent: number | null
 }
 
-export interface Trabajador { nombre: string; desde: Mes; hasta: Mes | null }
+/** Un trabajador; «altaEl» y «bajaEl» (AAAA-MM-DD), el día, si se sabe (para lo proporcional). */
+export interface Trabajador { nombre: string; desde: Mes; hasta: Mes | null; altaEl?: string | null; bajaEl?: string | null }
+
+/** Los ajustes de cobro de la gestoría (los guarda conta_gestoria_ajustes). */
+export interface AjustesDeCobro {
+  /** Altas y bajas a mitad de mes: se cobra el mes entero o la parte proporcional. */
+  mitadDeMes: 'mes_entero' | 'proporcional'
+}
+export const AJUSTES_DE_SIEMPRE: AjustesDeCobro = { mitadDeMes: 'mes_entero' }
 
 /** Lo que tiene un cliente: un servicio (o un nivel) o un paquete, con la empresa que le factura. */
 export interface Asignacion {
@@ -100,6 +113,9 @@ export interface Asignacion {
   objetivo: Objetivo
   desde: Mes
   hasta: Mes | null
+  /** El día del alta y de la baja (AAAA-MM-DD), si se sabe (para lo proporcional). */
+  altaEl?: string | null
+  bajaEl?: string | null
   /** Los trabajadores, si se cobra por trabajador o por tramos. */
   trabajadores?: Trabajador[]
 }
@@ -109,6 +125,8 @@ export interface Catalogo {
   niveles: Nivel[]
   paquetes: Paquete[]
   precios: Precio[]
+  /** Sin ajustes: los de siempre (mes entero). */
+  ajustes?: AjustesDeCobro
 }
 
 export type DePrecio = 'tarifa' | 'especial' | 'de_este_cliente' | 'sin_precio'
@@ -155,10 +173,33 @@ export function euros(cent: number): string {
 /** El mes («AAAA-MM») de una fecha «AAAA-MM-DD»: un alta del 15 de noviembre es de noviembre. */
 export const mesDeFecha = (fecha: string): Mes => fecha.slice(0, 7)
 
+const diasDelMes = (mes: Mes) => new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).getUTCDate()
+
+/**
+ * La parte del mes que está de alta, de 0 a 1: los días desde el alta (si es de
+ * ese mes) hasta la baja (si es de ese mes), incluidos, entre los días del mes.
+ * Sin días: el mes entero (1).
+ */
+export function parteDelMes(mes: Mes, altaEl?: string | null, bajaEl?: string | null): { parte: number; dias: number; delMes: number } {
+  const delMes = diasDelMes(mes)
+  const ini = altaEl && altaEl.slice(0, 7) === mes ? Number(altaEl.slice(8, 10)) : 1
+  const fin = bajaEl && bajaEl.slice(0, 7) === mes ? Number(bajaEl.slice(8, 10)) : delMes
+  const dias = Math.max(0, fin - ini + 1)
+  return { parte: dias / delMes, dias, delMes }
+}
+
 const enTramo = (t: Tramo, n: number) => n >= t.desde && (t.hasta === null || n <= t.hasta)
 
 /** Lo que cuesta una forma con N trabajadores (o unidades), al mes. Null si ningún tramo cubre N. */
-export function importeDeForma(f: Forma, n: number): { cent: number; cuenta: string } | null {
+export function importeDeForma(f: Forma, n: number, partes?: { parte: number; dias: number; delMes: number }[]): { cent: number; cuenta: string } | null {
+  if (f.tipo === 'por_trabajador' && partes && partes.some((x) => x.parte !== 1)) {
+    // Proporcional: cada trabajador por su parte del mes, al céntimo.
+    const enteros = partes.filter((x) => x.parte === 1).length
+    const partidos = partes.filter((x) => x.parte !== 1)
+    const cent = enteros * f.importeCent + partidos.reduce((s, x) => s + Math.round(f.importeCent * x.parte), 0)
+    const cuenta = [enteros ? `${enteros} × ${euros(f.importeCent)}` : '', ...partidos.map((x) => `${euros(f.importeCent)} × ${x.dias}/${x.delMes} días`)].filter(Boolean).join(' + ')
+    return { cent, cuenta }
+  }
   switch (f.tipo) {
     case 'fijo':
       if (f.periodo === 'anio') return { cent: Math.round(f.importeCent / 12), cuenta: `${euros(f.importeCent)} al año, ${euros(Math.round(f.importeCent / 12))} al mes` }
@@ -272,7 +313,14 @@ export function reciboDelMes(c: Catalogo, asignaciones: Asignacion[], clienteId:
     const n = a.trabajadores ? tr.deAlta.length : 0
     const p = precioDelMes(c.precios, empresaId, a.objetivo, clienteId, mes)
     const paq = a.objetivo.tipo === 'paquete' ? c.paquetes.find((x) => x.id === (a.objetivo as { paqueteId: string }).paqueteId) ?? null : null
-    const imp = !p ? null : paq ? importeDePaquete(paq, p.forma, n) : importeDeForma(p.forma, n)
+    const proporcional = (c.ajustes ?? AJUSTES_DE_SIEMPRE).mitadDeMes === 'proporcional'
+    let imp = !p ? null : paq ? importeDePaquete(paq, p.forma, n)
+      : importeDeForma(p.forma, n, proporcional ? tr.deAlta.map((t) => parteDelMes(mes, t.altaEl, t.bajaEl)) : undefined)
+    // Un servicio fijo que empieza o acaba a mitad de mes, en proporcional: su parte del mes.
+    const delServicio = parteDelMes(mes, a.altaEl, a.bajaEl)
+    if (imp && proporcional && !paq && p?.forma.tipo === 'fijo' && delServicio.parte !== 1) {
+      imp = { cent: Math.round(imp.cent * delServicio.parte), cuenta: `${imp.cuenta} × ${delServicio.dias}/${delServicio.delMes} días` }
+    }
     const conTrab = a.trabajadores ? ` · ${n} ${n === 1 ? 'trabajador' : 'trabajadores'}` : ''
     lineas.push({
       asignacionId: a.id, objetivo: a.objetivo, texto: `${nombreDe(c, a.objetivo)}${conTrab}`,

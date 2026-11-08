@@ -43,6 +43,14 @@ describe('G01 · lector de GoCardless', () => {
       .toMatchObject({ nombre: 'Persona De Prueba', nif: null, correo: null })
   })
 
+  it('G04 · el siguiente cobro de una suscripción: el más próximo de upcoming_payments', () => {
+    const base = { id: 'SB9', name: 'GESTORIA MENSUAL', amount: 6050, currency: 'EUR', interval_unit: 'monthly', interval: 1, status: 'active', links: { mandate: 'MD9' } }
+    expect(leerSuscripcion({ ...base, upcoming_payments: [{ charge_date: '2027-01-04', amount: 6050 }, { charge_date: '2026-12-04', amount: 6050 }] }).proximoCobro)
+      .toEqual({ fecha: '2026-12-04', importeCent: 6050 })
+    expect(leerSuscripcion(base).proximoCobro).toBeNull()
+    expect(leerSuscripcion({ ...base, upcoming_payments: [{ amount: 100 }] }).proximoCobro).toBeNull()
+  })
+
   it('mandato, suscripción y cobro, con sus enlaces', () => {
     expect(leerMandato({ id: 'MD1', status: 'active', reference: 'REF-1', scheme: 'sepa_core', links: { customer: 'CU1', customer_bank_account: 'BA1' } }))
       .toMatchObject({ id: 'MD1', estado: 'active', clienteId: 'CU1', esquema: 'sepa_core' })

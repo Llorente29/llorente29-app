@@ -100,7 +100,10 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
   const suscripciones = datos.suscripciones.map((x) => ({ company_id: empresa, gc_id: x.id, account_id: cuenta,
     gc_cliente_id: x.mandatoId ? clienteDeMandato.get(x.mandatoId) ?? null : null, mandato_gc_id: x.mandatoId, nombre: x.nombre,
     importe: aEuros(x.importeCent), moneda: x.moneda, intervalo: x.intervalo, cada: x.cada, estado: x.estado, al_mes: aEuros(alMesCent(x)),
-    inicio: x.inicio, fin: x.fin, leido_at: ahora }))
+    inicio: x.inicio, fin: x.fin, leido_at: ahora,
+    // G04 · El siguiente cobro, solo de una activa (de las demás no hay).
+    proximo_cobro_fecha: x.estado === 'active' ? x.proximoCobro?.fecha ?? null : null,
+    proximo_cobro_importe: x.estado === 'active' && x.proximoCobro ? aEuros(x.proximoCobro.importeCent) : null }))
   const cobros = datos.cobros.map((p) => ({ company_id: empresa, gc_id: p.id, account_id: cuenta, mandato_gc_id: p.mandatoId,
     suscripcion_gc_id: p.suscripcionId, estado: p.estado, fecha: p.fecha, importe: aEuros(p.importeCent), moneda: p.moneda, motivo: p.motivo, leido_at: ahora }))
 

@@ -125,6 +125,8 @@ export interface CargoDeGoCardless {
   fecha: string // «AAAA-MM-DD»
   importeCent: number
   mandatoActivo: boolean
+  /** Lo que ya dice la base (conta_consulta_cargo_devuelto): cobrado después en la misma suscripción. */
+  cobradoDespues?: boolean
 }
 
 /**
@@ -137,7 +139,7 @@ export interface CargoDeGoCardless {
 export function teDeben(cargos: readonly CargoDeGoCardless[], cobradoPorOtraVia: ReadonlySet<string>, hoy: string) {
   const pagado = (c: CargoDeGoCardless) => c.estado === 'paid_out' || c.estado === 'confirmed'
   const deben = cargos.filter((c) => (c.estado === 'failed' || c.estado === 'charged_back') && c.mandatoActivo && !cobradoPorOtraVia.has(c.id)
-    && !cargos.some((p) => pagado(p) && p.empresaId === c.empresaId && c.suscripcionId !== null && p.suscripcionId === c.suscripcionId && p.fecha > c.fecha))
+    && !c.cobradoDespues && !cargos.some((p) => pagado(p) && p.empresaId === c.empresaId && c.suscripcionId !== null && p.suscripcionId === c.suscripcionId && p.fecha > c.fecha))
   const dias = (f: string) => Math.round((Date.parse(`${hoy}T00:00:00Z`) - Date.parse(`${f}T00:00:00Z`)) / 86_400_000)
   const masDe60 = deben.filter((c) => dias(c.fecha) > 60)
   return {
