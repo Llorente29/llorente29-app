@@ -6938,6 +6938,41 @@ end $$;
 
 
 --
+-- Name: _conta_precio_insertar(uuid, uuid, uuid, uuid, uuid, uuid, text, text, numeric, jsonb, date, date, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_precio_insertar(p_cuenta uuid, p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_hasta date, p_cambio uuid, p_quien text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_id uuid; v_t jsonb; v_ant record; v_primero boolean := true;
+begin
+  if p_forma in ('tramos', 'tramo_y_por_trabajador') then
+    if jsonb_typeof(p_tramos) <> 'array' or jsonb_array_length(p_tramos) = 0 then raise exception 'Faltan los tramos.' using errcode = '22023'; end if;
+    for v_t in select value from jsonb_array_elements(p_tramos) order by (value->>'desde')::int loop
+      if not v_primero then
+        if v_ant.hasta is null then raise exception 'El tramo desde % no tiene final y hay otro después.', v_ant.desde using errcode = '22023'; end if;
+        if (v_t->>'desde')::int <= v_ant.hasta then raise exception 'Los tramos que empiezan en % y en % se pisan.', v_ant.desde, v_t->>'desde' using errcode = '22023'; end if;
+        if (v_t->>'desde')::int > v_ant.hasta + 1 then raise exception 'Entre % y % no hay tramo.', v_ant.hasta, v_t->>'desde' using errcode = '22023'; end if;
+      end if;
+      select (v_t->>'desde')::int as desde, nullif(v_t->>'hasta', '')::int as hasta into v_ant;
+      v_primero := false;
+    end loop;
+  end if;
+  insert into public.conta_precio (account_id, company_id, servicio_id, nivel_id, paquete_id, party_id, forma, periodo, importe, desde, hasta, cambio_id, created_by_name)
+  values (p_cuenta, p_company, p_servicio, p_nivel, p_paquete, p_party, p_forma, case when p_forma = 'fijo' then coalesce(p_periodo, 'mes') end,
+          case when p_forma in ('fijo', 'por_trabajador') then p_importe end, public._conta_tarifa_mes(p_desde), p_hasta, p_cambio, p_quien)
+  returning id into v_id;
+  if p_forma in ('tramos', 'tramo_y_por_trabajador') then
+    insert into public.conta_precio_tramo (account_id, precio_id, desde, hasta, importe, por_unidad)
+    select p_cuenta, v_id, (x->>'desde')::int, nullif(x->>'hasta', '')::int, (x->>'importe')::numeric, coalesce((x->>'porUnidad')::boolean, false)
+      from jsonb_array_elements(p_tramos) x;
+  end if;
+  return v_id;
+end $$;
+
+
+--
 -- Name: _conta_proponer(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7762,6 +7797,67 @@ CREATE FUNCTION public._conta_s01q_euros(p numeric) RETURNS text
     AS $$
   select translate(to_char(round(p, 2), 'FM999,999,999,990.00'), ',.', '.,')
 $$;
+
+
+--
+-- Name: _conta_tarifa_huella(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tarifa_huella(p_company uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select md5(coalesce(string_agg(x, '|' order by x), ''))
+  from (
+    select 'tarifa:' || t.id || ':' || t.importe || ':' || t.periodo || ':' || t.desde || ':' || coalesce(t.hasta::text, '') x from public.conta_tarifa t where t.company_id = p_company
+    union all
+    select 'precio:' || p.id || ':' || p.forma || ':' || coalesce(p.periodo, '') || ':' || coalesce(p.importe::text, '') || ':' || p.desde || ':' || coalesce(p.hasta::text, '')
+           || ':' || coalesce((select string_agg(r.desde || '-' || coalesce(r.hasta::text, '') || '-' || r.importe || '-' || r.por_unidad, ',' order by r.desde) from public.conta_precio_tramo r where r.precio_id = p.id), '')
+      from public.conta_precio p where p.company_id = p_company
+  ) q
+$$;
+
+
+--
+-- Name: _conta_tarifa_mes(date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tarifa_mes(p date) RETURNS date
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$ select date_trunc('month', p)::date $$;
+
+
+--
+-- Name: _conta_tarifa_nombre(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tarifa_nombre(p_servicio uuid, p_nivel uuid, p_paquete uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(
+    (select nombre from public.conta_paquete where id = p_paquete),
+    (select s.nombre || coalesce(' · ' || n.nombre, '') from public.conta_servicio s left join public.conta_servicio_nivel n on n.id = p_nivel where s.id = p_servicio),
+    'ese servicio')
+$$;
+
+
+--
+-- Name: _conta_tarifa_puede(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_tarifa_puede(p_company uuid, p_escribir boolean) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company);
+begin
+  if p_escribir and not coalesce((select cambios_de_tarifa from public.conta_gestoria_ajustes where company_id = p_company), false) then
+    raise exception 'Los cambios de precios y de servicios aún no están encendidos en esta empresa. De momento se prueban en la cuenta de pruebas.' using errcode = '42501';
+  end if;
+  return v_cuenta;
+end $$;
 
 
 --
@@ -37232,6 +37328,65 @@ COMMENT ON FUNCTION public.conta_gasto_aprendido(p_company uuid, p_supplier uuid
 
 
 --
+-- Name: conta_gc_cobro_otra_via(uuid, text, text, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company); v_c public.conta_gc_cobro;
+begin
+  select * into v_c from public.conta_gc_cobro where company_id = p_company and gc_id = p_gc_cobro;
+  if v_c.gc_id is null then raise exception 'Ese cargo de GoCardless no es de esta empresa.' using errcode = 'P0002'; end if;
+  if v_c.estado not in ('failed', 'charged_back') then raise exception 'Ese cargo no está devuelto en GoCardless.' using errcode = '22023'; end if;
+  if p_via not in ('transferencia', 'efectivo') then raise exception 'Di si se cobró por transferencia o en efectivo.' using errcode = '22023'; end if;
+  if p_fecha is null then raise exception 'Di qué día se cobró.' using errcode = '22023'; end if;
+  insert into public.conta_gc_cobro_otra_via (company_id, gc_id, account_id, via, fecha, nota, quien, quien_name)
+  values (p_company, p_gc_cobro, v_cuenta, p_via, p_fecha, nullif(trim(coalesce(p_nota, '')), ''), auth.uid(), public.conta_nombre_actor())
+  on conflict (company_id, gc_id) do update set via = excluded.via, fecha = excluded.fecha, nota = excluded.nota, quien = excluded.quien, quien_name = excluded.quien_name, cuando = now();
+  return jsonb_build_object('frase', format('Guardado: el cargo de %s del %s se cobró %s el %s. Ya no sale en «Te deben». En GoCardless no cambia nada.',
+    public._conta_gestoria_euros(v_c.importe), to_char(v_c.fecha, 'DD/MM/YYYY'), case p_via when 'transferencia' then 'por transferencia' else 'en efectivo' end, to_char(p_fecha, 'DD/MM/YYYY')));
+end $$;
+
+
+--
+-- Name: conta_gc_cobro_otra_via_quitar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  perform public._conta_gestoria_puede(p_company);
+  delete from public.conta_gc_cobro_otra_via where company_id = p_company and gc_id = p_gc_cobro;
+  if not found then raise exception 'Ese cargo no estaba marcado como cobrado por otra vía.' using errcode = 'P0002'; end if;
+  return jsonb_build_object('frase', 'Quitado: ese cargo vuelve a salir en «Te deben».');
+end $$;
+
+
+--
+-- Name: conta_gestoria_ajustes_guardar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gestoria_ajustes_guardar(p_company uuid, p_mitad_de_mes text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_gestoria_puede(p_company);
+begin
+  if p_mitad_de_mes not in ('mes_entero', 'proporcional') then raise exception 'Elige «el mes entero» o «la parte proporcional».' using errcode = '22023'; end if;
+  insert into public.conta_gestoria_ajustes (company_id, account_id, mitad_de_mes, updated_by_name)
+  values (p_company, v_cuenta, p_mitad_de_mes, public.conta_nombre_actor())
+  on conflict (company_id) do update set mitad_de_mes = excluded.mitad_de_mes, updated_at = now(), updated_by_name = excluded.updated_by_name;
+  return jsonb_build_object('frase', case p_mitad_de_mes when 'mes_entero'
+    then 'Guardado: las altas y bajas a mitad de mes se cobran el mes entero.'
+    else 'Guardado: las altas y bajas a mitad de mes se cobran por los días de alta.' end);
+end $$;
+
+
+--
 -- Name: conta_gestoria_alta_empleado(uuid, uuid, uuid, text, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -50967,6 +51122,115 @@ COMMENT ON FUNCTION public.conta_sumas_saldos(p_company uuid, p_desde date, p_ha
 
 
 --
+-- Name: conta_tarifa_cambio_aplicar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_cambio_aplicar(p_cambio uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_c public.conta_cambio_precios; v_ref text; v_n jsonb; v_efectos jsonb := '[]'; v_hasta date; v_id uuid; v_quien text := public.conta_nombre_actor();
+begin
+  select * into v_c from public.conta_cambio_precios where id = p_cambio for update;
+  if v_c.id is null then raise exception 'Ese cambio de precios no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_tarifa_puede(v_c.company_id, true);
+  if v_c.estado <> 'ensayo' then raise exception 'Ese cambio de precios ya está %.', case v_c.estado when 'aplicado' then 'aplicado' else 'deshecho' end using errcode = '22023'; end if;
+  if public._conta_tarifa_huella(v_c.company_id) <> v_c.huella then
+    raise exception 'Los precios han cambiado desde el ensayo: vuelve a ensayar.' using errcode = '40001';
+  end if;
+  for v_ref in select jsonb_array_elements_text(coalesce(v_c.resultado->'guardar'->'acabanAntes', '[]')) loop
+    if split_part(v_ref, ':', 1) = 'precio' then
+      select hasta into v_hasta from public.conta_precio where id = split_part(v_ref, ':', 2)::uuid;
+      update public.conta_precio set hasta = (v_c.desde - interval '1 month')::date where id = split_part(v_ref, ':', 2)::uuid;
+    else
+      select hasta into v_hasta from public.conta_tarifa where id = split_part(v_ref, ':', 2)::uuid;
+      update public.conta_tarifa set hasta = (v_c.desde - interval '1 month')::date where id = split_part(v_ref, ':', 2)::uuid;
+    end if;
+    v_efectos := v_efectos || jsonb_build_array(jsonb_build_object('acaba', v_ref, 'hastaAntes', v_hasta));
+  end loop;
+  for v_n in select value from jsonb_array_elements(coalesce(v_c.resultado->'guardar'->'nuevos', '[]')) loop
+    v_id := public._conta_precio_insertar(v_c.account_id, v_c.company_id,
+      case when v_n->'objetivo'->>'tipo' in ('servicio', 'nivel') then (v_n->'objetivo'->>'servicioId')::uuid end,
+      case when v_n->'objetivo'->>'tipo' = 'nivel' then (v_n->'objetivo'->>'nivelId')::uuid end,
+      case when v_n->'objetivo'->>'tipo' = 'paquete' then (v_n->'objetivo'->>'paqueteId')::uuid end,
+      (v_n->>'clienteId')::uuid, v_n->'forma'->>'tipo', v_n->'forma'->>'periodo', (v_n->'forma'->>'importeCent')::numeric / 100,
+      (select jsonb_agg(jsonb_build_object('desde', t->'desde', 'hasta', t->'hasta', 'importe', (t->>'importeCent')::numeric / 100, 'porUnidad', t->'porUnidad'))
+         from jsonb_array_elements(coalesce(v_n->'forma'->'tramos', '[]')) t),
+      v_c.desde, case when v_n->>'hasta' is null then null else (v_n->>'hasta' || '-01')::date end, v_c.id, v_quien);
+    v_efectos := v_efectos || jsonb_build_array(jsonb_build_object('crea', 'precio:' || v_id));
+  end loop;
+  update public.conta_cambio_precios set estado = 'aplicado', efectos = v_efectos, aplicado_at = now(), aplicado_por_name = v_quien where id = p_cambio;
+  return jsonb_build_object('id', p_cambio, 'frase', 'Hecho. ' || v_c.frase);
+end $$;
+
+
+--
+-- Name: conta_tarifa_cambio_deshacer(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_cambio_deshacer(p_cambio uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_c public.conta_cambio_precios; v_e jsonb; v_ref text; v_quien text := public.conta_nombre_actor();
+begin
+  select * into v_c from public.conta_cambio_precios where id = p_cambio for update;
+  if v_c.id is null then raise exception 'Ese cambio de precios no existe.' using errcode = 'P0002'; end if;
+  perform public._conta_tarifa_puede(v_c.company_id, true);
+  if v_c.estado <> 'aplicado' then raise exception 'Solo se deshace un cambio de precios aplicado.' using errcode = '22023'; end if;
+  delete from public.conta_precio where cambio_id = p_cambio;
+  for v_e in select value from jsonb_array_elements(v_c.efectos) loop
+    v_ref := v_e->>'acaba';
+    continue when v_ref is null;
+    if split_part(v_ref, ':', 1) = 'precio' then
+      update public.conta_precio set hasta = (v_e->>'hastaAntes')::date where id = split_part(v_ref, ':', 2)::uuid;
+    else
+      update public.conta_tarifa set hasta = (v_e->>'hastaAntes')::date where id = split_part(v_ref, ':', 2)::uuid;
+    end if;
+  end loop;
+  update public.conta_cambio_precios set estado = 'deshecho', deshecho_at = now(), deshecho_por_name = v_quien where id = p_cambio;
+  return jsonb_build_object('id', p_cambio, 'frase', format('Deshecho: los precios vuelven a ser los de antes del cambio (%s clientes).', v_c.clientes));
+end $$;
+
+
+--
+-- Name: conta_tarifa_cambio_ensayar(uuid, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_cambio_ensayar(p_company uuid, p_operacion jsonb, p_resultado jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_tarifa_puede(p_company, false); v_id uuid; v_desde date := public._conta_tarifa_mes((p_operacion->>'desde' || '-01')::date);
+        v_ref text; v_n jsonb;
+begin
+  if v_desde is null then raise exception 'Di desde qué mes cambian los precios.' using errcode = '22023'; end if;
+  for v_ref in select jsonb_array_elements_text(coalesce(p_resultado->'guardar'->'acabanAntes', '[]')) loop
+    if not ((split_part(v_ref, ':', 1) = 'precio' and exists (select 1 from public.conta_precio where id = split_part(v_ref, ':', 2)::uuid and company_id = p_company))
+         or (split_part(v_ref, ':', 1) = 'tarifa' and exists (select 1 from public.conta_tarifa where id = split_part(v_ref, ':', 2)::uuid and company_id = p_company))) then
+      raise exception 'Un precio del ensayo no es de esta empresa.' using errcode = 'P0002';
+    end if;
+  end loop;
+  for v_n in select value from jsonb_array_elements(coalesce(p_resultado->'guardar'->'nuevos', '[]')) loop
+    if v_n->>'empresaId' is distinct from p_company::text then raise exception 'Un precio nuevo del ensayo no es de esta empresa.' using errcode = 'P0002'; end if;
+    if v_n->>'clienteId' is not null and not exists (select 1 from public.party where id = (v_n->>'clienteId')::uuid and account_id = v_cuenta) then
+      raise exception 'Un cliente del ensayo no es de esta cuenta.' using errcode = 'P0002';
+    end if;
+  end loop;
+  insert into public.conta_cambio_precios (account_id, company_id, operacion, resultado, frase, clientes, antes, despues, desde, huella, ensayado_por, ensayado_por_name)
+  values (v_cuenta, p_company, p_operacion, p_resultado, coalesce(p_resultado->>'frase', ''), coalesce((p_resultado->>'clientes')::int, 0),
+          coalesce((p_resultado->>'antesCent')::numeric, 0) / 100, coalesce((p_resultado->>'despuesCent')::numeric, 0) / 100, v_desde,
+          public._conta_tarifa_huella(p_company), auth.uid(), public.conta_nombre_actor())
+  returning id into v_id;
+  insert into public.conta_cambio_precios_linea (account_id, cambio_id, party_id, objetivo, antes, despues, como)
+  select v_cuenta, v_id, (x->>'clienteId')::uuid, x->'objetivo', (x->>'antesCent')::numeric / 100, (x->>'despuesCent')::numeric / 100, x->>'como'
+    from jsonb_array_elements(coalesce(p_resultado->'lineas', '[]')) x
+   where exists (select 1 from public.party where id = (x->>'clienteId')::uuid and account_id = v_cuenta);
+  return jsonb_build_object('id', v_id, 'ensayo', true, 'frase', coalesce(p_resultado->>'frase', ''));
+end $$;
+
+
+--
 -- Name: conta_tarifa_guardar(uuid, text, date, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -51004,6 +51268,195 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_tarifa_guardar(p_company uuid, p_provider text, p_desde date, p_params jsonb, p_quien_nombre text) IS 'E05 · Guarda una versión de la tarifa del proveedor (Catcher) que vale desde p_desde; si ya hay una de ese día, la corrige.';
+
+
+--
+-- Name: conta_tarifa_nivel_cambiar(uuid, uuid, date, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_nivel_cambiar(p_linea uuid, p_nivel uuid, p_desde date, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l public.conta_linea; v_mes date := public._conta_tarifa_mes(p_desde); v_cuenta uuid; v_cliente text; v_de text; v_a text; v_id uuid; v_frase text;
+        v_quien text := public.conta_nombre_actor();
+begin
+  select * into v_l from public.conta_linea where id = p_linea;
+  if v_l.id is null then raise exception 'Esa línea no existe.' using errcode = 'P0002'; end if;
+  v_cuenta := public._conta_tarifa_puede(v_l.company_id, not p_ensayo);
+  if not exists (select 1 from public.conta_servicio_nivel where id = p_nivel and servicio_id = v_l.servicio_id) then raise exception 'Ese nivel no es del servicio de la línea.' using errcode = 'P0002'; end if;
+  if p_nivel is not distinct from v_l.nivel_id then raise exception 'Ya está en ese nivel.' using errcode = '22023'; end if;
+  if v_mes is null or v_mes <= v_l.desde then raise exception 'El cambio de nivel va desde un mes posterior al alta (%).', public._conta_gestoria_mes(v_l.desde) using errcode = '22023'; end if;
+  if v_l.hasta is not null and v_l.hasta < v_mes then raise exception 'La línea ya está de baja ese mes.' using errcode = '22023'; end if;
+  select name into v_cliente from public.party where id = v_l.party_id;
+  v_de := public._conta_tarifa_nombre(v_l.servicio_id, v_l.nivel_id, null);
+  v_a := public._conta_tarifa_nombre(v_l.servicio_id, p_nivel, null);
+  v_frase := format('%s pasa de %s a %s desde %s de %s.', v_cliente, v_de, v_a, public._conta_gestoria_mes(v_mes), extract(year from v_mes));
+  if p_ensayo then return jsonb_build_object('ensayo', true, 'frase', v_frase); end if;
+  update public.conta_linea set hasta = (v_mes - interval '1 month')::date, updated_at = now(), updated_by_name = v_quien where id = p_linea;
+  insert into public.conta_linea (account_id, company_id, party_id, servicio_id, nivel_id, tipo, detalle, empleado_nombre, employee_id, origen, importe_propio, periodo, desde, hasta, created_by_name, updated_by_name)
+  values (v_l.account_id, v_l.company_id, v_l.party_id, v_l.servicio_id, p_nivel, v_l.tipo, v_l.detalle, v_l.empleado_nombre, v_l.employee_id, 'manual', v_l.importe_propio, v_l.periodo, v_mes, v_l.hasta, v_quien, v_quien)
+  returning id into v_id;
+  return jsonb_build_object('id', v_id, 'frase', v_frase);
+end $$;
+
+
+--
+-- Name: conta_tarifa_nivel_guardar(uuid, uuid, uuid, text, integer, text[], boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_nivel_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_nombre text, p_orden integer, p_incluye text[], p_mas_elegido boolean, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_tarifa_puede(p_company, not p_ensayo); v_serv text; v_id uuid := p_nivel; v_frase text;
+begin
+  select nombre into v_serv from public.conta_servicio where id = p_servicio and company_id = p_company;
+  if v_serv is null then raise exception 'Ese servicio no es de esta empresa.' using errcode = 'P0002'; end if;
+  if coalesce(trim(p_nombre), '') = '' then raise exception 'Ponle un nombre al nivel.' using errcode = '22023'; end if;
+  if p_nivel is not null and not exists (select 1 from public.conta_servicio_nivel where id = p_nivel and servicio_id = p_servicio) then
+    raise exception 'Ese nivel no es de ese servicio.' using errcode = 'P0002';
+  end if;
+  v_frase := format('%s · %s%s.', v_serv, trim(p_nombre), case when p_mas_elegido then ', marcado como el más elegido' else '' end);
+  if p_ensayo then return jsonb_build_object('ensayo', true, 'frase', (case when p_nivel is null then 'Se creará el nivel ' else 'Se cambiará el nivel ' end) || v_frase); end if;
+  if p_mas_elegido then update public.conta_servicio_nivel set mas_elegido = false where servicio_id = p_servicio and id is distinct from p_nivel; end if;
+  if p_nivel is null then
+    insert into public.conta_servicio_nivel (account_id, company_id, servicio_id, nombre, orden, incluye, mas_elegido, created_by_name)
+    values (v_cuenta, p_company, p_servicio, trim(p_nombre), coalesce(p_orden, 1), coalesce(p_incluye, '{}'), coalesce(p_mas_elegido, false), public.conta_nombre_actor())
+    returning id into v_id;
+  else
+    update public.conta_servicio_nivel set nombre = trim(p_nombre), orden = coalesce(p_orden, orden), incluye = coalesce(p_incluye, incluye), mas_elegido = coalesce(p_mas_elegido, false) where id = p_nivel;
+  end if;
+  return jsonb_build_object('id', v_id, 'frase', (case when p_nivel is null then 'Creado el nivel ' else 'Cambiado el nivel ' end) || v_frase);
+end $$;
+
+
+--
+-- Name: conta_tarifa_paquete_guardar(uuid, uuid, text, text, numeric, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_paquete_guardar(p_company uuid, p_paquete uuid, p_nombre text, p_descripcion text, p_exceso numeric, p_lineas jsonb, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_tarifa_puede(p_company, not p_ensayo); v_id uuid := p_paquete; v_l jsonb; v_n int; v_frase text;
+begin
+  if coalesce(trim(p_nombre), '') = '' then raise exception 'Ponle un nombre al paquete.' using errcode = '22023'; end if;
+  if jsonb_typeof(p_lineas) <> 'array' or jsonb_array_length(p_lineas) = 0 then raise exception 'Un paquete incluye al menos un servicio.' using errcode = '22023'; end if;
+  if p_paquete is not null and not exists (select 1 from public.conta_paquete where id = p_paquete and company_id = p_company) then
+    raise exception 'Ese paquete no es de esta empresa.' using errcode = 'P0002';
+  end if;
+  for v_l in select value from jsonb_array_elements(p_lineas) loop
+    if not exists (select 1 from public.conta_servicio where id = (v_l->>'servicio')::uuid and company_id = p_company) then
+      raise exception 'Un servicio del paquete no es de esta empresa.' using errcode = 'P0002';
+    end if;
+    if v_l->>'nivel' is not null and not exists (select 1 from public.conta_servicio_nivel where id = (v_l->>'nivel')::uuid and servicio_id = (v_l->>'servicio')::uuid) then
+      raise exception 'Un nivel del paquete no es de su servicio.' using errcode = 'P0002';
+    end if;
+  end loop;
+  v_n := jsonb_array_length(p_lineas);
+  v_frase := format('«%s», con %s %s%s.', trim(p_nombre), v_n, case when v_n = 1 then 'servicio' else 'servicios' end,
+    case when p_exceso is not null then format('; cada trabajador de más, %s', public._conta_gestoria_euros(p_exceso)) else '' end);
+  if p_ensayo then return jsonb_build_object('ensayo', true, 'frase', (case when p_paquete is null then 'Se creará el paquete ' else 'Se cambiará el paquete ' end) || v_frase); end if;
+  if p_paquete is null then
+    insert into public.conta_paquete (account_id, company_id, nombre, descripcion, exceso_por_trabajador, created_by_name)
+    values (v_cuenta, p_company, trim(p_nombre), nullif(trim(coalesce(p_descripcion, '')), ''), p_exceso, public.conta_nombre_actor()) returning id into v_id;
+  else
+    update public.conta_paquete set nombre = trim(p_nombre), descripcion = nullif(trim(coalesce(p_descripcion, '')), ''), exceso_por_trabajador = p_exceso where id = p_paquete;
+    delete from public.conta_paquete_linea where paquete_id = p_paquete;
+  end if;
+  insert into public.conta_paquete_linea (account_id, paquete_id, servicio_id, nivel_id, limite_trabajadores, orden)
+  select v_cuenta, v_id, (x->>'servicio')::uuid, (x->>'nivel')::uuid, nullif(x->>'limiteTrabajadores', '')::int, o::int
+    from jsonb_array_elements(p_lineas) with ordinality as e(x, o);
+  return jsonb_build_object('id', v_id, 'frase', (case when p_paquete is null then 'Creado el paquete ' else 'Cambiado el paquete ' end) || v_frase);
+end $$;
+
+
+--
+-- Name: conta_tarifa_precio_guardar(uuid, uuid, uuid, uuid, uuid, text, text, numeric, jsonb, date, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_precio_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_tarifa_puede(p_company, not p_ensayo); v_mes date := public._conta_tarifa_mes(p_desde);
+        v_nombre text; v_cliente text; v_quien text := public.conta_nombre_actor(); v_id uuid; v_acaba int := 0; v_frase text; v_como text;
+begin
+  if v_mes is null then raise exception 'Di desde qué mes vale el precio.' using errcode = '22023'; end if;
+  if p_forma not in ('fijo', 'por_trabajador', 'tramos', 'tramo_y_por_trabajador') then raise exception 'Esa forma de cobro no existe.' using errcode = '22023'; end if;
+  if p_forma in ('fijo', 'por_trabajador') and (p_importe is null or p_importe < 0) then raise exception 'El importe tiene que ser cero o más.' using errcode = '22023'; end if;
+  if (p_paquete is null) = (p_servicio is null) then raise exception 'Di si el precio es de un servicio o de un paquete.' using errcode = '22023'; end if;
+  if p_servicio is not null and not exists (select 1 from public.conta_servicio where id = p_servicio and company_id = p_company) then raise exception 'Ese servicio no es de esta empresa.' using errcode = 'P0002'; end if;
+  if p_nivel is not null and not exists (select 1 from public.conta_servicio_nivel where id = p_nivel and servicio_id = p_servicio) then raise exception 'Ese nivel no es de ese servicio.' using errcode = 'P0002'; end if;
+  if p_paquete is not null and not exists (select 1 from public.conta_paquete where id = p_paquete and company_id = p_company) then raise exception 'Ese paquete no es de esta empresa.' using errcode = 'P0002'; end if;
+  if p_party is not null then
+    select name into v_cliente from public.party where id = p_party and account_id = v_cuenta;
+    if v_cliente is null then raise exception 'Ese cliente no es de esta cuenta.' using errcode = 'P0002'; end if;
+  end if;
+  v_nombre := public._conta_tarifa_nombre(p_servicio, p_nivel, p_paquete);
+  v_como := case p_forma
+    when 'fijo' then public._conta_gestoria_euros(p_importe) || case coalesce(p_periodo, 'mes') when 'anio' then ' al año' when 'vez' then ' cada vez' else ' al mes' end
+    when 'por_trabajador' then public._conta_gestoria_euros(p_importe) || ' por trabajador'
+    else jsonb_array_length(p_tramos) || ' tramos' end;
+  v_frase := format('%s%s: %s desde %s de %s.', v_nombre, case when p_party is null then ' (precio de tarifa)' else format(' para %s', v_cliente) end,
+    v_como, public._conta_gestoria_mes(v_mes), extract(year from v_mes));
+  if p_ensayo then return jsonb_build_object('ensayo', true, 'frase', 'Se guardará ' || v_frase); end if;
+  -- El que valía para el mismo dueño, del mismo servicio, nivel o paquete, acaba el mes anterior.
+  update public.conta_precio set hasta = (v_mes - interval '1 month')::date
+   where company_id = p_company and servicio_id is not distinct from p_servicio and nivel_id is not distinct from p_nivel and paquete_id is not distinct from p_paquete
+     and party_id is not distinct from p_party and desde < v_mes and (hasta is null or hasta >= v_mes);
+  get diagnostics v_acaba = row_count;
+  delete from public.conta_precio
+   where company_id = p_company and servicio_id is not distinct from p_servicio and nivel_id is not distinct from p_nivel and paquete_id is not distinct from p_paquete
+     and party_id is not distinct from p_party and desde = v_mes;
+  if p_servicio is not null and p_nivel is null then
+    update public.conta_tarifa set hasta = (v_mes - interval '1 month')::date
+     where company_id = p_company and servicio_id = p_servicio and party_id is not distinct from p_party and desde < v_mes and (hasta is null or hasta >= v_mes);
+  end if;
+  v_id := public._conta_precio_insertar(v_cuenta, p_company, p_servicio, p_nivel, p_paquete, p_party, p_forma, p_periodo, p_importe, p_tramos, v_mes, null, null, v_quien);
+  return jsonb_build_object('id', v_id, 'frase', 'Guardado ' || v_frase);
+end $$;
+
+
+--
+-- Name: conta_tarifa_servicio_anadir(uuid, uuid, uuid, uuid, uuid, date, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_servicio_anadir(p_company uuid, p_party uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_precio jsonb DEFAULT NULL::jsonb, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_tarifa_puede(p_company, not p_ensayo); v_mes date := public._conta_tarifa_mes(p_desde);
+        v_cliente text; v_nombre text; v_id uuid; v_frase text; v_quien text := public.conta_nombre_actor();
+begin
+  if v_mes is null then raise exception 'Di desde qué mes se le cobra.' using errcode = '22023'; end if;
+  select name into v_cliente from public.party where id = p_party and account_id = v_cuenta;
+  if v_cliente is null then raise exception 'Ese cliente no es de esta cuenta.' using errcode = 'P0002'; end if;
+  if (p_paquete is null) = (p_servicio is null) then raise exception 'Elige un servicio o un paquete.' using errcode = '22023'; end if;
+  if p_servicio is not null and not exists (select 1 from public.conta_servicio where id = p_servicio and company_id = p_company) then raise exception 'Ese servicio no es de esta empresa.' using errcode = 'P0002'; end if;
+  if p_nivel is not null and not exists (select 1 from public.conta_servicio_nivel where id = p_nivel and servicio_id = p_servicio) then raise exception 'Ese nivel no es de ese servicio.' using errcode = 'P0002'; end if;
+  if p_nivel is null and p_servicio is not null and exists (select 1 from public.conta_servicio_nivel where servicio_id = p_servicio and activo) then
+    raise exception 'Ese servicio tiene niveles: elige uno.' using errcode = '22023';
+  end if;
+  if p_paquete is not null and not exists (select 1 from public.conta_paquete where id = p_paquete and company_id = p_company) then raise exception 'Ese paquete no es de esta empresa.' using errcode = 'P0002'; end if;
+  v_nombre := public._conta_tarifa_nombre(p_servicio, p_nivel, p_paquete);
+  v_frase := format('%s para %s desde %s de %s, %s.', v_nombre, v_cliente, public._conta_gestoria_mes(v_mes), extract(year from v_mes),
+    case when p_precio is null then 'a precio de tarifa' else 'con un precio suyo' end);
+  if p_ensayo then return jsonb_build_object('ensayo', true, 'frase', 'Se añadirá ' || v_frase); end if;
+  if p_paquete is not null then
+    insert into public.conta_cliente_paquete (account_id, company_id, party_id, paquete_id, desde, created_by_name, updated_by_name)
+    values (v_cuenta, p_company, p_party, p_paquete, v_mes, v_quien, v_quien) returning id into v_id;
+  else
+    insert into public.conta_linea (account_id, company_id, party_id, servicio_id, nivel_id, tipo, origen, periodo, desde, created_by_name, updated_by_name)
+    values (v_cuenta, p_company, p_party, p_servicio, p_nivel, 'cuota', 'manual', 'mes', v_mes, v_quien, v_quien) returning id into v_id;
+  end if;
+  if p_precio is not null then
+    perform public.conta_tarifa_precio_guardar(p_company, p_servicio, p_nivel, p_paquete, p_party, p_precio->>'forma', p_precio->>'periodo',
+      (p_precio->>'importe')::numeric, p_precio->'tramos', v_mes, false);
+  end if;
+  return jsonb_build_object('id', v_id, 'frase', 'Añadido ' || v_frase);
+end $$;
 
 
 --
@@ -102112,6 +102565,67 @@ ALTER SEQUENCE public.conta_asiento_borrado_id_seq OWNED BY public.conta_asiento
 
 
 --
+-- Name: conta_cambio_precios; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cambio_precios (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    estado text DEFAULT 'ensayo'::text NOT NULL,
+    operacion jsonb NOT NULL,
+    resultado jsonb NOT NULL,
+    frase text NOT NULL,
+    clientes integer NOT NULL,
+    antes numeric NOT NULL,
+    despues numeric NOT NULL,
+    desde date NOT NULL,
+    huella text NOT NULL,
+    efectos jsonb DEFAULT '[]'::jsonb NOT NULL,
+    ensayado_at timestamp with time zone DEFAULT now() NOT NULL,
+    ensayado_por uuid,
+    ensayado_por_name text,
+    aplicado_at timestamp with time zone,
+    aplicado_por_name text,
+    deshecho_at timestamp with time zone,
+    deshecho_por_name text,
+    CONSTRAINT conta_cambio_precios_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
+    CONSTRAINT conta_cambio_precios_estado_check CHECK ((estado = ANY (ARRAY['ensayo'::text, 'aplicado'::text, 'deshecho'::text])))
+);
+
+
+--
+-- Name: TABLE conta_cambio_precios; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cambio_precios IS 'G04 · Un «Cambiar precios» como operación: qué, a quién, cuánto y desde cuándo (operacion), el ensayo cliente a cliente (resultado y sus líneas en conta_cambio_precios_linea), la huella de los precios al ensayar (si cambian, hay que volver a ensayar) y lo que hizo al aplicarse (efectos), para deshacerlo.';
+
+
+--
+-- Name: conta_cambio_precios_linea; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cambio_precios_linea (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    cambio_id uuid NOT NULL,
+    party_id uuid,
+    objetivo jsonb NOT NULL,
+    antes numeric,
+    despues numeric,
+    como text NOT NULL,
+    CONSTRAINT conta_cambio_precios_linea_como_check CHECK ((como = ANY (ARRAY['tarifa'::text, 'suyo'::text, 'nuevo_suyo'::text])))
+);
+
+
+--
+-- Name: TABLE conta_cambio_precios_linea; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cambio_precios_linea IS 'G04 · Cada cliente de un «Cambiar precios», con su precio de antes y el nuevo.';
+
+
+--
 -- Name: conta_cierre_ajuste; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -102170,6 +102684,36 @@ CREATE TABLE public.conta_cierre_espera (
 --
 
 COMMENT ON TABLE public.conta_cierre_espera IS 'V01 · Un cierre del día que se queda en espera, con su motivo en una frase. No se valida hasta quitarlo.';
+
+
+--
+-- Name: conta_cliente_paquete; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_cliente_paquete (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    party_id uuid NOT NULL,
+    paquete_id uuid NOT NULL,
+    desde date NOT NULL,
+    hasta date,
+    alta_el date,
+    baja_el date,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_by_name text,
+    CONSTRAINT conta_cliente_paquete_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
+    CONSTRAINT conta_cliente_paquete_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric))
+);
+
+
+--
+-- Name: TABLE conta_cliente_paquete; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_cliente_paquete IS 'G04 · Un paquete que tiene un cliente con la empresa que le factura, de su mes «desde» a su mes «hasta». Los servicios sueltos siguen en conta_linea.';
 
 
 --
@@ -102511,31 +103055,123 @@ COMMENT ON TABLE public.conta_cobro_stripe IS 'PC01 · E4 · La cuenta de Stripe
 
 
 --
--- Name: conta_gc_cliente; Type: TABLE; Schema: public; Owner: -
+-- Name: conta_linea; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.conta_gc_cliente (
-    company_id uuid NOT NULL,
-    gc_id text NOT NULL,
+CREATE TABLE public.conta_linea (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
     account_id uuid NOT NULL,
-    nombre text,
-    correo text,
-    nif text,
-    party_id uuid,
-    casado_por text,
-    mandatos_vivos integer DEFAULT 0 NOT NULL,
-    suscripciones_activas integer DEFAULT 0 NOT NULL,
-    huella text,
-    leido_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_gc_cliente_casado_por_check CHECK (((casado_por IS NULL) OR (casado_por = ANY (ARRAY['nif'::text, 'correo'::text, 'persona'::text]))))
+    company_id uuid NOT NULL,
+    party_id uuid NOT NULL,
+    servicio_id uuid NOT NULL,
+    tipo text DEFAULT 'cuota'::text NOT NULL,
+    detalle text,
+    empleado_nombre text,
+    employee_id uuid,
+    origen text NOT NULL,
+    importe_propio numeric(14,2),
+    periodo text DEFAULT 'mes'::text NOT NULL,
+    desde date NOT NULL,
+    hasta date,
+    suscripcion_gc_id text,
+    solicitud_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_by_name text,
+    nivel_id uuid,
+    alta_el date,
+    baja_el date,
+    CONSTRAINT conta_linea_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
+    CONSTRAINT conta_linea_check1 CHECK (((tipo <> 'suelto'::text) OR ((hasta = desde) AND (importe_propio IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(detalle, ''::text))) > 0)))),
+    CONSTRAINT conta_linea_check2 CHECK (((origen <> 'solicitud'::text) OR (solicitud_id IS NOT NULL))),
+    CONSTRAINT conta_linea_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
+    CONSTRAINT conta_linea_importe_propio_check CHECK (((importe_propio IS NULL) OR (importe_propio >= (0)::numeric))),
+    CONSTRAINT conta_linea_origen_check CHECK ((origen = ANY (ARRAY['gocardless'::text, 'manual'::text, 'solicitud'::text, 'laboral'::text]))),
+    CONSTRAINT conta_linea_periodo_check CHECK ((periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'unidad'::text]))),
+    CONSTRAINT conta_linea_tipo_check CHECK ((tipo = ANY (ARRAY['cuota'::text, 'suelto'::text])))
 );
 
 
 --
--- Name: TABLE conta_gc_cliente; Type: COMMENT; Schema: public; Owner: -
+-- Name: TABLE conta_linea; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.conta_gc_cliente IS 'G01 · Un cliente de la cuenta de GoCardless de un emisor, como se leyó, y con qué cliente de la gestoría casa (y cómo).';
+COMMENT ON TABLE public.conta_linea IS 'G01 · Una línea del recibo de un cliente: un servicio (y su detalle: la sociedad o el empleado). Cuenta de su mes «desde» a su mes «hasta» (incluido; la baja se cobra entera el mes de la baja). Su precio: importe_propio, o la tarifa propia o general. tipo «suelto»: un trabajo fuera de la cuota, de un solo mes, con su concepto e importe. origen: gocardless (importada), manual, solicitud o laboral (fase 2, con employee_id).';
+
+
+--
+-- Name: COLUMN conta_linea.nivel_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_linea.nivel_id IS 'G04 · El nivel del servicio, si tiene niveles.';
+
+
+--
+-- Name: COLUMN conta_linea.alta_el; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_linea.alta_el IS 'G04 · El día del alta, si se sabe (para cobrar la parte proporcional).';
+
+
+--
+-- Name: COLUMN conta_linea.baja_el; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_linea.baja_el IS 'G04 · El día de la baja, si se sabe (para cobrar la parte proporcional).';
+
+
+--
+-- Name: conta_consulta_asignacion; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_asignacion WITH (security_invoker='true') AS
+ SELECT l.account_id AS cuenta_id,
+    l.company_id AS empresa_id,
+    l.party_id AS cliente_id,
+    ('linea:'::text || l.id) AS id,
+    l.tipo,
+    l.servicio_id,
+    l.nivel_id,
+    NULL::uuid AS paquete_id,
+    l.detalle,
+    l.empleado_nombre,
+    l.importe_propio,
+    l.periodo,
+    l.desde,
+    l.hasta,
+    l.alta_el,
+    l.baja_el,
+    l.origen,
+    l.suscripcion_gc_id
+   FROM public.conta_linea l
+UNION ALL
+ SELECT c.account_id AS cuenta_id,
+    c.company_id AS empresa_id,
+    c.party_id AS cliente_id,
+    ('paquete:'::text || c.id) AS id,
+    'cuota'::text AS tipo,
+    NULL::uuid AS servicio_id,
+    NULL::uuid AS nivel_id,
+    c.paquete_id,
+    NULL::text AS detalle,
+    NULL::text AS empleado_nombre,
+    NULL::numeric AS importe_propio,
+    'mes'::text AS periodo,
+    c.desde,
+    c.hasta,
+    c.alta_el,
+    c.baja_el,
+    'manual'::text AS origen,
+    NULL::text AS suscripcion_gc_id
+   FROM public.conta_cliente_paquete c;
+
+
+--
+-- Name: VIEW conta_consulta_asignacion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_asignacion IS 'G04 · Lo que tiene cada cliente con cada empresa: sus líneas (un servicio, un nivel o un trabajador) y sus paquetes, de su mes «desde» a su mes «hasta». Con ellas calcula precio.ts.';
 
 
 --
@@ -102565,6 +103201,31 @@ COMMENT ON TABLE public.conta_gc_cobro IS 'G01 · Los cobros de GoCardless de lo
 
 
 --
+-- Name: conta_gc_cobro_otra_via; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_cobro_otra_via (
+    company_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    via text NOT NULL,
+    fecha date NOT NULL,
+    nota text,
+    quien uuid,
+    quien_name text,
+    cuando timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gc_cobro_otra_via_via_check CHECK ((via = ANY (ARRAY['transferencia'::text, 'efectivo'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_cobro_otra_via; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_cobro_otra_via IS 'G04 · «Cobrado por otra vía»: un cargo devuelto en GoCardless que se cobró por transferencia o en efectivo, con su fecha. Solo se guarda en Sumied (nada en GoCardless) y saca ese cargo de «Te deben».';
+
+
+--
 -- Name: conta_gc_mandato; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -102589,6 +103250,71 @@ COMMENT ON TABLE public.conta_gc_mandato IS 'G01 · Cada mandato de la cuenta de
 
 
 --
+-- Name: conta_consulta_cargo_devuelto; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_cargo_devuelto WITH (security_invoker='true') AS
+ SELECT b.account_id AS cuenta_id,
+    b.company_id AS empresa_id,
+    b.gc_id,
+    b.suscripcion_gc_id,
+    b.estado,
+    b.fecha,
+    b.importe,
+    b.motivo,
+    m.gc_cliente_id,
+    m.estado AS mandato,
+    ( SELECT array_agg(cc.party_id) AS array_agg
+           FROM public.conta_cobro_cliente cc
+          WHERE ((cc.company_id = b.company_id) AND (cc.gc_cliente_id = m.gc_cliente_id))) AS clientes,
+    (m.estado = 'active'::text) AS mandato_activo,
+    (EXISTS ( SELECT 1
+           FROM public.conta_gc_cobro p
+          WHERE ((p.company_id = b.company_id) AND (p.suscripcion_gc_id = b.suscripcion_gc_id) AND (b.suscripcion_gc_id IS NOT NULL) AND (p.fecha > b.fecha) AND (p.estado = ANY (ARRAY['paid_out'::text, 'confirmed'::text]))))) AS cobrado_despues,
+    o.via AS otra_via,
+    o.fecha AS otra_via_fecha
+   FROM ((public.conta_gc_cobro b
+     LEFT JOIN public.conta_gc_mandato m ON (((m.company_id = b.company_id) AND (m.gc_id = b.mandato_gc_id))))
+     LEFT JOIN public.conta_gc_cobro_otra_via o ON (((o.company_id = b.company_id) AND (o.gc_id = b.gc_id))))
+  WHERE (b.estado = ANY (ARRAY['failed'::text, 'charged_back'::text]));
+
+
+--
+-- Name: VIEW conta_consulta_cargo_devuelto; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_cargo_devuelto IS 'G04 · Cada cargo devuelto (fallido o retrocedido) en GoCardless, con su mandato, sus clientes de Sumied, si se cobró después en la misma suscripción y si una persona lo marcó «Cobrado por otra vía». «Te deben» suma los de mandato activo, sin cobrar después y sin marcar (lista.ts · teDeben).';
+
+
+--
+-- Name: conta_gc_cliente; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_cliente (
+    company_id uuid NOT NULL,
+    gc_id text NOT NULL,
+    account_id uuid NOT NULL,
+    nombre text,
+    correo text,
+    nif text,
+    party_id uuid,
+    casado_por text,
+    mandatos_vivos integer DEFAULT 0 NOT NULL,
+    suscripciones_activas integer DEFAULT 0 NOT NULL,
+    huella text,
+    leido_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gc_cliente_casado_por_check CHECK (((casado_por IS NULL) OR (casado_por = ANY (ARRAY['nif'::text, 'correo'::text, 'persona'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_gc_cliente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_cliente IS 'G01 · Un cliente de la cuenta de GoCardless de un emisor, como se leyó, y con qué cliente de la gestoría casa (y cómo).';
+
+
+--
 -- Name: conta_gc_suscripcion; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -102607,7 +103333,9 @@ CREATE TABLE public.conta_gc_suscripcion (
     al_mes numeric(14,2),
     inicio date,
     fin date,
-    leido_at timestamp with time zone DEFAULT now() NOT NULL
+    leido_at timestamp with time zone DEFAULT now() NOT NULL,
+    proximo_cobro_fecha date,
+    proximo_cobro_importe numeric
 );
 
 
@@ -102616,6 +103344,20 @@ CREATE TABLE public.conta_gc_suscripcion (
 --
 
 COMMENT ON TABLE public.conta_gc_suscripcion IS 'G01 · Lo que cobra hoy GoCardless (cada «suscripción», como se leyó): para comparar con lo que sale de las tarifas. al_mes: lo anual entre 12.';
+
+
+--
+-- Name: COLUMN conta_gc_suscripcion.proximo_cobro_fecha; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_suscripcion.proximo_cobro_fecha IS 'G04 · El siguiente cobro de la suscripción (upcoming_payments de GoCardless), de la última lectura.';
+
+
+--
+-- Name: COLUMN conta_gc_suscripcion.proximo_cobro_importe; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_suscripcion.proximo_cobro_importe IS 'G04 · El importe del siguiente cobro de la suscripción, de la última lectura.';
 
 
 --
@@ -102707,49 +103449,6 @@ COMMENT ON TABLE public.conta_gestoria_diferencia IS 'G01 · Lo que no cuadra en
 
 
 --
--- Name: conta_linea; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.conta_linea (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    account_id uuid NOT NULL,
-    company_id uuid NOT NULL,
-    party_id uuid NOT NULL,
-    servicio_id uuid NOT NULL,
-    tipo text DEFAULT 'cuota'::text NOT NULL,
-    detalle text,
-    empleado_nombre text,
-    employee_id uuid,
-    origen text NOT NULL,
-    importe_propio numeric(14,2),
-    periodo text DEFAULT 'mes'::text NOT NULL,
-    desde date NOT NULL,
-    hasta date,
-    suscripcion_gc_id text,
-    solicitud_id uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by_name text,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_by_name text,
-    CONSTRAINT conta_linea_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
-    CONSTRAINT conta_linea_check1 CHECK (((tipo <> 'suelto'::text) OR ((hasta = desde) AND (importe_propio IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(detalle, ''::text))) > 0)))),
-    CONSTRAINT conta_linea_check2 CHECK (((origen <> 'solicitud'::text) OR (solicitud_id IS NOT NULL))),
-    CONSTRAINT conta_linea_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
-    CONSTRAINT conta_linea_importe_propio_check CHECK (((importe_propio IS NULL) OR (importe_propio >= (0)::numeric))),
-    CONSTRAINT conta_linea_origen_check CHECK ((origen = ANY (ARRAY['gocardless'::text, 'manual'::text, 'solicitud'::text, 'laboral'::text]))),
-    CONSTRAINT conta_linea_periodo_check CHECK ((periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'unidad'::text]))),
-    CONSTRAINT conta_linea_tipo_check CHECK ((tipo = ANY (ARRAY['cuota'::text, 'suelto'::text])))
-);
-
-
---
--- Name: TABLE conta_linea; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.conta_linea IS 'G01 · Una línea del recibo de un cliente: un servicio (y su detalle: la sociedad o el empleado). Cuenta de su mes «desde» a su mes «hasta» (incluido; la baja se cobra entera el mes de la baja). Su precio: importe_propio, o la tarifa propia o general. tipo «suelto»: un trabajo fuera de la cuota, de un solo mes, con su concepto e importe. origen: gocardless (importada), manual, solicitud o laboral (fase 2, con employee_id).';
-
-
---
 -- Name: party; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -102790,6 +103489,115 @@ COMMENT ON COLUMN public.party.tax_id IS 'C03. NIF normalizado (party_nif). Úni
 --
 
 COMMENT ON COLUMN public.party.archived_note IS 'C03. Lo que enseña la franja de archivado: «histórico de 2024».';
+
+
+--
+-- Name: conta_consulta_cliente_empresa; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_cliente_empresa WITH (security_invoker='true') AS
+ WITH vinculo AS (
+         SELECT c_1.account_id,
+            c_1.party_id,
+            c_1.emisor_segun_crm AS company_id
+           FROM public.conta_gestoria_cliente c_1
+          WHERE (c_1.emisor_segun_crm IS NOT NULL)
+        UNION
+         SELECT l.account_id,
+            l.party_id,
+            l.company_id
+           FROM public.conta_linea l
+        UNION
+         SELECT x.account_id,
+            x.party_id,
+            x.company_id
+           FROM public.conta_cliente_paquete x
+        UNION
+         SELECT cc_1.account_id,
+            cc_1.party_id,
+            cc_1.company_id
+           FROM public.conta_cobro_cliente cc_1
+        UNION
+         SELECT g.account_id,
+            g.party_id,
+            g.company_id
+           FROM public.conta_gc_cliente g
+          WHERE (g.party_id IS NOT NULL)
+        ), fila AS (
+         SELECT c_1.account_id,
+            c_1.party_id,
+            v.company_id
+           FROM (public.conta_gestoria_cliente c_1
+             JOIN vinculo v ON (((v.party_id = c_1.party_id) AND (v.account_id = c_1.account_id))))
+        UNION ALL
+         SELECT c_1.account_id,
+            c_1.party_id,
+            NULL::uuid AS uuid
+           FROM public.conta_gestoria_cliente c_1
+          WHERE (NOT (EXISTS ( SELECT 1
+                   FROM vinculo v
+                  WHERE ((v.party_id = c_1.party_id) AND (v.account_id = c_1.account_id)))))
+        )
+ SELECT f.account_id AS cuenta_id,
+    f.party_id AS cliente_id,
+    f.company_id AS empresa_id,
+    COALESCE(e.trade_name, e.legal_name) AS empresa,
+    p.name AS cliente,
+    p.tax_id AS nif,
+    c.situacion,
+    c.crm,
+    c.tipo_ficha,
+    c.id_externo AS ficha_en_el_crm,
+    c.leido_at AS leido_del_crm,
+    (c.ficha -> 'telefonos'::text) AS telefonos,
+    (c.ficha -> 'correos'::text) AS correos,
+    cc.forma_cobro AS forma_de_cobro,
+    cc.gc_cliente_id AS cliente_en_gocardless,
+    ( SELECT m.estado
+           FROM public.conta_gc_mandato m
+          WHERE ((m.company_id = f.company_id) AND (m.gc_cliente_id = cc.gc_cliente_id))
+          ORDER BY m.creado DESC NULLS LAST
+         LIMIT 1) AS mandato,
+    ( SELECT sum(s.al_mes) AS sum
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = f.company_id) AND (s.gc_cliente_id = cc.gc_cliente_id) AND (s.estado = 'active'::text))) AS gocardless_al_mes,
+    ( SELECT count(*) AS count
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = f.company_id) AND (s.gc_cliente_id = cc.gc_cliente_id) AND (s.estado = 'active'::text))) AS suscripciones_activas,
+    ( SELECT min(s.proximo_cobro_fecha) AS min
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = f.company_id) AND (s.gc_cliente_id = cc.gc_cliente_id) AND (s.estado = 'active'::text))) AS proximo_cobro_fecha,
+    ( SELECT b.fecha
+           FROM (public.conta_gc_cobro b
+             JOIN public.conta_gc_mandato m ON (((m.company_id = b.company_id) AND (m.gc_id = b.mandato_gc_id))))
+          WHERE ((b.company_id = f.company_id) AND (m.gc_cliente_id = cc.gc_cliente_id) AND (b.estado = ANY (ARRAY['paid_out'::text, 'confirmed'::text])))
+          ORDER BY b.fecha DESC
+         LIMIT 1) AS ultimo_cobro_fecha,
+    ( SELECT b.estado
+           FROM (public.conta_gc_cobro b
+             JOIN public.conta_gc_mandato m ON (((m.company_id = b.company_id) AND (m.gc_id = b.mandato_gc_id))))
+          WHERE ((b.company_id = f.company_id) AND (m.gc_cliente_id = cc.gc_cliente_id))
+          ORDER BY b.fecha DESC
+         LIMIT 1) AS ultimo_cargo_estado,
+    ( SELECT count(*) AS count
+           FROM public.conta_gestoria_diferencia d
+          WHERE ((d.party_id = f.party_id) AND d.vigente AND ((d.company_id IS NULL) OR (d.company_id = f.company_id)))) AS pendientes,
+    ( SELECT array_agg(DISTINCT l.empleado_nombre) AS array_agg
+           FROM public.conta_linea l
+          WHERE ((l.party_id = f.party_id) AND (l.company_id = f.company_id) AND (l.empleado_nombre IS NOT NULL) AND ((l.hasta IS NULL) OR (l.hasta >= (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date)))) AS trabajadores
+   FROM ((((fila f
+     JOIN public.conta_gestoria_cliente c ON ((c.party_id = f.party_id)))
+     JOIN public.party p ON ((p.id = f.party_id)))
+     LEFT JOIN public.company e ON ((e.id = f.company_id)))
+     LEFT JOIN public.conta_cobro_cliente cc ON (((cc.party_id = f.party_id) AND (cc.company_id = f.company_id))))
+  WHERE (p.archived_at IS NULL);
+
+
+--
+-- Name: VIEW conta_consulta_cliente_empresa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_cliente_empresa IS 'G04 · La lista de Clientes: una fila por cliente y empresa con la que tiene algo (la que dice su CRM, una línea, un paquete, la forma de cobro o un cliente de GoCardless casado), y una sin empresa (empresa_id null) para quien no tiene nada con ninguna. Sin los archivados. Lo de GoCardless, de la empresa de la fila. Sustituye a conta_consulta_clientes, que cruzaba cada cliente con todas las empresas.';
 
 
 --
@@ -102980,6 +103788,316 @@ CREATE VIEW public.conta_consulta_lineas WITH (security_invoker='true') AS
 --
 
 COMMENT ON VIEW public.conta_consulta_lineas IS 'G01 · Para el asistente (solo lectura): cada línea de cada cliente, con su servicio, emisor, empleado, origen, meses y lo que vale este mes.';
+
+
+--
+-- Name: conta_consulta_proximo_cobro; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_proximo_cobro WITH (security_invoker='true') AS
+ WITH prox AS (
+         SELECT s.account_id,
+            s.company_id,
+            min(s.proximo_cobro_fecha) AS fecha
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.estado = 'active'::text) AND (s.proximo_cobro_fecha >= CURRENT_DATE))
+          GROUP BY s.account_id, s.company_id
+        )
+ SELECT e.account_id AS cuenta_id,
+    e.id AS empresa_id,
+    COALESCE(e.trade_name, e.legal_name) AS empresa,
+    x.fecha,
+    ( SELECT count(*) AS count
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = e.id) AND (s.estado = 'active'::text) AND (s.proximo_cobro_fecha = x.fecha))) AS cobros,
+    ( SELECT sum(s.proximo_cobro_importe) AS sum
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = e.id) AND (s.estado = 'active'::text) AND (s.proximo_cobro_fecha = x.fecha))) AS importe,
+    ( SELECT count(*) AS count
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = e.id) AND (s.estado = 'active'::text))) AS suscripciones_activas,
+    ( SELECT sum(s.al_mes) AS sum
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = e.id) AND (s.estado = 'active'::text))) AS al_mes,
+    ( SELECT count(*) AS count
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.company_id = e.id) AND (s.estado = 'active'::text) AND (s.proximo_cobro_fecha IS NULL))) AS sin_fecha,
+    ( SELECT max(s.leido_at) AS max
+           FROM public.conta_gc_suscripcion s
+          WHERE (s.company_id = e.id)) AS leido_at
+   FROM ((public.company e
+     JOIN public.conta_cobro_gocardless g ON ((g.company_id = e.id)))
+     LEFT JOIN prox x ON ((x.company_id = e.id)));
+
+
+--
+-- Name: VIEW conta_consulta_proximo_cobro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_proximo_cobro IS 'G04 · El próximo cobro de GoCardless de cada empresa conectada: el día, cuántos cobros y cuánto (upcoming_payments de la última lectura), y las suscripciones activas, lo que suman al mes y las que no traen fecha. Hasta el G05, manda GoCardless.';
+
+
+--
+-- Name: conta_consulta_que_hacer; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_que_hacer WITH (security_invoker='true') AS
+ WITH gc_sin_cliente AS (
+         SELECT s.account_id,
+            s.company_id,
+            count(*) AS n,
+            sum(s.al_mes) AS eur
+           FROM public.conta_gc_suscripcion s
+          WHERE ((s.estado = 'active'::text) AND (NOT (EXISTS ( SELECT 1
+                   FROM public.conta_cobro_cliente cc
+                  WHERE ((cc.company_id = s.company_id) AND (cc.gc_cliente_id = s.gc_cliente_id))))))
+          GROUP BY s.account_id, s.company_id
+        ), gc_varios AS (
+         SELECT cc.account_id,
+            cc.company_id,
+            count(*) AS n
+           FROM ( SELECT conta_cobro_cliente.account_id,
+                    conta_cobro_cliente.company_id,
+                    conta_cobro_cliente.gc_cliente_id
+                   FROM public.conta_cobro_cliente
+                  WHERE (conta_cobro_cliente.gc_cliente_id IS NOT NULL)
+                  GROUP BY conta_cobro_cliente.account_id, conta_cobro_cliente.company_id, conta_cobro_cliente.gc_cliente_id
+                 HAVING (count(*) > 1)) cc
+          GROUP BY cc.account_id, cc.company_id
+        ), devueltos AS (
+         SELECT b.account_id,
+            b.company_id,
+            count(*) AS n,
+            sum(b.importe) AS eur
+           FROM public.conta_gc_cobro b
+          WHERE ((b.estado = ANY (ARRAY['failed'::text, 'charged_back'::text])) AND (b.fecha >= (date_trunc('month'::text, (CURRENT_DATE)::timestamp with time zone))::date))
+          GROUP BY b.account_id, b.company_id
+        ), por_firmar AS (
+         SELECT m.account_id,
+            m.company_id,
+            count(*) AS n,
+            sum(( SELECT sum(s.al_mes) AS sum
+                   FROM public.conta_gc_suscripcion s
+                  WHERE ((s.company_id = m.company_id) AND (s.mandato_gc_id = m.gc_id) AND (s.estado = 'active'::text)))) AS eur
+           FROM public.conta_gc_mandato m
+          WHERE (m.estado = ANY (ARRAY['pending_customer_approval'::text, 'pending_submission'::text, 'submitted'::text]))
+          GROUP BY m.account_id, m.company_id
+        ), difs AS (
+         SELECT d.account_id,
+            d.company_id,
+            d.tipo,
+            count(*) AS n
+           FROM public.conta_gestoria_diferencia d
+          WHERE d.vigente
+          GROUP BY d.account_id, d.company_id, d.tipo
+        )
+ SELECT gc_sin_cliente.account_id AS cuenta_id,
+    gc_sin_cliente.company_id AS empresa_id,
+    'gocardless_sin_cliente'::text AS tipo,
+    gc_sin_cliente.n,
+    gc_sin_cliente.eur AS euros
+   FROM gc_sin_cliente
+UNION ALL
+ SELECT gc_varios.account_id AS cuenta_id,
+    gc_varios.company_id AS empresa_id,
+    'gocardless_varios_clientes'::text AS tipo,
+    gc_varios.n,
+    NULL::numeric AS euros
+   FROM gc_varios
+UNION ALL
+ SELECT devueltos.account_id AS cuenta_id,
+    devueltos.company_id AS empresa_id,
+    'recibos_devueltos'::text AS tipo,
+    devueltos.n,
+    devueltos.eur AS euros
+   FROM devueltos
+UNION ALL
+ SELECT por_firmar.account_id AS cuenta_id,
+    por_firmar.company_id AS empresa_id,
+    'mandatos_por_firmar'::text AS tipo,
+    por_firmar.n,
+    por_firmar.eur AS euros
+   FROM por_firmar
+UNION ALL
+ SELECT difs.account_id AS cuenta_id,
+    difs.company_id AS empresa_id,
+    ('diferencia:'::text || difs.tipo) AS tipo,
+    difs.n,
+    NULL::numeric AS euros
+   FROM difs;
+
+
+--
+-- Name: VIEW conta_consulta_que_hacer; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_que_hacer IS 'G04 · «Lo que tienes que hacer», por empresa: los cobros de GoCardless sin cliente (y lo que suman al mes), los clientes de GoCardless unidos a más de un cliente de Sumied, los recibos devueltos este mes, los mandatos por firmar y las diferencias vigentes por tipo. Los activos sin cuota los cuenta la lista. La pantalla ordena por el dinero que mueve cada una.';
+
+
+--
+-- Name: conta_precio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_precio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    servicio_id uuid,
+    nivel_id uuid,
+    paquete_id uuid,
+    party_id uuid,
+    forma text NOT NULL,
+    periodo text,
+    importe numeric,
+    desde date NOT NULL,
+    hasta date,
+    cambio_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    CONSTRAINT conta_precio_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
+    CONSTRAINT conta_precio_check1 CHECK (((paquete_id IS NULL) = (servicio_id IS NOT NULL))),
+    CONSTRAINT conta_precio_check2 CHECK (((nivel_id IS NULL) OR (servicio_id IS NOT NULL))),
+    CONSTRAINT conta_precio_check3 CHECK (((forma = 'fijo'::text) = (periodo IS NOT NULL))),
+    CONSTRAINT conta_precio_check4 CHECK (((forma <> ALL (ARRAY['fijo'::text, 'por_trabajador'::text])) OR (importe IS NOT NULL))),
+    CONSTRAINT conta_precio_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
+    CONSTRAINT conta_precio_forma_check CHECK ((forma = ANY (ARRAY['fijo'::text, 'por_trabajador'::text, 'tramos'::text, 'tramo_y_por_trabajador'::text]))),
+    CONSTRAINT conta_precio_importe_check CHECK (((importe IS NULL) OR (importe >= (0)::numeric))),
+    CONSTRAINT conta_precio_periodo_check CHECK (((periodo IS NULL) OR (periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'vez'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_precio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_precio IS 'G04 · Un precio, con su historia (de su mes «desde» a su mes «hasta», incluido): el general de la tarifa (sin cliente) o el de un cliente. Su forma: fijo (al mes, al año o por vez), por trabajador, por tramos o tramo y por trabajador (los tramos, en conta_precio_tramo). Los importados en el G01 siguen en conta_tarifa: conta_consulta_tarifa_precio los junta. cambio_id: el «Cambiar precios» que lo creó.';
+
+
+--
+-- Name: conta_precio_tramo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_precio_tramo (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    precio_id uuid NOT NULL,
+    desde integer NOT NULL,
+    hasta integer,
+    importe numeric NOT NULL,
+    por_unidad boolean DEFAULT false NOT NULL,
+    CONSTRAINT conta_precio_tramo_check CHECK (((hasta IS NULL) OR (hasta >= desde))),
+    CONSTRAINT conta_precio_tramo_desde_check CHECK ((desde >= 0)),
+    CONSTRAINT conta_precio_tramo_importe_check CHECK ((importe >= (0)::numeric))
+);
+
+
+--
+-- Name: TABLE conta_precio_tramo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_precio_tramo IS 'G04 · Un tramo de un precio: de cuántos a cuántos trabajadores, y su importe (el del tramo entero, o por cada unidad).';
+
+
+--
+-- Name: conta_tarifa; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_tarifa (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    servicio_id uuid NOT NULL,
+    party_id uuid,
+    importe numeric(14,2) NOT NULL,
+    periodo text NOT NULL,
+    desde date NOT NULL,
+    hasta date,
+    motivo text,
+    origen text DEFAULT 'manual'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT conta_tarifa_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
+    CONSTRAINT conta_tarifa_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
+    CONSTRAINT conta_tarifa_importe_check CHECK ((importe >= (0)::numeric)),
+    CONSTRAINT conta_tarifa_origen_check CHECK ((origen = ANY (ARRAY['manual'::text, 'gocardless'::text]))),
+    CONSTRAINT conta_tarifa_periodo_check CHECK ((periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'unidad'::text])))
+);
+
+
+--
+-- Name: TABLE conta_tarifa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_tarifa IS 'G01 · La tarifa de un servicio de un emisor: general (party_id vacío) o propia de un cliente, que manda sobre la general. Vale de su mes «desde» a su mes «hasta» (incluido; vacío: sigue). periodo: al mes, al año o por unidad (los servicios por uso). Cada cambio, en conta_gestoria_cambio.';
+
+
+--
+-- Name: conta_consulta_tarifa_precio; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_consulta_tarifa_precio WITH (security_invoker='true') AS
+ SELECT t.account_id AS cuenta_id,
+    t.company_id AS empresa_id,
+    ('tarifa:'::text || t.id) AS id,
+    'servicio'::text AS objetivo,
+    t.servicio_id,
+    NULL::uuid AS nivel_id,
+    NULL::uuid AS paquete_id,
+    t.party_id AS cliente_id,
+        CASE
+            WHEN (s.forma = 'por_empleado'::text) THEN 'por_trabajador'::text
+            ELSE 'fijo'::text
+        END AS forma,
+        CASE
+            WHEN (s.forma = 'por_empleado'::text) THEN NULL::text
+            WHEN (t.periodo = 'anio'::text) THEN 'anio'::text
+            WHEN (t.periodo = 'unidad'::text) THEN 'vez'::text
+            ELSE 'mes'::text
+        END AS periodo,
+    t.importe,
+    '[]'::jsonb AS tramos,
+    t.desde,
+    t.hasta,
+    t.origen,
+    NULL::uuid AS cambio_id,
+    t.created_at,
+    t.created_by_name
+   FROM (public.conta_tarifa t
+     JOIN public.conta_servicio s ON ((s.id = t.servicio_id)))
+UNION ALL
+ SELECT p.account_id AS cuenta_id,
+    p.company_id AS empresa_id,
+    ('precio:'::text || p.id) AS id,
+        CASE
+            WHEN (p.paquete_id IS NOT NULL) THEN 'paquete'::text
+            WHEN (p.nivel_id IS NOT NULL) THEN 'nivel'::text
+            ELSE 'servicio'::text
+        END AS objetivo,
+    p.servicio_id,
+    p.nivel_id,
+    p.paquete_id,
+    p.party_id AS cliente_id,
+    p.forma,
+    p.periodo,
+    p.importe,
+    COALESCE(( SELECT jsonb_agg(jsonb_build_object('desde', r.desde, 'hasta', r.hasta, 'importe', r.importe, 'porUnidad', r.por_unidad) ORDER BY r.desde) AS jsonb_agg
+           FROM public.conta_precio_tramo r
+          WHERE (r.precio_id = p.id)), '[]'::jsonb) AS tramos,
+    p.desde,
+    p.hasta,
+    'manual'::text AS origen,
+    p.cambio_id,
+    p.created_at,
+    p.created_by_name
+   FROM public.conta_precio p;
+
+
+--
+-- Name: VIEW conta_consulta_tarifa_precio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_consulta_tarifa_precio IS 'G04 · Todos los precios de la tarifa, generales y de cada cliente, con su forma y sus tramos: los importados en el G01 (tarifa:…) y los nuevos (precio:…). Con ellos calcula precio.ts.';
 
 
 --
@@ -103631,6 +104749,28 @@ CREATE TABLE public.conta_gc_importacion (
 --
 
 COMMENT ON TABLE public.conta_gc_importacion IS 'G01 · La importación, una sola vez, de cada suscripción de GoCardless: la línea en que se convirtió o por qué no se convirtió (porque_codigo y su frase).';
+
+
+--
+-- Name: conta_gestoria_ajustes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gestoria_ajustes (
+    company_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    mitad_de_mes text DEFAULT 'mes_entero'::text NOT NULL,
+    cambios_de_tarifa boolean DEFAULT false NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_by_name text,
+    CONSTRAINT conta_gestoria_ajustes_mitad_de_mes_check CHECK ((mitad_de_mes = ANY (ARRAY['mes_entero'::text, 'proporcional'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gestoria_ajustes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gestoria_ajustes IS 'G04 · Los ajustes de cobro de cada empresa de una gestoría. mitad_de_mes: las altas y bajas a mitad de mes se cobran el mes entero (por defecto) o la parte proporcional. cambios_de_tarifa: si las acciones que cambian precios o servicios escriben (por defecto no: se prueban en la cuenta de pruebas hasta que Julio diga sí). Sin fila, lo de por defecto.';
 
 
 --
@@ -104357,6 +105497,55 @@ CREATE TABLE public.conta_pago_salida (
 --
 
 COMMENT ON TABLE public.conta_pago_salida IS 'B01 Revolut · PR 2a · Un pago saliente de una factura por un banco con el que Sumied paga (hoy Revolut): importe, beneficiario e IBAN tal como se aprobaron, su request_id (para que el banco no lo haga dos veces y su cargo se case solo) y su estado.';
+
+
+--
+-- Name: conta_paquete; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_paquete (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    nombre text NOT NULL,
+    descripcion text,
+    exceso_por_trabajador numeric,
+    activo boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    CONSTRAINT conta_paquete_exceso_por_trabajador_check CHECK (((exceso_por_trabajador IS NULL) OR (exceso_por_trabajador >= (0)::numeric))),
+    CONSTRAINT conta_paquete_nombre_check CHECK ((length(TRIM(BOTH FROM nombre)) > 0))
+);
+
+
+--
+-- Name: TABLE conta_paquete; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_paquete IS 'G04 · Un paquete: varios servicios (o un nivel de un servicio) por un precio cerrado. exceso_por_trabajador: cada trabajador de más sobre el límite de una de sus líneas. Su precio, en conta_precio.';
+
+
+--
+-- Name: conta_paquete_linea; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_paquete_linea (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    paquete_id uuid NOT NULL,
+    servicio_id uuid NOT NULL,
+    nivel_id uuid,
+    limite_trabajadores integer,
+    orden integer DEFAULT 1 NOT NULL,
+    CONSTRAINT conta_paquete_linea_limite_trabajadores_check CHECK (((limite_trabajadores IS NULL) OR (limite_trabajadores >= 0)))
+);
+
+
+--
+-- Name: TABLE conta_paquete_linea; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_paquete_linea IS 'G04 · Lo que incluye un paquete: un servicio o un nivel, con un límite de trabajadores opcional.';
 
 
 --
@@ -105098,6 +106287,33 @@ COMMENT ON TABLE public.conta_s01p_recibido_antes IS 'S01p · 1641 · Lo recibid
 
 
 --
+-- Name: conta_servicio_nivel; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_servicio_nivel (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    servicio_id uuid NOT NULL,
+    nombre text NOT NULL,
+    orden integer DEFAULT 1 NOT NULL,
+    incluye text[] DEFAULT '{}'::text[] NOT NULL,
+    mas_elegido boolean DEFAULT false NOT NULL,
+    activo boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by_name text,
+    CONSTRAINT conta_servicio_nivel_nombre_check CHECK ((length(TRIM(BOTH FROM nombre)) > 0))
+);
+
+
+--
+-- Name: TABLE conta_servicio_nivel; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_servicio_nivel IS 'G04 · Un nivel de un servicio (Básica, Estándar, Premium…), con su orden, lo que incluye y la marca «el más elegido». Su precio, en conta_precio.';
+
+
+--
 -- Name: conta_solicitud; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -105130,40 +106346,6 @@ CREATE TABLE public.conta_solicitud (
 --
 
 COMMENT ON TABLE public.conta_solicitud IS 'G01 · La petición de alta o baja de un trabajador que hace el cliente. QBO la da por hecha (y la línea sale con origen «solicitud») o la rechaza con su motivo.';
-
-
---
--- Name: conta_tarifa; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.conta_tarifa (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    account_id uuid NOT NULL,
-    company_id uuid NOT NULL,
-    servicio_id uuid NOT NULL,
-    party_id uuid,
-    importe numeric(14,2) NOT NULL,
-    periodo text NOT NULL,
-    desde date NOT NULL,
-    hasta date,
-    motivo text,
-    origen text DEFAULT 'manual'::text NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    created_by_name text,
-    CONSTRAINT conta_tarifa_check CHECK (((hasta IS NULL) OR ((EXTRACT(day FROM hasta) = (1)::numeric) AND (hasta >= desde)))),
-    CONSTRAINT conta_tarifa_desde_check CHECK ((EXTRACT(day FROM desde) = (1)::numeric)),
-    CONSTRAINT conta_tarifa_importe_check CHECK ((importe >= (0)::numeric)),
-    CONSTRAINT conta_tarifa_origen_check CHECK ((origen = ANY (ARRAY['manual'::text, 'gocardless'::text]))),
-    CONSTRAINT conta_tarifa_periodo_check CHECK ((periodo = ANY (ARRAY['mes'::text, 'anio'::text, 'unidad'::text])))
-);
-
-
---
--- Name: TABLE conta_tarifa; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.conta_tarifa IS 'G01 · La tarifa de un servicio de un emisor: general (party_id vacío) o propia de un cliente, que manda sobre la general. Vale de su mes «desde» a su mes «hasta» (incluido; vacío: sigue). periodo: al mes, al año o por unidad (los servicios por uso). Cada cambio, en conta_gestoria_cambio.';
 
 
 --
@@ -119111,6 +120293,22 @@ ALTER TABLE ONLY public.conta_asiento_borrado
 
 
 --
+-- Name: conta_cambio_precios_linea conta_cambio_precios_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios_linea
+    ADD CONSTRAINT conta_cambio_precios_linea_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_cambio_precios conta_cambio_precios_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios
+    ADD CONSTRAINT conta_cambio_precios_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_cierre_ajuste conta_cierre_ajuste_company_id_sale_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -119140,6 +120338,14 @@ ALTER TABLE ONLY public.conta_cierre_espera
 
 ALTER TABLE ONLY public.conta_cierre_espera
     ADD CONSTRAINT conta_cierre_espera_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_cliente_paquete conta_cliente_paquete_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cliente_paquete
+    ADD CONSTRAINT conta_cliente_paquete_pkey PRIMARY KEY (id);
 
 
 --
@@ -119351,6 +120557,14 @@ ALTER TABLE ONLY public.conta_gc_cliente
 
 
 --
+-- Name: conta_gc_cobro_otra_via conta_gc_cobro_otra_via_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_otra_via
+    ADD CONSTRAINT conta_gc_cobro_otra_via_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
 -- Name: conta_gc_cobro conta_gc_cobro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -119380,6 +120594,14 @@ ALTER TABLE ONLY public.conta_gc_mandato
 
 ALTER TABLE ONLY public.conta_gc_suscripcion
     ADD CONSTRAINT conta_gc_suscripcion_pkey PRIMARY KEY (company_id, gc_id);
+
+
+--
+-- Name: conta_gestoria_ajustes conta_gestoria_ajustes_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_ajustes
+    ADD CONSTRAINT conta_gestoria_ajustes_pkey PRIMARY KEY (company_id);
 
 
 --
@@ -119647,11 +120869,51 @@ ALTER TABLE ONLY public.conta_pago_salida
 
 
 --
+-- Name: conta_paquete conta_paquete_company_id_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete
+    ADD CONSTRAINT conta_paquete_company_id_nombre_key UNIQUE (company_id, nombre);
+
+
+--
+-- Name: conta_paquete_linea conta_paquete_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete_linea
+    ADD CONSTRAINT conta_paquete_linea_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_paquete conta_paquete_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete
+    ADD CONSTRAINT conta_paquete_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_pasarela_cuenta conta_pasarela_cuenta_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.conta_pasarela_cuenta
     ADD CONSTRAINT conta_pasarela_cuenta_pkey PRIMARY KEY (company_id, proveedor);
+
+
+--
+-- Name: conta_precio conta_precio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_precio_tramo conta_precio_tramo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio_tramo
+    ADD CONSTRAINT conta_precio_tramo_pkey PRIMARY KEY (id);
 
 
 --
@@ -119804,6 +121066,22 @@ ALTER TABLE ONLY public.conta_s01p_recibido_antes
 
 ALTER TABLE ONLY public.conta_servicio
     ADD CONSTRAINT conta_servicio_company_id_clave_key UNIQUE (company_id, clave);
+
+
+--
+-- Name: conta_servicio_nivel conta_servicio_nivel_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio_nivel
+    ADD CONSTRAINT conta_servicio_nivel_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_servicio_nivel conta_servicio_nivel_servicio_id_nombre_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio_nivel
+    ADD CONSTRAINT conta_servicio_nivel_servicio_id_nombre_key UNIQUE (servicio_id, nombre);
 
 
 --
@@ -125182,6 +126460,13 @@ CREATE INDEX conta_pago_salida_lote_idx ON public.conta_pago_salida USING btree 
 --
 
 CREATE UNIQUE INDEX conta_pago_salida_viva ON public.conta_pago_salida USING btree (invoice_id) WHERE (estado = ANY (ARRAY['esperando_segunda'::text, 'lista'::text, 'enviando'::text, 'enviada'::text, 'esperando_banco'::text]));
+
+
+--
+-- Name: conta_precio_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_precio_empresa_idx ON public.conta_precio USING btree (company_id, servicio_id, nivel_id, paquete_id, party_id);
 
 
 --
@@ -134257,6 +135542,46 @@ ALTER TABLE ONLY public.compliance_reminder_log
 
 
 --
+-- Name: conta_cambio_precios conta_cambio_precios_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios
+    ADD CONSTRAINT conta_cambio_precios_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cambio_precios conta_cambio_precios_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios
+    ADD CONSTRAINT conta_cambio_precios_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cambio_precios_linea conta_cambio_precios_linea_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios_linea
+    ADD CONSTRAINT conta_cambio_precios_linea_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cambio_precios_linea conta_cambio_precios_linea_cambio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios_linea
+    ADD CONSTRAINT conta_cambio_precios_linea_cambio_id_fkey FOREIGN KEY (cambio_id) REFERENCES public.conta_cambio_precios(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cambio_precios_linea conta_cambio_precios_linea_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cambio_precios_linea
+    ADD CONSTRAINT conta_cambio_precios_linea_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE SET NULL;
+
+
+--
 -- Name: conta_cierre_ajuste conta_cierre_ajuste_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -134286,6 +135611,38 @@ ALTER TABLE ONLY public.conta_cierre_espera
 
 ALTER TABLE ONLY public.conta_cierre_espera
     ADD CONSTRAINT conta_cierre_espera_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cliente_paquete conta_cliente_paquete_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cliente_paquete
+    ADD CONSTRAINT conta_cliente_paquete_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cliente_paquete conta_cliente_paquete_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cliente_paquete
+    ADD CONSTRAINT conta_cliente_paquete_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_cliente_paquete conta_cliente_paquete_paquete_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cliente_paquete
+    ADD CONSTRAINT conta_cliente_paquete_paquete_id_fkey FOREIGN KEY (paquete_id) REFERENCES public.conta_paquete(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_cliente_paquete conta_cliente_paquete_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_cliente_paquete
+    ADD CONSTRAINT conta_cliente_paquete_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
 
 
 --
@@ -134689,6 +136046,22 @@ ALTER TABLE ONLY public.conta_gc_cobro
 
 
 --
+-- Name: conta_gc_cobro_otra_via conta_gc_cobro_otra_via_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_otra_via
+    ADD CONSTRAINT conta_gc_cobro_otra_via_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_cobro_otra_via conta_gc_cobro_otra_via_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_cobro_otra_via
+    ADD CONSTRAINT conta_gc_cobro_otra_via_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_gc_importacion conta_gc_importacion_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -134750,6 +136123,22 @@ ALTER TABLE ONLY public.conta_gc_suscripcion
 
 ALTER TABLE ONLY public.conta_gc_suscripcion
     ADD CONSTRAINT conta_gc_suscripcion_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_ajustes conta_gestoria_ajustes_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_ajustes
+    ADD CONSTRAINT conta_gestoria_ajustes_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gestoria_ajustes conta_gestoria_ajustes_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gestoria_ajustes
+    ADD CONSTRAINT conta_gestoria_ajustes_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
 
 
 --
@@ -134934,6 +136323,14 @@ ALTER TABLE ONLY public.conta_linea
 
 ALTER TABLE ONLY public.conta_linea
     ADD CONSTRAINT conta_linea_employee_id_fkey FOREIGN KEY (employee_id) REFERENCES public.employees(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_linea conta_linea_nivel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_linea
+    ADD CONSTRAINT conta_linea_nivel_id_fkey FOREIGN KEY (nivel_id) REFERENCES public.conta_servicio_nivel(id) ON DELETE RESTRICT;
 
 
 --
@@ -135329,6 +136726,54 @@ ALTER TABLE ONLY public.conta_pago_salida
 
 
 --
+-- Name: conta_paquete conta_paquete_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete
+    ADD CONSTRAINT conta_paquete_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_paquete conta_paquete_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete
+    ADD CONSTRAINT conta_paquete_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_paquete_linea conta_paquete_linea_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete_linea
+    ADD CONSTRAINT conta_paquete_linea_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_paquete_linea conta_paquete_linea_nivel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete_linea
+    ADD CONSTRAINT conta_paquete_linea_nivel_id_fkey FOREIGN KEY (nivel_id) REFERENCES public.conta_servicio_nivel(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_paquete_linea conta_paquete_linea_paquete_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete_linea
+    ADD CONSTRAINT conta_paquete_linea_paquete_id_fkey FOREIGN KEY (paquete_id) REFERENCES public.conta_paquete(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_paquete_linea conta_paquete_linea_servicio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_paquete_linea
+    ADD CONSTRAINT conta_paquete_linea_servicio_id_fkey FOREIGN KEY (servicio_id) REFERENCES public.conta_servicio(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: conta_pasarela_cuenta conta_pasarela_cuenta_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -135358,6 +136803,70 @@ ALTER TABLE ONLY public.conta_pasarela_cuenta
 
 ALTER TABLE ONLY public.conta_pasarela_cuenta
     ADD CONSTRAINT conta_pasarela_cuenta_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio conta_precio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio conta_precio_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio conta_precio_nivel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_nivel_id_fkey FOREIGN KEY (nivel_id) REFERENCES public.conta_servicio_nivel(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio conta_precio_paquete_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_paquete_id_fkey FOREIGN KEY (paquete_id) REFERENCES public.conta_paquete(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio conta_precio_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio conta_precio_servicio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio
+    ADD CONSTRAINT conta_precio_servicio_id_fkey FOREIGN KEY (servicio_id) REFERENCES public.conta_servicio(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio_tramo conta_precio_tramo_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio_tramo
+    ADD CONSTRAINT conta_precio_tramo_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_precio_tramo conta_precio_tramo_precio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_precio_tramo
+    ADD CONSTRAINT conta_precio_tramo_precio_id_fkey FOREIGN KEY (precio_id) REFERENCES public.conta_precio(id) ON DELETE CASCADE;
 
 
 --
@@ -135502,6 +137011,30 @@ ALTER TABLE ONLY public.conta_servicio
 
 ALTER TABLE ONLY public.conta_servicio
     ADD CONSTRAINT conta_servicio_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_servicio_nivel conta_servicio_nivel_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio_nivel
+    ADD CONSTRAINT conta_servicio_nivel_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_servicio_nivel conta_servicio_nivel_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio_nivel
+    ADD CONSTRAINT conta_servicio_nivel_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_servicio_nivel conta_servicio_nivel_servicio_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_servicio_nivel
+    ADD CONSTRAINT conta_servicio_nivel_servicio_id_fkey FOREIGN KEY (servicio_id) REFERENCES public.conta_servicio(id) ON DELETE CASCADE;
 
 
 --
@@ -145407,6 +146940,32 @@ CREATE POLICY connector_write ON public.connector USING (public.current_user_is_
 ALTER TABLE public.conta_asiento_borrado ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_cambio_precios; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cambio_precios ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cambio_precios conta_cambio_precios_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cambio_precios_leer ON public.conta_cambio_precios FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cambio_precios_linea; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cambio_precios_linea ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cambio_precios_linea conta_cambio_precios_linea_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cambio_precios_linea_leer ON public.conta_cambio_precios_linea FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_cierre_ajuste; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -145430,6 +146989,19 @@ ALTER TABLE public.conta_cierre_espera ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_cierre_espera_leer ON public.conta_cierre_espera FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_cliente_paquete; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_cliente_paquete ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_cliente_paquete conta_cliente_paquete_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_cliente_paquete_leer ON public.conta_cliente_paquete FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -145696,6 +147268,19 @@ CREATE POLICY conta_gc_cobro_leer ON public.conta_gc_cobro FOR SELECT TO authent
 
 
 --
+-- Name: conta_gc_cobro_otra_via; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_cobro_otra_via ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_cobro_otra_via conta_gc_cobro_otra_via_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_cobro_otra_via_leer ON public.conta_gc_cobro_otra_via FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_gc_importacion; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -145732,6 +147317,19 @@ ALTER TABLE public.conta_gc_suscripcion ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_gc_suscripcion_leer ON public.conta_gc_suscripcion FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gestoria_ajustes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gestoria_ajustes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gestoria_ajustes conta_gestoria_ajustes_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gestoria_ajustes_leer ON public.conta_gestoria_ajustes FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -146026,6 +147624,32 @@ CREATE POLICY conta_pago_salida_leer ON public.conta_pago_salida FOR SELECT TO a
 
 
 --
+-- Name: conta_paquete; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_paquete ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_paquete conta_paquete_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_paquete_leer ON public.conta_paquete FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_paquete_linea; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_paquete_linea ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_paquete_linea conta_paquete_linea_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_paquete_linea_leer ON public.conta_paquete_linea FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_pasarela_cuenta; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -146036,6 +147660,32 @@ ALTER TABLE public.conta_pasarela_cuenta ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_pasarela_cuenta_leer ON public.conta_pasarela_cuenta FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_precio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_precio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_precio conta_precio_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_precio_leer ON public.conta_precio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_precio_tramo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_precio_tramo ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_precio_tramo conta_precio_tramo_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_precio_tramo_leer ON public.conta_precio_tramo FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -146188,6 +147838,19 @@ ALTER TABLE public.conta_servicio ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_servicio_leer ON public.conta_servicio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_servicio_nivel; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_servicio_nivel ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_servicio_nivel conta_servicio_nivel_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_servicio_nivel_leer ON public.conta_servicio_nivel FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -154576,6 +156239,14 @@ GRANT ALL ON FUNCTION public._conta_plataformas_apuntar_todas() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_precio_insertar(p_cuenta uuid, p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_hasta date, p_cambio uuid, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_precio_insertar(p_cuenta uuid, p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_hasta date, p_cambio uuid, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_precio_insertar(p_cuenta uuid, p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_hasta date, p_cambio uuid, p_quien text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_proponer(p_company uuid, p_propuesta jsonb, p_quien text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -154694,6 +156365,39 @@ GRANT ALL ON FUNCTION public._conta_s01q_como_se_pago(p_method text, p_banco boo
 
 REVOKE ALL ON FUNCTION public._conta_s01q_euros(p numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_s01q_euros(p numeric) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tarifa_huella(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tarifa_huella(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tarifa_huella(p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tarifa_mes(p date); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public._conta_tarifa_mes(p date) TO anon;
+GRANT ALL ON FUNCTION public._conta_tarifa_mes(p date) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_tarifa_mes(p date) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tarifa_nombre(p_servicio uuid, p_nivel uuid, p_paquete uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tarifa_nombre(p_servicio uuid, p_nivel uuid, p_paquete uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tarifa_nombre(p_servicio uuid, p_nivel uuid, p_paquete uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_tarifa_puede(p_company uuid, p_escribir boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_tarifa_puede(p_company uuid, p_escribir boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_tarifa_puede(p_company uuid, p_escribir boolean) TO service_role;
 
 
 --
@@ -160473,6 +162177,33 @@ GRANT ALL ON FUNCTION public.conta_gasto_aprendido(p_company uuid, p_supplier uu
 
 
 --
+-- Name: FUNCTION conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via(p_company uuid, p_gc_cobro text, p_via text, p_fecha date, p_nota text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gc_cobro_otra_via_quitar(p_company uuid, p_gc_cobro text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gestoria_ajustes_guardar(p_company uuid, p_mitad_de_mes text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gestoria_ajustes_guardar(p_company uuid, p_mitad_de_mes text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gestoria_ajustes_guardar(p_company uuid, p_mitad_de_mes text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gestoria_ajustes_guardar(p_company uuid, p_mitad_de_mes text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_gestoria_alta_empleado(p_company uuid, p_party uuid, p_servicio uuid, p_empleado text, p_desde date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -162967,12 +164698,84 @@ GRANT ALL ON FUNCTION public.conta_sumas_saldos(p_company uuid, p_desde date, p_
 
 
 --
+-- Name: FUNCTION conta_tarifa_cambio_aplicar(p_cambio uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_cambio_aplicar(p_cambio uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_cambio_aplicar(p_cambio uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_cambio_aplicar(p_cambio uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_cambio_deshacer(p_cambio uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_cambio_deshacer(p_cambio uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_cambio_deshacer(p_cambio uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_cambio_deshacer(p_cambio uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_cambio_ensayar(p_company uuid, p_operacion jsonb, p_resultado jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_cambio_ensayar(p_company uuid, p_operacion jsonb, p_resultado jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_cambio_ensayar(p_company uuid, p_operacion jsonb, p_resultado jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_cambio_ensayar(p_company uuid, p_operacion jsonb, p_resultado jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_tarifa_guardar(p_company uuid, p_provider text, p_desde date, p_params jsonb, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_tarifa_guardar(p_company uuid, p_provider text, p_desde date, p_params jsonb, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_tarifa_guardar(p_company uuid, p_provider text, p_desde date, p_params jsonb, p_quien_nombre text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_tarifa_guardar(p_company uuid, p_provider text, p_desde date, p_params jsonb, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_nivel_cambiar(p_linea uuid, p_nivel uuid, p_desde date, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_nivel_cambiar(p_linea uuid, p_nivel uuid, p_desde date, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_nivel_cambiar(p_linea uuid, p_nivel uuid, p_desde date, p_ensayo boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_nivel_cambiar(p_linea uuid, p_nivel uuid, p_desde date, p_ensayo boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_nivel_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_nombre text, p_orden integer, p_incluye text[], p_mas_elegido boolean, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_nivel_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_nombre text, p_orden integer, p_incluye text[], p_mas_elegido boolean, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_nivel_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_nombre text, p_orden integer, p_incluye text[], p_mas_elegido boolean, p_ensayo boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_nivel_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_nombre text, p_orden integer, p_incluye text[], p_mas_elegido boolean, p_ensayo boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_paquete_guardar(p_company uuid, p_paquete uuid, p_nombre text, p_descripcion text, p_exceso numeric, p_lineas jsonb, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_paquete_guardar(p_company uuid, p_paquete uuid, p_nombre text, p_descripcion text, p_exceso numeric, p_lineas jsonb, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_paquete_guardar(p_company uuid, p_paquete uuid, p_nombre text, p_descripcion text, p_exceso numeric, p_lineas jsonb, p_ensayo boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_paquete_guardar(p_company uuid, p_paquete uuid, p_nombre text, p_descripcion text, p_exceso numeric, p_lineas jsonb, p_ensayo boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_precio_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_precio_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_precio_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_precio_guardar(p_company uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_party uuid, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_tarifa_servicio_anadir(p_company uuid, p_party uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_precio jsonb, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_servicio_anadir(p_company uuid, p_party uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_precio jsonb, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_servicio_anadir(p_company uuid, p_party uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_precio jsonb, p_ensayo boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_servicio_anadir(p_company uuid, p_party uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_precio jsonb, p_ensayo boolean) TO service_role;
 
 
 --
@@ -171778,6 +173581,22 @@ GRANT ALL ON SEQUENCE public.conta_asiento_borrado_id_seq TO service_role;
 
 
 --
+-- Name: TABLE conta_cambio_precios; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cambio_precios TO service_role;
+GRANT SELECT ON TABLE public.conta_cambio_precios TO authenticated;
+
+
+--
+-- Name: TABLE conta_cambio_precios_linea; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cambio_precios_linea TO service_role;
+GRANT SELECT ON TABLE public.conta_cambio_precios_linea TO authenticated;
+
+
+--
 -- Name: TABLE conta_cierre_ajuste; Type: ACL; Schema: public; Owner: -
 --
 
@@ -171791,6 +173610,14 @@ GRANT SELECT ON TABLE public.conta_cierre_ajuste TO authenticated;
 
 GRANT ALL ON TABLE public.conta_cierre_espera TO service_role;
 GRANT SELECT ON TABLE public.conta_cierre_espera TO authenticated;
+
+
+--
+-- Name: TABLE conta_cliente_paquete; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_cliente_paquete TO service_role;
+GRANT SELECT ON TABLE public.conta_cliente_paquete TO authenticated;
 
 
 --
@@ -171868,11 +173695,19 @@ GRANT SELECT ON TABLE public.conta_cobro_stripe TO authenticated;
 
 
 --
--- Name: TABLE conta_gc_cliente; Type: ACL; Schema: public; Owner: -
+-- Name: TABLE conta_linea; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.conta_gc_cliente TO service_role;
-GRANT SELECT ON TABLE public.conta_gc_cliente TO authenticated;
+GRANT ALL ON TABLE public.conta_linea TO service_role;
+GRANT SELECT ON TABLE public.conta_linea TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_asignacion; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_asignacion TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_asignacion TO authenticated;
 
 
 --
@@ -171884,11 +173719,35 @@ GRANT SELECT ON TABLE public.conta_gc_cobro TO authenticated;
 
 
 --
+-- Name: TABLE conta_gc_cobro_otra_via; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_cobro_otra_via TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_cobro_otra_via TO authenticated;
+
+
+--
 -- Name: TABLE conta_gc_mandato; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON TABLE public.conta_gc_mandato TO service_role;
 GRANT SELECT ON TABLE public.conta_gc_mandato TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_cargo_devuelto; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_cargo_devuelto TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_cargo_devuelto TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_cliente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_cliente TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_cliente TO authenticated;
 
 
 --
@@ -171916,19 +173775,19 @@ GRANT SELECT ON TABLE public.conta_gestoria_diferencia TO authenticated;
 
 
 --
--- Name: TABLE conta_linea; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.conta_linea TO service_role;
-GRANT SELECT ON TABLE public.conta_linea TO authenticated;
-
-
---
 -- Name: TABLE party; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON TABLE public.party TO authenticated;
 GRANT ALL ON TABLE public.party TO service_role;
+
+
+--
+-- Name: TABLE conta_consulta_cliente_empresa; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_cliente_empresa TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_cliente_empresa TO authenticated;
 
 
 --
@@ -171969,6 +173828,54 @@ GRANT SELECT ON TABLE public.conta_servicio TO authenticated;
 
 GRANT ALL ON TABLE public.conta_consulta_lineas TO service_role;
 GRANT SELECT ON TABLE public.conta_consulta_lineas TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_proximo_cobro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_proximo_cobro TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_proximo_cobro TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_que_hacer; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_que_hacer TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_que_hacer TO authenticated;
+
+
+--
+-- Name: TABLE conta_precio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_precio TO service_role;
+GRANT SELECT ON TABLE public.conta_precio TO authenticated;
+
+
+--
+-- Name: TABLE conta_precio_tramo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_precio_tramo TO service_role;
+GRANT SELECT ON TABLE public.conta_precio_tramo TO authenticated;
+
+
+--
+-- Name: TABLE conta_tarifa; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_tarifa TO service_role;
+GRANT SELECT ON TABLE public.conta_tarifa TO authenticated;
+
+
+--
+-- Name: TABLE conta_consulta_tarifa_precio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_consulta_tarifa_precio TO service_role;
+GRANT SELECT ON TABLE public.conta_consulta_tarifa_precio TO authenticated;
 
 
 --
@@ -172108,6 +174015,14 @@ GRANT ALL ON TABLE public.conta_factura_cobro TO service_role;
 
 GRANT ALL ON TABLE public.conta_gc_importacion TO service_role;
 GRANT SELECT ON TABLE public.conta_gc_importacion TO authenticated;
+
+
+--
+-- Name: TABLE conta_gestoria_ajustes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gestoria_ajustes TO service_role;
+GRANT SELECT ON TABLE public.conta_gestoria_ajustes TO authenticated;
 
 
 --
@@ -172311,6 +174226,22 @@ GRANT SELECT ON TABLE public.conta_pago_salida TO authenticated;
 
 
 --
+-- Name: TABLE conta_paquete; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_paquete TO service_role;
+GRANT SELECT ON TABLE public.conta_paquete TO authenticated;
+
+
+--
+-- Name: TABLE conta_paquete_linea; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_paquete_linea TO service_role;
+GRANT SELECT ON TABLE public.conta_paquete_linea TO authenticated;
+
+
+--
 -- Name: TABLE conta_pasarela_cuenta; Type: ACL; Schema: public; Owner: -
 --
 
@@ -172470,19 +174401,19 @@ GRANT ALL ON TABLE public.conta_s01p_recibido_antes TO service_role;
 
 
 --
+-- Name: TABLE conta_servicio_nivel; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_servicio_nivel TO service_role;
+GRANT SELECT ON TABLE public.conta_servicio_nivel TO authenticated;
+
+
+--
 -- Name: TABLE conta_solicitud; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON TABLE public.conta_solicitud TO service_role;
 GRANT SELECT ON TABLE public.conta_solicitud TO authenticated;
-
-
---
--- Name: TABLE conta_tarifa; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.conta_tarifa TO service_role;
-GRANT SELECT ON TABLE public.conta_tarifa TO authenticated;
 
 
 --
