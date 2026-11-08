@@ -191,7 +191,7 @@ test('5 · «Volver al despacho»: Impuestos › Tus clientes, sin franja', asyn
   await franja(page).getByRole('button', { name: 'Volver al despacho' }).click()
   await page.waitForURL(/\/conta\/impuestos\/clientes/, { timeout: 30_000 })
   await cargada(page)
-  await expect(page.getByRole('heading', { name: 'Impuestos de tus clientes' })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: 'Impuestos de tus clientes' }).first()).toBeVisible()
   await expect(franja(page)).toHaveCount(0)
   expect(errores).toEqual([])
 })
