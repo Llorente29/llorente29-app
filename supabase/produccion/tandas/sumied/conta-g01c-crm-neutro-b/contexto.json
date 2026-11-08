@@ -1,0 +1,8 @@
+{
+ "_que": "G01c · PR B · contexto de producción, medido en SOLO LECTURA el 08/11 a la 01:00Z (analizar.mjs sql-contexto). La 0112 migra filas de conta_gestoria_diferencia (2.840 de los tipos de antes) y conta_gestoria_lectura (10 con el origen de antes), con su copia en una tabla nueva; quita conta_crm_bitrix con sus dos disparadores y siete funciones con «bitrix» (con su respaldo); deja vacías las dos de los espejos (misma firma, con su respaldo), y renombra un secreto de Vault sin tocar su valor. El único uso que mide el contexto (_conta_crm_a_bitrix nombra conta_crm_bitrix) lo quita el mismo fichero. Las columnas de antes (tablas y vistas) se quedan para su propio PR. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-08T01:00Z",
+ "tanda": {
+  "supabase/migrations/20261108T0112_g01c_crm_neutro_b.sql": "529634c9e0884e8e0129f4f73ff2c95b"
+ },
+ "contexto": {"tablas":["public.conta_crm","public.conta_crm_bitrix","public.conta_gestoria_diferencia","public.conta_gestoria_lectura","vault.secrets"],"funciones":["public._conta_bitrix_campo_sensible(jsonb)","public._conta_crm_a_bitrix()","public._conta_crm_desde_bitrix()","public.conta_bitrix_aplicar_union(uuid)","public.conta_bitrix_confirmar_mapa(uuid,jsonb)","public.conta_bitrix_guardar_clientes(uuid,jsonb)","public.conta_bitrix_guardar_conexion(uuid,text,text,text,text)","public.conta_bitrix_guardar_fichas(uuid,jsonb)","public.conta_bitrix_secreto(uuid)"],"filas":{"public.conta_crm":0,"public.conta_crm_bitrix":0,"public.conta_gestoria_diferencia":8834,"public.conta_gestoria_lectura":27,"vault.secrets":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{"public.conta_crm_bitrix":["función _conta_crm_a_bitrix()"]},"registro":[]}
+}

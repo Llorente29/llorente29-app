@@ -1,0 +1,27 @@
+# G01c · PR B de la clave neutra (Julio, 07/11 y 08/11): la base deja de tener
+# lo de Bitrix24. Rama conta/g01c-crm-neutro-b. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar. Va después del PR A (#506), ya
+# publicado: lo publicado ya no lee nada de lo que esta tanda quita.
+#
+#   0112  Pasa los tres tipos de «Pendiente de revisar» con «bitrix» a los
+#         neutros y el origen «bitrix» de las lecturas a «crm», con una copia
+#         de lo de antes de cada fila (y los CHECK, con uno nuevo: «ya no es
+#         cliente en tu CRM»); quita conta_crm_bitrix con sus dos disparadores
+#         y siete funciones con «bitrix» (con su respaldo); deja vacías las dos
+#         de los espejos, y cambia el nombre del secreto de Vault de la
+#         conexión sin tocar su valor: la conexión sigue sin volver a pegar la
+#         dirección.
+#
+# Para después, en su propio PR: las cinco columnas de antes de las tablas,
+# las tres de las dos vistas de consulta, lo que aún las escribe
+# (conta_crm_guardar_clientes) y las dos funciones vacías. Borrar una columna
+# va en su propia tanda; quitarla de una vista es borrar la vista y crearla
+# otra vez, que main cuenta como borrar algo que lee el front; y el analizador
+# cuenta como uso el disparador que quita el mismo fichero.
+#
+# Queda «bitrix24» como valor de crm, y las tres excepciones acordadas
+# (created_by_name, 'conta-bitrix-leer' en despertar y los textos de ayuda).
+# No lee ni escribe en el CRM. Nada en el camino del pedido. El real lo lanza
+# Julio, con su AUTORIZO.
+cuenta: scripts/conta/produccion/cuentas/g01c-crm-neutro-b.sql
+supabase/migrations/20261108T0112_g01c_crm_neutro_b.sql

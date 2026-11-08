@@ -1,0 +1,7 @@
+# G01c · la vuelta atrás de la 0112: todo como tras el PR A. Vuelven
+# conta_crm_bitrix (rellena desde conta_crm) con sus disparadores, las nueve
+# funciones, las columnas (rellenas desde las neutras) y las vistas como
+# estaban; los tipos y el origen de antes del corte (08/11 00:00 UTC) vuelven
+# a los de antes, y el secreto, a su nombre de antes (el mismo valor).
+cuenta: scripts/conta/produccion/cuentas/g01c-crm-neutro-b.sql
+supabase/vuelta-atras/20261108T0112_g01c_crm_neutro_b.down.sql

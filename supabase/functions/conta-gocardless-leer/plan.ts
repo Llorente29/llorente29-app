@@ -22,9 +22,8 @@ import { deRef } from '../_shared/crm/ficha.ts'
 const SIN_FICHA = { crm: null, tipo_ficha: null, id_externo: null } as const
 const fichaDe = (ref: string | null) => (ref ? (({ crm, tipoFicha, idExterno }) => ({ crm, tipo_ficha: tipoFicha, id_externo: idExterno }))(deRef(ref)) : SIN_FICHA)
 
-// G01c · Los tipos neutros, y los de antes del G01c para retirar las filas vigentes que los llevan (el PR B las migra y los quita).
-export const TIPOS_DEL_CASADO = ['crm_sin_cobro', 'gocardless_sin_ficha', 'emisor_distinto', 'nif_repetido_en_crm', 'correo_repetido_en_crm',
-  'bitrix_sin_cobro', 'nif_repetido_en_bitrix', 'correo_repetido_en_bitrix', 'nif_distinto']
+// G01c · Los tipos del casado, neutros (los de antes los migró a estos el PR B).
+export const TIPOS_DEL_CASADO = ['crm_sin_cobro', 'gocardless_sin_ficha', 'emisor_distinto', 'nif_repetido_en_crm', 'correo_repetido_en_crm', 'nif_distinto']
 
 export const mesDe = (fecha: string | null | undefined, hoy: string): string => (fecha ?? hoy).slice(0, 7)
 export const aEuros = (cent: number | null) => (cent === null ? null : Math.round(cent) / 100)
