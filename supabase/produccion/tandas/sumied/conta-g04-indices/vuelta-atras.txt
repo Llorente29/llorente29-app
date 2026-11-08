@@ -1,0 +1,3 @@
+# G04 · la vuelta atrás de la 2057: fuera los siete índices.
+cuenta: scripts/conta/produccion/cuentas/g04-indices.sql
+supabase/vuelta-atras/20261108T2057_g04_indices_clientes.down.sql

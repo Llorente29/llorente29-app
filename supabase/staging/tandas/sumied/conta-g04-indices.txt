@@ -1,0 +1,3 @@
+# G04 · URGENTE: la 2057, siete índices que solo añaden (Clientes y Tarifa no
+# cargaban en producción por tiempo).
+supabase/migrations/20261108T2057_g04_indices_clientes.sql

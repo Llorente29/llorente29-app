@@ -1,0 +1,13 @@
+# G04 · URGENTE (Julio, nº 17, 08/11): Clientes y Tarifa no cargan en
+# producción (conta_consulta_cliente_empresa pasa los 8 s como authenticated:
+# 8,8 s medidos). Rama conta/g04-indices. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   2057  SOLO AÑADE: siete índices en tablas pequeñas (864 a 11.453 filas),
+#         fuera del camino del pedido. Ni vistas, ni funciones, ni datos.
+#
+# La cuenta mide cada vista de la pantalla como authenticated, con el usuario
+# administrador de QBO: antes, con la tanda (en el ensayo) y después.
+# No lee ni escribe en GoCardless ni en el CRM. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g04-indices.sql
+supabase/migrations/20261108T2057_g04_indices_clientes.sql
