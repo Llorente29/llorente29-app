@@ -1,0 +1,19 @@
+{
+ "_que": "G04 · La pantalla rápida · contexto de producción, medido en SOLO LECTURA el 08/11 (por el MCP de lectura). La 2308 solo añade tres funciones nuevas (conta_pantalla_clientes, _ficha y _asignar), que hoy no existen; el nombre no está en el historial. Nada en el camino del pedido.",
+ "medido": "2026-11-08T22:34Z",
+ "tanda": {
+  "supabase/migrations/20261108T2308_g04_pantalla_rapida.sql": "2506890c3f4b2a9b73918ca4814c2100"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

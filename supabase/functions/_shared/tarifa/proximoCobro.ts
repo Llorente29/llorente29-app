@@ -10,7 +10,8 @@
 //   · En QBO, el 08/11, el primer día era el 16/11 (5 cobros · 181,50 €) y el
 //     grande el 04/12 (287 · 21.801,19 €).
 // Cuenta cada suscripción activa con su siguiente cobro (lo guarda la lectura:
-// upcoming_payments). Las que no traen fecha se cuentan aparte.
+// upcoming_payments), una a una o ya sumadas por día (la 2308). Las que no
+// traen fecha se cuentan aparte.
 // Puro. Lo prueban tests/unit/modules/conta/gestoria/g04/proximoCobro.test.ts.
 
 import { euros } from './precio.ts'
@@ -20,6 +21,8 @@ export interface SiguienteCobro {
   /** «AAAA-MM-DD», o null si la suscripción no trae fecha. */
   fecha: string | null
   importeCent: number
+  /** Cuántos cobros son (la base ya los da sumados por empresa y día, 2308); si no se dice, uno. */
+  cobros?: number
 }
 
 export interface DiaDeCobro { fecha: string; cobros: number; importeCent: number }
@@ -61,7 +64,7 @@ function deUnaEmpresa(xs: readonly SiguienteCobro[], empresaId: string, hoy: str
   for (const x of de) {
     if (!x.fecha || x.fecha < hoy || x.fecha > hasta) continue
     const d = porDia.get(x.fecha) ?? { fecha: x.fecha, cobros: 0, importeCent: 0 }
-    d.cobros++
+    d.cobros += x.cobros ?? 1
     d.importeCent += x.importeCent
     porDia.set(x.fecha, d)
   }
@@ -72,7 +75,7 @@ function deUnaEmpresa(xs: readonly SiguienteCobro[], empresaId: string, hoy: str
     empresaId, dias, principal,
     total: { cobros: dias.reduce((s, d) => s + d.cobros, 0), importeCent: dias.reduce((s, d) => s + d.importeCent, 0) },
     otros: { dias: otros.length, cobros: otros.reduce((s, d) => s + d.cobros, 0), importeCent: otros.reduce((s, d) => s + d.importeCent, 0) },
-    sinFecha: de.filter((x) => !x.fecha).length,
+    sinFecha: de.filter((x) => !x.fecha).reduce((s, x) => s + (x.cobros ?? 1), 0),
   }
 }
 

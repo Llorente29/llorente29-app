@@ -15,7 +15,7 @@ const laboral = [{ desde: 1, hasta: 5, importe: 100, porUnidad: false }, { desde
 
 const datos = (): DatosClientes => ({
   clientes: [{ cliente_id: '1', cliente: 'Construcciones Ficticias, S.A.' }, { cliente_id: '2', cliente: 'Talleres Ejemplo, S.L.' }, { cliente_id: '3', cliente: 'Estudio de Prueba, S.L.' }],
-  suscripciones: [], cargos: [], queHacer: [], ajustes: [], fichas: [], crm: [], cobros: [], mandatos: [],
+  cuotasGc: [], proximos: [], cargos: [], queHacer: [], ajustes: [], crm: [],
   servicios: [
     { id: 'ges', company_id: Q, nombre: 'Gestoría mensual', forma: 'fijo_mes' },
     { id: 'lab', company_id: Q, nombre: 'Gestión laboral', forma: 'por_empleado' },

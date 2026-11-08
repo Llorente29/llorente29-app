@@ -43,6 +43,10 @@ describe('G04 · el próximo cobro de GoCardless', () => {
     const p = proximoCobro(Array.from({ length: 1060 }, () => s('qbo', '2026-12-04', 100000)), [Q], '2026-11-08')
     expect([p.titulo, p.desglose[0]]).toEqual(['1.060 cobros · 1.060.000,00 €', '4 dic.: 1.060 cobros · 1.060.000 €'])
   })
+  it('ya sumados por día (la base, 2308), lo mismo que uno a uno', () => {
+    const p = proximoCobro([{ empresaId: 'qbo', fecha: '2026-12-04', importeCent: 106000000, cobros: 1060 }, { empresaId: 'qbo', fecha: null, importeCent: 0, cobros: 3 }], [Q], '2026-11-08')
+    expect([p.titulo, p.desglose[0], p.sinFecha]).toEqual(['1.060 cobros · 1.060.000,00 €', '4 dic.: 1.060 cobros · 1.060.000 €', 3])
+  })
   it('sin cobros en 30 días, lo dice', () => {
     expect(proximoCobro([], [Q], '2026-11-08')).toMatchObject({ titulo: 'Ningún cobro en los próximos 30 días', desglose: ['Ningún cobro en 30 días'] })
   })

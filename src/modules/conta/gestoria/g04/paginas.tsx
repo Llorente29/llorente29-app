@@ -1,8 +1,8 @@
 // src/modules/conta/gestoria/g04/paginas.tsx
 //
 // G04 · Tarea 4 · Las pantallas nuevas con sus datos: Clientes (con su panel),
-// la ficha del cliente y «Tarifa y paquetes». Leen por datos.ts (todo,
-// paginado) y pintan con las piezas de esta carpeta, que no leen nada (así se
+// la ficha del cliente y «Tarifa y paquetes». Leen por datos.ts (una llamada
+// por pantalla, ya agregada en la base: la 2308) y pintan con las piezas de esta carpeta, que no leen nada (así se
 // prueban y se capturan con datos inventados).
 
 import { useState } from 'react'
@@ -13,7 +13,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer as useLeerDeLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { acciones, leerClientes, leerTodo } from './datos'
+import { acciones, leerAsignar, leerClientes, leerFicha } from './datos'
 import { altaEmpleado, bajaLinea, lineaDesdeGc, noContar, revisada } from '@/modules/conta/services/gestoriaService'
 import { modeloClientes, modeloFicha, nombreDelCrmDe, referenciasDelCrm } from './modelo'
 import { Ficha } from './Ficha'
@@ -82,33 +82,21 @@ export function ClientesG04Page() {
   )
 }
 
-/** «Asignar a un cliente»: lee los clientes de GoCardless (nombre, email y NIF, para proponer) y une con conta_gestoria_enlazar. */
+/** «Asignar a un cliente»: lee las suscripciones activas y los clientes de GoCardless (nombre, email y NIF, para proponer), en su propia llamada, y une con conta_gestoria_enlazar. */
 function AsignarG04({ accountId, datos, empresas, elegidas, lasDos, recargar, rutaVolver }: {
   accountId: string; datos: Awaited<ReturnType<typeof leerClientes>>; empresas: { id: string; nombre: string }[]; elegidas: string[]; lasDos: boolean; recargar: () => void; rutaVolver: string
 }) {
-  const gc = useLeer(() => leerTodo('conta_gc_cliente', 'company_id, gc_id, nombre, correo, nif', { columna: 'account_id', id: accountId }, ['company_id', 'gc_id']), `${accountId}:g04-gc-clientes`)
+  const gc = useLeer(() => leerAsignar(accountId), `${accountId}:g04-asignar`)
   if (gc.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes de GoCardless: ${gc.error}`} reintentar={gc.recargar} />
   if (!gc.datos) return <TarjetaCargando />
   return (
-    <Asignar lista={porAsignar(datos, gc.datos, empresas, elegidas)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
+    <Asignar lista={porAsignar(datos, gc.datos.suscripciones, gc.datos.gcClientes, empresas, elegidas)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
       alUnir={async (empresa, gcCliente, cliente) => { const r = await acciones.enlazar(empresa, gcCliente, cliente); recargar(); return r.frase }} />
   )
 }
 
 type Fila = Record<string, unknown>
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
-
-/** Lo de la ficha que no está en la lista: lo pendiente de revisar y las personas de contacto de este cliente. */
-async function leerDeLaFicha(accountId: string, cliente: string) {
-  const deCuenta = { columna: 'account_id', id: accountId }
-  const [difs, personas] = await Promise.all([
-    leerTodo('conta_gestoria_diferencia', 'id, company_id, tipo, porque', deCuenta, ['id'],
-      (q) => (q as { eq: (c: string, v: unknown) => { eq: (c: string, v: unknown) => unknown } }).eq('party_id', cliente).eq('vigente', true)),
-    leerTodo('conta_gestoria_ficha', 'party_id, id_externo, ficha', deCuenta, ['id_externo'],
-      (q) => (q as { eq: (c: string, v: unknown) => { eq: (c: string, v: unknown) => { neq: (c: string, v: unknown) => unknown } } }).eq('party_id', cliente).eq('tipo_ficha', 'contacto').neq('de_empresa', '')),
-  ])
-  return { difs, personas }
-}
 
 export function FichaClienteG04Page() {
   const { accountId, cargando } = useCuentaConta()
@@ -117,7 +105,8 @@ export function FichaClienteG04Page() {
   const [params] = useSearchParams()
   const empresa = params.get('empresa')
   const d = useLeer(!cargando && accountId && cliente ? async () => {
-    const [datos, extra] = await Promise.all([leerClientes(accountId), leerDeLaFicha(accountId, cliente)])
+    // Las dos a la vez: lo de la lista y lo que solo hace falta al abrir este cliente.
+    const [datos, extra] = await Promise.all([leerClientes(accountId), leerFicha(accountId, cliente)])
     return { datos, extra }
   } : null, `${accountId}:g04-ficha:${cliente}`)
   if (d.error) return <ErrorConReintento mensaje={`No se ha podido leer la ficha: ${d.error}`} reintentar={d.recargar} />
@@ -125,15 +114,15 @@ export function FichaClienteG04Page() {
   const { datos, extra } = d.datos
   const hoy = hoyEnMadrid()
   const lista = empresas.map((e) => ({ id: e.id, nombre: e.nombre }))
-  const pendientes = extra.difs.filter((x) => !empresa || !x.company_id || x.company_id === empresa).map((x) => ({ id: String(x.id), tipo: String(x.tipo), porque: String(x.porque ?? '') }))
-  const modelo = modeloFicha(datos, lista, cliente, empresa, hoy, pendientes)
+  const pendientes = extra.pendientes.filter((x) => !empresa || !x.company_id || x.company_id === empresa).map((x) => ({ id: String(x.id), tipo: String(x.tipo), porque: String(x.porque ?? '') }))
+  const modelo = modeloFicha(datos, extra, lista, cliente, empresa, hoy, pendientes)
   if (!modelo) return <ErrorConReintento mensaje="Ese cliente no está en esta cuenta." reintentar={d.recargar} />
   const crm = datos.crm[0] ?? null
   const nombreCrm = nombreDelCrmDe(crm ? String(crm.crm) : null)
   const fila = datos.clientes.find((r) => String(r.cliente_id) === cliente && (r.empresa_id ?? null) === (modelo.fila.empresaId ?? null))
-  const ficha = (datos.fichas.find((x) => String(x.party_id) === cliente)?.ficha ?? {}) as Fila
+  const ficha = extra.ficha
   const direccion = [texto(ficha.calle), texto(ficha.cp), texto(ficha.poblacion), texto(ficha.provincia)].filter(Boolean).join(', ') || null
-  const leido = datos.fichas.find((x) => String(x.party_id) === cliente)?.leido_at
+  const leido = extra.leidoAt
   const e = modelo.fila.empresaId
   const deEmpresa = datos.servicios.filter((x) => x.company_id === e && x.activo !== false)
   const tras = async (p: Promise<{ frase: string } | string>) => { const r = await p; d.recargar(); return typeof r === 'string' ? r : r.frase }

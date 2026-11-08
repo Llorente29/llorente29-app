@@ -25,7 +25,7 @@
 import { test, expect, type Page, type Route } from '@playwright/test'
 import { CUENTA_A, entrarComo, type Sesion } from '../sesion'
 import { rest } from '../api'
-import { FRASES, siembra } from './siembra'
+import { FRASES, pantallas, siembra } from './siembra'
 
 const DIR = 'docs/conta/capturas/g04'
 const lado = (page: Page) => ((page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador')
@@ -73,11 +73,11 @@ async function simular(page: Page, Q: string, A: string) {
     if (r.request().method() !== 'GET' || !(nombre in datos)) return r.fallback()
     return json(r, datos[nombre])
   })
-  // Las funciones de lectura (la 2209) devuelven las mismas filas que las vistas de antes.
-  const LECTURAS: Record<string, string> = { conta_lista_clientes: 'conta_consulta_cliente_empresa', conta_lista_que_hacer: 'conta_consulta_que_hacer' }
+  // Las funciones de lectura de la 2308 (una llamada por pantalla), calculadas con la misma siembra.
+  const LECTURAS = pantallas(datos)
   await page.route(/\/rest\/v1\/rpc\/([a-z_]+)/, (r) => {
     const f = /\/rest\/v1\/rpc\/([a-z_]+)/.exec(r.request().url())![1]
-    if (f in LECTURAS) return json(r, datos[LECTURAS[f]])
+    if (f in LECTURAS) return json(r, LECTURAS[f]((r.request().postDataJSON() ?? {}) as Record<string, unknown>))
     if (!(f in FRASES)) return r.fallback()
     const cuerpo = (r.request().postDataJSON() ?? {}) as Record<string, unknown>
     llamadas.push({ f, cuerpo })

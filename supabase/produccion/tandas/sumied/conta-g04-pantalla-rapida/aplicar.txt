@@ -1,0 +1,15 @@
+# G04 · La pantalla de Clientes en UNA sola llamada, en menos de 1 s (Julio,
+# nº 21, 08/11). Rama conta/g04-pantalla-rapida. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   2308  SOLO AÑADE: conta_pantalla_clientes, conta_pantalla_ficha y
+#         conta_pantalla_asignar, funciones de lectura SECURITY DEFINER con una
+#         sola comprobación de la cuenta (como la 2209), que devuelven ya
+#         agregado lo que pinta cada pantalla. Antes, la pantalla leía enteros
+#         y por páginas los cobros, los mandatos, las suscripciones y las
+#         fichas con la RLS fila a fila: 4–5 s en el navegador con QBO.
+#
+# No toca datos. No lee ni escribe en GoCardless ni en el CRM. Nada en el
+# camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g04-pantalla-rapida.sql
+supabase/migrations/20261108T2308_g04_pantalla_rapida.sql
