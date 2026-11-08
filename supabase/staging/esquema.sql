@@ -4479,6 +4479,20 @@ COMMENT ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total nume
 
 
 --
+-- Name: _conta_despachos_de_quien_llama(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_despachos_de_quien_llama() RETURNS SETOF uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select up.account_id from public.user_profiles up
+   where up.user_id = auth.uid() and up.active and up.suspended_at is null
+     and up.advisor_account_id is null and up.account_id is not null
+$$;
+
+
+--
 -- Name: _conta_dir_coincide(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -31770,6 +31784,136 @@ COMMENT ON FUNCTION public.conta_asiento_envio(p_entry uuid) IS 'C07 · Lo que e
 
 
 --
+-- Name: conta_aviso_configurar(uuid, text, text, uuid, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_ref uuid; v_nombre text; v_quien text := public.conta_nombre_actor(); v_frase text; v_de text; v_codigo text := nullif(trim(coalesce(p_codigo, '')), '');
+begin
+  if not public.current_user_is_admin_or_manager_of(p_account) then
+    raise exception 'Solo un administrador o un encargado de la cuenta cambia «Al instante».' using errcode = '42501';
+  end if;
+  if p_origen = 'crm' then
+    if not exists (select 1 from public.conta_crm where account_id = p_account and crm = p_crm) then raise exception 'Esta cuenta no tiene conectado su CRM.' using errcode = 'P0002'; end if;
+    select aviso_ref into v_ref from public.conta_crm where account_id = p_account and crm = p_crm for update;
+    v_nombre := 'conta_crm_aviso:' || p_crm || ':' || p_account::text;
+    v_de := public._conta_crm_nombre(p_crm);
+  elsif p_origen = 'gocardless' then
+    if not exists (select 1 from public.conta_cobro_gocardless where company_id = p_company and account_id = p_account) then
+      raise exception 'Esa empresa no tiene conectado GoCardless.' using errcode = 'P0002';
+    end if;
+    select aviso_ref into v_ref from public.conta_cobro_gocardless where company_id = p_company for update;
+    v_nombre := 'conta_gocardless_aviso:' || p_company::text;
+    v_de := 'GoCardless';
+  else
+    raise exception 'Los avisos son del CRM o de GoCardless.' using errcode = '22023';
+  end if;
+
+  if v_codigo is not null then
+    if length(v_codigo) < 16 or v_codigo ~ '\s' then
+      raise exception 'Ese código no parece el de %: cópialo entero, sin espacios.', v_de using errcode = '22023';
+    end if;
+    if v_ref is null or not exists (select 1 from vault.secrets where id = v_ref) then select id into v_ref from vault.secrets where name = v_nombre; end if;
+    if v_ref is not null then perform vault.update_secret(v_ref, v_codigo, v_nombre, 'Código de los avisos al instante de una conexión de Sumied');
+    else v_ref := vault.create_secret(v_codigo, v_nombre, 'Código de los avisos al instante de una conexión de Sumied'); end if;
+  end if;
+  if p_encender is true and v_ref is null then
+    raise exception 'Para encender «Al instante» falta pegar el código de %.', v_de using errcode = '22023';
+  end if;
+
+  if p_origen = 'crm' then
+    update public.conta_crm set aviso_ref = v_ref,
+           aviso_encendido = coalesce(p_encender, aviso_encendido),
+           aviso_encendido_at = case when p_encender is not null then now() else aviso_encendido_at end,
+           aviso_encendido_por_name = case when p_encender is not null then v_quien else aviso_encendido_por_name end,
+           updated_at = now()
+     where account_id = p_account and crm = p_crm;
+  else
+    update public.conta_cobro_gocardless set aviso_ref = v_ref,
+           aviso_encendido = coalesce(p_encender, aviso_encendido),
+           aviso_encendido_at = case when p_encender is not null then now() else aviso_encendido_at end,
+           aviso_encendido_por_name = case when p_encender is not null then v_quien else aviso_encendido_por_name end,
+           updated_at = now()
+     where company_id = p_company;
+  end if;
+  v_frase := concat_ws(' ',
+    case when v_codigo is not null then format('Guardado el código de %s: no se vuelve a enseñar.', v_de) end,
+    case when p_encender is true then format('«Al instante» encendido para %s: los avisos se aplican en segundos.', v_de)
+         when p_encender is false then format('«Al instante» apagado para %s: los avisos que lleguen se rechazan. La lectura de cada noche sigue.', v_de) end);
+  return jsonb_build_object('frase', coalesce(nullif(v_frase, ''), 'No había nada que cambiar.'));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean) IS 'G01d · Pega el código de los avisos de una conexión (a Vault; no se vuelve a enseñar) y enciende o apaga «Al instante». Solo administradores o encargados de la cuenta.';
+
+
+--
+-- Name: conta_aviso_secreto(text, uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_aviso_secreto(p_origen text, p_account uuid, p_crm text, p_company uuid) RETURNS TABLE(encendido boolean, codigo text, entorno text)
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(c.aviso_encendido, false), s.decrypted_secret, c.entorno
+    from public.conta_crm c left join vault.decrypted_secrets s on s.id = c.aviso_ref
+   where p_origen = 'crm' and c.account_id = p_account and c.crm = p_crm
+  union all
+  select coalesce(g.aviso_encendido, false), s.decrypted_secret, g.entorno
+    from public.conta_cobro_gocardless g left join vault.decrypted_secrets s on s.id = g.aviso_ref
+   where p_origen = 'gocardless' and g.company_id = p_company and g.account_id = p_account
+$$;
+
+
+--
+-- Name: FUNCTION conta_aviso_secreto(p_origen text, p_account uuid, p_crm text, p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_aviso_secreto(p_origen text, p_account uuid, p_crm text, p_company uuid) IS 'G01d · El encendido y el código de los avisos de una conexión, para comprobar que un aviso es auténtico. Solo el servidor.';
+
+
+--
+-- Name: conta_avisos_despertar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_avisos_despertar() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_secreto text; v_origen text;
+begin
+  for v_origen in
+    select distinct origen from public.conta_aviso
+     where (estado = 'pendiente' and recibido_at < now() - interval '30 seconds')
+        or (estado = 'fallo' and proximo_intento_at <= now())
+        or (estado = 'trabajando' and coalesce(proximo_intento_at, recibido_at) < now() - interval '10 minutes')
+  loop
+    if v_secreto is null then
+      select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+      if v_secreto is null then raise exception 'Falta cron_secret en el Vault: no se puede repasar la cola de avisos.' using errcode = '55000'; end if;
+    end if;
+    perform net.http_post(url := public._project_url() || '/functions/v1/' || case v_origen when 'crm' then 'conta-crm-aviso' else 'conta-gocardless-aviso' end,
+      headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+      body := jsonb_build_object('accion', 'repasar'), timeout_milliseconds := 150000);
+  end loop;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_avisos_despertar(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_avisos_despertar() IS 'G01d · Cada 2 minutos: si hay avisos que esperan, que fallaron y les toca repetir o que se quedaron a medias, despierta a la función de su origen.';
+
+
+--
 -- Name: conta_banco_agregador_despertar(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34419,6 +34563,87 @@ COMMENT ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm text
 
 
 --
+-- Name: conta_crm_guardar_personas_de_contacto(uuid, text, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_guardar_personas_de_contacto(p_account uuid, p_crm text, p_contacto text, p_empresas jsonb, p_ficha jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare v_empresa text; v_party uuid; v_guardadas int := 0; v_sin_cliente int := 0; v_quitadas int := 0; v_vale text[] := '{}';
+begin
+  if not exists (select 1 from public.accounts where id = p_account) then raise exception 'La cuenta no existe.' using errcode = 'P0002'; end if;
+  if coalesce(p_crm, '') !~ '^[a-z0-9_]+$' then raise exception 'Falta el CRM.' using errcode = '22023'; end if;
+  if coalesce(p_contacto, '') = '' then raise exception 'Falta el contacto.' using errcode = '22023'; end if;
+  for v_empresa in select jsonb_array_elements_text(coalesce(p_empresas, '[]'::jsonb)) loop
+    v_party := null;
+    select party_id into v_party from public.conta_gestoria_ficha
+     where account_id = p_account and crm = p_crm and tipo_ficha = 'empresa' and id_externo = v_empresa and de_empresa = '';
+    if v_party is null then v_sin_cliente := v_sin_cliente + 1; continue; end if;
+    insert into public.conta_gestoria_ficha (account_id, crm, tipo_ficha, id_externo, de_empresa, party_id, situacion, ficha, huella, leido_at)
+    values (p_account, p_crm, 'contacto', p_contacto, v_empresa, v_party, null, p_ficha, md5(p_ficha::text), now())
+    on conflict (account_id, crm, tipo_ficha, id_externo, de_empresa) do update set party_id = excluded.party_id, ficha = excluded.ficha, huella = excluded.huella, leido_at = now();
+    v_vale := v_vale || v_empresa;
+    v_guardadas := v_guardadas + 1;
+  end loop;
+  -- Las empresas de las que ya no es persona de contacto (solo de este contacto).
+  delete from public.conta_gestoria_ficha
+   where account_id = p_account and crm = p_crm and tipo_ficha = 'contacto' and id_externo = p_contacto and de_empresa <> '' and de_empresa <> all(v_vale);
+  get diagnostics v_quitadas = row_count;
+  return jsonb_build_object('guardadas', v_guardadas, 'sinCliente', v_sin_cliente, 'quitadas', v_quitadas);
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_crm_guardar_personas_de_contacto(p_account uuid, p_crm text, p_contacto text, p_empresas jsonb, p_ficha jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_guardar_personas_de_contacto(p_account uuid, p_crm text, p_contacto text, p_empresas jsonb, p_ficha jsonb) IS 'G01d · Las filas de persona de contacto de UN contacto del CRM (una por empresa): las de las empresas que ya no son suyas se quitan; las de los demás contactos no se tocan. Para los avisos al instante. Solo el servidor.';
+
+
+--
+-- Name: conta_crm_renovar_pendientes(uuid, text, uuid, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_crm_renovar_pendientes(p_account uuid, p_crm text, p_lectura uuid, p_fichas jsonb, p_difs jsonb) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_claves text[]; d jsonb; v_party uuid; v_n int := 0;
+        v_tipos constant text[] := array['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos', 'ya_no_es_cliente_en_crm'];
+begin
+  if not exists (select 1 from public.conta_gestoria_lectura where id = p_lectura and account_id = p_account) then
+    raise exception 'La lectura no es de esta cuenta.' using errcode = 'P0002';
+  end if;
+  v_claves := array(select (x->>'tipoFicha') || ':' || (x->>'idExterno') from jsonb_array_elements(coalesce(p_fichas, '[]'::jsonb)) x);
+  update public.conta_gestoria_diferencia set vigente = false
+   where account_id = p_account and vigente and crm = p_crm and tipo = any(v_tipos) and (tipo_ficha || ':' || id_externo) = any(v_claves);
+  for d in select * from jsonb_array_elements(coalesce(p_difs, '[]'::jsonb)) loop
+    -- El cliente de cada una, como en la lectura entera (leer.ts · partyDeDif).
+    v_party := case
+      when d->>'tipo' = 'ficha_no_guardada' then null
+      when d->>'tipo' = 'ya_no_es_cliente_en_crm' then (select g.party_id from public.conta_gestoria_cliente g
+             where g.account_id = p_account and g.crm = p_crm and g.tipo_ficha = d->>'tipo_ficha' and g.id_externo = d->>'id_externo' limit 1)
+      when d->>'tipo' = 'contacto_empresa_con_datos' then (select f.party_id from public.conta_gestoria_ficha f
+             where f.account_id = p_account and f.crm = p_crm and f.tipo_ficha = 'empresa' and f.de_empresa = '' and f.id_externo = d->'datos'->'empresas'->>0)
+      else (select f.party_id from public.conta_gestoria_ficha f
+             where f.account_id = p_account and f.crm = p_crm and f.de_empresa = '' and f.tipo_ficha = d->>'tipo_ficha' and f.id_externo = d->>'id_externo') end;
+    insert into public.conta_gestoria_diferencia (account_id, lectura_id, tipo, porque_codigo, porque, crm, tipo_ficha, id_externo, party_id, datos)
+    values (p_account, p_lectura, d->>'tipo', d->>'porque_codigo', d->>'porque', p_crm, nullif(d->>'tipo_ficha', ''), nullif(d->>'id_externo', ''), v_party, coalesce(d->'datos', '{}'::jsonb));
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_crm_renovar_pendientes(p_account uuid, p_crm text, p_lectura uuid, p_fichas jsonb, p_difs jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_crm_renovar_pendientes(p_account uuid, p_crm text, p_lectura uuid, p_fichas jsonb, p_difs jsonb) IS 'G01d · «Pendiente de revisar» de unas fichas del CRM (las que toca un aviso): las suyas dejan de ser vigentes y entran las nuevas, con el cliente de cada una como en la lectura entera. Solo el servidor.';
+
+
+--
 -- Name: conta_crm_secreto(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34494,6 +34719,104 @@ end $_$;
 
 
 --
+-- Name: conta_despacho_donde(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_despacho_donde() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object(
+    'abierto', (select jsonb_build_object('account_id', up.account_id, 'despacho_id', d.id,
+                                          'despacho_nombre', coalesce(nullif(btrim(d.legal_name), ''), d.name))
+                  from public.user_profiles up join public.accounts d on d.id = up.advisor_account_id
+                 where up.user_id = auth.uid() and up.active and up.account_id = public._cuenta_activa()),
+    'accesos', coalesce((select jsonb_agg(up.account_id order by up.account_id)
+                           from public.user_profiles up
+                          where up.user_id = auth.uid() and up.active and up.advisor_account_id is not null), '[]'::jsonb))
+$$;
+
+
+--
+-- Name: FUNCTION conta_despacho_donde(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_despacho_donde() IS 'G05 (08/11/2026). De quien llama: si la cuenta abierta es un acceso de despacho (y de cuál), y las cuentas en las que tiene un acceso de despacho. Para el Shell, la franja y el selector.';
+
+
+--
+-- Name: conta_despacho_entrar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_despacho_entrar(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_uid uuid := auth.uid();
+  v_cuenta uuid;
+  v_razon text;
+  v_despacho uuid;
+  v_despacho_nombre text;
+  v_mia public.user_profiles;
+  v_origen public.user_profiles;
+begin
+  if v_uid is null then
+    raise exception 'SIN_SESION' using errcode = '42501', hint = 'Hay que entrar para abrir un cliente.';
+  end if;
+  select c.account_id, coalesce(nullif(btrim(c.legal_name), ''), c.trade_name) into v_cuenta, v_razon
+    from public.company c where c.id = p_company;
+  -- La gestoría de quien llama que tiene a esa sociedad con permiso vivo (la más antigua, si fueran varias).
+  select d.id, coalesce(nullif(btrim(d.legal_name), ''), d.name) into v_despacho, v_despacho_nombre
+    from public.accounts d
+   where d.id in (select public._conta_despachos_de_quien_llama())
+     and p_company in (select public.conta_despacho_clientes(d.id))
+   order by d.created_at, d.id
+   limit 1;
+  if v_cuenta is null or v_despacho is null then
+    raise exception 'NO_AUTORIZADO' using errcode = '42501', hint = 'Ese cliente no te ha dado permiso, o no eres de su asesoría.';
+  end if;
+
+  select * into v_mia from public.user_profiles where user_id = v_uid and account_id = v_cuenta;
+  if v_mia.id is null then
+    select * into v_origen from public.user_profiles where user_id = v_uid and account_id = v_despacho;
+    insert into public.user_profiles (user_id, account_id, role, active, display_name, advisor_account_id, terms_accepted_at, welcome_completed_at)
+    values (v_uid, v_cuenta, 'manager', true, v_origen.display_name, v_despacho, v_origen.terms_accepted_at, v_origen.welcome_completed_at);
+  elsif v_mia.advisor_account_id is not null or not v_mia.active then
+    -- Su acceso del despacho (o una fila apagada): se enciende como acceso de este despacho.
+    -- Una fila del equipo del cliente activa no se toca.
+    select * into v_origen from public.user_profiles where user_id = v_uid and account_id = v_despacho;
+    update public.user_profiles
+       set active = true, role = 'manager', advisor_account_id = v_despacho,
+           suspended_at = null, suspended_by = null,
+           -- La bienvenida, las dos fechas juntas (user_profiles_welcome_requires_terms).
+           terms_accepted_at = case when welcome_completed_at is null and v_origen.welcome_completed_at is not null
+                                    then v_origen.terms_accepted_at else terms_accepted_at end,
+           welcome_completed_at = coalesce(welcome_completed_at, v_origen.welcome_completed_at),
+           display_name = coalesce(display_name, v_origen.display_name)
+     where id = v_mia.id
+       and (not active or role <> 'manager' or advisor_account_id is distinct from v_despacho or suspended_at is not null
+            or (welcome_completed_at is null and v_origen.welcome_completed_at is not null));
+  end if;
+
+  perform public.cambiar_empresa(v_cuenta);
+
+  insert into public.conta_despacho_entrada (advisor_account_id, account_id, company_id, user_id, user_name)
+  values (v_despacho, v_cuenta, p_company, v_uid, (select display_name from public.user_profiles where user_id = v_uid and account_id = v_despacho));
+
+  return jsonb_build_object('account_id', v_cuenta, 'company_id', p_company, 'razon_social', v_razon,
+    'despacho', jsonb_build_object('account_id', v_despacho, 'nombre', v_despacho_nombre));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_despacho_entrar(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_despacho_entrar(p_company uuid) IS 'G05 (08/11/2026). Quien es del equipo de una asesoría entra en la cuenta de un cliente que le ha dado permiso (conta_despacho_clientes): crea o reactiva su acceso (manager, advisor_account_id = la asesoría, la bienvenida copiada), lo abre (cambiar_empresa) y lo apunta en conta_despacho_entrada. Si no, NO_AUTORIZADO.';
+
+
+--
 -- Name: conta_despacho_equipo(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34543,6 +34866,36 @@ begin
            case when v_n = 0 then ', vacía hasta que un cliente te invite.' else format(', con tus %s cliente%s.', v_n, case when v_n = 1 then '' else 's' end) end
       else 'Hecho: la cuenta ya no es una asesoría.' end);
 end $$;
+
+
+--
+-- Name: conta_despacho_mis_clientes(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_despacho_mis_clientes() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(jsonb_agg(jsonb_build_object(
+      'company_id', c.id,
+      'account_id', c.account_id,
+      'razon_social', coalesce(nullif(btrim(c.legal_name), ''), c.trade_name),
+      'nombre', coalesce(nullif(btrim(c.trade_name), ''), c.legal_name),
+      'despacho_id', d.id,
+      'despacho_nombre', coalesce(nullif(btrim(d.legal_name), ''), d.name))
+    order by coalesce(nullif(btrim(d.legal_name), ''), d.name), coalesce(nullif(btrim(c.legal_name), ''), c.trade_name)), '[]'::jsonb)
+  from public.accounts d
+  cross join lateral public.conta_despacho_clientes(d.id) cl(company_id)
+  join public.company c on c.id = cl.company_id
+  where d.id in (select public._conta_despachos_de_quien_llama())
+$$;
+
+
+--
+-- Name: FUNCTION conta_despacho_mis_clientes(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_despacho_mis_clientes() IS 'G05 (08/11/2026). Los clientes con permiso vivo de las asesorías de quien llama (de su equipo), con su razón social y su despacho. Para «Cambiar de cliente» y el selector de la cabecera.';
 
 
 --
@@ -34831,6 +35184,38 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_despacho_trimestre(p_account uuid, p_year integer, p_period text, p_hoy date) IS 'P01. Lo que pinta «Impuestos de tus clientes»: las cifras, los filtros y cada cliente con permiso vivo, con sus modelos del trimestre, importes, certificado, responsable y siguiente paso. No escribe nada.';
+
+
+--
+-- Name: conta_despacho_volver(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_despacho_volver() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_despacho uuid; v_nombre text;
+begin
+  if auth.uid() is null then
+    raise exception 'SIN_SESION' using errcode = '42501', hint = 'Hay que entrar para volver al despacho.';
+  end if;
+  select up.advisor_account_id into v_despacho
+    from public.user_profiles up
+   where up.user_id = auth.uid() and up.account_id = public._cuenta_activa() and up.active;
+  if v_despacho is null then
+    raise exception 'NO_ES_DE_DESPACHO' using errcode = '22023', hint = 'Ya estás en tu despacho: no has entrado en ningún cliente.';
+  end if;
+  perform public.cambiar_empresa(v_despacho);
+  select coalesce(nullif(btrim(legal_name), ''), name) into v_nombre from public.accounts where id = v_despacho;
+  return jsonb_build_object('account_id', v_despacho, 'nombre', v_nombre, 'ruta', 'impuestos/clientes');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_despacho_volver(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_despacho_volver() IS 'G05 (08/11/2026). Desde un cliente en el que se entró por el despacho, abre otra vez la cuenta del despacho y devuelve su ruta (Impuestos › Tus clientes).';
 
 
 --
@@ -51457,6 +51842,55 @@ begin
   end if;
   return jsonb_build_object('id', v_id, 'frase', 'Añadido ' || v_frase);
 end $$;
+
+
+--
+-- Name: conta_tarifa_servicio_crear(uuid, text, text, text, numeric, jsonb, date, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid := public._conta_tarifa_puede(p_company, not p_ensayo); v_nombre text := trim(coalesce(p_nombre, ''));
+        v_forma text; v_clave text; v_base text; v_n int := 1; v_id uuid; v_con_precio boolean := p_importe is not null or p_tramos is not null;
+        v_mes date := public._conta_tarifa_mes(p_desde); v_cobro text; v_frase text; v_precio jsonb;
+begin
+  if v_nombre = '' then raise exception 'Ponle un nombre al servicio.' using errcode = '22023'; end if;
+  if p_forma not in ('fijo', 'por_trabajador', 'tramos', 'tramo_y_por_trabajador') then raise exception 'Esa forma de cobro no existe.' using errcode = '22023'; end if;
+  if p_forma = 'fijo' and coalesce(p_periodo, 'mes') not in ('mes', 'anio', 'vez') then raise exception 'Di si se cobra cada mes, cada año o cada vez.' using errcode = '22023'; end if;
+  if exists (select 1 from public.conta_servicio where company_id = p_company and lower(trim(nombre)) = lower(v_nombre)) then
+    raise exception 'Ya hay un servicio «%» en esta empresa.', v_nombre using errcode = '23505';
+  end if;
+  if v_con_precio and v_mes is null then raise exception 'Di desde qué mes vale el precio.' using errcode = '22023'; end if;
+  -- La forma del catálogo del G01: por trabajador lo que va por trabajadores; si no, fijo al año o al mes.
+  v_forma := case when p_forma <> 'fijo' then 'por_empleado' when p_periodo = 'anio' then 'fijo_anio' else 'fijo_mes' end;
+  v_cobro := case p_forma when 'fijo' then case coalesce(p_periodo, 'mes') when 'anio' then 'un precio fijo cada año' when 'vez' then 'un precio fijo cada vez' else 'un precio fijo cada mes' end
+    when 'por_trabajador' then 'por trabajador' when 'tramos' then 'por tramos' else 'por un tramo y después por trabajador' end;
+  v_frase := format('«%s», que se cobra %s', v_nombre, v_cobro);
+  if p_ensayo then
+    return jsonb_build_object('ensayo', true, 'frase', 'Se creará el servicio ' || v_frase || case when v_con_precio then ', con su precio de tarifa.' else ', sin precio de tarifa: cada cliente con el suyo.' end);
+  end if;
+  v_base := 'g04:' || coalesce(nullif(trim(both '_' from regexp_replace(lower(translate(v_nombre, 'áéíóúüñÁÉÍÓÚÜÑ', 'aeiouunaeiouun')), '[^a-z0-9]+', '_', 'g')), ''), 'servicio');
+  v_clave := v_base;
+  while exists (select 1 from public.conta_servicio where company_id = p_company and clave = v_clave) loop
+    v_n := v_n + 1; v_clave := v_base || '_' || v_n;
+  end loop;
+  insert into public.conta_servicio (account_id, company_id, clave, nombre, forma, created_by_name)
+  values (v_cuenta, p_company, v_clave, v_nombre, v_forma, public.conta_nombre_actor()) returning id into v_id;
+  if v_con_precio then
+    v_precio := public.conta_tarifa_precio_guardar(p_company, v_id, null, null, null, p_forma, p_periodo, p_importe, p_tramos, v_mes, false);
+    return jsonb_build_object('id', v_id, 'frase', 'Creado el servicio ' || v_frase || '. ' || (v_precio->>'frase'));
+  end if;
+  return jsonb_build_object('id', v_id, 'frase', 'Creado el servicio ' || v_frase || ', sin precio de tarifa: cada cliente con el suyo.');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) IS 'G04 · «+ Crear › Servicio»: un servicio nuevo (nombre y forma de cobro) y, si se da, su precio general desde un mes. Ensaya por defecto; escribe solo con los cambios de tarifa encendidos en la empresa. Su clave empieza por «g04:».';
 
 
 --
@@ -71034,6 +71468,26 @@ $$;
 --
 
 COMMENT ON FUNCTION public.metrica_direcciones_de_reparto(p_account_id uuid, p_dias integer) IS 'Direcciones que faltan en pedidos marcados own_delivery, por pasarela y canal. DOS EJES INDEPENDIENTES: `reparto` (nosotros / plataforma, de brand.own_delivery_enabled) y `marca` (propia / licenciada, de brand.ownership_type). Smash Brothers y Lovers son marcas PROPIAS que reparte la plataforma: no confundir los ejes. Ojo: own_delivery_enabled es NULL en 16 de 18 marcas y NULL se lee como "nosotros", asi que las filas reparto=nosotros + marca=licenciada son una contradiccion conocida (Dos Coyotes); la fuente buena es channel_delivery_policy.';
+
+
+--
+-- Name: mi_bienvenida_hecha(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.mi_bienvenida_hecha() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select exists (select 1 from public.user_profiles up
+                  where up.user_id = auth.uid() and up.welcome_completed_at is not null)
+$$;
+
+
+--
+-- Name: FUNCTION mi_bienvenida_hecha(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.mi_bienvenida_hecha() IS 'G05 (08/11/2026). Si quien llama ya completó la bienvenida en alguna de sus cuentas: entonces ya tiene contraseña y WelcomePage no le pide otra.';
 
 
 --
@@ -102565,6 +103019,44 @@ ALTER SEQUENCE public.conta_asiento_borrado_id_seq OWNED BY public.conta_asiento
 
 
 --
+-- Name: conta_aviso; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_aviso (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid,
+    origen text NOT NULL,
+    crm text,
+    clave text,
+    estado text NOT NULL,
+    tipo_ficha text,
+    id_externo text,
+    accion text,
+    recurso text,
+    enlaces jsonb,
+    causa text,
+    recibido_at timestamp with time zone DEFAULT now() NOT NULL,
+    intentos integer DEFAULT 0 NOT NULL,
+    proximo_intento_at timestamp with time zone,
+    hecho_at timestamp with time zone,
+    porque text,
+    frase text,
+    CONSTRAINT conta_aviso_crm_check CHECK (((crm IS NULL) OR (crm ~ '^[a-z0-9_]+$'::text))),
+    CONSTRAINT conta_aviso_estado_check CHECK ((estado = ANY (ARRAY['pendiente'::text, 'trabajando'::text, 'hecho'::text, 'fallo'::text, 'rechazado'::text, 'ignorado'::text, 'prueba'::text]))),
+    CONSTRAINT conta_aviso_origen_check CHECK ((origen = ANY (ARRAY['crm'::text, 'gocardless'::text]))),
+    CONSTRAINT conta_aviso_tipo_ficha_check CHECK (((tipo_ficha IS NULL) OR (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))
+);
+
+
+--
+-- Name: TABLE conta_aviso; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_aviso IS 'G01d · La cola y el registro de los avisos al instante del CRM y de GoCardless: cuándo llegó, de qué conexión, qué cambió (solo ids y palabras del CRM o de GoCardless, sin datos personales) y si se aplicó o por qué no. Cada aviso, una vez (clave). Solo escribe el servidor.';
+
+
+--
 -- Name: conta_cambio_precios; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -102809,6 +103301,11 @@ CREATE TABLE public.conta_cobro_gocardless (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     reintentos_inteligentes boolean DEFAULT false NOT NULL,
+    aviso_ref uuid,
+    aviso_encendido boolean DEFAULT false,
+    aviso_encendido_at timestamp with time zone,
+    aviso_encendido_por_name text,
+    aviso_ultimo_at timestamp with time zone,
     CONSTRAINT conta_cobro_gocardless_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
 );
 
@@ -102825,6 +103322,27 @@ COMMENT ON TABLE public.conta_cobro_gocardless IS 'G01 · La cuenta de GoCardles
 --
 
 COMMENT ON COLUMN public.conta_cobro_gocardless.reintentos_inteligentes IS 'G01 · «Reintentos inteligentes» de GoCardless: apagado por defecto. Solo se guarda (todavía no se cobra nada); puede tener coste según el plan de GoCardless.';
+
+
+--
+-- Name: COLUMN conta_cobro_gocardless.aviso_ref; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_gocardless.aviso_ref IS 'G01d · El secreto del endpoint de avisos de GoCardless de esta empresa, en Vault («conta_gocardless_aviso:<empresa>»).';
+
+
+--
+-- Name: COLUMN conta_cobro_gocardless.aviso_encendido; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_gocardless.aviso_encendido IS 'G01d · «Al instante» encendido para esta cuenta de GoCardless. Apagado de serie: con él apagado, los avisos se rechazan.';
+
+
+--
+-- Name: COLUMN conta_cobro_gocardless.aviso_ultimo_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_cobro_gocardless.aviso_ultimo_at IS 'G01d · Cuándo llegó el último aviso auténtico.';
 
 
 --
@@ -103681,7 +104199,7 @@ CREATE TABLE public.conta_gestoria_lectura (
     CONSTRAINT conta_gestoria_lectura_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text]))),
     CONSTRAINT conta_gestoria_lectura_estado_check CHECK ((estado = ANY (ARRAY['en_marcha'::text, 'bien'::text, 'mal'::text, 'no_lee'::text]))),
     CONSTRAINT conta_gestoria_lectura_origen_check CHECK ((origen = ANY (ARRAY['gocardless'::text, 'crm'::text]))),
-    CONSTRAINT conta_gestoria_lectura_por_check CHECK ((por = ANY (ARRAY['persona'::text, 'cada_noche'::text, 'conexion'::text])))
+    CONSTRAINT conta_gestoria_lectura_por_check CHECK ((por = ANY (ARRAY['persona'::text, 'cada_noche'::text, 'conexion'::text, 'aviso'::text])))
 );
 
 
@@ -104156,6 +104674,11 @@ CREATE TABLE public.conta_crm (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     union_aplicada jsonb,
+    aviso_ref uuid,
+    aviso_encendido boolean DEFAULT false,
+    aviso_encendido_at timestamp with time zone,
+    aviso_encendido_por_name text,
+    aviso_ultimo_at timestamp with time zone,
     CONSTRAINT conta_crm_crm_check CHECK ((crm ~ '^[a-z0-9_]+$'::text)),
     CONSTRAINT conta_crm_entorno_check CHECK ((entorno = ANY (ARRAY['real'::text, 'pruebas'::text])))
 );
@@ -104215,6 +104738,49 @@ COMMENT ON COLUMN public.conta_crm.contactos_leidos IS 'G01c · De la última le
 --
 
 COMMENT ON COLUMN public.conta_crm.union_aplicada IS 'G01c · La unión de las fichas aplicada (mismo NIF = un cliente): quién y cuándo. Fuera del mapa, para que confirmarlo no la quite. La lectura la lee de aquí.';
+
+
+--
+-- Name: COLUMN conta_crm.aviso_ref; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.aviso_ref IS 'G01d · El código de seguridad de los avisos del CRM (en Bitrix24, el application_token del webhook saliente), en Vault («conta_crm_aviso:<crm>:<cuenta>»).';
+
+
+--
+-- Name: COLUMN conta_crm.aviso_encendido; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.aviso_encendido IS 'G01d · «Al instante» encendido para esta conexión. Apagado de serie: con él apagado, los avisos se rechazan.';
+
+
+--
+-- Name: COLUMN conta_crm.aviso_ultimo_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_crm.aviso_ultimo_at IS 'G01d · Cuándo llegó el último aviso auténtico.';
+
+
+--
+-- Name: conta_despacho_entrada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_despacho_entrada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    advisor_account_id uuid NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid,
+    user_id uuid NOT NULL,
+    user_name text,
+    entered_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_despacho_entrada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_despacho_entrada IS 'G05 (08/11/2026). Cada vez que alguien de un despacho (advisor_account_id) entra en un cliente (account_id, company_id). La escribe conta_despacho_entrar. La ven el despacho y el cliente.';
 
 
 --
@@ -117556,6 +118122,7 @@ CREATE TABLE public.user_profiles (
     last_login_at timestamp with time zone,
     suspended_at timestamp with time zone,
     suspended_by uuid,
+    advisor_account_id uuid,
     CONSTRAINT user_profiles_suspended_consistency CHECK ((((suspended_at IS NULL) AND (suspended_by IS NULL)) OR ((suspended_at IS NOT NULL) AND (suspended_by IS NOT NULL)))),
     CONSTRAINT user_profiles_welcome_requires_terms CHECK (((welcome_completed_at IS NULL) OR ((terms_accepted_at IS NOT NULL) AND (terms_accepted_at <= welcome_completed_at)))),
     CONSTRAINT valid_role CHECK ((role = ANY (ARRAY['admin'::text, 'manager'::text, 'worker'::text])))
@@ -117602,6 +118169,13 @@ COMMENT ON COLUMN public.user_profiles.suspended_at IS 'Suspensión individual d
 --
 
 COMMENT ON COLUMN public.user_profiles.suspended_by IS 'auth.users.id del admin que suspendió este perfil.';
+
+
+--
+-- Name: COLUMN user_profiles.advisor_account_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.user_profiles.advisor_account_id IS 'G05 (08/11/2026). Si no es nulo, esta fila es un acceso que da el despacho (esa cuenta, una asesoría) para llevar la contabilidad del cliente, no una persona de su equipo. Lo crea conta_despacho_entrar; lo apaga _conta_despacho_retirar.';
 
 
 --
@@ -120293,6 +120867,14 @@ ALTER TABLE ONLY public.conta_asiento_borrado
 
 
 --
+-- Name: conta_aviso conta_aviso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_aviso
+    ADD CONSTRAINT conta_aviso_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_cambio_precios_linea conta_cambio_precios_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -120442,6 +121024,14 @@ ALTER TABLE ONLY public.conta_contrasena_intento
 
 ALTER TABLE ONLY public.conta_crm
     ADD CONSTRAINT conta_crm_pkey PRIMARY KEY (account_id, crm);
+
+
+--
+-- Name: conta_despacho_entrada conta_despacho_entrada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_despacho_entrada
+    ADD CONSTRAINT conta_despacho_entrada_pkey PRIMARY KEY (id);
 
 
 --
@@ -126162,6 +126752,27 @@ CREATE INDEX conta_asiento_borrado_lote ON public.conta_asiento_borrado USING bt
 
 
 --
+-- Name: conta_aviso_clave_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_aviso_clave_idx ON public.conta_aviso USING btree (account_id, clave) WHERE (clave IS NOT NULL);
+
+
+--
+-- Name: conta_aviso_cola_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_aviso_cola_idx ON public.conta_aviso USING btree (origen, estado, proximo_intento_at) WHERE (estado = ANY (ARRAY['pendiente'::text, 'fallo'::text, 'trabajando'::text]));
+
+
+--
+-- Name: conta_aviso_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_aviso_cuenta_idx ON public.conta_aviso USING btree (account_id, recibido_at DESC);
+
+
+--
 -- Name: conta_cierre_ajuste_destino_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -126215,6 +126826,20 @@ CREATE INDEX conta_contrasena_intento_conexion ON public.conta_contrasena_intent
 --
 
 CREATE INDEX conta_contrasena_intento_correo ON public.conta_contrasena_intento USING btree (correo_huella, pedido_en);
+
+
+--
+-- Name: conta_despacho_entrada_cuenta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_despacho_entrada_cuenta_idx ON public.conta_despacho_entrada USING btree (account_id, entered_at DESC);
+
+
+--
+-- Name: conta_despacho_entrada_despacho_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_despacho_entrada_despacho_idx ON public.conta_despacho_entrada USING btree (advisor_account_id, entered_at DESC);
 
 
 --
@@ -130534,6 +131159,13 @@ CREATE UNIQUE INDEX uq_vat_book_entry_linea ON public.vat_book_entry USING btree
 --
 
 CREATE INDEX user_profiles_account_idx ON public.user_profiles USING btree (account_id);
+
+
+--
+-- Name: user_profiles_advisor_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX user_profiles_advisor_idx ON public.user_profiles USING btree (advisor_account_id, account_id) WHERE (advisor_account_id IS NOT NULL);
 
 
 --
@@ -135542,6 +136174,22 @@ ALTER TABLE ONLY public.compliance_reminder_log
 
 
 --
+-- Name: conta_aviso conta_aviso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_aviso
+    ADD CONSTRAINT conta_aviso_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_aviso conta_aviso_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_aviso
+    ADD CONSTRAINT conta_aviso_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_cambio_precios conta_cambio_precios_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -135851,6 +136499,30 @@ ALTER TABLE ONLY public.conta_cobro_stripe
 
 ALTER TABLE ONLY public.conta_crm
     ADD CONSTRAINT conta_crm_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_despacho_entrada conta_despacho_entrada_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_despacho_entrada
+    ADD CONSTRAINT conta_despacho_entrada_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_despacho_entrada conta_despacho_entrada_advisor_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_despacho_entrada
+    ADD CONSTRAINT conta_despacho_entrada_advisor_account_id_fkey FOREIGN KEY (advisor_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_despacho_entrada conta_despacho_entrada_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_despacho_entrada
+    ADD CONSTRAINT conta_despacho_entrada_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE SET NULL;
 
 
 --
@@ -143941,6 +144613,14 @@ ALTER TABLE ONLY public.user_profiles
 
 
 --
+-- Name: user_profiles user_profiles_advisor_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.user_profiles
+    ADD CONSTRAINT user_profiles_advisor_account_id_fkey FOREIGN KEY (advisor_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
 -- Name: user_profiles user_profiles_employee_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -146940,6 +147620,19 @@ CREATE POLICY connector_write ON public.connector USING (public.current_user_is_
 ALTER TABLE public.conta_asiento_borrado ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: conta_aviso; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_aviso ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_aviso conta_aviso_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_aviso_leer ON public.conta_aviso FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_cambio_precios; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -147118,6 +147811,19 @@ ALTER TABLE public.conta_crm ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_crm_leer ON public.conta_crm FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_despacho_entrada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_despacho_entrada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_despacho_entrada conta_despacho_entrada_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_despacho_entrada_select ON public.conta_despacho_entrada FOR SELECT TO authenticated USING ((public.belongs_to_account(account_id) OR public.belongs_to_account(advisor_account_id)));
 
 
 --
@@ -155663,6 +156369,14 @@ GRANT ALL ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total nu
 
 
 --
+-- Name: FUNCTION _conta_despachos_de_quien_llama(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_despachos_de_quien_llama() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_despachos_de_quien_llama() TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_dir_coincide(p_texto text, p_dir text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -161018,6 +161732,31 @@ GRANT ALL ON FUNCTION public.conta_asiento_envio(p_entry uuid) TO service_role;
 
 
 --
+-- Name: FUNCTION conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_aviso_configurar(p_account uuid, p_origen text, p_crm text, p_company uuid, p_codigo text, p_encender boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_aviso_secreto(p_origen text, p_account uuid, p_crm text, p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_aviso_secreto(p_origen text, p_account uuid, p_crm text, p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_aviso_secreto(p_origen text, p_account uuid, p_crm text, p_company uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_avisos_despertar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_avisos_despertar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_avisos_despertar() TO service_role;
+
+
+--
 -- Name: FUNCTION conta_banco_agregador_despertar(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -161582,6 +162321,22 @@ GRANT ALL ON FUNCTION public.conta_crm_guardar_personas(p_account uuid, p_crm te
 
 
 --
+-- Name: FUNCTION conta_crm_guardar_personas_de_contacto(p_account uuid, p_crm text, p_contacto text, p_empresas jsonb, p_ficha jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_guardar_personas_de_contacto(p_account uuid, p_crm text, p_contacto text, p_empresas jsonb, p_ficha jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_guardar_personas_de_contacto(p_account uuid, p_crm text, p_contacto text, p_empresas jsonb, p_ficha jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_crm_renovar_pendientes(p_account uuid, p_crm text, p_lectura uuid, p_fichas jsonb, p_difs jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_crm_renovar_pendientes(p_account uuid, p_crm text, p_lectura uuid, p_fichas jsonb, p_difs jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_crm_renovar_pendientes(p_account uuid, p_crm text, p_lectura uuid, p_fichas jsonb, p_difs jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_crm_secreto(p_account uuid, p_crm text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -161616,6 +162371,24 @@ GRANT ALL ON FUNCTION public.conta_despacho_correo_poner(p_account uuid, p_corre
 
 
 --
+-- Name: FUNCTION conta_despacho_donde(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_despacho_donde() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_despacho_donde() TO authenticated;
+GRANT ALL ON FUNCTION public.conta_despacho_donde() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_despacho_entrar(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_despacho_entrar(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_despacho_entrar(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_despacho_entrar(p_company uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_despacho_equipo(p_account uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -161631,6 +162404,15 @@ GRANT ALL ON FUNCTION public.conta_despacho_equipo(p_account uuid) TO authentica
 REVOKE ALL ON FUNCTION public.conta_despacho_marcar(p_account uuid, p_es boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_despacho_marcar(p_account uuid, p_es boolean) TO service_role;
 GRANT ALL ON FUNCTION public.conta_despacho_marcar(p_account uuid, p_es boolean) TO authenticated;
+
+
+--
+-- Name: FUNCTION conta_despacho_mis_clientes(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_despacho_mis_clientes() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_despacho_mis_clientes() TO authenticated;
+GRANT ALL ON FUNCTION public.conta_despacho_mis_clientes() TO service_role;
 
 
 --
@@ -161658,6 +162440,15 @@ GRANT ALL ON FUNCTION public.conta_despacho_soy(p_account uuid) TO authenticated
 REVOKE ALL ON FUNCTION public.conta_despacho_trimestre(p_account uuid, p_year integer, p_period text, p_hoy date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_despacho_trimestre(p_account uuid, p_year integer, p_period text, p_hoy date) TO service_role;
 GRANT ALL ON FUNCTION public.conta_despacho_trimestre(p_account uuid, p_year integer, p_period text, p_hoy date) TO authenticated;
+
+
+--
+-- Name: FUNCTION conta_despacho_volver(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_despacho_volver() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_despacho_volver() TO authenticated;
+GRANT ALL ON FUNCTION public.conta_despacho_volver() TO service_role;
 
 
 --
@@ -164779,6 +165570,15 @@ GRANT ALL ON FUNCTION public.conta_tarifa_servicio_anadir(p_company uuid, p_part
 
 
 --
+-- Name: FUNCTION conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_tarifa_servicio_crear(p_company uuid, p_nombre text, p_forma text, p_periodo text, p_importe numeric, p_tramos jsonb, p_desde date, p_ensayo boolean) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_tienda_cambio_decidir(p_cambio uuid, p_confirmar boolean, p_marca uuid, p_local uuid, p_desde date, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -167830,6 +168630,15 @@ GRANT ALL ON FUNCTION public.menu_item_vendible_en_alguna_parte(p_menu_item_id u
 REVOKE ALL ON FUNCTION public.metrica_direcciones_de_reparto(p_account_id uuid, p_dias integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.metrica_direcciones_de_reparto(p_account_id uuid, p_dias integer) TO authenticated;
 GRANT ALL ON FUNCTION public.metrica_direcciones_de_reparto(p_account_id uuid, p_dias integer) TO service_role;
+
+
+--
+-- Name: FUNCTION mi_bienvenida_hecha(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.mi_bienvenida_hecha() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.mi_bienvenida_hecha() TO authenticated;
+GRANT ALL ON FUNCTION public.mi_bienvenida_hecha() TO service_role;
 
 
 --
@@ -173581,6 +174390,14 @@ GRANT ALL ON SEQUENCE public.conta_asiento_borrado_id_seq TO service_role;
 
 
 --
+-- Name: TABLE conta_aviso; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_aviso TO service_role;
+GRANT SELECT ON TABLE public.conta_aviso TO authenticated;
+
+
+--
 -- Name: TABLE conta_cambio_precios; Type: ACL; Schema: public; Owner: -
 --
 
@@ -173900,6 +174717,14 @@ GRANT ALL ON SEQUENCE public.conta_contrasena_intento_id_seq TO service_role;
 
 GRANT ALL ON TABLE public.conta_crm TO service_role;
 GRANT SELECT ON TABLE public.conta_crm TO authenticated;
+
+
+--
+-- Name: TABLE conta_despacho_entrada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_despacho_entrada TO service_role;
+GRANT SELECT ON TABLE public.conta_despacho_entrada TO authenticated;
 
 
 --
