@@ -126787,6 +126787,13 @@ CREATE INDEX conta_cierre_ajuste_dia_idx ON public.conta_cierre_ajuste USING btr
 
 
 --
+-- Name: conta_cobro_cliente_gc_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_cobro_cliente_gc_idx ON public.conta_cobro_cliente USING btree (company_id, gc_cliente_id);
+
+
+--
 -- Name: conta_cobro_remesa_evento_remesa_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -126899,6 +126906,34 @@ CREATE INDEX conta_gc_cobro_mandato_idx ON public.conta_gc_cobro USING btree (co
 
 
 --
+-- Name: conta_gc_cobro_suscripcion_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_cobro_suscripcion_idx ON public.conta_gc_cobro USING btree (company_id, suscripcion_gc_id, fecha);
+
+
+--
+-- Name: conta_gc_mandato_cliente_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_mandato_cliente_idx ON public.conta_gc_mandato USING btree (company_id, gc_cliente_id);
+
+
+--
+-- Name: conta_gc_suscripcion_cliente_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_suscripcion_cliente_idx ON public.conta_gc_suscripcion USING btree (company_id, gc_cliente_id, estado);
+
+
+--
+-- Name: conta_gc_suscripcion_mandato_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_suscripcion_mandato_idx ON public.conta_gc_suscripcion USING btree (company_id, mandato_gc_id);
+
+
+--
 -- Name: conta_gestoria_cambio_registro_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -126910,6 +126945,13 @@ CREATE INDEX conta_gestoria_cambio_registro_idx ON public.conta_gestoria_cambio 
 --
 
 CREATE INDEX conta_gestoria_decision_empresa_idx ON public.conta_gestoria_decision USING btree (company_id, tipo);
+
+
+--
+-- Name: conta_gestoria_diferencia_cliente_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gestoria_diferencia_cliente_idx ON public.conta_gestoria_diferencia USING btree (party_id) WHERE vigente;
 
 
 --
@@ -127092,6 +127134,13 @@ CREATE UNIQUE INDEX conta_pago_salida_viva ON public.conta_pago_salida USING btr
 --
 
 CREATE INDEX conta_precio_empresa_idx ON public.conta_precio USING btree (company_id, servicio_id, nivel_id, paquete_id, party_id);
+
+
+--
+-- Name: conta_precio_tramo_precio_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_precio_tramo_precio_idx ON public.conta_precio_tramo USING btree (precio_id);
 
 
 --
