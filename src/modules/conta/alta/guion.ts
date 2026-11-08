@@ -16,6 +16,7 @@
 // tus impuestos, tus cuentas y tu banco. Se guarda cada respuesta; el paso va
 // en company.setup_step y se sigue desde otro dispositivo.
 
+import { opcionesDelSector, preguntaDelSector, type Propuesta } from '@/modules/conta/sectores/sectores'
 import type { DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { proponerAlta } from '@/modules/conta/lib/propuestaAlta'
 import { anadirAnuales, modelosQuePresenta, type ClaseActividad, type ReglaModelo, type Territorio, type TipoEmpresa } from '@/modules/conta/lib/modelos'
@@ -24,7 +25,7 @@ import { MARCA } from '../cuenta/marca'
 import { PROGRAMAS } from '@/modules/conta/alta/programa'
 
 export type PasoAlta = 'nif' | 'nombre' | 'actividad' | 'impuestos' | 'cuentas' | 'banco' | 'hecho'
-export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'asesoria' | 'cuentas' | 'programa' | 'banco'
+export type ClavePregunta = 'nif' | 'nombre' | 'direccion' | 'actividad' | 'sector' | 'periodo' | 'retiene' | 'alquiler' | 'retenido70' | 'asesoria' | 'cuentas' | 'programa' | 'banco'
 
 export interface OpcionAlta { valor: string; texto: string }
 
@@ -62,6 +63,12 @@ export interface ContextoAlta {
   hoy: string
   /** P01 · La marca con la que se da el alta ('sumied', 'folvy'…): la pregunta de la asesoría, solo con Sumied. */
   marca?: string
+  /**
+   * G03 · El sector que se propone por la actividad (ya guardado en la empresa)
+   * y si va con duda. Con él, y con Sumied, la primera pregunta después de la
+   * actividad es «¿De qué sector es tu negocio?».
+   */
+  sector?: Propuesta | null
 }
 
 export const PASOS: PasoAlta[] = ['nif', 'nombre', 'actividad', 'impuestos', 'cuentas', 'banco', 'hecho']
@@ -146,6 +153,14 @@ function preguntasDe(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
         volumenAnoAnterior: null, inicioActividad: null, hoy: ctx.hoy,
       })
       const out: Pregunta[] = []
+      // G03 · Justo después de «A qué te dedicas»: el sector, con la propuesta marcada.
+      if (ctx.marca === 'sumied' && ctx.sector) {
+        out.push({
+          clave: 'sector', texto: preguntaDelSector(ctx.sector), porque: null,
+          ayuda: 'Según el sector salen unas cosas u otras: con hostelería, las liquidaciones de las plataformas y los socios de marca; con gestoría, los clientes y sus cuotas. Lo de siempre sale igual en todos, y se cambia luego en Ajustes › Tu empresa.',
+          opciones: opcionesDelSector(ctx.sector.sector), entrada: null, normal: ctx.sector.sector, noLoSe: 'No lo sé, déjalo así',
+        })
+      }
       if (territorio === 'peninsula_baleares') {
         out.push({
           clave: 'periodo', texto: '¿Presentas el IVA cada tres meses? Es lo normal en tu caso.', porque: prop.periodoIva.porque,
@@ -235,6 +250,14 @@ export function preguntaActual(paso: PasoAlta, ctx: ContextoAlta): Pregunta | nu
 
 export function todasLasPreguntas(paso: PasoAlta, ctx: ContextoAlta): Pregunta[] {
   return preguntasDe(paso, ctx)
+}
+
+/**
+ * La que abre el paso, la que lleva su «Ahora, …». El sector va antes que «Tus
+ * impuestos» pero es de la actividad: no se lleva el «Ahora, tus impuestos.».
+ */
+export function primeraDelPaso(paso: PasoAlta, ctx: ContextoAlta): ClavePregunta | null {
+  return preguntasDe(paso, ctx).find((p) => p.clave !== 'sector')?.clave ?? null
 }
 
 // ── Lo que se deduce de las respuestas de «Tus impuestos» ───────────────────

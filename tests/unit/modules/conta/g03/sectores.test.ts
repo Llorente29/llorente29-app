@@ -95,6 +95,20 @@ describe('el aviso al cambiar de sector', () => {
     expect(fraseDelCambio(c)).toMatch(/^Saldrá: Clientes y cuotas, .*\. Dejará de salir: Cierres del día, .*\. No se borra nada\.$/)
   })
 
+  it('sin repeticiones: de las tarjetas, solo lo que no tiene página propia en el menú (Julio, 08/11)', () => {
+    expect(fraseDelCambio(cambioDeSector('general', 'hosteleria'))).toBe(
+      'Saldrá: Cierres del día, Repartidores, Plataformas, Socios de marca, Catcher, Liquidaciones del mes en Compras. No se borra nada.')
+    for (const de of SECTORES) for (const a of SECTORES) {
+      const c = cambioDeSector(de, a)
+      expect(new Set(c.saldra).size, `${de} → ${a}`).toBe(c.saldra.length)
+      expect(new Set(c.dejaraDeSalir).size, `${de} → ${a}`).toBe(c.dejaraDeSalir.length)
+    }
+    const paginas = [...paginasQueEnciende('hosteleria'), ...paginasQueEnciende('gestoria')]
+    for (const t of [...PAQUETES.hosteleria.tarjetas, ...PAQUETES.gestoria.tarjetas]) {
+      expect(paginas.some((p) => t.includes(p)), `«${t}» repite una página del menú`).toBe(false)
+    }
+  })
+
   it('al mismo sector, nada cambia y se dice', () => {
     expect(fraseDelCambio(cambioDeSector('gestoria', 'gestoria'))).toBe('No cambia lo que sale. No se borra nada.')
   })

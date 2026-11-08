@@ -1,0 +1,29 @@
+[
+ {
+  "id": "509-1",
+  "pr": 509,
+  "fecha": "2026-11-08T11:59:36Z",
+  "producto": "sumied",
+  "apartado": "Tu empresa",
+  "frase": "Nueva pregunta «¿De qué sector es tu negocio?»: general, hostelería o gestoría. Al cambiarla te dice qué sale y qué deja de salir, y no se borra nada.",
+  "ruta": "/conta/ajustes/empresa"
+ },
+ {
+  "id": "509-2",
+  "pr": 509,
+  "fecha": "2026-11-08T11:59:36Z",
+  "producto": "sumied",
+  "apartado": "Alta",
+  "frase": "Reconoce las gestorías y asesorías, y te propone el sector justo después de «A qué te dedicas».",
+  "ruta": null
+ },
+ {
+  "id": "509-3",
+  "pr": 509,
+  "fecha": "2026-11-08T11:59:36Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "Solo sale en las empresas del sector Gestoría, también si entras por su dirección.",
+  "ruta": "/conta/ventas/clientes-y-cuotas"
+ }
+]
