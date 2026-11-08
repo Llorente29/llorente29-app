@@ -11,6 +11,7 @@
 // El bloque verde de la IA es una SUGERENCIA (§6.2 del C00): solo si se puede
 // fundamentar con datos de la propia cuenta.
 
+import { useEnClienteDelDespacho } from '@/modules/multitenancy/hooks/useDespacho'
 import { useState } from 'react'
 import { Navigate, useParams } from 'react-router-dom'
 import { ENTRADA_DE_APARTADO, entradaAjustes, rutaAjustes, rutaTablasGenerales } from '@/config/navegacion'
@@ -54,6 +55,7 @@ function Entrada({ id }: { id: string }) {
   const { datos, plan, quien, movil, hoy } = useAjustes()
   const hosteleria = useHosteleria()
   const { userName } = useCuentaConta()
+  const enClienteDelDespacho = useEnClienteDelDespacho()
   // C02c: lo que ha hecho «Deshacer entero» del plan traído, en una frase (el botón desaparece al recargar).
   const [aviso, setAviso] = useState<string | null>(null)
   const e = entradaAjustes(id)!
@@ -73,6 +75,10 @@ function Entrada({ id }: { id: string }) {
   // S01o · Apuntar solo lo seguro: el interruptor de la empresa; no necesita los datos de la empresa de Ajustes.
   if (id === 'apuntar-solo') return <>{cabeza}<ApuntarSoloAjustes /></>
   // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
+  // G05: la gestoría, dentro de un cliente, no ve ni toca su equipo (lo lleva el cliente).
+  if (id === 'personas' && enClienteDelDespacho) {
+    return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Los usuarios los lleva el cliente." explicacion="Has entrado por tu despacho: llevas su contabilidad, sus impuestos y su laboral, no quién entra en su cuenta." /></div></>
+  }
   if (id === 'personas') return <>{cabeza}<Usuarios /></>
   if (e.hueco) {
     return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Aún no." explicacion={e.hueco} /></div></>

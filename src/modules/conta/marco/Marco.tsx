@@ -50,6 +50,8 @@ import type { Ejercicio } from './periodo'
 import { barraAbierta } from '@/modules/conta/diseno/plantillas/anchos'
 import { useTramoAncho } from '@/modules/conta/diseno/plantillas/useAncho'
 import { BARRA_PREGUNTAR } from './muyPronto'
+import { useDespacho } from '@/modules/multitenancy/hooks/useDespacho'
+import { FranjaDespacho } from './FranjaDespacho'
 
 /** Los apartados de la barra, con el activo dentro aunque no esté contratado, en el orden del mapa. */
 function conElActivo(visibles: Producto[], activo: Producto | null): Producto[] {
@@ -84,7 +86,11 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
   // El apartado en el que estás sale siempre, aunque la empresa no lo tenga
   // contratado (se llega por la dirección): si no, sus páginas no estarían en
   // ninguna parte (antes iban en las pestañas de la cabecera).
+  // G05: dentro de un cliente por el despacho, sin «Usuarios» en Ajustes (el equipo es del cliente).
+  const despacho = useDespacho()
+  const enCliente = despacho.donde.abierto
   const productos = conElActivo(productosVisibles(ctx), producto)
+    .map((p) => (enCliente && p.id === 'ajustes' ? { ...p, pestanas: p.pestanas.filter((t) => t.id !== 'personas') } : p))
   const pendientes = cuentasDeLaBarra(cuentas)
   const frases = frasesDeLaBarra(cuentas)
   const contadores = useContadoresPestanas(producto?.id ?? null, activa?.id ?? null, cuentas)
@@ -202,7 +208,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
             favoritos={favoritos(false)} />
         )}
         <div className="s-esq-cuerpo">
-          <Cabecera movil={movil} logoEmpresa={ctx.logoEmpresa ?? logoCuenta} colorEmpresa={ctx.colorEmpresa ?? null}
+          <Cabecera franja={enCliente ? <FranjaDespacho abierto={enCliente} clientes={despacho.clientes} movil={movil} /> : null} movil={movil} logoEmpresa={ctx.logoEmpresa ?? logoCuenta} colorEmpresa={ctx.colorEmpresa ?? null}
             huecoPeriodo={setHuecoPeriodo} abrirBuscador={abrirBuscador} abrirMenu={() => setCajon(true)} menuAbierto={cajon}
             usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>

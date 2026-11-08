@@ -201,11 +201,12 @@ test('6 · Un cliente sin consentimiento no sale (ni el que lo retiró ni el que
   expect(errores).toEqual([])
 })
 
-test('7 · Abrir un cliente lleva a su Trimestre (la pantalla de C), por la ruta de su empresa', async ({ page }) => {
+test('7 · Los chips de un cliente llevan a su Trimestre (la pantalla de C), por la ruta de su empresa', async ({ page }) => {
   test.skip(esMovil(page), 'Basta un tamaño: el enlace es el mismo en la tarjeta')
   const errores = vigilar(page)
   await abrir(page)
-  await lista(page).getByRole('link', { name: 'Talleres de Prueba Ruiz, S.L.' }).click()
+  // G05 (08/11): el nombre entra en el cliente; el trimestre sigue a un clic, en los chips de modelos.
+  await lista(page).getByRole('link', { name: 'El trimestre de Talleres de Prueba Ruiz, S.L.' }).click()
   await expect(page).toHaveURL(/\/conta\/impuestos\/empresa\/[0-9a-f-]{36}\/trimestre\/2026\/3T(\?|$)/)
   await expect(page.getByRole('heading', { level: 1, name: /^El trimestre · Talleres de Prueba Ruiz/ })).toBeVisible({ timeout: 20_000 })
   expect(errores).toEqual([])

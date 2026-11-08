@@ -315,3 +315,28 @@ html:has(.s-cabecera) { scroll-padding-top: 72px; }   /* 3 + 56 + aire: los toke
   box-shadow: var(--s-sombra); z-index: 60;
 }
 .s-hoja-titulo { font-size: var(--s-t-l); font-weight: var(--s-peso-fuerte); color: var(--s-tinta); padding: 0 var(--s-2) var(--s-3); }
+
+/* G05 · La franja del despacho: fija con la cabecera, una línea (dos en el móvil), sin cerrar. */
+.s-franja-despacho {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--s-3);
+  min-height: 36px; padding: 4px var(--s-5); background: var(--s-despacho-fondo); color: var(--s-despacho-tinta);
+  font-size: var(--s-t-s);
+}
+.s-franja-despacho-donde { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-franja-despacho-de { opacity: .85; }
+.s-franja-despacho-acciones { display: flex; align-items: center; gap: var(--s-2); flex-shrink: 0; }
+.s-franja-despacho-estado { font-size: var(--s-t-xs); opacity: .95; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.s-franja-despacho-boton {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 var(--s-3);
+  border: 1px solid var(--s-despacho-borde); border-radius: var(--s-radio-boton); background: transparent; color: inherit; font: inherit; font-weight: 600; cursor: pointer;
+}
+.s-franja-despacho-boton:hover:not(:disabled) { background: var(--s-despacho-encima); }
+.s-franja-despacho-boton:focus-visible { outline: 2px solid var(--s-despacho-tinta); outline-offset: 1px; }
+.s-franja-despacho-boton:disabled { opacity: .6; cursor: progress; }
+.s-franja-despacho-volver { background: var(--s-despacho-tinta); color: var(--s-despacho-fondo); border-color: var(--s-despacho-tinta); }
+.s-franja-despacho-volver:hover:not(:disabled) { background: var(--s-despacho-claro); }
+.s-franja-despacho-menu { color: var(--s-tinta); min-width: 320px; }
+.s-franja-despacho-movil { flex-wrap: wrap; padding: 4px var(--s-4); row-gap: 4px; }
+.s-franja-despacho-movil .s-franja-despacho-donde { flex-basis: 100%; }
+.s-franja-despacho-movil .s-franja-despacho-acciones { width: 100%; justify-content: flex-end; }
+.s-franja-despacho-movil .s-franja-despacho-estado { margin-right: auto; }

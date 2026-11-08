@@ -22,7 +22,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import { Boton, Chip, Dialogo, Selector, Tarjeta, TarjetaCifra } from '@/modules/conta/diseno'
-import { rutaAjustes, rutaTrimestre } from '@/config/navegacion'
+import { rutaAjustes, rutaConta, rutaTrimestre } from '@/config/navegacion'
+import { entrarEnCliente } from '@/modules/multitenancy/services/empresasService'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { baseDeDatos } from '@/services/versionApp'
 import { confirmarCertificado, hacienda, leerPuerta } from '@/modules/conta/services/impuestosService'
@@ -83,6 +84,13 @@ export function Despacho({ accountId }: { accountId: string }) {
 
   // Abrir un cliente: su Trimestre (la pantalla de C, por la ruta de la empresa), del trimestre que se mira aquí.
   const enlace = (c: ClienteDespacho) => rutaTrimestre(trimestre.ejercicio, trimestre.periodo, c.empresa)
+  // G05 · «Entrar»: se está dentro del Sumied del cliente, en su Inicio. Mientras, la fila lo dice; si falla, el porqué (regla 8).
+  const [entrando, setEntrando] = useState<{ empresa: string; error: string | null } | null>(null)
+  const entrar = (c: ClienteDespacho) => {
+    setEntrando({ empresa: c.empresa, error: null })
+    entrarEnCliente(c.empresa, rutaConta('inicio'))
+      .catch((e: unknown) => setEntrando({ empresa: c.empresa, error: e instanceof Error ? e.message : String(e) }))
+  }
   const elegir = (id: string, si: boolean) => setElegidos((e) => { const n = new Set(e); if (si) n.add(id); else n.delete(id); return n })
 
   const exportar = () => {
@@ -202,10 +210,10 @@ export function Despacho({ accountId }: { accountId: string }) {
               </div>
             ) : (
               <>
-                <TablaClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} enlace={enlace}
+                <TablaClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} enlace={enlace} entrar={entrar} entrando={entrando}
                   todosElegidos={visibles.length > 0 && visibles.every((c) => elegidos.has(c.empresa))}
                   elegirTodos={(si) => setElegidos((e) => { const n = new Set(e); for (const c of visibles) { if (si) n.add(c.empresa); else n.delete(c.empresa) } return n })} />
-                <TarjetasClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} enlace={enlace} />
+                <TarjetasClientes clientes={visibles} elegidos={elegidos} elegir={elegir} alResponsable={setResponsableDe} enlace={enlace} entrar={entrar} entrando={entrando} />
                 <p className="s-despacho-pie">
                   {hayFiltros(filtros)
                     ? <>{visibles.length} de {clientes.length} clientes · <button type="button" className="s-despacho-enlace" onClick={() => setFiltros(SIN_FILTROS)}>quitar los filtros</button></>
@@ -265,23 +273,42 @@ function Responsable({ c, alPulsar }: { c: ClienteDespacho; alPulsar: () => void
   )
 }
 
-function Chips({ c }: { c: ClienteDespacho }) {
+function Chips({ c, enlace }: { c: ClienteDespacho; enlace: string }) {
   const cert = chipDeCertificado(c.certificado, c.pendiente)
+  // G05: el trimestre sigue a un clic, en los chips de modelos.
   return (
-    <span className="s-despacho-chips">
+    <Link className="s-despacho-chips" to={enlace} aria-label={`El trimestre de ${c.razon_social ?? c.nombre}`} data-prueba="despacho-trimestre">
       {c.modelos.map((m) => { const v = chipDeModelo(m); return <Chip key={`${m.modelo}-${m.ejercicio}-${m.periodo}`} tono={v.tono} titulo={v.titulo}>{v.texto}</Chip> })}
       {cert && <Chip tono={cert.tono} titulo={cert.titulo}>{cert.texto}</Chip>}
       {c.modelos.length === 0 && <span className="s-apoyo">Sin modelos este trimestre</span>}
+    </Link>
+  )
+}
+
+type Entrando = { empresa: string; error: string | null } | null
+
+/** G05 · «Entrar» en el cliente: la acción principal de la fila, visible sin pasar el ratón. */
+function BotonEntrar({ c, entrar, entrando }: { c: ClienteDespacho; entrar: (c: ClienteDespacho) => void; entrando: Entrando }) {
+  const nombre = c.razon_social ?? c.nombre
+  const aqui = entrando?.empresa === c.empresa
+  return (
+    <span className="s-despacho-entrar">
+      <Boton variante="principal" onClick={() => entrar(c)} disabled={entrando !== null && !entrando.error}
+        aria-label={`Entrar en ${nombre}`} data-prueba="despacho-entrar">
+        {aqui && !entrando?.error ? `Entrando en ${nombre}…` : 'Entrar'}
+      </Boton>
+      {aqui && entrando?.error && <span className="s-despacho-entrar-error" role="alert">No se ha podido entrar: {entrando.error}</span>}
     </span>
   )
 }
 
 const importe = (n: number | null) => (n === null ? '—' : eurosExactos(n).replace(' €', ''))
 
-function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegidos, elegirTodos, enlace }: {
+function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegidos, elegirTodos, enlace, entrar, entrando }: {
   clientes: ClienteDespacho[]; elegidos: ReadonlySet<string>; elegir: (id: string, si: boolean) => void
   alResponsable: (c: ClienteDespacho) => void; todosElegidos: boolean; elegirTodos: (si: boolean) => void
   enlace: (c: ClienteDespacho) => string
+  entrar: (c: ClienteDespacho) => void; entrando: Entrando
 }) {
   return (
     <table className="s-tabla s-despacho-tabla" aria-label="Impuestos de tus clientes">
@@ -296,6 +323,7 @@ function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegido
           <th scope="col" className="s-despacho-cifra">A compensar</th>
           <th scope="col">Responsable</th>
           <th scope="col">Siguiente paso</th>
+          <th scope="col" className="s-despacho-col-entrar"><span className="s-oculto">Entrar</span></th>
         </tr>
       </thead>
       <tbody>
@@ -305,27 +333,29 @@ function TablaClientes({ clientes, elegidos, elegir, alResponsable, todosElegido
               <input type="checkbox" aria-label={`Elegir ${c.nombre}`} checked={elegidos.has(c.empresa)} onChange={(e) => elegir(c.empresa, e.target.checked)} />
             </td>
             <td>
-              <Link className="s-despacho-cliente" to={enlace(c)}>{c.razon_social ?? c.nombre}</Link>
+              <button type="button" className="s-despacho-cliente s-despacho-cliente-boton" onClick={() => entrar(c)} disabled={entrando !== null && !entrando.error}>{c.razon_social ?? c.nombre}</button>
               <span className="s-despacho-tipo">{tipoDeCliente(c)}</span>
             </td>
-            <td><Chips c={c} /></td>
+            <td><Chips c={c} enlace={enlace(c)} /></td>
             <td className="s-despacho-cifra">{importe(c.a_ingresar)}</td>
             <td className="s-despacho-cifra">{importe(c.a_compensar)}</td>
             <td><Responsable c={c} alPulsar={() => alResponsable(c)} /></td>
             <td className="s-despacho-paso">{c.siguiente_paso}</td>
+            <td className="s-despacho-col-entrar"><BotonEntrar c={c} entrar={entrar} entrando={entrando} /></td>
           </tr>
         ))}
         {clientes.length === 0 && (
-          <tr><td colSpan={7} className="s-despacho-ninguno">Ningún cliente cumple los filtros encendidos.</td></tr>
+          <tr><td colSpan={8} className="s-despacho-ninguno">Ningún cliente cumple los filtros encendidos.</td></tr>
         )}
       </tbody>
     </table>
   )
 }
 
-function TarjetasClientes({ clientes, elegidos, elegir, alResponsable, enlace }: {
+function TarjetasClientes({ clientes, elegidos, elegir, alResponsable, enlace, entrar, entrando }: {
   clientes: ClienteDespacho[]; elegidos: ReadonlySet<string>; elegir: (id: string, si: boolean) => void; alResponsable: (c: ClienteDespacho) => void
   enlace: (c: ClienteDespacho) => string
+  entrar: (c: ClienteDespacho) => void; entrando: Entrando
 }) {
   return (
     <ul className="s-despacho-tarjetas" aria-label="Impuestos de tus clientes">
@@ -334,17 +364,18 @@ function TarjetasClientes({ clientes, elegidos, elegir, alResponsable, enlace }:
           <div className="s-despacho-tarjeta-cabeza">
             <input type="checkbox" aria-label={`Elegir ${c.nombre}`} checked={elegidos.has(c.empresa)} onChange={(e) => elegir(c.empresa, e.target.checked)} />
             <div>
-              <Link className="s-despacho-cliente" to={enlace(c)}>{c.razon_social ?? c.nombre}</Link>
+              <button type="button" className="s-despacho-cliente s-despacho-cliente-boton" onClick={() => entrar(c)} disabled={entrando !== null && !entrando.error}>{c.razon_social ?? c.nombre}</button>
               <span className="s-despacho-tipo">{tipoDeCliente(c)}</span>
             </div>
           </div>
-          <Chips c={c} />
+          <Chips c={c} enlace={enlace(c)} />
           <dl className="s-despacho-datos">
             <div><dt>A ingresar</dt><dd className="s-despacho-cifra">{importe(c.a_ingresar)}</dd></div>
             <div><dt>A compensar</dt><dd className="s-despacho-cifra">{importe(c.a_compensar)}</dd></div>
             <div><dt>Responsable</dt><dd><Responsable c={c} alPulsar={() => alResponsable(c)} /></dd></div>
           </dl>
           <p className="s-despacho-paso"><span className="s-apoyo">Siguiente paso:</span> {c.siguiente_paso}</p>
+          <BotonEntrar c={c} entrar={entrar} entrando={entrando} />
         </li>
       ))}
       {clientes.length === 0 && <li className="s-despacho-ninguno">Ningún cliente cumple los filtros encendidos.</li>}

@@ -40,6 +40,11 @@
   --s-borde-control: #7F8FA6;
   --s-borde-decorativo: #DCE5F0;
   --s-borde-pestanas: #DCE5F0;   /* El separador de las pestañas de estado */
+  --s-despacho-fondo: #0E4A52;   /* G05 · La franja del despacho (dentro de un cliente): propia, ni la de la empresa ni la de plataforma */
+  --s-despacho-tinta: #FFFFFF;
+  --s-despacho-borde: rgba(255, 255, 255, .45);
+  --s-despacho-encima: rgba(255, 255, 255, .12);
+  --s-despacho-claro: #E6F0F1;
   --s-accion: #1E63C9;           /* Botón principal, enlaces, página activa */
   --s-accion-encima: #174FA1;     /* Acción al pasar el ratón */
   --s-accion-suave: #EAF2F8;     /* Lo seleccionado */

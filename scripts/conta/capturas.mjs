@@ -70,6 +70,9 @@ export const DE_QUIEN = {
   // P01 (19/10): «Impuestos de tus clientes» (conta/p01…), igual que Impuestos:
   // sin frente de usuarios, con sus capturas en p01/…
   despacho: /^docs\/conta\/capturas\/p\d[^/]*\//,
+  // G05 (08/11): la gestoría (conta/g…), igual que el despacho: sin frente de
+  // usuarios, con sus capturas en g05/…
+  gestoria: /^docs\/conta\/capturas\/g\d[^/]*\//,
   // Compras (21/10, «Compras pasa a ser tuya»): conta/compras-…, sin frente de
   // usuarios, con sus capturas en compras/…
   compras: /^docs\/conta\/capturas\/compras\//,
@@ -96,6 +99,7 @@ export function duenoDeLaRama(rama, cambiados = []) {
   if (/^reparto-/.test(rama)) return 'reparto'
   if (/^conta\/i\d/.test(rama)) return 'impuestos'
   if (/^conta\/p\d/.test(rama)) return 'despacho'
+  if (/^conta\/g\d/.test(rama)) return 'gestoria'
   if (/^conta\/compras/.test(rama)) return 'compras'
   const frente = frenteDeLaRama(rama)
   if (frente) return frente

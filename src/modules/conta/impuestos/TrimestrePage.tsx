@@ -144,14 +144,16 @@ export default function TrimestrePage() {
   const modelos = datos?.modelos ?? []
   const elegidoModelo = modelos.find((m) => clave(m) === elegido) ?? modelos.find((m) => m.modelo === '303') ?? modelos[0] ?? null
   const dia = hoy()
+  // G05: el de un cliente (por la ruta) se nombra por su razón social: tres «Piri Piri» no se distinguen por el nombre comercial.
+  const nombreEmpresa = datos ? (datos.empresa.razon_social?.trim() || datos.empresa.nombre) : ''
 
   return (
     <div className="s-pantalla s-impuestos s-trimestre">
       <nav aria-label="Migas" className="s-impuestos-migas">
-        <Link to={rutaImpuestos()}>Impuestos</Link>{deRuta && datos ? ` › ${datos.empresa.nombre}` : ''} › {tituloTrimestre(ejercicio, trimestre)}
+        <Link to={rutaImpuestos()}>Impuestos</Link>{deRuta && datos ? ` › ${nombreEmpresa}` : ''} › {tituloTrimestre(ejercicio, trimestre)}
       </nav>
       <div className="s-trimestre-cabeza">
-        <h1 className="s-impuestos-titulo">El trimestre{deRuta && datos ? <span className="s-impuestos-titulo-apoyo"> · {datos.empresa.nombre}</span> : null}</h1>
+        <h1 className="s-impuestos-titulo">El trimestre{deRuta && datos ? <span className="s-impuestos-titulo-apoyo"> · {nombreEmpresa}</span> : null}</h1>
         <div className="s-trimestre-selector">
           <label className="s-trimestre-ano">
             <span className="cx-oculto">Ejercicio</span>

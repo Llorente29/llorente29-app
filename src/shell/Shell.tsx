@@ -44,6 +44,8 @@ import { useFeatureGate } from '@/platform/feature-gate/useFeatureGate'
 import { MARCA } from '@/marca/marca'
 import { useMisEmpresas } from '@/modules/multitenancy/hooks/useMisEmpresas'
 import { abrirEmpresa } from '@/modules/multitenancy/services/empresasService'
+import { useEnClienteDelDespacho } from '@/modules/multitenancy/hooks/useDespacho'
+import { soloSumiedEnElShell } from './soloSumied'
 
 const SETTINGS_BASE = 'configuracion'
 
@@ -57,7 +59,9 @@ export default function Shell() {
   const { userProfile, accounts, activeAccount, activeAccountId, setActiveAccountId } = useApp()
   const { isPlatformAdmin } = usePlatformAdmin()
   const { account: cuentaPlataforma } = useFeatureGate()
-  const soloContabilidad = !!cuentaPlataforma?.product_brand
+  // G05: dentro de un cliente por el despacho, también solo Sumied (aunque el cliente sea de Folvy).
+  const enClienteDelDespacho = useEnClienteDelDespacho()
+  const soloContabilidad = soloSumiedEnElShell({ marcaSolo: false, productBrand: cuentaPlataforma?.product_brand, enClienteDelDespacho })
   // ENCARGO CODE (14/08) Pendientes Fase 1, B.1 — un solo fetch aquí; el
   // contador se pasa al TopBar y decide el aterrizaje en Home. NUNCA cuenta
   // 'salud' (solo ahora+semana, ver usePendingBoard).
