@@ -19,6 +19,9 @@ begin
 end $$;
 
 -- 2 · Las funciones de antes, con sus permisos, y conta_crm_bitrix con su fila y sus espejos.
+-- Los permisos, en el orden de antes: una función recreada nace con los de
+-- serie de Supabase (service_role entre ellos); se quitan todos y se dan en
+-- orden (authenticated, si lo tenía, y luego service_role).
 select public._restaurar_funcion('public.conta_bitrix_guardar_clientes(uuid,jsonb)', '20261108T0112_g01c_crm_neutro_b');
 select public._restaurar_funcion('public.conta_bitrix_confirmar_mapa(uuid,jsonb)', '20261108T0112_g01c_crm_neutro_b');
 select public._restaurar_funcion('public.conta_bitrix_aplicar_union(uuid)', '20261108T0112_g01c_crm_neutro_b');
@@ -28,23 +31,23 @@ select public._restaurar_funcion('public.conta_bitrix_guardar_fichas(uuid,jsonb)
 select public._restaurar_funcion('public._conta_bitrix_campo_sensible(jsonb)', '20261108T0112_g01c_crm_neutro_b');
 select public._restaurar_funcion('public._conta_crm_a_bitrix()', '20261108T0112_g01c_crm_neutro_b');
 select public._restaurar_funcion('public._conta_crm_desde_bitrix()', '20261108T0112_g01c_crm_neutro_b');
-revoke all on function public.conta_bitrix_guardar_clientes(uuid,jsonb) from public, anon, authenticated;
+revoke all on function public.conta_bitrix_guardar_clientes(uuid,jsonb) from public, anon, authenticated, service_role;
 grant execute on function public.conta_bitrix_guardar_clientes(uuid,jsonb) to service_role;
-revoke all on function public.conta_bitrix_confirmar_mapa(uuid,jsonb) from public, anon, authenticated;
+revoke all on function public.conta_bitrix_confirmar_mapa(uuid,jsonb) from public, anon, authenticated, service_role;
 grant execute on function public.conta_bitrix_confirmar_mapa(uuid,jsonb) to authenticated, service_role;
-revoke all on function public.conta_bitrix_aplicar_union(uuid) from public, anon, authenticated;
+revoke all on function public.conta_bitrix_aplicar_union(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.conta_bitrix_aplicar_union(uuid) to authenticated, service_role;
-revoke all on function public.conta_bitrix_guardar_conexion(uuid,text,text,text,text) from public, anon, authenticated;
+revoke all on function public.conta_bitrix_guardar_conexion(uuid,text,text,text,text) from public, anon, authenticated, service_role;
 grant execute on function public.conta_bitrix_guardar_conexion(uuid,text,text,text,text) to service_role;
-revoke all on function public.conta_bitrix_secreto(uuid) from public, anon, authenticated;
+revoke all on function public.conta_bitrix_secreto(uuid) from public, anon, authenticated, service_role;
 grant execute on function public.conta_bitrix_secreto(uuid) to service_role;
-revoke all on function public.conta_bitrix_guardar_fichas(uuid,jsonb) from public, anon, authenticated;
+revoke all on function public.conta_bitrix_guardar_fichas(uuid,jsonb) from public, anon, authenticated, service_role;
 grant execute on function public.conta_bitrix_guardar_fichas(uuid,jsonb) to service_role;
-revoke all on function public._conta_bitrix_campo_sensible(jsonb) from public, anon, authenticated;
+revoke all on function public._conta_bitrix_campo_sensible(jsonb) from public, anon, authenticated, service_role;
 grant execute on function public._conta_bitrix_campo_sensible(jsonb) to authenticated, service_role;
-revoke all on function public._conta_crm_a_bitrix() from public, anon, authenticated;
+revoke all on function public._conta_crm_a_bitrix() from public, anon, authenticated, service_role;
 grant execute on function public._conta_crm_a_bitrix() to service_role;
-revoke all on function public._conta_crm_desde_bitrix() from public, anon, authenticated;
+revoke all on function public._conta_crm_desde_bitrix() from public, anon, authenticated, service_role;
 grant execute on function public._conta_crm_desde_bitrix() to service_role;
 create table public.conta_crm_bitrix (
   account_id          uuid primary key references public.accounts(id) on delete cascade,
