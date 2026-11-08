@@ -29,7 +29,7 @@ describe('la actividad reconoce la gestoría', () => {
   it('busca en los títulos de los catálogos de la base', () => {
     const g = gruposDe('Somos una gestoría').find((x) => x.clave === 'gestoria')!
     expect(g.iae).toEqual(['financieros y contables', 'gestión administrativa'])
-    expect(g.cnae).toEqual(['contabilidad, teneduría'])
+    expect(g.cnae).toEqual(['teneduría de libros'])
   })
 })
 
