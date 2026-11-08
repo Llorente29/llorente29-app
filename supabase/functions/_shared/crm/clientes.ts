@@ -196,7 +196,7 @@ export interface ErrorAlGuardar {
 
 /** Una diferencia de la lectura del CRM, para conta_gestoria_diferencia (crm, tipo_ficha e id_externo los pone quien guarda). */
 export interface DiferenciaDeCrm {
-  tipo: 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada' | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos'
+  tipo: 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada' | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos' | 'ya_no_es_cliente_en_crm'
   porque_codigo: string
   porque: string
   tipo_ficha: TipoFicha
@@ -273,4 +273,28 @@ export function ensayoDeUnion<F extends FichaParaUnir & { nombre: string; situac
       idExterno: c.principal.idExterno, tipoFicha: c.principal.tipoFicha ?? 'empresa', nombre: c.principal.nombre, nifEnCrm: c.principal.nifEnCrm ?? c.principal.nif,
       motivo: c.motivo as 'nif_no_valido' | 'nif_en_muchas', fichasConSuNif: c.fichasConSuNif })),
   }
+}
+
+/** Un cliente de Sumied que vino del CRM: la ficha que lo identifica y su nombre. */
+export interface ClienteGuardado { tipoFicha: TipoFicha; idExterno: string; nombre: string | null }
+
+/**
+ * G01c · Los clientes de Sumied que vinieron del CRM y cuya ficha ya no entra
+ * como cliente en esta lectura: ahora es una persona de contacto, se queda
+ * fuera o ya no está en el CRM. No se archivan solos (puede tener líneas,
+ * cobros o facturas): salen en «Pendiente de revisar» para que decida una
+ * persona (regla 7). Los de un contacto solo se miran si los contactos entran
+ * (con el mapa confirmado): sin él, ningún contacto entra y no es que haya
+ * dejado de ser cliente.
+ */
+export function yaNoSonClientes(guardados: readonly ClienteGuardado[], clientes: readonly { fichas: readonly FichaParaUnir[] }[],
+  conContactos: boolean, crm: string): DiferenciaDeCrm[] {
+  const leidas = new Set(clientes.flatMap((c) => c.fichas.map(claveDeFicha)))
+  return guardados
+    .filter((g) => (g.tipoFicha === 'empresa' || conContactos) && !leidas.has(claveDeFicha(g)))
+    .sort((a, b) => claveDeFicha(a).localeCompare(claveDeFicha(b), 'es', { numeric: true }))
+    .map((g) => ({ tipo: 'ya_no_es_cliente_en_crm', porque_codigo: 'ya_no_es_cliente', tipo_ficha: g.tipoFicha, id_externo: g.idExterno,
+      datos: { nombre: g.nombre },
+      porque: `Es cliente en Sumied por su ${fichaEnPalabras(g)} de ${crm}, pero en esta lectura ya no entra como cliente${g.tipoFicha === 'contacto'
+        ? ' (ahora es persona de contacto de una empresa, se queda fuera o ya no está)' : ' (ya no está entre las empresas leídas)'}. No se archiva solo: decide si se queda o se archiva.` }))
 }

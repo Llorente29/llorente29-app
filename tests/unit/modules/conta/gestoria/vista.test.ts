@@ -30,7 +30,9 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
       // G01b · De la lectura del CRM.
       'Fichas repetidas en tu CRM', 'NIF de tu CRM que no se usa', 'Fichas de tu CRM sin guardar',
       // G01c · Los contactos.
-      'Contacto con solo una negociación', 'Contacto con empresa y con datos de cliente'])
+      'Contacto con solo una negociación', 'Contacto con empresa y con datos de cliente',
+      // G01c · PR B.
+      'Ya no es cliente en tu CRM'])
     expect(filtrarPorChip(filas, 'fallan').map((f) => f.clienteId)).toEqual(['2'])
     expect(filtrarPorChip(filas, null)).toHaveLength(3)
     expect(filtrarPorEmisor(filas, B).map((f) => f.clienteId)).toEqual(['3'])
@@ -75,12 +77,12 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
 
   it('se adapta a lo conectado: sin GoCardless no sale lo suyo; sin Bitrix24, tampoco lo que los cruza', () => {
     const todo = queSeVe({ gocardless: new Set([A, B]), bitrix: true }, null, [A, B])
-    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 12, []])
+    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 13, []])
     const soloGc = queSeVe({ gocardless: new Set([A]), bitrix: false }, null, [A, B])
     expect([soloGc.gocardless, soloGc.bitrix, soloGc.chips, soloGc.sinGocardless]).toEqual([true, false, ['sin-convertir', 'totales', 'por-firmar', 'fallan'], [B]])
     const deB = queSeVe({ gocardless: new Set([A]), bitrix: true }, B, [A, B])
     // G01b · Lo del CRM solo pide el CRM (G01c: también los dos de los contactos).
-    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, ['repetidas', 'sin-nif', 'no-guardada', 'contacto-negociacion', 'contacto-con-datos']])
+    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, ['repetidas', 'sin-nif', 'no-guardada', 'contacto-negociacion', 'contacto-con-datos', 'ya-no-es-cliente']])
     expect(queSeVe({ gocardless: new Set(), bitrix: false }, null, [A, B]).chips).toEqual([])
   })
 

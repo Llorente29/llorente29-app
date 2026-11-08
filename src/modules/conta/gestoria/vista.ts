@@ -17,13 +17,13 @@ import {
 
 export type TipoDiferencia =
   | 'crm_sin_cobro' | 'gocardless_sin_ficha' | 'emisor_distinto' | 'nif_repetido_en_crm' | 'correo_repetido_en_crm'
-  // G01c · Los de antes, mientras queden filas con ellos (el PR B las migra a los neutros y los quita).
-  | 'bitrix_sin_cobro' | 'nif_repetido_en_bitrix' | 'correo_repetido_en_bitrix'
   | 'nif_distinto' | 'suscripcion_sin_convertir' | 'totales_distintos' | 'mandato_por_firmar' | 'falla_a_menudo' | 'abono_en_otra_cuenta'
   // G01b · De la lectura del CRM: un cliente con varias fichas, una ficha que entra sin NIF y una que no se ha podido guardar.
   | 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada'
   // G01c · Un contacto con solo una negociación, y uno con empresa y con datos de cliente.
   | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos'
+  // G01c · Un cliente de Sumied cuya ficha ya no entra como cliente en la lectura del CRM (no se archiva solo).
+  | 'ya_no_es_cliente_en_crm'
 
 export interface Diferencia {
   id: string
@@ -68,7 +68,7 @@ export interface ClienteGestoria {
 export type Conector = 'gocardless' | 'bitrix'
 /** Cada chip, con los conectores que necesita: sin ellos, no sale (no hay nada que comparar). */
 export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; etiqueta: string; necesita: readonly Conector[] }[] = [
-  { id: 'sin-cobro', tipos: ['crm_sin_cobro', 'bitrix_sin_cobro'], etiqueta: 'En tu CRM sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-cobro', tipos: ['crm_sin_cobro'], etiqueta: 'En tu CRM sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
   { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en tu CRM', necesita: ['bitrix', 'gocardless'] },
   { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Tu CRM y GoCardless no coinciden en el emisor', necesita: ['bitrix', 'gocardless'] },
   { id: 'sin-convertir', tipos: ['suscripcion_sin_convertir'], etiqueta: 'Suscripción sin convertir en tarifa', necesita: ['gocardless'] },
@@ -82,6 +82,7 @@ export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; eti
   // G01c · Los contactos (Julio, 07/11).
   { id: 'contacto-negociacion', tipos: ['contacto_solo_negociacion'], etiqueta: 'Contacto con solo una negociación', necesita: ['bitrix'] },
   { id: 'contacto-con-datos', tipos: ['contacto_empresa_con_datos'], etiqueta: 'Contacto con empresa y con datos de cliente', necesita: ['bitrix'] },
+  { id: 'ya-no-es-cliente', tipos: ['ya_no_es_cliente_en_crm'], etiqueta: 'Ya no es cliente en tu CRM', necesita: ['bitrix'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
@@ -204,7 +205,7 @@ export function comoResolver(d: Diferencia): Resolver[] {
   if (d.tipo === 'totales_distintos' || d.tipo === 'suscripcion_sin_convertir') return ['linea_o_baja', 'revisada']
   if (d.tipo === 'gocardless_sin_ficha') return ['enlazar', 'revisada']
   // G01b · Lo del CRM se corrige en el CRM: la próxima lectura lo renueva (no hay empresa a la que apuntar la revisión).
-  if (['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos'].includes(d.tipo)) return []
+  if (['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos', 'ya_no_es_cliente_en_crm'].includes(d.tipo)) return []
   return ['revisada']
 }
 

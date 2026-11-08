@@ -45,9 +45,8 @@ function extraDeFicha(f: Fila | undefined): ExtraDeFicha {
   if (!f) return {}
   const otras = Array.isArray(f.otras) ? (f.otras as Fila[]).filter((o) => str(o?.texto)).map((o) => ({ etiqueta: String(o.etiqueta ?? ''), texto: String(o.texto) })) : []
   const direccion = [str(f.calle), str(f.cp) && !String(f.calle ?? '').includes(String(f.cp)) ? str(f.cp) : null, str(f.poblacion), str(f.provincia)].filter(Boolean).join(', ')
-  // G01c · Lo guardado antes del G01c lleva «bitrixId»; lo de ahora, «idExterno» y «tipoFicha».
-  const otrasFichas = Array.isArray(f.otras_fichas) ? (f.otras_fichas as Fila[]).filter((o) => str(o?.idExterno) ?? str(o?.bitrixId)).map((o) => ({
-    idExterno: String(o.idExterno ?? o.bitrixId), tipoFicha: o.tipoFicha === 'contacto' ? 'contacto' as const : 'empresa' as const,
+  const otrasFichas = Array.isArray(f.otras_fichas) ? (f.otras_fichas as Fila[]).filter((o) => str(o?.idExterno)).map((o) => ({
+    idExterno: String(o.idExterno), tipoFicha: o.tipoFicha === 'contacto' ? 'contacto' as const : 'empresa' as const,
     nombre: String(o.nombre ?? ''), situacion: str(o.situacion), situacionTexto: str(o.situacionTexto) })) : []
   return { situacionTexto: str(f.situacion_texto), direccion: direccion || null, direccionDe: str(f.direccion_de), otrasDirecciones: otras, otrasFichas,
     tipoFicha: f.tipo_ficha === 'contacto' ? 'contacto' : 'empresa', tipoCliente: str(f.tipo_cliente) }

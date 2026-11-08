@@ -1,0 +1,6 @@
+# G01c · PR B de la clave neutra: la 0112 y su prueba (ROLLBACK, datos
+# inventados): tipos y origen neutros con su copia, fuera la tabla y las
+# funciones de antes, guardar clientes sigue guardando, el secreto de Vault
+# cambia de nombre y la conexión lee la misma dirección, y la vuelta atrás.
+supabase/migrations/20261108T0112_g01c_crm_neutro_b.sql
+supabase/staging/sql/20261108_g01c_crm_neutro_b_prueba.sql
