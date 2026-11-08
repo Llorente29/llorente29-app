@@ -1,0 +1,26 @@
+{
+ "_que": "G05 · contexto de producción de la tanda (1225 y 1226), medido en SOLO LECTURA el 08/11 a las 12:27Z (y otra vez a las 13:03Z, al añadir mi_bienvenida_hecha a la 1225: tampoco existe, ni otra firma con su nombre; user_profiles sigue con 23 filas) con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen user_profiles y company_tax_presenter (a las que la 1225 añade una columna y un índice, y la 1226 un disparador cada una); no existe ninguna de las funciones ni la tabla que crean; nada en el camino del pedido; nada en el historial. El analizador: la 1225 «sigue» (añade), la 1226 «sigue» (cambia, declarado y con prueba). La cuenta (g05-entrar-en-el-cliente.sql) a la misma hora: 0 · 0 · 0 · 0 · 23 · 21 · 20 · 3 · _cuenta_activa 5236fb0c, cambiar_empresa 78a66814, conta_despacho_clientes 7cfcf89d, mis_empresas a6c7f2d3.",
+ "medido": "2026-11-08T13:03Z",
+ "tanda": {
+  "supabase/migrations/20261108T1225_g05_entrar_en_el_cliente.sql": "84d93ba6fa2e1b62bc7b1dccc5d972ac",
+  "supabase/migrations/20261108T1226_g05_disparadores.sql": "d6f437f4f79fb43fe47f663a0daa5224"
+ },
+ "contexto": {
+  "tablas": [
+   "public.company_tax_presenter",
+   "public.user_profiles"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.company_tax_presenter": 0,
+   "public.user_profiles": 5
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,20 @@
+# G05 · La gestoría entra en su cliente y lo lleva entero (Julio, 08/11).
+# Rama conta/g05-entrar-en-el-cliente. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1225  SOLO AÑADE: user_profiles.advisor_account_id (admite nulos: las 23
+#         filas de hoy quedan a nulo, que es lo que son), el rastro
+#         conta_despacho_entrada y las funciones conta_despacho_entrar,
+#         conta_despacho_volver, conta_despacho_mis_clientes y
+#         conta_despacho_donde.
+#   1226  CAMBIA, declarado y con prueba de staging: dos disparadores nuevos en
+#         tablas que existen. En user_profiles, la bienvenida heredada (una
+#         fila nueva de quien ya la hizo en otra cuenta la copia); en
+#         company_tax_presenter, la retirada sola de los accesos del despacho.
+#         No toca ninguna fila al aplicarse.
+#
+# Sin «autorizo»: nada en el camino del pedido, nada se borra ni se mueve.
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g05-entrar-en-el-cliente.sql
+supabase/migrations/20261108T1225_g05_entrar_en_el_cliente.sql
+supabase/migrations/20261108T1226_g05_disparadores.sql
