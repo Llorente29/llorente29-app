@@ -1,0 +1,33 @@
+{
+ "_que": "G04 · URGENTE (nº 17) · contexto de producción, medido en SOLO LECTURA el 08/11 (analizar.mjs sql-contexto, por el MCP de lectura). La 2057 solo añade siete índices; ninguno existe hoy; tablas de 864 a 11.453 filas, ninguna en el camino del pedido; el nombre no está en el historial.",
+ "medido": "2026-11-08T20:10Z",
+ "tanda": {
+  "supabase/migrations/20261108T2057_g04_indices_clientes.sql": "6139308f6bac48d278064fdfd707855a"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_cobro_cliente",
+   "public.conta_gc_cobro",
+   "public.conta_gc_mandato",
+   "public.conta_gc_suscripcion",
+   "public.conta_gestoria_diferencia",
+   "public.conta_precio_tramo"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_cobro_cliente": 864,
+   "public.conta_gc_cobro": 2855,
+   "public.conta_gc_mandato": 2099,
+   "public.conta_gc_suscripcion": 2636,
+   "public.conta_gestoria_diferencia": 11453,
+   "public.conta_precio_tramo": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
