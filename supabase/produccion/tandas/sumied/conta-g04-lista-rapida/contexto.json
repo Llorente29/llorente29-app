@@ -1,0 +1,19 @@
+{
+ "_que": "G04 · La lista rápida · contexto de producción, medido en SOLO LECTURA el 08/11 (por el MCP de lectura). La 2209 solo añade dos funciones nuevas, que hoy no existen; el nombre no está en el historial. Nada en el camino del pedido.",
+ "medido": "2026-11-08T21:40Z",
+ "tanda": {
+  "supabase/migrations/20261108T2209_g04_lista_rapida.sql": "9af5c87600b25d001a0ab7b6197c2a11"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -7,7 +7,7 @@
 // Lee las vistas de la 0930 (con su RLS: solo lo de la cuenta) y las tablas de
 // GoCardless; hace por las funciones de la 0930, que ensayan por defecto.
 
-import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { funcion, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 
 export type Fila = Record<string, unknown>
 export const PAGINA = 1000
@@ -22,6 +22,23 @@ export async function leerTodo(nombre: string, select: string, cuenta: { columna
     for (const o of orden) q = (q as { order: (c: string, x: { ascending: boolean; nullsFirst: boolean }) => unknown }).order(o, { ascending: true, nullsFirst: true })
     const { data, error } = await (q as { range: (a: number, b: number) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }> }).range(desde, desde + PAGINA - 1)
     if (error) throw new Error(mensaje(`No se ha podido leer ${nombre.replace(/^conta_(consulta_)?/, '').replace(/_/g, ' ')}`, error))
+    const filas = (data ?? []) as Fila[]
+    todas.push(...filas)
+    if (filas.length < PAGINA) return todas
+  }
+}
+
+/**
+ * Toda una función de lectura (de las que comprueban la cuenta una sola vez),
+ * página a página y en un orden fijo, como leerTodo.
+ */
+export async function leerFuncion(nombre: string, args: Record<string, unknown>, orden: string[]): Promise<Fila[]> {
+  const todas: Fila[] = []
+  for (let desde = 0; ; desde += PAGINA) {
+    let q = funcion(nombre, args)
+    for (const o of orden) q = (q as { order: (c: string, x: { ascending: boolean; nullsFirst: boolean }) => unknown }).order(o, { ascending: true, nullsFirst: true })
+    const { data, error } = await (q as { range: (a: number, b: number) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }> }).range(desde, desde + PAGINA - 1)
+    if (error) throw new Error(mensaje(`No se ha podido leer ${nombre.replace(/^conta_(lista_)?/, '').replace(/_/g, ' ')}`, error))
     const filas = (data ?? []) as Fila[]
     todas.push(...filas)
     if (filas.length < PAGINA) return todas
@@ -53,11 +70,13 @@ export async function leerClientes(accountId: string): Promise<DatosClientes> {
   const cuenta = { columna: 'cuenta_id', id: accountId }
   const deCuenta = { columna: 'account_id', id: accountId }
   const [clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm, cobros, mandatos] = await Promise.all([
-    leerTodo('conta_consulta_cliente_empresa', '*', cuenta, ['cliente_id', 'empresa_id']),
+    // La lista y «Lo que tienes que hacer», por sus funciones de lectura (la 2209): las vistas, con la RLS fila
+    // a fila, tardaban 5 s y 0,7 s en QBO; las funciones comprueban la cuenta una vez (61 ms la lista).
+    leerFuncion('conta_lista_clientes', { p_cuenta: accountId }, ['cliente_id', 'empresa_id']),
     leerTodo('conta_gc_suscripcion', 'company_id, gc_id, gc_cliente_id, nombre, importe, al_mes, estado, inicio, fin, proximo_cobro_fecha, proximo_cobro_importe', deCuenta, ['company_id', 'gc_id'],
       (q) => (q as { eq: (c: string, v: string) => unknown }).eq('estado', 'active')),
     leerTodo('conta_consulta_cargo_devuelto', '*', cuenta, ['empresa_id', 'gc_id']),
-    leerTodo('conta_consulta_que_hacer', '*', cuenta, ['empresa_id', 'tipo']),
+    leerFuncion('conta_lista_que_hacer', { p_cuenta: accountId }, ['empresa_id', 'tipo']),
     leerTodo('conta_consulta_asignacion', '*', cuenta, ['cliente_id', 'id']),
     leerTodo('conta_consulta_tarifa_precio', '*', cuenta, ['id']),
     leerTodo('conta_servicio', 'id, company_id, clave, nombre, forma, activo', deCuenta, ['id']),

@@ -1,0 +1,5 @@
+# G04 · la 2209 (la lista de Clientes rápida) y su prueba (ROLLBACK, datos
+# inventados): las mismas filas que las vistas, nada con otra cuenta, y la
+# vuelta atrás.
+supabase/migrations/20261108T2209_g04_lista_rapida.sql
+supabase/staging/sql/20261108_g04_lista_rapida_prueba.sql
