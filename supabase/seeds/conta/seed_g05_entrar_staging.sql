@@ -1,17 +1,19 @@
 -- ============================================================================
--- G05 · Un cliente de Folvy con DOS SOCIEDADES DEL MISMO NOMBRE COMERCIAL, de
--- la asesoría de demo del P01. SOLO STAGING. Va después de
--- seed_p01_despacho_staging.sql (usa su asesoría, d5ac…a0).
+-- G05 · Una gestoría de demo con un cliente de Folvy con DOS SOCIEDADES DEL
+-- MISMO NOMBRE COMERCIAL. SOLO STAGING. Su propia gestoría, para no cambiar
+-- los 8 clientes de la asesoría del P01 (su semilla y su e2e los cuentan).
 -- ----------------------------------------------------------------------------
 -- Todo inventado (T11): nombres, NIF de sociedad (con su control bien hecho, de
 -- nadie conocido) y correos en .test.
 --
+--   Gestoría de Prueba G05 · marca Sumied · «Soy una asesoría»
+--     g05.gestora@g05-prueba.test   Gestora de Prueba G05   administración
 --   Asadores de Prueba · cuenta de FOLVY (sin product_brand): la gestoría entra
 --   y tiene que ver solo Sumied.
 --     Asador de Prueba Norte, S.L.  B91000901  nombre comercial «Asador de Prueba»
 --     Asador de Prueba Sur, S.L.    B91000919  nombre comercial «Asador de Prueba»
 --   g05.asador@g05-prueba.test   Administración del Asador (prueba)   admin
---   Las dos dan permiso a la asesoría de demo.
+--   Las dos dan permiso a la Gestoría de Prueba G05.
 --
 -- Se puede volver a pasar: si ya está, no hace nada.
 -- ============================================================================
@@ -20,33 +22,37 @@ do $$ begin
   if exists (select 1 from public.accounts where id in ('51ad1792-6629-4ef7-833a-b57b09a86710', '00000000-0000-0000-0000-000000000001')) then
     raise exception 'Semilla G05 ABORTADA: al otro lado hay cuentas de producción.';
   end if;
-  if not exists (select 1 from public.accounts where id = 'd5ac0000-0000-4000-8000-0000000000a0') then
-    raise exception 'Semilla G05 ABORTADA: falta la asesoría de demo del P01 (seed_p01_despacho_staging.sql).';
-  end if;
 end $$;
 
 do $$
 declare
-  v_ase uuid := 'd5ac0000-0000-4000-8000-0000000000a0';
+  v_ase uuid := '90500000-0000-4000-8000-0000000000a0';
+  v_gestora uuid := '90500000-0000-4000-8000-0000000000a1';
   v_cuenta uuid := '90500000-0000-4000-8000-0000000000c0';
   v_admin uuid := '90500000-0000-4000-8000-0000000000f1';
   r record;
 begin
   if exists (select 1 from public.accounts where id = v_cuenta) then return; end if;
 
+  insert into public.accounts (id, name, slug, status, business_type, product_brand, tax_advisor_since)
+  values (v_ase, 'Gestoría de Prueba G05', 'g05-gestoria-de-prueba', 'active', 'otra_actividad', 'sumied', now() - interval '30 days');
   insert into public.accounts (id, name, slug, status, business_type)
   values (v_cuenta, 'Asadores de Prueba', 'g05-asadores-de-prueba', 'active', 'restaurante');
 
-  insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
-    email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
-    confirmation_token, recovery_token, email_change_token_new, email_change)
-  values ('00000000-0000-0000-0000-000000000000', v_admin, 'authenticated', 'authenticated', 'g05.asador@g05-prueba.test',
-    extensions.crypt(gen_random_uuid()::text, extensions.gen_salt('bf')),
-    now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '');
-  insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
-  values (v_admin::text, v_admin, jsonb_build_object('sub', v_admin::text, 'email', 'g05.asador@g05-prueba.test', 'email_verified', true), 'email', now(), now(), now());
-  insert into public.user_profiles (user_id, account_id, role, active, display_name, terms_accepted_at, welcome_completed_at)
-  values (v_admin, v_cuenta, 'admin', true, 'Administración del Asador (prueba)', now(), now());
+  for r in select * from (values
+      (v_gestora, v_ase, 'g05.gestora@g05-prueba.test', 'Gestora de Prueba G05'),
+      (v_admin, v_cuenta, 'g05.asador@g05-prueba.test', 'Administración del Asador (prueba)')) v(id, cuenta, correo, nombre) loop
+    insert into auth.users (instance_id, id, aud, role, email, encrypted_password,
+      email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+      confirmation_token, recovery_token, email_change_token_new, email_change)
+    values ('00000000-0000-0000-0000-000000000000', r.id, 'authenticated', 'authenticated', r.correo,
+      extensions.crypt(gen_random_uuid()::text, extensions.gen_salt('bf')),
+      now(), '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', '');
+    insert into auth.identities (provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+    values (r.id::text, r.id, jsonb_build_object('sub', r.id::text, 'email', r.correo, 'email_verified', true), 'email', now(), now(), now());
+    insert into public.user_profiles (user_id, account_id, role, active, display_name, terms_accepted_at, welcome_completed_at)
+    values (r.id, r.cuenta, 'admin', true, r.nombre, now(), now());
+  end loop;
 
   for r in select * from (values
       ('90500000-0000-4000-8000-0000000000e1'::uuid, 'Asador de Prueba Norte, S.L.', 'B91000901', '1', '#B4532A'),

@@ -4,9 +4,9 @@
 -- 20261108T1226_g05_disparadores (los de public.user_profiles y
 -- public.company_tax_presenter, pasos 7 a 9), con \i
 -- dentro de la transacción y ROLLBACK: staging no cambia. Contra la asesoría
--- de demo del P01 (seed_p01_despacho_staging.sql) y la de G05
--- (seed_g05_entrar_staging.sql: un cliente de Folvy con dos sociedades del
--- mismo nombre comercial). Todo inventado (T11).
+-- de demo del P01 (seed_p01_despacho_staging.sql, que ya está en staging) y
+-- la gestoría de G05 (seed_g05_entrar_staging.sql: un cliente de Folvy con dos
+-- sociedades del mismo nombre comercial). Todo inventado (T11).
 --
 --   1. Laura (administración de la asesoría) entra en Hostal de Prueba Mayor:
 --      una fila de acceso, manager, con el despacho, la bienvenida copiada y
@@ -40,7 +40,6 @@ set local statement_timeout = '120s';
 
 \i supabase/migrations/20261108T1225_g05_entrar_en_el_cliente.sql
 \i supabase/migrations/20261108T1226_g05_disparadores.sql
-\i supabase/seeds/conta/seed_p01_despacho_staging.sql
 \i supabase/seeds/conta/seed_g05_entrar_staging.sql
 
 create function pg_temp.id(s text) returns uuid language sql immutable as $f$ select ('d5ac0000-0000-4000-8000-' || lpad(s, 12, '0'))::uuid $f$;
@@ -103,7 +102,7 @@ declare r jsonb; n int;
 begin
   r := public.conta_despacho_entrar('d5ac0000-0000-4000-8000-00000000c01e');
   if r->>'account_id' <> 'd5ac0000-0000-4000-8000-00000000c010' then raise exception 'PRUEBA G05 · 1b: entrar como usuario no abre Hostal: %', r; end if;
-  if public.conta_despacho_donde()->'abierto' is null or jsonb_array_length(public.conta_despacho_mis_clientes()) < 10 or not public.mi_bienvenida_hecha() then
+  if public.conta_despacho_donde()->'abierto' is null or jsonb_array_length(public.conta_despacho_mis_clientes()) < 8 or not public.mi_bienvenida_hecha() then
     raise exception 'PRUEBA G05 · 1b: como usuario, dónde, los clientes o la bienvenida no cuadran.';
   end if;
   select count(*) into n from public.conta_despacho_entrada;
@@ -175,23 +174,28 @@ begin
   perform public.conta_despacho_entrar(pg_temp.id('c01e'));
   l := public.conta_despacho_mis_clientes();
   select count(*) into n from jsonb_array_elements(l);
-  if n <> (select count(*) from public.conta_despacho_clientes(pg_temp.id('a0'))) or n < 10 then
+  if n <> (select count(*) from public.conta_despacho_clientes(pg_temp.id('a0'))) or n < 8 then
     raise exception 'PRUEBA G05 · 5: salen % clientes, y tienen que ser los % con permiso.', n, (select count(*) from public.conta_despacho_clientes(pg_temp.id('a0')));
-  end if;
-  select array_agg(x->>'razon_social' order by x->>'razon_social') into razones
-    from jsonb_array_elements(l) x where x->>'nombre' = 'Asador de Prueba';
-  if razones is distinct from array['Asador de Prueba Norte, S.L.', 'Asador de Prueba Sur, S.L.'] then
-    raise exception 'PRUEBA G05 · 5: las dos «Asador de Prueba» no salen con su razón social: %', razones;
   end if;
   if exists (select 1 from jsonb_array_elements(l) x where x->>'company_id' = pg_temp.id('c09e')::text) then
     raise exception 'PRUEBA G05 · 5: sale el cliente que retiró el permiso.';
+  end if;
+  if exists (select 1 from jsonb_array_elements(l) x where x->>'despacho_id' <> pg_temp.id('a0')::text) then
+    raise exception 'PRUEBA G05 · 5: salen clientes de otra gestoría.';
+  end if;
+  -- La gestora de G05: las dos «Asador de Prueba», cada una con su razón social.
+  perform pg_temp.como(pg_temp.g('a1'));
+  select array_agg(x->>'razon_social' order by x->>'razon_social') into razones
+    from jsonb_array_elements(public.conta_despacho_mis_clientes()) x where x->>'nombre' = 'Asador de Prueba';
+  if razones is distinct from array['Asador de Prueba Norte, S.L.', 'Asador de Prueba Sur, S.L.'] then
+    raise exception 'PRUEBA G05 · 5: las dos «Asador de Prueba» no salen con su razón social: %', razones;
   end if;
   -- Quien no es de ninguna asesoría: lista vacía.
   perform pg_temp.como(pg_temp.id('c02a'));
   if jsonb_array_length(public.conta_despacho_mis_clientes()) <> 0 then
     raise exception 'PRUEBA G05 · 5: un cliente ve clientes de la asesoría.';
   end if;
-  raise notice 'PRUEBA G05 · 5: % clientes desde dentro, por razón social; ninguno para quien no es de la asesoría. OK.', n;
+  raise notice 'PRUEBA G05 · 5: % clientes desde dentro, solo de su despacho; las dos «Asador de Prueba» por razón social; ninguno para quien no es de la asesoría. OK.', n;
 end $$;
 
 -- ── 6. Volver ───────────────────────────────────────────────────────────────
@@ -214,19 +218,19 @@ end $$;
 do $$
 declare v_activa boolean;
 begin
-  perform pg_temp.como(pg_temp.id('a1'));
+  perform pg_temp.como(pg_temp.g('a1'));
   perform public.conta_despacho_entrar(pg_temp.g('e1'));
   -- Una de las dos sociedades retira el permiso: el acceso sigue (la otra lo da).
-  update public.company_tax_presenter set revoked_at = now(), revoked_by = pg_temp.id('a1') where company_id = pg_temp.g('e1');
-  select active into v_activa from public.user_profiles where user_id = pg_temp.id('a1') and account_id = pg_temp.g('c0');
+  update public.company_tax_presenter set revoked_at = now(), revoked_by = pg_temp.g('a1') where company_id = pg_temp.g('e1');
+  select active into v_activa from public.user_profiles where user_id = pg_temp.g('a1') and account_id = pg_temp.g('c0');
   if not v_activa then raise exception 'PRUEBA G05 · 7: retirar una de dos ha apagado el acceso.'; end if;
   -- La última: se apaga, y la fila sigue.
-  update public.company_tax_presenter set revoked_at = now(), revoked_by = pg_temp.id('a1') where company_id = pg_temp.g('e2');
-  select active into v_activa from public.user_profiles where user_id = pg_temp.id('a1') and account_id = pg_temp.g('c0');
+  update public.company_tax_presenter set revoked_at = now(), revoked_by = pg_temp.g('a1') where company_id = pg_temp.g('e2');
+  select active into v_activa from public.user_profiles where user_id = pg_temp.g('a1') and account_id = pg_temp.g('c0');
   if v_activa is null then raise exception 'PRUEBA G05 · 7: la fila de acceso se ha borrado; tiene que quedar apagada.'; end if;
   if v_activa then raise exception 'PRUEBA G05 · 7: sin permiso vivo, el acceso sigue encendido.'; end if;
   perform pg_temp.falla(format('select public.cambiar_empresa(%L)', pg_temp.g('c0')), 'NO_AUTORIZADO');
-  -- Hostal (otra cuenta) no se toca.
+  -- El acceso de Laura a Hostal (otra cuenta, otra gestoría) no se toca.
   if not (select active from public.user_profiles where user_id = pg_temp.id('a1') and account_id = pg_temp.id('c010')) then
     raise exception 'PRUEBA G05 · 7: se ha apagado el acceso de otra cuenta.';
   end if;
@@ -238,9 +242,9 @@ do $$
 declare n int; v_activa boolean;
 begin
   update public.company_tax_presenter set revoked_at = null, revoked_by = null where company_id = pg_temp.g('e2');
-  perform pg_temp.como(pg_temp.id('a1'));
+  perform pg_temp.como(pg_temp.g('a1'));
   perform public.conta_despacho_entrar(pg_temp.g('e2'));
-  select count(*), bool_and(active) into n, v_activa from public.user_profiles where user_id = pg_temp.id('a1') and account_id = pg_temp.g('c0');
+  select count(*), bool_and(active) into n, v_activa from public.user_profiles where user_id = pg_temp.g('a1') and account_id = pg_temp.g('c0');
   if n <> 1 or not v_activa then raise exception 'PRUEBA G05 · 8: % filas, activa %.', n, v_activa; end if;
   raise notice 'PRUEBA G05 · 8: con el permiso devuelto, entrar reactiva la misma fila. OK.';
 end $$;

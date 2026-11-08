@@ -1,9 +1,9 @@
 # G05 · La gestoría entra en su cliente (rama conta/g05-entrar-en-el-cliente).
 #   La 1225 solo añade y se puede volver a pasar: de verdad desde la rama. La
 #   1226 (dos disparadores en tablas que existen), en ROLLBACK desde la rama y
-#   de verdad al fusionar. La semilla: un cliente de Folvy de la asesoría de
-#   demo del P01 con dos sociedades del mismo nombre comercial («Asador de
-#   Prueba»), inventado. Y su prueba, con ROLLBACK: entrar dos veces, quien no
+#   de verdad al fusionar. La semilla: una gestoría de demo propia (para no
+#   tocar los 8 clientes de la del P01) con un cliente de Folvy de dos
+#   sociedades del mismo nombre comercial («Asador de Prueba»), inventado. Y su prueba, con ROLLBACK: entrar dos veces, quien no
 #   es del despacho, un acceso no abre otro, dónde se está, los clientes desde
 #   dentro, volver, la retirada sola, reactivar, la bienvenida y la vuelta atrás.
 supabase/migrations/20261108T1225_g05_entrar_en_el_cliente.sql
