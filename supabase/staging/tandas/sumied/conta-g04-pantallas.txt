@@ -1,0 +1,5 @@
+# G04 · Tarea 4: la 1511 («+ Crear › Servicio») y su prueba (ROLLBACK, datos
+# inventados): apagado por defecto, crear sin precio y con precio, lo que no
+# entra, «Cobrado por otra vía» sin depender del interruptor y la vuelta atrás.
+supabase/migrations/20261108T1511_g04_servicio_crear.sql
+supabase/staging/sql/20261108_g04_servicio_crear_prueba.sql

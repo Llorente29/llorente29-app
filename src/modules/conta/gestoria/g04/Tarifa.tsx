@@ -20,6 +20,8 @@ import { pruebalo, reglasDe, type DetalleTarifa, type FormaTipo, type ModeloTari
 import { mesEnPalabras } from './enlaces'
 
 export interface AccionesTarifa {
+  /** «+ Crear › Servicio»: con su forma de cobro y, si se da, su precio general desde un mes. */
+  crearServicio: (nombre: string, forma: Forma, conPrecio: boolean, desde: string) => Promise<string>
   guardarPrecio: (o: Objetivo, f: Forma, desde: string) => Promise<string>
   guardarNivel: (servicioId: string, nombre: string, orden: number, incluye: string[], precio: Forma | null, desde: string) => Promise<string>
   guardarPaquete: (paqueteId: string | null, nombre: string, descripcion: string | null, excesoCent: number | null,
@@ -130,7 +132,7 @@ export function Tarifa(p: PropsTarifa) {
   const item = (e: (typeof modelo.entradas)[number]) => (
     <button key={e.id} type="button" className="g4-tf-item" aria-current={sel === e.id ? 'true' : 'false'} onClick={() => { setSel(e.id); setAviso(null) }}>
       <span className="g4-tf-item-textos"><span className="g4-tf-item-nombre">{e.nombre}</span><span className="g4-tf-item-resumen">{e.resumen}</span></span>
-      <span className="g4-tf-item-clientes">{e.clientes ? `${e.clientes} ${e.clientes === 1 ? 'cliente' : 'clientes'}` : 'Ningún cliente'}</span>
+      <span className="g4-tf-item-clientes">{e.clientes ? `${e.clientes} ${e.clientes === 1 ? 'cliente' : 'clientes'}` : e.cuandoToque ? 'Cuando toque' : 'Ningún cliente'}</span>
     </button>
   )
   return (
@@ -162,12 +164,7 @@ export function Tarifa(p: PropsTarifa) {
       </header>
 
       {!detalle && <Hecho aviso={aviso} />}
-      {crear === 'servicio' && (
-        <section className="g4-tf-crear" aria-label="Crear un servicio">
-          <p className="g4-hecho" role="alert">Crear un servicio nuevo aún no se puede desde aquí: la base no tiene todavía la función que lo guarda. Mientras tanto, los servicios son los que ya tiene la empresa; a cada uno se le pueden poner niveles y precio.</p>
-          <button type="button" className="g4-boton" onClick={() => setCrear(null)}>Cerrar</button>
-        </section>
-      )}
+      {crear === 'servicio' && <CrearServicio {...p} alCerrar={() => setCrear(null)} />}
       {crear === 'paquete' && <CrearPaquete {...p} alCerrar={() => setCrear(null)} />}
 
       <div className="g4-tf-cuerpo">
@@ -448,6 +445,56 @@ function Especiales({ d, rutaFicha }: { d: DetalleTarifa; rutaFicha: (id: string
         </div>
       ))}
     </div>
+  )
+}
+
+function CrearServicio(p: PropsTarifa & { alCerrar: () => void }) {
+  const [nombre, setNombre] = useState('')
+  const [tipo, setTipo] = useState<FormaTipo>('fijo')
+  const [periodo, setPeriodo] = useState<'mes' | 'anio' | 'vez'>('mes')
+  const [precio, setPrecio] = useState('')
+  const [desde, setDesde] = useState(siguientes(p.hoy, 1)[0])
+  const [aviso, setAviso] = useState<Aviso>(null)
+  const sencilla = tipo === 'fijo' || tipo === 'por_trabajador'
+  const cent = aCent(precio)
+  const malo = sencilla && precio.trim() !== '' && cent === null
+  return (
+    <section className="g4-tf-crear" aria-label="Crear un servicio">
+      <div className="g4-tf-cambio-titulo">Nuevo servicio</div>
+      <div className="g4-tf-formulario">
+        <label className="g4-tf-campo g4-tf-ancho">Nombre<input value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Por ejemplo, Asesoría fiscal" /></label>
+      </div>
+      <div className="g4-tf-bloque-titulo">Cómo se cobra</div>
+      <div role="radiogroup" aria-label="Cómo se cobra el servicio nuevo" className="g4-tf-formas">
+        {FORMAS.map((f) => (
+          <button key={f.tipo} type="button" role="radio" aria-checked={tipo === f.tipo} className="g4-tf-forma" onClick={() => setTipo(f.tipo)}>
+            <span className="g4-tf-forma-titulo">{f.titulo}</span><span className="g4-tf-forma-texto">{f.texto}</span>
+          </button>
+        ))}
+      </div>
+      <div className="g4-tf-formulario">
+        {tipo === 'fijo' && (
+          <label className="g4-tf-campo">Cada cuánto
+            <select value={periodo} onChange={(e) => setPeriodo(e.target.value as 'mes' | 'anio' | 'vez')}>
+              <option value="mes">Cada mes</option><option value="anio">Cada año</option><option value="vez">Cada vez (trabajo suelto)</option>
+            </select>
+          </label>
+        )}
+        {sencilla
+          ? <label className="g4-tf-campo">Precio de tarifa (€{tipo === 'por_trabajador' ? ' por trabajador' : ''}), si lo tiene<input inputMode="decimal" value={precio} onChange={(e) => setPrecio(e.target.value)} placeholder="Sin precio: cada cliente con el suyo" /></label>
+          : <p className="g4-tf-nota g4-tf-ancho">Los tramos se ponen después de crearlo, en «Cómo se cobra». Hasta entonces, sin precio de tarifa: cada cliente con el suyo.</p>}
+      </div>
+      <Hecho aviso={aviso} />
+      <div className="g4-tf-guardar">
+        {sencilla && cent !== null && <Desde hoy={p.hoy} valor={desde} alCambiar={setDesde} etiqueta="Su precio, desde" />}
+        <button type="button" className="g4-boton" onClick={p.alCerrar}>Cancelar</button>
+        <button type="button" className="g4-boton" data-tipo="primario" disabled={!nombre.trim() || malo} onClick={() => conAviso(setAviso, () => {
+          const f: Forma = tipo === 'fijo' ? { tipo: 'fijo', periodo, importeCent: cent ?? 0 } : tipo === 'por_trabajador' ? { tipo: 'por_trabajador', importeCent: cent ?? 0 } : formaNueva(tipo, null)
+          return p.acciones.crearServicio(nombre.trim(), f, sencilla && cent !== null, desde)
+        })}>Crear el servicio</button>
+        {malo && <span className="g4-tf-nota">Escribe el precio en euros, por ejemplo 60,50.</span>}
+      </div>
+    </section>
   )
 }
 

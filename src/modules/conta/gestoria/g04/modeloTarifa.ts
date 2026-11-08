@@ -25,6 +25,8 @@ export interface Entrada {
   nombre: string
   resumen: string
   clientes: number
+  /** Un trabajo suelto (se cobra cada vez que se hace): sin clientes fijos, «Cuando toque». */
+  cuandoToque?: boolean
 }
 
 export interface Regla { tramo: string; importe: string; unidad: string }
@@ -65,6 +67,13 @@ export function formaEnPalabras(f: Forma): string {
       return cerrado && despues ? `Tramo ${cerrado.desde}–${cerrado.hasta ?? '…'} por ${sinCentimos(cerrado.importeCent)}, después ${sinCentimos(despues.importeCent)}` : 'Tramo y por trabajador'
     }
   }
+}
+
+/** El resumen de la lista de la izquierda (palabras del tablero Tarifa): «Fijo · 605 € al año», «Trabajo suelto · 60 €». */
+export function resumenDeForma(f: Forma): string {
+  if (f.tipo === 'fijo') return f.periodo === 'vez' ? `Trabajo suelto · ${sinCentimos(f.importeCent)}` : `Fijo · ${sinCentimos(f.importeCent)} al ${f.periodo === 'anio' ? 'año' : 'mes'}`
+  if (f.tipo === 'por_trabajador') return `${sinCentimos(f.importeCent)} por trabajador`
+  return formaEnPalabras(f)
 }
 
 /** Las filas de «Cómo se cobra» de una forma. */
@@ -140,9 +149,11 @@ export function modeloTarifa(d: DatosClientes, empresaId: string, hoy: string): 
         resumen = `${niveles.length} ${niveles.length === 1 ? 'nivel' : 'niveles'}${ps.length ? ` · de ${sinCentimos(Math.min(...ps)).replace(' €', '')} a ${sinCentimos(Math.max(...ps))} al mes` : ''}`
       } else {
         const g = general({ tipo: 'servicio', servicioId: sid })
-        resumen = g ? formaEnPalabras(g.forma) : 'Sin precio de tarifa · cada cliente con el suyo'
+        resumen = g ? resumenDeForma(g.forma) : 'Sin precio de tarifa · cada cliente con el suyo'
       }
-      return { id: `servicio:${sid}`, tipo: 'servicio' as const, nombre: String(s.nombre), resumen, clientes: clientesDe(delServicio(sid)) }
+      const suelto = !niveles.length && general({ tipo: 'servicio', servicioId: sid })?.forma
+      return { id: `servicio:${sid}`, tipo: 'servicio' as const, nombre: String(s.nombre), resumen, clientes: clientesDe(delServicio(sid)),
+        cuandoToque: !!suelto && suelto.tipo === 'fijo' && suelto.periodo === 'vez' }
     }),
     ...catalogo.paquetes.filter((p) => p.empresaId === empresaId).map((p) => {
       const g = general({ tipo: 'paquete', paqueteId: p.id })

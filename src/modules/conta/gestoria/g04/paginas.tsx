@@ -206,6 +206,10 @@ export function TarifaG04Page() {
         }), mesEnPalabras(hoy))
       }}
       acciones={{
+        crearServicio: (nombre, f, conPrecio, desde) => tras(async () => {
+          const g = formaParaGuardar(f)
+          return (await acciones.crearServicio(e, nombre, g.forma, g.periodo, conPrecio ? g.importe : null, conPrecio ? g.tramos : null, conPrecio ? `${desde}-01` : null, false)).frase
+        }),
         guardarPrecio: (o, f, desde) => tras(() => precio(o, f, desde)),
         guardarNivel: (servicio, nombre, orden, incluye, f, desde) => tras(async () => {
           const r = await acciones.guardarNivel(e, servicio, null, nombre, orden, incluye, false, false)

@@ -100,6 +100,8 @@ export const acciones = {
     forma: string, periodo: string | null, importe: number | null, tramos: unknown[] | null, desde: string, ensayo: boolean) =>
     hacer('conta_tarifa_precio_guardar', { p_company: empresa, p_servicio: o.servicio ?? null, p_nivel: o.nivel ?? null, p_paquete: o.paquete ?? null, p_party: cliente,
       p_forma: forma, p_periodo: periodo, p_importe: importe, p_tramos: tramos, p_desde: desde, p_ensayo: ensayo }),
+  crearServicio: (empresa: string, nombre: string, forma: string, periodo: string | null, importe: number | null, tramos: unknown[] | null, desde: string | null, ensayo: boolean) =>
+    hacer('conta_tarifa_servicio_crear', { p_company: empresa, p_nombre: nombre, p_forma: forma, p_periodo: periodo, p_importe: importe, p_tramos: tramos, p_desde: desde, p_ensayo: ensayo }),
   guardarNivel: (empresa: string, servicio: string, nivel: string | null, nombre: string, orden: number, incluye: string[], masElegido: boolean, ensayo: boolean) =>
     hacer('conta_tarifa_nivel_guardar', { p_company: empresa, p_servicio: servicio, p_nivel: nivel, p_nombre: nombre, p_orden: orden, p_incluye: incluye, p_mas_elegido: masElegido, p_ensayo: ensayo }),
   guardarPaquete: (empresa: string, paquete: string | null, nombre: string, descripcion: string | null, exceso: number | null,

@@ -1,0 +1,8 @@
+{
+ "_que": "G04 · Tarea 4 · contexto de producción, medido en SOLO LECTURA el 08/11 (analizar.mjs sql-contexto, por el MCP de lectura). La 1511 solo añade una función nueva, que hoy no existe; ningún servicio con clave «g04:»; el nombre no está en el historial. Nada en el camino del pedido.",
+ "medido": "2026-11-08T14:20Z",
+ "tanda": {
+  "supabase/migrations/20261108T1511_g04_servicio_crear.sql": "7cbe15548d8ea7cda658503937166d6f"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
