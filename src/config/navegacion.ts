@@ -261,6 +261,8 @@ export const CONTA = {
     /** G01 · Ventas › Clientes y cuotas (solo asesoría): los clientes de la gestoría, sus tarifas y lo que cobra GoCardless. */
     clientesCuotas: 'ventas/clientes-y-cuotas',
     tarifasGestoria: 'ventas/clientes-y-cuotas/tarifas',
+    /** G04 · La ficha completa de un cliente de la gestoría (con la empresa que le factura). */
+    clienteGestoria: 'ventas/clientes-y-cuotas/cliente',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
     /** S01j·2 · La ficha de UNA liquidación de plataforma: sus cifras, su factura de comisión y el correo del que salió. */
     liquidacionFicha: 'ventas/liquidaciones/liquidacion/:id',
@@ -467,6 +469,8 @@ export const rutaCobros = (pestana?: string): string => `${rutaConta(CONTA.rutas
 export const rutaRemesaCobros = (remesaId: string): string => rutaConta(CONTA.rutas.remesaCobros, { remesaId })
 export const rutaClientesCuotas = (): string => rutaConta(CONTA.rutas.clientesCuotas)
 export const rutaTarifasGestoria = (): string => rutaConta(CONTA.rutas.tarifasGestoria)
+export const rutaClienteGestoria = (cliente: string, empresa: string | null): string =>
+  `${rutaConta(CONTA.rutas.clienteGestoria)}/${cliente}${empresa ? `?${new URLSearchParams({ empresa })}` : ''}`
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
 /** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
 export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))

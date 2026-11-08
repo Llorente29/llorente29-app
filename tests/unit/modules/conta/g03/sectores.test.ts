@@ -64,7 +64,8 @@ describe('el sector de una empresa', () => {
 
 describe('el menú pregunta al paquete', () => {
   it('Clientes y cuotas sale con el sector Gestoría, no con «la cuenta es asesoría»', () => {
-    const t = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((x) => x.id === 'clientesCuotas')!
+    // G04 · Es un apartado propio (Clientes y Tarifa y paquetes), con su condición.
+    const t = PRODUCTOS.find((p) => p.id === 'clientesCuotas')!
     expect(t.solo).toBe('gestoria')
     const base = { hosteleria: false, diez: false, interruptores: new Set<string>() }
     expect(cumple(t.solo, { ...base, asesoria: true, gestoria: false })).toBe(false)

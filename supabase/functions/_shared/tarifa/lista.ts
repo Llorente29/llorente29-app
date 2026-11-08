@@ -50,10 +50,10 @@ const sinTildes = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLo
 const nifLimpio = (s: string) => s.replace(/[^0-9a-z]/gi, '').toLowerCase()
 
 /** Las filas que salen con la empresa elegida: una por cliente y empresa, sin repetir. */
-export function filasDe(filas: readonly FilaDeCliente[], elegida: Elegida): FilaDeCliente[] {
+export function filasDe<F extends FilaDeCliente>(filas: readonly F[], elegida: Elegida): F[] {
   const vistas = new Set<string>()
   const conEmpresa = new Set(filas.filter((f) => f.empresaId !== null).map((f) => f.clienteId))
-  const out: FilaDeCliente[] = []
+  const out: F[] = []
   for (const f of filas) {
     if (elegida.tipo === 'empresa' && f.empresaId !== elegida.empresaId) continue
     // Un cliente con alguna empresa nunca sale además «sin empresa».
@@ -86,7 +86,7 @@ export function pasaLaBusqueda(f: FilaDeCliente, texto: string): boolean {
 }
 
 /** Primero los que necesitan algo; después, por nombre (y, con el mismo nombre, por empresa). */
-export function ordenar(filas: readonly FilaDeCliente[]): FilaDeCliente[] {
+export function ordenar<F extends FilaDeCliente>(filas: readonly F[]): F[] {
   return [...filas].sort((a, b) =>
     (Number(b.pendientes > 0) - Number(a.pendientes > 0))
     || a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' })

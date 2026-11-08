@@ -11,6 +11,8 @@
 
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
+// G04 · Los títulos y las cifras de Clientes, la ficha y «Tarifa y paquetes» (la maqueta del 08/11).
+import '@fontsource-variable/space-grotesk'
 // S02 · Inter es la letra del patrón, para todas las marcas (diseno/tokens.css): la trae tema.css.
 import '../../../marca/tema.css'
 import './tokens.css'
@@ -21,6 +23,7 @@ import './traer.css'
 import './tercero.css'
 import './diario.css'
 import './gestoria.css'
+import './clientesG04.css' // G04 · Clientes, ficha y «Tarifa y paquetes» (la maqueta del 08/11)
 import './libros.css'
 import './compras.css'
 import './documentos.css'
