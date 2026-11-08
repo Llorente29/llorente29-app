@@ -20,6 +20,8 @@ import { Ficha } from './Ficha'
 import { Clientes } from './Clientes'
 import { descargarPrecios, enlaceAlCrm, exportar, imprimirPrecios, imprimirTarifa, mesEnPalabras } from './enlaces'
 import { Tarifa } from './Tarifa'
+import { Asignar } from './Asignar'
+import { clientesParaCasar, porAsignar } from './asignar'
 import { formaParaGuardar, formaEnPalabras, modeloTarifa } from './modeloTarifa'
 import { euros, type Forma, type Objetivo } from '../../../../../supabase/functions/_shared/tarifa/precio'
 
@@ -47,6 +49,10 @@ export function ClientesG04Page() {
   const lasDos = params.get('empresa') === 'las-dos' && empresas.length > 1
   const lista = empresas.map((e) => ({ id: e.id, nombre: e.nombre }))
   const elegidas = lasDos ? lista.map((e) => e.id) : [activa.id]
+  if (params.get('ver') === 'sin-cliente') {
+    return <AsignarG04 accountId={accountId!} datos={d.datos} empresas={lista} elegidas={elegidas} lasDos={lasDos} recargar={d.recargar}
+      rutaVolver={lasDos ? `${rutaClientesCuotas()}?empresa=las-dos` : rutaClientesCuotas()} />
+  }
   const hoy = hoyEnMadrid()
   const modelo = modeloClientes(d.datos, lista, elegidas, hoy)
   const crm = d.datos.crm[0] ?? null
@@ -73,6 +79,19 @@ export function ClientesG04Page() {
         d.recargar()
         return cargos.length === 1 ? frases[0] : `Guardados ${cargos.length} cargos como cobrados ${via === 'transferencia' ? 'por transferencia' : 'en efectivo'}. Ya no salen en «Te deben». En GoCardless no cambia nada.`
       }} />
+  )
+}
+
+/** «Asignar a un cliente»: lee los clientes de GoCardless (nombre, email y NIF, para proponer) y une con conta_gestoria_enlazar. */
+function AsignarG04({ accountId, datos, empresas, elegidas, lasDos, recargar, rutaVolver }: {
+  accountId: string; datos: Awaited<ReturnType<typeof leerClientes>>; empresas: { id: string; nombre: string }[]; elegidas: string[]; lasDos: boolean; recargar: () => void; rutaVolver: string
+}) {
+  const gc = useLeer(() => leerTodo('conta_gc_cliente', 'company_id, gc_id, nombre, correo, nif', { columna: 'account_id', id: accountId }, ['company_id', 'gc_id']), `${accountId}:g04-gc-clientes`)
+  if (gc.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes de GoCardless: ${gc.error}`} reintentar={gc.recargar} />
+  if (!gc.datos) return <TarjetaCargando />
+  return (
+    <Asignar lista={porAsignar(datos, gc.datos, empresas, elegidas)} clientes={clientesParaCasar(datos)} lasDos={lasDos} rutaVolver={rutaVolver}
+      alUnir={async (empresa, gcCliente, cliente) => { const r = await acciones.enlazar(empresa, gcCliente, cliente); recargar(); return r.frase }} />
   )
 }
 
