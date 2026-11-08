@@ -1,0 +1,13 @@
+# G04 · Tarea 4 (Julio, nº 15, 08/11): «+ Crear › Servicio» en «Tarifa y
+# paquetes». Rama conta/g04-pantallas. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   1511  SOLO AÑADE: la función conta_tarifa_servicio_crear (nombre, forma de
+#         cobro y precio general opcional). Ensaya por defecto y solo escribe
+#         con los cambios de tarifa encendidos en la empresa, como el resto de
+#         la tarifa: en la cuenta real de QBO siguen apagados (06/11).
+#
+# No toca datos. No lee ni escribe en GoCardless ni en el CRM. Nada en el
+# camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g04-servicio-crear.sql
+supabase/migrations/20261108T1511_g04_servicio_crear.sql

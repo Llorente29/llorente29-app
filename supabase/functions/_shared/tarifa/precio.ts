@@ -96,7 +96,7 @@ export interface Paquete {
 }
 
 /** Un trabajador; «altaEl» y «bajaEl» (AAAA-MM-DD), el día, si se sabe (para lo proporcional). */
-export interface Trabajador { nombre: string; desde: Mes; hasta: Mes | null; altaEl?: string | null; bajaEl?: string | null }
+export interface Trabajador { nombre: string; desde: Mes; hasta: Mes | null; altaEl?: string | null; bajaEl?: string | null; /** La línea que lo cobra (para «Dar de baja»). */ lineaId?: string }
 
 /** Los ajustes de cobro de la gestoría (los guarda conta_gestoria_ajustes). */
 export interface AjustesDeCobro {

@@ -29,7 +29,7 @@ import { CONTA, INDICE_AJUSTES } from '@/config/navegacion'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
 import type { Sector } from '@/modules/conta/sectores/sectores'
 
-export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
+export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'clientesCuotas' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
 
 /**
  * Lo que solo sale si la empresa (o la cuenta) lo tiene. `hosteleria` y
@@ -172,6 +172,16 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
+    // G04 (maqueta del 08/11) · «Clientes y cuotas», apartado propio de la gestoría, con sus dos
+    // entradas: Clientes (la lista, el panel y la ficha) y Tarifa y paquetes. Sale con el sector
+    // Gestoría de la empresa activa (G03); antes era una pestaña de Ventas.
+    id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [], solo: 'gestoria', grupo: 'finanzas',
+    pestanas: [
+      { id: 'clientesGestoria', etiqueta: 'Clientes', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas, R.clienteGestoria] },
+      { id: 'tarifasGestoria', etiqueta: 'Tarifa y paquetes', icono: 'facturas', ruta: R.tarifasGestoria, prefijos: [R.tarifasGestoria] },
+    ],
+  },
+  {
     // V01 (Julio, 24/10) · Ventas sustituye a Facturación: Facturas (luego
     // Presupuestos y Cobros) y, solo si vende en hostelería, Cierres del día y
     // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona. El id sigue
@@ -184,9 +194,6 @@ export const PRODUCTOS: Producto[] = [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       // PC01 · E3 · Cobros (tableros cobros-1 y cobros-2): lo que te deben, las remesas de recibos y los devueltos.
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: R.cobros, prefijos: [R.cobros] },
-      // G01 · Clientes y cuotas: los clientes de la gestoría, sus tarifas y lo que cobra GoCardless.
-      // G03 · Sale con el sector Gestoría de la empresa activa (antes, con «la cuenta es asesoría»).
-      { id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas], solo: 'gestoria' },
       // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te
       // pagan quienes cobran por ti: plataformas, el datáfono, Amazon, Stripe…),
       // encima del bloque «Hostelería». La ficha de la del socio de marca (y la de

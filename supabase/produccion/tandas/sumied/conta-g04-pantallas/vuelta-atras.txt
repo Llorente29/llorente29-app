@@ -1,0 +1,4 @@
+# G04 · la vuelta atrás de la 1511: fuera la función y los servicios que creó
+# sin uso; los que ya cobran a un cliente o están en un paquete se quedan.
+cuenta: scripts/conta/produccion/cuentas/g04-servicio-crear.sql
+supabase/vuelta-atras/20261108T1511_g04_servicio_crear.down.sql

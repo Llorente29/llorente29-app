@@ -19,7 +19,25 @@ import { foto, medir, type Empresa } from './medirMenu'
 import { HOY } from './poblacion'
 
 const ANTES = JSON.parse(readFileSync(join(__dirname, 'foto-antes.json'), 'utf8')) as ReturnType<typeof foto>
-const vistaAntes = (quien: string) => Object.fromEntries(Object.entries(ANTES.empresas[quien]).map(([c, i]) => [c, ANTES.vistas[i]]))
+const vistaAntes = (quien: string) => Object.fromEntries(Object.entries(ANTES.empresas[quien]).map(([c, i]) => [c, conG04(ANTES.vistas[i])]))
+
+/**
+ * G04 (maqueta del 08/11) · El único cambio que se quiere en el menú: «Clientes
+ * y cuotas» deja de ser una pestaña de Ventas y pasa a ser un apartado propio,
+ * con Clientes y Tarifa y paquetes (solo donde salía: con el sector Gestoría).
+ * Lo demás, igual que en la foto de antes.
+ */
+function conG04(v: unknown): unknown {
+  const x = v as { menu: string[]; ordenes: string[] }
+  if (!x.menu.some((l) => l.startsWith('facturacion:') && l.split(' ').includes('clientesCuotas'))) return v
+  const menu = x.menu.flatMap((l) => (l.startsWith('facturacion:')
+    ? ['clientesCuotas: clientesGestoria tarifasGestoria', l.split(' ').filter((t) => t !== 'clientesCuotas').join(' ')] : [l]))
+  // En el buscador, sus dos entradas van donde va el apartado: antes de las de Ventas.
+  const ordenes = x.ordenes.filter((o) => o !== 'ir.facturacion.clientesCuotas')
+  const i = ordenes.findIndex((o) => o.startsWith('ir.facturacion.'))
+  ordenes.splice(i < 0 ? ordenes.length : i, 0, 'ir.clientesCuotas.clientesGestoria', 'ir.clientesCuotas.tarifasGestoria')
+  return { ...x, menu, ordenes }
+}
 
 const despues = (e: Empresa) => medir(e,
   (fila, asesoria) => ({ ...loQueEnciendeLaEmpresa(fila, asesoria), asesoria }),
