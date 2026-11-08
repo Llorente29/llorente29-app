@@ -1,53 +1,29 @@
 // src/modules/conta/gestoria/g04/datos.ts
 //
 // G04 · Tarea 4 · Lo que leen y hacen las pantallas nuevas de Clientes, la
-// ficha y «Tarifa y paquetes». TODAS las lecturas paginan (Julio, 08/11): de
-// 1.000 en 1.000, en un orden fijo, hasta que una página vuelve corta. Así las
-// cifras y los recuentos son de todos (el fallo del 07/11: se cortaba en 1.000).
-// Lee las vistas de la 0930 (con su RLS: solo lo de la cuenta) y las tablas de
-// GoCardless; hace por las funciones de la 0930, que ensayan por defecto.
+// ficha y «Tarifa y paquetes».
+//
+// Leer (Julio, nº 21, 08/11: toda pantalla abre en menos de 1 s, medido en el
+// navegador con datos reales): UNA llamada por pantalla, ya agregada en la
+// base, a las funciones de la 2308 (SECURITY DEFINER, el permiso de la cuenta
+// comprobado una vez y cada tabla filtrada por la cuenta). Nada de leer los
+// cobros o las suscripciones enteros en el navegador:
+//   · conta_pantalla_clientes: todo lo que pinta Clientes (y «Tarifa y paquetes»);
+//   · conta_pantalla_ficha: lo que solo hace falta al abrir un cliente;
+//   · conta_pantalla_asignar: «Asignar a un cliente».
+// Hacer, por las funciones de la 0930, que ensayan por defecto.
 
-import { funcion, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { rpc } from '@/modules/conta/services/bd'
 
 export type Fila = Record<string, unknown>
-export const PAGINA = 1000
-
-/** Toda una vista o tabla de la cuenta, página a página, en un orden fijo. */
-export async function leerTodo(nombre: string, select: string, cuenta: { columna: string; id: string }, orden: string[],
-  filtro?: (q: unknown) => unknown): Promise<Fila[]> {
-  const todas: Fila[] = []
-  for (let desde = 0; ; desde += PAGINA) {
-    let q = (tabla(nombre).select(select) as unknown as { eq: (c: string, v: string) => unknown }).eq(cuenta.columna, cuenta.id)
-    if (filtro) q = filtro(q)
-    for (const o of orden) q = (q as { order: (c: string, x: { ascending: boolean; nullsFirst: boolean }) => unknown }).order(o, { ascending: true, nullsFirst: true })
-    const { data, error } = await (q as { range: (a: number, b: number) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }> }).range(desde, desde + PAGINA - 1)
-    if (error) throw new Error(mensaje(`No se ha podido leer ${nombre.replace(/^conta_(consulta_)?/, '').replace(/_/g, ' ')}`, error))
-    const filas = (data ?? []) as Fila[]
-    todas.push(...filas)
-    if (filas.length < PAGINA) return todas
-  }
-}
-
-/**
- * Toda una función de lectura (de las que comprueban la cuenta una sola vez),
- * página a página y en un orden fijo, como leerTodo.
- */
-export async function leerFuncion(nombre: string, args: Record<string, unknown>, orden: string[]): Promise<Fila[]> {
-  const todas: Fila[] = []
-  for (let desde = 0; ; desde += PAGINA) {
-    let q = funcion(nombre, args)
-    for (const o of orden) q = (q as { order: (c: string, x: { ascending: boolean; nullsFirst: boolean }) => unknown }).order(o, { ascending: true, nullsFirst: true })
-    const { data, error } = await (q as { range: (a: number, b: number) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }> }).range(desde, desde + PAGINA - 1)
-    if (error) throw new Error(mensaje(`No se ha podido leer ${nombre.replace(/^conta_(lista_)?/, '').replace(/_/g, ' ')}`, error))
-    const filas = (data ?? []) as Fila[]
-    todas.push(...filas)
-    if (filas.length < PAGINA) return todas
-  }
-}
 
 export interface DatosClientes {
+  /** La lista (conta_lista_clientes), con los nombres de sus suscripciones activas (servicios_gc) y su último cargo. */
   clientes: Fila[]
-  suscripciones: Fila[]
+  /** Por empresa: lo que cobra GoCardless al mes, y las altas y las bajas de este mes. */
+  cuotasGc: Fila[]
+  /** Por empresa y día: cuántos cobros y cuánto (el próximo cobro de cada suscripción activa). */
+  proximos: Fila[]
   cargos: Fila[]
   queHacer: Fila[]
   asignaciones: Fila[]
@@ -57,51 +33,45 @@ export interface DatosClientes {
   paquetes: Fila[]
   lineasDePaquete: Fila[]
   ajustes: Fila[]
-  fichas: Fila[]
   /** El CRM conectado (su nombre y su portal), para «Ver en …». */
   crm: Fila[]
-  /** Los cobros y los mandatos de GoCardless (el último cobro de verdad y la pestaña «Cobros» de la ficha). */
-  cobros: Fila[]
-  mandatos: Fila[]
 }
 
-/** Todo lo de la lista, el panel y la ficha, de toda la cuenta (cada empresa lo filtra en la pantalla). */
+const filas = (x: unknown): Fila[] => (Array.isArray(x) ? (x as Fila[]) : [])
+
+/** Todo lo de Clientes, el panel y la tarifa, de toda la cuenta, en una llamada (cada empresa lo filtra en la pantalla). */
 export async function leerClientes(accountId: string): Promise<DatosClientes> {
-  const cuenta = { columna: 'cuenta_id', id: accountId }
-  const deCuenta = { columna: 'account_id', id: accountId }
-  const [clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm, cobros, mandatos] = await Promise.all([
-    // La lista y «Lo que tienes que hacer», por sus funciones de lectura (la 2209): las vistas, con la RLS fila
-    // a fila, tardaban 5 s y 0,7 s en QBO; las funciones comprueban la cuenta una vez (61 ms la lista).
-    leerFuncion('conta_lista_clientes', { p_cuenta: accountId }, ['cliente_id', 'empresa_id']),
-    // Las cuatro tablas grandes de la pantalla, también por funciones (la 2308): con la RLS, los cobros tardaban
-    // 2,1 s en QBO (3 páginas de 690 ms) y los mandatos 1,5 s; con la función, 41 y 11 ms por página.
-    leerFuncion('conta_lista_gc_suscripciones', { p_cuenta: accountId }, ['company_id', 'gc_id']),
-    leerTodo('conta_consulta_cargo_devuelto', '*', cuenta, ['empresa_id', 'gc_id']),
-    leerFuncion('conta_lista_que_hacer', { p_cuenta: accountId }, ['empresa_id', 'tipo']),
-    leerTodo('conta_consulta_asignacion', '*', cuenta, ['cliente_id', 'id']),
-    leerTodo('conta_consulta_tarifa_precio', '*', cuenta, ['id']),
-    leerTodo('conta_servicio', 'id, company_id, clave, nombre, forma, activo', deCuenta, ['id']),
-    leerTodo('conta_servicio_nivel', 'id, servicio_id, nombre, orden, incluye, mas_elegido, activo', deCuenta, ['id']),
-    leerTodo('conta_paquete', 'id, company_id, nombre, descripcion, exceso_por_trabajador, activo', deCuenta, ['id']),
-    leerTodo('conta_paquete_linea', 'id, paquete_id, servicio_id, nivel_id, limite_trabajadores, orden', deCuenta, ['id']),
-    leerTodo('conta_gestoria_ajustes', 'company_id, mitad_de_mes, cambios_de_tarifa', deCuenta, ['company_id']),
-    // Lo leído del CRM de cada cliente (contacto, dirección, referencia), para el panel y la ficha.
-    leerFuncion('conta_lista_fichas', { p_cuenta: accountId }, ['party_id']),
-    leerTodo('conta_crm', 'crm, portal', deCuenta, ['crm']),
-    leerFuncion('conta_lista_gc_cobros', { p_cuenta: accountId }, ['company_id', 'gc_id']),
-    leerFuncion('conta_lista_gc_mandatos', { p_cuenta: accountId }, ['company_id', 'gc_id']),
-  ])
-  return { clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm, cobros, mandatos }
+  const d = (await rpc<Fila | null>('conta_pantalla_clientes', { p_cuenta: accountId })) ?? {}
+  return {
+    clientes: filas(d.clientes), cuotasGc: filas(d.cuotas_gc), proximos: filas(d.proximos), cargos: filas(d.cargos), queHacer: filas(d.que_hacer),
+    asignaciones: filas(d.asignaciones), precios: filas(d.precios), servicios: filas(d.servicios), niveles: filas(d.niveles), paquetes: filas(d.paquetes),
+    lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes), crm: filas(d.crm),
+  }
 }
 
-/** Los cobros de GoCardless de un cliente en una empresa (la pestaña «Cobros» de la ficha), con su mandato. */
-export async function leerCobrosDe(accountId: string, empresaId: string, gcClienteId: string): Promise<Fila[]> {
-  const mandatos = await leerTodo('conta_gc_mandato', 'gc_id, estado, creado', { columna: 'account_id', id: accountId }, ['gc_id'],
-    (q) => (q as { eq: (c: string, v: string) => { eq: (c: string, v: string) => unknown } }).eq('company_id', empresaId).eq('gc_cliente_id', gcClienteId))
-  const ids = mandatos.map((m) => String(m.gc_id))
-  if (!ids.length) return []
-  return leerTodo('conta_gc_cobro', 'gc_id, mandato_gc_id, estado, fecha, importe, motivo', { columna: 'account_id', id: accountId }, ['fecha', 'gc_id'],
-    (q) => (q as { eq: (c: string, v: string) => { in: (c: string, v: string[]) => unknown } }).eq('company_id', empresaId).in('mandato_gc_id', ids))
+/** Lo que solo hace falta al abrir un cliente: su ficha del CRM, sus mandatos, sus cobros (13 meses), sus suscripciones, lo pendiente y sus personas. */
+export interface DatosFicha {
+  ficha: Fila
+  leidoAt: string | null
+  mandatos: Fila[]
+  cobros: Fila[]
+  suscripciones: Fila[]
+  pendientes: Fila[]
+  personas: Fila[]
+}
+
+export async function leerFicha(accountId: string, cliente: string): Promise<DatosFicha> {
+  const d = (await rpc<Fila | null>('conta_pantalla_ficha', { p_cuenta: accountId, p_cliente: cliente })) ?? {}
+  return {
+    ficha: d.ficha && typeof d.ficha === 'object' ? (d.ficha as Fila) : {}, leidoAt: typeof d.leido_at === 'string' ? d.leido_at : null,
+    mandatos: filas(d.mandatos), cobros: filas(d.cobros), suscripciones: filas(d.suscripciones), pendientes: filas(d.pendientes), personas: filas(d.personas),
+  }
+}
+
+/** «Asignar a un cliente»: las suscripciones activas de GoCardless y los clientes de GoCardless que las pagan. */
+export async function leerAsignar(accountId: string): Promise<{ suscripciones: Fila[]; gcClientes: Fila[] }> {
+  const d = (await rpc<Fila | null>('conta_pantalla_asignar', { p_cuenta: accountId })) ?? {}
+  return { suscripciones: filas(d.suscripciones), gcClientes: filas(d.gc_clientes) }
 }
 
 type Respuesta = { frase: string; id?: string; ensayo?: boolean }

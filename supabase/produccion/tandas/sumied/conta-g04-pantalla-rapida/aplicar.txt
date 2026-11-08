@@ -1,13 +1,13 @@
-# G04 · La pantalla de Clientes entera en menos de 1 s (Julio, nº 20, 08/11).
-# Rama conta/g04-pantalla-rapida. Se ensaya y se aplica desde main nombrando
-# esta rama, antes de fusionar.
+# G04 · La pantalla de Clientes en UNA sola llamada, en menos de 1 s (Julio,
+# nº 21, 08/11). Rama conta/g04-pantalla-rapida. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
 #
-#   2308  SOLO AÑADE: conta_lista_gc_cobros, conta_lista_gc_mandatos,
-#         conta_lista_gc_suscripciones y conta_lista_fichas, funciones de
-#         lectura SECURITY DEFINER con una sola comprobación de la cuenta (como
-#         la 2209). Devuelven las filas de sus tablas con la RLS. Con la RLS
-#         fila a fila, los cobros tardaban 2,1 s en QBO; con la función, 41 ms
-#         por página.
+#   2308  SOLO AÑADE: conta_pantalla_clientes, conta_pantalla_ficha y
+#         conta_pantalla_asignar, funciones de lectura SECURITY DEFINER con una
+#         sola comprobación de la cuenta (como la 2209), que devuelven ya
+#         agregado lo que pinta cada pantalla. Antes, la pantalla leía enteros
+#         y por páginas los cobros, los mandatos, las suscripciones y las
+#         fichas con la RLS fila a fila: 4–5 s en el navegador con QBO.
 #
 # No toca datos. No lee ni escribe en GoCardless ni en el CRM. Nada en el
 # camino del pedido. El real lo lanza Julio.

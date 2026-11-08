@@ -111,6 +111,74 @@ export function siembra(Q: string, A: string): Record<string, Fila[]> {
   }
 }
 
+/**
+ * Lo que devuelven las tres funciones de lectura de la 2308, calculado con la
+ * misma siembra (y lo mismo que hacen en la base: la lista con los nombres de
+ * sus suscripciones activas y su último cargo; las cuotas y el próximo cobro
+ * ya sumados; lo de un cliente al abrirlo).
+ */
+export function pantallas(d: Record<string, Fila[]>): Record<string, (cuerpo: Fila) => unknown> {
+  const subs = d.conta_gc_suscripcion
+  const activas = subs.filter((s) => s.estado === 'active')
+  const mes = dia(0).slice(0, 7)
+  const fichaDe = new Map(d.conta_gestoria_cliente.map((f) => [String(f.party_id), f]))
+  const mandatoDe = new Map(d.conta_gc_mandato.map((m) => [`${String(m.company_id)}|${String(m.gc_id)}`, m]))
+  const ultimo = new Map<string, Fila>()
+  for (const b of d.conta_gc_cobro) {
+    const m = mandatoDe.get(`${String(b.company_id)}|${String(b.mandato_gc_id)}`)
+    if (!m) continue
+    const k = `${String(b.company_id)}|${String(m.gc_cliente_id)}`
+    if (!ultimo.has(k) || String(b.fecha) > String(ultimo.get(k)!.fecha)) ultimo.set(k, b)
+  }
+  const empresas = [...new Set(subs.map((s) => String(s.company_id)))]
+  const suma = (xs: Fila[], k: string) => Math.round(xs.reduce((t, x) => t + Number(x[k] ?? 0), 0) * 100) / 100
+  const clientes: Fila[] = d.conta_consulta_cliente_empresa.map((r) => {
+    const f = fichaDe.get(String(r.cliente_id))?.ficha as Fila | undefined
+    const k = `${String(r.empresa_id)}|${String(r.cliente_en_gocardless)}`
+    const u = ultimo.get(k)
+    const nombres = activas.filter((s) => `${String(s.company_id)}|${String(s.gc_cliente_id)}` === k).map((s) => String(s.nombre)).join(' · ')
+    return { ...r, telefonos: f?.telefonos ?? null, correos: f?.correos ?? null, servicios_gc: nombres || null,
+      ultimo_cargo_estado: u?.estado ?? null, ultimo_cargo_fecha: u?.fecha ?? null, ultimo_cargo_importe: u?.importe ?? null }
+  })
+  const proximos = new Map<string, Fila>()
+  for (const s of activas) {
+    const k = `${String(s.company_id)}|${String(s.proximo_cobro_fecha)}`
+    const x = proximos.get(k) ?? { empresa_id: s.company_id, fecha: s.proximo_cobro_fecha, n: 0, euros: 0 }
+    x.n = Number(x.n) + 1; x.euros = Math.round((Number(x.euros) + Number(s.proximo_cobro_importe ?? 0)) * 100) / 100
+    proximos.set(k, x)
+  }
+  const deCliente = (c: string) => {
+    const gc = new Set(clientes.filter((r) => String(r.cliente_id) === c && r.cliente_en_gocardless).map((r) => `${String(r.empresa_id)}|${String(r.cliente_en_gocardless)}`))
+    const mandatos = d.conta_gc_mandato.filter((m) => gc.has(`${String(m.company_id)}|${String(m.gc_cliente_id)}`))
+    const ids = new Set(mandatos.map((m) => `${String(m.company_id)}|${String(m.gc_id)}`))
+    return {
+      ficha: fichaDe.get(c)?.ficha ?? null, leido_at: fichaDe.get(c)?.leido_at ?? null, mandatos,
+      cobros: d.conta_gc_cobro.filter((b) => ids.has(`${String(b.company_id)}|${String(b.mandato_gc_id)}`)),
+      suscripciones: subs.filter((s) => gc.has(`${String(s.company_id)}|${String(s.gc_cliente_id)}`)),
+      pendientes: d.conta_gestoria_diferencia.filter((x) => String(x.party_id) === c), personas: d.conta_gestoria_ficha.filter((x) => String(x.party_id) === c),
+    }
+  }
+  return {
+    conta_pantalla_clientes: () => ({
+      clientes,
+      cuotas_gc: empresas.map((e) => {
+        const de = subs.filter((s) => String(s.company_id) === e)
+        const altas = de.filter((s) => s.estado === 'active' && String(s.inicio ?? '').slice(0, 7) === mes)
+        const bajas = de.filter((s) => s.estado !== 'active' && String(s.fin ?? '').slice(0, 7) === mes)
+        return { empresa_id: e, al_mes: suma(de.filter((s) => s.estado === 'active'), 'al_mes'), altas_n: altas.length, altas_euros: suma(altas, 'al_mes'), bajas_n: bajas.length, bajas_euros: suma(bajas, 'al_mes') }
+      }),
+      proximos: [...proximos.values()],
+      cargos: d.conta_consulta_cargo_devuelto, que_hacer: d.conta_consulta_que_hacer, asignaciones: d.conta_consulta_asignacion, precios: d.conta_consulta_tarifa_precio,
+      servicios: d.conta_servicio, niveles: d.conta_servicio_nivel, paquetes: d.conta_paquete, lineas_de_paquete: d.conta_paquete_linea, ajustes: d.conta_gestoria_ajustes, crm: d.conta_crm,
+    }),
+    conta_pantalla_ficha: (cuerpo) => deCliente(String(cuerpo.p_cliente)),
+    conta_pantalla_asignar: () => ({
+      suscripciones: activas,
+      gc_clientes: d.conta_gc_cliente.filter((g) => activas.some((s) => s.company_id === g.company_id && s.gc_cliente_id === g.gc_id)),
+    }),
+  }
+}
+
 /** Las frases que devuelve cada acción simulada (lo que dice la base de verdad, con datos inventados). */
 export const FRASES: Record<string, (cuerpo: Fila) => Fila> = {
   conta_gc_cobro_otra_via: () => ({ frase: 'Guardado: ese cargo ya no sale en «Te deben». En GoCardless no cambia nada.' }),

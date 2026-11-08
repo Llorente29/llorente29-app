@@ -17,7 +17,7 @@ import {
 import { SE_COBRA, SIN_EMPRESA, teDeben, type CargoDeGoCardless, type FilaDeCliente, type Situacion } from '../../../../../supabase/functions/_shared/tarifa/lista'
 import { cifraDeCobro, type CifraDeCobro } from '../../../../../supabase/functions/_shared/tarifa/mandaEnLosCobros'
 import { proximoCobro, type ProximoCobro } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
-import type { DatosClientes, Fila } from './datos'
+import type { DatosClientes, DatosFicha, Fila } from './datos'
 
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const cent = (v: unknown): number => Math.round(Number(v ?? 0) * 100)
@@ -177,8 +177,6 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
   const { catalogo, asignaciones } = catalogoYAsignaciones(d)
   const nombreEmpresa = new Map(empresas.map((e) => [e.id, e.nombre]))
   const enElegidas = (empresa: unknown) => elegidas.includes(String(empresa))
-  const subs = d.suscripciones.filter((s) => s.estado === 'active')
-  const fichaDe = new Map(d.fichas.map((f) => [String(f.party_id), f]))
 
   // «Te deben», por cliente y empresa.
   const cargos: (CargoDeGoCardless & { clientes: string[] })[] = d.cargos.map((c) => ({
@@ -198,16 +196,6 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     }
   }
 
-  // El último cobro de cada cliente de GoCardless (por empresa), de verdad y con su estado.
-  const clienteDelMandato = new Map(d.mandatos.map((m) => [`${String(m.company_id)}|${String(m.gc_id)}`, str(m.gc_cliente_id)]))
-  const ultimoDe = new Map<string, { estado: string; fecha: string; importeCent: number }>()
-  for (const b of d.cobros) {
-    const gc = clienteDelMandato.get(`${String(b.company_id)}|${String(b.mandato_gc_id)}`)
-    if (!gc || !b.fecha) continue
-    const k = `${String(b.company_id)}|${gc}`
-    const x = ultimoDe.get(k)
-    if (!x || String(b.fecha) > x.fecha) ultimoDe.set(k, { estado: String(b.estado), fecha: String(b.fecha), importeCent: cent(b.importe) })
-  }
   const devueltosDe = new Map<string, { id: string; fecha: string; importeCent: number }[]>()
   for (const c of deben.cargos as typeof cargos) for (const cl of c.clientes) {
     const k = `${cl}|${c.empresaId}`
@@ -245,10 +233,9 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
       : str(r.ultimo_cobro_fecha) ? { texto: 'Cobrado', detalle: fechaCorta(String(r.ultimo_cobro_fecha)), tono: 'bien' }
       : { texto: 'Sin cobros', detalle: 'Ninguno en GoCardless', tono: 'neutro' }
     const servicios = recibo && recibo.lineas.length ? serviciosEnTexto(recibo.lineas)
-      : subs.filter((s) => s.company_id === empresaId && s.gc_cliente_id === r.cliente_en_gocardless).map((s) => String(s.nombre)).join(' · ') || 'Sin cuota en Sumied'
-    const f = fichaDe.get(clienteId)?.ficha as Fila | undefined
-    const tel = Array.isArray(f?.telefonos) ? str((f!.telefonos as unknown[])[0]) : null
-    const correo = Array.isArray(f?.correos) ? str((f!.correos as unknown[])[0]) : null
+      : str(r.servicios_gc) ?? 'Sin cuota en Sumied' // los nombres de sus suscripciones activas de GoCardless (los junta la base)
+    const tel = Array.isArray(r.telefonos) ? str((r.telefonos as unknown[])[0]) : null
+    const correo = Array.isArray(r.correos) ? str((r.correos as unknown[])[0]) : null
     filas.push({
       clienteId, empresaId, empresa: empresaId ? nombreEmpresa.get(empresaId) ?? null : null,
       nombre: String(r.cliente ?? ''), nif: str(r.nif), situacion, figura: figura(str(r.nif)) ?? 'Sin NIF',
@@ -259,11 +246,13 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
         .concat(siguiente && siguiente.lineas.length ? [{ texto: 'Total', importe: euros(siguiente.totalCent) }] : []),
       situacionTexto: empresaId === null ? SIN_EMPRESA : SITUACION[situacion ?? '']?.texto ?? 'Sin situación',
       situacionTono: SITUACION[situacion ?? '']?.tono ?? 'neutro',
+      // El último cobro de verdad en GoCardless (lo elige la base: el más reciente; el mismo día, el cobrado).
       ultimoCargo: (() => {
-        const u = empresaId && r.cliente_en_gocardless ? ultimoDe.get(`${empresaId}|${String(r.cliente_en_gocardless)}`) : undefined
-        if (!u) return null
-        const e = ESTADO_DEL_COBRO[u.estado] ?? { texto: u.estado, tono: 'neutro' as Tono }
-        return { estado: e.texto, tono: e.tono, fecha: u.fecha, importeCent: u.importeCent }
+        const estado = empresaId && r.cliente_en_gocardless ? str(r.ultimo_cargo_estado) : null
+        const fecha = str(r.ultimo_cargo_fecha)
+        if (!estado || !fecha) return null
+        const e = ESTADO_DEL_COBRO[estado] ?? { texto: estado, tono: 'neutro' as Tono }
+        return { estado: e.texto, tono: e.tono, fecha, importeCent: cent(r.ultimo_cargo_importe) }
       })(),
       devueltos: devueltosDe.get(`${clienteId}|${empresaId}`) ?? [],
       aviso: debe ? { titulo: `Debe ${debe.n} ${debe.n === 1 ? 'recibo' : 'recibos'} (${euros(debe.cent)})`,
@@ -274,22 +263,22 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     })
   }
 
-  // Las cuotas: lo que cobra GoCardless (manda hasta el G05) y lo que calcula Sumied, al lado.
-  const subsDe = subs.filter((s) => enElegidas(s.company_id))
-  const altas = subsDe.filter((s) => mesDe(s.inicio) === mes)
-  const bajasSubs = d.suscripciones.filter((s) => enElegidas(s.company_id) && s.estado !== 'active' && mesDe(s.fin) === mes)
+  // Las cuotas: lo que cobra GoCardless (manda hasta el G05; la base lo da sumado por empresa) y lo que calcula Sumied, al lado.
+  const gcDe = d.cuotasGc.filter((x) => enElegidas(x.empresa_id))
+  const sumar = (k: string) => gcDe.reduce((s, x) => s + cent(x[k]), 0)
+  const contar = (k: string) => gcDe.reduce((s, x) => s + Number(x[k] ?? 0), 0)
   const clientesConCuota = new Set(filas.filter((f) => f.empresaId && ((f.esteMes.principalCent ?? 0) > 0 || (f.esteMes.comparacionCent ?? 0) > 0)).map((f) => f.clienteId)).size
   const cuotas = {
-    principal: cifraDeCobro({ gocardlessCent: subsDe.reduce((s, x) => s + cent(x.al_mes), 0), sumiedCent: sumiedTotal }),
+    principal: cifraDeCobro({ gocardlessCent: sumar('al_mes'), sumiedCent: sumiedTotal }),
     clientes: clientesConCuota,
-    altas: { n: altas.length, cent: altas.reduce((s, x) => s + cent(x.al_mes), 0) },
-    bajas: { n: bajasSubs.length, cent: bajasSubs.reduce((s, x) => s + cent(x.al_mes), 0) },
+    altas: { n: contar('altas_n'), cent: sumar('altas_euros') },
+    bajas: { n: contar('bajas_n'), cent: sumar('bajas_euros') },
   }
   void gcTotal
 
   const elegidasConNombre = elegidas.map((id) => ({ id, nombre: nombreEmpresa.get(id) ?? '' }))
   const banda = {
-    ...proximoCobro(subs.map((s) => ({ empresaId: String(s.company_id), fecha: str(s.proximo_cobro_fecha), importeCent: cent(s.proximo_cobro_importe) })), elegidasConNombre, hoy),
+    ...proximoCobro(d.proximos.map((p) => ({ empresaId: String(p.empresa_id), fecha: str(p.fecha), importeCent: cent(p.euros), cobros: Number(p.n ?? 0) })), elegidasConNombre, hoy),
     sumiedCent: sumiedTotal, porRevisar,
   }
 
@@ -364,8 +353,8 @@ const MANDATO: Record<string, { texto: string; tono: Tono }> = {
   submitted: { texto: 'en curso', tono: 'neutro' }, cancelled: { texto: 'cancelado', tono: 'mal' }, failed: { texto: 'fallido', tono: 'mal' }, expired: { texto: 'caducado', tono: 'mal' },
 }
 
-/** La ficha de un cliente con una empresa: lo que se le cobra el mes que viene, sus cobros, su contacto, lo del CRM y sus servicios. */
-export function modeloFicha(d: DatosClientes, empresas: readonly Empresa[], clienteId: string, empresaId: string | null, hoy: string,
+/** La ficha de un cliente con una empresa: lo que se le cobra el mes que viene, sus cobros, su contacto, lo del CRM y sus servicios. Lo suyo (mandatos, cobros, suscripciones) llega en su propia llamada, al abrirla (conta_pantalla_ficha). */
+export function modeloFicha(d: DatosClientes, suyo: DatosFicha, empresas: readonly Empresa[], clienteId: string, empresaId: string | null, hoy: string,
   pendientes: { id: string; tipo: string; porque: string }[]): ModeloFicha | null {
   const elegidas = empresaId ? [empresaId] : empresas.map((e) => e.id)
   const m = modeloClientes(d, empresas, elegidas, hoy)
@@ -395,10 +384,10 @@ export function modeloFicha(d: DatosClientes, empresas: readonly Empresa[], clie
   })
   // Los cobros de los últimos 12 meses (lo leído de GoCardless), con el estado del mandato.
   const gc = fila.gcClienteId
-  const mandatos = d.mandatos.filter((x) => x.company_id === e && gc && x.gc_cliente_id === gc)
+  const mandatos = suyo.mandatos.filter((x) => x.company_id === e && gc && x.gc_cliente_id === gc)
   const ids = new Set(mandatos.map((x) => String(x.gc_id)))
   const hace12 = `${Number(hoy.slice(0, 4)) - 1}${hoy.slice(4)}`
-  const cobros = d.cobros.filter((b) => b.company_id === e && ids.has(String(b.mandato_gc_id)) && String(b.fecha ?? '') >= hace12)
+  const cobros = suyo.cobros.filter((b) => b.company_id === e && ids.has(String(b.mandato_gc_id)) && String(b.fecha ?? '') >= hace12)
     .sort((a, b) => (String(a.fecha) < String(b.fecha) ? 1 : -1))
     .map((b) => { const x = ESTADO_DEL_COBRO[String(b.estado)] ?? { texto: String(b.estado), tono: 'neutro' as Tono }
       return { fecha: `${Number(String(b.fecha).slice(8, 10))} ${MES_CORTO[Number(String(b.fecha).slice(5, 7)) - 1]} ${String(b.fecha).slice(0, 4)}`, importe: euros(cent(b.importe)), estado: x.texto, tono: x.tono } })
@@ -419,9 +408,9 @@ export function modeloFicha(d: DatosClientes, empresas: readonly Empresa[], clie
   const sueltos = d.asignaciones.filter((a) => a.tipo === 'suelto' && String(a.cliente_id) === clienteId && a.empresa_id === e && mesDe(a.desde) >= mes)
     .map((a) => ({ texto: `${String(a.detalle ?? 'Trabajo suelto')} · ${mesLargo(mesDe(a.desde))}`, importe: a.importe_propio == null ? '—' : euros(cent(a.importe_propio)) }))
   const conLinea = new Set(d.asignaciones.map((a) => str(a.suscripcion_gc_id)).filter(Boolean))
-  const sinLinea = d.suscripciones.filter((s) => s.company_id === e && gc && s.gc_cliente_id === gc && s.estado === 'active' && !conLinea.has(String(s.gc_id)))
+  const sinLinea = suyo.suscripciones.filter((s) => s.company_id === e && gc && s.gc_cliente_id === gc && s.estado === 'active' && !conLinea.has(String(s.gc_id)))
     .map((s) => ({ id: String(s.gc_id), nombre: String(s.nombre ?? 'Suscripción'), alMes: euros(cent(s.al_mes)) }))
-  const desdes = [...suyas.map((a) => a.desde), ...d.suscripciones.filter((s) => s.company_id === e && gc && s.gc_cliente_id === gc).map((s) => mesDe(s.inicio)).filter(Boolean)].sort()
+  const desdes = [...suyas.map((a) => a.desde), ...suyo.suscripciones.filter((s) => s.company_id === e && gc && s.gc_cliente_id === gc).map((s) => mesDe(s.inicio)).filter(Boolean)].sort()
   return {
     fila, clienteDesde: desdes[0] ? `Cobra desde ${mesLargo(desdes[0])}` : null,
     mesRecibo: mesLargo(siguiente), recibo: lineas, totalRecibo: euros(recibo?.totalCent ?? 0),

@@ -26,26 +26,23 @@ export interface PorAsignar {
 const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100)
 const texto = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
 
-/** Los clientes de Sumied para casar (uno por cliente, con los correos de su ficha). */
+/** Los clientes de Sumied para casar (uno por cliente, con los correos de su ficha: los trae cada fila de la lista). */
 export function clientesParaCasar(d: DatosClientes): ClienteParaCasar[] {
-  const correos = new Map(d.fichas.map((f) => {
-    const x = (f.ficha ?? {}) as Fila
-    return [String(f.party_id), Array.isArray(x.correos) ? x.correos.map(String) : []]
-  }))
   const vistos = new Map<string, ClienteParaCasar>()
   for (const c of d.clientes) {
     const id = String(c.cliente_id)
-    if (!vistos.has(id)) vistos.set(id, { id, nombre: String(c.cliente ?? ''), nif: texto(c.nif), correos: correos.get(id) ?? [] })
+    if (!vistos.has(id)) vistos.set(id, { id, nombre: String(c.cliente ?? ''), nif: texto(c.nif), correos: Array.isArray(c.correos) ? c.correos.map(String) : [] })
   }
   return [...vistos.values()].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 }
 
-export function porAsignar(d: DatosClientes, gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[]): PorAsignar[] {
+/** Las suscripciones activas y los clientes de GoCardless que las pagan llegan en su propia llamada (conta_pantalla_asignar). */
+export function porAsignar(d: DatosClientes, suscripciones: readonly Fila[], gcClientes: readonly Fila[], empresas: readonly { id: string; nombre: string }[], elegidas: readonly string[]): PorAsignar[] {
   const unidos = new Set(d.clientes.filter((c) => c.cliente_en_gocardless && c.empresa_id).map((c) => `${String(c.empresa_id)}|${String(c.cliente_en_gocardless)}`))
   const delGc = new Map(gcClientes.map((g) => [`${String(g.company_id)}|${String(g.gc_id)}`, g]))
   const grupos = new Map<string, PorAsignar>()
   const casar = clientesParaCasar(d)
-  for (const s of d.suscripciones) {
+  for (const s of suscripciones) {
     const empresaId = String(s.company_id)
     if (!elegidas.includes(empresaId) || s.estado !== 'active' || !s.gc_cliente_id) continue
     const k = `${empresaId}|${String(s.gc_cliente_id)}`

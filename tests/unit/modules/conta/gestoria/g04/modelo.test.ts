@@ -15,16 +15,20 @@ const cli = (id: string, empresa: string | null, x: Record<string, unknown> = {}
 })
 const datos = (): DatosClientes => ({
   clientes: [
-    cli('1', Q, { gocardless_al_mes: 496.10 }),
-    cli('2', Q, { gocardless_al_mes: 108.90 }),
-    cli('2', A, { gocardless_al_mes: 60.50 }),
+    cli('1', Q, { gocardless_al_mes: 496.10, servicios_gc: 'GESTORIA', ultimo_cargo_estado: 'paid_out', ultimo_cargo_fecha: '2026-11-04', ultimo_cargo_importe: 496.10,
+      telefonos: ['600000000'], correos: ['admin@ejemplo.es'] }),
+    cli('2', Q, { gocardless_al_mes: 108.90, servicios_gc: 'GESTORIA' }),
+    cli('2', A, { gocardless_al_mes: 60.50, servicios_gc: 'RENTA' }),
     cli('3', Q, { cliente_en_gocardless: null, mandato: null, forma_de_cobro: null, ultimo_cobro_fecha: null }), // activo sin cuota
     cli('4', null, { situacion: 'baja', cliente_en_gocardless: null }),
   ],
-  suscripciones: [
-    { company_id: Q, gc_id: 'S1', gc_cliente_id: 'CU-1', nombre: 'GESTORIA', al_mes: 496.10, estado: 'active', inicio: '2020-01-01', proximo_cobro_fecha: '2026-12-04', proximo_cobro_importe: 496.10 },
-    { company_id: Q, gc_id: 'S2', gc_cliente_id: 'CU-2', nombre: 'GESTORIA', al_mes: 108.90, estado: 'active', inicio: '2026-11-01', proximo_cobro_fecha: '2026-11-16', proximo_cobro_importe: 108.90 },
-    { company_id: A, gc_id: 'S3', gc_cliente_id: 'CU-2', nombre: 'RENTA', al_mes: 60.50, estado: 'active', inicio: '2024-01-01', proximo_cobro_fecha: '2026-12-04', proximo_cobro_importe: 60.50 },
+  // Lo de GoCardless, ya sumado por la base (2308): S1 Q 496,10 (próximo 04/12), S2 Q 108,90 (alta este mes, próximo 16/11), S3 A 60,50 (próximo 04/12).
+  cuotasGc: [
+    { empresa_id: Q, al_mes: 605.00, altas_n: 1, altas_euros: 108.90, bajas_n: 0, bajas_euros: 0 },
+    { empresa_id: A, al_mes: 60.50, altas_n: 0, altas_euros: 0, bajas_n: 0, bajas_euros: 0 },
+  ],
+  proximos: [
+    { empresa_id: Q, fecha: '2026-11-16', n: 1, euros: 108.90 }, { empresa_id: Q, fecha: '2026-12-04', n: 1, euros: 496.10 }, { empresa_id: A, fecha: '2026-12-04', n: 1, euros: 60.50 },
   ],
   cargos: [
     { empresa_id: Q, gc_id: 'P1', suscripcion_gc_id: 'S2', estado: 'failed', fecha: '2026-08-04', importe: 108.90, clientes: ['2'], mandato_activo: true, cobrado_despues: false, otra_via: null },
@@ -45,10 +49,16 @@ const datos = (): DatosClientes => ({
   ],
   servicios: [{ id: 'ges', company_id: Q, nombre: 'Gestoría mensual', forma: 'fijo_mes' }, { id: 'lab', company_id: Q, nombre: 'Gestión laboral', forma: 'por_empleado' }],
   niveles: [], paquetes: [], lineasDePaquete: [], ajustes: [],
+  crm: [{ crm: 'bitrix24', portal: 'portal-de-prueba.bitrix24.es' }],
+})
+/** Lo de la ficha del cliente 1, en su propia llamada (conta_pantalla_ficha). */
+const suyo = () => ({
+  ficha: { telefonos: ['600000000'], correos: ['admin@ejemplo.es'], cuotasReferencia: [{ etiqueta: 'Tarifa recurrente', importeCent: 6050 }, { etiqueta: 'Laboral', importeCent: 0 }] },
+  leidoAt: null,
   cobros: [{ company_id: Q, gc_id: 'PB1', mandato_gc_id: 'MD1', estado: 'paid_out', fecha: '2026-11-04', importe: 496.10 }, { company_id: Q, gc_id: 'PB0', mandato_gc_id: 'MD1', estado: 'failed', fecha: '2026-10-04', importe: 496.10 }],
   mandatos: [{ company_id: Q, gc_id: 'MD1', gc_cliente_id: 'CU-1', estado: 'active' }],
-  crm: [{ crm: 'bitrix24', portal: 'portal-de-prueba.bitrix24.es' }],
-  fichas: [{ party_id: '1', ficha: { telefonos: ['600000000'], correos: ['admin@ejemplo.es'], cuotasReferencia: [{ etiqueta: 'Tarifa recurrente', importeCent: 6050 }, { etiqueta: 'Laboral', importeCent: 0 }] } }],
+  suscripciones: [{ company_id: Q, gc_id: 'S1', gc_cliente_id: 'CU-1', nombre: 'GESTORIA', al_mes: 496.10, estado: 'active', inicio: '2020-01-01' }],
+  pendientes: [], personas: [],
 })
 
 describe('G04 · el modelo de Clientes', () => {
@@ -96,14 +106,14 @@ describe('G04 · el modelo de Clientes', () => {
       .toEqual(['sin altas', 'sin bajas', '−2 bajas (121 €)', '+1 alta (109 €)'])
   })
   it('los importes de referencia del CRM, cada uno con su etiqueta, sin sumar', () => {
-    expect(referenciasDelCrm(datos().fichas[0].ficha as Record<string, unknown>)).toEqual(['Tarifa recurrente: 60,50 €'])
+    expect(referenciasDelCrm(suyo().ficha)).toEqual(['Tarifa recurrente: 60,50 €'])
   })
 })
 
 describe('G04 · el modelo de la ficha', () => {
   it('el recibo del mes que viene, con los trabajadores agrupados y desplegables', async () => {
     const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
-    const f = modeloFicha(datos(), EMPRESAS, '1', Q, '2026-11-08', [])!
+    const f = modeloFicha(datos(), suyo(), EMPRESAS, '1', Q, '2026-11-08', [])!
     expect([f.mesRecibo, f.totalRecibo, f.recibo.map((l) => l.texto)]).toEqual(['diciembre de 2026', '496,10 €', ['Gestoría mensual', 'Gestión laboral · 18 trabajadores']])
     expect(f.recibo[1].detalle).toBe('18 × 24,20 € · este mes: ninguna alta, ninguna baja')
     expect([f.recibo[1].trabajadores.length, f.recibo[1].trabajadores[0].importe, f.recibo[1].trabajadores[0].lineaId]).toEqual([18, '24,20 €', 'w0'])
