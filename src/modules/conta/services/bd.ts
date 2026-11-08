@@ -45,3 +45,14 @@ export async function rpc<T>(nombre: string, args: Record<string, unknown>): Pro
   if (error) throw new Error(textoParaPantalla(nombre, error, `${nombre}: ${error.message}`))
   return data as T
 }
+
+/**
+ * Una función de la base que devuelve filas, como si fuera una tabla: admite
+ * order() y range() (para leerla por páginas). Para las de lectura con una
+ * sola comprobación de la cuenta (conta_lista_clientes…), que tardan mucho
+ * menos que una vista con la RLS fila a fila.
+ */
+export function funcion(nombre: string, args: Record<string, unknown>) {
+  hayBase()
+  return (supabase as unknown as { rpc: (n: string, a: Record<string, unknown>) => unknown }).rpc(nombre, args)
+}
