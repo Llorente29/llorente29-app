@@ -12,6 +12,7 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { ModeloFicha } from './modelo'
 import { OtraVia } from './Clientes'
+import { proponerServicio } from './propuestas'
 
 export interface Persona { nombre: string; correos: string[]; telefonos: string[] }
 export interface DatosDelCrm { situacion: string; formaPago: string | null; servicios: string | null; leido: string | null; referencias: string[]; direccion: string | null }
@@ -20,7 +21,7 @@ export interface AccionesFicha {
   cobradoPorOtraVia: (cargos: string[], via: 'transferencia' | 'efectivo', fecha: string) => Promise<string>
   altaTrabajador: (servicio: string, nombre: string, desde: string) => Promise<string>
   bajaTrabajador: (linea: string, mes: string) => Promise<string>
-  lineaDesdeGc: (suscripcion: string, servicio: string) => Promise<string>
+  lineaDesdeGc: (suscripcion: string, servicio: string, trabajador: string | null) => Promise<string>
   noContar: (suscripcion: string) => Promise<string>
   revisada: (diferencia: string) => Promise<string>
   anadir: (o: { servicio?: string | null; nivel?: string | null; paquete?: string | null }, desde: string, ensayo: boolean) => Promise<string>
@@ -37,7 +38,7 @@ export interface PropsFicha {
   rutaCrm: string | null
   hoy: string
   /** Lo que se puede añadir o a qué nivel cambiar: servicios (con sus niveles) y paquetes de la empresa. */
-  catalogo: { servicios: { id: string; nombre: string; niveles: { id: string; nombre: string }[]; porTrabajador: boolean }[]; paquetes: { id: string; nombre: string }[] }
+  catalogo: { servicios: { id: string; nombre: string; clave: string; niveles: { id: string; nombre: string }[]; porTrabajador: boolean }[]; paquetes: { id: string; nombre: string }[] }
   acciones: AccionesFicha
   /** Abrir «+ Añadir» nada más entrar (desde «Ponerle la cuota»). */
   anadirAbierto?: boolean
@@ -68,6 +69,7 @@ export function Ficha(p: PropsFicha) {
   const [buscar, setBuscar] = useState<Record<number, string>>({})
   const [panel, setPanel] = useState<null | 'trabajador' | 'anadir' | { nivel: string }>(p.anadirAbierto ? 'anadir' : null)
   const [otraVia, setOtraVia] = useState(false)
+  const [comoLinea, setComoLinea] = useState(false)
   const h = useHacer()
   const pendiente = m.pendientes[0] ?? null
   const desde = mesSiguiente(p.hoy)
@@ -120,9 +122,12 @@ export function Ficha(p: PropsFicha) {
           <div className="g4-nota-textos"><div className="g4-aviso-titulo">Por revisar</div><div className="g4-aviso-texto">{pendiente.porque}</div></div>
           <div className="g4-aviso-botones">
             {m.sinLinea[0] && (pendiente.tipo === 'totales_distintos' || pendiente.tipo === 'suscripcion_sin_convertir') ? <>
-              <button type="button" className="g4-aviso-boton" disabled={h.haciendo || !p.catalogo.servicios[0]}
-                onClick={() => void h.hacer(() => p.acciones.lineaDesdeGc(m.sinLinea[0].id, p.catalogo.servicios[0].id))}>Añadirla como línea</button>
-              <button type="button" className="g4-aviso-boton" data-tipo="sec" disabled={h.haciendo} onClick={() => void h.hacer(() => p.acciones.noContar(m.sinLinea[0].id))}>Es una baja: no la cuentes</button>
+              {comoLinea
+                ? <ComoLinea suscripciones={m.sinLinea} servicios={p.catalogo.servicios} h={h} alCerrar={() => setComoLinea(false)} anadir={p.acciones.lineaDesdeGc} />
+                : <>
+                  <button type="button" className="g4-aviso-boton" onClick={() => { h.limpiar(); setComoLinea(true) }}>Añadirla como línea</button>
+                  <button type="button" className="g4-aviso-boton" data-tipo="sec" disabled={h.haciendo} onClick={() => void h.hacer(() => p.acciones.noContar(m.sinLinea[0].id))}>Es una baja: no la cuentes</button>
+                </>}
             </> : <>
               <button type="button" className="g4-aviso-boton" disabled={h.haciendo} onClick={() => void h.hacer(() => p.acciones.revisada(pendiente.id))}>Ya lo he revisado</button>
               {p.rutaCrm && <a className="g4-aviso-boton" data-tipo="sec" href={p.rutaCrm} target="_blank" rel="noreferrer">Corregirlo en {nombresCrm} ↗</a>}
@@ -332,6 +337,38 @@ function CambiarNivel({ niveles, desde, h, alCerrar, cambiar }: { niveles: { id:
       <div className="g4-aviso-botones">
         <button type="submit" className="g4-boton" data-tipo="primario" disabled={h.haciendo || !nivel}>{ensayado ? 'Cambiarlo' : 'Ver qué hará'}</button>
         <button type="button" className="g4-boton" onClick={alCerrar}>Cerrar</button>
+      </div>
+    </form>
+  )
+}
+
+/** «Añadirla como línea»: la suscripción, el servicio propuesto (se puede elegir otro) y su trabajador; confirma una persona. */
+function ComoLinea({ suscripciones, servicios, h, alCerrar, anadir }: {
+  suscripciones: { id: string; nombre: string; alMes: string }[]; servicios: PropsFicha['catalogo']['servicios']; h: Hacer; alCerrar: () => void
+  anadir: (suscripcion: string, servicio: string, trabajador: string | null) => Promise<string>
+}) {
+  const [sus, setSus] = useState(suscripciones[0]?.id ?? '')
+  const propuesta = (id: string) => proponerServicio(suscripciones.find((x) => x.id === id)?.nombre ?? '', servicios)
+  const [servicio, setServicio] = useState(propuesta(sus).servicioId ?? '')
+  const [trabajador, setTrabajador] = useState(propuesta(sus).trabajador ?? '')
+  const elegido = servicios.find((x) => x.id === servicio)
+  const cambiarSus = (id: string) => { setSus(id); const pr = propuesta(id); setServicio(pr.servicioId ?? ''); setTrabajador(pr.trabajador ?? '') }
+  return (
+    <form className="g4-otra-via" onSubmit={(e) => { e.preventDefault(); void h.hacer(() => anadir(sus, servicio, elegido?.porTrabajador ? trabajador.trim() : null)) }}>
+      {suscripciones.length > 1 && <label className="g4-campo">Suscripción de GoCardless<select value={sus} onChange={(e) => cambiarSus(e.target.value)}>
+        {suscripciones.map((x) => <option key={x.id} value={x.id}>{`${x.nombre} · ${x.alMes}`}</option>)}</select></label>}
+      {suscripciones.length === 1 && <div className="g4-aviso-texto">{`${suscripciones[0].nombre} · ${suscripciones[0].alMes} al mes`}</div>}
+      <div className="g4-otra-via-fila">
+        <label className="g4-campo">Servicio{propuesta(sus).servicioId === servicio && servicio ? ' (propuesto)' : ''}
+          <select value={servicio} onChange={(e) => setServicio(e.target.value)}>
+            <option value="">Elige un servicio</option>
+            {servicios.map((x) => <option key={x.id} value={x.id}>{x.nombre}</option>)}
+          </select></label>
+        {elegido?.porTrabajador && <label className="g4-campo">Trabajador<input value={trabajador} onChange={(e) => setTrabajador(e.target.value)} required /></label>}
+      </div>
+      <div className="g4-aviso-botones">
+        <button type="submit" className="g4-aviso-boton" disabled={h.haciendo || !servicio || (!!elegido?.porTrabajador && !trabajador.trim())}>Añadirla como línea</button>
+        <button type="button" className="g4-aviso-boton" data-tipo="sec" onClick={alCerrar}>Cancelar</button>
       </div>
     </form>
   )

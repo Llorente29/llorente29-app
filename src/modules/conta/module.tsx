@@ -51,8 +51,7 @@ import RemesaPagosPage from '@/modules/conta/compras/RemesaPagosPage'
 import RemesasPagosPage from '@/modules/conta/compras/RemesasPagosPage'
 import CobrosPage from '@/modules/conta/ventas/CobrosPage'
 import RemesaCobrosPage from '@/modules/conta/ventas/RemesaCobrosPage'
-import { TarifasPage } from '@/modules/conta/gestoria/paginas'
-import { ClientesG04Page, FichaClienteG04Page } from '@/modules/conta/gestoria/g04/paginas'
+import { ClientesG04Page, FichaClienteG04Page, TarifaG04Page } from '@/modules/conta/gestoria/g04/paginas'
 import LiquidacionPlataformaPage from '@/modules/conta/ventas/LiquidacionPlataformaPage'
 import LiquidacionFichaPage from '@/modules/conta/ventas/LiquidacionFichaPage'
 import BancosPage from '@/modules/conta/bancos/BancosPage'
@@ -173,7 +172,7 @@ export const contaModule: ModuleDefinition = {
     // G04 · Clientes (la maqueta del 08/11): la lista, el próximo cobro, lo que hay que hacer y el panel.
     { path: CONTA.rutas.clientesCuotas, element: enMarco(<ClientesG04Page />, '¿Quién me paga, cuánto, qué me deben y qué tengo que hacer?', true) },
     { path: `${CONTA.rutas.clienteGestoria}/:cliente`, element: enMarco(<FichaClienteG04Page />, '¿Qué le cobro a este cliente y cómo va?', true) },
-    { path: CONTA.rutas.tarifasGestoria, element: enMarco(<TarifasPage />, '¿Cuánto cobro por cada servicio?', true) },
+    { path: CONTA.rutas.tarifasGestoria, element: enMarco(<TarifaG04Page />, '¿Cuánto cobro por cada servicio?', true) },
     { path: CONTA.rutas.liquidacionNueva, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.liquidacion, element: enMarco(<LiquidacionPage />, '¿Cuánto me paga este mes?') },
     { path: CONTA.rutas.nuevoAsiento, element: enMarco(<NuevoAsientoPage />, '¿A qué cuenta va el alquiler?', true) },

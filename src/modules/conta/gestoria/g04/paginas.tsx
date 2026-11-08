@@ -5,11 +5,12 @@
 // paginado) y pintan con las piezas de esta carpeta, que no leen nada (así se
 // prueban y se capturan con datos inventados).
 
+import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { rutaClienteGestoria, rutaClientesCuotas, rutaTarifasGestoria } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
-import { useLeer } from '@/modules/conta/libros/contexto'
+import { useLeer as useLeerDeLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { acciones, leerClientes, leerTodo } from './datos'
@@ -17,7 +18,24 @@ import { altaEmpleado, bajaLinea, lineaDesdeGc, noContar, revisada } from '@/mod
 import { modeloClientes, modeloFicha, nombreDelCrmDe, referenciasDelCrm } from './modelo'
 import { Ficha } from './Ficha'
 import { Clientes } from './Clientes'
-import { enlaceAlCrm, exportar, mesEnPalabras } from './enlaces'
+import { descargarPrecios, enlaceAlCrm, exportar, imprimirPrecios, imprimirTarifa, mesEnPalabras } from './enlaces'
+import { Tarifa } from './Tarifa'
+import { formaParaGuardar, formaEnPalabras, modeloTarifa } from './modeloTarifa'
+import { euros, type Forma, type Objetivo } from '../../../../../supabase/functions/_shared/tarifa/precio'
+
+/**
+ * Como useLeer, pero al recargar después de guardar sigue enseñando lo de
+ * antes hasta que llega lo nuevo: si no, la pantalla se desmonta y se pierde
+ * el mensaje de lo que se acaba de hacer (regla 8).
+ */
+function useLeer<T>(leer: (() => Promise<T>) | null, clave: string) {
+  const r = useLeerDeLibros(leer, clave)
+  const [ultimo, setUltimo] = useState<{ clave: string; datos: T } | null>(null)
+  // Ajustar el estado mientras se pinta (el patrón de React para «lo último que llegó»): solo cuando llega algo nuevo.
+  if (r.datos && (ultimo?.datos !== r.datos || ultimo.clave !== clave)) setUltimo({ clave, datos: r.datos })
+  const datos = r.datos ?? (!r.error && ultimo?.clave === clave ? ultimo.datos : null)
+  return { ...r, datos }
+}
 
 export function ClientesG04Page() {
   const { accountId, cargando } = useCuentaConta()
@@ -109,7 +127,7 @@ export function FichaClienteG04Page() {
       personas={extra.personas.map((x) => { const f = (x.ficha ?? {}) as Fila
         return { nombre: String(f.nombre ?? `Contacto ${String(x.id_externo)}`), correos: Array.isArray(f.correos) ? f.correos.map(String) : [], telefonos: Array.isArray(f.telefonos) ? f.telefonos.map(String) : [] } })}
       catalogo={{
-        servicios: deEmpresa.map((x) => ({ id: String(x.id), nombre: String(x.nombre), porTrabajador: x.forma === 'por_empleado',
+        servicios: deEmpresa.map((x) => ({ id: String(x.id), nombre: String(x.nombre), clave: String(x.clave ?? ''), porTrabajador: x.forma === 'por_empleado',
           niveles: datos.niveles.filter((n) => n.servicio_id === x.id && n.activo !== false).map((n) => ({ id: String(n.id), nombre: String(n.nombre) })) })),
         paquetes: datos.paquetes.filter((x) => x.company_id === e && x.activo !== false).map((x) => ({ id: String(x.id), nombre: String(x.nombre) })),
       }}
@@ -121,11 +139,73 @@ export function FichaClienteG04Page() {
         },
         altaTrabajador: (servicio, nombre, desde) => tras(altaEmpleado(e!, cliente, servicio, nombre, desde)),
         bajaTrabajador: (linea, mes) => tras(bajaLinea(linea, mes)),
-        lineaDesdeGc: (suscripcion, servicio) => tras(lineaDesdeGc(e!, suscripcion, servicio, null)),
+        lineaDesdeGc: (suscripcion, servicio, trabajador) => tras(lineaDesdeGc(e!, suscripcion, servicio, trabajador)),
         noContar: (suscripcion) => tras(noContar(e!, suscripcion, 'Desde la ficha: es una baja que GoCardless sigue cobrando.')),
         revisada: (diferencia) => tras(revisada(diferencia, 'Revisado desde la ficha.')),
         anadir: async (o, desde, ensayo) => { const r = await acciones.anadir(e!, cliente, o, desde, null, ensayo); if (!ensayo) d.recargar(); return r.frase },
         cambiarNivel: async (linea, nivel, desde, ensayo) => { const r = await acciones.cambiarNivel(linea, nivel, desde, ensayo); if (!ensayo) d.recargar(); return r.frase },
+      }} />
+  )
+}
+
+const objetivoParaGuardar = (o: Objetivo) => (o.tipo === 'paquete' ? { paquete: o.paqueteId } : o.tipo === 'nivel' ? { servicio: o.servicioId, nivel: o.nivelId } : { servicio: o.servicioId })
+
+export function TarifaG04Page() {
+  const { accountId, cargando, logoCuenta } = useCuentaConta()
+  const { empresas, activa } = useEmpresas()
+  const [params] = useSearchParams()
+  const d = useLeer(!cargando && accountId ? () => leerClientes(accountId) : null, `${accountId}:g04-tarifa`)
+  if (d.error) return <ErrorConReintento mensaje={`No se ha podido leer la tarifa: ${d.error}`} reintentar={d.recargar} />
+  if (!d.datos || !activa) return <TarjetaCargando />
+  const datos = d.datos
+  const e = activa.id
+  const hoy = hoyEnMadrid()
+  const modelo = modeloTarifa(datos, e, hoy)
+  const lista = empresas.map((x) => ({ id: x.id, nombre: x.nombre }))
+  const precio = async (o: Objetivo, f: Forma, desde: string) => {
+    const g = formaParaGuardar(f)
+    return (await acciones.guardarPrecio(e, objetivoParaGuardar(o), null, g.forma, g.periodo, g.importe, g.tramos, `${desde}-01`, false)).frase
+  }
+  const tras = async (f: () => Promise<string>) => { const r = await f(); d.recargar(); return r }
+  const filasDePrecios = () => modeloClientes(datos, lista, [e], hoy).filas.map((f) => ({
+    cliente: f.nombre, nif: f.nif ?? '', servicios: f.servicios || '—', esteMes: f.esteMes.principalCent === null ? '—' : euros(f.esteMes.principalCent),
+  }))
+  return (
+    <Tarifa modelo={modelo} empresa={activa.nombre} hoy={hoy} rutaClientes={rutaClientesCuotas()} rutaFicha={(c) => rutaClienteGestoria(c, e)}
+      elegidaInicial={params.get('ver') ?? undefined} cambioAbierto={params.get('cambiar') === '1'}
+      servicios={datos.servicios.filter((s) => s.company_id === e && s.activo !== false).map((s) => ({ id: String(s.id), nombre: String(s.nombre), porTrabajador: s.forma === 'por_empleado',
+        niveles: datos.niveles.filter((n) => n.servicio_id === s.id && n.activo !== false).map((n) => ({ id: String(n.id), nombre: String(n.nombre) })) }))}
+      alDescargar={(que) => {
+        if (que === 'excel') return descargarPrecios(filasDePrecios(), activa.nombre)
+        if (que === 'pdf') return imprimirPrecios(filasDePrecios(), activa.nombre, mesEnPalabras(hoy))
+        return imprimirTarifa(activa.nombre, logoCuenta, modelo.entradas.map((x) => {
+          const det = modelo.detalle(x.id)!
+          const lineas = det.niveles.length ? det.niveles.map((n) => `${n.nombre}: ${n.precio ? `${n.precio} € al mes` : 'a consultar'}${n.incluye.length ? ` · ${n.incluye.join(', ')}` : ''}`)
+            : det.paquete ? [...det.paquete.lineas.map((l) => `${l.texto} · ${l.detalle}`), det.paquete.precio ? `Precio: ${det.paquete.precio} € al mes` : 'Precio a consultar']
+              : [det.general ? formaEnPalabras(det.general.forma) : 'Precio a consultar']
+          return { nombre: x.nombre, descripcion: det.descripcion, lineas }
+        }), mesEnPalabras(hoy))
+      }}
+      acciones={{
+        guardarPrecio: (o, f, desde) => tras(() => precio(o, f, desde)),
+        guardarNivel: (servicio, nombre, orden, incluye, f, desde) => tras(async () => {
+          const r = await acciones.guardarNivel(e, servicio, null, nombre, orden, incluye, false, false)
+          if (!f || !r.id) return r.frase
+          return `${r.frase} ${await precio({ tipo: 'nivel', servicioId: servicio, nivelId: r.id }, f, desde)}`
+        }),
+        guardarPaquete: (paquete, nombre, descripcion, excesoCent, lineas, f, desde) => tras(async () => {
+          const r = await acciones.guardarPaquete(e, paquete, nombre, descripcion, excesoCent === null ? null : excesoCent / 100, lineas, false)
+          if (!f || !r.id) return r.frase
+          return `${r.frase} ${await precio({ tipo: 'paquete', paqueteId: r.id }, f, desde)}`
+        }),
+        aplicarCambio: async (op, ensayo) => {
+          const guardado = await acciones.ensayarCambio(e, { ...op, empresaId: e }, ensayo)
+          if (!guardado.id) throw new Error('No se ha podido guardar el ensayo: no se ha aplicado nada.')
+          const r = await acciones.aplicarCambio(guardado.id)
+          d.recargar()
+          return { frase: r.frase, id: guardado.id }
+        },
+        deshacerCambio: (id) => tras(async () => (await acciones.deshacerCambio(id)).frase),
       }} />
   )
 }

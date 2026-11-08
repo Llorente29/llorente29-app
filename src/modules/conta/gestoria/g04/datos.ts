@@ -100,6 +100,11 @@ export const acciones = {
     forma: string, periodo: string | null, importe: number | null, tramos: unknown[] | null, desde: string, ensayo: boolean) =>
     hacer('conta_tarifa_precio_guardar', { p_company: empresa, p_servicio: o.servicio ?? null, p_nivel: o.nivel ?? null, p_paquete: o.paquete ?? null, p_party: cliente,
       p_forma: forma, p_periodo: periodo, p_importe: importe, p_tramos: tramos, p_desde: desde, p_ensayo: ensayo }),
+  guardarNivel: (empresa: string, servicio: string, nivel: string | null, nombre: string, orden: number, incluye: string[], masElegido: boolean, ensayo: boolean) =>
+    hacer('conta_tarifa_nivel_guardar', { p_company: empresa, p_servicio: servicio, p_nivel: nivel, p_nombre: nombre, p_orden: orden, p_incluye: incluye, p_mas_elegido: masElegido, p_ensayo: ensayo }),
+  guardarPaquete: (empresa: string, paquete: string | null, nombre: string, descripcion: string | null, exceso: number | null,
+    lineas: { servicio: string; nivel: string | null; limiteTrabajadores: number | null }[], ensayo: boolean) =>
+    hacer('conta_tarifa_paquete_guardar', { p_company: empresa, p_paquete: paquete, p_nombre: nombre, p_descripcion: descripcion, p_exceso: exceso, p_lineas: lineas, p_ensayo: ensayo }),
   ensayarCambio: (empresa: string, operacion: unknown, resultado: unknown) => hacer('conta_tarifa_cambio_ensayar', { p_company: empresa, p_operacion: operacion, p_resultado: resultado }),
   aplicarCambio: (id: string) => hacer('conta_tarifa_cambio_aplicar', { p_cambio: id }),
   deshacerCambio: (id: string) => hacer('conta_tarifa_cambio_deshacer', { p_cambio: id }),
