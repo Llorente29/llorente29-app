@@ -229,9 +229,6 @@ test('cuenta C, sin empresa: el alta a pantalla completa, con «Lo que llevamos�
 // empresa y sin ser asesoría).
 test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → asesoría, y al terminar, «Impuestos de tus clientes»', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Escribe: basta un tamaño')
-  // G03: con la pregunta del sector, el alta entera (y su último paso, que espera hasta 45 s) no cabe en los 60 s
-  // de serie: la e2e 42418931805 se cortó a 1,0 min sin ningún fallo de la página ni de la base.
-  test.setTimeout(120_000)
   const s = await entrarComo(page, CUENTA_C.email)
   await borrarEmpresas(s, CUENTA_C.id, true)
   const desmarcar = () => rest(s, 'POST', 'rpc/conta_despacho_marcar', { p_account: CUENTA_C.id, p_es: false })
@@ -241,9 +238,16 @@ test('cuenta C con Sumied: «¿Llevas los impuestos de otras empresas?» → ase
     await hastaLaActividad(page, `Alta e2e Sumied ${Date.now()}`)
     // G03: «gestoría» se reconoce como actividad, y justo después se pregunta el sector, con la propuesta marcada.
     await decir(page, 'somos una gestoría')
-    await page.getByRole('button', { name: 'Añadir las marcadas' }).click()
-    await expect(log(page).getByText('Por lo que me cuentas, eres una gestoría. ¿Es así?')).toBeVisible()
-    await page.getByRole('button', { name: 'Gestoría o asesoría', exact: true }).click()
+    // Si no salen las propuestas, falla aquí y dice por qué, en vez de esperar a un botón que no llega
+    // (e2e 42426861903: «gestoría» se apuntaba como «No lo sé» y no se buscaba nada).
+    const anadir = page.getByRole('button', { name: 'Añadir las marcadas' })
+    await expect(anadir, 'Tras «somos una gestoría» tienen que salir las actividades del catálogo (IAE 1_842 o 1_8497, CNAE 6920). '
+      + 'Si la conversación dice «Se lo apunto a tu asesor», se ha tomado como «No lo sé»; si dice «No encuentro nada», falta el catálogo').toBeVisible()
+    await anadir.click()
+    await expect(log(page).getByText('Por lo que me cuentas, eres una gestoría. ¿Es así?'), 'La pregunta del sector propone Gestoría').toBeVisible()
+    const gestoria = page.getByRole('button', { name: 'Gestoría o asesoría', exact: true })
+    await expect(gestoria, 'La opción Gestoría o asesoría, marcada la primera').toBeVisible()
+    await gestoria.click()
     await expect(log(page).getByText(/^Apuntado: sector Gestoría o asesoría\. Además de lo de siempre, salen Clientes y cuotas/)).toBeVisible()
     // Queda en la empresa, no solo en la pantalla (y con su disparador, is_hospitality en no).
     const empresa = await rest<{ sector: string; is_hospitality: boolean | null }[]>(s, 'GET', `company?account_id=eq.${CUENTA_C.id}&select=sector,is_hospitality`)

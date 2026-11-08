@@ -129,6 +129,8 @@ export interface Propuesta {
   sector: Sector
   /** Se propone, pero sin darlo por hecho: «¿Eres una gestoría o asesoría?» en vez de «eres una gestoría. ¿Es así?». */
   duda: boolean
+  /** G03 · No hay nada en qué apoyarse (ni actividad ni palabras): la pregunta va sin propuesta dicha. */
+  sinPista?: boolean
 }
 
 /**
@@ -158,6 +160,7 @@ export const enMinuscula = (s: Sector): string => PAQUETES[s].etiqueta.charAt(0)
 
 /** La pregunta del alta, con la propuesta ya dicha (Diseño del G03): «Por lo que me cuentas, eres una gestoría. ¿Es así?». */
 export function preguntaDelSector(p: Propuesta): string {
+  if (p.sinPista) return '¿De qué sector es tu negocio?'
   if (p.duda) return 'Por lo que me cuentas, puede que seas una gestoría o una asesoría. ¿Lo eres?'
   if (p.sector === 'general') return 'Por lo que me cuentas, tu negocio no es de hostelería ni una gestoría. ¿Es así?'
   return `Por lo que me cuentas, eres ${PAQUETES[p.sector].enLaFrase}. ¿Es así?`

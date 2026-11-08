@@ -43,6 +43,7 @@ const GRUPOS: { clave: string; descripcion: string; palabras: string[]; iae: str
   // «Servicios de gestión administrativa» y la clase 6920 de la CNAE-2025 (sin coma: la búsqueda
   // cambia las comas por espacios, y «contabilidad, teneduría» no encontraba nada).
   { clave: 'gestoria', descripcion: 'Gestoría o asesoría', palabras: ['gestoria', 'gestorias', 'asesoria', 'asesorias', 'asesoria fiscal', 'asesoria laboral',
+    'gestor', 'gestores', 'gestora', 'asesor', 'asesores', 'asesora',
     'asesor fiscal', 'asesores fiscales', 'gestor administrativo', 'gestores administrativos', 'graduado social', 'graduados sociales', 'despacho de contabilidad', 'contabilidad de empresas'],
     iae: ['financieros y contables', 'gestión administrativa'], cnae: ['teneduría de libros'] },
   { clave: 'panaderia', descripcion: 'Panadería', palabras: ['panaderia', 'pasteleria', 'bolleria', 'obrador'],

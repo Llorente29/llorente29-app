@@ -9,8 +9,9 @@ import { gruposDe } from '@/modules/conta/alta/actividades'
 import { primeraDelPaso, todasLasPreguntas, type ContextoAlta } from '@/modules/conta/alta/guion'
 import { PUNTOS } from '@/modules/conta/alta/llevamos'
 import { enTexto, fraseSector } from '@/modules/conta/alta/frases'
-import { propuestaGuardada } from '@/modules/conta/alta/sectorDelAlta'
-import { gestoriaPorCodigos } from '@/modules/conta/sectores/sectores'
+import { propuestaDelAlta, propuestaGuardada } from '@/modules/conta/alta/sectorDelAlta'
+import { entender } from '@/modules/conta/alta/entender'
+import { gestoriaPorCodigos, preguntaDelSector } from '@/modules/conta/sectores/sectores'
 import { fraseDespuesDelCambio } from '@/modules/conta/sectores/cambio'
 
 const CUENTA = { nombre: 'Gestoría', razonSocial: 'Gestoría de Prueba, S.L.', nif: 'B28000016',
@@ -78,7 +79,9 @@ describe('al volver a entrar a medias, la propuesta es la guardada', () => {
   it('el sector de la empresa; sin él, la marca de hostelería', () => {
     expect(propuestaGuardada('gestoria', false, [])).toEqual({ sector: 'gestoria', duda: false })
     expect(propuestaGuardada(null, true, [])).toEqual({ sector: 'hosteleria', duda: false })
-    expect(propuestaGuardada(undefined, null, [])).toEqual({ sector: 'general', duda: false })
+    // Sin sector, sin marca y sin actividades: nada en qué apoyarse.
+    expect(propuestaGuardada(undefined, null, [])).toEqual({ sector: 'general', duda: false, sinPista: true })
+    expect(propuestaGuardada('general', false, [{ iaeCode: '1_644', cnaeCode: null, endedOn: null }])).toEqual({ sector: 'general', duda: false })
   })
   it('con duda solo si sus actividades vivas solo dan duda', () => {
     expect(propuestaGuardada('gestoria', false, [{ iaeCode: null, cnaeCode: '6910', endedOn: null }])).toEqual({ sector: 'gestoria', duda: true })
@@ -94,5 +97,46 @@ describe('lo que se dice (regla 8: con contenido)', () => {
   it('en Ajustes, después de cambiar', () => {
     expect(fraseDespuesDelCambio('general', 'gestoria')).toBe('Hecho: tu negocio es ahora del sector Gestoría o asesoría. Ya salen: Clientes y cuotas, Tarifa y paquetes, CRM y GoCardless en Ajustes › Cobros. No se ha borrado nada.')
     expect(fraseDespuesDelCambio('hosteleria', 'general')).toMatch(/^Hecho: tu negocio es ahora del sector General\. Dejan de salir: Cierres del día, .*\. No se ha borrado nada\.$/)
+  })
+})
+
+// G03 (Julio, 08/11) · La e2e 42426861903: «somos una gestoría» se apuntaba como
+// «No lo sé» (la palabra «gestoría» suelta lo era), no se buscaba nada y el
+// sector salía «tu negocio no es de hostelería ni una gestoría».
+describe('quien escribe «gestoría» recibe Gestoría', () => {
+  const actividad = todasLasPreguntas('actividad', ctx())[0]
+
+  it.each(['somos una gestoría', 'Gestoría', 'somos asesores fiscales', 'asesoría laboral para pymes', 'soy gestor administrativo', 'despacho de asesor'])(
+    '«%s» es una actividad, no un «No lo sé»', (t) => {
+      expect(entender(actividad, t).tipo).not.toBe('nolose')
+    })
+
+  it('«No lo sé» sigue siéndolo cuando señala a otro', () => {
+    expect(entender(actividad, 'ni idea').tipo).toBe('nolose')
+    expect(entender(actividad, 'que lo mire mi gestor').tipo).toBe('nolose')
+    expect(entender(actividad, 'pregúntaselo a mi asesor').tipo).toBe('nolose')
+    const boton = todasLasPreguntas('impuestos', ctx())[0]
+    expect(entender(boton, 'lo lleva la gestoría').tipo).toBe('nolose')
+  })
+
+  it.each(['somos una gestoría', 'somos gestores', 'una asesoría', 'soy asesor', 'gestor', 'asesora fiscal'])(
+    '«%s», aunque el catálogo no encuentre nada, propone Gestoría', (t) => {
+      const p = propuestaDelAlta({ texto: t, elegidas: [] })
+      expect(p.sector).toBe('gestoria')
+      expect(preguntaDelSector(p)).not.toMatch(/no es .*gestor/)
+    })
+
+  it('con la actividad de otra cosa, las palabras siguen valiendo', () => {
+    expect(propuestaDelAlta({ texto: 'gestoría', elegidas: [{ clave: 'a-mano', iae: '1_644', cnae: null }] }).sector).toBe('gestoria')
+  })
+
+  it('sin actividad ni palabras, la pregunta va sin propuesta dicha', () => {
+    const p = propuestaDelAlta({ texto: null, elegidas: [] })
+    expect(p).toEqual({ sector: 'general', duda: false, sinPista: true })
+    expect(preguntaDelSector(p)).toBe('¿De qué sector es tu negocio?')
+  })
+
+  it('un restaurante sigue siendo hostelería', () => {
+    expect(propuestaDelAlta({ texto: 'restaurante', elegidas: [] }).sector).toBe('hosteleria')
   })
 })

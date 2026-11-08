@@ -33,7 +33,7 @@ import { CambiarDeEmpresa } from '@/modules/conta/alta/CambiarDeEmpresa'
 import { rutaImpuestos, rutaTuEmpresa } from '@/config/navegacion'
 import { leerSoyAsesoria, marcarAsesoria } from '@/modules/conta/services/despachoService'
 import { refrescarContextoEsqueleto } from '@/modules/conta/esqueleto/useEsqueleto'
-import { esSector, sectorPropuesto, type Propuesta } from '@/modules/conta/sectores/sectores'
+import { esSector, type Propuesta } from '@/modules/conta/sectores/sectores'
 import { useCuentaConta, leerDatosDeLaCuenta, type DatosDeLaCuenta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useDatosEmpresa } from '@/modules/conta/empresa/useDatosEmpresa'
@@ -44,8 +44,8 @@ import {
   PASOS, pasoSiguiente, preguntaActual, primeraDelPaso, territorioPorCp, textoDuda, todasLasPreguntas,
   type ClavePregunta, type ContextoAlta, type PasoAlta, type Pregunta,
 } from '@/modules/conta/alta/guion'
-import { esHosteleriaPorCodigos, esHosteleriaPorGrupos, gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
-import { propuestaGuardada } from '@/modules/conta/alta/sectorDelAlta'
+import { gruposDe, proponer, type PropuestaActividad } from '@/modules/conta/alta/actividades'
+import { propuestaDelAlta, propuestaGuardada } from '@/modules/conta/alta/sectorDelAlta'
 import {
   TOTAL_PUNTOS, cuantosHechos, loQueLlevamos, puntoQuePide, respuestasParaVolver, sePuedeVolver,
   type ClavePunto, type Punto,
@@ -124,6 +124,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
   const [aMano, setAMano] = useState(false)
   /** G03 · El sector que se acaba de proponer (hasta que la empresa se vuelve a leer). */
   const [sectorDelAlta, setSectorDelAlta] = useState<Propuesta | null>(null)
+  /** G03 · Lo que escribió en «¿A qué os dedicáis?»: con ello se propone el sector aunque el catálogo no encuentre nada. */
+  const [textoActividad, setTextoActividad] = useState<string | null>(null)
   const [muyPronto, setMuyPronto] = useState(false)
   const [hoja, setHoja] = useState(false)
   const [texto, setTexto] = useState('')
@@ -277,10 +279,15 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
         case 'actividad': {
           if (noLoSe) {
             await apuntarDuda(accountId, id!, userId, 'actividad', p.texto, 'Sin actividad')
+            // G03: sin actividad no hay en qué apoyarse; el sector se pregunta sin propuesta dicha.
+            const sinActividad = propuestaDelAlta({ texto: null, elegidas: [] })
+            await ponerSectorDelAlta(accountId, id!, sinActividad.sector)
+            setSectorDelAlta(sinActividad)
             apuntado([{ t: 'Se lo apunto a tu asesor. La actividad la añades luego en «Tu empresa».' }])
             break
           }
           const grupos = gruposDe(valor)
+          setTextoActividad(valor)
           const lista = grupos.length ? proponer(grupos, await buscarParaGrupos(grupos)) : []
           if (lista.length === 0) {
             decir('folvy', <>No encuentro nada en el catálogo oficial con «<b>{valor}</b>». Búscalo a mano: escribe lo que haces o el número del epígrafe.</>)
@@ -421,8 +428,7 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       // Va en la MISMA frase que las actividades: la pregunta siguiente se pega
       // a la última frase apuntada, y tiene que seguir en la burbuja del «Entendido».
       // G03: el sector, propuesto por lo que hace; con Sumied, la pregunta siguiente lo confirma.
-      const hosteleria = esHosteleriaPorGrupos(elegidas.map((x) => x.clave)) || elegidas.some((x) => esHosteleriaPorCodigos(x.iae?.code ?? null, x.cnae?.code ?? null))
-      const propuesta = sectorPropuesto({ hosteleria, grupos: elegidas.map((x) => x.clave), codigos: elegidas.map((x) => ({ iae: x.iae?.code ?? null, cnae: x.cnae?.code ?? null })) })
+      const propuesta = propuestaDelAlta({ texto: propuestas.texto, elegidas: elegidas.map((x) => ({ clave: x.clave, iae: x.iae?.code ?? null, cnae: x.cnae?.code ?? null })) })
       await ponerSectorDelAlta(accountId!, companyId, propuesta.sector)
       setSectorDelAlta(propuesta)
       const frase = fraseActividades(propuestas.texto, elegidas.map((x) => ({ descripcion: x.descripcion, iae: x.iae?.code ?? null })), iva)
@@ -444,8 +450,8 @@ export function ConversacionAlta({ marco }: { marco: MarcoAlta }) {
       })
       const iva = await ponerIvaVentas(companyId, [{ iaeCode: a.iae?.code ?? null, cnaeCode: a.cnae?.code ?? null }])
       setAMano(false)
-      const hosteleria = esHosteleriaPorCodigos(a.iae?.code ?? null, a.cnae?.code ?? null)
-      const propuesta = sectorPropuesto({ hosteleria, grupos: [], codigos: [{ iae: a.iae?.code ?? null, cnae: a.cnae?.code ?? null }] })
+      // G03: por el código elegido y por lo que escribió antes (si el catálogo no encontró nada, sus palabras siguen valiendo).
+      const propuesta = propuestaDelAlta({ texto: textoActividad, elegidas: [{ clave: 'a-mano', iae: a.iae?.code ?? null, cnae: a.cnae?.code ?? null }] })
       await ponerSectorDelAlta(accountId!, companyId, propuesta.sector)
       setSectorDelAlta(propuesta)
       const frase = fraseActividadAMano(a.descripcion, a.iae?.code ?? null, iva)
