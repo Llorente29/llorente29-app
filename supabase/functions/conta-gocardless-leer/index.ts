@@ -42,7 +42,7 @@ async function leerFilas<T>(q: PromiseLike<{ data: unknown; error: { message: st
   return (data ?? []) as T[]
 }
 
-async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_noche' | 'conexion', quien: string | null) {
+async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_noche' | 'conexion' | 'aviso', quien: string | null) {
   const { data: sec, error: secErr } = await db.rpc('conta_gocardless_secreto', { p_company: empresa })
   if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
   const s = (sec as { account_id: string; entorno: Entorno; token: string }[] | null)?.[0]
@@ -242,7 +242,8 @@ Deno.serve(async (req) => {
       if (error) return json(400, { error: error.message })
       return json(200, { ok: true, ...(await leer(admin, empresa, 'conexion', quien)) })
     }
-    if (cuerpo.accion === 'leer') return json(200, { ok: true, ...(await leer(admin, empresa, esCron ? 'cada_noche' : 'persona', quien)) })
+    // G01d · La relectura que lanza un aviso al instante (conta-gocardless-aviso, con el secreto del servidor) se apunta «por aviso».
+    if (cuerpo.accion === 'leer') return json(200, { ok: true, ...(await leer(admin, empresa, esCron ? (cuerpo.por === 'aviso' ? 'aviso' : 'cada_noche') : 'persona', quien)) })
     return json(400, { error: 'Acción: conectar o leer.' })
   } catch (e) {
     // En el registro, el qué y nunca el token (T11).

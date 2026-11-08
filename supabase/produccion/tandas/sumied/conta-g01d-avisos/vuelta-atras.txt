@@ -1,0 +1,6 @@
+# G01d · la vuelta atrás de la 1620: quita el repaso, las cinco funciones, la
+# cola de avisos, los secretos de los avisos en Vault (si alguien los pegó) y
+# las columnas de las conexiones; las lecturas «aviso» pasan a «persona» y el
+# CHECK vuelve a como estaba. La lectura entera no cambia.
+cuenta: scripts/conta/produccion/cuentas/g01d-avisos.sql
+supabase/vuelta-atras/20261108T1620_g01d_avisos.down.sql

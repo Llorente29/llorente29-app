@@ -378,3 +378,14 @@ verify_jwt = false
 
 [functions.conta-bitrix-leer]
 verify_jwt = false
+
+# G01d (08/11) · Los avisos al instante del CRM y de GoCardless, sin sesión
+# (verify_jwt = false): llaman Bitrix24 y GoCardless. Solo se acepta un aviso
+# auténtico (el código de la conexión en Bitrix24; la firma con el secreto de la
+# cuenta en GoCardless); lo demás, 401. Y no se cree lo que trae: solo dice qué
+# ficha o qué cuenta releer, con el acceso de solo lectura de siempre.
+[functions.conta-crm-aviso]
+verify_jwt = false
+
+[functions.conta-gocardless-aviso]
+verify_jwt = false
