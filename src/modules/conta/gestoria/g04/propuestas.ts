@@ -16,6 +16,10 @@ export interface PropuestaDeServicio { servicioId: string | null; trabajador: st
 
 const palabras = (t: string) => normalizar(t).split(/[^A-Z0-9Ñ]+/).filter((p) => p.length >= 3)
 
+// Sin la clase de caracteres escrita entre corchetes: Tailwind lee el código buscando
+// «propiedad:valor» entre corchetes y le rompía la build de CSS (como en AllergensCompliancePage).
+const SEPARADORES_AL_PRINCIPIO = new RegExp('^[\\s,·:\\-]+')
+
 export function proponerServicio(nombreSuscripcion: string, servicios: readonly ServicioParaProponer[]): PropuestaDeServicio {
   const c = clasificar(nombreSuscripcion)
   const porClave = (clave: string) => servicios.find((s) => s.clave === clave) ?? null
@@ -30,6 +34,6 @@ export function proponerServicio(nombreSuscripcion: string, servicios: readonly 
   if (!s.porTrabajador) return { servicioId: s.id, trabajador: null }
   // El trabajador: lo que queda del nombre al quitar las palabras del servicio.
   const delServicio = new Set(palabras(s.nombre))
-  const resto = nombreSuscripcion.trim().split(/\s+/).filter((p) => !delServicio.has(normalizar(p).replace(/[^A-Z0-9Ñ]/g, ''))).join(' ').replace(/^[-:·,\s]+/, '').trim()
+  const resto = nombreSuscripcion.trim().split(/\s+/).filter((p) => !delServicio.has(normalizar(p).replace(/[^A-Z0-9Ñ]/g, ''))).join(' ').replace(SEPARADORES_AL_PRINCIPIO, '').trim()
   return { servicioId: s.id, trabajador: resto || null }
 }
