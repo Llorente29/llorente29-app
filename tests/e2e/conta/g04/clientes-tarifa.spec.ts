@@ -54,7 +54,9 @@ async function simular(page: Page, Q: string, A: string) {
   // Las empresas: gestorías con nombres inventados (el resto de la fila, la de staging).
   await page.route(/\/rest\/v1\/company\?/, async (r) => {
     if (r.request().method() !== 'GET') return r.continue()
-    const resp = await r.fetch()
+    // Si la prueba ya acabó, la respuesta no le importa a nadie: no se convierte en un error de la prueba.
+    const resp = await r.fetch().catch(() => null)
+    if (!resp) return
     let cuerpo: unknown = await resp.json().catch(() => null)
     const cambiar = (x: Record<string, unknown>) => {
       const i = [Q, A].indexOf(String(x.id))
@@ -118,7 +120,7 @@ test('Clientes: la banda, lo que tienes que hacer, «Las dos», el panel y «Cob
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/clientes-panel-otra-via-${lado(page)}.png`, fullPage: false })
   await panel.getByRole('button', { name: 'Guardar' }).click()
-  await expect(panel.getByRole('status')).toContainText('ya no sale en «Te deben»')
+  await expect(panel.getByRole('status').filter({ hasText: 'ya no sale en «Te deben»' }).last()).toBeVisible()
   expect(llamadas.map((l) => l.f)).toEqual(['conta_gc_cobro_otra_via'])
   expect(llamadas[0].cuerpo).toMatchObject({ p_gc_cobro: 'PM1', p_via: 'transferencia' })
   expect(errores).toEqual([])
@@ -141,7 +143,7 @@ test('«Asignar a un cliente»: propone por NIF y une, sin tocar GoCardless', as
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/asignar-${lado(page)}.png`, fullPage: true })
   await uno.getByRole('button', { name: 'Unir a Transportes de Ejemplo, S.L.' }).click()
-  await expect(page.getByRole('status')).toContainText('Enlazado: TRANSPORTES DE EJEMPLO SL de GoCardless es Transportes de Ejemplo, S.L.')
+  await expect(page.getByRole('status').filter({ hasText: 'Enlazado: TRANSPORTES DE EJEMPLO SL de GoCardless es Transportes de Ejemplo, S.L.' })).toBeVisible()
   expect(llamadas).toEqual([{ f: 'conta_gestoria_enlazar', cuerpo: { p_company: Q, p_gc_cliente: 'CU1x', p_party: 'c8' } }])
   expect(errores).toEqual([])
 })
@@ -181,7 +183,7 @@ test('Tarifa: niveles, laboral y paquete; cambiar un precio, crear un servicio y
   // Cambiar el precio de un nivel: guarda desde un mes y lo dice.
   await page.getByRole('textbox', { name: 'Precio de Estándar' }).fill('62,00')
   await page.getByRole('button', { name: /^Guardar el precio desde/ }).click()
-  await expect(page.getByRole('status')).toContainText('Guardado Gestoría mensual · Estándar (precio de tarifa): 62,00 €')
+  await expect(page.getByRole('status').filter({ hasText: 'Guardado Gestoría mensual · Estándar (precio de tarifa): 62,00 €' })).toBeVisible()
 
   // La laboral: sus reglas y «Pruébalo».
   await lista.getByRole('button', { name: /Gestión laboral/ }).click()
@@ -204,7 +206,7 @@ test('Tarifa: niveles, laboral y paquete; cambiar un precio, crear un servicio y
   await crear.getByRole('textbox', { name: 'Nombre' }).fill('Asesoría de prueba')
   await crear.getByRole('textbox', { name: /Precio de tarifa/ }).fill('30')
   await crear.getByRole('button', { name: 'Crear el servicio' }).click()
-  await expect(crear.getByRole('status')).toContainText('Creado el servicio «Asesoría de prueba»')
+  await expect(crear.getByRole('status').filter({ hasText: 'Creado el servicio «Asesoría de prueba»' })).toBeVisible()
   await page.screenshot({ path: `${DIR}/tarifa-crear-servicio-${lado(page)}.png`, fullPage: true })
 
   // Cambiar precios: parte de lo que se está viendo (la laboral); primero a quién afecta; después, aplicar lo dice.
@@ -219,7 +221,7 @@ test('Tarifa: niveles, laboral y paquete; cambiar un precio, crear un servicio y
   await expect(afecta).toContainText(/Transportes de Ejemplo, S\.L\.|Cliente Ejemplo Dos/)
   await page.screenshot({ path: `${DIR}/tarifa-cambiar-precios-${lado(page)}.png`, fullPage: true })
   await cambio.getByRole('button', { name: /^Aplicar el cambio a \d+ clientes?$/ }).click()
-  await expect(cambio.getByRole('status')).toContainText('Aplicado: Gestión laboral sube un 3 %')
+  await expect(cambio.getByRole('status').filter({ hasText: 'Aplicado: Gestión laboral sube un 3 %' })).toBeVisible()
   expect(llamadas.map((l) => l.f)).toEqual(['conta_tarifa_precio_guardar', 'conta_tarifa_servicio_crear', 'conta_tarifa_cambio_ensayar', 'conta_tarifa_cambio_aplicar'])
   expect(llamadas[1].cuerpo).toMatchObject({ p_nombre: 'Asesoría de prueba', p_forma: 'fijo', p_periodo: 'mes', p_importe: 30, p_ensayo: false })
   expect(errores).toEqual([])
