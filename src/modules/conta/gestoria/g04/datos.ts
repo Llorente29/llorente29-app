@@ -73,8 +73,9 @@ export async function leerClientes(accountId: string): Promise<DatosClientes> {
     // La lista y «Lo que tienes que hacer», por sus funciones de lectura (la 2209): las vistas, con la RLS fila
     // a fila, tardaban 5 s y 0,7 s en QBO; las funciones comprueban la cuenta una vez (61 ms la lista).
     leerFuncion('conta_lista_clientes', { p_cuenta: accountId }, ['cliente_id', 'empresa_id']),
-    leerTodo('conta_gc_suscripcion', 'company_id, gc_id, gc_cliente_id, nombre, importe, al_mes, estado, inicio, fin, proximo_cobro_fecha, proximo_cobro_importe', deCuenta, ['company_id', 'gc_id'],
-      (q) => (q as { eq: (c: string, v: string) => unknown }).eq('estado', 'active')),
+    // Las cuatro tablas grandes de la pantalla, también por funciones (la 2308): con la RLS, los cobros tardaban
+    // 2,1 s en QBO (3 páginas de 690 ms) y los mandatos 1,5 s; con la función, 41 y 11 ms por página.
+    leerFuncion('conta_lista_gc_suscripciones', { p_cuenta: accountId }, ['company_id', 'gc_id']),
     leerTodo('conta_consulta_cargo_devuelto', '*', cuenta, ['empresa_id', 'gc_id']),
     leerFuncion('conta_lista_que_hacer', { p_cuenta: accountId }, ['empresa_id', 'tipo']),
     leerTodo('conta_consulta_asignacion', '*', cuenta, ['cliente_id', 'id']),
@@ -85,10 +86,10 @@ export async function leerClientes(accountId: string): Promise<DatosClientes> {
     leerTodo('conta_paquete_linea', 'id, paquete_id, servicio_id, nivel_id, limite_trabajadores, orden', deCuenta, ['id']),
     leerTodo('conta_gestoria_ajustes', 'company_id, mitad_de_mes, cambios_de_tarifa', deCuenta, ['company_id']),
     // Lo leído del CRM de cada cliente (contacto, dirección, referencia), para el panel y la ficha.
-    leerTodo('conta_gestoria_cliente', 'party_id, ficha, leido_at', deCuenta, ['party_id']),
+    leerFuncion('conta_lista_fichas', { p_cuenta: accountId }, ['party_id']),
     leerTodo('conta_crm', 'crm, portal', deCuenta, ['crm']),
-    leerTodo('conta_gc_cobro', 'company_id, gc_id, mandato_gc_id, suscripcion_gc_id, estado, fecha, importe, motivo', deCuenta, ['company_id', 'gc_id']),
-    leerTodo('conta_gc_mandato', 'company_id, gc_id, gc_cliente_id, estado, creado', deCuenta, ['company_id', 'gc_id']),
+    leerFuncion('conta_lista_gc_cobros', { p_cuenta: accountId }, ['company_id', 'gc_id']),
+    leerFuncion('conta_lista_gc_mandatos', { p_cuenta: accountId }, ['company_id', 'gc_id']),
   ])
   return { clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm, cobros, mandatos }
 }

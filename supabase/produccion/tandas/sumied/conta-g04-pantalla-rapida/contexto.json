@@ -1,0 +1,19 @@
+{
+ "_que": "G04 · La pantalla rápida · contexto de producción, medido en SOLO LECTURA el 08/11 (por el MCP de lectura). La 2308 solo añade cuatro funciones nuevas, que hoy no existen; el nombre no está en el historial. Nada en el camino del pedido.",
+ "medido": "2026-11-08T22:09Z",
+ "tanda": {
+  "supabase/migrations/20261108T2308_g04_pantalla_rapida.sql": "a6cdfffb43b5778fe312c470e1b2eeae"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -73,11 +73,18 @@ async function simular(page: Page, Q: string, A: string) {
     if (r.request().method() !== 'GET' || !(nombre in datos)) return r.fallback()
     return json(r, datos[nombre])
   })
-  // Las funciones de lectura (la 2209) devuelven las mismas filas que las vistas de antes.
-  const LECTURAS: Record<string, string> = { conta_lista_clientes: 'conta_consulta_cliente_empresa', conta_lista_que_hacer: 'conta_consulta_que_hacer' }
+  // Las funciones de lectura (la 2209 y la 2308) devuelven las mismas filas que las vistas y las tablas de antes.
+  const LECTURAS: Record<string, (d: typeof datos) => unknown[]> = {
+    conta_lista_clientes: (d) => d.conta_consulta_cliente_empresa,
+    conta_lista_que_hacer: (d) => d.conta_consulta_que_hacer,
+    conta_lista_gc_cobros: (d) => d.conta_gc_cobro,
+    conta_lista_gc_mandatos: (d) => d.conta_gc_mandato,
+    conta_lista_gc_suscripciones: (d) => d.conta_gc_suscripcion.filter((x) => x.estado === 'active'),
+    conta_lista_fichas: (d) => d.conta_gestoria_cliente,
+  }
   await page.route(/\/rest\/v1\/rpc\/([a-z_]+)/, (r) => {
     const f = /\/rest\/v1\/rpc\/([a-z_]+)/.exec(r.request().url())![1]
-    if (f in LECTURAS) return json(r, datos[LECTURAS[f]])
+    if (f in LECTURAS) return json(r, LECTURAS[f](datos))
     if (!(f in FRASES)) return r.fallback()
     const cuerpo = (r.request().postDataJSON() ?? {}) as Record<string, unknown>
     llamadas.push({ f, cuerpo })

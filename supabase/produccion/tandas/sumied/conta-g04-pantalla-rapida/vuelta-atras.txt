@@ -1,0 +1,3 @@
+# G04 · la vuelta atrás de la 2308: fuera las cuatro funciones de lectura.
+cuenta: scripts/conta/produccion/cuentas/g04-pantalla-rapida.sql
+supabase/vuelta-atras/20261108T2308_g04_pantalla_rapida.down.sql
