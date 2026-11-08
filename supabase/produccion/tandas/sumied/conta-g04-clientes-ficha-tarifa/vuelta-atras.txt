@@ -1,0 +1,5 @@
+# G04 · la vuelta atrás de la 0930: fuera las vistas, las funciones, las tablas
+# y las columnas nuevas; lo que un «Cambiar precios» aplicado cerró en los
+# precios importados, como estaba.
+cuenta: scripts/conta/produccion/cuentas/g04-tarifa-y-clientes.sql
+supabase/vuelta-atras/20261108T0930_g04_tarifa_y_clientes.down.sql

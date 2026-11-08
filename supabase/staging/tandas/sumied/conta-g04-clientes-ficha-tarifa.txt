@@ -1,0 +1,6 @@
+# G04 · Tarea 3: la 0930 y su prueba (ROLLBACK, datos inventados): apagado por
+# defecto, niveles, precios, tramos, paquetes, «+ Añadir», «Cambiar de nivel»,
+# «Cambiar precios» (ensayar, aplicar, huella, deshacer), «Cobrado por otra
+# vía», la lista sin repetir, el ajuste de mitad de mes y la vuelta atrás.
+supabase/migrations/20261108T0930_g04_tarifa_y_clientes.sql
+supabase/staging/sql/20261108_g04_tarifa_y_clientes_prueba.sql

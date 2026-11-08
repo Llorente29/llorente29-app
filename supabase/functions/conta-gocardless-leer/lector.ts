@@ -156,6 +156,8 @@ export interface SuscripcionGc {
   mandatoId: string | null
   inicio: string | null
   fin: string | null
+  /** G04 · El siguiente cobro (upcoming_payments de GoCardless, el más próximo): su día y su importe. */
+  proximoCobro: { fecha: string; importeCent: number } | null
 }
 
 export function leerSuscripcion(x: Record<string, unknown>): SuscripcionGc {
@@ -170,7 +172,17 @@ export function leerSuscripcion(x: Record<string, unknown>): SuscripcionGc {
     mandatoId: enlace(x, 'mandate'),
     inicio: texto(x.start_date),
     fin: texto(x.end_date),
+    proximoCobro: proximoCobro(x.upcoming_payments),
   }
+}
+
+/** G04 · El más próximo de upcoming_payments ([{ charge_date, amount }]); null si no trae ninguno. */
+function proximoCobro(v: unknown): { fecha: string; importeCent: number } | null {
+  if (!Array.isArray(v)) return null
+  const xs = v.filter((p): p is { charge_date: string; amount: number } =>
+    !!p && typeof (p as { charge_date?: unknown }).charge_date === 'string' && Number.isFinite(Number((p as { amount?: unknown }).amount)))
+    .sort((a, b) => (a.charge_date < b.charge_date ? -1 : a.charge_date > b.charge_date ? 1 : 0))
+  return xs.length ? { fecha: xs[0].charge_date, importeCent: Math.round(Number(xs[0].amount)) } : null
 }
 
 /**

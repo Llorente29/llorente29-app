@@ -1,0 +1,8 @@
+{
+ "_que": "G04 · Tarea 3 · contexto de producción, medido en SOLO LECTURA el 08/11 (analizar.mjs sql-contexto). La 0930 solo añade: diez tablas nuevas, columnas que admiten nulos en conta_linea (264 filas) y conta_gc_suscripcion (2.636), dieciséis funciones nuevas y seis vistas nuevas. Nada de lo que crea existe hoy. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-08T09:10Z",
+ "tanda": {
+  "supabase/migrations/20261108T0930_g04_tarifa_y_clientes.sql": "17d5e50048711f226f88d205117d9510"
+ },
+ "contexto": {"tablas":["public.conta_gc_suscripcion","public.conta_linea"],"funciones":[],"filas":{"public.conta_gc_suscripcion":2636,"public.conta_linea":264},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
