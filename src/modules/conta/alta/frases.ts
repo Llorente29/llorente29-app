@@ -8,6 +8,8 @@
 import { codigoIae } from '@/modules/conta/empresa/datosEmpresa'
 import { fecha } from '@/modules/conta/alta/guion'
 import { TEXTO_IVA_VENTAS } from '@/modules/conta/lib/ivaVentas'
+import { PAQUETES, type Sector } from '@/modules/conta/sectores/sectores'
+import { loQueSaleCon } from '@/modules/conta/sectores/cambio'
 
 export interface Trozo { t: string; b?: true }
 export type Frase = Trozo[]
@@ -106,4 +108,11 @@ export function fraseHosteleria(es: boolean): Frase {
   return es
     ? [{ t: 'La marco como ' }, n('hostelería'), { t: ': salen Liquidaciones, las plataformas y los socios de marca. Se cambia en Ajustes › Empresa.' }]
     : [{ t: 'No la marco como ' }, n('hostelería'), { t: '. Si lo es, se cambia en Ajustes › Empresa.' }]
+}
+
+/** G03 · Lo que ha quedado del sector, qué sale con él y dónde se cambia (regla 8). */
+export function fraseSector(s: Sector): Frase {
+  const sale = loQueSaleCon(s)
+  return [{ t: 'Apuntado: sector ' }, n(PAQUETES[s].etiqueta),
+    { t: sale.length ? `. Además de lo de siempre, salen ${sale.join(', ')}. Se cambia en Ajustes › Tu empresa.` : ': lo de siempre. Se cambia en Ajustes › Tu empresa.' }]
 }

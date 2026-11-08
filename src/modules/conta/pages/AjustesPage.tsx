@@ -35,7 +35,7 @@ import { ApuntarSoloAjustes } from '@/modules/conta/compras/ApuntarSoloAjustes'
 import { ApartadoRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
-import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
+import { ApartadoSector } from '@/modules/conta/empresa/ApartadoSector'
 import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
 import { ApartadoColor } from '@/modules/conta/empresa/ApartadoColor'
 import { Usuarios } from '@/modules/conta/ajustes/Usuarios'
@@ -90,8 +90,8 @@ function Entrada({ id }: { id: string }) {
             <QuienEres {...p} />
             <div className="cx-columna">
               <Actividades {...p} />
-              {/* S01: la marca de hostelería de la empresa, al lado de lo que hace. */}
-              <ApartadoHosteleria {...p} />
+              {/* G03: el sector de la empresa, al lado de lo que hace (antes, S01: «¿Es un negocio de hostelería?»). */}
+              <ApartadoSector {...p} />
               {/* S01: el logo de la empresa, el de la cabecera. */}
               <ApartadoLogo {...p} />
               <ApartadoColor quien={p.quien} movil={p.movil} />

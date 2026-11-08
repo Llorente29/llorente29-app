@@ -1,0 +1,4 @@
+# G03b · Las pantallas del sector: sin migraciones. Solo la comprobación de
+# que el alta encuentra en staging las actividades de una gestoría (como
+# usuario, solo lee, en ROLLBACK).
+supabase/staging/sql/20261108_g03b_catalogos_del_alta_prueba.sql

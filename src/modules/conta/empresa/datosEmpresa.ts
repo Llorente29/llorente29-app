@@ -5,6 +5,7 @@
 // deduce (qué meses están cerrados, qué falta para «Todo listo», cómo se dice
 // el IVA en palabras de la calle).
 
+import type { Sector } from '@/modules/conta/sectores/sectores'
 import { mesesDe, siguienteMesACerrar, mesQueSePuedeReabrir, type Ejercicio } from '@/modules/conta/lib/ejercicios'
 import type { Origen, Registro, Sugerencia } from '@/modules/conta/ia/tipos'
 import { DIGITOS_MAXIMOS, DIGITOS_MINIMOS } from '@/modules/conta/lib/pgc'
@@ -47,6 +48,8 @@ export interface Empresa {
    * null = sin decir (se trata como no).
    */
   hosteleria?: boolean | null
+  /** G03 · El sector de la empresa (company.sector). null = sin poner o sin la columna: se sigue lo de hosteleria. */
+  sector?: Sector | null
   /** S01 · La ruta del logo en el bucket company-logos (company.logo_path), o null. */
   logoPath?: string | null
   /** Por dónde va el alta conversada (company.setup_step). */

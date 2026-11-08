@@ -12,6 +12,7 @@
 // conta_reabrir_mes y conta_hacer_principal. La prueba tests/unit/modules/
 // conta/empresaC00.test.ts lo comprueba.
 
+import { esSector, type Sector } from '@/modules/conta/sectores/sectores'
 import { tabla, mensaje, rpc } from '@/modules/conta/services/bd'
 import type {
   Actividad, CambiosQuienEres, Cierre, DatosEmpresa, Empresa, EjercicioBd, Opcion, PerfilFiscal, Socio,
@@ -39,6 +40,8 @@ function aEmpresa(r: Fila): Empresa {
     registryName: txt(r.registry_name), registryVolume: txt(r.registry_volume), registryFolio: txt(r.registry_folio),
     registrySheet: txt(r.registry_sheet), registryEntry: txt(r.registry_entry),
     hosteleria: r.is_hospitality === true ? true : r.is_hospitality === false ? false : null,
+    // G03 · El sector (company.sector); sin la columna o sin poner, null.
+    sector: esSector(r.sector) ? r.sector : null,
     logoPath: typeof r.logo_path === 'string' && r.logo_path ? r.logo_path : null,
     incorporatedOn: txt(r.incorporated_on), dehuEmail: txt(r.dehu_email), dehuPhone: txt(r.dehu_phone),
     phone: txt(r.phone), email: txt(r.email),
@@ -149,15 +152,20 @@ export async function guardarQuienEres(companyId: string, userId: string | null,
   if (error) throw new Error(mensaje('No se ha guardado', error))
 }
 
-// ── S01 · La marca de hostelería ────────────────────────────────────────────
+// ── G03 · El sector de la empresa ──────────────────────────────────────────
 
-/** Dice si la empresa es de hostelería (company.is_hospitality). Devuelve lo que ha quedado en la base. */
-export async function guardarHosteleria(accountId: string, companyId: string, userId: string | null, esHosteleria: boolean): Promise<boolean> {
-  const { data, error } = await tabla('company').update({ is_hospitality: esHosteleria, updated_by: userId })
-    .eq('id', companyId).eq('account_id', accountId).select('is_hospitality').maybeSingle()
-  if (error) throw new Error(mensaje('No se ha guardado', error))
-  if (!data) throw new Error('No se ha guardado: esa empresa no está en tu cuenta o no tienes permiso para cambiarla.')
-  return (data as { is_hospitality: boolean | null }).is_hospitality === true
+/**
+ * Pone el sector de la empresa (company.sector, de la 20261107T1945). Su
+ * disparador deja is_hospitality igual. Devuelve lo que ha quedado en la base.
+ */
+export async function guardarSector(accountId: string, companyId: string, userId: string | null, sector: Sector): Promise<Sector> {
+  const { data, error } = await tabla('company').update({ sector, updated_by: userId })
+    .eq('id', companyId).eq('account_id', accountId).select('sector').maybeSingle()
+  if (error) throw new Error(mensaje('No se ha guardado el sector', error))
+  if (!data) throw new Error('No se ha guardado el sector: esa empresa no está en tu cuenta o no tienes permiso para cambiarla.')
+  const quedo = (data as { sector: unknown }).sector
+  if (!esSector(quedo)) throw new Error('No se ha guardado el sector: la base no lo ha devuelto.')
+  return quedo
 }
 
 // ── Tus impuestos y detalle contable ────────────────────────────────────────
