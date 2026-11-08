@@ -42,6 +42,12 @@ concurrency:
 permissions:
   contents: read
 
+# Con «shell: bash», GitHub corre cada paso con «-eo pipefail»: un guion que
+# falla dentro de «… | tee» pone el paso en rojo (sin esto, el tee lo tapaba).
+defaults:
+  run:
+    shell: bash
+
 env:
   PGCONNECT_TIMEOUT: '15'
   STAGING_REF: oseymswjlzplqoxrfjzi
@@ -97,6 +103,7 @@ jobs:
           case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
 
       - name: Instalar psql 17
+        id: psql
         timeout-minutes: 15
         run: |
           set -euo pipefail
@@ -162,7 +169,7 @@ jobs:
 
       - name: La cola de la cuenta de pruebas (solo lee)
         timeout-minutes: 10
-        if: always()
+        if: always() && steps.psql.outcome == 'success'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
