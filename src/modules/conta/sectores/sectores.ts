@@ -40,7 +40,7 @@ export interface Paquete {
   /** En la frase del alta: «Por lo que me cuentas, eres …». */
   enLaFrase: string
   enciende: readonly Enciende[]
-  /** Lo que sale dentro de las pantallas y no es una página del menú. */
+  /** Lo que sale dentro de las pantallas y no tiene página propia en el menú (si la tiene, ya la nombra el menú). */
   tarjetas: readonly string[]
   catalogo: readonly ServicioDeSerie[]
 }
@@ -53,7 +53,9 @@ export const PAQUETES: Record<Sector, Paquete> = {
   hosteleria: {
     id: 'hosteleria', etiqueta: 'Hostelería', linea: 'Además: liquidaciones de Glovo, Uber y Just Eat, socios de marca y Catcher',
     enLaFrase: 'un negocio de hostelería', enciende: ['hosteleria'],
-    tarjetas: ['Socios de marca en Liquidaciones', 'Catcher', 'Liquidaciones del mes en Compras', 'Cierre del día en Ajustes'],
+    // Solo lo que no tiene página propia en el menú (Julio, 08/11): los socios de marca y el cierre del
+    // día ya salen por su página (Contactos › Socios de marca, Ventas › Cierres del día).
+    tarjetas: ['Catcher', 'Liquidaciones del mes en Compras'],
     catalogo: [],
   },
   gestoria: {

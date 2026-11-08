@@ -47,7 +47,8 @@ export function ApartadoSector({ d, quien, alCambiar, movil }: { d: DatosEmpresa
             onClick={() => { h.limpiar(); setElegido(s) }}
             style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', height: 'auto', minHeight: 44, padding: '8px 14px', borderRadius: 12, whiteSpace: 'normal' }}>
             <span style={{ fontWeight: 600 }}>{PAQUETES[s].etiqueta}</span>
-            <span className="cx-ayuda" style={{ margin: 0 }}>{PAQUETES[s].linea}</span>
+            {/* La explicación, en letra normal y gris (la del botón es negrita y se lo comía). */}
+            <span className="cx-ayuda" style={{ margin: 0, fontWeight: 400 }}>{PAQUETES[s].linea}</span>
           </button>
         ))}
       </div>

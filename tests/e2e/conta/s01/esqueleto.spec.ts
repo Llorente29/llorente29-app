@@ -426,6 +426,11 @@ test('Favoritos: se fija desde el menú, se guarda en la base y sigue en otro na
 
 /** G03 · Lo que dice el sector en Ajustes › Tu empresa. */
 const sectorEs = (page: Page) => page.getByTestId('sector-empresa')
+/** G03 · La captura de Ajustes con la tarjeta del sector a la vista (en el móvil queda debajo de «Quién eres»). */
+async function capturarSector(page: Page, nombre: string) {
+  await page.getByTestId('sector-empresa').scrollIntoViewIfNeeded()
+  await capturar(page, nombre)
+}
 /** G03 · Cambia el sector con su aviso de antes y el de después (reglas 7 y 8). */
 async function ponerSector(page: Page, a: 'General' | 'Hostelería' | 'Gestoría o asesoría', antes: RegExp, despues: RegExp, captura?: string) {
   await page.getByRole('group', { name: '¿De qué sector es tu negocio?' }).getByRole('button', { name: new RegExp(`^${a}`) }).click()
@@ -452,12 +457,12 @@ test('G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y de
   // La entrada «Empresa» directamente: en el móvil, /conta/ajustes es la lista de entradas.
   await page.goto('/conta/ajustes/empresa')
   await expect(sectorEs(page)).toHaveText('General', { timeout: 30_000 })
-  await capturar(page, 'g03-ajustes-general')
+  await capturarSector(page, 'g03-ajustes-general')
   try {
     // A Hostelería: dice qué saldrá, y después qué ha salido.
     await ponerSector(page, 'Hostelería', /^Pasar a Hostelería\. Saldrá: Cierres del día, Repartidores, Plataformas, Socios de marca/,
       /^Hecho: tu negocio es ahora del sector Hostelería\. Ya salen: Cierres del día, Repartidores/, 'g03-aviso-a-hosteleria')
-    await capturar(page, 'g03-ajustes-hosteleria')
+    await capturarSector(page, 'g03-ajustes-hosteleria')
     // El esqueleto lo lee otra vez: Repartidores sale en Compras y gastos sin recargar.
     if (lado(page) === 'ordenador') await barra(page).getByRole('link', { name: 'Compras y gastos', exact: true }).click()
     else await page.goto('/conta/compras')
@@ -470,7 +475,7 @@ test('G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y de
     await expect(sectorEs(page)).toHaveText('Hostelería', { timeout: 30_000 })
     await ponerSector(page, 'Gestoría o asesoría', /^Pasar a Gestoría o asesoría\. Saldrá: Clientes y cuotas, Tarifa y paquetes, CRM y GoCardless en Ajustes › Cobros\. Dejará de salir: Cierres del día/,
       /^Hecho: tu negocio es ahora del sector Gestoría o asesoría\. Ya salen: Clientes y cuotas/, 'g03-aviso-a-gestoria')
-    await capturar(page, 'g03-ajustes-gestoria')
+    await capturarSector(page, 'g03-ajustes-gestoria')
     await page.goto('/conta/ventas/facturas')
     await expect(nombres(await paginas(page, 'Ventas'))).toHaveText(['Facturas', 'Cobros', 'Clientes y cuotas', 'Liquidaciones'])
     await capturar(page, 'g03-menu-gestoria')
@@ -485,7 +490,7 @@ test('G03 · Ajustes › Tu empresa: el sector se cambia con su aviso antes y de
       await page.goto('/conta/ajustes/empresa')
       await expect(sectorEs(page)).toHaveText('Gestoría o asesoría', { timeout: 30_000 })
       await densidad(page, 'Compacta')
-      try { await capturar(page, 'g03-ajustes-gestoria-compacta') } finally { await densidad(page, 'Cómoda') }
+      try { await capturarSector(page, 'g03-ajustes-gestoria-compacta') } finally { await densidad(page, 'Cómoda') }
     }
   } finally {
     // Pase lo que pase, D vuelve a General (las demás pruebas lo cuentan).
