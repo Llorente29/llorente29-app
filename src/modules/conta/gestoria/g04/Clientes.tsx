@@ -12,7 +12,7 @@ import { Link } from 'react-router-dom'
 import { euros } from '../../../../../supabase/functions/_shared/tarifa/precio'
 import { eurosRedondos, miles } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
 import { ordenar, pasaElFiltro, pasaLaBusqueda, grupoDe, type Filtro, type Grupo } from '../../../../../supabase/functions/_shared/tarifa/lista'
-import type { Empresa, FilaDeLaLista, ModeloClientes, Tarea } from './modelo'
+import { altasYBajas, type Empresa, type FilaDeLaLista, type ModeloClientes, type Tarea } from './modelo'
 
 export interface PropsClientes {
   modelo: ModeloClientes
@@ -28,6 +28,11 @@ export interface PropsClientes {
   rutaCrm: (f: FilaDeLaLista) => string | null
   alExportar: (filas: FilaDeLaLista[]) => void
   alAsignar: () => void
+  /** «Cobrado por otra vía» de unos cargos devueltos: solo se guarda en Sumied. Devuelve la frase. */
+  alCobradoPorOtraVia: (empresa: string, cargos: string[], via: 'transferencia' | 'efectivo', fecha: string) => Promise<string>
+  /** «Ponerle la cuota»: a la ficha, con «+ Añadir» abierto. */
+  rutaPonerCuota: (cliente: string, empresa: string | null) => string
+  hoy: string
 }
 
 const FILTROS: { id: Filtro; texto: string }[] = [
@@ -99,7 +104,7 @@ export function Clientes(p: PropsClientes) {
           <div className="g4-cifra-titulo">Cuotas al mes</div>
           <div className="g4-cifra-valor">{m.cuotas.principal.principalCent === null ? '—' : euros(m.cuotas.principal.principalCent)}</div>
           <div className="g4-cifra-linea">
-            {miles(m.cuotas.clientes)} clientes · <span className="g4-sube">+{m.cuotas.altas.n} {m.cuotas.altas.n === 1 ? 'alta' : 'altas'} ({eurosRedondos(m.cuotas.altas.cent)})</span> · <span className="g4-baja">−{m.cuotas.bajas.n} {m.cuotas.bajas.n === 1 ? 'baja' : 'bajas'} ({eurosRedondos(m.cuotas.bajas.cent)})</span>
+            {miles(m.cuotas.clientes)} clientes · <span className={m.cuotas.altas.n ? 'g4-sube' : undefined}>{altasYBajas(m.cuotas.altas, 'alta')}</span> · <span className={m.cuotas.bajas.n ? 'g4-baja' : undefined}>{altasYBajas(m.cuotas.bajas, 'baja')}</span>
           </div>
           {m.cuotas.principal.alLado && <div className="g4-cifra-linea">En GoCardless · {m.cuotas.principal.alLado}</div>}
         </div>
@@ -197,7 +202,9 @@ export function Clientes(p: PropsClientes) {
         </div>
       </section>
 
-      {panel && <PanelCliente fila={panel} crm={p.crm} alCerrar={() => setAbierta(null)} rutaFicha={p.rutaFicha(panel.clienteId, panel.empresaId)} rutaTarifa={p.rutaTarifa} rutaCrm={p.rutaCrm(panel)} />}
+      {panel && <PanelCliente fila={panel} crm={p.crm} alCerrar={() => setAbierta(null)} rutaFicha={p.rutaFicha(panel.clienteId, panel.empresaId)} rutaTarifa={p.rutaTarifa} rutaCrm={p.rutaCrm(panel)}
+        rutaPonerCuota={p.rutaPonerCuota(panel.clienteId, panel.empresaId)} hoy={p.hoy}
+        alCobradoPorOtraVia={(cargos, via, fecha) => p.alCobradoPorOtraVia(panel.empresaId!, cargos, via, fecha)} />}
     </div>
   )
 }
@@ -205,16 +212,20 @@ export function Clientes(p: PropsClientes) {
 const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 
 /** El panel lateral: fijo a la vista, sin aplastar la lista; se cierra con «×», con Escape o al pulsar fuera. */
-export function PanelCliente({ fila: f, crm, alCerrar, rutaFicha, rutaTarifa, rutaCrm }: { fila: FilaDeLaLista; crm: string; alCerrar: () => void; rutaFicha: string; rutaTarifa: string; rutaCrm: string | null }) {
+export function PanelCliente({ fila: f, crm, alCerrar, rutaFicha, rutaTarifa, rutaCrm, rutaPonerCuota, hoy, alCobradoPorOtraVia }: {
+  fila: FilaDeLaLista; crm: string; alCerrar: () => void; rutaFicha: string; rutaTarifa: string; rutaCrm: string | null; rutaPonerCuota: string; hoy: string
+  alCobradoPorOtraVia: (cargos: string[], via: 'transferencia' | 'efectivo', fecha: string) => Promise<string>
+}) {
   const cerrarRef = useRef<HTMLButtonElement>(null)
+  const [otraVia, setOtraVia] = useState(false)
   useEffect(() => {
     cerrarRef.current?.focus()
     const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') alCerrar() }
     window.addEventListener('keydown', tecla)
     return () => window.removeEventListener('keydown', tecla)
   }, [alCerrar])
-  const siguiente = new Date()
-  const mesQueViene = MESES[(siguiente.getMonth() + 1) % 12]
+  const mesQueViene = MESES[Number(hoy.slice(5, 7)) % 12]
+  const fecha = (x: string) => `${Number(x.slice(8, 10))}/${x.slice(5, 7)}`
   return (
     <>
       <button type="button" className="g4-velo" aria-label="Cerrar el resumen" tabIndex={-1} onClick={alCerrar} />
@@ -224,7 +235,7 @@ export function PanelCliente({ fila: f, crm, alCerrar, rutaFicha, rutaTarifa, ru
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <h2 className="g4-panel-nombre">{f.nombre}</h2>
-                <span className="g4-etiqueta" data-tono={f.estado.tono}>{f.estado.texto}</span>
+                <span className="g4-etiqueta" data-tono={f.situacionTono}>{f.situacionTexto}</span>
               </div>
               <div className="g4-panel-linea">{[f.nif ?? 'Sin NIF', f.figura].join(' · ')} · {f.empresa ? <>Le factura <b>{f.empresa}</b></> : 'Sin empresa que le facture'}</div>
             </div>
@@ -234,17 +245,22 @@ export function PanelCliente({ fila: f, crm, alCerrar, rutaFicha, rutaTarifa, ru
             <div className="g4-mini"><div className="g4-mini-titulo">Este mes</div><div className="g4-mini-valor">{f.esteMes.principalCent === null ? '—' : euros(f.esteMes.principalCent)}</div>
               {f.esteMes.alLado && <div className="g4-mini-titulo">{f.esteMes.alLado}</div>}</div>
             <div className="g4-mini"><div className="g4-mini-titulo">Debe</div><div className="g4-mini-valor" style={f.debeCent > 0 ? { color: '#A11B12' } : undefined}>{f.debeCent > 0 ? euros(f.debeCent) : '0 €'}</div></div>
-            <div className="g4-mini"><div className="g4-mini-titulo">Último cobro</div><div className="g4-mini-valor" data-texto="">{f.ultimoCobro ? `Cobrado · ${Number(f.ultimoCobro.slice(8, 10))}/${f.ultimoCobro.slice(5, 7)}` : 'Ninguno'}</div></div>
+            <div className="g4-mini"><div className="g4-mini-titulo">Último cobro</div>
+              <div className="g4-mini-valor" data-texto="">{f.ultimoCargo ? `${f.ultimoCargo.estado} · ${fecha(f.ultimoCargo.fecha)}` : 'Ninguno en GoCardless'}</div>
+              {f.ultimoCargo && <div className="g4-mini-titulo">{euros(f.ultimoCargo.importeCent)}</div>}</div>
           </div>
         </div>
         {f.aviso && (
           <div className="g4-aviso" role="status">
             <div className="g4-aviso-titulo">{f.aviso.titulo}</div>
             <div className="g4-aviso-texto">{f.aviso.texto}</div>
-            <div className="g4-aviso-botones">
-              <Link className="g4-aviso-boton" to={rutaFicha}>{f.aviso.boton}</Link>
-              <button type="button" className="g4-aviso-boton" data-tipo="sec" onClick={alCerrar}>Ahora no</button>
-            </div>
+            {otraVia && f.aviso.accion === 'otra_via'
+              ? <OtraVia cargos={f.devueltos} hoy={hoy} alGuardar={alCobradoPorOtraVia} alCancelar={() => setOtraVia(false)} />
+              : <div className="g4-aviso-botones">
+                {f.aviso.accion === 'otra_via' && <button type="button" className="g4-aviso-boton" onClick={() => setOtraVia(true)}>{f.aviso.boton}</button>}
+                {f.aviso.accion === 'poner_cuota' && <Link className="g4-aviso-boton" to={rutaPonerCuota}>{f.aviso.boton}</Link>}
+                <button type="button" className="g4-aviso-boton" data-tipo="sec" onClick={alCerrar}>Ahora no</button>
+              </div>}
           </div>
         )}
         <div className="g4-panel-seccion">
@@ -264,5 +280,46 @@ export function PanelCliente({ fila: f, crm, alCerrar, rutaFicha, rutaTarifa, ru
         </div>
       </aside>
     </>
+  )
+}
+
+/** «Cobrado por otra vía»: qué cargos, cómo y qué día. Solo se guarda en Sumied; confirma con su frase (regla 8). */
+export function OtraVia({ cargos, hoy, alGuardar, alCancelar }: {
+  cargos: { id: string; fecha: string; importeCent: number }[]; hoy: string
+  alGuardar: (cargos: string[], via: 'transferencia' | 'efectivo', fecha: string) => Promise<string>; alCancelar: () => void
+}) {
+  const [marcados, setMarcados] = useState<string[]>(cargos.map((c) => c.id))
+  const [via, setVia] = useState<'transferencia' | 'efectivo'>('transferencia')
+  const [dia, setDia] = useState(hoy)
+  const [estado, setEstado] = useState<{ ok: boolean; texto: string } | null>(null)
+  const [guardando, setGuardando] = useState(false)
+  const guardar = async () => {
+    setGuardando(true); setEstado(null)
+    try { setEstado({ ok: true, texto: await alGuardar(marcados, via, dia) }) }
+    catch (e) { setEstado({ ok: false, texto: e instanceof Error ? e.message : String(e) }) }
+    finally { setGuardando(false) }
+  }
+  if (estado?.ok) return <p className="g4-aviso-texto" role="status"><b>{estado.texto}</b></p>
+  return (
+    <form className="g4-otra-via" onSubmit={(e) => { e.preventDefault(); void guardar() }}>
+      <fieldset className="g4-otra-via-cargos">
+        <legend className="g4-aviso-texto">Qué cargos</legend>
+        {cargos.map((c) => (
+          <label key={c.id} className="g4-casilla">
+            <input type="checkbox" checked={marcados.includes(c.id)} onChange={(e) => setMarcados(e.target.checked ? [...marcados, c.id] : marcados.filter((x) => x !== c.id))} />
+            {`${Number(c.fecha.slice(8, 10))}/${c.fecha.slice(5, 7)}/${c.fecha.slice(0, 4)} · ${euros(c.importeCent)}`}
+          </label>
+        ))}
+      </fieldset>
+      <div className="g4-otra-via-fila">
+        <label className="g4-campo">Cómo<select value={via} onChange={(e) => setVia(e.target.value as 'transferencia' | 'efectivo')}><option value="transferencia">Por transferencia</option><option value="efectivo">En efectivo</option></select></label>
+        <label className="g4-campo">Qué día<input type="date" value={dia} max={hoy} onChange={(e) => setDia(e.target.value)} /></label>
+      </div>
+      {estado && !estado.ok && <p className="g4-aviso-texto" role="alert">{estado.texto}</p>}
+      <div className="g4-aviso-botones">
+        <button type="submit" className="g4-aviso-boton" disabled={guardando || marcados.length === 0 || !dia}>{guardando ? 'Guardando…' : 'Guardar'}</button>
+        <button type="button" className="g4-aviso-boton" data-tipo="sec" onClick={alCancelar}>Cancelar</button>
+      </div>
+    </form>
   )
 }

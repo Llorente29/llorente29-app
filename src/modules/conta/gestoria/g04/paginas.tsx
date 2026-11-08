@@ -12,7 +12,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { leerClientes } from './datos'
+import { acciones, leerClientes } from './datos'
 import { modeloClientes, nombreDelCrmDe } from './modelo'
 import { Clientes } from './Clientes'
 import { enlaceAlCrm, exportar, mesEnPalabras } from './enlaces'
@@ -45,6 +45,13 @@ export function ClientesG04Page() {
         const r = deFila.get(`${f.clienteId}|${f.empresaId ?? ''}`)
         return enlaceAlCrm(crm ? String(crm.crm) : null, portal, r ? String(r.tipo_ficha ?? '') : null, r && r.ficha_en_el_crm ? String(r.ficha_en_el_crm) : null)
       }}
-      alExportar={exportar} alAsignar={() => setParams(lasDos ? { empresa: 'las-dos', ver: 'sin-cliente' } : { ver: 'sin-cliente' })} />
+      alExportar={exportar} alAsignar={() => setParams(lasDos ? { empresa: 'las-dos', ver: 'sin-cliente' } : { ver: 'sin-cliente' })}
+      hoy={hoy} rutaPonerCuota={(cliente, empresa) => `${rutaClienteGestoria(cliente, empresa)}${empresa ? '&' : '?'}anadir=1`}
+      alCobradoPorOtraVia={async (empresa, cargos, via, fecha) => {
+        const frases: string[] = []
+        for (const c of cargos) frases.push((await acciones.cobradoPorOtraVia(empresa, c, via, fecha)).frase)
+        d.recargar()
+        return cargos.length === 1 ? frases[0] : `Guardados ${cargos.length} cargos como cobrados ${via === 'transferencia' ? 'por transferencia' : 'en efectivo'}. Ya no salen en «Te deben». En GoCardless no cambia nada.`
+      }} />
   )
 }

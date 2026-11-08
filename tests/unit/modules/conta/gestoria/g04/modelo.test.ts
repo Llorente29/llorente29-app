@@ -44,7 +44,10 @@ const datos = (): DatosClientes => ({
     { id: 'tarifa:l', empresa_id: Q, servicio_id: 'lab', nivel_id: null, paquete_id: null, cliente_id: '1', forma: 'por_trabajador', periodo: null, importe: 24.20, tramos: [], desde: '2024-01-01', hasta: null },
   ],
   servicios: [{ id: 'ges', company_id: Q, nombre: 'Gestoría mensual', forma: 'fijo_mes' }, { id: 'lab', company_id: Q, nombre: 'Gestión laboral', forma: 'por_empleado' }],
-  niveles: [], paquetes: [], lineasDePaquete: [], ajustes: [], crm: [{ crm: 'bitrix24', portal: 'portal-de-prueba.bitrix24.es' }],
+  niveles: [], paquetes: [], lineasDePaquete: [], ajustes: [],
+  cobros: [{ company_id: Q, gc_id: 'PB1', mandato_gc_id: 'MD1', estado: 'paid_out', fecha: '2026-11-04', importe: 496.10 }, { company_id: Q, gc_id: 'PB0', mandato_gc_id: 'MD1', estado: 'failed', fecha: '2026-10-04', importe: 496.10 }],
+  mandatos: [{ company_id: Q, gc_id: 'MD1', gc_cliente_id: 'CU-1', estado: 'active' }],
+  crm: [{ crm: 'bitrix24', portal: 'portal-de-prueba.bitrix24.es' }],
   fichas: [{ party_id: '1', ficha: { telefonos: ['600000000'], correos: ['admin@ejemplo.es'], cuotasReferencia: [{ etiqueta: 'Tarifa recurrente', importeCent: 6050 }, { etiqueta: 'Laboral', importeCent: 0 }] } }],
 })
 
@@ -79,7 +82,18 @@ describe('G04 · el modelo de Clientes', () => {
   it('«Lo que tienes que hacer»: primero los cobros sin cliente; después, por el dinero que mueve', () => {
     const t = modeloClientes(datos(), EMPRESAS, [Q, A], '2026-11-08').tareas
     expect(t.map((x) => [x.id, x.n])).toEqual([['sin-cliente', 4], ['devueltos', 1], ['activos-sin-cuota', 1]])
-    expect(t[0].texto).toBe('4 suscripciones cobran 250,00 € al mes a alguien que no es ningún cliente de Sumied.')
+    expect(t[0].texto).toBe('4 suscripciones de GoCardless (250,00 € al mes) que aún no están unidas a su cliente en Sumied.')
+  })
+  it('el panel: la situación del cliente, el último cobro de verdad y la acción concreta del aviso', () => {
+    const fs = modeloClientes(datos(), EMPRESAS, [Q], '2026-11-08').filas
+    expect([fs[0].situacionTexto, fs[0].ultimoCargo]).toEqual(['Activo', { estado: 'Cobrado', tono: 'bien', fecha: '2026-11-04', importeCent: 49610 }])
+    expect([fs[1].aviso?.accion, fs[1].aviso?.boton, fs[1].devueltos]).toEqual(['otra_via', 'Cobrado por otra vía', [{ id: 'P1', fecha: '2026-08-04', importeCent: 10890 }]])
+    expect(fs[2].aviso?.accion).toBe('poner_cuota')
+  })
+  it('«sin altas» y «sin bajas»', async () => {
+    const { altasYBajas } = await import('@/modules/conta/gestoria/g04/modelo')
+    expect([altasYBajas({ n: 0, cent: 0 }, 'alta'), altasYBajas({ n: 0, cent: 0 }, 'baja'), altasYBajas({ n: 2, cent: 12100 }, 'baja'), altasYBajas({ n: 1, cent: 10890 }, 'alta')])
+      .toEqual(['sin altas', 'sin bajas', '−2 bajas (121 €)', '+1 alta (109 €)'])
   })
   it('los importes de referencia del CRM, cada uno con su etiqueta, sin sumar', () => {
     expect(referenciasDelCrm(datos().fichas[0].ficha as Record<string, unknown>)).toEqual(['Tarifa recurrente: 60,50 €'])

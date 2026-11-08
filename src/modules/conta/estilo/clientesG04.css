@@ -161,3 +161,27 @@
 .g4 a.g4-boton, .g4 a.g4-boton:hover { color: var(--g4-tinta); }
 .g4 a.g4-boton[data-tipo='primario'], .g4 a.g4-boton[data-tipo='primario']:hover { color: #FFFFFF; }
 .g4 a.g4-aviso-boton, .g4 a.g4-aviso-boton:hover { color: #FFFFFF; }
+
+/* «Cobrado por otra vía», dentro del aviso del panel */
+.g4-otra-via { display: flex; flex-direction: column; gap: 10px; }
+.g4-otra-via-cargos { border: 0; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.g4-casilla { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 14px; color: #6B3A06; }
+.g4-casilla input { width: 20px; height: 20px; }
+.g4-otra-via-fila { display: flex; gap: 10px; flex-wrap: wrap; }
+.g4-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #6B3A06; }
+.g4-campo select, .g4-campo input { min-height: 44px; border: 1px solid #C98A3E; border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px; font-weight: 500; background: #FFFFFF; color: var(--g4-tinta); }
+
+/* Móvil: cada cliente es una tarjeta (nombre y figura; importe del mes; lo que debe; estado del cobro con su línea), sin desplazamiento lateral. */
+@media (max-width: 767px) {
+  .g4-tabla-caja { overflow-x: visible; }
+  .g4-tabla { min-width: 0; display: flex; flex-direction: column; gap: 10px; padding: 0 16px; }
+  .g4-fila-titulos { display: none; }
+  .g4-fila { grid-template-columns: 1fr auto; grid-template-areas: 'cliente cliente' 'importe debe' 'cobro cobro'; gap: 10px 12px;
+    padding: 14px 16px; border: 1px solid var(--g4-linea); border-radius: 14px; }
+  .g4-fila > .g4-cliente { grid-area: cliente; }
+  .g4-fila > .g4-servicios { display: none; }
+  .g4-fila > .g4-importe { grid-area: importe; text-align: left; }
+  .g4-fila > .g4-debe { grid-area: debe; }
+  .g4-fila > .g4-cobro { grid-area: cobro; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .g4-lista-cabecera, .g4-filtros, .g4-pie { padding-left: 16px; padding-right: 16px; }
+}

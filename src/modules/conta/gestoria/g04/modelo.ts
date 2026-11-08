@@ -38,8 +38,15 @@ export interface FilaDeLaLista extends FilaDeCliente {
   ultimoCobro: string | null
   /** Lo que se le cobra el mes que viene, línea a línea (Sumied). */
   lineas: { texto: string; importe: string }[]
-  /** La diferencia pendiente más importante, para el aviso del panel. */
-  aviso: { titulo: string; texto: string; boton: string } | null
+  /** La situación del cliente (en su CRM), con su color: «Activo», «Moroso», «Sin clasificar»… */
+  situacionTexto: string
+  situacionTono: Tono
+  /** El último cobro de verdad en GoCardless, con su estado. */
+  ultimoCargo: { estado: string; tono: Tono; fecha: string; importeCent: number } | null
+  /** Los cargos devueltos que cuentan en «Debe» (para «Cobrado por otra vía»). */
+  devueltos: { id: string; fecha: string; importeCent: number }[]
+  /** El aviso del panel, con su acción concreta. */
+  aviso: { titulo: string; texto: string; accion: 'otra_via' | 'poner_cuota' | null; boton: string | null } | null
 }
 
 export interface Tarea { id: string; n: number; titulo: string; texto: string; boton: string; centimos: number | null; tono: Tono; filtro: 'necesitan_algo' | 'devueltos' | 'sin_mandato' | null }
@@ -141,6 +148,22 @@ export function catalogoYAsignaciones(d: DatosClientes): { catalogo: Catalogo; a
 }
 
 const PALABRA_SITUACION: Record<string, string> = { baja: 'De baja', solo_renta: 'Solo renta' }
+export const SITUACION: Record<string, { texto: string; tono: Tono }> = {
+  activo: { texto: 'Activo', tono: 'bien' }, moroso: { texto: 'Moroso', tono: 'mal' }, sin_clasificar: { texto: 'Sin clasificar', tono: 'aviso' },
+  baja: { texto: 'De baja', tono: 'neutro' }, solo_renta: { texto: 'Solo renta', tono: 'neutro' },
+}
+/** El estado de un cobro de GoCardless, en palabras de oficina. */
+export const ESTADO_DEL_COBRO: Record<string, { texto: string; tono: Tono }> = {
+  paid_out: { texto: 'Cobrado', tono: 'bien' }, confirmed: { texto: 'Cobrado', tono: 'bien' }, failed: { texto: 'Devuelto', tono: 'mal' },
+  charged_back: { texto: 'Retrocedido', tono: 'mal' }, cancelled: { texto: 'Cancelado', tono: 'neutro' }, pending_submission: { texto: 'En curso', tono: 'neutro' },
+  submitted: { texto: 'En curso', tono: 'neutro' }, pending_customer_approval: { texto: 'Pendiente de aprobar', tono: 'neutro' }, customer_approval_denied: { texto: 'Rechazado', tono: 'mal' },
+}
+/** «+1 alta (109 €)», «sin altas»; «−2 bajas (121 €)», «sin bajas». */
+export function altasYBajas(x: { n: number; cent: number }, que: 'alta' | 'baja'): string {
+  if (x.n === 0) return que === 'alta' ? 'sin altas' : 'sin bajas'
+  const signo = que === 'alta' ? '+' : '−'
+  return `${signo}${x.n} ${x.n === 1 ? que : `${que}s`} (${String(Math.round(x.cent / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')} €)`
+}
 const mesSiguiente = (m: string) => { const a = Number(m.slice(0, 4)); const n = Number(m.slice(5, 7)); return n === 12 ? `${a + 1}-01` : `${a}-${String(n + 1).padStart(2, '0')}` }
 const fechaCorta = (f: string) => `${Number(f.slice(8, 10))}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 
@@ -173,6 +196,22 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
       x.cent += c.importeCent; x.n++; if (c.fecha < x.masAntiguo) x.masAntiguo = c.fecha
       debeDe.set(k, x)
     }
+  }
+
+  // El último cobro de cada cliente de GoCardless (por empresa), de verdad y con su estado.
+  const clienteDelMandato = new Map(d.mandatos.map((m) => [`${String(m.company_id)}|${String(m.gc_id)}`, str(m.gc_cliente_id)]))
+  const ultimoDe = new Map<string, { estado: string; fecha: string; importeCent: number }>()
+  for (const b of d.cobros) {
+    const gc = clienteDelMandato.get(`${String(b.company_id)}|${String(b.mandato_gc_id)}`)
+    if (!gc || !b.fecha) continue
+    const k = `${String(b.company_id)}|${gc}`
+    const x = ultimoDe.get(k)
+    if (!x || String(b.fecha) > x.fecha) ultimoDe.set(k, { estado: String(b.estado), fecha: String(b.fecha), importeCent: cent(b.importe) })
+  }
+  const devueltosDe = new Map<string, { id: string; fecha: string; importeCent: number }[]>()
+  for (const c of deben.cargos as typeof cargos) for (const cl of c.clientes) {
+    const k = `${cl}|${c.empresaId}`
+    devueltosDe.set(k, [...(devueltosDe.get(k) ?? []), { id: c.id, fecha: c.fecha, importeCent: c.importeCent }])
   }
 
   const filas: FilaDeLaLista[] = []
@@ -218,9 +257,19 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
       servicios, esteMes, estado, gcClienteId: str(r.cliente_en_gocardless), telefono: tel, correo, ultimoCobro: str(r.ultimo_cobro_fecha),
       lineas: (siguiente?.lineas ?? []).map((l) => ({ texto: l.texto, importe: l.importeCent === null ? 'Sin precio' : euros(l.importeCent) }))
         .concat(siguiente && siguiente.lineas.length ? [{ texto: 'Total', importe: euros(siguiente.totalCent) }] : []),
-      aviso: debe ? { titulo: `Debe ${debe.n} ${debe.n === 1 ? 'recibo' : 'recibos'} (${euros(debe.cent)})`, texto: 'Devuelto en GoCardless y sin cobrar después. Lo cobrado por otra vía no se ve hasta que lo marques en su ficha.', boton: 'Abrir la ficha' }
-        : sinCuota ? { titulo: `Activo en ${crm}, pero no se le cobra nada`, texto: 'Ni en Sumied ni en GoCardless tiene una cuota este mes.', boton: 'Ponerle la cuota' }
-        : mandato === 'por_firmar' ? { titulo: 'El mandato SEPA está sin firmar', texto: 'Sin mandato firmado no entra en el cobro de GoCardless.', boton: 'Abrir la ficha' }
+      situacionTexto: empresaId === null ? SIN_EMPRESA : SITUACION[situacion ?? '']?.texto ?? 'Sin situación',
+      situacionTono: SITUACION[situacion ?? '']?.tono ?? 'neutro',
+      ultimoCargo: (() => {
+        const u = empresaId && r.cliente_en_gocardless ? ultimoDe.get(`${empresaId}|${String(r.cliente_en_gocardless)}`) : undefined
+        if (!u) return null
+        const e = ESTADO_DEL_COBRO[u.estado] ?? { texto: u.estado, tono: 'neutro' as Tono }
+        return { estado: e.texto, tono: e.tono, fecha: u.fecha, importeCent: u.importeCent }
+      })(),
+      devueltos: devueltosDe.get(`${clienteId}|${empresaId}`) ?? [],
+      aviso: debe ? { titulo: `Debe ${debe.n} ${debe.n === 1 ? 'recibo' : 'recibos'} (${euros(debe.cent)})`,
+          texto: 'Devuelto en GoCardless y sin cobrar después. Si te lo pagó por transferencia o en efectivo, márcalo: solo se guarda en Sumied.', accion: 'otra_via', boton: 'Cobrado por otra vía' }
+        : sinCuota ? { titulo: `Activo en ${crm}, pero no se le cobra nada`, texto: 'Ni en Sumied ni en GoCardless tiene una cuota este mes.', accion: 'poner_cuota', boton: 'Ponerle la cuota' }
+        : mandato === 'por_firmar' ? { titulo: 'El mandato SEPA está sin firmar', texto: 'Sin mandato firmado no entra en el cobro de GoCardless. Se firma desde el enlace que le envía GoCardless.', accion: null, boton: null }
         : null,
     })
   }
@@ -261,7 +310,7 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
   ] as Tarea[]).filter((t) => t.n > 0).sort((a, b) => (b.centimos ?? 0) - (a.centimos ?? 0))
   const tareas: Tarea[] = [
     ...(sinCliente.n ? [{ id: 'sin-cliente', n: sinCliente.n, titulo: 'Cobros de GoCardless sin cliente',
-      texto: `${sinCliente.n} ${sinCliente.n === 1 ? 'suscripción cobra' : 'suscripciones cobran'}${sinCliente.cent !== null ? ` ${euros(sinCliente.cent)} al mes` : ''} a alguien que no es ningún cliente de Sumied.`,
+      texto: `${sinCliente.n} ${sinCliente.n === 1 ? 'suscripción' : 'suscripciones'} de GoCardless${sinCliente.cent !== null ? ` (${euros(sinCliente.cent)} al mes)` : ''} que aún no ${sinCliente.n === 1 ? 'está unida' : 'están unidas'} a su cliente en Sumied.`,
       boton: 'Asignar a un cliente', centimos: sinCliente.cent, tono: 'mal' as Tono, filtro: null }] : []),
     ...resto,
   ]

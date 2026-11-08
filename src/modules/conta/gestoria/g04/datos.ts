@@ -43,13 +43,16 @@ export interface DatosClientes {
   fichas: Fila[]
   /** El CRM conectado (su nombre y su portal), para «Ver en …». */
   crm: Fila[]
+  /** Los cobros y los mandatos de GoCardless (el último cobro de verdad y la pestaña «Cobros» de la ficha). */
+  cobros: Fila[]
+  mandatos: Fila[]
 }
 
 /** Todo lo de la lista, el panel y la ficha, de toda la cuenta (cada empresa lo filtra en la pantalla). */
 export async function leerClientes(accountId: string): Promise<DatosClientes> {
   const cuenta = { columna: 'cuenta_id', id: accountId }
   const deCuenta = { columna: 'account_id', id: accountId }
-  const [clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm] = await Promise.all([
+  const [clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm, cobros, mandatos] = await Promise.all([
     leerTodo('conta_consulta_cliente_empresa', '*', cuenta, ['cliente_id', 'empresa_id']),
     leerTodo('conta_gc_suscripcion', 'company_id, gc_id, gc_cliente_id, nombre, importe, al_mes, estado, inicio, fin, proximo_cobro_fecha, proximo_cobro_importe', deCuenta, ['company_id', 'gc_id'],
       (q) => (q as { eq: (c: string, v: string) => unknown }).eq('estado', 'active')),
@@ -65,8 +68,10 @@ export async function leerClientes(accountId: string): Promise<DatosClientes> {
     // Lo leído del CRM de cada cliente (contacto, dirección, referencia), para el panel y la ficha.
     leerTodo('conta_gestoria_cliente', 'party_id, ficha, leido_at', deCuenta, ['party_id']),
     leerTodo('conta_crm', 'crm, portal', deCuenta, ['crm']),
+    leerTodo('conta_gc_cobro', 'company_id, gc_id, mandato_gc_id, suscripcion_gc_id, estado, fecha, importe, motivo', deCuenta, ['company_id', 'gc_id']),
+    leerTodo('conta_gc_mandato', 'company_id, gc_id, gc_cliente_id, estado, creado', deCuenta, ['company_id', 'gc_id']),
   ])
-  return { clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm }
+  return { clientes, suscripciones, cargos, queHacer, asignaciones, precios, servicios, niveles, paquetes, lineasDePaquete, ajustes, fichas, crm, cobros, mandatos }
 }
 
 /** Los cobros de GoCardless de un cliente en una empresa (la pestaña «Cobros» de la ficha), con su mandato. */
