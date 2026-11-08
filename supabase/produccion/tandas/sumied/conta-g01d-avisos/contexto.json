@@ -1,0 +1,8 @@
+{
+ "_que": "G01d · contexto de producción, medido en SOLO LECTURA el 08/11 a las 16:30Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1620 añade columnas a conta_crm y conta_cobro_gocardless (existen), la tabla conta_aviso y cinco funciones nuevas (no existen), amplía el CHECK de conta_gestoria_lectura.por (existe) y programa el repaso. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-08T16:30Z",
+ "tanda": {
+  "supabase/migrations/20261108T1620_g01d_avisos.sql": "f67e63c5be1b4a892f630d2b5eb01a6c"
+ },
+ "contexto": {"tablas":["public.conta_cobro_gocardless","public.conta_crm","public.conta_gestoria_lectura","vault.secrets"],"funciones":[],"filas":{"public.conta_cobro_gocardless":0,"public.conta_crm":0,"public.conta_gestoria_lectura":38,"vault.secrets":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

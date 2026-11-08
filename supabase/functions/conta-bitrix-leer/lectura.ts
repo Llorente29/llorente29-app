@@ -12,6 +12,7 @@ import type { FichaContactoCrm } from '../_shared/crm/ficha.ts'
 import { repartirContactos, resumenDeContactos, type ResumenContactos } from '../_shared/crm/contactos.ts'
 import { esCampoSensible } from './sensibles.ts'
 import { camposDeContactoQueSePiden, leerContacto, mapaContactosDe, propuestaContactos, type MapaContactos } from './contactosClientes.ts'
+import { planDeFichaBitrix } from '../_shared/avisos/lecturaDeFicha.ts'
 import { camposDeContactos, contactosDeNegociaciones, contarContactos, empresasDeItems, estadosAPedir, paginaDeItems } from './contactos.ts'
 
 export type Pedir = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string }) =>
@@ -212,4 +213,45 @@ export function fraseDelReparto(r: RepartoDeFichas, confirmado: boolean): string
     `${miles(r.sin_situacion)} sin situación en Bitrix24`,
   ]
   return `${fichas}: ${partes.join(', ')}. ${nifDir}`
+}
+
+// ── G01d · Una ficha suelta, para los avisos al instante ─────────────────────
+//
+// Lo mismo que la lectura entera (leerFichas, leerContactos): los mismos
+// campos, sin los sensibles, y la misma conversión a ficha neutra; solo que de
+// UNA ficha, con un filtro por su id (_shared/avisos/lecturaDeFicha.ts). Las
+// negociaciones de un contacto no se piden (Julio, 08/11): se toman de lo que
+// guardó la última lectura entera; las nuevas entran con la de la noche.
+// Null: la ficha ya no está en el CRM (se ha borrado entre el aviso y ahora).
+
+
+export async function leerEmpresaSuelta(pedir: Pedir, url: string, mapa: MapaBitrix, id: string): Promise<{ ficha: FichaBitrix | null; bloqueados: string[] }> {
+  const medidos = await medirCampos(pedir, url)
+  const pedidos = camposQueSePiden(mapa)
+  const bloqueados = pedidos.filter((c) => esCampoSensible(medidos[c], c))
+  const select = pedidos.filter((c) => !bloqueados.includes(c))
+  const plan = planDeFichaBitrix({ tipo: 'leer_ficha', crm: 'bitrix24', tipoFicha: 'empresa', idExterno: id, claves: [] }, { empresa: select, contacto: [] })
+  if (plan.tipo !== 'leer') return { ficha: null, bloqueados }
+  const r = await llamar(pedir, url, plan.peticiones[0].metodo, plan.peticiones[0].cuerpo) as { result?: Record<string, unknown>[]; error?: string } | null
+  if (r?.error) throw new FalloBitrix(`Bitrix24 ha contestado «${r.error}».`)
+  const fila = (r?.result ?? []).find((f) => String(f.ID) === id)
+  return { ficha: fila ? leerEmpresa(fila, mapa) : null, bloqueados }
+}
+
+export async function leerContactoSuelto(pedir: Pedir, url: string, guardado: MapaContactos | null, id: string,
+  extras: { conNegociacion: boolean; gocardless: { nifs: ReadonlySet<string>; correos: ReadonlySet<string> } }): Promise<{ ficha: FichaContactoCrm | null; mapa: MapaContactos | null }> {
+  const medidos = await medirCampos(pedir, url, 'contact')
+  const base = mapaConElQueSeLee(medidos, guardado)
+  if (!base) return { ficha: null, mapa: null }
+  const select = camposDeContactoQueSePiden(base).filter((c) => c === 'ID' || (medidos[c] && !esCampoSensible(medidos[c], c)))
+  const plan = planDeFichaBitrix({ tipo: 'leer_ficha', crm: 'bitrix24', tipoFicha: 'contacto', idExterno: id, claves: [] }, { empresa: [], contacto: select })
+  if (plan.tipo !== 'leer') return { ficha: null, mapa: base }
+  const rc = await llamar(pedir, url, plan.peticiones[0].metodo, plan.peticiones[0].cuerpo) as { result?: Record<string, unknown>[]; error?: string } | null
+  if (rc?.error) throw new FalloBitrix(`Bitrix24 ha contestado «${rc.error}».`)
+  const fila = (rc?.result ?? []).find((f) => String(f.ID) === id)
+  if (!fila) return { ficha: null, mapa: base }
+  const ri = paginaDeItems(await llamar(pedir, url, plan.peticiones[1].metodo, plan.peticiones[1].cuerpo)) as { result?: Record<string, unknown>[] | null } | null
+  const empresas = empresasDeItems(ri?.result ?? []).get(id) ?? []
+  // Los textos de «Tipo de cliente», los guardados con el mapa (los de la lectura entera); sin ellos, el código tal cual.
+  return { ficha: leerContacto(fila, base, { empresas, conNegociacion: extras.conNegociacion, gocardless: extras.gocardless }), mapa: base }
 }

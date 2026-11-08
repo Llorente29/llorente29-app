@@ -21,6 +21,7 @@ import type { ConexionBitrix, ConexionGc } from '@/modules/conta/services/gestor
 import type { MapaBitrix } from './queEsCadaCampo'
 import { CamposDeBitrix } from './CamposDeBitrix'
 import { UnionDeFichas } from './UnionDeFichas'
+import { AlInstante } from '@/modules/conta/avisos/AlInstante'
 import type { DatosEnsayo } from './pdfUnion'
 import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
@@ -132,6 +133,7 @@ export function TarjetaGocardless({ emisor, nombre, c, acciones }: { emisor: str
               alCambiar={(v) => void hacer(async () => { const f = await acciones.reintentos(emisor, v); setReintentos(v); return f })} />
           </div>
           <div><Boton onClick={() => void hacer(() => acciones.leerGc(emisor))} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
+          <AlInstante origen="gocardless" empresa={emisor} nombre={`GoCardless de ${nombre}`} />
         </div>
       )}
       <Aviso a={aviso} />
@@ -161,6 +163,7 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
             <div><dt>Clientes leídos</dt><dd className="cxg-cifra">{c!.empresasLeidas == null ? '—' : miles(c!.empresasLeidas)}</dd></div>
           </dl>
           <div><Boton onClick={() => void hacer(acciones.leerBitrix)} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
+          <AlInstante origen="crm" crm={c!.crm} nombre={c!.nombre} />
           <CamposDeBitrix empresas={{ mapa: c!.mapa, medidos: c!.medidos, alConfirmar: acciones.confirmarMapa }}
             contactos={{ mapa: c!.contactos?.mapa ?? null, medidos: c!.contactos?.medidos ?? null, resumen: c!.contactos?.resumen ?? null, leidos: c!.contactos?.leidos ?? null,
               alConfirmar: acciones.confirmarMapaContactos ?? (async () => { throw new Error('Confirmar el mapa de contactos aún no está publicado en este entorno.') }) }} />
