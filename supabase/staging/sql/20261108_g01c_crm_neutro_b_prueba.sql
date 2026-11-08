@@ -35,13 +35,17 @@ create temp table _dato (clave text primary key, valor text) on commit drop;
 create temp table _vault on commit drop as select to_regclass('vault.secrets') is not null as hay;
 
 select to_regclass('public.conta_crm_bitrix') is null as ya_esta_la_0112 \gset
+-- Si la 0112 ya está (el aplicar de staging la pasa antes que esta prueba),
+-- primero su vuelta atrás: así la prueba parte siempre de lo de antes.
 \if :ya_esta_la_0112
 insert into _antes select firma, huella from public.funcion_respaldo where migracion = '20261108T0112_g01c_crm_neutro_b';
+\i supabase/vuelta-atras/20261108T0112_g01c_crm_neutro_b.down.sql
 \else
 insert into _antes select f, md5(pg_get_functiondef(f::regprocedure)) from unnest(array[
   'public.conta_bitrix_guardar_clientes(uuid,jsonb)', 'public.conta_bitrix_confirmar_mapa(uuid,jsonb)', 'public.conta_bitrix_aplicar_union(uuid)',
   'public.conta_bitrix_guardar_conexion(uuid,text,text,text,text)', 'public.conta_bitrix_secreto(uuid)', 'public.conta_bitrix_guardar_fichas(uuid,jsonb)',
   'public._conta_bitrix_campo_sensible(jsonb)', 'public._conta_crm_a_bitrix()', 'public._conta_crm_desde_bitrix()']) f;
+\endif
 
 -- 0 · Antes de la tanda: la conexión, el secreto con el nombre de hoy y las filas de antes y de después del corte.
 do $$
@@ -70,7 +74,6 @@ begin
   raise notice 'G01c-B · 0: la conexión con el secreto llamado como hoy, y las filas de antes y de después del corte. OK';
 end $$;
 \i supabase/migrations/20261108T0112_g01c_crm_neutro_b.sql
-\endif
 
 -- 1 · Lo que deja la tanda.
 do $$
