@@ -1,0 +1,17 @@
+# G01d · La clave única de la cola de avisos, sin «where». Rama conta/g01d-cola.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar. El
+# real lo lanza Julio.
+#
+#   0050  La clave de conta_aviso pasa de índice parcial («where clave is not
+#         null») a índice único normal sobre (account_id, clave): con la
+#         parcial, el «on conflict (account_id, clave)» de las dos funciones que
+#         reciben avisos daba 42P10 y ningún aviso auténtico entraba en la cola.
+#         Quita y vuelve a crear el índice: pide «autorizo». La cola tiene 0
+#         filas en producción y «Al instante» está apagado en todas las
+#         conexiones: nadie escribe en ella.
+#
+# Las dos funciones (conta-crm-aviso y conta-gocardless-aviso) cambian en el
+# mismo PR: el «último aviso» solo se apunta cuando el aviso ya está guardado.
+# Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g01d-cola.sql
+supabase/migrations/20261109T0050_g01d_cola_clave.sql

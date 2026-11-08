@@ -12,7 +12,7 @@ select 'conexiones' as que,
        from public.conta_crm c where c.account_id = :'cuenta'::uuid and c.crm = 'bitrix24'),
     (select 'GoCardless: ' || case when g.aviso_encendido then 'encendido' else 'apagado' end || ', secreto ' || case when g.aviso_ref is null then 'no' else 'sí' end
             || ', último aviso ' || coalesce(to_char(g.aviso_ultimo_at at time zone 'Europe/Madrid', 'DD/MM HH24:MI:SS'), '—')
-            || ', mandatos vivos ' || coalesce(g.mandatos_vivos::text, '—') || ', líneas activas ' || coalesce(g.lineas_activas::text, '—')
+            || ', mandatos activos ' || coalesce(g.mandatos_vivos::text, '—') || ', líneas activas ' || coalesce(g.lineas_activas::text, '—')
        from public.conta_cobro_gocardless g where g.account_id = :'cuenta'::uuid limit 1)) as detalle
 union all
 select 'avisos por estado', coalesce((select string_agg(origen || ' ' || estado || ' ' || n, ', ' order by origen, estado)

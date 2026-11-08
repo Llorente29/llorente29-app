@@ -42,6 +42,12 @@ async function deLaEmpresa(db: SupabaseClient, empresa: string) {
 }
 
 /** Recibir un aviso: comprobar la firma con el cuerpo TAL CUAL, guardar en la cola y contestar. */
+/** G01d · El aviso auténtico que no se ha podido guardar: 500 (GoCardless lo reintenta) y queda en el registro, con el qué y nunca el secreto. */
+function sinGuardar(e: { message: string; code?: string }): Response {
+  console.error('[conta-gocardless-aviso] no se ha podido guardar el aviso en la cola:', e.code ?? '', e.message)
+  return json(500, { error: 'No se ha podido guardar el aviso.' })
+}
+
 async function recibir(db: SupabaseClient, supabaseUrl: string, empresa: string, cuerpo: string, firma: string | null): Promise<Response> {
   const cuenta = await deLaEmpresa(db, empresa)
   if (!cuenta) return json(401, { error: 'No.' })
@@ -54,27 +60,35 @@ async function recibir(db: SupabaseClient, supabaseUrl: string, empresa: string,
     return json(401, { error: 'No.' })
   }
   const ahora = new Date().toISOString()
-  await db.from('conta_cobro_gocardless').update({ aviso_ultimo_at: ahora }).eq('company_id', empresa)
+  // G01d · El «último aviso» se apunta SOLO cuando el aviso ya está guardado en la cola (regla 8): si no, la
+  // pantalla diría «Funciona» sin haber aplicado nada. Si no se puede guardar, 500 (GoCardless lo reintenta) y queda en el registro.
+  const llego = () => db.from('conta_cobro_gocardless').update({ aviso_ultimo_at: ahora }).eq('company_id', empresa)
   let prueba = false
   try { prueba = (JSON.parse(cuerpo) as { meta?: { sumied_prueba?: boolean } })?.meta?.sumied_prueba === true } catch { /* lo dice leerAvisoGoCardless */ }
   if (prueba) {
-    await db.from('conta_aviso').insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', clave: `prueba:${Date.now()}`, estado: 'prueba',
+    const { error: eP } = await db.from('conta_aviso').insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', clave: `prueba:${Date.now()}`, estado: 'prueba',
       hecho_at: ahora, frase: 'Aviso de prueba recibido: la dirección y el secreto funcionan.' })
+    if (eP) return sinGuardar(eP)
+    await llego()
     return json(200, { ok: true, prueba: true })
   }
   const a = leerAvisoGoCardless(cuerpo)
   if (!a.ok) {
-    await db.from('conta_aviso').insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', estado: 'ignorado', porque: a.porque, hecho_at: ahora })
+    const { error: eI } = await db.from('conta_aviso').insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', estado: 'ignorado', porque: a.porque, hecho_at: ahora })
+    if (eI) return sinGuardar(eI)
+    await llego()
     return json(200, { ok: true, ignorado: a.porque })
   }
   if (a.avisos.length) {
     const filas = a.avisos.map((x: AvisoGc) => ({ account_id: cuenta, company_id: empresa, origen: 'gocardless', clave: x.clave, estado: 'pendiente',
       recurso: x.recurso, accion: x.accion, enlaces: x.enlaces, causa: x.causa }))
+    // El mismo «on conflict (account_id, clave)» que prueba la de staging: un aviso repetido no se trata dos veces.
     const { error: eCola } = await db.from('conta_aviso').upsert(filas, { onConflict: 'account_id,clave', ignoreDuplicates: true })
-    if (eCola) return json(500, { error: 'No se ha podido guardar el aviso.' })
+    if (eCola) return sinGuardar(eCola)
     // Se juntan unos 30 s; después se mira si ya toca releer (si llegan más, los recoge el último o el repaso).
     despues((async () => { await esperar(JUNTAR_GC_MS + 1_000); await trabajar(db, supabaseUrl) })())
   }
+  await llego()
   return json(200, { ok: true, avisos: a.avisos.length, fuera: a.fuera ?? 0 })
 }
 

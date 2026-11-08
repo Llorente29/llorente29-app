@@ -55,6 +55,12 @@ async function registrarRechazo(db: SupabaseClient, cuenta: string, crm: string,
   await db.from('conta_aviso').insert({ account_id: cuenta, origen: 'crm', crm, estado: 'rechazado', porque })
 }
 
+/** G01d · El aviso auténtico que no se ha podido guardar: 500 (el CRM lo da por no entregado) y queda en el registro, con el qué y nunca el código. */
+function sinGuardar(e: { message: string; code?: string }): Response {
+  console.error('[conta-crm-aviso] no se ha podido guardar el aviso en la cola:', e.code ?? '', e.message)
+  return json(500, { error: 'No se ha podido guardar el aviso.' })
+}
+
 /** Recibir un aviso: comprobar, guardar en la cola y contestar. */
 async function recibir(db: SupabaseClient, cuenta: string, crm: string, cuerpo: string): Promise<Response> {
   const { data: sec, error } = await db.rpc('conta_aviso_secreto', { p_origen: 'crm', p_account: cuenta, p_crm: crm, p_company: null })
@@ -65,22 +71,30 @@ async function recibir(db: SupabaseClient, cuenta: string, crm: string, cuerpo: 
   const v = avisoBitrixAutentico({ encendido: s.encendido, guardado: s.codigo, recibido })
   if (!v.ok) { await registrarRechazo(db, cuenta, crm, FRASE_RECHAZO[v.porque]); return json(401, { error: 'No.' }) }
   const ahora = new Date().toISOString()
-  await db.from('conta_crm').update({ aviso_ultimo_at: ahora }).eq('account_id', cuenta).eq('crm', crm)
+  // G01d · El «último aviso» se apunta SOLO cuando el aviso ya está guardado en la cola (regla 8): si no, la
+  // pantalla diría «Funciona» sin haber aplicado nada. Si no se puede guardar, 500 y queda en el registro.
+  const llego = () => db.from('conta_crm').update({ aviso_ultimo_at: ahora }).eq('account_id', cuenta).eq('crm', crm)
 
   if ((new URLSearchParams(cuerpo).get('event') ?? '').toUpperCase() === PRUEBA) {
-    await db.from('conta_aviso').insert({ account_id: cuenta, origen: 'crm', crm, clave: `prueba:${Date.now()}`, estado: 'prueba',
+    const { error: eP } = await db.from('conta_aviso').insert({ account_id: cuenta, origen: 'crm', crm, clave: `prueba:${Date.now()}`, estado: 'prueba',
       hecho_at: ahora, frase: 'Aviso de prueba recibido: la dirección y el código funcionan.' })
+    if (eP) return sinGuardar(eP)
+    await llego()
     return json(200, { ok: true, prueba: true })
   }
   const a = leerAvisoBitrix(cuerpo)
   if (!a.ok) {
-    await db.from('conta_aviso').insert({ account_id: cuenta, origen: 'crm', crm, estado: 'ignorado', porque: a.porque, hecho_at: ahora })
+    const { error: eI } = await db.from('conta_aviso').insert({ account_id: cuenta, origen: 'crm', crm, estado: 'ignorado', porque: a.porque, hecho_at: ahora })
+    if (eI) return sinGuardar(eI)
+    await llego()
     return json(200, { ok: true, ignorado: a.porque })
   }
   const filas = a.avisos.map((x) => ({ account_id: cuenta, origen: 'crm', crm, clave: x.clave, estado: 'pendiente', tipo_ficha: x.tipoFicha,
     id_externo: x.idExterno, accion: x.accion, enlaces: { ts: x.ts } }))
+  // El mismo «on conflict (account_id, clave)» que prueba la de staging: un aviso repetido no se trata dos veces.
   const { error: eCola } = await db.from('conta_aviso').upsert(filas, { onConflict: 'account_id,clave', ignoreDuplicates: true })
-  if (eCola) return json(500, { error: 'No se ha podido guardar el aviso.' })
+  if (eCola) return sinGuardar(eCola)
+  await llego()
   despues(trabajarCuenta(db, cuenta, crm))
   return json(200, { ok: true })
 }
