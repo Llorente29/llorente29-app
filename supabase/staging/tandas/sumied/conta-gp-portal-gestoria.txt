@@ -1,0 +1,6 @@
+# GP · la 2030 (la parte de la gestoría y los avisos por correo) y su prueba
+# (ROLLBACK, datos inventados): hacer y rechazar lo que pide el cliente, los
+# avisos que faltan solo a quien toca, «Tu próximo recibo» con la cuenta de
+# cargo, la regla de los permisos y la vuelta atrás.
+supabase/migrations/20261109T2030_gp_portal_gestoria.sql
+supabase/staging/sql/20261109_gp_portal_gestoria_prueba.sql

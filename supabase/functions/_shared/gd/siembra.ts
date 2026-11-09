@@ -19,8 +19,9 @@ export const GC_SANDBOX = 'https://api-sandbox.gocardless.com'
 type Fila = Record<string, unknown>
 export interface Siembra {
   plan(): Promise<void>
-  borrarBitrix(): Promise<void>
-  sembrarBitrix(): Promise<void>
+  /** Por tandas: hace lo que cabe en `presupuestoMs` (sin él, todo) y dice cuántos quedan. */
+  borrarBitrix(presupuestoMs?: number): Promise<{ quedan: number }>
+  sembrarBitrix(presupuestoMs?: number): Promise<{ quedan: number }>
   borrarGoCardless(): Promise<void>
   sembrarGoCardless(): Promise<void>
   tocar(): Promise<void>
@@ -52,7 +53,7 @@ const MAYUS = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperC
 const euros = (n: number) => Math.round(n * 100)
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
-export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: string) => void; fetch?: typeof fetch }): Siembra {
+export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: string) => void; fetch?: typeof fetch; pausaMs?: number }): Siembra {
   const B24 = guardaPortal(o.b24Url)
   const GC_TOKEN = o.gcToken.trim()
   const f = o.fetch ?? fetch
@@ -60,7 +61,7 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
 
   // ── Bitrix24 de pruebas (webhook entrante, permiso CRM) ───────────────────
   async function b24(metodo: string, params: Fila = {}): Promise<Fila> {
-    await esperar(550) // Bitrix24: 2 peticiones por segundo
+    await esperar(o.pausaMs ?? 550) // Bitrix24: 2 peticiones por segundo
     const r = await f(`${B24}${metodo}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) })
     const d = (await r.json().catch(() => ({}))) as Fila
     if (d.error) throw new Error(`Bitrix24 · ${metodo}: ${String(d.error)} ${String(d.error_description ?? '')}`)
@@ -105,18 +106,30 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
     return ids
   }
 
-  async function borrarBitrix() {
-    const empresas = await b24Todos('crm.company.list', { select: ['ID'] })
+  // Por tandas (nº71): una función tiene un tiempo máximo, y Bitrix24 deja 2 peticiones por segundo; sembrar los 40
+  // clientes de una vez tardaba casi 3 minutos y se cortaba. Cada llamada hace lo que cabe en su presupuesto y dice
+  // cuántos quedan; la siguiente sigue donde se quedó (borrar lo que queda; sembrar solo las empresas que aún no están).
+  async function borrarBitrix(presupuestoMs = Infinity): Promise<{ quedan: number }> {
+    const t0 = Date.now()
+    const queda = () => Date.now() - t0 < presupuestoMs
     const contactos = await b24Todos('crm.contact.list', { select: ['ID'] })
-    for (const c of contactos) await b24('crm.contact.delete', { id: c.ID })
-    for (const e of empresas) await b24('crm.company.delete', { id: e.ID })
-    decir(`  ✓ Borrado lo de antes: ${empresas.length} empresas y ${contactos.length} contactos.`)
+    let borradosC = 0, borradasE = 0
+    for (const c of contactos) { if (!queda()) break; await b24('crm.contact.delete', { id: c.ID }); borradosC++ }
+    const empresas = borradosC === contactos.length && queda() ? await b24Todos('crm.company.list', { select: ['ID'] }) : []
+    for (const e of empresas) { if (!queda()) break; await b24('crm.company.delete', { id: e.ID }); borradasE++ }
+    const quedan = (contactos.length - borradosC) + (borradosC === contactos.length ? empresas.length - borradasE : 1)
+    decir(`  ✓ Borrado lo de antes: ${borradasE} empresas y ${borradosC} contactos${quedan > 0 ? '; sigue en otra tanda' : ''}.`)
+    return { quedan: Math.max(0, quedan) }
   }
 
-  async function sembrarBitrix() {
+  async function sembrarBitrix(presupuestoMs = Infinity): Promise<{ quedan: number }> {
+    const t0 = Date.now()
     const ids = await camposDeEmpresa(true)
+    const hay = new Set((await b24Todos('crm.company.list', { select: ['TITLE'] })).map((e) => String(e.TITLE)))
+    const faltan = CLIENTES.filter((c) => !hay.has(c.nombre))
     let nEmpresas = 0, nContactos = 0
-    for (const c of CLIENTES) {
+    for (const c of faltan) {
+      if (Date.now() - t0 >= presupuestoMs) break
       const correo = correoDelCliente(c)
       const r = await b24('crm.company.add', { fields: {
         TITLE: c.nombre, COMPANY_TYPE: 'CUSTOMER',
@@ -126,11 +139,11 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
         UF_CRM_FORMA_PAGO: ids.UF_CRM_FORMA_PAGO[EMISORES[c.emisor].formaDePago],
         UF_CRM_CUOTA_MENSUAL: c.cuota ? `${c.cuota},00` : '',
         EMAIL: [{ VALUE: correo, VALUE_TYPE: 'WORK' }],
-        PHONE: [{ VALUE: `+34 600 000 ${String(100 + nEmpresas).slice(-3)}`, VALUE_TYPE: 'WORK' }],
+        PHONE: [{ VALUE: `+34 600 000 ${String(100 + CLIENTES.indexOf(c)).slice(-3)}`, VALUE_TYPE: 'WORK' }],
         ADDRESS: 'Calle Mayor, 1', ADDRESS_CITY: c.ciudad, ADDRESS_POSTAL_CODE: '28001', ADDRESS_PROVINCE: 'Madrid',
       } })
       nEmpresas++
-      // La persona de contacto de cada sociedad (los autónomos son ellos mismos).
+      // La persona de contacto de cada sociedad (los autónomos son ellos mismos), justo detrás de su empresa.
       if (c.tipo === 'sociedad') {
         await b24('crm.contact.add', { fields: {
           NAME: c.contacto.nombre, LAST_NAME: c.contacto.apellidos, COMPANY_ID: r.result, POST: 'Administración',
@@ -139,7 +152,9 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
         nContactos++
       }
     }
-    decir(`  ✓ Sembrado: ${nEmpresas} empresas (30 sociedades y 10 autónomos) y ${nContactos} personas de contacto.`)
+    const quedan = faltan.length - nEmpresas
+    decir(`  ✓ Sembrado: ${nEmpresas} empresas y ${nContactos} personas de contacto${quedan > 0 ? `; quedan ${quedan}, en otra tanda` : ` (los ${CLIENTES.length} clientes, 30 sociedades y 10 autónomos)`}.`)
+    return { quedan }
   }
 
   // ── Sandbox de GoCardless ──────────────────────────────────────────────────

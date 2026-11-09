@@ -85,12 +85,16 @@ declare
     'conta_portal_mensaje_enviar', 'conta_portal_mensajes_leidos', 'conta_portal_solicitud_pedir', 'conta_portal_incidencia_crear',
     'conta_portal_peticion_contestar', 'conta_portal_invitar', 'conta_portal_acceso_quitar', 'conta_portal_firma_comprobar',
     'conta_portal_ficha', 'conta_portal_pendiente', 'conta_portal_peticion_crear', 'conta_portal_peticion_anular',
-    'conta_portal_incidencia_resolver', 'conta_portal_ajustes_guardar'];
+    'conta_portal_incidencia_resolver', 'conta_portal_ajustes_guardar',
+    -- GP · T4 (la 2030), si ya está:
+    'conta_portal_solicitud_hacer', 'conta_portal_solicitud_rechazar'];
   -- Las que llama el servidor con la clave de servicio (y las de dentro).
   solo_servidor constant text[] := array[
     '_conta_portal_yo', '_conta_portal_empresa', '_conta_portal_marca', '_conta_portal_estado_recibo', '_conta_portal_devuelto_pagado',
     '_conta_portal_devueltos', '_conta_portal_proximo', '_conta_portal_cuenta_propia', 'conta_portal_acceso_usuario', 'conta_portal_firma_pedir',
-    'conta_portal_firma_pdf', 'conta_portal_incidencia_parada', 'conta_portal_archivo'];
+    'conta_portal_firma_pdf', 'conta_portal_incidencia_parada', 'conta_portal_archivo',
+    -- GP · T4 (la 2030), si ya está (conta_portal_despertar solo la llama el cron: ni sesión ni servicio):
+    'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos'];
   f record; malos text[] := '{}'; n int := 0;
 begin
   for f in select p.oid, p.proname, p.oid::regprocedure::text as firma from pg_catalog.pg_proc p join pg_catalog.pg_namespace s on s.oid = p.pronamespace
@@ -101,7 +105,7 @@ begin
       malos := malos || (case when f.proname = any (puede_con_sesion) then 'authenticated NO puede llamar a ' else 'authenticated puede llamar a ' end || f.firma);
     end if;
     if f.proname = any (solo_servidor) and not has_function_privilege('service_role', f.oid, 'execute') then malos := malos || ('service_role no puede llamar a ' || f.firma); end if;
-    if not (f.proname = any (puede_con_sesion) or f.proname = any (solo_servidor)) then malos := malos || ('función del portal sin decidir quién la llama: ' || f.firma); end if;
+    if not (f.proname = any (puede_con_sesion) or f.proname = any (solo_servidor) or f.proname = 'conta_portal_despertar') then malos := malos || ('función del portal sin decidir quién la llama: ' || f.firma); end if;
   end loop;
   if n < 37 then raise exception 'PRUEBA GP-1720 · 2: solo hay % funciones del portal; deberían ser 37 o más.', n; end if;
   if cardinality(malos) > 0 then raise exception 'PRUEBA GP-1720 · 2: permisos que no son los decididos: %', array_to_string(malos, '; '); end if;
