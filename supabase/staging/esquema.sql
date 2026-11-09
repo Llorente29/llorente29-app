@@ -3917,6 +3917,26 @@ COMMENT ON FUNCTION public._conta_asientos_borrar(p_company uuid, p_entries uuid
 
 
 --
+-- Name: _conta_bitrix_pestana_bitrix_de(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_bitrix_pestana_bitrix_de(p_cuenta uuid, p_tipo text, p_id text) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select jsonb_build_object(
+    'campo', (select x->>'codigo' from public.conta_crm c, jsonb_array_elements(coalesce(c.mapa->'campos', '[]'::jsonb)) x
+               where c.account_id = p_cuenta and c.crm = 'bitrix24' and x->>'campo' = 'cuota_referencia' and x->>'etiqueta' = 'Cuota mensual'
+                 and coalesce(x->>'codigo', '') <> '' limit 1),
+    'conocida', (select q->>'texto' from public.conta_gestoria_ficha f, jsonb_array_elements(coalesce(f.ficha->'cuotasReferencia', '[]'::jsonb)) q
+                  where f.account_id = p_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = p_id and q->>'etiqueta' = 'Cuota mensual' limit 1),
+    'escrita', (select b.bitrix->>'escrito' from public.conta_bitrix_pestana_cambio b
+                 where b.account_id = p_cuenta and b.tipo_ficha = p_tipo and b.id_externo = p_id and b.bitrix ? 'escrito'
+                 order by b.bitrix_at desc nulls last limit 1))
+$$;
+
+
+--
 -- Name: _conta_cadena_rota(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -32969,6 +32989,87 @@ COMMENT ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo tex
 
 
 --
+-- Name: conta_bitrix_pestana_portal(text, text, text, text, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_portal(p_portal text, p_correo text, p_tipo text, p_id text, p_solicitud uuid DEFAULT NULL::uuid, p_servicio uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_portal text := lower(trim(coalesce(p_portal, '')));
+  v_correo text := lower(trim(coalesce(p_correo, '')));
+  v_id text := trim(coalesce(p_id, ''));
+  v_cuenta uuid; v_usuario uuid; v_quien text; v_n int; v_cliente uuid;
+  v_f jsonb; v_s public.conta_solicitud; v_r jsonb; v_cambio uuid;
+begin
+  if p_tipo is null or p_tipo not in ('empresa', 'contacto') or v_id !~ '^[0-9]{1,18}$' then return jsonb_build_object('estado', 'ficha_rara'); end if;
+  if v_portal = '' or v_correo = '' then return jsonb_build_object('estado', 'sin_acceso'); end if;
+
+  -- La persona, igual que en la lectura.
+  select count(*), min(c.account_id::text)::uuid into v_n, v_cuenta
+    from public.conta_crm c
+    join public.user_profiles up on up.account_id = c.account_id and up.active
+    join auth.users u on u.id = up.user_id and lower(u.email) = v_correo
+   where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  if v_n = 0 then return jsonb_build_object('estado', 'sin_acceso'); end if;
+  if v_n > 1 then return jsonb_build_object('estado', 'varias_cuentas'); end if;
+  select up.user_id, up.display_name into v_usuario, v_quien
+    from public.user_profiles up join auth.users u on u.id = up.user_id
+   where up.account_id = v_cuenta and up.active and lower(u.email) = v_correo limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_usuario::text || ':' || v_cuenta::text, true);
+
+  select f.party_id into v_cliente from public.conta_gestoria_ficha f
+   where f.account_id = v_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = v_id
+   order by (f.de_empresa = '') desc, f.de_empresa limit 1;
+  if v_cliente is null then
+    select g.party_id into v_cliente from public.conta_gestoria_cliente g
+     where g.account_id = v_cuenta and g.crm = 'bitrix24' and g.tipo_ficha = p_tipo and g.id_externo = v_id;
+  end if;
+  if v_cliente is null then return jsonb_build_object('estado', 'sin_enlazar'); end if;
+
+  if p_solicitud is null then
+    v_f := public.conta_portal_ficha(v_cliente);
+    return jsonb_build_object('estado', 'ok',
+      'accesos', coalesce((select jsonb_agg(jsonb_build_object('nombre', a->>'nombre', 'correo', a->>'correo', 'permiso', a->>'permiso', 'entro', a->>'entro_at')
+                  order by a->>'invitado_at') from jsonb_array_elements(coalesce(v_f->'accesos', '[]'::jsonb)) a where a->>'revocado_at' is null), '[]'::jsonb),
+      'solicitudes', coalesce((select jsonb_agg(jsonb_build_object('id', s->>'id', 'tipo', s->>'tipo', 'nombre', s->>'empleado_nombre', 'empresa', s->>'company_id',
+                  'fecha', coalesce(s->>'fecha_efecto', s->>'mes'), 'desde_el_portal', s->>'portal_acceso_id' is not null) order by s->>'pedida_at')
+                  from jsonb_array_elements(coalesce(v_f->'solicitudes', '[]'::jsonb)) s where s->>'estado' = 'pedida'), '[]'::jsonb),
+      'mensajes_sin_leer', (select count(*) from jsonb_array_elements(coalesce(v_f->'mensajes', '[]'::jsonb)) m where m->>'de' = 'cliente' and m->>'leido' is null));
+  end if;
+
+  -- «Hacerla»: solo una petición del cliente de la ficha abierta.
+  select * into v_s from public.conta_solicitud where id = p_solicitud;
+  if v_s.id is null or v_s.account_id <> v_cuenta or v_s.party_id <> v_cliente then
+    return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Esa petición no es de este cliente.');
+  end if;
+  begin
+    v_r := public.conta_portal_solicitud_hacer(p_solicitud, p_servicio);
+  exception
+    when insufficient_privilege then
+      return jsonb_build_object('estado', 'sin_permiso', 'frase', 'Puedes ver, pero no cambiar lo que se cobra: pídeselo a un administrador o a un encargado de la cuenta.');
+    when others then
+      return jsonb_build_object('estado', 'no_se_pudo', 'frase', sqlerrm);
+  end;
+  insert into public.conta_bitrix_pestana_cambio (account_id, party_id, tipo_ficha, id_externo, accion, datos, frase, resultado_id, hecho_por, hecho_por_nombre)
+  values (v_cuenta, v_cliente, p_tipo, v_id, v_s.tipo, jsonb_build_object('solicitud', p_solicitud, 'servicio', p_servicio, 'nombre', v_s.empleado_nombre),
+          coalesce(v_r->>'frase', ''), nullif(v_r->>'linea_id', '')::uuid, v_usuario, v_quien)
+  returning id into v_cambio;
+  return jsonb_build_object('estado', 'ok', 'frase', v_r->>'frase', 'cambio', v_cambio, 'id', v_r->>'linea_id', 'empresa', v_s.company_id, 'cliente', v_cliente,
+    'tipo', v_s.tipo, 'nombre', v_s.empleado_nombre, 'bitrix', public._conta_bitrix_pestana_bitrix_de(v_cuenta, p_tipo, v_id));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_portal(p_portal text, p_correo text, p_tipo text, p_id text, p_solicitud uuid, p_servicio uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_portal(p_portal text, p_correo text, p_tipo text, p_id text, p_solicitud uuid, p_servicio uuid) IS 'GB · «Su portal» en la pestaña de Bitrix24. Solo el servidor, DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación. Actúa como la persona: sin solicitud, lee el portal del cliente (conta_portal_ficha, de Code 3); con solicitud, «Hacerla» (conta_portal_solicitud_hacer, de Code 3), solo del cliente de la ficha abierta.';
+
+
+--
 -- Name: conta_canal_de_factura(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -48978,6 +49079,83 @@ begin
                            '[]'::jsonb),
     'empresa_id', e);
 end $$;
+
+
+--
+-- Name: conta_portal_demo_preparar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_servidor boolean := coalesce(auth.role(), '') = 'service_role';
+  v_cliente uuid; v_hechas text[] := '{}'; v_hoy date := (now() at time zone 'Europe/Madrid')::date;
+  v_limite date; v_correo constant text := 'tomas.ruiz@talleresruiz.example';
+  v_mes text;
+begin
+  if not exists (select 1 from public.accounts where id = p_cuenta and is_demo is true) then
+    raise exception 'Solo se prepara el portal de una cuenta de demostración.' using errcode = '42501';
+  end if;
+  if not (v_servidor or public.current_user_is_admin_or_manager_of(p_cuenta)) then
+    raise exception 'Prepara la demo un administrador o un encargado de la cuenta.' using errcode = '42501';
+  end if;
+  select id into v_cliente from public.party where account_id = p_cuenta and name = 'Talleres Ruiz, S.L.' order by created_at limit 1;
+  if v_cliente is null then
+    return jsonb_build_object('hecho', false, 'frase', 'En la demo aún no está Talleres Ruiz, S.L.: lee antes los clientes del CRM y vuelve a pulsar.');
+  end if;
+
+  -- 1 · Cómo se paga un devuelto: los dos caminos.
+  if not exists (select 1 from public.conta_portal_ajustes where account_id = p_cuenta and pagar_devuelto @> array['banco', 'tarjeta']) then
+    insert into public.conta_portal_ajustes (account_id, pagar_devuelto, updated_at, updated_by_name)
+    values (p_cuenta, array['banco', 'tarjeta'], now(), 'Preparación de la demo')
+    on conflict (account_id) do update set pagar_devuelto = excluded.pagar_devuelto, updated_at = now(), updated_by_name = excluded.updated_by_name;
+    v_hechas := array_append(v_hechas, 'el devuelto se paga desde el banco o con tarjeta');
+  end if;
+
+  -- 2 · El acceso de Tomás Ruiz (sin usuario: lo pone el enlace al entrar).
+  if not exists (select 1 from public.conta_portal_acceso where party_id = v_cliente and lower(correo) = v_correo and revocado_at is null) then
+    if exists (select 1 from public.conta_portal_acceso where party_id = v_cliente and lower(correo) = v_correo) then
+      update public.conta_portal_acceso set revocado_at = null, revocado_por_name = null, permiso = 'todo', invitado_at = now(), invitado_por_name = 'Preparación de la demo'
+       where party_id = v_cliente and lower(correo) = v_correo;
+    else
+      insert into public.conta_portal_acceso (account_id, party_id, correo, nombre, permiso, invitado_por_name)
+      values (p_cuenta, v_cliente, v_correo, 'Tomás Ruiz', 'todo', 'Preparación de la demo');
+    end if;
+    v_hechas := array_append(v_hechas, ('acceso de Tomás Ruiz (' || v_correo || ')'));
+  end if;
+
+  -- 3 · Un mensaje de bienvenida, si aún no os habéis escrito (ya avisado: no sale correo).
+  if not exists (select 1 from public.conta_portal_mensaje where party_id = v_cliente) then
+    insert into public.conta_portal_mensaje (account_id, party_id, de, autor_nombre, texto, created_at, avisado_at)
+    values (p_cuenta, v_cliente, 'gestoria', 'Gestoría Demo',
+            'Hola, Tomás: ya tienes aquí tu espacio. Ves tus facturas y tus recibos, nos subes los documentos y nos escribes por aquí. Si el banco te devuelve un recibo, lo pagas desde Inicio en un minuto.',
+            now() - interval '1 day', now());
+    v_hechas := array_append(v_hechas, 'un mensaje de bienvenida');
+  end if;
+
+  -- 4 · Una petición: subir las facturas de gasto del mes, para el día 10 del que viene (ya avisada).
+  if not exists (select 1 from public.conta_portal_peticion where party_id = v_cliente and estado = 'pendiente') then
+    v_limite := (date_trunc('month', v_hoy) + interval '1 month' + interval '9 days')::date;
+    v_mes := (array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'])[extract(month from v_hoy)::int];
+    insert into public.conta_portal_peticion (account_id, party_id, tipo, titulo, detalle, fecha_limite, creada_por_name, avisado_at)
+    values (p_cuenta, v_cliente, 'subir', 'Facturas de gasto de ' || v_mes,
+            'Las de proveedores y los tiques del mes. Una foto con el móvil vale.', v_limite, 'Gestoría Demo', now());
+    v_hechas := array_append(v_hechas, ('la petición «Facturas de gasto de ' || v_mes || '», para el ' || to_char(v_limite, 'DD/MM')));
+  end if;
+
+  return jsonb_build_object('hecho', true, 'cliente_id', v_cliente,
+    'frase', case when cardinality(v_hechas) = 0 then 'El portal de la demo ya estaba preparado: no hacía falta nada.'
+                  else 'Portal de la demo preparado: ' || array_to_string(v_hechas, ', ') || '.' end);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_portal_demo_preparar(p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) IS 'GP · Prepara el portal de una cuenta de demostración (Talleres Ruiz en «Gestoría Demo»): ajustes del devuelto, el acceso de Tomás Ruiz, un mensaje y una petición. Se puede pasar otra vez (también después de «Volver a empezar»). Solo cuentas demo; su administrador o encargado, o el servidor.';
 
 
 --
@@ -161122,6 +161300,14 @@ REVOKE ALL ON FUNCTION public._conta_asientos_borrar(p_company uuid, p_entries u
 
 
 --
+-- Name: FUNCTION _conta_bitrix_pestana_bitrix_de(p_cuenta uuid, p_tipo text, p_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_bitrix_pestana_bitrix_de(p_cuenta uuid, p_tipo text, p_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_bitrix_pestana_bitrix_de(p_cuenta uuid, p_tipo text, p_id text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_cadena_rota(p_company uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -166950,6 +167136,14 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo t
 
 
 --
+-- Name: FUNCTION conta_bitrix_pestana_portal(p_portal text, p_correo text, p_tipo text, p_id text, p_solicitud uuid, p_servicio uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_portal(p_portal text, p_correo text, p_tipo text, p_id text, p_solicitud uuid, p_servicio uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_portal(p_portal text, p_correo text, p_tipo text, p_id text, p_solicitud uuid, p_servicio uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_canal_de_factura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -170069,6 +170263,15 @@ GRANT ALL ON FUNCTION public.conta_portal_avisos_pendientes(p_limite integer) TO
 REVOKE ALL ON FUNCTION public.conta_portal_cuenta(p_party uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_portal_cuenta(p_party uuid) TO service_role;
 GRANT ALL ON FUNCTION public.conta_portal_cuenta(p_party uuid) TO authenticated;
+
+
+--
+-- Name: FUNCTION conta_portal_demo_preparar(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) TO service_role;
+GRANT ALL ON FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) TO authenticated;
 
 
 --
