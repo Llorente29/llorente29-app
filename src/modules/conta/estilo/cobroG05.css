@@ -1,0 +1,92 @@
+/* src/modules/conta/estilo/cobroG05.css
+ *
+ * G05 · Tarea 4 · «Revisar el cobro», fiel a la maqueta aprobada (Cobro.dc.html):
+ * lo propio de esta pantalla. Lo común (cabecera, bandas, bloques, botones y
+ * cifras) es de clientesG04.css (.g4-*). Toques de 44 px o más; en móvil, la
+ * tabla de seguimiento se desplaza dentro de su caja.
+ */
+
+/* Los cuatro pasos */
+.g5-pasos { list-style: none; margin: 0; padding: 4px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: #E6EBF3; border-radius: 14px; }
+.g5-paso { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 10px; color: var(--g4-apoyo); }
+.g5-paso[data-estado='ahora'] { background: #FFFFFF; color: var(--g4-tinta); box-shadow: 0 1px 2px rgba(15,27,45,.12); }
+.g5-paso-bola { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 700; background: #E1E7F0; color: var(--g4-apoyo); }
+.g5-paso[data-estado='ahora'] .g5-paso-bola { background: var(--g4-azul); color: #FFFFFF; }
+.g5-paso[data-estado='hecho'] .g5-paso-bola { background: var(--g4-bien); color: #FFFFFF; }
+.g5-paso-textos { display: flex; flex-direction: column; min-width: 0; }
+.g5-paso-t { font-size: 14px; font-weight: 600; }
+.g5-paso-d { font-size: 12px; }
+
+.g5-frase { margin: 0; border-radius: 12px; padding: 12px 16px; font-size: 14px; font-weight: 600; }
+.g5-frase[data-tono='bien'] { background: var(--g4-bien-fondo); color: var(--g4-bien); }
+.g5-frase[data-tono='mal'] { background: var(--g4-mal-fondo); color: var(--g4-mal); }
+.g5-frase[data-tono='aviso'] { background: var(--g4-aviso-fondo); color: var(--g4-aviso); }
+.g5-apoyo { margin: 0; font-size: 14px; color: var(--g4-apoyo); line-height: 1.5; }
+
+/* Los grupos y las cifras dentro de la banda oscura */
+.g5-grupos, .g5-cifras-oscuras { display: flex; gap: 12px; flex-wrap: wrap; }
+.g5-grupos > div, .g5-cifras-oscuras > div { background: rgba(255,255,255,.08); border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+.g5-cifras-oscuras > div[data-tono='bien'] { background: rgba(130,220,180,.16); }
+.g5-cifras-oscuras > div[data-tono='mal'] { background: rgba(255,140,130,.16); }
+.g5-grupo-t { font-size: 12px; color: #9FB3D1; font-weight: 600; }
+.g5-grupo-n { font-family: var(--g4-display); font-size: 26px; font-weight: 700; color: #FFFFFF; font-variant-numeric: tabular-nums; }
+.g5-grupo-d { font-size: 12px; color: #C9D4E6; }
+.g5-cifras-oscuras > div[data-tono='bien'] .g5-grupo-n { color: #8EE3BD; }
+.g5-cifras-oscuras > div[data-tono='mal'] .g5-grupo-n { color: #FFB3AC; }
+
+/* Con cambios, uno a uno */
+.g5-estado { font-size: 13px; font-weight: 700; }
+.g5-estado[data-tono='aviso'] { color: var(--g4-aviso); }
+.g5-estado[data-tono='bien'] { color: var(--g4-bien); }
+.g5-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.g5-cambio, .g5-fuera { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 16px; align-items: center; padding: 14px 0; border-top: 1px solid var(--g4-linea); }
+.g5-fuera { grid-template-columns: minmax(0, 1fr) auto; }
+.g5-cambio[data-fuerte='si'] { background: #FFFBF5; margin: 0 -24px; padding: 14px 24px; }
+.g5-cambio-textos { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.g5-cambio-cabeza { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.g5-cambio-nombre { font-size: 15px; font-weight: 600; color: var(--g4-tinta); text-decoration: none; }
+.g5 a.g5-cambio-nombre { color: var(--g4-tinta); }
+.g5-cambio-porque { font-size: 13px; color: var(--g4-apoyo); line-height: 1.45; }
+.g5-cambio-importe { display: flex; gap: 8px; align-items: baseline; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 15px; }
+.g5-antes { color: var(--g4-apoyo); text-decoration: line-through; }
+.g5-cambio-acciones { display: flex; gap: 8px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.g5-etiqueta { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 700; background: var(--g4-neutro-fondo); color: var(--g4-neutro); }
+.g5-etiqueta[data-tono='aviso'] { background: var(--g4-aviso-fondo); color: var(--g4-aviso); }
+.g5-etiqueta[data-tono='bien'] { background: var(--g4-bien-fondo); color: var(--g4-bien); }
+.g5-etiqueta[data-tono='mal'] { background: var(--g4-mal-fondo); color: var(--g4-mal); }
+.g5-hecho { font-size: 14px; font-weight: 700; }
+.g5-hecho[data-tono='bien'] { color: var(--g4-bien); }
+.g5-hecho[data-tono='aviso'] { color: var(--g4-aviso); }
+.g5-iguales { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 24px; }
+.g5-iguales li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--g4-linea); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* La barra de «Enviar el cobro» */
+.g5-barra { position: sticky; bottom: 0; background: #FFFFFF; border-radius: 16px; padding: 16px 24px; display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; box-shadow: 0 -2px 12px rgba(15,27,45,.08); }
+.g5-barra-textos { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.g5-barra-textos span { color: var(--g4-apoyo); }
+.g5-enviar { border: 0; background: var(--g4-azul); color: #FFFFFF; border-radius: 12px; padding: 0 26px; height: 52px; font-size: 15px; font-weight: 700; cursor: pointer; }
+.g5-enviar:disabled { background: #C9D3E3; color: #5A6B84; cursor: not-allowed; }
+
+/* El aviso antes de enviar */
+.g5-velo { position: fixed; inset: 0; background: rgba(14,34,64,.45); display: grid; place-items: center; padding: 16px; z-index: 50; }
+.g5-aviso { background: #FFFFFF; border-radius: 18px; padding: 28px; width: min(520px, 100%); display: flex; flex-direction: column; gap: 16px; }
+.g5-aviso-datos { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.g5-aviso-datos div { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--g4-linea); font-size: 14px; }
+.g5-aviso-datos dt { color: var(--g4-apoyo); }
+.g5-aviso-datos dd { margin: 0; font-weight: 700; text-align: right; }
+
+/* Cómo va cada recibo */
+.g5-tabla-caja { overflow-x: auto; }
+.g5-tabla { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 640px; }
+.g5-tabla th { text-align: left; font-size: 12px; color: var(--g4-apoyo); font-weight: 600; padding: 8px 12px; border-bottom: 1px solid var(--g4-borde); }
+.g5-tabla td { padding: 12px; border-bottom: 1px solid var(--g4-linea); vertical-align: middle; }
+.g5-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.g5-tabla th.g5-num { text-align: right; }
+.g5-detalle { font-size: 12px; color: var(--g4-apoyo); }
+
+@media (max-width: 720px) {
+  .g5-pasos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .g5-cambio { grid-template-columns: minmax(0, 1fr); }
+  .g5-cambio-acciones { justify-content: flex-start; }
+  .g5-cambio[data-fuerte='si'] { margin: 0 -16px; padding: 14px 16px; }
+}
