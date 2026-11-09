@@ -110,6 +110,8 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await upsert(db, 'conta_gc_mandato', plan.filas.mandatos, 'company_id,gc_id')
     await upsert(db, 'conta_gc_suscripcion', plan.filas.suscripciones, 'company_id,gc_id')
     await upsert(db, 'conta_gc_cobro', plan.filas.cobros, 'company_id,gc_id')
+    // G05 · nº 43 · Los pagos al banco: su día de llegada y su neto (el casado de Bancos, match_id, no se toca).
+    await upsert(db, 'conta_gc_payout', plan.filas.payouts, 'company_id,gc_id')
     await upsert(db, 'conta_cobro_cliente', plan.cobroCliente, 'company_id,party_id')
     const yaEstan = await leerFilas<{ id: string; gc_mandato_id: string }>(db.from('conta_mandato').select('id, gc_mandato_id').eq('company_id', empresa).not('gc_mandato_id', 'is', null), 'los mandatos')
     const idDe = new Map(yaEstan.map((m) => [m.gc_mandato_id, m.id]))

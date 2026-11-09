@@ -174,7 +174,7 @@ export function crearBancos(bd: Bd) {
 
   async function cargarContexto(accountId: string, companyId: string, hoy: string): Promise<{ ctx: Contexto; movimientos: Movimiento[] }> {
     const hace = (d: number) => new Date(Date.parse(`${hoy}T00:00:00Z`) - d * 86400000).toISOString().slice(0, 10)
-    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas, pasarela, declaraciones] = await Promise.all([
+    const [bancos, movs, facturas, saldos, asientos, historial, ventas, liqs, canales, roles, enlaces, cuentas, contratos, reglas, proveedores, tarjetas, empresa, tiendas, cuentasLocal, emitidas, cobroEmitidas, pasarela, declaraciones, gocardless] = await Promise.all([
       bancosDeLaEmpresa(accountId, companyId),
       leer(tabla('bank_movement').select('id, treasury_account_id, op_date, amount, bank_concept, clean_concept, common_code, document_no, reference_1, reference_2, before_cutover, status, counterparty, movement_type')
         .eq('account_id', accountId).eq('company_id', companyId).in('status', ['pendiente', 'propuesto', 'por_aclarar']), 'los movimientos sin casar'),
@@ -210,6 +210,10 @@ export function crearBancos(bd: Bd) {
       // S01d · Las declaraciones presentadas a ingresar y sin su asiento de pago: el modelo y el periodo del pago, de aquí.
       leer(tabla('tax_return').select('id, form_code, fiscal_year, period, amount, payment_entry_id').eq('account_id', accountId).eq('company_id', companyId)
         .eq('status', 'filed').eq('result_kind', 'to_pay'), 'las declaraciones por pagar'),
+      // G05 · nº 43 · Los pagos de GoCardless al banco que esperan su movimiento. Si no se pueden leer
+      // (la base aún sin la 1426), Bancos sigue: ese ingreso se casa a mano, como antes.
+      rpc<Fila[]>('conta_abonos_gocardless_pendientes', { p_company: companyId })
+        .catch((e: unknown) => { console.warn('[bancos] no se pudieron leer los pagos de GoCardless que esperan su ingreso', e); return [] as Fila[] }),
     ])
     const tiendaDe = new Map(tiendas.map((t) => [String(t.id), t]))
     const bancosLocal = cuentasLocal.map((c) => ({ id: String(c.id), localId: s(c.location_id) }))
@@ -327,6 +331,8 @@ export function crearBancos(bd: Bd) {
       nombresPropios: nombresDeEmpresa(empresa[0]),
       cuentaDiferenciaGasto: hoja('669') ?? '66900000',
       cuentaDiferenciaIngreso: hoja('769') ?? '76900000',
+      abonosGocardless: (gocardless ?? []).map((a) => ({ id: String(a.id), llegada: String(a.llegada), netoCent: cent(a.neto), referencia: s(a.referencia),
+        cuenta: String(a.cuenta ?? '57200002'), cobros: Number(a.cobros ?? 0) })),
       cobrosPasarela: (pasarela ?? []).map((c) => ({
         id: String(c.id), proveedor: c.proveedor === 'redsys' ? 'redsys' as const : 'stripe' as const, fecha: String(c.fecha), brutoCent: cent(c.bruto),
         netoCent: c.neto === null || c.neto === undefined ? null : cent(c.neto), comisionCent: c.comision === null || c.comision === undefined ? null : cent(c.comision),
@@ -386,6 +392,10 @@ export function crearBancos(bd: Bd) {
    * lo demás, a bank_casar directamente.
    */
   async function casarDestino(movimientoId: string, destino: Destino, confianza: 'seguro' | 'probable' | 'duda', porque: string, por: 'folvy' | 'persona', reglaId: string | null): Promise<Fila> {
+    // G05 · nº 43 · El ingreso de GoCardless: su asiento (el banco contra la 57200002) y el casado.
+    if (destino.tipo === 'abono_gocardless') {
+      return rpc<Fila>('conta_abono_gocardless_casar', { p_movement: movimientoId, p_payout: destino.payout, p_confianza: confianza, p_porque: porque, p_por: por })
+    }
     if (destino.tipo === 'abono_pasarela') {
       return rpc<Fila>('conta_abono_pasarela_casar', { p_movement: movimientoId, p_enlaces: destino.cobros, p_confianza: confianza, p_porque: porque, p_por: por })
     }
@@ -395,7 +405,7 @@ export function crearBancos(bd: Bd) {
   /** «Sí»: casa lo propuesto (o el destino que elija la persona). */
   async function confirmar(movimientoId: string, porque: string, destino: Destino, confianza: 'seguro' | 'probable' | 'duda', reglaId: string | null): Promise<{ asiento: string; creado: boolean }> {
     const r = await casarDestino(movimientoId, destino, confianza, porque, 'persona', reglaId)
-    if (destino.tipo === 'abono_pasarela') return { asiento: String(r.asiento), creado: true }
+    if (destino.tipo === 'abono_pasarela' || destino.tipo === 'abono_gocardless') return { asiento: String(r.asiento), creado: true }
     if (reglaId) await rpc('bank_regla_confirmada', { p_id: reglaId })
     return { asiento: String(r.asiento), creado: !!r.creado }
   }

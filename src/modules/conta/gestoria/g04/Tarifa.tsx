@@ -24,6 +24,8 @@ export interface AccionesTarifa {
   crearServicio: (nombre: string, forma: Forma, conPrecio: boolean, desde: string) => Promise<string>
   guardarPrecio: (o: Objetivo, f: Forma, desde: string) => Promise<string>
   guardarNivel: (servicioId: string, nombre: string, orden: number, incluye: string[], precio: Forma | null, desde: string) => Promise<string>
+  /** G05 · El «Qué incluye» del servicio, el que sale en la factura (vacío: el de siempre). */
+  guardarQueIncluye: (servicioId: string, texto: string) => Promise<string>
   guardarPaquete: (paqueteId: string | null, nombre: string, descripcion: string | null, excesoCent: number | null,
     lineas: { servicio: string; nivel: string | null; limiteTrabajadores: number | null }[], precio: Forma | null, desde: string) => Promise<string>
   /** Guarda el ensayo (lo que se ha visto) y lo aplica. */
@@ -184,6 +186,38 @@ export function Tarifa(p: PropsTarifa) {
   )
 }
 
+/** G05 · El «Qué incluye» del servicio: el que sale en la factura, debajo de su nombre. */
+function QueIncluye(p: PropsTarifa & { servicioId: string; q: { texto: string | null; porDefecto: boolean }; setAviso: (a: Aviso) => void }) {
+  const [editando, setEditando] = useState<string | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+  return (
+    <div className="g4-tf-incluye-caja" data-que-incluye="">
+      <div className="g4-tf-bloque-titulo">Qué incluye</div>
+      {editando === null ? (
+        <div className="g4-tf-incluye-linea">
+          <div>
+            <div className="g4-tf-incluye-nombre">{p.q.texto ?? 'Sin poner'}</div>
+            <div className="g4-tf-nota">{p.q.porDefecto ? (p.q.texto ? 'El de siempre del catálogo de gestoría. ' : '') + 'Sale en la factura debajo del nombre del servicio.' : 'Sale en la factura debajo del nombre del servicio.'}</div>
+          </div>
+          <button type="button" className="g4-boton" onClick={() => setEditando(p.q.porDefecto ? (p.q.texto ?? '') : (p.q.texto ?? ''))}>Cambiar</button>
+        </div>
+      ) : (
+        <div className="g4-tf-incluye-linea">
+          <label className="g4-tf-campo g4-tf-ancho">Qué incluye (una frase)<input type="text" maxLength={200} value={editando} onChange={(e) => setEditando(e.target.value)} /></label>
+          <div className="g4-cabecera-acciones">
+            <button type="button" className="g4-boton" onClick={() => setEditando(null)}>Cancelar</button>
+            <button type="button" className="g4-boton" data-tipo="primario" disabled={ocupado} onClick={async () => {
+              setOcupado(true)
+              try { p.setAviso({ texto: await p.acciones.guardarQueIncluye(p.servicioId, editando), ok: true }); setEditando(null) }
+              catch (e) { p.setAviso({ texto: e instanceof Error ? e.message : String(e), ok: false }) } finally { setOcupado(false) }
+            }}>{ocupado ? 'Guardando…' : 'Guardar'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function Opcion({ titulo, texto, alPulsar }: { titulo: string; texto: string; alPulsar: () => void }) {
   return (
     <button type="button" role="menuitem" className="g4-tf-opcion" onClick={alPulsar}>
@@ -209,6 +243,7 @@ function Detalle(p: PropsTarifa & { d: DetalleTarifa; aviso: Aviso; setAviso: (a
         {d.entrada.clientes > 0 && <Link className="g4-boton g4-tf-ver" to={p.rutaClientes}>Ver sus {d.entrada.clientes} clientes</Link>}
       </div>
       <Hecho aviso={p.aviso} />
+      {d.queIncluye && <QueIncluye {...p} servicioId={sid} q={d.queIncluye} />}
       {d.niveles.length > 0 && <Niveles {...p} servicioId={sid} />}
       {!esPaquete && !d.niveles.length && <ComoSeCobra {...p} servicioId={sid} />}
       {esPaquete && d.paquete && <ElPaquete {...p} />}

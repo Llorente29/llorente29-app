@@ -94,6 +94,9 @@ export const acciones = {
     hacer('conta_tarifa_servicio_crear', { p_company: empresa, p_nombre: nombre, p_forma: forma, p_periodo: periodo, p_importe: importe, p_tramos: tramos, p_desde: desde, p_ensayo: ensayo }),
   guardarNivel: (empresa: string, servicio: string, nivel: string | null, nombre: string, orden: number, incluye: string[], masElegido: boolean, ensayo: boolean) =>
     hacer('conta_tarifa_nivel_guardar', { p_company: empresa, p_servicio: servicio, p_nivel: nivel, p_nombre: nombre, p_orden: orden, p_incluye: incluye, p_mas_elegido: masElegido, p_ensayo: ensayo }),
+  /** G05 · El «Qué incluye» de un servicio (vacío: el de siempre). */
+  queIncluye: (empresa: string, servicio: string, texto: string, ensayo: boolean) =>
+    hacer('conta_tarifa_servicio_incluye', { p_company: empresa, p_servicio: servicio, p_incluye: texto, p_ensayo: ensayo }),
   guardarPaquete: (empresa: string, paquete: string | null, nombre: string, descripcion: string | null, exceso: number | null,
     lineas: { servicio: string; nivel: string | null; limiteTrabajadores: number | null }[], ensayo: boolean) =>
     hacer('conta_tarifa_paquete_guardar', { p_company: empresa, p_paquete: paquete, p_nombre: nombre, p_descripcion: descripcion, p_exceso: exceso, p_lineas: lineas, p_ensayo: ensayo }),

@@ -54,6 +54,8 @@ export interface PlanLectura {
     mandatos: Record<string, unknown>[]
     suscripciones: Record<string, unknown>[]
     cobros: Record<string, unknown>[]
+    /** G05 · nº 43 · Los pagos de GoCardless al banco (conta_gc_payout). */
+    payouts: Record<string, unknown>[]
   }
   nuevos: number
   cambiados: number
@@ -95,8 +97,14 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     return { company_id: empresa, gc_id: c.id, account_id: cuenta, nombre: c.nombre, correo: c.correo, nif: c.nif,
       mandatos_vivos: vivosDe.get(c.id) ?? 0, suscripciones_activas: activasDe.get(c.id) ?? 0, huella, leido_at: ahora }
   })
-  const mandatos = datos.mandatos.map((m) => ({ company_id: empresa, gc_id: m.id, account_id: cuenta, gc_cliente_id: m.clienteId,
-    estado: m.estado, referencia: m.referencia, esquema: m.esquema, creado: m.creado, leido_at: ahora }))
+  // G05 · De la cuenta del mandato, solo lo de enmascararla en la factura (los últimos dígitos, el país y el banco).
+  const cuentaDe = new Map((datos.cuentasCliente ?? []).map((c) => [c.id, c]))
+  const mandatos = datos.mandatos.map((m) => {
+    const c = m.cuentaBancoId ? cuentaDe.get(m.cuentaBancoId) ?? null : null
+    return { company_id: empresa, gc_id: m.id, account_id: cuenta, gc_cliente_id: m.clienteId,
+      estado: m.estado, referencia: m.referencia, esquema: m.esquema, creado: m.creado, leido_at: ahora,
+      cuenta_final: c?.final ?? null, cuenta_pais: c?.pais ?? null, banco: c?.banco ?? null }
+  })
   const suscripciones = datos.suscripciones.map((x) => ({ company_id: empresa, gc_id: x.id, account_id: cuenta,
     gc_cliente_id: x.mandatoId ? clienteDeMandato.get(x.mandatoId) ?? null : null, mandato_gc_id: x.mandatoId, nombre: x.nombre,
     importe: aEuros(x.importeCent), moneda: x.moneda, intervalo: x.intervalo, cada: x.cada, estado: x.estado, al_mes: aEuros(alMesCent(x)),
@@ -105,7 +113,10 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     proximo_cobro_fecha: x.estado === 'active' ? x.proximoCobro?.fecha ?? null : null,
     proximo_cobro_importe: x.estado === 'active' && x.proximoCobro ? aEuros(x.proximoCobro.importeCent) : null }))
   const cobros = datos.cobros.map((p) => ({ company_id: empresa, gc_id: p.id, account_id: cuenta, mandato_gc_id: p.mandatoId,
-    suscripcion_gc_id: p.suscripcionId, estado: p.estado, fecha: p.fecha, importe: aEuros(p.importeCent), moneda: p.moneda, motivo: p.motivo, leido_at: ahora }))
+    suscripcion_gc_id: p.suscripcionId, estado: p.estado, fecha: p.fecha, importe: aEuros(p.importeCent), moneda: p.moneda, motivo: p.motivo,
+    payout_gc_id: p.payoutId ?? null, leido_at: ahora }))
+  const payouts = (datos.payouts ?? []).map((o) => ({ company_id: empresa, gc_id: o.id, account_id: cuenta, estado: o.estado, llegada: o.llegada,
+    importe: aEuros(o.importeCent), comision: o.comisionCent == null ? null : aEuros(o.comisionCent), moneda: o.moneda, referencia: o.referencia, leido_at: ahora }))
 
   // 2 · El casado, de toda la cuenta: esta cuenta de GoCardless (recién leída) y las otras (de la base).
   const deEsta: ClienteParaCasar[] = datos.clientes.map((c) => ({ emisor: empresa, id: c.id, nombre: c.nombre, nif: c.nif, correo: c.correo,
@@ -172,7 +183,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     importeCent: porImportar.find((x) => x.id === n.suscripcionId)?.importeCent ?? null }))
 
   return {
-    filas: { clientes, mandatos, suscripciones, cobros }, nuevos, cambiados, iguales,
+    filas: { clientes, mandatos, suscripciones, cobros, payouts }, nuevos, cambiados, iguales,
     parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeFicha, cobroCliente, mandatosSumied,
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {

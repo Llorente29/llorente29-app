@@ -258,6 +258,8 @@ export function asientoQueSeCrea(m: MovimientoBanco, destino: Destino, cuenta572
     case 'abono_pasarela': return [banco,
       ...(destino.comision > 0 ? [{ cuenta: destino.cuenta_comision, debeCent: c(destino.comision), haberCent: 0 }] : []),
       { cuenta: destino.cuenta_pasarela, debeCent: 0, haberCent: c(destino.cobrado) }]
+    // G05 · nº 43 · El ingreso de GoCardless: el banco contra la cuenta puente, por el neto.
+    case 'abono_gocardless': return [banco, { cuenta: destino.cuenta_puente, debeCent: 0, haberCent: abs }]
     default: return [banco, ...destino.lineas.map((l) => ({ cuenta: l.cuenta, debeCent: entra ? 0 : c(l.importe), haberCent: entra ? c(l.importe) : 0 }))]
   }
 }
@@ -265,7 +267,7 @@ export function asientoQueSeCrea(m: MovimientoBanco, destino: Destino, cuenta572
 /** La píldora del origen de la propuesta, con su nombre. */
 export const PILDORA: Record<string, string> = {
   factura: 'Factura', traspaso: 'Traspaso', regla: 'Regla', liquidacion: 'Liquidación', historial: 'Historial', libro: 'Contabilidad',
-  contrato: 'Contrato', nomina: 'Nómina', impuesto: 'Impuesto', banco: 'Banco', cliente: 'Cliente', anticipo: 'Anticipo', pasarela: 'Cobro con tarjeta',
+  contrato: 'Contrato', nomina: 'Nómina', impuesto: 'Impuesto', banco: 'Banco', cliente: 'Cliente', anticipo: 'Anticipo', pasarela: 'Cobro con tarjeta', gocardless: 'GoCardless',
 }
 
 const euros = (c: number) => `${(c / 100).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`

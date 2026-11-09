@@ -46,6 +46,12 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     expect(p.parejas.map((x) => [x.clienteGcId, x.claveFicha, x.por])).toEqual([['CU001', 'F1', 'nif'], ['CU002', 'F2', 'correo']])
     expect(p.cobroCliente.map((c) => [c.party_id, c.forma_cobro, c.gc_cliente_id])).toEqual([['P1', 'gocardless', 'CU001'], ['P2', 'gocardless', 'CU002']])
     expect(p.mandatosSumied.map((m) => [m.gcMandatoId, m.fila.status, m.fila.origen])).toEqual([['MD001', 'firmado', 'gocardless'], ['MD002', 'firmado', 'gocardless']])
+    // G05 · De la cuenta del mandato, solo los últimos dígitos, el país y el banco (sin cuenta leída, nada).
+    // nº 43 · El pago al banco de cada cobro y los payouts, con su día de llegada y su neto.
+    expect(p.filas.cobros.map((c) => [c.gc_id, c.payout_gc_id])).toEqual([['PM001', 'PO001'], ['PM002', null], ['PM003', null], ['PM004', null]])
+    expect(p.filas.payouts).toEqual([expect.objectContaining({ gc_id: 'PO001', estado: 'paid', llegada: '2026-10-07', importe: 89.75, comision: 1, moneda: 'EUR', referencia: 'PRUEBA-PO001' })])
+    expect(p.filas.mandatos.map((m) => [m.gc_id, m.cuenta_final, m.cuenta_pais, m.banco])).toEqual([
+      ['MD001', '21', 'ES', 'BANCO DE PRUEBA'], ['MD002', '07', 'ES', 'OTRO BANCO DE PRUEBA'], ['MD003', null, null, null]])
     // El cliente con 7 líneas y el de B: 8 líneas; la laboral sin nombre no se convierte; la cancelada no se importa.
     expect(p.lineas).toHaveLength(8)
     expect(p.lineas.filter((l) => l.partyId === 'P1')).toHaveLength(7)

@@ -84,7 +84,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
     // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
     cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros', // G04 · «Clientes y cuotas», apartado propio: Clientes (con la ficha) y Tarifa y paquetes.
-    clientesCuotas: 'clientesCuotas.clientesGestoria', tarifasGestoria: 'clientesCuotas.tarifasGestoria', clienteGestoria: 'clientesCuotas.clientesGestoria',
+    clientesCuotas: 'clientesCuotas.clientesGestoria', tarifasGestoria: 'clientesCuotas.tarifasGestoria', clienteGestoria: 'clientesCuotas.clientesGestoria', cobroGestoria: 'clientesCuotas.clientesGestoria',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
