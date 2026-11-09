@@ -1,0 +1,7 @@
+# G05 · La 2027 (apuntar un pago con tarjeta que quedó pendiente y poner la
+# cuenta de Stripe en Ajustes del cobro). Su prueba (ROLLBACK, datos inventados,
+# en la cuenta A) deja un pago pendiente, mira que otra cuenta no puede, que las
+# cuentas que no valen no entran, pone la 57200003, apunta el pago y prueba la
+# vuelta atrás.
+supabase/migrations/20261109T2027_g05_apuntar_pendiente.sql
+supabase/staging/sql/20261109_g05_apuntar_pendiente_prueba.sql

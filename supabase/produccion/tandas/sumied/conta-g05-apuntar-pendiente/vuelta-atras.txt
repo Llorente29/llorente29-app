@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 2027: fuera las cuatro funciones nuevas. No toca datos.
+cuenta: scripts/conta/produccion/cuentas/g05-apuntar-pendiente.sql
+supabase/vuelta-atras/20261109T2027_g05_apuntar_pendiente.down.sql
