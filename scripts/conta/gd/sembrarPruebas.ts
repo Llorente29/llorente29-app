@@ -159,6 +159,9 @@ async function gcTodos(recurso: string): Promise<Fila[]> {
   return out
 }
 
+/** Los estados de un mandato que ya no hay que cancelar. */
+const MANDATO_ACABADO = ['cancelled', 'failed', 'expired', 'consumed', 'blocked']
+
 const MAYUS = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/,?\s*S\.L\.$/, '')
 const euros = (n: number) => Math.round(n * 100)
 
@@ -185,10 +188,14 @@ async function suscripcion(mandato: string, sello: string, nombre: string, impor
 }
 
 async function sembrarGoCardless() {
-  // Lo de antes fuera: quitar un cliente cancela sus mandatos y suscripciones.
+  // Lo de antes fuera. El sandbox no deja quitar un cliente con mandatos vivos
+  // (422): primero se cancelan sus mandatos (eso cancela también sus
+  // suscripciones y sus cobros pendientes) y después se quita el cliente.
+  const vivos = (await gcTodos('mandates')).filter((m) => !MANDATO_ACABADO.includes(String(m.status)))
+  for (const m of vivos) await gc('POST', `/mandates/${String(m.id)}/actions/cancel`, { data: { metadata: { demo: 'gd' } } }, `gd-cancelar-${String(m.id)}`)
   const antes = await gcTodos('customers')
   for (const c of antes) await gc('DELETE', `/customers/${String(c.id)}`, undefined, `gd-quitar-${String(c.id)}`)
-  decir(`  ✓ Quitados los ${antes.length} clientes de antes del sandbox.`)
+  decir(`  ✓ Quitado lo de antes del sandbox: ${vivos.length} mandatos cancelados y ${antes.length} clientes.`)
 
   let n = 0, subs = 0, sueltos = 0
   const enGc = CLIENTES.filter((c): c is Cliente & { gc: NonNullable<Cliente['gc']> } => !!c.gc)
