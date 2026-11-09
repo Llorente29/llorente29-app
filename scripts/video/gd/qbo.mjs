@@ -13,7 +13,9 @@
 //   MODO=ensayo  no escribe nada: ni prepara ni envía el cobro. Sirve para
 //                ver las pantallas y los rótulos.
 //   MODO=grabar  prepara y envía el cobro de diciembre de la demo (autorizado
-//                por Julio, nº52: solo la demo y el sandbox). No toca Bitrix24.
+//                por Julio, nº52: solo la demo y el sandbox). No toca Bitrix24
+//                salvo con «00»: entonces, antes de grabar, pulsa «Volver a
+//                empezar» como Julio, solo en la Gestoría Demo (nº78).
 //
 // Las escenas 5 y 7b son tomas que graba Julio desde su Chrome (nº60), en GIF,
 // en la rama video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif y
@@ -166,7 +168,32 @@ async function still(E, png, texto, arriba, segundos = 5) {
 
 // ── Las escenas ──────────────────────────────────────────────────────────────
 try {
-  if (pedidas.some((id) => ['02', '03', '04', '06', '07', '07c', '08'].includes(id))) await entrar()
+  if (pedidas.some((id) => ['00', '02', '03', '04', '06', '07', '07c', '08'].includes(id))) await entrar()
+
+  // 00 · «Volver a empezar», pulsado por el guion (Julio, nº78): los mismos pasos que el botón de Ajustes › Tu cuenta,
+  // con la sesión de Julio y solo en la Gestoría Demo (la función se niega fuera de una demo, y sus guardas solo
+  // dejan el portal b24-s3mr2y y el sandbox). Los pasos por tandas se repiten mientras digan «sigue». No es una escena.
+  if (pedidas.includes('00')) {
+    if (MODO !== 'grabar') decir('\n── 00 · «Volver a empezar»: solo en modo grabar; en ensayo no se pulsa.')
+    else {
+      decir('\n── 00 · «Volver a empezar»')
+      const PASOS_VOLVER = ['comprobar', 'portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'cambios']
+      for (const paso of PASOS_VOLVER) {
+        for (let tanda = 1; ; tanda++) {
+          const r = await fetch(`${SUPABASE_URL}/functions/v1/conta-gd-volver-a-empezar`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${sesion.access_token}` },
+            body: JSON.stringify({ cuenta: CUENTA, paso }),
+          })
+          const d = await r.json().catch(() => ({}))
+          if (!r.ok || !d.ok) throw new Error(`«Volver a empezar» · ${paso}: ${d.error ?? r.status}`)
+          if (!d.sigue) { decir(`  ✓ ${paso}: ${String(d.frase ?? '').slice(0, 300)}`); break }
+          if (tanda >= 8) throw new Error(`«Volver a empezar» · ${paso}: después de 8 tandas aún queda trabajo`)
+          decir(`  · ${paso}: tanda ${tanda}, sigue`)
+        }
+      }
+      decir('  Hecho: la demo está como el primer día.')
+    }
+  }
 
   await escena('01', async (E) => {
     await tarjeta(E, `<div class="c"><div class="g">Sumied para gestorías</div><div class="m">Asesoría QBO</div><div class="p">Datos de demostración</div></div>`)
