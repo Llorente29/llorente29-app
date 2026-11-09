@@ -18,9 +18,15 @@ supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
 #         Bancos (la 572 del banco contra la 57200002). Va ANTES de la 1403, que
 #         la lee.
 #
+#   1500  (nº 46) CAMBIA, declarado y probado, el CHECK de los tipos de
+#         «Pendiente de revisar» (solo amplía: «cliente_no_de_acuerdo») y AÑADE
+#         conta_recibo_parar (el portal para un recibo con su motivo) y
+#         conta_recibo_reanudar (la gestoría lo deshace).
+#
 #   1403  AÑADE conta_pantalla_factura_recibo: la ficha de una factura que sale
 #         de un recibo (su recibo, lo que le ha pasado, su Verifactu y sus
 #         asientos con sus apuntes) en una sola lectura. Con las políticas de
 #         quien la llama.
 supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
 supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
+supabase/migrations/20261109T1500_g05_t4_parar_recibo.sql

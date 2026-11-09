@@ -13,7 +13,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer as useLeerDeLibros } from '@/modules/conta/libros/contexto'
 import { ErrorConReintento, TarjetaCargando } from '@/modules/conta/ui/piezas'
 import { hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { aprobarIguales, decidir, enviarCobro, leerCobro, prepararCobro } from './datos'
+import { aprobarIguales, decidir, enviarCobro, leerCobro, prepararCobro, reanudar } from './datos'
 import { modeloCobro, type DatosCobro } from './modeloCobro'
 import { Cobro } from './Cobro'
 
@@ -44,6 +44,7 @@ export function CobroG05Page() {
       alPreparar={yRecargar(() => prepararCobro(empresa.id, mes))}
       alDecidir={(id, decision) => yRecargar(() => decidir(id, decision))()}
       alAprobarIguales={yRecargar(() => aprobarIguales(empresa.id, mes))}
+      alReanudar={(id) => yRecargar(() => reanudar(id))()}
       alEnviar={yRecargar(() => enviarCobro(empresa.id, mes))} />
   )
 }

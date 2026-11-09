@@ -26,11 +26,15 @@ export interface PropsCobro {
   alPreparar: () => Promise<string>
   alDecidir: (reciboId: string, decision: 'pendiente' | 'aprobado' | 'este_mes_no') => Promise<string>
   alAprobarIguales: () => Promise<string>
+  /** nº 46 · «Volver a cobrar» un recibo que paró su cliente desde el portal. */
+  alReanudar?: (reciboId: string) => Promise<string>
   alEnviar: () => Promise<string>
 }
 
 const PASOS: [string, string][] = [['Revisar', 'Lo que cambia'], ['Enviar el cobro', 'Aviso el día 2'], ['Cobrado', 'Cargo el día 4'], ['Facturado', 'Sale solo']]
 const idDe = (x: ReciboEnRevision) => x.recibo.clave
+/** nº 46 · El principio de la marca de un recibo que paró su cliente (conta_recibo_parar, 1500). */
+export const MARCA_CLIENTE = 'El cliente no está de acuerdo'
 const antes = (x: ReciboEnRevision) => (x.recibo.anteriorCent ? euros(x.recibo.anteriorCent) : 'nuevo')
 const porque = (x: ReciboEnRevision) => x.recibo.cambios.map((c) => c.texto).join(' ')
 
@@ -167,6 +171,12 @@ export function Cobro(p: PropsCobro) {
                   <li key={`${z.cliente}-${i}`} className="g5-fuera">
                     <div className="g5-cambio-textos"><span className="g5-cambio-nombre">{z.cliente}</span><span className="g5-cambio-porque">{z.porque}</span></div>
                     {(() => {
+                      // nº 46 · Lo paró el cliente desde el portal: la gestoría lo revisa y lo devuelve al cobro.
+                      const id = z.recibo ? m.idDe[z.recibo.recibo.clave] : undefined
+                      if (p.alReanudar && id && z.recibo?.recibo.parado.some((x) => x.startsWith(MARCA_CLIENTE))) {
+                        const alReanudar = p.alReanudar
+                        return <button type="button" className="g4-boton" disabled={!!ocupado} onClick={() => hacer(id, () => alReanudar(id))}>Volver a cobrar</button>
+                      }
                       const cliente = z.recibo?.recibo.clienteId ?? (z as { cliente_id?: string }).cliente_id ?? null
                       if (!z.boton || !cliente) return null
                       return <Link className="g4-boton" to={z.boton === 'Ponerle la cuota' ? p.rutaPonerCuota(cliente) : p.rutaFicha(cliente)}>{z.boton}</Link>

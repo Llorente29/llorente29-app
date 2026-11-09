@@ -46,6 +46,12 @@ export async function decidir(recibo: string, decision: 'pendiente' | 'aprobado'
   return String(r?.frase ?? 'Hecho.')
 }
 
+/** nº 46 · «Volver a cobrar»: la gestoría deshace lo que paró el cliente desde el portal (conta_recibo_reanudar). */
+export async function reanudar(recibo: string): Promise<string> {
+  const r = await rpc<Fila>('conta_recibo_reanudar', { p_recibo: recibo })
+  return String(r?.frase ?? 'Hecho.')
+}
+
 export async function aprobarIguales(empresa: string, mes: string): Promise<string> {
   const r = await rpc<Fila>('conta_cobro_aprobar_iguales', { p_company: empresa, p_mes: mes })
   return String(r?.frase ?? 'Hecho.')

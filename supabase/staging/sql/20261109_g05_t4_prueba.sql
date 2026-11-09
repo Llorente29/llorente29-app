@@ -20,6 +20,12 @@
 --      y el asiento del ingreso; no se casa dos veces. Con la empresa y el banco
 --      de pruebas de staging (los de la prueba de Stripe, S01); en una base sin
 --      ellos, se dice y se salta.
+--   6. La 1500 (nº 46, parar un recibo desde el portal), dos veces: el portal
+--      (service_role) lo para con su motivo; sale del cobro (no se puede
+--      aprobar), su incidencia en «Pendiente de revisar» y su historial;
+--      pararlo otra vez cambia el motivo sin duplicar; sin motivo no; otra
+--      cuenta no lo deshace; la gestoría lo deshace y la incidencia deja de
+--      estar vigente; un recibo ya enviado no se para. Y su vuelta atrás.
 -- Datos inventados (T11).
 
 begin;
@@ -32,7 +38,7 @@ set local statement_timeout = '120s';
 set local lock_timeout = '120s';
 
 create temp table _t (clave text primary key, v text) on commit drop;
-grant select, insert on _t to authenticated;
+grant select, insert on _t to authenticated, service_role;
 -- La de antes de la 1344: si el manifiesto ya la pasó (staging aplica la tanda antes que esta prueba, en la
 -- misma transacción), la de su respaldo; si no, la de ahora. La misma huella que mira _restaurar_funcion.
 insert into _t select 'antes', coalesce(
@@ -267,5 +273,94 @@ end $$;
 \i supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
 \i supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
 \echo 'G05 T4 · 5: la vuelta atrás de la 1403 y la 1426, y otra vez las dos. OK'
+
+-- 6 · La 1500, dos veces, y parar un recibo desde el portal.
+\i supabase/migrations/20261109T1500_g05_t4_parar_recibo.sql
+\i supabase/migrations/20261109T1500_g05_t4_parar_recibo.sql
+do $$
+declare v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; v_e uuid; v_p uuid; v_r uuid; v_r2 uuid;
+begin
+  select id into v_e from public.company where account_id = v_acc order by created_at limit 1;
+  if not exists (select 1 from public.conta_gestoria_lectura where account_id = v_acc) then
+    insert into public.conta_gestoria_lectura (account_id, company_id, origen, entorno, por) values (v_acc, v_e, 'gocardless', 'pruebas', 'persona');
+  end if;
+  insert into public.party (account_id, name, source) values (v_acc, 'Cliente Prueba G05 Portal', 'manual') returning id into v_p;
+  insert into public.conta_recibo (account_id, company_id, party_id, mes, clave, total_cent, cobrar_cent, decision)
+  values (v_acc, v_e, v_p, '2026-12', 'recibo:' || v_e || ':' || v_p || ':2026-12', 15730, 15730, 'aprobado') returning id into v_r;
+  insert into public.conta_recibo (account_id, company_id, party_id, mes, clave, total_cent, cobrar_cent, estado)
+  values (v_acc, v_e, v_p, '2027-01', 'recibo:' || v_e || ':' || v_p || ':2027-01', 15730, 15730, 'enviado') returning id into v_r2;
+  insert into _t values ('r6', v_r::text), ('r6b', v_r2::text);
+end $$;
+-- El portal, desde su servidor.
+set local role service_role;
+select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+do $$
+declare v_r uuid := (select v::uuid from _t where clave = 'r6'); x jsonb; v_err text;
+begin
+  begin perform public.conta_recibo_parar(v_r, '   '); exception when invalid_parameter_value then v_err := 'sin motivo'; end;
+  if v_err is null then raise exception 'G05 T4 · 6: se ha parado sin motivo.'; end if;
+  x := public.conta_recibo_parar(v_r, 'No contraté la gestión laboral');
+  if x->>'frase' <> 'Parado el recibo de 157,30 € de 2026-12: no se cobra hasta que la gestoría lo revise.' then raise exception 'G05 T4 · 6: parar dijo «%».', x->>'frase'; end if;
+  perform public.conta_recibo_parar(v_r, 'No contraté la gestión laboral desde diciembre', 'Persona Prueba (portal)');
+  v_err := null;
+  begin perform public.conta_recibo_parar((select v::uuid from _t where clave = 'r6b'), 'No'); exception when others then v_err := sqlerrm; end;
+  if v_err is distinct from 'Este recibo ya se ha enviado al banco: ya no se puede parar desde aquí. Habla con tu gestoría.' then raise exception 'G05 T4 · 6: parar uno enviado dijo «%».', v_err; end if;
+end $$;
+reset role;
+do $$
+declare v_r uuid := (select v::uuid from _t where clave = 'r6'); v public.conta_recibo;
+begin
+  select * into v from public.conta_recibo where id = v_r;
+  if v.parado <> array['El cliente no está de acuerdo: «No contraté la gestión laboral desde diciembre»'] or v.decision <> 'pendiente' then
+    raise exception 'G05 T4 · 6: el recibo parado quedó % / %.', v.parado, v.decision;
+  end if;
+  if (select count(*) from public.conta_gestoria_diferencia where tipo = 'cliente_no_de_acuerdo' and vigente and datos->>'recibo' = v_r::text) <> 1
+     or (select datos->>'quien' from public.conta_gestoria_diferencia where tipo = 'cliente_no_de_acuerdo' and vigente and datos->>'recibo' = v_r::text) <> 'Persona Prueba (portal)' then
+    raise exception 'G05 T4 · 6: la incidencia no es una sola y vigente, con quién la puso.';
+  end if;
+  if (select count(*) from public.conta_recibo_evento where recibo_id = v_r and tipo = 'parado_cliente') <> 2 then raise exception 'G05 T4 · 6: el historial no apunta las dos veces.'; end if;
+end $$;
+-- La gestoría: no lo puede aprobar mientras está parado; otra cuenta no lo deshace; la suya sí.
+select set_config('request.jwt.claims', json_build_object('sub', 'c01b0000-0000-4000-8000-0000000000b1', 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', 'c01b0000-0000-4000-8000-0000000000b1', true);
+set local role authenticated;
+do $$ declare v_err text; begin
+  begin perform public.conta_recibo_reanudar((select v::uuid from _t where clave = 'r6')); exception when no_data_found then v_err := 'no'; end;
+  if v_err is null then raise exception 'G05 T4 · 6: otra cuenta ha deshecho el recibo parado.'; end if;
+end $$;
+reset role;
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', 'c01a0000-0000-4000-8000-0000000000a1', true);
+set local role authenticated;
+do $$
+declare v_r uuid := (select v::uuid from _t where clave = 'r6'); v_err text; x jsonb;
+begin
+  begin perform public.conta_cobro_decidir(v_r, 'aprobado'); exception when check_violation then v_err := sqlerrm; end;
+  if v_err not like 'No se puede aprobar: El cliente no está de acuerdo%' then raise exception 'G05 T4 · 6: aprobar el parado dijo «%».', v_err; end if;
+  x := public.conta_recibo_reanudar(v_r);
+  if x->>'frase' <> 'Cliente Prueba G05 Portal vuelve al cobro de 2026-12, por revisar: apruébalo cuando lo tengas claro.' then raise exception 'G05 T4 · 6: deshacer dijo «%».', x->>'frase'; end if;
+  v_err := null;
+  begin perform public.conta_recibo_reanudar(v_r); exception when check_violation then v_err := sqlerrm; end;
+  if v_err is distinct from 'Este recibo no lo ha parado su cliente.' then raise exception 'G05 T4 · 6: deshacer dos veces dijo «%».', v_err; end if;
+end $$;
+reset role;
+do $$
+declare v_r uuid := (select v::uuid from _t where clave = 'r6');
+begin
+  if (select cardinality(parado) from public.conta_recibo where id = v_r) <> 0
+     or exists (select 1 from public.conta_gestoria_diferencia where tipo = 'cliente_no_de_acuerdo' and vigente and datos->>'recibo' = v_r::text) then
+    raise exception 'G05 T4 · 6: deshecho, sigue parado o con la incidencia vigente.';
+  end if;
+  raise notice 'G05 T4 · 6: el portal para el recibo con su motivo (sale del cobro, incidencia y historial), otra vez sin duplicar, sin motivo no, uno enviado no; otra cuenta no lo deshace; la gestoría sí. OK';
+end $$;
+\i supabase/vuelta-atras/20261109T1500_g05_t4_parar_recibo.down.sql
+do $$ begin
+  if to_regprocedure('public.conta_recibo_parar(uuid,text,text)') is not null
+     or pg_get_constraintdef((select oid from pg_constraint where conname = 'conta_gestoria_diferencia_tipo_check')) like '%cliente_no_de_acuerdo%' then
+    raise exception 'G05 T4 · 6: la vuelta atrás de la 1500 no la quita.';
+  end if;
+end $$;
+\i supabase/migrations/20261109T1500_g05_t4_parar_recibo.sql
+\echo 'G05 T4 · 6: la vuelta atrás de la 1500, y otra vez la 1500. OK'
 
 rollback;

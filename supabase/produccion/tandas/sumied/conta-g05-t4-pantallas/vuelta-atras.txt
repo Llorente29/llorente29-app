@@ -1,6 +1,7 @@
-# G05 · T4 · la vuelta atrás, en orden inverso: fuera la lectura de la 1403; el ingreso de GoCardless de la 1426; y la de la 1344: la pantalla de clientes de antes (de su
+# G05 · T4 · la vuelta atrás, en orden inverso: fuera parar un recibo (1500); la lectura de la 1403; el ingreso de GoCardless de la 1426; y la de la 1344: la pantalla de clientes de antes (de su
 # respaldo) y fuera la función y las columnas nuevas.
 cuenta: scripts/conta/produccion/cuentas/g05-t4-pantallas.sql
+supabase/vuelta-atras/20261109T1500_g05_t4_parar_recibo.down.sql
 supabase/vuelta-atras/20261109T1403_g05_t4_ficha_factura.down.sql
 supabase/vuelta-atras/20261109T1426_g05_t4_ingreso_gocardless.down.sql
 supabase/vuelta-atras/20261109T1344_g05_t4_incluye_y_cuenta.down.sql

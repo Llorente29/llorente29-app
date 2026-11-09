@@ -13,6 +13,8 @@
 --   6. La lectura de la ficha de la factura de un recibo existe (1403): false → true.
 --   7. La tabla de los pagos de GoCardless al banco existe (1426): false → true.
 --   8. Cobros de GoCardless (todas las cuentas): quieta, la lectura los escribe; la 1426 solo añade una columna vacía.
+--   9. Parar un recibo desde el portal existe (1500): false → true.
+--  10. Incidencias de «Pendiente de revisar» (todas las cuentas): quieta, las escribe la lectura; la 1500 solo amplía su CHECK.
 select clave, valor from (
   select 1 o, 'conta_servicio.incluye existe' clave,
     exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_servicio' and column_name = 'incluye')::text valor union all
@@ -31,5 +33,10 @@ select clave, valor from (
     (to_regclass('public.conta_gc_payout') is not null)::text union all
   select 8, 'Cobros de GoCardless (todas las cuentas)',
     -- quieta: los escribe la lectura de GoCardless; la tanda no los toca (solo añade una columna que nace vacía)
-    (select count(*)::text from public.conta_gc_cobro)
+    (select count(*)::text from public.conta_gc_cobro) union all
+  select 9, 'Parar un recibo desde el portal existe',
+    (to_regprocedure('public.conta_recibo_parar(uuid,text,text)') is not null)::text union all
+  select 10, 'Incidencias de «Pendiente de revisar» (todas las cuentas)',
+    -- quieta: las escribe la lectura de cada noche; la tanda solo amplía el CHECK de su tipo
+    (select count(*)::text from public.conta_gestoria_diferencia)
 ) q order by o;
