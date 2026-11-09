@@ -2,7 +2,7 @@
  "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 11:15Z. La 1300 crea demo_gestoria_contabilidad_sembrar(uuid), que no existe, y la llama para la cuenta demo de000000-…-a0: hoy 0 subcuentas, 0 enlaces, 0 ejercicios, 0 actividades, 0 series, modelos vacíos, 0 asientos y los ajustes de cobro sin poner. Nada en el camino del pedido. Ningún fichero en el historial.",
  "medido": "2026-11-09T11:15Z",
  "tanda": {
-  "supabase/migrations/20261109T1300_gd_contabilidad_demo.sql": "23869bf11eedbbe3d95c15aed8b5656f"
+  "supabase/migrations/20261109T1300_gd_contabilidad_demo.sql": "24fcfcbcf2f0b537cb697432563723ef"
  },
  "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
 }

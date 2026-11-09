@@ -43,7 +43,7 @@ create temp table _h (vuelta text, huella text) on commit drop;
 create temp view _huella as
 select md5(coalesce(string_agg(x, '|' order by x), '')) h from (
   select concat_ws(';', 'cuenta', company_id, code, template_code, name, kind) x from public.company_account where account_id = 'de000000-0000-4000-8000-0000000000a0'
-  union all select concat_ws(';', 'enlace', company_id, entity, role) from public.company_account_link where account_id = 'de000000-0000-4000-8000-0000000000a0'
+  union all select concat_ws(';', 'enlace', l.company_id, l.entity, l.role, a.code) from public.company_account_link l join public.company_account a on a.id = l.company_account_id where l.account_id = 'de000000-0000-4000-8000-0000000000a0'
   union all select concat_ws(';', 'serie', company_id, code, starts_at, formato, digits, reset_yearly) from public.invoice_series where account_id = 'de000000-0000-4000-8000-0000000000a0'
   union all select concat_ws(';', 'ejercicio', company_id, code, status) from public.fiscal_year where account_id = 'de000000-0000-4000-8000-0000000000a0'
   union all select concat_ws(';', 'actividad', company_id, iae_code, cnae_code, kind) from public.company_activity where account_id = 'de000000-0000-4000-8000-0000000000a0'
@@ -77,7 +77,17 @@ begin
   end if;
   select count(*) into n from public.company_account_log where company_id = s and que = 'subcuenta_creada' and code in ('57200002', '40000015', '62900007');
   if n <> 3 then raise exception 'GD · 2: las 3 subcuentas de GoCardless tenían que dejar su línea en el registro del plan y hay %.', n; end if;
-  raise notice 'GD · 2: perfil, actividad, ejercicio, plan de 8 cifras con las de QBO, serie y ajustes en las dos empresas. OK';
+  -- El banco, como en QBO (nº39): enlazado a la 57200000; la 57200001 es la tarjeta y no lleva nada.
+  if not exists (select 1 from public.company_account_link l join public.company_account x on x.id = l.company_account_id join public.treasury_account t on t.id::text = l.entity_id
+                  where l.company_id = s and l.entity = 'bank_account' and l.role = 'principal' and t.kind = 'bank' and x.code = '57200000') then
+    raise exception 'GD · 2: el banco de la sociedad no está enlazado a la 57200000.';
+  end if;
+  if exists (select 1 from public.company_account_link l join public.company_account x on x.id = l.company_account_id where l.company_id = s and x.code = '57200001') then
+    raise exception 'GD · 2: la 57200001 (la tarjeta) no tiene que llevar nada enlazado.';
+  end if;
+  if not exists (select 1 from public.company_account where company_id = s and code = '57200001' and name = 'Tarjeta de crédito') then raise exception 'GD · 2: la 57200001 no se llama «Tarjeta de crédito».'; end if;
+  if not exists (select 1 from public.company_account where company_id = s and code = '62900007' and name = 'Otros servicios - Suscripción') then raise exception 'GD · 2: la 62900007 no se llama como en QBO.'; end if;
+  raise notice 'GD · 2: perfil, actividad, ejercicio, plan de 8 cifras con las de QBO (el banco en la 57200000 y la tarjeta en la 57200001), serie y ajustes en las dos empresas. OK';
 end $$;
 insert into _h select 'sembrada', h from _huella;
 

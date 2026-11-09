@@ -7,7 +7,7 @@
 #         solo de la cuenta demo, por los caminos de la app (como Casa Lola):
 #         perfil fiscal con los modelos de QBO, actividad, ejercicio 2026
 #         abierto, el plan de 8 cifras («Activar el plan») con las subcuentas
-#         de GoCardless de QBO (57200002, 40000015 y 62900007), la serie «1»
+#         de GoCardless de QBO (57200002, 40000015 y 62900007; el banco en la 57200000 y la 57200001, «Tarjeta de crédito»), la serie «1»
 #         (la sociedad, {año}/{serie}/{número} desde la 2026/1/141) y los
 #         ajustes de cobro (el código de cliente «lo pone Sumied»). No asienta
 #         nada. Repetible (lo rehace «Volver a empezar»).

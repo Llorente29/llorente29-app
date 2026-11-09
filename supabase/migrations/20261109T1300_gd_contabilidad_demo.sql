@@ -24,7 +24,10 @@
 --       serie «1» y las cuentas de banco, ingresos e IVA.
 --   Y en la sociedad, las subcuentas de GoCardless con el código de QBO:
 --   57200002 «Plataforma GoCardless», 40000015 «GoCardless» y 62900007
---   «Comisiones de GoCardless». «Añadir subcuenta» (company_account_add) coge
+--   «Otros servicios - Suscripción»; y el banco como en QBO (Julio, nº39): el
+--   banco enlazado a la 57200000 (Bancos, c/c vista, euros), y la 57200001,
+--   que «Activar el plan» crea para el banco, se llama «Tarjeta de crédito» y
+--   no lleva nada (en QBO es la tarjeta). «Añadir subcuenta» (company_account_add) coge
 --   la siguiente libre y no deja elegir el código: estas tres se crean con su
 --   código, con los mismos campos y la misma línea en el registro del plan que
 --   ella. Las 430 de cada cliente las crea el cobro.
@@ -40,7 +43,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_claims text := current_setting('request.jwt.claims', true);
   v_activa text := current_setting('folvy.cuenta_activa', true);
-  v_admin uuid; v_quien text; v_soc uuid; v_aut uuid; v_emp uuid; v_plan text; v_hechas text[] := '{}'; r record;
+  v_admin uuid; v_quien text; v_soc uuid; v_aut uuid; v_emp uuid; v_plan text; v_572 uuid; v_hechas text[] := '{}'; r record;
 begin
   if not exists (select 1 from public.accounts where id = p_cuenta and is_demo is true) then
     raise exception 'GD: % no es una cuenta de demostración: no se siembra nada.', p_cuenta using errcode = '42501';
@@ -105,7 +108,7 @@ begin
   select plan into v_plan from public.company_account where company_id = v_soc limit 1;
   for r in select * from (values ('57200002', '572', 'Plataforma GoCardless', 'Lo que GoCardless ha cobrado y aún no ha ingresado en el banco'),
                                  ('40000015', '4000', 'GoCardless', 'Proveedor: GoCardless'),
-                                 ('62900007', '629', 'Comisiones de GoCardless', 'Lo que cobra GoCardless por cada recibo')) x(code, hoja, nombre, claro) loop
+                                 ('62900007', '629', 'Otros servicios - Suscripción', 'Lo que cobra GoCardless por cada recibo')) x(code, hoja, nombre, claro) loop
     if not exists (select 1 from public.company_account where company_id = v_soc and code = r.code) then
       if not exists (select 1 from public.pgc_account p where p.plan = v_plan and p.code = r.hoja and p.is_leaf and p.valid_to is null) then
         raise exception 'GD: la % no es una cuenta del plan en la que se pueda apuntar.', r.hoja using errcode = '22023';
@@ -116,8 +119,25 @@ begin
       values (p_cuenta, v_soc, 'subcuenta_creada', r.code, format('Subcuenta %s · %s, bajo la %s.', r.code, r.nombre, r.hoja),
               jsonb_build_object('code', r.code, 'name', r.nombre), 'manual', v_admin, v_quien);
       v_hechas := array_append(v_hechas, r.code::text);
+    elsif exists (select 1 from public.company_account where company_id = v_soc and code = r.code and kind = 'own' and name <> r.nombre) then
+      perform public.company_account_rename((select id from public.company_account where company_id = v_soc and code = r.code), r.nombre, v_quien);
     end if;
   end loop;
+
+  -- 9 · El banco, como en QBO (Julio, nº39): el banco es la 57200000 (Bancos, c/c vista, euros) y la 57200001
+  -- es la tarjeta de crédito. «Activar el plan» enlaza el banco a una subcuenta nueva (la 57200001): se pasa
+  -- a la 57200000 y la 57200001 se queda con el nombre de la tarjeta. Por las funciones de la pantalla del plan.
+  select id into v_572 from public.company_account where company_id = v_soc and code = '57200000';
+  for r in select t.id from public.treasury_account t where t.company_id = v_soc and t.account_id = p_cuenta and t.kind = 'bank' loop
+    if v_572 is not null and not exists (select 1 from public.company_account_link l where l.company_id = v_soc and l.entity = 'bank_account'
+                                          and l.entity_id = r.id::text and l.role = 'principal' and l.company_account_id = v_572) then
+      perform public.company_account_link_set(v_soc, 'bank_account', r.id::text, 'principal', v_572, v_quien);
+      v_hechas := array_append(v_hechas, 'banco en la 57200000');
+    end if;
+  end loop;
+  if exists (select 1 from public.company_account where company_id = v_soc and code = '57200001' and kind = 'own' and name <> 'Tarjeta de crédito') then
+    perform public.company_account_rename((select id from public.company_account where company_id = v_soc and code = '57200001'), 'Tarjeta de crédito', v_quien);
+  end if;
 
   perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
   perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
