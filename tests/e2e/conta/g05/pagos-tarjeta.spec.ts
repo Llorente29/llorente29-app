@@ -140,10 +140,15 @@ async function simular(page: Page, Q: string, A: string) {
     },
     conta_cobro_apuntar_pendientes: () => st.todos(),
   }
+  // Ajustes › Cobros espera a sus recordatorios para pintarse entero (como en tests/e2e/conta/pc01/cobros.spec.ts).
+  const OTRAS: Record<string, () => unknown> = {
+    conta_recordatorios_resumen: () => ({ activos: true, dias: [-3, 0, 7, 15], cambiado: null, clientes_apagados: [], facturas: [], ultimos: [] }),
+  }
   await page.route(/\/rest\/v1\/rpc\/([a-z_]+)/, (r) => {
     const f = /\/rest\/v1\/rpc\/([a-z_]+)/.exec(r.request().url())![1]
     const cuerpo = (r.request().postDataJSON() ?? {}) as Fila
     if (f in STRIPE) { if (f !== 'conta_cobro_cuenta_stripe_leer') llamadas.push({ f, cuerpo }); return json(r, STRIPE[f](cuerpo)) }
+    if (f in OTRAS) return json(r, OTRAS[f]())
     if (f in LECTURAS) return json(r, LECTURAS[f](cuerpo))
     if (!(f in FRASES)) return r.fallback()
     llamadas.push({ f, cuerpo })
@@ -175,7 +180,11 @@ test('Ajustes › Cobros: la cuenta de las tarjetas con sus cuatro mensajes y «
   const { llamadas } = await preparar(page)
   await page.goto('/conta/ajustes/cobros')
   const tarjeta = page.getByRole('region', { name: /Pagos con tarjeta o Bizum/ })
-  await expect(tarjeta).toBeVisible({ timeout: 30_000 })
+  try { await expect(tarjeta).toBeVisible({ timeout: 30_000 }) } catch (e) {
+    // Si no sale, lo que se ve (para saber por qué sin bajar el artefacto).
+    console.log(`[lo que se ve en Ajustes › Cobros] ${(await page.locator('main').innerText().catch(() => '(sin main)')).slice(0, 1500)}`)
+    throw e
+  }
 
   // Sin poner: «Falta la cuenta», y los dos pagos esperan sin botón para apuntarlos.
   await expect(tarjeta).toContainText('Falta la cuenta')
