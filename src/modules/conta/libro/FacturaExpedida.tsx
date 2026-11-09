@@ -22,7 +22,7 @@ import {
   ACEPTA_EXPEDIDA, admitePdfExpedida, claseDeFichero, esExpedidaAMano, motivoExpedida, problemaDeFichero, tamano, textoAdjunta,
   type AsientoParaExpedida,
 } from '@/modules/conta/lib/expedidaPdf'
-import { guardarExpedidaPdf, leerExpedidaPdf, urlDocumento, type DocExpedida } from '@/modules/conta/services/documentosService'
+import { abrirFacturaAdjunta, guardarExpedidaPdf, leerExpedidaPdf, urlDocumento, type DocExpedida } from '@/modules/conta/services/documentosService'
 
 const motivo = (e: unknown) => motivoExpedida(e instanceof Error ? e.message : String(e))
 
@@ -181,6 +181,34 @@ export function TarjetaExpedida({ a, accountId, quien, movil, alHacer, alFallar 
           )}
           {falloAqui && <p className="cx-error" role="alert">{falloAqui}</p>}
         </>
+      )}
+    </section>
+  )
+}
+
+/**
+ * G05 · T4 · La factura de un asiento de una factura emitida (su PDF lo adjunta
+ * la emisión: conta_venta_pdf_guardar). Solo se ve y se abre: no se cambia.
+ */
+export function TarjetaFacturaEmitida({ entryId, accountId, alFallar }: { entryId: string; accountId: string; alFallar: (texto: string) => void }) {
+  const [leido, setLeido] = useState<{ doc: DocExpedida | null; error: string | null; listo: boolean }>({ doc: null, error: null, listo: false })
+  useEffect(() => {
+    let vivo = true
+    leerExpedidaPdf(accountId, entryId).then((doc) => { if (vivo) setLeido({ doc, error: null, listo: true }) },
+      (e: unknown) => { if (vivo) setLeido({ doc: null, error: motivo(e), listo: true }) })
+    return () => { vivo = false }
+  }, [accountId, entryId])
+  return (
+    <section className="cx-tarjeta cxd-expedida" aria-label="Factura">
+      <h2 className="cx-tarjeta-titulo">Factura</h2>
+      {!leido.listo && <p className="cx-ayuda" aria-busy="true">Mirando si tiene la factura adjunta…</p>}
+      {leido.error && <p className="cx-error" role="alert">No he podido leer si tiene la factura adjunta: {leido.error}.</p>}
+      {leido.listo && !leido.error && !leido.doc && <p className="cx-ayuda">Aún sin su PDF: se adjunta al hacerse el de la factura.</p>}
+      {leido.doc && (
+        <p className="cxd-expedida-fichero">
+          <span>{leido.doc.nombre}</span>{' '}
+          <button type="button" className="cx-enlace" onClick={() => void abrirFacturaAdjunta(accountId, entryId).then((t) => { if (t) alFallar(t) })}>Abrir</button>
+        </p>
       )}
     </section>
   )
