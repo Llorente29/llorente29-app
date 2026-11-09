@@ -10774,6 +10774,34 @@ end $$;
 
 
 --
+-- Name: _gd_se_queda(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._gd_se_queda() RETURNS text[]
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select array[
+    -- La cuenta y quién entra.
+    'user_profiles', 'user_active_account', 'feature_flags', 'conta_user_pref',
+    -- Las empresas y su contabilidad.
+    'company', 'company_account', 'company_account_link', 'company_account_log', 'company_activity', 'company_person',
+    'company_tax_profile', 'tax_obligation', 'fiscal_year', 'invoice_series',
+    -- El banco (la cuenta, no lo que pasa por ella) y los ajustes.
+    'treasury_account', 'bank_settings', 'conta_gestoria_ajustes',
+    -- Las dos conexiones (sus secretos viven en el Vault).
+    'conta_crm', 'conta_cobro_gocardless'
+  ]::text[]
+$$;
+
+
+--
+-- Name: FUNCTION _gd_se_queda(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._gd_se_queda() IS 'GD · Las tablas que «Volver a empezar» deja como están en una cuenta demo: la configuración. Lo demás con filas de la cuenta se vacía.';
+
+
+--
 -- Name: _generate_daily_count_core(uuid, uuid, uuid[], integer, numeric, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -58552,6 +58580,91 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.demo_gestoria_tarifa_sembrar(p_cuenta uuid) IS 'GD · Siembra (o vuelve a sembrar) la tarifa de una cuenta de demostración de Gestoría: niveles, precios especiales, laboral, impuesto de sociedades, nóminas por tramos, un paquete y las cuotas de la autónoma. Solo cuentas demo; solo la llama la plataforma.';
+
+
+--
+-- Name: demo_gestoria_volver_a_empezar(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.demo_gestoria_volver_a_empezar(p_cuenta uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_claims text := current_setting('request.jwt.claims', true);
+  v_activa text := current_setting('folvy.cuenta_activa', true);
+  v_admin uuid; v_tabla text; v_n bigint; v_pasada int; v_en_pasada bigint;
+  v_vaciadas jsonb := '{}'::jsonb; v_fallos jsonb := '{}'::jsonb; v_quedan text[]; v_total bigint := 0;
+  v_cont jsonb; v_banco jsonb;
+begin
+  if not exists (select 1 from public.accounts where id = p_cuenta and is_demo is true) then
+    raise exception 'GD: % no es una cuenta de demostración: no se toca nada.', p_cuenta using errcode = '42501';
+  end if;
+  select user_id into v_admin from public.user_profiles where account_id = p_cuenta and role = 'admin' and active order by created_at limit 1;
+  if v_admin is null then raise exception 'GD: la cuenta demo no tiene administrador: no se vuelve a empezar.' using errcode = '42501'; end if;
+  perform pg_advisory_xact_lock(hashtextextended('gd_volver_a_empezar:' || p_cuenta::text, 0));
+
+  -- Como el administrador de la cuenta, en la cuenta abierta (DM1: «usuario:cuenta»).
+  perform set_config('request.jwt.claims', json_build_object('sub', v_admin, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_admin::text || ':' || p_cuenta::text, true);
+
+  -- Por pasadas: lo que una clave ajena no deja borrar todavía, en la siguiente
+  -- (cuando ya no está lo que lo usa). Cada tabla, en su subtransacción.
+  for v_pasada in 1..12 loop
+    v_en_pasada := 0;
+    for v_tabla in
+      select c.table_name from information_schema.columns c
+        join information_schema.tables t on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
+       where c.table_schema = 'public' and c.column_name = 'account_id' and c.table_name <> all (public._gd_se_queda())
+       order by c.table_name
+    loop
+      begin
+        execute format('delete from public.%I where account_id = $1', v_tabla) using p_cuenta;
+        get diagnostics v_n = row_count;
+        if v_n > 0 then
+          v_vaciadas := jsonb_set(v_vaciadas, array[v_tabla], to_jsonb(coalesce((v_vaciadas->>v_tabla)::bigint, 0) + v_n));
+          v_en_pasada := v_en_pasada + v_n;
+        end if;
+        v_fallos := v_fallos - v_tabla;
+      exception when others then
+        v_fallos := jsonb_set(v_fallos, array[v_tabla], to_jsonb(sqlerrm));
+      end;
+    end loop;
+    v_total := v_total + v_en_pasada;
+    exit when v_en_pasada = 0;
+  end loop;
+
+  -- ¿Queda algo de la cuenta fuera de la lista de lo que se queda?
+  v_quedan := '{}';
+  for v_tabla in
+    select c.table_name from information_schema.columns c
+      join information_schema.tables t on t.table_schema = c.table_schema and t.table_name = c.table_name and t.table_type = 'BASE TABLE'
+     where c.table_schema = 'public' and c.column_name = 'account_id' and c.table_name <> all (public._gd_se_queda())
+  loop
+    execute format('select count(*) from public.%I where account_id = $1', v_tabla) using p_cuenta into v_n;
+    if v_n > 0 then v_quedan := array_append(v_quedan, format('%s (%s filas: %s)', v_tabla, v_n, coalesce(v_fallos->>v_tabla, 'vuelven a aparecer'))); end if;
+  end loop;
+  if cardinality(v_quedan) > 0 then
+    raise exception 'GD: no se ha podido vaciar la demo, y no ha cambiado nada. Se resisten: %', array_to_string(v_quedan, '; ') using errcode = '55000';
+  end if;
+
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+
+  -- Las siembras que no dependen de lo leído (la tarifa y los ingresos van después de leer).
+  v_cont := public.demo_gestoria_contabilidad_sembrar(p_cuenta);
+  v_banco := public.demo_gestoria_banco_sembrar(p_cuenta);
+
+  return jsonb_build_object('filas', v_total, 'tablas', v_vaciadas,
+    'frase', format('Vaciada la demo: %s filas de %s tablas. %s %s', v_total, (select count(*) from jsonb_object_keys(v_vaciadas)), v_cont->>'frase', v_banco->>'frase'));
+end $_$;
+
+
+--
+-- Name: FUNCTION demo_gestoria_volver_a_empezar(p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.demo_gestoria_volver_a_empezar(p_cuenta uuid) IS 'GD · «Volver a empezar», la parte de Sumied: vacía de una cuenta demo todo lo que nace de usarla (todo menos _gd_se_queda) y vuelve a sembrar la contabilidad y el banco. Todo o nada. Solo cuentas demo; solo la plataforma.';
 
 
 --
@@ -159865,6 +159978,14 @@ GRANT ALL ON FUNCTION public._fill_acc_from_user_profile() TO service_role;
 
 
 --
+-- Name: FUNCTION _gd_se_queda(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._gd_se_queda() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._gd_se_queda() TO service_role;
+
+
+--
 -- Name: FUNCTION _generate_daily_count_core(p_account_id uuid, p_location_id uuid, p_employee_ids uuid[], p_per_person integer, p_coverage_target numeric, p_ignore_freshness boolean); Type: ACL; Schema: public; Owner: -
 --
 
@@ -168954,6 +169075,14 @@ GRANT ALL ON FUNCTION public.demo_gestoria_ingresos_gocardless_demos() TO servic
 
 REVOKE ALL ON FUNCTION public.demo_gestoria_tarifa_sembrar(p_cuenta uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.demo_gestoria_tarifa_sembrar(p_cuenta uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION demo_gestoria_volver_a_empezar(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.demo_gestoria_volver_a_empezar(p_cuenta uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.demo_gestoria_volver_a_empezar(p_cuenta uuid) TO service_role;
 
 
 --
