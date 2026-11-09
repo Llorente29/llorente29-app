@@ -13,8 +13,9 @@
 //     su gestoría. Con más de un cliente, el enlace es el mismo: dentro elige.
 //   · Como mucho ENLACES_POR_HORA enlaces por correo y hora (los cuenta
 //     conta_portal_aviso): más, y no sale nada (y se contesta lo mismo).
-//   · En una demo, al buzón de pruebas; cerrado por CORREO_MARCA_ABIERTOS
-//     («portal_enlace»). Fuera de producción, el enlace va en la respuesta.
+//   · En una demo, solo al buzón de pruebas y sin el freno (nº 11); en una
+//     cuenta de verdad, cerrado por CORREO_MARCA_ABIERTOS («portal_enlace»)
+//     hasta que Julio decida. Fuera de producción, el enlace va en la respuesta.
 //
 // Contesta 200 con { ok: true, frase } (y { enlace } fuera de producción).
 

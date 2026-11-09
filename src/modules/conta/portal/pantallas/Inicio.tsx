@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowUp, CircleCheck, Euro, FileText, MessageCircle, PenLine, Plus } from 'lucide-react'
 import { abrir, accion } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { diferencia, euros, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS } from '../formato'
+import { cuentaEnmascarada, diferencia, euros, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS } from '../formato'
 import type { Inicio as DatosInicio, Novedad, Peticion } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -141,6 +141,7 @@ function ProximoRecibo({ cliente, p, avisar, recargar }: { cliente: string; p: N
   const [texto, setTexto] = useState('')
   const [enviando, setEnviando] = useState(false)
   const lineas = lineasDelRecibo(p.lineas)
+  const cuenta = cuentaEnmascarada(p.cuenta_pais, p.cuenta_final)
   const cambio = diferencia(p.total_cent, p.anterior_cent)
   const porque = porQueCambia(p.cambios)
   const enviar = async () => {
@@ -172,7 +173,7 @@ function ProximoRecibo({ cliente, p, avisar, recargar }: { cliente: string; p: N
           </div>
         ))}
       </div>
-      <div className="pt-nota" style={{ fontSize: 13 }}>Se carga en tu cuenta de cargo (la ves en «Tu cuenta»). La factura te llega por correo en cuanto se cobre.</div>
+      <div className="pt-nota" style={{ fontSize: 13 }}>{cuenta ? `De tu cuenta ${cuenta}.` : 'Se carga en tu cuenta de cargo (la ves en «Tu cuenta»).'} La factura te llega por correo en cuanto se cobre.</div>
       {p.incidencia ? (
         <div className="pt-aviso info" role="status">
           <span><CircleCheck size={16} aria-hidden="true" style={{ verticalAlign: '-3px' }} /> Le dijiste a tu gestoría que no estás de acuerdo el {fecha(p.incidencia.creada)}{p.incidencia.parado ? ': el recibo está parado hasta que lo revise' : ': lo está revisando'}.</span>
