@@ -108,6 +108,7 @@ const REF = new URL(SUPABASE_URL || 'https://x.supabase.co').hostname.split('.')
 const iniciarSesion = () => `(() => { try {
   localStorage.setItem(${JSON.stringify(`sb-${REF}-auth-token`)}, ${JSON.stringify(JSON.stringify(sesion))});
   localStorage.setItem('andy-app-active-account', ${JSON.stringify(CUENTA)});
+  localStorage.setItem(${JSON.stringify(`folvy.conta.empresa.${CUENTA}`)}, ${JSON.stringify(SOCIEDAD)});
 } catch (e) {} })()`
 
 // ── Una escena: su contexto, su vídeo, su captura ────────────────────────────
@@ -125,6 +126,7 @@ async function escena(id, fn, { ancho = W, alto = H, conSesion = true } = {}) {
   const E = { page, ctx, R: raton(page), empezar: () => { marca.desde = (Date.now() - t0) / 1000 }, captura: async () => page.screenshot({ path: join(SALIDA, 'capturas', `${id}.png`) }) }
   try { await fn(E) } catch (e) { fallos.push(`${id}: ${e.message.split('\n')[0]}`); decir(`  ✗ ${e.message.split('\n')[0]}`); await E.captura().catch(() => {}) }
   await page.close(); await ctx.close()
+  if (E.sinEscena) { rmSync(join(SALIDA, 'escenas', `${id}.mp4`), { force: true }); rmSync(join(SALIDA, 'capturas', `${id}.png`), { force: true }); decir(`  · sin escena ${id}: queda fuera del montaje`); return }
   const webm = readdirSync(dir).find((f) => f.endsWith('.webm'))
   if (!webm) { fallos.push(`${id}: sin vídeo`); return }
   renameSync(join(dir, webm), join(dir, 'clip.webm'))
@@ -175,7 +177,7 @@ try {
     E.id = '02'
     await ir(E.page, '/conta/ventas/clientes-y-cuotas'); E.empezar()
     await rotulo(E.page, 'Todos tus clientes y lo que cobras a cada uno, en una pantalla'); await E.page.waitForTimeout(3500)
-    for (const t of ['Cuotas al mes', 'Te deben', 'Dejas de cobrar', 'Último cobro']) await a(E, E.page.getByText(t, { exact: false }), { que: t, pausa: 1300 })
+    for (const t of ['Cuotas al mes', 'Te deben', 'Dejas de cobrar', 'Precio sin revisar']) await a(E, E.page.getByText(t, { exact: false }), { que: t, pausa: 1300 })
     await a(E, E.page.getByText('Lo que tienes que hacer'), { que: 'Lo que tienes que hacer', pausa: 2500 })
     await E.captura()
     await a(E, E.page.getByText(CLIENTE, { exact: true }), { clic: true, que: CLIENTE, pausa: 3500 })
@@ -184,15 +186,14 @@ try {
 
   await escena('03', async (E) => {
     E.id = '03'
-    await ir(E.page, '/conta/ventas/clientes-y-cuotas')
-    await E.page.getByText(CLIENTE, { exact: true }).first().click().catch(() => {})
-    await E.page.getByText('Abrir la ficha completa').first().click({ timeout: 10_000 }).catch(() => {})
-    await E.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {}); await E.page.waitForTimeout(1200); E.empezar()
+    const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).maybeSingle()
+    if (!cli) throw new Error(`No está «${CLIENTE}» en la demo.`)
+    await ir(E.page, `/conta/ventas/clientes-y-cuotas/cliente/${cli.id}`); E.empezar()
     await rotulo(E.page, 'Cada cliente, con su recibo explicado línea a línea'); await E.page.waitForTimeout(3500)
-    await a(E, E.page.getByRole('button', { name: 'Ver trabajadores' }), { clic: true, que: 'Ver trabajadores', pausa: 2500 })
+    await a(E, E.page.getByRole('button', { name: 'Ver trabajadores' }), { clic: true, que: 'Ver trabajadores', pausa: 3000 })
     await E.captura()
-    for (const t of ['Cobros', 'Contacto']) await a(E, E.page.getByRole('tab', { name: t }).or(E.page.getByRole('button', { name: t, exact: true })), { clic: true, que: `pestaña ${t}`, pausa: 3000 })
-    await a(E, E.page.getByText('Situación'), { que: 'datos de Bitrix24', pausa: 2500 })
+    for (const t of ['Cobros', 'Contacto']) await a(E, E.page.getByRole('tab', { name: t, exact: true }), { clic: true, que: `pestaña ${t}`, pausa: 3200 })
+    await a(E, E.page.getByRole('tab', { name: /^Datos de / }), { clic: true, que: 'pestaña Datos del CRM', pausa: 3500 })
   })
 
   await escena('04', async (E) => {
@@ -293,7 +294,7 @@ try {
     await E.captura()
     const { data: rec } = await admin.from('conta_recibo').select('invoice_id').eq('account_id', CUENTA).not('invoice_id', 'is', null).order('enviado_at', { ascending: false }).limit(1)
     const factura = rec?.[0]?.invoice_id
-    if (!factura) { fallos.push('07: ninguna factura todavía'); return }
+    if (!factura) { fallos.push('07: ninguna factura todavía'); if (MODO === 'grabar') E.sinEscena = true; return }
     await ir(E.page, `/conta/ventas/facturas/${factura}`)
     await rotulo(E.page, 'Con la numeración y las cuentas de tu plan'); await E.page.waitForTimeout(3000)
     await a(E, E.page.getByText('Lo que ha pasado'), { que: 'Lo que ha pasado', pausa: 2500 })
@@ -321,7 +322,7 @@ try {
     // Lo mismo que hace el cron de cada 30 minutos (solo cuentas demo), por si aún no ha pasado.
     if (MODO === 'grabar') await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(({ data }) => decir(`  · ${data?.frase ?? ''}`))
     const { count } = await admin.from('bank_movement').select('id', { count: 'exact', head: true }).eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
-    if (!count) { fallos.push('08: aún no hay ningún ingreso de GoCardless en el banco de la demo'); return }
+    if (!count) { fallos.push('08: aún no hay ningún ingreso de GoCardless en el banco de la demo: escena fuera'); E.sinEscena = true; return }
     await ir(E.page, '/conta/bancos'); E.empezar()
     await rotulo(E.page, 'El ingreso de GoCardless se casa solo en el banco'); await E.page.waitForTimeout(3500)
     await a(E, E.page.getByText(/GOCARDLESS/).first(), { clic: true, que: 'el ingreso de GoCardless', pausa: 4000 })
