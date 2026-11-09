@@ -329,6 +329,8 @@ begin
   if exists (select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid = p.pronamespace
               where n.nspname = 'public' and (p.proname like 'conta_portal%' or p.proname like '_conta_portal%'))
      or exists (select 1 from pg_catalog.pg_class where relnamespace = 'public'::regnamespace and relname like 'conta_portal%')
+     or exists (select 1 from storage.buckets where id = 'conta-portal')
+     or exists (select 1 from pg_catalog.pg_policies where schemaname = 'storage' and policyname like 'conta\_portal\_%')
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_solicitud'
                  and column_name in ('empleado_documento', 'fecha_efecto', 'tipo_contrato', 'horas_semana', 'portal_acceso_id')) then
     raise exception 'PRUEBA GP-1530 · 6: la vuelta atrás deja algo.';

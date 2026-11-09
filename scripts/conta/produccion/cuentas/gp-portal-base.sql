@@ -4,7 +4,7 @@
 --   1. Las tablas conta_portal_*: 0 → 9.
 --   2. Las funciones del portal (conta_portal_* y _conta_portal_*): 0 → 37.
 --   3. Las columnas nuevas de conta_solicitud: 0 → 5.
---   4. Las filas de conta_solicitud: las mismas antes y después (no se toca ninguna).
+--   4. Las filas de conta_solicitud pedidas antes del 09/11: las mismas antes y después (no se toca ninguna).
 --   5. Las políticas del portal en storage.objects: 0 → 2.
 select clave, valor from (
   select 1 o, 'Tablas conta_portal_*' clave,
@@ -15,7 +15,7 @@ select clave, valor from (
   select 3, 'Columnas nuevas de conta_solicitud',
     (select count(*)::text from information_schema.columns where table_schema = 'public' and table_name = 'conta_solicitud'
       and column_name in ('empleado_documento', 'fecha_efecto', 'tipo_contrato', 'horas_semana', 'portal_acceso_id')) union all
-  select 4, 'Filas de conta_solicitud', (select count(*)::text from public.conta_solicitud) union all
+  select 4, 'Filas de conta_solicitud pedidas antes del 09/11', (select count(*)::text from public.conta_solicitud where pedida_at < timestamptz '2026-11-09 15:00:00+00') union all
   select 5, 'Políticas del portal en storage.objects',
     (select count(*)::text from pg_catalog.pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like 'conta\_portal\_%')
 ) q order by o;

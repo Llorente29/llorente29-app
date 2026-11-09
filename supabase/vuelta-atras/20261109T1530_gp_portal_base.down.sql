@@ -9,6 +9,20 @@
 drop policy if exists conta_portal_leer on storage.objects;
 drop policy if exists conta_portal_subir on storage.objects;
 
+do $$
+begin
+  if exists (select 1 from storage.objects where bucket_id = 'conta-portal') then
+    raise notice 'GP 1530 vuelta atrás: el almacén conta-portal tiene ficheros y se queda (sin políticas). Se vacía con la API de storage.';
+  else
+    perform set_config('storage.allow_delete_query', 'true', true);
+    delete from storage.buckets where id = 'conta-portal';
+    perform set_config('storage.allow_delete_query', 'false', true);
+    if exists (select 1 from storage.buckets where id = 'conta-portal') then
+      raise exception 'GP 1530 vuelta atrás: el almacén conta-portal, vacío, no se ha borrado.';
+    end if;
+  end if;
+end $$;
+
 drop function if exists public.conta_portal_ruta_puede(text, boolean);
 drop function if exists public.conta_portal_firma_pdf(uuid, text, text);
 drop function if exists public.conta_portal_incidencia_parada(uuid, boolean, text);
