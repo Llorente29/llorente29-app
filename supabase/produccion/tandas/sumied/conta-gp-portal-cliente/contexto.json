@@ -1,0 +1,25 @@
+{
+ "_que": "GP · T2 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 15:10Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1530 añade nueve tablas y sus funciones, que no existen (ninguna función con nombre conta_portal); cinco columnas que admiten nulos en conta_solicitud (0 filas), con CHECK y clave ajena solo sobre ellas; el almacén conta-portal (no existe) y dos políticas en storage.objects. Nada en el camino del pedido. Ningún fichero en el historial. analizar.mjs decidir: sigue.",
+ "medido": "2026-11-09T15:10Z",
+ "tanda": {
+  "supabase/migrations/20261109T1530_gp_portal_base.sql": "a3796a0a40f119a0a0132aac6df1c064"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_solicitud",
+   "storage.buckets"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_solicitud": 0,
+   "storage.buckets": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

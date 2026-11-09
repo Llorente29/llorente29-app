@@ -1,0 +1,5 @@
+# GP · la vuelta atrás de la 1530: fuera funciones, políticas, tablas
+# conta_portal_* y las cinco columnas de conta_solicitud. El almacén
+# conta-portal se queda (vacío no molesta).
+cuenta: scripts/conta/produccion/cuentas/gp-portal-base.sql
+supabase/vuelta-atras/20261109T1530_gp_portal_base.down.sql
