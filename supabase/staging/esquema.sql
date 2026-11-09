@@ -4274,6 +4274,43 @@ end $$;
 
 
 --
+-- Name: _conta_cobro_cuota_exacta(uuid, jsonb, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_cobro_cuota_exacta(p_id uuid, p_factura jsonb, p_total numeric) RETURNS numeric
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_l jsonb := coalesce(p_factura->'lineas', '[]'::jsonb); v_c jsonb; v_n int;
+begin
+  -- Un recibo de antes (sin la cuota de cada línea): como siempre.
+  if jsonb_array_length(v_l) = 0 or exists (select 1 from jsonb_array_elements(v_l) x where not (x ? 'ivaCent')) then return p_total; end if;
+  if (select status from public.customer_invoice where id = p_id) is distinct from 'borrador' then
+    raise exception 'La cuota de las líneas solo se pone en un borrador.' using errcode = '23514';
+  end if;
+  select count(*) into v_n from public.customer_invoice_line where invoice_id = p_id;
+  if v_n <> jsonb_array_length(v_l) then
+    raise exception 'La factura tiene % líneas y el recibo, %: no se emite.', v_n, jsonb_array_length(v_l) using errcode = '23514';
+  end if;
+  -- Línea a línea, en su orden (conta_venta_guardar las numera desde 1).
+  update public.customer_invoice_line l set tax_amount = ((v_l->(l.position - 1))->>'ivaCent')::numeric / 100
+   where l.invoice_id = p_id;
+  v_c := public._conta_venta_cifras(p_id);
+  update public.customer_invoice set base = (v_c->>'base')::numeric, tax = (v_c->>'iva')::numeric, surcharge_amount = (v_c->>'recargo')::numeric,
+         withholding_amount = (v_c->>'retencion')::numeric, total = (v_c->>'total')::numeric
+   where id = p_id;
+  return (v_c->>'total')::numeric;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_cobro_cuota_exacta(p_id uuid, p_factura jsonb, p_total numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_cobro_cuota_exacta(p_id uuid, p_factura jsonb, p_total numeric) IS 'G05 · nº 62 · La cuota de IVA de cada línea de la factura de un recibo, la del núcleo (ivaCent): se guarda en el borrador para que el total sea justo el del recibo. Sin ella, nada.';
+
+
+--
 -- Name: _conta_cobro_dejar(jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4398,7 +4435,8 @@ begin
     v_g := public.conta_venta_guardar(v_r.company_id, null, jsonb_build_object('cliente_id', v_r.party_id, 'fecha', v_fecha, 'serie', v_aj->>'serie',
       'retencion_id', v_ret, 'notas', 'Recibo de ' || v_r.mes || ', cobrado por domiciliación SEPA (GoCardless).'), v_lin, v_r.enviado_por_name);
     v_id := (v_g->>'id')::uuid;
-    v_total := (v_g->>'total')::numeric;
+    -- nº 62 · La cuota de cada línea, la del núcleo: el total es justo el del recibo (119,83 + 25,17 = 145,00).
+    v_total := public._conta_cobro_cuota_exacta(v_id, v_r.factura, (v_g->>'total')::numeric);
     -- Nunca una factura que no cuadra con su cobro.
     if round(v_total * 100) <> v_r.cobrar_cent then
       raise exception 'La factura saldría por % € y el cobro fue de % €: no se emite.', v_total, v_r.cobrar_cent / 100.0 using errcode = '23514';
@@ -4465,7 +4503,8 @@ begin
     v_g := public.conta_venta_guardar(v_r.company_id, null, jsonb_build_object('cliente_id', v_r.party_id, 'fecha', p_fecha, 'serie', v_aj->>'serie',
       'retencion_id', v_ret, 'notas', 'Recibo de ' || v_r.mes || ', devuelto y pagado después desde el portal.'), v_lin, v_r.enviado_por_name);
     v_id := (v_g->>'id')::uuid;
-    v_total := (v_g->>'total')::numeric;
+    -- nº 62 · La cuota de cada línea, la del núcleo: el total es justo el del recibo (119,83 + 25,17 = 145,00).
+    v_total := public._conta_cobro_cuota_exacta(v_id, v_r.factura, (v_g->>'total')::numeric);
     if round(v_total * 100) <> coalesce(v_r.cobrar_cent, v_r.total_cent) then
       raise exception 'La factura saldría por % € y el recibo es de % €: no se emite.', v_total, coalesce(v_r.cobrar_cent, v_r.total_cent) / 100.0 using errcode = '23514';
     end if;
@@ -161176,6 +161215,14 @@ GRANT ALL ON FUNCTION public._conta_cobro_cuenta(p_company uuid, p_code text, p_
 
 REVOKE ALL ON FUNCTION public._conta_cobro_cuenta_cliente(p_company uuid, p_party uuid, p_quien text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_cobro_cuenta_cliente(p_company uuid, p_party uuid, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_cobro_cuota_exacta(p_id uuid, p_factura jsonb, p_total numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_cobro_cuota_exacta(p_id uuid, p_factura jsonb, p_total numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_cobro_cuota_exacta(p_id uuid, p_factura jsonb, p_total numeric) TO service_role;
 
 
 --
