@@ -1,4 +1,4 @@
-// src/portal/main.tsx
+// src/modules/conta/portal/main.tsx
 //
 // GP · Tarea 3 · La entrada de Vite del portal del cliente (portal.html):
 // aparte de la app (no pasa por App.tsx, nº 2 punto 5), así carga solo el

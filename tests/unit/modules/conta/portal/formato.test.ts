@@ -1,10 +1,10 @@
-// GP · Tarea 3 · Lo puro de las pantallas del portal del cliente (src/portal/formato.ts).
+// GP · Tarea 3 · Lo puro de las pantallas del portal del cliente (src/modules/conta/portal/formato.ts).
 // Nombres, cifras y fechas inventados.
 import { describe, expect, it } from 'vitest'
 import {
   cuando, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, lineasDelRecibo, mes, nombreDePila,
   nombreImpuesto, nombreSeguro, porQueCambia, puedeSubirse, tonoDe,
-} from '../../../src/portal/formato'
+} from '../../../../../src/modules/conta/portal/formato'
 
 const hoy = new Date('2026-11-09T12:00:00Z')
 

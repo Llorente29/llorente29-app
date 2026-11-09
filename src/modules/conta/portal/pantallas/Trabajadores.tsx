@@ -1,4 +1,4 @@
-// src/portal/pantallas/Trabajadores.tsx
+// src/modules/conta/portal/pantallas/Trabajadores.tsx
 //
 // GP · Tarea 3 · Tus trabajadores: los de alta, «Pedir un alta» (nombre, DNI o
 // NIE, fecha, tipo de contrato y horas) y «Pedir la baja». La petición llega a

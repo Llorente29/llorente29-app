@@ -1,4 +1,4 @@
-// src/portal/comun.tsx
+// src/modules/conta/portal/comun.tsx
 //
 // GP · Tarea 3 · Las piezas que comparten las pantallas del portal del
 // cliente: el chip de un estado, el aviso con contenido (regla 8: lo que pasa

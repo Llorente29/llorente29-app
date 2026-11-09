@@ -1,4 +1,4 @@
-// src/portal/tipos.ts
+// src/modules/conta/portal/tipos.ts
 //
 // GP · Tarea 3 · Lo que devuelve cada lectura del portal (las funciones
 // conta_portal_* de la 1530 y la 1720). Los nombres, como vienen de la base.

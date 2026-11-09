@@ -1,4 +1,4 @@
-// src/portal/pantallas/Mensajes.tsx
+// src/modules/conta/portal/pantallas/Mensajes.tsx
 //
 // GP · Tarea 3 · Mensajes con tu gestoría: la conversación, con adjuntos. Al
 // abrirla, los de la gestoría quedan leídos. Si se llega desde «Contestar» de

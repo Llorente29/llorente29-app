@@ -1,4 +1,4 @@
-// src/portal/pantallas/Facturas.tsx
+// src/modules/conta/portal/pantallas/Facturas.tsx
 //
 // GP · Tarea 3 · Tus facturas: todas, con su estado y su PDF (el de Code 1),
 // un buscador por número o concepto, el filtro por año y la descarga del año en

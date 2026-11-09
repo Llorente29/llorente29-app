@@ -1,4 +1,4 @@
-// src/portal/pantallas/pantalla.ts
+// src/modules/conta/portal/pantallas/pantalla.ts
 //
 // GP · Tarea 3 · Lo que recibe cada pantalla del portal: el cliente, cómo ir a
 // otra pestaña (con lo que tiene que abrir) y cómo decir lo que ha pasado.

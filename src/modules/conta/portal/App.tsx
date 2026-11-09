@@ -1,4 +1,4 @@
-// src/portal/App.tsx
+// src/modules/conta/portal/App.tsx
 //
 // GP · Tarea 3 · La entrada del portal del cliente (portal.html):
 //   1. Con ?token_hash (el enlace del correo): lo canjea y entra.

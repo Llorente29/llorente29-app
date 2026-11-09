@@ -1,4 +1,4 @@
-// src/portal/useLectura.ts
+// src/modules/conta/portal/useLectura.ts
 //
 // GP · Tarea 3 · Una lectura por pantalla (la regla del segundo): la función
 // conta_portal_* que la prepara en la base, una vez al abrir y otra cuando lo

@@ -1,4 +1,4 @@
-// src/portal/pantallas/Inicio.tsx
+// src/modules/conta/portal/pantallas/Inicio.tsx
 //
 // GP · Tarea 3 · Inicio del portal del cliente, fiel a la maqueta: lo que pide
 // la gestoría (firmar, subir, contestar), el aviso rojo de un devuelto con sus

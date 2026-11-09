@@ -1,4 +1,4 @@
-// src/portal/Portal.tsx
+// src/modules/conta/portal/Portal.tsx
 //
 // GP · Tarea 3 · El armazón del portal del cliente, fiel a la maqueta: la
 // cabecera con la marca de la gestoría (su nombre, sus iniciales o su logo y su

@@ -1,4 +1,4 @@
-// src/portal/pantallas/Documentos.tsx
+// src/modules/conta/portal/pantallas/Documentos.tsx
 //
 // GP · Tarea 3 · Documentos: subir facturas y tickets (también con una foto
 // desde el móvil, o arrastrando) al buzón de su cuenta en Sumied, y ver lo que

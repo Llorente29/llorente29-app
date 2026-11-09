@@ -1,4 +1,4 @@
-// src/portal/pantallas/Cuenta.tsx
+// src/modules/conta/portal/pantallas/Cuenta.tsx
 //
 // GP · Tarea 3 · Tu cuenta: la cuenta donde se cargan los recibos (sus últimos
 // dígitos, de Code 1) y «Cambiar de cuenta» (firmas una domiciliación nueva

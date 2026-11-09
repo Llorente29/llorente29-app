@@ -1,4 +1,4 @@
-// src/portal/formato.ts
+// src/modules/conta/portal/formato.ts
 //
 // GP · Tarea 3 (Code 3, 09/11/2026) · Lo puro de las pantallas del portal del
 // cliente: euros, fechas y meses en palabras, iniciales, el color de cada estado

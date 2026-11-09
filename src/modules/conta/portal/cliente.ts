@@ -1,4 +1,4 @@
-// src/portal/cliente.ts
+// src/modules/conta/portal/cliente.ts
 //
 // GP · Tarea 3 · Cómo habla el portal del cliente con Sumied.
 //   · Su propia sesión de Supabase (storageKey «sumied-portal»): no se mezcla con

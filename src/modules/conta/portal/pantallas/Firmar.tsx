@@ -1,4 +1,4 @@
-// src/portal/pantallas/Firmar.tsx
+// src/modules/conta/portal/pantallas/Firmar.tsx
 //
 // GP · Tarea 3 · Firmar por aceptación (17/11): ver el documento, pedir el
 // código (llega al correo) y escribirlo. Firmado, queda quién, cuándo y desde

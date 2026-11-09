@@ -1,4 +1,4 @@
-// src/portal/pantallas/Pagos.tsx
+// src/modules/conta/portal/pantallas/Pagos.tsx
 //
 // GP · Tarea 3 · Tus pagos: lo pagado en el año, lo pendiente (los devueltos
 // sin pagar), el próximo cargo y el estado de cada recibo. Una sola lectura:
