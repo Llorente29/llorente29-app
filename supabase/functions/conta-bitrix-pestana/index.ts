@@ -17,6 +17,10 @@
 //     conta_bitrix_pestana_leer, que busca la persona de Sumied con ese correo
 //     en la cuenta de ese portal y lee como ella. Nunca se enseña nada sin eso.
 //
+// La aplicación local necesita los permisos crm, placement y user_basic (con
+// user_brief, user.current no trae el correo y nadie pasa: nº 6, 09/11). Cómo
+// se instala: docs/conta/encargos/encargo_GB_pestana_sumied_en_bitrix.md.
+//
 // Solo lee: no escribe en Sumied ni en Bitrix24 (salvo enganchar la pestaña al
 // instalar). No guarda ningún token. Solo en los portales de puro.ts · PORTALES.
 

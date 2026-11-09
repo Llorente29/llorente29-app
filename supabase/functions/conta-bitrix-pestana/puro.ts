@@ -127,7 +127,7 @@ export function porqueUsuario(respuesta: unknown): string | null {
   const r = x.result
   if (!r || typeof r !== 'object') return 'user.current: sin «result»'
   if (usuarioDeBitrix(respuesta)) return null
-  if (!('EMAIL' in r)) return `user.current: no trae EMAIL (campos: ${Object.keys(r).sort().join(',')})`
+  if (!('EMAIL' in r)) return `user.current: no trae EMAIL: falta el permiso user_basic en la aplicación (campos: ${Object.keys(r).sort().join(',')})`
   if (!(r.ACTIVE === true || r.ACTIVE === 'Y' || r.ACTIVE === '1' || r.ACTIVE === undefined)) return 'user.current: el usuario no está activo'
   return 'user.current: el EMAIL está vacío o no es un correo'
 }

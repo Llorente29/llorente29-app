@@ -75,7 +75,7 @@ describe('GB (nº 5) · el porqué en el registro, sin datos personales ni secre
   it('user.current: sin EMAIL (dice qué campos trae, no sus valores), inactivo o bien', async () => {
     const { porqueUsuario } = await import('../../../../../supabase/functions/conta-bitrix-pestana/puro')
     const sin = porqueUsuario({ result: { ID: '1', NAME: 'Ana', LAST_NAME: 'Prueba' } })!
-    expect(sin).toBe('user.current: no trae EMAIL (campos: ID,LAST_NAME,NAME)')
+    expect(sin).toBe('user.current: no trae EMAIL: falta el permiso user_basic en la aplicación (campos: ID,LAST_NAME,NAME)')
     expect(sin).not.toMatch(/Ana|Prueba/)
     expect(porqueUsuario({ result: { ID: '1', ACTIVE: false, EMAIL: 'gestora@example.com' } })).toBe('user.current: el usuario no está activo')
     expect(porqueUsuario({ result: { ID: '1', ACTIVE: true, EMAIL: '' } })).toBe('user.current: el EMAIL está vacío o no es un correo')
