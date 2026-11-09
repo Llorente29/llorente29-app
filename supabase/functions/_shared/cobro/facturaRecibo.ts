@@ -9,8 +9,9 @@
 //      de documentos de siempre: se abre desde la factura, el asiento y el
 //      libro diario);
 //   2. y la factura, ya cobrada, se manda sola al cliente UNA vez
-//      (_shared/facturaVentaEnviar.ts: en la demo, solo al buzón de pruebas; con
-//      el freno de los correos cerrado, no sale y su historial lo dice).
+//      (_shared/facturaVentaEnviar.ts): en una cuenta de demostración, siempre y
+//      solo al buzón de pruebas, sin pasar por el freno de los correos (nº 53);
+//      en una de verdad, con el freno cerrado no sale y su historial lo dice.
 // Lo llaman conta-gocardless-leer y conta-cobro («seguir») después de seguir el
 // cobro. Cada factura, aparte: si una falla, las demás siguen y el fallo queda
 // en el resultado. Con la clave de servicio, solo la empresa que se le pasa.
@@ -149,7 +150,8 @@ export async function rematarFacturasDeRecibos(db: SupabaseClient, empresa: stri
           out.sinEnviar.push(texto);
           continue;
         }
-        const e = await enviarFacturaVenta(db, f as never, para, "Sumied", h.correo);
+        // En la demo, al buzón de pruebas sin pasar por el freno de los correos (nº 53); en las de verdad, con él.
+        const e = await enviarFacturaVenta(db, f as never, para, "Sumied", h.correo, { demoSinFreno: true });
         if (e.enviado) out.enviadas++; else out.sinEnviar.push(e.texto);
       }
     } catch (e) {
