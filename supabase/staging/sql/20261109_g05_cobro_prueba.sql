@@ -76,6 +76,8 @@ begin
   insert into _g values ('c2', r->>'party_id');
   r := public.party_save_customer(v_acc, null, 'Cliente Prueba G05 Otro', null, '{}'::jsonb, 'Prueba G05');
   insert into _g values ('c3', r->>'party_id');
+  r := public.party_save_customer(v_acc, null, 'Cliente Prueba G05 Cuatro', null, '{}'::jsonb, 'Prueba G05');
+  insert into _g values ('c4', r->>'party_id');
 end $$;
 reset role;
 do $$
@@ -299,6 +301,97 @@ begin
   raise notice 'G05 · 7: retrocedido → 430 / 57200002 una sola vez, y la factura se queda. OK';
 end $$;
 
+-- 7b · «Viene de mi programa anterior» (QBO, nº 33): sin código no se cobra ni se factura, sale en «Pendiente de revisar»
+-- y nunca se inventa uno; con su código (827), su subcuenta es la 43000827.
+do $$
+declare v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; v_e uuid := (select v::uuid from _g where clave = 'empresa');
+begin
+  insert into public.conta_cobro_cliente (company_id, party_id, account_id, forma_cobro, gc_cliente_id, updated_by_name)
+  values (v_e, (select v::uuid from _g where clave = 'c4'), v_acc, 'gocardless', 'CU0000G05CUATRO', 'Prueba G05');
+  insert into public.conta_gc_mandato (company_id, gc_id, account_id, gc_cliente_id, estado, creado)
+  values (v_e, 'MD0000G05CUATRO', v_acc, 'CU0000G05CUATRO', 'active', now() - interval '1 year');
+  if not exists (select 1 from public.conta_gestoria_lectura where account_id = v_acc) then
+    insert into public.conta_gestoria_lectura (account_id, company_id, origen, entorno, por, quien_name, empezada_at, estado)
+    values (v_acc, v_e, 'gocardless', 'pruebas', 'persona', 'Prueba G05', now(), 'bien');
+  end if;
+end $$;
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', 'c01a0000-0000-4000-8000-0000000000a1', true);
+set local role authenticated;
+do $$
+declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r jsonb;
+begin
+  r := public.conta_cobro_modo_codigo(v_e, 'programa_anterior');
+  if r->>'frase' not like 'Los códigos de cliente vienen de tu programa anterior%' then raise exception 'G05 · 7b: la frase del modo es «%».', r->>'frase'; end if;
+  begin
+    perform public.conta_cobro_modo_codigo(v_e, 'inventado');
+    raise exception 'G05 · 7b: un modo que no existe ha entrado.';
+  exception when invalid_parameter_value then null; end;
+end $$;
+reset role;
+do $$
+declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); c4 text := (select v from _g where clave = 'c4'); r jsonb; v_r public.conta_recibo;
+begin
+  r := public.conta_cobro_guardar(v_e, '2026-12', jsonb_build_array(
+    jsonb_build_object('clave', 'recibo:' || v_e || ':' || c4 || ':2026-12', 'party_id', c4, 'total_cent', 6050, 'cambios', jsonb_build_array(jsonb_build_object('tipo', 'cliente_nuevo')),
+      'parado', '[]'::jsonb, 'factura', jsonb_build_object('lineas', jsonb_build_array(jsonb_build_object('concepto', 'Asesoría laboral', 'cantidad', 1, 'precioCent', 5000))), 'cobrar_cent', 6050)),
+    '[]'::jsonb, 'Prueba G05');
+  if (r->>'sin_codigo')::int <> 1 or r->>'frase' not like '%1 cliente sin su código de cliente: no se cobra hasta tenerlo.' then raise exception 'G05 · 7b: preparar no dice el que no tiene código: %.', r; end if;
+  select * into v_r from public.conta_recibo where clave = 'recibo:' || v_e || ':' || c4 || ':2026-12';
+  if not ('Falta su código de cliente' = any (v_r.parado)) then raise exception 'G05 · 7b: el recibo sin código no está parado (%).', v_r.parado; end if;
+  if not exists (select 1 from public.conta_gestoria_diferencia where company_id = v_e and party_id = c4::uuid and tipo = 'falta_codigo_cliente' and vigente) then
+    raise exception 'G05 · 7b: el cliente sin código no sale en «Pendiente de revisar».';
+  end if;
+  if jsonb_array_length(public.conta_cobro_para_enviar(v_e, '2026-12')) <> 0 then raise exception 'G05 · 7b: un recibo sin código se puede enviar.'; end if;
+  -- Seguir (como después de una lectura) no lo duplica: sigue habiendo uno vigente.
+  perform public.conta_cobro_seguir(v_e);
+  if (select count(*) from public.conta_gestoria_diferencia where company_id = v_e and party_id = c4::uuid and tipo = 'falta_codigo_cliente' and vigente) <> 1 then
+    raise exception 'G05 · 7b: «Pendiente de revisar» del código queda repetido.';
+  end if;
+  -- Y la factura nunca se inventa un código: un cliente sin él para.
+  begin
+    perform public._conta_cobro_cuenta_cliente(v_e, c4::uuid, 'Prueba G05');
+    raise exception 'G05 · 7b: se ha inventado un código de cliente.';
+  exception when check_violation then
+    if sqlerrm <> 'Falta su código de cliente.' then raise exception 'G05 · 7b: el aviso es «%».', sqlerrm; end if;
+  end;
+  insert into _g values ('r4', v_r.id::text);
+  raise notice 'G05 · 7b: sin código, parado y en «Pendiente de revisar», sin enviar y sin inventar ninguno. OK';
+end $$;
+set local role authenticated;
+do $$
+declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); c4 uuid := (select v::uuid from _g where clave = 'c4'); r jsonb;
+begin
+  begin
+    perform public.conta_cobro_decidir((select v::uuid from _g where clave = 'r4'), 'aprobado');
+    raise exception 'G05 · 7b: se ha aprobado un recibo sin código.';
+  exception when check_violation then null; end;
+  r := public.conta_cobro_codigo_poner(v_e, c4, 827);
+  if r->>'frase' <> 'Código de cliente 827 guardado: su subcuenta es la 43000827.' then raise exception 'G05 · 7b: la frase del código es «%».', r->>'frase'; end if;
+  begin
+    perform public.conta_cobro_codigo_poner(v_e, (select v::uuid from _g where clave = 'c3'), 827);
+    raise exception 'G05 · 7b: dos clientes con el mismo código.';
+  exception when unique_violation then null; end;
+  if exists (select 1 from public.conta_recibo where id = (select v::uuid from _g where clave = 'r4') and 'Falta su código de cliente' = any (parado)) then
+    raise exception 'G05 · 7b: con el código puesto, el recibo sigue parado.';
+  end if;
+  r := public.conta_cobro_decidir((select v::uuid from _g where clave = 'r4'), 'aprobado');
+end $$;
+reset role;
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
+do $$
+declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); c4 uuid := (select v::uuid from _g where clave = 'c4'); v_code text;
+begin
+  if exists (select 1 from public.conta_gestoria_diferencia where company_id = v_e and party_id = c4 and tipo = 'falta_codigo_cliente' and vigente) then
+    raise exception 'G05 · 7b: con el código puesto, sigue en «Pendiente de revisar».';
+  end if;
+  v_code := public._conta_cobro_cuenta_cliente(v_e, c4, 'Prueba G05');
+  if v_code <> '43000827' then raise exception 'G05 · 7b: con el código 827 la subcuenta es % y no la 43000827.', v_code; end if;
+  if jsonb_array_length(public.conta_cobro_para_enviar(v_e, '2026-12')) <> 1 then raise exception 'G05 · 7b: con su código, el recibo no sale a enviar.'; end if;
+  raise notice 'G05 · 7b: con su código (827), aprobado, a enviar y con la 43000827; el código no se repite. OK';
+end $$;
+
 -- 8 · La vuelta atrás de las tres, y otra vez las tres.
 \i supabase/vuelta-atras/20261109T1021_g05_verifactu_demos.down.sql
 \i supabase/vuelta-atras/20261109T1007_g05_numero_con_formato.down.sql
@@ -308,6 +401,9 @@ do $$ begin
      or to_regproc('public._conta_numero_con_formato') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'invoice_series' and column_name = 'formato') then
     raise exception 'G05 · 8: la vuelta atrás deja algo.';
+  end if;
+  if (select pg_get_constraintdef(oid) from pg_constraint where conname = 'conta_gestoria_diferencia_tipo_check') like '%falta_codigo_cliente%' then
+    raise exception 'G05 · 8: el CHECK de los tipos de las diferencias no vuelve a ser el de antes.';
   end if;
   if (select md5(prosrc) from pg_proc where oid = 'public.conta_venta_emitir(uuid,text)'::regprocedure) <> '4b3ffe4c13b8c7b4f7dc98acaed6c187' then
     raise exception 'G05 · 8: conta_venta_emitir no vuelve a ser la de producción.';

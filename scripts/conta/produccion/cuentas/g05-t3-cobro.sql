@@ -11,6 +11,7 @@
 --   4. Asientos (todas las cuentas, hasta el corte): 15786 → 15786.
 --   5. Clientes del cobro (todas las cuentas, hasta el corte): 313 → 313.
 --   6. El despertador de las pruebas de las demos, función / cron: false / false → true / true.
+--   7. «Pendiente de revisar» por falta de código de cliente (todas las cuentas): 0 → 0.
 select clave, valor from (
   select 1 o, 'Las tablas del cobro (conta_recibo, conta_cobro_mes, conta_recibo_evento)' clave,
     (to_regclass('public.conta_recibo') is not null and to_regclass('public.conta_cobro_mes') is not null and to_regclass('public.conta_recibo_evento') is not null)::text valor union all
@@ -24,5 +25,7 @@ select clave, valor from (
     (select count(*)::text from public.conta_cobro_cliente where updated_at < timestamptz '2026-11-09 00:00:00+00') union all
   select 6, 'El despertador de las pruebas de las demos: función / cron',
     concat_ws(' / ', (to_regprocedure('public.verifactu_despertar_demos()') is not null)::text,
-      (select exists (select 1 from cron.job where jobname = 'verifactu-despertar-demos'))::text)
+      (select exists (select 1 from cron.job where jobname = 'verifactu-despertar-demos'))::text) union all
+  select 7, '«Pendiente de revisar» por falta de código de cliente (todas las cuentas)',
+    (select count(*)::text from public.conta_gestoria_diferencia where tipo = 'falta_codigo_cliente')
 ) q order by o;

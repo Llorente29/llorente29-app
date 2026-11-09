@@ -24,6 +24,8 @@ export type TipoDiferencia =
   | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos'
   // G01c · Un cliente de Sumied cuya ficha ya no entra como cliente en la lectura del CRM (no se archiva solo).
   | 'ya_no_es_cliente_en_crm'
+  // G05 · En una empresa que trae los códigos de su programa anterior, un cliente sin el suyo (no se cobra ni se factura).
+  | 'falta_codigo_cliente'
 
 export interface Diferencia {
   id: string
@@ -83,6 +85,8 @@ export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; eti
   { id: 'contacto-negociacion', tipos: ['contacto_solo_negociacion'], etiqueta: 'Contacto con solo una negociación', necesita: ['bitrix'] },
   { id: 'contacto-con-datos', tipos: ['contacto_empresa_con_datos'], etiqueta: 'Contacto con empresa y con datos de cliente', necesita: ['bitrix'] },
   { id: 'ya-no-es-cliente', tipos: ['ya_no_es_cliente_en_crm'], etiqueta: 'Ya no es cliente en tu CRM', necesita: ['bitrix'] },
+  // G05 · nº 33: con los códigos de cliente del programa anterior, Sumied no se inventa ninguno.
+  { id: 'sin-codigo', tipos: ['falta_codigo_cliente'], etiqueta: 'Falta su código de cliente', necesita: ['gocardless'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
@@ -206,6 +210,8 @@ export function comoResolver(d: Diferencia): Resolver[] {
   if (d.tipo === 'gocardless_sin_ficha') return ['enlazar', 'revisada']
   // G01b · Lo del CRM se corrige en el CRM: la próxima lectura lo renueva (no hay empresa a la que apuntar la revisión).
   if (['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos', 'ya_no_es_cliente_en_crm'].includes(d.tipo)) return []
+  // G05 · Se resuelve poniéndole su código en la ficha: el cobro lo quita solo.
+  if (d.tipo === 'falta_codigo_cliente') return []
   return ['revisada']
 }
 

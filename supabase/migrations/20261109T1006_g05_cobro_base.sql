@@ -1,12 +1,15 @@
 -- supabase/migrations/20261109T1006_g05_cobro_base.sql
 -- cambia: public.conta_gestoria_ajustes · prueba: supabase/staging/sql/20261109_g05_cobro_prueba.sql
 -- cambia: public.conta_cobro_cliente · prueba: supabase/staging/sql/20261109_g05_cobro_prueba.sql
+-- cambia: public.conta_gestoria_diferencia · prueba: supabase/staging/sql/20261109_g05_cobro_prueba.sql
 --
 -- G05 · Tarea 3 · EL COBRO DEL MES Y SU FACTURA, la base. AÑADE tablas,
--- columnas que admiten nulos y funciones nuevas; y tres CHECK sobre columnas
+-- columnas que admiten nulos y funciones nuevas; cuatro CHECK sobre columnas
 -- nuevas de dos tablas que existen (conta_gestoria_ajustes, 0 filas, y
--- conta_cobro_cliente, 865: todas pasan porque la columna nace vacía), por eso
--- las dos van declaradas arriba. No cambia ninguna función que ya exista, y
+-- conta_cobro_cliente, 865: todas pasan porque la columna nace vacía); y
+-- AMPLÍA el CHECK de los tipos de conta_gestoria_diferencia con
+-- «falta_codigo_cliente» (lo mismo de antes y uno más). Las tres tablas van
+-- declaradas arriba. No cambia ninguna función que ya exista, y
 -- se puede pasar dos veces seguidas. Nada en el
 -- camino del pedido. Lo que cambia (el formato del número en la emisión de la
 -- V01) va aparte, en la 1007.
@@ -57,9 +60,14 @@ alter table public.conta_gestoria_ajustes add column if not exists cuenta_iva   
 alter table public.conta_gestoria_ajustes add column if not exists cuenta_retencion  text;
 alter table public.conta_gestoria_ajustes add column if not exists cuenta_plataforma text;
 alter table public.conta_gestoria_ajustes add column if not exists cuenta_banco      text;
+alter table public.conta_gestoria_ajustes add column if not exists codigo_cliente_modo text;
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'conta_gestoria_ajustes_retencion_pct') then
     alter table public.conta_gestoria_ajustes add constraint conta_gestoria_ajustes_retencion_pct check (retencion_pct is null or retencion_pct in (0, 7, 15));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'conta_gestoria_ajustes_codigo_cliente_modo') then
+    alter table public.conta_gestoria_ajustes add constraint conta_gestoria_ajustes_codigo_cliente_modo
+      check (codigo_cliente_modo is null or codigo_cliente_modo in ('sumied', 'programa_anterior'));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'conta_gestoria_ajustes_dias_cobro') then
     alter table public.conta_gestoria_ajustes add constraint conta_gestoria_ajustes_dias_cobro
@@ -71,6 +79,16 @@ comment on column public.conta_gestoria_ajustes.retencion_pct is 'G05 · La rete
 comment on column public.conta_gestoria_ajustes.serie_cobro is 'G05 · La serie de las facturas de los recibos (invoice_series.code). Sin poner: «1», la de QBO.';
 comment on column public.conta_gestoria_ajustes.cuenta_plataforma is 'G05 · La cuenta puente de GoCardless (QBO: 57200002 «Plataforma GoCardless»).';
 comment on column public.conta_gestoria_ajustes.cuenta_banco is 'G05 · El banco donde ingresa GoCardless (QBO: 57200000).';
+comment on column public.conta_gestoria_ajustes.codigo_cliente_modo is
+  'G05 · Cómo se asigna el código de cada cliente (su subcuenta es prefijo + código, cliente 827 → 43000827): «sumied», el siguiente libre (la demo); «programa_anterior», el que traía de su programa (QBO: el de Cegid, que se importa con el plan de cuentas). En «programa_anterior» un cliente sin código no se factura: sale en «Pendiente de revisar» y nunca se inventa uno (nº 33). Sin poner: «sumied».';
+
+-- El tipo de «Pendiente de revisar» de un cliente al que le falta su código (nº 33): lo mismo de antes y uno más.
+alter table public.conta_gestoria_diferencia drop constraint if exists conta_gestoria_diferencia_tipo_check;
+alter table public.conta_gestoria_diferencia add constraint conta_gestoria_diferencia_tipo_check check (tipo = any (array[
+  'crm_sin_cobro', 'gocardless_sin_ficha', 'emisor_distinto', 'nif_repetido_en_crm', 'correo_repetido_en_crm', 'nif_distinto',
+  'suscripcion_sin_convertir', 'totales_distintos', 'mandato_por_firmar', 'falla_a_menudo', 'abono_en_otra_cuenta',
+  'fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos',
+  'ya_no_es_cliente_en_crm', 'falta_codigo_cliente']));
 
 -- El formato del número de una serie (lo lee la emisión desde la 1007): «{año}/{serie}/{número}» en QBO.
 alter table public.invoice_series add column if not exists formato text;
@@ -189,7 +207,8 @@ returns jsonb language sql stable security definer set search_path = public as $
     'serie', coalesce(a.serie_cobro, '1'), 'dia_aviso', coalesce(a.dia_aviso, 2), 'dia_cargo', coalesce(a.dia_cargo, 4),
     'prefijo_cliente', coalesce(a.prefijo_cliente, '430'), 'cuenta_ingresos', coalesce(a.cuenta_ingresos, '70500000'),
     'cuenta_iva', coalesce(a.cuenta_iva, '47700021'), 'cuenta_retencion', coalesce(a.cuenta_retencion, '47300000'),
-    'cuenta_plataforma', coalesce(a.cuenta_plataforma, '57200002'), 'cuenta_banco', coalesce(a.cuenta_banco, '57200000'))
+    'cuenta_plataforma', coalesce(a.cuenta_plataforma, '57200002'), 'cuenta_banco', coalesce(a.cuenta_banco, '57200000'),
+    'codigo_cliente_modo', coalesce(a.codigo_cliente_modo, 'sumied'))
   from (select 1) x left join public.conta_gestoria_ajustes a on a.company_id = p_company
 $$;
 
@@ -216,42 +235,105 @@ begin
   return v_id;
 end $$;
 
+/** El texto de un cliente sin código cuando la empresa los trae de su programa anterior (nº 33). */
+create or replace function public._conta_cobro_falta_codigo()
+returns text language sql immutable as $$ select 'Falta su código de cliente'::text $$;
+
 /**
- * La subcuenta 430 de un cliente en su empresa. Si ya tiene una enlazada (la de
- * siempre, de la V01 o de un traspaso), esa. Si no, su código (el suyo, o el
- * siguiente libre) y la subcuenta prefijo + código (cliente 827 → 43000827),
- * saltando los códigos cuya subcuenta ya existe (es de otro tercero), enlazada
- * al cliente.
+ * La subcuenta 430 de un cliente en su empresa: prefijo + código (cliente 827 → 43000827).
+ *   · «programa_anterior» (QBO): el código es el que trae el cliente (el de
+ *     Cegid). Sin código, para con «Falta su código de cliente»: nunca se
+ *     inventa uno. Si el cliente ya tiene otra 430 enlazada, o esa subcuenta es
+ *     de otro tercero, para y lo dice.
+ *   · «sumied» (la demo): si ya tiene una enlazada, esa; si no, su código o el
+ *     siguiente libre, saltando los que tienen la subcuenta ya ocupada.
  */
 create or replace function public._conta_cobro_cuenta_cliente(p_company uuid, p_party uuid, p_quien text)
 returns text language plpgsql security definer set search_path = public as $$
-declare v_aj jsonb := public._conta_cobro_ajustes(p_company); v_cod int; v_d int; v_code text; v_nombre text; v_id uuid; v_pre text;
+declare v_aj jsonb := public._conta_cobro_ajustes(p_company); v_cod int; v_d int; v_code text; v_ya text; v_nombre text; v_id uuid; v_pre text; v_otro text;
 begin
-  select a.code into v_code from public.company_account_link k join public.company_account a on a.id = k.company_account_id
-   where k.company_id = p_company and k.entity = 'customer' and k.entity_id = p_party::text and k.role = 'principal' limit 1;
-  if v_code is not null then return v_code; end if;
   v_pre := v_aj->>'prefijo_cliente';
   select length(a.code) into v_d from public.company_account a where a.company_id = p_company limit 1;
   v_d := coalesce(v_d, 8);
-  perform pg_advisory_xact_lock(hashtext('conta_cobro_codigo:' || p_company::text));
-  select codigo_cliente into v_cod from public.conta_cobro_cliente where company_id = p_company and party_id = p_party for update;
-  if v_cod is null then
-    select coalesce(max(codigo_cliente), 0) + 1 into v_cod from public.conta_cobro_cliente where company_id = p_company;
-    while exists (select 1 from public.company_account where company_id = p_company and code = v_pre || lpad(v_cod::text, v_d - length(v_pre), '0'))
-       or exists (select 1 from public.conta_cobro_cliente where company_id = p_company and codigo_cliente = v_cod) loop
-      v_cod := v_cod + 1;
-    end loop;
-    insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name)
-    values (p_company, p_party, (select account_id from public.company where id = p_company), v_cod, p_quien)
-    on conflict (company_id, party_id) do update set codigo_cliente = excluded.codigo_cliente where public.conta_cobro_cliente.codigo_cliente is null;
+  select a.code into v_ya from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+   where k.company_id = p_company and k.entity = 'customer' and k.entity_id = p_party::text and k.role = 'principal' limit 1;
+  select codigo_cliente into v_cod from public.conta_cobro_cliente where company_id = p_company and party_id = p_party;
+  if v_aj->>'codigo_cliente_modo' = 'programa_anterior' then
+    if v_cod is null then raise exception '%.', public._conta_cobro_falta_codigo() using errcode = '23514'; end if;
+    v_code := v_pre || lpad(v_cod::text, v_d - length(v_pre), '0');
+    if v_ya is not null and v_ya <> v_code then
+      raise exception 'El cliente tiene en Sumied la subcuenta % y su código dice %: corrígelo antes de facturar.', v_ya, v_code using errcode = '23514';
+    end if;
+    if v_ya is null then
+      select k.entity_id into v_otro from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+       where k.company_id = p_company and a.code = v_code and k.entity = 'customer' and k.entity_id <> p_party::text limit 1;
+      if v_otro is not null then
+        raise exception 'La subcuenta % de su código ya es de otro cliente: revisa los códigos antes de facturar.', v_code using errcode = '23514';
+      end if;
+    end if;
+  else
+    if v_ya is not null then return v_ya; end if;
+    perform pg_advisory_xact_lock(hashtext('conta_cobro_codigo:' || p_company::text));
+    if v_cod is null then
+      select coalesce(max(codigo_cliente), 0) + 1 into v_cod from public.conta_cobro_cliente where company_id = p_company;
+      while exists (select 1 from public.company_account where company_id = p_company and code = v_pre || lpad(v_cod::text, v_d - length(v_pre), '0'))
+         or exists (select 1 from public.conta_cobro_cliente where company_id = p_company and codigo_cliente = v_cod) loop
+        v_cod := v_cod + 1;
+      end loop;
+      insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name)
+      values (p_company, p_party, (select account_id from public.company where id = p_company), v_cod, p_quien)
+      on conflict (company_id, party_id) do update set codigo_cliente = excluded.codigo_cliente where public.conta_cobro_cliente.codigo_cliente is null;
+    end if;
+    v_code := v_pre || lpad(v_cod::text, v_d - length(v_pre), '0');
   end if;
-  v_code := v_pre || lpad(v_cod::text, v_d - length(v_pre), '0');
+  if v_ya is not null then return v_ya; end if;
   select name into v_nombre from public.party where id = p_party;
   v_id := public._conta_cobro_cuenta(p_company, v_code, coalesce(v_nombre, 'Cliente'), p_quien);
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
   values ((select account_id from public.company where id = p_company), p_company, v_id, 'customer', p_party::text, 'principal', 'manual')
   on conflict (company_id, entity, entity_id, role) do update set company_account_id = excluded.company_account_id;
   return v_code;
+end $$;
+
+/**
+ * En «programa_anterior»: los recibos preparados de clientes sin código quedan
+ * parados con «Falta su código de cliente» (no se aprueban ni se envían, así
+ * que nunca se facturan), y cada uno sale en «Pendiente de revisar» del
+ * cliente. Con el código puesto, se les quita. Lo llaman conta_cobro_guardar y
+ * conta_cobro_seguir (después de cada lectura, que renueva las diferencias).
+ */
+create or replace function public._conta_cobro_codigos(p_company uuid)
+returns int language plpgsql security definer set search_path = public as $$
+declare v_falta text := public._conta_cobro_falta_codigo(); v_modo text := public._conta_cobro_ajustes(p_company)->>'codigo_cliente_modo';
+  v_cuenta uuid; v_lectura uuid; v_n int := 0; v_x record;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  -- Lo de antes deja de valer: se vuelve a decir con lo de ahora (como hace la lectura con lo suyo).
+  update public.conta_gestoria_diferencia set vigente = false where company_id = p_company and tipo = 'falta_codigo_cliente' and vigente;
+  update public.conta_recibo r set parado = array_remove(r.parado, v_falta), updated_at = now()
+   where r.company_id = p_company and r.estado = 'preparado' and v_falta = any (r.parado)
+     and (v_modo <> 'programa_anterior'
+          or exists (select 1 from public.conta_cobro_cliente c where c.company_id = r.company_id and c.party_id = r.party_id and c.codigo_cliente is not null));
+  if v_modo <> 'programa_anterior' then return 0; end if;
+  select id into v_lectura from public.conta_gestoria_lectura where account_id = v_cuenta and (company_id = p_company or company_id is null)
+   order by empezada_at desc limit 1;
+  for v_x in
+    select r.id, r.party_id from public.conta_recibo r
+     where r.company_id = p_company and r.estado = 'preparado'
+       and not exists (select 1 from public.conta_cobro_cliente c where c.company_id = r.company_id and c.party_id = r.party_id and c.codigo_cliente is not null)
+  loop
+    update public.conta_recibo set parado = case when v_falta = any (parado) then parado else parado || v_falta end,
+           decision = case when decision = 'aprobado' then 'pendiente' else decision end, updated_at = now()
+     where id = v_x.id;
+    if v_lectura is not null then
+      insert into public.conta_gestoria_diferencia (account_id, lectura_id, company_id, party_id, tipo, porque_codigo, porque, datos)
+      values (v_cuenta, v_lectura, p_company, v_x.party_id, 'falta_codigo_cliente', 'sin_codigo',
+              v_falta || ': esta empresa trae los códigos de su programa anterior, y Sumied no se inventa uno. Ponlo en su ficha y se podrá cobrar y facturar.',
+              jsonb_build_object('recibo', v_x.id));
+    end if;
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
 end $$;
 
 /** El estado de un recibo según el de su cobro en GoCardless (el mismo que _shared/cobro/gocardless.ts · estadoDelRecibo). */
@@ -318,7 +400,7 @@ end $$;
  */
 create or replace function public.conta_cobro_guardar(p_company uuid, p_mes text, p_recibos jsonb, p_sin_recibo jsonb, p_quien text)
 returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_cuenta uuid; v_x jsonb; v_n int := 0; v_ya int := 0; v_quitados int := 0; v_claves text[] := '{}'; v_r public.conta_recibo;
+declare v_cuenta uuid; v_x jsonb; v_n int := 0; v_ya int := 0; v_quitados int := 0; v_claves text[] := '{}'; v_r public.conta_recibo; v_sin_codigo int;
 begin
   select account_id into v_cuenta from public.company where id = p_company;
   if v_cuenta is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
@@ -346,8 +428,11 @@ begin
     (p_mes || '-' || lpad((public._conta_cobro_ajustes(p_company)->>'dia_aviso'), 2, '0'))::date,
     (p_mes || '-' || lpad((public._conta_cobro_ajustes(p_company)->>'dia_cargo'), 2, '0'))::date, now(), p_quien)
   on conflict (company_id, mes) do update set sin_recibo = excluded.sin_recibo, preparado_at = now(), preparado_por_name = excluded.preparado_por_name;
-  return jsonb_build_object('guardados', v_n, 'ya_enviados', v_ya, 'quitados', v_quitados,
-    'frase', case when v_n = 1 then format('Preparado 1 recibo de %s.', p_mes) else format('Preparados %s recibos de %s.', v_n, p_mes) end || case when v_ya > 0 then format(' %s ya estaban enviados y no se tocan.', v_ya) else '' end);
+  v_sin_codigo := public._conta_cobro_codigos(p_company);
+  return jsonb_build_object('guardados', v_n, 'ya_enviados', v_ya, 'quitados', v_quitados, 'sin_codigo', v_sin_codigo,
+    'frase', case when v_n = 1 then format('Preparado 1 recibo de %s.', p_mes) else format('Preparados %s recibos de %s.', v_n, p_mes) end || case when v_ya > 0 then format(' %s ya estaban enviados y no se tocan.', v_ya) else '' end
+      || case when v_sin_codigo = 1 then ' 1 cliente sin su código de cliente: no se cobra hasta tenerlo.'
+              when v_sin_codigo > 1 then format(' %s clientes sin su código de cliente: no se cobran hasta tenerlo.', v_sin_codigo) else '' end);
 end $$;
 
 /** Lo que conta-cobro manda a GoCardless: los aprobados, sin parar, con su mandato que cobra. */
@@ -504,6 +589,8 @@ create or replace function public.conta_cobro_seguir(p_company uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_x record; v_nuevo text; v_facturadas int := 0; v_deshechos int := 0; v_cambios int := 0; v_fallos int := 0; v_msg text;
 begin
+  -- Después de cada lectura (que renueva las diferencias), los clientes sin código vuelven a «Pendiente de revisar».
+  perform public._conta_cobro_codigos(p_company);
   for v_x in
     select r.id, r.estado, r.gc_estado, r.invoice_id, r.asiento_cobro, r.asiento_devolucion, b.estado as gc, b.fecha
       from public.conta_recibo r join public.conta_gc_cobro b on b.company_id = r.company_id and b.gc_id = r.gc_cobro_id
@@ -577,6 +664,53 @@ begin
   return jsonb_build_object('n', v_n, 'frase', case when v_n = 1 then format('Aprobado 1 recibo igual que el mes pasado: %s.', public._conta_gestoria_euros(v_cent / 100.0)) else format('Aprobados %s recibos iguales que el mes pasado: %s.', v_n, public._conta_gestoria_euros(v_cent / 100.0)) end);
 end $$;
 
+/**
+ * El código de un cliente en una empresa emisora (nº 33): un dato del cliente
+ * en Sumied, de 1 a 99999, único en la empresa. Lo pone una persona (o la
+ * importación del plan de cuentas del programa anterior, que vendrá). Una vez
+ * facturado con él, no se cambia: su subcuenta ya tiene apuntes.
+ */
+create or replace function public.conta_cobro_codigo_poner(p_company uuid, p_party uuid, p_codigo int)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_cuenta uuid; v_quien text := public.conta_nombre_actor(); v_otro text; v_antes int;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cuenta) then raise exception 'Solo un administrador o un encargado pone el código de un cliente.' using errcode = '42501'; end if;
+  if not exists (select 1 from public.party where id = p_party and account_id = v_cuenta) then raise exception 'Ese cliente no está.' using errcode = 'P0002'; end if;
+  if p_codigo is null or p_codigo not between 1 and 99999 then raise exception 'El código de cliente va del 1 al 99999.' using errcode = '22023'; end if;
+  select p.name into v_otro from public.conta_cobro_cliente c join public.party p on p.id = c.party_id
+   where c.company_id = p_company and c.codigo_cliente = p_codigo and c.party_id <> p_party;
+  if v_otro is not null then raise exception 'El código % ya es de %.', p_codigo, v_otro using errcode = '23505'; end if;
+  select codigo_cliente into v_antes from public.conta_cobro_cliente where company_id = p_company and party_id = p_party;
+  if v_antes is not null and v_antes <> p_codigo and exists (select 1 from public.conta_recibo where company_id = p_company and party_id = p_party and invoice_id is not null) then
+    raise exception 'Este cliente ya tiene facturas con el código %: no se cambia.', v_antes using errcode = '23514';
+  end if;
+  insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name)
+  values (p_company, p_party, v_cuenta, p_codigo, v_quien)
+  on conflict (company_id, party_id) do update set codigo_cliente = excluded.codigo_cliente, updated_at = now(), updated_by_name = excluded.updated_by_name;
+  perform public._conta_cobro_codigos(p_company);
+  return jsonb_build_object('frase', format('Código de cliente %s guardado: su subcuenta es la %s.', p_codigo,
+    (public._conta_cobro_ajustes(p_company)->>'prefijo_cliente') || lpad(p_codigo::text, 8 - length(public._conta_cobro_ajustes(p_company)->>'prefijo_cliente'), '0')));
+end $$;
+
+/** Cómo asigna los códigos de cliente una empresa: «sumied» (el siguiente libre) o «programa_anterior» (los trae de su programa: nunca se inventa uno). */
+create or replace function public.conta_cobro_modo_codigo(p_company uuid, p_modo text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_cuenta uuid; v_quien text := public.conta_nombre_actor(); v_n int;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cuenta) then raise exception 'Solo un administrador o un encargado cambia los ajustes del cobro.' using errcode = '42501'; end if;
+  if p_modo not in ('sumied', 'programa_anterior') then raise exception 'El código de cliente lo pone Sumied o viene de tu programa anterior.' using errcode = '22023'; end if;
+  insert into public.conta_gestoria_ajustes (company_id, account_id, codigo_cliente_modo, updated_by_name) values (p_company, v_cuenta, p_modo, v_quien)
+  on conflict (company_id) do update set codigo_cliente_modo = excluded.codigo_cliente_modo, updated_at = now(), updated_by_name = excluded.updated_by_name;
+  v_n := public._conta_cobro_codigos(p_company);
+  return jsonb_build_object('frase', case when p_modo = 'sumied' then 'Los códigos de cliente los pone Sumied: el siguiente libre.'
+    else 'Los códigos de cliente vienen de tu programa anterior: Sumied no se inventa ninguno.'
+         || case when v_n > 0 then format(' %s %s sin código: en «Pendiente de revisar».', v_n, case when v_n = 1 then 'recibo' else 'recibos' end) else '' end end);
+end $$;
+
 -- ── 7 · La pantalla «Revisar el cobro», en una sola lectura ──────────────────────
 create or replace function public.conta_pantalla_cobro(p_cuenta uuid, p_company uuid, p_mes text)
 returns jsonb language sql stable security definer set search_path = public as $$
@@ -601,7 +735,7 @@ begin
     'public._conta_cobro_evento(uuid, text, text, jsonb, text)', 'public._conta_cobro_ajustes(uuid)', 'public._conta_cobro_cuenta(uuid, text, text, text)',
     'public._conta_cobro_cuenta_cliente(uuid, uuid, text)', 'public._conta_cobro_estado(text, boolean)', 'public._conta_cobro_como(uuid, uuid)',
     'public._conta_cobro_dejar(jsonb)', 'public._conta_cobro_asiento(uuid, date, text, text, uuid, uuid, jsonb, text, uuid)',
-    'public._conta_cobro_facturar(uuid)', 'public._conta_cobro_devolver(uuid)'] loop
+    'public._conta_cobro_facturar(uuid)', 'public._conta_cobro_devolver(uuid)', 'public._conta_cobro_codigos(uuid)'] loop
     execute format('revoke all on function %s from public, anon, authenticated', f);
   end loop;
   -- Solo el servidor (conta-cobro y conta-gocardless-leer, con la clave de servicio).
@@ -613,7 +747,8 @@ begin
     execute format('grant execute on function %s to service_role', f);
   end loop;
   -- Una persona, desde la pantalla.
-  foreach f in array array['public.conta_cobro_decidir(uuid, text)', 'public.conta_cobro_aprobar_iguales(uuid, text)', 'public.conta_pantalla_cobro(uuid, uuid, text)'] loop
+  foreach f in array array['public.conta_cobro_decidir(uuid, text)', 'public.conta_cobro_aprobar_iguales(uuid, text)', 'public.conta_pantalla_cobro(uuid, uuid, text)',
+    'public.conta_cobro_codigo_poner(uuid, uuid, int)', 'public.conta_cobro_modo_codigo(uuid, text)'] loop
     execute format('revoke all on function %s from public, anon', f);
     execute format('grant execute on function %s to authenticated, service_role', f);
   end loop;
