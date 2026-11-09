@@ -22,7 +22,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import {
-  direccionDeLaPagina, esNuestraAplicacion, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, TITULO_PESTANA, usuarioDeBitrix,
+  direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
 
@@ -36,13 +36,15 @@ const json = (status: number, body: unknown) =>
 const irA = (donde: string) => new Response(null, { status: 303, headers: { Location: donde, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
 
 const PAGINA = Deno.env.get('BITRIX_PESTANA_PAGINA') ?? 'https://app.sumied.com/bitrix-pestana.html'
-const CLIENT_ID = Deno.env.get('BITRIX_PESTANA_CLIENT_ID') ?? ''
+/** Se lee en cada llamada: un cambio del secreto vale desde la siguiente, sin depender de que la función arranque de nuevo. */
+const clientId = () => (Deno.env.get('BITRIX_PESTANA_CLIENT_ID') ?? '').trim()
 
 /** Una llamada a la API de Bitrix24 del portal, con el token del usuario. Solo a portales permitidos. */
 async function bitrix(portal: string, metodo: string, auth: string, cuerpo: Record<string, unknown> = {}): Promise<unknown> {
   if (!portalPermitido(portal)) throw new Error('portal no permitido')
-  const r = await fetch(`https://${portal}/rest/${metodo}.json`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...cuerpo, auth }),
+  // El token va en la dirección (?auth=), como lo documenta Bitrix24; el resto, en el cuerpo.
+  const r = await fetch(`https://${portal}/rest/${metodo}.json?auth=${encodeURIComponent(auth)}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cuerpo),
     signal: AbortSignal.timeout(4000),
   })
   return await r.json().catch(() => null)
@@ -85,11 +87,17 @@ async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
   let app: unknown, yo: unknown
   try {
     ;[app, yo] = await Promise.all([bitrix(portal, 'app.info', auth), bitrix(portal, 'user.current', auth)])
-  } catch {
+  } catch (e) {
+    console.warn(JSON.stringify({ gb: 'no_es_sumied', porque: `Bitrix24 no contesta: ${e instanceof Error ? e.name : 'error'}` }))
     return json(200, { estado: 'no_es_sumied', frase: FRASES.no_es_sumied })
   }
   const usuario = usuarioDeBitrix(yo)
-  if (!esNuestraAplicacion(app, CLIENT_ID) || !usuario) return json(200, { estado: 'no_es_sumied', frase: FRASES.no_es_sumied })
+  const porque = [porqueApp(app, clientId()), porqueUsuario(yo)].filter(Boolean)
+  if (porque.length || !usuario) {
+    // Sin datos personales ni secretos (puro.ts): solo códigos y nombres de campo.
+    console.warn(JSON.stringify({ gb: 'no_es_sumied', porque }))
+    return json(200, { estado: 'no_es_sumied', frase: FRASES.no_es_sumied })
+  }
 
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
   const { data, error } = await db.rpc('conta_bitrix_pestana_leer', { p_portal: portal, p_correo: usuario.correo, p_tipo: tipo, p_id: id })

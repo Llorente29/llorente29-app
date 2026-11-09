@@ -59,3 +59,27 @@ describe('GB · lo que contesta Bitrix24', () => {
     expect(usuarioDeBitrix({ error: 'NO_AUTH_FOUND' })).toBeNull()
   })
 })
+
+describe('GB (nº 5) · el porqué en el registro, sin datos personales ni secretos', () => {
+  const ID = 'local.0000aaaa1111bb.22223333'
+  it('app.info: sin secreto, con error, con otro código o bien', async () => {
+    const { porqueApp } = await import('../../../../../supabase/functions/conta-bitrix-pestana/puro')
+    expect(porqueApp({ result: { CODE: ID } }, '')).toBe('falta BITRIX_PESTANA_CLIENT_ID en la función')
+    expect(porqueApp({ error: 'insufficient_scope', error_description: 'x' }, ID)).toBe('app.info: error insufficient_scope')
+    expect(porqueApp(null, ID)).toBe('app.info: sin respuesta o no es JSON')
+    const otro = porqueApp({ result: { ID: 13, CODE: 'local.otra.app', VERSION: 1 } }, ID)!
+    expect(otro).toBe('app.info: el código no coincide (campos: CODE,ID,VERSION; CODE de 14 letras, empieza por local.; el esperado, de 29)')
+    expect(otro).not.toContain('local.otra.app')
+    expect(porqueApp({ result: { CODE: ID } }, ID)).toBeNull()
+  })
+  it('user.current: sin EMAIL (dice qué campos trae, no sus valores), inactivo o bien', async () => {
+    const { porqueUsuario } = await import('../../../../../supabase/functions/conta-bitrix-pestana/puro')
+    const sin = porqueUsuario({ result: { ID: '1', NAME: 'Ana', LAST_NAME: 'Prueba' } })!
+    expect(sin).toBe('user.current: no trae EMAIL (campos: ID,LAST_NAME,NAME)')
+    expect(sin).not.toMatch(/Ana|Prueba/)
+    expect(porqueUsuario({ result: { ID: '1', ACTIVE: false, EMAIL: 'gestora@example.com' } })).toBe('user.current: el usuario no está activo')
+    expect(porqueUsuario({ result: { ID: '1', ACTIVE: true, EMAIL: '' } })).toBe('user.current: el EMAIL está vacío o no es un correo')
+    expect(porqueUsuario({ error: 'expired_token' })).toBe('user.current: error expired_token')
+    expect(porqueUsuario({ result: { ID: '1', ACTIVE: true, EMAIL: 'gestora@example.com' } })).toBeNull()
+  })
+})

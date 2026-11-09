@@ -101,3 +101,33 @@ export const FRASES: Record<string, string> = {
   varias_cuentas: 'Tu correo está en más de una cuenta de Sumied con este Bitrix24. Pide a tu administrador que lo revise.',
   sin_enlazar: 'Esta ficha no está enlazada con ningún cliente de Sumied.',
 }
+
+/**
+ * GB (nº 5) · Por qué no se ha podido comprobar a quien mira, para el registro de
+ * la función. SIN DATOS PERSONALES NI SECRETOS: solo códigos de error de
+ * Bitrix24, nombres de campo y formas (si hay código, cuánto mide, si empieza
+ * por «local.»). Nunca el token, el correo, el nombre ni el código entero.
+ */
+export function porqueApp(respuesta: unknown, clientId: string): string | null {
+  if (!clientId) return 'falta BITRIX_PESTANA_CLIENT_ID en la función'
+  const x = respuesta as { result?: Record<string, unknown>; error?: unknown } | null
+  if (!x) return 'app.info: sin respuesta o no es JSON'
+  if (x.error) return `app.info: error ${String(x.error).slice(0, 60)}`
+  const r = x.result
+  if (!r || typeof r !== 'object') return 'app.info: sin «result»'
+  if (esNuestraAplicacion(respuesta, clientId)) return null
+  const codigo = typeof r.CODE === 'string' ? r.CODE : ''
+  return `app.info: el código no coincide (campos: ${Object.keys(r).sort().join(',')}; CODE ${codigo ? `de ${codigo.length} letras, ${codigo.startsWith('local.') ? 'empieza por local.' : 'no empieza por local.'}` : 'vacío'}; el esperado, de ${clientId.length})`
+}
+
+export function porqueUsuario(respuesta: unknown): string | null {
+  const x = respuesta as { result?: Record<string, unknown>; error?: unknown } | null
+  if (!x) return 'user.current: sin respuesta o no es JSON'
+  if (x.error) return `user.current: error ${String(x.error).slice(0, 60)}`
+  const r = x.result
+  if (!r || typeof r !== 'object') return 'user.current: sin «result»'
+  if (usuarioDeBitrix(respuesta)) return null
+  if (!('EMAIL' in r)) return `user.current: no trae EMAIL (campos: ${Object.keys(r).sort().join(',')})`
+  if (!(r.ACTIVE === true || r.ACTIVE === 'Y' || r.ACTIVE === '1' || r.ACTIVE === undefined)) return 'user.current: el usuario no está activo'
+  return 'user.current: el EMAIL está vacío o no es un correo'
+}
