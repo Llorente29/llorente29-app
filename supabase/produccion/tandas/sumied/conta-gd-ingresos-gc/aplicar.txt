@@ -1,0 +1,16 @@
+# GD · El ingreso de cada liquidación del sandbox de GoCardless en el banco de
+# la demo (nº47 y nº50). Rama conta/gd-ingresos-gc. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1707  Añade demo_gestoria_ingresos_gocardless(cuenta) y
+#         demo_gestoria_ingresos_gocardless_demos() (solo cuentas demo, solo la
+#         plataforma) y el cron «gd-ingresos-gocardless» cada 30 minutos.
+#         CAMBIARÁ DATOS, solo de cuentas demo: por cada liquidación pagada y ya
+#         llegada, un extracto de un movimiento en el banco de la sociedad
+#         (llegada, neto, «TRANSFER INMEDIATA GOCARDLESS SAS»), una sola vez.
+#         El analizador no ve dentro de las funciones: la tanda dice «sigue»,
+#         y por eso va escrito aquí. Hoy no crea nada (0 liquidaciones leídas).
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-ingresos-gocardless.sql
+supabase/migrations/20261109T1707_gd_ingresos_gocardless.sql
