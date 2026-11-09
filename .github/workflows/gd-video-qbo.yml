@@ -111,7 +111,7 @@ jobs:
           B24_URL: ${{ secrets.G01D_B24_ENTRANTE_URL }}
           APP: https://app.sumied.com
         # Lo que dice el guion va a un fichero (registro.txt, en la salida), no al registro del run.
-        run: node scripts/video/gd/qbo.mjs > "$SALIDA/registro.txt" 2>&1
+        run: mkdir -p video-salida && node scripts/video/gd/qbo.mjs > video-salida/registro.txt 2>&1
 
       - name: Resumen
         if: always()
