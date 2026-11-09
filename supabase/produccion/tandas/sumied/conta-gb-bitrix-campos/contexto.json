@@ -1,0 +1,8 @@
+{
+ "_que": "GB · nº 13, punto 1 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 00:20Z. La 0040 crea conta_bitrix_pestana_campos(uuid), que no existe, y no la llama: no cambia datos. Lee conta_bitrix_pestana_cambio (2235) y conta_crm, que existen. Nada en el camino del pedido.",
+ "medido": "2026-11-10T00:20Z",
+ "tanda": {
+  "supabase/migrations/20261110T0040_gb_bitrix_campos.sql": "2a3d9a2f2315749e4c39570ce98ca328"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

@@ -44,6 +44,9 @@ const CAMPOS_EMPRESA: CampoPropio[] = [
   { nombre: 'Servicios contratados', codigo: 'UF_CRM_SERVICIOS', tipo: 'enumeration', opciones: ['Contabilidad', 'Laboral'], multiple: true },
   { nombre: 'Forma de pago', codigo: 'UF_CRM_FORMA_PAGO', tipo: 'enumeration', opciones: [EMISORES.sociedad.formaDePago, EMISORES.autonomo.formaDePago] },
   { nombre: 'Cuota mensual', codigo: 'UF_CRM_CUOTA_MENSUAL', tipo: 'string' },
+  // GB (nº 13) · Los que rellena Sumied desde la pestaña de Bitrix24 (se dejan vacíos al sembrar).
+  { nombre: 'Trabajadores', codigo: 'UF_CRM_TRABAJADORES', tipo: 'string' },
+  { nombre: 'Estado del cobro', codigo: 'UF_CRM_ESTADO_COBRO', tipo: 'string' },
 ]
 
 /** Los estados de un mandato que ya no hay que cancelar. */
