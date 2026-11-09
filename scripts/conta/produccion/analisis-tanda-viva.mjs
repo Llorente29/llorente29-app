@@ -56,6 +56,18 @@ if (mal.length) {
 
 const dir = mkdtempSync(join(tmpdir(), 'tanda-viva-'))
 const ctx = join(dir, 'contexto.json'); writeFileSync(ctx, JSON.stringify(medida.contexto))
+// GP (09/11): como el workflow («Contexto e historial · lo ya aplicado no se
+// reaplica»): lo que está en el historial medido con la misma huella se quita
+// de la tanda antes de analizar; con OTRA huella, PARA. Sin esto, la segunda
+// mitad de una tanda con la primera ya aplicada salía BLOQUEA aquí y no en el ensayo.
+const hist = JSON.parse(execFileSync('node', [A, 'historial', ctx, ...tanda], { encoding: 'utf8' }))
+if (hist.distintos.length) {
+  console.error(hist.distintos.map((d) => `✗ ${d.f} está en el historial con OTRA huella (registrada ${d.registrada ?? 'ninguna'}, ahora ${d.actual}).`).join('\n'))
+  process.exit(1)
+}
+for (const f of hist.yaAplicados) console.log(`  ${f.replace(/^.*\//, '')}: ya aplicado con la misma huella (se quita de la tanda, como en el workflow).`)
+tanda.splice(0, tanda.length, ...hist.pendientes)
+if (!tanda.length) { console.log('Toda la tanda está ya aplicada: nada que analizar.'); process.exit(0) }
 const des = join(dir, 'destruidos.json'); writeFileSync(des, execFileSync('node', [A, 'destruidos', ...tanda]))
 const usos = join(dir, 'usos.json'); writeFileSync(usos, execFileSync('node', [A, 'front', 'WORKTREE', des]))
 let informe

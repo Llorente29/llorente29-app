@@ -10,8 +10,15 @@
 #         lo que hace la gestoría y lo que solo hace el servidor); el almacén
 #         privado conta-portal y dos políticas suyas en storage.objects.
 #
-# No toca datos ni ninguna función que exista. No lee ni escribe en
+#   1720  CAMBIA EN CALIENTE public.conta_portal_cuenta (la misma firma): lee
+#         la cuenta de cargo con los nombres de Code 1 (cuenta_final,
+#         cuenta_pais y banco). Y AÑADE permisos explícitos a service_role.
+#         Declarada en su cabecera con su prueba. (La 1530 ya está aplicada:
+#         no se reaplica.)
+#
+# No toca datos. No lee ni escribe en
 # GoCardless, Stripe ni el CRM. Nada en el camino del pedido. El real lo lanza
 # Julio.
 cuenta: scripts/conta/produccion/cuentas/gp-portal-base.sql
 supabase/migrations/20261109T1530_gp_portal_base.sql
+supabase/migrations/20261109T1720_gp_portal_cuenta.sql

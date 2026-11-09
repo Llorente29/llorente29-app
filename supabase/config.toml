@@ -396,3 +396,13 @@ verify_jwt = false
 
 [functions.conta-gocardless-aviso]
 verify_jwt = false
+
+# GP · T2b (09/11) · El portal del cliente: pedir el enlace para entrar. Sin
+# sesión (aún no la tiene): contesta siempre lo mismo, haya acceso o no.
+[functions.conta-portal-entrar]
+verify_jwt = false
+
+# GP · T2b (09/11) · Lo que hace el servidor del portal del cliente, con la
+# sesión de la persona: cada acción pregunta antes a la base con esa sesión.
+[functions.conta-portal]
+verify_jwt = true
