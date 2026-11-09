@@ -27,5 +27,6 @@ select clave, valor from (
     concat_ws(' / ', (to_regprocedure('public.verifactu_despertar_demos()') is not null)::text,
       (select exists (select 1 from cron.job where jobname = 'verifactu-despertar-demos'))::text) union all
   select 7, '«Pendiente de revisar» por falta de código de cliente (todas las cuentas)',
+    -- quieta: solo las crea el cobro (conta_cobro_guardar y conta_cobro_seguir), que nadie llama hasta fusionar y desplegar conta-cobro; la tanda no crea ninguna
     (select count(*)::text from public.conta_gestoria_diferencia where tipo = 'falta_codigo_cliente')
 ) q order by o;
