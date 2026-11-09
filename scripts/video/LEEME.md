@@ -85,3 +85,15 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
 - **No se graba** el paso 1 del guion (el correo que llega): la empresa de
   prueba no tiene dirección de facturas y staging no recibe correo. Su
   subtítulo va sobre la factura ya leída.
+
+## GD · el vídeo para QBO (nº52 y nº56)
+
+`gd/qbo.mjs` y `.github/workflows/gd-video-qbo.yml`: Sumied para gestorías,
+grabado en la «Gestoría Demo» de **producción** con el usuario de Julio (un
+enlace de acceso generado en el servidor, sin correo), a 1440×900, sin voz y
+con rótulos. **Por escenas**: cada una deja `escenas/<id>.mp4` y
+`capturas/<id>.png` en `video-salida/gd-qbo`; para cambiar una se lanza el
+workflow con `escenas: 05b` y las demás se reutilizan. `modo: ensayo` no
+escribe nada; `modo: grabar` envía el cobro de la demo al sandbox (autorizado
+por Julio). Las maquetas (el portal y Sumied dentro de Bitrix24) son capturas
+del tablero, en `gd/maquetas/`, rotuladas «En construcción».
