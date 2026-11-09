@@ -5,10 +5,12 @@
 #
 #   2027  AÑADE conta_cobro_cuenta_stripe_poner (pone o quita la cuenta de Stripe
 #         de la empresa; nunca una de banco ni con otro nombre),
-#         conta_recibo_apuntar_pendiente (el botón: apunta el pago que guarda la
-#         incidencia «Falta la cuenta de Stripe en Ajustes») y
-#         conta_cobro_cuenta_stripe_leer (lo que enseña la pantalla). Solo
-#         funciones nuevas: no toca datos ni tablas.
+#         conta_recibo_apuntar_pendiente («Apuntar el pago»: el pago que guarda
+#         la incidencia «Falta la cuenta de Stripe en Ajustes», con su factura y
+#         sus asientos), conta_cobro_apuntar_pendientes («Apuntar los N pagos»)
+#         y conta_cobro_cuenta_stripe_leer (lo que enseñan Ajustes › Cobros y la
+#         ficha; maqueta Stripe.dc.html v23). Solo funciones nuevas: no toca
+#         datos ni tablas.
 #
 # Nada en el camino del pedido.
 cuenta: scripts/conta/produccion/cuentas/g05-apuntar-pendiente.sql

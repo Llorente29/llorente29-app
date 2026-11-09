@@ -24,6 +24,10 @@
 //     lo está, cancela las viejas (solo con una conexión de pruebas, como
 //     enviar) y guarda el cambio (conta_cobro_cuenta_cambiada): los recibos
 //     siguientes van contra la nueva.
+//   · { accion: 'rematar', empresa } (G05 · nº 61): una persona, justo después
+//     de «Apuntar el pago» de un pago con tarjeta que esperaba: la factura que
+//     acaba de salir, con su PDF guardado y su envío al cliente (como al emitir
+//     las de los recibos), sin esperar a la próxima lectura. No toca nada más.
 //
 // Nunca se cobra en el GoCardless real de QBO: su conexión es real, de solo
 // lectura, y aquí no se envía a real. En el registro, nunca el token (T11).
@@ -190,6 +194,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    if (accion === 'rematar') {
+      // nº 61 · Solo el PDF y el correo de las facturas de los recibos que aún no los tienen.
+      const rem = await rematarFacturasDeRecibos(admin, empresa, { jsPDF, qr: modulosQr, correo: { resendKey: Deno.env.get('RESEND_API_KEY'),
+        buzonDePruebas: Deno.env.get('CORREO_BUZON_PRUEBAS'), abiertos: Deno.env.get('CORREO_MARCA_ABIERTOS') } })
+      return json(200, { ok: true, facturas: rem })
+    }
     if (accion === 'seguir') {
       const { data, error } = await admin.rpc('conta_cobro_seguir', { p_company: empresa })
       if (error) throw new Error(error.message)

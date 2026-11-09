@@ -10,11 +10,13 @@
 --      · Otra cuenta (B) no lee, no pone la cuenta y no apunta.
 --      · Leer: sin cuenta, no vale, 1 pago esperando con su importe.
 --      · «Apuntar el pago» sin cuenta: no se apunta y lo dice (sigue pendiente).
---      · Poner la cuenta: una que no es 572, ni de las cifras del plan, ni la de
---        un banco, ni una con otro nombre, no; la 57200003 sí (se crea
+--      · Poner la cuenta: una que no es 572 o sin las cifras del plan, error; la
+--        de un banco o una con otro nombre, no se guardan y lo dicen; la 57200003 sí (se crea
 --        «Plataforma Stripe» con su registro) y dice que hay 1 pago esperando.
---      · «Apuntar el pago»: asiento 57200003 / 430, su factura, fuera de «Te
---        deben» y fuera de «Pendiente de revisar»; otra vez, «ya estaba».
+--      · «Apuntar los N pagos» (el camino de «Apuntar el pago»): asiento
+--        57200003 / 430, su factura nueva (no tenía), fuera de «Te deben» y de
+--        «Pendiente de revisar»; con lo del bloque verde (quién, cuándo, los dos
+--        asientos con sus apuntes) y en «apuntados hoy»; otra vez, nada.
 --      · Quitar la cuenta.
 --   4. La vuelta atrás de la 2027, y otra vez la 2027.
 
@@ -32,7 +34,7 @@ set local lock_timeout = '120s';
 \i supabase/migrations/20261109T2027_g05_apuntar_pendiente.sql
 do $$ begin
   if to_regprocedure('public.conta_cobro_cuenta_stripe_poner(uuid,text)') is null or to_regprocedure('public.conta_recibo_apuntar_pendiente(uuid)') is null
-     or to_regprocedure('public.conta_cobro_cuenta_stripe_leer(uuid)') is null then
+     or to_regprocedure('public.conta_cobro_cuenta_stripe_leer(uuid)') is null or to_regprocedure('public.conta_cobro_apuntar_pendientes(uuid)') is null then
     raise exception 'G05 PENDIENTE · 1: falta algo de la 2027.';
   end if;
   raise notice 'G05 PENDIENTE · 1: la 2027 carga, y dos veces. OK';
@@ -337,8 +339,10 @@ select set_config('request.jwt.claim.sub', 'c01a0000-0000-4000-8000-0000000000a1
 set local role authenticated;
 do $$ declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r jsonb; v_err text; begin
   r := public.conta_cobro_cuenta_stripe_leer(v_e);
-  if r->>'cuenta' is not null or (r->>'vale')::boolean or r->>'motivo' <> 'sin_cuenta' or jsonb_array_length(r->'pendientes') <> 1
-     or (r->'pendientes'->0->>'importe')::numeric <> 30.25 or r->'pendientes'->0->>'referencia' <> 'pi_PRUEBA1' then
+  if r->>'cuenta' is not null or r->>'motivo' <> 'sin_cuenta' or jsonb_array_length(r->'pendientes') <> 1
+     or (r->'pendientes'->0->>'importe')::numeric <> 30.25 or r->'pendientes'->0->>'referencia' <> 'pi_PRUEBA1'
+     or r->'pendientes'->0->>'mes' <> '2026-11' or r->'pendientes'->0->>'pagado_el' is null or jsonb_array_length(r->'apuntados_hoy') <> 0
+     or r->'pendientes'->0->>'numero' is not null then
     raise exception 'G05 PENDIENTE · 3: leer sin cuenta dijo %.', r;
   end if;
   -- «Apuntar el pago» sin cuenta: no se apunta.
@@ -349,14 +353,18 @@ do $$ declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r js
   v_err := null;
   begin perform public.conta_cobro_cuenta_stripe_poner(v_e, '5720003'); exception when invalid_parameter_value then v_err := 'cifras'; end;
   if v_err is null then raise exception 'G05 PENDIENTE · 3: ha valido una cuenta sin las cifras del plan.'; end if;
-  v_err := null;
-  begin perform public.conta_cobro_cuenta_stripe_poner(v_e, '57200000'); exception when check_violation then v_err := sqlerrm; end;
-  if v_err not like 'La 57200000 es la de un banco («%»): no puede ser la cuenta de Stripe.' then raise exception 'G05 PENDIENTE · 3: con la de un banco dijo «%».', v_err; end if;
-  v_err := null;
-  begin perform public.conta_cobro_cuenta_stripe_poner(v_e, '57200009'); exception when check_violation then v_err := sqlerrm; end;
-  if v_err is distinct from 'La 57200009 ya existe como «Otra plataforma de prueba», no como «Plataforma Stripe»: no se usa a ciegas. Elige otra o cámbiale el nombre en el plan.' then
-    raise exception 'G05 PENDIENTE · 3: con otro nombre dijo «%».', v_err;
+  -- La de un banco y una con otro nombre: no se guardan, y lo dicen con su nombre.
+  r := public.conta_cobro_cuenta_stripe_poner(v_e, '57200000');
+  if (r->>'guardada')::boolean or r->>'motivo' <> 'de_banco' or r->>'banco' is null
+     or r->>'frase' not like 'No se ha guardado: la 57200000 es tu banco (%). Elige otra 572, por ejemplo la 57200003.' then
+    raise exception 'G05 PENDIENTE · 3: con la de un banco dijo %.', r;
   end if;
+  r := public.conta_cobro_cuenta_stripe_poner(v_e, '57200009');
+  if (r->>'guardada')::boolean or r->>'motivo' <> 'otro_nombre' or r->>'nombre' <> 'Otra plataforma de prueba'
+     or r->>'frase' <> 'No se ha guardado: la 57200009 ya existe y se llama «Otra plataforma de prueba». Elige otra 572, por ejemplo la 57200003.' then
+    raise exception 'G05 PENDIENTE · 3: con otro nombre dijo %.', r;
+  end if;
+  if (select cuenta_stripe from public.conta_gestoria_ajustes where company_id = v_e) is not null then raise exception 'G05 PENDIENTE · 3: se ha guardado una cuenta que no vale.'; end if;
   -- La 57200003, que no existe: se crea «Plataforma Stripe».
   insert into _g values ('poner', public.conta_cobro_cuenta_stripe_poner(v_e, '57200003')::text);
 end $$;
@@ -379,7 +387,8 @@ do $$ declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r js
   end if;
   insert into _g values ('dif2', v_id::text);
   r := (select v::jsonb from _g where clave = 'poner');
-  if r->>'frase' <> 'Guardada: la cuenta de Stripe es la 57200003 «Plataforma Stripe». Hay 1 pago con tarjeta esperando: apúntalo desde «Pendiente de revisar».' then
+  if r->>'frase' <> 'Guardada: la cuenta de Stripe es la 57200003 «Plataforma Stripe». Hay 1 pago con tarjeta esperando: apúntalo desde aquí o desde la ficha del cliente.'
+     or (r->>'guardada')::boolean is not true or r->>'nombre' <> 'Plataforma Stripe' then
     raise exception 'G05 PENDIENTE · 3: poner la 57200003 dijo %.', r;
   end if;
   if (select cuenta_stripe from public.conta_gestoria_ajustes where company_id = v_e) is distinct from '57200003'
@@ -397,7 +406,10 @@ do $$ declare v_err text; begin
   -- La de antes ya no está vigente (y aún no está apuntado): no.
   begin perform public.conta_recibo_apuntar_pendiente((select v::uuid from _g where clave = 'dif1')); exception when check_violation then v_err := sqlerrm; end;
   if v_err is distinct from 'Esta incidencia ya no está vigente: mira la de ahora en «Pendiente de revisar».' then raise exception 'G05 PENDIENTE · 3: una incidencia vieja dijo «%».', v_err; end if;
-  insert into _g values ('apuntar', public.conta_recibo_apuntar_pendiente((select v::uuid from _g where clave = 'dif2'))::text);
+  -- «Apuntar los N pagos» (aquí, uno): el mismo camino que «Apuntar el pago».
+  insert into _g values ('todos', public.conta_cobro_apuntar_pendientes((select v::uuid from _g where clave = 'empresa'))::text);
+  insert into _g values ('apuntar', ((select v::jsonb from _g where clave = 'todos')->'apuntados'->0)::text);
+  insert into _g values ('todos_otra_vez', public.conta_cobro_apuntar_pendientes((select v::uuid from _g where clave = 'empresa'))::text);
   insert into _g values ('apuntar_otra_vez', public.conta_recibo_apuntar_pendiente((select v::uuid from _g where clave = 'dif2'))::text);
   insert into _g values ('leer_despues', public.conta_cobro_cuenta_stripe_leer((select v::uuid from _g where clave = 'empresa'))::text);
   insert into _g values ('quitar', public.conta_cobro_cuenta_stripe_poner((select v::uuid from _g where clave = 'empresa'), null)::text);
@@ -408,6 +420,17 @@ do $$ declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r js
   if (r->>'apuntado')::boolean is not true or r->>'cuenta' <> '57200003'
      or r->>'frase' <> 'Apuntado: el recibo de 2026-11 (30,25 €) pagado desde el portal con tarjeta o Bizum. Ya no sale en «Te deben».' then
     raise exception 'G05 PENDIENTE · 3: apuntar con la cuenta dijo %.', r;
+  end if;
+  if (select v::jsonb from _g where clave = 'todos')->>'frase' <> 'Apuntados 1 pago con tarjeta, con su factura y su asiento.'
+     or (select v::jsonb from _g where clave = 'todos_otra_vez')->>'frase' <> 'Ningún pago con tarjeta esperaba: no había nada que apuntar.' then
+    raise exception 'G05 PENDIENTE · 3: «Apuntar los pagos» dijo % y, otra vez, %.', (select v from _g where clave = 'todos'), (select v from _g where clave = 'todos_otra_vez');
+  end if;
+  -- El bloque verde: la factura nueva (el Dos no tenía), quién y cuándo, y sus dos asientos con sus apuntes.
+  if (r->>'factura_nueva')::boolean is not true or r->>'numero' is null or r->>'mes' <> '2026-11' or (r->>'importe')::numeric <> 30.25
+     or r->>'quien' is null or r->>'quien' = 'El cliente, desde el portal' or r->>'cuando' is null
+     or jsonb_array_length(r->'asientos') <> 2 or r->'asientos'->0->>'tipo' <> 'factura' or r->'asientos'->1->>'tipo' <> 'cobro'
+     or (select string_agg(x->>'codigo', ',' order by x->>'codigo') from jsonb_array_elements(r->'asientos'->1->'apuntes') x) not like '430%,57200003' then
+    raise exception 'G05 PENDIENTE · 3: lo del bloque verde no está entero: %.', r;
   end if;
   select * into v_r from public.conta_recibo where id = (select v::uuid from _g where clave = 'r2');
   select a.code into v_430 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
@@ -432,7 +455,8 @@ do $$ declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r js
     raise exception 'G05 PENDIENTE · 3: apuntar otra vez ha duplicado algo (%).', r;
   end if;
   r := (select v::jsonb from _g where clave = 'leer_despues');
-  if r->>'cuenta' <> '57200003' or r->>'nombre' <> 'Plataforma Stripe' or (r->>'vale')::boolean is not true or jsonb_array_length(r->'pendientes') <> 0 then
+  if r->>'cuenta' <> '57200003' or r->>'nombre' <> 'Plataforma Stripe' or r->>'motivo' is not null or jsonb_array_length(r->'pendientes') <> 0
+     or jsonb_array_length(r->'apuntados_hoy') <> 1 or r->'apuntados_hoy'->0->>'numero' is null or (r->'apuntados_hoy'->0->>'importe')::numeric <> 30.25 then
     raise exception 'G05 PENDIENTE · 3: leer después dijo %.', r;
   end if;
   if (select cuenta_stripe from public.conta_gestoria_ajustes where company_id = v_e) is not null
@@ -446,7 +470,8 @@ end $$;
 \i supabase/vuelta-atras/20261109T2027_g05_apuntar_pendiente.down.sql
 do $$ begin
   if to_regprocedure('public.conta_cobro_cuenta_stripe_poner(uuid,text)') is not null or to_regprocedure('public.conta_recibo_apuntar_pendiente(uuid)') is not null
-     or to_regprocedure('public.conta_cobro_cuenta_stripe_leer(uuid)') is not null or to_regprocedure('public._conta_cobro_pendientes_stripe(uuid)') is not null then
+     or to_regprocedure('public.conta_cobro_cuenta_stripe_leer(uuid)') is not null or to_regprocedure('public.conta_cobro_apuntar_pendientes(uuid)') is not null
+     or to_regprocedure('public._conta_cobro_stripe_estado(uuid,text)') is not null or to_regprocedure('public._conta_cobro_asientos_pago(uuid,uuid)') is not null then
     raise exception 'G05 PENDIENTE · 4: la vuelta atrás de la 2027 no la quita.';
   end if;
 end $$;

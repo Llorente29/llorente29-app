@@ -172,3 +172,46 @@
 .cxg-lista-contactos-cabeza .s-control { max-width: 260px; }
 .cxg-lista-contactos ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 320px; overflow: auto; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .cxg-personas { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+
+/* G05 · nº 61 · «Pagos con tarjeta» (maqueta Stripe.dc.html, v23): Ajustes › Cobros y el aviso de la ficha. */
+.cxst-tarjeta { display: flex; flex-direction: column; gap: 14px; }
+.cxst-cabeza { display: flex; flex-direction: column; gap: 4px; }
+.cxst-titulo { margin: 0; font-size: 15px; font-weight: 700; }
+.cxst-de { font-weight: 500; color: var(--cx-apoyo); }
+.cxst-apoyo { margin: 0; font-size: 13px; color: var(--cx-apoyo); line-height: 1.5; }
+.cxst-etiqueta { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; }
+.cxst-fila { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.cxst-campo { flex: 0 0 160px; height: 44px; border: 1px solid var(--cx-borde-control); border-radius: 10px; padding: 0 12px; font: inherit; font-size: 15px; font-weight: 600; color: var(--cx-texto); background: var(--cx-blanco); box-sizing: border-box; }
+.cxst-campo[data-mal] { border-color: var(--s-falta); }
+.cxst-guardar { min-height: 44px; padding: 0 18px; border-radius: 10px; font-size: 14px; }
+.cxst-mensaje { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+.cxst-mensaje[data-tono='ok'] { background: var(--s-ok-fondo); color: var(--s-ok); }
+.cxst-mensaje[data-tono='mal'] { background: var(--s-falta-fondo); color: var(--s-falta); }
+.cxst-mensaje[data-tono='ambar'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+.cxst-lista { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--cx-linea); padding-top: 14px; }
+.cxst-lista-cabeza { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 14px; }
+.cxst-verde { border: 0; background: var(--s-ok); color: var(--cx-blanco); border-radius: 10px; padding: 0 16px; min-height: 40px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.cxst-verde:disabled { background: var(--cx-linea); color: var(--cx-apoyo); cursor: default; }
+.cxst-pago { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: var(--s-fondo, #F6F8FB); flex-wrap: wrap; }
+.cxst-pago-quien { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; }
+.cxst-pago-quien span { font-size: 12px; color: var(--cx-apoyo); }
+.cxst-pago-der { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.cxst-chip { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; }
+.cxst-chip[data-tono='ok'] { background: var(--s-ok-fondo); color: var(--s-ok); }
+.cxst-chip[data-tono='ambar'] { background: var(--s-duda-fondo); color: var(--s-duda); }
+.cxst-aviso { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 14px; background: var(--s-duda-fondo); border: 1px solid var(--cxdo-ambar-borde, #F2D29B); }
+.cxst-aviso-sub { font-size: 12px; font-weight: 700; color: var(--s-duda); letter-spacing: .02em; }
+.cxst-aviso-titulo { font-size: 16px; }
+.cxst-aviso-texto, .cxst-hecho-texto { margin: 0; font-size: 13px; line-height: 1.55; }
+.cxst-aviso-detalle { margin: 0; font-size: 12px; color: var(--cx-apoyo); }
+.cxst-aviso .cxst-verde { min-height: 44px; padding: 0 18px; font-size: 14px; }
+.cxst-enlace { font-size: 14px; font-weight: 600; }
+.cxst-hecho { display: flex; flex-direction: column; gap: 10px; padding: 18px 20px; border-radius: 14px; background: var(--s-ok-fondo); border: 1px solid var(--s-ok); }
+.cxst-hecho-titulo { font-size: 16px; color: var(--s-ok); }
+.cxst-hecho-texto[data-tono='ambar'] { color: var(--s-duda); }
+.cxst-conta { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: 10px; background: var(--cx-blanco); font-size: 13px; }
+.cxst-conta-sub { font-size: 12px; font-weight: 700; color: var(--cx-apoyo); }
+.cxst-conta-sub2 { font-size: 12px; color: var(--cx-apoyo); padding-top: 4px; }
+.cxst-asiento { display: flex; flex-direction: column; gap: 6px; }
+.cxst-apunte { display: flex; justify-content: space-between; gap: 10px; }
+.cxst-enlaces { display: flex; gap: 14px; flex-wrap: wrap; font-size: 14px; font-weight: 600; }
