@@ -1,0 +1,67 @@
+# .github/workflows/gd-sembrar-pruebas.yml
+#
+# GD · «Gestoría Demo» · Deja el Bitrix24 de pruebas y el sandbox de GoCardless
+# con los clientes de la demo (scripts/conta/gd/datos.ts), siempre igual: se
+# repite para volver al estado inicial, antes del congreso o si QBO lo deja
+# hecho un lío (Julio, nº27: mandan ellos; Sumied los lee).
+#
+#   plan     solo lee: lo que hay hoy en los dos y lo que dejaría.
+#   sembrar  borra lo de antes en los dos y siembra.
+#
+# Solo a mano. Escribir ahí está permitido: son de pruebas. Dos guardas en el
+# guion: solo el portal b24-s3mr2y (por la dirección del webhook) y solo el
+# sandbox (api-sandbox: un token real no vale ahí). Nunca el Bitrix24 ni el
+# GoCardless reales de QBO. No toca ninguna base: ni staging ni producción.
+# Los secretos no se escriben nunca.
+
+name: GD · sembrar pruebas
+
+on:
+  workflow_dispatch:
+    inputs:
+      paso:
+        description: 'plan = solo lee; sembrar = borra lo de antes y siembra la demo en el Bitrix24 de pruebas y el sandbox'
+        required: true
+        type: choice
+        options: [plan, sembrar]
+
+concurrency:
+  group: gd-sembrar-pruebas
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: Los secretos · están o faltan (sin enseñar ninguno)
+        env:
+          B24: ${{ secrets.G01D_B24_ENTRANTE_URL }}
+          GC: ${{ secrets.GD_GC_SANDBOX_RW_TOKEN }}
+        run: |
+          [ -n "${B24:-}" ] && echo "✓ G01D_B24_ENTRANTE_URL: está." || echo "::warning::Falta G01D_B24_ENTRANTE_URL."
+          [ -n "${GC:-}" ] && echo "✓ GD_GC_SANDBOX_RW_TOKEN: está." || echo "::warning::Falta GD_GC_SANDBOX_RW_TOKEN."
+
+      - name: GD · ${{ inputs.paso }}
+        timeout-minutes: 15
+        env:
+          G01D_B24_ENTRANTE_URL: ${{ secrets.G01D_B24_ENTRANTE_URL }}
+          GD_GC_SANDBOX_RW_TOKEN: ${{ secrets.GD_GC_SANDBOX_RW_TOKEN }}
+        run: npx tsx scripts/conta/gd/sembrarPruebas.ts "${{ inputs.paso }}" | tee -a "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 00:51Z. La 0110 solo inserta filas de una cuenta nueva (de000000-…-a0) en accounts, company, company_tax_profile, treasury_account, conta_gestoria_ajustes, feature_flags y user_profiles, que existen; ninguna en el camino del pedido. Ni la cuenta, ni su nombre corto, ni sus NIF ni sus IBAN están ya en producción. Ningún fichero en el historial.",
+ "medido": "2026-11-09T00:51Z",
+ "tanda": {
+  "supabase/migrations/20261109T0110_gd_cuenta_demo.sql": "d15580aa987b85e734da5d3f759d3fc0"
+ },
+ "contexto": {"tablas":["public.accounts","public.company","public.company_tax_profile","public.conta_gestoria_ajustes","public.feature_flags","public.treasury_account","public.user_profiles"],"funciones":[],"filas":{"public.accounts":2,"public.company":7,"public.company_tax_profile":5,"public.conta_gestoria_ajustes":0,"public.feature_flags":0,"public.treasury_account":0,"public.user_profiles":5},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

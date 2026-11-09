@@ -1,0 +1,5 @@
+# GD · la vuelta atrás de la 0110: quita la cuenta «Gestoría Demo» y todo lo
+# suyo (también lo que hayan escrito los agentes o las conexiones), solo de esa
+# cuenta y solo si es de demostración.
+cuenta: scripts/conta/produccion/cuentas/gd-cuenta-demo.sql
+supabase/vuelta-atras/20261109T0110_gd_cuenta_demo.down.sql
