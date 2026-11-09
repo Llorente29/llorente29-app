@@ -352,11 +352,47 @@ export async function verifactuDelPdf(accountId: string, invoiceId: string): Pro
   return url ? { modulos: modulosQr(url), prueba: r?.entorno === 'pruebas' } : null
 }
 
+const MESES_PDF = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+const fechaLargaPdf = (iso: string) => `${Number(iso.slice(8, 10))} de ${MESES_PDF[Number(iso.slice(5, 7)) - 1]}${iso.slice(0, 4) ? ` de ${iso.slice(0, 4)}` : ''}`
+
+/**
+ * G05 · T4 · Lo propio de la factura de un recibo de la gestoría (la maqueta
+ * aprobada): sus trabajadores por línea, el código del cliente, la forma de
+ * pago, si la cuenta es de demostración y las notas al pie. Null si la factura
+ * no sale de un recibo (las de siempre salen como siempre). Las líneas de la
+ * factura son las del recibo, en su orden (_conta_cobro_facturar).
+ */
+export async function reciboDelPdf(accountId: string, invoiceId: string, conQr: boolean): Promise<NonNullable<DatosFacturaPdf['recibo']> | null> {
+  const [r] = await leer(tabla('conta_recibo').select('company_id, party_id, factura, confirmado_el').eq('account_id', accountId).eq('invoice_id', invoiceId), 'su recibo')
+  if (!r) return null
+  const [c] = await leer(tabla('conta_cobro_cliente').select('codigo_cliente').eq('company_id', String(r.company_id)).eq('party_id', String(r.party_id)), 'el código del cliente')
+  const sale = await rpc<boolean>('cuenta_puede_salir', { p_account_id: accountId })
+  const lineas = Array.isArray((r.factura as Fila | null)?.lineas) ? ((r.factura as Fila).lineas as Fila[]) : []
+  const conTrabajadores = lineas.some((l) => Array.isArray(l.trabajadores) && (l.trabajadores as unknown[]).length > 0)
+  const pagada = s(r.confirmado_el)
+  const desde = (x: string | null) => (x ? (/^\d{4}-\d{2}-\d{2}$/.test(x) ? `Desde el ${fechaLargaPdf(x)}` : x) : null)
+  return {
+    demo: sale === false,
+    codigoCliente: c?.codigo_cliente == null ? null : Number(c.codigo_cliente),
+    pago: { forma: 'Domiciliación SEPA', cuenta: null, texto: pagada ? `Cargada el ${fechaLargaPdf(pagada).replace(/ de \d{4}$/, '')} · pagada` : 'Pendiente de cargo' },
+    lineas: lineas.map((l) => ({
+      trabajadores: Array.isArray(l.trabajadores) ? (l.trabajadores as Fila[]).map((t) => ({ nombre: String(t.nombre ?? ''), desde: desde(s(t.desde)) })) : null,
+      trabajadoresEn: l.trabajadoresEn === 'linea' || l.trabajadoresEn === 'hoja' ? l.trabajadoresEn : null,
+    })),
+    verifactuPendiente: !conQr,
+    pie: [
+      ...(conTrabajadores ? ['Las altas y bajas de cualquier día del mes se cobran como mes entero. Con más de 10 trabajadores, el detalle va en una hoja aparte.'] : []),
+      ...(pagada ? [`Pagada el ${fechaLargaPdf(pagada).replace(/ de \d{4}$/, '')} por domiciliación. No tienes que hacer nada.`] : []),
+    ],
+  }
+}
+
 /** El PDF de una emitida: se hace aquí, se sube y se guarda en la factura. Si ya lo tiene, no se rehace. */
 export async function guardarPdf(accountId: string, f: FacturaGuardada, datos: DatosFacturaPdf): Promise<{ ruta: string; yaEstaba: boolean }> {
   if (f.pdf) return { ruta: f.pdf.ruta, yaEstaba: true }
   if (!supabase) throw new Error('No hay conexión con la base de datos.')
-  const pdf = facturaVentaPdf(jsPDF, { ...datos, verifactu: await verifactuDelPdf(accountId, f.id) })
+  const verifactu = await verifactuDelPdf(accountId, f.id)
+  const pdf = facturaVentaPdf(jsPDF, { ...datos, verifactu, recibo: await reciboDelPdf(accountId, f.id, !!verifactu) })
   const sha = await hex(pdf)
   const ruta = `${accountId}/ventas/${f.id}/${sha.slice(0, 16)}.pdf`
   const sub = await supabase.storage.from(BUCKET).upload(ruta, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
