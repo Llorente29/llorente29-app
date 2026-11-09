@@ -91,7 +91,7 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
       const fa = facturaDelRecibo(recibo, fiscal)
       factura = fa
       cobrar = fa.totalCent
-      if (fa.ajuste) recibo.cambios.push({ tipo: 'precio', asignacionId: null, texto: `${fa.ajuste.porque}.` })
+      // nº 62 · Una cuota ajustada en un céntimo no es un cambio: el cliente paga lo mismo.
     }
     recibos.push({
       clave: claveDelRecibo(empresa, clienteId, mes), party_id: clienteId, lineas: recibo.lineas, total_cent: recibo.totalCent,

@@ -1,0 +1,10 @@
+# GP · la 1530 (la base del portal del cliente) y su prueba (ROLLBACK, datos
+# inventados): el cliente A lee y hace lo suyo, pide lo de B de 17 formas y
+# todas fallan, «Facturas y documentos» no ve lo demás, sin sesión nada, y la
+# vuelta atrás no deja nada.
+supabase/migrations/20261109T1530_gp_portal_base.sql
+supabase/staging/sql/20261109_gp_portal_base_prueba.sql
+# La 1720 («Tu cuenta» con los nombres de Code 1) y su prueba, con la regla de
+# los permisos del portal: anon ninguna, authenticated solo las decididas.
+supabase/migrations/20261109T1720_gp_portal_cuenta.sql
+supabase/staging/sql/20261109_gp_portal_cuenta_prueba.sql

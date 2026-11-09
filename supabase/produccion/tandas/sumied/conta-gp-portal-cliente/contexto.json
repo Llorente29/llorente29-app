@@ -1,0 +1,27 @@
+{
+ "_que": "GP · T2b · contexto de producción, medido en SOLO LECTURA el 09/11 a las 16:30Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow), después del real de la 1530 (en el historial, con su huella). La 1720 cambia en caliente public.conta_portal_cuenta (existe; misma firma; declarada en su cabecera con su prueba) y añade permisos a service_role. Las columnas de Code 1 que lee (conta_gc_mandato.cuenta_final, cuenta_pais y banco) ya existen. Nada en el camino del pedido.",
+ "medido": "2026-11-09T16:30Z",
+ "tanda": {
+  "supabase/migrations/20261109T1530_gp_portal_base.sql": "0ab16047d7349a04ed416e8d3d9b318e",
+  "supabase/migrations/20261109T1720_gp_portal_cuenta.sql": "60adb07b58fe2a52881f055d437025b4"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_portal_cuenta(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": [
+   {
+    "version": "20261109T1530_gp_portal_base",
+    "huella": "-- huella md5:0ab16047d7349a04ed416e8d3d9b318e"
+   }
+  ]
+ }
+}

@@ -1,0 +1,14 @@
+# GP · El portal del cliente · Tarea 4: la parte de la gestoría y los avisos
+# por correo (Code 3; Julio, nº 9 y nº 10, 09/11). Rama conta/gp-portal-gestoria.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2030  AÑADE: hacer o rechazar lo que pide el cliente (alta o baja), los
+#         avisos por correo que faltan por mandar, el despertador y su cron
+#         (cada 10 minutos, solo donde está el cron_secret). CAMBIA EN
+#         CALIENTE una función propia del portal (_conta_portal_proximo, la
+#         misma firma, con respaldo): «Tu próximo recibo» dice de qué cuenta
+#         se carga. Declarada en su cabecera con su prueba.
+#
+# No toca datos. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-gestoria.sql
+supabase/migrations/20261109T2030_gp_portal_gestoria.sql

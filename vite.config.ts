@@ -39,6 +39,8 @@ export default defineConfig({
         revolutVuelta: path.resolve(__dirname, 'revolut-vuelta.html'),
         // GB · La pestaña «Sumied» dentro de la ficha de Bitrix24 (bitrix-pestana.html), sin la app.
         bitrixPestana: path.resolve(__dirname, 'bitrix-pestana.html'),
+        // GP · El portal del cliente de la gestoría (portal.html): entrada aparte, no pasa por App.tsx.
+        portal: path.resolve(__dirname, 'portal.html'),
       },
     },
   },
