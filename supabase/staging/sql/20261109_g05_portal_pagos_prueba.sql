@@ -374,9 +374,17 @@ do $$ begin
   insert into _g values ('pend_banco', public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.25, 'pi_PRUEBA1')::text);
 end $$;
 reset role;
--- La de Ajustes, una que ya existe con otro nombre (la 57200002, «Plataforma GoCardless»).
-insert into public.conta_gestoria_ajustes (company_id, account_id, cuenta_stripe, updated_by_name) values ((select v::uuid from _g where clave = 'empresa'), 'c01a0000-0000-4000-8000-00000000000a', '57200002', 'Prueba G05')
+-- La de Ajustes, una que ya existe con otro nombre y no es de un banco (la primera así del plan de la empresa).
+do $$ declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); v_c text; begin
+  select x.code into v_c from public.company_account x
+   where x.company_id = v_e and x.name is distinct from 'Plataforma Stripe'
+     and not exists (select 1 from public.company_account_link k where k.company_account_id = x.id and k.entity = 'bank_account')
+   order by x.code limit 1;
+  if v_c is null then raise exception 'G05 PORTAL · 3: la empresa A no tiene ninguna subcuenta que no sea de banco.'; end if;
+  insert into _g values ('otra_cuenta', v_c);
+  insert into public.conta_gestoria_ajustes (company_id, account_id, cuenta_stripe, updated_by_name) values (v_e, 'c01a0000-0000-4000-8000-00000000000a', v_c, 'Prueba G05')
   on conflict (company_id) do update set cuenta_stripe = excluded.cuenta_stripe;
+end $$;
 select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
 set local role service_role;
 do $$ begin
@@ -391,7 +399,8 @@ begin
     raise exception 'G05 PORTAL · 3: con una cuenta de banco dijo %.', r;
   end if;
   r := (select v::jsonb from _g where clave = 'pend_nombre');
-  if r->>'motivo' is distinct from 'otro_nombre' or (r->>'apuntado')::boolean or r->>'frase' not like 'No se ha apuntado el pago del recibo de 2026-11 (30,25 €): la cuenta de Stripe de Ajustes (57200002) ya existe como «%», no como «Plataforma Stripe». Queda en «Pendiente de revisar».' then
+  if r->>'motivo' is distinct from 'otro_nombre' or (r->>'apuntado')::boolean
+     or r->>'frase' not like format('No se ha apuntado el pago del recibo de 2026-11 (30,25 €): la cuenta de Stripe de Ajustes (%s) ya existe como «%%», no como «Plataforma Stripe». Queda en «Pendiente de revisar».', (select v from _g where clave = 'otra_cuenta')) then
     raise exception 'G05 PORTAL · 3: con una cuenta de otro nombre dijo %.', r;
   end if;
   if (select count(*) from public.conta_gestoria_diferencia where company_id = (select v::uuid from _g where clave = 'empresa') and tipo = 'falta_cuenta_stripe' and vigente) <> 1
