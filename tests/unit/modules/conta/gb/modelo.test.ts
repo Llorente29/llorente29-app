@@ -77,3 +77,21 @@ describe('GB (nº 9) · el recibo nuevo antes de guardar, con la cuenta de la fi
       .toBe('El recibo de diciembre no cambia: 496,10 €.')
   })
 })
+
+describe('GB (nº 9, punto 2) · el nivel y el precio especial antes de guardar', () => {
+  it('el servicio con sus niveles, el de ahora y si es por trabajador', async () => {
+    const { conNiveles } = await import('../../../../e2e/conta/gb/respuesta')
+    const p = modeloPestana(conNiveles(), '2026-11-09')!
+    expect(p.servicios.map((s) => [s.texto, s.importe, s.nivelId, s.niveles.map((n) => n.nombre), s.porTrabajador]))
+      .toEqual([['Gestoría mensual · Premium', '150,00 €', 'premium', ['Básica', 'Premium'], false], ['Gestión laboral', '435,60 €', null, [], true]])
+  })
+  it('de Premium a Básica: −60,00 €; precio especial de 135 € en Premium: −15,00 €; 22 € por trabajador: −39,60 €', async () => {
+    const { conNiveles } = await import('../../../../e2e/conta/gb/respuesta')
+    const r = conNiveles()
+    const base = { accion: 'tarifa' as const, linea: 'l1', servicio: 'ges', porTrabajador: false, motivo: 'Cliente desde 2015', desde: '2026-12-01' }
+    expect(reciboPrevisto(r, '2026-11-09', Q, { ...base, nivel: 'basica', precio: null }).frase).toBe('El recibo de diciembre pasa de 585,60 € a 525,60 € (−60,00 €).')
+    expect(reciboPrevisto(r, '2026-11-09', Q, { ...base, nivel: 'premium', precio: 135 }).frase).toBe('El recibo de diciembre pasa de 585,60 € a 570,60 € (−15,00 €).')
+    expect(reciboPrevisto(r, '2026-11-09', Q, { ...base, linea: 'w0', servicio: 'lab', nivel: null, precio: 22, porTrabajador: true }).frase)
+      .toBe('El recibo de diciembre pasa de 585,60 € a 546,00 € (−39,60 €).')
+  })
+})

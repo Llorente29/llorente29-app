@@ -52,7 +52,9 @@ export interface Pestana {
   mesRecibo: string
   recibo: { texto: string; detalle: string; importe: string; porque: string[] }[]
   totalRecibo: string
-  servicios: { texto: string; detalle: string; importe: string }[]
+  servicios: { texto: string; detalle: string; importe: string; lineaId: string | null; servicioId: string | null; especial: boolean
+    /** nº 9 · Para «Cambiar»: sus niveles, el de ahora y si se cobra por trabajador. */
+    niveles: { id: string; nombre: string }[]; nivelId: string | null; porTrabajador: boolean }[]
   sueltos: { texto: string; importe: string }[]
   trabajadores: { nombre: string; desde: string; importe: string | null; lineaId: string | null }[]
   /** nº 9 · Los servicios de su empresa que se cobran por trabajador (para dar de alta). */
@@ -90,7 +92,14 @@ export function modeloPestana(r: Fila, hoy: string): Pestana | null {
     mesRecibo: m.mesRecibo,
     recibo: m.recibo.map((l) => ({ texto: l.texto, detalle: l.detalle, importe: l.importe, porque: l.etiquetas })),
     totalRecibo: m.totalRecibo,
-    servicios: m.servicios.map((s) => ({ texto: s.texto, detalle: s.detalle, importe: s.importe })),
+    servicios: m.servicios.map((s) => {
+      const fila = d.asignaciones.find((a) => String(a.id).replace(/^linea:/, '') === s.lineaId)
+      return { texto: s.texto, detalle: s.detalle, importe: s.importe, lineaId: s.lineaId, servicioId: s.servicioId, especial: s.especial,
+        niveles: d.niveles.filter((n) => String(n.servicio_id) === s.servicioId && n.activo !== false)
+          .sort((a, b) => Number(a.orden ?? 0) - Number(b.orden ?? 0)).map((n) => ({ id: String(n.id), nombre: String(n.nombre) })),
+        nivelId: fila?.nivel_id ? String(fila.nivel_id) : null,
+        porTrabajador: d.servicios.some((x) => String(x.id) === s.servicioId && x.forma === 'por_empleado') }
+    }),
     sueltos: m.sueltos,
     trabajadores,
     serviciosPorTrabajador: d.servicios.filter((x) => String(x.company_id) === String(f.empresaId) && x.forma === 'por_empleado' && x.activo !== false)
@@ -128,6 +137,7 @@ export function leerAlmohadilla(hash: string): { a: string | null; p: string | n
 export type Cambio =
   | { accion: 'alta'; servicio: string; nombre: string; desde: string }
   | { accion: 'baja'; linea: string; mes: string }
+  | { accion: 'tarifa'; linea: string; servicio: string; nivel: string | null; precio: number | null; porTrabajador: boolean; motivo: string; desde: string }
 
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 export const nombreDelMes = (mes: string) => MES[Number(mes.slice(5, 7)) - 1] ?? mes
@@ -140,7 +150,13 @@ function conElCambio(clientes: unknown, clienteId: string, empresaId: string, c:
     return { ...d, asignaciones: [...asignaciones, { id: 'prevista', tipo: 'cuota', cliente_id: clienteId, empresa_id: empresaId, servicio_id: c.servicio,
       nivel_id: null, paquete_id: null, empleado_nombre: c.nombre.trim().toUpperCase(), importe_propio: null, periodo: 'mes', desde: c.desde, hasta: null }] }
   }
-  return { ...d, asignaciones: asignaciones.map((a) => (String(a.id).replace(/^linea:/, '') === c.linea ? { ...a, hasta: c.mes } : a)) }
+  if (c.accion === 'baja') return { ...d, asignaciones: asignaciones.map((a) => (String(a.id).replace(/^linea:/, '') === c.linea ? { ...a, hasta: c.mes } : a)) }
+  // Nivel y precio especial: solo cuenta el mes que viene, así que basta con poner el nivel nuevo en su línea y añadir el precio suyo.
+  const conNivel = asignaciones.map((a) => (String(a.id).replace(/^linea:/, '') === c.linea && c.nivel ? { ...a, nivel_id: c.nivel } : a))
+  const precios = filas(d.precios)
+  return { ...d, asignaciones: conNivel, precios: c.precio === null ? precios : [...precios, { id: 'prevista', empresa_id: empresaId, servicio_id: c.servicio,
+    nivel_id: c.nivel, paquete_id: null, cliente_id: clienteId, forma: c.porTrabajador ? 'por_trabajador' : 'fijo', periodo: c.porTrabajador ? null : 'mes',
+    importe: c.precio, tramos: [], desde: c.desde, hasta: null }] }
 }
 
 /** «El recibo de diciembre pasa de 225,00 € a 250,00 € (+25,00 €)», con la misma cuenta que la ficha del G04. */

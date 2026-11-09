@@ -1,0 +1,12 @@
+# GB · nº 9, punto 2 · Cambiar el nivel o poner un precio especial desde la pestaña de Bitrix24.
+# Rama conta/gb-pestana-tarifa. VA DESPUÉS DEL REAL DE LA 2235 (#549, conta/gb-pestana-alta-baja):
+# amplía su tabla y su función. Se ensaya y se aplica desde main nombrando esta rama. El real lo lanza Julio.
+#
+#   2250  Amplía el CHECK de conta_bitrix_pestana_cambio («tarifa») y cambia
+#         conta_bitrix_pestana_hacer (misma firma) para llamar también a
+#         conta_tarifa_nivel_cambiar y conta_tarifa_precio_guardar, las de la
+#         ficha del G04. No llama a nada: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-tarifa.sql
+supabase/migrations/20261109T2250_gb_pestana_tarifa.sql
