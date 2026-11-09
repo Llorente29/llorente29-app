@@ -1,7 +1,7 @@
 // G05 · Tarea 2 · La factura de un recibo, al céntimo de lo cobrado
 // (supabase/functions/_shared/cobro/factura.ts). Datos inventados (T11).
 import { describe, expect, it } from 'vitest'
-import { baseParaElTotal, facturaDelRecibo, lineasParaGuardar, totalConBase, type Fiscal } from '../../../../../../supabase/functions/_shared/cobro/factura'
+import { TRABAJADORES_EN_LA_LINEA, baseParaElTotal, facturaDelRecibo, lineasParaGuardar, totalConBase, type Fiscal } from '../../../../../../supabase/functions/_shared/cobro/factura'
 import { prepararRecibo } from '../../../../../../supabase/functions/_shared/cobro/recibo'
 import { C, E, asignaciones, catalogo, trabajador } from './comun'
 
@@ -13,15 +13,25 @@ const reciboDe = (as = asignaciones()) => {
 }
 
 describe('G05 · la factura del recibo', () => {
-  it('el ejemplo de QBO: 145,20 € con el IVA dentro = 120,00 € + 25,20 €, una línea por servicio y la hoja de trabajadores', () => {
+  it('el ejemplo de QBO: 145,20 € con el IVA dentro = 120,00 € + 25,20 €; la laboral, «2 × 20,00 €», con sus trabajadores debajo', () => {
     const f = facturaDelRecibo(reciboDe(), CON_IVA)
     expect([f.baseCent, f.ivaCent, f.totalCent, f.ajuste]).toEqual([12000, 2520, 14520, null])
-    expect(f.lineas.map((l) => [l.concepto, l.baseCent])).toEqual([['Gestoría mensual · diciembre de 2026', 8000], ['Gestión laboral · 2 trabajadores · diciembre de 2026', 4000]])
-    expect(f.hoja).toEqual([{ servicio: 'Gestión laboral', trabajadores: [{ nombre: 'Persona Prueba 1', desde: null }, { nombre: 'Persona Prueba 2', desde: null }] }])
+    expect(f.lineas.map((l) => [l.concepto, l.cantidad, l.precioCent, l.baseCent, l.trabajadoresEn])).toEqual([
+      ['Gestoría mensual', 1, 8000, 8000, null], ['Gestión laboral · 2 trabajadores', 2, 2000, 4000, 'linea'],
+    ])
+    expect(f.lineas[1].trabajadores).toEqual([{ nombre: 'Persona Prueba 1', desde: null }, { nombre: 'Persona Prueba 2', desde: null }])
+    expect(f.hoja).toEqual([])
+  })
+  it('hasta 10 trabajadores, debajo de su línea; con 11, en la hoja aparte', () => {
+    expect(TRABAJADORES_EN_LA_LINEA).toBe(10)
+    const diez = facturaDelRecibo(reciboDe(asignaciones(Array.from({ length: 10 }, (_, i) => trabajador(`Persona Prueba ${i + 1}`)))), CON_IVA)
+    expect([diez.lineas[1].trabajadoresEn, diez.hoja]).toEqual(['linea', []])
+    const once = facturaDelRecibo(reciboDe(asignaciones(Array.from({ length: 11 }, (_, i) => trabajador(`Persona Prueba ${i + 1}`)))), CON_IVA)
+    expect([once.lineas[1].trabajadoresEn, once.hoja[0].servicio, once.hoja[0].trabajadores.length]).toEqual(['hoja', 'Gestión laboral', 11])
   })
   it('con un solo trabajador, «1 trabajador», no «1 trabajadores»', () => {
     const f = facturaDelRecibo(reciboDe(asignaciones([trabajador('Persona Prueba 1')])), CON_IVA)
-    expect(f.lineas[1].concepto).toBe('Gestión laboral · 1 trabajador · diciembre de 2026')
+    expect(f.lineas[1].concepto).toBe('Gestión laboral · 1 trabajador')
   })
   it('la factura y el cobro, al céntimo, para cualquier total: lo comprueba con todos de 0,01 € a 300,00 €', () => {
     let exactos = 0
@@ -41,11 +51,14 @@ describe('G05 · la factura del recibo', () => {
     expect(f.ajuste?.cent).toBe(1)
     expect(f.ajuste?.porque).toMatch(/no sale con ninguna base: se cobra y se factura/)
   })
-  it('las bases de las líneas suman la base de la factura (el céntimo que sobra, a la de más importe)', () => {
-    const r = { ...reciboDe(), totalCent: 10001 + 2420 * 3, lineas: [{ ...reciboDe().lineas[0], importeCent: 10001 }, { ...reciboDe().lineas[1], importeCent: 2420 * 3 }] }
+  it('las bases de las líneas suman la base de la factura; el céntimo que sobra va a la que no es por trabajador', () => {
+    const base = reciboDe()
+    const r = { ...base, totalCent: 10001 + 4840, lineas: [{ ...base.lineas[0], importeCent: 10001 }, base.lineas[1]] }
     const f = facturaDelRecibo(r, CON_IVA)
     expect(f.lineas.reduce((s, l) => s + l.baseCent, 0)).toBe(f.baseCent)
     expect(totalConBase(f.baseCent, CON_IVA)).toBe(f.totalCent)
+    expect([f.lineas[1].cantidad, f.lineas[1].precioCent]).toEqual([2, 2000])
+    expect(f.lineas.every((l) => l.cantidad * l.precioCent === l.baseCent)).toBe(true)
   })
   it('sin el IVA dentro: la tarifa es la base y se cobra base + IVA; con retención, se resta', () => {
     const f = facturaDelRecibo(reciboDe(), { ivaPct: 21, retencionPct: 0, preciosConIva: false })
@@ -53,10 +66,10 @@ describe('G05 · la factura del recibo', () => {
     const g = facturaDelRecibo(reciboDe(), { ivaPct: 21, retencionPct: 15, preciosConIva: true })
     expect([g.baseCent + g.ivaCent - g.retencionCent, g.totalCent]).toEqual([14520, 14520])
   })
-  it('lo que recibe conta_venta_guardar: cantidad 1 y la base en euros', () => {
+  it('lo que recibe conta_venta_guardar: cantidad y precio de cada uno, en euros (sin IVA)', () => {
     expect(lineasParaGuardar(facturaDelRecibo(reciboDe(), CON_IVA))).toEqual([
-      { concepto: 'Gestoría mensual · diciembre de 2026', cantidad: 1, precio: 80, descuento: 0, iva_pct: 21 },
-      { concepto: 'Gestión laboral · 2 trabajadores · diciembre de 2026', cantidad: 1, precio: 40, descuento: 0, iva_pct: 21 },
+      { concepto: 'Gestoría mensual', cantidad: 1, precio: 80, descuento: 0, iva_pct: 21 },
+      { concepto: 'Gestión laboral · 2 trabajadores', cantidad: 2, precio: 20, descuento: 0, iva_pct: 21 },
     ])
   })
   it('un recibo parado no se factura', () => {

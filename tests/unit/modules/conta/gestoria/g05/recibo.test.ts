@@ -40,42 +40,52 @@ describe('G05 · el recibo del mes', () => {
   })
   it('un trabajador nuevo: «+1 trabajador», con su día de alta', () => {
     const r = recibo({ asignaciones: asignaciones([trabajador('Persona Prueba 1'), trabajador('Persona Prueba 2'), trabajador('Persona Prueba 3', '2026-11', null, '2026-11-12')]) })
-    expect(r.cambios.map((c) => c.texto)).toEqual(['+1 trabajador en Gestión laboral: Persona Prueba 3, alta el 12/11'])
+    expect(r.cambios.map((c) => c.texto)).toEqual(['+1 trabajador: Persona Prueba 3, alta el 12 de noviembre. Se cobra el mes entero.'])
     expect([r.igualQueElMesPasado, r.totalCent]).toEqual([false, 16940])
   })
   it('un trabajador de baja el mes pasado ya no se cobra: «−1 trabajador»', () => {
     const as = asignaciones([trabajador('Persona Prueba 1'), trabajador('Persona Prueba 2', '2026-01', '2026-10')])
     const r = recibo({ asignaciones: as, anterior: anteriorDe('2026-10', catalogo(), as) })
-    expect(r.cambios.map((c) => c.texto)).toEqual(['−1 trabajador en Gestión laboral: baja de Persona Prueba 2'])
+    expect(r.cambios.map((c) => c.texto)).toEqual(['−1 trabajador: Persona Prueba 2, de baja en octubre (octubre se cobró entero).'])
     expect(r.totalCent).toBe(12100)
   })
   it('un precio nuevo: «Precio nuevo desde …» con el de antes y el de ahora', () => {
     const cat = catalogo([precio('pg', GESTORIA, 9680, false, '2026-01', '2026-10'), precio('pg2', GESTORIA, 10285, false, '2026-11'), precio('pl', LABORAL, 2420, true)])
     const r = recibo({ catalogo: cat })
-    expect(r.cambios.map((c) => c.texto)).toEqual(['Precio nuevo desde noviembre de 2026 en Gestoría mensual: 96,80 € → 102,85 €'])
+    expect(r.cambios.map((c) => c.texto)).toEqual(['Precio nuevo desde noviembre: Gestoría mensual pasa de 96,80 € a 102,85 €.'])
   })
   it('un servicio nuevo y uno que ya no está', () => {
     const antes: ReciboAnterior = { mes: '2026-10', totalCent: 9680 + 3000, lineas: [
       ...anteriorDe('2026-10').lineas.filter((l) => l.asignacionId === 'a-gestoria'),
-      { asignacionId: 'a-vieja', texto: 'Renta anual', importeCent: 3000, cuenta: '', trabajadores: null },
+      { asignacionId: 'a-vieja', servicioId: 'renta', texto: 'Renta anual', importeCent: 3000, cuenta: '', trabajadores: null },
     ] }
     const r = recibo({ anterior: antes })
     expect(r.cambios.map((c) => c.tipo)).toEqual(['linea_nueva', 'linea_quitada'])
-    expect(r.cambios[0].texto).toBe('Nuevo: Gestión laboral (48,40 €), desde noviembre de 2026')
-    expect(r.cambios[1].texto).toBe('Ya no se cobra: Renta anual (30,00 €)')
+    expect(r.cambios[0].texto).toBe('Nuevo: Gestión laboral (48,40 €) desde noviembre.')
+    expect(r.cambios[1].texto).toBe('Ya no se cobra: Renta anual (30,00 €).')
   })
-  it('el primer recibo: va con los que cambian (uno a uno), sin pedir el clic del 30 %', () => {
+  it('el primer recibo: «Cliente nuevo», con los que cambian (uno a uno), sin pedir el clic del 30 %', () => {
     const r = recibo({ anterior: null })
-    expect([r.cambios.map((c) => c.tipo), r.igualQueElMesPasado, r.pideClic]).toEqual([['primer_recibo'], false, null])
+    expect([r.cambios.map((c) => c.texto), r.igualQueElMesPasado, r.pideClic])
+      .toEqual([['Cliente nuevo: Gestoría mensual y Gestión laboral desde el 1 de noviembre.'], false, null])
+  })
+  it('un nivel por otro del mismo servicio: «Cambia de tarifa», no una baja y un alta', () => {
+    const cat = { ...catalogo(), servicios: [{ id: 'gestoria', empresaId: E, nombre: 'Gestoría' }, { id: 'laboral', empresaId: E, nombre: 'Gestión laboral' }],
+      niveles: [{ id: 'aut', servicioId: 'gestoria', nombre: 'Autónomos', orden: 1, incluye: [], masElegido: false }, { id: 'est', servicioId: 'gestoria', nombre: 'Estándar', orden: 2, incluye: [], masElegido: false }],
+      precios: [precio('pa', { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'aut' }, 4840), precio('pe', { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'est' }, 6050)] }
+    const antes = [{ id: 'a-aut', clienteId: C, empresaId: E, objetivo: { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'aut' } as const, desde: '2026-01', hasta: '2026-10' }]
+    const ahora = [...antes, { id: 'a-est', clienteId: C, empresaId: E, objetivo: { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'est' } as const, desde: '2026-11', hasta: null }]
+    const r = recibo({ catalogo: cat, asignaciones: ahora, anterior: anteriorDe('2026-10', cat, antes) })
+    expect(r.cambios.map((c) => c.texto)).toEqual(['Cambia de tarifa: de Autónomos a Estándar desde noviembre.'])
   })
   it('más de un 30 % de cambio pide un clic y dice por qué; justo el 30 %, no', () => {
     expect(UMBRAL_DE_CAMBIO).toBe(0.3)
     expect(porqueDelClic(10000, 13000)).toBeNull()
-    expect(porqueDelClic(10000, 13001)).toBe('El total pasa de 100,00 € a 130,01 € (+30 %): revísalo antes de enviarlo')
-    expect(porqueDelClic(14520, 9680)).toBe('El total pasa de 145,20 € a 96,80 € (−33 %): revísalo antes de enviarlo')
+    expect(porqueDelClic(10000, 13001)).toBe('Sube un 30 %')
+    expect(porqueDelClic(14520, 9680)).toBe('Baja un 33 %')
     const muchos = Array.from({ length: 4 }, (_, i) => trabajador(`Persona Prueba ${i + 3}`, '2026-11'))
     const r = recibo({ asignaciones: asignaciones([trabajador('Persona Prueba 1'), trabajador('Persona Prueba 2'), ...muchos]) })
-    expect(r.pideClic).toBe('El total pasa de 145,20 € a 242,00 € (+67 %): revísalo antes de enviarlo')
+    expect(r.pideClic).toBe('Sube un 67 %')
   })
   it('sin recibo si el día 1 no se le cobra (de baja, «solo renta», sin situación) o no tiene nada', () => {
     expect(preparar({ situacionElDia1: 'baja' })).toEqual({ hay: false, porque: 'No se le cobra: el día 1 está de baja' })

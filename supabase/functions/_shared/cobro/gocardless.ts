@@ -114,14 +114,21 @@ export function leerRespuestaDeCobro(status: number, cuerpo: unknown): Respuesta
   return { tipo: 'rechazado', frase: `GoCardless no ha aceptado el cobro: ${detalle}.` }
 }
 
-/** El estado de un recibo, en palabras de oficina, con su color. */
-export type EstadoDelRecibo = 'preparado' | 'enviado' | 'cobrado' | 'devuelto' | 'cancelado' | 'facturado'
+/**
+ * El estado de un recibo, en palabras de oficina, con su color (la maqueta
+ * Cobro.dc.html, 09/11): Preparado · Enviado · En el banco · Cobrado ·
+ * Devuelto (sin fondos) · Retrocedido (lo reclamó el cliente) · Cancelado ·
+ * Facturado.
+ */
+export type EstadoDelRecibo = 'preparado' | 'enviado' | 'en_el_banco' | 'cobrado' | 'devuelto' | 'retrocedido' | 'cancelado' | 'facturado'
 
 export const ESTADO_EN_PALABRAS: Record<EstadoDelRecibo, { texto: string; tono: 'neutro' | 'aviso' | 'bien' | 'mal' }> = {
   preparado: { texto: 'Preparado', tono: 'neutro' },
   enviado: { texto: 'Enviado', tono: 'aviso' },
+  en_el_banco: { texto: 'En el banco', tono: 'aviso' },
   cobrado: { texto: 'Cobrado', tono: 'bien' },
   devuelto: { texto: 'Devuelto', tono: 'mal' },
+  retrocedido: { texto: 'Retrocedido', tono: 'mal' },
   cancelado: { texto: 'Cancelado', tono: 'neutro' },
   facturado: { texto: 'Facturado', tono: 'bien' },
 }
@@ -129,25 +136,37 @@ export const ESTADO_EN_PALABRAS: Record<EstadoDelRecibo, { texto: string; tono: 
 /** El estado del recibo según el estado del cobro en GoCardless (sin cobro: preparado). */
 export function estadoDelRecibo(estadoGc: string | null | undefined, facturado: boolean): EstadoDelRecibo {
   if (!estadoGc) return 'preparado'
-  if (['failed', 'charged_back', 'customer_approval_denied'].includes(estadoGc)) return 'devuelto'
+  if (estadoGc === 'charged_back') return 'retrocedido'
+  if (['failed', 'customer_approval_denied'].includes(estadoGc)) return 'devuelto'
   if (estadoGc === 'cancelled') return 'cancelado'
   if (['confirmed', 'paid_out'].includes(estadoGc)) return facturado ? 'facturado' : 'cobrado'
+  if (estadoGc === 'submitted') return 'en_el_banco'
   return 'enviado'
 }
 
 /** Si toca hacer la factura: solo con el cobro confirmado (no hay factura sin cobro) y si aún no la tiene. */
 export const tocaFacturar = (estadoGc: string | null | undefined, facturado: boolean) => !facturado && ['confirmed', 'paid_out'].includes(estadoGc ?? '')
 
+/**
+ * Si el cambio de estado deshace un cobro ya contabilizado: un retrocedido
+ * (o un fallo que llega después de confirmarse) con su asiento de cobro hecho.
+ * Entonces va el asiento de la devolución (asientos.ts · asientoDeLaDevolucion).
+ */
+export const tocaDeshacerElCobro = (estadoGc: string | null | undefined, cobroContabilizado: boolean) =>
+  cobroContabilizado && ['charged_back', 'failed'].includes(estadoGc ?? '')
+
 /** Lo que dice el historial del recibo cuando cambia su cobro. */
 export function fraseDelCambio(r: { totalCent: number; mes: string }, estado: EstadoDelRecibo, conFactura = false): string {
   const cuanto = `${euros(r.totalCent)} de ${mesEnPalabras(r.mes)}`
   switch (estado) {
     case 'enviado': return `Cobro de ${cuanto} enviado a GoCardless.`
+    case 'en_el_banco': return `Cobro de ${cuanto} en el banco del cliente.`
     case 'cobrado': return `Cobro de ${cuanto} confirmado.`
     case 'facturado': return `Cobro de ${cuanto} confirmado y facturado.`
-    // Retrocedido después de confirmarse: la factura ya existe y se queda; lo que se deshace es el cobro.
     case 'devuelto': return conFactura ? `Recibo de ${cuanto} devuelto después de cobrarse: se deshace el cobro y pasa a «Te deben»; la factura se queda.`
-      : `Recibo de ${cuanto} devuelto: pasa a «Te deben» y no tiene factura.`
+      : `Recibo de ${cuanto} devuelto sin fondos: pasa a «Te deben» y no tiene factura.`
+    // Retrocedido: el cliente lo reclamó a su banco después de cobrarse. La factura ya existe y se queda; lo que se deshace es el cobro.
+    case 'retrocedido': return `Recibo de ${cuanto} retrocedido: el cliente lo reclamó a su banco. Se deshace el cobro y pasa a «Te deben»${conFactura ? '; la factura se queda' : ''}.`
     case 'cancelado': return `Cobro de ${cuanto} cancelado en GoCardless: no se ha cobrado.`
     default: return `Recibo de ${cuanto} preparado.`
   }

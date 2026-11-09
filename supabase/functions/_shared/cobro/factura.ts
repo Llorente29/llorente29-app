@@ -9,7 +9,9 @@
 // Reglas:
 //   · No hay factura sin cobro confirmado (eso lo decide gocardless.ts).
 //   · La factura detalla cada trabajador con su nombre: una línea por servicio
-//     y, aparte, la hoja de trabajadores con quién es cada uno.
+//     («Gestión laboral · 4 trabajadores», 4 × 20,00 €, como la maqueta
+//     Factura.dc.html) y debajo sus trabajadores si son hasta 10; con más, en
+//     una hoja aparte (decisiones_qbo.md, 09/11).
 //   · LA FACTURA Y EL COBRO, AL CÉNTIMO. La V01 calcula el IVA por tipo sobre
 //     la suma de las bases, redondeado (_conta_venta_cifras). Si la tarifa de
 //     la gestoría lleva el IVA dentro (QBO: 96,80 € = 80 € + 21 %), hay que
@@ -24,7 +26,7 @@
 // Lo prueban tests/unit/modules/conta/gestoria/g05/factura.test.ts.
 
 import { euros } from '../tarifa/precio.ts'
-import { mesEnPalabras, type LineaDeRecibo, type Recibo } from './recibo.ts'
+import type { LineaDeRecibo, Recibo } from './recibo.ts'
 
 /** Cómo factura la empresa emisora. */
 export interface Fiscal {
@@ -57,17 +59,31 @@ export function baseParaElTotal(totalCent: number, f: Fiscal): { baseCent: numbe
   return { baseCent: mejor, exacta: false }
 }
 
+/** Hasta cuántos trabajadores van debajo de su línea, en la misma hoja; con más, en una hoja aparte (decisiones_qbo.md, 09/11). */
+export const TRABAJADORES_EN_LA_LINEA = 10
+
+export interface TrabajadorEnFactura { nombre: string; desde: string | null }
+
 export interface LineaDeFactura {
+  /** El servicio, con sus trabajadores si los lleva: «Gestión laboral · 4 trabajadores». */
   concepto: string
-  /** Siempre 1: el importe de un servicio por tramos no es «cantidad × precio». */
-  cantidad: 1
+  /**
+   * «Cantidad × precio» cuando todos los trabajadores cuestan lo mismo (la
+   * maqueta: «4 × 20,00 €»); si no (un tramo, un paquete o un servicio fijo), 1.
+   */
+  cantidad: number
+  /** El precio de cada uno, en céntimos (base, sin IVA): cantidad × precio = base de la línea. */
+  precioCent: number
   /** La base de la línea, en céntimos. */
   baseCent: number
   ivaPct: number
   asignacionId: string
+  trabajadores: TrabajadorEnFactura[] | null
+  /** Dónde van sus trabajadores: debajo de la línea (hasta 10) o en la hoja aparte (más de 10). */
+  trabajadoresEn: 'linea' | 'hoja' | null
 }
 
-export interface HojaDeTrabajadores { servicio: string; trabajadores: { nombre: string; desde: string | null }[] }
+export interface HojaDeTrabajadores { servicio: string; trabajadores: TrabajadorEnFactura[] }
 
 export interface FacturaDelRecibo {
   lineas: LineaDeFactura[]
@@ -78,29 +94,35 @@ export interface FacturaDelRecibo {
   totalCent: number
   /** Si el total del recibo sale exacto; si no, cuánto menos se cobra y por qué. */
   ajuste: null | { cent: number; porque: string }
-  /** Los trabajadores de cada servicio, por su nombre (la hoja aparte del PDF). */
+  /** Los servicios con más de 10 trabajadores, con todos ellos por su nombre: la hoja aparte del PDF. Vacía: no hay hoja aparte. */
   hoja: HojaDeTrabajadores[]
 }
 
 const sinTrabajadores = (texto: string) => texto.replace(/ · \d+ trabajador(es)?$/, '')
-const conceptoDe = (l: LineaDeRecibo, mes: string) => {
+const conceptoDe = (l: LineaDeRecibo) => {
   const n = l.trabajadores?.length ?? 0
-  return `${sinTrabajadores(l.texto)}${l.trabajadores ? ` · ${n} ${n === 1 ? 'trabajador' : 'trabajadores'}` : ''} · ${mesEnPalabras(mes)}`
+  return `${sinTrabajadores(l.texto)}${l.trabajadores ? ` · ${n} ${n === 1 ? 'trabajador' : 'trabajadores'}` : ''}`
 }
 
-/** Reparte una base total entre las líneas en proporción a su importe; el céntimo que sobre o falte, a la de más importe. */
-function repartir(importes: number[], baseTotal: number): number[] {
+/**
+ * Reparte una base total entre las líneas en proporción a su importe. El
+ * céntimo que sobre o falte va a la línea de más importe que no va por
+ * trabajador (así las de trabajadores siguen siendo «cantidad × precio»); si
+ * todas van por trabajador, a la de más importe.
+ */
+function repartir(importes: number[], porTrabajador: boolean[], baseTotal: number): number[] {
   const suma = importes.reduce((s, x) => s + x, 0)
   const partes = importes.map((x) => (suma ? redondear((x * baseTotal) / suma) : 0))
   const dif = baseTotal - partes.reduce((s, x) => s + x, 0)
   if (dif !== 0 && partes.length) {
-    const i = importes.indexOf(Math.max(...importes))
-    partes[i] += dif
+    const candidatas = importes.map((x, i) => ({ x, i })).filter((c) => !porTrabajador[c.i])
+    const elegida = (candidatas.length ? candidatas : importes.map((x, i) => ({ x, i }))).reduce((m, c) => (c.x > m.x ? c : m))
+    partes[elegida.i] += dif
   }
   return partes
 }
 
-/** Las líneas, las cifras y la hoja de trabajadores de la factura de un recibo. Lanza si el recibo está parado. */
+/** Las líneas, las cifras y los trabajadores de la factura de un recibo. Lanza si el recibo está parado. */
 export function facturaDelRecibo(r: Recibo, f: Fiscal): FacturaDelRecibo {
   if (r.parado.length) throw new Error(`Un recibo parado no se factura: ${r.parado.join('; ')}.`)
   const importes = r.lineas.map((l) => l.importeCent ?? 0)
@@ -116,17 +138,26 @@ export function facturaDelRecibo(r: Recibo, f: Fiscal): FacturaDelRecibo {
   } else {
     baseTotal = r.totalCent
   }
-  const bases = f.preciosConIva ? repartir(importes, baseTotal) : importes
-  const lineas: LineaDeFactura[] = r.lineas.map((l, i) => ({ concepto: conceptoDe(l, r.mes), cantidad: 1, baseCent: bases[i], ivaPct: f.ivaPct, asignacionId: l.asignacionId }))
+  const conTrabajadores = r.lineas.map((l) => !!l.trabajadores && l.trabajadores.length > 0)
+  const bases = f.preciosConIva ? repartir(importes, conTrabajadores, baseTotal) : importes
+  const lineas: LineaDeFactura[] = r.lineas.map((l, i) => {
+    const n = l.trabajadores?.length ?? 0
+    // «Cantidad × precio» solo si sale exacto al céntimo: n trabajadores al mismo precio.
+    const porUno = n > 0 && bases[i] % n === 0 && /^\d+ × /.test(l.cuenta)
+    const trabajadores = l.trabajadores && n ? l.trabajadores.map((t) => ({ nombre: t.nombre, desde: t.altaEl })) : null
+    return {
+      concepto: conceptoDe(l), cantidad: porUno ? n : 1, precioCent: porUno ? bases[i] / n : bases[i], baseCent: bases[i], ivaPct: f.ivaPct,
+      asignacionId: l.asignacionId, trabajadores, trabajadoresEn: trabajadores ? (n > TRABAJADORES_EN_LA_LINEA ? 'hoja' : 'linea') : null,
+    }
+  })
   const ivaCent = cuotaDe(baseTotal, f.ivaPct)
   const retencionCent = cuotaDe(baseTotal, f.retencionPct)
   return {
     lineas, baseCent: baseTotal, ivaCent, retencionCent, totalCent: baseTotal + ivaCent - retencionCent, ajuste,
-    hoja: r.lineas.filter((l) => l.trabajadores && l.trabajadores.length)
-      .map((l) => ({ servicio: sinTrabajadores(l.texto), trabajadores: l.trabajadores!.map((t) => ({ nombre: t.nombre, desde: t.altaEl })) })),
+    hoja: lineas.filter((l) => l.trabajadoresEn === 'hoja').map((l) => ({ servicio: sinTrabajadores(r.lineas.find((x) => x.asignacionId === l.asignacionId)!.texto), trabajadores: l.trabajadores! })),
   }
 }
 
 /** Las líneas como las recibe conta_venta_guardar (precio en euros con 4 decimales; el tipo y la cuenta los pone la base). */
 export const lineasParaGuardar = (fa: FacturaDelRecibo) =>
-  fa.lineas.map((l) => ({ concepto: l.concepto, cantidad: l.cantidad, precio: l.baseCent / 100, descuento: 0, iva_pct: l.ivaPct }))
+  fa.lineas.map((l) => ({ concepto: l.concepto, cantidad: l.cantidad, precio: l.precioCent / 100, descuento: 0, iva_pct: l.ivaPct }))

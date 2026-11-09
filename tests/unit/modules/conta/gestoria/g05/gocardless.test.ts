@@ -3,7 +3,7 @@
 // la documentación de GoCardless (09/11); identificadores inventados.
 import { describe, expect, it } from 'vitest'
 import {
-  ESTADO_EN_PALABRAS, VERSION_GOCARDLESS, estadoDelRecibo, fraseDelCambio, leerRespuestaDeCobro, mandatoParaCobrar, peticionDeCobro, tocaFacturar,
+  ESTADO_EN_PALABRAS, VERSION_GOCARDLESS, estadoDelRecibo, fraseDelCambio, leerRespuestaDeCobro, mandatoParaCobrar, peticionDeCobro, tocaDeshacerElCobro, tocaFacturar,
 } from '../../../../../../supabase/functions/_shared/cobro/gocardless'
 import type { Recibo } from '../../../../../../supabase/functions/_shared/cobro/recibo'
 
@@ -51,16 +51,19 @@ describe('G05 · el cobro en GoCardless', () => {
   })
   it('el estado del recibo y cuándo toca facturar: solo con el cobro confirmado', () => {
     expect([null, 'pending_submission', 'submitted', 'confirmed', 'paid_out', 'failed', 'charged_back', 'cancelled'].map((x) => estadoDelRecibo(x, false)))
-      .toEqual(['preparado', 'enviado', 'enviado', 'cobrado', 'cobrado', 'devuelto', 'devuelto', 'cancelado'])
+      .toEqual(['preparado', 'enviado', 'en_el_banco', 'cobrado', 'cobrado', 'devuelto', 'retrocedido', 'cancelado'])
     expect(estadoDelRecibo('paid_out', true)).toBe('facturado')
     expect([tocaFacturar('submitted', false), tocaFacturar('confirmed', false), tocaFacturar('paid_out', true), tocaFacturar('failed', false)]).toEqual([false, true, false, false])
-    expect(ESTADO_EN_PALABRAS.devuelto).toEqual({ texto: 'Devuelto', tono: 'mal' })
+    expect([ESTADO_EN_PALABRAS.en_el_banco.texto, ESTADO_EN_PALABRAS.devuelto, ESTADO_EN_PALABRAS.retrocedido.texto]).toEqual(['En el banco', { texto: 'Devuelto', tono: 'mal' }, 'Retrocedido'])
+    // Se deshace el cobro solo si ya estaba contabilizado: un devuelto antes de confirmarse no tenía asiento.
+    expect([tocaDeshacerElCobro('charged_back', true), tocaDeshacerElCobro('failed', true), tocaDeshacerElCobro('failed', false), tocaDeshacerElCobro('paid_out', true)]).toEqual([true, true, false, false])
   })
   it('las frases del historial, sin palabras en inglés', () => {
     const x = { totalCent: 14520, mes: '2026-12' }
-    expect(fraseDelCambio(x, 'devuelto')).toBe('Recibo de 145,20 € de diciembre de 2026 devuelto: pasa a «Te deben» y no tiene factura.')
+    expect(fraseDelCambio(x, 'devuelto')).toBe('Recibo de 145,20 € de diciembre de 2026 devuelto sin fondos: pasa a «Te deben» y no tiene factura.')
+    expect(fraseDelCambio(x, 'retrocedido', true)).toBe('Recibo de 145,20 € de diciembre de 2026 retrocedido: el cliente lo reclamó a su banco. Se deshace el cobro y pasa a «Te deben»; la factura se queda.')
     expect(fraseDelCambio(x, 'devuelto', true)).toBe('Recibo de 145,20 € de diciembre de 2026 devuelto después de cobrarse: se deshace el cobro y pasa a «Te deben»; la factura se queda.')
-    const todas = (['preparado', 'enviado', 'cobrado', 'devuelto', 'cancelado', 'facturado'] as const).map((e) => fraseDelCambio(x, e)).join(' ')
+    const todas = (['preparado', 'enviado', 'en_el_banco', 'cobrado', 'devuelto', 'retrocedido', 'cancelado', 'facturado'] as const).map((e) => fraseDelCambio(x, e)).join(' ')
     expect(todas).not.toMatch(/payment|payout|charge|idempot/i)
   })
 })
