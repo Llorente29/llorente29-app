@@ -49,9 +49,10 @@ function AvisoAltaAMedias({ e }: { e: EmpresaResumen }) {
 function Indice({ actual, d, plan, hoy, lista, series }: { actual: string | null; d: DatosEmpresa | null; plan: DatosPlan | null; hoy: string; lista: boolean; series: number | null }) {
   // C06: en el producto vendido solo, el índice no enseña lo que dice «aún no».
   const solo = useProductoSolo()
+  const { esDemo } = useCuentaConta()
   return (
     <nav aria-label="Ajustes" className={lista ? 'cx-ajustes-lista' : 'cx-tarjeta cx-ajustes-indice'}>
-      {indiceAjustes(solo).map((g) => (
+      {indiceAjustes(solo, esDemo).map((g) => (
         <div key={g.grupo} className="cx-ajustes-grupo">
           <h2 className="cx-ajustes-grupo-titulo">{g.grupo}</h2>
           <div className={lista ? 'cx-lista' : undefined}>

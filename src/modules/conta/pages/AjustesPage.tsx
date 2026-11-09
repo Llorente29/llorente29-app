@@ -40,6 +40,7 @@ import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
 import { ApartadoColor } from '@/modules/conta/empresa/ApartadoColor'
 import { Usuarios } from '@/modules/conta/ajustes/Usuarios'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
+import { VolverAEmpezar } from '@/modules/conta/cuenta/VolverAEmpezar'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
   return (
@@ -53,7 +54,7 @@ function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
 function Entrada({ id }: { id: string }) {
   const { datos, plan, quien, movil, hoy } = useAjustes()
   const hosteleria = useHosteleria()
-  const { userName } = useCuentaConta()
+  const { userName, esDemo, cargando: cargandoCuenta } = useCuentaConta()
   // C02c: lo que ha hecho «Deshacer entero» del plan traído, en una frase (el botón desaparece al recargar).
   const [aviso, setAviso] = useState<string | null>(null)
   const e = entradaAjustes(id)!
@@ -74,6 +75,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'apuntar-solo') return <>{cabeza}<ApuntarSoloAjustes /></>
   // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
   if (id === 'personas') return <>{cabeza}<Usuarios /></>
+  // GD · Tu cuenta: solo en una cuenta de demostración, con «Volver a empezar».
+  if (id === 'cuenta') return cargandoCuenta ? <>{cabeza}<TarjetaCargando /></> : esDemo ? <>{cabeza}<VolverAEmpezar /></> : <Navigate to={rutaAjustes()} replace />
   if (e.hueco) {
     return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Aún no." explicacion={e.hueco} /></div></>
   }

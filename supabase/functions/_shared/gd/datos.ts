@@ -1,4 +1,4 @@
-// scripts/conta/gd/datos.ts
+// supabase/functions/_shared/gd/datos.ts
 //
 // GD · «Gestoría Demo»: los clientes de la demo, tal como tienen que quedar en
 // el Bitrix24 de pruebas y en el sandbox de GoCardless (Julio, nº27: mandan
