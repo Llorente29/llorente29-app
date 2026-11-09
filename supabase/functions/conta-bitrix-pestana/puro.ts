@@ -49,7 +49,7 @@ export function leerLlegada(form: URLSearchParams, query: URLSearchParams): Lleg
   const auth = form.get('AUTH_ID') ?? form.get('auth[access_token]')
   const portal = portalLimpio(query.get('DOMAIN') ?? form.get('DOMAIN') ?? form.get('auth[domain]'))
   const hueco = form.get('PLACEMENT')
-  let id: string | null = null
+  let id: string | null
   try {
     const o = JSON.parse(form.get('PLACEMENT_OPTIONS') ?? 'null') as { ID?: unknown } | null
     const v = o && (typeof o.ID === 'string' || typeof o.ID === 'number') ? String(o.ID) : null
