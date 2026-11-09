@@ -23,6 +23,7 @@ import { Clientes } from './Clientes'
 import { descargarPrecios, enlaceAlCrm, exportar, imprimirPrecios, imprimirTarifa, mesEnPalabras } from './enlaces'
 import { Tarifa } from './Tarifa'
 import { Asignar } from './Asignar'
+import { useAlDiaConLasLecturas } from '../useAlDia'
 import { clientesParaCasar, porAsignar } from './asignar'
 import { formaParaGuardar, formaEnPalabras, modeloTarifa } from './modeloTarifa'
 import { euros, type Forma, type Objetivo } from '../../../../../supabase/functions/_shared/tarifa/precio'
@@ -46,6 +47,8 @@ export function ClientesG04Page() {
   const { empresas, activa, elegir } = useEmpresas()
   const [params, setParams] = useSearchParams()
   const d = useLeer(!cargando && accountId ? () => leerClientes(accountId) : null, `${accountId}:g04-clientes`)
+  // GD (nº71): al acabar una lectura del CRM o de GoCardless de la cuenta, se pone al día sola (con el panel abierto).
+  useAlDiaConLasLecturas(accountId, d.recargar)
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos || !activa) return <TarjetaCargando />
   const lasDos = params.get('empresa') === 'las-dos' && empresas.length > 1
@@ -113,6 +116,7 @@ export function FichaClienteG04Page() {
     const [datos, extra] = await Promise.all([leerClientes(accountId), leerFicha(accountId, cliente)])
     return { datos, extra }
   } : null, `${accountId}:g04-ficha:${cliente}`)
+  useAlDiaConLasLecturas(accountId, d.recargar)
   if (d.error) return <ErrorConReintento mensaje={`No se ha podido leer la ficha: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos) return <TarjetaCargando />
   const { datos, extra } = d.datos
