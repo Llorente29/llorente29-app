@@ -18,10 +18,13 @@ select clave, valor from (
   select 3, 'conta_gestoria_ajustes.cuenta_stripe existe',
     exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gestoria_ajustes' and column_name = 'cuenta_stripe')::text union all
   select 4, 'Cobros apuntados por otra vía (todas las cuentas)',
+    -- quieta: solo la escribe «Cobrado por otra vía» a mano en la gestoría (0 filas en toda su vida); la tanda solo amplía su CHECK
     (select count(*)::text from public.conta_gc_cobro_otra_via) union all
   select 5, 'La 57200003 «Plataforma Stripe» en las cuentas de demostración',
+    -- quieta: nadie más crea esa subcuenta; solo esta tanda (0 → 1)
     (select count(*)::text from public.company_account x join public.company c on c.id = x.company_id join public.accounts a on a.id = c.account_id and a.is_demo
       where x.code = '57200003') union all
   select 6, 'Ajustes de la gestoría (todas las cuentas)',
+    -- quieta: una fila por empresa con cobro, se crea al activarlo a mano; la tanda solo añade una columna vacía
     (select count(*)::text from public.conta_gestoria_ajustes)
 ) q order by o;
