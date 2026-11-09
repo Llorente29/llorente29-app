@@ -1,0 +1,5 @@
+# GD · «Gestoría Demo»: la 0110 crea la cuenta de demostración y sus dos
+# empresas de Gestoría. Su prueba (ROLLBACK) mira que es demo, sus empresas,
+# bancos y cambios de tarifa, que no toca otras cuentas y la vuelta atrás.
+supabase/migrations/20261109T0110_gd_cuenta_demo.sql
+supabase/staging/sql/20261109_gd_cuenta_demo_prueba.sql
