@@ -15,6 +15,7 @@
 --      invita a otra persona y firma con el código (mal y bien).
 --   3. LA PRUEBA DE OTRO CLIENTE: «A todo» pide cada pantalla, cada fichero y
 --      cada acción de B, y las tablas de B con la RLS: todo falla o sale vacío.
+--      Y las dos políticas de storage.objects, atadas al almacén conta-portal.
 --   4. «A facturas»: ve facturas y documentos; pagos, mensajes, trabajadores y
 --      cuenta, no.
 --   5. Sin sesión (anon): ninguna función se puede llamar.
@@ -271,6 +272,11 @@ begin
     raise exception 'PRUEBA GP-1530 · 3: el almacén deja a «A» leer o subir en la carpeta de B.';
   end if;
   if not public.conta_portal_ruta_puede(g.cuenta || '/' || g.ca || '/subidas/x.pdf', true) then raise exception 'PRUEBA GP-1530 · 3: el almacén no deja a «A» subir a su carpeta.'; end if;
+  -- Las dos políticas de storage.objects que usan esa comprobación, puestas y solo para el almacén conta-portal.
+  if (select count(*) from pg_catalog.pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname in ('conta_portal_leer', 'conta_portal_subir')
+        and coalesce(qual, with_check) like '%conta-portal%' and coalesce(qual, with_check) like '%conta_portal_ruta_puede%') <> 2 then
+    raise exception 'PRUEBA GP-1530 · 3: storage.objects no tiene las dos políticas del portal atadas a conta-portal.';
+  end if;
   if (select count(*) from public.conta_portal_pendiente(g.cuenta) x, jsonb_each(x) e where jsonb_array_length(e.value) > 0) > 0 then
     raise exception 'PRUEBA GP-1530 · 3: «A» ve lo pendiente de la gestoría.';
   end if;

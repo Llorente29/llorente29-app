@@ -1,5 +1,6 @@
 -- supabase/migrations/20261109T1530_gp_portal_base.sql
 -- cambia: public.conta_solicitud · prueba: supabase/staging/sql/20261109_gp_portal_base_prueba.sql
+-- cambia: storage.objects · prueba: supabase/staging/sql/20261109_gp_portal_base_prueba.sql
 --
 -- GP · Tarea 2 · EL PORTAL DEL CLIENTE DE LA GESTORÍA, la base (Code 3; Julio,
 -- nº 2 y nº 3 del 09/11). SOLO AÑADE:
@@ -13,7 +14,9 @@
 --   · funciones nuevas: una lectura por pantalla del portal (la regla del
 --     segundo), lo que hace el cliente, lo que hace la gestoría y lo que solo
 --     hace el servidor;
---   · el almacén privado conta-portal y sus políticas.
+--   · el almacén privado conta-portal y dos políticas suyas en storage.objects
+--     (tabla que existe, unas 3.800 filas: crear una política no las revisa; toma
+--     su cierre un instante), declaradas arriba.
 -- No cambia ninguna tabla, función ni fila que exista. Se puede pasar dos veces
 -- seguidas. Nada en el camino del pedido.
 --

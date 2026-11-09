@@ -1,18 +1,20 @@
 {
- "_que": "GP · T2 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 15:10Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1530 añade nueve tablas y sus funciones, que no existen (ninguna función con nombre conta_portal); cinco columnas que admiten nulos en conta_solicitud (0 filas), con CHECK y clave ajena solo sobre ellas; el almacén conta-portal (no existe) y dos políticas en storage.objects. Nada en el camino del pedido. Ningún fichero en el historial. analizar.mjs decidir: sigue.",
- "medido": "2026-11-09T15:10Z",
+ "_que": "GP · T2 · contexto de producción, medido en SOLO LECTURA el 09/11 (15:10Z y 15:00Z, la consulta de analizar.mjs sql-contexto con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1530 añade nueve tablas y sus funciones, que no existen (ninguna función con nombre conta_portal); cinco columnas que admiten nulos en conta_solicitud (0 filas), con dos CHECK y una clave ajena solo sobre ellas; el almacén conta-portal (no existe) y dos políticas nuevas en storage.objects (unas 3.800 filas), las dos tablas declaradas en la cabecera. Nada en el camino del pedido. Ningún fichero en el historial. analizar.mjs: sigue.",
+ "medido": "2026-11-09T15:00Z",
  "tanda": {
-  "supabase/migrations/20261109T1530_gp_portal_base.sql": "3bbc2dbf7d79f70356ab154a12c8b194"
+  "supabase/migrations/20261109T1530_gp_portal_base.sql": "0ab16047d7349a04ed416e8d3d9b318e"
  },
  "contexto": {
   "tablas": [
    "public.conta_solicitud",
-   "storage.buckets"
+   "storage.buckets",
+   "storage.objects"
   ],
   "funciones": [],
   "filas": {
    "public.conta_solicitud": 0,
-   "storage.buckets": 0
+   "storage.buckets": 0,
+   "storage.objects": 3791
   },
   "otras": {},
   "camino": {
