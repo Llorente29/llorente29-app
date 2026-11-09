@@ -15,6 +15,7 @@ export const PASOS = [
   { id: 'sumied', que: 'Dejando Sumied como el primer día' },
   { id: 'leer', que: 'Leyendo otra vez el CRM y GoCardless' },
   { id: 'tarifa', que: 'Sembrando la tarifa y los ingresos en el banco' },
+  { id: 'cambios', que: 'Dejando los cambios del mes que viene' },
 ] as const
 export type Paso = (typeof PASOS)[number]['id'] | 'comprobar'
 export const esPaso = (x: unknown): x is Paso => x === 'comprobar' || PASOS.some((p) => p.id === x)
@@ -48,4 +49,24 @@ export function porqueNo(p: Puerta, portalDePruebas: string): string | null {
  */
 export function inicioDeLasCuotas(hoyMadrid: string): string {
   return `${hoyMadrid.slice(0, 4)}-01-01`
+}
+
+/**
+ * Los cambios que el cobro del mes que viene tiene que enseñar (nº68, como la maqueta). Se hacen con las mismas
+ * funciones que la ficha del cliente, con la sesión de quien pulsa:
+ *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 12 de este mes.
+ *   · Imprenta Rápida Sol: de Básica a Premium desde el mes que viene (sube más de un 30 %: pide «Lo he mirado, aprobar»).
+ *   · Reformas Atalaya: baja de un trabajador, que se cobra este mes y ya no el que viene (para «Este mes no»).
+ */
+export const CAMBIOS_DEL_MES = {
+  alta: { cliente: 'Talleres Ruiz, S.L.', trabajador: 'LUCAS FERRER GIL' },
+  nivel: { cliente: 'Imprenta Rápida Sol, S.L.', nivel: 'Premium' },
+  baja: { cliente: 'Reformas Atalaya, S.L.' },
+} as const
+
+/** Las fechas de esos cambios, a partir de hoy (AAAA-MM-DD, en Madrid). */
+export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; esteMes: string; mesQueViene: string } {
+  const [a, m] = hoyMadrid.slice(0, 7).split('-').map(Number)
+  const sig = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
+  return { altaEl: `${hoyMadrid.slice(0, 7)}-12`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
 }
