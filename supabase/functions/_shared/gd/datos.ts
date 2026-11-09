@@ -12,8 +12,13 @@
 
 export type Situacion = 'Activo' | 'Moroso' | 'Baja' | 'Solo renta'
 export type Servicio = 'Contabilidad' | 'Laboral'
-/** El escenario del sandbox: va en el given_name del cliente de GoCardless (Successful activa y cobra; Penniless falla; Fickle cobra y se retrocede). */
-export type Escenario = 'normal' | 'Successful' | 'Penniless' | 'Fickle'
+/**
+ * El escenario del sandbox: va en el given_name del cliente de GoCardless (Successful activa y cobra; Penniless falla;
+ * Fickle cobra y se retrocede). «normal» se siembra como Successful (mandato firmado al momento); «por_firmar», con su
+ * nombre de verdad: el sandbox deja su mandato en «pending_submission» y Sumied lo enseña «por firmar» (Julio, nº62:
+ * dos, para que el aviso salga sin dominar).
+ */
+export type Escenario = 'normal' | 'por_firmar' | 'Successful' | 'Penniless' | 'Fickle'
 
 /** Las dos empresas emisoras de la demo. «Forma de pago» en Bitrix24 dice de cuál es cada cliente. */
 export const EMISORES = {
@@ -105,7 +110,7 @@ const FILAS: Fila[] = [
   ['Floristería Las Camelias, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Madrid', ['Carmen', 'Pizarro Luna'], gc(90)],
   ['Transportes Meseta, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Leganés', ['Ramón', 'Gallardo Ruiz'], gc(150, ['Luis Ortiz Sáez', 'Víctor Navas Prado', 'Álvaro Cid Montes'])],
   ['Academia Idiomas Puente, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Madrid', ['Sofía', 'Medina Rojas'], gc(120, ['Clara Vidal Rey'])],
-  ['Ferretería El Clavo, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Fuenlabrada', ['Ernesto', 'Lorenzo Marín'], gc(120, ['Daniel Ríos Mateo'])],
+  ['Ferretería El Clavo, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Fuenlabrada', ['Ernesto', 'Lorenzo Marín'], gc(120, ['Daniel Ríos Mateo'], { escenario: 'por_firmar' })],
   ['Estudio Arquitectura Trazo, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Madrid', ['Patricia', 'Calvo Méndez'], gc(150, [], { anual: true })],
   ['Cafetería La Glorieta, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Madrid', ['Javier', 'Toledo Rubio'], gc(120, ['Marta Gil Herranz', 'Irene Sastre Ponce'])],
   ['Gimnasio Fuerza Viva, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Pozuelo de Alarcón', ['Alberto', 'Rey Cuesta'], gc(150, ['Rubén Lago Aguilar', 'Alba Mora Castillo'])],
@@ -123,7 +128,7 @@ const FILAS: Fila[] = [
   ['Pinturas Arcoíris, S.L.', 'sociedad', 'Baja', C, 'sociedad', 'Coslada', ['Rocío', 'Benito Arroyo'], null],
   ['Agencia Viajes Rumbo, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Madrid', ['Cristina', 'Cabello Ferrer'], gc(90)],
   ['Lavandería Espuma, S.L.', 'sociedad', 'Activo', L, 'sociedad', 'Getafe', ['Joaquín', 'Rincón Gil'], gc(null, ['Sara Iglesias Prado', 'Lorena Rivas Toro'])],
-  ['Pastelería Dulce Hogar, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Majadahonda', ['Elisa', 'Montes Lara'], gc(120, ['Alicia Paredes Mena'])],
+  ['Pastelería Dulce Hogar, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Majadahonda', ['Elisa', 'Montes Lara'], gc(120, ['Alicia Paredes Mena'], { escenario: 'por_firmar' })],
   // Autónomos: los lleva Elena Campos (emisor autónomo), que cobra por transferencia.
   ['Lucía Fernández Prado', 'autonomo', 'Activo', C, 'autonomo', 'Madrid', ['Lucía', 'Fernández Prado'], null],
   ['Miguel Ángel Torres Vela', 'autonomo', 'Activo', C, 'autonomo', 'Getafe', ['Miguel Ángel', 'Torres Vela'], null],
@@ -173,6 +178,7 @@ export function resumen() {
     enGoCardless: enGc.length + 1,
     trabajadores: enGc.reduce((s, c) => s + c.gc!.trabajadores.length, 0),
     alMes: enGc.reduce((s, c) => s + (c.gc!.mensual ?? 0) + c.gc!.trabajadores.length * 25, 0) + SOLO_EN_GOCARDLESS.mensual,
-    escenarios: enGc.filter((c) => c.gc!.escenario !== 'normal').map((c) => `${c.gc!.escenario}: ${c.nombre}`),
+    escenarios: enGc.filter((c) => !['normal', 'por_firmar'].includes(c.gc!.escenario)).map((c) => `${c.gc!.escenario}: ${c.nombre}`),
+    porFirmar: enGc.filter((c) => c.gc!.escenario === 'por_firmar').map((c) => c.nombre),
   }
 }

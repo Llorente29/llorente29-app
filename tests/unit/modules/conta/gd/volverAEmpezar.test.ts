@@ -1,9 +1,10 @@
 // GD · «Volver a empezar» (nº51): la puerta, las guardas de la siembra y la
 // entrada «Tu cuenta» de Ajustes, solo en una demo. Datos inventados (T11).
 import { describe, expect, it } from 'vitest'
-import { PASOS, esPaso, porqueNo, type Puerta } from '../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos'
+import { PASOS, esPaso, inicioDeLasCuotas, porqueNo, type Puerta } from '../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos'
 import { GC_SANDBOX, PORTAL_DE_PRUEBAS, crearSiembra, guardaPortal } from '../../../../../supabase/functions/_shared/gd/siembra'
 import { indiceAjustes } from '@/config/navegacion'
+import { vale } from '../../../../../supabase/functions/conta-gocardless-leer/comparacion'
 
 const BIEN = `https://${PORTAL_DE_PRUEBAS}/rest/1/abc123/`
 const puerta = (p: Partial<Puerta> = {}): Puerta => ({ esDemo: true, esAdmin: true, portalCrm: PORTAL_DE_PRUEBAS, entornosGc: ['pruebas'], faltan: [], ...p })
@@ -50,5 +51,16 @@ describe('GD · Ajustes › Tu cuenta', () => {
   it('sale solo en una cuenta de demostración', () => {
     expect(ids(true)).toContain('cuenta')
     expect(ids(false)).not.toContain('cuenta')
+  })
+})
+
+describe('GD · nº63 · las cuotas mensuales de la demo, desde enero', () => {
+  it('enero del año en curso, en Madrid', () => {
+    expect(inicioDeLasCuotas('2026-11-09')).toBe('2026-01-01')
+    expect(inicioDeLasCuotas('2027-01-02')).toBe('2027-01-01')
+  })
+  it('así una cuota cuenta ya este mes; desde diciembre, no (lo que hacía decir «Ningún cliente»)', () => {
+    expect(vale('2026-01', null, '2026-11')).toBe(true)
+    expect(vale('2026-12', null, '2026-11')).toBe(false)
   })
 })

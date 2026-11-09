@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { esPaso, porqueNo } from './pasos.ts'
+import { esPaso, inicioDeLasCuotas, porqueNo } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -100,6 +100,14 @@ Deno.serve(async (req) => {
         break
       }
       case 'tarifa': {
+        // nº63 · Los clientes de la demo son de antes: sus cuotas mensuales de GoCardless empiezan en enero, no en
+        // el primer cargo de una suscripción recién creada en el sandbox. Solo esta cuenta demo; ni las anuales ni las manuales.
+        const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+        const desde = inicioDeLasCuotas(hoy)
+        const { data: movidas, error: eL } = await admin.from('conta_linea').update({ desde })
+          .eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'mes').gt('desde', desde).select('id')
+        if (eL) throw new Error(`No se han podido poner las cuotas desde enero: ${eL.message}`)
+        dicho.push(`${(movidas ?? []).length} cuotas mensuales de GoCardless, desde el ${desde.split('-').reverse().join('/')}.`)
         const t = await admin.rpc('demo_gestoria_tarifa_sembrar', { p_cuenta: cuenta })
         if (t.error) throw new Error(t.error.message)
         const i = await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: cuenta })

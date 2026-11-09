@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Sumied</title>
+    <!-- GB · La pestaña «Sumied» dentro de la ficha de Bitrix24 (maqueta EnCRM.dc.html). Entrada aparte, como pagar.html: no pasa por la app. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --tinta: #0F1B2D; --suave: #4A5B74; --texto: #24344D; --linea: #EEF1F6; --borde: #D5DCE6; --fondo: #F4F6FA;
+        --azul: #1F5BD8; --azul-fondo: #EAF0FD; --azul-borde: #C5D5F8; --oscuro: #0E2240; --sobre-oscuro: #C9D4E6;
+        --verde: #0B6B4F; --verde-fondo: #E6F5EE; --rojo: #A11B12; --rojo-fondo: #FDECEA; --ambar: #8A5A00; --ambar-fondo: #FDF3E1;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: var(--fondo); color: var(--tinta); font: 14px/1.45 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; }
+      a { color: var(--azul); font-weight: 600; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      .marco { min-height: 100vh; }
+      .cabeza { background: #fff; border-bottom: 1px solid #E3E8F0; padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+      .logo { font-family: "Space Grotesk", Inter, sans-serif; font-weight: 700; font-size: 17px; color: var(--azul); }
+      .cabeza-texto { font-size: 13px; color: var(--suave); }
+      .chip { margin-left: auto; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+      [data-tono=bien] { background: var(--verde-fondo); color: var(--verde); }
+      [data-tono=mal] { background: var(--rojo-fondo); color: var(--rojo); }
+      [data-tono=aviso] { background: var(--ambar-fondo); color: var(--ambar); }
+      [data-tono=neutro] { background: var(--linea); color: var(--suave); }
+      .cuerpo { padding: 16px; display: flex; flex-direction: column; gap: 14px; max-width: 1200px; }
+      .cliente { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; }
+      .cliente h1 { margin: 0; font-size: 18px; font-weight: 700; }
+      .pequeno { font-size: 13px; color: var(--suave); }
+      .aviso { border-radius: 12px; padding: 12px 14px; font-size: 14px; font-weight: 600; }
+      .rejilla { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+      .columna { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+      .bloque { background: #fff; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 1px 2px rgba(15,27,45,.06); }
+      .bloque h2 { margin: 0 0 4px; font-size: 16px; font-weight: 700; }
+      .fila { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--linea); font-size: 14px; }
+      .fila:last-child { border-bottom: 0; }
+      .fila b { font-weight: 600; }
+      .derecha { font-weight: 600; white-space: nowrap; text-align: right; }
+      .recibo { background: var(--oscuro); color: #fff; border-radius: 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+      .recibo .antetitulo { font-size: 13px; color: var(--sobre-oscuro); }
+      .recibo .total { font-family: "Space Grotesk", Inter, sans-serif; font-size: 32px; font-weight: 700; line-height: 1.15; }
+      .recibo .linea { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid rgba(201,212,230,.22); font-size: 13px; }
+      .recibo .linea .detalle { color: var(--sobre-oscuro); font-size: 12px; }
+      .porque { display: inline-block; margin: 4px 6px 0 0; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.12); color: #fff; }
+      .cobro { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 2px 0; }
+      .estado-bien { color: var(--verde); font-weight: 600; } .estado-mal { color: var(--rojo); font-weight: 600; } .estado-aviso { color: var(--ambar); font-weight: 600; } .estado-neutro { color: var(--suave); font-weight: 600; }
+      .abrir { font-size: 14px; }
+      .vacio { font-size: 14px; color: var(--suave); }
+      .mensaje { margin: 48px auto; max-width: 520px; background: #fff; border-radius: 14px; padding: 24px; text-align: center; box-shadow: 0 1px 2px rgba(15,27,45,.06); }
+      .mensaje h1 { margin: 0 0 8px; font-size: 18px; }
+      .mensaje p { margin: 0; color: var(--texto); }
+      .esqueleto { background: linear-gradient(90deg, #E9EDF3 0%, #F3F5F9 50%, #E9EDF3 100%); background-size: 200% 100%; animation: brillo 1.2s infinite; border-radius: 14px; }
+      @keyframes brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+      @media (max-width: 760px) { .rejilla { grid-template-columns: minmax(0, 1fr); } .chip { margin-left: 0; } }
+      @media (prefers-reduced-motion: reduce) { .esqueleto { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div class="marco" id="pestana" aria-live="polite">
+      <div class="cabeza"><span class="logo">Sumied</span><span class="cabeza-texto">Cuotas, recibos y facturas</span></div>
+      <div class="cuerpo" aria-busy="true">
+        <div class="esqueleto" style="height: 28px; width: 40%"></div>
+        <div class="rejilla"><div class="esqueleto" style="height: 220px"></div><div class="esqueleto" style="height: 220px"></div></div>
+      </div>
+    </div>
+    <script type="module" src="/src/publicas/bitrixPestana.ts"></script>
+  </body>
+</html>
