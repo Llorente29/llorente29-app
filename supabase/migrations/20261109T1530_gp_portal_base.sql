@@ -936,6 +936,9 @@ grant all on public.conta_portal_acceso, public.conta_portal_ajustes, public.con
   to service_role;
 
 -- Las funciones: las de leer y hacer, a authenticated; las de dentro y las del servidor, a nadie más.
+-- Se quitan también a authenticated: Supabase da EXECUTE por defecto a anon y authenticated en cada
+-- función nueva de public, y una función de dentro (SECURITY DEFINER, sin comprobar quién llama) o una
+-- del servidor (el código de la firma) no la puede llamar nadie con sesión. Lo cazó la prueba de staging.
 revoke all on function public.conta_portal_ve(uuid, boolean), public._conta_portal_yo(uuid, boolean), public._conta_portal_empresa(uuid, uuid),
   public._conta_portal_marca(uuid, uuid), public._conta_portal_estado_recibo(text), public._conta_portal_devuelto_pagado(uuid),
   public._conta_portal_devueltos(uuid, uuid), public._conta_portal_proximo(uuid, uuid), public._conta_portal_cuenta_propia(uuid, uuid),
@@ -949,7 +952,7 @@ revoke all on function public.conta_portal_ve(uuid, boolean), public._conta_port
   public.conta_portal_incidencia_resolver(uuid, text), public.conta_portal_ajustes_guardar(uuid, text[]),
   public.conta_portal_acceso_usuario(uuid, uuid), public.conta_portal_firma_pedir(uuid, uuid, text, text), public.conta_portal_firma_pdf(uuid, text, text),
   public.conta_portal_incidencia_parada(uuid, boolean, text)
-  from public, anon;
+  from public, anon, authenticated;
 grant execute on function public.conta_portal_ve(uuid, boolean),
   public.conta_portal_entrada(), public.conta_portal_inicio(uuid), public.conta_portal_facturas(uuid), public.conta_portal_pagos(uuid),
   public.conta_portal_documentos(uuid), public.conta_portal_trabajadores(uuid), public.conta_portal_mensajes(uuid), public.conta_portal_cuenta(uuid),
@@ -984,7 +987,7 @@ begin
   end if;
   return (v_partes[3] = 'subidas' and public.conta_portal_ve(v_cliente)) or (v_partes[3] in ('mensajes', 'peticiones', 'firmas') and public.conta_portal_ve(v_cliente, true));
 end $$;
-revoke all on function public.conta_portal_ruta_puede(text, boolean) from public, anon;
+revoke all on function public.conta_portal_ruta_puede(text, boolean) from public, anon, authenticated;
 grant execute on function public.conta_portal_ruta_puede(text, boolean) to authenticated;
 
 drop policy if exists conta_portal_leer on storage.objects;

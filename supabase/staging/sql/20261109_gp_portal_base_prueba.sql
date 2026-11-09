@@ -158,10 +158,29 @@ begin
   perform public.conta_portal_incidencia_crear(g.ca, 'cambio_datos', 'La dirección ha cambiado');
   j := public.conta_portal_invitar(g.ca, 'Administracion@Ejemplo.invalid', 'Administración', 'facturas_documentos');
   if (j ->> 'nuevo')::boolean is not true then raise exception 'PRUEBA GP-1530 · 2: no invita: %', j; end if;
+  -- Las de dentro y las del servidor: nadie con sesión (Supabase las daría por defecto a authenticated).
+  declare f text;
   begin
-    perform public.conta_portal_incidencia_parada(gen_random_uuid(), true);
-    raise exception 'PRUEBA GP-1530 · 2: la persona del portal llama a una función del servidor.';
-  exception when insufficient_privilege then null; end;
+    foreach f in array array[
+      'select public.conta_portal_incidencia_parada(gen_random_uuid(), true)',
+      'select public.conta_portal_acceso_usuario(gen_random_uuid(), gen_random_uuid())',
+      'select public.conta_portal_firma_pedir(gen_random_uuid(), gen_random_uuid(), ''correo'', ''x'')',
+      'select public.conta_portal_firma_pdf(gen_random_uuid(), ''x'', null)',
+      'select public._conta_portal_proximo(gen_random_uuid(), gen_random_uuid())',
+      'select public._conta_portal_devueltos(gen_random_uuid(), gen_random_uuid())',
+      'select public._conta_portal_marca(gen_random_uuid(), gen_random_uuid())',
+      'select public._conta_portal_yo(null, false)',
+      'select public._conta_portal_empresa(gen_random_uuid(), gen_random_uuid())',
+      'select public._conta_portal_cuenta_propia(gen_random_uuid(), gen_random_uuid())',
+      'select public._conta_portal_devuelto_pagado(gen_random_uuid())',
+      'select public._conta_portal_estado_recibo(''x'')']
+    loop
+      begin
+        execute f;
+        raise exception 'PRUEBA GP-1530 · 2: la persona del portal llama a una función de dentro o del servidor: %', f;
+      exception when insufficient_privilege then null; end;
+    end loop;
+  end;
   raise notice 'GP-1530 · 2: «A todo» lee sus siete pantallas y escribe, pide, avisa e invita. OK';
 end $$;
 
