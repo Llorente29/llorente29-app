@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { rutaClienteGestoria, rutaClientesCuotas, rutaTarifasGestoria } from '@/config/navegacion'
+import { rutaClienteGestoria, rutaClientesCuotas, rutaCobroGestoria, rutaTarifasGestoria } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer as useLeerDeLibros } from '@/modules/conta/libros/contexto'
@@ -73,6 +73,7 @@ export function ClientesG04Page() {
       }}
       alExportar={exportar} alAsignar={() => setParams(lasDos ? { empresa: 'las-dos', ver: 'sin-cliente' } : { ver: 'sin-cliente' })}
       hoy={hoy} rutaPonerCuota={(cliente, empresa) => `${rutaClienteGestoria(cliente, empresa)}${empresa ? '&' : '?'}anadir=1`}
+      rutaCobro={lasDos ? null : rutaCobroGestoria(activa.id)}
       alCobradoPorOtraVia={async (empresa, cargos, via, fecha) => {
         const frases: string[] = []
         for (const c of cargos) frases.push((await acciones.cobradoPorOtraVia(empresa, c, via, fecha)).frase)
@@ -200,6 +201,7 @@ export function TarifaG04Page() {
           return (await acciones.crearServicio(e, nombre, g.forma, g.periodo, conPrecio ? g.importe : null, conPrecio ? g.tramos : null, conPrecio ? `${desde}-01` : null, false)).frase
         }),
         guardarPrecio: (o, f, desde) => tras(() => precio(o, f, desde)),
+        guardarQueIncluye: (servicio, texto) => tras(async () => (await acciones.queIncluye(e, servicio, texto, false)).frase),
         guardarNivel: (servicio, nombre, orden, incluye, f, desde) => tras(async () => {
           const r = await acciones.guardarNivel(e, servicio, null, nombre, orden, incluye, false, false)
           if (!f || !r.id) return r.frase

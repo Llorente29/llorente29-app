@@ -61,6 +61,12 @@ describe('las palabras: aviso, al instante, al día', () => {
     expect(gc[0]).toContain('Endpoint de webhook (así lo llama GoCardless)')
     for (const t of [...crm, ...gc]) expect(t.replace(/Webhook saliente|Endpoint de webhook/g, '')).not.toMatch(/webhook|endpoint|payload|hmac/i)
   })
+  it('GD · con la conexión de pruebas, GoCardless se da de alta en el sandbox (manage-sandbox), no en el de verdad', () => {
+    expect(pasosParaActivar('gocardless', 'GoCardless')[0]).toContain('En manage.gocardless.com,')
+    const pruebas = pasosParaActivar('gocardless', 'GoCardless', true)
+    expect(pruebas[0]).toContain('En manage-sandbox.gocardless.com (el de pruebas),')
+    expect(pruebas.join(' ')).not.toContain('manage.gocardless.com')
+  })
 })
 
 describe('la línea «Al día» de Clientes (se pone cuando fusione el G04)', () => {

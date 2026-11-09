@@ -5,8 +5,8 @@
 // tests/unit/modules/conta/gestoria/lecturaGocardless.test.ts). Solo GET.
 
 import {
-  BASES, cabeceras, casarMotivos, desdeHaceMeses, leerCliente, leerCobro, leerCuentaAbono, leerMandato, leerSuscripcion, leerTodo, urlDePagina,
-  type ClienteGc, type CobroGc, type CuentaAbonoGc, type Entorno, type MandatoGc, type Recurso, type SuscripcionGc,
+  BASES, cabeceras, casarMotivos, desdeHaceMeses, leerCliente, leerCobro, leerCuentaAbono, leerCuentaCliente, leerMandato, leerPayout, leerSuscripcion, leerTodo, urlDePagina,
+  type ClienteGc, type CobroGc, type CuentaAbonoGc, type CuentaClienteGc, type Entorno, type MandatoGc, type PayoutGc, type Recurso, type SuscripcionGc,
 } from './lector.ts'
 
 export type Pedir = (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
@@ -17,6 +17,10 @@ export interface DatosGc {
   suscripciones: SuscripcionGc[]
   cobros: CobroGc[]
   abonos: CuentaAbonoGc[]
+  /** G05 · Las cuentas de los clientes (lo justo para enmascararlas: los últimos dígitos, el país y el banco). */
+  cuentasCliente: CuentaClienteGc[]
+  /** G05 · nº 43 · Los pagos de GoCardless al banco (payouts) de los mismos 6 meses: día de llegada y neto. */
+  payouts: PayoutGc[]
   /** Desde cuándo se han leído los cobros (el día 1 de hace 6 meses). */
   desde: string
 }
@@ -44,16 +48,18 @@ export async function comprobarToken(pedir: Pedir, entorno: Entorno, token: stri
   return { ok: false, porque: r.status === 401 || r.status === 403 ? `GoCardless no acepta ese token en ${donde}.` : `GoCardless ha contestado ${r.status} en ${donde}.` }
 }
 
-/** Todo lo que se lee de una cuenta: clientes, mandatos, suscripciones, cobros de 6 meses con su motivo y la cuenta de abono. */
+/** Todo lo que se lee de una cuenta: clientes, mandatos, suscripciones, cobros de 6 meses con su motivo y su pago al banco, los payouts y la cuenta de abono. */
 export async function leerCuentaGc(pedir: Pedir, entorno: Entorno, token: string, hoy: string): Promise<DatosGc> {
   const desde = desdeHaceMeses(hoy, 6)
-  const [rc, rm, rs, rp, re, ra] = await Promise.all([
+  const [rc, rm, rs, rp, re, ra, rb, ro] = await Promise.all([
     pedirRecurso(pedir, entorno, token, 'customers'),
     pedirRecurso(pedir, entorno, token, 'mandates'),
     pedirRecurso(pedir, entorno, token, 'subscriptions'),
     pedirRecurso(pedir, entorno, token, 'payments', { 'charge_date[gte]': desde }),
     pedirRecurso(pedir, entorno, token, 'events', { resource_type: 'payments', 'created_at[gte]': `${desde}T00:00:00Z` }),
     pedirRecurso(pedir, entorno, token, 'creditor_bank_accounts'),
+    pedirRecurso(pedir, entorno, token, 'customer_bank_accounts'),
+    pedirRecurso(pedir, entorno, token, 'payouts', { 'created_at[gte]': `${desde}T00:00:00Z` }),
   ])
   return {
     clientes: rc.map(leerCliente),
@@ -61,6 +67,8 @@ export async function leerCuentaGc(pedir: Pedir, entorno: Entorno, token: string
     suscripciones: rs.map(leerSuscripcion),
     cobros: casarMotivos(rp.map(leerCobro), re),
     abonos: ra.map(leerCuentaAbono).filter((a) => a.activa),
+    cuentasCliente: rb.map(leerCuentaCliente),
+    payouts: ro.map(leerPayout),
     desde,
   }
 }

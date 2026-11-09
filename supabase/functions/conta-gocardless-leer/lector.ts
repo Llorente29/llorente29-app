@@ -6,8 +6,9 @@
 // suscripción, cobro y cuenta de abono. Puro: lo prueban las unitarias
 // (tests/unit/modules/conta/gestoria/lectorGocardless.test.ts).
 //
-// Solo LEE: GET a /customers, /mandates, /subscriptions, /payments, /events y
-// /creditor_bank_accounts. Nunca escribe en GoCardless.
+// Solo LEE: GET a /customers, /mandates, /subscriptions, /payments, /events,
+// /creditor_bank_accounts y /customer_bank_accounts (de estas, solo los últimos
+// dígitos, el país y el banco: G05, para la factura). Nunca escribe en GoCardless.
 //
 // API de GoCardless (documentación oficial, https://developer.gocardless.com/api-reference):
 //   · Cabecera obligatoria «GoCardless-Version: 2015-07-06» y
@@ -29,7 +30,7 @@ export function cabeceras(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'GoCardless-Version': VERSION_API, Accept: 'application/json' }
 }
 
-export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts'
+export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts'
 
 /** La dirección de una página: el recurso, sus filtros y el cursor de la anterior. */
 export function urlDePagina(entorno: Entorno, recurso: Recurso, filtros: Record<string, string> = {}, despues: string | null = null): string {
@@ -112,6 +113,16 @@ export function leerCliente(x: Record<string, unknown>): ClienteGc {
     nif,
     creado: texto(x.created_at),
   }
+}
+
+/**
+ * G05 · La cuenta del cliente de un mandato, lo justo para enseñarla
+ * enmascarada en la factura y el portal: los últimos dígitos (2 en euros, 4 en
+ * dólares neozelandeses), el país y el banco. Nunca la cuenta entera.
+ */
+export interface CuentaClienteGc { id: string; final: string | null; pais: string | null; banco: string | null }
+export function leerCuentaCliente(x: Record<string, unknown>): CuentaClienteGc {
+  return { id: String(x.id), final: texto(x.account_number_ending), pais: texto(x.country_code), banco: texto(x.bank_name) }
 }
 
 /** Estados de un mandato en GoCardless. «activo» para el casado: active (y submitted, que ya cobra). */
@@ -205,6 +216,8 @@ export interface CobroGc {
   moneda: string
   mandatoId: string | null
   suscripcionId: string | null
+  /** G05 · nº 43 · El pago de GoCardless al banco que lo lleva (links.payout), si ya lo tiene. */
+  payoutId: string | null
   /** El motivo del fallo, de su evento (/events): lo pone casarMotivos. */
   motivo: string | null
 }
@@ -220,8 +233,21 @@ export function leerCobro(x: Record<string, unknown>): CobroGc {
     moneda: String(x.currency ?? ''),
     mandatoId: enlace(x, 'mandate'),
     suscripcionId: enlace(x, 'subscription'),
+    payoutId: enlace(x, 'payout'),
     motivo: null,
   }
+}
+
+/**
+ * G05 · nº 43 · Un pago de GoCardless a la cuenta de la empresa (payout): junta
+ * los cobros de un día. Trae el día en que llega al banco (arrival_date), su
+ * neto (amount, ya sin la comisión: deducted_fees) y su referencia.
+ */
+export interface PayoutGc { id: string; estado: string; llegada: string | null; importeCent: number; comisionCent: number | null; moneda: string; referencia: string | null }
+export function leerPayout(x: Record<string, unknown>): PayoutGc {
+  const cent = (v: unknown) => (Number.isInteger(v) ? (v as number) : Math.round(Number(v ?? 0)))
+  return { id: String(x.id), estado: String(x.status ?? ''), llegada: texto(x.arrival_date), importeCent: cent(x.amount),
+    comisionCent: x.deducted_fees == null ? null : cent(x.deducted_fees), moneda: String(x.currency ?? ''), referencia: texto(x.reference) }
 }
 
 /**

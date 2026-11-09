@@ -203,7 +203,11 @@ async function sembrarGoCardless() {
   for (const c of enGc) {
     n++
     const { mandato, sello } = await clienteEnGc(n, { nombre: c.nombre, correo: correoDelCliente(c), nif: c.nif, ciudad: c.ciudad,
-      given: c.gc.escenario === 'normal' ? c.contacto.nombre : c.gc.escenario, family: c.contacto.apellidos })
+      // El sandbox deja un mandato SEPA en «pending_submission» y no lo activa solo (los del 06/11 seguían así el 09/11),
+      // y su simulador «mandate_activated» no vale para SEPA. Un cliente «Successful» nace con el mandato activo y
+      // cobra al momento: así se siembran los normales (Julio, nº32: activos para el congreso). En Sumied no se ve: el
+      // nombre sale de company_name; la persona de contacto va en los apellidos.
+      given: c.gc.escenario === 'normal' ? 'Successful' : c.gc.escenario, family: `${c.contacto.nombre} ${c.contacto.apellidos}` })
     if (c.gc.mensual) { await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(c.nombre)}`, c.gc.mensual); subs++ }
     for (const t of c.gc.trabajadores) { await suscripcion(mandato, sello, `GESTION LABORAL ${MAYUS(t)}`, 25); subs++ }
     // Con el mismo nombre en todos, la importación lo convierte en UN servicio (con el cliente detrás, sería uno por cliente).
@@ -216,7 +220,7 @@ async function sembrarGoCardless() {
   // El cobro de GoCardless sin cliente en el CRM.
   n++
   const s = SOLO_EN_GOCARDLESS
-  const { mandato, sello } = await clienteEnGc(n, { nombre: s.nombre, correo: s.correo, nif: s.nif, given: 'Alba', family: 'Centro de Estudios', ciudad: 'Madrid' })
+  const { mandato, sello } = await clienteEnGc(n, { nombre: s.nombre, correo: s.correo, nif: s.nif, given: 'Successful', family: 'Alba Centro de Estudios', ciudad: 'Madrid' })
   await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(s.nombre)}`, s.mensual); subs++
   decir(`  ✓ Sembrado en el sandbox: ${n} clientes con su mandato, ${subs} suscripciones y ${sueltos} cobros sueltos (Successful, Penniless y Fickle).`)
 }

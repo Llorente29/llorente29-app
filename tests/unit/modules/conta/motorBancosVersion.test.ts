@@ -11,6 +11,8 @@ import { PROPUESTA_RECALCULADA } from '@/modules/conta/lib/bancosVista'
 
 const VERSIONES: Record<string, string> = {
   '2026-11-02.1': 'ddacc80511990c6ea52c0fc8d4b8ce4d',
+  // G05 · nº 43: el ingreso de GoCardless (abonoDeGocardless).
+  '2026-11-09.1': '0f0d0c2f949ad683ee1cdb52196a40ea',
 }
 
 describe('Cola 2 · la versión del motor de Bancos', () => {

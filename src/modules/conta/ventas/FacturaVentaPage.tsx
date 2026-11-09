@@ -25,7 +25,7 @@
 import { useMemo, useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { jsPDF } from 'jspdf'
-import { rutaAsiento, rutaFacturaVenta, rutaFacturasVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta } from '@/config/navegacion'
+import { rutaAsiento, rutaCobroGestoria, rutaFacturaVenta, rutaFacturasVenta, rutaLiquidacionesVentas, rutaNuevaFacturaVenta } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
@@ -45,7 +45,7 @@ import { leerAsiento, localesDeLaCuenta } from '@/modules/conta/services/diarioS
 import { enviarADiez } from '@/modules/conta/services/conDiezService'
 import { useEnvioDiez } from '@/modules/conta/services/envioDiezService'
 import {
-  borrarBorrador, catalogosFactura, cobrarFactura, corregirFactura, datosDelPdf, direccion, emitirFactura, empresaDelPdf, enviarPorCorreo, guardarBorrador, guardarPdf, leerFactura, urlDelPdf,
+  borrarBorrador, catalogosFactura, cobrarFactura, corregirFactura, datosDelPdf, datosSumied, direccion, emitirFactura, empresaDelPdf, enviarPorCorreo, guardarBorrador, guardarPdf, leerFactura, urlDelPdf,
   type Catalogos, type FacturaGuardada,
 } from '@/modules/conta/services/ventasService'
 import {
@@ -56,6 +56,10 @@ import { MENCION_SIN_IVA, porqueNoVale, zonaDelCliente } from '@/modules/conta/l
 import { BandaPruebas } from '@/modules/conta/verifactu/BandaPruebas'
 import { HaciendaDeFactura } from '@/modules/conta/verifactu/HaciendaDeFactura'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
+import { facturaSumiedPdf } from '../../../../supabase/functions/_shared/facturaSumiedPdf.ts'
+import { leerFichaRecibo } from '@/modules/conta/gestoria/g05/datos'
+import { modeloFicha } from '@/modules/conta/gestoria/g05/modeloFicha'
+import { FichaFactura } from '@/modules/conta/gestoria/g05/FichaFactura'
 import { BloqueCobro, DialogoClienteNuevo, DialogoCobro, DialogoCorregir, DialogoEmitir, LineasEditables, LineasLeer, PorqueSinIva, Totales } from './FacturaVentaBloques'
 
 const importeEs = (n: number) => textoDeNumero(n)
@@ -113,6 +117,21 @@ export default function FacturaVentaPage() {
   const locales = useLeer(accountId && ejeLocal ? () => localesDeLaCuenta(accountId) : null, `${accountId}:${ejeLocal ? 'con' : 'sin'}-local:locales`)
   const asiento = useLeer(accountId && f?.entryId ? () => leerAsiento(accountId, f.entryId!) : null, `${accountId}:${f?.entryId}:asiento`)
   const pdfUrl = useLeer(f?.pdf ? () => urlDelPdf(f.pdf!.ruta) : null, `${f?.pdf?.ruta}:url`)
+  // G05 · T4 · La factura de un recibo: su ficha es la de la maqueta (Factura.dc.html), en una lectura.
+  const leidaFicha = useLeer(accountId && facturaId ? async () => ({ ficha: await leerFichaRecibo(accountId, facturaId) }) : null, `${accountId}:${facturaId}:ficha-recibo:${vuelta}`)
+  // Lo último leído de esta factura, mientras vuelve a leer: la ficha no cambia de cara ni se desmonta.
+  const [ultimaFicha, setUltimaFicha] = useState<{ id: string; datos: NonNullable<typeof leidaFicha.datos> } | null>(null)
+  if (facturaId && leidaFicha.datos && leidaFicha.datos !== ultimaFicha?.datos) setUltimaFicha({ id: facturaId, datos: leidaFicha.datos })
+  const ficha = leidaFicha.datos ?? (ultimaFicha && ultimaFicha.id === facturaId ? ultimaFicha.datos : null)
+  // Sin poder leerla (p. ej. aún sin publicar en este entorno), la ficha de siempre.
+  const fichaRecibo = { datos: ficha?.ficha ?? null, sabida: !!ficha || !!leidaFicha.error || !facturaId }
+  // Sin su PDF guardado, cómo es con el modelo «Sumied» (hecho aquí, sin guardar).
+  const sumiedVista = useLeer(accountId && f && !f.pdf && fichaRecibo.datos ? () => datosSumied(accountId, f) : null, `${accountId}:${f?.id}:${f?.pdf ? 'con' : 'sin'}-pdf:sumied:${vuelta}`)
+  const sumiedUrl = useMemo(() => {
+    if (!sumiedVista.datos) return null
+    try { return URL.createObjectURL(new Blob([facturaSumiedPdf(jsPDF, sumiedVista.datos) as BlobPart], { type: 'application/pdf' })) } catch { return null }
+  }, [sumiedVista.datos])
+  useEffect(() => () => { if (sumiedUrl) URL.revokeObjectURL(sumiedUrl) }, [sumiedUrl])
 
   const cat = catalogos.datos ?? (!catalogos.error && ultimosCatalogos && ultimosCatalogos.id === companyId ? ultimosCatalogos.datos : null)
   const base = useMemo(() => {
@@ -312,12 +331,46 @@ export default function FacturaVentaPage() {
   if (leida.error || (facturaId && leida.datos === null && !leida.error && catalogos.datos && false)) {
     return <div className="s-pagina"><EncabezadoPagina titulo="Factura" /><p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido leer la factura: {leida.error} <button type="button" className="s-boton s-boton-enlace" onClick={leida.recargar}>Reintentar</button></p></div>
   }
-  if (!cat || (facturaId && !f)) {
+  if (!cat || (facturaId && !f) || (f && f.estado !== 'borrador' && !fichaRecibo.sabida)) {
     return (
       <div className="s-pagina">
         <EncabezadoPagina titulo={nueva ? 'Nueva factura' : 'Factura'} />
         {catalogos.error ? <p className="s-aviso-lista" data-tono="falta" role="alert">No se ha podido preparar la factura: {catalogos.error}</p>
           : <div className="s-lista" aria-busy="true" aria-label="Cargando la factura"><div className="s-lista-cargando" /></div>}
+      </div>
+    )
+  }
+
+  // G05 · T4 · La emitida que sale de un recibo: la ficha de la maqueta.
+  if (f && f.estado !== 'borrador' && fichaRecibo.datos) {
+    const fr = fichaRecibo.datos
+    const m = modeloFicha(fr, { numero: f.numero, serie: f.serie, fecha: f.fecha, total: f.total, cliente: f.cliente.nombre,
+      enviadaEl: f.enviadaEl, correo: f.correo ?? f.cliente.correo, anulada: f.estado === 'anulada' }, hoy)
+    const url = pdfUrl.datos ?? sumiedUrl
+    return (
+      <div className="s-pagina" data-prueba="ficha-venta" data-estado={f.estado}>
+        <BandaPruebas />
+        <FichaFactura modelo={m} rutaVolver={rutaCobroGestoria(m.volver.empresa, m.volver.mes)} rutaAsiento={rutaAsiento}
+          documento={url ? <PapelPdf url={url} titulo={`La factura ${f.numero ?? ''}`} />
+            : <p className="g5-apoyo">{sumiedVista.error ? `No se ha podido hacer su PDF: ${sumiedVista.error}` : 'Preparando su PDF…'}</p>}
+          aviso={aviso} descargar={pdfUrl.datos ?? null} alReenviar={() => void mandarDeNuevo()}
+          alAbono={f.estado === 'emitida' && !f.rectificativa && f.rectificativas.length === 0 ? () => setDialogo('corregir') : null}
+          debajo={accountId && fr.verifactu?.estado === 'incorrecto' ? (
+            <HaciendaDeFactura accountId={accountId} quien={userName ?? null}
+              factura={{ id: f.id, numero: f.numero, emitidaEl: f.emitidaEl, porque: f.porque, sinIva: f.lineas.some((l) => l.tipo === 0), pais: f.cliente.pais, anulada: f.estado === 'anulada' }}
+              alRectificar={f.estado === 'emitida' && !f.rectificativa ? () => setDialogo('corregir') : null} alCambiar={() => setVuelta((x) => x + 1)} />
+          ) : null} />
+        {dialogo === 'corregir' && (
+          <DialogoCorregir numero={f.numero ?? ''} sinDatos={false} traspaso={mensual ? 'en el traspaso de su mes' : null} alCerrar={() => setDialogo(null)}
+            alCorregir={async (tipo, motivo) => {
+              try {
+                const r = await corregirFactura(f.id, tipo, motivo, userName)
+                setDialogo(null)
+                navegar(rutaFacturaVenta(r.id))
+                return null
+              } catch (e) { return e instanceof Error ? e.message : String(e) }
+            }} />
+        )}
       </div>
     )
   }

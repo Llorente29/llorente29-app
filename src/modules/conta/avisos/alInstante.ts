@@ -56,7 +56,8 @@ export function direccionDelAviso(base: string, o: { origen: 'crm'; cuenta: stri
 }
 
 /** Los pasos para el administrador (los de «avisos_al_instante_qbo»). */
-export function pasosParaActivar(origen: OrigenAviso, nombre: string): string[] {
+/** Los pasos para darlo de alta. `pruebas`: la conexión es del entorno de pruebas (en GoCardless, el sandbox tiene su propia dirección). */
+export function pasosParaActivar(origen: OrigenAviso, nombre: string, pruebas = false): string[] {
   if (origen === 'crm') {
     return [
       `En ${nombre}, ve a Recursos para desarrolladores › Otros › Webhook saliente (así lo llama ${nombre}).`,
@@ -67,7 +68,7 @@ export function pasosParaActivar(origen: OrigenAviso, nombre: string): string[] 
     ]
   }
   return [
-    'En manage.gocardless.com, como administrador, ve a Desarrolladores › Crear › Endpoint de webhook (así lo llama GoCardless).',
+    `En ${pruebas ? 'manage-sandbox.gocardless.com (el de pruebas)' : 'manage.gocardless.com'}, como administrador, ve a Desarrolladores › Crear › Endpoint de webhook (así lo llama GoCardless).`,
     'Ponle de nombre «Sumied» y, en la dirección, pega la de abajo (botón «Copiar»). Es de esta empresa: cada cuenta de GoCardless tiene la suya.',
     'Créalo, ábrelo y copia su secreto. Pégalo aquí abajo. No lo mandes por correo ni por chat.',
     'Enciende «Al instante» y pulsa «Probar».',

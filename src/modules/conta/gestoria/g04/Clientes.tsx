@@ -32,6 +32,8 @@ export interface PropsClientes {
   alCobradoPorOtraVia: (empresa: string, cargos: string[], via: 'transferencia' | 'efectivo', fecha: string) => Promise<string>
   /** «Ponerle la cuota»: a la ficha, con «+ Añadir» abierto. */
   rutaPonerCuota: (cliente: string, empresa: string | null) => string
+  /** G05 · «Revisar el cobro» de la empresa elegida (con «Las dos», no hay uno solo: sin enlace). */
+  rutaCobro?: string | null
   hoy: string
 }
 
@@ -96,7 +98,9 @@ export function Clientes(p: PropsClientes) {
             {m.banda.sinFecha > 0 && ` ${miles(m.banda.sinFecha)} ${m.banda.sinFecha === 1 ? 'suscripción activa no trae' : 'suscripciones activas no traen'} fecha.`}
           </div>
         </div>
-        <button type="button" className="g4-banda-boton" onClick={() => { setGrupo('se_cobra'); setFiltro('necesitan_algo'); listaRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Revisar el cobro →</button>
+        {p.rutaCobro
+          ? <Link className="g4-banda-boton" to={p.rutaCobro}>Revisar el cobro →</Link>
+          : <button type="button" className="g4-banda-boton" onClick={() => { setGrupo('se_cobra'); setFiltro('necesitan_algo'); listaRef.current?.scrollIntoView({ behavior: 'smooth' }) }}>Revisar el cobro →</button>}
       </section>
 
       <section aria-label="Cómo va el despacho" className="g4-cifras">

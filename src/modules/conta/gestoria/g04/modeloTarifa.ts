@@ -10,6 +10,7 @@
 // se inventa: sin precio, lo dice. Puro: lo prueba
 // tests/unit/modules/conta/gestoria/g04/modeloTarifa.test.ts.
 
+import { QUE_INCLUYE_POR_DEFECTO } from '../../../../../supabase/functions/_shared/facturaSumiedPdf'
 import {
   claveDe, euros, importeDeForma, porSeparado, precioDelMes, vale, type Forma, type Objetivo, type Precio,
 } from '../../../../../supabase/functions/_shared/tarifa/precio'
@@ -36,6 +37,8 @@ export interface DetalleTarifa {
   /** «Servicio con niveles», «Servicio» o «Paquete». */
   tipoTexto: string
   descripcion: string | null
+  /** G05 · El «Qué incluye» del servicio (sale en la factura debajo de su nombre): el suyo o, sin él, el de siempre del catálogo. Null en un paquete. */
+  queIncluye: { texto: string | null; porDefecto: boolean } | null
   niveles: { id: string; nombre: string; precio: string | null; incluye: string[]; masElegido: boolean; clientes: number }[]
   /** El precio general de la tarifa (si lo hay), para la forma de cobro y «Pruébalo». */
   general: Precio | null
@@ -195,6 +198,8 @@ export function modeloTarifa(d: DatosClientes, empresaId: string, hoy: string): 
         : especialesDe({ tipo: 'servicio', servicioId: sid }, !!g)
       return {
         entrada, tipoTexto: niveles.length ? 'Servicio con niveles' : 'Servicio', descripcion: null, niveles, general: g,
+        queIncluye: s && typeof s.incluye === 'string' && s.incluye.trim() ? { texto: s.incluye.trim(), porDefecto: false }
+          : { texto: QUE_INCLUYE_POR_DEFECTO[String(s?.clave ?? '')] ?? null, porDefecto: true },
         formaTipo: g?.forma.tipo ?? null, reglas: g ? reglasDe(g.forma) : [], porTrabajador: s?.forma === 'por_empleado' || g?.forma.tipo !== 'fijo' && !!g,
         paquete: null, especiales, sinPrecioGeneral: !niveles.length && !g,
       }
@@ -211,7 +216,7 @@ export function modeloTarifa(d: DatosClientes, empresaId: string, hoy: string): 
       return o.tipo === 'nivel' ? `${s} · ${catalogo.niveles.find((x) => x.id === o.nivelId)?.nombre ?? ''}` : s
     }
     return {
-      entrada, tipoTexto: 'Paquete', descripcion: p.descripcion, niveles: [], general: g, formaTipo: g?.forma.tipo ?? null, reglas: [], porTrabajador: false,
+      entrada, tipoTexto: 'Paquete', descripcion: p.descripcion, queIncluye: null, niveles: [], general: g, formaTipo: g?.forma.tipo ?? null, reglas: [], porTrabajador: false,
       excesoCent: p.excesoPorTrabajadorCent,
       paquete: {
         lineas: p.lineas.map((l) => {

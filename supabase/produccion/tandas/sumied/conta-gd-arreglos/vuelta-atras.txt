@@ -1,0 +1,4 @@
+# GD · la vuelta atrás de la 1530: el banco de la sociedad demo vuelve al IBAN
+# de la 0110 (termina en 01) y se quita la función.
+cuenta: scripts/conta/produccion/cuentas/gd-banco-demo.sql
+supabase/vuelta-atras/20261109T1530_gd_banco_demo.down.sql
