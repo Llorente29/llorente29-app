@@ -1,0 +1,3 @@
+# GB · la vuelta atrás de la 2250: la función y el CHECK como los dejó la 2235.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-tarifa.sql
+supabase/vuelta-atras/20261109T2250_gb_pestana_tarifa.down.sql

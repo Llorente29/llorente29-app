@@ -132,7 +132,7 @@ async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
   return l.ok ? json(200, l.d) : l.respuesta
 }
 
-const ACCIONES = new Set(['alta', 'baja'])
+const ACCIONES = new Set(['alta', 'baja', 'tarifa'])
 const hoyEnMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 
 /**

@@ -35,7 +35,7 @@ const raiz = () => document.getElementById('pestana')!
 const vista: {
   ficha: { a: string; p: string; t: string; id: string } | null
   r: Record<string, unknown> | null
-  abierto: null | { tipo: 'alta' } | { tipo: 'baja'; linea: string; nombre: string }
+  abierto: null | { tipo: 'alta' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string }
   hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal' }
   guardando: boolean
 } = { ficha: null, r: null, abierto: null, hecho: null, guardando: false }
@@ -58,13 +58,17 @@ function pintar(p: Pestana) {
 
   const servicios = h('section', { class: 'bloque', 'aria-labelledby': 'gb-serv' }, h('h2', { id: 'gb-serv' }, 'Servicios que tiene'))
   if (!p.servicios.length && !p.sueltos.length) servicios.append(h('div', { class: 'vacio' }, 'No tiene servicios en Sumied.'))
-  for (const s of p.servicios) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, s.detalle)), h('span', { class: 'derecha' }, s.importe)))
+  for (const s of p.servicios) {
+    servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, s.detalle)),
+      h('span', { class: 'derecha con-enlace' }, s.importe, s.lineaId && s.servicioId && !vista.abierto ? enlaceBoton('Cambiar', () => abrir_({ tipo: 'tarifa', linea: s.lineaId! })) : null)))
+    if (vista.abierto?.tipo === 'tarifa' && vista.abierto.linea === s.lineaId) servicios.append(formulario(p))
+  }
   for (const s of p.sueltos) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, 'Trabajo suelto')), h('span', { class: 'derecha' }, s.importe)))
 
   const trabajadores = h('section', { class: 'bloque', 'aria-labelledby': 'gb-trab' },
     h('div', { class: 'titulo-con-boton' }, h('h2', { id: 'gb-trab' }, `Trabajadores · ${p.trabajadores.length}`),
       p.serviciosPorTrabajador.length && !vista.abierto ? boton('+ Dar de alta', 'primario', () => abrir_({ tipo: 'alta' })) : null))
-  if (vista.abierto) trabajadores.append(formulario(p))
+  if (vista.abierto && vista.abierto.tipo !== 'tarifa') trabajadores.append(formulario(p))
   if (!p.trabajadores.length) trabajadores.append(h('div', { class: 'vacio' }, 'No tiene trabajadores en Sumied.'))
   const A_LA_VISTA = 8
   for (const t of p.trabajadores.slice(0, A_LA_VISTA)) {
@@ -136,9 +140,11 @@ const mesDe = (hoy: string, mas: number) => { const a = Number(hoy.slice(0, 4));
 /** El formulario abierto (alta o baja), con el recibo nuevo antes de guardar. */
 function formulario(p: Pestana): HTMLElement {
   const hoy = hoyEnMadrid()
-  const caja = h('form', { class: 'formulario', 'aria-label': vista.abierto?.tipo === 'alta' ? 'Alta de un trabajador' : 'Baja de un trabajador' })
+  const etiqueta = vista.abierto?.tipo === 'alta' ? 'Alta de un trabajador' : vista.abierto?.tipo === 'baja' ? 'Baja de un trabajador' : 'Cambiar un servicio'
+  const caja = h('form', { class: 'formulario', 'aria-label': etiqueta })
   const previsto = h('div', { class: 'previsto', role: 'status', 'data-prueba': 'previsto' })
-  const guardar = h('button', { type: 'submit', class: 'boton boton-primario' }, vista.abierto?.tipo === 'alta' ? 'Dar de alta' : 'Dar de baja') as HTMLButtonElement
+  const guardar = h('button', { type: 'submit', class: 'boton boton-primario' },
+    vista.abierto?.tipo === 'alta' ? 'Dar de alta' : vista.abierto?.tipo === 'baja' ? 'Dar de baja' : 'Guardar el cambio') as HTMLButtonElement
   let cambio: () => Cambio | null
   if (vista.abierto?.tipo === 'alta') {
     const nombre = h('input', { name: 'nombre', required: '', autocomplete: 'off' }) as HTMLInputElement
@@ -151,6 +157,36 @@ function formulario(p: Pestana): HTMLElement {
         h('label', {}, 'Se cobra desde', desde)))
     cambio = () => nombre.value.trim() ? { accion: 'alta', servicio: servicio.value || p.serviciosPorTrabajador[0]?.id, nombre: nombre.value.trim(), desde: desde.value } : null
     for (const x of [nombre, servicio, desde]) x.addEventListener('input', () => calcular())
+  } else if (vista.abierto?.tipo === 'tarifa') {
+    const linea = vista.abierto.linea
+    const sv = p.servicios.find((x) => x.lineaId === linea)!
+    const desde = `${mesDe(hoy, 1)}-01`
+    let nivel = sv.nivelId
+    const chips = h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Nivel' })
+    const pintarChips = () => chips.replaceChildren(...sv.niveles.map((n) => {
+      const b = h('button', { type: 'button', class: 'chip-opcion', role: 'radio', 'aria-checked': String(n.id === nivel) }, n.nombre)
+      b.addEventListener('click', () => { nivel = n.id; pintarChips(); calcular() })
+      return b
+    }))
+    pintarChips()
+    const especial = h('input', { type: 'checkbox', name: 'especial' }) as HTMLInputElement
+    const precio = h('input', { name: 'precio', inputmode: 'decimal', autocomplete: 'off' }) as HTMLInputElement
+    const motivo = h('input', { name: 'motivo', autocomplete: 'off' }) as HTMLInputElement
+    const camposEspecial = h('div', { class: 'campos' }, h('label', {}, sv.porTrabajador ? 'Precio por trabajador' : 'Precio al mes', precio), h('label', {}, 'Por qué (lo verá tu equipo)', motivo))
+    camposEspecial.hidden = true
+    especial.addEventListener('change', () => { camposEspecial.hidden = !especial.checked; calcular() })
+    caja.append(h('div', { class: 'formulario-titulo' }, `Cambiar la ${sv.texto.replace(/ · .*$/, '').toLowerCase()}`),
+      ...(sv.niveles.length > 1 ? [chips] : []),
+      h('label', { class: 'casilla' }, especial, 'Precio especial para este cliente'), camposEspecial,
+      h('div', { class: 'pequeno' }, `Desde ${nombreDelMes(desde)}. Si el recibo sube más de un 30 %, al cobrar te pedirá «Lo he mirado, aprobar».`))
+    cambio = () => {
+      const importe = Number(precio.value.replace(/\./g, '').replace(',', '.'))
+      const conPrecio = especial.checked
+      if (conPrecio && (!precio.value.trim() || !Number.isFinite(importe) || importe < 0 || !motivo.value.trim())) return null
+      if (!conPrecio && nivel === sv.nivelId) return null
+      return { accion: 'tarifa', linea, servicio: sv.servicioId!, nivel, precio: conPrecio ? importe : null, porTrabajador: sv.porTrabajador, motivo: motivo.value.trim(), desde }
+    }
+    for (const x of [precio, motivo]) x.addEventListener('input', () => calcular())
   } else {
     const b = vista.abierto as { tipo: 'baja'; linea: string; nombre: string }
     const mes = `${hoy.slice(0, 7)}-01`
@@ -161,11 +197,17 @@ function formulario(p: Pestana): HTMLElement {
   function calcular() {
     const c = cambio()
     guardar.disabled = !c || vista.guardando
-    if (!c || !vista.r || !p.empresaId) { previsto.textContent = 'Escribe el nombre para ver el recibo nuevo.'; return }
+    if (!c || !vista.r || !p.empresaId) {
+      previsto.textContent = vista.abierto?.tipo === 'tarifa' ? 'Elige otro nivel o pon un precio especial con su motivo para ver el recibo nuevo.' : 'Escribe el nombre para ver el recibo nuevo.'
+      return
+    }
     const r = reciboPrevisto(vista.r, hoy, p.empresaId, c)
     const porque = c.accion === 'alta'
       ? `+1 trabajador: ${c.nombre.toUpperCase()}, se cobra desde ${nombreDelMes(c.desde)}.`
-      : `−1 trabajador: ${(vista.abierto as { nombre: string }).nombre}, deja de cobrarse desde ${nombreDelMes(mesDe(hoy, 1))}.`
+      : c.accion === 'baja'
+        ? `−1 trabajador: ${(vista.abierto as { nombre: string }).nombre}, deja de cobrarse desde ${nombreDelMes(mesDe(hoy, 1))}.`
+        : [c.nivel !== p.servicios.find((x) => x.lineaId === c.linea)?.nivelId ? `Cambia a ${p.servicios.find((x) => x.lineaId === c.linea)?.niveles.find((n) => n.id === c.nivel)?.nombre ?? 'otro nivel'}.` : '',
+           c.precio !== null ? `Precio especial: ${c.precio.toFixed(2).replace('.', ',')} €${c.porTrabajador ? ' por trabajador' : ' al mes'}. Por qué: ${c.motivo}.` : ''].filter(Boolean).join(' ')
     previsto.replaceChildren(h('b', {}, r.frase), h('div', { class: 'pequeno' }, porque))
   }
   calcular()
@@ -180,23 +222,26 @@ async function guardarCambio(c: Cambio) {
   vista.guardando = true
   const datos = c.accion === 'alta'
     ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nombre: c.nombre, desde: c.desde }
-    : { linea: c.linea, mes: c.mes }
+    : c.accion === 'baja' ? { linea: c.linea, mes: c.mes }
+      : { linea: c.linea, desde: c.desde, ...(c.nivel ? { nivel: c.nivel } : {}), ...(c.precio !== null ? { precio: c.precio, motivo: c.motivo } : {}) }
   let r: Record<string, unknown>
   try { r = await llamar({ paso: 'hacer', ...vista.ficha, accion: c.accion, datos }) } catch { r = { estado: 'error' } }
   vista.guardando = false
   const nombre = c.accion === 'alta' ? c.nombre.toUpperCase() : (vista.abierto as { nombre?: string } | null)?.nombre ?? ''
+  const titulos = { alta: [`Alta hecha: ${nombre}`, 'No se ha dado de alta'], baja: [`Baja hecha: ${nombre}`, 'No se ha dado de baja'],
+    tarifa: [c.accion === 'tarifa' && c.precio !== null ? 'Precio especial guardado' : 'Nivel cambiado', 'No se ha cambiado'] }[c.accion]
   if (r.estado === 'ok') {
     const b = (r.bitrix ?? {}) as { hecho?: string; texto?: string }
     vista.abierto = null
     if (r.pestana && typeof r.pestana === 'object') vista.r = r.pestana as Record<string, unknown>
     vista.hecho = {
-      titulo: c.accion === 'alta' ? `Alta hecha: ${nombre}` : `Baja hecha: ${nombre}`,
+      titulo: titulos[0],
       texto: String(r.frase ?? ''),
       bitrix: b.hecho === 'escrito' ? `Bitrix24 actualizado: ${b.texto}` : String(b.texto ?? 'Bitrix24 no se ha tocado.'),
       tono: b.hecho === 'choque' ? 'aviso' : 'bien',
     }
   } else {
-    vista.hecho = { titulo: c.accion === 'alta' ? 'No se ha dado de alta' : 'No se ha dado de baja', texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal' }
+    vista.hecho = { titulo: titulos[1], texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal' }
   }
   repintar()
 }

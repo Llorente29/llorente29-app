@@ -47,3 +47,20 @@ export const respuesta = (x: Record<string, unknown> = {}) => ({
   estado: 'ok', cuenta: 'cuenta', cuenta_nombre: 'Gestoría Demo', quien: 'Quien Prueba', cliente: '1', cliente_nombre: 'Cliente Prueba, S.L.', de_empresa: null,
   empresas: [{ id: Q, nombre: 'QBO Prueba' }], clientes, ficha, ...x,
 })
+
+/** nº 9, punto 2 · El mismo cliente con la gestoría mensual por niveles (Básica 90 €, Premium 150 €) y en Premium. */
+export const conNiveles = () => respuesta({
+  clientes: {
+    ...clientes,
+    niveles: [
+      { id: 'basica', servicio_id: 'ges', nombre: 'Básica', orden: 1, incluye: [], mas_elegido: false, activo: true },
+      { id: 'premium', servicio_id: 'ges', nombre: 'Premium', orden: 3, incluye: [], mas_elegido: false, activo: true },
+    ],
+    precios: [
+      ...clientes.precios.filter((p) => p.servicio_id !== 'ges'),
+      { id: 'tarifa:b', empresa_id: Q, servicio_id: 'ges', nivel_id: 'basica', paquete_id: null, cliente_id: null, forma: 'fijo', periodo: 'mes', importe: 90, tramos: [], desde: '2024-01-01', hasta: null },
+      { id: 'tarifa:p', empresa_id: Q, servicio_id: 'ges', nivel_id: 'premium', paquete_id: null, cliente_id: null, forma: 'fijo', periodo: 'mes', importe: 150, tramos: [], desde: '2024-01-01', hasta: null },
+    ],
+    asignaciones: clientes.asignaciones.map((a) => (a.id === 'l1' ? { ...a, nivel_id: 'premium' } : a)),
+  },
+})

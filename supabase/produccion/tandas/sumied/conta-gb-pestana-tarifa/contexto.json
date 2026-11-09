@@ -1,0 +1,25 @@
+{
+ "_que": "GB · nº 9, punto 2 · contexto ESPERADO de producción después del real de la 2235 (#549): existen conta_bitrix_pestana_cambio (0 filas o las que deje el uso) y conta_bitrix_pestana_hacer(text,text,text,text,text,jsonb). Medido en SOLO LECTURA el 09/11 a las 21:43Z: todavía no existen (la 2235 está en ensayo), y conta_tarifa_nivel_cambiar(uuid,uuid,date,boolean) y conta_tarifa_precio_guardar(...) sí; la demo tiene los cambios de tarifa encendidos en sus dos empresas. El ensayo de esta tanda va después del real de la 2235. Nada en el camino del pedido.",
+ "medido": "2026-11-09T21:43Z",
+ "tanda": {
+  "supabase/migrations/20261109T2250_gb_pestana_tarifa.sql": "57b2d17c87bd5a08e906a47dd8ed1f42"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_bitrix_pestana_cambio"
+  ],
+  "funciones": [
+   "public.conta_bitrix_pestana_hacer(text,text,text,text,text,jsonb)"
+  ],
+  "filas": {
+   "public.conta_bitrix_pestana_cambio": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
