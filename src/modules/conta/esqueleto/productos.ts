@@ -137,7 +137,7 @@ function llega(id: string, etiqueta: string, icono: NombreIcono, cuando: string)
  */
 const DE_DEFINICIONES = new Set(['plan', 'tablas', 'numeracion'])
 const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
-  .filter((e) => !DE_DEFINICIONES.has(e.id))
+  .filter((e) => !DE_DEFINICIONES.has(e.id) && !e.soloDemo)
   .map((e): Pestana => ({
     id: e.id, etiqueta: e.etiqueta, icono: e.id === 'folvy' ? 'ia' : e.id === 'empresa' ? 'empresa' : e.id === 'personas' ? 'usuarios' : e.id === 'avisos' ? 'avisos' : e.id === 'impuestos' ? 'impuestos' : e.id === 'socios' ? 'socios' : e.id === 'ejercicio' ? 'fecha' : 'ajustes',
     ruta: e.ruta,

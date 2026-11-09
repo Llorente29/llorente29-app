@@ -24,3 +24,10 @@ conta-bitrix-leer
 # pruebas y con el sandbox de GoCardless.
 conta-crm-aviso
 conta-gocardless-aviso
+# G05 · T4 · La factura de un recibo en el servidor (09/11), de la rama
+# conta/g05-t4-pdf-servidor: conta-cobro y conta-gocardless-leer (de arriba)
+# hacen el PDF «Sumied» y lo mandan después de seguir el cobro
+# (_shared/cobro/facturaRecibo.ts); conta-venta-correo manda con el envío
+# común (_shared/facturaVentaEnviar.ts). En staging, el correo sigue frenado.
+conta-cobro
+conta-venta-correo

@@ -316,7 +316,7 @@ export const CONTA = {
  * su aviso «aún no» (`hueco`), como pide el encargo para Certificados: el
  * índice dice lo que habrá, y la entrada dice que todavía no está.
  */
-export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string }
+export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string; /** GD · Solo en una cuenta de demostración. */ soloDemo?: boolean }
 export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
   {
     grupo: 'Empresa',
@@ -360,6 +360,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     entradas: [
       // DM1 · PR 1 (30/10): ya no es un hueco. Quién entra e «Invitar a una persona» (tablero 4).
       { id: 'personas', etiqueta: 'Usuarios', ruta: 'ajustes/personas' },
+      // GD · Tu cuenta, solo en una cuenta de demostración: «Volver a empezar» (Julio, nº51).
+      { id: 'cuenta', etiqueta: 'Tu cuenta', ruta: 'ajustes/cuenta', soloDemo: true },
       { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: `Qué te avisa ${MARCA.nombre} y por dónde llega en un encargo propio.` },
       { id: 'folvy', etiqueta: `Lo que ha hecho ${MARCA.nombre}`, ruta: 'ajustes/folvy' },
     ],
@@ -376,9 +378,8 @@ export const ENTRADA_DE_APARTADO: Record<string, string> = {
 }
 
 /** Las entradas del índice de Ajustes que se pintan: en el producto vendido solo, sin las que dicen «aún no». */
-export function indiceAjustes(solo = false): typeof INDICE_AJUSTES {
-  if (!solo) return INDICE_AJUSTES
-  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !e.hueco) })).filter((g) => g.entradas.length > 0)
+export function indiceAjustes(solo = false, demo = false): typeof INDICE_AJUSTES {
+  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !(solo && e.hueco) && (demo || !e.soloDemo)) })).filter((g) => g.entradas.length > 0)
 }
 
 /** N1 · La ficha nueva de una persona en Sumied › Laboral. */

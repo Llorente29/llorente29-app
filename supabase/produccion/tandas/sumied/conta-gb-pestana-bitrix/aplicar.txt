@@ -1,0 +1,14 @@
+# GB · La pestaña «Sumied» en la ficha de Bitrix24 (primera parte, solo ver).
+# Rama conta/gb-pestana-bitrix. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1905  Añade conta_bitrix_pestana_leer(portal, correo, tipo, ficha), solo
+#         para el servidor (service_role). Busca la cuenta por el portal, la
+#         persona por su correo y, actuando como ella («usuario:cuenta»), llama a
+#         conta_pantalla_clientes y conta_pantalla_ficha del G04. Solo lee: no
+#         cambia ningún dato. El analizador no ve dentro de las funciones: por
+#         eso va escrito aquí.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-bitrix.sql
+supabase/migrations/20261109T1905_gb_bitrix_pestana.sql

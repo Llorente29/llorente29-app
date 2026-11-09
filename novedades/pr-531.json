@@ -1,0 +1,20 @@
+[
+ {
+  "id": "531-1",
+  "pr": 531,
+  "fecha": "2026-11-09T16:43:15Z",
+  "producto": "sumied",
+  "apartado": "Facturas del cobro",
+  "frase": "al cobrarse un recibo, su factura sale ya con su PDF, queda adjunta a la factura y a su asiento, y se manda sola al cliente (en la demo, al buzón de pruebas).",
+  "ruta": null
+ },
+ {
+  "id": "531-2",
+  "pr": 531,
+  "fecha": "2026-11-09T16:43:15Z",
+  "producto": "sumied",
+  "apartado": "Contabilidad",
+  "frase": "el asiento de una factura emitida enseña su PDF, y en el libro diario se abre con «Abrir la factura (PDF)».",
+  "ruta": null
+ }
+]
