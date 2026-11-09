@@ -1,0 +1,7 @@
+# G05 · Portal · La 1822 (el pago de un devuelto desde el portal y el cambio de
+# cuenta). Su prueba (ROLLBACK, datos inventados, en la cuenta A) paga un devuelto
+# desde el banco y con tarjeta, mira el asiento, que sale de «Te deben», que
+# repetir no duplica y que otra cuenta no puede; cambia la cuenta de un cliente; y
+# prueba la vuelta atrás.
+supabase/migrations/20261109T1822_g05_portal_pagos.sql
+supabase/staging/sql/20261109_g05_portal_pagos_prueba.sql

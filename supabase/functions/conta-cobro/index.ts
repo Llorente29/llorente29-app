@@ -18,6 +18,12 @@
 //     posible», para ver el flujo entero en la demo; en real, con su fecha.
 //   · { accion: 'seguir', empresa }: poner al día los recibos con lo leído de
 //     GoCardless (lo hace también conta-gocardless-leer después de cada lectura).
+//   · { accion: 'cambiar_cuenta', empresa, cliente, mandato } (G05 · nº 55): lo
+//     llama el servidor del portal (Code 3) con la clave de servicio cuando la
+//     domiciliación nueva del cliente está activa. Comprueba en GoCardless que
+//     lo está, cancela las viejas (solo con una conexión de pruebas, como
+//     enviar) y guarda el cambio (conta_cobro_cuenta_cambiada): los recibos
+//     siguientes van contra la nueva.
 //
 // Nunca se cobra en el GoCardless real de QBO: su conexión es real, de solo
 // lectura, y aquí no se envía a real. En el registro, nunca el token (T11).
@@ -29,10 +35,10 @@ import { salirA } from '../_shared/puertaDePruebas.ts'
 import { catalogoYAsignaciones } from '../_shared/cobro/datos.ts'
 import { claveDelRecibo, mesAnterior, prepararRecibo, type LineaDeRecibo, type Recibo, type ReciboAnterior } from '../_shared/cobro/recibo.ts'
 import { facturaDelRecibo, type Fiscal } from '../_shared/cobro/factura.ts'
-import { leerRespuestaDeCobro, mandatoParaCobrar, peticionDeCobro } from '../_shared/cobro/gocardless.ts'
+import { leerCancelacion, leerMandatoNuevo, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro } from '../_shared/cobro/gocardless.ts'
 import { euros, type Mes } from '../_shared/tarifa/precio.ts'
 import type { Situacion } from '../_shared/tarifa/lista.ts'
-import { BASES, type Entorno } from '../conta-gocardless-leer/lector.ts'
+import { BASES, cabeceras, type Entorno } from '../conta-gocardless-leer/lector.ts'
 import { jsPDF } from 'npm:jspdf@4.2.1'
 import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
 import { modulosQr } from '../_shared/verifactu/qrServidor.ts'
@@ -92,6 +98,55 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
   return { recibos, sinRecibo }
 }
 
+/**
+ * nº 55 · Cambiar de cuenta: la domiciliación nueva tiene que estar activa en
+ * GoCardless; se cancelan las viejas del cliente (solo con una conexión de
+ * pruebas, como «enviar», y por la puerta de las demos) y se guarda el cambio.
+ */
+// deno-lint-ignore no-explicit-any
+async function cambiarCuenta(admin: any, empresa: string, cuenta: string, cuerpo: Fila): Promise<Response> {
+  const cliente = String(cuerpo.cliente ?? ''), nuevo = String(cuerpo.mandato ?? '').trim()
+  const quien = typeof cuerpo.quien === 'string' ? cuerpo.quien.slice(0, 120) : 'El cliente, desde el portal'
+  if (!UUID.test(cliente)) return json(400, { error: 'Falta el cliente.' })
+  if (!/^[A-Z0-9]{2,40}$/i.test(nuevo)) return json(400, { error: 'Falta el mandato nuevo.' })
+  try {
+    const { data: sec, error: e1 } = await admin.rpc('conta_gocardless_secreto', { p_company: empresa })
+    if (e1) throw new Error(`No se ha podido leer la conexión: ${e1.message}`)
+    const s = (sec as { entorno: Entorno; token: string }[] | null)?.[0]
+    if (!s?.token) return json(400, { error: 'Esta empresa no tiene conectada su cuenta de GoCardless.' })
+    if (s.entorno !== 'pruebas' && !ENVIAR_A_REAL) return json(400, { error: 'Por ahora la cuenta de cargo solo se cambia con una conexión de pruebas de GoCardless (el sandbox). En la cuenta real no se cancela nada.' })
+    const puerta = salirA(!(await cuentaPuedeSalir(admin, cuenta)), s.entorno)
+    if (!puerta.sale) return json(400, { error: puerta.porque })
+    // 1 · La nueva, activa en GoCardless.
+    const rm = await fetch(`${BASES[s.entorno]}/mandates/${encodeURIComponent(nuevo)}`, { headers: cabeceras(s.token) })
+    const m = leerMandatoNuevo(await rm.json().catch(() => null))
+    if (!m.vale) return json(409, { error: m.porque })
+    // 2 · Las viejas: las vivas de su cliente de GoCardless de antes y del de ahora, menos la nueva.
+    const { data: cc } = await admin.from('conta_cobro_cliente').select('gc_cliente_id').eq('company_id', empresa).eq('party_id', cliente).maybeSingle()
+    if (!cc) return json(404, { error: 'Ese cliente no se cobra en esta empresa.' })
+    const antes = (cc as Fila).gc_cliente_id ? String((cc as Fila).gc_cliente_id) : null
+    const { data: gm, error: e2 } = await admin.from('conta_gc_mandato').select('gc_id, gc_cliente_id, estado').eq('company_id', empresa)
+      .in('gc_cliente_id', [antes, m.cliente].filter(Boolean))
+    if (e2) throw new Error(`No se han podido leer los mandatos: ${e2.message}`)
+    const viejos = mandatosACancelar(((gm ?? []) as Fila[]).map((x) => ({ gcId: String(x.gc_id), gcCliente: x.gc_cliente_id ? String(x.gc_cliente_id) : null, estado: x.estado ? String(x.estado) : null })), antes, m.cliente, nuevo)
+    const cancelados: string[] = []
+    for (const v of viejos) {
+      const r = await fetch(`${BASES[s.entorno]}/mandates/${encodeURIComponent(v)}/actions/cancel`, {
+        method: 'POST', headers: { ...cabeceras(s.token), 'Content-Type': 'application/json' }, body: JSON.stringify({ data: { metadata: { motivo: 'cuenta_cambiada_portal' } } }),
+      })
+      const c = leerCancelacion(r.status, await r.json().catch(() => null))
+      if (!c.cancelado) return json(502, { error: `No se ha podido cancelar en GoCardless la domiciliación vieja (${v}): ${c.porque}. No se ha cambiado nada en Sumied.`, cancelados })
+      cancelados.push(v)
+    }
+    // 3 · El cambio, guardado: los recibos siguientes van contra la nueva.
+    const { data, error } = await admin.rpc('conta_cobro_cuenta_cambiada', { p_company: empresa, p_party: cliente, p_mandato_nuevo: nuevo, p_cliente_gc: m.cliente, p_cancelados: cancelados, p_quien: quien })
+    if (error) throw new Error(error.message)
+    return json(200, { ok: true, ...(data as Fila) })
+  } catch (e) {
+    return json(500, { error: e instanceof Error ? e.message : String(e) })
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'Solo POST.' })
@@ -112,6 +167,13 @@ Deno.serve(async (req) => {
   // ¿Quién llama? El cron (solo para «seguir») o una persona administradora o encargada de la cuenta.
   const secreto = Deno.env.get('CRON_SECRET') ?? ''
   const esCron = secreto !== '' && req.headers.get('x-cron-secret') === secreto
+  // nº 55 · El servidor del portal (Code 3), con la clave de servicio: solo para «cambiar_cuenta».
+  const servicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const esServidor = servicio !== '' && req.headers.get('Authorization') === `Bearer ${servicio}`
+  if (accion === 'cambiar_cuenta') {
+    if (!esServidor) return json(403, { error: 'Cambiar la cuenta de cargo lo pide el servidor del portal.' })
+    return await cambiarCuenta(admin, empresa, cuenta, cuerpo)
+  }
   const persona = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } })
   let quien = 'Sumied'
   let quienId: string | null = null

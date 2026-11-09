@@ -1,0 +1,17 @@
+# G05 · Portal · el pago de un devuelto desde el portal y el cambio de cuenta
+# (nº 54/55). Rama conta/g05-portal-pagos. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1822  AÑADE conta_gestoria_ajustes.cuenta_stripe (la cuenta puente de Stripe
+#         de cada empresa; sin poner, la 57200003), la tabla
+#         conta_recibo_pago_portal, conta_recibo_pagado_portal (Code 3 la llama
+#         cuando el cliente paga un devuelto: asiento puente / 430 y fuera de
+#         «Te deben») y conta_cobro_cuenta_cambiada (la domiciliación nueva, la
+#         vieja cancelada). CAMBIA, declarado y probado, el CHECK de
+#         conta_gc_cobro_otra_via.via (solo amplía: portal_banco, portal_tarjeta).
+#         En la demo con plan, crea la 57200003 «Plataforma Stripe» con su apunte
+#         en el registro del plan (company_account_log).
+#
+# No toca datos existentes. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-portal-pagos.sql
+supabase/migrations/20261109T1822_g05_portal_pagos.sql

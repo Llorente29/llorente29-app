@@ -1,0 +1,25 @@
+{
+ "_que": "G05 · Portal · contexto de producción, medido en SOLO LECTURA el 09/11 a las 17:27Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1822 añade una columna que admite nulos a conta_gestoria_ajustes (2 filas), la tabla conta_recibo_pago_portal y cuatro funciones nuevas, y amplía el CHECK de conta_gc_cobro_otra_via.via (0 filas). En la demo con plan, inserta la 57200003 y su apunte en el registro del plan. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T17:27Z",
+ "tanda": {
+  "supabase/migrations/20261109T1822_g05_portal_pagos.sql": "8d4195f08d67ec08e6e3c02c4b63b721"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_gc_cobro_otra_via",
+   "public.conta_gestoria_ajustes"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_gc_cobro_otra_via": 0,
+   "public.conta_gestoria_ajustes": 2
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
