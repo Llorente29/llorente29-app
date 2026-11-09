@@ -97,7 +97,7 @@ jobs:
           mkdir -p "$SALIDA"
           if git fetch -q --depth=1 origin video-salida/gd-qbo 2>/dev/null; then
             git archive FETCH_HEAD escenas capturas 2>/dev/null | tar -x -C "$SALIDA" || true
-            echo "De la grabación anterior: $(ls "$SALIDA/escenas" 2>/dev/null | tr '\n' ' ')"
+            echo "Hay grabación anterior: se reutilizan sus escenas."
           else
             echo "No hay grabación anterior."
           fi
@@ -110,12 +110,14 @@ jobs:
           MES: ${{ inputs.mes }}
           B24_URL: ${{ secrets.G01D_B24_ENTRANTE_URL }}
           APP: https://app.sumied.com
-        run: node scripts/video/gd/qbo.mjs | tee "$SALIDA/registro.txt"
+        # Lo que dice el guion va a un fichero (registro.txt, en la salida), no al registro del run.
+        run: node scripts/video/gd/qbo.mjs > "$SALIDA/registro.txt" 2>&1
 
       - name: Resumen
         if: always()
         run: |
-          [ -f "$SALIDA/registro.txt" ] && { echo '```'; tail -25 "$SALIDA/registro.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
+          [ -f "$SALIDA/registro.txt" ] || exit 0
+          tail -25 "$SALIDA/registro.txt" | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
 
       - uses: actions/upload-artifact@v4
         if: always()
