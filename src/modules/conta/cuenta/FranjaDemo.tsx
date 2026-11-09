@@ -7,7 +7,7 @@
 
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
-export const TEXTO_FRANJA_DEMO = ['Cuenta de demostración', 'datos inventados', 'aquí puedes tocar todo'] as const
+const TEXTO_FRANJA_DEMO = ['Cuenta de demostración', 'datos inventados', 'aquí puedes tocar todo'] as const
 
 export function FranjaDemo() {
   const { esDemo } = useCuentaConta()
