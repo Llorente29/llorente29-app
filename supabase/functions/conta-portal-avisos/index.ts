@@ -11,9 +11,10 @@
 //   · Qué manda: lo que dice conta_portal_avisos_pendientes, una fila por aviso
 //     y persona, con su clave. mandar() lo apunta en conta_portal_aviso con esa
 //     clave: nunca dos veces lo mismo a la misma persona.
-//   · La puerta de las demos: el de una cuenta de demo va al buzón de pruebas.
-//   · El freno: «portal_aviso» cerrado hasta que Julio lo abra
-//     (CORREO_MARCA_ABIERTOS). Cerrado, no se apunta nada: los avisos esperan.
+//   · La puerta de las demos: el de una cuenta de demo va SOLO al buzón de
+//     pruebas, sin pasar por el freno (nº 11, como el #533).
+//   · En una cuenta de verdad, el freno: «portal_aviso» cerrado hasta que Julio
+//     decida (CORREO_MARCA_ABIERTOS). Cerrado, no se apunta nada: esperan.
 //   · Mensajes y peticiones avisados se marcan (conta_portal_avisos_hechos),
 //     para no volver a juntarlos.
 //

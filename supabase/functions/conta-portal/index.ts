@@ -37,8 +37,8 @@
 //                    guarda en el cobro (conta-cobro «cambiar_cuenta», que
 //                    cancela la vieja). Cada remate queda en la operación
 //                    (detalle.apunte / detalle.cambio) y no se repite. En
-//                    producción, apagado hasta que Code 1 confirme que está
-//                    desplegado (REMATAR_EN_PRODUCCION).
+//                    producción, encendido desde que Code 1 confirmó su
+//                    despliegue (nº 11; REMATAR_EN_PRODUCCION).
 //
 // GoCardless, por la puerta de las demos (_shared/puerta.ts y
 // puertaDePruebas.ts) y como conta-cobro: SOLO con una conexión de pruebas
@@ -64,8 +64,8 @@ import { enlaceParaEntrar, mandar, marcaDe, portalBase } from '../_shared/portal
 
 /** Mientras Julio no lo encienda, el portal solo escribe en GoCardless con una conexión de pruebas. */
 const ESCRIBIR_EN_REAL = false
-/** Code 1 (nº 10): no llamar a conta_recibo_pagado_portal ni a conta-cobro «cambiar_cuenta» en producción hasta que confirme el despliegue. */
-const REMATAR_EN_PRODUCCION = false
+/** Code 1 confirmó el despliegue de su #534 (Julio, nº 11): conta_recibo_pagado_portal y conta-cobro «cambiar_cuenta», también en producción. */
+const REMATAR_EN_PRODUCCION = true
 const PRODUCCION = 'xzmpnchlguibclvxyynt'
 const SOLO_PRUEBAS = 'Por ahora esto solo funciona en la demo: con el banco de cobros de verdad aún no está encendido.'
 

@@ -17,6 +17,19 @@
 // «mandato», «payment» ni «SEPA».
 
 import { marco, type Correo, type Marca } from '../cobroCorreos.ts'
+import { MARCAS } from '../marcas.ts'
+import { cerrojoMarca } from '../../send-email/marca.ts'
+
+/**
+ * ¿Pasa el freno un correo del portal? (Julio, nº 11, como la factura de un
+ * recibo de Code 1 en el #533.) En una cuenta de DEMOSTRACIÓN el destino ya es
+ * solo el buzón de pruebas: no pasa por CORREO_MARCA_ABIERTOS. En una cuenta de
+ * verdad, el freno de siempre: cerrado hasta que Julio decida.
+ */
+export function frenoDelPortal(demo: boolean, plantilla: string, para: string, abiertos: string | null | undefined): { abierto: boolean } {
+  if (demo) return { abierto: true }
+  return { abierto: cerrojoMarca(MARCAS.sumied, plantilla, para, abiertos).abierto }
+}
 
 /** La plantilla de los avisos, para el freno de Julio (CORREO_MARCA_ABIERTOS). */
 export const PLANTILLA_AVISO = 'portal_aviso'

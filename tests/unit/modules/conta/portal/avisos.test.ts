@@ -4,7 +4,7 @@
 // supabase/functions/_shared/portal/avisos.ts). Datos inventados (T11).
 
 import { describe, expect, it } from 'vitest'
-import { avisados, correoAviso, enlaceAviso, euros, eurosDe, fechaLarga, nombreMes, type Pendiente } from '../../../../../supabase/functions/_shared/portal/avisos'
+import { avisados, correoAviso, enlaceAviso, euros, eurosDe, fechaLarga, frenoDelPortal, nombreMes, type Pendiente } from '../../../../../supabase/functions/_shared/portal/avisos'
 
 const marca = { empresa: 'Gestoría Ejemplo', color: '#172443', logo: null, cliente: 'Cliente Ejemplo, S.L.', portal: 'https://app.sumied.com/', hoy: new Date('2026-11-09T10:00:00Z') }
 const base = { clave: 'k', acceso_id: 'a', account_id: 'c', party_id: 'p', para: 'persona@ejemplo.invalid', nombre: 'Ana Ejemplo', permiso: 'todo' as const }
@@ -82,5 +82,17 @@ describe('los avisos del portal', () => {
     ]
     for (const p of todos) { const c = correoAviso(p, marca); expect(c.asunto + c.texto).not.toMatch(PROHIBIDAS) }
     expect(() => correoAviso(fila('otro' as Pendiente['tipo'], {}), marca)).toThrow()
+  })
+})
+
+describe('el freno de los correos del portal (nº 11)', () => {
+  it('en una demo no pasa por él: el destino ya es solo el buzón de pruebas', () => {
+    expect(frenoDelPortal(true, 'portal_aviso', 'buzon@ejemplo.invalid', '')).toEqual({ abierto: true })
+    expect(frenoDelPortal(true, 'portal_enlace', 'buzon@ejemplo.invalid', undefined)).toEqual({ abierto: true })
+  })
+  it('en una cuenta de verdad, cerrado hasta que Julio lo abra', () => {
+    expect(frenoDelPortal(false, 'portal_aviso', 'persona@ejemplo.invalid', '')).toEqual({ abierto: false })
+    expect(frenoDelPortal(false, 'portal_aviso', 'persona@ejemplo.invalid', 'otra_plantilla')).toEqual({ abierto: false })
+    expect(frenoDelPortal(false, 'portal_aviso', 'persona@ejemplo.invalid', 'portal_aviso')).toEqual({ abierto: true })
   })
 })
