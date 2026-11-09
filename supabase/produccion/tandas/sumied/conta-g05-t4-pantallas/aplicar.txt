@@ -11,3 +11,9 @@
 # No toca datos: las columnas nacen vacías. Nada en el camino del pedido.
 cuenta: scripts/conta/produccion/cuentas/g05-t4-pantallas.sql
 supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
+#
+#   1403  AÑADE conta_pantalla_factura_recibo: la ficha de una factura que sale
+#         de un recibo (su recibo, lo que le ha pasado, su Verifactu y sus
+#         asientos con sus apuntes) en una sola lectura. Con las políticas de
+#         quien la llama.
+supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql

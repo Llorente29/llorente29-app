@@ -13,6 +13,7 @@
 import { rpc } from '@/modules/conta/services/bd'
 import { supabase } from '@/lib/supabase'
 import type { DatosCobro } from './modeloCobro'
+import type { DatosFichaRecibo } from './modeloFicha'
 
 type Fila = Record<string, unknown>
 
@@ -48,4 +49,14 @@ export async function decidir(recibo: string, decision: 'pendiente' | 'aprobado'
 export async function aprobarIguales(empresa: string, mes: string): Promise<string> {
   const r = await rpc<Fila>('conta_cobro_aprobar_iguales', { p_company: empresa, p_mes: mes })
   return String(r?.frase ?? 'Hecho.')
+}
+
+/**
+ * La ficha de una factura que sale de un recibo, en UNA lectura
+ * (conta_pantalla_factura_recibo, 1403): su recibo, lo que le ha pasado, su
+ * Verifactu y sus asientos con los apuntes. Null si no sale de un recibo.
+ */
+export async function leerFichaRecibo(cuenta: string, factura: string): Promise<DatosFichaRecibo | null> {
+  const d = await rpc<DatosFichaRecibo | null>('conta_pantalla_factura_recibo', { p_cuenta: cuenta, p_factura: factura })
+  return d && d.recibo ? { ...d, eventos: d.eventos ?? [], asientos: d.asientos ?? [] } : null
 }

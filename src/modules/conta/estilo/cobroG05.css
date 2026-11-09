@@ -90,3 +90,43 @@
   .g5-cambio-acciones { justify-content: flex-start; }
   .g5-cambio[data-fuerte='si'] { margin: 0 -16px; padding: 14px 16px; }
 }
+
+/* La ficha de una factura que sale de un recibo (Factura.dc.html) */
+.g5-ficha-cabeza { display: flex; flex-direction: column; gap: 6px; }
+.g5-ficha-titulos { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.g5-ficha-titulo { font-size: 32px; }
+.g5-ficha-cuerpo { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start; }
+.g5-ficha-papel { flex: 1 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.g5-ficha-lado { flex: 1 1 300px; max-width: 380px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.g5-ficha-lado .g4-bloque { padding: 20px; }
+.g5-ficha-acciones { gap: 12px; }
+.g5-ficha-principal { justify-content: center; min-height: 46px; }
+.g5-ficha-dos { display: flex; gap: 8px; }
+.g5-ficha-dos .g4-boton { flex: 1; justify-content: center; font-size: 13px; padding: 0 10px; }
+.g5-ficha .g4-boton:disabled { opacity: .55; cursor: not-allowed; }
+.g5-ficha-h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.g5-ficha-hitos { gap: 4px; }
+.g5-hitos { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; }
+.g5-hito { display: flex; gap: 12px; }
+.g5-hito-raya { display: flex; flex-direction: column; align-items: center; flex: none; width: 22px; }
+.g5-hito-bola { width: 22px; height: 22px; border-radius: 50%; color: #FFFFFF; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; background: var(--g4-bien); }
+.g5-hito-bola[data-bola='pendiente'] { background: var(--g4-azul); }
+.g5-hito-bola[data-bola='espera'] { background: #8090A6; }
+.g5-hito-bola[data-bola='mal'] { background: var(--g4-mal); }
+.g5-hito-linea { flex: 1; width: 2px; background: #E3E8F0; min-height: 14px; }
+.g5-hito:last-child .g5-hito-linea { visibility: hidden; }
+.g5-hito-textos { display: flex; flex-direction: column; gap: 2px; padding-bottom: 14px; min-width: 0; }
+.g5-hito-textos b { font-size: 14px; }
+.g5-hito-textos span { font-size: 13px; color: var(--g4-apoyo); line-height: 1.45; overflow-wrap: anywhere; }
+.g5-ficha-conta { gap: 10px; }
+.g5-asiento { border: 1px solid #E3E8F0; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.g5-asiento-t { font-size: 13px; font-weight: 700; text-decoration: none; }
+.g5 a.g5-asiento-t { color: var(--g4-tinta); }
+.g5 a.g5-asiento-t:hover { color: var(--g4-azul); text-decoration: underline; }
+.g5-asiento-tabla { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.g5-asiento-tabla td { padding: 1px 0; vertical-align: top; }
+.g5-asiento-tabla td:first-child { color: #33445E; padding-right: 10px; width: 100%; }
+.g5-asiento-tabla td + td { text-align: right; min-width: 64px; padding-left: 10px; white-space: nowrap; }
+.g5-ficha-nota { margin: 0; font-size: 12.5px; color: var(--g4-apoyo); line-height: 1.5; }
+.g5-oculto { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 720px) { .g5-ficha-lado { max-width: none; } .g5-ficha-titulo { font-size: 26px; } }

@@ -1,8 +1,9 @@
 {
- "_que": "G05 · T4 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 12:50Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1344 añade columnas que admiten nulos a conta_servicio (31 filas) y conta_gc_mandato (2.099), una función nueva y reemplaza conta_pantalla_clientes (misma firma, respaldada). Nada en el camino del pedido. Ningún fichero en el historial.",
- "medido": "2026-11-09T12:50Z",
+ "_que": "G05 · T4 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 13:05Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1344 añade columnas que admiten nulos a conta_servicio (31 filas) y conta_gc_mandato (2.099), una función nueva y reemplaza conta_pantalla_clientes (misma firma, respaldada). La 1403 solo añade una función de lectura (conta_pantalla_factura_recibo, que no existe). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T13:05Z",
  "tanda": {
-  "supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql": "9aa7a43bb549f174c6be523ed3cb156f"
+  "supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql": "9aa7a43bb549f174c6be523ed3cb156f",
+  "supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql": "600fed4d6e0c9cba80262e7c576160fb"
  },
  "contexto": {
   "tablas": [

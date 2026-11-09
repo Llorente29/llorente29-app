@@ -10,6 +10,7 @@
 --   3. La pantalla de clientes devuelve el «incluye» de los servicios: false → true.
 --   4. Servicios (todas las cuentas, hasta el corte): 31 → 31.
 --   5. Mandatos de GoCardless (todas las cuentas): 2099 → 2099.
+--   6. La lectura de la ficha de la factura de un recibo existe (1403): false → true.
 select clave, valor from (
   select 1 o, 'conta_servicio.incluye existe' clave,
     exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_servicio' and column_name = 'incluye')::text valor union all
@@ -21,5 +22,7 @@ select clave, valor from (
     (select count(*)::text from public.conta_servicio where created_at < timestamptz '2026-11-09 00:00:00+00') union all
   select 5, 'Mandatos de GoCardless (todas las cuentas)',
     -- quieta: los escribe la lectura de GoCardless; la tanda no los toca (solo añade columnas que nacen vacías)
-    (select count(*)::text from public.conta_gc_mandato)
+    (select count(*)::text from public.conta_gc_mandato) union all
+  select 6, 'La lectura de la ficha de la factura de un recibo existe',
+    (to_regprocedure('public.conta_pantalla_factura_recibo(uuid,uuid)') is not null)::text
 ) q order by o;
