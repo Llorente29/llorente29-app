@@ -75,14 +75,20 @@ export interface LineaDeRecibo {
   trabajadores: TrabajadorDelRecibo[] | null
 }
 
-/** Lo que el recibo del mes anterior tenía (el guardado de verdad, o el calculado si no se guardó). */
+/**
+ * Lo que el recibo del mes anterior tenía: el guardado en Sumied o, si el
+ * cliente aún no tiene ninguno, lo que le cobraba GoCardless (deGoCardless:
+ * solo el total, sin líneas). Esto último es la prueba previa de QBO: lo que
+ * propone Sumied frente a lo que cobra GoCardless, al céntimo.
+ */
 export interface ReciboAnterior {
   mes: Mes
   totalCent: number
   lineas: LineaDeRecibo[]
+  deGoCardless?: boolean
 }
 
-export type TipoDeCambio = 'cliente_nuevo' | 'linea_nueva' | 'linea_quitada' | 'nivel' | 'alta' | 'baja' | 'precio'
+export type TipoDeCambio = 'cliente_nuevo' | 'frente_a_gocardless' | 'linea_nueva' | 'linea_quitada' | 'nivel' | 'alta' | 'baja' | 'precio'
 export interface Cambio { tipo: TipoDeCambio; asignacionId: string | null; texto: string; altas?: number; bajas?: number }
 
 export interface Recibo {
@@ -166,6 +172,12 @@ const nivelDe = (texto: string) => { const p = sinTrabajadores(texto).split(' ·
 export function cambiosFrenteA(anterior: ReciboAnterior | null, lineas: LineaDeRecibo[], mes: Mes, mesEntero = true): Cambio[] {
   if (!anterior) {
     return [{ tipo: 'cliente_nuevo', asignacionId: null, texto: `Cliente nuevo: ${enLista(lineas.map((l) => sinTrabajadores(l.texto)))} desde el 1 de ${nombreDelMes(mes)}.` }]
+  }
+  if (anterior.deGoCardless) {
+    // Sin recibo de Sumied el mes anterior: lo que cobraba GoCardless. Si coincide al céntimo, es «igual que el mes pasado».
+    const total = lineas.reduce((s, l) => s + (l.importeCent ?? 0), 0)
+    return total === anterior.totalCent ? [] : [{ tipo: 'frente_a_gocardless', asignacionId: null,
+      texto: `GoCardless le cobraba ${euros(anterior.totalCent)} al mes y Sumied calcula ${euros(total)}.` }]
   }
   const antes = new Map(anterior.lineas.map((l) => [l.asignacionId, l]))
   const ahora = new Set(lineas.map((l) => l.asignacionId))

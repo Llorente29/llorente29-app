@@ -189,6 +189,10 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     const conDiferencias = new Set(dif.diferencias.map((d) => d.party_id ?? d.gc_cliente_id ?? d.id_externo ?? d.tipo)).size
     const frase = fraseDeLectura(nombreEmisor(empresa), plan, convertidas, conDiferencias, por === 'conexion')
     await acabar({ estado: 'bien', nuevos: plan.nuevos, cambiados: plan.cambiados, iguales: plan.iguales, con_diferencias: conDiferencias, mensaje: frase })
+    // G05 · T3: los recibos del cobro, al día con lo recién leído (confirmado → factura y asiento; devuelto → su asiento).
+    // Un fallo aquí no tumba la lectura: queda dicho en el recibo y en el registro.
+    const { error: eSeguir } = await db.rpc('conta_cobro_seguir', { p_company: empresa })
+    if (eSeguir) console.error('[conta-gocardless-leer] seguir el cobro:', eSeguir.message)
     return { frase, lee: true, mandatosVivos: plan.resumen.mandatosVivos, lineas: plan.resumen.lineasActivas, alMes: aEuros(plan.resumen.alMesCent),
       convertidas, noConvertidas: plan.noConvertidas.length, diferencias: dif.diferencias.length,
       casados: { porNif: plan.parejas.filter((p) => p.emisor === empresa && p.por === 'nif').length, porCorreo: plan.parejas.filter((p) => p.emisor === empresa && p.por === 'correo').length } }

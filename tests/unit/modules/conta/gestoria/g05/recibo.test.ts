@@ -98,6 +98,12 @@ describe('G05 · el recibo del mes', () => {
     const r = recibo({ catalogo: catalogo([precio('pg', GESTORIA, 9680)]) })
     expect([r.totalCent, r.parado]).toEqual([9680, ['Una línea sin precio: Gestión laboral']])
   })
+  it('sin recibo de Sumied el mes anterior, se compara con lo que cobraba GoCardless, al céntimo', () => {
+    const gc = (cent: number): ReciboAnterior => ({ mes: '2026-10', totalCent: cent, lineas: [], deGoCardless: true })
+    expect([recibo({ anterior: gc(14520) }).cambios, recibo({ anterior: gc(14520) }).igualQueElMesPasado]).toEqual([[], true])
+    const r = recibo({ anterior: gc(9680) })
+    expect([r.cambios.map((c) => c.texto), r.pideClic]).toEqual([['GoCardless le cobraba 96,80 € al mes y Sumied calcula 145,20 €.'], 'Sube un 50 %'])
+  })
   it('los meses de al lado, también en enero y diciembre', () => {
     expect([mesAnterior('2026-01'), mesAnterior('2026-11'), mesSiguiente('2026-12'), mesSiguiente('2026-03')]).toEqual(['2025-12', '2026-10', '2027-01', '2026-04'])
   })

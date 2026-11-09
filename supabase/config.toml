@@ -379,6 +379,13 @@ verify_jwt = false
 [functions.conta-bitrix-leer]
 verify_jwt = false
 
+# G05 · T3 (09/11) · El cobro del mes (preparar, enviar a GoCardless y seguir).
+# Sin el JWT del gateway porque «seguir» llega también del cron con
+# x-cron-secret; dentro se comprueba quién llama (una persona administradora o
+# encargada de la cuenta para preparar y enviar).
+[functions.conta-cobro]
+verify_jwt = false
+
 # G01d (08/11) · Los avisos al instante del CRM y de GoCardless, sin sesión
 # (verify_jwt = false): llaman Bitrix24 y GoCardless. Solo se acepta un aviso
 # auténtico (el código de la conexión en Bitrix24; la firma con el secreto de la

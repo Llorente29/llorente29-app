@@ -28,11 +28,14 @@
 import { euros } from '../tarifa/precio.ts'
 import type { LineaDeRecibo, Recibo } from './recibo.ts'
 
+/** Las retenciones de IRPF que puede aplicar un emisor (Julio, nº 31): sin retención, 15 % o 7 % (profesionales que empiezan). */
+export const RETENCIONES = [0, 15, 7] as const
+
 /** Cómo factura la empresa emisora. */
 export interface Fiscal {
   /** El IVA de sus servicios, en % (21). */
   ivaPct: number
-  /** La retención que aplica, en % (0 si no aplica). */
+  /** La retención de IRPF que aplica, en %: 0, 15 o 7 (RETENCIONES). Va en su línea de la factura y en la 4730 del asiento. */
   retencionPct: number
   /** Si los precios de su tarifa llevan el IVA dentro (QBO: sí). */
   preciosConIva: boolean
@@ -125,6 +128,7 @@ function repartir(importes: number[], porTrabajador: boolean[], baseTotal: numbe
 /** Las líneas, las cifras y los trabajadores de la factura de un recibo. Lanza si el recibo está parado. */
 export function facturaDelRecibo(r: Recibo, f: Fiscal): FacturaDelRecibo {
   if (r.parado.length) throw new Error(`Un recibo parado no se factura: ${r.parado.join('; ')}.`)
+  if (!(RETENCIONES as readonly number[]).includes(f.retencionPct)) throw new Error(`La retención tiene que ser sin retención, 15 % o 7 %, no ${f.retencionPct} %.`)
   const importes = r.lineas.map((l) => l.importeCent ?? 0)
   let baseTotal: number
   let ajuste: FacturaDelRecibo['ajuste'] = null

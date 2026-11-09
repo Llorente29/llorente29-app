@@ -26,6 +26,7 @@
 
 import type { MaterialCertificado } from '../certificados/mtls.ts'
 import { EN_LA_DEMO } from '../puerta.ts'
+import { salirA } from '../puertaDePruebas.ts'
 import { EnvioRechazado, leerRespuesta, RespuestaIlegible } from './respuesta.ts'
 import { type Registro, RegistroNoValido, sobreEnvio, type SistemaInformatico } from './xml.ts'
 
@@ -62,6 +63,12 @@ export interface Piezas {
    * la cola no lo vuelva a intentar.
    */
   enLaDemo?: (lote: Lote) => Promise<boolean>
+  /**
+   * G05 · T3: pruebas desde producción, solo para las demos (puerta.ts). Un
+   * lote de demo SÍ va a Hacienda de pruebas; uno de una cuenta de verdad, no:
+   * falla diciéndolo (salirA, _shared/puertaDePruebas.ts).
+   */
+  soloDemos?: boolean
 }
 
 /** Lo que se apunta de un lote de demo: correcto, sin CSV y dicho. Nunca sale a Hacienda. */
@@ -103,7 +110,11 @@ export async function unaVuelta(p: Piezas, entorno: Entorno, maxEnvios = 10): Pr
     r.envios++
     r.registros += lote.registros.length
     try {
-      if (p.enLaDemo && await p.enLaDemo(lote)) {
+      if (p.soloDemos) {
+        const esDemo = !!p.enLaDemo && await p.enLaDemo(lote)
+        const s = salirA(esDemo, entorno, true)
+        if (!s.sale) throw new Error(s.porque)
+      } else if (p.enLaDemo && await p.enLaDemo(lote)) {
         await p.responder(lote.envio_id, respuestaDeLaDemo(lote))
         r.en_la_demo++
         r.correctos += lote.registros.length

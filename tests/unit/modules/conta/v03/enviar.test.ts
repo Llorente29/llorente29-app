@@ -108,6 +108,14 @@ describe('V03 · la puerta de conta-verifactu', () => {
     expect(puerta('real', PROD)).toEqual({ entorno: 'real' })
     expect(puerta('real', STAGING)).toHaveProperty('cerrada')
   })
+  it('G05 · desde producción, pruebas solo para las demos, con la llamada que lo pide y CONTA_VERIFACTU_DEMOS puesto', () => {
+    expect(puerta('real', PROD, 'pruebas', 'pruebas')).toEqual({ entorno: 'pruebas', soloDemos: true })
+    expect(puerta(undefined, PROD, 'pruebas', 'pruebas')).toEqual({ entorno: 'pruebas', soloDemos: true })
+    expect(puerta('real', PROD, 'pruebas', undefined)).toHaveProperty('cerrada')
+    expect(puerta('real', PROD, undefined, 'pruebas')).toEqual({ entorno: 'real' })
+    // En staging no cambia nada: pruebas como siempre, sin «solo demos».
+    expect(puerta('pruebas', STAGING, 'pruebas', 'pruebas')).toEqual({ entorno: 'pruebas' })
+  })
 })
 
 describe('V03 · las facturas contra la AEAT de pruebas', () => {

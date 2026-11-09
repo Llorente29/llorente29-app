@@ -72,6 +72,10 @@ describe('G05 · la factura del recibo', () => {
       { concepto: 'Gestión laboral · 2 trabajadores', cantidad: 2, precio: 20, descuento: 0, iva_pct: 21 },
     ])
   })
+  it('la retención: sin retención, 15 % o 7 %; cualquier otra, no', () => {
+    expect(facturaDelRecibo(reciboDe(), { ivaPct: 21, retencionPct: 7, preciosConIva: true }).totalCent).toBe(14520)
+    expect(() => facturaDelRecibo(reciboDe(), { ivaPct: 21, retencionPct: 19, preciosConIva: true })).toThrow('sin retención, 15 % o 7 %')
+  })
   it('un recibo parado no se factura', () => {
     expect(() => facturaDelRecibo({ ...reciboDe(), parado: ['Una línea sin precio: X'] }, CON_IVA)).toThrow('Un recibo parado no se factura')
   })

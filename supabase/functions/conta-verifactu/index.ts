@@ -110,12 +110,14 @@ async function prepararPruebas(srv: any): Promise<Record<string, unknown>> {
 
 Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "usa POST" }, 405);
-  const p = puerta(Deno.env.get("CONTA_VERIFACTU"), SUPABASE_URL);
+  const cuerpo = (await req.json().catch(() => ({}))) as { accion?: string; entorno?: string };
+  // G05 · T3: {"entorno":"pruebas"} desde producción (verifactu_despertar_demos) abre las pruebas solo para las demos.
+  const p = puerta(Deno.env.get("CONTA_VERIFACTU"), SUPABASE_URL, cuerpo.entorno, Deno.env.get("CONTA_VERIFACTU_DEMOS"));
   // Quién puede despertarla: el cron (CRON_SECRET) o, solo en pruebas, el
   // workflow de las pruebas con su llave de un solo run (VERIFACTU_PRUEBAS_TOKEN).
   const cron = Deno.env.get("CRON_SECRET") ?? "", llave = Deno.env.get("VERIFACTU_PRUEBAS_TOKEN") ?? "";
   const porCron = !!cron && (req.headers.get("x-cron-secret") ?? "") === cron;
-  const porPruebas = "entorno" in p && p.entorno === "pruebas" && !!llave && (req.headers.get("x-verifactu-pruebas") ?? "") === llave;
+  const porPruebas = "entorno" in p && p.entorno === "pruebas" && !("soloDemos" in p) && !!llave && (req.headers.get("x-verifactu-pruebas") ?? "") === llave;
   if (!porCron && !porPruebas) return json({ error: "no autorizado" }, 401);
   if ("cerrada" in p) {
     console.log(`conta-verifactu · cerrada · ${p.cerrada}`);
@@ -128,7 +130,11 @@ Deno.serve(async (req) => {
     if (error) throw new Error(`${fn}: ${error.message}`);
     return data;
   };
-  const accion = (await req.json().catch(() => ({})) as { accion?: string }).accion ?? "enviar";
+  const accion = cuerpo.accion ?? "enviar";
+  const soloDemos = "soloDemos" in p && p.soloDemos === true;
+  // Desde producción, en pruebas solo se envía y se comprueba: preparar y probar se hacen en staging.
+  // probar_conexion sí: el candado de verifactu_modo pide la conexión de pruebas apuntada en ESTA base.
+  if (soloDemos && accion === "preparar_pruebas") return json({ error: "preparar_pruebas no se hace desde producción" }, 400);
   // DM1 · PR 2a · La puerta: una empresa de una cuenta de demo no habla con Hacienda.
   const empresaEnLaDemo = async (companyId: string): Promise<boolean> => {
     const { data } = await srv.from("company").select("account_id").eq("id", companyId).maybeSingle();
@@ -196,6 +202,7 @@ Deno.serve(async (req) => {
       },
       url: URL[entorno],
       enLaDemo: (c) => empresaEnLaDemo(c.company_id),
+      soloDemos,
     }, entorno);
     console.log(`conta-verifactu · ${entorno} · cuadres ${r.cuadres} · hechos ${r.hechos} · páginas ${r.paginas} · facturas ${r.facturas} · fallos ${r.fallos.length}`);
     return json({ entorno, cuadres: r.cuadres, hechos: r.hechos, paginas: r.paginas, facturas: r.facturas, fallos: r.fallos.length });
@@ -249,10 +256,11 @@ Deno.serve(async (req) => {
       nif: sifNif,
       nombre: "Sumied", id: "SU",
       version: Deno.env.get("VERIFACTU_SIF_VERSION") ?? "1.0.0",
-      numeroInstalacion: entorno === "pruebas" ? "staging" : "produccion",
+      numeroInstalacion: entorno === "pruebas" ? (soloDemos ? "demo" : "staging") : "produccion",
     },
     url: URL[entorno],
     enLaDemo: (lote) => empresaEnLaDemo(lote.company_id),
+    soloDemos,
   };
 
   const r = await unaVuelta(piezas, entorno);
