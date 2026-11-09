@@ -1,0 +1,6 @@
+# G05 · La 2203 (nº 62: lo que paga el cliente no cambia). Su prueba (ROLLBACK,
+# datos inventados, en la cuenta A) cobra y factura un recibo de 145,00 € con base
+# 119,83 e IVA 25,17 en su factura, su asiento, su libro y su cobro, y prueba la
+# vuelta atrás.
+supabase/migrations/20261109T2203_g05_cuota_exacta.sql
+supabase/staging/sql/20261109_g05_cuota_exacta_prueba.sql

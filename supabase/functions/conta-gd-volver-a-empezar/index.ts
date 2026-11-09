@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PRESUPUESTO_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -66,12 +66,14 @@ Deno.serve(async (req) => {
   if (no) return json(403, { error: no })
 
   const dicho: string[] = []
+  let sigue = false
   try {
     const siembra = crearSiembra({ b24Url, gcToken, decir: (t) => dicho.push(t.trim().replace(/^✓\s*/, '')) })
     switch (paso) {
       case 'comprobar': dicho.push('Todo listo para volver a empezar.'); break
-      case 'portal_borrar': await siembra.borrarBitrix(); break
-      case 'portal_sembrar': await siembra.sembrarBitrix(); break
+      // Por tandas (nº71): lo que cabe en 90 s; si queda, la pantalla vuelve a llamar al mismo paso.
+      case 'portal_borrar': sigue = (await siembra.borrarBitrix(PRESUPUESTO_MS)).quedan > 0; break
+      case 'portal_sembrar': sigue = (await siembra.sembrarBitrix(PRESUPUESTO_MS)).quedan > 0; break
       case 'sandbox_borrar': await siembra.borrarGoCardless(); break
       case 'sandbox_sembrar': await siembra.sembrarGoCardless(); break
       case 'sumied': {
@@ -163,7 +165,7 @@ Deno.serve(async (req) => {
         break
       }
     }
-    return json(200, { ok: true, paso, frase: dicho.filter(Boolean).join(' ') })
+    return json(200, { ok: true, paso, sigue, frase: dicho.filter(Boolean).join(' ') })
   } catch (e) {
     // En el registro, el qué y nunca un secreto.
     const m = e instanceof Error ? e.message : String(e)

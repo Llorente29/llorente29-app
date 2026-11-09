@@ -7,7 +7,7 @@
 // (modelo.ts) y lo que hacer al pulsar. Palabras de oficina; el CRM, por su
 // nombre.
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { euros } from '../../../../../supabase/functions/_shared/tarifa/precio'
 import { eurosRedondos, miles } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
@@ -35,6 +35,8 @@ export interface PropsClientes {
   /** G05 · «Revisar el cobro» de la empresa elegida (con «Las dos», no hay uno solo: sin enlace). */
   rutaCobro?: string | null
   hoy: string
+  /** GP · T4: lo del portal de los clientes (portal/PortalPendiente.tsx), con cuántas tareas hay además. Sin él, no sale. */
+  portal?: (otras: number) => ReactNode
 }
 
 const FILTROS: { id: Filtro; texto: string }[] = [
@@ -136,7 +138,7 @@ export function Clientes(p: PropsClientes) {
           <div className="g4-pequeno" style={{ fontSize: 13 }}>Primero lo que más dinero mueve</div>
         </div>
         {m.tareas.length === 0
-          ? <p className="g4-nada">Nada pendiente.</p>
+          ? (p.portal ? null : <p className="g4-nada">Nada pendiente.</p>)
           : <div className="g4-tareas">
             {m.tareas.map((t) => (
               <div key={t.id} className="g4-tarea" data-tono={t.tono}>
@@ -146,6 +148,7 @@ export function Clientes(p: PropsClientes) {
               </div>
             ))}
           </div>}
+        {p.portal?.(m.tareas.length)}
       </section>
 
       <section aria-labelledby="g4-lista" className="g4-bloque g4-lista" ref={listaRef}>
