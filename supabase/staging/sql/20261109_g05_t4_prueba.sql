@@ -215,13 +215,15 @@ select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-
 select set_config('request.jwt.claim.sub', 'c01a0000-0000-4000-8000-0000000000a1', true);
 set local role authenticated;
 do $$
-declare v_e uuid := (select v::uuid from _t where clave = 'e5'); x jsonb; r jsonb; mv jsonb := '[]'::jsonb; m record; v_err text; v_bueno uuid; v_otro uuid; lin text; ent uuid;
+declare v_e uuid := (select v::uuid from _t where clave = 'e5'); x jsonb; r jsonb; mv jsonb := '[]'::jsonb; m record; v_err text; v_bueno uuid; v_otro uuid; lin text; ent uuid; v_puente text;
 begin
   if exists (select 1 from _t where clave = 'salta5') then return; end if;
   x := public.conta_abonos_gocardless_pendientes(v_e);
   if not exists (select 1 from jsonb_array_elements(x) a where a->>'id' = 'PRUEBA-PO1' and (a->>'neto')::numeric = 157.30 and (a->>'cobros')::int = 1 and a->>'cuenta' is not null) then
     raise exception 'G05 T4 · 5: el pago de GoCardless no espera su ingreso: %', x;
   end if;
+  -- La cuenta puente, la que dice lo que espera (los ajustes son internos: el usuario no los lee).
+  select a->>'cuenta' into v_puente from jsonb_array_elements(x) a where a->>'id' = 'PRUEBA-PO1';
   for m in select * from (values (1, 157.31, 'GOCARDLESS OTRO G05'), (2, 157.30, 'GOCARDLESS PRUEBA-PO1 G05')) y(i, imp, con) loop
     mv := mv || jsonb_build_array(jsonb_build_object('fecha', to_char(public.conta_hoy(), 'YYYY-MM-DD'), 'importe', m.imp,
       'concepto_banco', m.con, 'concepto_limpio', initcap(m.con), 'contraparte', 'GOCARDLESS', 'tipo', 'ABONO', 'huella', 'g05-' || m.i, 'huella_suave', 'g05-s' || m.i));
@@ -238,7 +240,7 @@ begin
   select string_agg(coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by jl.position) into lin from public.journal_line jl where jl.entry_id = ent;
   if lin <> '157.30/0.00 · 0.00/157.30'
      or (select ca.code from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = ent and jl.credit > 0)
-        <> public._conta_cobro_ajustes(v_e)->>'cuenta_plataforma' then
+        <> v_puente then
     raise exception 'G05 T4 · 5: el asiento del ingreso es «%».', lin;
   end if;
   if exists (select 1 from jsonb_array_elements(public.conta_abonos_gocardless_pendientes(v_e)) a where a->>'id' = 'PRUEBA-PO1') then raise exception 'G05 T4 · 5: casado, sigue esperando.'; end if;
