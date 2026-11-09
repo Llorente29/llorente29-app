@@ -208,3 +208,33 @@ export function leerCancelacion(status: number, respuesta: unknown): { cancelado
   if (motivos.includes('mandate_already_cancelled')) return { cancelado: true }
   return { cancelado: false, porque: e?.message ?? `HTTP ${status}` }
 }
+
+/** nº 70 · Una suscripción de GoCardless, como se leyó (conta_gc_suscripcion). */
+export interface SuscripcionGuardada { importeCent: number; intervalo: string; cada: number; estado: string; proximoCobro: string | null; inicio: string | null }
+
+const mesesDesde = (de: string, a: string) => (Number(a.slice(0, 4)) - Number(de.slice(0, 4))) * 12 + Number(a.slice(5, 7)) - Number(de.slice(5, 7))
+
+/**
+ * nº 70 · Lo que GoCardless le cobra a un cliente EN un mes, para compararlo con
+ * el recibo de ese mes. Una mensual entra todos los meses; una anual (o cada
+ * varios meses), solo en el mes en que la cobra, que sale de su próximo cobro (o
+ * de su inicio). No se reparte entre doce: la de 300 € al año no son 25 € en
+ * diciembre, son 300 € en su mes. Las semanales no se comparan con un mes.
+ * Null si no tiene ninguna activa.
+ */
+export function gocardlessEnElMes(suscripciones: readonly SuscripcionGuardada[], mes: string): number | null {
+  const activas = suscripciones.filter((s) => s.estado === 'active')
+  if (!activas.length) return null
+  let total = 0
+  for (const s of activas) {
+    const cada = Math.max(1, s.cada || 1)
+    const meses = s.intervalo === 'monthly' ? cada : s.intervalo === 'yearly' ? 12 * cada : null
+    if (meses === null) continue
+    if (meses === 1) { total += s.importeCent; continue }
+    const ref = s.proximoCobro ?? s.inicio
+    if (!ref) continue
+    const d = mesesDesde(ref.slice(0, 7), mes)
+    if (((d % meses) + meses) % meses === 0) total += s.importeCent
+  }
+  return total
+}
