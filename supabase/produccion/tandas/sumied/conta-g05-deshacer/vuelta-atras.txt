@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 0010: fuera las funciones de deshacer y su tabla.
+cuenta: scripts/conta/produccion/cuentas/g05-deshacer.sql
+supabase/vuelta-atras/20261110T0010_g05_deshacer_lineas.down.sql
