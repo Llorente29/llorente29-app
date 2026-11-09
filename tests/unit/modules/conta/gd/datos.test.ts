@@ -1,6 +1,6 @@
 // GD · Los datos de la demo: inventados, bien formados y que cuentan lo que tienen que contar.
 import { describe, expect, it } from 'vitest'
-import { CLIENTES, NIF_EMISORES, SOLO_EN_GOCARDLESS, cifConControl, correoDelCliente, dniConLetra, ibanDePrueba, ibanValido, resumen } from '../../../../../scripts/conta/gd/datos'
+import { CLIENTES, NIF_EMISORES, SOLO_EN_GOCARDLESS, cifConControl, correoDelCliente, dniConLetra, ibanDePrueba, ibanValido, resumen } from '../../../../../supabase/functions/_shared/gd/datos'
 import { normalizarNif } from '../../../../../supabase/functions/_shared/crm/ficha'
 
 describe('GD · datos de la demo', () => {

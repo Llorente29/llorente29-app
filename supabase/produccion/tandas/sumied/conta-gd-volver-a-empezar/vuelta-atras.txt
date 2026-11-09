@@ -1,0 +1,3 @@
+# GD · la vuelta atrás de la 1731: se quitan las dos funciones (no hay datos que devolver).
+cuenta: scripts/conta/produccion/cuentas/gd-volver-a-empezar.sql
+supabase/vuelta-atras/20261109T1731_gd_volver_a_empezar.down.sql

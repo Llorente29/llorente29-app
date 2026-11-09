@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 16:20Z. La 1731 crea _gd_se_queda() y demo_gestoria_volver_a_empezar(uuid), que no existen, y no las llama: no cambia datos. Medido para cuando se pulse: la demo de000000-…-a0 tiene filas en 42 tablas; 24 se vaciarían y 18 son configuración. Ninguna clave ajena sin cascada desde tablas sin account_id; dos disparadores de borrado (conta_linea_apuntar, conta_tarifa_apuntar) que apuntan en conta_gestoria_cambio, que también se vacía. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T16:20Z",
+ "tanda": {
+  "supabase/migrations/20261109T1731_gd_volver_a_empezar.sql": "7f82dfa076d2712cafd42285fed9cf93"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
