@@ -8,12 +8,12 @@ import { useEffect, useRef, useState } from 'react'
 import { Paperclip } from 'lucide-react'
 import { abrir, leer, subirFichero } from '../cliente'
 import { Cargando, Fallo } from '../comun'
-import { cuando, puedeSubirse } from '../formato'
+import { cuando, iniciales, puedeSubirse } from '../formato'
 import type { Mensajes as DatosMensajes } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
 
-export function Mensajes({ cliente, abrir: pedido, avisar, ir }: Pantalla) {
+export function Mensajes({ cliente, abrir: pedido, avisar, ir, gestoria }: Pantalla & { gestoria: string }) {
   const { datos, error, cargando, recargar } = useLectura<DatosMensajes>('conta_portal_mensajes', cliente)
   const [texto, setTexto] = useState('')
   const [adjuntos, setAdjuntos] = useState<File[]>([])
@@ -54,11 +54,14 @@ export function Mensajes({ cliente, abrir: pedido, avisar, ir }: Pantalla) {
       <h1 className="pt-h1">Mensajes con tu gestoría</h1>
       {contestar && pedido.pregunta && <div className="pt-aviso info" role="status"><span>Contestas a: «{pedido.pregunta}»</span><button type="button" onClick={() => ir('mensajes')}>No contestar</button></div>}
       <section className="pt-tarjeta pt-chat" style={{ padding: 0, gap: 0 }} aria-label="Conversación">
+        <div className="pt-chat-cabeza">
+          <span className="pt-avatar" aria-hidden="true" style={{ background: '#E2F5F3', color: '#0B6B63' }}>{iniciales(gestoria)}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><b style={{ fontSize: 14 }}>{gestoria} · tu gestoría</b><span className="pt-nota">Contesta en el día, de lunes a viernes. Te avisamos por correo.</span></div>
+        </div>
         <div className="pt-chat-hilo" ref={hilo} aria-live="polite">
           {datos.mensajes.length === 0 && <div className="pt-nota">Escribe aquí lo que necesites. Tu gestoría contesta en el día y te avisamos por correo.</div>}
           {datos.mensajes.map((m) => (
             <div key={m.id} className={`pt-burbuja-msg${m.de === 'cliente' ? ' mio' : ''}`}>
-              {m.de === 'gestoria' && <small style={{ opacity: 1, fontWeight: 700 }}>{m.autor}</small>}
               {m.texto && <span>{m.texto}</span>}
               {m.adjuntos.map((a, i) => (
                 <button type="button" key={a.ruta} className="pt-adjunto" onClick={() => abrir(cliente, 'adjunto', m.id, i).catch((e: Error) => avisar({ tipo: 'mal', texto: e.message }))}>

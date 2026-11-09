@@ -46,7 +46,7 @@ export function Trabajadores({ cliente, abrir: pedido, avisar }: Pantalla) {
         {datos.trabajadores.length === 0 && <div className="pt-vacio">Tu gestoría no tiene ningún trabajador tuyo de alta en tu recibo.</div>}
         {datos.trabajadores.map((w) => (
           <div className="pt-fila" key={w.linea_id}>
-            <div className="pt-fila-texto"><b>{w.nombre}</b><span>{w.nuevo ? `Alta el ${fecha(w.desde)}` : `Desde ${fecha(w.desde)}`}{w.hasta ? ` · baja en ${fecha(w.hasta)}` : ''}</span></div>
+            <div className="pt-fila-texto"><b>{w.nombre}</b><span>{w.nuevo ? `Alta el ${fecha(w.desde)}` : `Desde el ${fecha(w.desde)}`}{w.hasta ? ` · baja en ${fecha(w.hasta)}` : ''}</span></div>
             <Chip texto={w.nuevo ? 'Alta nueva' : 'De alta'} tono={w.nuevo ? 'info' : 'ok'} />
             <button type="button" className="pt-boton sec chico" disabled={bajaPedida(w.nombre)} onClick={() => setBaja(w.nombre)}>{bajaPedida(w.nombre) ? 'Baja pedida' : 'Pedir la baja'}</button>
           </div>

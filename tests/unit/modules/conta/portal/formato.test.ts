@@ -42,11 +42,13 @@ describe('nombres', () => {
     expect(nombreDePila('Persona Ejemplo')).toBe('Persona')
     expect(nombreDePila('persona@ejemplo.example')).toBe('')
   })
-  it('los impuestos, en palabras', () => {
-    expect(nombreImpuesto('303', '3T', 2026)).toBe('IVA del 3.º trimestre de 2026 (modelo 303)')
-    expect(nombreImpuesto('200', '0A', 2025)).toBe('Impuesto de sociedades 2025 (modelo 200)')
-    expect(nombreImpuesto('111', '10', 2026)).toBe('Retenciones de octubre de 2026 (modelo 111)')
-    expect(nombreImpuesto('202', '2P', 2026)).toBe('Modelo, 2.º pago de 2026 (modelo 202)')
+  it('los impuestos, en palabras, como en la maqueta', () => {
+    expect(nombreImpuesto('303', '3T', 2026, hoy)).toBe('IVA del 3.er trimestre (modelo 303)')
+    expect(nombreImpuesto('303', '4T', 2025, hoy)).toBe('IVA del 4.º trimestre de 2025 (modelo 303)')
+    expect(nombreImpuesto('200', '0A', 2025, hoy)).toBe('Impuesto de sociedades 2025')
+    expect(nombreImpuesto('111', '10', 2026, hoy)).toBe('Retenciones de octubre (modelo 111)')
+    expect(nombreImpuesto('202', '2P', 2026, hoy)).toBe('Pago a cuenta de sociedades, 2.º pago (modelo 202)')
+    expect(nombreImpuesto('999', '1T', 2026, hoy)).toBe('Modelo 999 del 1.er trimestre')
   })
 })
 

@@ -12,4 +12,6 @@ export interface Pantalla {
   ir: (p: Pestana, abrir?: Record<string, string>) => void
   abrir: Record<string, string>
   avisar: (a: Aviso) => void
+  /** El nombre de la persona, para la cabecera (lo trae Inicio). */
+  ponerNombre?: (n: string) => void
 }

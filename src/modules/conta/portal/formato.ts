@@ -151,12 +151,15 @@ export function documentoLimpio(x: string): string | null {
 }
 
 /** Qué es cada impuesto, para el cliente. */
-export function nombreImpuesto(modelo: string, periodo: string | null, ejercicio: number | null): string {
-  const que: Record<string, string> = { '303': 'IVA', '111': 'Retenciones', '115': 'Retenciones del alquiler', '130': 'Pago a cuenta del IRPF', '200': 'Impuesto de sociedades', '390': 'Resumen anual del IVA', '190': 'Resumen anual de retenciones', '347': 'Operaciones con terceros', '100': 'Renta' }
-  const a = ejercicio ? ` de ${ejercicio}` : ''
-  const p = !periodo || periodo === '0A' ? (ejercicio ? String(ejercicio) : '')
-    : /^[1-4]T$/.test(periodo) ? `del ${periodo[0]}.º trimestre${a}`
-    : /^(0[1-9]|1[0-2])$/.test(periodo) ? `de ${MESES[Number(periodo) - 1]}${a}`
-    : /^[1-3]P$/.test(periodo) ? `, ${periodo[0]}.º pago${a}` : periodo
-  return `${que[modelo] ?? 'Modelo'} ${p} (modelo ${modelo})`.replace(/\s+,/g, ',').replace(/\s+/g, ' ').trim()
+export function nombreImpuesto(modelo: string, periodo: string | null, ejercicio: number | null, hoy: Date = new Date()): string {
+  const que: Record<string, string> = { '303': 'IVA', '111': 'Retenciones', '115': 'Retenciones del alquiler', '130': 'Pago a cuenta del IRPF', '202': 'Pago a cuenta de sociedades', '200': 'Impuesto de sociedades', '390': 'Resumen anual del IVA', '190': 'Resumen anual de retenciones', '180': 'Resumen anual del alquiler', '347': 'Operaciones con terceros', '100': 'Renta' }
+  const nombre = que[modelo] ?? `Modelo ${modelo}`
+  // Lo anual, como en la maqueta: «Impuesto de sociedades 2025», sin el modelo.
+  if (!periodo || periodo === '0A') return `${nombre}${ejercicio ? ` ${ejercicio}` : ''}`
+  const a = ejercicio && ejercicio !== madrid(hoy)[0] ? ` de ${ejercicio}` : ''
+  const ord = ['1.er', '2.º', '3.er', '4.º']
+  const p = /^[1-4]T$/.test(periodo) ? ` del ${ord[Number(periodo[0]) - 1]} trimestre${a}`
+    : /^(0[1-9]|1[0-2])$/.test(periodo) ? ` de ${MESES[Number(periodo) - 1]}${a}`
+    : /^[1-3]P$/.test(periodo) ? `, ${ord[Number(periodo[0]) - 1]} pago${a}` : ` ${periodo}`
+  return `${nombre}${p}${que[modelo] ? ` (modelo ${modelo})` : ''}`
 }

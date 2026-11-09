@@ -45,8 +45,8 @@ button:disabled { cursor: default; opacity: .6; }
 .pt-gestoria-nombre { font-family: var(--titulo); font-weight: 700; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pt-gestoria-sub { font-size: 12px; color: #C9D4E6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pt-yo { display: flex; align-items: center; gap: 10px; flex: none; background: transparent; border: 0; color: #FFF; padding: 0; }
-.pt-yo-nombre { font-size: 13px; color: #C9D4E6; display: none; }
-@media (min-width: 760px) { .pt-cabecera { padding: 16px 20px; } .pt-yo-nombre { display: block; } }
+.pt-yo-nombre { font-size: 13px; color: #C9D4E6; max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (min-width: 760px) { .pt-cabecera { padding: 16px 20px; } .pt-yo-nombre { max-width: none; } }
 .pt-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--azul); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: #FFF; }
 
 /* Pestañas */

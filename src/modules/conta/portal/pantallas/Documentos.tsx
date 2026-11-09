@@ -72,7 +72,7 @@ export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla
         <div className="pt-aviso info" role="status"><span>Para subir documentos desde aquí, tu gestoría tiene que tener tu empresa dada de alta en Sumied. Mientras, mándaselos por Mensajes.</span></div>
       )}
       <div className="pt-botones" role="group" aria-label="Qué documentos ver">
-        {tipos.map((t) => <button type="button" key={t.id} className="pt-filtro" aria-pressed={tipo === t.id} onClick={() => setTipo(t.id)}>{t.label}{t.n ? ` · ${t.n}` : ''}</button>)}
+        {tipos.map((t) => <button type="button" key={t.id} className="pt-filtro" aria-pressed={tipo === t.id} onClick={() => setTipo(t.id)}>{t.label}</button>)}
       </div>
       <section className="pt-lista" aria-label={tipos.find((t) => t.id === tipo)?.label}>
         {tipo === 'impuestos' && (datos.impuestos.length === 0 ? <div className="pt-vacio">Aún no hay impuestos presentados aquí. Cuando tu gestoría presente uno, sale con su justificante.</div>

@@ -6,19 +6,21 @@
 // su desglose, por qué cambia y «No estoy de acuerdo», los atajos y lo último.
 // Una sola lectura: conta_portal_inicio.
 
-import { useState, type ReactNode } from 'react'
-import { ArrowUp, CircleCheck, Euro, FileText, MessageCircle, PenLine, Plus, Receipt, Users } from 'lucide-react'
-import { accion } from '../cliente'
+import { useEffect, useState, type ReactNode } from 'react'
+import { ArrowUp, CircleCheck, Euro, FileText, MessageCircle, PenLine, Plus } from 'lucide-react'
+import { abrir, accion } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { diferencia, euros, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia } from '../formato'
+import { diferencia, euros, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS } from '../formato'
 import type { Inicio as DatosInicio, Novedad, Peticion } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
 import { Firmar } from './Firmar'
 
-export function Inicio({ cliente, ir, avisar }: Pantalla) {
+export function Inicio({ cliente, ir, avisar, ponerNombre }: Pantalla) {
   const { datos, error, cargando, recargar } = useLectura<DatosInicio>('conta_portal_inicio', cliente)
   const [firmando, setFirmando] = useState<Peticion | null>(null)
+  const nombre = datos?.yo.nombre
+  useEffect(() => { if (nombre) ponerNombre?.(nombre) }, [nombre, ponerNombre])
   if (cargando && !datos) return <Cargando que="tu espacio" />
   if (error || !datos) return <Fallo texto={error ?? 'No se ha podido cargar.'} otraVez={recargar} />
   const d = datos
@@ -48,7 +50,7 @@ export function Inicio({ cliente, ir, avisar }: Pantalla) {
                 <span className="pt-icono" aria-hidden="true" style={tonoPeticion(q.tipo)}>{q.tipo === 'firmar' ? <PenLine /> : q.tipo === 'subir' ? <ArrowUp /> : <MessageCircle />}</span>
                 <div className="pt-fila-texto">
                   <b>{q.titulo}</b>
-                  <span>{q.fecha_limite ? `Antes del ${fecha(q.fecha_limite)}` : 'Sin fecha límite'}{q.detalle ? ` · ${q.detalle}` : ''}</span>
+                  <span>{[q.fecha_limite ? `Antes del ${fecha(q.fecha_limite)}` : null, q.detalle].filter(Boolean).join(' · ')}</span>
                 </div>
                 <button type="button" className="pt-boton chico" onClick={() => hacer(q)}>{q.tipo === 'firmar' ? 'Firmar' : q.tipo === 'subir' ? 'Subirlo' : 'Contestar'}</button>
               </div>
@@ -65,13 +67,12 @@ export function Inicio({ cliente, ir, avisar }: Pantalla) {
         {d.puede_subir && <Atajo icono={<ArrowUp />} t="Subir una factura" d="O un ticket, con una foto" pick={() => ir('documentos')} />}
         {todo && <Atajo icono={<Plus />} t="Pedir un alta" d="De un trabajador nuevo" pick={() => ir('trabajadores', { alta: '1' })} />}
         <Atajo icono={<Euro />} t="Tus facturas" d="Todas, en PDF" pick={() => ir('facturas')} />
-        {todo && <Atajo icono={<MessageCircle />} t="Escribir a tu gestoría" d={d.mensajes_sin_leer ? `${d.mensajes_sin_leer} sin leer` : 'Contesta en el día'} pick={() => ir('mensajes')} />}
       </section>
 
       <section className="pt-tarjeta" aria-labelledby="pt-ultimo">
         <h2 className="pt-h2" id="pt-ultimo">Lo último de tu gestoría</h2>
         {d.novedades.length === 0 && <div className="pt-nota">Aún no hay nada. Aquí salen tus facturas, los impuestos que te presentan y las altas que te hacen.</div>}
-        <div>{d.novedades.map((n) => <FilaNovedad key={`${n.tipo}-${n.id}`} n={n} ir={ir} />)}</div>
+        <div>{d.novedades.map((n) => <FilaNovedad key={`${n.tipo}-${n.id}`} n={n} ir={ir} cliente={cliente} avisar={avisar} />)}</div>
       </section>
 
       {firmando && <Firmar cliente={cliente} peticion={firmando} cerrar={() => setFirmando(null)} hecho={(t) => { setFirmando(null); avisar({ tipo: 'ok', texto: t }); recargar() }} />}
@@ -92,14 +93,15 @@ function Atajo({ icono, t, d, pick }: { icono: ReactNode; t: string; d: string; 
   )
 }
 
-function FilaNovedad({ n, ir }: { n: Novedad; ir: Pantalla['ir'] }) {
-  const v = n.tipo === 'factura' ? { ico: <Receipt />, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: fecha(n.cuando), b: 'Ver', go: () => ir('facturas') }
-    : n.tipo === 'impuesto' ? { ico: <FileText />, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
-    : n.tipo === 'alta' ? { ico: <Users />, t: `${n.alta === 'baja' ? 'Baja' : 'Alta'} de ${n.titulo} ${n.estado === 'hecha' ? 'hecha' : 'no hecha'}`, d: n.desde ? `Desde el ${fecha(n.desde)}` : '', b: 'Ver', go: () => ir('trabajadores') }
-    : { ico: <MessageCircle />, t: n.titulo || 'Mensaje de tu gestoría', d: fecha(n.cuando), b: 'Leer', go: () => ir('mensajes') }
+function FilaNovedad({ n, ir, cliente, avisar }: { n: Novedad; ir: Pantalla['ir']; cliente: string; avisar: Pantalla['avisar'] }) {
+  const v = n.tipo === 'factura' ? { ico: <Euro />, tono: TONOS.ok, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: `Del ${fecha(n.cuando)}`, b: 'PDF',
+        go: () => { abrir(cliente, 'factura', n.id).catch((e: Error) => avisar({ tipo: 'mal', texto: e.message })) } }
+    : n.tipo === 'impuesto' ? { ico: <FileText />, tono: TONOS.info, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${n.resultado === 'a_devolver' ? 'a devolver' : 'a ingresar'} ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
+    : n.tipo === 'alta' ? { ico: <CircleCheck />, tono: n.estado === 'hecha' ? TONOS.ok : TONOS.gris, t: `${n.alta === 'baja' ? 'Baja' : 'Alta'} de ${n.titulo} ${n.estado === 'hecha' ? 'hecha' : 'no hecha'}`, d: n.desde ? `Desde el ${fecha(n.desde)}` : '', b: 'Ver', go: () => ir('trabajadores') }
+    : { ico: <MessageCircle />, tono: TONOS.gris, t: n.titulo || 'Mensaje de tu gestoría', d: fecha(n.cuando), b: 'Leer', go: () => ir('mensajes') }
   return (
     <div className="pt-fila">
-      <span className="pt-icono" aria-hidden="true">{v.ico}</span>
+      <span className="pt-icono" aria-hidden="true" style={{ background: v.tono.fondo, color: v.tono.tinta }}>{v.ico}</span>
       <div className="pt-fila-texto"><b>{v.t}</b><span>{v.d}</span></div>
       <button type="button" className="pt-boton enlace" onClick={v.go}>{v.b}</button>
     </div>
@@ -155,7 +157,7 @@ function ProximoRecibo({ cliente, p, avisar, recargar }: { cliente: string; p: N
       <div className="pt-cabeza" style={{ alignItems: 'flex-start' }}>
         <div>
           <div id="pt-proximo" style={{ fontSize: 13, color: 'var(--suave)', fontWeight: 600 }}>
-            Tu próximo recibo · {mes(p.mes)}{p.cargo_el ? ` · se carga el ${fecha(p.cargo_el)}` : ''}
+            Tu próximo recibo · {p.cargo_el ? `se carga el ${fecha(p.cargo_el)}` : mes(p.mes).toLowerCase()}
           </div>
           <div className="pt-cifra">{euros(p.total_cent)}</div>
         </div>

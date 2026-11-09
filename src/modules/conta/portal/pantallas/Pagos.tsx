@@ -10,12 +10,13 @@ import type { Pagos as DatosPagos } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
 
-export function Pagos({ cliente, ir }: Pantalla) {
+export function Pagos({ cliente }: Pantalla) {
   const { datos, error, cargando, recargar } = useLectura<DatosPagos>('conta_portal_pagos', cliente)
   if (cargando && !datos) return <Cargando que="tus pagos" />
   if (error || !datos) return <Fallo texto={error ?? 'No se han podido cargar.'} otraVez={recargar} />
   const deuda = datos.devueltos.reduce((s, d) => s + d.importe_cent, 0)
   const anio = new Date().getFullYear()
+  const devueltoEl = (id: string) => { const d = datos.devueltos.find((x) => x.recibo_id === id)?.devuelto_el; return d ? `Devuelto el ${fecha(d)} · se paga desde Inicio` : 'Ya pagado después del devuelto' }
   return (
     <>
       <h1 className="pt-h1">Tus pagos</h1>
@@ -24,7 +25,6 @@ export function Pagos({ cliente, ir }: Pantalla) {
         <div style={deuda ? { background: '#FDE8E7' } : undefined}><div style={deuda ? { color: '#A11B12' } : undefined}>Pendiente</div><div style={deuda ? { color: '#A11B12' } : undefined}>{euros(deuda)}</div></div>
         <div><div>Próximo cargo</div><div>{datos.proximo?.cargo_el ? fechaCorta(datos.proximo.cargo_el) : datos.proximo ? mes(datos.proximo.mes) : '—'}</div></div>
       </section>
-      {deuda > 0 && <div className="pt-aviso mal" role="status"><span>Tienes {datos.devueltos.length === 1 ? 'un recibo devuelto' : `${datos.devueltos.length} recibos devueltos`}. Lo pagas desde Inicio.</span><button type="button" onClick={() => ir('inicio')}>Ir a pagarlo</button></div>}
       <section className="pt-lista" aria-label="Recibos">
         {datos.recibos.length === 0 && <div className="pt-vacio">Aún no hay recibos.</div>}
         {datos.recibos.map((r) => (
@@ -32,7 +32,7 @@ export function Pagos({ cliente, ir }: Pantalla) {
             <div className="pt-fila-texto">
               <b>{mes(r.mes)}</b>
               <span>{r.estado === 'cobrado' || r.estado === 'facturado' ? `Cobrado${r.cobrado_el ? ` el ${fecha(r.cobrado_el)}` : ''}`
-                : r.estado === 'devuelto' || r.estado === 'retrocedido' ? 'Tu banco lo devolvió'
+                : r.estado === 'devuelto' || r.estado === 'retrocedido' ? devueltoEl(r.id)
                 : r.cargo_el ? `Se carga el ${fecha(r.cargo_el)}` : 'Aún sin fecha de cargo'}</span>
             </div>
             <Chip texto={r.estado_texto} />
