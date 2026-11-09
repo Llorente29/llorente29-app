@@ -1,0 +1,29 @@
+[
+ {
+  "id": "523-1",
+  "pr": 523,
+  "fecha": "2026-11-09T10:40:23Z",
+  "producto": "sumied",
+  "apartado": "Cobro del mes",
+  "frase": "el servidor prepara el recibo de cada cliente, los iguales al mes anterior se aprueban de una vez y los que cambian uno a uno, y se envían a GoCardless, por ahora solo con una conexión de pruebas.",
+  "ruta": null
+ },
+ {
+  "id": "523-2",
+  "pr": 523,
+  "fecha": "2026-11-09T10:40:23Z",
+  "producto": "sumied",
+  "apartado": "Factura del cobro",
+  "frase": "al confirmarse el cobro sale la factura (2026/1/141 en la demo) con 430 / 705 + 477 y el cobro 57200002 / 430; la 430 es la del código del cliente (827 → 43000827): lo pone Sumied o viene del programa anterior.",
+  "ruta": null
+ },
+ {
+  "id": "523-3",
+  "pr": 523,
+  "fecha": "2026-11-09T10:40:23Z",
+  "producto": "sumied",
+  "apartado": "Demo",
+  "frase": "una cuenta de demostración solo sale a entornos de pruebas: GoCardless de pruebas, Hacienda de pruebas (también desde producción) y el buzón de pruebas para el correo.",
+  "ruta": null
+ }
+]
