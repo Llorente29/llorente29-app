@@ -17,6 +17,7 @@ import { acciones, leerAsignar, leerClientes, leerFicha } from './datos'
 import { altaEmpleado, bajaLinea, lineaDesdeGc, noContar, revisada } from '@/modules/conta/services/gestoriaService'
 import { modeloClientes, modeloFicha, nombreDelCrmDe, referenciasDelCrm } from './modelo'
 import { Ficha } from './Ficha'
+import type { PagoHecho } from '../g05/PagosConTarjeta'
 import { PortalFicha } from '../portal/PortalFicha'
 import { PortalPendiente } from '../portal/PortalPendiente'
 import { Clientes } from './Clientes'
@@ -108,6 +109,8 @@ export function FichaClienteG04Page() {
   const { cliente = '' } = useParams()
   const [params] = useSearchParams()
   const empresa = params.get('empresa')
+  // G05 · nº 61 · Lo apuntado desde la ficha: aquí, para que el bloque verde siga mientras la ficha se relee.
+  const [pagoHecho, setPagoHecho] = useState<PagoHecho | null>(null)
   const d = useLeer(!cargando && accountId && cliente ? async () => {
     // Las dos a la vez: lo de la lista y lo que solo hace falta al abrir este cliente.
     const [datos, extra] = await Promise.all([leerClientes(accountId), leerFicha(accountId, cliente)])
@@ -131,7 +134,7 @@ export function FichaClienteG04Page() {
   const deEmpresa = datos.servicios.filter((x) => x.company_id === e && x.activo !== false)
   const tras = async (p: Promise<{ frase: string } | string>) => { const r = await p; d.recargar(); return typeof r === 'string' ? r : r.frase }
   return (
-    <Ficha modelo={modelo} crm={nombreCrm} hoy={hoy} rutaVolver={rutaClientesCuotas()} rutaTarifa={rutaTarifasGestoria()} anadirAbierto={params.get('anadir') === '1'}
+    <Ficha pagoTarjeta={{ hecho: pagoHecho, alHecho: (h) => { setPagoHecho(h); d.recargar() } }} modelo={modelo} crm={nombreCrm} hoy={hoy} rutaVolver={rutaClientesCuotas()} rutaTarifa={rutaTarifasGestoria()} anadirAbierto={params.get('anadir') === '1'}
       pestanaInicial={params.get('pestana') === 'portal' ? 'Portal' : undefined}
       portal={<PortalFicha cuenta={accountId!} cliente={cliente} nombreCliente={modelo.fila.nombre}
         serviciosPorTrabajador={deEmpresa.filter((x) => x.forma === 'por_empleado').map((x) => ({ id: String(x.id), nombre: String(x.nombre) }))} />}

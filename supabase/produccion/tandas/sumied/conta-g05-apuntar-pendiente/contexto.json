@@ -1,0 +1,19 @@
+{
+ "_que": "G05 · Apuntar el pago pendiente · contexto de producción, medido en SOLO LECTURA el 09/11 a las 19:29Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 2027 solo añade funciones nuevas (siete): no existe ninguna con esos nombres, ni tablas, ni trabajos de cron que las nombren. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T19:29Z",
+ "tanda": {
+  "supabase/migrations/20261109T2027_g05_apuntar_pendiente.sql": "49a62c1d18efbf96236ef3480f963aa4"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

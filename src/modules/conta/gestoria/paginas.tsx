@@ -22,6 +22,7 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { ClientesCuotas } from './ClientesCuotas'
 import { Tarifas } from './Tarifas'
 import { CobrosGestoria } from './CobrosGestoria'
+import { PagosConTarjeta } from './g05/PagosConTarjeta'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 
@@ -74,18 +75,25 @@ export function CobrosGestoriaAjustes() {
   const { accountId, cargando } = useCuentaConta()
   const { empresas } = useEmpresas()
   const gestoria = useGestoria()
-  const d = useLeer(!cargando && accountId && gestoria === true ? () => leerConexiones(accountId) : null, `${accountId}:conexiones-gestoria`)
+  // La clave lleva si es gestoría: el marco lo sabe un momento después de montar esto, y useLeer
+  // solo vuelve a leer cuando cambia la clave (sin esto no se leía nunca y no salía nada de la gestoría).
+  const d = useLeer(!cargando && accountId && gestoria === true ? () => leerConexiones(accountId) : null, `${accountId}:${gestoria}:${cargando}:conexiones-gestoria`)
   if (gestoria !== true) return null
   if (d.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer GoCardless y tu CRM: {d.error}</p>
   if (!d.datos || !accountId) return null
   const tras = async (p: Promise<string>) => { const f = await p; d.recargar(); return f }
-  return <CobrosGestoria emisores={empresas.map((e) => ({ id: e.id, nombre: e.razonSocial ?? e.nombre }))} gocardless={d.datos.gocardless} bitrix={d.datos.bitrix}
-    acciones={{
-      conectarGc: (e, en, t) => tras(conectarGocardless(e, en, t)), leerGc: (e) => tras(leerGocardless(e)),
-      reintentos: (e, on) => cambiarReintentos(e, on),
-      conectarBitrix: (en, u) => tras(conectarBitrix(accountId, en, u)), leerBitrix: () => tras(leerBitrix(accountId)),
-      confirmarMapa: (m) => tras(confirmarMapaBitrix(accountId, m)), confirmarMapaContactos: (m) => tras(confirmarMapaContactos(accountId, m)),
-      ensayoUnion: () => ensayoUnion(accountId), aplicarUnion: () => tras(aplicarUnion(accountId)),
-    }} />
+  // nº 61 · «Pagos con tarjeta o Bizum»: una por empresa que cobra con GoCardless (sus devueltos se pagan desde el portal).
+  const conCobro = empresas.filter((e) => d.datos!.gocardless.some((g) => g.emisorId === e.id && g.conectada))
+  return <>
+    <CobrosGestoria emisores={empresas.map((e) => ({ id: e.id, nombre: e.razonSocial ?? e.nombre }))} gocardless={d.datos.gocardless} bitrix={d.datos.bitrix}
+      acciones={{
+        conectarGc: (e, en, t) => tras(conectarGocardless(e, en, t)), leerGc: (e) => tras(leerGocardless(e)),
+        reintentos: (e, on) => cambiarReintentos(e, on),
+        conectarBitrix: (en, u) => tras(conectarBitrix(accountId, en, u)), leerBitrix: () => tras(leerBitrix(accountId)),
+        confirmarMapa: (m) => tras(confirmarMapaBitrix(accountId, m)), confirmarMapaContactos: (m) => tras(confirmarMapaContactos(accountId, m)),
+        ensayoUnion: () => ensayoUnion(accountId), aplicarUnion: () => tras(aplicarUnion(accountId)),
+      }} />
+    {conCobro.map((e) => <PagosConTarjeta key={e.id} empresa={e.id} nombreEmpresa={e.razonSocial ?? e.nombre} />)}
+  </>
 }
 

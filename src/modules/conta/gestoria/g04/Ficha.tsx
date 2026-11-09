@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom'
 import type { ModeloFicha } from './modelo'
 import { OtraVia } from './Clientes'
 import { proponerServicio } from './propuestas'
+import { AvisoPagoTarjeta, type PagoHecho } from '../g05/PagosConTarjeta'
 
 export interface Persona { nombre: string; correos: string[]; telefonos: string[] }
 export interface DatosDelCrm { situacion: string; formaPago: string | null; servicios: string | null; leido: string | null; referencias: string[]; direccion: string | null }
@@ -42,6 +43,8 @@ export interface PropsFicha {
   acciones: AccionesFicha
   /** Abrir «+ Añadir» nada más entrar (desde «Ponerle la cuota»). */
   anadirAbierto?: boolean
+  /** G05 · nº 61 · El pago con tarjeta que espera (o el ya apuntado, con su bloque verde): lo guarda la página. */
+  pagoTarjeta?: { hecho: PagoHecho | null; alHecho: (h: PagoHecho) => void }
   /** GP · T4: la pestaña «Portal» (la pinta src/modules/conta/gestoria/portal/PortalFicha.tsx). Sin ella, no sale. */
   portal?: ReactNode
   /** Con qué pestaña abrir (?pestana=portal, desde «Lo que tienes que hacer»). */
@@ -75,7 +78,9 @@ export function Ficha(p: PropsFicha) {
   const [otraVia, setOtraVia] = useState(false)
   const [comoLinea, setComoLinea] = useState(false)
   const h = useHacer()
-  const pendiente = m.pendientes[0] ?? null
+  // G05 · nº 61 · Un pago con tarjeta que espera va antes que nada: «Cobrado por otra vía» lo contaría dos veces.
+  const pagoTarjeta = m.pendientes.find((x) => x.tipo === 'falta_cuenta_stripe') ?? null
+  const pendiente = m.pendientes.find((x) => x.tipo !== 'falta_cuenta_stripe') ?? null
   const desde = mesSiguiente(p.hoy)
   const nombresCrm = p.crm
 
@@ -115,7 +120,9 @@ export function Ficha(p: PropsFicha) {
           <div className="g4-cifra-linea">Sumied guarda los cambios de precio desde el 07/11/2026</div></div>
       </section>
 
-      {f.aviso?.accion === 'otra_via' ? (
+      {p.pagoTarjeta && f.empresaId && (pagoTarjeta || p.pagoTarjeta.hecho) ? (
+        <AvisoPagoTarjeta diferencia={pagoTarjeta?.id ?? null} empresa={f.empresaId} hecho={p.pagoTarjeta.hecho} alHecho={p.pagoTarjeta.alHecho} />
+      ) : f.aviso?.accion === 'otra_via' ? (
         <div role="note" className="g4-nota">
           <div className="g4-nota-textos"><div className="g4-aviso-titulo">{f.aviso.titulo}</div><div className="g4-aviso-texto">{f.aviso.texto}</div></div>
           {otraVia ? <OtraVia cargos={f.devueltos} hoy={p.hoy} alGuardar={p.acciones.cobradoPorOtraVia} alCancelar={() => setOtraVia(false)} />
