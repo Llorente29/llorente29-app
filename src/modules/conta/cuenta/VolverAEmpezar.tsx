@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
-import { PASOS, pasoDeVolverAEmpezar } from '@/modules/conta/cuenta/volverAEmpezar'
+import { PASOS, TANDAS_MAX, pasoDeVolverAEmpezar } from '@/modules/conta/cuenta/volverAEmpezar'
 
 type Estado =
   | { fase: 'quieto' }
@@ -26,9 +26,13 @@ export function VolverAEmpezar() {
     const ya = [...hechos]
     for (let i = desde; i < PASOS.length; i++) {
       setE({ fase: 'yendo', paso: i, hechos: ya })
-      const r = await pasoDeVolverAEmpezar(accountId, PASOS[i].id)
-      if (!r.ok) { setE({ fase: 'fallo', paso: i, hechos: ya, texto: r.texto }); return }
-      ya.push(r.frase)
+      // Los pasos del portal van por tandas: mientras digan «sigue», se vuelven a llamar.
+      for (let tanda = 1; ; tanda++) {
+        const r = await pasoDeVolverAEmpezar(accountId, PASOS[i].id)
+        if (!r.ok) { setE({ fase: 'fallo', paso: i, hechos: ya, texto: r.texto }); return }
+        if (!r.sigue) { ya.push(r.frase); break }
+        if (tanda >= TANDAS_MAX) { setE({ fase: 'fallo', paso: i, hechos: ya, texto: `Después de ${TANDAS_MAX} tandas aún queda trabajo: ${r.frase}` }); return }
+      }
     }
     setE({ fase: 'hecho', hechos: ya })
   }
