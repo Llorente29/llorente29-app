@@ -211,25 +211,41 @@ try {
   // 5 y 7b · Las tomas que graba Julio desde su Chrome (nº60), en GIF, con los rótulos del vídeo.
   //   tomas/05-bitrix.gif y tomas/05-sumied.gif: en pantalla partida. tomas/07b-buzon.gif: entera.
   //   Sin la toma, la escena no se monta y se dice (queda su hueco).
-  const tomaHtml = (imgs) => `<!doctype html><html><head><meta charset="utf-8"><style>
-    html,body{margin:0;height:100%;background:#33435E}.f{display:flex;height:${H}px;gap:${imgs.length > 1 ? 6 : 0}px}
-    .f div{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
-    img{max-width:100%;max-height:100%;object-fit:contain;display:block}</style></head><body><div class="f">${imgs.map((b64) => `<div><img src="data:image/gif;base64,${b64}"></div>`).join('')}</div></body></html>`
+  // Cada toma: { f: fichero, desde: segundos en que aparece (0 = al empezar), titulo: lo que se ve mientras espera }.
+  // Busca primero en scripts/video/gd/tomas (las que van en el repositorio) y después en TOMAS (video-tomas/gd-qbo).
+  const dondeToma = (f) => [join('scripts/video/gd/tomas', f), join(TOMAS, f)].find((x) => existsSync(x)) ?? null
   const duraGif = (f) => { try { return Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString().trim()) || 0 } catch { return 0 } }
-  async function toma(id, ficheros, rotulos) {
+  async function toma(id, tomas, rotulos) {
     if (!pedidas.includes(id)) return
-    const faltan = ficheros.filter((f) => !existsSync(join(TOMAS, f)))
-    if (faltan.length) { fallos.push(`${id}: falta la toma (${faltan.join(', ')} en video-tomas/gd-qbo/tomas): queda su hueco`); decir(`\n── Escena ${id}: falta ${faltan.join(', ')}`); return }
-    const dura = Math.min(40, Math.max(8, ...ficheros.map((f) => duraGif(join(TOMAS, f)))))
+    const faltan = tomas.filter((t) => !dondeToma(t.f)).map((t) => t.f)
+    if (faltan.length) { fallos.push(`${id}: falta la toma (${faltan.join(', ')}): queda su hueco`); decir(`\n── Escena ${id}: falta ${faltan.join(', ')}`); return }
+    const fin = Math.min(45, Math.max(8, ...tomas.map((t) => (t.desde ?? 0) + duraGif(dondeToma(t.f))))) + 4
     await escena(id, async (E) => {
-      await E.page.setContent(tomaHtml(ficheros.map((f) => readFileSync(join(TOMAS, f)).toString('base64'))))
+      const celdas = tomas.map((t, k) => `<div class="c"><div class="espera">${t.titulo ?? ''}</div><img id="t${k}" style="display:none"></div>`).join('')
+      await E.page.setContent(`<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet"><style>
+        html,body{margin:0;height:100%;background:#33435E}.f{display:flex;height:${H}px;gap:${tomas.length > 1 ? 6 : 0}px}
+        .c{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#2A3A56}
+        .espera{position:absolute;color:#8FA3C0;font:600 26px Inter,'DejaVu Sans',sans-serif}
+        img{max-width:100%;max-height:100%;object-fit:contain;display:block;position:relative;z-index:1;animation:entra .5s ease-out}
+        @keyframes entra{from{opacity:0}to{opacity:1}}</style></head><body><div class="f">${celdas}</div></body></html>`)
       await E.page.waitForTimeout(600); E.empezar()
-      const paso = (dura * 1000) / rotulos.length
-      for (const r of rotulos) { await rotulo(E.page, r); await E.page.waitForTimeout(Math.max(3200, paso)) }
+      const t0 = Date.now()
+      const poner = (k) => E.page.evaluate(([k, src]) => { const im = document.getElementById(`t${k}`); im.src = src; im.style.display = 'block' }, [k, `data:image/gif;base64,${readFileSync(dondeToma(tomas[k].f)).toString('base64')}`])
+      const eventos = [
+        ...tomas.map((t, k) => ({ en: t.desde ?? 0, hacer: () => poner(k) })),
+        ...rotulos.map((r) => ({ en: r.en, hacer: () => rotulo(E.page, r.t) })),
+      ].sort((x, y) => x.en - y.en)
+      for (const ev of eventos) { const falta = ev.en * 1000 - (Date.now() - t0); if (falta > 0) await E.page.waitForTimeout(falta); await ev.hacer() }
+      const falta = fin * 1000 - (Date.now() - t0); if (falta > 0) await E.page.waitForTimeout(falta)
       await E.captura()
     }, { conSesion: false })
   }
-  await toma('05', ['05-bitrix.gif', '05-sumied.gif'], ['Lo que cambias en Bitrix24, Sumied lo sabe en segundos', 'Sin tocar tu forma de trabajar'])
+  // 5 · Julio cambia la situación de Librería El Faro en el Bitrix24 de pruebas (de Activo a Moroso) y Sumied
+  // lo recibe en segundos (leído a las 18:25:49 UTC del 09/11). Sumied entra cuando Bitrix24 ya ha guardado.
+  await toma('05', [
+    { f: '05-bitrix.gif', desde: 0, titulo: 'Bitrix24' },
+    { f: '05-sumied.gif', desde: 15, titulo: 'Sumied' },
+  ], [{ t: 'Lo que cambias en Bitrix24, Sumied lo sabe en segundos', en: 0 }, { t: 'Sin tocar tu forma de trabajar', en: 15.5 }])
 
   await escena('05b', async (E) => {
     E.empezar(); await still(E, 'scripts/video/gd/maquetas/0-encrm.png', 'Y sin salir de Bitrix24: la ficha de Sumied dentro de cada cliente', 'En construcción', 7); await E.captura()
@@ -315,7 +331,7 @@ try {
     }
   })
 
-  await toma('07b', ['07b-buzon.gif'], ['Y le llega a tu cliente por correo, sin que nadie la mande'])
+  await toma('07b', [{ f: '07b-buzon.gif', desde: 0 }], [{ t: 'Y le llega a tu cliente por correo, sin que nadie la mande', en: 0 }])
 
   await escena('08', async (E) => {
     E.id = '08'
