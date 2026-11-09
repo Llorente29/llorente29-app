@@ -3,9 +3,7 @@
 -- Vuelta atrás de la 1130: quita la tarifa sembrada en «Gestoría Demo» (niveles,
 -- precios, paquetes, los servicios creados por la tarifa y las líneas que no
 -- vienen de GoCardless) y la función. Solo de esa cuenta, y solo si es demo.
--- Lo que no se deshace: si la siembra juntó en uno los servicios «IMPUESTO DE
--- SOCIEDADES <cliente>» de la importación, se queda junto (la próxima lectura de
--- GoCardless no los vuelve a separar; volver a sembrar el sandbox, sí).
+-- Deja la demo exactamente como estaba antes de la siembra.
 
 do $$
 declare c constant uuid := 'de000000-0000-4000-8000-0000000000a0';

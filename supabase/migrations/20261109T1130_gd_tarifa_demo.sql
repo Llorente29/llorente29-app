@@ -21,7 +21,9 @@
 --       vienen de las suscripciones de GoCardless).
 --     · Impuesto de sociedades: 300 € al año. Si la importación dejó un servicio
 --       por cliente («IMPUESTO DE SOCIEDADES <cliente>», la primera siembra del
---       sandbox), se juntan en uno.
+--       sandbox), el precio va en cada uno: NO se juntan (no se podría deshacer).
+--       Al volver a empezar la demo quedan en uno (el sandbox ya los siembra con
+--       un solo nombre).
 --     · Nóminas, por tramos: de 1 a 5, 15 € cada una; de 6 a 20, 12 €; de 21 en
 --       adelante, 10 €.
 --     · El paquete «Pack Empresa»: Gestoría mensual Estándar y la laboral de
@@ -82,17 +84,11 @@ begin
     return jsonb_build_object('frase', 'Aún no se ha leído GoCardless en la demo (faltan la gestoría mensual y la laboral): conecta y lee, y vuelve a sembrar.');
   end if;
 
-  -- El impuesto de sociedades: uno solo, aunque la importación dejara uno por cliente.
-  select id into v_imp from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%' order by (upper(nombre) = 'IMPUESTO DE SOCIEDADES') desc, created_at, id limit 1;
-  if v_imp is not null then
-    update public.conta_linea set servicio_id = v_imp where company_id = v_soc and servicio_id in
-      (select id from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%' and id <> v_imp);
-    update public.conta_tarifa set servicio_id = v_imp where company_id = v_soc and servicio_id in
-      (select id from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%' and id <> v_imp);
-    delete from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%' and id <> v_imp;
-    get diagnostics v_juntados = row_count;
-    update public.conta_servicio set nombre = 'Impuesto de sociedades', por_confirmar = false where id = v_imp;
-  end if;
+  -- El impuesto de sociedades: su precio, en el servicio (o servicios) que dejó la importación. NO se juntan:
+  -- juntar servicios no se puede deshacer, y la vuelta atrás tiene que dejarlo todo como estaba. Al volver a
+  -- empezar la demo, el sandbox ya los siembra con un solo nombre y la importación hace un solo servicio.
+  select count(*) into v_juntados from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%';
+  select id into v_imp from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%' order by created_at, id limit 1;
 
   -- 3 · Gestoría mensual con niveles, y cada cliente en el de lo que le cobra GoCardless.
   v_basica   := (public.conta_tarifa_nivel_guardar(v_soc, v_gm, null, 'Básica', 1, array['Contabilidad e impuestos trimestrales'], false, false)->>'id')::uuid;
@@ -114,7 +110,9 @@ begin
 
   -- 4 · Laboral, impuesto de sociedades, nóminas por tramos y el paquete.
   perform public.conta_tarifa_precio_guardar(v_soc, v_lab, null, null, null, 'por_trabajador', null, 25, null, v_desde, false);
-  if v_imp is not null then perform public.conta_tarifa_precio_guardar(v_soc, v_imp, null, null, null, 'fijo', 'anio', 300, null, v_desde, false); end if;
+  for v_r in select jsonb_build_object('id', id) from public.conta_servicio where company_id = v_soc and upper(nombre) like 'IMPUESTO DE SOCIEDADES%' loop
+    perform public.conta_tarifa_precio_guardar(v_soc, (v_r->>'id')::uuid, null, null, null, 'fijo', 'anio', 300, null, v_desde, false);
+  end loop;
   if not exists (select 1 from public.conta_servicio where company_id = v_soc and lower(nombre) = 'nóminas') then
     v_nom := (public.conta_tarifa_servicio_crear(v_soc, 'Nóminas', 'tramos', null, null,
       '[{"desde":1,"hasta":5,"importe":15,"porUnidad":true},{"desde":6,"hasta":20,"importe":12,"porUnidad":true},{"desde":21,"hasta":null,"importe":10,"porUnidad":true}]'::jsonb,
@@ -157,7 +155,7 @@ begin
     'Sembrada la tarifa de la demo: Gestoría mensual con 3 niveles (Básica 90 €, Estándar 120 €, Premium 150 €; %s clientes en su nivel), %s precios especiales, '
     'laboral a 25 € por trabajador, impuesto de sociedades a 300 € al año%s, Nóminas por tramos, el paquete «Pack Empresa» (180 € al mes) '
     'y %s líneas de la autónoma (cuota y renta).',
-    v_niveles, v_n, case when v_juntados > 0 then format(' (juntados %s servicios de la importación)', v_juntados) else '' end, v_lineas_aut));
+    v_niveles, v_n, case when v_juntados > 1 then format(' (en los %s servicios del impuesto que dejó la importación)', v_juntados) else '' end, v_lineas_aut));
 end $$;
 comment on function public.demo_gestoria_tarifa_sembrar(uuid) is
   'GD · Siembra (o vuelve a sembrar) la tarifa de una cuenta de demostración de Gestoría: niveles, precios especiales, laboral, impuesto de sociedades, nóminas por tramos, un paquete y las cuotas de la autónoma. Solo cuentas demo; solo la llama la plataforma.';

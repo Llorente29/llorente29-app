@@ -5,9 +5,11 @@
 -- lo que deja la importación de GoCardless puesto a mano dentro de la prueba:
 --   1. Sin administrador, no siembra nada y lo dice.
 --   2. Con administrador: los 3 niveles con su precio, cada cliente en su nivel,
---      el precio especial, laboral, impuesto de sociedades (los dos servicios de
---      la importación, juntados en uno), nóminas por tramos, el paquete y las
---      líneas de la autónoma.
+--      el precio especial, laboral, impuesto de sociedades (con su precio en los
+--      dos servicios de la importación, sin juntarlos), nóminas por tramos, el
+--      paquete y las líneas de la autónoma.
+--   5b. La vuelta atrás deja la demo exactamente como estaba (la huella de sus
+--      servicios, líneas y tarifas, igual que antes de sembrar).
 --   3. Sembrar otra vez deja exactamente lo mismo (la huella, igual).
 --   4. En una cuenta que no es demo, no siembra (42501).
 --   5. La vuelta atrás quita la tarifa y la función.
@@ -66,6 +68,11 @@ begin
 end $$;
 
 create temp table _huella (vuelta int, huella text) on commit drop;
+create temp table _antes_de_sembrar on commit drop as
+select md5(coalesce(string_agg(x, '|' order by x), '')) huella from (
+  select concat_ws(';', 'servicio', nombre, forma, por_confirmar, clave) x from public.conta_servicio where account_id = 'de000000-0000-4000-8000-0000000000a0'
+  union all select concat_ws(';', 'linea', servicio_id, party_id, nivel_id, origen) from public.conta_linea where account_id = 'de000000-0000-4000-8000-0000000000a0'
+  union all select concat_ws(';', 'tarifa', servicio_id, party_id, importe) from public.conta_tarifa where account_id = 'de000000-0000-4000-8000-0000000000a0') q;
 -- 2 · Sembrar.
 do $$
 declare c constant uuid := 'de000000-0000-4000-8000-0000000000a0'; v jsonb; n int;
@@ -81,15 +88,16 @@ begin
   end if;
   select count(*) into n from public.conta_precio where account_id = c and party_id is not null and importe = 120;
   if n <> 1 then raise exception 'GD · 2: tenía que haber 1 precio especial y hay %.', n; end if;
-  select count(*) into n from public.conta_servicio where account_id = c and upper(nombre) like 'IMPUESTO DE SOCIEDADES%';
-  if n <> 1 then raise exception 'GD · 2: los impuestos de sociedades tenían que quedar en uno y hay %.', n; end if;
+  select count(*) into n from public.conta_precio p join public.conta_servicio s on s.id = p.servicio_id
+   where s.account_id = c and upper(s.nombre) like 'IMPUESTO DE SOCIEDADES%' and p.importe = 300 and p.periodo = 'anio' and p.party_id is null;
+  if n <> 2 then raise exception 'GD · 2: los 2 servicios del impuesto de la importación tenían que tener su precio de 300 € al año y hay %.', n; end if;
   select count(*) into n from public.conta_precio_tramo t join public.conta_precio p on p.id = t.precio_id join public.conta_servicio s on s.id = p.servicio_id where s.account_id = c and s.nombre = 'Nóminas';
   if n <> 3 then raise exception 'GD · 2: Nóminas tenía que tener 3 tramos y tiene %.', n; end if;
   select count(*) into n from public.conta_precio p join public.conta_paquete k on k.id = p.paquete_id where k.account_id = c and k.nombre = 'Pack Empresa' and p.importe = 180;
   if n <> 1 then raise exception 'GD · 2: el Pack Empresa tenía que costar 180 €.'; end if;
   select count(*) into n from public.conta_linea where account_id = c and company_id = 'de000000-0000-4000-8000-0000000000b9' and origen = 'manual';
   if n <> 2 then raise exception 'GD · 2: la autónoma tenía que tener 2 líneas (cuota y renta) y tiene %.', n; end if;
-  raise notice 'GD · 2: niveles, clientes en su nivel, precio especial, impuesto juntado, tramos, paquete y la autónoma. OK';
+  raise notice 'GD · 2: niveles, clientes en su nivel, precio especial, impuesto con su precio, tramos, paquete y la autónoma. OK';
 end $$;
 insert into _huella select 1, md5(string_agg(x, '|' order by x)) from (
   select concat_ws(';', s.nombre, s.forma, nv.nombre, p.forma, p.periodo, p.importe, (select string_agg(t.desde || '-' || coalesce(t.hasta, 0) || ':' || t.importe, ',' order by t.desde) from public.conta_precio_tramo t where t.precio_id = p.id),
@@ -132,6 +140,14 @@ do $$ begin
     raise exception 'GD · 5: la vuelta atrás ha dejado tarifa.';
   end if;
   raise notice 'GD · 5: la vuelta atrás quita la tarifa y la función. OK';
+  if (select md5(coalesce(string_agg(x, '|' order by x), '')) from (
+        select concat_ws(';', 'servicio', nombre, forma, por_confirmar, clave) x from public.conta_servicio where account_id = 'de000000-0000-4000-8000-0000000000a0'
+        union all select concat_ws(';', 'linea', servicio_id, party_id, nivel_id, origen) from public.conta_linea where account_id = 'de000000-0000-4000-8000-0000000000a0'
+        union all select concat_ws(';', 'tarifa', servicio_id, party_id, importe) from public.conta_tarifa where account_id = 'de000000-0000-4000-8000-0000000000a0') q)
+     <> (select huella from _antes_de_sembrar) then
+    raise exception 'GD · 5b: la vuelta atrás no deja la demo como estaba antes de sembrar.';
+  end if;
+  raise notice 'GD · 5b: la vuelta atrás deja la demo exactamente como estaba. OK';
 end $$;
 
 rollback;

@@ -1,5 +1,4 @@
 # GD · la vuelta atrás de la 1130: quita la tarifa sembrada de «Gestoría Demo»
-# y la función. Lo que no se deshace: los 7 servicios del impuesto de sociedades
-# quedan juntos (volver a sembrar el sandbox los rehace bien).
+# y la función, y deja la demo exactamente como estaba.
 cuenta: scripts/conta/produccion/cuentas/gd-tarifa-demo.sql
 supabase/vuelta-atras/20261109T1130_gd_tarifa_demo.down.sql

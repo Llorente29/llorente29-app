@@ -6,9 +6,10 @@
 #         cuenta demo: siembra su tarifa por las funciones del G04 (niveles,
 #         precios especiales, laboral, impuesto de sociedades, nóminas por
 #         tramos, el paquete y las cuotas de la autónoma), pone a cada línea de
-#         la gestoría mensual su nivel y junta en uno los 7 servicios
-#         «IMPUESTO DE SOCIEDADES <cliente>» de la primera importación. Se puede
-#         repetir (es la mitad de Sumied de «Volver a empezar»).
+#         la gestoría mensual su nivel y pone su precio a los 7 servicios
+#         «IMPUESTO DE SOCIEDADES <cliente>» de la primera importación (no los
+#         junta: no se podría deshacer). Se puede repetir (es la mitad de Sumied
+#         de «Volver a empezar»), y su vuelta atrás deja la demo como estaba.
 #
 # No toca ninguna otra cuenta (cada consulta lleva la de la demo). Nada en el
 # camino del pedido.
