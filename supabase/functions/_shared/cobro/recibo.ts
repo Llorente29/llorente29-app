@@ -169,15 +169,25 @@ const nivelDe = (texto: string) => { const p = sinTrabajadores(texto).split(' ·
  * después las que ya no están. Un mismo servicio que deja un nivel por otro es
  * «Cambia de tarifa», no una baja y un alta.
  */
-export function cambiosFrenteA(anterior: ReciboAnterior | null, lineas: LineaDeRecibo[], mes: Mes, mesEntero = true): Cambio[] {
+export function cambiosFrenteA(anterior: ReciboAnterior | null, lineas: LineaDeRecibo[], mes: Mes, mesEntero = true, calculadoAntes: LineaDeRecibo[] | null = null): Cambio[] {
   if (!anterior) {
     return [{ tipo: 'cliente_nuevo', asignacionId: null, texto: `Cliente nuevo: ${enLista(lineas.map((l) => sinTrabajadores(l.texto)))} desde el 1 de ${nombreDelMes(mes)}.` }]
   }
   if (anterior.deGoCardless) {
     // Sin recibo de Sumied el mes anterior: lo que cobraba GoCardless. Si coincide al céntimo, es «igual que el mes pasado».
     const total = lineas.reduce((s, l) => s + (l.importeCent ?? 0), 0)
-    return total === anterior.totalCent ? [] : [{ tipo: 'frente_a_gocardless', asignacionId: null,
-      texto: `GoCardless le cobraba ${euros(anterior.totalCent)} al mes y Sumied calcula ${euros(total)}.` }]
+    if (total === anterior.totalCent) return []
+    // nº 62/63 · El porqué sale de lo que ha cambiado en las líneas del cliente (las de Sumied del mes
+    // anterior, calculadas con sus mismas altas, bajas y niveles), se compare con lo que se compare.
+    const antes = calculadoAntes ?? []
+    const totalAntes = antes.reduce((s, l) => s + (l.importeCent ?? 0), 0)
+    const deLineas = antes.length ? cambiosFrenteA({ mes: anterior.mes, totalCent: totalAntes, lineas: antes }, lineas, mes, mesEntero) : []
+    // Lo explican del todo: lo de Sumied del mes anterior es lo que cobraba GoCardless.
+    if (deLineas.length && totalAntes === anterior.totalCent) return deLineas
+    const generico: Cambio = { tipo: 'frente_a_gocardless', asignacionId: null, texto: `GoCardless le cobraba ${euros(anterior.totalCent)} al mes y Sumied calcula ${euros(total)}.` }
+    if (!deLineas.length) return [generico]
+    // Lo explican en parte: los cambios y lo que queda sin explicar.
+    return [...deLineas, { ...generico, texto: `Además, GoCardless le cobraba ${euros(anterior.totalCent)} al mes y, con lo de ${nombreDelMes(anterior.mes)}, Sumied habría calculado ${euros(totalAntes)}.` }]
   }
   const antes = new Map(anterior.lineas.map((l) => [l.asignacionId, l]))
   const ahora = new Set(lineas.map((l) => l.asignacionId))
@@ -236,7 +246,9 @@ export function prepararRecibo(d: DatosDelRecibo): SinRecibo | ConRecibo {
   if (sinPrecio.length) parado.push(`${sinPrecio.length === 1 ? 'Una línea' : `${sinPrecio.length} líneas`} sin precio: ${sinPrecio.map((l) => sinTrabajadores(l.texto)).join(', ')}`)
   if (!sinPrecio.length && totalCent <= 0) parado.push('El total es 0 €: no hay nada que cobrar')
   const mesEntero = (d.catalogo.ajustes ?? AJUSTES_DE_SIEMPRE).mitadDeMes === 'mes_entero'
-  const cambios = cambiosFrenteA(d.anterior, lineas, d.mes, mesEntero)
+  // Sin recibo de Sumied el mes anterior (se compara con GoCardless): cómo habría sido con lo de Sumied, para el porqué.
+  const calculadoAntes = d.anterior?.deGoCardless ? lineasDelMes(d.catalogo, d.asignaciones, d.clienteId, d.empresaId, mesAnterior(d.mes)) : null
+  const cambios = cambiosFrenteA(d.anterior, lineas, d.mes, mesEntero, calculadoAntes)
   const anteriorCent = d.anterior ? d.anterior.totalCent : null
   return {
     hay: true,
