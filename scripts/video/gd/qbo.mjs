@@ -200,12 +200,16 @@ try {
     E.id = '04'
     await ir(E.page, '/conta/ventas/clientes-y-cuotas/tarifas'); E.empezar()
     await rotulo(E.page, 'Tu tarifa, tal como la cobras hoy'); await E.page.waitForTimeout(3500)
-    for (const t of ['Básica', 'Estándar', 'Premium']) await a(E, E.page.getByText(t, { exact: true }), { que: t, pausa: 1000 })
-    await E.captura()
-    for (const t of ['Por trabajador', 'Por tramos', 'Pack Empresa', 'Clientes con precio especial']) {
-      const l = E.page.getByText(t, { exact: false }).first()
-      if (await l.isVisible().catch(() => false)) { await l.scrollIntoViewIfNeeded(); await E.R.a(l); await E.page.waitForTimeout(1800) } else { await rodar(E.page, 500); decir(`  · no está: ${t}`) }
+    // Cada servicio de la lista de la izquierda, por su nombre; dentro, lo que lo hace distinto.
+    const servicio = (n) => E.page.getByText(n, { exact: true }).first()
+    if (await a(E, servicio('Gestoría mensual'), { clic: true, que: 'Gestoría mensual', pausa: 1800 })) {
+      for (const t of ['Básica', 'Estándar', 'Premium']) await a(E, E.page.getByText(t, { exact: true }), { que: t, pausa: 1200 })
+      await E.captura()
+      await a(E, E.page.getByText(/precio especial|su propio precio/i), { que: 'precio especial', pausa: 2500 })
     }
+    await a(E, servicio('Gestión laboral'), { clic: true, que: 'Gestión laboral', pausa: 3000 })
+    await a(E, servicio('Nóminas'), { clic: true, que: 'Nóminas', pausa: 3000 })
+    await a(E, E.page.getByText(/^Pack Empresa/).first(), { clic: true, que: 'Pack Empresa', pausa: 3500 })
   })
 
   // 5 y 7b · Las tomas que graba Julio desde su Chrome (nº60), en GIF, con los rótulos del vídeo.
