@@ -4428,12 +4428,119 @@ end $$;
 
 
 --
+-- Name: _conta_cobro_facturar_portal(uuid, date, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_cobro_facturar_portal(p_recibo uuid, p_fecha date, p_puente text, p_forma text, p_referencia text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_r public.conta_recibo; v_aj jsonb; v_antes jsonb; v_id uuid; v_g jsonb; v_numero text; v_tipo uuid; v_ret uuid;
+  v_705 uuid; v_lin jsonb := '[]'::jsonb; v_x jsonb; v_cli text; v_nombre text; v_pago uuid; v_entry uuid; v_total numeric;
+begin
+  select * into v_r from public.conta_recibo where id = p_recibo for update;
+  if v_r.invoice_id is not null then raise exception 'Este recibo ya tiene su factura.' using errcode = '23514'; end if;
+  if v_r.enviado_por is null then raise exception 'No se sabe quién envió el cobro: la factura se emite en su nombre.' using errcode = '23514'; end if;
+  if v_r.factura is null or jsonb_array_length(coalesce(v_r.factura->'lineas', '[]'::jsonb)) = 0 then raise exception 'Este recibo no tiene las líneas de su factura.' using errcode = '23514'; end if;
+  v_aj := public._conta_cobro_ajustes(v_r.company_id);
+  v_antes := public._conta_cobro_como(v_r.enviado_por, v_r.account_id);
+  begin
+    v_705 := public._conta_cobro_cuenta(v_r.company_id, v_aj->>'cuenta_ingresos', 'Prestaciones de servicios', v_r.enviado_por_name);
+    select id into v_tipo from public.tax_rate where is_system and code = 'iva_general' and rate = (v_aj->>'iva_pct')::numeric limit 1;
+    if v_tipo is null then raise exception 'No encuentro el IVA general al % %%.', v_aj->>'iva_pct' using errcode = '23514'; end if;
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    values (v_r.account_id, v_r.company_id, public._conta_cobro_cuenta(v_r.company_id, v_aj->>'cuenta_iva', 'IVA repercutido ' || (v_aj->>'iva_pct') || ' %', v_r.enviado_por_name),
+            'tax_rate', v_tipo::text, 'repercutido', 'manual')
+    on conflict (company_id, entity, entity_id, role) do nothing;
+    v_cli := public._conta_cobro_cuenta_cliente(v_r.company_id, v_r.party_id, v_r.enviado_por_name);
+    if (v_aj->>'retencion_pct')::numeric > 0 then
+      perform public._conta_cobro_cuenta(v_r.company_id, v_aj->>'cuenta_retencion', 'Hacienda Pública, retenciones y pagos a cuenta', v_r.enviado_por_name);
+      select id into v_ret from public.withholding_rate where is_system and code = case when (v_aj->>'retencion_pct')::numeric = 7 then 'profesional_inicio' else 'profesional' end limit 1;
+    end if;
+    for v_x in select * from jsonb_array_elements(v_r.factura->'lineas') loop
+      v_lin := v_lin || jsonb_build_array(jsonb_build_object('concepto', v_x->>'concepto', 'cantidad', (v_x->>'cantidad')::numeric,
+        'precio', (v_x->>'precioCent')::numeric / 100, 'descuento', 0, 'tipo_id', v_tipo, 'cuenta_id', v_705));
+    end loop;
+    v_g := public.conta_venta_guardar(v_r.company_id, null, jsonb_build_object('cliente_id', v_r.party_id, 'fecha', p_fecha, 'serie', v_aj->>'serie',
+      'retencion_id', v_ret, 'notas', 'Recibo de ' || v_r.mes || ', devuelto y pagado después desde el portal.'), v_lin, v_r.enviado_por_name);
+    v_id := (v_g->>'id')::uuid;
+    v_total := (v_g->>'total')::numeric;
+    if round(v_total * 100) <> coalesce(v_r.cobrar_cent, v_r.total_cent) then
+      raise exception 'La factura saldría por % € y el recibo es de % €: no se emite.', v_total, coalesce(v_r.cobrar_cent, v_r.total_cent) / 100.0 using errcode = '23514';
+    end if;
+    perform public.conta_venta_emitir(v_id, v_r.enviado_por_name);
+    select number_text into v_numero from public.customer_invoice where id = v_id;
+    perform public.conta_venta_cobrar(v_id, p_fecha, v_total, p_forma, p_referencia, v_r.enviado_por_name);
+    select id into v_pago from public.customer_invoice_payment where invoice_id = v_id order by created_at desc limit 1;
+    select name into v_nombre from public.party where id = v_r.party_id;
+    v_entry := public._conta_cobro_asiento(v_r.company_id, p_fecha, v_numero || '-' || coalesce(v_nombre, 'Cliente'), v_numero, v_r.party_id, v_pago,
+      jsonb_build_array(
+        jsonb_build_object('cuenta', p_puente, 'concepto', v_numero || '-' || coalesce(v_nombre, 'Cliente'), 'debe', v_total, 'haber', 0),
+        jsonb_build_object('cuenta', v_cli, 'tercero_id', v_r.party_id, 'concepto', v_numero || '-' || coalesce(v_nombre, 'Cliente'), 'debe', 0, 'haber', v_total)),
+      v_r.enviado_por_name, v_r.enviado_por);
+    update public.customer_invoice_payment set entry_id = v_entry where id = v_pago;
+  exception when others then
+    perform public._conta_cobro_dejar(v_antes);
+    raise;
+  end;
+  perform public._conta_cobro_dejar(v_antes);
+  update public.conta_recibo set invoice_id = v_id, asiento_cobro = v_entry, confirmado_el = p_fecha, updated_at = now() where id = p_recibo;
+  return jsonb_build_object('factura', v_id, 'numero', v_numero, 'asiento', v_entry);
+end $$;
+
+
+--
 -- Name: _conta_cobro_falta_codigo(); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public._conta_cobro_falta_codigo() RETURNS text
     LANGUAGE sql IMMUTABLE
     AS $$ select 'Falta su código de cliente'::text $$;
+
+
+--
+-- Name: _conta_cobro_puente(uuid, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_cobro_puente(p_company uuid, p_code text, p_nombre text, p_claro text, p_quien text) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_plan text; v_d int; v_hoja text;
+begin
+  if exists (select 1 from public.company_account where company_id = p_company and code = p_code) then return p_code; end if;
+  select account_id into v_cuenta from public.company where id = p_company;
+  select a.plan, length(a.code) into v_plan, v_d from public.company_account a where a.company_id = p_company limit 1;
+  if v_plan is null then raise exception 'El plan contable de la empresa no está activado.' using errcode = '23514'; end if;
+  if length(p_code) <> v_d then raise exception 'La subcuenta % no tiene las % cifras del plan de la empresa.', p_code, v_d using errcode = '23514'; end if;
+  select p.code into v_hoja from public.pgc_account p where p.plan = v_plan and p.is_leaf and p.valid_to is null and p_code like p.code || '%'
+   order by length(p.code) desc limit 1;
+  if v_hoja is null then raise exception 'La subcuenta % no cuelga de ninguna cuenta del plan.', p_code using errcode = '23514'; end if;
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, source, created_by_name)
+  values (v_cuenta, p_company, v_plan, p_code, v_hoja, p_nombre, p_claro, 'own', 'manual', p_quien);
+  insert into public.company_account_log (account_id, company_id, que, code, detalle, despues, source, done_by_name)
+  values (v_cuenta, p_company, 'subcuenta_creada', p_code, format('Subcuenta %s · %s, bajo la %s.', p_code, p_nombre, v_hoja),
+          jsonb_build_object('code', p_code, 'name', p_nombre), 'manual', p_quien);
+  return p_code;
+end $$;
+
+
+--
+-- Name: _conta_cobro_stripe_no_vale(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_cobro_stripe_no_vale(p_company uuid, p_code text) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select case
+    when nullif(btrim(coalesce(p_code, '')), '') is null then 'sin_cuenta'
+    when exists (select 1 from public.company_account x join public.company_account_link k on k.company_account_id = x.id and k.entity = 'bank_account'
+                  where x.company_id = p_company and x.code = p_code) then 'de_banco'
+    when exists (select 1 from public.company_account x where x.company_id = p_company and x.code = p_code and x.name is distinct from 'Plataforma Stripe') then 'otro_nombre'
+  end
+$$;
 
 
 --
@@ -32439,6 +32546,86 @@ COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada ho
 
 
 --
+-- Name: conta_bitrix_pestana_leer(text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_portal text := lower(trim(coalesce(p_portal, '')));
+  v_correo text := lower(trim(coalesce(p_correo, '')));
+  v_id text := trim(coalesce(p_id, ''));
+  v_cuenta uuid; v_usuario uuid; v_quien text; v_n int;
+  v_cliente uuid; v_de_empresa text;
+begin
+  if p_tipo is null or p_tipo not in ('empresa', 'contacto') or v_id !~ '^[0-9]{1,18}$' then
+    return jsonb_build_object('estado', 'ficha_rara');
+  end if;
+  if v_portal = '' or v_correo = '' then
+    return jsonb_build_object('estado', 'sin_acceso');
+  end if;
+  if not exists (select 1 from public.conta_crm c where c.crm = 'bitrix24' and lower(c.portal) = v_portal) then
+    return jsonb_build_object('estado', 'portal_desconocido');
+  end if;
+
+  -- La persona: de una cuenta con ese portal conectado, activa, con ese correo.
+  select count(*), min(c.account_id::text)::uuid into v_n, v_cuenta
+    from public.conta_crm c
+    join public.user_profiles up on up.account_id = c.account_id and up.active
+    join auth.users u on u.id = up.user_id and lower(u.email) = v_correo
+   where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  if v_n = 0 then return jsonb_build_object('estado', 'sin_acceso'); end if;
+  if v_n > 1 then return jsonb_build_object('estado', 'varias_cuentas'); end if;
+  select up.user_id, up.display_name into v_usuario, v_quien
+    from public.user_profiles up join auth.users u on u.id = up.user_id
+   where up.account_id = v_cuenta and up.active and lower(u.email) = v_correo
+   limit 1;
+
+  -- Como esa persona, en esa cuenta (DM1: «usuario:cuenta»), solo en esta transacción.
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_usuario::text || ':' || v_cuenta::text, true);
+
+  -- El cliente de esa ficha: la suya primero; si es una persona de contacto de una empresa cliente, el de la empresa.
+  select f.party_id, f.de_empresa into v_cliente, v_de_empresa
+    from public.conta_gestoria_ficha f
+   where f.account_id = v_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = v_id
+   order by (f.de_empresa = '') desc, f.de_empresa
+   limit 1;
+  if v_cliente is null then
+    select g.party_id, '' into v_cliente, v_de_empresa from public.conta_gestoria_cliente g
+     where g.account_id = v_cuenta and g.crm = 'bitrix24' and g.tipo_ficha = p_tipo and g.id_externo = v_id;
+  end if;
+
+  if v_cliente is null then
+    return jsonb_build_object('estado', 'sin_enlazar', 'cuenta', v_cuenta, 'quien', v_quien,
+      'cuenta_nombre', (select a.name from public.accounts a where a.id = v_cuenta));
+  end if;
+
+  return jsonb_build_object(
+    'estado', 'ok',
+    'cuenta', v_cuenta,
+    'cuenta_nombre', (select a.name from public.accounts a where a.id = v_cuenta),
+    'quien', v_quien,
+    'cliente', v_cliente,
+    'cliente_nombre', (select p.name from public.party p where p.id = v_cliente and p.account_id = v_cuenta),
+    'de_empresa', nullif(v_de_empresa, ''),
+    'empresas', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'nombre', coalesce(nullif(c.trade_name, ''), c.legal_name)) order by c.created_at)
+        from public.company c where c.account_id = v_cuenta and c.is_active and public.belongs_to_account(v_cuenta)), '[]'::jsonb),
+    'clientes', public.conta_pantalla_clientes(v_cuenta),
+    'ficha', public.conta_pantalla_ficha(v_cuenta, v_cliente));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text) IS 'GB · La pestaña «Sumied» de la ficha de Bitrix24, en una sola lectura. Solo el servidor (conta-bitrix-pestana), DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación. Busca la cuenta por su portal, la persona por su correo (activa en esa cuenta) y, actuando como ella («usuario:cuenta»), el cliente de la ficha y lo que leen Clientes y la ficha del G04 (sus funciones, sin copia). Estados: ok, sin_acceso, sin_enlazar, portal_desconocido, varias_cuentas, ficha_rara. Solo lee.';
+
+
+--
 -- Name: conta_canal_de_factura(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -34145,6 +34332,45 @@ begin
   perform public._conta_cobro_codigos(p_company);
   return jsonb_build_object('frase', format('Código de cliente %s guardado: su subcuenta es la %s.', p_codigo,
     (public._conta_cobro_ajustes(p_company)->>'prefijo_cliente') || lpad(p_codigo::text, 8 - length(public._conta_cobro_ajustes(p_company)->>'prefijo_cliente'), '0')));
+end $$;
+
+
+--
+-- Name: conta_cobro_cuenta_cambiada(uuid, uuid, text, text, text[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_cobro_cuenta_cambiada(p_company uuid, p_party uuid, p_mandato_nuevo text, p_cliente_gc text, p_cancelados text[], p_quien text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_cc public.conta_cobro_cliente; v_quien text := coalesce(nullif(btrim(coalesce(p_quien, '')), ''), 'El cliente, desde el portal');
+  v_nombre text;
+begin
+  -- Solo el servidor (conta-cobro, «cambiar_cuenta»), que antes ha cancelado en GoCardless.
+  if coalesce(auth.role(), '') <> 'service_role' then raise exception 'Esto lo guarda el servidor del cobro.' using errcode = '42501'; end if;
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  select * into v_cc from public.conta_cobro_cliente where company_id = p_company and party_id = p_party;
+  if v_cc.party_id is null then raise exception 'Ese cliente no se cobra en esta empresa.' using errcode = 'P0002'; end if;
+  if nullif(btrim(coalesce(p_mandato_nuevo, '')), '') is null or nullif(btrim(coalesce(p_cliente_gc, '')), '') is null then
+    raise exception 'Falta el mandato nuevo o su cliente de GoCardless.' using errcode = '22023';
+  end if;
+  insert into public.conta_gc_mandato (company_id, gc_id, account_id, gc_cliente_id, estado, creado, leido_at)
+  values (p_company, p_mandato_nuevo, v_cuenta, p_cliente_gc, 'active', now(), now())
+  on conflict (company_id, gc_id) do update set gc_cliente_id = excluded.gc_cliente_id, estado = 'active', leido_at = now();
+  update public.conta_gc_mandato set estado = 'cancelled', leido_at = now()
+   where company_id = p_company and gc_id = any (coalesce(p_cancelados, '{}')) and gc_id <> p_mandato_nuevo;
+  if v_cc.gc_cliente_id is distinct from p_cliente_gc then
+    update public.conta_cobro_cliente set gc_cliente_id = p_cliente_gc, gc_casado_por = 'persona', updated_at = now(), updated_by_name = v_quien
+     where company_id = p_company and party_id = p_party;
+    -- El enlace, para que la lectura de GoCardless lo respete (manda sobre el casado).
+    insert into public.conta_gestoria_decision (account_id, company_id, tipo, party_id, gc_cliente_id, frase, quien_name)
+    values (v_cuenta, p_company, 'enlace', p_party, p_cliente_gc, 'Cuenta de cargo cambiada desde el portal: la domiciliación nueva es de este cliente de GoCardless.', v_quien);
+  end if;
+  select name into v_nombre from public.party where id = p_party;
+  return jsonb_build_object('mandato', p_mandato_nuevo, 'cancelados', coalesce(p_cancelados, '{}'),
+    'frase', format('Cambiada la cuenta de %s: los recibos siguientes se cargan en la domiciliación nueva%s.', coalesce(v_nombre, 'el cliente'),
+      case when cardinality(coalesce(p_cancelados, '{}')) > 0 then format(' y la vieja está cancelada en GoCardless (%s)', array_to_string(p_cancelados, ', ')) else '' end));
 end $$;
 
 
@@ -51174,6 +51400,136 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_recibo_devuelto(p_linea uuid, p_movement uuid, p_motivo text) IS 'PC01 · E3 · Casa la devolución de un recibo (430 del cliente y 626 de los gastos contra 572); la factura vuelve a «Por cobrar». Deshacer el casado lo devuelve todo.';
+
+
+--
+-- Name: conta_recibo_pagado_portal(uuid, text, numeric, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_r public.conta_recibo; v_ya public.conta_recibo_pago_portal; v_servidor boolean := coalesce(auth.role(), '') = 'service_role';
+  v_aj jsonb; v_puente text; v_nombre_puente text; v_ref text := nullif(btrim(coalesce(p_referencia, '')), ''); v_fecha date := public.conta_hoy();
+  v_cent int; v_f jsonb; v_entry uuid; v_numero text; v_nombre text; v_cli text; v_antes jsonb; v_quien text; v_id uuid := gen_random_uuid();
+  v_no text; v_porque text; v_corto text; v_lectura uuid; v_nombre_hay text;
+begin
+  select * into v_r from public.conta_recibo where id = p_recibo for update;
+  if v_r.id is null or not (v_servidor or public.belongs_to_account(v_r.account_id)) then raise exception 'Ese recibo no está.' using errcode = 'P0002'; end if;
+  if not (v_servidor or public.current_user_is_admin_or_manager_of(v_r.account_id)) then
+    raise exception 'El pago de un devuelto lo apunta el portal (su servidor) o la gestoría.' using errcode = '42501';
+  end if;
+  if p_via not in ('banco', 'tarjeta') then raise exception 'La vía es «banco» o «tarjeta».' using errcode = '22023'; end if;
+  if v_ref is null or length(v_ref) > 200 then raise exception 'Falta la referencia del pago (la de GoCardless o la de Stripe).' using errcode = '22023'; end if;
+  -- Repetir no duplica: la misma referencia devuelve lo hecho; otra, es un error.
+  select * into v_ya from public.conta_recibo_pago_portal where recibo_id = p_recibo;
+  if v_ya.recibo_id is not null then
+    if v_ya.referencia = v_ref then
+      return jsonb_build_object('id', p_recibo, 'ya', true, 'factura', v_ya.factura_id, 'asiento', v_ya.asiento_id,
+        'frase', format('Ya estaba apuntado: el recibo de %s se pagó desde el portal (%s).', v_r.mes, case v_ya.via when 'banco' then 'desde el banco' else 'con tarjeta o Bizum' end));
+    end if;
+    raise exception 'Este recibo ya se pagó desde el portal con otra referencia (%).', v_ya.referencia using errcode = '23505';
+  end if;
+  if v_r.estado not in ('devuelto', 'retrocedido') then raise exception 'Este recibo no está devuelto: no hay nada que pagar desde el portal.' using errcode = '23514'; end if;
+  v_cent := coalesce(v_r.cobrar_cent, v_r.total_cent);
+  if p_importe is null or round(p_importe * 100) <> v_cent then
+    raise exception 'El recibo es de % y el pago, de %: no se apunta.', public._conta_gestoria_euros(v_cent / 100.0), public._conta_gestoria_euros(coalesce(p_importe, 0)) using errcode = '23514';
+  end if;
+  v_aj := public._conta_cobro_ajustes(v_r.company_id);
+  v_quien := case when v_servidor then 'El cliente, desde el portal' else public.conta_nombre_actor() end;
+  if p_via = 'banco' then
+    v_puente := v_aj->>'cuenta_plataforma'; v_nombre_puente := 'Plataforma GoCardless';
+  else
+    select nullif(btrim(a.cuenta_stripe), '') into v_puente from public.conta_gestoria_ajustes a where a.company_id = v_r.company_id;
+    v_nombre_puente := 'Plataforma Stripe';
+    -- Ninguna por defecto, y nunca una que ya es otra cosa: no se apunta y queda en «Pendiente de revisar».
+    v_no := public._conta_cobro_stripe_no_vale(v_r.company_id, v_puente);
+    if v_no is not null then
+      select name into v_nombre_hay from public.company_account where company_id = v_r.company_id and code = v_puente;
+      v_corto := case v_no
+        when 'sin_cuenta' then 'Falta la cuenta de Stripe en Ajustes'
+        when 'de_banco' then format('La cuenta de Stripe de Ajustes (%s) es la de un banco («%s»)', v_puente, v_nombre_hay)
+        else format('La cuenta de Stripe de Ajustes (%s) ya existe como «%s», no como «Plataforma Stripe»', v_puente, v_nombre_hay) end;
+      v_porque := format('%s: el cliente pagó desde el portal con tarjeta o Bizum el recibo de %s (%s, referencia %s) y no se ha apuntado. %s',
+        v_corto, v_r.mes, public._conta_gestoria_euros(v_cent / 100.0), v_ref,
+        case v_no when 'sin_cuenta' then 'Pon la cuenta puente de Stripe de la empresa en Ajustes para apuntarlo.'
+          else 'No se usa a ciegas: pon en Ajustes la cuenta puente de Stripe («Plataforma Stripe») para apuntarlo.' end);
+      select id into v_lectura from public.conta_gestoria_lectura where account_id = v_r.account_id and (company_id = v_r.company_id or company_id is null)
+       order by empezada_at desc limit 1;
+      if v_lectura is null then raise exception '%. Y esta empresa aún no tiene ninguna lectura de clientes: no hay dónde apuntar la incidencia.', v_corto using errcode = '23514'; end if;
+      -- Una sola por recibo: la de antes deja de estar vigente y entra la de ahora.
+      update public.conta_gestoria_diferencia set vigente = false
+       where company_id = v_r.company_id and tipo = 'falta_cuenta_stripe' and vigente and datos->>'recibo' = p_recibo::text;
+      insert into public.conta_gestoria_diferencia (account_id, lectura_id, company_id, party_id, tipo, porque_codigo, porque, datos)
+      values (v_r.account_id, v_lectura, v_r.company_id, v_r.party_id, 'falta_cuenta_stripe', v_no, v_porque,
+              jsonb_build_object('recibo', p_recibo, 'mes', v_r.mes, 'via', p_via, 'importe', v_cent / 100.0, 'referencia', v_ref, 'cuenta', v_puente, 'quien', v_quien));
+      perform public._conta_cobro_evento(p_recibo, 'pago_portal_pendiente',
+        format('Pagado desde el portal con tarjeta o Bizum (%s): %s. Sin apuntar: %s.', v_ref, public._conta_gestoria_euros(v_cent / 100.0), lower(left(v_corto, 1)) || substr(v_corto, 2)),
+        jsonb_build_object('via', p_via, 'referencia', v_ref, 'motivo', v_no, 'cuenta', v_puente), v_quien);
+      return jsonb_build_object('id', p_recibo, 'apuntado', false, 'pendiente', true, 'motivo', v_no,
+        'frase', format('No se ha apuntado el pago del recibo de %s (%s): %s. Queda en «Pendiente de revisar».', v_r.mes, public._conta_gestoria_euros(v_cent / 100.0),
+          lower(left(v_corto, 1)) || substr(v_corto, 2)));
+    end if;
+  end if;
+  -- La puente con su código (si no existe, se crea en el plan con su apunte en el registro, como la 57200002).
+  perform public._conta_cobro_puente(v_r.company_id, v_puente, v_nombre_puente,
+    case p_via when 'banco' then 'Lo que GoCardless ha cobrado y aún no ha ingresado en el banco' else 'Lo que Stripe ha cobrado (tarjeta o Bizum) y aún no ha ingresado en el banco' end,
+    coalesce(v_r.enviado_por_name, v_quien));
+
+  if v_r.invoice_id is null then
+    -- Devuelto antes de cobrarse: su factura y su cobro, ahora.
+    v_f := public._conta_cobro_facturar_portal(p_recibo, v_fecha, v_puente, case p_via when 'banco' then 'GoCardless' else 'Tarjeta (Stripe)' end, 'Portal ' || v_ref);
+    v_entry := (v_f->>'asiento')::uuid; v_numero := v_f->>'numero';
+  else
+    -- Devuelto después de cobrarse (el cobro ya se deshizo): el asiento del cobro de nuevo, la puente contra la 430.
+    select number_text into v_numero from public.customer_invoice where id = v_r.invoice_id;
+    select name into v_nombre from public.party where id = v_r.party_id;
+    if v_r.enviado_por is null then raise exception 'No se sabe quién envió el cobro: el asiento se hace en su nombre.' using errcode = '23514'; end if;
+    v_antes := public._conta_cobro_como(v_r.enviado_por, v_r.account_id);
+    begin
+      v_cli := public._conta_cobro_cuenta_cliente(v_r.company_id, v_r.party_id, v_r.enviado_por_name);
+      -- Su origen, el pago del portal (el recibo ya es el de la devolución).
+      v_entry := public._conta_cobro_asiento(v_r.company_id, v_fecha, 'Pagado desde el portal ' || v_numero || '-' || coalesce(v_nombre, 'Cliente'), v_numero, v_r.party_id, v_id,
+        jsonb_build_array(
+          jsonb_build_object('cuenta', v_puente, 'concepto', 'Pagado desde el portal ' || v_numero || '-' || coalesce(v_nombre, 'Cliente'), 'debe', v_cent / 100.0, 'haber', 0),
+          jsonb_build_object('cuenta', v_cli, 'tercero_id', v_r.party_id, 'concepto', 'Pagado desde el portal ' || v_numero || '-' || coalesce(v_nombre, 'Cliente'), 'debe', 0, 'haber', v_cent / 100.0)),
+        v_r.enviado_por_name, v_r.enviado_por);
+    exception when others then
+      perform public._conta_cobro_dejar(v_antes);
+      raise;
+    end;
+    perform public._conta_cobro_dejar(v_antes);
+  end if;
+
+  insert into public.conta_recibo_pago_portal (recibo_id, id, account_id, company_id, via, importe, referencia, cuenta, factura_id, asiento_id, quien_name)
+  values (p_recibo, v_id, v_r.account_id, v_r.company_id, p_via, v_cent / 100.0, v_ref, v_puente, (select invoice_id from public.conta_recibo where id = p_recibo), v_entry, v_quien);
+  -- Sale de «Te deben»: el cargo devuelto de GoCardless, cobrado por otra vía (el portal).
+  if v_r.gc_cobro_id is not null then
+    insert into public.conta_gc_cobro_otra_via (company_id, gc_id, account_id, via, fecha, nota, quien_name)
+    values (v_r.company_id, v_r.gc_cobro_id, v_r.account_id, 'portal_' || p_via, v_fecha, 'Pagado desde el portal · ' || v_ref, v_quien)
+    on conflict (company_id, gc_id) do update set via = excluded.via, fecha = excluded.fecha, nota = excluded.nota, quien_name = excluded.quien_name, cuando = now();
+  end if;
+  update public.conta_recibo set updated_at = now() where id = p_recibo;
+  -- Apuntado: si estaba pendiente por la cuenta de Stripe, deja de estarlo.
+  update public.conta_gestoria_diferencia set vigente = false
+   where company_id = v_r.company_id and tipo = 'falta_cuenta_stripe' and vigente and datos->>'recibo' = p_recibo::text;
+  perform public._conta_cobro_evento(p_recibo, 'pagado_portal',
+    format('Pagado desde el portal %s (%s): %s. Asiento: %s contra la 430 del cliente%s.', case p_via when 'banco' then 'desde el banco' else 'con tarjeta o Bizum' end,
+      v_ref, public._conta_gestoria_euros(v_cent / 100.0), v_puente, case when v_f is not null then format('; su factura, %s', v_numero) else '' end),
+    jsonb_build_object('via', p_via, 'referencia', v_ref, 'asiento', v_entry, 'cuenta', v_puente), v_quien);
+  return jsonb_build_object('id', p_recibo, 'apuntado', true, 'factura', (select invoice_id from public.conta_recibo where id = p_recibo), 'numero', v_numero, 'asiento', v_entry, 'cuenta', v_puente,
+    'frase', format('Apuntado: el recibo de %s (%s) pagado desde el portal %s. Ya no sale en «Te deben».', v_r.mes, public._conta_gestoria_euros(v_cent / 100.0),
+      case p_via when 'banco' then 'desde el banco' else 'con tarjeta o Bizum' end));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text) IS 'G05 · nº 55 · Un recibo devuelto que el cliente paga desde el portal (banco por GoCardless o tarjeta/Bizum por Stripe): su asiento contra la puente de su vía (y, si aún no la tenía, su factura), sale de «Te deben» y su historial lo dice. Repetir no duplica.';
 
 
 --
@@ -105494,7 +105850,7 @@ CREATE TABLE public.conta_gc_cobro_otra_via (
     quien uuid,
     quien_name text,
     cuando timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT conta_gc_cobro_otra_via_via_check CHECK ((via = ANY (ARRAY['transferencia'::text, 'efectivo'::text])))
+    CONSTRAINT conta_gc_cobro_otra_via_via_check CHECK ((via = ANY (ARRAY['transferencia'::text, 'efectivo'::text, 'portal_banco'::text, 'portal_tarjeta'::text])))
 );
 
 
@@ -105727,7 +106083,7 @@ CREATE TABLE public.conta_gestoria_diferencia (
     tipo_ficha text,
     id_externo text,
     CONSTRAINT conta_gestoria_diferencia_ficha_check CHECK ((((id_externo IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))),
-    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text])))
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text])))
 );
 
 
@@ -107147,6 +107503,7 @@ CREATE TABLE public.conta_gestoria_ajustes (
     cuenta_plataforma text,
     cuenta_banco text,
     codigo_cliente_modo text,
+    cuenta_stripe text,
     CONSTRAINT conta_gestoria_ajustes_codigo_cliente_modo CHECK (((codigo_cliente_modo IS NULL) OR (codigo_cliente_modo = ANY (ARRAY['sumied'::text, 'programa_anterior'::text])))),
     CONSTRAINT conta_gestoria_ajustes_dias_cobro CHECK ((((dia_aviso IS NULL) OR ((dia_aviso >= 1) AND (dia_aviso <= 28))) AND ((dia_cargo IS NULL) OR ((dia_cargo >= 1) AND (dia_cargo <= 28))))),
     CONSTRAINT conta_gestoria_ajustes_mitad_de_mes_check CHECK ((mitad_de_mes = ANY (ARRAY['mes_entero'::text, 'proporcional'::text]))),
@@ -107201,6 +107558,13 @@ COMMENT ON COLUMN public.conta_gestoria_ajustes.cuenta_banco IS 'G05 · El banco
 --
 
 COMMENT ON COLUMN public.conta_gestoria_ajustes.codigo_cliente_modo IS 'G05 · Cómo se asigna el código de cada cliente (su subcuenta es prefijo + código, cliente 827 → 43000827): «sumied», el siguiente libre (la demo); «programa_anterior», el que traía de su programa (QBO: el de Cegid, que se importa con el plan de cuentas). En «programa_anterior» un cliente sin código no se factura: sale en «Pendiente de revisar» y nunca se inventa uno (nº 33). Sin poner: «sumied».';
+
+
+--
+-- Name: COLUMN conta_gestoria_ajustes.cuenta_stripe; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gestoria_ajustes.cuenta_stripe IS 'G05 · La cuenta puente de Stripe (tarjeta o Bizum desde el portal), «Plataforma Stripe». Ninguna por defecto: sin ella, el pago con tarjeta queda en «Pendiente de revisar» (falta_cuenta_stripe). En la demo, la 57200003; para QBO real se decidirá.';
 
 
 --
@@ -108598,6 +108962,36 @@ CREATE TABLE public.conta_recibo_evento (
 --
 
 COMMENT ON TABLE public.conta_recibo_evento IS 'G05 · Lo que le ha pasado a cada recibo, en palabras: preparado, aprobado, enviado, cobrado, facturado, devuelto…';
+
+
+--
+-- Name: conta_recibo_pago_portal; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_recibo_pago_portal (
+    recibo_id uuid NOT NULL,
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    via text NOT NULL,
+    importe numeric(14,2) NOT NULL,
+    referencia text NOT NULL,
+    cuenta text NOT NULL,
+    factura_id uuid,
+    asiento_id uuid,
+    quien_name text,
+    cuando timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_recibo_pago_portal_importe_check CHECK ((importe > (0)::numeric)),
+    CONSTRAINT conta_recibo_pago_portal_referencia_check CHECK (((length(btrim(referencia)) >= 1) AND (length(btrim(referencia)) <= 200))),
+    CONSTRAINT conta_recibo_pago_portal_via_check CHECK ((via = ANY (ARRAY['banco'::text, 'tarjeta'::text])))
+);
+
+
+--
+-- Name: TABLE conta_recibo_pago_portal; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_recibo_pago_portal IS 'G05 · El pago de un recibo devuelto que el cliente hace desde el portal (banco por GoCardless, o tarjeta o Bizum por Stripe): su vía, su referencia, la cuenta puente y el asiento. Uno por recibo.';
 
 
 --
@@ -123559,6 +123953,22 @@ ALTER TABLE ONLY public.conta_recibo
 
 ALTER TABLE ONLY public.conta_recibo_evento
     ADD CONSTRAINT conta_recibo_evento_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibo_pago_portal
+    ADD CONSTRAINT conta_recibo_pago_portal_id_key UNIQUE (id);
+
+
+--
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibo_pago_portal
+    ADD CONSTRAINT conta_recibo_pago_portal_pkey PRIMARY KEY (recibo_id);
 
 
 --
@@ -139801,6 +140211,38 @@ ALTER TABLE ONLY public.conta_recibo
 
 
 --
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibo_pago_portal
+    ADD CONSTRAINT conta_recibo_pago_portal_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibo_pago_portal
+    ADD CONSTRAINT conta_recibo_pago_portal_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_factura_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibo_pago_portal
+    ADD CONSTRAINT conta_recibo_pago_portal_factura_id_fkey FOREIGN KEY (factura_id) REFERENCES public.customer_invoice(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_recibo_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_recibo_pago_portal
+    ADD CONSTRAINT conta_recibo_pago_portal_recibo_id_fkey FOREIGN KEY (recibo_id) REFERENCES public.conta_recibo(id) ON DELETE CASCADE;
+
+
+--
 -- Name: conta_recibo conta_recibo_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -150704,6 +151146,19 @@ CREATE POLICY conta_recibo_leer ON public.conta_recibo FOR SELECT TO authenticat
 
 
 --
+-- Name: conta_recibo_pago_portal; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_recibo_pago_portal ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_recibo_pago_portal conta_recibo_pago_portal_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_recibo_pago_portal_leer ON public.conta_recibo_pago_portal FOR SELECT USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_recordatorio; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -158581,12 +159036,36 @@ GRANT ALL ON FUNCTION public._conta_cobro_facturar(p_recibo uuid) TO service_rol
 
 
 --
+-- Name: FUNCTION _conta_cobro_facturar_portal(p_recibo uuid, p_fecha date, p_puente text, p_forma text, p_referencia text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_cobro_facturar_portal(p_recibo uuid, p_fecha date, p_puente text, p_forma text, p_referencia text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_cobro_facturar_portal(p_recibo uuid, p_fecha date, p_puente text, p_forma text, p_referencia text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_cobro_falta_codigo(); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public._conta_cobro_falta_codigo() TO anon;
 GRANT ALL ON FUNCTION public._conta_cobro_falta_codigo() TO authenticated;
 GRANT ALL ON FUNCTION public._conta_cobro_falta_codigo() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_cobro_puente(p_company uuid, p_code text, p_nombre text, p_claro text, p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_cobro_puente(p_company uuid, p_code text, p_nombre text, p_claro text, p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_cobro_puente(p_company uuid, p_code text, p_nombre text, p_claro text, p_quien text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_cobro_stripe_no_vale(p_company uuid, p_code text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_cobro_stripe_no_vale(p_company uuid, p_code text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_cobro_stripe_no_vale(p_company uuid, p_code text) TO service_role;
 
 
 --
@@ -164137,6 +164616,14 @@ GRANT ALL ON FUNCTION public.conta_banco_agregador_despertar() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_canal_de_factura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -164513,6 +165000,14 @@ GRANT ALL ON FUNCTION public.conta_cobro_aprobar_iguales(p_company uuid, p_mes t
 REVOKE ALL ON FUNCTION public.conta_cobro_codigo_poner(p_company uuid, p_party uuid, p_codigo integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_cobro_codigo_poner(p_company uuid, p_party uuid, p_codigo integer) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_cobro_codigo_poner(p_company uuid, p_party uuid, p_codigo integer) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_cobro_cuenta_cambiada(p_company uuid, p_party uuid, p_mandato_nuevo text, p_cliente_gc text, p_cancelados text[], p_quien text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_cobro_cuenta_cambiada(p_company uuid, p_party uuid, p_mandato_nuevo text, p_cliente_gc text, p_cancelados text[], p_quien text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_cobro_cuenta_cambiada(p_company uuid, p_party uuid, p_mandato_nuevo text, p_cliente_gc text, p_cancelados text[], p_quien text) TO service_role;
 
 
 --
@@ -167637,6 +168132,15 @@ GRANT ALL ON FUNCTION public.conta_recibidas_poner_vencimiento(p_company uuid, p
 REVOKE ALL ON FUNCTION public.conta_recibo_devuelto(p_linea uuid, p_movement uuid, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibo_devuelto(p_linea uuid, p_movement uuid, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibo_devuelto(p_linea uuid, p_movement uuid, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibo_pagado_portal(p_recibo uuid, p_via text, p_importe numeric, p_referencia text) TO service_role;
 
 
 --
@@ -177786,6 +178290,15 @@ GRANT ALL ON TABLE public.conta_recibo TO service_role;
 
 GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE public.conta_recibo_evento TO authenticated;
 GRANT ALL ON TABLE public.conta_recibo_evento TO service_role;
+
+
+--
+-- Name: TABLE conta_recibo_pago_portal; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_recibo_pago_portal TO anon;
+GRANT ALL ON TABLE public.conta_recibo_pago_portal TO authenticated;
+GRANT ALL ON TABLE public.conta_recibo_pago_portal TO service_role;
 
 
 --
