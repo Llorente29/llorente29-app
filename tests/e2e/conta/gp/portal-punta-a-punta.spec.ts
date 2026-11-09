@@ -132,7 +132,8 @@ test('La gestoría invita a Tomás Ruiz desde la pestaña «Portal» de la ficha
   await page.getByLabel('Correo').fill(CORREO)
   await page.getByLabel('Nombre (opcional)').fill('Tomás Ruiz')
   await page.getByRole('button', { name: 'Mandar la invitación' }).click()
-  await expect(page.getByRole('status')).toContainText(`Invitada ${CORREO}. Le llega un correo con el enlace para entrar.`)
+  // Por su texto: en staging, la franja «BUILD LOCAL · NO ES PRODUCCIÓN» también es un role=status.
+  await expect(page.getByText(`Invitada ${CORREO}. Le llega un correo con el enlace para entrar.`, { exact: false })).toBeVisible()
   await expect(page.getByText('Tomás Ruiz', { exact: true })).toBeVisible()
   const inv = llamadas.find((l) => l.f === 'conta-portal:invitar')
   expect(inv?.cuerpo).toMatchObject({ accion: 'invitar', cliente: 'c8', correo: CORREO, nombre: 'Tomás Ruiz', permiso: 'todo' })
