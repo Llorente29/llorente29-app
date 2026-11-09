@@ -17,6 +17,11 @@ export const PASOS = [
   { id: 'tarifa', que: 'Sembrando la tarifa y los ingresos en el banco' },
   { id: 'cambios', que: 'Dejando los cambios del mes que viene' },
 ] as const
+/** Lo que hace como mucho cada llamada de un paso por tandas (el portal): muy por debajo del tiempo máximo de una función. */
+export const PRESUPUESTO_MS = 90_000
+/** Cuántas veces se repite como mucho un paso por tandas antes de darlo por atascado. */
+export const TANDAS_MAX = 8
+
 export type Paso = (typeof PASOS)[number]['id'] | 'comprobar'
 export const esPaso = (x: unknown): x is Paso => x === 'comprobar' || PASOS.some((p) => p.id === x)
 

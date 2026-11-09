@@ -28,7 +28,7 @@ try {
   if (modo === 'plan') await s.plan()
   else if (modo === 'tocar') await s.tocar()
   else {
-    console.log('Bitrix24 de pruebas:'); await s.borrarBitrix(); await s.sembrarBitrix()
+    console.log('Bitrix24 de pruebas:'); await s.borrarBitrix(); await s.sembrarBitrix()  // sin presupuesto: todo de una vez
     console.log('Sandbox de GoCardless:'); await s.borrarGoCardless(); await s.sembrarGoCardless()
     console.log('Hecho: el portal de pruebas y el sandbox están como el primer día de la demo.')
   }
