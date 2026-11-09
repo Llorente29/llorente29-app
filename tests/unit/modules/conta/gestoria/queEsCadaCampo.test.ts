@@ -2,7 +2,7 @@
 // rojo) y el mapa que se confirma. Las etiquetas, como las del portal de QBO
 // (medidas el 07/11); los códigos UF_CRM_ y los datos, inventados (T11).
 import { describe, expect, it } from 'vitest'
-import {
+import { cuotasSinCampo,
   eleccionInicial, loQueFalta, mapaParaConfirmar, opcionesDeCampos, resumenDeOpciones, sePuedeConfirmar, type CampoMedido, type MapaBitrix,
 } from '@/modules/conta/gestoria/queEsCadaCampo'
 import { leerEmpresa } from '../../../../../supabase/functions/conta-bitrix-leer/mapa'
@@ -68,7 +68,10 @@ describe('G01b · Qué es cada campo', () => {
     expect(sePuedeConfirmar(e)).toBe(true)
     const sin = { ...e, situacion: null, direcciones: e.direcciones.map((d) => ({ ...d, calle: null })), cuotas: [{ etiqueta: 'Laboral', codigo: null }] }
     expect(loQueFalta(sin)).toEqual(['El NIF: ningún campo elegido.', 'La situación del cliente: ningún campo elegido. Sin él no se guarda la situación de nadie.',
-      'La dirección: ninguna fuente elegida.', 'La cuota «Laboral»: ningún campo elegido.'])
+      'La dirección: ninguna fuente elegida.'])
+    // GD (nº32): una cuota de referencia sin campo no es una falta (no sale en rojo): se dice aparte.
+    expect(cuotasSinCampo(sin)).toEqual(['Laboral'])
+    expect(cuotasSinCampo(e)).toEqual([])
     expect(sePuedeConfirmar(sin)).toBe(false)
   })
 

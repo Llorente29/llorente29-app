@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react'
 import { Selector } from '@/modules/conta/diseno'
 import { ElegirCampo } from './ElegirCampo'
 import {
-  FUENTES, SITUACIONES_SUMIED, camposParaElegir, eleccionInicial, etiquetaDe, loQueFalta, mapaParaConfirmar, opcionesDeSituacion, resumenDeOpciones, sePuedeConfirmar,
+  FUENTES, SITUACIONES_SUMIED, camposParaElegir, cuotasSinCampo, eleccionInicial, etiquetaDe, loQueFalta, mapaParaConfirmar, opcionesDeSituacion, resumenDeOpciones, sePuedeConfirmar,
   type CampoMedido, type Eleccion, type MapaBitrix, type Situacion,
 } from './queEsCadaCampo'
 
@@ -53,6 +53,7 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar, sinTitulo }: {
   }
   const cambiar = (p: Partial<Eleccion>) => { setE({ ...e, ...p }); setAviso(null) }
   const faltan = loQueFalta(e)
+  const sinCuota = cuotasSinCampo(e)
   const confirmado = mapa?.confirmado ?? null
   const otros = (mapa?.campos ?? []).filter((c) => ['nombre', 'correo', 'telefono', 'servicios', 'forma_pago'].includes(c.campo))
   const NOMBRES: Record<string, string> = { nombre: 'Nombre', correo: 'Correo', telefono: 'Teléfono', servicios: 'Servicios contratados', forma_pago: 'Forma de pago (el emisor)' }
@@ -75,6 +76,11 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar, sinTitulo }: {
           <strong>Falta:</strong>
           <ul className="cxg-mapa-faltan">{faltan.map((f) => <li key={f}>{f}</li>)}</ul>
         </div>
+      )}
+      {sinCuota.length > 0 && (
+        <p className="cxg-apoyo" data-prueba="cuotas-sin-campo">
+          Sin cuota de referencia ({sinCuota.map((x) => `«${x}»`).join(', ')}): no hace falta; solo sirve de referencia y Sumied no calcula con ella.
+        </p>
       )}
 
       <div className="cxg-mapa-cabeza" aria-hidden="true"><span>En Sumied</span><span>Sale de este campo de Bitrix24</span></div>

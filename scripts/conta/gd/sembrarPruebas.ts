@@ -8,6 +8,7 @@
 //   npx tsx scripts/conta/gd/sembrarPruebas.ts plan      solo lee: qué hay y qué haría
 //   npx tsx scripts/conta/gd/sembrarPruebas.ts sembrar   borra lo de antes y siembra
 //   npx tsx scripts/conta/gd/sembrarPruebas.ts tocar     un cambio pequeño en cada uno, para probar «Al instante»
+//   npx tsx scripts/conta/gd/sembrarPruebas.ts activar   los mandatos del sandbox aún sin activar, activos (su simulador)
 //
 // Escribir en el portal de pruebas y en el sandbox está permitido (Julio, nº27):
 // son de pruebas. DOS GUARDAS: solo se escribe en el portal b24-s3mr2y (por su
@@ -166,6 +167,18 @@ const MANDATO_ACABADO = ['cancelled', 'failed', 'expired', 'consumed', 'blocked'
 const MAYUS = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/,?\s*S\.L\.$/, '')
 const euros = (n: number) => Math.round(n * 100)
 
+/** El simulador del sandbox «mandate_activated»: un mandato en «pending_submission» pasa a activo. Solo existe en el sandbox. */
+async function activarMandato(mandato: string) {
+  await gc('POST', '/scenario_simulators/mandate_activated/actions/run', { data: { links: { resource: mandato } } })
+}
+
+/** «activar»: los mandatos del sandbox que siguen en «pending_submission», activos (sin volver a sembrar). */
+async function activar() {
+  const pendientes = (await gcTodos('mandates')).filter((m) => m.status === 'pending_submission')
+  for (const m of pendientes) await activarMandato(String(m.id))
+  decir(`✓ Sandbox: ${pendientes.length} mandatos activados con su simulador (estaban en «pending_submission»).`)
+}
+
 async function clienteEnGc(n: number, datos: { nombre: string; correo: string; nif: string; given: string; family: string; ciudad: string }) {
   const sello = `gd-${Date.now()}-${n}`
   const cu = ((await gc('POST', '/customers', { customers: {
@@ -177,6 +190,10 @@ async function clienteEnGc(n: number, datos: { nombre: string; correo: string; n
     account_holder_name: datos.nombre.slice(0, 70), iban: ibanDePrueba(n), links: { customer: cu.id },
   } }, `${sello}-ba`)).customer_bank_accounts as Fila)
   const md = ((await gc('POST', '/mandates', { mandates: { scheme: 'sepa_core', links: { customer_bank_account: ba.id } } }, `${sello}-md`)).mandates as Fila)
+  // El sandbox deja los mandatos en «pending_submission» y no los activa solo (los del 06/11 seguían así el 09/11):
+  // se activan con su simulador, como si el banco los hubiera aceptado (Julio, nº32: para el congreso, activos).
+  // (los Successful, Penniless y Fickle ya nacen activos: solo se activa el que sigue en «pending_submission»).
+  if (String(md.status) === 'pending_submission') await activarMandato(String(md.id))
   return { mandato: String(md.id), sello }
 }
 
@@ -264,11 +281,14 @@ async function tocar() {
 }
 
 const modo = process.argv[2]
-if (!['plan', 'sembrar', 'tocar'].includes(modo)) fallo('uso: sembrarPruebas.ts plan | sembrar | tocar')
+if (!['plan', 'sembrar', 'tocar', 'activar'].includes(modo)) fallo('uso: sembrarPruebas.ts plan | sembrar | tocar | activar')
 if (!env('G01D_B24_ENTRANTE_URL')) fallo('Falta el secreto G01D_B24_ENTRANTE_URL.')
 guardaPortal()
 if (modo === 'plan') await plan()
-else if (modo === 'tocar') {
+else if (modo === 'activar') {
+  if (!GC_TOKEN) fallo('Falta el secreto GD_GC_SANDBOX_RW_TOKEN (lectura y escritura del sandbox).')
+  await activar()
+} else if (modo === 'tocar') {
   if (!GC_TOKEN) fallo('Falta el secreto GD_GC_SANDBOX_RW_TOKEN (lectura y escritura del sandbox).')
   await tocar()
 } else {

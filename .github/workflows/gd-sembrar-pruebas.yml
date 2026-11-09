@@ -9,6 +9,8 @@
 #   sembrar  borra lo de antes en los dos y siembra.
 #   tocar    un cambio pequeño en cada uno (una nota en una empresa; un cobro
 #            suelto de 15 € a un cliente Successful), para probar «Al instante».
+#   activar  los mandatos del sandbox que siguen sin activar, activos con su
+#            simulador (sembrar ya los activa al crearlos).
 #
 # Solo a mano. Escribir ahí está permitido: son de pruebas. Dos guardas en el
 # guion: solo el portal b24-s3mr2y (por la dirección del webhook) y solo el
@@ -22,10 +24,10 @@ on:
   workflow_dispatch:
     inputs:
       paso:
-        description: 'plan = solo lee; sembrar = borra lo de antes y siembra la demo; tocar = un cambio pequeño en cada uno, para probar «Al instante»'
+        description: 'plan = solo lee; sembrar = borra lo de antes y siembra la demo; tocar = un cambio pequeño en cada uno, para probar «Al instante»; activar = los mandatos del sandbox sin activar, activos'
         required: true
         type: choice
-        options: [plan, sembrar, tocar]
+        options: [plan, sembrar, tocar, activar]
 
 concurrency:
   group: gd-sembrar-pruebas
