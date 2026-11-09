@@ -10,19 +10,22 @@
 // clips que haya, en su orden: para cambiar una escena se regraba solo ella
 // (ESCENAS=05b) y las demás se reutilizan de la grabación anterior.
 //
-//   MODO=ensayo  no escribe nada: ni prepara ni envía el cobro, ni cambia
-//                Bitrix24. Sirve para ver las pantallas y los rótulos.
+//   MODO=ensayo  no escribe nada: ni prepara ni envía el cobro. Sirve para
+//                ver las pantallas y los rótulos.
 //   MODO=grabar  prepara y envía el cobro de diciembre de la demo (autorizado
-//                por Julio, nº52: solo la demo y el sandbox) y cambia la
-//                situación de una empresa en el Bitrix24 de pruebas (y la deja
-//                como estaba al acabar).
+//                por Julio, nº52: solo la demo y el sandbox). No toca Bitrix24.
+//
+// Las escenas 5 y 7b son tomas que graba Julio desde su Chrome (nº60), en GIF,
+// en la rama video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif y
+// 05-sumied.gif (en pantalla partida) y 07b-buzon.gif. Aquí se les ponen los
+// rótulos; sin la toma, queda su hueco y se dice.
 //
 // La sesión: un enlace de acceso generado en el servidor (generateLink) y
 // canjeado aquí (verifyOtp), sin correo. Al acabar, la cuenta abierta de Julio
 // vuelve a la que tenía. Ningún secreto se escribe en el registro.
 //
 // Solo sistemas de pruebas y datos inventados: la cuenta tiene que ser demo
-// (is_demo) y el webhook, del portal b24-s3mr2y.
+// (is_demo).
 
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
@@ -35,18 +38,16 @@ const env = (k) => (process.env[k] ?? '').trim()
 const SUPABASE_URL = env('SUPABASE_URL'); const SERVICE = env('SERVICE_KEY'); const ANON = env('ANON_KEY')
 const APP = env('APP') || 'https://app.sumied.com'
 const MODO = env('MODO') === 'grabar' ? 'grabar' : 'ensayo'
-const B24 = env('B24_URL')
+const TOMAS = resolve(env('TOMAS') || join(SALIDA, 'tomas'))
 const SALIDA = resolve(env('SALIDA') || 'video-salida')
 const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
 const MES = env('MES') || '2026-12'
 const CLIENTE = 'Talleres Ruiz, S.L.'
-const EMPRESA_INSTANTE = 'Librería El Faro, S.L.'
-const PORTAL = 'b24-s3mr2y.bitrix24.es'
 const W = 1440; const H = 900
 
-const ORDEN = ['01', '02', '03', '04', '05', '05b', '06', '07', '08', '09', '10']
+const ORDEN = ['01', '02', '03', '04', '05', '05b', '06', '07', '07b', '08', '09', '10']
 const pedidas = env('ESCENAS') && env('ESCENAS') !== 'todas' ? env('ESCENAS').split(/[\s,]+/).filter(Boolean) : ORDEN
 const fallos = []
 let enviado = false
@@ -107,6 +108,7 @@ const REF = new URL(SUPABASE_URL || 'https://x.supabase.co').hostname.split('.')
 const iniciarSesion = () => `(() => { try {
   localStorage.setItem(${JSON.stringify(`sb-${REF}-auth-token`)}, ${JSON.stringify(JSON.stringify(sesion))});
   localStorage.setItem('andy-app-active-account', ${JSON.stringify(CUENTA)});
+  localStorage.setItem(${JSON.stringify(`folvy.conta.empresa.${CUENTA}`)}, ${JSON.stringify(SOCIEDAD)});
 } catch (e) {} })()`
 
 // ── Una escena: su contexto, su vídeo, su captura ────────────────────────────
@@ -124,6 +126,7 @@ async function escena(id, fn, { ancho = W, alto = H, conSesion = true } = {}) {
   const E = { page, ctx, R: raton(page), empezar: () => { marca.desde = (Date.now() - t0) / 1000 }, captura: async () => page.screenshot({ path: join(SALIDA, 'capturas', `${id}.png`) }) }
   try { await fn(E) } catch (e) { fallos.push(`${id}: ${e.message.split('\n')[0]}`); decir(`  ✗ ${e.message.split('\n')[0]}`); await E.captura().catch(() => {}) }
   await page.close(); await ctx.close()
+  if (E.sinEscena) { rmSync(join(SALIDA, 'escenas', `${id}.mp4`), { force: true }); rmSync(join(SALIDA, 'capturas', `${id}.png`), { force: true }); decir(`  · sin escena ${id}: queda fuera del montaje`); return }
   const webm = readdirSync(dir).find((f) => f.endsWith('.webm'))
   if (!webm) { fallos.push(`${id}: sin vídeo`); return }
   renameSync(join(dir, webm), join(dir, 'clip.webm'))
@@ -131,33 +134,6 @@ async function escena(id, fn, { ancho = W, alto = H, conSesion = true } = {}) {
     '-vf', `fps=30,scale=${ancho}:${alto},format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-an', join(SALIDA, 'escenas', `${id}.mp4`)])
   decir(`  ✓ escenas/${id}.mp4`)
 }
-/** Lo mismo para dos páginas a la vez, una al lado de la otra (escena 5). */
-async function dosLados(id, izq, der, fn) {
-  if (!pedidas.includes(id)) return
-  decir(`\n── Escena ${id} (dos lados)`)
-  const hechos = []
-  const abrir = async (lado, conSesion) => {
-    const dir = join(SALIDA, 'crudo', `${id}-${lado}`); rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true })
-    const ctx = await navegador.newContext({ viewport: { width: W / 2, height: H }, deviceScaleFactor: 1, locale: 'es-ES', timezoneId: 'Europe/Madrid', recordVideo: { dir, size: { width: W / 2, height: H } } })
-    if (conSesion) await ctx.addInitScript(iniciarSesion())
-    await ctx.addInitScript(CURSOR); await ctx.addInitScript(ROTULO)
-    const page = await ctx.newPage(); hechos.push({ dir, ctx, page, t0: Date.now() })
-    return page
-  }
-  const a = await abrir('izq', false); const b = await abrir('der', true)
-  const marca = { desde: 0 }; const tA = hechos[0].t0; const tB = hechos[1].t0
-  try { await fn({ a, b, Ra: raton(a), Rb: raton(b), empezar: () => { marca.desde = Date.now() } }) } catch (e) { fallos.push(`${id}: ${e.message.split('\n')[0]}`); decir(`  ✗ ${e.message.split('\n')[0]}`) }
-  await a.screenshot({ path: join(SALIDA, 'crudo', `${id}-a.png`) }).catch(() => {}); await b.screenshot({ path: join(SALIDA, 'crudo', `${id}-b.png`) }).catch(() => {})
-  for (const h of hechos) { await h.page.close(); await h.ctx.close() }
-  const clip = (h) => join(h.dir, readdirSync(h.dir).find((f) => f.endsWith('.webm')))
-  const dA = Math.max(0, (marca.desde - tA) / 1000); const dB = Math.max(0, (marca.desde - tB) / 1000)
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(dA), '-i', clip(hechos[0]), '-ss', String(dB), '-i', clip(hechos[1]),
-    '-filter_complex', `[0:v]fps=30,scale=${W / 2}:${H}[l];[1:v]fps=30,scale=${W / 2}:${H}[r];[l][r]hstack=inputs=2,format=yuv420p[v]`,
-    '-map', '[v]', '-shortest', '-c:v', 'libx264', '-crf', '20', '-an', join(SALIDA, 'escenas', `${id}.mp4`)])
-  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', join(SALIDA, 'crudo', `${id}-a.png`), '-i', join(SALIDA, 'crudo', `${id}-b.png`), '-filter_complex', 'hstack=inputs=2', join(SALIDA, 'capturas', `${id}.png`)])
-  decir(`  ✓ escenas/${id}.mp4`)
-}
-
 // ── Piezas de las escenas ────────────────────────────────────────────────────
 const rotulo = (page, t, arriba = false) => page.evaluate(([x, y]) => window.__rotulo?.(x, y), [t, arriba])
 async function ir(page, ruta) {
@@ -188,20 +164,9 @@ async function still(E, png, texto, arriba, segundos = 5) {
   await E.page.waitForTimeout(segundos * 1000)
 }
 
-// ── Bitrix24 de pruebas, por su API (solo b24-s3mr2y) ────────────────────────
-function guardaB24() {
-  const m = /^https:\/\/([A-Za-z0-9.-]+)\/rest\/[0-9]+\/[A-Za-z0-9]+\/?$/.exec(B24)
-  if (!m || m[1] !== PORTAL) throw new Error('El webhook de Bitrix24 no es el del portal de pruebas: no se toca.')
-  return B24.replace(/\/?$/, '/')
-}
-async function b24(metodo, params) {
-  const r = await fetch(`${guardaB24()}${metodo}.json`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(params) })
-  const d = await r.json().catch(() => ({})); if (d.error || !r.ok) throw new Error(`Bitrix24 · ${metodo}: ${d.error ?? r.status}`); return d.result
-}
-
 // ── Las escenas ──────────────────────────────────────────────────────────────
 try {
-  if (pedidas.some((id) => ['02', '03', '04', '05', '06', '07', '08'].includes(id))) await entrar()
+  if (pedidas.some((id) => ['02', '03', '04', '06', '07', '08'].includes(id))) await entrar()
 
   await escena('01', async (E) => {
     await tarjeta(E, `<div class="c"><div class="g">Sumied para gestorías</div><div class="m">Asesoría QBO</div><div class="p">Datos de demostración</div></div>`)
@@ -212,7 +177,7 @@ try {
     E.id = '02'
     await ir(E.page, '/conta/ventas/clientes-y-cuotas'); E.empezar()
     await rotulo(E.page, 'Todos tus clientes y lo que cobras a cada uno, en una pantalla'); await E.page.waitForTimeout(3500)
-    for (const t of ['Cuotas al mes', 'Te deben', 'Dejas de cobrar', 'Último cobro']) await a(E, E.page.getByText(t, { exact: false }), { que: t, pausa: 1300 })
+    for (const t of ['Cuotas al mes', 'Te deben', 'Dejas de cobrar', 'Precio sin revisar']) await a(E, E.page.getByText(t, { exact: false }), { que: t, pausa: 1300 })
     await a(E, E.page.getByText('Lo que tienes que hacer'), { que: 'Lo que tienes que hacer', pausa: 2500 })
     await E.captura()
     await a(E, E.page.getByText(CLIENTE, { exact: true }), { clic: true, que: CLIENTE, pausa: 3500 })
@@ -221,15 +186,14 @@ try {
 
   await escena('03', async (E) => {
     E.id = '03'
-    await ir(E.page, '/conta/ventas/clientes-y-cuotas')
-    await E.page.getByText(CLIENTE, { exact: true }).first().click().catch(() => {})
-    await E.page.getByText('Abrir la ficha completa').first().click({ timeout: 10_000 }).catch(() => {})
-    await E.page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {}); await E.page.waitForTimeout(1200); E.empezar()
+    const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).maybeSingle()
+    if (!cli) throw new Error(`No está «${CLIENTE}» en la demo.`)
+    await ir(E.page, `/conta/ventas/clientes-y-cuotas/cliente/${cli.id}`); E.empezar()
     await rotulo(E.page, 'Cada cliente, con su recibo explicado línea a línea'); await E.page.waitForTimeout(3500)
-    await a(E, E.page.getByRole('button', { name: 'Ver trabajadores' }), { clic: true, que: 'Ver trabajadores', pausa: 2500 })
+    await a(E, E.page.getByRole('button', { name: 'Ver trabajadores' }), { clic: true, que: 'Ver trabajadores', pausa: 3000 })
     await E.captura()
-    for (const t of ['Cobros', 'Contacto']) await a(E, E.page.getByRole('tab', { name: t }).or(E.page.getByRole('button', { name: t, exact: true })), { clic: true, que: `pestaña ${t}`, pausa: 3000 })
-    await a(E, E.page.getByText('Situación'), { que: 'datos de Bitrix24', pausa: 2500 })
+    for (const t of ['Cobros', 'Contacto']) await a(E, E.page.getByRole('tab', { name: t, exact: true }), { clic: true, que: `pestaña ${t}`, pausa: 3200 })
+    await a(E, E.page.getByRole('tab', { name: /^Datos de / }), { clic: true, que: 'pestaña Datos del CRM', pausa: 3500 })
   })
 
   await escena('04', async (E) => {
@@ -244,57 +208,44 @@ try {
     }
   })
 
-  // 5 · Al instante: a la izquierda, la empresa en el Bitrix24 de pruebas (por su API); a la derecha, Sumied.
-  let situacionAntes = null
-  await dosLados('05', 'izq', 'der', async ({ a: izq, b: der, Ra, Rb, empezar }) => {
-    const [emp] = await b24('crm.company.list', { filter: { TITLE: EMPRESA_INSTANTE }, select: ['ID', 'TITLE', 'UF_CRM_SITUACION', 'UF_CRM_NIF'] })
-    if (!emp) throw new Error(`No está «${EMPRESA_INSTANTE}» en el portal de pruebas.`)
-    const campos = await b24('crm.company.userfield.list', { filter: { FIELD_NAME: 'UF_CRM_SITUACION' } })
-    const lista = campos?.[0]?.LIST ?? []
-    const id = (v) => lista.find((x) => x.VALUE === v)?.ID
-    situacionAntes = emp.UF_CRM_SITUACION
-    const actual = lista.find((x) => String(x.ID) === String(emp.UF_CRM_SITUACION))?.VALUE ?? 'Activo'
-    const nueva = actual === 'Moroso' ? 'Activo' : 'Moroso'
-    await izq.exposeFunction('__guardar', async () => { if (MODO === 'grabar') await b24('crm.company.update', { id: emp.ID, fields: { UF_CRM_SITUACION: id(nueva) } }) })
-    await izq.setContent(`<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet"><style>
-      body{margin:0;font-family:Inter,'DejaVu Sans',Arial,sans-serif;background:#EEF2F7;color:#0F1B2D}
-      .top{background:#0F1B2D;color:#fff;padding:18px 24px;font-weight:700;font-size:20px}.top span{font-weight:400;color:#9FB2CF;font-size:14px;margin-left:8px}
-      .c{margin:24px;background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
-      h1{font-size:24px;margin:0 0 18px}.f{display:flex;justify-content:space-between;padding:12px 0;border-bottom:1px solid #E3E8F0;font-size:16px}
-      select{font:600 16px Inter,sans-serif;padding:8px 12px;border-radius:8px;border:1px solid #C3CEDD}
-      button{margin-top:22px;background:#1F5BD8;color:#fff;border:0;border-radius:10px;font:600 16px Inter,sans-serif;padding:12px 22px}
-      .ok{margin-top:14px;color:#0B6B4F;font-weight:600;min-height:22px}.n{font-size:13px;color:#5B6B82;margin:0 24px}</style></head><body>
-      <div class="top">Bitrix24 de pruebas<span>${PORTAL} · compañía</span></div>
-      <div class="c"><h1>${EMPRESA_INSTANTE}</h1>
-      <div class="f"><span>NIF</span><b>${emp.UF_CRM_NIF ?? ''}</b></div>
-      <div class="f"><span>Situación</span><select id="s">${lista.map((x) => `<option ${x.VALUE === actual ? 'selected' : ''}>${x.VALUE}</option>`).join('')}</select></div>
-      <button id="g" onclick="window.__guardar().then(()=>{document.getElementById('ok').textContent='Guardado en Bitrix24'})">Guardar</button><div class="ok" id="ok"></div></div>
-      <p class="n">La compañía de verdad del portal de pruebas, leída y cambiada por su API.</p></body></html>`)
-    await ir(der, '/conta/ventas/clientes-y-cuotas')
-    const buscar = der.getByLabel('Buscar cliente, NIF o trabajador')
-    if (await buscar.isVisible().catch(() => false)) { await buscar.fill('Librería'); await der.waitForTimeout(1200) }
-    empezar()
-    await rotulo(izq, 'Lo que cambias en Bitrix24…'); await rotulo(der, '…Sumied lo sabe en segundos'); await izq.waitForTimeout(3500)
-    await Rb.a(der.getByText(EMPRESA_INSTANTE).first()).catch(() => {}); await der.waitForTimeout(1500)
-    await Ra.clic(izq.locator('#s')); await izq.locator('#s').selectOption(nueva); await izq.waitForTimeout(1200)
-    await Ra.clic(izq.locator('#g')); await izq.waitForTimeout(1500)
-    const desde = Date.now(); let visto = false
-    while (MODO === 'grabar' && Date.now() - desde < 120_000) {
-      await der.waitForTimeout(5000)
-      await der.reload({ waitUntil: 'domcontentloaded' }); await der.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {})
-      if (await buscar.isVisible().catch(() => false)) { await buscar.fill('Librería'); await der.waitForTimeout(900) }
-      await rotulo(der, '…Sumied lo sabe en segundos')
-      const fila = der.locator('tr, li, [role="row"]').filter({ hasText: EMPRESA_INSTANTE }).filter({ hasText: nueva })
-      if (await fila.first().isVisible().catch(() => false)) { visto = true; await Rb.a(fila.first()); break }
-    }
-    if (MODO === 'grabar' && !visto) fallos.push('05: Sumied no enseñó el cambio de Bitrix24 en 2 minutos')
-    decir(`  · ${MODO === 'grabar' ? (visto ? `Sumied ya dice «${nueva}» (${Math.round((Date.now() - desde) / 1000)} s)` : 'Sumied no lo enseñó') : 'ensayo: Bitrix24 no se ha cambiado'}`)
-    await rotulo(izq, 'Sin tocar tu forma de trabajar'); await izq.waitForTimeout(4000)
-  })
-  if (MODO === 'grabar' && situacionAntes) {
-    const [emp] = await b24('crm.company.list', { filter: { TITLE: EMPRESA_INSTANTE }, select: ['ID'] }).catch(() => [])
-    if (emp) { await b24('crm.company.update', { id: emp.ID, fields: { UF_CRM_SITUACION: situacionAntes } }).catch((e) => fallos.push(`05: no se ha podido dejar la situación como estaba: ${e.message}`)); decir('  · La empresa vuelve a su situación de antes en Bitrix24.') }
+  // 5 y 7b · Las tomas que graba Julio desde su Chrome (nº60), en GIF, con los rótulos del vídeo.
+  //   tomas/05-bitrix.gif y tomas/05-sumied.gif: en pantalla partida. tomas/07b-buzon.gif: entera.
+  //   Sin la toma, la escena no se monta y se dice (queda su hueco).
+  // Cada toma: { f: fichero, desde: segundos en que aparece (0 = al empezar), titulo: lo que se ve mientras espera }.
+  // Busca primero en scripts/video/gd/tomas (las que van en el repositorio) y después en TOMAS (video-tomas/gd-qbo).
+  const dondeToma = (f) => [join('scripts/video/gd/tomas', f), join(TOMAS, f)].find((x) => existsSync(x)) ?? null
+  const duraGif = (f) => { try { return Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f]).toString().trim()) || 0 } catch { return 0 } }
+  async function toma(id, tomas, rotulos) {
+    if (!pedidas.includes(id)) return
+    const faltan = tomas.filter((t) => !dondeToma(t.f)).map((t) => t.f)
+    if (faltan.length) { fallos.push(`${id}: falta la toma (${faltan.join(', ')}): queda su hueco`); decir(`\n── Escena ${id}: falta ${faltan.join(', ')}`); return }
+    const fin = Math.min(45, Math.max(8, ...tomas.map((t) => (t.desde ?? 0) + duraGif(dondeToma(t.f))))) + 4
+    await escena(id, async (E) => {
+      const celdas = tomas.map((t, k) => `<div class="c"><div class="espera">${t.titulo ?? ''}</div><img id="t${k}" style="display:none"></div>`).join('')
+      await E.page.setContent(`<!doctype html><html><head><meta charset="utf-8"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap" rel="stylesheet"><style>
+        html,body{margin:0;height:100%;background:#33435E}.f{display:flex;height:${H}px;gap:${tomas.length > 1 ? 6 : 0}px}
+        .c{flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#2A3A56}
+        .espera{position:absolute;color:#8FA3C0;font:600 26px Inter,'DejaVu Sans',sans-serif}
+        img{max-width:100%;max-height:100%;object-fit:contain;display:block;position:relative;z-index:1;animation:entra .5s ease-out}
+        @keyframes entra{from{opacity:0}to{opacity:1}}</style></head><body><div class="f">${celdas}</div></body></html>`)
+      await E.page.waitForTimeout(600); E.empezar()
+      const t0 = Date.now()
+      const poner = (k) => E.page.evaluate(([k, src]) => { const im = document.getElementById(`t${k}`); im.src = src; im.style.display = 'block' }, [k, `data:image/gif;base64,${readFileSync(dondeToma(tomas[k].f)).toString('base64')}`])
+      const eventos = [
+        ...tomas.map((t, k) => ({ en: t.desde ?? 0, hacer: () => poner(k) })),
+        ...rotulos.map((r) => ({ en: r.en, hacer: () => rotulo(E.page, r.t) })),
+      ].sort((x, y) => x.en - y.en)
+      for (const ev of eventos) { const falta = ev.en * 1000 - (Date.now() - t0); if (falta > 0) await E.page.waitForTimeout(falta); await ev.hacer() }
+      const falta = fin * 1000 - (Date.now() - t0); if (falta > 0) await E.page.waitForTimeout(falta)
+      await E.captura()
+    }, { conSesion: false })
   }
+  // 5 · Julio cambia la situación de Librería El Faro en el Bitrix24 de pruebas (de Activo a Moroso) y Sumied
+  // lo recibe en segundos (leído a las 18:25:49 UTC del 09/11). Sumied entra cuando Bitrix24 ya ha guardado.
+  await toma('05', [
+    { f: '05-bitrix.gif', desde: 0, titulo: 'Bitrix24' },
+    { f: '05-sumied.gif', desde: 15, titulo: 'Sumied' },
+  ], [{ t: 'Lo que cambias en Bitrix24, Sumied lo sabe en segundos', en: 0 }, { t: 'Sin tocar tu forma de trabajar', en: 15.5 }])
 
   await escena('05b', async (E) => {
     E.empezar(); await still(E, 'scripts/video/gd/maquetas/0-encrm.png', 'Y sin salir de Bitrix24: la ficha de Sumied dentro de cada cliente', 'En construcción', 7); await E.captura()
@@ -359,7 +310,7 @@ try {
     await E.captura()
     const { data: rec } = await admin.from('conta_recibo').select('invoice_id').eq('account_id', CUENTA).not('invoice_id', 'is', null).order('enviado_at', { ascending: false }).limit(1)
     const factura = rec?.[0]?.invoice_id
-    if (!factura) { fallos.push('07: ninguna factura todavía'); return }
+    if (!factura) { fallos.push('07: ninguna factura todavía'); if (MODO === 'grabar') E.sinEscena = true; return }
     await ir(E.page, `/conta/ventas/facturas/${factura}`)
     await rotulo(E.page, 'Con la numeración y las cuentas de tu plan'); await E.page.waitForTimeout(3000)
     await a(E, E.page.getByText('Lo que ha pasado'), { que: 'Lo que ha pasado', pausa: 2500 })
@@ -380,12 +331,14 @@ try {
     }
   })
 
+  await toma('07b', [{ f: '07b-buzon.gif', desde: 0 }], [{ t: 'Y le llega a tu cliente por correo, sin que nadie la mande', en: 0 }])
+
   await escena('08', async (E) => {
     E.id = '08'
     // Lo mismo que hace el cron de cada 30 minutos (solo cuentas demo), por si aún no ha pasado.
     if (MODO === 'grabar') await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(({ data }) => decir(`  · ${data?.frase ?? ''}`))
     const { count } = await admin.from('bank_movement').select('id', { count: 'exact', head: true }).eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
-    if (!count) { fallos.push('08: aún no hay ningún ingreso de GoCardless en el banco de la demo'); return }
+    if (!count) { fallos.push('08: aún no hay ningún ingreso de GoCardless en el banco de la demo: escena fuera'); E.sinEscena = true; return }
     await ir(E.page, '/conta/bancos'); E.empezar()
     await rotulo(E.page, 'El ingreso de GoCardless se casa solo en el banco'); await E.page.waitForTimeout(3500)
     await a(E, E.page.getByText(/GOCARDLESS/).first(), { clic: true, que: 'el ingreso de GoCardless', pausa: 4000 })

@@ -4,11 +4,13 @@ name: GD · vídeo para QBO
 # grabado con Playwright en la «Gestoría Demo» de PRODUCCIÓN (app.sumied.com),
 # con el usuario de Julio, por escenas (scripts/video/gd/qbo.mjs).
 #
-#   modo: ensayo   no escribe nada (ni el cobro ni Bitrix24): para ver las
-#                  pantallas y los rótulos.
+#   modo: ensayo   no escribe nada (ni prepara ni envía el cobro): para ver
+#                  las pantallas y los rótulos.
 #         grabar   prepara y ENVÍA el cobro de la demo al sandbox (autorizado
-#                  por Julio, nº52) y cambia, y luego deja como estaba, la
-#                  situación de una empresa del Bitrix24 de pruebas.
+#                  por Julio, nº52). No toca Bitrix24.
+#   Las escenas 5 y 7b son tomas de Julio en GIF (nº60), en la rama
+#   video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif, 05-sumied.gif y
+#   07b-buzon.gif. Sin la toma, su escena queda como hueco y se dice.
 #   escenas: «todas», o las que se regraban (p. ej. «05b» o «06,07»). Las
 #            demás se reutilizan de la grabación anterior (video-salida/gd-qbo).
 #
@@ -21,12 +23,12 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox y cambia Bitrix24 de pruebas'
+        description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox'
         required: true
         type: choice
         options: [ensayo, grabar]
       escenas:
-        description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,08,09,10)'
+        description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,08,09,10)'
         required: true
         default: todas
       mes:
@@ -101,6 +103,13 @@ jobs:
           else
             echo "No hay grabación anterior."
           fi
+          mkdir -p "$RUNNER_TEMP/tomas"
+          if git fetch -q --depth=1 origin video-tomas/gd-qbo 2>/dev/null; then
+            git archive FETCH_HEAD tomas 2>/dev/null | tar -x -C "$RUNNER_TEMP" || true
+            echo "Tomas de Julio: las de video-tomas/gd-qbo."
+          else
+            echo "Aún no hay tomas de Julio (video-tomas/gd-qbo)."
+          fi
 
       - name: Grabar
         timeout-minutes: 60
@@ -108,7 +117,7 @@ jobs:
           MODO: ${{ inputs.modo }}
           ESCENAS: ${{ inputs.escenas }}
           MES: ${{ inputs.mes }}
-          B24_URL: ${{ secrets.G01D_B24_ENTRANTE_URL }}
+          TOMAS: ${{ runner.temp }}/tomas
           APP: https://app.sumied.com
         # Lo que dice el guion va a un fichero (registro.txt, en la salida), no al registro del run.
         run: mkdir -p video-salida && node scripts/video/gd/qbo.mjs > video-salida/registro.txt 2>&1
