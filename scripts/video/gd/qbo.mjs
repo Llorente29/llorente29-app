@@ -274,23 +274,40 @@ try {
     if (await fuerte.isVisible().catch(() => false)) { await E.R.a(fuerte.locator('.g5-cambio-porque')); await E.page.waitForTimeout(3000) }
     for (let i = 0; i < Math.min(n, 2); i++) { await E.R.a(cambios.nth(i).locator('.g5-cambio-porque')).catch(() => {}); await E.page.waitForTimeout(1800) }
     if (MODO === 'grabar') {
+      // Cada aprobación se guarda antes de la siguiente: mientras se guarda, los botones están desactivados.
+      const libre = () => E.page.waitForFunction(() => !document.querySelector('.g5-cambio .g4-boton[disabled], .g4-boton[data-tipo="primario"][disabled]'), null, { timeout: 30_000 }).catch(() => {})
       for (let i = 0; i < 60; i++) {
+        await libre()
         const b = E.page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
         if (!(await b.isVisible().catch(() => false))) break
-        if (i < 2) { await E.R.clic(b); await E.page.waitForTimeout(1500) } else { await b.click(); await E.page.waitForTimeout(500) }
+        if (i < 2) { await E.R.clic(b); await E.page.waitForTimeout(1500) } else { await b.click(); await E.page.waitForTimeout(300) }
       }
+      await libre()
       const iguales = E.page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ })
-      if (await iguales.isVisible().catch(() => false)) { await E.R.clic(iguales); await E.page.waitForTimeout(2500) }
+      if (await iguales.isVisible().catch(() => false)) {
+        await iguales.scrollIntoViewIfNeeded(); await E.page.waitForFunction((el) => !el.disabled, await iguales.elementHandle(), { timeout: 30_000 }).catch(() => {})
+        await E.R.clic(iguales); await E.page.waitForTimeout(1500); await libre(); await E.page.waitForTimeout(1500)
+      }
     } else await a(E, E.page.getByRole('button', { name: /^Aprobar/ }), { que: 'Aprobar los iguales', pausa: 2000 })
     const verLista = E.page.getByRole('button', { name: 'Ver la lista' })
     if (await a(E, E.page.getByText('No entran'), { que: 'No entran', pausa: 1200 }) && await verLista.isVisible().catch(() => false)) { await E.R.clic(verLista); await E.page.waitForTimeout(3000) }
     const enviar = E.page.locator('button.g5-enviar')
     if (await a(E, enviar, { que: 'Enviar el cobro', pausa: 800 })) {
+      if (MODO === 'grabar') await E.page.waitForFunction((el) => !el.disabled, await enviar.elementHandle(), { timeout: 30_000 }).catch(() => {})
       if (MODO === 'grabar' && await enviar.isEnabled()) {
         await E.R.clic(enviar); await E.page.waitForTimeout(3500); await E.captura()
         const si = E.page.getByRole('dialog').getByRole('button', { name: /^Sí, enviar/ })
-        await E.R.clic(si); await E.page.getByText(/Enviado|Cómo va cada recibo/).first().waitFor({ timeout: 120_000 }).catch(() => {}); await E.page.waitForTimeout(3500)
-        enviado = true; decir('  · COBRO ENVIADO al sandbox.')
+        await E.R.clic(si)
+        // Enviado de verdad: lo dice la base (conta_cobro_mes.enviado_at), no la pantalla.
+        const desdeEnvio = Date.now()
+        while (Date.now() - desdeEnvio < 180_000) {
+          const { data } = await admin.from('conta_cobro_mes').select('enviado_at').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES).maybeSingle()
+          if (data?.enviado_at) { enviado = true; break }
+          await E.page.waitForTimeout(3000)
+        }
+        await E.page.waitForTimeout(3500)
+        decir(enviado ? '  · COBRO ENVIADO al sandbox.' : '  · OJO: pulsado «Sí, enviar» y la base no dice enviado en 3 minutos.')
+        if (!enviado) fallos.push('06: la base no dice enviado tras «Sí, enviar»')
       } else if (MODO === 'grabar') fallos.push('06: «Enviar el cobro» no se deja pulsar (falta revisar algo)')
     }
     await E.captura()
