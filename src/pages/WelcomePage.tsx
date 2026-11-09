@@ -104,8 +104,22 @@ export default function WelcomePage() {
   const [password, setPassword] = useState('')
   const [passwordRepeat, setPasswordRepeat] = useState('')
   const [acceptedTerms, setAcceptedTerms] = useState(false)
+  // G05 (08/11/2026): quien ya hizo la bienvenida en otra cuenta ya tiene su
+  // contraseña: no se le pide otra (Supabase la rechaza sin la actual,
+  // current_password_required), solo aceptar los términos. Lo dice la base
+  // (mi_bienvenida_hecha, de la 1225); sin ella, se pide como siempre.
+  const [yaTieneClave, setYaTieneClave] = useState(false)
   const [formState, setFormState] = useState<FormState>('idle')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!user || !supabase) return
+    let vivo = true
+    // La 1225 es más nueva que los tipos generados: sin tipar, como empresasService.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('mi_bienvenida_hecha').then(({ data, error }: { data: unknown; error: unknown }) => { if (vivo && !error && data === true) setYaTieneClave(true) })
+    return () => { vivo = false }
+  }, [user])
 
   // Ses 18: si la URL trae token_hash, canjearlo con verifyOtp para abrir
   // sesión. Se ejecuta UNA VEZ al montar. Limpia el token_hash de la URL tras
@@ -184,7 +198,7 @@ export default function WelcomePage() {
     e.preventDefault()
     setErrorMsg(null)
 
-    const pwdValidation = validatePassword(password)
+    const pwdValidation = yaTieneClave ? { ok: true as const } : validatePassword(password)
     if (!pwdValidation.ok) {
       if (pwdValidation.reason === 'too_short' || pwdValidation.reason === 'empty') {
         setErrorMsg(`La contraseña debe tener al menos ${PASSWORD_MIN_LENGTH} caracteres.`)
@@ -194,7 +208,7 @@ export default function WelcomePage() {
       setFormState('error')
       return
     }
-    if (password !== passwordRepeat) {
+    if (!yaTieneClave && password !== passwordRepeat) {
       setErrorMsg('Las contraseñas no coinciden.')
       setFormState('error')
       return
@@ -212,9 +226,12 @@ export default function WelcomePage() {
 
     setFormState('submitting')
 
-    // 1) Actualizar password en Supabase Auth
-    const pwdResult = await updateUserPassword(password)
-    if (!pwdResult.ok) {
+    // 1) Actualizar password en Supabase Auth (G05: no a quien ya tiene una).
+    //    Si Supabase contesta que hace falta la actual, es que ya la tiene: se sigue.
+    const pwdResult = yaTieneClave ? { ok: true as const } : await updateUserPassword(password)
+    if (!pwdResult.ok && /current_password_required|current password/i.test(pwdResult.error)) {
+      setYaTieneClave(true)
+    } else if (!pwdResult.ok) {
       setErrorMsg(translatePasswordError(pwdResult.error))
       setFormState('error')
       return
@@ -306,6 +323,7 @@ export default function WelcomePage() {
         repetida={passwordRepeat} ponerRepetida={setPasswordRepeat}
         acepto={acceptedTerms} ponerAcepto={setAcceptedTerms}
         corta={passwordTooShort} debil={passwordWeak} distintas={passwordsDiffer}
+        conClave={!yaTieneClave}
         fallo={errorMsg}
         enviando={submitting} preparando={preparandoCuenta}
         enviar={handleSubmit}
@@ -346,7 +364,8 @@ export default function WelcomePage() {
               </div>
             )}
 
-            {/* Password */}
+            {/* Password (G05: no a quien ya tiene una) */}
+            {!yaTieneClave && <>
             <div>
               <label className="block text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1">
                 Contraseña nueva
@@ -394,6 +413,10 @@ export default function WelcomePage() {
                 <p className="text-xs text-danger mt-1">Las contraseñas no coinciden.</p>
               )}
             </div>
+            </>}
+            {yaTieneClave && (
+              <p className="text-sm text-text-secondary">Ya tienes tu contraseña: sigue siendo la misma. Solo falta aceptar los términos de esta cuenta.</p>
+            )}
 
             {/* Checkbox T&C */}
             <label className="flex items-start gap-2 text-sm text-text-primary cursor-pointer">
@@ -427,7 +450,7 @@ export default function WelcomePage() {
 
             <button
               type="submit"
-              disabled={submitting || preparandoCuenta || !password || !passwordRepeat || !acceptedTerms}
+              disabled={submitting || preparandoCuenta || (!yaTieneClave && (!password || !passwordRepeat)) || !acceptedTerms}
               className="w-full py-3 rounded-md bg-accent text-text-on-accent font-semibold disabled:opacity-40 hover:bg-accent-hover transition-base active:scale-[0.98] inline-flex items-center justify-center gap-2"
             >
               {submitting ? 'Activando cuenta...' : preparandoCuenta ? 'Preparando tu cuenta…' : <><Lock size={16} /> Activar cuenta</>}

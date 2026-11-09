@@ -129,3 +129,15 @@ select.s-despacho-filtro { appearance: none; padding-right: var(--s-6);
   .s-despacho-lote-acciones .s-boton { flex: 1 1 auto; justify-content: center; }
   .s-despacho-lote-acciones .s-boton:last-child { flex-basis: 100%; }
 }
+
+/* G05 · «Entrar» en el cliente: la acción principal de cada fila, a la derecha y visible sin pasar el ratón. */
+.s-despacho-col-entrar { text-align: right; white-space: nowrap; width: 1%; }
+.s-despacho-entrar { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.s-despacho-entrar-error { color: var(--s-falta); font-size: var(--s-t-xs); max-width: 32ch; white-space: normal; text-align: right; }
+.cx .s-despacho-cliente-boton, .s-despacho-cliente-boton { background: none; border: 0; padding: 0; font: inherit; font-weight: var(--s-peso-titulo); text-align: left; cursor: pointer; }
+.s-despacho-cliente-boton:disabled { cursor: progress; }
+.cx .s-despacho-chips, a.s-despacho-chips { text-decoration: none; color: inherit; }
+a.s-despacho-chips:hover, a.s-despacho-chips:focus-visible { outline: 1px dashed var(--s-accion); outline-offset: 2px; }
+.s-despacho-tarjeta .s-despacho-entrar { display: flex; align-items: stretch; margin-top: var(--s-3); }
+.s-despacho-tarjeta .s-despacho-entrar .s-boton, .s-despacho-tarjeta .s-despacho-entrar button { width: 100%; justify-content: center; }
+.s-despacho-tarjeta .s-despacho-entrar-error { text-align: left; max-width: none; }

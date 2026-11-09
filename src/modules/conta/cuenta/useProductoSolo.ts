@@ -7,8 +7,11 @@
 
 import { MARCA } from './marca'
 import { useCuentaConta } from './contratoCuenta'
+import { useEnClienteDelDespacho } from '@/modules/multitenancy/hooks/useDespacho'
 
 export function useProductoSolo(): boolean {
   const { soloContabilidad } = useCuentaConta()
-  return MARCA.soloContabilidad || soloContabilidad
+  // G05: la gestoría dentro de un cliente (aunque sea de Folvy) ve Sumied solo.
+  const enCliente = useEnClienteDelDespacho()
+  return MARCA.soloContabilidad || soloContabilidad || enCliente
 }

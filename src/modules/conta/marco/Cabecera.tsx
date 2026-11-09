@@ -22,6 +22,8 @@ import { Icono, Tecla } from '@/modules/conta/diseno'
 import { colorDeEmpresa, inicialDeEmpresa } from './colorEmpresa'
 import { useMisEmpresas } from '@/modules/multitenancy/hooks/useMisEmpresas'
 import { VariasEmpresas } from './VariasEmpresas'
+import { useDespacho } from '@/modules/multitenancy/hooks/useDespacho'
+import { nombreQueNoSeConfunde } from '@/modules/multitenancy/lib/misEmpresas'
 
 /** El cuadrado de la empresa: su logo si lo subió; si no, su inicial en su color. */
 export function CuadradoEmpresa({ nombre, color, logo }: { nombre: string; color: string; logo: string | null }) {
@@ -35,7 +37,9 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
   const { abierto, setAbierto, alternar, caja, boton } = useDesplegable()
   // DM1 · PR 1: con varias cuentas (una asesoría), sus sociedades agrupadas por cuenta.
   const cuentas = useMisEmpresas()
-  const varias = cuentas.length > 1
+  // G05: quien es de un despacho ve también «Clientes de …», aunque aún no haya entrado en ninguno.
+  const despacho = useDespacho()
+  const varias = cuentas.length > 1 || despacho.clientes.length > 0
   const [busca, setBusca] = useState('')
   const lista = useMemo(() => {
     const q = busca.trim().toLowerCase()
@@ -47,15 +51,17 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
     return <Link to={rutaAltaEmpresa()} className="s-empresa"><span className="s-empresa-nombre">Tu empresa · darla de alta</span></Link>
   }
   const color = colorDeEmpresa(colorElegido, activa.nombre)
-  const razon = activa.razonSocial && activa.razonSocial !== activa.nombre ? activa.razonSocial : null
+  // G05: con tres «Piri Piri» en la cuenta, el nombre es la razón social (y no se repite debajo).
+  const nombre = nombreQueNoSeConfunde(activa, empresas)
+  const razon = activa.razonSocial && activa.razonSocial !== nombre ? activa.razonSocial : null
   return (
     <div className="s-desplegable s-empresa-caja" ref={caja}>
       <button type="button" ref={boton} className="s-empresa" aria-expanded={abierto} aria-haspopup="true"
-        aria-label={`${activa.nombre}${razon ? `, ${razon}` : ''}. Cambiar de empresa`} title={movil ? undefined : [activa.nombre, razon].filter(Boolean).join(' · ')}
+        aria-label={`${nombre}${razon ? `, ${razon}` : ''}. Cambiar de empresa`} title={movil ? undefined : [nombre, razon].filter(Boolean).join(' · ')}
         onClick={() => { setBusca(''); alternar() }}>
         <CuadradoEmpresa nombre={activa.nombre} color={color} logo={logo} />
         <span className="s-empresa-textos">
-          <span className="s-empresa-nombre">{activa.nombre}</span>
+          <span className="s-empresa-nombre">{nombre}</span>
           {razon && <span className="s-empresa-razon">{razon}</span>}
         </span>
         <Icono nombre="desplegar" />
@@ -63,7 +69,7 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
       {abierto && varias && (
         <div className={`s-menu s-menu-empresas${movil ? ' s-menu-hoja' : ''}`} role="group" aria-label={movil ? 'Cambiar de empresa' : 'Tus empresas'}>
           <span className={movil ? 's-hoja-titulo' : 's-menu-titulo'}>{movil ? 'Cambiar de empresa' : 'Tus empresas'}</span>
-          <VariasEmpresas cuentas={cuentas} sociedadAbierta={activa.id} elegirEnEsta={elegir} cerrar={() => setAbierto(false)} />
+          <VariasEmpresas cuentas={cuentas} clientes={despacho.clientes} donde={despacho.donde} sociedadAbierta={activa.id} elegirEnEsta={elegir} cerrar={() => setAbierto(false)} />
         </div>
       )}
       {abierto && !varias && (
@@ -81,8 +87,8 @@ function BotonEmpresa({ logo, colorElegido, movil }: { logo: string | null; colo
                 <button type="button" className="s-menu-item" aria-current={e.id === activa.id ? 'true' : undefined}
                   onClick={() => { elegir(e.id); setAbierto(false) }}>
                   <span className="s-menu-texto">
-                    <span>{e.nombre}</span>
-                    {(e.razonSocial || e.nif) && <span className="s-menu-nota">{[e.razonSocial !== e.nombre ? e.razonSocial : null, e.nif].filter(Boolean).join(' · ')}</span>}
+                    <span>{nombreQueNoSeConfunde(e, empresas)}</span>
+                    {(e.razonSocial || e.nif) && <span className="s-menu-nota">{[e.razonSocial !== nombreQueNoSeConfunde(e, empresas) ? e.razonSocial : null, e.nif].filter(Boolean).join(' · ')}</span>}
                   </span>
                 </button>
               </li>
@@ -132,8 +138,10 @@ function Ayuda() {
   )
 }
 
-export function Cabecera({ movil, logoEmpresa, colorEmpresa, huecoPeriodo, abrirBuscador, usuario, abrirMenu, menuAbierto }: {
+export function Cabecera({ movil, logoEmpresa, colorEmpresa, huecoPeriodo, abrirBuscador, usuario, abrirMenu, menuAbierto, franja }: {
   movil: boolean
+  /** G05: la franja del despacho, encima de todo y fija con la cabecera. */
+  franja?: ReactNode
   logoEmpresa: string | null
   /** El color que eligió la empresa ('#RRGGBB'), o null: el de serie de su inicial. */
   colorEmpresa: string | null
@@ -148,6 +156,7 @@ export function Cabecera({ movil, logoEmpresa, colorEmpresa, huecoPeriodo, abrir
   const color = colorDeEmpresa(colorEmpresa, activa?.nombre ?? null)
   return (
     <div className="s-cab" style={{ ['--s-color-empresa' as string]: color }}>
+      {franja}
       <div className="s-franja-empresa" aria-hidden="true" />
       <header className="s-cabecera">
         <div className="s-cab-izquierda">

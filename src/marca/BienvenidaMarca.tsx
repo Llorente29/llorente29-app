@@ -18,12 +18,15 @@ export interface PropsBienvenida {
   repetida: string; ponerRepetida: (v: string) => void
   acepto: boolean; ponerAcepto: (v: boolean) => void
   corta: boolean; debil: boolean; distintas: boolean
+  /** G05: false si ya tiene contraseña (hizo la bienvenida en otra cuenta): no se le pide otra. */
+  conClave?: boolean
   fallo: string | null
   enviando: boolean; preparando: boolean
   enviar: (e: FormEvent) => void
 }
 
 export default function BienvenidaMarca(p: PropsBienvenida) {
+  const conClave = p.conClave !== false
   return (
     <div className="mx-entrar">
       <div className="mx-izquierda">
@@ -31,13 +34,14 @@ export default function BienvenidaMarca(p: PropsBienvenida) {
         <form className="mx-formulario" onSubmit={p.enviar} noValidate aria-label="Activa tu cuenta">
           <div className="mx-titulos">
             <h1 className="mx-titulo">Activa tu cuenta</h1>
-            <span className="mx-subtitulo">Crea tu contraseña para terminar el alta.</span>
+            <span className="mx-subtitulo">{conClave ? 'Crea tu contraseña para terminar el alta.' : 'Ya tienes tu contraseña: solo falta aceptar los términos de esta cuenta.'}</span>
           </div>
           {p.email && (
             <label className="mx-campo">Email
               <input className="mx-input" type="email" value={p.email} readOnly aria-readonly="true" />
             </label>
           )}
+          {conClave && <>
           <label className="mx-campo">Contraseña nueva
             <input className="mx-input" type="password" autoComplete="new-password" autoFocus value={p.clave}
               onChange={(e) => p.ponerClave(e.target.value)} disabled={p.enviando} />
@@ -50,6 +54,7 @@ export default function BienvenidaMarca(p: PropsBienvenida) {
               onChange={(e) => p.ponerRepetida(e.target.value)} disabled={p.enviando} />
             {p.distintas && <span className="mx-aviso-campo">Las contraseñas no coinciden.</span>}
           </label>
+          </>}
           <label className="mx-casilla">
             <input type="checkbox" checked={p.acepto} onChange={(e) => p.ponerAcepto(e.target.checked)} disabled={p.enviando} />
             <span>
@@ -58,10 +63,10 @@ export default function BienvenidaMarca(p: PropsBienvenida) {
             </span>
           </label>
           {p.fallo && <div className="mx-fallo" role="alert">{p.fallo}</div>}
-          <button type="submit" className="mx-boton" disabled={p.enviando || p.preparando || !p.clave || !p.repetida || !p.acepto}>
+          <button type="submit" className="mx-boton" disabled={p.enviando || p.preparando || (conClave && (!p.clave || !p.repetida)) || !p.acepto}>
             {p.enviando ? 'Activando cuenta…' : p.preparando ? 'Preparando tu cuenta…' : 'Activar cuenta'}
           </button>
-          <span className="mx-nota">Una vez activada, entras con tu email y la contraseña nueva.</span>
+          <span className="mx-nota">{conClave ? 'Una vez activada, entras con tu email y la contraseña nueva.' : 'Sigues entrando con tu email y tu contraseña de siempre.'}</span>
         </form>
         <PieLegal className="mx-pie" />
       </div>

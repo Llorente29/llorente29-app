@@ -1,0 +1,5 @@
+# G05 · la vuelta atrás: primero los dos disparadores (1226), después lo de la
+# 1225. Los accesos que dio el despacho se apagan antes de quitar la columna.
+cuenta: scripts/conta/produccion/cuentas/g05-entrar-en-el-cliente.sql
+supabase/vuelta-atras/20261108T1226_g05_disparadores.down.sql
+supabase/vuelta-atras/20261108T1225_g05_entrar_en_el_cliente.down.sql

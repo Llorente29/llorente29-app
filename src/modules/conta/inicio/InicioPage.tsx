@@ -38,6 +38,8 @@
 // Sin empresa todavía, el Inicio no tiene nada que enseñar: lleva al alta
 // conversada (N1b), que es donde aterriza el cliente la primera vez.
 
+import { useEnClienteDelDespacho } from '@/modules/multitenancy/hooks/useDespacho'
+import { nombreQueNoSeConfunde } from '@/modules/multitenancy/lib/misEmpresas'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { rutaAltaEmpresa, rutaAjustes, rutaApartadoEmpresa, rutaBancos, rutaCompras, rutaImpuestos, rutaLibroDiario, rutaLibros, rutaLiquidacionesVentas, rutaMayor, rutaNuevoAsiento, rutaDocumentos, rutaTerceros } from '@/config/navegacion'
@@ -93,6 +95,8 @@ function useCarga<T>(f: (() => Promise<T>) | null, clave: string): [Carga<T>, ()
 export default function InicioPage() {
   const { accountId, userName } = useCuentaConta()
   const { activa, empresas, cargando } = useEmpresas()
+  // G05: la gestoría que entra en un cliente aterriza aquí, con la sociedad en el título.
+  const enClienteDelDespacho = useEnClienteDelDespacho()
   const hoy = hoyEnMadrid()
   const mesActual = `${hoy.slice(0, 7)}-01`
   const [mes, setMes] = useState(mesActual)
@@ -104,7 +108,8 @@ export default function InicioPage() {
   return (
     <>
       <Cabecera nombre={primerNombre(userName)} hoy={hoy} mes={mes} mesActual={mesActual} alCambiarMes={setMes}
-        accountId={accountId} companyId={activa.id} />
+        accountId={accountId} companyId={activa.id}
+        empresaDelCliente={enClienteDelDespacho ? (activa.razonSocial?.trim() || nombreQueNoSeConfunde(activa, empresas)) : null} />
       {!activa.completa && (
         <div className="cx-aviso-alta" role="status" aria-label="Alta a medias">
           <span><b>Alta a medias</b> · {activa.razonSocial ?? 'empresa sin nombre todavía'}</span>
@@ -165,8 +170,10 @@ function FacturasDePlataforma({ accountId, companyId, hoy }: { accountId: string
 
 // ── Cabecera ────────────────────────────────────────────────────────────────
 
-function Cabecera({ nombre, hoy, mes, mesActual, alCambiarMes, accountId, companyId }: {
+function Cabecera({ nombre, hoy, mes, mesActual, alCambiarMes, accountId, companyId, empresaDelCliente }: {
   nombre: string | null; hoy: string; mes: string; mesActual: string; alCambiarMes: (m: string) => void; accountId: string; companyId: string
+  /** G05: dentro de un cliente del despacho, su nombre va de título (y el saludo, debajo). */
+  empresaDelCliente: string | null
 }) {
   const [abierto, setAbierto] = useState(false)
   const [cierres] = useCarga<CierreMes[]>(() => leerCierres(accountId, companyId), `${accountId}|${companyId}`)
@@ -175,9 +182,9 @@ function Cabecera({ nombre, hoy, mes, mesActual, alCambiarMes, accountId, compan
   return (
     <header className="cxi-cabecera">
       <div className="cxi-titulos">
-        <h1 className="cxi-titulo">{saludo(horaEnMadrid())}{nombre ? `, ${nombre}` : ''}</h1>
+        <h1 className="cxi-titulo" data-prueba="inicio-titulo">{empresaDelCliente ?? `${saludo(horaEnMadrid())}${nombre ? `, ${nombre}` : ''}`}</h1>
         <span className="cxi-subtitulo">
-          {diaDeHoy(hoy)}.{ultimoCerrado ? ` Tu contabilidad está cerrada hasta ${nombreMes(ultimoCerrado)}.` : ''}
+          {empresaDelCliente ? `${saludo(horaEnMadrid())}${nombre ? `, ${nombre}` : ''}. ` : ''}{diaDeHoy(hoy)}.{ultimoCerrado ? ` Tu contabilidad está cerrada hasta ${nombreMes(ultimoCerrado)}.` : ''}
         </span>
       </div>
       <div className="cxi-acciones">
