@@ -1,0 +1,3 @@
+# GB · la vuelta atrás de la 2235: fuera las dos funciones y la tabla (las altas y bajas hechas siguen: son de la ficha).
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-alta-baja.sql
+supabase/vuelta-atras/20261109T2235_gb_pestana_alta_baja.down.sql

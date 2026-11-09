@@ -1,0 +1,3 @@
+# GB · nº 9, punto 1 · Alta y baja desde la pestaña: la 2235 y su prueba (ROLLBACK).
+supabase/migrations/20261109T2235_gb_pestana_alta_baja.sql
+supabase/staging/sql/20261109_gb_pestana_alta_baja_prueba.sql

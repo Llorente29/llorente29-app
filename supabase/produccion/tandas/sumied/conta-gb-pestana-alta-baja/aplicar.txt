@@ -1,0 +1,15 @@
+# GB · nº 9, punto 1 · Alta y baja de un trabajador desde la pestaña de Bitrix24.
+# Rama conta/gb-pestana-alta-baja. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   2235  Añade conta_bitrix_pestana_cambio (lo hecho desde la pestaña y lo que
+#         pasó en Bitrix24), conta_bitrix_pestana_hacer (solo el servidor:
+#         actúa como la persona y llama a conta_gestoria_alta_empleado y
+#         conta_gestoria_baja_linea, las de la ficha del G04) y
+#         conta_bitrix_pestana_bitrix. La migración no llama a nada: no cambia
+#         ningún dato. El analizador no ve dentro de las funciones: por eso va
+#         escrito aquí.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-alta-baja.sql
+supabase/migrations/20261109T2235_gb_pestana_alta_baja.sql
