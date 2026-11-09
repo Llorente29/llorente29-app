@@ -163,3 +163,52 @@ export function nombreImpuesto(modelo: string, periodo: string | null, ejercicio
     : /^[1-3]P$/.test(periodo) ? `, ${ord[Number(periodo[0]) - 1]} pago${a}` : ` ${periodo}`
   return `${nombre}${p}${que[modelo] ? ` (modelo ${modelo})` : ''}`
 }
+
+// ── Documentos · nóminas y seguros sociales, por mes (como la maqueta) ───────
+
+export interface DocLaboral { id: string; nombre: string; carpeta: string; trabajador: string; fecha: string }
+export interface GrupoLaboral {
+  clave: string
+  /** «nominas» o «ss_sepe». */
+  carpeta: string
+  /** «2026-10». */
+  mes: string
+  /** «Nóminas de octubre» / «Seguros sociales de octubre». */
+  titulo: string
+  /** «4 nóminas · listas el 30 de octubre» / «Cargados el 31 de octubre». */
+  detalle: string
+  ids: string[]
+}
+
+/**
+ * Las nóminas y los seguros sociales que deja la gestoría, en una fila por mes
+ * (el mes en que se dejaron, hora de Madrid): primero el mes más reciente y,
+ * dentro, las nóminas antes que los seguros sociales. Ninguno se queda fuera
+ * (regla 7): cada documento está en el grupo de su mes.
+ */
+export function laboralPorMes(docs: DocLaboral[], hoy: Date = new Date()): GrupoLaboral[] {
+  const grupos = new Map<string, { carpeta: string; mes: string; docs: DocLaboral[] }>()
+  for (const d of docs) {
+    const t = new Date(d.fecha)
+    const [a, m] = Number.isNaN(t.getTime()) ? [Number(d.fecha.slice(0, 4)), Number(d.fecha.slice(5, 7))] : madrid(t)
+    const clave = `${a}-${String(m).padStart(2, '0')}`
+    const carpeta = d.carpeta === 'ss_sepe' ? 'ss_sepe' : 'nominas'
+    const k = `${clave}:${carpeta}`
+    const g = grupos.get(k) ?? { carpeta, mes: clave, docs: [] }
+    g.docs.push(d); grupos.set(k, g)
+  }
+  return [...grupos.entries()]
+    .sort(([, x], [, y]) => (x.mes === y.mes ? (x.carpeta === 'nominas' ? -1 : 1) : x.mes < y.mes ? 1 : -1))
+    .map(([clave, g]) => {
+      const nombreMes = mes(g.mes, hoy).toLowerCase()
+      const ultima = g.docs.map((d) => d.fecha).sort().at(-1) ?? ''
+      const ss = g.carpeta === 'ss_sepe'
+      const n = g.docs.length
+      return {
+        clave, carpeta: g.carpeta, mes: g.mes,
+        titulo: `${ss ? 'Seguros sociales' : 'Nóminas'} de ${nombreMes}`,
+        detalle: ss ? `${n > 1 ? `${n} documentos · ` : ''}Cargados el ${fecha(ultima, hoy)}` : `${n} ${n === 1 ? 'nómina' : 'nóminas'} · listas el ${fecha(ultima, hoy)}`,
+        ids: g.docs.map((d) => d.id),
+      }
+    })
+}
