@@ -20,6 +20,8 @@
 // el portal b24-s3mr2y y solo el sandbox. Además, la cuenta tiene que estar
 // conectada a ese portal y solo a GoCardless de pruebas. Los secretos no se
 // devuelven ni se escriben en el registro.
+// Su verify_jwt = true está declarado en supabase/config.toml (sin él, el
+// despliegue la rechaza por nueva: le pasó a la fusión del #532).
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
