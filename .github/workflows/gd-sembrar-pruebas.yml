@@ -7,6 +7,8 @@
 #
 #   plan     solo lee: lo que hay hoy en los dos y lo que dejaría.
 #   sembrar  borra lo de antes en los dos y siembra.
+#   tocar    un cambio pequeño en cada uno (una nota en una empresa; un cobro
+#            suelto de 15 € a un cliente Successful), para probar «Al instante».
 #
 # Solo a mano. Escribir ahí está permitido: son de pruebas. Dos guardas en el
 # guion: solo el portal b24-s3mr2y (por la dirección del webhook) y solo el
@@ -20,10 +22,10 @@ on:
   workflow_dispatch:
     inputs:
       paso:
-        description: 'plan = solo lee; sembrar = borra lo de antes y siembra la demo en el Bitrix24 de pruebas y el sandbox'
+        description: 'plan = solo lee; sembrar = borra lo de antes y siembra la demo; tocar = un cambio pequeño en cada uno, para probar «Al instante»'
         required: true
         type: choice
-        options: [plan, sembrar]
+        options: [plan, sembrar, tocar]
 
 concurrency:
   group: gd-sembrar-pruebas

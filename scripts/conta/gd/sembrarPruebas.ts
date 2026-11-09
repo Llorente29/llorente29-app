@@ -7,6 +7,7 @@
 //
 //   npx tsx scripts/conta/gd/sembrarPruebas.ts plan      solo lee: qué hay y qué haría
 //   npx tsx scripts/conta/gd/sembrarPruebas.ts sembrar   borra lo de antes y siembra
+//   npx tsx scripts/conta/gd/sembrarPruebas.ts tocar     un cambio pequeño en cada uno, para probar «Al instante»
 //
 // Escribir en el portal de pruebas y en el sandbox está permitido (Julio, nº27):
 // son de pruebas. DOS GUARDAS: solo se escribe en el portal b24-s3mr2y (por su
@@ -238,12 +239,38 @@ async function plan() {
     `(${r.trabajadores} trabajadores, ${r.alMes} € al mes; ${r.escenarios.join('; ')}).`)
 }
 
+/**
+ * Un cambio pequeño en cada sistema, para probar «Al instante» de verdad (Julio, nº32):
+ *   · Bitrix24: una nota en «Comentarios» de Librería El Faro (Sumied no lee ese campo: la ficha no cambia,
+ *     pero Bitrix24 manda su aviso de cambio y Sumied relee esa empresa).
+ *   · Sandbox: un cobro suelto de 15 € a Clínica Dental Sonrisas (cliente Successful: se cobra al momento).
+ */
+async function tocar() {
+  const hora = new Date().toISOString()
+  const [empresa] = (await b24('crm.company.list', { filter: { TITLE: 'Librería El Faro, S.L.' }, select: ['ID', 'TITLE'] })).result as Fila[]
+  if (!empresa) fallo('No está «Librería El Faro, S.L.» en el portal de pruebas: ¿falta sembrar?')
+  await b24('crm.company.update', { id: empresa.ID, fields: { COMMENTS: `Prueba de «Al instante» (GD), ${hora}.` } })
+  decir(`✓ Bitrix24: cambiada la empresa ${String(empresa.ID)} («${String(empresa.TITLE)}») a las ${hora}.`)
+
+  const clientes = await gcTodos('customers')
+  const cliente = clientes.find((c) => c.company_name === 'Clínica Dental Sonrisas, S.L.')
+  if (!cliente) fallo('No está «Clínica Dental Sonrisas, S.L.» en el sandbox: ¿falta sembrar?')
+  const mandato = (await gcTodos('mandates')).find((m) => (m.links as Fila | undefined)?.customer === cliente!.id && !MANDATO_ACABADO.includes(String(m.status)))
+  if (!mandato) fallo('Clínica Dental Sonrisas no tiene un mandato vivo en el sandbox.')
+  const pm = ((await gc('POST', '/payments', { payments: { amount: 1500, currency: 'EUR', description: 'Prueba de Al instante', links: { mandate: mandato!.id } } },
+    `gd-tocar-${hora}`)).payments as Fila)
+  decir(`✓ Sandbox: cobro suelto ${String(pm.id)} de 15 € a Clínica Dental Sonrisas (Successful) a las ${hora}.`)
+}
+
 const modo = process.argv[2]
-if (!['plan', 'sembrar'].includes(modo)) fallo('uso: sembrarPruebas.ts plan | sembrar')
+if (!['plan', 'sembrar', 'tocar'].includes(modo)) fallo('uso: sembrarPruebas.ts plan | sembrar | tocar')
 if (!env('G01D_B24_ENTRANTE_URL')) fallo('Falta el secreto G01D_B24_ENTRANTE_URL.')
 guardaPortal()
 if (modo === 'plan') await plan()
-else {
+else if (modo === 'tocar') {
+  if (!GC_TOKEN) fallo('Falta el secreto GD_GC_SANDBOX_RW_TOKEN (lectura y escritura del sandbox).')
+  await tocar()
+} else {
   if (!GC_TOKEN) fallo('Falta el secreto GD_GC_SANDBOX_RW_TOKEN (lectura y escritura del sandbox).')
   decir('Bitrix24 de pruebas:'); await sembrarBitrix()
   decir('Sandbox de GoCardless:'); await sembrarGoCardless()
