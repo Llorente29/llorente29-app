@@ -39,3 +39,13 @@ export function porqueNo(p: Puerta, portalDePruebas: string): string | null {
   if (p.faltan.length) return `Faltan los secretos ${p.faltan.join(' y ')} en las funciones: los pega Julio.`
   return null
 }
+
+/**
+ * Desde cuándo cuentan las cuotas mensuales de la demo (nº63). El sandbox crea las suscripciones nuevas, así que
+ * GoCardless las da por empezadas en su primer cargo (el mes que viene) y la lectura crea sus líneas «desde» ese mes:
+ * hasta entonces, «Tarifa y paquetes» dice «Ningún cliente» en todo y el cobro no tiene con qué comparar. Los clientes
+ * de la demo son de antes: sus cuotas mensuales empiezan en enero del año en curso (hora de Madrid).
+ */
+export function inicioDeLasCuotas(hoyMadrid: string): string {
+  return `${hoyMadrid.slice(0, 4)}-01-01`
+}

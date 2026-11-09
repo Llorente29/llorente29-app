@@ -215,8 +215,9 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
         // El sandbox deja un mandato SEPA en «pending_submission» y no lo activa solo, y su simulador
         // «mandate_activated» no vale para SEPA. Un cliente «Successful» nace con el mandato activo y cobra al
         // momento: así se siembran los normales (Julio, nº32). En Sumied no se ve: el nombre sale de
-        // company_name; la persona de contacto va en los apellidos.
-        given: c.gc.escenario === 'normal' ? 'Successful' : c.gc.escenario, family: `${c.contacto.nombre} ${c.contacto.apellidos}` })
+        // company_name; la persona de contacto va en los apellidos. Los «por_firmar» (2, nº62) llevan su nombre: su
+        // mandato se queda en «pending_submission» y Sumied los enseña por firmar.
+        given: c.gc.escenario === 'normal' ? 'Successful' : c.gc.escenario === 'por_firmar' ? c.contacto.nombre : c.gc.escenario, family: `${c.contacto.nombre} ${c.contacto.apellidos}` })
       if (c.gc.mensual) { await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(c.nombre)}`, c.gc.mensual); subs++ }
       for (const t of c.gc.trabajadores) { await suscripcion(mandato, sello, `GESTION LABORAL ${MAYUS(t)}`, 25); subs++ }
       // Con el mismo nombre en todos, la importación lo convierte en UN servicio.
