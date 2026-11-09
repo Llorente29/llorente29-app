@@ -5,7 +5,7 @@
 // con más de 10 trabajadores, y que una factura que no cuadra no tiene PDF.
 import { jsPDF } from 'jspdf'
 import { describe, expect, it } from 'vitest'
-import { facturaSumiedPdf, iniciales, SUMIED_PDF, type DatosFacturaSumied } from '../../../../../../supabase/functions/_shared/facturaSumiedPdf'
+import { cuentaEnmascarada, facturaSumiedPdf, iniciales, QUE_INCLUYE_POR_DEFECTO, SUMIED_PDF, type DatosFacturaSumied } from '../../../../../../supabase/functions/_shared/facturaSumiedPdf'
 
 const bytes = (b: Uint8Array) => new TextDecoder('latin1').decode(b)
 const paginas = (b: Uint8Array) => (bytes(b).match(/\/Type \/Page\b/g) ?? []).length
@@ -50,5 +50,21 @@ describe('G05 · T4 · el modelo de factura «Sumied»', () => {
     expect([iniciales('Gestoría Demo, S.L.'), iniciales('Elena Campos Ortiz'), iniciales('Asesoría Inventada')]).toEqual(['GD', 'EC', 'AI'])
     expect(SUMIED_PDF).toMatchObject({ marca: 'DEMOSTRACIÓN · SIN VALIDEZ', verifactu: 'VERI*FACTU', pendiente: 'Verifactu de pruebas: pendiente',
       verificable: 'Factura verificable en la sede electrónica de la AEAT' })
+  })
+
+  it('la cuenta del mandato, enmascarada: GoCardless da 2 dígitos en euros; sin dígitos, nada', () => {
+    expect(cuentaEnmascarada('ES', '21')).toBe('Cuenta ES•• •••• •••• •••• •••• ••21')
+    expect(cuentaEnmascarada('es', '4821')).toBe('Cuenta ES•• •••• •••• •••• •••• 4821')
+    expect(cuentaEnmascarada('ES', null)).toBeNull()
+  })
+
+  it('el «Qué incluye» de siempre del catálogo: laboral, «Nóminas y seguros sociales»', () => {
+    expect(QUE_INCLUYE_POR_DEFECTO.gestion_laboral).toBe('Nóminas y seguros sociales')
+  })
+
+  it('con el logo de la empresa (PNG), el nombre se corre a su derecha y no salen las iniciales', () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAEklEQVR4nGPkU3JggAEmBiQAAAqcAHRMAN8nAAAAAElFTkSuQmCC'
+    const t = bytes(facturaSumiedPdf(jsPDF, factura(4, { emisor: { nombre: 'Gestoría Demo, S.L.', nif: 'B00000026', lineas: [], logo: { base64: png, formato: 'PNG' } } })))
+    expect(t).toContain('/Subtype /Image')
   })
 })

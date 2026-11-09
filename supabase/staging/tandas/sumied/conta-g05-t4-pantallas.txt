@@ -1,0 +1,6 @@
+# G05 · T4 · La 1344 (el «Qué incluye» de cada servicio y la cuenta del mandato,
+# para el modelo de factura «Sumied»). Su prueba (ROLLBACK, datos inventados, en
+# la cuenta A) ensaya, guarda y vacía el «Qué incluye», mira que otra cuenta no
+# puede y que la pantalla lo devuelve, y prueba la vuelta atrás.
+supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
+supabase/staging/sql/20261109_g05_t4_prueba.sql

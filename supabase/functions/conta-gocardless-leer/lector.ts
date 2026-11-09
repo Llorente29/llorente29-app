@@ -6,8 +6,9 @@
 // suscripción, cobro y cuenta de abono. Puro: lo prueban las unitarias
 // (tests/unit/modules/conta/gestoria/lectorGocardless.test.ts).
 //
-// Solo LEE: GET a /customers, /mandates, /subscriptions, /payments, /events y
-// /creditor_bank_accounts. Nunca escribe en GoCardless.
+// Solo LEE: GET a /customers, /mandates, /subscriptions, /payments, /events,
+// /creditor_bank_accounts y /customer_bank_accounts (de estas, solo los últimos
+// dígitos, el país y el banco: G05, para la factura). Nunca escribe en GoCardless.
 //
 // API de GoCardless (documentación oficial, https://developer.gocardless.com/api-reference):
 //   · Cabecera obligatoria «GoCardless-Version: 2015-07-06» y
@@ -29,7 +30,7 @@ export function cabeceras(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'GoCardless-Version': VERSION_API, Accept: 'application/json' }
 }
 
-export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts'
+export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts'
 
 /** La dirección de una página: el recurso, sus filtros y el cursor de la anterior. */
 export function urlDePagina(entorno: Entorno, recurso: Recurso, filtros: Record<string, string> = {}, despues: string | null = null): string {
@@ -112,6 +113,16 @@ export function leerCliente(x: Record<string, unknown>): ClienteGc {
     nif,
     creado: texto(x.created_at),
   }
+}
+
+/**
+ * G05 · La cuenta del cliente de un mandato, lo justo para enseñarla
+ * enmascarada en la factura y el portal: los últimos dígitos (2 en euros, 4 en
+ * dólares neozelandeses), el país y el banco. Nunca la cuenta entera.
+ */
+export interface CuentaClienteGc { id: string; final: string | null; pais: string | null; banco: string | null }
+export function leerCuentaCliente(x: Record<string, unknown>): CuentaClienteGc {
+  return { id: String(x.id), final: texto(x.account_number_ending), pais: texto(x.country_code), banco: texto(x.bank_name) }
 }
 
 /** Estados de un mandato en GoCardless. «activo» para el casado: active (y submitted, que ya cobra). */

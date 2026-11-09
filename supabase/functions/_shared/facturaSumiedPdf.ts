@@ -73,6 +73,25 @@ export interface DatosFacturaSumied {
   demo: boolean
 }
 
+/**
+ * La cuenta del mandato, enmascarada como en la maqueta: GoCardless solo da los
+ * últimos dígitos (2 en euros), así que lo demás va con puntos, en grupos de 4
+ * como un IBAN («ES•• •••• •••• •••• •••• ••21»). Sin dígitos, nada.
+ */
+export function cuentaEnmascarada(pais: string | null, final: string | null): string | null {
+  if (!final) return null
+  const f = final.replace(/\s+/g, '').slice(-4)
+  return `Cuenta ${(pais ?? '').toUpperCase() || '••'}•• •••• •••• •••• •••• ${'•'.repeat(4 - f.length)}${f}`
+}
+
+/**
+ * El «Qué incluye» de siempre del catálogo de gestoría, por la clave del
+ * servicio, para el que no tiene uno propio en «Tarifa y paquetes» (Julio, nº 41).
+ */
+export const QUE_INCLUYE_POR_DEFECTO: Record<string, string> = {
+  gestion_laboral: 'Nóminas y seguros sociales',
+}
+
 /** Los textos fijos del modelo (los de la maqueta). */
 export const SUMIED_PDF = {
   marca: 'DEMOSTRACIÓN · SIN VALIDEZ',
@@ -170,14 +189,19 @@ export function facturaSumiedPdf(JsPDF: JsPdfCtor, d: DatosFacturaSumied): Uint8
   }
 
   // ── Cabecera: el emisor y Verifactu ───────────────────────────────────────
+  // El logo de la empresa (Ajustes), a la altura del cuadrado de la maqueta y con su forma (hasta 4 veces más
+  // ancho que alto); sin logo, sus iniciales en el cuadrado azul. El nombre, a su derecha.
   const LOGO = 38 * PX
+  let anchoLogo = LOGO
   if (d.emisor.logo) {
-    doc.addImage(d.emisor.logo.base64, d.emisor.logo.formato, IZQ, 13.6, LOGO, LOGO)
+    const props = doc.getImageProperties(d.emisor.logo.base64)
+    anchoLogo = Math.min(LOGO * 4, LOGO * (props.width / Math.max(1, props.height)))
+    doc.addImage(d.emisor.logo.base64, d.emisor.logo.formato, IZQ, 13.6, anchoLogo, LOGO)
   } else {
     relleno(NOCHE); doc.roundedRect(IZQ, 13.6, LOGO, LOGO, 10 * PX, 10 * PX, 'F')
     texto(iniciales(d.emisor.nombre), IZQ + LOGO / 2, 13.6 + (LOGO - 15 * PX * 1.21) / 2, 'SpaceGrotesk', 15, [255, 255, 255], { align: 'center' })
   }
-  texto(d.emisor.nombre, 29.8, 13.6 + (LOGO - 19 * PX * 1.276) / 2, 'SpaceGrotesk', 19, TINTA)
+  texto(d.emisor.nombre, IZQ + anchoLogo + 10 * PX, 13.6 + (LOGO - 19 * PX * 1.276) / 2, 'SpaceGrotesk', 19, TINTA)
   const emisor = [`NIF ${d.emisor.nif}`, ...d.emisor.lineas]
   emisor.forEach((l, i) => texto(l, IZQ, 27.9 + i * 5.2, 'Inter', 11.5, APOYO))
   const finEmisor = 27.6 + emisor.length * 5.2

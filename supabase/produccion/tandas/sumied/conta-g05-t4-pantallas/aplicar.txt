@@ -1,0 +1,13 @@
+# G05 · T4 · Lo que necesita el modelo de factura «Sumied» (Julio, nº 41). Rama
+# conta/g05-t4-pantallas. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. El real lo lanza Julio.
+#
+#   1344  AÑADE conta_servicio.incluye (el «Qué incluye» de cada servicio, que
+#         sale en la factura) y, en conta_gc_mandato, los últimos dígitos, el
+#         país y el banco de la cuenta del mandato (para enseñarla enmascarada);
+#         y conta_tarifa_servicio_incluye para guardarlo. CAMBIA (declarada y
+#         respaldada) conta_pantalla_clientes: los servicios llevan su «incluye».
+#
+# No toca datos: las columnas nacen vacías. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-t4-pantallas.sql
+supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql

@@ -201,6 +201,7 @@ export function TarifaG04Page() {
           return (await acciones.crearServicio(e, nombre, g.forma, g.periodo, conPrecio ? g.importe : null, conPrecio ? g.tramos : null, conPrecio ? `${desde}-01` : null, false)).frase
         }),
         guardarPrecio: (o, f, desde) => tras(() => precio(o, f, desde)),
+        guardarQueIncluye: (servicio, texto) => tras(async () => (await acciones.queIncluye(e, servicio, texto, false)).frase),
         guardarNivel: (servicio, nombre, orden, incluye, f, desde) => tras(async () => {
           const r = await acciones.guardarNivel(e, servicio, null, nombre, orden, incluye, false, false)
           if (!f || !r.id) return r.frase

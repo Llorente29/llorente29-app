@@ -45,6 +45,12 @@ export const ABONOS = pag('creditor_bank_accounts', [
   { id: 'BA900', bank_name: 'BANCO DE PRUEBA', account_holder_name: 'EMISOR PRUEBA ALFA', account_number_ending: '34', currency: 'EUR', enabled: true },
 ])
 
+// G05 · Las cuentas de los clientes: solo los últimos dígitos, el país y el banco (inventados).
+export const CUENTAS_CLIENTE = pag('customer_bank_accounts', [
+  { id: 'BA001', account_number_ending: '21', country_code: 'ES', bank_name: 'BANCO DE PRUEBA', currency: 'EUR', enabled: true },
+  { id: 'BA002', account_number_ending: '07', country_code: 'ES', bank_name: 'OTRO BANCO DE PRUEBA', currency: 'EUR', enabled: true },
+])
+
 /** Un fetch falso: contesta por ruta y cursor, y apunta lo que se pidió. */
 export function fetchGrabado(pedidas: string[] = []) {
   return async (url: string, init: { headers: Record<string, string> }) => {
@@ -54,7 +60,7 @@ export function fetchGrabado(pedidas: string[] = []) {
     const after = u.searchParams.get('after')
     const tabla: Record<string, unknown> = {
       customers: after === 'CU002' ? CLIENTES_2 : CLIENTES_1, mandates: MANDATOS, subscriptions: SUSCRIPCIONES,
-      payments: COBROS, events: EVENTOS, creditor_bank_accounts: ABONOS, creditors: pag('creditors', [{ id: 'CR001' }]),
+      payments: COBROS, events: EVENTOS, creditor_bank_accounts: ABONOS, customer_bank_accounts: CUENTAS_CLIENTE, creditors: pag('creditors', [{ id: 'CR001' }]),
     }
     if (init.headers.Authorization !== 'Bearer token-de-prueba') return { ok: false, status: 401, json: async () => ({ error: { message: 'Invalid token' } }) }
     if (!(r in tabla)) return { ok: false, status: 404, json: async () => ({ error: { message: 'No existe' } }) }
