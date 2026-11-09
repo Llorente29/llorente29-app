@@ -11,6 +11,10 @@
 //     nunca al cliente. Sin buzón puesto, no sale, y se dice.
 //   · EL FRENO: «factura_venta» está cerrado hasta que Julio lo abra en
 //     CORREO_MARCA_ABIERTOS. Cerrado, no se manda nada y el historial lo dice.
+//     Una excepción (Julio, nº 53): la factura de un RECIBO de una cuenta de
+//     DEMOSTRACIÓN (`demoSinFreno`) no pasa por el freno, porque su destino ya
+//     es fijo y de pruebas (el buzón). En las cuentas de verdad, el freno sigue
+//     igual, también para las facturas de los recibos.
 //   · Sale de sumied.com con el nombre de la empresa; las respuestas, al correo
 //     de la empresa si lo tiene. Todo lo que pasa queda en el historial de la
 //     factura (conta_venta_enviada), también lo que no se manda.
@@ -43,7 +47,12 @@ function base64(bytes: Uint8Array): string {
   return btoa(s);
 }
 
-export async function enviarFacturaVenta(srv: SupabaseClient, f: FacturaParaEnviar, paraPedido: string, quien: string | null, env: EntornoCorreo): Promise<ResultadoEnvio> {
+/**
+ * `demoSinFreno` (solo lo pasa la factura de un recibo, cobro/facturaRecibo.ts): en
+ * una cuenta de demostración, al buzón de pruebas sin pasar por el freno.
+ */
+export async function enviarFacturaVenta(srv: SupabaseClient, f: FacturaParaEnviar, paraPedido: string, quien: string | null, env: EntornoCorreo,
+  opciones: { demoSinFreno?: boolean } = {}): Promise<ResultadoEnvio> {
   let para = paraPedido;
   const apuntar = (enviado: boolean, texto: string, detalle: Record<string, unknown>) =>
     srv.rpc("conta_venta_enviada", { p_id: f.id, p_para: enviado ? para : null, p_texto: texto, p_detalle: detalle, p_quien_nombre: quien });
@@ -67,8 +76,10 @@ export async function enviarFacturaVenta(srv: SupabaseClient, f: FacturaParaEnvi
     para = salida.para;
   }
 
-  // El freno, antes de tocar nada más.
-  const cerrojo = cerrojoMarca(MARCAS.sumied, PLANTILLA_FACTURA_VENTA, para, env.abiertos);
+  // El freno, antes de tocar nada más. En la demo, la factura de un recibo no
+  // pasa por él: ya va solo al buzón de pruebas (nº 53).
+  const sinFreno = alBuzon !== null && opciones.demoSinFreno === true;
+  const cerrojo = sinFreno ? { abierto: true } : cerrojoMarca(MARCAS.sumied, PLANTILLA_FACTURA_VENTA, para, env.abiertos);
   if (!cerrojo.abierto) {
     const texto = `No se ha mandado la ${f.number_text} a ${para}: los correos de facturas aún están cerrados (los abre Julio).`;
     await apuntar(false, texto, { para, motivo: "cerrado" });

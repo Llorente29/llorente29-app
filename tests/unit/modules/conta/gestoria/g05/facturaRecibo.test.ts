@@ -6,6 +6,7 @@
 import { jsPDF } from 'jspdf'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { rematarFacturasDeRecibos, type Herramientas } from '../../../../../../supabase/functions/_shared/cobro/facturaRecibo'
+import { enviarFacturaVenta } from '../../../../../../supabase/functions/_shared/facturaVentaEnviar'
 
 type Fila = Record<string, unknown>
 const CUENTA = 'c01a0000-0000-4000-8000-00000000000a', EMPRESA = 'e0000000-0000-4000-8000-000000000001'
@@ -110,5 +111,39 @@ describe('G05 · T4 · la factura de un recibo, rematada en el servidor', () => 
     expect(r.fallos).toEqual(['2026/1/141: no se ha podido guardar su PDF (mes cerrado)'])
     expect(r.pdfs).toBe(1)
     expect(r.sinEnviar).toEqual(['No se ha mandado la 2026/1/142 a dos@ejemplo.example: los correos de facturas aún están cerrados (los abre Julio).'])
+  })
+
+  it('nº 53 · en la demo, la factura de un recibo sale al buzón de pruebas aunque el freno esté cerrado; en una cuenta de verdad, con el freno cerrado no sale', async () => {
+    const correos: Fila[] = []
+    vi.stubGlobal('fetch', async (_u: string, init: { body: string }) => { correos.push(JSON.parse(init.body)); return new Response(JSON.stringify({ id: 'c' }), { status: 200 }) })
+    // Demo, freno cerrado (CORREO_MARCA_ABIERTOS vacío): al buzón, y nunca al cliente.
+    const demo = tablas([factura('f1', '2026/1/141', { email_to: 'cliente@ejemplo.example' })])
+    const r1 = await rematarFacturasDeRecibos(baseFalsa(demo, { demo: true }).db, EMPRESA, herramientas(''))
+    expect([r1.enviadas, r1.sinEnviar]).toEqual([1, []])
+    expect(correos.map((c) => c.to)).toEqual([['buzon@pruebas.example']])
+    expect(demo.customer_invoice_event.at(-1)?.text).toBe('Enviada la 2026/1/141 al buzón de pruebas (buzon@pruebas.example), con su PDF: en la demo no se manda a cliente@ejemplo.example.')
+    // Cuenta de verdad, freno cerrado: no sale nada.
+    const real = tablas([factura('f2', '2026/1/142', { email_to: 'cliente@ejemplo.example' })])
+    const r2 = await rematarFacturasDeRecibos(baseFalsa(real).db, EMPRESA, herramientas(''))
+    expect(r2.enviadas).toBe(0)
+    expect(r2.sinEnviar).toEqual(['No se ha mandado la 2026/1/142 a cliente@ejemplo.example: los correos de facturas aún están cerrados (los abre Julio).'])
+    expect(correos).toHaveLength(1)
+    // Demo sin buzón puesto: tampoco sale (el destino fijo no existe), y se dice.
+    const sinBuzon = tablas([factura('f3', '2026/1/143', { email_to: 'cliente@ejemplo.example' })])
+    const h = herramientas('')
+    const r3 = await rematarFacturasDeRecibos(baseFalsa(sinBuzon, { demo: true }).db, EMPRESA, { ...h, correo: { ...h.correo, buzonDePruebas: undefined } })
+    expect(r3.enviadas).toBe(0)
+    expect(correos).toHaveLength(1)
+  })
+
+  it('nº 53 · «Enviar por correo» a mano (sin la excepción) sigue pasando por el freno, también en la demo', async () => {
+    const fetchFalso = vi.fn()
+    vi.stubGlobal('fetch', fetchFalso)
+    const t = tablas([factura('f1', '2026/1/141', { pdf_path: 'x.pdf' })])
+    const r = await enviarFacturaVenta(baseFalsa(t, { demo: true }).db, t.customer_invoice[0] as never, 'cliente@ejemplo.example', 'Persona Prueba',
+      { resendKey: 'clave-de-prueba', buzonDePruebas: 'buzon@pruebas.example', abiertos: '' })
+    expect(r.enviado).toBe(false)
+    expect(r.texto).toBe('No se ha mandado la 2026/1/141 a buzon@pruebas.example: los correos de facturas aún están cerrados (los abre Julio).')
+    expect(fetchFalso).not.toHaveBeenCalled()
   })
 })
