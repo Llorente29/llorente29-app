@@ -31,6 +31,14 @@
 //   · archivos       los enlaces firmados de las facturas de un año (el ZIP lo
 //                    hace la pantalla).
 //   · seguir         en qué ha quedado lo pedido a GoCardless o a Stripe, al volver.
+//                    Al quedar hecho (T4), se remata con lo de Code 1 (#534):
+//                    un devuelto pagado se apunta (conta_recibo_pagado_portal,
+//                    y su frase sale en pantalla tal cual) y una cuenta nueva se
+//                    guarda en el cobro (conta-cobro «cambiar_cuenta», que
+//                    cancela la vieja). Cada remate queda en la operación
+//                    (detalle.apunte / detalle.cambio) y no se repite. En
+//                    producción, apagado hasta que Code 1 confirme que está
+//                    desplegado (REMATAR_EN_PRODUCCION).
 //
 // GoCardless, por la puerta de las demos (_shared/puerta.ts y
 // puertaDePruebas.ts) y como conta-cobro: SOLO con una conexión de pruebas
@@ -56,6 +64,9 @@ import { enlaceParaEntrar, mandar, marcaDe, portalBase } from '../_shared/portal
 
 /** Mientras Julio no lo encienda, el portal solo escribe en GoCardless con una conexión de pruebas. */
 const ESCRIBIR_EN_REAL = false
+/** Code 1 (nº 10): no llamar a conta_recibo_pagado_portal ni a conta-cobro «cambiar_cuenta» en producción hasta que confirme el despliegue. */
+const REMATAR_EN_PRODUCCION = false
+const PRODUCCION = 'xzmpnchlguibclvxyynt'
 const SOLO_PRUEBAS = 'Por ahora esto solo funciona en la demo: con el banco de cobros de verdad aún no está encendido.'
 
 const URL_BASE = Deno.env.get('SUPABASE_URL')!
@@ -402,9 +413,12 @@ async function seguir(yo: Sb, srv: Sb, b: Fila) {
   const id = uuid(b.operacion)
   if (!id) return json(400, { ok: false, frase: 'Falta qué seguir.' })
   // Con su sesión: la RLS solo le deja ver las de su cliente.
-  const { data: op } = await yo.from('conta_portal_operacion').select('id, account_id, company_id, tipo, estado, externo_id').eq('id', id).maybeSingle()
+  const { data: op } = await yo.from('conta_portal_operacion').select('id, account_id, company_id, party_id, recibo_id, tipo, estado, externo_id, importe_cent, mandato_nuevo, detalle, creada_por_name').eq('id', id).maybeSingle()
   if (!op) return mal('Eso no es tuyo o ya no está.')
-  if (op.estado === 'hecha') return json(200, { ok: true, estado: 'hecha', frase: op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Gracias.' })
+  if (op.estado === 'hecha') {
+    const r = await rematar(srv, op)
+    return json(200, { ok: true, estado: 'hecha', frase: r ?? (op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Gracias.') })
+  }
   if (!op.externo_id || op.tipo === 'reintentar') return json(200, { ok: true, estado: op.estado, frase: 'Aún no ha terminado.' })
   if (op.tipo === 'pagar_tarjeta') return await seguirTarjeta(srv, op)
   const c = await conexion(srv, op.account_id, op.company_id)
@@ -412,12 +426,14 @@ async function seguir(yo: Sb, srv: Sb, b: Fila) {
   const r = await gc(c, peticionLeer(op.externo_id))
   if (r.status >= 300) return mal(fraseError(r.status, r.j, op.tipo === 'cambiar_cuenta' ? 'cambiar' : 'pagar'))
   const l = leerPeticion(r.j)
+  const detalle = { ...((op.detalle as Fila) ?? {}), pago: l.pago, mandato: l.mandato }
   await srv.from('conta_portal_operacion').update({
-    estado: l.estado, mandato_nuevo: l.mandato, detalle: { pago: l.pago, mandato: l.mandato }, updated_at: new Date().toISOString(),
+    estado: l.estado, mandato_nuevo: l.mandato, detalle, updated_at: new Date().toISOString(),
     ...(l.estado === 'hecha' ? { hecha_at: new Date().toISOString() } : {}),
   }).eq('id', op.id)
+  const remate = l.estado === 'hecha' ? await rematar(srv, { ...op, estado: 'hecha', mandato_nuevo: l.mandato, detalle }) : null
   const frase = l.estado === 'hecha'
-    ? (op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Tu gestoría ya lo tiene.')
+    ? remate ?? (op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Tu gestoría ya lo tiene.')
     : l.estado === 'esperando' ? 'Tu banco aún lo está confirmando. Te avisamos cuando termine.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'Tu banco no lo ha aceptado. Prueba de nuevo o escribe a tu gestoría.'
   return json(200, { ok: true, estado: l.estado, frase })
@@ -473,8 +489,58 @@ async function seguirTarjeta(srv: Sb, op: Fila) {
   if (!s.ok) return mal('No se ha podido saber cómo ha ido el pago. Prueba en unos minutos.')
   const l = leerSesionStripe(s.datos)
   await srv.from('conta_portal_operacion').update({ estado: l.estado, updated_at: new Date().toISOString(), ...(l.estado === 'hecha' ? { hecha_at: new Date().toISOString() } : {}) }).eq('id', op.id)
-  return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? 'Pagado. Tu gestoría ya lo tiene.'
+  const remate = l.estado === 'hecha' ? await rematar(srv, { ...op, estado: 'hecha' }) : null
+  return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? remate ?? 'Pagado. Tu gestoría ya lo tiene.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'El pago aún se está confirmando. Te avisamos cuando termine.' })
+}
+
+// ── El remate de Code 1 (#534), una vez por operación ─────────────────────────
+
+/**
+ * Un devuelto pagado: se apunta con conta_recibo_pagado_portal (su frase, tal
+ * cual). Una cuenta nueva: conta-cobro «cambiar_cuenta». Lo hecho queda en
+ * detalle.apunte o detalle.cambio y no se repite; si falla, se vuelve a probar
+ * en el siguiente «seguir». Devuelve la frase para la pantalla, o null.
+ */
+async function rematar(srv: Sb, op: Fila): Promise<string | null> {
+  const d = ((op.detalle as Fila) ?? {}) as Fila
+  if (URL_BASE.includes(PRODUCCION) && !REMATAR_EN_PRODUCCION) return null
+  const guardar = (extra: Fila) => srv.from('conta_portal_operacion').update({ detalle: { ...d, ...extra }, updated_at: new Date().toISOString() }).eq('id', op.id)
+  try {
+    if (op.tipo === 'pagar_banco' || op.tipo === 'pagar_tarjeta') {
+      if (d.apunte) return String((d.apunte as Fila).frase ?? '') || null
+      const referencia = op.tipo === 'pagar_banco' ? String(d.pago ?? op.externo_id ?? '') : String(op.externo_id ?? '')
+      if (!op.recibo_id || !referencia || !op.importe_cent) return null
+      const { data, error } = await srv.rpc('conta_recibo_pagado_portal', {
+        p_recibo: op.recibo_id, p_via: op.tipo === 'pagar_banco' ? 'banco' : 'tarjeta', p_importe: Number(op.importe_cent) / 100, p_referencia: referencia,
+      })
+      if (error) { await guardar({ apunte_error: error.message.slice(0, 300) }); console.error('[conta-portal] apunte', error.message); return null }
+      const r = (data ?? {}) as Fila
+      await guardar({ apunte: r, apunte_error: null })
+      return typeof r.frase === 'string' && r.frase ? r.frase : null
+    }
+    if (op.tipo === 'cambiar_cuenta') {
+      if (d.cambio) return 'Listo: tus recibos se cargarán en tu cuenta nueva.'
+      const mandato = String(op.mandato_nuevo ?? d.mandato ?? '')
+      if (!mandato || !op.company_id) return null
+      const r = await fetch(`${URL_BASE}/functions/v1/conta-cobro`, {
+        method: 'POST', headers: { Authorization: `Bearer ${SERVICIO}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'cambiar_cuenta', empresa: op.company_id, cliente: op.party_id, mandato, quien: `${String(op.creada_por_name ?? 'El cliente')}, desde el portal`.slice(0, 120) }),
+      })
+      const j = await r.json().catch(() => ({})) as Fila
+      if (!r.ok || j.ok !== true) {
+        await guardar({ cambio_error: `${r.status} ${String(j.error ?? '')}`.slice(0, 300) })
+        console.error('[conta-portal] cambiar_cuenta', r.status)
+        // 409: la domiciliación nueva aún no está activa en el banco. Se vuelve a mirar después.
+        return r.status === 409 ? 'Tu banco aún está activando la cuenta nueva. Mientras, los recibos siguen en la de antes.' : null
+      }
+      await guardar({ cambio: j, cambio_error: null })
+      return 'Listo: tus recibos se cargarán en tu cuenta nueva.'
+    }
+  } catch (x) {
+    console.error('[conta-portal] remate', x instanceof Error ? x.message : String(x))
+  }
+  return null
 }
 
 // ── Las facturas de un año, para el ZIP ──────────────────────────────────────

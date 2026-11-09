@@ -406,3 +406,8 @@ verify_jwt = false
 # sesión de la persona: cada acción pregunta antes a la base con esa sesión.
 [functions.conta-portal]
 verify_jwt = true
+
+# GP · T4 (09/11) · Los avisos por correo del portal. La despierta el cron
+# «portal-avisos» con x-cron-secret (o el servidor con la clave de servicio).
+[functions.conta-portal-avisos]
+verify_jwt = false

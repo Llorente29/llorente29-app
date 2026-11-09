@@ -51,10 +51,12 @@ export interface Envio {
   correo: Correo
   plantilla: string
   marca: MarcaGestoria
-  aviso: { tipo: 'invitacion' | 'enlace' | 'firma'; clave: string }
+  aviso: { tipo: 'invitacion' | 'enlace' | 'firma' | 'factura' | 'recibo_proximo' | 'devuelto' | 'mensaje' | 'peticion'; clave: string }
+  /** Los avisos (T4): con el freno cerrado no se apunta nada, para que salgan cuando Julio lo abra. */
+  esperarSiCerrado?: boolean
 }
 
-export type Resultado = { enviado: true; demo: boolean; para: string } | { enviado: false; demo: boolean; porque: string }
+export type Resultado = { enviado: true; demo: boolean; para: string } | { enviado: false; demo: boolean; porque: string; espera?: boolean }
 
 /** Manda un correo del portal por la puerta y el freno, y lo apunta. */
 export async function mandar(srv: Srv, e: Envio): Promise<Resultado> {
@@ -71,6 +73,7 @@ export async function mandar(srv: Srv, e: Envio): Promise<Resultado> {
   const cerrojo = cerrojoMarca(MARCAS.sumied, e.plantilla, para, Deno.env.get('CORREO_MARCA_ABIERTOS'))
   if (!cerrojo.abierto) {
     const porque = 'Los correos del portal aún están cerrados (los abre Julio).'
+    if (e.esperarSiCerrado) return { enviado: false, demo, porque, espera: true }
     await apuntar('no_enviado', porque, e.para)
     return { enviado: false, demo, porque }
   }
