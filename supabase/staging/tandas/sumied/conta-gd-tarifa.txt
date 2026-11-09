@@ -1,0 +1,5 @@
+# GD · La tarifa de «Gestoría Demo»: la 1130 y su prueba (ROLLBACK), que monta en
+# la Gestoría Demo de staging lo que deja la importación y siembra dos veces
+# (la segunda deja lo mismo), y prueba la vuelta atrás.
+supabase/migrations/20261109T1130_gd_tarifa_demo.sql
+supabase/staging/sql/20261109_gd_tarifa_demo_prueba.sql

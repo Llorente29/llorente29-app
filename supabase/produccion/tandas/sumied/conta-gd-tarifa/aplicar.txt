@@ -1,0 +1,16 @@
+# GD · La tarifa de «Gestoría Demo». Rama conta/gd-tarifa. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1130  Añade demo_gestoria_tarifa_sembrar(cuenta) (solo cuentas demo, solo la
+#         plataforma) y la llama para «Gestoría Demo». CAMBIA DATOS, solo de la
+#         cuenta demo: siembra su tarifa por las funciones del G04 (niveles,
+#         precios especiales, laboral, impuesto de sociedades, nóminas por
+#         tramos, el paquete y las cuotas de la autónoma), pone a cada línea de
+#         la gestoría mensual su nivel y junta en uno los 7 servicios
+#         «IMPUESTO DE SOCIEDADES <cliente>» de la primera importación. Se puede
+#         repetir (es la mitad de Sumied de «Volver a empezar»).
+#
+# No toca ninguna otra cuenta (cada consulta lleva la de la demo). Nada en el
+# camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-tarifa-demo.sql
+supabase/migrations/20261109T1130_gd_tarifa_demo.sql

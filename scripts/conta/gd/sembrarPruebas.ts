@@ -205,7 +205,8 @@ async function sembrarGoCardless() {
       given: c.gc.escenario === 'normal' ? c.contacto.nombre : c.gc.escenario, family: c.contacto.apellidos })
     if (c.gc.mensual) { await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(c.nombre)}`, c.gc.mensual); subs++ }
     for (const t of c.gc.trabajadores) { await suscripcion(mandato, sello, `GESTION LABORAL ${MAYUS(t)}`, 25); subs++ }
-    if (c.gc.anual) { await suscripcion(mandato, sello, `IMPUESTO DE SOCIEDADES ${MAYUS(c.nombre)}`, 300, true); subs++ }
+    // Con el mismo nombre en todos, la importación lo convierte en UN servicio (con el cliente detrás, sería uno por cliente).
+    if (c.gc.anual) { await suscripcion(mandato, sello, 'IMPUESTO DE SOCIEDADES', 300, true); subs++ }
     if (c.gc.suelto) {
       await gc('POST', '/payments', { payments: { amount: euros(c.gc.suelto), currency: 'EUR', description: 'Asesoría puntual', links: { mandate: mandato } } }, `${sello}-pm`)
       sueltos++
