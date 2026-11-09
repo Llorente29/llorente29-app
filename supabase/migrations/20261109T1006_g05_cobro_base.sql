@@ -216,21 +216,36 @@ begin
   return v_id;
 end $$;
 
-/** El código de un cliente en su empresa (el suyo, o el siguiente libre) y su subcuenta 430 + código, enlazada al cliente. */
+/**
+ * La subcuenta 430 de un cliente en su empresa. Si ya tiene una enlazada (la de
+ * siempre, de la V01 o de un traspaso), esa. Si no, su código (el suyo, o el
+ * siguiente libre) y la subcuenta prefijo + código (cliente 827 → 43000827),
+ * saltando los códigos cuya subcuenta ya existe (es de otro tercero), enlazada
+ * al cliente.
+ */
 create or replace function public._conta_cobro_cuenta_cliente(p_company uuid, p_party uuid, p_quien text)
 returns text language plpgsql security definer set search_path = public as $$
-declare v_aj jsonb := public._conta_cobro_ajustes(p_company); v_cod int; v_d int; v_code text; v_nombre text; v_id uuid;
+declare v_aj jsonb := public._conta_cobro_ajustes(p_company); v_cod int; v_d int; v_code text; v_nombre text; v_id uuid; v_pre text;
 begin
+  select a.code into v_code from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+   where k.company_id = p_company and k.entity = 'customer' and k.entity_id = p_party::text and k.role = 'principal' limit 1;
+  if v_code is not null then return v_code; end if;
+  v_pre := v_aj->>'prefijo_cliente';
+  select length(a.code) into v_d from public.company_account a where a.company_id = p_company limit 1;
+  v_d := coalesce(v_d, 8);
+  perform pg_advisory_xact_lock(hashtext('conta_cobro_codigo:' || p_company::text));
   select codigo_cliente into v_cod from public.conta_cobro_cliente where company_id = p_company and party_id = p_party for update;
   if v_cod is null then
-    perform pg_advisory_xact_lock(hashtext('conta_cobro_codigo:' || p_company::text));
     select coalesce(max(codigo_cliente), 0) + 1 into v_cod from public.conta_cobro_cliente where company_id = p_company;
+    while exists (select 1 from public.company_account where company_id = p_company and code = v_pre || lpad(v_cod::text, v_d - length(v_pre), '0'))
+       or exists (select 1 from public.conta_cobro_cliente where company_id = p_company and codigo_cliente = v_cod) loop
+      v_cod := v_cod + 1;
+    end loop;
     insert into public.conta_cobro_cliente (company_id, party_id, account_id, codigo_cliente, updated_by_name)
     values (p_company, p_party, (select account_id from public.company where id = p_company), v_cod, p_quien)
     on conflict (company_id, party_id) do update set codigo_cliente = excluded.codigo_cliente where public.conta_cobro_cliente.codigo_cliente is null;
   end if;
-  select length(a.code) into v_d from public.company_account a where a.company_id = p_company limit 1;
-  v_code := (v_aj->>'prefijo_cliente') || lpad(v_cod::text, coalesce(v_d, 8) - length(v_aj->>'prefijo_cliente'), '0');
+  v_code := v_pre || lpad(v_cod::text, v_d - length(v_pre), '0');
   select name into v_nombre from public.party where id = p_party;
   v_id := public._conta_cobro_cuenta(p_company, v_code, coalesce(v_nombre, 'Cliente'), p_quien);
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)

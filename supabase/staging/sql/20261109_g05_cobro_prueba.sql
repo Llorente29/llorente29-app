@@ -74,6 +74,8 @@ begin
   insert into _g values ('c1', r->>'party_id');
   r := public.party_save_customer(v_acc, null, 'Cliente Prueba G05 Dos', '00000000T', '{}'::jsonb, 'Prueba G05');
   insert into _g values ('c2', r->>'party_id');
+  r := public.party_save_customer(v_acc, null, 'Cliente Prueba G05 Otro', null, '{}'::jsonb, 'Prueba G05');
+  insert into _g values ('c3', r->>'party_id');
 end $$;
 reset role;
 do $$
@@ -104,6 +106,15 @@ begin
   exception when check_violation then null; end;
   if public._conta_cobro_ajustes(v_e)->>'cuenta_plataforma' <> '57200002' or (public._conta_cobro_ajustes(v_e)->>'retencion_pct')::numeric <> 0 then
     raise exception 'G05 · 2: sin ajustes no salen los de QBO: %.', public._conta_cobro_ajustes(v_e);
+  end if;
+  -- Como en staging: la 43000001 (la del primer código libre) ya es de otro cliente.
+  if not exists (select 1 from public.company_account where company_id = v_e and code = '43000001') then
+    perform public._conta_cobro_cuenta(v_e, '43000001', 'Cliente Prueba G05 Otro', 'Prueba G05');
+  end if;
+  if not exists (select 1 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
+                  where k.company_id = v_e and a.code = '43000001' and k.entity = 'customer') then
+    insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+    values (v_acc, v_e, (select id from public.company_account where company_id = v_e and code = '43000001'), 'customer', (select v from _g where clave = 'c3'), 'principal', 'manual');
   end if;
   delete from public.invoice_series where company_id = v_e and code = '1';
   insert into public.invoice_series (account_id, company_id, code, name, doc_type, digits, reset_yearly, starts_at, is_default, is_active, formato)
@@ -244,6 +255,7 @@ begin
   end if;
   select a.code into v_430 from public.company_account_link k join public.company_account a on a.id = k.company_account_id
    where k.company_id = v_e and k.entity = 'customer' and k.entity_id = v_r.party_id::text and k.role = 'principal';
+  if v_430 is null or v_430 = '43000001' then raise exception 'G05 · 6: el Uno ha cogido la 430 de otro cliente (%).', v_430; end if;
   -- El del cobro: 57200002 al debe y la 430 del cliente al haber, con la fecha del cobro y «nº de factura-nombre».
   select e.entry_date, e.concept, e.status into v_cobro from public.journal_entry e where e.id = v_r.asiento_cobro;
   select string_agg(a.code || ' ' || l.debit || '/' || l.credit || ' «' || coalesce(l.concept, '') || '»', ', ' order by a.code) into v_mal
