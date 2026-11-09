@@ -1,0 +1,8 @@
+{
+ "_que": "GB · nº 9, punto 1 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 21:43Z. La 2235 crea conta_bitrix_pestana_cambio, conta_bitrix_pestana_hacer(text,text,text,text,text,jsonb) y conta_bitrix_pestana_bitrix(uuid,jsonb), que no existen, y no las llama: no cambia datos. Las dos que llama, conta_gestoria_alta_empleado(uuid,uuid,uuid,text,date) y conta_gestoria_baja_linea(uuid,date), existen. La demo de000000-…-a0 tiene en su mapa la «Cuota mensual» (UF_CRM_CUOTA_MENSUAL). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T21:43Z",
+ "tanda": {
+  "supabase/migrations/20261109T2235_gb_pestana_alta_baja.sql": "609b344860987a3aaae04ed1132493e0"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

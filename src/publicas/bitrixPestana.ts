@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { FRASE_DE, leerAlmohadilla, modeloPestana, type Estado, type Pestana } from './bitrixPestanaModelo'
+import { FRASE_DE, leerAlmohadilla, modeloPestana, nombreDelMes, reciboPrevisto, type Cambio, type Estado, type Pestana } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -30,6 +30,15 @@ function h(etiqueta: string, atributos: Record<string, string> = {}, ...hijos: H
 }
 
 const raiz = () => document.getElementById('pestana')!
+
+/** nº 9 · Lo de esta apertura: la ficha (para «hacer»), lo leído, el formulario abierto y lo último hecho. */
+const vista: {
+  ficha: { a: string; p: string; t: string; id: string } | null
+  r: Record<string, unknown> | null
+  abierto: null | { tipo: 'alta' } | { tipo: 'baja'; linea: string; nombre: string }
+  hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal' }
+  guardando: boolean
+} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false }
 
 function cabeza(texto: string, chip?: { texto: string; tono: string }): HTMLElement {
   return h('div', { class: 'cabeza' }, h('span', { class: 'logo' }, 'Sumied'), h('span', { class: 'cabeza-texto' }, texto),
@@ -52,11 +61,16 @@ function pintar(p: Pestana) {
   for (const s of p.servicios) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, s.detalle)), h('span', { class: 'derecha' }, s.importe)))
   for (const s of p.sueltos) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, 'Trabajo suelto')), h('span', { class: 'derecha' }, s.importe)))
 
-  const trabajadores = h('section', { class: 'bloque', 'aria-labelledby': 'gb-trab' }, h('h2', { id: 'gb-trab' }, `Trabajadores · ${p.trabajadores.length}`))
+  const trabajadores = h('section', { class: 'bloque', 'aria-labelledby': 'gb-trab' },
+    h('div', { class: 'titulo-con-boton' }, h('h2', { id: 'gb-trab' }, `Trabajadores · ${p.trabajadores.length}`),
+      p.serviciosPorTrabajador.length && !vista.abierto ? boton('+ Dar de alta', 'primario', () => abrir_({ tipo: 'alta' })) : null))
+  if (vista.abierto) trabajadores.append(formulario(p))
   if (!p.trabajadores.length) trabajadores.append(h('div', { class: 'vacio' }, 'No tiene trabajadores en Sumied.'))
   const A_LA_VISTA = 8
   for (const t of p.trabajadores.slice(0, A_LA_VISTA)) {
-    trabajadores.append(h('div', { class: 'fila' }, h('span', {}, t.nombre, ' ', h('span', { class: 'pequeno' }, `· ${t.desde.toLowerCase()}`)), h('span', { class: 'derecha' }, t.importe ?? '')))
+    trabajadores.append(h('div', { class: 'fila' }, h('span', {}, t.nombre, ' ', h('span', { class: 'pequeno' }, `· ${t.desde.toLowerCase()}`)),
+      h('span', { class: 'derecha con-enlace' }, t.importe ?? '',
+        t.lineaId && !vista.abierto ? enlaceBoton('Dar de baja', () => abrir_({ tipo: 'baja', linea: t.lineaId!, nombre: t.nombre })) : null)))
   }
   if (p.trabajadores.length > A_LA_VISTA) trabajadores.append(h('a', { href: enSumied, target: '_blank', rel: 'noopener' }, `Ver los ${p.trabajadores.length} en Sumied →`))
 
@@ -92,10 +106,99 @@ function pintar(p: Pestana) {
       h('div', { class: 'cliente' }, h('h1', {}, p.cliente),
         p.desde ? h('span', { class: 'pequeno' }, p.desde) : null,
         p.personaDeContacto ? h('span', { class: 'pequeno' }, '· Es una persona de contacto de este cliente') : null),
+      vista.hecho ? h('div', { class: 'aviso hecho', role: 'status', 'data-tono': vista.hecho.tono, 'data-prueba': 'hecho' },
+        h('b', {}, vista.hecho.titulo), h('div', {}, vista.hecho.texto), h('div', { class: 'pequeno-claro' }, vista.hecho.bitrix)) : null,
       p.aviso ? h('div', { class: 'aviso', role: 'status', 'data-tono': p.aviso.tono }, p.aviso.texto) : null,
       h('div', { class: 'rejilla' }, izquierda, derecha)))
   // Lo que mide la e2e: cuánto tarda en estar pintada desde que se abre (menos de 1 s).
   performance.mark('gb-pintada')
+}
+
+function boton(texto: string, tipo: 'primario' | 'normal', alPulsar: () => void, desactivado = false): HTMLElement {
+  const b = h('button', { type: 'button', class: `boton boton-${tipo}` }, texto) as HTMLButtonElement
+  b.disabled = desactivado
+  b.addEventListener('click', alPulsar)
+  return b
+}
+function enlaceBoton(texto: string, alPulsar: () => void): HTMLElement {
+  const b = h('button', { type: 'button', class: 'enlace' }, texto)
+  b.addEventListener('click', alPulsar)
+  return b
+}
+function abrir_(a: NonNullable<typeof vista.abierto>) { vista.abierto = a; vista.hecho = null; repintar() }
+function cerrar_() { vista.abierto = null; repintar() }
+function repintar() {
+  const m = vista.r ? modeloPestana(vista.r, hoyEnMadrid()) : null
+  if (m) pintar(m)
+}
+const mesDe = (hoy: string, mas: number) => { const a = Number(hoy.slice(0, 4)); const n = Number(hoy.slice(5, 7)) - 1 + mas; return `${a + Math.floor(n / 12)}-${String((n % 12) + 1).padStart(2, '0')}` }
+
+/** El formulario abierto (alta o baja), con el recibo nuevo antes de guardar. */
+function formulario(p: Pestana): HTMLElement {
+  const hoy = hoyEnMadrid()
+  const caja = h('form', { class: 'formulario', 'aria-label': vista.abierto?.tipo === 'alta' ? 'Alta de un trabajador' : 'Baja de un trabajador' })
+  const previsto = h('div', { class: 'previsto', role: 'status', 'data-prueba': 'previsto' })
+  const guardar = h('button', { type: 'submit', class: 'boton boton-primario' }, vista.abierto?.tipo === 'alta' ? 'Dar de alta' : 'Dar de baja') as HTMLButtonElement
+  let cambio: () => Cambio | null
+  if (vista.abierto?.tipo === 'alta') {
+    const nombre = h('input', { name: 'nombre', required: '', autocomplete: 'off' }) as HTMLInputElement
+    const servicio = h('select', { name: 'servicio' }, ...p.serviciosPorTrabajador.map((x) => h('option', { value: x.id }, x.nombre))) as HTMLSelectElement
+    // Como la ficha del G04: se cobra desde el mes que viene (o desde este).
+    const desde = h('select', { name: 'desde' }, ...[1, 0].map((n) => h('option', { value: `${mesDe(hoy, n)}-01` }, `${nombreDelMes(mesDe(hoy, n)).replace(/^./, (x) => x.toUpperCase())} de ${mesDe(hoy, n).slice(0, 4)}`))) as HTMLSelectElement
+    caja.append(h('div', { class: 'formulario-titulo' }, 'Alta de un trabajador'),
+      h('div', { class: 'campos' }, h('label', {}, 'Nombre y apellidos', nombre),
+        p.serviciosPorTrabajador.length > 1 ? h('label', {}, 'Servicio', servicio) : null,
+        h('label', {}, 'Se cobra desde', desde)))
+    cambio = () => nombre.value.trim() ? { accion: 'alta', servicio: servicio.value || p.serviciosPorTrabajador[0]?.id, nombre: nombre.value.trim(), desde: desde.value } : null
+    for (const x of [nombre, servicio, desde]) x.addEventListener('input', () => calcular())
+  } else {
+    const b = vista.abierto as { tipo: 'baja'; linea: string; nombre: string }
+    const mes = `${hoy.slice(0, 7)}-01`
+    caja.append(h('div', { class: 'formulario-titulo' }, `Baja de ${b.nombre}`),
+      h('div', { class: 'pequeno' }, `${nombreDelMes(hoy).replace(/^./, (x) => x.toUpperCase())} se cobra entero: es la regla de tu gestoría (mes entero). Deja de cobrarse desde ${nombreDelMes(mesDe(hoy, 1))}.`))
+    cambio = () => ({ accion: 'baja', linea: b.linea, mes })
+  }
+  function calcular() {
+    const c = cambio()
+    guardar.disabled = !c || vista.guardando
+    if (!c || !vista.r || !p.empresaId) { previsto.textContent = 'Escribe el nombre para ver el recibo nuevo.'; return }
+    const r = reciboPrevisto(vista.r, hoy, p.empresaId, c)
+    const porque = c.accion === 'alta'
+      ? `+1 trabajador: ${c.nombre.toUpperCase()}, se cobra desde ${nombreDelMes(c.desde)}.`
+      : `−1 trabajador: ${(vista.abierto as { nombre: string }).nombre}, deja de cobrarse desde ${nombreDelMes(mesDe(hoy, 1))}.`
+    previsto.replaceChildren(h('b', {}, r.frase), h('div', { class: 'pequeno' }, porque))
+  }
+  calcular()
+  caja.append(previsto, h('div', { class: 'botones' }, boton('Cancelar', 'normal', cerrar_), guardar))
+  caja.addEventListener('submit', (e) => { e.preventDefault(); const c = cambio(); if (c) void guardarCambio(c) })
+  return caja
+}
+
+/** Guardar: Sumied hace el cambio (con las funciones de la ficha) y la función actualiza Bitrix24. La pantalla dice lo que ha pasado (regla 8). */
+async function guardarCambio(c: Cambio) {
+  if (!vista.ficha || vista.guardando) return
+  vista.guardando = true
+  const datos = c.accion === 'alta'
+    ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nombre: c.nombre, desde: c.desde }
+    : { linea: c.linea, mes: c.mes }
+  let r: Record<string, unknown>
+  try { r = await llamar({ paso: 'hacer', ...vista.ficha, accion: c.accion, datos }) } catch { r = { estado: 'error' } }
+  vista.guardando = false
+  const nombre = c.accion === 'alta' ? c.nombre.toUpperCase() : (vista.abierto as { nombre?: string } | null)?.nombre ?? ''
+  if (r.estado === 'ok') {
+    const b = (r.bitrix ?? {}) as { hecho?: string; texto?: string }
+    vista.abierto = null
+    if (r.pestana && typeof r.pestana === 'object') vista.r = r.pestana as Record<string, unknown>
+    vista.hecho = {
+      titulo: c.accion === 'alta' ? `Alta hecha: ${nombre}` : `Baja hecha: ${nombre}`,
+      texto: String(r.frase ?? ''),
+      bitrix: b.hecho === 'escrito' ? `Bitrix24 actualizado: ${b.texto}` : String(b.texto ?? 'Bitrix24 no se ha tocado.'),
+      tono: b.hecho === 'choque' ? 'aviso' : 'bien',
+    }
+  } else {
+    vista.hecho = { titulo: c.accion === 'alta' ? 'No se ha dado de alta' : 'No se ha dado de baja', texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal' }
+  }
+  repintar()
 }
 
 /** El SDK de Bitrix24, sin esperar por él: para terminar la instalación y ajustar el alto de la pestaña. */
@@ -110,14 +213,15 @@ function conBitrix(hacer: (bx: { installFinish?: () => void; fitWindow?: () => v
   document.head.append(s)
 }
 
-async function leer(a: string, p: string, t: string, id: string): Promise<Record<string, unknown>> {
+async function llamar(cuerpo: Record<string, unknown>): Promise<Record<string, unknown>> {
   const r = await fetch(`${URL_BASE}/functions/v1/conta-bitrix-pestana`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...(CLAVE ? { apikey: CLAVE, Authorization: `Bearer ${CLAVE}` } : {}) },
-    body: JSON.stringify({ paso: 'leer', a, p, t, id }),
+    body: JSON.stringify(cuerpo),
   })
   return (await r.json().catch(() => ({ estado: 'error' }))) as Record<string, unknown>
 }
+const leer = (a: string, p: string, t: string, id: string) => llamar({ paso: 'leer', a, p, t, id })
 
 async function arrancar() {
   const x = leerAlmohadilla(window.location.hash)
@@ -143,6 +247,8 @@ async function arrancar() {
   try { r = await leer(x.a, x.p, x.t, x.id) } catch { r = { estado: 'error' } }
   const estado = String(r.estado ?? 'error') as Estado
   if (estado === 'ok') {
+    vista.ficha = { a: x.a, p: x.p, t: x.t, id: x.id }
+    vista.r = r
     const m = modeloPestana(r, hoyEnMadrid())
     if (m) pintar(m)
     else pintarMensaje('Sin datos en Sumied', 'Este cliente está enlazado, pero todavía no tiene nada en Clientes y cuotas.', 'sin_datos')

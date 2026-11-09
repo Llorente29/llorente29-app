@@ -11,6 +11,7 @@
 
 import { modeloFicha, type Tono } from '../modules/conta/gestoria/g04/modelo'
 import type { DatosClientes, DatosFicha, Fila } from '../modules/conta/gestoria/g04/datos'
+import { mesSiguiente, totalDelRecibo } from '../../supabase/functions/conta-bitrix-pestana/escribir'
 
 export type Estado = 'ok' | 'sin_acceso' | 'sin_enlazar' | 'portal_desconocido' | 'portal_no_permitido' | 'no_es_sumied' | 'ficha_rara' | 'varias_cuentas' | 'error'
 
@@ -53,7 +54,9 @@ export interface Pestana {
   totalRecibo: string
   servicios: { texto: string; detalle: string; importe: string }[]
   sueltos: { texto: string; importe: string }[]
-  trabajadores: { nombre: string; desde: string; importe: string | null }[]
+  trabajadores: { nombre: string; desde: string; importe: string | null; lineaId: string | null }[]
+  /** nº 9 · Los servicios de su empresa que se cobran por trabajador (para dar de alta). */
+  serviciosPorTrabajador: { id: string; nombre: string }[]
   mandato: { texto: string; tono: Tono } | null
   cobros: { fecha: string; importe: string; estado: string; tono: Tono }[]
   hayMasCobros: number
@@ -80,7 +83,7 @@ export function modeloPestana(r: Fila, hoy: string): Pestana | null {
     : f.aviso ? { texto: [f.aviso.titulo, f.aviso.texto].filter(Boolean).join('. '), tono: 'aviso' as Tono } : null
   const vistos = new Set<string>()
   const trabajadores = m.recibo.flatMap((l) => l.trabajadores).filter((t) => (vistos.has(t.nombre) ? false : (vistos.add(t.nombre), true)))
-    .map((t) => ({ nombre: t.nombre, desde: t.desde, importe: t.importe }))
+    .map((t) => ({ nombre: t.nombre, desde: t.desde, importe: t.importe, lineaId: t.lineaId }))
   return {
     cliente: String(r.cliente_nombre ?? f.nombre ?? 'Cliente'), clienteId, empresaId: f.empresaId ?? null,
     emisora: f.empresa ?? null, situacion, desde: m.clienteDesde, personaDeContacto: !!r.de_empresa, aviso,
@@ -90,6 +93,8 @@ export function modeloPestana(r: Fila, hoy: string): Pestana | null {
     servicios: m.servicios.map((s) => ({ texto: s.texto, detalle: s.detalle, importe: s.importe })),
     sueltos: m.sueltos,
     trabajadores,
+    serviciosPorTrabajador: d.servicios.filter((x) => String(x.company_id) === String(f.empresaId) && x.forma === 'por_empleado' && x.activo !== false)
+      .map((x) => ({ id: String(x.id), nombre: String(x.nombre) })),
     mandato: m.mandato,
     cobros: m.cobros.slice(0, COBROS_A_LA_VISTA), hayMasCobros: Math.max(0, m.cobros.length - COBROS_A_LA_VISTA),
     pendientes: m.pendientes.map((p) => ({ porque: p.porque || 'Sin detalle' })),
@@ -116,4 +121,37 @@ export const FRASE_DE: Record<Exclude<Estado, 'ok'>, string> = {
 export function leerAlmohadilla(hash: string): { a: string | null; p: string | null; t: string | null; id: string | null; instalar: string | null; que: string | null } {
   const h = new URLSearchParams(hash.replace(/^#/, ''))
   return { a: h.get('a'), p: h.get('p'), t: h.get('t'), id: h.get('id'), instalar: h.get('instalar'), que: h.get('que') }
+}
+
+// ── nº 9 · El recibo nuevo antes de guardar ─────────────────────────────────
+
+export type Cambio =
+  | { accion: 'alta'; servicio: string; nombre: string; desde: string }
+  | { accion: 'baja'; linea: string; mes: string }
+
+const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+export const nombreDelMes = (mes: string) => MES[Number(mes.slice(5, 7)) - 1] ?? mes
+
+/** Las asignaciones de Clientes como quedarían con el cambio (sin guardar nada). */
+function conElCambio(clientes: unknown, clienteId: string, empresaId: string, c: Cambio): Fila {
+  const d = objeto(clientes)
+  const asignaciones = filas(d.asignaciones)
+  if (c.accion === 'alta') {
+    return { ...d, asignaciones: [...asignaciones, { id: 'prevista', tipo: 'cuota', cliente_id: clienteId, empresa_id: empresaId, servicio_id: c.servicio,
+      nivel_id: null, paquete_id: null, empleado_nombre: c.nombre.trim().toUpperCase(), importe_propio: null, periodo: 'mes', desde: c.desde, hasta: null }] }
+  }
+  return { ...d, asignaciones: asignaciones.map((a) => (String(a.id).replace(/^linea:/, '') === c.linea ? { ...a, hasta: c.mes } : a)) }
+}
+
+/** «El recibo de diciembre pasa de 225,00 € a 250,00 € (+25,00 €)», con la misma cuenta que la ficha del G04. */
+export function reciboPrevisto(r: Fila, hoy: string, empresaId: string, c: Cambio): { mes: string; antes: number; despues: number; frase: string } {
+  const clienteId = String(r.cliente ?? '')
+  const mes = mesSiguiente(hoy)
+  const antes = totalDelRecibo(r.clientes, clienteId, empresaId, mes)
+  const despues = totalDelRecibo(conElCambio(r.clientes, clienteId, empresaId, c), clienteId, empresaId, mes)
+  const dif = despues - antes
+  const frase = dif === 0
+    ? `El recibo de ${nombreDelMes(mes)} no cambia: ${euros(antes)}.`
+    : `El recibo de ${nombreDelMes(mes)} pasa de ${euros(antes)} a ${euros(despues)} (${dif > 0 ? '+' : '−'}${euros(Math.abs(dif))}).`
+  return { mes, antes, despues, frase }
 }

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest'
 import { datosDeClientes, datosDeFicha, FRASE_DE, leerAlmohadilla, modeloPestana } from '@/publicas/bitrixPestanaModelo'
 import { modeloFicha } from '@/modules/conta/gestoria/g04/modelo'
 
+import { reciboPrevisto } from '@/publicas/bitrixPestanaModelo'
 import { clientes, ficha, Q, respuesta } from '../../../../e2e/conta/gb/respuesta'
 
 const HOY = '2026-11-09'
@@ -36,7 +37,8 @@ describe('GB · la pestaña dice lo mismo que la ficha de Sumied', () => {
     const p = modeloPestana(respuesta(), HOY)!
     expect(p.servicios.map((s) => [s.texto, s.importe])).toEqual([['Gestoría mensual', '60,50 €'], ['Gestión laboral', '435,60 €']])
     expect(p.trabajadores.length).toBe(18)
-    expect(p.trabajadores[0]).toEqual({ nombre: 'Persona Prueba 00', desde: 'Desde enero de 2024', importe: '24,20 €' })
+    expect(p.trabajadores[0]).toEqual({ nombre: 'Persona Prueba 00', desde: 'Desde enero de 2024', importe: '24,20 €', lineaId: 'w0' })
+    expect(p.serviciosPorTrabajador).toEqual([{ id: 'lab', nombre: 'Gestión laboral' }])
     expect(p.pendientes).toEqual([{ porque: 'GoCardless cobra 496,10 € y Sumied calcula otra cifra.' }])
   })
   it('un cliente con un recibo devuelto lo dice arriba', () => {
@@ -58,5 +60,20 @@ describe('GB · lo que llega detrás del «#» y las frases', () => {
   it('sin acceso, lo dice el encargo, palabra por palabra; y ningún código interno', () => {
     expect(FRASE_DE.sin_acceso).toBe('Pide acceso a Sumied a tu administrador.')
     for (const f of Object.values(FRASE_DE)) expect(f).not.toMatch(/_|rpc|jwt|token|uuid|placement/i)
+  })
+})
+
+describe('GB (nº 9) · el recibo nuevo antes de guardar, con la cuenta de la ficha del G04', () => {
+  it('un alta desde diciembre: +24,20 €', () => {
+    expect(reciboPrevisto(respuesta(), '2026-11-09', Q, { accion: 'alta', servicio: 'lab', nombre: 'Luis Prueba Soto', desde: '2026-12-01' }))
+      .toEqual({ mes: '2026-12', antes: 49610, despues: 52030, frase: 'El recibo de diciembre pasa de 496,10 € a 520,30 € (+24,20 €).' })
+  })
+  it('una baja en noviembre (noviembre se cobra entero): −24,20 € en diciembre', () => {
+    expect(reciboPrevisto(respuesta(), '2026-11-09', Q, { accion: 'baja', linea: 'w0', mes: '2026-11-01' }).frase)
+      .toBe('El recibo de diciembre pasa de 496,10 € a 471,90 € (−24,20 €).')
+  })
+  it('un alta desde enero no cambia el de diciembre', () => {
+    expect(reciboPrevisto(respuesta(), '2026-11-09', Q, { accion: 'alta', servicio: 'lab', nombre: 'X', desde: '2027-01-01' }).frase)
+      .toBe('El recibo de diciembre no cambia: 496,10 €.')
   })
 })

@@ -57,6 +57,25 @@
       .mensaje p { margin: 0; color: var(--texto); }
       .esqueleto { background: linear-gradient(90deg, #E9EDF3 0%, #F3F5F9 50%, #E9EDF3 100%); background-size: 200% 100%; animation: brillo 1.2s infinite; border-radius: 14px; }
       @keyframes brillo { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+      /* nº 9 · Trabajar desde la pestaña (maqueta EnCRM2.dc.html) */
+      .titulo-con-boton { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+      .titulo-con-boton h2 { margin: 0; }
+      .boton { border-radius: 10px; padding: 0 16px; height: 40px; font: 600 13px Inter, sans-serif; cursor: pointer; }
+      .boton-primario { border: 0; background: var(--azul); color: #fff; }
+      .boton-normal { border: 1px solid #CBD4E1; background: #fff; color: var(--tinta); }
+      .boton:disabled { opacity: .55; cursor: default; }
+      .enlace { border: 0; background: none; padding: 0; color: var(--azul); font: 600 13px Inter, sans-serif; cursor: pointer; }
+      .con-enlace { display: flex; gap: 12px; align-items: center; }
+      .formulario { border: 2px solid var(--azul); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: #F7F9FE; margin: 4px 0 8px; }
+      .formulario-titulo { font-size: 14px; font-weight: 700; }
+      .campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+      .campos label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--texto); }
+      .campos input, .campos select { height: 40px; border: 1px solid #CBD4E1; border-radius: 10px; padding: 0 12px; font: 500 14px Inter, sans-serif; background: #fff; color: var(--tinta); }
+      .previsto { background: #fff; border-radius: 10px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+      .botones { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+      .aviso.hecho { display: flex; flex-direction: column; gap: 4px; font-weight: 400; }
+      .aviso.hecho b { font-weight: 700; }
+      .pequeno-claro { font-size: 13px; opacity: .85; }
       @media (max-width: 760px) { .rejilla { grid-template-columns: minmax(0, 1fr); } .chip { margin-left: 0; } }
       @media (prefers-reduced-motion: reduce) { .esqueleto { animation: none; } }
     </style>
