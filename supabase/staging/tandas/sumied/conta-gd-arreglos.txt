@@ -1,0 +1,3 @@
+# GD · El banco de la demo termina en 56: la 1530 y su prueba (ROLLBACK).
+supabase/migrations/20261109T1530_gd_banco_demo.sql
+supabase/staging/sql/20261109_gd_banco_demo_prueba.sql

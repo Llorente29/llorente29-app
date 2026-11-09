@@ -113,8 +113,16 @@ export function loQueFalta(e: Eleccion): string[] {
   if (!e.nif) out.push('El NIF: ningún campo elegido.')
   if (!e.situacion) out.push('La situación del cliente: ningún campo elegido. Sin él no se guarda la situación de nadie.')
   if (!e.direcciones.some((d) => d.calle)) out.push('La dirección: ninguna fuente elegida.')
-  for (const c of e.cuotas) if (!c.codigo) out.push(`La cuota «${c.etiqueta}»: ningún campo elegido.`)
   return out
+}
+
+/**
+ * GD (Julio, nº32) · Las cuotas de referencia sin campo. No son una falta: solo
+ * sirven de referencia (Sumied no calcula con ellas), y un portal puede no
+ * tenerlas (el de pruebas solo tiene «Cuota mensual»). Se dicen aparte, sin rojo.
+ */
+export function cuotasSinCampo(e: Eleccion): string[] {
+  return e.cuotas.filter((c) => !c.codigo).map((c) => c.etiqueta)
 }
 
 /** Se puede confirmar con la situación elegida (lo demás que falte se avisa, pero no para). */

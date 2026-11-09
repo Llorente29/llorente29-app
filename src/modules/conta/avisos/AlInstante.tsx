@@ -22,7 +22,7 @@ import { direccionDelAviso, estadoAlInstante, pasosParaActivar, type DatosAlInst
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const BASE = (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ''
 
-export function AlInstante(p: { origen: 'crm'; crm: string; nombre: string } | { origen: 'gocardless'; empresa: string; nombre: string }) {
+export function AlInstante(p: ({ origen: 'crm'; crm: string; nombre: string } | { origen: 'gocardless'; empresa: string; nombre: string }) & { entorno?: 'real' | 'pruebas' }) {
   const { accountId } = useCuentaConta()
   const conexion: Conexion | null = !accountId ? null : p.origen === 'crm'
     ? { origen: 'crm', cuenta: accountId, crm: p.crm } : { origen: 'gocardless', cuenta: accountId, empresa: p.empresa }
@@ -88,7 +88,7 @@ export function AlInstante(p: { origen: 'crm'; crm: string; nombre: string } | {
       {abierto && (
         <div className="pg-dialogo-campos" data-prueba="al-instante-pasos" style={{ width: '100%' }}>
           <ol className="cxg-apoyo" style={{ paddingLeft: 20, margin: 0, display: 'grid', gap: 6 }}>
-            {pasosParaActivar(p.origen, nombreCorto).map((t) => <li key={t}>{t}</li>)}
+            {pasosParaActivar(p.origen, nombreCorto, p.entorno === 'pruebas').map((t) => <li key={t}>{t}</li>)}
           </ol>
           <div className="cxg-fila-campos" style={{ alignItems: 'flex-end' }}>
             <Campo etiqueta="La dirección de Sumied">{(x) => <Texto {...x} valor={direccion} alCambiar={() => undefined} readOnly spellCheck={false} />}</Campo>

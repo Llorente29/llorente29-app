@@ -54,6 +54,8 @@ export interface CuentaConta {
    * activa: con dos cuentas no se enseña el logo de la otra.
    */
   logoCuenta: string | null
+  /** GD · ¿Es una cuenta de demostración (accounts.is_demo)? Solo lee los sistemas de pruebas y no manda nada fuera. */
+  esDemo: boolean
 }
 
 /**
@@ -63,6 +65,11 @@ export interface CuentaConta {
 export function logoDe(cuenta: { id?: unknown; logo_url?: unknown } | null | undefined, activa: string | null): string | null {
   if (!cuenta || cuenta.id !== activa) return null
   return typeof cuenta.logo_url === 'string' && cuenta.logo_url.trim() !== '' ? cuenta.logo_url : null
+}
+
+/** GD · ¿Es una cuenta de demostración? La marca la pone solo el superadministrador (DM1). Pura. */
+export function esCuentaDemo(fila: object | null | undefined): boolean {
+  return (fila as { is_demo?: unknown } | null | undefined)?.is_demo === true
 }
 
 /** ¿Es una cuenta solo de contabilidad? La marca la tienen solo las que se dieron de alta así (C06). Pura. */
@@ -82,6 +89,7 @@ export function useCuentaConta(): CuentaConta {
     esAdmin: userProfile?.role === 'admin',
     soloContabilidad: esCuentaSoloContabilidad(account),
     logoCuenta: logoDe(account, activeAccountId),
+    esDemo: esCuentaDemo(account),
   }
 }
 

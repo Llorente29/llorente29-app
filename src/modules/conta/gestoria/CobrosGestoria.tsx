@@ -22,6 +22,7 @@ import type { MapaBitrix } from './queEsCadaCampo'
 import { CamposDeBitrix } from './CamposDeBitrix'
 import { UnionDeFichas } from './UnionDeFichas'
 import { AlInstante } from '@/modules/conta/avisos/AlInstante'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import type { DatosEnsayo } from './pdfUnion'
 import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
@@ -71,7 +72,10 @@ function Estado({ conectada, entorno }: { conectada: boolean; entorno: 'real' | 
 }
 
 function ConectarGc({ emisor, nombre, alConectar }: { emisor: string; nombre: string; alConectar: AccionesGestoria['conectarGc'] }) {
-  const [entorno, setEntorno] = useState<'real' | 'pruebas'>('real')
+  // GD · Una cuenta de demostración solo lee los sistemas de pruebas: el entorno sale ya en «pruebas».
+  const { esDemo } = useCuentaConta()
+  const [elegido, setEntorno] = useState<'real' | 'pruebas' | null>(null)
+  const entorno: 'real' | 'pruebas' = elegido ?? (esDemo ? 'pruebas' : 'real')
   const [token, setToken] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
@@ -133,7 +137,7 @@ export function TarjetaGocardless({ emisor, nombre, c, acciones }: { emisor: str
               alCambiar={(v) => void hacer(async () => { const f = await acciones.reintentos(emisor, v); setReintentos(v); return f })} />
           </div>
           <div><Boton onClick={() => void hacer(() => acciones.leerGc(emisor))} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
-          <AlInstante origen="gocardless" empresa={emisor} nombre={`GoCardless de ${nombre}`} />
+          <AlInstante origen="gocardless" empresa={emisor} nombre={`GoCardless de ${nombre}`} entorno={c?.entorno} />
         </div>
       )}
       <Aviso a={aviso} />
@@ -142,7 +146,10 @@ export function TarjetaGocardless({ emisor, nombre, c, acciones }: { emisor: str
 }
 
 export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; acciones: AccionesGestoria }) {
-  const [entorno, setEntorno] = useState<'real' | 'pruebas'>('real')
+  // GD · Una cuenta de demostración solo lee los sistemas de pruebas: el entorno sale ya en «pruebas».
+  const { esDemo } = useCuentaConta()
+  const [elegido, setEntorno] = useState<'real' | 'pruebas' | null>(null)
+  const entorno: 'real' | 'pruebas' = elegido ?? (esDemo ? 'pruebas' : 'real')
   const [url, setUrl] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
