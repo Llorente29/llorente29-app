@@ -262,8 +262,10 @@ try {
     await rotulo(E.page, 'Revisas solo lo que cambia. Lo demás, de una vez'); await E.page.waitForTimeout(3500)
     const preparar = E.page.getByRole('button', { name: 'Preparar el cobro' })
     if (MODO === 'grabar' && await preparar.isVisible().catch(() => false)) {
-      await E.R.clic(preparar); await E.page.getByText(/Lo que cambia|Con cambios/).first().waitFor({ timeout: 90_000 }).catch(() => {}); await E.page.waitForTimeout(2000)
+      // La barra de «Enviar el cobro» solo está con el cobro ya preparado («Lo que cambia» también sale en los pasos de arriba).
+      await E.R.clic(preparar); await E.page.locator('section.g5-barra').waitFor({ timeout: 180_000 }).catch(() => {}); await E.page.waitForTimeout(2000)
     }
+    if (!(await E.page.locator('section.g5-barra').isVisible().catch(() => false))) fallos.push('06: el cobro no está preparado (sin la barra de «Enviar el cobro»)')
     await E.captura()
     const cambios = E.page.locator('li.g5-cambio')
     const n = await cambios.count(); decir(`  · ${n} cambios`)
@@ -295,7 +297,8 @@ try {
   })
 
   // 7 · Cobrado y facturado: se espera a los avisos del sandbox fuera de cámara.
-  if (pedidas.includes('07') && MODO === 'grabar') {
+  if (pedidas.includes('07') && MODO === 'grabar' && !enviado) decir('\nSin cobro enviado en esta grabación: no se espera a las facturas.')
+  if (pedidas.includes('07') && MODO === 'grabar' && enviado) {
     decir('\nEsperando a que el sandbox confirme cobros y salgan facturas (hasta 25 min)…')
     const desde = Date.now()
     while (Date.now() - desde < 25 * 60_000) {
