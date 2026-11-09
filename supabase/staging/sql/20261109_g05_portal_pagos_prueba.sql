@@ -12,7 +12,10 @@
 --      clave de servicio):
 --        · otra cuenta no puede; sin referencia, con otro importe o con otra
 --          vía, no; un recibo que no está devuelto, no;
---        · el Dos con tarjeta: su factura (2026/1/142) y su cobro, el asiento
+--        · el Dos con tarjeta sin cuenta de Stripe en Ajustes (ninguna por
+--          defecto), con una de banco y con una de otro nombre: no se apunta
+--          nada y queda en «Pendiente de revisar» (una sola incidencia);
+--        · puesta la 57200003, el Dos con tarjeta: su factura (2026/1/142) y su cobro, el asiento
 --          57200003 / 430 (la 57200003 «Plataforma Stripe», creada con su
 --          apunte en el registro del plan); sale de «Te deben» (portal_tarjeta)
 --          y su historial lo dice; otra vez con la misma referencia, nada nuevo;
@@ -24,6 +27,8 @@
 --      enlace; un recibo siguiente sale contra el nuevo. Una persona no puede.
 --   5. La vuelta atrás de la 1822, y otra vez la 1822. La 57200003 que crea Sumied sin
 --      apuntes (la de la demo al aplicar) se va con su registro; con apuntes, se queda.
+--      Y, con la cuenta A de demostración, la 1822 deja la cuenta de Stripe de sus
+--      empresas con cobro en la 57200003 «Plataforma Stripe», creada con su registro.
 
 begin;
 do $$ begin
@@ -307,6 +312,11 @@ end $$;
 reset role;
 -- El portal, desde su servidor: las llamadas (lo que comprueban, fuera de ese papel, debajo).
 do $$ begin
+  -- Una lectura de clientes, para que la incidencia tenga dónde quedar (como en la demo y en QBO).
+  if not exists (select 1 from public.conta_gestoria_lectura where account_id = 'c01a0000-0000-4000-8000-00000000000a') then
+    insert into public.conta_gestoria_lectura (account_id, company_id, origen, entorno, por)
+    values ('c01a0000-0000-4000-8000-00000000000a', (select v::uuid from _g where clave = 'empresa'), 'gocardless', 'pruebas', 'persona');
+  end if;
   insert into _g select 'asientos_antes', count(*)::text from public.journal_entry where company_id = (select v::uuid from _g where clave = 'empresa');
   insert into public.conta_recibo (account_id, company_id, party_id, mes, clave, total_cent, cobrar_cent)
   values ('c01a0000-0000-4000-8000-00000000000a', (select v::uuid from _g where clave = 'empresa'), (select v::uuid from _g where clave = 'c1'), '2026-12',
@@ -327,7 +337,77 @@ begin
   v_err := null;
   begin perform public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.26, 'pi_PRUEBA1'); exception when check_violation then v_err := sqlerrm; end;
   if v_err is distinct from 'El recibo es de 30,25 € y el pago, de 30,26 €: no se apunta.' then raise exception 'G05 PORTAL · 3: otro importe dijo «%».', v_err; end if;
-  -- El Dos, devuelto antes de cobrarse, con tarjeta.
+  -- El Dos con tarjeta, y la empresa sin cuenta de Stripe en Ajustes (ninguna por defecto, nº 58): no se apunta, queda pendiente. Dos veces.
+  insert into _g values ('pend_sin', public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.25, 'pi_PRUEBA1')::text);
+  insert into _g values ('pend_sin_otra_vez', public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.25, 'pi_PRUEBA1')::text);
+end $$;
+reset role;
+do $$
+declare v_e uuid := (select v::uuid from _g where clave = 'empresa'); r jsonb := (select v::jsonb from _g where clave = 'pend_sin'); v_r2 uuid := (select v::uuid from _g where clave = 'r2');
+begin
+  if r->>'frase' is distinct from 'No se ha apuntado el pago del recibo de 2026-11 (30,25 €): falta la cuenta de Stripe en Ajustes. Queda en «Pendiente de revisar».'
+     or (r->>'apuntado')::boolean or r->>'motivo' <> 'sin_cuenta' then
+    raise exception 'G05 PORTAL · 3: sin cuenta de Stripe dijo %.', r;
+  end if;
+  if (select count(*) from public.conta_gestoria_diferencia where company_id = v_e and tipo = 'falta_cuenta_stripe' and vigente and datos->>'recibo' = v_r2::text) <> 1
+     or (select porque from public.conta_gestoria_diferencia where company_id = v_e and tipo = 'falta_cuenta_stripe' and vigente and datos->>'recibo' = v_r2::text)
+        not like 'Falta la cuenta de Stripe en Ajustes: el cliente pagó desde el portal con tarjeta o Bizum el recibo de 2026-11 (30,25 €, referencia pi_PRUEBA1)%' then
+    raise exception 'G05 PORTAL · 3: sin cuenta de Stripe, su incidencia en «Pendiente de revisar» no está (una sola).';
+  end if;
+  if exists (select 1 from public.company_account where company_id = v_e and code = '57200003') or exists (select 1 from public.conta_recibo_pago_portal where recibo_id = v_r2)
+     or exists (select 1 from public.conta_gc_cobro_otra_via where company_id = v_e and gc_id = 'PM0000G05DOS')
+     or (select invoice_id from public.conta_recibo where id = v_r2) is not null
+     or (select count(*) from public.journal_entry where company_id = v_e) <> (select v::int from _g where clave = 'asientos_antes') then
+    raise exception 'G05 PORTAL · 3: sin cuenta de Stripe se ha apuntado algo (subcuenta, pago, factura, asiento o «Te deben»).';
+  end if;
+  if not exists (select 1 from public.conta_recibo_evento where recibo_id = v_r2 and tipo = 'pago_portal_pendiente') then raise exception 'G05 PORTAL · 3: el historial del Dos no dice que está sin apuntar.'; end if;
+  -- La de Ajustes, una de banco (su 57200000, enlazada como la cuenta de un banco).
+  insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+  select x.account_id, x.company_id, x.id, 'bank_account', gen_random_uuid()::text, 'principal', 'manual' from public.company_account x where x.company_id = v_e and x.code = '57200000'
+  on conflict do nothing;
+  insert into public.conta_gestoria_ajustes (company_id, account_id, cuenta_stripe, updated_by_name) values (v_e, 'c01a0000-0000-4000-8000-00000000000a', '57200000', 'Prueba G05')
+  on conflict (company_id) do update set cuenta_stripe = excluded.cuenta_stripe;
+end $$;
+select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+set local role service_role;
+do $$ begin
+  insert into _g values ('pend_banco', public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.25, 'pi_PRUEBA1')::text);
+end $$;
+reset role;
+-- La de Ajustes, una que ya existe con otro nombre (la 57200002, «Plataforma GoCardless»).
+insert into public.conta_gestoria_ajustes (company_id, account_id, cuenta_stripe, updated_by_name) values ((select v::uuid from _g where clave = 'empresa'), 'c01a0000-0000-4000-8000-00000000000a', '57200002', 'Prueba G05')
+  on conflict (company_id) do update set cuenta_stripe = excluded.cuenta_stripe;
+select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+set local role service_role;
+do $$ begin
+  insert into _g values ('pend_nombre', public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.25, 'pi_PRUEBA1')::text);
+end $$;
+reset role;
+do $$
+declare r jsonb;
+begin
+  r := (select v::jsonb from _g where clave = 'pend_banco');
+  if r->>'motivo' is distinct from 'de_banco' or (r->>'apuntado')::boolean or r->>'frase' not like 'No se ha apuntado el pago del recibo de 2026-11 (30,25 €): la cuenta de Stripe de Ajustes (57200000) es la de un banco («%»). Queda en «Pendiente de revisar».' then
+    raise exception 'G05 PORTAL · 3: con una cuenta de banco dijo %.', r;
+  end if;
+  r := (select v::jsonb from _g where clave = 'pend_nombre');
+  if r->>'motivo' is distinct from 'otro_nombre' or (r->>'apuntado')::boolean or r->>'frase' not like 'No se ha apuntado el pago del recibo de 2026-11 (30,25 €): la cuenta de Stripe de Ajustes (57200002) ya existe como «%», no como «Plataforma Stripe». Queda en «Pendiente de revisar».' then
+    raise exception 'G05 PORTAL · 3: con una cuenta de otro nombre dijo %.', r;
+  end if;
+  if (select count(*) from public.conta_gestoria_diferencia where company_id = (select v::uuid from _g where clave = 'empresa') and tipo = 'falta_cuenta_stripe' and vigente) <> 1
+     or exists (select 1 from public.conta_recibo_pago_portal where recibo_id = (select v::uuid from _g where clave = 'r2')) then
+    raise exception 'G05 PORTAL · 3: con una cuenta que no vale se ha apuntado algo, o hay más de una incidencia vigente.';
+  end if;
+  -- Ya bien puesta: la 57200003, que aún no existe (se crea «Plataforma Stripe» con su registro).
+  insert into public.conta_gestoria_ajustes (company_id, account_id, cuenta_stripe, updated_by_name) values ((select v::uuid from _g where clave = 'empresa'), 'c01a0000-0000-4000-8000-00000000000a', '57200003', 'Prueba G05')
+  on conflict (company_id) do update set cuenta_stripe = excluded.cuenta_stripe;
+end $$;
+select set_config('request.jwt.claims', json_build_object('role', 'service_role')::text, true);
+set local role service_role;
+do $$
+declare r jsonb; v_err text;
+begin
+  -- El Dos, devuelto antes de cobrarse, con tarjeta: ahora sí.
   r := public.conta_recibo_pagado_portal((select v::uuid from _g where clave = 'r2'), 'tarjeta', 30.25, 'pi_PRUEBA1');
   insert into _g values ('pago_dos', r::text);
   -- Otra vez con la misma referencia; con otra, no.
@@ -370,6 +450,9 @@ begin
     raise exception 'G05 PORTAL · 3: el Dos sigue en «Te deben».';
   end if;
   if not exists (select 1 from public.conta_recibo_evento where recibo_id = v_r.id and tipo = 'pagado_portal') then raise exception 'G05 PORTAL · 3: el historial del Dos no lo dice.'; end if;
+  if exists (select 1 from public.conta_gestoria_diferencia where company_id = v_e and tipo = 'falta_cuenta_stripe' and vigente) or (r->>'apuntado')::boolean is not true then
+    raise exception 'G05 PORTAL · 3: apuntado el Dos, su incidencia de la cuenta de Stripe sigue en «Pendiente de revisar».';
+  end if;
   if ((select v::jsonb from _g where clave = 'pago_dos_otra_vez')->>'ya')::boolean is not true
      or (select count(*) from public.conta_recibo_pago_portal where recibo_id = v_r.id) <> 1 then
     raise exception 'G05 PORTAL · 3: repetir con la misma referencia ha duplicado algo.';
@@ -393,7 +476,7 @@ begin
     raise exception 'G05 PORTAL · 3: hay % asientos nuevos, y tenían que ser 3 (la factura y el cobro del Dos, y el cobro del Uno).',
       (select count(*) from public.journal_entry where company_id = v_e) - (select v::int from _g where clave = 'asientos_antes');
   end if;
-  raise notice 'G05 PORTAL · 3: el Dos con tarjeta (factura 2026/1/142, 57200003 / 430, la 57200003 con su registro) y el Uno desde el banco (57200002 / 430, sin otra factura); salen de «Te deben»; repetir no duplica; lo que no vale, no entra. OK';
+  raise notice 'G05 PORTAL · 3: con tarjeta y sin cuenta de Stripe, con una de banco o con una de otro nombre, no se apunta y queda en «Pendiente de revisar» (una sola); puesta la 57200003, el Dos con tarjeta (factura 2026/1/142, 57200003 / 430, la 57200003 con su registro) y el Uno desde el banco (57200002 / 430, sin otra factura); salen de «Te deben»; repetir no duplica; lo que no vale, no entra. OK';
 end $$;
 
 -- 4 · Cambiar de cuenta: solo el servidor; el recibo siguiente, contra la nueva.
@@ -455,6 +538,8 @@ do $$ declare v_t uuid := (select v::uuid from _g where clave = 'empresa_t'); v_
      or not exists (select 1 from public.company_account_log where company_id = v_t and que = 'subcuenta_creada' and code = '57200003') then
     raise exception 'G05 PORTAL · 5: la 57200003 de la empresa de prueba no se ha creado con su registro.';
   end if;
+  -- Sus ajustes del cobro, como la demo (con GoCardless): para la 1822 de después.
+  insert into public.conta_gestoria_ajustes (company_id, account_id, cuenta_plataforma, updated_by_name) values (v_t, 'c01a0000-0000-4000-8000-00000000000a', '57200002', 'Prueba G05');
   update public.company_account set created_by_name = 'Sumied' where company_id = v_e and code = '57200003';
   update public.company_account_log set done_by_name = 'Sumied' where company_id = v_e and que = 'subcuenta_creada' and code = '57200003';
 end $$;
@@ -472,11 +557,31 @@ end $$;
 do $$ begin
   if to_regprocedure('public.conta_recibo_pagado_portal(uuid,text,numeric,text)') is not null or to_regclass('public.conta_recibo_pago_portal') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gestoria_ajustes' and column_name = 'cuenta_stripe')
-     or pg_get_constraintdef((select oid from pg_constraint where conname = 'conta_gc_cobro_otra_via_via_check')) like '%portal%' then
+     or pg_get_constraintdef((select oid from pg_constraint where conname = 'conta_gc_cobro_otra_via_via_check')) like '%portal%'
+     or pg_get_constraintdef((select oid from pg_constraint where conname = 'conta_gestoria_diferencia_tipo_check')) like '%falta_cuenta_stripe%'
+     or to_regprocedure('public._conta_cobro_stripe_no_vale(uuid,text)') is not null then
     raise exception 'G05 PORTAL · 5: la vuelta atrás de la 1822 no la quita.';
   end if;
 end $$;
+-- Otra vez la 1822, ahora con la cuenta A de demostración (como Gestoría Demo, S.L.): deja la cuenta de
+-- Stripe puesta en la 57200003 «Plataforma Stripe» en sus empresas con cobro, creada con su registro.
+reset role;
+select set_config('request.jwt.claims', '', true);
+select set_config('request.jwt.claim.sub', '', true);
+update public.accounts set is_demo = true where id = 'c01a0000-0000-4000-8000-00000000000a';
 \i supabase/migrations/20261109T1822_g05_portal_pagos.sql
-\echo 'G05 PORTAL · 5: la vuelta atrás de la 1822 (fuera la 57200003 sin apuntes con su registro; la que tiene apuntes se queda), y otra vez la 1822. OK'
+do $$ declare v_t uuid := (select v::uuid from _g where clave = 'empresa_t'); v_e uuid := (select v::uuid from _g where clave = 'empresa'); begin
+  -- La que cobra con GoCardless (cuenta_plataforma puesta, como Gestoría Demo, S.L.), en la 57200003; la otra
+  -- (sus ajustes los puso esta prueba sin GoCardless, como la otra demo de producción), sin ninguna.
+  if (select cuenta_stripe from public.conta_gestoria_ajustes where company_id = v_t) is distinct from '57200003'
+     or (select cuenta_stripe from public.conta_gestoria_ajustes where company_id = v_e) is not null then
+    raise exception 'G05 PORTAL · 5: en la demo, la cuenta de Stripe no queda puesta en la 57200003 (solo en la empresa con cobro).';
+  end if;
+  if (select name from public.company_account where company_id = v_t and code = '57200003') is distinct from 'Plataforma Stripe'
+     or (select count(*) from public.company_account_log where company_id = v_t and que = 'subcuenta_creada' and code = '57200003') <> 1 then
+    raise exception 'G05 PORTAL · 5: en la demo, la 57200003 no se crea «Plataforma Stripe» con su apunte en el registro del plan.';
+  end if;
+end $$;
+\echo 'G05 PORTAL · 5: la vuelta atrás de la 1822 (fuera la 57200003 sin apuntes con su registro; la que tiene apuntes se queda), y otra vez la 1822, en la demo con la cuenta de Stripe en la 57200003. OK'
 
 rollback;

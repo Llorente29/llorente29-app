@@ -1,15 +1,21 @@
 -- supabase/migrations/20261109T1822_g05_portal_pagos.sql
 -- cambia: public.conta_gc_cobro_otra_via · prueba: supabase/staging/sql/20261109_g05_portal_pagos_prueba.sql
+-- cambia: public.conta_gestoria_diferencia · prueba: supabase/staging/sql/20261109_g05_portal_pagos_prueba.sql
 --
 -- G05 · LO QUE EL CLIENTE HACE DESDE EL PORTAL Y TOCA EL COBRO (Julio, nº 54 y
 -- nº 55; lo llama Code 3 con la clave de servicio cuando su operación queda
 -- hecha, como conta_recibo_parar). Code 1 no lee las tablas del portal.
 -- CAMBIA (declarado arriba) el CHECK de conta_gc_cobro_otra_via.via: solo
--- AMPLÍA, con «portal_banco» y «portal_tarjeta». Y AÑADE:
+-- AMPLÍA, con «portal_banco» y «portal_tarjeta»; y el de
+-- conta_gestoria_diferencia.tipo: solo AMPLÍA, con «falta_cuenta_stripe». Y AÑADE:
 --   1. conta_gestoria_ajustes.cuenta_stripe: la cuenta puente de Stripe de cada
---      empresa (tarjeta o Bizum). Sin poner, la 57200003 «Plataforma Stripe».
---      _conta_cobro_puente la crea si falta, con su apunte en el registro del
---      plan; en las cuentas de demostración, ya en esta migración.
+--      empresa (tarjeta o Bizum). Ninguna por defecto (Julio, nº 58): sin ella,
+--      el pago con tarjeta no se apunta y queda en «Pendiente de revisar» con
+--      «Falta la cuenta de Stripe en Ajustes». Si la puesta ya existe con otro
+--      nombre o es de un banco, tampoco: para y lo dice. Si no existe, se crea
+--      «Plataforma Stripe» con su apunte en el registro del plan. En la demo
+--      (Gestoría Demo, S.L.: las cuentas de demostración con cobro y plan), esta
+--      migración la deja puesta en la 57200003 «Plataforma Stripe», creada así.
 --   2. conta_recibo_pago_portal: el pago de cada devuelto desde el portal (uno
 --      por recibo: repetir la llamada no duplica nada).
 --   3. conta_recibo_pagado_portal(recibo, via, importe, referencia): un recibo
@@ -33,7 +39,15 @@
 
 -- ── 1 · La cuenta puente de Stripe de cada empresa ───────────────────────────────
 alter table public.conta_gestoria_ajustes add column if not exists cuenta_stripe text;
-comment on column public.conta_gestoria_ajustes.cuenta_stripe is 'G05 · La cuenta puente de Stripe (tarjeta o Bizum desde el portal). Sin poner, la 57200003 «Plataforma Stripe» (en QBO esa subcuenta es «TPV tienda online»: para QBO real se decidirá).';
+comment on column public.conta_gestoria_ajustes.cuenta_stripe is 'G05 · La cuenta puente de Stripe (tarjeta o Bizum desde el portal), «Plataforma Stripe». Ninguna por defecto: sin ella, el pago con tarjeta queda en «Pendiente de revisar» (falta_cuenta_stripe). En la demo, la 57200003; para QBO real se decidirá.';
+
+-- «Pendiente de revisar», también cuando falta (o no vale) la cuenta de Stripe.
+alter table public.conta_gestoria_diferencia drop constraint if exists conta_gestoria_diferencia_tipo_check;
+alter table public.conta_gestoria_diferencia add constraint conta_gestoria_diferencia_tipo_check check (tipo = any (array[
+  'crm_sin_cobro', 'gocardless_sin_ficha', 'emisor_distinto', 'nif_repetido_en_crm', 'correo_repetido_en_crm', 'nif_distinto',
+  'suscripcion_sin_convertir', 'totales_distintos', 'mandato_por_firmar', 'falla_a_menudo', 'abono_en_otra_cuenta',
+  'fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos',
+  'ya_no_es_cliente_en_crm', 'falta_codigo_cliente', 'cliente_no_de_acuerdo', 'falta_cuenta_stripe']));
 
 -- ── 2 · «Cobrado por otra vía», también desde el portal ──────────────────────────
 alter table public.conta_gc_cobro_otra_via drop constraint if exists conta_gc_cobro_otra_via_via_check;
@@ -66,14 +80,36 @@ begin
 end $$;
 revoke all on function public._conta_cobro_puente(uuid, text, text, text, text) from public, anon, authenticated;
 
--- En la demo, la 57200003 «Plataforma Stripe» ya, en la empresa que cobra con GoCardless (la sociedad): se ve en
--- su plan antes del primer pago. Solo cuentas de demostración con su plan activado.
+/**
+ * Qué le pasa a la cuenta de Stripe de una empresa: null si se puede usar (puesta, y si
+ * existe es «Plataforma Stripe» y no es de un banco); si no, 'sin_cuenta', 'de_banco' u
+ * 'otro_nombre'. Nunca se usa a ciegas una subcuenta que ya es otra cosa.
+ */
+create or replace function public._conta_cobro_stripe_no_vale(p_company uuid, p_code text)
+returns text language sql stable security definer set search_path = public as $$
+  select case
+    when nullif(btrim(coalesce(p_code, '')), '') is null then 'sin_cuenta'
+    when exists (select 1 from public.company_account x join public.company_account_link k on k.company_account_id = x.id and k.entity = 'bank_account'
+                  where x.company_id = p_company and x.code = p_code) then 'de_banco'
+    when exists (select 1 from public.company_account x where x.company_id = p_company and x.code = p_code and x.name is distinct from 'Plataforma Stripe') then 'otro_nombre'
+  end
+$$;
+revoke all on function public._conta_cobro_stripe_no_vale(uuid, text) from public, anon, authenticated;
+
+-- En la demo (Gestoría Demo, S.L.: las cuentas de demostración con cobro de GoCardless y su plan),
+-- la cuenta de Stripe puesta: la 57200003 «Plataforma Stripe», creada con su apunte en el registro
+-- del plan. Si la 57200003 ya fuera otra cosa, para (nunca se usa a ciegas).
 do $$
 declare r record;
 begin
   for r in select a.company_id from public.conta_gestoria_ajustes a join public.accounts c on c.id = a.account_id and c.is_demo
-            where a.cuenta_plataforma is not null and exists (select 1 from public.company_account x where x.company_id = a.company_id) loop
+            where a.cuenta_plataforma is not null and a.cuenta_stripe is null
+              and exists (select 1 from public.company_account x where x.company_id = a.company_id) loop
+    if public._conta_cobro_stripe_no_vale(r.company_id, '57200003') is not null then
+      raise exception 'En la demo, la 57200003 ya existe y no es «Plataforma Stripe»: no se pone como cuenta de Stripe.' using errcode = '23514';
+    end if;
     perform public._conta_cobro_puente(r.company_id, '57200003', 'Plataforma Stripe', 'Lo que Stripe ha cobrado (tarjeta o Bizum) y aún no ha ingresado en el banco', 'Sumied');
+    update public.conta_gestoria_ajustes set cuenta_stripe = '57200003' where company_id = r.company_id;
   end loop;
 end $$;
 
@@ -168,6 +204,7 @@ declare
   v_r public.conta_recibo; v_ya public.conta_recibo_pago_portal; v_servidor boolean := coalesce(auth.role(), '') = 'service_role';
   v_aj jsonb; v_puente text; v_nombre_puente text; v_ref text := nullif(btrim(coalesce(p_referencia, '')), ''); v_fecha date := public.conta_hoy();
   v_cent int; v_f jsonb; v_entry uuid; v_numero text; v_nombre text; v_cli text; v_antes jsonb; v_quien text; v_id uuid := gen_random_uuid();
+  v_no text; v_porque text; v_corto text; v_lectura uuid; v_nombre_hay text;
 begin
   select * into v_r from public.conta_recibo where id = p_recibo for update;
   if v_r.id is null or not (v_servidor or public.belongs_to_account(v_r.account_id)) then raise exception 'Ese recibo no está.' using errcode = 'P0002'; end if;
@@ -191,13 +228,41 @@ begin
     raise exception 'El recibo es de % y el pago, de %: no se apunta.', public._conta_gestoria_euros(v_cent / 100.0), public._conta_gestoria_euros(coalesce(p_importe, 0)) using errcode = '23514';
   end if;
   v_aj := public._conta_cobro_ajustes(v_r.company_id);
+  v_quien := case when v_servidor then 'El cliente, desde el portal' else public.conta_nombre_actor() end;
   if p_via = 'banco' then
     v_puente := v_aj->>'cuenta_plataforma'; v_nombre_puente := 'Plataforma GoCardless';
   else
-    select coalesce(a.cuenta_stripe, '57200003') into v_puente from public.conta_gestoria_ajustes a where a.company_id = v_r.company_id;
-    v_puente := coalesce(v_puente, '57200003'); v_nombre_puente := 'Plataforma Stripe';
+    select nullif(btrim(a.cuenta_stripe), '') into v_puente from public.conta_gestoria_ajustes a where a.company_id = v_r.company_id;
+    v_nombre_puente := 'Plataforma Stripe';
+    -- Ninguna por defecto, y nunca una que ya es otra cosa: no se apunta y queda en «Pendiente de revisar».
+    v_no := public._conta_cobro_stripe_no_vale(v_r.company_id, v_puente);
+    if v_no is not null then
+      select name into v_nombre_hay from public.company_account where company_id = v_r.company_id and code = v_puente;
+      v_corto := case v_no
+        when 'sin_cuenta' then 'Falta la cuenta de Stripe en Ajustes'
+        when 'de_banco' then format('La cuenta de Stripe de Ajustes (%s) es la de un banco («%s»)', v_puente, v_nombre_hay)
+        else format('La cuenta de Stripe de Ajustes (%s) ya existe como «%s», no como «Plataforma Stripe»', v_puente, v_nombre_hay) end;
+      v_porque := format('%s: el cliente pagó desde el portal con tarjeta o Bizum el recibo de %s (%s, referencia %s) y no se ha apuntado. %s',
+        v_corto, v_r.mes, public._conta_gestoria_euros(v_cent / 100.0), v_ref,
+        case v_no when 'sin_cuenta' then 'Pon la cuenta puente de Stripe de la empresa en Ajustes para apuntarlo.'
+          else 'No se usa a ciegas: pon en Ajustes la cuenta puente de Stripe («Plataforma Stripe») para apuntarlo.' end);
+      select id into v_lectura from public.conta_gestoria_lectura where account_id = v_r.account_id and (company_id = v_r.company_id or company_id is null)
+       order by empezada_at desc limit 1;
+      if v_lectura is null then raise exception '%. Y esta empresa aún no tiene ninguna lectura de clientes: no hay dónde apuntar la incidencia.', v_corto using errcode = '23514'; end if;
+      -- Una sola por recibo: la de antes deja de estar vigente y entra la de ahora.
+      update public.conta_gestoria_diferencia set vigente = false
+       where company_id = v_r.company_id and tipo = 'falta_cuenta_stripe' and vigente and datos->>'recibo' = p_recibo::text;
+      insert into public.conta_gestoria_diferencia (account_id, lectura_id, company_id, party_id, tipo, porque_codigo, porque, datos)
+      values (v_r.account_id, v_lectura, v_r.company_id, v_r.party_id, 'falta_cuenta_stripe', v_no, v_porque,
+              jsonb_build_object('recibo', p_recibo, 'mes', v_r.mes, 'via', p_via, 'importe', v_cent / 100.0, 'referencia', v_ref, 'cuenta', v_puente, 'quien', v_quien));
+      perform public._conta_cobro_evento(p_recibo, 'pago_portal_pendiente',
+        format('Pagado desde el portal con tarjeta o Bizum (%s): %s. Sin apuntar: %s.', v_ref, public._conta_gestoria_euros(v_cent / 100.0), lower(left(v_corto, 1)) || substr(v_corto, 2)),
+        jsonb_build_object('via', p_via, 'referencia', v_ref, 'motivo', v_no, 'cuenta', v_puente), v_quien);
+      return jsonb_build_object('id', p_recibo, 'apuntado', false, 'pendiente', true, 'motivo', v_no,
+        'frase', format('No se ha apuntado el pago del recibo de %s (%s): %s. Queda en «Pendiente de revisar».', v_r.mes, public._conta_gestoria_euros(v_cent / 100.0),
+          lower(left(v_corto, 1)) || substr(v_corto, 2)));
+    end if;
   end if;
-  v_quien := case when v_servidor then 'El cliente, desde el portal' else public.conta_nombre_actor() end;
   -- La puente con su código (si no existe, se crea en el plan con su apunte en el registro, como la 57200002).
   perform public._conta_cobro_puente(v_r.company_id, v_puente, v_nombre_puente,
     case p_via when 'banco' then 'Lo que GoCardless ha cobrado y aún no ha ingresado en el banco' else 'Lo que Stripe ha cobrado (tarjeta o Bizum) y aún no ha ingresado en el banco' end,
@@ -237,11 +302,14 @@ begin
     on conflict (company_id, gc_id) do update set via = excluded.via, fecha = excluded.fecha, nota = excluded.nota, quien_name = excluded.quien_name, cuando = now();
   end if;
   update public.conta_recibo set updated_at = now() where id = p_recibo;
+  -- Apuntado: si estaba pendiente por la cuenta de Stripe, deja de estarlo.
+  update public.conta_gestoria_diferencia set vigente = false
+   where company_id = v_r.company_id and tipo = 'falta_cuenta_stripe' and vigente and datos->>'recibo' = p_recibo::text;
   perform public._conta_cobro_evento(p_recibo, 'pagado_portal',
     format('Pagado desde el portal %s (%s): %s. Asiento: %s contra la 430 del cliente%s.', case p_via when 'banco' then 'desde el banco' else 'con tarjeta o Bizum' end,
       v_ref, public._conta_gestoria_euros(v_cent / 100.0), v_puente, case when v_f is not null then format('; su factura, %s', v_numero) else '' end),
     jsonb_build_object('via', p_via, 'referencia', v_ref, 'asiento', v_entry, 'cuenta', v_puente), v_quien);
-  return jsonb_build_object('id', p_recibo, 'factura', (select invoice_id from public.conta_recibo where id = p_recibo), 'numero', v_numero, 'asiento', v_entry, 'cuenta', v_puente,
+  return jsonb_build_object('id', p_recibo, 'apuntado', true, 'factura', (select invoice_id from public.conta_recibo where id = p_recibo), 'numero', v_numero, 'asiento', v_entry, 'cuenta', v_puente,
     'frase', format('Apuntado: el recibo de %s (%s) pagado desde el portal %s. Ya no sale en «Te deben».', v_r.mes, public._conta_gestoria_euros(v_cent / 100.0),
       case p_via when 'banco' then 'desde el banco' else 'con tarjeta o Bizum' end));
 end $$;

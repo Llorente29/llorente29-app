@@ -10,6 +10,8 @@
 --   4. Cobros apuntados por otra vía (todas las cuentas): 0 → 0.
 --   5. La 57200003 «Plataforma Stripe» en las cuentas de demostración: 0 → 1.
 --   6. Ajustes de la gestoría (todas las cuentas): 2 → 2.
+--   7. Empresas con la cuenta de Stripe puesta en la 57200003 (las de demostración): 0 → 1 (Gestoría Demo, S.L.).
+--   8. Incidencias de «Falta la cuenta de Stripe en Ajustes» (todas las cuentas): 0 → 0.
 select clave, valor from (
   select 1 o, 'conta_recibo_pagado_portal existe' clave,
     (to_regprocedure('public.conta_recibo_pagado_portal(uuid,text,numeric,text)') is not null)::text valor union all
@@ -26,5 +28,13 @@ select clave, valor from (
       where x.code = '57200003') union all
   select 6, 'Ajustes de la gestoría (todas las cuentas)',
     -- quieta: una fila por empresa con cobro, se crea al activarlo a mano; la tanda solo añade una columna vacía
-    (select count(*)::text from public.conta_gestoria_ajustes)
+    (select count(*)::text from public.conta_gestoria_ajustes) union all
+  select 7, 'Empresas con la cuenta de Stripe puesta en la 57200003 (las de demostración)',
+    -- quieta: solo esta tanda la pone (en la demo con cobro); sin la columna, 0
+    (select case when exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gestoria_ajustes' and column_name = 'cuenta_stripe')
+       then (select count(*)::text from public.conta_gestoria_ajustes g join public.accounts a on a.id = g.account_id and a.is_demo where to_jsonb(g)->>'cuenta_stripe' = '57200003')
+       else '0' end) union all
+  select 8, 'Incidencias de «Falta la cuenta de Stripe en Ajustes» (todas las cuentas)',
+    -- quieta: solo las escribe un pago con tarjeta desde el portal (aún no hay ninguno)
+    (select count(*)::text from public.conta_gestoria_diferencia where tipo = 'falta_cuenta_stripe')
 ) q order by o;
