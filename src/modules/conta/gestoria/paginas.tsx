@@ -75,7 +75,9 @@ export function CobrosGestoriaAjustes() {
   const { accountId, cargando } = useCuentaConta()
   const { empresas } = useEmpresas()
   const gestoria = useGestoria()
-  const d = useLeer(!cargando && accountId && gestoria === true ? () => leerConexiones(accountId) : null, `${accountId}:conexiones-gestoria`)
+  // La clave lleva si es gestoría: el marco lo sabe un momento después de montar esto, y useLeer
+  // solo vuelve a leer cuando cambia la clave (sin esto no se leía nunca y no salía nada de la gestoría).
+  const d = useLeer(!cargando && accountId && gestoria === true ? () => leerConexiones(accountId) : null, `${accountId}:${gestoria}:${cargando}:conexiones-gestoria`)
   if (gestoria !== true) return null
   if (d.error) return <p className="s-aviso-lista" data-tono="falta" role="alert">No se han podido leer GoCardless y tu CRM: {d.error}</p>
   if (!d.datos || !accountId) return null

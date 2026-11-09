@@ -77,7 +77,7 @@ export function mensajeCuenta(e: EstadoCuenta, guardada = false): { tono: Tono; 
   }
   return {
     tono: 'ok', titulo: `${guardada ? 'Guardada · ' : ''}${e.cuenta} «${e.nombre ?? 'Plataforma Stripe'}»`,
-    texto: 'Los pagos con tarjeta entran aquí y, cuando Stripe los pasa a tu banco, se casan en Bancos.',
+    texto: 'Los pagos con tarjeta entran aquí.',
   }
 }
 
