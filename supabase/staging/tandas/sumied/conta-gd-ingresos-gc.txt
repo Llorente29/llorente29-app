@@ -1,0 +1,3 @@
+# GD · El ingreso de las liquidaciones de GoCardless en el banco de la demo: la 1707 y su prueba (ROLLBACK).
+supabase/migrations/20261109T1707_gd_ingresos_gocardless.sql
+supabase/staging/sql/20261109_gd_ingresos_gocardless_prueba.sql
