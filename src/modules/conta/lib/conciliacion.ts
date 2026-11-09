@@ -31,6 +31,14 @@
 // el neto y la 626 por la comisión, contra la cuenta de la pasarela («Stripe ·
 // por abonar»), donde quedó cada cobro el día que el cliente pagó.
 //
+// G05 · nº 43 · El INGRESO DE GOCARDLESS: un pago de GoCardless al banco
+// (payout) junta los cobros de un día y trae su día de llegada y su neto
+// (abonoDeGocardless). Cuadra si el ingreso es el neto exacto y llega en los
+// días de alrededor; «seguro» si además el banco nombra a GoCardless (o su
+// referencia) y no hay otro igual. El asiento (conta_abono_gocardless_casar):
+// el banco contra la cuenta puente de GoCardless (57200002) por el neto; la
+// comisión llega en su factura mensual.
+//
 // NADA SE CASA DOS VECES: `conciliar` recorre los movimientos en orden y cada
 // candidato (lo que queda de una factura, una liquidación, el otro lado de un
 // traspaso, un asiento traído) se gasta al usarse.
@@ -99,6 +107,12 @@ export interface CobroPasarela {
   id: string; proveedor: 'stripe' | 'redsys'; fecha: string; brutoCent: number; netoCent: number | null; comisionCent: number | null
   factura: string | null; cliente: string; cuenta: string | null; conAsiento: boolean
 }
+
+/**
+ * G05 · nº 43 · Un pago de GoCardless al banco (conta_abonos_gocardless_pendientes):
+ * su día de llegada, su neto (ya sin la comisión) y la cuenta puente (57200002).
+ */
+export interface AbonoGocardless { id: string; llegada: string; netoCent: number; referencia: string | null; cuenta: string; cobros: number }
 
 export interface Liquidacion {
   id: string; plataforma: string; fecha: string; desde: string | null; hasta: string | null; netoCent: number; cuenta430: string; terceroId: string | null
@@ -175,6 +189,8 @@ export interface Contexto {
   cuentaDiferenciaIngreso?: string
   /** S01 · Los cobros por el enlace de pago (Stripe y TPV) que esperan su abono. */
   cobrosPasarela?: CobroPasarela[]
+  /** G05 · nº 43 · Los pagos de GoCardless al banco (payouts) que esperan su movimiento. */
+  abonosGocardless?: AbonoGocardless[]
   /** S01c · Los albaranes que esperan factura: dicen qué albarán espera una factura que falta. */
   albaranesEsperando?: AlbaranQueEspera[]
 }
@@ -206,10 +222,10 @@ export function facturasEnConcepto(texto: string): string[] {
  * anulada). Cada cambio de este fichero sube la versión: lo vigila
  * tests/unit/modules/conta/motorBancosVersion.test.ts.
  */
-export const MOTOR_BANCOS = '2026-11-02.1'
+export const MOTOR_BANCOS = '2026-11-09.1'
 
 /** De dónde sale la propuesta: la píldora de la fila (N17b). */
-export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo' | 'pasarela'
+export type Origen = 'factura' | 'traspaso' | 'regla' | 'liquidacion' | 'historial' | 'libro' | 'contrato' | 'nomina' | 'impuesto' | 'banco' | 'cliente' | 'anticipo' | 'pasarela' | 'gocardless'
 
 /** El destino tal y como lo recibe bank_casar (20261101T0110). */
 export type Destino =
@@ -227,6 +243,8 @@ export type Destino =
   | { tipo: 'abono_pasarela'; proveedor: 'stripe' | 'redsys'; cobros: string[]; comision: number; cuenta_comision: string
       /** La cuenta de la pasarela y lo cobrado (bruto) que se salda en ella. */
       cuenta_pasarela: string; cobrado: number; concepto: string }
+  /** G05 · nº 43 · El ingreso de GoCardless: va a conta_abono_gocardless_casar (el banco contra la 57200002 por el neto). */
+  | { tipo: 'abono_gocardless'; payout: string; cuenta_puente: string; concepto: string }
   | { tipo: 'cuenta' | 'anticipo' | 'contrato' | 'factura_emitida'; lineas: { cuenta: string; importe: number; tercero_id?: string | null; concepto?: string; modelo?: string; periodo?: string }[];
       /** PC01 · Solo «factura_emitida»: las facturas que cobra (bank_casar escribe su cobro). */
       facturas?: { id: string; importe: number }[];
@@ -464,6 +482,30 @@ export function abonoDePasarela(m: Movimiento, cobros: readonly CobroPasarela[],
     porque: `${frase('redsys', xs, comision)} El banco no dice la comisión: sale de lo cobrado menos lo abonado. Confírmalo.` }
 }
 
+export const nombraGocardless = (texto: string) => /\bGO ?CARDLESS\b/.test(normal(texto))
+
+/**
+ * G05 · nº 43 · ¿Es este ingreso un pago de GoCardless? Un payout sin gastar con
+ * el neto exacto que llega ese día o en los 4 de alrededor (el banco puede
+ * apuntarlo un día después). «Seguro» si el banco nombra a GoCardless o trae su
+ * referencia y es el único; si no, para confirmar. Puro. Null si nada cuadra.
+ */
+export function abonoDeGocardless(m: Movimiento, abonos: readonly AbonoGocardless[], usados: ReadonlySet<string> = new Set()):
+  { abono: AbonoGocardless; confianza: Confianza; que: string; porque: string } | null {
+  if (m.importeCent <= 0 || m.antesDelCorte) return null
+  const xs = abonos.filter((a) => !usados.has(`gc:${a.id}`) && a.netoCent === m.importeCent && Math.abs(dias(a.llegada, m.fecha)) <= 4)
+    .sort((a, b) => Math.abs(dias(a.llegada, m.fecha)) - Math.abs(dias(b.llegada, m.fecha)) || a.id.localeCompare(b.id))
+  if (!xs.length) return null
+  const a = xs[0]
+  const txt = textoDe(m)
+  const nombra = nombraGocardless(txt) || (!!a.referencia && normal(txt).includes(normal(a.referencia)))
+  const seguro = nombra && xs.length === 1
+  const cobros = `${a.cobros} ${a.cobros === 1 ? 'cobro' : 'cobros'}`
+  return { abono: a, confianza: seguro ? 'seguro' : 'probable', que: `Ingreso de GoCardless del ${ddmm(a.llegada)} · ${cobros}`,
+    porque: `Pago de GoCardless con ${cobros}, que llegaba el ${ddmm(a.llegada)}: ${eurosCent(a.netoCent)} netos, exactos. ` +
+      (seguro ? 'Se casa solo.' : !nombra ? 'El banco no nombra a GoCardless: confírmalo.' : `Hay ${xs.length} pagos de GoCardless con ese neto esos días: confirma que es este.`) }
+}
+
 /** ¿Es un pago con tarjeta? (concepto común 12 de la AEB, o lo dice el concepto) */
 export const esTarjeta = (m: Pick<Movimiento, 'conceptoComun' | 'concepto'>) => m.conceptoComun === '12' || /\bTARJ(ETA)?\b|COMPRA TARJ/i.test(m.concepto)
 
@@ -584,6 +626,16 @@ function decidirSin(m: Movimiento, ctx: Contexto, g: Gastado, tj?: Tarjeta): Dec
       return { ...b, confianza: a.confianza, origen: 'pasarela', contraparte: null, que: a.que, porque: a.porque,
         destino: { tipo: 'abono_pasarela', proveedor: a.proveedor, cobros: a.cobros.map((c) => c.id), comision: euros(a.comisionCent),
           cuenta_comision: ctx.cuentas626, cuenta_pasarela: a.cobros[0].cuenta!, cobrado: euros(a.brutoCent), concepto: a.que } }
+    }
+  }
+
+  // ── 2c · G05 · nº 43 · Ingreso de GoCardless ──────────────────────────────
+  if (entra && ctx.abonosGocardless?.length) {
+    const a = abonoDeGocardless(m, ctx.abonosGocardless, g.pasarela)
+    if (a) {
+      g.pasarela.add(`gc:${a.abono.id}`)
+      return { ...b, confianza: a.confianza, origen: 'gocardless', contraparte: null, que: a.que, porque: a.porque,
+        destino: { tipo: 'abono_gocardless', payout: a.abono.id, cuenta_puente: a.abono.cuenta, concepto: a.que } }
     }
   }
 

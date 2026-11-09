@@ -13,6 +13,13 @@
 --      Una factura sin recibo da null; con su recibo inventado, el recibo, lo
 --      que le ha pasado y el asiento del cobro con sus apuntes. Otra cuenta no
 --      ve nada. Y su vuelta atrás, y otra vez la 1403.
+--   5. La 1426 (nº 43, el ingreso de GoCardless en el banco), dos veces: un pago
+--      de GoCardless inventado espera su ingreso; un movimiento de otro importe
+--      no se casa; el bueno se casa (la 572 del banco contra la 57200002 por el
+--      neto), deja de esperar, el recibo lo apunta y la ficha enseña su llegada
+--      y el asiento del ingreso; no se casa dos veces. Con la empresa y el banco
+--      de pruebas de staging (los de la prueba de Stripe, S01); en una base sin
+--      ellos, se dice y se salta.
 -- Datos inventados (T11).
 
 begin;
@@ -112,7 +119,8 @@ end $$;
 \i supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
 \echo 'G05 T4 · 3: y otra vez la 1344. OK'
 
--- 4 · La 1403, dos veces, y la ficha de la factura de un recibo inventado.
+-- 4 · La 1403, dos veces (después de la 1426, que lee), y la ficha de la factura de un recibo inventado.
+\i supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
 \i supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
 \i supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
 do $$
@@ -178,5 +186,84 @@ do $$ begin
 end $$;
 \i supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
 \echo 'G05 T4 · 4: la vuelta atrás de la 1403, y otra vez la 1403. OK'
+
+-- 5 · La 1426, dos veces, y el ingreso de GoCardless casado en Bancos.
+\i supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
+\i supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
+\i supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
+insert into _t values ('e5', '3b34403a-a7d6-4a48-a8d7-737e8cababdc'), ('banco5', 'b0100000-0000-4000-8000-0000000000b3');
+do $$
+declare v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; v_e uuid := (select v::uuid from _t where clave = 'e5'); v_p uuid; v_f uuid; v_r uuid;
+begin
+  if not exists (select 1 from public.treasury_account where id = (select v::uuid from _t where clave = 'banco5') and company_id = v_e) then
+    insert into _t values ('salta5', 'si');
+    raise notice 'G05 T4 · 5: esta base no tiene la empresa y el banco de pruebas de staging: el casado se prueba en staging.';
+    return;
+  end if;
+  insert into public.party (account_id, name, source) values (v_acc, 'Cliente Prueba G05 Ingreso', 'manual') returning id into v_p;
+  insert into public.customer_invoice (account_id, company_id, party_id) values (v_acc, v_e, v_p) returning id into v_f;
+  insert into public.conta_gc_payout (company_id, gc_id, account_id, estado, llegada, importe, comision, moneda, referencia)
+  values (v_e, 'PRUEBA-PO1', v_acc, 'paid', public.conta_hoy(), 157.30, 1.00, 'EUR', 'PRUEBA-PO1');
+  insert into public.conta_gc_cobro (company_id, gc_id, account_id, estado, fecha, importe, moneda, payout_gc_id)
+  values (v_e, 'PRUEBA-PM1', v_acc, 'paid_out', public.conta_hoy() - 2, 158.30, 'EUR', 'PRUEBA-PO1');
+  insert into public.conta_recibo (account_id, company_id, party_id, mes, clave, total_cent, cobrar_cent, estado, gc_cobro_id, gc_estado, confirmado_el, invoice_id)
+  values (v_acc, v_e, v_p, '2026-12', 'recibo:' || v_e || ':' || v_p || ':2026-12', 15830, 15830, 'facturado', 'PRUEBA-PM1', 'paid_out', public.conta_hoy() - 2, v_f)
+  returning id into v_r;
+  insert into _t values ('f5', v_f::text), ('r5', v_r::text);
+end $$;
+select set_config('request.jwt.claims', json_build_object('sub', 'c01a0000-0000-4000-8000-0000000000a1', 'role', 'authenticated')::text, true);
+select set_config('request.jwt.claim.sub', 'c01a0000-0000-4000-8000-0000000000a1', true);
+set local role authenticated;
+do $$
+declare v_e uuid := (select v::uuid from _t where clave = 'e5'); x jsonb; r jsonb; mv jsonb := '[]'::jsonb; m record; v_err text; v_bueno uuid; v_otro uuid; lin text; ent uuid;
+begin
+  if exists (select 1 from _t where clave = 'salta5') then return; end if;
+  x := public.conta_abonos_gocardless_pendientes(v_e);
+  if not exists (select 1 from jsonb_array_elements(x) a where a->>'id' = 'PRUEBA-PO1' and (a->>'neto')::numeric = 157.30 and (a->>'cobros')::int = 1 and a->>'cuenta' is not null) then
+    raise exception 'G05 T4 · 5: el pago de GoCardless no espera su ingreso: %', x;
+  end if;
+  for m in select * from (values (1, 157.31, 'GOCARDLESS OTRO G05'), (2, 157.30, 'GOCARDLESS PRUEBA-PO1 G05')) y(i, imp, con) loop
+    mv := mv || jsonb_build_array(jsonb_build_object('fecha', to_char(public.conta_hoy(), 'YYYY-MM-DD'), 'importe', m.imp,
+      'concepto_banco', m.con, 'concepto_limpio', initcap(m.con), 'contraparte', 'GOCARDLESS', 'tipo', 'ABONO', 'huella', 'g05-' || m.i, 'huella_suave', 'g05-s' || m.i));
+  end loop;
+  r := public.bank_importar((select v::uuid from _t where clave = 'banco5'), 'fichero', 'csv:bbva', 'prueba-g05.xlsx', repeat('f', 64),
+    public.conta_hoy(), public.conta_hoy(), null, null, 'prueba', null, mv);
+  select id into v_bueno from public.bank_movement where statement_id = (r->>'extracto')::uuid and bank_concept = 'GOCARDLESS PRUEBA-PO1 G05' limit 1;
+  select id into v_otro from public.bank_movement where statement_id = (r->>'extracto')::uuid and bank_concept = 'GOCARDLESS OTRO G05' limit 1;
+  begin perform public.conta_abono_gocardless_casar(v_otro, 'PRUEBA-PO1', 'probable', 'prueba', 'persona'); exception when others then v_err := sqlerrm; end;
+  if v_err is distinct from 'GoCardless pagó 157,30 € y este movimiento es de 157,31 €: no es este.' then raise exception 'G05 T4 · 5: otro importe dijo «%».', v_err; end if;
+  x := public.conta_abono_gocardless_casar(v_bueno, 'PRUEBA-PO1', 'seguro', 'Pago de GoCardless: 157,30 € netos, exactos.', 'folvy');
+  if x->>'frase' not like 'Casado el ingreso de GoCardless del __/__: 157,30 € de 1 cobro. Asiento: 157,30 € al banco contra la %.' then raise exception 'G05 T4 · 5: casar dijo «%».', x->>'frase'; end if;
+  ent := (x->>'asiento')::uuid;
+  select string_agg(coalesce(jl.debit, 0)::numeric(14,2) || '/' || coalesce(jl.credit, 0)::numeric(14,2), ' · ' order by jl.position) into lin from public.journal_line jl where jl.entry_id = ent;
+  if lin <> '157.30/0.00 · 0.00/157.30'
+     or (select ca.code from public.journal_line jl join public.company_account ca on ca.id = jl.company_account_id where jl.entry_id = ent and jl.credit > 0)
+        <> public._conta_cobro_ajustes(v_e)->>'cuenta_plataforma' then
+    raise exception 'G05 T4 · 5: el asiento del ingreso es «%».', lin;
+  end if;
+  if exists (select 1 from jsonb_array_elements(public.conta_abonos_gocardless_pendientes(v_e)) a where a->>'id' = 'PRUEBA-PO1') then raise exception 'G05 T4 · 5: casado, sigue esperando.'; end if;
+  if not exists (select 1 from public.conta_recibo_evento where recibo_id = (select v::uuid from _t where clave = 'r5') and tipo = 'ingreso') then raise exception 'G05 T4 · 5: el recibo no apunta el ingreso.'; end if;
+  r := public.conta_pantalla_factura_recibo('c01a0000-0000-4000-8000-00000000000a', (select v::uuid from _t where clave = 'f5'));
+  if (r->'ingreso'->>'casado')::boolean is not true or r->'ingreso'->>'llegada' <> to_char(public.conta_hoy(), 'YYYY-MM-DD')
+     or not exists (select 1 from jsonb_array_elements(r->'asientos') a where a->>'tipo' = 'ingreso' and (a->>'id')::uuid = ent and jsonb_array_length(a->'apuntes') = 2) then
+    raise exception 'G05 T4 · 5: la ficha no enseña el ingreso: % · %', r->'ingreso', r->'asientos';
+  end if;
+  v_err := null;
+  begin perform public.conta_abono_gocardless_casar(v_otro, 'PRUEBA-PO1', 'probable', 'prueba', 'persona'); exception when others then v_err := sqlerrm; end;
+  if v_err is distinct from 'Ese pago de GoCardless ya está casado con otro movimiento.' then raise exception 'G05 T4 · 5: casarlo dos veces dijo «%».', v_err; end if;
+  raise notice 'G05 T4 · 5: el pago de GoCardless espera su ingreso, otro importe no se casa, el bueno sí (banco contra la puente por el neto), deja de esperar, el recibo lo apunta, la ficha enseña llegada y asiento, y no se casa dos veces. OK';
+end $$;
+reset role;
+\i supabase/vuelta-atras/20261109T1403_g05_t4_ficha_factura.down.sql
+\i supabase/vuelta-atras/20261109T1426_g05_t4_ingreso_gocardless.down.sql
+do $$ begin
+  if to_regclass('public.conta_gc_payout') is not null or to_regprocedure('public.conta_abono_gocardless_casar(uuid,text,text,text,text)') is not null
+     or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gc_cobro' and column_name = 'payout_gc_id') then
+    raise exception 'G05 T4 · 5: la vuelta atrás de la 1426 no la quita.';
+  end if;
+end $$;
+\i supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
+\i supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
+\echo 'G05 T4 · 5: la vuelta atrás de la 1403 y la 1426, y otra vez las dos. OK'
 
 rollback;

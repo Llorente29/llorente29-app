@@ -30,7 +30,7 @@ export function cabeceras(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'GoCardless-Version': VERSION_API, Accept: 'application/json' }
 }
 
-export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts'
+export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts'
 
 /** La dirección de una página: el recurso, sus filtros y el cursor de la anterior. */
 export function urlDePagina(entorno: Entorno, recurso: Recurso, filtros: Record<string, string> = {}, despues: string | null = null): string {
@@ -216,6 +216,8 @@ export interface CobroGc {
   moneda: string
   mandatoId: string | null
   suscripcionId: string | null
+  /** G05 · nº 43 · El pago de GoCardless al banco que lo lleva (links.payout), si ya lo tiene. */
+  payoutId: string | null
   /** El motivo del fallo, de su evento (/events): lo pone casarMotivos. */
   motivo: string | null
 }
@@ -231,8 +233,21 @@ export function leerCobro(x: Record<string, unknown>): CobroGc {
     moneda: String(x.currency ?? ''),
     mandatoId: enlace(x, 'mandate'),
     suscripcionId: enlace(x, 'subscription'),
+    payoutId: enlace(x, 'payout'),
     motivo: null,
   }
+}
+
+/**
+ * G05 · nº 43 · Un pago de GoCardless a la cuenta de la empresa (payout): junta
+ * los cobros de un día. Trae el día en que llega al banco (arrival_date), su
+ * neto (amount, ya sin la comisión: deducted_fees) y su referencia.
+ */
+export interface PayoutGc { id: string; estado: string; llegada: string | null; importeCent: number; comisionCent: number | null; moneda: string; referencia: string | null }
+export function leerPayout(x: Record<string, unknown>): PayoutGc {
+  const cent = (v: unknown) => (Number.isInteger(v) ? (v as number) : Math.round(Number(v ?? 0)))
+  return { id: String(x.id), estado: String(x.status ?? ''), llegada: texto(x.arrival_date), importeCent: cent(x.amount),
+    comisionCent: x.deducted_fees == null ? null : cent(x.deducted_fees), moneda: String(x.currency ?? ''), referencia: texto(x.reference) }
 }
 
 /**

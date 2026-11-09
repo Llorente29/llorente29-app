@@ -33,7 +33,7 @@ export const SUSCRIPCIONES = pag('subscriptions', [
   sus('SB010', 'GESTORIA MENSUAL', 9075, 'MD002', { status: 'cancelled' }),
 ])
 export const COBROS = pag('payments', [
-  { id: 'PM001', status: 'paid_out', charge_date: '2026-10-05', amount: 9075, currency: 'EUR', links: { mandate: 'MD001', subscription: 'SB001' } },
+  { id: 'PM001', status: 'paid_out', charge_date: '2026-10-05', amount: 9075, currency: 'EUR', links: { mandate: 'MD001', subscription: 'SB001', payout: 'PO001' } },
   { id: 'PM002', status: 'failed', charge_date: '2026-08-05', amount: 9075, currency: 'EUR', links: { mandate: 'MD002', subscription: 'SB010' } },
   { id: 'PM003', status: 'failed', charge_date: '2026-09-05', amount: 9075, currency: 'EUR', links: { mandate: 'MD002', subscription: 'SB010' } },
   { id: 'PM004', status: 'charged_back', charge_date: '2026-10-05', amount: 9075, currency: 'EUR', links: { mandate: 'MD002', subscription: 'SB010' } },
@@ -51,6 +51,11 @@ export const CUENTAS_CLIENTE = pag('customer_bank_accounts', [
   { id: 'BA002', account_number_ending: '07', country_code: 'ES', bank_name: 'OTRO BANCO DE PRUEBA', currency: 'EUR', enabled: true },
 ])
 
+// G05 · nº 43 · El pago de GoCardless al banco que lleva el PM001: llega el 7/10, neto (sin su comisión).
+export const PAYOUTS = pag('payouts', [
+  { id: 'PO001', status: 'paid', arrival_date: '2026-10-07', amount: 8975, deducted_fees: 100, currency: 'EUR', reference: 'PRUEBA-PO001' },
+])
+
 /** Un fetch falso: contesta por ruta y cursor, y apunta lo que se pidió. */
 export function fetchGrabado(pedidas: string[] = []) {
   return async (url: string, init: { headers: Record<string, string> }) => {
@@ -60,7 +65,7 @@ export function fetchGrabado(pedidas: string[] = []) {
     const after = u.searchParams.get('after')
     const tabla: Record<string, unknown> = {
       customers: after === 'CU002' ? CLIENTES_2 : CLIENTES_1, mandates: MANDATOS, subscriptions: SUSCRIPCIONES,
-      payments: COBROS, events: EVENTOS, creditor_bank_accounts: ABONOS, customer_bank_accounts: CUENTAS_CLIENTE, creditors: pag('creditors', [{ id: 'CR001' }]),
+      payments: COBROS, events: EVENTOS, creditor_bank_accounts: ABONOS, customer_bank_accounts: CUENTAS_CLIENTE, payouts: PAYOUTS, creditors: pag('creditors', [{ id: 'CR001' }]),
     }
     if (init.headers.Authorization !== 'Bearer token-de-prueba') return { ok: false, status: 401, json: async () => ({ error: { message: 'Invalid token' } }) }
     if (!(r in tabla)) return { ok: false, status: 404, json: async () => ({ error: { message: 'No existe' } }) }

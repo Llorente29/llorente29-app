@@ -11,6 +11,8 @@
 --   4. Servicios (todas las cuentas, hasta el corte): 31 → 31.
 --   5. Mandatos de GoCardless (todas las cuentas): 2099 → 2099.
 --   6. La lectura de la ficha de la factura de un recibo existe (1403): false → true.
+--   7. La tabla de los pagos de GoCardless al banco existe (1426): false → true.
+--   8. Cobros de GoCardless (todas las cuentas): quieta, la lectura los escribe; la 1426 solo añade una columna vacía.
 select clave, valor from (
   select 1 o, 'conta_servicio.incluye existe' clave,
     exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_servicio' and column_name = 'incluye')::text valor union all
@@ -24,5 +26,10 @@ select clave, valor from (
     -- quieta: los escribe la lectura de GoCardless; la tanda no los toca (solo añade columnas que nacen vacías)
     (select count(*)::text from public.conta_gc_mandato) union all
   select 6, 'La lectura de la ficha de la factura de un recibo existe',
-    (to_regprocedure('public.conta_pantalla_factura_recibo(uuid,uuid)') is not null)::text
+    (to_regprocedure('public.conta_pantalla_factura_recibo(uuid,uuid)') is not null)::text union all
+  select 7, 'La tabla de los pagos de GoCardless al banco existe',
+    (to_regclass('public.conta_gc_payout') is not null)::text union all
+  select 8, 'Cobros de GoCardless (todas las cuentas)',
+    -- quieta: los escribe la lectura de GoCardless; la tanda no los toca (solo añade una columna que nace vacía)
+    (select count(*)::text from public.conta_gc_cobro)
 ) q order by o;

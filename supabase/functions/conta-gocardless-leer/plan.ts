@@ -54,6 +54,8 @@ export interface PlanLectura {
     mandatos: Record<string, unknown>[]
     suscripciones: Record<string, unknown>[]
     cobros: Record<string, unknown>[]
+    /** G05 · nº 43 · Los pagos de GoCardless al banco (conta_gc_payout). */
+    payouts: Record<string, unknown>[]
   }
   nuevos: number
   cambiados: number
@@ -111,7 +113,10 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     proximo_cobro_fecha: x.estado === 'active' ? x.proximoCobro?.fecha ?? null : null,
     proximo_cobro_importe: x.estado === 'active' && x.proximoCobro ? aEuros(x.proximoCobro.importeCent) : null }))
   const cobros = datos.cobros.map((p) => ({ company_id: empresa, gc_id: p.id, account_id: cuenta, mandato_gc_id: p.mandatoId,
-    suscripcion_gc_id: p.suscripcionId, estado: p.estado, fecha: p.fecha, importe: aEuros(p.importeCent), moneda: p.moneda, motivo: p.motivo, leido_at: ahora }))
+    suscripcion_gc_id: p.suscripcionId, estado: p.estado, fecha: p.fecha, importe: aEuros(p.importeCent), moneda: p.moneda, motivo: p.motivo,
+    payout_gc_id: p.payoutId ?? null, leido_at: ahora }))
+  const payouts = (datos.payouts ?? []).map((o) => ({ company_id: empresa, gc_id: o.id, account_id: cuenta, estado: o.estado, llegada: o.llegada,
+    importe: aEuros(o.importeCent), comision: o.comisionCent == null ? null : aEuros(o.comisionCent), moneda: o.moneda, referencia: o.referencia, leido_at: ahora }))
 
   // 2 · El casado, de toda la cuenta: esta cuenta de GoCardless (recién leída) y las otras (de la base).
   const deEsta: ClienteParaCasar[] = datos.clientes.map((c) => ({ emisor: empresa, id: c.id, nombre: c.nombre, nif: c.nif, correo: c.correo,
@@ -178,7 +183,7 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     importeCent: porImportar.find((x) => x.id === n.suscripcionId)?.importeCent ?? null }))
 
   return {
-    filas: { clientes, mandatos, suscripciones, cobros }, nuevos, cambiados, iguales,
+    filas: { clientes, mandatos, suscripciones, cobros, payouts }, nuevos, cambiados, iguales,
     parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeFicha, cobroCliente, mandatosSumied,
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {

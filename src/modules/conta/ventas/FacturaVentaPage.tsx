@@ -345,7 +345,7 @@ export default function FacturaVentaPage() {
   if (f && f.estado !== 'borrador' && fichaRecibo.datos) {
     const fr = fichaRecibo.datos
     const m = modeloFicha(fr, { numero: f.numero, serie: f.serie, fecha: f.fecha, total: f.total, cliente: f.cliente.nombre,
-      enviadaEl: f.enviadaEl, correo: f.correo ?? f.cliente.correo, anulada: f.estado === 'anulada' })
+      enviadaEl: f.enviadaEl, correo: f.correo ?? f.cliente.correo, anulada: f.estado === 'anulada' }, hoy)
     const url = pdfUrl.datos ?? sumiedUrl
     return (
       <div className="s-pagina" data-prueba="ficha-venta" data-estado={f.estado}>

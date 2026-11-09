@@ -17,7 +17,9 @@ export interface DatosFichaRecibo {
   }
   eventos: { tipo: string; texto: string; cuando: string; quien: string | null }[]
   verifactu: { estado: string; entorno: 'pruebas' | 'real'; huella: string | null; anterior: string | null } | null
-  asientos: { tipo: 'factura' | 'cobro' | 'devolucion'; id: string; fecha: string; numero: number | null; estado: string;
+  /** nº 43 · El pago de GoCardless al banco que lleva este cobro (su payout): día de llegada, neto y si Bancos ya lo ha casado. */
+  ingreso?: { payout: string; llegada: string | null; neto: number | null; estado: string; casado: boolean } | null
+  asientos: { tipo: 'factura' | 'cobro' | 'ingreso' | 'devolucion'; id: string; fecha: string; numero: number | null; estado: string;
     apuntes: { codigo: string; nombre: string; debe: number; haber: number }[] }[]
 }
 
@@ -49,13 +51,15 @@ function enMadrid(iso: string): [string, string] {
   const t = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso))
   return [t.slice(0, 10), t.slice(11, 16)]
 }
-const importe = (n: number) => (n ? n.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '')
+/** «3.104,90»: con el punto de los miles también en las de cuatro cifras, como la maqueta. */
+const importe = (n: number) => (n ? new Intl.NumberFormat('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: 'always' } as Intl.NumberFormatOptions).format(n) : '')
 /** «7C3E 91A0 5B2D … F04E»: el principio y el final de la huella, en grupos de 4. */
 export const huellaCorta = (h: string) => `${h.slice(0, 4)} ${h.slice(4, 8)} ${h.slice(8, 12)} … ${h.slice(-4)}`
 
 const VERIFACTU_HECHO = new Set(['correcto', 'aceptado_con_errores'])
 
-export function modeloFicha(d: DatosFichaRecibo, f: FacturaDeLaFicha): ModeloFicha {
+/** `hoy` (AAAA-MM-DD, Madrid): para decir si el ingreso ya tenía que haber llegado. */
+export function modeloFicha(d: DatosFichaRecibo, f: FacturaDeLaFicha, hoy: string | null = null): ModeloFicha {
   const r = d.recibo
   const mesNombre = mesEnPalabras(r.mes)
   const cobrado = euros(r.cobrar_cent)
@@ -76,6 +80,10 @@ export function modeloFicha(d: DatosFichaRecibo, f: FacturaDeLaFicha): ModeloFic
   if (v && VERIFACTU_HECHO.has(v.estado)) {
     hitos.push({ bola: 'hecho', icono: '✓', titulo: v.entorno === 'pruebas' ? 'Verifactu: registrada en pruebas de la AEAT' : 'Verifactu: registrada en la AEAT',
       detalle: [v.huella ? `Huella ${huellaCorta(v.huella)}` : null, v.anterior ? `encadenada con la ${v.anterior}` : 'la primera de su cadena'].filter(Boolean).join(' · ') })
+  } else if (v && (v.estado === 'pendiente' || v.estado === 'enviando')) {
+    // Con registro, el QR ya va en la factura: falta que conteste la AEAT.
+    hitos.push({ bola: 'espera', icono: '…', titulo: v.entorno === 'pruebas' ? 'Verifactu: enviándose a la AEAT de pruebas' : 'Verifactu: enviándose a la AEAT',
+      detalle: 'El QR ya va en la factura. La AEAT aún no ha contestado: se le manda sola.' })
   } else if (v && v.estado === 'incorrecto') {
     hitos.push({ bola: 'mal', icono: '!', titulo: 'Verifactu: la AEAT no la ha aceptado', detalle: 'Mira qué dice y corrígela en «Con Hacienda», más abajo en esta ficha.' })
   } else {
@@ -94,17 +102,25 @@ export function modeloFicha(d: DatosFichaRecibo, f: FacturaDeLaFicha): ModeloFic
     hitos.push({ bola: 'mal', icono: '!', titulo: r.estado === 'retrocedido' ? 'Retrocedido' : 'Devuelto',
       detalle: ev ? `${diaLargo(enMadrid(ev.cuando)[0])} · ${ev.texto}` : 'No se ha podido cobrar: vuelve a «Te deben».' })
   } else if (r.confirmado_el) {
-    // 7 · El ingreso de GoCardless en el banco: lo casa Bancos; aquí no hay fecha.
-    hitos.push({ bola: 'pendiente', icono: '…', titulo: 'Ingreso de GoCardless en el banco',
-      detalle: r.gc_estado === 'paid_out'
-        ? 'GoCardless ya lo ha pagado, junto con los demás cobros del día. Se casa solo en Bancos.'
-        : 'Llega unos días después del cobro, junto con los demás cobros del día. Se casa solo en Bancos.' })
+    // 7 · El ingreso de GoCardless en el banco: el día de llegada lo da su payout; lo casa Bancos.
+    const ing = d.ingreso
+    const titulo = 'Ingreso de GoCardless en el banco'
+    if (ing?.casado && ing.llegada) {
+      hitos.push({ bola: 'hecho', icono: '✓', titulo, detalle: `${diaLargo(ing.llegada)}${ing.neto ? ` · ${euros(Math.round(ing.neto * 100))}` : ''}, junto con los demás cobros del día. Casado en Bancos.` })
+    } else if (ing?.llegada && hoy && ing.llegada < hoy) {
+      hitos.push({ bola: 'pendiente', icono: '…', titulo, detalle: `Tenía que llegar el ${diaLargo(ing.llegada)}, junto con los demás cobros del día. Sube el extracto en Bancos y se casa solo.` })
+    } else if (ing?.llegada) {
+      hitos.push({ bola: 'pendiente', icono: '…', titulo, detalle: `Llega el ${diaLargo(ing.llegada)}, junto con los demás cobros del día. Se casa solo en Bancos.` })
+    } else {
+      hitos.push({ bola: 'pendiente', icono: '…', titulo,
+        detalle: 'Llega unos días después del cobro, junto con los demás cobros del día. Se casa solo en Bancos.' })
+    }
   }
 
-  const NOMBRE = { factura: 'Factura', cobro: 'Cobro', devolucion: 'Devolución' } as const
+  const NOMBRE = { factura: 'Factura', cobro: 'Cobro', ingreso: 'Ingreso en el banco', devolucion: 'Devolución' } as const
   const asientos: AsientoDeLaFicha[] = d.asientos.map((a) => ({
     id: a.id,
-    titulo: `${NOMBRE[a.tipo]} · ${diaLargo(a.fecha)}${a.numero ? ` · asiento ${a.numero.toLocaleString('es-ES')}` : ''}`,
+    titulo: `${NOMBRE[a.tipo]} · ${diaLargo(a.fecha)}${a.tipo === 'ingreso' ? ' (todos los cobros del día)' : ''}${a.numero ? ` · asiento ${a.numero.toLocaleString('es-ES')}` : ''}`,
     lineas: a.apuntes.map((x) => ({ cuenta: `${x.codigo} ${x.nombre}`, debe: importe(Number(x.debe)), haber: importe(Number(x.haber)) })),
   }))
 
@@ -120,7 +136,7 @@ export function modeloFicha(d: DatosFichaRecibo, f: FacturaDeLaFicha): ModeloFic
     hitos,
     asientos,
     notas: [
-      'El ingreso de GoCardless en el banco (572 / 57200002) lo casa Bancos, con todos los cobros del día juntos.',
+      ...(d.asientos.some((a) => a.tipo === 'ingreso') || devuelto ? [] : ['El ingreso de GoCardless en el banco (572 / 57200002) lo casa Bancos, con todos los cobros del día juntos.']),
       'La comisión de GoCardless no va aquí: llega en su factura mensual, que se registra como factura recibida (629, con inversión del sujeto pasivo) y se paga desde la 57200002.',
     ],
   }

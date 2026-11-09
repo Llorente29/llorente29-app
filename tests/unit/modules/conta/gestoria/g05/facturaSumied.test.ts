@@ -5,6 +5,7 @@
 // con más de 10 trabajadores, y que una factura que no cuadra no tiene PDF.
 import { jsPDF } from 'jspdf'
 import { describe, expect, it } from 'vitest'
+import { modulosQr } from '../../../../../../src/modules/conta/lib/verifactu/qr'
 import { cuentaEnmascarada, facturaSumiedPdf, iniciales, QUE_INCLUYE_POR_DEFECTO, SUMIED_PDF, type DatosFacturaSumied } from '../../../../../../supabase/functions/_shared/facturaSumiedPdf'
 
 const bytes = (b: Uint8Array) => new TextDecoder('latin1').decode(b)
@@ -66,5 +67,35 @@ describe('G05 · T4 · el modelo de factura «Sumied»', () => {
     const png = 'iVBORw0KGgoAAAANSUhEUgAAAAQAAAACCAIAAADwyuo0AAAAEklEQVR4nGPkU3JggAEmBiQAAAqcAHRMAN8nAAAAAElFTkSuQmCC'
     const t = bytes(facturaSumiedPdf(jsPDF, factura(4, { emisor: { nombre: 'Gestoría Demo, S.L.', nif: 'B00000026', lineas: [], logo: { base64: png, formato: 'PNG' } } })))
     expect(t).toContain('/Subtype /Image')
+  })
+
+  // nº 43 · Con Verifactu registrado, el PDF lleva el QR y no el recuadro de «pendiente».
+  // jsPDF incrusta las letras (el texto no se ve en los bytes): se apunta lo que se escribe.
+  const conLoQueEscribe = () => {
+    const escrito: string[] = []
+    // jsPDF pone sus métodos en cada documento: se envuelve el `text` del documento recién hecho.
+    function Espia(this: unknown, o: ConstructorParameters<typeof jsPDF>[0]) {
+      const doc = new jsPDF(o)
+      const text = doc.text.bind(doc)
+      doc.text = ((t: string | string[], ...resto: unknown[]) => { escrito.push(...(Array.isArray(t) ? t : [t])); return (text as (...a: unknown[]) => jsPDF)(t, ...resto) }) as typeof doc.text
+      return doc
+    }
+    return { escrito, Espia: Espia as unknown as typeof jsPDF }
+  }
+  it('con Verifactu registrado, el QR con «VERI*FACTU» y «Factura verificable…»; sin registro, el recuadro de pendiente', () => {
+    const url = 'https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR?nif=B00000026&numserie=2026%2F1%2F141&fecha=04-12-2026&importe=157.30'
+    const con = conLoQueEscribe()
+    const pdf = facturaSumiedPdf(con.Espia, factura(4, { verifactu: { modulos: modulosQr(url), prueba: true } }))
+    const todo = con.escrito.join(' ')
+    expect(todo).toContain('VERI*FACTU')
+    expect(todo).toContain('Factura verificable')
+    expect(todo).not.toContain('pendiente')
+    // El QR son cuadrados negros: muchos más rectángulos rellenos que sin él.
+    const rects = (b: Uint8Array) => (bytes(b).match(/ re\s*\n?f/g) ?? []).length
+    const sin = conLoQueEscribe()
+    const pdfSin = facturaSumiedPdf(sin.Espia, factura(4))
+    expect(sin.escrito.join(' ')).toContain('pendiente')
+    expect(sin.escrito.join(' ')).not.toContain('VERI*FACTU')
+    expect(rects(pdf) - rects(pdfSin)).toBeGreaterThan(100)
   })
 })

@@ -71,4 +71,24 @@ describe('G05 · T4 · la ficha de la factura de un recibo', () => {
     expect(m.asientos[1].titulo).toBe('Cobro · 4 de diciembre · asiento 813')
     expect(m.notas[1]).toMatch(/^La comisión de GoCardless no va aquí/)
   })
+
+  it('nº 43 · registro sin respuesta de la AEAT: el QR ya va en la factura (no «pendiente»)', () => {
+    const m = modeloFicha(datos({}, { verifactu: { estado: 'pendiente', entorno: 'pruebas', huella: null, anterior: null } }), factura())
+    expect(m.hitos[3]).toEqual({ bola: 'espera', icono: '…', titulo: 'Verifactu: enviándose a la AEAT de pruebas', detalle: 'El QR ya va en la factura. La AEAT aún no ha contestado: se le manda sola.' })
+  })
+
+  it('nº 43 · el ingreso en el banco: el día de llegada de su payout; ya casado, su asiento (el tercero) y sin la nota', () => {
+    const llega = modeloFicha(datos({}, { ingreso: { payout: 'PO1', llegada: '2026-12-06', neto: 3104.9, estado: 'paid', casado: false } }), factura(), '2026-12-05')
+    expect(llega.hitos.at(-1)).toEqual({ bola: 'pendiente', icono: '…', titulo: 'Ingreso de GoCardless en el banco', detalle: 'Llega el 6 de diciembre, junto con los demás cobros del día. Se casa solo en Bancos.' })
+    const tarde = modeloFicha(datos({}, { ingreso: { payout: 'PO1', llegada: '2026-12-06', neto: 3104.9, estado: 'paid', casado: false } }), factura(), '2026-12-09')
+    expect(tarde.hitos.at(-1)?.detalle).toBe('Tenía que llegar el 6 de diciembre, junto con los demás cobros del día. Sube el extracto en Bancos y se casa solo.')
+    const d = datos({}, { ingreso: { payout: 'PO1', llegada: '2026-12-06', neto: 3104.9, estado: 'paid', casado: true } })
+    d.asientos.push({ tipo: 'ingreso', id: 'a3', fecha: '2026-12-06', numero: 830, estado: 'validado', apuntes: [
+      { codigo: '57200000', nombre: 'Banco', debe: 3104.9, haber: 0 }, { codigo: '57200002', nombre: 'Plataforma GoCardless', debe: 0, haber: 3104.9 }] })
+    const casado = modeloFicha(d, factura(), '2026-12-09')
+    expect(casado.hitos.at(-1)).toEqual({ bola: 'hecho', icono: '✓', titulo: 'Ingreso de GoCardless en el banco', detalle: '6 de diciembre · 3.104,90 €, junto con los demás cobros del día. Casado en Bancos.' })
+    expect(casado.asientos[2]).toEqual({ id: 'a3', titulo: 'Ingreso en el banco · 6 de diciembre (todos los cobros del día) · asiento 830', lineas: [
+      { cuenta: '57200000 Banco', debe: '3.104,90', haber: '' }, { cuenta: '57200002 Plataforma GoCardless', debe: '', haber: '3.104,90' }] })
+    expect(casado.notas).toHaveLength(1)
+  })
 })

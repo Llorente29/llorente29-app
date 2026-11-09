@@ -12,8 +12,15 @@
 cuenta: scripts/conta/produccion/cuentas/g05-t4-pantallas.sql
 supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
 #
+#   1426  AÑADE (nº 43) el ingreso de GoCardless en el banco: conta_gc_cobro.
+#         payout_gc_id, la tabla conta_gc_payout (día de llegada y neto de cada
+#         pago de GoCardless al banco), lo que espera su ingreso y el casado en
+#         Bancos (la 572 del banco contra la 57200002). Va ANTES de la 1403, que
+#         la lee.
+#
 #   1403  AÑADE conta_pantalla_factura_recibo: la ficha de una factura que sale
 #         de un recibo (su recibo, lo que le ha pasado, su Verifactu y sus
 #         asientos con sus apuntes) en una sola lectura. Con las políticas de
 #         quien la llama.
+supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
 supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
