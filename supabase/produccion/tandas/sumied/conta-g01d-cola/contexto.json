@@ -1,0 +1,8 @@
+{
+ "_que": "G01d · contexto de producción, medido en SOLO LECTURA el 08/11 a las 23:39Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 0050 quita y vuelve a crear el índice único conta_aviso_clave_idx (hoy parcial) sobre conta_aviso, que existe con 0 filas, fuera del camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-08T23:39Z",
+ "tanda": {
+  "supabase/migrations/20261109T0050_g01d_cola_clave.sql": "3802eadc673a900fd946a5d6b5d43cf8"
+ },
+ "contexto": {"tablas":["public.conta_aviso","public.conta_aviso_clave_idx"],"funciones":[],"filas":{"public.conta_aviso":0,"public.conta_aviso_clave_idx":0},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

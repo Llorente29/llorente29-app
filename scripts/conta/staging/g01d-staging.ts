@@ -10,6 +10,8 @@
 //   npx tsx scripts/conta/staging/g01d-staging.ts preparar   conecta y enciende
 //   npx tsx scripts/conta/staging/g01d-staging.ts leer       «Leer ahora» del CRM (para la huella)
 //   npx tsx scripts/conta/staging/g01d-staging.ts rechazos   un aviso con el código malo a cada función: 401
+//   npx tsx scripts/conta/staging/g01d-staging.ts autenticos un aviso auténtico de verdad a cada función (el código
+//                                                           de Bitrix24 y la firma de GoCardless): entra en la cola y se aplica
 //
 // Solo lee Bitrix24 y GoCardless (las funciones de siempre). No escribe en
 // ninguno de los dos.
@@ -133,7 +135,65 @@ async function rechazos() {
   decir('✓ Los dos rechazan el aviso que no es auténtico.')
 }
 
+/** Un aviso de la cola, por su clave, leído como lo lee la pantalla (RLS de la cuenta). */
+async function avisoDeLaCola(jwt: string, clave: string): Promise<Fila | null> {
+  const r = await fetch(`${URL_BASE}/rest/v1/conta_aviso?account_id=eq.${CUENTA}&clave=eq.${encodeURIComponent(clave)}&select=estado,porque,frase,recibido_at,hecho_at,intentos`, {
+    headers: { apikey: ANON, Authorization: `Bearer ${jwt}` },
+  })
+  return ((await r.json().catch(() => [])) as Fila[])[0] ?? null
+}
+
+/** Espera a que el aviso quede «hecho» (o falle) y dice cuánto ha tardado desde que llegó. */
+async function esperarHecho(jwt: string, que: string, clave: string, segundos: number): Promise<void> {
+  const fin = Date.now() + segundos * 1000
+  let a: Fila | null = null
+  while (Date.now() < fin) {
+    a = await avisoDeLaCola(jwt, clave)
+    if (a && ['hecho', 'fallo', 'ignorado'].includes(String(a.estado))) break
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+  if (!a) fallo(`${que}: la función contestó 200 pero el aviso no está en la cola (${clave}).`)
+  if (a!.estado !== 'hecho') fallo(`${que}: el aviso está «${String(a!.estado)}»${a!.porque ? `: ${String(a!.porque)}` : ''}.`)
+  const tarda = (Date.parse(String(a!.hecho_at)) - Date.parse(String(a!.recibido_at))) / 1000
+  decir(`✓ ${que}: en la cola y aplicado en ${Number.isFinite(tarda) ? Math.round(tarda * 10) / 10 : '?'} s. ${String(a!.frase ?? '')}`)
+}
+
+/**
+ * G01d · Un aviso AUTÉNTICO de verdad a cada función de staging, con el código de Bitrix24 y la firma de
+ * GoCardless de las conexiones de prueba (Julio, nº24): tiene que contestar 200, quedar en la cola y
+ * aplicarse. Es lo que no cazó ninguna prueba antes del arreglo de la clave de la cola (el 42P10).
+ * Bitrix24: un cambio de la empresa 1 (se relee esa ficha). GoCardless: un pago confirmado (se relee la cuenta).
+ */
+async function autenticos() {
+  const faltan = ['G01D_B24_SALIDA_TOKEN', 'G01D_GC_SANDBOX_WEBHOOK_SECRET'].filter((k) => !env(k))
+  if (faltan.length) fallo(`Faltan estos secretos de Actions: ${faltan.join(', ')}.`)
+  const jwt = await entrar()
+
+  const ts = String(Math.floor(Date.now() / 1000))
+  const form = new URLSearchParams({ event: 'ONCRMCOMPANYUPDATE', 'data[FIELDS][ID]': '1', ts,
+    'auth[domain]': 'b24-s3mr2y.bitrix24.es', 'auth[member_id]': 'g01d-prueba', 'auth[application_token]': env('G01D_B24_SALIDA_TOKEN').trim() })
+  const b = await fetch(`${URL_BASE}/functions/v1/conta-crm-aviso?cuenta=${CUENTA}&crm=bitrix24`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form.toString(),
+  })
+  if (b.status !== 200) fallo(`Bitrix24 con su código: la función contesta ${b.status} (tiene que ser 200).`)
+  decir('✓ Bitrix24 con su código: 200.')
+
+  const id = `EVG01D${Date.now()}`
+  const cuerpo = JSON.stringify({ events: [{ id, created_at: new Date().toISOString(), resource_type: 'payments', action: 'confirmed',
+    links: { payment: 'PMG01DPRUEBA' }, details: { origin: 'gocardless', cause: 'payment_confirmed', description: 'Prueba G01d.' } }], meta: { webhook_id: 'WBG01DPRUEBA' } })
+  const { createHmac } = await import('node:crypto')
+  const firma = createHmac('sha256', env('G01D_GC_SANDBOX_WEBHOOK_SECRET').trim()).update(cuerpo).digest('hex')
+  const g = await fetch(`${URL_BASE}/functions/v1/conta-gocardless-aviso?empresa=${EMPRESA}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Webhook-Signature': firma }, body: cuerpo,
+  })
+  if (g.status !== 200) fallo(`GoCardless con su firma: la función contesta ${g.status} (tiene que ser 200).`)
+  decir('✓ GoCardless con su firma: 200.')
+
+  await esperarHecho(jwt, 'El aviso de Bitrix24', `bitrix24:ONCRMCOMPANYUPDATE:1:${ts}`, 90)
+  await esperarHecho(jwt, 'El aviso de GoCardless (se junta unos 30 s y relee la cuenta)', `gocardless:${id}`, 180)
+}
+
 const modo = process.argv[2]
-const hacer = { preparar, leer, rechazos }[modo as 'preparar' | 'leer' | 'rechazos']
-if (!hacer) fallo('uso: g01d-staging.ts preparar | leer | rechazos')
+const hacer = { preparar, leer, rechazos, autenticos }[modo as 'preparar' | 'leer' | 'rechazos' | 'autenticos']
+if (!hacer) fallo('uso: g01d-staging.ts preparar | leer | rechazos | autenticos')
 await hacer!()

@@ -16,7 +16,9 @@
 #              (scripts/conta/staging/g01d-huella-lectura.sql): iguales línea a
 #              línea, o en rojo.
 #   comprobar  Un aviso con el código malo a cada función (tienen que
-#              contestar 401) y lo que hay en la cola de la cuenta.
+#              contestar 401); un aviso AUTÉNTICO de verdad a cada una, con el
+#              código de Bitrix24 y la firma de GoCardless (tienen que
+#              contestar 200, quedar en la cola y aplicarse); y la cola.
 #
 # Los secretos (G01D_*) no se escriben nunca: se dice si están y, de la
 # dirección de Bitrix24, solo el nombre del portal. La contraseña de la
@@ -30,7 +32,7 @@ on:
   workflow_dispatch:
     inputs:
       paso:
-        description: 'preparar = conectar y encender; huella = dos lecturas seguidas, iguales; comprobar = avisos falsos rechazados y la cola'
+        description: 'preparar = conectar y encender; huella = dos lecturas seguidas, iguales; comprobar = avisos falsos rechazados, auténticos aplicados, y la cola'
         required: true
         type: choice
         options: [preparar, huella, comprobar]
@@ -122,7 +124,6 @@ jobs:
 
       - name: La cuenta de pruebas, su sector y la contraseña de un solo uso
         timeout-minutes: 10
-        if: inputs.paso != 'comprobar'
         env:
           DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
         run: |
@@ -166,6 +167,14 @@ jobs:
         timeout-minutes: 10
         if: inputs.paso == 'comprobar'
         run: npx tsx scripts/conta/staging/g01d-staging.ts rechazos | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Comprobar · un aviso auténtico de verdad entra en la cola y se aplica
+        timeout-minutes: 10
+        if: inputs.paso == 'comprobar'
+        env:
+          G01D_B24_SALIDA_TOKEN: ${{ secrets.G01D_B24_SALIDA_TOKEN }}
+          G01D_GC_SANDBOX_WEBHOOK_SECRET: ${{ secrets.G01D_GC_SANDBOX_WEBHOOK_SECRET }}
+        run: npx tsx scripts/conta/staging/g01d-staging.ts autenticos | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: La cola de la cuenta de pruebas (solo lee)
         timeout-minutes: 10
