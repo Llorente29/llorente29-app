@@ -1,0 +1,4 @@
+# GD · la vuelta atrás de la 1130: quita la tarifa sembrada de «Gestoría Demo»
+# y la función, y deja la demo exactamente como estaba.
+cuenta: scripts/conta/produccion/cuentas/gd-tarifa-demo.sql
+supabase/vuelta-atras/20261109T1130_gd_tarifa_demo.down.sql

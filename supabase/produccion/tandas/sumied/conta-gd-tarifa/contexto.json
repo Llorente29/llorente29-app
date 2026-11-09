@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 10:24Z. La 1130 crea demo_gestoria_tarifa_sembrar(uuid), que no existe (ni otra con ese nombre, ni ningún cron que la llame), y la llama para la cuenta demo de000000-…-a0: hoy 9 servicios, 67 líneas, 0 niveles, 0 precios y 0 paquetes. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T10:24Z",
+ "tanda": {
+  "supabase/migrations/20261109T1130_gd_tarifa_demo.sql": "45f0afd40f370f56c64a7a35c5953ad1"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
