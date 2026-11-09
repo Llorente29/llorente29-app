@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { esPaso, inicioDeLasCuotas, porqueNo } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -113,6 +113,53 @@ Deno.serve(async (req) => {
         const i = await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: cuenta })
         if (i.error) throw new Error(i.error.message)
         dicho.push(String((t.data as { frase?: string } | null)?.frase ?? 'Tarifa sembrada.'), String((i.data as { frase?: string } | null)?.frase ?? ''))
+        break
+      }
+      case 'cambios': {
+        // nº68 · Los cambios que enseña el cobro del mes que viene, con las funciones de la ficha y la sesión de quien pulsa
+        // (la cuenta abierta es esta demo). Repetible: lo que ya está hecho se dice y se sigue.
+        const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+        const f = fechasDeLosCambios(hoy)
+        const { data: soc } = await admin.from('company').select('id').eq('account_id', cuenta).eq('sector', 'gestoria').eq('entity_kind', 'company').order('created_at').limit(1).maybeSingle()
+        if (!soc) throw new Error('La demo no tiene una sociedad de Gestoría.')
+        const empresa = (soc as { id: string }).id
+        const parte = async (nombre: string) => {
+          const { data } = await admin.from('party').select('id').eq('account_id', cuenta).eq('name', nombre).maybeSingle()
+          if (!data) throw new Error(`No está «${nombre}» en la demo.`)
+          return (data as { id: string }).id
+        }
+        const servicio = async (clave: string) => {
+          const { data } = await admin.from('conta_servicio').select('id').eq('company_id', empresa).eq('clave', clave).maybeSingle()
+          if (!data) throw new Error(`La demo no tiene el servicio «${clave}».`)
+          return (data as { id: string }).id
+        }
+        const yaHecho = (e: { code?: string; message: string } | null) => !!e && (e.code === '23505' || /ya est[aá]/i.test(e.message))
+        // 1 · Talleres Ruiz, +1 trabajador (alta el 12 de este mes).
+        const laboral = await servicio('gestion_laboral')
+        const talleres = await parte(CAMBIOS_DEL_MES.alta.cliente)
+        const alta = await persona.rpc('conta_gestoria_alta_empleado', { p_company: empresa, p_party: talleres, p_servicio: laboral, p_empleado: CAMBIOS_DEL_MES.alta.trabajador, p_desde: f.altaEl })
+        if (alta.error && !yaHecho(alta.error)) throw new Error(`El alta en ${CAMBIOS_DEL_MES.alta.cliente}: ${alta.error.message}`)
+        await admin.from('conta_linea').update({ alta_el: f.altaEl }).eq('account_id', cuenta).eq('party_id', talleres).eq('servicio_id', laboral).eq('empleado_nombre', CAMBIOS_DEL_MES.alta.trabajador)
+        dicho.push(alta.error ? `${CAMBIOS_DEL_MES.alta.cliente}: el alta ya estaba.` : String((alta.data as { frase?: string } | null)?.frase ?? ''))
+        // 2 · Imprenta Rápida Sol, de Básica a Premium desde el mes que viene.
+        const mensual = await servicio('gestoria_mensual')
+        const imprenta = await parte(CAMBIOS_DEL_MES.nivel.cliente)
+        const { data: nivel } = await admin.from('conta_servicio_nivel').select('id').eq('servicio_id', mensual).eq('nombre', CAMBIOS_DEL_MES.nivel.nivel).maybeSingle()
+        const { data: linea } = await admin.from('conta_linea').select('id').eq('account_id', cuenta).eq('party_id', imprenta).eq('servicio_id', mensual).is('hasta', null).order('desde').limit(1).maybeSingle()
+        if (!nivel || !linea) throw new Error(`${CAMBIOS_DEL_MES.nivel.cliente}: no está su gestoría mensual o el nivel ${CAMBIOS_DEL_MES.nivel.nivel}.`)
+        const cambio = await persona.rpc('conta_tarifa_nivel_cambiar', { p_linea: (linea as { id: string }).id, p_nivel: (nivel as { id: string }).id, p_desde: f.mesQueViene, p_ensayo: false })
+        if (cambio.error && !yaHecho(cambio.error)) throw new Error(`El cambio de nivel de ${CAMBIOS_DEL_MES.nivel.cliente}: ${cambio.error.message}`)
+        dicho.push(cambio.error ? `${CAMBIOS_DEL_MES.nivel.cliente}: ya estaba en ${CAMBIOS_DEL_MES.nivel.nivel}.` : String((cambio.data as { frase?: string } | null)?.frase ?? ''))
+        // 3 · Reformas Atalaya, baja de un trabajador: se cobra este mes y ya no el que viene.
+        const reformas = await parte(CAMBIOS_DEL_MES.baja.cliente)
+        const { data: tr } = await admin.from('conta_linea').select('id, hasta').eq('account_id', cuenta).eq('party_id', reformas).eq('servicio_id', laboral).not('empleado_nombre', 'is', null).order('empleado_nombre', { ascending: false }).limit(1).maybeSingle()
+        if (!tr) throw new Error(`${CAMBIOS_DEL_MES.baja.cliente} no tiene trabajadores en la demo.`)
+        if ((tr as { hasta: string | null }).hasta) dicho.push(`${CAMBIOS_DEL_MES.baja.cliente}: la baja ya estaba.`)
+        else {
+          const baja = await persona.rpc('conta_gestoria_baja_linea', { p_linea: (tr as { id: string }).id, p_mes: f.esteMes })
+          if (baja.error) throw new Error(`La baja en ${CAMBIOS_DEL_MES.baja.cliente}: ${baja.error.message}`)
+          dicho.push(String((baja.data as { frase?: string } | null)?.frase ?? ''))
+        }
         break
       }
     }
