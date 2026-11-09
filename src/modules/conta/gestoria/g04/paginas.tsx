@@ -103,7 +103,7 @@ type Fila = Record<string, unknown>
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 
 export function FichaClienteG04Page() {
-  const { accountId, cargando } = useCuentaConta()
+  const { accountId, cargando, esDemo } = useCuentaConta()
   const { empresas } = useEmpresas()
   const { cliente = '' } = useParams()
   const [params] = useSearchParams()
@@ -133,7 +133,7 @@ export function FichaClienteG04Page() {
   return (
     <Ficha modelo={modelo} crm={nombreCrm} hoy={hoy} rutaVolver={rutaClientesCuotas()} rutaTarifa={rutaTarifasGestoria()} anadirAbierto={params.get('anadir') === '1'}
       pestanaInicial={params.get('pestana') === 'portal' ? 'Portal' : undefined}
-      portal={<PortalFicha cuenta={accountId!} cliente={cliente} nombreCliente={modelo.fila.nombre}
+      portal={<PortalFicha cuenta={accountId!} cliente={cliente} nombreCliente={modelo.fila.nombre} esDemo={esDemo}
         serviciosPorTrabajador={deEmpresa.filter((x) => x.forma === 'por_empleado').map((x) => ({ id: String(x.id), nombre: String(x.nombre) }))} />}
       rutaCrm={enlaceAlCrm(crm ? String(crm.crm) : null, crm ? texto(crm.portal) : null, fila ? texto(fila.tipo_ficha) : null, fila ? texto(fila.ficha_en_el_crm) : null)}
       datosCrm={{ situacion: modelo.fila.situacionTexto, formaPago: texto(ficha.formaPago), servicios: Array.isArray(ficha.servicios) ? (ficha.servicios as string[]).join(', ') : texto(ficha.servicios),

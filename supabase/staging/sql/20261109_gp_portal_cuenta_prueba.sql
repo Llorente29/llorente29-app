@@ -87,7 +87,9 @@ declare
     'conta_portal_ficha', 'conta_portal_pendiente', 'conta_portal_peticion_crear', 'conta_portal_peticion_anular',
     'conta_portal_incidencia_resolver', 'conta_portal_ajustes_guardar',
     -- GP · T4 (la 2030), si ya está:
-    'conta_portal_solicitud_hacer', 'conta_portal_solicitud_rechazar'];
+    'conta_portal_solicitud_hacer', 'conta_portal_solicitud_rechazar',
+    -- GP · T5 (la 2240), si ya está: solo cuentas demo y solo quien las lleva.
+    'conta_portal_demo_preparar'];
   -- Las que llama el servidor con la clave de servicio (y las de dentro).
   solo_servidor constant text[] := array[
     '_conta_portal_yo', '_conta_portal_empresa', '_conta_portal_marca', '_conta_portal_estado_recibo', '_conta_portal_devuelto_pagado',
