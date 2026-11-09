@@ -276,6 +276,11 @@ try {
     if (MODO === 'grabar') {
       // Cada aprobación se guarda antes de la siguiente: mientras se guarda, los botones están desactivados.
       const libre = () => E.page.waitForFunction(() => !document.querySelector('.g5-cambio .g4-boton[disabled], .g4-boton[data-tipo="primario"][disabled]'), null, { timeout: 30_000 }).catch(() => {})
+      // «Este mes no»: la baja de Reformas Atalaya se deja fuera de este cobro (nº68).
+      await libre()
+      const fuera = E.page.locator('li.g5-cambio').filter({ hasText: 'Reformas Atalaya' }).getByRole('button', { name: 'Este mes no' })
+      if (await fuera.first().isVisible().catch(() => false)) { await E.R.clic(fuera.first()); await E.page.waitForTimeout(2500); await libre() }
+      else decir('  · no está: «Este mes no» de Reformas Atalaya')
       for (let i = 0; i < 60; i++) {
         await libre()
         const b = E.page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
