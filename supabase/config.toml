@@ -396,3 +396,10 @@ verify_jwt = false
 
 [functions.conta-gocardless-aviso]
 verify_jwt = false
+
+# GB · conta-bitrix-pestana: la pestaña «Sumied» en la ficha de Bitrix24. La
+# llaman Bitrix24 (al abrir la pestaña y al instalar) y su página, sin sesión de
+# Sumied: verify_jwt = false. La seguridad la da la comprobación con Bitrix24
+# (app.info y user.current) antes de leer nada.
+[functions.conta-bitrix-pestana]
+verify_jwt = false
