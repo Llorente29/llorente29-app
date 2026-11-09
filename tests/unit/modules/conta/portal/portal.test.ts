@@ -5,6 +5,7 @@
 // identificadores, nombres y correos inventados.
 import { describe, expect, it } from 'vitest'
 import {
+  camposPagoTarjeta, claveStripePruebas, leerSesionStripe,
   correoCodigo, correoEnlace, enmascararCorreo, fraseError, leerFlujo, leerPeticion, nombreSeguro, peticionCambiarCuenta,
   peticionFlujo, peticionLeer, peticionPagarAhora, peticionReintento,
 } from '../../../../../supabase/functions/_shared/portal/portal'
@@ -99,5 +100,33 @@ describe('GoCardless', () => {
     expect(fraseError(403, {}, 'cambiar')).toMatch(/aún no tiene encendido/)
     expect(fraseError(503, {}, 'pagar')).toMatch(/no contesta ahora/)
     for (const f of [fraseError(422, {}, 'pagar'), fraseError(500, {}, 'cambiar')]) expect(f).not.toMatch(/mandat|payment|sepa|billing/i)
+  })
+})
+
+
+describe('Stripe, solo en pruebas', () => {
+  it('la clave tiene que ser de pruebas: con otra, no se cobra nada', () => {
+    expect(claveStripePruebas('sk_test_000')).toEqual({ clave: 'sk_test_000' })
+    expect(claveStripePruebas('sk_live_000')).toEqual({ porque: expect.stringMatching(/solo funciona con la clave de pruebas/) })
+    expect(claveStripePruebas('rk_live_000')).toHaveProperty('porque')
+    expect(claveStripePruebas(undefined)).toEqual({ porque: 'El pago con tarjeta aún no está conectado.' })
+  })
+  it('la sesión: el importe en céntimos, tarjeta y, si se pide, Bizum, y la vuelta con su sesión', () => {
+    const c = camposPagoTarjeta({ importeCent: 18150, concepto: 'Recibo de noviembre devuelto', operacion: 'op1', vuelta: 'https://app.sumied.com/portal.html?vuelta=op1', salida: 'https://app.sumied.com/portal.html', correo: null, bizum: true })
+    expect(c['line_items[0][price_data][unit_amount]']).toBe('18150')
+    expect(c['line_items[0][price_data][currency]']).toBe('eur')
+    expect(c['payment_method_types[0]']).toBe('card')
+    expect(c['payment_method_types[1]']).toBe('bizum')
+    expect(c.success_url).toBe('https://app.sumied.com/portal.html?vuelta=op1&sesion={CHECKOUT_SESSION_ID}')
+    expect(c).not.toHaveProperty('customer_email')
+    expect(camposPagoTarjeta({ importeCent: 100, concepto: 'x', operacion: 'o', vuelta: 'https://x.example/p', salida: 'https://x.example/', correo: 'c@x.example', bizum: false }))
+      .not.toHaveProperty('payment_method_types[1]')
+    expect(() => camposPagoTarjeta({ importeCent: 1.5, concepto: 'x', operacion: 'o', vuelta: 'https://x', salida: 'https://x', correo: null, bizum: false })).toThrow()
+  })
+  it('lee la sesión: pagada, esperando o caducada', () => {
+    expect(leerSesionStripe({ id: 'cs_test_1', status: 'complete', payment_status: 'paid' }).estado).toBe('hecha')
+    expect(leerSesionStripe({ id: 'cs_test_1', status: 'open', payment_status: 'unpaid', url: 'https://checkout.stripe.com/c/pay/x' })).toEqual({ id: 'cs_test_1', estado: 'esperando', url: 'https://checkout.stripe.com/c/pay/x' })
+    expect(leerSesionStripe({ id: 'cs_test_1', status: 'expired', payment_status: 'unpaid' }).estado).toBe('caducada')
+    expect(() => leerSesionStripe({})).toThrow()
   })
 })

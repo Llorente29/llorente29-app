@@ -7,7 +7,9 @@
 // lo que la persona no puede hacer sola. Nunca se fía de un id que venga del
 // navegador sin que la base diga que es suyo.
 //
-//   · archivo        un fichero suyo (factura, justificante, nómina, papel,
+//   · subida_url     una dirección firmada para subir un documento o un adjunto a su
+//                    carpeta de conta-portal (la ruta la pone el servidor).
+//   · archivo        un fichero suyo (factura, justificante, nómina, documento subido,
 //                    adjunto o documento a firmar): un enlace firmado de 5 min.
 //   · subir          lo que ha subido a conta-portal, al buzón de documentos de
 //                    su cuenta en Sumied (document_inbox, canal portal: el mismo
@@ -24,7 +26,11 @@
 //                    (GoCardless, pago al momento): la página de GoCardless.
 //   · reintentar     que el banco lo pase de nuevo (GoCardless).
 //   · cambiar_cuenta una domiciliación nueva del mismo cliente (GoCardless).
-//   · seguir         en qué ha quedado lo pedido a GoCardless, al volver.
+//   · tarjeta        pagar un recibo devuelto con tarjeta o Bizum (Stripe, solo
+//                    con la clave de PRUEBAS y solo en las demos: Julio, nº 6).
+//   · archivos       los enlaces firmados de las facturas de un año (el ZIP lo
+//                    hace la pantalla).
+//   · seguir         en qué ha quedado lo pedido a GoCardless o a Stripe, al volver.
 //
 // GoCardless, por la puerta de las demos (_shared/puerta.ts y
 // puertaDePruebas.ts) y como conta-cobro: SOLO con una conexión de pruebas
@@ -41,8 +47,9 @@ import { cuentaPuedeSalir } from '../_shared/puerta.ts'
 import { salirA } from '../_shared/puertaDePruebas.ts'
 import { correoValido } from '../_shared/facturaVentaCorreo.ts'
 import { BASES, type Entorno } from '../conta-gocardless-leer/lector.ts'
+import { errorStripe, v1 } from '../_shared/stripeSumied.ts'
 import {
-  BYTES_SUBIDA, PLANTILLA_CODIGO, PLANTILLA_ENLACE, TIPOS_SUBIDA, correoCodigo, correoEnlace, enmascararCorreo, fraseError, leerFlujo, leerPeticion,
+  BYTES_SUBIDA, camposPagoTarjeta, claveStripePruebas, leerSesionStripe, PLANTILLA_CODIGO, PLANTILLA_ENLACE, TIPOS_SUBIDA, correoCodigo, correoEnlace, enmascararCorreo, fraseError, leerFlujo, leerPeticion,
   nombreSeguro, peticionCambiarCuenta, peticionFlujo, peticionLeer, peticionPagarAhora, peticionReintento, type Peticion,
 } from '../_shared/portal/portal.ts'
 import { enlaceParaEntrar, mandar, marcaDe, portalBase } from '../_shared/portal/enviar.ts'
@@ -81,6 +88,7 @@ Deno.serve(async (req) => {
 
   try {
     switch (accion) {
+      case 'subida_url': return await subidaUrl(yo, srv, b)
       case 'archivo': return await archivo(yo, srv, b)
       case 'subir': return await subir(yo, srv, b)
       case 'no_de_acuerdo': return await noDeAcuerdo(yo, srv, b)
@@ -90,6 +98,8 @@ Deno.serve(async (req) => {
       case 'banco_pagar': return await banco(yo, srv, b, 'pagar_banco', origen)
       case 'reintentar': return await banco(yo, srv, b, 'reintentar', origen)
       case 'cambiar_cuenta': return await banco(yo, srv, b, 'cambiar_cuenta', origen)
+      case 'tarjeta': return await tarjeta(yo, srv, b, origen)
+      case 'archivos': return await archivos(yo, srv, b)
       case 'seguir': return await seguir(yo, srv, b)
       default: return json(400, { ok: false, frase: 'Esa acción no existe.' })
     }
@@ -113,6 +123,20 @@ async function archivo(yo: Sb, srv: Sb, b: Fila) {
   const { data: s, error: e2 } = await srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300, { download: nombreSeguro(f.nombre) })
   if (e2 || !s?.signedUrl) return mal('Ese documento no se puede abrir ahora.')
   return json(200, { ok: true, url: s.signedUrl, nombre: f.nombre })
+}
+
+async function subidaUrl(yo: Sb, srv: Sb, b: Fila) {
+  const cliente = uuid(b.cliente); const carpeta = b.carpeta === 'mensajes' ? 'mensajes' : 'subidas'
+  const tipo = texto(b.tipo, 60); const bytes = Number(b.bytes ?? 0)
+  if (!cliente) return json(400, { ok: false, frase: 'Falta el cliente.' })
+  if (!(TIPOS_SUBIDA as readonly string[]).includes(tipo)) return mal('Solo se pueden subir PDF y fotos (JPG, PNG, WEBP o HEIC).')
+  if (!(bytes > 0 && bytes <= BYTES_SUBIDA)) return mal('El fichero pasa de 15 MB.')
+  const { data: acc } = await srv.from('conta_portal_acceso').select('account_id, permiso').eq('party_id', cliente).eq('user_id', (await yo.auth.getUser()).data.user.id).is('revocado_at', null).maybeSingle()
+  if (!acc || (carpeta === 'mensajes' && acc.permiso !== 'todo')) return mal('No tienes acceso a este cliente.')
+  const ruta = `${acc.account_id}/${cliente}/${carpeta}/${crypto.randomUUID()}-${nombreSeguro(texto(b.nombre, 200) || 'documento')}`
+  const { data, error } = await srv.storage.from('conta-portal').createSignedUploadUrl(ruta)
+  if (error || !data?.token) return mal('No se puede subir ahora. Prueba en unos minutos.')
+  return json(200, { ok: true, ruta, token: data.token })
 }
 
 async function subir(yo: Sb, srv: Sb, b: Fila) {
@@ -382,6 +406,7 @@ async function seguir(yo: Sb, srv: Sb, b: Fila) {
   if (!op) return mal('Eso no es tuyo o ya no está.')
   if (op.estado === 'hecha') return json(200, { ok: true, estado: 'hecha', frase: op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Gracias.' })
   if (!op.externo_id || op.tipo === 'reintentar') return json(200, { ok: true, estado: op.estado, frase: 'Aún no ha terminado.' })
+  if (op.tipo === 'pagar_tarjeta') return await seguirTarjeta(srv, op)
   const c = await conexion(srv, op.account_id, op.company_id)
   if ('porque' in c) return mal(c.porque)
   const r = await gc(c, peticionLeer(op.externo_id))
@@ -396,4 +421,77 @@ async function seguir(yo: Sb, srv: Sb, b: Fila) {
     : l.estado === 'esperando' ? 'Tu banco aún lo está confirmando. Te avisamos cuando termine.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'Tu banco no lo ha aceptado. Prueba de nuevo o escribe a tu gestoría.'
   return json(200, { ok: true, estado: l.estado, frase })
+}
+
+// ── Stripe: pagar un devuelto con tarjeta o Bizum (solo pruebas, solo demos) ──
+
+async function tarjeta(yo: Sb, srv: Sb, b: Fila, origen: unknown) {
+  const cliente = uuid(b.cliente); const id = uuid(b.recibo)
+  if (!cliente || !id) return json(400, { ok: false, frase: 'Falta el recibo.' })
+  const { data, error } = await yo.rpc('conta_portal_pagos', { p_party: cliente })
+  if (error || !data) return mal(fraseBase(error))
+  if (!((data as { devueltos: Fila[] }).devueltos ?? []).some((d) => d.recibo_id === id)) return mal('Ese recibo no está devuelto o ya está pagado.')
+  const { data: acc } = await srv.from('conta_portal_acceso').select('id, account_id, nombre, correo').eq('party_id', cliente).eq('user_id', (await yo.auth.getUser()).data.user.id).is('revocado_at', null).maybeSingle()
+  if (!acc) return mal('No tienes acceso a este cliente.')
+  const { data: aj } = await srv.from('conta_portal_ajustes').select('pagar_devuelto').eq('account_id', acc.account_id).maybeSingle()
+  if (!((aj?.pagar_devuelto as string[] | undefined) ?? ['banco']).includes('tarjeta')) return mal('Tu gestoría no tiene puesto el pago con tarjeta.')
+  // Solo en las demos, y solo con la clave de pruebas.
+  if (await cuentaPuedeSalir(srv, acc.account_id)) return mal(SOLO_PRUEBAS)
+  const k = claveStripePruebas(Deno.env.get('STRIPE_SECRET_KEY_PRUEBAS'))
+  if ('porque' in k) return mal(k.porque)
+  const { data: r } = await srv.from('conta_recibo').select('id, company_id, mes, total_cent, cobrar_cent').eq('id', id).single()
+
+  const { data: ya } = await srv.from('conta_portal_operacion').select('id, externo_url').eq('recibo_id', id).eq('tipo', 'pagar_tarjeta')
+    .in('estado', ['creada', 'esperando']).gte('created_at', new Date(Date.now() - 3600_000).toISOString()).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (ya?.externo_url) return json(200, { ok: true, operacion: ya.id, url: ya.externo_url, frase: 'Sigue donde lo dejaste.' })
+
+  const importe = Number(r.cobrar_cent ?? r.total_cent)
+  const { data: op } = await srv.from('conta_portal_operacion').insert({
+    account_id: acc.account_id, company_id: r.company_id, party_id: cliente, recibo_id: id, tipo: 'pagar_tarjeta', entorno: 'pruebas',
+    importe_cent: importe, acceso_id: acc.id, creada_por_name: acc.nombre ?? acc.correo,
+  }).select('id').single()
+  const base = portalBase(origen, URL_BASE)
+  const pedir = (bizum: boolean) => v1(k.clave, 'POST', '/v1/checkout/sessions', camposPagoTarjeta({
+    importeCent: importe, concepto: `Recibo ${r.mes} devuelto`, operacion: op.id, vuelta: `${base}/portal.html?vuelta=${op.id}`, salida: `${base}/portal.html`,
+    correo: correoValido(acc.correo), bizum,
+  }))
+  let s = await pedir(true)
+  if (!s.ok && /bizum/i.test(errorStripe(s))) s = await pedir(false)
+  if (!s.ok) {
+    await srv.from('conta_portal_operacion').update({ estado: 'fallida', error: `Stripe ${s.status}: ${errorStripe(s)}`.slice(0, 400), updated_at: new Date().toISOString() }).eq('id', op.id)
+    return mal('El pago con tarjeta no está disponible ahora. Prueba desde tu banco o escribe a tu gestoría.')
+  }
+  const l = leerSesionStripe(s.datos)
+  await srv.from('conta_portal_operacion').update({ estado: 'esperando', externo_id: l.id, externo_url: l.url, updated_at: new Date().toISOString() }).eq('id', op.id)
+  return json(200, { ok: true, operacion: op.id, url: l.url, frase: 'Te llevamos a la página de pago.' })
+}
+
+async function seguirTarjeta(srv: Sb, op: Fila) {
+  const k = claveStripePruebas(Deno.env.get('STRIPE_SECRET_KEY_PRUEBAS'))
+  if ('porque' in k) return mal(k.porque)
+  const s = await v1(k.clave, 'GET', `/v1/checkout/sessions/${encodeURIComponent(String(op.externo_id))}`)
+  if (!s.ok) return mal('No se ha podido saber cómo ha ido el pago. Prueba en unos minutos.')
+  const l = leerSesionStripe(s.datos)
+  await srv.from('conta_portal_operacion').update({ estado: l.estado, updated_at: new Date().toISOString(), ...(l.estado === 'hecha' ? { hecha_at: new Date().toISOString() } : {}) }).eq('id', op.id)
+  return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? 'Pagado. Tu gestoría ya lo tiene.'
+    : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'El pago aún se está confirmando. Te avisamos cuando termine.' })
+}
+
+// ── Las facturas de un año, para el ZIP ──────────────────────────────────────
+
+async function archivos(yo: Sb, srv: Sb, b: Fila) {
+  const cliente = uuid(b.cliente); const anio = Number(b.anio)
+  if (!cliente || !(anio > 2000 && anio < 2100)) return json(400, { ok: false, frase: 'Falta el año.' })
+  const { data, error } = await yo.rpc('conta_portal_facturas', { p_party: cliente })
+  if (error || !data) return mal(fraseBase(error))
+  const del = ((data as { facturas: Fila[] }).facturas ?? []).filter((f) => Number(f.anio) === anio && f.tiene_pdf).slice(0, 60)
+  const urls: { nombre: string; url: string }[] = []
+  for (const f of del) {
+    const { data: a } = await yo.rpc('conta_portal_archivo', { p_party: cliente, p_tipo: 'factura', p_id: f.id, p_indice: 0 })
+    if (!a) continue
+    const x = a as { almacen: string; ruta: string; nombre: string }
+    const { data: s } = await srv.storage.from(x.almacen).createSignedUrl(x.ruta, 300)
+    if (s?.signedUrl) urls.push({ nombre: nombreSeguro(x.nombre), url: s.signedUrl })
+  }
+  return json(200, { ok: true, anio, archivos: urls, frase: urls.length ? `${urls.length} facturas de ${anio}.` : `No hay facturas de ${anio} con PDF.` })
 }

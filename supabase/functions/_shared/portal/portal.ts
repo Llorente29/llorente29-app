@@ -54,7 +54,7 @@ export function correoEnlace(d: DatosEnlace): Correo {
   const lineas = d.invitacion
     ? [`Hola:`, '',
        `${d.invita ? `${d.invita}, de ${d.empresa},` : d.empresa} te ha dado acceso al espacio de ${d.cliente}.`,
-       'Ahí ves tus facturas y tus recibos, subes papeles, pides altas y hablas con tu gestoría.',
+       'Ahí ves tus facturas y tus recibos, subes documentos, pides altas y hablas con tu gestoría.',
        'Se entra con este botón, sin contraseña. El enlace vale una hora y una sola vez; cuando caduque, pide otro desde la misma página.']
     : [`Hola:`, '', `Aquí tienes tu enlace para entrar en el espacio de ${d.cliente}.`,
        'Vale una hora y una sola vez. Si no lo has pedido tú, no hagas nada: sin el enlace nadie entra.']
@@ -190,4 +190,49 @@ export function fraseError(status: number, j: unknown, que: 'pagar' | 'reintenta
   }
   if (status >= 500 || status === 0) return 'El banco de cobros no contesta ahora. Prueba en unos minutos.'
   return 'No se ha podido hacer ahora. Prueba en unos minutos o escribe a tu gestoría.'
+}
+
+// ── Stripe (solo pruebas, en las demos) ────────────────────────────────────
+//
+// Julio, nº 6: «Pagar con tarjeta o Bizum» va DENTRO del portal (conta-pago no
+// se toca), con su propia clave de pruebas (STRIPE_SECRET_KEY_PRUEBAS). Si no
+// empieza por sk_test_, no se usa. Se cobra en la cuenta de plataforma de
+// pruebas, sin cuenta conectada; al volver, el portal pregunta a Stripe por la
+// sesión (sin webhook).
+
+/** La clave de pruebas, o por qué no vale. */
+export function claveStripePruebas(clave: string | null | undefined): { clave: string } | { porque: string } {
+  const c = (clave ?? '').trim()
+  if (!c) return { porque: 'El pago con tarjeta aún no está conectado.' }
+  if (!/^sk_test_/.test(c)) return { porque: 'El pago con tarjeta solo funciona con la clave de pruebas: con otra clave no se cobra nada.' }
+  return { clave: c }
+}
+
+/** Los campos de la sesión de pago (Checkout) de un recibo devuelto. Con Bizum o sin él. */
+export function camposPagoTarjeta(p: { importeCent: number; concepto: string; operacion: string; vuelta: string; salida: string; correo: string | null; bizum: boolean }): Record<string, string> {
+  if (!Number.isInteger(p.importeCent) || p.importeCent <= 0) throw new Error('El importe tiene que ser mayor que cero y en céntimos.')
+  for (const u of [p.vuelta, p.salida]) if (!/^https:\/\//.test(u)) throw new Error('La vuelta tiene que ser una dirección https.')
+  return {
+    mode: 'payment',
+    'line_items[0][quantity]': '1',
+    'line_items[0][price_data][currency]': 'eur',
+    'line_items[0][price_data][unit_amount]': String(p.importeCent),
+    'line_items[0][price_data][product_data][name]': p.concepto.slice(0, 120),
+    'payment_method_types[0]': 'card',
+    ...(p.bizum ? { 'payment_method_types[1]': 'bizum' } : {}),
+    success_url: `${p.vuelta}${p.vuelta.includes('?') ? '&' : '?'}sesion={CHECKOUT_SESSION_ID}`,
+    cancel_url: p.salida,
+    client_reference_id: p.operacion,
+    'metadata[operacion]': p.operacion,
+    ...(p.correo ? { customer_email: p.correo } : {}),
+  }
+}
+
+/** En qué ha quedado la sesión de pago. */
+export function leerSesionStripe(j: unknown): { id: string; estado: Estado; url: string | null } {
+  const s = (j ?? {}) as { id?: unknown; status?: unknown; payment_status?: unknown; url?: unknown }
+  const id = String(s.id ?? '')
+  if (!/^cs_(test|live)_/.test(id)) throw new Error('Stripe no ha devuelto la sesión de pago.')
+  const estado: Estado = s.payment_status === 'paid' ? 'hecha' : s.status === 'expired' ? 'caducada' : 'esperando'
+  return { id, estado, url: typeof s.url === 'string' ? s.url : null }
 }

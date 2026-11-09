@@ -37,6 +37,8 @@ export default defineConfig({
         pagar: path.resolve(__dirname, 'pagar.html'),
         // B01 Revolut · La vuelta de Revolut (/bancos/revolut/vuelta, por vercel.json): devuelve a Bancos.
         revolutVuelta: path.resolve(__dirname, 'revolut-vuelta.html'),
+        // GP · El portal del cliente de la gestoría (portal.html): entrada aparte, no pasa por App.tsx.
+        portal: path.resolve(__dirname, 'portal.html'),
       },
     },
   },
