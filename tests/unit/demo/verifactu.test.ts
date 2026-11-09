@@ -10,6 +10,7 @@ import { describe, it, expect } from 'vitest'
 import { unaVuelta, type Lote, type Piezas } from '../../../supabase/functions/_shared/verifactu/enviar'
 import { vueltaDeCuadres, type CuadreTomado } from '../../../supabase/functions/_shared/verifactu/cuadre'
 import { EN_LA_DEMO } from '../../../supabase/functions/_shared/puerta'
+import { PRUEBAS_SOLO_DEMOS } from '../../../supabase/functions/_shared/puertaDePruebas'
 
 const lote = (id: string, company: string): Lote => ({
   envio_id: id, entorno: 'pruebas', nif_emisor: '00000000T', company_id: company,
@@ -49,6 +50,22 @@ describe('Verifactu con la puerta de las demos', () => {
     expect(r.en_la_demo).toBe(0)
     expect(r.fallos.length).toBe(1)
     expect(respuestas.e2).toBeUndefined()
+  })
+
+  it('G05 · pruebas desde producción (soloDemos): el lote de demo SÍ va a Hacienda de pruebas; el de verdad no sale y lo dice', async () => {
+    const fallos: Record<string, string> = {}
+    const { p, respuestas } = piezas([lote('d1', 'demo'), lote('v1', 'verdad')], new Set(['demo']))
+    p.soloDemos = true
+    p.fallar = async (id, e) => { fallos[id] = e }
+    const r = await unaVuelta(p, 'pruebas')
+    // El de demo pasa la puerta y sigue el camino de siempre: no se apunta «en la
+    // demo» (aquí cae al prepararlo, sin red ni registro completo).
+    expect(r.en_la_demo).toBe(0)
+    expect(respuestas.d1).toBeUndefined()
+    expect(fallos.d1).toBeDefined()
+    expect(fallos.d1).not.toBe(PRUEBAS_SOLO_DEMOS)
+    // El de una cuenta de verdad no sale: lo dice la puerta.
+    expect(fallos.v1).toBe(PRUEBAS_SOLO_DEMOS)
   })
 
   it('«Comprobar con Hacienda» en una demo no consulta: falla diciéndolo', async () => {

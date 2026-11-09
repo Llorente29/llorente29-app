@@ -10,6 +10,7 @@
 // Núcleo sin Deno: las piezas (base, certificado, red) se inyectan.
 
 import { EN_LA_DEMO } from '../puerta.ts'
+import { salirA } from '../puertaDePruebas.ts'
 import type { Entorno } from './enviar.ts'
 import { type ClavePaginacion, ConsultaRechazada, type FacturaEnHacienda, leerRespuestaConsulta, sobreConsultaPeriodo } from './consulta.ts'
 
@@ -36,6 +37,8 @@ export interface PiezasCuadre<M> {
   maxCuadres?: number
   /** DM1 · PR 2a: ¿es de una cuenta de demo? Si lo es, no se consulta a Hacienda: se dice. */
   enLaDemo?: (c: CuadreTomado) => Promise<boolean>
+  /** G05 · T3: pruebas desde producción, solo para las demos: la de demo sí consulta; la de verdad, no (salirA). */
+  soloDemos?: boolean
 }
 
 export interface VueltaCuadre {
@@ -90,7 +93,10 @@ export async function vueltaDeCuadres<M>(p: PiezasCuadre<M>, entorno: Entorno): 
     if (!c) break
     cuenta.cuadres++
     try {
-      if (p.enLaDemo && await p.enLaDemo(c)) {
+      if (p.soloDemos) {
+        const s = salirA(!!p.enLaDemo && await p.enLaDemo(c), entorno, true)
+        if (!s.sale) throw new Error(s.porque)
+      } else if (p.enLaDemo && await p.enLaDemo(c)) {
         const motivo = `${EN_LA_DEMO} Comprobar con Hacienda no consulta nada en una empresa de demostración.`
         cuenta.fallos.push({ cuadre_id: c.cuadre_id, motivo })
         await p.fallar(c.cuadre_id, motivo)

@@ -1,0 +1,24 @@
+# G05 · T3 · El cobro del mes y su factura, con las puertas de la demo. Rama
+# conta/g05-t3-cobro. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. Ensayo el miércoles 11; el real lo lanza Julio el jueves 12.
+#
+#   1006  AÑADE: los ajustes del cobro de cada emisor (IVA dentro, retención 0 /
+#         15 / 7, serie, días de aviso y de cargo, subcuentas), el formato del
+#         número de una serie, el código de cada cliente; las tablas
+#         conta_cobro_mes, conta_recibo y conta_recibo_evento (con RLS, solo
+#         lectura para las personas) y sus funciones: preparar, revisar,
+#         enviar, seguir (cobro confirmado → factura y asiento 57200002 / 430;
+#         devuelto → 430 / 57200002) y la pantalla en una sola lectura. Tres
+#         CHECK sobre columnas nuevas de dos tablas que existen, declarados.
+#   1007  CAMBIA (misma firma, respaldada): conta_venta_emitir lee el formato
+#         de la serie («{año}/{serie}/{número}»: 2026/1/141). Sin formato, el
+#         número de siempre: ninguna serie de hoy lo tiene.
+#   1021  AÑADE: verifactu_despertar_demos y su cron: despierta conta-verifactu
+#         en pruebas solo si hay registros de pruebas de una cuenta de demo.
+#
+# No toca datos. No lee ni escribe en GoCardless ni en el CRM. Nada en el
+# camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-t3-cobro.sql
+supabase/migrations/20261109T1006_g05_cobro_base.sql
+supabase/migrations/20261109T1007_g05_numero_con_formato.sql
+supabase/migrations/20261109T1021_g05_verifactu_demos.sql

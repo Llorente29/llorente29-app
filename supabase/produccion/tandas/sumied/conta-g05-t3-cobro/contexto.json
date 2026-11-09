@@ -1,0 +1,31 @@
+{
+ "_que": "G05 · T3 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 09:35Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1006 añade tres tablas y sus funciones (no existen) y tres CHECK sobre columnas nuevas de conta_gestoria_ajustes (0 filas) y conta_cobro_cliente; la 1007 reemplaza conta_venta_emitir (misma firma, respaldada); la 1021 añade una función y un cron. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T09:35Z",
+ "tanda": {
+  "supabase/migrations/20261109T1006_g05_cobro_base.sql": "382c72f38c87b93f94b94b80029bc90a",
+  "supabase/migrations/20261109T1007_g05_numero_con_formato.sql": "dd50d553134735816da7e197da3c547a",
+  "supabase/migrations/20261109T1021_g05_verifactu_demos.sql": "3f2e8c7fc898b597c7246a1442b7ec99"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_cobro_cliente",
+   "public.conta_gestoria_ajustes",
+   "public.invoice_series"
+  ],
+  "funciones": [
+   "public.conta_venta_emitir(uuid,text)"
+  ],
+  "filas": {
+   "public.conta_cobro_cliente": 865,
+   "public.conta_gestoria_ajustes": 0,
+   "public.invoice_series": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

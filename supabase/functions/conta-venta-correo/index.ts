@@ -19,7 +19,8 @@
 //
 // verify_jwt = true (config.toml): sin sesión no hay nada que hacer.
 
-import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
+import { cuentaPuedeSalir } from "../_shared/puerta.ts";
+import { correoDeSalida } from "../_shared/puertaDePruebas.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { MARCAS } from "../_shared/marcas.ts";
@@ -79,11 +80,18 @@ Deno.serve(async (req) => {
     return json({ enviado: false, texto });
   }
 
-  // DM1 · PR 2a · La puerta: una cuenta de demo no manda correos. Queda como enviada, y lo dice.
+  // La puerta de las demos (DM1; G05 · T3, respuesta de Julio nº 23): el correo
+  // de una cuenta de demo va SOLO al buzón de pruebas fijo (CORREO_BUZON_PRUEBAS),
+  // nunca al cliente. Sin buzón puesto, no sale, y se dice.
+  let alBuzon: string | null = null;
   if (!(await cuentaPuedeSalir(srv, f.account_id))) {
-    const texto = `Enviada la ${f.number_text} a ${para}. ${EN_LA_DEMO}`;
-    await apuntar(true, texto, { para, demo: true });
-    return json({ enviado: true, demo: true, texto });
+    const salida = correoDeSalida(true, para, Deno.env.get("CORREO_BUZON_PRUEBAS"));
+    if ("porque" in salida) {
+      await apuntar(false, salida.porque, { para, demo: true, motivo: "sin_buzon" });
+      return json({ enviado: false, demo: true, texto: salida.porque });
+    }
+    alBuzon = para;
+    para = salida.para;
   }
 
   // El freno, antes de tocar nada más.
@@ -127,7 +135,9 @@ Deno.serve(async (req) => {
     console.error(`conta-venta-correo · ${id} · Resend ${res.status}`);
     return json({ enviado: false, texto });
   }
-  const texto = `Enviada la ${f.number_text} a ${para}, con su PDF.`;
-  await apuntar(true, texto, { para, correo_id: cuerpo.id ?? null });
+  const texto = alBuzon
+    ? `Enviada la ${f.number_text} al buzón de pruebas (${para}), con su PDF: en la demo no se manda a ${alBuzon}.`
+    : `Enviada la ${f.number_text} a ${para}, con su PDF.`;
+  await apuntar(true, texto, { para, correo_id: cuerpo.id ?? null, ...(alBuzon ? { demo: true, era_para: alBuzon } : {}) });
   return json({ enviado: true, texto });
 });
