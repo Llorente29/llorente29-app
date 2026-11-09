@@ -97,3 +97,11 @@ workflow con `escenas: 05b` y las demás se reutilizan. `modo: ensayo` no
 escribe nada; `modo: grabar` envía el cobro de la demo al sandbox (autorizado
 por Julio). Las maquetas (el portal y Sumied dentro de Bitrix24) son capturas
 del tablero, en `gd/maquetas/`, rotuladas «En construcción».
+
+**Las tomas de Julio (nº60).** Las escenas 5 (Al instante, en pantalla partida)
+y 7b (el buzón) no las graba el guion: son GIF que graba Claude desde el
+Chrome de Julio, en la rama `video-tomas/gd-qbo`, carpeta `tomas/`:
+`05-bitrix.gif`, `05-sumied.gif` y `07b-buzon.gif`. El guion les pone los
+rótulos; sin la toma, la escena queda como hueco y el registro lo dice. Para
+montarlas sin regrabar el resto: `escenas: 05,07b`. En «grabar» no se toca
+Bitrix24.
