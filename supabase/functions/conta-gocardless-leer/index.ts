@@ -24,6 +24,9 @@ import type { Linea, Tarifa } from './comparacion.ts'
 import type { FichaParaCasar } from './casado.ts'
 import { puedeLeer } from './salida.ts'
 import { refDeFicha } from '../_shared/crm/ficha.ts'
+import { jsPDF } from 'npm:jspdf@4.2.1'
+import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
+import { modulosQr } from '../_shared/verifactu/qrServidor.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -195,6 +198,13 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     // Un fallo aquí no tumba la lectura: queda dicho en el recibo y en el registro.
     const { error: eSeguir } = await db.rpc('conta_cobro_seguir', { p_company: empresa })
     if (eSeguir) console.error('[conta-gocardless-leer] seguir el cobro:', eSeguir.message)
+    // G05 · T4 · Las facturas que acaba de emitir: su PDF (adjunto a la factura y a su asiento) y su envío al cliente.
+    // Tampoco tumba la lectura: lo que no salga queda en el historial de cada factura y en el registro.
+    try {
+      const rem = await rematarFacturasDeRecibos(db, empresa, { jsPDF, qr: modulosQr, correo: { resendKey: Deno.env.get('RESEND_API_KEY'),
+        buzonDePruebas: Deno.env.get('CORREO_BUZON_PRUEBAS'), abiertos: Deno.env.get('CORREO_MARCA_ABIERTOS') } })
+      if (rem.fallos.length) console.error('[conta-gocardless-leer] facturas de los recibos:', rem.fallos.join(' · '))
+    } catch (e) { console.error('[conta-gocardless-leer] facturas de los recibos:', e instanceof Error ? e.message : String(e)) }
     return { frase, lee: true, mandatosVivos: plan.resumen.mandatosVivos, lineas: plan.resumen.lineasActivas, alMes: aEuros(plan.resumen.alMesCent),
       convertidas, noConvertidas: plan.noConvertidas.length, diferencias: dif.diferencias.length,
       casados: { porNif: plan.parejas.filter((p) => p.emisor === empresa && p.por === 'nif').length, porCorreo: plan.parejas.filter((p) => p.emisor === empresa && p.por === 'correo').length } }

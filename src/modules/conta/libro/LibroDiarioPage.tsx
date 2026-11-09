@@ -34,6 +34,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaMayor, rutaNuevoAsiento } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { abrirFacturaAdjunta } from '@/modules/conta/services/documentosService'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
@@ -512,6 +513,7 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
     finally { setOcupado(false) }
   }
   const { local: ejeLocal, marca: ejeMarca } = useAnalitica()
+  const { accountId } = useCuentaConta()
   return (
     <div className="cxd-apuntes">
       {espera && <p className="cxd-espera" role="note"><strong>Espera:</strong> {espera}</p>}
@@ -528,7 +530,13 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
         enlaceCuenta={(l) => rutaMayor(l.apunte.cuenta)}
         columnas={columnasApuntes(a.apuntes, { local: !!ejeLocal, marca: !!ejeMarca })}
         apoyo={(l) => apoyoApunte(l.apunte)} />
-      <div className="cxd-apunte-pie"><Link to={rutaAsiento(a.id)} className="cx-enlace">Abrir el asiento</Link></div>
+      <div className="cxd-apunte-pie">
+        <Link to={rutaAsiento(a.id)} className="cx-enlace">Abrir el asiento</Link>
+        {/* G05 · T4 · El de una factura emitida: su PDF adjunto, desde aquí también. */}
+        {a.origen === 'customer_invoice' && accountId && (
+          <button type="button" className="cx-enlace" onClick={(e) => { e.stopPropagation(); void abrirFacturaAdjunta(accountId, a.id).then((t) => { if (t) alFallar(t) }) }}>Abrir la factura (PDF)</button>
+        )}
+      </div>
     </div>
   )
 }

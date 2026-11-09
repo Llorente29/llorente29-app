@@ -58,6 +58,7 @@ export function resumenEntrada(e: EntradaAjustes, d: DatosEmpresa | null, plan: 
     }
     case 'plan': return plan ? resumenPlan(plan.activo ? { plan: plan.plan, digitos: plan.digitos, cuentas: plan.cuentas.length } : null) : ''
     case 'tablas': return 'Impuestos, plazos, formas de pago…'
+    case 'cuenta': return 'Cuenta de demostración · volver a empezar'
     case 'folvy': {
       // También lo que ha hecho en el plan (no decir «Nada todavía» con historial, regla 7).
       const ia = resumen('registro', d, hoy)

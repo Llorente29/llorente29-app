@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 16:05Z. La 1707 crea demo_gestoria_ingresos_gocardless(uuid) y demo_gestoria_ingresos_gocardless_demos(), que no existen, y el cron gd-ingresos-gocardless, que no existe (el único cron de demos es verifactu-despertar-demos). La demo de000000-…-a0 tiene 0 liquidaciones en conta_gc_payout y 0 movimientos y 0 extractos en sus dos bancos: la llamada de hoy no crea nada. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T16:05Z",
+ "tanda": {
+  "supabase/migrations/20261109T1707_gd_ingresos_gocardless.sql": "9af31d7a08aa91e3d8a440c6244be955"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

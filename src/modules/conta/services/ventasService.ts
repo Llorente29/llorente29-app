@@ -23,7 +23,8 @@ import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
 import { cifrasGuardadas, diezDeFactura, diferenciaDe, type EstadoCobroBase, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
-import { QUE_INCLUYE_POR_DEFECTO, cuentaEnmascarada, facturaSumiedPdf, type DatosFacturaSumied } from '../../../../supabase/functions/_shared/facturaSumiedPdf.ts'
+import { facturaSumiedPdf, type DatosFacturaSumied } from '../../../../supabase/functions/_shared/facturaSumiedPdf.ts'
+import { montarDatosSumied } from '../../../../supabase/functions/_shared/cobro/facturaSumiedDatos.ts'
 import { modulosQr } from '@/modules/conta/lib/verifactu/qr'
 import { MENCION_SIN_IVA, aTipoVenta, dePorque, type PorqueSinIva } from '@/modules/conta/lib/ventasSinIva'
 
@@ -372,63 +373,26 @@ export async function datosSumied(accountId: string, f: FacturaGuardada): Promis
   if (!emp) throw new Error('No he podido leer los datos de la empresa.')
   const [cc] = await leer(tabla('conta_cobro_cliente').select('codigo_cliente').eq('company_id', companyId).eq('party_id', String(r.party_id)), 'el código del cliente')
   const asig = asignaciones.length ? await leer(tabla('conta_consulta_asignacion').select('id, servicio_id, nivel_id, paquete_id').eq('cuenta_id', accountId).in('id', asignaciones), 'lo que incluye cada servicio') : []
-  const nivelIds = asig.map((a) => s(a.nivel_id)).filter((x): x is string => !!x)
-  const paqueteIds = asig.map((a) => s(a.paquete_id)).filter((x): x is string => !!x)
-  const niveles = nivelIds.length ? await leer(tabla('conta_servicio_nivel').select('id, incluye').eq('account_id', accountId).in('id', nivelIds), 'los niveles') : []
-  const paquetes = paqueteIds.length ? await leer(tabla('conta_paquete').select('id, descripcion').eq('account_id', accountId).in('id', paqueteIds), 'los paquetes') : []
-  const servicioIds = asig.map((a) => s(a.servicio_id)).filter((x): x is string => !!x)
-  const servicios = servicioIds.length ? await leer(tabla('conta_servicio').select('id, clave, incluye').eq('account_id', accountId).in('id', servicioIds), 'los servicios') : []
+  const ids = (k: string) => asig.map((a) => s(a[k])).filter((x): x is string => !!x)
+  const niveles = ids('nivel_id').length ? await leer(tabla('conta_servicio_nivel').select('id, incluye').eq('account_id', accountId).in('id', ids('nivel_id')), 'los niveles') : []
+  const paquetes = ids('paquete_id').length ? await leer(tabla('conta_paquete').select('id, descripcion').eq('account_id', accountId).in('id', ids('paquete_id')), 'los paquetes') : []
+  const servicios = ids('servicio_id').length ? await leer(tabla('conta_servicio').select('id, clave, incluye').eq('account_id', accountId).in('id', ids('servicio_id')), 'los servicios') : []
   const mandato = s(r.mandato_gc_id)
   const [cuenta] = mandato ? await leer(tabla('conta_gc_mandato').select('cuenta_final, cuenta_pais').eq('company_id', companyId).eq('gc_id', mandato), 'la cuenta del mandato') : []
   const logo = s(emp.logo_path) ? await logoParaPdf(String(emp.logo_path)) : null
   const sale = await rpc<boolean>('cuenta_puede_salir', { p_account_id: accountId })
   const verifactu = await verifactuDelPdf(accountId, f.id)
-
-  const enLista = (xs: string[]) => (xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} y ${xs[xs.length - 1].charAt(0).toLowerCase()}${xs[xs.length - 1].slice(1)}`)
-  const queIncluye = (asignacionId: string | null): string | null => {
-    const a = asig.find((x) => String(x.id) === asignacionId)
-    if (!a) return null
-    // Por orden: lo que incluye su nivel, lo del servicio, la descripción del paquete y, si no, el de siempre del catálogo.
-    const n = niveles.find((x) => String(x.id) === s(a.nivel_id))
-    if (n && Array.isArray(n.incluye) && n.incluye.length) return enLista((n.incluye as unknown[]).map(String).slice(0, 3))
-    const sv = servicios.find((x) => String(x.id) === s(a.servicio_id))
-    if (s(sv?.incluye)) return s(sv?.incluye)
-    const p = paquetes.find((x) => String(x.id) === s(a.paquete_id))
-    if (s(p?.descripcion)) return s(p?.descripcion)
-    return QUE_INCLUYE_POR_DEFECTO[String(sv?.clave ?? '')] ?? null
-  }
-  const mes = String(r.mes)
-  const desde = (iso: string | null) => (!iso ? null : iso.slice(0, 7) === mes ? `Alta el ${fechaLargaSumied(iso)}` : `Desde el ${fechaLargaSumied(iso)}`)
-  const cent = (x: number) => Math.round(x * 100)
-  const lineas = lineasRecibo.map((l) => {
-    const m = String(l.concepto ?? '').match(/^(.*?)\s*·\s*(\d+ trabajador(?:es)?)$/)
-    const nombre = m ? m[1] : String(l.concepto ?? '')
-    const incluye = queIncluye(s(l.asignacionId))
-    const trabajadores = Array.isArray(l.trabajadores) ? (l.trabajadores as Fila[]).map((t) => ({ nombre: String(t.nombre ?? ''), desde: desde(s(t.desde)) })) : null
-    return {
-      concepto: nombre, explicacion: [incluye, m ? m[2] : null].filter(Boolean).join(' · ') || null,
-      cantidad: Number(l.cantidad ?? 1), precioCent: Number(l.precioCent ?? 0), importeCent: Number(l.baseCent ?? 0),
-      trabajadores, trabajadoresEn: (l.trabajadoresEn === 'linea' || l.trabajadoresEn === 'hoja' ? l.trabajadoresEn : null) as 'linea' | 'hoja' | null,
-    }
+  // G05 · T4 · Lo arma la pieza común: el mismo PDF que hace el servidor al emitir (cobro/facturaRecibo.ts).
+  return montarDatosSumied({
+    factura: { numero: f.numero, fecha: f.fecha, base: f.base, iva: f.iva, retencion: f.retencion, total: f.total,
+      cliente: { nombre: f.cliente.nombre, nif: f.cliente.nif, calle: f.cliente.calle, cp: f.cliente.cp, ciudad: f.cliente.ciudad, provincia: f.cliente.provincia },
+      lineas: f.lineas.map((l) => ({ tipo: l.tipo, importe: l.importe, cuota: l.cuota })) },
+    recibo: { mes: String(r.mes), factura: (r.factura as Fila | null) ?? null, confirmado_el: s(r.confirmado_el) },
+    empresa: emp, codigoCliente: cc?.codigo_cliente == null ? null : Number(cc.codigo_cliente),
+    asignaciones: asig, niveles, servicios, paquetes,
+    cuenta: cuenta ? { pais: s(cuenta.cuenta_pais), final: s(cuenta.cuenta_final) } : null,
+    logo, demo: sale === false, verifactu: verifactu ?? null,
   })
-  const calle = [s(emp.fiscal_street_type), s(emp.fiscal_street), s(emp.fiscal_number), s(emp.fiscal_extra)].filter(Boolean).join(' ')
-  const direccionEmisor = [calle, [s(emp.fiscal_postal_code), s(emp.fiscal_city)].filter(Boolean).join(' ')].filter(Boolean).join(' · ')
-  const contacto = [s(emp.email), s(emp.phone)].filter(Boolean).join(' · ')
-  const porTipo = cifrasGuardadas(f.lineas).porTipo
-  const pagada = s(r.confirmado_el)
-  const [anio, m] = mes.split('-')
-  const retPct = f.base === 0 ? 0 : Math.round(f.retencion / f.base * 10000) / 100
-  return {
-    emisor: { nombre: String(s(emp.trade_name) ?? s(emp.legal_name) ?? ''), nif: String(emp.tax_id ?? ''), lineas: [direccionEmisor, contacto].filter(Boolean), logo },
-    numero: f.numero ?? '', fecha: f.fecha, pagadaEl: pagada, periodo: `Servicios de ${MESES_SUMIED[Number(m) - 1]} de ${anio}`,
-    cliente: { nombre: f.cliente.nombre ?? '', nif: f.cliente.nif ?? '', codigo: cc?.codigo_cliente == null ? null : Number(cc.codigo_cliente),
-      direccion: [[f.cliente.calle].filter(Boolean).join(''), [f.cliente.cp, f.cliente.ciudad].filter(Boolean).join(' ') + (f.cliente.provincia && f.cliente.provincia !== f.cliente.ciudad ? ` (${f.cliente.provincia})` : '')].filter(Boolean).join(' · ') || null },
-    pago: { forma: 'Domiciliación SEPA', cuenta: cuentaEnmascarada(s(cuenta?.cuenta_pais), s(cuenta?.cuenta_final)), texto: pagada ? `Cargada el ${fechaLargaSumied(pagada, false)} · pagada` : 'Pendiente de cargo' },
-    lineas,
-    porTipo: porTipo.map((t) => ({ tipo: t.tipo, baseCent: cent(t.base), ivaCent: cent(t.iva) })),
-    baseCent: cent(f.base), ivaCent: cent(f.iva), retencion: f.retencion ? { pct: retPct, cent: cent(f.retencion) } : null, totalCent: cent(f.total),
-    verifactu: verifactu ?? null, demo: sale === false,
-  }
 }
 /** El logo de Ajustes, para el PDF: PNG o JPEG tal cual; WebP (jsPDF no lo lee), pasado a PNG. Si no se puede, null (salen las iniciales). */
 async function logoParaPdf(ruta: string): Promise<{ base64: string; formato: 'PNG' | 'JPEG' } | null> {
@@ -446,8 +410,6 @@ async function logoParaPdf(ruta: string): Promise<{ base64: string; formato: 'PN
   } catch { return null }
 }
 
-const MESES_SUMIED = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-const fechaLargaSumied = (iso: string, conAnio = true) => `${Number(iso.slice(8, 10))} de ${MESES_SUMIED[Number(iso.slice(5, 7)) - 1]}${conAnio ? ` de ${iso.slice(0, 4)}` : ''}`
 
 /** El PDF de una emitida: se hace aquí, se sube y se guarda en la factura. Si ya lo tiene, no se rehace. */
 export async function guardarPdf(accountId: string, f: FacturaGuardada, datos: DatosFacturaPdf): Promise<{ ruta: string; yaEstaba: boolean }> {

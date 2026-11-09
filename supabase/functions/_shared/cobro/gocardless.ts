@@ -171,3 +171,40 @@ export function fraseDelCambio(r: { totalCent: number; mes: string }, estado: Es
     default: return `Recibo de ${cuanto} preparado.`
   }
 }
+
+// ── G05 · nº 55 · Cambiar de cuenta desde el portal ──────────────────────────────
+
+/** Un mandato de los guardados (conta_gc_mandato): su id, su cliente de GoCardless y su estado. */
+export interface MandatoGuardado { gcId: string; gcCliente: string | null; estado: string | null }
+
+/**
+ * Los mandatos que se cancelan cuando el cliente cambia de cuenta: los vivos
+ * (los que cobrarían) de su cliente de GoCardless de antes y del de ahora,
+ * menos el nuevo. Puro.
+ */
+export function mandatosACancelar(guardados: readonly MandatoGuardado[], clienteAntes: string | null, clienteNuevo: string, nuevo: string): string[] {
+  const clientes = new Set([clienteAntes, clienteNuevo].filter((x): x is string => !!x))
+  return guardados
+    .filter((m) => m.gcId !== nuevo && m.gcCliente !== null && clientes.has(m.gcCliente) && (MANDATO_QUE_COBRA as readonly string[]).includes(m.estado ?? ''))
+    .map((m) => m.gcId)
+    .sort()
+}
+
+/** El mandato nuevo, leído de GoCardless (GET /mandates/:id): si ya cobra y de qué cliente es. */
+export function leerMandatoNuevo(respuesta: unknown): { vale: true; cliente: string } | { vale: false; porque: string } {
+  const m = (respuesta as { mandates?: { status?: unknown; links?: { customer?: unknown } } } | null)?.mandates
+  const estado = typeof m?.status === 'string' ? m.status : null
+  const cliente = typeof m?.links?.customer === 'string' ? m.links.customer : null
+  if (!estado || !cliente) return { vale: false, porque: 'GoCardless no ha devuelto ese mandato.' }
+  if (estado !== 'active') return { vale: false, porque: `La domiciliación nueva aún no está activa en GoCardless (${estado}): la vieja no se cancela todavía.` }
+  return { vale: true, cliente }
+}
+
+/** La respuesta de cancelar un mandato: cancelado ahora, o ya lo estaba (no es un fallo). */
+export function leerCancelacion(status: number, respuesta: unknown): { cancelado: true } | { cancelado: false; porque: string } {
+  if (status >= 200 && status < 300) return { cancelado: true }
+  const e = (respuesta as { error?: { errors?: { reason?: string }[]; message?: string } } | null)?.error
+  const motivos = (e?.errors ?? []).map((x) => x.reason ?? '')
+  if (motivos.includes('mandate_already_cancelled')) return { cancelado: true }
+  return { cancelado: false, porque: e?.message ?? `HTTP ${status}` }
+}

@@ -1,0 +1,15 @@
+# GD · «Volver a empezar», la parte de Sumied (nº51). Rama
+# conta/gd-volver-a-empezar. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1731  Añade _gd_se_queda() y demo_gestoria_volver_a_empezar(cuenta) (solo
+#         cuentas demo, solo la plataforma). La migración NO la llama: no cambia
+#         ningún dato. Cuando el administrador de una demo pulse «Volver a
+#         empezar», vaciará de ESA cuenta todo lo que nace del uso (todo menos
+#         la configuración que nombra _gd_se_queda) y volverá a sembrar la
+#         contabilidad y el banco. El analizador no ve dentro de las funciones:
+#         por eso va escrito aquí.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-volver-a-empezar.sql
+supabase/migrations/20261109T1731_gd_volver_a_empezar.sql

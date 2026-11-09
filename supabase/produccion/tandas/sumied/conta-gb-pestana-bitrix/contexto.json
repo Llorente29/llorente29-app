@@ -1,0 +1,8 @@
+{
+ "_que": "GB · contexto de producción, medido en SOLO LECTURA el 09/11 a las 17:54Z. La 1905 crea conta_bitrix_pestana_leer(text,text,text,text), que no existe (ni otra conta_bitrix_pestana*), y no la llama: no cambia datos. Las dos que llama, conta_pantalla_ficha(uuid,uuid) y conta_pantalla_clientes(uuid), existen. Conexiones de Bitrix24: la demo de000000-…-a0 con el portal de pruebas (70 fichas) y una cuenta real con el suyo; la pestaña solo se instala en el de pruebas. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T17:54Z",
+ "tanda": {
+  "supabase/migrations/20261109T1905_gb_bitrix_pestana.sql": "d171571d3ae4f00b5c7a5bc97467d943"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

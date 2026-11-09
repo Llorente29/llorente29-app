@@ -51,7 +51,7 @@ import { detalleDiez, type EnvioAsiento } from '@/modules/conta/lib/enDiez'
 import { DetalleDiezPieza } from '@/modules/conta/libro/DetalleDiez'
 import { noSeValida } from '@/modules/conta/lib/validarConPdf'
 import { useAnalitica } from '@/modules/conta/marco/nuevo/contexto'
-import { TarjetaExpedida } from '@/modules/conta/libro/FacturaExpedida'
+import { TarjetaExpedida, TarjetaFacturaEmitida } from '@/modules/conta/libro/FacturaExpedida'
 import { esExpedidaAMano } from '@/modules/conta/lib/expedidaPdf'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { motivosParaValidar } from '@/modules/conta/services/esperanService'
@@ -314,6 +314,10 @@ export default function AsientoPage() {
           {esExpedidaAMano(a) && accountId && (
             <TarjetaExpedida a={a} accountId={accountId} quien={userName} movil={movil}
               alHacer={(t) => { setFallo(null); setHecho(t) }} alFallar={(t) => { setHecho(null); setFallo(t) }} />
+          )}
+          {/* G05 · T4 · El asiento de una factura emitida: su PDF adjunto (lo adjunta la emisión). */}
+          {a.origen === 'customer_invoice' && accountId && (
+            <TarjetaFacturaEmitida entryId={a.id} accountId={accountId} alFallar={(t) => { setHecho(null); setFallo(t) }} />
           )}
           <section className="cx-tarjeta" aria-label="Documento">
             <h2 className="cx-tarjeta-titulo">Documento</h2>

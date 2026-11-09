@@ -1,0 +1,4 @@
+# GD · la vuelta atrás de la 1707: se quitan el cron y las dos funciones. Los
+# ingresos ya apuntados se quedan en el banco de la demo (el día del real, 0).
+cuenta: scripts/conta/produccion/cuentas/gd-ingresos-gocardless.sql
+supabase/vuelta-atras/20261109T1707_gd_ingresos_gocardless.down.sql
