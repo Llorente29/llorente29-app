@@ -94,7 +94,9 @@ declare
     '_conta_portal_devueltos', '_conta_portal_proximo', '_conta_portal_cuenta_propia', 'conta_portal_acceso_usuario', 'conta_portal_firma_pedir',
     'conta_portal_firma_pdf', 'conta_portal_incidencia_parada', 'conta_portal_archivo',
     -- GP · T4 (la 2030), si ya está (conta_portal_despertar solo la llama el cron: ni sesión ni servicio):
-    'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos'];
+    'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos',
+    -- GP · nº 17 (la 2345), si ya está: la pestaña de Bitrix24, solo el servidor.
+    '_conta_portal_bitrix_quien', 'conta_portal_bitrix_invitar', 'conta_portal_bitrix_contestar'];
   f record; malos text[] := '{}'; n int := 0;
 begin
   for f in select p.oid, p.proname, p.oid::regprocedure::text as firma from pg_catalog.pg_proc p join pg_catalog.pg_namespace s on s.oid = p.pronamespace
