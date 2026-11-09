@@ -1,0 +1,6 @@
+# GD · La contabilidad de «Gestoría Demo»: la 1300 y su prueba (ROLLBACK), que
+# siembra dos veces en la Gestoría Demo de staging (la segunda deja lo mismo),
+# pasa la regla de los modelos del agente «Datos maestros» y prueba la vuelta
+# atrás.
+supabase/migrations/20261109T1300_gd_contabilidad_demo.sql
+supabase/staging/sql/20261109_gd_contabilidad_demo_prueba.sql

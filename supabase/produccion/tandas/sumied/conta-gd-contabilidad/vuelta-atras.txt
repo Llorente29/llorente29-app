@@ -1,0 +1,5 @@
+# GD · la vuelta atrás de la 1300: deja las dos empresas de «Gestoría Demo» como
+# las dejó la 0110 (sin plan, actividad, ejercicio, serie, modelos ni ajustes de
+# cobro) y quita la función.
+cuenta: scripts/conta/produccion/cuentas/gd-contabilidad-demo.sql
+supabase/vuelta-atras/20261109T1300_gd_contabilidad_demo.down.sql

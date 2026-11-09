@@ -1,0 +1,18 @@
+# GD · La contabilidad de «Gestoría Demo» (la necesita Code 1 para la T4 y la
+# T5). Rama conta/gd-contabilidad. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1300  Añade demo_gestoria_contabilidad_sembrar(cuenta) (solo cuentas demo,
+#         solo la plataforma) y la llama para «Gestoría Demo». CAMBIA DATOS,
+#         solo de la cuenta demo, por los caminos de la app (como Casa Lola):
+#         perfil fiscal con los modelos de QBO, actividad, ejercicio 2026
+#         abierto, el plan de 8 cifras («Activar el plan») con las subcuentas
+#         de GoCardless de QBO (57200002, 40000015 y 62900007), la serie «1»
+#         (la sociedad, {año}/{serie}/{número} desde la 2026/1/141) y los
+#         ajustes de cobro (el código de cliente «lo pone Sumied»). No asienta
+#         nada. Repetible (lo rehace «Volver a empezar»).
+#
+# No toca ninguna otra cuenta (cada consulta lleva la de la demo). Nada en el
+# camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-contabilidad-demo.sql
+supabase/migrations/20261109T1300_gd_contabilidad_demo.sql
