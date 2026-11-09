@@ -15,7 +15,7 @@ const reciboDe = (as = asignaciones()) => {
 describe('G05 · la factura del recibo', () => {
   it('el ejemplo de QBO: 145,20 € con el IVA dentro = 120,00 € + 25,20 €; la laboral, «2 × 20,00 €», con sus trabajadores debajo', () => {
     const f = facturaDelRecibo(reciboDe(), CON_IVA)
-    expect([f.baseCent, f.ivaCent, f.totalCent, f.ajuste]).toEqual([12000, 2520, 14520, null])
+    expect([f.baseCent, f.ivaCent, f.totalCent, f.cuotaAjustada]).toEqual([12000, 2520, 14520, null])
     expect(f.lineas.map((l) => [l.concepto, l.cantidad, l.precioCent, l.baseCent, l.trabajadoresEn])).toEqual([
       ['Gestoría mensual', 1, 8000, 8000, null], ['Gestión laboral · 2 trabajadores', 2, 2000, 4000, 'linea'],
     ])
@@ -33,23 +33,46 @@ describe('G05 · la factura del recibo', () => {
     const f = facturaDelRecibo(reciboDe(asignaciones([trabajador('Persona Prueba 1')])), CON_IVA)
     expect(f.lineas[1].concepto).toBe('Gestión laboral · 1 trabajador')
   })
-  it('la factura y el cobro, al céntimo, para cualquier total: lo comprueba con todos de 0,01 € a 300,00 €', () => {
+  it('nº 62 · para cualquier total de 0,01 € a 1.000,00 €, base + IVA es justo el total, y el IVA se aparta de base × tipo como mucho un céntimo', () => {
     let exactos = 0
-    for (let t = 1; t <= 30000; t++) {
+    for (let t = 1; t <= 100000; t++) {
       const b = baseParaElTotal(t, CON_IVA)
-      const total = totalConBase(b.baseCent, CON_IVA)
-      if (b.exacta) { exactos++; expect(total).toBe(t) } else { expect(total).toBeLessThan(t); expect(t - total).toBeLessThanOrEqual(1) }
+      expect(b.baseCent + b.ivaCent).toBe(t)
+      const redondeado = Math.round(b.baseCent * 0.21 + 1e-9)
+      if (b.exacta) { exactos++; expect(b.ivaCent).toBe(redondeado) } else expect(Math.abs(b.ivaCent - redondeado)).toBe(1)
+      // Dentro de lo que acepta Verifactu en la cuota (±10 €), con muchísimo margen.
+      expect(Math.abs(b.ivaCent - (b.baseCent * 21) / 100)).toBeLessThan(1)
     }
-    // Con el 21 %, unos pocos totales no salen con ningún céntimo de base (sube de 2 en 2 en algunos puntos).
-    expect(exactos).toBeGreaterThan(30000 * 0.8)
+    // Con el 21 %, cada céntimo de base sube el total 1,21: unos 17 de cada 100 totales no salen con ninguna base
+    // (82.645 de 100.000 sí).
+    expect(exactos).toBe(82645)
   })
-  it('un total que no sale: se dice antes de cobrar y se cobra lo que dirá la factura, nunca de más', () => {
-    let t = 1; while (baseParaElTotal(t, CON_IVA).exacta) t++
-    const r = { ...reciboDe(), totalCent: t, lineas: [{ ...reciboDe().lineas[0], importeCent: t }] }
+  it('nº 62 · los importes que dio Julio: 145,00 € (la demo) = 119,83 + 25,17 y 74,20 € (QBO) = 61,32 + 12,88; y otros que no salen', () => {
+    const de = (t: number) => { const r = { ...reciboDe(), totalCent: t, lineas: [{ ...reciboDe().lineas[0], importeCent: t }] }; return facturaDelRecibo(r, CON_IVA) }
+    const f = de(14500)
+    expect([f.baseCent, f.ivaCent, f.totalCent]).toEqual([11983, 2517, 14500])
+    expect(f.cuotaAjustada?.cent).toBe(1)
+    expect(f.cuotaAjustada?.porque).toBe('145,00 € no sale con ninguna base y su IVA redondeado: base 119,83 € e IVA 25,17 € (un céntimo más que 25,16 €, dentro del margen de Verifactu). Se cobra y se factura 145,00 €')
+    expect(f.lineas.map((l) => [l.baseCent, l.ivaCent])).toEqual([[11983, 2517]])
+    const g = de(7420)
+    expect([g.baseCent, g.ivaCent, g.totalCent, g.cuotaAjustada]).toEqual([6132, 1288, 7420, null])
+    // Otros totales que no salen con ninguna base (los primeros por encima de 100, 200 y 500 €, sacados del cálculo).
+    const sinBase = [10000, 20000, 50000].map((d) => { let t = d; while (baseParaElTotal(t, CON_IVA).exacta) t++; return t })
+    for (const t of sinBase) {
+      const x = de(t)
+      expect(x.totalCent).toBe(t)
+      expect(x.baseCent + x.ivaCent).toBe(t)
+      expect(Math.abs(x.cuotaAjustada!.cent)).toBe(1)
+    }
+  })
+  it('nº 62 · con el IVA ajustado, las cuotas de las líneas suman justo el IVA y el céntimo va a la línea que no es por trabajador', () => {
+    const base = reciboDe()
+    const r = { ...base, totalCent: 14500, lineas: [{ ...base.lineas[0], importeCent: 10500 }, base.lineas[1]] }
     const f = facturaDelRecibo(r, CON_IVA)
-    expect(f.totalCent).toBe(t - 1)
-    expect(f.ajuste?.cent).toBe(1)
-    expect(f.ajuste?.porque).toMatch(/no sale con ninguna base: se cobra y se factura/)
+    expect(f.totalCent).toBe(14500)
+    expect(f.lineas.reduce((s, l) => s + l.ivaCent, 0)).toBe(f.ivaCent)
+    expect(f.lineas.reduce((s, l) => s + l.baseCent, 0) + f.ivaCent).toBe(14500)
+    expect(f.lineas[1].ivaCent).toBe(Math.round(f.lineas[1].baseCent * 0.21))
   })
   it('las bases de las líneas suman la base de la factura; el céntimo que sobra va a la que no es por trabajador', () => {
     const base = reciboDe()
@@ -68,8 +91,8 @@ describe('G05 · la factura del recibo', () => {
   })
   it('lo que recibe conta_venta_guardar: cantidad y precio de cada uno, en euros (sin IVA)', () => {
     expect(lineasParaGuardar(facturaDelRecibo(reciboDe(), CON_IVA))).toEqual([
-      { concepto: 'Gestoría mensual', cantidad: 1, precio: 80, descuento: 0, iva_pct: 21 },
-      { concepto: 'Gestión laboral · 2 trabajadores', cantidad: 2, precio: 20, descuento: 0, iva_pct: 21 },
+      { concepto: 'Gestoría mensual', cantidad: 1, precio: 80, descuento: 0, iva_pct: 21, cuota: 16.8 },
+      { concepto: 'Gestión laboral · 2 trabajadores', cantidad: 2, precio: 20, descuento: 0, iva_pct: 21, cuota: 8.4 },
     ])
   })
   it('la retención: sin retención, 15 % o 7 %; cualquier otra, no', () => {

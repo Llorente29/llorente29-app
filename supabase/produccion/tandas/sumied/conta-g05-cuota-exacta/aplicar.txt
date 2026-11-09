@@ -1,0 +1,13 @@
+# G05 · Lo que paga el cliente no cambia (nº 62). Rama conta/g05-cuota-exacta. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar. El real
+# lo lanza Julio.
+#
+#   2203  AÑADE _conta_cobro_cuota_exacta (guarda en las líneas del borrador la
+#         cuota de IVA que da el núcleo, para que la factura sea justo el total
+#         del recibo: 145,00 = 119,83 + 25,17). CAMBIA, declaradas y probadas,
+#         _conta_cobro_facturar y _conta_cobro_facturar_portal (misma firma):
+#         la llaman antes de comprobar que la factura cuadra con el cobro.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-cuota-exacta.sql
+supabase/migrations/20261109T2203_g05_cuota_exacta.sql
