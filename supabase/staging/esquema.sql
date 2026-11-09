@@ -127042,7 +127042,14 @@ CREATE INDEX conta_asiento_borrado_lote ON public.conta_asiento_borrado USING bt
 -- Name: conta_aviso_clave_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE UNIQUE INDEX conta_aviso_clave_idx ON public.conta_aviso USING btree (account_id, clave) WHERE (clave IS NOT NULL);
+CREATE UNIQUE INDEX conta_aviso_clave_idx ON public.conta_aviso USING btree (account_id, clave);
+
+
+--
+-- Name: INDEX conta_aviso_clave_idx; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON INDEX public.conta_aviso_clave_idx IS 'G01d · Una clave por aviso y cuenta: cada aviso se trata una vez. Sin «where», para que case con el «on conflict (account_id, clave)» de las funciones.';
 
 
 --
