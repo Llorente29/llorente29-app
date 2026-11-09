@@ -7546,10 +7546,18 @@ CREATE FUNCTION public._conta_portal_proximo(p_account uuid, p_party uuid) RETUR
            'recibo_id', r.id, 'mes', r.mes, 'estado', r.estado, 'estado_texto', public._conta_portal_estado_recibo(r.estado),
            'total_cent', coalesce(r.cobrar_cent, r.total_cent), 'anterior_cent', r.anterior_cent,
            'lineas', r.lineas, 'cambios', r.cambios, 'cargo_el', r.cargo_el, 'parado', to_jsonb(r.parado),
+           'cuenta_final', m.cuenta_final, 'cuenta_pais', m.cuenta_pais,
            'incidencia', (select jsonb_build_object('id', i.id, 'texto', i.texto, 'creada', i.created_at, 'parado', i.recibo_parado)
                             from public.conta_portal_incidencia i
                            where i.recibo_id = r.id and i.tipo = 'no_de_acuerdo' and i.estado = 'abierta' limit 1))
     from public.conta_recibo r
+    left join lateral (select g.cuenta_final, g.cuenta_pais from public.conta_gc_mandato g
+                        where g.company_id = r.company_id
+                          and g.gc_id = coalesce(r.mandato_gc_id, (select g2.gc_id from public.conta_gc_mandato g2
+                                join public.conta_cobro_cliente cc on cc.company_id = g2.company_id and cc.gc_cliente_id = g2.gc_cliente_id
+                               where cc.company_id = r.company_id and cc.party_id = r.party_id
+                                 and g2.estado not in ('cancelled', 'failed', 'expired', 'consumed', 'blocked')
+                               order by g2.creado desc nulls last limit 1))) m on true
    where r.account_id = p_account and r.party_id = p_party
      and r.estado in ('preparado', 'enviado', 'en_el_banco') and r.decision <> 'este_mes_no'
    order by r.mes desc limit 1
@@ -32727,6 +32735,121 @@ COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada ho
 
 
 --
+-- Name: conta_bitrix_pestana_bitrix(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_bitrix(p_cambio uuid, p_resultado jsonb) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  update public.conta_bitrix_pestana_cambio set bitrix = p_resultado, bitrix_at = now() where id = p_cambio
+$$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_bitrix(p_cambio uuid, p_resultado jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_bitrix(p_cambio uuid, p_resultado jsonb) IS 'GB · Apunta lo que pasó en Bitrix24 al guardar un cambio de la pestaña: lo escrito, o el choque con un dato cambiado allí (no se pisa).';
+
+
+--
+-- Name: conta_bitrix_pestana_hacer(text, text, text, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_portal text := lower(trim(coalesce(p_portal, '')));
+  v_correo text := lower(trim(coalesce(p_correo, '')));
+  v_id text := trim(coalesce(p_id, ''));
+  v_d jsonb := coalesce(p_datos, '{}'::jsonb);
+  v_cuenta uuid; v_usuario uuid; v_quien text; v_n int;
+  v_cliente uuid; v_empresa uuid; v_r jsonb; v_linea public.conta_linea; v_cambio uuid;
+  v_campo text; v_conocida text; v_escrita text;
+begin
+  if p_tipo is null or p_tipo not in ('empresa', 'contacto') or v_id !~ '^[0-9]{1,18}$' then
+    return jsonb_build_object('estado', 'ficha_rara');
+  end if;
+  if p_accion is null or p_accion not in ('alta', 'baja') then
+    return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Esa acción no se puede hacer desde la pestaña.');
+  end if;
+  if v_portal = '' or v_correo = '' then return jsonb_build_object('estado', 'sin_acceso'); end if;
+
+  -- La persona, igual que en la lectura: de una cuenta con ese portal conectado, activa, con ese correo.
+  select count(*), min(c.account_id::text)::uuid into v_n, v_cuenta
+    from public.conta_crm c
+    join public.user_profiles up on up.account_id = c.account_id and up.active
+    join auth.users u on u.id = up.user_id and lower(u.email) = v_correo
+   where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  if v_n = 0 then return jsonb_build_object('estado', 'sin_acceso'); end if;
+  if v_n > 1 then return jsonb_build_object('estado', 'varias_cuentas'); end if;
+  select up.user_id, up.display_name into v_usuario, v_quien
+    from public.user_profiles up join auth.users u on u.id = up.user_id
+   where up.account_id = v_cuenta and up.active and lower(u.email) = v_correo limit 1;
+
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_usuario::text || ':' || v_cuenta::text, true);
+
+  -- El cliente de la ficha abierta: solo se cambia lo suyo.
+  select f.party_id into v_cliente from public.conta_gestoria_ficha f
+   where f.account_id = v_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = v_id
+   order by (f.de_empresa = '') desc, f.de_empresa limit 1;
+  if v_cliente is null then
+    select g.party_id into v_cliente from public.conta_gestoria_cliente g
+     where g.account_id = v_cuenta and g.crm = 'bitrix24' and g.tipo_ficha = p_tipo and g.id_externo = v_id;
+  end if;
+  if v_cliente is null then return jsonb_build_object('estado', 'sin_enlazar'); end if;
+
+  begin
+    if p_accion = 'alta' then
+      v_empresa := nullif(v_d->>'empresa', '')::uuid;
+      v_r := public.conta_gestoria_alta_empleado(v_empresa, v_cliente, nullif(v_d->>'servicio', '')::uuid, v_d->>'nombre', nullif(v_d->>'desde', '')::date);
+    else
+      select * into v_linea from public.conta_linea where id = nullif(v_d->>'linea', '')::uuid;
+      if v_linea.id is null or v_linea.account_id <> v_cuenta or v_linea.party_id <> v_cliente then
+        return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Ese trabajador no es de este cliente.');
+      end if;
+      v_empresa := v_linea.company_id;
+      v_r := public.conta_gestoria_baja_linea(v_linea.id, nullif(v_d->>'mes', '')::date);
+    end if;
+  exception
+    when insufficient_privilege then
+      return jsonb_build_object('estado', 'sin_permiso', 'frase', 'Puedes ver, pero no cambiar lo que se cobra: pídeselo a un administrador o a un encargado de la cuenta.');
+    when others then
+      return jsonb_build_object('estado', 'no_se_pudo', 'frase', sqlerrm);
+  end;
+
+  insert into public.conta_bitrix_pestana_cambio (account_id, party_id, tipo_ficha, id_externo, accion, datos, frase, resultado_id, hecho_por, hecho_por_nombre)
+  values (v_cuenta, v_cliente, p_tipo, v_id, p_accion, v_d, coalesce(v_r->>'frase', ''), nullif(v_r->>'id', '')::uuid, v_usuario, v_quien)
+  returning id into v_cambio;
+
+  -- Para actualizar Bitrix24 sin pisar nada: el campo de la cuota en el mapa
+  -- confirmado, lo que Sumied leyó allí y lo último que escribió la pestaña.
+  select x->>'codigo' into v_campo from public.conta_crm c, jsonb_array_elements(coalesce(c.mapa->'campos', '[]'::jsonb)) x
+   where c.account_id = v_cuenta and c.crm = 'bitrix24' and x->>'campo' = 'cuota_referencia' and x->>'etiqueta' = 'Cuota mensual'
+     and coalesce(x->>'codigo', '') <> '' limit 1;
+  select q->>'texto' into v_conocida from public.conta_gestoria_ficha f, jsonb_array_elements(coalesce(f.ficha->'cuotasReferencia', '[]'::jsonb)) q
+   where f.account_id = v_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = v_id and q->>'etiqueta' = 'Cuota mensual' limit 1;
+  select b.bitrix->>'escrito' into v_escrita from public.conta_bitrix_pestana_cambio b
+   where b.account_id = v_cuenta and b.tipo_ficha = p_tipo and b.id_externo = v_id and b.bitrix ? 'escrito'
+   order by b.bitrix_at desc nulls last limit 1;
+
+  return jsonb_build_object('estado', 'ok', 'frase', v_r->>'frase', 'cambio', v_cambio, 'id', v_r->>'id', 'empresa', v_empresa, 'cliente', v_cliente,
+    'bitrix', jsonb_build_object('campo', v_campo, 'conocida', v_conocida, 'escrita', v_escrita));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb) IS 'GB · Alta y baja de un trabajador desde la pestaña de Bitrix24. Solo el servidor (conta-bitrix-pestana), DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación. Actúa como la persona («usuario:cuenta») y llama a las funciones de la ficha del G04 (conta_gestoria_alta_empleado y conta_gestoria_baja_linea), que comprueban su permiso. Solo sobre el cliente de la ficha abierta. Estados: ok, sin_permiso, no_se_pudo, sin_acceso, sin_enlazar, varias_cuentas, ficha_rara.';
+
+
+--
 -- Name: conta_bitrix_pestana_leer(text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -48712,6 +48835,77 @@ end $$;
 
 
 --
+-- Name: conta_portal_avisos_hechos(uuid[], uuid[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_avisos_hechos(p_mensajes uuid[], p_peticiones uuid[]) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  update public.conta_portal_mensaje set avisado_at = now() where id = any (coalesce(p_mensajes, '{}')) and avisado_at is null;
+  update public.conta_portal_peticion set avisado_at = now() where id = any (coalesce(p_peticiones, '{}')) and avisado_at is null;
+$$;
+
+
+--
+-- Name: conta_portal_avisos_pendientes(integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_avisos_pendientes(p_limite integer DEFAULT 200) RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with personas as (
+    select a.id as acceso_id, a.account_id, a.party_id, lower(a.correo) as para, a.nombre, a.permiso
+      from public.conta_portal_acceso a where a.revocado_at is null
+  ), hoy as (select (now() at time zone 'Europe/Madrid')::date as d),
+  todo as (
+    -- Factura nueva (las de los tres últimos días), a todos los que la ven.
+    select 'factura' as tipo, 'factura:' || f.id || ':' || p.para as clave, p.*,
+           jsonb_build_object('id', f.id, 'numero', f.number_text, 'total', f.total, 'fecha', f.issue_date) as datos, f.issued_at as orden
+      from public.customer_invoice f join personas p on p.account_id = f.account_id and p.party_id = f.party_id
+     where f.status = 'emitida' and f.issued_at > now() - interval '3 days'
+    union all
+    -- Recibo próximo, desde el día de aviso de su empresa (sin ponerlo, el 2), solo a quien tiene «todo».
+    select 'recibo_proximo', 'recibo_proximo:' || r.id || ':' || p.para, p.*,
+           jsonb_build_object('id', r.id, 'mes', r.mes, 'total_cent', coalesce(r.cobrar_cent, r.total_cent), 'anterior_cent', r.anterior_cent,
+                              'lineas', r.lineas, 'cambios', r.cambios, 'cargo_el', r.cargo_el), r.preparado_at
+      from public.conta_recibo r join personas p on p.account_id = r.account_id and p.party_id = r.party_id and p.permiso = 'todo'
+      left join public.conta_gestoria_ajustes j on j.company_id = r.company_id
+     where r.estado in ('preparado', 'enviado', 'en_el_banco') and r.decision <> 'este_mes_no'
+       and r.mes = to_char((select d from hoy), 'YYYY-MM')
+       and extract(day from (select d from hoy)) >= coalesce(j.dia_aviso, 2)
+    union all
+    -- Devuelto sin pagar, solo a quien tiene «todo».
+    select 'devuelto', 'devuelto:' || r.id || ':' || p.para, p.*,
+           jsonb_build_object('id', r.id, 'mes', r.mes, 'importe_cent', coalesce(r.cobrar_cent, r.total_cent)), r.updated_at
+      from public.conta_recibo r join personas p on p.account_id = r.account_id and p.party_id = r.party_id and p.permiso = 'todo'
+     where r.estado in ('devuelto', 'retrocedido') and not public._conta_portal_devuelto_pagado(r.id)
+    union all
+    -- Mensajes nuevos de la gestoría (los de hace más de 2 minutos, juntos): uno por cliente y persona.
+    select 'mensaje', 'mensaje:' || m.ultimo || ':' || p.para, p.*,
+           jsonb_build_object('ids', m.ids, 'cuantos', m.n, 'autor', m.autor, 'texto', left(m.texto, 300)), m.cuando
+      from (select party_id, account_id, count(*) n, max(created_at) cuando, (array_agg(id order by created_at desc))[1] ultimo,
+                   (array_agg(autor_nombre order by created_at desc))[1] autor, (array_agg(texto order by created_at desc))[1] texto,
+                   jsonb_agg(id) ids
+              from public.conta_portal_mensaje
+             where de = 'gestoria' and avisado_at is null and leido_at is null and created_at < now() - interval '2 minutes'
+             group by party_id, account_id) m
+      join personas p on p.account_id = m.account_id and p.party_id = m.party_id and p.permiso = 'todo'
+    union all
+    -- Lo que pide la gestoría, solo a quien tiene «todo».
+    select 'peticion', 'peticion:' || q.id || ':' || p.para, p.*,
+           jsonb_build_object('id', q.id, 'tipo', q.tipo, 'titulo', q.titulo, 'detalle', q.detalle, 'fecha_limite', q.fecha_limite), q.created_at
+      from public.conta_portal_peticion q join personas p on p.account_id = q.account_id and p.party_id = q.party_id and p.permiso = 'todo'
+     where q.estado = 'pendiente' and q.avisado_at is null
+  )
+  select coalesce(jsonb_agg(to_jsonb(x) - 'orden' order by x.orden), '[]'::jsonb)
+    from (select * from todo t where not exists (select 1 from public.conta_portal_aviso v where v.clave = t.clave)
+           order by t.orden limit greatest(1, least(coalesce(p_limite, 200), 500))) x
+$$;
+
+
+--
 -- Name: conta_portal_cuenta(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -48745,6 +48939,35 @@ begin
                            '[]'::jsonb),
     'empresa_id', e);
 end $$;
+
+
+--
+-- Name: conta_portal_despertar(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_despertar() RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_secreto text;
+begin
+  if jsonb_array_length(public.conta_portal_avisos_pendientes(1)) = 0 then return; end if;
+  select decrypted_secret into v_secreto from vault.decrypted_secrets where name = 'cron_secret';
+  if v_secreto is null then
+    raise exception 'Falta cron_secret en el Vault: no se puede despertar a conta-portal-avisos.' using errcode = '55000';
+  end if;
+  perform net.http_post(
+    url := public._project_url() || '/functions/v1/conta-portal-avisos',
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-cron-secret', v_secreto),
+    body := '{}'::jsonb, timeout_milliseconds := 150000);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_portal_despertar(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_portal_despertar() IS 'GP · Cada 10 minutos (cron portal-avisos, solo en producción): si hay avisos del portal por mandar, llama a conta-portal-avisos. Si falta el secreto, falla (cron lo apunta), no calla.';
 
 
 --
@@ -49273,6 +49496,41 @@ end $_$;
 
 
 --
+-- Name: conta_portal_solicitud_hacer(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_solicitud_hacer(p_solicitud uuid, p_servicio uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare s public.conta_solicitud; r jsonb; v_linea uuid; v_mes date; v_quien text := public.conta_nombre_actor();
+begin
+  select * into s from public.conta_solicitud where id = p_solicitud for update;
+  if s.id is null or not public.current_user_is_admin_or_manager_of(s.account_id) then
+    raise exception 'Esa petición no es de esta cuenta.' using errcode = '42501';
+  end if;
+  if s.estado <> 'pedida' then raise exception 'Esa petición ya está %.', s.estado using errcode = '22023'; end if;
+  v_mes := date_trunc('month', coalesce(s.fecha_efecto, s.mes))::date;
+  if s.tipo = 'alta' then
+    if p_servicio is null then raise exception 'Elige en qué servicio se cobra el trabajador.' using errcode = '22023'; end if;
+    r := public.conta_gestoria_alta_empleado(s.company_id, s.party_id, p_servicio, s.empleado_nombre, v_mes);
+    v_linea := (r ->> 'id')::uuid;
+    update public.conta_linea set origen = 'solicitud', solicitud_id = s.id where id = v_linea;
+  else
+    select l.id into v_linea from public.conta_linea l
+     where l.account_id = s.account_id and l.party_id = s.party_id and upper(l.empleado_nombre) = upper(s.empleado_nombre)
+       and (l.hasta is null or l.hasta >= v_mes)
+     order by l.desde desc limit 1;
+    if v_linea is null then raise exception '% no está de alta en el recibo de este cliente.', s.empleado_nombre using errcode = 'P0002'; end if;
+    r := public.conta_gestoria_baja_linea(v_linea, v_mes);
+  end if;
+  update public.conta_solicitud set estado = 'hecha', resuelta_at = now(), resuelta_por_name = v_quien where id = s.id;
+  return jsonb_build_object('id', s.id, 'linea_id', v_linea,
+    'frase', coalesce(r ->> 'frase', 'Hecho.') || ' Al cliente le sale como hecha en su portal.');
+end $$;
+
+
+--
 -- Name: conta_portal_solicitud_pedir(uuid, text, text, text, date, text, numeric, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -49302,6 +49560,29 @@ begin
   return jsonb_build_object('id', v_id, 'frase', format('Pedida %s de %s desde el %s. Tu gestoría te avisa cuando esté hecha.',
     case p_tipo when 'alta' then 'el alta' else 'la baja' end, v_nombre, to_char(p_fecha, 'DD/MM/YYYY')));
 end $_$;
+
+
+--
+-- Name: conta_portal_solicitud_rechazar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_solicitud_rechazar(p_solicitud uuid, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare s public.conta_solicitud;
+begin
+  select * into s from public.conta_solicitud where id = p_solicitud for update;
+  if s.id is null or not public.current_user_is_admin_or_manager_of(s.account_id) then
+    raise exception 'Esa petición no es de esta cuenta.' using errcode = '42501';
+  end if;
+  if s.estado <> 'pedida' then raise exception 'Esa petición ya está %.', s.estado using errcode = '22023'; end if;
+  if length(trim(coalesce(p_motivo, ''))) = 0 then raise exception 'Escribe por qué no se hace: el cliente lo lee.' using errcode = '22023'; end if;
+  update public.conta_solicitud set estado = 'rechazada', motivo_rechazo = trim(p_motivo), resuelta_at = now(), resuelta_por_name = public.conta_nombre_actor()
+   where id = s.id;
+  return jsonb_build_object('id', s.id, 'frase', format('No se hace %s de %s. El cliente ve el motivo en su portal.',
+    case s.tipo when 'alta' then 'el alta' else 'la baja' end, s.empleado_nombre));
+end $$;
 
 
 --
@@ -106163,6 +106444,37 @@ COMMENT ON TABLE public.conta_aviso IS 'G01d · La cola y el registro de los avi
 
 
 --
+-- Name: conta_bitrix_pestana_cambio; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_bitrix_pestana_cambio (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    party_id uuid NOT NULL,
+    tipo_ficha text NOT NULL,
+    id_externo text NOT NULL,
+    accion text NOT NULL,
+    datos jsonb DEFAULT '{}'::jsonb NOT NULL,
+    frase text NOT NULL,
+    resultado_id uuid,
+    hecho_por uuid NOT NULL,
+    hecho_por_nombre text,
+    hecho_at timestamp with time zone DEFAULT now() NOT NULL,
+    bitrix jsonb,
+    bitrix_at timestamp with time zone,
+    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text]))),
+    CONSTRAINT conta_bitrix_pestana_cambio_tipo_ficha_check CHECK ((tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])))
+);
+
+
+--
+-- Name: TABLE conta_bitrix_pestana_cambio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_bitrix_pestana_cambio IS 'GB · Lo hecho desde la pestaña «Sumied» de Bitrix24 (alta y baja de trabajadores), con la frase que vio la persona, y lo que pasó en Bitrix24 al guardar: lo escrito o el choque con un dato cambiado allí (que nunca se pisa).';
+
+
+--
 -- Name: conta_cambio_precios; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -124535,6 +124847,14 @@ ALTER TABLE ONLY public.conta_aviso
 
 
 --
+-- Name: conta_bitrix_pestana_cambio conta_bitrix_pestana_cambio_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
+    ADD CONSTRAINT conta_bitrix_pestana_cambio_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_cambio_precios_linea conta_cambio_precios_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -130581,6 +130901,13 @@ CREATE INDEX conta_aviso_cola_idx ON public.conta_aviso USING btree (origen, est
 --
 
 CREATE INDEX conta_aviso_cuenta_idx ON public.conta_aviso USING btree (account_id, recibido_at DESC);
+
+
+--
+-- Name: conta_bitrix_pestana_cambio_ficha_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_bitrix_pestana_cambio_ficha_idx ON public.conta_bitrix_pestana_cambio USING btree (account_id, tipo_ficha, id_externo, hecho_at DESC);
 
 
 --
@@ -140166,6 +140493,22 @@ ALTER TABLE ONLY public.conta_aviso
 
 ALTER TABLE ONLY public.conta_aviso
     ADD CONSTRAINT conta_aviso_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_bitrix_pestana_cambio conta_bitrix_pestana_cambio_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
+    ADD CONSTRAINT conta_bitrix_pestana_cambio_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_bitrix_pestana_cambio conta_bitrix_pestana_cambio_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
+    ADD CONSTRAINT conta_bitrix_pestana_cambio_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
 
 
 --
@@ -151961,6 +152304,19 @@ ALTER TABLE public.conta_aviso ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_aviso_leer ON public.conta_aviso FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_bitrix_pestana_cambio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_bitrix_pestana_cambio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_bitrix_pestana_cambio conta_bitrix_pestana_cambio_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_bitrix_pestana_cambio_leer ON public.conta_bitrix_pestana_cambio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -166523,6 +166879,22 @@ GRANT ALL ON FUNCTION public.conta_banco_agregador_despertar() TO service_role;
 
 
 --
+-- Name: FUNCTION conta_bitrix_pestana_bitrix(p_cambio uuid, p_resultado jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_bitrix(p_cambio uuid, p_resultado jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_bitrix(p_cambio uuid, p_resultado jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_bitrix_pestana_leer(p_portal text, p_correo text, p_tipo text, p_id text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -169628,12 +170000,36 @@ GRANT ALL ON FUNCTION public.conta_portal_archivo(p_party uuid, p_tipo text, p_i
 
 
 --
+-- Name: FUNCTION conta_portal_avisos_hechos(p_mensajes uuid[], p_peticiones uuid[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_avisos_hechos(p_mensajes uuid[], p_peticiones uuid[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_avisos_hechos(p_mensajes uuid[], p_peticiones uuid[]) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_portal_avisos_pendientes(p_limite integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_avisos_pendientes(p_limite integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_avisos_pendientes(p_limite integer) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_portal_cuenta(p_party uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_portal_cuenta(p_party uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_portal_cuenta(p_party uuid) TO service_role;
 GRANT ALL ON FUNCTION public.conta_portal_cuenta(p_party uuid) TO authenticated;
+
+
+--
+-- Name: FUNCTION conta_portal_despertar(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_despertar() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_despertar() TO service_role;
 
 
 --
@@ -169823,12 +170219,30 @@ GRANT ALL ON FUNCTION public.conta_portal_ruta_puede(p_ruta text, p_subir boolea
 
 
 --
+-- Name: FUNCTION conta_portal_solicitud_hacer(p_solicitud uuid, p_servicio uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_solicitud_hacer(p_solicitud uuid, p_servicio uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_solicitud_hacer(p_solicitud uuid, p_servicio uuid) TO service_role;
+GRANT ALL ON FUNCTION public.conta_portal_solicitud_hacer(p_solicitud uuid, p_servicio uuid) TO authenticated;
+
+
+--
 -- Name: FUNCTION conta_portal_solicitud_pedir(p_party uuid, p_tipo text, p_nombre text, p_documento text, p_fecha date, p_contrato text, p_horas numeric, p_nota text); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_portal_solicitud_pedir(p_party uuid, p_tipo text, p_nombre text, p_documento text, p_fecha date, p_contrato text, p_horas numeric, p_nota text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_portal_solicitud_pedir(p_party uuid, p_tipo text, p_nombre text, p_documento text, p_fecha date, p_contrato text, p_horas numeric, p_nota text) TO service_role;
 GRANT ALL ON FUNCTION public.conta_portal_solicitud_pedir(p_party uuid, p_tipo text, p_nombre text, p_documento text, p_fecha date, p_contrato text, p_horas numeric, p_nota text) TO authenticated;
+
+
+--
+-- Name: FUNCTION conta_portal_solicitud_rechazar(p_solicitud uuid, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_solicitud_rechazar(p_solicitud uuid, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_solicitud_rechazar(p_solicitud uuid, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.conta_portal_solicitud_rechazar(p_solicitud uuid, p_motivo text) TO authenticated;
 
 
 --
@@ -179684,6 +180098,14 @@ GRANT ALL ON SEQUENCE public.conta_asiento_borrado_id_seq TO service_role;
 
 GRANT ALL ON TABLE public.conta_aviso TO service_role;
 GRANT SELECT ON TABLE public.conta_aviso TO authenticated;
+
+
+--
+-- Name: TABLE conta_bitrix_pestana_cambio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_bitrix_pestana_cambio TO service_role;
+GRANT SELECT ON TABLE public.conta_bitrix_pestana_cambio TO authenticated;
 
 
 --
