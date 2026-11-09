@@ -66,9 +66,9 @@ describe('GD · nº63 · las cuotas mensuales de la demo, desde enero', () => {
 })
 
 describe('GD · nº68 · los cambios del cobro del mes que viene', () => {
-  it('alta el 12 de este mes, baja este mes y nivel desde el que viene', () => {
-    expect(fechasDeLosCambios('2026-11-09')).toEqual({ altaEl: '2026-11-12', esteMes: '2026-11-01', mesQueViene: '2026-12-01' })
-    expect(fechasDeLosCambios('2026-12-20')).toEqual({ altaEl: '2026-12-12', esteMes: '2026-12-01', mesQueViene: '2027-01-01' })
+  it('alta y nivel el 1 del mes que viene, baja este mes (nº76: la regla del mes entero)', () => {
+    expect(fechasDeLosCambios('2026-11-09')).toEqual({ altaEl: '2026-12-01', esteMes: '2026-11-01', mesQueViene: '2026-12-01' })
+    expect(fechasDeLosCambios('2026-12-20')).toEqual({ altaEl: '2027-01-01', esteMes: '2026-12-01', mesQueViene: '2027-01-01' })
   })
   it('a quién: Talleres Ruiz (+1), Imprenta Rápida Sol (a Premium) y Reformas Atalaya (una baja)', () => {
     expect(CAMBIOS_DEL_MES.alta.cliente).toBe('Talleres Ruiz, S.L.')

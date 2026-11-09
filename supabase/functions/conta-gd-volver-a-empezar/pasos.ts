@@ -59,7 +59,8 @@ export function inicioDeLasCuotas(hoyMadrid: string): string {
 /**
  * Los cambios que el cobro del mes que viene tiene que enseñar (nº68, como la maqueta). Se hacen con las mismas
  * funciones que la ficha del cliente, con la sesión de quien pulsa:
- *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 12 de este mes.
+ *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 1 del mes que viene (nº76: con la regla del mes
+ *     entero, un alta a mitad de este mes ya se cobraría este mes y el cobro del que viene no la enseñaría como cambio).
  *   · Imprenta Rápida Sol: de Básica a Premium desde el mes que viene (sube más de un 30 %: pide «Lo he mirado, aprobar»).
  *   · Reformas Atalaya: baja de un trabajador, que se cobra este mes y ya no el que viene (para «Este mes no»).
  */
@@ -69,9 +70,9 @@ export const CAMBIOS_DEL_MES = {
   baja: { cliente: 'Reformas Atalaya, S.L.' },
 } as const
 
-/** Las fechas de esos cambios, a partir de hoy (AAAA-MM-DD, en Madrid). */
+/** Las fechas de esos cambios, a partir de hoy (AAAA-MM-DD, en Madrid): el alta y el nivel, el 1 del mes que viene; la baja, este mes. */
 export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; esteMes: string; mesQueViene: string } {
   const [a, m] = hoyMadrid.slice(0, 7).split('-').map(Number)
   const sig = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
-  return { altaEl: `${hoyMadrid.slice(0, 7)}-12`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
+  return { altaEl: `${sig}-01`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
 }
