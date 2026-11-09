@@ -255,6 +255,23 @@ export async function leerExpedidaPdf(accountId: string, entryId: string): Promi
   }
 }
 
+/**
+ * G05 · T4 · Abrir el PDF adjunto a un asiento (journal_entry_document, «factura_expedida»):
+ * desde el asiento y desde el libro diario. Una dirección nueva cada vez (la firmada dura
+ * cinco minutos). Devuelve null si se ha abierto, o lo que ha pasado (regla 8).
+ */
+export async function abrirFacturaAdjunta(accountId: string, entryId: string): Promise<string | null> {
+  const doc = await leerExpedidaPdf(accountId, entryId)
+  if (!doc) return 'Este asiento aún no tiene su factura en PDF adjunta.'
+  const ventana = window.open('', '_blank')
+  try {
+    const u = await urlDocumento(doc.ruta)
+    if (ventana) ventana.location.href = u
+    else window.location.href = u
+    return null
+  } catch (e) { ventana?.close(); return e instanceof Error ? e.message : String(e) }
+}
+
 /** El fichero elegido, como PDF: tal cual si lo es; una foto JPG o PNG se convierte. */
 export async function ficheroAPdf(fichero: File): Promise<Uint8Array> {
   const clase = claseDeFichero(fichero.name, fichero.type)

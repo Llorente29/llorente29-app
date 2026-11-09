@@ -33,6 +33,9 @@ import { leerRespuestaDeCobro, mandatoParaCobrar, peticionDeCobro } from '../_sh
 import { euros, type Mes } from '../_shared/tarifa/precio.ts'
 import type { Situacion } from '../_shared/tarifa/lista.ts'
 import { BASES, type Entorno } from '../conta-gocardless-leer/lector.ts'
+import { jsPDF } from 'npm:jspdf@4.2.1'
+import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
+import { modulosQr } from '../_shared/verifactu/qrServidor.ts'
 
 /** Mientras Julio no lo encienda, el cobro solo se envía con una conexión de pruebas (sandbox). */
 const ENVIAR_A_REAL = false
@@ -128,7 +131,10 @@ Deno.serve(async (req) => {
     if (accion === 'seguir') {
       const { data, error } = await admin.rpc('conta_cobro_seguir', { p_company: empresa })
       if (error) throw new Error(error.message)
-      return json(200, { ok: true, ...(data as Fila) })
+      // G05 · T4 · Las facturas emitidas: su PDF (adjunto a la factura y a su asiento) y su envío al cliente.
+      const rem = await rematarFacturasDeRecibos(admin, empresa, { jsPDF, qr: modulosQr, correo: { resendKey: Deno.env.get('RESEND_API_KEY'),
+        buzonDePruebas: Deno.env.get('CORREO_BUZON_PRUEBAS'), abiertos: Deno.env.get('CORREO_MARCA_ABIERTOS') } })
+      return json(200, { ok: true, ...(data as Fila), facturas: rem })
     }
     if (!MES.test(mes)) return json(400, { error: 'Falta el mes (AAAA-MM).' })
 
