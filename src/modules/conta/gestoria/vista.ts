@@ -28,6 +28,8 @@ export type TipoDiferencia =
   | 'falta_codigo_cliente'
   // G05 · nº 46 · El cliente ha parado un recibo desde el portal («No estoy de acuerdo»).
   | 'cliente_no_de_acuerdo'
+  // G05 · nº 58 · Un pago con tarjeta desde el portal sin apuntar: falta (o no vale) la cuenta de Stripe en Ajustes.
+  | 'falta_cuenta_stripe'
 
 export interface Diferencia {
   id: string
@@ -91,6 +93,8 @@ export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; eti
   { id: 'sin-codigo', tipos: ['falta_codigo_cliente'], etiqueta: 'Falta su código de cliente', necesita: ['gocardless'] },
   // G05 · nº 46 · Lo para el cliente desde el portal; se deshace con «Volver a cobrar» en «Revisar el cobro».
   { id: 'no-de-acuerdo', tipos: ['cliente_no_de_acuerdo'], etiqueta: 'El cliente no está de acuerdo con un recibo', necesita: ['gocardless'] },
+  // G05 · nº 58 · Un pago con tarjeta desde el portal sin apuntar: falta (o no vale) la cuenta de Stripe en Ajustes.
+  { id: 'sin-stripe', tipos: ['falta_cuenta_stripe'], etiqueta: 'Falta la cuenta de Stripe en Ajustes', necesita: ['gocardless'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
@@ -218,6 +222,8 @@ export function comoResolver(d: Diferencia): Resolver[] {
   if (d.tipo === 'falta_codigo_cliente') return []
   // G05 · nº 46 · Se resuelve en «Revisar el cobro» («Volver a cobrar»), que la quita.
   if (d.tipo === 'cliente_no_de_acuerdo') return []
+  // G05 · nº 58 · Se resuelve poniendo la cuenta de Stripe en Ajustes y apuntando el pago, que la quita (no se da por revisada sin apuntarlo).
+  if (d.tipo === 'falta_cuenta_stripe') return []
   return ['revisada']
 }
 

@@ -1,0 +1,27 @@
+{
+ "_que": "G05 · Portal · contexto de producción, medido en SOLO LECTURA el 09/11 a las 18:12Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1822 añade una columna que admite nulos a conta_gestoria_ajustes (2 filas), la tabla conta_recibo_pago_portal y cinco funciones nuevas; amplía el CHECK de conta_gc_cobro_otra_via.via (0 filas) y el de conta_gestoria_diferencia.tipo (12.434 filas, todas de los tipos de antes). En la demo con cobro (Gestoría Demo, S.L.), inserta la 57200003 «Plataforma Stripe» con su apunte en el registro del plan y la deja como su cuenta de Stripe. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T18:12Z",
+ "tanda": {
+  "supabase/migrations/20261109T1822_g05_portal_pagos.sql": "9a9ea0259c869acdaff9dace52097ba6"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_gc_cobro_otra_via",
+   "public.conta_gestoria_ajustes",
+   "public.conta_gestoria_diferencia"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_gc_cobro_otra_via": 0,
+   "public.conta_gestoria_ajustes": 0,
+   "public.conta_gestoria_diferencia": 12434
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
