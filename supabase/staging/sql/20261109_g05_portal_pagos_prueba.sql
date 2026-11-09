@@ -22,7 +22,8 @@
 --   4. Cambiar de cuenta (conta_cobro_cuenta_cambiada, solo el servidor): el
 --      mandato nuevo, el viejo cancelado, el cliente de GoCardless nuevo con su
 --      enlace; un recibo siguiente sale contra el nuevo. Una persona no puede.
---   5. La vuelta atrás de la 1822, y otra vez la 1822.
+--   5. La vuelta atrás de la 1822, y otra vez la 1822. La 57200003 que crea Sumied sin
+--      apuntes (la de la demo al aplicar) se va con su registro; con apuntes, se queda.
 
 begin;
 do $$ begin
@@ -435,8 +436,39 @@ begin
   raise notice 'G05 PORTAL · 4: el servidor cambia la cuenta (nueva activa, vieja cancelada, cliente nuevo con su enlace) y el recibo siguiente sale contra la nueva; una persona no puede. OK';
 end $$;
 
--- 5 · La vuelta atrás de la 1822, y otra vez la 1822.
+-- 5 · La vuelta atrás de la 1822, y otra vez la 1822. Como en la demo al aplicar (nº 57): una
+-- empresa inventada con su plan y la 57200003 que crea Sumied, sin apuntes, se va con su apunte
+-- del registro; la de la empresa A, con apuntes, se queda aunque la haya creado Sumied.
+reset role;
+do $$ declare v_t uuid; begin
+  insert into public.company (account_id, legal_name, tax_id) values ('c01a0000-0000-4000-8000-00000000000a', 'Empresa Prueba G05 Stripe, S.L.', 'B00000000') returning id into v_t;
+  insert into _g values ('empresa_t', v_t::text);
+  -- Su plan: la 57200000 de la empresa A, para que tenga el plan y sus cifras.
+  insert into public.company_account (account_id, company_id, plan, code, template_code, name, plain_name, kind, source, created_by_name)
+  select x.account_id, v_t, x.plan, x.code, x.template_code, x.name, x.plain_name, x.kind, x.source, 'Prueba G05'
+    from public.company_account x where x.company_id = (select v::uuid from _g where clave = 'empresa') and x.code = '57200000';
+  if not found then raise exception 'G05 PORTAL · 5: la empresa A no tiene la 57200000.'; end if;
+end $$;
+do $$ declare v_t uuid := (select v::uuid from _g where clave = 'empresa_t'); v_e uuid := (select v::uuid from _g where clave = 'empresa'); begin
+  perform public._conta_cobro_puente(v_t, '57200003', 'Plataforma Stripe', 'Lo que Stripe ha cobrado (tarjeta o Bizum) y aún no ha ingresado en el banco', 'Sumied');
+  if not exists (select 1 from public.company_account where company_id = v_t and code = '57200003')
+     or not exists (select 1 from public.company_account_log where company_id = v_t and que = 'subcuenta_creada' and code = '57200003') then
+    raise exception 'G05 PORTAL · 5: la 57200003 de la empresa de prueba no se ha creado con su registro.';
+  end if;
+  update public.company_account set created_by_name = 'Sumied' where company_id = v_e and code = '57200003';
+  update public.company_account_log set done_by_name = 'Sumied' where company_id = v_e and que = 'subcuenta_creada' and code = '57200003';
+end $$;
 \i supabase/vuelta-atras/20261109T1822_g05_portal_pagos.down.sql
+do $$ declare v_t uuid := (select v::uuid from _g where clave = 'empresa_t'); v_e uuid := (select v::uuid from _g where clave = 'empresa'); begin
+  if exists (select 1 from public.company_account where company_id = v_t and code = '57200003')
+     or exists (select 1 from public.company_account_log where company_id = v_t and code = '57200003') then
+    raise exception 'G05 PORTAL · 5: la vuelta atrás deja la 57200003 sin apuntes, o su apunte en el registro del plan.';
+  end if;
+  if not exists (select 1 from public.company_account where company_id = v_e and code = '57200003')
+     or not exists (select 1 from public.company_account_log where company_id = v_e and que = 'subcuenta_creada' and code = '57200003') then
+    raise exception 'G05 PORTAL · 5: la vuelta atrás ha quitado una 57200003 con apuntes.';
+  end if;
+end $$;
 do $$ begin
   if to_regprocedure('public.conta_recibo_pagado_portal(uuid,text,numeric,text)') is not null or to_regclass('public.conta_recibo_pago_portal') is not null
      or exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'conta_gestoria_ajustes' and column_name = 'cuenta_stripe')
@@ -445,6 +477,6 @@ do $$ begin
   end if;
 end $$;
 \i supabase/migrations/20261109T1822_g05_portal_pagos.sql
-\echo 'G05 PORTAL · 5: la vuelta atrás de la 1822, y otra vez la 1822. OK'
+\echo 'G05 PORTAL · 5: la vuelta atrás de la 1822 (fuera la 57200003 sin apuntes con su registro; la que tiene apuntes se queda), y otra vez la 1822. OK'
 
 rollback;
