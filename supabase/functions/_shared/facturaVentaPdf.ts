@@ -20,15 +20,6 @@
 // Si las cifras no cuadran con las líneas, NO hay PDF: lanza y dice qué (un
 // documento que no cuadra con su factura es peor que ninguno).
 //
-// G05 · T4: la factura de un recibo de la gestoría (la maqueta aprobada,
-// Factura.dc.html) lleva además, si se le pasa `recibo`: la marca
-// «DEMOSTRACIÓN · SIN VALIDEZ» en una cuenta de demostración; el código del
-// cliente junto a su NIF; la forma de pago (domiciliación SEPA, cargada y
-// pagada); debajo de cada línea sus trabajadores (hasta 10) o, con más, «en la
-// hoja aparte», que va al final con todos por su nombre; «Verifactu de
-// pruebas: pendiente» si aún no tiene QR; una nota al pie y «Hoja N de M». Sin
-// `recibo`, la factura sale como siempre.
-//
 // Sin dependencias de Node ni de Deno: jsPDF se pasa desde fuera (en Node,
 // `import { jsPDF } from 'jspdf'`; en una edge function, `npm:jspdf`).
 
@@ -55,30 +46,7 @@ export interface DatosFacturaPdf {
   verifactu?: { modulos: boolean[][]; prueba: boolean } | null
   /** V03 E2: por qué va sin IVA, con su artículo (lib/ventasSinIva.ts, MENCION_SIN_IVA), o nada. */
   sinIva?: string | null
-  /** G05 · T4: lo de la factura de un recibo de la gestoría (ver arriba), o nada. */
-  recibo?: ExtrasDelRecibo | null
 }
-
-/** G05 · T4: un trabajador debajo de su línea: «Persona — Desde el 3 de marzo de 2019». */
-export interface TrabajadorPdf { nombre: string; desde: string | null }
-
-export interface ExtrasDelRecibo {
-  /** Una cuenta de demostración: la marca «DEMOSTRACIÓN · SIN VALIDEZ». */
-  demo: boolean
-  /** El código del cliente en la empresa (su subcuenta es 430 + código). */
-  codigoCliente: number | null
-  /** «Domiciliación SEPA», la cuenta enmascarada (si se sabe) y «Cargada el 4 de diciembre · pagada». */
-  pago: { forma: string; cuenta: string | null; texto: string } | null
-  /** Por cada línea, en su orden: sus trabajadores y dónde van (debajo, hasta 10; o en la hoja aparte). */
-  lineas: { trabajadores: TrabajadorPdf[] | null; trabajadoresEn: 'linea' | 'hoja' | null }[]
-  /** Sin QR todavía: «Verifactu de pruebas: pendiente». */
-  verifactuPendiente: boolean
-  /** Las notas al pie, en su orden. */
-  pie: string[]
-}
-
-/** G05 · T4: los textos fijos de la factura de un recibo. */
-export const RECIBO_PDF = { demo: 'DEMOSTRACIÓN · SIN VALIDEZ', verifactuPendiente: 'Verifactu de pruebas: pendiente', hoja: 'Hoja' } as const
 
 /** V03: el lado del QR en mm (entre 30 y 40, §6; el mismo que QR_MM.elegido de qr.ts) y sus leyendas. */
 export const QR_PDF = { mm: 32, encima: 'QR tributario:', debajo: 'VERI*FACTU', prueba: 'PRUEBA' } as const
@@ -144,10 +112,6 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   if (d.empresa.direccion) doc.text(doc.splitTextToSize(d.empresa.direccion, 90), M, y + 10)
   doc.text(fecha(d.fecha), derecha, y + 5, { align: 'right' })
 
-  const rc = d.recibo ?? null
-  if (rc?.demo) { doc.setTextColor(200, 30, 30); letra('bold', 9); doc.text(RECIBO_PDF.demo, W / 2, M - 6, { align: 'center' }) }
-  if (rc?.verifactuPendiente && !vf) { color(GRIS); letra('normal', 8); doc.text(RECIBO_PDF.verifactuPendiente, derecha, y + 10, { align: 'right' }) }
-
   // ── El QR tributario (V03) ──────────────────────────────────────────────────
   if (vf) {
     const x0 = W - M - QR_PDF.mm, y0 = M + 1, n = vf.modulos.length, lado = QR_PDF.mm / n
@@ -161,7 +125,7 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   // ── Para ───────────────────────────────────────────────────────────────────
   y += vf ? 34 : 22
   color(GRIS); letra('normal', 9); doc.text('Para:', M, y)
-  color(TINTA); letra('bold', 10); doc.text(`${d.cliente.nombre} · ${d.cliente.nif}${rc?.codigoCliente ? ` · Código cliente ${rc.codigoCliente}` : ''}`, M + 12, y)
+  color(TINTA); letra('bold', 10); doc.text(`${d.cliente.nombre} · ${d.cliente.nif}`, M + 12, y)
   if (d.cliente.direccion) { letra('normal', 9); color(GRIS); doc.text(doc.splitTextToSize(d.cliente.direccion, ANCHO - 12), M + 12, y + 5) }
   y += d.cliente.direccion ? 12 : 8
 
@@ -184,7 +148,7 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   doc.line(M, y + 6, W - M, y + 6)
   y += 11
   letra('normal', 9); color(TINTA)
-  for (const [i, l] of d.lineas.entries()) {
+  for (const l of d.lineas) {
     if (y > 250) { doc.addPage(); y = M + 6 }
     const texto = doc.splitTextToSize(l.descuento ? `${l.concepto} (dto. ${pct(l.descuento)})` : l.concepto, 92) as string[]
     doc.text(texto, X.concepto, y)
@@ -193,17 +157,6 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
     doc.text(pct(l.tipo), X.iva, y, { align: 'right' })
     doc.text(euros(l.importe), X.importe, y, { align: 'right' })
     y += 4.5 * texto.length + 2
-    // G05 · T4: sus trabajadores, debajo (hasta 10) o en la hoja aparte.
-    const t = rc?.lineas[i]
-    if (t?.trabajadores?.length) {
-      color(GRIS); letra('normal', 8)
-      if (t.trabajadoresEn === 'hoja') { doc.text(`El detalle de los ${t.trabajadores.length} trabajadores va en la hoja aparte.`, X.concepto + 3, y - 0.5); y += 4 }
-      else for (const w of t.trabajadores) {
-        if (y > 270) { doc.addPage(); y = M + 6 }
-        doc.text(`· ${w.nombre}${w.desde ? ` — ${w.desde}` : ''}`, X.concepto + 3, y - 0.5); y += 4
-      }
-      color(TINTA); letra('normal', 9); y += 1
-    }
     doc.line(M, y - 3, W - M, y - 3)
   }
 
@@ -227,43 +180,17 @@ export function facturaVentaPdf(JsPDF: JsPdfCtor, d: DatosFacturaPdf): Uint8Arra
   // ── El cobro y las notas ─────────────────────────────────────────────────────
   y += 4
   color(GRIS); letra('normal', 9)
-  const cobro = rc?.pago
-    ? [`Forma de pago: ${rc.pago.forma}`, rc.pago.cuenta, rc.pago.texto].filter(Boolean).join(' · ')
-    : [d.vence ? `Vence el ${fecha(d.vence)}` : null, d.formaCobro ? `Forma de cobro: ${d.formaCobro}` : null].filter(Boolean).join(' · ')
+  const cobro = [d.vence ? `Vence el ${fecha(d.vence)}` : null, d.formaCobro ? `Forma de cobro: ${d.formaCobro}` : null].filter(Boolean).join(' · ')
   if (cobro) { relleno(SUAVE); doc.rect(M, y, ANCHO, 9, 'F'); color(AZUL); doc.text(cobro, M + 3, y + 5.8); y += 13 }
   if (d.sinIva) {
     const t = doc.splitTextToSize(d.sinIva, ANCHO)
     color(TINTA); letra('bold', 9); doc.text(t, M, y); y += 4.5 * t.length + 2
     letra('normal', 9)
   }
-  if (d.notas) { const t = doc.splitTextToSize(d.notas, ANCHO); color(GRIS); doc.text(t, M, y); y += 4.5 * t.length + 2 }
-  for (const nota of rc?.pie ?? []) { color(GRIS); letra('normal', 8); const t = doc.splitTextToSize(nota, ANCHO); doc.text(t, M, y); y += 4 * t.length + 1.5 }
-
-  // G05 · T4: la hoja aparte, con todos los trabajadores de cada servicio que lleva más de 10.
-  for (const [i, t] of (rc?.lineas ?? []).entries()) {
-    if (t.trabajadoresEn !== 'hoja' || !t.trabajadores?.length) continue
-    doc.addPage(); let yy = M + 4
-    color(TINTA); letra('bold', 11); doc.text(`Factura ${d.numero} · ${d.lineas[i]?.concepto ?? ''}`, M, yy); yy += 6
-    color(GRIS); letra('normal', 9); doc.text(`Los ${t.trabajadores.length} trabajadores de este servicio`, M, yy); yy += 8
-    color(TINTA)
-    for (const w of t.trabajadores) {
-      if (yy > 275) { doc.addPage(); yy = M + 6 }
-      doc.text(`· ${w.nombre}${w.desde ? ` — ${w.desde}` : ''}`, M, yy); yy += 5
-    }
-  }
+  if (d.notas) { color(GRIS); doc.text(doc.splitTextToSize(d.notas, ANCHO), M, y) }
   if (vf?.prueba) {
     doc.setTextColor(200, 30, 30); letra('normal', 8)
     doc.text('Factura de PRUEBA: enviada al entorno de pruebas de Hacienda, no tiene validez.', W / 2, 287, { align: 'center' })
-  }
-
-  // G05 · T4: «Empresa · Hoja N de M» al pie de cada hoja.
-  if (rc) {
-    const n = doc.getNumberOfPages()
-    for (let p = 1; p <= n; p++) {
-      doc.setPage(p); color(GRIS); letra('normal', 8)
-      doc.text(d.empresa.nombre, M, 292)
-      doc.text(`${RECIBO_PDF.hoja} ${p} de ${n}`, W - M, 292, { align: 'right' })
-    }
   }
 
   const out = doc.output('arraybuffer') as ArrayBuffer
