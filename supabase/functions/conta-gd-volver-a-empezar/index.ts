@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
           return (data as { id: string }).id
         }
         const yaHecho = (e: { code?: string; message: string } | null) => !!e && (e.code === '23505' || /ya est[aá]/i.test(e.message))
-        // 1 · Talleres Ruiz, +1 trabajador (alta el 12 de este mes).
+        // 1 · Talleres Ruiz, +1 trabajador (alta el 1 del mes que viene: nº76, la regla del mes entero).
         const laboral = await servicio('gestion_laboral')
         const talleres = await parte(CAMBIOS_DEL_MES.alta.cliente)
         const alta = await persona.rpc('conta_gestoria_alta_empleado', { p_company: empresa, p_party: talleres, p_servicio: laboral, p_empleado: CAMBIOS_DEL_MES.alta.trabajador, p_desde: f.altaEl })
