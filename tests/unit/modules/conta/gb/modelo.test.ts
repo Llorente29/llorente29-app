@@ -95,3 +95,15 @@ describe('GB (nº 9, punto 2) · el nivel y el precio especial antes de guardar'
       .toBe('El recibo de diciembre pasa de 585,60 € a 546,00 € (−39,60 €).')
   })
 })
+
+describe('GB (nº 9, punto 5) · su portal', () => {
+  it('quién entra, lo que pide y los mensajes sin leer; si no se ha podido leer, nada', async () => {
+    const { modeloPortal } = await import('@/publicas/bitrixPestanaModelo')
+    expect(modeloPortal({ estado: 'ok', accesos: [{ nombre: 'Persona Prueba', permiso: 'facturas_documentos', entro: null }],
+      solicitudes: [{ id: 's1', tipo: 'baja', nombre: 'Ana Prueba', fecha: '2026-11-30' }], mensajes_sin_leer: 2 })).toEqual({
+      accesos: [{ nombre: 'Persona Prueba', permiso: 'Solo facturas y documentos', entro: false }],
+      solicitudes: [{ id: 's1', tipo: 'baja', nombre: 'Ana Prueba', fecha: '2026-11-30', texto: 'Pide una baja: Ana Prueba, el 30/11' }],
+      mensajesSinLeer: 2 })
+    expect(modeloPortal({ estado: 'sin_permiso' })).toBeNull()
+  })
+})

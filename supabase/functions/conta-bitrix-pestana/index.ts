@@ -132,7 +132,16 @@ async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
   return l.ok ? json(200, l.d) : l.respuesta
 }
 
-const ACCIONES = new Set(['alta', 'baja', 'tarifa'])
+/** nº 9, punto 5 · «Su portal»: quién entra, lo que pide el cliente y los mensajes sin leer (conta_portal_ficha, de Code 3, como la persona). */
+async function portal(cuerpo: Record<string, unknown>): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const { data, error } = await baseDeDatos().rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
+  if (error) return json(200, { estado: 'error', frase: 'No se ha podido leer su portal.' })
+  return json(200, data ?? { estado: 'error' })
+}
+
+const ACCIONES = new Set(['alta', 'baja', 'tarifa', 'solicitud'])
 const hoyEnMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid' }).format(new Date())
 
 /**
@@ -149,7 +158,11 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
   if (!accion || !datos) return json(400, { estado: 'no_se_pudo', frase: 'No se sabe qué cambiar.' })
 
   const db = baseDeDatos()
-  const { data, error } = await db.rpc('conta_bitrix_pestana_hacer', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_accion: accion, p_datos: datos })
+  // nº 9, punto 5 · «Hacerla» (lo que pide el cliente en su portal): con la función de Code 3.
+  const { data, error } = accion === 'solicitud'
+    ? await db.rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id,
+        p_solicitud: typeof datos.solicitud === 'string' ? datos.solicitud : null, p_servicio: typeof datos.servicio === 'string' ? datos.servicio : null })
+    : await db.rpc('conta_bitrix_pestana_hacer', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_accion: accion, p_datos: datos })
   if (error) return json(500, { estado: 'error', frase: 'No se ha podido guardar en Sumied. No ha cambiado nada.' })
   const r = (data ?? {}) as Record<string, unknown>
   if (r.estado !== 'ok') return json(200, { estado: r.estado ?? 'no_se_pudo', frase: typeof r.frase === 'string' ? r.frase : FRASES[String(r.estado)] ?? 'No se ha podido hacer.' })
@@ -212,6 +225,7 @@ Deno.serve(async (req) => {
     const cuerpo = await req.json().catch(() => null) as Record<string, unknown> | null
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
     if (cuerpo?.paso === 'hacer') return await hacer(cuerpo)
+    if (cuerpo?.paso === 'portal') return await portal(cuerpo)
     return json(400, { estado: 'error', frase: 'No se sabe qué hacer.' })
   } catch (e) {
     console.error('conta-bitrix-pestana', e instanceof Error ? e.message : e)

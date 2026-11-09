@@ -56,7 +56,9 @@ test('con acceso: el cliente, el recibo línea a línea, los cobros, los servici
   await expect(pestana.getByRole('heading', { level: 1, name: 'Cliente Prueba, S.L.' })).toBeVisible({ timeout: 30_000 })
 
   // Una sola lectura, con lo que mandó Bitrix24; y el token ya no está en la dirección.
-  expect(pedidos).toEqual([{ paso: 'leer', a: TOKEN, p: 'b24-s3mr2y.bitrix24.es', t: 'empresa', id: '99001' }])
+  expect(pedidos[0]).toEqual({ paso: 'leer', a: TOKEN, p: 'b24-s3mr2y.bitrix24.es', t: 'empresa', id: '99001' })
+  // nº 9 · Después de pintar, y solo entonces, «Su portal».
+  await expect.poll(() => pedidos.map((x) => x.paso)).toEqual(['leer', 'portal'])
   expect(page.url()).not.toContain(TOKEN)
   const ms = await page.evaluate(() => performance.getEntriesByName('gb-pintada')[0]?.startTime ?? -1)
   console.log(`[GB] pintada a los ${Math.round(ms)} ms (${lado(page)})`)

@@ -138,6 +138,7 @@ export type Cambio =
   | { accion: 'alta'; servicio: string; nombre: string; desde: string }
   | { accion: 'baja'; linea: string; mes: string }
   | { accion: 'tarifa'; linea: string; servicio: string; nivel: string | null; precio: number | null; porTrabajador: boolean; motivo: string; desde: string }
+  | { accion: 'solicitud'; solicitud: string; tipo: 'alta' | 'baja'; nombre: string; servicio: string | null; desde: string }
 
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 export const nombreDelMes = (mes: string) => MES[Number(mes.slice(5, 7)) - 1] ?? mes
@@ -146,6 +147,12 @@ export const nombreDelMes = (mes: string) => MES[Number(mes.slice(5, 7)) - 1] ??
 function conElCambio(clientes: unknown, clienteId: string, empresaId: string, c: Cambio): Fila {
   const d = objeto(clientes)
   const asignaciones = filas(d.asignaciones)
+  // Lo que pide el cliente en su portal es un alta o una baja como las de la pestaña.
+  if (c.accion === 'solicitud') {
+    if (c.tipo === 'alta') return c.servicio ? conElCambio(clientes, clienteId, empresaId, { accion: 'alta', servicio: c.servicio, nombre: c.nombre, desde: c.desde }) : d
+    const linea = asignaciones.find((a) => String(a.cliente_id) === clienteId && String(a.empleado_nombre ?? '').toUpperCase() === c.nombre.toUpperCase() && !a.hasta)
+    return linea ? conElCambio(clientes, clienteId, empresaId, { accion: 'baja', linea: String(linea.id).replace(/^linea:/, ''), mes: c.desde }) : d
+  }
   if (c.accion === 'alta') {
     return { ...d, asignaciones: [...asignaciones, { id: 'prevista', tipo: 'cuota', cliente_id: clienteId, empresa_id: empresaId, servicio_id: c.servicio,
       nivel_id: null, paquete_id: null, empleado_nombre: c.nombre.trim().toUpperCase(), importe_propio: null, periodo: 'mes', desde: c.desde, hasta: null }] }
@@ -170,4 +177,30 @@ export function reciboPrevisto(r: Fila, hoy: string, empresaId: string, c: Cambi
     ? `El recibo de ${nombreDelMes(mes)} no cambia: ${euros(antes)}.`
     : `El recibo de ${nombreDelMes(mes)} pasa de ${euros(antes)} a ${euros(despues)} (${dif > 0 ? '+' : '−'}${euros(Math.abs(dif))}).`
   return { mes, antes, despues, frase }
+}
+
+// ── nº 9, punto 5 · Su portal ───────────────────────────────────────────────
+
+export interface Portal {
+  accesos: { nombre: string; permiso: string; entro: boolean }[]
+  solicitudes: { id: string; tipo: 'alta' | 'baja'; nombre: string; fecha: string; texto: string }[]
+  mensajesSinLeer: number
+}
+
+const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+
+/** Lo que devuelve conta-bitrix-pestana (paso «portal»), para pintar «Su portal». */
+export function modeloPortal(x: unknown): Portal | null {
+  const d = objeto(x)
+  if (d.estado !== 'ok') return null
+  return {
+    accesos: filas(d.accesos).map((a) => ({ nombre: String(a.nombre ?? a.correo ?? ''), permiso: a.permiso === 'todo' ? 'Todo' : 'Solo facturas y documentos', entro: !!a.entro })),
+    solicitudes: filas(d.solicitudes).map((s) => {
+      const tipo = s.tipo === 'baja' ? 'baja' : 'alta'
+      const fecha = String(s.fecha ?? '')
+      return { id: String(s.id), tipo, nombre: String(s.nombre ?? ''), fecha,
+        texto: `Pide ${tipo === 'alta' ? 'un alta' : 'una baja'}: ${String(s.nombre ?? '')}, ${tipo === 'alta' ? 'desde el' : 'el'} ${fechaCorta(fecha)}` }
+    }),
+    mensajesSinLeer: Number(d.mensajes_sin_leer ?? 0),
+  }
 }
