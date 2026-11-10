@@ -23,7 +23,7 @@ describe('GD · el vídeo de Sumied para gestorías', () => {
   })
 
   it('en ensayo no escribe nada', () => {
-    expect(g).toMatch(/async function pulsaQueEscribe[\s\S]*?if \(GRABA\) await ra\.clic\(l, ms\); else await ra\.a\(l, ms\)/)
+    expect(g).toMatch(/async function pulsaQueEscribe[\s\S]*?if \(!GRABA\) \{ await ra\.a\(l, ms\); return \}\s*await ra\.clic\(l, ms\)/)
     for (const b of ['Preparar el cobro', 'Este mes no', '/^Aprobar']) expect(g).toMatch(new RegExp(`pulsaQueEscribe\\([^\\n]*${b.replace(/[/^]/g, (c) => `\\${c}`)}`))
     expect(g).toMatch(/if \(GRABA && enviado\) \{\s*await R\.sinVer\(async \(\) => \{[\s\S]*?validarIngresosFacturados/)
     expect(g).toMatch(/if \(GRABA\) \{\s*\/\/ Julio \(nº98\): se paga con la tarjeta de pruebas de Stripe/)
@@ -119,5 +119,20 @@ describe('GD · nº118 · la primera pantalla no depende de la suerte', () => {
   })
   it('01 espera a la cifra «Cuotas al mes», no a un texto cualquiera', () => {
     expect(g).toContain("await ir('/conta/ventas/clientes-y-cuotas', page.locator('.g4-cifra').filter({ hasText: 'Cuotas al mes' }))")
+  })
+})
+
+describe('GD · nº120 · los clics que escriben se comprueban', () => {
+  const pqe = g.slice(g.indexOf('async function pulsaQueEscribe'), g.indexOf('async function pulsa(loc'))
+  it('grabando, si no pasa lo que tiene que pasar, se pulsa de verdad fuera del montaje y, si no, se dice', () => {
+    expect(pqe).toContain('efecto = null')
+    expect(pqe).toContain('await R.sinVer(async () => { await l.click(')
+    expect(pqe).toContain("throw new Error('el clic no ha hecho lo que tenía que hacer')")
+  })
+  it('06: «Este mes no», «Aprobar los N», «Enviar el cobro» y «Sí, enviar», cada uno con lo que tiene que pasar', () => {
+    expect(g).toContain("cambio('Reformas Atalaya').getByText('Fuera de este cobro')")
+    expect(g).toContain("page.locator('.g5-hecho').filter({ hasText: 'Aprobados' })")
+    expect(g).toContain("await pulsaQueEscribe(enviar, 800, page.getByRole('dialog'))")
+    expect(g).toContain("throw new Error('el diálogo de enviar sigue abierto')")
   })
 })
