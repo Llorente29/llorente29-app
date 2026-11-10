@@ -154,8 +154,8 @@ export function leerAlmohadilla(hash: string): { a: string | null; p: string | n
 // ── nº 9 · El recibo nuevo antes de guardar ─────────────────────────────────
 
 export type Cambio =
-  | { accion: 'alta'; servicio: string; nombre: string; desde: string }
-  | { accion: 'baja'; linea: string; mes: string }
+  | { accion: 'alta'; servicio: string; nombre: string; desde: string; dia?: string; documento?: string | null }
+  | { accion: 'baja'; linea: string; mes: string; dia?: string }
   | { accion: 'servicio'; servicio: string | null; nivel: string | null; paquete: string | null; texto: string; desde: string }
   | { accion: 'tarifa'; linea: string; servicio: string; nivel: string | null; precio: number | null; porTrabajador: boolean; motivo: string; desde: string }
   | { accion: 'solicitud'; solicitud: string; tipo: 'alta' | 'baja'; nombre: string; servicio: string | null; desde: string }
@@ -376,3 +376,20 @@ export function modeloMensajes(x: unknown): Mensajes | null {
   })
   return { total: Math.max(Number(d.total ?? lista.length), lista.length), lista }
 }
+
+/**
+ * nº 17, D · El DNI o NIE como lo guarda Code 1 (sin espacios, puntos ni guiones,
+ * en mayúsculas) y si su letra de control es buena. Vacío: null (es opcional).
+ * La comprobación de verdad la hace la base (_conta_dni_nie_valido); esta es
+ * para avisar antes de guardar.
+ */
+export function documentoDe(x: string): { documento: string | null; valido: boolean } {
+  const d = x.replace(/[\s.-]/g, '').toUpperCase()
+  if (!d) return { documento: null, valido: true }
+  if (!/^[0-9XYZ][0-9]{7}[A-Z]$/.test(d)) return { documento: d, valido: false }
+  const numero = Number(`${'XYZ'.indexOf(d[0]) >= 0 ? 'XYZ'.indexOf(d[0]) : d[0]}${d.slice(1, 8)}`)
+  return { documento: d, valido: 'TRWAGMYFPDXBNJZSQVHLCKE'[numero % 23] === d[8] }
+}
+
+/** nº 17, D · «15/12/2026» de «2026-12-15». */
+export const diaCorto = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}/${dia.slice(0, 4)}`
