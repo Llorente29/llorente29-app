@@ -50763,6 +50763,29 @@ end $$;
 
 
 --
+-- Name: conta_portal_quien_lleva(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_portal_quien_lleva(p_party uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare y public.conta_portal_acceso := public._conta_portal_yo(p_party, false); v jsonb;
+begin
+  select g.ficha->'responsable' into v from public.conta_gestoria_cliente g where g.party_id = y.party_id and g.account_id = y.account_id;
+  if v is null or jsonb_typeof(v) <> 'object' or coalesce(nullif(v->>'nombre', ''), nullif(v->>'correo', '')) is null then return null; end if;
+  return jsonb_build_object('nombre', nullif(v->>'nombre', ''), 'correo', nullif(v->>'correo', ''));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_portal_quien_lleva(p_party uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_portal_quien_lleva(p_party uuid) IS 'GB (nº 24, el 7 de Code 3) · Quién lleva al cliente, para el portal («Te lleva: Nombre · correo»): el responsable de su ficha del CRM (Bitrix24, ASSIGNED_BY_ID con user.get), que guarda la lectura del CRM en conta_gestoria_cliente.ficha. {nombre, correo} o null. Para la persona del portal de ese cliente (_conta_portal_yo), con cualquier permiso.';
+
+
+--
 -- Name: conta_portal_ruta_puede(text, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -172123,6 +172146,15 @@ GRANT ALL ON FUNCTION public.conta_portal_peticion_contestar(p_peticion uuid, p_
 REVOKE ALL ON FUNCTION public.conta_portal_peticion_crear(p_party uuid, p_tipo text, p_titulo text, p_detalle text, p_fecha_limite date, p_documento_ruta text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_portal_peticion_crear(p_party uuid, p_tipo text, p_titulo text, p_detalle text, p_fecha_limite date, p_documento_ruta text) TO service_role;
 GRANT ALL ON FUNCTION public.conta_portal_peticion_crear(p_party uuid, p_tipo text, p_titulo text, p_detalle text, p_fecha_limite date, p_documento_ruta text) TO authenticated;
+
+
+--
+-- Name: FUNCTION conta_portal_quien_lleva(p_party uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_portal_quien_lleva(p_party uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_portal_quien_lleva(p_party uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_portal_quien_lleva(p_party uuid) TO service_role;
 
 
 --
