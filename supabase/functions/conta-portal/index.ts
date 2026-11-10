@@ -30,6 +30,10 @@
 //                    con la clave de PRUEBAS y solo en las demos: Julio, nº 6).
 //   · archivos       los enlaces firmados de las facturas de un año (el ZIP lo
 //                    hace la pantalla).
+//   · demo_devolver  (T5, solo demos) el sandbox de GoCardless devuelve el cobro
+//                    de un recibo (simulador «payment_failed»), para enseñar un
+//                    devuelto de verdad. Solo una cuenta demo, solo con la
+//                    conexión de pruebas y solo su administrador o encargado.
 //   · seguir         en qué ha quedado lo pedido a GoCardless o a Stripe, al volver.
 //                    Al quedar hecho (T4), se remata con lo de Code 1 (#534):
 //                    un devuelto pagado se apunta (conta_recibo_pagado_portal,
@@ -55,6 +59,7 @@ import { cuentaPuedeSalir } from '../_shared/puerta.ts'
 import { salirA } from '../_shared/puertaDePruebas.ts'
 import { correoValido } from '../_shared/facturaVentaCorreo.ts'
 import { BASES, type Entorno } from '../conta-gocardless-leer/lector.ts'
+import { VERSION_GOCARDLESS } from '../_shared/cobro/gocardless.ts'
 import { errorStripe, v1 } from '../_shared/stripeSumied.ts'
 import {
   BYTES_SUBIDA, camposPagoTarjeta, claveStripePruebas, leerSesionStripe, PLANTILLA_CODIGO, PLANTILLA_ENLACE, TIPOS_SUBIDA, correoCodigo, correoEnlace, enmascararCorreo, fraseError, leerFlujo, leerPeticion,
@@ -112,6 +117,7 @@ Deno.serve(async (req) => {
       case 'tarjeta': return await tarjeta(yo, srv, b, origen)
       case 'archivos': return await archivos(yo, srv, b)
       case 'seguir': return await seguir(yo, srv, b)
+      case 'demo_devolver': return await demoDevolver(yo, srv, b)
       default: return json(400, { ok: false, frase: 'Esa acción no existe.' })
     }
   } catch (x) {
@@ -492,6 +498,41 @@ async function seguirTarjeta(srv: Sb, op: Fila) {
   const remate = l.estado === 'hecha' ? await rematar(srv, { ...op, estado: 'hecha' }) : null
   return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? remate ?? 'Pagado. Tu gestoría ya lo tiene.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'El pago aún se está confirmando. Te avisamos cuando termine.' })
+}
+
+// ── La demo: que el banco devuelva un recibo (sandbox) ────────────────────────
+
+/**
+ * El simulador del sandbox de GoCardless («payment_failed»: el cobro pasa a
+ * fallido, como si el banco lo devolviera). Después llega el aviso de GoCardless
+ * y el cobro de Code 1 pone el recibo «devuelto», como con uno de verdad. Solo
+ * cuentas demo, solo la conexión de pruebas y solo quien lleva la cuenta.
+ */
+async function demoDevolver(yo: Sb, srv: Sb, b: Fila) {
+  const id = uuid(b.recibo)
+  if (!id) return json(400, { ok: false, frase: 'Falta el recibo.' })
+  const { data: r } = await srv.from('conta_recibo').select('id, account_id, company_id, mes, estado, gc_cobro_id').eq('id', id).maybeSingle()
+  if (!r) return mal('Ese recibo no está.')
+  const { data: puede } = await yo.rpc('current_user_is_admin_or_manager_of', { p_account_id: r.account_id })
+  if (puede !== true) return mal('Esto lo hace un administrador o un encargado de la cuenta.')
+  const { data: cu } = await srv.from('accounts').select('is_demo').eq('id', r.account_id).maybeSingle()
+  if (cu?.is_demo !== true) return mal('Esto solo se hace en una cuenta de demostración.')
+  const { data: sec } = await srv.rpc('conta_gocardless_secreto', { p_company: r.company_id })
+  const s = (sec as { entorno: Entorno; token: string }[] | null)?.[0]
+  if (!s?.token || s.entorno !== 'pruebas') return mal('Solo con la conexión de pruebas de GoCardless (el sandbox).')
+  const pago = String(r.gc_cobro_id ?? '')
+  if (!/^PM[0-9A-Z]+$/.test(pago)) return mal('Ese recibo aún no se ha mandado al banco: primero «Enviar el cobro».')
+  const x = await fetch(`${BASES.pruebas}/scenario_simulators/payment_failed/actions/run`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${s.token}`, 'Content-Type': 'application/json', Accept: 'application/json', 'GoCardless-Version': VERSION_GOCARDLESS },
+    body: JSON.stringify({ data: { links: { resource: pago } } }),
+  })
+  if (x.status >= 300) {
+    const j = await x.json().catch(() => ({})) as { error?: { message?: string } }
+    console.error('[conta-portal] demo_devolver', x.status)
+    return mal(`El sandbox no lo ha devuelto (${x.status}): ${String(j.error?.message ?? 'sin motivo').slice(0, 200)}. Solo se puede con un cobro que aún no ha salido al banco.`)
+  }
+  return json(200, { ok: true, frase: `Hecho: el sandbox devuelve el cobro del recibo de ${r.mes}. En unos minutos llega el aviso de GoCardless y el recibo sale devuelto, en Sumied y en el portal del cliente.` })
 }
 
 // ── El remate de Code 1 (#534), una vez por operación ─────────────────────────

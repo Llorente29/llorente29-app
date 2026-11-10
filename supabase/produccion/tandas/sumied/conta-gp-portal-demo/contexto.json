@@ -1,0 +1,19 @@
+{
+ "_que": "GP · T5 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 21:56Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 2240 añade una función que no existe (conta_portal_demo_preparar) y la llama una vez para «Gestoría Demo»: solo escribe filas nuevas del portal de la cuenta demo. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T21:56Z",
+ "tanda": {
+  "supabase/migrations/20261109T2240_gp_portal_demo.sql": "f1fe985f0014fc58aaa76cbb311b138e"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

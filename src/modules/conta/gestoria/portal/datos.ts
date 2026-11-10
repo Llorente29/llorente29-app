@@ -89,3 +89,23 @@ export async function abrirFichero(ruta: string): Promise<string> {
   if (error || !data?.signedUrl) throw new Error('No se ha podido abrir el fichero.')
   return data.signedUrl
 }
+
+// ── Solo en las cuentas demo (T5) ───────────────────────────────────────────
+
+/** Prepara el portal de la demo (se puede pasar otra vez, también después de «Volver a empezar»). */
+export const prepararDemo = async (cuenta: string) => (await rpc<Frase>('conta_portal_demo_preparar', { p_cuenta: cuenta })).frase
+
+/** El recibo de este cliente que está en el banco (el que el sandbox puede devolver), o null. */
+export async function reciboEnElBanco(cliente: string): Promise<{ id: string; mes: string } | null> {
+  const { data, error } = await tabla('conta_recibo').select('id, mes').eq('party_id', cliente).in('estado', ['enviado', 'en_el_banco'])
+    .not('gc_cobro_id', 'is', null).order('mes', { ascending: false }).limit(1).maybeSingle()
+  if (error) return null
+  return (data as { id: string; mes: string } | null) ?? null
+}
+
+/** El sandbox de GoCardless devuelve el cobro de ese recibo (solo demos y solo pruebas). */
+export async function devolverEnDemo(recibo: string): Promise<string> {
+  const r = await servidor({ accion: 'demo_devolver', recibo })
+  if (!r.ok) throw new Error(r.frase)
+  return r.frase
+}
