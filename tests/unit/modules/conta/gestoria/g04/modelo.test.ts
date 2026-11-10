@@ -110,22 +110,6 @@ describe('G04 · el modelo de Clientes', () => {
   })
 })
 
-describe('G04 · el modelo de la ficha', () => {
-  it('el recibo del mes que viene, con los trabajadores agrupados y desplegables', async () => {
-    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
-    const f = modeloFicha(datos(), suyo(), EMPRESAS, '1', Q, '2026-11-08', [])!
-    expect([f.mesRecibo, f.totalRecibo, f.recibo.map((l) => l.texto)]).toEqual(['diciembre de 2026', '496,10 €', ['Gestoría mensual', 'Gestión laboral · 18 trabajadores']])
-    expect(f.recibo[1].detalle).toBe('18 × 24,20 € · este mes: ninguna alta, ninguna baja')
-    expect([f.recibo[1].trabajadores.length, f.recibo[1].trabajadores[0].importe, f.recibo[1].trabajadores[0].lineaId]).toEqual([18, '24,20 €', 'w0'])
-    expect(f.cobros.map((c) => [c.estado, c.importe])).toEqual([['Cobrado', '496,10 €'], ['Devuelto', '496,10 €']])
-    expect([f.mandato, f.devoluciones12, f.clienteDesde]).toEqual([{ texto: 'firmado', tono: 'bien' }, 1, 'Cobra desde enero de 2020'])
-    expect(f.servicios.map((s) => [s.texto, s.detalle, s.importe])).toEqual([
-      ['Gestoría mensual', 'Precio de tarifa · desde ene. 2024', '60,50 €'],
-      ['Gestión laboral', 'Precio de este cliente · 18 × 24,20 € · desde ene. 2024', '435,60 €'],
-    ])
-  })
-})
-
 // Una anual de GoCardless que se cobra por primera vez en junio: no está en el recibo del mes que viene, y la
 // ficha la pintaba «Servicio · Sin precio · desde jun. 2027». Ahora, con su nombre y su precio de la tarifa.
 describe('la ficha · un servicio que empieza más adelante', () => {
@@ -146,3 +130,20 @@ describe('la ficha · un servicio que empieza más adelante', () => {
     expect(f.servicios.some((x) => x.texto === 'Servicio')).toBe(false)
   })
 })
+
+describe('G04 · el modelo de la ficha', () => {
+  it('el recibo del mes que viene, con los trabajadores agrupados y desplegables', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const f = modeloFicha(datos(), suyo(), EMPRESAS, '1', Q, '2026-11-08', [])!
+    expect([f.mesRecibo, f.totalRecibo, f.recibo.map((l) => l.texto)]).toEqual(['diciembre de 2026', '496,10 €', ['Gestoría mensual', 'Gestión laboral · 18 trabajadores']])
+    expect(f.recibo[1].detalle).toBe('18 × 24,20 € · este mes: ninguna alta, ninguna baja')
+    expect([f.recibo[1].trabajadores.length, f.recibo[1].trabajadores[0].importe, f.recibo[1].trabajadores[0].lineaId]).toEqual([18, '24,20 €', 'w0'])
+    expect(f.cobros.map((c) => [c.estado, c.importe])).toEqual([['Cobrado', '496,10 €'], ['Devuelto', '496,10 €']])
+    expect([f.mandato, f.devoluciones12, f.clienteDesde]).toEqual([{ texto: 'firmado', tono: 'bien' }, 1, 'Cobra desde enero de 2020'])
+    expect(f.servicios.map((s) => [s.texto, s.detalle, s.importe])).toEqual([
+      ['Gestoría mensual', 'Precio de tarifa · desde ene. 2024', '60,50 €'],
+      ['Gestión laboral', 'Precio de este cliente · 18 × 24,20 € · desde ene. 2024', '435,60 €'],
+    ])
+  })
+})
+
