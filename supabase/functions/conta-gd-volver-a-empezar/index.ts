@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, HISTORIA, historiaDeTalleres, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -123,6 +123,82 @@ Deno.serve(async (req) => {
         const i = await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: cuenta })
         if (i.error) throw new Error(i.error.message)
         dicho.push(String((t.data as { frase?: string } | null)?.frase ?? 'Tarifa sembrada.'), String((i.data as { frase?: string } | null)?.frase ?? ''))
+        break
+      }
+      case 'historia': {
+        // nº101 · La historia de Talleres Ruiz (de julio a octubre, si se cobra noviembre): la cadena entera de cada mes,
+        // por los mismos caminos que un cobro de verdad. Repetible: un mes que ya tiene su factura se deja.
+        const { data: soc } = await admin.from('company').select('id').eq('account_id', cuenta).eq('sector', 'gestoria').eq('entity_kind', 'company').order('created_at').limit(1).maybeSingle()
+        if (!soc) throw new Error('La demo no tiene una sociedad de Gestoría.')
+        const empresa = (soc as { id: string }).id
+        const { data: cli } = await admin.from('party').select('id').eq('account_id', cuenta).eq('name', HISTORIA.cliente).maybeSingle()
+        if (!cli) throw new Error(`No está «${HISTORIA.cliente}» en la demo.`)
+        const talleres = (cli as { id: string }).id
+        const { data: adm } = await admin.from('user_profiles').select('user_id, display_name').eq('account_id', cuenta).eq('role', 'admin').eq('active', true).order('created_at').limit(1).maybeSingle()
+        if (!adm) throw new Error('La demo no tiene administrador: la factura se emite en nombre de quien envía el cobro.')
+        const quien = { id: (adm as { user_id: string }).user_id, nombre: (adm as { display_name: string | null }).display_name ?? 'Administración' }
+        // Sus trabajadores de entonces: las líneas de gestión laboral que ya tenía (el alta del mes en curso va después, en «cambios»).
+        const { data: lab } = await admin.from('conta_servicio').select('id').eq('company_id', empresa).eq('clave', 'gestion_laboral').maybeSingle()
+        const { data: tr } = await admin.from('conta_linea').select('empleado_nombre').eq('account_id', cuenta).eq('party_id', talleres)
+          .eq('servicio_id', (lab as { id: string } | null)?.id ?? '').not('empleado_nombre', 'is', null).is('hasta', null).order('empleado_nombre')
+        const trabajadores = ((tr ?? []) as { empleado_nombre: string }[]).map((x) => x.empleado_nombre).filter((n) => n !== CAMBIOS_DEL_MES.alta.trabajador)
+        if (!trabajadores.length) throw new Error(`${HISTORIA.cliente} no tiene trabajadores en la demo: no se siembra su historia.`)
+        const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
+        const meses = historiaDeTalleres(hoy, trabajadores)
+        let facturas = 0; let casados = 0
+        for (const h of meses) {
+          const { data: ya } = await admin.from('conta_recibo').select('id, invoice_id').eq('account_id', cuenta).eq('party_id', talleres).eq('mes', h.mes).maybeSingle()
+          if ((ya as { invoice_id: string | null } | null)?.invoice_id) continue
+          const ahora = new Date().toISOString()
+          const e1 = await admin.from('conta_gc_payout').upsert({ company_id: empresa, account_id: cuenta, gc_id: h.payoutGc, estado: 'paid', llegada: h.llegada,
+            importe: h.netoCent / 100, comision: h.comisionCent / 100, moneda: 'EUR', referencia: h.referencia }, { onConflict: 'company_id,gc_id' })
+          if (e1.error) throw new Error(`La liquidación de ${h.mes}: ${e1.error.message}`)
+          const e2 = await admin.from('conta_gc_cobro').upsert({ company_id: empresa, account_id: cuenta, gc_id: h.cobroGc, estado: 'paid_out', importe: h.totalCent / 100,
+            moneda: 'EUR', fecha: h.cargoEl, payout_gc_id: h.payoutGc}, { onConflict: 'company_id,gc_id' })
+          if (e2.error) throw new Error(`El cobro de ${h.mes}: ${e2.error.message}`)
+          const fila = { account_id: cuenta, company_id: empresa, party_id: talleres, mes: h.mes, clave: `recibo:${empresa}:${talleres}:${h.mes}`, entorno: 'pruebas',
+            total_cent: h.totalCent, cobrar_cent: h.totalCent, anterior_cent: h.totalCent, anterior_de_gocardless: true, factura: h.factura, cambios: [], parado: [],
+            decision: 'aprobado', decidido_at: ahora, decidido_por_name: quien.nombre, estado: 'enviado', gc_estado: 'paid_out', gc_cobro_id: h.cobroGc,
+            cargo_el: h.cargoEl, confirmado_el: h.cargoEl,
+            enviado_at: `${h.cargoEl}T09:00:00Z`, enviado_por: quien.id, enviado_por_name: quien.nombre }
+          const ins = ya ? await admin.from('conta_recibo').update(fila).eq('id', (ya as { id: string }).id).select('id').single()
+            : await admin.from('conta_recibo').insert(fila).select('id').single()
+          if (ins.error) throw new Error(`El recibo de ${h.mes}: ${ins.error.message}`)
+          const f = await admin.rpc('_conta_cobro_facturar', { p_recibo: (ins.data as { id: string }).id })
+          if (f.error) throw new Error(`La factura de ${h.mes}: ${f.error.message}`)
+          facturas++
+        }
+        // Su ingreso en el banco (el mismo que la siembra de cada liquidación), casado como «Casado solo» y validado.
+        const ing = await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: cuenta })
+        if (ing.error) throw new Error(`Los ingresos en el banco: ${ing.error.message}`)
+        for (const h of meses) {
+          const { data: po } = await admin.from('conta_gc_payout').select('match_id').eq('company_id', empresa).eq('gc_id', h.payoutGc).maybeSingle()
+          const yaCasado = (po as { match_id: string | null } | null)?.match_id
+          if (yaCasado) {
+            // Casado ya (la pasada del banco se adelantó): solo falta validarlo, si sigue propuesto.
+            const { data: bm } = await admin.from('bank_match').select('journal_entry_id').eq('id', yaCasado).maybeSingle()
+            const asiento = (bm as { journal_entry_id: string | null } | null)?.journal_entry_id
+            const { data: je } = asiento ? await admin.from('journal_entry').select('status').eq('id', asiento).maybeSingle() : { data: null }
+            if (asiento && (je as { status: string } | null)?.status === 'propuesto') {
+              const v = await persona.rpc('journal_entry_validar', { p_entry: asiento, p_quien_nombre: quien.nombre })
+              if (v.error) throw new Error(`Validar el ingreso de ${h.mes}: ${v.error.message}`)
+            }
+            continue
+          }
+          const { data: mov } = await admin.from('bank_movement').select('id').eq('account_id', cuenta).eq('company_id', empresa)
+            .eq('op_date', h.llegada).eq('amount', h.netoCent / 100).limit(1).maybeSingle()
+          if (!mov) throw new Error(`No está en el banco el ingreso de ${h.mes} (${(h.netoCent / 100).toFixed(2)} €).`)
+          const c = await persona.rpc('conta_abono_gocardless_casar', { p_movement: (mov as { id: string }).id, p_payout: h.payoutGc, p_confianza: 'seguro',
+            p_porque: `Pago de GoCardless con 1 cobro, que llegaba el ${h.llegada.slice(8, 10)}/${h.llegada.slice(5, 7)}: ${(h.netoCent / 100).toFixed(2).replace('.', ',')} € netos, exactos.`, p_por: 'folvy' })
+          if (c.error) throw new Error(`Casar el ingreso de ${h.mes}: ${c.error.message}`)
+          const asiento = (c.data as { asiento?: string } | null)?.asiento
+          if (asiento) {
+            const v = await persona.rpc('journal_entry_validar', { p_entry: asiento, p_quien_nombre: quien.nombre })
+            if (v.error) throw new Error(`Validar el ingreso de ${h.mes}: ${v.error.message}`)
+          }
+          casados++
+        }
+        dicho.push(`Historia de ${HISTORIA.cliente}: ${meses.length} meses (${meses[0].mes} a ${meses[meses.length - 1].mes}), ${facturas} facturas nuevas y ${casados} ingresos casados y validados en el banco.`)
         break
       }
       case 'cambios': {

@@ -64,6 +64,7 @@ export function VolverAEmpezar() {
           <ul style={{ margin: '6px 0' }}>
             <li>el Bitrix24 de pruebas y el sandbox de GoCardless vuelven a sus 40 clientes de siempre;</li>
             <li>en Sumied se van los clientes, cobros, recibos, facturas, movimientos del banco y asientos, y se vuelven a leer;</li>
+            <li>Talleres Ruiz vuelve a tener su historia de cobros de los cuatro meses anteriores, facturada y en el banco;</li>
             <li>el portal de la demo vuelve a quedar preparado, con el acceso de Tomás Ruiz para Talleres Ruiz y el de Felipe Herrera para Electricidad Voltio;</li>
             <li>se quedan las empresas, su plan contable, las conexiones y las personas de la cuenta.</li>
           </ul>

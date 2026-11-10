@@ -16,7 +16,8 @@ export const PASOS = [
   { id: 'sumied', que: 'Dejando Sumied como el primer día' },
   { id: 'leer', que: 'Leyendo otra vez el CRM y GoCardless' },
   { id: 'tarifa', que: 'Sembrando la tarifa y los ingresos en el banco' },
-  { id: 'cambios', que: 'Dejando los cambios del mes que viene' },
+  { id: 'historia', que: 'Sembrando la historia de cobros de Talleres Ruiz' },
+  { id: 'cambios', que: 'Dejando los cambios del mes del cobro' },
   { id: 'portal', que: 'Dejando el portal de la demo preparado' },
 ] as const
 /** Lo que hace como mucho cada llamada de un paso por tandas (el portal): muy por debajo del tiempo máximo de una función. */
@@ -103,3 +104,50 @@ export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; nivelDe
 export const PORTAL_DE_LA_DEMO = { cliente: 'Talleres Ruiz, S.L.', persona: 'Tomás Ruiz', correo: 'tomas.ruiz@talleresruiz.example' } as const
 export const PORTAL_DEL_DEVUELTO = { cliente: 'Electricidad Voltio, S.L.', persona: 'Felipe Herrera', correo: 'felipe.herrera@electricidadvoltio.example' } as const
 export const ACCESOS_DE_LA_DEMO = [PORTAL_DE_LA_DEMO, PORTAL_DEL_DEVUELTO] as const
+
+/**
+ * nº101 · La historia de Talleres Ruiz: los cuatro meses antes del cobro en curso (de julio a octubre, si se cobra
+ * noviembre), cada uno con la cadena entera: el recibo, su factura (la misma función que un cobro confirmado), el cobro,
+ * su liquidación y el ingreso en el banco, casado y validado. Así su 430 queda saldada y la 57200002 solo con la
+ * comisión. El mes en curso no: ése es el cobro que se hace en vivo. Su recibo, el de entonces: la gestoría mensual
+ * Premium (150 €) y la gestión laboral de sus tres trabajadores (25 € cada uno), 225,00 € con IVA, como en GoCardless.
+ */
+export const HISTORIA = { cliente: 'Talleres Ruiz, S.L.', meses: 4, mensual: { concepto: 'Gestoría mensual · Premium', cent: 15000 }, porTrabajadorCent: 2500, ivaPct: 21 } as const
+
+export interface MesDeHistoria {
+  mes: string; cargoEl: string; llegada: string; cobroGc: string; payoutGc: string; referencia: string
+  totalCent: number; comisionCent: number; netoCent: number
+  factura: { lineas: unknown[]; baseCent: number; ivaCent: number; totalCent: number; retencionCent: 0; cuotaAjustada: null; hoja: [] }
+}
+
+/** La línea de un recibo con IVA incluido: su base por unidad redondeada y el IVA, lo que falta hasta el total. */
+function lineaConIva(concepto: string, cantidad: number, unidadCent: number, ivaPct: number, trabajadores: string[] | null) {
+  const precioCent = Math.round(unidadCent / (1 + ivaPct / 100))
+  const baseCent = precioCent * cantidad
+  const ivaCent = unidadCent * cantidad - baseCent
+  return { concepto, cantidad, precioCent, baseCent, ivaPct, ivaCent,
+    trabajadores: trabajadores ? trabajadores.map((nombre) => ({ nombre, desde: null })) : null, trabajadoresEn: trabajadores ? 'linea' : null }
+}
+
+/** Los meses de la historia, en orden, con su recibo, su cargo (día 5), su liquidación (día 7) y la comisión (1 % + 0,25 €). */
+export function historiaDeTalleres(hoyMadrid: string, trabajadores: string[]): MesDeHistoria[] {
+  const [a, m] = hoyMadrid.slice(0, 7).split('-').map(Number)
+  const out: MesDeHistoria[] = []
+  for (let k = HISTORIA.meses; k >= 1; k--) {
+    const d = new Date(Date.UTC(a, m - 1 - k, 1))
+    const mes = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+    const lineas = [
+      lineaConIva(`Gestión laboral · ${trabajadores.length} trabajadores`, trabajadores.length, HISTORIA.porTrabajadorCent, HISTORIA.ivaPct, trabajadores),
+      lineaConIva(HISTORIA.mensual.concepto, 1, HISTORIA.mensual.cent, HISTORIA.ivaPct, null),
+    ]
+    const baseCent = lineas.reduce((t, l) => t + l.baseCent, 0)
+    const ivaCent = lineas.reduce((t, l) => t + l.ivaCent, 0)
+    const totalCent = baseCent + ivaCent
+    const comisionCent = Math.round(totalCent / 100) + 25
+    const id = mes.replace('-', '')
+    out.push({ mes, cargoEl: `${mes}-05`, llegada: `${mes}-07`, cobroGc: `PM00GDHIST${id}`, payoutGc: `PO00GDHIST${id}`, referencia: `GD-HIST-${id}`,
+      totalCent, comisionCent, netoCent: totalCent - comisionCent,
+      factura: { lineas, baseCent, ivaCent, totalCent, retencionCent: 0, cuotaAjustada: null, hoja: [] } })
+  }
+  return out
+}
