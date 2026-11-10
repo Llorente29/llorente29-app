@@ -1,0 +1,7 @@
+# G05 · La 0055 (un recibo devuelto, desde la gestoría). Su prueba (ROLLBACK, datos
+# inventados, en la cuenta A) mira qué se puede hacer como la persona, que otra
+# cuenta no lo ve, lo que no se puede (sin nadie que pague, con la real,
+# retrocedido, contabilizado, cobrado o pagado en el portal), el pasado de nuevo
+# (que «seguir» respeta, tres veces como mucho) y la vuelta atrás.
+supabase/migrations/20261110T0055_g05_devuelto_pagar.sql
+supabase/staging/sql/20261110_g05_devuelto_pagar_prueba.sql

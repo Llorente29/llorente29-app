@@ -1,0 +1,5 @@
+# GP · la 2345 (invitar y contestar desde la pestaña de Bitrix24) y su prueba
+# (ROLLBACK, datos inventados): quién mira, invitar, contestar, solo el
+# servidor y la vuelta atrás.
+supabase/migrations/20261109T2345_gp_portal_bitrix.sql
+supabase/staging/sql/20261109_gp_portal_bitrix_prueba.sql

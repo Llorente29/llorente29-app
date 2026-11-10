@@ -1,0 +1,3 @@
+# GP · la vuelta atrás de la 2345: fuera las tres funciones.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-bitrix.sql
+supabase/vuelta-atras/20261109T2345_gp_portal_bitrix.down.sql
