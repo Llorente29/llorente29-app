@@ -33314,6 +33314,80 @@ COMMENT ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa 
 
 
 --
+-- Name: conta_bitrix_pestana_deshacer(text, text, text, text, uuid, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_portal text := lower(trim(coalesce(p_portal, '')));
+  v_correo text := lower(trim(coalesce(p_correo, '')));
+  v_id text := trim(coalesce(p_id, ''));
+  v_cuenta uuid; v_usuario uuid; v_quien text; v_n int; v_cliente uuid; v_r jsonb; v_cambio uuid;
+begin
+  if p_tipo is null or p_tipo not in ('empresa', 'contacto') or v_id !~ '^[0-9]{1,18}$' then return jsonb_build_object('estado', 'ficha_rara'); end if;
+  if v_portal = '' or v_correo = '' then return jsonb_build_object('estado', 'sin_acceso'); end if;
+
+  -- La persona, igual que en la lectura.
+  select count(*), min(c.account_id::text)::uuid into v_n, v_cuenta
+    from public.conta_crm c
+    join public.user_profiles up on up.account_id = c.account_id and up.active
+    join auth.users u on u.id = up.user_id and lower(u.email) = v_correo
+   where c.crm = 'bitrix24' and lower(c.portal) = v_portal;
+  if v_n = 0 then return jsonb_build_object('estado', 'sin_acceso'); end if;
+  if v_n > 1 then return jsonb_build_object('estado', 'varias_cuentas'); end if;
+  select up.user_id, up.display_name into v_usuario, v_quien
+    from public.user_profiles up join auth.users u on u.id = up.user_id
+   where up.account_id = v_cuenta and up.active and lower(u.email) = v_correo limit 1;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_usuario::text || ':' || v_cuenta::text, true);
+
+  -- El cliente de la ficha abierta, y una empresa de la cuenta.
+  select f.party_id into v_cliente from public.conta_gestoria_ficha f
+   where f.account_id = v_cuenta and f.crm = 'bitrix24' and f.tipo_ficha = p_tipo and f.id_externo = v_id
+   order by (f.de_empresa = '') desc, f.de_empresa limit 1;
+  if v_cliente is null then
+    select g.party_id into v_cliente from public.conta_gestoria_cliente g
+     where g.account_id = v_cuenta and g.crm = 'bitrix24' and g.tipo_ficha = p_tipo and g.id_externo = v_id;
+  end if;
+  if v_cliente is null then return jsonb_build_object('estado', 'sin_enlazar'); end if;
+  if p_empresa is null or not exists (select 1 from public.company where id = p_empresa and account_id = v_cuenta) then
+    return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Esa empresa no es de esta cuenta.');
+  end if;
+  if to_regprocedure('public.conta_linea_deshacer(uuid,uuid,timestamptz)') is null then
+    return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Todavía no se puede deshacer desde aquí: hazlo en la ficha del cliente en Sumied.');
+  end if;
+
+  begin
+    if p_cuando is null then
+      return jsonb_build_object('estado', 'ok', 'operaciones', public.conta_linea_operaciones_hoy(p_empresa, v_cliente));
+    end if;
+    v_r := public.conta_linea_deshacer(p_empresa, v_cliente, p_cuando);
+  exception
+    when insufficient_privilege then
+      return jsonb_build_object('estado', 'sin_permiso', 'frase', 'Puedes ver, pero no cambiar lo que se cobra: pídeselo a un administrador o a un encargado de la cuenta.');
+    when others then
+      return jsonb_build_object('estado', 'no_se_pudo', 'frase', sqlerrm);
+  end;
+  insert into public.conta_bitrix_pestana_cambio (account_id, party_id, tipo_ficha, id_externo, accion, datos, frase, hecho_por, hecho_por_nombre)
+  values (v_cuenta, v_cliente, p_tipo, v_id, 'deshacer', jsonb_build_object('cuando', p_cuando, 'tipo', v_r->>'tipo', 'empresa', p_empresa),
+          coalesce(v_r->>'frase', ''), v_usuario, v_quien)
+  returning id into v_cambio;
+  return jsonb_build_object('estado', 'ok', 'frase', v_r->>'frase', 'tipo', v_r->>'tipo', 'cambio', v_cambio, 'empresa', p_empresa, 'cliente', v_cliente,
+    'bitrix', public._conta_bitrix_pestana_bitrix_de(v_cuenta, p_tipo, v_id));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone) IS 'GB (nº 13) · «Deshacer» en la pestaña de Bitrix24. Solo el servidor, DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación. Actúa como la persona: sin «cuando», lo hecho hoy con las líneas del cliente de la ficha abierta (conta_linea_operaciones_hoy, de Code 1); con «cuando», lo deshace (conta_linea_deshacer) y lo apunta.';
+
+
+--
 -- Name: conta_bitrix_pestana_hacer(text, text, text, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -107773,7 +107847,7 @@ CREATE TABLE public.conta_bitrix_pestana_cambio (
     hecho_at timestamp with time zone DEFAULT now() NOT NULL,
     bitrix jsonb,
     bitrix_at timestamp with time zone,
-    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text, 'tarifa'::text]))),
+    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text, 'tarifa'::text, 'deshacer'::text]))),
     CONSTRAINT conta_bitrix_pestana_cambio_tipo_ficha_check CHECK ((tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])))
 );
 
@@ -168472,6 +168546,14 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_campos(p_cambio uuid) TO servi
 
 REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone) TO service_role;
 
 
 --
