@@ -1,1 +1,0 @@
-Antes de salir, te dice a cuántos clientes y por cuánto. Confirmas, y GoCardless pasa los cargos.

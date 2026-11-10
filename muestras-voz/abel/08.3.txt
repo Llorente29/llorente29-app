@@ -1,1 +1,0 @@
-Lo que cobra GoCardless pasa por esta cuenta puente hasta que llega al banco. Cuando llega, queda solo su comisión, al céntimo.

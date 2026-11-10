@@ -1,0 +1,4 @@
+Muestra de voz del vídeo de Sumied para gestorías (nº96, fase 2).
+Las mismas 8 frases con las dos voces, modelo eleven_v4 de ElevenLabs:
+  julio/  TbcXaMnSerONT83CTICz
+Cada .mp3 lleva su texto al lado (.txt).
