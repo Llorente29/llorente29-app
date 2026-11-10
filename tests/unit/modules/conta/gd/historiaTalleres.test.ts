@@ -34,19 +34,25 @@ describe('GD · nº101 · la historia de Talleres Ruiz', () => {
     expect(caso).toContain("persona.rpc('conta_abono_gocardless_casar'")
     expect(caso).toContain("p_por: 'folvy'")
     expect(caso).toContain("persona.rpc('journal_entry_validar'")
-    expect(caso).toContain('.filter((n) => n !== CAMBIOS_DEL_MES.alta.trabajador)')
+    expect(caso).toContain('.filter((n) => n.toLowerCase() !== CAMBIOS_DEL_MES.alta.trabajador.toLowerCase())')
   })
 })
 
-describe('GD · nº102 · la anual, desde el último junio', () => {
-  it('este año si ya pasó junio; si no, el del año pasado', async () => {
-    const { inicioDeLaAnual } = await import('../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos')
-    expect(inicioDeLaAnual('2026-11-10')).toBe('2026-06-01')
-    expect(inicioDeLaAnual('2026-06-01')).toBe('2026-06-01')
-    expect(inicioDeLaAnual('2027-03-15')).toBe('2026-06-01')
+describe('GD · nº109–110 · las tarifas del mes en curso', () => {
+  const f = readFileSync('supabase/functions/conta-gd-volver-a-empezar/index.ts', 'utf8')
+  const caso = f.slice(f.indexOf("case 'tarifa':"), f.indexOf("case 'historia':"))
+  it('«tarifa» pone desde enero las tarifas mensuales de GoCardless de la cuenta demo (la demo cobra el mes en curso)', () => {
+    expect(caso).toContain("admin.from('conta_tarifa').update({ desde })")
+    expect(caso).toContain(".eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'mes').gt('desde', desde)")
   })
-  it('«tarifa» la mueve, solo las anuales de GoCardless de la cuenta demo', () => {
-    const f = readFileSync('supabase/functions/conta-gd-volver-a-empezar/index.ts', 'utf8')
-    expect(f).toContain(".eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'anio').gt('desde', desdeAnual)")
+  it('las anuales se quedan como las cobra GoCardless: ni las líneas ni las tarifas se mueven (nº110 deshace el #605)', () => {
+    expect(caso).not.toContain("eq('periodo', 'anio')")
+    expect(f).not.toContain('inicioDeLaAnual')
+  })
+  it('«cambios»: el alta de Lucas Ferrer Gil se escribe como en la demo, y se busca sin distinguir mayúsculas', () => {
+    const cambios = f.slice(f.indexOf("case 'cambios':"), f.indexOf("case 'portal':"))
+    expect(cambios).toContain("update({ alta_el: f.altaEl, empleado_nombre: trabajador })")
+    expect(cambios).toContain(".ilike('empleado_nombre', trabajador)")
+    expect(cambios).toContain('.replace(trabajador.toUpperCase(), trabajador)')
   })
 })
