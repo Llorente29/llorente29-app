@@ -64,3 +64,9 @@ export const conNiveles = () => respuesta({
     asignaciones: clientes.asignaciones.map((a) => (a.id === 'l1' ? { ...a, nivel_id: 'premium' } : a)),
   },
 })
+
+/** nº 31 · Un cliente nuevo, sin cobros todavía, con su mandato en el estado que se pida (como Talleres Ruiz en el Bitrix24 de pruebas). */
+export const conMandato = (estado: string) => respuesta({
+  clientes: { ...clientes, clientes: clientes.clientes.map((c) => (c.cliente_id === '1' ? { ...c, mandato: estado, ultimo_cobro_fecha: null, ultimo_cargo_estado: null, ultimo_cargo_fecha: null, ultimo_cargo_importe: null } : c)) },
+  ficha: { ...ficha, cobros: [], pendientes: [], mandatos: ficha.mandatos.map((m) => ({ ...m, estado })) },
+})
