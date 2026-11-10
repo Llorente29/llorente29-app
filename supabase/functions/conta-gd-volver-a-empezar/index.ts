@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -173,30 +173,50 @@ Deno.serve(async (req) => {
         break
       }
       case 'portal': {
-        // nº94 · El portal de la demo, como si se hubiera pulsado «Preparar el portal de la demo» (la vacía «sumied»), y el
-        // acceso de Tomás Ruiz listo: su usuario ya existe de otras veces, pero el portal deja entrar por el usuario del
-        // acceso y el acceso nuevo nace sin él (solo lo pone el servidor al mandar el enlace). Se le enlaza aquí.
+        // nº94 · El portal de la demo, como si se hubiera pulsado «Preparar el portal de la demo» (la vacía «sumied»).
+        // nº98 · Y el acceso de Felipe Herrera para Electricidad Voltio (sale devuelto en cada cobro: el devuelto del
+        // portal). El portal deja entrar por el usuario del acceso, y un acceso nuevo nace sin él (solo lo pone el
+        // servidor al mandar el enlace): a cada uno se le enlaza su usuario, y si no lo tiene se le crea, confirmado.
         const prep = await admin.rpc('conta_portal_demo_preparar', { p_cuenta: cuenta })
         if (prep.error) throw new Error(`Preparar el portal de la demo: ${prep.error.message}`)
         dicho.push(String((prep.data as { frase?: string } | null)?.frase ?? 'Portal de la demo preparado.'))
-        const { data: cli } = await admin.from('party').select('id').eq('account_id', cuenta).eq('name', PORTAL_DE_LA_DEMO.cliente).maybeSingle()
-        if (!cli) throw new Error(`No está «${PORTAL_DE_LA_DEMO.cliente}» en la demo: el portal no se puede preparar.`)
-        const { data: acc } = await admin.from('conta_portal_acceso').select('id, user_id').eq('account_id', cuenta)
-          .eq('party_id', (cli as { id: string }).id).ilike('correo', PORTAL_DE_LA_DEMO.correo).is('revocado_at', null).maybeSingle()
-        if (!acc) throw new Error(`${PORTAL_DE_LA_DEMO.cliente} no tiene el acceso de ${PORTAL_DE_LA_DEMO.persona} después de preparar el portal.`)
-        const acceso = acc as { id: string; user_id: string | null }
-        if (acceso.user_id) { dicho.push(`${PORTAL_DE_LA_DEMO.persona} ya puede entrar en su portal.`); break }
-        let usuario: string | null = null
-        for (let pagina = 1; pagina <= 20 && !usuario; pagina++) {
-          const { data: us, error: eU } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 })
-          if (eU) throw new Error(`Buscar el usuario de ${PORTAL_DE_LA_DEMO.persona}: ${eU.message}`)
-          usuario = us.users.find((u) => (u.email ?? '').toLowerCase() === PORTAL_DE_LA_DEMO.correo)?.id ?? null
-          if (us.users.length < 1000) break
+        const usuarios = new Map<string, string>()
+        const buscarUsuario = async (correo: string): Promise<string | null> => {
+          if (!usuarios.size) {
+            for (let pagina = 1; pagina <= 20; pagina++) {
+              const { data: us, error: eU } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 })
+              if (eU) throw new Error(`Buscar los usuarios del portal: ${eU.message}`)
+              for (const u of us.users) if (u.email) usuarios.set(u.email.toLowerCase(), u.id)
+              if (us.users.length < 1000) break
+            }
+          }
+          return usuarios.get(correo) ?? null
         }
-        if (!usuario) { dicho.push(`${PORTAL_DE_LA_DEMO.persona} aún no tiene usuario: la primera vez entra con su enlace (pestaña Portal de su ficha).`); break }
-        const enl = await admin.rpc('conta_portal_acceso_usuario', { p_acceso: acceso.id, p_user: usuario })
-        if (enl.error) throw new Error(`Dejar listo el acceso de ${PORTAL_DE_LA_DEMO.persona}: ${enl.error.message}`)
-        dicho.push(`${PORTAL_DE_LA_DEMO.persona} ya puede entrar en su portal, con su usuario de siempre.`)
+        for (const a of ACCESOS_DE_LA_DEMO) {
+          const { data: cli } = await admin.from('party').select('id').eq('account_id', cuenta).eq('name', a.cliente).maybeSingle()
+          if (!cli) throw new Error(`No está «${a.cliente}» en la demo: su portal no se puede preparar.`)
+          const party = (cli as { id: string }).id
+          let { data: acc } = await admin.from('conta_portal_acceso').select('id, user_id').eq('account_id', cuenta)
+            .eq('party_id', party).ilike('correo', a.correo).is('revocado_at', null).maybeSingle()
+          if (!acc && a !== PORTAL_DE_LA_DEMO) {
+            const ins = await admin.from('conta_portal_acceso').insert({ account_id: cuenta, party_id: party, correo: a.correo, nombre: a.persona,
+              permiso: 'todo', invitado_por_name: 'Preparación de la demo' }).select('id, user_id').single()
+            if (ins.error) throw new Error(`El acceso de ${a.persona}: ${ins.error.message}`)
+            acc = ins.data
+          }
+          if (!acc) throw new Error(`${a.cliente} no tiene el acceso de ${a.persona} después de preparar el portal.`)
+          const acceso = acc as { id: string; user_id: string | null }
+          if (acceso.user_id) { dicho.push(`${a.persona} ya puede entrar en su portal.`); continue }
+          let usuario = await buscarUsuario(a.correo)
+          if (!usuario) {
+            const nuevo = await admin.auth.admin.createUser({ email: a.correo, email_confirm: true, user_metadata: { nombre: a.persona, demo: 'gd' } })
+            if (nuevo.error || !nuevo.data.user) throw new Error(`El usuario de ${a.persona}: ${nuevo.error?.message ?? 'sin usuario'}`)
+            usuario = nuevo.data.user.id
+          }
+          const enl = await admin.rpc('conta_portal_acceso_usuario', { p_acceso: acceso.id, p_user: usuario })
+          if (enl.error) throw new Error(`Dejar listo el acceso de ${a.persona}: ${enl.error.message}`)
+          dicho.push(`${a.persona} ya puede entrar en el portal de ${a.cliente}.`)
+        }
         break
       }
     }

@@ -16,7 +16,7 @@ import { join } from 'node:path'
 
 export const FRASES = {
   // 00 · Portada
-  '00.1': 'Sumied para gestorías: tus clientes, sus cuotas, el cobro, las facturas y la contabilidad, en un solo sitio.',
+  portada: 'Sumied para gestorías: tus clientes, sus cuotas, el cobro, las facturas y la contabilidad, en un solo sitio.',
 
   // 01 · Clientes y cuotas
   '01.1': 'Aquí están todos tus clientes. Sumied los lee de tu Bitrix24, y las cuotas, de tu tarifa; GoCardless solo pasa el cargo. No das de alta nada dos veces.',
@@ -101,12 +101,12 @@ export const FRASES = {
   '11.7': 'Hasta cambiar la cuenta donde se le cargan los recibos lo hace él.',
 
   // 12 · Cierre
-  '12.1': 'Sin teclear recibos, sin facturar a mano y sin descuadres. Sumied para gestorías.',
+  cierre: 'Sin teclear recibos, sin facturar a mano y sin descuadres. Sumied para gestorías.',
 }
 
 /** A qué gesto va pegada cada frase (lo que señala el ratón y donde hace zoom el montaje). */
 export const GESTOS = {
-  '00.1': 'portada', '01.1': 'la lista entera', '01.2': 'zoom a «Cuotas al mes»', '01.3': 'zoom a «Te deben»', '01.4': 'zoom a «Dejas de cobrar»',
+  portada: 'portada', '01.1': 'la lista entera', '01.2': 'zoom a «Cuotas al mes»', '01.3': 'zoom a «Te deben»', '01.4': 'zoom a «Dejas de cobrar»',
   '01.5': 'zoom a «Lo que tienes que hacer»', '01.6': 'clic en Talleres Ruiz y zoom al panel',
   '02.1': 'zoom a «Se le cobra al mes»', '02.2': 'zoom al recibo', '02.3': 'clic en «Ver trabajadores»', '02.4': 'zoom al trabajador nuevo',
   '02.5': 'pestañas Cobros y Contacto', '02.6': 'pestaña Datos de Bitrix24',
@@ -124,7 +124,7 @@ export const GESTOS = {
   '10.1': 'pestaña Portal de la ficha', '10.2': 'zoom a lo pedido y los mensajes',
   '11.1': 'portal · Inicio', '11.2': 'portal · Facturas', '11.3': 'portal · Pagos', '11.4': 'portal · Trabajadores', '11.5': 'portal · Documentos',
   '11.6': 'portal · Mensajes', '11.7': 'portal · Tu cuenta',
-  '12.1': 'cierre',
+  cierre: 'cierre',
 }
 
 /** Las 6 frases de la muestra de voz (nº96, fase 2): 2 del cobro, 2 de la contabilidad y 2 del banco. */
