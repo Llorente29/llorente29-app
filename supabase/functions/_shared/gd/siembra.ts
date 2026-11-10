@@ -56,6 +56,22 @@ const MANDATO_ACABADO = ['cancelled', 'failed', 'expired', 'consumed', 'blocked'
 // sociedades»): la lectura los clasifica sin mirar mayúsculas ni tildes (conversion.ts, normalizar) y guarda el nombre
 // tal cual, así que en Sumied, en la pestaña de Bitrix24 y en el PDF de la factura salen así. Antes, en mayúsculas.
 const SIN_SL = (t: string) => t.replace(/,?\s*S\.L\.$/, '')
+
+/**
+ * nº105 · La clave de idempotencia va en una CABECERA HTTP, y una cabecera solo admite ASCII. Con el nº104 llevaba el
+ * nombre de la suscripción con tildes («…-Gestión laboral Adrián Molina Castro») y la petición se paraba antes de
+ * llegar a GoCardless: un 403 sin cuerpo de GoCardless. El nombre sigue con sus tildes en el cuerpo (JSON, UTF-8: los
+ * clientes se crean así sin problema); la clave, sin tildes y solo con letras, cifras y guiones, hasta 128.
+ */
+export function claveIdempotencia(t: string): string {
+  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9_-]+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 128)
+}
+
+/** Lo que dice una respuesta que no es de GoCardless (una página HTML de un cortafuegos, por ejemplo), en una línea corta. */
+export function motivoSinJson(texto: string): string {
+  const t = texto.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+  return t ? t.slice(0, 200) : 'sin cuerpo'
+}
 const euros = (n: number) => Math.round(n * 100)
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -169,13 +185,21 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
     const r = await f(`${GC_SANDBOX}${ruta}`, {
       method: metodo,
       headers: { Authorization: `Bearer ${GC_TOKEN}`, 'GoCardless-Version': '2015-07-06', 'Content-Type': 'application/json', Accept: 'application/json',
-        ...(clave ? { 'Idempotency-Key': clave } : {}) },
+        ...(clave ? { 'Idempotency-Key': claveIdempotencia(clave) } : {}) },
       body: cuerpo ? JSON.stringify(cuerpo) : undefined,
     })
-    const d = (await r.json().catch(() => ({}))) as Fila
+    const texto = await r.text().catch(() => '')
+    let d: Fila = {}
+    let esJson = true
+    try { d = (texto ? JSON.parse(texto) : {}) as Fila } catch { esJson = false }
     if (!r.ok) {
-      const e = d.error as { message?: string; errors?: { field?: string; message?: string }[] } | undefined
-      throw new Error(`GoCardless (sandbox) · ${metodo} ${ruta.split('?')[0]}: ${r.status} ${e?.message ?? ''} ${(e?.errors ?? []).map((x) => `${x.field ?? ''} ${x.message ?? ''}`).join('; ')}`)
+      // nº105 · El motivo, no solo el código: el de GoCardless (su mensaje, su razón y los campos) o, si la respuesta
+      // no es suya, lo que diga esa respuesta. Nunca la clave ni el cuerpo que se mandó.
+      const e = d.error as { message?: string; type?: string; errors?: { field?: string; message?: string; reason?: string }[] } | undefined
+      const motivo = esJson && e
+        ? [e.type, e.message, ...(e.errors ?? []).map((x) => [x.field, x.reason, x.message].filter(Boolean).join(' '))].filter(Boolean).join(' · ')
+        : `la respuesta no es de GoCardless (${r.statusText || 'sin texto'}): ${motivoSinJson(texto)}`
+      throw new Error(`GoCardless (sandbox) · ${metodo} ${ruta.split('?')[0]}: ${r.status} · ${motivo}`)
     }
     return d
   }
@@ -228,6 +252,9 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
 
   async function sembrarGoCardless() {
     sinToken()
+    // nº105 · «Seguir desde este paso» después de un fallo: lo que dejó el intento a medias (clientes con su mandato)
+    // se quita antes, para no sembrar dos veces el mismo cliente.
+    if ((await gcTodos('customers')).length) await borrarGoCardless()
     let n = 0, subs = 0, sueltos = 0
     const enGc = CLIENTES.filter((c): c is Cliente & { gc: NonNullable<Cliente['gc']> } => !!c.gc)
     for (const c of enGc) {
