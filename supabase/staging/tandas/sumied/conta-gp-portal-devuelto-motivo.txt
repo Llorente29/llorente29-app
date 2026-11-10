@@ -1,0 +1,5 @@
+# GP · la 1222 (el motivo del devuelto en el portal) y su prueba (ROLLBACK, datos
+# inventados): Inicio y Pagos traen el motivo de cada devuelto, lo de antes
+# igual y la vuelta atrás.
+supabase/migrations/20261110T1222_gp_portal_devuelto_motivo.sql
+supabase/staging/sql/20261110_gp_portal_devuelto_motivo_prueba.sql
