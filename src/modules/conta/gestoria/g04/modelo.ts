@@ -121,9 +121,16 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     devueltosDe.set(k, [...(devueltosDe.get(k) ?? []), { id: c.id, fecha: c.fecha, importeCent: c.importeCent }])
   }
 
+  // nº 82 · Lo que GoCardless cobra EN el mes, por cliente y empresa (la anual, entera en su mes). La media
+  // (gocardless_al_mes, la anual entre 12) ya no se compara con nada: solo dice si tiene cuota.
+  const delMes = (d.gcDelMes ?? []).filter((x) => mesDe(x.mes) === mes)
+  const gcDelMesDe = new Map(delMes.filter((x) => x.que === 'cliente')
+    .map((x) => [`${String(x.cliente_id)}|${String(x.empresa_id)}`, cent(x.gocardless_del_mes)]))
+  // Y por empresa, todo lo suyo del mes, también lo que aún no está unido a ningún cliente: el total de las cuotas.
+  const gcDelMesEmpresa = delMes.filter((x) => x.que === 'empresa' && enElegidas(x.empresa_id)).reduce((t, x) => t + cent(x.gocardless_del_mes), 0)
+
   const filas: FilaDeLaLista[] = []
   let sumiedTotal = 0
-  let gcTotal = 0
   let porRevisar = 0
   for (const r of d.clientes) {
     const empresaId = str(r.empresa_id)
@@ -134,9 +141,10 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     const recibo = empresaId ? reciboDelMes(catalogo, asignaciones, clienteId, empresaId, mes) : null
     const siguiente = empresaId ? reciboDelMes(catalogo, asignaciones, clienteId, empresaId, mesSiguiente(mes)) : null
     const gcAlMes = r.gocardless_al_mes == null ? null : cent(r.gocardless_al_mes)
+    const gcDelMes = empresaId ? gcDelMesDe.get(`${clienteId}|${empresaId}`) ?? null : null
     const sumied = recibo && recibo.lineas.length ? recibo.totalCent : null
-    const esteMes = cifraDeCobro({ gocardlessCent: gcAlMes, sumiedCent: sumied })
-    if (empresaId) { sumiedTotal += sumied ?? 0; gcTotal += gcAlMes ?? 0 }
+    const esteMes = cifraDeCobro({ gocardlessCent: gcDelMes, sumiedCent: sumied })
+    if (empresaId) sumiedTotal += sumied ?? 0
     if (esteMes.diferenciaCent !== null && esteMes.diferenciaCent !== 0) porRevisar++
     const debe = debeDe.get(`${clienteId}|${empresaId}`) ?? null
     const mandatoGc = str(r.mandato)
@@ -182,18 +190,17 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     })
   }
 
-  // Las cuotas: lo que cobra GoCardless (manda hasta el G05; la base lo da sumado por empresa) y lo que calcula Sumied, al lado.
+  // Las cuotas: lo que cobra GoCardless este mes (manda hasta el G05; la base lo da sumado por empresa, nº 82) y lo que calcula Sumied, al lado.
   const gcDe = d.cuotasGc.filter((x) => enElegidas(x.empresa_id))
   const sumar = (k: string) => gcDe.reduce((s, x) => s + cent(x[k]), 0)
   const contar = (k: string) => gcDe.reduce((s, x) => s + Number(x[k] ?? 0), 0)
   const clientesConCuota = new Set(filas.filter((f) => f.empresaId && ((f.esteMes.principalCent ?? 0) > 0 || (f.esteMes.comparacionCent ?? 0) > 0)).map((f) => f.clienteId)).size
   const cuotas = {
-    principal: cifraDeCobro({ gocardlessCent: sumar('al_mes'), sumiedCent: sumiedTotal }),
+    principal: cifraDeCobro({ gocardlessCent: gcDelMesEmpresa, sumiedCent: sumiedTotal }),
     clientes: clientesConCuota,
     altas: { n: contar('altas_n'), cent: sumar('altas_euros') },
     bajas: { n: contar('bajas_n'), cent: sumar('bajas_euros') },
   }
-  void gcTotal
 
   const elegidasConNombre = elegidas.map((id) => ({ id, nombre: nombreEmpresa.get(id) ?? '' }))
   const banda = {
@@ -312,13 +319,16 @@ export function modeloFicha(d: DatosClientes, suyo: DatosFicha, empresas: readon
       return { fecha: `${Number(String(b.fecha).slice(8, 10))} ${MES_CORTO[Number(String(b.fecha).slice(5, 7)) - 1]} ${String(b.fecha).slice(0, 4)}`, importe: euros(cent(b.importe)), estado: x.texto, tono: x.tono } })
   const ultimoMandato = [...mandatos].sort((a, b) => (String(a.creado ?? '') < String(b.creado ?? '') ? 1 : -1))[0]
   // Lo que tiene, a la derecha: cada asignación vigente con su precio.
+  // Una que aún no ha empezado (la anual de GoCardless que se cobra por primera vez en junio) no está en el recibo
+  // del mes que viene: se busca en el de su primer mes, para que tenga su nombre y su precio, no «Servicio · Sin precio».
   const servicios = suyas.filter((a) => a.hasta === null || a.hasta >= mes).map((a) => {
     const l = recibo?.lineas.find((x) => x.asignacionId === a.id)
+      ?? (e && mesDe(a.desde) > siguiente ? reciboDelMes(catalogo, asignaciones, clienteId, e, mesDe(a.desde)).lineas.find((x) => x.asignacionId === a.id) : undefined)
     const servicioId = a.objetivo.tipo === 'paquete' ? null : a.objetivo.servicioId.split('#')[0]
     const palabra = !l || l.dePrecio === 'sin_precio' ? 'Sin precio' : l.dePrecio === 'tarifa' ? 'Precio de tarifa' : l.dePrecio === 'especial' ? 'Precio especial' : 'Precio de este cliente'
     return {
-      texto: l?.texto.replace(/ · \d+ trabajadores?$/, '') ?? 'Servicio',
-      detalle: `${palabra}${l?.trabajadores !== null && l?.trabajadores !== undefined ? ` · ${l.cuenta}` : ''} · desde ${mesCorto(a.desde)}`,
+      texto: l?.texto.replace(/ · \d+ trabajadores?$/, '') ?? catalogo.servicios.find((x) => x.id === servicioId)?.nombre ?? 'Servicio',
+      detalle: `${palabra}${(l?.trabajadores !== null && l?.trabajadores !== undefined) || / al año/.test(l?.cuenta ?? '') ? ` · ${l!.cuenta}` : ''} · desde ${mesCorto(a.desde)}`,
       importe: l?.importeCent == null ? '—' : euros(l.importeCent),
       lineaId: a.objetivo.tipo === 'paquete' ? null : a.id.replace(/^linea:/, ''), servicioId,
       tieneNiveles: !!servicioId && catalogo.niveles.some((n) => n.servicioId === servicioId), especial: l?.dePrecio === 'especial',

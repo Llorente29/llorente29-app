@@ -1,0 +1,13 @@
+# G05 · Un trabajo suelto, sumado al recibo del mes (nº 69 y nº 71, punto 3; para
+# la ficha y la pestaña de Bitrix24 de Code 4). Rama conta/g05-trabajo-suelto. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar. El real lo
+# lanza Julio.
+#
+#   0700  AÑADE conta_trabajos_sueltos (los servicios «cada vez» con su precio y
+#         los sueltos del cliente) y conta_trabajo_suelto_poner (una línea
+#         «suelto» en el mes del próximo recibo), y dos internas. No cambia
+#         ninguna función de antes.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-trabajo-suelto.sql
+supabase/migrations/20261110T0700_g05_trabajo_suelto.sql

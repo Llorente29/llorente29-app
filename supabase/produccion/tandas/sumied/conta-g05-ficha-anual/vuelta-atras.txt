@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 1222: fuera conta_gocardless_del_mes.
+cuenta: scripts/conta/produccion/cuentas/g05-ficha-anual.sql
+supabase/vuelta-atras/20261110T1222_g05_gocardless_del_mes.down.sql

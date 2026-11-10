@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowUp, CircleCheck, Euro, FileText, MessageCircle, PenLine, Plus } from 'lucide-react'
 import { abrir, accion } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { cuentaEnmascarada, diferencia, euros, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS } from '../formato'
+import { cuentaEnmascarada, diferencia, euros, mes as nombreMes, peticionHecha, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS, motivoParaTi, resultadoImpuesto, nombrePropio, cortado } from '../formato'
 import type { Inicio as DatosInicio, Novedad, Peticion } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -25,7 +25,8 @@ export function Inicio({ cliente, ir, avisar, ponerNombre }: Pantalla) {
   if (error || !datos) return <Fallo texto={error ?? 'No se ha podido cargar.'} otraVez={recargar} />
   const d = datos
   const todo = d.yo.permiso === 'todo'
-  const pendientes = d.peticiones.length
+  // nº 24 · Lo hecho hace poco sigue en la lista, tachado (como la maqueta); el número es solo lo pendiente.
+  const pendientes = d.peticiones.filter((q) => q.estado !== 'hecha').length
 
   const hacer = (q: Peticion) => {
     if (q.tipo === 'firmar') setFirmando(q)
@@ -45,16 +46,23 @@ export function Inicio({ cliente, ir, avisar, ponerNombre }: Pantalla) {
           </div>
           {pendientes === 0 && <div className="pt-nota">No tienes nada pendiente. Cuando tu gestoría te pida algo, sale aquí y te llega un correo.</div>}
           <div>
-            {d.peticiones.map((q) => (
-              <div className="pt-fila" key={q.id}>
-                <span className="pt-icono" aria-hidden="true" style={tonoPeticion(q.tipo)}>{q.tipo === 'firmar' ? <PenLine /> : q.tipo === 'subir' ? <ArrowUp /> : <MessageCircle />}</span>
-                <div className="pt-fila-texto">
-                  <b>{q.titulo}</b>
-                  <span>{[q.fecha_limite ? `Antes del ${fecha(q.fecha_limite)}` : null, q.detalle].filter(Boolean).join(' · ')}</span>
+            {d.peticiones.map((q) => {
+              const hecha = q.estado === 'hecha' ? peticionHecha(q) : null
+              return (
+                <div className="pt-fila" key={q.id} data-hecha={hecha ? '' : undefined}>
+                  <span className="pt-icono" aria-hidden="true" style={tonoPeticion(q.tipo)}>{q.tipo === 'firmar' ? <PenLine /> : q.tipo === 'subir' ? <ArrowUp /> : <MessageCircle />}</span>
+                  <div className="pt-fila-texto">
+                    <b style={hecha ? { textDecoration: 'line-through' } : undefined}>{q.titulo}</b>
+                    {hecha
+                      ? <span style={{ color: 'var(--ok)' }}>{hecha.detalle}</span>
+                      : <span>{[q.fecha_limite ? `Antes del ${fecha(q.fecha_limite)}` : null, q.detalle].filter(Boolean).join(' · ')}</span>}
+                  </div>
+                  {hecha
+                    ? <span className="pt-hecho">{hecha.boton}</span>
+                    : <button type="button" className="pt-boton chico" onClick={() => hacer(q)}>{q.tipo === 'firmar' ? 'Firmar' : q.tipo === 'subir' ? 'Subirlo' : 'Contestar'}</button>}
                 </div>
-                <button type="button" className="pt-boton chico" onClick={() => hacer(q)}>{q.tipo === 'firmar' ? 'Firmar' : q.tipo === 'subir' ? 'Subirlo' : 'Contestar'}</button>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       )}
@@ -94,11 +102,12 @@ function Atajo({ icono, t, d, pick }: { icono: ReactNode; t: string; d: string; 
 }
 
 function FilaNovedad({ n, ir, cliente, avisar }: { n: Novedad; ir: Pantalla['ir']; cliente: string; avisar: Pantalla['avisar'] }) {
-  const v = n.tipo === 'factura' ? { ico: <Euro />, tono: TONOS.ok, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: `Del ${fecha(n.cuando)}`, b: 'PDF',
+  const v = n.tipo === 'factura' ? { ico: <Euro />, tono: TONOS.ok, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: n.pagada ? `Pagada el ${fecha(n.pagada)}` : `Del ${fecha(n.cuando)}`, b: 'PDF',
         go: () => { abrir(cliente, 'factura', n.id).catch((e: Error) => avisar({ tipo: 'mal', texto: e.message })) } }
-    : n.tipo === 'impuesto' ? { ico: <FileText />, tono: TONOS.info, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${n.resultado === 'a_devolver' ? 'a devolver' : 'a ingresar'} ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
-    : n.tipo === 'alta' ? { ico: <CircleCheck />, tono: n.estado === 'hecha' ? TONOS.ok : TONOS.gris, t: `${n.alta === 'baja' ? 'Baja' : 'Alta'} de ${n.titulo} ${n.estado === 'hecha' ? 'hecha' : 'no hecha'}`, d: n.desde ? `Desde el ${fecha(n.desde)}` : '', b: 'Ver', go: () => ir('trabajadores') }
-    : { ico: <MessageCircle />, tono: TONOS.gris, t: n.titulo || 'Mensaje de tu gestoría', d: fecha(n.cuando), b: 'Leer', go: () => ir('mensajes') }
+    : n.tipo === 'impuesto' ? { ico: <FileText />, tono: TONOS.info, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${resultadoImpuesto(n.resultado) || 'importe'} ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
+    : n.tipo === 'nomina' ? { ico: <FileText />, tono: TONOS.gris, t: `Nóminas de ${nombreMes(n.titulo).toLowerCase()} listas`, d: n.n ? `${n.n} ${n.n === 1 ? 'nómina' : 'nóminas'}` : '', b: 'Ver', go: () => ir('documentos') }
+    : n.tipo === 'alta' ? { ico: <CircleCheck />, tono: n.estado === 'hecha' ? TONOS.ok : TONOS.gris, t: `${n.alta === 'baja' ? 'Baja' : 'Alta'} de ${nombrePropio(n.titulo)} ${n.estado === 'hecha' ? 'hecha' : 'no hecha'}`, d: n.desde ? `Desde el ${fecha(n.desde)}` : '', b: 'Ver', go: () => ir('trabajadores') }
+    : { ico: <MessageCircle />, tono: TONOS.gris, t: cortado(n.titulo) || 'Mensaje de tu gestoría', d: fecha(n.cuando), b: 'Leer', go: () => ir('mensajes') }
   return (
     <div className="pt-fila">
       <span className="pt-icono" aria-hidden="true" style={{ background: v.tono.fondo, color: v.tono.tinta }}>{v.ico}</span>
@@ -109,6 +118,7 @@ function FilaNovedad({ n, ir, cliente, avisar }: { n: Novedad; ir: Pantalla['ir'
 }
 
 function Devuelto({ cliente, v, formas, avisar, recargar }: { cliente: string; v: DatosInicio['devueltos'][number]; formas: DatosInicio['pagar_devuelto']; avisar: Pantalla['avisar']; recargar: () => void }) {
+  const motivo = motivoParaTi(v.motivo)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const ir = async (que: 'banco_pagar' | 'tarjeta' | 'reintentar') => {
     setOcupado(que)
@@ -124,7 +134,7 @@ function Devuelto({ cliente, v, formas, avisar, recargar }: { cliente: string; v
       <div id={`pt-dev-${v.recibo_id}`} style={{ fontSize: 13, color: '#A11B12', fontWeight: 700 }}>Tienes un recibo devuelto</div>
       <div className="pt-cifra">{euros(v.importe_cent)}</div>
       <div style={{ color: '#7A140D' }}>
-        El de {mes(v.mes).toLowerCase()}. {v.devuelto_el ? `Tu banco lo devolvió el ${fecha(v.devuelto_el)}. ` : 'Tu banco lo devolvió. '}Puedes pagarlo ahora y queda todo al día.
+        El de {mes(v.mes).toLowerCase()}. Tu banco lo devolvió{v.devuelto_el ? ` el ${fecha(v.devuelto_el)}` : ''}{motivo ? `: ${motivo.frase}` : ''}. Puedes pagarlo ahora y queda todo al día.
       </div>
       {v.en_marcha && <div className="pt-nota" style={{ color: '#7A140D' }}>Empezaste a pagarlo el {fecha(v.en_marcha.creada)}: si no lo terminaste, vuelve a pulsar.</div>}
       <div className="pt-botones">

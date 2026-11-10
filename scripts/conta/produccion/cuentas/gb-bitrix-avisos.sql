@@ -8,6 +8,7 @@ select clave, valor from (
   select 1 o, 'conta_bitrix_pestana_aviso / cron conta-bitrix-avisos-despertar' clave,
     concat_ws(' / ', (to_regclass('public.conta_bitrix_pestana_aviso') is not null)::text,
                      (exists (select 1 from cron.job where jobname = 'conta-bitrix-avisos-despertar'))::text) valor union all
-  select 2, 'Conexiones de CRM de pruebas / reales',
-    concat_ws(' / ', (select count(*) from public.conta_crm where entorno = 'pruebas'), (select count(*) from public.conta_crm where entorno = 'real'))
+  select 2, 'Conexiones de CRM de pruebas / reales (con corte de fecha)',
+    concat_ws(' / ', (select count(*) from public.conta_crm where entorno = 'pruebas' and created_at < timestamptz '2026-11-10 10:00:00+00'),
+                     (select count(*) from public.conta_crm where entorno = 'real' and created_at < timestamptz '2026-11-10 10:00:00+00'))
 ) q order by o;

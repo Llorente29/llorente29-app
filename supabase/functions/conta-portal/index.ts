@@ -30,7 +30,15 @@
 //                    con la clave de PRUEBAS y solo en las demos: Julio, nº 6).
 //   · archivos       los enlaces firmados de las facturas de un año (el ZIP lo
 //                    hace la pantalla).
+//   · demo_devolver  (T5, solo demos) el sandbox de GoCardless devuelve el cobro
+//                    de un recibo (simulador «payment_failed»), para enseñar un
+//                    devuelto de verdad. Solo una cuenta demo, solo con la
+//                    conexión de pruebas y solo su administrador o encargado.
 //   · seguir         en qué ha quedado lo pedido a GoCardless o a Stripe, al volver.
+//   · bitrix_invitar (nº 17) «Invitar al portal» desde la pestaña de Bitrix24:
+//                    SOLO con la clave de servicio (sin sesión de Sumied); lo
+//                    llama conta-bitrix-pestana (Code 4) después de comprobar
+//                    con Bitrix24 quién mira. Ver bitrixInvitar.
 //                    Al quedar hecho (T4), se remata con lo de Code 1 (#534):
 //                    un devuelto pagado se apunta (conta_recibo_pagado_portal,
 //                    y su frase sale en pantalla tal cual) y una cuenta nueva se
@@ -55,6 +63,7 @@ import { cuentaPuedeSalir } from '../_shared/puerta.ts'
 import { salirA } from '../_shared/puertaDePruebas.ts'
 import { correoValido } from '../_shared/facturaVentaCorreo.ts'
 import { BASES, type Entorno } from '../conta-gocardless-leer/lector.ts'
+import { VERSION_GOCARDLESS } from '../_shared/cobro/gocardless.ts'
 import { errorStripe, v1 } from '../_shared/stripeSumied.ts'
 import {
   BYTES_SUBIDA, camposPagoTarjeta, claveStripePruebas, leerSesionStripe, PLANTILLA_CODIGO, PLANTILLA_ENLACE, TIPOS_SUBIDA, correoCodigo, correoEnlace, enmascararCorreo, fraseError, leerFlujo, leerPeticion,
@@ -88,6 +97,16 @@ function fraseBase(error: { message?: string } | null): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'usa POST' })
+  // nº 17 · Desde la pestaña de Bitrix24 (Code 4): sin sesión de Sumied, solo con la clave de servicio.
+  if ((req.headers.get('Authorization') ?? '') === `Bearer ${SERVICIO}`) {
+    let b0: Fila = {}
+    try { b0 = await req.clone().json() as Fila } catch { /* vacío */ }
+    if (b0.accion === 'bitrix_invitar') {
+      try { return await bitrixInvitar(createClient(URL_BASE, SERVICIO, { auth: { persistSession: false } }), b0) }
+      catch (x) { console.error('[conta-portal] bitrix_invitar', x instanceof Error ? x.message : String(x)); return json(200, { ok: false, estado: 'error', frase: 'No se ha podido invitar ahora. Prueba en unos minutos.' }) }
+    }
+    return json(400, { ok: false, frase: 'Con la clave de servicio solo se puede «bitrix_invitar».' })
+  }
   const yo = createClient(URL_BASE, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } })
   const { data: u } = await yo.auth.getUser()
   if (!u?.user) return json(401, { error: 'no autenticado' })
@@ -112,6 +131,7 @@ Deno.serve(async (req) => {
       case 'tarjeta': return await tarjeta(yo, srv, b, origen)
       case 'archivos': return await archivos(yo, srv, b)
       case 'seguir': return await seguir(yo, srv, b)
+      case 'demo_devolver': return await demoDevolver(yo, srv, b)
       default: return json(400, { ok: false, frase: 'Esa acción no existe.' })
     }
   } catch (x) {
@@ -131,9 +151,34 @@ async function archivo(yo: Sb, srv: Sb, b: Fila) {
   const { data, error } = await yo.rpc('conta_portal_archivo', { p_party: cliente, p_tipo: String(b.tipo ?? ''), p_id: id, p_indice: Number(b.indice ?? 0) || 0 })
   if (error || !data) return mal(fraseBase(error))
   const f = data as { almacen: string; ruta: string; nombre: string }
-  const { data: s, error: e2 } = await srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300, { download: nombreSeguro(f.nombre) })
+  const firmar = () => srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300, { download: nombreSeguro(f.nombre) })
+  let { data: s, error: e2 } = await firmar()
+  // nº 28 · En la demo, los justificantes y las nóminas sembrados («demo/<cuenta>/…») no tienen fichero: se hace la primera vez.
+  if ((e2 || !s?.signedUrl) && await pdfDeLaDemo(srv, f)) ({ data: s, error: e2 } = await firmar())
   if (e2 || !s?.signedUrl) return mal('Ese documento no se puede abrir ahora.')
   return json(200, { ok: true, url: s.signedUrl, nombre: f.nombre })
+}
+
+/**
+ * nº 28 · El PDF de un documento sembrado en una cuenta de DEMOSTRACIÓN (ruta «demo/<cuenta>/…»), que no tiene
+ * fichero: una página que dice qué es y que es de la demo. Solo si esa cuenta es demo; nunca pisa un fichero.
+ */
+async function pdfDeLaDemo(srv: Sb, f: { almacen: string; ruta: string; nombre: string }): Promise<boolean> {
+  const [raiz, cuenta] = f.ruta.split('/')
+  if (raiz !== 'demo' || !uuid(cuenta)) return false
+  const { data: acc } = await srv.from('accounts').select('name, is_demo').eq('id', cuenta).maybeSingle()
+  if (!acc?.is_demo) return false
+  const doc = await PDFDocument.create()
+  const pag = doc.addPage([595, 842])
+  const negrita = await doc.embedFont(StandardFonts.HelveticaBold); const normal = await doc.embedFont(StandardFonts.Helvetica)
+  const titulo = f.nombre.replace(/\.pdf$/i, '')
+  pag.drawText(String(acc.name ?? ''), { x: 56, y: 770, size: 12, font: normal, color: rgb(0.29, 0.36, 0.45) })
+  pag.drawText(titulo.length > 60 ? `${titulo.slice(0, 59)}…` : titulo, { x: 56, y: 740, size: 18, font: negrita, color: rgb(0.06, 0.11, 0.18) })
+  pag.drawText('Documento de demostración: lo ha hecho Sumied para la demo. No es un documento real.', { x: 56, y: 708, size: 11, font: normal, color: rgb(0.29, 0.36, 0.45) })
+  const bytes = await doc.save()
+  const { error } = await srv.storage.from(f.almacen).upload(f.ruta, new Blob([bytes as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
+  if (error && !/exists|duplicate/i.test(error.message)) { console.error('[conta-portal] pdf de la demo', error.message); return false }
+  return true
 }
 
 async function subidaUrl(yo: Sb, srv: Sb, b: Fila) {
@@ -229,7 +274,34 @@ async function invitar(yo: Sb, srv: Sb, b: Fila, origen: unknown) {
   if (!cliente || !correo) return json(400, { ok: false, frase: 'Escribe un correo que valga.' })
   const { data, error } = await yo.rpc('conta_portal_invitar', { p_party: cliente, p_correo: correo, p_nombre: texto(b.nombre, 120), p_permiso: b.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo' })
   if (error || !data) return mal(fraseBase(error))
-  const r0 = data as { id: string; frase: string }
+  return await mandarInvitacion(srv, data as { id: string; frase: string }, correo, origen)
+}
+
+/**
+ * nº 17 · «Invitar al portal» desde la pestaña de Bitrix24. Solo con la clave de
+ * servicio: lo llama conta-bitrix-pestana (Code 4) DESPUÉS de comprobar con
+ * Bitrix24 quién mira. conta_portal_bitrix_invitar busca la persona y el cliente
+ * de la ficha y, como ella, da el acceso; aquí se manda el correo, igual que
+ * desde Sumied. Cuerpo: { portal, correo (el de quien mira), tipo, id (la ficha),
+ * invitado, nombre?, permiso?, origen? }.
+ */
+async function bitrixInvitar(srv: Sb, b: Fila) {
+  const invitado = correoValido(b.invitado)
+  if (!invitado) return json(200, { ok: false, estado: 'no', frase: 'Escribe un correo que valga.' })
+  const { data, error } = await srv.rpc('conta_portal_bitrix_invitar', {
+    p_portal: texto(b.portal, 200), p_correo: texto(b.correo, 200), p_tipo: texto(b.tipo, 20), p_id: texto(b.id, 20),
+    p_invitado: invitado, p_nombre: texto(b.nombre, 120) || null, p_permiso: b.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo',
+  })
+  if (error) return json(200, { ok: false, estado: 'error', frase: fraseBase(error) })
+  const r = data as { estado: string; frase: string; id?: string }
+  if (r.estado !== 'ok' || !r.id) return json(200, { ok: false, estado: r.estado, frase: r.frase })
+  const res = await mandarInvitacion(srv, { id: r.id, frase: r.frase }, invitado, b.origen ?? null)
+  const cuerpo = await res.json() as Fila
+  return json(200, { ...cuerpo, estado: cuerpo.ok ? 'ok' : 'no' })
+}
+
+/** El correo de la invitación (el acceso ya está): el enlace para entrar, con la marca de la gestoría. */
+async function mandarInvitacion(srv: Sb, r0: { id: string; frase: string }, correo: string, origen: unknown) {
   const { data: a } = await srv.from('conta_portal_acceso').select('id, account_id, party_id, invitado_por_name').eq('id', r0.id).single()
   const e = await enlaceParaEntrar(srv, correo, origen, URL_BASE)
   if ('porque' in e) return json(200, { ok: true, enviado: false, frase: `${r0.frase.split('.')[0]}, pero ${e.porque.toLowerCase()}` })
@@ -492,6 +564,41 @@ async function seguirTarjeta(srv: Sb, op: Fila) {
   const remate = l.estado === 'hecha' ? await rematar(srv, { ...op, estado: 'hecha' }) : null
   return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? remate ?? 'Pagado. Tu gestoría ya lo tiene.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'El pago aún se está confirmando. Te avisamos cuando termine.' })
+}
+
+// ── La demo: que el banco devuelva un recibo (sandbox) ────────────────────────
+
+/**
+ * El simulador del sandbox de GoCardless («payment_failed»: el cobro pasa a
+ * fallido, como si el banco lo devolviera). Después llega el aviso de GoCardless
+ * y el cobro de Code 1 pone el recibo «devuelto», como con uno de verdad. Solo
+ * cuentas demo, solo la conexión de pruebas y solo quien lleva la cuenta.
+ */
+async function demoDevolver(yo: Sb, srv: Sb, b: Fila) {
+  const id = uuid(b.recibo)
+  if (!id) return json(400, { ok: false, frase: 'Falta el recibo.' })
+  const { data: r } = await srv.from('conta_recibo').select('id, account_id, company_id, mes, estado, gc_cobro_id').eq('id', id).maybeSingle()
+  if (!r) return mal('Ese recibo no está.')
+  const { data: puede } = await yo.rpc('current_user_is_admin_or_manager_of', { p_account_id: r.account_id })
+  if (puede !== true) return mal('Esto lo hace un administrador o un encargado de la cuenta.')
+  const { data: cu } = await srv.from('accounts').select('is_demo').eq('id', r.account_id).maybeSingle()
+  if (cu?.is_demo !== true) return mal('Esto solo se hace en una cuenta de demostración.')
+  const { data: sec } = await srv.rpc('conta_gocardless_secreto', { p_company: r.company_id })
+  const s = (sec as { entorno: Entorno; token: string }[] | null)?.[0]
+  if (!s?.token || s.entorno !== 'pruebas') return mal('Solo con la conexión de pruebas de GoCardless (el sandbox).')
+  const pago = String(r.gc_cobro_id ?? '')
+  if (!/^PM[0-9A-Z]+$/.test(pago)) return mal('Ese recibo aún no se ha mandado al banco: primero «Enviar el cobro».')
+  const x = await fetch(`${BASES.pruebas}/scenario_simulators/payment_failed/actions/run`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${s.token}`, 'Content-Type': 'application/json', Accept: 'application/json', 'GoCardless-Version': VERSION_GOCARDLESS },
+    body: JSON.stringify({ data: { links: { resource: pago } } }),
+  })
+  if (x.status >= 300) {
+    const j = await x.json().catch(() => ({})) as { error?: { message?: string } }
+    console.error('[conta-portal] demo_devolver', x.status)
+    return mal(`El sandbox no lo ha devuelto (${x.status}): ${String(j.error?.message ?? 'sin motivo').slice(0, 200)}. Solo se puede con un cobro que aún no ha salido al banco.`)
+  }
+  return json(200, { ok: true, frase: `Hecho: el sandbox devuelve el cobro del recibo de ${r.mes}. En unos minutos llega el aviso de GoCardless y el recibo sale devuelto, en Sumied y en el portal del cliente.` })
 }
 
 // ── El remate de Code 1 (#534), una vez por operación ─────────────────────────

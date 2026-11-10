@@ -19,6 +19,7 @@
   --azul-oscuro: #1747AE;
   --azul-claro: #EAF0FD;
   --marca: #0E2240;
+  --ok: #0B6B4F;
   --sombra: 0 1px 2px rgba(15, 27, 45, .06);
   --titulo: 'Space Grotesk', Inter, system-ui, sans-serif;
 }
@@ -43,7 +44,8 @@ button:disabled { cursor: default; opacity: .6; }
 .pt-logo { width: 40px; height: 40px; border-radius: 11px; background: #FFF; color: var(--marca); display: flex; align-items: center; justify-content: center; font-family: var(--titulo); font-weight: 700; flex: none; overflow: hidden; }
 .pt-logo img { width: 100%; height: 100%; object-fit: contain; }
 .pt-gestoria-nombre { font-family: var(--titulo); font-weight: 700; font-size: 17px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pt-gestoria-sub { font-size: 12px; color: #C9D4E6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* nº 28 · El nombre del cliente no se corta: pasa a otra línea si no cabe (en el móvil, «Electricidad Voltio, S.L.»). */
+.pt-gestoria-sub { font-size: 12px; color: #C9D4E6; line-height: 1.35; overflow-wrap: anywhere; }
 .pt-yo { display: flex; align-items: center; gap: 10px; flex: none; background: transparent; border: 0; color: #FFF; padding: 0; }
 .pt-yo-nombre { font-size: 13px; color: #C9D4E6; max-width: 34vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @media (min-width: 760px) { .pt-cabecera { padding: 16px 20px; } .pt-yo-nombre { max-width: none; } }
@@ -153,3 +155,6 @@ button:disabled { cursor: default; opacity: .6; }
 /* La entrada */
 .pt-entrada { max-width: 440px; margin: 0 auto; padding: 40px 16px; display: flex; flex-direction: column; gap: 16px; }
 .pt-cargando { padding: 40px 16px; text-align: center; color: var(--suave); }
+
+/* nº 24 · Una petición ya hecha, como la maqueta: «✓ Firmada» en verde, sin botón. */
+.pt-hecho { color: var(--ok); font-weight: 700; font-size: 13px; padding: 0 6px; min-height: 38px; display: inline-flex; align-items: center; }

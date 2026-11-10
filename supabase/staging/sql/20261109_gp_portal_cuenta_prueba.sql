@@ -87,14 +87,18 @@ declare
     'conta_portal_ficha', 'conta_portal_pendiente', 'conta_portal_peticion_crear', 'conta_portal_peticion_anular',
     'conta_portal_incidencia_resolver', 'conta_portal_ajustes_guardar',
     -- GP · T4 (la 2030), si ya está:
-    'conta_portal_solicitud_hacer', 'conta_portal_solicitud_rechazar'];
+    'conta_portal_solicitud_hacer', 'conta_portal_solicitud_rechazar',
+    -- GP · T5 (la 2240), si ya está: solo cuentas demo y solo quien las lleva.
+    'conta_portal_demo_preparar'];
   -- Las que llama el servidor con la clave de servicio (y las de dentro).
   solo_servidor constant text[] := array[
     '_conta_portal_yo', '_conta_portal_empresa', '_conta_portal_marca', '_conta_portal_estado_recibo', '_conta_portal_devuelto_pagado',
     '_conta_portal_devueltos', '_conta_portal_proximo', '_conta_portal_cuenta_propia', 'conta_portal_acceso_usuario', 'conta_portal_firma_pedir',
     'conta_portal_firma_pdf', 'conta_portal_incidencia_parada', 'conta_portal_archivo',
     -- GP · T4 (la 2030), si ya está (conta_portal_despertar solo la llama el cron: ni sesión ni servicio):
-    'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos'];
+    'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos',
+    -- GP · nº 17 (la 2345), si ya está: la pestaña de Bitrix24, solo el servidor.
+    '_conta_portal_bitrix_quien', 'conta_portal_bitrix_invitar', 'conta_portal_bitrix_contestar'];
   f record; malos text[] := '{}'; n int := 0;
 begin
   for f in select p.oid, p.proname, p.oid::regprocedure::text as firma from pg_catalog.pg_proc p join pg_catalog.pg_namespace s on s.oid = p.pronamespace

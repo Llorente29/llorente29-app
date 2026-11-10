@@ -94,11 +94,13 @@ print(f"Voz: ElevenLabs · {modelo}")
 # el de 24 kHz perdía los agudos), y SIN voice_settings: los de la propia voz, como en su prueba.
 import subprocess
 for i, f in enumerate(frases):
-    cuerpo = {"text": f["texto"], "model_id": modelo, "language_code": "es"}
+    # nº99 · «voz»: cómo se escribe para que suene bien (p. ej. «Gou Cárdles»); el subtítulo sigue siendo «texto».
+    habla = lambda x: x.get("voz") or x["texto"]  # noqa: E731
+    cuerpo = {"text": habla(f), "model_id": modelo, "language_code": "es"}
     if i > 0 and frases[i - 1]["id"] not in ("portada",):
-        cuerpo["previous_text"] = frases[i - 1]["texto"]
+        cuerpo["previous_text"] = habla(frases[i - 1])
     if i + 1 < len(frases) and frases[i + 1]["id"] not in ("cierre",):
-        cuerpo["next_text"] = frases[i + 1]["texto"]
+        cuerpo["next_text"] = habla(frases[i + 1])
     url = f"https://api.elevenlabs.io/v1/text-to-speech/{voz}?output_format=mp3_44100_128"
     mp3 = None
     for quitar in ([], ["previous_text", "next_text"], ["previous_text", "next_text", "language_code"]):

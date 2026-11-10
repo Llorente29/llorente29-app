@@ -1,0 +1,13 @@
+# GP · El portal del cliente · Tarea 5: el portal de la demo (Code 3; Julio,
+# nº 14 y nº 15, 09/11). Rama conta/gp-portal-demo. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   2240  AÑADE conta_portal_demo_preparar (solo cuentas demo; se puede pasar
+#         otra vez, también después de «Volver a empezar») y la llama una vez
+#         para «Gestoría Demo»: los dos caminos para pagar un devuelto, el
+#         acceso de Tomás Ruiz para Talleres Ruiz, un mensaje y una petición,
+#         ya avisados (no sale ningún correo). Solo filas nuevas de la demo.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-demo.sql
+supabase/migrations/20261109T2240_gp_portal_demo.sql

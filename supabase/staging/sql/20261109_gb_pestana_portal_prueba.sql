@@ -43,7 +43,7 @@ select p.account_id as cuenta, p.user_id as usuario, lower(u.email) as correo,
 
 do $$
 declare a uuid := (select cuenta from _u); e uuid := (select empresa from _u); c1 uuid; c2 uuid; s uuid; q1 uuid; q2 uuid;
-        ver uuid := 'b0000000-0000-4000-8000-000000002300'; mes date := (date_trunc('month', current_date) + interval '1 month')::date;
+        ver uuid := 'b0000000-0000-4000-8000-000000002300'; v_mes date := (date_trunc('month', current_date) + interval '1 month')::date;
 begin
   if a is null or e is null then raise exception 'PRUEBA GB-2300 · 0: staging no tiene una persona con empresa.'; end if;
   insert into public.conta_crm (account_id, crm, entorno, portal, mapa) values (a, 'bitrix24', 'pruebas', 'gb-prueba-a.bitrix24.es',
@@ -59,9 +59,9 @@ begin
     (a, c1, 'quitado.prueba@gb-prueba.test', 'Persona Quitada Prueba', 'todo', now());
   update public.conta_portal_acceso set revocado_at = now(), revocado_por_name = 'Prueba' where correo = 'quitado.prueba@gb-prueba.test';
   insert into public.conta_solicitud (account_id, company_id, party_id, tipo, empleado_nombre, mes, estado, pedida_at)
-  values (a, e, c1, 'alta', 'Diego Prueba Ferrer', mes, 'pedida', now()) returning id into q1;
+  values (a, e, c1, 'alta', 'Diego Prueba Ferrer', v_mes, 'pedida', now()) returning id into q1;
   insert into public.conta_solicitud (account_id, company_id, party_id, tipo, empleado_nombre, mes, estado, pedida_at)
-  values (a, e, c2, 'alta', 'De Otro Prueba', mes, 'pedida', now()) returning id into q2;
+  values (a, e, c2, 'alta', 'De Otro Prueba', v_mes, 'pedida', now()) returning id into q2;
   insert into public.conta_portal_mensaje (account_id, party_id, de, autor_nombre, texto) values (a, c1, 'cliente', 'Persona Prueba Portal', '¿Me mandáis el modelo de prueba?');
   insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
     created_at, updated_at, confirmation_token, recovery_token, email_change_token_new, email_change)
