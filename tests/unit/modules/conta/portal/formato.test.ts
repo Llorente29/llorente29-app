@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cuando, cuandoSeHizo, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
-  cortado, gestoriaPrimero, motivoParaTi, nombreImpuesto, nombrePropio, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, resultadoImpuesto, telefono, tonoDe,
+  cortado, gestoriaPrimero, motivoParaTi, nombreImpuesto, nombrePropio, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, resultadoImpuesto, teLleva, telefono, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
 import { motivoEnPalabras } from '../../../../../supabase/functions/conta-gocardless-leer/motivo'
 
@@ -219,5 +219,17 @@ describe('nº 28 · cómo se escriben las cosas en la pantalla', () => {
   it('lo contratado: la gestoría antes que la laboral', () => {
     expect(gestoriaPrimero([{ texto: 'Gestión laboral · 4 trabajadores' }, { texto: 'Gestoría mensual · Premium' }]).map((l) => l.texto))
       .toEqual(['Gestoría mensual · Premium', 'Gestión laboral · 4 trabajadores'])
+  })
+})
+
+describe('nº 32 · quién lleva al cliente', () => {
+  it('nombre y correo, como en la maqueta (inventados)', () => {
+    expect(teLleva({ nombre: 'Persona Gestora', correo: 'gestora@ejemplo.invalid' })).toBe('Te lleva: Persona Gestora · gestora@ejemplo.invalid')
+    expect(teLleva({ nombre: 'PERSONA GESTORA', correo: null })).toBe('Te lleva: Persona Gestora')
+    expect(teLleva({ nombre: '', correo: 'gestora@ejemplo.invalid' })).toBe('Te lleva: gestora@ejemplo.invalid')
+  })
+  it('sin nadie, sin línea', () => {
+    expect(teLleva(null)).toBeNull()
+    expect(teLleva({ nombre: ' ', correo: '' })).toBeNull()
   })
 })

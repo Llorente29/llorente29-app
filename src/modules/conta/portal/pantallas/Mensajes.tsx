@@ -8,13 +8,16 @@ import { useEffect, useRef, useState } from 'react'
 import { Paperclip } from 'lucide-react'
 import { abrir, leer, subirFichero } from '../cliente'
 import { Cargando, Fallo } from '../comun'
-import { cuando, iniciales, puedeSubirse } from '../formato'
+import { cuando, iniciales, puedeSubirse, teLleva } from '../formato'
 import type { Mensajes as DatosMensajes } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
 
 export function Mensajes({ cliente, abrir: pedido, avisar, ir, gestoria }: Pantalla & { gestoria: string }) {
   const { datos, error, cargando, recargar } = useLectura<DatosMensajes>('conta_portal_mensajes', cliente)
+  // nº 32 · Quién lleva al cliente (Code 4): una lectura pequeña aparte; si no hay nadie o falla, no hay línea.
+  const quien = useLectura<{ nombre?: string | null; correo?: string | null } | null>('conta_portal_quien_lleva', cliente)
+  const lleva = teLleva(quien.datos)
   const [texto, setTexto] = useState('')
   const [adjuntos, setAdjuntos] = useState<File[]>([])
   const [enviando, setEnviando] = useState(false)
@@ -56,7 +59,7 @@ export function Mensajes({ cliente, abrir: pedido, avisar, ir, gestoria }: Panta
       <section className="pt-tarjeta pt-chat" style={{ padding: 0, gap: 0 }} aria-label="Conversación">
         <div className="pt-chat-cabeza">
           <span className="pt-avatar" aria-hidden="true" style={{ background: '#E2F5F3', color: '#0B6B63' }}>{iniciales(gestoria)}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><b style={{ fontSize: 14 }}>{gestoria} · tu gestoría</b><span className="pt-nota">Contesta en el día, de lunes a viernes. Te avisamos por correo.</span></div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}><b style={{ fontSize: 14 }}>{gestoria} · tu gestoría</b>{lleva && <span style={{ fontSize: 13, color: 'var(--tinta)' }}>{lleva}</span>}<span className="pt-nota">Contesta en el día, de lunes a viernes. Te avisamos por correo.</span></div>
         </div>
         <div className="pt-chat-hilo" ref={hilo} aria-live="polite">
           {datos.mensajes.length === 0 && <div className="pt-nota">Escribe aquí lo que necesites. Tu gestoría contesta en el día y te avisamos por correo.</div>}

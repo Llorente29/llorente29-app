@@ -334,3 +334,15 @@ export function gestoriaPrimero<T extends { texto: string }>(lineas: T[]): T[] {
   const es = (t: string) => /^gestor[ií]a\b/i.test(t.trim())
   return [...lineas.filter((l) => es(l.texto)), ...lineas.filter((l) => !es(l.texto))]
 }
+
+/**
+ * nº 32 · «Te lleva: Nombre · correo» en Mensajes (punto 7): quien lleva al cliente, el
+ * responsable de su ficha del CRM (conta_portal_quien_lleva, de Code 4). Sin nadie
+ * (null, o sin nombre ni correo), no hay línea.
+ */
+export function teLleva(x: { nombre?: string | null; correo?: string | null } | null | undefined): string | null {
+  const nombre = nombrePropio(x?.nombre ?? '')
+  const correo = (x?.correo ?? '').trim()
+  const partes = [nombre, correo].filter(Boolean)
+  return partes.length ? `Te lleva: ${partes.join(' · ')}` : null
+}
