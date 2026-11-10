@@ -124,6 +124,8 @@ function bloquePendiente(p: Pestana): HTMLElement {
 function bloqueDatos(p: Pestana): HTMLElement {
   const dato = (t: string, v: string) => h('div', {}, h('div', { class: 'pequeno' }, t), h('b', {}, v))
   return h('section', { class: 'bloque datos' },
+    // nº 17, E · Desde cuándo es cliente (el primer mes que se le cobra), como en la maqueta.
+    dato('Cliente desde', p.clienteDesde ?? 'Aún no se le cobra'),
     dato('Servicios', p.servicios.map((s) => s.texto.replace(/ · .*$/, '')).join(' · ') || 'Ninguno'),
     dato('Trabajadores', String(p.trabajadores.length)),
     dato('Mandato', p.mandato ? p.mandato.texto.charAt(0).toUpperCase() + p.mandato.texto.slice(1) : 'Sin mandato'))
