@@ -276,3 +276,32 @@ export function leerSimulacion(status: number, cuerpo: unknown, como: Simulacion
   const detalle = (e.errors ?? []).map((x) => x.message).filter(Boolean).join('; ') || e.message || `respuesta ${status}`
   return { hecho: false, frase: `GoCardless no lo ha simulado: ${detalle}.` }
 }
+
+/**
+ * nº 71 · «Que lo pasen de nuevo»: POST /payments/{id}/actions/retry. GoCardless
+ * vuelve a presentar el mismo cobro (con el mismo id) y contesta 200 con el cobro
+ * en «pending_submission». Solo se puede con un cobro devuelto («failed») y con el
+ * mandato aún vivo; si no, lo dice. Lo pide la función del servidor solo con una
+ * conexión de pruebas (el sandbox).
+ */
+export function peticionDeReintento(motivo: string): { data: { metadata: Record<string, string> } } {
+  return { data: { metadata: { motivo: motivo.slice(0, 500) } } }
+}
+
+export type RespuestaDeReintento =
+  | { tipo: 'pasado'; estado: string; cargoEl: string | null }
+  | { tipo: 'no'; frase: string }
+
+export function leerReintento(status: number, cuerpo: unknown): RespuestaDeReintento {
+  const c = (cuerpo ?? {}) as { payments?: { id?: string; status?: string; charge_date?: string | null }; error?: ErrorDeGc }
+  if (status >= 200 && status < 300 && c.payments?.id) {
+    return { tipo: 'pasado', estado: c.payments.status ?? 'pending_submission', cargoEl: c.payments.charge_date ?? null }
+  }
+  const e = c.error ?? {}
+  const razones = (e.errors ?? []).map((x) => x.reason).filter(Boolean)
+  if (status === 403) return { tipo: 'no', frase: 'La conexión de GoCardless es de solo lectura: con ella no se puede volver a pasar.' }
+  if (razones.includes('mandate_is_inactive')) return { tipo: 'no', frase: 'El mandato SEPA ya no está activo en GoCardless: no se puede volver a pasar. Mándale el enlace para pagar.' }
+  if (status === 429 || status >= 500) return { tipo: 'no', frase: 'GoCardless no ha contestado bien: no se ha vuelto a pasar. Inténtalo dentro de un rato.' }
+  const detalle = (e.errors ?? []).map((x) => x.message).filter(Boolean).join('; ') || e.message || `respuesta ${status}`
+  return { tipo: 'no', frase: `GoCardless no lo ha vuelto a pasar: ${detalle}.` }
+}

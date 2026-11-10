@@ -15,6 +15,7 @@
 // lectura.ts (lo que se pide a GoCardless), plan.ts (lo que se escribe y las
 // diferencias), lector, casado, conversion, comparacion y salida.
 
+import { CADA_MS, CAIDA_MS, ESPERA_MS, fraseEnMarcha, laDeAntes, type LecturaEnMarcha } from './turno.ts'
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { type Entorno } from './lector.ts'
@@ -57,10 +58,24 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
   const nombreEmisor = (id: string) => nombres.get(id) ?? 'otro emisor'
 
   const { data: lect, error: lectErr } = await db.from('conta_gestoria_lectura')
-    .insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', entorno: s.entorno, por, quien_name: quien }).select('id').single()
+    .insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', entorno: s.entorno, por, quien_name: quien }).select('id, empezada_at').single()
   if (lectErr) throw new Error(`No se ha podido apuntar la lectura: ${lectErr.message}`)
   const lectura = (lect as { id: string }).id
   const acabar = (campos: Record<string, unknown>) => db.from('conta_gestoria_lectura').update({ acabada_at: new Date().toISOString(), ...campos }).eq('id', lectura)
+
+  // nº 72 · Una a la vez por conexión: si hay otra de esta empresa en marcha que empezó antes, se espera a que acabe.
+  const mia = lect as LecturaEnMarcha
+  for (let esperado = 0; ; esperado += CADA_MS) {
+    const enMarcha = await leerFilas<LecturaEnMarcha>(db.from('conta_gestoria_lectura').select('id, empezada_at')
+      .eq('company_id', empresa).eq('origen', 'gocardless').eq('estado', 'en_marcha').gte('empezada_at', new Date(Date.now() - CAIDA_MS).toISOString()), 'las lecturas en marcha')
+    if (!laDeAntes(mia, enMarcha, new Date())) break
+    if (esperado >= ESPERA_MS) {
+      const frase = fraseEnMarcha(nombreEmisor(empresa))
+      await acabar({ estado: 'no_lee', mensaje: frase })
+      return { frase, lee: false, enMarcha: true }
+    }
+    await new Promise((r) => setTimeout(r, CADA_MS))
+  }
 
   const puerta = await puedeLeer(db, cuenta, s.entorno)
   if (!puerta.lee) { await acabar({ estado: 'no_lee', mensaje: puerta.porque }); return { frase: puerta.porque, lee: false } }
@@ -142,9 +157,16 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       const { data: lin, error } = await db.from('conta_linea').insert({ account_id: cuenta, company_id: empresa, party_id: l.partyId, servicio_id: servicioId.get(l.servicio),
         detalle: l.detalle, empleado_nombre: l.empleado, origen: 'gocardless', importe_propio: aEuros(l.importePropioCent), periodo: l.periodo,
         desde: `${l.desdeMes}-01`, suscripcion_gc_id: l.suscripcionId, created_by_name: 'GoCardless' }).select('id').single()
-      if (error) throw new Error(`No se ha podido guardar la línea de ${l.suscripcionId}: ${error.message}`)
-      const { error: e2 } = await db.from('conta_gc_importacion').insert({ company_id: empresa, suscripcion_gc_id: l.suscripcionId, account_id: cuenta,
-        gc_cliente_id: l.clienteGcId, party_id: l.partyId, nombre: l.nombreSuscripcion, importe: aEuros(l.importeCent), resultado: 'linea', linea_id: (lin as { id: string }).id })
+      // nº 72 · Si ya está (otra lectura la guardó a la vez), se usa esa: guardar la misma línea dos veces no es un error.
+      let lineaId = (lin as { id: string } | null)?.id ?? null
+      if (error && error.code === '23505' && error.message.includes('conta_linea_suscripcion_idx')) {
+        const { data: ya } = await db.from('conta_linea').select('id').eq('company_id', empresa).eq('suscripcion_gc_id', l.suscripcionId).maybeSingle()
+        lineaId = (ya as { id: string } | null)?.id ?? null
+      } else if (error) throw new Error(`No se ha podido guardar la línea de ${l.suscripcionId}: ${error.message}`)
+      if (!lineaId) throw new Error(`No se ha podido guardar la línea de ${l.suscripcionId}.`)
+      const { error: e2 } = await db.from('conta_gc_importacion').upsert({ company_id: empresa, suscripcion_gc_id: l.suscripcionId, account_id: cuenta,
+        gc_cliente_id: l.clienteGcId, party_id: l.partyId, nombre: l.nombreSuscripcion, importe: aEuros(l.importeCent), resultado: 'linea', linea_id: lineaId },
+        { onConflict: 'company_id,suscripcion_gc_id' })
       if (e2) throw new Error(`No se ha podido apuntar la importación de ${l.suscripcionId}: ${e2.message}`)
       convertidas++
     }

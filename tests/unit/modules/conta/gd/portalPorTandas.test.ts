@@ -11,6 +11,8 @@ function bitrixFalso() {
   let n = 0
   const campos = [
     { FIELD_NAME: 'UF_CRM_NIF' }, { FIELD_NAME: 'UF_CRM_CUOTA_MENSUAL' },
+    // GB (nº 13) · Los dos que rellena Sumied desde la pestaña de Bitrix24.
+    { FIELD_NAME: 'UF_CRM_TRABAJADORES' }, { FIELD_NAME: 'UF_CRM_ESTADO_COBRO' },
     { FIELD_NAME: 'UF_CRM_SITUACION', LIST: ['Activo', 'Baja', 'Moroso', 'Solo renta'].map((v, i) => ({ ID: `s${i}`, VALUE: v })) },
     { FIELD_NAME: 'UF_CRM_SERVICIOS', LIST: ['Contabilidad', 'Laboral'].map((v, i) => ({ ID: `v${i}`, VALUE: v })) },
     { FIELD_NAME: 'UF_CRM_FORMA_PAGO', LIST: ['Gestoría Demo', 'Elena Campos'].map((v, i) => ({ ID: `f${i}`, VALUE: v })) },

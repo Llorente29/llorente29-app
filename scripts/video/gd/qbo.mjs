@@ -32,7 +32,7 @@
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { CURSOR, raton } from '../raton.mjs'
 
@@ -166,7 +166,28 @@ async function still(E, png, texto, arriba, segundos = 5) {
   await E.page.waitForTimeout(segundos * 1000)
 }
 
+// nº87 · El ingreso del banco que trae el cobro de CLIENTE (Talleres Ruiz): su importe tal como sale en Movimientos
+// («+247,25») y si ya está casado. La 07c y la 08 lo enseñan a él, no al primero de la lista (el 10/11 fue uno
+// «para confirmar», en amarillo, bajo el rótulo «se casa solo»).
+async function ingresoDelCliente() {
+  const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).limit(2)
+  if ((cli ?? []).length !== 1) return null
+  const { data: rec } = await admin.from('conta_recibo').select('gc_cobro_id').eq('account_id', CUENTA).eq('party_id', cli[0].id).eq('mes', MES).maybeSingle()
+  if (!rec?.gc_cobro_id) return null
+  const { data: cobro } = await admin.from('conta_gc_cobro').select('payout_gc_id').eq('account_id', CUENTA).eq('gc_id', rec.gc_cobro_id).maybeSingle()
+  if (!cobro?.payout_gc_id) return null
+  const { data: po } = await admin.from('conta_gc_payout').select('importe, match_id').eq('account_id', CUENTA).eq('gc_id', cobro.payout_gc_id).maybeSingle()
+  if (!po) return null
+  const texto = `+${Number(po.importe).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return { texto, casado: po.match_id !== null }
+}
+
 // ── Las escenas ──────────────────────────────────────────────────────────────
+// nº84 · Si «Volver a empezar» falla, el run sale en ROJO (antes salía verde con el fallo escondido en el
+// registro): el workflow mira este fichero en su último paso, después de publicar lo que haya.
+let volverFallo = false
+const ROJO = join(process.env.RUNNER_TEMP ?? SALIDA, 'gd-qbo-rojo.txt')
+rmSync(ROJO, { force: true })
 try {
   if (pedidas.some((id) => ['00', '02', '03', '04', '06', '07', '07c', '08'].includes(id))) await entrar()
 
@@ -185,9 +206,9 @@ try {
             body: JSON.stringify({ cuenta: CUENTA, paso }),
           })
           const d = await r.json().catch(() => ({}))
-          if (!r.ok || !d.ok) throw new Error(`«Volver a empezar» · ${paso}: ${d.error ?? r.status}`)
+          if (!r.ok || !d.ok) { volverFallo = true; throw new Error(`«Volver a empezar» · ${paso}: ${d.error ?? r.status}`) }
           if (!d.sigue) { decir(`  ✓ ${paso}: ${String(d.frase ?? '').slice(0, 300)}`); break }
-          if (tanda >= 8) throw new Error(`«Volver a empezar» · ${paso}: después de 8 tandas aún queda trabajo`)
+          if (tanda >= 8) { volverFallo = true; throw new Error(`«Volver a empezar» · ${paso}: después de 8 tandas aún queda trabajo`) }
           decir(`  · ${paso}: tanda ${tanda}, sigue`)
         }
       }
@@ -369,9 +390,14 @@ try {
     await rotulo(E.page, 'Cada cobro confirmado sale facturado y contabilizado solo'); await E.page.waitForTimeout(3500)
     await a(E, E.page.getByText('Cómo va cada recibo'), { que: 'Cómo va cada recibo', pausa: 3000 })
     await E.captura()
-    const { data: rec } = await admin.from('conta_recibo').select('invoice_id').eq('account_id', CUENTA).not('invoice_id', 'is', null).order('enviado_at', { ascending: false }).limit(1)
+    // nº86 · La factura de CLIENTE (Talleres Ruiz), la que lleva los trabajadores y la que llega al buzón en la 7b; no
+    // la última que salió, que el 10/11 fue una de una sola línea (Floristería Las Camelias) bajo «con sus trabajadores».
+    const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).limit(2)
+    if ((cli ?? []).length !== 1) { fallos.push(`07: ${CLIENTE} no está una sola vez en la demo (${(cli ?? []).length})`); if (MODO === 'grabar') E.sinEscena = true; return }
+    const { data: rec } = await admin.from('conta_recibo').select('invoice_id').eq('account_id', CUENTA).eq('party_id', cli[0].id).eq('mes', MES)
+      .not('invoice_id', 'is', null).limit(1)
     const factura = rec?.[0]?.invoice_id
-    if (!factura) { fallos.push('07: ninguna factura todavía'); if (MODO === 'grabar') E.sinEscena = true; return }
+    if (!factura) { fallos.push(`07: ${CLIENTE} aún no tiene factura de ${MES}`); if (MODO === 'grabar') E.sinEscena = true; return }
     await ir(E.page, `/conta/ventas/facturas/${factura}`)
     await rotulo(E.page, 'Con la numeración y las cuentas de tu plan'); await E.page.waitForTimeout(3000)
     await a(E, E.page.getByText('Lo que ha pasado'), { que: 'Lo que ha pasado', pausa: 2500 })
@@ -409,8 +435,9 @@ try {
     if (!rec?.invoice_id) fallos.push(`07c · 1-2: ${CLIENTE} aún no tiene factura de ${MES} (recibo: ${rec?.estado ?? 'ninguno'})`)
     const { data: c430 } = await admin.from('company_account').select('code').eq('company_id', SOCIEDAD).like('code', '430%').ilike('name', 'Talleres Ruiz%').limit(1).maybeSingle()
     if (!c430) fallos.push(`07c · 2: ${CLIENTE} aún no tiene su subcuenta 430`)
-    const { count: casados } = await admin.from('conta_gc_payout').select('gc_id', { count: 'exact', head: true }).eq('account_id', CUENTA).not('match_id', 'is', null)
-    if (!casados) fallos.push('07c · 4: aún no hay ningún ingreso de GoCardless casado en el banco')
+    const ingreso = await ingresoDelCliente()
+    if (!ingreso) fallos.push(`07c · 4: el cobro de ${CLIENTE} aún no ha llegado al banco (sin liquidación de GoCardless)`)
+    else if (!ingreso.casado) fallos.push(`07c · 4: el ingreso de ${CLIENTE} (${ingreso.texto}) aún no está casado`)
 
     // 1 · Su factura en el libro de IVA repercutido (expedidas).
     await ir(E.page, '/conta/libros/registro/expedidas'); E.empezar(); await E.page.waitForTimeout(1500)
@@ -428,7 +455,8 @@ try {
     await paso(3, 'mayor de la 57200002')
     // 4 · El banco 57200000: el ingreso de GoCardless, casado con sus cobros.
     await ir(E.page, '/conta/bancos'); await E.page.waitForTimeout(1500)
-    await a(E, E.page.getByText(/GOCARDLESS/).first(), { clic: true, que: '7c · 4: el ingreso de GoCardless en el banco', pausa: 5000 })
+    await a(E, ingreso ? E.page.getByText(ingreso.texto, { exact: true }).first() : E.page.getByText(/GOCARDLESS/).first(),
+      { clic: true, que: `7c · 4: el ingreso de GoCardless de ${CLIENTE} en el banco`, pausa: 5000 })
     await paso(4, 'banco 57200000')
     await rotulo(E.page, 'De la cuota al banco, contabilizado solo. Sin teclear un asiento'); await E.page.waitForTimeout(4500)
     await E.captura()
@@ -440,9 +468,11 @@ try {
     if (MODO === 'grabar') await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(({ data }) => decir(`  · ${data?.frase ?? ''}`))
     const { count } = await admin.from('bank_movement').select('id', { count: 'exact', head: true }).eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
     if (!count) { fallos.push('08: aún no hay ningún ingreso de GoCardless en el banco de la demo: escena fuera'); E.sinEscena = true; return }
+    const ingreso = await ingresoDelCliente()
+    if (!ingreso?.casado) { fallos.push(`08: el ingreso de ${CLIENTE} aún no está casado (${ingreso?.texto ?? 'sin liquidación'}): escena fuera`); E.sinEscena = true; return }
     await ir(E.page, '/conta/bancos'); E.empezar()
     await rotulo(E.page, 'El ingreso de GoCardless se casa solo en el banco'); await E.page.waitForTimeout(3500)
-    await a(E, E.page.getByText(/GOCARDLESS/).first(), { clic: true, que: 'el ingreso de GoCardless', pausa: 4000 })
+    await a(E, E.page.getByText(ingreso.texto, { exact: true }).first(), { clic: true, que: `el ingreso de GoCardless de ${CLIENTE} (${ingreso.texto})`, pausa: 4000 })
     await a(E, E.page.getByText(/Ingreso de GoCardless/).first(), { que: 'su casado', pausa: 3500 })
     await E.captura()
   })
@@ -482,3 +512,8 @@ if (clips.length) {
 }
 decir(`\nModo ${MODO}. ${enviado ? 'El cobro de la demo se ha ENVIADO al sandbox.' : 'El cobro no se ha enviado.'}`)
 if (fallos.length) { decir(`\nLo que no ha salido (${fallos.length}):`); for (const f of fallos) decir(`  - ${f}`) } else decir('\nTodas las escenas, completas.')
+if (volverFallo) {
+  const porque = fallos.find((f) => f.includes('«Volver a empezar»')) ?? '«Volver a empezar» ha fallado'
+  writeFileSync(ROJO, `${porque}\n`)
+  decir('\nEN ROJO: «Volver a empezar» no ha acabado; no se ha grabado ninguna escena. Las que se ven son de la grabación anterior.')
+}

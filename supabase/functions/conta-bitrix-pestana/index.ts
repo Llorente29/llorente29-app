@@ -33,7 +33,7 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { mesSiguiente, queHacerConLaCuota, totalDelRecibo } from './escribir.ts'
+import { estadoDelCobro, mesSiguiente, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -147,7 +147,8 @@ const hoyEnMadrid = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/M
 /**
  * GB (nº 9) · Un cambio desde la pestaña: lo hace Sumied (conta_bitrix_pestana_hacer,
  * con las funciones de la ficha del G04, como la persona) y DESPUÉS se
- * actualiza la «Cuota mensual» de la ficha en Bitrix24, con el token de quien
+ * actualiza la ficha en Bitrix24 (la «Cuota mensual» y, desde el nº 13,
+ * «Trabajadores» y «Estado del cobro»), con el token de quien
  * mira (sus permisos de Bitrix24), sin pisar un dato cambiado allí.
  */
 async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
@@ -177,28 +178,72 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
   } else if (!pestana) {
     enBitrix = { hecho: 'nada', texto: 'No se ha podido leer el recibo nuevo: Bitrix24 no se ha tocado.' }
   } else {
-    const nuevoCent = totalDelRecibo(pestana.clientes, String(r.cliente), String(r.empresa), mesSiguiente(hoyEnMadrid()))
-    enBitrix = await cuotaEnLaFicha(m, b, nuevoCent)
+    const mes = mesSiguiente(hoyEnMadrid())
+    // nº 13 · Los campos que rellena Sumied (Trabajadores, Estado del cobro): cuáles son en el mapa y lo último escrito.
+    const { data: campos } = await db.rpc('conta_bitrix_pestana_campos', { p_cambio: r.cambio })
+    enBitrix = await fichaEnBitrix(m, b, (campos ?? {}) as Campos, {
+      cuotaCent: totalDelRecibo(pestana.clientes, String(r.cliente), String(r.empresa), mes),
+      trabajadores: trabajadoresDelRecibo(pestana.clientes, String(r.cliente), String(r.empresa), mes),
+      estado: estadoDelCobro(pestana.ficha, String(r.empresa)),
+    })
   }
   await db.rpc('conta_bitrix_pestana_bitrix', { p_cambio: r.cambio, p_resultado: enBitrix })
   return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, id: r.id ?? null, bitrix: enBitrix, pestana })
 }
 
-/** La «Cuota mensual» de la ficha de la empresa en Bitrix24: se escribe solo si nadie la ha cambiado allí. */
-async function cuotaEnLaFicha(m: Extract<Mira, { ok: true }>, b: { campo?: string | null; conocida?: string | null; escrita?: string | null }, nuevoCent: number): Promise<Record<string, unknown>> {
+type Campos = Record<string, { campo?: string | null; escrita?: string | null }>
+const NOMBRE_DEL_CAMPO: Record<string, string> = { trabajadores: 'Trabajadores', estado_cobro: 'Estado del cobro' }
+
+/**
+ * La ficha de la empresa en Bitrix24 después de un cambio: la «Cuota mensual»
+ * (nº 9) y, desde el nº 13, «Trabajadores» y «Estado del cobro». Una lectura
+ * (crm.company.get) y una escritura (crm.company.update) con los que tocan.
+ * Cada campo se decide solo: nunca se pisa un dato cambiado en Bitrix24.
+ */
+async function fichaEnBitrix(m: Extract<Mira, { ok: true }>, b: { campo?: string | null; conocida?: string | null; escrita?: string | null },
+  campos: Campos, nuevo: { cuotaCent: number; trabajadores: number | null; estado: string }): Promise<Record<string, unknown>> {
   try {
-    const campo = b.campo ?? null
-    const ficha = campo ? (await bitrix(m.portal, 'crm.company.get', m.auth, { id: m.id }) as { result?: Record<string, unknown>; error?: string } | null) : null
-    if (campo && !ficha?.result) return { hecho: 'nada', campo, texto: `Bitrix24 no ha dejado leer la ficha${ficha?.error ? ` (${String(ficha.error).slice(0, 40)})` : ''}: no se ha tocado.` }
-    const q = queHacerConLaCuota({ campo, actual: ficha?.result?.[campo ?? ''], conocida: b.conocida ?? null, escrita: b.escrita ?? null, nuevoCent })
-    if (q.hacer === 'nada') return { hecho: 'nada', campo, texto: `Bitrix24 no se ha tocado: ${q.porque}.` }
+    const codigos = [b.campo, ...Object.values(campos).map((c) => c.campo)].filter((x): x is string => !!x)
+    if (!codigos.length) return { hecho: 'nada', texto: 'Bitrix24 no se ha tocado: el mapa de Bitrix24 no tiene la «Cuota mensual» ni los campos de Sumied.' }
+    const ficha = await bitrix(m.portal, 'crm.company.get', m.auth, { id: m.id }) as { result?: Record<string, unknown>; error?: string } | null
+    if (!ficha?.result) return { hecho: 'nada', campo: b.campo ?? null, texto: `Bitrix24 no ha dejado leer la ficha${ficha?.error ? ` (${String(ficha.error).slice(0, 40)})` : ''}: no se ha tocado.` }
+    const actual = ficha.result
+    const escribir: Record<string, string> = {}
+    const escritos: string[] = []
+    const choques: string[] = []
+    const out: Record<string, unknown> = { campo: b.campo ?? null, campos: {} as Record<string, unknown> }
+
+    const q = queHacerConLaCuota({ campo: b.campo ?? null, actual: actual[b.campo ?? ''], conocida: b.conocida ?? null, escrita: b.escrita ?? null, nuevoCent: nuevo.cuotaCent })
+    if (q.hacer === 'escribir') { escribir[b.campo!] = q.valor; out.escrito = q.valor; escritos.push(`Cuota del mes ${q.valor} €`) }
     if (q.hacer === 'choque') {
-      return { hecho: 'choque', campo, en_bitrix: q.enBitrix, sumied: q.sumied,
-        texto: `En Bitrix24 alguien ha cambiado la cuota a ${q.enBitrix}: no se ha pisado. Sumied dice ${q.sumied}; queda en «Pendiente de revisar».` }
+      Object.assign(out, { en_bitrix: q.enBitrix, sumied: q.sumied })
+      choques.push(`En Bitrix24 alguien ha cambiado la cuota a ${q.enBitrix}: no se ha pisado. Sumied dice ${q.sumied}; queda en «Pendiente de revisar».`)
     }
-    const u = await bitrix(m.portal, 'crm.company.update', m.auth, { id: m.id, fields: { [campo!]: q.valor } }) as { result?: unknown; error?: string } | null
-    if (!u?.result) return { hecho: 'nada', campo, texto: `Bitrix24 no ha dejado guardar la cuota${u?.error ? ` (${String(u.error).slice(0, 40)})` : ''}.` }
-    return { hecho: 'escrito', campo, escrito: q.valor, texto: `Cuota del mes ${q.valor} €` }
+    const valores: Record<string, string | null> = { trabajadores: nuevo.trabajadores === null ? null : String(nuevo.trabajadores), estado_cobro: nuevo.estado }
+    for (const [clave, c] of Object.entries(campos)) {
+      const valor = valores[clave]
+      if (!c.campo || valor === null || valor === undefined) continue
+      const t = queHacerConElTexto({ campo: c.campo, actual: actual[c.campo], escrita: c.escrita ?? null, nuevo: valor })
+      const nombre = NOMBRE_DEL_CAMPO[clave] ?? clave
+      if (t.hacer === 'escribir') {
+        escribir[c.campo] = t.valor
+        ;(out.campos as Record<string, unknown>)[clave] = { hecho: 'escrito', campo: c.campo, escrito: t.valor }
+        escritos.push(`${nombre} ${t.valor}`)
+      } else if (t.hacer === 'choque') {
+        ;(out.campos as Record<string, unknown>)[clave] = { hecho: 'choque', campo: c.campo, en_bitrix: t.enBitrix, sumied: t.sumied }
+        choques.push(`En Bitrix24 alguien ha cambiado «${nombre}» a «${t.enBitrix}»: no se ha pisado. Sumied dice «${t.sumied}»; queda en «Pendiente de revisar».`)
+      }
+    }
+    if (Object.keys(escribir).length) {
+      const u = await bitrix(m.portal, 'crm.company.update', m.auth, { id: m.id, fields: escribir }) as { result?: unknown; error?: string } | null
+      if (!u?.result) {
+        return { hecho: choques.length ? 'choque' : 'nada', campo: b.campo ?? null,
+          texto: [`Bitrix24 no ha dejado guardar${u?.error ? ` (${String(u.error).slice(0, 40)})` : ''}.`, ...choques].join(' ') }
+      }
+    }
+    const hecho = choques.length ? 'choque' : escritos.length ? 'escrito' : 'nada'
+    const texto = [escritos.join(' · '), ...choques].filter(Boolean).join(' ') || `Bitrix24 no se ha tocado: ${q.hacer === 'nada' ? q.porque : 'ya lo tiene'}.`
+    return { ...out, hecho, texto }
   } catch (e) {
     return { hecho: 'nada', texto: `Bitrix24 no contesta (${e instanceof Error ? e.name : 'error'}): no se ha tocado.` }
   }

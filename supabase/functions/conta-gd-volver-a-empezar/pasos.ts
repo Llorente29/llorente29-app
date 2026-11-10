@@ -6,6 +6,7 @@
 //
 // Cada paso es una llamada: así ninguno se acerca al límite de tiempo de una
 // función (Bitrix24 deja 2 peticiones por segundo) y la pantalla dice por cuál va.
+// Los que van por tandas (el portal y «sumied») dicen «sigue» mientras les quede algo.
 
 export const PASOS = [
   { id: 'portal_borrar', que: 'Vaciando el Bitrix24 de pruebas' },
@@ -19,6 +20,11 @@ export const PASOS = [
 ] as const
 /** Lo que hace como mucho cada llamada de un paso por tandas (el portal): muy por debajo del tiempo máximo de una función. */
 export const PRESUPUESTO_MS = 90_000
+/**
+ * Lo que borra como mucho cada tanda del paso «sumied» (nº84). La base corta cualquier llamada de la plataforma a
+ * los 8 s (el 10/11, vaciar la demo de una vez tardó más y se cortó): con 4 s, cada tanda queda lejos del corte.
+ */
+export const SUMIED_MS = 4_000
 /** Cuántas veces se repite como mucho un paso por tandas antes de darlo por atascado. */
 export const TANDAS_MAX = 8
 

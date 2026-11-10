@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 10/11 a las 08:00Z. La 0857 crea demo_gestoria_volver_a_empezar_tanda(uuid, int), que no existe, y no la llama: no cambia datos. Usa _gd_se_queda(), demo_gestoria_contabilidad_sembrar y demo_gestoria_banco_sembrar, que existen. La de la 1731 se queda. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T08:00Z",
+ "tanda": {
+  "supabase/migrations/20261110T0857_gd_vaciar_por_tandas.sql": "14b8bd8a39c9d5e6e63bec1b58f9b35c"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

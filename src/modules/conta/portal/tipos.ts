@@ -40,6 +40,8 @@ export interface Documentos {
   impuestos: { id: string; modelo: string; ejercicio: number; periodo: string; presentado: string; resultado: string | null; importe: number | null; justificante: boolean }[]
   nominas: { id: string; nombre: string; carpeta: string; trabajador: string; fecha: string }[]
   subidas: { id: string; nombre: string; estado: string; subida: string; contabilizada: boolean }[]
+  /** nº 19.1 (la 0005): lo que ha firmado, con su PDF firmado. Sin la 0005, no viene. */
+  firmados?: { id: string; titulo: string; firmada: string; pdf: boolean }[]
 }
 
 export interface Trabajadores {

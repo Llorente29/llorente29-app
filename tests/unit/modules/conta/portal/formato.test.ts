@@ -2,7 +2,7 @@
 // Nombres, cifras y fechas inventados.
 import { describe, expect, it } from 'vitest'
 import {
-  cuando, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, lineasDelRecibo, mes, nombreDePila,
+  cuando, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
   nombreImpuesto, nombreSeguro, porQueCambia, puedeSubirse, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
 
@@ -98,5 +98,28 @@ describe('lo que se sube y se pide', () => {
     expect(documentoLimpio('00000000-t')).toBe('00000000T')
     expect(documentoLimpio('x 0000000 t')).toBe('X0000000T')
     expect(documentoLimpio('1234')).toBeNull()
+  })
+})
+
+describe('Documentos · nóminas y seguros sociales, por mes', () => {
+  const hoy = new Date('2026-11-09T10:00:00Z')
+  const doc = (id: string, carpeta: string, fecha: string) => ({ id, nombre: `${id}.pdf`, carpeta, trabajador: 'Persona Ejemplo', fecha })
+  it('una fila por mes y tipo, la más reciente primero y las nóminas antes que los seguros sociales', () => {
+    const g = laboralPorMes([
+      doc('n1', 'nominas', '2026-10-30T09:00:00Z'), doc('n2', 'nominas', '2026-10-30T09:01:00Z'), doc('n3', 'nominas', '2026-10-29T09:00:00Z'), doc('n4', 'nominas', '2026-10-30T10:00:00Z'),
+      doc('s1', 'ss_sepe', '2026-10-31T08:00:00Z'), doc('n5', 'nominas', '2026-09-30T09:00:00Z'), doc('n6', 'nominas', '2026-09-30T09:00:00Z'), doc('n7', 'nominas', '2026-09-30T09:00:00Z'),
+    ], hoy)
+    expect(g.map((x) => [x.titulo, x.detalle, x.ids.length])).toEqual([
+      ['Nóminas de octubre', '4 nóminas · listas el 30 de octubre', 4],
+      ['Seguros sociales de octubre', 'Cargados el 31 de octubre', 1],
+      ['Nóminas de septiembre', '3 nóminas · listas el 30 de septiembre', 3],
+    ])
+  })
+  it('el mes, en la hora de Madrid; ninguno se queda fuera', () => {
+    // 31/10 a las 23:30 UTC ya es 1 de noviembre en Madrid.
+    const g = laboralPorMes([doc('a', 'nominas', '2026-10-31T23:30:00Z'), doc('b', 'nominas', '2025-12-30T09:00:00Z')], hoy)
+    expect(g.map((x) => x.titulo)).toEqual(['Nóminas de noviembre', 'Nóminas de diciembre de 2025'])
+    expect(g.flatMap((x) => x.ids).sort()).toEqual(['a', 'b'])
+    expect(laboralPorMes([], hoy)).toEqual([])
   })
 })

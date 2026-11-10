@@ -13,9 +13,10 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
-  abrirFichero, anularPeticion, devolverEnDemo, enviarMensaje, prepararDemo, reciboEnElBanco, guardarPagarDevuelto, hacerSolicitud, invitar, leerFichaPortal, leerPagarDevuelto, marcarLeidos, pedir,
+  abrirFichero, anularPeticion, devolverEnDemo, enviarMensaje, leerFirmas, prepararDemo, reciboEnElBanco, guardarPagarDevuelto, hacerSolicitud, invitar, leerFichaPortal, leerPagarDevuelto, marcarLeidos, pedir,
   quitarAcceso, rechazarSolicitud, resolverIncidencia, type FichaPortal, type Permiso,
 } from './datos'
+import { pruebaDeFirma, type FirmaLeida } from './firma'
 
 export interface PropsPortalFicha {
   cuenta: string
@@ -202,6 +203,13 @@ function Peticiones({ cuenta, cliente, peticiones, h }: { cuenta: string; client
   const [pdf, setPdf] = useState<File | null>(null)
   const vivas = peticiones.filter((q) => q.estado === 'pendiente')
   const cerradas = peticiones.filter((q) => q.estado !== 'pendiente').slice(0, 10)
+  // nº 19.1 · Las firmadas: quién, cuándo, desde dónde y el PDF firmado (la última página lleva lo mismo).
+  const firmadas = cerradas.filter((q) => q.tipo === 'firmar' && q.estado === 'hecha').map((q) => q.id).join(',')
+  const [firmas, setFirmas] = useState<Record<string, FirmaLeida>>({})
+  useEffect(() => {
+    if (!firmadas) return
+    void leerFirmas(firmadas.split(',')).then((l) => setFirmas(Object.fromEntries(l.map((f) => [f.peticion_id, f]))), () => setFirmas({}))
+  }, [firmadas])
   return (
     <section aria-labelledby="gp-peticiones" className="g4-bloque">
       <div className="g4-bloque-cabecera"><h2 id="gp-peticiones" className="g4-bloque-titulo" style={{ fontSize: 20 }}>Lo que le pides</h2>
@@ -236,8 +244,11 @@ function Peticiones({ cuenta, cliente, peticiones, h }: { cuenta: string; client
         {cerradas.map((q) => (
           <div key={q.id} className="g4-renglon">
             <span className="g4-cliente-textos"><b>{PIDE[q.tipo]}: {q.titulo}</b>
-              <span className="g4-pequeno">{q.estado === 'hecha' ? `Hecho el ${fecha(q.hecha_at)}${q.hecha_por_name ? ` por ${q.hecha_por_name}` : ''}` : `Anulada el ${fecha(q.hecha_at)}`}{q.respuesta ? ` · «${q.respuesta}»` : ''}</span></span>
-            <span className="g4-etiqueta" data-tono={q.estado === 'hecha' ? 'bien' : undefined}>{q.estado === 'hecha' ? 'Hecho' : 'Anulada'}</span>
+              <span className="g4-pequeno">{q.estado === 'hecha' ? `Hecho el ${fecha(q.hecha_at)}${q.hecha_por_name ? ` por ${q.hecha_por_name}` : ''}` : `Anulada el ${fecha(q.hecha_at)}`}{q.respuesta ? ` · «${q.respuesta}»` : ''}</span>
+              {firmas[q.id] && <span className="g4-pequeno" data-prueba-firma="">{pruebaDeFirma(firmas[q.id])}</span>}</span>
+            {firmas[q.id]?.pdf_ruta
+              ? <AbrirFichero ruta={firmas[q.id].pdf_ruta!} h={h} texto="PDF firmado" />
+              : <span className="g4-etiqueta" data-tono={q.estado === 'hecha' ? 'bien' : undefined}>{q.estado === 'hecha' ? 'Hecho' : 'Anulada'}</span>}
           </div>
         ))}
       </>}
