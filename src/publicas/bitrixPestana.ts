@@ -42,7 +42,7 @@ const vista: {
   portalLeido: boolean
   /** nº 10 · La pestaña de área abierta: abre en Resumen. */
   area: Area
-  hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal' }
+  hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal'; deshacer?: { cuando: string } | null }
   guardando: boolean
 } = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen' }
 
@@ -86,7 +86,11 @@ function pintar(p: Pestana) {
         p.desde ? h('span', { class: 'pequeno' }, p.desde) : null,
         p.personaDeContacto ? h('span', { class: 'pequeno' }, '· Es una persona de contacto de este cliente') : null),
       vista.hecho ? h('div', { class: 'aviso hecho', role: 'status', 'data-tono': vista.hecho.tono, 'data-prueba': 'hecho' },
-        h('b', {}, vista.hecho.titulo), h('div', {}, vista.hecho.texto), h('div', { class: 'pequeno-claro' }, vista.hecho.bitrix)) : null,
+        h('b', {}, vista.hecho.titulo), h('div', {}, vista.hecho.texto),
+        h('div', { class: 'pequeno-claro' }, vista.hecho.bitrix,
+          // nº 13 · «Deshacer» (Code 1, #562): solo si lo último de hoy es este cambio y se puede.
+          vista.hecho.deshacer && p.empresaId ? ' · ' : null,
+          vista.hecho.deshacer && p.empresaId ? enlaceBoton('Deshacer', () => void deshacerCambio(vista.hecho!.deshacer!.cuando, p.empresaId!)) : null)) : null,
       p.aviso ? h('div', { class: 'aviso', role: 'status', 'data-tono': p.aviso.tono }, p.aviso.texto) : null,
       h('div', { class: 'rejilla' }, h('div', { class: 'columna' }, ...izquierda), h('div', { class: 'columna' }, ...derecha, abrir))))
   // Lo que mide la e2e: cuánto tarda en estar pintada desde que se abre (menos de 1 s).
@@ -331,9 +335,29 @@ async function guardarCambio(c: Cambio) {
       texto: String(r.frase ?? ''),
       bitrix: b.hecho === 'escrito' ? `Bitrix24 actualizado: ${b.texto}` : String(b.texto ?? 'Bitrix24 no se ha tocado.'),
       tono: b.hecho === 'choque' ? 'aviso' : 'bien',
+      deshacer: r.deshacer && typeof r.deshacer === 'object' && typeof (r.deshacer as { cuando?: unknown }).cuando === 'string' ? { cuando: (r.deshacer as { cuando: string }).cuando } : null,
     }
   } else {
     vista.hecho = { titulo: titulos[1], texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal' }
+  }
+  repintar()
+}
+
+/** nº 13 · «Deshacer» lo último hecho (con la función de Code 1): la pantalla dice lo que ha pasado (regla 8). */
+async function deshacerCambio(cuando: string, empresa: string) {
+  if (!vista.ficha || vista.guardando) return
+  vista.guardando = true
+  let r: Record<string, unknown>
+  try { r = await llamar({ paso: 'deshacer', ...vista.ficha, empresa, cuando }) } catch { r = { estado: 'error' } }
+  vista.guardando = false
+  if (r.estado === 'ok') {
+    const b = (r.bitrix ?? {}) as { hecho?: string; texto?: string }
+    if (r.pestana && typeof r.pestana === 'object') vista.r = r.pestana as Record<string, unknown>
+    void leerPortal()
+    vista.hecho = { titulo: 'Deshecho', texto: String(r.frase ?? '').replace(/^Deshecho:\s*/, ''), tono: b.hecho === 'choque' ? 'aviso' : 'bien', deshacer: null,
+      bitrix: b.hecho === 'escrito' ? `Bitrix24 actualizado: ${b.texto}` : String(b.texto ?? 'Bitrix24 no se ha tocado.') }
+  } else {
+    vista.hecho = { titulo: 'No se ha deshecho', texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal', deshacer: null }
   }
   repintar()
 }

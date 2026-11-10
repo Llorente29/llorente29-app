@@ -1,0 +1,3 @@
+# GB · nº 13 · «Deshacer» en la pestaña: la 0070 y su prueba (ROLLBACK). Va después de la 0010 (#562): la prueba la pasa antes si no está.
+supabase/migrations/20261110T0070_gb_pestana_deshacer.sql
+supabase/staging/sql/20261110_gb_pestana_deshacer_prueba.sql
