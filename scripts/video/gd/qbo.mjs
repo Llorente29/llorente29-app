@@ -32,7 +32,7 @@
 import { chromium } from 'playwright'
 import { createClient } from '@supabase/supabase-js'
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { CURSOR, raton } from '../raton.mjs'
 
@@ -183,6 +183,11 @@ async function ingresoDelCliente() {
 }
 
 // ── Las escenas ──────────────────────────────────────────────────────────────
+// nº84 · Si «Volver a empezar» falla, el run sale en ROJO (antes salía verde con el fallo escondido en el
+// registro): el workflow mira este fichero en su último paso, después de publicar lo que haya.
+let volverFallo = false
+const ROJO = join(process.env.RUNNER_TEMP ?? SALIDA, 'gd-qbo-rojo.txt')
+rmSync(ROJO, { force: true })
 try {
   if (pedidas.some((id) => ['00', '02', '03', '04', '06', '07', '07c', '08'].includes(id))) await entrar()
 
@@ -201,9 +206,9 @@ try {
             body: JSON.stringify({ cuenta: CUENTA, paso }),
           })
           const d = await r.json().catch(() => ({}))
-          if (!r.ok || !d.ok) throw new Error(`«Volver a empezar» · ${paso}: ${d.error ?? r.status}`)
+          if (!r.ok || !d.ok) { volverFallo = true; throw new Error(`«Volver a empezar» · ${paso}: ${d.error ?? r.status}`) }
           if (!d.sigue) { decir(`  ✓ ${paso}: ${String(d.frase ?? '').slice(0, 300)}`); break }
-          if (tanda >= 8) throw new Error(`«Volver a empezar» · ${paso}: después de 8 tandas aún queda trabajo`)
+          if (tanda >= 8) { volverFallo = true; throw new Error(`«Volver a empezar» · ${paso}: después de 8 tandas aún queda trabajo`) }
           decir(`  · ${paso}: tanda ${tanda}, sigue`)
         }
       }
@@ -507,3 +512,8 @@ if (clips.length) {
 }
 decir(`\nModo ${MODO}. ${enviado ? 'El cobro de la demo se ha ENVIADO al sandbox.' : 'El cobro no se ha enviado.'}`)
 if (fallos.length) { decir(`\nLo que no ha salido (${fallos.length}):`); for (const f of fallos) decir(`  - ${f}`) } else decir('\nTodas las escenas, completas.')
+if (volverFallo) {
+  const porque = fallos.find((f) => f.includes('«Volver a empezar»')) ?? '«Volver a empezar» ha fallado'
+  writeFileSync(ROJO, `${porque}\n`)
+  decir('\nEN ROJO: «Volver a empezar» no ha acabado; no se ha grabado ninguna escena. Las que se ven son de la grabación anterior.')
+}

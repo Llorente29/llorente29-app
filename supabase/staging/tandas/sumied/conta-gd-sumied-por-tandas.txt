@@ -1,0 +1,3 @@
+# GD · «Volver a empezar» por tandas (nº84): la 0857 y su prueba (ROLLBACK).
+supabase/migrations/20261110T0857_gd_vaciar_por_tandas.sql
+supabase/staging/sql/20261110_gd_vaciar_por_tandas_prueba.sql

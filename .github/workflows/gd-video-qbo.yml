@@ -153,3 +153,14 @@ jobs:
           git commit -q -m "Vídeo GD · QBO · ${{ inputs.modo }} · ${{ inputs.escenas }} · run ${GITHUB_RUN_ID}"
           git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "salida:refs/heads/video-salida/gd-qbo"
           echo "### Publicado en \`video-salida/gd-qbo\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # nº84 · Si «Volver a empezar» no acabó, el run sale en ROJO (antes, verde con el fallo en el registro).
+      - name: ¿Volvió a empezar?
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/gd-qbo-rojo.txt" ]; then
+            echo "::error title=Volver a empezar::$(cat "$RUNNER_TEMP/gd-qbo-rojo.txt")"
+            echo "### En rojo: «Volver a empezar» no ha acabado" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "«Volver a empezar»: bien, o no se pidió."
