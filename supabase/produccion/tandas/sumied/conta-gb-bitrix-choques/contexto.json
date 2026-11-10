@@ -2,7 +2,22 @@
  "_que": "GB · nº 13, punto 2 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 00:05Z. La 0050 quita y vuelve a poner el CHECK de los tipos de conta_gestoria_diferencia (12.658 filas) con los 20 tipos que tiene hoy producción más «bitrix_cambiado»: solo amplía. Crea conta_bitrix_pestana_choque(uuid,uuid,jsonb,text[]), que no existe, y no la llama. Ninguna rama abierta cambia ese CHECK (medido en las ramas conta/ y claude/ de origin). Nada en el camino del pedido.",
  "medido": "2026-11-10T00:05Z",
  "tanda": {
-  "supabase/migrations/20261110T0050_gb_bitrix_choques.sql": "cd114b14fd7f3916ad8a322ec500a6fe"
+  "supabase/migrations/20261110T0050_gb_bitrix_choques.sql": "7d0331f92d46f4298aa5ee9df74ba753"
  },
- "contexto": {"tablas":["public.conta_gestoria_diferencia"],"funciones":[],"filas":{"public.conta_gestoria_diferencia":12658},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+ "contexto": {
+  "tablas": [
+   "public.conta_gestoria_diferencia"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_gestoria_diferencia": 12658
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
 }
