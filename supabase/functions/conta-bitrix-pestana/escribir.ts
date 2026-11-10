@@ -121,3 +121,64 @@ export function queHacerConLaCuota(o: { campo: string | null; actual: unknown; c
   if (vacioYSabidoVacio || (actual !== null && sabidas.includes(actual))) return { hacer: 'escribir', valor }
   return { hacer: 'choque', enBitrix: actual === null ? 'vacío' : cuotaEnBitrix(actual), sumied: valor }
 }
+
+/** nº 13 · El nombre de cada campo de la ficha, como sale en «Pendiente de revisar». */
+export const NOMBRE_EN_LA_FICHA: Record<string, string> = { cuota: 'Cuota mensual', trabajadores: 'Trabajadores', estado_cobro: 'Estado del cobro' }
+
+/**
+ * nº 13, punto 2 · De lo que pasó en Bitrix24 al guardar (fichaEnBitrix): los
+ * choques, que van a «Pendiente de revisar», y los campos escritos sin choque,
+ * que quitan el suyo si lo había.
+ */
+export function choquesDe(r: Record<string, unknown>): { choques: { campo: string; en_bitrix: string; sumied: string }[]; escritos: string[] } {
+  const choques: { campo: string; en_bitrix: string; sumied: string }[] = []
+  const escritos: string[] = []
+  if (r.en_bitrix !== undefined && r.sumied !== undefined) choques.push({ campo: NOMBRE_EN_LA_FICHA.cuota, en_bitrix: String(r.en_bitrix), sumied: String(r.sumied) })
+  else if (typeof r.escrito === 'string') escritos.push(NOMBRE_EN_LA_FICHA.cuota)
+  const campos = (r.campos && typeof r.campos === 'object' ? r.campos : {}) as Record<string, Record<string, unknown>>
+  for (const [clave, c] of Object.entries(campos)) {
+    const nombre = NOMBRE_EN_LA_FICHA[clave] ?? clave
+    if (c.hecho === 'choque') choques.push({ campo: nombre, en_bitrix: String(c.en_bitrix ?? ''), sumied: String(c.sumied ?? '') })
+    else if (c.hecho === 'escrito') escritos.push(nombre)
+  }
+  return { choques, escritos }
+}
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+/** «2026-12-01» o «2026-12» → «diciembre»; si no es una fecha, null. */
+export function mesEnPalabras(x: unknown): string | null {
+  const m = /^(\d{4})-(\d{2})/.exec(String(x ?? ''))
+  return m && Number(m[2]) >= 1 && Number(m[2]) <= 12 ? MESES[Number(m[2]) - 1] : null
+}
+
+/**
+ * nº 13, punto 3 · La nota corta que va al historial de la ficha de Bitrix24
+ * por cada cambio de Sumied: «Sumied · alta de X desde diciembre». Una por
+ * cambio, sin flujos: lo largo está en la pestaña.
+ */
+export function notaDelCambio(accion: string, datos: Record<string, unknown>, frase: string): string {
+  const nombre = typeof datos.nombre === 'string' && datos.nombre.trim() ? datos.nombre.trim() : null
+  const corta = (t: string) => (t.length > 240 ? `${t.slice(0, 239)}…` : t)
+  if (accion === 'alta') {
+    const mes = mesEnPalabras(datos.desde)
+    return corta(`Sumied · alta de ${nombre ?? 'un trabajador'}${mes ? ` desde ${mes}` : ''}`)
+  }
+  if (accion === 'baja') {
+    const mes = mesEnPalabras(typeof datos.mes === 'string' ? mesSiguiente(datos.mes) : null)
+    return corta(`Sumied · baja de ${nombre ?? 'un trabajador'}${mes ? `: se deja de cobrar desde ${mes}` : ''}`)
+  }
+  if (accion === 'solicitud') {
+    const que = datos.tipo === 'baja' ? 'baja' : 'alta'
+    const mes = mesEnPalabras(datos.desde)
+    return corta(`Sumied · ${que} de ${nombre ?? 'un trabajador'}${mes ? ` desde ${mes}` : ''}, que pidió el cliente en su portal`)
+  }
+  if (accion === 'tarifa') {
+    const mes = mesEnPalabras(datos.desde)
+    if (typeof datos.precio === 'number') {
+      const precio = `${cuotaEnBitrix(Math.round(datos.precio * 100))} €`
+      return corta(`Sumied · precio especial de ${precio}${mes ? ` desde ${mes}` : ''}${typeof datos.motivo === 'string' && datos.motivo.trim() ? `. Por qué: ${datos.motivo.trim()}` : ''}`)
+    }
+    return corta(`Sumied · ${frase.trim().replace(/\.$/, '') || 'cambio de nivel'}`)
+  }
+  return corta(`Sumied · ${frase.trim().replace(/\.$/, '')}`)
+}

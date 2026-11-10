@@ -135,8 +135,8 @@ export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla
           : datos.subidas.map((s) => (
             <div className="pt-fila" key={s.id}>
               <span className="pt-icono" aria-hidden="true">{/\.pdf$/i.test(s.nombre) ? 'PDF' : 'IMG'}</span>
-              <div className="pt-fila-texto"><b>{s.nombre}</b><span>Subido el {fecha(s.subida)}</span></div>
-              <Chip texto={s.contabilizada ? 'Ya contabilizado' : 'Recibido'} tono={s.contabilizada ? 'ok' : 'info'} />
+              {/* nº 24 · Como la maqueta: «Subida el 6 de noviembre · ya contabilizada» (lo contabilizado es una factura). */}
+              <div className="pt-fila-texto"><b>{s.nombre}</b><span>{s.contabilizada ? `Subida el ${fecha(s.subida)} · ya contabilizada` : `Subido el ${fecha(s.subida)}`}</span></div>
               <button type="button" className="pt-boton sec chico" onClick={() => abrirDoc('subida', s.id)}>Ver</button>
             </div>)))}
       </section>

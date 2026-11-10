@@ -30,6 +30,8 @@ export type TipoDiferencia =
   | 'cliente_no_de_acuerdo'
   // G05 · nº 58 · Un pago con tarjeta desde el portal sin apuntar: falta (o no vale) la cuenta de Stripe en Ajustes.
   | 'falta_cuenta_stripe'
+  // GB · nº 13 · Al guardar desde la pestaña de Bitrix24, un dato cambiado allí a mano: no se pisa (se revisa con «Ya lo he revisado»).
+  | 'bitrix_cambiado'
 
 export interface Diferencia {
   id: string
@@ -95,6 +97,8 @@ export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; eti
   { id: 'no-de-acuerdo', tipos: ['cliente_no_de_acuerdo'], etiqueta: 'El cliente no está de acuerdo con un recibo', necesita: ['gocardless'] },
   // G05 · nº 58 · Un pago con tarjeta desde el portal sin apuntar: falta (o no vale) la cuenta de Stripe en Ajustes.
   { id: 'sin-stripe', tipos: ['falta_cuenta_stripe'], etiqueta: 'Falta la cuenta de Stripe en Ajustes', necesita: ['gocardless'] },
+  // GB · nº 13 · Al guardar desde la pestaña de Bitrix24, un dato cambiado allí a mano (no se pisa).
+  { id: 'bitrix-cambiado', tipos: ['bitrix_cambiado'], etiqueta: 'Cambiado a mano en Bitrix24', necesita: ['bitrix'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */

@@ -311,7 +311,7 @@ async function guardarCambio(c: Cambio) {
   vista.guardando = true
   const datos = c.accion === 'alta'
     ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nombre: c.nombre, desde: c.desde }
-    : c.accion === 'baja' ? { linea: c.linea, mes: c.mes }
+    : c.accion === 'baja' ? { linea: c.linea, mes: c.mes, nombre: (vista.abierto as { nombre?: string } | null)?.nombre ?? null }
       : c.accion === 'solicitud' ? { solicitud: c.solicitud, ...(c.servicio ? { servicio: c.servicio } : {}) }
         : { linea: c.linea, desde: c.desde, ...(c.nivel ? { nivel: c.nivel } : {}), ...(c.precio !== null ? { precio: c.precio, motivo: c.motivo } : {}) }
   let r: Record<string, unknown>

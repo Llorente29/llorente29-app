@@ -1,0 +1,12 @@
+# GB · nº 13, punto 2 · Los choques con Bitrix24 a «Pendiente de revisar» de Sumied.
+# Rama conta/gb-bitrix-choques. Se ensaya y se aplica desde main nombrando esta
+# rama. El real lo lanza Julio.
+#
+#   0050  Cambia en caliente (declarado, con su prueba): el CHECK de los tipos de
+#         conta_gestoria_diferencia solo AMPLÍA (los 20 de producción y
+#         «bitrix_cambiado»). Añade conta_bitrix_pestana_choque (solo el
+#         servidor). No llama a nada: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-bitrix-choques.sql
+supabase/migrations/20261110T0050_gb_bitrix_choques.sql
