@@ -92,3 +92,19 @@ describe('GB (nº 13, punto 2) · los choques con Bitrix24 a «Pendiente de revi
     expect(comoResolver({ tipo: 'bitrix_cambiado' } as never)).toEqual(['revisada'])
   })
 })
+
+describe('GB (nº 13, punto 3) · la nota corta en el historial de la ficha', () => {
+  it('una por cambio, corta, con el mes', async () => {
+    const { notaDelCambio, mesEnPalabras } = await import('../../../../../supabase/functions/conta-bitrix-pestana/escribir')
+    expect([mesEnPalabras('2026-12-01'), mesEnPalabras('2027-01'), mesEnPalabras('x'), mesEnPalabras(null)]).toEqual(['diciembre', 'enero', null, null])
+    expect(notaDelCambio('alta', { nombre: 'Luis Prueba Soto', desde: '2026-12-01', servicio: 'lab' }, 'Alta de LUIS…')).toBe('Sumied · alta de Luis Prueba Soto desde diciembre')
+    expect(notaDelCambio('baja', { linea: 'w0', mes: '2026-11-01', nombre: 'Persona Prueba 00' }, 'Baja…')).toBe('Sumied · baja de Persona Prueba 00: se deja de cobrar desde diciembre')
+    expect(notaDelCambio('baja', { linea: 'w0', mes: '2026-12-01' }, 'Baja…')).toBe('Sumied · baja de un trabajador: se deja de cobrar desde enero')
+    expect(notaDelCambio('solicitud', { solicitud: 's1', nombre: 'DIEGO PRUEBA FERRER', tipo: 'alta' }, 'Alta…')).toBe('Sumied · alta de DIEGO PRUEBA FERRER, que pidió el cliente en su portal')
+    expect(notaDelCambio('tarifa', { linea: 'g1', desde: '2026-12-01', precio: 135, motivo: 'Cliente desde 2015' }, '…'))
+      .toBe('Sumied · precio especial de 135,00 € desde diciembre. Por qué: Cliente desde 2015')
+    expect(notaDelCambio('tarifa', { linea: 'g1', desde: '2026-12-01', nivel: 'n1' }, 'Cliente Prueba, S.L. pasa de Gestoría mensual · Premium a Gestoría mensual · Básica desde diciembre de 2026.'))
+      .toBe('Sumied · Cliente Prueba, S.L. pasa de Gestoría mensual · Premium a Gestoría mensual · Básica desde diciembre de 2026')
+    expect(notaDelCambio('alta', { nombre: 'x'.repeat(400) }, '').length).toBe(240)
+  })
+})
