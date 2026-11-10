@@ -134,7 +134,7 @@ describe('GB (nº 10) · las pestañas por área y «Lo pendiente con este clien
   })
   it('cada formulario abre en su pestaña', async () => {
     const { AREA_DE } = await import('@/publicas/bitrixPestanaModelo')
-    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros' })
+    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros', invitar: 'portal', contestar: 'portal' })
   })
 })
 
@@ -170,5 +170,19 @@ describe('GB (nº 17, B) · los trabajos fuera de la cuota en la pestaña', () =
     const { sueltoPrevisto } = await import('@/publicas/bitrixPestanaModelo')
     expect(sueltoPrevisto(respuesta(), Q, { puede: true, mes: '2026-12', servicios: [], hechos: [] }, 60))
       .toBe('El recibo de diciembre pasa de 496,10 € a 556,10 € (+60,00 €).')
+  })
+})
+
+describe('GB (nº 17, C) · los mensajes de su portal en la pestaña', () => {
+  it('con su texto, quién, la hora de Madrid y si está sin leer; un adjunto sin texto se dice; si no llega, nada', async () => {
+    const { modeloMensajes } = await import('@/publicas/bitrixPestanaModelo')
+    expect(modeloMensajes({ total: 9, lista: [
+      { id: 'm1', de: 'gestoria', autor: 'Gestoría Prueba', texto: 'Te mando el modelo 303.', adjuntos: 0, cuando: '2026-11-09T22:30:00Z', leido: true },
+      { id: 'm2', de: 'cliente', autor: 'Persona Prueba', texto: '', adjuntos: 2, cuando: '2026-11-10T08:05:00Z', leido: false },
+    ] })).toEqual({ total: 9, lista: [
+      { id: 'm1', delCliente: false, quien: 'Gestoría Prueba', texto: 'Te mando el modelo 303.', cuando: '09/11 · 23:30', sinLeer: false },
+      { id: 'm2', delCliente: true, quien: 'Persona Prueba', texto: '2 adjuntos', cuando: '10/11 · 09:05', sinLeer: true },
+    ] })
+    expect(modeloMensajes(null)).toBeNull()
   })
 })

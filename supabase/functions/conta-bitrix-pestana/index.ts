@@ -140,13 +140,66 @@ async function portal(cuerpo: Record<string, unknown>): Promise<Response> {
   // nº 17, A · Con su portal, en la misma petición, sus recibos devueltos y lo que se puede hacer con cada uno (Code 1).
   // nº 17, B · Y, si la página dice la empresa, sus trabajos sueltos y lo que se puede facturar (Code 1).
   const empresa = typeof cuerpo.empresa === 'string' && /^[0-9a-f-]{36}$/.test(cuerpo.empresa) ? cuerpo.empresa : null
-  const [p, d, su] = await Promise.all([
+  // nº 17, C · Y los últimos mensajes de su portal, con su texto, para «Contestar».
+  const [p, d, su, me] = await Promise.all([
     db.rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
     db.rpc('conta_bitrix_pestana_devueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
     empresa ? db.rpc('conta_bitrix_pestana_sueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_empresa: empresa }) : Promise.resolve({ data: null }),
+    db.rpc('conta_bitrix_pestana_mensajes', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
   ])
   if (p.error) return json(200, { estado: 'error', frase: 'No se ha podido leer su portal.' })
-  return json(200, { ...((p.data ?? { estado: 'error' }) as Record<string, unknown>), devueltos: devueltosDe(d.data), sueltos: su.data ?? null })
+  return json(200, { ...((p.data ?? { estado: 'error' }) as Record<string, unknown>), devueltos: devueltosDe(d.data), sueltos: su.data ?? null, mensajes: mensajesDe(me.data) })
+}
+
+/** nº 17, C · Lo que llega de conta_bitrix_pestana_mensajes, para la pestaña. */
+function mensajesDe(x: unknown): Record<string, unknown> | null {
+  const d = (x ?? {}) as Record<string, unknown>
+  return d.estado === 'ok' ? { total: d.total, lista: Array.isArray(d.mensajes) ? d.mensajes : [] } : null
+}
+
+/**
+ * nº 17, C · «Invitar» a su portal: lo hace conta-portal («bitrix_invitar», con
+ * la clave de servicio), que llama a la de Code 3 como la persona (solo un
+ * administrador o un encargado) y manda el correo, como desde Sumied.
+ */
+async function invitar(cuerpo: Record<string, unknown>, origen: string | null): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const datos = (cuerpo.datos ?? {}) as Record<string, unknown>
+  const invitado = typeof datos.correo === 'string' ? datos.correo.trim().slice(0, 200) : ''
+  if (!invitado) return json(400, { estado: 'no', frase: 'Escribe un correo que valga.' })
+  const servicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/conta-portal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${servicio}`, ...(origen ? { origin: origen } : {}) },
+    body: JSON.stringify({ accion: 'bitrix_invitar', portal: m.portal, correo: m.correo, tipo: m.tipo, id: m.id, invitado,
+      nombre: typeof datos.nombre === 'string' ? datos.nombre.trim().slice(0, 120) || null : null,
+      permiso: datos.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo', origen }),
+  })
+  const c = (await r.json().catch(() => ({}))) as { ok?: boolean; estado?: string; frase?: string }
+  if (!c.ok) return json(200, { estado: c.estado && c.estado !== 'ok' ? c.estado : 'no', frase: c.frase ?? 'No se ha podido invitar ahora. Prueba en unos minutos.' })
+  const db = baseDeDatos()
+  const { data } = await db.rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
+  return json(200, { estado: 'ok', frase: c.frase, portal: data ?? null })
+}
+
+/** nº 17, C · «Contestar» un mensaje de su portal, con la de Code 3, como la persona; el aviso al cliente lo manda el cron, como desde Sumied. */
+async function contestar(cuerpo: Record<string, unknown>): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const datos = (cuerpo.datos ?? {}) as Record<string, unknown>
+  const texto = typeof datos.texto === 'string' ? datos.texto.trim() : ''
+  if (!texto) return json(400, { estado: 'no', frase: 'Escribe la respuesta.' })
+  const db = baseDeDatos()
+  const { data, error } = await db.rpc('conta_portal_bitrix_contestar', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_texto: texto })
+  if (error) return json(500, { estado: 'error', frase: 'No se ha podido mandar en Sumied. No ha cambiado nada.' })
+  const r = (data ?? {}) as Record<string, unknown>
+  if (r.estado !== 'ok') return json(200, { estado: r.estado ?? 'no', frase: typeof r.frase === 'string' ? r.frase : FRASES[String(r.estado)] ?? 'No se ha podido mandar.' })
+  const [{ data: me }, { data: pt }] = await Promise.all([
+    db.rpc('conta_bitrix_pestana_mensajes', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
+    db.rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
+  ])
+  return json(200, { estado: 'ok', frase: 'Mandado. Le llega un aviso de que tiene respuesta en su portal.', mensajes: mensajesDe(me), portal: pt ?? null })
 }
 
 /** nº 17, A · Lo que llega de conta_bitrix_pestana_devueltos, para la pestaña (sin el usuario). */
@@ -418,6 +471,8 @@ Deno.serve(async (req) => {
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'devuelto') return await devuelto(cuerpo, req.headers.get('origin'))
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'suelto') return await suelto(cuerpo)
+    if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'invitar') return await invitar(cuerpo, req.headers.get('origin'))
+    if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'contestar') return await contestar(cuerpo)
     if (cuerpo?.paso === 'hacer') return await hacer(cuerpo)
     if (cuerpo?.paso === 'portal') return await portal(cuerpo)
     if (cuerpo?.paso === 'deshacer') return await deshacer(cuerpo)

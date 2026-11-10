@@ -1,0 +1,19 @@
+{
+ "_que": "GB · nº 17, C · contexto de producción, medido en SOLO LECTURA el 10/11 a las 12:18Z (vuelto a medir; igual que a las 10:18Z). La 1040 crea conta_bitrix_pestana_mensajes(text,text,text,text), que no existe (ni otra con el mismo nombre), y no la llama. Usa _conta_portal_bitrix_quien (2345, Code 3) y conta_portal_ficha (1530, Code 3), que existen. Solo lee. Nada en el camino del pedido.",
+ "medido": "2026-11-10T12:18Z",
+ "tanda": {
+  "supabase/migrations/20261110T1040_gb_pestana_mensajes.sql": "e49f951b500707283b8735ad63c1fe7d"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
