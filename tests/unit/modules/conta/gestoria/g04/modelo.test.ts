@@ -67,6 +67,8 @@ const suyo = () => ({
   mandatos: [{ company_id: Q, gc_id: 'MD1', gc_cliente_id: 'CU-1', estado: 'active' }],
   suscripciones: [{ company_id: Q, gc_id: 'S1', gc_cliente_id: 'CU-1', nombre: 'GESTORIA', al_mes: 496.10, estado: 'active', inicio: '2020-01-01' }],
   pendientes: [], personas: [],
+  // nº 84 · El cobro de noviembre salió del recibo de Sumied y tiene su factura; el devuelto de octubre, no salió de ninguno.
+  facturas: [{ empresa_id: Q, cobro_gc_id: 'PB1', recibo_id: 'r1', mes: '2026-12', recibo_estado: 'facturado', factura_id: 'f1', factura: 'PRUEBA/154' }],
 })
 
 describe('G04 · el modelo de Clientes', () => {
@@ -115,6 +117,21 @@ describe('G04 · el modelo de Clientes', () => {
   })
   it('los importes de referencia del CRM, cada uno con su etiqueta, sin sumar', () => {
     expect(referenciasDelCrm(suyo().ficha)).toEqual(['Tarifa recurrente: 60,50 €'])
+  })
+})
+
+// nº 84 · La pestaña «Cobros»: la factura de cada cobro, no «Sin factura en Sumied» en todas las filas.
+describe('la ficha · la factura de cada cobro', () => {
+  it('el cobro con su factura sale con su número y su enlace; el que no salió de Sumied lo dice', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const f = modeloFicha(datos(), suyo(), EMPRESAS, '1', Q, '2026-11-08', [])!
+    expect(f.cobros.map((c) => c.factura)).toEqual([{ texto: 'PRUEBA/154', facturaId: 'f1' }, { texto: 'Sin factura en Sumied', facturaId: null }])
+  })
+  it('sin factura, por qué: según el estado de su recibo', async () => {
+    const { facturaDelCobro } = await import('@/modules/conta/gestoria/g04/modelo')
+    expect(['enviado', 'en_el_banco', 'cobrado', 'devuelto', 'retrocedido', 'cancelado', 'preparado'].map((e) => facturaDelCobro({ recibo_estado: e, factura_id: null }).texto))
+      .toEqual(['Se factura al cobrarse', 'Se factura al cobrarse', 'Por facturar', 'Sin factura: devuelto', 'Sin factura: reclamado', 'Sin factura: cancelado', 'Sin factura'])
+    expect(facturaDelCobro({ recibo_estado: 'retrocedido', factura_id: 'f9', factura: 'PRUEBA/162' })).toEqual({ texto: 'PRUEBA/162', facturaId: 'f9' })
   })
 })
 

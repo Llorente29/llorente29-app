@@ -178,6 +178,8 @@ export function pantallas(d: Record<string, Fila[]>): Record<string, (cuerpo: Fi
       ...empresas.map((e) => ({ que: 'empresa', cliente_id: null, empresa_id: e, mes: cuerpo.p_mes, gocardless_del_mes: suma(activas.filter((s) => String(s.company_id) === e), 'al_mes') })),
     ],
     conta_pantalla_ficha: (cuerpo) => deCliente(String(cuerpo.p_cliente)),
+    // nº 84 · La factura de cada cobro: en esta siembra ningún cobro salió de un recibo de Sumied.
+    conta_ficha_facturas: () => [],
     conta_pantalla_asignar: () => ({
       suscripciones: activas,
       gc_clientes: d.conta_gc_cliente.filter((g) => activas.some((s) => s.company_id === g.company_id && s.gc_cliente_id === g.gc_id)),

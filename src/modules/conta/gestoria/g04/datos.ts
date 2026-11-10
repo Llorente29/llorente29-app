@@ -64,13 +64,20 @@ export interface DatosFicha {
   suscripciones: Fila[]
   pendientes: Fila[]
   personas: Fila[]
+  /** nº 84 · La factura de cada cobro de GoCardless que salió de un recibo de Sumied (conta_ficha_facturas). */
+  facturas: Fila[]
 }
 
 export async function leerFicha(accountId: string, cliente: string): Promise<DatosFicha> {
-  const d = (await rpc<Fila | null>('conta_pantalla_ficha', { p_cuenta: accountId, p_cliente: cliente })) ?? {}
+  const [ficha, facturas] = await Promise.all([
+    rpc<Fila | null>('conta_pantalla_ficha', { p_cuenta: accountId, p_cliente: cliente }),
+    rpc<Fila[] | null>('conta_ficha_facturas', { p_cuenta: accountId, p_cliente: cliente }),
+  ])
+  const d = ficha ?? {}
   return {
     ficha: d.ficha && typeof d.ficha === 'object' ? (d.ficha as Fila) : {}, leidoAt: typeof d.leido_at === 'string' ? d.leido_at : null,
     mandatos: filas(d.mandatos), cobros: filas(d.cobros), suscripciones: filas(d.suscripciones), pendientes: filas(d.pendientes), personas: filas(d.personas),
+    facturas: filas(facturas),
   }
 }
 

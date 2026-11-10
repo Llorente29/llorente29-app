@@ -35,6 +35,8 @@ export interface PropsFicha {
   personas: Persona[]
   rutaVolver: string
   rutaTarifa: string
+  /** nº 84 · La ficha de una factura emitida, para el número de la factura de cada cobro. */
+  rutaFactura: (facturaId: string) => string
   rutaCrm: string | null
   hoy: string
   /** Lo que se puede añadir o a qué nivel cambiar: servicios (con sus niveles) y paquetes de la empresa. */
@@ -208,7 +210,7 @@ export function Ficha(p: PropsFicha) {
                 {m.cobros.length === 0 && <div className="g4-cobro-fila" role="row"><div role="cell">Ningún cobro en GoCardless en 12 meses.</div></div>}
                 {m.cobros.map((c, i) => (
                   <div key={`${c.fecha}-${i}`} className="g4-cobro-fila" role="row"><div role="cell">{c.fecha}</div><div role="cell" className="g4-derecha" style={{ fontWeight: 600 }}>{c.importe}</div>
-                    <div role="cell"><span className="g4-etiqueta" data-tono={c.tono}>{c.estado}</span></div><div role="cell" className="g4-pequeno">Sin factura en Sumied</div></div>
+                    <div role="cell"><span className="g4-etiqueta" data-tono={c.tono}>{c.estado}</span></div><div role="cell" className="g4-pequeno">{c.factura.facturaId ? <Link className="g4-enlace" to={p.rutaFactura(c.factura.facturaId)}>{c.factura.texto}</Link> : c.factura.texto}</div></div>
                 ))}
               </div>
             </section>

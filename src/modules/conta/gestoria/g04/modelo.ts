@@ -259,7 +259,7 @@ export interface ModeloFicha {
   mesRecibo: string
   recibo: LineaDeLaFicha[]
   totalRecibo: string
-  cobros: { fecha: string; importe: string; estado: string; tono: Tono }[]
+  cobros: { fecha: string; importe: string; estado: string; tono: Tono; factura: FacturaDelCobro }[]
   mandato: { texto: string; tono: Tono } | null
   devoluciones12: number
   servicios: { texto: string; detalle: string; importe: string; lineaId: string | null; servicioId: string | null; tieneNiveles: boolean; especial: boolean }[]
@@ -277,6 +277,20 @@ const mesCorto = (m: string) => `${MES_CORTO[Number(m.slice(5, 7)) - 1]} ${m.sli
 const MANDATO: Record<string, { texto: string; tono: Tono }> = {
   active: { texto: 'firmado', tono: 'bien' }, pending_customer_approval: { texto: 'por firmar', tono: 'aviso' }, pending_submission: { texto: 'en curso', tono: 'neutro' },
   submitted: { texto: 'en curso', tono: 'neutro' }, cancelled: { texto: 'cancelado', tono: 'mal' }, failed: { texto: 'fallido', tono: 'mal' }, expired: { texto: 'caducado', tono: 'mal' },
+}
+
+/** nº 84 · La factura de un cobro, en la pestaña «Cobros»: su número (con enlace) o por qué no la tiene. */
+export interface FacturaDelCobro { texto: string; facturaId: string | null }
+
+const SIN_FACTURA: Record<string, string> = {
+  preparado: 'Sin factura', enviado: 'Se factura al cobrarse', en_el_banco: 'Se factura al cobrarse', cobrado: 'Por facturar',
+  devuelto: 'Sin factura: devuelto', retrocedido: 'Sin factura: reclamado', cancelado: 'Sin factura: cancelado',
+}
+
+export function facturaDelCobro(x: Fila | undefined): FacturaDelCobro {
+  if (!x) return { texto: 'Sin factura en Sumied', facturaId: null }
+  if (x.factura_id) return { texto: str(x.factura) ?? 'Factura', facturaId: String(x.factura_id) }
+  return { texto: SIN_FACTURA[String(x.recibo_estado ?? '')] ?? 'Sin factura', facturaId: null }
 }
 
 /** La ficha de un cliente con una empresa: lo que se le cobra el mes que viene, sus cobros, su contacto, lo del CRM y sus servicios. Lo suyo (mandatos, cobros, suscripciones) llega en su propia llamada, al abrirla (conta_pantalla_ficha). */
@@ -313,10 +327,12 @@ export function modeloFicha(d: DatosClientes, suyo: DatosFicha, empresas: readon
   const mandatos = suyo.mandatos.filter((x) => x.company_id === e && gc && x.gc_cliente_id === gc)
   const ids = new Set(mandatos.map((x) => String(x.gc_id)))
   const hace12 = `${Number(hoy.slice(0, 4)) - 1}${hoy.slice(4)}`
+  const facturaDe = new Map((suyo.facturas ?? []).map((x) => [`${String(x.empresa_id)}|${String(x.cobro_gc_id)}`, x]))
   const cobros = suyo.cobros.filter((b) => b.company_id === e && ids.has(String(b.mandato_gc_id)) && String(b.fecha ?? '') >= hace12)
     .sort((a, b) => (String(a.fecha) < String(b.fecha) ? 1 : -1))
     .map((b) => { const x = ESTADO_DEL_COBRO[String(b.estado)] ?? { texto: String(b.estado), tono: 'neutro' as Tono }
-      return { fecha: `${Number(String(b.fecha).slice(8, 10))} ${MES_CORTO[Number(String(b.fecha).slice(5, 7)) - 1]} ${String(b.fecha).slice(0, 4)}`, importe: euros(cent(b.importe)), estado: x.texto, tono: x.tono } })
+      return { fecha: `${Number(String(b.fecha).slice(8, 10))} ${MES_CORTO[Number(String(b.fecha).slice(5, 7)) - 1]} ${String(b.fecha).slice(0, 4)}`, importe: euros(cent(b.importe)), estado: x.texto, tono: x.tono,
+        factura: facturaDelCobro(facturaDe.get(`${String(b.company_id)}|${String(b.gc_id)}`)) } })
   const ultimoMandato = [...mandatos].sort((a, b) => (String(a.creado ?? '') < String(b.creado ?? '') ? 1 : -1))[0]
   // Lo que tiene, a la derecha: cada asignación vigente con su precio.
   const servicios = suyas.filter((a) => a.hasta === null || a.hasta >= mes).map((a) => {
