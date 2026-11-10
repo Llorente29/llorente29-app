@@ -42,7 +42,7 @@ describe('GB (nº 24) · quién lleva al cliente en Bitrix24', () => {
     expect(pedidas.map((p) => [p.metodo, p.cuerpo])).toEqual([['user.get', { FILTER: { ID: '7' } }], ['user.get', { FILTER: { ID: '9' } }]])
     expect(fichas.map((f) => f.responsable)).toEqual([
       { idExterno: '7', nombre: 'Gestora Prueba', correo: 'gestora.prueba@ejemplo.invalid' },
-      { idExterno: '9', nombre: 'comercial.prueba', correo: null },
+      { idExterno: '9', nombre: null, correo: null },
       { idExterno: '7', nombre: 'Gestora Prueba', correo: 'gestora.prueba@ejemplo.invalid' },
       null,
     ])
@@ -62,5 +62,13 @@ describe('GB (nº 24) · quién lleva al cliente en Bitrix24', () => {
   it('los datos de un usuario', () => {
     expect(datosDeUsuario({ NAME: ' Ana ', LAST_NAME: '', EMAIL: '' })).toEqual({ nombre: 'Ana', correo: null })
     expect(datosDeUsuario({})).toEqual({ nombre: null, correo: null })
+  })
+
+  it('sin nombre, null: ni «Sin título» ni el login en su lugar (nº 29)', () => {
+    expect(datosDeUsuario({ NAME: 'Sin título', EMAIL: 'sin.titulo@ejemplo.invalid' })).toEqual({ nombre: null, correo: 'sin.titulo@ejemplo.invalid' })
+    expect(datosDeUsuario({ NAME: '  SIN TITULO ', LAST_NAME: '' })).toEqual({ nombre: null, correo: null })
+    expect(datosDeUsuario({ NAME: 'Untitled' })).toEqual({ nombre: null, correo: null })
+    expect(datosDeUsuario({ LOGIN: 'comercial.prueba' })).toEqual({ nombre: null, correo: null })
+    expect(datosDeUsuario({ NAME: 'Gestora', LAST_NAME: 'Sin título' })).toEqual({ nombre: 'Gestora', correo: null })
   })
 })
