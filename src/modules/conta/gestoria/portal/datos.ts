@@ -8,6 +8,7 @@
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
+import type { FirmaLeida } from './firma'
 
 export type Permiso = 'todo' | 'facturas_documentos'
 export interface Acceso { id: string; correo: string; nombre: string | null; permiso: Permiso; invitado_at: string; invitado_por_name: string | null; revocado_at: string | null; user_id?: never }
@@ -88,4 +89,20 @@ export async function abrirFichero(ruta: string): Promise<string> {
   const { data, error } = await supabase!.storage.from('conta-portal').createSignedUrl(ruta, 300)
   if (error || !data?.signedUrl) throw new Error('No se ha podido abrir el fichero.')
   return data.signedUrl
+}
+
+/**
+ * nº 19.1 · Las firmas de estas peticiones (la gestoría las lee por su RLS): cuándo,
+ * desde dónde, a dónde fue el código, el PDF firmado y quién firmó (su acceso).
+ */
+export async function leerFirmas(peticiones: string[]): Promise<FirmaLeida[]> {
+  if (!peticiones.length) return []
+  const { data, error } = await tabla('conta_portal_firma').select('peticion_id, acceso_id, firmada_at, ip, navegador, destino, pdf_ruta, pdf_sha256')
+    .in('peticion_id', peticiones).not('firmada_at', 'is', null).order('firmada_at', { ascending: false })
+  if (error) throw new Error('No se han podido leer las firmas.')
+  const filas = (data ?? []) as (Omit<FirmaLeida, 'quien'> & { acceso_id: string })[]
+  const ids = [...new Set(filas.map((f) => f.acceso_id))]
+  const { data: acc } = ids.length ? await tabla('conta_portal_acceso').select('id, nombre, correo').in('id', ids) : { data: [] }
+  const nombre = new Map(((acc ?? []) as { id: string; nombre: string | null; correo: string }[]).map((a) => [a.id, a.nombre ?? a.correo]))
+  return filas.map(({ acceso_id, ...f }) => ({ ...f, quien: nombre.get(acceso_id) ?? null }))
 }
