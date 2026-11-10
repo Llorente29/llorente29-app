@@ -187,7 +187,9 @@ declare
   solo_servidor constant text[] := array[
     '_conta_portal_yo', '_conta_portal_empresa', '_conta_portal_marca', '_conta_portal_estado_recibo', '_conta_portal_devuelto_pagado',
     '_conta_portal_devueltos', '_conta_portal_proximo', '_conta_portal_cuenta_propia', 'conta_portal_acceso_usuario', 'conta_portal_firma_pedir',
-    'conta_portal_firma_pdf', 'conta_portal_incidencia_parada', 'conta_portal_archivo', 'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos'];
+    'conta_portal_firma_pdf', 'conta_portal_incidencia_parada', 'conta_portal_archivo', 'conta_portal_avisos_pendientes', 'conta_portal_avisos_hechos',
+    -- GP · nº 17 (la 2345), si ya está: la pestaña de Bitrix24, solo el servidor.
+    '_conta_portal_bitrix_quien', 'conta_portal_bitrix_invitar', 'conta_portal_bitrix_contestar'];
   -- Las que solo llama el dueño de la base (el cron).
   solo_cron constant text[] := array['conta_portal_despertar'];
   f record; malos text[] := '{}'; n int := 0;

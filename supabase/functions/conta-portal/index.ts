@@ -35,6 +35,10 @@
 //                    devuelto de verdad. Solo una cuenta demo, solo con la
 //                    conexión de pruebas y solo su administrador o encargado.
 //   · seguir         en qué ha quedado lo pedido a GoCardless o a Stripe, al volver.
+//   · bitrix_invitar (nº 17) «Invitar al portal» desde la pestaña de Bitrix24:
+//                    SOLO con la clave de servicio (sin sesión de Sumied); lo
+//                    llama conta-bitrix-pestana (Code 4) después de comprobar
+//                    con Bitrix24 quién mira. Ver bitrixInvitar.
 //                    Al quedar hecho (T4), se remata con lo de Code 1 (#534):
 //                    un devuelto pagado se apunta (conta_recibo_pagado_portal,
 //                    y su frase sale en pantalla tal cual) y una cuenta nueva se
@@ -93,6 +97,16 @@ function fraseBase(error: { message?: string } | null): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'usa POST' })
+  // nº 17 · Desde la pestaña de Bitrix24 (Code 4): sin sesión de Sumied, solo con la clave de servicio.
+  if ((req.headers.get('Authorization') ?? '') === `Bearer ${SERVICIO}`) {
+    let b0: Fila = {}
+    try { b0 = await req.clone().json() as Fila } catch { /* vacío */ }
+    if (b0.accion === 'bitrix_invitar') {
+      try { return await bitrixInvitar(createClient(URL_BASE, SERVICIO, { auth: { persistSession: false } }), b0) }
+      catch (x) { console.error('[conta-portal] bitrix_invitar', x instanceof Error ? x.message : String(x)); return json(200, { ok: false, estado: 'error', frase: 'No se ha podido invitar ahora. Prueba en unos minutos.' }) }
+    }
+    return json(400, { ok: false, frase: 'Con la clave de servicio solo se puede «bitrix_invitar».' })
+  }
   const yo = createClient(URL_BASE, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } })
   const { data: u } = await yo.auth.getUser()
   if (!u?.user) return json(401, { error: 'no autenticado' })
@@ -235,7 +249,34 @@ async function invitar(yo: Sb, srv: Sb, b: Fila, origen: unknown) {
   if (!cliente || !correo) return json(400, { ok: false, frase: 'Escribe un correo que valga.' })
   const { data, error } = await yo.rpc('conta_portal_invitar', { p_party: cliente, p_correo: correo, p_nombre: texto(b.nombre, 120), p_permiso: b.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo' })
   if (error || !data) return mal(fraseBase(error))
-  const r0 = data as { id: string; frase: string }
+  return await mandarInvitacion(srv, data as { id: string; frase: string }, correo, origen)
+}
+
+/**
+ * nº 17 · «Invitar al portal» desde la pestaña de Bitrix24. Solo con la clave de
+ * servicio: lo llama conta-bitrix-pestana (Code 4) DESPUÉS de comprobar con
+ * Bitrix24 quién mira. conta_portal_bitrix_invitar busca la persona y el cliente
+ * de la ficha y, como ella, da el acceso; aquí se manda el correo, igual que
+ * desde Sumied. Cuerpo: { portal, correo (el de quien mira), tipo, id (la ficha),
+ * invitado, nombre?, permiso?, origen? }.
+ */
+async function bitrixInvitar(srv: Sb, b: Fila) {
+  const invitado = correoValido(b.invitado)
+  if (!invitado) return json(200, { ok: false, estado: 'no', frase: 'Escribe un correo que valga.' })
+  const { data, error } = await srv.rpc('conta_portal_bitrix_invitar', {
+    p_portal: texto(b.portal, 200), p_correo: texto(b.correo, 200), p_tipo: texto(b.tipo, 20), p_id: texto(b.id, 20),
+    p_invitado: invitado, p_nombre: texto(b.nombre, 120) || null, p_permiso: b.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo',
+  })
+  if (error) return json(200, { ok: false, estado: 'error', frase: fraseBase(error) })
+  const r = data as { estado: string; frase: string; id?: string }
+  if (r.estado !== 'ok' || !r.id) return json(200, { ok: false, estado: r.estado, frase: r.frase })
+  const res = await mandarInvitacion(srv, { id: r.id, frase: r.frase }, invitado, b.origen ?? null)
+  const cuerpo = await res.json() as Fila
+  return json(200, { ...cuerpo, estado: cuerpo.ok ? 'ok' : 'no' })
+}
+
+/** El correo de la invitación (el acceso ya está): el enlace para entrar, con la marca de la gestoría. */
+async function mandarInvitacion(srv: Sb, r0: { id: string; frase: string }, correo: string, origen: unknown) {
   const { data: a } = await srv.from('conta_portal_acceso').select('id, account_id, party_id, invitado_por_name').eq('id', r0.id).single()
   const e = await enlaceParaEntrar(srv, correo, origen, URL_BASE)
   if ('porque' in e) return json(200, { ok: true, enviado: false, frase: `${r0.frase.split('.')[0]}, pero ${e.porque.toLowerCase()}` })
