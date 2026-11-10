@@ -35790,7 +35790,8 @@ begin
   -- Después de cada lectura (que renueva las diferencias), los clientes sin código vuelven a «Pendiente de revisar».
   perform public._conta_cobro_codigos(p_company);
   for v_x in
-    select r.id, r.estado, r.gc_estado, r.invoice_id, r.asiento_cobro, r.asiento_devolucion, b.estado as gc, b.fecha
+    select r.id, r.estado, r.gc_estado, r.invoice_id, r.asiento_cobro, r.asiento_devolucion, b.estado as gc, b.fecha,
+           r.motivo_devolucion, b.motivo_es as motivo_gc
       from public.conta_recibo r join public.conta_gc_cobro b on b.company_id = r.company_id and b.gc_id = r.gc_cobro_id
      where r.company_id = p_company and r.gc_cobro_id is not null
   loop
@@ -35807,6 +35808,11 @@ begin
         when 'cancelado' then 'Cancelado en GoCardless: no se ha cobrado.'
         else 'Enviado.' end, jsonb_build_object('gocardless', v_x.gc), null);
       v_cambios := v_cambios + 1;
+    end if;
+    -- nº 77 · El motivo del devuelto o el retrocedido, en el recibo (en cuanto la lectura lo trae).
+    if v_x.gc in ('failed', 'charged_back', 'customer_approval_denied') and v_x.motivo_gc is not null
+       and v_x.motivo_devolucion is distinct from v_x.motivo_gc then
+      update public.conta_recibo set motivo_devolucion = v_x.motivo_gc, updated_at = now() where id = v_x.id;
     end if;
     begin
       if v_x.gc in ('confirmed', 'paid_out') and v_x.invoice_id is null then
@@ -108455,7 +108461,9 @@ CREATE TABLE public.conta_gc_cobro (
     moneda text,
     motivo text,
     leido_at timestamp with time zone DEFAULT now() NOT NULL,
-    payout_gc_id text
+    payout_gc_id text,
+    causa text,
+    motivo_es text
 );
 
 
@@ -108471,6 +108479,20 @@ COMMENT ON TABLE public.conta_gc_cobro IS 'G01 · Los cobros de GoCardless de lo
 --
 
 COMMENT ON COLUMN public.conta_gc_cobro.payout_gc_id IS 'G05 · El pago de GoCardless al banco que lleva este cobro (links.payout).';
+
+
+--
+-- Name: COLUMN conta_gc_cobro.causa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_cobro.causa IS 'G05 · El código del motivo de GoCardless (details.cause), si lo dio.';
+
+
+--
+-- Name: COLUMN conta_gc_cobro.motivo_es; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_gc_cobro.motivo_es IS 'G05 · El motivo en palabras de oficina («Sin saldo en la cuenta»).';
 
 
 --
@@ -111833,6 +111855,7 @@ CREATE TABLE public.conta_recibo (
     asiento_devolucion uuid,
     preparado_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    motivo_devolucion text,
     CONSTRAINT conta_recibo_clave_de_verdad CHECK ((clave = ((((('recibo:'::text || (company_id)::text) || ':'::text) || (party_id)::text) || ':'::text) || mes))),
     CONSTRAINT conta_recibo_cobrar_cent_check CHECK (((cobrar_cent IS NULL) OR (cobrar_cent > 0))),
     CONSTRAINT conta_recibo_decision_check CHECK ((decision = ANY (ARRAY['pendiente'::text, 'aprobado'::text, 'este_mes_no'::text]))),
@@ -111848,6 +111871,13 @@ CREATE TABLE public.conta_recibo (
 --
 
 COMMENT ON TABLE public.conta_recibo IS 'G05 · El recibo del mes de un cliente con su empresa emisora: lo calcula el servidor (conta-cobro, con _shared/cobro), uno por empresa, cliente y mes (clave única, la misma que va a GoCardless). Lleva sus líneas, lo que cambia frente al mes anterior, la factura que tendrá y su cobro. Solo lo escriben las funciones del G05.';
+
+
+--
+-- Name: COLUMN conta_recibo.motivo_devolucion; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_recibo.motivo_devolucion IS 'G05 · Por qué se devolvió o se reclamó, en palabras de oficina: lo enseñan el portal y la ficha.';
 
 
 --
