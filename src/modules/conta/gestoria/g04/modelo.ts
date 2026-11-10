@@ -18,6 +18,9 @@ import { cifraDeCobro, type CifraDeCobro } from '../../../../../supabase/functio
 import { proximoCobro, type ProximoCobro } from '../../../../../supabase/functions/_shared/tarifa/proximoCobro'
 import type { DatosClientes, DatosFicha, Fila } from './datos'
 
+/** nº 90 · Los estados del mandato que ya ha firmado el cliente: con ellos GoCardless cobra. */
+export const MANDATO_FIRMADO: readonly string[] = ['active', 'pending_submission', 'submitted']
+
 const str = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 const cent = (v: unknown): number => Math.round(Number(v ?? 0) * 100)
 const mesDe = (d: unknown): string => String(d ?? '').slice(0, 7)
@@ -148,7 +151,9 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     if (esteMes.diferenciaCent !== null && esteMes.diferenciaCent !== 0) porRevisar++
     const debe = debeDe.get(`${clienteId}|${empresaId}`) ?? null
     const mandatoGc = str(r.mandato)
-    const mandato = mandatoGc === 'active' ? 'firmado' : mandatoGc && /^pending|^submitted/.test(mandatoGc) ? 'por_firmar' : r.forma_de_cobro === 'gocardless' ? 'sin_mandato' : null
+    // nº 90 · En «pending_submission» y «submitted» ya lo ha firmado el cliente: GoCardless lo manda al banco con su
+    // primer cobro y se cobra con él. Por firmar, solo el que espera la aprobación del cliente.
+    const mandato = mandatoGc && MANDATO_FIRMADO.includes(mandatoGc) ? 'firmado' : mandatoGc === 'pending_customer_approval' ? 'por_firmar' : r.forma_de_cobro === 'gocardless' ? 'sin_mandato' : null
     const seCobra = empresaId !== null && SE_COBRA.includes(situacion)
     const sinCuota = seCobra && (gcAlMes ?? 0) === 0 && !(recibo && recibo.lineas.length)
     const crm = nombreDelCrmDe(str(r.crm))
@@ -275,8 +280,8 @@ const mesLargo = (m: string) => `${MES_LARGO[Number(m.slice(5, 7)) - 1]} de ${m.
 const MES_CORTO = ['ene.', 'feb.', 'mar.', 'abr.', 'may.', 'jun.', 'jul.', 'ago.', 'sept.', 'oct.', 'nov.', 'dic.']
 const mesCorto = (m: string) => `${MES_CORTO[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`
 const MANDATO: Record<string, { texto: string; tono: Tono }> = {
-  active: { texto: 'firmado', tono: 'bien' }, pending_customer_approval: { texto: 'por firmar', tono: 'aviso' }, pending_submission: { texto: 'en curso', tono: 'neutro' },
-  submitted: { texto: 'en curso', tono: 'neutro' }, cancelled: { texto: 'cancelado', tono: 'mal' }, failed: { texto: 'fallido', tono: 'mal' }, expired: { texto: 'caducado', tono: 'mal' },
+  active: { texto: 'firmado', tono: 'bien' }, pending_customer_approval: { texto: 'por firmar', tono: 'aviso' },
+  pending_submission: { texto: 'firmado, se envía al banco con el primer cobro', tono: 'bien' }, submitted: { texto: 'firmado, camino del banco', tono: 'bien' }, cancelled: { texto: 'cancelado', tono: 'mal' }, failed: { texto: 'fallido', tono: 'mal' }, expired: { texto: 'caducado', tono: 'mal' },
 }
 
 /** nº 84 · La factura de un cobro, en la pestaña «Cobros»: su número (con enlace) o por qué no la tiene. */

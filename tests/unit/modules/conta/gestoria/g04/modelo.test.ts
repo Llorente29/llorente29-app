@@ -234,3 +234,26 @@ describe('nº 82 · la cifra de GoCardless es la del mes, no la media', () => {
     expect(m.filas[0].estado.texto).not.toBe('Activo sin cuota')
   })
 })
+
+// nº 90 · Un mandato en «pending_submission» (o «submitted») ya lo ha firmado el cliente: GoCardless lo manda al banco
+// con su primer cobro, y se cobra con él. Por firmar, solo el que espera la aprobación del cliente.
+describe('nº 90 · el mandato en pending_submission está firmado', () => {
+  const conMandato = (estado: string): DatosClientes => ({ ...datos(), clientes: [cli('1', Q, { mandato: estado, gocardless_al_mes: 496.10, servicios_gc: 'GESTORIA' })] })
+  it.each([['pending_submission', 'firmado'], ['submitted', 'firmado'], ['active', 'firmado'], ['pending_customer_approval', 'por_firmar']])(
+    '%s → %s', (estado, mandato) => {
+      const f = modeloClientes(conMandato(estado), EMPRESAS, [Q], '2026-11-08').filas[0]
+      expect(f.mandato).toBe(mandato)
+      expect(f.estado.texto === 'Mandato por firmar').toBe(mandato === 'por_firmar')
+    })
+  it('la ficha lo dice: «firmado, se envía al banco con el primer cobro», en verde', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const s = suyo()
+    const f = modeloFicha(conMandato('pending_submission'), { ...s, mandatos: [{ ...s.mandatos[0], estado: 'pending_submission' }] }, EMPRESAS, '1', Q, '2026-11-08', [])!
+    expect(f.mandato).toEqual({ texto: 'firmado, se envía al banco con el primer cobro', tono: 'bien' })
+  })
+  it('y en la lista de antes (vista.ts), también firmado', async () => {
+    const { textoMandato } = await import('@/modules/conta/gestoria/vista')
+    expect([textoMandato('pending_submission'), textoMandato('pending_customer_approval').texto])
+      .toEqual([{ texto: 'Firmado, se envía al banco con el primer cobro', tono: 'verde' }, 'Por firmar'])
+  })
+})

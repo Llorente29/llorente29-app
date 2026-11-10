@@ -1,0 +1,21 @@
+{
+ "_que": "G05 · Un mandato en pending_submission ya está firmado · contexto de producción, medido en SOLO LECTURA el 10/11 a las 16:34Z. conta_lista_que_hacer existe con la misma firma y sin sobrecargas (se cambia en caliente, con su respaldo y su prueba; huella de antes 5cd0a6cf…), sin disparadores ni trabajos de cron que la usen. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T16:34Z",
+ "tanda": {
+  "supabase/migrations/20261110T1631_g05_mandato_firmado.sql": "bec6a08dbef2fd1b6b5d27ccc6cded72"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_lista_que_hacer(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
