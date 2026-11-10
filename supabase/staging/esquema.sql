@@ -33064,6 +33064,48 @@ COMMENT ON FUNCTION public.conta_banco_agregador_despertar() IS 'B01c · Cada ho
 
 
 --
+-- Name: conta_bitrix_pestana_anadir(text, text, text, text, uuid, uuid, uuid, uuid, date, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean DEFAULT true) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_q jsonb; v_r jsonb; v_cambio uuid; v_cuenta uuid; v_cliente uuid;
+begin
+  v_q := public._conta_portal_bitrix_quien(p_portal, p_correo, p_tipo, p_id);
+  if v_q->>'estado' <> 'ok' then return v_q; end if;
+  v_cuenta := (v_q->>'cuenta')::uuid; v_cliente := (v_q->>'cliente')::uuid;
+  if p_empresa is null or not exists (select 1 from public.company where id = p_empresa and account_id = v_cuenta) then
+    return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Esa empresa no es de esta cuenta.');
+  end if;
+  begin
+    v_r := public.conta_tarifa_servicio_anadir(p_empresa, v_cliente, p_servicio, p_nivel, p_paquete, p_desde, null, coalesce(p_ensayo, true));
+  exception
+    when insufficient_privilege then
+      return jsonb_build_object('estado', 'sin_permiso', 'frase', sqlerrm);
+    when others then
+      return jsonb_build_object('estado', 'no_se_pudo', 'frase', sqlerrm);
+  end;
+  if coalesce(p_ensayo, true) then return jsonb_build_object('estado', 'ok', 'ensayo', true, 'frase', v_r->>'frase'); end if;
+  insert into public.conta_bitrix_pestana_cambio (account_id, party_id, tipo_ficha, id_externo, accion, datos, frase, resultado_id, hecho_por, hecho_por_nombre)
+  values (v_cuenta, v_cliente, p_tipo, trim(p_id), 'servicio',
+          jsonb_build_object('servicio', p_servicio, 'nivel', p_nivel, 'paquete', p_paquete, 'desde', p_desde),
+          coalesce(v_r->>'frase', ''), nullif(v_r->>'id', '')::uuid, (v_q->>'usuario')::uuid, v_q->>'quien')
+  returning id into v_cambio;
+  return jsonb_build_object('estado', 'ok', 'frase', v_r->>'frase', 'cambio', v_cambio, 'id', v_r->>'id', 'empresa', p_empresa, 'cliente', v_cliente,
+    'bitrix', public._conta_bitrix_pestana_bitrix_de(v_cuenta, p_tipo, trim(p_id)));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean) IS 'GB (nº 17, G) · «+ Añadir servicio o paquete» desde la pestaña de Bitrix24: conta_tarifa_servicio_anadir (G04), como la persona, con ensayo (solo la frase) o de verdad (y lo apunta). Solo el servidor, DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación.';
+
+
+--
 -- Name: conta_bitrix_pestana_aviso_apuntar(jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -108141,7 +108183,7 @@ CREATE TABLE public.conta_bitrix_pestana_cambio (
     hecho_at timestamp with time zone DEFAULT now() NOT NULL,
     bitrix jsonb,
     bitrix_at timestamp with time zone,
-    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text, 'tarifa'::text, 'deshacer'::text, 'devuelto'::text, 'suelto'::text]))),
+    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text, 'tarifa'::text, 'deshacer'::text, 'devuelto'::text, 'suelto'::text, 'servicio'::text]))),
     CONSTRAINT conta_bitrix_pestana_cambio_tipo_ficha_check CHECK ((tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])))
 );
 
@@ -168792,6 +168834,14 @@ GRANT ALL ON FUNCTION public.conta_avisos_despertar() TO service_role;
 
 REVOKE ALL ON FUNCTION public.conta_banco_agregador_despertar() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_banco_agregador_despertar() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_anadir(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_servicio uuid, p_nivel uuid, p_paquete uuid, p_desde date, p_ensayo boolean) TO service_role;
 
 
 --
