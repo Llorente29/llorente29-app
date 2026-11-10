@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, modeloPortal, nombreDelMes, pendientesDe, reciboPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Pestana, type Portal } from './bitrixPestanaModelo'
+import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -35,7 +35,7 @@ const raiz = () => document.getElementById('pestana')!
 const vista: {
   ficha: { a: string; p: string; t: string; id: string } | null
   r: Record<string, unknown> | null
-  abierto: null | { tipo: 'alta' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
+  abierto: null | { tipo: 'alta' } | { tipo: 'suelto' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
   /** nº 9, punto 5 · Su portal (se lee después de pintar, para no retrasar la pestaña). */
   portal: Portal | null
   /** nº 10 · Si ya se intentó leer el portal (para decir «Leyendo…» o que no se pudo). */
@@ -44,9 +44,11 @@ const vista: {
   area: Area
   /** nº 17, A · Sus recibos devueltos y lo que se puede hacer (llegan con «Su portal»). */
   devueltos: Devueltos | null
+  /** nº 17, B · Sus trabajos fuera de la cuota y lo que se puede facturar (llegan con «Su portal»). */
+  sueltos: Sueltos | null
   hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal'; deshacer?: { cuando: string } | null }
   guardando: boolean
-} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null }
+} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null, sueltos: null }
 
 function cabeza(texto: string, chip?: { texto: string; tono: string }): HTMLElement {
   return h('div', { class: 'cabeza' }, h('span', { class: 'logo' }, 'Sumied'), h('span', { class: 'cabeza-texto' }, texto),
@@ -75,7 +77,7 @@ function pintar(p: Pestana) {
 
   const recibo = bloqueRecibo(p)
   const devuelto = vista.devueltos?.lista.length ? [bloqueDevuelto(vista.devueltos)] : []
-  const [izquierda, derecha] = vista.area === 'cobros' ? [[bloqueServicios(p)], [recibo, ...devuelto, bloqueCobros(p, enSumied)]]
+  const [izquierda, derecha] = vista.area === 'cobros' ? [[bloqueServicios(p), bloqueSueltos(p)], [recibo, ...devuelto, bloqueCobros(p, enSumied)]]
     : vista.area === 'laboral' ? [[bloqueTrabajadores(p, enSumied)], [recibo]]
       : vista.area === 'portal' ? [[vista.portal ? suPortal(p, vista.portal, enSumied) : h('section', { class: 'bloque' }, h('h2', {}, 'Su portal'),
         h('div', { class: 'vacio' }, vista.portalLeido ? 'No se ha podido leer su portal. Ábrelo en Sumied.' : 'Leyendo su portal…'))], [recibo]]
@@ -134,8 +136,91 @@ function bloqueServicios(p: Pestana): HTMLElement {
       h('span', { class: 'derecha con-enlace' }, s.importe, s.lineaId && s.servicioId && !vista.abierto ? enlaceBoton('Cambiar', () => abrir_({ tipo: 'tarifa', linea: s.lineaId! })) : null)))
     if (vista.abierto?.tipo === 'tarifa' && vista.abierto.linea === s.lineaId) servicios.append(formulario(p))
   }
-  for (const s of p.sueltos) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, 'Trabajo suelto')), h('span', { class: 'derecha' }, s.importe)))
+  // nº 17, B · Con «Trabajos fuera de la cuota» leído, los sueltos van allí (no dos veces).
+  if (!vista.sueltos) for (const s of p.sueltos) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, 'Trabajo suelto')), h('span', { class: 'derecha' }, s.importe)))
   return servicios
+}
+
+/** nº 17, B · Cuotas y cobros · «Trabajos fuera de la cuota», con «Facturar un trabajo» (Code 1: conta_trabajo_suelto_poner). */
+function bloqueSueltos(p: Pestana): HTMLElement | null {
+  const s = vista.sueltos
+  if (!s) return null
+  const caja = h('section', { class: 'bloque', 'aria-labelledby': 'gb-suel' },
+    h('div', { class: 'titulo-con-boton' }, h('h2', { id: 'gb-suel' }, 'Trabajos fuera de la cuota'),
+      s.puede && s.servicios.length && p.empresaId && !vista.abierto ? boton('Facturar un trabajo', 'normal', () => abrir_({ tipo: 'suelto' })) : null))
+  if (vista.abierto?.tipo === 'suelto') caja.append(formularioSuelto(p, s))
+  if (!s.puede) caja.append(h('div', { class: 'pequeno' }, 'Puedes verlos, pero solo un administrador o un encargado de la cuenta puede facturar un trabajo.'))
+  else if (!s.servicios.length) caja.append(h('div', { class: 'pequeno' }, 'Tu tarifa no tiene servicios que se cobren «cada vez». Ponlos en Sumied para facturarlos desde aquí.'))
+  if (!s.hechos.length && s.puede) caja.append(h('div', { class: 'vacio' }, 'Ninguno sin cobrar. Una renta, una escritura, una regularización: se factura desde aquí.'))
+  for (const x of s.hechos) caja.append(h('div', { class: 'fila', 'data-prueba': 'suelto' }, h('span', {}, h('b', {}, x.texto), h('div', { class: 'pequeno' }, x.recibo)), h('span', { class: 'derecha' }, x.importe)))
+  return caja
+}
+
+/** nº 17, B · «Facturar un trabajo»: servicio, concepto e importe (el de la tarifa, que se puede cambiar), con el recibo nuevo antes de guardar. */
+function formularioSuelto(p: Pestana, s: Sueltos): HTMLElement {
+  const caja = h('form', { class: 'formulario', 'aria-label': 'Facturar un trabajo' })
+  const previsto = h('div', { class: 'previsto', role: 'status', 'data-prueba': 'previsto' })
+  const guardar = h('button', { type: 'submit', class: 'boton boton-primario' }, 'Facturarlo') as HTMLButtonElement
+  const servicio = h('select', { name: 'servicio' }, ...s.servicios.map((x) => h('option', { value: x.id }, x.nombre))) as HTMLSelectElement
+  const concepto = h('input', { name: 'concepto', autocomplete: 'off', placeholder: s.servicios[0]?.nombre ?? '' }) as HTMLInputElement
+  const importe = h('input', { name: 'importe', inputmode: 'decimal', autocomplete: 'off' }) as HTMLInputElement
+  const elegido = () => s.servicios.find((x) => x.id === servicio.value) ?? s.servicios[0]
+  // eslint-disable-next-line no-restricted-syntax -- importe ya filtrado a número finito en modeloSueltos
+  const deLaTarifa = () => { const e = elegido(); importe.value = e ? e.importe.toFixed(2).replace('.', ',') : ''; concepto.placeholder = e?.nombre ?? '' }
+  deLaTarifa()
+  const mes = nombreDelMes(s.mes)
+  // «Cobrarlo aparte ahora» espera a la decisión de Julio (con un recibo por cliente y mes): se ve, pero no se puede elegir.
+  const chips = h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Cómo se cobra' },
+    h('button', { type: 'button', class: 'chip-opcion', role: 'radio', 'aria-checked': 'true' }, `Sumarlo al recibo de ${mes}`),
+    Object.assign(h('button', { type: 'button', class: 'chip-opcion', role: 'radio', 'aria-checked': 'false', title: 'Pendiente de decidir' }, 'Cobrarlo aparte ahora'), { disabled: true }))
+  caja.append(h('div', { class: 'formulario-titulo' }, 'Facturar un trabajo'),
+    h('div', { class: 'campos' }, h('label', {}, 'Servicio', servicio), h('label', {}, 'Concepto (lo verá el cliente)', concepto), h('label', {}, 'Importe', importe)),
+    chips, h('div', { class: 'pequeno' }, `Se cobra con la cuota de ${mes}. «Cobrarlo aparte» está pendiente de decidir.`))
+  const leido = () => {
+    const n = Number(importe.value.replace(/\./g, '').replace(',', '.'))
+    return importe.value.trim() && Number.isFinite(n) && n > 0 ? n : null
+  }
+  function calcular() {
+    const n = leido()
+    guardar.disabled = n === null || vista.guardando
+    const e = elegido()
+    previsto.replaceChildren(...(n === null || !vista.r || !p.empresaId ? [h('span', {}, 'Pon un importe mayor que cero para ver el recibo nuevo.')]
+      : [h('b', {}, sueltoPrevisto(vista.r, p.empresaId, s, n)),
+        h('div', { class: 'pequeno' }, `${concepto.value.trim() || e?.nombre || 'Trabajo suelto'}${e && Math.abs(n - e.importe) < 0.005 ? ` · ${e.suPrecio ? 'su precio' : 'el de la tarifa'}` : ' · importe cambiado a mano'}.`)]))
+  }
+  servicio.addEventListener('input', () => { deLaTarifa(); calcular() })
+  for (const x of [concepto, importe]) x.addEventListener('input', () => calcular())
+  calcular()
+  caja.append(previsto, h('div', { class: 'botones' }, boton('Cancelar', 'normal', cerrar_), guardar))
+  caja.addEventListener('submit', (ev) => {
+    ev.preventDefault()
+    const n = leido()
+    const e = elegido()
+    if (n !== null && e && p.empresaId) void facturarSuelto(p.empresaId, e.id, concepto.value.trim() || null, n)
+  })
+  return caja
+}
+
+/** nº 17, B · Guardar el trabajo suelto: la pantalla dice lo que ha pasado (regla 8), con «Deshacer» si se puede. */
+async function facturarSuelto(empresa: string, servicio: string, concepto: string | null, importe: number) {
+  if (!vista.ficha || vista.guardando) return
+  vista.guardando = true
+  repintar()
+  let r: Record<string, unknown>
+  try { r = await llamar({ paso: 'hacer', ...vista.ficha, accion: 'suelto', datos: { empresa, servicio, concepto, importe } }) } catch { r = { estado: 'error' } }
+  vista.guardando = false
+  if (r.estado === 'ok') {
+    const b = (r.bitrix ?? {}) as { hecho?: string; texto?: string }
+    vista.abierto = null
+    if (r.pestana && typeof r.pestana === 'object') vista.r = r.pestana as Record<string, unknown>
+    if (r.sueltos !== undefined) vista.sueltos = modeloSueltos(r.sueltos) ?? vista.sueltos
+    vista.hecho = { titulo: 'Trabajo facturado', texto: String(r.frase ?? ''), tono: b.hecho === 'choque' ? 'aviso' : 'bien',
+      bitrix: b.hecho === 'escrito' ? `Bitrix24 actualizado: ${b.texto}` : String(b.texto ?? 'Bitrix24 no se ha tocado.'),
+      deshacer: r.deshacer && typeof r.deshacer === 'object' && typeof (r.deshacer as { cuando?: unknown }).cuando === 'string' ? { cuando: (r.deshacer as { cuando: string }).cuando } : null }
+  } else {
+    vista.hecho = { titulo: 'No se ha facturado', texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal', deshacer: null }
+  }
+  repintar()
 }
 
 /** Laboral · Trabajadores, con «Dar de alta» y «Dar de baja». */
@@ -343,9 +428,11 @@ function suPortal(p: Pestana, pt: Portal, enSumied: string): HTMLElement {
 async function leerPortal() {
   if (!vista.ficha) return
   try {
-    const r = await llamar({ paso: 'portal', ...vista.ficha })
+    const empresa = vista.r ? modeloPestana(vista.r, hoyEnMadrid())?.empresaId : null
+    const r = await llamar({ paso: 'portal', ...vista.ficha, ...(empresa ? { empresa } : {}) })
     vista.portal = modeloPortal(r)
     vista.devueltos = modeloDevueltos(r.devueltos)
+    vista.sueltos = modeloSueltos(r.sueltos)
   } catch { vista.portal = null }
   vista.portalLeido = true
   if (!vista.abierto) repintar()

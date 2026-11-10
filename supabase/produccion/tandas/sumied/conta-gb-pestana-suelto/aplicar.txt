@@ -1,0 +1,11 @@
+# GB · nº 17, B · «Facturar un trabajo» en la pestaña de Bitrix24, con lo de Code 1 (0700).
+# Rama conta/gb-pestana-suelto. VA DESPUÉS DEL REAL DE LA 0950 (#581): apunta
+# con su acción «suelto». Se ensaya y se aplica desde main nombrando esta rama.
+# El real lo lanza Julio.
+#
+#   1010  Solo añade conta_bitrix_pestana_sueltos y conta_bitrix_pestana_suelto_poner
+#         (solo el servidor). No llama a nada: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-suelto.sql
+supabase/migrations/20261110T1010_gb_pestana_suelto.sql

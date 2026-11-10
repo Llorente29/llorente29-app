@@ -33,7 +33,7 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { choquesDe, estadoDelCobro, mesEnPalabras, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
+import { choquesDe, cuotaEnBitrix, estadoDelCobro, mesEnPalabras, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -138,12 +138,15 @@ async function portal(cuerpo: Record<string, unknown>): Promise<Response> {
   if (!m.ok) return m.respuesta
   const db = baseDeDatos()
   // nº 17, A · Con su portal, en la misma petición, sus recibos devueltos y lo que se puede hacer con cada uno (Code 1).
-  const [p, d] = await Promise.all([
+  // nº 17, B · Y, si la página dice la empresa, sus trabajos sueltos y lo que se puede facturar (Code 1).
+  const empresa = typeof cuerpo.empresa === 'string' && /^[0-9a-f-]{36}$/.test(cuerpo.empresa) ? cuerpo.empresa : null
+  const [p, d, su] = await Promise.all([
     db.rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
     db.rpc('conta_bitrix_pestana_devueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
+    empresa ? db.rpc('conta_bitrix_pestana_sueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_empresa: empresa }) : Promise.resolve({ data: null }),
   ])
   if (p.error) return json(200, { estado: 'error', frase: 'No se ha podido leer su portal.' })
-  return json(200, { ...((p.data ?? { estado: 'error' }) as Record<string, unknown>), devueltos: devueltosDe(d.data) })
+  return json(200, { ...((p.data ?? { estado: 'error' }) as Record<string, unknown>), devueltos: devueltosDe(d.data), sueltos: su.data ?? null })
 }
 
 /** nº 17, A · Lo que llega de conta_bitrix_pestana_devueltos, para la pestaña (sin el usuario). */
@@ -153,6 +156,33 @@ function devueltosDe(x: unknown): Record<string, unknown> | null {
   return { puede: d.puede === true, lista: Array.isArray(d.devueltos) ? d.devueltos.map((o: Record<string, unknown>) => ({
     recibo: o.recibo_id, mes: o.mes, importe_cent: o.importe_cent, estado: o.estado, enlace: o.enlace, pasar: o.pasar, veces: o.veces_pasado,
   })) : [] }
+}
+
+/**
+ * nº 17, B · «Facturar un trabajo»: lo suma al próximo recibo la función de
+ * Code 1 (conta_trabajo_suelto_poner), como la persona; Bitrix24 se pone al día
+ * y, si es lo último de hoy, se puede deshacer.
+ */
+async function suelto(cuerpo: Record<string, unknown>): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const datos = (cuerpo.datos ?? {}) as Record<string, unknown>
+  const empresa = typeof datos.empresa === 'string' ? datos.empresa : null
+  const servicio = typeof datos.servicio === 'string' ? datos.servicio : null
+  const importe = typeof datos.importe === 'number' && Number.isFinite(datos.importe) ? datos.importe : null
+  if (!empresa || !servicio) return json(400, { estado: 'no_se_pudo', frase: 'No se sabe qué trabajo facturar.' })
+  const db = baseDeDatos()
+  const { data, error } = await db.rpc('conta_bitrix_pestana_suelto_poner', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id,
+    p_empresa: empresa, p_servicio: servicio, p_concepto: typeof datos.concepto === 'string' ? datos.concepto : null, p_importe: importe })
+  if (error) return json(500, { estado: 'error', frase: 'No se ha podido guardar en Sumied. No ha cambiado nada.' })
+  const r = (data ?? {}) as Record<string, unknown>
+  if (r.estado !== 'ok') return json(200, { estado: r.estado ?? 'no_se_pudo', frase: typeof r.frase === 'string' ? r.frase : FRASES[String(r.estado)] ?? 'No se ha podido facturar.' })
+  const inicio = Date.now()
+  const nota = `Sumied · trabajo suelto: ${String(r.concepto ?? '')}, ${cuotaEnBitrix(Math.round(Number(r.importe ?? 0) * 100))} € en el recibo de ${mesEnPalabras(r.mes) ?? 'su mes'}`
+  const { enBitrix, pestana } = await despuesDelCambio(db, m, r, nota)
+  const deshacer = await loQueSePuedeDeshacer(db, m, r, 'alta', inicio)
+  const { data: su } = await db.rpc('conta_bitrix_pestana_sueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_empresa: empresa })
+  return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, bitrix: enBitrix, pestana, deshacer, sueltos: su ?? null })
 }
 
 /**
@@ -387,6 +417,7 @@ Deno.serve(async (req) => {
     const cuerpo = await req.json().catch(() => null) as Record<string, unknown> | null
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'devuelto') return await devuelto(cuerpo, req.headers.get('origin'))
+    if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'suelto') return await suelto(cuerpo)
     if (cuerpo?.paso === 'hacer') return await hacer(cuerpo)
     if (cuerpo?.paso === 'portal') return await portal(cuerpo)
     if (cuerpo?.paso === 'deshacer') return await deshacer(cuerpo)
