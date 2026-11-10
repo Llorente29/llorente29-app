@@ -14,6 +14,10 @@ name: GD · vídeo para QBO
 #                  registro qué paso falla (scripts/video/gd/comprobar.mjs). Con
 #                  algún fallo, en rojo. No publica nada en video-salida/gd-qbo.
 #                  «escenas» no cuenta: lo recorre todo.
+#         muestras-voz  (nº96, fase 2) las 6 frases de muestra de la locución
+#                  (scripts/video/gd/locucion.mjs) con las dos voces en juego, en
+#                  MP3, en video-salida/gd-qbo, carpeta muestras-voz/. No lee
+#                  producción ni graba; solo usa VOZ_ELEVENLABS_KEY.
 #   Las escenas 5 y 7b son tomas de Julio en GIF (nº60), en la rama
 #   video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif, 05-sumied.gif y
 #   07b-buzon.gif. Sin la toma, su escena queda como hueco y se dice.
@@ -32,7 +36,7 @@ on:
         description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox; comprobar = recorre la demo sin grabar y solo lee'
         required: true
         type: choice
-        options: [ensayo, grabar, comprobar]
+        options: [ensayo, grabar, comprobar, muestras-voz]
       escenas:
         description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,07c,08,09,10)'
         required: true
@@ -124,8 +128,53 @@ jobs:
             comprobar-salida/capturas
           retention-days: 14
 
+  # nº96 · Fase 2: la muestra de voz para que Julio elija entre las dos voces. Sin producción.
+  muestras-voz:
+    if: inputs.modo == 'muestras-voz'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Solo desde main
+        run: |
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Solo se lanza desde main."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Las frases y la voz
+        env:
+          VOZ_ELEVENLABS_KEY: ${{ secrets.VOZ_ELEVENLABS_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/video/gd/locucion.mjs "$RUNNER_TEMP/muestra" --muestra > "$RUNNER_TEMP/locucion.txt"
+          python3 scripts/video/gd/muestras_voz.py "$RUNNER_TEMP/muestra/voz/frases.json" "$RUNNER_TEMP/muestras-voz" > "$RUNNER_TEMP/muestras.txt" 2>&1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: muestras-voz
+          path: ${{ runner.temp }}/muestras-voz
+          retention-days: 30
+
+      - name: Publicar en video-salida/gd-qbo, carpeta muestras-voz/ (encima de lo que hay)
+        run: |
+          set -euo pipefail
+          git fetch -q origin video-salida/gd-qbo
+          git worktree add -q "$RUNNER_TEMP/salida" FETCH_HEAD
+          cd "$RUNNER_TEMP/salida"
+          rm -rf muestras-voz && cp -r "$RUNNER_TEMP/muestras-voz" muestras-voz
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A muestras-voz
+          git commit -q -m "Vídeo GD · muestras de voz · run ${GITHUB_RUN_ID}"
+          git push -q "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/video-salida/gd-qbo"
+          echo "### Muestras de voz en video-salida/gd-qbo, carpeta muestras-voz" >> "$GITHUB_STEP_SUMMARY"
+
   grabar:
-    if: inputs.modo != 'comprobar'
+    if: inputs.modo != 'comprobar' && inputs.modo != 'muestras-voz'
     environment: despliegue
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -176,6 +225,7 @@ jobs:
           mkdir -p "$SALIDA"
           if git fetch -q --depth=1 origin video-salida/gd-qbo 2>/dev/null; then
             git archive FETCH_HEAD escenas capturas 2>/dev/null | tar -x -C "$SALIDA" || true
+            git archive FETCH_HEAD muestras-voz 2>/dev/null | tar -x -C "$SALIDA" || true
             echo "Hay grabación anterior: se reutilizan sus escenas."
           else
             echo "No hay grabación anterior."
