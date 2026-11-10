@@ -34,10 +34,13 @@ const MODO = env('MODO') === 'grabar' ? 'grabar' : 'ensayo'
 const GRABA = MODO === 'grabar'
 const salida = resolve(process.argv[2] || env('SALIDA') || 'video-salida')
 const TOMAS = resolve(env('TOMAS') || join(salida, 'tomas'))
-const MES = env('MES') || '2026-12'
+// nº100 · El mes del cobro: el mes en curso (Madrid), salvo que se pida otro (AAAA-MM).
+const MES = /^\d{4}-\d{2}$/.test(env('MES')) ? env('MES') : new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }).slice(0, 7)
 // nº99 · Las escenas que se graban: «todas», o una lista (p. ej. «01,02,03» para la prueba de la voz y el zoom).
 const ESCENAS = env('ESCENAS') && env('ESCENAS') !== 'todas' ? env('ESCENAS').split(/[\s,]+/).filter(Boolean) : null
 const pide = (e) => !ESCENAS || ESCENAS.includes(e)
+/** El mes siguiente (AAAA-MM): el del recibo que queda preparado, sin enviar (nº100; como mesSiguiente de pasos.ts). */
+const mesSiguiente = (mes) => { const [a, m] = mes.split('-').map(Number); return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}` }
 const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
@@ -334,6 +337,17 @@ try {
       })
       decir(enviado ? '  · COBRO ENVIADO al sandbox.' : '  ✗ la base no dice enviado')
       if (!enviado) fallo('06: el cobro no se ha enviado')
+      // nº100 · Cobrado el mes, queda PREPARADO (sin enviar) el recibo del mes siguiente: el portal enseña «Tu próximo
+      // recibo» con su porqué. Como Julio, con la misma llamada que «Preparar el cobro» (conta-cobro, «preparar»).
+      if (enviado) await R.sinVer(async () => {
+        const siguiente = mesSiguiente(MES)
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/conta-cobro`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${julio.sesion.access_token}` },
+          body: JSON.stringify({ accion: 'preparar', empresa: SOCIEDAD, mes: siguiente }) })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) fallo(`06: no se ha preparado el recibo de ${siguiente}: ${d.error ?? r.status}`)
+        else decir(`  · Preparado, sin enviar, el cobro de ${siguiente}: ${String(d.frase ?? '').slice(0, 160)}`)
+      })
     }
   }
   // ── 07 · Cobrado y facturado ───────────────────────────────────────────────

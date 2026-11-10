@@ -45,7 +45,7 @@ const SALIDA = resolve(env('SALIDA') || 'video-salida')
 const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
-const MES = env('MES') || '2026-12'
+const MES = /^\d{4}-\d{2}$/.test(env('MES')) ? env('MES') : new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }).slice(0, 7)
 const CLIENTE = 'Talleres Ruiz, S.L.'
 const W = 1440; const H = 900
 

@@ -28,9 +28,9 @@ export const FRASES = {
 
   // 02 · La ficha de Talleres Ruiz
   '02.1': 'Su cuota sale de tu tarifa. Sumied la calcula y te avisa si no coincide con lo que cobra GoCardless.',
-  '02.2': 'El recibo del mes que viene, línea a línea: cada servicio, su precio y por qué se cobra.',
+  '02.2': 'Su próximo recibo, línea a línea: cada servicio, su precio y por qué se cobra.',
   '02.3': 'La gestión laboral va por trabajador, y aquí están todos, con nombre.',
-  '02.4': 'El que entra el mes que viene sale marcado con su alta. Así nadie cobra de más ni de menos.',
+  '02.4': 'El que entra nuevo sale marcado con su alta. Así nadie cobra de más ni de menos.',
   '02.5': 'Sus cobros, uno por uno, y sus datos de contacto…',
   '02.6': '…y lo que tienes de él en Bitrix24, tal cual está allí.',
 

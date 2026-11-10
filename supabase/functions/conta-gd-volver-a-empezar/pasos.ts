@@ -64,12 +64,13 @@ export function inicioDeLasCuotas(hoyMadrid: string): string {
 }
 
 /**
- * Los cambios que el cobro del mes que viene tiene que enseñar (nº68, como la maqueta). Se hacen con las mismas
- * funciones que la ficha del cliente, con la sesión de quien pulsa:
- *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 1 del mes que viene (nº76: con la regla del mes
- *     entero, un alta a mitad de este mes ya se cobraría este mes y el cobro del que viene no la enseñaría como cambio).
- *   · Imprenta Rápida Sol: de Básica a Premium desde el mes que viene (sube más de un 30 %: pide «Lo he mirado, aprobar»).
- *   · Reformas Atalaya: baja de un trabajador, que se cobra este mes y ya no el que viene (para «Este mes no»).
+ * Los cambios que tiene que enseñar el cobro de la demo (nº68, como la maqueta). nº100: la demo cobra el MES EN
+ * CURSO (antes, el siguiente: el portal decía «Diciembre · cobrado el 10 de noviembre»), así que los cambios son de
+ * este mes frente al anterior. Se hacen con las mismas funciones que la ficha del cliente, con la sesión de quien pulsa:
+ *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 1 de este mes (con la regla del mes entero, se
+ *     cobra entero este mes y el cobro lo enseña como cambio).
+ *   · Imprenta Rápida Sol: de Básica a Premium desde este mes (sube más de un 30 %: pide «Lo he mirado, aprobar»).
+ *   · Reformas Atalaya: baja de un trabajador, cobrada por última vez el mes pasado: este mes ya no (y «Este mes no»).
  */
 export const CAMBIOS_DEL_MES = {
   alta: { cliente: 'Talleres Ruiz, S.L.', trabajador: 'LUCAS FERRER GIL' },
@@ -77,11 +78,20 @@ export const CAMBIOS_DEL_MES = {
   baja: { cliente: 'Reformas Atalaya, S.L.' },
 } as const
 
-/** Las fechas de esos cambios, a partir de hoy (AAAA-MM-DD, en Madrid): el alta y el nivel, el 1 del mes que viene; la baja, este mes. */
-export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; esteMes: string; mesQueViene: string } {
+/** El mes del cobro de la demo (AAAA-MM): el mes en curso, en Madrid (nº100). */
+export const mesDelCobro = (hoyMadrid: string): string => hoyMadrid.slice(0, 7)
+/** El mes siguiente (AAAA-MM): el del recibo que queda preparado, sin enviar, para «Tu próximo recibo» (nº100). */
+export function mesSiguiente(mes: string): string {
+  const [a, m] = mes.split('-').map(Number)
+  return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
+}
+
+/** Las fechas de esos cambios (AAAA-MM-DD, en Madrid): el alta y el nivel, el 1 de este mes; la baja, el mes pasado. */
+export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; nivelDesde: string; bajaHasta: string } {
   const [a, m] = hoyMadrid.slice(0, 7).split('-').map(Number)
-  const sig = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
-  return { altaEl: `${sig}-01`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
+  const ant = m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, '0')}`
+  const este = `${hoyMadrid.slice(0, 7)}-01`
+  return { altaEl: este, nivelDesde: este, bajaHasta: `${ant}-01` }
 }
 
 /**

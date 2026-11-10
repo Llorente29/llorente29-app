@@ -144,29 +144,29 @@ Deno.serve(async (req) => {
           return (data as { id: string }).id
         }
         const yaHecho = (e: { code?: string; message: string } | null) => !!e && (e.code === '23505' || /ya est[aá]/i.test(e.message))
-        // 1 · Talleres Ruiz, +1 trabajador (alta el 1 del mes que viene: nº76, la regla del mes entero).
+        // 1 · Talleres Ruiz, +1 trabajador (alta el 1 de este mes: nº100, la demo cobra el mes en curso).
         const laboral = await servicio('gestion_laboral')
         const talleres = await parte(CAMBIOS_DEL_MES.alta.cliente)
         const alta = await persona.rpc('conta_gestoria_alta_empleado', { p_company: empresa, p_party: talleres, p_servicio: laboral, p_empleado: CAMBIOS_DEL_MES.alta.trabajador, p_desde: f.altaEl })
         if (alta.error && !yaHecho(alta.error)) throw new Error(`El alta en ${CAMBIOS_DEL_MES.alta.cliente}: ${alta.error.message}`)
         await admin.from('conta_linea').update({ alta_el: f.altaEl }).eq('account_id', cuenta).eq('party_id', talleres).eq('servicio_id', laboral).eq('empleado_nombre', CAMBIOS_DEL_MES.alta.trabajador)
         dicho.push(alta.error ? `${CAMBIOS_DEL_MES.alta.cliente}: el alta ya estaba.` : String((alta.data as { frase?: string } | null)?.frase ?? ''))
-        // 2 · Imprenta Rápida Sol, de Básica a Premium desde el mes que viene.
+        // 2 · Imprenta Rápida Sol, de Básica a Premium desde este mes.
         const mensual = await servicio('gestoria_mensual')
         const imprenta = await parte(CAMBIOS_DEL_MES.nivel.cliente)
         const { data: nivel } = await admin.from('conta_servicio_nivel').select('id').eq('servicio_id', mensual).eq('nombre', CAMBIOS_DEL_MES.nivel.nivel).maybeSingle()
         const { data: linea } = await admin.from('conta_linea').select('id').eq('account_id', cuenta).eq('party_id', imprenta).eq('servicio_id', mensual).is('hasta', null).order('desde').limit(1).maybeSingle()
         if (!nivel || !linea) throw new Error(`${CAMBIOS_DEL_MES.nivel.cliente}: no está su gestoría mensual o el nivel ${CAMBIOS_DEL_MES.nivel.nivel}.`)
-        const cambio = await persona.rpc('conta_tarifa_nivel_cambiar', { p_linea: (linea as { id: string }).id, p_nivel: (nivel as { id: string }).id, p_desde: f.mesQueViene, p_ensayo: false })
+        const cambio = await persona.rpc('conta_tarifa_nivel_cambiar', { p_linea: (linea as { id: string }).id, p_nivel: (nivel as { id: string }).id, p_desde: f.nivelDesde, p_ensayo: false })
         if (cambio.error && !yaHecho(cambio.error)) throw new Error(`El cambio de nivel de ${CAMBIOS_DEL_MES.nivel.cliente}: ${cambio.error.message}`)
         dicho.push(cambio.error ? `${CAMBIOS_DEL_MES.nivel.cliente}: ya estaba en ${CAMBIOS_DEL_MES.nivel.nivel}.` : String((cambio.data as { frase?: string } | null)?.frase ?? ''))
-        // 3 · Reformas Atalaya, baja de un trabajador: se cobra este mes y ya no el que viene.
+        // 3 · Reformas Atalaya, baja de un trabajador: cobrada por última vez el mes pasado.
         const reformas = await parte(CAMBIOS_DEL_MES.baja.cliente)
         const { data: tr } = await admin.from('conta_linea').select('id, hasta').eq('account_id', cuenta).eq('party_id', reformas).eq('servicio_id', laboral).not('empleado_nombre', 'is', null).order('empleado_nombre', { ascending: false }).limit(1).maybeSingle()
         if (!tr) throw new Error(`${CAMBIOS_DEL_MES.baja.cliente} no tiene trabajadores en la demo.`)
         if ((tr as { hasta: string | null }).hasta) dicho.push(`${CAMBIOS_DEL_MES.baja.cliente}: la baja ya estaba.`)
         else {
-          const baja = await persona.rpc('conta_gestoria_baja_linea', { p_linea: (tr as { id: string }).id, p_mes: f.esteMes })
+          const baja = await persona.rpc('conta_gestoria_baja_linea', { p_linea: (tr as { id: string }).id, p_mes: f.bajaHasta })
           if (baja.error) throw new Error(`La baja en ${CAMBIOS_DEL_MES.baja.cliente}: ${baja.error.message}`)
           dicho.push(String((baja.data as { frase?: string } | null)?.frase ?? ''))
         }
