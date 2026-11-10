@@ -22,6 +22,7 @@
 
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+import { basename } from 'node:path'
 
 // Lee producción o Diez si usa sus secretos o su usuario de lectura. Nombrar la
 // ref de producción para NEGARSE a conectar (las guardas de staging) no es leerla.
@@ -73,9 +74,24 @@ export function ordenes(texto) {
   return out
 }
 
-const PRODUCE = /\b(?:npx\s+(?:--yes\s+)?tsx(?:@[\d.]+)?|node\s+(?!scripts\/conta\/salida-segura\.mjs)\S+\.(?:m?js|ts)|psql|"\$PSQL"|python3?|curl|deno\s+run)\b/
+const PRODUCE = /\b(?:npx\s+(?:--yes\s+)?tsx(?:@[\d.]+)?|node\s+(?!scripts\/conta\/salida-(?:segura|demo)\.mjs)\S+\.(?:m?js|ts)|psql|"\$PSQL"|python3?|curl|deno\s+run)\b/
 const A_FICHERO = /(?:^|[^>&0-9])>{1,2}\s*(?:"?\$\{?RUNNER_TEMP|"?\/tmp\/|\/dev\/null|"?[\w./-]+\.(?:json|txt|sql|csv|md|pdf|bin)\b)/
 const POR_LA_PUERTA = /\|\s*node\s+scripts\/conta\/salida-segura\.mjs\b/
+/**
+ * GD · nº94 · La puerta de la DEMO (lib/salidaDemo.mjs): deja pasar el texto de los pasos del «comprobar» de la
+ * Gestoría Demo, que son datos inventados. SOLO en estos jobs; en cualquier otro sitio, falla.
+ */
+export const PUERTA_DE_LA_DEMO = { 'gd-video-qbo.yml': ['comprobar'] }
+const POR_LA_DE_LA_DEMO = /\|\s*PUERTA_DEMO=gd-comprobar\s+node\s+scripts\/conta\/salida-demo\.mjs\b/
+const NOMBRA_LA_DE_LA_DEMO = /salida-demo\.mjs|PUERTA_DEMO/
+/** El job de una línea (1 = la primera) de un workflow: la clave de dos espacios bajo «jobs:» que la contiene. */
+export function jobDeLinea(yaml, linea) {
+  const lineas = yaml.split('\n')
+  const ini = lineas.findIndex((l) => /^jobs:\s*$/.test(l))
+  if (ini < 0 || linea - 1 <= ini) return null
+  for (let i = linea - 1; i > ini; i--) { const m = /^ {2}([A-Za-z0-9_-]+):\s*$/.exec(lineas[i]); if (m) return m[1] }
+  return null
+}
 /**
  * Las variables que el workflow declara de datos del REPOSITORIO (nombres de
  * fichero, md5, contadores del bucle), en un comentario:
@@ -96,10 +112,18 @@ export function revisar(yaml, nombre = 'workflow') {
   const fallos = []
   const delRepo = variablesDelRepo(yaml)
   const VARIABLE = { test: (t) => conVariables(t, delRepo) }
+  const demo = PUERTA_DE_LA_DEMO[basename(nombre)] ?? []
   for (const b of bloquesRun(yaml)) {
+    const enLaDemo = demo.includes(jobDeLinea(yaml, b.linea))
     for (const o of ordenes(b.texto)) {
       const t = o.texto
       const donde = `${nombre}:${b.linea + o.desde}`
+      if (NOMBRA_LA_DE_LA_DEMO.test(t)) {
+        // La puerta de la demo: solo en su job, y solo con su forma; ahí cuenta como la puerta.
+        if (!enLaDemo) { fallos.push(`${donde}: usa la puerta de la demo (salida-demo.mjs) fuera del job que la tiene permitida (PUERTA_DE_LA_DEMO)`); continue }
+        if (!POR_LA_DE_LA_DEMO.test(t)) { fallos.push(`${donde}: la puerta de la demo va como «| PUERTA_DEMO=gd-comprobar node scripts/conta/salida-demo.mjs»`); continue }
+        continue
+      }
       const cabeza = t.split('\n')[0]
       const heredocPython = /python3?\s+-\s*<</.test(cabeza)
       if (heredocPython) {

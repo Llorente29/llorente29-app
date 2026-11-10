@@ -48,7 +48,11 @@ export interface Cliente {
     trabajadores: string[]
     /** Una anual (impuesto de sociedades), 300 €. */
     anual: boolean
-    /** Un cobro suelto ahora (para ver cobrado, devuelto o retrocedido). */
+    /**
+     * Un cobro suelto ahora, SOLO si nunca se paga (escenario Penniless: sale devuelto y deja algo en «Te deben»). nº94:
+     * uno que se paga (Successful o Fickle) deja una liquidación en el sandbox sin recibo ni factura en Sumied, con el
+     * mandato vivo, y descuadra la 57200002 (los 58,96 € y 78,68 € de cada «Volver a empezar» que midió Code 1).
+     */
     suelto: number | null
   }
 }
@@ -101,7 +105,7 @@ const gc = (mensual: 90 | 120 | 150 | null, trabajadores: string[] = [], o: { an
 const FILAS: Fila[] = [
   ['Panadería La Espiga, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Madrid', ['Rosa', 'Alcántara Vidal'], gc(120, ['Iván Serrano Gil', 'Nuria Peña Lozano'], { anual: true })],
   ['Talleres Ruiz, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Getafe', ['Tomás', 'Ruiz Herrero'], gc(150, ['Adrián Molina Castro', 'Sergio Vela Ramos', 'Raúl Ibarra Soto'], { anual: true })],
-  ['Clínica Dental Sonrisas, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Alcobendas', ['Beatriz', 'Lanza Prieto'], gc(150, ['Carla Núñez Bravo', 'Paula Esteban Ruiz'], { anual: true, escenario: 'Successful', suelto: 60 })],
+  ['Clínica Dental Sonrisas, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Alcobendas', ['Beatriz', 'Lanza Prieto'], gc(150, ['Carla Núñez Bravo', 'Paula Esteban Ruiz'], { anual: true, escenario: 'Successful' })],
   ['Frutas Hermanos Ortega, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Madrid', ['Julián', 'Ortega Sanz'], gc(120, ['Marcos Pardo León'])],
   ['Librería El Faro, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Toledo', ['Inés', 'Carrasco Mora'], gc(90)],
   ['Reformas Atalaya, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Móstoles', ['Andrés', 'Fuentes Calvo'], gc(150, ['Hugo Rivas Marín', 'Óscar Benítez Gallego', 'Diego Cano Ferrer', 'Jaime Solís Vega'], { anual: true })],
@@ -117,7 +121,7 @@ const FILAS: Fila[] = [
   ['Peluquería Tijeras de Oro, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Getafe', ['Silvia', 'Ramos Bueno'], gc(90, ['Noelia Cruz Pascual'])],
   ['Imprenta Rápida Sol, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Madrid', ['Gonzalo', 'Sierra Márquez'], gc(90)],
   ['Distribuciones Norte, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Alcobendas', ['Mónica', 'Vázquez Ibáñez'], gc(150, ['Iker Santos Rojo', 'Eva Lozano Cabrera'], { anual: true })],
-  ['Veterinaria Cuatro Patas, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Las Rozas', ['Natalia', 'Domínguez Cano'], gc(120, ['Laura Méndez Vidal'], { escenario: 'Fickle', suelto: 80 })],
+  ['Veterinaria Cuatro Patas, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Las Rozas', ['Natalia', 'Domínguez Cano'], gc(120, ['Laura Méndez Vidal'], { escenario: 'Fickle' })],
   ['Carpintería Roble, S.L.', 'sociedad', 'Activo', CL, 'sociedad', 'Valdemoro', ['Emilio', 'Garrido Nieto'], gc(120, ['Samuel Otero Paz'])],
   ['Joyería Brillante, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Madrid', ['Teresa', 'Aguirre Soler'], null], // mandato por firmar: paga con GoCardless y no tiene mandato
   ['Consultora Horizonte, S.L.', 'sociedad', 'Activo', C, 'sociedad', 'Madrid', ['Ricardo', 'Montero Plaza'], gc(null)], // activo sin cuota: mandato y ninguna suscripción

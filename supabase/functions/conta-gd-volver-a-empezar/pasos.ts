@@ -17,6 +17,7 @@ export const PASOS = [
   { id: 'leer', que: 'Leyendo otra vez el CRM y GoCardless' },
   { id: 'tarifa', que: 'Sembrando la tarifa y los ingresos en el banco' },
   { id: 'cambios', que: 'Dejando los cambios del mes que viene' },
+  { id: 'portal', que: 'Dejando el portal de la demo preparado' },
 ] as const
 /** Lo que hace como mucho cada llamada de un paso por tandas (el portal): muy por debajo del tiempo máximo de una función. */
 export const PRESUPUESTO_MS = 90_000
@@ -82,3 +83,10 @@ export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; esteMes
   const sig = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
   return { altaEl: `${sig}-01`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
 }
+
+/**
+ * nº94 · El portal de la demo después de «Volver a empezar»: lo que deja «Preparar el portal de la demo»
+ * (conta_portal_demo_preparar, de Code 3) y el acceso de la persona de Talleres Ruiz, listo para entrar con su
+ * usuario de siempre. Datos inventados (el correo es de .example).
+ */
+export const PORTAL_DE_LA_DEMO = { cliente: 'Talleres Ruiz, S.L.', persona: 'Tomás Ruiz', correo: 'tomas.ruiz@talleresruiz.example' } as const

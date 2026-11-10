@@ -37,6 +37,11 @@ const REF = new URL(SUPABASE_URL || 'https://x.supabase.co').hostname.split('.')
 
 mkdirSync(join(SALIDA, 'capturas'), { recursive: true })
 const decir = (t) => console.log(t)
+// nº94 · El resumen del run: cada paso con su marca, por secciones. Pasa por la puerta de la DEMO
+// (scripts/conta/salida-demo.mjs), que solo deja líneas con esta forma y solo en el job «comprobar».
+const resumen = []
+const corta = (t) => (t.length > 230 ? `${t.slice(0, 229)}…` : t)
+const seccion = (t) => { decir(`\n── ${t}`); resumen.push(`### ${t}`) }
 const cuenta = { bien: 0, mal: 0, notoca: 0, avisos: 0 }
 const malos = []; const avisos = []
 const euros = (n) => `${Number(n).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`
@@ -62,12 +67,12 @@ let pagina = null
 async function paso(id, que, fn) {
   try {
     const dicho = await fn()
-    cuenta.bien++; decir(`  ✓ ${id} · ${que}${dicho ? `: ${dicho}` : ''}`)
+    cuenta.bien++; decir(`  ✓ ${id} · ${que}${dicho ? `: ${dicho}` : ''}`); resumen.push(corta(`✓ ${id} · ${que}${dicho ? `: ${dicho}` : ''}`))
   } catch (e) {
     const t = String(e?.message ?? e).split('\n')[0]
-    if (e instanceof NoToca) { cuenta.notoca++; decir(`  — ${id} · ${que}: no toca (${t})`); return }
-    if (e instanceof Aviso) { cuenta.avisos++; avisos.push(`${id} · ${que}: ${t}`); decir(`  ! ${id} · ${que}: ${t}`); return }
-    cuenta.mal++; malos.push(`${id} · ${que}: ${t}`); decir(`  ✗ ${id} · ${que}: ${t}`)
+    if (e instanceof NoToca) { cuenta.notoca++; decir(`  — ${id} · ${que}: no toca (${t})`); resumen.push(corta(`— ${id} · ${que}: no toca (${t})`)); return }
+    if (e instanceof Aviso) { cuenta.avisos++; avisos.push(`${id} · ${que}: ${t}`); decir(`  ! ${id} · ${que}: ${t}`); resumen.push(corta(`! ${id} · ${que}: ${t}`)); return }
+    cuenta.mal++; malos.push(`${id} · ${que}: ${t}`); decir(`  ✗ ${id} · ${que}: ${t}`); resumen.push(corta(`✗ ${id} · ${que}: ${t}`))
     if (pagina) await pagina.screenshot({ path: join(SALIDA, 'capturas', `${id.replace(/[^\w.-]+/g, '_')}.png`) }).catch(() => {})
   }
 }
@@ -109,7 +114,7 @@ async function contexto(initScript) {
 decir(`Comprobar la Gestoría Demo · ${new Date().toISOString()} · mes del cobro ${MES} · solo lectura`)
 try {
   // ── 0 · La demo y la sesión ────────────────────────────────────────────────
-  decir('\n── 0 · La demo')
+  seccion('0 · La demo')
   let julio = null
   await paso('0.1', 'la cuenta es de demostración', async () => {
     const cu = await leer(admin.from('accounts').select('is_demo').eq('id', CUENTA).maybeSingle())
@@ -144,7 +149,7 @@ try {
   pagina = page
 
   // ── 02 · Clientes y cuotas ─────────────────────────────────────────────────
-  decir('\n── 02 · Clientes y cuotas')
+  seccion('02 · Clientes y cuotas')
   await paso('02.1', 'la pantalla carga', async () => { await ir(page, '/conta/ventas/clientes-y-cuotas'); await ver(page, 'Cuotas al mes') })
   await paso('02.2', 'las cuatro cifras', async () => { for (const t of ['Cuotas al mes', 'Te deben', 'Dejas de cobrar', 'Precio sin revisar']) await ver(page, t) })
   await paso('02.3', '«Lo que tienes que hacer»', async () => ver(page, 'Lo que tienes que hacer'))
@@ -153,7 +158,7 @@ try {
   })
 
   // ── 03 · La ficha ──────────────────────────────────────────────────────────
-  decir('\n── 03 · La ficha del cliente')
+  seccion('03 · La ficha del cliente')
   let fichaTexto = ''
   await paso('03.1', 'la ficha carga', async () => {
     if (!clienteId) noToca(`${CLIENTE} no está una sola vez`)
@@ -177,7 +182,7 @@ try {
   await paso('03.CRM', 'pestaña Datos de Bitrix24', async () => { await pulsar(page.getByRole('tab', { name: /^Datos de / }), 'pestaña Datos de Bitrix24'); await page.waitForTimeout(800) })
 
   // ── 04 · Tarifa y paquetes ─────────────────────────────────────────────────
-  decir('\n── 04 · Tarifa y paquetes')
+  seccion('04 · Tarifa y paquetes')
   await paso('04.1', 'la pantalla carga', async () => { await ir(page, '/conta/ventas/clientes-y-cuotas/tarifas'); await ver(page, 'Tarifa y paquetes') })
   await paso('04.2', 'Gestoría mensual, con sus tres niveles', async () => {
     await pulsar(page.getByText('Gestoría mensual', { exact: false }), 'servicio de la tarifa')
@@ -187,7 +192,7 @@ try {
   await paso('04.Pack', 'Pack Empresa', async () => ver(page, page.getByText(/^Pack Empresa/)))
 
   // ── 06 · El cobro del mes ──────────────────────────────────────────────────
-  decir(`\n── 06 · El cobro de ${MES}`)
+  seccion(`06 · El cobro de ${MES}`)
   const mes = await leer(admin.from('conta_cobro_mes').select('preparado_at, enviado_at').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES).maybeSingle())
   const todos = (await leer(admin.from('conta_recibo').select('estado, gc_estado, invoice_id').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES))) ?? []
   const porEstado = Object.entries(todos.reduce((t, r) => ({ ...t, [r.estado]: (t[r.estado] ?? 0) + 1 }), {})).map(([k, n]) => `${n} ${k}`).join(', ')
@@ -220,7 +225,7 @@ try {
   })
 
   // ── 07 · La factura ────────────────────────────────────────────────────────
-  decir(`\n── 07 · La factura de ${CLIENTE}`)
+  seccion(`07 · La factura de ${CLIENTE}`)
   await paso('07.1', 'la factura carga, con lo que ha pasado y su contabilidad', async () => {
     if (!recibo?.invoice_id) noToca(`${CLIENTE} aún no tiene factura de ${MES}`)
     await ir(page, `/conta/ventas/facturas/${recibo.invoice_id}`)
@@ -238,7 +243,7 @@ try {
   })
 
   // ── 07c · En la contabilidad ───────────────────────────────────────────────
-  decir('\n── 07c · En la contabilidad')
+  seccion('07c · En la contabilidad')
   await paso('07c.1', `${CLIENTE} en el libro de IVA repercutido`, async () => {
     if (!recibo?.invoice_id) noToca('sin factura')
     await ir(page, '/conta/libros/registro/expedidas'); await ver(page, page.getByText(/Talleres Ruiz/))
@@ -272,7 +277,7 @@ try {
   })
 
   // ── 08 · El banco ──────────────────────────────────────────────────────────
-  decir('\n── 08 · El banco')
+  seccion('08 · El banco')
   await paso('08.1', 'los ingresos de GoCardless, casados', async () => {
     if (!casados.length) noToca('aún no ha llegado ningún ingreso')
     const sin = casados.filter((p) => !p.match_id).length
@@ -292,7 +297,7 @@ try {
   })
 
   // ── P · El portal, como lo ve la gestoría ──────────────────────────────────
-  decir('\n── P · El portal, desde la gestoría')
+  seccion('P · El portal, desde la gestoría')
   const accesos = clienteId ? (await leer(admin.from('conta_portal_acceso').select('nombre, correo, user_id, revocado_at').eq('account_id', CUENTA).eq('party_id', clienteId))) ?? [] : []
   const acceso = accesos.find((a) => !a.revocado_at) ?? null
   await paso('P.1', 'el portal de la demo está preparado', async () => {
@@ -308,7 +313,7 @@ try {
   await ctxG.close()
 
   // ── C · El portal, como lo ve el cliente ───────────────────────────────────
-  decir(`\n── C · El portal, como lo ve ${CLIENTE}`)
+  seccion(`C · El portal, como lo ve ${CLIENTE}`)
   let tomas = null
   await paso('C.0', 'entrar como el cliente de la demo', async () => {
     if (!acceso) noToca('el portal no está preparado')
@@ -347,9 +352,11 @@ try {
 }
 
 if (errores.length) { cuenta.avisos++; avisos.push(`errores de la página: ${[...new Set(errores)].slice(0, 3).join(' · ')}`); decir(`\n! errores de la página (${errores.length}): ${[...new Set(errores)].slice(0, 3).join(' · ')}`) }
-decir('\n── Lo que no comprueba: la pestaña de Sumied dentro de Bitrix24 (solo se abre desde Bitrix24): la mira Julio en su Chrome.')
+seccion('Sin comprobar aquí: la pestaña de Sumied en Bitrix24')
+resumen.push('— B.1 · la pestaña de Sumied dentro de Bitrix24: no toca (solo se abre desde Bitrix24; la mira Julio en su Chrome)')
+decir('  — B.1 · la pestaña de Sumied dentro de Bitrix24: no toca (solo se abre desde Bitrix24; la mira Julio en su Chrome)')
 decir(`\n${cuenta.mal ? 'EN ROJO' : 'EN VERDE'}: ${cuenta.bien} bien, ${cuenta.mal} fallan, ${cuenta.notoca} no tocan, ${cuenta.avisos} avisos.`)
 for (const m of malos) decir(`  ✗ ${m}`)
 for (const a of avisos) decir(`  ! ${a}`)
-writeFileSync(join(SALIDA, 'resumen.txt'), [`${cuenta.mal ? 'En rojo' : 'En verde'}: ${cuenta.bien} bien, ${cuenta.mal} fallan, ${cuenta.notoca} no tocan, ${cuenta.avisos} avisos.`, ...malos.map((m) => `✗ ${m}`), ...avisos.map((a) => `! ${a}`)].join('\n') + '\n')
+writeFileSync(join(SALIDA, 'resumen.txt'), [`${cuenta.mal ? 'En rojo' : 'En verde'}: ${cuenta.bien} bien, ${cuenta.mal} fallan, ${cuenta.notoca} no tocan, ${cuenta.avisos} avisos.`, ...resumen].join('\n') + '\n')
 process.exit(cuenta.mal ? 1 : 0)

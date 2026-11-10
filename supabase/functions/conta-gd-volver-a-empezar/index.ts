@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -170,6 +170,33 @@ Deno.serve(async (req) => {
           if (baja.error) throw new Error(`La baja en ${CAMBIOS_DEL_MES.baja.cliente}: ${baja.error.message}`)
           dicho.push(String((baja.data as { frase?: string } | null)?.frase ?? ''))
         }
+        break
+      }
+      case 'portal': {
+        // nº94 · El portal de la demo, como si se hubiera pulsado «Preparar el portal de la demo» (la vacía «sumied»), y el
+        // acceso de Tomás Ruiz listo: su usuario ya existe de otras veces, pero el portal deja entrar por el usuario del
+        // acceso y el acceso nuevo nace sin él (solo lo pone el servidor al mandar el enlace). Se le enlaza aquí.
+        const prep = await admin.rpc('conta_portal_demo_preparar', { p_cuenta: cuenta })
+        if (prep.error) throw new Error(`Preparar el portal de la demo: ${prep.error.message}`)
+        dicho.push(String((prep.data as { frase?: string } | null)?.frase ?? 'Portal de la demo preparado.'))
+        const { data: cli } = await admin.from('party').select('id').eq('account_id', cuenta).eq('name', PORTAL_DE_LA_DEMO.cliente).maybeSingle()
+        if (!cli) throw new Error(`No está «${PORTAL_DE_LA_DEMO.cliente}» en la demo: el portal no se puede preparar.`)
+        const { data: acc } = await admin.from('conta_portal_acceso').select('id, user_id').eq('account_id', cuenta)
+          .eq('party_id', (cli as { id: string }).id).ilike('correo', PORTAL_DE_LA_DEMO.correo).is('revocado_at', null).maybeSingle()
+        if (!acc) throw new Error(`${PORTAL_DE_LA_DEMO.cliente} no tiene el acceso de ${PORTAL_DE_LA_DEMO.persona} después de preparar el portal.`)
+        const acceso = acc as { id: string; user_id: string | null }
+        if (acceso.user_id) { dicho.push(`${PORTAL_DE_LA_DEMO.persona} ya puede entrar en su portal.`); break }
+        let usuario: string | null = null
+        for (let pagina = 1; pagina <= 20 && !usuario; pagina++) {
+          const { data: us, error: eU } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 })
+          if (eU) throw new Error(`Buscar el usuario de ${PORTAL_DE_LA_DEMO.persona}: ${eU.message}`)
+          usuario = us.users.find((u) => (u.email ?? '').toLowerCase() === PORTAL_DE_LA_DEMO.correo)?.id ?? null
+          if (us.users.length < 1000) break
+        }
+        if (!usuario) { dicho.push(`${PORTAL_DE_LA_DEMO.persona} aún no tiene usuario: la primera vez entra con su enlace (pestaña Portal de su ficha).`); break }
+        const enl = await admin.rpc('conta_portal_acceso_usuario', { p_acceso: acceso.id, p_user: usuario })
+        if (enl.error) throw new Error(`Dejar listo el acceso de ${PORTAL_DE_LA_DEMO.persona}: ${enl.error.message}`)
+        dicho.push(`${PORTAL_DE_LA_DEMO.persona} ya puede entrar en su portal, con su usuario de siempre.`)
         break
       }
     }
