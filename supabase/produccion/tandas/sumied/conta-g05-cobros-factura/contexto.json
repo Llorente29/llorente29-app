@@ -1,0 +1,19 @@
+{
+ "_que": "G05 · La factura de cada cobro en la ficha · contexto de producción, medido en SOLO LECTURA el 10/11 a las 13:33Z (analizar.mjs sql-contexto). La 1342 solo añade una función nueva: no existe ninguna con ese nombre, ni trabajos de cron que la nombren. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T13:33Z",
+ "tanda": {
+  "supabase/migrations/20261110T1342_g05_ficha_facturas.sql": "040e22866abb15be63cbfcd745578b2f"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

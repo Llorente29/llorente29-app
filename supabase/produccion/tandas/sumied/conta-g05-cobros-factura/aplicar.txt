@@ -1,0 +1,11 @@
+# G05 · La factura de cada cobro en la pestaña «Cobros» de la ficha (nº 84).
+# Rama conta/g05-cobros-factura. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1342  AÑADE conta_ficha_facturas (por cada cobro de GoCardless de un recibo de
+#         Sumied del cliente, su recibo y su factura). No cambia ninguna función
+#         de antes: conta_pantalla_ficha se queda como está.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-cobros-factura.sql
+supabase/migrations/20261110T1342_g05_ficha_facturas.sql
