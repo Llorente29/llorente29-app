@@ -5,7 +5,7 @@
 // conta_portal_pagos.
 
 import { Cargando, Chip, Fallo } from '../comun'
-import { euros, fecha, fechaCorta, mes } from '../formato'
+import { euros, fecha, fechaCorta, mes, motivoParaTi } from '../formato'
 import type { Pagos as DatosPagos } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -16,7 +16,13 @@ export function Pagos({ cliente }: Pantalla) {
   if (error || !datos) return <Fallo texto={error ?? 'No se han podido cargar.'} otraVez={recargar} />
   const deuda = datos.devueltos.reduce((s, d) => s + d.importe_cent, 0)
   const anio = new Date().getFullYear()
-  const devueltoEl = (id: string) => { const d = datos.devueltos.find((x) => x.recibo_id === id)?.devuelto_el; return d ? `Devuelto el ${fecha(d)} · se paga desde Inicio` : 'Ya pagado después del devuelto' }
+  // nº 24 · 6 · Como la maqueta: «Devuelto el 7 de noviembre · sin saldo»; sin motivo aún, dónde se paga.
+  const devueltoEl = (id: string) => {
+    const v = datos.devueltos.find((x) => x.recibo_id === id)
+    if (!v) return 'Ya pagado después del devuelto'
+    const m = motivoParaTi(v.motivo)
+    return `Devuelto${v.devuelto_el ? ` el ${fecha(v.devuelto_el)}` : ''} · ${m ? m.corto : 'se paga desde Inicio'}`
+  }
   return (
     <>
       <h1 className="pt-h1">Tus pagos</h1>

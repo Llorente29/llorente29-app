@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 1108: fuera las funciones, la comprobación y la columna.
+cuenta: scripts/conta/produccion/cuentas/g05-alta-baja-dia.sql
+supabase/vuelta-atras/20261110T1108_g05_alta_baja_dia.down.sql

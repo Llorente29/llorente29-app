@@ -1,0 +1,6 @@
+# GP · la 1010 (las facturas como la maqueta) y su prueba (ROLLBACK, datos
+# inventados): cada factura con sus líneas y cuándo se pagó, «Pagada el …» en
+# Inicio y la vuelta atrás. Va encima de la 0945 (la tanda de
+# conta/gp-portal-inicio-hecho): si staging no la tiene, la prueba la pasa antes.
+supabase/migrations/20261110T1010_gp_portal_facturas_pagada.sql
+supabase/staging/sql/20261110_gp_portal_facturas_pagada_prueba.sql

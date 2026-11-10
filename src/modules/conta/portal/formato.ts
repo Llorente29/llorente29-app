@@ -95,7 +95,7 @@ export function lineasDelRecibo(lineas: unknown): LineaVista[] {
   return lineas.map((l) => {
     const x = l as { texto?: unknown; importeCent?: unknown; importe_cent?: unknown; cuenta?: unknown; trabajadores?: unknown }
     const cent = x.importeCent ?? x.importe_cent
-    const trab = Array.isArray(x.trabajadores) ? x.trabajadores.map((t) => String((t as { nombre?: unknown })?.nombre ?? t)).filter(Boolean) : []
+    const trab = Array.isArray(x.trabajadores) ? x.trabajadores.map((t) => nombrePropio(String((t as { nombre?: unknown })?.nombre ?? t))).filter(Boolean) : []
     return {
       texto: String(x.texto ?? 'Servicio'),
       importe: typeof cent === 'number' ? euros(cent) : 'Sin precio',
@@ -162,4 +162,175 @@ export function nombreImpuesto(modelo: string, periodo: string | null, ejercicio
     : /^(0[1-9]|1[0-2])$/.test(periodo) ? ` de ${MESES[Number(periodo) - 1]}${a}`
     : /^[1-3]P$/.test(periodo) ? `, ${ord[Number(periodo[0]) - 1]} pago${a}` : ` ${periodo}`
   return `${nombre}${p}${que[modelo] ? ` (modelo ${modelo})` : ''}`
+}
+
+// ── Documentos · nóminas y seguros sociales, por mes (como la maqueta) ───────
+
+export interface DocLaboral { id: string; nombre: string; carpeta: string; trabajador: string; fecha: string }
+export interface GrupoLaboral {
+  clave: string
+  /** «nominas» o «ss_sepe». */
+  carpeta: string
+  /** «2026-10». */
+  mes: string
+  /** «Nóminas de octubre» / «Seguros sociales de octubre». */
+  titulo: string
+  /** «4 nóminas · listas el 30 de octubre» / «Cargados el 31 de octubre». */
+  detalle: string
+  ids: string[]
+}
+
+/**
+ * Las nóminas y los seguros sociales que deja la gestoría, en una fila por mes
+ * (el mes en que se dejaron, hora de Madrid): primero el mes más reciente y,
+ * dentro, las nóminas antes que los seguros sociales. Ninguno se queda fuera
+ * (regla 7): cada documento está en el grupo de su mes.
+ */
+export function laboralPorMes(docs: DocLaboral[], hoy: Date = new Date()): GrupoLaboral[] {
+  const grupos = new Map<string, { carpeta: string; mes: string; docs: DocLaboral[] }>()
+  for (const d of docs) {
+    const t = new Date(d.fecha)
+    const [a, m] = Number.isNaN(t.getTime()) ? [Number(d.fecha.slice(0, 4)), Number(d.fecha.slice(5, 7))] : madrid(t)
+    const clave = `${a}-${String(m).padStart(2, '0')}`
+    const carpeta = d.carpeta === 'ss_sepe' ? 'ss_sepe' : 'nominas'
+    const k = `${clave}:${carpeta}`
+    const g = grupos.get(k) ?? { carpeta, mes: clave, docs: [] }
+    g.docs.push(d); grupos.set(k, g)
+  }
+  return [...grupos.entries()]
+    .sort(([, x], [, y]) => (x.mes === y.mes ? (x.carpeta === 'nominas' ? -1 : 1) : x.mes < y.mes ? 1 : -1))
+    .map(([clave, g]) => {
+      const nombreMes = mes(g.mes, hoy).toLowerCase()
+      const ultima = g.docs.map((d) => d.fecha).sort().at(-1) ?? ''
+      const ss = g.carpeta === 'ss_sepe'
+      const n = g.docs.length
+      return {
+        clave, carpeta: g.carpeta, mes: g.mes,
+        titulo: `${ss ? 'Seguros sociales' : 'Nóminas'} de ${nombreMes}`,
+        detalle: ss ? `${n > 1 ? `${n} documentos · ` : ''}Cargados el ${fecha(ultima, hoy)}` : `${n} ${n === 1 ? 'nómina' : 'nóminas'} · listas el ${fecha(ultima, hoy)}`,
+        ids: g.docs.map((d) => d.id),
+      }
+    })
+}
+
+/** nº 24 · Cuándo se hizo algo, como la maqueta: «hoy», «ayer» o «el 9 de noviembre» (hora de Madrid). */
+export function cuandoSeHizo(x: string | null | undefined, ahora: Date = new Date()): string {
+  if (!x) return ''
+  const d = new Date(x)
+  if (Number.isNaN(d.getTime())) return ''
+  const dia = (y: Date) => madrid(y).join('-')
+  if (dia(d) === dia(ahora)) return 'hoy'
+  if (dia(d) === dia(new Date(ahora.getTime() - 86_400_000))) return 'ayer'
+  return `el ${fecha(x, ahora)}`
+}
+
+/** nº 24 · Lo que dice una petición ya hecha, como la maqueta: «Firmada hoy», «Recibidos: 2 documentos», «Contestada ayer». */
+export function peticionHecha(q: { tipo: string; hecha?: string | null; recibidas?: number }, ahora: Date = new Date()): { detalle: string; boton: string } {
+  const cuando = cuandoSeHizo(q.hecha, ahora)
+  if (q.tipo === 'firmar') return { detalle: `Firmada ${cuando}`.trim(), boton: '✓ Firmada' }
+  if (q.tipo === 'subir') return { detalle: q.recibidas ? `${q.recibidas === 1 ? 'Recibido: 1 documento' : `Recibidos: ${q.recibidas} documentos`}` : `Hecho ${cuando}`.trim(), boton: '✓ Hecho' }
+  return { detalle: `Contestada ${cuando}`.trim(), boton: '✓ Hecho' }
+}
+
+/**
+ * nº 24 · Lo que lleva una factura o un recibo, en la calle, como la maqueta:
+ * «Gestoría y laboral (4 trabajadores)», «Gestoría y laboral · Cuentas anuales».
+ * Junta la cuota de gestoría y la laboral; lo demás va detrás tal cual. Con
+ * algo más detrás, los trabajadores no se dicen (la línea sería muy larga).
+ */
+export function queLleva(textos: (string | null | undefined)[]): string {
+  const limpios = textos.map((t) => (t ?? '').trim()).filter(Boolean)
+  const gestoria = limpios.some((t) => /^gestor[ií]a\b/i.test(t))
+  const laboral = limpios.find((t) => /^gesti[oó]n laboral\b/i.test(t))
+  const resto = limpios.filter((t) => !/^gestor[ií]a\b/i.test(t) && !/^gesti[oó]n laboral\b/i.test(t))
+  const n = laboral ? Number(/(\d+)\s+trabajador/i.exec(laboral)?.[1] ?? 0) : 0
+  const base = gestoria && laboral ? 'Gestoría y laboral' : gestoria ? 'Gestoría' : laboral ? 'Laboral' : ''
+  const conTrabajadores = base && laboral && n > 0 && resto.length === 0 ? `${base} (${n} ${n === 1 ? 'trabajador' : 'trabajadores'})` : base
+  return [conTrabajadores, ...resto].filter(Boolean).join(' · ')
+}
+
+/**
+ * nº 24 · 6 · El motivo del devuelto, dicho al cliente de tú, como la maqueta.
+ * Code 1 lo guarda en palabras de oficina (conta-gocardless-leer/motivo.ts):
+ * «Sin saldo en la cuenta» → «no había saldo suficiente» (Inicio) y «sin saldo»
+ * (Pagos). Lo que no dice nada nuevo («El banco lo ha devuelto») no se repite.
+ * Un texto que no se conoce se enseña tal cual, en minúscula: nunca se esconde.
+ */
+const MOTIVOS: Record<string, { frase: string; corto: string } | null> = {
+  'Sin saldo en la cuenta': { frase: 'no había saldo suficiente', corto: 'sin saldo' },
+  'El banco lo ha devuelto: el cliente tiene que hablar con su banco': { frase: 'habla con tu banco para saber por qué', corto: 'habla con tu banco' },
+  'La cuenta está cerrada': { frase: 'la cuenta está cerrada', corto: 'cuenta cerrada' },
+  'La cuenta está bloqueada': { frase: 'la cuenta está bloqueada', corto: 'cuenta bloqueada' },
+  'El cliente canceló la domiciliación en su banco': { frase: 'cancelaste la domiciliación en tu banco', corto: 'domiciliación cancelada' },
+  'La domiciliación ha caducado': { frase: 'la domiciliación ha caducado', corto: 'domiciliación caducada' },
+  'Los datos de la cuenta no son válidos': { frase: 'los datos de la cuenta no son válidos', corto: 'datos de la cuenta no válidos' },
+  'La cuenta no admite domiciliaciones': { frase: 'la cuenta no admite domiciliaciones', corto: 'la cuenta no admite domiciliaciones' },
+  'El cliente lo reclamó a su banco: dice que no lo autorizó': { frase: 'lo reclamaste a tu banco como no autorizado', corto: 'reclamado a tu banco' },
+  'El cliente lo reclamó a su banco (en las 8 semanas que tiene para hacerlo)': { frase: 'lo reclamaste a tu banco', corto: 'reclamado a tu banco' },
+  'Cancelado antes de cobrarse': { frase: 'se canceló antes de cobrarse', corto: 'cancelado antes de cobrarse' },
+  'El banco lo ha devuelto': null,
+  'El banco lo ha devuelto sin decir por qué': null,
+}
+export function motivoParaTi(motivo: string | null | undefined): { frase: string; corto: string } | null {
+  const m = (motivo ?? '').trim()
+  if (!m) return null
+  if (m in MOTIVOS) return MOTIVOS[m]
+  const minuscula = m[0].toLowerCase() + m.slice(1)
+  return { frase: minuscula, corto: minuscula }
+}
+
+/**
+ * nº 28 · Un nombre que llega todo en mayúsculas (los trabajadores del CRM, el banco
+ * de GoCardless), con mayúscula solo al principio de cada palabra: «ADRIAN MOLINA
+ * CASTRO» → «Adrian Molina Castro», «CAIXABANK, S.A.» → «Caixabank, S.A.». Las
+ * siglas con punto (S.A., S.L.) se quedan; «de», «del», «la», «y»… en minúscula
+ * salvo al empezar. Lo que ya viene bien escrito no se toca.
+ */
+const MENUDAS = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'i'])
+export function nombrePropio(x: string | null | undefined): string {
+  const t = (x ?? '').trim()
+  if (!t || t !== t.toLocaleUpperCase('es-ES') || t === t.toLocaleLowerCase('es-ES')) return t
+  return t.split(/(\s+)/).map((p, i) => {
+    if (/^\s+$/.test(p) || /^([A-ZÁÉÍÓÚÑÜ]\.)+,?$/.test(p)) return p
+    const m = p.toLocaleLowerCase('es-ES')
+    if (i > 0 && MENUDAS.has(m)) return m
+    return m.replace(/(^|[-'’])(\p{L})/gu, (_, a: string, b: string) => a + b.toLocaleUpperCase('es-ES'))
+  }).join('')
+}
+
+/** nº 28 · Un teléfono español con espacios: «910000000» → «910 000 000», «+34910000000» → «+34 910 000 000». Lo demás, tal cual. */
+export function telefono(x: string | null | undefined): string {
+  const t = (x ?? '').trim()
+  const d = t.replace(/[\s.-]/g, '')
+  const m = /^(\+34|0034)?(\d{3})(\d{3})(\d{3})$/.exec(d)
+  if (!m) return t
+  return `${m[1] ? '+34 ' : ''}${m[2]} ${m[3]} ${m[4]}`
+}
+
+/** nº 28 · Un texto que la base corta (a 120 letras en «Lo último»), con «…» y sin partir una palabra. */
+export function cortado(x: string | null | undefined, max = 120): string {
+  const t = (x ?? '').trim()
+  // Se mira el largo de lo que llega: un corte que cae en un espacio deja, ya sin él, una letra menos.
+  if ((x ?? '').length < max) return t
+  // Si el corte cayó en mitad de una palabra, esa palabra no se enseña a medias.
+  const corte = /\s$/.test((x ?? '').slice(0, max)) ? t : t.slice(0, max).replace(/\s+\S*$/, '')
+  return `${(corte || t.slice(0, max)).replace(/[\s,.;:]+$/, '')}…`
+}
+
+/** nº 28 · El resultado de un impuesto, como lo guarda la base (to_pay, to_refund…): «a ingresar», «a devolver». */
+export function resultadoImpuesto(r: string | null | undefined): string {
+  switch (r) {
+    case 'to_pay': case 'a_ingresar': return 'a ingresar'
+    case 'to_refund': case 'a_devolver': return 'a devolver'
+    case 'to_offset': return 'a compensar'
+    case 'zero': return 'sin cuota'
+    case 'no_activity': return 'sin actividad'
+    default: return ''
+  }
+}
+
+/** nº 28 · Lo contratado, como la maqueta: primero la gestoría y después lo demás (la laboral), en el orden en que vino. */
+export function gestoriaPrimero<T extends { texto: string }>(lineas: T[]): T[] {
+  const es = (t: string) => /^gestor[ií]a\b/i.test(t.trim())
+  return [...lineas.filter((l) => es(l.texto)), ...lineas.filter((l) => !es(l.texto))]
 }

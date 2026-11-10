@@ -1,0 +1,6 @@
+# G05 · La 1222 (la cifra de GoCardless del mes, nº 82). Su prueba (ROLLBACK, datos
+# inventados, en la cuenta A) mira noviembre a 225 (no 250), junio con la anual
+# entera, la trimestral en su mes, la semanal y la cancelada fuera, la fila de la
+# empresa, otra cuenta sin nada y la vuelta atrás.
+supabase/migrations/20261110T1222_g05_gocardless_del_mes.sql
+supabase/staging/sql/20261110_g05_gocardless_del_mes_prueba.sql

@@ -50,6 +50,14 @@ const datos = (): DatosClientes => ({
   servicios: [{ id: 'ges', company_id: Q, nombre: 'Gestoría mensual', forma: 'fijo_mes' }, { id: 'lab', company_id: Q, nombre: 'Gestión laboral', forma: 'por_empleado' }],
   niveles: [], paquetes: [], lineasDePaquete: [], ajustes: [],
   crm: [{ crm: 'bitrix24', portal: 'portal-de-prueba.bitrix24.es' }],
+  // nº 82 · Lo que GoCardless cobra en noviembre (conta_gocardless_del_mes): aquí todo es mensual, así que es su «al mes».
+  gcDelMes: [
+    { que: 'cliente', cliente_id: '1', empresa_id: Q, mes: '2026-11', gocardless_del_mes: 496.10 },
+    { que: 'cliente', cliente_id: '2', empresa_id: Q, mes: '2026-11', gocardless_del_mes: 108.90 },
+    { que: 'cliente', cliente_id: '2', empresa_id: A, mes: '2026-11', gocardless_del_mes: 60.50 },
+    { que: 'empresa', cliente_id: null, empresa_id: Q, mes: '2026-11', gocardless_del_mes: 605.00 },
+    { que: 'empresa', cliente_id: null, empresa_id: A, mes: '2026-11', gocardless_del_mes: 60.50 },
+  ],
 })
 /** Lo de la ficha del cliente 1, en su propia llamada (conta_pantalla_ficha). */
 const suyo = () => ({
@@ -59,6 +67,8 @@ const suyo = () => ({
   mandatos: [{ company_id: Q, gc_id: 'MD1', gc_cliente_id: 'CU-1', estado: 'active' }],
   suscripciones: [{ company_id: Q, gc_id: 'S1', gc_cliente_id: 'CU-1', nombre: 'GESTORIA', al_mes: 496.10, estado: 'active', inicio: '2020-01-01' }],
   pendientes: [], personas: [],
+  // nº 84 · El cobro de noviembre salió del recibo de Sumied y tiene su factura; el devuelto de octubre, no salió de ninguno.
+  facturas: [{ empresa_id: Q, cobro_gc_id: 'PB1', recibo_id: 'r1', mes: '2026-12', recibo_estado: 'facturado', factura_id: 'f1', factura: 'PRUEBA/154' }],
 })
 
 describe('G04 · el modelo de Clientes', () => {
@@ -110,6 +120,42 @@ describe('G04 · el modelo de Clientes', () => {
   })
 })
 
+// nº 84 · La pestaña «Cobros»: la factura de cada cobro, no «Sin factura en Sumied» en todas las filas.
+describe('la ficha · la factura de cada cobro', () => {
+  it('el cobro con su factura sale con su número y su enlace; el que no salió de Sumied lo dice', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const f = modeloFicha(datos(), suyo(), EMPRESAS, '1', Q, '2026-11-08', [])!
+    expect(f.cobros.map((c) => c.factura)).toEqual([{ texto: 'PRUEBA/154', facturaId: 'f1' }, { texto: 'Sin factura en Sumied', facturaId: null }])
+  })
+  it('sin factura, por qué: según el estado de su recibo', async () => {
+    const { facturaDelCobro } = await import('@/modules/conta/gestoria/g04/modelo')
+    expect(['enviado', 'en_el_banco', 'cobrado', 'devuelto', 'retrocedido', 'cancelado', 'preparado'].map((e) => facturaDelCobro({ recibo_estado: e, factura_id: null }).texto))
+      .toEqual(['Se factura al cobrarse', 'Se factura al cobrarse', 'Por facturar', 'Sin factura: devuelto', 'Sin factura: reclamado', 'Sin factura: cancelado', 'Sin factura'])
+    expect(facturaDelCobro({ recibo_estado: 'retrocedido', factura_id: 'f9', factura: 'PRUEBA/162' })).toEqual({ texto: 'PRUEBA/162', facturaId: 'f9' })
+  })
+})
+
+// Una anual de GoCardless que se cobra por primera vez en junio: no está en el recibo del mes que viene, y la
+// ficha la pintaba «Servicio · Sin precio · desde jun. 2027». Ahora, con su nombre y su precio de la tarifa.
+describe('la ficha · un servicio que empieza más adelante', () => {
+  it('sale con su nombre y su precio, no «Servicio · Sin precio»', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const d = datos()
+    const conAnual: DatosClientes = {
+      ...d,
+      asignaciones: [...d.asignaciones, { id: 'soc', tipo: 'cuota', cliente_id: '1', empresa_id: Q, servicio_id: 'soc', nivel_id: null, paquete_id: null,
+        empleado_nombre: null, importe_propio: null, periodo: 'anio', desde: '2027-06-01', hasta: null }],
+      precios: [...d.precios, { id: 'tarifa:s', empresa_id: Q, servicio_id: 'soc', nivel_id: null, paquete_id: null, cliente_id: null, forma: 'fijo', periodo: 'anio',
+        importe: 300, tramos: [], desde: '2026-01-01', hasta: null }],
+      servicios: [...d.servicios, { id: 'soc', company_id: Q, nombre: 'Impuesto de sociedades', forma: 'fijo_anio' }],
+    }
+    const f = modeloFicha(conAnual, suyo(), EMPRESAS, '1', Q, '2026-11-10', [])!
+    const s = f.servicios.find((x) => x.lineaId === 'soc')!
+    expect([s.texto, s.detalle]).toEqual(['Impuesto de sociedades', 'Precio de tarifa · 300,00 € al año, 25,00 € al mes · desde jun. 2027'])
+    expect(f.servicios.some((x) => x.texto === 'Servicio')).toBe(false)
+  })
+})
+
 describe('G04 · el modelo de la ficha', () => {
   it('el recibo del mes que viene, con los trabajadores agrupados y desplegables', async () => {
     const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
@@ -123,5 +169,68 @@ describe('G04 · el modelo de la ficha', () => {
       ['Gestoría mensual', 'Precio de tarifa · desde ene. 2024', '60,50 €'],
       ['Gestión laboral', 'Precio de este cliente · 18 × 24,20 € · desde ene. 2024', '435,60 €'],
     ])
+  })
+})
+
+// nº 81 y nº 82 · Un Talleres inventado como el de la demo: laboral 3 × 25 € y gestoría 150 €, mensuales, y un impuesto de
+// sociedades de 300 € al año que GoCardless cobra en junio. Su «al mes» (la media) es 250 €; en noviembre cobra 225 €.
+describe('nº 82 · la cifra de GoCardless es la del mes, no la media', () => {
+  const talleres = (gcDelMes: Record<string, unknown>[], alMes = 250): DatosClientes => {
+    const d = datos()
+    return {
+      ...d,
+      clientes: [cli('9', Q, { gocardless_al_mes: alMes, servicios_gc: 'LABORAL · GESTORIA · SOCIEDADES' })],
+      cuotasGc: [{ empresa_id: Q, al_mes: alMes, altas_n: 0, altas_euros: 0, bajas_n: 0, bajas_euros: 0 }],
+      asignaciones: [
+        { id: 'tg', tipo: 'cuota', cliente_id: '9', empresa_id: Q, servicio_id: 'ges9', nivel_id: null, paquete_id: null, empleado_nombre: null, importe_propio: null, periodo: 'mes', desde: '2024-01-01', hasta: null },
+        ...['Persona Prueba A', 'Persona Prueba B', 'Persona Prueba C'].map((n, i) => ({ id: `tl${i}`, tipo: 'cuota', cliente_id: '9', empresa_id: Q, servicio_id: 'lab9', nivel_id: null,
+          paquete_id: null, empleado_nombre: n, importe_propio: null, periodo: 'mes', desde: '2024-01-01', hasta: null })),
+        { id: 'tl3', tipo: 'cuota', cliente_id: '9', empresa_id: Q, servicio_id: 'lab9', nivel_id: null, paquete_id: null, empleado_nombre: 'Persona Prueba D', importe_propio: null, periodo: 'mes', desde: '2026-12-01', hasta: null },
+      ],
+      precios: [
+        { id: 't:g9', empresa_id: Q, servicio_id: 'ges9', nivel_id: null, paquete_id: null, cliente_id: null, forma: 'fijo', periodo: 'mes', importe: 150, tramos: [], desde: '2024-01-01', hasta: null },
+        { id: 't:l9', empresa_id: Q, servicio_id: 'lab9', nivel_id: null, paquete_id: null, cliente_id: null, forma: 'por_trabajador', periodo: null, importe: 25, tramos: [], desde: '2024-01-01', hasta: null },
+      ],
+      servicios: [{ id: 'ges9', company_id: Q, nombre: 'Gestoría mensual', forma: 'fijo_mes' }, { id: 'lab9', company_id: Q, nombre: 'Gestión laboral', forma: 'por_empleado' }],
+      gcDelMes,
+    }
+  }
+  const delMes = (mes: string, cliente: number, empresa = cliente) => [
+    { que: 'cliente', cliente_id: '9', empresa_id: Q, mes, gocardless_del_mes: cliente },
+    { que: 'empresa', cliente_id: null, empresa_id: Q, mes, gocardless_del_mes: empresa },
+  ]
+
+  it('noviembre: GoCardless cobra 225 € y Sumied calcula 225 €: iguales, sin «por revisar» (antes, 250 frente a 225)', () => {
+    const m = modeloClientes(talleres(delMes('2026-11', 225)), EMPRESAS, [Q], '2026-11-10')
+    expect([m.filas[0].esteMes.principalCent, m.filas[0].esteMes.comparacionCent, m.filas[0].esteMes.alLado]).toEqual([22500, 22500, null])
+    expect(m.banda.porRevisar).toBe(0)
+    expect([m.cuotas.principal.principalCent, m.cuotas.principal.alLado]).toEqual([22500, null])
+  })
+  it('la ficha dice lo mismo: sin «En GoCardless · …» al lado', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const f = modeloFicha(talleres(delMes('2026-11', 225)), suyo(), EMPRESAS, '9', Q, '2026-11-10', [])!
+    expect([f.fila.esteMes.principalCent, f.fila.esteMes.alLado]).toEqual([22500, null])
+  })
+  it('diciembre: el alta del cuarto trabajador sí es una diferencia de verdad (250 en Sumied, 225 en GoCardless)', () => {
+    const m = modeloClientes(talleres(delMes('2026-12', 225)), EMPRESAS, [Q], '2026-12-02')
+    expect([m.filas[0].esteMes.principalCent, m.filas[0].esteMes.alLado]).toEqual([22500, 'Sumied calcula 250,00 €'])
+    expect(m.banda.porRevisar).toBe(1)
+  })
+  it('junio: la anual entra entera (525 €), no 25 €', () => {
+    const m = modeloClientes(talleres(delMes('2027-06', 525)), EMPRESAS, [Q], '2027-06-03')
+    expect(m.filas[0].esteMes.principalCent).toBe(52500)
+  })
+  it('las cuotas de arriba suman también lo que aún no es de ningún cliente', () => {
+    const m = modeloClientes(talleres(delMes('2026-11', 225, 265)), EMPRESAS, [Q], '2026-11-10')
+    expect([m.cuotas.principal.principalCent, m.cuotas.principal.alLado]).toEqual([26500, 'Sumied calcula 225,00 €'])
+  })
+  it('una cifra de otro mes no se usa', () => {
+    const m = modeloClientes(talleres(delMes('2026-10', 999)), EMPRESAS, [Q], '2026-11-10')
+    expect(m.filas[0].esteMes.principalCent).toBe(null)
+  })
+  it('«Activo sin cuota» sigue con la media: con solo una anual, fuera de su mes no es «sin cuota»', () => {
+    const d = talleres(delMes('2026-11', 0), 25)
+    const m = modeloClientes({ ...d, asignaciones: [] }, EMPRESAS, [Q], '2026-11-10')
+    expect(m.filas[0].estado.texto).not.toBe('Activo sin cuota')
   })
 })

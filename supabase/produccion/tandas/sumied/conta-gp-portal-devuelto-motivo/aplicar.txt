@@ -1,0 +1,12 @@
+# GP · nº 24, punto 6 (Code 3; Julio, nº 26, 10/11): el motivo del devuelto en
+# el portal. Rama conta/gp-portal-devuelto-motivo. Se ensaya y se aplica desde
+# main nombrando esta rama. Necesita la columna de Code 1
+# (conta_recibo.motivo_devolucion, la 1138 del #591, ya aplicada).
+#
+#   1222  CAMBIA EN CALIENTE una función propia del portal (la misma firma, con
+#         respaldo): _conta_portal_devueltos trae además el motivo de cada
+#         devuelto. Declarada en su cabecera con su prueba. No toca datos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-devuelto-motivo.sql
+supabase/migrations/20261110T1222_gp_portal_devuelto_motivo.sql

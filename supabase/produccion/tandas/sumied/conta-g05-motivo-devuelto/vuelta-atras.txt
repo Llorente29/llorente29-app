@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 1138: «seguir» de su respaldo y fuera las tres columnas.
+cuenta: scripts/conta/produccion/cuentas/g05-motivo-devuelto.sql
+supabase/vuelta-atras/20261110T1138_g05_motivo_devuelto.down.sql

@@ -1,0 +1,5 @@
+# GP · la 2240 (el portal de la demo) y su prueba (ROLLBACK, datos inventados):
+# preparar dos veces deja lo mismo, solo en una cuenta demo y solo quien la
+# lleva, y la vuelta atrás no deja nada.
+supabase/migrations/20261109T2240_gp_portal_demo.sql
+supabase/staging/sql/20261109_gp_portal_demo_prueba.sql

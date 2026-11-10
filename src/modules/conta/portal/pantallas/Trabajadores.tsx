@@ -9,7 +9,7 @@
 import { useState, type ChangeEvent } from 'react'
 import { leer } from '../cliente'
 import { Cargando, Chip, Dialogo, Fallo } from '../comun'
-import { documentoLimpio, fecha } from '../formato'
+import { documentoLimpio, fecha, nombrePropio } from '../formato'
 import type { Trabajadores as DatosTrab } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -37,7 +37,7 @@ export function Trabajadores({ cliente, abrir: pedido, avisar }: Pantalla) {
           <h2 className="pt-h2">Lo que has pedido</h2>
           <div>{pedidas.map((p) => (
             <div className="pt-fila" key={p.id}>
-              <div className="pt-fila-texto"><b>{p.tipo === 'alta' ? 'Alta' : 'Baja'} de {p.nombre}</b><span>{p.tipo === 'alta' ? 'Desde' : 'Hasta'} el {fecha(p.fecha)} · pedida el {fecha(p.pedida)}</span></div>
+              <div className="pt-fila-texto"><b>{p.tipo === 'alta' ? 'Alta' : 'Baja'} de {nombrePropio(p.nombre)}</b><span>{p.tipo === 'alta' ? 'Desde' : 'Hasta'} el {fecha(p.fecha)} · pedida el {fecha(p.pedida)}</span></div>
               <Chip texto="Pedida" tono="info" />
             </div>))}</div>
         </section>
@@ -46,7 +46,7 @@ export function Trabajadores({ cliente, abrir: pedido, avisar }: Pantalla) {
         {datos.trabajadores.length === 0 && <div className="pt-vacio">Tu gestoría no tiene ningún trabajador tuyo de alta en tu recibo.</div>}
         {datos.trabajadores.map((w) => (
           <div className="pt-fila" key={w.linea_id}>
-            <div className="pt-fila-texto"><b>{w.nombre}</b><span>{w.nuevo ? `Alta el ${fecha(w.desde)}` : `Desde el ${fecha(w.desde)}`}{w.hasta ? ` · baja en ${fecha(w.hasta)}` : ''}</span></div>
+            <div className="pt-fila-texto"><b>{nombrePropio(w.nombre)}</b><span>{w.nuevo ? `Alta el ${fecha(w.desde)}` : `Desde el ${fecha(w.desde)}`}{w.hasta ? ` · baja en ${fecha(w.hasta)}` : ''}</span></div>
             <Chip texto={w.nuevo ? 'Alta nueva' : 'De alta'} tono={w.nuevo ? 'info' : 'ok'} />
             <button type="button" className="pt-boton sec chico" disabled={bajaPedida(w.nombre)} onClick={() => setBaja(w.nombre)}>{bajaPedida(w.nombre) ? 'Baja pedida' : 'Pedir la baja'}</button>
           </div>
@@ -57,7 +57,7 @@ export function Trabajadores({ cliente, abrir: pedido, avisar }: Pantalla) {
           <h2 className="pt-h2">Lo que ha hecho tu gestoría</h2>
           <div>{datos.peticiones.filter((p) => p.estado !== 'pedida').map((p) => (
             <div className="pt-fila" key={p.id}>
-              <div className="pt-fila-texto"><b>{p.tipo === 'alta' ? 'Alta' : 'Baja'} de {p.nombre}</b><span>{p.estado === 'hecha' ? `Hecha el ${fecha(p.resuelta)}` : `No hecha: ${p.motivo ?? ''}`}</span></div>
+              <div className="pt-fila-texto"><b>{p.tipo === 'alta' ? 'Alta' : 'Baja'} de {nombrePropio(p.nombre)}</b><span>{p.estado === 'hecha' ? `Hecha el ${fecha(p.resuelta)}` : `No hecha: ${p.motivo ?? ''}`}</span></div>
               <Chip texto={p.estado === 'hecha' ? 'Hecha' : 'Rechazada'} />
             </div>))}</div>
         </section>

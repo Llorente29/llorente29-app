@@ -1,0 +1,6 @@
+# GP · la 1345 (el portal de la demo como la maqueta) y su prueba (ROLLBACK, datos
+# inventados): la empresa de Talleres Ruiz con sus impuestos y nóminas, Lucía
+# Pardo, la conversación y el contacto; preparar dos veces, lo que ve Tomás y la
+# vuelta atrás.
+supabase/migrations/20261110T1345_gp_portal_demo_empresa.sql
+supabase/staging/sql/20261110_gp_portal_demo_empresa_prueba.sql

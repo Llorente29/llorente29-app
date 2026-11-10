@@ -171,7 +171,15 @@ export function pantallas(d: Record<string, Fila[]>): Record<string, (cuerpo: Fi
       cargos: d.conta_consulta_cargo_devuelto, que_hacer: d.conta_consulta_que_hacer, asignaciones: d.conta_consulta_asignacion, precios: d.conta_consulta_tarifa_precio,
       servicios: d.conta_servicio, niveles: d.conta_servicio_nivel, paquetes: d.conta_paquete, lineas_de_paquete: d.conta_paquete_linea, ajustes: d.conta_gestoria_ajustes, crm: d.conta_crm,
     }),
+    // nº 82 · Lo que GoCardless cobra en el mes: aquí todas las suscripciones son mensuales, así que es su «al mes».
+    conta_gocardless_del_mes: (cuerpo) => [
+      ...clientes.filter((r) => r.empresa_id && r.gocardless_al_mes != null)
+        .map((r) => ({ que: 'cliente', cliente_id: r.cliente_id, empresa_id: r.empresa_id, mes: cuerpo.p_mes, gocardless_del_mes: r.gocardless_al_mes })),
+      ...empresas.map((e) => ({ que: 'empresa', cliente_id: null, empresa_id: e, mes: cuerpo.p_mes, gocardless_del_mes: suma(activas.filter((s) => String(s.company_id) === e), 'al_mes') })),
+    ],
     conta_pantalla_ficha: (cuerpo) => deCliente(String(cuerpo.p_cliente)),
+    // nº 84 · La factura de cada cobro: en esta siembra ningún cobro salió de un recibo de Sumied.
+    conta_ficha_facturas: () => [],
     conta_pantalla_asignar: () => ({
       suscripciones: activas,
       gc_clientes: d.conta_gc_cliente.filter((g) => activas.some((s) => s.company_id === g.company_id && s.gc_cliente_id === g.gc_id)),

@@ -1,0 +1,15 @@
+# GP · nº 28 (Code 3; Julio, 10/11): el portal de la demo como la maqueta. Rama
+# conta/gp-portal-demo-historia. Se ensaya y se aplica desde main nombrando esta
+# rama.
+#
+#   1345  CAMBIA EN CALIENTE dos funciones propias del portal (la misma firma,
+#         con respaldo): conta_portal_demo_preparar (solo cuentas demo) y
+#         conta_portal_cuenta. Declaradas en su cabecera con su prueba. Y llama
+#         una vez a preparar para «Gestoría Demo», como la plataforma: crea la
+#         empresa de Talleres Ruiz en Sumied (otra cuenta demo, con su sociedad),
+#         sus impuestos y nóminas, Lucía Pardo, una conversación ya avisada y el
+#         contacto de la gestoría. Solo filas de cuentas demo; no sale ningún correo.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-demo-empresa.sql
+supabase/migrations/20261110T1345_gp_portal_demo_empresa.sql
