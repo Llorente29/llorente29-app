@@ -2,8 +2,8 @@
 // Nombres, cifras y fechas inventados.
 import { describe, expect, it } from 'vitest'
 import {
-  cuando, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
-  nombreImpuesto, nombreSeguro, porQueCambia, puedeSubirse, tonoDe,
+  cuando, cuandoSeHizo, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
+  nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
 
 const hoy = new Date('2026-11-09T12:00:00Z')
@@ -121,5 +121,22 @@ describe('Documentos · nóminas y seguros sociales, por mes', () => {
     expect(g.map((x) => x.titulo)).toEqual(['Nóminas de noviembre', 'Nóminas de diciembre de 2025'])
     expect(g.flatMap((x) => x.ids).sort()).toEqual(['a', 'b'])
     expect(laboralPorMes([], hoy)).toEqual([])
+  })
+})
+
+describe('Inicio · lo hecho, como la maqueta (nº 24)', () => {
+  const ahora = new Date('2026-11-10T10:00:00Z')
+  it('cuándo se hizo: hoy, ayer o la fecha', () => {
+    expect(cuandoSeHizo('2026-11-10T08:00:00Z', ahora)).toBe('hoy')
+    expect(cuandoSeHizo('2026-11-09T08:00:00Z', ahora)).toBe('ayer')
+    expect(cuandoSeHizo('2026-11-03T08:00:00Z', ahora)).toBe('el 3 de noviembre')
+    expect(cuandoSeHizo(null, ahora)).toBe('')
+  })
+  it('lo que dice cada petición hecha', () => {
+    expect(peticionHecha({ tipo: 'firmar', hecha: '2026-11-10T08:00:00Z' }, ahora)).toEqual({ detalle: 'Firmada hoy', boton: '✓ Firmada' })
+    expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 12 }, ahora)).toEqual({ detalle: 'Recibidos: 12 documentos', boton: '✓ Hecho' })
+    expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 1 }, ahora).detalle).toBe('Recibido: 1 documento')
+    expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 0 }, ahora).detalle).toBe('Hecho ayer')
+    expect(peticionHecha({ tipo: 'contestar', hecha: '2026-11-03T08:00:00Z' }, ahora)).toEqual({ detalle: 'Contestada el 3 de noviembre', boton: '✓ Hecho' })
   })
 })

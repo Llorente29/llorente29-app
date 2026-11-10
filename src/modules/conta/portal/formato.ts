@@ -212,3 +212,22 @@ export function laboralPorMes(docs: DocLaboral[], hoy: Date = new Date()): Grupo
       }
     })
 }
+
+/** nº 24 · Cuándo se hizo algo, como la maqueta: «hoy», «ayer» o «el 9 de noviembre» (hora de Madrid). */
+export function cuandoSeHizo(x: string | null | undefined, ahora: Date = new Date()): string {
+  if (!x) return ''
+  const d = new Date(x)
+  if (Number.isNaN(d.getTime())) return ''
+  const dia = (y: Date) => madrid(y).join('-')
+  if (dia(d) === dia(ahora)) return 'hoy'
+  if (dia(d) === dia(new Date(ahora.getTime() - 86_400_000))) return 'ayer'
+  return `el ${fecha(x, ahora)}`
+}
+
+/** nº 24 · Lo que dice una petición ya hecha, como la maqueta: «Firmada hoy», «Recibidos: 2 documentos», «Contestada ayer». */
+export function peticionHecha(q: { tipo: string; hecha?: string | null; recibidas?: number }, ahora: Date = new Date()): { detalle: string; boton: string } {
+  const cuando = cuandoSeHizo(q.hecha, ahora)
+  if (q.tipo === 'firmar') return { detalle: `Firmada ${cuando}`.trim(), boton: '✓ Firmada' }
+  if (q.tipo === 'subir') return { detalle: q.recibidas ? `${q.recibidas === 1 ? 'Recibido: 1 documento' : `Recibidos: ${q.recibidas} documentos`}` : `Hecho ${cuando}`.trim(), boton: '✓ Hecho' }
+  return { detalle: `Contestada ${cuando}`.trim(), boton: '✓ Hecho' }
+}
