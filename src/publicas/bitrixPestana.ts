@@ -35,7 +35,7 @@ const raiz = () => document.getElementById('pestana')!
 const vista: {
   ficha: { a: string; p: string; t: string; id: string } | null
   r: Record<string, unknown> | null
-  abierto: null | { tipo: 'alta' } | { tipo: 'suelto' } | { tipo: 'invitar' } | { tipo: 'contestar' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
+  abierto: null | { tipo: 'alta' } | { tipo: 'servicio' } | { tipo: 'suelto' } | { tipo: 'invitar' } | { tipo: 'contestar' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
   /** nº 9, punto 5 · Su portal (se lee después de pintar, para no retrasar la pestaña). */
   portal: Portal | null
   /** nº 10 · Si ya se intentó leer el portal (para decir «Leyendo…» o que no se pudo). */
@@ -133,7 +133,11 @@ function bloqueDatos(p: Pestana): HTMLElement {
 
 /** Cuotas y cobros · Servicios, con «Cambiar» (nivel y precio especial) y los trabajos sueltos. */
 function bloqueServicios(p: Pestana): HTMLElement {
-  const servicios = h('section', { class: 'bloque', 'aria-labelledby': 'gb-serv' }, h('h2', { id: 'gb-serv' }, 'Servicios que tiene'))
+  // nº 17, G · «+ Añadir servicio o paquete», como «Añadir» de la ficha del G04.
+  const servicios = h('section', { class: 'bloque', 'aria-labelledby': 'gb-serv' },
+    h('div', { class: 'titulo-con-boton' }, h('h2', { id: 'gb-serv' }, 'Servicios que tiene'),
+      p.paraAnadir.length && p.empresaId && !vista.abierto ? boton('+ Añadir servicio o paquete', 'normal', () => abrir_({ tipo: 'servicio' })) : null))
+  if (vista.abierto?.tipo === 'servicio') servicios.append(formulario(p))
   if (!p.servicios.length && !p.sueltos.length) servicios.append(h('div', { class: 'vacio' }, 'No tiene servicios en Sumied.'))
   for (const s of p.servicios) {
     servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, s.detalle)),
@@ -325,11 +329,12 @@ const mesDe = (hoy: string, mas: number) => { const a = Number(hoy.slice(0, 4));
 function formulario(p: Pestana): HTMLElement {
   const hoy = hoyEnMadrid()
   const etiqueta = vista.abierto?.tipo === 'alta' ? 'Alta de un trabajador' : vista.abierto?.tipo === 'baja' ? 'Baja de un trabajador'
+    : vista.abierto?.tipo === 'servicio' ? 'Añadir servicio o paquete'
     : vista.abierto?.tipo === 'solicitud' ? 'Hacer lo que pide' : 'Cambiar un servicio'
   const caja = h('form', { class: 'formulario', 'aria-label': etiqueta })
   const previsto = h('div', { class: 'previsto', role: 'status', 'data-prueba': 'previsto' })
   const guardar = h('button', { type: 'submit', class: 'boton boton-primario' },
-    vista.abierto?.tipo === 'alta' ? 'Dar de alta' : vista.abierto?.tipo === 'baja' ? 'Dar de baja' : vista.abierto?.tipo === 'solicitud' ? 'Hacerla' : 'Guardar el cambio') as HTMLButtonElement
+    vista.abierto?.tipo === 'alta' ? 'Dar de alta' : vista.abierto?.tipo === 'servicio' ? 'Añadirlo' : vista.abierto?.tipo === 'baja' ? 'Dar de baja' : vista.abierto?.tipo === 'solicitud' ? 'Hacerla' : 'Guardar el cambio') as HTMLButtonElement
   let cambio: () => Cambio | null
   if (vista.abierto?.tipo === 'alta') {
     const nombre = h('input', { name: 'nombre', required: '', autocomplete: 'off' }) as HTMLInputElement
@@ -342,6 +347,17 @@ function formulario(p: Pestana): HTMLElement {
         h('label', {}, 'Se cobra desde', desde)))
     cambio = () => nombre.value.trim() ? { accion: 'alta', servicio: servicio.value || p.serviciosPorTrabajador[0]?.id, nombre: nombre.value.trim(), desde: desde.value } : null
     for (const x of [nombre, servicio, desde]) x.addEventListener('input', () => calcular())
+  } else if (vista.abierto?.tipo === 'servicio') {
+    const que = h('select', { name: 'que' }, ...p.paraAnadir.map((x) => h('option', { value: x.id }, x.texto))) as HTMLSelectElement
+    const desde = h('select', { name: 'desde' }, ...[1, 0].map((n) => h('option', { value: `${mesDe(hoy, n)}-01` }, `${nombreDelMes(mesDe(hoy, n)).replace(/^./, (x) => x.toUpperCase())} de ${mesDe(hoy, n).slice(0, 4)}`))) as HTMLSelectElement
+    caja.append(h('div', { class: 'formulario-titulo' }, 'Añadir servicio o paquete'),
+      h('div', { class: 'campos' }, h('label', {}, 'Qué', que), h('label', {}, 'Se cobra desde', desde)),
+      h('div', { class: 'pequeno' }, 'A precio de tarifa. Un precio especial se pone después con «Cambiar».'))
+    cambio = () => {
+      const x = p.paraAnadir.find((o) => o.id === que.value) ?? p.paraAnadir[0]
+      return x ? { accion: 'servicio', servicio: x.servicio, nivel: x.nivel, paquete: x.paquete, texto: x.texto, desde: desde.value } : null
+    }
+    for (const x of [que, desde]) x.addEventListener('input', () => calcular())
   } else if (vista.abierto?.tipo === 'solicitud') {
     const sol = vista.portal?.solicitudes.find((x) => x.id === (vista.abierto as { id: string }).id)
     const servicio = h('select', { name: 'servicio' }, ...p.serviciosPorTrabajador.map((x) => h('option', { value: x.id }, x.nombre))) as HTMLSelectElement
@@ -397,7 +413,9 @@ function formulario(p: Pestana): HTMLElement {
       return
     }
     const r = reciboPrevisto(vista.r, hoy, p.empresaId, c)
-    const porque = c.accion === 'solicitud'
+    const porque = c.accion === 'servicio'
+      ? `+ ${c.texto}, a precio de tarifa, desde ${nombreDelMes(c.desde)}.`
+      : c.accion === 'solicitud'
       ? `${c.tipo === 'alta' ? '+1' : '−1'} trabajador: ${c.nombre.toUpperCase()}, lo pide el cliente en su portal.`
       : c.accion === 'alta'
       ? `+1 trabajador: ${c.nombre.toUpperCase()}, se cobra desde ${nombreDelMes(c.desde)}.`
@@ -519,7 +537,9 @@ async function leerPortal() {
 async function guardarCambio(c: Cambio) {
   if (!vista.ficha || vista.guardando) return
   vista.guardando = true
-  const datos = c.accion === 'alta'
+  const datos = c.accion === 'servicio'
+    ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nivel: c.nivel, paquete: c.paquete, desde: c.desde, ensayo: false }
+    : c.accion === 'alta'
     ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nombre: c.nombre, desde: c.desde }
     : c.accion === 'baja' ? { linea: c.linea, mes: c.mes, nombre: (vista.abierto as { nombre?: string } | null)?.nombre ?? null }
       : c.accion === 'solicitud' ? { solicitud: c.solicitud, ...(c.servicio ? { servicio: c.servicio } : {}) }
@@ -528,7 +548,7 @@ async function guardarCambio(c: Cambio) {
   try { r = await llamar({ paso: 'hacer', ...vista.ficha, accion: c.accion, datos }) } catch { r = { estado: 'error' } }
   vista.guardando = false
   const nombre = c.accion === 'alta' || c.accion === 'solicitud' ? c.nombre.toUpperCase() : (vista.abierto as { nombre?: string } | null)?.nombre ?? ''
-  const titulos = { alta: [`Alta hecha: ${nombre}`, 'No se ha dado de alta'], baja: [`Baja hecha: ${nombre}`, 'No se ha dado de baja'],
+  const titulos = { servicio: [c.accion === 'servicio' ? `Añadido: ${c.texto}` : 'Añadido', 'No se ha añadido'], alta: [`Alta hecha: ${nombre}`, 'No se ha dado de alta'], baja: [`Baja hecha: ${nombre}`, 'No se ha dado de baja'],
     tarifa: [c.accion === 'tarifa' && c.precio !== null ? 'Precio especial guardado' : 'Nivel cambiado', 'No se ha cambiado'],
     solicitud: [`${c.accion === 'solicitud' && c.tipo === 'baja' ? 'Baja' : 'Alta'} hecha desde la petición del portal: ${nombre}`, 'No se ha hecho'] }[c.accion]
   if (r.estado === 'ok') {

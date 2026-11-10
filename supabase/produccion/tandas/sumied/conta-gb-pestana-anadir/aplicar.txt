@@ -1,0 +1,13 @@
+# GB · nº 17, G · «+ Añadir servicio o paquete» en la pestaña de Bitrix24, con la del G04.
+# Rama conta/gb-pestana-anadir. VA DESPUÉS DEL REAL DE LA 0950 (#581), que va
+# después de la 0070 (#570): amplía el CHECK que dejan ellas. Se ensaya y se
+# aplica desde main nombrando esta rama. El real lo lanza Julio.
+#
+#   1126  Cambia en caliente (declarado, con su prueba): el CHECK de las acciones
+#         de conta_bitrix_pestana_cambio solo AMPLÍA («servicio»).
+#         Añade conta_bitrix_pestana_anadir (solo el servidor). No llama a nada:
+#         no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-anadir.sql
+supabase/migrations/20261110T1126_gb_pestana_anadir.sql

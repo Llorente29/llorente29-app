@@ -1,0 +1,3 @@
+# GB · la vuelta atrás de la 1126: fuera la función y la acción «servicio» (lo apuntado con ella, antes; lo añadido en Sumied se queda).
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-anadir.sql
+supabase/vuelta-atras/20261110T1126_gb_pestana_anadir.down.sql
