@@ -49797,7 +49797,14 @@ begin
     'subidas', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'nombre', s.nombre, 'estado', s.estado, 'subida', s.created_at,
         'contabilizada', exists (select 1 from public.document_inbox di where di.id = s.document_inbox_id and di.status = 'factura'))
         order by s.created_at desc)
-      from public.conta_portal_subida s where s.party_id = y.party_id), '[]'::jsonb));
+      from public.conta_portal_subida s where s.party_id = y.party_id), '[]'::jsonb),
+    -- nº 19.1 · Lo firmado: la petición, cuándo se firmó y si ya está el PDF firmado.
+    'firmados', case when y.permiso <> 'todo' then '[]'::jsonb else coalesce((select jsonb_agg(jsonb_build_object('id', q.id, 'titulo', q.titulo,
+        'firmada', f.firmada_at, 'pdf', f.pdf_ruta is not null) order by f.firmada_at desc)
+      from public.conta_portal_peticion q
+      join lateral (select fi.firmada_at, fi.pdf_ruta from public.conta_portal_firma fi
+                     where fi.peticion_id = q.id and fi.firmada_at is not null order by fi.firmada_at desc limit 1) f on true
+     where q.party_id = y.party_id and q.tipo = 'firmar' and q.estado = 'hecha'), '[]'::jsonb) end);
 end $$;
 
 
