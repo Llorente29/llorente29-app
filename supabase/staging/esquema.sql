@@ -33550,14 +33550,24 @@ begin
   begin
     if p_accion = 'alta' then
       v_empresa := nullif(v_d->>'empresa', '')::uuid;
-      v_r := public.conta_gestoria_alta_empleado(v_empresa, v_cliente, nullif(v_d->>'servicio', '')::uuid, v_d->>'nombre', nullif(v_d->>'desde', '')::date);
+      -- nº 17, D · Con el día (y el DNI o NIE, si se da), la de Code 1 (1108); sin él, la del G01 de siempre.
+      if nullif(v_d->>'dia', '') is not null then
+        v_r := public.conta_gestoria_alta_trabajador(v_empresa, v_cliente, nullif(v_d->>'servicio', '')::uuid, v_d->>'nombre',
+                 (v_d->>'dia')::date, nullif(trim(coalesce(v_d->>'documento', '')), ''));
+      else
+        v_r := public.conta_gestoria_alta_empleado(v_empresa, v_cliente, nullif(v_d->>'servicio', '')::uuid, v_d->>'nombre', nullif(v_d->>'desde', '')::date);
+      end if;
     elsif p_accion = 'baja' then
       select * into v_linea from public.conta_linea where id = nullif(v_d->>'linea', '')::uuid;
       if v_linea.id is null or v_linea.account_id <> v_cuenta or v_linea.party_id <> v_cliente then
         return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Ese trabajador no es de este cliente.');
       end if;
       v_empresa := v_linea.company_id;
-      v_r := public.conta_gestoria_baja_linea(v_linea.id, nullif(v_d->>'mes', '')::date);
+      if nullif(v_d->>'dia', '') is not null then
+        v_r := public.conta_gestoria_baja_trabajador(v_linea.id, (v_d->>'dia')::date);
+      else
+        v_r := public.conta_gestoria_baja_linea(v_linea.id, nullif(v_d->>'mes', '')::date);
+      end if;
     else
       -- nº 9, punto 2 · El nivel y el precio especial, con las funciones de la ficha del G04:
       -- conta_tarifa_nivel_cambiar y conta_tarifa_precio_guardar (las dos, de verdad, p_ensayo = false).
@@ -33594,7 +33604,9 @@ begin
   end;
 
   insert into public.conta_bitrix_pestana_cambio (account_id, party_id, tipo_ficha, id_externo, accion, datos, frase, resultado_id, hecho_por, hecho_por_nombre)
-  values (v_cuenta, v_cliente, p_tipo, v_id, p_accion, v_d, coalesce(v_r->>'frase', ''), nullif(v_r->>'id', '')::uuid, v_usuario, v_quien)
+  values (v_cuenta, v_cliente, p_tipo, v_id, p_accion,
+          case when v_d ? 'documento' then (v_d - 'documento') || jsonb_build_object('con_documento', nullif(trim(coalesce(v_d->>'documento', '')), '') is not null) else v_d end,
+          coalesce(v_r->>'frase', ''), nullif(v_r->>'id', '')::uuid, v_usuario, v_quien)
   returning id into v_cambio;
 
   -- Para actualizar Bitrix24 sin pisar nada: el campo de la cuota en el mapa
@@ -33617,7 +33629,7 @@ end $_$;
 -- Name: FUNCTION conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb) IS 'GB · Alta y baja de un trabajador, cambio de nivel y precio especial desde la pestaña de Bitrix24. Solo el servidor (conta-bitrix-pestana), DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación. Actúa como la persona («usuario:cuenta») y llama a las funciones de la ficha del G04 (conta_gestoria_alta_empleado, conta_gestoria_baja_linea, conta_tarifa_nivel_cambiar y conta_tarifa_precio_guardar), que comprueban su permiso. Solo sobre el cliente de la ficha abierta.';
+COMMENT ON FUNCTION public.conta_bitrix_pestana_hacer(p_portal text, p_correo text, p_tipo text, p_id text, p_accion text, p_datos jsonb) IS 'GB · Alta y baja de un trabajador, cambio de nivel y precio especial desde la pestaña de Bitrix24. Solo el servidor (conta-bitrix-pestana), DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación. Actúa como la persona («usuario:cuenta») y llama a las funciones de la ficha del G04 (conta_gestoria_alta_empleado y conta_gestoria_baja_linea, o, con el día, conta_gestoria_alta_trabajador y conta_gestoria_baja_trabajador de la 1108; conta_tarifa_nivel_cambiar y conta_tarifa_precio_guardar), que comprueban su permiso. Solo sobre el cliente de la ficha abierta.';
 
 
 --
