@@ -1,4 +1,5 @@
 -- supabase/migrations/20261110T1108_g05_alta_baja_dia.sql
+-- cambia: public.conta_linea · prueba: supabase/staging/sql/20261110_g05_alta_baja_dia_prueba.sql
 --
 -- G05 · nº 77, punto 1 · EL ALTA Y LA BAJA DE UN TRABAJADOR CON SU DÍA Y SU DNI O
 -- NIE. Las de la ficha (G01) solo admiten el mes; la pestaña de Bitrix24 (Code 4)

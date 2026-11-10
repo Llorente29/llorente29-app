@@ -1,8 +1,8 @@
 {
- "_que": "G05 · Alta y baja con día y documento · contexto de producción, medido en SOLO LECTURA el 10/11 a las 10:09Z (analizar.mjs sql-contexto). La 1108 añade una columna que admite nulos a conta_linea (384 filas, fuera del camino del pedido), con un CHECK solo sobre ella, y tres funciones nuevas que no existen. Ningún fichero en el historial.",
+ "_que": "G05 · Alta y baja con día y documento · contexto de producción, medido en SOLO LECTURA el 10/11 a las 10:09Z (analizar.mjs sql-contexto). La 1108 añade una columna que admite nulos a conta_linea (384 filas, fuera del camino del pedido), con un CHECK solo sobre ella, y tres funciones nuevas que no existen. Ningún fichero en el historial. Añadir el CHECK a la tabla que ya existe es «cambia» (cierre ACCESS EXCLUSIVE breve sobre 384 filas): va declarado en la cabecera, con su prueba.",
  "medido": "2026-11-10T10:09Z",
  "tanda": {
-  "supabase/migrations/20261110T1108_g05_alta_baja_dia.sql": "71b459c6801325d8d5fbe91bd4fb4ff8"
+  "supabase/migrations/20261110T1108_g05_alta_baja_dia.sql": "741f2612b9b3341ead184e31d58c9117"
  },
  "contexto": {
   "tablas": [
