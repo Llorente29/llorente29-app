@@ -1,0 +1,16 @@
+# GD · «Volver a empezar», la parte de Sumied, POR TANDAS (nº84). Rama
+# conta/gd-sumied-por-tandas. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. El real lo lanza Julio.
+#
+#   0857  Añade demo_gestoria_volver_a_empezar_tanda(cuenta, ms) (solo cuentas
+#         demo, solo la plataforma). La migración NO la llama: no cambia ningún
+#         dato. Cuando el administrador de una demo pulse «Volver a empezar»,
+#         cada llamada borrará de ESA cuenta lo que quepa en ms (todo menos la
+#         configuración que nombra _gd_se_queda) y dirá si sigue; la última
+#         vuelve a sembrar la contabilidad y el banco. La de la 1731 se queda
+#         como está. El analizador no ve dentro de las funciones: por eso va
+#         escrito aquí.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-sumied-por-tandas.sql
+supabase/migrations/20261110T0857_gd_vaciar_por_tandas.sql

@@ -1,0 +1,19 @@
+{
+ "_que": "G05 · Un recibo devuelto, desde la gestoría · contexto de producción, medido en SOLO LECTURA el 09/11 a las 23:52Z (analizar.mjs sql-contexto). La 0055 solo añade cuatro funciones nuevas: no existe ninguna con esos nombres, ni trabajos de cron que las nombren. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T23:52Z",
+ "tanda": {
+  "supabase/migrations/20261110T0055_g05_devuelto_pagar.sql": "2892593d3e1bbc065bbef603960ec09b"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

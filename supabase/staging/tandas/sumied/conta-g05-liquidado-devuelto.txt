@@ -1,0 +1,6 @@
+# G05 · La 1217 (el cobro liquidado que llega ya devuelto o reclamado). Su prueba
+# (ROLLBACK, datos inventados, en la cuenta A) prepara, revisa y envía dos recibos;
+# el reclamado y liquidado sale con su factura, su cobro y su devolución; el
+# devuelto sin liquidar, sin nada; y la vuelta atrás.
+supabase/migrations/20261110T1217_g05_liquidado_devuelto.sql
+supabase/staging/sql/20261110_g05_liquidado_devuelto_prueba.sql

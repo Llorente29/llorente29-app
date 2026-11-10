@@ -1,0 +1,22 @@
+{
+ "_que": "G05 · Cobro liquidado y después devuelto · contexto de producción, medido en SOLO LECTURA el 10/11 a las 11:19Z (analizar.mjs sql-contexto). La 1217 reemplaza _conta_cobro_facturar (md5 3173115fbcd02c0523af69c24c321f6e, el de la 2203) y conta_cobro_seguir (md5 169a4670a5acdf6ab778c7d8941bad14, el de la 1138) con la misma firma; ningún disparador ni cron las nombra. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T11:19Z",
+ "tanda": {
+  "supabase/migrations/20261110T1217_g05_liquidado_devuelto.sql": "c758505aa2eb809bd3df8a6eb02c0dbc"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_cobro_facturar(uuid)",
+   "public.conta_cobro_seguir(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

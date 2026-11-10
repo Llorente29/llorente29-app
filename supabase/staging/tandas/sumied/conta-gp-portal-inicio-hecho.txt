@@ -1,0 +1,6 @@
+# GP · la 0945 (Inicio como la maqueta) y su prueba (ROLLBACK, datos inventados):
+# lo pendiente primero y lo hecho hace poco con lo recibido, las nóminas del
+# último mes en «Lo último», «Facturas y documentos» no ve nada de eso y la
+# vuelta atrás.
+supabase/migrations/20261110T0945_gp_portal_inicio_hecho.sql
+supabase/staging/sql/20261110_gp_portal_inicio_hecho_prueba.sql

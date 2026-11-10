@@ -54,7 +54,7 @@ export function Cuenta({ cliente, avisar }: Pantalla) {
           </div>
           <button type="button" className="pt-boton sec chico" disabled={cambiando} onClick={cambiarCuenta}>{cambiando ? 'Abriendo…' : datos.cambio_en_marcha ? 'Seguir con el cambio' : 'Cambiar de cuenta'}</button>
         </div>
-        <div className="pt-nota">Al cambiarla firmas una domiciliación nueva desde el móvil. Desde ese día, tus recibos se cargan en la cuenta nueva.</div>
+        <div className="pt-nota">Al cambiarla firmas una domiciliación nueva desde el móvil. La anterior deja de usarse ese mismo día.</div>
       </section>
 
       <section className="pt-tarjeta" style={{ gap: 4 }} aria-label="Tus datos para las facturas">

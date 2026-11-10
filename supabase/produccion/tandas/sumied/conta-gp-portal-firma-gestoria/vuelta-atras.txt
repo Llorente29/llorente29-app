@@ -1,0 +1,3 @@
+# GP · la vuelta atrás de la 0005: conta_portal_documentos, restaurada de su respaldo.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-firmados.sql
+supabase/vuelta-atras/20261110T0005_gp_portal_firmados.down.sql

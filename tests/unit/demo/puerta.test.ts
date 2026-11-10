@@ -52,6 +52,8 @@ const NO_SALEN_POR_UNA_CUENTA: Record<string, string> = {
   'conta-facturas-entrada': 'recoge los correos con facturas que LLEGAN a la cuenta (lee lo recibido en Resend); no manda nada',
   // GD · Al revés que las demás: SOLO funciona en una demo, y solo escribe en los sistemas de pruebas.
   'conta-gd-volver-a-empezar': 'vuelve a sembrar el Bitrix24 de pruebas (b24-s3mr2y) y el sandbox de GoCardless, solo en una cuenta de demo y con sus dos guardas; nunca los de verdad',
+  // GB · Igual que la de arriba: solo escribe en el Bitrix24 de pruebas (la base solo da conexiones de pruebas y avisos.ts comprueba el portal).
+  'conta-bitrix-pestana-avisos': 'pone y cierra tareas en el Bitrix24 de pruebas (b24-s3mr2y) por lo que pasa en Sumied; la base solo le da conexiones de pruebas y comprueba el portal antes de salir; nunca el Bitrix24 de verdad. El sandbox de GoCardless que ve la máquina llega con guardaPortal (_shared/gd/siembra.ts), que importa pero no lo llama',
   // De la plataforma, no de una cuenta.
   'create-platform-admin': 'da de alta a un superadministrador: es de la plataforma, no de una cuenta',
   // El acceso de la propia persona: también en una demo hace falta entrar.
