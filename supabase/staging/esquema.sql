@@ -46898,10 +46898,11 @@ CREATE FUNCTION public.conta_lista_que_hacer(p_cuenta uuid) RETURNS TABLE(cuenta
      where b.account_id = (select cuenta from permiso) and b.estado in ('failed', 'charged_back') and b.fecha >= date_trunc('month', current_date)::date
      group by b.account_id, b.company_id
   ), por_firmar as (
+    -- nº 90 · Por firmar, solo el que espera la aprobación del cliente: en pending_submission o submitted ya está firmado.
     select m.account_id, m.company_id, count(*) as n,
            sum((select sum(s.al_mes) from public.conta_gc_suscripcion s where s.company_id = m.company_id and s.mandato_gc_id = m.gc_id and s.estado = 'active')) as eur
       from public.conta_gc_mandato m
-     where m.account_id = (select cuenta from permiso) and m.estado in ('pending_customer_approval', 'pending_submission', 'submitted')
+     where m.account_id = (select cuenta from permiso) and m.estado = 'pending_customer_approval'
      group by m.account_id, m.company_id
   ), difs as (
     select d.account_id, d.company_id, d.tipo, count(*) as n from public.conta_gestoria_diferencia d
