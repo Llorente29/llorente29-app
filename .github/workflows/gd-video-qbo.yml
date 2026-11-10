@@ -104,13 +104,13 @@ jobs:
           MES: ${{ inputs.mes }}
           APP: https://app.sumied.com
         # Lo que dice va a un fichero (registro.txt), no al registro del run. Con algún ✗, sale en rojo.
-        run: mkdir -p "$SALIDA" && node scripts/video/gd/comprobar.mjs > "$SALIDA/registro.txt" 2>&1
+        run: mkdir -p comprobar-salida && node scripts/video/gd/comprobar.mjs > comprobar-salida/registro.txt 2>&1
 
       - name: Resumen
         if: always()
         run: |
-          [ -f "$SALIDA/resumen.txt" ] || { echo "### Sin resumen: mira registro.txt en el artefacto" >> "$GITHUB_STEP_SUMMARY"; exit 0; }
-          { echo '### Comprobar la Gestoría Demo'; echo '```'; node scripts/conta/salida-segura.mjs < "$SALIDA/resumen.txt"; echo '```'; } >> "$GITHUB_STEP_SUMMARY" || true
+          [ -f comprobar-salida/resumen.txt ] || exit 0
+          cat comprobar-salida/resumen.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -234,8 +234,8 @@ jobs:
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/gd-qbo-rojo.txt" ]; then
-            echo "::error title=Volver a empezar::$(cat "$RUNNER_TEMP/gd-qbo-rojo.txt")"
-            echo "### En rojo: «Volver a empezar» no ha acabado" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Volver a empezar::«Volver a empezar» no ha acabado: el porqué, en registro.txt."
+            cat "$RUNNER_TEMP/gd-qbo-rojo.txt" | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
             exit 1
           fi
           echo "«Volver a empezar»: bien, o no se pidió."
