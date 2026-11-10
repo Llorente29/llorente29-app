@@ -126,7 +126,7 @@ describe('GB (nº 10) · las pestañas por área y «Lo pendiente con este clien
     const { pendientesDe } = await import('@/publicas/bitrixPestanaModelo')
     const p = modeloPestana(respuesta(), HOY)!
     expect(pendientesDe(p, portal).map((x) => [x.area, x.etiqueta, x.texto, x.boton])).toEqual([
-      ['cobros', 'Cobros', 'Recibo del 4 oct. 2026 devuelto · 496,10 €', 'Ver'],
+      ['cobros', 'Cobros', 'Recibo del 4 oct. 2026 devuelto · 496,10 €', 'Resolver'],
       ['cobros', 'Revisar', ficha.pendientes[0].porque, 'Ver'],
       ['portal', 'Portal', 'Pide un alta: Ana Prueba, desde el 16/11', 'Ver'],
       ['portal', 'Portal', '1 mensaje sin contestar', 'Contestar'],
@@ -135,5 +135,19 @@ describe('GB (nº 10) · las pestañas por área y «Lo pendiente con este clien
   it('cada formulario abre en su pestaña', async () => {
     const { AREA_DE } = await import('@/publicas/bitrixPestanaModelo')
     expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal' })
+  })
+})
+
+describe('GB (nº 17, A) · el recibo devuelto en la pestaña', () => {
+  it('lo que se puede hacer con cada uno y, si no, por qué; si no llega, nada', async () => {
+    const { modeloDevueltos } = await import('@/publicas/bitrixPestanaModelo')
+    expect(modeloDevueltos({ puede: true, lista: [
+      { recibo: 'r1', mes: '2026-10', importe_cent: 22500, estado: 'devuelto', enlace: { puede: false, porque: 'Nadie de este cliente puede pagar en su espacio: invítalo primero.' }, pasar: { puede: true, porque: null } },
+      { recibo: 'r2', mes: '2026-09', importe_cent: 9900, estado: 'retrocedido', enlace: { puede: true, porque: null }, pasar: { puede: false, porque: 'Lo reclamó el cliente a su banco.' } },
+    ] })).toEqual({ puede: true, lista: [
+      { recibo: 'r1', texto: 'Octubre de 2026 · 225,00 € · devuelto', enlace: { puede: false, porque: 'Nadie de este cliente puede pagar en su espacio: invítalo primero.' }, pasar: { puede: true, porque: null } },
+      { recibo: 'r2', texto: 'Septiembre de 2026 · 99,00 € · reclamado al banco por el cliente', enlace: { puede: true, porque: null }, pasar: { puede: false, porque: 'Lo reclamó el cliente a su banco.' } },
+    ] })
+    expect(modeloDevueltos(null)).toBeNull()
   })
 })

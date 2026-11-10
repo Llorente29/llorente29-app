@@ -33,7 +33,7 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { choquesDe, estadoDelCobro, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
+import { choquesDe, estadoDelCobro, mesEnPalabras, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -136,9 +136,61 @@ async function leer(cuerpo: Record<string, unknown>): Promise<Response> {
 async function portal(cuerpo: Record<string, unknown>): Promise<Response> {
   const m = await quienMira(cuerpo)
   if (!m.ok) return m.respuesta
-  const { data, error } = await baseDeDatos().rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
-  if (error) return json(200, { estado: 'error', frase: 'No se ha podido leer su portal.' })
-  return json(200, data ?? { estado: 'error' })
+  const db = baseDeDatos()
+  // nº 17, A · Con su portal, en la misma petición, sus recibos devueltos y lo que se puede hacer con cada uno (Code 1).
+  const [p, d] = await Promise.all([
+    db.rpc('conta_bitrix_pestana_portal', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
+    db.rpc('conta_bitrix_pestana_devueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id }),
+  ])
+  if (p.error) return json(200, { estado: 'error', frase: 'No se ha podido leer su portal.' })
+  return json(200, { ...((p.data ?? { estado: 'error' }) as Record<string, unknown>), devueltos: devueltosDe(d.data) })
+}
+
+/** nº 17, A · Lo que llega de conta_bitrix_pestana_devueltos, para la pestaña (sin el usuario). */
+function devueltosDe(x: unknown): Record<string, unknown> | null {
+  const d = (x ?? {}) as Record<string, unknown>
+  if (d.estado !== 'ok') return null
+  return { puede: d.puede === true, lista: Array.isArray(d.devueltos) ? d.devueltos.map((o: Record<string, unknown>) => ({
+    recibo: o.recibo_id, mes: o.mes, importe_cent: o.importe_cent, estado: o.estado, enlace: o.enlace, pasar: o.pasar, veces: o.veces_pasado,
+  })) : [] }
+}
+
+/**
+ * nº 17, A · «Enviarle el enlace para pagar» o «Que lo pasen de nuevo»: lo hace
+ * conta-cobro (Code 1), con la clave de servicio y en nombre de la persona, que
+ * vuelve a comprobar que puede; después se apunta y Bitrix24 se pone al día.
+ */
+async function devuelto(cuerpo: Record<string, unknown>, origen: string | null): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const datos = (cuerpo.datos ?? {}) as Record<string, unknown>
+  const que = datos.que === 'enlace' || datos.que === 'pasar' ? datos.que : null
+  const recibo = typeof datos.recibo === 'string' ? datos.recibo : null
+  if (!que || !recibo) return json(400, { estado: 'no_se_pudo', frase: 'No se sabe qué hacer con el recibo.' })
+  const db = baseDeDatos()
+  const { data: dv } = await db.rpc('conta_bitrix_pestana_devueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
+  const d = (dv ?? {}) as { estado?: string; usuario?: string; puede?: boolean; devueltos?: Record<string, unknown>[] }
+  if (d.estado !== 'ok') return json(200, { estado: d.estado ?? 'error', frase: FRASES[String(d.estado)] ?? 'No se ha podido leer el recibo.' })
+  if (!d.puede) return json(200, { estado: 'sin_permiso', frase: 'Puedes ver, pero no cambiar lo que se cobra: pídeselo a un administrador o a un encargado de la cuenta.' })
+  const o = (d.devueltos ?? []).find((x) => x.recibo_id === recibo)
+  if (!o) return json(200, { estado: 'no_se_pudo', frase: 'Ese recibo no es de este cliente o ya no está devuelto.' })
+  const servicio = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+  const r = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/conta-cobro`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${servicio}`, ...(origen ? { origin: origen } : {}) },
+    body: JSON.stringify({ accion: que === 'enlace' ? 'enlace_para_pagar' : 'pasar_de_nuevo', empresa: o.empresa_id, recibo, usuario: d.usuario }),
+  })
+  const c = (await r.json().catch(() => ({}))) as { ok?: boolean; frase?: string; error?: string }
+  if (!c.ok) return json(200, { estado: 'no_se_pudo', frase: c.error ?? 'No se ha podido hacer ahora. Prueba en unos minutos.' })
+  const { data: h } = await db.rpc('conta_bitrix_pestana_devuelto_hecho', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id,
+    p_recibo: recibo, p_que: que, p_frase: c.frase ?? '' })
+  const hecho = (h ?? {}) as Record<string, unknown>
+  if (hecho.estado !== 'ok') return json(200, { estado: 'ok', frase: c.frase, bitrix: { hecho: 'nada', texto: 'Hecho en Sumied; no se ha podido apuntar para Bitrix24.' } })
+  const mes = mesEnPalabras(hecho.mes) ?? 'ese mes'
+  const nota = que === 'enlace' ? `Sumied · enviado el enlace para pagar el recibo de ${mes}` : `Sumied · el recibo de ${mes} se pasa de nuevo`
+  const { enBitrix, pestana } = await despuesDelCambio(db, m, hecho, nota)
+  const { data: dv2 } = await db.rpc('conta_bitrix_pestana_devueltos', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id })
+  return json(200, { estado: 'ok', frase: c.frase, bitrix: enBitrix, pestana, devueltos: devueltosDe(dv2) })
 }
 
 const ACCIONES = new Set(['alta', 'baja', 'tarifa', 'solicitud'])
@@ -334,6 +386,7 @@ Deno.serve(async (req) => {
     }
     const cuerpo = await req.json().catch(() => null) as Record<string, unknown> | null
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
+    if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'devuelto') return await devuelto(cuerpo, req.headers.get('origin'))
     if (cuerpo?.paso === 'hacer') return await hacer(cuerpo)
     if (cuerpo?.paso === 'portal') return await portal(cuerpo)
     if (cuerpo?.paso === 'deshacer') return await deshacer(cuerpo)

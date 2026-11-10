@@ -220,8 +220,8 @@ export interface Pendiente { area: Exclude<Area, 'resumen'>; etiqueta: string; t
 export function pendientesDe(p: Pestana, pt: Portal | null): Pendiente[] {
   const out: Pendiente[] = []
   const devueltos = p.cobros.filter((c) => c.tono === 'mal')
-  for (const c of devueltos) out.push({ area: 'cobros', etiqueta: 'Cobros', tono: 'mal', texto: `Recibo del ${c.fecha} ${c.estado.toLowerCase()} · ${c.importe}`, boton: 'Ver' })
-  if (!devueltos.length && p.aviso?.tono === 'mal') out.push({ area: 'cobros', etiqueta: 'Cobros', tono: 'mal', texto: p.aviso.texto, boton: 'Ver' })
+  for (const c of devueltos) out.push({ area: 'cobros', etiqueta: 'Cobros', tono: 'mal', texto: `Recibo del ${c.fecha} ${c.estado.toLowerCase()} · ${c.importe}`, boton: 'Resolver' })
+  if (!devueltos.length && p.aviso?.tono === 'mal') out.push({ area: 'cobros', etiqueta: 'Cobros', tono: 'mal', texto: p.aviso.texto, boton: 'Resolver' })
   for (const x of p.pendientes) out.push({ area: 'cobros', etiqueta: 'Revisar', tono: 'aviso', texto: x.porque, boton: 'Ver' })
   for (const s of pt?.solicitudes ?? []) out.push({ area: 'portal', etiqueta: 'Portal', tono: 'aviso', texto: s.texto, boton: 'Ver' })
   if (pt?.mensajesSinLeer) out.push({ area: 'portal', etiqueta: 'Portal', tono: 'neutro',
@@ -244,3 +244,30 @@ export function areasDe(p: Pestana, pt: Portal | null): { id: Area; nombre: stri
 
 /** En qué pestaña va cada formulario: abrir uno lleva a la suya. */
 export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal' }
+
+/**
+ * nº 17, A · Los recibos devueltos del cliente (conta_bitrix_pestana_devueltos,
+ * con lo de Code 1): lo que se puede hacer con cada uno y, si no, por qué.
+ */
+export interface Devueltos {
+  /** Si quien mira puede resolverlo (administrador o encargado). */
+  puede: boolean
+  lista: { recibo: string; texto: string; enlace: { puede: boolean; porque: string | null }; pasar: { puede: boolean; porque: string | null } }[]
+}
+
+const MESES_LARGOS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+export function modeloDevueltos(x: unknown): Devueltos | null {
+  const d = objeto(x)
+  if (typeof d.puede !== 'boolean') return null
+  const opcion = (o: unknown) => { const v = objeto(o); return { puede: v.puede === true, porque: typeof v.porque === 'string' ? v.porque : null } }
+  return {
+    puede: d.puede,
+    lista: filas(d.lista).map((r) => {
+      const m = /^(\d{4})-(\d{2})$/.exec(String(r.mes ?? ''))
+      const mes = m ? `${MESES_LARGOS[Number(m[2]) - 1].replace(/^./, (c) => c.toUpperCase())} de ${m[1]}` : String(r.mes ?? '')
+      const que = r.estado === 'retrocedido' ? 'reclamado al banco por el cliente' : 'devuelto'
+      return { recibo: String(r.recibo), texto: `${mes} · ${euros(Number(r.importe_cent ?? 0))} · ${que}`, enlace: opcion(r.enlace), pasar: opcion(r.pasar) }
+    }),
+  }
+}
