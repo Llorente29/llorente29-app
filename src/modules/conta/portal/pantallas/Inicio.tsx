@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowUp, CircleCheck, Euro, FileText, MessageCircle, PenLine, Plus } from 'lucide-react'
 import { abrir, accion } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { cuentaEnmascarada, diferencia, euros, mes as nombreMes, peticionHecha, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS, motivoParaTi } from '../formato'
+import { cuentaEnmascarada, diferencia, euros, mes as nombreMes, peticionHecha, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS, motivoParaTi, resultadoImpuesto, nombrePropio, cortado } from '../formato'
 import type { Inicio as DatosInicio, Novedad, Peticion } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -104,10 +104,10 @@ function Atajo({ icono, t, d, pick }: { icono: ReactNode; t: string; d: string; 
 function FilaNovedad({ n, ir, cliente, avisar }: { n: Novedad; ir: Pantalla['ir']; cliente: string; avisar: Pantalla['avisar'] }) {
   const v = n.tipo === 'factura' ? { ico: <Euro />, tono: TONOS.ok, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: n.pagada ? `Pagada el ${fecha(n.pagada)}` : `Del ${fecha(n.cuando)}`, b: 'PDF',
         go: () => { abrir(cliente, 'factura', n.id).catch((e: Error) => avisar({ tipo: 'mal', texto: e.message })) } }
-    : n.tipo === 'impuesto' ? { ico: <FileText />, tono: TONOS.info, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${n.resultado === 'a_devolver' ? 'a devolver' : 'a ingresar'} ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
+    : n.tipo === 'impuesto' ? { ico: <FileText />, tono: TONOS.info, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${resultadoImpuesto(n.resultado) || 'importe'} ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
     : n.tipo === 'nomina' ? { ico: <FileText />, tono: TONOS.gris, t: `Nóminas de ${nombreMes(n.titulo).toLowerCase()} listas`, d: n.n ? `${n.n} ${n.n === 1 ? 'nómina' : 'nóminas'}` : '', b: 'Ver', go: () => ir('documentos') }
-    : n.tipo === 'alta' ? { ico: <CircleCheck />, tono: n.estado === 'hecha' ? TONOS.ok : TONOS.gris, t: `${n.alta === 'baja' ? 'Baja' : 'Alta'} de ${n.titulo} ${n.estado === 'hecha' ? 'hecha' : 'no hecha'}`, d: n.desde ? `Desde el ${fecha(n.desde)}` : '', b: 'Ver', go: () => ir('trabajadores') }
-    : { ico: <MessageCircle />, tono: TONOS.gris, t: n.titulo || 'Mensaje de tu gestoría', d: fecha(n.cuando), b: 'Leer', go: () => ir('mensajes') }
+    : n.tipo === 'alta' ? { ico: <CircleCheck />, tono: n.estado === 'hecha' ? TONOS.ok : TONOS.gris, t: `${n.alta === 'baja' ? 'Baja' : 'Alta'} de ${nombrePropio(n.titulo)} ${n.estado === 'hecha' ? 'hecha' : 'no hecha'}`, d: n.desde ? `Desde el ${fecha(n.desde)}` : '', b: 'Ver', go: () => ir('trabajadores') }
+    : { ico: <MessageCircle />, tono: TONOS.gris, t: cortado(n.titulo) || 'Mensaje de tu gestoría', d: fecha(n.cuando), b: 'Leer', go: () => ir('mensajes') }
   return (
     <div className="pt-fila">
       <span className="pt-icono" aria-hidden="true" style={{ background: v.tono.fondo, color: v.tono.tinta }}>{v.ico}</span>

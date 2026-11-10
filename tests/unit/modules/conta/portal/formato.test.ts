@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cuando, cuandoSeHizo, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
-  motivoParaTi, nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, tonoDe,
+  cortado, gestoriaPrimero, motivoParaTi, nombreImpuesto, nombrePropio, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, resultadoImpuesto, telefono, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
 import { motivoEnPalabras } from '../../../../../supabase/functions/conta-gocardless-leer/motivo'
 
@@ -61,7 +61,7 @@ describe('el recibo de Code 1', () => {
       { texto: 'Sin tarifa', importeCent: null, cuenta: '' },
     ])).toEqual([
       { texto: 'Gestoría Estándar', importe: '60,50 €', detalle: '1 × 60,50 €' },
-      { texto: 'Gestión laboral', importe: '96,80 €', detalle: 'TRABAJADOR UNO, TRABAJADOR DOS' },
+      { texto: 'Gestión laboral', importe: '96,80 €', detalle: 'Trabajador Uno, Trabajador Dos' },
       { texto: 'Sin tarifa', importe: 'Sin precio', detalle: null },
     ])
     expect(lineasDelRecibo(null)).toEqual([])
@@ -182,5 +182,42 @@ describe('nº 24 · 6 · el motivo del devuelto, dicho de tú', () => {
         expect(m.frase, `${c} → ${texto}`).not.toBe(texto)
       }
     }
+  })
+})
+
+describe('nº 28 · cómo se escriben las cosas en la pantalla', () => {
+  it('nombres en mayúsculas, con mayúscula solo al principio (nombres inventados)', () => {
+    expect(nombrePropio('PERSONA PRUEBA UNO')).toBe('Persona Prueba Uno')
+    expect(nombrePropio('MARÍA DE LA PRUEBA DEL RÍO')).toBe('María de la Prueba del Río')
+    expect(nombrePropio('BANCO DE PRUEBAS, S.A.')).toBe('Banco de Pruebas, S.A.')
+    expect(nombrePropio('JOSÉ-LUIS PRUEBA')).toBe('José-Luis Prueba')
+  })
+  it('lo que ya viene bien escrito no se toca', () => {
+    expect(nombrePropio('Persona Prueba de Uno')).toBe('Persona Prueba de Uno')
+    expect(nombrePropio('Banco de Pruebas, S.A.')).toBe('Banco de Pruebas, S.A.')
+    expect(nombrePropio('')).toBe('')
+    expect(nombrePropio(null)).toBe('')
+  })
+  it('el teléfono, con espacios', () => {
+    expect(telefono('910000000')).toBe('910 000 000')
+    expect(telefono('+34910000000')).toBe('+34 910 000 000')
+    expect(telefono('+34 600 000 101')).toBe('+34 600 000 101')
+    expect(telefono('12345')).toBe('12345')
+  })
+  it('lo cortado a 120, con «…» y sin partir una palabra', () => {
+    const largo = 'Hola, ya tienes aquí tu espacio. Ves tus facturas y tus recibos, nos subes los documentos y nos escribes por aquí y más cosas'.slice(0, 120)
+    expect(largo.length).toBe(120)
+    expect(cortado(largo)).toBe('Hola, ya tienes aquí tu espacio. Ves tus facturas y tus recibos, nos subes los documentos y nos escribes por aquí y más…')
+    expect(cortado('Perfecto, recibido.')).toBe('Perfecto, recibido.')
+    expect(cortado('a'.repeat(50) + ' ' + 'palabrota'.repeat(10))).toBe('a'.repeat(50) + '…')
+  })
+  it('el resultado de un impuesto, como lo guarda la base', () => {
+    expect(resultadoImpuesto('to_pay')).toBe('a ingresar')
+    expect(resultadoImpuesto('to_refund')).toBe('a devolver')
+    expect(resultadoImpuesto(null)).toBe('')
+  })
+  it('lo contratado: la gestoría antes que la laboral', () => {
+    expect(gestoriaPrimero([{ texto: 'Gestión laboral · 4 trabajadores' }, { texto: 'Gestoría mensual · Premium' }]).map((l) => l.texto))
+      .toEqual(['Gestoría mensual · Premium', 'Gestión laboral · 4 trabajadores'])
   })
 })
