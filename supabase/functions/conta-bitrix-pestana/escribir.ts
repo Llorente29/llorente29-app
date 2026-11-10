@@ -121,3 +121,25 @@ export function queHacerConLaCuota(o: { campo: string | null; actual: unknown; c
   if (vacioYSabidoVacio || (actual !== null && sabidas.includes(actual))) return { hacer: 'escribir', valor }
   return { hacer: 'choque', enBitrix: actual === null ? 'vacío' : cuotaEnBitrix(actual), sumied: valor }
 }
+
+/** nº 13 · El nombre de cada campo de la ficha, como sale en «Pendiente de revisar». */
+export const NOMBRE_EN_LA_FICHA: Record<string, string> = { cuota: 'Cuota mensual', trabajadores: 'Trabajadores', estado_cobro: 'Estado del cobro' }
+
+/**
+ * nº 13, punto 2 · De lo que pasó en Bitrix24 al guardar (fichaEnBitrix): los
+ * choques, que van a «Pendiente de revisar», y los campos escritos sin choque,
+ * que quitan el suyo si lo había.
+ */
+export function choquesDe(r: Record<string, unknown>): { choques: { campo: string; en_bitrix: string; sumied: string }[]; escritos: string[] } {
+  const choques: { campo: string; en_bitrix: string; sumied: string }[] = []
+  const escritos: string[] = []
+  if (r.en_bitrix !== undefined && r.sumied !== undefined) choques.push({ campo: NOMBRE_EN_LA_FICHA.cuota, en_bitrix: String(r.en_bitrix), sumied: String(r.sumied) })
+  else if (typeof r.escrito === 'string') escritos.push(NOMBRE_EN_LA_FICHA.cuota)
+  const campos = (r.campos && typeof r.campos === 'object' ? r.campos : {}) as Record<string, Record<string, unknown>>
+  for (const [clave, c] of Object.entries(campos)) {
+    const nombre = NOMBRE_EN_LA_FICHA[clave] ?? clave
+    if (c.hecho === 'choque') choques.push({ campo: nombre, en_bitrix: String(c.en_bitrix ?? ''), sumied: String(c.sumied ?? '') })
+    else if (c.hecho === 'escrito') escritos.push(nombre)
+  }
+  return { choques, escritos }
+}

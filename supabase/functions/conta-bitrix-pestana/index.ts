@@ -33,7 +33,7 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { estadoDelCobro, mesSiguiente, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
+import { choquesDe, estadoDelCobro, mesSiguiente, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -186,6 +186,13 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
       trabajadores: trabajadoresDelRecibo(pestana.clientes, String(r.cliente), String(r.empresa), mes),
       estado: estadoDelCobro(pestana.ficha, String(r.empresa)),
     })
+  }
+  // nº 13, punto 2 · Un choque con Bitrix24 (un dato cambiado allí, que no se pisa) va a «Pendiente de revisar» del cliente.
+  const { choques, escritos } = choquesDe(enBitrix)
+  if ((choques.length || escritos.length) && r.empresa) {
+    const { data: pend } = await db.rpc('conta_bitrix_pestana_choque', { p_cambio: r.cambio, p_empresa: r.empresa, p_choques: choques, p_escritos: escritos })
+    const p = (pend ?? {}) as { apuntadas?: number; porque?: string }
+    if (choques.length && !p.apuntadas) enBitrix.texto = `${enBitrix.texto} (No se ha podido llevar a «Pendiente de revisar»${p.porque ? `: ${p.porque}` : ''}.)`
   }
   await db.rpc('conta_bitrix_pestana_bitrix', { p_cambio: r.cambio, p_resultado: enBitrix })
   return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, id: r.id ?? null, bitrix: enBitrix, pestana })
