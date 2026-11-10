@@ -93,6 +93,8 @@ test('con acceso: el cliente, el recibo línea a línea, los cobros, los servici
   await expect(pendiente.locator('[data-prueba="pendiente"]').nth(0)).toContainText('Recibo del 4 oct. 2026 devuelto · 496,10 €')
   await expect(pendiente.locator('[data-prueba="pendiente"]').nth(1)).toContainText('GoCardless cobra 496,10 € y Sumied calcula otra cifra.')
   await expect(pestana.getByRole('region', { name: 'Servicios que tiene' })).toHaveCount(0)
+  // nº 17, E · «Cliente desde», como dato.
+  await expect(pestana.locator('.datos')).toContainText('Cliente desdeEnero de 2020')
   await page.evaluate(() => document.fonts.ready)
   await page.screenshot({ path: `${DIR}/pestana-${lado(page)}.png`, fullPage: true })
 
