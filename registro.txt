@@ -1,0 +1,26 @@
+Sesión abierta en la Gestoría Demo (la cuenta de antes se devuelve al acabar: sí).
+
+Sin cobro enviado en esta grabación: no se espera a las facturas.
+
+── Escena 07
+  ✓ escenas/07.mp4
+
+── Escena 07b
+  ✓ escenas/07b.mp4
+
+── Escena 07c
+  · 7c · 1: libro de IVA repercutido
+  · 7c · 2: mayor de la 43000014
+  · 7c · 3: mayor de la 57200002
+  · 7c · 4: banco 57200000
+  ✓ escenas/07c.mp4
+
+── Escena 08
+  · Ingresos de GoCardless en el banco de la demo: 0 nuevos y 37 que ya estaban.
+  ✓ escenas/08.mp4
+
+Montado gd-qbo.mp4: 13 escenas, 315 s.
+
+Modo grabar. El cobro no se ha enviado.
+
+Todas las escenas, completas.
