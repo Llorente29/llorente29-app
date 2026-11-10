@@ -243,7 +243,7 @@ export function areasDe(p: Pestana, pt: Portal | null): { id: Area; nombre: stri
 }
 
 /** En qué pestaña va cada formulario: abrir uno lleva a la suya. */
-export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud' | 'suelto', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros' }
+export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud' | 'suelto' | 'invitar' | 'contestar', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros', invitar: 'portal', contestar: 'portal' }
 
 /**
  * nº 17, A · Los recibos devueltos del cliente (conta_bitrix_pestana_devueltos,
@@ -313,4 +313,41 @@ export function sueltoPrevisto(r: Fila, empresaId: string, s: Sueltos, importe: 
   const antes = totalDelRecibo(r.clientes, String(r.cliente ?? ''), empresaId, s.mes)
   const mas = Math.round(importe * 100)
   return `El recibo de ${nombreDelMes(s.mes)} pasa de ${euros(antes)} a ${euros(antes + mas)} (+${euros(mas)}).`
+}
+
+/**
+ * nº 17, C · Los últimos mensajes de su portal (conta_bitrix_pestana_mensajes,
+ * con conta_portal_ficha de Code 3), del más antiguo al más nuevo, para
+ * contestar desde la ficha.
+ */
+export interface Mensajes {
+  /** Cuántos hay en total (si son más de los que se ven, se dice). */
+  total: number
+  lista: { id: string; delCliente: boolean; quien: string; texto: string; cuando: string; sinLeer: boolean }[]
+}
+
+/** «10/11 · 10:55», en hora de Madrid (regla 4: lo que guarda la base está en UTC). */
+function horaDeMadrid(c: string): string {
+  const t = Object.fromEntries(new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Europe/Madrid' })
+    .formatToParts(new Date(c)).map((x) => [x.type, x.value]))
+  return `${t.day.padStart(2, '0')}/${t.month.padStart(2, '0')} · ${t.hour.padStart(2, '0')}:${t.minute.padStart(2, '0')}`
+}
+
+export function modeloMensajes(x: unknown): Mensajes | null {
+  const d = objeto(x)
+  if (!Array.isArray(d.lista)) return null
+  const lista = filas(d.lista).map((m) => {
+    const c = String(m.cuando ?? '')
+    const adjuntos = Number(m.adjuntos ?? 0)
+    const texto = String(m.texto ?? '').trim()
+    return {
+      id: String(m.id),
+      delCliente: m.de === 'cliente',
+      quien: String(m.autor ?? (m.de === 'cliente' ? 'El cliente' : 'Tu gestoría')),
+      texto: texto || (adjuntos ? `${adjuntos === 1 ? 'Un adjunto' : `${adjuntos} adjuntos`}` : ''),
+      cuando: /^\d{4}-\d{2}-\d{2}/.test(c) ? horaDeMadrid(c) : '',
+      sinLeer: m.de === 'cliente' && m.leido !== true,
+    }
+  })
+  return { total: Math.max(Number(d.total ?? lista.length), lista.length), lista }
 }

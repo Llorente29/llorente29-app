@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
+import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, modeloMensajes, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Mensajes, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -35,7 +35,7 @@ const raiz = () => document.getElementById('pestana')!
 const vista: {
   ficha: { a: string; p: string; t: string; id: string } | null
   r: Record<string, unknown> | null
-  abierto: null | { tipo: 'alta' } | { tipo: 'suelto' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
+  abierto: null | { tipo: 'alta' } | { tipo: 'suelto' } | { tipo: 'invitar' } | { tipo: 'contestar' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
   /** nº 9, punto 5 · Su portal (se lee después de pintar, para no retrasar la pestaña). */
   portal: Portal | null
   /** nº 10 · Si ya se intentó leer el portal (para decir «Leyendo…» o que no se pudo). */
@@ -46,9 +46,11 @@ const vista: {
   devueltos: Devueltos | null
   /** nº 17, B · Sus trabajos fuera de la cuota y lo que se puede facturar (llegan con «Su portal»). */
   sueltos: Sueltos | null
+  /** nº 17, C · Los últimos mensajes de su portal, con su texto (llegan con «Su portal»). */
+  mensajes: Mensajes | null
   hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal'; deshacer?: { cuando: string } | null }
   guardando: boolean
-} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null, sueltos: null }
+} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null, sueltos: null, mensajes: null }
 
 function cabeza(texto: string, chip?: { texto: string; tono: string }): HTMLElement {
   return h('div', { class: 'cabeza' }, h('span', { class: 'logo' }, 'Sumied'), h('span', { class: 'cabeza-texto' }, texto),
@@ -414,15 +416,87 @@ function suPortal(p: Pestana, pt: Portal, enSumied: string): HTMLElement {
   const caja = h('section', { class: 'bloque', 'aria-labelledby': 'gb-portal' }, h('h2', { id: 'gb-portal', style: 'font-size: 15px' }, 'Su portal'))
   if (!pt.accesos.length) caja.append(h('div', { class: 'vacio' }, 'Todavía no entra nadie de este cliente.'))
   for (const a of pt.accesos) caja.append(h('div', { class: 'cobro' }, h('span', {}, a.nombre), h('span', { class: a.entro ? 'estado-bien' : 'estado-neutro' }, a.entro ? a.permiso : `${a.permiso} · aún no ha entrado`)))
-  caja.append(h('a', { href: `${enSumied}${enSumied.includes('?') ? '&' : '?'}pestana=portal`, target: '_blank', rel: 'noopener' }, 'Invitar, en Sumied ↗'))
+  // nº 17, C · «Invitar», aquí mismo (Code 3, por conta-portal): el correo le llega como desde Sumied.
+  if (vista.abierto?.tipo === 'invitar') caja.append(formularioInvitar())
+  else if (!vista.abierto) caja.append(h('div', { class: 'botones' }, boton('Invitar a su portal', 'normal', () => abrir_({ tipo: 'invitar' }))))
   for (const s of pt.solicitudes) {
     caja.append(h('div', { class: 'fila', 'data-prueba': 'solicitud' }, h('span', {}, s.texto),
       h('span', { class: 'derecha con-enlace' }, !vista.abierto ? enlaceBoton('Hacerla', () => abrir_({ tipo: 'solicitud', id: s.id })) : null)))
     if (vista.abierto?.tipo === 'solicitud' && vista.abierto.id === s.id) caja.append(formulario(p))
   }
-  if (pt.mensajesSinLeer) caja.append(h('div', { class: 'cobro' }, h('span', {}, `${pt.mensajesSinLeer} ${pt.mensajesSinLeer === 1 ? 'mensaje' : 'mensajes'} sin leer`),
+  if (vista.mensajes) caja.append(bloqueMensajes(vista.mensajes, enSumied))
+  else if (pt.mensajesSinLeer) caja.append(h('div', { class: 'cobro' }, h('span', {}, `${pt.mensajesSinLeer} ${pt.mensajesSinLeer === 1 ? 'mensaje' : 'mensajes'} sin leer`),
     h('a', { href: enSumied, target: '_blank', rel: 'noopener' }, 'Contestar, en Sumied ↗')))
   return caja
+}
+
+/** nº 17, C · «Invitar a su portal»: el correo, el nombre y qué puede ver. Solo un administrador o un encargado (lo comprueba Code 3). */
+function formularioInvitar(): HTMLElement {
+  const caja = h('form', { class: 'formulario', 'aria-label': 'Invitar a su portal' })
+  const correo = h('input', { name: 'correo', type: 'email', required: '', autocomplete: 'off' }) as HTMLInputElement
+  const nombre = h('input', { name: 'nombre', autocomplete: 'off' }) as HTMLInputElement
+  let permiso: 'todo' | 'facturas_documentos' = 'todo'
+  const chips = h('div', { class: 'chips', role: 'radiogroup', 'aria-label': 'Qué puede ver' })
+  const pintarChips = () => chips.replaceChildren(...([['todo', 'Todo'], ['facturas_documentos', 'Solo facturas y documentos']] as const).map(([v, t]) => {
+    const b = h('button', { type: 'button', class: 'chip-opcion', role: 'radio', 'aria-checked': String(permiso === v) }, t)
+    b.addEventListener('click', () => { permiso = v; pintarChips() })
+    return b
+  }))
+  pintarChips()
+  const guardar = h('button', { type: 'submit', class: 'boton boton-primario' }, 'Invitar') as HTMLButtonElement
+  const valida = () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo.value.trim())
+  const calcular = () => { guardar.disabled = !valida() || vista.guardando }
+  correo.addEventListener('input', calcular)
+  calcular()
+  caja.append(h('div', { class: 'formulario-titulo' }, 'Invitar a su portal'),
+    h('div', { class: 'campos' }, h('label', {}, 'Correo', correo), h('label', {}, 'Nombre (opcional)', nombre)), chips,
+    h('div', { class: 'pequeno' }, 'Le llega un correo con el enlace para entrar, con la marca de tu gestoría.'),
+    h('div', { class: 'botones' }, boton('Cancelar', 'normal', cerrar_), guardar))
+  caja.addEventListener('submit', (e) => { e.preventDefault(); if (valida()) void hacerEnPortal('invitar', { correo: correo.value.trim(), nombre: nombre.value.trim() || null, permiso }) })
+  return caja
+}
+
+/** nº 17, C · Los últimos mensajes, con su texto, y «Contestar» aquí mismo. */
+function bloqueMensajes(ms: Mensajes, enSumied: string): HTMLElement {
+  const caja = h('div', { class: 'mensajes', role: 'region', 'aria-label': 'Mensajes' }, h('div', { class: 'antetitulo-suave' }, 'MENSAJES'))
+  if (!ms.lista.length) caja.append(h('div', { class: 'vacio' }, 'Todavía no hay mensajes con este cliente.'))
+  if (ms.total > ms.lista.length) caja.append(h('a', { href: enSumied, target: '_blank', rel: 'noopener', class: 'pequeno' }, `Ver los ${ms.total} en Sumied ↗`))
+  for (const m of ms.lista) {
+    caja.append(h('div', { class: 'mensaje-portal', 'data-de': m.delCliente ? 'cliente' : 'gestoria', 'data-prueba': 'mensaje' },
+      h('div', { class: 'pequeno' }, h('b', {}, m.quien), ` · ${m.cuando}`, m.sinLeer ? h('span', { class: 'etiqueta', 'data-tono': 'aviso' }, 'Sin leer') : null),
+      h('div', { class: 'mensaje-texto' }, m.texto)))
+  }
+  if (vista.abierto?.tipo === 'contestar') {
+    const form = h('form', { class: 'formulario', 'aria-label': 'Contestar' })
+    const texto = h('textarea', { name: 'texto', rows: '3', maxlength: '4000' }) as HTMLTextAreaElement
+    const mandar = h('button', { type: 'submit', class: 'boton boton-primario' }, 'Mandar') as HTMLButtonElement
+    const calcular = () => { mandar.disabled = !texto.value.trim() || vista.guardando }
+    texto.addEventListener('input', calcular)
+    calcular()
+    form.append(h('div', { class: 'campos campos-uno' }, h('label', {}, 'Tu respuesta (la verá en su portal)', texto)), h('div', { class: 'botones' }, boton('Cancelar', 'normal', cerrar_), mandar))
+    form.addEventListener('submit', (e) => { e.preventDefault(); if (texto.value.trim()) void hacerEnPortal('contestar', { texto: texto.value.trim() }) })
+    caja.append(form)
+  } else if (!vista.abierto) caja.append(h('div', { class: 'botones' }, boton('Contestar', 'primario', () => abrir_({ tipo: 'contestar' }))))
+  return caja
+}
+
+/** nº 17, C · «Invitar» o «Contestar»: la pantalla dice lo que ha pasado (regla 8). Bitrix24 no cambia: no toca lo que se cobra. */
+async function hacerEnPortal(accion: 'invitar' | 'contestar', datos: Record<string, unknown>) {
+  if (!vista.ficha || vista.guardando) return
+  vista.guardando = true
+  repintar()
+  let r: Record<string, unknown>
+  try { r = await llamar({ paso: 'hacer', ...vista.ficha, accion, datos }) } catch { r = { estado: 'error' } }
+  vista.guardando = false
+  if (r.estado === 'ok') {
+    vista.abierto = null
+    if (r.portal !== undefined) vista.portal = modeloPortal(r.portal) ?? vista.portal
+    if (r.mensajes !== undefined) vista.mensajes = modeloMensajes(r.mensajes) ?? vista.mensajes
+    vista.hecho = { titulo: accion === 'invitar' ? 'Invitación enviada' : 'Respuesta mandada', texto: String(r.frase ?? ''), bitrix: 'Bitrix24 no cambia: no toca lo que se cobra.', tono: 'bien', deshacer: null }
+  } else {
+    vista.hecho = { titulo: accion === 'invitar' ? 'No se ha invitado' : 'No se ha mandado', texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal', deshacer: null }
+  }
+  repintar()
 }
 
 async function leerPortal() {
@@ -433,6 +507,7 @@ async function leerPortal() {
     vista.portal = modeloPortal(r)
     vista.devueltos = modeloDevueltos(r.devueltos)
     vista.sueltos = modeloSueltos(r.sueltos)
+    vista.mensajes = modeloMensajes(r.mensajes)
   } catch { vista.portal = null }
   vista.portalLeido = true
   if (!vista.abierto) repintar()

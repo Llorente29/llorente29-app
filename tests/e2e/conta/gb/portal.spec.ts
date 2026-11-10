@@ -47,7 +47,8 @@ test('su portal: quién entra, lo que pide el cliente con «Hacerla» y los mens
   const portal = page.locator('#pestana').getByRole('region', { name: 'Su portal' })
   await expect(portal).toContainText('Persona Prueba Portal')
   await expect(portal).toContainText('Todo')
-  await expect(portal.getByRole('link', { name: 'Invitar, en Sumied ↗' })).toHaveAttribute('href', /pestana=portal$/)
+  // nº 17, C · «Invitar» se hace aquí mismo (lo prueba mensajes.spec.ts).
+  await expect(portal.getByRole('button', { name: 'Invitar a su portal' })).toBeVisible()
   await expect(portal).toContainText('1 mensaje sin leer')
   const sol = portal.locator('[data-prueba="solicitud"]')
   await expect(sol).toHaveText(/Pide un alta: Diego Prueba Ferrer, desde el 16\/11/)
