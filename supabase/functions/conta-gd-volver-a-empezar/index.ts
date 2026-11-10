@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, HISTORIA, historiaDeTalleres, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, HISTORIA, historiaDeTalleres, inicioDeLaAnual, inicioDeLasCuotas, porqueNo, ACCESOS_DE_LA_DEMO, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -111,13 +111,19 @@ Deno.serve(async (req) => {
       }
       case 'tarifa': {
         // nº63 · Los clientes de la demo son de antes: sus cuotas mensuales de GoCardless empiezan en enero, no en
-        // el primer cargo de una suscripción recién creada en el sandbox. Solo esta cuenta demo; ni las anuales ni las manuales.
+        // el primer cargo de una suscripción recién creada en el sandbox. Solo esta cuenta demo; ni las manuales. Las anuales, abajo.
         const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' })
         const desde = inicioDeLasCuotas(hoy)
         const { data: movidas, error: eL } = await admin.from('conta_linea').update({ desde })
           .eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'mes').gt('desde', desde).select('id')
         if (eL) throw new Error(`No se han podido poner las cuotas desde enero: ${eL.message}`)
         dicho.push(`${(movidas ?? []).length} cuotas mensuales de GoCardless, desde el ${desde.split('-').reverse().join('/')}.`)
+        // nº102 · Y las anuales (el impuesto de sociedades), desde el último junio: no desde el junio que viene.
+        const desdeAnual = inicioDeLaAnual(hoy)
+        const { data: anuales, error: eA } = await admin.from('conta_linea').update({ desde: desdeAnual })
+          .eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'anio').gt('desde', desdeAnual).select('id')
+        if (eA) throw new Error(`No se han podido poner las anuales desde junio: ${eA.message}`)
+        dicho.push(`${(anuales ?? []).length} cuotas anuales de GoCardless, desde el ${desdeAnual.split('-').reverse().join('/')}.`)
         const t = await admin.rpc('demo_gestoria_tarifa_sembrar', { p_cuenta: cuenta })
         if (t.error) throw new Error(t.error.message)
         const i = await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: cuenta })
