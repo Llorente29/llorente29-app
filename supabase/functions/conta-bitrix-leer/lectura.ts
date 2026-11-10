@@ -281,10 +281,14 @@ export async function ponerResponsables(pedir: Pedir, url: string, fichas: Ficha
 
 const idDeResponsable = (x: unknown) => (typeof x === 'string' || typeof x === 'number') && /^[0-9]{1,18}$/.test(String(x)) && String(x) !== '0' ? String(x) : null
 
-/** El nombre («Nombre Apellidos») y el correo de un usuario de Bitrix24 (user.get). */
+/** Lo que Bitrix24 enseña cuando un usuario no tiene nombre: no es un nombre (nº 29). */
+const SIN_NOMBRE = new Set(['sin título', 'sin titulo', 'untitled'])
+
+/** El nombre («Nombre Apellidos») y el correo de un usuario de Bitrix24 (user.get).
+ *  Sin nombre, null: ni «Sin título» ni el login en su lugar (el portal no dice «Te lleva: Sin título»). */
 export function datosDeUsuario(u: Record<string, unknown>): { nombre: string | null; correo: string | null } {
-  const texto = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null)
-  const nombre = [texto(u.NAME), texto(u.LAST_NAME)].filter(Boolean).join(' ') || texto(u.LOGIN)
+  const texto = (x: unknown) => (typeof x === 'string' && x.trim() && !SIN_NOMBRE.has(x.trim().toLowerCase()) ? x.trim() : null)
+  const nombre = [texto(u.NAME), texto(u.LAST_NAME)].filter(Boolean).join(' ')
   const correo = texto(u.EMAIL)
   return { nombre: nombre || null, correo: correo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo) ? correo.toLowerCase() : null }
 }

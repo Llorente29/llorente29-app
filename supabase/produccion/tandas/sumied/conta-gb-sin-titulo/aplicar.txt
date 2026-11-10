@@ -1,0 +1,11 @@
+# GB · nº 29, 2 · «Te lleva: Sin título», no: conta_portal_quien_lleva devuelve
+# null si el responsable de Bitrix24 no tiene nombre.
+# Rama conta/gb-sin-titulo. Se ensaya y se aplica desde main nombrando esta
+# rama. El real lo lanza Julio. Va después del 7 (1403, ya en producción).
+#
+#   1520  Cambia en caliente (declarado, con su prueba) conta_portal_quien_lleva,
+#         con la MISMA firma: sin nombre, null. Solo lee: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-sin-titulo.sql
+supabase/migrations/20261110T1520_gb_sin_titulo.sql
