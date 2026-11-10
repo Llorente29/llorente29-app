@@ -1,0 +1,6 @@
+# G05 · La 1108 (alta y baja con su día y su DNI o NIE). Su prueba (ROLLBACK, datos
+# inventados, en la cuenta A) mira la letra de control, el alta con día y
+# documento, el documento repetido o mal, la baja con su día, otra cuenta y la
+# vuelta atrás.
+supabase/migrations/20261110T1108_g05_alta_baja_dia.sql
+supabase/staging/sql/20261110_g05_alta_baja_dia_prueba.sql
