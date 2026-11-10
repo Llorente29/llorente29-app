@@ -1,0 +1,5 @@
+# G05 · La 1622 (una anual, entera y solo en su mes, nº 89). Su prueba (ROLLBACK,
+# datos inventados, en la cuenta A) mira la anual con su importe y con tarifa en su
+# mes y en los demás, la mensual igual que antes, y la vuelta atrás.
+supabase/migrations/20261110T1622_g05_anual_en_su_mes.sql
+supabase/staging/sql/20261110_g05_anual_en_su_mes_prueba.sql

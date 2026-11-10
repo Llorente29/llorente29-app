@@ -304,7 +304,17 @@ function importeDePaquete(paq: Paquete, forma: Forma, n: number): { cent: number
   return { cent: base.cent + deMas * paq.excesoPorTrabajadorCent, cuenta: `${base.cuenta} + ${deMas} de más × ${euros(paq.excesoPorTrabajadorCent)}` }
 }
 
-/** El recibo de un cliente con una empresa en un mes: una línea por asignación vigente. */
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+
+/** nº 89 · El mes del año en que se cobra una anual: el de su «desde» (para las de GoCardless, el de su próximo cobro). */
+export const mesDeLaAnual = (a: Pick<Asignacion, 'desde'>): number => Number(a.desde.slice(5, 7))
+
+/**
+ * El recibo de un cliente con una empresa en un mes: una línea por asignación vigente.
+ * nº 89 · Una anual (precio fijo «al año») va entera, y solo, en su mes (el de su
+ * «desde»); los demás meses no está en el recibo. Como gocardlessEnElMes: GoCardless
+ * la cobra entera en su mes, no 1/12 cada mes.
+ */
 export function reciboDelMes(c: Catalogo, asignaciones: Asignacion[], clienteId: string, empresaId: string, mes: Mes): Recibo {
   const lineas: LineaDelRecibo[] = []
   for (const a of asignaciones) {
@@ -313,12 +323,16 @@ export function reciboDelMes(c: Catalogo, asignaciones: Asignacion[], clienteId:
     const n = a.trabajadores ? tr.deAlta.length : 0
     const p = precioDelMes(c.precios, empresaId, a.objetivo, clienteId, mes)
     const paq = a.objetivo.tipo === 'paquete' ? c.paquetes.find((x) => x.id === (a.objetivo as { paqueteId: string }).paqueteId) ?? null : null
+    const anual = !paq && p?.forma.tipo === 'fijo' && p.forma.periodo === 'anio'
+    if (anual && Number(mes.slice(5, 7)) !== mesDeLaAnual(a)) continue
     const proporcional = (c.ajustes ?? AJUSTES_DE_SIEMPRE).mitadDeMes === 'proporcional'
-    let imp = !p ? null : paq ? importeDePaquete(paq, p.forma, n)
+    let imp = !p ? null : anual && p.forma.tipo === 'fijo'
+      ? { cent: p.forma.importeCent, cuenta: `${euros(p.forma.importeCent)} al año, se cobra en ${MESES[mesDeLaAnual(a) - 1]}` }
+      : paq ? importeDePaquete(paq, p.forma, n)
       : importeDeForma(p.forma, n, proporcional ? tr.deAlta.map((t) => parteDelMes(mes, t.altaEl, t.bajaEl)) : undefined)
-    // Un servicio fijo que empieza o acaba a mitad de mes, en proporcional: su parte del mes.
+    // Un servicio fijo que empieza o acaba a mitad de mes, en proporcional: su parte del mes (una anual, no: va entera).
     const delServicio = parteDelMes(mes, a.altaEl, a.bajaEl)
-    if (imp && proporcional && !paq && p?.forma.tipo === 'fijo' && delServicio.parte !== 1) {
+    if (imp && proporcional && !paq && !anual && p?.forma.tipo === 'fijo' && delServicio.parte !== 1) {
       imp = { cent: Math.round(imp.cent * delServicio.parte), cuenta: `${imp.cuenta} × ${delServicio.dias}/${delServicio.delMes} días` }
     }
     const conTrab = a.trabajadores ? ` · ${n} ${n === 1 ? 'trabajador' : 'trabajadores'}` : ''
