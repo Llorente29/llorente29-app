@@ -136,3 +136,37 @@ describe('GD · nº120 · los clics que escriben se comprueban', () => {
     expect(g).toContain("throw new Error('el diálogo de enviar sigue abierto')")
   })
 })
+
+describe('GD · nº120 · lo que falló en la grabación del run 22', () => {
+  const montar = readFileSync('scripts/video/montar.mjs', 'utf8')
+  const wf = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
+  it('el montaje pasa los filtros a ffmpeg en un fichero (E2BIG con el vídeo entero)', () => {
+    expect(montar).not.toContain("'-filter_complex', ")
+    expect((montar.match(/'-filter_complex_script', guion\(/g) ?? []).length).toBe(2)
+  })
+  it('la grabación en bruto se guarda siempre ANTES de montar, y «montar» la vuelve a montar sin grabar', () => {
+    const guardar = wf.indexOf('- name: Guardar la grabación en bruto (antes de montar)')
+    expect(guardar).toBeGreaterThan(0)
+    expect(guardar).toBeLessThan(wf.indexOf('- name: Montar con ffmpeg'))
+    const bloque = wf.slice(guardar, wf.indexOf('- name: La grabación en bruto de otro run'))
+    for (const f of ['if: always()', 'gd-sumied/crudo.webm', 'gd-sumied/tramos.json', 'gd-sumied/voz']) expect(bloque).toContain(f)
+    expect(wf).toContain('options: [ensayo, grabar, comprobar, muestras-voz, video, montar]')
+    expect(wf).toContain('run-id: ${{ inputs.desde_run }}')
+    expect(wf).toContain("if: inputs.modo == 'video' || inputs.modo == 'montar'")
+  })
+  it('07.5 espera a que «Descargar PDF» esté encendido', () => {
+    expect(g).toContain("page.getByRole('button', { name: 'Descargar PDF' })")
+    expect(g).toContain('isEnabled()')
+  })
+  it('08 casa las liquidaciones como el agente, sin esperar a que alguien abra Bancos', () => {
+    expect(g).toContain('await casarLiquidaciones()')
+    expect(g).toContain("julio.cliente.rpc('conta_abono_gocardless_casar'")
+    expect(g).toContain("p_confianza: 'seguro'")
+  })
+  it('11.3: Stripe en euros, España y sin Link', () => {
+    expect(g).toContain("selectOption('ES')")
+    expect(g).toContain('#enableStripePass')
+    expect(g).toContain("locale: 'es-ES', timezoneId: 'Europe/Madrid'")
+    expect(g).toContain("'Accept-Language': 'es-ES,es;q=0.9'")
+  })
+})
