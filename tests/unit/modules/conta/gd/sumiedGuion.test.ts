@@ -105,3 +105,19 @@ describe('GD · nº116 · el trabajador nuevo y el portal de Tomás Ruiz', () =>
     expect(g).toContain("correo: 'tomas.ruiz@talleresruiz.example', nombre: 'Tomás'")
   })
 })
+
+describe('GD · nº118 · la primera pantalla no depende de la suerte', () => {
+  const ir = g.slice(g.indexOf('async function ir('), g.indexOf('async function sinCargar'))
+  it('ir: hasta 3 intentos, recargando, dentro del corte (no se graba)', () => {
+    expect(ir).toContain('intento <= 3')
+    expect(ir).toContain('page.reload(')
+    expect(ir.indexOf('R.sinVer')).toBeLessThan(ir.indexOf('page.reload('))
+  })
+  it('si no sale, lo dice el resumen con lo que se ve; grabando y sin el cobro enviado, para', () => {
+    expect(ir).toContain('resumen.push(`✗ v0 · la pantalla no ha salido')
+    expect(ir).toContain('if (GRABA && !enviado) throw new Error(t)')
+  })
+  it('01 espera a la cifra «Cuotas al mes», no a un texto cualquiera', () => {
+    expect(g).toContain("await ir('/conta/ventas/clientes-y-cuotas', page.locator('.g4-cifra').filter({ hasText: 'Cuotas al mes' }))")
+  })
+})

@@ -182,14 +182,34 @@ async function pulsaQueEscribe(loc, ms = 800) {
 }
 /** Pulsa lo que solo navega o abre (también en ensayo). */
 async function pulsa(loc, ms = 800) { const l = loc.first(); await l.waitFor({ state: 'visible', timeout: 15_000 }); await ra.clic(l, ms) }
+/**
+ * nº118 · Ir a una pantalla y no seguir hasta que se vea lo que se espera. La primera pantalla del run 19 no salió a
+ * tiempo y fallaron las cinco escenas de la 01 una detrás de otra. Ahora: hasta 3 intentos, recargando, dentro del
+ * corte (no se graba). Si no sale, lo dice el RESUMEN (antes solo el registro, y se veían los «timeout» de las
+ * escenas) con lo que se ve; y grabando, si aún no se ha enviado el cobro, para: la grabación no se repite a medias.
+ */
 async function ir(ruta, espera) {
+  const url = ruta.startsWith('http') ? ruta : `${APP}${ruta}`
+  const loc = espera ? (typeof espera === 'string' ? page.getByText(espera).first() : espera.first()) : null
+  let salio = false
   await R.sinVer(async () => {
-    await page.goto(ruta.startsWith('http') ? ruta : `${APP}${ruta}`, { waitUntil: 'domcontentloaded', timeout: 60_000 })
-    await page.locator('.cx-hueso').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
-    await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
-    if (espera) await (typeof espera === 'string' ? page.getByText(espera).first() : espera).waitFor({ timeout: 30_000 }).catch(() => fallo(`${ruta}: no ha salido lo que se esperaba`))
-    await sinCargar()
+    for (let intento = 1; intento <= 3 && !salio; intento++) {
+      if (intento === 1) await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {})
+      else { decir(`  · ${ruta}: no ha salido a tiempo; se recarga (intento ${intento} de 3)`); await page.reload({ waitUntil: 'domcontentloaded', timeout: 60_000 }).catch(() => {}) }
+      await page.locator('.cx-hueso').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
+      await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
+      salio = loc ? await loc.waitFor({ state: 'visible', timeout: 45_000 }).then(() => true).catch(() => false) : true
+    }
+    if (salio) await sinCargar()
   })
+  if (salio) return
+  const seVe = await page.evaluate(() => `${location.pathname}${location.hash} · ${(document.querySelector('h1')?.textContent ?? document.body?.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 80)}`).catch(() => '')
+  const t = `${ruta}: no ha salido lo que se esperaba en 3 intentos (se ve: ${seVe})`
+  resumen.push(`✗ v0 · la pantalla no ha salido: ${t}`.slice(0, 230))
+  await foto(`x-pantalla-${Date.now()}`)
+  // Grabando y antes de enviar el cobro, se para (no queda nada a medias en la demo); después, se sigue y se dice.
+  if (GRABA && !enviado) throw new Error(t)
+  fallo(t)
 }
 /**
  * La prueba del nº99 grabó «Sumied · Cargando…» al volver de un corte: la app vuelve a pintar su pantalla de carga
@@ -237,7 +257,7 @@ try {
   let ing = null
   // ── 01 · Clientes y cuotas ─────────────────────────────────────────────────
   if (pide('01')) {
-    await ir('/conta/ventas/clientes-y-cuotas', 'Cuotas al mes')
+    await ir('/conta/ventas/clientes-y-cuotas', page.locator('.g4-cifra').filter({ hasText: 'Cuotas al mes' }))
     inicio = R.t()
     escena('01 Clientes y cuotas')
     const cifra = (t) => page.locator('.g4-cifra').filter({ hasText: t })
