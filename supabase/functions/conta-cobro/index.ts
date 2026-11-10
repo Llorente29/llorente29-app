@@ -59,7 +59,7 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
   const { catalogo, asignaciones } = catalogoYAsignaciones({
     servicios: filas(d.servicios), precios: filas(d.precios), asignaciones: filas(d.asignaciones), niveles: filas(d.niveles),
     paquetes: filas(d.paquetes), lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes).filter((a) => a.company_id === empresa),
-  })
+  }, { conSueltos: true })
   const recibos: Fila[] = []
   const sinRecibo: Fila[] = []
   for (const c of filas(d.clientes)) {
