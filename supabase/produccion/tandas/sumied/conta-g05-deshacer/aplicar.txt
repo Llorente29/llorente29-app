@@ -1,0 +1,13 @@
+# G05 · Deshacer un alta, una baja o un cambio de nivel del mismo día (nº 68 y nº 69,
+# punto 3; para la pestaña de Bitrix24 de Code 4). Rama conta/g05-deshacer. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar. El real lo
+# lanza Julio.
+#
+#   0010  AÑADE la tabla conta_linea_deshecha y las funciones
+#         conta_linea_operaciones_hoy y conta_linea_deshacer (y dos internas).
+#         Se apoyan en lo que ya apunta conta_gestoria_cambio: no cambia ninguna
+#         función de las que hacen el alta, la baja o el cambio de nivel.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-deshacer.sql
+supabase/migrations/20261110T0010_g05_deshacer_lineas.sql
