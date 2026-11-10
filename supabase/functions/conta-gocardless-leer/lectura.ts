@@ -8,6 +8,7 @@ import {
   BASES, cabeceras, casarMotivos, desdeHaceMeses, leerCliente, leerCobro, leerCuentaAbono, leerCuentaCliente, leerMandato, leerPayout, leerSuscripcion, leerTodo, urlDePagina,
   type ClienteGc, type CobroGc, type CuentaAbonoGc, type CuentaClienteGc, type Entorno, type MandatoGc, type PayoutGc, type Recurso, type SuscripcionGc,
 } from './lector.ts'
+import { liquidacionesDeClientes, pagosDePartidas, type Fuera } from './liquidaciones.ts'
 
 export type Pedir = (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
 
@@ -21,6 +22,8 @@ export interface DatosGc {
   cuentasCliente: CuentaClienteGc[]
   /** G05 · nº 43 · Los pagos de GoCardless al banco (payouts) de los mismos 6 meses: día de llegada y neto. */
   payouts: PayoutGc[]
+  /** nº 76 · Las liquidaciones leídas que no son de ningún cliente de ahora (no se guardan). */
+  payoutsFuera?: Fuera[]
   /** Desde cuándo se han leído los cobros (el día 1 de hace 6 meses). */
   desde: string
 }
@@ -61,14 +64,42 @@ export async function leerCuentaGc(pedir: Pedir, entorno: Entorno, token: string
     pedirRecurso(pedir, entorno, token, 'customer_bank_accounts'),
     pedirRecurso(pedir, entorno, token, 'payouts', { 'created_at[gte]': `${desde}T00:00:00Z` }),
   ])
+  const clientes = rc.map(leerCliente)
+  const mandatos = rm.map(leerMandato)
+  const cobros = casarMotivos(rp.map(leerCobro), re)
+  const payouts = ro.map(leerPayout)
+  // nº 76 · De las liquidaciones que ningún cobro leído nombra, sus partidas y, de los pagos que no se han leído, su mandato.
+  const nombradas = new Set(cobros.map((c) => c.payoutId).filter(Boolean))
+  const leidos = new Set(cobros.map((c) => c.id))
+  const partidas = new Map<string, string[]>()
+  const mandatoDePago = new Map<string, string | null>()
+  const sinSaber = new Set<string>()
+  for (const o of payouts.filter((x) => !nombradas.has(x.id)).slice(0, 100)) {
+    try {
+      const pagos = pagosDePartidas(await pedirRecurso(pedir, entorno, token, 'payout_items', { payout: o.id }))
+      partidas.set(o.id, pagos)
+      for (const p of pagos.filter((x) => !leidos.has(x) && !mandatoDePago.has(x))) {
+        const r = await pedir(`${BASES[entorno]}/payments/${encodeURIComponent(p)}`, { headers: cabeceras(token) })
+        const j = r.ok ? await r.json().catch(() => null) as { payments?: { links?: { mandate?: string } } } | null : null
+        mandatoDePago.set(p, j?.payments?.links?.mandate ?? null)
+      }
+    } catch {
+      // Si GoCardless no da sus partidas, no hay con qué decir que no es de nadie: entra, como antes.
+      sinSaber.add(o.id)
+    }
+  }
+  const reparto = liquidacionesDeClientes({ payouts, cobros, mandatos, clientes }, partidas, mandatoDePago)
+  const quedan = payouts.filter((x) => sinSaber.has(x.id) || reparto.quedan.includes(x))
+  const fuera = reparto.fuera.filter((f) => !sinSaber.has(f.id))
   return {
-    clientes: rc.map(leerCliente),
-    mandatos: rm.map(leerMandato),
+    clientes,
+    mandatos,
     suscripciones: rs.map(leerSuscripcion),
-    cobros: casarMotivos(rp.map(leerCobro), re),
+    cobros,
     abonos: ra.map(leerCuentaAbono).filter((a) => a.activa),
     cuentasCliente: rb.map(leerCuentaCliente),
-    payouts: ro.map(leerPayout),
+    payouts: quedan,
+    payoutsFuera: fuera,
     desde,
   }
 }

@@ -6,6 +6,7 @@
 //
 // Cada paso es una llamada: así ninguno se acerca al límite de tiempo de una
 // función (Bitrix24 deja 2 peticiones por segundo) y la pantalla dice por cuál va.
+// Los que van por tandas (el portal y «sumied») dicen «sigue» mientras les quede algo.
 
 export const PASOS = [
   { id: 'portal_borrar', que: 'Vaciando el Bitrix24 de pruebas' },
@@ -17,6 +18,16 @@ export const PASOS = [
   { id: 'tarifa', que: 'Sembrando la tarifa y los ingresos en el banco' },
   { id: 'cambios', que: 'Dejando los cambios del mes que viene' },
 ] as const
+/** Lo que hace como mucho cada llamada de un paso por tandas (el portal): muy por debajo del tiempo máximo de una función. */
+export const PRESUPUESTO_MS = 90_000
+/**
+ * Lo que borra como mucho cada tanda del paso «sumied» (nº84). La base corta cualquier llamada de la plataforma a
+ * los 8 s (el 10/11, vaciar la demo de una vez tardó más y se cortó): con 4 s, cada tanda queda lejos del corte.
+ */
+export const SUMIED_MS = 4_000
+/** Cuántas veces se repite como mucho un paso por tandas antes de darlo por atascado. */
+export const TANDAS_MAX = 8
+
 export type Paso = (typeof PASOS)[number]['id'] | 'comprobar'
 export const esPaso = (x: unknown): x is Paso => x === 'comprobar' || PASOS.some((p) => p.id === x)
 
@@ -54,7 +65,8 @@ export function inicioDeLasCuotas(hoyMadrid: string): string {
 /**
  * Los cambios que el cobro del mes que viene tiene que enseñar (nº68, como la maqueta). Se hacen con las mismas
  * funciones que la ficha del cliente, con la sesión de quien pulsa:
- *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 12 de este mes.
+ *   · Talleres Ruiz: +1 trabajador en Gestión laboral, alta el día 1 del mes que viene (nº76: con la regla del mes
+ *     entero, un alta a mitad de este mes ya se cobraría este mes y el cobro del que viene no la enseñaría como cambio).
  *   · Imprenta Rápida Sol: de Básica a Premium desde el mes que viene (sube más de un 30 %: pide «Lo he mirado, aprobar»).
  *   · Reformas Atalaya: baja de un trabajador, que se cobra este mes y ya no el que viene (para «Este mes no»).
  */
@@ -64,9 +76,9 @@ export const CAMBIOS_DEL_MES = {
   baja: { cliente: 'Reformas Atalaya, S.L.' },
 } as const
 
-/** Las fechas de esos cambios, a partir de hoy (AAAA-MM-DD, en Madrid). */
+/** Las fechas de esos cambios, a partir de hoy (AAAA-MM-DD, en Madrid): el alta y el nivel, el 1 del mes que viene; la baja, este mes. */
 export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; esteMes: string; mesQueViene: string } {
   const [a, m] = hoyMadrid.slice(0, 7).split('-').map(Number)
   const sig = m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}`
-  return { altaEl: `${hoyMadrid.slice(0, 7)}-12`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
+  return { altaEl: `${sig}-01`, esteMes: `${hoyMadrid.slice(0, 7)}-01`, mesQueViene: `${sig}-01` }
 }

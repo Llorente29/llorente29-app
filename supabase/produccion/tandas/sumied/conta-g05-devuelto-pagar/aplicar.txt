@@ -1,0 +1,13 @@
+# G05 · Un recibo devuelto, desde la gestoría: «Enviarle el enlace para pagar» y
+# «Que lo pasen de nuevo» (nº 68 y nº 71, punto 2; para la ficha y la pestaña de
+# Bitrix24 de Code 4). Rama conta/g05-devuelto-pagar. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   0055  AÑADE conta_recibo_devuelto_opciones (qué se puede hacer y por qué no)
+#         y tres internas del servidor (_conta_recibo_devuelto_opciones,
+#         _conta_recibo_devuelto_hecho y _conta_usuario_cobra). No cambia ninguna
+#         función de antes.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-devuelto-pagar.sql
+supabase/migrations/20261110T0055_g05_devuelto_pagar.sql

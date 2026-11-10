@@ -6,7 +6,11 @@
 export interface Marca { nombre: string; logo_ruta: string | null; color: string | null; correo: string | null; telefono: string | null; empresa_id: string | null }
 export interface ClienteDeEntrada { cliente_id: string; cliente: string; permiso: 'todo' | 'facturas_documentos'; gestoria: Marca }
 
-export interface Peticion { id: string; tipo: 'firmar' | 'subir' | 'contestar'; titulo: string; detalle: string | null; fecha_limite: string | null; creada: string }
+export interface Peticion {
+  id: string; tipo: 'firmar' | 'subir' | 'contestar'; titulo: string; detalle: string | null; fecha_limite: string | null; creada: string
+  /** nº 24 (la 0945): lo hecho en los últimos 14 días también viene, para tacharlo como la maqueta. Sin la 0945, no viene (todo es pendiente). */
+  estado?: 'pendiente' | 'hecha'; hecha?: string | null; recibidas?: number
+}
 export interface Proximo {
   recibo_id: string; mes: string; estado: string; estado_texto: string; total_cent: number; anterior_cent: number | null
   lineas: unknown; cambios: unknown; cargo_el: string | null; parado: string[]
@@ -15,7 +19,7 @@ export interface Proximo {
   incidencia: { id: string; texto: string; creada: string; parado: boolean | null } | null
 }
 export interface Devuelto { recibo_id: string; mes: string; importe_cent: number; devuelto_el: string | null; gc_estado: string | null; en_marcha: { tipo: string; estado: string; url: string | null; creada: string } | null }
-export interface Novedad { tipo: 'factura' | 'impuesto' | 'alta' | 'mensaje'; id: string; titulo: string; cuando: string; total?: number; periodo?: string; ejercicio?: number; importe?: number; resultado?: string; alta?: string; estado?: string; desde?: string }
+export interface Novedad { tipo: 'factura' | 'impuesto' | 'alta' | 'mensaje' | 'nomina'; n?: number; id: string; titulo: string; cuando: string; total?: number; periodo?: string; ejercicio?: number; importe?: number; resultado?: string; alta?: string; estado?: string; desde?: string }
 export interface Inicio {
   gestoria: Marca
   cliente: { id: string; nombre: string; nif: string | null }
@@ -40,6 +44,8 @@ export interface Documentos {
   impuestos: { id: string; modelo: string; ejercicio: number; periodo: string; presentado: string; resultado: string | null; importe: number | null; justificante: boolean }[]
   nominas: { id: string; nombre: string; carpeta: string; trabajador: string; fecha: string }[]
   subidas: { id: string; nombre: string; estado: string; subida: string; contabilizada: boolean }[]
+  /** nº 19.1 (la 0005): lo que ha firmado, con su PDF firmado. Sin la 0005, no viene. */
+  firmados?: { id: string; titulo: string; firmada: string; pdf: boolean }[]
 }
 
 export interface Trabajadores {

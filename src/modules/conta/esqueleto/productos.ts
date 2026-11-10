@@ -36,7 +36,7 @@ export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'clientesCuota
  * `gestoria` las enciende el sector de la empresa (G03, sectores/sectores.ts);
  * `asesoria` es la CUENTA que lleva clientes (Clientes del despacho).
  */
-export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria'
+export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
@@ -109,6 +109,8 @@ export interface Contexto {
   asesoria?: boolean
   /** S02 · El producto vendido solo (C06): sin las páginas que aún dicen «aún no». */
   solo?: boolean
+  /** GD · La cuenta es de demostración (accounts.is_demo): sale «Tu cuenta» en Ajustes. Sin leer, no lo es. */
+  demo?: boolean
 }
 
 /** Un eje de analítica encendido, con el nombre que le da la empresa. */
@@ -136,14 +138,16 @@ function llega(id: string, etiqueta: string, icono: NombreIcono, cuando: string)
  * que vive en las tablas): una cosa, un solo sitio.
  */
 const DE_DEFINICIONES = new Set(['plan', 'tablas', 'numeracion'])
+// GD (nº71): las de solo demo («Tu cuenta») salen con la condición «demo», en vez de quitarse.
 const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
-  .filter((e) => !DE_DEFINICIONES.has(e.id) && !e.soloDemo)
+  .filter((e) => !DE_DEFINICIONES.has(e.id))
   .map((e): Pestana => ({
     id: e.id, etiqueta: e.etiqueta, icono: e.id === 'folvy' ? 'ia' : e.id === 'empresa' ? 'empresa' : e.id === 'personas' ? 'usuarios' : e.id === 'avisos' ? 'avisos' : e.id === 'impuestos' ? 'impuestos' : e.id === 'socios' ? 'socios' : e.id === 'ejercicio' ? 'fecha' : 'ajustes',
     ruta: e.ruta,
     // «Tu empresa» es también la portada de Ajustes (la dirección «ajustes» a secas).
     prefijos: e.id === 'empresa' ? [R.empresa, e.ruta] : [e.ruta],
     hueco: !!e.hueco,
+    ...(e.soloDemo ? { solo: 'demo' as const } : {}),
   }))
 
 export const PRODUCTOS: Producto[] = [
@@ -304,6 +308,7 @@ export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
     case 'gestoria': return ctx.gestoria === true
     case 'diez': return ctx.diez
     case 'asesoria': return ctx.asesoria === true
+    case 'demo': return ctx.demo === true
   }
 }
 
