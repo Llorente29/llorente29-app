@@ -1,0 +1,8 @@
+{
+ "_que": "GB · nº 9, punto 5 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 22:05Z. La 2300 crea _conta_bitrix_pestana_bitrix_de(uuid,text,text) y conta_bitrix_pestana_portal(text,text,text,text,uuid,uuid), que no existen, y no las llama: no cambia datos. Las de Code 3 que llama, conta_portal_ficha(uuid) y conta_portal_solicitud_hacer(uuid,uuid), existen. Lee conta_bitrix_pestana_cambio de la 2235, que aún no está aplicada: esta tanda va después del real de la 2235 (#549). Nada en el camino del pedido.",
+ "medido": "2026-11-09T22:05Z",
+ "tanda": {
+  "supabase/migrations/20261109T2300_gb_pestana_portal.sql": "97ca8bc207a442d77cc460a4f4db0535"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

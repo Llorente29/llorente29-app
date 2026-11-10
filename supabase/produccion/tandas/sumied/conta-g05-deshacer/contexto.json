@@ -1,0 +1,19 @@
+{
+ "_que": "G05 · Deshacer · contexto de producción, medido en SOLO LECTURA el 09/11 a las 23:13Z (analizar.mjs sql-contexto). La 0010 solo añade una tabla y cuatro funciones nuevas: no existe ninguna con esos nombres, ni trabajos de cron que las nombren. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T23:13Z",
+ "tanda": {
+  "supabase/migrations/20261110T0010_g05_deshacer_lineas.sql": "8bbe2838a1dfa330ced2e6240e5720f5"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -13,7 +13,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
-  abrirFichero, anularPeticion, enviarMensaje, leerFirmas, guardarPagarDevuelto, hacerSolicitud, invitar, leerFichaPortal, leerPagarDevuelto, marcarLeidos, pedir,
+  abrirFichero, anularPeticion, devolverEnDemo, enviarMensaje, leerFirmas, prepararDemo, reciboEnElBanco, guardarPagarDevuelto, hacerSolicitud, invitar, leerFichaPortal, leerPagarDevuelto, marcarLeidos, pedir,
   quitarAcceso, rechazarSolicitud, resolverIncidencia, type FichaPortal, type Permiso,
 } from './datos'
 import { pruebaDeFirma, type FirmaLeida } from './firma'
@@ -24,6 +24,8 @@ export interface PropsPortalFicha {
   nombreCliente: string
   /** Los servicios que se cobran por trabajador: dónde va un alta pedida desde el portal. */
   serviciosPorTrabajador: { id: string; nombre: string }[]
+  /** Una cuenta de demostración (accounts.is_demo): sale el recuadro «Demo». */
+  esDemo?: boolean
   /** Para probar sin base (Storybook, capturas): lo que haría leerFichaPortal. */
   leer?: () => Promise<FichaPortal>
 }
@@ -107,6 +109,8 @@ export function PortalFicha(p: PropsPortalFicha) {
       )}
 
       <PagarDevuelto cuenta={p.cuenta} h={h} />
+
+      {p.esDemo && <Demo cuenta={p.cuenta} cliente={p.cliente} h={h} />}
     </div>
   )
 }
@@ -295,6 +299,27 @@ function PagarDevuelto({ cuenta, h }: { cuenta: string; h: H }) {
         <input type="checkbox" checked={formas.includes('tarjeta')} disabled={h.haciendo} onChange={(e) => cambiar('tarjeta', e.target.checked)} style={{ width: 20, height: 20 }} />
         Pagar con tarjeta o Bizum
       </label>
+    </section>
+  )
+}
+
+/** Solo en una cuenta demo: preparar su portal y que el sandbox devuelva un recibo (T5). */
+function Demo({ cuenta, cliente, h }: { cuenta: string; cliente: string; h: H }) {
+  const [recibo, setRecibo] = useState<{ id: string; mes: string } | null | undefined>(undefined)
+  useEffect(() => { void reciboEnElBanco(cliente).then(setRecibo, () => setRecibo(null)) }, [cliente])
+  return (
+    <section aria-labelledby="gp-demo" className="g4-bloque" data-pantalla="portal-demo">
+      <div className="g4-bloque-cabecera"><h2 id="gp-demo" className="g4-bloque-titulo" style={{ fontSize: 20 }}>Demo</h2>
+        <span className="g4-etiqueta">Solo en la cuenta de demostración</span></div>
+      <p className="g4-pequeno" style={{ fontSize: 14, margin: 0 }}>Después de «Volver a empezar», prepara otra vez el portal: el acceso de Tomás Ruiz, un mensaje, una petición y los dos caminos para pagar un devuelto. Lo que ya está, lo deja.</p>
+      <button type="button" className="g4-boton" style={{ alignSelf: 'flex-start' }} disabled={h.haciendo} onClick={() => void h.hacer(() => prepararDemo(cuenta))}>Preparar el portal de la demo</button>
+      <p className="g4-pequeno" style={{ fontSize: 14, margin: 0 }}>
+        {recibo === undefined ? 'Mirando si tiene un recibo en el banco…'
+          : recibo ? `El recibo de ${recibo.mes} está en el banco. En el sandbox, el banco lo puede devolver: llega el aviso y sale devuelto aquí y en su portal.`
+          : 'No tiene ningún recibo en el banco: primero «Enviar el cobro» del mes.'}
+      </p>
+      <button type="button" className="g4-boton" style={{ alignSelf: 'flex-start' }} disabled={h.haciendo || !recibo}
+        onClick={() => { if (recibo && window.confirm(`¿Que el sandbox devuelva el recibo de ${recibo.mes}?`)) void h.hacer(() => devolverEnDemo(recibo.id)) }}>Que el banco lo devuelva (sandbox)</button>
     </section>
   )
 }

@@ -95,3 +95,45 @@ describe('GB (nº 9, punto 2) · el nivel y el precio especial antes de guardar'
       .toBe('El recibo de diciembre pasa de 585,60 € a 546,00 € (−39,60 €).')
   })
 })
+
+describe('GB (nº 9, punto 5) · su portal', () => {
+  it('quién entra, lo que pide y los mensajes sin leer; si no se ha podido leer, nada', async () => {
+    const { modeloPortal } = await import('@/publicas/bitrixPestanaModelo')
+    expect(modeloPortal({ estado: 'ok', accesos: [{ nombre: 'Persona Prueba', permiso: 'facturas_documentos', entro: null }],
+      solicitudes: [{ id: 's1', tipo: 'baja', nombre: 'Ana Prueba', fecha: '2026-11-30' }], mensajes_sin_leer: 2 })).toEqual({
+      accesos: [{ nombre: 'Persona Prueba', permiso: 'Solo facturas y documentos', entro: false }],
+      solicitudes: [{ id: 's1', tipo: 'baja', nombre: 'Ana Prueba', fecha: '2026-11-30', texto: 'Pide una baja: Ana Prueba, el 30/11' }],
+      mensajesSinLeer: 2 })
+    expect(modeloPortal({ estado: 'sin_permiso' })).toBeNull()
+  })
+})
+
+describe('GB (nº 10) · las pestañas por área y «Lo pendiente con este cliente»', () => {
+  const portal = { accesos: [], solicitudes: [{ id: 's1', tipo: 'alta' as const, nombre: 'Ana Prueba', fecha: '2026-11-16', texto: 'Pide un alta: Ana Prueba, desde el 16/11' }], mensajesSinLeer: 1 }
+  it('solo las cuatro que existen hoy, en su orden, con su aviso', async () => {
+    const { areasDe } = await import('@/publicas/bitrixPestanaModelo')
+    const p = modeloPestana(respuesta(), HOY)!
+    expect(areasDe(p, portal)).toEqual([
+      { id: 'resumen', nombre: 'Resumen', chip: '', tono: null },
+      { id: 'cobros', nombre: 'Cuotas y cobros', chip: '2', tono: 'mal' },
+      { id: 'laboral', nombre: 'Laboral', chip: '18', tono: 'neutro' },
+      { id: 'portal', nombre: 'Portal', chip: '2', tono: 'aviso' },
+    ])
+    // Sin portal leído todavía, «Portal» no lleva aviso (no se inventa).
+    expect(areasDe(p, null)[3]).toEqual({ id: 'portal', nombre: 'Portal', chip: '', tono: null })
+  })
+  it('lo pendiente: el devuelto y lo de revisar van a «Cuotas y cobros»; lo que pide y los mensajes, a «Portal»', async () => {
+    const { pendientesDe } = await import('@/publicas/bitrixPestanaModelo')
+    const p = modeloPestana(respuesta(), HOY)!
+    expect(pendientesDe(p, portal).map((x) => [x.area, x.etiqueta, x.texto, x.boton])).toEqual([
+      ['cobros', 'Cobros', 'Recibo del 4 oct. 2026 devuelto · 496,10 €', 'Ver'],
+      ['cobros', 'Revisar', ficha.pendientes[0].porque, 'Ver'],
+      ['portal', 'Portal', 'Pide un alta: Ana Prueba, desde el 16/11', 'Ver'],
+      ['portal', 'Portal', '1 mensaje sin contestar', 'Contestar'],
+    ])
+  })
+  it('cada formulario abre en su pestaña', async () => {
+    const { AREA_DE } = await import('@/publicas/bitrixPestanaModelo')
+    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal' })
+  })
+})
