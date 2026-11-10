@@ -186,8 +186,24 @@ async function ir(ruta, espera) {
     await page.locator('.cx-hueso').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
     if (espera) await (typeof espera === 'string' ? page.getByText(espera).first() : espera).waitFor({ timeout: 30_000 }).catch(() => fallo(`${ruta}: no ha salido lo que se esperaba`))
-    await quieto(700)
+    await sinCargar()
   })
+}
+/**
+ * La prueba del nº99 grabó «Sumied · Cargando…» al volver de un corte: la app vuelve a pintar su pantalla de carga
+ * después de que la página ya parecía lista. Nunca se graba una pantalla cargando: dentro del corte se espera a que
+ * no haya ningún «Cargando…» ni esqueleto, y a que siga así un segundo entero.
+ */
+async function sinCargar() {
+  const cargando = () => page.evaluate(() => /Cargando(\.\.\.|…)|Entrando…/.test(document.body?.innerText ?? '') || !!document.querySelector('.cx-hueso, .pt-cargando'))
+  const hasta = Date.now() + 30_000
+  let quietos = 0
+  while (Date.now() < hasta && quietos < 3) {
+    await quieto(400)
+    quietos = (await cargando().catch(() => true)) ? 0 : quietos + 1
+  }
+  if (quietos < 3) fallo('una pantalla se ha quedado «Cargando…» más de 30 s')
+  await quieto(300)
 }
 async function foto(n) { await page.screenshot({ path: join(salida, 'capturas', `${n}.png`), style: '#__cursor,.__onda{display:none!important}' }).catch(() => {}) }
 const escena = (t) => { decir(`\n── ${t}`); R.marca(t.split(' ')[0], t) }
@@ -443,10 +459,10 @@ try {
         await page.evaluate(([ses, cli]) => { localStorage.setItem('sumied-portal', ses); localStorage.setItem('sumied-portal-cliente', cli) }, [JSON.stringify(s.sesion), u.party])
         await page.goto(`${APP}/portal.html#${pestana}`, { waitUntil: 'domcontentloaded' })
         await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => fallo(`11: el portal no ha cargado (${pestana})`))
-        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await quieto(600)
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await sinCargar()
       })
     }
-    const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await quieto(600) }) }
+    const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await sinCargar() }) }
     if (!tomas) { fallo('11: Tomás Ruiz no tiene usuario en el portal («Volver a empezar» lo deja listo)'); noToca(['11.1', '11.2', '11.4', '11.5', '11.6', '11.7'], 'Tomás Ruiz sin acceso') }
     else {
       await comoEnElPortal(tomas, 'inicio')

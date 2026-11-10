@@ -82,3 +82,11 @@ describe('GD · nº100 · la demo cobra el mes en curso y deja preparado el sigu
     expect(g).not.toMatch(/accion: 'enviar'/)
   })
 })
+
+describe('GD · nº100 · nunca se graba una pantalla cargando', () => {
+  it('cada salto de página espera, dentro del corte, a que no quede nada «Cargando…»', () => {
+    expect(g).toMatch(/async function ir\([\s\S]*?await sinCargar\(\)\s*\}\)\s*\}/)
+    expect(g).toContain('|Entrando…/.test(document.body')
+    expect((g.match(/await sinCargar\(\)/g) ?? []).length).toBeGreaterThanOrEqual(3)
+  })
+})
