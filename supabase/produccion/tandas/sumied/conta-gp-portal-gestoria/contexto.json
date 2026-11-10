@@ -1,0 +1,21 @@
+{
+ "_que": "GP · T4 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 19:40Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 2030 añade cinco funciones que no existen y un cron (solo con cron_secret), y cambia en caliente public._conta_portal_proximo (existe; misma firma; con respaldo; declarada en su cabecera con su prueba). Llama, sin cambiarlas, a conta_gestoria_alta_empleado y conta_gestoria_baja_linea (existen). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T19:40Z",
+ "tanda": {
+  "supabase/migrations/20261109T2030_gp_portal_gestoria.sql": "ddaece470327b4257835fbcd762a4921"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_portal_proximo(uuid,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

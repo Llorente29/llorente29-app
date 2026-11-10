@@ -1,0 +1,6 @@
+# G05 · La 0010 (deshacer un alta, una baja o un cambio de nivel del mismo día). Su
+# prueba (ROLLBACK, datos inventados, en la cuenta A) hace las tres como la persona,
+# las lista, deshace el nivel y el alta, no deja deshacer la baja con un recibo
+# enviado después ni una de ayer, y prueba la vuelta atrás.
+supabase/migrations/20261110T0010_g05_deshacer_lineas.sql
+supabase/staging/sql/20261110_g05_deshacer_lineas_prueba.sql
