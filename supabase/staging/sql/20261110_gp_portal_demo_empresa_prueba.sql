@@ -14,8 +14,8 @@
 --   3. Como Tomás: Inicio y Documentos con su empresa (sube documentos, ve los
 --      impuestos y las nóminas, y «Lo último» los trae); «Correo para las
 --      facturas» es el de GoCardless (adonde va la factura).
---   4. La vuelta atrás: las dos funciones como estaban y fuera lo sembrado en la
---      cuenta de la gestoría.
+--   4. La vuelta atrás: las dos funciones como estaban y fuera lo sembrado, también
+--      la empresa de Talleres Ruiz (con sus impuestos, trabajadores y nóminas).
 --
 -- sin usuario: sembrar los datos inventados lo hace el servidor; la lectura se prueba como la persona del portal.
 
@@ -179,7 +179,12 @@ begin
      or (select count(*) from public.conta_portal_mensaje where party_id = g.cliente) <> 1 then
     raise exception 'PRUEBA GP-1345 · 4: la vuelta atrás deja el enlace, a Lucía Pardo o la conversación.';
   end if;
-  raise notice 'GP-1345 · 4: la vuelta atrás deja las dos funciones como estaban y quita lo sembrado en la cuenta de la gestoría. OK';
+  if not g.ya_habia_empresa and (exists (select 1 from public.accounts where id = 'de000000-0000-4000-8000-0000000000b1')
+     or exists (select 1 from public.tax_return where account_id = 'de000000-0000-4000-8000-0000000000b1')
+     or exists (select 1 from public.employees where account_id = 'de000000-0000-4000-8000-0000000000b1')) then
+    raise exception 'PRUEBA GP-1345 · 4: la vuelta atrás deja la empresa de Talleres Ruiz, sus impuestos o sus trabajadores.';
+  end if;
+  raise notice 'GP-1345 · 4: la vuelta atrás deja las dos funciones como estaban y quita lo sembrado, también la empresa de Talleres Ruiz. OK';
 end $$;
 
 rollback;
