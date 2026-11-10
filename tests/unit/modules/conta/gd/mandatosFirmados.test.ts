@@ -16,6 +16,8 @@ describe('GD · nº62 · los mandatos de la demo, firmados salvo dos', () => {
     const creados: { empresa: string; given: string }[] = []
     let n = 0
     const f = (async (_u: string, init?: RequestInit) => {
+      // nº105 · La siembra mira primero si el sandbox ya tiene clientes (un intento a medias): aquí, vacío.
+      if (init?.method === 'GET') return new Response(JSON.stringify({ customers: [], mandates: [], meta: { cursors: {} } }), { status: 200 })
       const cuerpo = init?.body ? JSON.parse(String(init.body)) : {}
       if (cuerpo.customers) creados.push({ empresa: cuerpo.customers.company_name, given: cuerpo.customers.given_name })
       const id = `X${++n}`
