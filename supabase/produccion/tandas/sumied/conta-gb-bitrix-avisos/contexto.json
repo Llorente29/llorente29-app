@@ -1,0 +1,8 @@
+{
+ "_que": "GB · nº 13, punto 4 · contexto de producción, medido en SOLO LECTURA el 10/11 a la 01:10Z. La 0060 crea la tabla conta_bitrix_pestana_aviso, tres funciones nuevas y el cron conta-bitrix-avisos-despertar (no existen). Lee conta_crm, conta_gestoria_ficha, conta_gc_cobro, conta_gc_mandato, conta_gc_cliente y conta_solicitud, que existen. Solo conexiones de pruebas (hoy, la de Gestoría Demo). Nada en el camino del pedido.",
+ "medido": "2026-11-10T01:10Z",
+ "tanda": {
+  "supabase/migrations/20261110T0060_gb_bitrix_avisos.sql": "06466a5e724abd938c06a86b78a10615"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

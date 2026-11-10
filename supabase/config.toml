@@ -410,6 +410,12 @@ verify_jwt = false
 [functions.conta-bitrix-pestana]
 verify_jwt = false
 
+# GB · nº 13 · conta-bitrix-pestana-avisos: las tareas en el Bitrix24 de pruebas
+# (recibo devuelto, mandato sin firmar, alta pedida en el portal). La despierta
+# el cron conta-bitrix-avisos-despertar con x-cron-secret (CRON_SECRET), sin sesión.
+[functions.conta-bitrix-pestana-avisos]
+verify_jwt = false
+
 # GP · T2b (09/11) · El portal del cliente: pedir el enlace para entrar. Sin
 # sesión (aún no la tiene): contesta siempre lo mismo, haya acceso o no.
 [functions.conta-portal-entrar]
