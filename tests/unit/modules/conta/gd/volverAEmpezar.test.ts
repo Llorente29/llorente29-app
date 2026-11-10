@@ -1,7 +1,7 @@
 // GD · «Volver a empezar» (nº51): la puerta, las guardas de la siembra y la
 // entrada «Tu cuenta» de Ajustes, solo en una demo. Datos inventados (T11).
 import { describe, expect, it } from 'vitest'
-import { CAMBIOS_DEL_MES, PASOS, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, type Puerta } from '../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos'
+import { CAMBIOS_DEL_MES, PASOS, esPaso, fechasDeLosCambios, inicioDeLasCuotas, mesDelCobro, mesSiguiente, porqueNo, type Puerta } from '../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos'
 import { GC_SANDBOX, PORTAL_DE_PRUEBAS, crearSiembra, guardaPortal } from '../../../../../supabase/functions/_shared/gd/siembra'
 import { indiceAjustes } from '@/config/navegacion'
 import { vale } from '../../../../../supabase/functions/conta-gocardless-leer/comparacion'
@@ -22,7 +22,7 @@ describe('GD · Volver a empezar · la puerta', () => {
     expect(porqueNo(puerta({ faltan: ['GD_B24_ENTRANTE_URL', 'GD_GC_SANDBOX_RW_TOKEN'] }), PORTAL_DE_PRUEBAS)).toBe('Faltan los secretos GD_B24_ENTRANTE_URL y GD_GC_SANDBOX_RW_TOKEN en las funciones: los pega Julio.')
   })
   it('los pasos, en su orden, y nada más', () => {
-    expect(PASOS.map((p) => p.id)).toEqual(['portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'cambios'])
+    expect(PASOS.map((p) => p.id)).toEqual(['portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'cambios', 'portal'])
     expect(esPaso('comprobar')).toBe(true)
     expect(esPaso('borrar_todo')).toBe(false)
   })
@@ -65,10 +65,14 @@ describe('GD · nº63 · las cuotas mensuales de la demo, desde enero', () => {
   })
 })
 
-describe('GD · nº68 · los cambios del cobro del mes que viene', () => {
-  it('alta el 12 de este mes, baja este mes y nivel desde el que viene', () => {
-    expect(fechasDeLosCambios('2026-11-09')).toEqual({ altaEl: '2026-11-12', esteMes: '2026-11-01', mesQueViene: '2026-12-01' })
-    expect(fechasDeLosCambios('2026-12-20')).toEqual({ altaEl: '2026-12-12', esteMes: '2026-12-01', mesQueViene: '2027-01-01' })
+describe('GD · nº68 y nº100 · los cambios del cobro del mes en curso', () => {
+  it('alta y nivel el 1 del mes que viene, baja este mes (nº76: la regla del mes entero)', () => {
+    // nº100 · La demo cobra el mes en curso: el alta y el nivel, desde el 1 de este mes; la baja, cobrada hasta el mes pasado.
+    expect(fechasDeLosCambios('2026-11-09')).toEqual({ altaEl: '2026-11-01', nivelDesde: '2026-11-01', bajaHasta: '2026-10-01' })
+    expect(fechasDeLosCambios('2027-01-20')).toEqual({ altaEl: '2027-01-01', nivelDesde: '2027-01-01', bajaHasta: '2026-12-01' })
+    expect(mesDelCobro('2026-11-10')).toBe('2026-11')
+    expect(mesSiguiente('2026-11')).toBe('2026-12')
+    expect(mesSiguiente('2026-12')).toBe('2027-01')
   })
   it('a quién: Talleres Ruiz (+1), Imprenta Rápida Sol (a Premium) y Reformas Atalaya (una baja)', () => {
     expect(CAMBIOS_DEL_MES.alta.cliente).toBe('Talleres Ruiz, S.L.')
@@ -77,5 +81,15 @@ describe('GD · nº68 · los cambios del cobro del mes que viene', () => {
   })
   it('de Básica (90 €) a Premium (150 €) sube más de un 30 %: pide «Lo he mirado, aprobar»', () => {
     expect((150 - 90) / 90).toBeGreaterThan(0.3)
+  })
+})
+
+describe('GD · nº71 · «Tu cuenta» en el menú de Ajustes de la izquierda', () => {
+  it('sale en una cuenta demo y no en las demás', async () => {
+    const { PRODUCTOS, pestanasVisibles } = await import('@/modules/conta/esqueleto/productos')
+    const ajustes = PRODUCTOS.find((p) => p.id === 'ajustes')!
+    const ids = (demo: boolean) => pestanasVisibles(ajustes, { hosteleria: false, diez: false, interruptores: new Set(), demo }).map((t) => t.id)
+    expect(ids(true)).toContain('cuenta')
+    expect(ids(false)).not.toContain('cuenta')
   })
 })

@@ -49,8 +49,11 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
   gesto del guion. Los subtítulos son esas mismas frases. **Para cambiar lo
   que se dice, se cambia aquí.**
 - `voz-elevenlabs.txt`: **la voz de los vídeos, y el único sitio donde está**:
-  el id de la voz de ElevenLabs (`bsEDAkNZWaEolZ7vEeVJ`, la que eligió Julio
-  el 03/11) y `modelo: v4`. Ninguna variable del repositorio la cambia.
+  el id de la voz de ElevenLabs (`TbcXaMnSerONT83CTICz`, Julio Clon, la que
+  eligió Julio el 10/11, nº99; antes, Abel, del 03/11) y `modelo: v4`. Ninguna
+  variable del repositorio la cambia. Cada frase de `frases.json` puede llevar
+  `voz`, cómo se escribe para que suene bien («Gou Cárdles»): los subtítulos
+  siguen con `texto`.
 - `voz_nube.py`: hace la voz con ElevenLabs, ANTES de grabar (el guion espera
   a que acabe cada frase antes del gesto siguiente, así nunca se pisan). La
   clave va en el secreto `VOZ_ELEVENLABS_KEY`; **sin él, el vídeo para en rojo**

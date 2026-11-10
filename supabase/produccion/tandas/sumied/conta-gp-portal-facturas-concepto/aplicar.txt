@@ -1,0 +1,14 @@
+# GP · nº 24, punto 2 (Code 3; Julio, 10/11): las facturas como la maqueta.
+# Rama conta/gp-portal-facturas-concepto. Se ensaya y se aplica desde main
+# nombrando esta rama, DESPUÉS del real de la 0945 (conta/gp-portal-inicio-hecho):
+# si la 0945 no está, la 1010 para.
+#
+#   1010  CAMBIA EN CALIENTE dos funciones propias del portal (la misma firma,
+#         con respaldo): conta_portal_facturas trae lo que lleva cada factura y
+#         el día en que se pagó; conta_portal_inicio, «Pagada el …» en la
+#         factura de «Lo último». Declaradas en su cabecera con su prueba. No
+#         toca datos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-facturas-pagada.sql
+supabase/migrations/20261110T1010_gp_portal_facturas_pagada.sql

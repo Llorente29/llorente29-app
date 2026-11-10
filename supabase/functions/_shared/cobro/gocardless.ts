@@ -208,3 +208,100 @@ export function leerCancelacion(status: number, respuesta: unknown): { cancelado
   if (motivos.includes('mandate_already_cancelled')) return { cancelado: true }
   return { cancelado: false, porque: e?.message ?? `HTTP ${status}` }
 }
+
+/** nº 70 · Una suscripción de GoCardless, como se leyó (conta_gc_suscripcion). */
+export interface SuscripcionGuardada { importeCent: number; intervalo: string; cada: number; estado: string; proximoCobro: string | null; inicio: string | null }
+
+const mesesDesde = (de: string, a: string) => (Number(a.slice(0, 4)) - Number(de.slice(0, 4))) * 12 + Number(a.slice(5, 7)) - Number(de.slice(5, 7))
+
+/**
+ * nº 70 · Lo que GoCardless le cobra a un cliente EN un mes, para compararlo con
+ * el recibo de ese mes. Una mensual entra todos los meses; una anual (o cada
+ * varios meses), solo en el mes en que la cobra, que sale de su próximo cobro (o
+ * de su inicio). No se reparte entre doce: la de 300 € al año no son 25 € en
+ * diciembre, son 300 € en su mes. Las semanales no se comparan con un mes.
+ * Null si no tiene ninguna activa.
+ */
+export function gocardlessEnElMes(suscripciones: readonly SuscripcionGuardada[], mes: string): number | null {
+  const activas = suscripciones.filter((s) => s.estado === 'active')
+  if (!activas.length) return null
+  let total = 0
+  for (const s of activas) {
+    const cada = Math.max(1, s.cada || 1)
+    const meses = s.intervalo === 'monthly' ? cada : s.intervalo === 'yearly' ? 12 * cada : null
+    if (meses === null) continue
+    if (meses === 1) { total += s.importeCent; continue }
+    const ref = s.proximoCobro ?? s.inicio
+    if (!ref) continue
+    const d = mesesDesde(ref.slice(0, 7), mes)
+    if (((d % meses) + meses) % meses === 0) total += s.importeCent
+  }
+  return total
+}
+
+/**
+ * nº 71, punto 4 · LAS DEVOLUCIONES DE PUNTA A PUNTA EN EL SANDBOX. GoCardless
+ * deja provocar en su entorno de pruebas lo que en la vida real hace el banco
+ * (los «scenario simulators»): POST /scenario_simulators/{cual}/actions/run con
+ * { data: { links: { resource: <cobro> } } }. Solo existe en el sandbox: en la
+ * cuenta real, GoCardless contesta que no. Después, la lectura de GoCardless
+ * trae el estado nuevo y «seguir» hace lo de siempre (devuelto, «Te deben», el
+ * asiento de la devolución si ya estaba cobrado).
+ *   · sin_fondos  → payment_failed: el banco lo devuelve antes de cobrarse.
+ *   · reclamado   → payment_charged_back: se cobra y después el cliente lo
+ *                   reclama a su banco (retrocedido).
+ *   · tarde       → payment_late_failure: se cobra y después falla.
+ *   · cobrado     → payment_paid_out: se cobra y se ingresa (el camino bueno).
+ * Los cuatro piden el cobro aún sin presentar al banco (pending_submission).
+ */
+export const SIMULACIONES = {
+  sin_fondos: { gc: 'payment_failed', frase: 'devuelto por el banco antes de cobrarse (sin fondos)' },
+  reclamado: { gc: 'payment_charged_back', frase: 'cobrado y después reclamado por el cliente a su banco' },
+  tarde: { gc: 'payment_late_failure', frase: 'cobrado y después devuelto por el banco' },
+  cobrado: { gc: 'payment_paid_out', frase: 'cobrado e ingresado' },
+} as const
+export type Simulacion = keyof typeof SIMULACIONES
+
+export function peticionDeSimulacion(como: string, cobroId: string): { ruta: string; cuerpo: { data: { links: { resource: string } } } } | { porque: string } {
+  if (!(como in SIMULACIONES)) return { porque: `Eso no se simula: ${Object.keys(SIMULACIONES).join(', ')}.` }
+  if (!/^PM[0-9A-Z]{6,30}$/.test(cobroId)) return { porque: 'Ese recibo no tiene un cobro de GoCardless.' }
+  return { ruta: `/scenario_simulators/${SIMULACIONES[como as Simulacion].gc}/actions/run`, cuerpo: { data: { links: { resource: cobroId } } } }
+}
+
+export function leerSimulacion(status: number, cuerpo: unknown, como: Simulacion): { hecho: true; frase: string } | { hecho: false; frase: string } {
+  if (status >= 200 && status < 300) {
+    return { hecho: true, frase: `Simulado en el sandbox: ${SIMULACIONES[como].frase}. GoCardless lo procesa en unos segundos; pulsa «Leer GoCardless» para verlo en Sumied.` }
+  }
+  const e = ((cuerpo ?? {}) as { error?: ErrorDeGc }).error ?? {}
+  const detalle = (e.errors ?? []).map((x) => x.message).filter(Boolean).join('; ') || e.message || `respuesta ${status}`
+  return { hecho: false, frase: `GoCardless no lo ha simulado: ${detalle}.` }
+}
+
+/**
+ * nº 71 · «Que lo pasen de nuevo»: POST /payments/{id}/actions/retry. GoCardless
+ * vuelve a presentar el mismo cobro (con el mismo id) y contesta 200 con el cobro
+ * en «pending_submission». Solo se puede con un cobro devuelto («failed») y con el
+ * mandato aún vivo; si no, lo dice. Lo pide la función del servidor solo con una
+ * conexión de pruebas (el sandbox).
+ */
+export function peticionDeReintento(motivo: string): { data: { metadata: Record<string, string> } } {
+  return { data: { metadata: { motivo: motivo.slice(0, 500) } } }
+}
+
+export type RespuestaDeReintento =
+  | { tipo: 'pasado'; estado: string; cargoEl: string | null }
+  | { tipo: 'no'; frase: string }
+
+export function leerReintento(status: number, cuerpo: unknown): RespuestaDeReintento {
+  const c = (cuerpo ?? {}) as { payments?: { id?: string; status?: string; charge_date?: string | null }; error?: ErrorDeGc }
+  if (status >= 200 && status < 300 && c.payments?.id) {
+    return { tipo: 'pasado', estado: c.payments.status ?? 'pending_submission', cargoEl: c.payments.charge_date ?? null }
+  }
+  const e = c.error ?? {}
+  const razones = (e.errors ?? []).map((x) => x.reason).filter(Boolean)
+  if (status === 403) return { tipo: 'no', frase: 'La conexión de GoCardless es de solo lectura: con ella no se puede volver a pasar.' }
+  if (razones.includes('mandate_is_inactive')) return { tipo: 'no', frase: 'El mandato SEPA ya no está activo en GoCardless: no se puede volver a pasar. Mándale el enlace para pagar.' }
+  if (status === 429 || status >= 500) return { tipo: 'no', frase: 'GoCardless no ha contestado bien: no se ha vuelto a pasar. Inténtalo dentro de un rato.' }
+  const detalle = (e.errors ?? []).map((x) => x.message).filter(Boolean).join('; ') || e.message || `respuesta ${status}`
+  return { tipo: 'no', frase: `GoCardless no lo ha vuelto a pasar: ${detalle}.` }
+}

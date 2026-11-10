@@ -26,6 +26,7 @@ import { rutaPuerta } from '@/config/navegacion'
 import { dejarFicheros, llevaFicheros } from '@/modules/conta/puerta/entregas'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { FranjaDemo } from '@/modules/conta/cuenta/FranjaDemo'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
@@ -207,6 +208,8 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
             usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           <main className="cx-principal cxm-principal s-principal">
+            {/* GD · En una cuenta de demostración, arriba del contenido de cada pantalla (también en el móvil). */}
+            <FranjaDemo />
             {propias !== 'encabezado' && (
               <AccionesDePagina grupos={grupos} conBarra={propias === 'barra'} hueco={setHuecoAcciones} etiqueta={`Acciones de ${nombrePagina}`} />
             )}

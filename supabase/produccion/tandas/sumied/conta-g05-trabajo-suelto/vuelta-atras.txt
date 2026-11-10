@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 0700: fuera las funciones del trabajo suelto.
+cuenta: scripts/conta/produccion/cuentas/g05-trabajo-suelto.sql
+supabase/vuelta-atras/20261110T0700_g05_trabajo_suelto.down.sql

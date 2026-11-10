@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 1217: «facturar» y «seguir» de su respaldo.
+cuenta: scripts/conta/produccion/cuentas/g05-liquidado-devuelto.sql
+supabase/vuelta-atras/20261110T1217_g05_liquidado_devuelto.down.sql

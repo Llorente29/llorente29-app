@@ -1,0 +1,12 @@
+# GD · Clientes y cuotas al día sin recargar (nº71, Realtime). Rama
+# conta/gd-al-dia-solo. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. El real lo lanza Julio.
+#
+#   2308  Añade conta_gestoria_lectura a la publicación de Realtime
+#         (supabase_realtime). Ni datos, ni tablas, ni políticas. La seguridad
+#         por cuenta es la RLS que ya tiene la tabla (belongs_to_account: la
+#         cuenta abierta), que Realtime aplica a cada suscriptor.
+#
+# Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-al-dia.sql
+supabase/migrations/20261109T2308_gd_al_dia_lecturas.sql

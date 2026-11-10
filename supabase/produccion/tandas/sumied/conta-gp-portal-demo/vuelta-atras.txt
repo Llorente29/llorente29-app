@@ -1,0 +1,4 @@
+# GP · la vuelta atrás de la 2240: fuera la función y lo que sembró en la demo
+# (solo si sigue como lo dejó).
+cuenta: scripts/conta/produccion/cuentas/gp-portal-demo.sql
+supabase/vuelta-atras/20261109T2240_gp_portal_demo.down.sql

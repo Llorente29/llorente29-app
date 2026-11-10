@@ -1,0 +1,13 @@
+# G05 · Un cobro que GoCardless liquidó y llega ya devuelto o reclamado: su
+# factura, su cobro y su devolución, como la maqueta (nº 79). Rama
+# conta/g05-liquidado-devuelto. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1217  CAMBIA _conta_cobro_facturar (md5 en producción 3173115f…, el de la
+#         2203) y conta_cobro_seguir (169a4670…, el de la 1138), las dos con la
+#         misma firma y su respaldo.
+#
+# No toca datos: lo que esté así lo arregla el «seguir» de la siguiente lectura.
+# Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-liquidado-devuelto.sql
+supabase/migrations/20261110T1217_g05_liquidado_devuelto.sql

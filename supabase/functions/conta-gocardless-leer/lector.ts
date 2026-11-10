@@ -18,6 +18,8 @@
 //     trae meta.cursors.after, null en la última página.
 //   · Los importes van en céntimos (enteros) y con su moneda.
 
+import { motivoEnPalabras } from './motivo.ts'
+
 export type Entorno = 'real' | 'pruebas'
 export const BASES: Record<Entorno, string> = {
   real: 'https://api.gocardless.com',
@@ -30,7 +32,7 @@ export function cabeceras(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'GoCardless-Version': VERSION_API, Accept: 'application/json' }
 }
 
-export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts'
+export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts' | 'payout_items'
 
 /** La dirección de una página: el recurso, sus filtros y el cursor de la anterior. */
 export function urlDePagina(entorno: Entorno, recurso: Recurso, filtros: Record<string, string> = {}, despues: string | null = null): string {
@@ -220,6 +222,9 @@ export interface CobroGc {
   payoutId: string | null
   /** El motivo del fallo, de su evento (/events): lo pone casarMotivos. */
   motivo: string | null
+  /** G05 · nº 77 · Su código (details.cause) y el motivo en palabras de oficina. */
+  causa?: string | null
+  motivoEs?: string | null
 }
 
 export const COBRO_FALLIDO: readonly string[] = ['failed', 'charged_back', 'cancelled']
@@ -255,7 +260,7 @@ export function leerPayout(x: Record<string, unknown>): PayoutGc {
  * charged_back» (details.description; si no, details.cause). El último gana.
  */
 export function casarMotivos(cobros: CobroGc[], eventos: Record<string, unknown>[]): CobroGc[] {
-  const motivo = new Map<string, { cuando: string; texto: string }>()
+  const motivo = new Map<string, { cuando: string; texto: string; causa: string | null }>()
   for (const e of eventos) {
     if (e.resource_type !== 'payments' || !['failed', 'charged_back', 'cancelled'].includes(String(e.action))) continue
     const pago = enlace(e, 'payment')
@@ -264,9 +269,12 @@ export function casarMotivos(cobros: CobroGc[], eventos: Record<string, unknown>
     if (!pago || !t) continue
     const cuando = texto(e.created_at) ?? ''
     const antes = motivo.get(pago)
-    if (!antes || cuando >= antes.cuando) motivo.set(pago, { cuando, texto: t })
+    if (!antes || cuando >= antes.cuando) motivo.set(pago, { cuando, texto: t, causa: texto(d.cause) })
   }
-  return cobros.map((c) => (motivo.has(c.id) ? { ...c, motivo: motivo.get(c.id)!.texto } : c))
+  return cobros.map((c) => {
+    const m = motivo.get(c.id)
+    return m ? { ...c, motivo: m.texto, causa: m.causa, motivoEs: motivoEnPalabras(m.causa, m.texto) } : c
+  })
 }
 
 /** Desde cuándo se leen los cobros: el primer día del mes de hace N meses («charge_date[gte]»). */

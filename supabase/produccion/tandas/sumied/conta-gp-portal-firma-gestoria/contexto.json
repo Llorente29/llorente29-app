@@ -1,0 +1,21 @@
+{
+ "_que": "GP · nº 19.1 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 00:01Z (los objetivos de analizar.mjs). La 0005 cambia en caliente public.conta_portal_documentos(uuid) (existe; misma firma; sin otras sobrecargas; con respaldo; declarada en su cabecera con su prueba). Ni disparador ni cron la usan: no está en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T00:01Z",
+ "tanda": {
+  "supabase/migrations/20261110T0005_gp_portal_firmados.sql": "1c6dcdcf568fad87cf161e0a45ba1d07"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_portal_documentos(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

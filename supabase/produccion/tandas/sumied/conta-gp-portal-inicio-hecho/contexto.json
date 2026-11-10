@@ -1,0 +1,21 @@
+{
+ "_que": "GP · nº 24 · puntos 1 y 4 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 09:48Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 0945 cambia en caliente public.conta_portal_inicio(uuid) (existe; misma firma; sin otras sobrecargas; con respaldo; declarada en su cabecera con su prueba). Su cuerpo en producción es el de la 1530 (md5 del prosrc 0dcd03da88302a56e80b823f07cfa45b, el mismo que en la base local con la 1530). Ni disparador ni cron la usan: no está en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T09:48Z",
+ "tanda": {
+  "supabase/migrations/20261110T0945_gp_portal_inicio_hecho.sql": "1a4346c083a322fb7fe8a44306f73fd8"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_portal_inicio(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

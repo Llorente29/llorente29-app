@@ -1,0 +1,5 @@
+# GP · la 0005 (lo firmado, en Documentos) y su prueba (ROLLBACK, datos
+# inventados): «Todo» lo ve con su PDF, «Facturas y documentos» no, lo de antes
+# igual y la vuelta atrás.
+supabase/migrations/20261110T0005_gp_portal_firmados.sql
+supabase/staging/sql/20261110_gp_portal_firmados_prueba.sql
