@@ -24,6 +24,11 @@
 //     lo está, cancela las viejas (solo con una conexión de pruebas, como
 //     enviar) y guarda el cambio (conta_cobro_cuenta_cambiada): los recibos
 //     siguientes van contra la nueva.
+//   · { accion: 'simular', empresa, recibo, como } (nº 71, punto 4): SOLO en el
+//     sandbox y por la puerta de las demos, provoca en GoCardless lo que haría el
+//     banco con ese cobro (sin_fondos, reclamado, tarde o cobrado: los «scenario
+//     simulators»). Para probar las devoluciones de punta a punta; después,
+//     «Leer GoCardless» y «seguir» hacen lo de siempre.
 //
 // Nunca se cobra en el GoCardless real de QBO: su conexión es real, de solo
 // lectura, y aquí no se envía a real. En el registro, nunca el token (T11).
@@ -35,7 +40,7 @@ import { salirA } from '../_shared/puertaDePruebas.ts'
 import { catalogoYAsignaciones } from '../_shared/cobro/datos.ts'
 import { claveDelRecibo, mesAnterior, prepararRecibo, type LineaDeRecibo, type Recibo, type ReciboAnterior } from '../_shared/cobro/recibo.ts'
 import { facturaDelRecibo, type Fiscal } from '../_shared/cobro/factura.ts'
-import { gocardlessEnElMes, leerCancelacion, leerMandatoNuevo, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro, type SuscripcionGuardada } from '../_shared/cobro/gocardless.ts'
+import { gocardlessEnElMes, leerCancelacion, leerSimulacion, peticionDeSimulacion, type Simulacion, leerMandatoNuevo, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro, type SuscripcionGuardada } from '../_shared/cobro/gocardless.ts'
 import { euros, type Mes } from '../_shared/tarifa/precio.ts'
 import type { Situacion } from '../_shared/tarifa/lista.ts'
 import { BASES, cabeceras, type Entorno } from '../conta-gocardless-leer/lector.ts'
@@ -149,6 +154,28 @@ async function cambiarCuenta(admin: any, empresa: string, cuenta: string, cuerpo
   }
 }
 
+/** nº 71, punto 4 · Simular en el sandbox lo que haría el banco con el cobro de un recibo. */
+// deno-lint-ignore no-explicit-any
+async function simular(admin: any, empresa: string, cuenta: string, cuerpo: Fila): Promise<Response> {
+  const recibo = String(cuerpo.recibo ?? '')
+  if (!UUID.test(recibo)) return json(400, { error: 'Falta el recibo.' })
+  const { data: r } = await admin.from('conta_recibo').select('id, company_id, gc_cobro_id, entorno').eq('id', recibo).eq('company_id', empresa).maybeSingle()
+  if (!r) return json(404, { error: 'Ese recibo no está en esta empresa.' })
+  const p = peticionDeSimulacion(String(cuerpo.como ?? ''), String((r as Fila).gc_cobro_id ?? ''))
+  if ('porque' in p) return json(400, { error: p.porque })
+  const { data: sec, error: e1 } = await admin.rpc('conta_gocardless_secreto', { p_company: empresa })
+  if (e1) return json(500, { error: `No se ha podido leer la conexión: ${e1.message}` })
+  const s = (sec as { entorno: Entorno; token: string }[] | null)?.[0]
+  if (!s?.token) return json(400, { error: 'Esta empresa no tiene conectada su cuenta de GoCardless.' })
+  // Simular solo existe en el sandbox; aun así, ni se intenta con la conexión real.
+  if (s.entorno !== 'pruebas' || (r as Fila).entorno !== 'pruebas') return json(400, { error: 'Simular solo se puede con una conexión de pruebas de GoCardless (el sandbox).' })
+  const puerta = salirA(!(await cuentaPuedeSalir(admin, cuenta)), s.entorno)
+  if (!puerta.sale) return json(400, { error: puerta.porque })
+  const res = await fetch(`${BASES[s.entorno]}${p.ruta}`, { method: 'POST', headers: { ...cabeceras(s.token), 'Content-Type': 'application/json' }, body: JSON.stringify(p.cuerpo) })
+  const l = leerSimulacion(res.status, await res.json().catch(() => null), String(cuerpo.como) as Simulacion)
+  return json(l.hecho ? 200 : 409, l.hecho ? { ok: true, frase: l.frase } : { error: l.frase })
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'Solo POST.' })
@@ -200,6 +227,7 @@ Deno.serve(async (req) => {
         buzonDePruebas: Deno.env.get('CORREO_BUZON_PRUEBAS'), abiertos: Deno.env.get('CORREO_MARCA_ABIERTOS') } })
       return json(200, { ok: true, ...(data as Fila), facturas: rem })
     }
+    if (accion === 'simular') return await simular(admin, empresa, cuenta, cuerpo)
     if (!MES.test(mes)) return json(400, { error: 'Falta el mes (AAAA-MM).' })
 
     if (accion === 'preparar') {

@@ -238,3 +238,41 @@ export function gocardlessEnElMes(suscripciones: readonly SuscripcionGuardada[],
   }
   return total
 }
+
+/**
+ * nº 71, punto 4 · LAS DEVOLUCIONES DE PUNTA A PUNTA EN EL SANDBOX. GoCardless
+ * deja provocar en su entorno de pruebas lo que en la vida real hace el banco
+ * (los «scenario simulators»): POST /scenario_simulators/{cual}/actions/run con
+ * { data: { links: { resource: <cobro> } } }. Solo existe en el sandbox: en la
+ * cuenta real, GoCardless contesta que no. Después, la lectura de GoCardless
+ * trae el estado nuevo y «seguir» hace lo de siempre (devuelto, «Te deben», el
+ * asiento de la devolución si ya estaba cobrado).
+ *   · sin_fondos  → payment_failed: el banco lo devuelve antes de cobrarse.
+ *   · reclamado   → payment_charged_back: se cobra y después el cliente lo
+ *                   reclama a su banco (retrocedido).
+ *   · tarde       → payment_late_failure: se cobra y después falla.
+ *   · cobrado     → payment_paid_out: se cobra y se ingresa (el camino bueno).
+ * Los cuatro piden el cobro aún sin presentar al banco (pending_submission).
+ */
+export const SIMULACIONES = {
+  sin_fondos: { gc: 'payment_failed', frase: 'devuelto por el banco antes de cobrarse (sin fondos)' },
+  reclamado: { gc: 'payment_charged_back', frase: 'cobrado y después reclamado por el cliente a su banco' },
+  tarde: { gc: 'payment_late_failure', frase: 'cobrado y después devuelto por el banco' },
+  cobrado: { gc: 'payment_paid_out', frase: 'cobrado e ingresado' },
+} as const
+export type Simulacion = keyof typeof SIMULACIONES
+
+export function peticionDeSimulacion(como: string, cobroId: string): { ruta: string; cuerpo: { data: { links: { resource: string } } } } | { porque: string } {
+  if (!(como in SIMULACIONES)) return { porque: `Eso no se simula: ${Object.keys(SIMULACIONES).join(', ')}.` }
+  if (!/^PM[0-9A-Z]{6,30}$/.test(cobroId)) return { porque: 'Ese recibo no tiene un cobro de GoCardless.' }
+  return { ruta: `/scenario_simulators/${SIMULACIONES[como as Simulacion].gc}/actions/run`, cuerpo: { data: { links: { resource: cobroId } } } }
+}
+
+export function leerSimulacion(status: number, cuerpo: unknown, como: Simulacion): { hecho: true; frase: string } | { hecho: false; frase: string } {
+  if (status >= 200 && status < 300) {
+    return { hecho: true, frase: `Simulado en el sandbox: ${SIMULACIONES[como].frase}. GoCardless lo procesa en unos segundos; pulsa «Leer GoCardless» para verlo en Sumied.` }
+  }
+  const e = ((cuerpo ?? {}) as { error?: ErrorDeGc }).error ?? {}
+  const detalle = (e.errors ?? []).map((x) => x.message).filter(Boolean).join('; ') || e.message || `respuesta ${status}`
+  return { hecho: false, frase: `GoCardless no lo ha simulado: ${detalle}.` }
+}
