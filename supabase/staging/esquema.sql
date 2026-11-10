@@ -33240,6 +33240,67 @@ COMMENT ON FUNCTION public.conta_bitrix_pestana_campos(p_cambio uuid) IS 'GB (n�
 
 
 --
+-- Name: conta_bitrix_pestana_choque(uuid, uuid, jsonb, text[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.conta_bitrix_pestana_cambio; v_lectura uuid; v_x jsonb; v_id uuid; v_porque text; v_n int := 0; v_quitadas int := 0;
+begin
+  select * into v_c from public.conta_bitrix_pestana_cambio where id = p_cambio;
+  if v_c.id is null then return jsonb_build_object('apuntadas', 0, 'porque', 'Ese cambio no existe.'); end if;
+  if p_empresa is null or not exists (select 1 from public.company where id = p_empresa and account_id = v_c.account_id) then
+    return jsonb_build_object('apuntadas', 0, 'porque', 'Esa empresa no es de la cuenta.');
+  end if;
+
+  -- Lo escrito sin choque: su diferencia, si la había, ya no está.
+  update public.conta_gestoria_diferencia set vigente = false
+   where account_id = v_c.account_id and party_id = v_c.party_id and tipo = 'bitrix_cambiado' and vigente
+     and datos->>'campo' = any (coalesce(p_escritos, '{}'::text[]));
+  get diagnostics v_quitadas = row_count;
+
+  if coalesce(jsonb_array_length(p_choques), 0) = 0 then return jsonb_build_object('apuntadas', 0, 'quitadas', v_quitadas); end if;
+  select l.id into v_lectura from public.conta_gestoria_lectura l
+   where l.account_id = v_c.account_id and l.origen = 'crm' order by l.empezada_at desc limit 1;
+  if v_lectura is null then
+    return jsonb_build_object('apuntadas', 0, 'quitadas', v_quitadas, 'porque', 'La cuenta no ha leído nunca su CRM: no hay dónde apuntarlo.');
+  end if;
+
+  for v_x in select * from jsonb_array_elements(p_choques) loop
+    if coalesce(v_x->>'campo', '') = '' then continue; end if;
+    v_porque := format('En Bitrix24 alguien ha cambiado «%s» a «%s»; Sumied dice «%s». No se ha pisado: mira cuál vale.',
+      v_x->>'campo', coalesce(nullif(v_x->>'en_bitrix', ''), 'vacío'), v_x->>'sumied');
+    select id into v_id from public.conta_gestoria_diferencia
+     where account_id = v_c.account_id and party_id = v_c.party_id and tipo = 'bitrix_cambiado' and vigente and datos->>'campo' = v_x->>'campo'
+     order by created_at desc limit 1;
+    if v_id is null then
+      insert into public.conta_gestoria_diferencia (account_id, lectura_id, company_id, party_id, bitrix_id, crm, tipo_ficha, id_externo,
+        tipo, porque_codigo, porque, datos)
+      values (v_c.account_id, v_lectura, p_empresa, v_c.party_id, v_c.id_externo, 'bitrix24', v_c.tipo_ficha, v_c.id_externo,
+        'bitrix_cambiado', 'bitrix_cambiado', v_porque,
+        jsonb_build_object('campo', v_x->>'campo', 'en_bitrix', v_x->>'en_bitrix', 'sumied', v_x->>'sumied', 'cambio', p_cambio));
+    else
+      update public.conta_gestoria_diferencia set porque = v_porque, company_id = p_empresa,
+        datos = jsonb_build_object('campo', v_x->>'campo', 'en_bitrix', v_x->>'en_bitrix', 'sumied', v_x->>'sumied', 'cambio', p_cambio)
+       where id = v_id;
+    end if;
+    v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('apuntadas', v_n, 'quitadas', v_quitadas);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]) IS 'GB (nº 13) · Un choque con Bitrix24 al guardar desde la pestaña (un dato cambiado allí a mano, que no se pisa) va a «Pendiente de revisar» del cliente (tipo bitrix_cambiado, una por campo); un campo escrito sin choque quita la suya. Solo el servidor (conta-bitrix-pestana).';
+
+
+--
 -- Name: conta_bitrix_pestana_hacer(text, text, text, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -108455,7 +108516,7 @@ CREATE TABLE public.conta_gestoria_diferencia (
     tipo_ficha text,
     id_externo text,
     CONSTRAINT conta_gestoria_diferencia_ficha_check CHECK ((((id_externo IS NULL) AND (tipo_ficha IS NULL)) OR ((id_externo IS NOT NULL) AND (crm IS NOT NULL) AND (tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text]))))),
-    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text])))
+    CONSTRAINT conta_gestoria_diferencia_tipo_check CHECK ((tipo = ANY (ARRAY['crm_sin_cobro'::text, 'gocardless_sin_ficha'::text, 'emisor_distinto'::text, 'nif_repetido_en_crm'::text, 'correo_repetido_en_crm'::text, 'nif_distinto'::text, 'suscripcion_sin_convertir'::text, 'totales_distintos'::text, 'mandato_por_firmar'::text, 'falla_a_menudo'::text, 'abono_en_otra_cuenta'::text, 'fichas_repetidas'::text, 'nif_no_valido'::text, 'ficha_no_guardada'::text, 'contacto_solo_negociacion'::text, 'contacto_empresa_con_datos'::text, 'ya_no_es_cliente_en_crm'::text, 'falta_codigo_cliente'::text, 'cliente_no_de_acuerdo'::text, 'falta_cuenta_stripe'::text, 'bitrix_cambiado'::text])))
 );
 
 
@@ -168146,6 +168207,14 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_bitrix(p_cambio uuid, p_result
 
 REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_campos(p_cambio uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_bitrix_pestana_campos(p_cambio uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empresa uuid, p_choques jsonb, p_escritos text[]) TO service_role;
 
 
 --
