@@ -170,3 +170,34 @@ describe('GD · nº120 · lo que falló en la grabación del run 22', () => {
     expect(g).toContain("'Accept-Language': 'es-ES,es;q=0.9'")
   })
 })
+
+describe('GD · nº127 · el zoom del montaje, en árbol (ffmpeg no anida más de 100 niveles)', () => {
+  const montar = readFileSync('scripts/video/montar.mjs', 'utf8')
+  it('aTrozos parte los tramos por la mitad en vez de encadenarlos', () => {
+    const f = montar.slice(montar.indexOf('const aTrozos'), montar.indexOf("const Z = aTrozos('z')"))
+    expect(f).toContain('const arbol = (lo, hi) =>')
+    expect(f).toContain('Math.floor((lo + hi) / 2)')
+    expect(f).not.toMatch(/for \(let i = llaves\.length - 2; i >= 0; i--\)/)
+  })
+})
+
+describe('GD · nº128 · «montar»: quitar frases e intercalar una toma, sin grabar', () => {
+  const montar = readFileSync('scripts/video/montar.mjs', 'utf8')
+  const wf = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
+  it('MONTAR_QUITAR corta la frase y su tramo, y la quita de la voz y los subtítulos', () => {
+    expect(montar).toContain("process.env.MONTAR_QUITAR")
+    expect(montar).toContain('T.dichos = xs.filter((d) => !QUITAR.has(d.id))')
+  })
+  it('MONTAR_INSERTO mete la toma entera, en plano entero, antes de su escena, con sus frases; nada se le mete encima', () => {
+    expect(montar).toContain("process.env.MONTAR_INSERTO")
+    expect(montar).toContain("cuerpo.splice(quedan.filter(([, b]) => b <= INS.S).length, 0, '[g]')")
+    expect(montar).toContain("['-ignore_loop', '0', '-t', INS.D.toFixed(2), '-i', INS.gif]")
+    expect(montar).toContain('insA - 0.05')
+  })
+  it('el workflow: «quitar» e «insertar», y las tomas también al montar', () => {
+    expect(wf).toContain('MONTAR_QUITAR: ${{ inputs.quitar }}')
+    expect(wf).toContain('export MONTAR_INSERTO="$RUNNER_TEMP/tomas/$INSERTAR"')
+    const tomas = wf.slice(wf.lastIndexOf('- name: Las tomas (video-tomas/gd-qbo)'))
+    expect(tomas.split('\n')[1]).not.toContain("if: inputs.modo == 'video'")
+  })
+})

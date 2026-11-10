@@ -38,15 +38,43 @@ const NOMBRE = (process.env.VIDEO_NOMBRE || 'factura-al-pago').replace(/[^a-z0-9
 const PORTADA = Math.max(3.5, (vozDe.get('portada')?.dura ?? 0) + 1.2)
 const CIERRE = Math.max(3.5, (vozDe.get('cierre')?.dura ?? 0) + 1.6)
 
+// nº128 · MONTAR_QUITAR («07.5,…»): esas frases y su tramo no entran (de su gesto al de la frase siguiente).
+const QUITAR = new Set((process.env.MONTAR_QUITAR ?? '').split(/[\s,]+/).filter(Boolean))
+if (QUITAR.size) {
+  const xs = T.dichos ?? []
+  xs.forEach((d, i) => { if (QUITAR.has(d.id)) (T.cortes ??= []).push([d.desde - 0.05, i + 1 < xs.length ? xs[i + 1].desde - 0.05 : T.fin]) })
+  T.dichos = xs.filter((d) => !QUITAR.has(d.id))
+  console.log(`Quitadas: ${[...QUITAR].join(', ')}.`)
+}
+// nº128 · MONTAR_INSERTO («<toma.gif>|<frases>|<paso>»): una toma que no se grabó con el resto (la 07b, el correo), entera
+// y con sus frases (las que empiezan por <frases>), justo antes de <paso>. Plano entero, sin zoom.
+const INS = (() => {
+  const [gif, prefijo, paso] = (process.env.MONTAR_INSERTO ?? '').split('|')
+  if (!gif) return null
+  if (!existsSync(gif)) { console.error(`No está la toma ${gif}.`); process.exit(1) }
+  const p = (T.pasos ?? []).find((x) => String(x.paso) === paso)
+  if (!p) { console.error(`No está el paso ${paso} en la grabación.`); process.exit(1) }
+  const frases = voz.filter((f) => f.id.startsWith(`${prefijo}.`))
+  let dGif = 0
+  try { dGif = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', gif]).toString().trim()) || 0 } catch { /* sin duración */ }
+  const habla = frases.reduce((s, f) => s + f.dura + 0.4, 0.8)
+  return { gif, S: p.desde, frases, D: Math.max(4, dGif, habla + 0.8) }
+})()
+
 // 1 · Lo que se queda del crudo: [inicio, fin] menos los cortes.
 const cortes = [...(T.cortes ?? [])].map(([a, b]) => [Math.max(0, a), Math.min(T.fin, b)]).filter(([a, b]) => b - a > 0.05).sort((x, y) => x[0] - y[0])
 const quedan = []
 let t = T.inicio ?? 0
 for (const [a, b] of cortes) { if (a > t) quedan.push([t, a]); t = Math.max(t, b) }
 if (T.fin > t) quedan.push([t, T.fin])
+if (INS) {
+  const k = quedan.findIndex(([a, b]) => a < INS.S && INS.S < b)
+  if (k >= 0) quedan.splice(k, 1, [quedan[k][0], INS.S], [INS.S, quedan[k][1]])
+}
 
-/** Un instante del crudo, en el montaje (sin portada). */
-function aMontaje(x) {
+/** Un instante del crudo, en el montaje (sin portada), con la toma intercalada si la hay. */
+function aMontaje(x) { return aMontaje0(x) + (INS && x >= INS.S ? INS.D : 0) }
+function aMontaje0(x) {
   let m = 0
   for (const [a, b] of quedan) {
     if (x >= b) { m += b - a; continue }
@@ -55,15 +83,22 @@ function aMontaje(x) {
   }
   return m
 }
-const durCuerpo = quedan.reduce((s, [a, b]) => s + b - a, 0)
+const durCuerpo = quedan.reduce((s, [a, b]) => s + b - a, 0) + (INS ? INS.D : 0)
+const insA = INS ? PORTADA + aMontaje0(INS.S) : 0  // dónde empieza la toma, en el montaje
 const total = PORTADA + durCuerpo + CIERRE
 
 // 2 · Lo que se dice, en el montaje: cada frase desde su gesto hasta que acaba (o empieza la siguiente).
 const dichos = (T.dichos ?? []).map((d, i, xs) => {
   const a = PORTADA + aMontaje(d.desde)
   const sig = i + 1 < xs.length ? PORTADA + aMontaje(xs[i + 1].desde) : PORTADA + durCuerpo
-  return { ...d, a, b: Math.min(sig - 0.05, a + (vozDe.get(d.id)?.dura ?? d.dura) + 0.8) }
+  const hasta = INS && d.desde < INS.S ? insA - 0.05 : Infinity  // nada de antes de la toma se le mete encima
+  return { ...d, a, b: Math.min(sig - 0.05, hasta, a + (vozDe.get(d.id)?.dura ?? d.dura) + 0.8) }
 })
+if (INS) {
+  let a = insA + 0.6
+  for (const f of INS.frases) { dichos.push({ id: f.id, texto: f.texto, dura: f.dura, a, b: Math.min(insA + INS.D - 0.1, a + f.dura + 0.8) }); a += f.dura + 0.4 }
+  dichos.sort((x, y) => x.a - y.a)
+}
 const tarjetas = [
   { id: 'portada', texto: textoDe('portada', ''), a: 0.35, b: PORTADA - 0.2, sinSubtitulo: true },
   { id: 'cierre', texto: textoDe('cierre', ''), a: PORTADA + durCuerpo + 0.5, b: total - 0.2, sinSubtitulo: true },
@@ -86,6 +121,7 @@ const vista = (caja) => {
 }
 const objetivos = T.objetivos ?? []
 const llaves = [{ ...vista(null), t: 0 }]
+const delCrudo = dichos.filter((d) => d.desde !== undefined)
 ;(T.dichos ?? []).forEach((d, i, xs) => {
   const fin = i + 1 < xs.length ? xs[i + 1].desde : T.fin
   const cajas = objetivos.filter((o) => o.t >= d.desde - 0.2 && o.t < fin && o.w > 2 && o.h > 2)
@@ -96,29 +132,43 @@ const llaves = [{ ...vista(null), t: 0 }]
     caja = { x: Math.max(0, x0), y: Math.max(0, y0), w: Math.min(W, x1) - Math.max(0, x0), h: Math.min(H, y1) - Math.max(0, y0) }
   }
   const v = vista(caja)
-  const md = dichos[i]
-  llaves.push({ ...llaves[llaves.length - 1], t: md.a - 0.15, mantener: true })
+  const md = delCrudo[i]
+  // La primera frase después de la toma intercalada empieza desde el plano entero (la toma va sin zoom).
+  const tras = INS && d.desde >= INS.S && (i === 0 || xs[i - 1].desde < INS.S)
+  llaves.push({ ...(tras ? vista(null) : llaves[llaves.length - 1]), t: md.a - 0.15, mantener: true })
   llaves.push({ ...v, t: md.a + 0.75 })
-  const sig = i + 1 < dichos.length ? dichos[i + 1].a : PORTADA + durCuerpo
+  const sig = i + 1 < delCrudo.length ? delCrudo[i + 1].a : PORTADA + durCuerpo
   if (sig - md.b > 1.6) {  // hueco: se vuelve al plano entero (cambio de pantalla, un clic…)
     llaves.push({ ...v, t: md.b, mantener: true })
     llaves.push({ ...vista(null), t: md.b + 0.8 })
   }
 })
+if (INS) {
+  // Lo de antes de la toma se queda como estaba hasta el corte; la toma, en plano entero.
+  const antes = [...llaves].filter((l) => l.t < insA).sort((x, y) => x.t - y.t).at(-1) ?? vista(null)
+  llaves.push({ ...antes, t: insA - 0.02, mantener: true }, { ...vista(null), t: insA }, { ...vista(null), t: insA + INS.D })
+}
 llaves.push({ ...llaves[llaves.length - 1], t: PORTADA + durCuerpo - 0.9, mantener: true })
 llaves.push({ ...vista(null), t: PORTADA + durCuerpo })
 llaves.sort((a, b) => a.t - b.t)
 // Una función a trozos para ffmpeg: entre dos llaves, una curva suave (smoothstep).
+// nº127 · En árbol equilibrado, no en cadena: ffmpeg no deja anidar más de 100 niveles en una expresión y, con el vídeo
+// entero, la cadena de if() pasaba de 300 (run 24: «Missing ')' or too many args»). Así son unos 10, sea cual sea el largo.
 const aTrozos = (k) => {
-  let e = llaves[llaves.length - 1][k].toFixed(4)
-  for (let i = llaves.length - 2; i >= 0; i--) {
+  const tramo = (i) => {
+    if (i >= llaves.length - 1) return llaves[llaves.length - 1][k].toFixed(4)
     const a = llaves[i]; const b = llaves[i + 1]
     const d = Math.max(0.001, b.t - a.t)
     const u = `clip((t-${a.t.toFixed(3)})/${d.toFixed(3)},0,1)`
-    const tramo = `(${a[k].toFixed(4)}+(${(b[k] - a[k]).toFixed(4)})*${u}*${u}*(3-2*${u}))`
-    e = `if(lt(t,${b.t.toFixed(3)}),${tramo},${e})`
+    return `(${a[k].toFixed(4)}+(${(b[k] - a[k]).toFixed(4)})*${u}*${u}*(3-2*${u}))`
   }
-  return e
+  // Los tramos lo..hi (el último, hi = llaves.length - 1, es el valor final, constante).
+  const arbol = (lo, hi) => {
+    if (lo === hi) return tramo(lo)
+    const m = Math.floor((lo + hi) / 2)
+    return `if(lt(t,${llaves[m + 1].t.toFixed(3)}),${arbol(lo, m)},${arbol(m + 1, hi)})`
+  }
+  return arbol(0, llaves.length - 1)
 }
 const Z = aTrozos('z'); const CX = aTrozos('cx'); const CY = aTrozos('cy')
 writeFileSync(join(salida, 'zoom.json'), JSON.stringify(llaves.map((l) => ({ t: +l.t.toFixed(2), z: +l.z.toFixed(2), cx: Math.round(l.cx), cy: Math.round(l.cy) })), null, 1))
@@ -145,7 +195,12 @@ const filtros = []
 filtros.push(`[0:v]scale=1920:1080,setsar=1,fps=30,format=yuv420p,fade=t=out:st=${(PORTADA - 0.4).toFixed(2)}:d=0.4[p]`)
 quedan.forEach(([a, b], i) => filtros.push(`[1:v]trim=start=${a.toFixed(3)}:end=${b.toFixed(3)},setpts=PTS-STARTPTS,scale=1920:1080,setsar=1,fps=30,format=yuv420p[t${i}]`))
 filtros.push(`[2:v]scale=1920:1080,setsar=1,fps=30,format=yuv420p,fade=t=in:st=0:d=0.4[c]`)
-partes.push('[p]', ...quedan.map((_, i) => `[t${i}]`), '[c]')
+const cuerpo = quedan.map((_, i) => `[t${i}]`)
+if (INS) {
+  filtros.push(`[3:v]scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2:color=0x1f2a3c,setsar=1,fps=30,format=yuv420p,trim=duration=${INS.D.toFixed(3)},setpts=PTS-STARTPTS[g]`)
+  cuerpo.splice(quedan.filter(([, b]) => b <= INS.S).length, 0, '[g]')
+}
+partes.push('[p]', ...cuerpo, '[c]')
 filtros.push(`${partes.join('')}concat=n=${partes.length}:v=1:a=0[todo]`)
 filtros.push(`[todo]scale=w='trunc(${W}*(${Z})/2)*2':h='trunc(${H}*(${Z})/2)*2':eval=frame:flags=lanczos,` +
   // El recorte NO puede usar iw/ih: ffmpeg no los actualiza cuando el tamaño cambia en cada fotograma
@@ -161,8 +216,10 @@ execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
   '-loop', '1', '-t', PORTADA.toFixed(2), '-i', join(salida, existsSync(join(salida, 'portada-video.png')) ? 'portada-video.png' : 'portada.png'),
   '-i', join(salida, 'crudo.webm'),
   '-loop', '1', '-t', CIERRE.toFixed(2), '-i', join(salida, 'cierre.png'),
+  ...(INS ? ['-ignore_loop', '0', '-t', INS.D.toFixed(2), '-i', INS.gif] : []),
   '-filter_complex_script', guion('video', filtros.join(';')), '-map', '[v]',
   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', sinVoz], { stdio: 'inherit' })
+if (INS) console.log(`Intercalada ${INS.gif} (${INS.D.toFixed(1)} s, ${INS.frases.length} frases) en el ${aMontaje0(INS.S).toFixed(1)} s del cuerpo.`)
 console.log(`Montado: ${total.toFixed(1)} s (crudo ${T.fin.toFixed(1)} s, ${cortes.length} cortes, ${quedan.length} tramos, ${dichos.length} frases).`)
 
 // 5 · La voz: cada frase en su sitio, en una pista aparte. Sin voz hecha, el vídeo va sin voz.

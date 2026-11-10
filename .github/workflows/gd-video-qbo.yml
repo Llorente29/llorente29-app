@@ -60,6 +60,14 @@ on:
         description: 'Solo con «montar»: el número del run de «video» cuya grabación en bruto se vuelve a montar (sin grabar)'
         required: false
         default: ''
+      quitar:
+        description: 'Al montar: las frases que no entran, con su tramo (p. ej. «07.5»)'
+        required: false
+        default: ''
+      insertar:
+        description: 'Al montar: una toma de video-tomas/gd-qbo, sus frases y antes de qué escena («07b-buzon.gif|07b|08»)'
+        required: false
+        default: ''
 
 concurrency:
   group: gd-video-qbo
@@ -213,7 +221,6 @@ jobs:
           { echo "SUPABASE_URL=https://$REF.supabase.co"; echo "SERVICE_KEY=$KEY"; echo "ANON_KEY=$ANON"; } >> "$GITHUB_ENV"
 
       - name: Las tomas (video-tomas/gd-qbo)
-        if: inputs.modo == 'video'
         run: |
           mkdir -p "$RUNNER_TEMP/tomas"
           if git fetch -q --depth=1 origin video-tomas/gd-qbo 2>/dev/null; then git archive FETCH_HEAD tomas 2>/dev/null | tar -x -C "$RUNNER_TEMP" || true; fi
@@ -262,13 +269,21 @@ jobs:
           run-id: ${{ inputs.desde_run }}
           github-token: ${{ github.token }}
 
+      # nº128 · «quitar» e «insertar» (la 07b, el correo, que se graba aparte): solo en el montaje, sin grabar.
       - name: Montar con ffmpeg
         if: always()
         env:
           VIDEO_NOMBRE: gd-sumied
+          MONTAR_QUITAR: ${{ inputs.quitar }}
+          INSERTAR: ${{ inputs.insertar }}
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || exit 0
+          [[ "$MONTAR_QUITAR" =~ ^[0-9b., ]*$ ]] || { echo "::error::«quitar»: ids de frases, como 07.5"; exit 1; }
+          if [ -n "$INSERTAR" ]; then
+            [[ "$INSERTAR" =~ ^[0-9a-z-]+\.gif\|[0-9b]+\|[0-9b]+$ ]] || { echo "::error::«insertar»: toma.gif|frases|escena, como 07b-buzon.gif|07b|08"; exit 1; }
+            export MONTAR_INSERTO="$RUNNER_TEMP/tomas/$INSERTAR"
+          fi
           node scripts/video/montar.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1
 
       - uses: actions/upload-artifact@v4
