@@ -106,5 +106,8 @@ describe('GB (nº 13, punto 3) · la nota corta en el historial de la ficha', ()
     expect(notaDelCambio('tarifa', { linea: 'g1', desde: '2026-12-01', nivel: 'n1' }, 'Cliente Prueba, S.L. pasa de Gestoría mensual · Premium a Gestoría mensual · Básica desde diciembre de 2026.'))
       .toBe('Sumied · Cliente Prueba, S.L. pasa de Gestoría mensual · Premium a Gestoría mensual · Básica desde diciembre de 2026')
     expect(notaDelCambio('alta', { nombre: 'x'.repeat(400) }, '').length).toBe(240)
+    // nº 13 · «Deshacer».
+    expect(notaDelCambio('deshacer', {}, 'Deshecho: Alta de LUIS PRUEBA SOTO en gestión laboral de Cliente Prueba, S.L..'))
+      .toBe('Sumied · deshecho: Alta de LUIS PRUEBA SOTO en gestión laboral de Cliente Prueba, S.L.')
   })
 })

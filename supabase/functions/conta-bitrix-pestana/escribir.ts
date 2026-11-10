@@ -180,5 +180,6 @@ export function notaDelCambio(accion: string, datos: Record<string, unknown>, fr
     }
     return corta(`Sumied · ${frase.trim().replace(/\.$/, '') || 'cambio de nivel'}`)
   }
+  if (accion === 'deshacer') return corta(`Sumied · deshecho: ${frase.trim().replace(/^Deshecho:\s*/, '').replace(/\.$/, '')}`)
   return corta(`Sumied · ${frase.trim().replace(/\.$/, '')}`)
 }

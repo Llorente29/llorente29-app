@@ -168,6 +168,48 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
   const r = (data ?? {}) as Record<string, unknown>
   if (r.estado !== 'ok') return json(200, { estado: r.estado ?? 'no_se_pudo', frase: typeof r.frase === 'string' ? r.frase : FRASES[String(r.estado)] ?? 'No se ha podido hacer.' })
 
+  const inicio = Date.now()
+  const { enBitrix, pestana } = await despuesDelCambio(db, m, r, notaDelCambio(accion, accion === 'solicitud' ? { ...datos, nombre: r.nombre, tipo: r.tipo } : datos, String(r.frase ?? '')))
+  // nº 13 · «Deshacer»: si lo último de hoy con las líneas del cliente es justo este cambio (Code 1, #562).
+  const deshacer = await loQueSePuedeDeshacer(db, m, r, OPERACION_DE[accion === 'solicitud' ? String(r.tipo ?? 'alta') : accion], inicio)
+  return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, id: r.id ?? null, bitrix: enBitrix, pestana, deshacer })
+}
+
+/** Qué operación de las líneas (conta_linea_operaciones_hoy) es cada acción de la pestaña; un precio especial no toca líneas. */
+const OPERACION_DE: Record<string, string | undefined> = { alta: 'alta', baja: 'baja', tarifa: 'nivel' }
+
+/** nº 13 · Lo último de hoy, si es este cambio y se puede deshacer; si no, null. */
+async function loQueSePuedeDeshacer(db: ReturnType<typeof baseDeDatos>, m: Extract<Mira, { ok: true }>, r: Record<string, unknown>, tipo: string | undefined, inicio: number) {
+  if (!tipo || !r.empresa) return null
+  const { data } = await db.rpc('conta_bitrix_pestana_deshacer', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_empresa: r.empresa, p_cuando: null })
+  const d = (data ?? {}) as { estado?: string; operaciones?: { cuando: string; tipo: string; frase: string; puede: boolean }[] }
+  const ultima = d.estado === 'ok' ? d.operaciones?.[0] : undefined
+  if (!ultima || !ultima.puede || ultima.tipo !== tipo || Date.parse(ultima.cuando) < inicio - 60_000) return null
+  return { cuando: ultima.cuando, frase: ultima.frase }
+}
+
+/** nº 13 · «Deshacer» desde la pestaña: lo deshace Sumied (con la función de Code 1, como la persona) y Bitrix24 se pone al día, igual que al guardar. */
+async function deshacer(cuerpo: Record<string, unknown>): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const empresa = typeof cuerpo.empresa === 'string' ? cuerpo.empresa : null
+  const cuando = typeof cuerpo.cuando === 'string' && !Number.isNaN(Date.parse(cuerpo.cuando)) ? cuerpo.cuando : null
+  if (!empresa || !cuando) return json(400, { estado: 'no_se_pudo', frase: 'No se sabe qué deshacer.' })
+  const db = baseDeDatos()
+  const { data, error } = await db.rpc('conta_bitrix_pestana_deshacer', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id, p_empresa: empresa, p_cuando: cuando })
+  if (error) return json(500, { estado: 'error', frase: 'No se ha podido deshacer en Sumied. No ha cambiado nada.' })
+  const r = (data ?? {}) as Record<string, unknown>
+  if (r.estado !== 'ok') return json(200, { estado: r.estado ?? 'no_se_pudo', frase: typeof r.frase === 'string' ? r.frase : FRASES[String(r.estado)] ?? 'No se ha podido deshacer.' })
+  const { enBitrix, pestana } = await despuesDelCambio(db, m, r, notaDelCambio('deshacer', {}, String(r.frase ?? '')))
+  return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, bitrix: enBitrix, pestana })
+}
+
+/**
+ * Después de un cambio en Sumied (hacer o deshacer): la ficha de Bitrix24 al
+ * día (cuota, Trabajadores, Estado del cobro), la nota en el historial, los
+ * choques a «Pendiente de revisar» y lo apuntado.
+ */
+async function despuesDelCambio(db: ReturnType<typeof baseDeDatos>, m: Extract<Mira, { ok: true }>, r: Record<string, unknown>, nota: string) {
   // Lo de Sumied, otra vez (con el cambio): para la pestaña y para la cuota del mes que viene.
   const l = await lectura(db, m)
   const pestana = l.ok ? l.d : null
@@ -188,7 +230,6 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
     })
   }
   // nº 13, punto 3 · Una nota corta en el historial de la ficha de Bitrix24 (empresa o contacto), con el token de quien mira.
-  const nota = notaDelCambio(accion, accion === 'solicitud' ? { ...datos, nombre: r.nombre, tipo: r.tipo } : datos, String(r.frase ?? ''))
   enBitrix.nota = await notaEnLaFicha(m, nota)
   if ((enBitrix.nota as { hecho?: string }).hecho === 'escrita') enBitrix.texto = `${enBitrix.texto} · Nota en el historial de la ficha.`
 
@@ -200,7 +241,7 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
     if (choques.length && !p.apuntadas) enBitrix.texto = `${enBitrix.texto} (No se ha podido llevar a «Pendiente de revisar»${p.porque ? `: ${p.porque}` : ''}.)`
   }
   await db.rpc('conta_bitrix_pestana_bitrix', { p_cambio: r.cambio, p_resultado: enBitrix })
-  return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, id: r.id ?? null, bitrix: enBitrix, pestana })
+  return { enBitrix, pestana }
 }
 
 /** nº 13, punto 3 · La nota en el historial de la ficha (crm.timeline.comment.add): si Bitrix24 no la deja, se dice y no pasa nada más. */
@@ -295,6 +336,7 @@ Deno.serve(async (req) => {
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
     if (cuerpo?.paso === 'hacer') return await hacer(cuerpo)
     if (cuerpo?.paso === 'portal') return await portal(cuerpo)
+    if (cuerpo?.paso === 'deshacer') return await deshacer(cuerpo)
     return json(400, { estado: 'error', frase: 'No se sabe qué hacer.' })
   } catch (e) {
     console.error('conta-bitrix-pestana', e instanceof Error ? e.message : e)

@@ -1,0 +1,13 @@
+# GB · nº 13 · «Deshacer» en la pestaña de Bitrix24, con las funciones de Code 1.
+# Rama conta/gb-pestana-deshacer. VA DESPUÉS DEL REAL DE LA 0010 (#562, Code 1):
+# sin ella, la pestaña dice que no se puede deshacer y no cambia nada. Se ensaya
+# y se aplica desde main nombrando esta rama. El real lo lanza Julio.
+#
+#   0070  Cambia en caliente (declarado, con su prueba): el CHECK de las acciones
+#         de conta_bitrix_pestana_cambio solo AMPLÍA («deshacer»). Añade
+#         conta_bitrix_pestana_deshacer (solo el servidor). No llama a nada: no
+#         cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-deshacer.sql
+supabase/migrations/20261110T0070_gb_pestana_deshacer.sql
