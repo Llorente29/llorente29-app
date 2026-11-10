@@ -276,6 +276,8 @@ jobs:
           VIDEO_NOMBRE: gd-sumied
           MONTAR_QUITAR: ${{ inputs.quitar }}
           INSERTAR: ${{ inputs.insertar }}
+          # nº131 · Las tomas de Bitrix24 (04 y 05), a pantalla completa y recortadas a su frase.
+          MONTAR_TOMAS: '04.1=05-bitrix.gif,04.2=05-sumied.gif,05.1=05-pestana-resumen.gif,05.2=05-pestana-resumen.gif,05.3=05-pestana-cuotas.gif,05.4=05-pestana-laboral.gif,05.5=05-pestana-portal.gif'
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || exit 0
@@ -287,7 +289,11 @@ jobs:
             [[ "$INSERTAR" =~ $RE_INSERTAR ]] || { echo "::error::«insertar»: toma.gif|frases|escena, como 07b-buzon.gif|07b|08"; exit 1; }
             export MONTAR_INSERTO="$RUNNER_TEMP/tomas/$INSERTAR"
           fi
-          node scripts/video/montar.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1
+          # nº135 · Las carátulas hechas (entrada, seis antes de su escena y cierre) y la música, de video-tomas/gd-qbo.
+          export MONTAR_CARATULAS="$RUNNER_TEMP/tomas"
+          for mu in musica.mp3.mp3 musica.mp3; do [ -f "$RUNNER_TEMP/tomas/$mu" ] && export MONTAR_MUSICA="$RUNNER_TEMP/tomas/$mu" && break; done
+          # nº131 · El de gestorías, ajustado a la voz: sin imagen parada sin voz, subtítulos en su franja, y los silencios medidos.
+          TOMAS_DIRS="$RUNNER_TEMP/tomas" node scripts/video/montar-ajustado.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -297,6 +303,8 @@ jobs:
             gd-sumied/gd-sumied.mp4
             gd-sumied/gd-sumied-sin-voz.mp4
             gd-sumied/subtitulos.ass
+            gd-sumied/silencios.txt
+            gd-sumied/montaje.txt
             gd-sumied/registro.txt
             gd-sumied/capturas
             gd-sumied/pasos

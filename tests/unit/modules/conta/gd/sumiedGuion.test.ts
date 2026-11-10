@@ -4,7 +4,7 @@
 //   · los subtítulos, dos líneas como mucho (se ve en el móvil);
 //   · «Volver a empezar» deja también el acceso de Felipe Herrera para Electricidad Voltio (el devuelto del portal).
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { FRASES } from '../../../../../scripts/video/gd/locucion.mjs'
 import { trozos } from '../../../../../scripts/video/subtitulos.mjs'
 import { ACCESOS_DE_LA_DEMO, PORTAL_DEL_DEVUELTO } from '../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos'
@@ -209,5 +209,70 @@ describe('GD · nº129 · las comprobaciones de «quitar» e «insertar» se pue
     expect(wf).toContain('[[ "$MONTAR_QUITAR" =~ $RE_QUITAR ]]')
     expect(wf).toContain('[[ "$INSERTAR" =~ $RE_INSERTAR ]]')
     expect(wf).not.toMatch(/=~ \^\[0-9b\., \]/)
+  })
+})
+
+describe('GD · nº131 · el montaje ajustado a la voz', () => {
+  const m = readFileSync('scripts/video/montar-ajustado.mjs', 'utf8')
+  const wf = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
+  it('cada plano: de 0,3 s antes de su frase a 0,5 s después de su voz, en fotogramas exactos', () => {
+    expect(m).toContain('const ANTES = 0.3')
+    expect(m).toContain('const DESPUES = 0.5')
+    expect(m).toContain("tpad=stop_mode=clone")
+    expect(m).toContain("'-frames:v', String(n)")
+  })
+  it('las tomas a pantalla completa, la imagen encima de una franja con subtítulos de 36 px', () => {
+    expect(m).toContain('force_original_aspect_ratio=decrease,pad=${W}:${H}')
+    expect(m).toContain('const IH = 950')
+    expect(m).toContain('Style: Franja,DejaVu Sans,36,')
+  })
+  it('mide los silencios (−40 dB, 2 s) y los deja en silencios.txt', () => {
+    expect(m).toContain("silencedetect=noise=-40dB:d=2")
+    expect(m).toContain("'silencios.txt'")
+  })
+  it('el workflow monta el de gestorías con él y sus tomas de la 04 y la 05', () => {
+    expect(wf).toContain('TOMAS_DIRS="$RUNNER_TEMP/tomas" node scripts/video/montar-ajustado.mjs "$SALIDA"')
+    expect(wf).toContain("MONTAR_TOMAS: '04.1=05-bitrix.gif,04.2=05-sumied.gif,05.1=05-pestana-resumen.gif")
+    expect(wf).toContain('gd-sumied/silencios.txt')
+  })
+})
+
+describe('GD · nº133–135 · las carátulas hechas, la música y la medida de los silencios', () => {
+  const m = readFileSync('scripts/video/montar-ajustado.mjs', 'utf8')
+  const wf = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
+  it('las carátulas de video-tomas: entrada 4 s, seis de 2,5 s antes de su escena, cierre 5 s, encima de todo con 0,3 s de fundido', () => {
+    expect(m).toContain("entrada: { png: f('caratula-0-entrada.png'), dura: 4 }")
+    for (const e of ["['01', 'caratula-1-clientes.png']", "['04', 'caratula-2-bitrix.png']", "['06', 'caratula-3-cobro.png']",
+      "['07', 'caratula-4-factura.png']", "['08', 'caratula-5-contabilidad.png']", "['10', 'caratula-6-portal.png']"]) expect(m).toContain(e)
+    expect(m).toContain('dura: 2.5')
+    expect(m).toContain("cierre: { png: f('caratula-7-cierre.png'), dura: 5 }")
+    expect(m).toContain('const FUNDIDO = 0.3')
+    expect(m).toContain("overlay=0:0:enable='between(t,")
+    expect(existsSync('scripts/video/gd/carteles.mjs')).toBe(false)
+  })
+  it('la música: −24 dB, más baja cuando habla, repetida con fundido y con fundido al final', () => {
+    expect(m).toContain('volume=-24dB')
+    expect(m).toContain('sidechaincompress')
+    expect(m).toContain('acrossfade=d=2')
+    expect(m).toContain('afade=t=out:st=')
+  })
+  it('los silencios se leen de la salida de errores de ffmpeg (si no, siempre salían 0) y en la voz sola', () => {
+    expect(m).toContain("spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', medir, '-af', 'silencedetect=noise=-40dB:d=2'")
+    expect(m).toContain('.stderr')
+  })
+  it('el workflow: las carátulas y musica.mp3.mp3 de las tomas', () => {
+    expect(wf).toContain('export MONTAR_CARATULAS="$RUNNER_TEMP/tomas"')
+    expect(wf).toContain('for mu in musica.mp3.mp3 musica.mp3; do')
+    expect(wf).not.toContain('carteles.mjs')
+  })
+})
+
+describe('GD · nº134 · el zoom', () => {
+  const m = readFileSync('scripts/video/montar-ajustado.mjs', 'utf8')
+  it('como mucho 1,6×, el elemento con un 10 % de margen, 0,7 s de transición y plano entero al empezar cada sección', () => {
+    expect(m).toContain('process.env.VIDEO_ZMAX || 1.6')
+    expect(m).toContain('caja.w * 0.1')
+    expect(m).toContain('const TRANSICION = 0.7')
+    expect(m).toContain('if (nuevaSeccion) llaves.push')
   })
 })
