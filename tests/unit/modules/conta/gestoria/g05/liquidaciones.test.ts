@@ -78,3 +78,21 @@ describe('G05 · nº 76 · la lectura entera', () => {
     expect(d.payoutsFuera).toEqual([])
   })
 })
+
+describe('G05 · nº 79 · el cobro liquidado y después reclamado sabe su liquidación', () => {
+  it('si llega sin liquidación (links.payout) pero una liquidación lo lleva en sus partidas, se la pone; la liquidación entra', async () => {
+    const respuestas: Record<string, unknown> = {
+      customers: { customers: [{ id: 'CU_AHORA' }] },
+      mandates: { mandates: [{ id: 'MD_AHORA', status: 'active', links: { customer: 'CU_AHORA' } }] },
+      subscriptions: { subscriptions: [] },
+      payments: { payments: [{ id: 'PM_RECLAMADO', status: 'charged_back', amount: 14500, currency: 'EUR', charge_date: '2026-11-12', links: { mandate: 'MD_AHORA' } }] },
+      events: { events: [] }, creditor_bank_accounts: { creditor_bank_accounts: [] }, customer_bank_accounts: { customer_bank_accounts: [] },
+      payouts: { payouts: [{ id: 'PO_RECLAMADO', status: 'paid', amount: 14277, currency: 'EUR', arrival_date: '2026-11-10' }] },
+      payout_items: { payout_items: [{ type: 'payment_paid_out', amount: '145.00', links: { payment: 'PM_RECLAMADO' } }, { type: 'gocardless_fee', amount: '-2.23', links: { payment: 'PM_RECLAMADO' } }] },
+    }
+    const pedir = async (url: string) => { const c = respuestas[new URL(url).pathname.slice(1)]; return { ok: c !== undefined, status: c ? 200 : 404, json: async () => c ?? {} } }
+    const d = await leerCuentaGc(pedir, 'pruebas', 'token', '2026-11-10')
+    expect(d.cobros.map((c) => [c.id, c.estado, c.payoutId])).toEqual([['PM_RECLAMADO', 'charged_back', 'PO_RECLAMADO']])
+    expect(d.payouts.map((x) => x.id)).toEqual(['PO_RECLAMADO'])
+  })
+})
