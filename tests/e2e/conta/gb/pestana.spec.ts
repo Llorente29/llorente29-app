@@ -98,7 +98,7 @@ test('con acceso: el cliente, el recibo línea a línea, los cobros, los servici
 
   // Cuotas y cobros (desde lo pendiente): los servicios. Cambiar de pestaña no lee nada y es al momento.
   const t0 = await page.evaluate(() => performance.now())
-  await pendiente.getByRole('button', { name: 'Ver →' }).first().click()
+  await pendiente.getByRole('button', { name: 'Resolver →' }).first().click()
   await expect(areas.getByRole('tab', { name: /Cuotas y cobros/ })).toHaveAttribute('aria-selected', 'true')
   const servicios = pestana.getByRole('region', { name: 'Servicios que tiene' })
   await expect(servicios.locator('.fila')).toHaveCount(2)

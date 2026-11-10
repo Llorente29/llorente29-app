@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { AREA_DE, areasDe, FRASE_DE, leerAlmohadilla, modeloPestana, modeloPortal, nombreDelMes, pendientesDe, reciboPrevisto, type Area, type Cambio, type Estado, type Pestana, type Portal } from './bitrixPestanaModelo'
+import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, modeloPortal, nombreDelMes, pendientesDe, reciboPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Pestana, type Portal } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -42,9 +42,11 @@ const vista: {
   portalLeido: boolean
   /** nº 10 · La pestaña de área abierta: abre en Resumen. */
   area: Area
+  /** nº 17, A · Sus recibos devueltos y lo que se puede hacer (llegan con «Su portal»). */
+  devueltos: Devueltos | null
   hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal'; deshacer?: { cuando: string } | null }
   guardando: boolean
-} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen' }
+} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen', devueltos: null }
 
 function cabeza(texto: string, chip?: { texto: string; tono: string }): HTMLElement {
   return h('div', { class: 'cabeza' }, h('span', { class: 'logo' }, 'Sumied'), h('span', { class: 'cabeza-texto' }, texto),
@@ -72,11 +74,12 @@ function pintar(p: Pestana) {
   }
 
   const recibo = bloqueRecibo(p)
-  const [izquierda, derecha] = vista.area === 'cobros' ? [[bloqueServicios(p)], [recibo, bloqueCobros(p, enSumied)]]
+  const devuelto = vista.devueltos?.lista.length ? [bloqueDevuelto(vista.devueltos)] : []
+  const [izquierda, derecha] = vista.area === 'cobros' ? [[bloqueServicios(p)], [recibo, ...devuelto, bloqueCobros(p, enSumied)]]
     : vista.area === 'laboral' ? [[bloqueTrabajadores(p, enSumied)], [recibo]]
       : vista.area === 'portal' ? [[vista.portal ? suPortal(p, vista.portal, enSumied) : h('section', { class: 'bloque' }, h('h2', {}, 'Su portal'),
         h('div', { class: 'vacio' }, vista.portalLeido ? 'No se ha podido leer su portal. Ábrelo en Sumied.' : 'Leyendo su portal…'))], [recibo]]
-        : [[bloquePendiente(p), bloqueDatos(p)], [recibo, bloqueCobros(p, enSumied)]]
+        : [[bloquePendiente(p), bloqueDatos(p)], [recibo, ...devuelto, bloqueCobros(p, enSumied)]]
 
   raiz().replaceChildren(
     cabeza(`Cuotas, recibos y facturas${p.emisora ? ` · le factura ${p.emisora}` : ''}`, { texto: p.situacion.texto, tono: p.situacion.tono }),
@@ -150,6 +153,41 @@ function bloqueTrabajadores(p: Pestana, enSumied: string): HTMLElement {
   }
   if (p.trabajadores.length > A_LA_VISTA) trabajadores.append(h('a', { href: enSumied, target: '_blank', rel: 'noopener' }, `Ver los ${p.trabajadores.length} en Sumied →`))
   return trabajadores
+}
+
+/** nº 17, A · «Recibo devuelto», como en la maqueta: lo que se puede hacer (Code 1) y, si no, por qué. */
+function bloqueDevuelto(d: Devueltos): HTMLElement {
+  const caja = h('section', { class: 'devuelto', 'aria-label': 'Recibo devuelto' }, h('div', { class: 'antetitulo-rojo' }, d.lista.length === 1 ? 'RECIBO DEVUELTO' : 'RECIBOS DEVUELTOS'))
+  for (const r of d.lista) {
+    const enlace = boton('Enviarle el enlace para pagar', 'primario', () => void resolverDevuelto(r.recibo, 'enlace'), !d.puede || !r.enlace.puede || vista.guardando)
+    const pasar = boton('Que lo pasen de nuevo', 'normal', () => void resolverDevuelto(r.recibo, 'pasar'), !d.puede || !r.pasar.puede || vista.guardando)
+    const porques = [r.enlace.puede ? null : r.enlace.porque, r.pasar.puede ? null : r.pasar.porque].filter((x): x is string => !!x)
+    caja.append(h('div', { class: 'devuelto-recibo', 'data-prueba': 'devuelto' }, h('b', {}, r.texto),
+      h('div', { class: 'botones' }, enlace, pasar),
+      ...(d.puede ? [...new Set(porques)].map((x) => h('div', { class: 'pequeno' }, x)) : [h('div', { class: 'pequeno' }, 'Puedes verlo, pero solo un administrador o un encargado de la cuenta lo puede resolver.')])))
+  }
+  caja.append(h('div', { class: 'pequeno' }, 'El enlace le llega por correo y a su portal: paga con tarjeta o Bizum y queda apuntado solo.'))
+  return caja
+}
+
+/** nº 17, A · «Enviarle el enlace para pagar» o «Que lo pasen de nuevo». La pantalla dice lo que ha pasado (regla 8). */
+async function resolverDevuelto(recibo: string, que: 'enlace' | 'pasar') {
+  if (!vista.ficha || vista.guardando) return
+  vista.guardando = true
+  repintar()
+  let r: Record<string, unknown>
+  try { r = await llamar({ paso: 'hacer', ...vista.ficha, accion: 'devuelto', datos: { recibo, que } }) } catch { r = { estado: 'error' } }
+  vista.guardando = false
+  if (r.estado === 'ok') {
+    const b = (r.bitrix ?? {}) as { hecho?: string; texto?: string }
+    if (r.pestana && typeof r.pestana === 'object') vista.r = r.pestana as Record<string, unknown>
+    if (r.devueltos !== undefined) vista.devueltos = modeloDevueltos(r.devueltos)
+    vista.hecho = { titulo: que === 'enlace' ? 'Enlace para pagar enviado' : 'Se pasa de nuevo', texto: String(r.frase ?? ''), tono: b.hecho === 'choque' ? 'aviso' : 'bien', deshacer: null,
+      bitrix: b.hecho === 'escrito' ? `Bitrix24 actualizado: ${b.texto}` : String(b.texto ?? 'Bitrix24 no se ha tocado.') }
+  } else {
+    vista.hecho = { titulo: que === 'enlace' ? 'No se ha enviado el enlace' : 'No se ha pasado de nuevo', texto: String(r.frase ?? FRASE_DE.error), bitrix: 'No ha cambiado nada.', tono: 'mal', deshacer: null }
+  }
+  repintar()
 }
 
 function bloqueRecibo(p: Pestana): HTMLElement {
@@ -304,7 +342,11 @@ function suPortal(p: Pestana, pt: Portal, enSumied: string): HTMLElement {
 
 async function leerPortal() {
   if (!vista.ficha) return
-  try { vista.portal = modeloPortal(await llamar({ paso: 'portal', ...vista.ficha })) } catch { vista.portal = null }
+  try {
+    const r = await llamar({ paso: 'portal', ...vista.ficha })
+    vista.portal = modeloPortal(r)
+    vista.devueltos = modeloDevueltos(r.devueltos)
+  } catch { vista.portal = null }
   vista.portalLeido = true
   if (!vista.abierto) repintar()
 }
