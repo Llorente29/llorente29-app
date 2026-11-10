@@ -159,13 +159,15 @@ export function mesEnPalabras(x: unknown): string | null {
 export function notaDelCambio(accion: string, datos: Record<string, unknown>, frase: string): string {
   const nombre = typeof datos.nombre === 'string' && datos.nombre.trim() ? datos.nombre.trim() : null
   const corta = (t: string) => (t.length > 240 ? `${t.slice(0, 239)}…` : t)
+  // nº 17, D · Con el día exacto, el día (nunca el DNI o NIE: es un dato personal y la nota la ve todo Bitrix24).
+  const dia = typeof datos.dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(datos.dia) ? `${datos.dia.slice(8, 10)}/${datos.dia.slice(5, 7)}/${datos.dia.slice(0, 4)}` : null
   if (accion === 'alta') {
     const mes = mesEnPalabras(datos.desde)
-    return corta(`Sumied · alta de ${nombre ?? 'un trabajador'}${mes ? ` desde ${mes}` : ''}`)
+    return corta(`Sumied · alta de ${nombre ?? 'un trabajador'}${dia ? ` el ${dia}` : mes ? ` desde ${mes}` : ''}`)
   }
   if (accion === 'baja') {
     const mes = mesEnPalabras(typeof datos.mes === 'string' ? mesSiguiente(datos.mes) : null)
-    return corta(`Sumied · baja de ${nombre ?? 'un trabajador'}${mes ? `: se deja de cobrar desde ${mes}` : ''}`)
+    return corta(`Sumied · baja de ${nombre ?? 'un trabajador'}${dia ? ` el ${dia}` : ''}${mes ? `: se deja de cobrar desde ${mes}` : ''}`)
   }
   if (accion === 'solicitud') {
     const que = datos.tipo === 'baja' ? 'baja' : 'alta'

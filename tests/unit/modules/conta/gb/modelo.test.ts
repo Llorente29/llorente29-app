@@ -205,3 +205,16 @@ describe('GB (nº 17, G) · añadir un servicio o un paquete desde la pestaña',
       .toBe('El recibo de diciembre no cambia: 585,60 €.')
   })
 })
+
+describe('GB (nº 17, D) · el DNI o NIE antes de guardar', () => {
+  it('lo limpia como Code 1 y comprueba la letra; vacío vale (es opcional)', async () => {
+    const { documentoDe, diaCorto } = await import('@/publicas/bitrixPestanaModelo')
+    expect(documentoDe('1234 5678-z')).toEqual({ documento: '12345678Z', valido: true })
+    expect(documentoDe('X0000000T')).toEqual({ documento: 'X0000000T', valido: true })
+    expect(documentoDe('00000000T')).toEqual({ documento: '00000000T', valido: true })
+    expect(documentoDe('12345678A')).toEqual({ documento: '12345678A', valido: false })
+    expect(documentoDe('1234567Z')).toEqual({ documento: '1234567Z', valido: false })
+    expect(documentoDe('  ')).toEqual({ documento: null, valido: true })
+    expect(diaCorto('2026-12-15')).toBe('15/12/2026')
+  })
+})

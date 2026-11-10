@@ -1,0 +1,21 @@
+{
+ "_que": "GB · nº 17, D · contexto de producción, medido en SOLO LECTURA el 10/11 a las 12:29Z. La 1324 reemplaza conta_bitrix_pestana_hacer(text,text,text,text,text,jsonb), que existe con el cuerpo de la 2250 (md5 65be7fdea31e5f3f2765340b6cc33dba, el mismo que el fichero), con la misma firma y ninguna otra con ese nombre; no la llama ningún disparador ni cron. Llama, al usarse, a conta_gestoria_alta_trabajador y conta_gestoria_baja_trabajador (1108, Code 1), que existen. Nada en el camino del pedido.",
+ "medido": "2026-11-10T12:29Z",
+ "tanda": {
+  "supabase/migrations/20261110T1324_gb_pestana_dia_dni.sql": "c6c66608008d745e7a02bcc1376737f4"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_bitrix_pestana_hacer(text,text,text,text,text,jsonb)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, modeloMensajes, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Mensajes, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
+import { AREA_DE, areasDe, FRASE_DE, modeloDevueltos, leerAlmohadilla, modeloPestana, documentoDe, diaCorto, modeloMensajes, modeloPortal, modeloSueltos, nombreDelMes, pendientesDe, reciboPrevisto, sueltoPrevisto, type Area, type Cambio, type Devueltos, type Estado, type Mensajes, type Pestana, type Portal, type Sueltos } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -339,14 +339,21 @@ function formulario(p: Pestana): HTMLElement {
   if (vista.abierto?.tipo === 'alta') {
     const nombre = h('input', { name: 'nombre', required: '', autocomplete: 'off' }) as HTMLInputElement
     const servicio = h('select', { name: 'servicio' }, ...p.serviciosPorTrabajador.map((x) => h('option', { value: x.id }, x.nombre))) as HTMLSelectElement
-    // Como la ficha del G04: se cobra desde el mes que viene (o desde este).
-    const desde = h('select', { name: 'desde' }, ...[1, 0].map((n) => h('option', { value: `${mesDe(hoy, n)}-01` }, `${nombreDelMes(mesDe(hoy, n)).replace(/^./, (x) => x.toUpperCase())} de ${mesDe(hoy, n).slice(0, 4)}`))) as HTMLSelectElement
+    // nº 17, D · El día exacto (se cobra desde su mes, con la regla de tu gestoría) y el DNI o NIE, con las de Code 1.
+    const dia = h('input', { name: 'dia', type: 'date', required: '', min: `${hoy.slice(0, 7)}-01`, value: hoy }) as HTMLInputElement
+    const documento = h('input', { name: 'documento', autocomplete: 'off', placeholder: 'Opcional' }) as HTMLInputElement
+    const aviso = h('div', { class: 'pequeno estado-mal', role: 'alert' })
     caja.append(h('div', { class: 'formulario-titulo' }, 'Alta de un trabajador'),
       h('div', { class: 'campos' }, h('label', {}, 'Nombre y apellidos', nombre),
         p.serviciosPorTrabajador.length > 1 ? h('label', {}, 'Servicio', servicio) : null,
-        h('label', {}, 'Se cobra desde', desde)))
-    cambio = () => nombre.value.trim() ? { accion: 'alta', servicio: servicio.value || p.serviciosPorTrabajador[0]?.id, nombre: nombre.value.trim(), desde: desde.value } : null
-    for (const x of [nombre, servicio, desde]) x.addEventListener('input', () => calcular())
+        h('label', {}, 'Día de alta', dia), h('label', {}, 'DNI o NIE', documento)), aviso)
+    cambio = () => {
+      const d = documentoDe(documento.value)
+      aviso.textContent = d.valido ? '' : `El DNI o NIE ${d.documento} no es válido: revisa la letra.`
+      if (!nombre.value.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(dia.value) || dia.value < `${hoy.slice(0, 7)}-01` || !d.valido) return null
+      return { accion: 'alta', servicio: servicio.value || p.serviciosPorTrabajador[0]?.id, nombre: nombre.value.trim(), desde: `${dia.value.slice(0, 7)}-01`, dia: dia.value, documento: d.documento }
+    }
+    for (const x of [nombre, servicio, dia, documento]) x.addEventListener('input', () => calcular())
   } else if (vista.abierto?.tipo === 'servicio') {
     const que = h('select', { name: 'que' }, ...p.paraAnadir.map((x) => h('option', { value: x.id }, x.texto))) as HTMLSelectElement
     const desde = h('select', { name: 'desde' }, ...[1, 0].map((n) => h('option', { value: `${mesDe(hoy, n)}-01` }, `${nombreDelMes(mesDe(hoy, n)).replace(/^./, (x) => x.toUpperCase())} de ${mesDe(hoy, n).slice(0, 4)}`))) as HTMLSelectElement
@@ -400,10 +407,14 @@ function formulario(p: Pestana): HTMLElement {
     for (const x of [precio, motivo]) x.addEventListener('input', () => calcular())
   } else {
     const b = vista.abierto as { tipo: 'baja'; linea: string; nombre: string }
-    const mes = `${hoy.slice(0, 7)}-01`
-    caja.append(h('div', { class: 'formulario-titulo' }, `Baja de ${b.nombre}`),
-      h('div', { class: 'pequeno' }, `${nombreDelMes(hoy).replace(/^./, (x) => x.toUpperCase())} se cobra entero: es la regla de tu gestoría (mes entero). Deja de cobrarse desde ${nombreDelMes(mesDe(hoy, 1))}.`))
-    cambio = () => ({ accion: 'baja', linea: b.linea, mes })
+    // nº 17, D · El día exacto de la baja (Code 1): se cobra hasta su mes, con la regla de tu gestoría.
+    const dia = h('input', { name: 'dia', type: 'date', required: '', min: `${hoy.slice(0, 7)}-01`, value: hoy }) as HTMLInputElement
+    const regla = h('div', { class: 'pequeno' })
+    const pintarRegla = () => { const d = /^\d{4}-\d{2}-\d{2}$/.test(dia.value) ? dia.value : hoy; regla.textContent = `${nombreDelMes(d).replace(/^./, (x) => x.toUpperCase())} se cobra entero: es la regla de tu gestoría (mes entero). Deja de cobrarse desde ${nombreDelMes(mesDe(d, 1))}.` }
+    pintarRegla()
+    caja.append(h('div', { class: 'formulario-titulo' }, `Baja de ${b.nombre}`), h('div', { class: 'campos' }, h('label', {}, 'Día de baja', dia)), regla)
+    cambio = () => (/^\d{4}-\d{2}-\d{2}$/.test(dia.value) && dia.value >= `${hoy.slice(0, 7)}-01` ? { accion: 'baja', linea: b.linea, mes: `${dia.value.slice(0, 7)}-01`, dia: dia.value } : null)
+    dia.addEventListener('input', () => { pintarRegla(); calcular() })
   }
   function calcular() {
     const c = cambio()
@@ -418,9 +429,9 @@ function formulario(p: Pestana): HTMLElement {
       : c.accion === 'solicitud'
       ? `${c.tipo === 'alta' ? '+1' : '−1'} trabajador: ${c.nombre.toUpperCase()}, lo pide el cliente en su portal.`
       : c.accion === 'alta'
-      ? `+1 trabajador: ${c.nombre.toUpperCase()}, se cobra desde ${nombreDelMes(c.desde)}.`
+      ? `+1 trabajador: ${c.nombre.toUpperCase()}${c.documento ? ` (${c.documento})` : ''}, alta el ${c.dia ? diaCorto(c.dia) : nombreDelMes(c.desde)}; se cobra desde ${nombreDelMes(c.desde)}.`
       : c.accion === 'baja'
-        ? `−1 trabajador: ${(vista.abierto as { nombre: string }).nombre}, deja de cobrarse desde ${nombreDelMes(mesDe(hoy, 1))}.`
+        ? `−1 trabajador: ${(vista.abierto as { nombre: string }).nombre}${c.dia ? `, baja el ${diaCorto(c.dia)}` : ''}; deja de cobrarse desde ${nombreDelMes(mesDe(c.mes, 1))}.`
         : [c.nivel !== p.servicios.find((x) => x.lineaId === c.linea)?.nivelId ? `Cambia a ${p.servicios.find((x) => x.lineaId === c.linea)?.niveles.find((n) => n.id === c.nivel)?.nombre ?? 'otro nivel'}.` : '',
            c.precio !== null ? `Precio especial: ${c.precio.toFixed(2).replace('.', ',')} €${c.porTrabajador ? ' por trabajador' : ' al mes'}. Por qué: ${c.motivo}.` : ''].filter(Boolean).join(' ')
     previsto.replaceChildren(h('b', {}, r.frase), h('div', { class: 'pequeno' }, porque))
@@ -540,8 +551,8 @@ async function guardarCambio(c: Cambio) {
   const datos = c.accion === 'servicio'
     ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nivel: c.nivel, paquete: c.paquete, desde: c.desde, ensayo: false }
     : c.accion === 'alta'
-    ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nombre: c.nombre, desde: c.desde }
-    : c.accion === 'baja' ? { linea: c.linea, mes: c.mes, nombre: (vista.abierto as { nombre?: string } | null)?.nombre ?? null }
+    ? { empresa: modeloPestana(vista.r!, hoyEnMadrid())?.empresaId, servicio: c.servicio, nombre: c.nombre, desde: c.desde, ...(c.dia ? { dia: c.dia } : {}), ...(c.documento ? { documento: c.documento } : {}) }
+    : c.accion === 'baja' ? { linea: c.linea, mes: c.mes, nombre: (vista.abierto as { nombre?: string } | null)?.nombre ?? null, ...(c.dia ? { dia: c.dia } : {}) }
       : c.accion === 'solicitud' ? { solicitud: c.solicitud, ...(c.servicio ? { servicio: c.servicio } : {}) }
         : { linea: c.linea, desde: c.desde, ...(c.nivel ? { nivel: c.nivel } : {}), ...(c.precio !== null ? { precio: c.precio, motivo: c.motivo } : {}) }
   let r: Record<string, unknown>

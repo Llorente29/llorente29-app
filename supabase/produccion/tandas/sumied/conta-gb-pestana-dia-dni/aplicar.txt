@@ -1,0 +1,12 @@
+# GB · nº 17, D · El alta y la baja desde la pestaña de Bitrix24 con su día exacto
+# y su DNI o NIE, con las de Code 1 (1108, #590, ya en producción).
+# Rama conta/gb-pestana-dia-dni. Se ensaya y se aplica desde main nombrando esta
+# rama. El real lo lanza Julio. No depende de otra tanda de la cadena.
+#
+#   1324  Cambia en caliente (declarado, con su prueba) conta_bitrix_pestana_hacer,
+#         con la MISMA firma: con «dia», las de Code 1; sin él, lo de siempre.
+#         No llama a nada: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-dia-dni.sql
+supabase/migrations/20261110T1324_gb_pestana_dia_dni.sql
