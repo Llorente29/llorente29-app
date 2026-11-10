@@ -102,7 +102,7 @@ function Atajo({ icono, t, d, pick }: { icono: ReactNode; t: string; d: string; 
 }
 
 function FilaNovedad({ n, ir, cliente, avisar }: { n: Novedad; ir: Pantalla['ir']; cliente: string; avisar: Pantalla['avisar'] }) {
-  const v = n.tipo === 'factura' ? { ico: <Euro />, tono: TONOS.ok, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: `Del ${fecha(n.cuando)}`, b: 'PDF',
+  const v = n.tipo === 'factura' ? { ico: <Euro />, tono: TONOS.ok, t: `${n.titulo}${n.total != null ? ` · ${eurosDe(n.total)}` : ''}`, d: n.pagada ? `Pagada el ${fecha(n.pagada)}` : `Del ${fecha(n.cuando)}`, b: 'PDF',
         go: () => { abrir(cliente, 'factura', n.id).catch((e: Error) => avisar({ tipo: 'mal', texto: e.message })) } }
     : n.tipo === 'impuesto' ? { ico: <FileText />, tono: TONOS.info, t: `${nombreImpuesto(n.titulo, n.periodo ?? null, n.ejercicio ?? null)} presentado`, d: `${fecha(n.cuando)}${n.importe != null ? ` · ${n.resultado === 'a_devolver' ? 'a devolver' : 'a ingresar'} ${eurosDe(n.importe)}` : ''}`, b: 'Ver', go: () => ir('documentos') }
     : n.tipo === 'nomina' ? { ico: <FileText />, tono: TONOS.gris, t: `Nóminas de ${nombreMes(n.titulo).toLowerCase()} listas`, d: n.n ? `${n.n} ${n.n === 1 ? 'nómina' : 'nóminas'}` : '', b: 'Ver', go: () => ir('documentos') }

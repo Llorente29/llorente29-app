@@ -231,3 +231,20 @@ export function peticionHecha(q: { tipo: string; hecha?: string | null; recibida
   if (q.tipo === 'subir') return { detalle: q.recibidas ? `${q.recibidas === 1 ? 'Recibido: 1 documento' : `Recibidos: ${q.recibidas} documentos`}` : `Hecho ${cuando}`.trim(), boton: '✓ Hecho' }
   return { detalle: `Contestada ${cuando}`.trim(), boton: '✓ Hecho' }
 }
+
+/**
+ * nº 24 · Lo que lleva una factura o un recibo, en la calle, como la maqueta:
+ * «Gestoría y laboral (4 trabajadores)», «Gestoría y laboral · Cuentas anuales».
+ * Junta la cuota de gestoría y la laboral; lo demás va detrás tal cual. Con
+ * algo más detrás, los trabajadores no se dicen (la línea sería muy larga).
+ */
+export function queLleva(textos: (string | null | undefined)[]): string {
+  const limpios = textos.map((t) => (t ?? '').trim()).filter(Boolean)
+  const gestoria = limpios.some((t) => /^gestor[ií]a\b/i.test(t))
+  const laboral = limpios.find((t) => /^gesti[oó]n laboral\b/i.test(t))
+  const resto = limpios.filter((t) => !/^gestor[ií]a\b/i.test(t) && !/^gesti[oó]n laboral\b/i.test(t))
+  const n = laboral ? Number(/(\d+)\s+trabajador/i.exec(laboral)?.[1] ?? 0) : 0
+  const base = gestoria && laboral ? 'Gestoría y laboral' : gestoria ? 'Gestoría' : laboral ? 'Laboral' : ''
+  const conTrabajadores = base && laboral && n > 0 && resto.length === 0 ? `${base} (${n} ${n === 1 ? 'trabajador' : 'trabajadores'})` : base
+  return [conTrabajadores, ...resto].filter(Boolean).join(' · ')
+}

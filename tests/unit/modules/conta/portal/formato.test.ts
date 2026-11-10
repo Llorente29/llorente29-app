@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   cuando, cuandoSeHizo, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
-  nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, tonoDe,
+  nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
 
 const hoy = new Date('2026-11-09T12:00:00Z')
@@ -138,5 +138,21 @@ describe('Inicio · lo hecho, como la maqueta (nº 24)', () => {
     expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 1 }, ahora).detalle).toBe('Recibido: 1 documento')
     expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 0 }, ahora).detalle).toBe('Hecho ayer')
     expect(peticionHecha({ tipo: 'contestar', hecha: '2026-11-03T08:00:00Z' }, ahora)).toEqual({ detalle: 'Contestada el 3 de noviembre', boton: '✓ Hecho' })
+  })
+})
+
+describe('nº 24 · lo que lleva una factura o un recibo', () => {
+  it('junta gestoría y laboral, con los trabajadores', () => {
+    expect(queLleva(['Gestoría mensual · Estándar', 'Gestión laboral · 4 trabajadores'])).toBe('Gestoría y laboral (4 trabajadores)')
+    expect(queLleva(['Gestión laboral · 1 trabajador', 'Gestoría mensual · Básica'])).toBe('Gestoría y laboral (1 trabajador)')
+  })
+  it('con algo más, lo pone detrás y no dice los trabajadores', () => {
+    expect(queLleva(['Gestoría mensual · Estándar', 'Gestión laboral · 3 trabajadores', 'Cuentas anuales'])).toBe('Gestoría y laboral · Cuentas anuales')
+  })
+  it('solo una de las dos, o nada conocido', () => {
+    expect(queLleva(['Gestoría mensual · Premium'])).toBe('Gestoría')
+    expect(queLleva(['Gestión laboral · 2 trabajadores'])).toBe('Laboral (2 trabajadores)')
+    expect(queLleva(['Alta de autónomo', ' '])).toBe('Alta de autónomo')
+    expect(queLleva([])).toBe('')
   })
 })

@@ -19,7 +19,7 @@ export interface Proximo {
   incidencia: { id: string; texto: string; creada: string; parado: boolean | null } | null
 }
 export interface Devuelto { recibo_id: string; mes: string; importe_cent: number; devuelto_el: string | null; gc_estado: string | null; en_marcha: { tipo: string; estado: string; url: string | null; creada: string } | null }
-export interface Novedad { tipo: 'factura' | 'impuesto' | 'alta' | 'mensaje' | 'nomina'; n?: number; id: string; titulo: string; cuando: string; total?: number; periodo?: string; ejercicio?: number; importe?: number; resultado?: string; alta?: string; estado?: string; desde?: string }
+export interface Novedad { tipo: 'factura' | 'impuesto' | 'alta' | 'mensaje' | 'nomina'; n?: number; id: string; titulo: string; cuando: string; total?: number; periodo?: string; ejercicio?: number; importe?: number; resultado?: string; alta?: string; estado?: string; desde?: string; pagada?: string | null }
 export interface Inicio {
   gestoria: Marca
   cliente: { id: string; nombre: string; nif: string | null }
@@ -33,7 +33,7 @@ export interface Inicio {
   novedades: Novedad[]
 }
 
-export interface Factura { id: string; numero: string; fecha: string; anio: number; tipo: string; base: number; iva: number; retencion: number; total: number; concepto: string | null; recibo_mes: string | null; tiene_pdf: boolean; estado: string }
+export interface Factura { id: string; numero: string; fecha: string; anio: number; tipo: string; base: number; iva: number; retencion: number; total: number; concepto: string | null; recibo_mes: string | null; tiene_pdf: boolean; estado: string; lineas?: string[]; pagada?: string | null }
 export interface Facturas { facturas: Factura[] }
 
 export interface ReciboPago { id: string; mes: string; importe_cent: number; estado: string; estado_texto: string; cargo_el: string | null; cobrado_el: string | null; factura_id: string | null }
