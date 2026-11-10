@@ -299,12 +299,12 @@ const medir = existsSync(join(salida, 'voz.m4a')) ? join(salida, 'voz.m4a') : mp
 const sd = spawnSync('ffmpeg', ['-hide_banner', '-nostats', '-i', medir, '-af', 'silencedetect=noise=-40dB:d=2', '-f', 'null', '-'], { encoding: 'utf8' }).stderr ?? ''
 const silencios = [...String(sd).matchAll(/silence_end: ([\d.]+) \| silence_duration: ([\d.]+)/g)].map((x) => ({ fin: +x[1], dura: +x[2] }))
 const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
-const carteles = [[0, PORTADA], ...planos.filter((p) => p.tipo === 'cartel').map((p) => [p.m, p.m + p.dura])]
+const carteles = [[0, PORTADA], ...planos.filter((p) => p.tipo === 'cartel').map((p) => [p.m, p.m + p.dura]), [PORTADA + durCuerpo, total]]
 for (const s of silencios) { const a = s.fin - s.dura; s.cartel = carteles.some(([x, y]) => a < y && s.fin > x) }
 const fuera = silencios.filter((s) => !s.cartel)
-const lineas = silencios.map((s) => `${mmss(s.fin - s.dura)}  ${(s.fin - s.dura).toFixed(1)} s → ${s.fin.toFixed(1)} s (${s.dura.toFixed(1)} s)${s.cartel ? ' · entrada o carátula' : ' · SIN VOZ'}`)
-writeFileSync(join(salida, 'silencios.txt'), [`silencedetect −40 dB, 2 s, sobre ${medir.split('/').at(-1)}: ${silencios.length} tramos sin voz de 2 s o más; fuera de la entrada y las carátulas, ${fuera.length}.`, ...lineas, ''].join('\n'))
-console.log(`Silencios de 2 s o más (−40 dB, ${medir.split('/').at(-1)}): ${silencios.length}; fuera de la entrada y las carátulas: ${fuera.length}.${lineas.length ? `\n  ${lineas.join('\n  ')}` : ''}`)
+const lineas = silencios.map((s) => `${mmss(s.fin - s.dura)}  ${(s.fin - s.dura).toFixed(1)} s → ${s.fin.toFixed(1)} s (${s.dura.toFixed(1)} s)${s.cartel ? ' · entrada, carátula o cierre' : ' · SIN VOZ'}`)
+writeFileSync(join(salida, 'silencios.txt'), [`silencedetect −40 dB, 2 s, sobre ${medir.split('/').at(-1)}: ${silencios.length} tramos sin voz de 2 s o más; fuera de la entrada, las carátulas y el cierre, ${fuera.length}.`, ...lineas, ''].join('\n'))
+console.log(`Silencios de 2 s o más (−40 dB, ${medir.split('/').at(-1)}): ${silencios.length}; fuera de la entrada, las carátulas y el cierre: ${fuera.length}.${lineas.length ? `\n  ${lineas.join('\n  ')}` : ''}`)
 
 // 8 · Para revisar sin abrir el vídeo: uno cada 2 s y uno por escena.
 for (const d of ['fotogramas', 'pasos']) { rmSync(join(salida, d), { recursive: true, force: true }); mkdirSync(join(salida, d)) }
