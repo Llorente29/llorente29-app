@@ -279,9 +279,12 @@ jobs:
         run: |
           set -euo pipefail
           [ -f "$SALIDA/crudo.webm" ] || exit 0
-          [[ "$MONTAR_QUITAR" =~ ^[0-9b., ]*$ ]] || { echo "::error::«quitar»: ids de frases, como 07.5"; exit 1; }
+          # nº129 · Las expresiones, en variables: con un espacio dentro, bash no las lee en [[ =~ ]] (run 25).
+          RE_QUITAR='^[0-9b., ]*$'
+          RE_INSERTAR='^[0-9a-z-]+\.gif\|[0-9b]+\|[0-9b]+$'
+          [[ "$MONTAR_QUITAR" =~ $RE_QUITAR ]] || { echo "::error::«quitar»: ids de frases, como 07.5"; exit 1; }
           if [ -n "$INSERTAR" ]; then
-            [[ "$INSERTAR" =~ ^[0-9a-z-]+\.gif\|[0-9b]+\|[0-9b]+$ ]] || { echo "::error::«insertar»: toma.gif|frases|escena, como 07b-buzon.gif|07b|08"; exit 1; }
+            [[ "$INSERTAR" =~ $RE_INSERTAR ]] || { echo "::error::«insertar»: toma.gif|frases|escena, como 07b-buzon.gif|07b|08"; exit 1; }
             export MONTAR_INSERTO="$RUNNER_TEMP/tomas/$INSERTAR"
           fi
           node scripts/video/montar.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1

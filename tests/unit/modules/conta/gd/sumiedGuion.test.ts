@@ -201,3 +201,13 @@ describe('GD · nº128 · «montar»: quitar frases e intercalar una toma, sin g
     expect(tomas.split('\n')[1]).not.toContain("if: inputs.modo == 'video'")
   })
 })
+
+describe('GD · nº129 · las comprobaciones de «quitar» e «insertar» se pueden leer en bash', () => {
+  it('las expresiones van en variables (con un espacio dentro, [[ =~ ]] da error de sintaxis: run 25)', () => {
+    const wf = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
+    expect(wf).toContain("RE_QUITAR='^[0-9b., ]*$'")
+    expect(wf).toContain('[[ "$MONTAR_QUITAR" =~ $RE_QUITAR ]]')
+    expect(wf).toContain('[[ "$INSERTAR" =~ $RE_INSERTAR ]]')
+    expect(wf).not.toMatch(/=~ \^\[0-9b\., \]/)
+  })
+})
