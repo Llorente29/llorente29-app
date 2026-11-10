@@ -4427,7 +4427,11 @@ declare
 begin
   select * into v_r from public.conta_recibo where id = p_recibo for update;
   if v_r.invoice_id is not null then return jsonb_build_object('ya', true, 'factura', v_r.invoice_id); end if;
-  if v_r.gc_estado not in ('confirmed', 'paid_out') then raise exception 'Sin el cobro confirmado no hay factura.' using errcode = '23514'; end if;
+  -- nº 79 · O ya no confirmado, pero GoCardless lo liquidó (llegó al banco): también se factura.
+  if v_r.gc_estado not in ('confirmed', 'paid_out')
+     and not exists (select 1 from public.conta_gc_cobro b where b.company_id = v_r.company_id and b.gc_id = v_r.gc_cobro_id and b.payout_gc_id is not null) then
+    raise exception 'Sin el cobro confirmado no hay factura.' using errcode = '23514';
+  end if;
   if v_r.enviado_por is null then raise exception 'No se sabe quién envió el cobro: la factura se emite en su nombre.' using errcode = '23514'; end if;
   v_aj := public._conta_cobro_ajustes(v_r.company_id);
   v_fecha := least(coalesce(v_r.confirmado_el, v_r.cargo_el, (now() at time zone 'Europe/Madrid')::date), (now() at time zone 'Europe/Madrid')::date);
@@ -35865,7 +35869,7 @@ begin
   perform public._conta_cobro_codigos(p_company);
   for v_x in
     select r.id, r.estado, r.gc_estado, r.invoice_id, r.asiento_cobro, r.asiento_devolucion, b.estado as gc, b.fecha,
-           r.motivo_devolucion, b.motivo_es as motivo_gc
+           r.motivo_devolucion, b.motivo_es as motivo_gc, (b.payout_gc_id is not null) as liquidado
       from public.conta_recibo r join public.conta_gc_cobro b on b.company_id = r.company_id and b.gc_id = r.gc_cobro_id
      where r.company_id = p_company and r.gc_cobro_id is not null
   loop
@@ -35892,6 +35896,13 @@ begin
       if v_x.gc in ('confirmed', 'paid_out') and v_x.invoice_id is null then
         perform public._conta_cobro_facturar(v_x.id);
         v_facturadas := v_facturadas + 1;
+      elsif v_x.gc in ('failed', 'charged_back') and v_x.invoice_id is null and v_x.liquidado then
+        -- nº 79 · Liquidado y después devuelto o reclamado: su factura y su cobro, y después la devolución.
+        perform public._conta_cobro_facturar(v_x.id);
+        perform public._conta_cobro_devolver(v_x.id);
+        update public.conta_recibo set estado = public._conta_cobro_estado(v_x.gc, true), updated_at = now() where id = v_x.id;
+        v_facturadas := v_facturadas + 1;
+        v_deshechos := v_deshechos + 1;
       elsif v_x.gc in ('failed', 'charged_back') and v_x.asiento_cobro is not null and v_x.asiento_devolucion is null then
         perform public._conta_cobro_devolver(v_x.id);
         v_deshechos := v_deshechos + 1;
