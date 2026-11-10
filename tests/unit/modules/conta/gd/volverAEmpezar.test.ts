@@ -22,7 +22,7 @@ describe('GD · Volver a empezar · la puerta', () => {
     expect(porqueNo(puerta({ faltan: ['GD_B24_ENTRANTE_URL', 'GD_GC_SANDBOX_RW_TOKEN'] }), PORTAL_DE_PRUEBAS)).toBe('Faltan los secretos GD_B24_ENTRANTE_URL y GD_GC_SANDBOX_RW_TOKEN en las funciones: los pega Julio.')
   })
   it('los pasos, en su orden, y nada más', () => {
-    expect(PASOS.map((p) => p.id)).toEqual(['portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'cambios', 'portal'])
+    expect(PASOS.map((p) => p.id)).toEqual(['portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'historia', 'cambios', 'portal'])
     expect(esPaso('comprobar')).toBe(true)
     expect(esPaso('borrar_todo')).toBe(false)
   })

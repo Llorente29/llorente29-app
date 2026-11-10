@@ -198,7 +198,7 @@ try {
     if (MODO !== 'grabar') decir('\n── 00 · «Volver a empezar»: solo en modo grabar; en ensayo no se pulsa.')
     else {
       decir('\n── 00 · «Volver a empezar»')
-      const PASOS_VOLVER = ['comprobar', 'portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'cambios', 'portal']
+      const PASOS_VOLVER = ['comprobar', 'portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'historia', 'cambios', 'portal']
       for (const paso of PASOS_VOLVER) {
         for (let tanda = 1; ; tanda++) {
           const r = await fetch(`${SUPABASE_URL}/functions/v1/conta-gd-volver-a-empezar`, {
