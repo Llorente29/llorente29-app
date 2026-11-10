@@ -134,7 +134,7 @@ describe('GB (nº 10) · las pestañas por área y «Lo pendiente con este clien
   })
   it('cada formulario abre en su pestaña', async () => {
     const { AREA_DE } = await import('@/publicas/bitrixPestanaModelo')
-    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal' })
+    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros' })
   })
 })
 
@@ -149,5 +149,26 @@ describe('GB (nº 17, A) · el recibo devuelto en la pestaña', () => {
       { recibo: 'r2', texto: 'Septiembre de 2026 · 99,00 € · reclamado al banco por el cliente', enlace: { puede: true, porque: null }, pasar: { puede: false, porque: 'Lo reclamó el cliente a su banco.' } },
     ] })
     expect(modeloDevueltos(null)).toBeNull()
+  })
+})
+
+describe('GB (nº 17, B) · los trabajos fuera de la cuota en la pestaña', () => {
+  it('lo que se puede facturar y lo ya sumado; sin permiso, se ve que no; si no llega, nada', async () => {
+    const { modeloSueltos } = await import('@/publicas/bitrixPestanaModelo')
+    expect(modeloSueltos({ estado: 'ok', mes: '2026-12',
+      servicios: [{ servicio_id: 's1', nombre: 'Declaración de la renta', importe: 60, de: 'tarifa' }, { servicio_id: 's2', nombre: 'Escritura', importe: 120.5, de: 'su_precio' }],
+      hechos: [{ linea_id: 'l1', concepto: 'Renta 2025', importe: 60, mes: '2026-12', servicio: 'Declaración de la renta', recibo: null },
+        { linea_id: 'l2', concepto: null, importe: 35, mes: '2026-11', servicio: 'Regularización', recibo: { id: 'r', estado: 'cobrado' } }] }))
+      .toEqual({ puede: true, mes: '2026-12',
+        servicios: [{ id: 's1', nombre: 'Declaración de la renta', importe: 60, suPrecio: false }, { id: 's2', nombre: 'Escritura', importe: 120.5, suPrecio: true }],
+        hechos: [{ id: 'l1', texto: 'Renta 2025', importe: '60,00 €', recibo: 'En el recibo de diciembre de 2026' },
+          { id: 'l2', texto: 'Regularización', importe: '35,00 €', recibo: 'En el recibo de noviembre de 2026 · cobrado' }] })
+    expect(modeloSueltos({ estado: 'sin_permiso' })).toEqual({ puede: false, mes: '', servicios: [], hechos: [] })
+    expect(modeloSueltos(null)).toBeNull()
+  })
+  it('el recibo nuevo antes de guardar, con la cuenta de la ficha del G04', async () => {
+    const { sueltoPrevisto } = await import('@/publicas/bitrixPestanaModelo')
+    expect(sueltoPrevisto(respuesta(), Q, { puede: true, mes: '2026-12', servicios: [], hechos: [] }, 60))
+      .toBe('El recibo de diciembre pasa de 496,10 € a 556,10 € (+60,00 €).')
   })
 })

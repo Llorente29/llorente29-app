@@ -243,7 +243,7 @@ export function areasDe(p: Pestana, pt: Portal | null): { id: Area; nombre: stri
 }
 
 /** En qué pestaña va cada formulario: abrir uno lleva a la suya. */
-export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal' }
+export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud' | 'suelto', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros' }
 
 /**
  * nº 17, A · Los recibos devueltos del cliente (conta_bitrix_pestana_devueltos,
@@ -270,4 +270,47 @@ export function modeloDevueltos(x: unknown): Devueltos | null {
       return { recibo: String(r.recibo), texto: `${mes} · ${euros(Number(r.importe_cent ?? 0))} · ${que}`, enlace: opcion(r.enlace), pasar: opcion(r.pasar) }
     }),
   }
+}
+
+/**
+ * nº 17, B · «Trabajos fuera de la cuota» (conta_bitrix_pestana_sueltos, con
+ * conta_trabajos_sueltos de Code 1): lo que se puede facturar (los servicios
+ * que se cobran «cada vez», con su precio para este cliente) y lo ya sumado a
+ * un recibo de este mes en adelante.
+ */
+export interface Sueltos {
+  /** Si quien mira puede facturar (administrador o encargado). */
+  puede: boolean
+  /** El mes del próximo recibo (AAAA-MM), donde se suma. */
+  mes: string
+  servicios: { id: string; nombre: string; importe: number; suPrecio: boolean }[]
+  hechos: { id: string; texto: string; importe: string; recibo: string }[]
+}
+
+export function modeloSueltos(x: unknown): Sueltos | null {
+  const d = objeto(x)
+  if (d.estado === 'sin_permiso') return { puede: false, mes: '', servicios: [], hechos: [] }
+  if (d.estado !== 'ok' || typeof d.mes !== 'string') return null
+  const mesLargo = (m: unknown) => {
+    const v = /^(\d{4})-(\d{2})$/.exec(String(m ?? ''))
+    return v ? `${MESES_LARGOS[Number(v[2]) - 1]} de ${v[1]}` : String(m ?? '')
+  }
+  return {
+    puede: true,
+    mes: d.mes,
+    servicios: filas(d.servicios).filter((s) => Number.isFinite(Number(s.importe))).map((s) => ({ id: String(s.servicio_id), nombre: String(s.nombre ?? ''), importe: Number(s.importe), suPrecio: s.de === 'su_precio' })),
+    hechos: filas(d.hechos).map((h) => ({
+      id: String(h.linea_id),
+      texto: String(h.concepto ?? h.servicio ?? 'Trabajo suelto'),
+      importe: euros(Math.round(Number(h.importe ?? 0) * 100)),
+      recibo: `En el recibo de ${mesLargo(h.mes)}${objeto(h.recibo).estado === 'cobrado' ? ' · cobrado' : ''}`,
+    })),
+  }
+}
+
+/** nº 17, B · Lo que dice el formulario antes de guardar: el recibo de ese mes, con la misma cuenta que la ficha del G04, antes y después. */
+export function sueltoPrevisto(r: Fila, empresaId: string, s: Sueltos, importe: number): string {
+  const antes = totalDelRecibo(r.clientes, String(r.cliente ?? ''), empresaId, s.mes)
+  const mas = Math.round(importe * 100)
+  return `El recibo de ${nombreDelMes(s.mes)} pasa de ${euros(antes)} a ${euros(antes + mas)} (+${euros(mas)}).`
 }

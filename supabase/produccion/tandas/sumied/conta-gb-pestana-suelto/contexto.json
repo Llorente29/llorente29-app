@@ -1,0 +1,8 @@
+{
+ "_que": "GB · nº 17, B · contexto de producción, medido en SOLO LECTURA el 10/11 a las 09:55Z. La 1010 crea conta_bitrix_pestana_sueltos(text,text,text,text,uuid) y conta_bitrix_pestana_suelto_poner(text,text,text,text,uuid,uuid,text,numeric), que no existen (ni otras con el mismo nombre), y no las llama. Usa _conta_portal_bitrix_quien (2345, Code 3), conta_trabajos_sueltos y conta_trabajo_suelto_poner (0700, Code 1: las dos existen) y _conta_bitrix_pestana_bitrix_de (2300). Inserta en conta_bitrix_pestana_cambio con la acción «suelto», que añade la 0950 (#581). Nada en el camino del pedido.",
+ "medido": "2026-11-10T09:55Z",
+ "tanda": {
+  "supabase/migrations/20261110T1010_gb_pestana_suelto.sql": "fd464fd1692bb2a8081509fc19b59ab5"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}
