@@ -1,0 +1,12 @@
+# G05 · Una anual, entera y solo en su mes (nº 89). Rama conta/g05-anual-recibo.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar. El real
+# lo lanza Julio. El recibo lo calcula el servidor (conta-cobro, con
+# _shared/tarifa/precio.ts): va en el mismo PR y se despliega al fusionar.
+#
+#   1622  CAMBIA EN CALIENTE conta_linea_al_mes (la misma firma, con su respaldo y
+#         su prueba de staging): una anual vale su importe entero en el mes de su
+#         «desde» y 0 en los demás (antes, 1/12 cada mes).
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-anual-recibo.sql
+supabase/migrations/20261110T1622_g05_anual_en_su_mes.sql

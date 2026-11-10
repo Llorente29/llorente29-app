@@ -335,11 +335,19 @@ export function modeloFicha(d: DatosClientes, suyo: DatosFicha, empresas: readon
         factura: facturaDelCobro(facturaDe.get(`${String(b.company_id)}|${String(b.gc_id)}`)) } })
   const ultimoMandato = [...mandatos].sort((a, b) => (String(a.creado ?? '') < String(b.creado ?? '') ? 1 : -1))[0]
   // Lo que tiene, a la derecha: cada asignación vigente con su precio.
-  // Una que aún no ha empezado (la anual de GoCardless que se cobra por primera vez en junio) no está en el recibo
-  // del mes que viene: se busca en el de su primer mes, para que tenga su nombre y su precio, no «Servicio · Sin precio».
+  // Una que no está en el recibo del mes que viene (la que aún no ha empezado, o una anual, que solo va en su mes) se
+  // busca en el recibo de los doce meses siguientes, para que tenga su nombre y su precio, no «Servicio · Sin precio».
+  const masAdelante = (a: (typeof suyas)[number]) => {
+    if (!e) return undefined
+    let m = mesDe(a.desde) > siguiente ? mesDe(a.desde) : siguiente
+    for (let i = 0; i < 12; i++, m = mesSiguiente(m)) {
+      const x = reciboDelMes(catalogo, asignaciones, clienteId, e, m).lineas.find((y) => y.asignacionId === a.id)
+      if (x) return x
+    }
+    return undefined
+  }
   const servicios = suyas.filter((a) => a.hasta === null || a.hasta >= mes).map((a) => {
-    const l = recibo?.lineas.find((x) => x.asignacionId === a.id)
-      ?? (e && mesDe(a.desde) > siguiente ? reciboDelMes(catalogo, asignaciones, clienteId, e, mesDe(a.desde)).lineas.find((x) => x.asignacionId === a.id) : undefined)
+    const l = recibo?.lineas.find((x) => x.asignacionId === a.id) ?? masAdelante(a)
     const servicioId = a.objetivo.tipo === 'paquete' ? null : a.objetivo.servicioId.split('#')[0]
     const palabra = !l || l.dePrecio === 'sin_precio' ? 'Sin precio' : l.dePrecio === 'tarifa' ? 'Precio de tarifa' : l.dePrecio === 'especial' ? 'Precio especial' : 'Precio de este cliente'
     return {
