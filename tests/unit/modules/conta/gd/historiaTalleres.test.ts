@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { HISTORIA, PASOS, historiaDeTalleres } from '../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos'
 
-const TRES = ['ADRIAN MOLINA CASTRO', 'RAUL IBARRA SOTO', 'SERGIO VELA RAMOS']
+const TRES = ['Adrián Molina Castro', 'Raúl Ibarra Soto', 'Sergio Vela Ramos']
 
 describe('GD · nº101 · la historia de Talleres Ruiz', () => {
   it('de julio a octubre si se cobra noviembre; con el cambio de año, también', () => {

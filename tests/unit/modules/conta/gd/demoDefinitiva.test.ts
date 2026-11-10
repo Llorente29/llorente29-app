@@ -32,3 +32,22 @@ describe('GD · nº94 · la demo, definitiva', () => {
     expect(g).toContain('...resumen].join')
   })
 })
+
+describe('GD · nº104 · los nombres de la demo, bien escritos', () => {
+  it('las suscripciones del sandbox: «Gestión laboral Adrián Molina Castro», «Impuesto de sociedades»…', async () => {
+    const s = readFileSync('supabase/functions/_shared/gd/siembra.ts', 'utf8')
+    expect(s).not.toMatch(/toUpperCase|MAYUS|'IMPUESTO DE SOCIEDADES'|GESTION LABORAL|GESTORIA MENSUAL/)
+    expect(s).toContain('`Gestión laboral ${t}`')
+    expect(s).toContain("'Impuesto de sociedades'")
+    expect(s).toContain('`Gestoría mensual ${SIN_SL(c.nombre)}`')
+    // La lectura los sigue clasificando igual: no mira mayúsculas ni tildes.
+    const { clasificar } = await import('../../../../../supabase/functions/conta-gocardless-leer/conversion')
+    expect(clasificar('Gestión laboral Adrián Molina Castro')).toEqual({ tipo: 'laboral', detalle: 'Adrián Molina Castro' })
+    expect(clasificar('Gestoría mensual Talleres Ruiz')).toEqual({ tipo: 'gestoria', detalle: 'Talleres Ruiz' })
+    expect(clasificar('Impuesto de sociedades').tipo).toBe('otro')
+  })
+  it('el alta del mes, también: Lucas Ferrer Gil', async () => {
+    const { CAMBIOS_DEL_MES } = await import('../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos')
+    expect(CAMBIOS_DEL_MES.alta.trabajador).toBe('Lucas Ferrer Gil')
+  })
+})
