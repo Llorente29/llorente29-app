@@ -4,7 +4,8 @@
 // desde el móvil, o arrastrando) al buzón de su cuenta en Sumied, y ver lo que
 // la gestoría le deja: impuestos presentados con su justificante, nóminas y
 // seguros sociales (una fila por mes, como la maqueta: «Nóminas de octubre · 4
-// nóminas»; varios documentos se bajan en un ZIP), y lo que ha subido. Una sola
+// nóminas»; varios documentos se bajan en un ZIP), lo que ha subido y lo que ha
+// firmado (nº 19.1). Una sola
 // lectura: conta_portal_documentos.
 
 import { useRef, useState } from 'react'
@@ -17,7 +18,7 @@ import type { Documentos as DatosDocs } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
 
-type Tipo = 'impuestos' | 'nominas' | 'subidas'
+type Tipo = 'impuestos' | 'nominas' | 'subidas' | 'firmados'
 
 export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla) {
   const { datos, error, cargando, recargar } = useLectura<DatosDocs>('conta_portal_documentos', cliente)
@@ -56,6 +57,8 @@ export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla
     { id: 'impuestos', label: 'Impuestos presentados', n: datos.impuestos.length },
     ...(permiso === 'todo' ? [{ id: 'nominas' as Tipo, label: 'Nóminas', n: datos.nominas.length }] : []),
     { id: 'subidas', label: 'Lo que has subido', n: datos.subidas.length },
+    // nº 19.1 · Al firmar, el portal dice «tienes la copia en Documentos»: aquí está (solo si hay algo firmado).
+    ...((datos.firmados ?? []).length ? [{ id: 'firmados' as Tipo, label: 'Lo que has firmado', n: (datos.firmados ?? []).length }] : []),
   ]
   const abrirDoc = (t: string, id: string) => abrir(cliente, t, id).catch((e: Error) => avisar({ tipo: 'mal', texto: e.message }))
   // Nóminas y seguros sociales, una fila por mes como en la maqueta: uno se abre; varios, en un ZIP.
@@ -121,6 +124,13 @@ export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla
               <div className="pt-fila-texto"><b>{g.titulo}</b><span>{g.detalle}</span></div>
               <button type="button" className="pt-boton sec chico" disabled={bajando === g.clave} onClick={() => void bajarGrupo(g)}>{bajando === g.clave ? 'Preparando…' : 'Descargar'}</button>
             </div>)))}
+        {tipo === 'firmados' && (datos.firmados ?? []).map((f) => (
+            <div className="pt-fila" key={f.id}>
+              <span className="pt-icono" aria-hidden="true">PDF</span>
+              <div className="pt-fila-texto"><b>{f.titulo}</b><span>Firmado el {fecha(f.firmada)}</span></div>
+              <Chip texto="Firmado" tono="ok" />
+              <button type="button" className="pt-boton sec chico" onClick={() => abrirDoc('peticion', f.id)}>{f.pdf ? 'PDF firmado' : 'Ver'}</button>
+            </div>))}
         {tipo === 'subidas' && (datos.subidas.length === 0 ? <div className="pt-vacio">Aún no has subido nada.</div>
           : datos.subidas.map((s) => (
             <div className="pt-fila" key={s.id}>
