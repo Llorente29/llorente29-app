@@ -40398,6 +40398,59 @@ end $$;
 
 
 --
+-- Name: conta_gocardless_del_mes(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_gocardless_del_mes(p_cuenta uuid, p_mes text) RETURNS TABLE(que text, cliente_id uuid, empresa_id uuid, mes text, gocardless_del_mes numeric)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+begin
+  if p_mes is null or p_mes !~ '^[0-9]{4}-(0[1-9]|1[0-2])$' then
+    raise exception 'Falta el mes (AAAA-MM).' using errcode = '22023';
+  end if;
+  return query
+  with permiso as (
+    select p_cuenta as cuenta where public.belongs_to_account(p_cuenta)
+  ), sus as (
+    select s.company_id, s.gc_cliente_id, s.importe,
+           case s.intervalo when 'monthly' then greatest(1, coalesce(s.cada, 1))
+                            when 'yearly' then 12 * greatest(1, coalesce(s.cada, 1)) end as meses,
+           coalesce(s.proximo_cobro_fecha, s.inicio) as ref
+      from public.conta_gc_suscripcion s
+     where s.account_id = (select cuenta from permiso) and s.estado = 'active'
+  ), cuenta_mes as (
+    select x.company_id, x.gc_cliente_id,
+           coalesce(sum(case
+             when x.meses is null then 0
+             when x.meses = 1 then coalesce(x.importe, 0)
+             when x.ref is null then 0
+             when mod(mod((extract(year from to_date(p_mes, 'YYYY-MM'))::int - extract(year from x.ref)::int) * 12
+                          + extract(month from to_date(p_mes, 'YYYY-MM'))::int - extract(month from x.ref)::int, x.meses) + x.meses, x.meses) = 0
+               then coalesce(x.importe, 0)
+             else 0 end), 0) as importe
+      from sus x
+     group by x.company_id, x.gc_cliente_id
+  )
+  select 'cliente'::text, cc.party_id, cc.company_id, p_mes, cm.importe
+    from public.conta_cobro_cliente cc
+    join cuenta_mes cm on cm.company_id = cc.company_id and cm.gc_cliente_id = cc.gc_cliente_id
+   where cc.account_id = (select cuenta from permiso)
+  union all
+  select 'empresa'::text, null::uuid, cm.company_id, p_mes, sum(cm.importe)
+    from cuenta_mes cm
+   group by cm.company_id;
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_gocardless_del_mes(p_cuenta uuid, p_mes text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_gocardless_del_mes(p_cuenta uuid, p_mes text) IS 'G05 · nº 82 · Lo que GoCardless cobra a cada cliente EN un mes (la anual, entera en su mes; nunca repartida entre 12), para la ficha y Clientes. De quien es de la cuenta.';
+
+
+--
 -- Name: conta_gocardless_guardar_conexion(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -170114,6 +170167,15 @@ GRANT ALL ON FUNCTION public.conta_gestoria_revisada(p_diferencia uuid, p_motivo
 REVOKE ALL ON FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_gestoria_tarifa_guardar(p_company uuid, p_servicio uuid, p_party uuid, p_importe numeric, p_periodo text, p_desde date, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_gocardless_del_mes(p_cuenta uuid, p_mes text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_gocardless_del_mes(p_cuenta uuid, p_mes text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_gocardless_del_mes(p_cuenta uuid, p_mes text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_gocardless_del_mes(p_cuenta uuid, p_mes text) TO service_role;
 
 
 --
