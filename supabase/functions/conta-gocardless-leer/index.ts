@@ -130,6 +130,13 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await upsert(db, 'conta_gc_cobro', plan.filas.cobros, 'company_id,gc_id')
     // G05 · nº 43 · Los pagos al banco: su día de llegada y su neto (el casado de Bancos, match_id, no se toca).
     await upsert(db, 'conta_gc_payout', plan.filas.payouts, 'company_id,gc_id')
+    // nº 76 · Las que no son de ningún cliente de ahora no se guardan; si ya estaban, se quitan, salvo las casadas en Bancos.
+    const fuera = (datos.payoutsFuera ?? []).map((f) => f.id)
+    for (const trozo of enTrozos(fuera)) {
+      const { error } = await db.from('conta_gc_payout').delete().eq('company_id', empresa).in('gc_id', trozo).is('match_id', null)
+      if (error) throw new Error(`No se han podido quitar las liquidaciones que no son de ningún cliente: ${error.message}`)
+    }
+    if (fuera.length) console.log(`[conta-gocardless-leer] ${fuera.length} liquidaciones de GoCardless que no son de ningún cliente de ahora: fuera.`)
     await upsert(db, 'conta_cobro_cliente', plan.cobroCliente, 'company_id,party_id')
     const yaEstan = await leerFilas<{ id: string; gc_mandato_id: string }>(db.from('conta_mandato').select('id, gc_mandato_id').eq('company_id', empresa).not('gc_mandato_id', 'is', null), 'los mandatos')
     const idDe = new Map(yaEstan.map((m) => [m.gc_mandato_id, m.id]))
