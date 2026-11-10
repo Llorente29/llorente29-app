@@ -1,6 +1,6 @@
 {
- "_que": "GB · nº 13 · contexto de producción, medido en SOLO LECTURA el 10/11 a la 01:40Z. La 0070 quita y vuelve a poner el CHECK de las acciones de conta_bitrix_pestana_cambio (0 filas hoy) con alta, baja, tarifa (lo de producción) y deshacer: solo amplía. Crea conta_bitrix_pestana_deshacer(text,text,text,text,uuid,timestamptz), que no existe, y no la llama. Llama (al usarse) a conta_linea_operaciones_hoy y conta_linea_deshacer de la 0010 (#562), que aún no están en producción: la función lo comprueba y, sin ellas, no deshace nada. Usa _conta_bitrix_pestana_bitrix_de (2300, #554). Nada en el camino del pedido.",
- "medido": "2026-11-10T01:40Z",
+ "_que": "GB · nº 13 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 00:20Z. La 0070 quita y vuelve a poner el CHECK de las acciones de conta_bitrix_pestana_cambio (0 filas hoy) con alta, baja, tarifa (lo de producción) y deshacer: solo amplía. Crea conta_bitrix_pestana_deshacer(text,text,text,text,uuid,timestamptz), que no existe, y no la llama. Llama (al usarse) a conta_linea_operaciones_hoy y conta_linea_deshacer de la 0010 (#562), que aún no están en producción: la función lo comprueba y, sin ellas, no deshace nada. Usa _conta_bitrix_pestana_bitrix_de (2300, #554). Nada en el camino del pedido.",
+ "medido": "2026-11-10T00:20Z",
  "tanda": {
   "supabase/migrations/20261110T0070_gb_pestana_deshacer.sql": "bc28c6318eba36951bba7b91b94d31f3"
  },

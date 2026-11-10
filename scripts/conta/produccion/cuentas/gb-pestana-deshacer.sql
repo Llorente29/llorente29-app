@@ -9,5 +9,5 @@ select clave, valor from (
     concat_ws(' / ', (to_regprocedure('public.conta_bitrix_pestana_deshacer(text,text,text,text,uuid,timestamptz)') is not null)::text,
       (select pg_get_constraintdef(oid) like '%deshacer%' from pg_constraint where conname = 'conta_bitrix_pestana_cambio_accion_check')::text) valor union all
   select 2, 'Cambios desde la pestaña (con corte de fecha)',
-    (select count(*) from public.conta_bitrix_pestana_cambio where hecho_at < timestamptz '2026-11-10 01:40:00+00')::text
+    (select count(*) from public.conta_bitrix_pestana_cambio where hecho_at < timestamptz '2026-11-10 00:00:00+00')::text
 ) q order by o;
