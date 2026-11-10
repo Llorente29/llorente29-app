@@ -39881,6 +39881,31 @@ COMMENT ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) IS 'P
 
 
 --
+-- Name: conta_ficha_facturas(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_ficha_facturas(p_cuenta uuid, p_cliente uuid) RETURNS TABLE(empresa_id uuid, cobro_gc_id text, recibo_id uuid, mes text, recibo_estado text, factura_id uuid, factura text)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with permiso as (
+    select p_cuenta as cuenta where public.belongs_to_account(p_cuenta)
+  )
+  select r.company_id, r.gc_cobro_id, r.id, r.mes, r.estado, i.id, i.number_text
+    from public.conta_recibo r
+    left join public.customer_invoice i on i.id = r.invoice_id and i.account_id = r.account_id
+   where r.account_id = (select cuenta from permiso) and r.party_id = p_cliente and r.gc_cobro_id is not null
+$$;
+
+
+--
+-- Name: FUNCTION conta_ficha_facturas(p_cuenta uuid, p_cliente uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_ficha_facturas(p_cuenta uuid, p_cliente uuid) IS 'G05 · nº 84 · La factura de cada cobro de GoCardless de un cliente (por su recibo de Sumied), para la pestaña «Cobros» de la ficha. De quien es de la cuenta.';
+
+
+--
 -- Name: conta_fijar_corte(uuid, date, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -50107,7 +50132,13 @@ begin
                             and o.estado in ('creada', 'esperando') order by o.created_at desc limit 1),
     'datos', (select jsonb_build_object('razon_social', coalesce(cf.legal_name, p.name), 'nif', p.tax_id,
                 'direccion', concat_ws(' · ', cf.fiscal_street, nullif(concat_ws(' ', cf.fiscal_postal_code, cf.fiscal_city), '')),
-                'correo_facturas', (select f.email_to from public.customer_invoice f where f.party_id = p.id and f.email_to is not null order by f.issue_date desc limit 1))
+                -- nº 28 · Adonde va de verdad la factura (lo mismo que correoDelCliente, de Code 1): el de la última factura,
+                -- el del cliente en ella o el que tiene GoCardless de ese cliente.
+                'correo_facturas', coalesce(
+                   (select coalesce(nullif(btrim(f.email_to), ''), nullif(btrim(f.customer ->> 'correo'), '')) from public.customer_invoice f
+                     where f.party_id = p.id and f.status = 'emitida' and coalesce(nullif(btrim(f.email_to), ''), nullif(btrim(f.customer ->> 'correo'), '')) is not null
+                     order by f.issue_date desc limit 1),
+                   (select g.correo from public.conta_gc_cliente g where g.party_id = p.id and g.company_id = e and nullif(btrim(g.correo), '') is not null limit 1)))
                 from public.party p left join public.customer_fiscal cf on cf.party_id = p.id where p.id = y.party_id),
     'cambio_datos_abierto', exists (select 1 from public.conta_portal_incidencia i where i.party_id = y.party_id and i.tipo = 'cambio_datos' and i.estado = 'abierta'),
     'personas', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'nombre', coalesce(x.nombre, x.correo), 'correo', x.correo,
@@ -50133,6 +50164,11 @@ declare
   v_cliente uuid; v_hechas text[] := '{}'; v_hoy date := (now() at time zone 'Europe/Madrid')::date;
   v_limite date; v_correo constant text := 'tomas.ruiz@talleresruiz.example';
   v_mes text;
+  -- nº 28 · La empresa de Talleres Ruiz en Sumied (otra cuenta demo, que «Volver a empezar» no borra) y su sociedad.
+  v_prop constant uuid := 'de000000-0000-4000-8000-0000000000b1'; v_soc constant uuid := 'de000000-0000-4000-8000-0000000000b2';
+  v_qfin date; v_presentado date; v_anio_q int; v_q text; v_ej200 int; v_200 date; v_n int; v_m int; v_ini date; v_fin date;
+  v_nombre_mes text; v_emp uuid; v_primero uuid; w record; v_marca jsonb;
+  MESES constant text[] := array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 begin
   if not exists (select 1 from public.accounts where id = p_cuenta and is_demo is true) then
     raise exception 'Solo se prepara el portal de una cuenta de demostración.' using errcode = '42501';
@@ -50184,6 +50220,113 @@ begin
     v_hechas := array_append(v_hechas, ('la petición «Facturas de gasto de ' || v_mes || '», para el ' || to_char(v_limite, 'DD/MM')));
   end if;
 
+  -- 5 · nº 28 · La empresa de Talleres Ruiz en Sumied: una cuenta demo propia, con su sociedad. La crea la
+  --     plataforma (la migración o «Volver a empezar»): marcar una cuenta como demo no lo puede hacer una sesión.
+  if not exists (select 1 from public.accounts where id = v_prop) then
+    if auth.uid() is null then
+      insert into public.accounts (id, name, legal_name, slug, status, business_type, product_brand, is_demo)
+      values (v_prop, 'Talleres Ruiz, S.L.', 'Talleres Ruiz, S.L.', 'talleres-ruiz-demo', 'active', 'otra_actividad', 'sumied', true);
+      insert into public.company (id, account_id, legal_name, trade_name, tax_id, entity_kind, fiscal_street, fiscal_postal_code, fiscal_city, fiscal_province)
+      values (v_soc, v_prop, 'Talleres Ruiz, S.L.', 'Talleres Ruiz', 'B00001115', 'company', 'Calle Mayor, 1', '28001', 'Getafe', 'Madrid');
+      v_hechas := array_append(v_hechas, 'la empresa de Talleres Ruiz en Sumied');
+    else
+      v_hechas := array_append(v_hechas, 'la empresa de Talleres Ruiz en Sumied no está: la crea la plataforma («Volver a empezar»)');
+    end if;
+  end if;
+  if exists (select 1 from public.accounts where id = v_prop and is_demo is true) then
+    -- Su ficha de cliente apunta a su empresa (la ficha la siembra Code 2; aquí solo el enlace).
+    if not exists (select 1 from public.conta_gestoria_cliente where party_id = v_cliente and account_id = p_cuenta and cuenta_propia_account_id = v_prop) then
+      if exists (select 1 from public.conta_gestoria_cliente where party_id = v_cliente and account_id = p_cuenta) then
+        update public.conta_gestoria_cliente set cuenta_propia_account_id = v_prop where party_id = v_cliente and account_id = p_cuenta;
+      else
+        insert into public.conta_gestoria_cliente (party_id, account_id, cuenta_propia_account_id) values (v_cliente, p_cuenta, v_prop);
+      end if;
+      v_hechas := array_append(v_hechas, 'Talleres Ruiz ya sube documentos al portal');
+    end if;
+
+    -- 6 · Los impuestos presentados (como la maqueta): el 303, el 111 y el 115 del último trimestre ya presentado
+    --     (el día 20 del mes siguiente) y el 200 del último ejercicio (el 24 de julio). Con su justificante (un PDF
+    --     de la demo, que hace conta-portal al abrirlo).
+    v_qfin := (date_trunc('quarter', v_hoy) - interval '1 day')::date;
+    if (v_qfin + 20) > v_hoy then v_qfin := (date_trunc('quarter', v_qfin) - interval '1 day')::date; end if;
+    v_presentado := v_qfin + 20; v_anio_q := extract(year from v_qfin)::int; v_q := extract(quarter from v_qfin)::int || 'T';
+    v_ej200 := extract(year from v_hoy)::int - case when v_hoy >= make_date(extract(year from v_hoy)::int, 7, 24) then 1 else 2 end;
+    v_200 := make_date(v_ej200 + 1, 7, 24);
+    insert into public.tax_return (account_id, company_id, form_code, fiscal_year, cadence, period, due_date, status, result_kind, amount,
+                                   filed_at, filed_via, filed_by_name, presenter_kind, aeat_csv, receipt_source, receipt_document_path)
+    select v_prop, v_soc, x.modelo, x.ejercicio, x.cadencia, x.periodo, x.dia, 'filed', x.resultado, x.importe,
+           (x.dia + time '10:30') at time zone 'Europe/Madrid', 'sumied', 'Gestoría Demo', 'advisor', 'DEMO' || upper(substr(md5(x.modelo || x.ejercicio || x.periodo), 1, 12)),
+           'upload', 'demo/' || v_prop || '/impuestos/' || x.modelo || '-' || x.ejercicio || '-' || x.periodo || '.pdf'
+      from (values ('303', v_anio_q, 'quarterly', v_q, v_presentado, 'to_pay', 1842.50),
+                   ('111', v_anio_q, 'quarterly', v_q, v_presentado, 'to_pay', 1204.00),
+                   ('115', v_anio_q, 'quarterly', v_q, v_presentado, 'to_pay', 342.00),
+                   ('200', v_ej200, 'annual', '0A', v_200, 'to_refund', 312.40)) x(modelo, ejercicio, cadencia, periodo, dia, resultado, importe)
+    on conflict (company_id, form_code, fiscal_year, period, sequence) do nothing;
+    get diagnostics v_n = row_count;
+    if v_n > 0 then v_hechas := array_append(v_hechas, v_n || ' impuestos presentados (303, 111 y 115 del ' || v_q || ' y el 200 de ' || v_ej200 || ')'); end if;
+
+    -- 7 · Las nóminas de los dos últimos meses (y los seguros sociales del último), de los trabajadores que
+    --     enseña la pestaña Trabajadores (las líneas de Gestión laboral de Code 2), con el nombre bien escrito.
+    v_m := 0;
+    for i in reverse 2..1 loop
+      v_ini := (date_trunc('month', v_hoy) - make_interval(months => i))::date;
+      v_fin := (v_ini + interval '1 month' - interval '1 day')::date;
+      v_nombre_mes := MESES[extract(month from v_ini)::int] || ' ' || extract(year from v_ini);
+      v_primero := null;
+      for w in select distinct initcap(lower(btrim(l.empleado_nombre))) as nombre
+                 from public.conta_linea l
+                where l.account_id = p_cuenta and l.party_id = v_cliente and l.empleado_nombre is not null
+                  and l.desde <= v_fin and (l.hasta is null or l.hasta >= v_ini)
+                order by 1 loop
+        select id into v_emp from public.employees where account_id = v_prop and name = w.nombre limit 1;
+        if v_emp is null then
+          insert into public.employees (account_id, name, position, contract_type, active) values (v_prop, w.nombre, 'Mecánico', 'indefinido', true) returning id into v_emp;
+        end if;
+        v_primero := coalesce(v_primero, v_emp);
+        insert into public.documents (employee_id, type, name, file_path, carpeta, origen, uploaded_role, created_at)
+        select v_emp, 'nomina', 'Nómina ' || v_nombre_mes || ' · ' || w.nombre || '.pdf',
+               'demo/' || v_prop || '/nominas/' || to_char(v_ini, 'YYYY-MM') || '/' || v_emp || '.pdf', 'nominas', 'sumied', 'gestor',
+               (v_fin + time '10:00') at time zone 'Europe/Madrid'
+         where not exists (select 1 from public.documents d where d.employee_id = v_emp and d.file_path = 'demo/' || v_prop || '/nominas/' || to_char(v_ini, 'YYYY-MM') || '/' || v_emp || '.pdf');
+        get diagnostics v_n = row_count; v_m := v_m + v_n;
+      end loop;
+      if i = 1 and v_primero is not null then
+        insert into public.documents (employee_id, type, name, file_path, carpeta, origen, uploaded_role, created_at)
+        select v_primero, 'seguros_sociales', 'Seguros sociales ' || v_nombre_mes || '.pdf',
+               'demo/' || v_prop || '/ss/' || to_char(v_ini, 'YYYY-MM') || '.pdf', 'ss_sepe', 'sumied', 'gestor', (v_fin + time '09:00') at time zone 'Europe/Madrid'
+         where not exists (select 1 from public.documents d where d.file_path = 'demo/' || v_prop || '/ss/' || to_char(v_ini, 'YYYY-MM') || '.pdf');
+        get diagnostics v_n = row_count; v_m := v_m + v_n;
+      end if;
+    end loop;
+    if v_m > 0 then v_hechas := array_append(v_hechas, v_m || ' documentos de laboral (nóminas y seguros sociales)'); end if;
+  end if;
+
+  -- 8 · nº 28 · Una segunda persona, con «Facturas y documentos» (sin usuario; preparar no manda la invitación).
+  if not exists (select 1 from public.conta_portal_acceso where party_id = v_cliente and lower(correo) = 'administracion@talleresruiz.example') then
+    insert into public.conta_portal_acceso (account_id, party_id, correo, nombre, permiso, invitado_por_name, invitado_at)
+    values (p_cuenta, v_cliente, 'administracion@talleresruiz.example', 'Lucía Pardo', 'facturas_documentos', 'Preparación de la demo', now() - interval '1 hour');
+    v_hechas := array_append(v_hechas, 'Lucía Pardo, con «Facturas y documentos»');
+  end if;
+
+  -- 9 · nº 28 · Una conversación con la gestoría (como la maqueta), si Tomás aún no ha escrito. Ya avisada: no sale correo.
+  if not exists (select 1 from public.conta_portal_mensaje where party_id = v_cliente and de = 'cliente') then
+    insert into public.conta_portal_mensaje (account_id, party_id, de, autor_nombre, texto, created_at, avisado_at, leido_at) values
+      (p_cuenta, v_cliente, 'gestoria', 'Gestoría Demo', 'Hola, Tomás. Ya está hecha el alta del trabajador nuevo. ¿Tiene jornada completa o parcial? Lo necesito para su nómina.',
+       now() - interval '18 hours', now(), now() - interval '2 hours'),
+      (p_cuenta, v_cliente, 'cliente', 'Tomás Ruiz', 'Completa, 40 horas a la semana. El contrato firmado te lo paso mañana.',
+       now() - interval '40 minutes', now(), null),
+      (p_cuenta, v_cliente, 'gestoria', 'Gestoría Demo', 'Perfecto, recibido. Su primera nómina sale con la del mes que viene.',
+       now() - interval '20 minutes', now(), null);
+    v_hechas := array_append(v_hechas, 'una conversación en Mensajes');
+  end if;
+
+  -- 10 · nº 28 · El contacto de la gestoría que ve el cliente (inventado: correo de .example y teléfono de prueba).
+  v_marca := public._conta_portal_marca(p_cuenta, v_cliente);
+  if (v_marca ->> 'empresa_id') is not null and (v_marca ->> 'correo' is distinct from 'hola@gestoriademo.example' or v_marca ->> 'telefono' is distinct from '910000000') then
+    update public.company set email = 'hola@gestoriademo.example', phone = '910000000' where id = (v_marca ->> 'empresa_id')::uuid and account_id = p_cuenta;
+    v_hechas := array_append(v_hechas, 'el contacto de la gestoría (hola@gestoriademo.example · 910 000 000)');
+  end if;
+
   return jsonb_build_object('hecho', true, 'cliente_id', v_cliente,
     'frase', case when cardinality(v_hechas) = 0 then 'El portal de la demo ya estaba preparado: no hacía falta nada.'
                   else 'Portal de la demo preparado: ' || array_to_string(v_hechas, ', ') || '.' end);
@@ -50194,7 +50337,7 @@ end $$;
 -- Name: FUNCTION conta_portal_demo_preparar(p_cuenta uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) IS 'GP · Prepara el portal de una cuenta de demostración (Talleres Ruiz en «Gestoría Demo»): ajustes del devuelto, el acceso de Tomás Ruiz, un mensaje y una petición. Se puede pasar otra vez (también después de «Volver a empezar»). Solo cuentas demo; su administrador o encargado, o el servidor.';
+COMMENT ON FUNCTION public.conta_portal_demo_preparar(p_cuenta uuid) IS 'GP · Prepara el portal de una cuenta de demostración (Talleres Ruiz en «Gestoría Demo»): ajustes del devuelto, los accesos de Tomás Ruiz y Lucía Pardo, mensajes, una petición, la empresa de Talleres Ruiz en Sumied con sus impuestos y nóminas, y el contacto de la gestoría. Se puede pasar otra vez (también después de «Volver a empezar»). Solo cuentas demo; su administrador o encargado, o el servidor.';
 
 
 --
@@ -170047,6 +170190,15 @@ GRANT ALL ON FUNCTION public.conta_factura_recuperar(p_invoice uuid, p_quien_nom
 GRANT ALL ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) TO anon;
 GRANT ALL ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_factura_tiene_liquidacion(p_invoice uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_ficha_facturas(p_cuenta uuid, p_cliente uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_ficha_facturas(p_cuenta uuid, p_cliente uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_ficha_facturas(p_cuenta uuid, p_cliente uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_ficha_facturas(p_cuenta uuid, p_cliente uuid) TO service_role;
 
 
 --
