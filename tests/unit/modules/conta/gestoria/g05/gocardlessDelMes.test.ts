@@ -33,3 +33,19 @@ describe('G05 · nº 70 · lo que GoCardless cobra en el mes', () => {
     expect([r.recibo.totalCent, r.recibo.cambios, r.recibo.igualQueElMesPasado]).toEqual([14520, [], true])
   })
 })
+
+// nº 82 · Los MISMOS casos que la prueba de staging de conta_gocardless_del_mes
+// (supabase/staging/sql/20261110_g05_gocardless_del_mes_prueba.sql): la base y
+// «Revisar el cobro» cuentan igual.
+describe('nº 82 · los casos de la prueba de la base', () => {
+  const s = (importe: number, intervalo: string, cada: number, inicio: string, proximo: string | null, estado = 'active') =>
+    ({ importeCent: importe * 100, intervalo, cada, estado, proximoCobro: proximo, inicio })
+  const talleres = [
+    s(25, 'monthly', 1, '2026-01-05', '2026-12-05'), s(25, 'monthly', 1, '2026-01-05', '2026-12-05'), s(25, 'monthly', 1, '2026-01-05', '2026-12-05'),
+    s(150, 'monthly', 1, '2026-01-05', '2026-12-05'), s(300, 'yearly', 1, '2026-06-05', '2027-06-05'), s(60, 'monthly', 3, '2026-01-05', null),
+    s(10, 'weekly', 1, '2026-01-05', '2026-11-16'), s(99, 'monthly', 1, '2026-01-05', null, 'cancelled'),
+  ]
+  it.each([['2026-11', 225], ['2026-12', 225], ['2027-01', 285], ['2027-04', 285], ['2027-06', 525], ['2027-07', 285]])('%s: %i €', (mes, euros) => {
+    expect(gocardlessEnElMes(talleres, mes)).toBe(euros * 100)
+  })
+})
