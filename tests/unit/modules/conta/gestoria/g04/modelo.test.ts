@@ -146,4 +146,3 @@ describe('G04 · el modelo de la ficha', () => {
     ])
   })
 })
-
