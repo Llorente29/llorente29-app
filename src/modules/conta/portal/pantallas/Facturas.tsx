@@ -10,10 +10,17 @@ import { Search } from 'lucide-react'
 import { zipSync } from 'fflate'
 import { abrir, accion } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { eurosDe, fecha, mes } from '../formato'
+import { eurosDe, fecha, mes, queLleva } from '../formato'
 import type { Facturas as DatosFacturas } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
+
+// nº 24 · Como la maqueta: «Diciembre · Gestoría y laboral (4 trabajadores)»; sin recibo, la fecha y lo que lleva.
+function subtitulo(f: DatosFacturas['facturas'][number]): string {
+  const lleva = queLleva(f.lineas ?? [])
+  if (f.recibo_mes) return `${mes(f.recibo_mes)} · ${lleva || fecha(f.fecha)}`
+  return [fecha(f.fecha), lleva || f.concepto].filter(Boolean).join(' · ')
+}
 
 export function Facturas({ cliente, avisar }: Pantalla) {
   const { datos, error, cargando, recargar } = useLectura<DatosFacturas>('conta_portal_facturas', cliente)
@@ -25,7 +32,7 @@ export function Facturas({ cliente, avisar }: Pantalla) {
   const lista = useMemo(() => {
     const q = buscar.trim().toLowerCase()
     return (datos?.facturas ?? []).filter((f) => (elegido === 'todas' || f.anio === elegido)
-      && (!q || `${f.numero} ${f.concepto ?? ''} ${f.recibo_mes ? mes(f.recibo_mes) : ''}`.toLowerCase().includes(q)))
+      && (!q || `${f.numero} ${f.concepto ?? ''} ${f.recibo_mes ? mes(f.recibo_mes) : ''} ${queLleva(f.lineas ?? [])}`.toLowerCase().includes(q)))
   }, [datos, buscar, elegido])
   if (cargando && !datos) return <Cargando que="tus facturas" />
   if (error || !datos) return <Fallo texto={error ?? 'No se han podido cargar.'} otraVez={recargar} />
@@ -71,7 +78,7 @@ export function Facturas({ cliente, avisar }: Pantalla) {
           <div className="pt-fila" key={f.id}>
             <div className="pt-fila-texto">
               <b>{f.tipo === 'rectificativa' ? 'Rectificativa' : 'Factura'} {f.numero}</b>
-              <span>{f.recibo_mes ? `${mes(f.recibo_mes)} · ` : ''}{fecha(f.fecha)}{f.concepto && !f.recibo_mes ? ` · ${f.concepto}` : ''}</span>
+              <span>{subtitulo(f)}</span>
             </div>
             <Chip texto={f.estado} />
             <b className="pt-importe">{eurosDe(f.total)}</b>

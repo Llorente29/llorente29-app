@@ -35,17 +35,23 @@ export interface DatosClientes {
   ajustes: Fila[]
   /** El CRM conectado (su nombre y su portal), para «Ver en …». */
   crm: Fila[]
+  /** nº 82 · Lo que GoCardless cobra a cada cliente EN el mes (conta_gocardless_del_mes): la anual, entera en su mes, nunca entre 12. */
+  gcDelMes: Fila[]
 }
 
 const filas = (x: unknown): Fila[] => (Array.isArray(x) ? (x as Fila[]) : [])
 
-/** Todo lo de Clientes, el panel y la tarifa, de toda la cuenta, en una llamada (cada empresa lo filtra en la pantalla). */
-export async function leerClientes(accountId: string): Promise<DatosClientes> {
-  const d = (await rpc<Fila | null>('conta_pantalla_clientes', { p_cuenta: accountId })) ?? {}
+/** Todo lo de Clientes, el panel y la tarifa, de toda la cuenta (cada empresa lo filtra en la pantalla), y lo que GoCardless cobra en el mes (AAAA-MM), a la vez. */
+export async function leerClientes(accountId: string, mes: string): Promise<DatosClientes> {
+  const [pantalla, delMes] = await Promise.all([
+    rpc<Fila | null>('conta_pantalla_clientes', { p_cuenta: accountId }),
+    rpc<Fila[] | null>('conta_gocardless_del_mes', { p_cuenta: accountId, p_mes: mes }),
+  ])
+  const d = pantalla ?? {}
   return {
     clientes: filas(d.clientes), cuotasGc: filas(d.cuotas_gc), proximos: filas(d.proximos), cargos: filas(d.cargos), queHacer: filas(d.que_hacer),
     asignaciones: filas(d.asignaciones), precios: filas(d.precios), servicios: filas(d.servicios), niveles: filas(d.niveles), paquetes: filas(d.paquetes),
-    lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes), crm: filas(d.crm),
+    lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes), crm: filas(d.crm), gcDelMes: filas(delMes),
   }
 }
 

@@ -2,9 +2,10 @@
 // Nombres, cifras y fechas inventados.
 import { describe, expect, it } from 'vitest'
 import {
-  cuando, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, lineasDelRecibo, mes, nombreDePila,
-  nombreImpuesto, nombreSeguro, porQueCambia, puedeSubirse, tonoDe,
+  cuando, cuandoSeHizo, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
+  motivoParaTi, nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
+import { motivoEnPalabras } from '../../../../../supabase/functions/conta-gocardless-leer/motivo'
 
 const hoy = new Date('2026-11-09T12:00:00Z')
 
@@ -98,5 +99,88 @@ describe('lo que se sube y se pide', () => {
     expect(documentoLimpio('00000000-t')).toBe('00000000T')
     expect(documentoLimpio('x 0000000 t')).toBe('X0000000T')
     expect(documentoLimpio('1234')).toBeNull()
+  })
+})
+
+describe('Documentos · nóminas y seguros sociales, por mes', () => {
+  const hoy = new Date('2026-11-09T10:00:00Z')
+  const doc = (id: string, carpeta: string, fecha: string) => ({ id, nombre: `${id}.pdf`, carpeta, trabajador: 'Persona Ejemplo', fecha })
+  it('una fila por mes y tipo, la más reciente primero y las nóminas antes que los seguros sociales', () => {
+    const g = laboralPorMes([
+      doc('n1', 'nominas', '2026-10-30T09:00:00Z'), doc('n2', 'nominas', '2026-10-30T09:01:00Z'), doc('n3', 'nominas', '2026-10-29T09:00:00Z'), doc('n4', 'nominas', '2026-10-30T10:00:00Z'),
+      doc('s1', 'ss_sepe', '2026-10-31T08:00:00Z'), doc('n5', 'nominas', '2026-09-30T09:00:00Z'), doc('n6', 'nominas', '2026-09-30T09:00:00Z'), doc('n7', 'nominas', '2026-09-30T09:00:00Z'),
+    ], hoy)
+    expect(g.map((x) => [x.titulo, x.detalle, x.ids.length])).toEqual([
+      ['Nóminas de octubre', '4 nóminas · listas el 30 de octubre', 4],
+      ['Seguros sociales de octubre', 'Cargados el 31 de octubre', 1],
+      ['Nóminas de septiembre', '3 nóminas · listas el 30 de septiembre', 3],
+    ])
+  })
+  it('el mes, en la hora de Madrid; ninguno se queda fuera', () => {
+    // 31/10 a las 23:30 UTC ya es 1 de noviembre en Madrid.
+    const g = laboralPorMes([doc('a', 'nominas', '2026-10-31T23:30:00Z'), doc('b', 'nominas', '2025-12-30T09:00:00Z')], hoy)
+    expect(g.map((x) => x.titulo)).toEqual(['Nóminas de noviembre', 'Nóminas de diciembre de 2025'])
+    expect(g.flatMap((x) => x.ids).sort()).toEqual(['a', 'b'])
+    expect(laboralPorMes([], hoy)).toEqual([])
+  })
+})
+
+describe('Inicio · lo hecho, como la maqueta (nº 24)', () => {
+  const ahora = new Date('2026-11-10T10:00:00Z')
+  it('cuándo se hizo: hoy, ayer o la fecha', () => {
+    expect(cuandoSeHizo('2026-11-10T08:00:00Z', ahora)).toBe('hoy')
+    expect(cuandoSeHizo('2026-11-09T08:00:00Z', ahora)).toBe('ayer')
+    expect(cuandoSeHizo('2026-11-03T08:00:00Z', ahora)).toBe('el 3 de noviembre')
+    expect(cuandoSeHizo(null, ahora)).toBe('')
+  })
+  it('lo que dice cada petición hecha', () => {
+    expect(peticionHecha({ tipo: 'firmar', hecha: '2026-11-10T08:00:00Z' }, ahora)).toEqual({ detalle: 'Firmada hoy', boton: '✓ Firmada' })
+    expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 12 }, ahora)).toEqual({ detalle: 'Recibidos: 12 documentos', boton: '✓ Hecho' })
+    expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 1 }, ahora).detalle).toBe('Recibido: 1 documento')
+    expect(peticionHecha({ tipo: 'subir', hecha: '2026-11-09T08:00:00Z', recibidas: 0 }, ahora).detalle).toBe('Hecho ayer')
+    expect(peticionHecha({ tipo: 'contestar', hecha: '2026-11-03T08:00:00Z' }, ahora)).toEqual({ detalle: 'Contestada el 3 de noviembre', boton: '✓ Hecho' })
+  })
+})
+
+describe('nº 24 · lo que lleva una factura o un recibo', () => {
+  it('junta gestoría y laboral, con los trabajadores', () => {
+    expect(queLleva(['Gestoría mensual · Estándar', 'Gestión laboral · 4 trabajadores'])).toBe('Gestoría y laboral (4 trabajadores)')
+    expect(queLleva(['Gestión laboral · 1 trabajador', 'Gestoría mensual · Básica'])).toBe('Gestoría y laboral (1 trabajador)')
+  })
+  it('con algo más, lo pone detrás y no dice los trabajadores', () => {
+    expect(queLleva(['Gestoría mensual · Estándar', 'Gestión laboral · 3 trabajadores', 'Cuentas anuales'])).toBe('Gestoría y laboral · Cuentas anuales')
+  })
+  it('solo una de las dos, o nada conocido', () => {
+    expect(queLleva(['Gestoría mensual · Premium'])).toBe('Gestoría')
+    expect(queLleva(['Gestión laboral · 2 trabajadores'])).toBe('Laboral (2 trabajadores)')
+    expect(queLleva(['Alta de autónomo', ' '])).toBe('Alta de autónomo')
+    expect(queLleva([])).toBe('')
+  })
+})
+
+describe('nº 24 · 6 · el motivo del devuelto, dicho de tú', () => {
+  it('como la maqueta: «no había saldo suficiente» en Inicio y «sin saldo» en Pagos', () => {
+    expect(motivoParaTi('Sin saldo en la cuenta')).toEqual({ frase: 'no había saldo suficiente', corto: 'sin saldo' })
+  })
+  it('lo que no dice nada nuevo, o no hay, no se repite', () => {
+    expect(motivoParaTi('El banco lo ha devuelto')).toBeNull()
+    expect(motivoParaTi(null)).toBeNull()
+    expect(motivoParaTi('  ')).toBeNull()
+  })
+  it('un texto que no se conoce se enseña tal cual, en minúscula', () => {
+    expect(motivoParaTi('Motivo nuevo de prueba')).toEqual({ frase: 'motivo nuevo de prueba', corto: 'motivo nuevo de prueba' })
+  })
+  it('cada texto que guarda Code 1 tiene su versión de tú (nunca «el cliente» ni «su banco»)', () => {
+    const causas = ['insufficient_funds', 'refer_to_payer', 'bank_account_closed', 'bank_account_disabled', 'account_blocked_for_any_financial_transaction',
+      'mandate_cancelled', 'mandate_expired', 'invalid_bank_details', 'direct_debit_not_enabled', 'authorisation_disputed', 'refund_requested',
+      'return_on_odfi_request', 'payment_cancelled', 'reason_not_specified', 'causa_que_no_existe']
+    for (const c of causas) {
+      const texto = motivoEnPalabras(c, null)
+      const m = motivoParaTi(texto)
+      if (m) {
+        expect(`${m.frase} ${m.corto}`, `${c} → ${texto}`).not.toMatch(/el cliente|su banco/i)
+        expect(m.frase, `${c} → ${texto}`).not.toBe(texto)
+      }
+    }
   })
 })

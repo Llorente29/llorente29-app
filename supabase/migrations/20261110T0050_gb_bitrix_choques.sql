@@ -8,7 +8,7 @@
 -- «Trabajadores» o «Estado del cobro») y alguien lo ha cambiado allí a mano,
 -- no se pisa nunca. Desde hoy, además, sale como diferencia del cliente:
 --   1. conta_gestoria_diferencia: un tipo nuevo, «bitrix_cambiado». El CHECK
---      solo AMPLÍA (los 20 de producción, medidos el 10/11 a las 00:30Z, y el
+--      solo AMPLÍA (los 20 de producción, medidos el 10/11 a las 00:05Z, y el
 --      nuevo). La lectura de cada noche no lo renueva (no es de sus tipos): se
 --      quita con «Ya lo he revisado» o cuando la pestaña vuelve a escribir ese
 --      campo sin choque.

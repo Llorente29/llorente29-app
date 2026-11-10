@@ -1,0 +1,19 @@
+{
+ "_que": "G05 · Trabajo suelto · contexto de producción, medido en SOLO LECTURA el 10/11 a las 05:56Z (analizar.mjs sql-contexto). La 0700 solo añade cuatro funciones nuevas: no existe ninguna con esos nombres, ni trabajos de cron que las nombren. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T05:56Z",
+ "tanda": {
+  "supabase/migrations/20261110T0700_g05_trabajo_suelto.sql": "d23981c26c4dbe9321c0728b7ed4a637"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

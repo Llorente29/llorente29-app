@@ -1,0 +1,12 @@
+# G05 · La cifra de GoCardless del mes en la ficha y en Clientes (nº 81 y nº 82).
+# Rama conta/g05-ficha-anual. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. El real lo lanza Julio.
+#
+#   1222  AÑADE conta_gocardless_del_mes (lo que GoCardless cobra a cada cliente y
+#         a cada empresa EN un mes: la anual entera en su mes, nunca entre 12). No
+#         cambia ninguna función de antes: conta_lista_clientes y
+#         conta_pantalla_clientes se quedan como están.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-ficha-anual.sql
+supabase/migrations/20261110T1222_g05_gocardless_del_mes.sql

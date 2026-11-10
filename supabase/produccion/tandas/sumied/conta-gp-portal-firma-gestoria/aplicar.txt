@@ -1,0 +1,11 @@
+# GP · nº 19, punto 1 (Code 3; Julio, 09/11): lo firmado, en Documentos. Rama
+# conta/gp-portal-firma-gestoria. Se ensaya y se aplica desde main nombrando
+# esta rama.
+#
+#   0005  CAMBIA EN CALIENTE una función propia del portal (la misma firma, con
+#         respaldo): conta_portal_documentos devuelve además «firmados».
+#         Declarada en su cabecera con su prueba. No toca datos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-firmados.sql
+supabase/migrations/20261110T0005_gp_portal_firmados.sql

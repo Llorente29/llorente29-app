@@ -1,0 +1,11 @@
+[
+ {
+  "id": "576-1",
+  "pr": 576,
+  "fecha": "2026-11-10T11:05:08Z",
+  "producto": "sumied",
+  "apartado": "Cobros · Probar devoluciones",
+  "frase": "en una demo con el entorno de pruebas de GoCardless se puede simular que el banco devuelve un recibo, que el cliente lo reclama o que se cobra, para ver el camino entero.",
+  "ruta": null
+ }
+]

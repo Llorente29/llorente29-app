@@ -25,6 +25,7 @@ export function datosDeClientes(x: unknown): DatosClientes {
     clientes: filas(d.clientes), cuotasGc: filas(d.cuotas_gc), proximos: filas(d.proximos), cargos: filas(d.cargos), queHacer: filas(d.que_hacer),
     asignaciones: filas(d.asignaciones), precios: filas(d.precios), servicios: filas(d.servicios), niveles: filas(d.niveles), paquetes: filas(d.paquetes),
     lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes), crm: filas(d.crm),
+    gcDelMes: filas(d.gocardless_del_mes), // la pestaña no pinta la cifra de GoCardless del mes
   }
 }
 

@@ -24,6 +24,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, rmSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { trozos } from './subtitulos.mjs'
 
 const salida = process.argv[2]
 if (!salida) { console.error('uso: montar.mjs <salida>'); process.exit(2) }
@@ -32,6 +33,8 @@ const rutaVoz = join(salida, 'voz', 'frases.json')
 const voz = existsSync(rutaVoz) ? JSON.parse(readFileSync(rutaVoz, 'utf8')).filter((f) => f.dura && existsSync(f.salida)) : []
 const vozDe = new Map(voz.map((f) => [f.id, f]))
 const textoDe = (id, defecto) => vozDe.get(id)?.texto ?? defecto
+// GD · nº96 · El nombre del vídeo (VIDEO_NOMBRE): el del V01 si no se dice.
+const NOMBRE = (process.env.VIDEO_NOMBRE || 'factura-al-pago').replace(/[^a-z0-9-]/gi, '')
 const PORTADA = Math.max(3.5, (vozDe.get('portada')?.dura ?? 0) + 1.2)
 const CIERRE = Math.max(3.5, (vozDe.get('cierre')?.dura ?? 0) + 1.6)
 
@@ -120,6 +123,8 @@ const aTrozos = (k) => {
 const Z = aTrozos('z'); const CX = aTrozos('cx'); const CY = aTrozos('cy')
 writeFileSync(join(salida, 'zoom.json'), JSON.stringify(llaves.map((l) => ({ t: +l.t.toFixed(2), z: +l.z.toFixed(2), cx: Math.round(l.cx), cy: Math.round(l.cy) })), null, 1))
 
+// 3a · GD · nº96 · Dos líneas como mucho: las frases largas, en trozos (scripts/video/subtitulos.mjs).
+
 // 3 · Los subtítulos, en ASS: sin serifa, abajo, con caja semitransparente; dos líneas como mucho.
 const hms = (s) => { const h = Math.floor(s / 3600); const m = Math.floor((s % 3600) / 60); const x = (s % 60).toFixed(2).padStart(5, '0'); return `${h}:${String(m).padStart(2, '0')}:${x}` }
 const ass = [
@@ -129,7 +134,7 @@ const ass = [
   // BorderStyle 3: caja detrás; BackColour &H70…: negro al ~56 %.
   'Style: Abajo,DejaVu Sans,52,&H00FFFFFF,&H00FFFFFF,&H60141414,&H60141414,1,0,0,0,100,100,0,0,3,18,0,2,180,180,48,1',
   '', '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text',
-  ...dichos.map((d) => `Dialogue: 0,${hms(d.a + 0.05)},${hms(d.b)},Abajo,,0,0,0,,${d.texto}`),
+  ...dichos.flatMap((d) => trozos(d.texto).map((t) => `Dialogue: 0,${hms(t.a * (d.b - d.a - 0.05) + d.a + 0.05)},${hms(t.b * (d.b - d.a - 0.05) + d.a + 0.05)},Abajo,,0,0,0,,${t.texto}`)),
   '',
 ].join('\n')
 writeFileSync(join(salida, 'subtitulos.ass'), ass)
@@ -147,8 +152,8 @@ filtros.push(`[todo]scale=w='trunc(${W}*(${Z})/2)*2':h='trunc(${H}*(${Z})/2)*2':
   // (se quedaba en 1920 y el recorte, clavado arriba a la izquierda: run 41495352215). Va con el zoom.
   `crop=${W}:${H}:x='clip((${CX})*(${Z})-${W / 2},0,${W}*((${Z})-1))':y='clip((${CY})*(${Z})-${H / 2},0,${H}*((${Z})-1))'[zz]`)
 filtros.push(`[zz]ass=${join(salida, 'subtitulos.ass').replace(/:/g, '\\:')}[v]`)
-const mp4 = join(salida, 'factura-al-pago.mp4')
-const sinVoz = join(salida, 'factura-al-pago-sin-voz.mp4')
+const mp4 = join(salida, `${NOMBRE}.mp4`)
+const sinVoz = join(salida, `${NOMBRE}-sin-voz.mp4`)
 execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
   '-loop', '1', '-t', PORTADA.toFixed(2), '-i', join(salida, existsSync(join(salida, 'portada-video.png')) ? 'portada-video.png' : 'portada.png'),
   '-i', join(salida, 'crudo.webm'),

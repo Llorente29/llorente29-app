@@ -1,0 +1,11 @@
+[
+ {
+  "id": "566-1",
+  "pr": 566,
+  "fecha": "2026-11-10T10:00:04Z",
+  "producto": "sumied",
+  "apartado": "Pestaña de Bitrix24",
+  "frase": "si alguien ha cambiado a mano en Bitrix24 un dato que rellena Sumied, no se pisa y sale en «Pendiente de revisar» del cliente (portal de pruebas).",
+  "ruta": null
+ }
+]
