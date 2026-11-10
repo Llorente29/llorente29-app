@@ -248,3 +248,33 @@ export function queLleva(textos: (string | null | undefined)[]): string {
   const conTrabajadores = base && laboral && n > 0 && resto.length === 0 ? `${base} (${n} ${n === 1 ? 'trabajador' : 'trabajadores'})` : base
   return [conTrabajadores, ...resto].filter(Boolean).join(' · ')
 }
+
+/**
+ * nº 24 · 6 · El motivo del devuelto, dicho al cliente de tú, como la maqueta.
+ * Code 1 lo guarda en palabras de oficina (conta-gocardless-leer/motivo.ts):
+ * «Sin saldo en la cuenta» → «no había saldo suficiente» (Inicio) y «sin saldo»
+ * (Pagos). Lo que no dice nada nuevo («El banco lo ha devuelto») no se repite.
+ * Un texto que no se conoce se enseña tal cual, en minúscula: nunca se esconde.
+ */
+const MOTIVOS: Record<string, { frase: string; corto: string } | null> = {
+  'Sin saldo en la cuenta': { frase: 'no había saldo suficiente', corto: 'sin saldo' },
+  'El banco lo ha devuelto: el cliente tiene que hablar con su banco': { frase: 'habla con tu banco para saber por qué', corto: 'habla con tu banco' },
+  'La cuenta está cerrada': { frase: 'la cuenta está cerrada', corto: 'cuenta cerrada' },
+  'La cuenta está bloqueada': { frase: 'la cuenta está bloqueada', corto: 'cuenta bloqueada' },
+  'El cliente canceló la domiciliación en su banco': { frase: 'cancelaste la domiciliación en tu banco', corto: 'domiciliación cancelada' },
+  'La domiciliación ha caducado': { frase: 'la domiciliación ha caducado', corto: 'domiciliación caducada' },
+  'Los datos de la cuenta no son válidos': { frase: 'los datos de la cuenta no son válidos', corto: 'datos de la cuenta no válidos' },
+  'La cuenta no admite domiciliaciones': { frase: 'la cuenta no admite domiciliaciones', corto: 'la cuenta no admite domiciliaciones' },
+  'El cliente lo reclamó a su banco: dice que no lo autorizó': { frase: 'lo reclamaste a tu banco como no autorizado', corto: 'reclamado a tu banco' },
+  'El cliente lo reclamó a su banco (en las 8 semanas que tiene para hacerlo)': { frase: 'lo reclamaste a tu banco', corto: 'reclamado a tu banco' },
+  'Cancelado antes de cobrarse': { frase: 'se canceló antes de cobrarse', corto: 'cancelado antes de cobrarse' },
+  'El banco lo ha devuelto': null,
+  'El banco lo ha devuelto sin decir por qué': null,
+}
+export function motivoParaTi(motivo: string | null | undefined): { frase: string; corto: string } | null {
+  const m = (motivo ?? '').trim()
+  if (!m) return null
+  if (m in MOTIVOS) return MOTIVOS[m]
+  const minuscula = m[0].toLowerCase() + m.slice(1)
+  return { frase: minuscula, corto: minuscula }
+}

@@ -1,0 +1,21 @@
+{
+ "_que": "GP · nº 24 · punto 6 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 11:24Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1222 cambia en caliente public._conta_portal_devueltos(uuid, uuid) (existe; misma firma; sin otras sobrecargas; con respaldo; declarada en su cabecera con su prueba). Su cuerpo en producción es el de la 1530 (md5 del prosrc c340a9b3b06be983b291ef9b8b26aef6, el mismo que en la base local). La columna que lee, conta_recibo.motivo_devolucion (la 1138 de Code 1), ya existe. Ni disparador ni cron la usan: no está en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T11:24Z",
+ "tanda": {
+  "supabase/migrations/20261110T1222_gp_portal_devuelto_motivo.sql": "7d59c896323448fdb2201ceb6b9e99b2"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_portal_devueltos(uuid,uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

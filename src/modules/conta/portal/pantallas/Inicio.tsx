@@ -10,7 +10,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { ArrowUp, CircleCheck, Euro, FileText, MessageCircle, PenLine, Plus } from 'lucide-react'
 import { abrir, accion } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { cuentaEnmascarada, diferencia, euros, mes as nombreMes, peticionHecha, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS } from '../formato'
+import { cuentaEnmascarada, diferencia, euros, mes as nombreMes, peticionHecha, eurosDe, fecha, lineasDelRecibo, mes, nombreDePila, nombreImpuesto, porQueCambia, TONOS, motivoParaTi } from '../formato'
 import type { Inicio as DatosInicio, Novedad, Peticion } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -118,6 +118,7 @@ function FilaNovedad({ n, ir, cliente, avisar }: { n: Novedad; ir: Pantalla['ir'
 }
 
 function Devuelto({ cliente, v, formas, avisar, recargar }: { cliente: string; v: DatosInicio['devueltos'][number]; formas: DatosInicio['pagar_devuelto']; avisar: Pantalla['avisar']; recargar: () => void }) {
+  const motivo = motivoParaTi(v.motivo)
   const [ocupado, setOcupado] = useState<string | null>(null)
   const ir = async (que: 'banco_pagar' | 'tarjeta' | 'reintentar') => {
     setOcupado(que)
@@ -133,7 +134,7 @@ function Devuelto({ cliente, v, formas, avisar, recargar }: { cliente: string; v
       <div id={`pt-dev-${v.recibo_id}`} style={{ fontSize: 13, color: '#A11B12', fontWeight: 700 }}>Tienes un recibo devuelto</div>
       <div className="pt-cifra">{euros(v.importe_cent)}</div>
       <div style={{ color: '#7A140D' }}>
-        El de {mes(v.mes).toLowerCase()}. {v.devuelto_el ? `Tu banco lo devolvió el ${fecha(v.devuelto_el)}. ` : 'Tu banco lo devolvió. '}Puedes pagarlo ahora y queda todo al día.
+        El de {mes(v.mes).toLowerCase()}. Tu banco lo devolvió{v.devuelto_el ? ` el ${fecha(v.devuelto_el)}` : ''}{motivo ? `: ${motivo.frase}` : ''}. Puedes pagarlo ahora y queda todo al día.
       </div>
       {v.en_marcha && <div className="pt-nota" style={{ color: '#7A140D' }}>Empezaste a pagarlo el {fecha(v.en_marcha.creada)}: si no lo terminaste, vuelve a pulsar.</div>}
       <div className="pt-botones">

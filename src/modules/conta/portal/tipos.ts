@@ -18,7 +18,7 @@ export interface Proximo {
   cuenta_final?: string | null; cuenta_pais?: string | null
   incidencia: { id: string; texto: string; creada: string; parado: boolean | null } | null
 }
-export interface Devuelto { recibo_id: string; mes: string; importe_cent: number; devuelto_el: string | null; gc_estado: string | null; en_marcha: { tipo: string; estado: string; url: string | null; creada: string } | null }
+export interface Devuelto { recibo_id: string; mes: string; importe_cent: number; devuelto_el: string | null; gc_estado: string | null; motivo?: string | null; en_marcha: { tipo: string; estado: string; url: string | null; creada: string } | null }
 export interface Novedad { tipo: 'factura' | 'impuesto' | 'alta' | 'mensaje' | 'nomina'; n?: number; id: string; titulo: string; cuando: string; total?: number; periodo?: string; ejercicio?: number; importe?: number; resultado?: string; alta?: string; estado?: string; desde?: string; pagada?: string | null }
 export interface Inicio {
   gestoria: Marca

@@ -3,8 +3,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   cuando, cuandoSeHizo, cuentaEnmascarada, diferencia, documentoLimpio, euros, eurosDe, fecha, fechaCorta, iniciales, laboralPorMes, lineasDelRecibo, mes, nombreDePila,
-  nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, tonoDe,
+  motivoParaTi, nombreImpuesto, nombreSeguro, peticionHecha, porQueCambia, puedeSubirse, queLleva, tonoDe,
 } from '../../../../../src/modules/conta/portal/formato'
+import { motivoEnPalabras } from '../../../../../supabase/functions/conta-gocardless-leer/motivo'
 
 const hoy = new Date('2026-11-09T12:00:00Z')
 
@@ -154,5 +155,32 @@ describe('nº 24 · lo que lleva una factura o un recibo', () => {
     expect(queLleva(['Gestión laboral · 2 trabajadores'])).toBe('Laboral (2 trabajadores)')
     expect(queLleva(['Alta de autónomo', ' '])).toBe('Alta de autónomo')
     expect(queLleva([])).toBe('')
+  })
+})
+
+describe('nº 24 · 6 · el motivo del devuelto, dicho de tú', () => {
+  it('como la maqueta: «no había saldo suficiente» en Inicio y «sin saldo» en Pagos', () => {
+    expect(motivoParaTi('Sin saldo en la cuenta')).toEqual({ frase: 'no había saldo suficiente', corto: 'sin saldo' })
+  })
+  it('lo que no dice nada nuevo, o no hay, no se repite', () => {
+    expect(motivoParaTi('El banco lo ha devuelto')).toBeNull()
+    expect(motivoParaTi(null)).toBeNull()
+    expect(motivoParaTi('  ')).toBeNull()
+  })
+  it('un texto que no se conoce se enseña tal cual, en minúscula', () => {
+    expect(motivoParaTi('Motivo nuevo de prueba')).toEqual({ frase: 'motivo nuevo de prueba', corto: 'motivo nuevo de prueba' })
+  })
+  it('cada texto que guarda Code 1 tiene su versión de tú (nunca «el cliente» ni «su banco»)', () => {
+    const causas = ['insufficient_funds', 'refer_to_payer', 'bank_account_closed', 'bank_account_disabled', 'account_blocked_for_any_financial_transaction',
+      'mandate_cancelled', 'mandate_expired', 'invalid_bank_details', 'direct_debit_not_enabled', 'authorisation_disputed', 'refund_requested',
+      'return_on_odfi_request', 'payment_cancelled', 'reason_not_specified', 'causa_que_no_existe']
+    for (const c of causas) {
+      const texto = motivoEnPalabras(c, null)
+      const m = motivoParaTi(texto)
+      if (m) {
+        expect(`${m.frase} ${m.corto}`, `${c} → ${texto}`).not.toMatch(/el cliente|su banco/i)
+        expect(m.frase, `${c} → ${texto}`).not.toBe(texto)
+      }
+    }
   })
 })
