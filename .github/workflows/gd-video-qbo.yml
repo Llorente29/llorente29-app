@@ -110,7 +110,9 @@ jobs:
         if: always()
         run: |
           [ -f comprobar-salida/resumen.txt ] || exit 0
-          cat comprobar-salida/resumen.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
+          # nº94 · Cada paso con su marca: son datos inventados de la demo y pasan por la puerta de la DEMO,
+          # que solo se permite en este job (workflows-salida.mjs, PUERTA_DE_LA_DEMO).
+          cat comprobar-salida/resumen.txt | PUERTA_DEMO=gd-comprobar node scripts/conta/salida-demo.mjs >> "$GITHUB_STEP_SUMMARY" || true
 
       - uses: actions/upload-artifact@v4
         if: always()

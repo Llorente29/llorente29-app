@@ -241,6 +241,8 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
       // Con el mismo nombre en todos, la importación lo convierte en UN servicio.
       if (c.gc.anual) { await suscripcion(mandato, sello, 'IMPUESTO DE SOCIEDADES', 300, true); subs++ }
       if (c.gc.suelto) {
+        // nº94 · Solo uno que nunca se paga: uno pagado deja una liquidación sin factura en Sumied.
+        if (c.gc.escenario !== 'Penniless') throw new Error(`GD: ${c.nombre} tiene un cobro suelto que se pagaría (${c.gc.escenario}): solo Penniless.`)
         await gc('POST', '/payments', { payments: { amount: euros(c.gc.suelto), currency: 'EUR', description: 'Asesoría puntual', links: { mandate: mandato } } }, `${sello}-pm`)
         sueltos++
       }
@@ -250,7 +252,7 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
     const s = SOLO_EN_GOCARDLESS
     const { mandato, sello } = await clienteEnGc(n, { nombre: s.nombre, correo: s.correo, nif: s.nif, given: 'Successful', family: 'Alba Centro de Estudios', ciudad: 'Madrid' })
     await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(s.nombre)}`, s.mensual); subs++
-    decir(`  ✓ Sembrado en el sandbox: ${n} clientes con su mandato, ${subs} suscripciones y ${sueltos} cobros sueltos (Successful, Penniless y Fickle).`)
+    decir(`  ✓ Sembrado en el sandbox: ${n} clientes con su mandato, ${subs} suscripciones y ${sueltos} ${sueltos === 1 ? 'cobro suelto que sale devuelto' : 'cobros sueltos que salen devueltos'} (Penniless).`)
   }
 
   async function plan() {
