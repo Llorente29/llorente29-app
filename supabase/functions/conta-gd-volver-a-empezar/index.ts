@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PORTAL_DE_LA_DEMO, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -66,32 +66,42 @@ Deno.serve(async (req) => {
   if (no) return json(403, { error: no })
 
   const dicho: string[] = []
+  let sigue = false
   try {
     const siembra = crearSiembra({ b24Url, gcToken, decir: (t) => dicho.push(t.trim().replace(/^✓\s*/, '')) })
     switch (paso) {
       case 'comprobar': dicho.push('Todo listo para volver a empezar.'); break
-      case 'portal_borrar': await siembra.borrarBitrix(); break
-      case 'portal_sembrar': await siembra.sembrarBitrix(); break
+      // Por tandas (nº71): lo que cabe en 90 s; si queda, la pantalla vuelve a llamar al mismo paso.
+      case 'portal_borrar': sigue = (await siembra.borrarBitrix(PRESUPUESTO_MS)).quedan > 0; break
+      case 'portal_sembrar': sigue = (await siembra.sembrarBitrix(PRESUPUESTO_MS)).quedan > 0; break
       case 'sandbox_borrar': await siembra.borrarGoCardless(); break
       case 'sandbox_sembrar': await siembra.sembrarGoCardless(); break
       case 'sumied': {
-        const { data, error } = await admin.rpc('demo_gestoria_volver_a_empezar', { p_cuenta: cuenta })
+        // Por tandas (nº84): la base corta cada llamada a los 8 s; cada tanda borra lo que cabe en SUMIED_MS y,
+        // mientras quede algo, dice «sigue». La última vuelve a sembrar la contabilidad y el banco.
+        const { data, error } = await admin.rpc('demo_gestoria_volver_a_empezar_tanda', { p_cuenta: cuenta, p_ms: SUMIED_MS })
         if (error) throw new Error(error.message)
-        dicho.push(String((data as { frase?: string } | null)?.frase ?? 'Sumied, como el primer día.'))
+        const d = (data ?? {}) as { frase?: string; sigue?: boolean }
+        sigue = d.sigue === true
+        dicho.push(String(d.frase ?? 'Sumied, como el primer día.'))
         break
       }
       case 'leer': {
         const secreto = Deno.env.get('CRON_SECRET') ?? ''
         if (!secreto) throw new Error('Falta CRON_SECRET en las funciones: no se puede volver a leer.')
+        const empezo = new Date(Date.now() - 2000).toISOString()
         const r = await fetch(`${supabaseUrl}/functions/v1/conta-bitrix-leer`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cron-secret': secreto },
           body: JSON.stringify({ accion: 'leer', cuenta }),
         })
         const d = (await r.json().catch(() => ({}))) as { frase?: string; error?: string }
         if (!r.ok) throw new Error(`La lectura del CRM ha fallado: ${d.error ?? r.status}`)
-        // conta-bitrix-leer espera a la lectura de cada GoCardless de la cuenta antes de contestar.
+        // conta-bitrix-leer espera a la lectura de cada GoCardless de la cuenta antes de contestar. Se miran solo las que
+        // lanza este paso (con el secreto del servidor: «cada_noche»), no las de los avisos del sandbox: al volver a
+        // sembrarlo llegan avisos que relanzan lecturas a la vez, y una puede chocar con esta sin que falte nada (nº79).
         const { data: lect } = await admin.from('conta_gestoria_lectura').select('origen, estado, mensaje')
-          .eq('account_id', cuenta).eq('origen', 'gocardless').order('empezada_at', { ascending: false }).limit(2)
+          .eq('account_id', cuenta).eq('origen', 'gocardless').eq('por', 'cada_noche').gte('empezada_at', empezo)
+          .order('empezada_at', { ascending: false })
         const gcs = (lect ?? []) as { estado: string | null; mensaje: string | null }[]
         const mal = gcs.find((l) => l.estado !== 'bien')
         if (!gcs.length) throw new Error('No se ha leído GoCardless después del CRM: ¿está conectado en la demo?')
@@ -134,7 +144,7 @@ Deno.serve(async (req) => {
           return (data as { id: string }).id
         }
         const yaHecho = (e: { code?: string; message: string } | null) => !!e && (e.code === '23505' || /ya est[aá]/i.test(e.message))
-        // 1 · Talleres Ruiz, +1 trabajador (alta el 12 de este mes).
+        // 1 · Talleres Ruiz, +1 trabajador (alta el 1 del mes que viene: nº76, la regla del mes entero).
         const laboral = await servicio('gestion_laboral')
         const talleres = await parte(CAMBIOS_DEL_MES.alta.cliente)
         const alta = await persona.rpc('conta_gestoria_alta_empleado', { p_company: empresa, p_party: talleres, p_servicio: laboral, p_empleado: CAMBIOS_DEL_MES.alta.trabajador, p_desde: f.altaEl })
@@ -162,8 +172,35 @@ Deno.serve(async (req) => {
         }
         break
       }
+      case 'portal': {
+        // nº94 · El portal de la demo, como si se hubiera pulsado «Preparar el portal de la demo» (la vacía «sumied»), y el
+        // acceso de Tomás Ruiz listo: su usuario ya existe de otras veces, pero el portal deja entrar por el usuario del
+        // acceso y el acceso nuevo nace sin él (solo lo pone el servidor al mandar el enlace). Se le enlaza aquí.
+        const prep = await admin.rpc('conta_portal_demo_preparar', { p_cuenta: cuenta })
+        if (prep.error) throw new Error(`Preparar el portal de la demo: ${prep.error.message}`)
+        dicho.push(String((prep.data as { frase?: string } | null)?.frase ?? 'Portal de la demo preparado.'))
+        const { data: cli } = await admin.from('party').select('id').eq('account_id', cuenta).eq('name', PORTAL_DE_LA_DEMO.cliente).maybeSingle()
+        if (!cli) throw new Error(`No está «${PORTAL_DE_LA_DEMO.cliente}» en la demo: el portal no se puede preparar.`)
+        const { data: acc } = await admin.from('conta_portal_acceso').select('id, user_id').eq('account_id', cuenta)
+          .eq('party_id', (cli as { id: string }).id).ilike('correo', PORTAL_DE_LA_DEMO.correo).is('revocado_at', null).maybeSingle()
+        if (!acc) throw new Error(`${PORTAL_DE_LA_DEMO.cliente} no tiene el acceso de ${PORTAL_DE_LA_DEMO.persona} después de preparar el portal.`)
+        const acceso = acc as { id: string; user_id: string | null }
+        if (acceso.user_id) { dicho.push(`${PORTAL_DE_LA_DEMO.persona} ya puede entrar en su portal.`); break }
+        let usuario: string | null = null
+        for (let pagina = 1; pagina <= 20 && !usuario; pagina++) {
+          const { data: us, error: eU } = await admin.auth.admin.listUsers({ page: pagina, perPage: 1000 })
+          if (eU) throw new Error(`Buscar el usuario de ${PORTAL_DE_LA_DEMO.persona}: ${eU.message}`)
+          usuario = us.users.find((u) => (u.email ?? '').toLowerCase() === PORTAL_DE_LA_DEMO.correo)?.id ?? null
+          if (us.users.length < 1000) break
+        }
+        if (!usuario) { dicho.push(`${PORTAL_DE_LA_DEMO.persona} aún no tiene usuario: la primera vez entra con su enlace (pestaña Portal de su ficha).`); break }
+        const enl = await admin.rpc('conta_portal_acceso_usuario', { p_acceso: acceso.id, p_user: usuario })
+        if (enl.error) throw new Error(`Dejar listo el acceso de ${PORTAL_DE_LA_DEMO.persona}: ${enl.error.message}`)
+        dicho.push(`${PORTAL_DE_LA_DEMO.persona} ya puede entrar en su portal, con su usuario de siempre.`)
+        break
+      }
     }
-    return json(200, { ok: true, paso, frase: dicho.filter(Boolean).join(' ') })
+    return json(200, { ok: true, paso, sigue, frase: dicho.filter(Boolean).join(' ') })
   } catch (e) {
     // En el registro, el qué y nunca un secreto.
     const m = e instanceof Error ? e.message : String(e)

@@ -163,3 +163,88 @@ export function nombreImpuesto(modelo: string, periodo: string | null, ejercicio
     : /^[1-3]P$/.test(periodo) ? `, ${ord[Number(periodo[0]) - 1]} pago${a}` : ` ${periodo}`
   return `${nombre}${p}${que[modelo] ? ` (modelo ${modelo})` : ''}`
 }
+
+// ── Documentos · nóminas y seguros sociales, por mes (como la maqueta) ───────
+
+export interface DocLaboral { id: string; nombre: string; carpeta: string; trabajador: string; fecha: string }
+export interface GrupoLaboral {
+  clave: string
+  /** «nominas» o «ss_sepe». */
+  carpeta: string
+  /** «2026-10». */
+  mes: string
+  /** «Nóminas de octubre» / «Seguros sociales de octubre». */
+  titulo: string
+  /** «4 nóminas · listas el 30 de octubre» / «Cargados el 31 de octubre». */
+  detalle: string
+  ids: string[]
+}
+
+/**
+ * Las nóminas y los seguros sociales que deja la gestoría, en una fila por mes
+ * (el mes en que se dejaron, hora de Madrid): primero el mes más reciente y,
+ * dentro, las nóminas antes que los seguros sociales. Ninguno se queda fuera
+ * (regla 7): cada documento está en el grupo de su mes.
+ */
+export function laboralPorMes(docs: DocLaboral[], hoy: Date = new Date()): GrupoLaboral[] {
+  const grupos = new Map<string, { carpeta: string; mes: string; docs: DocLaboral[] }>()
+  for (const d of docs) {
+    const t = new Date(d.fecha)
+    const [a, m] = Number.isNaN(t.getTime()) ? [Number(d.fecha.slice(0, 4)), Number(d.fecha.slice(5, 7))] : madrid(t)
+    const clave = `${a}-${String(m).padStart(2, '0')}`
+    const carpeta = d.carpeta === 'ss_sepe' ? 'ss_sepe' : 'nominas'
+    const k = `${clave}:${carpeta}`
+    const g = grupos.get(k) ?? { carpeta, mes: clave, docs: [] }
+    g.docs.push(d); grupos.set(k, g)
+  }
+  return [...grupos.entries()]
+    .sort(([, x], [, y]) => (x.mes === y.mes ? (x.carpeta === 'nominas' ? -1 : 1) : x.mes < y.mes ? 1 : -1))
+    .map(([clave, g]) => {
+      const nombreMes = mes(g.mes, hoy).toLowerCase()
+      const ultima = g.docs.map((d) => d.fecha).sort().at(-1) ?? ''
+      const ss = g.carpeta === 'ss_sepe'
+      const n = g.docs.length
+      return {
+        clave, carpeta: g.carpeta, mes: g.mes,
+        titulo: `${ss ? 'Seguros sociales' : 'Nóminas'} de ${nombreMes}`,
+        detalle: ss ? `${n > 1 ? `${n} documentos · ` : ''}Cargados el ${fecha(ultima, hoy)}` : `${n} ${n === 1 ? 'nómina' : 'nóminas'} · listas el ${fecha(ultima, hoy)}`,
+        ids: g.docs.map((d) => d.id),
+      }
+    })
+}
+
+/** nº 24 · Cuándo se hizo algo, como la maqueta: «hoy», «ayer» o «el 9 de noviembre» (hora de Madrid). */
+export function cuandoSeHizo(x: string | null | undefined, ahora: Date = new Date()): string {
+  if (!x) return ''
+  const d = new Date(x)
+  if (Number.isNaN(d.getTime())) return ''
+  const dia = (y: Date) => madrid(y).join('-')
+  if (dia(d) === dia(ahora)) return 'hoy'
+  if (dia(d) === dia(new Date(ahora.getTime() - 86_400_000))) return 'ayer'
+  return `el ${fecha(x, ahora)}`
+}
+
+/** nº 24 · Lo que dice una petición ya hecha, como la maqueta: «Firmada hoy», «Recibidos: 2 documentos», «Contestada ayer». */
+export function peticionHecha(q: { tipo: string; hecha?: string | null; recibidas?: number }, ahora: Date = new Date()): { detalle: string; boton: string } {
+  const cuando = cuandoSeHizo(q.hecha, ahora)
+  if (q.tipo === 'firmar') return { detalle: `Firmada ${cuando}`.trim(), boton: '✓ Firmada' }
+  if (q.tipo === 'subir') return { detalle: q.recibidas ? `${q.recibidas === 1 ? 'Recibido: 1 documento' : `Recibidos: ${q.recibidas} documentos`}` : `Hecho ${cuando}`.trim(), boton: '✓ Hecho' }
+  return { detalle: `Contestada ${cuando}`.trim(), boton: '✓ Hecho' }
+}
+
+/**
+ * nº 24 · Lo que lleva una factura o un recibo, en la calle, como la maqueta:
+ * «Gestoría y laboral (4 trabajadores)», «Gestoría y laboral · Cuentas anuales».
+ * Junta la cuota de gestoría y la laboral; lo demás va detrás tal cual. Con
+ * algo más detrás, los trabajadores no se dicen (la línea sería muy larga).
+ */
+export function queLleva(textos: (string | null | undefined)[]): string {
+  const limpios = textos.map((t) => (t ?? '').trim()).filter(Boolean)
+  const gestoria = limpios.some((t) => /^gestor[ií]a\b/i.test(t))
+  const laboral = limpios.find((t) => /^gesti[oó]n laboral\b/i.test(t))
+  const resto = limpios.filter((t) => !/^gestor[ií]a\b/i.test(t) && !/^gesti[oó]n laboral\b/i.test(t))
+  const n = laboral ? Number(/(\d+)\s+trabajador/i.exec(laboral)?.[1] ?? 0) : 0
+  const base = gestoria && laboral ? 'Gestoría y laboral' : gestoria ? 'Gestoría' : laboral ? 'Laboral' : ''
+  const conTrabajadores = base && laboral && n > 0 && resto.length === 0 ? `${base} (${n} ${n === 1 ? 'trabajador' : 'trabajadores'})` : base
+  return [conTrabajadores, ...resto].filter(Boolean).join(' · ')
+}

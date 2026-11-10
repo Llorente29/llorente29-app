@@ -1,0 +1,11 @@
+[
+ {
+  "id": "571-1",
+  "pr": 571,
+  "fecha": "2026-11-10T06:21:11Z",
+  "producto": "sumied",
+  "apartado": "Cobros · Recibo devuelto",
+  "frase": "desde la gestoría se puede enviar al cliente el enlace para pagarlo en su espacio, o pedir que se pase de nuevo por el banco (por ahora, solo en el entorno de pruebas de GoCardless).",
+  "ruta": null
+ }
+]

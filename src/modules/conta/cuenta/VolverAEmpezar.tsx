@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
-import { PASOS, pasoDeVolverAEmpezar } from '@/modules/conta/cuenta/volverAEmpezar'
+import { PASOS, TANDAS_MAX, pasoDeVolverAEmpezar } from '@/modules/conta/cuenta/volverAEmpezar'
 
 type Estado =
   | { fase: 'quieto' }
@@ -26,9 +26,13 @@ export function VolverAEmpezar() {
     const ya = [...hechos]
     for (let i = desde; i < PASOS.length; i++) {
       setE({ fase: 'yendo', paso: i, hechos: ya })
-      const r = await pasoDeVolverAEmpezar(accountId, PASOS[i].id)
-      if (!r.ok) { setE({ fase: 'fallo', paso: i, hechos: ya, texto: r.texto }); return }
-      ya.push(r.frase)
+      // Los pasos del portal van por tandas: mientras digan «sigue», se vuelven a llamar.
+      for (let tanda = 1; ; tanda++) {
+        const r = await pasoDeVolverAEmpezar(accountId, PASOS[i].id)
+        if (!r.ok) { setE({ fase: 'fallo', paso: i, hechos: ya, texto: r.texto }); return }
+        if (!r.sigue) { ya.push(r.frase); break }
+        if (tanda >= TANDAS_MAX) { setE({ fase: 'fallo', paso: i, hechos: ya, texto: `Después de ${TANDAS_MAX} tandas aún queda trabajo: ${r.frase}` }); return }
+      }
     }
     setE({ fase: 'hecho', hechos: ya })
   }
@@ -60,6 +64,7 @@ export function VolverAEmpezar() {
           <ul style={{ margin: '6px 0' }}>
             <li>el Bitrix24 de pruebas y el sandbox de GoCardless vuelven a sus 40 clientes de siempre;</li>
             <li>en Sumied se van los clientes, cobros, recibos, facturas, movimientos del banco y asientos, y se vuelven a leer;</li>
+            <li>el portal de la demo vuelve a quedar preparado, con el acceso de Tomás Ruiz para Talleres Ruiz;</li>
             <li>se quedan las empresas, su plan contable, las conexiones y las personas de la cuenta.</li>
           </ul>
           <p className="cx-ayuda" style={{ margin: '0 0 8px' }}>Tarda unos minutos. Solo toca esta cuenta de demostración.</p>

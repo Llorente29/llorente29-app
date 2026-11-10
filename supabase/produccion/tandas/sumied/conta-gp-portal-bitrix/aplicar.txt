@@ -1,0 +1,12 @@
+# GP · nº 17: «Invitar al portal» y «Contestar un mensaje» desde la pestaña de
+# Bitrix24, sin sesión de Sumied (Code 3, para Code 4; Julio, 09/11). Rama
+# conta/gp-portal-bitrix. Se ensaya y se aplica desde main nombrando esta rama.
+#
+#   2345  AÑADE tres funciones, solo para el servidor: la de dentro (quién mira
+#         y qué cliente es la ficha abierta) y las dos que, como esa persona,
+#         llaman a conta_portal_invitar y conta_portal_mensaje_enviar. No toca
+#         datos ni nada de lo que existe.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-bitrix.sql
+supabase/migrations/20261109T2345_gp_portal_bitrix.sql
