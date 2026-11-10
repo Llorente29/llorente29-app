@@ -85,7 +85,7 @@ export function inicioDeLaAnual(hoyMadrid: string): string {
  *   · Reformas Atalaya: baja de un trabajador, cobrada por última vez el mes pasado: este mes ya no (y «Este mes no»).
  */
 export const CAMBIOS_DEL_MES = {
-  alta: { cliente: 'Talleres Ruiz, S.L.', trabajador: 'LUCAS FERRER GIL' },
+  alta: { cliente: 'Talleres Ruiz, S.L.', trabajador: 'Lucas Ferrer Gil' },
   nivel: { cliente: 'Imprenta Rápida Sol, S.L.', nivel: 'Premium' },
   baja: { cliente: 'Reformas Atalaya, S.L.' },
 } as const

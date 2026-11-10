@@ -52,7 +52,10 @@ const CAMPOS_EMPRESA: CampoPropio[] = [
 
 /** Los estados de un mandato que ya no hay que cancelar. */
 const MANDATO_ACABADO = ['cancelled', 'failed', 'expired', 'consumed', 'blocked']
-const MAYUS = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/,?\s*S\.L\.$/, '')
+// nº104 · Los nombres de las suscripciones, bien escritos («Gestión laboral Adrián Molina Castro», «Impuesto de
+// sociedades»): la lectura los clasifica sin mirar mayúsculas ni tildes (conversion.ts, normalizar) y guarda el nombre
+// tal cual, así que en Sumied, en la pestaña de Bitrix24 y en el PDF de la factura salen así. Antes, en mayúsculas.
+const SIN_SL = (t: string) => t.replace(/,?\s*S\.L\.$/, '')
 const euros = (n: number) => Math.round(n * 100)
 const esperar = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
@@ -236,10 +239,10 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
         // company_name; la persona de contacto va en los apellidos. Los «por_firmar» (2, nº62) llevan su nombre: su
         // mandato se queda en «pending_submission» y Sumied los enseña por firmar.
         given: c.gc.escenario === 'normal' ? 'Successful' : c.gc.escenario === 'por_firmar' ? c.contacto.nombre : c.gc.escenario, family: `${c.contacto.nombre} ${c.contacto.apellidos}` })
-      if (c.gc.mensual) { await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(c.nombre)}`, c.gc.mensual); subs++ }
-      for (const t of c.gc.trabajadores) { await suscripcion(mandato, sello, `GESTION LABORAL ${MAYUS(t)}`, 25); subs++ }
+      if (c.gc.mensual) { await suscripcion(mandato, sello, `Gestoría mensual ${SIN_SL(c.nombre)}`, c.gc.mensual); subs++ }
+      for (const t of c.gc.trabajadores) { await suscripcion(mandato, sello, `Gestión laboral ${t}`, 25); subs++ }
       // Con el mismo nombre en todos, la importación lo convierte en UN servicio.
-      if (c.gc.anual) { await suscripcion(mandato, sello, 'IMPUESTO DE SOCIEDADES', 300, true); subs++ }
+      if (c.gc.anual) { await suscripcion(mandato, sello, 'Impuesto de sociedades', 300, true); subs++ }
       if (c.gc.suelto) {
         // nº94 · Solo uno que nunca se paga: uno pagado deja una liquidación sin factura en Sumied.
         if (c.gc.escenario !== 'Penniless') throw new Error(`GD: ${c.nombre} tiene un cobro suelto que se pagaría (${c.gc.escenario}): solo Penniless.`)
@@ -251,7 +254,7 @@ export function crearSiembra(o: { b24Url: string; gcToken: string; decir: (t: st
     n++
     const s = SOLO_EN_GOCARDLESS
     const { mandato, sello } = await clienteEnGc(n, { nombre: s.nombre, correo: s.correo, nif: s.nif, given: 'Successful', family: 'Alba Centro de Estudios', ciudad: 'Madrid' })
-    await suscripcion(mandato, sello, `GESTORIA MENSUAL ${MAYUS(s.nombre)}`, s.mensual); subs++
+    await suscripcion(mandato, sello, `Gestoría mensual ${SIN_SL(s.nombre)}`, s.mensual); subs++
     decir(`  ✓ Sembrado en el sandbox: ${n} clientes con su mandato, ${subs} suscripciones y ${sueltos} ${sueltos === 1 ? 'cobro suelto que sale devuelto' : 'cobros sueltos que salen devueltos'} (Penniless).`)
   }
 
