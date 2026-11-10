@@ -42,9 +42,13 @@ export interface PropsFicha {
   acciones: AccionesFicha
   /** Abrir «+ Añadir» nada más entrar (desde «Ponerle la cuota»). */
   anadirAbierto?: boolean
+  /** GP · T4: la pestaña «Portal» (la pinta src/modules/conta/gestoria/portal/PortalFicha.tsx). Sin ella, no sale. */
+  portal?: ReactNode
+  /** Con qué pestaña abrir (?pestana=portal, desde «Lo que tienes que hacer»). */
+  pestanaInicial?: (typeof PESTANAS)[number]
 }
 
-const PESTANAS = ['Este mes', 'Cobros', 'Contacto', 'Datos del CRM'] as const
+const PESTANAS = ['Este mes', 'Cobros', 'Contacto', 'Datos del CRM', 'Portal'] as const
 const iniciales = (nombre: string) => { const p = nombre.replace(/[,.]/g, '').split(/\s+/).filter(Boolean); return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase() }
 const mesSiguiente = (hoy: string) => { const a = Number(hoy.slice(0, 4)); const m = Number(hoy.slice(5, 7)); return m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01` }
 
@@ -63,7 +67,7 @@ function useHacer() {
 export function Ficha(p: PropsFicha) {
   const { modelo: m } = p
   const f = m.fila
-  const [pestana, setPestana] = useState<(typeof PESTANAS)[number]>('Este mes')
+  const [pestana, setPestana] = useState<(typeof PESTANAS)[number]>(p.pestanaInicial === 'Portal' && !p.portal ? 'Este mes' : p.pestanaInicial ?? 'Este mes')
   const [abiertos, setAbiertos] = useState<Record<number, boolean>>({})
   const [verTodos, setVerTodos] = useState<Record<number, boolean>>({})
   const [buscar, setBuscar] = useState<Record<number, string>>({})
@@ -137,7 +141,7 @@ export function Ficha(p: PropsFicha) {
       ) : null}
 
       <div role="tablist" aria-label="Partes de la ficha" className="g4-pestanas-ficha">
-        {PESTANAS.map((t) => <button key={t} type="button" role="tab" aria-selected={pestana === t} onClick={() => setPestana(t)}>{t === 'Datos del CRM' ? `Datos de ${nombresCrm}` : t}</button>)}
+        {PESTANAS.filter((t) => t !== 'Portal' || p.portal).map((t) => <button key={t} type="button" role="tab" aria-selected={pestana === t} onClick={() => setPestana(t)}>{t === 'Datos del CRM' ? `Datos de ${nombresCrm}` : t}</button>)}
       </div>
 
       <div className="g4-ficha-cuerpo">
@@ -223,6 +227,8 @@ export function Ficha(p: PropsFicha) {
               {p.personas.map((x) => <div key={x.nombre} className="g4-renglon"><b>{x.nombre}</b><span className="g4-pequeno" style={{ fontSize: 14 }}>{[...x.telefonos, ...x.correos].join(' · ') || '—'}</span></div>)}
             </section>
           )}
+
+          {pestana === 'Portal' && p.portal}
 
           {pestana === 'Datos del CRM' && (
             <section aria-labelledby="g4-crm" className="g4-bloque">

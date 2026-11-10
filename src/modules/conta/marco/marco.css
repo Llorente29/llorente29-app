@@ -275,6 +275,16 @@ p.s-menu-nota, li.s-menu-nota { padding: var(--s-1) var(--s-2); }
 .s-esq-aviso[data-tono='falta'] { background: var(--s-falta-fondo); color: var(--s-falta); }
 .s-esq-aviso:empty { display: none; }
 
+/* GD · La franja de una cuenta de demostración: discreta (ni roja ni ámbar), a lo ancho del contenido, y en el móvil
+   en una o dos líneas. */
+.cx-franja-demo {
+  margin: 0 0 var(--s-3); padding: var(--s-1) var(--s-3);
+  font-size: var(--s-t-s); line-height: 1.4; text-align: center;
+  color: var(--s-apoyo); background: var(--s-neutro-fondo);
+  border: var(--s-linea) solid var(--s-borde-decorativo); border-radius: var(--s-radio-bloque);
+}
+.cx-franja-demo-punto { opacity: .7; }
+
 /* Lo que se enfoca o se lleva a la vista no queda debajo de la cabecera fija (WCAG 2.4.11). */
 html:has(.s-cabecera) { scroll-padding-top: 72px; }   /* 3 + 56 + aire: los tokens viven en .cx, no en html */
 /* B01 · En el móvil la cabecera lleva debajo la fila de la empresa y el periodo (hasta dos líneas): más alta. */

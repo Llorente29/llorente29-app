@@ -1,0 +1,4 @@
+# GP · la vuelta atrás de la 2030: fuera el cron y las funciones nuevas;
+# _conta_portal_proximo, restaurada de su respaldo.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-gestoria.sql
+supabase/vuelta-atras/20261109T2030_gp_portal_gestoria.down.sql
