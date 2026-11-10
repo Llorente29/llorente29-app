@@ -25,7 +25,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { crearSiembra, PORTAL_DE_PRUEBAS } from '../_shared/gd/siembra.ts'
-import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PRESUPUESTO_MS } from './pasos.ts'
+import { CAMBIOS_DEL_MES, esPaso, fechasDeLosCambios, inicioDeLasCuotas, porqueNo, PRESUPUESTO_MS, SUMIED_MS } from './pasos.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -77,9 +77,13 @@ Deno.serve(async (req) => {
       case 'sandbox_borrar': await siembra.borrarGoCardless(); break
       case 'sandbox_sembrar': await siembra.sembrarGoCardless(); break
       case 'sumied': {
-        const { data, error } = await admin.rpc('demo_gestoria_volver_a_empezar', { p_cuenta: cuenta })
+        // Por tandas (nº84): la base corta cada llamada a los 8 s; cada tanda borra lo que cabe en SUMIED_MS y,
+        // mientras quede algo, dice «sigue». La última vuelve a sembrar la contabilidad y el banco.
+        const { data, error } = await admin.rpc('demo_gestoria_volver_a_empezar_tanda', { p_cuenta: cuenta, p_ms: SUMIED_MS })
         if (error) throw new Error(error.message)
-        dicho.push(String((data as { frase?: string } | null)?.frase ?? 'Sumied, como el primer día.'))
+        const d = (data ?? {}) as { frase?: string; sigue?: boolean }
+        sigue = d.sigue === true
+        dicho.push(String(d.frase ?? 'Sumied, como el primer día.'))
         break
       }
       case 'leer': {
