@@ -85,8 +85,11 @@ export function fechasDeLosCambios(hoyMadrid: string): { altaEl: string; esteMes
 }
 
 /**
- * nº94 · El portal de la demo después de «Volver a empezar»: lo que deja «Preparar el portal de la demo»
- * (conta_portal_demo_preparar, de Code 3) y el acceso de la persona de Talleres Ruiz, listo para entrar con su
- * usuario de siempre. Datos inventados (el correo es de .example).
+ * nº94 y nº98 · El portal de la demo después de «Volver a empezar»: lo que deja «Preparar el portal de la demo»
+ * (conta_portal_demo_preparar, de Code 3: el acceso de Tomás Ruiz para Talleres Ruiz) y, además, el de Felipe Herrera
+ * para Electricidad Voltio, que sale devuelto en cada cobro: así el portal enseña un devuelto que se paga (escena 11 del
+ * vídeo). Cada uno, listo para entrar con su usuario. Datos inventados (correos de .example).
  */
 export const PORTAL_DE_LA_DEMO = { cliente: 'Talleres Ruiz, S.L.', persona: 'Tomás Ruiz', correo: 'tomas.ruiz@talleresruiz.example' } as const
+export const PORTAL_DEL_DEVUELTO = { cliente: 'Electricidad Voltio, S.L.', persona: 'Felipe Herrera', correo: 'felipe.herrera@electricidadvoltio.example' } as const
+export const ACCESOS_DE_LA_DEMO = [PORTAL_DE_LA_DEMO, PORTAL_DEL_DEVUELTO] as const

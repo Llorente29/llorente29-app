@@ -16,12 +16,12 @@ describe('GD · la muestra de voz', () => {
     expect(MUESTRA).toEqual(['06.3', '06.10', '08.3', '08.5', '09.2', '09.4'])
   })
 
-  it('las dos voces, sin tocar la del vídeo', () => {
+  it('las dos voces en la muestra; la del vídeo, Julio Clon (nº99)', () => {
     const py = readFileSync('scripts/video/gd/muestras_voz.py', 'utf8')
     expect(py).toContain('"julio": "TbcXaMnSerONT83CTICz"')
     expect(py).toContain('"abel": "bsEDAkNZWaEolZ7vEeVJ"')
     expect(py).not.toMatch(/open\([^)]*voz-elevenlabs\.txt[^)]*["']w/)
-    expect(readFileSync('scripts/video/voz-elevenlabs.txt', 'utf8')).toMatch(/^bsEDAkNZWaEolZ7vEeVJ$/m)
+    expect(readFileSync('scripts/video/voz-elevenlabs.txt', 'utf8')).toMatch(/^TbcXaMnSerONT83CTICz$/m)
   })
 
   it('el job de la muestra no usa producción', () => {

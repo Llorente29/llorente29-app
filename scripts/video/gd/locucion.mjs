@@ -16,7 +16,7 @@ import { join } from 'node:path'
 
 export const FRASES = {
   // 00 · Portada
-  '00.1': 'Sumied para gestorías: tus clientes, sus cuotas, el cobro, las facturas y la contabilidad, en un solo sitio.',
+  portada: 'Sumied para gestorías: tus clientes, sus cuotas, el cobro, las facturas y la contabilidad, en un solo sitio.',
 
   // 01 · Clientes y cuotas
   '01.1': 'Aquí están todos tus clientes. Sumied los lee de tu Bitrix24, y las cuotas, de tu tarifa; GoCardless solo pasa el cargo. No das de alta nada dos veces.',
@@ -101,12 +101,12 @@ export const FRASES = {
   '11.7': 'Hasta cambiar la cuenta donde se le cargan los recibos lo hace él.',
 
   // 12 · Cierre
-  '12.1': 'Sin teclear recibos, sin facturar a mano y sin descuadres. Sumied para gestorías.',
+  cierre: 'Sin teclear recibos, sin facturar a mano y sin descuadres. Sumied para gestorías.',
 }
 
 /** A qué gesto va pegada cada frase (lo que señala el ratón y donde hace zoom el montaje). */
 export const GESTOS = {
-  '00.1': 'portada', '01.1': 'la lista entera', '01.2': 'zoom a «Cuotas al mes»', '01.3': 'zoom a «Te deben»', '01.4': 'zoom a «Dejas de cobrar»',
+  portada: 'portada', '01.1': 'la lista entera', '01.2': 'zoom a «Cuotas al mes»', '01.3': 'zoom a «Te deben»', '01.4': 'zoom a «Dejas de cobrar»',
   '01.5': 'zoom a «Lo que tienes que hacer»', '01.6': 'clic en Talleres Ruiz y zoom al panel',
   '02.1': 'zoom a «Se le cobra al mes»', '02.2': 'zoom al recibo', '02.3': 'clic en «Ver trabajadores»', '02.4': 'zoom al trabajador nuevo',
   '02.5': 'pestañas Cobros y Contacto', '02.6': 'pestaña Datos de Bitrix24',
@@ -124,11 +124,27 @@ export const GESTOS = {
   '10.1': 'pestaña Portal de la ficha', '10.2': 'zoom a lo pedido y los mensajes',
   '11.1': 'portal · Inicio', '11.2': 'portal · Facturas', '11.3': 'portal · Pagos', '11.4': 'portal · Trabajadores', '11.5': 'portal · Documentos',
   '11.6': 'portal · Mensajes', '11.7': 'portal · Tu cuenta',
-  '12.1': 'cierre',
+  cierre: 'cierre',
 }
 
 /** Las 6 frases de la muestra de voz (nº96, fase 2): 2 del cobro, 2 de la contabilidad y 2 del banco. */
 export const MUESTRA = ['06.3', '06.10', '08.3', '08.5', '09.2', '09.4']
+
+/**
+ * nº99 · Cómo se escribe, para ElevenLabs, lo que si no suena mal («GoCardless» salía «GoKarlis» con las dos voces).
+ * Solo cambia lo que se oye: los subtítulos dicen el nombre de verdad. La grafía buena sale de la muestra de
+ * pronunciación (modo «muestras-voz», carpeta pronunciacion/); hasta elegirla, la primera de VARIANTES.
+ */
+export const VARIANTES = {
+  GoCardless: ['Gou Cárdles', 'Go Cárdles', 'Gou Cárdless', 'Gocárdles'],
+  Sumied: ['Sumied', 'Sumiéd', 'Súmied', 'Su mied'],
+}
+export const PRONUNCIA = { GoCardless: VARIANTES.GoCardless[0], Sumied: VARIANTES.Sumied[0] }
+/** El texto tal como se le pasa a la voz. */
+export const paraLaVoz = (texto, pronuncia = PRONUNCIA) =>
+  Object.entries(pronuncia).reduce((t, [de, a]) => t.replace(new RegExp(`\\b${de}\\b`, 'g'), a), texto)
+/** La frase para probar la pronunciación, con los dos nombres. */
+export const FRASE_PRONUNCIACION = 'Sumied prepara el cobro solo, y GoCardless pasa los cargos.'
 
 /** Lo que dura una frase si no hay voz (para el ritmo): unas 15 letras por segundo. */
 export const estimada = (texto) => 0.5 + texto.length / 15
@@ -136,9 +152,18 @@ export const estimada = (texto) => 0.5 + texto.length / 15
 if (process.argv[1] && process.argv[1].endsWith('locucion.mjs')) {
   const salida = process.argv[2]
   if (!salida) { console.error('uso: locucion.mjs <salida> [--muestra]'); process.exit(2) }
-  const ids = process.argv.includes('--muestra') ? MUESTRA : Object.keys(FRASES)
   const dir = join(salida, 'voz')
   mkdirSync(dir, { recursive: true })
-  writeFileSync(join(dir, 'frases.json'), JSON.stringify(ids.map((id) => ({ id, texto: FRASES[id], salida: join(dir, `${id}.wav`) })), null, 1))
-  console.log(`${ids.length} frases en ${join(dir, 'frases.json')}`)
+  let frases
+  if (process.argv.includes('--pronunciacion')) {
+    // La misma frase con cada grafía: Sumied y GoCardless, cada una con sus variantes (la otra, la primera).
+    frases = [...VARIANTES.GoCardless.map((v, i) => ({ id: `gocardless-${i + 1}`, voz: paraLaVoz(FRASE_PRONUNCIACION, { ...PRONUNCIA, GoCardless: v }) })),
+      ...VARIANTES.Sumied.map((v, i) => ({ id: `sumied-${i + 1}`, voz: paraLaVoz(FRASE_PRONUNCIACION, { ...PRONUNCIA, Sumied: v }) }))]
+      .map((f) => ({ ...f, texto: FRASE_PRONUNCIACION, salida: join(dir, `${f.id}.wav`) }))
+  } else {
+    const ids = process.argv.includes('--muestra') ? MUESTRA : Object.keys(FRASES)
+    frases = ids.map((id) => ({ id, texto: FRASES[id], voz: paraLaVoz(FRASES[id]), salida: join(dir, `${id}.wav`) }))
+  }
+  writeFileSync(join(dir, 'frases.json'), JSON.stringify(frases, null, 1))
+  console.log(`${frases.length} frases en ${join(dir, 'frases.json')}`)
 }
