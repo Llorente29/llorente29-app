@@ -1,0 +1,4 @@
+# G05 · la vuelta atrás de la 1452: las cuatro protecciones como estaban (de su
+# respaldo) y fuera las dos funciones de la marca.
+cuenta: scripts/conta/produccion/cuentas/g05-demo-vaciar.sql
+supabase/vuelta-atras/20261110T1452_g05_demo_vaciar_emitidas.down.sql

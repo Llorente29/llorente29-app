@@ -1,0 +1,24 @@
+{
+ "_que": "G05 · «Volver a empezar» puede vaciar la demo · contexto de producción, medido en SOLO LECTURA el 10/11 a las 16:00Z (analizar.mjs sql-contexto, con el camino del pedido del workflow). Las cuatro protecciones existen (se cambian en caliente, con la misma firma, su respaldo y su prueba); las dos funciones de la marca no existen. Ninguna está en el camino del pedido ni la nombra un trabajo de cron. Ningún fichero en el historial.",
+ "medido": "2026-11-10T16:00Z",
+ "tanda": {
+  "supabase/migrations/20261110T1452_g05_demo_vaciar_emitidas.sql": "98db04fe71111d3c5c0b628721c9571b"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.customer_invoice_inalterable()",
+   "public.customer_invoice_line_inalterable()",
+   "public.journal_entry_inalterable()",
+   "public.journal_line_inalterable()"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,6 @@
+# G05 · La 1452 («Volver a empezar» puede vaciar la demo, nº 86). Su prueba
+# (ROLLBACK, datos inventados) mira los dos lados: sin la marca, con la de otra
+# cuenta y en una cuenta que no es demo, nada se borra; nadie de fuera pone la
+# marca; en la demo con la marca se vacía todo; y la vuelta atrás.
+supabase/migrations/20261110T1452_g05_demo_vaciar_emitidas.sql
+supabase/staging/sql/20261110_g05_demo_vaciar_emitidas_prueba.sql
