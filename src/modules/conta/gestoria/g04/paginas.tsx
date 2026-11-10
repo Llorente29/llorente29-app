@@ -17,6 +17,8 @@ import { acciones, leerAsignar, leerClientes, leerFicha } from './datos'
 import { altaEmpleado, bajaLinea, lineaDesdeGc, noContar, revisada } from '@/modules/conta/services/gestoriaService'
 import { modeloClientes, modeloFicha, nombreDelCrmDe, referenciasDelCrm } from './modelo'
 import { Ficha } from './Ficha'
+import { PortalFicha } from '../portal/PortalFicha'
+import { PortalPendiente } from '../portal/PortalPendiente'
 import { Clientes } from './Clientes'
 import { descargarPrecios, enlaceAlCrm, exportar, imprimirPrecios, imprimirTarifa, mesEnPalabras } from './enlaces'
 import { Tarifa } from './Tarifa'
@@ -72,6 +74,7 @@ export function ClientesG04Page() {
         return enlaceAlCrm(crm ? String(crm.crm) : null, portal, r ? String(r.tipo_ficha ?? '') : null, r && r.ficha_en_el_crm ? String(r.ficha_en_el_crm) : null)
       }}
       alExportar={exportar} alAsignar={() => setParams(lasDos ? { empresa: 'las-dos', ver: 'sin-cliente' } : { ver: 'sin-cliente' })}
+      portal={(otras) => <PortalPendiente cuenta={accountId!} otras={otras} rutaFicha={(c) => `${rutaClienteGestoria(c, lasDos ? null : activa.id)}${lasDos ? '?' : '&'}pestana=portal`} />}
       hoy={hoy} rutaPonerCuota={(cliente, empresa) => `${rutaClienteGestoria(cliente, empresa)}${empresa ? '&' : '?'}anadir=1`}
       rutaCobro={lasDos ? null : rutaCobroGestoria(activa.id)}
       alCobradoPorOtraVia={async (empresa, cargos, via, fecha) => {
@@ -100,7 +103,7 @@ type Fila = Record<string, unknown>
 const texto = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null)
 
 export function FichaClienteG04Page() {
-  const { accountId, cargando } = useCuentaConta()
+  const { accountId, cargando, esDemo } = useCuentaConta()
   const { empresas } = useEmpresas()
   const { cliente = '' } = useParams()
   const [params] = useSearchParams()
@@ -129,6 +132,9 @@ export function FichaClienteG04Page() {
   const tras = async (p: Promise<{ frase: string } | string>) => { const r = await p; d.recargar(); return typeof r === 'string' ? r : r.frase }
   return (
     <Ficha modelo={modelo} crm={nombreCrm} hoy={hoy} rutaVolver={rutaClientesCuotas()} rutaTarifa={rutaTarifasGestoria()} anadirAbierto={params.get('anadir') === '1'}
+      pestanaInicial={params.get('pestana') === 'portal' ? 'Portal' : undefined}
+      portal={<PortalFicha cuenta={accountId!} cliente={cliente} nombreCliente={modelo.fila.nombre} esDemo={esDemo}
+        serviciosPorTrabajador={deEmpresa.filter((x) => x.forma === 'por_empleado').map((x) => ({ id: String(x.id), nombre: String(x.nombre) }))} />}
       rutaCrm={enlaceAlCrm(crm ? String(crm.crm) : null, crm ? texto(crm.portal) : null, fila ? texto(fila.tipo_ficha) : null, fila ? texto(fila.ficha_en_el_crm) : null)}
       datosCrm={{ situacion: modelo.fila.situacionTexto, formaPago: texto(ficha.formaPago), servicios: Array.isArray(ficha.servicios) ? (ficha.servicios as string[]).join(', ') : texto(ficha.servicios),
         leido: typeof leido === 'string' ? new Date(leido).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : null,

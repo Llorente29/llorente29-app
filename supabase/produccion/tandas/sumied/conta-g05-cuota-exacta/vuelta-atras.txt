@@ -1,0 +1,4 @@
+# G05 · la vuelta atrás de la 2203: las dos funciones de facturar como estaban y fuera
+# _conta_cobro_cuota_exacta. No toca datos.
+cuenta: scripts/conta/produccion/cuentas/g05-cuota-exacta.sql
+supabase/vuelta-atras/20261109T2203_g05_cuota_exacta.down.sql

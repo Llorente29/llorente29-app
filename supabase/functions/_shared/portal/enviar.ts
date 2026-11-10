@@ -9,8 +9,10 @@
 //     las facturas (remitenteFactura) y el mandato (marco).
 //   · La puerta de las demos: el correo de una cuenta de demo va SOLO al buzón
 //     de pruebas (CORREO_BUZON_PRUEBAS). Sin buzón, no sale, y se dice.
-//   · El freno: «portal_enlace» y «portal_codigo» están cerrados hasta que
-//     Julio los abra en CORREO_MARCA_ABIERTOS (cerrojoMarca).
+//   · El freno (nº 11): en una demo NO se pasa por él, porque el destino ya es
+//     solo el buzón (como la factura de un recibo, #533). En una cuenta de
+//     verdad, «portal_enlace», «portal_codigo» y «portal_aviso» siguen cerrados
+//     hasta que Julio los abra en CORREO_MARCA_ABIERTOS (cerrojoMarca).
 //   · Cada correo queda en conta_portal_aviso con su clave: nunca dos veces lo
 //     mismo, y la gestoría ve lo que se mandó.
 //   · El enlace: generateLink de Supabase (magiclink), canjeado en la entrada del
@@ -20,7 +22,7 @@
 import { cuentaPuedeSalir } from '../puerta.ts'
 import { correoDeSalida } from '../puertaDePruebas.ts'
 import { MARCAS } from '../marcas.ts'
-import { cerrojoMarca } from '../../send-email/marca.ts'
+import { frenoDelPortal } from './avisos.ts'
 import { correoValido, remitenteFactura } from '../facturaVentaCorreo.ts'
 import { origenFirma, type Correo, type Marca } from '../cobroCorreos.ts'
 
@@ -51,10 +53,12 @@ export interface Envio {
   correo: Correo
   plantilla: string
   marca: MarcaGestoria
-  aviso: { tipo: 'invitacion' | 'enlace' | 'firma'; clave: string }
+  aviso: { tipo: 'invitacion' | 'enlace' | 'firma' | 'factura' | 'recibo_proximo' | 'devuelto' | 'mensaje' | 'peticion'; clave: string }
+  /** Los avisos (T4): con el freno cerrado no se apunta nada, para que salgan cuando Julio lo abra. */
+  esperarSiCerrado?: boolean
 }
 
-export type Resultado = { enviado: true; demo: boolean; para: string } | { enviado: false; demo: boolean; porque: string }
+export type Resultado = { enviado: true; demo: boolean; para: string } | { enviado: false; demo: boolean; porque: string; espera?: boolean }
 
 /** Manda un correo del portal por la puerta y el freno, y lo apunta. */
 export async function mandar(srv: Srv, e: Envio): Promise<Resultado> {
@@ -68,9 +72,11 @@ export async function mandar(srv: Srv, e: Envio): Promise<Resultado> {
     if ('porque' in s) { await apuntar('no_enviado', s.porque, e.para); return { enviado: false, demo, porque: s.porque } }
     para = s.para
   }
-  const cerrojo = cerrojoMarca(MARCAS.sumied, e.plantilla, para, Deno.env.get('CORREO_MARCA_ABIERTOS'))
+  // En la demo, al buzón de pruebas sin el freno (nº 11, como el #533); en las de verdad, con él.
+  const cerrojo = frenoDelPortal(demo, e.plantilla, para, Deno.env.get('CORREO_MARCA_ABIERTOS'))
   if (!cerrojo.abierto) {
-    const porque = 'Los correos del portal aún están cerrados (los abre Julio).'
+    const porque = 'Los correos del portal a los clientes de verdad aún están cerrados (los abre Julio).'
+    if (e.esperarSiCerrado) return { enviado: false, demo, porque, espera: true }
     await apuntar('no_enviado', porque, e.para)
     return { enviado: false, demo, porque }
   }

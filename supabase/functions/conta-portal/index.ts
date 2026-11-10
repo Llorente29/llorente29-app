@@ -30,7 +30,23 @@
 //                    con la clave de PRUEBAS y solo en las demos: Julio, nº 6).
 //   · archivos       los enlaces firmados de las facturas de un año (el ZIP lo
 //                    hace la pantalla).
+//   · demo_devolver  (T5, solo demos) el sandbox de GoCardless devuelve el cobro
+//                    de un recibo (simulador «payment_failed»), para enseñar un
+//                    devuelto de verdad. Solo una cuenta demo, solo con la
+//                    conexión de pruebas y solo su administrador o encargado.
 //   · seguir         en qué ha quedado lo pedido a GoCardless o a Stripe, al volver.
+//   · bitrix_invitar (nº 17) «Invitar al portal» desde la pestaña de Bitrix24:
+//                    SOLO con la clave de servicio (sin sesión de Sumied); lo
+//                    llama conta-bitrix-pestana (Code 4) después de comprobar
+//                    con Bitrix24 quién mira. Ver bitrixInvitar.
+//                    Al quedar hecho (T4), se remata con lo de Code 1 (#534):
+//                    un devuelto pagado se apunta (conta_recibo_pagado_portal,
+//                    y su frase sale en pantalla tal cual) y una cuenta nueva se
+//                    guarda en el cobro (conta-cobro «cambiar_cuenta», que
+//                    cancela la vieja). Cada remate queda en la operación
+//                    (detalle.apunte / detalle.cambio) y no se repite. En
+//                    producción, encendido desde que Code 1 confirmó su
+//                    despliegue (nº 11; REMATAR_EN_PRODUCCION).
 //
 // GoCardless, por la puerta de las demos (_shared/puerta.ts y
 // puertaDePruebas.ts) y como conta-cobro: SOLO con una conexión de pruebas
@@ -47,6 +63,7 @@ import { cuentaPuedeSalir } from '../_shared/puerta.ts'
 import { salirA } from '../_shared/puertaDePruebas.ts'
 import { correoValido } from '../_shared/facturaVentaCorreo.ts'
 import { BASES, type Entorno } from '../conta-gocardless-leer/lector.ts'
+import { VERSION_GOCARDLESS } from '../_shared/cobro/gocardless.ts'
 import { errorStripe, v1 } from '../_shared/stripeSumied.ts'
 import {
   BYTES_SUBIDA, camposPagoTarjeta, claveStripePruebas, leerSesionStripe, PLANTILLA_CODIGO, PLANTILLA_ENLACE, TIPOS_SUBIDA, correoCodigo, correoEnlace, enmascararCorreo, fraseError, leerFlujo, leerPeticion,
@@ -56,6 +73,9 @@ import { enlaceParaEntrar, mandar, marcaDe, portalBase } from '../_shared/portal
 
 /** Mientras Julio no lo encienda, el portal solo escribe en GoCardless con una conexión de pruebas. */
 const ESCRIBIR_EN_REAL = false
+/** Code 1 confirmó el despliegue de su #534 (Julio, nº 11): conta_recibo_pagado_portal y conta-cobro «cambiar_cuenta», también en producción. */
+const REMATAR_EN_PRODUCCION = true
+const PRODUCCION = 'xzmpnchlguibclvxyynt'
 const SOLO_PRUEBAS = 'Por ahora esto solo funciona en la demo: con el banco de cobros de verdad aún no está encendido.'
 
 const URL_BASE = Deno.env.get('SUPABASE_URL')!
@@ -77,6 +97,16 @@ function fraseBase(error: { message?: string } | null): string {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'usa POST' })
+  // nº 17 · Desde la pestaña de Bitrix24 (Code 4): sin sesión de Sumied, solo con la clave de servicio.
+  if ((req.headers.get('Authorization') ?? '') === `Bearer ${SERVICIO}`) {
+    let b0: Fila = {}
+    try { b0 = await req.clone().json() as Fila } catch { /* vacío */ }
+    if (b0.accion === 'bitrix_invitar') {
+      try { return await bitrixInvitar(createClient(URL_BASE, SERVICIO, { auth: { persistSession: false } }), b0) }
+      catch (x) { console.error('[conta-portal] bitrix_invitar', x instanceof Error ? x.message : String(x)); return json(200, { ok: false, estado: 'error', frase: 'No se ha podido invitar ahora. Prueba en unos minutos.' }) }
+    }
+    return json(400, { ok: false, frase: 'Con la clave de servicio solo se puede «bitrix_invitar».' })
+  }
   const yo = createClient(URL_BASE, ANON, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } })
   const { data: u } = await yo.auth.getUser()
   if (!u?.user) return json(401, { error: 'no autenticado' })
@@ -101,6 +131,7 @@ Deno.serve(async (req) => {
       case 'tarjeta': return await tarjeta(yo, srv, b, origen)
       case 'archivos': return await archivos(yo, srv, b)
       case 'seguir': return await seguir(yo, srv, b)
+      case 'demo_devolver': return await demoDevolver(yo, srv, b)
       default: return json(400, { ok: false, frase: 'Esa acción no existe.' })
     }
   } catch (x) {
@@ -218,7 +249,34 @@ async function invitar(yo: Sb, srv: Sb, b: Fila, origen: unknown) {
   if (!cliente || !correo) return json(400, { ok: false, frase: 'Escribe un correo que valga.' })
   const { data, error } = await yo.rpc('conta_portal_invitar', { p_party: cliente, p_correo: correo, p_nombre: texto(b.nombre, 120), p_permiso: b.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo' })
   if (error || !data) return mal(fraseBase(error))
-  const r0 = data as { id: string; frase: string }
+  return await mandarInvitacion(srv, data as { id: string; frase: string }, correo, origen)
+}
+
+/**
+ * nº 17 · «Invitar al portal» desde la pestaña de Bitrix24. Solo con la clave de
+ * servicio: lo llama conta-bitrix-pestana (Code 4) DESPUÉS de comprobar con
+ * Bitrix24 quién mira. conta_portal_bitrix_invitar busca la persona y el cliente
+ * de la ficha y, como ella, da el acceso; aquí se manda el correo, igual que
+ * desde Sumied. Cuerpo: { portal, correo (el de quien mira), tipo, id (la ficha),
+ * invitado, nombre?, permiso?, origen? }.
+ */
+async function bitrixInvitar(srv: Sb, b: Fila) {
+  const invitado = correoValido(b.invitado)
+  if (!invitado) return json(200, { ok: false, estado: 'no', frase: 'Escribe un correo que valga.' })
+  const { data, error } = await srv.rpc('conta_portal_bitrix_invitar', {
+    p_portal: texto(b.portal, 200), p_correo: texto(b.correo, 200), p_tipo: texto(b.tipo, 20), p_id: texto(b.id, 20),
+    p_invitado: invitado, p_nombre: texto(b.nombre, 120) || null, p_permiso: b.permiso === 'facturas_documentos' ? 'facturas_documentos' : 'todo',
+  })
+  if (error) return json(200, { ok: false, estado: 'error', frase: fraseBase(error) })
+  const r = data as { estado: string; frase: string; id?: string }
+  if (r.estado !== 'ok' || !r.id) return json(200, { ok: false, estado: r.estado, frase: r.frase })
+  const res = await mandarInvitacion(srv, { id: r.id, frase: r.frase }, invitado, b.origen ?? null)
+  const cuerpo = await res.json() as Fila
+  return json(200, { ...cuerpo, estado: cuerpo.ok ? 'ok' : 'no' })
+}
+
+/** El correo de la invitación (el acceso ya está): el enlace para entrar, con la marca de la gestoría. */
+async function mandarInvitacion(srv: Sb, r0: { id: string; frase: string }, correo: string, origen: unknown) {
   const { data: a } = await srv.from('conta_portal_acceso').select('id, account_id, party_id, invitado_por_name').eq('id', r0.id).single()
   const e = await enlaceParaEntrar(srv, correo, origen, URL_BASE)
   if ('porque' in e) return json(200, { ok: true, enviado: false, frase: `${r0.frase.split('.')[0]}, pero ${e.porque.toLowerCase()}` })
@@ -402,9 +460,12 @@ async function seguir(yo: Sb, srv: Sb, b: Fila) {
   const id = uuid(b.operacion)
   if (!id) return json(400, { ok: false, frase: 'Falta qué seguir.' })
   // Con su sesión: la RLS solo le deja ver las de su cliente.
-  const { data: op } = await yo.from('conta_portal_operacion').select('id, account_id, company_id, tipo, estado, externo_id').eq('id', id).maybeSingle()
+  const { data: op } = await yo.from('conta_portal_operacion').select('id, account_id, company_id, party_id, recibo_id, tipo, estado, externo_id, importe_cent, mandato_nuevo, detalle, creada_por_name').eq('id', id).maybeSingle()
   if (!op) return mal('Eso no es tuyo o ya no está.')
-  if (op.estado === 'hecha') return json(200, { ok: true, estado: 'hecha', frase: op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Gracias.' })
+  if (op.estado === 'hecha') {
+    const r = await rematar(srv, op)
+    return json(200, { ok: true, estado: 'hecha', frase: r ?? (op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Gracias.') })
+  }
   if (!op.externo_id || op.tipo === 'reintentar') return json(200, { ok: true, estado: op.estado, frase: 'Aún no ha terminado.' })
   if (op.tipo === 'pagar_tarjeta') return await seguirTarjeta(srv, op)
   const c = await conexion(srv, op.account_id, op.company_id)
@@ -412,12 +473,14 @@ async function seguir(yo: Sb, srv: Sb, b: Fila) {
   const r = await gc(c, peticionLeer(op.externo_id))
   if (r.status >= 300) return mal(fraseError(r.status, r.j, op.tipo === 'cambiar_cuenta' ? 'cambiar' : 'pagar'))
   const l = leerPeticion(r.j)
+  const detalle = { ...((op.detalle as Fila) ?? {}), pago: l.pago, mandato: l.mandato }
   await srv.from('conta_portal_operacion').update({
-    estado: l.estado, mandato_nuevo: l.mandato, detalle: { pago: l.pago, mandato: l.mandato }, updated_at: new Date().toISOString(),
+    estado: l.estado, mandato_nuevo: l.mandato, detalle, updated_at: new Date().toISOString(),
     ...(l.estado === 'hecha' ? { hecha_at: new Date().toISOString() } : {}),
   }).eq('id', op.id)
+  const remate = l.estado === 'hecha' ? await rematar(srv, { ...op, estado: 'hecha', mandato_nuevo: l.mandato, detalle }) : null
   const frase = l.estado === 'hecha'
-    ? (op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Tu gestoría ya lo tiene.')
+    ? remate ?? (op.tipo === 'cambiar_cuenta' ? 'Listo: tus recibos se cargarán en tu cuenta nueva.' : 'Pagado. Tu gestoría ya lo tiene.')
     : l.estado === 'esperando' ? 'Tu banco aún lo está confirmando. Te avisamos cuando termine.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'Tu banco no lo ha aceptado. Prueba de nuevo o escribe a tu gestoría.'
   return json(200, { ok: true, estado: l.estado, frase })
@@ -473,8 +536,93 @@ async function seguirTarjeta(srv: Sb, op: Fila) {
   if (!s.ok) return mal('No se ha podido saber cómo ha ido el pago. Prueba en unos minutos.')
   const l = leerSesionStripe(s.datos)
   await srv.from('conta_portal_operacion').update({ estado: l.estado, updated_at: new Date().toISOString(), ...(l.estado === 'hecha' ? { hecha_at: new Date().toISOString() } : {}) }).eq('id', op.id)
-  return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? 'Pagado. Tu gestoría ya lo tiene.'
+  const remate = l.estado === 'hecha' ? await rematar(srv, { ...op, estado: 'hecha' }) : null
+  return json(200, { ok: true, estado: l.estado, frase: l.estado === 'hecha' ? remate ?? 'Pagado. Tu gestoría ya lo tiene.'
     : l.estado === 'caducada' ? 'Lo dejaste a medias. Puedes empezar de nuevo.' : 'El pago aún se está confirmando. Te avisamos cuando termine.' })
+}
+
+// ── La demo: que el banco devuelva un recibo (sandbox) ────────────────────────
+
+/**
+ * El simulador del sandbox de GoCardless («payment_failed»: el cobro pasa a
+ * fallido, como si el banco lo devolviera). Después llega el aviso de GoCardless
+ * y el cobro de Code 1 pone el recibo «devuelto», como con uno de verdad. Solo
+ * cuentas demo, solo la conexión de pruebas y solo quien lleva la cuenta.
+ */
+async function demoDevolver(yo: Sb, srv: Sb, b: Fila) {
+  const id = uuid(b.recibo)
+  if (!id) return json(400, { ok: false, frase: 'Falta el recibo.' })
+  const { data: r } = await srv.from('conta_recibo').select('id, account_id, company_id, mes, estado, gc_cobro_id').eq('id', id).maybeSingle()
+  if (!r) return mal('Ese recibo no está.')
+  const { data: puede } = await yo.rpc('current_user_is_admin_or_manager_of', { p_account_id: r.account_id })
+  if (puede !== true) return mal('Esto lo hace un administrador o un encargado de la cuenta.')
+  const { data: cu } = await srv.from('accounts').select('is_demo').eq('id', r.account_id).maybeSingle()
+  if (cu?.is_demo !== true) return mal('Esto solo se hace en una cuenta de demostración.')
+  const { data: sec } = await srv.rpc('conta_gocardless_secreto', { p_company: r.company_id })
+  const s = (sec as { entorno: Entorno; token: string }[] | null)?.[0]
+  if (!s?.token || s.entorno !== 'pruebas') return mal('Solo con la conexión de pruebas de GoCardless (el sandbox).')
+  const pago = String(r.gc_cobro_id ?? '')
+  if (!/^PM[0-9A-Z]+$/.test(pago)) return mal('Ese recibo aún no se ha mandado al banco: primero «Enviar el cobro».')
+  const x = await fetch(`${BASES.pruebas}/scenario_simulators/payment_failed/actions/run`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${s.token}`, 'Content-Type': 'application/json', Accept: 'application/json', 'GoCardless-Version': VERSION_GOCARDLESS },
+    body: JSON.stringify({ data: { links: { resource: pago } } }),
+  })
+  if (x.status >= 300) {
+    const j = await x.json().catch(() => ({})) as { error?: { message?: string } }
+    console.error('[conta-portal] demo_devolver', x.status)
+    return mal(`El sandbox no lo ha devuelto (${x.status}): ${String(j.error?.message ?? 'sin motivo').slice(0, 200)}. Solo se puede con un cobro que aún no ha salido al banco.`)
+  }
+  return json(200, { ok: true, frase: `Hecho: el sandbox devuelve el cobro del recibo de ${r.mes}. En unos minutos llega el aviso de GoCardless y el recibo sale devuelto, en Sumied y en el portal del cliente.` })
+}
+
+// ── El remate de Code 1 (#534), una vez por operación ─────────────────────────
+
+/**
+ * Un devuelto pagado: se apunta con conta_recibo_pagado_portal (su frase, tal
+ * cual). Una cuenta nueva: conta-cobro «cambiar_cuenta». Lo hecho queda en
+ * detalle.apunte o detalle.cambio y no se repite; si falla, se vuelve a probar
+ * en el siguiente «seguir». Devuelve la frase para la pantalla, o null.
+ */
+async function rematar(srv: Sb, op: Fila): Promise<string | null> {
+  const d = ((op.detalle as Fila) ?? {}) as Fila
+  if (URL_BASE.includes(PRODUCCION) && !REMATAR_EN_PRODUCCION) return null
+  const guardar = (extra: Fila) => srv.from('conta_portal_operacion').update({ detalle: { ...d, ...extra }, updated_at: new Date().toISOString() }).eq('id', op.id)
+  try {
+    if (op.tipo === 'pagar_banco' || op.tipo === 'pagar_tarjeta') {
+      if (d.apunte) return String((d.apunte as Fila).frase ?? '') || null
+      const referencia = op.tipo === 'pagar_banco' ? String(d.pago ?? op.externo_id ?? '') : String(op.externo_id ?? '')
+      if (!op.recibo_id || !referencia || !op.importe_cent) return null
+      const { data, error } = await srv.rpc('conta_recibo_pagado_portal', {
+        p_recibo: op.recibo_id, p_via: op.tipo === 'pagar_banco' ? 'banco' : 'tarjeta', p_importe: Number(op.importe_cent) / 100, p_referencia: referencia,
+      })
+      if (error) { await guardar({ apunte_error: error.message.slice(0, 300) }); console.error('[conta-portal] apunte', error.message); return null }
+      const r = (data ?? {}) as Fila
+      await guardar({ apunte: r, apunte_error: null })
+      return typeof r.frase === 'string' && r.frase ? r.frase : null
+    }
+    if (op.tipo === 'cambiar_cuenta') {
+      if (d.cambio) return 'Listo: tus recibos se cargarán en tu cuenta nueva.'
+      const mandato = String(op.mandato_nuevo ?? d.mandato ?? '')
+      if (!mandato || !op.company_id) return null
+      const r = await fetch(`${URL_BASE}/functions/v1/conta-cobro`, {
+        method: 'POST', headers: { Authorization: `Bearer ${SERVICIO}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accion: 'cambiar_cuenta', empresa: op.company_id, cliente: op.party_id, mandato, quien: `${String(op.creada_por_name ?? 'El cliente')}, desde el portal`.slice(0, 120) }),
+      })
+      const j = await r.json().catch(() => ({})) as Fila
+      if (!r.ok || j.ok !== true) {
+        await guardar({ cambio_error: `${r.status} ${String(j.error ?? '')}`.slice(0, 300) })
+        console.error('[conta-portal] cambiar_cuenta', r.status)
+        // 409: la domiciliación nueva aún no está activa en el banco. Se vuelve a mirar después.
+        return r.status === 409 ? 'Tu banco aún está activando la cuenta nueva. Mientras, los recibos siguen en la de antes.' : null
+      }
+      await guardar({ cambio: j, cambio_error: null })
+      return 'Listo: tus recibos se cargarán en tu cuenta nueva.'
+    }
+  } catch (x) {
+    console.error('[conta-portal] remate', x instanceof Error ? x.message : String(x))
+  }
+  return null
 }
 
 // ── Las facturas de un año, para el ZIP ──────────────────────────────────────

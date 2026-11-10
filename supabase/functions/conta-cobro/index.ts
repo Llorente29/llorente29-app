@@ -35,7 +35,7 @@ import { salirA } from '../_shared/puertaDePruebas.ts'
 import { catalogoYAsignaciones } from '../_shared/cobro/datos.ts'
 import { claveDelRecibo, mesAnterior, prepararRecibo, type LineaDeRecibo, type Recibo, type ReciboAnterior } from '../_shared/cobro/recibo.ts'
 import { facturaDelRecibo, type Fiscal } from '../_shared/cobro/factura.ts'
-import { leerCancelacion, leerMandatoNuevo, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro } from '../_shared/cobro/gocardless.ts'
+import { gocardlessEnElMes, leerCancelacion, leerMandatoNuevo, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro, type SuscripcionGuardada } from '../_shared/cobro/gocardless.ts'
 import { euros, type Mes } from '../_shared/tarifa/precio.ts'
 import type { Situacion } from '../_shared/tarifa/lista.ts'
 import { BASES, cabeceras, type Entorno } from '../conta-gocardless-leer/lector.ts'
@@ -55,7 +55,7 @@ const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100)
 const filas = (x: unknown): Fila[] => (Array.isArray(x) ? (x as Fila[]) : [])
 
 /** Los recibos de un mes de una empresa, calculados aquí con los datos que ve la persona. */
-function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, ReciboAnterior>, fiscal: Fiscal) {
+function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, ReciboAnterior>, fiscal: Fiscal, suscripciones: Map<string, SuscripcionGuardada[]>) {
   const { catalogo, asignaciones } = catalogoYAsignaciones({
     servicios: filas(d.servicios), precios: filas(d.precios), asignaciones: filas(d.asignaciones), niveles: filas(d.niveles),
     paquetes: filas(d.paquetes), lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes).filter((a) => a.company_id === empresa),
@@ -68,7 +68,9 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
     if (c.forma_de_cobro !== 'gocardless' && !c.cliente_en_gocardless) continue
     const clienteId = String(c.cliente_id)
     const guardado = anteriores.get(clienteId) ?? null
-    const alMesGc = c.gocardless_al_mes == null ? null : cent(c.gocardless_al_mes)
+    // nº 70 · Lo que GoCardless le cobra EN este mes: las mensuales, y la anual solo en su mes (no entre doce).
+    const gcCliente = c.cliente_en_gocardless ? String(c.cliente_en_gocardless) : null
+    const alMesGc = gcCliente ? gocardlessEnElMes(suscripciones.get(gcCliente) ?? [], mes) : null
     const anterior: ReciboAnterior | null = guardado ?? (alMesGc ? { mes: mesAnterior(mes), totalCent: alMesGc, lineas: [], deGoCardless: true } : null)
     const r = prepararRecibo({ catalogo, asignaciones, clienteId, empresaId: empresa, mes, situacionElDia1: (c.situacion as Situacion) ?? null, anterior })
     if (!r.hay) {
@@ -87,7 +89,7 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
       const fa = facturaDelRecibo(recibo, fiscal)
       factura = fa
       cobrar = fa.totalCent
-      if (fa.ajuste) recibo.cambios.push({ tipo: 'precio', asignacionId: null, texto: `${fa.ajuste.porque}.` })
+      // nº 62 · Una cuota ajustada en un céntimo no es un cambio: el cliente paga lo mismo.
     }
     recibos.push({
       clave: claveDelRecibo(empresa, clienteId, mes), party_id: clienteId, lineas: recibo.lineas, total_cent: recibo.totalCent,
@@ -210,7 +212,16 @@ Deno.serve(async (req) => {
       const { data: antes, error: e3 } = await admin.from('conta_recibo').select('party_id, mes, total_cent, lineas').eq('company_id', empresa).eq('mes', mesAnterior(mes))
       if (e3) throw new Error(`No se han podido leer los recibos del mes anterior: ${e3.message}`)
       const anteriores = new Map((antes ?? []).map((r: Fila) => [String(r.party_id), { mes: String(r.mes), totalCent: Number(r.total_cent), lineas: (r.lineas as LineaDeRecibo[]) ?? [] }]))
-      const { recibos, sinRecibo } = calcular((d ?? {}) as Fila, empresa, mes, anteriores, fiscal)
+      const { data: subs, error: e4 } = await admin.from('conta_gc_suscripcion').select('gc_cliente_id, importe, intervalo, cada, estado, inicio, proximo_cobro_fecha')
+        .eq('company_id', empresa).eq('account_id', cuenta).eq('estado', 'active')
+      if (e4) throw new Error(`No se han podido leer las suscripciones de GoCardless: ${e4.message}`)
+      const suscripciones = new Map<string, SuscripcionGuardada[]>()
+      for (const x of (subs ?? []) as Fila[]) {
+        if (!x.gc_cliente_id) continue
+        const k = String(x.gc_cliente_id)
+        suscripciones.set(k, [...(suscripciones.get(k) ?? []), { importeCent: cent(x.importe), intervalo: String(x.intervalo ?? ''), cada: Number(x.cada ?? 1), estado: String(x.estado ?? ''), proximoCobro: (x.proximo_cobro_fecha as string | null) ?? null, inicio: (x.inicio as string | null) ?? null }])
+      }
+      const { recibos, sinRecibo } = calcular((d ?? {}) as Fila, empresa, mes, anteriores, fiscal, suscripciones)
       const { data, error } = await admin.rpc('conta_cobro_guardar', { p_company: empresa, p_mes: mes, p_recibos: recibos, p_sin_recibo: sinRecibo, p_quien: quien })
       if (error) throw new Error(error.message)
       return json(200, { ok: true, ...(data as Fila) })
