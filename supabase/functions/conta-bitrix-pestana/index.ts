@@ -33,7 +33,7 @@ import {
   direccionDeLaPagina, FRASES, HUECOS, leerLlegada, portalLimpio, portalPermitido, porqueApp, porqueUsuario, TITULO_PESTANA, usuarioDeBitrix,
   type TipoFicha,
 } from './puro.ts'
-import { choquesDe, estadoDelCobro, mesSiguiente, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
+import { choquesDe, estadoDelCobro, mesSiguiente, notaDelCambio, queHacerConElTexto, queHacerConLaCuota, totalDelRecibo, trabajadoresDelRecibo } from './escribir.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -174,7 +174,7 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
   const b = (r.bitrix ?? {}) as { campo?: string | null; conocida?: string | null; escrita?: string | null }
   let enBitrix: Record<string, unknown>
   if (m.tipo !== 'empresa') {
-    enBitrix = { hecho: 'nada', texto: 'En la ficha de un contacto, Bitrix24 no se toca.' }
+    enBitrix = { hecho: 'nada', texto: 'En la ficha de un contacto no se tocan los campos de la empresa.' }
   } else if (!pestana) {
     enBitrix = { hecho: 'nada', texto: 'No se ha podido leer el recibo nuevo: Bitrix24 no se ha tocado.' }
   } else {
@@ -187,6 +187,11 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
       estado: estadoDelCobro(pestana.ficha, String(r.empresa)),
     })
   }
+  // nº 13, punto 3 · Una nota corta en el historial de la ficha de Bitrix24 (empresa o contacto), con el token de quien mira.
+  const nota = notaDelCambio(accion, accion === 'solicitud' ? { ...datos, nombre: r.nombre, tipo: r.tipo } : datos, String(r.frase ?? ''))
+  enBitrix.nota = await notaEnLaFicha(m, nota)
+  if ((enBitrix.nota as { hecho?: string }).hecho === 'escrita') enBitrix.texto = `${enBitrix.texto} · Nota en el historial de la ficha.`
+
   // nº 13, punto 2 · Un choque con Bitrix24 (un dato cambiado allí, que no se pisa) va a «Pendiente de revisar» del cliente.
   const { choques, escritos } = choquesDe(enBitrix)
   if ((choques.length || escritos.length) && r.empresa) {
@@ -196,6 +201,18 @@ async function hacer(cuerpo: Record<string, unknown>): Promise<Response> {
   }
   await db.rpc('conta_bitrix_pestana_bitrix', { p_cambio: r.cambio, p_resultado: enBitrix })
   return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, id: r.id ?? null, bitrix: enBitrix, pestana })
+}
+
+/** nº 13, punto 3 · La nota en el historial de la ficha (crm.timeline.comment.add): si Bitrix24 no la deja, se dice y no pasa nada más. */
+async function notaEnLaFicha(m: Extract<Mira, { ok: true }>, texto: string): Promise<{ hecho: 'escrita' | 'no'; texto: string; id?: unknown; porque?: string }> {
+  try {
+    const r = await bitrix(m.portal, 'crm.timeline.comment.add', m.auth, {
+      fields: { ENTITY_ID: Number(m.id), ENTITY_TYPE: m.tipo === 'empresa' ? 'company' : 'contact', COMMENT: texto },
+    }) as { result?: unknown; error?: string } | null
+    return r?.result ? { hecho: 'escrita', texto, id: r.result } : { hecho: 'no', texto, porque: String(r?.error ?? 'sin respuesta').slice(0, 40) }
+  } catch (e) {
+    return { hecho: 'no', texto, porque: e instanceof Error ? e.name : 'error' }
+  }
 }
 
 type Campos = Record<string, { campo?: string | null; escrita?: string | null }>

@@ -143,3 +143,42 @@ export function choquesDe(r: Record<string, unknown>): { choques: { campo: strin
   }
   return { choques, escritos }
 }
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+/** «2026-12-01» o «2026-12» → «diciembre»; si no es una fecha, null. */
+export function mesEnPalabras(x: unknown): string | null {
+  const m = /^(\d{4})-(\d{2})/.exec(String(x ?? ''))
+  return m && Number(m[2]) >= 1 && Number(m[2]) <= 12 ? MESES[Number(m[2]) - 1] : null
+}
+
+/**
+ * nº 13, punto 3 · La nota corta que va al historial de la ficha de Bitrix24
+ * por cada cambio de Sumied: «Sumied · alta de X desde diciembre». Una por
+ * cambio, sin flujos: lo largo está en la pestaña.
+ */
+export function notaDelCambio(accion: string, datos: Record<string, unknown>, frase: string): string {
+  const nombre = typeof datos.nombre === 'string' && datos.nombre.trim() ? datos.nombre.trim() : null
+  const corta = (t: string) => (t.length > 240 ? `${t.slice(0, 239)}…` : t)
+  if (accion === 'alta') {
+    const mes = mesEnPalabras(datos.desde)
+    return corta(`Sumied · alta de ${nombre ?? 'un trabajador'}${mes ? ` desde ${mes}` : ''}`)
+  }
+  if (accion === 'baja') {
+    const mes = mesEnPalabras(typeof datos.mes === 'string' ? mesSiguiente(datos.mes) : null)
+    return corta(`Sumied · baja de ${nombre ?? 'un trabajador'}${mes ? `: se deja de cobrar desde ${mes}` : ''}`)
+  }
+  if (accion === 'solicitud') {
+    const que = datos.tipo === 'baja' ? 'baja' : 'alta'
+    const mes = mesEnPalabras(datos.desde)
+    return corta(`Sumied · ${que} de ${nombre ?? 'un trabajador'}${mes ? ` desde ${mes}` : ''}, que pidió el cliente en su portal`)
+  }
+  if (accion === 'tarifa') {
+    const mes = mesEnPalabras(datos.desde)
+    if (typeof datos.precio === 'number') {
+      const precio = `${cuotaEnBitrix(Math.round(datos.precio * 100))} €`
+      return corta(`Sumied · precio especial de ${precio}${mes ? ` desde ${mes}` : ''}${typeof datos.motivo === 'string' && datos.motivo.trim() ? `. Por qué: ${datos.motivo.trim()}` : ''}`)
+    }
+    return corta(`Sumied · ${frase.trim().replace(/\.$/, '') || 'cambio de nivel'}`)
+  }
+  return corta(`Sumied · ${frase.trim().replace(/\.$/, '')}`)
+}
