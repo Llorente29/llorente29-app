@@ -1,0 +1,19 @@
+{
+ "_que": "G05 · La cifra de GoCardless del mes · contexto de producción, medido en SOLO LECTURA el 10/11 a las 12:19Z (analizar.mjs sql-contexto). La 1222 solo añade una función nueva: no existe ninguna con ese nombre, ni trabajos de cron que la nombren. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T12:19Z",
+ "tanda": {
+  "supabase/migrations/20261110T1222_g05_gocardless_del_mes.sql": "d65f5a4ee1679917676ab54d91a624e7"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
