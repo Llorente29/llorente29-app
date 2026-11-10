@@ -46,7 +46,7 @@ export function ClientesG04Page() {
   const { accountId, cargando } = useCuentaConta()
   const { empresas, activa, elegir } = useEmpresas()
   const [params, setParams] = useSearchParams()
-  const d = useLeer(!cargando && accountId ? () => leerClientes(accountId) : null, `${accountId}:g04-clientes`)
+  const d = useLeer(!cargando && accountId ? () => leerClientes(accountId, hoyEnMadrid().slice(0, 7)) : null, `${accountId}:g04-clientes:${hoyEnMadrid().slice(0, 7)}`)
   // GD (nº71): al acabar una lectura del CRM o de GoCardless de la cuenta, se pone al día sola (con el panel abierto).
   useAlDiaConLasLecturas(accountId, d.recargar)
   if (d.error) return <ErrorConReintento mensaje={`No se han podido leer los clientes: ${d.error}`} reintentar={d.recargar} />
@@ -113,7 +113,7 @@ export function FichaClienteG04Page() {
   const empresa = params.get('empresa')
   const d = useLeer(!cargando && accountId && cliente ? async () => {
     // Las dos a la vez: lo de la lista y lo que solo hace falta al abrir este cliente.
-    const [datos, extra] = await Promise.all([leerClientes(accountId), leerFicha(accountId, cliente)])
+    const [datos, extra] = await Promise.all([leerClientes(accountId, hoyEnMadrid().slice(0, 7)), leerFicha(accountId, cliente)])
     return { datos, extra }
   } : null, `${accountId}:g04-ficha:${cliente}`)
   useAlDiaConLasLecturas(accountId, d.recargar)
@@ -173,7 +173,7 @@ export function TarifaG04Page() {
   const { accountId, cargando, logoCuenta } = useCuentaConta()
   const { empresas, activa } = useEmpresas()
   const [params] = useSearchParams()
-  const d = useLeer(!cargando && accountId ? () => leerClientes(accountId) : null, `${accountId}:g04-tarifa`)
+  const d = useLeer(!cargando && accountId ? () => leerClientes(accountId, hoyEnMadrid().slice(0, 7)) : null, `${accountId}:g04-tarifa:${hoyEnMadrid().slice(0, 7)}`)
   if (d.error) return <ErrorConReintento mensaje={`No se ha podido leer la tarifa: ${d.error}`} reintentar={d.recargar} />
   if (!d.datos || !activa) return <TarjetaCargando />
   const datos = d.datos

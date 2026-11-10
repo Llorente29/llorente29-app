@@ -121,9 +121,16 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     devueltosDe.set(k, [...(devueltosDe.get(k) ?? []), { id: c.id, fecha: c.fecha, importeCent: c.importeCent }])
   }
 
+  // nº 82 · Lo que GoCardless cobra EN el mes, por cliente y empresa (la anual, entera en su mes). La media
+  // (gocardless_al_mes, la anual entre 12) ya no se compara con nada: solo dice si tiene cuota.
+  const delMes = (d.gcDelMes ?? []).filter((x) => mesDe(x.mes) === mes)
+  const gcDelMesDe = new Map(delMes.filter((x) => x.que === 'cliente')
+    .map((x) => [`${String(x.cliente_id)}|${String(x.empresa_id)}`, cent(x.gocardless_del_mes)]))
+  // Y por empresa, todo lo suyo del mes, también lo que aún no está unido a ningún cliente: el total de las cuotas.
+  const gcDelMesEmpresa = delMes.filter((x) => x.que === 'empresa' && enElegidas(x.empresa_id)).reduce((t, x) => t + cent(x.gocardless_del_mes), 0)
+
   const filas: FilaDeLaLista[] = []
   let sumiedTotal = 0
-  let gcTotal = 0
   let porRevisar = 0
   for (const r of d.clientes) {
     const empresaId = str(r.empresa_id)
@@ -134,9 +141,10 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     const recibo = empresaId ? reciboDelMes(catalogo, asignaciones, clienteId, empresaId, mes) : null
     const siguiente = empresaId ? reciboDelMes(catalogo, asignaciones, clienteId, empresaId, mesSiguiente(mes)) : null
     const gcAlMes = r.gocardless_al_mes == null ? null : cent(r.gocardless_al_mes)
+    const gcDelMes = empresaId ? gcDelMesDe.get(`${clienteId}|${empresaId}`) ?? null : null
     const sumied = recibo && recibo.lineas.length ? recibo.totalCent : null
-    const esteMes = cifraDeCobro({ gocardlessCent: gcAlMes, sumiedCent: sumied })
-    if (empresaId) { sumiedTotal += sumied ?? 0; gcTotal += gcAlMes ?? 0 }
+    const esteMes = cifraDeCobro({ gocardlessCent: gcDelMes, sumiedCent: sumied })
+    if (empresaId) sumiedTotal += sumied ?? 0
     if (esteMes.diferenciaCent !== null && esteMes.diferenciaCent !== 0) porRevisar++
     const debe = debeDe.get(`${clienteId}|${empresaId}`) ?? null
     const mandatoGc = str(r.mandato)
@@ -182,18 +190,17 @@ export function modeloClientes(d: DatosClientes, empresas: readonly Empresa[], e
     })
   }
 
-  // Las cuotas: lo que cobra GoCardless (manda hasta el G05; la base lo da sumado por empresa) y lo que calcula Sumied, al lado.
+  // Las cuotas: lo que cobra GoCardless este mes (manda hasta el G05; la base lo da sumado por empresa, nº 82) y lo que calcula Sumied, al lado.
   const gcDe = d.cuotasGc.filter((x) => enElegidas(x.empresa_id))
   const sumar = (k: string) => gcDe.reduce((s, x) => s + cent(x[k]), 0)
   const contar = (k: string) => gcDe.reduce((s, x) => s + Number(x[k] ?? 0), 0)
   const clientesConCuota = new Set(filas.filter((f) => f.empresaId && ((f.esteMes.principalCent ?? 0) > 0 || (f.esteMes.comparacionCent ?? 0) > 0)).map((f) => f.clienteId)).size
   const cuotas = {
-    principal: cifraDeCobro({ gocardlessCent: sumar('al_mes'), sumiedCent: sumiedTotal }),
+    principal: cifraDeCobro({ gocardlessCent: gcDelMesEmpresa, sumiedCent: sumiedTotal }),
     clientes: clientesConCuota,
     altas: { n: contar('altas_n'), cent: sumar('altas_euros') },
     bajas: { n: contar('bajas_n'), cent: sumar('bajas_euros') },
   }
-  void gcTotal
 
   const elegidasConNombre = elegidas.map((id) => ({ id, nombre: nombreEmpresa.get(id) ?? '' }))
   const banda = {
