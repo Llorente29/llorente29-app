@@ -90,3 +90,18 @@ describe('GD · nº100 · nunca se graba una pantalla cargando', () => {
     expect((g.match(/await sinCargar\(\)/g) ?? []).length).toBeGreaterThanOrEqual(3)
   })
 })
+
+describe('GD · nº116 · el trabajador nuevo y el portal de Tomás Ruiz', () => {
+  it('02.4: el zoom va a Lucas Ferrer Gil en «Ver trabajadores» (sale siempre), no al «Alta en…» del recibo', async () => {
+    const { CAMBIOS_DEL_MES } = await import('../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos')
+    expect(g).toContain(`const TRABAJADOR_NUEVO = '${CAMBIOS_DEL_MES.alta.trabajador}'`)
+    expect(g).toContain("di('02.4', () => a(page.locator('.g4-cliente-textos').filter({ hasText: TRABAJADOR_NUEVO })))")
+    expect(g).not.toContain('/^Alta (en|el)/')
+  })
+  it('11: después de guardar la sesión, recarga (cambiar solo el «#» no recarga) y dice si no ha entrado quien toca', () => {
+    const entra = g.slice(g.indexOf('const comoEnElPortal'), g.indexOf('const pestanaPortal'))
+    expect(entra.indexOf("localStorage.setItem('sumied-portal'")).toBeLessThan(entra.indexOf('page.reload('))
+    expect(entra).toContain('el portal no ha entrado como ${u.nombre}')
+    expect(g).toContain("correo: 'tomas.ruiz@talleresruiz.example', nombre: 'Tomás'")
+  })
+})

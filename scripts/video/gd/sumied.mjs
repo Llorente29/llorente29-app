@@ -45,8 +45,10 @@ const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
 const CLIENTE = 'Talleres Ruiz, S.L.'
-const DEVUELTO = { cliente: 'Electricidad Voltio, S.L.', correo: 'felipe.herrera@electricidadvoltio.example' }
-const PORTAL = { cliente: CLIENTE, correo: 'tomas.ruiz@talleresruiz.example' }
+const DEVUELTO = { cliente: 'Electricidad Voltio, S.L.', correo: 'felipe.herrera@electricidadvoltio.example', nombre: 'Felipe' }
+const PORTAL = { cliente: CLIENTE, correo: 'tomas.ruiz@talleresruiz.example', nombre: 'Tomás' }
+// El alta del mes (la deja «Volver a empezar», CAMBIOS_DEL_MES en pasos.ts).
+const TRABAJADOR_NUEVO = 'Lucas Ferrer Gil'
 const W = 1920; const H = 1080
 const REF = new URL(SUPABASE_URL || 'https://x.supabase.co').hostname.split('.')[0]
 
@@ -77,7 +79,7 @@ async function usuarioDelPortal(a) {
   const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', a.cliente).maybeSingle()
   if (!cli) return null
   const { data: acc } = await admin.from('conta_portal_acceso').select('user_id').eq('account_id', CUENTA).eq('party_id', cli.id).ilike('correo', a.correo).is('revocado_at', null).maybeSingle()
-  return acc?.user_id ? { party: cli.id, user: acc.user_id } : null
+  return acc?.user_id ? { party: cli.id, user: acc.user_id, nombre: a.nombre } : null
 }
 const reciboDe = async (party) => (await admin.from('conta_recibo').select('id, estado, gc_estado, invoice_id, gc_cobro_id').eq('account_id', CUENTA).eq('party_id', party).eq('mes', MES).maybeSingle()).data
 
@@ -254,7 +256,9 @@ try {
     await di('02.1', () => mirar(page.getByText('Se le cobra al mes'), page.getByText(/Sumied calcula/)))
     await di('02.2', () => a(page.getByText(/Así le llegará el recibo/)))
     await di('02.3', () => pulsa(page.getByRole('button', { name: 'Ver trabajadores' })))
-    await di('02.4', () => a(page.getByText(/^Alta (en|el)/)))
+    // nº116 · El trabajador nuevo, en la lista de «Ver trabajadores» con su «desde…»: sale siempre (el «Alta en…» del
+    // recibo solo sale con el cobro del mes preparado).
+    await di('02.4', () => a(page.locator('.g4-cliente-textos').filter({ hasText: TRABAJADOR_NUEVO })))
     await di('02.5', async () => { await pulsa(page.getByRole('tab', { name: 'Cobros', exact: true })); await quieto(1500); await pulsa(page.getByRole('tab', { name: 'Contacto', exact: true })) })
     await di('02.6', () => pulsa(page.getByRole('tab', { name: /^Datos de / })))
     await foto('02')
@@ -457,9 +461,15 @@ try {
       await R.sinVer(async () => {
         await page.goto(`${APP}/portal.html`, { waitUntil: 'domcontentloaded' })
         await page.evaluate(([ses, cli]) => { localStorage.setItem('sumied-portal', ses); localStorage.setItem('sumied-portal-cliente', cli) }, [JSON.stringify(s.sesion), u.party])
+        // nº116 · Ir a «portal.html#…» desde «portal.html» solo cambia el «#»: no recarga, y el portal se quedaba con lo
+        // que leyó al abrirse, sin esta sesión. Se recarga, para que entre con la sesión que se acaba de guardar.
         await page.goto(`${APP}/portal.html#${pestana}`, { waitUntil: 'domcontentloaded' })
+        await page.reload({ waitUntil: 'domcontentloaded' })
         await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => fallo(`11: el portal no ha cargado (${pestana})`))
         await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await sinCargar()
+        // Y se dice si no es quien tenía que entrar (en vez de un «timeout» en la escena siguiente).
+        const hola = (await page.locator('h1.pt-h1').first().textContent().catch(() => '')) ?? ''
+        if (pestana === 'inicio' && !hola.includes(u.nombre)) fallo(`11: el portal no ha entrado como ${u.nombre} (dice «${hola.trim().slice(0, 60)}»)`)
       })
     }
     const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await sinCargar() }) }
