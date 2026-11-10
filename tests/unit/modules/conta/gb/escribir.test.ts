@@ -76,3 +76,19 @@ describe('GB (nº 13) · «Trabajadores» y «Estado del cobro» en la ficha de 
     expect(queHacerConElTexto({ campo: null, actual: '', escrita: null, nuevo: 'Cobrado' })).toEqual({ hacer: 'nada', porque: 'el mapa de Bitrix24 no tiene ese campo' })
   })
 })
+
+describe('GB (nº 13, punto 2) · los choques con Bitrix24 a «Pendiente de revisar»', () => {
+  it('los choques (con su nombre en la ficha) y lo escrito sin choque', async () => {
+    const { choquesDe } = await import('../../../../../supabase/functions/conta-bitrix-pestana/escribir')
+    expect(choquesDe({ hecho: 'choque', campo: 'UF_CRM_CUOTA', en_bitrix: '300,00', sumied: '250,00',
+      campos: { trabajadores: { hecho: 'escrito', campo: 'UF_CRM_T', escrito: '19' }, estado_cobro: { hecho: 'choque', campo: 'UF_CRM_E', en_bitrix: 'Al día', sumied: 'Cobrado' } } }))
+      .toEqual({ choques: [{ campo: 'Cuota mensual', en_bitrix: '300,00', sumied: '250,00' }, { campo: 'Estado del cobro', en_bitrix: 'Al día', sumied: 'Cobrado' }], escritos: ['Trabajadores'] })
+    expect(choquesDe({ hecho: 'escrito', escrito: '250,00', campos: {} })).toEqual({ choques: [], escritos: ['Cuota mensual'] })
+    expect(choquesDe({ hecho: 'nada', texto: 'Bitrix24 no contesta' })).toEqual({ choques: [], escritos: [] })
+  })
+  it('en la ficha del cliente, con su chip y «Ya lo he revisado»', async () => {
+    const { CHIPS, comoResolver } = await import('@/modules/conta/gestoria/vista')
+    expect(CHIPS.find((c) => c.tipos.includes('bitrix_cambiado'))).toMatchObject({ etiqueta: 'Cambiado a mano en Bitrix24', necesita: ['bitrix'] })
+    expect(comoResolver({ tipo: 'bitrix_cambiado' } as never)).toEqual(['revisada'])
+  })
+})
