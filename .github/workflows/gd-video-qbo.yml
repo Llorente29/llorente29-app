@@ -28,7 +28,7 @@ on:
         type: choice
         options: [ensayo, grabar]
       escenas:
-        description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,08,09,10)'
+        description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,07c,08,09,10)'
         required: true
         default: todas
       mes:
@@ -58,7 +58,7 @@ jobs:
       - name: Solo desde main
         run: |
           [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Este vídeo graba en producción: solo se lanza desde main."; exit 1; }
-          [[ "${{ inputs.escenas }}" =~ ^(todas|[0-9b ,]+)$ ]] || { echo "::error::«escenas»: «todas» o una lista como 05b,06."; exit 1; }
+          [[ "${{ inputs.escenas }}" =~ ^(todas|[0-9bc ,]+)$ ]] || { echo "::error::«escenas»: «todas» o una lista como 05b,07c."; exit 1; }
           [[ "${{ inputs.mes }}" =~ ^20[0-9]{2}-(0[1-9]|1[0-2])$ ]] || { echo "::error::«mes» es AAAA-MM."; exit 1; }
 
       - uses: actions/checkout@v4

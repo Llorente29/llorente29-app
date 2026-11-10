@@ -24,6 +24,17 @@
 //     lo está, cancela las viejas (solo con una conexión de pruebas, como
 //     enviar) y guarda el cambio (conta_cobro_cuenta_cambiada): los recibos
 //     siguientes van contra la nueva.
+//   · nº 71 · Un recibo devuelto, desde la gestoría (la ficha o la pestaña de
+//     Bitrix24 de Code 4), con { recibo } y sin mes:
+//       { accion: 'enlace_para_pagar' }: el correo «Tu recibo no se ha podido
+//         cobrar» con el botón para pagarlo en su espacio, a quien del cliente
+//         puede pagar («todo»). Por la puerta de las demos (al buzón de pruebas)
+//         y el freno del portal en las de verdad (lo abre Julio).
+//       { accion: 'pasar_de_nuevo' }: GoCardless lo vuelve a presentar (POST
+//         /payments/{id}/actions/retry). SOLO con una conexión de pruebas.
+//     Antes, conta_recibo_devuelto_opciones dice si se puede y por qué no. Las
+//     llama una persona (administradora o encargada) o el servidor de la
+//     pestaña con la clave de servicio y { usuario }: el id de esa persona.
 //
 // Nunca se cobra en el GoCardless real de QBO: su conexión es real, de solo
 // lectura, y aquí no se envía a real. En el registro, nunca el token (T11).
@@ -35,7 +46,9 @@ import { salirA } from '../_shared/puertaDePruebas.ts'
 import { catalogoYAsignaciones } from '../_shared/cobro/datos.ts'
 import { claveDelRecibo, mesAnterior, prepararRecibo, type LineaDeRecibo, type Recibo, type ReciboAnterior } from '../_shared/cobro/recibo.ts'
 import { facturaDelRecibo, type Fiscal } from '../_shared/cobro/factura.ts'
-import { leerCancelacion, leerMandatoNuevo, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro } from '../_shared/cobro/gocardless.ts'
+import { gocardlessEnElMes, leerCancelacion, leerMandatoNuevo, leerReintento, leerRespuestaDeCobro, mandatoParaCobrar, mandatosACancelar, peticionDeCobro, peticionDeReintento, type SuscripcionGuardada } from '../_shared/cobro/gocardless.ts'
+import { correoAviso, PLANTILLA_AVISO, type Pendiente } from '../_shared/portal/avisos.ts'
+import { mandar, marcaDe, portalBase } from '../_shared/portal/enviar.ts'
 import { euros, type Mes } from '../_shared/tarifa/precio.ts'
 import type { Situacion } from '../_shared/tarifa/lista.ts'
 import { BASES, cabeceras, type Entorno } from '../conta-gocardless-leer/lector.ts'
@@ -55,11 +68,11 @@ const cent = (v: unknown) => Math.round(Number(v ?? 0) * 100)
 const filas = (x: unknown): Fila[] => (Array.isArray(x) ? (x as Fila[]) : [])
 
 /** Los recibos de un mes de una empresa, calculados aquí con los datos que ve la persona. */
-function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, ReciboAnterior>, fiscal: Fiscal) {
+function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, ReciboAnterior>, fiscal: Fiscal, suscripciones: Map<string, SuscripcionGuardada[]>) {
   const { catalogo, asignaciones } = catalogoYAsignaciones({
     servicios: filas(d.servicios), precios: filas(d.precios), asignaciones: filas(d.asignaciones), niveles: filas(d.niveles),
     paquetes: filas(d.paquetes), lineasDePaquete: filas(d.lineas_de_paquete), ajustes: filas(d.ajustes).filter((a) => a.company_id === empresa),
-  })
+  }, { conSueltos: true })
   const recibos: Fila[] = []
   const sinRecibo: Fila[] = []
   for (const c of filas(d.clientes)) {
@@ -68,7 +81,9 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
     if (c.forma_de_cobro !== 'gocardless' && !c.cliente_en_gocardless) continue
     const clienteId = String(c.cliente_id)
     const guardado = anteriores.get(clienteId) ?? null
-    const alMesGc = c.gocardless_al_mes == null ? null : cent(c.gocardless_al_mes)
+    // nº 70 · Lo que GoCardless le cobra EN este mes: las mensuales, y la anual solo en su mes (no entre doce).
+    const gcCliente = c.cliente_en_gocardless ? String(c.cliente_en_gocardless) : null
+    const alMesGc = gcCliente ? gocardlessEnElMes(suscripciones.get(gcCliente) ?? [], mes) : null
     const anterior: ReciboAnterior | null = guardado ?? (alMesGc ? { mes: mesAnterior(mes), totalCent: alMesGc, lineas: [], deGoCardless: true } : null)
     const r = prepararRecibo({ catalogo, asignaciones, clienteId, empresaId: empresa, mes, situacionElDia1: (c.situacion as Situacion) ?? null, anterior })
     if (!r.hay) {
@@ -87,7 +102,7 @@ function calcular(d: Fila, empresa: string, mes: Mes, anteriores: Map<string, Re
       const fa = facturaDelRecibo(recibo, fiscal)
       factura = fa
       cobrar = fa.totalCent
-      if (fa.ajuste) recibo.cambios.push({ tipo: 'precio', asignacionId: null, texto: `${fa.ajuste.porque}.` })
+      // nº 62 · Una cuota ajustada en un céntimo no es un cambio: el cliente paga lo mismo.
     }
     recibos.push({
       clave: claveDelRecibo(empresa, clienteId, mes), party_id: clienteId, lineas: recibo.lineas, total_cent: recibo.totalCent,
@@ -147,6 +162,67 @@ async function cambiarCuenta(admin: any, empresa: string, cuenta: string, cuerpo
   }
 }
 
+/**
+ * nº 71 · Un recibo devuelto: enviarle el enlace para pagar o pasarlo de nuevo.
+ * Quien llama ya está comprobado (persona o servidor en su nombre).
+ */
+// deno-lint-ignore no-explicit-any
+async function devuelto(admin: any, req: Request, accion: string, empresa: string, cuenta: string, cuerpo: Fila, quien: string): Promise<Response> {
+  const recibo = String(cuerpo.recibo ?? '')
+  if (!UUID.test(recibo)) return json(400, { error: 'Falta el recibo.' })
+  try {
+    const { data: op, error: e0 } = await admin.rpc('_conta_recibo_devuelto_opciones', { p_recibo: recibo })
+    if (e0) throw new Error(e0.message)
+    const o = op as Fila | null
+    if (!o || String(o.empresa_id) !== empresa) return json(404, { error: 'Ese recibo no está en esta empresa.' })
+    const cliente = String(o.cliente ?? 'el cliente')
+    if (accion === 'enlace_para_pagar') {
+      const p = o.enlace as { puede: boolean; porque: string | null }
+      if (!p.puede) return json(409, { error: p.porque, opciones: o })
+      const marca = await marcaDe(admin, cuenta, String(o.cliente_id))
+      const portal = portalBase(req.headers.get('origin'), Deno.env.get('SUPABASE_URL')!)
+      const minuto = new Date().toISOString().slice(0, 16)
+      const enviados: string[] = []
+      const fallos: string[] = []
+      for (const x of (o.personas as { acceso_id: string; para: string; nombre: string | null }[])) {
+        const pendiente: Pendiente = { tipo: 'devuelto', clave: `devuelto:${recibo}:${x.para}:enlace:${minuto}`, acceso_id: x.acceso_id, account_id: cuenta,
+          party_id: String(o.cliente_id), para: x.para, nombre: x.nombre, permiso: 'todo', datos: { id: recibo, mes: o.mes, importe_cent: o.importe_cent } }
+        const r = await mandar(admin, { cuenta, cliente: String(o.cliente_id), para: x.para, plantilla: PLANTILLA_AVISO, marca,
+          correo: correoAviso(pendiente, { ...marca, cliente, portal }), aviso: { tipo: 'devuelto', clave: pendiente.clave } })
+        if (r.enviado) enviados.push(r.demo ? `${x.para} (demo: al buzón de pruebas)` : x.para)
+        else fallos.push(`${x.para}: ${r.porque}`)
+      }
+      if (!enviados.length) return json(409, { error: `No se ha enviado: ${fallos.join(' · ')}` })
+      const { data: h, error: e1 } = await admin.rpc('_conta_recibo_devuelto_hecho', { p_recibo: recibo, p_que: 'enlace', p_gc_estado: null,
+        p_detalle: { a: enviados.join(', '), no: fallos }, p_quien: quien })
+      if (e1) throw new Error(e1.message)
+      return json(200, { ok: true, frase: (h as Fila).frase, enviados, fallos })
+    }
+    // pasar_de_nuevo
+    const p = o.pasar as { puede: boolean; porque: string | null }
+    if (!p.puede) return json(409, { error: p.porque, opciones: o })
+    const { data: sec, error: e2 } = await admin.rpc('conta_gocardless_secreto', { p_company: empresa })
+    if (e2) throw new Error(`No se ha podido leer la conexión: ${e2.message}`)
+    const s = (sec as { entorno: Entorno; token: string }[] | null)?.[0]
+    if (!s?.token) return json(400, { error: 'Esta empresa no tiene conectada su cuenta de GoCardless.' })
+    // Solo el sandbox, siempre: aunque algún día se encienda el cobro real, volver a pasar un recibo lo decide Julio aparte.
+    if (s.entorno !== 'pruebas') return json(400, { error: 'Por ahora solo se vuelve a pasar con una conexión de pruebas de GoCardless (el sandbox). Con la cuenta real no se cobra nada.' })
+    const puerta = salirA(!(await cuentaPuedeSalir(admin, cuenta)), s.entorno)
+    if (!puerta.sale) return json(400, { error: puerta.porque })
+    const r = await fetch(`${BASES[s.entorno]}/payments/${encodeURIComponent(String(o.gc_cobro_id))}/actions/retry`, {
+      method: 'POST', headers: { ...cabeceras(s.token), 'Content-Type': 'application/json' }, body: JSON.stringify(peticionDeReintento(`gestoria: ${quien}`)),
+    })
+    const l = leerReintento(r.status, await r.json().catch(() => null))
+    if (l.tipo === 'no') return json(409, { error: l.frase })
+    const { data: h, error: e3 } = await admin.rpc('_conta_recibo_devuelto_hecho', { p_recibo: recibo, p_que: 'pasado', p_gc_estado: l.estado,
+      p_detalle: { cargo_el: l.cargoEl, gocardless: l.estado }, p_quien: quien })
+    if (e3) throw new Error(e3.message)
+    return json(200, { ok: true, frase: `${(h as Fila).frase} ${cliente}: ${euros(Number(o.importe_cent))}.`, estado: (h as Fila).estado, cargo_el: l.cargoEl })
+  } catch (e) {
+    return json(500, { error: e instanceof Error ? e.message : String(e) })
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
   if (req.method !== 'POST') return json(405, { error: 'Solo POST.' })
@@ -174,6 +250,16 @@ Deno.serve(async (req) => {
     if (!esServidor) return json(403, { error: 'Cambiar la cuenta de cargo lo pide el servidor del portal.' })
     return await cambiarCuenta(admin, empresa, cuenta, cuerpo)
   }
+  // nº 71 · El servidor de la pestaña de Bitrix24 (Code 4), en nombre de una persona de la cuenta.
+  const DEVUELTO = ['enlace_para_pagar', 'pasar_de_nuevo']
+  if (esServidor && DEVUELTO.includes(accion)) {
+    const usuario = String(cuerpo.usuario ?? '')
+    if (!UUID.test(usuario)) return json(400, { error: 'Falta la persona que lo pide.' })
+    const { data: puede } = await admin.rpc('_conta_usuario_cobra', { p_usuario: usuario, p_account: cuenta })
+    if (puede !== true) return json(403, { error: 'Solo un administrador o un encargado de la cuenta lo puede hacer.' })
+    const { data: perfil } = await admin.from('user_profiles').select('display_name').eq('user_id', usuario).eq('account_id', cuenta).maybeSingle()
+    return await devuelto(admin, req, accion, empresa, cuenta, cuerpo, (perfil as { display_name?: string } | null)?.display_name ?? 'Una persona de la cuenta')
+  }
   const persona = createClient(url, Deno.env.get('SUPABASE_ANON_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } }, auth: { persistSession: false } })
   let quien = 'Sumied'
   let quienId: string | null = null
@@ -198,6 +284,7 @@ Deno.serve(async (req) => {
         buzonDePruebas: Deno.env.get('CORREO_BUZON_PRUEBAS'), abiertos: Deno.env.get('CORREO_MARCA_ABIERTOS') } })
       return json(200, { ok: true, ...(data as Fila), facturas: rem })
     }
+    if (DEVUELTO.includes(accion)) return await devuelto(admin, req, accion, empresa, cuenta, cuerpo, quien)
     if (!MES.test(mes)) return json(400, { error: 'Falta el mes (AAAA-MM).' })
 
     if (accion === 'preparar') {
@@ -210,7 +297,16 @@ Deno.serve(async (req) => {
       const { data: antes, error: e3 } = await admin.from('conta_recibo').select('party_id, mes, total_cent, lineas').eq('company_id', empresa).eq('mes', mesAnterior(mes))
       if (e3) throw new Error(`No se han podido leer los recibos del mes anterior: ${e3.message}`)
       const anteriores = new Map((antes ?? []).map((r: Fila) => [String(r.party_id), { mes: String(r.mes), totalCent: Number(r.total_cent), lineas: (r.lineas as LineaDeRecibo[]) ?? [] }]))
-      const { recibos, sinRecibo } = calcular((d ?? {}) as Fila, empresa, mes, anteriores, fiscal)
+      const { data: subs, error: e4 } = await admin.from('conta_gc_suscripcion').select('gc_cliente_id, importe, intervalo, cada, estado, inicio, proximo_cobro_fecha')
+        .eq('company_id', empresa).eq('account_id', cuenta).eq('estado', 'active')
+      if (e4) throw new Error(`No se han podido leer las suscripciones de GoCardless: ${e4.message}`)
+      const suscripciones = new Map<string, SuscripcionGuardada[]>()
+      for (const x of (subs ?? []) as Fila[]) {
+        if (!x.gc_cliente_id) continue
+        const k = String(x.gc_cliente_id)
+        suscripciones.set(k, [...(suscripciones.get(k) ?? []), { importeCent: cent(x.importe), intervalo: String(x.intervalo ?? ''), cada: Number(x.cada ?? 1), estado: String(x.estado ?? ''), proximoCobro: (x.proximo_cobro_fecha as string | null) ?? null, inicio: (x.inicio as string | null) ?? null }])
+      }
+      const { recibos, sinRecibo } = calcular((d ?? {}) as Fila, empresa, mes, anteriores, fiscal, suscripciones)
       const { data, error } = await admin.rpc('conta_cobro_guardar', { p_company: empresa, p_mes: mes, p_recibos: recibos, p_sin_recibo: sinRecibo, p_quien: quien })
       if (error) throw new Error(error.message)
       return json(200, { ok: true, ...(data as Fila) })

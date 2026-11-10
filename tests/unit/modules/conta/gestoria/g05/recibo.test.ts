@@ -104,6 +104,39 @@ describe('G05 · el recibo del mes', () => {
     const r = recibo({ anterior: gc(9680) })
     expect([r.cambios.map((c) => c.texto), r.pideClic]).toEqual([['GoCardless le cobraba 96,80 € al mes y Sumied calcula 145,20 €.'], 'Sube un 50 %'])
   })
+  describe('nº 63 · sin recibo de Sumied el mes anterior, el porqué sale de lo que ha cambiado en sus líneas', () => {
+    const gc = (cent: number): ReciboAnterior => ({ mes: '2026-10', totalCent: cent, lineas: [], deGoCardless: true })
+    const textos = (o: Parameters<typeof preparar>[0]) => recibo(o).cambios.map((c) => [c.tipo, c.texto])
+    it('+1 trabajador: el alta, con su nombre y su día; no «GoCardless cobraba…»', () => {
+      const as = asignaciones([trabajador('Persona Prueba 1'), trabajador('Persona Prueba 2'), trabajador('Persona Prueba 3', '2026-11', null, '2026-11-12')])
+      expect(textos({ asignaciones: as, anterior: gc(14520) })).toEqual([['alta', '+1 trabajador: Persona Prueba 3, alta el 12 de noviembre. Se cobra el mes entero.']])
+    })
+    it('−1 trabajador: la baja, con su nombre', () => {
+      const as = asignaciones([trabajador('Persona Prueba 1'), trabajador('Persona Prueba 2', '2026-01', '2026-10')])
+      expect(textos({ asignaciones: as, anterior: gc(14520) })).toEqual([['baja', '−1 trabajador: Persona Prueba 2, de baja en octubre (octubre se cobró entero).']])
+    })
+    it('de un nivel a otro: «Cambia de tarifa: de Básica a Premium desde noviembre»', () => {
+      const cat = { ...catalogo(),
+        niveles: [{ id: 'bas', servicioId: 'gestoria', nombre: 'Básica', orden: 1, incluye: [], masElegido: false }, { id: 'pre', servicioId: 'gestoria', nombre: 'Premium', orden: 2, incluye: [], masElegido: false }],
+        precios: [precio('pb', { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'bas' }, 4840), precio('pp', { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'pre' }, 9680)] }
+      const as = [
+        { id: 'a-bas', clienteId: C, empresaId: E, objetivo: { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'bas' } as const, desde: '2026-01', hasta: '2026-10' },
+        { id: 'a-pre', clienteId: C, empresaId: E, objetivo: { tipo: 'nivel', servicioId: 'gestoria', nivelId: 'pre' } as const, desde: '2026-11', hasta: null },
+      ]
+      expect(textos({ catalogo: cat, asignaciones: as, anterior: gc(4840) })).toEqual([['nivel', 'Cambia de tarifa: de Básica a Premium desde noviembre.']])
+    })
+    it('si los cambios no lo explican todo, salen y se dice lo que queda: lo de GoCardless frente a lo que habría calculado Sumied', () => {
+      const as = asignaciones([trabajador('Persona Prueba 1'), trabajador('Persona Prueba 2'), trabajador('Persona Prueba 3', '2026-11', null, '2026-11-12')])
+      expect(textos({ asignaciones: as, anterior: gc(12100) })).toEqual([
+        ['alta', '+1 trabajador: Persona Prueba 3, alta el 12 de noviembre. Se cobra el mes entero.'],
+        ['frente_a_gocardless', 'Además, GoCardless le cobraba 121,00 € al mes y, con lo de octubre, Sumied habría calculado 145,20 €.'],
+      ])
+    })
+    it('sin ningún cambio de línea que lo explique, entonces sí «GoCardless le cobraba X y Sumied calcula Y»; y si coincide, nada', () => {
+      expect(textos({ anterior: gc(12100) })).toEqual([['frente_a_gocardless', 'GoCardless le cobraba 121,00 € al mes y Sumied calcula 145,20 €.']])
+      expect(textos({ anterior: gc(14520) })).toEqual([])
+    })
+  })
   it('los meses de al lado, también en enero y diciembre', () => {
     expect([mesAnterior('2026-01'), mesAnterior('2026-11'), mesSiguiente('2026-12'), mesSiguiente('2026-03')]).toEqual(['2025-12', '2026-10', '2027-01', '2026-04'])
   })

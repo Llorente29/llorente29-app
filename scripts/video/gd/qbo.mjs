@@ -13,7 +13,9 @@
 //   MODO=ensayo  no escribe nada: ni prepara ni envía el cobro. Sirve para
 //                ver las pantallas y los rótulos.
 //   MODO=grabar  prepara y envía el cobro de diciembre de la demo (autorizado
-//                por Julio, nº52: solo la demo y el sandbox). No toca Bitrix24.
+//                por Julio, nº52: solo la demo y el sandbox). No toca Bitrix24
+//                salvo con «00»: entonces, antes de grabar, pulsa «Volver a
+//                empezar» como Julio, solo en la Gestoría Demo (nº78).
 //
 // Las escenas 5 y 7b son tomas que graba Julio desde su Chrome (nº60), en GIF,
 // en la rama video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif y
@@ -47,7 +49,7 @@ const MES = env('MES') || '2026-12'
 const CLIENTE = 'Talleres Ruiz, S.L.'
 const W = 1440; const H = 900
 
-const ORDEN = ['01', '02', '03', '04', '05', '05b', '06', '07', '07b', '08', '09', '10']
+const ORDEN = ['01', '02', '03', '04', '05', '05b', '06', '07', '07b', '07c', '08', '09', '10']
 const pedidas = env('ESCENAS') && env('ESCENAS') !== 'todas' ? env('ESCENAS').split(/[\s,]+/).filter(Boolean) : ORDEN
 const fallos = []
 let enviado = false
@@ -166,7 +168,32 @@ async function still(E, png, texto, arriba, segundos = 5) {
 
 // ── Las escenas ──────────────────────────────────────────────────────────────
 try {
-  if (pedidas.some((id) => ['02', '03', '04', '06', '07', '08'].includes(id))) await entrar()
+  if (pedidas.some((id) => ['00', '02', '03', '04', '06', '07', '07c', '08'].includes(id))) await entrar()
+
+  // 00 · «Volver a empezar», pulsado por el guion (Julio, nº78): los mismos pasos que el botón de Ajustes › Tu cuenta,
+  // con la sesión de Julio y solo en la Gestoría Demo (la función se niega fuera de una demo, y sus guardas solo
+  // dejan el portal b24-s3mr2y y el sandbox). Los pasos por tandas se repiten mientras digan «sigue». No es una escena.
+  if (pedidas.includes('00')) {
+    if (MODO !== 'grabar') decir('\n── 00 · «Volver a empezar»: solo en modo grabar; en ensayo no se pulsa.')
+    else {
+      decir('\n── 00 · «Volver a empezar»')
+      const PASOS_VOLVER = ['comprobar', 'portal_borrar', 'portal_sembrar', 'sandbox_borrar', 'sandbox_sembrar', 'sumied', 'leer', 'tarifa', 'cambios']
+      for (const paso of PASOS_VOLVER) {
+        for (let tanda = 1; ; tanda++) {
+          const r = await fetch(`${SUPABASE_URL}/functions/v1/conta-gd-volver-a-empezar`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${sesion.access_token}` },
+            body: JSON.stringify({ cuenta: CUENTA, paso }),
+          })
+          const d = await r.json().catch(() => ({}))
+          if (!r.ok || !d.ok) throw new Error(`«Volver a empezar» · ${paso}: ${d.error ?? r.status}`)
+          if (!d.sigue) { decir(`  ✓ ${paso}: ${String(d.frase ?? '').slice(0, 300)}`); break }
+          if (tanda >= 8) throw new Error(`«Volver a empezar» · ${paso}: después de 8 tandas aún queda trabajo`)
+          decir(`  · ${paso}: tanda ${tanda}, sigue`)
+        }
+      }
+      decir('  Hecho: la demo está como el primer día.')
+    }
+  }
 
   await escena('01', async (E) => {
     await tarjeta(E, `<div class="c"><div class="g">Sumied para gestorías</div><div class="m">Asesoría QBO</div><div class="p">Datos de demostración</div></div>`)
@@ -281,11 +308,16 @@ try {
       const fuera = E.page.locator('li.g5-cambio').filter({ hasText: 'Reformas Atalaya' }).getByRole('button', { name: 'Este mes no' })
       if (await fuera.first().isVisible().catch(() => false)) { await E.R.clic(fuera.first()); await E.page.waitForTimeout(2500); await libre() }
       else decir('  · no está: «Este mes no» de Reformas Atalaya')
-      for (let i = 0; i < 60; i++) {
+      // Se aprueba hasta que no quede ningún «Aprobar» en los cambios: si uno no se ve un momento (la lista se vuelve a
+      // pintar después de cada aprobación), se espera y se vuelve a mirar antes de darlo por acabado (nº74).
+      const pendiente = () => E.page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
+      for (let i = 0, vacios = 0; i < 80 && vacios < 3; i++) {
         await libre()
-        const b = E.page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
-        if (!(await b.isVisible().catch(() => false))) break
-        if (i < 2) { await E.R.clic(b); await E.page.waitForTimeout(1500) } else { await b.click(); await E.page.waitForTimeout(300) }
+        const b = pendiente()
+        if (!(await b.isVisible().catch(() => false))) { vacios++; await E.page.waitForTimeout(1000); continue }
+        vacios = 0
+        await b.scrollIntoViewIfNeeded().catch(() => {})
+        if (i < 2) { await E.R.clic(b); await E.page.waitForTimeout(1500) } else { await b.click(); await E.page.waitForTimeout(600) }
       }
       await libre()
       const iguales = E.page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ })
@@ -361,6 +393,46 @@ try {
   })
 
   await toma('07b', [{ f: '07b-buzon.gif', desde: 0 }], [{ t: 'Y le llega a tu cliente por correo, sin que nadie la mande', en: 0 }])
+
+  // 7c · La contabilidad de punta a punta de UN cliente, Talleres Ruiz, en Gestoría Demo, S.L. (Julio, nº75):
+  //   su factura en el libro de IVA repercutido; el mayor de su 430 (factura al debe, cobro al haber, saldo 0); el
+  //   mayor de la 57200002 (entra el cobro, sale el ingreso al banco; queda la comisión, sin taparla ni rotularla); y
+  //   el banco 57200000 con el ingreso de GoCardless casado con sus cobros. Rótulo solo al final. Lo que aún no se
+  //   puede enseñar se graba igual y se apunta, con su captura (capturas/07c-N.png), para decidir antes de montar.
+  await escena('07c', async (E) => {
+    E.id = '07c'
+    const paso = async (n, que) => { await E.page.screenshot({ path: join(SALIDA, 'capturas', `07c-${n}.png`) }); decir(`  · 7c · ${n}: ${que}`) }
+    const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).maybeSingle()
+    if (!cli) throw new Error(`No está «${CLIENTE}» en la demo.`)
+    // Lo que tiene que haber para cada paso, medido antes (solo lectura).
+    const { data: rec } = await admin.from('conta_recibo').select('invoice_id, estado').eq('account_id', CUENTA).eq('party_id', cli.id).eq('mes', MES).maybeSingle()
+    if (!rec?.invoice_id) fallos.push(`07c · 1-2: ${CLIENTE} aún no tiene factura de ${MES} (recibo: ${rec?.estado ?? 'ninguno'})`)
+    const { data: c430 } = await admin.from('company_account').select('code').eq('company_id', SOCIEDAD).like('code', '430%').ilike('name', 'Talleres Ruiz%').limit(1).maybeSingle()
+    if (!c430) fallos.push(`07c · 2: ${CLIENTE} aún no tiene su subcuenta 430`)
+    const { count: casados } = await admin.from('conta_gc_payout').select('gc_id', { count: 'exact', head: true }).eq('account_id', CUENTA).not('match_id', 'is', null)
+    if (!casados) fallos.push('07c · 4: aún no hay ningún ingreso de GoCardless casado en el banco')
+
+    // 1 · Su factura en el libro de IVA repercutido (expedidas).
+    await ir(E.page, '/conta/libros/registro/expedidas'); E.empezar(); await E.page.waitForTimeout(1500)
+    if (!(await a(E, E.page.getByText(/Talleres Ruiz/).first(), { que: '7c · 1: Talleres Ruiz en el libro de IVA repercutido', pausa: 5000 }))) await rodar(E.page, 400)
+    await paso(1, 'libro de IVA repercutido')
+    // 2 · El mayor de su 430.
+    if (c430) {
+      await ir(E.page, `/conta/plan/${c430.code}`); await E.page.waitForTimeout(1500)
+      await a(E, E.page.getByText(/Saldo/).first(), { que: '7c · 2: el saldo del mayor de su 430', pausa: 5500 })
+      await paso(2, `mayor de la ${c430.code}`)
+    }
+    // 3 · El mayor de la 57200002 (Plataforma GoCardless). La comisión que queda, tal cual.
+    await ir(E.page, '/conta/plan/57200002'); await E.page.waitForTimeout(1500)
+    await a(E, E.page.getByText(/Talleres Ruiz|GoCardless/).first(), { que: '7c · 3: el mayor de la 57200002', pausa: 5500 })
+    await paso(3, 'mayor de la 57200002')
+    // 4 · El banco 57200000: el ingreso de GoCardless, casado con sus cobros.
+    await ir(E.page, '/conta/bancos'); await E.page.waitForTimeout(1500)
+    await a(E, E.page.getByText(/GOCARDLESS/).first(), { clic: true, que: '7c · 4: el ingreso de GoCardless en el banco', pausa: 5000 })
+    await paso(4, 'banco 57200000')
+    await rotulo(E.page, 'De la cuota al banco, contabilizado solo. Sin teclear un asiento'); await E.page.waitForTimeout(4500)
+    await E.captura()
+  })
 
   await escena('08', async (E) => {
     E.id = '08'
