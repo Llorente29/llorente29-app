@@ -50095,6 +50095,13 @@ begin
       'id', f.id, 'numero', f.number_text, 'fecha', f.issue_date, 'anio', extract(year from f.issue_date)::int,
       'tipo', f.doc_type, 'base', f.base, 'iva', f.tax, 'retencion', f.withholding_amount, 'total', f.total,
       'concepto', coalesce(r.mes, f.notes), 'recibo_mes', r.mes, 'tiene_pdf', f.pdf_path is not null,
+      -- nº 24 · 2 · Lo que lleva cada factura («Gestoría y laboral (4 trabajadores)», «… · Cuentas anuales») y cuándo se pagó.
+      'lineas', coalesce((select jsonb_agg(l.concept order by l.position) from public.customer_invoice_line l where l.invoice_id = f.id and l.concept is not null), '[]'::jsonb),
+      'pagada', case when r.estado in ('devuelto', 'retrocedido') and not public._conta_portal_devuelto_pagado(r.id) then null
+        else coalesce(case when r.estado in ('cobrado', 'facturado') then r.confirmado_el end,
+                      (select max(p.paid_on) from public.customer_invoice_payment p where p.invoice_id = f.id),
+                      (select max((e.pagado_at at time zone 'Europe/Madrid')::date) from public.conta_enlace_pago e
+                        where e.invoice_id = f.id and e.pagado_at is not null)) end,
       'estado', case
         when r.estado in ('devuelto', 'retrocedido') and not public._conta_portal_devuelto_pagado(r.id) then 'Devuelta'
         when r.estado in ('cobrado', 'facturado', 'devuelto', 'retrocedido') then 'Pagada'
@@ -50296,8 +50303,15 @@ begin
     'mensajes_sin_leer', case when todo then (select count(*) from public.conta_portal_mensaje m where m.party_id = c and m.de = 'gestoria' and m.leido_at is null) else 0 end,
     'puede_subir', v_prop is not null,
     'novedades', coalesce((select jsonb_agg(z.n order by z.n ->> 'cuando' desc) from (select x.n from (
-        (select jsonb_build_object('tipo', 'factura', 'id', f.id, 'titulo', 'Factura ' || f.number_text, 'total', f.total, 'cuando', f.issue_date::timestamptz)
-           from public.customer_invoice f where f.account_id = a and f.party_id = c and f.status = 'emitida' order by f.issue_date desc limit 3)
+        -- nº 24 · 2 · «Factura 2026/1/141 · 157,30 € · Pagada el 4 de diciembre», como en la maqueta.
+        (select jsonb_build_object('tipo', 'factura', 'id', f.id, 'titulo', 'Factura ' || f.number_text, 'total', f.total, 'cuando', f.issue_date::timestamptz,
+                                   'pagada', case when r.estado in ('devuelto', 'retrocedido') and not public._conta_portal_devuelto_pagado(r.id) then null
+                                     else coalesce(case when r.estado in ('cobrado', 'facturado') then r.confirmado_el end,
+                                                   (select max(p.paid_on) from public.customer_invoice_payment p where p.invoice_id = f.id),
+                                                   (select max((e.pagado_at at time zone 'Europe/Madrid')::date) from public.conta_enlace_pago e
+                                                     where e.invoice_id = f.id and e.pagado_at is not null)) end)
+           from public.customer_invoice f left join public.conta_recibo r on r.invoice_id = f.id
+          where f.account_id = a and f.party_id = c and f.status = 'emitida' order by f.issue_date desc limit 3)
         union all
         (select jsonb_build_object('tipo', 'impuesto', 'id', t.id, 'titulo', t.form_code, 'periodo', t.period, 'ejercicio', t.fiscal_year,
                                    'importe', t.amount, 'resultado', t.result_kind, 'cuando', t.filed_at)
