@@ -175,10 +175,21 @@ async function a(loc, ms = 800) {
   await ra.a(l, ms)
 }
 /** Pulsa, o en ensayo solo señala, lo que ESCRIBE en la demo. */
-async function pulsaQueEscribe(loc, ms = 800) {
+async function pulsaQueEscribe(loc, ms = 800, efecto = null) {
   const l = loc.first()
   await l.waitFor({ state: 'visible', timeout: 15_000 })
-  if (GRABA) await ra.clic(l, ms); else await ra.a(l, ms)
+  if (!GRABA) { await ra.a(l, ms); return }
+  await ra.clic(l, ms)
+  // nº120 · El ratón va hasta donde ESTABA el botón y pulsa allí: si la página se mueve mientras va (la franja verde
+  // «Aprobado el recibo de…» empuja todo hacia abajo), el clic cae fuera y no pasa nada (run 21: «Aprobar los 23» no
+  // aprobó y el cobro no se envió). Se comprueba lo que tiene que pasar; si no pasa, se pulsa el botón de verdad, fuera
+  // del montaje, y si aun así no, se dice.
+  if (!efecto) return
+  const paso = () => efecto.first().waitFor({ state: 'visible', timeout: 8_000 }).then(() => true).catch(() => false)
+  if (await paso()) return
+  let ok = false
+  await R.sinVer(async () => { await l.click({ timeout: 15_000 }).catch(() => {}); ok = await paso() })
+  if (!ok) throw new Error('el clic no ha hecho lo que tenía que hacer')
 }
 /** Pulsa lo que solo navega o abre (también en ensayo). */
 async function pulsa(loc, ms = 800) { const l = loc.first(); await l.waitFor({ state: 'visible', timeout: 15_000 }); await ra.clic(l, ms) }
@@ -338,7 +349,7 @@ try {
       await di('06.2', () => mirar(page.getByText('Lo que cambia').first(), page.locator('li.g5-cambio').first()))
       await di('06.3', () => a(cambio('Imprenta Rápida Sol').locator('.g5-cambio-porque')))
       await di('06.4', () => a(cambio('Talleres Ruiz').locator('.g5-cambio-porque')))
-      await di('06.5', async () => { await libre(); await pulsaQueEscribe(cambio('Reformas Atalaya').getByRole('button', { name: 'Este mes no' })) })
+      await di('06.5', async () => { await libre(); await pulsaQueEscribe(cambio('Reformas Atalaya').getByRole('button', { name: 'Este mes no' }), 800, cambio('Reformas Atalaya').getByText('Fuera de este cobro')) })
       await di('06.6', async () => {
         const pendiente = () => page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
         if (!GRABA) { await a(pendiente()); return }
@@ -350,19 +361,23 @@ try {
           if (i < 2) { await ra.clic(b, 700); await quieto(1200) } else { await b.click(); await quieto(500) }
         }
       })
-      await di('06.7', async () => { await libre(); await pulsaQueEscribe(page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ })) })
+      await di('06.7', async () => { await libre(); await pulsaQueEscribe(page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ }), 800, page.locator('.g5-hecho').filter({ hasText: 'Aprobados' })) })
       await di('06.8', () => a(page.getByText('No entran')))
       const enviar = page.locator('button.g5-enviar')
       await di('06.9', async () => {
         if (GRABA) await page.waitForFunction((el) => el && !el.disabled, await enviar.elementHandle(), { timeout: 30_000 }).catch(() => {})
-        await pulsaQueEscribe(enviar)
+        await pulsaQueEscribe(enviar, 800, page.getByRole('dialog'))
       })
       await di('06.10', async () => {
         if (!GRABA) return
         const dlg = page.getByRole('dialog')
         await dlg.first().waitFor({ timeout: 10_000 }); await mirar(dlg)
         await quieto(2500)
-        await ra.clic(dlg.getByRole('button', { name: /^Sí, enviar/ }), 700)
+        const si = dlg.getByRole('button', { name: /^Sí, enviar/ })
+        await ra.clic(si, 700)
+        // nº120 · Y si el clic no ha caído en el botón, el diálogo sigue abierto: se pulsa de verdad, fuera del montaje.
+        const cerrado = () => dlg.first().waitFor({ state: 'hidden', timeout: 10_000 }).then(() => true).catch(() => false)
+        if (!(await cerrado())) await R.sinVer(async () => { await si.first().click({ timeout: 15_000 }).catch(() => {}); if (!(await cerrado())) throw new Error('el diálogo de enviar sigue abierto') })
       })
       await foto('06')
     } else noToca(['06.2', '06.3', '06.4', '06.5', '06.6', '06.7', '06.8', '06.9', '06.10'], mes0?.enviado_at ? 'el cobro ya está enviado' : 'sin preparar; en ensayo no se prepara')
