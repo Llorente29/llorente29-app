@@ -7678,6 +7678,8 @@ CREATE FUNCTION public._conta_portal_devueltos(p_account uuid, p_party uuid) RET
            'recibo_id', r.id, 'mes', r.mes, 'importe_cent', coalesce(r.cobrar_cent, r.total_cent),
            'devuelto_el', (select max(ev.cuando) from public.conta_recibo_evento ev where ev.recibo_id = r.id and ev.tipo in ('devuelto', 'retrocedido')),
            'gc_estado', r.gc_estado,
+           -- nº 24 · 6 · Por qué lo devolvió el banco, en palabras de oficina (lo guarda Code 1); null si aún no se sabe.
+           'motivo', nullif(btrim(r.motivo_devolucion), ''),
            'en_marcha', (select jsonb_build_object('tipo', o.tipo, 'estado', o.estado, 'url', o.externo_url, 'creada', o.created_at)
                            from public.conta_portal_operacion o
                           where o.recibo_id = r.id and o.estado in ('creada', 'esperando') order by o.created_at desc limit 1))
