@@ -88,6 +88,14 @@ export async function leerCuentaGc(pedir: Pedir, entorno: Entorno, token: string
       sinSaber.add(o.id)
     }
   }
+  // nº 79 · Un cobro que GoCardless liquidó y después se devolvió o se reclamó puede venir sin su liquidación
+  // (links.payout): sus partidas la dicen. Así «seguir» sabe que llegó al banco y lo factura antes de devolverlo.
+  const liquidacionDe = new Map<string, string>()
+  for (const [o, pagos] of partidas) for (const p of pagos) if (!liquidacionDe.has(p)) liquidacionDe.set(p, o)
+  for (let i = 0; i < cobros.length; i++) {
+    const o = cobros[i].payoutId ? null : liquidacionDe.get(cobros[i].id)
+    if (o) cobros[i] = { ...cobros[i], payoutId: o }
+  }
   const reparto = liquidacionesDeClientes({ payouts, cobros, mandatos, clientes }, partidas, mandatoDePago)
   const quedan = payouts.filter((x) => sinSaber.has(x.id) || reparto.quedan.includes(x))
   const fuera = reparto.fuera.filter((f) => !sinSaber.has(f.id))
