@@ -1,0 +1,11 @@
+# GB · nº 13, punto 1 · «Trabajadores» y «Estado del cobro» en la ficha de Bitrix24.
+# Rama conta/gb-bitrix-campos. Lee conta_bitrix_pestana_cambio (2235, ya en
+# producción). Se ensaya y se aplica desde main nombrando esta rama. El real lo lanza Julio.
+#
+#   0040  Añade conta_bitrix_pestana_campos (solo el servidor: dice qué campo de
+#         Bitrix24 es cada uno y lo último escrito). No llama a nada: no cambia
+#         ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-bitrix-campos.sql
+supabase/migrations/20261110T0040_gb_bitrix_campos.sql

@@ -30,6 +30,8 @@ export const ESPERA_MS = 500
 export type CampoSumied =
   | 'nombre' | 'nif' | 'calle' | 'cp' | 'poblacion' | 'provincia' | 'correo' | 'telefono'
   | 'situacion' | 'servicios' | 'forma_pago' | 'cuota_referencia'
+  /** GB (nº 13) · Los que RELLENA Sumied desde la pestaña (no se leen): cuántos trabajadores se cobran y el estado del cobro. */
+  | 'trabajadores' | 'estado_cobro'
 
 /** G01b · «sin_clasificar»: una opción de Bitrix24 sin significado en Sumied (GRAVE DESAPARECIDO, las «Vzla»…), con su texto. */
 /** Los servicios contratados que enseña la tabla: C (contabilidad), L (laboral), S (otros servicios). */
@@ -125,6 +127,8 @@ export const MAPA_QBO: MapaBitrix = {
     { codigo: null, campo: 'cuota_referencia', etiqueta: 'Laboral' },
     { codigo: null, campo: 'cuota_referencia', etiqueta: 'ContaSimple' },
     { codigo: null, campo: 'cuota_referencia', etiqueta: 'Tarifa recurrente' },
+    { codigo: null, campo: 'trabajadores' },
+    { codigo: null, campo: 'estado_cobro' },
   ],
   formaPagoAEmisor: {},
 }
@@ -329,7 +333,13 @@ const QUIEN_ES: { campo: CampoSumied; etiqueta?: string; patron: RegExp; lista?:
   { campo: 'cuota_referencia', etiqueta: 'Laboral', patron: /^(CUOTA (MENSUAL )?)?LABORAL$/ },
   { campo: 'cuota_referencia', etiqueta: 'ContaSimple', patron: /^(CUOTA (MENSUAL )?)?CONTA ?SIMPLE$/ },
   { campo: 'cuota_referencia', etiqueta: 'Tarifa recurrente', patron: /^TARIFA RECURRENTE$/ },
+  // GB (nº 13) · Los que rellena Sumied desde la pestaña de Bitrix24.
+  { campo: 'trabajadores', patron: /^(N(UMERO|º|O\.?) DE )?TRABAJADORES$/ },
+  { campo: 'estado_cobro', patron: /^ESTADO DEL COBRO$/ },
 ]
+
+/** GB (nº 13) · Los campos que rellena Sumied: si el portal no los tiene, no pasa nada. */
+const OPCIONALES = new Set<CampoSumied>(['trabajadores', 'estado_cobro'])
 
 /**
  * G01b · Lo que quiere decir en Sumied una opción de «Situación del Cliente»:
@@ -419,6 +429,11 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
         continue
       }
       campos.push({ codigo: null, campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}) })
+      // GB (nº 13) · Los que rellena Sumied son opcionales: si el portal no los tiene, no es una duda.
+      if (candidatos.length === 0 && OPCIONALES.has(q.campo)) {
+        queEsCadaUno.push({ campo: nombreCampo, codigo: null, etiquetaEnBitrix: null, nota: 'opcional: Sumied lo rellenaría si existiera' })
+        continue
+      }
       dudas.push({ campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}), porque: candidatos.length ? 'varios' : 'ninguno',
         candidatos: candidatos.map(([k, c]) => ({ codigo: k, etiqueta: [c.formLabel, c.listLabel, c.title].find((x) => x && x.trim()) ?? k })) })
       queEsCadaUno.push({ campo: nombreCampo, codigo: null, etiquetaEnBitrix: null,
