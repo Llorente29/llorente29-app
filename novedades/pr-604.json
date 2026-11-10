@@ -1,0 +1,20 @@
+[
+ {
+  "id": "604-1",
+  "pr": 604,
+  "fecha": "2026-11-10T13:42:37Z",
+  "producto": "sumied",
+  "apartado": "Ficha y Clientes",
+  "frase": "fuera las palabras internas y lo que ya no es verdad («Sumied aún no factura»). «Dejas de cobrar» dice lo que hay hoy, sin prometer nada.",
+  "ruta": null
+ },
+ {
+  "id": "604-2",
+  "pr": 604,
+  "fecha": "2026-11-10T13:42:37Z",
+  "producto": "sumied",
+  "apartado": "Servicios que tiene",
+  "frase": "un servicio que empieza más adelante, como la anual que se cobra por primera vez en junio, sale con su nombre y su precio, no como «Servicio · Sin precio».",
+  "ruta": null
+ }
+]

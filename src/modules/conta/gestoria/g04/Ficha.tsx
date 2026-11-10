@@ -152,7 +152,7 @@ export function Ficha(p: PropsFicha) {
             <section aria-labelledby="g4-recibo" className="g4-bloque g4-sin-relleno">
               <div className="g4-recibo-cabeza">
                 <div><div className="g4-antetitulo">Así le llegará el recibo de {m.mesRecibo.replace(/ de \d+$/, '')}</div><h2 id="g4-recibo" className="g4-bloque-titulo" style={{ fontSize: 20 }}>Recibo de {m.mesRecibo}</h2></div>
-                <div className="g4-pequeno" style={{ fontSize: 13 }}>Lo calcula Sumied con su tarifa · hasta el G05, cobra GoCardless</div>
+                <div className="g4-pequeno" style={{ fontSize: 13 }}>Lo calcula Sumied con su tarifa</div>
               </div>
               <div className="g4-recibo">
                 {m.recibo.length === 0 && <div className="g4-recibo-linea"><span>Nada en Sumied el mes que viene.</span><b>—</b></div>}
@@ -191,7 +191,7 @@ export function Ficha(p: PropsFicha) {
                   )
                 })}
                 <div className="g4-recibo-total"><div style={{ fontSize: 15, fontWeight: 600 }}>Total</div><div className="g4-banda-cifra" style={{ color: 'inherit' }}>{m.totalRecibo}</div></div>
-                <div className="g4-pequeno" style={{ paddingBottom: 18 }}>Cuando Sumied facture (G05), en la factura saldrá cada trabajador con su nombre, en una hoja aparte.</div>
+                <div className="g4-pequeno" style={{ paddingBottom: 18 }}>En la factura sale cada trabajador con su nombre: debajo de su línea o, si son más de 10, en una hoja aparte.</div>
               </div>
             </section>
           )}
@@ -204,7 +204,7 @@ export function Ficha(p: PropsFicha) {
                   {m.mandato ? <>Domiciliación · mandato SEPA <b style={{ color: m.mandato.tono === 'bien' ? '#0B6B4F' : '#8A4B08' }}>{m.mandato.texto}</b></> : 'Sin mandato en GoCardless'} · {m.devoluciones12} {m.devoluciones12 === 1 ? 'devolución' : 'devoluciones'} en 12 meses
                 </div>
               </div>
-              <div className="g4-pequeno">Lo leído de GoCardless (desde mayo de 2026). Sumied aún no factura: la factura llega con el recibo (G05).</div>
+              <div className="g4-pequeno">Lo leído de GoCardless (desde mayo de 2026).</div>
               <div className="g4-tabla-cobros" role="table" aria-label="Cobros de los últimos 12 meses">
                 <div className="g4-cobro-fila g4-cobro-titulos" role="row"><div role="columnheader">Recibo</div><div role="columnheader" className="g4-derecha">Importe</div><div role="columnheader">Estado</div><div role="columnheader">Factura</div></div>
                 {m.cobros.length === 0 && <div className="g4-cobro-fila" role="row"><div role="cell">Ningún cobro en GoCardless en 12 meses.</div></div>}

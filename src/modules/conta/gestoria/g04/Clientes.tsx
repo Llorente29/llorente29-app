@@ -123,7 +123,7 @@ export function Clientes(p: PropsClientes) {
         <div className="g4-cifra" data-tono="aviso">
           <div className="g4-cifra-titulo">Dejas de cobrar</div>
           <div className="g4-cifra-valor">{miles(m.dejasDeCobrar.activosSinCuota)} {m.dejasDeCobrar.activosSinCuota === 1 ? 'cliente' : 'clientes'}</div>
-          <div className="g4-cifra-linea">Activos sin cuota · trabajadores sin cobrar: aún sin dato, se verá cuando se conecte Laboral</div>
+          <div className="g4-cifra-linea">Activos sin cuota: no se les cobra nada, ni en Sumied ni en GoCardless</div>
         </div>
         <div className="g4-cifra">
           <div className="g4-cifra-titulo">Precio sin revisar</div>

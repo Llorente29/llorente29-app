@@ -135,6 +135,27 @@ describe('la ficha · la factura de cada cobro', () => {
   })
 })
 
+// Una anual de GoCardless que se cobra por primera vez en junio: no está en el recibo del mes que viene, y la
+// ficha la pintaba «Servicio · Sin precio · desde jun. 2027». Ahora, con su nombre y su precio de la tarifa.
+describe('la ficha · un servicio que empieza más adelante', () => {
+  it('sale con su nombre y su precio, no «Servicio · Sin precio»', async () => {
+    const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')
+    const d = datos()
+    const conAnual: DatosClientes = {
+      ...d,
+      asignaciones: [...d.asignaciones, { id: 'soc', tipo: 'cuota', cliente_id: '1', empresa_id: Q, servicio_id: 'soc', nivel_id: null, paquete_id: null,
+        empleado_nombre: null, importe_propio: null, periodo: 'anio', desde: '2027-06-01', hasta: null }],
+      precios: [...d.precios, { id: 'tarifa:s', empresa_id: Q, servicio_id: 'soc', nivel_id: null, paquete_id: null, cliente_id: null, forma: 'fijo', periodo: 'anio',
+        importe: 300, tramos: [], desde: '2026-01-01', hasta: null }],
+      servicios: [...d.servicios, { id: 'soc', company_id: Q, nombre: 'Impuesto de sociedades', forma: 'fijo_anio' }],
+    }
+    const f = modeloFicha(conAnual, suyo(), EMPRESAS, '1', Q, '2026-11-10', [])!
+    const s = f.servicios.find((x) => x.lineaId === 'soc')!
+    expect([s.texto, s.detalle]).toEqual(['Impuesto de sociedades', 'Precio de tarifa · 300,00 € al año, 25,00 € al mes · desde jun. 2027'])
+    expect(f.servicios.some((x) => x.texto === 'Servicio')).toBe(false)
+  })
+})
+
 describe('G04 · el modelo de la ficha', () => {
   it('el recibo del mes que viene, con los trabajadores agrupados y desplegables', async () => {
     const { modeloFicha } = await import('@/modules/conta/gestoria/g04/modelo')

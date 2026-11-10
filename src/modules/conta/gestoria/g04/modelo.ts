@@ -335,13 +335,16 @@ export function modeloFicha(d: DatosClientes, suyo: DatosFicha, empresas: readon
         factura: facturaDelCobro(facturaDe.get(`${String(b.company_id)}|${String(b.gc_id)}`)) } })
   const ultimoMandato = [...mandatos].sort((a, b) => (String(a.creado ?? '') < String(b.creado ?? '') ? 1 : -1))[0]
   // Lo que tiene, a la derecha: cada asignación vigente con su precio.
+  // Una que aún no ha empezado (la anual de GoCardless que se cobra por primera vez en junio) no está en el recibo
+  // del mes que viene: se busca en el de su primer mes, para que tenga su nombre y su precio, no «Servicio · Sin precio».
   const servicios = suyas.filter((a) => a.hasta === null || a.hasta >= mes).map((a) => {
     const l = recibo?.lineas.find((x) => x.asignacionId === a.id)
+      ?? (e && mesDe(a.desde) > siguiente ? reciboDelMes(catalogo, asignaciones, clienteId, e, mesDe(a.desde)).lineas.find((x) => x.asignacionId === a.id) : undefined)
     const servicioId = a.objetivo.tipo === 'paquete' ? null : a.objetivo.servicioId.split('#')[0]
     const palabra = !l || l.dePrecio === 'sin_precio' ? 'Sin precio' : l.dePrecio === 'tarifa' ? 'Precio de tarifa' : l.dePrecio === 'especial' ? 'Precio especial' : 'Precio de este cliente'
     return {
-      texto: l?.texto.replace(/ · \d+ trabajadores?$/, '') ?? 'Servicio',
-      detalle: `${palabra}${l?.trabajadores !== null && l?.trabajadores !== undefined ? ` · ${l.cuenta}` : ''} · desde ${mesCorto(a.desde)}`,
+      texto: l?.texto.replace(/ · \d+ trabajadores?$/, '') ?? catalogo.servicios.find((x) => x.id === servicioId)?.nombre ?? 'Servicio',
+      detalle: `${palabra}${(l?.trabajadores !== null && l?.trabajadores !== undefined) || / al año/.test(l?.cuenta ?? '') ? ` · ${l!.cuenta}` : ''} · desde ${mesCorto(a.desde)}`,
       importe: l?.importeCent == null ? '—' : euros(l.importeCent),
       lineaId: a.objetivo.tipo === 'paquete' ? null : a.id.replace(/^linea:/, ''), servicioId,
       tieneNiveles: !!servicioId && catalogo.niveles.some((n) => n.servicioId === servicioId), especial: l?.dePrecio === 'especial',

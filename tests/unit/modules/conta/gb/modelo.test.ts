@@ -25,6 +25,8 @@ describe('GB · la pestaña dice lo mismo que la ficha de Sumied', () => {
   it('el cliente, su situación y quién le factura', () => {
     const p = modeloPestana(respuesta(), HOY)!
     expect([p.cliente, p.situacion, p.emisora, p.desde, p.personaDeContacto]).toEqual(['Cliente Prueba, S.L.', { texto: 'Activo', tono: 'bien' }, 'QBO Prueba', 'Cobra desde enero de 2020', false])
+    // nº 17, E · «Cliente desde», como dato de Resumen.
+    expect(p.clienteDesde).toBe('Enero de 2020')
     expect(modeloPestana(respuesta({ de_empresa: '99001' }), HOY)!.personaDeContacto).toBe(true)
   })
   it('los últimos cobros (cuatro a la vista), el devuelto y el mandato', () => {

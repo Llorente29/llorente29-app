@@ -47,6 +47,8 @@ export interface Pestana {
   emisora: string | null
   situacion: { texto: string; tono: Tono }
   desde: string | null
+  /** nº 17, E · «Cliente desde», como dato: el primer mes que se le cobra (lo mismo que «Cobra desde» de la ficha del G04). */
+  clienteDesde: string | null
   /** Si es la ficha de una persona de contacto de la empresa cliente. */
   personaDeContacto: boolean
   /** Lo que se le debe (devueltos), en una frase; o nada. */
@@ -90,7 +92,8 @@ export function modeloPestana(r: Fila, hoy: string): Pestana | null {
     .map((t) => ({ nombre: t.nombre, desde: t.desde, importe: t.importe, lineaId: t.lineaId }))
   return {
     cliente: String(r.cliente_nombre ?? f.nombre ?? 'Cliente'), clienteId, empresaId: f.empresaId ?? null,
-    emisora: f.empresa ?? null, situacion, desde: m.clienteDesde, personaDeContacto: !!r.de_empresa, aviso,
+    emisora: f.empresa ?? null, situacion, desde: m.clienteDesde,
+    clienteDesde: m.clienteDesde ? m.clienteDesde.replace(/^Cobra desde /, '').replace(/^./, (c) => c.toUpperCase()) : null, personaDeContacto: !!r.de_empresa, aviso,
     mesRecibo: m.mesRecibo,
     recibo: m.recibo.map((l) => ({ texto: l.texto, detalle: l.detalle, importe: l.importe, porque: l.etiquetas })),
     totalRecibo: m.totalRecibo,

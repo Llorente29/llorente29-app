@@ -37,3 +37,16 @@ describe('GD · nº101 · la historia de Talleres Ruiz', () => {
     expect(caso).toContain('.filter((n) => n !== CAMBIOS_DEL_MES.alta.trabajador)')
   })
 })
+
+describe('GD · nº102 · la anual, desde el último junio', () => {
+  it('este año si ya pasó junio; si no, el del año pasado', async () => {
+    const { inicioDeLaAnual } = await import('../../../../../supabase/functions/conta-gd-volver-a-empezar/pasos')
+    expect(inicioDeLaAnual('2026-11-10')).toBe('2026-06-01')
+    expect(inicioDeLaAnual('2026-06-01')).toBe('2026-06-01')
+    expect(inicioDeLaAnual('2027-03-15')).toBe('2026-06-01')
+  })
+  it('«tarifa» la mueve, solo las anuales de GoCardless de la cuenta demo', () => {
+    const f = readFileSync('supabase/functions/conta-gd-volver-a-empezar/index.ts', 'utf8')
+    expect(f).toContain(".eq('account_id', cuenta).eq('origen', 'gocardless').eq('periodo', 'anio').gt('desde', desdeAnual)")
+  })
+})
