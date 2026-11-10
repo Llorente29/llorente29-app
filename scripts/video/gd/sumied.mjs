@@ -34,10 +34,13 @@ const MODO = env('MODO') === 'grabar' ? 'grabar' : 'ensayo'
 const GRABA = MODO === 'grabar'
 const salida = resolve(process.argv[2] || env('SALIDA') || 'video-salida')
 const TOMAS = resolve(env('TOMAS') || join(salida, 'tomas'))
-const MES = env('MES') || '2026-12'
+// nº100 · El mes del cobro: el mes en curso (Madrid), salvo que se pida otro (AAAA-MM).
+const MES = /^\d{4}-\d{2}$/.test(env('MES')) ? env('MES') : new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }).slice(0, 7)
 // nº99 · Las escenas que se graban: «todas», o una lista (p. ej. «01,02,03» para la prueba de la voz y el zoom).
 const ESCENAS = env('ESCENAS') && env('ESCENAS') !== 'todas' ? env('ESCENAS').split(/[\s,]+/).filter(Boolean) : null
 const pide = (e) => !ESCENAS || ESCENAS.includes(e)
+/** El mes siguiente (AAAA-MM): el del recibo que queda preparado, sin enviar (nº100; como mesSiguiente de pasos.ts). */
+const mesSiguiente = (mes) => { const [a, m] = mes.split('-').map(Number); return m === 12 ? `${a + 1}-01` : `${a}-${String(m + 1).padStart(2, '0')}` }
 const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
@@ -183,8 +186,24 @@ async function ir(ruta, espera) {
     await page.locator('.cx-hueso').first().waitFor({ state: 'detached', timeout: 30_000 }).catch(() => {})
     await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => {})
     if (espera) await (typeof espera === 'string' ? page.getByText(espera).first() : espera).waitFor({ timeout: 30_000 }).catch(() => fallo(`${ruta}: no ha salido lo que se esperaba`))
-    await quieto(700)
+    await sinCargar()
   })
+}
+/**
+ * La prueba del nº99 grabó «Sumied · Cargando…» al volver de un corte: la app vuelve a pintar su pantalla de carga
+ * después de que la página ya parecía lista. Nunca se graba una pantalla cargando: dentro del corte se espera a que
+ * no haya ningún «Cargando…» ni esqueleto, y a que siga así un segundo entero.
+ */
+async function sinCargar() {
+  const cargando = () => page.evaluate(() => /Cargando(\.\.\.|…)|Entrando…/.test(document.body?.innerText ?? '') || !!document.querySelector('.cx-hueso, .pt-cargando'))
+  const hasta = Date.now() + 30_000
+  let quietos = 0
+  while (Date.now() < hasta && quietos < 3) {
+    await quieto(400)
+    quietos = (await cargando().catch(() => true)) ? 0 : quietos + 1
+  }
+  if (quietos < 3) fallo('una pantalla se ha quedado «Cargando…» más de 30 s')
+  await quieto(300)
 }
 async function foto(n) { await page.screenshot({ path: join(salida, 'capturas', `${n}.png`), style: '#__cursor,.__onda{display:none!important}' }).catch(() => {}) }
 const escena = (t) => { decir(`\n── ${t}`); R.marca(t.split(' ')[0], t) }
@@ -334,6 +353,17 @@ try {
       })
       decir(enviado ? '  · COBRO ENVIADO al sandbox.' : '  ✗ la base no dice enviado')
       if (!enviado) fallo('06: el cobro no se ha enviado')
+      // nº100 · Cobrado el mes, queda PREPARADO (sin enviar) el recibo del mes siguiente: el portal enseña «Tu próximo
+      // recibo» con su porqué. Como Julio, con la misma llamada que «Preparar el cobro» (conta-cobro, «preparar»).
+      if (enviado) await R.sinVer(async () => {
+        const siguiente = mesSiguiente(MES)
+        const r = await fetch(`${SUPABASE_URL}/functions/v1/conta-cobro`, { method: 'POST',
+          headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${julio.sesion.access_token}` },
+          body: JSON.stringify({ accion: 'preparar', empresa: SOCIEDAD, mes: siguiente }) })
+        const d = await r.json().catch(() => ({}))
+        if (!r.ok) fallo(`06: no se ha preparado el recibo de ${siguiente}: ${d.error ?? r.status}`)
+        else decir(`  · Preparado, sin enviar, el cobro de ${siguiente}: ${String(d.frase ?? '').slice(0, 160)}`)
+      })
     }
   }
   // ── 07 · Cobrado y facturado ───────────────────────────────────────────────
@@ -429,10 +459,10 @@ try {
         await page.evaluate(([ses, cli]) => { localStorage.setItem('sumied-portal', ses); localStorage.setItem('sumied-portal-cliente', cli) }, [JSON.stringify(s.sesion), u.party])
         await page.goto(`${APP}/portal.html#${pestana}`, { waitUntil: 'domcontentloaded' })
         await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => fallo(`11: el portal no ha cargado (${pestana})`))
-        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await quieto(600)
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await sinCargar()
       })
     }
-    const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await quieto(600) }) }
+    const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await sinCargar() }) }
     if (!tomas) { fallo('11: Tomás Ruiz no tiene usuario en el portal («Volver a empezar» lo deja listo)'); noToca(['11.1', '11.2', '11.4', '11.5', '11.6', '11.7'], 'Tomás Ruiz sin acceso') }
     else {
       await comoEnElPortal(tomas, 'inicio')
