@@ -8,6 +8,12 @@ name: GD · vídeo para QBO
 #                  las pantallas y los rótulos.
 #         grabar   prepara y ENVÍA el cobro de la demo al sandbox (autorizado
 #                  por Julio, nº52). No toca Bitrix24.
+#         comprobar  (nº92, nº93) NO GRABA y SOLO LEE: recorre la demo en vivo
+#                  (clientes, ficha, tarifa, cobro, factura, contabilidad, banco
+#                  y el portal, desde la gestoría y como el cliente) y dice en el
+#                  registro qué paso falla (scripts/video/gd/comprobar.mjs). Con
+#                  algún fallo, en rojo. No publica nada en video-salida/gd-qbo.
+#                  «escenas» no cuenta: lo recorre todo.
 #   Las escenas 5 y 7b son tomas de Julio en GIF (nº60), en la rama
 #   video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif, 05-sumied.gif y
 #   07b-buzon.gif. Sin la toma, su escena queda como hueco y se dice.
@@ -23,10 +29,10 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox'
+        description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox; comprobar = recorre la demo sin grabar y solo lee'
         required: true
         type: choice
-        options: [ensayo, grabar]
+        options: [ensayo, grabar, comprobar]
       escenas:
         description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,07c,08,09,10)'
         required: true
@@ -48,7 +54,76 @@ defaults:
     shell: bash
 
 jobs:
+  # nº92 · Comprobar la demo en vivo: sin grabar, solo leyendo. Rojo si algún paso falla.
+  comprobar:
+    if: inputs.modo == 'comprobar'
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SALIDA: ${{ github.workspace }}/comprobar-salida
+    steps:
+      - name: Solo desde main
+        run: |
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Comprueba la demo de producción: solo se lanza desde main."; exit 1; }
+          [[ "${{ inputs.mes }}" =~ ^20[0-9]{2}-(0[1-9]|1[0-2])$ ]] || { echo "::error::«mes» es AAAA-MM."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias y el navegador
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Proyecto y claves (enmascaradas)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          ANON=$(jq -r '[.[] | select(.type == "publishable")] | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$ANON" ] || ANON=$(jq -r '[.[] | select(.name == "anon")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
+          [ -n "$KEY" ] && [ -n "$ANON" ] || { echo "::error::No se pudieron obtener las claves del proyecto."; exit 1; }
+          echo "::add-mask::$KEY"; echo "::add-mask::$ANON"
+          { echo "SUPABASE_URL=https://$REF.supabase.co"; echo "SERVICE_KEY=$KEY"; echo "ANON_KEY=$ANON"; } >> "$GITHUB_ENV"
+
+      - name: Comprobar
+        timeout-minutes: 20
+        env:
+          MES: ${{ inputs.mes }}
+          APP: https://app.sumied.com
+        # Lo que dice va a un fichero (registro.txt), no al registro del run. Con algún ✗, sale en rojo.
+        run: mkdir -p comprobar-salida && node scripts/video/gd/comprobar.mjs > comprobar-salida/registro.txt 2>&1
+
+      - name: Resumen
+        if: always()
+        run: |
+          [ -f comprobar-salida/resumen.txt ] || exit 0
+          cat comprobar-salida/resumen.txt | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gd-comprobar
+          path: |
+            comprobar-salida/registro.txt
+            comprobar-salida/resumen.txt
+            comprobar-salida/capturas
+          retention-days: 14
+
   grabar:
+    if: inputs.modo != 'comprobar'
     environment: despliegue
     runs-on: ubuntu-latest
     timeout-minutes: 75
@@ -159,8 +234,8 @@ jobs:
         if: always()
         run: |
           if [ -f "$RUNNER_TEMP/gd-qbo-rojo.txt" ]; then
-            echo "::error title=Volver a empezar::$(cat "$RUNNER_TEMP/gd-qbo-rojo.txt")"
-            echo "### En rojo: «Volver a empezar» no ha acabado" >> "$GITHUB_STEP_SUMMARY"
+            echo "::error title=Volver a empezar::«Volver a empezar» no ha acabado: el porqué, en registro.txt."
+            cat "$RUNNER_TEMP/gd-qbo-rojo.txt" | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
             exit 1
           fi
           echo "«Volver a empezar»: bien, o no se pidió."
