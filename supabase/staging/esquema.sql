@@ -45715,7 +45715,7 @@ CREATE FUNCTION public.conta_linea_al_mes(p_linea uuid, p_mes date) RETURNS nume
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare l public.conta_linea; t public.conta_tarifa; v_mes date := date_trunc('month', p_mes)::date;
+declare l public.conta_linea; t public.conta_tarifa; v_mes date := date_trunc('month', p_mes)::date; v_su_mes boolean;
 begin
   select * into l from public.conta_linea where id = p_linea;
   if l.id is null then return null; end if;
@@ -45723,8 +45723,10 @@ begin
   if auth.uid() is not null and not public.belongs_to_account(l.account_id) then return null; end if;
   -- Fuera de sus meses, la línea no cuenta.
   if l.desde > v_mes or (l.hasta is not null and l.hasta < v_mes) then return 0; end if;
+  -- nº 89 · Una anual va entera en el mes del año de su «desde» y no cuenta en los demás.
+  v_su_mes := extract(month from l.desde) = extract(month from v_mes);
   if l.importe_propio is not null then
-    return case l.periodo when 'anio' then round(l.importe_propio / 12, 2) when 'unidad' then null else l.importe_propio end;
+    return case l.periodo when 'anio' then case when v_su_mes then l.importe_propio else 0 end when 'unidad' then null else l.importe_propio end;
   end if;
   select * into t from public.conta_tarifa x
    where x.company_id = l.company_id and x.servicio_id = l.servicio_id and x.party_id = l.party_id
@@ -45737,7 +45739,7 @@ begin
      order by x.desde desc limit 1;
   end if;
   if t.id is null then return null; end if;   -- sin tarifa: no se inventa un precio
-  return case t.periodo when 'anio' then round(t.importe / 12, 2) when 'unidad' then null else t.importe end;
+  return case t.periodo when 'anio' then case when v_su_mes then t.importe else 0 end when 'unidad' then null else t.importe end;
 end $$;
 
 
