@@ -85,15 +85,19 @@ Deno.serve(async (req) => {
       case 'leer': {
         const secreto = Deno.env.get('CRON_SECRET') ?? ''
         if (!secreto) throw new Error('Falta CRON_SECRET en las funciones: no se puede volver a leer.')
+        const empezo = new Date(Date.now() - 2000).toISOString()
         const r = await fetch(`${supabaseUrl}/functions/v1/conta-bitrix-leer`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'x-cron-secret': secreto },
           body: JSON.stringify({ accion: 'leer', cuenta }),
         })
         const d = (await r.json().catch(() => ({}))) as { frase?: string; error?: string }
         if (!r.ok) throw new Error(`La lectura del CRM ha fallado: ${d.error ?? r.status}`)
-        // conta-bitrix-leer espera a la lectura de cada GoCardless de la cuenta antes de contestar.
+        // conta-bitrix-leer espera a la lectura de cada GoCardless de la cuenta antes de contestar. Se miran solo las que
+        // lanza este paso (con el secreto del servidor: «cada_noche»), no las de los avisos del sandbox: al volver a
+        // sembrarlo llegan avisos que relanzan lecturas a la vez, y una puede chocar con esta sin que falte nada (nº79).
         const { data: lect } = await admin.from('conta_gestoria_lectura').select('origen, estado, mensaje')
-          .eq('account_id', cuenta).eq('origen', 'gocardless').order('empezada_at', { ascending: false }).limit(2)
+          .eq('account_id', cuenta).eq('origen', 'gocardless').eq('por', 'cada_noche').gte('empezada_at', empezo)
+          .order('empezada_at', { ascending: false })
         const gcs = (lect ?? []) as { estado: string | null; mensaje: string | null }[]
         const mal = gcs.find((l) => l.estado !== 'bien')
         if (!gcs.length) throw new Error('No se ha leído GoCardless después del CRM: ¿está conectado en la demo?')
