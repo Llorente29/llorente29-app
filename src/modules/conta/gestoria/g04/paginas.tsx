@@ -7,7 +7,7 @@
 
 import { useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
-import { rutaClienteGestoria, rutaClientesCuotas, rutaCobroGestoria, rutaTarifasGestoria } from '@/config/navegacion'
+import { rutaClienteGestoria, rutaClientesCuotas, rutaCobroGestoria, rutaFacturaVenta, rutaTarifasGestoria } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer as useLeerDeLibros } from '@/modules/conta/libros/contexto'
@@ -135,7 +135,7 @@ export function FichaClienteG04Page() {
   const deEmpresa = datos.servicios.filter((x) => x.company_id === e && x.activo !== false)
   const tras = async (p: Promise<{ frase: string } | string>) => { const r = await p; d.recargar(); return typeof r === 'string' ? r : r.frase }
   return (
-    <Ficha modelo={modelo} crm={nombreCrm} hoy={hoy} rutaVolver={rutaClientesCuotas()} rutaTarifa={rutaTarifasGestoria()} anadirAbierto={params.get('anadir') === '1'}
+    <Ficha modelo={modelo} crm={nombreCrm} hoy={hoy} rutaVolver={rutaClientesCuotas()} rutaTarifa={rutaTarifasGestoria()} rutaFactura={rutaFacturaVenta} anadirAbierto={params.get('anadir') === '1'}
       pestanaInicial={params.get('pestana') === 'portal' ? 'Portal' : undefined}
       portal={<PortalFicha cuenta={accountId!} cliente={cliente} nombreCliente={modelo.fila.nombre} esDemo={esDemo}
         serviciosPorTrabajador={deEmpresa.filter((x) => x.forma === 'por_empleado').map((x) => ({ id: String(x.id), nombre: String(x.nombre) }))} />}

@@ -35,6 +35,7 @@ export function datosDeFicha(x: unknown): DatosFicha {
   return {
     ficha: objeto(d.ficha), leidoAt: typeof d.leido_at === 'string' ? d.leido_at : null,
     mandatos: filas(d.mandatos), cobros: filas(d.cobros), suscripciones: filas(d.suscripciones), pendientes: filas(d.pendientes), personas: filas(d.personas),
+    facturas: filas(d.facturas), // la pestaña no pinta la factura de cada cobro
   }
 }
 

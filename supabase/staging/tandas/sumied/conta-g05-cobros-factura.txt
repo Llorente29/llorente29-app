@@ -1,0 +1,5 @@
+# G05 · La 1342 (la factura de cada cobro en la ficha, nº 84). Su prueba (ROLLBACK,
+# datos inventados, en la cuenta A) mira el cobro con su factura, el de sin
+# factura, que el recibo sin cobro no sale, otra cuenta sin nada y la vuelta atrás.
+supabase/migrations/20261110T1342_g05_ficha_facturas.sql
+supabase/staging/sql/20261110_g05_ficha_facturas_prueba.sql
