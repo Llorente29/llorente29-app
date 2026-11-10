@@ -152,13 +152,16 @@ filtros.push(`[todo]scale=w='trunc(${W}*(${Z})/2)*2':h='trunc(${H}*(${Z})/2)*2':
   // (se quedaba en 1920 y el recorte, clavado arriba a la izquierda: run 41495352215). Va con el zoom.
   `crop=${W}:${H}:x='clip((${CX})*(${Z})-${W / 2},0,${W}*((${Z})-1))':y='clip((${CY})*(${Z})-${H / 2},0,${H}*((${Z})-1))'[zz]`)
 filtros.push(`[zz]ass=${join(salida, 'subtitulos.ass').replace(/:/g, '\\:')}[v]`)
+// nº120 · Con el vídeo entero, el filtro (cada tramo y cada fotograma del zoom) no cabe en la línea de órdenes
+// (run 22: «spawnSync ffmpeg E2BIG»): va en un fichero, y ffmpeg lo lee de ahí.
+const guion = (nombre, texto) => { const f = join(salida, `filtro-${nombre}.txt`); writeFileSync(f, texto); return f }
 const mp4 = join(salida, `${NOMBRE}.mp4`)
 const sinVoz = join(salida, `${NOMBRE}-sin-voz.mp4`)
 execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
   '-loop', '1', '-t', PORTADA.toFixed(2), '-i', join(salida, existsSync(join(salida, 'portada-video.png')) ? 'portada-video.png' : 'portada.png'),
   '-i', join(salida, 'crudo.webm'),
   '-loop', '1', '-t', CIERRE.toFixed(2), '-i', join(salida, 'cierre.png'),
-  '-filter_complex', filtros.join(';'), '-map', '[v]',
+  '-filter_complex_script', guion('video', filtros.join(';')), '-map', '[v]',
   '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '26', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', sinVoz], { stdio: 'inherit' })
 console.log(`Montado: ${total.toFixed(1)} s (crudo ${T.fin.toFixed(1)} s, ${cortes.length} cortes, ${quedan.length} tramos, ${dichos.length} frases).`)
 
@@ -173,7 +176,7 @@ if (sonidos.length) {
   const mezcla = sonidos.map((d, i) => `[${i}:a]aresample=48000,adelay=${Math.round(d.a * 1000)}:all=1[a${i}]`).join(';') +
     `;${sonidos.map((_, i) => `[a${i}]`).join('')}amix=inputs=${sonidos.length}:normalize=0,apad,atrim=0:${total.toFixed(2)},alimiter=limit=0.95:level=false[voz]`
   const m4a = join(salida, 'voz.m4a')
-  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...entradas, '-filter_complex', mezcla, '-map', '[voz]', '-c:a', 'aac', '-b:a', '192k', m4a])
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', ...entradas, '-filter_complex_script', guion('voz', mezcla), '-map', '[voz]', '-c:a', 'aac', '-b:a', '192k', m4a])
   execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', sinVoz, '-i', m4a, '-map', '0:v', '-map', '1:a', '-c', 'copy', '-shortest', '-movflags', '+faststart', mp4])
   console.log(`Con voz: ${sonidos.length} frases.`)
 } else {

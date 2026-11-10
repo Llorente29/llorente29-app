@@ -136,7 +136,9 @@ await julio.cliente.rpc('cambiar_empresa', { p_account_id: CUENTA })
 const { data: perfil } = await admin.from('user_profiles').select('display_name').eq('account_id', CUENTA).eq('user_id', JULIO).maybeSingle()
 
 const dirVideo = join(salida, 'video-tmp')
+// nº123 · Como desde España: idioma es-ES (también en lo que pide al servidor, que Stripe mira) y hora de Madrid.
 const ctx = await navegador.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: 'es-ES', timezoneId: 'Europe/Madrid', acceptDownloads: true,
+  extraHTTPHeaders: { 'Accept-Language': 'es-ES,es;q=0.9' },
   ...(GRABA ? { recordVideo: { dir: dirVideo, size: { width: W, height: H } } } : {}) })
 await ctx.addInitScript(`(() => { try {
   localStorage.setItem(${JSON.stringify(`sb-${REF}-auth-token`)}, ${JSON.stringify(JSON.stringify(julio.sesion))});
@@ -252,6 +254,21 @@ async function ponerTomas(fs) {
       img{max-width:100%;max-height:100%;object-fit:contain}</style></head><body><div class="f">${celdas}</div></body></html>`)
     await quieto(400)
   })
+}
+
+/** nº120 · Casa, como el agente de Conciliación, cada liquidación pagada del mes del cobro que ya tiene su ingreso en el banco. */
+async function casarLiquidaciones() {
+  const { data: pos } = await admin.from('conta_gc_payout').select('gc_id, importe, llegada').eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
+    .eq('estado', 'paid').is('match_id', null).gte('llegada', `${MES}-01`)
+  for (const po of pos ?? []) {
+    const { data: mov } = await admin.from('bank_movement').select('id').eq('account_id', CUENTA).eq('company_id', SOCIEDAD)
+      .eq('op_date', po.llegada).eq('amount', po.importe).limit(1).maybeSingle()
+    if (!mov) continue
+    const euros = Number(po.importe).toFixed(2).replace('.', ',')
+    const { error } = await julio.cliente.rpc('conta_abono_gocardless_casar', { p_movement: mov.id, p_payout: po.gc_id, p_confianza: 'seguro',
+      p_porque: `Pago de GoCardless que llegaba el ${po.llegada.slice(8, 10)}/${po.llegada.slice(5, 7)}: ${euros} € netos, exactos.`, p_por: 'folvy' })
+    if (error) decir(`  · no se ha casado la liquidación ${po.gc_id}: ${error.message}`)
+  }
 }
 
 let inicio = 0
@@ -420,8 +437,11 @@ try {
       await di('07.4', () => a(page.getByText('En la contabilidad')))
       let png = null
       await R.sinVer(async () => {
-        const b = page.getByText('Descargar PDF').first()
-        const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), b.click()]).catch(() => [null])
+        // nº120 · El PDF se hace después de emitir la factura: el botón sale apagado un rato (run 22). Se espera a que se
+        // encienda, recargando si hace falta, antes de pulsar.
+        const b = page.getByRole('button', { name: 'Descargar PDF' }).first()
+        for (let i = 0; i < 12 && !(await b.isEnabled().catch(() => false)); i++) { await quieto(5000); if (i % 4 === 3) { await page.reload({ waitUntil: 'domcontentloaded' }).catch(() => {}); await sinCargar() } }
+        const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), b.click({ timeout: 15_000 })]).catch(() => [null])
         if (!d) { fallo('07.5: el PDF no se ha bajado'); return }
         const f = join(salida, 'factura.pdf'); await d.saveAs(f)
         execFileSync('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', f, join(salida, 'factura')])
@@ -451,10 +471,15 @@ try {
     ing = await ingresoDe(tr.id)
     if (GRABA && enviado) {
       await R.sinVer(async () => {
+        // nº120 · El agente de Conciliación pasa después de cada extracto y, si hoy no ha pasado, la primera vez que
+        // alguien abre Bancos (bancosPantallas.ts, pasarAgente). En la demo ya había pasado ese día y nadie lo casaba:
+        // el run 22 esperó 45 min en balde. Lo hace el guion como lo haría él («seguro», por Folvy), con las mismas
+        // funciones que «Volver a empezar» en la historia de Talleres: cada liquidación pagada del mes con su ingreso.
         await esperaHasta(`ingreso de ${CLIENTE} casado en el banco`, async () => {
           await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(() => {}, () => {})
+          await casarLiquidaciones()
           ing = await ingresoDe(tr.id); return !!ing?.casado
-        }, 45)
+        }, 10)
         await validarIngresosFacturados(julio.cliente, perfil?.display_name ?? null)
       })
     }
@@ -530,12 +555,25 @@ try {
         await ra.clic(pagar, 600)
         await R.sinVer(async () => { await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 }).catch(() => fallo('11.3: no se ha abierto la página de pago de Stripe')); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(800) })
         try {
+          // nº120 · GitHub graba desde Estados Unidos: Stripe propone dólares, país «Estados Unidos» (pide el código
+          // postal) y Link marcado (pide un teléfono), y «Pagar» no seguía (run 22). En euros, España y sin Link.
+          await R.sinVer(async () => {
+            const eur = page.locator('button, [role="radio"], label').filter({ hasText: /\d,\d{2}\s*€/ }).first()
+            if (await eur.isVisible().catch(() => false)) { await eur.click().catch(() => {}); await quieto(800) }
+          })
           const tarjetaBtn = page.locator('[data-testid="card-accordion-item-button"]')
           if (await tarjetaBtn.isVisible().catch(() => false)) await ra.clic(tarjetaBtn, 600)
           for (const [sel, v] of [['#cardNumber', '4242 4242 4242 4242'], ['#cardExpiry', '12 / 34'], ['#cardCvc', '123'], ['#billingName', 'Felipe Herrera']]) {
             const c = page.locator(sel)
             if (await c.isVisible().catch(() => false)) { await ra.clic(c, 500); await c.pressSequentially(v, { delay: 45 }) }
           }
+          await R.sinVer(async () => {
+            const pais = page.locator('#billingCountry')
+            if (await pais.isVisible().catch(() => false)) await pais.selectOption('ES').catch(() => {})
+            const link = page.locator('#enableStripePass')
+            if (await link.isChecked().catch(() => false)) await link.uncheck({ force: true }).catch(() => {})
+            await quieto(500)
+          })
           await ra.clic(page.locator('[data-testid="hosted-payment-submit-button"], button[type="submit"]').first(), 700)
           await R.sinVer(async () => { await page.waitForURL(/portal\.html/, { timeout: 90_000 }); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(2500) })
           await foto('11-pagado')
