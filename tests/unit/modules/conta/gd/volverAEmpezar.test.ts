@@ -79,3 +79,13 @@ describe('GD · nº68 · los cambios del cobro del mes que viene', () => {
     expect((150 - 90) / 90).toBeGreaterThan(0.3)
   })
 })
+
+describe('GD · nº71 · «Tu cuenta» en el menú de Ajustes de la izquierda', () => {
+  it('sale en una cuenta demo y no en las demás', async () => {
+    const { PRODUCTOS, pestanasVisibles } = await import('@/modules/conta/esqueleto/productos')
+    const ajustes = PRODUCTOS.find((p) => p.id === 'ajustes')!
+    const ids = (demo: boolean) => pestanasVisibles(ajustes, { hosteleria: false, diez: false, interruptores: new Set(), demo }).map((t) => t.id)
+    expect(ids(true)).toContain('cuenta')
+    expect(ids(false)).not.toContain('cuenta')
+  })
+})
