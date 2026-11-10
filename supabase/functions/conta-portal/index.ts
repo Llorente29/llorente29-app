@@ -151,7 +151,9 @@ async function archivo(yo: Sb, srv: Sb, b: Fila) {
   const { data, error } = await yo.rpc('conta_portal_archivo', { p_party: cliente, p_tipo: String(b.tipo ?? ''), p_id: id, p_indice: Number(b.indice ?? 0) || 0 })
   if (error || !data) return mal(fraseBase(error))
   const f = data as { almacen: string; ruta: string; nombre: string }
-  const firmar = () => srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300, { download: nombreSeguro(f.nombre) })
+  // nº 30 · Sin «download»: el enlace firmado se ABRE en la pestaña nueva (el visor del navegador, con su botón de
+  // descargar). Con «download» el almacén lo manda como descarga y la pestaña que abrió el portal se queda en blanco.
+  const firmar = () => srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300)
   let { data: s, error: e2 } = await firmar()
   // nº 28 · En la demo, los justificantes y las nóminas sembrados («demo/<cuenta>/…») no tienen fichero: se hace la primera vez.
   if ((e2 || !s?.signedUrl) && await pdfDeLaDemo(srv, f)) ({ data: s, error: e2 } = await firmar())
