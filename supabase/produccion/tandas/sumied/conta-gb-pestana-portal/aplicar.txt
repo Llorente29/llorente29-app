@@ -1,0 +1,12 @@
+# GB · nº 9, punto 5 · «Su portal» en la pestaña de Bitrix24: quién entra y «Hacerla».
+# Rama conta/gb-pestana-portal. VA DESPUÉS DEL REAL DE LA 2235 (#549): apunta en
+# su tabla. Se ensaya y se aplica desde main nombrando esta rama. El real lo lanza Julio.
+#
+#   2300  Añade _conta_bitrix_pestana_bitrix_de y conta_bitrix_pestana_portal
+#         (solo el servidor: actúa como la persona y llama a conta_portal_ficha y
+#         conta_portal_solicitud_hacer, las de Code 3). No llama a nada: no
+#         cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-portal.sql
+supabase/migrations/20261109T2300_gb_pestana_portal.sql

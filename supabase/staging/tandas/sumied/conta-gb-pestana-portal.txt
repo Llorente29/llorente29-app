@@ -1,0 +1,3 @@
+# GB · nº 9, punto 5 · «Su portal» en la pestaña: la 2300 y su prueba (ROLLBACK). Va después de la 2235.
+supabase/migrations/20261109T2300_gb_pestana_portal.sql
+supabase/staging/sql/20261109_gb_pestana_portal_prueba.sql

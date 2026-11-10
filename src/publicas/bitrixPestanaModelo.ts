@@ -138,6 +138,7 @@ export type Cambio =
   | { accion: 'alta'; servicio: string; nombre: string; desde: string }
   | { accion: 'baja'; linea: string; mes: string }
   | { accion: 'tarifa'; linea: string; servicio: string; nivel: string | null; precio: number | null; porTrabajador: boolean; motivo: string; desde: string }
+  | { accion: 'solicitud'; solicitud: string; tipo: 'alta' | 'baja'; nombre: string; servicio: string | null; desde: string }
 
 const MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
 export const nombreDelMes = (mes: string) => MES[Number(mes.slice(5, 7)) - 1] ?? mes
@@ -146,6 +147,12 @@ export const nombreDelMes = (mes: string) => MES[Number(mes.slice(5, 7)) - 1] ??
 function conElCambio(clientes: unknown, clienteId: string, empresaId: string, c: Cambio): Fila {
   const d = objeto(clientes)
   const asignaciones = filas(d.asignaciones)
+  // Lo que pide el cliente en su portal es un alta o una baja como las de la pestaña.
+  if (c.accion === 'solicitud') {
+    if (c.tipo === 'alta') return c.servicio ? conElCambio(clientes, clienteId, empresaId, { accion: 'alta', servicio: c.servicio, nombre: c.nombre, desde: c.desde }) : d
+    const linea = asignaciones.find((a) => String(a.cliente_id) === clienteId && String(a.empleado_nombre ?? '').toUpperCase() === c.nombre.toUpperCase() && !a.hasta)
+    return linea ? conElCambio(clientes, clienteId, empresaId, { accion: 'baja', linea: String(linea.id).replace(/^linea:/, ''), mes: c.desde }) : d
+  }
   if (c.accion === 'alta') {
     return { ...d, asignaciones: [...asignaciones, { id: 'prevista', tipo: 'cuota', cliente_id: clienteId, empresa_id: empresaId, servicio_id: c.servicio,
       nivel_id: null, paquete_id: null, empleado_nombre: c.nombre.trim().toUpperCase(), importe_propio: null, periodo: 'mes', desde: c.desde, hasta: null }] }
@@ -171,3 +178,69 @@ export function reciboPrevisto(r: Fila, hoy: string, empresaId: string, c: Cambi
     : `El recibo de ${nombreDelMes(mes)} pasa de ${euros(antes)} a ${euros(despues)} (${dif > 0 ? '+' : '−'}${euros(Math.abs(dif))}).`
   return { mes, antes, despues, frase }
 }
+
+// ── nº 9, punto 5 · Su portal ───────────────────────────────────────────────
+
+export interface Portal {
+  accesos: { nombre: string; permiso: string; entro: boolean }[]
+  solicitudes: { id: string; tipo: 'alta' | 'baja'; nombre: string; fecha: string; texto: string }[]
+  mensajesSinLeer: number
+}
+
+const fechaCorta = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}`
+
+/** Lo que devuelve conta-bitrix-pestana (paso «portal»), para pintar «Su portal». */
+export function modeloPortal(x: unknown): Portal | null {
+  const d = objeto(x)
+  if (d.estado !== 'ok') return null
+  return {
+    accesos: filas(d.accesos).map((a) => ({ nombre: String(a.nombre ?? a.correo ?? ''), permiso: a.permiso === 'todo' ? 'Todo' : 'Solo facturas y documentos', entro: !!a.entro })),
+    solicitudes: filas(d.solicitudes).map((s) => {
+      const tipo = s.tipo === 'baja' ? 'baja' : 'alta'
+      const fecha = String(s.fecha ?? '')
+      return { id: String(s.id), tipo, nombre: String(s.nombre ?? ''), fecha,
+        texto: `Pide ${tipo === 'alta' ? 'un alta' : 'una baja'}: ${String(s.nombre ?? '')}, ${tipo === 'alta' ? 'desde el' : 'el'} ${fechaCorta(fecha)}` }
+    }),
+    mensajesSinLeer: Number(d.mensajes_sin_leer ?? 0),
+  }
+}
+
+/**
+ * nº 10 · Las pestañas por área de la pestaña Sumied (maqueta «Trabajar desde
+ * Bitrix24», versión 27): Resumen · Cuotas y cobros · Laboral · Portal. Solo
+ * las que tienen algo hoy: Impuestos, Contabilidad y Documentos llegarán
+ * cuando existan. Todo sale de lo ya leído (la lectura y la del portal): ni
+ * una lectura más.
+ */
+export type Area = 'resumen' | 'cobros' | 'laboral' | 'portal'
+
+export interface Pendiente { area: Exclude<Area, 'resumen'>; etiqueta: string; tono: Tono; texto: string; boton: string }
+
+/** «Lo pendiente con este cliente»: cada línea lleva a su pestaña. */
+export function pendientesDe(p: Pestana, pt: Portal | null): Pendiente[] {
+  const out: Pendiente[] = []
+  const devueltos = p.cobros.filter((c) => c.tono === 'mal')
+  for (const c of devueltos) out.push({ area: 'cobros', etiqueta: 'Cobros', tono: 'mal', texto: `Recibo del ${c.fecha} ${c.estado.toLowerCase()} · ${c.importe}`, boton: 'Ver' })
+  if (!devueltos.length && p.aviso?.tono === 'mal') out.push({ area: 'cobros', etiqueta: 'Cobros', tono: 'mal', texto: p.aviso.texto, boton: 'Ver' })
+  for (const x of p.pendientes) out.push({ area: 'cobros', etiqueta: 'Revisar', tono: 'aviso', texto: x.porque, boton: 'Ver' })
+  for (const s of pt?.solicitudes ?? []) out.push({ area: 'portal', etiqueta: 'Portal', tono: 'aviso', texto: s.texto, boton: 'Ver' })
+  if (pt?.mensajesSinLeer) out.push({ area: 'portal', etiqueta: 'Portal', tono: 'neutro',
+    texto: `${pt.mensajesSinLeer} ${pt.mensajesSinLeer === 1 ? 'mensaje sin contestar' : 'mensajes sin contestar'}`, boton: 'Contestar' })
+  return out
+}
+
+/** Las pestañas, con su aviso en la que tiene algo pendiente (y cuántos trabajadores en Laboral). */
+export function areasDe(p: Pestana, pt: Portal | null): { id: Area; nombre: string; chip: string; tono: Tono | null }[] {
+  const pend = pendientesDe(p, pt)
+  const de = (a: Area) => pend.filter((x) => x.area === a)
+  const cobros = de('cobros'); const portal = de('portal')
+  return [
+    { id: 'resumen', nombre: 'Resumen', chip: '', tono: null },
+    { id: 'cobros', nombre: 'Cuotas y cobros', chip: cobros.length ? String(cobros.length) : '', tono: cobros.length ? (cobros.some((x) => x.tono === 'mal') ? 'mal' : 'aviso') : null },
+    { id: 'laboral', nombre: 'Laboral', chip: String(p.trabajadores.length), tono: 'neutro' },
+    { id: 'portal', nombre: 'Portal', chip: portal.length ? String(portal.length) : '', tono: portal.length ? 'aviso' : null },
+  ]
+}
+
+/** En qué pestaña va cada formulario: abrir uno lleva a la suya. */
+export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal' }
