@@ -1,7 +1,7 @@
 // src/publicas/bitrixPestana.ts
 //
-// GB · La pestaña «Sumied» dentro de la ficha de Bitrix24 (primera parte: solo
-// ver). Entrada aparte de Vite, como pagar.html: no pasa por la app ni lleva
+// GB · La pestaña «Sumied» dentro de la ficha de Bitrix24. Desde el nº 10, con
+// sus pestañas por área (Resumen · Cuotas y cobros · Laboral · Portal). Entrada aparte de Vite, como pagar.html: no pasa por la app ni lleva
 // React, para abrir en menos de 1 segundo dentro de la pestaña.
 //
 //   · Llega desde conta-bitrix-pestana con el token, el portal y la ficha
@@ -15,7 +15,7 @@
 
 import { rutaClienteGestoria } from '../config/navegacion'
 import { hoyEnMadrid } from '../modules/conta/lib/formato'
-import { FRASE_DE, leerAlmohadilla, modeloPestana, modeloPortal, nombreDelMes, reciboPrevisto, type Cambio, type Estado, type Pestana, type Portal } from './bitrixPestanaModelo'
+import { AREA_DE, areasDe, FRASE_DE, leerAlmohadilla, modeloPestana, modeloPortal, nombreDelMes, pendientesDe, reciboPrevisto, type Area, type Cambio, type Estado, type Pestana, type Portal } from './bitrixPestanaModelo'
 
 const URL_BASE = import.meta.env.VITE_SUPABASE_URL as string | undefined
 const CLAVE = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined
@@ -38,9 +38,13 @@ const vista: {
   abierto: null | { tipo: 'alta' } | { tipo: 'baja'; linea: string; nombre: string } | { tipo: 'tarifa'; linea: string } | { tipo: 'solicitud'; id: string }
   /** nº 9, punto 5 · Su portal (se lee después de pintar, para no retrasar la pestaña). */
   portal: Portal | null
+  /** nº 10 · Si ya se intentó leer el portal (para decir «Leyendo…» o que no se pudo). */
+  portalLeido: boolean
+  /** nº 10 · La pestaña de área abierta: abre en Resumen. */
+  area: Area
   hecho: null | { titulo: string; texto: string; bitrix: string; tono: 'bien' | 'aviso' | 'mal' }
   guardando: boolean
-} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null }
+} = { ficha: null, r: null, abierto: null, hecho: null, guardando: false, portal: null, portalLeido: false, area: 'resumen' }
 
 function cabeza(texto: string, chip?: { texto: string; tono: string }): HTMLElement {
   return h('div', { class: 'cabeza' }, h('span', { class: 'logo' }, 'Sumied'), h('span', { class: 'cabeza-texto' }, texto),
@@ -58,6 +62,64 @@ function pintar(p: Pestana) {
   const enSumied = `${window.location.origin}${rutaClienteGestoria(p.clienteId, p.empresaId)}`
   const abrir = h('a', { class: 'abrir', href: enSumied, target: '_blank', rel: 'noopener' }, 'Abrir en Sumied ↗')
 
+  // nº 10 · Las pestañas por área, con su aviso. Cambiar de pestaña no lee nada: todo está ya leído.
+  const pestanas = h('div', { class: 'areas', role: 'tablist', 'aria-label': 'Áreas de Sumied' })
+  for (const a of areasDe(p, vista.portal)) {
+    const b = h('button', { type: 'button', role: 'tab', class: 'area', 'aria-selected': String(vista.area === a.id), 'data-area': a.id },
+      a.nombre, a.chip && a.tono ? h('span', { class: 'area-chip', 'data-tono': a.tono }, a.chip) : null)
+    b.addEventListener('click', () => irA(a.id))
+    pestanas.append(b)
+  }
+
+  const recibo = bloqueRecibo(p)
+  const [izquierda, derecha] = vista.area === 'cobros' ? [[bloqueServicios(p)], [recibo, bloqueCobros(p, enSumied)]]
+    : vista.area === 'laboral' ? [[bloqueTrabajadores(p, enSumied)], [recibo]]
+      : vista.area === 'portal' ? [[vista.portal ? suPortal(p, vista.portal, enSumied) : h('section', { class: 'bloque' }, h('h2', {}, 'Su portal'),
+        h('div', { class: 'vacio' }, vista.portalLeido ? 'No se ha podido leer su portal. Ábrelo en Sumied.' : 'Leyendo su portal…'))], [recibo]]
+        : [[bloquePendiente(p), bloqueDatos(p)], [recibo, bloqueCobros(p, enSumied)]]
+
+  raiz().replaceChildren(
+    cabeza(`Cuotas, recibos y facturas${p.emisora ? ` · le factura ${p.emisora}` : ''}`, { texto: p.situacion.texto, tono: p.situacion.tono }),
+    pestanas,
+    h('div', { class: 'cuerpo', role: 'tabpanel', 'data-area': vista.area },
+      h('div', { class: 'cliente' }, h('h1', {}, p.cliente),
+        p.desde ? h('span', { class: 'pequeno' }, p.desde) : null,
+        p.personaDeContacto ? h('span', { class: 'pequeno' }, '· Es una persona de contacto de este cliente') : null),
+      vista.hecho ? h('div', { class: 'aviso hecho', role: 'status', 'data-tono': vista.hecho.tono, 'data-prueba': 'hecho' },
+        h('b', {}, vista.hecho.titulo), h('div', {}, vista.hecho.texto), h('div', { class: 'pequeno-claro' }, vista.hecho.bitrix)) : null,
+      p.aviso ? h('div', { class: 'aviso', role: 'status', 'data-tono': p.aviso.tono }, p.aviso.texto) : null,
+      h('div', { class: 'rejilla' }, h('div', { class: 'columna' }, ...izquierda), h('div', { class: 'columna' }, ...derecha, abrir))))
+  // Lo que mide la e2e: cuánto tarda en estar pintada desde que se abre (menos de 1 s).
+  performance.mark('gb-pintada')
+}
+
+/** Cambiar de pestaña: cierra lo que estuviera a medias y no lee nada. */
+function irA(a: Area) { vista.area = a; vista.abierto = null; vista.hecho = null; repintar() }
+
+/** Resumen · «Lo pendiente con este cliente»: cada línea lleva a su pestaña. */
+function bloquePendiente(p: Pestana): HTMLElement {
+  const caja = h('section', { class: 'bloque', 'aria-labelledby': 'gb-pend' }, h('h2', { id: 'gb-pend' }, 'Lo pendiente con este cliente'))
+  const lista = pendientesDe(p, vista.portal)
+  if (!lista.length) caja.append(h('div', { class: 'vacio' }, vista.portal || vista.portalLeido ? 'Nada pendiente.' : 'Nada pendiente en cuotas y cobros. Leyendo su portal…'))
+  for (const x of lista) {
+    caja.append(h('div', { class: 'fila', 'data-prueba': 'pendiente' },
+      h('span', {}, h('span', { class: 'etiqueta', 'data-tono': x.tono }, x.etiqueta), x.texto),
+      h('span', { class: 'derecha con-enlace' }, enlaceBoton(`${x.boton} →`, () => irA(x.area)))))
+  }
+  return caja
+}
+
+/** Resumen · Lo que tiene, de un vistazo. */
+function bloqueDatos(p: Pestana): HTMLElement {
+  const dato = (t: string, v: string) => h('div', {}, h('div', { class: 'pequeno' }, t), h('b', {}, v))
+  return h('section', { class: 'bloque datos' },
+    dato('Servicios', p.servicios.map((s) => s.texto.replace(/ · .*$/, '')).join(' · ') || 'Ninguno'),
+    dato('Trabajadores', String(p.trabajadores.length)),
+    dato('Mandato', p.mandato ? p.mandato.texto.charAt(0).toUpperCase() + p.mandato.texto.slice(1) : 'Sin mandato'))
+}
+
+/** Cuotas y cobros · Servicios, con «Cambiar» (nivel y precio especial) y los trabajos sueltos. */
+function bloqueServicios(p: Pestana): HTMLElement {
   const servicios = h('section', { class: 'bloque', 'aria-labelledby': 'gb-serv' }, h('h2', { id: 'gb-serv' }, 'Servicios que tiene'))
   if (!p.servicios.length && !p.sueltos.length) servicios.append(h('div', { class: 'vacio' }, 'No tiene servicios en Sumied.'))
   for (const s of p.servicios) {
@@ -66,7 +128,11 @@ function pintar(p: Pestana) {
     if (vista.abierto?.tipo === 'tarifa' && vista.abierto.linea === s.lineaId) servicios.append(formulario(p))
   }
   for (const s of p.sueltos) servicios.append(h('div', { class: 'fila' }, h('span', {}, h('b', {}, s.texto), h('div', { class: 'pequeno' }, 'Trabajo suelto')), h('span', { class: 'derecha' }, s.importe)))
+  return servicios
+}
 
+/** Laboral · Trabajadores, con «Dar de alta» y «Dar de baja». */
+function bloqueTrabajadores(p: Pestana, enSumied: string): HTMLElement {
   const trabajadores = h('section', { class: 'bloque', 'aria-labelledby': 'gb-trab' },
     h('div', { class: 'titulo-con-boton' }, h('h2', { id: 'gb-trab' }, `Trabajadores · ${p.trabajadores.length}`),
       p.serviciosPorTrabajador.length && !vista.abierto ? boton('+ Dar de alta', 'primario', () => abrir_({ tipo: 'alta' })) : null))
@@ -79,14 +145,10 @@ function pintar(p: Pestana) {
         t.lineaId && !vista.abierto ? enlaceBoton('Dar de baja', () => abrir_({ tipo: 'baja', linea: t.lineaId!, nombre: t.nombre })) : null)))
   }
   if (p.trabajadores.length > A_LA_VISTA) trabajadores.append(h('a', { href: enSumied, target: '_blank', rel: 'noopener' }, `Ver los ${p.trabajadores.length} en Sumied →`))
+  return trabajadores
+}
 
-  const izquierda = h('div', { class: 'columna' }, servicios, trabajadores)
-  if (p.pendientes.length) {
-    const pend = h('section', { class: 'bloque', 'aria-labelledby': 'gb-pend' }, h('h2', { id: 'gb-pend' }, `Pendiente de revisar · ${p.pendientes.length}`))
-    for (const x of p.pendientes) pend.append(h('div', { class: 'fila' }, h('span', {}, x.porque)))
-    izquierda.append(pend)
-  }
-
+function bloqueRecibo(p: Pestana): HTMLElement {
   const recibo = h('section', { class: 'recibo', 'aria-labelledby': 'gb-rec' },
     h('div', { id: 'gb-rec', class: 'antetitulo' }, `Recibo de ${p.mesRecibo}`),
     h('div', { class: 'total' }, p.totalRecibo))
@@ -96,28 +158,17 @@ function pintar(p: Pestana) {
       h('span', {}, l.texto, h('div', { class: 'detalle' }, l.detalle), ...l.porque.map((x) => h('span', { class: 'porque' }, x))),
       h('b', { style: 'white-space: nowrap' }, l.importe)))
   }
+  return recibo
+}
 
+function bloqueCobros(p: Pestana, enSumied: string): HTMLElement {
   const cobros = h('section', { class: 'bloque', 'aria-labelledby': 'gb-cob' }, h('h2', { id: 'gb-cob', style: 'font-size: 15px' }, 'Cobros'))
   cobros.append(h('div', { class: 'cobro' }, h('span', { style: 'color: var(--suave)' }, 'Mandato SEPA'),
     p.mandato ? h('span', { class: TONO_A_CLASE[p.mandato.tono] }, p.mandato.texto.charAt(0).toUpperCase() + p.mandato.texto.slice(1)) : h('span', { class: 'estado-neutro' }, 'Sin mandato')))
   if (!p.cobros.length) cobros.append(h('div', { class: 'vacio' }, 'Ningún cobro en los últimos 12 meses.'))
   for (const c of p.cobros) cobros.append(h('div', { class: 'cobro' }, h('span', {}, `${c.fecha} · ${c.importe}`), h('span', { class: TONO_A_CLASE[c.tono] }, c.estado)))
   if (p.hayMasCobros) cobros.append(h('a', { href: enSumied, target: '_blank', rel: 'noopener' }, `Ver los ${p.cobros.length + p.hayMasCobros} cobros →`))
-
-  const derecha = h('div', { class: 'columna' }, recibo, cobros, ...(vista.portal ? [suPortal(p, vista.portal, enSumied)] : []), abrir)
-
-  raiz().replaceChildren(
-    cabeza(`Cuotas, recibos y facturas${p.emisora ? ` · le factura ${p.emisora}` : ''}`, { texto: p.situacion.texto, tono: p.situacion.tono }),
-    h('div', { class: 'cuerpo' },
-      h('div', { class: 'cliente' }, h('h1', {}, p.cliente),
-        p.desde ? h('span', { class: 'pequeno' }, p.desde) : null,
-        p.personaDeContacto ? h('span', { class: 'pequeno' }, '· Es una persona de contacto de este cliente') : null),
-      vista.hecho ? h('div', { class: 'aviso hecho', role: 'status', 'data-tono': vista.hecho.tono, 'data-prueba': 'hecho' },
-        h('b', {}, vista.hecho.titulo), h('div', {}, vista.hecho.texto), h('div', { class: 'pequeno-claro' }, vista.hecho.bitrix)) : null,
-      p.aviso ? h('div', { class: 'aviso', role: 'status', 'data-tono': p.aviso.tono }, p.aviso.texto) : null,
-      h('div', { class: 'rejilla' }, izquierda, derecha)))
-  // Lo que mide la e2e: cuánto tarda en estar pintada desde que se abre (menos de 1 s).
-  performance.mark('gb-pintada')
+  return cobros
 }
 
 function boton(texto: string, tipo: 'primario' | 'normal', alPulsar: () => void, desactivado = false): HTMLElement {
@@ -131,7 +182,7 @@ function enlaceBoton(texto: string, alPulsar: () => void): HTMLElement {
   b.addEventListener('click', alPulsar)
   return b
 }
-function abrir_(a: NonNullable<typeof vista.abierto>) { vista.abierto = a; vista.hecho = null; repintar() }
+function abrir_(a: NonNullable<typeof vista.abierto>) { vista.abierto = a; vista.area = AREA_DE[a.tipo]; vista.hecho = null; repintar() }
 function cerrar_() { vista.abierto = null; repintar() }
 function repintar() {
   const m = vista.r ? modeloPestana(vista.r, hoyEnMadrid()) : null
@@ -250,6 +301,7 @@ function suPortal(p: Pestana, pt: Portal, enSumied: string): HTMLElement {
 async function leerPortal() {
   if (!vista.ficha) return
   try { vista.portal = modeloPortal(await llamar({ paso: 'portal', ...vista.ficha })) } catch { vista.portal = null }
+  vista.portalLeido = true
   if (!vista.abierto) repintar()
 }
 

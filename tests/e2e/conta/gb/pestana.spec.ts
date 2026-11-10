@@ -83,21 +83,44 @@ test('con acceso: el cliente, el recibo línea a línea, los cobros, los servici
   await expect(cobros.locator('.cobro')).toHaveCount(5)
   await expect(cobros.locator('.estado-mal')).toHaveText('Devuelto')
   await expect(cobros.getByRole('link', { name: 'Ver los 5 cobros →' })).toBeVisible()
-  // Los servicios, los trabajadores y lo pendiente.
+  // nº 10 · Las pestañas por área: abre en Resumen, con su aviso en la que tiene algo pendiente.
+  const areas = pestana.getByRole('tablist', { name: 'Áreas de Sumied' })
+  await expect(areas.getByRole('tab')).toHaveText(['Resumen', 'Cuotas y cobros2', 'Laboral18', 'Portal'])
+  await expect(areas.getByRole('tab', { name: 'Resumen' })).toHaveAttribute('aria-selected', 'true')
+  // Resumen: lo pendiente con este cliente, cada línea lleva a su pestaña.
+  const pendiente = pestana.getByRole('region', { name: 'Lo pendiente con este cliente' })
+  await expect(pendiente.locator('[data-prueba="pendiente"]')).toHaveCount(2)
+  await expect(pendiente.locator('[data-prueba="pendiente"]').nth(0)).toContainText('Recibo del 4 oct. 2026 devuelto · 496,10 €')
+  await expect(pendiente.locator('[data-prueba="pendiente"]').nth(1)).toContainText('GoCardless cobra 496,10 € y Sumied calcula otra cifra.')
+  await expect(pestana.getByRole('region', { name: 'Servicios que tiene' })).toHaveCount(0)
+  await page.evaluate(() => document.fonts.ready)
+  await page.screenshot({ path: `${DIR}/pestana-${lado(page)}.png`, fullPage: true })
+
+  // Cuotas y cobros (desde lo pendiente): los servicios. Cambiar de pestaña no lee nada y es al momento.
+  const t0 = await page.evaluate(() => performance.now())
+  await pendiente.getByRole('button', { name: 'Ver →' }).first().click()
+  await expect(areas.getByRole('tab', { name: /Cuotas y cobros/ })).toHaveAttribute('aria-selected', 'true')
   const servicios = pestana.getByRole('region', { name: 'Servicios que tiene' })
   await expect(servicios.locator('.fila')).toHaveCount(2)
+  expect(await page.evaluate((t) => performance.now() - t, t0)).toBeLessThan(1000)
   await expect(servicios.locator('.fila').nth(1)).toContainText('435,60 €')
+  await expect(pestana.getByRole('region', { name: 'Cobros' })).toBeVisible()
+  // Laboral: los trabajadores.
+  await areas.getByRole('tab', { name: /Laboral/ }).click()
   await expect(pestana.getByRole('heading', { name: 'Trabajadores · 18' })).toBeVisible()
   await expect(pestana.getByRole('link', { name: 'Ver los 18 en Sumied →' })).toBeVisible()
-  await expect(pestana.getByRole('region', { name: 'Pendiente de revisar · 1' })).toContainText('GoCardless cobra 496,10 € y Sumied calcula otra cifra.')
+  await expect(pestana.getByRole('region', { name: 'Cobros' })).toHaveCount(0)
+  await page.screenshot({ path: `${DIR}/pestana-laboral-${lado(page)}.png`, fullPage: true })
+  // Portal: quién entra (aquí, nadie).
+  await areas.getByRole('tab', { name: 'Portal' }).click()
+  await expect(pestana.getByRole('region', { name: 'Su portal' })).toContainText('Todavía no entra nadie de este cliente.')
+  expect(pedidos.map((x) => x.paso)).toEqual(['leer', 'portal'])
   // «Abrir en Sumied ↗», a la ficha del cliente, en otra pestaña.
   const abrir = pestana.getByRole('link', { name: 'Abrir en Sumied ↗' })
   await expect(abrir).toHaveAttribute('href', /\/conta\/ventas\/clientes-y-cuotas\/cliente\/1\?empresa=emp-qbo$/)
   await expect(abrir).toHaveAttribute('target', '_blank')
 
   expect(await pestana.innerText()).not.toMatch(TECNICAS)
-  await page.evaluate(() => document.fonts.ready)
-  await page.screenshot({ path: `${DIR}/pestana-${lado(page)}.png`, fullPage: true })
   expect(errores).toEqual([])
 })
 

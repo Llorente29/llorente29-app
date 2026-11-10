@@ -41,6 +41,8 @@ test('baja: el recibo nuevo antes de guardar y la confirmación con Sumied y Bit
   await page.goto(`/bitrix-pestana.html${ALMOHADILLA}`)
   const pestana = page.locator('#pestana')
   await expect(pestana.getByRole('heading', { level: 1, name: 'Cliente Prueba, S.L.' })).toBeVisible({ timeout: 30_000 })
+  // nº 10 · Alta y baja, en la pestaña «Laboral».
+  await pestana.getByRole('tab', { name: /^Laboral/ }).click({ timeout: 30_000 })
 
   const fila = pestana.locator('.fila', { hasText: 'Persona Prueba 00' })
   await fila.getByRole('button', { name: 'Dar de baja' }).click()
@@ -68,7 +70,8 @@ test('alta: el recibo nuevo al escribir; si alguien cambió la cuota en Bitrix24
     bitrix: { hecho: 'choque', texto: 'En Bitrix24 alguien ha cambiado la cuota a 300,00: no se ha pisado. Sumied dice 520,30; queda en «Pendiente de revisar».' }, pestana: respuesta() }))
   await page.goto(`/bitrix-pestana.html${ALMOHADILLA}`)
   const pestana = page.locator('#pestana')
-  await pestana.getByRole('button', { name: '+ Dar de alta' }).click({ timeout: 30_000 })
+  await pestana.getByRole('tab', { name: /^Laboral/ }).click({ timeout: 30_000 })
+  await pestana.getByRole('button', { name: '+ Dar de alta' }).click()
   const form = pestana.getByRole('form', { name: 'Alta de un trabajador' })
   await expect(form.getByRole('button', { name: 'Dar de alta' })).toBeDisabled()
   await form.getByLabel('Nombre y apellidos').fill('Luis Prueba Soto')
@@ -87,7 +90,8 @@ test('quien solo puede ver: lo dice y no cambia nada', async ({ page }) => {
   await simular(page, () => ({ estado: 'sin_permiso', frase: 'Puedes ver, pero no cambiar lo que se cobra: pídeselo a un administrador o a un encargado de la cuenta.' }))
   await page.goto(`/bitrix-pestana.html${ALMOHADILLA}`)
   const pestana = page.locator('#pestana')
-  await pestana.getByRole('button', { name: '+ Dar de alta' }).click({ timeout: 30_000 })
+  await pestana.getByRole('tab', { name: /^Laboral/ }).click({ timeout: 30_000 })
+  await pestana.getByRole('button', { name: '+ Dar de alta' }).click()
   await pestana.getByLabel('Nombre y apellidos').fill('Intruso Prueba')
   await pestana.getByRole('form', { name: 'Alta de un trabajador' }).getByRole('button', { name: 'Dar de alta' }).click()
   const hecho = pestana.locator('[data-prueba="hecho"]')
