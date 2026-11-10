@@ -1,0 +1,22 @@
+{
+ "_que": "GP · nº 24 · punto 2 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 10:00Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1010 cambia en caliente public.conta_portal_facturas(uuid) y public.conta_portal_inicio(uuid) (existen; misma firma; sin otras sobrecargas; con respaldo; declaradas en su cabecera con su prueba). conta_portal_facturas en producción es la de la 1530 (md5 del prosrc 29ecf1180e3e905419f41705e015b0f2, el mismo que en la base local). conta_portal_inicio tiene que ser la de la 0945: la 1010 para si no. Ni disparador ni cron las usan: no están en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T10:00Z",
+ "tanda": {
+  "supabase/migrations/20261110T1010_gp_portal_facturas_pagada.sql": "609033cdcebb326ef7c1ef94a3a4f3d4"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_portal_facturas(uuid)",
+   "public.conta_portal_inicio(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
