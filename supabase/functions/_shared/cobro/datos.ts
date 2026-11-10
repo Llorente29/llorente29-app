@@ -52,7 +52,7 @@ function objetivoDe(x: Fila): Objetivo | null {
  * trabajadores). Una línea con su propio importe (importada así de GoCardless)
  * lleva su precio propio, solo para ella.
  */
-export function catalogoYAsignaciones(d: FilasDeLaTarifa): { catalogo: Catalogo; asignaciones: Asignacion[] } {
+export function catalogoYAsignaciones(d: FilasDeLaTarifa, o: { conSueltos?: boolean } = {}): { catalogo: Catalogo; asignaciones: Asignacion[] } {
   const servicios = d.servicios.map((s) => ({ id: String(s.id), empresaId: String(s.company_id), nombre: String(s.nombre) }))
   const precios: Precio[] = d.precios.map((p) => ({ id: String(p.id), empresaId: String(p.empresa_id), objetivo: objetivoDe(p)!, clienteId: str(p.cliente_id),
     forma: formaDe(p), desde: mesDe(p.desde), hasta: p.hasta ? mesDe(p.hasta) : null })).filter((p) => p.objetivo)
@@ -60,6 +60,19 @@ export function catalogoYAsignaciones(d: FilasDeLaTarifa): { catalogo: Catalogo;
   const asignaciones: Asignacion[] = []
   const grupos = new Map<string, Asignacion>()
   for (const a of d.asignaciones) {
+    // nº 71 · Un trabajo suelto «sumado al recibo»: su mes, con su concepto y su importe, una vez. Solo
+    // para el recibo (conSueltos): la cuota al mes de la pantalla y de la pestaña no lo cuenta.
+    if (a.tipo === 'suelto') {
+      if (!o.conSueltos || a.importe_propio == null) continue
+      const mes = mesDe(a.desde)
+      const sid = `${String(a.servicio_id)}#${String(a.id)}`
+      const empresaId = String(a.empresa_id)
+      servicios.push({ id: sid, empresaId, nombre: str(a.detalle) ?? servicios.find((s) => s.id === String(a.servicio_id))?.nombre ?? 'Trabajo suelto' })
+      precios.push({ id: `suelto:${String(a.id)}`, empresaId, objetivo: { tipo: 'servicio', servicioId: sid }, clienteId: String(a.cliente_id),
+        forma: { tipo: 'fijo', periodo: 'vez', importeCent: cent(a.importe_propio) }, desde: mes, hasta: mes })
+      asignaciones.push({ id: String(a.id), clienteId: String(a.cliente_id), empresaId, desde: mes, hasta: mes, altaEl: null, bajaEl: null, objetivo: { tipo: 'servicio', servicioId: sid } })
+      continue
+    }
     if (a.tipo !== 'cuota') continue
     const objetivo = objetivoDe(a)
     if (!objetivo) continue

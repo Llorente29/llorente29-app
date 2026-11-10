@@ -55,8 +55,9 @@ export function QueEsCadaCampo({ mapa, medidos, alConfirmar, sinTitulo }: {
   const faltan = loQueFalta(e)
   const sinCuota = cuotasSinCampo(e)
   const confirmado = mapa?.confirmado ?? null
-  const otros = (mapa?.campos ?? []).filter((c) => ['nombre', 'correo', 'telefono', 'servicios', 'forma_pago'].includes(c.campo))
-  const NOMBRES: Record<string, string> = { nombre: 'Nombre', correo: 'Correo', telefono: 'Teléfono', servicios: 'Servicios contratados', forma_pago: 'Forma de pago (el emisor)' }
+  const otros = (mapa?.campos ?? []).filter((c) => ['nombre', 'correo', 'telefono', 'servicios', 'forma_pago', 'trabajadores', 'estado_cobro'].includes(c.campo))
+  const NOMBRES: Record<string, string> = { nombre: 'Nombre', correo: 'Correo', telefono: 'Teléfono', servicios: 'Servicios contratados', forma_pago: 'Forma de pago (el emisor)',
+    trabajadores: 'Trabajadores (lo rellena Sumied)', estado_cobro: 'Estado del cobro (lo rellena Sumied)' }
   const items = (e.situacion ? medidos[e.situacion]?.items : null) ?? []
 
   const confirmar = async () => {

@@ -67,6 +67,8 @@ export async function leerContexto(accountId: string, companyId: string | null):
     .map((f) => String(f.feature_key))
   const fila = empresa.data as Record<string, unknown> | null
   const asesoria = await esAsesoria(accountId)
+  // GD · ¿Es una cuenta de demostración? Enciende «Tu cuenta» en Ajustes (nº71). Sin leer, no lo es.
+  const demo = ((await tabla('accounts').select('is_demo').eq('id', accountId).maybeSingle()).data as { is_demo?: unknown } | null)?.is_demo === true
   // G03 · El sector de la empresa (company.sector; sin la columna, lo de hoy) y lo que enciende su paquete.
   const { sector, hosteleria, gestoria } = loQueEnciendeLaEmpresa(companyId ? fila : null, asesoria)
   return {
@@ -80,6 +82,7 @@ export async function leerContexto(accountId: string, companyId: string | null):
     colorEmpresa: typeof fila?.color === 'string' && FORMATO_COLOR.test(fila.color) ? fila.color : null,
     analitica: ejes ? analiticaDe(ejes) : null,
     asesoria,
+    demo,
   }
 }
 

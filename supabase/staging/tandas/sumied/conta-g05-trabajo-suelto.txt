@@ -1,0 +1,6 @@
+# G05 · La 0700 (un trabajo suelto sumado al recibo). Su prueba (ROLLBACK, datos
+# inventados, en la cuenta A) mira la lista con el precio de la tarifa, ponerlo con
+# y sin importe, el aviso con el cobro preparado, el mes que viene con el de este
+# enviado, el precio propio del cliente, lo que no se puede y la vuelta atrás.
+supabase/migrations/20261110T0700_g05_trabajo_suelto.sql
+supabase/staging/sql/20261110_g05_trabajo_suelto_prueba.sql

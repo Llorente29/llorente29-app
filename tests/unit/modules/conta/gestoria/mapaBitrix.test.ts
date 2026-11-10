@@ -122,6 +122,12 @@ describe('G01 · el mapa, propuesto desde crm.company.fields', () => {
     expect(p.mapa.campos.find((c) => c.campo === 'servicios')?.opciones).toEqual({ '21': 'C', '22': 'L', '23': 'S' })
     expect(p.mapa.formaPagoAEmisor).toEqual({ 'Emisor Prueba Alfa': 'empresa-a', 'Emisor Prueba Alfa Nuevo': 'empresa-a', 'Persona Prueba Gomez': 'empresa-b' })
     expect(p.sinUsar).toEqual([{ codigo: 'UF_CRM_P6', etiqueta: 'POBLACION' }, { codigo: 'UF_CRM_P7', etiqueta: 'POBLACION' }, { codigo: 'UF_CRM_P8', etiqueta: 'COMERCIAL ASIGNADO' }])
+    // GB (nº 13) · «Trabajadores» y «Estado del cobro» (los rellena Sumied) son opcionales: sin ellos, no hay duda.
+    expect(cod('trabajadores')).toBeNull()
+    expect(p.mapa.dudas?.some((d) => d.campo === 'trabajadores' || d.campo === 'estado_cobro')).toBe(false)
+    const conLosDeSumied = proponerMapa('Gestoría de prueba', { ...medidos, UF_CRM_T1: { formLabel: 'Nº de trabajadores', type: 'string' }, UF_CRM_E1: { formLabel: 'Estado del cobro', type: 'string' } }, EMISORES)
+    expect(conLosDeSumied.mapa.campos.filter((c) => c.campo === 'trabajadores' || c.campo === 'estado_cobro').map((c) => [c.campo, c.codigo]))
+      .toEqual([['trabajadores', 'UF_CRM_T1'], ['estado_cobro', 'UF_CRM_E1']])
     // Y la ficha se lee con el mapa propuesto: sin confirmar, sin situación; confirmado, con ella.
     const fila = { ID: '9', TITLE: 'CLIENTE PRUEBA', UF_CRM_P1: 'B00000009', UF_CRM_P2: '13', UF_CRM_P3: ['21', '23'], UF_CRM_P4: '32', UF_CRM_P5: '90,75' }
     expect(p.mapa.confirmado ?? null).toBeNull()
