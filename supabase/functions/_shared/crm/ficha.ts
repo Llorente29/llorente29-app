@@ -58,7 +58,16 @@ export interface FichaCrm {
   cuotasReferencia: CuotaDeReferencia[]
   /** Lo que no se ha podido leer, en palabras. */
   avisos: string[]
+  /**
+   * nº 24 (Code 3, 7) · Quién lleva al cliente en el CRM: en Bitrix24, el
+   * responsable de la ficha (ASSIGNED_BY_ID) con su nombre y su correo (user.get).
+   * Lo lee el portal («Te lleva: Nombre · correo») con conta_portal_quien_lleva.
+   */
+  responsable?: Responsable | null
 }
+
+/** nº 24 · El responsable de una ficha del CRM. Sin permiso para leer usuarios, solo su id. */
+export interface Responsable { idExterno: string; nombre: string | null; correo: string | null }
 
 /** Un contacto del CRM: una ficha, con sus empresas y sus señales de cliente. */
 export interface FichaContactoCrm extends FichaCrm {

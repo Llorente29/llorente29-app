@@ -54,10 +54,12 @@ export async function leerFichas(pedir: Pedir, url: string, mapa: MapaBitrix, es
   const medidos = await medirCampos(pedir, url)
   const pedidos = camposQueSePiden(mapa)
   const bloqueados = pedidos.filter((c) => esCampoSensible(medidos[c], c))
-  const select = pedidos.filter((c) => !bloqueados.includes(c))
+  const select = conResponsable(pedidos.filter((c) => !bloqueados.includes(c)), medidos)
   await esperar(ESPERA_MS)
   const r = await leerTodas((start) => llamar(pedir, url, 'crm.company.list', { select, order: { ID: 'ASC' }, start }), esperar)
-  return { fichas: r.filas.map((f) => leerEmpresa(f, mapa)), total: r.total, peticiones: r.peticiones + 1,
+  const fichas = r.filas.map((f) => leerEmpresa(f, mapa))
+  const extra = await ponerResponsables(pedir, url, fichas, r.filas, esperar)
+  return { fichas, total: r.total, peticiones: r.peticiones + 1 + extra,
     bloqueados: bloqueados.map((c) => [medidos[c]?.formLabel, medidos[c]?.listLabel, medidos[c]?.title].find((x) => x && x.trim())?.trim() ?? c) }
 }
 
@@ -229,13 +231,62 @@ export async function leerEmpresaSuelta(pedir: Pedir, url: string, mapa: MapaBit
   const medidos = await medirCampos(pedir, url)
   const pedidos = camposQueSePiden(mapa)
   const bloqueados = pedidos.filter((c) => esCampoSensible(medidos[c], c))
-  const select = pedidos.filter((c) => !bloqueados.includes(c))
+  const select = conResponsable(pedidos.filter((c) => !bloqueados.includes(c)), medidos)
   const plan = planDeFichaBitrix({ tipo: 'leer_ficha', crm: 'bitrix24', tipoFicha: 'empresa', idExterno: id, claves: [] }, { empresa: select, contacto: [] })
   if (plan.tipo !== 'leer') return { ficha: null, bloqueados }
   const r = await llamar(pedir, url, plan.peticiones[0].metodo, plan.peticiones[0].cuerpo) as { result?: Record<string, unknown>[]; error?: string } | null
   if (r?.error) throw new FalloBitrix(`Bitrix24 ha contestado «${r.error}».`)
   const fila = (r?.result ?? []).find((f) => String(f.ID) === id)
-  return { ficha: fila ? leerEmpresa(fila, mapa) : null, bloqueados }
+  if (!fila) return { ficha: null, bloqueados }
+  const ficha = leerEmpresa(fila, mapa)
+  // nº 24 · También aquí: si no, la lectura suelta de un aviso dejaría la ficha sin su responsable.
+  await ponerResponsables(pedir, url, [ficha], [fila], async () => {})
+  return { ficha, bloqueados }
+}
+
+/** nº 24 · El responsable de la ficha (ASSIGNED_BY_ID), si el portal lo tiene: se pide además de los campos del mapa. */
+export function conResponsable(select: string[], medidos: Record<string, CampoMedido>): string[] {
+  return medidos.ASSIGNED_BY_ID && !select.includes('ASSIGNED_BY_ID') ? [...select, 'ASSIGNED_BY_ID'] : select
+}
+
+/**
+ * nº 24 (Code 3, 7) · Quién lleva a cada cliente: el ASSIGNED_BY_ID de su ficha
+ * con su nombre y su correo, de user.get (una petición por persona, una cada
+ * 500 ms; suelen ser pocas). Si el webhook no puede leer usuarios (le falta el
+ * permiso «user»), se queda el id, sin nombre ni correo, y se dice una vez en
+ * los avisos de la primera ficha. Devuelve cuántas peticiones ha hecho.
+ */
+export async function ponerResponsables(pedir: Pedir, url: string, fichas: FichaBitrix[], filas: Record<string, unknown>[],
+  esperar: (ms: number) => Promise<void>): Promise<number> {
+  const ids = filas.map((f) => idDeResponsable(f.ASSIGNED_BY_ID))
+  const distintos = [...new Set(ids.filter((x): x is string => !!x))]
+  const quien = new Map<string, { nombre: string | null; correo: string | null }>()
+  let peticiones = 0
+  let sinPermiso: string | null = null
+  for (const id of distintos) {
+    await esperar(ESPERA_MS)
+    peticiones++
+    const r = await llamar(pedir, url, 'user.get', { FILTER: { ID: id } }) as { result?: Record<string, unknown>[]; error?: string; error_description?: string } | null
+    if (r?.error) { sinPermiso = r.error_description || r.error; break }
+    const u = (r?.result ?? []).find((x) => String(x.ID) === id)
+    if (u) quien.set(id, datosDeUsuario(u))
+  }
+  fichas.forEach((f, i) => {
+    const id = ids[i]
+    f.responsable = id ? { idExterno: id, ...(quien.get(id) ?? { nombre: null, correo: null }) } : null
+  })
+  if (sinPermiso && fichas.length) fichas[0].avisos.push(`No se ha podido leer quién lleva a cada cliente (user.get: ${sinPermiso}). Dale al webhook el permiso «Usuarios».`)
+  return peticiones
+}
+
+const idDeResponsable = (x: unknown) => (typeof x === 'string' || typeof x === 'number') && /^[0-9]{1,18}$/.test(String(x)) && String(x) !== '0' ? String(x) : null
+
+/** El nombre («Nombre Apellidos») y el correo de un usuario de Bitrix24 (user.get). */
+export function datosDeUsuario(u: Record<string, unknown>): { nombre: string | null; correo: string | null } {
+  const texto = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null)
+  const nombre = [texto(u.NAME), texto(u.LAST_NAME)].filter(Boolean).join(' ') || texto(u.LOGIN)
+  const correo = texto(u.EMAIL)
+  return { nombre: nombre || null, correo: correo && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(correo) ? correo.toLowerCase() : null }
 }
 
 export async function leerContactoSuelto(pedir: Pedir, url: string, guardado: MapaContactos | null, id: string,

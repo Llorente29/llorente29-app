@@ -1,0 +1,3 @@
+# GB · nº 24 (el 7 de Code 3) · Quién lleva al cliente: la 1403 y su prueba (ROLLBACK). Necesita en staging la 1530 (Code 3).
+supabase/migrations/20261110T1403_gb_quien_lleva.sql
+supabase/staging/sql/20261110_gb_quien_lleva_prueba.sql
