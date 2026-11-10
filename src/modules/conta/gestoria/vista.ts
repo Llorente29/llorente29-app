@@ -162,7 +162,9 @@ export const FORMA_COBRO: Record<string, string> = {
 export function textoMandato(estado: string | null): { texto: string; tono: 'verde' | 'ambar' | 'gris' } {
   switch (estado) {
     case 'active': return { texto: 'Firmado', tono: 'verde' }
-    case 'pending_submission': case 'submitted': return { texto: 'Camino del banco', tono: 'ambar' }
+    // nº 90 · Firmado por el cliente: GoCardless lo manda al banco con su primer cobro, y ya se cobra con él.
+    case 'pending_submission': return { texto: 'Firmado, se envía al banco con el primer cobro', tono: 'verde' }
+    case 'submitted': return { texto: 'Firmado, camino del banco', tono: 'verde' }
     case 'pending_customer_approval': return { texto: 'Por firmar', tono: 'ambar' }
     case 'cancelled': return { texto: 'Cancelado', tono: 'gris' }
     case 'failed': return { texto: 'Rechazado por el banco', tono: 'gris' }

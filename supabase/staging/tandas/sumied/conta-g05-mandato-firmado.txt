@@ -1,0 +1,5 @@
+# G05 · La 1631 (un mandato en pending_submission ya está firmado, nº 90). Su prueba
+# (ROLLBACK, datos inventados, en la cuenta A) mira que «por firmar» cuenta solo el
+# que espera la aprobación del cliente, y la vuelta atrás.
+supabase/migrations/20261110T1631_g05_mandato_firmado.sql
+supabase/staging/sql/20261110_g05_mandato_firmado_prueba.sql
