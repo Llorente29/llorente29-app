@@ -9,6 +9,6 @@ select clave, valor from (
     concat_ws(' / ', (to_regprocedure('public.conta_bitrix_pestana_choque(uuid,uuid,jsonb,text[])') is not null)::text,
       (select pg_get_constraintdef(oid) like '%bitrix_cambiado%' from pg_constraint where conname = 'conta_gestoria_diferencia_tipo_check')::text) valor union all
   select 2, 'Diferencias vigentes / todas (con corte de fecha)',
-    concat_ws(' / ', (select count(*) from public.conta_gestoria_diferencia where vigente and created_at < timestamptz '2026-11-10 00:40:00+00'),
-                     (select count(*) from public.conta_gestoria_diferencia where created_at < timestamptz '2026-11-10 00:40:00+00'))
+    concat_ws(' / ', (select count(*) from public.conta_gestoria_diferencia where vigente and created_at < timestamptz '2026-11-10 00:00:00+00'),
+                     (select count(*) from public.conta_gestoria_diferencia where created_at < timestamptz '2026-11-10 00:00:00+00'))
 ) q order by o;

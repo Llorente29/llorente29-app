@@ -1,0 +1,13 @@
+# GP · nº 24, puntos 1 y 4 (Code 3; Julio, 10/11): Inicio como la maqueta. Rama
+# conta/gp-portal-inicio-hecho. Se ensaya y se aplica desde main nombrando esta
+# rama.
+#
+#   0945  CAMBIA EN CALIENTE una función propia del portal (la misma firma, con
+#         respaldo): conta_portal_inicio devuelve además lo hecho en los últimos
+#         14 días (con su estado, cuándo y lo recibido) y, en «Lo último», las
+#         nóminas del último mes que dejó la gestoría. Declarada en su cabecera
+#         con su prueba. No toca datos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-inicio-hecho.sql
+supabase/migrations/20261110T0945_gp_portal_inicio_hecho.sql
