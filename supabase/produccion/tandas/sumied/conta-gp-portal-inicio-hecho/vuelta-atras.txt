@@ -1,0 +1,3 @@
+# GP · la vuelta atrás de la 0945: conta_portal_inicio, restaurada de su respaldo.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-inicio-hecho.sql
+supabase/vuelta-atras/20261110T0945_gp_portal_inicio_hecho.down.sql
