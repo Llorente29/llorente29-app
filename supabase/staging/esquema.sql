@@ -33392,6 +33392,68 @@ COMMENT ON FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo
 
 
 --
+-- Name: conta_bitrix_pestana_devuelto_hecho(text, text, text, text, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_devuelto_hecho(p_portal text, p_correo text, p_tipo text, p_id text, p_recibo uuid, p_que text, p_frase text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_q jsonb; v_r public.conta_recibo; v_cambio uuid;
+begin
+  if p_que is null or p_que not in ('enlace', 'pasar') then return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Eso no se apunta aquí.'); end if;
+  v_q := public._conta_portal_bitrix_quien(p_portal, p_correo, p_tipo, p_id);
+  if v_q->>'estado' <> 'ok' then return v_q; end if;
+  select * into v_r from public.conta_recibo where id = p_recibo;
+  if v_r.id is null or v_r.account_id <> (v_q->>'cuenta')::uuid or v_r.party_id <> (v_q->>'cliente')::uuid then
+    return jsonb_build_object('estado', 'no_se_pudo', 'frase', 'Ese recibo no es de este cliente.');
+  end if;
+  insert into public.conta_bitrix_pestana_cambio (account_id, party_id, tipo_ficha, id_externo, accion, datos, frase, hecho_por, hecho_por_nombre)
+  values (v_r.account_id, v_r.party_id, p_tipo, trim(p_id), 'devuelto', jsonb_build_object('recibo', p_recibo, 'que', p_que, 'mes', v_r.mes),
+          coalesce(p_frase, ''), (v_q->>'usuario')::uuid, v_q->>'quien')
+  returning id into v_cambio;
+  return jsonb_build_object('estado', 'ok', 'cambio', v_cambio, 'empresa', v_r.company_id, 'cliente', v_r.party_id, 'mes', v_r.mes,
+    'bitrix', public._conta_bitrix_pestana_bitrix_de(v_r.account_id, p_tipo, trim(p_id)));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_devuelto_hecho(p_portal text, p_correo text, p_tipo text, p_id text, p_recibo uuid, p_que text, p_frase text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_devuelto_hecho(p_portal text, p_correo text, p_tipo text, p_id text, p_recibo uuid, p_que text, p_frase text) IS 'GB (nº 17) · Apunta en lo hecho desde la pestaña de Bitrix24 un «enviarle el enlace» o «pasarlo de nuevo» que ya hizo conta-cobro, y devuelve lo que necesita la función para poner al día la ficha de Bitrix24. Solo el servidor.';
+
+
+--
+-- Name: conta_bitrix_pestana_devueltos(text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_pestana_devueltos(p_portal text, p_correo text, p_tipo text, p_id text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_q jsonb; v_cuenta uuid; v_cliente uuid; v_usuario uuid;
+begin
+  v_q := public._conta_portal_bitrix_quien(p_portal, p_correo, p_tipo, p_id);
+  if v_q->>'estado' <> 'ok' then return v_q; end if;
+  v_cuenta := (v_q->>'cuenta')::uuid; v_cliente := (v_q->>'cliente')::uuid; v_usuario := (v_q->>'usuario')::uuid;
+  return jsonb_build_object('estado', 'ok', 'usuario', v_usuario, 'cliente', v_cliente,
+    'puede', public._conta_usuario_cobra(v_usuario, v_cuenta),
+    'devueltos', coalesce((select jsonb_agg(public._conta_recibo_devuelto_opciones(r.id) order by r.mes desc, r.id)
+        from (select id, mes from public.conta_recibo
+               where account_id = v_cuenta and party_id = v_cliente and estado in ('devuelto', 'retrocedido')
+               order by mes desc, id limit 5) r), '[]'::jsonb));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_devueltos(p_portal text, p_correo text, p_tipo text, p_id text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_pestana_devueltos(p_portal text, p_correo text, p_tipo text, p_id text) IS 'GB (nº 17) · Los recibos devueltos del cliente de la ficha abierta en Bitrix24, con lo que se puede hacer con cada uno (_conta_recibo_devuelto_opciones, de Code 1) y si la persona puede (administradora o encargada). Solo el servidor, DESPUÉS de comprobar con Bitrix24 al usuario y la aplicación.';
+
+
+--
 -- Name: conta_bitrix_pestana_hacer(text, text, text, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -107858,7 +107920,7 @@ CREATE TABLE public.conta_bitrix_pestana_cambio (
     hecho_at timestamp with time zone DEFAULT now() NOT NULL,
     bitrix jsonb,
     bitrix_at timestamp with time zone,
-    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text, 'tarifa'::text, 'deshacer'::text]))),
+    CONSTRAINT conta_bitrix_pestana_cambio_accion_check CHECK ((accion = ANY (ARRAY['alta'::text, 'baja'::text, 'tarifa'::text, 'deshacer'::text, 'devuelto'::text, 'suelto'::text]))),
     CONSTRAINT conta_bitrix_pestana_cambio_tipo_ficha_check CHECK ((tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])))
 );
 
@@ -168565,6 +168627,22 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_choque(p_cambio uuid, p_empres
 
 REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_bitrix_pestana_deshacer(p_portal text, p_correo text, p_tipo text, p_id text, p_empresa uuid, p_cuando timestamp with time zone) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_devuelto_hecho(p_portal text, p_correo text, p_tipo text, p_id text, p_recibo uuid, p_que text, p_frase text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_devuelto_hecho(p_portal text, p_correo text, p_tipo text, p_id text, p_recibo uuid, p_que text, p_frase text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_devuelto_hecho(p_portal text, p_correo text, p_tipo text, p_id text, p_recibo uuid, p_que text, p_frase text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_pestana_devueltos(p_portal text, p_correo text, p_tipo text, p_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_pestana_devueltos(p_portal text, p_correo text, p_tipo text, p_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_pestana_devueltos(p_portal text, p_correo text, p_tipo text, p_id text) TO service_role;
 
 
 --
