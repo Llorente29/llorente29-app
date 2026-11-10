@@ -50967,11 +50967,13 @@ CREATE FUNCTION public.conta_portal_quien_lleva(p_party uuid DEFAULT NULL::uuid)
     LANGUAGE plpgsql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-declare y public.conta_portal_acceso := public._conta_portal_yo(p_party, false); v jsonb;
+declare y public.conta_portal_acceso := public._conta_portal_yo(p_party, false); v jsonb; v_nombre text;
 begin
   select g.ficha->'responsable' into v from public.conta_gestoria_cliente g where g.party_id = y.party_id and g.account_id = y.account_id;
-  if v is null or jsonb_typeof(v) <> 'object' or coalesce(nullif(v->>'nombre', ''), nullif(v->>'correo', '')) is null then return null; end if;
-  return jsonb_build_object('nombre', nullif(v->>'nombre', ''), 'correo', nullif(v->>'correo', ''));
+  if v is null or jsonb_typeof(v) <> 'object' then return null; end if;
+  v_nombre := nullif(btrim(v->>'nombre'), '');
+  if v_nombre is null or lower(v_nombre) in ('sin título', 'sin titulo', 'untitled') then return null; end if;
+  return jsonb_build_object('nombre', v_nombre, 'correo', nullif(btrim(v->>'correo'), ''));
 end $$;
 
 
@@ -50979,7 +50981,7 @@ end $$;
 -- Name: FUNCTION conta_portal_quien_lleva(p_party uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_portal_quien_lleva(p_party uuid) IS 'GB (nº 24, el 7 de Code 3) · Quién lleva al cliente, para el portal («Te lleva: Nombre · correo»): el responsable de su ficha del CRM (Bitrix24, ASSIGNED_BY_ID con user.get), que guarda la lectura del CRM en conta_gestoria_cliente.ficha. {nombre, correo} o null. Para la persona del portal de ese cliente (_conta_portal_yo), con cualquier permiso.';
+COMMENT ON FUNCTION public.conta_portal_quien_lleva(p_party uuid) IS 'GB (nº 24, el 7 de Code 3; nº 29, sin «Sin título») · Quién lleva al cliente, para el portal («Te lleva: Nombre · correo»): el responsable de su ficha del CRM (Bitrix24, ASSIGNED_BY_ID con user.get), que guarda la lectura del CRM en conta_gestoria_cliente.ficha. {nombre, correo}, o null si no tiene nombre («Sin título» incluido). Para la persona del portal de ese cliente (_conta_portal_yo), con cualquier permiso.';
 
 
 --
