@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # scripts/video/gd/muestras_voz.py — GD · nº96, fase 2: la muestra de voz para que Julio elija.
 #
-#   python3 scripts/video/gd/muestras_voz.py <frases.json> <salida>
+#   python3 scripts/video/gd/muestras_voz.py <frases.json> <salida> [voces]
+#
+# [voces]: «julio», «abel» o «julio,abel» (las dos, si no se dice). nº99: la de la pronunciación, solo «julio».
 #
 # Las mismas frases (scripts/video/gd/locucion.mjs --muestra) con las dos voces en juego, con el
 # modelo que pide scripts/video/voz-elevenlabs.txt («modelo: v4»). Deja, por voz:
@@ -18,6 +20,9 @@ VOCES = {"julio": "TbcXaMnSerONT83CTICz", "abel": "bsEDAkNZWaEolZ7vEeVJ"}
 
 frases = json.load(open(sys.argv[1], encoding="utf-8"))
 salida = sys.argv[2]
+if len(sys.argv) > 3:
+    VOCES = {k: v for k, v in VOCES.items() if k in sys.argv[3].split(",")}
+habla = lambda f: f.get("voz") or f["texto"]  # noqa: E731 — nº99: cómo se escribe para que suene bien
 CLAVE = os.environ.get("VOZ_ELEVENLABS_KEY", "").strip()
 if not CLAVE:
     print("::error::Falta el secreto VOZ_ELEVENLABS_KEY: sin él no hay muestra.")
@@ -47,7 +52,7 @@ v = q.replace("eleven", "").lstrip("_")
 candidatos = encontrados[:1] or [f"eleven_{v}", f"eleven_{v}_alpha", f"eleven_{v}_preview", pedido]
 
 modelo = None
-for voz_id in [VOCES["abel"]]:
+for voz_id in list(VOCES.values())[:1]:
     for m in candidatos:
         try:
             pedir(f"https://api.elevenlabs.io/v1/text-to-speech/{voz_id}?output_format=mp3_44100_128", {"text": "Hola.", "model_id": m})
@@ -65,11 +70,11 @@ for nombre, voz_id in VOCES.items():
     d = os.path.join(salida, nombre)
     os.makedirs(d, exist_ok=True)
     for i, f in enumerate(frases):
-        cuerpo = {"text": f["texto"], "model_id": modelo, "language_code": "es"}
-        if i > 0:
-            cuerpo["previous_text"] = frases[i - 1]["texto"]
-        if i + 1 < len(frases):
-            cuerpo["next_text"] = frases[i + 1]["texto"]
+        cuerpo = {"text": habla(f), "model_id": modelo, "language_code": "es"}
+        if i > 0 and not f["id"].startswith(("gocardless-", "sumied-")):
+            cuerpo["previous_text"] = habla(frases[i - 1])
+        if i + 1 < len(frases) and not f["id"].startswith(("gocardless-", "sumied-")):
+            cuerpo["next_text"] = habla(frases[i + 1])
         mp3 = None
         for quitar in ([], ["previous_text", "next_text"], ["previous_text", "next_text", "language_code"]):
             for k in quitar:
@@ -83,11 +88,11 @@ for nombre, voz_id in VOCES.items():
         if mp3 is None:
             sys.exit(f"ElevenLabs ({nombre}): la frase {f['id']} no ha salido.")
         open(os.path.join(d, f"{f['id']}.mp3"), "wb").write(mp3)
-        open(os.path.join(d, f"{f['id']}.txt"), "w", encoding="utf-8").write(f["texto"] + "\n")
+        open(os.path.join(d, f"{f['id']}.txt"), "w", encoding="utf-8").write(f"{f['texto']}\n" + (f"(a la voz: {habla(f)})\n" if habla(f) != f["texto"] else ""))
         print(f"{nombre} · {f['id']} · {len(mp3) // 1024} KB")
 
 open(os.path.join(salida, "LEEME.txt"), "w", encoding="utf-8").write(
     "Muestra de voz del vídeo de Sumied para gestorías (nº96, fase 2).\n"
     f"Las mismas {len(frases)} frases con las dos voces, modelo {modelo} de ElevenLabs:\n"
-    f"  julio/  Julio Clon ({VOCES['julio']})\n  abel/   Abel ({VOCES['abel']}), la de voz-elevenlabs.txt\n"
+    + "".join(f"  {k}/  {v}\n" for k, v in VOCES.items()) +
     "Cada .mp3 lleva su texto al lado (.txt).\n")

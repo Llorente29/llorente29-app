@@ -22,7 +22,10 @@ name: GD · vídeo para QBO
 #                  paga el devuelto con la tarjeta de pruebas de Stripe (nº98).
 #                  La demo, limpia antes («Volver a empezar»). Publica en
 #                  video-salida/gd-sumied. «comprobar» ensaya este guion sin grabar.
-#         muestras-voz  (nº96, fase 2) las 6 frases de muestra de la locución
+#                  Con «escenas» (p. ej. 01,02,03), solo esas: la prueba de la voz y el zoom.
+#         muestras-voz  (nº96, fase 2; nº99) las 6 frases de muestra y la prueba de
+#                  pronunciación (pronunciacion/: «GoCardless» y «Sumied» con cada grafía)
+#                  con Julio Clon. Las 6 frases de muestra de la locución
 #                  (scripts/video/gd/locucion.mjs) con las dos voces en juego, en
 #                  MP3, en video-salida/gd-qbo, carpeta muestras-voz/. No lee
 #                  producción ni graba; solo usa VOZ_ELEVENLABS_KEY.
@@ -168,6 +171,7 @@ jobs:
         run: |
           [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Este vídeo graba en producción: solo se lanza desde main."; exit 1; }
           [[ "${{ inputs.mes }}" =~ ^20[0-9]{2}-(0[1-9]|1[0-2])$ ]] || { echo "::error::«mes» es AAAA-MM."; exit 1; }
+          [[ "${{ inputs.escenas }}" =~ ^(todas|[0-9b ,]+)$ ]] || { echo "::error::«escenas»: «todas» o una lista como 01,02,03."; exit 1; }
 
       - uses: actions/checkout@v4
 
@@ -211,6 +215,7 @@ jobs:
         env:
           MODO: grabar
           MES: ${{ inputs.mes }}
+          ESCENAS: ${{ inputs.escenas }}
           TOMAS: ${{ runner.temp }}/tomas
           APP: https://app.sumied.com
           VOZ_ELEVENLABS_KEY: ${{ secrets.VOZ_ELEVENLABS_KEY }}
@@ -281,7 +286,10 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/video/gd/locucion.mjs "$RUNNER_TEMP/muestra" --muestra > "$RUNNER_TEMP/locucion.txt"
-          python3 scripts/video/gd/muestras_voz.py "$RUNNER_TEMP/muestra/voz/frases.json" "$RUNNER_TEMP/muestras-voz" > "$RUNNER_TEMP/muestras.txt" 2>&1
+          python3 scripts/video/gd/muestras_voz.py "$RUNNER_TEMP/muestra/voz/frases.json" "$RUNNER_TEMP/muestras-voz" julio > "$RUNNER_TEMP/muestras.txt" 2>&1
+          # nº99 · La pronunciación: la misma frase con cada grafía de «GoCardless» y «Sumied», con Julio Clon.
+          node scripts/video/gd/locucion.mjs "$RUNNER_TEMP/pron" --pronunciacion > "$RUNNER_TEMP/locucion-pron.txt"
+          python3 scripts/video/gd/muestras_voz.py "$RUNNER_TEMP/pron/voz/frases.json" "$RUNNER_TEMP/muestras-voz/pronunciacion" julio > "$RUNNER_TEMP/pron.txt" 2>&1
 
       - uses: actions/upload-artifact@v4
         if: always()

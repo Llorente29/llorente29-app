@@ -47,3 +47,25 @@ describe('GD · el vídeo de Sumied para gestorías', () => {
     expect(f).toContain("for (const a of ACCESOS_DE_LA_DEMO)")
   })
 })
+
+describe('GD · nº99 · la voz elegida y la pronunciación', () => {
+  it('la voz de los vídeos es Julio Clon, con el modelo v4, en su único sitio', () => {
+    const v = readFileSync('scripts/video/voz-elevenlabs.txt', 'utf8').split('\n').filter((l) => l.trim() && !l.startsWith('#'))
+    expect(v).toEqual(['TbcXaMnSerONT83CTICz', 'modelo: v4'])
+  })
+
+  it('a la voz va «GoCardless» como suena; los subtítulos dicen GoCardless', async () => {
+    const { paraLaVoz, FRASES: F, PRONUNCIA } = await import('../../../../../scripts/video/gd/locucion.mjs')
+    expect(PRONUNCIA.GoCardless).toBe('Gou Cárdles')
+    expect(paraLaVoz(F['06.10'])).toContain('Gou Cárdles pasa los cargos')
+    expect(paraLaVoz(F['06.10'])).not.toContain('GoCardless')
+    expect(F['06.10']).toContain('GoCardless')
+    expect(readFileSync('scripts/video/voz_nube.py', 'utf8')).toContain('habla = lambda x: x.get("voz") or x["texto"]')
+  })
+
+  it('la prueba de 01, 02 y 03: cada escena se puede pedir sola', () => {
+    for (const e of ['01', '02', '03', '04', '05', '06', '07', '07b', '08', '09', '10', '11']) expect(g).toContain(`if (pide('${e}')) {`)
+    const w = readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')
+    expect(w.slice(w.indexOf('  video:'))).toContain('ESCENAS: ${{ inputs.escenas }}')
+  })
+})

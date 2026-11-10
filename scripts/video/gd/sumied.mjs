@@ -35,6 +35,9 @@ const GRABA = MODO === 'grabar'
 const salida = resolve(process.argv[2] || env('SALIDA') || 'video-salida')
 const TOMAS = resolve(env('TOMAS') || join(salida, 'tomas'))
 const MES = env('MES') || '2026-12'
+// nº99 · Las escenas que se graban: «todas», o una lista (p. ej. «01,02,03» para la prueba de la voz y el zoom).
+const ESCENAS = env('ESCENAS') && env('ESCENAS') !== 'todas' ? env('ESCENAS').split(/[\s,]+/).filter(Boolean) : null
+const pide = (e) => !ESCENAS || ESCENAS.includes(e)
 const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
@@ -201,268 +204,286 @@ async function ponerTomas(fs) {
 
 let inicio = 0
 let enviado = false
-try {
-  // ── 01 · Clientes y cuotas ─────────────────────────────────────────────────
-  await ir('/conta/ventas/clientes-y-cuotas', 'Cuotas al mes')
-  inicio = R.t()
-  escena('01 Clientes y cuotas')
-  const cifra = (t) => page.locator('.g4-cifra').filter({ hasText: t })
-  await di('01.1', () => ra.ir(980, 620, 1200))
-  await di('01.2', () => a(cifra('Cuotas al mes')))
-  await di('01.3', () => a(cifra('Te deben')))
-  await di('01.4', () => a(cifra('Dejas de cobrar')))
-  await di('01.5', () => a(page.locator('section[aria-labelledby="g4-hacer"]')))
-  await di('01.6', async () => { await pulsa(page.getByText(CLIENTE, { exact: true })); await quieto(1200); await mirar(page.getByText('Este mes', { exact: true }), page.getByText('Último cobro')) })
-  await foto('01')
+const esperaHasta = async (que, fn, min) => {
+  const desde = Date.now()
+  while (Date.now() - desde < min * 60_000) { if (await fn()) { decir(`  · ${que}: a los ${Math.round((Date.now() - desde) / 60000)} min`); return true } await esperar(60_000) }
+  fallo(`${que}: no ha llegado en ${min} min`); return false
+}
 
-  // ── 02 · La ficha ──────────────────────────────────────────────────────────
+try {
   const { data: tr } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).maybeSingle()
   if (!tr) throw new Error(`No está «${CLIENTE}» en la demo.`)
-  await ir(`/conta/ventas/clientes-y-cuotas/cliente/${tr.id}`, CLIENTE)
-  escena('02 La ficha')
-  await di('02.1', () => mirar(page.getByText('Se le cobra al mes'), page.getByText(/Sumied calcula/)))
-  await di('02.2', () => a(page.getByText(/Así le llegará el recibo/)))
-  await di('02.3', () => pulsa(page.getByRole('button', { name: 'Ver trabajadores' })))
-  await di('02.4', () => a(page.getByText(/^Alta (en|el)/)))
-  await di('02.5', async () => { await pulsa(page.getByRole('tab', { name: 'Cobros', exact: true })); await quieto(1500); await pulsa(page.getByRole('tab', { name: 'Contacto', exact: true })) })
-  await di('02.6', () => pulsa(page.getByRole('tab', { name: /^Datos de / })))
-  await foto('02')
-
+  let ing = null
+  // ── 01 · Clientes y cuotas ─────────────────────────────────────────────────
+  if (pide('01')) {
+    await ir('/conta/ventas/clientes-y-cuotas', 'Cuotas al mes')
+    inicio = R.t()
+    escena('01 Clientes y cuotas')
+    const cifra = (t) => page.locator('.g4-cifra').filter({ hasText: t })
+    await di('01.1', () => ra.ir(980, 620, 1200))
+    await di('01.2', () => a(cifra('Cuotas al mes')))
+    await di('01.3', () => a(cifra('Te deben')))
+    await di('01.4', () => a(cifra('Dejas de cobrar')))
+    await di('01.5', () => a(page.locator('section[aria-labelledby="g4-hacer"]')))
+    await di('01.6', async () => { await pulsa(page.getByText(CLIENTE, { exact: true })); await quieto(1200); await mirar(page.getByText('Este mes', { exact: true }), page.getByText('Último cobro')) })
+    await foto('01')
+  }
+  // ── 02 · La ficha ──────────────────────────────────────────────────────────
+  if (pide('02')) {
+    await ir(`/conta/ventas/clientes-y-cuotas/cliente/${tr.id}`, CLIENTE)
+    escena('02 La ficha')
+    await di('02.1', () => mirar(page.getByText('Se le cobra al mes'), page.getByText(/Sumied calcula/)))
+    await di('02.2', () => a(page.getByText(/Así le llegará el recibo/)))
+    await di('02.3', () => pulsa(page.getByRole('button', { name: 'Ver trabajadores' })))
+    await di('02.4', () => a(page.getByText(/^Alta (en|el)/)))
+    await di('02.5', async () => { await pulsa(page.getByRole('tab', { name: 'Cobros', exact: true })); await quieto(1500); await pulsa(page.getByRole('tab', { name: 'Contacto', exact: true })) })
+    await di('02.6', () => pulsa(page.getByRole('tab', { name: /^Datos de / })))
+    await foto('02')
+  }
   // ── 03 · Tarifa y paquetes ─────────────────────────────────────────────────
-  await ir('/conta/ventas/clientes-y-cuotas/tarifas', 'Tarifa y paquetes')
-  escena('03 Tarifa y paquetes')
-  const servicio = (n) => page.getByText(n, { exact: true }).first()
-  await di('03.1', () => ra.ir(900, 500, 1000))
-  await di('03.2', async () => { await pulsa(servicio('Gestoría mensual')); await quieto(800); await mirar(page.getByText('Básica', { exact: true }), page.getByText('Premium', { exact: true })) })
-  await di('03.3', () => a(page.getByText(/precio especial|su propio precio/i)))
-  await di('03.4', () => pulsa(servicio('Gestión laboral')))
-  await di('03.5', async () => { await pulsa(servicio('Nóminas')); await quieto(1500); await pulsa(page.getByText(/^Pack Empresa/)) })
-  await foto('03')
-
+  if (pide('03')) {
+    await ir('/conta/ventas/clientes-y-cuotas/tarifas', 'Tarifa y paquetes')
+    escena('03 Tarifa y paquetes')
+    const servicio = (n) => page.getByText(n, { exact: true }).first()
+    await di('03.1', () => ra.ir(900, 500, 1000))
+    await di('03.2', async () => { await pulsa(servicio('Gestoría mensual')); await quieto(800); await mirar(page.getByText('Básica', { exact: true }), page.getByText('Premium', { exact: true })) })
+    await di('03.3', () => a(page.getByText(/precio especial|su propio precio/i)))
+    await di('03.4', () => pulsa(servicio('Gestión laboral')))
+    await di('03.5', async () => { await pulsa(servicio('Nóminas')); await quieto(1500); await pulsa(page.getByText(/^Pack Empresa/)) })
+    await foto('03')
+  }
   // ── 04 · Bitrix24 y Sumied, al momento (tomas) ─────────────────────────────
-  {
-    const b = toma('05-bitrix.gif'); const s = toma('05-sumied.gif')
-    if (!b || !s) { if (GRABA) fallo('04: faltan las tomas 05-bitrix.gif y 05-sumied.gif'); noToca(['04.1', '04.2'], 'faltan sus tomas') }
-    else {
-      await ponerTomas([b, s]); escena('04 Bitrix24 y Sumied')
-      await di('04.1', () => ra.ir(480, 540, 900))
-      await di('04.2', () => ra.ir(1440, 540, 900))
-      if (GRABA) await quieto(Math.max(0, Math.max(duraGif(b), duraGif(s)) * 1000 - 9000))
+  if (pide('04')) {
+    {
+      const b = toma('05-bitrix.gif'); const s = toma('05-sumied.gif')
+      if (!b || !s) { if (GRABA) fallo('04: faltan las tomas 05-bitrix.gif y 05-sumied.gif'); noToca(['04.1', '04.2'], 'faltan sus tomas') }
+      else {
+        await ponerTomas([b, s]); escena('04 Bitrix24 y Sumied')
+        await di('04.1', () => ra.ir(480, 540, 900))
+        await di('04.2', () => ra.ir(1440, 540, 900))
+        if (GRABA) await quieto(Math.max(0, Math.max(duraGif(b), duraGif(s)) * 1000 - 9000))
+      }
     }
   }
   // ── 05 · La pestaña Sumied dentro de Bitrix24 (tomas) ──────────────────────
-  {
-    const fs = ['resumen', 'cuotas', 'laboral', 'portal'].map((n) => toma(`05-pestana-${n}.gif`))
-    if (fs.some((f) => !f)) { if (GRABA) fallo('05: faltan tomas 05-pestana-*.gif (resumen, cuotas, laboral, portal)'); noToca(['05.1', '05.2', '05.3', '05.4', '05.5'], 'faltan sus tomas') }
-    else {
-      escena('05 La pestaña Sumied')
-      for (const [k, id] of [['0', '05.1'], ['0', '05.2'], ['1', '05.3'], ['2', '05.4'], ['3', '05.5']]) {
-        if (id !== '05.2') await ponerTomas([fs[Number(k)]])
-        await di(id, () => ra.ir(960, 540, 600))
-        if (GRABA && id !== '05.1') await quieto(Math.max(0, duraGif(fs[Number(k)]) * 1000 - 6000))
+  if (pide('05')) {
+    {
+      const fs = ['resumen', 'cuotas', 'laboral', 'portal'].map((n) => toma(`05-pestana-${n}.gif`))
+      if (fs.some((f) => !f)) { if (GRABA) fallo('05: faltan tomas 05-pestana-*.gif (resumen, cuotas, laboral, portal)'); noToca(['05.1', '05.2', '05.3', '05.4', '05.5'], 'faltan sus tomas') }
+      else {
+        escena('05 La pestaña Sumied')
+        for (const [k, id] of [['0', '05.1'], ['0', '05.2'], ['1', '05.3'], ['2', '05.4'], ['3', '05.5']]) {
+          if (id !== '05.2') await ponerTomas([fs[Number(k)]])
+          await di(id, () => ra.ir(960, 540, 600))
+          if (GRABA && id !== '05.1') await quieto(Math.max(0, duraGif(fs[Number(k)]) * 1000 - 6000))
+        }
       }
     }
   }
-
   // ── 06 · El cobro del mes ──────────────────────────────────────────────────
-  await ir(`/conta/ventas/clientes-y-cuotas/cobro?empresa=${SOCIEDAD}&mes=${MES}`, page.locator('main'))
-  escena('06 El cobro')
-  const { data: mes0 } = await admin.from('conta_cobro_mes').select('preparado_at, enviado_at').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES).maybeSingle()
-  if (mes0?.enviado_at) fallo('06: el cobro ya está enviado: la demo no está limpia («Volver a empezar» antes de grabar)')
-  if (!GRABA && mes0?.preparado_at) noToca(['06.1'], 'el cobro ya está preparado')
-  else await di('06.1', () => pulsaQueEscribe(page.getByRole('button', { name: 'Preparar el cobro' })))
-  if (GRABA) await R.sinVer(() => page.locator('section.g5-barra').waitFor({ timeout: 180_000 }).catch(() => fallo('06: el cobro no se ha preparado en 3 minutos')))
-  const cambio = (t) => page.locator('li.g5-cambio').filter({ hasText: t })
-  const libre = () => page.waitForFunction(() => !document.querySelector('.g5-cambio .g4-boton[disabled], .g4-boton[data-tipo="primario"][disabled]'), null, { timeout: 30_000 }).catch(() => {})
-  if (GRABA || (mes0?.preparado_at && !mes0?.enviado_at)) {
-    await di('06.2', () => mirar(page.getByText('Lo que cambia').first(), page.locator('li.g5-cambio').first()))
-    await di('06.3', () => a(cambio('Imprenta Rápida Sol').locator('.g5-cambio-porque')))
-    await di('06.4', () => a(cambio('Talleres Ruiz').locator('.g5-cambio-porque')))
-    await di('06.5', async () => { await libre(); await pulsaQueEscribe(cambio('Reformas Atalaya').getByRole('button', { name: 'Este mes no' })) })
-    await di('06.6', async () => {
-      const pendiente = () => page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
-      if (!GRABA) { await a(pendiente()); return }
-      for (let i = 0, vacios = 0; i < 80 && vacios < 3; i++) {
-        await libre()
-        const b = pendiente()
-        if (!(await b.isVisible().catch(() => false))) { vacios++; await quieto(1000); continue }
-        vacios = 0; await b.scrollIntoViewIfNeeded().catch(() => {})
-        if (i < 2) { await ra.clic(b, 700); await quieto(1200) } else { await b.click(); await quieto(500) }
-      }
-    })
-    await di('06.7', async () => { await libre(); await pulsaQueEscribe(page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ })) })
-    await di('06.8', () => a(page.getByText('No entran')))
-    const enviar = page.locator('button.g5-enviar')
-    await di('06.9', async () => {
-      if (GRABA) await page.waitForFunction((el) => el && !el.disabled, await enviar.elementHandle(), { timeout: 30_000 }).catch(() => {})
-      await pulsaQueEscribe(enviar)
-    })
-    await di('06.10', async () => {
-      if (!GRABA) return
-      const dlg = page.getByRole('dialog')
-      await dlg.first().waitFor({ timeout: 10_000 }); await mirar(dlg)
-      await quieto(2500)
-      await ra.clic(dlg.getByRole('button', { name: /^Sí, enviar/ }), 700)
-    })
-    await foto('06')
-  } else noToca(['06.2', '06.3', '06.4', '06.5', '06.6', '06.7', '06.8', '06.9', '06.10'], mes0?.enviado_at ? 'el cobro ya está enviado' : 'sin preparar; en ensayo no se prepara')
+  if (pide('06')) {
+    await ir(`/conta/ventas/clientes-y-cuotas/cobro?empresa=${SOCIEDAD}&mes=${MES}`, page.locator('main'))
+    escena('06 El cobro')
+    const { data: mes0 } = await admin.from('conta_cobro_mes').select('preparado_at, enviado_at').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES).maybeSingle()
+    if (mes0?.enviado_at) fallo('06: el cobro ya está enviado: la demo no está limpia («Volver a empezar» antes de grabar)')
+    if (!GRABA && mes0?.preparado_at) noToca(['06.1'], 'el cobro ya está preparado')
+    else await di('06.1', () => pulsaQueEscribe(page.getByRole('button', { name: 'Preparar el cobro' })))
+    if (GRABA) await R.sinVer(() => page.locator('section.g5-barra').waitFor({ timeout: 180_000 }).catch(() => fallo('06: el cobro no se ha preparado en 3 minutos')))
+    const cambio = (t) => page.locator('li.g5-cambio').filter({ hasText: t })
+    const libre = () => page.waitForFunction(() => !document.querySelector('.g5-cambio .g4-boton[disabled], .g4-boton[data-tipo="primario"][disabled]'), null, { timeout: 30_000 }).catch(() => {})
+    if (GRABA || (mes0?.preparado_at && !mes0?.enviado_at)) {
+      await di('06.2', () => mirar(page.getByText('Lo que cambia').first(), page.locator('li.g5-cambio').first()))
+      await di('06.3', () => a(cambio('Imprenta Rápida Sol').locator('.g5-cambio-porque')))
+      await di('06.4', () => a(cambio('Talleres Ruiz').locator('.g5-cambio-porque')))
+      await di('06.5', async () => { await libre(); await pulsaQueEscribe(cambio('Reformas Atalaya').getByRole('button', { name: 'Este mes no' })) })
+      await di('06.6', async () => {
+        const pendiente = () => page.locator('li.g5-cambio .g4-boton[data-tipo="primario"]:not([disabled])').first()
+        if (!GRABA) { await a(pendiente()); return }
+        for (let i = 0, vacios = 0; i < 80 && vacios < 3; i++) {
+          await libre()
+          const b = pendiente()
+          if (!(await b.isVisible().catch(() => false))) { vacios++; await quieto(1000); continue }
+          vacios = 0; await b.scrollIntoViewIfNeeded().catch(() => {})
+          if (i < 2) { await ra.clic(b, 700); await quieto(1200) } else { await b.click(); await quieto(500) }
+        }
+      })
+      await di('06.7', async () => { await libre(); await pulsaQueEscribe(page.getByRole('button', { name: /^Aprobar (el que no cambia|los \d+)/ })) })
+      await di('06.8', () => a(page.getByText('No entran')))
+      const enviar = page.locator('button.g5-enviar')
+      await di('06.9', async () => {
+        if (GRABA) await page.waitForFunction((el) => el && !el.disabled, await enviar.elementHandle(), { timeout: 30_000 }).catch(() => {})
+        await pulsaQueEscribe(enviar)
+      })
+      await di('06.10', async () => {
+        if (!GRABA) return
+        const dlg = page.getByRole('dialog')
+        await dlg.first().waitFor({ timeout: 10_000 }); await mirar(dlg)
+        await quieto(2500)
+        await ra.clic(dlg.getByRole('button', { name: /^Sí, enviar/ }), 700)
+      })
+      await foto('06')
+    } else noToca(['06.2', '06.3', '06.4', '06.5', '06.6', '06.7', '06.8', '06.9', '06.10'], mes0?.enviado_at ? 'el cobro ya está enviado' : 'sin preparar; en ensayo no se prepara')
 
-  // Lo enviado, de verdad (la base), y la espera de GoCardless: fuera del montaje.
-  if (GRABA) {
-    await R.sinVer(async () => {
-      for (let i = 0; i < 60 && !enviado; i++) {
-        const { data } = await admin.from('conta_cobro_mes').select('enviado_at').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES).maybeSingle()
-        if (data?.enviado_at) enviado = true; else await esperar(3000)
-      }
-    })
-    decir(enviado ? '  · COBRO ENVIADO al sandbox.' : '  ✗ la base no dice enviado')
-    if (!enviado) fallo('06: el cobro no se ha enviado')
+    // Lo enviado, de verdad (la base), y la espera de GoCardless: fuera del montaje.
+    if (GRABA) {
+      await R.sinVer(async () => {
+        for (let i = 0; i < 60 && !enviado; i++) {
+          const { data } = await admin.from('conta_cobro_mes').select('enviado_at').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).eq('mes', MES).maybeSingle()
+          if (data?.enviado_at) enviado = true; else await esperar(3000)
+        }
+      })
+      decir(enviado ? '  · COBRO ENVIADO al sandbox.' : '  ✗ la base no dice enviado')
+      if (!enviado) fallo('06: el cobro no se ha enviado')
+    }
   }
-  const esperaHasta = async (que, fn, min) => {
-    const desde = Date.now()
-    while (Date.now() - desde < min * 60_000) { if (await fn()) { decir(`  · ${que}: a los ${Math.round((Date.now() - desde) / 60000)} min`); return true } await esperar(60_000) }
-    fallo(`${que}: no ha llegado en ${min} min`); return false
-  }
-
   // ── 07 · Cobrado y facturado ───────────────────────────────────────────────
-  if (GRABA && enviado) await R.sinVer(() => esperaHasta(`factura de ${CLIENTE}`, async () => !!(await reciboDe(tr.id))?.invoice_id, 30))
-  const rec = await reciboDe(tr.id)
-  await ir(`/conta/ventas/clientes-y-cuotas/cobro?empresa=${SOCIEDAD}&mes=${MES}`, page.locator('main'))
-  escena('07 Cobrado y facturado')
-  await di('07.1', () => a(page.getByText('Cómo va cada recibo')))
-  if (!rec?.invoice_id) noToca(['07.2', '07.3', '07.4', '07.5'], `${CLIENTE} aún no tiene factura`)
-  else {
-    await ir(`/conta/ventas/facturas/${rec.invoice_id}`, 'Lo que ha pasado')
-    await di('07.2', () => mirar(page.locator('h1').first(), page.getByText(/2026\/\d+\/\d+|Factura/).first()))
-    await di('07.3', () => a(page.getByText('Lo que ha pasado')))
-    await di('07.4', () => a(page.getByText('En la contabilidad')))
-    let png = null
-    await R.sinVer(async () => {
-      const b = page.getByText('Descargar PDF').first()
-      const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), b.click()]).catch(() => [null])
-      if (!d) { fallo('07.5: el PDF no se ha bajado'); return }
-      const f = join(salida, 'factura.pdf'); await d.saveAs(f)
-      execFileSync('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', f, join(salida, 'factura')])
-      png = readdirSync(salida).find((x) => x.startsWith('factura') && x.endsWith('.png'))
-      if (png) await page.setContent(`<!doctype html><html><body style="margin:0;background:#525659;display:flex;justify-content:center"><img id="pdf" src="data:image/png;base64,${readFileSync(join(salida, png)).toString('base64')}" style="height:${H}px;box-shadow:0 4px 20px rgba(0,0,0,.4)"></body></html>`)
-      await quieto(500)
-    })
-    await di('07.5', async () => {
-      const c = await page.locator('#pdf').boundingBox().catch(() => null)
-      if (!c) throw new Error('no está el PDF')
-      ra.mira({ x: c.x, y: c.y + c.height * 0.32, width: c.width, height: c.height * 0.3 })
-      await ra.ir(c.x + c.width * 0.3, c.y + c.height * 0.45, 900)
-    })
-    await foto('07')
+  if (pide('07')) {
+    if (GRABA && enviado) await R.sinVer(() => esperaHasta(`factura de ${CLIENTE}`, async () => !!(await reciboDe(tr.id))?.invoice_id, 30))
+    const rec = await reciboDe(tr.id)
+    await ir(`/conta/ventas/clientes-y-cuotas/cobro?empresa=${SOCIEDAD}&mes=${MES}`, page.locator('main'))
+    escena('07 Cobrado y facturado')
+    await di('07.1', () => a(page.getByText('Cómo va cada recibo')))
+    if (!rec?.invoice_id) noToca(['07.2', '07.3', '07.4', '07.5'], `${CLIENTE} aún no tiene factura`)
+    else {
+      await ir(`/conta/ventas/facturas/${rec.invoice_id}`, 'Lo que ha pasado')
+      await di('07.2', () => mirar(page.locator('h1').first(), page.getByText(/2026\/\d+\/\d+|Factura/).first()))
+      await di('07.3', () => a(page.getByText('Lo que ha pasado')))
+      await di('07.4', () => a(page.getByText('En la contabilidad')))
+      let png = null
+      await R.sinVer(async () => {
+        const b = page.getByText('Descargar PDF').first()
+        const [d] = await Promise.all([page.waitForEvent('download', { timeout: 30_000 }), b.click()]).catch(() => [null])
+        if (!d) { fallo('07.5: el PDF no se ha bajado'); return }
+        const f = join(salida, 'factura.pdf'); await d.saveAs(f)
+        execFileSync('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', f, join(salida, 'factura')])
+        png = readdirSync(salida).find((x) => x.startsWith('factura') && x.endsWith('.png'))
+        if (png) await page.setContent(`<!doctype html><html><body style="margin:0;background:#525659;display:flex;justify-content:center"><img id="pdf" src="data:image/png;base64,${readFileSync(join(salida, png)).toString('base64')}" style="height:${H}px;box-shadow:0 4px 20px rgba(0,0,0,.4)"></body></html>`)
+        await quieto(500)
+      })
+      await di('07.5', async () => {
+        const c = await page.locator('#pdf').boundingBox().catch(() => null)
+        if (!c) throw new Error('no está el PDF')
+        ra.mira({ x: c.x, y: c.y + c.height * 0.32, width: c.width, height: c.height * 0.3 })
+        await ra.ir(c.x + c.width * 0.3, c.y + c.height * 0.45, 900)
+      })
+      await foto('07')
+    }
   }
   // ── 07b · El buzón (toma) ──────────────────────────────────────────────────
-  {
-    const b = toma('07b-buzon.gif')
-    if (!b) { if (GRABA) fallo('07b: falta la toma 07b-buzon.gif'); noToca(['07b.1'], 'falta su toma') }
-    else { await ponerTomas([b]); escena('07b El buzón'); await di('07b.1', () => ra.ir(960, 420, 800)); if (GRABA) await quieto(Math.max(0, duraGif(b) * 1000 - 6000)) }
-  }
-
-  // ── 08 · En la contabilidad ────────────────────────────────────────────────
-  let ing = await ingresoDe(tr.id)
-  if (GRABA && enviado) {
-    await R.sinVer(async () => {
-      await esperaHasta(`ingreso de ${CLIENTE} casado en el banco`, async () => {
-        await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(() => {}, () => {})
-        ing = await ingresoDe(tr.id); return !!ing?.casado
-      }, 45)
-      await validarIngresosFacturados(julio.cliente, perfil?.display_name ?? null)
-    })
-  }
-  const c430 = (await admin.from('company_account').select('code').eq('company_id', SOCIEDAD).like('code', '430%').ilike('name', 'Talleres Ruiz%').limit(1).maybeSingle()).data
-  await ir('/conta/libros/registro/expedidas', page.getByText(/Talleres Ruiz/))
-  escena('08 En la contabilidad')
-  await di('08.1', () => a(page.locator('tr').filter({ hasText: /Talleres Ruiz/ })))
-  if (c430) { await ir(`/conta/plan/${c430.code}`, 'Saldo'); await di('08.2', () => mirar(page.getByText(/Saldo/).first(), page.getByText(/Saldada/).first())) } else fallo('08.2: sin la 430 de Talleres Ruiz')
-  await ir('/conta/plan/57200002', 'Saldo')
-  await di('08.3', () => mirar(page.getByText(/Saldo/).first(), page.getByText(/deudor|acreedor|Saldada/).first()))
-  await foto('08-57200002')
-  await ir('/conta/bancos', ing ? page.getByText(`+${ing.texto}`, { exact: true }) : page.getByText(/GOCARDLESS/))
-  await di('08.4', () => a(ing ? page.getByText(`+${ing.texto}`, { exact: true }) : page.getByText(/GOCARDLESS/)))
-  await di('08.5', () => ra.ir(960, 300, 1000))
-
-  // ── 09 · El banco ──────────────────────────────────────────────────────────
-  escena('09 El banco')
-  await di('09.1', () => a(page.getByText(/^He casado yo/)))
-  await di('09.2', () => pulsa(page.getByRole('button', { name: /Casados solos/ })))
-  await di('09.3', () => pulsa(page.getByRole('listitem').filter({ hasText: ing?.texto ?? '—' }).getByRole('button', { name: 'Abrir' })))
-  await di('09.4', () => a(page.getByRole('button', { name: 'Deshacer' })))
-  await foto('09')
-
-  // ── 10 · El portal, desde la gestoría ──────────────────────────────────────
-  await ir(`/conta/ventas/clientes-y-cuotas/cliente/${tr.id}?pestana=portal`, 'Tomás Ruiz')
-  escena('10 El portal, desde la gestoría')
-  await di('10.1', () => a(page.getByText('Tomás Ruiz')))
-  await di('10.2', () => mirar(page.getByText(/facturas de gasto/i), page.getByText(/Mensajes|mensaje/).first()))
-  await foto('10')
-
-  // ── 11 · El portal, como lo ve el cliente ──────────────────────────────────
-  const tomas = await usuarioDelPortal(PORTAL)
-  const felipe = await usuarioDelPortal(DEVUELTO)
-  const comoEnElPortal = async (u, pestana) => {
-    const s = await sesionDe(u.user)
-    await R.sinVer(async () => {
-      await page.goto(`${APP}/portal.html`, { waitUntil: 'domcontentloaded' })
-      await page.evaluate(([ses, cli]) => { localStorage.setItem('sumied-portal', ses); localStorage.setItem('sumied-portal-cliente', cli) }, [JSON.stringify(s.sesion), u.party])
-      await page.goto(`${APP}/portal.html#${pestana}`, { waitUntil: 'domcontentloaded' })
-      await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => fallo(`11: el portal no ha cargado (${pestana})`))
-      await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await quieto(600)
-    })
-  }
-  const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await quieto(600) }) }
-  if (!tomas) { fallo('11: Tomás Ruiz no tiene usuario en el portal («Volver a empezar» lo deja listo)'); noToca(['11.1', '11.2', '11.4', '11.5', '11.6', '11.7'], 'Tomás Ruiz sin acceso') }
-  else {
-    await comoEnElPortal(tomas, 'inicio')
-    escena('11 El portal del cliente')
-    await di('11.1', () => a(page.locator('section[aria-labelledby="pt-piden"]')))
-    await pestanaPortal('facturas')
-    await di('11.2', () => a(page.locator('h1.pt-h1').filter({ hasText: 'Tus facturas' }).locator('xpath=following::b[1]')))
-    await foto('11-tomas')
-  }
-  if (!felipe) { if (GRABA) fallo('11.3: Felipe Herrera no tiene usuario en el portal («Volver a empezar» lo deja listo)'); noToca(['11.3'], 'Felipe Herrera aún no tiene acceso: lo deja «Volver a empezar»') }
-  else {
-    if (GRABA && enviado) await R.sinVer(() => esperaHasta(`devuelto de ${DEVUELTO.cliente}`, async () => ['devuelto', 'retrocedido'].includes((await reciboDe(felipe.party))?.estado), 20))
-    const devuelto = ['devuelto', 'retrocedido'].includes((await reciboDe(felipe.party))?.estado)
-    if (!GRABA && !devuelto) noToca(['11.3'], `${DEVUELTO.cliente} aún no tiene su recibo devuelto`)
-    else await comoEnElPortal(felipe, 'inicio')
-    const pagar = page.getByRole('button', { name: 'Pagar con tarjeta o Bizum' })
-    if (GRABA || devuelto) await di('11.3', async () => { await mirar(page.getByText('Tienes un recibo devuelto')); await a(pagar) })
-    if (GRABA) {
-      // Julio (nº98): se paga con la tarjeta de pruebas de Stripe. Escribe en la demo y en Stripe en modo de pruebas.
-      await ra.clic(pagar, 600)
-      await R.sinVer(async () => { await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 }).catch(() => fallo('11.3: no se ha abierto la página de pago de Stripe')); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(800) })
-      try {
-        const tarjetaBtn = page.locator('[data-testid="card-accordion-item-button"]')
-        if (await tarjetaBtn.isVisible().catch(() => false)) await ra.clic(tarjetaBtn, 600)
-        for (const [sel, v] of [['#cardNumber', '4242 4242 4242 4242'], ['#cardExpiry', '12 / 34'], ['#cardCvc', '123'], ['#billingName', 'Felipe Herrera']]) {
-          const c = page.locator(sel)
-          if (await c.isVisible().catch(() => false)) { await ra.clic(c, 500); await c.pressSequentially(v, { delay: 45 }) }
-        }
-        await ra.clic(page.locator('[data-testid="hosted-payment-submit-button"], button[type="submit"]').first(), 700)
-        await R.sinVer(async () => { await page.waitForURL(/portal\.html/, { timeout: 90_000 }); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(2500) })
-        await foto('11-pagado')
-      } catch (e) { fallo(`11.3: el pago de pruebas en Stripe: ${String(e.message).split('\n')[0]}`); await foto('11-stripe-error') }
+  if (pide('07b')) {
+    {
+      const b = toma('07b-buzon.gif')
+      if (!b) { if (GRABA) fallo('07b: falta la toma 07b-buzon.gif'); noToca(['07b.1'], 'falta su toma') }
+      else { await ponerTomas([b]); escena('07b El buzón'); await di('07b.1', () => ra.ir(960, 420, 800)); if (GRABA) await quieto(Math.max(0, duraGif(b) * 1000 - 6000)) }
     }
   }
-  if (tomas) {
-    await comoEnElPortal(tomas, 'trabajadores')
-    await di('11.4', () => mirar(page.locator('h1.pt-h1'), page.getByText('Pedir un alta')))
-    await pestanaPortal('documentos')
-    await di('11.5', () => a(page.getByText(/Sube una factura, un ticket/)))
-    await pestanaPortal('mensajes')
-    await di('11.6', () => a(page.locator('h1.pt-h1')))
-    await pestanaPortal('cuenta')
-    await di('11.7', () => a(page.getByText('Cuenta donde se cargan tus recibos')))
-    await foto('11-cuenta')
+  // ── 08 · En la contabilidad ────────────────────────────────────────────────
+  if (pide('08')) {
+    ing = await ingresoDe(tr.id)
+    if (GRABA && enviado) {
+      await R.sinVer(async () => {
+        await esperaHasta(`ingreso de ${CLIENTE} casado en el banco`, async () => {
+          await admin.rpc('demo_gestoria_ingresos_gocardless', { p_cuenta: CUENTA }).then(() => {}, () => {})
+          ing = await ingresoDe(tr.id); return !!ing?.casado
+        }, 45)
+        await validarIngresosFacturados(julio.cliente, perfil?.display_name ?? null)
+      })
+    }
+    const c430 = (await admin.from('company_account').select('code').eq('company_id', SOCIEDAD).like('code', '430%').ilike('name', 'Talleres Ruiz%').limit(1).maybeSingle()).data
+    await ir('/conta/libros/registro/expedidas', page.getByText(/Talleres Ruiz/))
+    escena('08 En la contabilidad')
+    await di('08.1', () => a(page.locator('tr').filter({ hasText: /Talleres Ruiz/ })))
+    if (c430) { await ir(`/conta/plan/${c430.code}`, 'Saldo'); await di('08.2', () => mirar(page.getByText(/Saldo/).first(), page.getByText(/Saldada/).first())) } else fallo('08.2: sin la 430 de Talleres Ruiz')
+    await ir('/conta/plan/57200002', 'Saldo')
+    await di('08.3', () => mirar(page.getByText(/Saldo/).first(), page.getByText(/deudor|acreedor|Saldada/).first()))
+    await foto('08-57200002')
+    await ir('/conta/bancos', ing ? page.getByText(`+${ing.texto}`, { exact: true }) : page.getByText(/GOCARDLESS/))
+    await di('08.4', () => a(ing ? page.getByText(`+${ing.texto}`, { exact: true }) : page.getByText(/GOCARDLESS/)))
+    await di('08.5', () => ra.ir(960, 300, 1000))
+  }
+  // ── 09 · El banco ──────────────────────────────────────────────────────────
+  if (pide('09')) {
+    escena('09 El banco')
+    await di('09.1', () => a(page.getByText(/^He casado yo/)))
+    await di('09.2', () => pulsa(page.getByRole('button', { name: /Casados solos/ })))
+    await di('09.3', () => pulsa(page.getByRole('listitem').filter({ hasText: ing?.texto ?? '—' }).getByRole('button', { name: 'Abrir' })))
+    await di('09.4', () => a(page.getByRole('button', { name: 'Deshacer' })))
+    await foto('09')
+  }
+  // ── 10 · El portal, desde la gestoría ──────────────────────────────────────
+  if (pide('10')) {
+    await ir(`/conta/ventas/clientes-y-cuotas/cliente/${tr.id}?pestana=portal`, 'Tomás Ruiz')
+    escena('10 El portal, desde la gestoría')
+    await di('10.1', () => a(page.getByText('Tomás Ruiz')))
+    await di('10.2', () => mirar(page.getByText(/facturas de gasto/i), page.getByText(/Mensajes|mensaje/).first()))
+    await foto('10')
+  }
+  // ── 11 · El portal, como lo ve el cliente ──────────────────────────────────
+  if (pide('11')) {
+    const tomas = await usuarioDelPortal(PORTAL)
+    const felipe = await usuarioDelPortal(DEVUELTO)
+    const comoEnElPortal = async (u, pestana) => {
+      const s = await sesionDe(u.user)
+      await R.sinVer(async () => {
+        await page.goto(`${APP}/portal.html`, { waitUntil: 'domcontentloaded' })
+        await page.evaluate(([ses, cli]) => { localStorage.setItem('sumied-portal', ses); localStorage.setItem('sumied-portal-cliente', cli) }, [JSON.stringify(s.sesion), u.party])
+        await page.goto(`${APP}/portal.html#${pestana}`, { waitUntil: 'domcontentloaded' })
+        await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => fallo(`11: el portal no ha cargado (${pestana})`))
+        await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => {}); await quieto(600)
+      })
+    }
+    const pestanaPortal = async (p) => { await R.sinVer(async () => { await page.goto(`${APP}/portal.html#${p}`); await page.locator('h1.pt-h1').first().waitFor({ timeout: 30_000 }).catch(() => {}); await quieto(600) }) }
+    if (!tomas) { fallo('11: Tomás Ruiz no tiene usuario en el portal («Volver a empezar» lo deja listo)'); noToca(['11.1', '11.2', '11.4', '11.5', '11.6', '11.7'], 'Tomás Ruiz sin acceso') }
+    else {
+      await comoEnElPortal(tomas, 'inicio')
+      escena('11 El portal del cliente')
+      await di('11.1', () => a(page.locator('section[aria-labelledby="pt-piden"]')))
+      await pestanaPortal('facturas')
+      await di('11.2', () => a(page.locator('h1.pt-h1').filter({ hasText: 'Tus facturas' }).locator('xpath=following::b[1]')))
+      await foto('11-tomas')
+    }
+    if (!felipe) { if (GRABA) fallo('11.3: Felipe Herrera no tiene usuario en el portal («Volver a empezar» lo deja listo)'); noToca(['11.3'], 'Felipe Herrera aún no tiene acceso: lo deja «Volver a empezar»') }
+    else {
+      if (GRABA && enviado) await R.sinVer(() => esperaHasta(`devuelto de ${DEVUELTO.cliente}`, async () => ['devuelto', 'retrocedido'].includes((await reciboDe(felipe.party))?.estado), 20))
+      const devuelto = ['devuelto', 'retrocedido'].includes((await reciboDe(felipe.party))?.estado)
+      if (!GRABA && !devuelto) noToca(['11.3'], `${DEVUELTO.cliente} aún no tiene su recibo devuelto`)
+      else await comoEnElPortal(felipe, 'inicio')
+      const pagar = page.getByRole('button', { name: 'Pagar con tarjeta o Bizum' })
+      if (GRABA || devuelto) await di('11.3', async () => { await mirar(page.getByText('Tienes un recibo devuelto')); await a(pagar) })
+      if (GRABA) {
+        // Julio (nº98): se paga con la tarjeta de pruebas de Stripe. Escribe en la demo y en Stripe en modo de pruebas.
+        await ra.clic(pagar, 600)
+        await R.sinVer(async () => { await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 }).catch(() => fallo('11.3: no se ha abierto la página de pago de Stripe')); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(800) })
+        try {
+          const tarjetaBtn = page.locator('[data-testid="card-accordion-item-button"]')
+          if (await tarjetaBtn.isVisible().catch(() => false)) await ra.clic(tarjetaBtn, 600)
+          for (const [sel, v] of [['#cardNumber', '4242 4242 4242 4242'], ['#cardExpiry', '12 / 34'], ['#cardCvc', '123'], ['#billingName', 'Felipe Herrera']]) {
+            const c = page.locator(sel)
+            if (await c.isVisible().catch(() => false)) { await ra.clic(c, 500); await c.pressSequentially(v, { delay: 45 }) }
+          }
+          await ra.clic(page.locator('[data-testid="hosted-payment-submit-button"], button[type="submit"]').first(), 700)
+          await R.sinVer(async () => { await page.waitForURL(/portal\.html/, { timeout: 90_000 }); await page.waitForLoadState('networkidle').catch(() => {}); await quieto(2500) })
+          await foto('11-pagado')
+        } catch (e) { fallo(`11.3: el pago de pruebas en Stripe: ${String(e.message).split('\n')[0]}`); await foto('11-stripe-error') }
+      }
+    }
+    if (tomas) {
+      await comoEnElPortal(tomas, 'trabajadores')
+      await di('11.4', () => mirar(page.locator('h1.pt-h1'), page.getByText('Pedir un alta')))
+      await pestanaPortal('documentos')
+      await di('11.5', () => a(page.getByText(/Sube una factura, un ticket/)))
+      await pestanaPortal('mensajes')
+      await di('11.6', () => a(page.locator('h1.pt-h1')))
+      await pestanaPortal('cuenta')
+      await di('11.7', () => a(page.getByText('Cuenta donde se cargan tus recibos')))
+      await foto('11-cuenta')
+    }
   }
 } catch (e) {
   fallo(`general: ${String(e.message).split('\n')[0]}`)
   await foto('x-error')
 }
+if (!inicio) inicio = R.pasos[0]?.desde ?? 0
 const fin = R.t()
 const video = GRABA ? page.video() : null
 await ctx.close()
@@ -472,7 +493,7 @@ await navegador.close()
 // La tarjeta de la cuenta abierta de la portada y del cierre van sin frase propia en el crudo: las pone montar.mjs.
 const dichos = R.dichos.filter((d) => d.texto)
 writeFileSync(join(salida, 'tramos.json'), JSON.stringify({ inicio, fin, pasos: R.pasos, dichos, objetivos: R.objetivos, cortes: R.cortes, errores }, null, 2))
-const esperadas = Object.keys(FRASES).filter((id) => id !== 'portada' && id !== 'cierre')
+const esperadas = Object.keys(FRASES).filter((id) => id !== 'portada' && id !== 'cierre' && pide(id.split('.')[0]))
 const dichas = new Set(dichos.map((d) => d.id))
 const faltan = esperadas.filter((id) => !dichas.has(id))
 decir(`\nModo ${MODO}: ${dichas.size} de ${esperadas.length} frases con su gesto${faltan.length ? ` (faltan ${faltan.join(', ')})` : ''}; ${fallos.length} fallos; ${errores.length} errores de la página.${GRABA ? ` Cobro ${enviado ? 'enviado' : 'NO enviado'}.` : ''}`)

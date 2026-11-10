@@ -23,11 +23,11 @@ for f in frases:
         if hasattr(voz, "synthesize_wav"):
             try:
                 from piper import SynthesisConfig
-                voz.synthesize_wav(f["texto"], w, syn_config=SynthesisConfig(length_scale=LENTITUD))
+                voz.synthesize_wav((f.get("voz") or f["texto"]), w, syn_config=SynthesisConfig(length_scale=LENTITUD))
             except ImportError:
-                voz.synthesize_wav(f["texto"], w)
+                voz.synthesize_wav((f.get("voz") or f["texto"]), w)
         else:
-            voz.synthesize(f["texto"], w, length_scale=LENTITUD)
+            voz.synthesize((f.get("voz") or f["texto"]), w, length_scale=LENTITUD)
     with wave.open(f["salida"], "rb") as r:
         f["dura"] = r.getnframes() / float(r.getframerate())
     print(f"{f['dura']:5.2f} s · {f['texto']}")
