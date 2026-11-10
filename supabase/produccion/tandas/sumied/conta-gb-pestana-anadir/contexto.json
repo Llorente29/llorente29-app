@@ -1,0 +1,23 @@
+{
+ "_que": "GB · nº 17, G · contexto de producción, medido en SOLO LECTURA el 10/11 a las 13:34Z (vuelto a medir con la 0070 y la 0950 ya aplicadas). La 1126 quita y vuelve a poner el CHECK de las acciones de conta_bitrix_pestana_cambio (0 filas; hoy admite alta, baja, tarifa, deshacer, devuelto y suelto) con «servicio» además: solo amplía. Crea conta_bitrix_pestana_anadir(text,text,text,text,uuid,uuid,uuid,uuid,date,boolean), que no existe (ni otra con el mismo nombre), y no la llama. Usa _conta_portal_bitrix_quien (2345, Code 3), conta_tarifa_servicio_anadir (0930, G04) y _conta_bitrix_pestana_bitrix_de (2300), que existen. Nada en el camino del pedido.",
+ "medido": "2026-11-10T13:34Z",
+ "tanda": {
+  "supabase/migrations/20261110T1126_gb_pestana_anadir.sql": "1c337afd4f95223cbd53a66143e36b9a"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_bitrix_pestana_cambio"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_bitrix_pestana_cambio": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

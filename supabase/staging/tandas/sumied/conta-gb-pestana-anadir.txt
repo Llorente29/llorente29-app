@@ -1,0 +1,3 @@
+# GB · nº 17, G · «+ Añadir servicio o paquete» en la pestaña: la 1126 y su prueba (ROLLBACK). Necesita en staging la 2345 (Code 3) y la 0930 (G04); la 0950 (#581) la pasa la prueba si falta.
+supabase/migrations/20261110T1126_gb_pestana_anadir.sql
+supabase/staging/sql/20261110_gb_pestana_anadir_prueba.sql

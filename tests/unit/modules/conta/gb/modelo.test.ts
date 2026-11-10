@@ -136,7 +136,7 @@ describe('GB (nº 10) · las pestañas por área y «Lo pendiente con este clien
   })
   it('cada formulario abre en su pestaña', async () => {
     const { AREA_DE } = await import('@/publicas/bitrixPestanaModelo')
-    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros', invitar: 'portal', contestar: 'portal' })
+    expect(AREA_DE).toEqual({ alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros', invitar: 'portal', contestar: 'portal', servicio: 'cobros' })
   })
 })
 
@@ -186,5 +186,22 @@ describe('GB (nº 17, C) · los mensajes de su portal en la pestaña', () => {
       { id: 'm2', delCliente: true, quien: 'Persona Prueba', texto: '2 adjuntos', cuando: '10/11 · 09:05', sinLeer: true },
     ] })
     expect(modeloMensajes(null)).toBeNull()
+  })
+})
+
+describe('GB (nº 17, G) · añadir un servicio o un paquete desde la pestaña', () => {
+  it('lo que se puede añadir (cada nivel, sin los de por trabajador) y el recibo nuevo, con la cuenta de la ficha del G04', async () => {
+    const { conNiveles } = await import('../../../../e2e/conta/gb/respuesta')
+    const r = conNiveles()
+    const p = modeloPestana(r, '2026-11-09')!
+    expect(p.paraAnadir).toEqual([
+      { id: 'n:basica', texto: 'Gestoría mensual · Básica', servicio: 'ges', nivel: 'basica', paquete: null },
+      { id: 'n:premium', texto: 'Gestoría mensual · Premium', servicio: 'ges', nivel: 'premium', paquete: null },
+    ])
+    const o = p.paraAnadir[0]
+    expect(reciboPrevisto(r, '2026-11-09', Q, { accion: 'servicio', servicio: o.servicio, nivel: o.nivel, paquete: o.paquete, texto: o.texto, desde: '2026-12-01' }).frase)
+      .toBe('El recibo de diciembre pasa de 585,60 € a 675,60 € (+90,00 €).')
+    expect(reciboPrevisto(r, '2026-11-09', Q, { accion: 'servicio', servicio: o.servicio, nivel: o.nivel, paquete: o.paquete, texto: o.texto, desde: '2027-01-01' }).frase)
+      .toBe('El recibo de diciembre no cambia: 585,60 €.')
   })
 })

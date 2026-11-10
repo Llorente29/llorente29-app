@@ -62,6 +62,8 @@ export interface Pestana {
   trabajadores: { nombre: string; desde: string; importe: string | null; lineaId: string | null }[]
   /** nº 9 · Los servicios de su empresa que se cobran por trabajador (para dar de alta). */
   serviciosPorTrabajador: { id: string; nombre: string }[]
+  /** nº 17, G · Lo que se puede añadir (como «Añadir» de la ficha del G04): cada servicio con su nivel y cada paquete. Los de por trabajador van por «Dar de alta». */
+  paraAnadir: { id: string; texto: string; servicio: string | null; nivel: string | null; paquete: string | null }[]
   mandato: { texto: string; tono: Tono } | null
   cobros: { fecha: string; importe: string; estado: string; tono: Tono }[]
   hayMasCobros: number
@@ -108,6 +110,18 @@ export function modeloPestana(r: Fila, hoy: string): Pestana | null {
     trabajadores,
     serviciosPorTrabajador: d.servicios.filter((x) => String(x.company_id) === String(f.empresaId) && x.forma === 'por_empleado' && x.activo !== false)
       .map((x) => ({ id: String(x.id), nombre: String(x.nombre) })),
+    paraAnadir: [
+      ...d.servicios.filter((x) => String(x.company_id) === String(f.empresaId) && x.activo !== false && x.forma !== 'por_empleado')
+        .sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'))
+        .flatMap((x): Pestana['paraAnadir'] => {
+          const niveles = d.niveles.filter((n) => String(n.servicio_id) === String(x.id) && n.activo !== false).sort((a, b) => Number(a.orden ?? 0) - Number(b.orden ?? 0))
+          return niveles.length
+            ? niveles.map((n) => ({ id: `n:${n.id}`, texto: `${String(x.nombre)} · ${String(n.nombre)}`, servicio: String(x.id), nivel: String(n.id), paquete: null }))
+            : [{ id: `s:${x.id}`, texto: String(x.nombre), servicio: String(x.id), nivel: null, paquete: null }]
+        }),
+      ...d.paquetes.filter((x) => String(x.company_id) === String(f.empresaId) && x.activo !== false)
+        .map((x) => ({ id: `p:${x.id}`, texto: `Paquete · ${String(x.nombre)}`, servicio: null, nivel: null, paquete: String(x.id) })),
+    ],
     mandato: m.mandato,
     cobros: m.cobros.slice(0, COBROS_A_LA_VISTA), hayMasCobros: Math.max(0, m.cobros.length - COBROS_A_LA_VISTA),
     pendientes: m.pendientes.map((p) => ({ porque: p.porque || 'Sin detalle' })),
@@ -141,6 +155,7 @@ export function leerAlmohadilla(hash: string): { a: string | null; p: string | n
 export type Cambio =
   | { accion: 'alta'; servicio: string; nombre: string; desde: string }
   | { accion: 'baja'; linea: string; mes: string }
+  | { accion: 'servicio'; servicio: string | null; nivel: string | null; paquete: string | null; texto: string; desde: string }
   | { accion: 'tarifa'; linea: string; servicio: string; nivel: string | null; precio: number | null; porTrabajador: boolean; motivo: string; desde: string }
   | { accion: 'solicitud'; solicitud: string; tipo: 'alta' | 'baja'; nombre: string; servicio: string | null; desde: string }
 
@@ -156,6 +171,11 @@ function conElCambio(clientes: unknown, clienteId: string, empresaId: string, c:
     if (c.tipo === 'alta') return c.servicio ? conElCambio(clientes, clienteId, empresaId, { accion: 'alta', servicio: c.servicio, nombre: c.nombre, desde: c.desde }) : d
     const linea = asignaciones.find((a) => String(a.cliente_id) === clienteId && String(a.empleado_nombre ?? '').toUpperCase() === c.nombre.toUpperCase() && !a.hasta)
     return linea ? conElCambio(clientes, clienteId, empresaId, { accion: 'baja', linea: String(linea.id).replace(/^linea:/, ''), mes: c.desde }) : d
+  }
+  // nº 17, G · Un servicio (con su nivel) o un paquete nuevo, a precio de tarifa.
+  if (c.accion === 'servicio') {
+    return { ...d, asignaciones: [...asignaciones, { id: 'prevista', tipo: 'cuota', cliente_id: clienteId, empresa_id: empresaId, servicio_id: c.servicio,
+      nivel_id: c.nivel, paquete_id: c.paquete, empleado_nombre: null, importe_propio: null, periodo: 'mes', desde: c.desde, hasta: null }] }
   }
   if (c.accion === 'alta') {
     return { ...d, asignaciones: [...asignaciones, { id: 'prevista', tipo: 'cuota', cliente_id: clienteId, empresa_id: empresaId, servicio_id: c.servicio,
@@ -247,7 +267,7 @@ export function areasDe(p: Pestana, pt: Portal | null): { id: Area; nombre: stri
 }
 
 /** En qué pestaña va cada formulario: abrir uno lleva a la suya. */
-export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud' | 'suelto' | 'invitar' | 'contestar', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros', invitar: 'portal', contestar: 'portal' }
+export const AREA_DE: Record<'alta' | 'baja' | 'tarifa' | 'solicitud' | 'suelto' | 'invitar' | 'contestar' | 'servicio', Area> = { alta: 'laboral', baja: 'laboral', tarifa: 'cobros', solicitud: 'portal', suelto: 'cobros', invitar: 'portal', contestar: 'portal', servicio: 'cobros' }
 
 /**
  * nº 17, A · Los recibos devueltos del cliente (conta_bitrix_pestana_devueltos,

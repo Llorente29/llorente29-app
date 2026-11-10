@@ -158,6 +158,35 @@ function mensajesDe(x: unknown): Record<string, unknown> | null {
 }
 
 /**
+ * nº 17, G · «+ Añadir servicio o paquete»: lo añade la función de siempre de la
+ * ficha del G04 (conta_tarifa_servicio_anadir), como la persona. Con «ensayo»,
+ * solo la frase («Se añadirá …»); sin él, lo añade, Bitrix24 se pone al día y,
+ * si es lo último de hoy, se puede deshacer.
+ */
+async function anadir(cuerpo: Record<string, unknown>): Promise<Response> {
+  const m = await quienMira(cuerpo)
+  if (!m.ok) return m.respuesta
+  const datos = (cuerpo.datos ?? {}) as Record<string, unknown>
+  const uuid = (x: unknown) => (typeof x === 'string' && /^[0-9a-f-]{36}$/.test(x) ? x : null)
+  const empresa = uuid(datos.empresa)
+  const desde = typeof datos.desde === 'string' && /^\d{4}-\d{2}-01$/.test(datos.desde) ? datos.desde : null
+  const ensayo = datos.ensayo !== false
+  if (!empresa || !desde || (!uuid(datos.servicio) && !uuid(datos.paquete))) return json(400, { estado: 'no_se_pudo', frase: 'No se sabe qué añadir.' })
+  const db = baseDeDatos()
+  const { data, error } = await db.rpc('conta_bitrix_pestana_anadir', { p_portal: m.portal, p_correo: m.correo, p_tipo: m.tipo, p_id: m.id,
+    p_empresa: empresa, p_servicio: uuid(datos.servicio), p_nivel: uuid(datos.nivel), p_paquete: uuid(datos.paquete), p_desde: desde, p_ensayo: ensayo })
+  if (error) return json(500, { estado: 'error', frase: 'No se ha podido guardar en Sumied. No ha cambiado nada.' })
+  const r = (data ?? {}) as Record<string, unknown>
+  if (r.estado !== 'ok') return json(200, { estado: r.estado ?? 'no_se_pudo', frase: typeof r.frase === 'string' ? r.frase : FRASES[String(r.estado)] ?? 'No se ha podido añadir.' })
+  if (ensayo) return json(200, { estado: 'ok', ensayo: true, frase: r.frase })
+  const inicio = Date.now()
+  const nota = `Sumied · ${String(r.frase ?? '').replace(/^Añadido /, 'añadido ').replace(/\.$/, '')}`
+  const { enBitrix, pestana } = await despuesDelCambio(db, m, r, nota)
+  const deshacer = await loQueSePuedeDeshacer(db, m, r, 'alta', inicio)
+  return json(200, { estado: 'ok', frase: r.frase, cambio: r.cambio, bitrix: enBitrix, pestana, deshacer })
+}
+
+/**
  * nº 17, C · «Invitar» a su portal: lo hace conta-portal («bitrix_invitar», con
  * la clave de servicio), que llama a la de Code 3 como la persona (solo un
  * administrador o un encargado) y manda el correo, como desde Sumied.
@@ -471,6 +500,7 @@ Deno.serve(async (req) => {
     if (cuerpo?.paso === 'leer') return await leer(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'devuelto') return await devuelto(cuerpo, req.headers.get('origin'))
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'suelto') return await suelto(cuerpo)
+    if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'servicio') return await anadir(cuerpo)
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'invitar') return await invitar(cuerpo, req.headers.get('origin'))
     if (cuerpo?.paso === 'hacer' && cuerpo.accion === 'contestar') return await contestar(cuerpo)
     if (cuerpo?.paso === 'hacer') return await hacer(cuerpo)
