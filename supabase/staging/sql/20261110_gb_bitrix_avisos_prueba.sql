@@ -30,7 +30,7 @@ select to_regclass('public.conta_bitrix_pestana_aviso') is not null as ya_esta_l
 
 create temp table _u (cuenta uuid, empresa uuid, cliente uuid, real_cuenta uuid, pedida uuid) on commit drop;
 do $$
-declare a uuid; e uuid; cl uuid; ar uuid; er uuid; clr uuid; q uuid; mes date := (date_trunc('month', current_date) + interval '1 month')::date;
+declare a uuid; e uuid; cl uuid; ar uuid; er uuid; clr uuid; q uuid; v_mes date := (date_trunc('month', current_date) + interval '1 month')::date;
 begin
   select c.account_id, c.id into a, e from public.company c where c.is_active order by c.created_at limit 1;
   select c.account_id, c.id into ar, er from public.company c where c.is_active and c.account_id <> a order by c.created_at limit 1;
@@ -55,8 +55,8 @@ begin
     (e, 'PM-GB60-DEV', a, 'MD-GB60', 'failed', current_date - 5, 225.00),
     (er, 'PM-GB61-DEV', ar, 'MD-GB61', 'failed', current_date - 5, 99.00);
   insert into public.conta_solicitud (account_id, company_id, party_id, tipo, empleado_nombre, mes, fecha_efecto, estado) values
-    (a, e, cl, 'alta', 'Diego Prueba Ferrer', mes, mes + 15, 'pedida') returning id into q;
-  insert into public.conta_solicitud (account_id, company_id, party_id, tipo, empleado_nombre, mes, estado) values (ar, er, clr, 'alta', 'Real Prueba', mes, 'pedida');
+    (a, e, cl, 'alta', 'Diego Prueba Ferrer', v_mes, v_mes + 15, 'pedida') returning id into q;
+  insert into public.conta_solicitud (account_id, company_id, party_id, tipo, empleado_nombre, mes, estado) values (ar, er, clr, 'alta', 'Real Prueba', v_mes, 'pedida');
   insert into _u values (a, e, cl, ar, q);
 end $$;
 
