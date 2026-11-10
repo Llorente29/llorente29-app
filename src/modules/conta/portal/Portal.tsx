@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { sb } from './cliente'
 import { CajaAviso, type Aviso } from './comun'
-import { iniciales } from './formato'
+import { iniciales, telefono } from './formato'
 import type { ClienteDeEntrada, Pestana } from './tipos'
 import { Inicio } from './pantallas/Inicio'
 import { Facturas } from './pantallas/Facturas'
@@ -105,7 +105,7 @@ export function Portal({ c, yo, otros, cambiar, avisoInicial }: { c: ClienteDeEn
         {!visibles.some((p) => p.id === pestana) && <div className="pt-aviso info"><span>Tu acceso es solo para facturas y documentos.</span></div>}
       </main>
       <footer className="pt-pie">
-        <span>¿Dudas? Escribe a tu gestoría{c.gestoria.correo ? <>: <a href={`mailto:${c.gestoria.correo}`}>{c.gestoria.correo}</a></> : ''}{c.gestoria.telefono ? ` · ${c.gestoria.telefono}` : ''}</span>
+        <span>¿Dudas? Escribe a tu gestoría{c.gestoria.correo ? <>: <a href={`mailto:${c.gestoria.correo}`}>{c.gestoria.correo}</a></> : ''}{c.gestoria.telefono ? ` · ${telefono(c.gestoria.telefono)}` : ''}</span>
         <span>Funciona con Sumied</span>
       </footer>
     </div>

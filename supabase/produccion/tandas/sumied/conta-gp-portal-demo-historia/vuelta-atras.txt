@@ -1,0 +1,4 @@
+# GP · la vuelta atrás de la 1345: las dos funciones, restauradas de su respaldo, y
+# fuera lo sembrado en la cuenta de la gestoría (el enlace, Lucía Pardo y la conversación).
+cuenta: scripts/conta/produccion/cuentas/gp-portal-demo-empresa.sql
+supabase/vuelta-atras/20261110T1345_gp_portal_demo_empresa.down.sql

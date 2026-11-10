@@ -13,7 +13,7 @@ import { ArrowUp } from 'lucide-react'
 import { zipSync } from 'fflate'
 import { abrir, accion, subirFichero } from '../cliente'
 import { Cargando, Chip, Fallo } from '../comun'
-import { eurosDe, fecha, laboralPorMes, nombreImpuesto, nombreSeguro, puedeSubirse, type GrupoLaboral } from '../formato'
+import { eurosDe, fecha, laboralPorMes, nombreImpuesto, nombreSeguro, puedeSubirse, type GrupoLaboral, resultadoImpuesto } from '../formato'
 import type { Documentos as DatosDocs } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -103,7 +103,7 @@ export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla
           <button type="button" className="pt-boton" disabled={!!subiendo} onClick={() => entrada.current?.click()}>{subiendo ? `Subiendo ${subiendo}…` : 'Elegir o hacer foto'}</button>
         </section>
       ) : (
-        <div className="pt-aviso info" role="status"><span>Para subir documentos desde aquí, tu gestoría tiene que tener tu empresa dada de alta en Sumied. Mientras, mándaselos por Mensajes.</span></div>
+        <div className="pt-aviso info" role="status"><span>Para mandar un documento a tu gestoría, adjúntalo en Mensajes.</span></div>
       )}
       <div className="pt-botones" role="group" aria-label="Qué documentos ver">
         {tipos.map((t) => <button type="button" key={t.id} className="pt-filtro" aria-pressed={tipo === t.id} onClick={() => setTipo(t.id)}>{t.label}</button>)}
@@ -114,7 +114,7 @@ export function Documentos({ cliente, permiso, abrir: pedido, avisar }: Pantalla
             <div className="pt-fila" key={t.id}>
               <span className="pt-icono" aria-hidden="true">{t.modelo}</span>
               <div className="pt-fila-texto"><b>{nombreImpuesto(t.modelo, t.periodo, t.ejercicio)}</b>
-                <span>Presentado el {fecha(t.presentado)}{t.importe != null ? ` · ${t.resultado === 'a_devolver' ? 'a devolver' : t.resultado === 'a_ingresar' ? 'a ingresar' : ''} ${eurosDe(t.importe)}`.replace(/\s+/g, ' ') : ''}</span></div>
+                <span>Presentado el {fecha(t.presentado)}{t.importe != null ? ` · ${resultadoImpuesto(t.resultado)} ${eurosDe(t.importe)}`.replace(/\s+/g, ' ') : ''}</span></div>
               <button type="button" className="pt-boton sec chico" disabled={!t.justificante} onClick={() => abrirDoc('impuesto', t.id)}>{t.justificante ? 'Justificante' : 'Sin justificante'}</button>
             </div>)))}
         {tipo === 'nominas' && (laborales.length === 0 ? <div className="pt-vacio">Aún no hay nóminas aquí.</div>

@@ -151,9 +151,34 @@ async function archivo(yo: Sb, srv: Sb, b: Fila) {
   const { data, error } = await yo.rpc('conta_portal_archivo', { p_party: cliente, p_tipo: String(b.tipo ?? ''), p_id: id, p_indice: Number(b.indice ?? 0) || 0 })
   if (error || !data) return mal(fraseBase(error))
   const f = data as { almacen: string; ruta: string; nombre: string }
-  const { data: s, error: e2 } = await srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300, { download: nombreSeguro(f.nombre) })
+  const firmar = () => srv.storage.from(f.almacen).createSignedUrl(f.ruta, 300, { download: nombreSeguro(f.nombre) })
+  let { data: s, error: e2 } = await firmar()
+  // nº 28 · En la demo, los justificantes y las nóminas sembrados («demo/<cuenta>/…») no tienen fichero: se hace la primera vez.
+  if ((e2 || !s?.signedUrl) && await pdfDeLaDemo(srv, f)) ({ data: s, error: e2 } = await firmar())
   if (e2 || !s?.signedUrl) return mal('Ese documento no se puede abrir ahora.')
   return json(200, { ok: true, url: s.signedUrl, nombre: f.nombre })
+}
+
+/**
+ * nº 28 · El PDF de un documento sembrado en una cuenta de DEMOSTRACIÓN (ruta «demo/<cuenta>/…»), que no tiene
+ * fichero: una página que dice qué es y que es de la demo. Solo si esa cuenta es demo; nunca pisa un fichero.
+ */
+async function pdfDeLaDemo(srv: Sb, f: { almacen: string; ruta: string; nombre: string }): Promise<boolean> {
+  const [raiz, cuenta] = f.ruta.split('/')
+  if (raiz !== 'demo' || !uuid(cuenta)) return false
+  const { data: acc } = await srv.from('accounts').select('name, is_demo').eq('id', cuenta).maybeSingle()
+  if (!acc?.is_demo) return false
+  const doc = await PDFDocument.create()
+  const pag = doc.addPage([595, 842])
+  const negrita = await doc.embedFont(StandardFonts.HelveticaBold); const normal = await doc.embedFont(StandardFonts.Helvetica)
+  const titulo = f.nombre.replace(/\.pdf$/i, '')
+  pag.drawText(String(acc.name ?? ''), { x: 56, y: 770, size: 12, font: normal, color: rgb(0.29, 0.36, 0.45) })
+  pag.drawText(titulo.length > 60 ? `${titulo.slice(0, 59)}…` : titulo, { x: 56, y: 740, size: 18, font: negrita, color: rgb(0.06, 0.11, 0.18) })
+  pag.drawText('Documento de demostración: lo ha hecho Sumied para la demo. No es un documento real.', { x: 56, y: 708, size: 11, font: normal, color: rgb(0.29, 0.36, 0.45) })
+  const bytes = await doc.save()
+  const { error } = await srv.storage.from(f.almacen).upload(f.ruta, new Blob([bytes as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })
+  if (error && !/exists|duplicate/i.test(error.message)) { console.error('[conta-portal] pdf de la demo', error.message); return false }
+  return true
 }
 
 async function subidaUrl(yo: Sb, srv: Sb, b: Fila) {

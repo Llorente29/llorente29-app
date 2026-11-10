@@ -95,7 +95,7 @@ export function lineasDelRecibo(lineas: unknown): LineaVista[] {
   return lineas.map((l) => {
     const x = l as { texto?: unknown; importeCent?: unknown; importe_cent?: unknown; cuenta?: unknown; trabajadores?: unknown }
     const cent = x.importeCent ?? x.importe_cent
-    const trab = Array.isArray(x.trabajadores) ? x.trabajadores.map((t) => String((t as { nombre?: unknown })?.nombre ?? t)).filter(Boolean) : []
+    const trab = Array.isArray(x.trabajadores) ? x.trabajadores.map((t) => nombrePropio(String((t as { nombre?: unknown })?.nombre ?? t))).filter(Boolean) : []
     return {
       texto: String(x.texto ?? 'Servicio'),
       importe: typeof cent === 'number' ? euros(cent) : 'Sin precio',
@@ -277,4 +277,60 @@ export function motivoParaTi(motivo: string | null | undefined): { frase: string
   if (m in MOTIVOS) return MOTIVOS[m]
   const minuscula = m[0].toLowerCase() + m.slice(1)
   return { frase: minuscula, corto: minuscula }
+}
+
+/**
+ * nº 28 · Un nombre que llega todo en mayúsculas (los trabajadores del CRM, el banco
+ * de GoCardless), con mayúscula solo al principio de cada palabra: «ADRIAN MOLINA
+ * CASTRO» → «Adrian Molina Castro», «CAIXABANK, S.A.» → «Caixabank, S.A.». Las
+ * siglas con punto (S.A., S.L.) se quedan; «de», «del», «la», «y»… en minúscula
+ * salvo al empezar. Lo que ya viene bien escrito no se toca.
+ */
+const MENUDAS = new Set(['de', 'del', 'la', 'las', 'los', 'el', 'y', 'e', 'i'])
+export function nombrePropio(x: string | null | undefined): string {
+  const t = (x ?? '').trim()
+  if (!t || t !== t.toLocaleUpperCase('es-ES') || t === t.toLocaleLowerCase('es-ES')) return t
+  return t.split(/(\s+)/).map((p, i) => {
+    if (/^\s+$/.test(p) || /^([A-ZÁÉÍÓÚÑÜ]\.)+,?$/.test(p)) return p
+    const m = p.toLocaleLowerCase('es-ES')
+    if (i > 0 && MENUDAS.has(m)) return m
+    return m.replace(/(^|[-'’])(\p{L})/gu, (_, a: string, b: string) => a + b.toLocaleUpperCase('es-ES'))
+  }).join('')
+}
+
+/** nº 28 · Un teléfono español con espacios: «910000000» → «910 000 000», «+34910000000» → «+34 910 000 000». Lo demás, tal cual. */
+export function telefono(x: string | null | undefined): string {
+  const t = (x ?? '').trim()
+  const d = t.replace(/[\s.-]/g, '')
+  const m = /^(\+34|0034)?(\d{3})(\d{3})(\d{3})$/.exec(d)
+  if (!m) return t
+  return `${m[1] ? '+34 ' : ''}${m[2]} ${m[3]} ${m[4]}`
+}
+
+/** nº 28 · Un texto que la base corta (a 120 letras en «Lo último»), con «…» y sin partir una palabra. */
+export function cortado(x: string | null | undefined, max = 120): string {
+  const t = (x ?? '').trim()
+  // Se mira el largo de lo que llega: un corte que cae en un espacio deja, ya sin él, una letra menos.
+  if ((x ?? '').length < max) return t
+  // Si el corte cayó en mitad de una palabra, esa palabra no se enseña a medias.
+  const corte = /\s$/.test((x ?? '').slice(0, max)) ? t : t.slice(0, max).replace(/\s+\S*$/, '')
+  return `${(corte || t.slice(0, max)).replace(/[\s,.;:]+$/, '')}…`
+}
+
+/** nº 28 · El resultado de un impuesto, como lo guarda la base (to_pay, to_refund…): «a ingresar», «a devolver». */
+export function resultadoImpuesto(r: string | null | undefined): string {
+  switch (r) {
+    case 'to_pay': case 'a_ingresar': return 'a ingresar'
+    case 'to_refund': case 'a_devolver': return 'a devolver'
+    case 'to_offset': return 'a compensar'
+    case 'zero': return 'sin cuota'
+    case 'no_activity': return 'sin actividad'
+    default: return ''
+  }
+}
+
+/** nº 28 · Lo contratado, como la maqueta: primero la gestoría y después lo demás (la laboral), en el orden en que vino. */
+export function gestoriaPrimero<T extends { texto: string }>(lineas: T[]): T[] {
+  const es = (t: string) => /^gestor[ií]a\b/i.test(t.trim())
+  return [...lineas.filter((l) => es(l.texto)), ...lineas.filter((l) => !es(l.texto))]
 }

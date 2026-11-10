@@ -1,0 +1,22 @@
+{
+ "_que": "GP · nº 28 · contexto de producción, medido en SOLO LECTURA el 10/11 a las 12:57Z (la consulta de analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 1345 cambia en caliente public.conta_portal_demo_preparar(uuid) y public.conta_portal_cuenta(uuid) (existen; misma firma; sin otras sobrecargas; con respaldo; declaradas en su cabecera con su prueba). Sus cuerpos en producción son los de main: preparar, el de la 2240 (md5 del prosrc b1ea4fcfc910c04b85290263651f6d19) y conta_portal_cuenta, el de la 1720 (b1b093ba49048200c925411238e0f65a), los mismos que en la base local. La cuenta de000000-…-0000000000b1, la sociedad …b2 y el slug talleres-ruiz-demo no existen. «public.conta_portal_demo_preparar» como tabla es el comment on function: no hay tabla con ese nombre. Ni disparador ni cron usan las funciones: no están en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T12:57Z",
+ "tanda": {
+  "supabase/migrations/20261110T1345_gp_portal_demo_empresa.sql": "49550e742e991774fae3660c6e3bb502"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_portal_cuenta(uuid)",
+   "public.conta_portal_demo_preparar(uuid)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

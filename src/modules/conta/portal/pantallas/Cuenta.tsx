@@ -10,7 +10,7 @@
 import { useState } from 'react'
 import { accion, leer } from '../cliente'
 import { Cargando, Dialogo, Fallo } from '../comun'
-import { cuentaEnmascarada, fecha, lineasDelRecibo } from '../formato'
+import { cuentaEnmascarada, fecha, lineasDelRecibo, nombrePropio, gestoriaPrimero } from '../formato'
 import type { Cuenta as DatosCuenta } from '../tipos'
 import { useLectura } from '../useLectura'
 import type { Pantalla } from './pantalla'
@@ -24,7 +24,7 @@ export function Cuenta({ cliente, avisar }: Pantalla) {
   if (error || !datos) return <Fallo texto={error ?? 'No se ha podido cargar.'} otraVez={recargar} />
   const dom = datos.domiciliacion
   const iban = dom ? cuentaEnmascarada(dom.cuenta_pais, dom.cuenta_final) : null
-  const contratado = lineasDelRecibo(datos.contratado)
+  const contratado = gestoriaPrimero(lineasDelRecibo(datos.contratado))
 
   const cambiarCuenta = async () => {
     setCambiando(true)
@@ -50,7 +50,7 @@ export function Cuenta({ cliente, avisar }: Pantalla) {
         <div className="pt-cabeza" style={{ alignItems: 'center' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontFamily: 'var(--titulo)', fontSize: 18, fontWeight: 700 }}>{iban ?? (dom ? 'Cuenta domiciliada' : 'Sin cuenta domiciliada')}</span>
-            {dom && <span style={{ fontSize: 12, color: '#0B6B4F', fontWeight: 600 }}>Domiciliación firmada{dom.firmada ? ` el ${fecha(dom.firmada)}` : ''}{dom.banco ? ` · ${dom.banco}` : ''}</span>}
+            {dom && <span style={{ fontSize: 12, color: '#0B6B4F', fontWeight: 600 }}>Domiciliación firmada{dom.firmada ? ` el ${fecha(dom.firmada)}` : ''}{dom.banco ? ` · ${nombrePropio(dom.banco)}` : ''}</span>}
           </div>
           <button type="button" className="pt-boton sec chico" disabled={cambiando} onClick={cambiarCuenta}>{cambiando ? 'Abriendo…' : datos.cambio_en_marcha ? 'Seguir con el cambio' : 'Cambiar de cuenta'}</button>
         </div>
