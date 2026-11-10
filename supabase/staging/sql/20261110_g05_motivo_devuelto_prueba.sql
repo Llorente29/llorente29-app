@@ -8,6 +8,7 @@
 --      el cobrado, sin motivo; si la lectura trae después otro motivo, se cambia;
 --      sin motivo en español, no se pone nada (nunca el inglés).
 --   4. La vuelta atrás de la 1138 (seguir de su respaldo), y otra vez la 1138.
+-- sin usuario: conta_cobro_seguir la llama solo el servidor (conta-gocardless-leer y el «seguir» de conta-cobro), nunca una persona.
 
 begin;
 do $$ begin
