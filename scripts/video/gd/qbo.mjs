@@ -369,9 +369,14 @@ try {
     await rotulo(E.page, 'Cada cobro confirmado sale facturado y contabilizado solo'); await E.page.waitForTimeout(3500)
     await a(E, E.page.getByText('Cómo va cada recibo'), { que: 'Cómo va cada recibo', pausa: 3000 })
     await E.captura()
-    const { data: rec } = await admin.from('conta_recibo').select('invoice_id').eq('account_id', CUENTA).not('invoice_id', 'is', null).order('enviado_at', { ascending: false }).limit(1)
+    // nº86 · La factura de CLIENTE (Talleres Ruiz), la que lleva los trabajadores y la que llega al buzón en la 7b; no
+    // la última que salió, que el 10/11 fue una de una sola línea (Floristería Las Camelias) bajo «con sus trabajadores».
+    const { data: cli } = await admin.from('party').select('id').eq('account_id', CUENTA).eq('name', CLIENTE).limit(2)
+    if ((cli ?? []).length !== 1) { fallos.push(`07: ${CLIENTE} no está una sola vez en la demo (${(cli ?? []).length})`); if (MODO === 'grabar') E.sinEscena = true; return }
+    const { data: rec } = await admin.from('conta_recibo').select('invoice_id').eq('account_id', CUENTA).eq('party_id', cli[0].id).eq('mes', MES)
+      .not('invoice_id', 'is', null).limit(1)
     const factura = rec?.[0]?.invoice_id
-    if (!factura) { fallos.push('07: ninguna factura todavía'); if (MODO === 'grabar') E.sinEscena = true; return }
+    if (!factura) { fallos.push(`07: ${CLIENTE} aún no tiene factura de ${MES}`); if (MODO === 'grabar') E.sinEscena = true; return }
     await ir(E.page, `/conta/ventas/facturas/${factura}`)
     await rotulo(E.page, 'Con la numeración y las cuentas de tu plan'); await E.page.waitForTimeout(3000)
     await a(E, E.page.getByText('Lo que ha pasado'), { que: 'Lo que ha pasado', pausa: 2500 })
