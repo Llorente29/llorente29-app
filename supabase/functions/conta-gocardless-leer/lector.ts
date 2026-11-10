@@ -30,7 +30,7 @@ export function cabeceras(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'GoCardless-Version': VERSION_API, Accept: 'application/json' }
 }
 
-export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts'
+export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts' | 'payout_items'
 
 /** La dirección de una página: el recurso, sus filtros y el cursor de la anterior. */
 export function urlDePagina(entorno: Entorno, recurso: Recurso, filtros: Record<string, string> = {}, despues: string | null = null): string {
