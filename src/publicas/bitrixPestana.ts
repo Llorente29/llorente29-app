@@ -90,7 +90,8 @@ function pintar(p: Pestana) {
     pestanas,
     h('div', { class: 'cuerpo', role: 'tabpanel', 'data-area': vista.area },
       h('div', { class: 'cliente' }, h('h1', {}, p.cliente),
-        p.desde ? h('span', { class: 'pequeno' }, p.desde) : null,
+        // nº 29 · En Resumen ya lo dice «Cliente desde» (en los datos): aquí, solo en las otras pestañas.
+        p.desde && vista.area !== 'resumen' ? h('span', { class: 'pequeno' }, p.desde) : null,
         p.personaDeContacto ? h('span', { class: 'pequeno' }, '· Es una persona de contacto de este cliente') : null),
       vista.hecho ? h('div', { class: 'aviso hecho', role: 'status', 'data-tono': vista.hecho.tono, 'data-prueba': 'hecho' },
         h('b', {}, vista.hecho.titulo), h('div', {}, vista.hecho.texto),

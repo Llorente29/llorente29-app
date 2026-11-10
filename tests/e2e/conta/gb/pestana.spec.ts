@@ -68,7 +68,8 @@ test('con acceso: el cliente, el recibo línea a línea, los cobros, los servici
   // La cabecera: quién le factura y su situación.
   await expect(pestana.locator('.cabeza')).toContainText('Cuotas, recibos y facturas · le factura QBO Prueba')
   await expect(pestana.locator('.chip')).toHaveText('Activo')
-  await expect(pestana).toContainText('Cobra desde enero de 2020')
+  // nº 29 · En Resumen, una sola vez: «Cliente desde» en los datos, no «Cobra desde» junto al nombre.
+  await expect(pestana.locator('.cliente')).not.toContainText('Cobra desde')
   // El recibo del mes que viene, línea a línea, con el porqué.
   const recibo = pestana.getByRole('region', { name: 'Recibo de diciembre de 2026' })
   await expect(recibo.locator('.total')).toHaveText('496,10 €')
@@ -102,6 +103,8 @@ test('con acceso: el cliente, el recibo línea a línea, los cobros, los servici
   const t0 = await page.evaluate(() => performance.now())
   await pendiente.getByRole('button', { name: 'Resolver →' }).first().click()
   await expect(areas.getByRole('tab', { name: /Cuotas y cobros/ })).toHaveAttribute('aria-selected', 'true')
+  // nº 29 · En las otras pestañas, «Cobra desde» junto al nombre (allí no está el dato).
+  await expect(pestana.locator('.cliente')).toContainText('Cobra desde enero de 2020')
   const servicios = pestana.getByRole('region', { name: 'Servicios que tiene' })
   await expect(servicios.locator('.fila')).toHaveCount(2)
   expect(await page.evaluate((t) => performance.now() - t, t0)).toBeLessThan(1000)
