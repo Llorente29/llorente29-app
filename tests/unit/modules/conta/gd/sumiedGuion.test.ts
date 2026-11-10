@@ -69,3 +69,16 @@ describe('GD · nº99 · la voz elegida y la pronunciación', () => {
     expect(w.slice(w.indexOf('  video:'))).toContain('ESCENAS: ${{ inputs.escenas }}')
   })
 })
+
+describe('GD · nº100 · la demo cobra el mes en curso y deja preparado el siguiente', () => {
+  it('el mes del cobro, el en curso salvo que se pida otro', () => {
+    for (const f of ['scripts/video/gd/sumied.mjs', 'scripts/video/gd/comprobar.mjs', 'scripts/video/gd/qbo.mjs']) {
+      expect(readFileSync(f, 'utf8')).toContain("new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }).slice(0, 7)")
+    }
+    expect(readFileSync('.github/workflows/gd-video-qbo.yml', 'utf8')).toContain("default: 'este'")
+  })
+  it('después de enviar, prepara (sin enviar) el recibo del mes siguiente', () => {
+    expect(g).toMatch(/if \(enviado\) await R\.sinVer\(async \(\) => \{\s*const siguiente = mesSiguiente\(MES\)[\s\S]*?accion: 'preparar', empresa: SOCIEDAD, mes: siguiente/)
+    expect(g).not.toMatch(/accion: 'enviar'/)
+  })
+})

@@ -31,7 +31,8 @@ const SALIDA = resolve(env('SALIDA') || 'comprobar-salida')
 const CUENTA = 'de000000-0000-4000-8000-0000000000a0'
 const SOCIEDAD = 'de000000-0000-4000-8000-0000000000a9'
 const JULIO = 'e298629b-9d34-4d62-9a00-ff7c3fa29a1a'
-const MES = env('MES') || '2026-12'
+// nº100 · El mes del cobro: el mes en curso (Madrid), salvo que se pida otro (AAAA-MM).
+const MES = /^\d{4}-\d{2}$/.test(env('MES')) ? env('MES') : new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Madrid' }).slice(0, 7)
 const CLIENTE = 'Talleres Ruiz, S.L.'
 const REF = new URL(SUPABASE_URL || 'https://x.supabase.co').hostname.split('.')[0]
 
