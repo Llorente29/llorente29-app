@@ -276,3 +276,15 @@ describe('GD · nº134 · el zoom', () => {
     expect(m).toContain('if (nuevaSeccion) llaves.push')
   })
 })
+
+describe('GD · nº136 · el vídeo dura lo que la voz (run 27: 6,8 s de más)', () => {
+  const m = readFileSync('scripts/video/montar-ajustado.mjs', 'utf8')
+  it('cada plano de la grabación se lee desde 15 s antes y se recorta en su sitio (Playwright no guarda fotogramas sin cambios)', () => {
+    expect(m).toContain('const ss = Math.max(0, p.a - 15)')
+    expect(m).toContain('fps=${FPS},trim=start=${(p.a - ss).toFixed(3)},setpts=PTS-STARTPTS')
+  })
+  it('al juntar, cada fotograma toma su tiempo de su número de orden, y las marcas raras de un plano se dicen', () => {
+    expect(m).toContain('[0:v]setpts=N/(${FPS}*TB)')
+    expect(m).toContain('Marcas de tiempo del plano')
+  })
+})
