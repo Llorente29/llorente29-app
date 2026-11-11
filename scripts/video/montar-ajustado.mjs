@@ -212,6 +212,9 @@ const plano = (nombre, entrada, vf, dura) => {
   ff([...entrada, '-vf', `${vf},tpad=stop_mode=clone:stop_duration=${(dura + 2).toFixed(2)}`, '-frames:v', String(n), ...codif, f])
   const hay = Number(execFileSync('ffprobe', ['-v', 'error', '-count_frames', '-select_streams', 'v:0', '-show_entries', 'stream=nb_read_frames', '-of', 'csv=p=0', f]).toString().trim())
   if (hay !== n) { descuadres++; console.log(`AVISO: el plano ${nombre} tiene ${hay} fotogramas y tenían que ser ${n}.`) }
+  // nº136 · Y sus marcas de tiempo: un plano con huecos alargaba el vídeo al juntarlos (run 27: 6,8 s de más). Se dice.
+  const [ini, dur] = execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=start_time,duration', '-of', 'csv=p=0', f]).toString().trim().split(',').map(Number)
+  if (Math.abs(ini) > 0.01 || Math.abs(dur - n / FPS) > 0.02) console.log(`Marcas de tiempo del plano ${nombre}: empieza en ${ini.toFixed(3)} s y dura ${dur.toFixed(3)} s (son ${n} fotogramas: ${(n / FPS).toFixed(3)} s).`)
   lista.push(`file '${f}'`)
 }
 const negro = (dura) => ['-f', 'lavfi', '-t', (dura + 1).toFixed(2), '-i', `color=c=black:s=${W}x${H}:r=${FPS}`]
@@ -221,15 +224,23 @@ else plano('000-portada', ['-loop', '1', '-i', join(salida, existsSync(join(sali
 planos.forEach((p, i) => {
   const n = String(i + 1).padStart(3, '0')
   if (p.tipo === 'cartel') plano(n, negro(p.dura), comun, p.dura)
-  else if (p.tipo === 'crudo') plano(n, ['-ss', p.a.toFixed(3), '-i', join(salida, 'crudo.webm')], `scale=${W}:${H},${comun}`, p.b - p.a)
+  // nº136 · La grabación de Playwright solo guarda un fotograma cuando la pantalla cambia: si el plano empieza en un
+  // hueco, el primero que se lee es el del siguiente cambio y el plano sale desplazado. Se empieza a leer 15 s antes, se
+  // rellenan los huecos con la pantalla que había (fps) y se recorta justo en su sitio.
+  else if (p.tipo === 'crudo') {
+    const ss = Math.max(0, p.a - 15)
+    plano(n, ['-ss', ss.toFixed(3), '-i', join(salida, 'crudo.webm')], `fps=${FPS},trim=start=${(p.a - ss).toFixed(3)},setpts=PTS-STARTPTS,scale=${W}:${H},${comun}`, p.b - p.a)
+  }
   else plano(n, ['-ignore_loop', '0', '-t', (p.desde + p.dura + 1).toFixed(2), '-i', p.gif],
     `trim=start=${p.desde.toFixed(3)},setpts=PTS-STARTPTS,scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2:color=0x1f2a3c,${comun}`, p.dura)
 })
 if (CARTELES) plano('999-cierre', negro(CIERRE), comun, enFot(CIERRE))
 else plano('999-cierre', ['-loop', '1', '-i', join(salida, 'cierre.png')], `scale=${W}:${H},${comun},fade=t=in:st=0:d=0.4`, enFot(CIERRE))
 writeFileSync(join(dirPlanos, 'lista.txt'), lista.join('\n') + '\n')
+// nº136 · Al juntar, cada fotograma toma su tiempo de su número de orden (N/30), no de las marcas de cada plano: con
+// planos de la grabación de verdad, las marcas traían huecos y el vídeo salía 204 fotogramas (6,8 s) más largo que la voz.
 const filtros = [
-  `[0:v]scale=w='trunc(${W}*(${Z})/2)*2':h='trunc(${H}*(${Z})/2)*2':eval=frame:flags=lanczos,` +
+  `[0:v]setpts=N/(${FPS}*TB),scale=w='trunc(${W}*(${Z})/2)*2':h='trunc(${H}*(${Z})/2)*2':eval=frame:flags=lanczos,` +
   `crop=${W}:${H}:x='clip((${CX})*(${Z})-${W / 2},0,${W}*((${Z})-1))':y='clip((${CY})*(${Z})-${H / 2},0,${H}*((${Z})-1))'[zz]`,
   `[zz]scale=${IW}:${IH}:flags=lanczos,pad=${W}:${H}:${(W - IW) / 2}:0:color=${FONDO}[fr]`,
   `[fr]ass=${join(salida, 'subtitulos.ass').replace(/:/g, '\\:')}[v0]`,
