@@ -1,0 +1,1025 @@
+{
+  "inicio": 6.535,
+  "fin": 1153.602,
+  "pasos": [
+    {
+      "paso": "01",
+      "subtitulo": "01 Clientes y cuotas",
+      "desde": 6.536
+    },
+    {
+      "paso": "02",
+      "subtitulo": "02 La ficha",
+      "desde": 57.526
+    },
+    {
+      "paso": "03",
+      "subtitulo": "03 Tarifa y paquetes",
+      "desde": 100.891
+    },
+    {
+      "paso": "04",
+      "subtitulo": "04 Bitrix24 y Sumied",
+      "desde": 136.24
+    },
+    {
+      "paso": "05",
+      "subtitulo": "05 La pestaña Sumied",
+      "desde": 159.305
+    },
+    {
+      "paso": "06",
+      "subtitulo": "06 El cobro",
+      "desde": 232.122
+    },
+    {
+      "paso": "07",
+      "subtitulo": "07 Cobrado y facturado",
+      "desde": 406.794
+    },
+    {
+      "paso": "08",
+      "subtitulo": "08 En la contabilidad",
+      "desde": 939.592
+    },
+    {
+      "paso": "09",
+      "subtitulo": "09 El banco",
+      "desde": 1016.086
+    },
+    {
+      "paso": "10",
+      "subtitulo": "10 El portal, desde la gestoría",
+      "desde": 1048.477
+    },
+    {
+      "paso": "11",
+      "subtitulo": "11 El portal del cliente",
+      "desde": 1062.371
+    }
+  ],
+  "dichos": [
+    {
+      "id": "01.1",
+      "texto": "Aquí están todos tus clientes. Sumied los lee de tu Bitrix24, y las cuotas, de tu tarifa; GoCardless solo pasa el cargo. No das de alta nada dos veces.",
+      "dura": 11.6,
+      "desde": 6.536
+    },
+    {
+      "id": "01.2",
+      "texto": "Arriba, lo que cobras cada mes, con las altas y las bajas.",
+      "dura": 4.56,
+      "desde": 19.04
+    },
+    {
+      "id": "01.3",
+      "texto": "Lo que te deben: los recibos que el banco ha devuelto y nadie ha pagado después.",
+      "dura": 5.52,
+      "desde": 24.5
+    },
+    {
+      "id": "01.4",
+      "texto": "Y lo que dejas de cobrar: clientes que están activos en tu Bitrix24 y no tienen cuota.",
+      "dura": 6.48,
+      "desde": 30.923
+    },
+    {
+      "id": "01.5",
+      "texto": "Debajo, lo que tienes que hacer, ordenado por el dinero que mueve.",
+      "dura": 4.48,
+      "desde": 38.306
+    },
+    {
+      "id": "01.6",
+      "texto": "Abres un cliente y ves, de un vistazo, lo que se le cobra este mes, lo que debe y cómo fue su último cobro.",
+      "dura": 7.68,
+      "desde": 43.687
+    },
+    {
+      "id": "02.1",
+      "texto": "Su cuota sale de tu tarifa. Sumied la calcula y te avisa si no coincide con lo que cobra GoCardless.",
+      "dura": 7.04,
+      "desde": 57.526
+    },
+    {
+      "id": "02.2",
+      "texto": "Su próximo recibo, línea a línea: cada servicio, su precio y por qué se cobra.",
+      "dura": 6.4,
+      "desde": 65.471
+    },
+    {
+      "id": "02.3",
+      "texto": "La gestión laboral va por trabajador, y aquí están todos, con nombre.",
+      "dura": 4.88,
+      "desde": 72.774
+    },
+    {
+      "id": "02.4",
+      "texto": "El que entra nuevo sale marcado con su alta. Así nadie cobra de más ni de menos.",
+      "dura": 6.08,
+      "desde": 78.555
+    },
+    {
+      "id": "02.5",
+      "texto": "Sus cobros, uno por uno, y sus datos de contacto…",
+      "dura": 3.92,
+      "desde": 85.535
+    },
+    {
+      "id": "02.6",
+      "texto": "…y lo que tienes de él en Bitrix24, tal cual está allí.",
+      "dura": 4.16,
+      "desde": 90.357
+    },
+    {
+      "id": "03.1",
+      "texto": "Tu tarifa, como la cobras hoy, y cuántos clientes tiene cada servicio.",
+      "dura": 4.96,
+      "desde": 100.891
+    },
+    {
+      "id": "03.2",
+      "texto": "La gestoría mensual, en tres niveles, con lo que incluye cada uno y cuántos clientes están en él.",
+      "dura": 6.88,
+      "desde": 106.751
+    },
+    {
+      "id": "03.3",
+      "texto": "Si a un cliente le cobras otro precio, queda como su precio especial, con el motivo.",
+      "dura": 5.76,
+      "desde": 114.534
+    },
+    {
+      "id": "03.4",
+      "texto": "La gestión laboral, a tanto por trabajador: el recibo cambia solo cuando hay un alta o una baja.",
+      "dura": 7.2,
+      "desde": 121.194
+    },
+    {
+      "id": "03.5",
+      "texto": "Las nóminas, por tramos. Y los paquetes, con lo que se ahorra el cliente.",
+      "dura": 5.36,
+      "desde": 129.295
+    },
+    {
+      "id": "04.1",
+      "texto": "Sigues trabajando en tu Bitrix24. Aquí cambiamos la situación de un cliente, de Activo a Moroso.",
+      "dura": 7.6,
+      "desde": 136.24
+    },
+    {
+      "id": "04.2",
+      "texto": "Y Sumied se entera en segundos, sin importar nada ni tocar un botón.",
+      "dura": 4.88,
+      "desde": 144.742
+    },
+    {
+      "id": "05.1",
+      "texto": "Y sin salir de Bitrix24: en la ficha de cada empresa tienes una pestaña de Sumied.",
+      "dura": 6.16,
+      "desde": 159.885
+    },
+    {
+      "id": "05.2",
+      "texto": "En Resumen, lo pendiente con ese cliente: cada cosa te lleva a donde se arregla.",
+      "dura": 5.92,
+      "desde": 166.946
+    },
+    {
+      "id": "05.3",
+      "texto": "En Cuotas y cobros, sus servicios y sus cobros. Le cambias el nivel o el precio desde aquí, y antes de guardar te enseña cómo queda su recibo.",
+      "dura": 10,
+      "desde": 176.472
+    },
+    {
+      "id": "05.4",
+      "texto": "En Laboral, sus trabajadores: das un alta o una baja desde Bitrix24, y Sumied la apunta en su recibo.",
+      "dura": 8.48,
+      "desde": 198.161
+    },
+    {
+      "id": "05.5",
+      "texto": "Y en Portal, quién de ese cliente entra en su portal y lo que te ha pedido.",
+      "dura": 4.72,
+      "desde": 221.529
+    },
+    {
+      "id": "06.1",
+      "texto": "Toca cobrar. Sumied prepara el recibo de cada cliente con tu tarifa y con sus altas y bajas.",
+      "dura": 6.88,
+      "desde": 232.526
+    },
+    {
+      "id": "06.2",
+      "texto": "Y lo compara con el del mes anterior: solo te enseña lo que cambia, cada cambio con su porqué.",
+      "dura": 5.92,
+      "desde": 240.312
+    },
+    {
+      "id": "06.3",
+      "texto": "Imprenta Rápida Sol pasa de Básica a Premium y su recibo sube un 67 %. Cuando un recibo cambia más de un 30 %, Sumied no te deja aprobarlo de un clic: te pide que lo mires.",
+      "dura": 13.68,
+      "desde": 247.136
+    },
+    {
+      "id": "06.4",
+      "texto": "Talleres Ruiz paga más por el trabajador nuevo. Lo ves con su nombre y su alta.",
+      "dura": 5.6,
+      "desde": 261.725
+    },
+    {
+      "id": "06.5",
+      "texto": "A Reformas Atalaya este mes no le cobras: lo dejas fuera de este cobro, y el mes que viene vuelve a entrar.",
+      "dura": 7.28,
+      "desde": 268.228
+    },
+    {
+      "id": "06.6",
+      "texto": "Apruebas los cambios uno a uno, sabiendo por qué cambia cada uno.",
+      "dura": 4.88,
+      "desde": 276.411
+    },
+    {
+      "id": "06.7",
+      "texto": "Y los que no cambian, todos de una vez.",
+      "dura": 2.96,
+      "desde": 284.518
+    },
+    {
+      "id": "06.8",
+      "texto": "Sumied también te dice quién se queda fuera, y por qué: aquí, un cliente activo en Bitrix24 que no tiene cuota.",
+      "dura": 8.56,
+      "desde": 294.86
+    },
+    {
+      "id": "06.9",
+      "texto": "Todo revisado: el cobro se envía a GoCardless.",
+      "dura": 4,
+      "desde": 304.322
+    },
+    {
+      "id": "06.10",
+      "texto": "Antes de salir, te dice a cuántos clientes y por cuánto. Confirmas, y GoCardless pasa los cargos.",
+      "dura": 7.2,
+      "desde": 309.222
+    },
+    {
+      "id": "07.1",
+      "texto": "Cuando GoCardless confirma cada cargo, Sumied hace la factura sola. Aquí ves cómo va cada recibo.",
+      "dura": 7.52,
+      "desde": 406.794
+    },
+    {
+      "id": "07.2",
+      "texto": "La factura sale a nombre de tu gestoría, con la numeración de tu serie.",
+      "dura": 4.48,
+      "desde": 419.95
+    },
+    {
+      "id": "07.3",
+      "texto": "Con todo lo que ha pasado, paso a paso: preparado, aprobado, enviado, cobrado y facturado.",
+      "dura": 7.52,
+      "desde": 425.332
+    },
+    {
+      "id": "07.4",
+      "texto": "Y su asiento ya hecho: el cliente a su 430, la cuota a ventas y el IVA a la 477.",
+      "dura": 8.48,
+      "desde": 433.756
+    },
+    {
+      "id": "07.5",
+      "texto": "El PDF lleva cada trabajador por el que se le cobra, y el que entra nuevo, con su fecha de alta.",
+      "dura": 6.4,
+      "desde": 886.494
+    },
+    {
+      "id": "08.1",
+      "texto": "En el libro de IVA repercutido, la factura ya está, con su base y su IVA. El trimestre sale de aquí.",
+      "dura": 7.44,
+      "desde": 939.592
+    },
+    {
+      "id": "08.2",
+      "texto": "La cuenta del cliente: la factura al debe y el cobro al haber. Saldada.",
+      "dura": 5.52,
+      "desde": 952.599
+    },
+    {
+      "id": "08.3",
+      "texto": "Lo que cobra GoCardless pasa por esta cuenta puente hasta que llega al banco. Cuando llega, queda solo su comisión, al céntimo.",
+      "dura": 8.88,
+      "desde": 987.639
+    },
+    {
+      "id": "08.4",
+      "texto": "Y en el banco, el ingreso que llega de GoCardless, neto, casado con sus cobros.",
+      "dura": 5.92,
+      "desde": 1003.322
+    },
+    {
+      "id": "08.5",
+      "texto": "De la cuota al banco, contabilizado solo. Sin teclear un asiento.",
+      "dura": 5.04,
+      "desde": 1010.145
+    },
+    {
+      "id": "09.1",
+      "texto": "En el banco, Sumied te dice qué ha casado solo, qué te propone y qué no sabe.",
+      "dura": 5.6,
+      "desde": 1016.086
+    },
+    {
+      "id": "09.2",
+      "texto": "Aquí, todo lo que ha casado sin ti. Nada pasa a la contabilidad sin que esté seguro o lo confirmes tú.",
+      "dura": 7.04,
+      "desde": 1022.588
+    },
+    {
+      "id": "09.3",
+      "texto": "El ingreso de Talleres Ruiz: el importe neto, exacto, y el porqué de que lo case.",
+      "dura": 6.24,
+      "desde": 1030.531
+    },
+    {
+      "id": "09.4",
+      "texto": "Y todo lo que hace solo, se deshace con un clic.",
+      "dura": 3.44,
+      "desde": 1037.674
+    },
+    {
+      "id": "10.1",
+      "texto": "Cada cliente puede tener su portal. En su ficha ves quién entra…",
+      "dura": 4.64,
+      "desde": 1048.477
+    },
+    {
+      "id": "10.2",
+      "texto": "…lo que le has pedido y lo que te ha escrito.",
+      "dura": 2.64,
+      "desde": 1054.017
+    },
+    {
+      "id": "11.1",
+      "texto": "Esto es lo que ve tu cliente al entrar: lo que le pides y lo último de tu gestoría.",
+      "dura": 5.84,
+      "desde": 1062.371
+    },
+    {
+      "id": "11.2",
+      "texto": "Todas sus facturas, con lo que lleva cada una, en PDF, cuando quiera.",
+      "dura": 5.12,
+      "desde": 1070.805
+    },
+    {
+      "id": "11.3",
+      "texto": "Sus recibos y el próximo cargo. Si uno se devuelve, lo paga desde aquí: desde su banco, o con tarjeta o Bizum.",
+      "dura": 8.48,
+      "desde": 1081.417
+    },
+    {
+      "id": "11.4",
+      "texto": "Sus trabajadores. Pide un alta o una baja, y tú la haces desde Sumied.",
+      "dura": 5.68,
+      "desde": 1125.115
+    },
+    {
+      "id": "11.5",
+      "texto": "Te sube facturas y tickets con una foto desde el móvil, y ve sus impuestos presentados.",
+      "dura": 5.76,
+      "desde": 1133.39
+    },
+    {
+      "id": "11.6",
+      "texto": "Y habla contigo por aquí, sin correos sueltos ni llamadas.",
+      "dura": 3.92,
+      "desde": 1142.35
+    },
+    {
+      "id": "11.7",
+      "texto": "Hasta cambiar la cuenta donde se le cargan los recibos lo hace él.",
+      "dura": 3.76,
+      "desde": 1148.864
+    }
+  ],
+  "objetivos": [
+    {
+      "t": 19.092,
+      "x": 292,
+      "y": 474.953125,
+      "w": 380,
+      "h": 186.234375
+    },
+    {
+      "t": 24.522,
+      "x": 688,
+      "y": 474.953125,
+      "w": 380,
+      "h": 186.234375
+    },
+    {
+      "t": 30.972,
+      "x": 1084,
+      "y": 474.953125,
+      "w": 380,
+      "h": 186.234375
+    },
+    {
+      "t": 38.339,
+      "x": 292,
+      "y": 685.1875,
+      "w": 1568,
+      "h": 252.375
+    },
+    {
+      "t": 43.724,
+      "x": 368,
+      "y": 734.59375,
+      "w": 127,
+      "h": 20.25
+    },
+    {
+      "t": 46.455,
+      "x": 1194.046875,
+      "y": -1143.4375,
+      "w": 177.078125,
+      "h": 16.1875
+    },
+    {
+      "t": 46.473,
+      "x": 1742.65625,
+      "y": 107.28125,
+      "w": 137.328125,
+      "h": 16.1875
+    },
+    {
+      "t": 57.551,
+      "x": 310,
+      "y": 369.078125,
+      "w": 345.5,
+      "h": 17.546875
+    },
+    {
+      "t": 57.565,
+      "x": 310,
+      "y": 423.015625,
+      "w": 345.5,
+      "h": 17.546875
+    },
+    {
+      "t": 65.505,
+      "x": 320,
+      "y": 731.9375,
+      "w": 287,
+      "h": 17.546875
+    },
+    {
+      "t": 72.804,
+      "x": 1355.34375,
+      "y": 825.875,
+      "w": 132,
+      "h": 40
+    },
+    {
+      "t": 78.586,
+      "x": 337,
+      "y": 961.234375,
+      "w": 152,
+      "h": 38.078125
+    },
+    {
+      "t": 85.554,
+      "x": 390,
+      "y": 637.9375,
+      "w": 80,
+      "h": 46
+    },
+    {
+      "t": 88.537,
+      "x": 476,
+      "y": 637.9375,
+      "w": 92,
+      "h": 46
+    },
+    {
+      "t": 90.436,
+      "x": 572,
+      "y": 637.9375,
+      "w": 149,
+      "h": 46
+    },
+    {
+      "t": 106.785,
+      "x": 317,
+      "y": 457.890625,
+      "w": 127,
+      "h": 20.25
+    },
+    {
+      "t": 109.023,
+      "x": 663.71875,
+      "y": 630.609375,
+      "w": 51,
+      "h": 21.59375
+    },
+    {
+      "t": 109.031,
+      "x": 1464.5625,
+      "y": 630.609375,
+      "w": 71,
+      "h": 21.59375
+    },
+    {
+      "t": 114.552,
+      "x": 644.71875,
+      "y": 974.703125,
+      "w": 229,
+      "h": 20.25
+    },
+    {
+      "t": 121.235,
+      "x": 317,
+      "y": 391.09375,
+      "w": 109,
+      "h": 20.25
+    },
+    {
+      "t": 129.318,
+      "x": 317,
+      "y": 629.28125,
+      "w": 64,
+      "h": 20.25
+    },
+    {
+      "t": 132.284,
+      "x": 317,
+      "y": 745.265625,
+      "w": 105,
+      "h": 20.25
+    },
+    {
+      "t": 232.564,
+      "x": 316,
+      "y": 545.5,
+      "w": 1520,
+      "h": 44
+    },
+    {
+      "t": 240.333,
+      "x": 346,
+      "y": 390.015625,
+      "w": 83,
+      "h": 16.1875
+    },
+    {
+      "t": 240.344,
+      "x": 316,
+      "y": 773.328125,
+      "w": 1520,
+      "h": 73
+    },
+    {
+      "t": 247.163,
+      "x": 316,
+      "y": 959.03125,
+      "w": 1021.421875,
+      "h": 18.84375
+    },
+    {
+      "t": 261.746,
+      "x": 316,
+      "y": 813.03125,
+      "w": 1108.421875,
+      "h": 18.84375
+    },
+    {
+      "t": 268.263,
+      "x": 1621,
+      "y": 861.328125,
+      "w": 118,
+      "h": 44
+    },
+    {
+      "t": 276.478,
+      "x": 1747,
+      "y": 788.328125,
+      "w": 89,
+      "h": 44
+    },
+    {
+      "t": 279.012,
+      "x": 1650,
+      "y": 861.328125,
+      "w": 186,
+      "h": 44
+    },
+    {
+      "t": 284.545,
+      "x": 1700,
+      "y": 1036.328125,
+      "w": 136,
+      "h": 44
+    },
+    {
+      "t": 294.898,
+      "x": 1299.5,
+      "y": 552.921875,
+      "w": 88,
+      "h": 16.1875
+    },
+    {
+      "t": 304.345,
+      "x": 1675,
+      "y": 1012,
+      "w": 161,
+      "h": 52
+    },
+    {
+      "t": 309.231,
+      "x": 700,
+      "y": 306.125,
+      "w": 520,
+      "h": 467.75
+    },
+    {
+      "t": 311.76,
+      "x": 880,
+      "y": 701.875,
+      "w": 176,
+      "h": 44
+    },
+    {
+      "t": 406.842,
+      "x": 316,
+      "y": 635.671875,
+      "w": 185,
+      "h": 24.296875
+    },
+    {
+      "t": 419.972,
+      "x": 292,
+      "y": 263.6875,
+      "w": 304,
+      "h": 43.1875
+    },
+    {
+      "t": 419.979,
+      "x": 56,
+      "y": 349.046875,
+      "w": 156,
+      "h": 26.890625
+    },
+    {
+      "t": 425.376,
+      "x": 1500,
+      "y": 535.875,
+      "w": 340,
+      "h": 21.59375
+    },
+    {
+      "t": 433.79,
+      "x": 1500,
+      "y": 1042.09375,
+      "w": 340,
+      "h": 21.59375
+    },
+    {
+      "t": 939.637,
+      "x": 253,
+      "y": 654.4375,
+      "w": 1646,
+      "h": 56
+    },
+    {
+      "t": 952.619,
+      "x": 275,
+      "y": 411.59375,
+      "w": 40,
+      "h": 20.25
+    },
+    {
+      "t": 987.661,
+      "x": 275,
+      "y": 441.140625,
+      "w": 40,
+      "h": 20.25
+    },
+    {
+      "t": 987.667,
+      "x": 520.5,
+      "y": 441.140625,
+      "w": 137,
+      "h": 20.25
+    },
+    {
+      "t": 1003.368,
+      "x": 857.296875,
+      "y": 741.125,
+      "w": 120,
+      "h": 18.890625
+    },
+    {
+      "t": 1016.118,
+      "x": 295,
+      "y": 389.5,
+      "w": 1320,
+      "h": 20.25
+    },
+    {
+      "t": 1022.616,
+      "x": 666,
+      "y": 482.53125,
+      "w": 152,
+      "h": 44
+    },
+    {
+      "t": 1030.566,
+      "x": 1585,
+      "y": 993.828125,
+      "w": 65,
+      "h": 34
+    },
+    {
+      "t": 1037.699,
+      "x": 1629,
+      "y": 398.515625,
+      "w": 252,
+      "h": 44
+    },
+    {
+      "t": 1048.515,
+      "x": 330,
+      "y": 1055.875,
+      "w": 471,
+      "h": 16.1875
+    },
+    {
+      "t": 1054.024,
+      "x": 316,
+      "y": 1496.890625,
+      "w": 276,
+      "h": 18.890625
+    },
+    {
+      "t": 1054.029,
+      "x": 316,
+      "y": 857.828125,
+      "w": 94,
+      "h": 27
+    },
+    {
+      "t": 1062.423,
+      "x": 420,
+      "y": 227.515625,
+      "w": 1080,
+      "h": 134.078125
+    },
+    {
+      "t": 1070.83,
+      "x": 438,
+      "y": 300.828125,
+      "w": 802,
+      "h": 21.75
+    },
+    {
+      "t": 1081.437,
+      "x": 439,
+      "y": 365.296875,
+      "w": 1042,
+      "h": 18.84375
+    },
+    {
+      "t": 1081.462,
+      "x": 674,
+      "y": 475.03125,
+      "w": 210,
+      "h": 44
+    },
+    {
+      "t": 1090.829,
+      "x": 674,
+      "y": 475.03125,
+      "w": 210,
+      "h": 44
+    },
+    {
+      "t": 1102.824,
+      "x": 1048.5,
+      "y": 414.359375,
+      "w": 348,
+      "h": 36
+    },
+    {
+      "t": 1106.279,
+      "x": 1048.5,
+      "y": 450.359375,
+      "w": 174,
+      "h": 36
+    },
+    {
+      "t": 1107.996,
+      "x": 1222.5,
+      "y": 450.359375,
+      "w": 174,
+      "h": 36
+    },
+    {
+      "t": 1109.412,
+      "x": 1048.5,
+      "y": 527.15625,
+      "w": 348,
+      "h": 36
+    },
+    {
+      "t": 1112.11,
+      "x": 1032.5,
+      "y": 774.921875,
+      "w": 380,
+      "h": 55
+    },
+    {
+      "t": 1125.135,
+      "x": 420,
+      "y": 180.140625,
+      "w": 213,
+      "h": 37.6875
+    },
+    {
+      "t": 1125.15,
+      "x": 1381,
+      "y": 173.828125,
+      "w": 119,
+      "h": 44
+    },
+    {
+      "t": 1133.412,
+      "x": 774,
+      "y": 303.515625,
+      "w": 372,
+      "h": 21.75
+    },
+    {
+      "t": 1142.377,
+      "x": 420,
+      "y": 173.828125,
+      "w": 1080,
+      "h": 37.6875
+    },
+    {
+      "t": 1148.894,
+      "x": 438,
+      "y": 245.515625,
+      "w": 1044,
+      "h": 21.75
+    }
+  ],
+  "cortes": [
+    [
+      0.37,
+      6.535
+    ],
+    [
+      52.373,
+      57.526
+    ],
+    [
+      95.517,
+      100.891
+    ],
+    [
+      135.645,
+      136.24
+    ],
+    [
+      159.306,
+      159.885
+    ],
+    [
+      175.614,
+      176.472
+    ],
+    [
+      197.323,
+      198.161
+    ],
+    [
+      220.989,
+      221.529
+    ],
+    [
+      227.195,
+      232.122
+    ],
+    [
+      240.308,
+      240.311
+    ],
+    [
+      293.954,
+      294.86
+    ],
+    [
+      323.065,
+      338.067
+    ],
+    [
+      338.154,
+      338.586
+    ],
+    [
+      338.587,
+      341.067
+    ],
+    [
+      341.067,
+      401.626
+    ],
+    [
+      401.949,
+      406.794
+    ],
+    [
+      415.216,
+      419.95
+    ],
+    [
+      443.138,
+      886.494
+    ],
+    [
+      917.831,
+      934.471
+    ],
+    [
+      934.601,
+      939.592
+    ],
+    [
+      947.935,
+      952.599
+    ],
+    [
+      982.619,
+      987.639
+    ],
+    [
+      997.517,
+      1003.322
+    ],
+    [
+      1042.152,
+      1048.477
+    ],
+    [
+      1059.37,
+      1062.371
+    ],
+    [
+      1069.114,
+      1070.805
+    ],
+    [
+      1076.904,
+      1077.102
+    ],
+    [
+      1078.514,
+      1081.417
+    ],
+    [
+      1091.753,
+      1101.765
+    ],
+    [
+      1101.765,
+      1102.666
+    ],
+    [
+      1111.471,
+      1112.03
+    ],
+    [
+      1113.83,
+      1121.642
+    ],
+    [
+      1122.623,
+      1125.115
+    ],
+    [
+      1131.698,
+      1133.39
+    ],
+    [
+      1140.055,
+      1142.35
+    ],
+    [
+      1147.17,
+      1148.864
+    ]
+  ],
+  "errores": [
+    "Failed to set the 'innerHTML' property on 'Element': This document requires 'TrustedHTML' assignment."
+  ]
+}

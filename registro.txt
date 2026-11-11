@@ -1,0 +1,48 @@
+Modo grabar · voz hecha: 60 frases · mes 2026-11
+
+── 01 Clientes y cuotas
+
+── 02 La ficha
+
+── 03 Tarifa y paquetes
+
+── 04 Bitrix24 y Sumied
+
+── 05 La pestaña Sumied
+
+── 06 El cobro
+  · COBRO ENVIADO al sandbox.
+  · Preparado, sin enviar, el cobro de 2026-12: Preparados 26 recibos de 2026-12.
+  · factura de Talleres Ruiz, S.L.: a los 1 min
+
+── 07 Cobrado y facturado
+  ✗ 07.5: el PDF no se ha bajado
+  ✗ 07.5 (el PDF): no está el PDF
+  · no se ha casado la liquidación PO01M73MAXEM2WGBNHAG3509V0T8: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MAY9MG5HB4HM4K53NNYHC: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MAZAMTJ6FFRA7WAZZ91MK: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MB60JWEFYHZRFNX1S1PQV: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MB6E36XJNE21ZKZVXK1SJ: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MB78S0M1CQPRH5T8C5C80: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MB7HMETW7PWJAMXNAHDH5: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MB84C92XMKRFAV2HJC2P9: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MB8YVTRE7BB68FR6CN1SP: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MBBA0R9JS9R2X7NMGMNHD: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MBC2F9P60EBV5WGC46CYQ: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MBC90RRRSX28Y9F09WRH5: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · no se ha casado la liquidación PO01M73MBCTSF2W29ER4EAXSNSJG: Este movimiento ya está casado: cada movimiento se casa una sola vez.
+  · ingreso de Talleres Ruiz, S.L. casado en el banco: a los 0 min
+  · 13 ingresos de cobros facturados; validados ahora 9. Comisión que queda en la 57200002: 29.53 €.
+
+── 08 En la contabilidad
+
+── 09 El banco
+
+── 10 El portal, desde la gestoría
+
+── 11 El portal del cliente
+  · devuelto de Electricidad Voltio, S.L.: a los 0 min
+
+Modo grabar: 57 de 57 frases con su gesto; 2 fallos; 1 errores de la página. Cobro enviado.
+  - 07.5: el PDF no se ha bajado
+  - 07.5 (el PDF): no está el PDF

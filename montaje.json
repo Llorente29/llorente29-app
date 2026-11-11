@@ -1,0 +1,805 @@
+{
+  "total": 401.4333333333334,
+  "portada": 4,
+  "cierre": 5,
+  "planos": [
+    {
+      "tipo": "cartel",
+      "png": "/home/runner/work/_temp/tomas/caratula-1-clientes.png",
+      "dura": 2.5,
+      "m": 4
+    },
+    {
+      "tipo": "crudo",
+      "a": 6.535,
+      "b": 18.634999999999998,
+      "m": 6.5
+    },
+    {
+      "tipo": "crudo",
+      "a": 18.74,
+      "b": 24.106666666666666,
+      "m": 18.599999999999998
+    },
+    {
+      "tipo": "crudo",
+      "a": 24.2,
+      "b": 30.53333333333333,
+      "m": 23.966666666666665
+    },
+    {
+      "tipo": "crudo",
+      "a": 30.622999999999998,
+      "b": 37.88966666666666,
+      "m": 30.299999999999997
+    },
+    {
+      "tipo": "crudo",
+      "a": 38.006,
+      "b": 43.272666666666666,
+      "m": 37.56666666666666
+    },
+    {
+      "tipo": "crudo",
+      "a": 43.387,
+      "b": 51.85366666666667,
+      "m": 42.83333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 57.526,
+      "b": 65.05933333333334,
+      "m": 51.3
+    },
+    {
+      "tipo": "crudo",
+      "a": 65.171,
+      "b": 72.37100000000001,
+      "m": 58.833333333333336
+    },
+    {
+      "tipo": "crudo",
+      "a": 72.474,
+      "b": 78.14066666666668,
+      "m": 66.03333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 78.25500000000001,
+      "b": 85.12166666666667,
+      "m": 71.7
+    },
+    {
+      "tipo": "crudo",
+      "a": 85.235,
+      "b": 89.96833333333333,
+      "m": 78.56666666666666
+    },
+    {
+      "tipo": "crudo",
+      "a": 90.057,
+      "b": 95.02366666666667,
+      "m": 83.3
+    },
+    {
+      "tipo": "crudo",
+      "a": 100.891,
+      "b": 106.35766666666667,
+      "m": 88.26666666666667
+    },
+    {
+      "tipo": "crudo",
+      "a": 106.45100000000001,
+      "b": 114.11766666666668,
+      "m": 93.73333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 114.23400000000001,
+      "b": 120.80066666666667,
+      "m": 101.4
+    },
+    {
+      "tipo": "crudo",
+      "a": 120.894,
+      "b": 128.894,
+      "m": 107.96666666666667
+    },
+    {
+      "tipo": "crudo",
+      "a": 128.99499999999998,
+      "b": 135.16166666666663,
+      "m": 115.96666666666667
+    },
+    {
+      "tipo": "cartel",
+      "png": "/home/runner/work/_temp/tomas/caratula-2-bitrix.png",
+      "dura": 2.5,
+      "m": 122.13333333333333
+    },
+    {
+      "tipo": "toma",
+      "gif": "scripts/video/gd/tomas/05-bitrix.gif",
+      "desde": 0,
+      "dura": 8.4,
+      "m": 124.63333333333333
+    },
+    {
+      "tipo": "toma",
+      "gif": "scripts/video/gd/tomas/05-sumied.gif",
+      "desde": 0,
+      "dura": 5.666666666666667,
+      "m": 133.03333333333333
+    },
+    {
+      "tipo": "toma",
+      "gif": "/home/runner/work/_temp/tomas/05-pestana-resumen.gif",
+      "desde": 0,
+      "dura": 6.966666666666667,
+      "m": 138.7
+    },
+    {
+      "tipo": "toma",
+      "gif": "/home/runner/work/_temp/tomas/05-pestana-resumen.gif",
+      "desde": 6.966666666666667,
+      "dura": 6.733333333333333,
+      "m": 145.66666666666666
+    },
+    {
+      "tipo": "toma",
+      "gif": "/home/runner/work/_temp/tomas/05-pestana-cuotas.gif",
+      "desde": 0,
+      "dura": 10.8,
+      "m": 152.39999999999998
+    },
+    {
+      "tipo": "toma",
+      "gif": "/home/runner/work/_temp/tomas/05-pestana-laboral.gif",
+      "desde": 0,
+      "dura": 9.266666666666667,
+      "m": 163.2
+    },
+    {
+      "tipo": "toma",
+      "gif": "/home/runner/work/_temp/tomas/05-pestana-portal.gif",
+      "desde": 0,
+      "dura": 5.533333333333333,
+      "m": 172.46666666666667
+    },
+    {
+      "tipo": "cartel",
+      "png": "/home/runner/work/_temp/tomas/caratula-3-cobro.png",
+      "dura": 2.5,
+      "m": 178
+    },
+    {
+      "tipo": "crudo",
+      "a": 232.226,
+      "b": 239.89266666666666,
+      "m": 180.5
+    },
+    {
+      "tipo": "crudo",
+      "a": 240.012,
+      "b": 246.74533333333332,
+      "m": 188.16666666666666
+    },
+    {
+      "tipo": "crudo",
+      "a": 246.83599999999998,
+      "b": 261.30266666666665,
+      "m": 194.89999999999998
+    },
+    {
+      "tipo": "crudo",
+      "a": 261.425,
+      "b": 267.825,
+      "m": 209.36666666666665
+    },
+    {
+      "tipo": "crudo",
+      "a": 267.928,
+      "b": 275.99466666666666,
+      "m": 215.76666666666662
+    },
+    {
+      "tipo": "crudo",
+      "a": 276.111,
+      "b": 281.7776666666667,
+      "m": 223.8333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 284.21799999999996,
+      "b": 287.9846666666666,
+      "m": 229.49999999999997
+    },
+    {
+      "tipo": "crudo",
+      "a": 294.86,
+      "b": 303.9266666666667,
+      "m": 233.26666666666662
+    },
+    {
+      "tipo": "crudo",
+      "a": 304.022,
+      "b": 308.822,
+      "m": 242.3333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 308.92199999999997,
+      "b": 316.92199999999997,
+      "m": 247.1333333333333
+    },
+    {
+      "tipo": "cartel",
+      "png": "/home/runner/work/_temp/tomas/caratula-4-factura.png",
+      "dura": 2.5,
+      "m": 255.1333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 406.794,
+      "b": 414.82733333333334,
+      "m": 257.6333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 419.95,
+      "b": 424.91666666666663,
+      "m": 265.6666666666667
+    },
+    {
+      "tipo": "crudo",
+      "a": 425.032,
+      "b": 433.3653333333333,
+      "m": 270.6333333333333
+    },
+    {
+      "tipo": "crudo",
+      "a": 433.45599999999996,
+      "b": 442.7226666666666,
+      "m": 278.96666666666664
+    },
+    {
+      "tipo": "toma",
+      "gif": "/home/runner/work/_temp/tomas/07b-buzon.gif",
+      "desde": 0,
+      "dura": 6.466666666666667,
+      "m": 288.2333333333333
+    },
+    {
+      "tipo": "cartel",
+      "png": "/home/runner/work/_temp/tomas/caratula-5-contabilidad.png",
+      "dura": 2.5,
+      "m": 294.69999999999993
+    },
+    {
+      "tipo": "crudo",
+      "a": 939.592,
+      "b": 947.5253333333333,
+      "m": 297.19999999999993
+    },
+    {
+      "tipo": "crudo",
+      "a": 987.639,
+      "b": 997.0056666666667,
+      "m": 305.1333333333332
+    },
+    {
+      "tipo": "crudo",
+      "a": 1003.322,
+      "b": 1009.7553333333333,
+      "m": 314.4999999999999
+    },
+    {
+      "tipo": "crudo",
+      "a": 1009.845,
+      "b": 1015.6783333333334,
+      "m": 320.93333333333317
+    },
+    {
+      "tipo": "crudo",
+      "a": 1015.7860000000001,
+      "b": 1022.186,
+      "m": 326.76666666666654
+    },
+    {
+      "tipo": "crudo",
+      "a": 1022.288,
+      "b": 1030.1213333333333,
+      "m": 333.1666666666665
+    },
+    {
+      "tipo": "crudo",
+      "a": 1030.231,
+      "b": 1037.2643333333333,
+      "m": 340.9999999999998
+    },
+    {
+      "tipo": "crudo",
+      "a": 1037.374,
+      "b": 1041.6073333333334,
+      "m": 348.0333333333331
+    },
+    {
+      "tipo": "cartel",
+      "png": "/home/runner/work/_temp/tomas/caratula-6-portal.png",
+      "dura": 2.5,
+      "m": 352.2666666666664
+    },
+    {
+      "tipo": "crudo",
+      "a": 1048.477,
+      "b": 1053.6103333333335,
+      "m": 354.7666666666664
+    },
+    {
+      "tipo": "crudo",
+      "a": 1053.717,
+      "b": 1057.1503333333335,
+      "m": 359.89999999999986
+    },
+    {
+      "tipo": "crudo",
+      "a": 1062.371,
+      "b": 1068.7043333333334,
+      "m": 363.33333333333326
+    },
+    {
+      "tipo": "crudo",
+      "a": 1070.805,
+      "b": 1076.4383333333335,
+      "m": 369.6666666666665
+    },
+    {
+      "tipo": "crudo",
+      "a": 1125.115,
+      "b": 1131.2816666666668,
+      "m": 375.29999999999995
+    },
+    {
+      "tipo": "crudo",
+      "a": 1133.39,
+      "b": 1139.6566666666668,
+      "m": 381.4666666666667
+    },
+    {
+      "tipo": "crudo",
+      "a": 1142.35,
+      "b": 1146.7833333333333,
+      "m": 387.73333333333335
+    },
+    {
+      "tipo": "crudo",
+      "a": 1148.864,
+      "b": 1153.1306666666667,
+      "m": 392.16666666666674
+    }
+  ],
+  "silencios": [
+    {
+      "fin": 6.539229,
+      "dura": 6.539229,
+      "cartel": true
+    },
+    {
+      "fin": 124.960875,
+      "dura": 3.914625,
+      "cartel": true
+    },
+    {
+      "fin": 180.841938,
+      "dura": 3.798437,
+      "cartel": true
+    },
+    {
+      "fin": 257.675271,
+      "dura": 3.037292,
+      "cartel": true
+    },
+    {
+      "fin": 297.204979,
+      "dura": 3.517375,
+      "cartel": true
+    },
+    {
+      "fin": 354.810625,
+      "dura": 3.65575,
+      "cartel": true
+    },
+    {
+      "fin": 401.450667,
+      "dura": 5.728542,
+      "cartel": true
+    }
+  ],
+  "dichos": [
+    {
+      "id": "01.1",
+      "texto": "Aquí están todos tus clientes. Sumied los lee de tu Bitrix24, y las cuotas, de tu tarifa; GoCardless solo pasa el cargo. No das de alta nada dos veces.",
+      "desde": 6.5009999999999994,
+      "hasta": 18.500999999999998,
+      "toma": null
+    },
+    {
+      "id": "01.2",
+      "texto": "Arriba, lo que cobras cada mes, con las altas y las bajas.",
+      "desde": 18.9,
+      "hasta": 23.859999999999996,
+      "toma": null
+    },
+    {
+      "id": "01.3",
+      "texto": "Lo que te deben: los recibos que el banco ha devuelto y nadie ha pagado después.",
+      "desde": 24.266666666666666,
+      "hasta": 30.186666666666664,
+      "toma": null
+    },
+    {
+      "id": "01.4",
+      "texto": "Y lo que dejas de cobrar: clientes que están activos en tu Bitrix24 y no tienen cuota.",
+      "desde": 30.599999999999998,
+      "hasta": 37.48,
+      "toma": null
+    },
+    {
+      "id": "01.5",
+      "texto": "Debajo, lo que tienes que hacer, ordenado por el dinero que mueve.",
+      "desde": 37.86666666666666,
+      "hasta": 42.74666666666666,
+      "toma": null
+    },
+    {
+      "id": "01.6",
+      "texto": "Abres un cliente y ves, de un vistazo, lo que se le cobra este mes, lo que debe y cómo fue su último cobro.",
+      "desde": 43.133333333333326,
+      "hasta": 51.213333333333324,
+      "toma": null
+    },
+    {
+      "id": "02.1",
+      "texto": "Su cuota sale de tu tarifa. Sumied la calcula y te avisa si no coincide con lo que cobra GoCardless.",
+      "desde": 51.3,
+      "hasta": 58.739999999999995,
+      "toma": null
+    },
+    {
+      "id": "02.2",
+      "texto": "Su próximo recibo, línea a línea: cada servicio, su precio y por qué se cobra.",
+      "desde": 59.13333333333333,
+      "hasta": 65.93333333333334,
+      "toma": null
+    },
+    {
+      "id": "02.3",
+      "texto": "La gestión laboral va por trabajador, y aquí están todos, con nombre.",
+      "desde": 66.33333333333333,
+      "hasta": 71.61333333333333,
+      "toma": null
+    },
+    {
+      "id": "02.4",
+      "texto": "El que entra nuevo sale marcado con su alta. Así nadie cobra de más ni de menos.",
+      "desde": 72,
+      "hasta": 78.48,
+      "toma": null
+    },
+    {
+      "id": "02.5",
+      "texto": "Sus cobros, uno por uno, y sus datos de contacto…",
+      "desde": 78.86666666666666,
+      "hasta": 83.18666666666667,
+      "toma": null
+    },
+    {
+      "id": "02.6",
+      "texto": "…y lo que tienes de él en Bitrix24, tal cual está allí.",
+      "desde": 83.6,
+      "hasta": 88.16,
+      "toma": null
+    },
+    {
+      "id": "03.1",
+      "texto": "Tu tarifa, como la cobras hoy, y cuántos clientes tiene cada servicio.",
+      "desde": 88.26666666666667,
+      "hasta": 93.62666666666667,
+      "toma": null
+    },
+    {
+      "id": "03.2",
+      "texto": "La gestoría mensual, en tres niveles, con lo que incluye cada uno y cuántos clientes están en él.",
+      "desde": 94.03333333333333,
+      "hasta": 101.31333333333333,
+      "toma": null
+    },
+    {
+      "id": "03.3",
+      "texto": "Si a un cliente le cobras otro precio, queda como su precio especial, con el motivo.",
+      "desde": 101.7,
+      "hasta": 107.86000000000001,
+      "toma": null
+    },
+    {
+      "id": "03.4",
+      "texto": "La gestión laboral, a tanto por trabajador: el recibo cambia solo cuando hay un alta o una baja.",
+      "desde": 108.26666666666667,
+      "hasta": 115.86666666666667,
+      "toma": null
+    },
+    {
+      "id": "03.5",
+      "texto": "Las nóminas, por tramos. Y los paquetes, con lo que se ahorra el cliente.",
+      "desde": 116.26666666666668,
+      "hasta": 122.02666666666669,
+      "toma": null
+    },
+    {
+      "id": "04.1",
+      "texto": "Sigues trabajando en tu Bitrix24. Aquí cambiamos la situación de un cliente, de Activo a Moroso.",
+      "desde": 124.93333333333332,
+      "hasta": 132.93333333333334,
+      "toma": "05-bitrix.gif"
+    },
+    {
+      "id": "04.2",
+      "texto": "Y Sumied se entera en segundos, sin importar nada ni tocar un botón.",
+      "desde": 133.33333333333334,
+      "hasta": 138.61333333333334,
+      "toma": "05-sumied.gif"
+    },
+    {
+      "id": "05.1",
+      "texto": "Y sin salir de Bitrix24: en la ficha de cada empresa tienes una pestaña de Sumied.",
+      "desde": 139,
+      "hasta": 145.56,
+      "toma": "05-pestana-resumen.gif"
+    },
+    {
+      "id": "05.2",
+      "texto": "En Resumen, lo pendiente con ese cliente: cada cosa te lleva a donde se arregla.",
+      "desde": 145.96666666666667,
+      "hasta": 152.28666666666666,
+      "toma": "05-pestana-resumen.gif"
+    },
+    {
+      "id": "05.3",
+      "texto": "En Cuotas y cobros, sus servicios y sus cobros. Le cambias el nivel o el precio desde aquí, y antes de guardar te enseña cómo queda su recibo.",
+      "desde": 152.7,
+      "hasta": 163.1,
+      "toma": "05-pestana-cuotas.gif"
+    },
+    {
+      "id": "05.4",
+      "texto": "En Laboral, sus trabajadores: das un alta o una baja desde Bitrix24, y Sumied la apunta en su recibo.",
+      "desde": 163.5,
+      "hasta": 172.38,
+      "toma": "05-pestana-laboral.gif"
+    },
+    {
+      "id": "05.5",
+      "texto": "Y en Portal, quién de ese cliente entra en su portal y lo que te ha pedido.",
+      "desde": 172.76666666666668,
+      "hasta": 177.88666666666668,
+      "toma": "05-pestana-portal.gif"
+    },
+    {
+      "id": "06.1",
+      "texto": "Toca cobrar. Sumied prepara el recibo de cada cliente con tu tarifa y con sus altas y bajas.",
+      "desde": 180.8,
+      "hasta": 188.08,
+      "toma": null
+    },
+    {
+      "id": "06.2",
+      "texto": "Y lo compara con el del mes anterior: solo te enseña lo que cambia, cada cambio con su porqué.",
+      "desde": 188.46666666666667,
+      "hasta": 194.78666666666666,
+      "toma": null
+    },
+    {
+      "id": "06.3",
+      "texto": "Imprenta Rápida Sol pasa de Básica a Premium y su recibo sube un 67 %. Cuando un recibo cambia más de un 30 %, Sumied no te deja aprobarlo de un clic: te pide que lo mires.",
+      "desde": 195.2,
+      "hasta": 209.28,
+      "toma": null
+    },
+    {
+      "id": "06.4",
+      "texto": "Talleres Ruiz paga más por el trabajador nuevo. Lo ves con su nombre y su alta.",
+      "desde": 209.66666666666666,
+      "hasta": 215.66666666666666,
+      "toma": null
+    },
+    {
+      "id": "06.5",
+      "texto": "A Reformas Atalaya este mes no le cobras: lo dejas fuera de este cobro, y el mes que viene vuelve a entrar.",
+      "desde": 216.06666666666663,
+      "hasta": 223.74666666666664,
+      "toma": null
+    },
+    {
+      "id": "06.6",
+      "texto": "Apruebas los cambios uno a uno, sabiendo por qué cambia cada uno.",
+      "desde": 224.1333333333333,
+      "hasta": 229.4133333333333,
+      "toma": null
+    },
+    {
+      "id": "06.7",
+      "texto": "Y los que no cambian, todos de una vez.",
+      "desde": 229.79999999999998,
+      "hasta": 233.16,
+      "toma": null
+    },
+    {
+      "id": "06.8",
+      "texto": "Sumied también te dice quién se queda fuera, y por qué: aquí, un cliente activo en Bitrix24 que no tiene cuota.",
+      "desde": 233.26666666666662,
+      "hasta": 242.22666666666663,
+      "toma": null
+    },
+    {
+      "id": "06.9",
+      "texto": "Todo revisado: el cobro se envía a GoCardless.",
+      "desde": 242.6333333333333,
+      "hasta": 247.0333333333333,
+      "toma": null
+    },
+    {
+      "id": "06.10",
+      "texto": "Antes de salir, te dice a cuántos clientes y por cuánto. Confirmas, y GoCardless pasa los cargos.",
+      "desde": 247.4333333333333,
+      "hasta": 255.0333333333333,
+      "toma": null
+    },
+    {
+      "id": "07.1",
+      "texto": "Cuando GoCardless confirma cada cargo, Sumied hace la factura sola. Aquí ves cómo va cada recibo.",
+      "desde": 257.6333333333333,
+      "hasta": 265.5533333333333,
+      "toma": null
+    },
+    {
+      "id": "07.2",
+      "texto": "La factura sale a nombre de tu gestoría, con la numeración de tu serie.",
+      "desde": 265.6666666666667,
+      "hasta": 270.5466666666667,
+      "toma": null
+    },
+    {
+      "id": "07.3",
+      "texto": "Con todo lo que ha pasado, paso a paso: preparado, aprobado, enviado, cobrado y facturado.",
+      "desde": 270.93333333333334,
+      "hasta": 278.8533333333333,
+      "toma": null
+    },
+    {
+      "id": "07.4",
+      "texto": "Y su asiento ya hecho: el cliente a su 430, la cuota a ventas y el IVA a la 477.",
+      "desde": 279.26666666666665,
+      "hasta": 288.14666666666665,
+      "toma": null
+    },
+    {
+      "id": "07b.1",
+      "texto": "Y a tu cliente le llega por correo, con su factura en PDF, sin que nadie la mande.",
+      "desde": 288.5333333333333,
+      "hasta": 294.6133333333333,
+      "toma": "07b-buzon.gif"
+    },
+    {
+      "id": "08.1",
+      "texto": "En el libro de IVA repercutido, la factura ya está, con su base y su IVA. El trimestre sale de aquí.",
+      "desde": 297.19999999999993,
+      "hasta": 305.0399999999999,
+      "toma": null
+    },
+    {
+      "id": "08.3",
+      "texto": "Lo que cobra GoCardless pasa por esta cuenta puente hasta que llega al banco. Cuando llega, queda solo su comisión, al céntimo.",
+      "desde": 305.1333333333332,
+      "hasta": 314.4133333333332,
+      "toma": null
+    },
+    {
+      "id": "08.4",
+      "texto": "Y en el banco, el ingreso que llega de GoCardless, neto, casado con sus cobros.",
+      "desde": 314.4999999999999,
+      "hasta": 320.8199999999999,
+      "toma": null
+    },
+    {
+      "id": "08.5",
+      "texto": "De la cuota al banco, contabilizado solo. Sin teclear un asiento.",
+      "desde": 321.2333333333331,
+      "hasta": 326.6733333333331,
+      "toma": null
+    },
+    {
+      "id": "09.1",
+      "texto": "En el banco, Sumied te dice qué ha casado solo, qué te propone y qué no sabe.",
+      "desde": 327.0666666666665,
+      "hasta": 333.0666666666665,
+      "toma": null
+    },
+    {
+      "id": "09.2",
+      "texto": "Aquí, todo lo que ha casado sin ti. Nada pasa a la contabilidad sin que esté seguro o lo confirmes tú.",
+      "desde": 333.46666666666647,
+      "hasta": 340.90666666666647,
+      "toma": null
+    },
+    {
+      "id": "09.3",
+      "texto": "El ingreso de Talleres Ruiz: el importe neto, exacto, y el porqué de que lo case.",
+      "desde": 341.2999999999997,
+      "hasta": 347.9399999999997,
+      "toma": null
+    },
+    {
+      "id": "09.4",
+      "texto": "Y todo lo que hace solo, se deshace con un clic.",
+      "desde": 348.33333333333303,
+      "hasta": 352.173333333333,
+      "toma": null
+    },
+    {
+      "id": "10.1",
+      "texto": "Cada cliente puede tener su portal. En su ficha ves quién entra…",
+      "desde": 354.7666666666664,
+      "hasta": 359.8066666666664,
+      "toma": null
+    },
+    {
+      "id": "10.2",
+      "texto": "…lo que le has pedido y lo que te ha escrito.",
+      "desde": 360.1999999999998,
+      "hasta": 363.2399999999998,
+      "toma": null
+    },
+    {
+      "id": "11.1",
+      "texto": "Esto es lo que ve tu cliente al entrar: lo que le pides y lo último de tu gestoría.",
+      "desde": 363.33333333333326,
+      "hasta": 369.5733333333332,
+      "toma": null
+    },
+    {
+      "id": "11.2",
+      "texto": "Todas sus facturas, con lo que lleva cada una, en PDF, cuando quiera.",
+      "desde": 369.6666666666665,
+      "hasta": 375.1866666666665,
+      "toma": null
+    },
+    {
+      "id": "11.4",
+      "texto": "Sus trabajadores. Pide un alta o una baja, y tú la haces desde Sumied.",
+      "desde": 375.29999999999995,
+      "hasta": 381.37999999999994,
+      "toma": null
+    },
+    {
+      "id": "11.5",
+      "texto": "Te sube facturas y tickets con una foto desde el móvil, y ve sus impuestos presentados.",
+      "desde": 381.4666666666667,
+      "hasta": 387.62666666666667,
+      "toma": null
+    },
+    {
+      "id": "11.6",
+      "texto": "Y habla contigo por aquí, sin correos sueltos ni llamadas.",
+      "desde": 387.73333333333335,
+      "hasta": 392.05333333333334,
+      "toma": null
+    },
+    {
+      "id": "11.7",
+      "texto": "Hasta cambiar la cuenta donde se le cargan los recibos lo hace él.",
+      "desde": 392.16666666666674,
+      "hasta": 396.3266666666667,
+      "toma": null
+    }
+  ]
+}

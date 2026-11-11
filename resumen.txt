@@ -1,0 +1,58 @@
+### Vídeo · el guion, frase a frase (ensayo, sin grabar)
+✓ v01.1 · la lista entera
+✓ v01.2 · zoom a «Cuotas al mes»
+✓ v01.3 · zoom a «Te deben»
+✓ v01.4 · zoom a «Dejas de cobrar»
+✓ v01.5 · zoom a «Lo que tienes que hacer»
+✓ v01.6 · clic en Talleres Ruiz y zoom al panel
+✓ v02.1 · zoom a «Se le cobra al mes»
+✓ v02.2 · zoom al recibo
+✓ v02.3 · clic en «Ver trabajadores»
+✓ v02.4 · zoom al trabajador nuevo
+✓ v02.5 · pestañas Cobros y Contacto
+✓ v02.6 · pestaña Datos de Bitrix24
+✓ v03.1 · la pantalla entera
+✓ v03.2 · zoom a los tres niveles
+✓ v03.3 · zoom a «precio especial»
+✓ v03.4 · zoom a Gestión laboral
+✓ v03.5 · zoom a Nóminas y Pack Empresa
+✓ v04.1 · toma de Bitrix24
+✓ v04.2 · toma de Sumied
+✓ v05.1 · toma: la pestaña Sumied
+✓ v05.2 · toma: Resumen
+✓ v05.3 · toma: Cuotas y cobros
+✓ v05.4 · toma: Laboral
+✓ v05.5 · toma: Portal
+✓ v06.1 · clic en «Preparar el cobro»
+✓ v06.2 · zoom a «Lo que cambia»
+✓ v06.3 · zoom al cambio de Imprenta Rápida Sol
+✓ v06.4 · zoom al cambio de Talleres Ruiz
+✓ v06.5 · clic en «Este mes no» de Reformas Atalaya
+✓ v06.6 · aprueba los cambios
+✓ v06.7 · clic en «Aprobar» de los que no cambian
+✓ v06.8 · zoom a «No entran»
+✓ v06.9 · clic en «Enviar el cobro»
+✓ v06.10 · zoom al diálogo de confirmación
+✓ v07.1 · zoom a «Cómo va cada recibo»
+✓ v07.2 · la factura de Talleres Ruiz
+✓ v07.3 · zoom a «Lo que ha pasado»
+✓ v07.4 · zoom a «En la contabilidad»
+✗ v07.5 · el PDF: no está el PDF
+✓ v08.1 · libro de IVA repercutido, fila de Talleres Ruiz
+✓ v08.2 · mayor de su 430, zoom al saldo
+✓ v08.3 · mayor de la 57200002, zoom al saldo
+✓ v08.4 · banco 57200000, el ingreso
+✓ v08.5 · plano entero
+✓ v09.1 · zoom al aviso de lo que ha hecho
+✓ v09.2 · pestaña «Casados solos»
+✓ v09.3 · abre el de Talleres Ruiz
+✓ v09.4 · zoom a «Deshacer»
+✓ v10.1 · pestaña Portal de la ficha
+✓ v10.2 · zoom a lo pedido y los mensajes
+✓ v11.1 · portal · Inicio
+✓ v11.2 · portal · Facturas
+✓ v11.3 · portal · Pagos
+✓ v11.4 · portal · Trabajadores
+✓ v11.5 · portal · Documentos
+✓ v11.6 · portal · Mensajes
+✓ v11.7 · portal · Tu cuenta
