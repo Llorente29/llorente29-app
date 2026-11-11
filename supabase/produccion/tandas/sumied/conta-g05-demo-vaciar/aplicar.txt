@@ -1,0 +1,15 @@
+# G05 · «Volver a empezar» de la demo puede vaciar sus facturas emitidas y sus
+# asientos validados (nº 86). Rama conta/g05-demo-vaciar. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1452  CAMBIA EN CALIENTE las cuatro protecciones (customer_invoice_inalterable,
+#         customer_invoice_line_inalterable, journal_entry_inalterable,
+#         journal_line_inalterable): una línea más al principio, «si se está
+#         vaciando esta cuenta de demostración, se deja». Cada una con su
+#         respaldo y su prueba de staging. AÑADE _conta_demo_vaciando y
+#         _conta_demo_permitir_vaciar (la marca; nadie de fuera la puede poner).
+#         Para cualquier cuenta que no es de demostración, la regla no cambia.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-demo-vaciar.sql
+supabase/migrations/20261110T1452_g05_demo_vaciar_emitidas.sql
