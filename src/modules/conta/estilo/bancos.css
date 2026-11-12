@@ -458,3 +458,8 @@
   .cxb-anulado-botones { width: 100%; }
   .cxb-anulado-botones > button { flex: 1; }
 }
+
+/* B01·21 · «Cobro de un cliente» / «Pago a un proveedor»: la lista para elegir. */
+.cxr-terceros { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; margin: 8px 0; }
+.cxr-tercero { text-align: left; justify-content: flex-start; }
+.cxr-tercero-elegido { background: var(--s-accion-suave); border-color: var(--s-accion-borde); color: var(--s-accion); font-weight: 600; }

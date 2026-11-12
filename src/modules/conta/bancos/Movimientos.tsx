@@ -55,7 +55,7 @@ import { AvisoCargoAnulado } from '@/modules/conta/bancos/AvisoCargoAnulado'
 import { textoDesapartado, textoEsBueno, textoQuitado, type AvisoAnulado } from '@/modules/conta/lib/cargoAnulado'
 import { refrescarCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 import { useBancos } from '@/modules/conta/bancos/contexto'
-import { DialogoCuenta, DialogoFactura, type Eleccion } from '@/modules/conta/bancos/dialogos'
+import { DialogoCuenta, DialogoFactura, DialogoTercero, type Eleccion } from '@/modules/conta/bancos/dialogos'
 import { nombreConCuenta } from '@/modules/conta/lib/validarBanco'
 import { PanelMovimiento } from '@/modules/conta/bancos/PanelMovimiento'
 import { casarRemesa, remesasParaCasar } from '@/modules/conta/services/pagosService'
@@ -90,7 +90,7 @@ export function Movimientos() {
   // B01·20 · Lo que dicen «Quitarlo» y «No, es bueno» sale arriba, donde estaba el aviso.
   const [avisoArriba, setAvisoArriba] = useState(false)
   const [ocupado, setOcupado] = useState<string | null>(null)
-  const [dialogo, setDialogo] = useState<{ que: 'cuenta' | 'factura' | 'apartar'; m: MovimientoBanco } | null>(null)
+  const [dialogo, setDialogo] = useState<{ que: 'cuenta' | 'factura' | 'apartar' | 'tercero'; m: MovimientoBanco } | null>(null)
   // El movimiento del panel va en la dirección (?mov=), como la bandeja: si algo de arriba vuelve a
   // montar la pantalla, el panel sigue abierto (lo cazó la e2e: se cerraba solo de vez en cuando).
   const elegido = query.get('mov')
@@ -283,6 +283,13 @@ export function Movimientos() {
     }
     hecho(`Casado con ${nombre} (${quien(m)})${e.regla ? `. Y desde ahora, lo que tenga «${e.regla}» saldrá ${e.lineas.length > 1 ? 'ya repartido, para confirmar' : 'ahí'}: está en Reglas` : ''}.`)
   }
+  // B01·21 · «Cobro de un cliente» / «Pago a un proveedor»: el movimiento entero contra la cuenta del tercero.
+  const elegirTercero = (m: MovimientoBanco) => async (e: Eleccion) => {
+    const l = e.lineas[0]
+    const destino: Destino = { tipo: 'cuenta', concepto: e.concepto, lineas: [{ cuenta: l.cuenta, importe: l.importeCent / 100 }] }
+    await nucleo.confirmar(m.id, `Lo dijiste tú: ${e.concepto.toLowerCase()} · ${l.cuenta}.`, destino, 'probable', null)
+    hecho(`Casado: ${e.concepto.charAt(0).toLowerCase()}${e.concepto.slice(1)} · ${l.cuenta} (${quien(m)}). Su asiento espera en «Por validar».`)
+  }
   const apartar = (m: MovimientoBanco) => async (motivo: string) => {
     await ignorar(m.id, motivo)
     hecho(`Apartado el movimiento del ${quien(m)}: «${motivo}». No va a contabilidad.`)
@@ -342,6 +349,7 @@ export function Movimientos() {
       alBuscarFactura={() => setDialogo({ que: 'factura', m: elegidoM })}
       alApuntarSinFactura={() => setDialogo({ que: 'cuenta', m: elegidoM })}
       alApartar={() => setDialogo({ que: 'apartar', m: elegidoM })}
+      alTercero={() => setDialogo({ que: 'tercero', m: elegidoM })}
       alDesapartar={() => desapartarM(elegidoM)}
       alCerrar={() => setElegido(null)} />
   )
@@ -484,6 +492,7 @@ export function Movimientos() {
       {dialogo?.que === 'cuenta' && <DialogoCuenta m={dialogo.m} alCerrar={() => setDialogo(null)} alElegir={elegirCuenta(dialogo.m)} alApartar={apartar(dialogo.m)} />}
       {dialogo?.que === 'apartar' && <DialogoCuenta m={dialogo.m} apartando alCerrar={() => setDialogo(null)} alElegir={elegirCuenta(dialogo.m)} alApartar={apartar(dialogo.m)} />}
       {dialogo?.que === 'factura' && <DialogoFactura m={dialogo.m} alCerrar={() => setDialogo(null)} alElegir={elegirFactura(dialogo.m)} />}
+      {dialogo?.que === 'tercero' && <DialogoTercero m={dialogo.m} alCerrar={() => setDialogo(null)} alElegir={elegirTercero(dialogo.m)} />}
     </section>
   )
 }

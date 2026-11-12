@@ -52,6 +52,8 @@ export interface PanelProps {
   alBuscarFactura: () => void
   alApuntarSinFactura: () => void
   alApartar: () => void
+  /** B01·21 · «Cobro de un cliente» (lo que entra) o «Pago a un proveedor» (lo que sale), sin factura. */
+  alTercero?: () => void
   /** B01·20 · Deshacer un «Apartar»: el movimiento vuelve a contar. */
   alDesapartar?: () => void
   alCerrar: () => void
@@ -291,6 +293,9 @@ export function PanelMovimiento(p: PanelProps) {
         <details className="cxn-bloque cxn-otra-cosa">
           <summary>¿Es otra cosa?</summary>
           <div className="cxn-acciones cxn-acciones-columna">
+            {p.alTercero && (
+              <button type="button" className="cx-boton-sec" onClick={p.alTercero}>{m.importeCent > 0 ? 'Cobro de un cliente…' : 'Pago a un proveedor…'}</button>
+            )}
             <button type="button" className="cx-boton-sec" onClick={p.alApuntarSinFactura}>Apuntar sin factura…</button>
             {p.otrosBancos.filter((b) => b.cuenta).map((b) => (
               <button key={b.id} type="button" className="cx-boton-sec" disabled={p.ocupado}
