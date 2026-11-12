@@ -556,13 +556,14 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
  * Lo que va en la fila después de los chips: el motivo si espera, lo que falta
  * para Diez si es tarea, y si no, de dónde sale (en una línea, con «…»).
  */
-function QueLePasa({ a, espera, tarea }: { a: AsientoDiario; espera: string | null; tarea: string | null }) {
-  // S01p·18 · 2: lo propuesto que también espera en su apartado lo dice siempre (se valida aquí o allí).
-  const tambien = dondeSeDecide(a)
-  const con = (x: string) => (tambien ? `${x} · ${tambien}` : x)
-  if (espera) return <span className="cxd-sale cxd-sale-espera" title={con(`Espera: ${espera}`)}>{con(`Espera: ${espera}`)}</span>
-  if (tarea) return <span className="cxd-sale cxd-sale-tarea" title={con(tarea)}>{con(tarea)}</span>
-  return <span className="cxd-sale" title={con(deDondeSale(a))}>{con(deDondeSale(a))}</span>
+function QueLePasa({ a, espera, tarea, sinTambien }: { a: AsientoDiario; espera: string | null; tarea: string | null; sinTambien?: boolean }) {
+  // S01p·18 · 2: lo propuesto que también espera en su apartado lo dice siempre, en su propia
+  // línea (la del «de dónde sale» se corta con «…» y en el móvil se perdía).
+  const tambien = sinTambien ? null : dondeSeDecide(a)
+  const otro = tambien ? <span className="cxd-tambien">{tambien}</span> : null
+  if (espera) return <><span className="cxd-sale cxd-sale-espera" title={espera}>Espera: {espera}</span>{otro}</>
+  if (tarea) return <><span className="cxd-sale cxd-sale-tarea" title={tarea}>{tarea}</span>{otro}</>
+  return <><span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>{otro}</>
 }
 
 /** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
@@ -579,8 +580,10 @@ function TarjetaAsiento({ a, diez, espera, tarea }: { a: AsientoDiario; diez: De
           {pastillas(a, ejes).map((p) => <Chip key={p.texto} tono={p.tono}>{p.texto}</Chip>)}
           {/* C07: la tarjeta entera abre el asiento (es un botón): aquí solo el chip; «Reintentar», en el asiento. */}
           <DetalleDiezPieza d={diez} conMotivo={false} sinBoton alHacer={() => undefined} alFallar={() => undefined} />
-          <QueLePasa a={a} espera={espera} tarea={tarea} />
+          <QueLePasa a={a} espera={espera} tarea={tarea} sinTambien />
         </span>
+        {/* S01p·18 · 2: en el móvil, debajo y entero (la línea de arriba se corta con «…»). */}
+        {dondeSeDecide(a) && <span className="cxd-tambien">{dondeSeDecide(a)}</span>}
       </span>
       <span className="cxd-tarjeta-derecha">
         <span className="cxd-importe">{eurosExactos(importe(a))}</span>

@@ -51,7 +51,7 @@ test('1 y 2 · «Para revisar» con todo lo propuesto, y el filtro de Estado con
   await expect(liq).toContainText('También en Ventas › Liquidaciones', { timeout: 30_000 })
   await page.screenshot({ path: `${DIR}/asientos-para-revisar-${lado(page)}.png`, fullPage: true })
 
-  await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: /^Todos · [\d.]+$/ }).click()
+  await page.getByRole('group', { name: 'Vistas' }).getByRole('button', { name: /^Todos( · [\d.]+)?$/ }).click()
   const f = await filtros(page)
   const estado = f.getByLabel('Estado')
   await expect(estado.locator('option', { hasText: /^Propuesto$/ })).toHaveCount(1)
