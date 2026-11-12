@@ -1,0 +1,6 @@
+# DL1 · octubre de Llorente29 (1842: añade _dl1_casar y, en Foodint, apunta
+# tres correcciones y casa los 33 movimientos de octubre). Su prueba
+# (ROLLBACK, cuenta A): sin Foodint no hace nada; casa un movimiento como la
+# persona y lo valida; no casa dos veces; no casa uno de otra empresa.
+supabase/migrations/20261112T1842_dl1_octubre_bancos.sql
+supabase/staging/sql/20261112_dl1_octubre_bancos_prueba.sql

@@ -123,10 +123,13 @@ describe('lector · cada documento por su título, cada factura por su NIF', () 
     expect(r.avisos).toContain('La factura que le haces suma 9.533,64 € por líneas y dice 9.533,65 €: 1 céntimo de redondeo del IVA. Manda el total.')
     expect(r.avisos).toContain('Su factura suma 3.987,82 € por líneas y dice 3.987,81 €: 1 céntimo de redondeo del IVA. Manda el total.')
   })
-  it('una línea de la transacción que no se sabe qué es y trae importe, PARA (§2.5)', () => {
+  it('una línea de la transacción que no se sabe qué es y trae importe se PREGUNTA, no para (S01p·18; antes §2.5)', () => {
     expect(leerLiquidacion([AF, FV, transaccion()], EMPRESA).avisos).toContain('«Ventas Anticipadas en Efectivo» viene a cero.')
     const r = leerLiquidacion([AF, FV, transaccion('12,00')], EMPRESA)
-    expect(r.bloqueos).toContain('«Ventas Anticipadas en Efectivo» trae 12,00 € y Folvy no sabe qué es: dímelo antes de proponer nada.')
+    expect(r.lineasSocio).toEqual([{ concepto: 'Ventas Anticipadas en Efectivo', importe: 12, queEs: null }])
+    expect(r.bloqueos.some((b) => b.includes('no sabe qué es'))).toBe(false)
+    // El saldo del documento (5.545,84) no suma esa línea: eso sí para.
+    expect(r.bloqueos).toContain('La transacción dice 5.545,84 € de saldo y sus líneas suman 5.557,84 €.')
   })
   it('una factura que ni emite ni recibe tu empresa no se toma por ninguna de las dos', () => {
     const r = leerLiquidacion([AF, FV], 'B00000011')
