@@ -1,0 +1,3 @@
+# B01·20 · la vuelta atrás de la 0055: quita las cinco funciones y las dos columnas. Lo apartado se queda apartado.
+cuenta: scripts/conta/produccion/cuentas/b01s-cargo-anulado.sql
+supabase/vuelta-atras/20261107T0055_b01s_cargo_anulado.down.sql
