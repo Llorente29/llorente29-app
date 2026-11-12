@@ -1,0 +1,2 @@
+# DL1 · octubre de Llorente29: la 1842 no tiene vuelta atrás (se declara en aplicar.txt): un asiento validado se anula con un contraasiento, y un casado se deshace en Bancos.
+cuenta: scripts/conta/produccion/cuentas/dl1-octubre-bancos.sql

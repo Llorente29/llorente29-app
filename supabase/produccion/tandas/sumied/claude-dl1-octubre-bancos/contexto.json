@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · octubre de Llorente29 · contexto de producción, medido en SOLO LECTURA el 12/11 a las 17:29Z: la 1842 añade _dl1_casar y _dl1_anular (no existen, ni otras con esos nombres) y, en Foodint, anula la 9/2 y la 9/3 con journal_entry_anular, apunta tres correcciones con _dl1_asiento_iva (de la 1451, en producción), casa los 33 movimientos de octubre sin casar con bank_casar y valida con _dl1_validar. Octubre no está cerrado (ni en Bancos ni en Contabilidad). Nada en el camino del pedido; la 1842 no está en el historial.",
+ "medido": "2026-11-12T17:29Z",
+ "tanda": {
+  "supabase/migrations/20261112T1842_dl1_octubre_bancos.sql": "f9cce207c9dc02cafc648f4780b01c48"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
