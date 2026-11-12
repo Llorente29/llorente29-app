@@ -1,0 +1,3 @@
+# B01·22 · la vuelta atrás de la 0027: quita las dos funciones, la tabla del veredicto y las dos columnas.
+cuenta: scripts/conta/produccion/cuentas/b01r22-niveles.sql
+supabase/vuelta-atras/20261113T0027_b01r22_niveles.down.sql

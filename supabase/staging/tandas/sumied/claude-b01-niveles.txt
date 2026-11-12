@@ -1,0 +1,7 @@
+# B01·22 · 0027: el nivel de cada propuesta del banco. Solo añade (dos columnas
+# que admiten nulos en bank_settings, la tabla bank_nivel_veredicto y dos
+# funciones). Su prueba (ROLLBACK, cuenta D): la vuelta atrás y la 0027 otra
+# vez, quién puede llamar a qué, el interruptor apagado, el veredicto que apunta
+# y ve el administrador de D y no otra cuenta, y que la historia se lee.
+supabase/migrations/20261113T0027_b01r22_niveles.sql
+supabase/staging/sql/20261113_b01r22_niveles_prueba.sql

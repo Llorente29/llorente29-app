@@ -1,0 +1,23 @@
+{
+ "_que": "B01·22 · el nivel de cada propuesta · contexto de producción, medido en SOLO LECTURA el 12/11 a las 23:34Z: la 0027 añade dos columnas que admiten nulos a bank_settings (no existen; 1 fila), la tabla bank_nivel_veredicto (no existe) y dos funciones que no existen (bank_historial_validado y bank_nivel_veredicto_apuntar). La consulta de bank_historial_validado, probada en solo lectura sobre Foodint: 186 validaciones contra una cuenta, 17 corregidas, 61 contrapartes. Nada en el camino del pedido.",
+ "medido": "2026-11-12T23:34Z",
+ "tanda": {
+  "supabase/migrations/20261113T0027_b01r22_niveles.sql": "5def0bda28685824b56f0717b3996530"
+ },
+ "contexto": {
+  "tablas": [
+   "public.bank_settings"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.bank_settings": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

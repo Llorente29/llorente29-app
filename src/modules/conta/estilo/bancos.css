@@ -178,6 +178,16 @@
 }
 .cxn-pildora-ambar { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
 
+/* B01·22 · El nivel de lo que se propone: verde lo seguro, ámbar lo que hay que mirar, rojo suave lo que nunca va solo, neutro lo que no sé. */
+.cxn-nivel {
+  display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
+  background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); white-space: nowrap;
+}
+.cxn-nivel-centimo, .cxn-nivel-confirmado { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxn-nivel-camino { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxn-nivel-nunca { background: var(--cx-rojo-suave); color: var(--cx-rojo); }
+.cxn-nivel-linea { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin: 6px 0 0; }
+
 .cxn-casados { padding: 4px 18px 8px; display: flex; flex-direction: column; }
 .cxn-casado { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--cx-linea); }
 .cxn-casado:first-child { border-top: none; }

@@ -15,11 +15,16 @@
 //                        (bank_casar, «folvy»); lo demás queda propuesto o por
 //                        aclarar con su porqué (bank_proponer).
 //   confirmar / deshacer lo que hace la persona.
+//   datosDelNivel        B01·22: lo que necesita el nivel de cada propuesta
+//                        (nivel.ts): la racha de lo validado, qué documento es
+//                        cada factura, el límite, los meses cerrados y el
+//                        interruptor de la empresa (apagado).
 
 import { huellas, huellasSuaves, limpiarConcepto, movimientoSinTarjetas, type Cuadre, type ExtractoLeido } from '../extractoBanco.ts'
 import {
   MOTOR_BANCOS, conciliar, contraparte, cuentaDeTienda, ventanaDeCobro, type Aprendido, type AsientoLibre, type Contexto, type Contrato, type Decision, type Destino, type Impuesto, type Movimiento, type Plataforma,
 } from './conciliacion.ts'
+import { LIMITE_POR_DEFECTO_CENT, mismoDestino, nivelDe, rachasDe, type DatosNivel, type Nivel } from './nivel.ts'
 
 type Fila = Record<string, unknown>
 type Respuesta = PromiseLike<{ data: unknown; error: { message: string } | null }>
@@ -341,9 +346,38 @@ export function crearBancos(bd: Bd) {
     return { ctx, movimientos }
   }
 
+  /**
+   * B01·22 · Lo que necesita el nivel de cada propuesta. Lo que la base aún no tenga (antes de la
+   * tanda 0027) no para la pasada: se propone igual, sin racha ni interruptor, y se dice en el registro.
+   */
+  async function datosDelNivel(accountId: string, companyId: string, ctx: Contexto, hoy: string): Promise<DatosNivel & { seguroSolo: boolean }> {
+    const desde = new Date(Date.parse(`${hoy}T00:00:00Z`) - 400 * 86400000).toISOString().slice(0, 10)
+    const tolerante = <T,>(p: Promise<T>, que: string, vacio: T) => p.catch((e: unknown) => { console.warn(`[bancos] nivel: ${que} no se ha podido leer`, e); return vacio })
+    const ids = ctx.facturas.map((f) => f.id)
+    const [historial, tipos, ajustes, cierres] = await Promise.all([
+      tolerante(rpc<Fila[]>('bank_historial_validado', { p_company: companyId, p_desde: desde }), 'lo validado', [] as Fila[]),
+      ids.length ? tolerante(leer(tabla('supplier_invoice').select('id, doc_kind').in('id', ids), 'qué documento es cada factura'), 'qué documento es cada factura', [] as Fila[]) : Promise.resolve([] as Fila[]),
+      tolerante(leer(tabla('bank_settings').select('*').eq('company_id', companyId), 'los ajustes de Bancos'), 'los ajustes de Bancos', [] as Fila[]),
+      tolerante(leer(tabla('bank_month_close').select('treasury_account_id, month, status').eq('account_id', accountId).eq('company_id', companyId).eq('status', 'cerrado'), 'los meses cerrados'), 'los meses cerrados', [] as Fila[]),
+    ])
+    const tipo = new Map(tipos.map((t) => [String(t.id), String(t.doc_kind ?? '')]))
+    const aj = ajustes[0] ?? {}
+    return {
+      facturas: ctx.facturas.map((f) => ({ ...f, esFactura: tipo.has(f.id) ? tipo.get(f.id) === 'invoice' : undefined })),
+      rachas: rachasDe((historial ?? []).map((h) => ({ concepto: String(h.concepto ?? ''), contraparte: s(h.contraparte), cuentas: String(h.cuentas ?? ''),
+        validado: String(h.validado ?? ''), corregido: h.corregido === true }))),
+      limiteCent: aj.seguro_limite === null || aj.seguro_limite === undefined ? LIMITE_POR_DEFECTO_CENT : cent(aj.seguro_limite),
+      mesesCerrados: new Set(cierres.map((c) => `${String(c.treasury_account_id)}|${String(c.month).slice(0, 7)}`)),
+      nombres: ctx.nombres,
+      seguroSolo: aj.seguro_solo === true,
+    }
+  }
+
   async function conciliarPendientes(accountId: string, companyId: string, hoy: string): Promise<ResultadoConciliar> {
     const { ctx, movimientos } = await cargarContexto(accountId, companyId, hoy)
     const decisiones = conciliar(movimientos, ctx)
+    const datosNivel = await datosDelNivel(accountId, companyId, ctx, hoy)
+    const porId = new Map(movimientos.map((m) => [m.id, m]))
     const r: ResultadoConciliar = { casadosSolos: 0, propuestos: 0, porAclarar: 0, antesDelCorte: 0, fallos: [], decisiones }
     const hechos = new Set<string>()
     for (const d of decisiones) {
@@ -351,10 +385,17 @@ export function crearBancos(bd: Bd) {
       if (hechos.has(d.movimientoId) || d.otroLadoDe) continue
       const propuesta = { que: d.que, destino: d.destino, falta: d.falta, pideTicket: d.pideTicket, reglaId: d.reglaId, contraparte: d.contraparte, tarjetaId: d.tarjetaId,
         origen: d.origen, preseleccionar: d.preseleccionar, tarjetaDesconocida: d.tarjetaDesconocida, alternativas: d.alternativas,
-        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, reparto: d.reparto ?? null, motor: MOTOR_BANCOS }
+        quedaPorCasarCent: d.quedaPorCasarCent, facturaSinAprobar: d.facturaSinAprobar, reparto: d.reparto ?? null, motor: MOTOR_BANCOS,
+        // B01·22 · El nivel y su porqué («Seguro · coincide al céntimo con la factura X», «Míralo · 2 de 3»…).
+        nivel: porId.has(d.movimientoId) ? nivelDe(d, porId.get(d.movimientoId)!, datosNivel) : null }
+      // El interruptor de la empresa (apagado mientras no lo encienda Julio): solo él deja casar sola una propuesta «Seguro».
+      const solaPorNivel = datosNivel.seguroSolo && !!propuesta.nivel?.seguro && !!d.destino && d.confianza !== 'seguro'
       try {
         if (d.tarjetaId) await rpc('bank_tarjeta_del_movimiento', { p_movement: d.movimientoId, p_card: d.tarjetaId })
-        if (d.confianza === 'seguro' && d.destino) {
+        if (solaPorNivel && d.destino) {
+          await casarDestino(d.movimientoId, d.destino, 'seguro', `${propuesta.nivel!.etiqueta}: ${propuesta.nivel!.porque}`, 'folvy', d.reglaId)
+          r.casadosSolos++
+        } else if (d.confianza === 'seguro' && d.destino) {
           await casarDestino(d.movimientoId, d.destino, 'seguro', d.porque, 'folvy', d.reglaId)
           if (d.destino.tipo === 'traspaso') hechos.add(d.destino.otro_movimiento_id)
           r.casadosSolos++
@@ -394,9 +435,20 @@ export function crearBancos(bd: Bd) {
     return rpc<Fila>('bank_casar', { p_movement: movimientoId, p_destino: destino, p_confianza: confianza, p_porque: porque, p_razones: [], p_por: por, p_regla: reglaId })
   }
 
-  /** «Sí»: casa lo propuesto (o el destino que elija la persona). */
-  async function confirmar(movimientoId: string, porque: string, destino: Destino, confianza: 'seguro' | 'probable' | 'duda', reglaId: string | null): Promise<{ asiento: string; creado: boolean }> {
+  /**
+   * «Sí»: casa lo propuesto (o el destino que elija la persona). B01·22: si la propuesta tenía nivel,
+   * apunta si la persona la casó tal cual o la cambió (bank_nivel_veredicto): la medida que decide
+   * encender el interruptor. Que no se pueda apuntar no deshace el casado: se dice en el registro.
+   */
+  async function confirmar(movimientoId: string, porque: string, destino: Destino, confianza: 'seguro' | 'probable' | 'duda', reglaId: string | null,
+    propuesta?: { nivel?: Nivel | null; destino?: Destino | null; motor?: string | null } | null): Promise<{ asiento: string; creado: boolean }> {
     const r = await casarDestino(movimientoId, destino, confianza, porque, 'persona', reglaId)
+    if (propuesta?.nivel) {
+      try {
+        await rpc('bank_nivel_veredicto_apuntar', { p_movement: movimientoId, p_match: s(r.casado) ?? s(r.match) ?? s(r.id), p_nivel: propuesta.nivel.clave, p_etiqueta: propuesta.nivel.etiqueta,
+          p_tal_cual: mismoDestino(propuesta.destino ?? null, destino), p_propuesto: propuesta.destino ?? null, p_casado: destino, p_motor: propuesta.motor ?? null })
+      } catch (e) { console.warn('[bancos] no se ha podido apuntar si la propuesta se casó tal cual', e) }
+    }
     if (destino.tipo === 'abono_pasarela' || destino.tipo === 'abono_gocardless') return { asiento: String(r.asiento), creado: true }
     if (reglaId) await rpc('bank_regla_confirmada', { p_id: reglaId })
     return { asiento: String(r.asiento), creado: !!r.creado }
@@ -407,7 +459,7 @@ export function crearBancos(bd: Bd) {
     return String(r.asiento ?? '')
   }
 
-  return { bancosDeLaEmpresa, importar, cargarContexto, conciliarPendientes, confirmar, deshacer }
+  return { bancosDeLaEmpresa, importar, cargarContexto, datosDelNivel, conciliarPendientes, confirmar, deshacer }
 }
 
 /** S01d · Las declaraciones presentadas a ingresar y sin pagar, con la cuenta de su modelo. Pura. */
