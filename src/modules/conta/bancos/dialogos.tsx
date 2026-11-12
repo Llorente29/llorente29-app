@@ -252,9 +252,14 @@ export function DialogoTercero({ m, alCerrar, alElegir }: {
   const [elegido, setElegido] = useState<string | null>(null)
   const [ocupado, setOcupado] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Primero los que más palabras de la búsqueda tienen («SUMINISTROS DEL NORTE» → «Suministros B01 del Norte»
+  // antes que todo lo que solo dice «Norte»); a igualdad, por nombre.
   const vistos = useMemo(() => {
-    const t = normal(busca.trim())
-    const xs = t ? lista.filter((x) => t.split(/\s+/).some((p) => p.length >= 3 && normal(x.nombre).includes(p)) || x.codigo.startsWith(t)) : lista
+    const palabras = normal(busca.trim()).split(/\s+/).filter((p) => p.length >= 3)
+    if (!palabras.length) return lista
+    const puntos = (x: { nombre: string; codigo: string }) => palabras.filter((p) => normal(x.nombre).includes(p)).length + (x.codigo.startsWith(busca.trim()) ? 10 : 0)
+    const xs = lista.map((x) => ({ x, n: puntos(x) })).filter((y) => y.n > 0)
+      .sort((a, b) => b.n - a.n || a.x.nombre.localeCompare(b.x.nombre, 'es')).map((y) => y.x)
     return xs.length ? xs : lista
   }, [busca, lista])
   const tercero = lista.find((x) => x.codigo === elegido) ?? null

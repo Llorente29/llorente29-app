@@ -64,6 +64,8 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await expect(dialogo).toBeVisible()
     await expect(dialogo.getByText('¿De qué proveedor es?')).toBeVisible()
     const opcion = dialogo.getByRole('option').first()
+    // El que más palabras del banco tiene sale el primero (no lo primero que diga «Norte»).
+    await expect(opcion).toContainText('Suministros B01 del Norte')
     if (await opcion.count()) {
       await opcion.click()
       await expect(dialogo.getByRole('note')).toContainText('Sale 250,00 €')
