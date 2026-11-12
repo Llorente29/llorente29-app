@@ -329,7 +329,7 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
     return () => { vivo = false }
   }, [liqId, vuelta])
 
-  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaLiquidacionesVentas('socios')}>‹ Liquidaciones</Link><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
+  if (error) return <div className="cxc"><Link className="cx-enlace cx-mayor-volver" to={rutaLiquidacionesVentas('socios')}>‹ Liquidaciones</Link>{/* Regla 8: lo que se acaba de guardar se dice aunque la ficha no se pueda leer. */}<Guardado texto={aviso} /><ErrorConReintento mensaje={error} reintentar={() => setVuelta((v) => v + 1)} /></div>
   if (!liq || !contraste) return <div className="cxc"><TarjetaCargando /><TarjetaCargando /></div>
 
   const lec = liq.detail
