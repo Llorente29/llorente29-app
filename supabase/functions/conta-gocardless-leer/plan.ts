@@ -69,6 +69,8 @@ export interface PlanLectura {
   cobroCliente: Record<string, unknown>[]
   /** G06 · Lo atado en esta lectura, para el sitio único del enlace (conta_gc_enlace): cada cliente de esta cuenta de GoCardless con su ficha. */
   enlaces: { gcClienteId: string; partyId: string; por: 'nif' | 'correo' | 'persona' }[]
+  /** G06 · Tarea 3 · Lo que no casa solo y tiene pareja posible (correo en varias fichas o el mismo nombre): solo propuesta. */
+  propuestas: { gcClienteId: string; candidatas: string[]; por: 'correo' | 'nombre'; porque: string }[]
   mandatosSumied: { gcMandatoId: string; fila: Record<string, unknown> }[]
   servicios: ServicioImportado[]
   tarifas: (TarifaImportada & { partyId: string; desde: string })[]
@@ -189,6 +191,11 @@ export function planLectura(empresa: string, cuenta: string, datos: DatosGc, ant
     filas: { clientes, mandatos, suscripciones, cobros, payouts }, nuevos, cambiados, iguales,
     parejas: casado.parejas, diferenciasDelCasado: casado.diferencias, partyDeCliente, partyDeFicha, cobroCliente, mandatosSumied,
     enlaces: [...partyDeCliente].map(([gcClienteId, partyId]) => ({ gcClienteId, partyId, por: (porDe.get(gcClienteId) ?? 'correo') as 'nif' | 'correo' | 'persona' })),
+    propuestas: casado.propuestas
+      .filter((x) => x.emisor === empresa && !partyDeCliente.has(x.clienteGcId))
+      .map((x) => ({ gcClienteId: x.clienteGcId, por: x.por, porque: x.porque,
+        candidatas: [...new Set(x.claveFichas.map((k) => partyDeFicha.get(k)).filter((v): v is string => !!v))] }))
+      .filter((x) => x.candidatas.length > 0),
     servicios: conv.servicios, tarifas, lineas, noConvertidas,
     resumen: {
       // «Mandatos activos», como los cuenta GoCardless (status active). El casado usa todos los vivos (también los que van camino del banco).
