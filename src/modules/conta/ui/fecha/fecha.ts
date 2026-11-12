@@ -47,3 +47,18 @@ export function deTexto(t: string): string | null {
 export function fechaMal(t: string): boolean {
   return /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(t.trim()) && deTexto(t) === null
 }
+
+/**
+ * S01p·18 · 2 · Al salir del campo, una fecha sin año («04/10», «4/10/») se
+ * completa con el año que se da (el en curso, si no). Lo demás, tal cual: null.
+ * Antes se quedaba a medias en silencio y el filtro no se ponía (Julio, 12/11:
+ * con 04/10–04/10, Asientos enseñaba los del 10/11 y el 11/11).
+ */
+export function completarAnio(t: string, anio: number): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/?$/.exec(t.trim())
+  if (!m) return null
+  return deTexto(`${m[1]}/${m[2]}/${anio}`)
+}
+
+/** Escrita a medias (algo hay y no es una fecha entera): al salir del campo, se dice. */
+export const fechaAMedias = (t: string): boolean => t.trim() !== '' && deTexto(t) === null && !fechaMal(t)

@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·18 · punto 2 · «Contabilizar» valida lo que propone · contexto de producción, medido en SOLO LECTURA el 2026-11-12T18:21Z: la 1915 cambia _compras_liquidacion_confirmar por reemplazo exacto dentro de un DO, con respaldo (huella bd7e9531adab28949f3ecf00e0b90c5d, la misma en staging y en la base local). No crea objetos ni mueve filas. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-12T18:21Z",
+ "tanda": {
+  "supabase/migrations/20261112T1915_s01p_contabilizar_valida.sql": "a738ff19bba26afa92f60647f8a6b2f7"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

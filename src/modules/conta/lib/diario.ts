@@ -207,12 +207,22 @@ export function seDecideEnSuSitio(a: Pick<AsientoDiario, 'estado' | 'origen'> & 
 }
 
 /**
- * Lo que es de Contabilidad › Asientos: todo menos lo propuesto que se decide
- * en otro apartado. La lista, sus vistas, «Para revisar», las cifras, «Lo que
- * he hecho yo» y el número del menú salen de aquí: la misma vara (regla 31).
+ * Lo que es de Contabilidad › Asientos: TODO. S01p·18 · 2 (Julio, 12/11): todo
+ * asiento propuesto sale en «Para revisar», sea cual sea su origen, también lo
+ * que tiene su sitio en otro apartado (Julio validó los de la liquidación del
+ * socio abriéndolos por su dirección: «Para revisar · 0» los escondía). Lo que
+ * se decide en otro sitio lo dice en su fila (dondeSeDecide), y se puede validar
+ * desde los dos. La lista, sus vistas, «Para revisar», las cifras, «Lo que he
+ * hecho yo» y el número del menú salen de aquí: la misma vara (regla 31).
  */
 export function delLibroDiario<T extends Pick<AsientoDiario, 'estado' | 'origen'> & { sinCanal?: boolean }>(asientos: readonly T[]): T[] {
-  return asientos.filter((a) => seDecideEnSuSitio(a) === null)
+  return [...asientos]
+}
+
+/** El texto de la fila de un propuesto que también espera en otro apartado («También en Ventas › Liquidaciones»). */
+export function dondeSeDecide(a: Pick<AsientoDiario, 'estado' | 'origen'> & { sinCanal?: boolean }): string | null {
+  const s = seDecideEnSuSitio(a)
+  return s ? `También en ${NOMBRE_SITIO[s]}` : null
 }
 
 /** Lo sin validar con fecha de un mes, separado: lo de Asientos y lo que espera en su sitio (por sitio). */

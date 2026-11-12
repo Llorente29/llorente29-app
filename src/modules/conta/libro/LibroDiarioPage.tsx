@@ -41,12 +41,12 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Chip, ErrorConReintento, Guardado, Hueso, Vacio } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, euros, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import {
-  NOMBRE_SITIO, cifras, deDondeSale, delLibroDiario, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, mesDe, nombreMes, numeroVisible,
+  NOMBRE_SITIO, cifras, deDondeSale, delLibroDiario, dondeSeDecide, estadoDe, filtrar, filtrosVisibles, importe, loQueHeHechoYo, mesAnterior, mesDe, nombreMes, numeroVisible,
   pasosCierre, pastillas, pedirCierre, seDecideEnSuSitio, sePuedeCerrar, sinValidarPorSitio, type AsientoDiario, type CierreMes, type FiltroDiario, type FuenteCierre,
 } from '@/modules/conta/lib/diario'
 import { NOMBRE_SERIE } from '@/modules/conta/lib/libro'
 import {
-  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerEjercicios, localesDeLaCuenta, primerDiaAbierto, reabrirMes, resultadoDelMes,
+  cerrarMes, fuenteCierre, horaDeCierre, leerAsientos, leerCierres, leerPropuestosFuera, leerEjercicios, localesDeLaCuenta, primerDiaAbierto, reabrirMes, resultadoDelMes,
   type EjercicioLibro,
 } from '@/modules/conta/services/diarioService'
 import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
@@ -122,7 +122,10 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
       const ejercicio = ejercicios.find((e) => e.code === codigo) ?? ejercicios.find((e) => hoy >= e.inicio && hoy <= e.fin) ?? ejercicios[0] ?? null
       if (!ejercicio) return { horaCierre, ejercicios, ejercicio, asientos: [], enSuSitio: [], cierres, mes: mesDe(hoy), resultado: null, resultadoError: null, cierre: null, conDiez: new Map<string, ConDiez>(), conDiezError: null, envios: new Map<string, EnvioAsiento>(), contras: new Map<string, EnvioAsiento>(), esperan: new Map<string, MotivoEspera[]>(), esperanError: null }
       const mes = hoy >= ejercicio.inicio && hoy <= ejercicio.fin ? mesDe(hoy) : mesDe(ejercicio.fin)
-      const leidos = await leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin)
+      // S01p·18 · 2: y lo propuesto de cualquier otra fecha (otro ejercicio): también espera revisión.
+      const [delEjercicio, deFuera] = await Promise.all([leerAsientos(accountId, companyId, ejercicio.inicio, ejercicio.fin),
+        leerPropuestosFuera(accountId, companyId, ejercicio.inicio, ejercicio.fin)])
+      const leidos = [...delEjercicio, ...deFuera]
       // S02 · PR 2: una sola vez, aquí, y todo lo de abajo lee lo mismo (regla 31).
       const asientos = delLibroDiario(leidos)
       const enSuSitio = leidos.filter((a) => seDecideEnSuSitio(a) !== null)
@@ -155,6 +158,9 @@ function useLibro(accountId: string | null, companyId: string | null, codigo: st
   return r.clave === clave ? r : { clave, datos: null, error: null }
 }
 
+/** El texto del estado de lo propuesto (estadoDe): el filtro lo llama «Propuesto». */
+const ESTADO_PROPUESTO = 'Para revisar'
+
 /** Los filtros de arriba de la tabla; las listas salen de lo que hay en el libro (regla 30). */
 function camposDelLibro(asientos: readonly AsientoDiario[], ejeLocal: EjeVista | null): CampoFiltro[] {
   const series = [...new Set(asientos.map((a) => a.serie))].sort((x, y) => Number(x) - Number(y))
@@ -164,7 +170,9 @@ function camposDelLibro(asientos: readonly AsientoDiario[], ejeLocal: EjeVista |
     { id: 'desde', etiqueta: 'Desde', tipo: 'desde' },
     { id: 'hasta', etiqueta: 'Hasta', tipo: 'hasta' },
     { id: 'serie', etiqueta: 'Serie', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todas' }, ...series.map((x) => ({ valor: String(x), texto: NOMBRE_SERIE[x] }))] },
-    { id: 'estado', etiqueta: 'Estado', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todos' }, ...estados.map((x) => ({ valor: x, texto: x }))] },
+    // S01p·18 · 2: «Propuesto» siempre está (es lo que espera); los demás, los que hay (regla 30).
+    { id: 'estado', etiqueta: 'Estado', tipo: 'opciones', opciones: [{ valor: '', texto: 'Todos' }, { valor: ESTADO_PROPUESTO, texto: 'Propuesto' },
+      ...estados.filter((x) => x !== ESTADO_PROPUESTO).map((x) => ({ valor: x, texto: x }))] },
     ...(ejeLocal && locales.length > 1 ? [{ id: 'local', etiqueta: ejeLocal.nombre, tipo: 'opciones' as const, opciones: [{ valor: '', texto: 'Todos' }, ...locales.map((x) => ({ valor: x, texto: x }))] }] : []),
     { id: 'texto', etiqueta: 'Buscar', tipo: 'texto', pista: 'Concepto, número, cuenta, importe…' },
   ]
@@ -223,6 +231,9 @@ export default function LibroDiarioPage() {
       if (!e || !(a.estado === 'propuesto' || (a.estado === 'validado' && e.reintentar))) return []
       // M01: lo propuesto que la validación pararía espera; no se ofrece validar y enviar.
       if (a.estado === 'propuesto' && datos.esperan.has(a.id)) return []
+      // S01p·18 · 2: lo propuesto que se decide en su apartado sale en «Para revisar», pero no se
+      // envía desde aquí: las ventas de un canal van en Cierres del día y en el traspaso (V01).
+      if (a.estado === 'propuesto' && seDecideEnSuSitio(a)) return []
       // V04: con el IVA de su periodo presentado no se valida (la base lo para): no se ofrece.
       if (a.estado === 'propuesto' && candadoDelAsiento(a, iva.presentados)) return []
       return [{ id: a.id, concepto: a.concepto, fecha: a.fecha, estado: a.estado, cobro: cobroDe(a.apuntes), estadoDiez: e, noSeEnvia: motivoSinPatron(datos.conDiez.get(a.id)!.canal) }]
@@ -546,9 +557,12 @@ function Apuntes({ a, espera, tarea, quien, alHacer, alFallar }: {
  * para Diez si es tarea, y si no, de dónde sale (en una línea, con «…»).
  */
 function QueLePasa({ a, espera, tarea }: { a: AsientoDiario; espera: string | null; tarea: string | null }) {
-  if (espera) return <span className="cxd-sale cxd-sale-espera" title={espera}>Espera: {espera}</span>
-  if (tarea) return <span className="cxd-sale cxd-sale-tarea" title={tarea}>{tarea}</span>
-  return <span className="cxd-sale" title={deDondeSale(a)}>{deDondeSale(a)}</span>
+  // S01p·18 · 2: lo propuesto que también espera en su apartado lo dice siempre (se valida aquí o allí).
+  const tambien = dondeSeDecide(a)
+  const con = (x: string) => (tambien ? `${x} · ${tambien}` : x)
+  if (espera) return <span className="cxd-sale cxd-sale-espera" title={con(`Espera: ${espera}`)}>{con(`Espera: ${espera}`)}</span>
+  if (tarea) return <span className="cxd-sale cxd-sale-tarea" title={con(tarea)}>{con(tarea)}</span>
+  return <span className="cxd-sale" title={con(deDondeSale(a))}>{con(deDondeSale(a))}</span>
 }
 
 /** Un asiento en el móvil: fecha y número, el concepto, sus chips, el importe y el estado. */
