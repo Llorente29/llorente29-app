@@ -72,9 +72,9 @@
 import { esResumenUber, leerResumenUber, NoEsResumenUber, paraRegistrar, trozos, type ResumenUber } from './liquidacionUber.ts'
 import { esLiquidacionJustEat, leerLiquidacionJustEat, paraRegistrarJustEat } from './liquidacionJustEat.ts'
 import { esExcelGlovo, leerExcelGlovo, paraRegistrarGlovo } from './lectorGlovo.ts'
-import { queDiceElContenido, queDiceElNombre, type QueEs } from './queEs.ts'
+import { esCierreDelSocio, queDiceElContenido, queDiceElNombre, type QueEs } from './queEs.ts'
 
-export { queDiceElContenido, queDiceElNombre, type QueEs }
+export { esCierreDelSocio, queDiceElContenido, queDiceElNombre, type QueEs }
 
 export const DOMINIO_ENTRADA = 'entrada.folvy.app'
 export const DIRECCION = /^((?:facturas|liquidaciones)-[a-z0-9][a-z0-9-]{1,40})@([a-z0-9.-]+)$/
@@ -267,7 +267,7 @@ export interface PuertoEntrada {
 }
 
 export type ResultadoEntrada = {
-  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion' | 'no_es_factura' | 'documentos'
+  resultado: 'ignorado' | 'sin_destino' | 'apagada' | 'repetido' | 'recibido' | 'liquidacion' | 'confirmacion' | 'no_es_liquidacion' | 'no_es_factura' | 'documentos' | 'cierre_socio'
   texto: string
   llegadas: { id: string; estado: string; texto: string }[]
 }
@@ -381,6 +381,8 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
   }
 
   const todos = await p.adjuntos(c.email_id)
+  // S01p·18 · 4 · El cierre del mes del socio de marca no son facturas de Compras: va a su liquidación.
+  if (esCierreDelSocio(todos.map((a) => a.filename))) return recibirCierreSocio(c, dest, base, p, todos)
   const { tomar, dejar } = clasificarAdjuntos(todos)
   const llegadas: ResultadoEntrada['llegadas'] = []
   const comun = { accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
@@ -414,6 +416,40 @@ export async function recibirCorreo(c: CorreoResend & Sobre, p: PuertoEntrada): 
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${deLiq}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ninguna factura${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarla.`
   return { resultado: 'recibido', texto, llegadas }
+}
+
+/**
+ * S01p·18 · 4 · El cierre del mes del socio de marca (sus cinco PDF): se guardan
+ * en la bandeja como «liquidación», sin leerlos como facturas, y esperan en
+ * Ventas › Liquidaciones › Socios de marca. Allí se leen con el lector de su
+ * liquidación (el de subirlos a mano) y, si no se sabe de qué local son, se
+ * pregunta: sus PDF traen la dirección fiscal de la empresa, no la del local.
+ */
+export async function recibirCierreSocio(c: CorreoResend, dest: Destino & { direccion: string },
+  base: { emailId: string; to: string; from: string | null; subject: string | null }, p: PuertoEntrada, todos: readonly AdjuntoResend[]): Promise<ResultadoEntrada> {
+  const { tomar, dejar } = clasificarAdjuntos(todos)
+  const llegadas: ResultadoEntrada['llegadas'] = []
+  const comun = { accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
+  for (const [i, a] of tomar.entries()) {
+    if (a.tipo !== 'application/pdf') { dejar.push({ nombre: a.nombre, porque: 'no es uno de los PDF del cierre' }); continue }
+    if (!a.download_url) { dejar.push({ nombre: a.nombre, porque: 'Resend no da su enlace de descarga' }); continue }
+    const bytes = await p.bajar(a.download_url)
+    if (bytes.length > MAX_BYTES) { dejar.push({ nombre: a.nombre, porque: 'pasa de 10 MB' }); continue }
+    const ruta = rutaEntrada(dest.accountId, c.email_id, i, a.nombre)
+    const sha = await p.sha256(bytes)
+    await p.subir(ruta, bytes, a.tipo)
+    const l = await p.llegada({ ...comun, ruta, nombre: a.nombre, tipo: a.tipo, bytes: bytes.length, sha256: sha, enlace: null })
+    if (l.yaEstaba) { llegadas.push({ id: l.id, estado: 'repetido', texto: `${a.nombre}: ya estaba (el mismo fichero llegó antes).` }); continue }
+    await p.colocar?.(l.id, { tipo: 'liquidacion', por: 'regla' })
+    llegadas.push({ id: l.id, estado: 'cierre_socio', texto: `${a.nombre}: es del cierre del mes del socio.` })
+  }
+  await p.registrarCorreo({ ...base, companyId: dest.companyId, resultado: llegadas.length ? 'recibido' : 'sin_facturas',
+    detalle: { cierre_socio: true, tomados: llegadas.length, dejados: dejar } })
+  const n = llegadas.filter((l) => l.estado === 'cierre_socio').length
+  const texto = `Es el cierre del mes del socio de marca: ${n} ${n === 1 ? 'PDF guardado' : 'PDF guardados'}, que no son facturas de Compras. `
+    + 'Esperan en Ventas › Liquidaciones › Socios de marca, para leerlos con su liquidación y su local'
+    + `${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
+  return { resultado: 'cierre_socio', texto, llegadas }
 }
 
 /** ¿Puede ser un correo de Glovo? (S01j: su Excel solo se mira si lo es.) */
@@ -576,7 +612,9 @@ async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: s
   }
   const delRemitente: QueEs | null = quien?.decision === 'tipo' ? quien.tipo ?? null : null
 
-  const { leer, guardar, dejar } = clasificarDocumentos(await p.adjuntos(c.email_id))
+  const adjuntos = await p.adjuntos(c.email_id)
+  if (esCierreDelSocio(adjuntos.map((a) => a.filename))) return recibirCierreSocio(c, dest, base, p, adjuntos)
+  const { leer, guardar, dejar } = clasificarDocumentos(adjuntos)
   const llegadas: ResultadoEntrada['llegadas'] = []
   const comun = { accountId: dest.accountId, companyId: dest.companyId, emailId: c.email_id, to: dest.direccion, from: c.from ?? null, subject: c.subject ?? null, recibido: c.created_at ?? null }
   let i = 0

@@ -39,6 +39,10 @@ import { TEXTO_QUE_ES, useContextoSocio, type ReglaSocio } from '@/modules/conta
 import { rpc, tabla } from '@/modules/conta/services/bd'
 import { MARCA as PRODUCTO } from '../cuenta/marca'
 import { SocioDelMes } from '@/modules/conta/ventas/SocioDelMes'
+import { bajarCierre, cierreDelCorreo, cierreUsado } from '@/modules/conta/services/liquidacionesVentasService'
+import { leerLocales } from '@/modules/conta/services/liquidacionesMotorService'
+import { fraseCierre, type CierreDelCorreo } from '@/modules/conta/lib/cierreSocio'
+import { useLeer } from '@/modules/conta/libros/contexto'
 
 interface Liq {
   id: string; status: string; settlement_ref: string | null; period_from: string; period_to: string
@@ -80,12 +84,18 @@ export default function LiquidacionPage() {
 // ── Subir sus documentos ───────────────────────────────────────────────────
 
 function NuevaLiquidacion() {
-  const [q] = useSearchParams()
+  const [q, setQ] = useSearchParams()
   const navigate = useNavigate()
   const { activa } = useEmpresas()
+  const { accountId } = useCuentaConta()
   const proveedor = q.get('proveedor') ?? ''
   const local = q.get('local')
   const mes = q.get('mes') ?? ''
+  // S01p·18 · 4 · El cierre del mes que llegó por correo: sus PDF se leen de la bandeja.
+  // Sus PDF traen la dirección fiscal de la empresa, no la del local: si no se sabe, se pregunta.
+  const correo = q.get('correo')
+  const [cierre, setCierre] = useState<CierreDelCorreo | null>(null)
+  const locales = useLeer(correo && !local && accountId ? () => leerLocales(accountId) : null, `${accountId}:locales:${correo}:${local}`)
   const [nombres, setNombres] = useState<{ proveedor: string | null; local: string | null }>({ proveedor: null, local: null })
   const [lectura, setLectura] = useState<LiquidacionLeida | null>(null)
   const [leyendo, setLeyendo] = useState(false)
@@ -98,6 +108,27 @@ function NuevaLiquidacion() {
   useEffect(() => {
     void Promise.all([nombreDe('supplier', proveedor), nombreDe('locations', local)]).then(([p, l]) => setNombres({ proveedor: p, local: l }))
   }, [proveedor, local])
+
+  // Con el local sabido (y lo pendiente con él en ese local), se bajan y se leen los PDF del correo.
+  const listoParaElCorreo = !!correo && !!local && socio.listo && !!activa && !!accountId
+  useEffect(() => {
+    if (!listoParaElCorreo || !correo || !activa || !accountId) return
+    let vivo = true
+    void Promise.resolve()
+      .then(() => { if (vivo) { setLeyendo(true); setFallo(null) } return cierreDelCorreo(accountId, activa.id, correo) })
+      .then(async (c) => {
+        if (!vivo) return
+        if (!c) { setFallo('Los PDF de ese correo ya no esperan: están con una liquidación, o ya no están en la bandeja.'); return }
+        setCierre(c)
+        const fs = await bajarCierre(c)
+        if (vivo) await leer(fs)
+      })
+      .catch((e: unknown) => { if (vivo) setFallo(e instanceof Error ? e.message : String(e)) })
+      .finally(() => { if (vivo) setLeyendo(false) })
+    return () => { vivo = false }
+    // Se lee una vez por correo y local; las reglas que se contestan después no vuelven a leer.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listoParaElCorreo, correo, local])
 
   async function leer(fs: File[]) {
     if (!activa?.nif) { setFallo('Tu empresa no tiene NIF en Ajustes: sin él no sé cuál de las dos facturas es la tuya.'); return }
@@ -118,12 +149,27 @@ function NuevaLiquidacion() {
     <div className="cxc">
       <CabeceraLiquidacion titulo={titulo} sub={`Liquidación del mes${nombres.local ? ` · ${nombres.local}` : ''}`} lectura={lectura} />
       <Tarjeta titulo="Sus documentos">
-        <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario.</p>
-        <label className="cx-campo">
+        {correo && !local && (
+          <div className="cx-campo" role="group" aria-label="De qué local es" data-prueba="cierre-que-local">
+            <p style={{ marginTop: 0 }}><strong>¿De qué local es este cierre?</strong> Llegó por correo y sus PDF traen la dirección fiscal de tu empresa, no la del local.</p>
+            {locales.error && <div className="cx-error" role="alert">No he podido leer tus locales: {locales.error}</div>}
+            {!locales.datos && !locales.error && <p role="status">Mirando tus locales…</p>}
+            <div className="cxc-ops">
+              {(locales.datos ?? []).filter((l) => l.abierto).map((l) => (
+                <button key={l.id} type="button" className="cxc-op" onClick={() => { const n = new URLSearchParams(q); n.set('local', l.id); setQ(n, { replace: true }) }}>
+                  <span className="cxc-op-t">{l.nombre}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {correo && cierre && <p style={{ marginTop: 0 }} data-prueba="cierre-leido">{fraseCierre(cierre)} Los he leído aquí: {cierre.ficheros.map((f) => f.nombre).join(', ')}.</p>}
+        {!correo && <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario.</p>}
+        {!correo && <label className="cx-campo">
           <span className="cx-etiqueta">Los PDF de la liquidación</span>
           <input type="file" accept="application/pdf" multiple className="cx-input" disabled={leyendo || !socio.listo || !activa}
             onChange={(e) => void leer(Array.from(e.target.files ?? []))} />
-        </label>
+        </label>}
         {leyendo && <p role="status">Leyendo…</p>}
         {fallo && <div className="cx-error" role="alert">{fallo}</div>}
         {socio.fallo && <div className="cx-error" role="alert">{socio.fallo}</div>}
@@ -152,10 +198,17 @@ function NuevaLiquidacion() {
                 setGuardando(true); setFallo(null)
                 try {
                   const id = await rpc<string>('compras_liquidacion_guardar', { p_empresa: activa.id, p_proveedor: proveedor, p_local: local, p_lectura: lectura })
-                  navigate(rutaLiquidacion(id), { state: { aviso: `Guardada la liquidación ${lectura.emitida?.numero ?? ''}: ahora la comparo con lo que sabe ${PRODUCTO.nombre}.` } })
+                  // Los PDF del correo quedan con ella: dejan de esperar en Ventas › Liquidaciones.
+                  let delCorreo = ''
+                  if (correo) {
+                    try { delCorreo = ` ${(await cierreUsado(id, correo)).texto}` }
+                    catch (e) { delCorreo = ` No he podido dejar los PDF del correo con ella (${e instanceof Error ? e.message : String(e)}): seguirán saliendo como «por leer».` }
+                  }
+                  navigate(rutaLiquidacion(id), { state: { aviso: `Guardada la liquidación ${lectura.emitida?.numero ?? ''}: ahora la comparo con lo que sabe ${PRODUCTO.nombre}.${delCorreo}` } })
                 } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo guardar.') } finally { setGuardando(false) }
               }}>{guardando ? 'Guardando…' : 'Guardar y comparar'}</button>
             {sinContestar(lectura).length > 0 && lectura.bloqueos.length === 0 && <span className="cx-ayuda">Contesta la pregunta de arriba para guardar.</span>}
+            {!local && <span className="cx-ayuda">Dime de qué local es para guardar.</span>}
           </div>
         </>
       )}

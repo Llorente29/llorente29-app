@@ -1,0 +1,3 @@
+# S01p·18 · 4 · la vuelta atrás: fuera compras_cierre_socio_usado y la columna.
+cuenta: scripts/conta/produccion/cuentas/s01p-cierre-socio.sql
+supabase/vuelta-atras/20261113T0015_s01p_cierre_socio.down.sql
