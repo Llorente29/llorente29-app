@@ -110526,6 +110526,59 @@ COMMENT ON VIEW public.conta_factura_cobro IS 'PC01 · El estado de cobro de cad
 
 
 --
+-- Name: conta_gc_enlace; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_gc_enlace (
+    company_id uuid NOT NULL,
+    gc_cliente_id text NOT NULL,
+    account_id uuid NOT NULL,
+    party_id uuid,
+    por text NOT NULL,
+    estado text DEFAULT 'atado'::text NOT NULL,
+    candidatas uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+    porque text,
+    quien uuid,
+    quien_name text,
+    decidido_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_gc_enlace_atado_con_ficha CHECK (((estado <> 'atado'::text) OR (party_id IS NOT NULL))),
+    CONSTRAINT conta_gc_enlace_estado_check CHECK ((estado = ANY (ARRAY['atado'::text, 'propuesto'::text, 'conflicto'::text]))),
+    CONSTRAINT conta_gc_enlace_por_check CHECK ((por = ANY (ARRAY['nif'::text, 'correo'::text, 'nombre'::text, 'persona'::text])))
+);
+
+
+--
+-- Name: TABLE conta_gc_enlace; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_gc_enlace IS 'G06 · El sitio único del enlace: qué ficha (party) es cada cliente de GoCardless de una empresa emisora, por qué (nif, correo, nombre o persona) y en qué estado (atado, propuesto, conflicto). Lo de una persona manda sobre lo automático.';
+
+
+--
+-- Name: conta_gc_enlace_elegido; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.conta_gc_enlace_elegido WITH (security_invoker='true') AS
+ SELECT DISTINCT ON (e.company_id, e.party_id) e.account_id,
+    e.company_id,
+    e.party_id,
+    e.gc_cliente_id,
+    e.por
+   FROM (public.conta_gc_enlace e
+     LEFT JOIN public.conta_gc_cliente g ON (((g.company_id = e.company_id) AND (g.gc_id = e.gc_cliente_id))))
+  WHERE (e.estado = 'atado'::text)
+  ORDER BY e.company_id, e.party_id, (e.por = 'persona'::text) DESC, COALESCE(g.mandatos_vivos, 0) DESC, COALESCE(g.suscripciones_activas, 0) DESC, e.gc_cliente_id;
+
+
+--
+-- Name: VIEW conta_gc_enlace_elegido; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.conta_gc_enlace_elegido IS 'G06 · El cliente de GoCardless de cada ficha y empresa, uno solo: el de una persona; si no, el de más mandatos vivos, más suscripciones activas y, si empatan, el de id menor (la regla de conta-gocardless-leer/plan.ts).';
+
+
+--
 -- Name: conta_gc_importacion; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -126963,6 +127016,14 @@ ALTER TABLE ONLY public.conta_gc_cobro
 
 
 --
+-- Name: conta_gc_enlace conta_gc_enlace_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_enlace
+    ADD CONSTRAINT conta_gc_enlace_pkey PRIMARY KEY (company_id, gc_cliente_id);
+
+
+--
 -- Name: conta_gc_importacion conta_gc_importacion_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -132883,6 +132944,20 @@ CREATE INDEX conta_gc_cobro_mandato_idx ON public.conta_gc_cobro USING btree (co
 --
 
 CREATE INDEX conta_gc_cobro_suscripcion_idx ON public.conta_gc_cobro USING btree (company_id, suscripcion_gc_id, fecha);
+
+
+--
+-- Name: conta_gc_enlace_estado_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_enlace_estado_idx ON public.conta_gc_enlace USING btree (account_id, estado) WHERE (estado <> 'atado'::text);
+
+
+--
+-- Name: conta_gc_enlace_party_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_gc_enlace_party_idx ON public.conta_gc_enlace USING btree (account_id, party_id);
 
 
 --
@@ -142913,6 +142988,30 @@ ALTER TABLE ONLY public.conta_gc_cobro_otra_via
 
 ALTER TABLE ONLY public.conta_gc_cobro_otra_via
     ADD CONSTRAINT conta_gc_cobro_otra_via_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_enlace conta_gc_enlace_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_enlace
+    ADD CONSTRAINT conta_gc_enlace_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_enlace conta_gc_enlace_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_enlace
+    ADD CONSTRAINT conta_gc_enlace_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_gc_enlace conta_gc_enlace_party_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_gc_enlace
+    ADD CONSTRAINT conta_gc_enlace_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
 
 
 --
@@ -154557,6 +154656,19 @@ ALTER TABLE public.conta_gc_cobro_otra_via ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_gc_cobro_otra_via_leer ON public.conta_gc_cobro_otra_via FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_gc_enlace; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_gc_enlace ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_gc_enlace conta_gc_enlace_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_gc_enlace_leer ON public.conta_gc_enlace FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -182761,6 +182873,22 @@ GRANT SELECT ON TABLE public.customer_invoice_payment TO authenticated;
 GRANT ALL ON TABLE public.conta_factura_cobro TO anon;
 GRANT ALL ON TABLE public.conta_factura_cobro TO authenticated;
 GRANT ALL ON TABLE public.conta_factura_cobro TO service_role;
+
+
+--
+-- Name: TABLE conta_gc_enlace; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_enlace TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_enlace TO authenticated;
+
+
+--
+-- Name: TABLE conta_gc_enlace_elegido; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_gc_enlace_elegido TO service_role;
+GRANT SELECT ON TABLE public.conta_gc_enlace_elegido TO authenticated;
 
 
 --
