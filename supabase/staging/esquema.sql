@@ -8770,6 +8770,28 @@ $$;
 
 
 --
+-- Name: _conta_socio_pendiente(uuid, uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_socio_pendiente(p_company uuid, p_party uuid, p_local uuid, p_excluir uuid DEFAULT NULL::uuid) RETURNS numeric
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with c as (select public._conta_enlace(p_company, 'customer', p_party::text, 'principal') as cli, public._conta_hoja(p_company, '4009') as pend)
+  select coalesce(sum(jl.credit - jl.debit), 0)
+    from c
+    join public.company_account ca on ca.company_id = p_company and ca.code = c.pend
+    join public.journal_line jl on jl.company_account_id = ca.id
+    join public.journal_entry e on e.id = jl.entry_id
+   where e.company_id = p_company and e.status in ('propuesto', 'borrador', 'validado', 'anulado')
+     and jl.location_id is not distinct from p_local
+     and (p_excluir is null or e.source_id is distinct from p_excluir)
+     and exists (select 1 from public.journal_line j2 join public.company_account c2 on c2.id = j2.company_account_id
+                  where j2.entry_id = e.id and c2.company_id = p_company and c2.code = c.cli)
+$$;
+
+
+--
 -- Name: _conta_suelto_mes(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -18034,6 +18056,18 @@ begin
     'offer', v_offer
   );
 end;
+$$;
+
+
+--
+-- Name: _socio_linea_clave(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._socio_linea_clave(p_concepto text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select lower(regexp_replace(btrim(coalesce(p_concepto, '')), '\s+', ' ', 'g'))
 $$;
 
 
@@ -31135,6 +31169,80 @@ begin
    where id = p.id;
   return jsonb_build_object('factura', v_factura, 'repetida', coalesce((v->>'repetida')::boolean, false),
     'frase', format('Apuntada sin descontar el IVA: %s. Su IVA va como más gasto; no va a la 472 ni al libro de facturas recibidas como deducible.', v->>'motivo'));
+end $$;
+
+
+--
+-- Name: compras_socio_pendiente(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.compras_socio_pendiente(p_empresa uuid, p_proveedor uuid, p_local uuid) RETURNS numeric
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_party uuid;
+begin
+  select account_id into v_cuenta from public.company where id = p_empresa;
+  if v_cuenta is null or not (v_cuenta = any (public.current_user_account_ids())) then
+    raise exception 'Esa empresa no es de tu cuenta.' using errcode = '42501';
+  end if;
+  select pr.party_id into v_party from public.party_role pr join public.supplier s on s.id = pr.supplier_id
+   where pr.supplier_id = p_proveedor and s.account_id = v_cuenta limit 1;
+  if v_party is null then return 0; end if;
+  return public._conta_socio_pendiente(p_empresa, v_party, p_local, null);
+end $$;
+
+
+--
+-- Name: compras_socio_regla_guardar(uuid, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.compras_socio_regla_guardar(p_empresa uuid, p_proveedor uuid, p_concepto text, p_que_es text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_clave text := public._socio_linea_clave(p_concepto); v_nombre text := public.conta_nombre_actor(); r public.socio_linea_regla;
+begin
+  select account_id into v_cuenta from public.company where id = p_empresa;
+  if v_cuenta is null or not public.current_user_is_admin_or_manager_of(v_cuenta) then
+    raise exception 'No puedes cambiar lo que sé de este socio.' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.supplier where id = p_proveedor and account_id = v_cuenta) then
+    raise exception 'Ese proveedor no es de esta cuenta.' using errcode = '42501';
+  end if;
+  if v_clave = '' then raise exception 'La línea no tiene concepto.' using errcode = '22023'; end if;
+  if p_que_es is null then
+    delete from public.socio_linea_regla where company_id = p_empresa and supplier_id = p_proveedor and clave = v_clave;
+    return null;
+  end if;
+  if p_que_es not in ('pendiente_facturar', 'cancela_pendiente', 'a_mano') then
+    raise exception 'No sé qué es «%».', p_que_es using errcode = '22023';
+  end if;
+  insert into public.socio_linea_regla (account_id, company_id, supplier_id, concepto, clave, que_es, created_by, created_by_name, updated_by_name)
+  values (v_cuenta, p_empresa, p_proveedor, btrim(p_concepto), v_clave, p_que_es, auth.uid(), v_nombre, v_nombre)
+  on conflict (company_id, supplier_id, clave) do update set que_es = excluded.que_es, concepto = excluded.concepto, updated_at = now(), updated_by_name = v_nombre
+  returning * into r;
+  return jsonb_build_object('concepto', r.concepto, 'clave', r.clave, 'queEs', r.que_es, 'fecha', r.updated_at, 'quien', r.updated_by_name);
+end $$;
+
+
+--
+-- Name: compras_socio_reglas(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.compras_socio_reglas(p_empresa uuid, p_proveedor uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid;
+begin
+  select account_id into v_cuenta from public.company where id = p_empresa;
+  if v_cuenta is null or not (v_cuenta = any (public.current_user_account_ids())) then
+    raise exception 'Esa empresa no es de tu cuenta.' using errcode = '42501';
+  end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('concepto', r.concepto, 'clave', r.clave, 'queEs', r.que_es,
+                                                       'fecha', r.updated_at, 'quien', coalesce(r.updated_by_name, r.created_by_name)) order by r.concepto)
+                     from public.socio_linea_regla r where r.company_id = p_empresa and r.supplier_id = p_proveedor and r.account_id = v_cuenta), '[]'::jsonb);
 end $$;
 
 
@@ -52292,6 +52400,7 @@ declare
   c_400 text; c_430 text; c_pend text; c_477 text; t21 uuid; t10 uuid; t10_rate numeric; v_faltan text[]; v_cobradas numeric;
   lin jsonb := '[]'::jsonb; avisos jsonb := '[]'::jsonb; razones jsonb; v_compras bigint := 0; v_cuota numeric; v_factura bigint; v_iva_com numeric;
   v_contra_liq bigint; v_contra_com bigint; v_neto bigint; v_ap jsonb;
+  v_extra jsonb := '[]'::jsonb; v_aj jsonb; v_pend numeric; v_pendfac numeric := 0; v_cancela numeric := 0; v_amano numeric := 0; c_4009 text; v_conc text;
   v_meses text[] := array['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 begin
   select * into l from public.licensed_settlement where id = p_liq;
@@ -52333,8 +52442,37 @@ begin
     if cr is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'Su factura ' || coalesce(rc->>'numero', 'undefined') || ' no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.'); end if;
     if ce is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'La factura que le haces ' || coalesce(em->>'numero', 'undefined') || ' no cuadra: sus bases y su IVA no dan su total, y no es un céntimo de redondeo.'); end if;
     v_saldo := (round(coalesce((em->>'total')::numeric, 0) * 100) - round(coalesce((rc->>'total')::numeric, 0) * 100)) / 100;
-    if v_saldo_doc is not null and round(v_saldo_doc * 100) <> round(v_saldo * 100) then
-      return jsonb_build_object('que', v_que, 'sin_propuesta', 'La transacción dice ' || public.conta_euros_exactos(v_saldo_doc) || ' de saldo y las dos facturas dan ' || public.conta_euros_exactos(v_saldo) || '.');
+    -- S01p·18 · Las líneas de la transacción que no son ninguna de las dos facturas: lo que se ha dicho que son.
+    v_aj := case when jsonb_typeof(d->'lineasSocio') = 'array' then d->'lineasSocio' else '[]'::jsonb end;
+    select string_agg('«' || coalesce(x->>'concepto', '?') || '»', ', ') into v_conc from jsonb_array_elements(v_aj) x
+     where coalesce(x->>'queEs', '') not in ('pendiente_facturar', 'cancela_pendiente', 'a_mano');
+    if v_conc is not null then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'La transacción trae ' || v_conc || ' y aún no me has dicho qué es: contéstalo en la liquidación.');
+    end if;
+    select coalesce(sum((x->>'importe')::numeric) filter (where x->>'queEs' = 'pendiente_facturar'), 0),
+           coalesce(sum((x->>'importe')::numeric) filter (where x->>'queEs' = 'cancela_pendiente'), 0),
+           coalesce(sum((x->>'importe')::numeric) filter (where x->>'queEs' = 'a_mano'), 0)
+      into v_pendfac, v_cancela, v_amano from jsonb_array_elements(v_aj) x;
+    if round(v_pendfac * 100) < 0 then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'El género que te cobrará el mes que viene viene en negativo (' || public.conta_euros_exactos(v_pendfac) || '): ¿no será el del mes pasado?');
+    end if;
+    if round(v_cancela * 100) > 0 then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'El género del mes pasado que ya te cobra viene en positivo (' || public.conta_euros_exactos(v_cancela) || '): ¿no será el de este mes?');
+    end if;
+    if round(v_pendfac * 100) <> 0 or round(v_cancela * 100) <> 0 then
+      c_4009 := public._conta_hoja(p_company, '4009');
+      if c_4009 is null then return jsonb_build_object('que', v_que, 'sin_propuesta', 'Falta en tu plan la cuenta de facturas pendientes de recibir (4009).'); end if;
+    end if;
+    if round(v_cancela * 100) <> 0 then
+      v_pend := public._conta_socio_pendiente(p_company, l.party_id, loc, l.id);
+      if round(-v_cancela * 100) > round(v_pend * 100) then
+        return jsonb_build_object('que', v_que, 'sin_propuesta', 'Cancela ' || public.conta_euros_exactos(-v_cancela) || ' de género pendiente y con ' || v_socio || ' en ' || v_local
+                 || ' solo queda ' || public.conta_euros_exactos(v_pend) || ' pendiente de facturar: dime qué es esa línea.');
+      end if;
+    end if;
+    if v_saldo_doc is not null and round(v_saldo_doc * 100) <> round(v_saldo * 100) + round((v_pendfac + v_cancela + v_amano) * 100) then
+      return jsonb_build_object('que', v_que, 'sin_propuesta', 'La transacción dice ' || public.conta_euros_exactos(v_saldo_doc) || ' de saldo y las dos facturas dan ' || public.conta_euros_exactos(v_saldo)
+               || case when jsonb_array_length(v_aj) > 0 then ' más sus otras líneas, ' || public.conta_euros_exactos(v_pendfac + v_cancela + v_amano) else '' end || '.');
     end if;
     if l.received_invoice_id is null then
       return jsonb_build_object('que', v_que, 'sin_propuesta', 'Su factura ' || coalesce(rc->>'numero', '') || ' aún no está registrada en Compras: confirma la liquidación y se propone.');
@@ -52416,6 +52554,41 @@ begin
       end if;
     end if;
 
+    -- S01p·18 · El género que te cobrará el mes que viene, y su contrario: entre su 430 y la 4009, en el local.
+    if round(v_pendfac * 100) <> 0 then
+      select string_agg('«' || (x->>'concepto') || '»', ', ') into v_conc from jsonb_array_elements(v_aj) x where x->>'queEs' = 'pendiente_facturar';
+      v_extra := v_extra || jsonb_build_array(jsonb_build_object(
+        'entrada', jsonb_build_object('series', 4, 'fecha', em->>'fecha',
+          'concepto', v_socio || ' · ' || coalesce(em->>'numero', '') || ' · género que te facturará el mes que viene',
+          'source_type', 'purchase_accrual', 'source_id', l.id, 'confianza', 'seguro',
+          'porque', 'Te paga ' || public.conta_euros_exactos(v_pendfac) || ' más por género que aún no te ha facturado: es deuda con él hasta que llegue su factura, y se cancela con la liquidación siguiente.',
+          'razones', jsonb_build_array(jsonb_build_object('decision', 'A facturas pendientes de recibir (4009)', 'porque', 'lo dijiste tú: ' || v_conc || ' es género que te cobrará el mes que viene')),
+          'party_id', l.party_id, 'documento', null),
+        'lineas', jsonb_build_array(
+          jsonb_build_object('cuenta', c_cliente, 'debe', v_pendfac, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null),
+          jsonb_build_object('cuenta', c_4009, 'debe', 0, 'haber', v_pendfac, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null))));
+    end if;
+    if round(v_cancela * 100) <> 0 then
+      select string_agg('«' || (x->>'concepto') || '»', ', ') into v_conc from jsonb_array_elements(v_aj) x where x->>'queEs' = 'cancela_pendiente';
+      v_extra := v_extra || jsonb_build_array(jsonb_build_object(
+        'entrada', jsonb_build_object('series', 4, 'fecha', em->>'fecha',
+          'concepto', v_socio || ' · ' || coalesce(em->>'numero', '') || ' · se cancela el género pendiente del mes pasado',
+          'source_type', 'purchase_accrual_reversal', 'source_id', l.id, 'confianza', 'seguro',
+          'porque', 'Ya te cobra ' || public.conta_euros_exactos(-v_cancela) || ' del género que quedó pendiente de facturar: la deuda con él baja y lo que te paga, también.',
+          'razones', jsonb_build_array(jsonb_build_object('decision', 'Se cancela lo pendiente en facturas pendientes de recibir (4009)', 'porque', v_conc || ' es el género del mes pasado que ya te cobra')),
+          'party_id', l.party_id, 'documento', null),
+        'lineas', jsonb_build_array(
+          jsonb_build_object('cuenta', c_4009, 'debe', -v_cancela, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null),
+          jsonb_build_object('cuenta', c_cliente, 'debe', 0, 'haber', -v_cancela, 'concepto', null, 'local_id', loc, 'comun', comun,
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', null, 'iva', null, 'retencion', null))));
+    end if;
+    for v_conc in select '«' || (x->>'concepto') || '» (' || public.conta_euros_exactos((x->>'importe')::numeric) || ')' from jsonb_array_elements(v_aj) x where x->>'queEs' = 'a_mano' loop
+      ae := ae || to_jsonb('La transacción trae ' || v_conc || ' y dijiste que la apuntas tú a mano: no va en ningún asiento.');
+    end loop;
+
     -- 3 · La compensación: su factura se paga con lo que te debe.
     v_menor := least(round((em->>'total')::numeric * 100), round((rc->>'total')::numeric * 100));
     return jsonb_build_object('que', v_que, 'propuestas', jsonb_build_array(
@@ -52452,7 +52625,7 @@ begin
           jsonb_build_object('cuenta', c_proveedor, 'debe', v_menor / 100.0, 'haber', 0, 'concepto', null, 'local_id', loc, 'comun', comun,
             'marca_id', null, 'tercero_id', l.party_id, 'documento', rc->>'numero', 'iva', null, 'retencion', null),
           jsonb_build_object('cuenta', c_cliente, 'debe', 0, 'haber', v_menor / 100.0, 'concepto', null, 'local_id', loc, 'comun', comun,
-            'marca_id', null, 'tercero_id', l.party_id, 'documento', em->>'numero', 'iva', null, 'retencion', null)))));
+            'marca_id', null, 'tercero_id', l.party_id, 'documento', em->>'numero', 'iva', null, 'retencion', null)))) || v_extra);
   end if;
 
   -- ════ Fórmula «compras, aportaciones y comisión» (liquidacionSocio) ════
@@ -121908,6 +122081,34 @@ CREATE TABLE public.social_scene (
 
 
 --
+-- Name: socio_linea_regla; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.socio_linea_regla (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    supplier_id uuid NOT NULL,
+    concepto text NOT NULL,
+    clave text NOT NULL,
+    que_es text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_by_name text,
+    CONSTRAINT socio_linea_regla_que_es_check CHECK ((que_es = ANY (ARRAY['pendiente_facturar'::text, 'cancela_pendiente'::text, 'a_mano'::text])))
+);
+
+
+--
+-- Name: TABLE socio_linea_regla; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.socio_linea_regla IS 'S01p·18 · Lo que es cada línea de la transacción del socio de marca que no es ninguna de las dos facturas, contestado una vez y recordado por socio y concepto.';
+
+
+--
 -- Name: staff_role; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -130951,6 +131152,22 @@ ALTER TABLE ONLY public.social_post
 
 ALTER TABLE ONLY public.social_scene
     ADD CONSTRAINT social_scene_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: socio_linea_regla socio_linea_regla_company_id_supplier_id_clave_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.socio_linea_regla
+    ADD CONSTRAINT socio_linea_regla_company_id_supplier_id_clave_key UNIQUE (company_id, supplier_id, clave);
+
+
+--
+-- Name: socio_linea_regla socio_linea_regla_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.socio_linea_regla
+    ADD CONSTRAINT socio_linea_regla_pkey PRIMARY KEY (id);
 
 
 --
@@ -149951,6 +150168,30 @@ ALTER TABLE ONLY public.social_scene
 
 
 --
+-- Name: socio_linea_regla socio_linea_regla_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.socio_linea_regla
+    ADD CONSTRAINT socio_linea_regla_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: socio_linea_regla socio_linea_regla_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.socio_linea_regla
+    ADD CONSTRAINT socio_linea_regla_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: socio_linea_regla socio_linea_regla_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.socio_linea_regla
+    ADD CONSTRAINT socio_linea_regla_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE CASCADE;
+
+
+--
 -- Name: stock_adjustment stock_adjustment_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -161046,6 +161287,19 @@ CREATE POLICY social_scene_write ON public.social_scene USING (((account_id IS N
 
 
 --
+-- Name: socio_linea_regla; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.socio_linea_regla ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: socio_linea_regla socio_linea_regla_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY socio_linea_regla_read ON public.socio_linea_regla FOR SELECT USING ((account_id = ANY (public.current_user_account_ids())));
+
+
+--
 -- Name: staff_role; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -164432,6 +164686,14 @@ GRANT ALL ON FUNCTION public._conta_s01q_euros(p numeric) TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_socio_pendiente(p_company uuid, p_party uuid, p_local uuid, p_excluir uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_socio_pendiente(p_company uuid, p_party uuid, p_local uuid, p_excluir uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_socio_pendiente(p_company uuid, p_party uuid, p_local uuid, p_excluir uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_suelto_mes(p_company uuid, p_party uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -166291,6 +166553,15 @@ GRANT ALL ON FUNCTION public._shop_item_promo(p_account uuid, p_menu_item_id uui
 REVOKE ALL ON FUNCTION public._shop_reprice_line(p_account_id uuid, p_line jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._shop_reprice_line(p_account_id uuid, p_line jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public._shop_reprice_line(p_account_id uuid, p_line jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION _socio_linea_clave(p_concepto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._socio_linea_clave(p_concepto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._socio_linea_clave(p_concepto text) TO authenticated;
+GRANT ALL ON FUNCTION public._socio_linea_clave(p_concepto text) TO service_role;
 
 
 --
@@ -168779,6 +169050,33 @@ GRANT ALL ON FUNCTION public.compras_recepcion_linea_anadir(p_recepcion uuid, p_
 REVOKE ALL ON FUNCTION public.compras_sin_iva(p_recepcion uuid, p_empresa uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.compras_sin_iva(p_recepcion uuid, p_empresa uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.compras_sin_iva(p_recepcion uuid, p_empresa uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION compras_socio_pendiente(p_empresa uuid, p_proveedor uuid, p_local uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.compras_socio_pendiente(p_empresa uuid, p_proveedor uuid, p_local uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.compras_socio_pendiente(p_empresa uuid, p_proveedor uuid, p_local uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.compras_socio_pendiente(p_empresa uuid, p_proveedor uuid, p_local uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION compras_socio_regla_guardar(p_empresa uuid, p_proveedor uuid, p_concepto text, p_que_es text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.compras_socio_regla_guardar(p_empresa uuid, p_proveedor uuid, p_concepto text, p_que_es text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.compras_socio_regla_guardar(p_empresa uuid, p_proveedor uuid, p_concepto text, p_que_es text) TO authenticated;
+GRANT ALL ON FUNCTION public.compras_socio_regla_guardar(p_empresa uuid, p_proveedor uuid, p_concepto text, p_que_es text) TO service_role;
+
+
+--
+-- Name: FUNCTION compras_socio_reglas(p_empresa uuid, p_proveedor uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.compras_socio_reglas(p_empresa uuid, p_proveedor uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.compras_socio_reglas(p_empresa uuid, p_proveedor uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.compras_socio_reglas(p_empresa uuid, p_proveedor uuid) TO service_role;
 
 
 --
@@ -186619,6 +186917,15 @@ GRANT ALL ON TABLE public.social_post TO service_role;
 GRANT ALL ON TABLE public.social_scene TO anon;
 GRANT ALL ON TABLE public.social_scene TO authenticated;
 GRANT ALL ON TABLE public.social_scene TO service_role;
+
+
+--
+-- Name: TABLE socio_linea_regla; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.socio_linea_regla TO anon;
+GRANT ALL ON TABLE public.socio_linea_regla TO authenticated;
+GRANT ALL ON TABLE public.socio_linea_regla TO service_role;
 
 
 --
