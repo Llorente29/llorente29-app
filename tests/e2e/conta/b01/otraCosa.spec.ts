@@ -24,14 +24,6 @@ async function capturar(page: Page, nombre: string) {
   await page.screenshot({ path: `${DIR}/${nombre}-ordenador.png`, fullPage: true })
 }
 
-type Estado = { mismo: boolean; abierto: boolean } | null
-/** El bloque «¿Es otra cosa?» del panel: si es el mismo elemento que se marcó y si sigue abierto. */
-async function estadoBloque(page: Page): Promise<Estado> {
-  const b = page.locator('.cxn-panel details.cxn-otra-cosa')
-  if (!(await b.count())) return null
-  return b.evaluate((el) => ({ mismo: (el as HTMLElement & { _marca?: boolean })._marca === true, abierto: (el as HTMLDetailsElement).open }))
-}
-
 test.describe('B01·21 · «¿Es otra cosa?»', () => {
   test.describe.configure({ timeout: 300_000 })
   test.use({ actionTimeout: 20_000 })
@@ -52,20 +44,6 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await page.route('**/rest/v1/rpc/bank_agente_toca_hoy', (ruta) => ruta.fulfill({ status: 200, contentType: 'application/json', body: 'false' }))
     await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
     await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
-    // Sonda: cada vez que el cuerpo de Movimientos se desmonta (la pantalla se vuelve a montar
-    // entera, y con ella el panel y su «¿Es otra cosa?»), el segundo desde que cargó la página.
-    await page.locator('.cxn-cuerpo').first().waitFor()
-    await page.evaluate(() => {
-      const w = window as unknown as { _remontes: number[] }
-      w._remontes = []
-      let actual = document.querySelector('.cxn-cuerpo')
-      new MutationObserver(() => {
-        if (actual && !actual.isConnected) {
-          w._remontes.push(Math.round(performance.now() / 100) / 10)
-          actual = document.querySelector('.cxn-cuerpo')
-        } else if (!actual) actual = document.querySelector('.cxn-cuerpo')
-      }).observe(document.body, { childList: true, subtree: true })
-    })
 
     // Lo que sale: «Pago a un proveedor…».
     await page.getByText('Transferencia a SUMINISTROS B01', { exact: false }).first().click()
@@ -81,20 +59,10 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await expect(panel.getByRole('button', { name: 'Pago a un proveedor…' })).toBeVisible()
     await expect(panel.getByRole('button', { name: 'Cobro de un cliente…' })).toHaveCount(0)
 
-    // ¿Se pliega solo? La captura de otra-cosa-pago (#634) salió plegada aunque la prueba lo
-    // acababa de abrir. Se marca el bloque abierto y se mira: (1) tras 5 s sin tocar nada, como
-    // una persona que lee; (2) tras una captura de página entera, que cambia el tamaño de la
-    // ventana mientras dura. Las cifras van al informe del run.
-    await panel.locator('details.cxn-otra-cosa').evaluate((el) => { (el as HTMLElement & { _marca?: boolean })._marca = true })
-    await page.waitForTimeout(5_000)
-    const sinTocar = await estadoBloque(page)
-    await page.screenshot({ path: test.info().outputPath('sonda.png'), fullPage: true })
-    const trasCaptura = await estadoBloque(page)
-    test.info().annotations.push({ type: 'pliegue', description: JSON.stringify({ sinTocar, trasCaptura }) })
-    console.log(`[pliegue] sin tocar 5 s: ${JSON.stringify(sinTocar)} · tras la captura de página entera: ${JSON.stringify(trasCaptura)}`)
-
-    // La captura, con la ventana ya tan alta como la página (la foto no cambia el tamaño) y el
-    // bloque comprobado abierto justo antes.
+    // La captura del #634 salió con el bloque plegado aunque se acababa de abrir. Dos sondas
+    // (runs 43322033550 y 43323243030) no lo reprodujeron: el bloque siguió abierto tras 5 s y
+    // tras una captura de página entera, y la pantalla no se volvió a montar sola. Por si acaso,
+    // la captura se saca con la ventana tan alta como la página y el bloque comprobado abierto.
     const alto = await page.evaluate(() => document.documentElement.scrollHeight)
     await page.setViewportSize({ width: page.viewportSize()?.width ?? 1440, height: alto })
     await abrirOtraCosa('Pago a un proveedor…')
@@ -122,9 +90,5 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await (await abrirOtraCosa('Cobro de un cliente…')).click()
     await expect(page.getByRole('dialog', { name: 'Cobro de un cliente' }).getByText('¿De qué cliente es?')).toBeVisible()
     await capturar(page, 'otra-cosa-cobro-cliente')
-    const remontes = await page.evaluate(() => (window as unknown as { _remontes: number[] })._remontes)
-    const ahora = await page.evaluate(() => Math.round(performance.now() / 100) / 10)
-    test.info().annotations.push({ type: 'remontes', description: JSON.stringify({ remontes, ahora }) })
-    console.log(`[remontes] la pantalla de Movimientos se ha vuelto a montar ${remontes.length} veces sin que nadie la tocara, en los segundos ${JSON.stringify(remontes)} desde que cargó (la prueba acaba en el ${ahora})`)
   })
 })
