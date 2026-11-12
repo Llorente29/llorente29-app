@@ -9972,6 +9972,36 @@ COMMENT ON FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre tex
 
 
 --
+-- Name: _dl1_envio_aclarar(uuid, text, uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_envio_aclarar(p_actor uuid, p_nombre text, p_sale uuid, p_decision text, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true); v_r jsonb;
+begin
+  select account_id into v_acc from public.sale where id = p_sale;
+  if v_acc is null then raise exception 'DL1 envío: ese pedido no está.'; end if;
+  -- Como si lo aclarara la persona: su usuario y su cuenta activa, solo en esta transacción.
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  v_r := public.conta_envio_aclarar(p_sale, p_decision, p_motivo, p_nombre);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_envio_aclarar(p_actor uuid, p_nombre text, p_sale uuid, p_decision text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_envio_aclarar(p_actor uuid, p_nombre text, p_sale uuid, p_decision text, p_motivo text) IS 'DL1. Aclara el envío de un pedido con conta_envio_aclarar, como una persona de la cuenta. Solo una tanda.';
+
+
+--
 -- Name: _dl1_factura_emitir(uuid, uuid, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -165037,6 +165067,13 @@ REVOKE ALL ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date
 --
 
 REVOKE ALL ON FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _dl1_envio_aclarar(p_actor uuid, p_nombre text, p_sale uuid, p_decision text, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_envio_aclarar(p_actor uuid, p_nombre text, p_sale uuid, p_decision text, p_motivo text) FROM PUBLIC;
 
 
 --
