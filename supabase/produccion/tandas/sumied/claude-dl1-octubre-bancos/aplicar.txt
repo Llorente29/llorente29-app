@@ -2,12 +2,11 @@
 # claude/dl1-octubre-bancos. Se ensaya y se aplica desde main nombrando esta
 # rama, antes de fusionar.
 #
-#   1842  Añade _dl1_casar y _dl1_anular y, como Julio y por el camino de la
-#         aplicación:
-#         A · anula la 9/2 y la 9/3 (liquidaciones del IVA del 1T y del 2T
-#             duplicadas), con contraasientos a 31/10; y a 01/01, la caja
-#             (3.998,88 a la 113), la apertura de la ···4525 (290,00 a la 113)
-#             y «Glovo Ventas» (884,74 a la 43000001);
+#   1842  Añade _dl1_casar y, como Julio y por el camino de la aplicación:
+#         A · a 01/01, la caja (3.998,88 a la 113), la apertura de la ···4525
+#             (290,00 a la 113) y «Glovo Ventas» (884,74 a la 43000001). La 1.6
+#             (liquidaciones del IVA duplicadas en la serie 9) se queda fuera:
+#             su contraasiento no pasa la regla 5 de la validación;
 #         B · casa los 33 movimientos de octubre que quedaban (bank_casar) y
 #             valida sus asientos: facturas (AMIRSA, Orange, Europastry), cuenta
 #             y, sin justificante y sin IVA, los gastos sin factura ni ticket.
@@ -19,10 +18,6 @@ supabase/migrations/20261112T1842_dl1_octubre_bancos.sql
 sin-vuelta-atras: supabase/migrations/20261112T1842_dl1_octubre_bancos.sql · motivo: un asiento validado se anula con un contraasiento, y un casado se deshace en Bancos.
 esperado: dl1-octubre-bancos · Movimientos de octubre sin casar = 0
 esperado: dl1-octubre-bancos · Casados de octubre por Julio con su asiento validado, menos 33 = 0
-esperado: dl1-octubre-bancos · La 9/2 y la 9/3 anuladas, menos 2 = 0
-esperado: dl1-octubre-bancos · 470 de los contraasientos de la 9/2 y la 9/3, menos lo que deshacen = 0.00
-esperado: dl1-octubre-bancos · 472 de los contraasientos de la 9/2 y la 9/3, menos lo que deshacen = 0.00
-esperado: dl1-octubre-bancos · 477 de los contraasientos de la 9/2 y la 9/3, menos lo que deshacen = 0.00
 esperado: dl1-octubre-bancos · 11300000 a 01/01, más 824,34 = 0.00
 esperado: dl1-octubre-bancos · 43000001 a 01/01, menos 546,59 = 0.00
 esperado: dl1-octubre-bancos · 43000101 en 2026 = 0.00

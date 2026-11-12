@@ -5,8 +5,6 @@
 -- igual en producción y en staging (sin Foodint, todo da 0 antes y después).
 --   1. Movimientos de octubre sin casar: 33 → 0.
 --   2. Casados por Julio con su asiento validado, menos 33: −33 → 0.
---   3. La 9/2 y la 9/3 anuladas, menos 2: −2 → 0.
---   4. 472, 477 y 470 de sus contraasientos, menos lo que deshacen: → 0.
 --   5. A 01/01: 570 (3.998,88 → 0), 57200002 menos 1.607,10 (290 → 0), 113 más 824,34
 --      (−4.288,88 → 0), 43000001 menos 546,59 (884,74 → 0); 43000101 en 2026 (−884,74 → 0).
 --   6. Lo que falta por pagar de las facturas 24056932 y 24093211 de Europastry: 397,20 → 0.
@@ -33,17 +31,6 @@ select clave, valor from (
       where b.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and b.status = 'vivo' and e.status = 'validado'
         and b.created_by = '673fca49-f6b5-40ed-a8f7-558390acce10' and m.op_date between date '2026-10-01' and date '2026-10-31'
         and b.created_at between timestamptz '2026-11-12 00:00+00' and timestamptz '2026-12-31 00:00+00')::text
-  union all
-  -- quieta: dos asientos por su id
-  select 3, 'La 9/2 y la 9/3 anuladas, menos 2',
-    (select case when not (select hay from f) then 0 else count(*) - 2 end from public.journal_entry
-      where id in ('a560e7d1-2b0e-40a6-b891-ab308aaf6122', '02436d5d-c0e2-4295-8029-651e4f2919c1') and status = 'anulado')::text
-  union all
-  select 4, q.c || ' de los contraasientos de la 9/2 y la 9/3, menos lo que deshacen',
-    (select case when not (select hay from f) then 0 else coalesce(sum(l.debit - l.credit), 0) - q.v end::numeric(14,2)::text
-       from l where l.code like q.c || '%' and l.status = 'validado'
-        and l.reverses_entry_id in ('a560e7d1-2b0e-40a6-b891-ab308aaf6122', '02436d5d-c0e2-4295-8029-651e4f2919c1'))
-    from (values ('472', 34659.31), ('477', -33172.41), ('470', -1486.90)) q(c, v)
   union all
   select 5, q.k, (select case when not (select hay from f) then 0 else coalesce(sum(l.debit - l.credit), 0) + q.mas end::numeric(14,2)::text
                     from l where l.code = q.c and l.status = 'validado' and l.entry_date between q.d1 and q.d2)

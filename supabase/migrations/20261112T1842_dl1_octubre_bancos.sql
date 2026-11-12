@@ -2,17 +2,16 @@
 --
 -- DL1 · Cerrar octubre de Llorente29: cuatro correcciones y los 33 movimientos
 -- del banco sin casar (Julio, DL1·17 y DL1·18, 12/11). Todo como Julio y por el
--- camino de la aplicación: journal_entry_anular para anular, bank_casar para
--- casar (como «Apuntar sin factura» o el pago de una factura) y
--- journal_entry_validar para validar (_dl1_validar). Nada toca un IVA
--- presentado: lo que va en el 1T–3T (por fecha) no cambia.
+-- camino de la aplicación: bank_casar para casar (como «Apuntar sin factura»
+-- o el pago de una factura) y journal_entry_validar para validar
+-- (_dl1_validar). Nada toca un IVA presentado: lo que va en el 1T–3T (por
+-- fecha) no cambia.
 --
--- A · Las cuatro correcciones (aprobadas por Julio; la gestoría las revisa):
---   1.6  Se anulan la 9/2 (liquidación del IVA del 1T, 31/03) y la 9/3 (la del
---        2T, 30/06), duplicadas de la 4/1016 y la 4/1194. Contraasientos a
---        31/10. La 472 baja 34.659,31; la 477, 33.172,41; la 470, 1.486,90
---        (el contraasiento deshace el asiento entero). Borrarlas no se puede:
---        son de antes del corte y la cadena de huellas es una por empresa.
+-- A · Tres de las cuatro correcciones (aprobadas por Julio; la gestoría las
+--     revisa). La 1.6 (las liquidaciones del IVA duplicadas en la serie 9) se
+--     queda fuera (Julio, 12/11): su contraasiento lleva 472 y 477 sin tipo ni
+--     libro registro, como las trajo Diez, y la regla 5 de la validación no lo
+--     admite; borrarlas tampoco se puede (antes del corte, cadena de huellas).
 --   2.1  Caja: 3.998,88 de años anteriores. 01/01: Debe 113 / Haber 570.
 --   4.9  Banco ···4525: 290,00 de más en la apertura. 01/01: Debe 113 / Haber
 --        57200002; empieza 2026 en 1.607,10.
@@ -52,29 +51,6 @@ revoke all on function public._dl1_casar(uuid, uuid, text, uuid, jsonb, text) fr
 comment on function public._dl1_casar(uuid, uuid, text, uuid, jsonb, text) is
   'DL1. Casa un movimiento del banco con bank_casar, como una persona de la cuenta (por «persona», confianza segura). Solo una tanda.';
 
-create or replace function public._dl1_anular(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text, p_fecha date)
-returns jsonb language plpgsql security definer set search_path = public as $$
-declare
-  v_acc uuid; v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true); v_r jsonb;
-begin
-  select account_id into v_acc from public.company where id = p_company;
-  if v_acc is null then raise exception 'DL1 anular: esa empresa no está.'; end if;
-  if not exists (select 1 from public.journal_entry where id = p_entry and company_id = p_company and account_id = v_acc) then
-    raise exception 'DL1 anular: el asiento % no es de la empresa.', p_entry;
-  end if;
-  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
-  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
-  v_r := public.journal_entry_anular(p_entry, p_motivo, p_fecha, p_nombre);
-  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
-  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
-  if (v_r->>'fecha')::date is distinct from p_fecha then
-    raise exception 'DL1 anular: el contraasiento sale con fecha % y se pedía %.', v_r->>'fecha', p_fecha;
-  end if;
-  return v_r;
-end $$;
-revoke all on function public._dl1_anular(uuid, uuid, text, uuid, text, date) from public, anon, authenticated, service_role;
-comment on function public._dl1_anular(uuid, uuid, text, uuid, text, date) is
-  'DL1. Anula un asiento validado con journal_entry_anular, como una persona de la cuenta, con la fecha que se pide (para si sale otra). Solo una tanda.';
 
 -- ── Foodint ────────────────────────────────────────────────────────────────
 do $$
@@ -91,19 +67,6 @@ begin
     raise notice 'DL1 octubre: sin la cuenta de Foodint, no hay nada que hacer.';
     return;
   end if;
-  if (select count(*) from public.journal_entry
-       where company_id = v_e and series = 9 and status = 'validado'
-         and ((id = 'a560e7d1-2b0e-40a6-b891-ab308aaf6122' and number = 2 and entry_date = date '2026-03-31' and concept = 'Liquidación I.V.A. Trimestre 1')
-           or (id = '02436d5d-c0e2-4295-8029-651e4f2919c1' and number = 3 and entry_date = date '2026-06-30' and concept = 'Liquidación I.V.A. Trimestre 2'))) <> 2 then
-    raise exception 'DL1 octubre: la 9/2 y la 9/3 no están como se midieron (validadas, sus fechas y conceptos): no se anula nada.';
-  end if;
-
-  -- A · 1.6: anular los duplicados de la serie 9.
-  perform public._dl1_anular(v_e, v_julio, 'Julio', 'a560e7d1-2b0e-40a6-b891-ab308aaf6122',
-    'liquidación del IVA del 1T duplicada: ya está en la serie 4 (4/1016). Incidencia 1.6, aprobada por Julio el 12/11', date '2026-10-31');
-  perform public._dl1_anular(v_e, v_julio, 'Julio', '02436d5d-c0e2-4295-8029-651e4f2919c1',
-    'liquidación del IVA del 2T duplicada: ya está en la serie 4 (4/1194). Incidencia 1.6, aprobada por Julio el 12/11', date '2026-10-31');
-
   -- A · 2.1, 4.9 y 4.11: a 01/01, sin IVA.
   for r in select * from (values
       ('Caja: saldo de años anteriores a reservas (incidencia 2.1)', '11300000', '57000000', 3998.88, null::uuid),
@@ -175,5 +138,5 @@ begin
               and status in ('por_aclarar', 'propuesto')) then
     raise exception 'DL1 octubre: después de casar quedan movimientos de octubre sin casar.';
   end if;
-  raise notice 'DL1 octubre: anuladas la 9/2 y la 9/3; % asientos validados como Julio (3 correcciones y los casados).', v_n;
+  raise notice 'DL1 octubre: % asientos validados como Julio (3 correcciones y los 33 casados).', v_n;
 end $$;

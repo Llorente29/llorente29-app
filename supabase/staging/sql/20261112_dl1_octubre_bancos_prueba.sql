@@ -3,16 +3,13 @@
 -- SOLO STAGING. Prueba de la DL1 · octubre de Llorente29 (1842). Todo en una
 -- transacción con ROLLBACK, en la cuenta A, con una cuenta de banco, un extracto
 -- y cuentas de mentira si no los tiene. Recorre el camino de producción (las
--- funciones), no solo el «sin Foodint». Nombra lo que añade: _dl1_casar y
--- _dl1_anular.
+-- funciones), no solo el «sin Foodint». Nombra lo que añade: _dl1_casar.
 --   1. Sin Foodint, la migración no hace nada (la cuenta A sigue igual).
 --   2. Un movimiento del banco se casa como la persona («Apuntar sin factura»,
 --      destino cuenta): queda casado y su asiento, propuesto con el banco por su
 --      importe; se valida con _dl1_validar.
---   3. Ese asiento se anula como la persona con la fecha pedida: queda anulado y
---      su contraasiento, validado con esa fecha.
---   4. Otra vez el mismo movimiento: no se casa dos veces.
---   5. Un movimiento de otra empresa: para.
+--   3. Otra vez el mismo movimiento: no se casa dos veces.
+--   4. Un movimiento de otra empresa: para.
 
 begin;
 do $$ begin
@@ -21,7 +18,7 @@ do $$ begin
   end if;
 end $$;
 set local statement_timeout = '120s';
--- sin usuario: las funciones solo las llama una tanda, que corre como el dueño; dentro se pone el usuario de la persona al casar, anular y validar.
+-- sin usuario: las funciones solo las llama una tanda, que corre como el dueño; dentro se pone el usuario de la persona al casar y validar.
 set constraints all immediate;
 
 \i supabase/migrations/20261105T1702_dl1_uber_saldos.sql
@@ -34,7 +31,7 @@ create temp table prueba_antes on commit drop as select count(*) n from public.j
 do $$
 declare
   v_acc constant uuid := 'c01a0000-0000-4000-8000-00000000000a'; c uuid; y uuid; v_admin uuid; t uuid; v_572 uuid; v_629 uuid;
-  v_st uuid; v_m uuid; v_otro uuid; v_r jsonb; v_e uuid; v_n int; v_err text; v_hoy date := (now() at time zone 'Europe/Madrid')::date; v_a jsonb;
+  v_st uuid; v_m uuid; v_otro uuid; v_r jsonb; v_e uuid; v_n int; v_err text; v_hoy date := (now() at time zone 'Europe/Madrid')::date;
 begin
   -- 1. Sin Foodint, nada.
   if (select count(*) from public.journal_entry where account_id = v_acc) <> (select n from prueba_antes) then
@@ -86,30 +83,22 @@ begin
     raise exception 'PRUEBA DL1 octubre 2: el asiento del casado no se ha validado.';
   end if;
 
-  -- 3. Anular con la fecha pedida.
-  v_a := public._dl1_anular(c, v_admin, 'Persona de prueba', v_e, 'PRUEBA duplicado', v_hoy);
-  if (select status from public.journal_entry where id = v_e) <> 'anulado'
-     or (select status from public.journal_entry where id = (v_a->>'contraasiento')::uuid) <> 'validado'
-     or (select entry_date from public.journal_entry where id = (v_a->>'contraasiento')::uuid) <> v_hoy then
-    raise exception 'PRUEBA DL1 octubre 3: no está anulado o su contraasiento no está validado con la fecha pedida (%).', v_a;
-  end if;
-
-  -- 4. Otra vez el mismo movimiento.
+  -- 3. Otra vez el mismo movimiento.
   begin
     perform public._dl1_casar(c, v_admin, 'Persona de prueba', v_m,
       jsonb_build_object('tipo', 'cuenta', 'lineas', jsonb_build_array(jsonb_build_object('cuenta', '62900098', 'importe', 12.34))), 'PRUEBA');
-    raise exception 'PRUEBA DL1 octubre 4: se ha casado dos veces el mismo movimiento.';
+    raise exception 'PRUEBA DL1 octubre 3: se ha casado dos veces el mismo movimiento.';
   exception when others then
     get stacked diagnostics v_err = message_text;
     if v_err !~ 'ya está casado|una sola vez' then raise; end if;
   end;
 
-  -- 5. Un movimiento que no es de la empresa.
+  -- 4. Un movimiento que no es de la empresa.
   select id into v_otro from public.bank_movement where company_id <> c limit 1;
   begin
     perform public._dl1_casar(c, v_admin, 'Persona de prueba', coalesce(v_otro, gen_random_uuid()),
       jsonb_build_object('tipo', 'cuenta', 'lineas', '[]'::jsonb), 'PRUEBA');
-    raise exception 'PRUEBA DL1 octubre 5: ha aceptado un movimiento de otra empresa.';
+    raise exception 'PRUEBA DL1 octubre 4: ha aceptado un movimiento de otra empresa.';
   exception when others then
     get stacked diagnostics v_err = message_text;
     if v_err !~ 'no es de la empresa' then raise; end if;
