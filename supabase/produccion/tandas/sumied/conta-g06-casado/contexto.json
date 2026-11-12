@@ -1,5 +1,5 @@
 {
- "_que": "G06 · Tarea 2 · contexto de producción de la tanda (0938), medido en SOLO LECTURA el 12/11 a las 09:00Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ni la tabla ni la vista que crea la 0938, nada en el camino del pedido y nada en el historial. La cuenta (g06-casado.sql) a la misma hora: 073142532d9c / 35ac669afdf7 · no existe · no existe · 106 · 76 · 27 · 56 · 117 · no existe · 56 / 2961 / 1370.",
+ "_que": "G06 · Tarea 2 · contexto de producción de la tanda (0938), medido en SOLO LECTURA el 12/11 a las 09:00Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: no existe ni la tabla ni la vista que crea la 0938, nada en el camino del pedido y nada en el historial. La cuenta (g06-casado.sql) a la misma hora: no existe · no existe · 1370. El cuadre de QBO y la huella de los dos enlaces (scripts/conta/g06/cuadre.sql, aparte porque leen lo que reescribe la lectura de GoCardless): 073142532d9c / 35ac669afdf7 · 106 · 76 · 27 · 56 · 117 · no existe.",
  "medido": "2026-11-12T09:00Z",
  "tanda": {
   "supabase/migrations/20261112T0938_g06_enlace_gocardless.sql": "e5be53bd17242e14c35763b938b4dfeb"
