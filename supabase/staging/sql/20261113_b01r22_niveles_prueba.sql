@@ -74,11 +74,11 @@ end $$;
 select set_config('request.jwt.claims', json_build_object('sub', (select v from _r where clave = 'admin'), 'role', 'authenticated')::text, true);
 set local role authenticated;
 do $$
-declare id uuid;
+declare v_id uuid;
 begin
-  id := public.bank_nivel_veredicto_apuntar((select v::uuid from _r where clave = 'm'), null, 'confirmado', 'Seguro · confirmado 3 veces', false,
+  v_id := public.bank_nivel_veredicto_apuntar((select v::uuid from _r where clave = 'm'), null, 'confirmado', 'Seguro · confirmado 3 veces', false,
     '{"tipo": "cuenta", "lineas": [{"cuenta": "62800000", "importe": 80}]}'::jsonb, '{"tipo": "cuenta", "lineas": [{"cuenta": "62900000", "importe": 80}]}'::jsonb, '2026-11-12.1');
-  if id is null then raise exception 'PRUEBA B01·22 · 1: no ha apuntado el veredicto.'; end if;
+  if v_id is null then raise exception 'PRUEBA B01·22 · 1: no ha apuntado el veredicto.'; end if;
   if (select count(*) from public.bank_nivel_veredicto where movement_id = (select v::uuid from _r where clave = 'm') and not tal_cual and nivel = 'confirmado') <> 1 then
     raise exception 'PRUEBA B01·22 · 1: el administrador no ve su veredicto.';
   end if;
