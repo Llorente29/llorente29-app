@@ -229,3 +229,79 @@ export function DialogoFactura({ m, alCerrar, alElegir }: { m: MovimientoBanco; 
     </Dialogo>
   )
 }
+
+/**
+ * B01·21 · «¿Es otra cosa?» › «Cobro de un cliente» (lo que entra) o «Pago a un
+ * proveedor» (lo que sale), sin factura que casar: se elige al cliente o al
+ * proveedor por su nombre (su subcuenta 430, o 400/410) y el movimiento va
+ * entero contra ella. Antes había que «Apuntar sin factura» y escribir la
+ * cuenta a mano.
+ */
+export function DialogoTercero({ m, alCerrar, alElegir }: {
+  m: MovimientoBanco
+  alCerrar: () => void
+  alElegir: (e: Eleccion) => Promise<void>
+}) {
+  const { datos } = useBancos()
+  const cobro = m.importeCent > 0
+  const quien = cobro ? 'cliente' : 'proveedor'
+  const lista = useMemo(() => Object.entries(datos.nombres)
+    .filter(([c]) => c.length >= 8 && (cobro ? c.startsWith('430') : c.startsWith('400') || c.startsWith('410')))
+    .map(([codigo, nombre]) => ({ codigo, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')), [datos.nombres, cobro])
+  const [busca, setBusca] = useState(() => contraparte(m.conceptoBanco || m.conceptoLimpio) ?? '')
+  const [elegido, setElegido] = useState<string | null>(null)
+  const [ocupado, setOcupado] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const vistos = useMemo(() => {
+    const t = normal(busca.trim())
+    const xs = t ? lista.filter((x) => t.split(/\s+/).some((p) => p.length >= 3 && normal(x.nombre).includes(p)) || x.codigo.startsWith(t)) : lista
+    return xs.length ? xs : lista
+  }, [busca, lista])
+  const tercero = lista.find((x) => x.codigo === elegido) ?? null
+  const casar = async () => {
+    if (!tercero) return
+    setOcupado(true); setError(null)
+    try {
+      await alElegir({ lineas: [{ cuenta: tercero.codigo, importeCent: Math.abs(m.importeCent), concepto: null }],
+        concepto: cobro ? `Cobro de ${tercero.nombre}` : `Pago a ${tercero.nombre}`, regla: null, paraRegla: [] })
+      alCerrar()
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)) } finally { setOcupado(false) }
+  }
+  return (
+    <Dialogo titulo={cobro ? 'Cobro de un cliente' : 'Pago a un proveedor'} alCerrar={alCerrar}>
+      <div className="cxr-cabeza">
+        <div><span className="cx-ayuda">Fecha</span><strong>{diaMesCorto(m.fecha)}</strong></div>
+        <div className="cxr-cabeza-concepto"><span className="cx-ayuda">Lo que dice el banco</span><strong>{m.conceptoBanco || m.conceptoLimpio}</strong></div>
+        <div className="cxr-cabeza-importe"><span className="cx-ayuda">Importe</span><strong className="cx-cifra">{eurosExactos(m.importeCent / 100)}</strong></div>
+      </div>
+      <div className="cx-formulario">
+        <label className="cx-campo">
+          <span>¿De qué {quien} es?</span>
+          <input className="cx-input" type="search" value={busca} onChange={(e) => { setBusca(e.target.value); setElegido(null) }} placeholder={`Busca al ${quien} por su nombre`} autoFocus />
+        </label>
+        {lista.length === 0 ? (
+          <p className="cx-ayuda">No tienes ningún {quien} con su cuenta en el plan. Dalo de alta en Contactos y vuelve aquí.</p>
+        ) : (
+          <div className="cxr-terceros" role="listbox" aria-label={`Elige el ${quien}`}>
+            {vistos.slice(0, 30).map((x) => (
+              <button key={x.codigo} type="button" role="option" aria-selected={elegido === x.codigo}
+                className={`cx-boton-sec cxr-tercero${elegido === x.codigo ? ' cxr-tercero-elegido' : ''}`} onClick={() => setElegido(x.codigo)}>
+                {x.nombre} · {x.codigo}
+              </button>
+            ))}
+          </div>
+        )}
+        {tercero && (
+          <p className="cx-ayuda" role="note">
+            {cobro ? `Entra ${eurosExactos(m.importeCent / 100)} de ${tercero.nombre}` : `Sale ${eurosExactos(Math.abs(m.importeCent) / 100)} a ${tercero.nombre}`}: el banco contra su cuenta ({tercero.codigo}). Su asiento queda propuesto, en «Por validar».
+          </p>
+        )}
+        {error && <p className="cx-error" role="alert">{error}</p>}
+        <div className="cx-acciones">
+          <button type="button" className="cx-boton-sec" onClick={alCerrar}>Cancelar</button>
+          <button type="button" className="cx-boton" disabled={!tercero || ocupado} onClick={casar}>{ocupado ? 'Casando…' : cobro ? 'Es su cobro' : 'Es su pago'}</button>
+        </div>
+      </div>
+    </Dialogo>
+  )
+}

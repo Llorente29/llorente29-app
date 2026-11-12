@@ -1,4 +1,4 @@
-// supabase/functions/_shared/extractoBanco.ts · COPIA EXACTA de src/modules/conta/lib/extractoBanco.ts (B01c), salvo esta línea: la función nocturna del banco (conta-banco-agregador) calcula las huellas igual que la app. tests/unit/modules/conta/bancoAgregadorB01c.test.ts para si difieren.
+// supabase/functions/_shared/extractoBanco.ts · La ÚNICA copia (B01·21): la app la re-exporta (src/modules/conta/lib/extractoBanco.ts) y la usan la lectura de cada noche y el motor de Bancos en el servidor: las huellas y el concepto limpio, iguales en los dos sitios.
 //
 // B01 · El modelo único de lo que trae un banco, venga de donde venga
 // (fichero Norma 43, Excel/CSV, correo o agregador): una lista de cuentas, cada
