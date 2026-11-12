@@ -1,0 +1,2 @@
+# DL1 · envíos de Glovo: la 2342 no tiene vuelta atrás (se declara en aplicar.txt): lo aclarado se cambia volviéndolo a aclarar.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-envios.sql

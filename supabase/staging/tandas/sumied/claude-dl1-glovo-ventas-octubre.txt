@@ -1,0 +1,6 @@
+# DL1 · envíos de Glovo de octubre (2342: añade _dl1_envio_aclarar y, en
+# Foodint, aclara 22 envíos). Su prueba (ROLLBACK, cuenta A): sin Foodint no
+# aclara nada; aclara un pedido como la persona; no deja puesto su usuario; una
+# decisión que no existe para.
+supabase/migrations/20261112T2342_dl1_glovo_envios.sql
+supabase/staging/sql/20261112_dl1_glovo_envios_prueba.sql
