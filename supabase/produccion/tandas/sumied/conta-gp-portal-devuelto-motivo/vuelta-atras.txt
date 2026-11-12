@@ -1,0 +1,3 @@
+# GP · la vuelta atrás de la 1222: _conta_portal_devueltos, restaurada de su respaldo.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-devuelto-motivo.sql
+supabase/vuelta-atras/20261110T1222_gp_portal_devuelto_motivo.down.sql

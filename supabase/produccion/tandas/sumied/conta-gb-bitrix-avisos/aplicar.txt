@@ -1,0 +1,14 @@
+# GB · nº 13, punto 4 · Tareas en Bitrix24 a partir de lo que pasa en Sumied.
+# Rama conta/gb-bitrix-avisos. Se ensaya y se aplica desde main nombrando esta
+# rama. El real lo lanza Julio.
+#
+#   0060  Añade conta_bitrix_pestana_aviso (tabla, RLS de lectura), las funciones
+#         que dicen qué abrir y cerrar y apuntan (solo el servidor), su
+#         despertador y el cron conta-bitrix-avisos-despertar (cada 15 minutos).
+#         SOLO conexiones de PRUEBAS (conta_crm.entorno = 'pruebas'). No cambia
+#         ningún dato. Tras el real, despliega conta-bitrix-pestana-avisos: sin
+#         ella, el despertador llama y no contesta nadie (no pasa nada más).
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-bitrix-avisos.sql
+supabase/migrations/20261110T0060_gb_bitrix_avisos.sql

@@ -1,0 +1,4 @@
+# G01b · la vuelta atrás de la 0915: fuera la función, el mapa sin confirmar,
+# las fichas «sin clasificar» sin situación y el CHECK de antes.
+cuenta: scripts/conta/produccion/cuentas/g01b-mapa-confirmado.sql
+supabase/vuelta-atras/20261107T0915_g01b_mapa_confirmado.down.sql

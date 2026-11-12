@@ -352,6 +352,12 @@ verify_jwt = false
 [functions.conta-revolut-conectar]
 verify_jwt = true
 
+# GD · «Volver a empezar» (nº51). conta-gd-volver-a-empezar: con la sesión del
+# administrador de una cuenta de demostración (se mira dentro, con la puerta de
+# pasos.ts). Solo escribe en los sistemas de pruebas.
+[functions.conta-gd-volver-a-empezar]
+verify_jwt = true
+
 # B01 Revolut · PR 2b (01/11). conta-pagar: la única que manda un pago a un
 # banco; con la sesión de quien paga. Quién puede qué lo decide la base.
 [functions.conta-pagar]
@@ -377,4 +383,50 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.conta-bitrix-leer]
+verify_jwt = false
+
+# G05 · T3 (09/11) · El cobro del mes (preparar, enviar a GoCardless y seguir).
+# Sin el JWT del gateway porque «seguir» llega también del cron con
+# x-cron-secret; dentro se comprueba quién llama (una persona administradora o
+# encargada de la cuenta para preparar y enviar).
+[functions.conta-cobro]
+verify_jwt = false
+
+# G01d (08/11) · Los avisos al instante del CRM y de GoCardless, sin sesión
+# (verify_jwt = false): llaman Bitrix24 y GoCardless. Solo se acepta un aviso
+# auténtico (el código de la conexión en Bitrix24; la firma con el secreto de la
+# cuenta en GoCardless); lo demás, 401. Y no se cree lo que trae: solo dice qué
+# ficha o qué cuenta releer, con el acceso de solo lectura de siempre.
+[functions.conta-crm-aviso]
+verify_jwt = false
+
+[functions.conta-gocardless-aviso]
+verify_jwt = false
+
+# GB · conta-bitrix-pestana: la pestaña «Sumied» en la ficha de Bitrix24. La
+# llaman Bitrix24 (al abrir la pestaña y al instalar) y su página, sin sesión de
+# Sumied: verify_jwt = false. La seguridad la da la comprobación con Bitrix24
+# (app.info y user.current) antes de leer nada.
+[functions.conta-bitrix-pestana]
+verify_jwt = false
+
+# GB · nº 13 · conta-bitrix-pestana-avisos: las tareas en el Bitrix24 de pruebas
+# (recibo devuelto, mandato sin firmar, alta pedida en el portal). La despierta
+# el cron conta-bitrix-avisos-despertar con x-cron-secret (CRON_SECRET), sin sesión.
+[functions.conta-bitrix-pestana-avisos]
+verify_jwt = false
+
+# GP · T2b (09/11) · El portal del cliente: pedir el enlace para entrar. Sin
+# sesión (aún no la tiene): contesta siempre lo mismo, haya acceso o no.
+[functions.conta-portal-entrar]
+verify_jwt = false
+
+# GP · T2b (09/11) · Lo que hace el servidor del portal del cliente, con la
+# sesión de la persona: cada acción pregunta antes a la base con esa sesión.
+[functions.conta-portal]
+verify_jwt = true
+
+# GP · T4 (09/11) · Los avisos por correo del portal. La despierta el cron
+# «portal-avisos» con x-cron-secret (o el servidor con la clave de servicio).
+[functions.conta-portal-avisos]
 verify_jwt = false

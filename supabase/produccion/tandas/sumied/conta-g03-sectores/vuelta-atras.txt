@@ -1,0 +1,6 @@
+# G03 · la vuelta atrás, en orden inverso: la 1946 deja las empresas sin
+# sector y a Casa Lola sin decir; la 1945 quita el disparador, su función,
+# el CHECK y la columna. is_hospitality queda como antes.
+cuenta: scripts/conta/produccion/cuentas/g03-sectores.sql
+supabase/vuelta-atras/20261107T1946_g03_sector_de_hoy.down.sql
+supabase/vuelta-atras/20261107T1945_g03_sector.down.sql

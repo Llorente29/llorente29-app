@@ -1,0 +1,20 @@
+[
+ {
+  "id": "534-1",
+  "pr": 534,
+  "fecha": "2026-11-09T19:09:14Z",
+  "producto": "sumied",
+  "apartado": "Cobros · Te deben",
+  "frase": "un recibo devuelto que el cliente paga desde el portal (desde el banco, o con tarjeta o Bizum) queda contabilizado y sale de «Te deben».",
+  "ruta": null
+ },
+ {
+  "id": "534-2",
+  "pr": 534,
+  "fecha": "2026-11-09T19:09:14Z",
+  "producto": "sumied",
+  "apartado": "Cobros · Domiciliación",
+  "frase": "cuando un cliente cambia de cuenta desde el portal, los recibos siguientes se cargan en la nueva domiciliación y la vieja queda cancelada.",
+  "ruta": null
+ }
+]

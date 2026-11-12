@@ -1,0 +1,13 @@
+# G05 · El alta y la baja de un trabajador con su día y su DNI o NIE (nº 77, punto
+# 1; para la ficha, la pestaña de Bitrix24 de Code 4 y la maqueta). Rama
+# conta/g05-alta-baja-dia. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. El real lo lanza Julio.
+#
+#   1108  AÑADE la columna conta_linea.empleado_documento (admite nulos, con su
+#         CHECK solo sobre ella), _conta_dni_nie_valido y las funciones
+#         conta_gestoria_alta_trabajador y conta_gestoria_baja_trabajador. Las del
+#         G01 (alta_empleado y baja_linea) no cambian.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-alta-baja-dia.sql
+supabase/migrations/20261110T1108_g05_alta_baja_dia.sql

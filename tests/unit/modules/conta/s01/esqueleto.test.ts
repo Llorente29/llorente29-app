@@ -83,7 +83,8 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
     // PC01 · Entrega 2: Compras › Pagos (la lista, las remesas y la ficha de una) y «Repartidores», el nombre nuevo de Liquidaciones.
     repartidores: 'compras.liquidaciones', pagos: 'compras.pagos', remesasPagos: 'compras.pagos', remesaPagos: 'compras.pagos',
     // PC01 · Entrega 3: Ventas › Cobros (la lista, con sus remesas, y la ficha de una remesa de recibos).
-    cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros', clientesCuotas: 'facturacion.clientesCuotas', tarifasGestoria: 'facturacion.clientesCuotas',
+    cobros: 'facturacion.cobros', remesaCobros: 'facturacion.cobros', // G04 · «Clientes y cuotas», apartado propio: Clientes (con la ficha) y Tarifa y paquetes.
+    clientesCuotas: 'clientesCuotas.clientesGestoria', tarifasGestoria: 'clientesCuotas.tarifasGestoria', clienteGestoria: 'clientesCuotas.clientesGestoria', cobroGestoria: 'clientesCuotas.clientesGestoria',
   }
   it('las de CONTA.rutas, todas, con lo suyo', () => {
     const rutas = Object.entries(CONTA.rutas) as [keyof typeof CONTA.rutas, string][]
@@ -113,7 +114,7 @@ describe('cada dirección del módulo, en su producto y su pestaña', () => {
 
 describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   it('el orden de la barra (tablero 0): (Clientes del despacho) · Inicio · Contabilidad · Ventas (V01: antes Facturación) · Compras y gastos · Bancos · Laboral · Impuestos · Contactos · (abajo) Ajustes', () => {
-    expect(PRODUCTOS.map((p) => p.etiqueta)).toEqual(['Clientes del despacho', 'Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Laboral', 'Impuestos', 'Contactos', 'Ajustes'])
+    expect(PRODUCTOS.map((p) => p.etiqueta)).toEqual(['Clientes del despacho', 'Inicio', 'Contabilidad', 'Clientes y cuotas', 'Ventas', 'Compras y gastos', 'Bancos', 'Laboral', 'Impuestos', 'Contactos', 'Ajustes'])
     expect(PRODUCTOS.filter((p) => p.abajo).map((p) => p.id)).toEqual(['ajustes'])
   })
   it('S02 · «Clientes del despacho», arriba del todo, solo en una cuenta que es asesoría', () => {
@@ -124,7 +125,7 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
   })
   it('S02 · los grupos de la barra están previstos y no se pintan', () => {
     expect(PRODUCTOS.filter((p) => p.grupo).map((p) => [p.id, p.grupo])).toEqual([
-      ['contabilidad', 'finanzas'], ['facturacion', 'finanzas'], ['compras', 'finanzas'], ['bancos', 'finanzas'],
+      ['contabilidad', 'finanzas'], ['clientesCuotas', 'finanzas'], ['facturacion', 'finanzas'], ['compras', 'finanzas'], ['bancos', 'finanzas'],
       ['laboral', 'personas'], ['impuestos', 'finanzas'], ['contactos', 'operaciones'],
     ])
   })
@@ -132,9 +133,11 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V01 · Entrega 2: y, en su bloque «Hostelería», Cierres del día (solo con hostelería).
     // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te pagan quienes
     // cobran por ti), encima del bloque «Hostelería»; sin hostelería, sin plataformas.
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Clientes y cuotas', 'Liquidaciones', 'Cierres del día'])
-    // G01 · Clientes y cuotas, solo en una cuenta de asesoría.
-    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'clientesCuotas')).toMatchObject({ solo: 'asesoria' })
+    expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.map((t) => t.etiqueta)).toEqual(['Facturas', 'Cobros', 'Liquidaciones', 'Cierres del día'])
+    // G01 · Clientes y cuotas. G03 (Julio, 07/11): solo con el sector Gestoría de la empresa, no con «la cuenta es asesoría».
+    // G04 (maqueta del 08/11): un apartado propio, con Clientes y Tarifa y paquetes.
+    expect(PRODUCTOS.find((p) => p.id === 'clientesCuotas')).toMatchObject({ solo: 'gestoria' })
+    expect(PRODUCTOS.find((p) => p.id === 'clientesCuotas')!.pestanas.map((t) => t.etiqueta)).toEqual(['Clientes', 'Tarifa y paquetes'])
     expect(PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'cierres')).toMatchObject({ solo: 'hosteleria', bloque: 'Hostelería' })
     const liq = PRODUCTOS.find((p) => p.id === 'facturacion')!.pestanas.find((t) => t.id === 'liquidacionesVentas')!
     expect([liq.solo, liq.bloque]).toEqual([undefined, undefined])
@@ -155,7 +158,11 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     expect(productosVisibles(todo).map((p) => p.id)).toEqual(['inicio', 'contabilidad', 'facturacion', 'compras', 'bancos', 'laboral', 'impuestos', 'contactos', 'ajustes'])
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_laboral']) }).map((p) => p.id)).toContain('laboral')
     expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, NADA).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
-    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, asesoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'clientesCuotas', 'liquidacionesVentas'])
+    // G03: la cuenta de asesoría sola ya no la enciende; el sector Gestoría, sí.
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, asesoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
+    expect(pestanasVisibles(PRODUCTOS.find((p) => p.id === 'facturacion')!, { ...NADA, gestoria: true }).map((t) => t.id)).toEqual(['emitidas', 'cobros', 'liquidacionesVentas'])
+    expect(productosVisibles({ ...NADA, gestoria: true }).map((p) => p.id)).toContain('clientesCuotas')
+    expect(productosVisibles({ ...NADA, asesoria: true }).map((p) => p.id)).not.toContain('clientesCuotas')
     expect(productosVisibles({ ...NADA, interruptores: new Set(['conta_impuestos']) }).map((p) => p.id)).toContain('impuestos')
   })
   // I01b (18/10, capturas): «Certificados y accesos» no cabía en el hueco de «Más ▾» a 1440 px y
@@ -200,10 +207,12 @@ describe('qué sale: el esqueleto de Julio, sin nada vacío', () => {
     // V03 E2 (26/10): entra Facturación › Verifactu (tablero 25), con pantalla: sale también en el producto solo.
     // PC01 E4 (27/10): entra Facturación › Cobros (los recordatorios), con pantalla.
     // S01c (29/10): entra Compras › Correo de facturas (la dirección, la confirmación de Gmail y lo que ha llegado), con pantalla.
-    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Apuntar solo lo seguro', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
+    expect(a.pestanas.map((t) => t.etiqueta)).toEqual(['Tu empresa', 'Tus impuestos', 'Socios y cargos', 'Ejercicio', 'Apuntar solo lo seguro', 'Certificados y accesos', 'Correo de facturas', 'Verifactu', 'Cobros', 'Usuarios', 'Tu cuenta', 'Avisos', `Lo que ha hecho ${MARCA.nombre}`])
     // S01o (01/11): entra Contabilidad › Apuntar solo lo seguro (el interruptor de la empresa), con pantalla.
     // DM1 · PR 1 (30/10): entra Usuarios (quién entra e «Invitar a una persona»), con pantalla.
     expect(pestanasVisibles(a, { ...NADA, solo: true }).map((t) => t.id)).toEqual(['empresa', 'impuestos', 'socios', 'ejercicio', 'apuntar-solo', 'correo-facturas', 'verifactu', 'cobros', 'personas', 'folvy'])
+    // GD (nº71): «Tu cuenta» solo en una cuenta de demostración.
+    expect(pestanasVisibles(a, { ...NADA, solo: true, demo: true }).map((t) => t.id)).toContain('cuenta')
     expect(de('/conta/ajustes')).toBe('ajustes.empresa')
     expect(de('/conta/ajustes/plan')).toBe('contabilidad.definiciones')
     expect(de('/conta/ajustes/tablas/numeracion')).toBe('contabilidad.definiciones')

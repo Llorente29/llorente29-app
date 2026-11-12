@@ -15,6 +15,7 @@
 // lectura.ts (lo que se pide a GoCardless), plan.ts (lo que se escribe y las
 // diferencias), lector, casado, conversion, comparacion y salida.
 
+import { CADA_MS, CAIDA_MS, ESPERA_MS, fraseEnMarcha, laDeAntes, type LecturaEnMarcha } from './turno.ts'
 import { createClient, type SupabaseClient } from 'npm:@supabase/supabase-js@2'
 import { corsHeaders } from '../_shared/cors.ts'
 import { type Entorno } from './lector.ts'
@@ -23,6 +24,12 @@ import { aEuros, fraseDeLectura, planDiferencias, planLectura, TIPOS_DEL_CASADO,
 import type { Linea, Tarifa } from './comparacion.ts'
 import type { FichaParaCasar } from './casado.ts'
 import { puedeLeer } from './salida.ts'
+import { leerTodas } from './paginas.ts'
+import { planEnlaces, personasDeDecisiones, type EstadoEnlace, type PorEnlace } from './enlace.ts'
+import { refDeFicha } from '../_shared/crm/ficha.ts'
+import { jsPDF } from 'npm:jspdf@4.2.1'
+import { rematarFacturasDeRecibos } from '../_shared/cobro/facturaRecibo.ts'
+import { modulosQr } from '../_shared/verifactu/qrServidor.ts'
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
@@ -35,28 +42,36 @@ async function upsert(db: SupabaseClient, tabla: string, filas: Record<string, u
     if (error) throw new Error(`No se ha podido guardar en ${tabla}: ${error.message}`)
   }
 }
-async function leerFilas<T>(q: PromiseLike<{ data: unknown; error: { message: string } | null }>, que: string): Promise<T[]> {
-  const { data, error } = await q
-  if (error) throw new Error(`No se ha podido leer ${que}: ${error.message}`)
-  return (data ?? []) as T[]
-}
-
-async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_noche' | 'conexion', quien: string | null) {
+async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_noche' | 'conexion' | 'aviso', quien: string | null) {
   const { data: sec, error: secErr } = await db.rpc('conta_gocardless_secreto', { p_company: empresa })
   if (secErr) throw new Error(`No se ha podido leer la conexión: ${secErr.message}`)
   const s = (sec as { account_id: string; entorno: Entorno; token: string }[] | null)?.[0]
   if (!s?.token) throw new Error('Esta empresa no tiene conectada su cuenta de GoCardless.')
   const cuenta = s.account_id
-  const empresas = await leerFilas<{ id: string; legal_name: string | null; trade_name: string | null }>(
-    db.from('company').select('id, legal_name, trade_name').eq('account_id', cuenta), 'las empresas')
+  const empresas = await leerTodas<{ id: string; legal_name: string | null; trade_name: string | null }>(
+    (d, h) => db.from('company').select('id, legal_name, trade_name').eq('account_id', cuenta).order('id').range(d, h), 'las empresas')
   const nombres = new Map(empresas.map((e) => [e.id, e.trade_name || e.legal_name || 'la empresa']))
   const nombreEmisor = (id: string) => nombres.get(id) ?? 'otro emisor'
 
   const { data: lect, error: lectErr } = await db.from('conta_gestoria_lectura')
-    .insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', entorno: s.entorno, por, quien_name: quien }).select('id').single()
+    .insert({ account_id: cuenta, company_id: empresa, origen: 'gocardless', entorno: s.entorno, por, quien_name: quien }).select('id, empezada_at').single()
   if (lectErr) throw new Error(`No se ha podido apuntar la lectura: ${lectErr.message}`)
   const lectura = (lect as { id: string }).id
   const acabar = (campos: Record<string, unknown>) => db.from('conta_gestoria_lectura').update({ acabada_at: new Date().toISOString(), ...campos }).eq('id', lectura)
+
+  // nº 72 · Una a la vez por conexión: si hay otra de esta empresa en marcha que empezó antes, se espera a que acabe.
+  const mia = lect as LecturaEnMarcha
+  for (let esperado = 0; ; esperado += CADA_MS) {
+    const enMarcha = await leerTodas<LecturaEnMarcha>((d, h) => db.from('conta_gestoria_lectura').select('id, empezada_at')
+      .eq('company_id', empresa).eq('origen', 'gocardless').eq('estado', 'en_marcha').gte('empezada_at', new Date(Date.now() - CAIDA_MS).toISOString()).order('id').range(d, h), 'las lecturas en marcha')
+    if (!laDeAntes(mia, enMarcha, new Date())) break
+    if (esperado >= ESPERA_MS) {
+      const frase = fraseEnMarcha(nombreEmisor(empresa))
+      await acabar({ estado: 'no_lee', mensaje: frase })
+      return { frase, lee: false, enMarcha: true }
+    }
+    await new Promise((r) => setTimeout(r, CADA_MS))
+  }
 
   const puerta = await puedeLeer(db, cuenta, s.entorno)
   if (!puerta.lee) { await acabar({ estado: 'no_lee', mensaje: puerta.porque }); return { frase: puerta.porque, lee: false } }
@@ -66,26 +81,27 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     const datos = await leerCuentaGc(fetch, s.entorno, s.token, hoy)
 
     // Lo que ya hay en Sumied.
-    const huellas = await leerFilas<{ gc_id: string; huella: string | null }>(db.from('conta_gc_cliente').select('gc_id, huella').eq('company_id', empresa), 'lo leído antes')
-    const fichasDb = await leerFilas<Record<string, unknown>>(db.from('conta_gestoria_cliente')
-      .select('party_id, bitrix_id, situacion, forma_pago_bitrix, emisor_segun_bitrix, ficha, party:party_id(name, tax_id)').eq('account_id', cuenta), 'las fichas de Bitrix24')
-    const fichas: Antes['fichas'] = fichasDb.filter((f) => f.bitrix_id).map((f) => {
+    const huellas = await leerTodas<{ gc_id: string; huella: string | null }>((d, h) => db.from('conta_gc_cliente').select('gc_id, huella').eq('company_id', empresa).order('gc_id').range(d, h), 'lo leído antes')
+    const fichasDb = await leerTodas<Record<string, unknown>>((d, h) => db.from('conta_gestoria_cliente')
+      .select('party_id, crm, tipo_ficha, id_externo, situacion, forma_pago_crm, emisor_segun_crm, ficha, party:party_id(name, tax_id)').eq('account_id', cuenta).order('party_id').range(d, h), 'las fichas del CRM')
+    // G01c · Cada ficha por su referencia neutra (CRM, tipo e id): una empresa y un contacto pueden tener el mismo id.
+    const fichas: Antes['fichas'] = fichasDb.filter((f) => f.id_externo).map((f) => {
       const party = (f.party ?? {}) as { name?: string; tax_id?: string | null }
       const ficha = (f.ficha ?? {}) as { correos?: string[] }
-      return { partyId: String(f.party_id), bitrixId: String(f.bitrix_id), nombre: party.name ?? String(f.bitrix_id), nif: party.tax_id ?? null,
+      return { partyId: String(f.party_id), claveFicha: refDeFicha(String(f.crm), f.tipo_ficha as 'empresa' | 'contacto', String(f.id_externo)), nombre: party.name ?? String(f.id_externo), nif: party.tax_id ?? null,
         correos: ficha.correos ?? [], situacion: (f.situacion as FichaParaCasar['situacion']) ?? null,
-        formaPago: (f.forma_pago_bitrix as string | null) ?? null, emisorSegunBitrix: (f.emisor_segun_bitrix as string | null) ?? null }
+        formaPago: (f.forma_pago_crm as string | null) ?? null, emisorSegunCrm: (f.emisor_segun_crm as string | null) ?? null }
     })
-    const otros = await leerFilas<Record<string, unknown>>(db.from('conta_gc_cliente')
-      .select('company_id, gc_id, nombre, nif, correo, mandatos_vivos, suscripciones_activas').eq('account_id', cuenta).neq('company_id', empresa), 'las otras cuentas de GoCardless')
-    const formas = await leerFilas<{ party_id: string; forma_cobro: string | null }>(db.from('conta_cobro_cliente').select('party_id, forma_cobro').eq('company_id', empresa), 'las formas de cobro')
-    const importadas = await leerFilas<{ suscripcion_gc_id: string }>(db.from('conta_gc_importacion').select('suscripcion_gc_id').eq('company_id', empresa), 'lo importado')
-    const propias = await leerFilas<{ party_id: string; servicio: { clave: string } | null }>(db.from('conta_tarifa')
-      .select('party_id, servicio:servicio_id(clave)').eq('company_id', empresa).not('party_id', 'is', null), 'las tarifas propias')
+    const otros = await leerTodas<Record<string, unknown>>((d, h) => db.from('conta_gc_cliente')
+      .select('company_id, gc_id, nombre, nif, correo, mandatos_vivos, suscripciones_activas').eq('account_id', cuenta).neq('company_id', empresa).order('company_id').order('gc_id').range(d, h), 'las otras cuentas de GoCardless')
+    const formas = await leerTodas<{ party_id: string; forma_cobro: string | null }>((d, h) => db.from('conta_cobro_cliente').select('party_id, forma_cobro').eq('company_id', empresa).order('party_id').range(d, h), 'las formas de cobro')
+    const importadas = await leerTodas<{ suscripcion_gc_id: string }>((d, h) => db.from('conta_gc_importacion').select('suscripcion_gc_id').eq('company_id', empresa).order('suscripcion_gc_id').range(d, h), 'lo importado')
+    const propias = await leerTodas<{ party_id: string; servicio: { clave: string } | null }>((d, h) => db.from('conta_tarifa')
+      .select('party_id, servicio:servicio_id(clave)').eq('company_id', empresa).not('party_id', 'is', null).order('id').range(d, h), 'las tarifas propias')
     const { data: conex } = await db.from('conta_cobro_gocardless').select('por_defecto').eq('company_id', empresa).single()
     // G01 · 4b · Lo decidido en la ficha: enlaces, suscripciones que no se cuentan y diferencias revisadas.
-    const decisiones = await leerFilas<{ tipo: string; party_id: string | null; gc_cliente_id: string | null; suscripcion_gc_id: string | null; diferencia_tipo: string | null; porque: string | null }>(
-      db.from('conta_gestoria_decision').select('tipo, party_id, gc_cliente_id, suscripcion_gc_id, diferencia_tipo, porque').eq('company_id', empresa), 'lo decidido en la ficha')
+    const decisiones = await leerTodas<{ tipo: string; party_id: string | null; gc_cliente_id: string | null; suscripcion_gc_id: string | null; diferencia_tipo: string | null; porque: string | null; quien: string | null; quien_name: string | null; cuando: string }>(
+      (d, h) => db.from('conta_gestoria_decision').select('tipo, party_id, gc_cliente_id, suscripcion_gc_id, diferencia_tipo, porque, quien, quien_name, cuando').eq('company_id', empresa).order('cuando').order('id').range(d, h), 'lo decidido en la ficha')
     const enlaces = new Map(decisiones.filter((d) => d.tipo === 'enlace' && d.gc_cliente_id && d.party_id).map((d) => [d.gc_cliente_id!, d.party_id!]))
     const noContar = new Set(decisiones.filter((d) => d.tipo === 'no_contar' && d.suscripcion_gc_id).map((d) => d.suscripcion_gc_id!))
     const revisadas = new Set(decisiones.filter((d) => d.tipo === 'revisada').map((d) => `${d.diferencia_tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
@@ -108,8 +124,28 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await upsert(db, 'conta_gc_mandato', plan.filas.mandatos, 'company_id,gc_id')
     await upsert(db, 'conta_gc_suscripcion', plan.filas.suscripciones, 'company_id,gc_id')
     await upsert(db, 'conta_gc_cobro', plan.filas.cobros, 'company_id,gc_id')
+    // G05 · nº 43 · Los pagos al banco: su día de llegada y su neto (el casado de Bancos, match_id, no se toca).
+    await upsert(db, 'conta_gc_payout', plan.filas.payouts, 'company_id,gc_id')
+    // nº 76 · Las que no son de ningún cliente de ahora no se guardan; si ya estaban, se quitan, salvo las casadas en Bancos.
+    const fuera = (datos.payoutsFuera ?? []).map((f) => f.id)
+    for (const trozo of enTrozos(fuera)) {
+      const { error } = await db.from('conta_gc_payout').delete().eq('company_id', empresa).in('gc_id', trozo).is('match_id', null)
+      if (error) throw new Error(`No se han podido quitar las liquidaciones que no son de ningún cliente: ${error.message}`)
+    }
+    if (fuera.length) console.log(`[conta-gocardless-leer] ${fuera.length} liquidaciones de GoCardless que no son de ningún cliente de ahora: fuera.`)
     await upsert(db, 'conta_cobro_cliente', plan.cobroCliente, 'company_id,party_id')
-    const yaEstan = await leerFilas<{ id: string; gc_mandato_id: string }>(db.from('conta_mandato').select('id, gc_mandato_id').eq('company_id', empresa).not('gc_mandato_id', 'is', null), 'los mandatos')
+    // G06 · Y el sitio único del enlace (conta_gc_enlace). Los dos de arriba se siguen escribiendo hasta que todos los
+    // que los leen hayan cambiado (cautela del nº 140).
+    const enlacesAntes = await leerTodas<{ gc_cliente_id: string; por: PorEnlace; estado: EstadoEnlace }>((d, h) => db.from('conta_gc_enlace')
+      .select('gc_cliente_id, por, estado').eq('company_id', empresa).order('gc_cliente_id').range(d, h), 'los enlaces de antes')
+    const pe = planEnlaces(empresa, cuenta, new Date().toISOString(), enlacesAntes.map((e) => ({ gcClienteId: e.gc_cliente_id, por: e.por, estado: e.estado })),
+      plan.enlaces, personasDeDecisiones(decisiones))
+    await upsert(db, 'conta_gc_enlace', pe.guardar, 'company_id,gc_cliente_id')
+    for (const trozo of enTrozos(pe.quitar)) {
+      const { error } = await db.from('conta_gc_enlace').delete().eq('company_id', empresa).in('gc_cliente_id', trozo).eq('estado', 'atado').in('por', ['nif', 'correo'])
+      if (error) throw new Error(`No se han podido quitar los enlaces que ya no casan: ${error.message}`)
+    }
+    const yaEstan = await leerTodas<{ id: string; gc_mandato_id: string }>((d, h) => db.from('conta_mandato').select('id, gc_mandato_id').eq('company_id', empresa).not('gc_mandato_id', 'is', null).order('id').range(d, h), 'los mandatos')
     const idDe = new Map(yaEstan.map((m) => [m.gc_mandato_id, m.id]))
     for (const m of plan.mandatosSumied) {
       const id = idDe.get(m.gcMandatoId)
@@ -122,7 +158,7 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       await upsert(db, 'conta_servicio', plan.servicios.map((v) => ({ account_id: cuenta, company_id: empresa, clave: v.clave, nombre: v.nombre, forma: v.forma,
         por_confirmar: v.porConfirmar, created_by_name: 'GoCardless' })), 'company_id,clave')
     }
-    const servicios = await leerFilas<{ id: string; clave: string; nombre: string }>(db.from('conta_servicio').select('id, clave, nombre').eq('company_id', empresa), 'los servicios')
+    const servicios = await leerTodas<{ id: string; clave: string; nombre: string }>((d, h) => db.from('conta_servicio').select('id, clave, nombre').eq('company_id', empresa).order('id').range(d, h), 'los servicios')
     const servicioId = new Map(servicios.map((x) => [x.clave, x.id]))
     for (const t of plan.tarifas) {
       const { error } = await db.from('conta_tarifa').insert({ account_id: cuenta, company_id: empresa, servicio_id: servicioId.get(t.servicio), party_id: t.partyId,
@@ -135,9 +171,16 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       const { data: lin, error } = await db.from('conta_linea').insert({ account_id: cuenta, company_id: empresa, party_id: l.partyId, servicio_id: servicioId.get(l.servicio),
         detalle: l.detalle, empleado_nombre: l.empleado, origen: 'gocardless', importe_propio: aEuros(l.importePropioCent), periodo: l.periodo,
         desde: `${l.desdeMes}-01`, suscripcion_gc_id: l.suscripcionId, created_by_name: 'GoCardless' }).select('id').single()
-      if (error) throw new Error(`No se ha podido guardar la línea de ${l.suscripcionId}: ${error.message}`)
-      const { error: e2 } = await db.from('conta_gc_importacion').insert({ company_id: empresa, suscripcion_gc_id: l.suscripcionId, account_id: cuenta,
-        gc_cliente_id: l.clienteGcId, party_id: l.partyId, nombre: l.nombreSuscripcion, importe: aEuros(l.importeCent), resultado: 'linea', linea_id: (lin as { id: string }).id })
+      // nº 72 · Si ya está (otra lectura la guardó a la vez), se usa esa: guardar la misma línea dos veces no es un error.
+      let lineaId = (lin as { id: string } | null)?.id ?? null
+      if (error && error.code === '23505' && error.message.includes('conta_linea_suscripcion_idx')) {
+        const { data: ya } = await db.from('conta_linea').select('id').eq('company_id', empresa).eq('suscripcion_gc_id', l.suscripcionId).maybeSingle()
+        lineaId = (ya as { id: string } | null)?.id ?? null
+      } else if (error) throw new Error(`No se ha podido guardar la línea de ${l.suscripcionId}: ${error.message}`)
+      if (!lineaId) throw new Error(`No se ha podido guardar la línea de ${l.suscripcionId}.`)
+      const { error: e2 } = await db.from('conta_gc_importacion').upsert({ company_id: empresa, suscripcion_gc_id: l.suscripcionId, account_id: cuenta,
+        gc_cliente_id: l.clienteGcId, party_id: l.partyId, nombre: l.nombreSuscripcion, importe: aEuros(l.importeCent), resultado: 'linea', linea_id: lineaId },
+        { onConflict: 'company_id,suscripcion_gc_id' })
       if (e2) throw new Error(`No se ha podido apuntar la importación de ${l.suscripcionId}: ${e2.message}`)
       convertidas++
     }
@@ -146,11 +189,11 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       porque_codigo: n.codigo, porque: n.porque })), 'company_id,suscripcion_gc_id')
 
     // 3 · Las diferencias, con las líneas y tarifas como quedan ahora.
-    const sinConvertir = await leerFilas<Record<string, string | null>>(db.from('conta_gc_importacion')
-      .select('suscripcion_gc_id, gc_cliente_id, party_id, nombre, porque_codigo, porque').eq('company_id', empresa).eq('resultado', 'no_convertida'), 'lo no convertido')
-    const lineasDb = await leerFilas<Record<string, unknown>>(db.from('conta_linea')
-      .select('id, party_id, servicio_id, detalle, empleado_nombre, importe_propio, periodo, desde, hasta, suscripcion_gc_id').eq('company_id', empresa), 'las líneas')
-    const tarifasDb = await leerFilas<Record<string, unknown>>(db.from('conta_tarifa').select('servicio_id, party_id, importe, periodo, desde, hasta').eq('company_id', empresa), 'las tarifas')
+    const sinConvertir = await leerTodas<Record<string, string | null>>((d, h) => db.from('conta_gc_importacion')
+      .select('suscripcion_gc_id, gc_cliente_id, party_id, nombre, porque_codigo, porque').eq('company_id', empresa).eq('resultado', 'no_convertida').order('suscripcion_gc_id').range(d, h), 'lo no convertido')
+    const lineasDb = await leerTodas<Record<string, unknown>>((d, h) => db.from('conta_linea')
+      .select('id, party_id, servicio_id, detalle, empleado_nombre, importe_propio, periodo, desde, hasta, suscripcion_gc_id').eq('company_id', empresa).order('id').range(d, h), 'las líneas')
+    const tarifasDb = await leerTodas<Record<string, unknown>>((d, h) => db.from('conta_tarifa').select('servicio_id, party_id, importe, periodo, desde, hasta').eq('company_id', empresa).order('id').range(d, h), 'las tarifas')
     const nombreServicio = new Map(servicios.map((x) => [x.id, x.nombre]))
     const tarifas: Tarifa[] = tarifasDb.filter((t) => t.periodo !== 'unidad').map((t) => ({ emisor: empresa, servicio: String(t.servicio_id),
       clienteId: (t.party_id as string | null) ?? null, importeCent: Math.round(Number(t.importe) * 100), periodo: t.periodo as 'mes' | 'anio',
@@ -160,7 +203,7 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
       detalle: (l.detalle as string | null) ?? null, empleado: (l.empleado_nombre as string | null) ?? null,
       importePropioCent: l.importe_propio === null ? null : Math.round(Number(l.importe_propio) * 100), periodo: l.periodo as 'mes' | 'anio',
       desde: mes(l.desde), hasta: l.hasta ? mes(l.hasta) : null, suscripcionId: (l.suscripcion_gc_id as string | null) ?? null }))
-    const tes = await leerFilas<{ id: string; name: string; iban: string | null }>(db.from('treasury_account').select('id, name, iban').eq('company_id', empresa).eq('kind', 'bank'), 'la tesorería')
+    const tes = await leerTodas<{ id: string; name: string; iban: string | null }>((d, h) => db.from('treasury_account').select('id, name, iban').eq('company_id', empresa).eq('kind', 'bank').order('id').range(d, h), 'la tesorería')
     const dif = planDiferencias(empresa, { ...datos, suscripciones: datos.suscripciones.filter((x) => !noContar.has(x.id)) }, plan, hoy,
       sinConvertir.map((n) => ({ suscripcion: String(n.suscripcion_gc_id), gcCliente: n.gc_cliente_id, partyId: n.party_id, nombre: String(n.nombre ?? ''),
         codigo: String(n.porque_codigo ?? 'sin_convertir'), porque: String(n.porque ?? '') })),
@@ -171,9 +214,9 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await db.from('conta_gestoria_diferencia').update({ vigente: false }).eq('account_id', cuenta).eq('vigente', true).in('tipo', TIPOS_DEL_CASADO)
     // Lo revisado no vuelve a salir mientras diga lo mismo.
     dif.diferencias = dif.diferencias.filter((d) => !revisadas.has(`${d.tipo}|${d.party_id ?? d.gc_cliente_id}|${d.porque}`))
-    // Sin Bitrix24 conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.
-    const { data: bx } = await db.from('conta_crm_bitrix').select('url_ref').eq('account_id', cuenta).maybeSingle()
-    if (!(bx as { url_ref?: string | null } | null)?.url_ref) dif.diferencias = dif.diferencias.filter((d) => !TIPOS_DEL_CASADO.includes(d.tipo))
+    // Sin un CRM conectado (cada conector va aparte), no hay fichas con las que casar: lo del casado no se dice.
+    const { data: bx } = await db.from('conta_crm').select('url_ref').eq('account_id', cuenta).not('url_ref', 'is', null).limit(1)
+    if (!((bx ?? []) as { url_ref?: string | null }[]).length) dif.diferencias = dif.diferencias.filter((d) => !TIPOS_DEL_CASADO.includes(d.tipo))
     for (const trozo of enTrozos(dif.diferencias)) {
       const { error } = await db.from('conta_gestoria_diferencia').insert(trozo.map((d) => ({ account_id: cuenta, lectura_id: lectura, ...d })))
       if (error) throw new Error(`No se han podido guardar las diferencias: ${error.message}`)
@@ -184,9 +227,20 @@ async function leer(db: SupabaseClient, empresa: string, por: 'persona' | 'cada_
     await db.from('conta_cobro_gocardless').update({ ultima_lectura_at: ahora, mandatos_vivos: plan.resumen.mandatosVivos, lineas_activas: plan.resumen.lineasActivas,
       al_mes: aEuros(plan.resumen.alMesCent), abono: plan.resumen.abono, abono_treasury_id: dif.abono.coincide ? dif.abono.tesoreriaId : null,
       abono_coincide: dif.abono.coincide, abono_porque: dif.abono.coincide ? null : dif.abono.porque, updated_at: ahora }).eq('company_id', empresa)
-    const conDiferencias = new Set(dif.diferencias.map((d) => d.party_id ?? d.gc_cliente_id ?? d.bitrix_id ?? d.tipo)).size
+    const conDiferencias = new Set(dif.diferencias.map((d) => d.party_id ?? d.gc_cliente_id ?? d.id_externo ?? d.tipo)).size
     const frase = fraseDeLectura(nombreEmisor(empresa), plan, convertidas, conDiferencias, por === 'conexion')
     await acabar({ estado: 'bien', nuevos: plan.nuevos, cambiados: plan.cambiados, iguales: plan.iguales, con_diferencias: conDiferencias, mensaje: frase })
+    // G05 · T3: los recibos del cobro, al día con lo recién leído (confirmado → factura y asiento; devuelto → su asiento).
+    // Un fallo aquí no tumba la lectura: queda dicho en el recibo y en el registro.
+    const { error: eSeguir } = await db.rpc('conta_cobro_seguir', { p_company: empresa })
+    if (eSeguir) console.error('[conta-gocardless-leer] seguir el cobro:', eSeguir.message)
+    // G05 · T4 · Las facturas que acaba de emitir: su PDF (adjunto a la factura y a su asiento) y su envío al cliente.
+    // Tampoco tumba la lectura: lo que no salga queda en el historial de cada factura y en el registro.
+    try {
+      const rem = await rematarFacturasDeRecibos(db, empresa, { jsPDF, qr: modulosQr, correo: { resendKey: Deno.env.get('RESEND_API_KEY'),
+        buzonDePruebas: Deno.env.get('CORREO_BUZON_PRUEBAS'), abiertos: Deno.env.get('CORREO_MARCA_ABIERTOS') } })
+      if (rem.fallos.length) console.error('[conta-gocardless-leer] facturas de los recibos:', rem.fallos.join(' · '))
+    } catch (e) { console.error('[conta-gocardless-leer] facturas de los recibos:', e instanceof Error ? e.message : String(e)) }
     return { frase, lee: true, mandatosVivos: plan.resumen.mandatosVivos, lineas: plan.resumen.lineasActivas, alMes: aEuros(plan.resumen.alMesCent),
       convertidas, noConvertidas: plan.noConvertidas.length, diferencias: dif.diferencias.length,
       casados: { porNif: plan.parejas.filter((p) => p.emisor === empresa && p.por === 'nif').length, porCorreo: plan.parejas.filter((p) => p.emisor === empresa && p.por === 'correo').length } }
@@ -240,7 +294,8 @@ Deno.serve(async (req) => {
       if (error) return json(400, { error: error.message })
       return json(200, { ok: true, ...(await leer(admin, empresa, 'conexion', quien)) })
     }
-    if (cuerpo.accion === 'leer') return json(200, { ok: true, ...(await leer(admin, empresa, esCron ? 'cada_noche' : 'persona', quien)) })
+    // G01d · La relectura que lanza un aviso al instante (conta-gocardless-aviso, con el secreto del servidor) se apunta «por aviso».
+    if (cuerpo.accion === 'leer') return json(200, { ok: true, ...(await leer(admin, empresa, esCron ? (cuerpo.por === 'aviso' ? 'aviso' : 'cada_noche') : 'persona', quien)) })
     return json(400, { error: 'Acción: conectar o leer.' })
   } catch (e) {
     // En el registro, el qué y nunca el token (T11).

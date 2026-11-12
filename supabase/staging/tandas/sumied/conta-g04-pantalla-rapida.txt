@@ -1,0 +1,5 @@
+# G04 · la 2308 (la pantalla de Clientes en una sola llamada) y su prueba
+# (ROLLBACK, datos inventados): lo mismo que leer las tablas y las vistas con
+# la RLS, nada con otra cuenta, y la vuelta atrás.
+supabase/migrations/20261108T2308_g04_pantalla_rapida.sql
+supabase/staging/sql/20261108_g04_pantalla_rapida_prueba.sql

@@ -4,8 +4,8 @@
 import { describe, expect, it } from 'vitest'
 import { casar, type ClienteParaCasar, type FichaParaCasar } from '../../../../../supabase/functions/conta-gocardless-leer/casado'
 
-const ficha = (bitrixId: string, extra: Partial<FichaParaCasar> = {}): FichaParaCasar => ({
-  bitrixId, nombre: `CLIENTE PRUEBA ${bitrixId}`, nif: null, correos: [], situacion: 'activo', formaPago: null, emisorSegunBitrix: null, ...extra,
+const ficha = (claveFicha: string, extra: Partial<FichaParaCasar> = {}): FichaParaCasar => ({
+  claveFicha, nombre: `CLIENTE PRUEBA ${claveFicha}`, nif: null, correos: [], situacion: 'activo', formaPago: null, emisorSegunCrm: null, ...extra,
 })
 const cliente = (emisor: string, id: string, extra: Partial<ClienteParaCasar> = {}): ClienteParaCasar => ({
   emisor, id, nombre: `Cliente ${id}`, nif: null, correo: null, mandatosVivos: 1, suscripcionesActivas: 1, ...extra,
@@ -16,7 +16,7 @@ const nombre = (e: string) => NOMBRES[e] ?? e
 describe('G01 · casado de clientes', () => {
   it('casa por NIF', () => {
     const r = casar([ficha('1', { nif: 'B00000001' })], [cliente('a', 'CU1', { nif: 'B00000001' })], nombre)
-    expect(r.parejas).toEqual([{ bitrixId: '1', emisor: 'a', clienteGcId: 'CU1', por: 'nif' }])
+    expect(r.parejas).toEqual([{ claveFicha: '1', emisor: 'a', clienteGcId: 'CU1', por: 'nif' }])
     expect(r.diferencias).toEqual([])
   })
 
@@ -24,17 +24,17 @@ describe('G01 · casado de clientes', () => {
     const r = casar(
       [ficha('1', { nif: 'B00000001', correos: ['uno@prueba.test'] })],
       [cliente('a', 'CU1', { nif: 'B00000002', correo: 'uno@prueba.test' })], nombre)
-    expect(r.parejas).toEqual([{ bitrixId: '1', emisor: 'a', clienteGcId: 'CU1', por: 'correo' }])
-    expect(r.diferencias).toEqual([{ tipo: 'nif_distinto', bitrixId: '1', emisor: 'a', clienteGcId: 'CU1',
+    expect(r.parejas).toEqual([{ claveFicha: '1', emisor: 'a', clienteGcId: 'CU1', por: 'correo' }])
+    expect(r.diferencias).toEqual([{ tipo: 'nif_distinto', claveFicha: '1', emisor: 'a', clienteGcId: 'CU1',
       porque: 'Casado por el correo: Bitrix24 dice NIF B00000001 y GoCardless B00000002.' }])
   })
 
   it('un cliente en la cuenta de B que en Bitrix24 dice A: el emisor es B y sale la diferencia', () => {
     const r = casar(
-      [ficha('1', { nif: 'B00000001', formaPago: 'Emisor A', emisorSegunBitrix: 'a' })],
+      [ficha('1', { nif: 'B00000001', formaPago: 'Emisor A', emisorSegunCrm: 'a' })],
       [cliente('b', 'CU7', { nif: 'B00000001' })], nombre)
     expect(r.parejas[0]).toMatchObject({ emisor: 'b' })
-    expect(r.diferencias).toEqual([{ tipo: 'emisor_distinto', bitrixId: '1', emisor: 'b', clienteGcId: 'CU7',
+    expect(r.diferencias).toEqual([{ tipo: 'emisor_distinto', claveFicha: '1', emisor: 'b', clienteGcId: 'CU7',
       porque: 'Bitrix24 dice que paga a EMISOR A DE PRUEBA, S.L. («Emisor A») y GoCardless le cobra desde Emisor B de prueba.' }])
   })
 
@@ -48,15 +48,15 @@ describe('G01 · casado de clientes', () => {
       [ficha('1', { nif: 'B00000001' }), ficha('2', { nif: 'B00000002', situacion: 'baja' })],
       [cliente('a', 'CU5', { nif: 'B00000005' }), cliente('a', 'CU6', { nif: 'B00000006', mandatosVivos: 0, suscripcionesActivas: 0 })], nombre)
     expect(r.parejas).toEqual([])
-    expect(r.diferencias.map((d) => [d.tipo, d.bitrixId ?? d.clienteGcId])).toEqual([
+    expect(r.diferencias.map((d) => [d.tipo, d.claveFicha ?? d.clienteGcId])).toEqual([
       ['gocardless_sin_ficha', 'CU5'],
-      ['bitrix_sin_cobro', '1'],
+      ['crm_sin_cobro', '1'],
     ])
   })
 
   it('casado pero sin cobro mensual también es «en Bitrix24 sin cobro», con otra frase', () => {
     const r = casar([ficha('1', { nif: 'B00000001' })], [cliente('a', 'CU1', { nif: 'B00000001', suscripcionesActivas: 0 })], nombre)
-    expect(r.diferencias).toEqual([{ tipo: 'bitrix_sin_cobro', bitrixId: '1', emisor: null, clienteGcId: null,
+    expect(r.diferencias).toEqual([{ tipo: 'crm_sin_cobro', claveFicha: '1', emisor: null, clienteGcId: null,
       porque: '«CLIENTE PRUEBA 1» está activo en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.' }])
   })
 
@@ -64,6 +64,6 @@ describe('G01 · casado de clientes', () => {
     const r = casar([ficha('1', { nif: 'B00000001' }), ficha('2', { nif: 'B00000001' })],
       [cliente('a', 'CU1', { nif: 'B00000001' }), cliente('b', 'CU2', { nif: 'B00000001' })], nombre)
     expect(r.parejas).toEqual([])
-    expect(r.diferencias.filter((d) => d.tipo === 'nif_repetido_en_bitrix')).toHaveLength(1)
+    expect(r.diferencias.filter((d) => d.tipo === 'nif_repetido_en_crm')).toHaveLength(1)
   })
 })

@@ -1,0 +1,3 @@
+# GB · nº 9, punto 2 · Nivel y precio especial desde la pestaña: la 2250 y su prueba (ROLLBACK). Va después de la 2235.
+supabase/migrations/20261109T2250_gb_pestana_tarifa.sql
+supabase/staging/sql/20261109_gb_pestana_tarifa_prueba.sql

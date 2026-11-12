@@ -1,0 +1,3 @@
+# GB · nº 13, punto 2 · Los choques con Bitrix24 a «Pendiente de revisar»: la 0050 y su prueba (ROLLBACK).
+supabase/migrations/20261110T0050_gb_bitrix_choques.sql
+supabase/staging/sql/20261110_gb_bitrix_choques_prueba.sql

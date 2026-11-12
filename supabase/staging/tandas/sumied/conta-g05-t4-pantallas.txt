@@ -1,0 +1,12 @@
+# G05 · T4 · La 1344 (el «Qué incluye» de cada servicio y la cuenta del mandato,
+# para el modelo de factura «Sumied»). Su prueba (ROLLBACK, datos inventados, en
+# la cuenta A) ensaya, guarda y vacía el «Qué incluye», mira que otra cuenta no
+# puede y que la pantalla lo devuelve, y prueba la vuelta atrás. Y la 1403 (la
+# ficha de la factura de un recibo, en una lectura), con un recibo inventado; y la
+# 1426 (el ingreso de GoCardless casado en Bancos), con un pago inventado; y la
+# 1500 (parar un recibo desde el portal y deshacerlo).
+supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
+supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
+supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
+supabase/migrations/20261109T1500_g05_t4_parar_recibo.sql
+supabase/staging/sql/20261109_g05_t4_prueba.sql

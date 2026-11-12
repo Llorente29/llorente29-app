@@ -1,0 +1,12 @@
+# G05 · Un mandato en pending_submission ya está firmado (nº 90). Rama
+# conta/g05-mandato-firmado. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. El real lo lanza Julio.
+#
+#   1631  CAMBIA EN CALIENTE conta_lista_que_hacer (la misma firma, con su
+#         respaldo y su prueba de staging): «Mandatos por firmar» cuenta solo los
+#         que esperan la aprobación del cliente (pending_customer_approval); en
+#         pending_submission o submitted ya están firmados.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-mandato-firmado.sql
+supabase/migrations/20261110T1631_g05_mandato_firmado.sql

@@ -1,0 +1,15 @@
+# G01b · La unión de las fichas repetidas de Bitrix24 (Julio, 07/11, tras el
+# recuento de repetidos). Rama conta/g01b-union-fichas. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar.
+#
+#   1110  Cambia en caliente (con su prueba de staging): el CHECK de los tipos
+#         de diferencia (solo amplía) y confirmar el mapa (no deja un campo con
+#         una contraseña o un certificado; conserva la unión). Añade la tabla
+#         de fichas (rellena con las de ahora), guardar los clientes uno a uno
+#         (uno que falla no tumba la lectura) y aplicar la unión.
+#
+# No une nada por sí sola: la unión la aplica una persona en Ajustes › Cobros ›
+# Bitrix24 después de ver el ensayo en PDF. No lee ni escribe nada en Bitrix24.
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g01b-union-fichas.sql
+supabase/migrations/20261107T1110_g01b_union_fichas.sql

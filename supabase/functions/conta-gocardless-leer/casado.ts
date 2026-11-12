@@ -15,13 +15,13 @@
 
 /** Lo que el casado necesita de una ficha de Bitrix24 (la de conta-bitrix-leer/mapa.ts lo cumple). */
 export interface FichaParaCasar {
-  bitrixId: string
+  claveFicha: string
   nombre: string
   nif: string | null
   correos: string[]
-  situacion: 'activo' | 'baja' | 'moroso' | 'solo_renta' | null
+  situacion: 'activo' | 'baja' | 'moroso' | 'solo_renta' | 'sin_clasificar' | null
   formaPago: string | null
-  emisorSegunBitrix: string | null
+  emisorSegunCrm: string | null
 }
 
 /** Un cliente de una cuenta de GoCardless, con lo que tiene vivo. */
@@ -36,30 +36,34 @@ export interface ClienteParaCasar {
 }
 
 export interface Pareja {
-  bitrixId: string
+  claveFicha: string
   emisor: string
   clienteGcId: string
   por: 'nif' | 'correo'
 }
 
 export type TipoDiferencia =
-  | 'bitrix_sin_cobro'
+  | 'crm_sin_cobro'
   | 'gocardless_sin_ficha'
   | 'emisor_distinto'
-  | 'nif_repetido_en_bitrix'
-  | 'correo_repetido_en_bitrix'
+  | 'nif_repetido_en_crm'
+  | 'correo_repetido_en_crm'
   | 'nif_distinto'
 
 export interface Diferencia {
   tipo: TipoDiferencia
-  bitrixId: string | null
+  claveFicha: string | null
   emisor: string | null
   clienteGcId: string | null
   porque: string
 }
 
-/** Una ficha que se cobra: activa o morosa. Las de baja y «solo renta» no esperan cobro mensual. */
-export const SE_COBRA: readonly string[] = ['activo', 'moroso']
+/**
+ * Una ficha que se cobra: solo la activa (Julio, G01b, 07/11: lo que no sea
+ * activo, también la morosa y la «sin clasificar», no cuenta para «Activos en
+ * Bitrix24 sin cobro»).
+ */
+export const SE_COBRA: readonly string[] = ['activo']
 
 export function casar(
   fichas: FichaParaCasar[],
@@ -88,7 +92,7 @@ export function casar(
       else if (v.length > 1) {
         if (!avisadoNif.has(c.nif)) {
           avisadoNif.add(c.nif)
-          diferencias.push({ tipo: 'nif_repetido_en_bitrix', bitrixId: null, emisor: c.emisor, clienteGcId: c.id,
+          diferencias.push({ tipo: 'nif_repetido_en_crm', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
             porque: `El NIF ${c.nif} está en ${v.length} fichas de Bitrix24 (${v.map((x) => x.nombre).join(', ')}): no se sabe cuál es.` })
         }
         continue
@@ -100,7 +104,7 @@ export function casar(
       else if (v.length > 1) {
         if (!avisadoCorreo.has(c.correo)) {
           avisadoCorreo.add(c.correo)
-          diferencias.push({ tipo: 'correo_repetido_en_bitrix', bitrixId: null, emisor: c.emisor, clienteGcId: c.id,
+          diferencias.push({ tipo: 'correo_repetido_en_crm', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
             porque: `El correo ${c.correo} está en ${v.length} fichas de Bitrix24: no se sabe cuál es.` })
         }
         continue
@@ -108,20 +112,20 @@ export function casar(
     }
     if (!ficha || !por) {
       if (c.mandatosVivos > 0 || c.suscripcionesActivas > 0) {
-        diferencias.push({ tipo: 'gocardless_sin_ficha', bitrixId: null, emisor: c.emisor, clienteGcId: c.id,
+        diferencias.push({ tipo: 'gocardless_sin_ficha', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
           porque: `«${c.nombre}» está en GoCardless de ${nombreEmisor(c.emisor)} y no tiene ficha en Bitrix24 con su NIF${c.correo ? ' ni con su correo' : ''}.` })
       }
       continue
     }
-    parejas.push({ bitrixId: ficha.bitrixId, emisor: c.emisor, clienteGcId: c.id, por })
-    casadas.add(ficha.bitrixId)
+    parejas.push({ claveFicha: ficha.claveFicha, emisor: c.emisor, clienteGcId: c.id, por })
+    casadas.add(ficha.claveFicha)
     if (por === 'correo' && c.nif && ficha.nif && c.nif !== ficha.nif) {
-      diferencias.push({ tipo: 'nif_distinto', bitrixId: ficha.bitrixId, emisor: c.emisor, clienteGcId: c.id,
+      diferencias.push({ tipo: 'nif_distinto', claveFicha: ficha.claveFicha, emisor: c.emisor, clienteGcId: c.id,
         porque: `Casado por el correo: Bitrix24 dice NIF ${ficha.nif} y GoCardless ${c.nif}.` })
     }
-    if (ficha.emisorSegunBitrix && ficha.emisorSegunBitrix !== c.emisor && c.suscripcionesActivas > 0) {
-      diferencias.push({ tipo: 'emisor_distinto', bitrixId: ficha.bitrixId, emisor: c.emisor, clienteGcId: c.id,
-        porque: `Bitrix24 dice que paga a ${nombreEmisor(ficha.emisorSegunBitrix)} («${ficha.formaPago}») y GoCardless le cobra desde ${nombreEmisor(c.emisor)}.` })
+    if (ficha.emisorSegunCrm && ficha.emisorSegunCrm !== c.emisor && c.suscripcionesActivas > 0) {
+      diferencias.push({ tipo: 'emisor_distinto', claveFicha: ficha.claveFicha, emisor: c.emisor, clienteGcId: c.id,
+        porque: `Bitrix24 dice que paga a ${nombreEmisor(ficha.emisorSegunCrm)} («${ficha.formaPago}») y GoCardless le cobra desde ${nombreEmisor(c.emisor)}.` })
     }
   }
 
@@ -129,13 +133,13 @@ export function casar(
   const conCobro = new Set(parejas.filter((p) => {
     const c = clientes.find((x) => x.id === p.clienteGcId && x.emisor === p.emisor)
     return c ? c.suscripcionesActivas > 0 : false
-  }).map((p) => p.bitrixId))
+  }).map((p) => p.claveFicha))
   for (const f of fichas) {
-    if (!f.situacion || !SE_COBRA.includes(f.situacion) || conCobro.has(f.bitrixId)) continue
-    diferencias.push({ tipo: 'bitrix_sin_cobro', bitrixId: f.bitrixId, emisor: f.emisorSegunBitrix, clienteGcId: null,
-      porque: casadas.has(f.bitrixId)
-        ? `«${f.nombre}» está ${f.situacion === 'moroso' ? 'moroso' : 'activo'} en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.`
-        : `«${f.nombre}» está ${f.situacion === 'moroso' ? 'moroso' : 'activo'} en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).` })
+    if (!f.situacion || !SE_COBRA.includes(f.situacion) || conCobro.has(f.claveFicha)) continue
+    diferencias.push({ tipo: 'crm_sin_cobro', claveFicha: f.claveFicha, emisor: f.emisorSegunCrm, clienteGcId: null,
+      porque: casadas.has(f.claveFicha)
+        ? `«${f.nombre}» está activo en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.`
+        : `«${f.nombre}» está activo en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).` })
   }
   return { parejas, diferencias }
 }

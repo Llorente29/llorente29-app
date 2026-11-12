@@ -10,13 +10,21 @@
 //     una vez el token de solo lectura (GoCardless › Developers › Create ›
 //     Access token, de solo lectura).
 //   · la tarjeta «Bitrix24 · tus clientes» (uno para toda la cuenta): pegar una
-//     vez la dirección que da Bitrix24 y «Leer ahora».
+//     vez la dirección que da Bitrix24 y «Leer ahora»; y, conectado, «Qué es cada
+//     campo» (G01b): el mapa que una persona confirma.
 // Cada botón dice lo que ha hecho, con su contenido (regla 8): «Conectada la
 // cuenta de GoCardless de QBO INTEGRITY S.L.: 208 mandatos activos y …».
 
 import { useState } from 'react'
 import { Boton, Campo, Selector, Tarjeta, Texto } from '@/modules/conta/diseno'
 import type { ConexionBitrix, ConexionGc } from '@/modules/conta/services/gestoriaService'
+import type { MapaBitrix } from './queEsCadaCampo'
+import { CamposDeBitrix } from './CamposDeBitrix'
+import { UnionDeFichas } from './UnionDeFichas'
+import { AlInstante } from '@/modules/conta/avisos/AlInstante'
+import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import type { DatosEnsayo } from './pdfUnion'
+import type { MapaContactos } from '../../../../supabase/functions/conta-bitrix-leer/contactosClientes'
 
 const fechaHora = (iso: string | null) => {
   if (!iso) return null
@@ -32,6 +40,13 @@ export interface AccionesGestoria {
   reintentos: (emisor: string, encendido: boolean) => Promise<string>
   conectarBitrix: (entorno: 'real' | 'pruebas', url: string) => Promise<string>
   leerBitrix: () => Promise<string>
+  /** G01b · Confirmar el mapa en «Qué es cada campo» y leer de nuevo. */
+  confirmarMapa: (mapa: MapaBitrix) => Promise<string>
+  /** G01b · El ensayo de la unión (los datos del PDF) y aplicarla y leer. */
+  ensayoUnion: () => Promise<DatosEnsayo>
+  aplicarUnion: () => Promise<string>
+  /** G01c · Confirmar el mapa de contactos y leer (llega con la base de los contactos). */
+  confirmarMapaContactos?: (mapa: MapaContactos) => Promise<string>
 }
 
 export function Interruptor({ encendido, alCambiar, etiqueta, descrito, disabled }: {
@@ -57,7 +72,10 @@ function Estado({ conectada, entorno }: { conectada: boolean; entorno: 'real' | 
 }
 
 function ConectarGc({ emisor, nombre, alConectar }: { emisor: string; nombre: string; alConectar: AccionesGestoria['conectarGc'] }) {
-  const [entorno, setEntorno] = useState<'real' | 'pruebas'>('real')
+  // GD · Una cuenta de demostración solo lee los sistemas de pruebas: el entorno sale ya en «pruebas».
+  const { esDemo } = useCuentaConta()
+  const [elegido, setEntorno] = useState<'real' | 'pruebas' | null>(null)
+  const entorno: 'real' | 'pruebas' = elegido ?? (esDemo ? 'pruebas' : 'real')
   const [token, setToken] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
@@ -119,6 +137,7 @@ export function TarjetaGocardless({ emisor, nombre, c, acciones }: { emisor: str
               alCambiar={(v) => void hacer(async () => { const f = await acciones.reintentos(emisor, v); setReintentos(v); return f })} />
           </div>
           <div><Boton onClick={() => void hacer(() => acciones.leerGc(emisor))} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
+          <AlInstante origen="gocardless" empresa={emisor} nombre={`GoCardless de ${nombre}`} entorno={c?.entorno} />
         </div>
       )}
       <Aviso a={aviso} />
@@ -127,7 +146,10 @@ export function TarjetaGocardless({ emisor, nombre, c, acciones }: { emisor: str
 }
 
 export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; acciones: AccionesGestoria }) {
-  const [entorno, setEntorno] = useState<'real' | 'pruebas'>('real')
+  // GD · Una cuenta de demostración solo lee los sistemas de pruebas: el entorno sale ya en «pruebas».
+  const { esDemo } = useCuentaConta()
+  const [elegido, setEntorno] = useState<'real' | 'pruebas' | null>(null)
+  const entorno: 'real' | 'pruebas' = elegido ?? (esDemo ? 'pruebas' : 'real')
   const [url, setUrl] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState<{ ok: boolean; texto: string } | null>(null)
@@ -137,7 +159,7 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
   }
   const conectada = !!c?.conectada
   return (
-    <Tarjeta titulo="Bitrix24 · tus clientes"
+    <Tarjeta titulo={`Tu CRM · ${c?.nombre ?? 'Bitrix24'}`}
       apoyo="La ficha de cada cliente: quién es, si está activo, qué servicios tiene y con qué empresa se le factura. Uno para todas tus empresas."
       accion={<Estado conectada={conectada} entorno={c?.entorno ?? 'real'} />}>
       {conectada ? (
@@ -148,6 +170,11 @@ export function TarjetaBitrix({ c, acciones }: { c: ConexionBitrix | null; accio
             <div><dt>Clientes leídos</dt><dd className="cxg-cifra">{c!.empresasLeidas == null ? '—' : miles(c!.empresasLeidas)}</dd></div>
           </dl>
           <div><Boton onClick={() => void hacer(acciones.leerBitrix)} disabled={ocupado}>{ocupado ? 'Leyendo…' : 'Leer ahora'}</Boton></div>
+          <AlInstante origen="crm" crm={c!.crm} nombre={c!.nombre} />
+          <CamposDeBitrix empresas={{ mapa: c!.mapa, medidos: c!.medidos, alConfirmar: acciones.confirmarMapa }}
+            contactos={{ mapa: c!.contactos?.mapa ?? null, medidos: c!.contactos?.medidos ?? null, resumen: c!.contactos?.resumen ?? null, leidos: c!.contactos?.leidos ?? null,
+              alConfirmar: acciones.confirmarMapaContactos ?? (async () => { throw new Error('Confirmar el mapa de contactos aún no está publicado en este entorno.') }) }} />
+          <UnionDeFichas mapa={c!.mapa} alEnsayar={acciones.ensayoUnion} alAplicar={acciones.aplicarUnion} />
         </div>
       ) : (
         <div className="pg-dialogo-campos">

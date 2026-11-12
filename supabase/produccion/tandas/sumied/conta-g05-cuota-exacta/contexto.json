@@ -1,0 +1,22 @@
+{
+ "_que": "G05 · Cuota exacta · contexto de producción, medido en SOLO LECTURA el 09/11 a las 21:05Z (analizar.mjs sql-contexto, con CAMINO_TABLAS y CAMINO_FUNCIONES del workflow). La 2203 añade _conta_cobro_cuota_exacta (no existe) y reemplaza, con la misma firma, _conta_cobro_facturar y _conta_cobro_facturar_portal (existen, sin sobrecargas). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T21:05Z",
+ "tanda": {
+  "supabase/migrations/20261109T2203_g05_cuota_exacta.sql": "97d308e58af59ff03e8a7f0112bf9b4e"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public._conta_cobro_facturar(uuid)",
+   "public._conta_cobro_facturar_portal(uuid,date,text,text,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

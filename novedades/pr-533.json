@@ -1,0 +1,11 @@
+[
+ {
+  "id": "533-1",
+  "pr": 533,
+  "fecha": "2026-11-09T17:19:07Z",
+  "producto": "sumied",
+  "apartado": "Facturas del cobro",
+  "frase": "en una cuenta de demostración, la factura de un recibo se manda siempre y solo al buzón de pruebas, también con los correos de facturas aún cerrados.",
+  "ruta": null
+ }
+]

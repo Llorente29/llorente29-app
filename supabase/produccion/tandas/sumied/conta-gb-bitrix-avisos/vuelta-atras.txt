@@ -1,0 +1,3 @@
+# GB · la vuelta atrás de la 0060: fuera el cron, las funciones y la tabla (las tareas ya puestas se quedan en Bitrix24).
+cuenta: scripts/conta/produccion/cuentas/gb-bitrix-avisos.sql
+supabase/vuelta-atras/20261110T0060_gb_bitrix_avisos.down.sql

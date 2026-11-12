@@ -1,0 +1,24 @@
+# GP · El portal del cliente de la gestoría · Tarea 2, la base (Code 3; Julio,
+# nº 2 y nº 3, 09/11). Rama conta/gp-portal-cliente. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar.
+#
+#   1530  SOLO AÑADE: nueve tablas conta_portal_* con su RLS (la gestoría ve
+#         las de su cuenta; la persona del portal, solo las de su cliente);
+#         cinco columnas que admiten nulos en conta_solicitud (DNI o NIE,
+#         fecha, contrato, horas y quién la pidió), con CHECK solo sobre ellas;
+#         funciones nuevas (una lectura por pantalla, lo que hace el cliente,
+#         lo que hace la gestoría y lo que solo hace el servidor); el almacén
+#         privado conta-portal y dos políticas suyas en storage.objects.
+#
+#   1720  CAMBIA EN CALIENTE public.conta_portal_cuenta (la misma firma): lee
+#         la cuenta de cargo con los nombres de Code 1 (cuenta_final,
+#         cuenta_pais y banco). Y AÑADE permisos explícitos a service_role.
+#         Declarada en su cabecera con su prueba. (La 1530 ya está aplicada:
+#         no se reaplica.)
+#
+# No toca datos. No lee ni escribe en
+# GoCardless, Stripe ni el CRM. Nada en el camino del pedido. El real lo lanza
+# Julio.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-base.sql
+supabase/migrations/20261109T1530_gp_portal_base.sql
+supabase/migrations/20261109T1720_gp_portal_cuenta.sql

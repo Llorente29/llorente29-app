@@ -261,6 +261,10 @@ export const CONTA = {
     /** G01 · Ventas › Clientes y cuotas (solo asesoría): los clientes de la gestoría, sus tarifas y lo que cobra GoCardless. */
     clientesCuotas: 'ventas/clientes-y-cuotas',
     tarifasGestoria: 'ventas/clientes-y-cuotas/tarifas',
+    /** G04 · La ficha completa de un cliente de la gestoría (con la empresa que le factura). */
+    clienteGestoria: 'ventas/clientes-y-cuotas/cliente',
+    /** G05 · «Revisar el cobro» del mes de una empresa de la gestoría: revisar, enviar a GoCardless y ver cómo va. */
+    cobroGestoria: 'ventas/clientes-y-cuotas/cobro',
     liquidacionPlataforma: 'ventas/liquidaciones/plataforma/:clave',
     /** S01j·2 · La ficha de UNA liquidación de plataforma: sus cifras, su factura de comisión y el correo del que salió. */
     liquidacionFicha: 'ventas/liquidaciones/liquidacion/:id',
@@ -312,7 +316,7 @@ export const CONTA = {
  * su aviso «aún no» (`hueco`), como pide el encargo para Certificados: el
  * índice dice lo que habrá, y la entrada dice que todavía no está.
  */
-export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string }
+export interface EntradaAjustes { id: string; etiqueta: string; ruta: string; hueco?: string; /** GD · Solo en una cuenta de demostración. */ soloDemo?: boolean }
 export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
   {
     grupo: 'Empresa',
@@ -356,6 +360,8 @@ export const INDICE_AJUSTES: { grupo: string; entradas: EntradaAjustes[] }[] = [
     entradas: [
       // DM1 · PR 1 (30/10): ya no es un hueco. Quién entra e «Invitar a una persona» (tablero 4).
       { id: 'personas', etiqueta: 'Usuarios', ruta: 'ajustes/personas' },
+      // GD · Tu cuenta, solo en una cuenta de demostración: «Volver a empezar» (Julio, nº51).
+      { id: 'cuenta', etiqueta: 'Tu cuenta', ruta: 'ajustes/cuenta', soloDemo: true },
       { id: 'avisos', etiqueta: 'Avisos', ruta: 'ajustes/avisos', hueco: `Qué te avisa ${MARCA.nombre} y por dónde llega en un encargo propio.` },
       { id: 'folvy', etiqueta: `Lo que ha hecho ${MARCA.nombre}`, ruta: 'ajustes/folvy' },
     ],
@@ -372,9 +378,8 @@ export const ENTRADA_DE_APARTADO: Record<string, string> = {
 }
 
 /** Las entradas del índice de Ajustes que se pintan: en el producto vendido solo, sin las que dicen «aún no». */
-export function indiceAjustes(solo = false): typeof INDICE_AJUSTES {
-  if (!solo) return INDICE_AJUSTES
-  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !e.hueco) })).filter((g) => g.entradas.length > 0)
+export function indiceAjustes(solo = false, demo = false): typeof INDICE_AJUSTES {
+  return INDICE_AJUSTES.map((g) => ({ ...g, entradas: g.entradas.filter((e) => !(solo && e.hueco) && (demo || !e.soloDemo)) })).filter((g) => g.entradas.length > 0)
 }
 
 /** N1 · La ficha nueva de una persona en Sumied › Laboral. */
@@ -467,6 +472,15 @@ export const rutaCobros = (pestana?: string): string => `${rutaConta(CONTA.rutas
 export const rutaRemesaCobros = (remesaId: string): string => rutaConta(CONTA.rutas.remesaCobros, { remesaId })
 export const rutaClientesCuotas = (): string => rutaConta(CONTA.rutas.clientesCuotas)
 export const rutaTarifasGestoria = (): string => rutaConta(CONTA.rutas.tarifasGestoria)
+export const rutaCobroGestoria = (empresa?: string | null, mes?: string | null): string => {
+  const q = new URLSearchParams()
+  if (empresa) q.set('empresa', empresa)
+  if (mes) q.set('mes', mes)
+  const t = q.toString()
+  return `${rutaConta(CONTA.rutas.cobroGestoria)}${t ? `?${t}` : ''}`
+}
+export const rutaClienteGestoria = (cliente: string, empresa: string | null): string =>
+  `${rutaConta(CONTA.rutas.clienteGestoria)}/${cliente}${empresa ? `?${new URLSearchParams({ empresa })}` : ''}`
 export const rutaLiquidacion = (liqId: string): string => rutaConta(CONTA.rutas.liquidacion, { liqId })
 /** I01b · Impuestos: el calendario, o una de sus pestañas (presentados, sociedades, certificados). */
 export const rutaImpuestos = (pestana?: string): string => (pestana ? rutaConta(CONTA.rutas.impuestosPestana, { pestana }) : rutaConta(CONTA.rutas.impuestos))

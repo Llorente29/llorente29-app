@@ -1,0 +1,20 @@
+[
+ {
+  "id": "504-1",
+  "pr": 504,
+  "fecha": "2026-11-07T21:26:41Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "confirmar «Qué es cada campo» ya no quita la unión de las fichas repetidas, y el recuento de contactos reparte con la misma regla que la lectura.",
+  "ruta": null
+ },
+ {
+  "id": "504-2",
+  "pr": 504,
+  "fecha": "2026-11-07T21:26:41Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "la lectura de GoCardless dice cuántas suscripciones activas siguen sin línea porque su cliente aún no está casado con uno de Sumied.",
+  "ruta": null
+ }
+]

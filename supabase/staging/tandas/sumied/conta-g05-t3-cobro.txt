@@ -1,0 +1,8 @@
+# G05 · T3 · El cobro del mes y su factura (1006 y 1007) y el despertador de las
+# pruebas de las demos (1021). Su prueba (ROLLBACK, datos inventados, en la
+# cuenta A) recorre preparar, revisar, enviar, confirmar → la 2026/1/141 con sus
+# asientos, devolver y retroceder; otra cuenta no ve nada; y la vuelta atrás.
+supabase/migrations/20261109T1006_g05_cobro_base.sql
+supabase/migrations/20261109T1007_g05_numero_con_formato.sql
+supabase/migrations/20261109T1021_g05_verifactu_demos.sql
+supabase/staging/sql/20261109_g05_cobro_prueba.sql

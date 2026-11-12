@@ -1,0 +1,187 @@
+# .github/workflows/g01d-staging.yml
+#
+# G01d · «Al instante» en STAGING, con el Bitrix24 de pruebas y el sandbox de
+# GoCardless (Julio, nº19). Solo a mano. Solo staging: nunca producción.
+#
+#   preparar   La cuenta de pruebas «Asesoría G01d de Pruebas» (fuera de la
+#              plantilla de la e2e: ningún carril se lleva su conexión), su
+#              empresa en sector Gestoría y su administración; el CRM conectado
+#              con el webhook entrante (entorno pruebas) y sus dos mapas
+#              confirmados; GoCardless conectado con el token de solo lectura;
+#              el código y el secreto de «Al instante» en Vault, encendidos y
+#              probados. Lo hace como una persona desde Ajustes › Cobros: las
+#              mismas funciones y las mismas llamadas a la base.
+#   huella     Dos «Leer ahora» seguidos con las funciones publicadas y la
+#              huella de lo guardado después de cada uno
+#              (scripts/conta/staging/g01d-huella-lectura.sql): iguales línea a
+#              línea, o en rojo.
+#   comprobar  Un aviso con el código malo a cada función (tienen que
+#              contestar 401); un aviso AUTÉNTICO de verdad a cada una, con el
+#              código de Bitrix24 y la firma de GoCardless (tienen que
+#              contestar 200, quedar en la cola y aplicarse); y la cola.
+#
+# Los secretos (G01D_*) no se escriben nunca: se dice si están y, de la
+# dirección de Bitrix24, solo el nombre del portal. La contraseña de la
+# administración de pruebas es de un solo uso, de esta ejecución.
+# No escribe nada en Bitrix24 ni en GoCardless: solo lee, con las funciones de
+# siempre.
+
+name: G01d · Al instante en staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      paso:
+        description: 'preparar = conectar y encender; huella = dos lecturas seguidas, iguales; comprobar = avisos falsos rechazados, auténticos aplicados, y la cola'
+        required: true
+        type: choice
+        options: [preparar, huella, comprobar]
+
+concurrency:
+  group: g01d-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+# Con «shell: bash», GitHub corre cada paso con «-eo pipefail»: un guion que
+# falla dentro de «… | tee» pone el paso en rojo (sin esto, el tee lo tapaba).
+defaults:
+  run:
+    shell: bash
+
+env:
+  PGCONNECT_TIMEOUT: '15'
+  STAGING_REF: oseymswjlzplqoxrfjzi
+  PROD_REF: xzmpnchlguibclvxyynt
+  # La clave pública de staging (la misma de e2e-staging-conta.yml): no es un secreto.
+  VITE_SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9zZXltc3dqbHpwbHFveHJmanppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA4ODYzNzUsImV4cCI6MjEwNjQ2MjM3NX0.xszvWohb2R7MWidy1ZsIL0IZg2E55aQSFRc1WX8A4js
+  CUENTA: 901d0000-0000-4000-8000-0000000000a0
+  PSQL: /usr/lib/postgresql/17/bin/psql
+
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Los secretos · están o faltan (sin enseñar ninguno)
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+          B24_ENTRANTE: ${{ secrets.G01D_B24_ENTRANTE_URL }}
+          B24_SALIDA: ${{ secrets.G01D_B24_SALIDA_TOKEN }}
+          GC_TOKEN: ${{ secrets.G01D_GC_SANDBOX_TOKEN }}
+          GC_SECRETO: ${{ secrets.G01D_GC_SANDBOX_WEBHOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          mal=0
+          for par in "STAGING_CONTA_DB_URL:DB_URL" "G01D_B24_ENTRANTE_URL:B24_ENTRANTE" "G01D_B24_SALIDA_TOKEN:B24_SALIDA" "G01D_GC_SANDBOX_TOKEN:GC_TOKEN" "G01D_GC_SANDBOX_WEBHOOK_SECRET:GC_SECRETO"; do
+            nombre=${par%%:*}; var=${par##*:}
+            if [ -n "${!var:-}" ]; then echo "✓ $nombre: está."; else echo "::error::Falta el secreto de Actions $nombre."; mal=1; fi
+          done
+          # De la dirección de Bitrix24 solo se enseña el portal; y tiene que ser la de un webhook entrante.
+          portal=$(python3 -c 'import os,re; m=re.match(r"^https://([A-Za-z0-9.-]+)/rest/[0-9]+/[A-Za-z0-9]+/?$", os.environ.get("B24_ENTRANTE","").strip()); print(m.group(1) if m else "")')
+          if [ -n "${B24_ENTRANTE:-}" ]; then
+            if [ -n "$portal" ]; then echo "  G01D_B24_ENTRANTE_URL es un webhook entrante del portal $portal."; else echo "::error::G01D_B24_ENTRANTE_URL no tiene la forma https://<portal>/rest/<número>/<clave>/."; mal=1; fi
+          fi
+          exit $mal
+
+      - name: Guarda 1 y 2 · el secreto apunta a staging-conta y no a producción
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["DB_URL"])
+          for parte in (os.environ["DB_URL"], u.password, u.username, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          PY
+          case "$DB_URL" in *"$PROD_REF"*) echo "::error::La URL apunta a PRODUCCIÓN."; exit 1 ;; esac
+          case "$DB_URL" in *"$STAGING_REF"*) echo "La URL es de staging-conta." ;; *) echo "::error::La URL no es de staging-conta."; exit 1 ;; esac
+
+      - name: Instalar psql 17
+        id: psql
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common >/dev/null
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y >/dev/null
+          sudo apt-get install -y -qq postgresql-client-17 >/dev/null
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias
+        run: npm ci
+
+      - name: La cuenta de pruebas, su sector y la contraseña de un solo uso
+        timeout-minutes: 10
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          CLAVE=$(openssl rand -base64 30 | tr -dc 'A-Za-z0-9' | head -c 28)
+          echo "::add-mask::$CLAVE"
+          echo "CLAVE_PRUEBAS=$CLAVE" >> "$GITHUB_ENV"
+          "$PSQL" "$DB_URL" -X -q -v ON_ERROR_STOP=1 -v clave="$CLAVE" -f scripts/conta/staging/g01d-cuenta.sql
+
+      - name: Preparar · conectar el CRM y GoCardless y encender «Al instante»
+        timeout-minutes: 10
+        if: inputs.paso == 'preparar'
+        env:
+          G01D_B24_ENTRANTE_URL: ${{ secrets.G01D_B24_ENTRANTE_URL }}
+          G01D_B24_SALIDA_TOKEN: ${{ secrets.G01D_B24_SALIDA_TOKEN }}
+          G01D_GC_SANDBOX_TOKEN: ${{ secrets.G01D_GC_SANDBOX_TOKEN }}
+          G01D_GC_SANDBOX_WEBHOOK_SECRET: ${{ secrets.G01D_GC_SANDBOX_WEBHOOK_SECRET }}
+        run: npx tsx scripts/conta/staging/g01d-staging.ts preparar | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Huella · dos «Leer ahora» seguidos, iguales línea a línea
+        timeout-minutes: 10
+        if: inputs.paso == 'huella'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          H=scripts/conta/staging/g01d-huella-lectura.sql
+          npx tsx scripts/conta/staging/g01d-staging.ts leer
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v cuenta="$CUENTA" -f "$H" > /tmp/huella-1.txt
+          npx tsx scripts/conta/staging/g01d-staging.ts leer
+          "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v cuenta="$CUENTA" -f "$H" > /tmp/huella-2.txt
+          { echo "## Huella de la lectura entera"; echo; echo '```'; echo "· Después de la 1.ª lectura"; cat /tmp/huella-1.txt; echo; echo "· Después de la 2.ª lectura"; cat /tmp/huella-2.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/huella-1.txt
+          if diff -u /tmp/huella-1.txt /tmp/huella-2.txt; then
+            echo "✓ Las dos huellas son iguales, línea a línea." | tee -a "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Las dos lecturas seguidas no dejan lo mismo (arriba, la diferencia)."; exit 1
+          fi
+
+      - name: Comprobar · los avisos que no son auténticos se rechazan
+        timeout-minutes: 10
+        if: inputs.paso == 'comprobar'
+        run: npx tsx scripts/conta/staging/g01d-staging.ts rechazos | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Comprobar · un aviso auténtico de verdad entra en la cola y se aplica
+        timeout-minutes: 10
+        if: inputs.paso == 'comprobar'
+        env:
+          G01D_B24_SALIDA_TOKEN: ${{ secrets.G01D_B24_SALIDA_TOKEN }}
+          G01D_GC_SANDBOX_WEBHOOK_SECRET: ${{ secrets.G01D_GC_SANDBOX_WEBHOOK_SECRET }}
+        run: npx tsx scripts/conta/staging/g01d-staging.ts autenticos | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: La cola de la cuenta de pruebas (solo lee)
+        timeout-minutes: 10
+        if: always() && steps.psql.outcome == 'success'
+        env:
+          DB_URL: ${{ secrets.STAGING_CONTA_DB_URL }}
+        run: |
+          set -euo pipefail
+          sleep 5
+          { echo "## La cola de avisos"; echo; echo '```'; "$PSQL" "$DB_URL" -X -A -v ON_ERROR_STOP=1 -v cuenta="$CUENTA" -f scripts/conta/staging/g01d-cola.sql; echo '```'; } | tee -a "$GITHUB_STEP_SUMMARY"

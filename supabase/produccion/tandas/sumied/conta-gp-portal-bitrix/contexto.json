@@ -1,0 +1,19 @@
+{
+ "_que": "GP · nº 17 · contexto de producción, medido en SOLO LECTURA el 09/11 a las 23:00Z (los objetivos de analizar.mjs: ninguna de las tres funciones existe). La 2345 añade tres funciones nuevas, solo para el servidor, que llaman sin cambiarlas a conta_portal_invitar, conta_portal_mensaje_enviar y conta_portal_mensajes_leidos (existen) y leen conta_crm.portal y conta_gestoria_ficha (existen). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T23:00Z",
+ "tanda": {
+  "supabase/migrations/20261109T2345_gp_portal_bitrix.sql": "8bfad6ecc2a7db84dbfcb9c2b74d8115"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

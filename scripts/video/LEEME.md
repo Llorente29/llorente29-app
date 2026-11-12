@@ -49,8 +49,11 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
   gesto del guion. Los subtítulos son esas mismas frases. **Para cambiar lo
   que se dice, se cambia aquí.**
 - `voz-elevenlabs.txt`: **la voz de los vídeos, y el único sitio donde está**:
-  el id de la voz de ElevenLabs (`bsEDAkNZWaEolZ7vEeVJ`, la que eligió Julio
-  el 03/11) y `modelo: v4`. Ninguna variable del repositorio la cambia.
+  el id de la voz de ElevenLabs (`TbcXaMnSerONT83CTICz`, Julio Clon, la que
+  eligió Julio el 10/11, nº99; antes, Abel, del 03/11) y `modelo: v4`. Ninguna
+  variable del repositorio la cambia. Cada frase de `frases.json` puede llevar
+  `voz`, cómo se escribe para que suene bien («Gou Cárdles»): los subtítulos
+  siguen con `texto`.
 - `voz_nube.py`: hace la voz con ElevenLabs, ANTES de grabar (el guion espera
   a que acabe cada frase antes del gesto siguiente, así nunca se pisan). La
   clave va en el secreto `VOZ_ELEVENLABS_KEY`; **sin él, el vídeo para en rojo**
@@ -85,3 +88,31 @@ commit sin historia que se reescribe en cada run; no es la rama de ningún PR):
 - **No se graba** el paso 1 del guion (el correo que llega): la empresa de
   prueba no tiene dirección de facturas y staging no recibe correo. Su
   subtítulo va sobre la factura ya leída.
+
+## GD · el vídeo para QBO (nº52 y nº56)
+
+`gd/qbo.mjs` y `.github/workflows/gd-video-qbo.yml`: Sumied para gestorías,
+grabado en la «Gestoría Demo» de **producción** con el usuario de Julio (un
+enlace de acceso generado en el servidor, sin correo), a 1440×900, sin voz y
+con rótulos. **Por escenas**: cada una deja `escenas/<id>.mp4` y
+`capturas/<id>.png` en `video-salida/gd-qbo`; para cambiar una se lanza el
+workflow con `escenas: 05b` y las demás se reutilizan. `modo: ensayo` no
+escribe nada; `modo: grabar` envía el cobro de la demo al sandbox (autorizado
+por Julio). Las maquetas (el portal y Sumied dentro de Bitrix24) son capturas
+del tablero, en `gd/maquetas/`, rotuladas «En construcción».
+
+**Las tomas de Julio (nº60).** Las escenas 5 (Al instante, en pantalla partida)
+y 7b (el buzón) no las graba el guion: son GIF que graba Claude desde el
+Chrome de Julio, en la rama `video-tomas/gd-qbo`, carpeta `tomas/`:
+`05-bitrix.gif`, `05-sumied.gif` y `07b-buzon.gif`. El guion les pone los
+rótulos; sin la toma, la escena queda como hueco y el registro lo dice. Para
+montarlas sin regrabar el resto: `escenas: 05,07b`. En «grabar» no se toca
+Bitrix24.
+
+**La escena 5, ya montada (nº61).** Las dos tomas de Julio (rama
+`conta/gd-video-clips`, commit 38cfc63) van recortadas en `gd/tomas/`:
+`05-bitrix.gif` (la ficha con «Situación» y «Guardar», sin el fotograma en
+blanco) y `05-sumied.gif` (el panel del cliente, solo los fotogramas en que ya
+dice «Moroso»). Ninguna se repite. Sumied entra a los 15 s, cuando Bitrix24 ya
+ha guardado. El guion busca las tomas primero en `gd/tomas/` y después en
+`video-tomas/gd-qbo`.

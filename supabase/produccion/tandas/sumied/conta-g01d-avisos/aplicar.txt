@@ -1,0 +1,19 @@
+# G01d · Avisos al instante de Bitrix24 y GoCardless. Rama conta/g01d-avisos.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar. El
+# real lo lanza Julio.
+#
+#   1620  Añade el código y el encendido de «Al instante» a cada conexión
+#         (columnas que admiten nulos, APAGADO de serie), la cola y registro de
+#         los avisos (conta_aviso, con su RLS), cinco funciones nuevas, el
+#         «aviso» en conta_gestoria_lectura.por (el CHECK solo amplía) y el
+#         repaso de cada 2 minutos.
+#
+# Pide «autorizo» solo por una razón: conta_aviso_configurar LLAMA a
+# vault.create_secret / vault.update_secret dentro de su cuerpo, y el
+# analizador lo cuenta como escritura en Vault (W02). Aplicar la tanda no
+# escribe ningún secreto: solo lo hará una persona al pegar el código en
+# Ajustes › Cobros (la cuenta lo mide: 0 → 0).
+#
+# No lee ni escribe en Bitrix24 ni en GoCardless. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g01d-avisos.sql
+supabase/migrations/20261108T1620_g01d_avisos.sql

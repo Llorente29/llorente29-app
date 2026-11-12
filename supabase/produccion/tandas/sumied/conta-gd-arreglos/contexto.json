@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 14:08Z. La 1530 crea demo_gestoria_banco_sembrar(uuid), que no existe, y la llama para la cuenta demo de000000-…-a0: hoy su banco termina en 01 y la lectura de GoCardless avisa (abono_coincide = false, la cuenta de abono del sandbox termina en 56). El IBAN nuevo no lo tiene nadie. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T14:08Z",
+ "tanda": {
+  "supabase/migrations/20261109T1530_gd_banco_demo.sql": "d93b4792e046c771f1e88be6b0be5971"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

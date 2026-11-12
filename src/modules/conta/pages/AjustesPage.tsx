@@ -35,11 +35,12 @@ import { ApuntarSoloAjustes } from '@/modules/conta/compras/ApuntarSoloAjustes'
 import { ApartadoRoi } from '@/modules/conta/empresa/ApartadoRoi'
 import { Resultado } from '@/modules/conta/empresa/campos'
 import { ejercicioActual } from '@/modules/conta/empresa/datosEmpresa'
-import { ApartadoHosteleria } from '@/modules/conta/empresa/ApartadoHosteleria'
+import { ApartadoSector } from '@/modules/conta/empresa/ApartadoSector'
 import { ApartadoLogo } from '@/modules/conta/empresa/ApartadoLogo'
 import { ApartadoColor } from '@/modules/conta/empresa/ApartadoColor'
 import { Usuarios } from '@/modules/conta/ajustes/Usuarios'
 import { useHosteleria } from '@/modules/conta/marco/nuevo/contexto'
+import { VolverAEmpezar } from '@/modules/conta/cuenta/VolverAEmpezar'
 
 function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
   return (
@@ -53,7 +54,7 @@ function TituloPanel({ titulo, apoyo }: { titulo: string; apoyo?: string }) {
 function Entrada({ id }: { id: string }) {
   const { datos, plan, quien, movil, hoy } = useAjustes()
   const hosteleria = useHosteleria()
-  const { userName } = useCuentaConta()
+  const { userName, esDemo, cargando: cargandoCuenta } = useCuentaConta()
   // C02c: lo que ha hecho «Deshacer entero» del plan traído, en una frase (el botón desaparece al recargar).
   const [aviso, setAviso] = useState<string | null>(null)
   const e = entradaAjustes(id)!
@@ -74,6 +75,8 @@ function Entrada({ id }: { id: string }) {
   if (id === 'apuntar-solo') return <>{cabeza}<ApuntarSoloAjustes /></>
   // DM1 · PR 1 · Usuarios: quién entra e «Invitar a una persona»; no necesita los datos de la empresa de Ajustes.
   if (id === 'personas') return <>{cabeza}<Usuarios /></>
+  // GD · Tu cuenta: solo en una cuenta de demostración, con «Volver a empezar».
+  if (id === 'cuenta') return cargandoCuenta ? <>{cabeza}<TarjetaCargando /></> : esDemo ? <>{cabeza}<VolverAEmpezar /></> : <Navigate to={rutaAjustes()} replace />
   if (e.hueco) {
     return <>{cabeza}<div className="cx-tarjeta"><Vacio titulo="Aún no." explicacion={e.hueco} /></div></>
   }
@@ -90,8 +93,8 @@ function Entrada({ id }: { id: string }) {
             <QuienEres {...p} />
             <div className="cx-columna">
               <Actividades {...p} />
-              {/* S01: la marca de hostelería de la empresa, al lado de lo que hace. */}
-              <ApartadoHosteleria {...p} />
+              {/* G03: el sector de la empresa, al lado de lo que hace (antes, S01: «¿Es un negocio de hostelería?»). */}
+              <ApartadoSector {...p} />
               {/* S01: el logo de la empresa, el de la cabecera. */}
               <ApartadoLogo {...p} />
               <ApartadoColor quien={p.quien} movil={p.movil} />

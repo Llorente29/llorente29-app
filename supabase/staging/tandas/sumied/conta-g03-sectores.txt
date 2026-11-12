@@ -1,0 +1,7 @@
+# G03 · El sector de cada empresa: la 1945 añade la columna, su CHECK y el
+# disparador que mantiene is_hospitality; la 1946 rellena las de hoy. Su
+# prueba (ROLLBACK, datos inventados) prueba los dos sentidos como usuario,
+# la guarda de las cuentas ancladas y las dos vueltas atrás.
+supabase/migrations/20261107T1945_g03_sector.sql
+supabase/migrations/20261107T1946_g03_sector_de_hoy.sql
+supabase/staging/sql/20261107_g03_sectores_prueba.sql

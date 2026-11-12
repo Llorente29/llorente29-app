@@ -1,0 +1,17 @@
+# G04 · Tarea 3 (Julio, 07/11 y 08/11): Clientes, ficha y «Tarifa y paquetes».
+# Rama conta/g04-clientes-ficha-tarifa. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar.
+#
+#   0930  SOLO AÑADE: los ajustes de cobro de cada empresa (altas y bajas a
+#         mitad de mes, y los cambios de tarifa, apagados por defecto),
+#         niveles, paquetes, precios con su forma y sus tramos, paquetes de un
+#         cliente, el cambio de precios como operación, «Cobrado por otra vía»,
+#         el nivel y los días de alta y baja en conta_linea, el siguiente cobro
+#         en conta_gc_suscripcion, las funciones de las acciones (todas
+#         ensayan por defecto) y seis vistas de consulta con nombre nuevo.
+#
+# Lo importado en el G01 no se toca. En la cuenta real de QBO los cambios de
+# tarifa quedan apagados hasta que Julio diga sí (06/11). No lee ni escribe en
+# GoCardless ni en el CRM. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g04-tarifa-y-clientes.sql
+supabase/migrations/20261108T0930_g04_tarifa_y_clientes.sql

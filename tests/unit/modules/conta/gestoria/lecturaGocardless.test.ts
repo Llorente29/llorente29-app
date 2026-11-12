@@ -14,9 +14,9 @@ const nombre = (id: string) => (id === A ? 'EMISOR PRUEBA ALFA, S.L.' : 'Emisor 
 const antes = (extra: Partial<Antes> = {}): Antes => ({
   huellas: new Map(), otrosEmisores: [], formaAntes: new Map(), porDefecto: true, importadas: new Set(), tarifasPropias: new Set(),
   fichas: [
-    { partyId: 'P1', bitrixId: 'F1', nombre: 'CLIENTE PRUEBA UNO, S.L.', nif: 'B00000001', correos: [], situacion: 'activo', formaPago: 'Emisor Prueba Alfa', emisorSegunBitrix: A },
-    { partyId: 'P2', bitrixId: 'F2', nombre: 'CLIENTE PRUEBA DOS', nif: null, correos: ['dos@prueba.test'], situacion: 'moroso', formaPago: null, emisorSegunBitrix: null },
-    { partyId: 'P3', bitrixId: 'F3', nombre: 'CLIENTE PRUEBA TRES', nif: 'B00000003', correos: [], situacion: 'activo', formaPago: null, emisorSegunBitrix: null },
+    { partyId: 'P1', claveFicha: 'F1', nombre: 'CLIENTE PRUEBA UNO, S.L.', nif: 'B00000001', correos: [], situacion: 'activo', formaPago: 'Emisor Prueba Alfa', emisorSegunCrm: A },
+    { partyId: 'P2', claveFicha: 'F2', nombre: 'CLIENTE PRUEBA DOS', nif: null, correos: ['dos@prueba.test'], situacion: 'moroso', formaPago: null, emisorSegunCrm: null },
+    { partyId: 'P3', claveFicha: 'F3', nombre: 'CLIENTE PRUEBA TRES', nif: 'B00000003', correos: [], situacion: 'activo', formaPago: null, emisorSegunCrm: null },
   ],
   ...extra,
 })
@@ -43,9 +43,15 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
     const p = planLectura(A, 'cuenta', d, antes(), HOY, nombre)
     expect({ nuevos: p.nuevos, cambiados: p.cambiados, iguales: p.iguales }).toEqual({ nuevos: 3, cambiados: 0, iguales: 0 })
-    expect(p.parejas.map((x) => [x.clienteGcId, x.bitrixId, x.por])).toEqual([['CU001', 'F1', 'nif'], ['CU002', 'F2', 'correo']])
+    expect(p.parejas.map((x) => [x.clienteGcId, x.claveFicha, x.por])).toEqual([['CU001', 'F1', 'nif'], ['CU002', 'F2', 'correo']])
     expect(p.cobroCliente.map((c) => [c.party_id, c.forma_cobro, c.gc_cliente_id])).toEqual([['P1', 'gocardless', 'CU001'], ['P2', 'gocardless', 'CU002']])
     expect(p.mandatosSumied.map((m) => [m.gcMandatoId, m.fila.status, m.fila.origen])).toEqual([['MD001', 'firmado', 'gocardless'], ['MD002', 'firmado', 'gocardless']])
+    // G05 · De la cuenta del mandato, solo los últimos dígitos, el país y el banco (sin cuenta leída, nada).
+    // nº 43 · El pago al banco de cada cobro y los payouts, con su día de llegada y su neto.
+    expect(p.filas.cobros.map((c) => [c.gc_id, c.payout_gc_id])).toEqual([['PM001', 'PO001'], ['PM002', null], ['PM003', null], ['PM004', null]])
+    expect(p.filas.payouts).toEqual([expect.objectContaining({ gc_id: 'PO001', estado: 'paid', llegada: '2026-10-07', importe: 89.75, comision: 1, moneda: 'EUR', referencia: 'PRUEBA-PO001' })])
+    expect(p.filas.mandatos.map((m) => [m.gc_id, m.cuenta_final, m.cuenta_pais, m.banco])).toEqual([
+      ['MD001', '21', 'ES', 'BANCO DE PRUEBA'], ['MD002', '07', 'ES', 'OTRO BANCO DE PRUEBA'], ['MD003', null, null, null]])
     // El cliente con 7 líneas y el de B: 8 líneas; la laboral sin nombre no se convierte; la cancelada no se importa.
     expect(p.lineas).toHaveLength(8)
     expect(p.lineas.filter((l) => l.partyId === 'P1')).toHaveLength(7)
@@ -56,6 +62,17 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
     expect(p.resumen).toMatchObject({ mandatosVivos: 2, lineasActivas: 9, alMesCent: 34372 })
     expect(fraseDeLectura('EMISOR PRUEBA ALFA, S.L.', p, 8, 3, true))
       .toBe('Conectada la cuenta de GoCardless de EMISOR PRUEBA ALFA, S.L.: 2 mandatos activos y 9 líneas leídas (343,72 € al mes). 8 convertidas en línea, 1 sin convertir; 3 con diferencias.')
+
+    expect(p.resumen.sinCasar).toBe(0)
+  })
+
+  it('G01c · las suscripciones activas que esperan a casar se dicen, no salen como «0 sin convertir»', async () => {
+    const d = await leerCuentaGc(fetchGrabado(), 'pruebas', 'token-de-prueba', HOY)
+    // Sin ninguna ficha del CRM con la que casar, ninguna de las 9 activas se importa: las 9 esperan.
+    const p = planLectura(A, 'cuenta', d, { ...antes(), fichas: [] }, HOY, nombre)
+    expect([p.lineas.length, p.noConvertidas.length, p.resumen.sinCasar]).toEqual([0, 0, 9])
+    expect(fraseDeLectura('EMISOR PRUEBA ALFA, S.L.', p, 0, 2)).toContain(
+      '0 convertidas en línea, 0 sin convertir; 2 con diferencias. 9 suscripciones activas siguen sin línea porque su cliente de GoCardless no está casado con ningún cliente de Sumied (salen en «En GoCardless sin ficha en tu CRM»).')
   })
 
   it('la segunda lectura no vuelve a importar, ni pisa la forma de cobro, ni crea otra tarifa', async () => {
@@ -98,7 +115,7 @@ describe('G01 · una lectura de GoCardless con respuestas grabadas', () => {
       p.noConvertidas.map((n) => ({ suscripcion: n.suscripcionId, gcCliente: n.clienteGcId, partyId: n.partyId, nombre: n.nombre, codigo: n.codigo, porque: n.porque })),
       lineasDe, tarifas, tes)
     expect(r.diferencias.map((x) => [x.tipo, x.porque_codigo, x.party_id ?? x.gc_cliente_id])).toEqual([
-      ['bitrix_sin_cobro', 'bitrix_sin_cobro', 'P3'],
+      ['crm_sin_cobro', 'crm_sin_cobro', 'P3'],
       ['suscripcion_sin_convertir', 'laboral_sin_empleado', 'P2'],
       ['mandato_por_firmar', 'pending_customer_approval', 'CU003'],
       ['falla_a_menudo', 'tres_o_mas_fallos', 'P2'],

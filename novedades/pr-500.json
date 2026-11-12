@@ -1,0 +1,20 @@
+[
+ {
+  "id": "500-1",
+  "pr": 500,
+  "fecha": "2026-11-07T16:03:45Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "la unión de las fichas repetidas junta también los clientes que ya estaban por separado, y el PDF del ensayo lo dice antes.",
+  "ruta": null
+ },
+ {
+  "id": "500-2",
+  "pr": 500,
+  "fecha": "2026-11-07T16:03:45Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "la ficha vuelve a traer la dirección de Bitrix24.",
+  "ruta": null
+ }
+]

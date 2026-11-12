@@ -17,3 +17,17 @@ conta-justificante
 # sandbox de GoCardless y con un Bitrix24 de pruebas.
 conta-gocardless-leer
 conta-bitrix-leer
+# G01d · Avisos al instante (08/11), de la rama conta/g01d-avisos: las dos
+# funciones que reciben avisos, nuevas. Las dos lecturas que también cambian
+# (conta-bitrix-leer: una ficha suelta; conta-gocardless-leer: la relectura
+# «por aviso») ya están arriba. En staging solo hablan con el Bitrix24 de
+# pruebas y con el sandbox de GoCardless.
+conta-crm-aviso
+conta-gocardless-aviso
+# G05 · T4 · La factura de un recibo en el servidor (09/11), de la rama
+# conta/g05-t4-pdf-servidor: conta-cobro y conta-gocardless-leer (de arriba)
+# hacen el PDF «Sumied» y lo mandan después de seguir el cobro
+# (_shared/cobro/facturaRecibo.ts); conta-venta-correo manda con el envío
+# común (_shared/facturaVentaEnviar.ts). En staging, el correo sigue frenado.
+conta-cobro
+conta-venta-correo

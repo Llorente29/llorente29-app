@@ -5,9 +5,10 @@
 // tests/unit/modules/conta/gestoria/lecturaGocardless.test.ts). Solo GET.
 
 import {
-  BASES, cabeceras, casarMotivos, desdeHaceMeses, leerCliente, leerCobro, leerCuentaAbono, leerMandato, leerSuscripcion, leerTodo, urlDePagina,
-  type ClienteGc, type CobroGc, type CuentaAbonoGc, type Entorno, type MandatoGc, type Recurso, type SuscripcionGc,
+  BASES, cabeceras, casarMotivos, desdeHaceMeses, leerCliente, leerCobro, leerCuentaAbono, leerCuentaCliente, leerMandato, leerPayout, leerSuscripcion, leerTodo, urlDePagina,
+  type ClienteGc, type CobroGc, type CuentaAbonoGc, type CuentaClienteGc, type Entorno, type MandatoGc, type PayoutGc, type Recurso, type SuscripcionGc,
 } from './lector.ts'
+import { liquidacionesDeClientes, pagosDePartidas, type Fuera } from './liquidaciones.ts'
 
 export type Pedir = (url: string, init: { headers: Record<string, string> }) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>
 
@@ -17,6 +18,12 @@ export interface DatosGc {
   suscripciones: SuscripcionGc[]
   cobros: CobroGc[]
   abonos: CuentaAbonoGc[]
+  /** G05 · Las cuentas de los clientes (lo justo para enmascararlas: los últimos dígitos, el país y el banco). */
+  cuentasCliente: CuentaClienteGc[]
+  /** G05 · nº 43 · Los pagos de GoCardless al banco (payouts) de los mismos 6 meses: día de llegada y neto. */
+  payouts: PayoutGc[]
+  /** nº 76 · Las liquidaciones leídas que no son de ningún cliente de ahora (no se guardan). */
+  payoutsFuera?: Fuera[]
   /** Desde cuándo se han leído los cobros (el día 1 de hace 6 meses). */
   desde: string
 }
@@ -44,23 +51,63 @@ export async function comprobarToken(pedir: Pedir, entorno: Entorno, token: stri
   return { ok: false, porque: r.status === 401 || r.status === 403 ? `GoCardless no acepta ese token en ${donde}.` : `GoCardless ha contestado ${r.status} en ${donde}.` }
 }
 
-/** Todo lo que se lee de una cuenta: clientes, mandatos, suscripciones, cobros de 6 meses con su motivo y la cuenta de abono. */
+/** Todo lo que se lee de una cuenta: clientes, mandatos, suscripciones, cobros de 6 meses con su motivo y su pago al banco, los payouts y la cuenta de abono. */
 export async function leerCuentaGc(pedir: Pedir, entorno: Entorno, token: string, hoy: string): Promise<DatosGc> {
   const desde = desdeHaceMeses(hoy, 6)
-  const [rc, rm, rs, rp, re, ra] = await Promise.all([
+  const [rc, rm, rs, rp, re, ra, rb, ro] = await Promise.all([
     pedirRecurso(pedir, entorno, token, 'customers'),
     pedirRecurso(pedir, entorno, token, 'mandates'),
     pedirRecurso(pedir, entorno, token, 'subscriptions'),
     pedirRecurso(pedir, entorno, token, 'payments', { 'charge_date[gte]': desde }),
     pedirRecurso(pedir, entorno, token, 'events', { resource_type: 'payments', 'created_at[gte]': `${desde}T00:00:00Z` }),
     pedirRecurso(pedir, entorno, token, 'creditor_bank_accounts'),
+    pedirRecurso(pedir, entorno, token, 'customer_bank_accounts'),
+    pedirRecurso(pedir, entorno, token, 'payouts', { 'created_at[gte]': `${desde}T00:00:00Z` }),
   ])
+  const clientes = rc.map(leerCliente)
+  const mandatos = rm.map(leerMandato)
+  const cobros = casarMotivos(rp.map(leerCobro), re)
+  const payouts = ro.map(leerPayout)
+  // nº 76 · De las liquidaciones que ningún cobro leído nombra, sus partidas y, de los pagos que no se han leído, su mandato.
+  const nombradas = new Set(cobros.map((c) => c.payoutId).filter(Boolean))
+  const leidos = new Set(cobros.map((c) => c.id))
+  const partidas = new Map<string, string[]>()
+  const mandatoDePago = new Map<string, string | null>()
+  const sinSaber = new Set<string>()
+  for (const o of payouts.filter((x) => !nombradas.has(x.id)).slice(0, 100)) {
+    try {
+      const pagos = pagosDePartidas(await pedirRecurso(pedir, entorno, token, 'payout_items', { payout: o.id }))
+      partidas.set(o.id, pagos)
+      for (const p of pagos.filter((x) => !leidos.has(x) && !mandatoDePago.has(x))) {
+        const r = await pedir(`${BASES[entorno]}/payments/${encodeURIComponent(p)}`, { headers: cabeceras(token) })
+        const j = r.ok ? await r.json().catch(() => null) as { payments?: { links?: { mandate?: string } } } | null : null
+        mandatoDePago.set(p, j?.payments?.links?.mandate ?? null)
+      }
+    } catch {
+      // Si GoCardless no da sus partidas, no hay con qué decir que no es de nadie: entra, como antes.
+      sinSaber.add(o.id)
+    }
+  }
+  // nº 79 · Un cobro que GoCardless liquidó y después se devolvió o se reclamó puede venir sin su liquidación
+  // (links.payout): sus partidas la dicen. Así «seguir» sabe que llegó al banco y lo factura antes de devolverlo.
+  const liquidacionDe = new Map<string, string>()
+  for (const [o, pagos] of partidas) for (const p of pagos) if (!liquidacionDe.has(p)) liquidacionDe.set(p, o)
+  for (let i = 0; i < cobros.length; i++) {
+    const o = cobros[i].payoutId ? null : liquidacionDe.get(cobros[i].id)
+    if (o) cobros[i] = { ...cobros[i], payoutId: o }
+  }
+  const reparto = liquidacionesDeClientes({ payouts, cobros, mandatos, clientes }, partidas, mandatoDePago)
+  const quedan = payouts.filter((x) => sinSaber.has(x.id) || reparto.quedan.includes(x))
+  const fuera = reparto.fuera.filter((f) => !sinSaber.has(f.id))
   return {
-    clientes: rc.map(leerCliente),
-    mandatos: rm.map(leerMandato),
+    clientes,
+    mandatos,
     suscripciones: rs.map(leerSuscripcion),
-    cobros: casarMotivos(rp.map(leerCobro), re),
+    cobros,
     abonos: ra.map(leerCuentaAbono).filter((a) => a.activa),
+    cuentasCliente: rb.map(leerCuentaCliente),
+    payouts: quedan,
+    payoutsFuera: fuera,
     desde,
   }
 }

@@ -1,0 +1,5 @@
+# G01c · la vuelta atrás de la 1925: conta_crm vuelve a ser conta_crm_bitrix,
+# bitrix_id vuelve a ser la clave, las vistas y las seis funciones como
+# estaban. Lo leído de los contactos se quita; ningún cliente se borra.
+cuenta: scripts/conta/produccion/cuentas/g01c-crm-y-contactos.sql
+supabase/vuelta-atras/20261107T1925_g01c_crm_y_contactos.down.sql

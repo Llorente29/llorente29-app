@@ -1,0 +1,14 @@
+# GD · «Gestoría Demo»: la cuenta de demostración para QBO y para el congreso
+# del 17/11. Rama conta/gd-cuenta-demo. Se ensaya y se aplica desde main
+# nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   0110  SOLO AÑADE: la cuenta «Gestoría Demo» (de demostración: no sale fuera
+#         y solo lee los sistemas de pruebas), sus dos empresas de Gestoría
+#         (Gestoría Demo, S.L. y Elena Campos Ortiz, autónoma), sus bancos del
+#         9999, los cambios de tarifa encendidos y su administración (el
+#         superadministrador). No toca ninguna fila de otra cuenta.
+#
+# Los clientes vienen del Bitrix24 de pruebas y del sandbox al conectarlos
+# (workflow «GD · sembrar pruebas»). Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-cuenta-demo.sql
+supabase/migrations/20261109T0110_gd_cuenta_demo.sql

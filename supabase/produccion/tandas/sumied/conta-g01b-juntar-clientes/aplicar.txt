@@ -1,0 +1,16 @@
+# G01b · La unión junta también los clientes ya creados (Julio, 07/11, tras
+# «Aplicar la unión y leer» de las 13:02 UTC: 18 NIF que ya eran 2 clientes).
+# Rama conta/g01b-juntar-clientes. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1336  Añade el rastro (conta_gestoria_union) y la función que junta dos
+#         clientes (mueve lo de la gestoría y el cobro, archiva el otro; con
+#         contabilidad, no junta). Cambia en caliente (con su prueba de
+#         staging y su respaldo) guardar los clientes: con la unión aplicada,
+#         junta los que ya eran varios.
+#
+# No junta nada por sí sola: lo hace la próxima lectura de Bitrix24 (la unión
+# ya está aplicada). No lee ni escribe en Bitrix24. Nada en el camino del
+# pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g01b-juntar-clientes.sql
+supabase/migrations/20261107T1336_g01b_juntar_clientes.sql

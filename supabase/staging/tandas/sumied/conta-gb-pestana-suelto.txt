@@ -1,0 +1,3 @@
+# GB · nº 17, B · «Facturar un trabajo» en la pestaña: la 1010 y su prueba (ROLLBACK). Necesita en staging la 2345 (Code 3), la 0700 (Code 1) y la 0950 (#581).
+supabase/migrations/20261110T1010_gb_pestana_suelto.sql
+supabase/staging/sql/20261110_gb_pestana_suelto_prueba.sql

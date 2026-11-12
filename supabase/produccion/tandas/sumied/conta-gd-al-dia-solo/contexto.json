@@ -1,0 +1,8 @@
+{
+ "_que": "GD · contexto de producción, medido en SOLO LECTURA el 09/11 a las 22:15Z. La publicación supabase_realtime existe (inserta, actualiza y borra) con 13 tablas; conta_gestoria_lectura no está. La tabla tiene RLS con conta_gestoria_lectura_leer [select] belongs_to_account(account_id) y grant select a authenticated. La 2308 solo la añade a la publicación. Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-09T22:15Z",
+ "tanda": {
+  "supabase/migrations/20261109T2308_gd_al_dia_lecturas.sql": "b4f5c65edbe76b40cba3f3b597423e0d"
+ },
+ "contexto": {"tablas":[],"funciones":[],"filas":{},"otras":{},"camino":{"tablas":[],"funciones":[]},"usos":{},"registro":[]}
+}

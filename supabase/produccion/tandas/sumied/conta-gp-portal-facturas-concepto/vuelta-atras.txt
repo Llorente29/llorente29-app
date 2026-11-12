@@ -1,0 +1,4 @@
+# GP · la vuelta atrás de la 1010: conta_portal_facturas y conta_portal_inicio,
+# restauradas de su respaldo (Inicio, como lo dejó la 0945).
+cuenta: scripts/conta/produccion/cuentas/gp-portal-facturas-pagada.sql
+supabase/vuelta-atras/20261110T1010_gp_portal_facturas_pagada.down.sql

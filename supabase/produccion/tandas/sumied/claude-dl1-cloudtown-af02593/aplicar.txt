@@ -1,0 +1,19 @@
+# DL1 · Cloudtown (43000004): la autofactura de febrero que falta, AF-02593
+# (Julio, DL1·15, 12/11). Rama claude/dl1-cloudtown-af02593. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1421  Apunta y valida (como Julio, con _dl1_venta_proponer y _dl1_validar,
+#         ya en producción) la AF-02593 de Carabanchel con fecha del 01/10:
+#         base 8.240,66 en la 705 con su local, IVA 824,07 en la 477 al 10 %
+#         (4T) y 9.064,73 en la 43000004. La 43000004 pasa de −13.275,35 a
+#         −4.210,62. La AF-02514 de enero va aparte, cuando llegue corregida.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-cloudtown.sql
+supabase/migrations/20261112T1421_dl1_cloudtown_af02593.sql
+sin-vuelta-atras: supabase/migrations/20261112T1421_dl1_cloudtown_af02593.sql · motivo: el asiento se valida; un asiento validado se anula con un contraasiento.
+esperado: dl1-cloudtown · AF-02593 validada por Julio, menos 1 = 0
+esperado: dl1-cloudtown · 43000004 validado, menos −4.210,62 = 0.00
+esperado: dl1-cloudtown · IVA repercutido de la AF-02593 (01/10), menos 824,07 = 0.00
+esperado: dl1-cloudtown · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-cloudtown · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

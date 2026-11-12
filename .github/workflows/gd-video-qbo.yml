@@ -1,0 +1,495 @@
+name: GD · vídeo para QBO
+
+# GD · El vídeo para QBO (Julio, nº52 y nº56): Sumied para gestorías,
+# grabado con Playwright en la «Gestoría Demo» de PRODUCCIÓN (app.sumied.com),
+# con el usuario de Julio, por escenas (scripts/video/gd/qbo.mjs).
+#
+#   modo: ensayo   no escribe nada (ni prepara ni envía el cobro): para ver
+#                  las pantallas y los rótulos.
+#         grabar   prepara y ENVÍA el cobro de la demo al sandbox (autorizado
+#                  por Julio, nº52). No toca Bitrix24.
+#         comprobar  (nº92, nº93) NO GRABA y SOLO LEE: recorre la demo en vivo
+#                  (clientes, ficha, tarifa, cobro, factura, contabilidad, banco
+#                  y el portal, desde la gestoría y como el cliente) y dice en el
+#                  registro qué paso falla (scripts/video/gd/comprobar.mjs). Con
+#                  algún fallo, en rojo. No publica nada en video-salida/gd-qbo.
+#                  «escenas» no cuenta: lo recorre todo.
+#         video    (nº96, fase 3) EL VÍDEO de Sumied para gestorías, con la máquina
+#                  del V01 (scripts/video/gd/sumied.mjs + montar.mjs): la voz de
+#                  ElevenLabs de voz-elevenlabs.txt, una toma, zoom y subtítulos.
+#                  Escribe SOLO en la demo y sus sistemas de pruebas: envía el
+#                  cobro al sandbox, valida los ingresos de cobros facturados y
+#                  paga el devuelto con la tarjeta de pruebas de Stripe (nº98).
+#                  La demo, limpia antes («Volver a empezar»). Publica en
+#                  video-salida/gd-sumied. «comprobar» ensaya este guion sin grabar.
+#                  Con «escenas» (p. ej. 01,02,03), solo esas: la prueba de la voz y el zoom.
+#         muestras-voz  (nº96, fase 2; nº99) las 6 frases de muestra y la prueba de
+#                  pronunciación (pronunciacion/: «GoCardless» y «Sumied» con cada grafía)
+#                  con Julio Clon. Las 6 frases de muestra de la locución
+#                  (scripts/video/gd/locucion.mjs) con las dos voces en juego, en
+#                  MP3, en video-salida/gd-qbo, carpeta muestras-voz/. No lee
+#                  producción ni graba; solo usa VOZ_ELEVENLABS_KEY.
+#   Las escenas 5 y 7b son tomas de Julio en GIF (nº60), en la rama
+#   video-tomas/gd-qbo, carpeta tomas/: 05-bitrix.gif, 05-sumied.gif y
+#   07b-buzon.gif. Sin la toma, su escena queda como hueco y se dice.
+#   escenas: «todas», o las que se regraban (p. ej. «05b» o «06,07»). Las
+#            demás se reutilizan de la grabación anterior (video-salida/gd-qbo).
+#
+# Solo se lanza desde main: la clave de servicio vive en el entorno
+# «despliegue» (W12b). Con ella solo se genera el enlace de acceso de Julio
+# (sin correo) y se lee la demo; ningún secreto se escribe en el registro.
+# Deja el artefacto «gd-qbo» y lo mismo en la rama aparte video-salida/gd-qbo.
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'ensayo = no escribe nada; grabar = envía el cobro de la demo al sandbox; comprobar = recorre la demo sin grabar y solo lee'
+        required: true
+        type: choice
+        options: [ensayo, grabar, comprobar, muestras-voz, video, montar]
+      escenas:
+        description: '«todas», o las que se regraban, separadas por comas (01,02,03,04,05,05b,06,07,07b,07c,08,09,10)'
+        required: true
+        default: todas
+      mes:
+        description: 'El mes del cobro: «este» (el mes en curso, nº100) o AAAA-MM'
+        required: true
+        default: 'este'
+      desde_run:
+        description: 'Solo con «montar»: el número del run de «video» cuya grabación en bruto se vuelve a montar (sin grabar)'
+        required: false
+        default: ''
+      quitar:
+        description: 'Al montar: las frases que no entran, con su tramo (p. ej. «07.5»)'
+        required: false
+        default: ''
+      insertar:
+        description: 'Al montar: una toma de video-tomas/gd-qbo, sus frases y antes de qué escena («07b-buzon.gif|07b|08»)'
+        required: false
+        default: ''
+
+concurrency:
+  group: gd-video-qbo
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # nº92 · Comprobar la demo en vivo: sin grabar, solo leyendo. Rojo si algún paso falla.
+  comprobar:
+    if: inputs.modo == 'comprobar'
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SALIDA: ${{ github.workspace }}/comprobar-salida
+    steps:
+      - name: Solo desde main
+        run: |
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Comprueba la demo de producción: solo se lanza desde main."; exit 1; }
+          [[ "${{ inputs.mes }}" =~ ^(este|20[0-9]{2}-(0[1-9]|1[0-2]))$ ]] || { echo "::error::«mes» es «este» o AAAA-MM."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias y el navegador
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Proyecto y claves (enmascaradas)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          ANON=$(jq -r '[.[] | select(.type == "publishable")] | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$ANON" ] || ANON=$(jq -r '[.[] | select(.name == "anon")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
+          [ -n "$KEY" ] && [ -n "$ANON" ] || { echo "::error::No se pudieron obtener las claves del proyecto."; exit 1; }
+          echo "::add-mask::$KEY"; echo "::add-mask::$ANON"
+          { echo "SUPABASE_URL=https://$REF.supabase.co"; echo "SERVICE_KEY=$KEY"; echo "ANON_KEY=$ANON"; } >> "$GITHUB_ENV"
+
+      - name: Las tomas del vídeo (para el ensayo del guion)
+        run: |
+          mkdir -p "$RUNNER_TEMP/tomas"
+          if git fetch -q --depth=1 origin video-tomas/gd-qbo 2>/dev/null; then git archive FETCH_HEAD tomas 2>/dev/null | tar -x -C "$RUNNER_TEMP" || true; fi
+
+      - name: Comprobar
+        timeout-minutes: 20
+        env:
+          MES: ${{ inputs.mes }}
+          APP: https://app.sumied.com
+        # Lo que dice va a un fichero (registro.txt), no al registro del run. Con algún ✗, sale en rojo.
+        run: mkdir -p comprobar-salida && node scripts/video/gd/comprobar.mjs > comprobar-salida/registro.txt 2>&1
+
+      # nº96, fase 3 · El guion del vídeo, en ensayo: cada frase busca lo que va a señalar, sin grabar ni escribir.
+      - name: Ensayo del guion del vídeo
+        if: always()
+        timeout-minutes: 20
+        env:
+          MODO: ensayo
+          MES: ${{ inputs.mes }}
+          TOMAS: ${{ runner.temp }}/tomas
+          APP: https://app.sumied.com
+        run: mkdir -p comprobar-salida/video && node scripts/video/gd/sumied.mjs comprobar-salida/video > comprobar-salida/video/salida.txt 2>&1
+
+      - name: Resumen
+        if: always()
+        run: |
+          [ -f comprobar-salida/resumen.txt ] || exit 0
+          touch comprobar-salida/video/resumen.txt
+          # nº94 · Cada paso con su marca: son datos inventados de la demo y pasan por la puerta de la DEMO,
+          # que solo se permite en este job (workflows-salida.mjs, PUERTA_DE_LA_DEMO).
+          cat comprobar-salida/resumen.txt comprobar-salida/video/resumen.txt | PUERTA_DEMO=gd-comprobar node scripts/conta/salida-demo.mjs >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gd-comprobar
+          path: |
+            comprobar-salida/registro.txt
+            comprobar-salida/resumen.txt
+            comprobar-salida/capturas
+            comprobar-salida/video/registro.txt
+            comprobar-salida/video/capturas
+          retention-days: 14
+
+  # nº96 · Fase 3: el vídeo de Sumied para gestorías, con la máquina del V01. Solo en la demo y sus pruebas.
+  # nº123 · «montar»: vuelve a montar la grabación en bruto de un run de «video» (artefacto gd-sumied-crudo), sin grabar.
+  video:
+    if: inputs.modo == 'video' || inputs.modo == 'montar'
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      SALIDA: ${{ github.workspace }}/gd-sumied
+    steps:
+      - name: Solo desde main
+        run: |
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Este vídeo graba en producción: solo se lanza desde main."; exit 1; }
+          [[ "${{ inputs.mes }}" =~ ^(este|20[0-9]{2}-(0[1-9]|1[0-2]))$ ]] || { echo "::error::«mes» es «este» o AAAA-MM."; exit 1; }
+          if [ "${{ inputs.modo }}" = "montar" ]; then [[ "${{ inputs.desde_run }}" =~ ^[0-9]+$ ]] || { echo "::error::«montar» necesita «desde_run»: el número del run de «video»."; exit 1; }; fi
+          [[ "${{ inputs.escenas }}" =~ ^(todas|[0-9b ,]+)$ ]] || { echo "::error::«escenas»: «todas» o una lista como 01,02,03."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias, ffmpeg y el navegador
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg poppler-utils fonts-dejavu-core >/dev/null
+          npx playwright install --with-deps chromium
+
+      - name: Proyecto y claves (enmascaradas)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          ANON=$(jq -r '[.[] | select(.type == "publishable")] | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$ANON" ] || ANON=$(jq -r '[.[] | select(.name == "anon")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
+          [ -n "$KEY" ] && [ -n "$ANON" ] || { echo "::error::No se pudieron obtener las claves del proyecto."; exit 1; }
+          echo "::add-mask::$KEY"; echo "::add-mask::$ANON"
+          { echo "SUPABASE_URL=https://$REF.supabase.co"; echo "SERVICE_KEY=$KEY"; echo "ANON_KEY=$ANON"; } >> "$GITHUB_ENV"
+
+      - name: Las tomas (video-tomas/gd-qbo)
+        run: |
+          mkdir -p "$RUNNER_TEMP/tomas"
+          if git fetch -q --depth=1 origin video-tomas/gd-qbo 2>/dev/null; then git archive FETCH_HEAD tomas 2>/dev/null | tar -x -C "$RUNNER_TEMP" || true; fi
+
+      - name: La voz (antes de grabar) y grabar
+        if: inputs.modo == 'video'
+        timeout-minutes: 100
+        env:
+          MODO: grabar
+          MES: ${{ inputs.mes }}
+          ESCENAS: ${{ inputs.escenas }}
+          TOMAS: ${{ runner.temp }}/tomas
+          APP: https://app.sumied.com
+          VOZ_ELEVENLABS_KEY: ${{ secrets.VOZ_ELEVENLABS_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$SALIDA"
+          node scripts/video/gd/locucion.mjs "$SALIDA" > gd-sumied/locucion.txt
+          python3 scripts/video/voz_nube.py "$SALIDA/voz/frases.json" > gd-sumied/voz.txt 2>&1
+          node scripts/video/gd/sumied.mjs "$SALIDA" > gd-sumied/salida.txt 2>&1
+
+      # nº123 · La grabación en bruto se guarda SIEMPRE, antes de montar: un fallo del montaje (run 22: E2BIG) no puede
+      # volver a costar una grabación. Con ella, «montar» la vuelve a montar sin grabar.
+      - name: Guardar la grabación en bruto (antes de montar)
+        if: always() && inputs.modo == 'video'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gd-sumied-crudo
+          path: |
+            gd-sumied/crudo.webm
+            gd-sumied/tramos.json
+            gd-sumied/voz
+            gd-sumied/portada.png
+            gd-sumied/cierre.png
+            gd-sumied/registro.txt
+            gd-sumied/resumen.txt
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: La grabación en bruto de otro run («montar»)
+        if: inputs.modo == 'montar'
+        uses: actions/download-artifact@v4
+        with:
+          name: gd-sumied-crudo
+          path: gd-sumied
+          run-id: ${{ inputs.desde_run }}
+          github-token: ${{ github.token }}
+
+      # nº128 · «quitar» e «insertar» (la 07b, el correo, que se graba aparte): solo en el montaje, sin grabar.
+      - name: Montar con ffmpeg
+        if: always()
+        env:
+          VIDEO_NOMBRE: gd-sumied
+          MONTAR_QUITAR: ${{ inputs.quitar }}
+          INSERTAR: ${{ inputs.insertar }}
+          # nº131 · Las tomas de Bitrix24 (04 y 05), a pantalla completa y recortadas a su frase.
+          MONTAR_TOMAS: '04.1=05-bitrix.gif,04.2=05-sumied.gif,05.1=05-pestana-resumen.gif,05.2=05-pestana-resumen.gif,05.3=05-pestana-cuotas.gif,05.4=05-pestana-laboral.gif,05.5=05-pestana-portal.gif'
+        run: |
+          set -euo pipefail
+          [ -f "$SALIDA/crudo.webm" ] || exit 0
+          # nº129 · Las expresiones, en variables: con un espacio dentro, bash no las lee en [[ =~ ]] (run 25).
+          RE_QUITAR='^[0-9b., ]*$'
+          RE_INSERTAR='^[0-9a-z-]+\.gif\|[0-9b]+\|[0-9b]+$'
+          [[ "$MONTAR_QUITAR" =~ $RE_QUITAR ]] || { echo "::error::«quitar»: ids de frases, como 07.5"; exit 1; }
+          if [ -n "$INSERTAR" ]; then
+            [[ "$INSERTAR" =~ $RE_INSERTAR ]] || { echo "::error::«insertar»: toma.gif|frases|escena, como 07b-buzon.gif|07b|08"; exit 1; }
+            export MONTAR_INSERTO="$RUNNER_TEMP/tomas/$INSERTAR"
+          fi
+          # nº135 · Las carátulas hechas (entrada, seis antes de su escena y cierre) y la música, de video-tomas/gd-qbo.
+          export MONTAR_CARATULAS="$RUNNER_TEMP/tomas"
+          for mu in musica.mp3.mp3 musica.mp3; do [ -f "$RUNNER_TEMP/tomas/$mu" ] && export MONTAR_MUSICA="$RUNNER_TEMP/tomas/$mu" && break; done
+          # nº131 · El de gestorías, ajustado a la voz: sin imagen parada sin voz, subtítulos en su franja, y los silencios medidos.
+          TOMAS_DIRS="$RUNNER_TEMP/tomas" node scripts/video/montar-ajustado.mjs "$SALIDA" > gd-sumied/montaje.txt 2>&1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gd-sumied
+          path: |
+            gd-sumied/gd-sumied.mp4
+            gd-sumied/gd-sumied-sin-voz.mp4
+            gd-sumied/subtitulos.ass
+            gd-sumied/silencios.txt
+            gd-sumied/montaje.txt
+            gd-sumied/registro.txt
+            gd-sumied/capturas
+            gd-sumied/pasos
+            gd-sumied/fotogramas
+          retention-days: 30
+
+      - name: Publicar en video-salida/gd-sumied (fuera de cualquier PR)
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -f "$SALIDA/registro.txt" ] || exit 0
+          cd "$SALIDA"
+          rm -rf video-tmp crudo.webm voz/*.wav fotogramas
+          git init -q -b salida
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Vídeo GD · Sumied para gestorías · run ${GITHUB_RUN_ID}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "salida:refs/heads/video-salida/gd-sumied"
+          echo "### Publicado en video-salida/gd-sumied" >> "$GITHUB_STEP_SUMMARY"
+
+  # nº96 · Fase 2: la muestra de voz para que Julio elija entre las dos voces. Sin producción.
+  muestras-voz:
+    if: inputs.modo == 'muestras-voz'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Solo desde main
+        run: |
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Solo se lanza desde main."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Las frases y la voz
+        env:
+          VOZ_ELEVENLABS_KEY: ${{ secrets.VOZ_ELEVENLABS_KEY }}
+        run: |
+          set -euo pipefail
+          node scripts/video/gd/locucion.mjs "$RUNNER_TEMP/muestra" --muestra > "$RUNNER_TEMP/locucion.txt"
+          python3 scripts/video/gd/muestras_voz.py "$RUNNER_TEMP/muestra/voz/frases.json" "$RUNNER_TEMP/muestras-voz" julio > "$RUNNER_TEMP/muestras.txt" 2>&1
+          # nº99 · La pronunciación: la misma frase con cada grafía de «GoCardless» y «Sumied», con Julio Clon.
+          node scripts/video/gd/locucion.mjs "$RUNNER_TEMP/pron" --pronunciacion > "$RUNNER_TEMP/locucion-pron.txt"
+          python3 scripts/video/gd/muestras_voz.py "$RUNNER_TEMP/pron/voz/frases.json" "$RUNNER_TEMP/muestras-voz/pronunciacion" julio > "$RUNNER_TEMP/pron.txt" 2>&1
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: muestras-voz
+          path: ${{ runner.temp }}/muestras-voz
+          retention-days: 30
+
+      - name: Publicar en video-salida/gd-qbo, carpeta muestras-voz/ (encima de lo que hay)
+        run: |
+          set -euo pipefail
+          git fetch -q origin video-salida/gd-qbo
+          git worktree add -q "$RUNNER_TEMP/salida" FETCH_HEAD
+          cd "$RUNNER_TEMP/salida"
+          rm -rf muestras-voz && cp -r "$RUNNER_TEMP/muestras-voz" muestras-voz
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A muestras-voz
+          git commit -q -m "Vídeo GD · muestras de voz · run ${GITHUB_RUN_ID}"
+          git push -q "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/video-salida/gd-qbo"
+          echo "### Muestras de voz en video-salida/gd-qbo, carpeta muestras-voz" >> "$GITHUB_STEP_SUMMARY"
+
+  grabar:
+    if: inputs.modo == 'ensayo' || inputs.modo == 'grabar'
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      SALIDA: ${{ github.workspace }}/video-salida
+    steps:
+      - name: Solo desde main
+        run: |
+          [ "${GITHUB_REF}" = "refs/heads/main" ] || { echo "::error::Este vídeo graba en producción: solo se lanza desde main."; exit 1; }
+          [[ "${{ inputs.escenas }}" =~ ^(todas|[0-9bc ,]+)$ ]] || { echo "::error::«escenas»: «todas» o una lista como 05b,07c."; exit 1; }
+          [[ "${{ inputs.mes }}" =~ ^(este|20[0-9]{2}-(0[1-9]|1[0-2]))$ ]] || { echo "::error::«mes» es «este» o AAAA-MM."; exit 1; }
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Dependencias, ffmpeg y el navegador
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg poppler-utils fonts-dejavu-core >/dev/null
+          npx playwright install --with-deps chromium
+
+      - name: Proyecto y claves (enmascaradas)
+        if: inputs.modo == 'video'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          ANON=$(jq -r '[.[] | select(.type == "publishable")] | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$ANON" ] || ANON=$(jq -r '[.[] | select(.name == "anon")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
+          [ -n "$KEY" ] && [ -n "$ANON" ] || { echo "::error::No se pudieron obtener las claves del proyecto."; exit 1; }
+          echo "::add-mask::$KEY"; echo "::add-mask::$ANON"
+          { echo "SUPABASE_URL=https://$REF.supabase.co"; echo "SERVICE_KEY=$KEY"; echo "ANON_KEY=$ANON"; } >> "$GITHUB_ENV"
+
+      - name: Las escenas de la grabación anterior (se reutilizan las que no se regraban)
+        run: |
+          set -euo pipefail
+          mkdir -p "$SALIDA"
+          if git fetch -q --depth=1 origin video-salida/gd-qbo 2>/dev/null; then
+            git archive FETCH_HEAD escenas capturas 2>/dev/null | tar -x -C "$SALIDA" || true
+            git archive FETCH_HEAD muestras-voz 2>/dev/null | tar -x -C "$SALIDA" || true
+            echo "Hay grabación anterior: se reutilizan sus escenas."
+          else
+            echo "No hay grabación anterior."
+          fi
+          mkdir -p "$RUNNER_TEMP/tomas"
+          if git fetch -q --depth=1 origin video-tomas/gd-qbo 2>/dev/null; then
+            git archive FETCH_HEAD tomas 2>/dev/null | tar -x -C "$RUNNER_TEMP" || true
+            echo "Tomas de Julio: las de video-tomas/gd-qbo."
+          else
+            echo "Aún no hay tomas de Julio (video-tomas/gd-qbo)."
+          fi
+
+      - name: Grabar
+        timeout-minutes: 60
+        env:
+          MODO: ${{ inputs.modo }}
+          ESCENAS: ${{ inputs.escenas }}
+          MES: ${{ inputs.mes }}
+          TOMAS: ${{ runner.temp }}/tomas
+          APP: https://app.sumied.com
+        # Lo que dice el guion va a un fichero (registro.txt, en la salida), no al registro del run.
+        run: mkdir -p video-salida && node scripts/video/gd/qbo.mjs > video-salida/registro.txt 2>&1
+
+      - name: Resumen
+        if: always()
+        run: |
+          [ -f "$SALIDA/registro.txt" ] || exit 0
+          tail -25 "$SALIDA/registro.txt" | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gd-qbo
+          path: |
+            video-salida/gd-qbo.mp4
+            video-salida/escenas
+            video-salida/capturas
+            video-salida/registro.txt
+          retention-days: 30
+
+      - name: Publicar en video-salida/gd-qbo (fuera de cualquier PR)
+        if: always()
+        run: |
+          set -euo pipefail
+          [ -d "$SALIDA/escenas" ] || exit 0
+          cd "$SALIDA"
+          rm -rf crudo
+          git init -q -b salida
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Vídeo GD · QBO · ${{ inputs.modo }} · ${{ inputs.escenas }} · run ${GITHUB_RUN_ID}"
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" "salida:refs/heads/video-salida/gd-qbo"
+          echo "### Publicado en \`video-salida/gd-qbo\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # nº84 · Si «Volver a empezar» no acabó, el run sale en ROJO (antes, verde con el fallo en el registro).
+      - name: ¿Volvió a empezar?
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/gd-qbo-rojo.txt" ]; then
+            echo "::error title=Volver a empezar::«Volver a empezar» no ha acabado: el porqué, en registro.txt."
+            cat "$RUNNER_TEMP/gd-qbo-rojo.txt" | node scripts/conta/salida-segura.mjs >> "$GITHUB_STEP_SUMMARY" || true
+            exit 1
+          fi
+          echo "«Volver a empezar»: bien, o no se pidió."

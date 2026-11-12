@@ -25,8 +25,20 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
     expect(n.fallan).toBe(1)
     expect(n['sin-cobro']).toBe(0)
     expect(CHIPS.map((c) => c.etiqueta)).toEqual([
-      'En Bitrix24 sin cobro en GoCardless', 'En GoCardless sin ficha en Bitrix24', 'Bitrix24 y GoCardless no coinciden en el emisor',
-      'Suscripción sin convertir en tarifa', 'Sumied y GoCardless no dan el mismo total', 'Mandato pendiente de firma', 'Fallan a menudo (3 o más en 6 meses)'])
+      'En tu CRM sin cobro en GoCardless', 'En GoCardless sin ficha en tu CRM', 'Tu CRM y GoCardless no coinciden en el emisor',
+      'Suscripción sin convertir en tarifa', 'Sumied y GoCardless no dan el mismo total', 'Mandato pendiente de firma', 'Fallan a menudo (3 o más en 6 meses)',
+      // G01b · De la lectura del CRM.
+      'Fichas repetidas en tu CRM', 'NIF de tu CRM que no se usa', 'Fichas de tu CRM sin guardar',
+      // G01c · Los contactos.
+      'Contacto con solo una negociación', 'Contacto con empresa y con datos de cliente',
+      // G01c · PR B.
+      'Ya no es cliente en tu CRM',
+      // G05 · nº 33: los códigos del programa anterior.
+      'Falta su código de cliente',
+      // G05 · nº 46: el cliente para un recibo desde el portal.
+      'El cliente no está de acuerdo con un recibo', 'Falta la cuenta de Stripe en Ajustes',
+      // GB · nº 13 · Un dato cambiado a mano en Bitrix24 al guardar desde la pestaña.
+      'Cambiado a mano en Bitrix24'])
     expect(filtrarPorChip(filas, 'fallan').map((f) => f.clienteId)).toEqual(['2'])
     expect(filtrarPorChip(filas, null)).toHaveLength(3)
     expect(filtrarPorEmisor(filas, B).map((f) => f.clienteId)).toEqual(['3'])
@@ -71,11 +83,12 @@ describe('G01 · Clientes y cuotas: lo que se decide sin pintar', () => {
 
   it('se adapta a lo conectado: sin GoCardless no sale lo suyo; sin Bitrix24, tampoco lo que los cruza', () => {
     const todo = queSeVe({ gocardless: new Set([A, B]), bitrix: true }, null, [A, B])
-    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 7, []])
+    expect([todo.gocardless, todo.bitrix, todo.chips.length, todo.sinGocardless]).toEqual([true, true, 17, []])
     const soloGc = queSeVe({ gocardless: new Set([A]), bitrix: false }, null, [A, B])
-    expect([soloGc.gocardless, soloGc.bitrix, soloGc.chips, soloGc.sinGocardless]).toEqual([true, false, ['sin-convertir', 'totales', 'por-firmar', 'fallan'], [B]])
+    expect([soloGc.gocardless, soloGc.bitrix, soloGc.chips, soloGc.sinGocardless]).toEqual([true, false, ['sin-convertir', 'totales', 'por-firmar', 'fallan', 'sin-codigo', 'no-de-acuerdo', 'sin-stripe'], [B]])
     const deB = queSeVe({ gocardless: new Set([A]), bitrix: true }, B, [A, B])
-    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, []])
+    // G01b · Lo del CRM solo pide el CRM (G01c: también los dos de los contactos).
+    expect([deB.gocardless, deB.bitrix, deB.chips]).toEqual([false, true, ['repetidas', 'sin-nif', 'no-guardada', 'contacto-negociacion', 'contacto-con-datos', 'ya-no-es-cliente', 'bitrix-cambiado']])
     expect(queSeVe({ gocardless: new Set(), bitrix: false }, null, [A, B]).chips).toEqual([])
   })
 

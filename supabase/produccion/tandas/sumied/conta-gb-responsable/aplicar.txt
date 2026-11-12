@@ -1,0 +1,11 @@
+# GB · nº 24 (el 7 de Code 3) · Quién lleva al cliente, para el portal.
+# Rama conta/gb-responsable. Se ensaya y se aplica desde main nombrando esta
+# rama. El real lo lanza Julio. No depende de otra tanda de la cadena.
+#
+#   1403  Solo añade conta_portal_quien_lleva (lectura, para la persona del
+#         portal). No llama a nada: no cambia ningún dato. El responsable lo
+#         trae la lectura del CRM (conta-bitrix-leer) al desplegarse.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-responsable.sql
+supabase/migrations/20261110T1403_gb_quien_lleva.sql

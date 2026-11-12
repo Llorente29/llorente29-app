@@ -1,0 +1,27 @@
+{
+ "_que": "G05 · Motivo del devuelto · contexto de producción, medido en SOLO LECTURA el 10/11 a las 10:41Z (analizar.mjs sql-contexto). La 1138 añade tres columnas que admiten nulos (conta_gc_cobro, 2.867 filas; conta_recibo, 26) y reemplaza conta_cobro_seguir con la misma firma (md5 2ea28319370b6d6b7749055816805035, el de la 1006; ningún cron la nombra; la llama conta-gocardless-leer). Nada en el camino del pedido. Ningún fichero en el historial.",
+ "medido": "2026-11-10T10:41Z",
+ "tanda": {
+  "supabase/migrations/20261110T1138_g05_motivo_devuelto.sql": "ab77152f338bc54bf1f562e8e2dd358f"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_gc_cobro",
+   "public.conta_recibo"
+  ],
+  "funciones": [
+   "public.conta_cobro_seguir(uuid)"
+  ],
+  "filas": {
+   "public.conta_gc_cobro": 2867,
+   "public.conta_recibo": 26
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

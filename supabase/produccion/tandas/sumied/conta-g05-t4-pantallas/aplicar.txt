@@ -1,0 +1,32 @@
+# G05 · T4 · Lo que necesita el modelo de factura «Sumied» (Julio, nº 41). Rama
+# conta/g05-t4-pantallas. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar. El real lo lanza Julio.
+#
+#   1344  AÑADE conta_servicio.incluye (el «Qué incluye» de cada servicio, que
+#         sale en la factura) y, en conta_gc_mandato, los últimos dígitos, el
+#         país y el banco de la cuenta del mandato (para enseñarla enmascarada);
+#         y conta_tarifa_servicio_incluye para guardarlo. CAMBIA (declarada y
+#         respaldada) conta_pantalla_clientes: los servicios llevan su «incluye».
+#
+# No toca datos: las columnas nacen vacías. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-t4-pantallas.sql
+supabase/migrations/20261109T1344_g05_t4_incluye_y_cuenta.sql
+#
+#   1426  AÑADE (nº 43) el ingreso de GoCardless en el banco: conta_gc_cobro.
+#         payout_gc_id, la tabla conta_gc_payout (día de llegada y neto de cada
+#         pago de GoCardless al banco), lo que espera su ingreso y el casado en
+#         Bancos (la 572 del banco contra la 57200002). Va ANTES de la 1403, que
+#         la lee.
+#
+#   1500  (nº 46) CAMBIA, declarado y probado, el CHECK de los tipos de
+#         «Pendiente de revisar» (solo amplía: «cliente_no_de_acuerdo») y AÑADE
+#         conta_recibo_parar (el portal para un recibo con su motivo) y
+#         conta_recibo_reanudar (la gestoría lo deshace).
+#
+#   1403  AÑADE conta_pantalla_factura_recibo: la ficha de una factura que sale
+#         de un recibo (su recibo, lo que le ha pasado, su Verifactu y sus
+#         asientos con sus apuntes) en una sola lectura. Con las políticas de
+#         quien la llama.
+supabase/migrations/20261109T1426_g05_t4_ingreso_gocardless.sql
+supabase/migrations/20261109T1403_g05_t4_ficha_factura.sql
+supabase/migrations/20261109T1500_g05_t4_parar_recibo.sql

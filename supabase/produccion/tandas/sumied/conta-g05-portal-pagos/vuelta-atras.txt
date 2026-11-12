@@ -1,0 +1,4 @@
+# G05 · Portal · la vuelta atrás de la 1822: fuera las funciones y la tabla nuevas,
+# el CHECK de antes y fuera la columna. La 57200003 se queda en el plan (sin apuntes).
+cuenta: scripts/conta/produccion/cuentas/g05-portal-pagos.sql
+supabase/vuelta-atras/20261109T1822_g05_portal_pagos.down.sql

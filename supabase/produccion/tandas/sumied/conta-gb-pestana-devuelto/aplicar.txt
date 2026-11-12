@@ -1,0 +1,12 @@
+# GB · nº 17, A · El recibo devuelto en la pestaña de Bitrix24, con lo de Code 1.
+# Rama conta/gb-pestana-devuelto. VA DESPUÉS DEL REAL DE LA 0070 (#570). Se ensaya
+# y se aplica desde main nombrando esta rama. El real lo lanza Julio.
+#
+#   0950  Cambia en caliente (declarado, con su prueba): el CHECK de las acciones
+#         de conta_bitrix_pestana_cambio solo AMPLÍA («devuelto» y «suelto»).
+#         Añade conta_bitrix_pestana_devueltos y conta_bitrix_pestana_devuelto_hecho
+#         (solo el servidor). No llama a nada: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-devuelto.sql
+supabase/migrations/20261110T0950_gb_pestana_devuelto.sql

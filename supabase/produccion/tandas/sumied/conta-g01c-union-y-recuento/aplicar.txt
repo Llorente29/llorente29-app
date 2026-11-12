@@ -1,0 +1,13 @@
+# G01c · La unión aplicada no se pierde al confirmar el mapa (Julio, 07/11,
+# tras la lectura de las 20:05 UTC: «31 clientes no se han guardado … Se unirá
+# a su cliente cuando se aplique la unión»). Rama conta/g01c-union-y-recuento.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   2115  conta_crm.union_aplicada (la marca, fuera del mapa), repuesta con la
+#         primera lectura que unió; aplicar la unión la escribe y confirmar el
+#         mapa la conserva (las dos funciones con su respaldo).
+#
+# No lee ni escribe en el CRM. Nada en el camino del pedido. El real lo lanza
+# Julio.
+cuenta: scripts/conta/produccion/cuentas/g01c-union-aplicada.sql
+supabase/migrations/20261107T2115_g01c_union_aplicada.sql

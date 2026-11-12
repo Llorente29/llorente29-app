@@ -25,7 +25,7 @@ import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
 import { TABLAS_GENERALES } from '@/modules/conta/tablas/registro'
 import { HECHO_POR, LO_HECHO } from '@/modules/conta/bancos/marca'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
-import { PRODUCTOS, pestanasVisibles, productoVisible, type Condicion, type Contexto, type IdProducto } from './productos'
+import { PRODUCTOS, cumple, pestanasVisibles, productoVisible, type Condicion, type Contexto, type IdProducto } from './productos'
 
 export interface Orden {
   id: string
@@ -185,7 +185,7 @@ export function ordenDisponible(o: Orden, ctx: Contexto): boolean {
   const p = PRODUCTOS.find((x) => x.id === o.producto)
   if (!p || !productoVisible(p, ctx)) return false
   if (o.pestana && p.pestanas.length > 0 && !pestanasVisibles(p, ctx).some((t) => t.id === o.pestana)) return false
-  return !o.solo || (o.solo === 'hosteleria' ? ctx.hosteleria : o.solo === 'diez' ? ctx.diez : ctx.asesoria === true)
+  return cumple(o.solo, ctx)
 }
 
 /** Las acciones de una página, con lo que no se puede usar aquí ya quitado; los grupos vacíos, fuera. */

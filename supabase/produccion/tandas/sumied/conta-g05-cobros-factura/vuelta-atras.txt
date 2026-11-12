@@ -1,0 +1,3 @@
+# G05 · la vuelta atrás de la 1342: fuera conta_ficha_facturas.
+cuenta: scripts/conta/produccion/cuentas/g05-cobros-factura.sql
+supabase/vuelta-atras/20261110T1342_g05_ficha_facturas.down.sql

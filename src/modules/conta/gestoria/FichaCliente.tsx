@@ -24,7 +24,13 @@ import {
 import type { Linea, SuscripcionActiva } from '../../../../supabase/functions/conta-gocardless-leer/comparacion'
 import type { Servicio } from '@/modules/conta/services/gestoriaService'
 
-const SITUACION: Record<string, string> = { activo: 'Activo', baja: 'De baja', moroso: 'Moroso', solo_renta: 'Solo la renta' }
+const SITUACION: Record<string, string> = { activo: 'Activo', baja: 'De baja', moroso: 'Moroso', solo_renta: 'Solo la renta', sin_clasificar: 'Sin clasificar' }
+/** G01b · La situación en palabras: «Sin clasificar» lleva su texto del CRM; vacía, «Sin situación en tu CRM». G01c · Un contacto no tiene situación. */
+const situacionEnPalabras = (b: NonNullable<ClienteGestoria['bitrix']>) =>
+  b.tipoFicha === 'contacto' && !b.situacion ? 'Los contactos no tienen situación'
+    : !b.situacion ? 'Sin situación en tu CRM'
+    : b.situacion === 'sin_clasificar' ? `Sin clasificar${b.situacionTexto ? ` («${b.situacionTexto}» en tu CRM)` : ''}`
+    : SITUACION[b.situacion] ?? b.situacion
 const fecha = (f: string) => `${f.slice(8, 10)}/${f.slice(5, 7)}/${f.slice(0, 4)}`
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 const nombreMes = (valor: string, opciones: { valor: string; texto: string }[]) => opciones.find((o) => o.valor === valor)?.texto ?? valor
@@ -254,16 +260,31 @@ export function FichaCliente({ fila, ficha, mes, lineas, servicios, sinLinea, cl
         )}
       </section>
 
-      {conBitrix && <section aria-label="Lo que dice Bitrix24">
-        <h3 className="cxg-ficha-sub">Lo que dice Bitrix24</h3>
-        {!fila.bitrix ? <p className="cxg-apoyo">No tiene ficha en Bitrix24.</p> : (
+      {conBitrix && <section aria-label="Lo que dice tu CRM">
+        <h3 className="cxg-ficha-sub">Lo que dice tu CRM</h3>
+        {!fila.bitrix ? <p className="cxg-apoyo">No tiene ficha en tu CRM.</p> : (
           <dl className="cxg-datos">
-            <div><dt>Situación</dt><dd>{fila.bitrix.situacion ? SITUACION[fila.bitrix.situacion] ?? fila.bitrix.situacion : '—'}</dd></div>
+            <div><dt>Viene de</dt><dd>{fila.bitrix.tipoFicha === 'contacto' ? 'Un contacto' : 'Una empresa'}</dd></div>
+            {fila.bitrix.tipoCliente && <div><dt>Tipo de cliente</dt><dd>{fila.bitrix.tipoCliente} <span className="cxg-apoyo">(de referencia)</span></dd></div>}
+            <div><dt>Situación</dt><dd>{situacionEnPalabras(fila.bitrix)}</dd></div>
             <div><dt>Forma de pago</dt><dd>{fila.bitrix.formaPago ?? '—'}</dd></div>
             <div><dt>Servicios</dt><dd>{fila.bitrix.servicios.length ? fila.bitrix.servicios.join(', ') : '—'}</dd></div>
+            <div><dt>Dirección{fila.bitrix.direccionDe ? ` (de «${fila.bitrix.direccionDe}»)` : ''}</dt><dd>{fila.bitrix.direccion ?? 'Sin dirección en tu CRM'}</dd></div>
+            {(fila.bitrix.otrasFichas ?? []).length > 0 && (
+              <div><dt>Otras fichas con el mismo NIF</dt><dd className="cxg-apoyo-dd">{fila.bitrix.otrasFichas!.map((o) =>
+                `${o.nombre} (${o.tipoFicha === 'contacto' ? 'contacto' : 'ficha'} ${o.idExterno}: ${o.situacion === 'sin_clasificar' && o.situacionTexto ? `«${o.situacionTexto}»` : o.situacion ? SITUACION[o.situacion] ?? o.situacion : 'sin situación'})`).join(' · ')}</dd></div>
+            )}
+            {(fila.bitrix.otrasDirecciones ?? []).map((o, i) => (
+              <div key={i}><dt>Otra dirección · {o.etiqueta}</dt><dd className="cxg-apoyo-dd">{o.texto}</dd></div>
+            ))}
+            <div><dt>Personas de contacto</dt><dd>{(fila.bitrix.personas ?? []).length === 0 ? <span className="cxg-apoyo">Ninguna en tu CRM.</span> : (
+              <ul className="cxg-personas">{fila.bitrix.personas!.map((p, i) => (
+                <li key={i}><strong>{p.nombre}</strong>{[...p.correos, ...p.telefonos].length > 0 && <span className="cxg-apoyo"> · {[...p.correos, ...p.telefonos].join(' · ')}</span>}</li>
+              ))}</ul>
+            )}</dd></div>
           </dl>
         )}
-        <p className="cxg-apoyo">De referencia: Sumied no cambia la ficha de Bitrix24.</p>
+        <p className="cxg-apoyo">De referencia: Sumied no cambia la ficha de tu CRM.</p>
       </section>}
     </div>
   )

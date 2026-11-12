@@ -1,0 +1,29 @@
+[
+ {
+  "id": "529-1",
+  "pr": 529,
+  "fecha": "2026-11-09T15:58:08Z",
+  "producto": "sumied",
+  "apartado": "Revisar el cobro",
+  "frase": "pantalla nueva, como la maqueta: los cambios uno a uno, los iguales de una vez, lo que no entra y «Enviar el cobro» con su aviso; ya enviado, cómo va cada recibo.",
+  "ruta": null
+ },
+ {
+  "id": "529-2",
+  "pr": 529,
+  "fecha": "2026-11-09T15:58:08Z",
+  "producto": "sumied",
+  "apartado": "Facturas del cobro",
+  "frase": "modelo «Sumied» (logo, cuenta enmascarada, «Qué incluye», QR) y su ficha con «Lo que ha pasado» y sus asientos, también el ingreso de GoCardless que Bancos casa solo.",
+  "ruta": null
+ },
+ {
+  "id": "529-3",
+  "pr": 529,
+  "fecha": "2026-11-09T15:58:08Z",
+  "producto": "sumied",
+  "apartado": "Portal",
+  "frase": "el cliente puede parar un recibo con su motivo («No estoy de acuerdo»); sale del cobro, queda en «Pendiente de revisar» y la gestoría lo deshace con «Volver a cobrar».",
+  "ruta": null
+ }
+]

@@ -1,0 +1,3 @@
+# GB · La pestaña «Sumied» en la ficha de Bitrix24: la 1905 y su prueba (ROLLBACK).
+supabase/migrations/20261109T1905_gb_bitrix_pestana.sql
+supabase/staging/sql/20261109_gb_bitrix_pestana_prueba.sql

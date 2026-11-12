@@ -1,0 +1,7 @@
+# G01d · Avisos al instante: la 1620 añade el código y el encendido de cada
+# conexión, la cola de avisos con su RLS, las cinco funciones y el repaso. Su
+# prueba (ROLLBACK, datos inventados) mira el configurar como persona, que el
+# servidor lee el código y nadie más, la RLS de la cola, las dos funciones
+# ficha a ficha y la vuelta atrás.
+supabase/migrations/20261108T1620_g01d_avisos.sql
+supabase/staging/sql/20261108_g01d_avisos_prueba.sql

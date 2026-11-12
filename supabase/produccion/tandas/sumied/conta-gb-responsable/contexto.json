@@ -1,0 +1,19 @@
+{
+ "_que": "GB · nº 24 (el 7 de Code 3) · contexto de producción, medido en SOLO LECTURA el 10/11 a las 14:59Z (vuelto a medir; igual que a las 13:07Z). La 1403 crea conta_portal_quien_lleva(uuid), que no existe (ni otra con el mismo nombre), y no la llama. Usa _conta_portal_yo (1530, Code 3), que existe, y lee conta_gestoria_cliente.ficha (1576 clientes, ninguno con «responsable» todavía). Nada en el camino del pedido.",
+ "medido": "2026-11-10T14:59Z",
+ "tanda": {
+  "supabase/migrations/20261110T1403_gb_quien_lleva.sql": "127bbdaee2ba87d64349e804bd9a818a"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

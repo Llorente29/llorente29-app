@@ -16,8 +16,22 @@ import {
 } from '../../../../supabase/functions/conta-gocardless-leer/comparacion'
 
 export type TipoDiferencia =
-  | 'bitrix_sin_cobro' | 'gocardless_sin_ficha' | 'emisor_distinto' | 'nif_repetido_en_bitrix' | 'correo_repetido_en_bitrix'
+  | 'crm_sin_cobro' | 'gocardless_sin_ficha' | 'emisor_distinto' | 'nif_repetido_en_crm' | 'correo_repetido_en_crm'
   | 'nif_distinto' | 'suscripcion_sin_convertir' | 'totales_distintos' | 'mandato_por_firmar' | 'falla_a_menudo' | 'abono_en_otra_cuenta'
+  // G01b · De la lectura del CRM: un cliente con varias fichas, una ficha que entra sin NIF y una que no se ha podido guardar.
+  | 'fichas_repetidas' | 'nif_no_valido' | 'ficha_no_guardada'
+  // G01c · Un contacto con solo una negociación, y uno con empresa y con datos de cliente.
+  | 'contacto_solo_negociacion' | 'contacto_empresa_con_datos'
+  // G01c · Un cliente de Sumied cuya ficha ya no entra como cliente en la lectura del CRM (no se archiva solo).
+  | 'ya_no_es_cliente_en_crm'
+  // G05 · En una empresa que trae los códigos de su programa anterior, un cliente sin el suyo (no se cobra ni se factura).
+  | 'falta_codigo_cliente'
+  // G05 · nº 46 · El cliente ha parado un recibo desde el portal («No estoy de acuerdo»).
+  | 'cliente_no_de_acuerdo'
+  // G05 · nº 58 · Un pago con tarjeta desde el portal sin apuntar: falta (o no vale) la cuenta de Stripe en Ajustes.
+  | 'falta_cuenta_stripe'
+  // GB · nº 13 · Al guardar desde la pestaña de Bitrix24, un dato cambiado allí a mano: no se pisa (se revisa con «Ya lo he revisado»).
+  | 'bitrix_cambiado'
 
 export interface Diferencia {
   id: string
@@ -38,8 +52,19 @@ export interface ClienteGestoria {
   nif: string | null
   emisorId: string
   emisor: string
-  /** Lo que dice Bitrix24 (de referencia). */
-  bitrix: { situacion: string | null; formaPago: string | null; servicios: string[] } | null
+  /** Lo que dice su CRM (de referencia). */
+  bitrix: {
+    situacion: string | null; formaPago: string | null; servicios: string[]
+    /** G01b · El texto de la situación en Bitrix24 (para «Sin clasificar»), la dirección y de qué campo sale, y las otras, de referencia. */
+    situacionTexto?: string | null; direccion?: string | null; direccionDe?: string | null; otrasDirecciones?: { etiqueta: string; texto: string }[]
+    /** G01b · Las otras fichas del CRM del mismo cliente (el mismo NIF, con la unión aplicada). */
+    otrasFichas?: { idExterno: string; tipoFicha?: 'empresa' | 'contacto'; nombre: string; situacion: string | null; situacionTexto: string | null }[]
+    /** G01c · Si su ficha principal es una empresa o un contacto del CRM, y «Tipo de cliente» (de un contacto, de referencia). */
+    tipoFicha?: 'empresa' | 'contacto'
+    tipoCliente?: string | null
+    /** G01c · Sus personas de contacto (los contactos del CRM con su empresa). */
+    personas?: { nombre: string; correos: string[]; telefonos: string[] }[]
+  } | null
   formaCobro: 'gocardless' | 'transferencia' | 'tarjeta' | 'efectivo' | null
   /** El estado del mandato en GoCardless, tal cual (active, pending_customer_approval…). */
   mandato: string | null
@@ -51,13 +76,29 @@ export interface ClienteGestoria {
 export type Conector = 'gocardless' | 'bitrix'
 /** Cada chip, con los conectores que necesita: sin ellos, no sale (no hay nada que comparar). */
 export const CHIPS: readonly { id: string; tipos: readonly TipoDiferencia[]; etiqueta: string; necesita: readonly Conector[] }[] = [
-  { id: 'sin-cobro', tipos: ['bitrix_sin_cobro'], etiqueta: 'En Bitrix24 sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
-  { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en Bitrix24', necesita: ['bitrix', 'gocardless'] },
-  { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Bitrix24 y GoCardless no coinciden en el emisor', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-cobro', tipos: ['crm_sin_cobro'], etiqueta: 'En tu CRM sin cobro en GoCardless', necesita: ['bitrix', 'gocardless'] },
+  { id: 'sin-ficha', tipos: ['gocardless_sin_ficha'], etiqueta: 'En GoCardless sin ficha en tu CRM', necesita: ['bitrix', 'gocardless'] },
+  { id: 'emisor', tipos: ['emisor_distinto'], etiqueta: 'Tu CRM y GoCardless no coinciden en el emisor', necesita: ['bitrix', 'gocardless'] },
   { id: 'sin-convertir', tipos: ['suscripcion_sin_convertir'], etiqueta: 'Suscripción sin convertir en tarifa', necesita: ['gocardless'] },
   { id: 'totales', tipos: ['totales_distintos'], etiqueta: 'Sumied y GoCardless no dan el mismo total', necesita: ['gocardless'] },
   { id: 'por-firmar', tipos: ['mandato_por_firmar'], etiqueta: 'Mandato pendiente de firma', necesita: ['gocardless'] },
   { id: 'fallan', tipos: ['falla_a_menudo'], etiqueta: 'Fallan a menudo (3 o más en 6 meses)', necesita: ['gocardless'] },
+  // G01b · De la lectura del CRM (Julio, 07/11).
+  { id: 'repetidas', tipos: ['fichas_repetidas'], etiqueta: 'Fichas repetidas en tu CRM', necesita: ['bitrix'] },
+  { id: 'sin-nif', tipos: ['nif_no_valido'], etiqueta: 'NIF de tu CRM que no se usa', necesita: ['bitrix'] },
+  { id: 'no-guardada', tipos: ['ficha_no_guardada'], etiqueta: 'Fichas de tu CRM sin guardar', necesita: ['bitrix'] },
+  // G01c · Los contactos (Julio, 07/11).
+  { id: 'contacto-negociacion', tipos: ['contacto_solo_negociacion'], etiqueta: 'Contacto con solo una negociación', necesita: ['bitrix'] },
+  { id: 'contacto-con-datos', tipos: ['contacto_empresa_con_datos'], etiqueta: 'Contacto con empresa y con datos de cliente', necesita: ['bitrix'] },
+  { id: 'ya-no-es-cliente', tipos: ['ya_no_es_cliente_en_crm'], etiqueta: 'Ya no es cliente en tu CRM', necesita: ['bitrix'] },
+  // G05 · nº 33: con los códigos de cliente del programa anterior, Sumied no se inventa ninguno.
+  { id: 'sin-codigo', tipos: ['falta_codigo_cliente'], etiqueta: 'Falta su código de cliente', necesita: ['gocardless'] },
+  // G05 · nº 46 · Lo para el cliente desde el portal; se deshace con «Volver a cobrar» en «Revisar el cobro».
+  { id: 'no-de-acuerdo', tipos: ['cliente_no_de_acuerdo'], etiqueta: 'El cliente no está de acuerdo con un recibo', necesita: ['gocardless'] },
+  // G05 · nº 58 · Un pago con tarjeta desde el portal sin apuntar: falta (o no vale) la cuenta de Stripe en Ajustes.
+  { id: 'sin-stripe', tipos: ['falta_cuenta_stripe'], etiqueta: 'Falta la cuenta de Stripe en Ajustes', necesita: ['gocardless'] },
+  // GB · nº 13 · Al guardar desde la pestaña de Bitrix24, un dato cambiado allí a mano (no se pisa).
+  { id: 'bitrix-cambiado', tipos: ['bitrix_cambiado'], etiqueta: 'Cambiado a mano en Bitrix24', necesita: ['bitrix'] },
 ]
 
 /** Lo conectado: las empresas con GoCardless y si la cuenta tiene Bitrix24 (cada conector se enciende aparte). */
@@ -121,7 +162,9 @@ export const FORMA_COBRO: Record<string, string> = {
 export function textoMandato(estado: string | null): { texto: string; tono: 'verde' | 'ambar' | 'gris' } {
   switch (estado) {
     case 'active': return { texto: 'Firmado', tono: 'verde' }
-    case 'pending_submission': case 'submitted': return { texto: 'Camino del banco', tono: 'ambar' }
+    // nº 90 · Firmado por el cliente: GoCardless lo manda al banco con su primer cobro, y ya se cobra con él.
+    case 'pending_submission': return { texto: 'Firmado, se envía al banco con el primer cobro', tono: 'verde' }
+    case 'submitted': return { texto: 'Firmado, camino del banco', tono: 'verde' }
     case 'pending_customer_approval': return { texto: 'Por firmar', tono: 'ambar' }
     case 'cancelled': return { texto: 'Cancelado', tono: 'gris' }
     case 'failed': return { texto: 'Rechazado por el banco', tono: 'gris' }
@@ -179,6 +222,14 @@ export type Resolver = 'linea_o_baja' | 'enlazar' | 'revisada'
 export function comoResolver(d: Diferencia): Resolver[] {
   if (d.tipo === 'totales_distintos' || d.tipo === 'suscripcion_sin_convertir') return ['linea_o_baja', 'revisada']
   if (d.tipo === 'gocardless_sin_ficha') return ['enlazar', 'revisada']
+  // G01b · Lo del CRM se corrige en el CRM: la próxima lectura lo renueva (no hay empresa a la que apuntar la revisión).
+  if (['fichas_repetidas', 'nif_no_valido', 'ficha_no_guardada', 'contacto_solo_negociacion', 'contacto_empresa_con_datos', 'ya_no_es_cliente_en_crm'].includes(d.tipo)) return []
+  // G05 · Se resuelve poniéndole su código en la ficha: el cobro lo quita solo.
+  if (d.tipo === 'falta_codigo_cliente') return []
+  // G05 · nº 46 · Se resuelve en «Revisar el cobro» («Volver a cobrar»), que la quita.
+  if (d.tipo === 'cliente_no_de_acuerdo') return []
+  // G05 · nº 58 · Se resuelve poniendo la cuenta de Stripe en Ajustes y apuntando el pago, que la quita (no se da por revisada sin apuntarlo).
+  if (d.tipo === 'falta_cuenta_stripe') return []
   return ['revisada']
 }
 

@@ -27,11 +27,16 @@
 
 import { CONTA, INDICE_AJUSTES } from '@/config/navegacion'
 import type { NombreIcono } from '@/modules/conta/diseno/iconos'
+import type { Sector } from '@/modules/conta/sectores/sectores'
 
-export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
+export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'clientesCuotas' | 'facturacion' | 'compras' | 'bancos' | 'laboral' | 'impuestos' | 'contactos' | 'ajustes'
 
-/** Lo que solo sale si la empresa (o la cuenta) lo tiene. */
-export type Condicion = 'hosteleria' | 'diez' | 'asesoria'
+/**
+ * Lo que solo sale si la empresa (o la cuenta) lo tiene. `hosteleria` y
+ * `gestoria` las enciende el sector de la empresa (G03, sectores/sectores.ts);
+ * `asesoria` es la CUENTA que lleva clientes (Clientes del despacho).
+ */
+export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
@@ -83,7 +88,12 @@ export interface Producto {
 
 /** Lo que decide qué sale: de la empresa activa y de la cuenta. */
 export interface Contexto {
+  /** G03 · El sector de la empresa enciende lo de hostelería (sale del paquete, no de una columna suelta). */
   hosteleria: boolean
+  /** G03 · El sector de la empresa es Gestoría: Clientes y cuotas, Tarifa y paquetes, CRM y GoCardless. */
+  gestoria?: boolean
+  /** G03 · El sector de la empresa activa; sin leer, no hay. No decide nada por sí solo: deciden hosteleria y gestoria. */
+  sector?: Sector | null
   diez: boolean
   interruptores: ReadonlySet<string>
   /** S01 · El logo de la empresa (URL firmada del bucket company-logos), o null. No decide qué sale. */
@@ -99,6 +109,8 @@ export interface Contexto {
   asesoria?: boolean
   /** S02 · El producto vendido solo (C06): sin las páginas que aún dicen «aún no». */
   solo?: boolean
+  /** GD · La cuenta es de demostración (accounts.is_demo): sale «Tu cuenta» en Ajustes. Sin leer, no lo es. */
+  demo?: boolean
 }
 
 /** Un eje de analítica encendido, con el nombre que le da la empresa. */
@@ -126,6 +138,7 @@ function llega(id: string, etiqueta: string, icono: NombreIcono, cuando: string)
  * que vive en las tablas): una cosa, un solo sitio.
  */
 const DE_DEFINICIONES = new Set(['plan', 'tablas', 'numeracion'])
+// GD (nº71): las de solo demo («Tu cuenta») salen con la condición «demo», en vez de quitarse.
 const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
   .filter((e) => !DE_DEFINICIONES.has(e.id))
   .map((e): Pestana => ({
@@ -134,6 +147,7 @@ const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
     // «Tu empresa» es también la portada de Ajustes (la dirección «ajustes» a secas).
     prefijos: e.id === 'empresa' ? [R.empresa, e.ruta] : [e.ruta],
     hueco: !!e.hueco,
+    ...(e.soloDemo ? { solo: 'demo' as const } : {}),
   }))
 
 export const PRODUCTOS: Producto[] = [
@@ -162,6 +176,16 @@ export const PRODUCTOS: Producto[] = [
     ],
   },
   {
+    // G04 (maqueta del 08/11) · «Clientes y cuotas», apartado propio de la gestoría, con sus dos
+    // entradas: Clientes (la lista, el panel y la ficha) y Tarifa y paquetes. Sale con el sector
+    // Gestoría de la empresa activa (G03); antes era una pestaña de Ventas.
+    id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [], solo: 'gestoria', grupo: 'finanzas',
+    pestanas: [
+      { id: 'clientesGestoria', etiqueta: 'Clientes', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas, R.clienteGestoria] },
+      { id: 'tarifasGestoria', etiqueta: 'Tarifa y paquetes', icono: 'facturas', ruta: R.tarifasGestoria, prefijos: [R.tarifasGestoria] },
+    ],
+  },
+  {
     // V01 (Julio, 24/10) · Ventas sustituye a Facturación: Facturas (luego
     // Presupuestos y Cobros) y, solo si vende en hostelería, Cierres del día y
     // Liquidaciones (entregas 2 y 3). Solo sale lo que funciona. El id sigue
@@ -174,8 +198,6 @@ export const PRODUCTOS: Producto[] = [
       { id: 'emitidas', etiqueta: 'Facturas', icono: 'facturas', ruta: R.facturasVenta, prefijos: [R.facturasVenta, R.facturasEmitidas] },
       // PC01 · E3 · Cobros (tableros cobros-1 y cobros-2): lo que te deben, las remesas de recibos y los devueltos.
       { id: 'cobros', etiqueta: 'Cobros', icono: 'cobros', ruta: R.cobros, prefijos: [R.cobros] },
-      // G01 · Clientes y cuotas (solo asesoría): los clientes de la gestoría, sus tarifas y lo que cobra GoCardless.
-      { id: 'clientesCuotas', etiqueta: 'Clientes y cuotas', icono: 'contactos', ruta: R.clientesCuotas, prefijos: [R.clientesCuotas], solo: 'asesoria' },
       // V02 · Pantallas (tableros 28 y 29): Liquidaciones es de todos (lo que te
       // pagan quienes cobran por ti: plataformas, el datáfono, Amazon, Stripe…),
       // encima del bloque «Hostelería». La ficha de la del socio de marca (y la de
@@ -278,7 +300,17 @@ export const PRODUCTOS: Producto[] = [
   { id: 'ajustes', etiqueta: 'Ajustes', icono: 'ajustes', ruta: R.empresa, prefijos: [R.alta], abajo: true, pestanas: PAGINAS_AJUSTES },
 ]
 
-const cumple = (c: Condicion | undefined, ctx: Contexto) => !c || (c === 'hosteleria' ? ctx.hosteleria : c === 'diez' ? ctx.diez : ctx.asesoria === true)
+/** ¿La empresa tiene lo que pide la condición? La única cuenta de este tipo: el menú, el buscador y Favoritos la usan. */
+export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
+  if (!c) return true
+  switch (c) {
+    case 'hosteleria': return ctx.hosteleria
+    case 'gestoria': return ctx.gestoria === true
+    case 'diez': return ctx.diez
+    case 'asesoria': return ctx.asesoria === true
+    case 'demo': return ctx.demo === true
+  }
+}
 
 /** Las páginas que salen: con pantalla y, si piden algo de la empresa, que lo tenga. */
 /**

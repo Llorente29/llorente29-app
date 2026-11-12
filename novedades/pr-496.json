@@ -1,0 +1,20 @@
+[
+ {
+  "id": "496-1",
+  "pr": 496,
+  "fecha": "2026-11-07T09:51:53Z",
+  "producto": "sumied",
+  "apartado": "Ajustes › Cobros",
+  "frase": "«Qué es cada campo» en la tarjeta de Bitrix24: se confirma de qué campo sale cada dato; sin confirmar no se guarda la situación de nadie.",
+  "ruta": null
+ },
+ {
+  "id": "496-2",
+  "pr": 496,
+  "fecha": "2026-11-07T09:51:53Z",
+  "producto": "sumied",
+  "apartado": "Clientes y cuotas",
+  "frase": "la ficha dice «Sin clasificar» con el texto de Bitrix24, de qué campo sale la dirección y las demás direcciones.",
+  "ruta": null
+ }
+]

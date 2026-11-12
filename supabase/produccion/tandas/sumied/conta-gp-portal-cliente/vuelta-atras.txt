@@ -1,0 +1,7 @@
+# GP · la vuelta atrás, en orden inverso. La de la 1720: conta_portal_cuenta
+# como la dejó la 1530. La de la 1530: fuera funciones, políticas, tablas
+# conta_portal_* y las cinco columnas de conta_solicitud; el almacén
+# conta-portal, si está vacío.
+cuenta: scripts/conta/produccion/cuentas/gp-portal-base.sql
+supabase/vuelta-atras/20261109T1720_gp_portal_cuenta.down.sql
+supabase/vuelta-atras/20261109T1530_gp_portal_base.down.sql

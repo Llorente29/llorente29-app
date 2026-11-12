@@ -1,0 +1,13 @@
+# G04 · La lista de Clientes, en menos de 1 s (Julio, nº 19, 08/11). Rama
+# conta/g04-lista-rapida. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   2209  SOLO AÑADE: conta_lista_clientes y conta_lista_que_hacer, funciones
+#         de lectura SECURITY DEFINER con una sola comprobación de la cuenta
+#         (como conta_pagos_lista). Devuelven lo mismo que sus vistas. Con la
+#         RLS fila a fila, la lista tardaba 5 s en QBO; la función, 61 ms.
+#
+# No toca datos. No lee ni escribe en GoCardless ni en el CRM. Nada en el
+# camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/g04-lista-rapida.sql
+supabase/migrations/20261108T2209_g04_lista_rapida.sql

@@ -1,0 +1,6 @@
+# G01d · La clave única de la cola de avisos, sin «where»: la 0050. Su prueba
+# (ROLLBACK, datos inventados) hace el mismo «on conflict (account_id, clave)»
+# que las funciones, mira que sin clave se entra siempre y prueba la vuelta
+# atrás (con la clave de antes vuelve el 42P10).
+supabase/migrations/20261109T0050_g01d_cola_clave.sql
+supabase/staging/sql/20261109_g01d_cola_clave_prueba.sql

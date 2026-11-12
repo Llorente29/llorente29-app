@@ -38,6 +38,14 @@ const GRUPOS: { clave: string; descripcion: string; palabras: string[]; iae: str
     iae: ['heladerías'], cnae: [] },
   { clave: 'alojamiento', descripcion: 'Alojamiento', palabras: ['hotel', 'hoteles', 'hostal', 'alojamiento', 'hospedaje'],
     iae: ['hoteles'], cnae: ['Hoteles'] },
+  // G03 · Gestoría o asesoría (hoy el alta no la reconocía). Términos medidos en producción
+  // contra iae_heading y cnae_code (07/11): 1_842 «Servicios financieros y contables», 1_8497
+  // «Servicios de gestión administrativa» y la clase 6920 de la CNAE-2025 (sin coma: la búsqueda
+  // cambia las comas por espacios, y «contabilidad, teneduría» no encontraba nada).
+  { clave: 'gestoria', descripcion: 'Gestoría o asesoría', palabras: ['gestoria', 'gestorias', 'asesoria', 'asesorias', 'asesoria fiscal', 'asesoria laboral',
+    'gestor', 'gestores', 'gestora', 'asesor', 'asesores', 'asesora',
+    'asesor fiscal', 'asesores fiscales', 'gestor administrativo', 'gestores administrativos', 'graduado social', 'graduados sociales', 'despacho de contabilidad', 'contabilidad de empresas'],
+    iae: ['financieros y contables', 'gestión administrativa'], cnae: ['teneduría de libros'] },
   { clave: 'panaderia', descripcion: 'Panadería', palabras: ['panaderia', 'pasteleria', 'bolleria', 'obrador'],
     iae: ['Despachos de pan', 'Industria del pan'], cnae: ['productos de panadería'] },
 ]

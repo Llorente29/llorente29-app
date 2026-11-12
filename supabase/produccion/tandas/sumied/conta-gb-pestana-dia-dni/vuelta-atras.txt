@@ -1,0 +1,3 @@
+# GB · la vuelta atrás de la 1324: conta_bitrix_pestana_hacer como en la 2250 (byte a byte lo de hoy en producción).
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-dia-dni.sql
+supabase/vuelta-atras/20261110T1324_gb_pestana_dia_dni.down.sql

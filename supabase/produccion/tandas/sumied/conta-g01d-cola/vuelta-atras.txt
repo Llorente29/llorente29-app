@@ -1,0 +1,4 @@
+# G01d · la vuelta atrás de la 0050: la clave de la cola, otra vez parcial (como
+# la dejó la 1620). Solo para deshacer: con ella, los avisos vuelven a no entrar.
+cuenta: scripts/conta/produccion/cuentas/g01d-cola.sql
+supabase/vuelta-atras/20261109T0050_g01d_cola_clave.down.sql

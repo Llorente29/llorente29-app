@@ -1,0 +1,7 @@
+# G05 · T3 · la vuelta atrás, en orden inverso: fuera el despertador de las
+# demos (1021); conta_venta_emitir, la de antes, de su respaldo (1007); fuera
+# las tablas, columnas y funciones del cobro (1006).
+cuenta: scripts/conta/produccion/cuentas/g05-t3-cobro.sql
+supabase/vuelta-atras/20261109T1021_g05_verifactu_demos.down.sql
+supabase/vuelta-atras/20261109T1007_g05_numero_con_formato.down.sql
+supabase/vuelta-atras/20261109T1006_g05_cobro_base.down.sql

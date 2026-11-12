@@ -1,0 +1,11 @@
+# GB · nº 17, C · Los mensajes del portal con su texto en la pestaña de Bitrix24
+# («Invitar» y «Contestar» son de Code 3, 2345, ya en producción).
+# Rama conta/gb-pestana-portal-c. Se ensaya y se aplica desde main nombrando
+# esta rama. El real lo lanza Julio. No depende de otra tanda de la cadena.
+#
+#   1040  Solo añade conta_bitrix_pestana_mensajes (solo el servidor). Solo lee:
+#         no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gb-pestana-portal-c.sql
+supabase/migrations/20261110T1040_gb_pestana_mensajes.sql

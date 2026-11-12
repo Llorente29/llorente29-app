@@ -105,6 +105,12 @@ describe('definiciones-comparar.mjs · la foto, antes y después', () => {
     expect(contraRegistro(leerFoto('función f(),huella 1\n'), reg)).toEqual([])
     expect(contraRegistro(con, reg).map((x) => x.clave)).toEqual(['función f()', 'índice public.b_idx'])
   })
+
+  it('sin cambios, el registro sale vacío del todo: ni una línea en blanco para el \\copy', () => {
+    const foto = leerFoto('función f(),huella 1\n')
+    expect(delta(foto, foto)).toBe('')
+    expect(contraRegistro(foto, delta(foto, foto))).toEqual([])
+  })
 })
 
 describe('los workflows', () => {

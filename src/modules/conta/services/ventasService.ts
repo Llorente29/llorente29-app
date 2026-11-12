@@ -23,6 +23,8 @@ import type { AnotacionLibro } from '@/modules/conta/lib/libroRegistro'
 import { cifrasGuardadas, diezDeFactura, diferenciaDe, type EstadoCobroBase, type FacturaVenta, type OrigenFactura } from '@/modules/conta/lib/facturasVenta'
 import { jsPDF } from 'jspdf'
 import { facturaVentaPdf, type DatosFacturaPdf } from '../../../../supabase/functions/_shared/facturaVentaPdf.ts'
+import { facturaSumiedPdf, type DatosFacturaSumied } from '../../../../supabase/functions/_shared/facturaSumiedPdf.ts'
+import { montarDatosSumied } from '../../../../supabase/functions/_shared/cobro/facturaSumiedDatos.ts'
 import { modulosQr } from '@/modules/conta/lib/verifactu/qr'
 import { MENCION_SIN_IVA, aTipoVenta, dePorque, type PorqueSinIva } from '@/modules/conta/lib/ventasSinIva'
 
@@ -352,11 +354,70 @@ export async function verifactuDelPdf(accountId: string, invoiceId: string): Pro
   return url ? { modulos: modulosQr(url), prueba: r?.entorno === 'pruebas' } : null
 }
 
+/**
+ * G05 · T4 · El modelo de factura «Sumied» (la maqueta aprobada, Factura.dc.html;
+ * Julio nº 38): lo usan las facturas que salen de un recibo de la gestoría. Sus
+ * datos: la factura guardada (cifras y cliente), su recibo (las líneas con sus
+ * trabajadores, el mes y el día del cobro), lo que incluye cada servicio (su
+ * nivel o su paquete), el código del cliente, el emisor y si la cuenta es de
+ * demostración. Null si la factura no sale de un recibo (sigue el PDF de la V01).
+ */
+export async function datosSumied(accountId: string, f: FacturaGuardada): Promise<DatosFacturaSumied | null> {
+  const [r] = await leer(tabla('conta_recibo').select('company_id, party_id, mes, factura, confirmado_el, mandato_gc_id').eq('account_id', accountId).eq('invoice_id', f.id), 'su recibo')
+  if (!r) return null
+  const companyId = String(r.company_id)
+  const lineasRecibo = Array.isArray((r.factura as Fila | null)?.lineas) ? ((r.factura as Fila).lineas as Fila[]) : []
+  const asignaciones = lineasRecibo.map((l) => s(l.asignacionId)).filter((x): x is string => !!x)
+  const [emp] = await leer(tabla('company').select('legal_name, trade_name, tax_id, fiscal_street_type, fiscal_street, fiscal_number, fiscal_extra, fiscal_postal_code, fiscal_city, fiscal_province, email, phone, logo_path')
+    .eq('account_id', accountId).eq('id', companyId), 'los datos de la empresa')
+  if (!emp) throw new Error('No he podido leer los datos de la empresa.')
+  const [cc] = await leer(tabla('conta_cobro_cliente').select('codigo_cliente').eq('company_id', companyId).eq('party_id', String(r.party_id)), 'el código del cliente')
+  const asig = asignaciones.length ? await leer(tabla('conta_consulta_asignacion').select('id, servicio_id, nivel_id, paquete_id').eq('cuenta_id', accountId).in('id', asignaciones), 'lo que incluye cada servicio') : []
+  const ids = (k: string) => asig.map((a) => s(a[k])).filter((x): x is string => !!x)
+  const niveles = ids('nivel_id').length ? await leer(tabla('conta_servicio_nivel').select('id, incluye').eq('account_id', accountId).in('id', ids('nivel_id')), 'los niveles') : []
+  const paquetes = ids('paquete_id').length ? await leer(tabla('conta_paquete').select('id, descripcion').eq('account_id', accountId).in('id', ids('paquete_id')), 'los paquetes') : []
+  const servicios = ids('servicio_id').length ? await leer(tabla('conta_servicio').select('id, clave, incluye').eq('account_id', accountId).in('id', ids('servicio_id')), 'los servicios') : []
+  const mandato = s(r.mandato_gc_id)
+  const [cuenta] = mandato ? await leer(tabla('conta_gc_mandato').select('cuenta_final, cuenta_pais').eq('company_id', companyId).eq('gc_id', mandato), 'la cuenta del mandato') : []
+  const logo = s(emp.logo_path) ? await logoParaPdf(String(emp.logo_path)) : null
+  const sale = await rpc<boolean>('cuenta_puede_salir', { p_account_id: accountId })
+  const verifactu = await verifactuDelPdf(accountId, f.id)
+  // G05 · T4 · Lo arma la pieza común: el mismo PDF que hace el servidor al emitir (cobro/facturaRecibo.ts).
+  return montarDatosSumied({
+    factura: { numero: f.numero, fecha: f.fecha, base: f.base, iva: f.iva, retencion: f.retencion, total: f.total,
+      cliente: { nombre: f.cliente.nombre, nif: f.cliente.nif, calle: f.cliente.calle, cp: f.cliente.cp, ciudad: f.cliente.ciudad, provincia: f.cliente.provincia },
+      lineas: f.lineas.map((l) => ({ tipo: l.tipo, importe: l.importe, cuota: l.cuota })) },
+    recibo: { mes: String(r.mes), factura: (r.factura as Fila | null) ?? null, confirmado_el: s(r.confirmado_el) },
+    empresa: emp, codigoCliente: cc?.codigo_cliente == null ? null : Number(cc.codigo_cliente),
+    asignaciones: asig, niveles, servicios, paquetes,
+    cuenta: cuenta ? { pais: s(cuenta.cuenta_pais), final: s(cuenta.cuenta_final) } : null,
+    logo, demo: sale === false, verifactu: verifactu ?? null,
+  })
+}
+/** El logo de Ajustes, para el PDF: PNG o JPEG tal cual; WebP (jsPDF no lo lee), pasado a PNG. Si no se puede, null (salen las iniciales). */
+async function logoParaPdf(ruta: string): Promise<{ base64: string; formato: 'PNG' | 'JPEG' } | null> {
+  if (!supabase) return null
+  const { data, error } = await supabase.storage.from('company-logos').download(ruta)
+  if (error || !data) return null
+  const aBase64 = (b: Blob) => new Promise<string>((ok, mal) => { const r = new FileReader(); r.onload = () => ok(String(r.result).replace(/^data:[^,]*,/, '')); r.onerror = () => mal(r.error); r.readAsDataURL(b) })
+  try {
+    if (data.type === 'image/png') return { base64: await aBase64(data), formato: 'PNG' }
+    if (data.type === 'image/jpeg') return { base64: await aBase64(data), formato: 'JPEG' }
+    const img = await createImageBitmap(data)
+    const lienzo = document.createElement('canvas'); lienzo.width = img.width; lienzo.height = img.height
+    lienzo.getContext('2d')!.drawImage(img, 0, 0)
+    return { base64: lienzo.toDataURL('image/png').replace(/^data:[^,]*,/, ''), formato: 'PNG' }
+  } catch { return null }
+}
+
+
 /** El PDF de una emitida: se hace aquí, se sube y se guarda en la factura. Si ya lo tiene, no se rehace. */
 export async function guardarPdf(accountId: string, f: FacturaGuardada, datos: DatosFacturaPdf): Promise<{ ruta: string; yaEstaba: boolean }> {
   if (f.pdf) return { ruta: f.pdf.ruta, yaEstaba: true }
   if (!supabase) throw new Error('No hay conexión con la base de datos.')
-  const pdf = facturaVentaPdf(jsPDF, { ...datos, verifactu: await verifactuDelPdf(accountId, f.id) })
+  // G05 · T4: la factura de un recibo, con el modelo «Sumied»; las demás, con el de la V01.
+  const sumied = await datosSumied(accountId, f)
+  const pdf = sumied ? facturaSumiedPdf(jsPDF, sumied) : facturaVentaPdf(jsPDF, { ...datos, verifactu: await verifactuDelPdf(accountId, f.id) })
   const sha = await hex(pdf)
   const ruta = `${accountId}/ventas/${f.id}/${sha.slice(0, 16)}.pdf`
   const sub = await supabase.storage.from(BUCKET).upload(ruta, new Blob([pdf as BlobPart], { type: 'application/pdf' }), { contentType: 'application/pdf', upsert: false })

@@ -26,6 +26,7 @@ import { rutaPuerta } from '@/config/navegacion'
 import { dejarFicheros, llevaFicheros } from '@/modules/conta/puerta/entregas'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
+import { FranjaDemo } from '@/modules/conta/cuenta/FranjaDemo'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useCuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
@@ -149,6 +150,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     ponerDatosCinta: setDatosCinta,
     ponerEntradasCinta: setEntradasCinta,
     hosteleria: ctxListo ? ctx.hosteleria : null,
+    gestoria: ctxListo ? ctx.gestoria === true : null,
     analitica: ctxListo ? ctx.analitica ?? null : null,
     nivel: prefs.nivel,
     ponerConPropias: setPropias,
@@ -158,7 +160,7 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
     abrirBuscador,
     colorEmpresa: ctx.colorEmpresa ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, ejercicios, activa?.id, abrirBuscador])
+  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, ejercicios, activa?.id, abrirBuscador])
 
   // Lo que se puede fijar desde aquí: esta página y sus acciones.
   const fijables: Orden[] = [
@@ -206,6 +208,8 @@ export function Marco({ children, sinPregunta = false }: { children: ReactNode; 
             usuario={usuario(false)} />
           <p className="s-esq-aviso" role="status" aria-live="polite" data-tono={avisoVisible?.tono}>{avisoVisible?.texto ?? ''}</p>
           <main className="cx-principal cxm-principal s-principal">
+            {/* GD · En una cuenta de demostración, arriba del contenido de cada pantalla (también en el móvil). */}
+            <FranjaDemo />
             {propias !== 'encabezado' && (
               <AccionesDePagina grupos={grupos} conBarra={propias === 'barra'} hueco={setHuecoAcciones} etiqueta={`Acciones de ${nombrePagina}`} />
             )}

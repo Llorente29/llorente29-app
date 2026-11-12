@@ -1,0 +1,23 @@
+{
+ "_que": "GB · nº 17, A · contexto de producción, medido en SOLO LECTURA el 10/11 a las 11:31Z (vuelto a medir con la 0070 ya aplicada). La 0950 quita y vuelve a poner el CHECK de las acciones de conta_bitrix_pestana_cambio (0 filas hoy; hoy admite alta, baja, tarifa y deshacer) con «devuelto» y «suelto» además: solo amplía. Crea conta_bitrix_pestana_devueltos(text,text,text,text) y conta_bitrix_pestana_devuelto_hecho(text,text,text,text,uuid,text,text), que no existen, y no las llama. Usa _conta_portal_bitrix_quien (2345, Code 3), _conta_recibo_devuelto_opciones y _conta_usuario_cobra (0055, Code 1) y _conta_bitrix_pestana_bitrix_de (2300), que existen. Nada en el camino del pedido.",
+ "medido": "2026-11-10T11:31Z",
+ "tanda": {
+  "supabase/migrations/20261110T0950_gb_pestana_devuelto.sql": "aaa9ce81a37e3cfb9fb9a573ff6bff5e"
+ },
+ "contexto": {
+  "tablas": [
+   "public.conta_bitrix_pestana_cambio"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.conta_bitrix_pestana_cambio": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

@@ -1,0 +1,3 @@
+# GB · nº 29, 2 · «Te lleva: Sin título», no: la 1520 y su prueba (ROLLBACK). Necesita en staging la 1530 (Code 3); la 1403, si falta, la pone la prueba.
+supabase/migrations/20261110T1520_gb_sin_titulo.sql
+supabase/staging/sql/20261110_gb_sin_titulo_prueba.sql

@@ -6,8 +6,9 @@
 // suscripción, cobro y cuenta de abono. Puro: lo prueban las unitarias
 // (tests/unit/modules/conta/gestoria/lectorGocardless.test.ts).
 //
-// Solo LEE: GET a /customers, /mandates, /subscriptions, /payments, /events y
-// /creditor_bank_accounts. Nunca escribe en GoCardless.
+// Solo LEE: GET a /customers, /mandates, /subscriptions, /payments, /events,
+// /creditor_bank_accounts y /customer_bank_accounts (de estas, solo los últimos
+// dígitos, el país y el banco: G05, para la factura). Nunca escribe en GoCardless.
 //
 // API de GoCardless (documentación oficial, https://developer.gocardless.com/api-reference):
 //   · Cabecera obligatoria «GoCardless-Version: 2015-07-06» y
@@ -16,6 +17,8 @@
 //   · Listas paginadas por cursor: «limit» (hasta 500) y «after»; la respuesta
 //     trae meta.cursors.after, null en la última página.
 //   · Los importes van en céntimos (enteros) y con su moneda.
+
+import { motivoEnPalabras } from './motivo.ts'
 
 export type Entorno = 'real' | 'pruebas'
 export const BASES: Record<Entorno, string> = {
@@ -29,7 +32,7 @@ export function cabeceras(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}`, 'GoCardless-Version': VERSION_API, Accept: 'application/json' }
 }
 
-export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts'
+export type Recurso = 'customers' | 'mandates' | 'subscriptions' | 'payments' | 'events' | 'creditor_bank_accounts' | 'customer_bank_accounts' | 'payouts' | 'payout_items'
 
 /** La dirección de una página: el recurso, sus filtros y el cursor de la anterior. */
 export function urlDePagina(entorno: Entorno, recurso: Recurso, filtros: Record<string, string> = {}, despues: string | null = null): string {
@@ -114,6 +117,16 @@ export function leerCliente(x: Record<string, unknown>): ClienteGc {
   }
 }
 
+/**
+ * G05 · La cuenta del cliente de un mandato, lo justo para enseñarla
+ * enmascarada en la factura y el portal: los últimos dígitos (2 en euros, 4 en
+ * dólares neozelandeses), el país y el banco. Nunca la cuenta entera.
+ */
+export interface CuentaClienteGc { id: string; final: string | null; pais: string | null; banco: string | null }
+export function leerCuentaCliente(x: Record<string, unknown>): CuentaClienteGc {
+  return { id: String(x.id), final: texto(x.account_number_ending), pais: texto(x.country_code), banco: texto(x.bank_name) }
+}
+
 /** Estados de un mandato en GoCardless. «activo» para el casado: active (y submitted, que ya cobra). */
 export type EstadoMandatoGc =
   | 'pending_customer_approval' | 'pending_submission' | 'submitted' | 'active' | 'failed'
@@ -156,6 +169,8 @@ export interface SuscripcionGc {
   mandatoId: string | null
   inicio: string | null
   fin: string | null
+  /** G04 · El siguiente cobro (upcoming_payments de GoCardless, el más próximo): su día y su importe. */
+  proximoCobro: { fecha: string; importeCent: number } | null
 }
 
 export function leerSuscripcion(x: Record<string, unknown>): SuscripcionGc {
@@ -170,7 +185,17 @@ export function leerSuscripcion(x: Record<string, unknown>): SuscripcionGc {
     mandatoId: enlace(x, 'mandate'),
     inicio: texto(x.start_date),
     fin: texto(x.end_date),
+    proximoCobro: proximoCobro(x.upcoming_payments),
   }
+}
+
+/** G04 · El más próximo de upcoming_payments ([{ charge_date, amount }]); null si no trae ninguno. */
+function proximoCobro(v: unknown): { fecha: string; importeCent: number } | null {
+  if (!Array.isArray(v)) return null
+  const xs = v.filter((p): p is { charge_date: string; amount: number } =>
+    !!p && typeof (p as { charge_date?: unknown }).charge_date === 'string' && Number.isFinite(Number((p as { amount?: unknown }).amount)))
+    .sort((a, b) => (a.charge_date < b.charge_date ? -1 : a.charge_date > b.charge_date ? 1 : 0))
+  return xs.length ? { fecha: xs[0].charge_date, importeCent: Math.round(Number(xs[0].amount)) } : null
 }
 
 /**
@@ -193,8 +218,13 @@ export interface CobroGc {
   moneda: string
   mandatoId: string | null
   suscripcionId: string | null
+  /** G05 · nº 43 · El pago de GoCardless al banco que lo lleva (links.payout), si ya lo tiene. */
+  payoutId: string | null
   /** El motivo del fallo, de su evento (/events): lo pone casarMotivos. */
   motivo: string | null
+  /** G05 · nº 77 · Su código (details.cause) y el motivo en palabras de oficina. */
+  causa?: string | null
+  motivoEs?: string | null
 }
 
 export const COBRO_FALLIDO: readonly string[] = ['failed', 'charged_back', 'cancelled']
@@ -208,8 +238,21 @@ export function leerCobro(x: Record<string, unknown>): CobroGc {
     moneda: String(x.currency ?? ''),
     mandatoId: enlace(x, 'mandate'),
     suscripcionId: enlace(x, 'subscription'),
+    payoutId: enlace(x, 'payout'),
     motivo: null,
   }
+}
+
+/**
+ * G05 · nº 43 · Un pago de GoCardless a la cuenta de la empresa (payout): junta
+ * los cobros de un día. Trae el día en que llega al banco (arrival_date), su
+ * neto (amount, ya sin la comisión: deducted_fees) y su referencia.
+ */
+export interface PayoutGc { id: string; estado: string; llegada: string | null; importeCent: number; comisionCent: number | null; moneda: string; referencia: string | null }
+export function leerPayout(x: Record<string, unknown>): PayoutGc {
+  const cent = (v: unknown) => (Number.isInteger(v) ? (v as number) : Math.round(Number(v ?? 0)))
+  return { id: String(x.id), estado: String(x.status ?? ''), llegada: texto(x.arrival_date), importeCent: cent(x.amount),
+    comisionCent: x.deducted_fees == null ? null : cent(x.deducted_fees), moneda: String(x.currency ?? ''), referencia: texto(x.reference) }
 }
 
 /**
@@ -217,7 +260,7 @@ export function leerCobro(x: Record<string, unknown>): CobroGc {
  * charged_back» (details.description; si no, details.cause). El último gana.
  */
 export function casarMotivos(cobros: CobroGc[], eventos: Record<string, unknown>[]): CobroGc[] {
-  const motivo = new Map<string, { cuando: string; texto: string }>()
+  const motivo = new Map<string, { cuando: string; texto: string; causa: string | null }>()
   for (const e of eventos) {
     if (e.resource_type !== 'payments' || !['failed', 'charged_back', 'cancelled'].includes(String(e.action))) continue
     const pago = enlace(e, 'payment')
@@ -226,9 +269,12 @@ export function casarMotivos(cobros: CobroGc[], eventos: Record<string, unknown>
     if (!pago || !t) continue
     const cuando = texto(e.created_at) ?? ''
     const antes = motivo.get(pago)
-    if (!antes || cuando >= antes.cuando) motivo.set(pago, { cuando, texto: t })
+    if (!antes || cuando >= antes.cuando) motivo.set(pago, { cuando, texto: t, causa: texto(d.cause) })
   }
-  return cobros.map((c) => (motivo.has(c.id) ? { ...c, motivo: motivo.get(c.id)!.texto } : c))
+  return cobros.map((c) => {
+    const m = motivo.get(c.id)
+    return m ? { ...c, motivo: m.texto, causa: m.causa, motivoEs: motivoEnPalabras(m.causa, m.texto) } : c
+  })
 }
 
 /** Desde cuándo se leen los cobros: el primer día del mes de hace N meses («charge_date[gte]»). */

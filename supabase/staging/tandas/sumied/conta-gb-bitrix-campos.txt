@@ -1,0 +1,3 @@
+# GB · nº 13, punto 1 · «Trabajadores» y «Estado del cobro»: la 0040 y su prueba (ROLLBACK).
+supabase/migrations/20261110T0040_gb_bitrix_campos.sql
+supabase/staging/sql/20261110_gb_bitrix_campos_prueba.sql

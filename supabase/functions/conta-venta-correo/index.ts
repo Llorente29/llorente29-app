@@ -19,27 +19,17 @@
 //
 // verify_jwt = true (config.toml): sin sesión no hay nada que hacer.
 
-import { cuentaPuedeSalir, EN_LA_DEMO } from "../_shared/puerta.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { MARCAS } from "../_shared/marcas.ts";
-import { cerrojoMarca } from "../send-email/marca.ts";
-import { PLANTILLA_FACTURA_VENTA, correoFactura, correoValido, remitenteFactura } from "../_shared/facturaVentaCorreo.ts";
-import { nombreFacturaPdf } from "../_shared/facturaVentaPdf.ts";
+import { correoValido } from "../_shared/facturaVentaCorreo.ts";
+import { enviarFacturaVenta } from "../_shared/facturaVentaEnviar.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const BUCKET = "conta-documentos";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-}
-
-function base64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(s);
 }
 
 Deno.serve(async (req) => {
@@ -69,65 +59,11 @@ Deno.serve(async (req) => {
   if (puede !== true) return json({ error: "Solo un administrador o un encargado de la cuenta manda facturas." }, 403);
 
   const srv = createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } });
-  const apuntar = (enviado: boolean, texto: string, detalle: Record<string, unknown>) =>
-    srv.rpc("conta_venta_enviada", { p_id: id, p_para: enviado ? para : null, p_texto: texto, p_detalle: detalle, p_quien_nombre: quien });
-
-  if (f.status === "borrador") return json({ enviado: false, texto: "No se ha mandado: un borrador no se manda; emítela antes." });
-  if (!f.pdf_path) {
-    const texto = `No se ha mandado la ${f.number_text}: aún no tiene su PDF.`;
-    await apuntar(false, texto, { para, motivo: "sin_pdf" });
-    return json({ enviado: false, texto });
-  }
-
-  // DM1 · PR 2a · La puerta: una cuenta de demo no manda correos. Queda como enviada, y lo dice.
-  if (!(await cuentaPuedeSalir(srv, f.account_id))) {
-    const texto = `Enviada la ${f.number_text} a ${para}. ${EN_LA_DEMO}`;
-    await apuntar(true, texto, { para, demo: true });
-    return json({ enviado: true, demo: true, texto });
-  }
-
-  // El freno, antes de tocar nada más.
-  const cerrojo = cerrojoMarca(MARCAS.sumied, PLANTILLA_FACTURA_VENTA, para, Deno.env.get("CORREO_MARCA_ABIERTOS"));
-  if (!cerrojo.abierto) {
-    const texto = `No se ha mandado la ${f.number_text} a ${para}: los correos de facturas aún están cerrados (los abre Julio).`;
-    await apuntar(false, texto, { para, motivo: "cerrado" });
-    return json({ enviado: false, texto });
-  }
-  const resendKey = Deno.env.get("RESEND_API_KEY");
-  if (!resendKey) return json({ enviado: false, texto: "No se ha mandado: el servicio de correo no está configurado." }, 500);
-
-  const { data: emp } = await sb.from("company").select("legal_name, trade_name, email").eq("id", f.company_id).maybeSingle();
-  const empresa = String(emp?.trade_name || emp?.legal_name || "");
-  const { data: pdf, error: e1 } = await srv.storage.from(BUCKET).download(f.pdf_path);
-  if (e1 || !pdf) {
-    const texto = `No se ha mandado la ${f.number_text}: no se ha podido leer su PDF.`;
-    await apuntar(false, texto, { para, motivo: "pdf" });
-    return json({ enviado: false, texto });
-  }
-
-  const cliente = String((f.customer as Record<string, unknown> | null)?.nombre ?? "");
-  const c = correoFactura({
-    empresa, numero: f.number_text, rectificativa: f.doc_type === "rectificativa", fecha: f.issue_date,
-    total: Number(f.total), vence: f.due_date, cliente: cliente || "cliente",
+  // G05 · T4 · El envío (la puerta de las demos, el freno, el correo y su apunte), en _shared/facturaVentaEnviar.ts:
+  // el mismo que usa el envío solo al emitir una factura de un recibo.
+  const r = await enviarFacturaVenta(srv, f, para, quien, {
+    resendKey: Deno.env.get("RESEND_API_KEY"), buzonDePruebas: Deno.env.get("CORREO_BUZON_PRUEBAS"), abiertos: Deno.env.get("CORREO_MARCA_ABIERTOS"),
   });
-  const responder = correoValido(emp?.email);
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      from: remitenteFactura(empresa), to: [para], subject: c.asunto, html: c.html, text: c.texto,
-      ...(responder ? { reply_to: responder } : {}),
-      attachments: [{ filename: nombreFacturaPdf(f.number_text), content: base64(new Uint8Array(await pdf.arrayBuffer())) }],
-    }),
-  });
-  const cuerpo = await res.json().catch(() => ({})) as { id?: string; message?: string };
-  if (!res.ok) {
-    const texto = `No se ha mandado la ${f.number_text} a ${para}: el proveedor de correo lo ha rechazado (${cuerpo.message ?? `HTTP ${res.status}`}).`;
-    await apuntar(false, texto, { para, motivo: "proveedor", estado: res.status });
-    console.error(`conta-venta-correo · ${id} · Resend ${res.status}`);
-    return json({ enviado: false, texto });
-  }
-  const texto = `Enviada la ${f.number_text} a ${para}, con su PDF.`;
-  await apuntar(true, texto, { para, correo_id: cuerpo.id ?? null });
-  return json({ enviado: true, texto });
+  if (!r.enviado && r.texto === "No se ha mandado: el servicio de correo no está configurado.") return json(r, 500);
+  return json(r);
 });

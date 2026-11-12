@@ -1,0 +1,13 @@
+# GD · Arreglos de la demo que vio Julio al conectar (nº32). Rama
+# conta/gd-arreglos. Se ensaya y se aplica desde main nombrando esta rama, antes
+# de fusionar. El real lo lanza Julio.
+#
+#   1530  Añade demo_gestoria_banco_sembrar(cuenta) (solo cuentas demo, solo la
+#         plataforma) y la llama para «Gestoría Demo». CAMBIA DATOS, solo de la
+#         cuenta demo: el banco por defecto de la sociedad pasa a un IBAN de
+#         mentira del banco 9999 que termina en 56, como la cuenta de abono del
+#         sandbox (si no, la lectura de GoCardless avisa en naranja).
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/gd-banco-demo.sql
+supabase/migrations/20261109T1530_gd_banco_demo.sql

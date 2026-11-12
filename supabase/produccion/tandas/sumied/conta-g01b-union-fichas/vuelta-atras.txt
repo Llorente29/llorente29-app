@@ -1,0 +1,6 @@
+# G01b · la vuelta atrás de la 1110: confirmar el mapa como antes (del
+# respaldo), fuera la tabla de fichas, guardar los clientes y aplicar la unión,
+# el mapa sin la unión, las diferencias de los tipos nuevos fuera y el CHECK de
+# antes.
+cuenta: scripts/conta/produccion/cuentas/g01b-union-fichas.sql
+supabase/vuelta-atras/20261107T1110_g01b_union_fichas.down.sql

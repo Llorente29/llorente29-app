@@ -1,0 +1,5 @@
+# G01c · la vuelta atrás de la 2310: confirmar el mapa como antes, fuera las
+# funciones nuevas y los CHECK como estaban (lo escrito con lo nuevo vuelve a
+# lo de antes).
+cuenta: scripts/conta/produccion/cuentas/g01c-crm-neutro-a.sql
+supabase/vuelta-atras/20261107T2310_g01c_crm_neutro_a.down.sql

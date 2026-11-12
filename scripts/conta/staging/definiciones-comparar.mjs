@@ -74,10 +74,15 @@ export function tabla(difs, ea = 'Antes', ed = 'Después') {
   return [`| Qué | ${ea} | ${ed} | |`, '|---|---|---|---|', ...difs.map((x) => `| ${x.clave} | ${celda(x.antes)} | ${celda(x.despues)} | ${nota(x.antes, x.despues)} |`), ''].join('\n')
 }
 
-/** CSV del registro: «clave,valor» con el valor vacío (sin comillas) si no existía. */
+/**
+ * CSV del registro: «clave,valor» con el valor vacío (sin comillas) si no existía.
+ * Sin cambios, NADA: ni una línea en blanco, que el \copy de de-verdad.sh lee
+ * como una fila sin columnas y para (el «aplicar» del #513 salió en rojo así).
+ */
 export function delta(antes, despues) {
   const q = (x) => `"${String(x).replace(/"/g, '""')}"`
-  return diferencias(antes, despues).map((x) => `${q(x.clave)},${x.antes === undefined ? '' : q(x.antes)}`).join('\n') + '\n'
+  const lineas = diferencias(antes, despues).map((x) => `${q(x.clave)},${x.antes === undefined ? '' : q(x.antes)}`)
+  return lineas.length ? `${lineas.join('\n')}\n` : ''
 }
 
 /** Lo que el registro dice que había antes, contra la foto de ahora. */

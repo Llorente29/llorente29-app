@@ -1,0 +1,215 @@
+name: Recuento de campos de Bitrix24 (solo lectura)
+
+# QUÉ HACE (G01b, 07/11)
+# Con el Bitrix24 real de QBO conectado, la propuesta del mapa dejó sin código
+# el NIF, la calle, la situación y dos cuotas, porque encajaban varios campos.
+# Para decidir con datos, la función conta-bitrix-leer (acción «recuento»)
+# cuenta, de todas las fichas:
+#   · NIF y calle: cuántas tienen relleno cada campo candidato, cuántas más de
+#     uno y en cuántas no coinciden;
+#   · la situación: cuántas hay en cada opción de «Situación del Cliente»;
+#   · las cuotas: cuántas tienen importe y (si se pide) la suma de cada una;
+#   · (07/11, tras el «ux_party_nif» de la primera lectura con el mapa
+#     confirmado) los NIF repetidos: cuántos salen en más de una ficha y
+#     cuántas fichas suman; con la misma situación o distinta; activa y de
+#     baja a la vez; de qué tipo (DNI, NIE, CIF); y si mezclan una ficha con
+#     nombre de sociedad y otra de persona. El nombre se lee solo para eso y
+#     no sale.
+#   · (07/11, la unión) lo que saldría con la regla: cuántos clientes, cuántas
+#     fichas se unen, cuántas entran sin NIF y cuántas fichas y clientes hay en
+#     cada situación. Solo números; no cambia nada.
+#   · (G01c, 07/11) los CONTACTOS: sus campos (etiqueta y tipo, para decidir el
+#     mapa), cuántos hay con y sin empresa (el enlace sale de crm.item.list,
+#     companyIds: crm.contact.list no lo trae), sus listas de cliente («Tipo de
+#     cliente», tipo, servicio, campaña) con cada opción, las señales de
+#     cliente de los que no tienen empresa (NIF, Tarifa Recurrente, una
+#     negociación, un cliente de GoCardless por NIF o correo), los que tienen el
+#     NIF de una empresa y si están enlazados a ella, y los de empresa con datos
+#     de cliente. Nunca un campo de contraseñas, ficheros o IBAN.
+#
+# SOLO LEE de Bitrix24 (crm.company.fields y crm.company.list) y NO ESCRIBE
+# nada, ni en Sumied ni en Bitrix24. La dirección del webhook, con su clave, la
+# saca la función de Vault por dentro y no la devuelve: no pasa por aquí.
+#
+# CUÁNDO: después de fusionar el PR que la trae, cuando deploy-edge-functions
+# haya desplegado conta-bitrix-leer (si no, la función contesta 400 «Acción:
+# conectar o leer.» y este workflow PARA diciéndolo).
+#
+# QUÉ SALE AQUÍ: solo números y las etiquetas de los campos. Ni nombres, ni
+# NIF, ni direcciones. El repositorio es público y este resumen también: las
+# SUMAS de las cuotas solo salen si se pide «importes = si».
+#
+# Usa el secreto SUPABASE_ACCESS_TOKEN (el del despliegue) para pedir la clave
+# de servicio a la Management API en el momento, enmascarada; no hay secreto
+# nuevo. Lo lanza Julio (T10).
+
+on:
+  workflow_dispatch:
+    inputs:
+      cuenta:
+        description: 'Cuenta (account_id). Por defecto, Asesoría QBO.'
+        required: true
+        default: 'f4e8032d-510a-4e57-914c-4b67732d8655'
+      importes:
+        description: '¿Sacar la SUMA de cada cuota? El resumen es público: «si» o «no».'
+        required: true
+        default: 'no'
+      grupos:
+        description: 'Los campos a contar (códigos del Bitrix24 de QBO, medidos el 07/11). Solo cambiarlo si se sabe lo que se hace.'
+        required: true
+        default: '{"texto":{"nif":["UF_CRM_1694696476571","UF_CRM_68DD6DC33A148","UF_CRM_698E04783FB03"],"calle":["UF_CRM_6728B7610B3ED","UF_CRM_6728B7627CAB4","UF_CRM_1694769585578","UF_CRM_1694769047761","ADDRESS"]},"situacion":"UF_CRM_1727086646502","cuotas":["UF_CRM_1727364305055","UF_CRM_1727359351013","UF_CRM_1727359417190","UF_CRM_1727364185647","UF_CRM_1727364202951","UF_CRM_1727364226237"],"repetidos":{"nif":"UF_CRM_1694696476571","nombre":"TITLE"},"contactos":true}'
+
+concurrency:
+  group: recuento-bitrix-conta
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  contar:
+    # W12b (30/10): el secreto vive en el entorno «despliegue», que solo admite
+    # ejecuciones de main.
+    environment: despliegue
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Proyecto y clave (enmascarada)
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          set -euo pipefail
+          REF=$(grep -E '^\s*project_id\s*=' supabase/config.toml | head -1 | sed -E 's/.*=\s*"?([a-z0-9]+)"?.*/\1/')
+          [ -n "$REF" ] || { echo "::error::No se pudo leer project_id de supabase/config.toml."; exit 1; }
+          # G01b (07/11): el primer recuento salió con 403 porque la función solo
+          # comparaba con la clave antigua. Se pide la nueva (secreta, «default»)
+          # si el proyecto la tiene y, si no, la antigua (service_role); la
+          # función acepta las dos. Del formato se dice cuál es; de la clave, nada.
+          curl -sf -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" "https://api.supabase.com/v1/projects/$REF/api-keys?reveal=true" > /tmp/claves.json
+          KEY=$(jq -r '[.[] | select(.type == "secret" and (.api_key // "" | startswith("sb_secret_")))] | (map(select(.name == "default")) + .) | .[0].api_key // empty' /tmp/claves.json)
+          [ -n "$KEY" ] || KEY=$(jq -r '[.[] | select(.name == "service_role")] | .[0].api_key // empty' /tmp/claves.json)
+          rm -f /tmp/claves.json
+          [ -n "$KEY" ] && [ "$KEY" != "null" ] || { echo "::error::No se pudo obtener la clave de servicio."; exit 1; }
+          echo "::add-mask::$KEY"
+          case "$KEY" in sb_secret_*) echo "Clave de servicio: la nueva (sb_secret_…)."; echo "FORMATO=nueva" >> "$GITHUB_ENV" ;;
+                         eyJ*) echo "Clave de servicio: la antigua (JWT)."; echo "FORMATO=antigua" >> "$GITHUB_ENV" ;;
+                         *) echo "::error::La clave de servicio no tiene un formato conocido."; exit 1 ;; esac
+          echo "REF=$REF" >> "$GITHUB_ENV"
+          echo "KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: Contar (solo lee de Bitrix24; no escribe nada)
+        env:
+          CUENTA: ${{ inputs.cuenta }}
+          IMPORTES: ${{ inputs.importes }}
+          GRUPOS: ${{ inputs.grupos }}
+        run: |
+          set -euo pipefail
+          [[ "$CUENTA" =~ ^[0-9a-f-]{36}$ ]] || { echo "::error::La cuenta no es un uuid."; exit 1; }
+          [[ "$IMPORTES" == "si" || "$IMPORTES" == "no" ]] || { echo "::error::«importes» es «si» o «no»."; exit 1; }
+          echo "$GRUPOS" | jq -e . > /dev/null || { echo "::error::«grupos» no es un JSON."; exit 1; }
+          jq -n --arg c "$CUENTA" --argjson g "$GRUPOS" '{accion: "recuento", cuenta: $c, grupos: $g}' > /tmp/cuerpo.json
+          # La nueva no es un JWT: no va en «Authorization» (Supabase la rechazaría ahí), sino en «apikey».
+          if [ "$FORMATO" = "nueva" ]; then CABECERA="apikey: $KEY"; else CABECERA="Authorization: Bearer $KEY"; fi
+          code=$(curl -s -o /tmp/r.json -w '%{http_code}' -X POST "https://$REF.supabase.co/functions/v1/conta-bitrix-leer" \
+                 -H "$CABECERA" -H "x-internal-key: $KEY" -H 'Content-Type: application/json' --data @/tmp/cuerpo.json)
+          if [ "$code" != "200" ]; then
+            echo "::error::La función ha contestado $code: $(jq -r '.error // "sin mensaje"' /tmp/r.json 2>/dev/null || echo 'sin mensaje')"
+            exit 1
+          fi
+          {
+            echo "## Recuento de Bitrix24 · $(jq -r '.portal' /tmp/r.json) ($(jq -r '.entorno' /tmp/r.json))"
+            echo
+            echo "**$(jq -r '.total' /tmp/r.json) fichas**, leídas en $(jq -r '.peticiones' /tmp/r.json) peticiones. Solo lectura: no se ha escrito nada."
+            for g in $(jq -r '.texto | keys[]' /tmp/r.json); do
+              echo; echo "### ${g^^}"; echo
+              echo "| Campo en Bitrix24 | Código | Fichas con algo |"; echo "|---|---|---:|"
+              jq -r --arg g "$g" '.texto[$g].campos[] | "| \(.etiqueta) | `\(.codigo)` | \(.rellenas) |"' /tmp/r.json
+              echo
+              echo "- Con más de uno relleno: **$(jq -r --arg g "$g" '.texto[$g].masDeUno' /tmp/r.json)**"
+              echo "- De esas, en las que no coinciden: **$(jq -r --arg g "$g" '.texto[$g].noCoinciden' /tmp/r.json)**"
+            done
+            echo; echo "### $(jq -r '.situacion.etiqueta' /tmp/r.json) (\`$(jq -r '.situacion.codigo' /tmp/r.json)\`)"; echo
+            echo "| Opción | Fichas |"; echo "|---|---:|"
+            jq -r '.situacion.opciones[] | "| \(.texto) | \(.fichas) |"' /tmp/r.json
+            echo "| (vacía) | $(jq -r '.situacion.vacias' /tmp/r.json) |"
+            echo "| (otro valor) | $(jq -r '.situacion.otras' /tmp/r.json) |"
+            echo; echo "### Cuotas"; echo
+            if [ "$IMPORTES" = "si" ]; then
+              echo "| Campo en Bitrix24 | Código | Fichas con importe | Suma |"; echo "|---|---|---:|---:|"
+              jq -r '.cuotas[] | "| \(.etiqueta) | `\(.codigo)` | \(.conImporte) | \((.sumaCent / 100) | tostring) € |"' /tmp/r.json
+            else
+              echo "| Campo en Bitrix24 | Código | Fichas con importe |"; echo "|---|---|---:|"
+              jq -r '.cuotas[] | "| \(.etiqueta) | `\(.codigo)` | \(.conImporte) |"' /tmp/r.json
+              echo; echo "Las sumas no salen («importes = no»)."
+            fi
+            if [ "$(jq -r 'has("repetidos")' /tmp/r.json)" = "true" ]; then
+              echo; echo "### NIF repetidos ($(jq -r '.repetidos.campoNif.etiqueta' /tmp/r.json), \`$(jq -r '.repetidos.campoNif.codigo' /tmp/r.json)\`)"; echo
+              echo "Solo números: ni nombres ni NIF. El NIF se compara como la base (mayúsculas, solo letras y números). La situación, según el $(jq -r '.repetidos.situacionSegun' /tmp/r.json)."; echo
+              echo "| Qué | Cuántos |"; echo "|---|---:|"
+              jq -r '.repetidos | "| Fichas con NIF | \(.fichasConNif) |",
+                "| NIF que salen en más de una ficha | \(.nifRepetidos) |",
+                "| Fichas que suman esos NIF | \(.fichasEnRepetidos) |",
+                "| Fichas del NIF más repetido | \(.maximoPorNif) |",
+                "| Repetidos con la misma situación | \(.mismaSituacion) |",
+                "| Repetidos con situaciones distintas | \(.distintaSituacion) |",
+                "| … de ellos, una ficha activa y otra de baja | \(.activaYBaja) |",
+                "| Repetidos que son DNI | \(.porTipo.DNI) |",
+                "| Repetidos que son NIE | \(.porTipo.NIE) |",
+                "| Repetidos que son CIF | \(.porTipo.CIF) |",
+                "| Repetidos de otro formato | \(.porTipo.otro) |",
+                "| Repetidos entre una ficha con nombre de sociedad y otra de persona | \(.sociedadYPersona) |"' /tmp/r.json
+            fi
+            if [ "$(jq -r 'has("union")' /tmp/r.json)" = "true" ]; then
+              echo; echo "### Con la regla de la unión (ensayo: no se ha cambiado nada)"; echo
+              echo "Mismo NIF = un cliente; su situación, la más viva de sus fichas; un NIF sin formato de DNI, NIE o CIF, o en 10 fichas o más, no se usa. Solo números."; echo
+              echo "| Qué | Cuántos |"; echo "|---|---:|"
+              jq -r '.union | "| Fichas de Bitrix24 | \(.fichas) |",
+                "| Clientes que resultan en Sumied | \(.clientes) |",
+                "| Clientes con varias fichas | \(.clientesUnidos) |",
+                "| Fichas que se unen | \(.fichasUnidas) |",
+                "| Fichas que entran sin NIF (formato no válido) | \(.sinNifPorFormato) |",
+                "| Fichas que entran sin NIF (en 10 fichas o más) | \(.sinNifPorMuchas) |"' /tmp/r.json
+              echo; echo "| Situación | Fichas | Clientes |"; echo "|---|---:|---:|"
+              jq -r '.union as $u | [["activo","Activo"],["moroso","Moroso"],["solo_renta","Solo la renta"],["sin_clasificar","Sin clasificar"],["baja","De baja"],["sin_situacion","Sin situación en Bitrix24"]][]
+                | "| \(.[1]) | \($u.fichasPorSituacion[.[0]]) | \($u.clientesPorSituacion[.[0]]) |"' /tmp/r.json
+            fi
+            if [ "$(jq -r 'has("contactos")' /tmp/r.json)" = "true" ]; then
+              echo; echo "## Contactos (solo números)"; echo
+              jq -r '.contactos | "**\(.total) contactos**: \(.sinEmpresa) sin empresa y \(.conEmpresa) con empresa (\(.conVariasEmpresas) con varias). El enlace con la empresa sale de \(.enlace); \(.soloEmpresaPrincipal) solo tenían la empresa principal. Campos que no se leen nunca (contraseñas, ficheros, IBAN): \(.bloqueados)."' /tmp/r.json
+              echo; echo "### Contactos sin empresa: señales de cliente"; echo
+              echo "| Señal | Contactos |"; echo "|---|---:|"
+              jq -r '.contactos.senalesSinEmpresa | "| Con NIF | \(.nif) |", "| Con Tarifa Recurrente | \(.tarifaRecurrente) |", "| En alguna negociación | \(.negociacion) |",
+                "| Con un cliente de GoCardless (por NIF o correo) | \(.gocardless) |", "| **Con alguna de estas** | **\(.alguna)** |", "| Con ninguna | \(.ninguna) |"' /tmp/r.json
+              echo; echo "### Contactos con el NIF de una empresa"; echo
+              echo "| Qué | Contactos |"; echo "|---|---:|"
+              jq -r '.contactos.nifDeUnaEmpresa | "| Con el NIF de una empresa | \(.contactos) |", "| … enlazados a esa empresa | \(.enlazadosAEsaEmpresa) |",
+                "| … enlazados a otra empresa | \(.enlazadosAOtra) |", "| … sin enlace a ninguna | \(.sinEnlace) |"' /tmp/r.json
+              echo; echo "- **Con empresa y con datos de cliente** (situación o cuota propias; irían a «Pendiente de revisar»): **$(jq -r '.contactos.conEmpresaYDatosDeCliente' /tmp/r.json)**"
+              for i in $(jq -r '.contactos.listas | keys[]' /tmp/r.json); do
+                echo; echo "### $(jq -r --argjson i "$i" '.contactos.listas[$i].etiqueta' /tmp/r.json) (\`$(jq -r --argjson i "$i" '.contactos.listas[$i].codigo' /tmp/r.json)\`)"; echo
+                echo "| Opción | Sin empresa | Con empresa |"; echo "|---|---:|---:|"
+                jq -r --argjson i "$i" '.contactos.listas[$i] | (.opciones[] | "| \(.texto) | \(.sinEmpresa) | \(.conEmpresa) |"), "| (vacía) | \(.vaciasSinEmpresa) | \(.vaciasConEmpresa) |"' /tmp/r.json
+              done
+              for g in nif situacion direccion cuotas; do
+                case "$g" in nif) t="NIF";; situacion) t="Situación";; direccion) t="Dirección";; *) t="Cuotas";; esac
+                echo; echo "### Campos que pueden ser · $t"; echo
+                echo "| Campo | Código | Tipo | Con algo | Con algo (sin empresa) |"; echo "|---|---|---|---:|---:|"
+                jq -r --arg g "$g" '.contactos.candidatos[$g][] | "| \(.etiqueta) | `\(.codigo)` | \(.tipo) | \(.conAlgo) | \(.conAlgoSinEmpresa) |"' /tmp/r.json
+                [ "$(jq -r --arg g "$g" '.contactos.candidatos[$g] | length' /tmp/r.json)" = "0" ] && echo "| (ninguno) | | | | |"
+              done
+              if [ "$(jq -r '.contactos.nif != null' /tmp/r.json)" = "true" ]; then
+                echo; echo "### NIF de los contactos sin empresa ($(jq -r '.contactos.nif.etiqueta' /tmp/r.json), \`$(jq -r '.contactos.nif.codigo' /tmp/r.json)\`)"; echo
+                echo "| Qué | Cuántos |"; echo "|---|---:|"
+                jq -r '.contactos.nif | "| Contactos sin empresa con NIF | \(.sinEmpresaConNif) |",
+                  "| DNI | \(.porTipo.DNI) |", "| NIE | \(.porTipo.NIE) |", "| CIF | \(.porTipo.CIF) |", "| RIF de Venezuela | \(.porTipo.RIF) |", "| Otro formato | \(.porTipo.otro) |",
+                  "| NIF que salen en más de un contacto | \(.repetidosEntreContactos.nifs) (\(.repetidosEntreContactos.contactos) contactos) |"' /tmp/r.json
+              fi
+              echo; echo "<details><summary>Todos los campos de contacto del portal ($(jq -r '.contactos.campos | length' /tmp/r.json)): etiqueta, código y tipo</summary>"; echo
+              echo "| Campo | Código | Tipo |"; echo "|---|---|---|"
+              jq -r '.contactos.campos[] | "| \(.etiqueta) | `\(.codigo)` | \(.tipo) |"' /tmp/r.json
+              echo; echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Recuento hecho: $(jq -r '.total' /tmp/r.json) fichas. El resultado, en el resumen del run."

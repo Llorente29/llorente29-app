@@ -17,7 +17,18 @@ export type Entendido =
 
 const limpio = (s: string) => ` ${normalizar(s).replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim()} `
 
-const NO_LO_SE = [' ni idea ', ' no lo se ', ' no se ', ' nose ', ' asesor ', ' gestor ', ' gestoria ', ' preguntaselo ', ' luego ', ' despues ', ' ahora no ']
+const NO_LO_SE = [' ni idea ', ' no lo se ', ' no se ', ' nose ', ' preguntaselo ', ' que lo mire ', ' que lo decida ', ' luego ', ' despues ', ' ahora no ']
+
+/**
+ * G03 (Julio, 08/11) · «Asesor», «gestor» y «gestoría» solo son «No lo sé»
+ * cuando señalan a OTRO («pregúntale a mi asesor», «lo lleva la gestoría»), no
+ * cuando dicen lo que es quien escribe: «somos una gestoría» es una actividad.
+ * Antes bastaba la palabra suelta, y el alta de una gestoría se apuntaba como
+ * «No lo sé» sin llegar a buscar nada (e2e 42426861903).
+ */
+const QUIEN = ['asesor', 'asesora', 'asesores', 'asesoria', 'gestor', 'gestora', 'gestores', 'gestoria']
+const MI_ASESOR = QUIEN.flatMap((q) => [` mi ${q} `, ` mis ${q} `, ` nuestro ${q} `, ` nuestra ${q} `])
+const EL_ASESOR = QUIEN.flatMap((q) => [` el ${q} `, ` la ${q} `, ` los ${q} `, ` al ${q} `, ` a la ${q} `])
 
 const SI = [' si ', ' sip ', ' vale ', ' claro ', ' correcto ', ' eso es ', ' exacto ', ' ok ', ' de acuerdo ']
 const NO = [' no ', ' nop ', ' para nada ', ' ninguno ', ' ninguna ']
@@ -25,7 +36,9 @@ const NO = [' no ', ' nop ', ' para nada ', ' ninguno ', ' ninguna ']
 export function entender(p: Pregunta, texto: string): Entendido {
   const t = limpio(texto)
   if (t.trim() === '') return { tipo: 'nada' }
-  if (NO_LO_SE.some((x) => t.includes(x))) return { tipo: 'nolose' }
+  // En «¿A qué os dedicáis?» se cuenta lo que se hace: ahí «el gestor» o «la gestoría» pueden ser uno mismo.
+  const aOtro = p.entrada === 'actividad' ? MI_ASESOR : [...MI_ASESOR, ...EL_ASESOR]
+  if (NO_LO_SE.some((x) => t.includes(x)) || aOtro.some((x) => t.includes(x))) return { tipo: 'nolose' }
 
   // Una respuesta cuyo texto entero (o su palabra que la distingue) aparece.
   const conTexto = p.opciones.filter((o) => {

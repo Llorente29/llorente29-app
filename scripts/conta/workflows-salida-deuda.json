@@ -9,8 +9,10 @@
     ".github/workflows/diez-lectura.yml": 9,
     ".github/workflows/medir-ocr-destinatario.yml": 8,
     ".github/workflows/diez-conexion.yml": 4,
-    ".github/workflows/desplegar-funciones-staging-conta.yml": 11
+    ".github/workflows/desplegar-funciones-staging-conta.yml": 11,
+    ".github/workflows/recuento-bitrix-conta.yml": 21
   },
   "_w09": "W09 (28/10): cumplimiento-produccion-conta 14→16, diez-lectura 8→9 y diez-conexion (sin tope)→4 son lo que ya tenían en main (medido con revisar() sobre origin/main, igual que en la rama): el W09 los toca solo para poner límites a psql, y no sube ninguno.",
-  "_b01": "B01 (03/11): desplegar-funciones-staging-conta (sin tope)→11 es lo que ya tenía en main (medido con revisar() sobre origin/main y sobre la rama: 11 y 11). El B01 lo toca solo para fijar la versión de la CLI y poner --yes, y no sube ninguna. Escribe en staging, pero usa SUPABASE_ACCESS_TOKEN, que alcanza también producción."
+  "_b01": "B01 (03/11): desplegar-funciones-staging-conta (sin tope)→11 es lo que ya tenía en main (medido con revisar() sobre origin/main y sobre la rama: 11 y 11). El B01 lo toca solo para fijar la versión de la CLI y poner --yes, y no sube ninguna. Escribe en staging, pero usa SUPABASE_ACCESS_TOKEN, que alcanza también producción.",
+  "_g01c": "G01c (07/11): recuento-bitrix-conta (sin tope)→21 es lo que ya tenía en main (medido con revisar() sobre origin/main: 21). Escribe en el resumen las etiquetas de los campos y los números del recuento, que Julio lee ahí. Apuntado como deuda por Julio, sin tocarlo; el reparto de los contactos con la regla de la lectura (G01c) se añadirá a su resumen cuando se arregle."
 }

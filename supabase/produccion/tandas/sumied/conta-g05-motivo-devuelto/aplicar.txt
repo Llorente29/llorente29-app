@@ -1,0 +1,12 @@
+# G05 · El motivo del devuelto, guardado en el recibo (nº 77, punto 2; para el
+# portal de Code 3 y la ficha). Rama conta/g05-motivo-devuelto. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1138  AÑADE conta_gc_cobro.causa y motivo_es, y conta_recibo.motivo_devolucion
+#         (admiten nulos). CAMBIA conta_cobro_seguir (la misma firma, con su
+#         respaldo; md5 en producción 2ea28319…, el de la 1006): además, guarda el
+#         motivo en el recibo devuelto o retrocedido.
+#
+# No toca datos. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/g05-motivo-devuelto.sql
+supabase/migrations/20261110T1138_g05_motivo_devuelto.sql

@@ -37,6 +37,12 @@ export default defineConfig({
         pagar: path.resolve(__dirname, 'pagar.html'),
         // B01 Revolut · La vuelta de Revolut (/bancos/revolut/vuelta, por vercel.json): devuelve a Bancos.
         revolutVuelta: path.resolve(__dirname, 'revolut-vuelta.html'),
+        // GB · La pestaña «Sumied» dentro de la ficha de Bitrix24 (bitrix-pestana.html), sin la app.
+        bitrixPestana: path.resolve(__dirname, 'bitrix-pestana.html'),
+        // GBc · PRUEBA · El campo fijo «Cuota mensual (Sumied)» que dibuja Sumied en la ficha de Bitrix24 (bitrix-campo.html).
+        bitrixCampo: path.resolve(__dirname, 'bitrix-campo.html'),
+        // GP · El portal del cliente de la gestoría (portal.html): entrada aparte, no pasa por App.tsx.
+        portal: path.resolve(__dirname, 'portal.html'),
       },
     },
   },

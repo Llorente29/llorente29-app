@@ -1,0 +1,4 @@
+# G01b · la vuelta atrás de la 1336: guardar los clientes como antes (del
+# respaldo) y fuera la función de juntar. Lo ya juntado y su rastro se quedan.
+cuenta: scripts/conta/produccion/cuentas/g01b-juntar-clientes.sql
+supabase/vuelta-atras/20261107T1336_g01b_juntar_clientes.down.sql

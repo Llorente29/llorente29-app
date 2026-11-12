@@ -17,6 +17,12 @@
 //   · Los campos propios se llaman UF_CRM_…; los de lista devuelven el id de
 //     la opción, no su texto: el mapa dice qué significa cada id.
 
+import { importeACent, normalizarNif, type FichaCrm, type Servicio, type Situacion } from '../_shared/crm/ficha.ts'
+import { esCampoSensible } from './sensibles.ts'
+
+/** Lo neutro, también desde aquí (el adaptador lo usa y lo reexporta). */
+export { importeACent, normalizarNif, type Servicio, type Situacion }
+
 export const POR_PAGINA = 50
 export const ESPERA_MS = 500
 
@@ -24,10 +30,11 @@ export const ESPERA_MS = 500
 export type CampoSumied =
   | 'nombre' | 'nif' | 'calle' | 'cp' | 'poblacion' | 'provincia' | 'correo' | 'telefono'
   | 'situacion' | 'servicios' | 'forma_pago' | 'cuota_referencia'
+  /** GB (nº 13) · Los que RELLENA Sumied desde la pestaña (no se leen): cuántos trabajadores se cobran y el estado del cobro. */
+  | 'trabajadores' | 'estado_cobro'
 
-export type Situacion = 'activo' | 'baja' | 'moroso' | 'solo_renta'
+/** G01b · «sin_clasificar»: una opción de Bitrix24 sin significado en Sumied (GRAVE DESAPARECIDO, las «Vzla»…), con su texto. */
 /** Los servicios contratados que enseña la tabla: C (contabilidad), L (laboral), S (otros servicios). */
-export type Servicio = 'C' | 'L' | 'S'
 
 export interface CampoDelMapa {
   /** El código del campo en Bitrix24 (TITLE, EMAIL, UF_CRM_…). Null: está en el mapa, pero falta medirlo en el portal. */
@@ -37,6 +44,23 @@ export interface CampoDelMapa {
   etiqueta?: string
   /** En los de lista: qué quiere decir cada id de opción. */
   opciones?: Record<string, string>
+  /** G01b · En los de lista: el texto de cada id en Bitrix24 (para «Sin clasificar» y para la pantalla). */
+  textos?: Record<string, string>
+}
+
+/**
+ * G01b · De dónde sale la dirección: un campo de Bitrix24 y, si los tiene, los
+ * suyos de código postal, población y provincia. Se usan por orden, el primero
+ * con algo, y nunca se mezclan dos (Julio, 07/11). Un campo de tipo dirección
+ * trae todo en un texto: el código postal se saca de él; la población y la
+ * provincia, no (se quedan en el texto de la calle).
+ */
+export interface FuenteDireccion {
+  etiqueta: string
+  calle: string
+  cp?: string | null
+  poblacion?: string | null
+  provincia?: string | null
 }
 
 export interface MapaBitrix {
@@ -48,6 +72,34 @@ export interface MapaBitrix {
    * Es solo referencia: el emisor de verdad lo dice la cuenta de GoCardless.
    */
   formaPagoAEmisor: Record<string, string>
+  /**
+   * G01b · Los campos de Sumied que la propuesta no ha podido decidir: ninguno
+   * o varios campos de Bitrix24 encajan. Se guardan con el mapa y salen en
+   * «Qué es cada campo» para que una persona elija (antes era una nota del
+   * informe de la conexión que no guardaba ni veía nadie).
+   */
+  dudas?: DudaDelMapa[]
+  /** G01b · Las fuentes de la dirección, por orden (si no hay, valen los campos calle, cp… de antes). */
+  direcciones?: FuenteDireccion[]
+  /**
+   * G01b · Quién confirmó el mapa en «Qué es cada campo» y cuándo. Sin
+   * confirmar, no se guarda la situación de nadie (Julio, 07/11).
+   */
+  confirmado?: { quien: string | null; cuando: string } | null
+  /**
+   * G01b · Quién aplicó la unión de las fichas repetidas (clientes.ts) y
+   * cuándo, después de ver el ensayo en PDF. Sin aplicar, cada ficha va sola.
+   */
+  union?: { quien: string | null; cuando: string } | null
+}
+
+export interface DudaDelMapa {
+  campo: CampoSumied
+  /** Para cuota_referencia: cuál («Laboral»…). */
+  etiqueta?: string
+  porque: 'ninguno' | 'varios'
+  /** Los que encajan, con su etiqueta en Bitrix24 (vacío si ninguno). */
+  candidatos: { codigo: string; etiqueta: string }[]
 }
 
 /**
@@ -75,14 +127,22 @@ export const MAPA_QBO: MapaBitrix = {
     { codigo: null, campo: 'cuota_referencia', etiqueta: 'Laboral' },
     { codigo: null, campo: 'cuota_referencia', etiqueta: 'ContaSimple' },
     { codigo: null, campo: 'cuota_referencia', etiqueta: 'Tarifa recurrente' },
+    { codigo: null, campo: 'trabajadores' },
+    { codigo: null, campo: 'estado_cobro' },
   ],
   formaPagoAEmisor: {},
 }
 
-/** Lo que se pide a crm.company.list: el id y solo los campos del mapa que tienen código. */
+/**
+ * Lo que se pide a crm.company.list: el id y solo los campos del mapa que
+ * tienen código. G01b (07/11) · También los de las fuentes de la dirección
+ * (mapa.direcciones): antes no se pedían, Bitrix24 no los devolvía y la
+ * lectura con el mapa confirmado dijo «Con dirección: 0».
+ */
 export function camposQueSePiden(mapa: MapaBitrix): string[] {
   const out = new Set<string>(['ID'])
   for (const c of mapa.campos) if (c.codigo) out.add(c.codigo)
+  for (const d of mapa.direcciones ?? []) for (const k of [d.calle, d.cp, d.poblacion, d.provincia]) if (k) out.add(k)
   return [...out]
 }
 
@@ -91,33 +151,8 @@ export function camposSinCodigo(mapa: MapaBitrix): string[] {
   return mapa.campos.filter((c) => !c.codigo).map((c) => c.etiqueta ?? c.campo)
 }
 
-export function normalizarNif(v: string | null | undefined): string | null {
-  if (!v) return null
-  let n = v.toUpperCase().replace(/[\s.\-_/]/g, '')
-  if (n.startsWith('ES') && n.length > 9) n = n.slice(2)
-  return n === '' ? null : n
-}
-
-export interface FichaBitrix {
-  bitrixId: string
-  nombre: string
-  nif: string | null
-  calle: string | null
-  cp: string | null
-  poblacion: string | null
-  provincia: string | null
-  correos: string[]
-  telefonos: string[]
-  situacion: Situacion | null
-  servicios: Servicio[]
-  /** El texto de «Forma de pago», tal cual, y el emisor que dice (si el mapa lo sabe). */
-  formaPago: string | null
-  emisorSegunBitrix: string | null
-  /** Las cuotas de Bitrix24: solo referencia, no se usan para calcular nada. */
-  cuotasReferencia: { etiqueta: string; importeCent: number | null; texto: string }[]
-  /** Lo que no se ha podido leer, en palabras. */
-  avisos: string[]
-}
+/** G01c · La ficha de una empresa de Bitrix24: la ficha neutra del núcleo (_shared/crm/ficha.ts). */
+export type FichaBitrix = FichaCrm
 
 const textoDe = (v: unknown): string | null => {
   if (v === null || v === undefined) return null
@@ -138,36 +173,40 @@ const valoresMultiples = (v: unknown): string[] => {
   return out
 }
 
-const SITUACIONES: readonly Situacion[] = ['activo', 'baja', 'moroso', 'solo_renta']
+const SITUACIONES: readonly Situacion[] = ['activo', 'baja', 'moroso', 'solo_renta', 'sin_clasificar']
 
-/** «24,20», «24.20», «1.234,50 €», «24|EUR» → céntimos; null si no es un número. */
-export function importeACent(v: string | null): number | null {
-  if (!v) return null
-  let t = v.split('|')[0].replace(/[€\s]/g, '')
-  if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.')
-  else t = t.replace(/,/g, '')
-  const n = Number(t)
-  return Number.isFinite(n) ? Math.round(n * 100) : null
+/** El texto de un campo de dirección: lo de antes de «|;|» (o de «|»); de varios, el primero con algo. */
+export function textoDeDireccion(v: unknown): string | null {
+  if (Array.isArray(v)) { for (const x of v) { const t = textoDeDireccion(x); if (t) return t } return null }
+  if (v === null || v === undefined || typeof v === 'object') return null
+  const t = String(v).split('|')[0].replace(/\s+/g, ' ').trim()
+  return t === '' ? null : t
 }
+
+/** Un código postal español (5 cifras) dentro de un texto de dirección. */
+const cpDelTexto = (t: string | null) => (t ? /\b(\d{5})\b/.exec(t)?.[1] ?? null : null)
 
 /** Una empresa de crm.company.list → la ficha del cliente, solo con los campos del mapa. */
 export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): FichaBitrix {
   const f: FichaBitrix = {
-    bitrixId: String(fila.ID ?? ''),
+    idExterno: String(fila.ID ?? ''),
     nombre: '',
-    nif: null, calle: null, cp: null, poblacion: null, provincia: null,
+    nif: null, nifEnCrm: null, calle: null, cp: null, poblacion: null, provincia: null,
     correos: [], telefonos: [],
-    situacion: null, servicios: [], formaPago: null, emisorSegunBitrix: null,
+    situacion: null, situacionTexto: null, direccionDe: null, otrasDirecciones: [], servicios: [], formaPago: null, emisorSegunCrm: null,
     cuotasReferencia: [], avisos: [],
   }
+  const conFuentes = (mapa.direcciones?.length ?? 0) > 0
   for (const c of mapa.campos) {
     if (!c.codigo) continue
+    // G01b · Con fuentes de dirección, la dirección sale de ellas (abajo), no de estos campos sueltos.
+    if (conFuentes && (c.campo === 'calle' || c.campo === 'cp' || c.campo === 'poblacion' || c.campo === 'provincia')) continue
     const crudo = fila[c.codigo]
     // Un id de opción que el mapa no conoce se queda tal cual: así el aviso dice cuál era.
     const opcion = (t: string | null) => (t && c.opciones ? c.opciones[t] ?? t : t)
     switch (c.campo) {
       case 'nombre': f.nombre = textoDe(crudo) ?? ''; break
-      case 'nif': f.nif = normalizarNif(textoDe(crudo)); break
+      case 'nif': f.nifEnCrm = textoDe(crudo); f.nif = normalizarNif(f.nifEnCrm); break
       case 'calle': f.calle = textoDe(crudo); break
       case 'cp': f.cp = textoDe(crudo); break
       case 'poblacion': f.poblacion = textoDe(crudo); break
@@ -175,9 +214,14 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
       case 'correo': f.correos = [...new Set(valoresMultiples(crudo).map((x) => x.toLowerCase()))]; break
       case 'telefono': f.telefonos = valoresMultiples(crudo); break
       case 'situacion': {
-        const t = opcion(textoDe(crudo))
+        // G01b · Sin el mapa confirmado en «Qué es cada campo», no se guarda la situación de nadie.
+        if (!mapa.confirmado) break
+        const id = textoDe(crudo)
+        if (!id) break
+        const t = opcion(id)
+        f.situacionTexto = c.textos?.[id] ?? id
         if (t && (SITUACIONES as readonly string[]).includes(t)) f.situacion = t as Situacion
-        else if (t) f.avisos.push(`Situación «${t}» que el mapa no conoce.`)
+        else { f.situacion = 'sin_clasificar'; f.avisos.push(`Situación «${f.situacionTexto}» sin clasificar en Sumied.`) }
         break
       }
       case 'servicios': {
@@ -193,8 +237,8 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
       case 'forma_pago': {
         const t = opcion(textoDe(crudo))
         f.formaPago = t
-        f.emisorSegunBitrix = t ? mapa.formaPagoAEmisor[t] ?? null : null
-        if (t && !f.emisorSegunBitrix) f.avisos.push(`«Forma de pago» dice «${t}», que el mapa no sabe de qué emisor es.`)
+        f.emisorSegunCrm = t ? mapa.formaPagoAEmisor[t] ?? null : null
+        if (t && !f.emisorSegunCrm) f.avisos.push(`«Forma de pago» dice «${t}», que el mapa no sabe de qué emisor es.`)
         break
       }
       case 'cuota_referencia': {
@@ -204,7 +248,19 @@ export function leerEmpresa(fila: Record<string, unknown>, mapa: MapaBitrix): Fi
       }
     }
   }
-  if (!f.nombre) { f.nombre = `Empresa ${f.bitrixId} de Bitrix24`; f.avisos.push('Sin nombre en Bitrix24.') }
+  if (conFuentes) {
+    // La primera fuente con algo da la dirección entera; las demás con algo, de referencia.
+    for (const d of mapa.direcciones!) {
+      const calle = textoDeDireccion(fila[d.calle])
+      const cp = d.cp ? textoDe(fila[d.cp]) : cpDelTexto(calle)
+      const poblacion = d.poblacion ? textoDe(fila[d.poblacion]) : null
+      const provincia = d.provincia ? textoDe(fila[d.provincia]) : null
+      if (!calle && !cp && !poblacion && !provincia) continue
+      if (!f.direccionDe) { Object.assign(f, { calle, cp, poblacion, provincia, direccionDe: d.etiqueta }); continue }
+      f.otrasDirecciones.push({ etiqueta: d.etiqueta, texto: [calle, cp, poblacion, provincia].filter(Boolean).join(', ') })
+    }
+  }
+  if (!f.nombre) { f.nombre = `Empresa ${f.idExterno} de Bitrix24`; f.avisos.push('Sin nombre en Bitrix24.') }
   return f
 }
 
@@ -273,20 +329,42 @@ const QUIEN_ES: { campo: CampoSumied; etiqueta?: string; patron: RegExp; lista?:
   { campo: 'servicios', patron: /^SERVICIOS( CONTRATADOS)?$/, lista: true },
   { campo: 'forma_pago', patron: /^FORMA DE PAGO$/ },
   { campo: 'cuota_referencia', etiqueta: 'Cuota mensual', patron: /^CUOTA MENSUAL$/ },
-  { campo: 'cuota_referencia', etiqueta: 'Laboral', patron: /^(CUOTA )?LABORAL$/ },
-  { campo: 'cuota_referencia', etiqueta: 'ContaSimple', patron: /^(CUOTA )?CONTA ?SIMPLE$/ },
+  // G01b · En el portal de QBO se llaman «Cuota Mensual Laboral» y «… ContaSimple»; las que acaban en «z» no son (Julio, 07/11).
+  { campo: 'cuota_referencia', etiqueta: 'Laboral', patron: /^(CUOTA (MENSUAL )?)?LABORAL$/ },
+  { campo: 'cuota_referencia', etiqueta: 'ContaSimple', patron: /^(CUOTA (MENSUAL )?)?CONTA ?SIMPLE$/ },
   { campo: 'cuota_referencia', etiqueta: 'Tarifa recurrente', patron: /^TARIFA RECURRENTE$/ },
+  // GB (nº 13) · Los que rellena Sumied desde la pestaña de Bitrix24.
+  { campo: 'trabajadores', patron: /^(N(UMERO|º|O\.?) DE )?TRABAJADORES$/ },
+  { campo: 'estado_cobro', patron: /^ESTADO DEL COBRO$/ },
 ]
 
+/** GB (nº 13) · Los campos que rellena Sumied: si el portal no los tiene, no pasa nada. */
+const OPCIONALES = new Set<CampoSumied>(['trabajadores', 'estado_cobro'])
+
+/**
+ * G01b · Lo que quiere decir en Sumied una opción de «Situación del Cliente»:
+ * ACTIVO, BAJA…, MOROSO y … SOLO RENTA; lo demás (GRAVE DESAPARECIDO, las
+ * «Vzla»…), sin clasificar (Julio, 07/11). Es solo la propuesta: la persona
+ * lo cambia en «Qué es cada campo» antes de confirmar.
+ */
+export function situacionDeTexto(texto: string): Situacion {
+  const v = sinTildes(texto)
+  return /^ACTIV/.test(v) ? 'activo' : /^BAJA/.test(v) ? 'baja' : /^MOROS/.test(v) ? 'moroso' : /RENTA/.test(v) ? 'solo_renta' : 'sin_clasificar'
+}
+
 /** Las opciones de una lista → lo que quieren decir en Sumied. */
-function opcionesDe(campo: CampoSumied, c: CampoMedido, emisores: { id: string; nombre: string }[]): { opciones: Record<string, string>; sinCasar: string[] } {
+function opcionesDe(campo: CampoSumied, c: CampoMedido, emisores: { id: string; nombre: string }[]): { opciones: Record<string, string>; textos: Record<string, string>; sinCasar: string[] } {
   const opciones: Record<string, string> = {}
+  const textos: Record<string, string> = {}
   const sinCasar: string[] = []
   for (const it of c.items ?? []) {
     const v = sinTildes(it.VALUE)
     let s: string | null = null
+    textos[String(it.ID)] = it.VALUE
     if (campo === 'situacion') {
-      s = /^ACTIV/.test(v) ? 'activo' : /^BAJA/.test(v) ? 'baja' : /^MOROS/.test(v) ? 'moroso' : /RENTA/.test(v) ? 'solo_renta' : null
+      // G01b · Lo que no encaja (GRAVE DESAPARECIDO, las «Vzla»…) queda «sin clasificar», con su texto (Julio, 07/11).
+      s = situacionDeTexto(it.VALUE)
+      if (s === 'sin_clasificar') sinCasar.push(it.VALUE)
     } else if (campo === 'servicios') {
       s = /^C$|^CONTA/.test(v) ? 'C' : /^L$|^LABORAL/.test(v) ? 'L' : /^S$/.test(v) ? 'S' : null
     } else if (campo === 'forma_pago') {
@@ -296,7 +374,7 @@ function opcionesDe(campo: CampoSumied, c: CampoMedido, emisores: { id: string; 
     else sinCasar.push(it.VALUE)
   }
   void emisores
-  return { opciones, sinCasar }
+  return { opciones, textos, sinCasar }
 }
 
 /**
@@ -334,8 +412,10 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
     { campo: 'telefono', codigo: 'PHONE', etiquetaEnBitrix: 'Teléfono', nota: null },
   ]
   const usados = new Set<string>()
+  const dudas: DudaDelMapa[] = []
   const formaPagoAEmisor: Record<string, string> = {}
-  const propios = Object.entries(medidos).filter(([k]) => k.startsWith('UF_CRM_'))
+  // G01b · Los campos con contraseñas o certificados no se proponen nunca.
+  const propios = Object.entries(medidos).filter(([k, c]) => k.startsWith('UF_CRM_') && !esCampoSensible(c, k))
   for (const q of QUIEN_ES) {
     const nombreCampo = q.etiqueta ?? q.campo
     const candidatos = propios.filter(([, c]) => q.patron.test(etiquetaDe(c)))
@@ -349,6 +429,13 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
         continue
       }
       campos.push({ codigo: null, campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}) })
+      // GB (nº 13) · Los que rellena Sumied son opcionales: si el portal no los tiene, no es una duda.
+      if (candidatos.length === 0 && OPCIONALES.has(q.campo)) {
+        queEsCadaUno.push({ campo: nombreCampo, codigo: null, etiquetaEnBitrix: null, nota: 'opcional: Sumied lo rellenaría si existiera' })
+        continue
+      }
+      dudas.push({ campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}), porque: candidatos.length ? 'varios' : 'ninguno',
+        candidatos: candidatos.map(([k, c]) => ({ codigo: k, etiqueta: [c.formLabel, c.listLabel, c.title].find((x) => x && x.trim()) ?? k })) })
       queEsCadaUno.push({ campo: nombreCampo, codigo: null, etiquetaEnBitrix: null,
         nota: candidatos.length === 0 ? 'ningún campo de Bitrix24 se llama así' : `dudoso: ${candidatos.map(([k, c]) => `${k} («${etiquetaDe(c)}»)`).join(', ')}` })
       continue
@@ -358,8 +445,9 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
     const entrada: CampoDelMapa = { codigo, campo: q.campo, ...(q.etiqueta ? { etiqueta: q.etiqueta } : {}) }
     let nota: string | null = null
     if (c.items?.length) {
-      const { opciones, sinCasar } = opcionesDe(q.campo, c, emisores)
+      const { opciones, textos, sinCasar } = opcionesDe(q.campo, c, emisores)
       entrada.opciones = opciones
+      entrada.textos = textos
       if (sinCasar.length) nota = `opciones sin significado en Sumied: ${sinCasar.join(', ')}`
       if (q.campo === 'forma_pago') {
         const sinEmisor: string[] = []
@@ -375,5 +463,5 @@ export function proponerMapa(nombre: string, medidos: Record<string, CampoMedido
     queEsCadaUno.push({ campo: nombreCampo, codigo, etiquetaEnBitrix: [c.formLabel, c.listLabel, c.title].find((x) => x && x.trim()) ?? codigo, nota })
   }
   const sinUsar = propios.filter(([k]) => !usados.has(k)).map(([codigo, c]) => ({ codigo, etiqueta: etiquetaDe(c) || codigo }))
-  return { mapa: { nombre, campos, formaPagoAEmisor }, queEsCadaUno, sinUsar }
+  return { mapa: { nombre, campos, formaPagoAEmisor, dudas }, queEsCadaUno, sinUsar }
 }
