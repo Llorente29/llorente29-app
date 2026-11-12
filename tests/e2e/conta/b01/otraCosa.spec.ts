@@ -52,6 +52,20 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await page.route('**/rest/v1/rpc/bank_agente_toca_hoy', (ruta) => ruta.fulfill({ status: 200, contentType: 'application/json', body: 'false' }))
     await page.goto(`/conta/bancos?banco=${NORTE}&mes=2026-10`)
     await expect(page.getByRole('heading', { name: 'Movimientos', level: 1 })).toBeVisible()
+    // Sonda: cada vez que el cuerpo de Movimientos se desmonta (la pantalla se vuelve a montar
+    // entera, y con ella el panel y su «¿Es otra cosa?»), el segundo desde que cargó la página.
+    await page.locator('.cxn-cuerpo').first().waitFor()
+    await page.evaluate(() => {
+      const w = window as unknown as { _remontes: number[] }
+      w._remontes = []
+      let actual = document.querySelector('.cxn-cuerpo')
+      new MutationObserver(() => {
+        if (actual && !actual.isConnected) {
+          w._remontes.push(Math.round(performance.now() / 100) / 10)
+          actual = document.querySelector('.cxn-cuerpo')
+        } else if (!actual) actual = document.querySelector('.cxn-cuerpo')
+      }).observe(document.body, { childList: true, subtree: true })
+    })
 
     // Lo que sale: «Pago a un proveedor…».
     await page.getByText('Transferencia a SUMINISTROS B01', { exact: false }).first().click()
@@ -108,5 +122,9 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await (await abrirOtraCosa('Cobro de un cliente…')).click()
     await expect(page.getByRole('dialog', { name: 'Cobro de un cliente' }).getByText('¿De qué cliente es?')).toBeVisible()
     await capturar(page, 'otra-cosa-cobro-cliente')
+    const remontes = await page.evaluate(() => (window as unknown as { _remontes: number[] })._remontes)
+    const ahora = await page.evaluate(() => Math.round(performance.now() / 100) / 10)
+    test.info().annotations.push({ type: 'remontes', description: JSON.stringify({ remontes, ahora }) })
+    console.log(`[remontes] la pantalla de Movimientos se ha vuelto a montar ${remontes.length} veces sin que nadie la tocara, en los segundos ${JSON.stringify(remontes)} desde que cargó (la prueba acaba en el ${ahora})`)
   })
 })
