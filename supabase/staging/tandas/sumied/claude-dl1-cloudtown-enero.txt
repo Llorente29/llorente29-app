@@ -1,0 +1,7 @@
+# DL1 · Cloudtown, enero (1451: añade _dl1_asiento_iva y, en Foodint, emite la
+# factura de enero a Cloudtown y apunta tres asientos). Su prueba (ROLLBACK,
+# cuenta A): sin Foodint no hace nada; un asiento con IVA soportado lleva su
+# libro y su documento y se valida; uno sin IVA en un mes migrado se valida; una
+# línea de IVA sin libro para.
+supabase/migrations/20261112T1451_dl1_cloudtown_enero.sql
+supabase/staging/sql/20261112_dl1_cloudtown_enero_prueba.sql
