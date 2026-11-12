@@ -243,7 +243,9 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // S02 · PR 2: el cierre del mes del banco se mudó a Contabilidad › Cierre y Registro › Cerrar
       // el mes, junto al de la contabilidad; la dirección de antes lleva allí con su mes y su banco.
       await irAlCierreDelBanco(page)
-      await expect(page.getByText('Octubre aún no ha terminado: el banco se cierra a partir del día 1 del mes siguiente.')).toBeVisible()
+      // La banda depende de la fecha: «aún no ha terminado» hasta el 31/10; desde el 01/11, cuántos bancos
+      // sin cerrar cuadran (o «cerrado en todos»). La prueba se escribió en octubre y daba por hecho lo primero.
+      await expect(page.getByText(/^Octubre( aún no ha terminado: el banco se cierra a partir del día 1 del mes siguiente\.|: \d+ de \d+ bancos sin cerrar cuadran al céntimo\.| está cerrado en todos los bancos\.)$/)).toBeVisible()
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
       // El banco por el que se llega va el primero.
       await expect(page.getByTestId('cierre-bancos').getByRole('article').first()).toHaveAttribute('aria-label', 'Cierre de Banco B01 · Norte')
