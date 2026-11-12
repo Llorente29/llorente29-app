@@ -7,7 +7,8 @@
 -- En la empresa A de staging (o en otra de la cuenta A, en la base local del W09), con fichas y clientes de
 -- GoCardless inventados (T11).
 --
---   0. Lo de antes: la 0938 (si no está, como en la base local, se aplica aquí) y la huella de _conta_gestoria_juntar.
+--   0. Lo de antes: la 0938 (si no está, como en la base local, se aplica aquí), la 1110 quitada si el workflow ya la
+--      pasó, y la huella de _conta_gestoria_juntar.
 --   1. La 1110 entra: la columna antes y el estado «sin_ficha».
 --   2. Lo que escribe la lectura (_conta_gc_enlace_guardar): la propuesta, lo automático, y la guarda: lo automático no
 --      pisa lo de una persona ni un conflicto; lo de una persona más antiguo no pisa una decisión más nueva.
@@ -33,6 +34,12 @@ set local statement_timeout = '120s';
 select to_regclass('public.conta_gc_enlace') is null as falta_0938 \gset
 \if :falta_0938
 \i supabase/migrations/20261112T0938_g06_enlace_gocardless.sql
+\endif
+-- La 1110 puede estar ya en esta transacción (el workflow pasa la línea de la migración antes que su prueba): primero
+-- su vuelta atrás, para probarla desde lo de antes.
+select to_regprocedure('public.conta_gc_enlace_confirmar(uuid,text,uuid)') is not null as esta_1110 \gset
+\if :esta_1110
+\i supabase/vuelta-atras/20261112T1110_g06_confirmar_enlace.down.sql
 \endif
 
 create temp table _v (clave text primary key, v text) on commit drop;
