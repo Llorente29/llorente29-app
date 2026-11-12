@@ -1,0 +1,6 @@
+# DL1 · compensaciones de Glovo (1958: no añade objetos; en Foodint valida 10
+# compensaciones propuestas). Su prueba (ROLLBACK, cuenta A): sin Foodint no
+# hace nada; una compensación propuesta se valida como la persona; con otro
+# importe no se valida nada.
+supabase/migrations/20261112T1958_dl1_glovo_compensaciones.sql
+supabase/staging/sql/20261112_dl1_glovo_compensaciones_prueba.sql

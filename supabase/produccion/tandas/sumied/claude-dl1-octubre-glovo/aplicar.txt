@@ -1,0 +1,19 @@
+# DL1 · Octubre de Llorente29: las compensaciones de Glovo del 01–15/10 (Julio,
+# DL1·19, 12/11). Rama claude/dl1-octubre-glovo. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   1958  Valida como Julio 10 de los 13 asientos propuestos del 16/10 que
+#         compensan la comisión de Glovo (Debe 41000002 / Haber 43000001, 612,74
+#         en total). Las otras 3 no casan al céntimo con su factura y se quedan;
+#         las 12 ventas del día de Glovo de Carabanchel, también (envíos por
+#         aclarar y sin su PDF). No crea ni cambia ningún objeto.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-compensaciones.sql
+supabase/migrations/20261112T1958_dl1_glovo_compensaciones.sql
+sin-vuelta-atras: supabase/migrations/20261112T1958_dl1_glovo_compensaciones.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-glovo-compensaciones · Compensaciones de Glovo del 16/10 validadas por Julio, menos 10 = 0
+esperado: dl1-glovo-compensaciones · Lo que suman, menos 612,74 = 0.00
+esperado: dl1-glovo-compensaciones · Asientos propuestos de octubre, menos 15 = 0
+esperado: dl1-glovo-compensaciones · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-glovo-compensaciones · IVA de Foodint 477 del 1T al 3T de 2026 = como antes
