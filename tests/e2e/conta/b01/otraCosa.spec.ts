@@ -24,6 +24,14 @@ async function capturar(page: Page, nombre: string) {
   await page.screenshot({ path: `${DIR}/${nombre}-ordenador.png`, fullPage: true })
 }
 
+type Estado = { mismo: boolean; abierto: boolean } | null
+/** El bloque «¿Es otra cosa?» del panel: si es el mismo elemento que se marcó y si sigue abierto. */
+async function estadoBloque(page: Page): Promise<Estado> {
+  const b = page.locator('.cxn-panel details.cxn-otra-cosa')
+  if (!(await b.count())) return null
+  return b.evaluate((el) => ({ mismo: (el as HTMLElement & { _marca?: boolean })._marca === true, abierto: (el as HTMLDetailsElement).open }))
+}
+
 test.describe('B01·21 · «¿Es otra cosa?»', () => {
   test.describe.configure({ timeout: 300_000 })
   test.use({ actionTimeout: 20_000 })
@@ -58,6 +66,25 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await abrirOtraCosa('Pago a un proveedor…')
     await expect(panel.getByRole('button', { name: 'Pago a un proveedor…' })).toBeVisible()
     await expect(panel.getByRole('button', { name: 'Cobro de un cliente…' })).toHaveCount(0)
+
+    // ¿Se pliega solo? La captura de otra-cosa-pago (#634) salió plegada aunque la prueba lo
+    // acababa de abrir. Se marca el bloque abierto y se mira: (1) tras 5 s sin tocar nada, como
+    // una persona que lee; (2) tras una captura de página entera, que cambia el tamaño de la
+    // ventana mientras dura. Las cifras van al informe del run.
+    await panel.locator('details.cxn-otra-cosa').evaluate((el) => { (el as HTMLElement & { _marca?: boolean })._marca = true })
+    await page.waitForTimeout(5_000)
+    const sinTocar = await estadoBloque(page)
+    await page.screenshot({ path: test.info().outputPath('sonda.png'), fullPage: true })
+    const trasCaptura = await estadoBloque(page)
+    test.info().annotations.push({ type: 'pliegue', description: JSON.stringify({ sinTocar, trasCaptura }) })
+    console.log(`[pliegue] sin tocar 5 s: ${JSON.stringify(sinTocar)} · tras la captura de página entera: ${JSON.stringify(trasCaptura)}`)
+
+    // La captura, con la ventana ya tan alta como la página (la foto no cambia el tamaño) y el
+    // bloque comprobado abierto justo antes.
+    const alto = await page.evaluate(() => document.documentElement.scrollHeight)
+    await page.setViewportSize({ width: page.viewportSize()?.width ?? 1440, height: alto })
+    await abrirOtraCosa('Pago a un proveedor…')
+    await expect(panel.locator('details.cxn-otra-cosa')).toHaveAttribute('open', '')
     await capturar(page, 'otra-cosa-pago')
     await (await abrirOtraCosa('Pago a un proveedor…')).click()
     const dialogo = page.getByRole('dialog', { name: 'Pago a un proveedor' })
