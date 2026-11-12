@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · Cloudtown, la AF-02593 · contexto de producción, medido en SOLO LECTURA el 12/11 a las 13:25Z: la 1421 no crea ni cambia ningún objeto; apunta y valida un asiento nuevo en Foodint con _dl1_venta_proponer y _dl1_validar (en producción desde la 2052 y la 1750). Hoy no hay ningún asiento de la AF-02593 y la 43000004 está en −13.275,35. Nada en el camino del pedido; ninguna en el historial.",
+ "medido": "2026-11-12T13:25Z",
+ "tanda": {
+  "supabase/migrations/20261112T1421_dl1_cloudtown_af02593.sql": "3e03393e82ad45f06c418f7334fbe7e1"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
