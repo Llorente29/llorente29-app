@@ -3254,6 +3254,7 @@ CREATE FUNCTION public._compras_liquidacion_confirmar(p_liq uuid, p_quien_nombre
     SET search_path TO 'public'
     AS $$
 declare l licensed_settlement; v_fv uuid; v_n int; r jsonb;
+  e record; v_quien text; v_val jsonb; v_ok jsonb := '[]'::jsonb; v_mal jsonb := '[]'::jsonb; v_sin text; v_frase text;
 begin
   select * into l from licensed_settlement where id = p_liq for update;
   if l.id is null then raise exception 'Esa liquidación no existe.' using errcode = 'P0002'; end if;
@@ -3283,8 +3284,32 @@ begin
   update licensed_settlement set status = 'confirmada', confirmed_at = now(), confirmed_by = auth.uid(),
          confirmed_by_name = coalesce(p_quien_nombre, public.conta_nombre_actor()), received_invoice_id = v_fv, updated_at = now()
    where id = p_liq;
+  -- S01p·18 · 2 · Quien contabiliza ha revisado la liquidación entera: lo que el libro acaba de
+  -- proponer (al pasar a confirmada) queda validado a su nombre, por el camino de «Validar».
+  -- Cada uno en su bloque: el que no se puede, queda propuesto y se dice por qué.
+  v_quien := coalesce(p_quien_nombre, public.conta_nombre_actor());
+  for e in
+    select je.id, je.concept, je.source_type from public.journal_entry je
+     where je.company_id = l.company_id and je.status = 'propuesto'
+       and ((je.source_type in ('licensed_settlement', 'purchase_accrual', 'purchase_accrual_reversal') and je.source_id = l.id)
+         or (je.source_type in ('supplier_invoice', 'supplier_payment') and je.source_id = v_fv))
+     order by case je.source_type when 'licensed_settlement' then 1 when 'supplier_invoice' then 2 when 'supplier_payment' then 3 else 4 end, je.created_at
+  loop
+    begin
+      v_val := public._journal_entry_validar(e.id, v_quien);
+      v_ok := v_ok || jsonb_build_array(jsonb_build_object('id', e.id, 'concepto', e.concept, 'serie', v_val->'serie', 'numero', v_val->'numero'));
+    exception when others then
+      v_mal := v_mal || jsonb_build_array(jsonb_build_object('id', e.id, 'concepto', e.concept, 'porque', sqlerrm));
+    end;
+  end loop;
+  select p.porque into v_sin from public.conta_propuesta_pendiente p
+   where p.company_id = l.company_id and p.origen = 'licensed_settlement' and p.origen_id = p_liq::text limit 1;
+  v_frase := format('Contabilizada. Su factura %s queda registrada y %s recepción(es) del mes, cubiertas.', r->>'numero', v_n)
+    || case when jsonb_array_length(v_ok) > 0 then format(' Validados %s asientos a tu nombre.', jsonb_array_length(v_ok)) else '' end
+    || case when jsonb_array_length(v_mal) > 0 then format(' %s no se ha podido validar: queda en «Para revisar».', jsonb_array_length(v_mal)) else '' end
+    || case when v_sin is not null then ' El libro no ha podido proponer los asientos: ' || v_sin else '' end;
   return jsonb_build_object('liquidacion', p_liq, 'factura', v_fv, 'recepciones', v_n,
-    'frase', format('Confirmada. Su factura %s queda registrada y %s recepción(es) del mes, cubiertas. Los tres asientos los propone el libro.', r->>'numero', v_n));
+    'validados', v_ok, 'sinValidar', v_mal, 'sinPropuesta', v_sin, 'frase', v_frase);
 end $$;
 
 
