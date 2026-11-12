@@ -25,7 +25,7 @@
 import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  rutaFichaTercero, rutaLiquidacion, rutaLiquidacionFicha, rutaLiquidacionPlataforma, rutaRevisarFactura,
+  rutaFichaTercero, rutaLiquidacion, rutaLiquidacionFicha, rutaLiquidacionNueva, rutaLiquidacionPlataforma, rutaRevisarFactura,
 } from '@/config/navegacion'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
@@ -46,6 +46,7 @@ import {
   leerLocales, reclamacionLlegada, registrarLeidas, resolverDiferencia, type Intermediario,
 } from '@/modules/conta/services/liquidacionesMotorService'
 import { leerLiquidaciones } from '@/modules/conta/services/liquidacionesService'
+import { proveedoresDeSocios } from '@/modules/conta/services/liquidacionesVentasService'
 import { leerCorreoFacturas } from '@/modules/conta/services/comprasService'
 import { subirFacturas } from '@/modules/conta/services/documentosService'
 import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
@@ -287,7 +288,7 @@ export default function LiquidacionesVentasPage() {
         </details>
       ))}
 
-      {m && m.cedidas.length > 0 && !filtros.plataforma && !filtros.soloTeNecesita && <Cedidas cedidas={m.cedidas} local={filtros.local} sinPropuesta={sinPropuesta.datos ?? null} />}
+      {m && m.cedidas.length > 0 && !filtros.plataforma && !filtros.soloTeNecesita && <Cedidas cedidas={m.cedidas} local={filtros.local} sinPropuesta={sinPropuesta.datos ?? null} mes={mes} accountId={accountId} />}
       {m && m.cedidas.length > 0 && (filtros.plataforma || filtros.soloTeNecesita) && (
         <p className="cxlm-vacio">Las marcas cedidas ({m.cedidas.length}) no salen con estos filtros: se cuadran con su socio, no con una plataforma.</p>
       )}
@@ -544,21 +545,32 @@ function SinFila({ m, sinPropuesta }: { m: MesLiquidaciones; sinPropuesta: Map<s
 
 // ── Las marcas cedidas ──────────────────────────────────────────────────────
 
-function Cedidas({ cedidas, local, sinPropuesta }: { cedidas: CedidaMes[]; local: string | null; sinPropuesta: Map<string, SinPropuesta> | null }) {
+function Cedidas({ cedidas, local, sinPropuesta, mes, accountId }: {
+  cedidas: CedidaMes[]; local: string | null; sinPropuesta: Map<string, SinPropuesta> | null; mes: string; accountId: string | null
+}) {
   const vistas = cedidas.filter((c) => !local || (local !== SIN_LOCAL && c.localId === local))
-  const socios = [...new Set(cedidas.map((c) => c.socio))]
+  // S01p·18 · 3: «El mes» lleva a su liquidación si está, y si falta, a subir sus documentos
+  // (compras/liquidacion/nueva, con su proveedor, local y mes). El proveedor sale de su tercero.
+  const socios = useLeer(accountId ? () => proveedoresDeSocios(accountId, [...new Set(cedidas.map((c) => c.socioId).filter((x): x is string => !!x))]) : null,
+    `${accountId}:proveedores-socios:${cedidas.map((c) => c.socioId).join(',')}`)
+  const destino = (c: CedidaMes): string | null => c.liquidacion ? rutaLiquidacion(c.liquidacion.id)
+    : c.socioId && socios.datos?.get(c.socioId) ? rutaLiquidacionNueva(socios.datos.get(c.socioId)!, c.localId, mes) : null
+  const nombres = [...new Set(cedidas.map((c) => c.socio))]
   const n = { completa: 0, aun_no_toca: 0, te_necesita: 0, no_cuadra: 0 } as Record<EstadoMes, number>
   for (const c of vistas) n[c.estado]++
   return (
     <details className="cxlm-grupo" open data-prueba="grupo-cedidas">
-      <summary><span>Marcas cedidas · se cuadran con {lista(socios)}</span>
+      <summary><span>Marcas cedidas · se cuadran con {lista(nombres)}</span>
         <span className="cxlm-cuenta">{(Object.keys(n) as EstadoMes[]).filter((e) => n[e]).map((e) => `${n[e]} ${NOMBRE_ESTADO[e].toLowerCase()}`).join(' · ') || 'ninguna aquí'}</span>
       </summary>
       {vistas.map((c) => (
         <div key={`${c.socioId}:${c.localId}`} className="cxlm-tienda-plana">
           <div className="cxlm-tienda-cab"><span className="cxlm-tn">{c.marcas.join(', ')}</span><br /><span className="cxlm-tp">{c.socio} · {(c.local ?? 'Sin local').replace(/^Foodint\s+/i, '')}</span></div>
           <div className="cxlm-fila" data-estado={c.estado} data-prueba="fila-cedida">
-            <span className="cxlm-per cxlm-per-texto">El mes</span>
+            {destino(c)
+              ? <Link className="cxlm-per cxlm-per-texto" to={destino(c)!} data-prueba="el-mes-cedida"
+                  title={c.liquidacion ? 'Ver su liquidación del mes' : 'Subir sus documentos del mes'}>El mes</Link>
+              : <span className="cxlm-per cxlm-per-texto">El mes</span>}
             <ul className="cxlm-piezas" aria-label="Sus piezas">
               <li className="cxlm-pz" data-tono={c.vendido.total > 0 ? 'si' : undefined}>Vendido {c.vendido.total > 0 ? '✓' : '—'}</li>
               <li className="cxlm-pz" data-tono={c.liquidacion ? 'si' : c.estado === 'te_necesita' ? 'no' : undefined}>Liquidación {c.liquidacion ? '✓' : c.estado === 'te_necesita' ? 'falta' : '—'}</li>
