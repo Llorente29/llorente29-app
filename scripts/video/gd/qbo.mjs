@@ -124,16 +124,21 @@ async function escena(id, fn, { ancho = W, alto = H, conSesion = true } = {}) {
   if (conSesion) await ctx.addInitScript(iniciarSesion())
   await ctx.addInitScript(CURSOR); await ctx.addInitScript(ROTULO)
   const page = await ctx.newPage()
-  const t0 = Date.now(); const marca = { desde: 0 }
-  const E = { page, ctx, R: raton(page), empezar: () => { marca.desde = (Date.now() - t0) / 1000 }, captura: async () => page.screenshot({ path: join(SALIDA, 'capturas', `${id}.png`) }) }
+  const t0 = Date.now(); const marca = { desde: 0, cortes: [] }
+  const ahora = () => (Date.now() - t0) / 1000
+  const E = { page, ctx, R: raton(page), empezar: () => { marca.desde = ahora() }, captura: async () => page.screenshot({ path: join(SALIDA, 'capturas', `${id}.png`) }),
+    // nº91 · Lo que pasa dentro de `tapar` (una pantalla cargando) se graba pero no sale en la escena: se corta al montar.
+    tapar: async (fn) => { const a = ahora(); try { return await fn() } finally { marca.cortes.push([a, ahora()]) } } }
   try { await fn(E) } catch (e) { fallos.push(`${id}: ${e.message.split('\n')[0]}`); decir(`  ✗ ${e.message.split('\n')[0]}`); await E.captura().catch(() => {}) }
   await page.close(); await ctx.close()
   if (E.sinEscena) { rmSync(join(SALIDA, 'escenas', `${id}.mp4`), { force: true }); rmSync(join(SALIDA, 'capturas', `${id}.png`), { force: true }); decir(`  · sin escena ${id}: queda fuera del montaje`); return }
   const webm = readdirSync(dir).find((f) => f.endsWith('.webm'))
   if (!webm) { fallos.push(`${id}: sin vídeo`); return }
   renameSync(join(dir, webm), join(dir, 'clip.webm'))
+  const cortes = marca.cortes.map(([x, y]) => [Math.max(0, x - marca.desde), y - marca.desde]).filter(([x, y]) => y > x)
+  const quitar = cortes.length ? `select='not(${cortes.map(([x, y]) => `between(t,${x.toFixed(2)},${y.toFixed(2)})`).join('+')})',setpts=N/30/TB,` : ''
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(Math.max(0, marca.desde)), '-i', join(dir, 'clip.webm'),
-    '-vf', `fps=30,scale=${ancho}:${alto},format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-an', join(SALIDA, 'escenas', `${id}.mp4`)])
+    '-vf', `fps=30,${quitar}scale=${ancho}:${alto},format=yuv420p`, '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-an', join(SALIDA, 'escenas', `${id}.mp4`)])
   decir(`  ✓ escenas/${id}.mp4`)
 }
 // ── Piezas de las escenas ────────────────────────────────────────────────────
@@ -180,6 +185,40 @@ async function ingresoDelCliente() {
   if (!po) return null
   const texto = `+${Number(po.importe).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   return { texto, casado: po.match_id !== null }
+}
+
+// nº91 · La 57200002 cuadrada. El mayor solo cuenta lo validado, y los asientos del banco de los ingresos de GoCardless
+// se quedan «por validar» aunque estén casados: sin validarlos, el mayor enseña el debe de las facturas y ningún haber.
+// Se validan, como Julio y con la misma función que «Validar» de Bancos › Movimientos, SOLO los de las liquidaciones
+// cuyos cobros son todos recibos facturados por Sumied: así queda la comisión de GoCardless de esos cobros. Los de
+// liquidaciones sin factura (pagos de pruebas de otras veces que el sandbox guarda, y cobros devueltos) no se tocan.
+async function validarIngresosFacturados() {
+  const { data: pos } = await admin.from('conta_gc_payout').select('gc_id, importe, comision, match_id').eq('account_id', CUENTA).eq('company_id', SOCIEDAD).not('match_id', 'is', null)
+  const { data: cobros } = await admin.from('conta_gc_cobro').select('gc_id, payout_gc_id').eq('account_id', CUENTA).not('payout_gc_id', 'is', null)
+  const { data: recs } = await admin.from('conta_recibo').select('gc_cobro_id, invoice_id').eq('account_id', CUENTA).not('gc_cobro_id', 'is', null)
+  const facturado = new Set((recs ?? []).filter((r) => r.invoice_id).map((r) => r.gc_cobro_id))
+  const porPayout = new Map()
+  for (const c of cobros ?? []) porPayout.set(c.payout_gc_id, [...(porPayout.get(c.payout_gc_id) ?? []), c.gc_id])
+  const buenos = (pos ?? []).filter((p) => (porPayout.get(p.gc_id) ?? []).length > 0 && porPayout.get(p.gc_id).every((g) => facturado.has(g)))
+  const { data: casados } = await admin.from('bank_match').select('id, journal_entry_id').in('id', buenos.map((p) => p.match_id))
+  const asientos = (casados ?? []).map((m) => m.journal_entry_id).filter(Boolean)
+  const { data: prop } = await admin.from('journal_entry').select('id').in('id', asientos).eq('status', 'propuesto')
+  const { data: perfil } = await admin.from('user_profiles').select('display_name').eq('account_id', CUENTA).eq('user_id', sesion.user.id).maybeSingle()
+  const quienValida = perfil?.display_name ?? null
+  let bien = 0; const mal = []
+  for (const { id } of prop ?? []) {
+    const { error } = await comoJulio.rpc('journal_entry_validar', { p_entry: id, p_quien_nombre: quienValida })
+    if (error) mal.push(error.message); else bien++
+  }
+  const com = buenos.reduce((t, p) => t + Number(p.comision), 0)
+  decir(`  · 7c: ${buenos.length} ingresos de cobros facturados; validados ahora ${bien} (ya lo estaban ${asientos.length - (prop ?? []).length}). Comisión de GoCardless que debe quedar en la 57200002: ${com.toFixed(2)} €.`)
+  if (mal.length) fallos.push(`07c: ${mal.length} asientos del banco no se han podido validar: ${mal[0]}`)
+  // El saldo de la 57200002 con lo validado, como lo saca el mayor.
+  const { data: cta } = await admin.from('company_account').select('id').eq('company_id', SOCIEDAD).eq('code', '57200002').maybeSingle()
+  const { data: lin } = await admin.from('journal_line').select('debit, credit, journal_entry!inner(status, voided_at)').eq('company_account_id', cta?.id ?? '').eq('journal_entry.status', 'validado').is('journal_entry.voided_at', null)
+  const saldo = (lin ?? []).reduce((t, l) => t + Number(l.debit) - Number(l.credit), 0)
+  decir(`  · 7c: la 57200002 con lo validado: ${saldo.toFixed(2)} € ${saldo >= 0 ? 'deudor' : 'acreedor'}.`)
+  if (Math.abs(saldo - com) > 0.005) fallos.push(`07c · 3: la 57200002 queda en ${saldo.toFixed(2)} € y la comisión es ${com.toFixed(2)} €: no cuadra`)
 }
 
 // ── Las escenas ──────────────────────────────────────────────────────────────
@@ -438,6 +477,7 @@ try {
     const ingreso = await ingresoDelCliente()
     if (!ingreso) fallos.push(`07c · 4: el cobro de ${CLIENTE} aún no ha llegado al banco (sin liquidación de GoCardless)`)
     else if (!ingreso.casado) fallos.push(`07c · 4: el ingreso de ${CLIENTE} (${ingreso.texto}) aún no está casado`)
+    if (MODO === 'grabar') await validarIngresosFacturados()
 
     // 1 · Su factura en el libro de IVA repercutido (expedidas).
     await ir(E.page, '/conta/libros/registro/expedidas'); E.empezar(); await E.page.waitForTimeout(1500)
@@ -454,7 +494,11 @@ try {
     await a(E, E.page.getByText(/Talleres Ruiz|GoCardless/).first(), { que: '7c · 3: el mayor de la 57200002', pausa: 5500 })
     await paso(3, 'mayor de la 57200002')
     // 4 · El banco 57200000: el ingreso de GoCardless, casado con sus cobros.
-    await ir(E.page, '/conta/bancos'); await E.page.waitForTimeout(1500)
+    await E.tapar(async () => {
+      await ir(E.page, '/conta/bancos')
+      await E.page.getByText(ingreso?.texto ?? /GOCARDLESS/, { exact: !!ingreso }).first().waitFor({ timeout: 30_000 }).catch(() => fallos.push('07c · 4: los movimientos no han salido en 30 s'))
+    })
+    await E.page.waitForTimeout(800)
     await a(E, ingreso ? E.page.getByText(ingreso.texto, { exact: true }).first() : E.page.getByText(/GOCARDLESS/).first(),
       { clic: true, que: `7c · 4: el ingreso de GoCardless de ${CLIENTE} en el banco`, pausa: 5000 })
     await paso(4, 'banco 57200000')
@@ -471,8 +515,11 @@ try {
     const ingreso = await ingresoDelCliente()
     if (!ingreso?.casado) { fallos.push(`08: el ingreso de ${CLIENTE} aún no está casado (${ingreso?.texto ?? 'sin liquidación'}): escena fuera`); E.sinEscena = true; return }
     await ir(E.page, '/conta/bancos'); E.empezar()
-    await rotulo(E.page, 'El ingreso de GoCardless se casa solo en el banco'); await E.page.waitForTimeout(3500)
-    await a(E, E.page.getByText(ingreso.texto, { exact: true }).first(), { clic: true, que: `el ingreso de GoCardless de ${CLIENTE} (${ingreso.texto})`, pausa: 4000 })
+    await rotulo(E.page, 'El ingreso de GoCardless se casa solo en el banco'); await E.page.waitForTimeout(2500)
+    // nº91 · Primero la pestaña «Casados solos»: solo los verdes, sin ninguno «para confirmar».
+    await a(E, E.page.getByRole('button', { name: /Casados solos/ }).first(), { clic: true, que: 'la pestaña «Casados solos»', pausa: 2500 })
+    // En «Casados solos» cada línea lleva su importe sin el «+» y su botón «Abrir».
+    await a(E, E.page.getByRole('listitem').filter({ hasText: ingreso.texto.replace(/^\+/, '') }).getByRole('button', { name: 'Abrir' }).first(), { clic: true, que: `el ingreso de GoCardless de ${CLIENTE} (${ingreso.texto})`, pausa: 4000 })
     await a(E, E.page.getByText(/Ingreso de GoCardless/).first(), { que: 'su casado', pausa: 3500 })
     await E.captura()
   })
