@@ -33901,6 +33901,87 @@ COMMENT ON FUNCTION public.conta_bitrix_pestana_sueltos(p_portal text, p_correo 
 
 
 --
+-- Name: conta_bitrix_red_apuntar(uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_red_apuntar(p_account uuid, p_fila jsonb) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_id uuid;
+begin
+  insert into public.conta_bitrix_red (account_id, id_externo, campo, antes, despues, quien_id, quien, correo, correo_a, correo_porque, nota)
+  values (p_account, p_fila->>'id_externo', p_fila->>'campo', p_fila->>'antes', p_fila->>'despues', p_fila->>'quien_id', p_fila->>'quien',
+          coalesce(p_fila->>'correo', 'sin_correo'),
+          coalesce((select array_agg(x) from jsonb_array_elements_text(coalesce(p_fila->'correo_a', '[]'::jsonb)) x), '{}'),
+          left(p_fila->>'correo_porque', 200), coalesce(p_fila->>'nota', 'no'))
+  returning id into v_id;
+  return v_id;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_red_apuntar(p_account uuid, p_fila jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_red_apuntar(p_account uuid, p_fila jsonb) IS 'GBd (plan B, pruebas) · Apunta una devolución de la red (conta_bitrix_red). Solo el servidor.';
+
+
+--
+-- Name: conta_bitrix_red_leer(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_bitrix_red_leer(p_account uuid, p_id text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  v_crm public.conta_crm; v_usuario uuid; v_cliente uuid; v_campo text; v_id text := trim(coalesce(p_id, ''));
+begin
+  if v_id !~ '^[0-9]{1,18}$' then return jsonb_build_object('estado', 'ficha_rara'); end if;
+  select * into v_crm from public.conta_crm c where c.account_id = p_account and c.crm = 'bitrix24';
+  if v_crm.account_id is null then return jsonb_build_object('estado', 'sin_crm'); end if;
+  -- Solo en pruebas: en el real, la red se enciende más adelante, con el sí de Julio.
+  if v_crm.entorno is distinct from 'pruebas' then return jsonb_build_object('estado', 'no_es_pruebas'); end if;
+
+  select x->>'codigo' into v_campo from jsonb_array_elements(coalesce(v_crm.mapa->'campos', '[]'::jsonb)) x
+   where x->>'campo' = 'cuota_referencia' and coalesce(x->>'codigo', '') <> ''
+   order by (lower(coalesce(x->>'etiqueta', '')) = 'cuota mensual') desc limit 1;
+  if v_campo is null then return jsonb_build_object('estado', 'sin_campo', 'portal', v_crm.portal); end if;
+
+  select g.party_id into v_cliente from public.conta_gestoria_ficha g
+   where g.account_id = p_account and g.crm = 'bitrix24' and g.tipo_ficha = 'empresa' and g.id_externo = v_id
+   order by (g.de_empresa = '') desc, g.de_empresa limit 1;
+  if v_cliente is null then
+    select g.party_id into v_cliente from public.conta_gestoria_cliente g
+     where g.account_id = p_account and g.crm = 'bitrix24' and g.tipo_ficha = 'empresa' and g.id_externo = v_id;
+  end if;
+  if v_cliente is null then return jsonb_build_object('estado', 'sin_enlazar', 'portal', v_crm.portal, 'campo', v_campo); end if;
+
+  -- Como una administradora activa de la cuenta (DM1: «usuario:cuenta»), solo en esta transacción.
+  select up.user_id into v_usuario from public.user_profiles up
+   where up.account_id = p_account and up.active and up.role = 'admin' order by up.created_at limit 1;
+  if v_usuario is null then return jsonb_build_object('estado', 'sin_persona', 'portal', v_crm.portal, 'campo', v_campo); end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', v_usuario, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', v_usuario::text || ':' || p_account::text, true);
+
+  return jsonb_build_object(
+    'estado', 'ok', 'portal', v_crm.portal, 'campo', v_campo, 'cliente', v_cliente,
+    'clientes', public.conta_pantalla_clientes(p_account),
+    'recientes', (select count(*) from public.conta_bitrix_red r
+      where r.account_id = p_account and r.crm = 'bitrix24' and r.tipo_ficha = 'empresa' and r.id_externo = v_id
+        and r.campo = v_campo and r.hecho_at > now() - interval '10 minutes'));
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_bitrix_red_leer(p_account uuid, p_id text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_bitrix_red_leer(p_account uuid, p_id text) IS 'GBd (plan B, pruebas) · Lo que necesita la red de la «Cuota mensual» para una ficha de empresa de Bitrix24: el campo del mapa, el cliente y lo de Clientes (la cuota del mes que viene, como la pestaña), leído como una administradora activa de la cuenta, y las devoluciones de los últimos 10 minutos (el freno del bucle). Solo con la conexión en entorno «pruebas». Solo el servidor.';
+
+
+--
 -- Name: conta_canal_de_factura(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -108213,6 +108294,39 @@ COMMENT ON TABLE public.conta_bitrix_pestana_cambio IS 'GB · Lo hecho desde la 
 
 
 --
+-- Name: conta_bitrix_red; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_bitrix_red (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    crm text DEFAULT 'bitrix24'::text NOT NULL,
+    tipo_ficha text DEFAULT 'empresa'::text NOT NULL,
+    id_externo text NOT NULL,
+    campo text NOT NULL,
+    antes text,
+    despues text,
+    quien_id text,
+    quien text,
+    correo text DEFAULT 'sin_correo'::text NOT NULL,
+    correo_a text[] DEFAULT '{}'::text[] NOT NULL,
+    correo_porque text,
+    nota text DEFAULT 'no'::text NOT NULL,
+    hecho_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_bitrix_red_correo_check CHECK ((correo = ANY (ARRAY['enviado'::text, 'no_enviado'::text, 'cupo'::text, 'sin_correo'::text]))),
+    CONSTRAINT conta_bitrix_red_nota_check CHECK ((nota = ANY (ARRAY['escrita'::text, 'no'::text]))),
+    CONSTRAINT conta_bitrix_red_tipo_ficha_check CHECK ((tipo_ficha = ANY (ARRAY['empresa'::text, 'contacto'::text])))
+);
+
+
+--
+-- Name: TABLE conta_bitrix_red; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_bitrix_red IS 'GBd (plan B, pruebas) · Cada vez que Sumied devuelve en Bitrix24 un campo suyo cambiado a mano (la «Cuota mensual»): de qué a qué, quién lo cambió (MODIFY_BY_ID; «no se sabe» si Bitrix24 no lo dice), el correo (enviado, no enviado o sin cupo) y la nota del historial. Solo el servidor.';
+
+
+--
 -- Name: conta_cambio_precios; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -126720,6 +126834,14 @@ ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
 
 
 --
+-- Name: conta_bitrix_red conta_bitrix_red_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_red
+    ADD CONSTRAINT conta_bitrix_red_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_cambio_precios_linea conta_cambio_precios_linea_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -132797,6 +132919,13 @@ CREATE INDEX conta_aviso_cuenta_idx ON public.conta_aviso USING btree (account_i
 --
 
 CREATE INDEX conta_bitrix_pestana_cambio_ficha_idx ON public.conta_bitrix_pestana_cambio USING btree (account_id, tipo_ficha, id_externo, hecho_at DESC);
+
+
+--
+-- Name: conta_bitrix_red_ficha; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_bitrix_red_ficha ON public.conta_bitrix_red USING btree (account_id, crm, tipo_ficha, id_externo, campo, hecho_at DESC);
 
 
 --
@@ -142428,6 +142557,14 @@ ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
 
 ALTER TABLE ONLY public.conta_bitrix_pestana_cambio
     ADD CONSTRAINT conta_bitrix_pestana_cambio_party_id_fkey FOREIGN KEY (party_id) REFERENCES public.party(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_bitrix_red conta_bitrix_red_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_bitrix_red
+    ADD CONSTRAINT conta_bitrix_red_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --
@@ -154290,6 +154427,12 @@ ALTER TABLE public.conta_bitrix_pestana_cambio ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY conta_bitrix_pestana_cambio_leer ON public.conta_bitrix_pestana_cambio FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
+
+--
+-- Name: conta_bitrix_red; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_bitrix_red ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: conta_cambio_precios; Type: ROW SECURITY; Schema: public; Owner: -
@@ -169094,6 +169237,22 @@ GRANT ALL ON FUNCTION public.conta_bitrix_pestana_sueltos(p_portal text, p_corre
 
 
 --
+-- Name: FUNCTION conta_bitrix_red_apuntar(p_account uuid, p_fila jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_red_apuntar(p_account uuid, p_fila jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_red_apuntar(p_account uuid, p_fila jsonb) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_bitrix_red_leer(p_account uuid, p_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_bitrix_red_leer(p_account uuid, p_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_bitrix_red_leer(p_account uuid, p_id text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_canal_de_factura(p_invoice uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -182428,6 +182587,13 @@ GRANT SELECT ON TABLE public.conta_bitrix_pestana_aviso TO authenticated;
 
 GRANT ALL ON TABLE public.conta_bitrix_pestana_cambio TO service_role;
 GRANT SELECT ON TABLE public.conta_bitrix_pestana_cambio TO authenticated;
+
+
+--
+-- Name: TABLE conta_bitrix_red; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_bitrix_red TO service_role;
 
 
 --
