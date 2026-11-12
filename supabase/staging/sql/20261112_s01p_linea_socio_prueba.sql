@@ -40,7 +40,6 @@ end $$;
 set local statement_timeout = '180s';
 set local lock_timeout = '120s';
 
-create temp table _h on commit drop as select md5(pg_get_functiondef('public.conta_propuestas_socio(uuid,uuid)'::regprocedure)) as antes;
 select to_regclass('public.socio_linea_regla') is not null as ya_esta \gset
 \if :ya_esta
 \else
@@ -260,11 +259,9 @@ delete from public.journal_entry where source_id in (select v::uuid from _p wher
 do $$
 declare v_h text := md5(pg_get_functiondef('public.conta_propuestas_socio(uuid,uuid)'::regprocedure));
 begin
-  if v_h <> (select antes from _h) then
-    raise exception 'PRUEBA S01p·18 · 8: la vuelta atrás deja conta_propuestas_socio con % y antes era %.', v_h, (select antes from _h);
-  end if;
-  if current_database() <> 'staging_local' and v_h <> 'b716120913963dca46f9bda310a24fcc' then
-    raise exception 'PRUEBA S01p·18 · 8: conta_propuestas_socio no queda con la huella de producción.';
+  -- La de producción (la misma en staging y en la base local antes de la 1755). El workflow aplica la 1755 antes de esta prueba.
+  if v_h <> 'b716120913963dca46f9bda310a24fcc' then
+    raise exception 'PRUEBA S01p·18 · 8: la vuelta atrás deja conta_propuestas_socio con % y la de producción es b716120913963dca46f9bda310a24fcc.', v_h;
   end if;
   if to_regclass('public.socio_linea_regla') is not null or to_regprocedure('public.compras_socio_pendiente(uuid,uuid,uuid)') is not null then
     raise exception 'PRUEBA S01p·18 · 8: la vuelta atrás deja cosas de la 1755.';

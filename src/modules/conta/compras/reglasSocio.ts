@@ -47,6 +47,8 @@ export function useContextoSocio(empresa: string | null, proveedor: string, loca
     })
     return () => { vivo = false }
   }, [empresa, proveedor, local])
-  return !empresa || !proveedor ? SIN_SOCIO : estado
+  // Sin proveedor no hay nada que saber; sin empresa aún no se sabe (y no se puede leer: falta su NIF).
+  return !proveedor ? SIN_SOCIO : !empresa ? ESPERANDO : estado
 }
 const SIN_SOCIO: ContextoDelSocio = { reglas: {}, pendiente: 0, listo: true, fallo: null }
+const ESPERANDO: ContextoDelSocio = { reglas: {}, pendiente: 0, listo: false, fallo: null }

@@ -106,7 +106,7 @@ function NuevaLiquidacion() {
         <p style={{ marginTop: 0 }}>Suelta los cinco PDF que te manda: tu factura, la suya, la cuenta, las ventas y el inventario.</p>
         <label className="cx-campo">
           <span className="cx-etiqueta">Los PDF de la liquidación</span>
-          <input type="file" accept="application/pdf" multiple className="cx-input" disabled={leyendo || !socio.listo}
+          <input type="file" accept="application/pdf" multiple className="cx-input" disabled={leyendo || !socio.listo || !activa}
             onChange={(e) => void leer(Array.from(e.target.files ?? []))} />
         </label>
         {leyendo && <p role="status">Leyendo…</p>}
