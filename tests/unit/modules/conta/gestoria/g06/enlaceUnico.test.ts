@@ -111,7 +111,9 @@ describe('G06 · index.ts: nada sin paginar y los dos enlaces de antes, igual', 
   it('sigue escribiendo conta_gc_cliente y conta_cobro_cliente, y además conta_gc_enlace', () => {
     expect(f).toContain("await upsert(db, 'conta_gc_cliente', plan.filas.clientes, 'company_id,gc_id')")
     expect(f).toContain("await upsert(db, 'conta_cobro_cliente', plan.cobroCliente, 'company_id,party_id')")
-    expect(f).toContain("await upsert(db, 'conta_gc_enlace', pe.guardar, 'company_id,gc_cliente_id')")
-    expect(f).toContain(".eq('estado', 'atado').in('por', ['nif', 'correo'])")
+    // G06 · Tarea 3: por la función con la guarda dentro (una confirmación a media lectura no se pisa).
+    expect(f).toContain("db.rpc('_conta_gc_enlace_guardar', { p_filas: trozo })")
+    expect(f).not.toContain("upsert(db, 'conta_gc_enlace'")
+    expect(f).toContain(".in('estado', ['atado', 'propuesto']).in('por', ['nif', 'correo', 'nombre'])")
   })
 })

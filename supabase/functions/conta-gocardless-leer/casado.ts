@@ -12,6 +12,12 @@
 // Lo que no casa NO se esconde: sale como diferencia, con su porqué
 // (regla 7). Puro: lo prueban las unitarias
 // (tests/unit/modules/conta/gestoria/casado.test.ts).
+//
+// G06 · Tarea 3 (12/11). Lo que no casa solo, con cobro vivo, sale además como
+// PROPUESTA, nunca atado solo (encargo G06): por el correo, si está en varias
+// fichas; por el NOMBRE normalizado (sin tildes ni signos, palabras en orden),
+// si coincide con una o varias fichas. Cada propuesta dice por qué y con qué
+// fichas; la confirma una persona con un clic (conta_gc_enlace_confirmar).
 
 /** Lo que el casado necesita de una ficha de Bitrix24 (la de conta-bitrix-leer/mapa.ts lo cumple). */
 export interface FichaParaCasar {
@@ -42,6 +48,21 @@ export interface Pareja {
   por: 'nif' | 'correo'
 }
 
+/** Una pareja que no se ata sola: la confirma una persona. */
+export interface Propuesta {
+  emisor: string
+  clienteGcId: string
+  por: 'correo' | 'nombre'
+  claveFichas: string[]
+  porque: string
+}
+
+/** El nombre para comparar: minúsculas, sin tildes ni signos, las palabras en orden alfabético. */
+export function normalizarNombre(nombre: string | null | undefined): string {
+  return (nombre ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9 ]+/g, ' ').split(' ').filter(Boolean).sort().join(' ')
+}
+
 export type TipoDiferencia =
   | 'crm_sin_cobro'
   | 'gocardless_sin_ficha'
@@ -69,15 +90,21 @@ export function casar(
   fichas: FichaParaCasar[],
   clientes: ClienteParaCasar[],
   nombreEmisor: (emisor: string) => string,
-): { parejas: Pareja[]; diferencias: Diferencia[] } {
+): { parejas: Pareja[]; diferencias: Diferencia[]; propuestas: Propuesta[] } {
   const parejas: Pareja[] = []
   const diferencias: Diferencia[] = []
+  const propuestas: Propuesta[] = []
 
   const porNif = new Map<string, FichaParaCasar[]>()
   const porCorreo = new Map<string, FichaParaCasar[]>()
+  const porNombre = new Map<string, FichaParaCasar[]>()
+  const vivo = (c: ClienteParaCasar) => c.mandatosVivos > 0 || c.suscripcionesActivas > 0
+  const nombres = (v: FichaParaCasar[]) => v.map((x) => `«${x.nombre}»`).join(', ')
   for (const f of fichas) {
     if (f.nif) porNif.set(f.nif, [...(porNif.get(f.nif) ?? []), f])
     for (const c of f.correos) porCorreo.set(c, [...(porCorreo.get(c) ?? []), f])
+    const n = normalizarNombre(f.nombre)
+    if (n) porNombre.set(n, [...(porNombre.get(n) ?? []), f])
   }
   const avisadoNif = new Set<string>()
   const avisadoCorreo = new Set<string>()
@@ -107,11 +134,22 @@ export function casar(
           diferencias.push({ tipo: 'correo_repetido_en_crm', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
             porque: `El correo ${c.correo} está en ${v.length} fichas de Bitrix24: no se sabe cuál es.` })
         }
+        if (vivo(c)) {
+          propuestas.push({ emisor: c.emisor, clienteGcId: c.id, por: 'correo', claveFichas: v.map((x) => x.claveFicha),
+            porque: `Su correo ${c.correo} está en ${v.length} fichas de Bitrix24 (${nombres(v)}): ¿cuál es?` })
+        }
         continue
       }
     }
     if (!ficha || !por) {
-      if (c.mandatosVivos > 0 || c.suscripcionesActivas > 0) {
+      const mismos = porNombre.get(normalizarNombre(c.nombre)) ?? []
+      if (vivo(c) && mismos.length) {
+        propuestas.push({ emisor: c.emisor, clienteGcId: c.id, por: 'nombre', claveFichas: mismos.map((x) => x.claveFicha),
+          porque: mismos.length === 1
+            ? `Se llama igual que la ficha ${nombres(mismos)} de Bitrix24, sin NIF ni correo que lo confirme: ¿es esta?`
+            : `Se llama igual que ${mismos.length} fichas de Bitrix24 (${nombres(mismos)}): ¿cuál es?` })
+      }
+      if (vivo(c)) {
         diferencias.push({ tipo: 'gocardless_sin_ficha', claveFicha: null, emisor: c.emisor, clienteGcId: c.id,
           porque: `«${c.nombre}» está en GoCardless de ${nombreEmisor(c.emisor)} y no tiene ficha en Bitrix24 con su NIF${c.correo ? ' ni con su correo' : ''}.` })
       }
@@ -141,5 +179,5 @@ export function casar(
         ? `«${f.nombre}» está activo en Bitrix24 y está en GoCardless, pero sin ningún cobro mensual.`
         : `«${f.nombre}» está activo en Bitrix24 y no está en GoCardless (ni por NIF ni por correo).` })
   }
-  return { parejas, diferencias }
+  return { parejas, diferencias, propuestas }
 }
