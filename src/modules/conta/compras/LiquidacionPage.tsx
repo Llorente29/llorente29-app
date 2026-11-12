@@ -7,8 +7,10 @@
 //     para saber cuál es tu factura) y se guarda con compras_liquidacion_guardar.
 //   · compras/liquidacion/:liqId: lo leído, el contraste con lo que sabe
 //     Folvy (compras, ventas, producto a producto), «Decirle cuál es cuál» y
-//     «Contabilizar» (compras_liquidacion_confirmar). Los tres asientos los
-//     propone el libro, como todo lo demás. V01 · Entrega 3: vive en Ventas ›
+//     «Contabilizar» (compras_liquidacion_confirmar). Los asientos los propone
+//     el libro, como todo lo demás, y S01p·18 · 2: quien contabiliza ya ha
+//     revisado la liquidación entera, así que quedan validados a su nombre; el
+//     que no se puede, se dice con su porqué y espera en «Para revisar». V01 · Entrega 3: vive en Ventas ›
 //     Liquidaciones › Socios de marca, con SocioDelMes (albaranes como soporte,
 //     sus albaranes contra su Relación Compras y Ventas, sus asientos y el cobro).
 //
@@ -48,6 +50,19 @@ interface Contraste {
   ventas: { plataforma: string; documento: number | null; folvy: number | null; pedidos: number | null; diferencia: number }[]
   productos: { casados: number; no_nuestros: number; sin_casar: number; sin_casar_con_compras: number; no_coinciden: { nombre: string; documento: number; unidad: string; folvy: number | null; comparable: boolean }[] }
   marcas: string; marcas_frase: string
+}
+/** Lo que contesta «Contabilizar» (S01p·18 · 2). */
+interface RespuestaContabilizar {
+  frase: string
+  validados?: { id: string; concepto: string; serie: number; numero: number }[]
+  sinValidar?: { id: string; concepto: string; porque: string }[]
+  sinPropuesta?: string | null
+}
+/** La frase, con el número de cada asiento validado («… Ventas nº 3.390, Compras nº 3.391…»). */
+function fraseContabilizada(r: RespuestaContabilizar): string {
+  const v = r.validados ?? []
+  if (v.length === 0) return r.frase
+  return `${r.frase} ${v.map((x) => `${x.concepto} (nº ${x.numero.toLocaleString('es-ES')})`).join(' · ')}.`
 }
 interface Producto { nombre: string; compras: number; unidad: string; articulo: string | null; articulo_nombre: string | null; no_es_nuestro: boolean }
 
@@ -309,8 +324,10 @@ function VerLiquidacion({ liqId }: { liqId: string }) {
             : <button type="button" className="cx-boton" disabled={confirmando || bloqueos.length > 0} onClick={async () => {
                 setConfirmando(true); setFallo(null)
                 try {
-                  const r = await rpc<{ frase: string }>('compras_liquidacion_confirmar', { p_liq: liqId })
-                  setAviso(r.frase); setVuelta((v) => v + 1)
+                  const r = await rpc<RespuestaContabilizar>('compras_liquidacion_confirmar', { p_liq: liqId })
+                  setAviso(fraseContabilizada(r))
+                  if ((r.sinValidar ?? []).length > 0) setFallo((r.sinValidar ?? []).map((x) => `«${x.concepto}» no se ha validado: ${x.porque}`).join(' '))
+                  setVuelta((v) => v + 1)
                 } catch (e) { setFallo(e instanceof Error ? e.message : 'No se pudo contabilizar.') } finally { setConfirmando(false) }
               }}>{confirmando ? 'Contabilizando…' : 'Contabilizar'}</button>}
         </div>

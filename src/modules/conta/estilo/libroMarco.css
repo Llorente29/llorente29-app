@@ -138,3 +138,6 @@
 .cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-exportar,
 .cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-aviso { order: 2; }
 .cxm .cxd-en-marco .cxt[data-movil='si'] .cxt-exportar { flex-wrap: wrap; }
+
+/* S01p·18 · 2 · Lo propuesto que también espera en su apartado: en su línea, entero. */
+.cxm .cxd-linea-libro .cxd-tambien, .cxm .cxd-tarjeta .cxd-tambien { flex: 1 0 100%; display: block; font-size: 12px; color: var(--cx-apoyo); white-space: normal; }

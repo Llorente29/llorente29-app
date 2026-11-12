@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · envíos de Glovo de octubre · contexto de producción, medido en SOLO LECTURA el 12/11 a las 22:33Z: la 2342 añade _dl1_envio_aclarar (no existe, ni otra con ese nombre) y, en Foodint, aclara con conta_envio_aclarar los 22 envíos por aclarar de las 12 ventas del día propuestas de Glovo de Carabanchel (06–18/10); conta_envio_aclarar borra esos asientos propuestos (el cierre del día los vuelve a proponer). Nada en el camino del pedido; la 2342 no está en el historial.",
+ "medido": "2026-11-12T22:33Z",
+ "tanda": {
+  "supabase/migrations/20261112T2342_dl1_glovo_envios.sql": "b647d329d429e424468a0065873e5ed6"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
