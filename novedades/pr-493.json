@@ -1,0 +1,20 @@
+[
+ {
+  "id": "493-1",
+  "pr": 493,
+  "fecha": "2026-11-12T17:09:06Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "si el banco anula un cargo sin saldo y no nos lo cuenta, Bancos lo avisa y lo quitas con un botón.",
+  "ruta": null
+ },
+ {
+  "id": "493-2",
+  "pr": 493,
+  "fecha": "2026-11-12T17:09:06Z",
+  "producto": "sumied",
+  "apartado": "Bancos",
+  "frase": "lo que apartas se puede deshacer desde el movimiento.",
+  "ruta": null
+ }
+]
