@@ -9914,6 +9914,39 @@ COMMENT ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p
 
 
 --
+-- Name: _dl1_casar(uuid, uuid, text, uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true); v_r jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'DL1 casar: esa empresa no está.'; end if;
+  if not exists (select 1 from public.bank_movement where id = p_movimiento and company_id = p_company and account_id = v_acc) then
+    raise exception 'DL1 casar: el movimiento % no es de la empresa.', p_movimiento;
+  end if;
+  -- Como si lo casara la persona en Bancos: su usuario y su cuenta activa, solo en esta transacción.
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  v_r := public.bank_casar(p_movimiento, p_destino, 'seguro', p_porque, '[]'::jsonb, 'persona', null);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text) IS 'DL1. Casa un movimiento del banco con bank_casar, como una persona de la cuenta (por «persona», confianza segura). Solo una tanda.';
+
+
+--
 -- Name: _dl1_factura_emitir(uuid, uuid, text, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -164972,6 +165005,13 @@ REVOKE ALL ON FUNCTION public._dl1_asiento_iva(p_company uuid, p_fecha date, p_s
 --
 
 REVOKE ALL ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date, p_concepto text, p_porque text, p_lineas jsonb) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text) FROM PUBLIC;
 
 
 --
