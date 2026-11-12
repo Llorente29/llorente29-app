@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · compensaciones de Glovo · contexto de producción, medido en SOLO LECTURA el 12/11 a las 19:00Z: la 1958 no crea ni cambia ningún objeto; valida 10 asientos propuestos del 16/10 (channel_settlement, 41000002/43000001) con _dl1_validar (en producción). Sus facturas de comisión (2/3309–2/3322) están validadas por lo mismo. Hay 25 propuestos en octubre. Nada en el camino del pedido; la 1958 no está en el historial.",
+ "medido": "2026-11-12T19:00Z",
+ "tanda": {
+  "supabase/migrations/20261112T1958_dl1_glovo_compensaciones.sql": "a559f164f75d0bc58d0277bc53c821fa"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
