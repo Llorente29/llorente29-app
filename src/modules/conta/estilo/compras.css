@@ -201,3 +201,26 @@
 .cxc-lineas-lista > li[data-mira='si'] { border-left-color: var(--cx-ambar, #b45309); }
 .cxc-lineas-que { overflow-wrap: anywhere; }
 .cxc-cuando-ops { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding-bottom: 4px; }
+
+/* S01p·18 · «¿Qué es esta línea?» en la liquidación del socio: en el sitio del aviso rojo, con botones. */
+.cxc-pregunta { background: var(--cx-ambar-suave); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta); padding: 16px 18px; display: grid; gap: 10px; }
+.cxc-pregunta-cabeza { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px; }
+.cxc-pregunta-cabeza strong { font-size: 16px; }
+.cxc-pregunta-importe { font-weight: 600; }
+.cxc-ops { display: grid; gap: 8px; }
+.cxc-op { all: unset; box-sizing: border-box; display: grid; gap: 2px; background: var(--cx-blanco); color: var(--cx-texto); border: 1px solid var(--cx-borde-campo); border-radius: var(--cx-radio-caja, 10px); padding: 10px 14px; cursor: pointer; min-height: 52px; }
+.cxc-op:hover:not(:disabled), .cxc-op:focus-visible { border-color: var(--cx-azul); }
+.cxc-op:focus-visible { outline: 3px solid var(--cx-azul); outline-offset: 1px; }
+.cxc-op:disabled { cursor: not-allowed; opacity: .6; }
+.cxc-op-sug { border-color: var(--cx-azul-borde); }
+.cxc-op-t { font-weight: 600; }
+.cxc-op-e { color: var(--cx-apoyo); font-size: 13px; }
+.cxc-chip { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 500; background: var(--cx-azul-suave); color: var(--cx-azul); border-radius: 999px; padding: 1px 8px; vertical-align: 1px; }
+.cxc-hecho { background: var(--cx-verde-suave); border: 1px solid var(--cx-ia-borde); border-radius: var(--cx-radio-tarjeta); padding: 14px 16px; display: grid; gap: 6px; }
+.cxc-hecho-t { font-weight: 600; color: var(--cx-verde-oscuro); }
+.cxc-fila-cuenta { display: contents; }
+.cxc-fila-cuenta[data-otra] > span { background: var(--cx-ambar-suave); }
+.cxc-asientos { display: grid; gap: 8px; }
+.cxc-asiento { border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja, 10px); padding: 8px 12px; display: grid; gap: 2px; }
+.cxc-asiento-t { font-weight: 600; }
+.cxc-asiento-nuevo { border-color: var(--cx-azul-borde); background: var(--cx-azul-suave); }

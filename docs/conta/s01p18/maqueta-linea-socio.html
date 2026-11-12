@@ -1,0 +1,175 @@
+<title>Línea desconocida del socio</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Maqueta fiel a la liquidación del socio de Sumied: misma columna, tarjetas y avisos (cx-). La pregunta ocupa el sitio del aviso rojo. */
+:root{
+  --fondo:#F5F6F8;--blanco:#FFFFFF;--texto:#152033;--apoyo:#5B6576;--azul:#1F5EDC;--azul-suave:#EAF1FF;--azul-borde:#B9CEF7;
+  --linea:#E3E6EC;--rojo:#B42318;--rojo-suave:#FDECEA;--ambar:#8A5A00;--ambar-suave:#FFF6E0;--verde:#14684A;--verde-suave:#E7F7EF;--verde-borde:#B7E6CF;
+  --f:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--fondo:#11161F;--blanco:#19202B;--texto:#E7EBF2;--apoyo:#9AA4B5;--azul:#7FA8FF;--azul-suave:#1B2A47;--azul-borde:#33508A;--linea:#2A3240;--rojo:#FF8A80;--rojo-suave:#3A1D1B;--ambar:#F2C46B;--ambar-suave:#352A12;--verde:#7DDDB1;--verde-suave:#163227;--verde-borde:#2C5C47;color-scheme:dark}}
+:root[data-theme="dark"]{--fondo:#11161F;--blanco:#19202B;--texto:#E7EBF2;--apoyo:#9AA4B5;--azul:#7FA8FF;--azul-suave:#1B2A47;--azul-borde:#33508A;--linea:#2A3240;--rojo:#FF8A80;--rojo-suave:#3A1D1B;--ambar:#F2C46B;--ambar-suave:#352A12;--verde:#7DDDB1;--verde-suave:#163227;--verde-borde:#2C5C47;color-scheme:dark}
+body{background:var(--fondo);color:var(--texto);font-family:var(--f);font-size:14px;line-height:1.45}
+.pag{max-width:880px;margin:0 auto;padding-block:20px 48px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:14px}
+.nota{background:var(--azul-suave);border:1px dashed var(--azul-borde);border-radius:8px;padding:10px 12px;font-size:13px}
+.nota b{font-weight:600}
+.estados{display:flex;flex-wrap:wrap;gap:6px}
+.estados button{font:inherit;font-size:13px;border:1px solid var(--linea);background:var(--blanco);color:var(--texto);border-radius:999px;padding:5px 12px;cursor:pointer}
+.estados button[aria-pressed="true"]{background:var(--azul);border-color:var(--azul);color:var(--blanco)}
+h1{font-size:20px;margin:0;text-wrap:balance}
+.sub{color:var(--apoyo);margin:2px 0 0}
+.tarjeta{background:var(--blanco);border:1px solid var(--linea);border-radius:10px;padding:14px 16px;display:grid;gap:8px}
+.tarjeta h2{font-size:15px;margin:0}
+.cifras{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.cifra{background:var(--blanco);border:1px solid var(--linea);border-radius:10px;padding:12px 14px}
+.cifra .et{color:var(--apoyo);font-size:12px;letter-spacing:.02em}
+.cifra .v{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.cifra .d{color:var(--apoyo);font-size:12px}
+.ok{color:var(--verde)}
+@media (max-width:560px){.cifras{grid-template-columns:1fr}}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+td{padding:6px 0;border-top:1px solid var(--linea)}
+td.n{text-align:right;white-space:nowrap}
+tr.nueva td{background:var(--ambar-suave)}
+.ayuda{color:var(--apoyo);font-size:13px;margin:0}
+.error{background:var(--rojo-suave);color:var(--rojo);border-radius:8px;padding:10px 12px}
+.error ul{margin:6px 0 0;padding-left:18px}
+.pregunta{background:var(--ambar-suave);border:1px solid var(--linea);border-radius:10px;padding:14px 16px;display:grid;gap:10px}
+.pregunta .cab{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px;align-items:baseline}
+.pregunta strong{font-size:15px}
+.importe{font-weight:600;font-variant-numeric:tabular-nums}
+.ops{display:grid;gap:8px}
+.op{display:grid;gap:2px;text-align:left;font:inherit;background:var(--blanco);color:var(--texto);border:1px solid var(--linea);border-radius:8px;padding:10px 12px;cursor:pointer}
+.op:hover,.op:focus-visible{border-color:var(--azul);outline:none}
+.op .t{font-weight:600}
+.op .e{color:var(--apoyo);font-size:13px}
+.op.sug{border-color:var(--azul-borde)}
+.chip{display:inline-block;font-size:11px;background:var(--azul-suave);color:var(--azul);border-radius:999px;padding:1px 8px;margin-left:6px;font-weight:500}
+.hecho{background:var(--verde-suave);border:1px solid var(--verde-borde);color:var(--texto);border-radius:10px;padding:12px 14px;display:grid;gap:6px}
+.hecho .t{font-weight:600;color:var(--verde)}
+.enlace{background:none;border:0;padding:0;color:var(--azul);font:inherit;cursor:pointer;text-decoration:underline;justify-self:start}
+.pie{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.boton{font:inherit;font-weight:600;background:var(--azul);color:#fff;border:0;border-radius:8px;padding:9px 16px}
+.boton[disabled]{opacity:.45}
+.asientos{display:grid;gap:8px}
+.asiento{border:1px solid var(--linea);border-radius:8px;padding:8px 12px;display:grid;gap:2px}
+.asiento .t{font-weight:600}
+.asiento .e{color:var(--apoyo);font-size:13px}
+.asiento.nuevo{border-color:var(--azul-borde);background:var(--azul-suave)}
+.preg{background:var(--blanco);border:1px solid var(--linea);border-radius:10px;padding:12px 16px}
+.preg ol{margin:6px 0 0;padding-left:20px;display:grid;gap:6px}
+</style>
+
+<div class="pag">
+  <div class="nota"><b>Maqueta S01p·18 · punto 1.</b> La liquidación de octubre de Alcalá (AF-02979 / FV-02979), con los números reales. Cambia de estado con los botones; abajo, las preguntas para Julio.</div>
+  <div class="estados" role="group" aria-label="Estado de la maqueta">
+    <button type="button" data-e="antes" aria-pressed="false">Antes (hoy)</button>
+    <button type="button" data-e="pregunta" aria-pressed="true">1 · La pregunta</button>
+    <button type="button" data-e="contestada" aria-pressed="false">2 · Contestada</button>
+    <button type="button" data-e="recordada" aria-pressed="false">3 · La próxima vez</button>
+    <button type="button" data-e="noviembre" aria-pressed="false">4 · Noviembre: se cancela</button>
+  </div>
+
+  <header>
+    <h1 id="titulo">CLOUDTOWN BRANDS, S.L. · octubre 2026</h1>
+    <p class="sub">Liquidación del mes · Foodint Alcalá</p>
+  </header>
+
+  <div class="cifras">
+    <div class="cifra"><div class="et">Le facturas</div><div class="v">11.408,42 €</div><div class="d">AF-02979</div></div>
+    <div class="cifra"><div class="et">Te factura</div><div class="v">5.998,37 €</div><div class="d">FV-02979</div></div>
+    <div class="cifra"><div class="et">Te paga</div><div class="v" id="saldo">6.180,05 €</div><div class="d" id="saldoD">Saldo de la transacción</div></div>
+  </div>
+
+  <section class="tarjeta">
+    <h2>La transacción</h2>
+    <table>
+      <tbody id="lineas">
+        <tr><td>AF-02979 · la factura que le haces</td><td class="n">11.408,42 €</td></tr>
+        <tr><td>FV-02979 · su factura</td><td class="n">−5.998,37 €</td></tr>
+        <tr class="nueva"><td>Financiación inventario pendiente por pagar</td><td class="n">770,00 €</td></tr>
+        <tr><td><b>Saldo</b></td><td class="n"><b>6.180,05 €</b></td></tr>
+      </tbody>
+    </table>
+    <p class="ayuda">La factura que le haces suma 11.408,43 € por líneas y dice 11.408,42 €: 1 céntimo de redondeo del IVA. Manda el total.</p>
+  </section>
+
+  <!-- Antes -->
+  <div class="error" role="alert" data-v="antes">
+    <strong>No se puede guardar todavía:</strong>
+    <ul><li>«Financiación inventario pendiente por pagar» trae 770,00 € y Sumied no sabe qué es: dímelo antes de proponer nada.</li></ul>
+  </div>
+
+  <!-- La pregunta -->
+  <section class="pregunta" data-v="pregunta">
+    <div class="cab"><strong>¿Qué es esta línea?</strong><span>«Financiación inventario pendiente por pagar» · <span class="importe">+770,00 €</span></span></div>
+    <p class="ayuda">CLOUDTOWN te la suma al saldo y no sale en ninguna de las dos facturas. Dime qué es y la apunto. Lo que digas lo recordaré para esta línea de CLOUDTOWN.</p>
+    <div class="ops">
+      <button type="button" class="op sug" data-ir="contestada"><span class="t">Género que te cobrará el mes que viene <span class="chip">lo más probable</span></span><span class="e">Pedidos de este mes que aún no te ha facturado. Queda como deuda con CLOUDTOWN hasta que llegue su factura.</span></button>
+      <button type="button" class="op"><span class="t">Género del mes pasado que ya te cobra</span><span class="e">Cancela lo que quedó pendiente el mes anterior.</span></button>
+      <button type="button" class="op"><span class="t">Otra cosa: la apunto yo a mano</span><span class="e">Se guarda la liquidación y esta línea queda en «Para revisar» con su importe, sin asiento.</span></button>
+    </div>
+  </section>
+
+  <!-- Contestada -->
+  <section class="hecho" role="status" data-v="contestada recordada">
+    <span class="t" data-v="contestada">Apuntado: 770,00 € de género que CLOUDTOWN te facturará en noviembre.</span>
+    <span class="t" data-v="recordada">Ya sé qué es: «Financiación inventario pendiente por pagar» es género que te cobrará el mes que viene (lo dijiste el 12/11).</span>
+    <span>Queda como deuda pendiente de facturar con CLOUDTOWN, de Foodint Alcalá. Se cancela sola cuando su factura de noviembre traiga ese género.</span>
+    <span class="ayuda" data-v="contestada">La próxima vez que CLOUDTOWN traiga esta línea, la apunto igual sin preguntar.</span>
+    <button type="button" class="enlace" data-ir="pregunta">Cambiar lo que es</button>
+  </section>
+
+  <!-- Noviembre -->
+  <section class="hecho" role="status" data-v="noviembre">
+    <span class="t">Su factura de noviembre trae el género pendiente de octubre: 770,00 €. Lo doy por facturado.</span>
+    <span>La deuda pendiente de facturar con CLOUDTOWN en Foodint Alcalá queda a 0,00 €.</span>
+    <button type="button" class="enlace">Ver lo que quedó pendiente en octubre</button>
+  </section>
+
+  <section class="tarjeta" data-v="contestada recordada noviembre">
+    <h2>Lo que apuntará al contabilizar</h2>
+    <div class="asientos">
+      <div class="asiento"><span class="t">Le facturas · AF-02979</span><span class="e">11.408,42 € de servicio y mercaderías aportadas</span></div>
+      <div class="asiento"><span class="t">Te factura · FV-02979</span><span class="e">5.998,37 € de género</span></div>
+      <div class="asiento"><span class="t">Compensación de las dos</span><span class="e">5.998,37 € que se restan de lo que te debe</span></div>
+      <div class="asiento nuevo" data-v="contestada recordada"><span class="t">Género pendiente de facturar</span><span class="e">770,00 € más que te paga, a cuenta de su factura de noviembre</span></div>
+      <div class="asiento nuevo" data-v="noviembre"><span class="t">Se cancela lo pendiente de octubre</span><span class="e">770,00 €, contra lo que te paga este mes</span></div>
+    </div>
+    <p class="ayuda" data-v="contestada recordada">Con esto, lo que te debe CLOUDTOWN de octubre son 6.180,05 €, lo mismo que dice la transacción. El cobro del banco lo deja a cero.</p>
+  </section>
+
+  <div class="pie">
+    <button type="button" class="boton" id="guardar" disabled>Guardar y comparar</button>
+    <span class="ayuda" id="pieNota">Contesta la pregunta de arriba para guardar.</span>
+  </div>
+
+  <section class="preg">
+    <strong>Para Julio, antes de construir</strong>
+    <ol>
+      <li><b>La cuenta.</b> La 40090000 «Proveedores, facturas pendientes de recibir o de formalizar», que ya está en el plan de Foodint. Es la que usaste en el asiento 3392 (Debe 43000004 / Haber 40090000, 770 €, Alcalá), así que propongo exactamente ese asiento.</li>
+      <li><b>Cómo se cancela en noviembre.</b> Propongo el asiento inverso (Debe 40090000 / Haber 43000004) en la liquidación del mes siguiente del mismo socio y local, por lo que haya pendiente en la 40090000. Se dispara si la transacción trae la línea en negativo, o si su saldo es «AF − FV − lo pendiente». Si no cuadra con ninguna de las dos, la pregunta sale otra vez. ¿Sabes cómo viene en la transacción de noviembre?</li>
+      <li><b>Octubre de Alcalá ya está cerrado.</b> Lo guardaste sin la transacción (5.410,05 €) y apuntaste los 770 a mano (3392). La prueba con los PDF reales la hago en la base local y en staging, sin tocar lo de producción. ¿Te vale así, o quieres que se rehaga?</li>
+      <li><b>Lo que se recuerda.</b> Una regla por socio y concepto (sin el importe), que se cambia en la misma pregunta («Cambiar lo que es»). ¿La quieres ver también en la ficha del socio, o basta con aquí?</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+const estados=document.querySelectorAll('.estados button');
+function ver(e){
+  estados.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.e===e)));
+  document.querySelectorAll('[data-v]').forEach(n=>{n.hidden=!n.dataset.v.split(' ').includes(e)});
+  const nov=e==='noviembre';
+  document.getElementById('titulo').textContent=nov?'CLOUDTOWN BRANDS, S.L. · noviembre 2026':'CLOUDTOWN BRANDS, S.L. · octubre 2026';
+  document.querySelector('#lineas tr.nueva td').textContent=nov?'Género pendiente de octubre (ejemplo)':'Financiación inventario pendiente por pagar';
+  document.querySelector('#lineas tr.nueva td.n')&&0;
+  const ok=e!=='antes'&&e!=='pregunta';
+  document.getElementById('guardar').disabled=!ok;
+  document.getElementById('pieNota').textContent=e==='antes'?'El botón se queda gris para siempre.':ok?'':'Contesta la pregunta de arriba para guardar.';
+  document.getElementById('saldoD').innerHTML=ok?'<span class="ok">Cuadra con las facturas y lo pendiente ✓</span>':'Saldo de la transacción';
+}
+estados.forEach(b=>b.addEventListener('click',()=>ver(b.dataset.e)));
+document.querySelectorAll('[data-ir]').forEach(b=>b.addEventListener('click',()=>ver(b.dataset.ir)));
+ver('pregunta');
+</script>
