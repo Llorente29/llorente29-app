@@ -1,0 +1,127 @@
+http://127.0.0.1:4173/conta/compras/pagos
+
+BUILD LOCAL
+· NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados
+F
+Folvy
+Inicio
+67
+Contabilidad
+15
+Ventas
+Compras y gastos
+33
+Facturas recibidas
+25
+2
+Pagos
+Repartidores
+Bancos
+19
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna de Prueba Norte
+Taberna de Prueba Norte, S.L.
+Buscar o hacer algo
+Ctrl K
+A
+Admin Norte
+Compras y gastos
+Pagos
+Pagos
+
+Lo que debes a tus proveedores y cuándo vence. Se paga una a una o todas juntas en una remesa para el banco, y se marca pagada sola cuando llega el cargo.
+
+Revolut · European suppliers
+3.268,37 €
+Llega para lo de esta semana
+Remesas
+Más acciones
+Lo que toca pagar hoy, jueves 12/11
+Vencido
+2.442,75 €
+7 facturas · 19 días
+Vence esta semana
+0,00 €
+0 facturas
+Por revisar
+3.427,26 €
+10 facturas · apruébalas para pagarlas
+Pagado en noviembre
+0,00 €
+0 facturas
+Pagar lo de esta semana · 6 facturas
+1.159,60 €
+
+Se queda fuera Hermanos Ruiz: se paga con tarjeta.
+
+2 proveedores no tienen IBAN. Sus facturas no se pueden marcar para pagar hasta que lo pongas.
+
+Poner IBAN · Suministros B01 del Norte
+Poner IBAN · Locales del Norte (alquiler)
+
+5 facturas no tienen vencimiento. Se lo pongo con el plazo de pago de cada proveedor (0 lo tienen en su ficha; a 3 proveedores te pregunto).
+
+Ponerles vencimiento
+Por pagar
+22
+Vencidas
+7
+Esta semana
+0
+Sin vencimiento
+5
+En remesa
+0
+Pagadas
+7
+Buscar un pago
+Vence: Cuando sea
+Cuando sea
+Hasta el 19/11
+Hasta el 02/12
+Hasta el 30/11
+Cómo se paga: Todas
+Todas
+Transferencia
+Domiciliada
+Tarjeta
+Saldo prepago
+Local: Todos
+Todos
+Norte Centro
+Norte Mercado
+	Vence ↑	Proveedor	Factura	Cómo se paga	Total	Pendiente	Estado	
+	24/10	Hermanos Ruiz	F-2026-0915	Tarjeta	1.283,15	1.283,15	Vencida · 19 días	›
+	28/10	Bebidas Prueba Sur	BP-2210	Transferencia	288,40	288,40	Vencida · 15 días	›
+	31/10	Carnes Prueba Centro	F-26/0811	Transferencia	324,00	324,00	Vencida · 12 días	›
+	04/11	Verduras Prueba	V-4471	Transferencia	96,30	96,30	Vencida · 8 días	›
+	05/11	Panadería de Prueba	PAN-118	Transferencia	212,75	212,75	Vencida · 7 días	›
+	05/11	Hielo Prueba	H-77	Transferencia	58,00	58,00	Vencida · 7 días	›
+	06/11	Limpiezas Prueba	LP-0091	Transferencia	180,15	180,15	Vencida · 6 días	›
+	10/11	Mayorista Prueba Alfa	F-2026-1022	Sin decir	1.411,47	1.411,47	Por revisar · apruébala para pagarla	›
+	sin fecha	Hermanos Ruiz	F-2026-0915	Tarjeta	1.283,15	1.283,15	Por revisar · apruébala para pagarla	›
+	sin fecha	Panadería Luna	L-0412	Sin decir	87,40	87,40	Sin vencimiento	›
+	sin fecha	Panadería Luna	L-412	Sin decir	87,40	87,40	Sin vencimiento	›
+	sin fecha	Catcher Marketplace	CMS_2026_09_2	Sin decir	9,56	9,56	Por revisar · apruébala para pagarla	›
+	sin fecha	Riders	ES_I_1003_26_7	Sin decir	4,84	4,84	Por revisar · apruébala para pagarla	›
+	sin fecha	Riders	ES_I_1001_26_7	Sin decir	24,68	24,68	Por revisar · apruébala para pagarla	›
+	sin fecha	Riders	ES_I_1002_26_7	Sin decir	9,92	9,92	Por revisar · apruébala para pagarla	›
+	sin fecha	Riders	ES_F_2001_26_7	Sin decir	5,69	5,69	Por revisar · apruébala para pagarla	›
+	sin fecha	Suministros B01 del Norte	B01-0478	Sin decir	600,00	600,00	Sin IBAN · ponlo para pagarla	›
+	sin fecha	Locales del Norte (alquiler)	A-2026-10	Sin decir	1.530,00	1.530,00	Sin IBAN · ponlo para pagarla	›
+	sin fecha	Panadería Luna	L-0431	Sin decir	152,30	152,30	Otro IBAN · decide en su ficha	›
+	sin fecha	Lácteos Prueba Ocho, S.L.	LP-7	Sin decir	132,00	132,00	Por revisar · apruébala para pagarla	›
+	sin fecha	Sin proveedor	sin número	Sin decir	47,07	47,07	Por revisar · apruébala para pagarla	›
+	sin fecha	Suministros Eléctricos Prueba Norte	2026/0512	Sin decir	498,88	498,88	Por revisar · apruébala para pagarla	›
+22 facturas
+Pendiente del filtro 8.327,11 €
+
+Pagada sola. Cuando el cargo llega al banco, Sumied lo casa con la factura o con la remesa entera, hace el asiento y la marca pagada. No hay que cambiar ningún estado a mano.
+
+Domiciliadas y con tarjeta. No se pagan desde aquí: el banco las cobra solo. Salen para que sepas lo que va a salir de la cuenta, y se marcan pagadas con el cargo.
+
+Un IBAN que cambia, se confirma. Si el IBAN de un proveedor ha cambiado hace poco, no entra en la remesa hasta que lo confirmes: es el engaño más común con facturas falsas.

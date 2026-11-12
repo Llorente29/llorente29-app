@@ -1,0 +1,182 @@
+{
+  "total": 128.874,
+  "portada": 4.32,
+  "cierre": 4.5600000000000005,
+  "quedan": [
+    [
+      5.027,
+      42.053
+    ],
+    [
+      43.427,
+      56.511
+    ],
+    [
+      56.822,
+      85.035
+    ],
+    [
+      85.136,
+      91.601
+    ],
+    [
+      93.769,
+      110.936
+    ],
+    [
+      111.488,
+      116.84
+    ],
+    [
+      117.245,
+      129.932
+    ]
+  ],
+  "pasos": [
+    {
+      "paso": 1,
+      "a": 4.32,
+      "b": 24.025
+    },
+    {
+      "paso": 2,
+      "a": 24.025,
+      "b": 39.458
+    },
+    {
+      "paso": 3,
+      "a": 39.458,
+      "b": 54.528
+    },
+    {
+      "paso": 4,
+      "a": 54.528,
+      "b": 77.857
+    },
+    {
+      "paso": 5,
+      "a": 77.857,
+      "b": 88.46699999999998
+    },
+    {
+      "paso": 6,
+      "a": 88.46699999999998,
+      "b": 104.54899999999998
+    },
+    {
+      "paso": 7,
+      "a": 104.54899999999998,
+      "b": 124.314
+    }
+  ],
+  "dichos": [
+    {
+      "id": "llega",
+      "texto": "Tu proveedor te manda la factura por correo, como siempre.",
+      "desde": 4.321,
+      "hasta": 8.561
+    },
+    {
+      "id": "lee",
+      "texto": "Sumied abre el PDF y lo lee entero: el proveedor, el número, la fecha, cada línea y cada tipo de IVA.",
+      "desde": 8.668,
+      "hasta": 18.188
+    },
+    {
+      "id": "igual",
+      "texto": "Y comprueba que lo que ha leído cuadra con el PDF, al céntimo.",
+      "desde": 18.291,
+      "hasta": 23.811
+    },
+    {
+      "id": "apunta",
+      "texto": "Si todo cuadra, la apunta sola en tu contabilidad, con su asiento ya validado.",
+      "desde": 24.025,
+      "hasta": 30.025
+    },
+    {
+      "id": "porque",
+      "texto": "Y te enseña por qué: cada requisito de la factura, comprobado. Si algo no encaja, te avisa y te dice qué falta.",
+      "desde": 30.127,
+      "hasta": 39.247
+    },
+    {
+      "id": "pagos",
+      "texto": "En Pagos ves lo que toca pagar hoy: lo vencido y lo que vence esta semana.",
+      "desde": 41.346,
+      "hasta": 47.425999999999995
+    },
+    {
+      "id": "semana",
+      "texto": "Un solo botón: pagar lo de esta semana. Sumied marca las facturas que tocan.",
+      "desde": 47.525999999999996,
+      "hasta": 54.32599999999999
+    },
+    {
+      "id": "titular",
+      "texto": "Antes de pagar, Revolut comprueba que el titular de cada IBAN es de verdad tu proveedor.",
+      "desde": 54.528,
+      "hasta": 61.407999999999994
+    },
+    {
+      "id": "segunda",
+      "texto": "Si un proveedor estrena IBAN, Sumied pide una segunda confirmación. Es el engaño más común con facturas falsas.",
+      "desde": 61.51,
+      "hasta": 70.63
+    },
+    {
+      "id": "desde",
+      "texto": "Salen de tu cuenta de Revolut, conectada a Sumied, y ves el saldo antes y después.",
+      "desde": 70.73499999999999,
+      "hasta": 77.53499999999998
+    },
+    {
+      "id": "una",
+      "texto": "Una sola aprobación vale para todos los pagos.",
+      "desde": 77.857,
+      "hasta": 82.017
+    },
+    {
+      "id": "pin",
+      "texto": "Confirmas con tu PIN de pago, y listo.",
+      "desde": 84.672,
+      "hasta": 88.27199999999999
+    },
+    {
+      "id": "enviado",
+      "texto": "Hecho: los tres pagos salen por Revolut, sin entrar en el banco.",
+      "desde": 89.108,
+      "hasta": 94.788
+    },
+    {
+      "id": "justificante",
+      "texto": "Cada pago sale con su justificante, listo para mandárselo al proveedor.",
+      "desde": 94.88899999999998,
+      "hasta": 100.24899999999998
+    },
+    {
+      "id": "pagado",
+      "texto": "Y Pagos ya los cuenta como pagados este mes.",
+      "desde": 100.351,
+      "hasta": 104.351
+    },
+    {
+      "id": "vuelve",
+      "texto": "Cuando el cargo llega al banco, Sumied lo reconoce solo.",
+      "desde": 106.275,
+      "hasta": 110.995
+    },
+    {
+      "id": "casado",
+      "texto": "Cada cargo queda casado con su factura, y su asiento, hecho. Sin conciliar a mano.",
+      "desde": 111.62700000000001,
+      "hasta": 118.587
+    },
+    {
+      "id": "resumen",
+      "texto": "Tres facturas, del correo al banco, sin teclear un solo dato.",
+      "desde": 118.689,
+      "hasta": 124.12899999999999
+    }
+  ]
+}

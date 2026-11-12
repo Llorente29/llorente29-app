@@ -1,0 +1,106 @@
+http://127.0.0.1:4173/conta/bancos?banco=64369fb9-1e0b-447b-aad0-1bb7c12a8be1
+
+BUILD LOCAL
+· NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados
+F
+Folvy
+Inicio
+67
+Contabilidad
+15
+Ventas
+Compras y gastos
+33
+Bancos
+19
+Movimientos
+19
+Préstamos y aplazamientos
+Cuentas y extractos
+Reglas
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna de Prueba Norte
+Taberna de Prueba Norte, S.L.
+Noviembre 2026
+Ejercicio 2026 · abierto
+Noviembre 2026
+Octubre 2026
+Buscar o hacer algo
+Ctrl K
+A
+Admin Norte
+Bancos
+Movimientos
+Movimientos
+
+Revolut · European suppliers ···4781, noviembre: lo que trae el banco, para casarlo con contabilidad.
+
+Tus bancos:
+Revolut · European suppliers
+4
+Reglas
+0
+Lo que he hecho
+Subir extracto
+Según el banco
+3.280,00 €
+a 01/11, su extracto
+−
+En contabilidad
+0,00 €
+a 12/11/2026
+=
+Te falta por casar
+3.280,00 €
+hay algo en contabilidad que no está en el banco
+ 0 casados solos
+ 1 para confirmar
+ 3 por aclarar
+He casado yo 0 de 4 movimientos de noviembre. Te quedan 1 por confirmar y 3 por aclarar.
+Mi última pasada por todos tus bancos y todos los meses, hoy a las 17:32 (la del día): He casado yo 0; te propongo 6 y quedan 9 por aclarar.
+Nada pasa a contabilidad sin que esté seguro o lo confirmes tú, y todo lo que hago solo se deshace.
+Ver y deshacer lo que he hecho
+Para confirmar 1
+Por aclarar 3
+Por validar 0
+Casados solos 0
+Todos 4
+Buscar movimientos
+Domingo 1 de noviembre
+Revolut
+Comisión de Revolut · Exchanged to GBP Main · Revolut
+−0,16
+Para confirmar
+Banco
+Comisión del banco
+El banco lo da como comisión: Comisiones del banco y del datáfono · 62600000
+Sí
+Otra cosa
+Exchanged to GBP Main
+Exchanged to GBP Main
+−11,47
+Por aclarar
+No sé qué es
+No hay factura de 11,47 €: ¿la subes o es un pago sin factura?
+Buscar factura
+Decirlo yo
+Rory Pearson
+To Rory Pearson · Rory Pearson
+−210,00
+Por aclarar
+No sé qué es
+No hay factura de 210,00 €: ¿la subes o es un pago sin factura?
+Buscar factura
+Decirlo yo
+Card Topup
+Card Topup
++3.490,00
+Por aclarar
+No sé qué es
+Sin factura ni liquidación de ese importe. ¿De quién es?
+Decirlo yo
+Punto verde: lo casaría solo y viene marcado. Ámbar: lo propongo, confírmalo. Gris: falta algo y te digo qué. Cada movimiento se casa una sola vez.

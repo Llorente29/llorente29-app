@@ -1,0 +1,47 @@
+http://127.0.0.1:4173/conta/ajustes/correo-facturas
+
+BUILD LOCAL
+· NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados
+F
+Folvy
+Inicio
+67
+Contabilidad
+15
+Ventas
+Compras y gastos
+33
+Bancos
+19
+Contactos
+Favoritos
+Ajustes
+Tu empresa
+Tus impuestos
+Socios y cargos
+Ejercicio
+Apuntar solo lo seguro
+Certificados y accesos
+Correo de facturas
+Verifactu
+Cobros
+Usuarios
+Avisos
+Lo que ha hecho Folvy
+Plegar
+T
+Taberna de Prueba Norte
+Taberna de Prueba Norte, S.L.
+Buscar o hacer algo
+Ctrl K
+A
+Admin Norte
+Folvy Conta
+Ajustes
+Todo listo para llevar tu contabilidad
+Correo de facturas
+Correo de facturas
+
+Tu empresa aún no tiene dirección de facturas. Con ella, las facturas de tus proveedores entran solas en Compras, se leen y se casan con sus albaranes.
+
+Crear la dirección

@@ -1,0 +1,85 @@
+Inicio
+65
+Contabilidad
+15
+Ventas
+Compras y gastos
+35
+Bancos
+15
+Movimientos
+15
+Préstamos y aplazamientos
+Cuentas y extractos
+Reglas
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna del Mercado
+Taberna del Mercado, S.L.
+Noviembre 2026
+Ejercicio 2026 · abierto
+Noviembre 2026
+Octubre 2026
+Buscar o hacer algo
+Ctrl K
+A
+Administración
+Bancos
+Movimientos
+Movimientos
+
+Revolut Business ···4781, noviembre: lo que trae el banco, para casarlo con contabilidad.
+
+Tus bancos:
+Revolut Business
+3
+Reglas
+0
+Lo que he hecho
+Subir extracto
+Según el banco
+—
+sube un extracto con saldos
+−
+En contabilidad
+−1.633,62 €
+a 12/11/2026
+0,00 € validado y −1.633,62 € por validar
+=
+Te falta por casar
+—
+falta un dato
+ 3 casados solos
+ 0 para confirmar
+ 0 por aclarar
+He casado yo 3 de 3 movimientos de noviembre. Te quedan 0 por confirmar y 0 por aclarar, y 3 por validar.
+Mi última pasada por todos tus bancos y todos los meses, hoy a las 17:32 (la del día): He casado yo 0; te propongo 6 y quedan 9 por aclarar.
+Nada pasa a contabilidad sin que esté seguro o lo confirmes tú, y todo lo que hago solo se deshace.
+Ver y deshacer lo que he hecho
+Para confirmar 0
+Por aclarar 0
+Por validar 3
+Casados solos 3
+Todos 3
+Buscar movimientos
+12/11 · Transferencia a Frutas y Verduras La Huerta · FV-2026/1187 · −294,77 €
+Casado con Pago FV-2026/1187 · Frutas y Verduras La Huerta
+Es el pago que salió desde Sumied por Revolut: el mismo importe y la referencia del pago.
+Abrir
+Ver el asiento
+Deshacer
+12/11 · Transferencia a Bebidas Sierra Norte · SN/2026/3310 · −565,27 €
+Casado con Pago SN/2026/3310 · Bebidas Sierra Norte
+Es el pago que salió desde Sumied por Revolut: el mismo importe y la referencia del pago.
+Abrir
+Ver el asiento
+Deshacer
+12/11 · Transferencia a Cárnicas del Centro · CC-26-0942 · −773,58 €
+Casado con Pago CC-26-0942 · Cárnicas del Centro
+Es el pago que salió desde Sumied por Revolut: el mismo importe y la referencia del pago.
+Abrir
+Ver el asiento
+Deshacer

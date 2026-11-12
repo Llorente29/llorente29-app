@@ -1,0 +1,33 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Abajo,DejaVu Sans,52,&H00FFFFFF,&H00FFFFFF,&H60141414,&H60141414,1,0,0,0,100,100,0,0,3,18,0,2,180,180,48,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:04.37,0:00:08.56,Abajo,,0,0,0,,Tu proveedor te manda la factura por correo, como siempre.
+Dialogue: 0,0:00:08.72,0:00:16.58,Abajo,,0,0,0,,Sumied abre el PDF y lo lee entero: el proveedor, el número, la fecha, cada línea y
+Dialogue: 0,0:00:16.58,0:00:18.19,Abajo,,0,0,0,,cada tipo de IVA.
+Dialogue: 0,0:00:18.34,0:00:23.81,Abajo,,0,0,0,,Y comprueba que lo que ha leído cuadra con el PDF, al céntimo.
+Dialogue: 0,0:00:24.07,0:00:30.02,Abajo,,0,0,0,,Si todo cuadra, la apunta sola en tu contabilidad, con su asiento ya validado.
+Dialogue: 0,0:00:30.18,0:00:35.29,Abajo,,0,0,0,,Y te enseña por qué: cada requisito de la factura, comprobado.
+Dialogue: 0,0:00:35.29,0:00:39.25,Abajo,,0,0,0,,Si algo no encaja, te avisa y te dice qué falta.
+Dialogue: 0,0:00:41.40,0:00:47.43,Abajo,,0,0,0,,En Pagos ves lo que toca pagar hoy: lo vencido y lo que vence esta semana.
+Dialogue: 0,0:00:47.58,0:00:54.33,Abajo,,0,0,0,,Un solo botón: pagar lo de esta semana. Sumied marca las facturas que tocan.
+Dialogue: 0,0:00:54.58,0:01:01.41,Abajo,,0,0,0,,Antes de pagar, Revolut comprueba que el titular de cada IBAN es de verdad tu proveedor.
+Dialogue: 0,0:01:01.56,0:01:07.08,Abajo,,0,0,0,,Si un proveedor estrena IBAN, Sumied pide una segunda confirmación.
+Dialogue: 0,0:01:07.08,0:01:10.63,Abajo,,0,0,0,,Es el engaño más común con facturas falsas.
+Dialogue: 0,0:01:10.78,0:01:17.53,Abajo,,0,0,0,,Salen de tu cuenta de Revolut, conectada a Sumied, y ves el saldo antes y después.
+Dialogue: 0,0:01:17.91,0:01:22.02,Abajo,,0,0,0,,Una sola aprobación vale para todos los pagos.
+Dialogue: 0,0:01:24.72,0:01:28.27,Abajo,,0,0,0,,Confirmas con tu PIN de pago, y listo.
+Dialogue: 0,0:01:29.16,0:01:34.79,Abajo,,0,0,0,,Hecho: los tres pagos salen por Revolut, sin entrar en el banco.
+Dialogue: 0,0:01:34.94,0:01:40.25,Abajo,,0,0,0,,Cada pago sale con su justificante, listo para mandárselo al proveedor.
+Dialogue: 0,0:01:40.40,0:01:44.35,Abajo,,0,0,0,,Y Pagos ya los cuenta como pagados este mes.
+Dialogue: 0,0:01:46.33,0:01:51.00,Abajo,,0,0,0,,Cuando el cargo llega al banco, Sumied lo reconoce solo.
+Dialogue: 0,0:01:51.68,0:01:58.59,Abajo,,0,0,0,,Cada cargo queda casado con su factura, y su asiento, hecho. Sin conciliar a mano.
+Dialogue: 0,0:01:58.74,0:02:04.13,Abajo,,0,0,0,,Tres facturas, del correo al banco, sin teclear un solo dato.

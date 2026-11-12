@@ -1,0 +1,176 @@
+http://127.0.0.1:4173/conta/compras
+
+BUILD LOCAL
+· NO ES PRODUCCIÓN — base de pruebas staging-conta: los datos son inventados
+F
+Folvy
+Inicio
+67
+Contabilidad
+15
+Ventas
+Compras y gastos
+33
+Facturas recibidas
+25
+2
+Pagos
+Repartidores
+Bancos
+19
+Contactos
+Favoritos
+Ajustes
+Plegar
+T
+Taberna de Prueba Norte
+Taberna de Prueba Norte, S.L.
+Buscar o hacer algo
+Ctrl K
+A
+Admin Norte
+Compras y gastos
+Facturas recibidas
+Recepciones del local
+Recepciones del local
+
+Lo que llega con el género entra solo desde el local. Aquí solo ves lo que necesita que alguien decida.
+
+Qué tienes que mirar
+6
+3 albaranes van a nombre de «Aurora Cocina Centro». ¿De quién son?
+Los trae Distribuciones Prueba Aurora, S.L. · del 2 al 9 de octubre · Norte Centro · 278,05 €
+Ver los 3 albaranes
+Es Distribuciones Prueba Aurora, S.L.
+Comparte «aurora» y es quien trae el género
+Es de otro…
+No es nuestro
+Una factura de Bodega Prueba Ribera, S.L. viene a nombre de «Contado», no de tu empresa.
+Así no puedes descontar su IVA. Recepción del viernes 25 de septiembre · Norte Centro · 102,54 €
+ALB-00005
+Pedir que la rehagan
+Apuntarla sin descontar el IVA
+Ver la factura
+A Verduras del Huerto Prueba, S.L. le faltan el NIF, el tipo de gasto y cómo te factura.
+Recepción del lunes 5 de octubre · Norte Centro · 191,00 €
+Sin NIF no puedo contabilizar sus facturas; en su último documento pone B12345674: compruébalo antes de aceptarlo; sin tipo de gasto no sé a qué cuenta van; sin saber cómo factura no sé si esperar su factura (lo último que trajo fue un albarán).
+ALB-00004
+Usar ese NIF
+Tipo de gasto
+Elige uno…
+Comida y bebida
+Envases, embalajes y desechables
+Limpieza y menaje
+Alquiler
+Reparaciones y mantenimiento
+Asesoría y servicios profesionales
+Transporte
+Seguros
+Comisiones de bancos y plataformas
+Publicidad
+Luz, agua, gas y teléfono
+Otros servicios
+Entrega con albarán y factura después
+Con cada entrega
+Liquidación mensual
+Abrir su ficha
+Ver el albarán
+A Carnes Prueba del Valle, S.L. le falta el tipo de gasto.
+Sin tipo de gasto no sé a qué cuenta van.
+Tipo de gasto
+Elige uno…
+Comida y bebida
+Envases, embalajes y desechables
+Limpieza y menaje
+Alquiler
+Reparaciones y mantenimiento
+Asesoría y servicios profesionales
+Transporte
+Seguros
+Comisiones de bancos y plataformas
+Publicidad
+Luz, agua, gas y teléfono
+Otros servicios
+Abrir su ficha
+A Distribuciones Prueba Aurora, S.L. le falta el tipo de gasto.
+Sin tipo de gasto no sé a qué cuenta van.
+Tipo de gasto
+Elige uno…
+Comida y bebida
+Envases, embalajes y desechables
+Limpieza y menaje
+Alquiler
+Reparaciones y mantenimiento
+Asesoría y servicios profesionales
+Transporte
+Seguros
+Comisiones de bancos y plataformas
+Publicidad
+Luz, agua, gas y teléfono
+Otros servicios
+Abrir su ficha
+3 recepciones se confirmaron antes de que Folvy mirara su albarán o su factura: no sé si esperan factura, si ya la trajeron o si son del socio.
+Marcas del Sur · del 2 al 5 de octubre
+Leo su albarán o su factura y su ficha, y cada una va a su sitio; lo que no se pueda decidir solo, vuelve aquí como pregunta.
+Ver las 3 recepciones
+Mirar sus 3 documentos ahora
+Qué está esperando factura
+10
+
+Género recibido con albarán. Cuando llega su factura (por correo o subida), la caso con su albarán y te digo si cuadra. 10 llevan más de lo normal: arriba.
+
+Carnes Prueba del Valle, S.L. · albarán ALB-00006 del 04/09/2026
+442,31 €
+Retrasado · 69 días (lo normal era hasta el 19 de sept.)
+Carnes Prueba del Valle, S.L. manda la factura después del albarán.
+Distribuciones Prueba Aurora, S.L. · albarán ALB-00010 del 10/09/2026
+330,00 €
+Retrasado · 63 días (lo normal era hasta el 10 de oct.)
+Distribuciones Prueba Aurora, S.L. liquida cada mes: su factura del mes llega a primeros del siguiente.
+Distribuciones Prueba Aurora, S.L. · albarán ALB-00012 del 12/09/2026
+242,00 €
+Retrasado · 61 días (lo normal era hasta el 10 de oct.)
+Distribuciones Prueba Aurora, S.L. liquida cada mes: su factura del mes llega a primeros del siguiente.
+Carnes Prueba del Valle, S.L. · albarán ALB-00007 del 15/09/2026
+286,00 €
+Retrasado · 58 días (lo normal era hasta el 30 de sept.)
+Carnes Prueba del Valle, S.L. manda la factura después del albarán.
+Carnes Prueba del Valle, S.L. · albarán ALB-00009 del 18/09/2026
+208,45 €
+Retrasado · 55 días (lo normal era hasta el 3 de oct.)
+Carnes Prueba del Valle, S.L. manda la factura después del albarán.
+Distribuciones Prueba Aurora, S.L. · albarán ALB-00011 del 24/09/2026
+165,00 €
+Retrasado · 49 días (lo normal era hasta el 10 de oct.)
+Distribuciones Prueba Aurora, S.L. liquida cada mes: su factura del mes llega a primeros del siguiente.
+Carnes Prueba del Valle, S.L. · albarán ALB-00008 del 28/09/2026
+274,21 €
+Retrasado · 45 días (lo normal era hasta el 13 de oct.)
+Carnes Prueba del Valle, S.L. manda la factura después del albarán.
+Distribuciones Prueba Aurora, S.L. · albarán ALB-00013 del 03/10/2026
+341,00 €
+Retrasado · 40 días (lo normal era hasta el 10 de nov.)
+Distribuciones Prueba Aurora, S.L. liquida cada mes: su factura del mes llega a primeros del siguiente.
+Verduras del Huerto Prueba, S.L. · albarán ALB-00004 del 05/10/2026
+210,10 €
+Retrasado · 38 días (lo normal era hasta el 20 de oct.)
+Verduras del Huerto Prueba, S.L. manda la factura después del albarán.
+Distribuciones Prueba Aurora, S.L. · albarán ALB-00014 del 08/10/2026
+104,94 €
+Retrasado · 35 días (lo normal era hasta el 10 de nov.)
+Distribuciones Prueba Aurora, S.L. liquida cada mes: su factura del mes llega a primeros del siguiente.
+Arrastra aquí la factura cuando llegue. Yo busco a qué albaranes corresponde y te digo si cuadra.
+Elegir el fichero
+Llegado por correo
+
+Aún no tienes dirección de facturas. Créala en Ajustes › Correo de facturas.
+
+Liquidaciones del mes
+
+Proveedores que no facturan cada entrega: liquidan una vez al mes, local por local.
+
+Distribuciones Prueba Aurora, S.L. · Norte Centro · octubre
+Todavía no ha llegado. Recibiste 2 albaranes suyos por 405,40 €.
+Subir sus documentos
+
+Todavía no hay facturas de noviembre contabilizadas. Verlas

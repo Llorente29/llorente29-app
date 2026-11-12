@@ -1,0 +1,122 @@
+[
+ {
+  "id": "portada",
+  "texto": "De la factura al pago, sin teclear nada.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/portada.wav",
+  "dura": 3.12
+ },
+ {
+  "id": "llega",
+  "texto": "Tu proveedor te manda la factura por correo, como siempre.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/llega.wav",
+  "dura": 3.44
+ },
+ {
+  "id": "lee",
+  "texto": "Sumied abre el PDF y lo lee entero: el proveedor, el número, la fecha, cada línea y cada tipo de IVA.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/lee.wav",
+  "dura": 8.72
+ },
+ {
+  "id": "igual",
+  "texto": "Y comprueba que lo que ha leído cuadra con el PDF, al céntimo.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/igual.wav",
+  "dura": 4.72
+ },
+ {
+  "id": "apunta",
+  "texto": "Si todo cuadra, la apunta sola en tu contabilidad, con su asiento ya validado.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/apunta.wav",
+  "dura": 5.2
+ },
+ {
+  "id": "porque",
+  "texto": "Y te enseña por qué: cada requisito de la factura, comprobado. Si algo no encaja, te avisa y te dice qué falta.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/porque.wav",
+  "dura": 8.32
+ },
+ {
+  "id": "pagos",
+  "texto": "En Pagos ves lo que toca pagar hoy: lo vencido y lo que vence esta semana.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/pagos.wav",
+  "dura": 5.28
+ },
+ {
+  "id": "semana",
+  "texto": "Un solo botón: pagar lo de esta semana. Sumied marca las facturas que tocan.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/semana.wav",
+  "dura": 6.0
+ },
+ {
+  "id": "titular",
+  "texto": "Antes de pagar, Revolut comprueba que el titular de cada IBAN es de verdad tu proveedor.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/titular.wav",
+  "dura": 6.08
+ },
+ {
+  "id": "segunda",
+  "texto": "Si un proveedor estrena IBAN, Sumied pide una segunda confirmación. Es el engaño más común con facturas falsas.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/segunda.wav",
+  "dura": 8.32
+ },
+ {
+  "id": "desde",
+  "texto": "Salen de tu cuenta de Revolut, conectada a Sumied, y ves el saldo antes y después.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/desde.wav",
+  "dura": 6.0
+ },
+ {
+  "id": "una",
+  "texto": "Una sola aprobación vale para todos los pagos.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/una.wav",
+  "dura": 3.36
+ },
+ {
+  "id": "pin",
+  "texto": "Confirmas con tu PIN de pago, y listo.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/pin.wav",
+  "dura": 2.8
+ },
+ {
+  "id": "enviado",
+  "texto": "Hecho: los tres pagos salen por Revolut, sin entrar en el banco.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/enviado.wav",
+  "dura": 4.88
+ },
+ {
+  "id": "justificante",
+  "texto": "Cada pago sale con su justificante, listo para mandárselo al proveedor.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/justificante.wav",
+  "dura": 4.56
+ },
+ {
+  "id": "pagado",
+  "texto": "Y Pagos ya los cuenta como pagados este mes.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/pagado.wav",
+  "dura": 3.2
+ },
+ {
+  "id": "vuelve",
+  "texto": "Cuando el cargo llega al banco, Sumied lo reconoce solo.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/vuelve.wav",
+  "dura": 3.92
+ },
+ {
+  "id": "casado",
+  "texto": "Cada cargo queda casado con su factura, y su asiento, hecho. Sin conciliar a mano.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/casado.wav",
+  "dura": 6.16
+ },
+ {
+  "id": "resumen",
+  "texto": "Tres facturas, del correo al banco, sin teclear un solo dato.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/resumen.wav",
+  "dura": 4.64
+ },
+ {
+  "id": "cierre",
+  "texto": "Sumied. Contabilidad que se hace sola.",
+  "salida": "/home/runner/work/llorente29-app/llorente29-app/video-salida/voz/cierre.wav",
+  "dura": 2.96
+ }
+]
