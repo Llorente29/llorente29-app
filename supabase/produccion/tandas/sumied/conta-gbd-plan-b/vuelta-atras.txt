@@ -1,0 +1,3 @@
+# GBd · la vuelta atrás de la 0955: fuera la tabla de la red y sus dos funciones.
+cuenta: scripts/conta/produccion/cuentas/gbd-plan-b.sql
+supabase/vuelta-atras/20261112T0955_gbd_red_cuota.down.sql

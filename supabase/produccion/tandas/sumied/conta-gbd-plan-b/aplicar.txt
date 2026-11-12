@@ -1,0 +1,11 @@
+# GBd · El plan B, en pruebas: la red de la «Cuota mensual» de Bitrix24.
+# Rama conta/gbd-plan-b. Se ensaya y se aplica desde main nombrando esta rama.
+# El real lo lanza Julio. Va después de la retirada del GBc (#628).
+#
+#   0955  Solo añade: la tabla conta_bitrix_red y dos funciones solo del
+#         servidor (conta_bitrix_red_leer y conta_bitrix_red_apuntar). Solo leen
+#         con la conexión en entorno «pruebas». No llama a nada: no cambia ningún dato.
+#
+# No toca ninguna otra cuenta. Nada en el camino del pedido. Nada de cobros ni recibos.
+cuenta: scripts/conta/produccion/cuentas/gbd-plan-b.sql
+supabase/migrations/20261112T0955_gbd_red_cuota.sql
