@@ -31,3 +31,8 @@ conta-gocardless-aviso
 # común (_shared/facturaVentaEnviar.ts). En staging, el correo sigue frenado.
 conta-cobro
 conta-venta-correo
+# S01p·18 · 4 · El correo del cierre del socio (12/11), de la rama
+# claude/s01p-cierre-socio: la puerta del correo reconoce el cierre del mes del
+# socio y lo guarda como «liquidación», sin leerlo como facturas
+# (_shared/facturasEntrada.ts y _shared/queEs.ts).
+conta-facturas-entrada

@@ -46,7 +46,9 @@ import {
   leerLocales, reclamacionLlegada, registrarLeidas, resolverDiferencia, type Intermediario, asignarTiendaALiquidacion, leerSinTienda, type SinTienda } from '@/modules/conta/services/liquidacionesMotorService'
 import { fraseHaySinTienda, lineaSinTienda, sinTiendaDeLaSemana, tituloSinTienda } from '@/modules/conta/lib/sinTienda'
 import { leerLiquidaciones } from '@/modules/conta/services/liquidacionesService'
-import { proveedoresDeSocios } from '@/modules/conta/services/liquidacionesVentasService'
+import { cierresPorLeer, proveedoresDeSocios } from '@/modules/conta/services/liquidacionesVentasService'
+import { fraseCierre, type CierreDelCorreo } from '@/modules/conta/lib/cierreSocio'
+import { mesLargo } from '@/modules/conta/lib/compras'
 import { leerCorreoFacturas } from '@/modules/conta/services/comprasService'
 import { subirFacturas } from '@/modules/conta/services/documentosService'
 import { exportarTabla } from '@/modules/conta/ui/tabla/exportar'
@@ -564,8 +566,22 @@ function Cedidas({ cedidas, local, sinPropuesta, mes, accountId }: {
   // (compras/liquidacion/nueva, con su proveedor, local y mes). El proveedor sale de su tercero.
   const socios = useLeer(accountId ? () => proveedoresDeSocios(accountId, [...new Set(cedidas.map((c) => c.socioId).filter((x): x is string => !!x))]) : null,
     `${accountId}:proveedores-socios:${cedidas.map((c) => c.socioId).join(',')}`)
+  // S01p·18 · 4: el cierre del mes del socio que llegó por correo (sus cinco PDF) espera aquí, no en Compras.
+  const { activa } = useEmpresas()
+  const cierres = useLeer(accountId && activa ? () => cierresPorLeer(accountId, activa.id) : null, `${accountId}:${activa?.id}:cierres-socio`)
+  const proveedores = [...new Set(cedidas.map((c) => (c.socioId ? socios.datos?.get(c.socioId) : null)).filter((x): x is string => !!x))]
+  const delMes = (cierres.datos ?? []).filter((c) => c.mes === mes)
+  const conCorreo = (ruta: string, emailId: string) => `${ruta}&correo=${encodeURIComponent(emailId)}`
+  // Sus PDF no dicen el local: si en su mes solo le falta la liquidación a un local, es ése; si no, se pregunta al leerlo.
+  const leerCierre = (k: CierreDelCorreo): string | null => {
+    if (proveedores.length !== 1) return null
+    const faltan = k.mes === mes ? cedidas.filter((c) => !c.liquidacion) : []
+    return conCorreo(rutaLiquidacionNueva(proveedores[0], faltan.length === 1 ? faltan[0].localId : null, k.mes), k.emailId)
+  }
   const destino = (c: CedidaMes): string | null => c.liquidacion ? rutaLiquidacion(c.liquidacion.id)
-    : c.socioId && socios.datos?.get(c.socioId) ? rutaLiquidacionNueva(socios.datos.get(c.socioId)!, c.localId, mes) : null
+    : c.socioId && socios.datos?.get(c.socioId)
+      ? (delMes.length === 1 ? conCorreo(rutaLiquidacionNueva(socios.datos.get(c.socioId)!, c.localId, mes), delMes[0].emailId) : rutaLiquidacionNueva(socios.datos.get(c.socioId)!, c.localId, mes))
+      : null
   const nombres = [...new Set(cedidas.map((c) => c.socio))]
   const n = { completa: 0, aun_no_toca: 0, te_necesita: 0, no_cuadra: 0 } as Record<EstadoMes, number>
   for (const c of vistas) n[c.estado]++
@@ -574,6 +590,16 @@ function Cedidas({ cedidas, local, sinPropuesta, mes, accountId }: {
       <summary><span>Marcas cedidas · se cuadran con {lista(nombres)}</span>
         <span className="cxlm-cuenta">{(Object.keys(n) as EstadoMes[]).filter((e) => n[e]).map((e) => `${n[e]} ${NOMBRE_ESTADO[e].toLowerCase()}`).join(' · ') || 'ninguna aquí'}</span>
       </summary>
+      {cierres.error && <p className="cxlm-nota" role="alert">No he podido mirar si llegó su cierre por correo: {cierres.error}</p>}
+      {(cierres.datos ?? []).map((k) => (
+        <div key={k.emailId} className="cxlm-fila cxlm-cierre-correo" data-estado="te_necesita" data-prueba="cierre-del-correo">
+          <span className="cxlm-per cxlm-per-texto">Por leer</span>
+          <p className="cxlm-nota" style={{ margin: 0 }}>{fraseCierre(k)} No son facturas de Compras: van a su liquidación de {mesLargo(k.mes)}.
+            {proveedores.length !== 1 && ' No sé de qué socio es: ábrelo desde su fila.'}</p>
+          <span className="cxlm-imp" aria-hidden="true" />
+          <span className="cxlm-est">{leerCierre(k) && <Link className="cxlm-btn cxlm-btn-pri" to={leerCierre(k)!} data-prueba="leer-cierre">Leerlo</Link>}</span>
+        </div>
+      ))}
       {vistas.map((c) => (
         <div key={`${c.socioId}:${c.localId}`} className="cxlm-tienda-plana">
           <div className="cxlm-tienda-cab"><span className="cxlm-tn">{c.marcas.join(', ')}</span><br /><span className="cxlm-tp">{c.socio} · {(c.local ?? 'Sin local').replace(/^Foodint\s+/i, '')}</span></div>

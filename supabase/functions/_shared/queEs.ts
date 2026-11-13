@@ -34,3 +34,33 @@ export function queDiceElContenido(nombre: string | null | undefined, bytes: Uin
   return riders.length >= 2 ? 'riders' : null
 }
 
+
+// ── S01p·18 · 4 · El cierre del mes del socio de marca ──────────────────────
+//
+// Su correo «Cierre del mes de …» trae cinco PDF: la AutoFactura (la que te
+// hace en tu nombre), su Factura, el Resumen de Transacción, el Resumen de
+// ventas y la Relación Compras y Ventas. Entraban en Compras como seis facturas
+// (medido el 12/11 en los cierres de septiembre y octubre de Foodint: ocho
+// facturas descartadas a mano y dos lecturas en error). Lo reconocen los dos
+// nombres que solo manda él: la AutoFactura y el Resumen de Transacción.
+
+const llano = (s: string | null | undefined) =>
+  (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+/** La pieza del cierre del socio que dice el nombre de un fichero (o null). */
+export function piezaDelCierre(nombre: string | null | undefined): 'autofactura' | 'factura' | 'transaccion' | 'ventas' | 'inventario' | null {
+  const n = llano(nombre)
+  if (!/\.pdf$/.test(n)) return null
+  if (/^auto ?factura\b/.test(n)) return 'autofactura'
+  if (/^resumen de transaccion\b/.test(n)) return 'transaccion'
+  if (/^resumen de ventas\b/.test(n)) return 'ventas'
+  if (/^compras y ventas\b/.test(n)) return 'inventario'
+  if (/^factura\b/.test(n)) return 'factura'
+  return null
+}
+
+/** ¿Son estos ficheros el cierre del mes del socio? Hacen falta su AutoFactura y su Resumen de Transacción. */
+export function esCierreDelSocio(nombres: readonly (string | null | undefined)[]): boolean {
+  const piezas = new Set(nombres.map(piezaDelCierre))
+  return piezas.has('autofactura') && piezas.has('transaccion')
+}

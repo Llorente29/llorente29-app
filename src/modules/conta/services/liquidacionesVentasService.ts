@@ -20,7 +20,9 @@
 // Regla 9: todo por la empresa (las funciones comprueban la cuenta de quien llama).
 
 import { deLaBase, type FichaLiquidacion } from '@/modules/conta/lib/fichaLiquidacion'
+import { supabase } from '@/lib/supabase'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
+import { cierresDelCorreo, type CierreDelCorreo } from '@/modules/conta/lib/cierreSocio'
 import { cargarContexto, proponerDevolucionSinCobrar } from '@/modules/conta/services/propuestasLibroService'
 import { asientoDeGasto, grupoDeFila, periodo, r2, type GrupoPlataforma } from '@/modules/conta/lib/liquidacionesPlataforma'
 import { eurosExactos } from '@/modules/conta/lib/formato'
@@ -197,4 +199,44 @@ export async function liquidacionesDelSocioEnElMes(accountId: string, partyId: s
     .eq('account_id', accountId).eq('party_id', partyId).eq('period_from', desde).neq('status', 'borrador')
   if (error) throw new Error(mensaje('No se han podido leer las liquidaciones del socio del mes', error))
   return ((data ?? []) as Fila[]).map((r) => ({ id: String(r.id), local: ((r.locations ?? null) as { name?: string } | null)?.name ?? null, neto: Number(r.net_settlement ?? 0) }))
+}
+
+/**
+ * S01p·18 · 4 · Los cierres del socio que llegaron por correo y esperan su
+ * liquidación (document_inbox: clase «liquidación», sin licensed_settlement_id).
+ * Si la columna aún no existe (la 0015 sin aplicar), no hay ninguno.
+ */
+export async function cierresPorLeer(accountId: string, companyId: string): Promise<CierreDelCorreo[]> {
+  const { data, error } = await tabla('document_inbox')
+    .select('id, email_id, email_subject, email_received_at, created_at, file_name, file_bucket, file_path')
+    .eq('account_id', accountId).eq('company_id', companyId).eq('channel', 'correo').eq('doc_kind', 'liquidacion')
+    .is('licensed_settlement_id', null).not('file_path', 'is', null).order('created_at', { ascending: false }).limit(60)
+  if (error?.code === '42703') return []
+  if (error) throw new Error(mensaje('No se han podido leer los cierres del socio que llegaron por correo', error))
+  return cierresDelCorreo(((data ?? []) as Fila[]).map((r) => ({
+    id: String(r.id), emailId: String(r.email_id), asunto: (r.email_subject as string | null) ?? null,
+    recibido: (r.email_received_at as string | null) ?? (r.created_at as string | null) ?? null,
+    nombre: String(r.file_name ?? ''), bucket: String(r.file_bucket ?? 'receipt-uploads'), ruta: String(r.file_path),
+  })))
+}
+
+/** Los PDF de un cierre del correo, del almacén, listos para el lector de la liquidación. */
+export async function bajarCierre(c: Pick<CierreDelCorreo, 'ficheros'>): Promise<File[]> {
+  const fs: File[] = []
+  for (const f of c.ficheros) {
+    const { data, error } = await supabase!.storage.from(f.bucket).download(f.ruta)
+    if (error || !data) throw new Error(`No he podido bajar «${f.nombre}» del correo: ${error?.message ?? 'sin respuesta'}`)
+    fs.push(new File([data], f.nombre, { type: 'application/pdf' }))
+  }
+  return fs
+}
+
+/** El cierre de un correo, por su id. */
+export async function cierreDelCorreo(accountId: string, companyId: string, emailId: string): Promise<CierreDelCorreo | null> {
+  return (await cierresPorLeer(accountId, companyId)).find((c) => c.emailId === emailId) ?? null
+}
+
+/** Al guardar la liquidación leída del correo: sus PDF quedan con ella (compras_cierre_socio_usado). */
+export async function cierreUsado(liquidacionId: string, emailId: string): Promise<{ pdf: number; texto: string }> {
+  return rpc<{ pdf: number; texto: string }>('compras_cierre_socio_usado', { p_liq: liquidacionId, p_email_id: emailId })
 }

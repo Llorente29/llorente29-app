@@ -1,0 +1,5 @@
+# S01p·18 · punto 4 · El correo del cierre del socio (0015: añade document_inbox.licensed_settlement_id y compras_cierre_socio_usado).
+# Su prueba (ROLLBACK, cuenta A): un cierre de cinco PDF en la bandeja, guardar su liquidación y que queden con ella;
+# otra vez, 0; sin permiso, no; y la vuelta atrás.
+supabase/migrations/20261113T0015_s01p_cierre_socio.sql
+supabase/staging/sql/20261113_s01p_cierre_socio_prueba.sql

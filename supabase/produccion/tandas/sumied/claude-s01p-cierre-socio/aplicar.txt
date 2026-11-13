@@ -1,0 +1,9 @@
+# S01p·18 · punto 4 · El correo del cierre del mes del socio va a su liquidación, no a Compras (Julio, 12/11).
+# Rama claude/s01p-cierre-socio. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0015  document_inbox.licensed_settlement_id (admite nulos) y compras_cierre_socio_usado:
+#         los PDF de un cierre quedan con la liquidación que se guarda desde ellos.
+#
+# Solo añade. Nada en el camino del pedido. No mueve ninguna fila. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-cierre-socio.sql
+supabase/migrations/20261113T0015_s01p_cierre_socio.sql

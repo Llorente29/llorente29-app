@@ -1,0 +1,25 @@
+{
+ "_que": "S01p·18 · punto 4 · el correo del cierre del socio · contexto de producción, medido en SOLO LECTURA el 2026-11-12T23:13Z: existen document_inbox (469 filas, fuera del camino del pedido) y licensed_settlement (7 filas); no existen la columna document_inbox.licensed_settlement_id ni compras_cierre_socio_usado. La 0015 solo añade. No mueve ninguna fila. Nada de la tanda en el historial.",
+ "medido": "2026-11-12T23:13Z",
+ "tanda": {
+  "supabase/migrations/20261113T0015_s01p_cierre_socio.sql": "c5f05c35c2ba418f33dd8f95897d1fd1"
+ },
+ "contexto": {
+  "tablas": [
+   "public.document_inbox",
+   "public.licensed_settlement"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.document_inbox": 469,
+   "public.licensed_settlement": 7
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
