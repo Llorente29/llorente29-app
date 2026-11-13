@@ -16,6 +16,7 @@
 // Cada acción devuelve la frase que dice lo que ha hecho (regla 8).
 
 import * as XLSX from 'xlsx'
+import { supabase } from '@/lib/supabase'
 import { mensaje, rpc, tabla } from '@/modules/conta/services/bd'
 import { cargarContexto } from '@/modules/conta/services/propuestasLibroService'
 import { asientoDeGasto } from '@/modules/conta/lib/liquidacionesPlataforma'
@@ -215,4 +216,32 @@ export async function darLocalATienda(accountId: string, storeId: string, localI
   const { data: l } = await tabla('locations').select('name').eq('account_id', accountId).eq('id', localId).maybeSingle()
   const local = String((l as Record<string, unknown> | null)?.name ?? 'su local')
   return `Guardado: «${String(t.external_text ?? 'la tienda')}» es de ${local}. Vale para todas sus liquidaciones, las de antes y las que vengan.`
+}
+
+// ── S01p·18 · 6 · Las liquidaciones sin tienda asignada ─────────────────────
+
+/** Una liquidación de plataforma con su tienda pero sin local o marca (conta_liquidaciones_sin_tienda, 1136). */
+export interface SinTienda {
+  id: string; canal: string; tienda: string; storeId: string; desde: string | null; hasta: string | null; neto: number | null
+  /** Lo que le daría su tienda en su fecha; si no puede, `porque`. */
+  marca: string | null; local: string | null; porque: string | null
+}
+
+/** Las del mes. Sin la 1136 aplicada (la función no existe), ninguna: la pantalla sigue como antes. */
+export async function leerSinTienda(companyId: string, desde: string, hasta: string): Promise<SinTienda[]> {
+  const cliente = supabase as unknown as { rpc: (n: string, a: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { code?: string; message: string } | null }> }
+  const { data, error } = await cliente.rpc('conta_liquidaciones_sin_tienda', { p_company: companyId, p_desde: desde, p_hasta: hasta })
+  if (error && (error.code === 'PGRST202' || error.code === '42883')) return []
+  if (error) throw new Error(`No he podido mirar las liquidaciones sin tienda: ${error.message}`)
+  return ((data ?? []) as Record<string, unknown>[]).map((x) => ({
+    id: String(x.id), canal: String(x.canal ?? 'Plataforma'), tienda: String(x.tienda ?? ''), storeId: String(x.store_id),
+    desde: x.desde ? String(x.desde) : null, hasta: x.hasta ? String(x.hasta) : null, neto: x.neto === null || x.neto === undefined ? null : Number(x.neto),
+    marca: x.marca ? String(x.marca) : null, local: x.local ? String(x.local) : null, porque: x.porque ? String(x.porque) : null,
+  }))
+}
+
+/** «Asignar»: le pone el local y la marca de su tienda en su fecha (conta_liquidacion_asignar_tienda) y dice cuáles. */
+export async function asignarTiendaALiquidacion(id: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto: string }>('conta_liquidacion_asignar_tienda', { p_settlement: id, p_quien_nombre: quien })
+  return r.texto
 }
