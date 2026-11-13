@@ -1,0 +1,19 @@
+{
+ "_que": "DL1 · facturas de octubre a su fecha · contexto de producción, medido en SOLO LECTURA el 13/11 a las 07:57Z y otra vez a las 09:39Z, después de la 0155 y la B01r_24 de B: la 0905 añade la tabla conta_dl1_303_4t_antes (no existe) y, en Foodint, llama a _s01p_facturas_a_su_fecha (en producción) con los 40 asientos de facturas de octubre fechados en noviembre (7.434,59; ni enviados a Diez ni casados; 38 en el borrador del 303 del 4T, que la función vacía y recalcula). Lo de detrás en la cadena (271 asientos) no está en otra declaración ni enviado. Cadena íntegra. Nada en el camino del pedido; la 0905 no está en el historial.",
+ "medido": "2026-11-13T09:39Z",
+ "tanda": {
+  "supabase/migrations/20261113T0905_dl1_facturas_a_su_fecha.sql": "dfbead7b503629fda3163a60c7389a43"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

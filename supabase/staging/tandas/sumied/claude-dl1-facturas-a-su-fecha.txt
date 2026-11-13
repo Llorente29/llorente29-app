@@ -1,0 +1,6 @@
+# DL1 · facturas de octubre a su fecha (0905: añade una tabla de copia y, en
+# Foodint, mueve 40 asientos con _s01p_facturas_a_su_fecha). Su prueba
+# (ROLLBACK): sin Foodint no mueve nada; la copia tiene seguridad por filas; se
+# puede pasar dos veces; la función existe.
+supabase/migrations/20261113T0905_dl1_facturas_a_su_fecha.sql
+supabase/staging/sql/20261113_dl1_facturas_a_su_fecha_prueba.sql
