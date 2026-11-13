@@ -11,10 +11,11 @@
 --   2. conta_comision_del_correo: su factura de comisión, ligada.
 --   3. _conta_plataforma_apuntar: la factura aprobada y apuntada (serie 2).
 --   4. Un asiento por liquidación, enlazado a ella (_journal_entry_proponer) y
---      validado como Julio: la compensación de su factura con la 43000003 y su
---      cargo GL de la campaña (el estado de cuenta lo descuenta aparte, por el
---      mismo importe que el abono de campaña de la factura, IVA incluido), sin
---      IVA, como gasto (62300003) contra la 43000003.
+--      validado como Julio: la compensación de su factura con la 43000003.
+--   5. Su cargo GL de la campaña (el estado de cuenta lo descuenta aparte, por
+--      el mismo importe que el abono de campaña de la factura, IVA incluido), en
+--      su propio asiento, sin IVA, como gasto (62300003) contra la 43000003: el
+--      de la liquidación no puede llevar gasto (tg_journal_line_liquidacion_no_repite).
 -- Y lo mismo para la 4126387 (Meraki Pita, abono de campaña de 5,98 y su cargo
 -- GL de 5,98: neto 0), que tenía la factura pero no su asiento.
 --   4126424 Milanesa House · Alcalá      ventas 144,02 · factura  32,79 · GL 20,93 · neto 90,30
@@ -104,14 +105,11 @@ begin
         jsonb_build_object('cuenta', '43000003', 'debe', 0, 'haber', r.total, 'concepto', 'Compensada con su factura', 'local_id', v_loc, 'comun', false))
       else jsonb_build_array(
         jsonb_build_object('cuenta', '43000003', 'debe', -r.total, 'haber', 0, 'concepto', 'Abono de JustEat ' || r.ref || ', compensado', 'local_id', v_loc, 'comun', false),
-        jsonb_build_object('cuenta', '41000004', 'debe', 0, 'haber', -r.total, 'concepto', 'Compensado con su abono', 'local_id', v_loc, 'comun', false)) end
-      || jsonb_build_array(
-        jsonb_build_object('cuenta', '62300003', 'debe', r.gl, 'haber', 0, 'concepto', 'Cargo de campaña JET+' || coalesce(' ' || r.gl_ref, '') || ', sin IVA', 'local_id', v_loc, 'comun', false),
-        jsonb_build_object('cuenta', '43000003', 'debe', 0, 'haber', r.gl, 'concepto', 'Cargo de campaña JET+, descontado del saldo', 'local_id', v_loc, 'comun', false));
+        jsonb_build_object('cuenta', '41000004', 'debe', 0, 'haber', -r.total, 'concepto', 'Compensado con su abono', 'local_id', v_loc, 'comun', false)) end;
     begin v_res := public._journal_entry_proponer(v_e,
       jsonb_build_object('series', 4, 'fecha', '2026-10-22', 'concepto', 'Liquidación JustEat · ' || r.ref, 'source_type', 'channel_settlement',
         'source_id', v_liq, 'confianza', 'seguro',
-        'porque', 'DL1·24 (Julio, 13/11): su factura compensada y su cargo GL de la campaña JET+, sin IVA, como gasto contra la 43000003.',
+        'porque', 'DL1·24 (Julio, 13/11): su factura de comisión compensada con lo que Just Eat debe (43000003).',
         'razones', '[]'::jsonb, 'party_id', null, 'documento', r.ref),
       v_lin, null, 'Julio (tanda DL1)', null);
     exception when others then
@@ -129,6 +127,15 @@ begin
     end if;
     select sum(debit) into v_tot from public.journal_line where entry_id = v_id;
     v_ids := v_ids || jsonb_build_object('id', v_id, 'importe', v_tot);
+    -- Su cargo GL, aparte: el asiento de una liquidación con factura de comisión no lleva gasto (no se apunta dos veces la comisión).
+    begin
+      v_id := public._dl1_asiento_iva(v_e, date '2026-10-15', 4,
+        'Just Eat · cargo de campaña JET+' || coalesce(' ' || r.gl_ref, '') || ' · liquidación ' || r.ref,
+        'DL1·24 (Julio, 13/11): el estado de cuenta de Just Eat descuenta aparte la campaña de envío gratis JET+, por el mismo importe que el abono de campaña de su factura con IVA. Sin IVA, como gasto contra la 43000003.',
+        jsonb_build_array(jsonb_build_object('cuenta', '62300003', 'debe', r.gl, 'local', v_loc),
+                          jsonb_build_object('cuenta', '43000003', 'haber', r.gl, 'local', v_loc)));
+    exception when others then raise exception using errcode = format('DJ7%s0', v_k), message = r.ref || ': ' || sqlerrm; end;
+    v_ids := v_ids || jsonb_build_object('id', v_id, 'importe', r.gl);
   end loop;
 
   begin v_n := public._dl1_validar(v_e, v_julio, 'Julio', v_ids);
