@@ -248,6 +248,11 @@ Antes del primero:
 - la tanda de Sumied del punto 0;
 - la prueba de la recibida exenta en la C0009.
 
+## Preguntas para Julio y la gestoría (las decide Julio, 13/11)
+
+1. **Las 88 líneas sin local.** Desde el 01/10, 88 líneas de gasto o ingreso (grupos 6 y 7) de Sumied son comunes: no tienen local, como lo de Revolut. En Diez no hay código de local para ellas. ¿Van a Diez sin analítica, o a un código de reparto?
+2. **Las promociones de Uber en la 63400000.** Los seis asientos 4/3355–4/3360 (enero a junio) bajan la venta a la 70009001 y apuntan 4.313,16 € en la 63400000, «ajustes negativos en la imposición indirecta», en el 1T y el 2T. No tocan ninguna subcuenta de IVA ni el libro de IVA presentado, pero el ajuste es de IVA de trimestres ya presentados. ¿Hace falta una complementaria, se corrige en el 4T, o se apunta de otra forma antes de enviarlos a Diez?
+
 ## Para la pantalla «Sumied y Diez, mes a mes» (Libros › Con Diez): qué datos le faltan
 
 1. **Una foto de Diez que se renueve.** Hoy la única es la del 12/10 (`external_entry_snapshot`) y acaba en septiembre. La pantalla necesita leer Diez por mes y subcuenta **guardándolo**; `external_balance_witness` y `external_compare_day` existen y están vacías. Eso es escribir en producción desde una lectura de Diez: una función programada, con su permiso, no un workflow de una sesión.
