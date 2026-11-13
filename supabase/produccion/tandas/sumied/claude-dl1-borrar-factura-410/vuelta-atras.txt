@@ -1,0 +1,2 @@
+# DL1 · borrar la FAC-00410: la 0950 no tiene vuelta atrás (se declara en aplicar.txt): se pide que no quede nada.
+cuenta: scripts/conta/produccion/cuentas/dl1-borrar-factura-410.sql

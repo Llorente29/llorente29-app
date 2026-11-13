@@ -1,0 +1,17 @@
+# DL1 · Borrar del todo la FAC-00410, subida por error el 13/11 (Julio). Rama
+# claude/dl1-borrar-factura-410. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   0950  Comprueba que no la nombra nada (asiento, pago, banco, remesa,
+#         declaración, liquidación, recepción, otra factura o bandeja) y borra
+#         la factura con sus hijas, su fila de la bandeja, su actividad y su
+#         lectura de la IA. El PDF del almacén no se puede borrar desde SQL: lo
+#         borra Julio desde el almacén (el informe dice cómo). No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-borrar-factura-410.sql
+supabase/migrations/20261113T0950_dl1_borrar_factura_410.sql
+sin-vuelta-atras: supabase/migrations/20261113T0950_dl1_borrar_factura_410.sql · motivo: se pide que no quede nada de una factura que no es de la empresa.
+esperado: dl1-borrar-factura-410 · Filas con el id de la FAC-00410, su bandeja o su lectura = 0
+esperado: dl1-borrar-factura-410 · Facturas de Foodint en revisión, menos 5 = 0
+esperado: dl1-borrar-factura-410 · El PDF de la FAC-00410 en el almacén = como antes
