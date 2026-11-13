@@ -103,8 +103,9 @@ describe('emitidas', () => {
 })
 
 describe('el cuadre agrupado', () => {
-  it('todas las 700xxxxx cuentan como «700»; el resto, cada una', () => {
-    expect(['70000000', '70000007', '70009001', '70500001', '47700010', '7000000'].map(claveDelCuadre)).toEqual(['700', '700', '700', '70500001', '47700010', '7000000'])
+  it('las 700xxxxx cuentan como «700», las 472 como «472» y las 477 como «477»; el resto, cada una', () => {
+    expect(['70000000', '70000007', '70009001', '70500001', '47700010', '47700021', '47200000', '47200010', '47510015', '7000000'].map(claveDelCuadre))
+      .toEqual(['700', '700', '700', '70500001', '477', '477', '472', '472', '47510015', '7000000'])
   })
 })
 

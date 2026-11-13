@@ -19,7 +19,7 @@
   2. **Envíos cobrados:** la 70500001, si la hay.
   3. **Promociones:** la 70009001, la 70009002 o la 70009003, si la hay.
 - **Analítica: una por factura,** con el **local** (Grupo: FLO, CAM o CAN) y la **plataforma** (Nivel3). **La marca no va.** Lo común (sin local) va sin código.
-- **El «Cuadra»** compara **las ventas sumadas, el grupo 700** (todas las 700xxxxx, promociones incluidas), y **el resto, cuenta a cuenta**. Así, que la marca vaya junta en Diez no descuadra.
+- **El «Cuadra»** compara **las ventas sumadas, el grupo 700** (todas las 700xxxxx, promociones incluidas), **el IVA soportado sumado (472) y el repercutido sumado (477)** (Julio, 13/11: Diez lleva el IVA a sus subcuentas por su tabla de tipos), y **el resto, cuenta a cuenta**. Así, que la marca vaya junta en Diez, o el IVA en otras subcuentas, no descuadra.
 
 ### Cuántas caben (producción, 13/11, solo lectura)
 

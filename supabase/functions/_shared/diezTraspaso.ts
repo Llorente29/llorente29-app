@@ -69,17 +69,18 @@ export function cuadrar(sumied: readonly Saldo[], filasDiez: readonly Record<str
 }
 
 /**
- * B01r26 (Julio, 13/11) · El cuadre con las cuentas agrupadas: el Excel de
+ * B01r26 (Julio, 13/11) · El cuadre con las cuentas agrupadas (ventas 700 e IVA 472 y 477): el Excel de
  * emitidas lleva las ventas de todas las marcas sumadas en la 70000000, así que
  * se comparan las ventas sumadas (todas las 700xxxxx, como «700») y el resto,
  * cuenta a cuenta. `clave` dice a qué grupo va cada subcuenta (claveDelCuadre,
  * _shared/diezExcel.ts); los dos lados se agrupan igual.
  */
+const NOMBRE_GRUPO: Record<string, string> = { '700': 'Ventas, sumadas (grupo 700)', '472': 'IVA soportado, sumado (472)', '477': 'IVA repercutido, sumado (477)' }
 export function cuadrarAgrupado(sumied: readonly Saldo[], filasDiez: readonly Record<string, unknown>[], clave: (cuenta: string) => string): Cuadre {
   const g = new Map<string, Saldo>()
   for (const s of sumied) {
     const k = clave(subcuenta(s.cuenta))
-    const x = g.get(k) ?? { cuenta: k, nombre: k === subcuenta(s.cuenta) ? s.nombre ?? null : 'Ventas, sumadas (grupo 700)', debe: 0, haber: 0 }
+    const x = g.get(k) ?? { cuenta: k, nombre: k === subcuenta(s.cuenta) ? s.nombre ?? null : NOMBRE_GRUPO[k] ?? `Grupo ${k}, sumado`, debe: 0, haber: 0 }
     x.debe = euros(cent(x.debe) + cent(s.debe)); x.haber = euros(cent(x.haber) + cent(s.haber))
     g.set(k, x)
   }

@@ -237,8 +237,14 @@ export function filaRecibida(f: Recibida, xml: string): Fila | NoCabe {
 
 // ── El cuadre ─────────────────────────────────────────────────────────────────
 
-/** Julio, 13/11: las ventas (todas las 700xxxxx) se comparan sumadas, como «700»; el resto, cuenta a cuenta. */
-export const claveDelCuadre = (cuenta: string) => (/^700\d{5}$/.test(cuenta) ? '700' : cuenta)
+/**
+ * Julio, 13/11: las ventas (todas las 700xxxxx) se comparan sumadas, como «700»;
+ * el IVA, igual: el soportado (472xxxxx) sumado como «472» y el repercutido
+ * (477xxxxx) como «477», porque Diez lleva el IVA a sus subcuentas por su tabla
+ * de tipos (la 47200000, la 47700010…) y Sumied a las suyas por tipo. El resto,
+ * cuenta a cuenta.
+ */
+export const claveDelCuadre = (cuenta: string) => (/^700\d{5}$/.test(cuenta) ? '700' : /^472\d{5}$/.test(cuenta) ? '472' : /^477\d{5}$/.test(cuenta) ? '477' : cuenta)
 
 // ── De lo que lee el traspaso a una factura del Excel ─────────────────────────
 
