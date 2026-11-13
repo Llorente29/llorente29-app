@@ -1,0 +1,17 @@
+# DL1 · QBO: la apertura de 145,20 que no existe (Julio, DL1·25, 13/11). Rama
+# claude/dl1-qbo-apertura. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1035  Comprueba que la apertura de la 41000008 es la medida (9/1, 145,20 al
+#         Haber) y la lleva a reservas a 01/01: Debe 41000008 / Haber 11300000,
+#         sin IVA, validado como Julio. El mayor de QBO de 2025 termina a 0,00.
+#         No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-qbo-apertura.sql
+supabase/migrations/20261113T1035_dl1_qbo_apertura.sql
+sin-vuelta-atras: supabase/migrations/20261113T1035_dl1_qbo_apertura.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-qbo-apertura · 41000008 (QBO), menos 537,60 = 0.00
+esperado: dl1-qbo-apertura · 11300000 a 01/01, más 969,54 = 0.00
+esperado: dl1-qbo-apertura · IVA 472 del 1T = como antes
+esperado: dl1-qbo-apertura · IVA 477 del 1T = como antes
