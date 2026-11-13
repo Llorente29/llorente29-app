@@ -748,10 +748,30 @@ export async function llegadaNoEsFactura(inboxId: string, quien: string | null, 
   return `${archivo ? `«${archivo}»` : 'El documento'} no es una factura: sale de «Por aclarar» y de Facturas recibidas, y lo tienes en Inicio › Documentos, en «Otras».`
 }
 
-/** S01p·18.2 · 3 · «Eliminar» un documento sin leer (conta_llegada_eliminar): sale de todas las listas; queda en su historial. */
+/** S01p·18.2 · 3 · Si un documento sin leer se puede borrar y, si no, por qué (no ha llegado a los libros: conta_llegada_eliminable). */
+export interface Eliminable { puede: boolean; porque: string | null; bucket: string | null; ruta: string | null }
+export async function llegadaEliminable(inboxId: string): Promise<Eliminable> {
+  const r = await rpc<{ puede: boolean; porque?: string | null; bucket?: string | null; ruta?: string | null }>('conta_llegada_eliminable', { p_inbox: inboxId })
+  return { puede: r.puede === true, porque: r.porque ?? null, bucket: r.bucket ?? null, ruta: r.ruta ?? null }
+}
+
+/**
+ * S01p·18.2 · 3 · «Eliminar» BORRA DE VERDAD (Julio, 13/11): primero el fichero, con la
+ * API del almacén (no SQL); después la fila, su actividad y su lectura (conta_llegada_eliminar,
+ * que vuelve a mirar que no haya llegado a los libros). Si el fichero no se puede borrar, no
+ * se toca nada más y se dice. Si ya no estaba en el almacén, se sigue y se dice.
+ */
 export async function llegadaEliminar(inboxId: string, quien: string | null): Promise<string> {
+  const e = await llegadaEliminable(inboxId)
+  if (!e.puede) throw new Error(e.porque ?? 'Este documento no se puede eliminar.')
+  let yaNoEstaba = false
+  if (e.ruta && e.bucket) {
+    const { data, error } = await supabase!.storage.from(e.bucket).remove([e.ruta])
+    if (error) throw new Error(`No he podido borrar el fichero del almacén (${error.message}): no he tocado nada más.`)
+    yaNoEstaba = (data ?? []).length === 0
+  }
   const r = await rpc<{ texto: string }>('conta_llegada_eliminar', { p_inbox: inboxId, p_quien_nombre: quien })
-  return r.texto
+  return yaNoEstaba ? r.texto.replace(' y el fichero del almacén.', '; el fichero ya no estaba en el almacén.') : r.texto
 }
 
 /** «No es soporte»: la recepción vuelve a «Por aclarar». */

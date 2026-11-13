@@ -1,3 +1,3 @@
-# S01p·18.2 · 3 · la vuelta atrás: conta_puerta_dime_que_es desde su respaldo y fuera conta_llegada_eliminar.
+# S01p·18.2 · 3 · la vuelta atrás: conta_puerta_dime_que_es desde su respaldo y fuera conta_llegada_eliminar y conta_llegada_eliminable.
 cuenta: scripts/conta/produccion/cuentas/s01p-documento-sin-leer.sql
 supabase/vuelta-atras/20261113T1015_s01p_documento_sin_leer.down.sql

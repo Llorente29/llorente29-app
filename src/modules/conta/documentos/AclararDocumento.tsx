@@ -5,8 +5,9 @@
 // solo se abría el fichero. Ahora se abre esto, con su porqué y sus acciones:
 //
 //   · una llegada sin leer: «Leerla» (el lector de «Subir factura»),
-//     «No es una factura» y, S01p·18.2 · 3, «Eliminar» (con su confirmación:
-//     sale de todas las listas y queda en su historial);
+//     «No es una factura» y, S01p·18.2 · 3, «Eliminar», que BORRA de verdad (la
+//     fila, su actividad, su lectura y el fichero del almacén) con su confirmación;
+//     solo si no ha llegado a los libros: si ha llegado, el botón no sale y se dice por qué;
 //   · una llegada sin PDF (el correo traía un enlace): «Subir el PDF» (va a la
 //     misma llegada y se lee en el momento) y «No es una factura»;
 //   · una recepción que no se pudo hacer factura: «Subir la factura» (el de la
@@ -17,7 +18,8 @@ import { useRef, useState } from 'react'
 import { Boton, Dialogo } from '@/modules/conta/diseno'
 import { DialogoPapel } from '@/modules/conta/compras/VerPapel'
 import { faltaElPdf, type FilaDocumento } from '@/modules/conta/documentos/documentos'
-import { leerLlegada, llegadaEliminar, llegadaNoEsFactura, subirPdfDeLlegada, urlDeLlegada } from '@/modules/conta/services/documentosService'
+import { leerLlegada, llegadaEliminable, llegadaEliminar, llegadaNoEsFactura, subirPdfDeLlegada, urlDeLlegada } from '@/modules/conta/services/documentosService'
+import { useLeer } from '@/modules/conta/libros/contexto'
 
 export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, alSubirFactura }: {
   fila: FilaDocumento; accountId: string; quien: string | null
@@ -30,6 +32,7 @@ export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, al
   const pdf = useRef<HTMLInputElement>(null)
   const sinPdf = faltaElPdf(fila)
   const llegada = fila.tipo === 'llegada'
+  const eliminable = useLeer(llegada ? () => llegadaEliminable(fila.id) : null, `${fila.id}:eliminable`)
 
   const hacer = async (que: string, fn: () => Promise<string>) => {
     setOcupado(que); setError(null)
@@ -45,7 +48,7 @@ export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, al
   const titulo = llegada ? (fila.archivo ? `«${fila.archivo}»` : sinPdf ? 'Un documento sin PDF' : 'Un documento sin leer') : `${fila.proveedor.nombre ?? 'Una recepción'}${fila.numero ? ` · ${fila.numero}` : ''}`
   const acciones = llegada ? (
     <>
-      <Boton variante="secundario" onClick={() => setEliminar(true)} disabled={!!ocupado}>Eliminar</Boton>
+      {eliminable.datos?.puede && <Boton variante="secundario" onClick={() => setEliminar(true)} disabled={!!ocupado}>Eliminar</Boton>}
       <Boton variante="secundario" onClick={() => void hacer('no', () => llegadaNoEsFactura(fila.id, quien, fila.archivo))} disabled={!!ocupado}>{ocupado === 'no' ? 'Guardando…' : 'No es una factura'}</Boton>
       {sinPdf
         ? <Boton variante="principal" icono="subir" onClick={() => pdf.current?.click()} disabled={!!ocupado}>{ocupado === 'pdf' ? 'Subiendo y leyendo…' : 'Subir el PDF'}</Boton>
@@ -65,9 +68,13 @@ export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, al
         <input ref={pdf} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="s-oculto" aria-label="Elegir el PDF"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void hacer('pdf', () => subirPdfDeLlegada(accountId, fila.id, f)); e.target.value = '' }} />
         {error && <div className="cx-error" role="alert">{error}</div>}
+        {llegada && eliminable.datos && !eliminable.datos.puede && (
+          <p className="s-apoyo" data-prueba="no-se-elimina">No se puede eliminar: {eliminable.datos.porque}</p>
+        )}
+        {llegada && eliminable.error && <p className="s-apoyo" role="status">No he podido saber si se puede eliminar: {eliminable.error}</p>}
         {eliminar && (
           <div className="s-aviso-lista" data-tono="duda" role="alertdialog" aria-label="¿Eliminar el documento?" data-prueba="confirmar-eliminar">
-            <p style={{ margin: '0 0 8px' }}><strong>¿Eliminar {fila.archivo ? `«${fila.archivo}»` : 'este documento'}?</strong> Sale de «Por aclarar» y de todas las listas. No se borra: queda en su historial, con quién lo eliminó y cuándo.</p>
+            <p style={{ margin: '0 0 8px' }}><strong>¿Eliminar {fila.archivo ? `«${fila.archivo}»` : 'este documento'}?</strong> Se borra de verdad: la fila, su actividad, lo que leyó la IA y el fichero del almacén. No se puede deshacer.</p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Boton variante="principal" onClick={() => void hacer('eliminar', () => llegadaEliminar(fila.id, quien))} disabled={!!ocupado}>{ocupado === 'eliminar' ? 'Eliminando…' : 'Sí, eliminarlo'}</Boton>
               <Boton variante="secundario" onClick={() => setEliminar(false)} disabled={!!ocupado}>No, déjalo</Boton>

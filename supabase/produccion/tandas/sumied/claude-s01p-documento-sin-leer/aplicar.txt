@@ -2,8 +2,9 @@
 # Rama claude/s01p-documento-sin-leer. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
 #
 #   1015  conta_puerta_dime_que_es (cambia, con respaldo): «No es una factura» ya no falla sin
-#         el nombre de quien lo dice (document_activity_check); conta_llegada_eliminar (añade):
-#         «Eliminar» un documento sin leer, que pasa a «descartado» con su actividad.
+#         el nombre de quien lo dice (document_activity_check); conta_llegada_eliminable y
+#         conta_llegada_eliminar (añaden): «Eliminar» borra de verdad un documento sin leer que no
+#         ha llegado a los libros (fila, actividad y lectura; el fichero, la pantalla con la API del almacén).
 #
 # Nada en el camino del pedido. No mueve ninguna fila. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/s01p-documento-sin-leer.sql

@@ -135,27 +135,46 @@ test.describe('S01g · las recepciones de soporte y «Por aclarar» con su acci�
     await page.goto('/conta/documentos?ver=por-aclarar')
     // S01p·18.2 · 3: la fila dice qué archivo es, no «Documento sin leer».
     await expect(page.getByText('Documento sin leer')).toHaveCount(0)
+    // «Eliminar» solo sale si el documento no ha llegado a los libros (conta_llegada_eliminable, contestada aquí;
+    // la base la prueba su prueba de staging). Primero, uno que sí ha llegado: no hay botón y se dice por qué.
+    let puede = false
+    await page.route(/\/rest\/v1\/rpc\/conta_llegada_eliminable(\?|$)/, (r) => json(r, puede
+      ? { puede: true, porque: null, archivo: 'factura-inventada.pdf', bucket: 'receipt-uploads', ruta: 'cuenta-prueba/_correo/prueba/01-factura-inventada.pdf' }
+      : { puede: false, porque: '«factura-inventada.pdf» ya es la factura F-0001, o la repite: se quita desde su ficha («No es una factura»), que mira su asiento y sus pagos.' }))
     await page.getByText('«factura-inventada.pdf»').first().click()
-    const d = page.getByRole('dialog', { name: '«factura-inventada.pdf»' })
+    let d = page.getByRole('dialog', { name: '«factura-inventada.pdf»' })
     await expect(d).toContainText('Recibida, sin leer todavía.')
-    // Tres salidas: «Leerla», «No es una factura» y «Eliminar».
+    await expect(d.locator('[data-prueba="no-se-elimina"]')).toContainText('No se puede eliminar: «factura-inventada.pdf» ya es la factura F-0001')
+    await expect(d.getByRole('button', { name: 'Eliminar' })).toHaveCount(0)
+    await capturar(page, 'por-aclarar-no-se-elimina')
+    await page.keyboard.press('Escape')
+    // Después, uno que no ha llegado: tres salidas, «Leerla», «No es una factura» y «Eliminar».
+    puede = true
+    await page.getByText('«factura-inventada.pdf»').first().click()
+    d = page.getByRole('dialog', { name: '«factura-inventada.pdf»' })
     await expect(d.getByRole('button', { name: 'Leerla' })).toBeVisible()
     await expect(d.getByRole('button', { name: 'No es una factura' })).toBeVisible()
     await expect(d.getByRole('button', { name: 'Eliminar' })).toBeVisible()
     await capturar(page, 'por-aclarar-acciones')
-    // «Eliminar» pregunta antes, y dice lo que ha hecho (regla 8). La base la prueba su prueba de staging.
-    let eliminar: Record<string, unknown> | null = null
+    // «Eliminar» pregunta antes; al confirmar borra el fichero con la API del almacén y después la fila (regla 8: lo dice).
+    const llamadas: string[] = []
+    await page.route(/\/storage\/v1\/object\/receipt-uploads(\?|$)/, (r) => {
+      if (r.request().method() !== 'DELETE') return r.fallback()
+      llamadas.push(`almacén:${JSON.stringify(r.request().postDataJSON())}`)
+      return json(r, [{ name: 'cuenta-prueba/_correo/prueba/01-factura-inventada.pdf' }])
+    })
     await page.route(/\/rest\/v1\/rpc\/conta_llegada_eliminar(\?|$)/, (r) => {
-      eliminar = r.request().postDataJSON() as Record<string, unknown>
-      return json(r, { id: eliminar.p_inbox, ya_estaba: false, texto: 'Eliminado: «factura-inventada.pdf». Ya no sale en «Por aclarar»; queda en su historial.' })
+      llamadas.push('base')
+      return json(r, { id: 'x', actividad: 1, lectura: 0, texto: 'Eliminado: «factura-inventada.pdf». Borrados la fila de la bandeja, 1 apunte de su actividad y el fichero del almacén.' })
     })
     await d.getByRole('button', { name: 'Eliminar' }).click()
     const confirmar = d.locator('[data-prueba="confirmar-eliminar"]')
-    await expect(confirmar).toContainText('¿Eliminar «factura-inventada.pdf»? Sale de «Por aclarar» y de todas las listas. No se borra: queda en su historial')
+    await expect(confirmar).toContainText('¿Eliminar «factura-inventada.pdf»? Se borra de verdad: la fila, su actividad, lo que leyó la IA y el fichero del almacén. No se puede deshacer.')
     await capturar(page, 'por-aclarar-eliminar')
     await confirmar.getByRole('button', { name: 'Sí, eliminarlo' }).click()
-    await expect(page.getByRole('status').filter({ hasText: 'Eliminado: «factura-inventada.pdf». Ya no sale en «Por aclarar»; queda en su historial.' })).toBeVisible({ timeout: 20_000 })
-    expect(eliminar).not.toBeNull()
+    await expect(page.getByRole('status').filter({ hasText: 'Eliminado: «factura-inventada.pdf». Borrados la fila de la bandeja, 1 apunte de su actividad y el fichero del almacén.' })).toBeVisible({ timeout: 20_000 })
+    // Primero el almacén (con su ruta), después la base.
+    expect(llamadas).toEqual(['almacén:{"prefixes":["cuenta-prueba/_correo/prueba/01-factura-inventada.pdf"]}', 'base'])
     // Al eliminar, la lista se vuelve a leer por la ruta de los datos inventados: sin esperar a esa lectura,
     // se cierran las rutas para que no quede un route.fetch a medias cuando la prueba ya ha acabado.
     await page.unrouteAll({ behavior: 'ignoreErrors' })
