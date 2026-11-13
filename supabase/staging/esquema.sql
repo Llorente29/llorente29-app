@@ -46354,6 +46354,50 @@ COMMENT ON FUNCTION public.conta_liquidacion_apuntar(p_company uuid, p jsonb, p_
 
 
 --
+-- Name: conta_liquidacion_asignar_tienda(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cs public.channel_settlement; v_t record; v_marca text; v_local text; v_canal text; v_tienda text;
+begin
+  select * into v_cs from public.channel_settlement where id = p_settlement;
+  if v_cs.id is null or not public.belongs_to_account(v_cs.account_id) then raise exception 'Esa liquidación no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_cs.account_id) then
+    raise exception 'Solo un administrador o un encargado de la cuenta asigna una liquidación.' using errcode = '42501';
+  end if;
+  if v_cs.store_id is null then raise exception 'Esta liquidación no tiene tienda: asígnala desde Sus tiendas.' using errcode = '22023'; end if;
+  select coalesce(sc.name, 'la plataforma'), ps.external_text into v_canal, v_tienda
+    from public.platform_store ps left join public.sales_channel sc on sc.id = v_cs.channel_id where ps.id = v_cs.store_id;
+  if v_cs.brand_id is not null and v_cs.location_id is not null then
+    return jsonb_build_object('id', p_settlement, 'ya_estaba', true, 'texto', 'Esta liquidación ya tenía su local y su marca.');
+  end if;
+  select * into v_t from public.conta_tienda_en(v_cs.store_id, coalesce(v_cs.period_from, v_cs.settlement_date));
+  if v_t.brand_id is null or v_t.location_id is null then
+    raise exception 'La tienda «%» no tenía local o marca en esas fechas: dáselos en Sus tiendas y vuelve.', v_tienda using errcode = '22023';
+  end if;
+  update public.channel_settlement set brand_id = coalesce(brand_id, v_t.brand_id), location_id = coalesce(location_id, v_t.location_id), updated_at = now()
+   where id = p_settlement returning * into v_cs;
+  perform public._conta_liquidacion_marcar(p_settlement);
+  select name into v_marca from public.brand where id = v_cs.brand_id;
+  select name into v_local from public.locations where id = v_cs.location_id;
+  return jsonb_build_object('id', p_settlement, 'ya_estaba', false,
+    'texto', format('Asignada: la liquidación de %s del %s al %s (%s €) es de %s · %s, como su tienda en esas fechas.',
+                    v_canal, to_char(v_cs.period_from, 'DD/MM'), to_char(v_cs.period_to, 'DD/MM'),
+                    replace(to_char(v_cs.net_payout, 'FM999999990.00'), '.', ','), v_marca, v_local));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text) IS 'S01p·18 · 6. Pone a una liquidación de plataforma el local y la marca que su tienda tenía en su fecha (solo los que le faltan), la vuelve a marcar y lo dice.';
+
+
+--
 -- Name: conta_liquidacion_enlazar_factura(uuid, uuid[], text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -47265,6 +47309,38 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) IS 'S01q · Las liquidaciones de un mes en cuatro estados (completa, aun_no_toca, te_necesita, no_cuadra), por tienda, con las marcas cedidas aparte (las liquida su socio).';
+
+
+--
+-- Name: conta_liquidaciones_sin_tienda(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_liquidaciones_sin_tienda(p_company uuid, p_desde date, p_hasta date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+             'id', cs.id, 'canal', coalesce(sc.name, 'Plataforma'), 'tienda', ps.external_text, 'store_id', ps.id,
+             'desde', cs.period_from, 'hasta', cs.period_to, 'neto', cs.net_payout,
+             'marca_id', t.brand_id, 'marca', b.name, 'local_id', t.location_id, 'local', l.name,
+             'porque', case when t.brand_id is null or t.location_id is null
+                            then 'Su tienda no tenía local o marca en esas fechas: dáselos en Sus tiendas.' end)
+           order by cs.period_from, sc.name, ps.external_text)
+      from public.channel_settlement cs
+      join public.platform_store ps on ps.id = cs.store_id and ps.account_id = cs.account_id
+      left join public.sales_channel sc on sc.id = cs.channel_id
+      cross join lateral public.conta_tienda_en(ps.id, coalesce(cs.period_from, cs.settlement_date)) t
+      left join public.brand b on b.id = coalesce(cs.brand_id, t.brand_id)
+      left join public.locations l on l.id = coalesce(cs.location_id, t.location_id)
+     where cs.account_id = v_cuenta and ps.company_id = p_company
+       and (cs.brand_id is null or cs.location_id is null)
+       and coalesce(cs.period_from, cs.settlement_date) <= p_hasta and coalesce(cs.period_to, cs.settlement_date) >= p_desde), '[]'::jsonb);
+end $$;
 
 
 --
@@ -172347,6 +172423,15 @@ GRANT ALL ON FUNCTION public.conta_liquidacion_apuntar(p_company uuid, p jsonb, 
 
 
 --
+-- Name: FUNCTION conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_liquidacion_enlazar_factura(p_invoice uuid, p_liquidaciones uuid[], p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -172425,6 +172510,15 @@ GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p
 REVOKE ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_liquidaciones_sin_tienda(p_company uuid, p_desde date, p_hasta date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_liquidaciones_sin_tienda(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_liquidaciones_sin_tienda(p_company uuid, p_desde date, p_hasta date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_liquidaciones_sin_tienda(p_company uuid, p_desde date, p_hasta date) TO service_role;
 
 
 --
