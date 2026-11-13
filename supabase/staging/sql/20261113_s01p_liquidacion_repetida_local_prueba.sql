@@ -6,7 +6,7 @@
 -- con los mismos apuntes, COMO LAS DE FOODINT: sin local y sin marcar como comunes. Y uno, el de
 -- la 4750, con local, para ver que lo conserva.
 --
---   1. Sin la 1914 (si aún no está): «Dejar solo esta» falla con «falta el local (o marcarlo como
+--   1. Sin la 1914 (quitada con su vuelta atrás si ya estaba): «Dejar solo esta» falla con «falta el local (o marcarlo como
 --      común)» y no deja nada, como le pasó a Julio con la 4/1016. Es lo que la prueba de la 1822
 --      no veía, porque sembraba los apuntes ya marcados como comunes.
 --   2. Con la 1914: «Dejar solo esta» hace el contraasiento validado del 01/10; los apuntes sin
@@ -98,9 +98,11 @@ begin
   end if;
 end $$;
 
--- 1. Sin la 1914: falla como en Foodint, y no deja nada.
+-- 1. Sin la 1914: falla como en Foodint, y no deja nada. Corre SIEMPRE: si el workflow ya pasó la
+-- 1914 (staging la aplica antes de esta prueba), se quita con su vuelta atrás y se vuelve a pasar.
 \if :ya_esta
-\else
+\i supabase/vuelta-atras/20261113T1914_s01p_liquidacion_repetida_local.down.sql
+\endif
 do $$
 declare v_m text;
 begin
@@ -118,7 +120,6 @@ begin
   raise notice '1 · sin la 1914, falla como en Foodint y no deja nada: «%»', v_m;
 end $$;
 \i supabase/migrations/20261113T1914_s01p_liquidacion_repetida_local.sql
-\endif
 
 -- 2. Con la 1914.
 do $$
@@ -135,8 +136,6 @@ begin
   raise notice '2 · %  (3 apuntes como comunes, 1 con su local; la traída igual)', r->>'mensaje';
 end $$;
 
-\if :ya_esta
-\else
 -- 3. La vuelta atrás.
 \i supabase/vuelta-atras/20261113T1914_s01p_liquidacion_repetida_local.down.sql
 do $$ begin
@@ -145,6 +144,5 @@ do $$ begin
   end if;
   raise notice '3 · la vuelta atrás: conta_liquidacion_dejar_esta como estaba';
 end $$;
-\endif
 
 rollback;
