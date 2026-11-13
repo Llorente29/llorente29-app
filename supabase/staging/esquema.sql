@@ -9834,6 +9834,41 @@ $$;
 
 
 --
+-- Name: _dl1_anular(uuid, uuid, text, uuid, text, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_anular(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text, p_fecha date) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true); v_r jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'DL1 anular: esa empresa no está.'; end if;
+  if not exists (select 1 from public.journal_entry where id = p_entry and company_id = p_company and account_id = v_acc) then
+    raise exception 'DL1 anular: el asiento % no es de la empresa.', p_entry;
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  v_r := public.journal_entry_anular(p_entry, p_motivo, p_fecha, p_nombre);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  if (v_r->>'fecha')::date is distinct from p_fecha then
+    raise exception 'DL1 anular: el contraasiento sale con fecha % y se pedía %.', v_r->>'fecha', p_fecha;
+  end if;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_anular(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text, p_fecha date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_anular(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text, p_fecha date) IS 'DL1. Anula un asiento validado con journal_entry_anular, como una persona de la cuenta, con la fecha que se pide (para si sale otra). Solo una tanda.';
+
+
+--
 -- Name: _dl1_asiento_iva(uuid, date, integer, text, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9969,6 +10004,38 @@ end $$;
 --
 
 COMMENT ON FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text) IS 'DL1. Casa un movimiento del banco con bank_casar, como una persona de la cuenta (por «persona», confianza segura). Solo una tanda.';
+
+
+--
+-- Name: _dl1_descartar(uuid, uuid, text, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._dl1_descartar(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true); v_r jsonb;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'DL1 descartar: esa empresa no está.'; end if;
+  if not exists (select 1 from public.journal_entry where id = p_entry and company_id = p_company and account_id = v_acc) then
+    raise exception 'DL1 descartar: el asiento % no es de la empresa.', p_entry;
+  end if;
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  v_r := public.journal_entry_descartar(p_entry, p_motivo, p_nombre);
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION _dl1_descartar(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._dl1_descartar(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text) IS 'DL1. Descarta una propuesta con journal_entry_descartar, como una persona de la cuenta. Solo una tanda.';
 
 
 --
@@ -30655,6 +30722,33 @@ begin
          question_closed_by_name = public.conta_nombre_actor(), question_closed_at = now()
    where id = p.id;
   return jsonb_build_object('recepcion', p_recepcion, 'pregunta', p.question);
+end $$;
+
+
+--
+-- Name: compras_cierre_socio_usado(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.compras_cierre_socio_usado(p_liq uuid, p_email_id text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare l licensed_settlement; v_n int;
+begin
+  select * into l from licensed_settlement where id = p_liq;
+  if l.id is null then raise exception 'Esa liquidación no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(l.account_id) then
+    raise exception 'No puedes guardar liquidaciones en esta cuenta.' using errcode = '42501';
+  end if;
+  if coalesce(trim(p_email_id), '') = '' then raise exception 'Falta el correo del cierre.' using errcode = '22023'; end if;
+  update public.document_inbox d set licensed_settlement_id = l.id, updated_at = now()
+   where d.account_id = l.account_id and d.company_id is not distinct from l.company_id
+     and d.email_id = p_email_id and d.doc_kind = 'liquidacion' and d.licensed_settlement_id is null;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('pdf', v_n,
+    'texto', case when v_n = 0 then 'Los PDF del correo ya estaban con una liquidación.'
+                  when v_n = 1 then 'El PDF del correo queda con esta liquidación.'
+                  else format('Los %s PDF del correo quedan con esta liquidación.', v_n) end);
 end $$;
 
 
@@ -114434,6 +114528,7 @@ CREATE TABLE public.document_inbox (
     doc_kind text,
     doc_kind_by text,
     expected_id uuid,
+    licensed_settlement_id uuid,
     CONSTRAINT document_inbox_channel_check CHECK ((channel = ANY (ARRAY['subida'::text, 'correo'::text, 'cocina'::text, 'portal'::text]))),
     CONSTRAINT document_inbox_check CHECK (((channel <> 'correo'::text) OR (email_id IS NOT NULL))),
     CONSTRAINT document_inbox_check1 CHECK (((status <> 'falta_pdf'::text) OR ((file_path IS NULL) AND (link_url IS NOT NULL)))),
@@ -114461,6 +114556,13 @@ COMMENT ON TABLE public.document_inbox IS 'D01 · La bandeja de llegadas: cada f
 --
 
 COMMENT ON COLUMN public.document_inbox.doc_kind IS 'V02 · Qué es el documento (factura, ticket, liquidación, extracto, nómina, facturas de riders u otro). Nulo: aún sin saber; sale en «Necesita que lo mires».';
+
+
+--
+-- Name: COLUMN document_inbox.licensed_settlement_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.document_inbox.licensed_settlement_id IS 'S01p·18 · 4 · La liquidación del socio con la que quedan los PDF de su cierre del mes (llegados por correo). Nulo: el cierre espera en Ventas › Liquidaciones › Socios de marca.';
 
 
 --
@@ -145905,6 +146007,14 @@ ALTER TABLE ONLY public.document_inbox
 
 
 --
+-- Name: document_inbox document_inbox_licensed_settlement_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.document_inbox
+    ADD CONSTRAINT document_inbox_licensed_settlement_id_fkey FOREIGN KEY (licensed_settlement_id) REFERENCES public.licensed_settlement(id) ON DELETE SET NULL;
+
+
+--
 -- Name: document_inbox document_inbox_supplier_invoice_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -165049,6 +165159,13 @@ GRANT ALL ON FUNCTION public._distancia_metros(p_lat1 double precision, p_lng1 d
 
 
 --
+-- Name: FUNCTION _dl1_anular(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_anular(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text, p_fecha date) FROM PUBLIC;
+
+
+--
 -- Name: FUNCTION _dl1_asiento_iva(p_company uuid, p_fecha date, p_serie integer, p_concepto text, p_porque text, p_lineas jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -165067,6 +165184,13 @@ REVOKE ALL ON FUNCTION public._dl1_asiento_proponer(p_company uuid, p_fecha date
 --
 
 REVOKE ALL ON FUNCTION public._dl1_casar(p_company uuid, p_actor uuid, p_nombre text, p_movimiento uuid, p_destino jsonb, p_porque text) FROM PUBLIC;
+
+
+--
+-- Name: FUNCTION _dl1_descartar(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._dl1_descartar(p_company uuid, p_actor uuid, p_nombre text, p_entry uuid, p_motivo text) FROM PUBLIC;
 
 
 --
@@ -168936,6 +169060,15 @@ GRANT ALL ON FUNCTION public.compras_casar_candidatos(p_factura uuid) TO service
 REVOKE ALL ON FUNCTION public.compras_cerrar_pregunta(p_recepcion uuid, p_nota text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.compras_cerrar_pregunta(p_recepcion uuid, p_nota text) TO authenticated;
 GRANT ALL ON FUNCTION public.compras_cerrar_pregunta(p_recepcion uuid, p_nota text) TO service_role;
+
+
+--
+-- Name: FUNCTION compras_cierre_socio_usado(p_liq uuid, p_email_id text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.compras_cierre_socio_usado(p_liq uuid, p_email_id text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.compras_cierre_socio_usado(p_liq uuid, p_email_id text) TO authenticated;
+GRANT ALL ON FUNCTION public.compras_cierre_socio_usado(p_liq uuid, p_email_id text) TO service_role;
 
 
 --
