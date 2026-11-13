@@ -3,7 +3,7 @@
 // sus Detalles, como los da Diez) y el mes como lo pide Diez. Cuentas y nombres con la forma del plan de Sumied;
 // importes inventados.
 import { describe, expect, it } from 'vitest'
-import { aaaammDelMes, cuadrar, lineasDeApuntes, siguientes, subcuenta, sumarDiez } from '../../../supabase/functions/_shared/diezTraspaso'
+import { aaaammDelMes, cuadrar, cuadrarAgrupado, lineasDeApuntes, siguientes, subcuenta, sumarDiez } from '../../../supabase/functions/_shared/diezTraspaso'
 
 // Lo que Diez devuelve: una fila por apunte, con la subcuenta como número o texto.
 const apunte = (Subcuenta: string | number, Debe: number, Haber: number) => ({ Subcuenta, Debe, Haber, Concepto: 'x' })
@@ -97,5 +97,27 @@ describe('lineasDeApuntes', () => {
     expect(cuadrar(sumied, lineasDeApuntes(apuntes)).cuadra).toBe(true)
     const r = cuadrar(sumied, lineasDeApuntes(apuntes.slice(1)))
     expect(r.diferencias.map((d) => [d.cuenta, d.falta_debe, d.falta_haber])).toEqual([['43000002', 0, 100], ['57200001', 100, 0]])
+  })
+})
+
+describe('cuadrarAgrupado (B01r26, Julio 13/11): las ventas sumadas como «700», el resto cuenta a cuenta', () => {
+  const clave = (c: string) => (/^700\d{5}$/.test(c) ? '700' : c)
+  const ap = (Subcuenta: string, Debe: number, Haber: number) => ({ Subcuenta, Debe, Haber })
+  it('Sumied por marca y Diez en la 70000000: cuadra', () => {
+    const sumied = [{ cuenta: '70000001', debe: 0, haber: 60 }, { cuenta: '70000002', debe: 0, haber: 40 }, { cuenta: '70009001', debe: 5, haber: 0 }, { cuenta: '43000002', debe: 105.5, haber: 0 }, { cuenta: '47700010', debe: 0, haber: 10.5 }]
+    const diez = [ap('70000000', 0, 100), ap('70009001', 5, 0), ap('43000002', 105.5, 0), ap('47700010', 0, 10.5)]
+    const r = cuadrarAgrupado(sumied, diez, clave)
+    expect(r.cuadra).toBe(true)
+    expect(r.cuentas).toBe(3)
+  })
+  it('un céntimo de menos en las ventas: no cuadra, en «700»', () => {
+    const r = cuadrarAgrupado([{ cuenta: '70000001', debe: 0, haber: 100 }], [ap('70000000', 0, 99.99)], clave)
+    expect(r.cuadra).toBe(false)
+    expect(r.diferencias.map((d) => [d.cuenta, d.falta_haber])).toEqual([['700', 0.01]])
+  })
+  it('el resto sigue cuenta a cuenta: la 47200010 de Sumied no es la 47200000 de Diez', () => {
+    const r = cuadrarAgrupado([{ cuenta: '47200010', debe: 10, haber: 0 }], [ap('47200000', 10, 0)], clave)
+    expect(r.cuadra).toBe(false)
+    expect(r.solo_en_diez.map((x) => x.cuenta)).toEqual(['47200000'])
   })
 })

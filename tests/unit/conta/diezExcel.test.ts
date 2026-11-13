@@ -142,3 +142,28 @@ describe('de lo que lee el traspaso', () => {
     expect('porLaApi' in filaEmitida(f, XML_EMITIDAS)).toBe(false)
   })
 })
+
+describe('«Ya lo he importado»: la misma factura en Diez', async () => {
+  const { esLaMisma, filasDeLosExcel } = await import('../../../supabase/functions/_shared/diezTraspasoExcel.ts')
+  const x = { entry_id: 'e', excel: 'recibidas' as const, numero: 'FA 2026/0012', cuenta: '40000001', subcuentas: [] }
+  it('por serie, número (sin espacios, barras ni guiones) y subcuenta', () => {
+    expect(esLaMisma(x, { Serie: '2', NumeroFactura: 'fa-2026-0012', CuentaCliente: '40000001' })).toBe(true)
+    expect(esLaMisma(x, { Serie: '1', NumeroFactura: 'FA 2026/0012', CuentaCliente: '40000001' })).toBe(false)
+    expect(esLaMisma(x, { Serie: '2', NumeroFactura: 'FA 2026/0013', CuentaCliente: '40000001' })).toBe(false)
+    expect(esLaMisma(x, { Serie: '2', NumeroFactura: 'FA 2026/0012', CuentaCliente: '40000002' })).toBe(false)
+    expect(esLaMisma({ ...x, excel: 'emitidas', numero: 'UBR-FLO-20261001', cuenta: '43000002' }, { Serie: '1', NumeroFactura: 'UBR-FLO-20261001', CuentaCliente: 43000002 })).toBe(true)
+  })
+  it('las filas: lo que va por la API no entra; el cliente de la emitida, con su nombre de Diez', () => {
+    const emitida: Emitida = {
+      numero: 'UBR-FLO-20261001', fecha: '2026-10-01', concepto: 'Ventas', url: URL, cliente: { subcuenta: '43000002', nombre: '' },
+      ingresos: [{ cuenta: '70000001', importe: 100 }], iva: [{ base: 100, pct: 10, cuota: 10 }], total: 110, grupo: 'FLO', nivel3: 'UBR',
+    }
+    const r = filasDeLosExcel([
+      { entry_id: 'a', excel: 'emitidas', numero: emitida.numero, cuenta: '43000002', emitida, subcuentas: [] },
+      { entry_id: 'b', excel: 'recibidas', numero: 'X', cuenta: '', porLaApi: '3 tipos de IVA', subcuentas: [] },
+    ], (sc) => (sc === '43000002' ? 'UBER EATS EN DIEZ' : ''))
+    expect(r.recibidas).toHaveLength(0)
+    expect(r.emitidas).toHaveLength(1)
+    expect(r.emitidas[0][columnas(XML_EMITIDAS)['005'] - 1]).toBe('UBER EATS EN DIEZ')
+  })
+})
