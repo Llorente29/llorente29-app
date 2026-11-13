@@ -45,8 +45,8 @@ Con la regla de arriba (las ventas de marca, agrupadas) caben **todas** (177): 5
 ### La fecha de las recibidas
 
 En la configuración de recibidas del 24/10, **«Fecha expedición» y «Fecha operación» van a la misma columna**, la B: Diez solo recibe la fecha de la factura. **En noviembre, 38 de las 62 recibidas tienen la factura de otro mes que su asiento** (en octubre, 6). Si Diez fecha el asiento con la de la factura, esas caen en otro mes y ni el libro ni el «Cuadra» salen iguales que en Sumied.
-- **Propuesta:** la **fecha del asiento** de Sumied en una columna nueva, **la Y**, y que Julio la mapee en la configuración de recibidas como la fecha del asiento (o de registro), si Diez la admite.
-- **Se comprueba en la C0009** con una recibida de septiembre apuntada en octubre.
+- **Hecho (Julio, 13/11):** la fecha del asiento de Sumied va en la **Y** como fecha contable y fiscal; la de la factura, en la B.
+- **Se comprueba en el ensayo de la C0009** con una recibida de septiembre apuntada en octubre.
 
 ## El Excel de emitidas: las columnas
 
@@ -73,16 +73,15 @@ C0009). **Se añaden cuatro, a la derecha, sin mover nada:**
 | Q | Fecha | |
 | R, S, T | Base, % y cuota del IVA 2 | |
 | U, V, W, X | Rectificativa: tipo, tipo de rectificación, nº y fecha de la rectificada | |
-| **Y** | **Subcuenta de ingresos 3: promociones** (cuando hay envíos y promociones) | 70009001 |
-| **Z** | **Importe de ingresos 3** | |
-| **AA** | **Analítica · Grupo: el local** | FLO |
-| **AB** | **Analítica · Nivel3: la plataforma** | |
+| **Y** (Campo095) | **Subcuenta de ingresos 3: promociones** (cuando hay envíos y promociones) | 70009001 |
+| **Z** (Campo097) | **Importe de ingresos 3** | |
+| **AA** (Campo059) | **Analítica · el local** | FLO |
+| **AB** (Campo061) | **Analítica · la plataforma** | UBR |
 
-**Lo que tiene que hacer Julio en Diez, en la C0009** (la configuración se guarda por base):
-1. En la configuración del Excel de emitidas: que lea **Y y Z como la subcuenta y el importe de ingresos 3**, **AA como Grupo** y **AB como Nivel3** de la analítica.
-2. En la de recibidas: que lea **la Y como la fecha del asiento** (si Diez tiene ese campo).
-3. Exportar las dos (los XML) y pasármelas: el generador lee cada columna del XML, como el de recibidas (si el XML no dice dónde va algo, el Excel no se genera).
-4. Después, en el ensayo general, importar en la C0009 los dos Excel que prepare Sumied.
+**Hecho por Julio en la C0009 el 13/11** (las dos configuraciones exportadas en `docs/conta/diez/configuracion/*-b01r26.XML`, y son las que usa el generador, byte a byte):
+- **Emitidas:** Y y Z como ingresos 3 (Campo095 y Campo097), AA el local (Campo059) y AB la plataforma (Campo061). Lo de A–T, igual que el 24/10.
+- **Recibidas:** la **B, la fecha de la factura** (Campo002), y la **Y, la fecha contable y la fiscal** (Campo001 y Campo118): la del asiento de Sumied. Lo demás, igual que el 24/10, con PRO y ALQ.
+- **Antes del traspaso de verdad, las mismas en la C0008.**
 
 ## La pantalla «Traspasar a Diez» (Libros › Cierre del mes)
 

@@ -41,28 +41,15 @@ export function tiposRetencionDelXml(xml: string): string[] {
 
 /** Qué es cada código, con lo que pone Julio en su pantalla (para decir qué falta). */
 export const CAMPOS: Record<string, string> = {
-  '001': 'Fecha expedición', '002': 'Fecha operación', '003': 'N.I.F.', '004': 'Subcuenta cliente o proveedor',
+  '001': 'Fecha (contable)', '002': 'Fecha factura', '003': 'N.I.F.', '004': 'Subcuenta cliente o proveedor',
   '005': 'Nombre', '006': 'Nº factura', '007': 'Concepto asiento', '010': 'Base IVA 1', '011': '% IVA 1',
   '012': 'Cuota IVA 1', '013': 'Base IVA 2', '014': '% IVA 2', '015': 'Cuota IVA 2', '034': 'Tipo retención',
   '035': 'Base retención', '036': '% retención', '037': 'Cuota retención', '038': 'Subcuenta retención',
   '041': 'Subcuenta ingresos o gasto 1', '043': 'Importe ingresos o gasto 1', '045': 'Total factura',
   '056': 'Url documento', '057': 'Ruta documento', '092': 'Subcuenta ingresos o gasto 2',
-  '094': 'Importe ingresos o gasto 2', '118': 'Fecha',
+  '094': 'Importe ingresos o gasto 2', '118': 'Fecha fiscal',
+  '095': 'Subcuenta ingresos 3', '097': 'Importe ingresos 3', '059': 'Analítica · local', '061': 'Analítica · plataforma',
 }
-
-/**
- * Los datos de las emitidas que la configuración del 24/10 aún no tiene (Julio
- * la amplía en Diez, 13/11). Mientras su XML no los traiga, van a las columnas
- * Y, Z, AA y AB (docs/conta/diez/traspaso_con_pdf.md). Con el XML ampliado,
- * cada uno va a la columna que diga su código.
- */
-export const EMITIDAS_NUEVAS = {
-  subcuentaIngresos3: { columna: 25, nombre: 'Subcuenta ingresos 3' },
-  importeIngresos3: { columna: 26, nombre: 'Importe ingresos 3' },
-  grupo: { columna: 27, nombre: 'Analítica · Grupo (local)' },
-  nivel3: { columna: 28, nombre: 'Analítica · Nivel3 (plataforma)' },
-} as const
-export type NuevaEmitida = keyof typeof EMITIDAS_NUEVAS
 
 const mismo = (a: Celda, b: Celda) => (a instanceof Date && b instanceof Date ? a.getTime() === b.getTime() : a === b)
 
@@ -134,15 +121,6 @@ export type Emitida = {
   nivel3: string | null
 }
 
-/** Las columnas de las emitidas: las del XML más las nuevas mientras el XML no las traiga. */
-export function columnasEmitidas(xml: string): { col: Record<string, number>; nuevas: Record<NuevaEmitida, number> } {
-  const col = columnas(xml)
-  const nuevas = Object.fromEntries(Object.entries(EMITIDAS_NUEVAS).map(([k, v]) => [k, v.columna])) as Record<NuevaEmitida, number>
-  const usadas = new Set(Object.values(col))
-  for (const [k, n] of Object.entries(nuevas)) if (usadas.has(n)) throw new Error(`La columna ${n} (${EMITIDAS_NUEVAS[k as NuevaEmitida].nombre}) ya la usa la configuración.`)
-  return { col, nuevas }
-}
-
 /** La fila del Excel de emitidas de una factura, o por qué va por la API. */
 export function filaEmitida(f: Emitida, xml: string): Fila | NoCabe {
   if (!/^https:\/\//.test(f.url)) return { porLaApi: 'sin el enlace de su PDF' }
@@ -153,36 +131,27 @@ export function filaEmitida(f: Emitida, xml: string): Fila | NoCabe {
   const bases = f.iva.reduce((t, i) => t + c(i.base), 0)
   if (sumaIng !== bases) return { porLaApi: `los ingresos (${e(sumaIng)}) no suman las bases (${e(bases)})` }
   if (bases + f.iva.reduce((t, i) => t + c(i.cuota), 0) !== c(f.total)) return { porLaApi: 'bases más cuotas no dan el total' }
-  const { col, nuevas } = columnasEmitidas(xml)
   const d = fecha(f.fecha)
-  const fila = colocar({
+  // Julio, 13/11: la línea 3 de ingresos en Campo095/097 (Y, Z) y la analítica en Campo059 (local, AA) y Campo061 (plataforma, AB).
+  return colocar({
     '004': f.cliente.subcuenta, '007': f.concepto, '005': f.cliente.nombre, '006': f.numero,
     '041': ing[0].cuenta, '043': ing[0].importe, '092': ing[1]?.cuenta ?? '', '094': ing[1]?.importe ?? '',
     '056': f.url, '010': f.iva[0].base, '011': f.iva[0].pct, '012': f.iva[0].cuota, '045': f.total,
     '001': d, '002': d, '118': d,
     '013': f.iva[1]?.base ?? '', '014': f.iva[1]?.pct ?? '', '015': f.iva[1]?.cuota ?? '',
-  }, col)
-  const ancho = Math.max(fila.length, ...Object.values(nuevas))
-  while (fila.length < ancho) fila.push('')
-  if (ing[2]) { fila[nuevas.subcuentaIngresos3 - 1] = ing[2].cuenta; fila[nuevas.importeIngresos3 - 1] = ing[2].importe }
-  if (f.grupo) fila[nuevas.grupo - 1] = f.grupo
-  if (f.nivel3) fila[nuevas.nivel3 - 1] = f.nivel3
-  return fila
+    '095': ing[2]?.cuenta ?? '', '097': ing[2]?.importe ?? '',
+    '059': f.grupo ?? '', '061': f.nivel3 ?? '',
+  }, columnas(xml))
 }
 
 // ── Recibidas ─────────────────────────────────────────────────────────────────
 
 /**
- * En la configuración de recibidas del 24/10, «Fecha expedición» y «Fecha
- * operación» van a la MISMA columna (la B): Diez solo recibe la de la factura.
- * En noviembre, 38 de 62 recibidas tienen la factura de otro mes que su
- * asiento (en octubre, 6). Para que Diez apunte cada una en el mes de Sumied,
- * la fecha del ASIENTO va en su columna, la Y, hasta que el XML ampliado de
- * Julio diga cuál (docs/conta/diez/traspaso_con_pdf.md). Lo dice la prueba en
- * la C0009.
+ * Las fechas de una recibida (Julio, 13/11, configuración de la C0009): la de la
+ * factura en la B (Campo002); la contable y la fiscal en la Y (Campo001 y
+ * Campo118), y son la del ASIENTO de Sumied, para que Diez la apunte en el mismo
+ * mes (en noviembre, 38 de 62 recibidas son de una factura de otro mes).
  */
-export const RECIBIDAS_NUEVAS = { fechaAsiento: { columna: 25, nombre: 'Fecha del asiento' } } as const
-
 /** Una factura recibida de Sumied, como la cuenta su asiento. */
 export type Recibida = {
   numero: string
@@ -219,20 +188,14 @@ export function filaRecibida(f: Recibida, xml: string): Fila | NoCabe {
   if (sumaGastos !== bases) return { porLaApi: `los gastos (${e(sumaGastos)}) no suman las bases (${e(bases)})` }
   // Diez: al debe gastos y cuotas; al haber el proveedor por el total y la retención por su cuota.
   if (bases + iva.reduce((t, i) => t + c(i.cuota), 0) !== c(f.total) + (ret ? c(ret.cuota) : 0)) return { porLaApi: 'el asiento no cuadraría en Diez (gastos + IVA ≠ total + retención)' }
-  const col = columnas(xml)
-  if (Object.values(col).includes(RECIBIDAS_NUEVAS.fechaAsiento.columna)) throw new Error(`La columna ${RECIBIDAS_NUEVAS.fechaAsiento.columna} (fecha del asiento) ya la usa la configuración.`)
-  // La B es a la vez expedición y operación: la de la factura.
-  const fila = colocar({
-    '006': f.numero, '001': fecha(f.fechaFactura), '002': fecha(f.fechaFactura), '003': f.proveedor.nif, '005': f.proveedor.nombre,
+  return colocar({
+    '006': f.numero, '002': fecha(f.fechaFactura), '001': fecha(f.fechaOperacion), '118': fecha(f.fechaOperacion), '003': f.proveedor.nif, '005': f.proveedor.nombre,
     '004': f.proveedor.subcuenta, '007': f.concepto, '045': f.total, '056': f.url,
     '041': gastos[0].cuenta, '043': gastos[0].importe, '092': gastos[1]?.cuenta ?? '', '094': gastos[1]?.importe ?? '',
     '010': iva[0].base, '011': iva[0].pct, '012': iva[0].cuota,
     '013': iva[1]?.base ?? '', '014': iva[1]?.pct ?? '', '015': iva[1]?.cuota ?? '',
     '035': ret?.base ?? '', '036': ret?.pct ?? '', '037': ret?.cuota ?? '', '034': ret?.tipoDiez ?? '', '038': ret?.subcuenta ?? '',
-  }, col)
-  while (fila.length < RECIBIDAS_NUEVAS.fechaAsiento.columna) fila.push('')
-  fila[RECIBIDAS_NUEVAS.fechaAsiento.columna - 1] = fecha(f.fechaOperacion)
-  return fila
+  }, columnas(xml))
 }
 
 // ── El cuadre ─────────────────────────────────────────────────────────────────
