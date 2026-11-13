@@ -10,6 +10,3 @@
 #         traspaso. Nada en el camino del pedido.
 cuenta: scripts/conta/produccion/cuentas/b01r26-conta-pdf.sql
 supabase/migrations/20261113T1805_b01r26_conta_pdf.sql
-esperado: b01r26-conta-pdf · Tablas de la 1805 que existen, menos 2 = 0
-esperado: b01r26-conta-pdf · Llaves de PDF = 0
-esperado: b01r26-conta-pdf · Traspasos a Diez = como antes
