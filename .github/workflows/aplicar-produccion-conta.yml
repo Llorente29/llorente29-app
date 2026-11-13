@@ -311,13 +311,12 @@ jobs:
           GUARDA="$DIR/guarda-diez.json" npx --yes tsx@4.19.2 scripts/conta/diez/guarda-desde.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
           r=${PIPESTATUS[0]}
           set -e
-          if [ "$r" = 0 ]; then echo "Guarda de Diez: cuadra." >> "$INFORME"; exit 0; fi
+          if [ "$r" = 0 ]; then exit 0; fi
           if [ "$MODO" = real ]; then
             echo "::error::Guarda de Diez: Diez no está como la tanda necesita (o no se ha podido leer). No se aplica nada. Ver guarda-diez.json de la tanda."
             exit 1
           fi
           echo "::warning::Guarda de Diez: hoy no cuadra (o no se ha podido leer). En el ENSAYO solo se dice; el REAL pararía aquí."
-          echo "Guarda de Diez: hoy NO cuadra; el real pararía." >> "$INFORME"
 
       - name: Instalar psql 17
         timeout-minutes: 15
