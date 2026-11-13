@@ -1,0 +1,6 @@
+# DL1 · reclasificación de tres pagos (0915: no añade objetos; en Foodint
+# apunta y valida tres reclasificaciones). Su prueba (ROLLBACK, cuenta A): sin
+# Foodint no hace nada; una reclasificación con su local y sin IVA se valida
+# como la persona.
+supabase/migrations/20261113T0915_dl1_reclasifica_pagos.sql
+supabase/staging/sql/20261113_dl1_reclasifica_pagos_prueba.sql

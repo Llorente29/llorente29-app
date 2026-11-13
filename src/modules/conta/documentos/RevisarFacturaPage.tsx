@@ -47,6 +47,7 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 import { vencimientoAEnsenar } from '@/modules/conta/documentos/documentos'
+import { fraseFechaDelAsiento } from '@/modules/conta/lib/fechaDelAsiento'
 import { MARCA } from '@/modules/conta/cuenta/marca'
 import { PapelPdf } from '@/modules/conta/documentos/PapelPdf'
 import { IvaNoDeducibleFicha } from '@/modules/conta/documentos/IvaNoDeducibleFicha'
@@ -562,6 +563,8 @@ export default function RevisarFacturaPage() {
   const lineasAsiento = fac.asiento
     ? (asientoReal.datos?.apuntes ?? []).map((x) => ({ nombre: x.nombreCuenta, codigo: x.cuenta, debe: x.debe ? importeEs(x.debe) : null, haber: x.haber ? importeEs(x.haber) : null }))
     : (previa?.lineas ?? []).map((x) => ({ nombre: x.nombre, codigo: x.codigo || '—', debe: x.debe !== null ? importeEs(x.debe) : null, haber: x.haber !== null ? importeEs(x.haber) : null, aMano: x.aMano }))
+  // S01p·18.2 · «Se apunta con fecha 31/10/2026, la de la factura»; si va con otra, cuál y por qué (su aviso).
+  const fraseFecha = propuesta ? fraseFechaDelAsiento(fac.fecha ?? null, propuesta.fecha, propuesta.fecha !== fac.fecha ? propuesta.avisos.find((x) => /se contabiliza|se asienta|primer día abierto|presentado/i.test(x)) ?? null : null) : null
   const notaAsiento = fac.asiento ? (
     <>
       <Link to={rutaAsiento(fac.asiento.id)} data-prueba="ver-asiento">Ver el asiento{fac.asiento.numero ? ` ${fac.asiento.numero}` : ''}</Link>
@@ -569,6 +572,8 @@ export default function RevisarFacturaPage() {
     </>
   ) : (
     <>
+      {/* S01p·18.2 · La fecha con la que se apunta, a la vista y antes de validar (regla 8). */}
+      {fraseFecha && <strong data-prueba="fecha-del-asiento" style={{ display: 'block', marginBottom: 4 }}>{fraseFecha}</strong>}
       {hayCambios ? 'Con cambios sin guardar, es la vista previa de cómo quedará: no se guarda ni se envía nada hasta «Guardar cambios». ' : ''}
       {previa?.faltan.length ? `Falta ${previa.faltan.join(', ')}. ` : ''}
       {enviaADiez ? 'Al validar se envía a Diez con su asiento; el PDF se queda aquí.' : vaEnElTraspaso ? 'Al validar queda para el traspaso del mes a Diez; el PDF se queda aquí.' : 'Debe arriba y haber debajo; cada importe en su columna.'}

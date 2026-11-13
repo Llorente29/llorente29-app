@@ -1,0 +1,19 @@
+# DL1 · Las liquidaciones de plataformas de octubre que cuadran con su factura
+# de comisión (Julio, DL1·23, 13/11). Rama claude/dl1-liquidaciones-octubre. Se
+# ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0935  Para 12 liquidaciones (Glovo 9, Just Eat 2, Uber 1; 1.526,18), propone
+#         con _conta_proponer_plataforma la compensación de su comisión contra
+#         la cuenta de la plataforma y la valida como Julio. Para si la
+#         propuesta no es exactamente la de su factura. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-liquidaciones-octubre.sql
+supabase/migrations/20261113T0935_dl1_liquidaciones_octubre.sql
+sin-vuelta-atras: supabase/migrations/20261113T0935_dl1_liquidaciones_octubre.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-liquidaciones-octubre · Las 12 con su compensación validada por Julio, menos 12 = 0
+esperado: dl1-liquidaciones-octubre · Lo que mueven en la 43000001, más 1.402,45 = 0.00
+esperado: dl1-liquidaciones-octubre · Lo que mueven en la 43000002, más 11,98 = 0.00
+esperado: dl1-liquidaciones-octubre · Lo que mueven en la 43000003, más 111,75 = 0.00
+esperado: dl1-liquidaciones-octubre · IVA 472 del 4T = como antes
+esperado: dl1-liquidaciones-octubre · IVA 477 del 4T = como antes
