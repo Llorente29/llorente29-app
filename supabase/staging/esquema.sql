@@ -47508,6 +47508,81 @@ $$;
 
 
 --
+-- Name: conta_llegada_eliminable(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llegada_eliminable(p_inbox uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_d public.document_inbox; v_que text; v_fac text; v_n int;
+begin
+  select * into v_d from public.document_inbox where id = p_inbox;
+  if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese documento no está.' using errcode = 'P0002'; end if;
+  v_que := coalesce('«' || nullif(btrim(v_d.file_name), '') || '»', 'Este documento');
+  -- Una factura: la que lo nombra (inbox_id) o la que nombra él (la leída o la repetida).
+  select coalesce(si.invoice_number, 'sin número') into v_fac from public.supplier_invoice si
+   where si.id in (v_d.supplier_invoice_id, v_d.duplicate_of_invoice_id) or si.inbox_id = v_d.id limit 1;
+  if v_fac is not null or v_d.status in ('factura', 'repetida') then
+    return jsonb_build_object('puede', false, 'porque',
+      format('%s ya es la factura %s, o la repite: se quita desde su ficha («No es una factura»), que mira su asiento y sus pagos.', v_que, coalesce(v_fac, '')));
+  end if;
+  if v_d.ai_session_id is not null and exists (select 1 from public.goods_receipt g where g.ai_session_id = v_d.ai_session_id) then
+    return jsonb_build_object('puede', false, 'porque', v_que || ' lo leyó una recepción de mercancía: se quita desde la recepción.');
+  end if;
+  if v_d.file_path is not null then
+    select count(*) into v_n from (
+      select 1 from public.document_inbox o where o.id <> v_d.id and o.file_path = v_d.file_path
+      union all select 1 from public.supplier_invoice si where si.account_id = v_d.account_id and si.raw_document_url = v_d.file_path) x;
+    if v_n > 0 then
+      return jsonb_build_object('puede', false, 'porque', v_que || ' comparte su fichero con otro documento o una factura: no se borra.');
+    end if;
+  end if;
+  return jsonb_build_object('puede', true, 'porque', null, 'archivo', v_d.file_name, 'bucket', v_d.file_bucket, 'ruta', v_d.file_path);
+end $$;
+
+
+--
+-- Name: conta_llegada_eliminar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_d public.document_inbox; v_ok jsonb; v_que text; v_act int; v_lec int := 0;
+begin
+  select * into v_d from public.document_inbox where id = p_inbox;
+  if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese documento no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(v_d.account_id) then
+    raise exception 'Solo un administrador o un encargado elimina un documento.' using errcode = '42501';
+  end if;
+  v_ok := public.conta_llegada_eliminable(p_inbox);
+  if (v_ok->>'puede')::boolean is not true then raise exception '%', v_ok->>'porque' using errcode = '22023'; end if;
+  v_que := coalesce('«' || nullif(btrim(v_d.file_name), '') || '»', 'El documento');
+  delete from public.document_activity where inbox_id = p_inbox;
+  get diagnostics v_act = row_count;
+  delete from public.document_inbox where id = p_inbox;
+  if v_d.ai_session_id is not null and not exists (select 1 from public.document_inbox o where o.ai_session_id = v_d.ai_session_id) then
+    delete from public.goods_receipt_ai_session where id = v_d.ai_session_id;
+    get diagnostics v_lec = row_count;
+  end if;
+  return jsonb_build_object('id', p_inbox, 'actividad', v_act, 'lectura', v_lec, 'bucket', v_d.file_bucket, 'ruta', v_d.file_path,
+    'texto', format('Eliminado: %s. Borrados la fila de la bandeja, %s %s de su actividad%s%s.',
+                    v_que, v_act, case when v_act = 1 then 'apunte' else 'apuntes' end,
+                    case when v_lec > 0 then ', lo que leyó la IA' else '' end,
+                    case when v_d.file_path is not null then ' y el fichero del almacén' else '' end));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text) IS 'S01p·18.2 · 3. Borra de verdad un documento sin leer que no ha llegado a los libros (conta_llegada_eliminable): su fila, su actividad y su lectura. El fichero del almacén lo borra la pantalla con la API del almacén, antes de llamarla.';
+
+
+--
 -- Name: conta_llegada_pdf_subido(uuid, text, text, text, integer, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -53369,6 +53444,8 @@ CREATE FUNCTION public.conta_puerta_dime_que_es(p_inbox uuid, p_tipo text, p_rec
     SET search_path TO 'public'
     AS $$
 declare v_d public.document_inbox; v_from text; v_recordado boolean := false; v_que text;
+  -- S01p·18.2 · 3: la actividad de una persona lleva su nombre (document_activity_check).
+  v_quien text := coalesce(nullif(btrim(p_quien_nombre), ''), public.conta_nombre_actor(), 'una persona');
 begin
   select * into v_d from public.document_inbox where id = p_inbox;
   if v_d.id is null or not public.belongs_to_account(v_d.account_id) then raise exception 'Ese documento no está.' using errcode = 'P0002'; end if;
@@ -53391,7 +53468,7 @@ begin
     v_recordado := true;
   end if;
   insert into public.document_activity (account_id, company_id, inbox_id, actor, actor_name, action, text, detail)
-  values (v_d.account_id, v_d.company_id, p_inbox, 'persona', p_quien_nombre, 'corregida',
+  values (v_d.account_id, v_d.company_id, p_inbox, 'persona', v_quien, 'corregida',
           'Es ' || v_que || case when v_recordado then '; lo que llegue de ese remitente irá igual' else '' end || '.',
           jsonb_build_object('campo', 'tipo', 'tipo', p_tipo, 'recordado', v_recordado));
   return jsonb_build_object('id', p_inbox, 'tipo', p_tipo, 'recordado', v_recordado,
@@ -172392,6 +172469,24 @@ GRANT ALL ON FUNCTION public.conta_llaves_de(p_user uuid, p_rp_id text) TO servi
 REVOKE ALL ON FUNCTION public.conta_llaves_mias() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_llaves_mias() TO authenticated;
 GRANT ALL ON FUNCTION public.conta_llaves_mias() TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llegada_eliminable(p_inbox uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llegada_eliminable(p_inbox uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llegada_eliminable(p_inbox uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_llegada_eliminable(p_inbox uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_llegada_eliminar(p_inbox uuid, p_quien_nombre text) TO service_role;
 
 
 --
