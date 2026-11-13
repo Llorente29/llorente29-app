@@ -1,0 +1,9 @@
+# S01p·21b · «Dejar solo esta» falla en Foodint con «falta el local (o marcarlo como común)» (Julio, 13/11).
+# Rama claude/s01p-liquidacion-repetida-local. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1914  cambia conta_liquidacion_dejar_esta (un solo trozo, con su respaldo): en el contraasiento, el apunte
+#         sin local va como común (una liquidación de IVA es de toda la empresa); el que tiene local lo conserva.
+#
+# No toca ningún dato. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-liquidacion-repetida-local.sql
+supabase/migrations/20261113T1914_s01p_liquidacion_repetida_local.sql
