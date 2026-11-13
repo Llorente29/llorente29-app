@@ -21,6 +21,22 @@ export const FORMAS: { valor: FormaFacturar; titulo: string; explicacion: string
     explicacion: 'No factura cada entrega. Cada mes te manda su factura y la tuya, y se paga la diferencia. Lo que recibes sirve para comprobar que su cuenta es verdad.' },
 ]
 
+/**
+ * S01p·20·2 · «Me lo factura otro»: no es una forma de invoicing_mode, es tener a alguien en
+ * supplier.invoiced_by_supplier_id (compras_lo_factura_otro, 1910). Va aparte de FORMAS porque
+ * las preguntas de «Qué tienes que mirar» solo ofrecen las tres de la ficha.
+ */
+export const FORMA_OTRO = {
+  valor: 'lo_factura_otro' as const,
+  titulo: 'Me lo factura otro',
+  explicacion: 'Trae el género, pero no te factura: lo factura otro proveedor en su factura de género. No espero ninguna factura suya y su ficha no pregunta nada más.',
+}
+
+/** La frase de una recepción de un proveedor al que se lo factura otro (la misma que guarda la base). */
+export function fraseLoFactura(otro: string): string {
+  return `Lo factura ${otro} en su factura de género.`
+}
+
 export function tituloForma(f: string | null | undefined): string | null {
   return FORMAS.find((x) => x.valor === f)?.titulo ?? null
 }
@@ -369,11 +385,13 @@ export function cuandoLlega(e: Pick<EsperandoFactura, 'oldest' | 'per_location'>
  * normal hasta el 3 de noviembre» o «Retrasado · 17 días (lo normal era hasta
  * el 3 de noviembre)», y por qué ese plazo.
  */
-export function esperaEnPalabras(a: { dias: number; espera_hasta: string; retrasado: boolean; camino: string; forma: string | null; llegada: string | null; supplier_name: string }): { estado: string; porque: string } {
+export function esperaEnPalabras(a: { dias: number; espera_hasta: string; retrasado: boolean; camino: string; forma: string | null; llegada: string | null; supplier_name: string; lo_factura?: string | null }): { estado: string; porque: string } {
   const dias = a.dias === 1 ? '1 día' : `${a.dias} días`
   const hasta = diaCorto(a.espera_hasta)
   const estado = a.retrasado ? `Retrasado · ${dias} (lo normal era hasta el ${hasta})` : `Esperando · ${dias} · normal hasta el ${hasta}`
-  const porque = a.camino === 'liquidacion' || a.forma === 'monthly_settlement'
+  // S01p·20·2: si se lo factura otro, no se espera nada suyo: lo dice la frase del otro.
+  const porque = a.lo_factura ? fraseLoFactura(a.lo_factura)
+    : a.camino === 'liquidacion' || a.forma === 'monthly_settlement'
     ? `${a.supplier_name} liquida cada mes: su factura del mes llega a primeros del siguiente.`
     : a.llegada === 'inicio_mes_siguiente'
       ? `${a.supplier_name} manda todas sus facturas juntas a primeros del mes siguiente.`
