@@ -184,6 +184,15 @@ verify_jwt = false
 [functions.conta-diez-traspaso]
 verify_jwt = true
 
+# (13/11) conta-pdf · B01r26. El enlace permanente del PDF de una factura que
+# Diez descarga al importar el Excel del traspaso («Url documento»).
+# verify_jwt = FALSE, y es deliberado: quien llama es el servidor de Diez, sin
+# sesión. La frontera es la llave (128 bits, una por documento, solo de un
+# traspaso confirmado, retirable, con tope por hora y cada acceso apuntado:
+# conta_pdf_servir, 20261113T1805). Una llave mala da 404 sin tocar la base.
+[functions.conta-pdf]
+verify_jwt = false
+
 [functions.conta-recibida-pdf]
 verify_jwt = false
 
