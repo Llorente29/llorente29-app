@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·21b · «Dejar solo esta» con apuntes sin local · contexto medido en SOLO LECTURA el 2026-11-13: Julio pulsó «Dejar solo esta» en el 1T de Foodint sobre la 4/1016 y salió «No se valida: apunte 1 (47000000): falta el local (o marcarlo como común); apuntes 2 a 7 igual»; no quedó nada (ni contraasiento ni enlace del 303). Los apuntes de 9/2 (7) y 9/3 (5) no llevan local ni están marcados como comunes, y el eje «local» de Foodint está encendido (conta_motivos_para_validar, 0140). conta_liquidacion_dejar_esta es la de la 1822 (md5 8d6ae41a75398515dca1a297e72e4a07) y el trozo de la copia de los apuntes está una sola vez.",
+ "medido": "2026-11-13T18:20Z",
+ "tanda": {
+  "supabase/migrations/20261113T1914_s01p_liquidacion_repetida_local.sql": "a471e49e0b95224a73d7f740ef580ded"
+ },
+ "contexto": {"tablas": ["public.journal_entry", "public.journal_line", "public.tax_return"], "funciones": ["public.conta_liquidacion_dejar_esta(uuid,uuid,text)"], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

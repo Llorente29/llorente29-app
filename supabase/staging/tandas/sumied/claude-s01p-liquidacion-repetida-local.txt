@@ -1,0 +1,5 @@
+# S01p·21b · «Dejar solo esta» con apuntes sin local (1914: cambia conta_liquidacion_dejar_esta). Su prueba (ROLLBACK,
+# cuenta A, eje «local» encendido, liquidaciones sin local ni común como las de Foodint): sin la 1914 falla con «falta
+# el local» y no deja nada; con ella, el contraasiento validado del 01/10 con los apuntes sin local como comunes; la vuelta atrás.
+supabase/migrations/20261113T1914_s01p_liquidacion_repetida_local.sql
+supabase/staging/sql/20261113_s01p_liquidacion_repetida_local_prueba.sql
