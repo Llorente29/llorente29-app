@@ -1,0 +1,5 @@
+# B01r26 · 1745: en Foodint, los 215 envíos de octubre a «rechazado» después del
+# borrado en Diez. No añade funciones. Su prueba (ROLLBACK): sin Foodint no hace
+# nada, y el mecanismo (rechazado → vuelve al traspaso y admite un envío nuevo).
+supabase/migrations/20261113T1745_b01r26_liberar_octubre.sql
+supabase/staging/sql/20261113_b01r26_liberar_octubre_prueba.sql

@@ -293,6 +293,32 @@ jobs:
           { cat /tmp/tanda.txt /tmp/cuentas.txt; grep -E '^supabase/vuelta-atras/[A-Za-z0-9_./-]+\.sql$' "$DIR/vuelta-atras.txt" 2>/dev/null || true; } | sort -u > /tmp/sql-que-se-ejecuta.txt
           node scripts/conta/produccion/analizar.mjs psql $(cat /tmp/sql-que-se-ejecuta.txt)
 
+      - name: Guarda de Diez · si la tanda trae guarda-diez.json, lee Diez (solo GET) antes de nada
+        # B01r26 (13/11): una tanda que solo puede ir cuando Diez está de una forma
+        # (la 1745: la C0008 sin nada desde el 01/10, que Julio ha borrado) lo dice
+        # en guarda-diez.json. En el REAL, si no cuadra o no se puede leer, PARA sin
+        # aplicar nada. En el ENSAYO solo lo dice: el ensayo mide la tanda, no Diez.
+        if: inputs.modo != 'vuelta_atras'
+        timeout-minutes: 15
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          DIR=$(cat /tmp/tanda-dir.txt)
+          if [ ! -f "$DIR/guarda-diez.json" ]; then echo "La tanda no trae guarda de Diez."; exit 0; fi
+          if [ -n "${DIEZ_LECTURA:-}" ]; then jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done; fi
+          set +e
+          GUARDA="$DIR/guarda-diez.json" npx --yes tsx@4.19.2 scripts/conta/diez/guarda-desde.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          r=${PIPESTATUS[0]}
+          set -e
+          if [ "$r" = 0 ]; then echo "Guarda de Diez: cuadra." >> "$INFORME"; exit 0; fi
+          if [ "$MODO" = real ]; then
+            echo "::error::Guarda de Diez: Diez no está como la tanda necesita (o no se ha podido leer). No se aplica nada. Ver guarda-diez.json de la tanda."
+            exit 1
+          fi
+          echo "::warning::Guarda de Diez: hoy no cuadra (o no se ha podido leer). En el ENSAYO solo se dice; el REAL pararía aquí."
+          echo "Guarda de Diez: hoy NO cuadra; el real pararía." >> "$INFORME"
+
       - name: Instalar psql 17
         timeout-minutes: 15
         run: |
