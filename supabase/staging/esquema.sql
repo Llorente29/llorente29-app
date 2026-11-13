@@ -35071,7 +35071,7 @@ begin
     into v_477, v_472
     from public.journal_line l join public.journal_entry e on e.id = l.entry_id join public.company_account a on a.id = l.company_account_id
    where e.company_id = p_company and e.account_id = v_acc and e.status = 'validado' and e.entry_date between v_tri_ini and v_fin
-     and e.source_type <> 'vat_settlement';
+     and e.source_type <> 'vat_settlement' and not exists (select 1 from public.conta_liquidacion_repetida rr where rr.repetida_entry_id = e.reverses_entry_id);
   select coalesce(sum(v.tax_amount) filter (where v.book = 'issued'), 0), coalesce(sum(v.tax_amount) filter (where v.book = 'received'), 0)
     into v_lib_rep, v_lib_sop
     from public.vat_book_entry v where v.company_id = p_company and v.account_id = v_acc and v.voided_at is null
@@ -42542,7 +42542,7 @@ begin
     join public.journal_entry je on je.id = jl.entry_id
     join public.company_account ca on ca.id = jl.company_account_id
    where je.account_id = c.account_id and je.company_id = p_company and je.status in ('validado', 'anulado')
-     and je.source_type not in ('vat_settlement', 'opening', 'closing') and je.entry_date between v_desde and v_hasta;
+     and je.source_type not in ('vat_settlement', 'opening', 'closing') and not exists (select 1 from public.conta_liquidacion_repetida rr where rr.repetida_entry_id = je.reverses_entry_id) and je.entry_date between v_desde and v_hasta;
 
   -- El libro vacío con el diario lleno: no hay nada que calcular, falta el libro.
   v_vacio_exp := v_emitidas = 0 and abs(v_477) >= 0.005;
@@ -42823,7 +42823,7 @@ begin
         join public.journal_entry je on je.id = jl.entry_id
         join public.company_account ca on ca.id = jl.company_account_id
        where je.account_id = r.account_id and je.company_id = r.company_id and je.status in ('validado', 'anulado')
-         and je.source_type not in ('vat_settlement', 'opening', 'closing') and je.entry_date between v_desde and v_hasta
+         and je.source_type not in ('vat_settlement', 'opening', 'closing') and not exists (select 1 from public.conta_liquidacion_repetida rr where rr.repetida_entry_id = je.reverses_entry_id) and je.entry_date between v_desde and v_hasta
          and ca.template_code like x.raiz || '%'
        group by ca.code
       having sum(jl.credit - jl.debit) <> 0
@@ -46584,6 +46584,92 @@ COMMENT ON FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid, p
 
 
 --
+-- Name: conta_liquidacion_dejar_esta(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  r public.tax_return; v_hasta date; v_fecha date; v_y uuid; v_quien text; v_buena public.journal_entry; v_e public.journal_entry;
+  v_nuevo uuid; v_val jsonb; v_hechos text[] := '{}'; v_estado text; v_trim text;
+begin
+  select * into r from public.tax_return where id = p_return for update;
+  if r.id is null then raise exception 'Esa declaración no está.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_of(r.account_id) then
+    raise exception 'Solo un administrador de la cuenta deja sin efecto una liquidación.' using errcode = '42501';
+  end if;
+  if r.form_code <> '303' then raise exception 'Esto es para la liquidación de un 303.' using errcode = '22023'; end if;
+  if r.status not in ('filed', 'booked', 'offset', 'paid', 'refunded') then
+    raise exception 'Este 303 está «%»: primero se presenta.', public.conta_impuesto_estado_texto(r.status) using errcode = '22023';
+  end if;
+  if not exists (select 1 from public.conta_liquidaciones_repetidas(p_return) x where x.asiento = p_buena) then
+    raise exception 'Ese asiento no es una de las liquidaciones repetidas de este trimestre.' using errcode = '22023';
+  end if;
+  if r.liquidation_entry_id is not null and r.liquidation_entry_id <> p_buena
+     and exists (select 1 from public.journal_entry e where e.id = r.liquidation_entry_id and e.status = 'validado') then
+    raise exception 'Este 303 ya está enlazado con otra liquidación: no lo cambio.' using errcode = '23514';
+  end if;
+  select * into v_buena from public.journal_entry where id = p_buena;
+  v_quien := coalesce(p_quien_nombre, public.conta_nombre_actor());
+  v_trim := 'del ' || r.period || ' de ' || r.fiscal_year;
+  select x.hasta into v_hasta from public.conta_impuesto_periodo_fechas(r.fiscal_year, r.period) x;
+  v_fecha := public.conta_primer_dia_abierto(r.company_id, v_hasta + 1);
+  if v_fecha is null then raise exception 'No hay ningún día abierto después del % para el contraasiento.', to_char(v_hasta, 'DD/MM/YYYY') using errcode = '23514'; end if;
+  select id into v_y from public.fiscal_year where company_id = r.company_id and v_fecha between starts_on and ends_on;
+  if v_y is null then raise exception 'No hay ejercicio para el %.', to_char(v_fecha, 'DD/MM/YYYY') using errcode = '23514'; end if;
+
+  -- 1 · El 303 con su liquidación buena (como lo deja conta_impuesto_303_contabilizar).
+  v_estado := case when r.status = 'filed' and r.result_kind = 'to_offset' then 'offset' when r.status = 'filed' then 'booked' else r.status end;
+  update public.tax_return set status = v_estado, liquidation_entry_id = p_buena, updated_at = now() where id = r.id;
+
+  -- 2 y 3 · Cada repetida (aún sin registrar): registrada, y su contraasiento.
+  for v_e in
+    select e.* from public.conta_liquidaciones_repetidas(p_return) x join public.journal_entry e on e.id = x.asiento
+     where x.asiento <> p_buena and not x.repetida
+  loop
+    insert into public.conta_liquidacion_repetida (account_id, company_id, tax_return_id, buena_entry_id, repetida_entry_id, created_by, created_by_name)
+    values (r.account_id, r.company_id, r.id, p_buena, v_e.id, auth.uid(), v_quien);
+    insert into public.journal_entry (account_id, company_id, fiscal_year_id, series, entry_date, concept, source_type, source_id,
+                                      status, party_id, document_ref, document_date, reverses_entry_id, created_by, created_by_name)
+    values (v_e.account_id, v_e.company_id, v_y, v_e.series, v_fecha,
+            format('Anula %s/%s: liquidación de IVA %s apuntada dos veces (se deja la %s/%s)', v_e.series, v_e.number, v_trim, v_buena.series, v_buena.number),
+            'reversal', v_e.id, 'borrador', v_e.party_id, v_e.document_ref, v_e.document_date, v_e.id, auth.uid(), v_quien)
+    returning id into v_nuevo;
+    insert into public.journal_line (account_id, company_id, entry_id, position, company_account_id, debit, credit, concept,
+                                     location_id, is_common, brand_id, party_id, document_ref, document_date,
+                                     tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model)
+    -- Los apuntes, al revés, como los copia journal_entry_anular (los de una liquidación no llevan tipo ni libro).
+    select account_id, company_id, v_nuevo, position, company_account_id, credit, debit, concept,
+           location_id, is_common, brand_id, party_id, document_ref, document_date,
+           tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model
+      from public.journal_line where entry_id = v_e.id;
+    v_val := public.journal_entry_validar(v_nuevo, v_quien);
+    update public.conta_liquidacion_repetida set contraasiento_id = v_nuevo where repetida_entry_id = v_e.id;
+    v_hechos := v_hechos || format('la %s/%s queda sin efecto con el contraasiento %s/%s del %s', v_e.series, v_e.number,
+                                   v_val->>'serie', v_val->>'numero', to_char(v_fecha, 'DD/MM/YYYY'));
+  end loop;
+
+  insert into public.tax_return_event (tax_return_id, account_id, company_id, by_user, by_name, kind, message, detail)
+  values (r.id, r.account_id, r.company_id, auth.uid(), v_quien, 'note',
+          format('Liquidación apuntada dos veces: se deja la %s/%s%s.', v_buena.series, v_buena.number,
+                 case when cardinality(v_hechos) > 0 then '; ' || array_to_string(v_hechos, '; ') else '' end),
+          jsonb_build_object('buena', p_buena, 'fecha', v_fecha));
+  return jsonb_build_object('ok', true, 'buena', p_buena, 'fecha', v_fecha,
+    'mensaje', format('Se deja la liquidación %s/%s%s. Ningún libro de IVA cambia.', v_buena.series, v_buena.number,
+                      case when cardinality(v_hechos) > 0 then ': ' || array_to_string(v_hechos, '; ') else ' (las demás ya estaban sin efecto)' end));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text) IS 'S01p·21. «Dejar solo esta»: el 303 enlazado con esta liquidación y cada repetida sin efecto con su contraasiento, en el primer día abierto después del trimestre.';
+
+
+--
 -- Name: conta_liquidacion_enlazar_factura(uuid, uuid[], text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -47495,6 +47581,50 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) IS 'S01q · Las liquidaciones de un mes en cuatro estados (completa, aun_no_toca, te_necesita, no_cuadra), por tienda, con las marcas cedidas aparte (las liquida su socio).';
+
+
+--
+-- Name: conta_liquidaciones_repetidas(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_liquidaciones_repetidas(p_return uuid) RETURNS TABLE(asiento uuid, serie integer, numero integer, fecha date, concepto text, importe numeric, traida boolean, enlazada boolean, repetida boolean, contraasiento uuid, contra_serie integer, contra_numero integer, contra_fecha date)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare r public.tax_return; v_desde date; v_hasta date;
+begin
+  select * into r from public.tax_return where id = p_return;
+  if r.id is null or not public.belongs_to_account(r.account_id) then raise exception 'Esa declaración no está.' using errcode = 'P0002'; end if;
+  if r.form_code <> '303' then return; end if;
+  select x.desde, x.hasta into v_desde, v_hasta from public.conta_impuesto_periodo_fechas(r.fiscal_year, r.period) x;
+  return query
+  with liq as (
+    select e.id, e.series, e.number, e.entry_date, e.concept, e.source_type,
+           md5(string_agg(ca.code || ':' || l.debit || ':' || l.credit, '|' order by ca.code, l.debit, l.credit)) huella,
+           sum(l.debit) filter (where ca.template_code like '477%') i477,
+           bool_and(ca.template_code like '472%' or ca.template_code like '477%' or ca.template_code in ('4700', '4750')) solo_iva,
+           bool_or(ca.template_code like '472%') hay472, bool_or(ca.template_code like '477%') hay477
+      from public.journal_entry e
+      join public.journal_line l on l.entry_id = e.id
+      join public.company_account ca on ca.id = l.company_account_id
+     where e.account_id = r.account_id and e.company_id = r.company_id and e.status = 'validado'
+       and e.entry_date = v_hasta and e.source_type <> 'reversal'
+     group by e.id),
+  rep as (select huella from liq where solo_iva and hay472 and hay477 group by huella having count(*) > 1)
+  select liq.id, liq.series::int, liq.number::int, liq.entry_date, liq.concept, coalesce(liq.i477, 0)::numeric, liq.source_type = 'migrated',
+         liq.id = r.liquidation_entry_id, rr.id is not null, c.id, c.series::int, c.number::int, c.entry_date
+    from liq join rep on rep.huella = liq.huella
+    left join public.conta_liquidacion_repetida rr on rr.repetida_entry_id = liq.id
+    left join public.journal_entry c on c.id = rr.contraasiento_id
+   order by liq.series, liq.number;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_liquidaciones_repetidas(p_return uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_liquidaciones_repetidas(p_return uuid) IS 'S01p·21. Las liquidaciones del trimestre de un 303 apuntadas más de una vez, con cuál es la enlazada y el contraasiento de la repetida.';
 
 
 --
@@ -48944,7 +49074,11 @@ begin
        where o.id = case when v_e.source_type = 'reversal' then v_e.reverses_entry_id else v_e.id end
          and o.company_id = v_e.company_id
          and o.source_type = 'vat_settlement'
-         and t.form_code = '303');
+         and t.form_code = '303')
+      -- S01p·21: o el contraasiento de una liquidación apuntada dos veces, registrada como repetida.
+      or (v_e.source_type = 'reversal' and exists (
+            select 1 from public.conta_liquidacion_repetida rr
+             where rr.repetida_entry_id = v_e.reverses_entry_id and rr.company_id = v_e.company_id));
 
     -- S01 (0140): el local solo se pide si el eje «local» de la empresa está encendido
     -- (conta_eje_analitico; sin fila = apagado). Lo demás, como estaba.
@@ -111230,6 +111364,34 @@ COMMENT ON COLUMN public.conta_diez_envio_empresa.modo IS 'C12 (24/10). al_valid
 
 
 --
+-- Name: conta_diez_subcuenta_creada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_diez_subcuenta_creada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    traspaso_id uuid NOT NULL,
+    base text NOT NULL,
+    codigo text NOT NULL,
+    nombre text NOT NULL,
+    creada_por uuid,
+    creada_por_nombre text,
+    creada_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_diez_subcuenta_creada_base_check CHECK (((base ~ '^C\d{4}$'::text) AND (base <> 'C0001'::text))),
+    CONSTRAINT conta_diez_subcuenta_creada_codigo_check CHECK ((codigo ~ '^\d{6,12}$'::text)),
+    CONSTRAINT conta_diez_subcuenta_creada_nombre_check CHECK ((btrim(nombre) <> ''::text))
+);
+
+
+--
+-- Name: TABLE conta_diez_subcuenta_creada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_diez_subcuenta_creada IS 'B01r26 · Cada subcuenta que Sumied creó en Diez antes de un traspaso, con «Crearlas en Diez» (un administrador lo confirma): en qué base, con qué nombre, quién y cuándo.';
+
+
+--
 -- Name: conta_diez_traspaso; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -111965,6 +112127,32 @@ CREATE TABLE public.conta_linea_deshecha (
 --
 
 COMMENT ON TABLE public.conta_linea_deshecha IS 'G05 · nº 69 · Las operaciones de conta_linea deshechas el mismo día (conta_linea_deshacer): la hora de la operación (cuando, la de sus filas en conta_gestoria_cambio) y la del deshacer.';
+
+
+--
+-- Name: conta_liquidacion_repetida; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_liquidacion_repetida (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    tax_return_id uuid NOT NULL,
+    buena_entry_id uuid NOT NULL,
+    repetida_entry_id uuid NOT NULL,
+    contraasiento_id uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT conta_liquidacion_repetida_check CHECK ((buena_entry_id <> repetida_entry_id))
+);
+
+
+--
+-- Name: TABLE conta_liquidacion_repetida; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_liquidacion_repetida IS 'S01p·21. Una liquidación de IVA apuntada dos veces: cuál es la repetida, cuál la buena y el contraasiento que la deja sin efecto.';
 
 
 --
@@ -128113,6 +128301,22 @@ ALTER TABLE ONLY public.conta_diez_envio_empresa
 
 
 --
+-- Name: conta_diez_subcuenta_creada conta_diez_subcuenta_creada_company_id_base_codigo_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_diez_subcuenta_creada
+    ADD CONSTRAINT conta_diez_subcuenta_creada_company_id_base_codigo_key UNIQUE (company_id, base, codigo);
+
+
+--
+-- Name: conta_diez_subcuenta_creada conta_diez_subcuenta_creada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_diez_subcuenta_creada
+    ADD CONSTRAINT conta_diez_subcuenta_creada_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_diez_traspaso conta_diez_traspaso_company_id_mes_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -128342,6 +128546,14 @@ ALTER TABLE ONLY public.conta_linea_deshecha
 
 ALTER TABLE ONLY public.conta_linea
     ADD CONSTRAINT conta_linea_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_pkey PRIMARY KEY (id);
 
 
 --
@@ -134274,6 +134486,13 @@ CREATE INDEX conta_linea_cliente_idx ON public.conta_linea USING btree (party_id
 --
 
 CREATE UNIQUE INDEX conta_linea_suscripcion_idx ON public.conta_linea USING btree (company_id, suscripcion_gc_id) WHERE (suscripcion_gc_id IS NOT NULL);
+
+
+--
+-- Name: conta_liquidacion_repetida_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_liquidacion_repetida_uq ON public.conta_liquidacion_repetida USING btree (repetida_entry_id);
 
 
 --
@@ -144100,6 +144319,30 @@ ALTER TABLE ONLY public.conta_diez_envio_empresa
 
 
 --
+-- Name: conta_diez_subcuenta_creada conta_diez_subcuenta_creada_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_diez_subcuenta_creada
+    ADD CONSTRAINT conta_diez_subcuenta_creada_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_diez_subcuenta_creada conta_diez_subcuenta_creada_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_diez_subcuenta_creada
+    ADD CONSTRAINT conta_diez_subcuenta_creada_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_diez_subcuenta_creada conta_diez_subcuenta_creada_traspaso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_diez_subcuenta_creada
+    ADD CONSTRAINT conta_diez_subcuenta_creada_traspaso_id_fkey FOREIGN KEY (traspaso_id) REFERENCES public.conta_diez_traspaso(id) ON DELETE RESTRICT;
+
+
+--
 -- Name: conta_diez_traspaso conta_diez_traspaso_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -144609,6 +144852,54 @@ ALTER TABLE ONLY public.conta_linea
 
 ALTER TABLE ONLY public.conta_linea
     ADD CONSTRAINT conta_linea_solicitud_id_fkey FOREIGN KEY (solicitud_id) REFERENCES public.conta_solicitud(id) ON DELETE SET NULL;
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_buena_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_buena_entry_id_fkey FOREIGN KEY (buena_entry_id) REFERENCES public.journal_entry(id);
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_contraasiento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_contraasiento_id_fkey FOREIGN KEY (contraasiento_id) REFERENCES public.journal_entry(id);
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_repetida_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_repetida_entry_id_fkey FOREIGN KEY (repetida_entry_id) REFERENCES public.journal_entry(id);
+
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_tax_return_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_liquidacion_repetida
+    ADD CONSTRAINT conta_liquidacion_repetida_tax_return_id_fkey FOREIGN KEY (tax_return_id) REFERENCES public.tax_return(id) ON DELETE CASCADE;
 
 
 --
@@ -155891,6 +156182,19 @@ CREATE POLICY conta_diez_envio_empresa_leer ON public.conta_diez_envio_empresa F
 
 
 --
+-- Name: conta_diez_subcuenta_creada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_diez_subcuenta_creada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_diez_subcuenta_creada conta_diez_subcuenta_creada_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_diez_subcuenta_creada_leer ON public.conta_diez_subcuenta_creada FOR SELECT USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_diez_traspaso; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -156204,6 +156508,19 @@ CREATE POLICY conta_linea_deshecha_leer ON public.conta_linea_deshecha FOR SELEC
 --
 
 CREATE POLICY conta_linea_leer ON public.conta_linea FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_liquidacion_repetida; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_liquidacion_repetida ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_liquidacion_repetida conta_liquidacion_repetida_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_liquidacion_repetida_leer ON public.conta_liquidacion_repetida FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
 
 --
@@ -172943,6 +173260,15 @@ GRANT ALL ON FUNCTION public.conta_liquidacion_asignar_tienda(p_settlement uuid,
 
 
 --
+-- Name: FUNCTION conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_liquidacion_dejar_esta(p_return uuid, p_buena uuid, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_liquidacion_enlazar_factura(p_invoice uuid, p_liquidaciones uuid[], p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -173021,6 +173347,15 @@ GRANT ALL ON FUNCTION public.conta_liquidaciones(p_company uuid, p_desde date, p
 REVOKE ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_liquidaciones_mes(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_liquidaciones_repetidas(p_return uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_liquidaciones_repetidas(p_return uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_liquidaciones_repetidas(p_return uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_liquidaciones_repetidas(p_return uuid) TO service_role;
 
 
 --
@@ -184419,6 +184754,14 @@ GRANT SELECT ON TABLE public.conta_diez_envio_empresa TO authenticated;
 
 
 --
+-- Name: TABLE conta_diez_subcuenta_creada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_diez_subcuenta_creada TO service_role;
+GRANT SELECT ON TABLE public.conta_diez_subcuenta_creada TO authenticated;
+
+
+--
 -- Name: TABLE conta_diez_traspaso; Type: ACL; Schema: public; Owner: -
 --
 
@@ -184570,6 +184913,15 @@ GRANT SELECT ON TABLE public.conta_gestoria_union TO authenticated;
 GRANT ALL ON TABLE public.conta_linea_deshecha TO anon;
 GRANT ALL ON TABLE public.conta_linea_deshecha TO authenticated;
 GRANT ALL ON TABLE public.conta_linea_deshecha TO service_role;
+
+
+--
+-- Name: TABLE conta_liquidacion_repetida; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_liquidacion_repetida TO anon;
+GRANT ALL ON TABLE public.conta_liquidacion_repetida TO authenticated;
+GRANT ALL ON TABLE public.conta_liquidacion_repetida TO service_role;
 
 
 --
