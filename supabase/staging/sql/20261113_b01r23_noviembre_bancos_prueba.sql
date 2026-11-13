@@ -19,6 +19,7 @@ do $$ begin
   end if;
 end $$;
 set local statement_timeout = '120s';
+-- sin usuario: las funciones solo las llama una tanda, que corre como el dueño; dentro se pone el usuario de la persona al apartar.
 set constraints all immediate;
 
 create temp table prueba_antes on commit drop as
