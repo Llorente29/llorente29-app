@@ -1,0 +1,21 @@
+# DL1 · Las 40 facturas recibidas de octubre con el asiento en noviembre, a su
+# fecha (Julio, DL1·23, 13/11). Rama claude/dl1-facturas-a-su-fecha. Se ensaya
+# y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0905  Añade conta_dl1_303_4t_antes (copia del borrador del 303 del 4T) y,
+#         con _s01p_facturas_a_su_fecha (S01p·4, en producción): saca las
+#         líneas del borrador, borra los 40 asientos con respaldo, los vuelve a
+#         apuntar con la fecha de su factura, validados, y recalcula el
+#         borrador. Para si el debe, la cadena o el IVA del 4T cambian.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-facturas-a-su-fecha.sql
+supabase/migrations/20261113T0905_dl1_facturas_a_su_fecha.sql
+sin-vuelta-atras: supabase/migrations/20261113T0905_dl1_facturas_a_su_fecha.sql · motivo: lo borrado queda en su respaldo (conta_asiento_borrado) y se deshace con _conta_asientos_borrado_deshacer, no con un .down.
+esperado: dl1-facturas-a-su-fecha · Facturas recibidas de octubre con el asiento fuera de octubre = 0
+esperado: dl1-facturas-a-su-fecha · Facturas recibidas de octubre con su asiento validado, menos 187 = 0
+esperado: dl1-facturas-a-su-fecha · Gasto (grupo 6) de octubre, menos 44.760,53 = 0.00
+esperado: dl1-facturas-a-su-fecha · IVA 472 del 4T = como antes
+esperado: dl1-facturas-a-su-fecha · IVA 477 del 4T = como antes
+esperado: dl1-facturas-a-su-fecha · Proveedores (400) = como antes
+esperado: dl1-facturas-a-su-fecha · Acreedores (410) = como antes
