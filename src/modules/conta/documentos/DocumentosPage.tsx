@@ -233,12 +233,14 @@ export default function DocumentosPage() {
       </span>
     )
   }
+  // S01p·20 · 1 · Un correo sin factura dice en la fila, en una frase, por qué está aquí (Julio, 13/11).
+  const porqueDelCorreo = (x: FilaDocumento) => (esCorreoSinFactura(x) && x.porque ? <span className="s-lista-propuesto" data-prueba="porque-correo">{x.porque}</span> : null)
   // N5 · La regla de anchos: sin sitio, se ocultan primero el local, la base y el IVA, luego el número; nunca la fecha, el proveedor ni el total.
   const columnas: ColumnaLista<FilaDocumento>[] = [
     { id: 'fecha', titulo: 'Fecha', ordenable: true, ancho: '80px', prioridad: 1, minimo: 80, celda: (x) => <span className="s-cifra">{diaMes(x.fecha ?? x.llego.slice(0, 10))}</span> },
     {
       id: 'proveedor', titulo: 'Proveedor', ordenable: true, prioridad: 1, minimo: 200,
-      celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{nombre(x)}</span>{propuesto(x)}</span>,
+      celda: (x) => <span className="s-lista-texto-doble"><span className="s-lista-principal">{nombre(x)}</span>{propuesto(x)}{porqueDelCorreo(x)}</span>,
     },
     { id: 'numero', titulo: 'Nº de factura', ordenable: true, prioridad: 3, minimo: 130, celda: (x) => <span className="s-cifra">{x.numero ?? '—'}</span> },
     ...(ejeLocal ? [{ id: 'local', titulo: ejeLocal.nombre, prioridad: 5, minimo: 120, celda: (x: FilaDocumento) => localDeFila(x, mapa.get(x.id)) ?? 'Común' }] : []),
@@ -266,6 +268,7 @@ export default function DocumentosPage() {
         <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{nombre(x)}</span><strong className="s-cifra">{euro(x.total)}</strong></span>
         <span className="s-tarjeta-apoyo">{[x.numero ?? 'sin número', diaMes(x.fecha ?? x.llego.slice(0, 10)), l].filter(Boolean).join(' · ')}</span>
         <span className="s-tarjeta-pie">{enBloque ? <ListaParaValidar p={pv?.get(x.id)} cargando={!pv && !listas.error} /> : <Chip tono={e.tono}>{e.texto}</Chip>}{propuesto(x)}</span>
+        {esCorreoSinFactura(x) && <span className="s-tarjeta-apoyo" data-prueba="porque-correo">{x.porque}</span>}
         {enBloque && mapa.get(x.id)?.motivo && <span className="s-tarjeta-apoyo"><MotivoRevisar x={x} motivo={mapa.get(x.id)?.motivo} /></span>}
         {f.pestana === 'solas' && (
           <span className="s-tarjeta-apoyo">{mapa.get(x.id)?.sola}{' '}

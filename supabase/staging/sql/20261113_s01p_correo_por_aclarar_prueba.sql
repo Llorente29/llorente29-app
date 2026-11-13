@@ -138,6 +138,7 @@ end $$;
 reset role;
 
 -- 5. La vuelta atrás.
+\i supabase/vuelta-atras/20261113T1511_s01p_foodint_ocho_por_aclarar.down.sql
 \i supabase/vuelta-atras/20261113T1504_s01p_correo_por_aclarar.down.sql
 do $$ begin
   if to_regprocedure('public.conta_entrada_sin_factura(jsonb)') is not null or to_regprocedure('public.conta_entrada_sin_factura_resuelta(uuid,text,text)') is not null

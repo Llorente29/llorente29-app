@@ -62,7 +62,7 @@ test('«Por aclarar»: el correo sin factura con su asunto, su porqué, «Volver
   // La fila: el asunto del correo y el porqué, en una frase.
   const fila = page.getByText(`«${ASUNTO}»`).first()
   await expect(fila).toBeVisible({ timeout: 30_000 })
-  await expect(page.getByText(PORQUE).first()).toBeVisible()
+  await expect(page.locator('[data-prueba="porque-correo"]').filter({ hasText: PORQUE }).first()).toBeVisible()
   await capturar(page, 'por-aclarar-correo')
 
   await fila.click()
