@@ -12,6 +12,9 @@
 //      no tocar staging): «Faltan 3 cosas» con sus enlaces, «listo para
 //      traspasar» con el resumen y el diálogo de confirmar (que dice qué
 //      autoriza), y «traspasado a Diez y cerrado» con el cuadre y el informe.
+//   3. B01r26 · Los pasos 2 y 3 (las facturas por Excel, con su PDF), con la
+//      revisión y la función simuladas: faltan subcuentas y «Crearlas en Diez»;
+//      los dos Excel listos para descargar; «Ya lo he importado» y el cuadre.
 // No escribe nada: el diálogo se cancela.
 
 import { test, expect, type Page, type Route } from '@playwright/test'
@@ -115,7 +118,7 @@ test('A · listo: el resumen por tipo y por cuenta, y el diálogo dice qué auto
   await capturar(page, 'listo')
   await zona.getByRole('button', { name: /^Traspasar \w+ a Diez$/ }).click()
   const dialogo = page.getByRole('dialog')
-  await expect(dialogo.getByText(/autorizas escribir en Diez todo lo de \w+: ventas, facturas recibidas, banco, asientos a mano y liquidaciones\. Queda apuntado quién y cuándo\./)).toBeVisible()
+  await expect(dialogo.getByText(/autorizas escribir en Diez todo lo de \w+: ventas, facturas recibidas, banco, asientos a mano y liquidaciones\. .*por dos Excel que importas tú en Diez \(pasos 2 y 3\)\. Queda apuntado quién y cuándo\./)).toBeVisible()
   await expect(dialogo.getByRole('button', { name: 'Traspasar', exact: true })).toBeVisible()
   await capturar(page, 'listo-confirmar')
   await dialogo.getByRole('button', { name: 'Cancelar' }).click()
@@ -137,4 +140,54 @@ test('A · traspasado y cerrado: «Cuadra» en verde, quién lo confirmó y el i
   await expect(zona.getByRole('button', { name: 'Descargar el informe' })).toBeVisible()
   await expect(zona.getByRole('button', { name: /Traspasar .* a Diez/ })).toHaveCount(0)
   await capturar(page, 'cerrado')
+})
+
+test('A · B01r26 · los pasos 2 y 3: las subcuentas, los dos Excel y «Ya lo he importado»', async ({ page }) => {
+  const mes = mesAnterior()
+  await conRevision(page, revision({
+    traspaso: { id: 't1', mes, estado: 'traspasando', confirmado_por_nombre: 'Julio', confirmado_en: `${mes.slice(0, 7)}-28T09:00:00Z`, faltaba: [], van: 120, llegaron: 30, no_llegaron: 0,
+      cuadre: null, cuadra: null, mes_cerrado: false, cierre_motivo: null, terminado_en: null },
+  }))
+  // La función del traspaso, simulada: la primera vez faltan dos subcuentas; después de crearlas, los Excel.
+  let creadas = false
+  const fila = (n: string) => ['43000002', 'Ventas', 'UBER EATS', '', '70000000', n, 100, '', '', '', 'https://ejemplo.invalid/conta-pdf/0', '', 100, 10, 10, 110, `${mes}T12:00:00.000Z`]
+  await page.route(/\/functions\/v1\/conta-diez-traspaso/, async (r) => {
+    const b = JSON.parse(r.request().postData() ?? '{}') as { accion?: string }
+    if (b.accion === 'excel') {
+      return json(r, creadas
+        ? { base: 'C0009', faltan: [], comprobadas: 14, emitidas: [fila('UBR-FLO-1'), fila('UBR-FLO-2')], recibidas: [fila('F-1')], por_la_api: [{ entry_id: '00000000-0000-0000-0000-000000000001', numero: 'F-9', motivo: 'lleva 3 tipos de IVA y el Excel admite 2 (Julio, 13/11: estas, por la API)' }] }
+        : { base: 'C0009', faltan: [{ codigo: '47200010', nombre: 'IVA soportado 10 %' }, { codigo: '62300004', nombre: 'Servicios profesionales' }], comprobadas: 14, por_la_api: [] })
+    }
+    if (b.accion === 'crear_subcuentas') { creadas = true; return json(r, { base: 'C0009', creadas: [{ codigo: '47200010', nombre: 'IVA soportado 10 %' }, { codigo: '62300004', nombre: 'Servicios profesionales' }], faltan: [] }) }
+    if (b.accion === 'importado') return json(r, { van_por_excel: 3, enlazadas: 3, faltan: [], dobles: [] })
+    if (b.accion === 'comprobar') return json(r, { cuadra: true, cuadre: { cuadra: true, cuentas: 21, diferencias: [], solo_en_diez: [] }, mes_cerrado: false, motivo: null })
+    return r.fulfill({ status: 400, body: '{}' })
+  })
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto(RUTA)
+  const zona = await elegirMesAnterior(page)
+  const excel = zona.getByLabel('Las facturas, por Excel')
+  await expect(excel.getByRole('heading', { name: '2 · Descarga los dos Excel e impórtalos en Diez' })).toBeVisible()
+  await expect(excel.getByText(/Importaciones › Importación desde fichero › Facturas/)).toBeVisible()
+  await excel.getByRole('button', { name: 'Preparar los Excel' }).click()
+  await expect(excel.getByText(/Faltan 2 subcuentas en Diez \(C0009\): sin ellas no se prepara ningún Excel\./)).toBeVisible()
+  await expect(excel.getByTestId('traspaso-subcuentas-faltan')).toContainText('47200010')
+  await expect(excel.getByRole('button', { name: /^Descargar/ })).toHaveCount(0)
+  await capturar(page, 'b01r26-faltan-subcuentas')
+  await excel.getByRole('button', { name: 'Crearlas en Diez' }).click()
+  const dialogo = page.getByRole('dialog')
+  await expect(dialogo.getByText('Queda apuntado quién las ha creado y cuándo.')).toBeVisible()
+  await dialogo.getByRole('button', { name: 'Crearlas' }).click()
+  await expect(excel.getByText(/Listos: 2 emitidas y 1 recibidas\./)).toBeVisible()
+  await expect(excel.getByRole('button', { name: 'Descargar emitidas (2)' })).toBeVisible()
+  await expect(excel.getByRole('button', { name: 'Descargar recibidas (1)' })).toBeVisible()
+  await expect(excel.getByText('1 factura va por la API, sin PDF en Diez')).toBeVisible()
+  const descarga = page.waitForEvent('download')
+  await excel.getByRole('button', { name: 'Descargar emitidas (2)' }).click()
+  expect((await descarga).suggestedFilename()).toBe(`diez-emitidas-${mes.slice(0, 7)}.xlsx`)
+  await expect(excel.getByText(/Descargado el Excel de emitidas: 2 facturas, cada una con el enlace a su PDF\./)).toBeVisible()
+  await capturar(page, 'b01r26-excel-listos')
+  await excel.getByRole('button', { name: 'Ya lo he importado' }).click()
+  await expect(zona.getByText(/Cuadra: 21 cuentas tienen en Diez lo mismo que en Sumied\./).first()).toBeVisible()
+  await capturar(page, 'b01r26-importado')
 })
