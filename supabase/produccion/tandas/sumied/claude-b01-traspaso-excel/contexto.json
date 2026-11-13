@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · las subcuentas creadas en Diez · contexto de producción, medido en SOLO LECTURA el 13/11 a las 17:15Z: conta_diez_subcuenta_creada no existe; conta_diez_traspaso con 0 filas. La 1850 solo añade. Nada en el camino del pedido; no está en el historial.",
+ "medido": "2026-11-13T17:15Z",
+ "tanda": {
+  "supabase/migrations/20261113T1850_b01r26_subcuentas_creadas.sql": "7a49c0f2ed290dcb0c444f86decaf798"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
