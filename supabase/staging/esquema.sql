@@ -53868,6 +53868,38 @@ COMMENT ON FUNCTION public.conta_recibida_envio(p_entry uuid) IS 'D01 · Lo que 
 
 
 --
+-- Name: conta_recibida_fecha(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_recibida_fecha(p_company uuid, p_fecha date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_cuenta uuid; v_r jsonb; v_abierto date;
+begin
+  select account_id into v_cuenta from public.company where id = p_company;
+  if v_cuenta is null or not public.belongs_to_account(v_cuenta) then
+    raise exception 'Esa empresa no está en tu cuenta.' using errcode = '42501';
+  end if;
+  if p_fecha is null then raise exception 'Falta la fecha de la factura.' using errcode = '22023'; end if;
+  v_abierto := public.conta_primer_dia_iva_abierto(p_company, p_fecha);
+  if v_abierto is null then
+    return jsonb_build_object('fecha', null, 'factura', p_fecha,
+      'aviso', format('No hay ningún día abierto desde el %s para apuntar esta factura (el ejercicio está cerrado o no existe).', to_char(p_fecha, 'DD/MM/YYYY')));
+  end if;
+  v_r := public._conta_recibida_no_antes_de_entrar(p_company, jsonb_build_object('source_type', 'supplier_invoice', 'fecha', p_fecha));
+  return jsonb_build_object('fecha', (v_r->>'fecha')::date, 'factura', p_fecha, 'aviso', v_r->>'aviso');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_recibida_fecha(p_company uuid, p_fecha date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_recibida_fecha(p_company uuid, p_fecha date) IS 'S01p·18.2 (0913). La fecha con la que se apunta una factura recibida: la suya, salvo que su trimestre tenga el 303 presentado o su día no esté abierto (entonces el primer día abierto, con su aviso). La misma regla que _conta_recibida_no_antes_de_entrar al proponer; la pantalla la enseña antes de validar.';
+
+
+--
 -- Name: conta_recibida_guardar(uuid, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -173708,6 +173740,15 @@ GRANT ALL ON FUNCTION public.conta_recibe_mercancia(p_company uuid) TO service_r
 REVOKE ALL ON FUNCTION public.conta_recibida_envio(p_entry uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_recibida_envio(p_entry uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_recibida_envio(p_entry uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_recibida_fecha(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_recibida_fecha(p_company uuid, p_fecha date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_recibida_fecha(p_company uuid, p_fecha date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_recibida_fecha(p_company uuid, p_fecha date) TO service_role;
 
 
 --
