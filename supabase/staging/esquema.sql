@@ -50401,6 +50401,117 @@ COMMENT ON FUNCTION public.conta_pantalla_ficha(p_cuenta uuid, p_cliente uuid) I
 
 
 --
+-- Name: conta_pdf_llaves_del_traspaso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pdf_llaves_del_traspaso(p_traspaso uuid) RETURNS TABLE(entry_id uuid, document_id uuid, llave text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  t public.conta_diez_traspaso;
+begin
+  select * into t from public.conta_diez_traspaso where id = p_traspaso;
+  if t.id is null then raise exception 'Ese traspaso no existe.' using errcode = 'P0002'; end if;
+  if t.estado not in ('confirmado', 'traspasando', 'terminado') then
+    raise exception 'Solo hay enlaces de PDF para un traspaso confirmado.' using errcode = '23514';
+  end if;
+  insert into public.conta_pdf_llave (account_id, company_id, entry_id, document_id, traspaso_id, llave)
+  select t.account_id, t.company_id, d.entry_id, d.id, t.id, encode(extensions.gen_random_bytes(16), 'hex')
+    from public.conta_traspaso_lista(t.company_id, t.mes) z
+    join public.journal_entry_document d on d.entry_id = z.entry_id and d.account_id = t.account_id
+     and d.kind in ('resumen_ventas', 'factura_recibida', 'factura_expedida')
+   where not exists (select 1 from public.conta_pdf_llave k where k.document_id = d.id and k.retirada_en is null)
+  on conflict do nothing;
+  return query
+    select k.entry_id, k.document_id, k.llave
+      from public.conta_pdf_llave k
+     where k.company_id = t.company_id and k.retirada_en is null
+       and k.entry_id in (select z.entry_id from public.conta_traspaso_lista(t.company_id, t.mes) z);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_pdf_llaves_del_traspaso(p_traspaso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_pdf_llaves_del_traspaso(p_traspaso uuid) IS 'B01r26 · Las llaves de los PDF de las facturas de un traspaso confirmado (las crea si faltan). Solo el servidor (conta-diez-traspaso).';
+
+
+--
+-- Name: conta_pdf_retirar(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_n int; v_nombre text;
+begin
+  select c.account_id into v_acc from public.company c where c.id = p_company;
+  if v_acc is null or not public.current_user_is_admin_of(v_acc) then
+    raise exception 'Solo un administrador de la cuenta puede retirar los enlaces de los PDF.' using errcode = '42501';
+  end if;
+  if coalesce(btrim(p_motivo), '') = '' then raise exception 'Hace falta el motivo.' using errcode = '23514'; end if;
+  select coalesce(up.display_name, 'administrador') into v_nombre from public.user_profiles up where up.user_id = auth.uid() and up.account_id = v_acc limit 1;
+  update public.conta_pdf_llave
+     set retirada_en = now(), retirada_por = auth.uid(), retirada_por_nombre = v_nombre, retirada_motivo = btrim(p_motivo)
+   where company_id = p_company and account_id = v_acc and retirada_en is null
+     and (p_entry is null or entry_id = p_entry);
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text) IS 'B01r26 · Retira los enlaces de PDF de un asiento (p_entry) o de toda la empresa (p_entry nulo), con su motivo. Un administrador de la cuenta. Devuelve cuántas.';
+
+
+--
+-- Name: conta_pdf_servir(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_pdf_servir(p_llave text, p_ip_hash text) RETURNS TABLE(resultado text, storage_path text, file_name text, sha256 text)
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $_$
+declare
+  k public.conta_pdf_llave; d public.journal_entry_document; v_anulado boolean; v_res text; v_n int;
+  v_ip text := case when p_ip_hash ~ '^[0-9a-f]{16,64}$' then p_ip_hash end;
+begin
+  if p_llave is null or p_llave !~ '^[0-9a-f]{32}$' then
+    insert into public.conta_pdf_acceso (llave_id, ip_hash, resultado) values (null, v_ip, 'no_existe');
+    return query select 'no_existe'::text, null::text, null::text, null::text; return;
+  end if;
+  select * into k from public.conta_pdf_llave where llave = p_llave for update;
+  if k.id is null then
+    insert into public.conta_pdf_acceso (llave_id, ip_hash, resultado) values (null, v_ip, 'no_existe');
+    return query select 'no_existe'::text, null::text, null::text, null::text; return;
+  end if;
+  select e.voided_at is not null or e.status = 'anulado' into v_anulado from public.journal_entry e where e.id = k.entry_id;
+  select count(*) into v_n from public.conta_pdf_acceso a where a.llave_id = k.id and a.resultado = 'servido' and a.en > now() - interval '1 hour';
+  v_res := case when k.retirada_en is not null then 'retirada' when v_anulado then 'anulado' when v_n >= 30 then 'tope' else 'servido' end;
+  insert into public.conta_pdf_acceso (llave_id, ip_hash, resultado) values (k.id, v_ip, v_res);
+  if v_res <> 'servido' then
+    return query select v_res, null::text, null::text, null::text; return;
+  end if;
+  update public.conta_pdf_llave set accesos = accesos + 1, ultimo_acceso = now() where id = k.id;
+  select * into d from public.journal_entry_document where id = k.document_id;
+  return query select 'servido'::text, d.storage_path, d.file_name, d.sha256;
+end $_$;
+
+
+--
+-- Name: FUNCTION conta_pdf_servir(p_llave text, p_ip_hash text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_pdf_servir(p_llave text, p_ip_hash text) IS 'B01r26 · Lo que conta-pdf necesita para servir un PDF por su llave (o por qué no), y el apunte del acceso. Solo el servidor.';
+
+
+--
 -- Name: conta_pedidos_del_dia(uuid, uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -112507,6 +112618,73 @@ COMMENT ON TABLE public.conta_pasarela_cuenta IS 'S01 · La subcuenta de tesorer
 
 
 --
+-- Name: conta_pdf_acceso; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pdf_acceso (
+    id bigint NOT NULL,
+    llave_id uuid,
+    en timestamp with time zone DEFAULT now() NOT NULL,
+    ip_hash text,
+    resultado text NOT NULL,
+    CONSTRAINT conta_pdf_acceso_ip_hash_check CHECK (((ip_hash IS NULL) OR (ip_hash ~ '^[0-9a-f]{16,64}$'::text))),
+    CONSTRAINT conta_pdf_acceso_resultado_check CHECK ((resultado = ANY (ARRAY['servido'::text, 'retirada'::text, 'anulado'::text, 'tope'::text, 'no_existe'::text])))
+);
+
+
+--
+-- Name: TABLE conta_pdf_acceso; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pdf_acceso IS 'B01r26 · Cada petición al enlace de un PDF (conta-pdf): cuándo, un hash de la IP (no la IP) y qué se contestó. Las de una llave que no existe se apuntan sin llave.';
+
+
+--
+-- Name: conta_pdf_acceso_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pdf_acceso ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.conta_pdf_acceso_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: conta_pdf_llave; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_pdf_llave (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    document_id uuid NOT NULL,
+    traspaso_id uuid NOT NULL,
+    llave text NOT NULL,
+    creada_en timestamp with time zone DEFAULT now() NOT NULL,
+    retirada_en timestamp with time zone,
+    retirada_por uuid,
+    retirada_por_nombre text,
+    retirada_motivo text,
+    accesos integer DEFAULT 0 NOT NULL,
+    ultimo_acceso timestamp with time zone,
+    CONSTRAINT conta_pdf_llave_check CHECK (((retirada_en IS NULL) = (retirada_motivo IS NULL))),
+    CONSTRAINT conta_pdf_llave_llave_check CHECK ((llave ~ '^[0-9a-f]{32}$'::text))
+);
+
+
+--
+-- Name: TABLE conta_pdf_llave; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_pdf_llave IS 'B01r26 · La llave del enlace permanente de un PDF de Sumied que Diez descarga (functions/v1/conta-pdf/<llave>): una por documento, solo para lo que ha ido en un traspaso confirmado, retirable. Ver 20261113T1805.';
+
+
+--
 -- Name: conta_portal_ajustes; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -128383,6 +128561,30 @@ ALTER TABLE ONLY public.conta_pasarela_cuenta
 
 
 --
+-- Name: conta_pdf_acceso conta_pdf_acceso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_acceso
+    ADD CONSTRAINT conta_pdf_acceso_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_llave_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_llave_key UNIQUE (llave);
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_portal_acceso conta_portal_acceso_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -134205,6 +134407,27 @@ CREATE INDEX conta_pago_salida_lote_idx ON public.conta_pago_salida USING btree 
 --
 
 CREATE UNIQUE INDEX conta_pago_salida_viva ON public.conta_pago_salida USING btree (invoice_id) WHERE (estado = ANY (ARRAY['esperando_segunda'::text, 'lista'::text, 'enviando'::text, 'enviada'::text, 'esperando_banco'::text]));
+
+
+--
+-- Name: conta_pdf_acceso_llave_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pdf_acceso_llave_idx ON public.conta_pdf_acceso USING btree (llave_id, en DESC);
+
+
+--
+-- Name: conta_pdf_llave_traspaso_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_pdf_llave_traspaso_idx ON public.conta_pdf_llave USING btree (traspaso_id);
+
+
+--
+-- Name: conta_pdf_llave_viva_uq; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX conta_pdf_llave_viva_uq ON public.conta_pdf_llave USING btree (document_id) WHERE (retirada_en IS NULL);
 
 
 --
@@ -144834,6 +145057,54 @@ ALTER TABLE ONLY public.conta_pasarela_cuenta
 
 ALTER TABLE ONLY public.conta_pasarela_cuenta
     ADD CONSTRAINT conta_pasarela_cuenta_treasury_account_id_fkey FOREIGN KEY (treasury_account_id) REFERENCES public.treasury_account(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pdf_acceso conta_pdf_acceso_llave_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_acceso
+    ADD CONSTRAINT conta_pdf_acceso_llave_id_fkey FOREIGN KEY (llave_id) REFERENCES public.conta_pdf_llave(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.journal_entry_document(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES public.journal_entry(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_pdf_llave conta_pdf_llave_traspaso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_pdf_llave
+    ADD CONSTRAINT conta_pdf_llave_traspaso_id_fkey FOREIGN KEY (traspaso_id) REFERENCES public.conta_diez_traspaso(id) ON DELETE RESTRICT;
 
 
 --
@@ -156160,6 +156431,18 @@ ALTER TABLE public.conta_pasarela_cuenta ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY conta_pasarela_cuenta_leer ON public.conta_pasarela_cuenta FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
+
+--
+-- Name: conta_pdf_acceso; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pdf_acceso ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_pdf_llave; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_pdf_llave ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: conta_portal_acceso; Type: ROW SECURITY; Schema: public; Owner: -
@@ -173440,6 +173723,31 @@ GRANT ALL ON FUNCTION public.conta_pantalla_ficha(p_cuenta uuid, p_cliente uuid)
 
 
 --
+-- Name: FUNCTION conta_pdf_llaves_del_traspaso(p_traspaso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pdf_llaves_del_traspaso(p_traspaso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pdf_llaves_del_traspaso(p_traspaso uuid) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_pdf_retirar(p_company uuid, p_entry uuid, p_motivo text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_pdf_servir(p_llave text, p_ip_hash text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_pdf_servir(p_llave text, p_ip_hash text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_pdf_servir(p_llave text, p_ip_hash text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_pedidos_del_dia(p_company uuid, p_location uuid, p_dia date); Type: ACL; Schema: public; Owner: -
 --
 
@@ -184454,6 +184762,29 @@ GRANT SELECT ON TABLE public.conta_paquete_linea TO authenticated;
 
 GRANT ALL ON TABLE public.conta_pasarela_cuenta TO service_role;
 GRANT SELECT ON TABLE public.conta_pasarela_cuenta TO authenticated;
+
+
+--
+-- Name: TABLE conta_pdf_acceso; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pdf_acceso TO service_role;
+
+
+--
+-- Name: SEQUENCE conta_pdf_acceso_id_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.conta_pdf_acceso_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.conta_pdf_acceso_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.conta_pdf_acceso_id_seq TO service_role;
+
+
+--
+-- Name: TABLE conta_pdf_llave; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_pdf_llave TO service_role;
 
 
 --
