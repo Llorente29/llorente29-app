@@ -10,6 +10,7 @@
 --   4. El tope: a la petición 31 de la hora, «tope».
 --   5. Una llave que no existe o mal formada: «no_existe», apuntado sin llave.
 --   6. Retirar (un administrador, con motivo): «retirada»; sin motivo, para.
+--   8. La vuelta atrás lo quita todo, con filas dentro.
 --   7. Nada de esto lo puede tocar un usuario por su cuenta (las tablas y las
 --      funciones del servidor, sin permiso para authenticated).
 
@@ -145,6 +146,15 @@ declare r record;
 begin
   select * into r from public.conta_pdf_servir((select x from _r where clave = 'k'), null);
   if r.resultado <> 'retirada' or r.storage_path is not null then raise exception 'PRUEBA B01r26 PDF 6: una llave retirada da %.', r.resultado; end if;
+end $$;
+
+-- 8. La vuelta atrás quita todo lo que añade, con llaves y accesos dentro.
+\i supabase/vuelta-atras/20261113T1805_b01r26_conta_pdf.down.sql
+do $$ begin
+  if to_regclass('public.conta_pdf_llave') is not null or to_regclass('public.conta_pdf_acceso') is not null
+     or exists (select 1 from pg_proc where proname in ('conta_pdf_servir', 'conta_pdf_llaves_del_traspaso', 'conta_pdf_retirar')) then
+    raise exception 'PRUEBA B01r26 PDF 8: la vuelta atrás no lo quita todo.';
+  end if;
 end $$;
 
 select 'PRUEBA B01r26 conta-pdf: en verde' as resultado;
