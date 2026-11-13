@@ -1,0 +1,17 @@
+# DL1·30 · Just Eat: la 43000003 a 31/10 con lo que Just Eat debe según sus
+# estados de cuenta (Julio, 14/11). Rama claude/dl1-justeat-regularizacion. Va
+# DESPUÉS de la 1905 (#666): sin ella aplicada, el ensayo para. Se ensaya y se
+# aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0035  Un asiento de regularización a 01/10, Debe 43000003 / Haber 77800000
+#         por 63,51 (lo que falta para los 320,17 que Just Eat debe), con el
+#         desglose en el concepto. Validado como Julio. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-justeat-regularizacion.sql
+supabase/migrations/20261114T0035_dl1_justeat_regularizacion.sql
+sin-vuelta-atras: supabase/migrations/20261114T0035_dl1_justeat_regularizacion.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-justeat-regularizacion · 43000003 a 31/10, menos 320,17 = 0.00
+esperado: dl1-justeat-regularizacion · 77800000 de la regularización de Just Eat, más 63,51 = 0.00
+esperado: dl1-justeat-regularizacion · IVA 472 del 4T = como antes
+esperado: dl1-justeat-regularizacion · IVA 477 del 4T = como antes
