@@ -1,0 +1,13 @@
+# S01p·20·2 · «Me lo factura otro» (Julio, 13/11): MANUFACTURAS CATOR trae y lo factura Cloudtown.
+# Rama claude/s01p-me-lo-factura-otro. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1910  añade supplier.invoiced_by_supplier_id (admite nulos) y compras_lo_factura_otro (el botón).
+#   0033  cambia, con un solo trozo cada una y su respaldo: _compras_camino_calcula (sus recepciones van con
+#         el que lo factura, con «Lo factura <otro> en su factura de género.»), compras_ficha_le_falta (no
+#         pregunta ni el tipo de gasto ni cómo factura), compras_mirar (sale de «Qué tienes que mirar») y
+#         _compras_forma_facturar (elegir otra forma lo quita).
+#
+# No toca ningún dato: CATOR → Cloudtown se elige en la pantalla. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-me-lo-factura-otro.sql
+supabase/migrations/20261113T1910_s01p_me_lo_factura_otro.sql
+supabase/migrations/20261114T0033_s01p_me_lo_factura_otro_caminos.sql
