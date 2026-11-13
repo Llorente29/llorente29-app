@@ -1,0 +1,14 @@
+# S01p·20 · punto 1 · El lector de correos no descarta en silencio (regla 8; Julio, 13/11).
+# Rama claude/s01p-correo-por-aclarar. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1504  conta_entrada_sin_factura, conta_entrada_sin_factura_resuelta y conta_correo_sin_factura_pdf
+#         (añaden): la fila «por aclarar» de un correo de plataforma del que no salió nada, su salida
+#         al volver a leerlo y entrar, y «Subir el PDF a mano».
+#   1511  Foodint: los 8 correos de Just Eat de junio a septiembre que no se entendieron el 01/11, a
+#         «Por aclarar» con la 1504 (añade 8 filas a document_inbox). Ni una liquidación ni una factura:
+#         entran al pulsar «Volver a leer». Los 3 de octubre, no (los crea D en su DL1_24).
+#
+# Solo añade. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-correo-por-aclarar.sql
+supabase/migrations/20261113T1504_s01p_correo_por_aclarar.sql
+supabase/migrations/20261113T1511_s01p_foodint_ocho_por_aclarar.sql

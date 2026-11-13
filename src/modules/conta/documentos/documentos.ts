@@ -56,6 +56,8 @@ export interface FilaDocumento {
   asiento: { id: string; estado: string; solo: boolean } | null
   llego: string
   archivo?: string | null
+  /** S01p·20 · 1 · Si es un correo de plataforma del que no salió nada: su correo y su asunto (lo pone la pantalla). */
+  correo?: { id: string; asunto: string | null } | null
 }
 
 /** S01g · El soporte de una liquidación mensual (conta_documentos_recibidos, 0931). */
@@ -215,7 +217,7 @@ const frase = (x: string) => (/[.!?…:]$/.test(x.trim()) ? x.trim() : `${x.trim
  * (escrita a mano) o no tiene cuenta todavía. Nunca solo «Sin cuenta».
  */
 export function entendido(f: FilaDocumento, solo = false): { titulo: string; porque: string | null } {
-  if (f.tipo === 'llegada') return { titulo: f.archivo ? `«${f.archivo}»` : 'Un documento sin leer', porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
+  if (f.tipo === 'llegada') return { titulo: tituloDeLlegada(f), porque: f.porque ?? 'Ha llegado y aún no la he leído.' }
   if (f.tipo === 'recepcion' && f.estado === 'soporte') {
     return { titulo: 'Soporte de la liquidación · no se apunta como compra', porque: f.porque ?? null }
   }
@@ -256,11 +258,25 @@ export function boton(f: FilaDocumento): { texto: string; principal: boolean } {
   // S01g · Ninguna fila de «Por aclarar» se abre sin una acción que la resuelva (regla 8).
   if (f.tipo === 'recepcion' && f.estado === 'por_aclarar') return { texto: 'Aclarar', principal: true }
   if (f.tipo === 'recepcion') return { texto: 'Ver la factura', principal: false }
-  if (f.tipo === 'llegada' && f.estado === 'por_aclarar') return { texto: faltaElPdf(f) ? 'Subir el PDF' : 'Leerla', principal: true }
+  if (f.tipo === 'llegada' && f.estado === 'por_aclarar') return { texto: faltaElPdf(f) ? 'Subir el PDF' : esCorreoSinFactura(f) ? 'Volver a leer' : 'Leerla', principal: true }
   if (f.tipo === 'factura' && !f.proveedor.id) return { texto: 'Decirlo yo', principal: true }
   if (f.estado === 'para_mirar') return { texto: 'Mirar', principal: false }
   if (f.estado === 'por_aclarar') return { texto: f.tipo === 'llegada' ? 'Ver' : 'Aclarar', principal: false }
   return { texto: 'Ver', principal: false }
+}
+
+/**
+ * S01p·20 · 1 · Un correo de plataforma del que no salió nada: sin fichero, con su correo.
+ * Se vuelve a leer o se le sube el PDF a mano; «Leerla» no tiene qué leer.
+ */
+export const esCorreoSinFactura = (f: Pick<FilaDocumento, 'tipo' | 'archivo' | 'correo' | 'porque'>) =>
+  f.tipo === 'llegada' && !f.archivo && !!f.correo && !faltaElPdf(f)
+
+/** El nombre de una llegada: su fichero; si es un correo sin factura, su asunto (Julio, 13/11). */
+export function tituloDeLlegada(f: Pick<FilaDocumento, 'tipo' | 'archivo' | 'correo' | 'porque'>): string {
+  if (f.archivo) return `«${f.archivo}»`
+  if (esCorreoSinFactura(f)) return f.correo?.asunto ? `«${f.correo.asunto}»` : 'Un correo sin factura'
+  return 'Un documento sin leer'
 }
 
 /** S01g · Una llegada a la que le falta el PDF (el correo traía un enlace). */

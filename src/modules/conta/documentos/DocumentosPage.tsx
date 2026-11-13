@@ -38,10 +38,10 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos, hoyEnMadrid } from '@/modules/conta/lib/formato'
-import { diaMes, entendido, meses, productoDeDocumentos, type FilaDocumento } from '@/modules/conta/documentos/documentos'
+import { diaMes, entendido, esCorreoSinFactura, meses, productoDeDocumentos, tituloDeLlegada, type FilaDocumento } from '@/modules/conta/documentos/documentos'
 import { useProductoSolo } from '@/modules/conta/cuenta/useProductoSolo'
 import { MARCA } from '@/modules/conta/cuenta/marca'
-import { leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
+import { leerCorreosDeLlegadas, leerDocumentos, leerExtrasFacturas, subirFacturas, urlDeLlegada, urlDePapelDeRecepcion, type ExtraFactura, type Subida } from '@/modules/conta/services/documentosService'
 import { Pedirselas } from '@/modules/conta/documentos/Pedirselas'
 import { leerParaValidar, validarEnBloque, type ResultadoBloque } from '@/modules/conta/documentos/paraValidarService'
 import { BarraMarcadas, ConfirmarBloque, ResultadoDelBloque } from '@/modules/conta/documentos/ValidarEnBloque'
@@ -85,6 +85,9 @@ export default function DocumentosPage() {
   const datos = useLeer(activa ? () => leerDocumentos(activa.id, desde, hasta) : null, `${activa?.id}:${desde}:${hasta}:${vuelta}`)
   const ids = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'factura').map((x) => x.id), [datos.datos])
   const extras = useLeer(accountId && ids.length ? () => leerExtrasFacturas(accountId, ids) : null, `${accountId}:${ids.join(',')}`)
+  // S01p·20 · 1 · Las llegadas sin fichero que son un correo de plataforma: su asunto (la fila lo enseña).
+  const sinFichero = useMemo(() => (datos.datos?.filas ?? []).filter((x) => x.tipo === 'llegada' && !x.archivo).map((x) => x.id), [datos.datos])
+  const correos = useLeer(accountId && sinFichero.length ? () => leerCorreosDeLlegadas(accountId, sinFichero) : null, `${accountId}:${sinFichero.join(',')}:correos`)
   // S01o · Lo que Sumied apuntó solo (con su porqué) y por qué se quedaron las demás. Si no se puede leer, la lista sale igual y lo dice.
   const solas = useLeer(activa ? () => leerApuntadasSolas(activa.id) : null, `${activa?.id}:${vuelta}:apuntadas-solas`)
   const sol = solas.datos ?? SIN_APUNTADAS
@@ -156,7 +159,7 @@ export default function DocumentosPage() {
   if (!activa) return <div className="s-pagina"><p className="s-apoyo">Aún no hay ninguna empresa: da de alta tu empresa y aquí llegan sus facturas.</p></div>
 
   const d = datos.datos
-  const todasLasFilas = d?.filas ?? []
+  const todasLasFilas = (d?.filas ?? []).map((x) => (correos.datos?.has(x.id) ? { ...x, correo: correos.datos.get(x.id)! } : x))
   const base = filtrarSinPestana(todasLasFilas, mapa, f)
   const pestanas = pestanasConNumero(base, mapa)
   const filas = filasDeLaLista(todasLasFilas, mapa, f)
@@ -218,7 +221,8 @@ export default function DocumentosPage() {
   const canales = [...new Set(todasLasFilas.map((x) => x.canal))]
 
   // S01p·18.2 · 3: una llegada sin leer dice qué archivo es, no «Documento sin leer».
-  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? (x.archivo ? `«${x.archivo}»` : 'Documento sin leer') : 'No reconozco el emisor')
+  // S01p·20 · 1: y un correo sin factura, su asunto.
+  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? (x.archivo || esCorreoSinFactura(x) ? tituloDeLlegada(x) : 'Documento sin leer') : 'No reconozco el emisor')
   const euro = (n: number | null | undefined) => (n === null || n === undefined ? '—' : eurosExactos(n))
   const propuesto = (x: FilaDocumento) => {
     if (x.tipo !== 'factura' || !x.entendido) return null
@@ -440,7 +444,7 @@ export default function DocumentosPage() {
       </BotonPulgar>
 
       {aclarando && accountId && (
-        <AclararDocumento fila={aclarando} accountId={accountId} quien={userName ?? null} alCerrar={() => setAclarando(null)}
+        <AclararDocumento fila={aclarando} accountId={accountId} companyId={activa.id} quien={userName ?? null} alCerrar={() => setAclarando(null)}
           alSubirFactura={() => { setAclarando(null); ficheros.current?.click() }}
           alHecho={(m) => { setAclarando(null); setHecho(m); setVuelta((v) => v + 1); refrescarCuentasMenu() }} />
       )}

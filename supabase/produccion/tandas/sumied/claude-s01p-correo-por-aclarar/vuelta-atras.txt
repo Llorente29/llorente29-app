@@ -1,0 +1,3 @@
+# S01p·20 · 1 · la vuelta atrás: fuera las tres funciones (las filas creadas se quedan: son correos que llegaron).
+cuenta: scripts/conta/produccion/cuentas/s01p-correo-por-aclarar.sql
+supabase/vuelta-atras/20261113T1504_s01p_correo_por_aclarar.down.sql
