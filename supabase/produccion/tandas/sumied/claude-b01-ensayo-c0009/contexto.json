@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · el ensayo en la C0009 · contexto de producción, medido en SOLO LECTURA el 13/11 a las 19:00Z: la conexión de Foodint con Diez (account_connector 860fcb61…) en la C0008, sin disparadores; external_send de Foodint 213 enviado, 2 enlazado y 27 pendiente, sin disparadores; conta_diez_traspaso sin filas ni disparadores; fiscal_period_lock de Foodint, enero a septiembre cerrados (migrated). La 2005 añade una tabla y cambia datos de Foodint (la conexión y 215 envíos). Nada en el camino del pedido; no está en el historial.",
+ "medido": "2026-11-13T19:00Z",
+ "tanda": {
+  "supabase/migrations/20261113T2005_b01r26_ensayo_c0009.sql": "3d0e8a6730b7e4759b974e53daa68ed3"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

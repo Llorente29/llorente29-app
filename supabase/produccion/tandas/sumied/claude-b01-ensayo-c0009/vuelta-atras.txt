@@ -1,0 +1,3 @@
+# B01r26 · la limpieza del ensayo en la C0009: deja Sumied como antes del ensayo (traspasos, enlaces de PDF, subcuentas apuntadas, envíos, el mes cerrado y la conexión a la C0008).
+cuenta: scripts/conta/produccion/cuentas/b01r26-ensayo-c0009.sql
+supabase/vuelta-atras/20261113T2005_b01r26_ensayo_c0009.down.sql
