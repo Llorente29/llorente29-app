@@ -76,7 +76,7 @@ export interface ResumenUber {
 // ── Del correo a trozos de texto ────────────────────────────────────────────
 
 const ENTIDADES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", euro: '€', ndash: '–', mdash: '—', minus: '−' }
-function decodificar(s: string): string {
+export function decodificar(s: string): string {
   return s
     .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
