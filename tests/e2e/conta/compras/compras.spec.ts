@@ -199,7 +199,7 @@ test('Cómo te factura, en su pantalla (N20): lo que dicen sus papeles, con el I
   await expect(page.getByRole('heading', { level: 1, name: 'Cómo te factura' })).toBeVisible()
   await expect(page.getByRole('navigation', { name: 'Estás en' }).getByRole('link', { name: 'Verduras del Huerto Prueba, S.L.' })).toBeVisible()
   const grupo = page.getByRole('radiogroup', { name: 'Cómo te factura' })
-  await expect(grupo.getByRole('radio')).toHaveCount(3)
+  await expect(grupo.getByRole('radio')).toHaveCount(4)   // S01p·20·2: y «Me lo factura otro»
   // Su ficha no dice cómo factura y su papel sí: lo avisa, con si traía IVA.
   await expect(page.locator('.cxc-dice-choca strong')).toHaveText('Su última entrega vino con albarán, con IVA.')
   await capturar(page, 'como-te-factura')
