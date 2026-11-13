@@ -1,0 +1,22 @@
+# DL1 · Uber de octubre: cada liquidación compensada en su fecha (Julio, DL1·24,
+# opción A, 13/11). Rama claude/dl1-uber-octubre. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   1225  Anula en su fecha los bloques 4/3352 (31/10, 403,55) y 4/3351 (05/11,
+#         6.303,17); pone tienda a 8 liquidaciones y arregla 11 enlaces de
+#         factura; compensa 17 liquidaciones en su fecha (1.933,95), las 23
+#         facturas de octubre sin liquidación a 31/10 (3.012,75) y las 15 de
+#         noviembre otra vez a 05/11 (1.794,73). Todo validado como Julio. No
+#         crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-uber-octubre.sql
+supabase/migrations/20261113T1225_dl1_uber_octubre.sql
+sin-vuelta-atras: supabase/migrations/20261113T1225_dl1_uber_octubre.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-uber-octubre · Liquidaciones de Uber de octubre con asiento validado, menos 23 = 0
+esperado: dl1-uber-octubre · 41000003 a 31/10, más 0,45 = 0.00
+esperado: dl1-uber-octubre · 43000002 a 31/10, menos 2.832,76 = 0.00
+esperado: dl1-uber-octubre · 41000003 en 2026, más 0,45 = 0.00
+esperado: dl1-uber-octubre · 43000002 en 2026, menos 3.259,06 = 0.00
+esperado: dl1-uber-octubre · IVA 472 del 4T = como antes
+esperado: dl1-uber-octubre · IVA 477 del 4T = como antes
