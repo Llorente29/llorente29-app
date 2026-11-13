@@ -273,16 +273,21 @@ jobs:
           ro=$("$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "select current_setting('transaction_read_only')")
           [ "$ro" = on ] || { echo "::error::La sesión no es de solo lectura. No se lee nada."; exit 1; }
           "$PSQL" "$DB_URL" -X -A -t -v ON_ERROR_STOP=1 -v emp="$FOODINT_EMPRESA" -f scripts/conta/diez/sumied-contra-diez.sql > /tmp/sumied.json
-          echo "Leído de Sumied: $(jq '.asientos | length' /tmp/sumied.json) asientos y $(jq '.envios | length' /tmp/sumied.json) envíos."
+          jq -r '"@@ sumied.asientos \(.asientos | length)", "@@ sumied.envios \(.envios | length)"' /tmp/sumied.json | node scripts/conta/salida-segura.mjs
       - name: Diez · comparar (solo GET), por la puerta de salida
         env:
           DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
         run: |
           set -euo pipefail
           SUMIED=/tmp/sumied.json CIFRAR=/tmp/fuera.txt npx --yes tsx@4.19.2 scripts/conta/diez/sumied-contra-diez.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
-      - name: Los importes de lo que no viene de Sumied, cifrados para Julio
+      - name: Los importes de lo que no viene de Sumied, cifrados para Julio (artefacto)
         run: |
           set -euo pipefail
-          [ -s /tmp/fuera.txt ] || { echo "Nada que cifrar."; exit 0; }
-          npx --yes tsx@4.19.2 scripts/conta/diez/cifrar.ts /tmp/fuera.txt FUERA-DE-SUMIED-CIFRADO
+          mkdir -p cifrado
+          if [ -s /tmp/fuera.txt ]; then npx --yes tsx@4.19.2 scripts/conta/diez/cifrar.ts /tmp/fuera.txt FUERA-DE-SUMIED-CIFRADO > cifrado/fuera-de-sumied.txt; fi
           rm -f /tmp/fuera.txt /tmp/sumied.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fuera-de-sumied-cifrado
+          path: cifrado/
+          retention-days: 14
