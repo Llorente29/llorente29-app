@@ -1,0 +1,21 @@
+{
+ "_que": "S01p·18.2 · punto 3 · el documento sin leer · contexto de producción, medido en SOLO LECTURA el 2026-11-13T09:15Z: conta_puerta_dime_que_es(uuid,text,boolean,text) existe con md5 6804c4836cd94c276a888e40105df563 (la misma en staging); conta_llegada_eliminar y conta_llegada_eliminable no existen (tampoco en staging). document_inbox con 4 llegadas de Foodint en «Por aclarar» (3 en error: los dos Compras-y-Ventas y EMPRESARIAL-COLON.pdf). La tanda cambia conta_puerta_dime_que_es por reemplazo exacto dentro de un DO, con respaldo, y añade conta_llegada_eliminable y conta_llegada_eliminar (borra de verdad la fila, su actividad y su lectura; el fichero lo borra la pantalla con la API del almacén). La tanda no mueve ninguna fila. No mueve ninguna fila. Nada en el camino del pedido; nada en el historial.",
+ "medido": "2026-11-13T09:15Z",
+ "tanda": {
+  "supabase/migrations/20261113T1015_s01p_documento_sin_leer.sql": "3e9a38a47dfbd19180b410d59b3a716a"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [
+   "public.conta_puerta_dime_que_es(uuid,text,boolean,text)"
+  ],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
