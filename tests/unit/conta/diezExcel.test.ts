@@ -168,3 +168,15 @@ describe('«Ya lo he importado»: la misma factura en Diez', async () => {
     expect(r.emitidas[0][columnas(XML_EMITIDAS)['005'] - 1]).toBe('UBER EATS EN DIEZ')
   })
 })
+
+describe('los abonos de proveedor (12 en octubre y noviembre)', () => {
+  it('van en el Excel en negativo: gasto, IVA y total, y el asiento cuadra', () => {
+    const r = recibidaDeAsiento({
+      fecha: '2026-10-15', factura: { numero: 'AB-1', fecha: '2026-10-15' }, proveedor: { nombre: 'P', nif: 'B00000000' },
+      lineas: [{ cuenta: '62300000', debe: 0, haber: 11.29, tipoIva: null, baseIva: null }, { cuenta: '47200021', debe: 0, haber: 2.37, tipoIva: 21, baseIva: 11.29 },
+        { cuenta: '41000001', debe: 13.66, haber: 0, tipoIva: null, baseIva: null }],
+    }, URL) as Recibida
+    expect([r.total, r.gastos, r.iva]).toEqual([-13.66, [{ cuenta: '62300000', importe: -11.29 }], [{ base: -11.29, pct: 21, cuota: -2.37 }]])
+    expect('porLaApi' in filaRecibida(r, XML_RECIBIDAS)).toBe(false)
+  })
+})

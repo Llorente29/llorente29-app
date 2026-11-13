@@ -309,7 +309,9 @@ export function recibidaDeAsiento(r: RecibidaAsiento, url: string): Recibida | N
   if (prov.size !== 1) return { porLaApi: `tiene que ir a una cuenta de proveedor (lleva ${prov.size})` }
   if (ret.size > 1) return { porLaApi: 'lleva más de una retención' }
   const [proveedor, total] = [...prov][0]
-  if (total <= 0) return { porLaApi: 'es un abono' }
+  // Un abono (total negativo) va en el Excel en negativo, como la rectificativa de emitidas que entró en la
+  // C0009 el 24/10: 12 en octubre y noviembre. Se prueba en el ensayo de la C0009. Cero, no va.
+  if (total === 0) return { porLaApi: 'el total es cero' }
   let retencion: Recibida['retencion'] = null
   if (ret.size === 1) {
     const [sub, cuota] = [...ret][0]

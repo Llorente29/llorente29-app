@@ -39,6 +39,7 @@ Con la regla de arriba (las ventas de marca, agrupadas) caben **todas** (177): 5
 
 - **Las que no caben** (3 tipos de IVA, autoliquidada o con la 76900000) **van por la API**, sin PDF.
 - **Las exentas caben** (una línea de IVA al 0 %), pero **no se ha probado** cómo las guarda Diez: va en el ensayo de la C0009.
+- **Los abonos de proveedor** (12 en octubre y noviembre, de −2,99 € a −420,46 €) van en el Excel **en negativo**, como la rectificativa de emitidas que entró en la C0009 el 24/10. **No se ha probado en recibidas:** va en el ensayo de la C0009. (Por la API tampoco irían: no está medido cómo los guarda Diez.)
 - **Las que no tienen PDF en Sumied no pueden ir con «Url documento»:** o llega su PDF antes del traspaso (las de Just Eat las arregla S), o van por la API sin PDF y la pantalla lo dice.
 
 ### La fecha de las recibidas
