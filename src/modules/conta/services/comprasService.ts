@@ -200,6 +200,24 @@ export async function releerCorreos(companyId: string, que: { emailIds: string[]
   return data as Releidos
 }
 
+/** S01p·20 · 1b · Lo que dice el servidor al poner el PDF a las facturas de Just Eat: la frase y cada factura. */
+export interface PdfsPuestos { texto: string; facturas: { emailId: string; facturaId: string; estado: 'puesto' | 'ya_tenia' | 'no_cuadra' | 'ya_no_esta' | 'error'; texto: string }[] }
+/**
+ * S01p·20 · 1b · «Poner el PDF a las facturas de Just Eat que no lo tienen»: el servidor pide cada correo
+ * otra vez, hace su PDF tal como llega y lo deja como el papel de su factura. Solo las que entraron por
+ * correo como liquidación y siguen sin papel (lo dice la base); nada más cambia.
+ */
+export async function ponerPdfsJustEat(companyId: string): Promise<PdfsPuestos> {
+  const { data, error } = await supabase!.functions.invoke('conta-facturas-entrada?pdfs=1', { body: { company_id: companyId } })
+  if (error) {
+    const ctx = (error as { context?: Response }).context
+    let texto = error.message
+    try { const j = ctx ? await ctx.json() as { error?: string } : null; if (j?.error) texto = j.error } catch { /* el mensaje de antes */ }
+    throw new Error(texto)
+  }
+  return data as PdfsPuestos
+}
+
 /** S01c · Una línea de la factura contra la de su albarán (o lo que está en un solo lado). */
 export interface LineaComparada {
   resultado: 'cuadra' | 'cantidad' | 'importe' | 'solo_factura' | 'solo_albaran'

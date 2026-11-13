@@ -264,6 +264,11 @@ export interface PuertoEntrada {
   colocar?(inboxId: string, x: { tipo: QueEs | null; por: 'regla' | 'lectura'; bucket?: string }): Promise<void>
   /** S01p·20 · 1 · La fila «por aclarar» de un correo de plataforma del que no salió nada (conta_entrada_sin_factura): una por correo. */
   sinFactura?(x: { accountId: string; companyId: string; emailId: string; to: string; from: string | null; subject: string | null; recibido: string | null; porque: string }): Promise<{ id: string; yaEstaba: boolean }>
+  /**
+   * S01p·20 · 1b · El PDF de una factura que venía escrita en el cuerpo del correo (Just Eat): se hace del
+   * correo tal como llega, se guarda y queda como el papel de su factura (si aún no tenía). Dice qué ha hecho.
+   */
+  papelDelCorreo?(x: { accountId: string; companyId: string; facturaId: string; emailId: string; numero: string | null; asunto: string | null; de: string | null; recibido: string | null; html: string | null; text: string | null }): Promise<{ puesto: boolean; texto: string }>
   /** S01p·20 · 1 · Al volver a leer el correo y entrar, su fila sale de «Por aclarar» (conta_entrada_sin_factura_resuelta). */
   sinFacturaResuelta?(companyId: string, emailId: string): Promise<void>
   /** La puerta: una nómina, por el camino del buzón de nóminas (employee-documents y payroll-extract). */
@@ -510,12 +515,18 @@ async function recibirLiquidacion(c: CorreoResend, destino: Destino & { direccio
     const r = await p.liquidacion({ companyId: destino.companyId, datos: cuadra ? datos : { ...datos, factura: null } })
     // S01j · Su factura de comisión, como recibida (con su número): la liga el S01i. Si no suma, en revisión con el porqué.
     const f = p.facturaComision ? await p.facturaComision({ settlementId: r.id, datos, emailId: c.email_id }) : null
+    // S01p·20 · 1b · Su factura no trae PDF: el papel es el propio correo. Que falle no para la entrada, pero se dice.
+    const papel = f?.id && p.papelDelCorreo
+      ? await p.papelDelCorreo({ accountId: destino.accountId, companyId: destino.companyId, facturaId: f.id, emailId: c.email_id, numero: je.factura.numero,
+          asunto: c.subject ?? null, de: c.from ?? null, recibido: c.created_at ?? null, html: cuerpo.html, text: cuerpo.text })
+          .catch((x: unknown) => ({ puesto: false, texto: `No he podido guardar el PDF del correo: ${x instanceof Error ? x.message : String(x)}.` }))
+      : null
     await p.registrarCorreo({ ...base, companyId: destino.companyId, resultado: 'liquidacion',
       detalle: { liquidacion_id: r.id, ya_estaba: r.yaEstaba, factura: r.factura, avisos: je.avisos.length, plataforma: 'justeat',
-                 ...(f ? { factura_id: f.id, factura_estado: f.estado } : {}) } })
+                 ...(f ? { factura_id: f.id, factura_estado: f.estado } : {}), ...(papel ? { pdf: papel.puesto } : {}) } })
     await yaNoPorAclarar(destino.companyId, c.email_id, p)
     const texto = cuadra ? r.texto : `La liquidación de Just Eat del ${je.desde.slice(8, 10)}/${je.desde.slice(5, 7)} al ${je.hasta.slice(8, 10)}/${je.hasta.slice(5, 7)} ha entrado.`
-    return { resultado: 'liquidacion', texto: f ? `${texto} ${f.texto}` : texto, llegadas: [] }
+    return { resultado: 'liquidacion', texto: [texto, f?.texto, papel?.texto].filter(Boolean).join(' '), llegadas: [] }
   }
   let resumen: ResumenUber
   try {
@@ -703,6 +714,52 @@ async function recibirDocumentos(c: CorreoResend, dest: Destino & { direccion: s
     ? `${llegadas.length} ${llegadas.length === 1 ? 'documento recibido' : 'documentos recibidos'}${dejar.length ? `; ${dejar.length} sin tomar (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''}.`
     : `El correo no trae ningún documento${dejar.length ? ` (${dejar.map((d) => `${d.nombre}: ${d.porque}`).join('; ')})` : ''} ni un enlace para bajarlo.`
   return { resultado: 'documentos', texto, llegadas }
+}
+
+// ── S01p·20 · 1b · El PDF de las facturas de Just Eat que ya entraron sin él ─
+
+export type PapelPuesto = { emailId: string; facturaId: string; estado: 'puesto' | 'ya_tenia' | 'no_cuadra' | 'ya_no_esta' | 'error'; texto: string }
+
+/**
+ * Pone el PDF del correo a facturas de Just Eat que entraron sin él (la base dice cuáles:
+ * conta_correo_papeles_que_faltan). Cada correo se pide otra vez a la entrada, se lee, y
+ * solo si su número de factura es el de la factura se hace el PDF y se enlaza. No registra
+ * ni cambia nada más: ni la liquidación ni la factura.
+ */
+export async function ponerPapelesDelCorreo(lista: readonly { emailId: string; facturaId: string; numero: string | null }[], destino: { accountId: string; companyId: string },
+  p: PuertoEntrada, pedir: (emailId: string) => Promise<CorreoResend | null>): Promise<PapelPuesto[]> {
+  const fuera: PapelPuesto[] = []
+  for (const x of lista) {
+    try {
+      if (!p.papelDelCorreo) throw new Error('La función no sabe guardar el PDF del correo.')
+      const c = await pedir(x.emailId)
+      if (!c) { fuera.push({ ...x, estado: 'ya_no_esta', texto: YA_NO_ESTA }); continue }
+      const je = leerLiquidacionJustEat({ from: c.from, subject: c.subject, html: c.html, text: c.text })
+      if (x.numero && je.factura.numero !== x.numero) {
+        fuera.push({ ...x, estado: 'no_cuadra', texto: `El correo trae la factura ${je.factura.numero} y la de Sumied es la ${x.numero}: no la toco.` }); continue
+      }
+      const r = await p.papelDelCorreo({ accountId: destino.accountId, companyId: destino.companyId, facturaId: x.facturaId, emailId: x.emailId, numero: je.factura.numero,
+        asunto: c.subject ?? null, de: c.from ?? null, recibido: c.created_at ?? null, html: c.html ?? null, text: c.text ?? null })
+      fuera.push({ ...x, estado: r.puesto ? 'puesto' : 'ya_tenia', texto: r.texto })
+    } catch (e) {
+      fuera.push({ ...x, estado: 'error', texto: e instanceof Error ? e.message : String(e) })
+    }
+  }
+  return fuera
+}
+
+/** La frase de lo hecho (regla 8): cuántas tienen ya su PDF y por qué no las demás. */
+export function resumenPapeles(rs: readonly PapelPuesto[]): string {
+  if (!rs.length) return 'No hay ninguna factura de Just Eat sin su PDF: no he tocado nada.'
+  const n = (e: PapelPuesto['estado']) => rs.filter((r) => r.estado === e).length
+  const partes = [
+    n('puesto') ? `${n('puesto') === 1 ? 'Una factura de Just Eat tiene' : `${n('puesto')} facturas de Just Eat tienen`} ya su PDF, hecho de su correo` : 'Ninguna factura nueva con su PDF',
+    n('ya_tenia') ? `${n('ya_tenia')} ya lo tenía${n('ya_tenia') === 1 ? '' : 'n'}` : '',
+    n('no_cuadra') ? `${n('no_cuadra')} sin tocar porque su correo trae otra factura` : '',
+    n('ya_no_esta') ? `${n('ya_no_esta')} sin tocar porque su correo ya no está en el buzón (reenvíalo desde Gmail)` : '',
+    n('error') ? `${n('error')} con error: ${rs.filter((r) => r.estado === 'error').map((r) => r.texto).slice(0, 2).join('; ')}` : '',
+  ].filter(Boolean)
+  return `${partes.join('; ')}.`
 }
 
 // ── S01j · Volver a leer lo que ya llegó ─────────────────────────────────────
