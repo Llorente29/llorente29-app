@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·18.2 · punto 2 · la fecha de la recibida · contexto de producción, medido en SOLO LECTURA el 2026-11-13T08:25Z: no existe conta_recibida_fecha; existen _conta_recibida_no_antes_de_entrar (md5 92123a66d441822e785697679e842735, la de la 2210, igual en staging) y conta_primer_dia_iva_abierto (78332516df47b2a0b2a860820d11f557), que la 0913 llama sin cambiarlas. Solo añade. No mueve ninguna fila. Nada de la tanda en el historial.",
+ "medido": "2026-11-13T08:25Z",
+ "tanda": {
+  "supabase/migrations/20261113T0913_s01p_recibida_fecha.sql": "cafc0ff4f9b4d7e6c8a7e6123ec09a8c"
+ },
+ "contexto": {"tablas": [], "funciones": ["public._conta_recibida_no_antes_de_entrar(uuid,jsonb)", "public.conta_primer_dia_iva_abierto(uuid,date)"], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
