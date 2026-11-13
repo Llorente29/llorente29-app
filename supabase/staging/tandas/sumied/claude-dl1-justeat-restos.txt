@@ -1,0 +1,5 @@
+# DL1·29 · Just Eat restos (1905: no añade objetos; en Foodint paga 8 facturas
+# por compensación y apunta 2 asientos). Su prueba (ROLLBACK, cuenta A): sin
+# Foodint no hace nada; un asiento validado se anula en su fecha.
+supabase/migrations/20261113T1905_dl1_justeat_restos.sql
+supabase/staging/sql/20261113_dl1_justeat_restos_prueba.sql

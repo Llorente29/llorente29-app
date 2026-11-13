@@ -1,0 +1,8 @@
+{
+ "_que": "DL1·29 · Just Eat restos · contexto de producción, medido en SOLO LECTURA el 13/11 a las 18:00Z: la 1905 no crea ni cambia ningún objeto; pasa 8 supplier_invoice de en_revision a aprobada y las paga con _conta_comision_pagar, apunta 2 asientos con _dl1_asiento_iva y valida con _dl1_validar (todas en producción). 43000003 a 31/10 = 404,52; 41000004 a 31/10 = 0,00. Nada en el camino del pedido; la 1905 no está en el historial.",
+ "medido": "2026-11-13T18:00Z",
+ "tanda": {
+  "supabase/migrations/20261113T1905_dl1_justeat_restos.sql": "ab24eb537133e32c07724fbc9a6f1432"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
