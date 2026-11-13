@@ -34,7 +34,7 @@ declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
   v_e constant uuid := '658728c0-fcd7-46ef-a860-d4e5e6eb21d9';
   v_julio constant uuid := '673fca49-f6b5-40ed-a8f7-558390acce10';
-  r record; p jsonb; v_res jsonb; v_i int := 0; v_liq uuid; v_inv uuid; v_loc uuid; v_id uuid; v_ids jsonb := '[]'::jsonb; v_n int; v_lin jsonb; v_tot numeric;
+  r record; p jsonb; v_res jsonb; v_i int := 0; v_k int := 0; v_con text; v_liq uuid; v_inv uuid; v_loc uuid; v_id uuid; v_ids jsonb := '[]'::jsonb; v_n int; v_lin jsonb; v_tot numeric;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
     raise notice 'DL1 Just Eat octubre: sin la cuenta de Foodint, no hay nada que apuntar.';
@@ -88,6 +88,7 @@ begin
       ('4126341', -2.99, 2.99, 'GL011103985'),
       ('4126387', -5.98, 5.98, null)
     ) x(ref, total, gl, gl_ref) loop
+    v_k := v_k + 1;
     select c.id, c.location_id into v_liq, v_loc from public.channel_settlement c
      where c.account_id = v_acc and c.settlement_ref = r.ref and c.period_from = date '2026-10-01' and c.period_to = date '2026-10-15';
     -- La propuesta que haya hecho sola al ligar la factura (Debe/Haber por el total, sin el cargo GL) se rehace, como hace la aplicación.
@@ -113,7 +114,15 @@ begin
         'porque', 'DL1·24 (Julio, 13/11): su factura compensada y su cargo GL de la campaña JET+, sin IVA, como gasto contra la 43000003.',
         'razones', '[]'::jsonb, 'party_id', null, 'documento', r.ref),
       v_lin, null, 'Julio (tanda DL1)', null);
-    exception when others then raise exception using errcode = 'DJ500', message = r.ref || ': ' || sqlerrm; end;
+    exception when others then
+      get stacked diagnostics v_con = constraint_name;
+      v_k := v_k;
+      raise exception using message = r.ref || ': ' || sqlerrm,
+        errcode = 'D' || v_k || case v_con when 'ux_journal_entry_origen' then 'O' when 'ux_journal_entry_numero' then 'N' when 'ux_journal_entry_cadena' then 'C'
+                                           when 'ux_journal_entry_anula' then 'A' else 'X' end
+                  || coalesce((select upper(left(e.status, 1)) from public.journal_entry e where e.company_id = v_e and e.source_type = 'channel_settlement'
+                                and e.source_id = v_liq and e.status <> 'anulado' limit 1), '0') || '9';
+    end;
     v_id := (v_res->>'id')::uuid;
     if v_id is null or coalesce((v_res->>'existente')::boolean, false) then
       raise exception 'DL1 Just Eat octubre: el asiento de % no ha salido nuevo (%): no se apunta nada.', r.ref, v_res;

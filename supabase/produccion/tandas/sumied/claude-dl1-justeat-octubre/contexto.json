@@ -2,7 +2,7 @@
  "_que": "DL1 · Just Eat del 01–15/10 · contexto de producción, medido en SOLO LECTURA el 13/11 a las 15:30Z: la 1615 no crea ni cambia ningún objeto; crea 3 channel_settlement con conta_liquidacion_registrar, sus facturas con conta_comision_del_correo y _conta_plataforma_apuntar, y 4 asientos con _journal_entry_proponer validados con _dl1_validar (todas en producción). Ninguna de las 3 existe; la 4126387 no tiene asiento. 43000003 a 31/10 = 471,49; 41000004 a 31/10 = 5,98. Nada en el camino del pedido; la 1615 no está en el historial.",
  "medido": "2026-11-13T15:30Z",
  "tanda": {
-  "supabase/migrations/20261113T1615_dl1_justeat_octubre.sql": "7ac1f19d81f6c076452c336c75e31ddf"
+  "supabase/migrations/20261113T1615_dl1_justeat_octubre.sql": "05e4c6be28c3e052689c371176c85127"
  },
  "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
 }
