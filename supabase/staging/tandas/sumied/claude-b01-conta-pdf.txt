@@ -1,0 +1,5 @@
+# B01r26 · 1805: el enlace permanente del PDF (conta_pdf_llave, conta_pdf_acceso y
+# sus cuatro funciones). Solo añade. Su prueba (ROLLBACK): llaves solo de un
+# traspaso confirmado, una por documento, servir con tope, no existe y retirar.
+supabase/migrations/20261113T1805_b01r26_conta_pdf.sql
+supabase/staging/sql/20261113_b01r26_conta_pdf_prueba.sql
