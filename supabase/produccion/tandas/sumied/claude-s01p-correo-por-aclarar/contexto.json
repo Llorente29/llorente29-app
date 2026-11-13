@@ -1,0 +1,9 @@
+{
+ "_que": "S01p·20 · punto 1 · el lector de correos no descarta en silencio · contexto escrito el 2026-11-13 desde el repositorio y lo medido antes en SOLO LECTURA (12:20–12:53): los 11 correos de Just Eat siguen «sin_facturas» en inbound_email_log de Foodint; 0 liquidaciones y 0 facturas con sus números. No existen conta_entrada_sin_factura, conta_entrada_sin_factura_resuelta ni conta_correo_sin_factura_pdf (nombres nuevos de esta rama). document_inbox admite el estado 'error' y document_activity la acción 'descartada' (comprobado en la base local del W09). La lectura de producción de las 15:10 no se pudo hacer (el conector de la base se cayó en la sesión): el ensayo la mide él mismo, en solo lectura, antes de su transacción. Solo añade. Nada de la tanda en el historial.",
+ "medido": "2026-11-13T11:53Z",
+ "tanda": {
+  "supabase/migrations/20261113T1504_s01p_correo_por_aclarar.sql": "7717c9e79e0feba46b3b05c422e57ff7",
+  "supabase/migrations/20261113T1511_s01p_foodint_ocho_por_aclarar.sql": "a6111deaf7b32a81b83bcf3f1dfb5ff0"
+ },
+ "contexto": {"tablas": ["public.document_inbox", "public.document_activity", "public.inbound_email_log"], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

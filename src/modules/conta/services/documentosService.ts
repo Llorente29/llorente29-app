@@ -30,6 +30,7 @@ import { hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { textoParaPantalla } from '@/modules/conta/lib/errorBase'
 import { MAX_BYTES_EXPEDIDA, claseDeFichero, motivoExpedida, nombreExpedida, rutaExpedida, tamano } from '@/modules/conta/lib/expedidaPdf'
 import { papelDeLaLectura } from '@/modules/conta/documentos/fichaRecibida'
+import { releerCorreos } from '@/modules/conta/services/comprasService'
 import type { ProveedorLeido } from '@/modules/conta/lib/proveedorDesdeFactura'
 
 type Fila = Record<string, unknown>
@@ -737,6 +738,55 @@ export async function subirPdfDeLlegada(accountId: string, inboxId: string, f: F
   const bytes = await bajado.data.arrayBuffer()
   await rpc('conta_llegada_pdf_subido', { p_inbox: inboxId, p_ruta: ruta, p_nombre: f.name, p_tipo: bajado.data.type || f.type, p_bytes: bytes.byteLength, p_sha256: await sha256(bytes) })
   return `«${f.name}» subido. ${await leerLlegada(accountId, inboxId)}`
+}
+
+// ── S01p·20 · 1 · Un correo de plataforma del que no salió nada (regla 8) ───
+//
+// La función de entrada deja su fila en la bandeja (conta_entrada_sin_factura,
+// estado 'error', sin fichero ni enlace) y sale en «Por aclarar». Su asunto se lee
+// aquí, por ids y con su cuenta (regla 9): la lista de Documentos no cambia.
+// Columnas comprobadas contra la tabla (20261021T0200_d01_recibidas): id,
+// account_id, status, email_id, email_subject, file_path, link_url (regla 40).
+
+/** El correo de una fila de «Por aclarar» que no trae fichero: su id de correo y su asunto. */
+export interface CorreoDeLlegada { id: string; asunto: string | null }
+
+export async function leerCorreosDeLlegadas(accountId: string, ids: readonly string[]): Promise<Map<string, CorreoDeLlegada>> {
+  const fuera = new Map<string, CorreoDeLlegada>()
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await tabla('document_inbox').select('id, email_id, email_subject')
+      .eq('account_id', accountId).eq('status', 'error').is('file_path', null).is('link_url', null).not('email_id', 'is', null)
+      .in('id', ids.slice(i, i + 200))
+    if (error) throw new Error(mensaje('No se han podido leer los correos de «Por aclarar»', error))
+    for (const f of (data ?? []) as Fila[]) {
+      if (typeof f.id === 'string' && typeof f.email_id === 'string') fuera.set(f.id, { id: f.email_id, asunto: typeof f.email_subject === 'string' ? f.email_subject : null })
+    }
+  }
+  return fuera
+}
+
+/** «Subir el PDF a mano» de un correo sin factura: el fichero va a la misma fila y se lee en el momento. */
+export async function subirPdfDelCorreo(accountId: string, inboxId: string, f: File): Promise<string> {
+  hayBase()
+  const [ruta] = await uploadReceiptFiles(accountId, [f])
+  const bajado = await supabase!.storage.from(RECEPCIONES).download(ruta)
+  if (bajado.error || !bajado.data) throw new Error(`No se ha podido comprobar lo subido (${bajado.error?.message ?? 'vacío'}).`)
+  const bytes = await bajado.data.arrayBuffer()
+  await rpc('conta_correo_sin_factura_pdf', { p_inbox: inboxId, p_ruta: ruta, p_nombre: f.name, p_tipo: bajado.data.type || f.type, p_bytes: bytes.byteLength, p_sha256: await sha256(bytes) })
+  return `«${f.name}» subido. ${await leerLlegada(accountId, inboxId)}`
+}
+
+/**
+ * «Volver a leer» un correo de «Por aclarar»: lo pide otra vez a la entrada (la misma
+ * que «Volver a leer este correo» de Correo de facturas). Si entra, su fila sale sola.
+ * Lo que dice el servidor, tal cual (regla 8); si no se ha podido, falla en pantalla.
+ */
+export async function releerCorreoDeLlegada(companyId: string, emailId: string): Promise<string> {
+  const r = await releerCorreos(companyId, { emailIds: [emailId] })
+  const c = r.correos[0]
+  if (!c) throw new Error('Ese correo no se puede volver a leer desde esta empresa.')
+  if (c.estado !== 'leido') throw new Error(c.texto ?? r.texto)
+  return c.texto ?? r.texto
 }
 
 /**

@@ -150,6 +150,17 @@ function puertoDe(sb: any): PuertoEntrada {
       const h = libro.Sheets[libro.SheetNames[0]];
       return h ? XLSX.utils.sheet_to_json(h, { defval: null }) as Record<string, unknown>[] : [];
     },
+    // S01p·20 · 1 · La fila «por aclarar» de un correo de plataforma del que no salió nada (regla 8).
+    sinFactura: async (x) => {
+      const r = await rpc<{ id: string; ya_estaba: boolean }>("conta_entrada_sin_factura", {
+        p: { account_id: x.accountId, company_id: x.companyId, email_id: x.emailId, to: x.to, from: x.from, subject: x.subject, recibido: x.recibido, porque: x.porque },
+      });
+      return { id: r.id, yaEstaba: r.ya_estaba };
+    },
+    // S01p·20 · 1 · Al volver a leer el correo y entrar, su fila sale de «Por aclarar».
+    sinFacturaResuelta: async (companyId, emailId) => {
+      await rpc("conta_entrada_sin_factura_resuelta", { p_company: companyId, p_email_id: emailId, p_texto: null });
+    },
     // S01j · La factura de comisión escrita en el correo (Just Eat), como recibida.
     facturaComision: async ({ settlementId, datos, emailId }) => {
       const r = await rpc<{ factura_id: string | null; estado: string; texto: string }>("conta_comision_del_correo", { p_settlement: settlementId, p: { ...datos, email_id: emailId } });
