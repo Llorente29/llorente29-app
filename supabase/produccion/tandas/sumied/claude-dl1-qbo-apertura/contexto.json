@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · apertura de QBO · contexto de producción, medido en SOLO LECTURA el 13/11 a las 09:48Z: la 1035 no crea ni cambia ningún objeto; apunta y valida un asiento a 01/01 con _dl1_asiento_iva y _dl1_validar (en producción). 41000008 en +392,40 (una sola línea a 01/01: 9/1, 145,20 al Haber); 11300000 en −1.898,36, −824,34 a 01/01. Nada en el camino del pedido; la 1035 no está en el historial.",
+ "medido": "2026-11-13T09:48Z",
+ "tanda": {
+  "supabase/migrations/20261113T1035_dl1_qbo_apertura.sql": "884185a5e4b5b438629f0a2ad86fee2d"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
