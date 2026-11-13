@@ -1,0 +1,5 @@
+# DL1 · Just Eat del 01–15/10 (1615: no añade objetos; en Foodint crea 3
+# liquidaciones con su factura y 4 asientos). Su prueba (ROLLBACK, cuenta A):
+# sin Foodint no hace nada; un asiento validado se anula en su fecha.
+supabase/migrations/20261113T1615_dl1_justeat_octubre.sql
+supabase/staging/sql/20261113_dl1_justeat_octubre_prueba.sql
