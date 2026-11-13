@@ -1,0 +1,19 @@
+{
+ "_que": "B01r23 · noviembre de Llorente29 · contexto de producción, medido en SOLO LECTURA el 13/11 a las 01:00Z: la 0155 añade _b01r23_ignorar (no existe, ni otra con ese nombre) y, en Foodint, casa 40 movimientos de noviembre con _dl1_casar y valida con _dl1_validar (las dos, de la 1842, en producción), y aparta 9 con bank_ignorar. Ningún mes de banco cerrado. Nada en el camino del pedido; la 0155 no está en el historial.",
+ "medido": "2026-11-13T01:00Z",
+ "tanda": {
+  "supabase/migrations/20261113T0155_b01r23_noviembre_bancos.sql": "f214f30f457ef322c0a2ad850608b9c1"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
