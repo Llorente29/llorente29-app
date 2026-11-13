@@ -4,46 +4,69 @@
 > Decisión de Julio (13/11): en Diez se borra todo lo que hay desde el 01/10, y octubre y noviembre entran limpios desde Sumied. El borrado lo hace Julio.
 > Sin nombres de personas ni NIF (T11). Las subcuentas de terceros van solo con su código.
 
-## Cómo se ha medido, y qué falta por medir
+## Cómo se ha medido
 
 - **Sumied:** producción, en solo lectura, con la vara única: `status in ('validado','anulado') and (voided_at is null or voided_by_entry_id is not null)`. Solo la empresa de Foodint (`658728c0…`).
-- **Diez:** la clave de la C0008 no la tiene ninguna sesión (T10), y ningún workflow de `main` leía la C0008 con detalle. Lo que hay:
-  - **Enero a septiembre:** la foto que Sumied guardó al traer el histórico (`external_entry_snapshot`). Son 7.223 asientos, leídos el **12/10 a las 21:04Z**, cuadrados con el testigo de los Excel de sumas y saldos.
-  - **Desde el 01/10:** no hay ninguna foto de Diez en Sumied: `external_compare_day`, `external_balance_witness` y `external_document` están a 0 filas.
-  - **La lectura de hoy:** el [#655](https://github.com/Llorente29/llorente29-app/pull/655) añade el modo `sumied-contra-diez` a «Diez · lectura», desde `main` y con el entorno «lectura». Lee la C0008 solo con GET y la compara con Sumied en el runner. Por la puerta de salida solo deja salir claves y enteros; los importes de lo que no viene de Sumied, cifrados, para Julio. **Cuando se fusione y se lance, completa el punto 0 y confirma los puntos 1 y 3** (las casillas «pendiente de la lectura»).
+- **Diez, lectura de hoy:** run [43444676030](https://github.com/Llorente29/llorente29-app/actions/runs/43444676030) del 13/11 a las 15:38 de Madrid. Es el modo `sumied-contra-diez` de «Diez · lectura», que entró con el [#655](https://github.com/Llorente29/llorente29-app/pull/655), lanzado desde `main` con el entorno «lectura».
+  - Lee la C0008 **solo con GET**: 256 peticiones, ninguna escritura. Sumied lo lee con `conta_lectura`, en una sesión de solo lectura.
+  - Por la puerta de salida solo salieron claves y enteros: 0 líneas retenidas.
+  - Los importes de lo que no viene de Sumied van **cifrados** en el artefacto [`fuera-de-sumied-cifrado`](https://github.com/Llorente29/llorente29-app/actions/runs/43444676030/artifacts/14047468861) (14 días). Solo lo abre Julio, con la clave privada del testigo.
+- **Diez, la foto del 12/10:** `external_entry_snapshot`. Son 7.223 asientos de enero a septiembre, leídos el 12/10 a las 21:04Z. Sirve para ver qué ha cambiado en Diez desde entonces.
 
 ## 0. Lo que hay en Diez desde el 01/10, antes de borrarlo (1b)
 
-### Lo que Sumied sabe que mandó (`external_send`)
+> **PARA: hay un asiento en Diez que Sumied no tiene (4/3155 del 05/10, subcuenta 55100001).** Si se borra octubre tal cual, se pierde. Julio tiene que decidir qué es antes de borrar: ver «Lo que no viene de Sumied».
 
-| Estado | Tipo | Asientos | Fechas de los asientos | Serie en Diez | PDF |
-|---|---|---:|---|---|---|
-| enviado | factura | 83 | 01/10–22/10 | 1 (ventas) | adjunto |
-| enviado | factura | 105 | 23/10–24/10 | 1 y 2 | `pendiente_diez` (Diez no guardaba documentos) |
-| enviado | factura | 12 | hasta el 24/10 | 1 | sin estado |
-| enviado | asiento | 13 | 01/10–14/10 | 4 | — |
-| enlazado | factura | 2 | 07/10 y 09/10 | 2 | `pendiente_diez` |
-| **De Sumied en Diez** | | **215** | | | **83 con PDF adjunto** |
-| pendiente | asiento | 26 | 01/10–15/10 | — | nunca salieron |
-| pendiente | factura | 1 | 05/10 | — | nunca salió |
+### Cuántos hay, y de dónde vienen
 
-- De esos 215, a **13 Sumied los anuló después** y tienen su contraasiento en Sumied, pero no en Diez. Con el borrado da igual: no hay que mandar su anulación.
-- Los 2 «enlazado» no los mandó Sumied: Julio ya los tenía en Diez y Sumied los casó por su referencia. **Son de los de Julio, y Sumied tiene el mismo hecho** (las dos recibidas están validadas en Sumied).
+| | Asientos |
+|---|---:|
+| **En la C0008 con fecha desde el 01/10** | **217** |
+| Serie 1 (facturas emitidas) | 109 |
+| Serie 2 (facturas recibidas) | 94 |
+| Serie 4 (asientos generales) | 14 |
+| Con fecha de noviembre | 0 |
+| **Vienen de Sumied** (su referencia está en `external_send`) | **215** |
+| **No vienen de Sumied** | **2** |
 
-### Lo que no viene de Sumied (lo que Julio metió a mano)
+- **Los 215 que Sumied dice que mandó** (213 «enviado» y 2 «enlazado») **están todos en Diez**: no falta ninguna referencia.
+- Lo que Sumied guarda de ellos:
 
-**Pendiente de la lectura del #655.** Ahí sale, uno a uno, cada asiento de Diez con fecha desde el 01/10 cuya referencia no está en `external_send`. De cada uno: serie, documento, fecha, tipo (factura o asiento), la subcuenta principal y la clase:
-- **1:** el mismo asiento en Sumied (mismo día, mismas subcuentas, mismos importes), con su número.
-- **2:** el mismo día y el mismo total, con otras subcuentas.
-- **3:** las mismas subcuentas y el mismo total, a ±31 días.
-- **0:** nada en Sumied. **Si sale alguno con clase 0, no se borra:** se para y se le dice a Julio, porque borrarlo lo perdería.
+| Estado en Sumied | Tipo | Asientos | Fechas | PDF según Sumied |
+|---|---|---:|---|---|
+| enviado | factura | 83 | 01/10–22/10 | adjunto |
+| enviado | factura | 105 | 23/10–24/10 | `pendiente_diez` |
+| enviado | factura | 12 | hasta el 24/10 | sin estado |
+| enviado | asiento | 13 | 01/10–14/10 | — |
+| enlazado | factura | 2 | 07/10 y 09/10 | `pendiente_diez` |
+| pendiente | asiento | 26 | 01/10–15/10 | nunca salieron |
+| pendiente | factura | 1 | 05/10 | nunca salió |
 
-Los importes de esos asientos van cifrados en el artefacto `fuera-de-sumied-cifrado`, que solo abre Julio.
+- **Los 13 asientos de la serie 4 están en Diez igual que en Sumied:** mismas subcuentas y mismos importes.
+- **Las 202 facturas no salen iguales** en el apunte que guarda Diez. La causa probable es que Diez lleva el IVA a sus subcuentas genéricas (47200000 y 47700000), porque no tiene las 47200004, 47200010, 47200021 ni 47700021 de Sumied (punto 3). Con el borrado da igual, pero **no se ha comprobado línea a línea**, porque por la puerta no salen importes.
+- **De esos 215, a 13 Sumied los anuló después.** Siguen en Diez sin su contraasiento. Con el borrado da igual.
+- Los 2 «enlazado» los metió Julio y Sumied los casó por su referencia: **Sumied tiene el mismo hecho.**
+
+### Lo que no viene de Sumied: 2 asientos
+
+| Diez | Fecha | Tipo | Subcuenta principal | Qué tiene Sumied | Qué hacer |
+|---|---|---|---|---|---|
+| **4/3155** | 05/10 | asiento general | **55100001** | **Nada.** Ningún asiento de Sumied desde el 01/10 tiene el mismo día y total, ni las mismas subcuentas y total a ±31 días. | **No borrar sin decidir.** Julio mira en Diez qué es (el importe está en el artefacto cifrado). Si es un hecho real, se apunta en Sumied antes del borrado; si no lo es, se borra sabiéndolo. |
+| 2/2521 | 06/10 | factura recibida | 40000006 | El asiento **2/3264** de Sumied tiene el mismo día y el mismo total, con otras subcuentas. | Parece la misma factura metida a mano, además de la que mandó Sumied: **se puede borrar**. Julio lo confirma con el artefacto. |
 
 ### Los PDF en Diez desde el 01/10
 
-- Según Sumied, **83 facturas tienen el PDF adjunto en Diez**, todas mandadas por Sumied y con el PDF también en Sumied. **Las 107** con `pendiente_diez` (105 enviadas y las 2 enlazadas) **no lo tienen**: Diez daba «container does not exist».
-- **Pendiente de la lectura del #655:** cuántas facturas de Diez desde el 01/10 tienen documento (`getfile`) y cuáles lo tienen **solo en Diez** (`solo_en_diez.*`). Esas hay que descargarlas antes de borrar.
+| | Facturas |
+|---|---:|
+| Facturas de Diez desde el 01/10 | 203 |
+| **Con PDF en Diez** (`getfile`) | **0** |
+| Sin PDF («container does not exist», las 203) | 203 |
+| **Con PDF solo en Diez** (hay que descargarlo antes de borrar) | **0** |
+| De Sumied, con PDF en Sumied y sin PDF en Diez | 190 |
+
+- **Ninguna factura tiene PDF en Diez**, tampoco las 83 que Sumied da por «adjunto». Hoy Diez contesta «container does not exist» a todas.
+- **No hay nada que descargar antes de borrar.** Los PDF que hay están en Sumied.
+- Las 83 de Sumied en «adjunto» mienten sobre Diez. Hoy, en Sumied, «adjunto» no garantiza que Diez tenga el documento: la próxima tanda tiene que tenerlo en cuenta.
 
 ### Lo que tiene que cambiar en Sumied después del borrado (otra tanda, sin hacer)
 
@@ -69,9 +92,14 @@ Con los 215 en «enviado» o «enlazado», la cola no volvería a mandar ni un a
 
 ## 1. Enero a septiembre: la tabla de diferencias
 
-Saldo del mes (debe − haber) de cada subcuenta. **Solo las filas que no cuadran.** «Diez» es la foto del 12/10; la lectura del #655 dice si Diez ha cambiado desde entonces (`diez_cambiado.*`).
+Saldo del mes (debe − haber) de cada subcuenta. **Solo las filas que no cuadran.** «Diez» es la foto del 12/10.
 
-**Los 7.223 asientos que vinieron de Diez están en Sumied igual, al céntimo.** La tabla entera se explica con los 13 asientos que Sumied creó en noviembre (punto 2): restados de Sumied, las diferencias dan 0 en todas las filas. **Julio, agosto y septiembre cuadran enteros.**
+**Los 7.223 asientos que vinieron de Diez están en Sumied igual, al céntimo.** La tabla entera se explica con los 13 asientos que Sumied creó en noviembre (punto 2): restados de Sumied, las diferencias dan 0 en todas las filas. **Julio y agosto cuadran enteros.**
+
+**Diez hoy (lectura del 13/11) contra la foto del 12/10:**
+- Enero a agosto, Diez no ha cambiado: el mismo número de asientos por mes y los mismos saldos por subcuenta.
+- **Septiembre tiene un asiento más en Diez** (1.419 contra 1.418) que mueve tres subcuentas: **47000000, 47200000 y 47700000**. Por las cuentas, parece la regularización del IVA del 3T, apuntada en Diez después del 12/10. **Sumied no lo tiene.**
+- Así que, contra Diez de hoy, las diferencias son **30 subcuenta×mes**: las 27 de la tabla y esas 3 de septiembre. Los importes de esas 3 no salen por la puerta de salida.
 
 | Mes | Subcuenta | Sumied | Diez | Diferencia |
 |---|---|---:|---:|---:|
@@ -130,16 +158,17 @@ Cada mes suma 0 (debe = haber). La consulta, para repetirla, está en el anexo A
 
 ### En Diez pero cambiado en Sumied
 
-**Ninguno de enero a septiembre.** En esos meses no hay ningún asiento anulado en Sumied, y los 7.223 traídos de Diez están igual (falta confirmar que Diez no ha cambiado desde el 12/10: `diez_cambiado.*` del #655). Desde el 01/10 no hace falta ninguno: lo de octubre se borra entero en Diez.
+**Ninguno de enero a septiembre.** En esos meses no hay ningún asiento anulado en Sumied, y los 7.223 traídos de Diez siguen igual en Diez (lectura del 13/11). Desde el 01/10 no hace falta ninguno: lo de octubre se borra entero en Diez.
 
 ### En Diez y no en Sumied
 
-**Ninguno de enero a septiembre:** todo asiento de Diez de esos meses está en Sumied. Lo de octubre y noviembre, en el punto 0, con la lectura del #655.
+- **Un asiento de septiembre**, apuntado en Diez después del 12/10, que mueve 47000000, 47200000 y 47700000; parece la regularización del IVA del 3T. **No se toca en Diez.** Para Julio: si es la liquidación del 3T, Sumied debería tenerla también, porque si no, el 2026 no acaba igual. Es un asiento para traer de Diez a Sumied, no para mandar.
+- **Desde el 01/10, el 4/3155 (55100001)**, que Sumied no tiene (punto 0). Con el borrado desaparece: lo decide Julio antes.
 
 ### Toca el IVA de un trimestre presentado (1T a 3T)
 
 - **Ninguno de los 13 toca una subcuenta de IVA** (472 o 477), así que no cambian los libros de IVA presentados.
-- **Ojo, para la gestoría:** los seis de promociones de Uber (4/3355–4/3360) bajan la venta a la 70009001 y apuntan 4.313,16 en la **63400000, «ajustes negativos en la imposición indirecta»**, en el 1T y el 2T. El libro de IVA no cambia, pero el ajuste es de IVA de trimestres ya presentados. Si hace falta una complementaria o corregirlo en el 4T, lo dice la gestoría, no Diez.
+- **Las promociones de Uber ya están decididas** (Julio, 13/11): los seis asientos 4/3355–4/3360 bajan la venta a la 70009001 y apuntan **3.314,16 €** en la 63400000. Ese IVA se da por perdido, como se acordó en su migración. No tocan ninguna subcuenta de IVA ni el libro presentado, y van a Diez tal cual. Comprobado sumando los seis: 1.283,84 + 750,70 + 315,72 + 98,39 + 573,06 + 292,45 = 3.314,16. *(La primera versión de este informe decía 4.313,16: era un error.)*
 
 ### Por qué se pararon los 27 «pendiente» desde el 24/10
 
@@ -150,29 +179,28 @@ Cada mes suma 0 (debe = haber). La consulta, para repetirla, está en el anexo A
 
 ### Subcuentas
 
-Las que usa Sumied en 2026 y no aparecen en ningún asiento de Diez (ni en la foto del 12/10 ni en lo que Diez ya aceptó de Sumied). **Pueden existir en Diez sin movimiento:** la lectura del #655 lo confirma contra el plan de cuentas de la C0008 (`falta.*`).
+Contra el plan de cuentas de la C0008, leído hoy: Diez tiene 788 subcuentas y Sumied usa 174 en 2026. **Faltan 11 en Diez:**
 
 | Subcuenta | Nombre en Sumied |
 |---|---|
-| 17100000 | Deudas a largo plazo |
 | 40000019 | (proveedor) |
-| 40090000 | (proveedor) |
+| 41000042 | (acreedor) |
 | 41000043 | (acreedor) |
 | 41000044 | (acreedor) |
 | 41000046 | (acreedor) |
 | 41000047 | (acreedor) |
+| 47200004 | IVA soportado 4 % |
+| 47200010 | IVA soportado 10 % |
+| 47200021 | IVA soportado 21 % |
 | 47700021 | IVA repercutido 21 % |
-| 57200004 | Bancos · Revolut · Main |
-| 60100000 | Compras de materias primas |
-| 60800000 | Devoluciones de compras de mercaderías |
-| 63400000 | Ajustes negativos en la imposición indirecta (la usan los 6 de promociones del punto 2) |
-| 66230000 | Intereses de deudas con entidades de crédito |
+| 62300004 | Servicios de profesionales independientes (Catcher) |
 
-Las que nombraba el encargo **ya están en Diez**: 47700010, las 70009001–70009003 y la 70500001 (Diez aceptó facturas de Sumied con ellas), y la 41000023 (está en la foto).
+- **Las demás ya existen**, también las que en la primera versión parecían faltar por no tener movimiento: 17100000, 40090000, 57200004, 60100000, 60800000, 63400000 y 66230000. Y las que nombraba el encargo: 47700010, las 70009001–70009003, la 70500001 y la 41000023.
+- **Ojo con las 472 por tipo:** Diez no las tiene, y aun así aceptó en octubre facturas recibidas de Sumied. Lo más probable es que el IVA vaya a la 47200000 (punto 0). Hay que decidir si se crean en Diez o si Sumied manda a la 47200000; si no, los libros no acaban igual subcuenta a subcuenta.
 
 ### Clientes y proveedores
 
-En Diez, un cliente o proveedor es su subcuenta 40/41/43 con sus datos fiscales. **Los que faltan son los seis 400/410 de la tabla de arriba.** Sus datos (nombre y NIF) están en Sumied y no se copian aquí (T11). Se dan de alta en Diez con el mismo código.
+En Diez, un cliente o proveedor es su subcuenta 40/41 con sus datos fiscales. **Faltan los seis de la tabla:** 40000019 y 41000042, 41000043, 41000044, 41000046 y 41000047. Sus datos (nombre y NIF) están en Sumied y no se copian aquí (T11). Se dan de alta en Diez con el mismo código.
 
 ### Analítica por local
 
@@ -186,7 +214,12 @@ La tabla está en `supabase/functions/_shared/diezAnalitica.ts` (`CORRESPONDENCI
 | **Común (sin local)** | **ninguno** | **88** |
 
 - **Los tres locales tienen código.**
-- **Lo común no tiene código de local:** 88 líneas, por ejemplo Revolut, que no tiene local. Hay que decidir si va sin analítica o a un código de reparto.
+- **Lo común no tiene código de local:** 88 líneas, por ejemplo Revolut, que no tiene local. **Decisión de Julio (13/11): un código «Común» en Diez si no cuesta; si cuesta, sin código.**
+  - Hoy, una línea sin local va a Diez **sin código de local**: `analiticaParaEnviar` lo apunta como «sin local» y no pone Grupo.
+  - Un «Común» cuesta dos cosas:
+    1. **Que exista ese grupo en la C0008.** La correspondencia de Sumied solo conoce CAM, BAR, FLO, CAN y JDH; si Diez tiene otro grupo, no se ha medido. Crearlo es escribir en la C0008, así que lo hace Julio en Diez.
+    2. **Un cambio pequeño en `diezAnalitica.ts`:** que «sin local» se envíe con ese código y se lea igual (la correspondencia y su revisión), con su prueba.
+  - **No es gratis, así que se queda sin código** mientras Julio no cree el grupo en Diez. Si lo crea, el cambio de Sumied es de una tanda pequeña.
 - JDH, en Diez, no es un local abierto: no se usa.
 - Las marcas (Subgrupo) tienen su tabla en el mismo fichero (`marcaAlEnviar`, 9 marcas).
 
@@ -194,9 +227,8 @@ La tabla está en `supabase/functions/_shared/diezAnalitica.ts` (`CORRESPONDENCI
 
 ### De lo ya enviado (se borra con octubre)
 
-- **83 de 202 facturas con el PDF adjunto en Diez.**
-- **107 con `pendiente_diez`:** Diez no guardaba documentos. Son las que lista «Pendientes de adjuntar en Diez».
-- **12 sin estado de documento.**
+- **Según Diez (lectura del 13/11), 0 de las 203 facturas desde el 01/10 tienen PDF.** Las 203 contestan «container does not exist».
+- Según Sumied: 83 en «adjunto», 107 en `pendiente_diez` (la lista «Pendientes de adjuntar en Diez») y 12 sin estado. **Las 83 en «adjunto» no lo tienen en Diez.**
 - `external_document`, la tabla de los PDF que se traen de Diez a Sumied: **0 filas.**
 
 ### De lo que habría que enviar
@@ -214,13 +246,20 @@ Las 20 sin PDF:
 
 Los asientos que no son factura (banco, liquidaciones, nóminas, manuales) no llevan PDF por la API: Diez solo adjunta a facturas (`facturas/upload`).
 
-### ¿La API ya deja subir un adjunto? (prueba en la C0009)
+### ¿La API ya deja subir un adjunto? (prueba en la C0009) — **No, sigue igual**
 
-- Lanzada desde `main` con `[prueba-c0009:adjunto]`: el run [43419120638](https://github.com/Llorente29/llorente29-app/actions/runs/43419120638) salió **en rojo antes de llegar a Diez**, con 0 líneas por la puerta y 3 retenidas.
-- La prueba es del 13/10 y escribe su resultado en texto, que la puerta de salida no deja pasar: no se sabe en qué paso paró.
-- **No llegó a subir nada: en la C0009 no quedó nada.**
-- El #655 le añade marcas de paso. Hay que repetirla después de fusionarlo.
-- **Hoy no se puede decir si Diez ya acepta el adjunto.** Lo último medido sigue siendo el «container does not exist» del 14/10.
+Run [43444680789](https://github.com/Llorente29/llorente29-app/actions/runs/43444680789), del 13/11 a las 15:48. Es `[prueba-c0009:adjunto]`, lanzada desde `main` con los pasos que añadió el #655. Llega a la factura UBR-FLO-20261001 de la C0009 (1 factura con ese número, de 18 de octubre en la C0009) y:
+
+| Paso | Respuesta de Diez |
+|---|---|
+| `getfile` antes de subir | **500**, «container does not exist» |
+| `facturas/upload` con el PDF | **500**, «container does not exist» |
+| `getfile` después | **500**, «container does not exist» |
+
+- **La API de Diez sigue sin dejar adjuntar documentos**, igual que el 14/10. El fallo es del almacén de Diez («container»), no de lo que se le manda.
+- **Qué quedó en la C0009: nada nuevo.** La factura de prueba ya estaba (R13) y el upload no guardó ningún documento, como dice el `getfile` de después.
+- La lectura de la C0008 dice lo mismo (punto 0): ninguna de sus 203 facturas desde el 01/10 tiene PDF.
+- **Para Julio:** mientras Diez no lo arregle, los PDF solo se pueden poner en Diez a mano, desde su pantalla, o pidiéndoselo a Diez (es su almacén). Antes del reenvío de octubre conviene preguntarles.
 
 ## 5. Cuántos asientos habría que enviar, y en cuántos envíos
 
@@ -248,10 +287,10 @@ Antes del primero:
 - la tanda de Sumied del punto 0;
 - la prueba de la recibida exenta en la C0009.
 
-## Preguntas para Julio y la gestoría (las decide Julio, 13/11)
+## Decidido por Julio (13/11)
 
-1. **Las 88 líneas sin local.** Desde el 01/10, 88 líneas de gasto o ingreso (grupos 6 y 7) de Sumied son comunes: no tienen local, como lo de Revolut. En Diez no hay código de local para ellas. ¿Van a Diez sin analítica, o a un código de reparto?
-2. **Las promociones de Uber en la 63400000.** Los seis asientos 4/3355–4/3360 (enero a junio) bajan la venta a la 70009001 y apuntan 4.313,16 € en la 63400000, «ajustes negativos en la imposición indirecta», en el 1T y el 2T. No tocan ninguna subcuenta de IVA ni el libro de IVA presentado, pero el ajuste es de IVA de trimestres ya presentados. ¿Hace falta una complementaria, se corrige en el 4T, o se apunta de otra forma antes de enviarlos a Diez?
+1. **Las 88 líneas sin local:** con un código «Común» en Diez si no cuesta; si cuesta, sin código. Cuesta un poco (punto 3, analítica), así que de momento van **sin código**.
+2. **Las promociones de Uber en la 63400000** (3.314,16 €): ese IVA se da por perdido, como en su migración. No es una pregunta para la gestoría: los seis asientos van a Diez tal cual.
 
 ## Para la pantalla «Sumied y Diez, mes a mes» (Libros › Con Diez): qué datos le faltan
 
