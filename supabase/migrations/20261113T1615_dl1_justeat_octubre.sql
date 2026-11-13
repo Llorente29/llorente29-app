@@ -34,7 +34,7 @@ declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
   v_e constant uuid := '658728c0-fcd7-46ef-a860-d4e5e6eb21d9';
   v_julio constant uuid := '673fca49-f6b5-40ed-a8f7-558390acce10';
-  r record; p jsonb; v_res jsonb; v_liq uuid; v_inv uuid; v_loc uuid; v_id uuid; v_ids jsonb := '[]'::jsonb; v_n int; v_lin jsonb; v_tot numeric;
+  r record; p jsonb; v_res jsonb; v_i int := 0; v_liq uuid; v_inv uuid; v_loc uuid; v_id uuid; v_ids jsonb := '[]'::jsonb; v_n int; v_lin jsonb; v_tot numeric;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
     raise notice 'DL1 Just Eat octubre: sin la cuenta de Foodint, no hay nada que apuntar.';
@@ -57,19 +57,25 @@ begin
       'factura', jsonb_build_object('numero', r.ref, 'base', r.base, 'iva', r.iva, 'total', r.total),
       'intermediario', jsonb_build_object('nombre', 'Just Eat Spain S.L.', 'nif', 'B86008539'),
       'dl1', 'DL1·24: leída del PDF del correo, que el lector no vio (sin adjunto).');
-    v_res := public.conta_liquidacion_registrar(v_e, p, 'Julio (tanda DL1)');
+    v_i := v_i + 1;
+    -- Cada paso para con su código (DJ<paso><liquidación>0): el ensayo solo enseña el SQLSTATE.
+    begin v_res := public.conta_liquidacion_registrar(v_e, p, 'Julio (tanda DL1)');
+    exception when others then raise exception using errcode = format('DJ1%s0', v_i), message = sqlerrm; end;
     v_liq := (v_res->>'liquidacion_id')::uuid;
     if v_liq is null or coalesce((v_res->>'ya_estaba')::boolean, false) or coalesce((v_res->>'tienda_nueva')::boolean, false)
        or (select location_id from public.channel_settlement where id = v_liq) is null then
       raise exception 'DL1 Just Eat octubre: la liquidación % no ha entrado nueva en su tienda (%): no se apunta nada.', r.ref, v_res;
     end if;
-    v_res := public.conta_comision_del_correo(v_liq, p);
+    begin v_res := public.conta_comision_del_correo(v_liq, p);
+    exception when others then raise exception using errcode = format('DJ2%s0', v_i), message = sqlerrm; end;
     v_inv := (v_res->>'factura_id')::uuid;
     if v_inv is null or v_res->>'estado' <> 'creada' then
       raise exception 'DL1 Just Eat octubre: la factura % no se ha creado (%): no se apunta nada.', r.ref, v_res;
     end if;
-    update public.channel_settlement set commission_invoice_id = v_inv, updated_at = now() where id = v_liq and commission_invoice_id is distinct from v_inv;
-    v_res := public._conta_plataforma_apuntar(v_inv);
+    begin update public.channel_settlement set commission_invoice_id = v_inv, updated_at = now() where id = v_liq and commission_invoice_id is distinct from v_inv;
+    exception when others then raise exception using errcode = format('DJ3%s0', v_i), message = sqlerrm; end;
+    begin v_res := public._conta_plataforma_apuntar(v_inv);
+    exception when others then raise exception using errcode = format('DJ4%s0', v_i), message = sqlerrm; end;
     if not coalesce((v_res->>'apuntada')::boolean, false) then
       raise exception 'DL1 Just Eat octubre: la factura % no se ha apuntado (%): no se apunta nada.', r.ref, v_res;
     end if;
@@ -101,12 +107,13 @@ begin
       || jsonb_build_array(
         jsonb_build_object('cuenta', '62300003', 'debe', r.gl, 'haber', 0, 'concepto', 'Cargo de campaña JET+' || coalesce(' ' || r.gl_ref, '') || ', sin IVA', 'local_id', v_loc, 'comun', false),
         jsonb_build_object('cuenta', '43000003', 'debe', 0, 'haber', r.gl, 'concepto', 'Cargo de campaña JET+, descontado del saldo', 'local_id', v_loc, 'comun', false));
-    v_res := public._journal_entry_proponer(v_e,
+    begin v_res := public._journal_entry_proponer(v_e,
       jsonb_build_object('series', 4, 'fecha', '2026-10-22', 'concepto', 'Liquidación JustEat · ' || r.ref, 'source_type', 'channel_settlement',
         'source_id', v_liq, 'confianza', 'seguro',
         'porque', 'DL1·24 (Julio, 13/11): su factura compensada y su cargo GL de la campaña JET+, sin IVA, como gasto contra la 43000003.',
         'razones', '[]'::jsonb, 'party_id', null, 'documento', r.ref),
       v_lin, null, 'Julio (tanda DL1)', null);
+    exception when others then raise exception using errcode = 'DJ500', message = r.ref || ': ' || sqlerrm; end;
     v_id := (v_res->>'id')::uuid;
     if v_id is null or coalesce((v_res->>'existente')::boolean, false) then
       raise exception 'DL1 Just Eat octubre: el asiento de % no ha salido nuevo (%): no se apunta nada.', r.ref, v_res;
@@ -115,6 +122,7 @@ begin
     v_ids := v_ids || jsonb_build_object('id', v_id, 'importe', v_tot);
   end loop;
 
-  v_n := public._dl1_validar(v_e, v_julio, 'Julio', v_ids);
+  begin v_n := public._dl1_validar(v_e, v_julio, 'Julio', v_ids);
+  exception when others then raise exception using errcode = 'DJ600', message = sqlerrm; end;
   raise notice 'DL1 Just Eat octubre: 3 liquidaciones con su factura, y % asientos de compensación y cargo GL validados como Julio.', v_n;
 end $$;
