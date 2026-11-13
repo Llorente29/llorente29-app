@@ -109,7 +109,7 @@ begin
     delete from public.channel_settlement_invoice k where k.supplier_invoice_id = r.fac and k.settlement_id <> r.liq;
     if not exists (select 1 from public.channel_settlement_invoice k where k.settlement_id = r.liq and k.supplier_invoice_id = r.fac) then
       insert into public.channel_settlement_invoice (account_id, settlement_id, supplier_invoice_id, matched_by, matched_by_name)
-      values (v_acc, r.liq, r.fac, 'tanda', 'Julio (tanda DL1)');
+      values (v_acc, r.liq, r.fac, 'persona', 'Julio');
     end if;
   end loop;
   if exists (select 1 from dl1_uber_liq x join public.channel_settlement c on c.id = x.liq where x.apuntar and (c.location_id is null or c.needs_review)) then
