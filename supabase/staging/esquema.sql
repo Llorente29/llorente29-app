@@ -46641,8 +46641,9 @@ begin
                                      location_id, is_common, brand_id, party_id, document_ref, document_date,
                                      tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model)
     -- Los apuntes, al revés, como los copia journal_entry_anular (los de una liquidación no llevan tipo ni libro).
+    -- S01p·21b: una liquidación es de toda la empresa: sin local, el apunte va como común.
     select account_id, company_id, v_nuevo, position, company_account_id, credit, debit, concept,
-           location_id, is_common, brand_id, party_id, document_ref, document_date,
+           location_id, (is_common or location_id is null), brand_id, party_id, document_ref, document_date,
            tax_rate_id, tax_base, vat_book, vat_deductible, tax_documents, withholding_rate_id, withholding_base, withholding_model
       from public.journal_line where entry_id = v_e.id;
     v_val := public.journal_entry_validar(v_nuevo, v_quien);
