@@ -61,6 +61,7 @@ md(`## Diez · ¿se puede adjuntar el PDF a una factura? (${BD}, UBR-FLO-2026100
 try {
   if (v.id !== ASIENTO) throw new Error(`el volcado no es el asiento ${ASIENTO}`)
   const asiento: AsientoVentas = { ...v, local: LOCAL[v.location_id] ?? '?', canal: CANAL[v.channel_id] ?? '?' }
+  console.log('@@ paso 1') // B01r25: dónde para, por la puerta de salida (el texto no sale)
   const { factura: fd } = facturaDeVentas(asiento, { correspondencia: CORRESPONDENCIA_LLORENTE29, nombreCliente: '—', hoy: new Date().toISOString().slice(0, 10), conAnalitica: false })
 
   // La base de cada pedido, como la propuesta (conta_propuesta_ventas_unidad):
@@ -78,12 +79,16 @@ try {
     numeroFactura: String(fd.NumeroFactura), generado: new Date(), tipoIva: 10, pedidos, reembolsos: [], lineasFactura,
     factura: { base: Number(fd.BaseImponible1), cuota: Number(fd.CuotaIVA1), total: Number(fd.TotalFactura) }, cobro: Number(fd.TotalFactura),
   })
+  console.log('@@ paso 2')
   md(`- El PDF: «Resumen de ventas» de ${fd.NumeroFactura}, ${pedidos.length} pedidos, ${pdf.length} bytes, huella \`${huella(pdf)}\`. Cuadra con la factura (si no, no habría PDF).`)
 
   await c.asegurarToken()
+  console.log('@@ paso 3')
   md(`- Entrar en ${BD}: sí.`)
   const oct = await c.facturasDelMes('202610')
   const docs = [...new Set(oct.filter((f) => String(f.Serie) === '1' && String(f.NumeroFactura) === fd.NumeroFactura && String(f.CuentaCliente) === fd.CuentaCliente).map((f) => Number(f.Documento)))]
+  console.log(`@@ facturas_con_ese_numero ${docs.length}`)
+  console.log(`@@ facturas_c0009_octubre ${oct.length}`)
   if (docs.length !== 1) throw new Error(`hay ${docs.length} facturas ${fd.NumeroFactura} en ${BD}; tiene que haber una`)
   const doc = docs[0]
   md(`- La factura: serie 1, documento ${doc}.`, '')
