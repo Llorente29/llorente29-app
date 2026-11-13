@@ -67,7 +67,8 @@ begin
   if v_mal is not null then raise exception 'DL1 borrar factura: no se borra nada. %', v_mal; end if;
 
   delete from public.document_activity where supplier_invoice_id = v_f or inbox_id = v_b;
-  update public.document_inbox set supplier_invoice_id = null where id = v_b;
+  -- La bandeja «factura» tiene que tener su factura (document_inbox_check2): se pasa a descartada para soltarla; la fila se borra justo después.
+  update public.document_inbox set status = 'descartado', supplier_invoice_id = null where id = v_b;
   delete from public.supplier_invoice where id = v_f;      -- sus líneas, su IVA y su «apuntar sola», en cascada
   delete from public.document_inbox where id = v_b;
   delete from public.goods_receipt_ai_session where id = v_ia;

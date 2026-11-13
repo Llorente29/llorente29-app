@@ -2,7 +2,18 @@
  "_que": "DL1 · borrar la FAC-00410 · contexto de producción, medido en SOLO LECTURA el 13/11 a las 08:43Z: la 0950 no crea ni cambia ningún objeto; borra 10 filas por su id (la factura, 2 líneas, su IVA, su apuntar-sola, la bandeja, 3 de actividad y la lectura de la IA). Ninguna otra tabla la nombra; ninguna de las tres tablas tiene disparadores de borrado. El PDF queda (protect_objects_delete). Nada en el camino del pedido; la 0950 no está en el historial.",
  "medido": "2026-11-13T08:43Z",
  "tanda": {
-  "supabase/migrations/20261113T0950_dl1_borrar_factura_410.sql": "98a93cc6c253cdd45528e1327971e641"
+  "supabase/migrations/20261113T0950_dl1_borrar_factura_410.sql": "afe50611dac129448f42978db6266567"
  },
- "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
 }
