@@ -1311,6 +1311,55 @@ $_$;
 
 
 --
+-- Name: _b01r23_ignorar(uuid, uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._b01r23_ignorar(p_company uuid, p_actor uuid, p_motivo text, p_movs jsonb) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_acc uuid; x jsonb; v_m public.bank_movement; v_n int := 0;
+  v_claims text := current_setting('request.jwt.claims', true); v_activa text := current_setting('folvy.cuenta_activa', true);
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null then raise exception 'B01r23 apartar: esa empresa no está.'; end if;
+  if coalesce(trim(p_motivo), '') = '' then raise exception 'B01r23 apartar: falta el motivo.'; end if;
+  if jsonb_array_length(coalesce(p_movs, '[]'::jsonb)) = 0 then raise exception 'B01r23 apartar: no hay movimientos.'; end if;
+  for x in select * from jsonb_array_elements(p_movs) loop
+    select * into v_m from public.bank_movement where id = (x->>'id')::uuid for update;
+    if v_m.id is null or v_m.company_id is distinct from p_company or v_m.account_id is distinct from v_acc then
+      raise exception 'B01r23 apartar: el movimiento % no está en la empresa: no se toca nada.', x->>'id';
+    end if;
+    if v_m.amount <> (x->>'importe')::numeric or v_m.op_date <> (x->>'fecha')::date then
+      raise exception 'B01r23 apartar: el movimiento % es de % el % y se esperaba % el %: no se toca nada.',
+        x->>'id', v_m.amount, v_m.op_date, x->>'importe', x->>'fecha';
+    end if;
+    if v_m.status not in ('por_aclarar', 'propuesto') then
+      raise exception 'B01r23 apartar: el movimiento % ya no está sin casar (está %): no se toca nada.', x->>'id', v_m.status;
+    end if;
+  end loop;
+  -- Como si lo pulsara la persona: su usuario y su cuenta activa, solo en esta transacción.
+  perform set_config('request.jwt.claims', json_build_object('sub', p_actor, 'role', 'authenticated')::text, true);
+  perform set_config('folvy.cuenta_activa', p_actor::text || ':' || v_acc::text, true);
+  for x in select * from jsonb_array_elements(p_movs) loop
+    perform public.bank_ignorar((x->>'id')::uuid, p_motivo);
+    v_n := v_n + 1;
+  end loop;
+  perform set_config('request.jwt.claims', coalesce(v_claims, ''), true);
+  perform set_config('folvy.cuenta_activa', coalesce(v_activa, ''), true);
+  return v_n;
+end $$;
+
+
+--
+-- Name: FUNCTION _b01r23_ignorar(p_company uuid, p_actor uuid, p_motivo text, p_movs jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._b01r23_ignorar(p_company uuid, p_actor uuid, p_motivo text, p_movs jsonb) IS 'B01r23. Aparta con bank_ignorar, como una persona de la cuenta, movimientos sin casar (por aclarar o propuestos) anclados por id, importe y fecha; para si alguno no está en la empresa, no cuadra o ya no está sin casar. Solo una tanda.';
+
+
+--
 -- Name: _b01r_ignorar_anulados(uuid, uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -163272,6 +163321,13 @@ GRANT ALL ON FUNCTION public._aviso_poner_en_cola(p_kind text, p_subject text, p
 GRANT ALL ON FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) TO anon;
 GRANT ALL ON FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) TO authenticated;
 GRANT ALL ON FUNCTION public._aviso_rango(p_severity text, p_debounce_kind text) TO service_role;
+
+
+--
+-- Name: FUNCTION _b01r23_ignorar(p_company uuid, p_actor uuid, p_motivo text, p_movs jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._b01r23_ignorar(p_company uuid, p_actor uuid, p_motivo text, p_movs jsonb) FROM PUBLIC;
 
 
 --
