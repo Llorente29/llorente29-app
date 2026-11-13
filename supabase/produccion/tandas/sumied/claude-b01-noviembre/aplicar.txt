@@ -10,8 +10,9 @@
 #           la plataforma («su liquidación, pendiente»), 7 sin justificante y sin
 #           IVA y 4 del banco o de la empresa;
 #         · valida los 5 asientos de noviembre ya casados y propuestos;
-#         · aparta 4 cargos que el BBVA anuló sin saldo (Iberdrola, Reciclajes
-#           Ecológicos, Vodafone, Jazztel) y 5 comprobaciones de tarjeta (0,00);
+#         · aparta 5 comprobaciones de tarjeta (0,00). Los 4 cargos que el BBVA
+#           anuló sin saldo ya los apartó Julio a mano el 13/11 (el real 706
+#           paró por eso);
 #         · deja fuera 6, al informe: 3 recobros del préstamo, el socio, QBO y la
 #           transferencia de −1.210,00 a la propia empresa.
 #         Nada del 1T al 3T cambia.
@@ -22,10 +23,10 @@ supabase/migrations/20261113T0155_b01r23_noviembre_bancos.sql
 sin-vuelta-atras: supabase/migrations/20261113T0155_b01r23_noviembre_bancos.sql · motivo: un asiento validado se anula con un contraasiento, un casado se deshace en Bancos y un apartado, con «Deshacer».
 esperado: b01r23-noviembre-bancos · Movimientos de noviembre hasta el 12/11 sin casar, menos los 6 de fuera = 0
 esperado: b01r23-noviembre-bancos · Casados de noviembre por Julio desde el 13/11 con su asiento validado, menos 40 = 0
-esperado: b01r23-noviembre-bancos · Apartados de noviembre: anulados por el banco, menos 4 = 0
+esperado: b01r23-noviembre-bancos · Apartados de noviembre: anulados por el banco, menos 5 = 0
 esperado: b01r23-noviembre-bancos · Apartados de noviembre: comprobación de tarjeta, menos 5 = 0
 esperado: b01r23-noviembre-bancos · Asientos de noviembre de los bancos casados y sin validar = 0
-esperado: b01r23-noviembre-bancos · 57200001 a 11/11 menos el banco y menos 626,27 de fuera = 0.00
+esperado: b01r23-noviembre-bancos · 57200001 a 13/11 menos el banco y menos 647,43 de fuera = 0.00
 esperado: b01r23-noviembre-bancos · 57200002 a 11/11 menos el banco = 0.00
 esperado: b01r23-noviembre-bancos · 57200003 a 09/11 menos el banco = 0.00
 esperado: b01r23-noviembre-bancos · 57200004 a 12/11 menos el banco y menos 555,60 de fuera = 0.00

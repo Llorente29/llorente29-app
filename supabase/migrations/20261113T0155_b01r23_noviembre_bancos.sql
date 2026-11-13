@@ -17,13 +17,12 @@
 --     ·  7 gastos sin factura ni ticket (regla 3): sin justificante y sin IVA.
 --     ·  4 del banco o de la empresa: las cuotas y la devolución del plan de
 --       Revolut (comisión del banco) y la devolución de Uber Eats.
---    9 se apartan, por el camino de la aplicación (bank_ignorar):
---     · 4 cargos que el BBVA anuló porque no había saldo (como los del 30/10,
---       tanda 2350): Iberdrola −395,25 y Reciclajes Ecológicos −1.617,31 en
---       ···4525; Vodafone −31,50 y Jazztel −35,45 en la principal. La lectura del
---       agregador lo dice: el saldo bajó ese importe y al día siguiente volvió
---       («hueco» por ese mismo importe), y sin ellos ···4525 cuadra al céntimo.
---     · 5 de 0,00 € de Revolut: comprobación de tarjeta (regla 6).
+--    5 de 0,00 € de Revolut se apartan, por el camino de la aplicación
+--      (bank_ignorar): comprobación de tarjeta (regla 6).
+--    Los 4 cargos que el BBVA anuló porque no había saldo (Iberdrola −395,25 y
+--    Reciclajes Ecológicos −1.617,31 en ···4525; Vodafone −31,50 y Jazztel
+--    −35,45 en la principal) ya NO van aquí: Julio los apartó a mano en Bancos el
+--    13/11 a las 08:39–08:40, con el −21,16 del 05/11 (el real 706 paró por eso).
 --    6 se quedan fuera, al informe (reglas 4 y 5): las tres «RECOBRO DEUDA
 --      VENCIDA PRESTAMO» (ninguna anterior apuntada así), el pago al socio
 --      (espera a Julio), QBO Integrity −537,60 (su acreedor ya está a −1.843,60
@@ -95,7 +94,7 @@ declare
     '322d4cc1-9a0d-4866-867a-7e75e6225ad9',   -- −18,00 al socio (espera a Julio)
     'df68f127-8f5f-405b-b54a-14d7f6eac6de'    -- −537,60 QBO Integrity
   ]::uuid[];
-  r record; v_res jsonb; v_st text; v_ids jsonb := '[]'::jsonb; v_n int; v_ap int; v_cero int; v_quedan uuid[];
+  r record; v_res jsonb; v_st text; v_ids jsonb := '[]'::jsonb; v_n int; v_cero int; v_quedan uuid[];
   liq constant text := '{"tipo":"liquidacion","concepto":"%s","tercero_id":"%s","cuenta_cliente":"%s","liquidacion_id":"%s"}';
   pend constant text := '{"tipo":"cuenta","concepto":"Cobro de %s · su liquidación, pendiente","tercero_id":"%s","lineas":[{"cuenta":"%s","importe":%s}]}';
   cta constant text := '{"tipo":"cuenta","concepto":"%s","lineas":[{"cuenta":"%s","importe":%s}]}';
@@ -178,12 +177,7 @@ begin
                       {"id":"3a3f6180-3886-4fd8-bb54-5a116a096c56","importe":1574.00}]'::jsonb;
   v_n := public._dl1_validar(v_e, v_julio, 'Julio', v_ids);
 
-  -- C · Se apartan: los cargos que el banco anuló y las comprobaciones de tarjeta de Revolut.
-  v_ap := public._b01r23_ignorar(v_e, v_julio, 'Anulado por el banco: no había saldo', '[
-    {"id":"4edeeffb-dd3d-4d9d-98a9-a6b02fc1d674","importe":-395.25,"fecha":"2026-11-06"},
-    {"id":"2620e344-b56d-4afb-baca-abb8cd48313c","importe":-1617.31,"fecha":"2026-11-11"},
-    {"id":"ba3ecdbc-5527-4bf8-9f60-cd3a0a82baf8","importe":-31.50,"fecha":"2026-11-10"},
-    {"id":"09305f04-f960-45bf-9998-1df44bbe06cc","importe":-35.45,"fecha":"2026-11-11"}]'::jsonb);
+  -- C · Se apartan las comprobaciones de tarjeta de Revolut. (Los cargos que el banco anuló ya los apartó Julio.)
   v_cero := public._b01r23_ignorar(v_e, v_julio, 'Comprobación de tarjeta', '[
     {"id":"883fffb3-75a0-42cb-9204-50727ee8c734","importe":0,"fecha":"2026-11-06"},
     {"id":"5f8bcf12-2158-47cc-9b17-635e4b437315","importe":0,"fecha":"2026-11-06"},
@@ -197,5 +191,5 @@ begin
   if v_quedan is distinct from (select array_agg(x order by x) from unnest(v_fuera) x) then
     raise exception 'B01r23 noviembre: después de casar quedan sin casar % y se esperaban los 6 de fuera.', v_quedan;
   end if;
-  raise notice 'B01r23 noviembre: 40 casados, % asientos validados como Julio, % cargos anulados y % comprobaciones de tarjeta apartados; quedan fuera los 6 del informe.', v_n, v_ap, v_cero;
+  raise notice 'B01r23 noviembre: 40 casados, % asientos validados como Julio y % comprobaciones de tarjeta apartadas; quedan fuera los 6 del informe.', v_n, v_cero;
 end $$;

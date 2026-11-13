@@ -6,12 +6,14 @@
 -- status in ('validado','anulado') and (voided_at is null or voided_by_entry_id is not null).
 --   1. Movimientos de noviembre (hasta el 12/11) sin casar, menos los 6 de fuera: 49 → 0.
 --   2. Casados de noviembre por Julio desde el 13/11 con su asiento validado, menos 40: −40 → 0.
---   3. Apartados de noviembre: anulados por el banco, menos 4; comprobación de tarjeta, menos 5.
+--   3. Apartados de noviembre: anulados por el banco, menos 5 (los apartó Julio el 13/11: 0 antes y
+--      después, la tanda no los toca); comprobación de tarjeta, menos 5 (−5 → 0).
 --   4. Asientos de noviembre de los bancos casados y sin validar: 5 → 0.
 --   5. Cada 572 a la fecha de su último movimiento, menos el saldo del banco ese día y menos lo que
---      la tanda deja fuera a propósito: la principal, 626,27 (los tres recobros del préstamo, −647,43,
---      que no se apuntan; y el −21,16 del 05/11, casado como agua y anulado por el banco); Revolut,
---      555,60 (el socio, −18,00, y QBO, −537,60). ···4525 y ···0133, nada.
+--      la tanda deja fuera a propósito: la principal, a 13/11 (el −21,16 del 05/11 lo deshizo Julio
+--      con un contraasiento del 13/11; sin movimientos el 12 ni el 13), 647,43 (los tres recobros del
+--      préstamo, que no se apuntan); Revolut, 555,60 (el socio, −18,00, y QBO, −537,60). ···4525 y
+--      ···0133, nada.
 --   6. El IVA de Foodint del 1T al 3T (472 y 477, por fecha): igual.
 with f as (select exists (select 1 from public.company where id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9') hay),
 l as (
@@ -41,7 +43,7 @@ select clave, valor from (
     (select case when not (select hay from f) then 0 else count(*) - q.n end from public.bank_movement m
       where m.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and m.op_date between date '2026-11-01' and date '2026-11-12'
         and m.status = 'ignorado' and m.ignored_reason = q.motivo)::text
-    from (values ('anulados por el banco', 4, 'Anulado por el banco: no había saldo'), ('comprobación de tarjeta', 5, 'Comprobación de tarjeta')) q(k, n, motivo)
+    from (values ('anulados por el banco', 5, 'Anulado por el banco: no había saldo'), ('comprobación de tarjeta', 5, 'Comprobación de tarjeta')) q(k, n, motivo)
   union all
   -- corte: asientos de noviembre
   select 4, 'Asientos de noviembre de los bancos casados y sin validar',
@@ -53,7 +55,7 @@ select clave, valor from (
     (select case when not (select hay from f) then 0 else coalesce(sum(l.debit - l.credit), 0) - q.banco - q.fuera end::numeric(14,2)::text
        from l where l.code = q.c and l.entry_date <= q.d
         and l.status in ('validado', 'anulado') and (l.voided_at is null or l.voided_by_entry_id is not null))
-    from (values ('57200001', date '2026-11-11', 0.00, 626.27, ' y menos 626,27 de fuera'),
+    from (values ('57200001', date '2026-11-13', 0.00, 647.43, ' y menos 647,43 de fuera'),
                  ('57200002', date '2026-11-11', 0.36, 0.00, ''),
                  ('57200003', date '2026-11-09', 0.11, 0.00, ''),
                  ('57200004', date '2026-11-12', 2231.46, 555.60, ' y menos 555,60 de fuera')) q(c, d, banco, fuera, nota)

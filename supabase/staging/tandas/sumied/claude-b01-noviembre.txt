@@ -1,5 +1,5 @@
 # B01r23 · noviembre de Llorente29 (0155: añade _b01r23_ignorar y, en Foodint,
-# casa 40 movimientos de noviembre, valida 45 asientos y aparta 9). Su prueba
+# casa 40 movimientos de noviembre, valida 45 asientos y aparta 5). Su prueba
 # (ROLLBACK, cuenta A): sin Foodint no hace nada; aparta como la persona uno por
 # aclarar y uno propuesto con su motivo; no aparta dos veces; para si el
 # importe no cuadra o el movimiento es de otra empresa.
