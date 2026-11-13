@@ -13,8 +13,8 @@ cuenta: scripts/conta/produccion/cuentas/dl1-facturas-a-su-fecha.sql
 supabase/migrations/20261113T0905_dl1_facturas_a_su_fecha.sql
 sin-vuelta-atras: supabase/migrations/20261113T0905_dl1_facturas_a_su_fecha.sql · motivo: lo borrado queda en su respaldo (conta_asiento_borrado) y se deshace con _conta_asientos_borrado_deshacer, no con un .down.
 esperado: dl1-facturas-a-su-fecha · Facturas recibidas de octubre con el asiento fuera de octubre = 0
-esperado: dl1-facturas-a-su-fecha · Facturas recibidas de octubre con su asiento validado, menos 187 = 0
-esperado: dl1-facturas-a-su-fecha · Gasto (grupo 6) de octubre, menos 44.760,53 = 0.00
+esperado: dl1-facturas-a-su-fecha · Facturas recibidas de octubre con su asiento validado, menos 188 = 0
+esperado: dl1-facturas-a-su-fecha · Gasto (grupo 6) de octubre, menos 45.984,28 = 0.00
 esperado: dl1-facturas-a-su-fecha · IVA 472 del 4T = como antes
 esperado: dl1-facturas-a-su-fecha · IVA 477 del 4T = como antes
 esperado: dl1-facturas-a-su-fecha · Proveedores (400) = como antes
