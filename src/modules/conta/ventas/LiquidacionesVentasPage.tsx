@@ -43,8 +43,8 @@ import {
 } from '@/modules/conta/lib/liquidacionesMes'
 import {
   apuntarLiquidacion, darDeAltaIntermediario, darLocalATienda, decidirCambioTienda, leerFicherosLiquidacion, leerIntermediarios, leerLiquidacionesMes,
-  leerLocales, reclamacionLlegada, registrarLeidas, resolverDiferencia, type Intermediario,
-} from '@/modules/conta/services/liquidacionesMotorService'
+  leerLocales, reclamacionLlegada, registrarLeidas, resolverDiferencia, type Intermediario, asignarTiendaALiquidacion, leerSinTienda, type SinTienda } from '@/modules/conta/services/liquidacionesMotorService'
+import { fraseHaySinTienda, lineaSinTienda, sinTiendaDeLaSemana, tituloSinTienda } from '@/modules/conta/lib/sinTienda'
 import { leerLiquidaciones } from '@/modules/conta/services/liquidacionesService'
 import { proveedoresDeSocios } from '@/modules/conta/services/liquidacionesVentasService'
 import { leerCorreoFacturas } from '@/modules/conta/services/comprasService'
@@ -98,6 +98,9 @@ export default function LiquidacionesVentasPage() {
   // Los locales, siempre: la pregunta de la tienda sin local los necesita, con hostelería o sin ella.
   const locales = useLeer(accountId ? () => leerLocales(accountId) : null, `${accountId}:locales`)
   const sinPropuesta = useLeer(accountId && activa && ver === 'mes' ? () => leerNoPropuestoPorOrigen(accountId, activa.id) : null, `${empresa}:sin-propuesta:${ver}`)
+  // S01p·18 · 6: las liquidaciones del mes que están en los libros sin tienda asignada (sin local o marca).
+  const finDeMes = new Date(Date.UTC(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0)).toISOString().slice(0, 10)
+  const sinTienda = useLeer(accountId && activa && ver === 'mes' ? () => leerSinTienda(activa.id, mes, finDeMes) : null, `${empresa}:sin-tienda:${mes}:${ver}`)
   const socios = useLeer(accountId && activa && hosteleria && ver === 'socios' ? () => leerLiquidaciones(accountId, activa.id, hoy) : null, `${empresa}:${hosteleria}:socios:${ver}`)
   // Mientras se relee el mismo mes (después de Guardar, Reclamar…), se sigue viendo el de antes: la
   // lista no se desmonta y la fila abierta sigue abierta, con lo que tenía escrito.
@@ -242,6 +245,11 @@ export default function LiquidacionesVentasPage() {
       <Resumen m={m} mes={mes} />
       <Ayuda />
 
+      {sinTienda.error && <p className="s-aviso-lista" data-tono="falta" role="alert">{sinTienda.error}</p>}
+      {sinTienda.datos && sinTienda.datos.length > 0 && (
+        <AvisoSinTienda xs={sinTienda.datos} ocupado={ocupado} alAsignar={(id) => void conAviso(() => asignarTiendaALiquidacion(id, quien))} />
+      )}
+
       {[...cambios.entries()].map(([id, c]) => (
         <TiendaCambiada key={id} fila={c.fila} texto={c.texto} ocupado={ocupado}
           alConfirmar={() => void conAviso(async () => `${await decidirCambioTienda(id, true, { desde: c.fila.motor.desde }, quien)} Lo vendido antes se queda con su marca y su local.`)}
@@ -279,7 +287,7 @@ export default function LiquidacionesVentasPage() {
         <details key={g.canal} className="cxlm-grupo" open data-prueba="grupo-plataforma">
           <summary><span>{g.canal}</span><span className="cxlm-cuenta">{cuenta(g.filas, true)}</span></summary>
           {g.tiendas.map((t) => (
-            <Tienda key={t.clave} t={t} sinPropuesta={sinPropuesta.datos ?? null} borrador={borrador} alBorrador={setBorrador} abierta={abierta} ocupado={ocupado} locales={locales.datos ?? []} hayRecorrido={recorrido.length > 0}
+            <Tienda key={t.clave} t={t} sinPropuesta={sinPropuesta.datos ?? null} sinTienda={sinTienda.datos ?? []} borrador={borrador} alBorrador={setBorrador} abierta={abierta} ocupado={ocupado} locales={locales.datos ?? []} hayRecorrido={recorrido.length > 0}
               alBoton={alBoton} alAbrir={(f) => setAbierta(abierta === f.clave ? null : f.clave)} alSiguiente={(f) => abrir(siguiente(f.clave))}
               alGuardarLocal={(storeId, localId) => void conAviso(() => darLocalATienda(accountId!, storeId, localId, quien))}
               alResolver={(f, x) => conAviso(async () => { const r = await resolverDiferencia(accountId!, activa.id, f.motor, partyDe(f), x, quien); setAbierta(null); setBorrador({ clave: null, tipo: null, frase: '' }); return r })}
@@ -369,8 +377,8 @@ type Borrador = { clave: string | null; tipo: 'gasto' | 'reclamacion' | null; fr
 
 type Resolver = (f: FilaMes, x: { tipo: 'gasto' | 'reclamacion'; importe: number; frase: string }) => Promise<void>
 
-function Tienda({ t, sinPropuesta, borrador, alBorrador, abierta, ocupado, locales, hayRecorrido, alBoton, alAbrir, alSiguiente, alGuardarLocal, alResolver, alLlegada }: {
-  t: GrupoTienda; sinPropuesta: Map<string, SinPropuesta> | null; borrador: Borrador; alBorrador: (b: Borrador) => void; abierta: string | null; ocupado: boolean; locales: { id: string; nombre: string; abierto: boolean }[]; hayRecorrido: boolean
+function Tienda({ t, sinPropuesta, sinTienda, borrador, alBorrador, abierta, ocupado, locales, hayRecorrido, alBoton, alAbrir, alSiguiente, alGuardarLocal, alResolver, alLlegada }: {
+  t: GrupoTienda; sinPropuesta: Map<string, SinPropuesta> | null; sinTienda: SinTienda[]; borrador: Borrador; alBorrador: (b: Borrador) => void; abierta: string | null; ocupado: boolean; locales: { id: string; nombre: string; abierto: boolean }[]; hayRecorrido: boolean
   alBoton: (f: FilaMes) => void; alAbrir: (f: FilaMes) => void; alSiguiente: (f: FilaMes) => void
   alGuardarLocal: (storeId: string, localId: string) => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
 }) {
@@ -384,7 +392,7 @@ function Tienda({ t, sinPropuesta, borrador, alBorrador, abierta, ocupado, local
         <span className="cxlm-cuenta">{cuenta(t.filas)}</span>
       </summary>
       {t.filas.map((f, i) => (
-        <Fila key={f.clave} f={f} sinPropuesta={[...new Set(f.motor.liquidaciones.map((x) => sinPropuesta?.get(x.id)?.porque).filter((x): x is string => !!x))]} abierta={abierta === f.clave} ocupado={ocupado} hayRecorrido={hayRecorrido}
+        <Fila key={f.clave} f={f} sinTienda={f.accion === 'pidela' ? sinTiendaDeLaSemana(f.canal, f.motor.desde, f.motor.hasta, sinTienda) : []} sinPropuesta={[...new Set(f.motor.liquidaciones.map((x) => sinPropuesta?.get(x.id)?.porque).filter((x): x is string => !!x))]} abierta={abierta === f.clave} ocupado={ocupado} hayRecorrido={hayRecorrido}
           borrador={borrador} alBorrador={alBorrador} alBoton={alBoton} alAbrir={alAbrir} alSiguiente={alSiguiente} alResolver={alResolver} alLlegada={alLlegada}
           pregunta={i === 0 && tiendaSinLocal ? <PreguntaLocal tienda={tiendaSinLocal.nombre} canal={f.canal} locales={locales} ocupado={ocupado} alGuardar={(l) => alGuardarLocal(tiendaSinLocal.id, l)} /> : null} />
       ))}
@@ -392,14 +400,16 @@ function Tienda({ t, sinPropuesta, borrador, alBorrador, abierta, ocupado, local
   )
 }
 
-function Fila({ f, sinPropuesta, borrador, alBorrador, abierta, ocupado, hayRecorrido, pregunta, alBoton, alAbrir, alSiguiente, alResolver, alLlegada }: {
-  f: FilaMes; sinPropuesta: string[]; borrador: Borrador; alBorrador: (b: Borrador) => void; abierta: boolean; ocupado: boolean; hayRecorrido: boolean; pregunta: ReactNode
+function Fila({ f, sinTienda, sinPropuesta, borrador, alBorrador, abierta, ocupado, hayRecorrido, pregunta, alBoton, alAbrir, alSiguiente, alResolver, alLlegada }: {
+  f: FilaMes; sinTienda: SinTienda[]; sinPropuesta: string[]; borrador: Borrador; alBorrador: (b: Borrador) => void; abierta: boolean; ocupado: boolean; hayRecorrido: boolean; pregunta: ReactNode
   alBoton: (f: FilaMes) => void; alAbrir: (f: FilaMes) => void; alSiguiente: (f: FilaMes) => void; alResolver: Resolver; alLlegada: (id: string, importe: number | null) => Promise<void>
 }) {
   const tono = TONO[f.estado]
   // La tienda sin local ya pregunta arriba: su botón «Elige el local» sobra en la fila que lleva la pregunta.
-  const boton = f.accion && !(f.accion === 'elige_local' && pregunta)
-  const nota = f.estado === 'completa' ? null : f.frase
+  // S01p·18 · 6: antes de pedir una liquidación que «no ha llegado», se mira si está en los libros sin tienda asignada.
+  const enLosLibros = sinTienda.length > 0
+  const boton = f.accion && !(f.accion === 'elige_local' && pregunta) && !enLosLibros
+  const nota = f.estado === 'completa' ? null : enLosLibros ? fraseHaySinTienda(f.canal, sinTienda) : f.frase
   return (
     <div className="cxlm-fila" id={`fila-${f.clave}`} data-estado={f.estado} data-abierta={abierta || undefined} data-prueba="fila-liquidacion">
       <button type="button" className="cxlm-per" aria-expanded={abierta} onClick={() => alAbrir(f)} title="Ver sus cuatro piezas">{periodoCorto(f.motor.desde, f.motor.hasta)}</button>
@@ -409,6 +419,7 @@ function Fila({ f, sinPropuesta, borrador, alBorrador, abierta, ocupado, hayReco
       <span className="cxlm-imp s-cifra">{euros(importe(f))}</span>
       <span className="cxlm-est">
         <span className="cxlm-chip" data-tono={tono}>{NOMBRE_ESTADO[f.estado]}</span>
+        {enLosLibros && <a className="cxlm-btn cxlm-btn-pri" href="#sin-tienda" data-prueba="ir-a-sin-tienda">Asignarla</a>}
         {boton && f.accion && (
           <button type="button" className={pideAlgo(f) ? 'cxlm-btn cxlm-btn-pri' : 'cxlm-btn'} disabled={ocupado} onClick={() => alBoton(f)}>{NOMBRE_ACCION[f.accion]}</button>
         )}
@@ -585,6 +596,32 @@ function Cedidas({ cedidas, local, sinPropuesta, mes, accountId }: {
         </div>
       ))}
     </details>
+  )
+}
+
+// ── S01p·18 · 6 · Las liquidaciones sin tienda asignada ────────────────────────
+
+function AvisoSinTienda({ xs, ocupado, alAsignar }: { xs: SinTienda[]; ocupado: boolean; alAsignar: (id: string) => void }) {
+  return (
+    <section className="cxlm-cambio" id="sin-tienda" aria-label="Liquidaciones sin tienda asignada" data-prueba="sin-tienda">
+      <div className="cxlm-cambio-texto">
+        <p className="cxlm-tn">{tituloSinTienda(xs)}</p>
+        <p className="cxlm-tp">Están en los libros, pero sin local ni marca no casan con lo que vendiste: hasta que las asignes, la semana de su tienda dice que no ha llegado. Cada una toma el local y la marca de su tienda en esas fechas.</p>
+        <ul className="cxlm-sin-tienda">
+          {xs.map((x) => (
+            <li key={x.id} data-prueba="sin-tienda-fila">
+              <span>{lineaSinTienda(x)}</span>
+              {x.porque
+                ? <span className="cxlm-tp"> · {x.porque}</span>
+                : <>
+                    <span className="cxlm-tp"> · Su tienda es de {x.marca} · {x.local}.</span>{' '}
+                    <button type="button" className="cxlm-btn cxlm-btn-pri" disabled={ocupado} onClick={() => alAsignar(x.id)}>Asignar</button>
+                  </>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   )
 }
 

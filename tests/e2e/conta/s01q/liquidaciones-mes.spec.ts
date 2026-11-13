@@ -327,3 +327,48 @@ test('4 · «No cuadra» abierta, las marcas cedidas, lo que espera a su factura
   expect(await page.locator('.cxlm').innerText()).not.toMatch(TECNICAS)
   expect(errores).toEqual([])
 })
+
+test('5 · S01p·18 · 6 · Una liquidación en los libros sin tienda asignada: el aviso, «Asignar», y la semana que ya no dice «No ha llegado»', async ({ page }) => {
+  test.setTimeout(90_000)
+  const errores = vigilar(page)
+  await entrarComo(page, CUENTA_A.email)
+  const llamadas = await simular(page, 'huecos')
+  const json = (r: Route, cuerpo: unknown) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(cuerpo) })
+  // La base contesta como conta_liquidaciones_sin_tienda: una de Uber de la semana del 05/10 al 11/10, con su tienda.
+  await page.route(/\/rest\/v1\/rpc\/conta_liquidaciones_sin_tienda(\?|$)/, (r) => {
+    llamadas.push({ f: 'sin-tienda', cuerpo: r.request().postDataJSON() })
+    return json(r, [{ id: 'f0000000-0000-4000-8000-0000000000s1', canal: 'Uber Eats', tienda: 'Coyotes Prueba (Calle Prueba Sur 4)', store_id: 'f0000000-0000-4000-8000-0000000000t1',
+      desde: '2026-10-05', hasta: '2026-10-11', neto: 684.1, marca: 'Coyotes Prueba', local: 'Sur Prueba', porque: null }])
+  })
+  await page.route(/\/rest\/v1\/rpc\/conta_liquidacion_asignar_tienda(\?|$)/, (r) => {
+    llamadas.push({ f: 'asignar-liquidacion', cuerpo: r.request().postDataJSON() })
+    return json(r, { id: 'f0000000-0000-4000-8000-0000000000s1', ya_estaba: false,
+      texto: 'Asignada: la liquidación de Uber Eats del 05/10 al 11/10 (684,10 €) es de Coyotes Prueba · Sur Prueba, como su tienda en esas fechas.' })
+  })
+  await page.goto('/conta/ventas/liquidaciones?mes=2026-10')
+  // El aviso: cuántas, cuál, de quién es su tienda y su botón.
+  const aviso = page.locator('[data-prueba="sin-tienda"]')
+  await expect(aviso).toBeVisible({ timeout: 30_000 })
+  expect(llamadas.find((x) => x.f === 'sin-tienda')?.cuerpo).toMatchObject({ p_desde: '2026-10-01', p_hasta: '2026-10-31' })
+  await expect(aviso).toContainText('1 liquidación de Uber Eats sin tienda asignada')
+  await expect(aviso).toContainText('Están en los libros, pero sin local ni marca no casan con lo que vendiste')
+  await expect(aviso.locator('[data-prueba="sin-tienda-fila"]')).toContainText(/Uber Eats · «Coyotes Prueba \(Calle Prueba Sur 4\)» · 05\/10–11\/10 · 684,10\s€ · Su tienda es de Coyotes Prueba · Sur Prueba\./)
+  // La semana que la pisa ya no dice «No ha llegado» ni pide nada: dice que puede que sí, y lleva al aviso.
+  const filas = page.locator('[data-prueba="fila-liquidacion"]')
+  const semana = filas.filter({ hasText: '5–11 oct' })
+  await expect(semana).toContainText('Puede que sí haya llegado: en los libros hay 1 liquidación de Uber Eats de estas fechas sin tienda asignada')
+  await expect(semana).not.toContainText('No ha llegado su liquidación')
+  await expect(semana.getByRole('button', { name: 'Pídela' })).toHaveCount(0)
+  await expect(semana.locator('[data-prueba="ir-a-sin-tienda"]')).toHaveAttribute('href', '#sin-tienda')
+  // La otra semana, sin ninguna en los libros, sigue pidiéndola.
+  await expect(filas.filter({ hasText: '28 sep–4 oct' }).getByRole('button', { name: 'Pídela' })).toBeVisible()
+  await expect(page.locator('.cxlm')).not.toContainText(TECNICAS)
+  await aviso.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: `docs/conta/capturas/s01p18/uber-sin-tienda-${(page.viewportSize()?.width ?? 1440) < 768 ? 'movil' : 'ordenador'}.png`, fullPage: true })
+  // «Asignar»: la llama con su id y dice lo que ha hecho (regla 8).
+  await aviso.getByRole('button', { name: 'Asignar' }).click()
+  await expect(page.locator('[data-prueba="liquidaciones-aviso"]')).toHaveText('Asignada: la liquidación de Uber Eats del 05/10 al 11/10 (684,10 €) es de Coyotes Prueba · Sur Prueba, como su tienda en esas fechas.')
+  expect(llamadas.find((x) => x.f === 'asignar-liquidacion')?.cuerpo).toMatchObject({ p_settlement: 'f0000000-0000-4000-8000-0000000000s1' })
+  await page.unrouteAll({ behavior: 'ignoreErrors' })
+  expect(errores).toEqual([])
+})
