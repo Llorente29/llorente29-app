@@ -1,0 +1,8 @@
+{
+ "_que": "DL1 · liquidaciones de octubre · contexto de producción, medido en SOLO LECTURA el 13/11 a las 08:30Z: la 0935 no crea ni cambia ningún objeto; propone con _conta_proponer_plataforma 12 compensaciones de liquidaciones sin asiento cuya propuesta (conta_propuestas_plataforma) es igual a su factura de comisión, y las valida con _dl1_validar. Sus días están abiertos. Nada en el camino del pedido; la 0935 no está en el historial.",
+ "medido": "2026-11-13T08:30Z",
+ "tanda": {
+  "supabase/migrations/20261113T0935_dl1_liquidaciones_octubre.sql": "231533269d645ad2d06dd57f43a1b10f"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

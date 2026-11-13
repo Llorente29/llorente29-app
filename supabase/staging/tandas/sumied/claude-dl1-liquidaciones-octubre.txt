@@ -1,0 +1,5 @@
+# DL1 · liquidaciones de octubre (0935: no añade objetos; en Foodint propone y
+# valida 12 compensaciones). Su prueba (ROLLBACK): sin Foodint no hace nada; las
+# funciones que usa existen.
+supabase/migrations/20261113T0935_dl1_liquidaciones_octubre.sql
+supabase/staging/sql/20261113_dl1_liquidaciones_octubre_prueba.sql
