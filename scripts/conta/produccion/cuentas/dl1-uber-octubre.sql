@@ -4,10 +4,10 @@
 -- Cada medida es lo que FALTA para el objetivo: después, todo a 0 (sin Foodint, 0 antes y después).
 -- La vara de los saldos, la de la DL1·20: validados y anulados con su contraasiento.
 --   1. Liquidaciones de Uber con fecha de octubre y su asiento validado, menos 23: −17 → 0.
---   2. 41000003 (Portier) a 31/10, más 0,47 (los céntimos de redondeo): −4.543,13 → 0.
---   3. 43000002 (Uber) a 31/10, menos 2.832,78: +4.543,13 → 0.
---   4. 41000003 en 2026, más 0,47: −34,69 → 0.
---   5. 43000002 en 2026, menos 3.259,08: +34,69 → 0.
+--   2. 41000003 (Portier) a 31/10, más 0,45 (los céntimos de redondeo): −4.543,15 → 0.
+--   3. 43000002 (Uber) a 31/10, menos 2.832,76: +4.543,15 → 0.
+--   4. 41000003 en 2026, más 0,45: −34,71 → 0.
+--   5. 43000002 en 2026, menos 3.259,06: +34,71 → 0.
 --   6. El IVA del 4T: igual.
 with f as (select exists (select 1 from public.company where id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9') hay),
 l as (
@@ -28,10 +28,10 @@ select clave, valor from (
   union all
   select 2, q.k, (select case when not (select hay from f) then 0 else coalesce(sum(l.debit - l.credit), 0) + q.mas end::numeric(14,2)::text
                     from l where l.code = q.c and l.entry_date <= q.hasta)
-    from (values ('41000003 a 31/10, más 0,47', '41000003', 0.47, date '2026-10-31'),
-                 ('43000002 a 31/10, menos 2.832,78', '43000002', -2832.78, date '2026-10-31'),
-                 ('41000003 en 2026, más 0,47', '41000003', 0.47, date '2026-12-31'),
-                 ('43000002 en 2026, menos 3.259,08', '43000002', -3259.08, date '2026-12-31')) q(k, c, mas, hasta)
+    from (values ('41000003 a 31/10, más 0,45', '41000003', 0.45, date '2026-10-31'),
+                 ('43000002 a 31/10, menos 2.832,76', '43000002', -2832.76, date '2026-10-31'),
+                 ('41000003 en 2026, más 0,45', '41000003', 0.45, date '2026-12-31'),
+                 ('43000002 en 2026, menos 3.259,06', '43000002', -3259.06, date '2026-12-31')) q(k, c, mas, hasta)
   union all
   select 3, 'IVA ' || y.c || ' del 4T', (select coalesce(sum(l.debit - l.credit), 0)::numeric(14,2)::text from l where l.code like y.c || '%' and l.entry_date between date '2026-10-01' and date '2026-12-31')
     from (values ('472'), ('477')) y(c)

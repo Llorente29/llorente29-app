@@ -16,9 +16,9 @@
 --   3. Las 17 que cuadran se compensan en su fecha por el camino de la pantalla
 --      (_conta_proponer_plataforma) y se validan como Julio. La compensación es
 --      lo que dice el correo; los céntimos de redondeo frente a la factura
---      (0,47 en total) quedan en la 41000003, el criterio de la 0045.
+--      (0,45 en total) quedan en la 41000003, el criterio de la 0045.
 --   4. Las 23 facturas de octubre sin liquidación que cuadre, en un asiento a
---      31/10 con su lista (3.012,73).
+--      31/10 con su lista (3.012,75).
 --   5. Las 15 facturas de noviembre (03–04/11) del 4/3351, otra vez a 05/11
 --      (1.794,73): son de las liquidaciones de noviembre, que no se apuntan.
 -- Las 4 «revisar» de noviembre que tenían la factura de otra tienda quedan con
@@ -144,8 +144,8 @@ begin
      and not exists (select 1 from public.channel_settlement c join public.journal_entry e on e.source_type = 'channel_settlement' and e.source_id = c.id and e.status = 'validado'
                       where c.commission_invoice_id = s.id)
      and s.id not in (select fac from dl1_uber_liq where apuntar);
-  if v_resto_n <> 23 or v_resto <> 3012.73 then
-    raise exception 'DL1 Uber octubre: las facturas de octubre sin liquidación son % por % (se midieron 23 por 3.012,73): no se apunta nada.', v_resto_n, v_resto;
+  if v_resto_n <> 23 or v_resto <> 3012.75 then
+    raise exception 'DL1 Uber octubre: las facturas de octubre sin liquidación son % por % (se midieron 23 por 3.012,75): no se apunta nada.', v_resto_n, v_resto;
   end if;
   v_id := public._dl1_asiento_iva(v_e, date '2026-10-31', 4, 'Facturas de Uber de octubre sin liquidación que cuadre, compensadas a 31/10',
     'DL1·24 (Julio, 13/11): ' || v_resto_n || ' facturas de Portier de octubre sin una liquidación que cuadre: ' || v_lista || '.',

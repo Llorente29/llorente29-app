@@ -2,7 +2,7 @@
  "_que": "DL1 · Uber de octubre · contexto de producción, medido en SOLO LECTURA el 13/11 a las 11:20Z: la 1225 no crea ni cambia ningún objeto; actualiza 21 filas de channel_settlement (tienda, factura de comisión) y sus enlaces de channel_settlement_invoice, anula los asientos 4/3352 y 4/3351 con _dl1_anular, propone con _conta_proponer_plataforma, apunta con _dl1_asiento_iva y valida con _dl1_validar (todas en producción). 43000002 a 31/10 = 7.375,91; 41000003 a 31/10 = −4.543,60 y en 2026 = −35,16. Nada en el camino del pedido; la 1225 no está en el historial.",
  "medido": "2026-11-13T11:20Z",
  "tanda": {
-  "supabase/migrations/20261113T1225_dl1_uber_octubre.sql": "e8f106bbf4bb17bf6b7db31b5fc7aa42"
+  "supabase/migrations/20261113T1225_dl1_uber_octubre.sql": "c6a7909a8317a02154658f8c2c8e3cc7"
  },
  "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
 }
