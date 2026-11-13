@@ -156,5 +156,8 @@ test.describe('S01g · las recepciones de soporte y «Por aclarar» con su acci�
     await confirmar.getByRole('button', { name: 'Sí, eliminarlo' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Eliminado: «factura-inventada.pdf». Ya no sale en «Por aclarar»; queda en su historial.' })).toBeVisible({ timeout: 20_000 })
     expect(eliminar).not.toBeNull()
+    // Al eliminar, la lista se vuelve a leer por la ruta de los datos inventados: sin esperar a esa lectura,
+    // se cierran las rutas para que no quede un route.fetch a medias cuando la prueba ya ha acabado.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
   })
 })
