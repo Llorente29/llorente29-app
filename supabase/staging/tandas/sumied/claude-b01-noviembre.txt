@@ -1,0 +1,7 @@
+# B01r23 · noviembre de Llorente29 (0155: añade _b01r23_ignorar y, en Foodint,
+# casa 40 movimientos de noviembre, valida 45 asientos y aparta 9). Su prueba
+# (ROLLBACK, cuenta A): sin Foodint no hace nada; aparta como la persona uno por
+# aclarar y uno propuesto con su motivo; no aparta dos veces; para si el
+# importe no cuadra o el movimiento es de otra empresa.
+supabase/migrations/20261113T0155_b01r23_noviembre_bancos.sql
+supabase/staging/sql/20261113_b01r23_noviembre_bancos_prueba.sql
