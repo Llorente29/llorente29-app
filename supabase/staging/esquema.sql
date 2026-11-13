@@ -110893,6 +110893,24 @@ COMMENT ON TABLE public.conta_diez_traspaso IS 'C12 (24/10). El traspaso a Diez 
 
 
 --
+-- Name: conta_dl1_303_4t_antes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_dl1_303_4t_antes (
+    que text NOT NULL,
+    fila jsonb NOT NULL,
+    copiado_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_dl1_303_4t_antes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_dl1_303_4t_antes IS 'DL1 (13/11). Copia del borrador del 303 del 4T de Foodint antes de poner las 40 facturas de octubre con su fecha. Solo lectura de respaldo.';
+
+
+--
 -- Name: conta_eje_analitico; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -155353,6 +155371,12 @@ CREATE POLICY conta_diez_traspaso_leer ON public.conta_diez_traspaso FOR SELECT 
 
 
 --
+-- Name: conta_dl1_303_4t_antes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_dl1_303_4t_antes ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: conta_eje_analitico; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -183770,6 +183794,13 @@ GRANT SELECT ON TABLE public.conta_diez_envio_empresa TO authenticated;
 
 GRANT ALL ON TABLE public.conta_diez_traspaso TO service_role;
 GRANT SELECT ON TABLE public.conta_diez_traspaso TO authenticated;
+
+
+--
+-- Name: TABLE conta_dl1_303_4t_antes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_dl1_303_4t_antes TO service_role;
 
 
 --
