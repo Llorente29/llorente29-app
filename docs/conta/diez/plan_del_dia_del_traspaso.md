@@ -3,6 +3,20 @@
 > B01r·26 (13/11). Una página. Diez real es la **C0008**. Lo de antes (el
 > diseño y por qué) está en `traspaso_con_pdf.md`.
 
+## El ensayo general, en la C0009 (Julio, 13/11: «la A»)
+
+Antes del día de verdad, el mismo camino contra la C0009 ([#668](https://github.com/Llorente29/llorente29-app/pull/668)):
+
+1. En Diez **C0009**, las dos configuraciones de los Excel, ampliadas.
+2. GitHub › «Aplicar SQL en PRODUCCIÓN», `tanda` = `claude-b01-ensayo-c0009`, `autorizo` = `20261113T2005_b01r26_ensayo_c0009.sql`: ensayo y **real**. Foodint queda apuntando a la C0009, y los 215 de octubre, listos para viajar.
+3. En Sumied, octubre: los pasos 3 a 6 de abajo, contra la C0009. Hay que mirar sobre todo:
+   - que diga «Cuadra»;
+   - la **recibida exenta**, al 0 %;
+   - los **abonos de proveedor** (12, en negativo);
+   - las **recibidas con la factura de otro mes**: en qué mes las pone Diez;
+   - que cada factura tenga **su PDF** en la C0009.
+4. **Limpieza:** la misma tanda en modo **`vuelta_atras`**. Sumied queda como antes y Foodint vuelve a la C0008.
+
 ## Antes de ese día (una vez)
 
 | | Quién | Qué | Cuánto |
@@ -28,7 +42,8 @@ Los **13 asientos de enero a junio** (las correcciones de noviembre) **van solos
 ## Lo que se queda sin PDF en Diez
 
 - Lo que va por la API: **banco, asientos a mano y liquidaciones**, que no llevan PDF, y **las recibidas que no caben en el Excel** (las de 3 tipos de IVA, la autoliquidada y las de la 76900000: 7 en octubre y noviembre). Diez no admite adjuntos por la API («container does not exist», probado el 13/11 en la C0009).
-- **Las facturas sin PDF en Sumied** (13 recibidas en octubre y noviembre, el 13/11) **no salen** ni por Excel ni por la API: la pantalla las lista con su enlace. Las de Just Eat las arregla S.
+- **Las facturas sin PDF en Sumied no salen**, ni por Excel ni por la API: la pantalla las lista con su enlace. **Tienen que tener su PDF antes del traspaso** (Julio, 13/11). El 13/11 a las 20:00 eran 7 recibidas (las de Just Eat ya lo tienen).
+- **Los abonos de proveedor** (12 en octubre y noviembre) van en el Excel de recibidas **en negativo**. Si el ensayo de la C0009 dice que Diez no los entiende así, se meten a mano en Diez.
 
 ## Si algo falla
 
