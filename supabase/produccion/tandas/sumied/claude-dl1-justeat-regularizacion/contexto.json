@@ -1,0 +1,8 @@
+{
+ "_que": "DL1·30 · Just Eat regularización · contexto de producción, medido en SOLO LECTURA el 13/11 a las 23:30Z: la 0035 no crea ni cambia ningún objeto; apunta un asiento con _dl1_asiento_iva y lo valida con _dl1_validar (en producción). Va después de la 1905 (#666): con ella, la 43000003 a 31/10 queda en 256,66. Nada en el camino del pedido; la 0035 no está en el historial.",
+ "medido": "2026-11-13T23:30Z",
+ "tanda": {
+  "supabase/migrations/20261114T0035_dl1_justeat_regularizacion.sql": "ee89ccbd6d394d7c3a840d8d0320051e"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
