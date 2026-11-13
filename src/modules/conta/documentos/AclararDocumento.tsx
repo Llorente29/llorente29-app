@@ -4,8 +4,9 @@
 // (regla 8; encargo del 31/10). Antes, al pulsar una llegada o una recepción
 // solo se abría el fichero. Ahora se abre esto, con su porqué y sus acciones:
 //
-//   · una llegada sin leer: «Leerla» (el lector de «Subir factura») y
-//     «No es una factura»;
+//   · una llegada sin leer: «Leerla» (el lector de «Subir factura»),
+//     «No es una factura» y, S01p·18.2 · 3, «Eliminar» (con su confirmación:
+//     sale de todas las listas y queda en su historial);
 //   · una llegada sin PDF (el correo traía un enlace): «Subir el PDF» (va a la
 //     misma llegada y se lee en el momento) y «No es una factura»;
 //   · una recepción que no se pudo hacer factura: «Subir la factura» (el de la
@@ -16,7 +17,7 @@ import { useRef, useState } from 'react'
 import { Boton, Dialogo } from '@/modules/conta/diseno'
 import { DialogoPapel } from '@/modules/conta/compras/VerPapel'
 import { faltaElPdf, type FilaDocumento } from '@/modules/conta/documentos/documentos'
-import { leerLlegada, llegadaNoEsFactura, subirPdfDeLlegada, urlDeLlegada } from '@/modules/conta/services/documentosService'
+import { leerLlegada, llegadaEliminar, llegadaNoEsFactura, subirPdfDeLlegada, urlDeLlegada } from '@/modules/conta/services/documentosService'
 
 export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, alSubirFactura }: {
   fila: FilaDocumento; accountId: string; quien: string | null
@@ -25,6 +26,7 @@ export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, al
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [papel, setPapel] = useState(false)
+  const [eliminar, setEliminar] = useState(false)
   const pdf = useRef<HTMLInputElement>(null)
   const sinPdf = faltaElPdf(fila)
   const llegada = fila.tipo === 'llegada'
@@ -43,7 +45,8 @@ export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, al
   const titulo = llegada ? (fila.archivo ? `«${fila.archivo}»` : sinPdf ? 'Un documento sin PDF' : 'Un documento sin leer') : `${fila.proveedor.nombre ?? 'Una recepción'}${fila.numero ? ` · ${fila.numero}` : ''}`
   const acciones = llegada ? (
     <>
-      <Boton variante="secundario" onClick={() => void hacer('no', () => llegadaNoEsFactura(fila.id, quien))} disabled={!!ocupado}>{ocupado === 'no' ? 'Guardando…' : 'No es una factura'}</Boton>
+      <Boton variante="secundario" onClick={() => setEliminar(true)} disabled={!!ocupado}>Eliminar</Boton>
+      <Boton variante="secundario" onClick={() => void hacer('no', () => llegadaNoEsFactura(fila.id, quien, fila.archivo))} disabled={!!ocupado}>{ocupado === 'no' ? 'Guardando…' : 'No es una factura'}</Boton>
       {sinPdf
         ? <Boton variante="principal" icono="subir" onClick={() => pdf.current?.click()} disabled={!!ocupado}>{ocupado === 'pdf' ? 'Subiendo y leyendo…' : 'Subir el PDF'}</Boton>
         : <Boton variante="principal" onClick={() => void hacer('leer', () => leerLlegada(accountId, fila.id))} disabled={!!ocupado}>{ocupado === 'leer' ? 'Leyéndola…' : 'Leerla'}</Boton>}
@@ -62,6 +65,15 @@ export function AclararDocumento({ fila, accountId, quien, alCerrar, alHecho, al
         <input ref={pdf} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="s-oculto" aria-label="Elegir el PDF"
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void hacer('pdf', () => subirPdfDeLlegada(accountId, fila.id, f)); e.target.value = '' }} />
         {error && <div className="cx-error" role="alert">{error}</div>}
+        {eliminar && (
+          <div className="s-aviso-lista" data-tono="duda" role="alertdialog" aria-label="¿Eliminar el documento?" data-prueba="confirmar-eliminar">
+            <p style={{ margin: '0 0 8px' }}><strong>¿Eliminar {fila.archivo ? `«${fila.archivo}»` : 'este documento'}?</strong> Sale de «Por aclarar» y de todas las listas. No se borra: queda en su historial, con quién lo eliminó y cuándo.</p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <Boton variante="principal" onClick={() => void hacer('eliminar', () => llegadaEliminar(fila.id, quien))} disabled={!!ocupado}>{ocupado === 'eliminar' ? 'Eliminando…' : 'Sí, eliminarlo'}</Boton>
+              <Boton variante="secundario" onClick={() => setEliminar(false)} disabled={!!ocupado}>No, déjalo</Boton>
+            </div>
+          </div>
+        )}
       </Dialogo>
       {papel && <DialogoPapel recepcion={fila.id} titulo={titulo} alCerrar={() => setPapel(false)} />}
     </>

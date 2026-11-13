@@ -217,7 +217,8 @@ export default function DocumentosPage() {
   const locales = [...new Set(todasLasFilas.map((x) => localDeFila(x, mapa.get(x.id))).filter((x): x is string => !!x))].sort((a, b) => a.localeCompare(b, 'es'))
   const canales = [...new Set(todasLasFilas.map((x) => x.canal))]
 
-  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? 'Documento sin leer' : 'No reconozco el emisor')
+  // S01p·18.2 · 3: una llegada sin leer dice qué archivo es, no «Documento sin leer».
+  const nombre = (x: FilaDocumento) => x.proveedor.nombre ?? (x.tipo === 'llegada' ? (x.archivo ? `«${x.archivo}»` : 'Documento sin leer') : 'No reconozco el emisor')
   const euro = (n: number | null | undefined) => (n === null || n === undefined ? '—' : eurosExactos(n))
   const propuesto = (x: FilaDocumento) => {
     if (x.tipo !== 'factura' || !x.entendido) return null

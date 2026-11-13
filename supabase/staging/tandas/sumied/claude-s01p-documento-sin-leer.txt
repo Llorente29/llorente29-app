@@ -1,0 +1,5 @@
+# S01p·18.2 · punto 3 · El documento sin leer (1015: cambia conta_puerta_dime_que_es; añade conta_llegada_eliminar).
+# Su prueba (ROLLBACK, cuenta A): «No es una factura» sin nombre no falla; eliminar y otra vez; una factura no;
+# sin cuenta no; la vuelta atrás con la huella de producción.
+supabase/migrations/20261113T1015_s01p_documento_sin_leer.sql
+supabase/staging/sql/20261113_s01p_documento_sin_leer_prueba.sql

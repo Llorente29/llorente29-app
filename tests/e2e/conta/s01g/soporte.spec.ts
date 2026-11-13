@@ -133,11 +133,28 @@ test.describe('S01g · las recepciones de soporte y «Por aclarar» con su acci�
     await entrarComo(page, CUENTA_A.email)
     await conDatosInventados(page)
     await page.goto('/conta/documentos?ver=por-aclarar')
-    await page.getByText('Documento sin leer').first().click()
+    // S01p·18.2 · 3: la fila dice qué archivo es, no «Documento sin leer».
+    await expect(page.getByText('Documento sin leer')).toHaveCount(0)
+    await page.getByText('«factura-inventada.pdf»').first().click()
     const d = page.getByRole('dialog', { name: '«factura-inventada.pdf»' })
     await expect(d).toContainText('Recibida, sin leer todavía.')
+    // Tres salidas: «Leerla», «No es una factura» y «Eliminar».
     await expect(d.getByRole('button', { name: 'Leerla' })).toBeVisible()
     await expect(d.getByRole('button', { name: 'No es una factura' })).toBeVisible()
+    await expect(d.getByRole('button', { name: 'Eliminar' })).toBeVisible()
     await capturar(page, 'por-aclarar-acciones')
+    // «Eliminar» pregunta antes, y dice lo que ha hecho (regla 8). La base la prueba su prueba de staging.
+    let eliminar: Record<string, unknown> | null = null
+    await page.route(/\/rest\/v1\/rpc\/conta_llegada_eliminar(\?|$)/, (r) => {
+      eliminar = r.request().postDataJSON() as Record<string, unknown>
+      return json(r, { id: eliminar.p_inbox, ya_estaba: false, texto: 'Eliminado: «factura-inventada.pdf». Ya no sale en «Por aclarar»; queda en su historial.' })
+    })
+    await d.getByRole('button', { name: 'Eliminar' }).click()
+    const confirmar = d.locator('[data-prueba="confirmar-eliminar"]')
+    await expect(confirmar).toContainText('¿Eliminar «factura-inventada.pdf»? Sale de «Por aclarar» y de todas las listas. No se borra: queda en su historial')
+    await capturar(page, 'por-aclarar-eliminar')
+    await confirmar.getByRole('button', { name: 'Sí, eliminarlo' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Eliminado: «factura-inventada.pdf». Ya no sale en «Por aclarar»; queda en su historial.' })).toBeVisible({ timeout: 20_000 })
+    expect(eliminar).not.toBeNull()
   })
 })

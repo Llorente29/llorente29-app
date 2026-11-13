@@ -739,10 +739,19 @@ export async function subirPdfDeLlegada(accountId: string, inboxId: string, f: F
   return `«${f.name}» subido. ${await leerLlegada(accountId, inboxId)}`
 }
 
-/** «No es una factura» de una llegada: pasa a «otra cosa» y sale de Facturas recibidas (la puerta, V02). */
-export async function llegadaNoEsFactura(inboxId: string, quien: string | null): Promise<string> {
-  const r = await rpc<{ texto?: string }>('conta_puerta_dime_que_es', { p_inbox: inboxId, p_tipo: 'otro', p_recordar: false, p_quien_nombre: quien })
-  return r.texto ?? 'Hecho: no es una factura. Sale de Facturas recibidas y lo tienes en Inicio › Documentos.'
+/**
+ * «No es una factura» de una llegada: pasa a «otra cosa» y sale de Facturas recibidas (la puerta, V02).
+ * S01p·18.2 · 3: la frase dice cuál (regla 8), no solo «Apuntado».
+ */
+export async function llegadaNoEsFactura(inboxId: string, quien: string | null, archivo?: string | null): Promise<string> {
+  await rpc<{ texto?: string }>('conta_puerta_dime_que_es', { p_inbox: inboxId, p_tipo: 'otro', p_recordar: false, p_quien_nombre: quien })
+  return `${archivo ? `«${archivo}»` : 'El documento'} no es una factura: sale de «Por aclarar» y de Facturas recibidas, y lo tienes en Inicio › Documentos, en «Otras».`
+}
+
+/** S01p·18.2 · 3 · «Eliminar» un documento sin leer (conta_llegada_eliminar): sale de todas las listas; queda en su historial. */
+export async function llegadaEliminar(inboxId: string, quien: string | null): Promise<string> {
+  const r = await rpc<{ texto: string }>('conta_llegada_eliminar', { p_inbox: inboxId, p_quien_nombre: quien })
+  return r.texto
 }
 
 /** «No es soporte»: la recepción vuelve a «Por aclarar». */
