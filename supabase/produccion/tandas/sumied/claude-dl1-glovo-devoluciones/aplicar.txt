@@ -1,0 +1,20 @@
+# DL1 · Las devoluciones falsas de Glovo de octubre (Julio, DL1·22, 13/11).
+# Rama claude/dl1-glovo-devoluciones. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   0205  Añade _dl1_anular y _dl1_descartar y, como Julio: anula la 1/2010
+#         (devolución del pedido 234, validada por error) con la fecha del
+#         asiento, apunta «se cobró por otro lado» de ese pedido y descarta las
+#         otras 20 devoluciones propuestas. Glovo cobró los 21 pedidos: cada
+#         liquidación cuenta los mismos pedidos que Folvy o más.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-devoluciones.sql
+supabase/migrations/20261113T0205_dl1_glovo_devoluciones.sql
+sin-vuelta-atras: supabase/migrations/20261113T0205_dl1_glovo_devoluciones.sql · motivo: un asiento validado se anula con un contraasiento, y un descarte es lo que dice la persona.
+esperado: dl1-glovo-devoluciones · Devoluciones de octubre en «Propuesto» = 0
+esperado: dl1-glovo-devoluciones · La 1/2010 anulada, menos 1 = 0
+esperado: dl1-glovo-devoluciones · «Se cobró por otro lado» de los 21 pedidos, menos 21 = 0
+esperado: dl1-glovo-devoluciones · La 477 de la 1/2010 con su contraasiento = 0.00
+esperado: dl1-glovo-devoluciones · IVA de Foodint 472 del 1T al 3T de 2026 = como antes
+esperado: dl1-glovo-devoluciones · IVA de Foodint 477 del 1T al 3T de 2026 = como antes

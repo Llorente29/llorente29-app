@@ -1,0 +1,6 @@
+# DL1 · devoluciones falsas de Glovo (0205: añade _dl1_anular y _dl1_descartar
+# y, en Foodint, anula una devolución y descarta 20). Su prueba (ROLLBACK,
+# cuenta A): sin Foodint no hace nada; anula con la fecha pedida; descarta una
+# propuesta; no deja puesto el usuario; no toca un asiento de otra empresa.
+supabase/migrations/20261113T0205_dl1_glovo_devoluciones.sql
+supabase/staging/sql/20261113_dl1_glovo_devoluciones_prueba.sql
