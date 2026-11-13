@@ -1,0 +1,12 @@
+# S01p·21 · Una liquidación de IVA apuntada dos veces en un trimestre presentado (Julio, 13/11).
+# Rama claude/s01p-liquidacion-repetida. Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1822  conta_liquidacion_repetida, conta_liquidaciones_repetidas y conta_liquidacion_dejar_esta (añaden);
+#         y cambian, con un solo trozo cada una y su respaldo: conta_motivos_para_validar (la regla 5 admite
+#         el contraasiento de una liquidación registrada como repetida, y solo ese), y conta_impuesto_303_calcular,
+#         conta_impuesto_303_contabilizar y conta_cierre_bloque_iva (ese contraasiento no es IVA del periodo).
+#
+# No toca ningún dato: los contraasientos de Foodint (9/2 y 9/3) los hace D después, con «Dejar solo esta».
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/s01p-liquidacion-repetida.sql
+supabase/migrations/20261113T1822_s01p_liquidacion_repetida.sql
