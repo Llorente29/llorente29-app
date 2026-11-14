@@ -155,7 +155,9 @@ test('A · B01r26 · los pasos 2 y 3: las subcuentas, los dos Excel y «Ya lo he
     const b = JSON.parse(r.request().postData() ?? '{}') as { accion?: string }
     if (b.accion === 'excel') {
       return json(r, creadas
-        ? { base: 'C0009', faltan: [], comprobadas: 14, emitidas: [fila('UBR-FLO-1'), fila('UBR-FLO-2')], recibidas: [fila('F-1')], por_la_api: [{ entry_id: '00000000-0000-0000-0000-000000000001', numero: 'F-9', motivo: 'lleva 3 tipos de IVA y el Excel admite 2 (Julio, 13/11: estas, por la API)' }] }
+        ? { base: 'C0009', faltan: [], comprobadas: 14, emitidas: [fila('UBR-FLO-1'), fila('UBR-FLO-2')], recibidas: [fila('F-1')], por_la_api: [{ entry_id: '00000000-0000-0000-0000-000000000001', numero: 'F-9', motivo: 'lleva 3 tipos de IVA y el Excel admite 2 (Julio, 13/11: estas, por la API)' }],
+            // Julio (14/11, 17:44): la recibida sin PDF va igual, sin el enlace, y se cuenta aparte.
+            sin_pdf: [{ entry_id: '00000000-0000-0000-0000-000000000002', numero: 'F-1' }] }
         : { base: 'C0009', faltan: [{ codigo: '47200010', nombre: 'IVA soportado 10 %' }, { codigo: '62300004', nombre: 'Servicios profesionales' }], comprobadas: 14, por_la_api: [] })
     }
     if (b.accion === 'crear_subcuentas') {
@@ -187,7 +189,9 @@ test('A · B01r26 · los pasos 2 y 3: las subcuentas, los dos Excel y «Ya lo he
   await expect(hechas.getByText(/62300004.*creada \(con el nombre recortado: Diez admite 60 caracteres\)/)).toBeVisible()
   await expect(hechas.getByText(/70009001.*no se ha creado\. Diez no ha aceptado la subcuenta: 400/)).toBeVisible()
   await expect(excel.getByText(/En Diez \(C0009\): creadas 2; 1 no \(abajo, por qué\)\. Ya están todas\. 47 asientos que esperaban vuelven al traspaso: pulsa «Seguir traspasando \w+»\./)).toBeVisible()
-  await expect(excel.getByText(/Listos: 2 emitidas y 1 recibidas\./)).toBeVisible()
+  await expect(excel.getByText(/Listos: 2 emitidas y 1 recibidas \(1 sin PDF: van sin el enlace y se adjunta después\)\./)).toBeVisible()
+  await expect(excel.getByTestId('traspaso-sin-pdf')).toContainText('1 recibida va en el Excel sin su PDF')
+  await expect(excel.getByTestId('traspaso-sin-pdf')).toContainText('F-1: sin PDF, para adjuntar después')
   await expect(excel.getByRole('button', { name: 'Descargar emitidas (2)' })).toBeVisible()
   await expect(excel.getByRole('button', { name: 'Descargar recibidas (1)' })).toBeVisible()
   await expect(excel.getByText('1 factura va por la API, sin PDF en Diez')).toBeVisible()

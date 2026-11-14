@@ -170,7 +170,9 @@ export type Recibida = {
 
 /** La fila del Excel de recibidas de una factura, o por qué va por la API. */
 export function filaRecibida(f: Recibida, xml: string): Fila | NoCabe {
-  if (!/^https:\/\//.test(f.url)) return { porLaApi: 'sin el enlace de su PDF' }
+  // Julio (14/11, 17:44): el PDF va siempre que esté; una recibida suelta sin PDF viaja igual,
+  // sin «Url documento» (vacía), y se adjunta después. Un enlace que no es https no vale.
+  if (f.url !== '' && !/^https:\/\//.test(f.url)) return { porLaApi: 'sin el enlace de su PDF' }
   if (f.iva.length > 2) return { porLaApi: `lleva ${f.iva.length} tipos de IVA y el Excel admite 2 (Julio, 13/11: estas, por la API)` }
   const gastos = f.gastos.filter((g) => c(g.importe) !== 0)
   if (gastos.length === 0) return { porLaApi: 'no lleva gasto' }

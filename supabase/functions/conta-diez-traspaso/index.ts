@@ -242,7 +242,9 @@ async function excel(srv: ReturnType<typeof createClient>, t: Traspaso): Promise
     if (s.faltan.length) return json({ base: c.nombreBd, faltan: s.faltan, comprobadas: s.codigos.length, por_la_api: porLaApi });
     const { emitidas, recibidas } = filasDeLosExcel(xs, (sc) => s.nombres.get(sc) ?? "");
     console.log(`conta-diez-traspaso · ${t.id} · excel · emitidas ${emitidas.length} · recibidas ${recibidas.length} · por la API ${porLaApi.length}`);
-    return json({ base: c.nombreBd, faltan: [], comprobadas: s.codigos.length, emitidas, recibidas, por_la_api: porLaApi });
+    // B01r26 (Julio, 14/11, 17:44): las recibidas que van sin su PDF, aparte, para adjuntarlo después.
+    const sinPdf = porExcel(xs).filter((x) => x.sinPdf).map((x) => ({ entry_id: x.entry_id, numero: x.numero }));
+    return json({ base: c.nombreBd, faltan: [], comprobadas: s.codigos.length, emitidas, recibidas, por_la_api: porLaApi, sin_pdf: sinPdf });
   } catch (x) {
     console.error(`conta-diez-traspaso · ${t.id} · excel · no se ha podido preparar`);
     return json({ error: x instanceof Error ? x.message : String(x) }, 500);
@@ -314,7 +316,9 @@ async function importado(srv: ReturnType<typeof createClient>, t: Traspaso): Pro
       const f = iguales[0];
       const fila = { account_id: t.account_id, company_id: t.company_id, entry_id: x.entry_id, kind: "factura", ext_year: String(f.Ejercicio), ext_series: String(f.Serie), ext_number: Number(f.Documento),
         ext_invoice_number: String(f.NumeroFactura), payload_hash: "excel-b01r26", status: "enlazado", attempts: 0, sent_at: new Date().toISOString(), last_error: null,
-        document_status: "adjunto", document_attached_via: "diez", document_attached_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+        // Sin PDF, el documento queda pendiente de adjuntar en Diez (Julio, 14/11, 17:44).
+        ...(x.sinPdf ? { document_status: "pendiente", document_error: "Sumied no tiene el PDF de esta factura: se adjunta después en Diez", document_attached_via: null, document_attached_at: null } : { document_status: "adjunto", document_attached_via: "diez", document_attached_at: new Date().toISOString() }),
+        updated_at: new Date().toISOString() };
       const { data: previo } = await srv.from("external_send").select("id, status").eq("entry_id", x.entry_id).eq("account_id", t.account_id).neq("status", "rechazado").maybeSingle();
       const p = previo as { id: string; status: string } | null;
       if (p && (p.status === "enviado" || p.status === "enlazado")) continue;

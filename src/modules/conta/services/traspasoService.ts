@@ -58,7 +58,9 @@ export type SubcuentaQueFalta = { codigo: string; nombre: string }
 export type PorLaApi = { entry_id: string; numero: string; motivo: string }
 /** Una fila del Excel tal como llega (las fechas, en texto ISO: las convierte el libro). */
 export type FilaExcel = (string | number)[]
-export type ResultadoExcel = { base: string; faltan: SubcuentaQueFalta[]; comprobadas: number; emitidas?: FilaExcel[]; recibidas?: FilaExcel[]; por_la_api: PorLaApi[] }
+/** B01r26 (Julio, 14/11, 17:44): una recibida que va por el Excel sin su PDF, para adjuntarlo después. */
+export type SinPdf = { entry_id: string; numero: string }
+export type ResultadoExcel = { base: string; faltan: SubcuentaQueFalta[]; comprobadas: number; emitidas?: FilaExcel[]; recibidas?: FilaExcel[]; por_la_api: PorLaApi[]; sin_pdf?: SinPdf[] }
 export type ResultadoSubcuentas = { base: string; intentadas?: number; creadas: (SubcuentaQueFalta & { recortado?: boolean })[]; no_creadas?: (SubcuentaQueFalta & { porque: string })[]; faltan: SubcuentaQueFalta[]; otra_vez?: number }
 export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string }[]; dobles: string[]; dias_sin_leer?: string[] }
 
