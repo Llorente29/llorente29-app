@@ -3,16 +3,17 @@
 # rama, antes de fusionar y antes de «Seguir traspasando octubre».
 #
 #   2041  Los 275 envíos de Foodint «enlazado» (asiento, serie 4: 4/3160 …
-#         4/3692) cuyo asiento no está hoy en la C0008 vuelven a «pendiente», sin
-#         la referencia de Diez y con la de antes en el motivo. Solo esos: si no
-#         son exactamente esos 275, no cambia nada.
+#         4/3692) y los 55 «enviado» que Sumied escribió y Diez ya no tiene (42
+#         de la serie 4, 4/3693 … 4/3734, y 13 de la 1, 1/1953 … 1/1965) vuelven
+#         a «pendiente», sin la referencia de Diez y con la de antes en el
+#         motivo. Solo esos: si no son exactamente esos 330, no cambia nada.
 #
 # Antes del real, la lectura de la C0008 otra vez (diez-lectura.yml, modo
-# octubre-contra-c0008): ninguno de los 275 puede estar en Diez. Nada en el
+# octubre-contra-c0008): ninguno de los 330 puede estar en Diez. Nada en el
 # camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/b01r26-enlaces-falsos.sql
 supabase/migrations/20261114T2041_b01r26_enlaces_falsos.sql
-sin-vuelta-atras: supabase/migrations/20261114T2041_b01r26_enlaces_falsos.sql · motivo: devolverlos a «enlazado» diría que están en Diez y no están; la referencia de antes queda en el motivo.
+sin-vuelta-atras: supabase/migrations/20261114T2041_b01r26_enlaces_falsos.sql · motivo: devolverlos a «enlazado» o «enviado» diría que están en Diez y no están; la referencia de antes queda en el motivo.
 esperado: b01r26-enlaces-falsos · Envíos enlazados de Foodint, asiento, serie 4 = 0
-esperado: b01r26-enlaces-falsos · Envíos pendientes de Foodint por enlace falso, menos 275 = 0
-esperado: b01r26-enlaces-falsos · Envíos enviados de Foodint, menos 56 = 0
+esperado: b01r26-enlaces-falsos · Envíos pendientes de Foodint que vuelven al traspaso, menos 330 = 0
+esperado: b01r26-enlaces-falsos · Envíos enviados de Foodint, de tipo asiento = 0

@@ -5,6 +5,7 @@
 --   1. Sin Foodint, la migración no hace nada (los envíos de la cuenta A, igual).
 --   2. El mecanismo que usa: un asiento con su envío «enlazado» NO va en el
 --      traspaso; el mismo envío en «pendiente», sin la referencia de Diez, sí.
+--   3. Igual con un envío «enviado» (los 55 que Diez ya no tiene).
 -- Que los 275 sean exactamente esos y que ninguno exista en Diez lo miden el
 -- ensayo de producción (la guarda de Sumied) y la lectura de la C0008.
 
@@ -72,6 +73,12 @@ begin
   update public.external_send set status = 'pendiente', next_try_at = null, sent_at = null, updated_at = now(),
          last_error = 'Enlace falso: PRUEBA', ext_year = null, ext_series = null, ext_number = null where id = v_s;
   if not public._conta_traspaso_va(e) then raise exception 'PRUEBA B01r26 enlaces 2: con el envío «pendiente», el asiento no vuelve al traspaso.'; end if;
+  -- 3. Lo mismo con un «enviado» que Diez ya no tiene (los 55).
+  update public.external_send set status = 'enviado', ext_year = '2026', ext_series = '4', ext_number = 990003, last_error = null where id = v_s;
+  if public._conta_traspaso_va(e) then raise exception 'PRUEBA B01r26 enlaces 3: con su envío «enviado», el asiento sigue yendo en el traspaso.'; end if;
+  update public.external_send set status = 'pendiente', next_try_at = null, sent_at = null, updated_at = now(),
+         last_error = 'Ya no está en Diez: PRUEBA', ext_year = null, ext_series = null, ext_number = null where id = v_s;
+  if not public._conta_traspaso_va(e) then raise exception 'PRUEBA B01r26 enlaces 3: con el envío «pendiente», el asiento no vuelve al traspaso.'; end if;
 end $$;
 
 select 'PRUEBA B01r26 enlaces falsos: en verde' as resultado;
