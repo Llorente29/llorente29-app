@@ -63,6 +63,50 @@ try {
   for (const [k, v] of porMes) sale(`diez.m${k}`, v)
   sale('diez.asientos_2026', diez.size)
 
+  // B01r26 (14/11) · ¿Qué números tienen hoy los asientos y las facturas de octubre? ¿Caen en los que
+  // eran de lo escrito por la API (4/3155 … 4/3734 y 1/1935 … 1/1965)? Por serie: cuántos, el primero
+  // y el último, y cuántos dentro de esos huecos; de las facturas, también si su documento es el de
+  // un asiento de octubre (si no, el documento de la factura no es el de su asiento).
+  seccion('octubre_numeros')
+  const HUECOS: Record<string, [number, number]> = { '4': [3155, 3734], '1': [1935, 1965] }
+  const deOctubre = [...diez.values()].filter((a) => mes(a.Fecha ?? 0) === '202610')
+  const porSerieOct = new Map<string, number[]>()
+  for (const a of deOctubre) porSerieOct.set(String(a.Serie), [...(porSerieOct.get(String(a.Serie)) ?? []), Number(a.Documento ?? 0)])
+  for (const [se, ds] of [...porSerieOct].sort()) {
+    ds.sort((x, y) => x - y)
+    sale(`asientos.s${se}.n`, ds.length); sale(`asientos.s${se}.primero`, ds[0]); sale(`asientos.s${se}.ultimo`, ds[ds.length - 1])
+    const h = HUECOS[se]
+    if (h) sale(`asientos.s${se}.en_el_hueco_api`, ds.filter((d) => d >= h[0] && d <= h[1]).length)
+    const tipos = new Map<number, number>()
+    for (const a of deOctubre.filter((x) => String(x.Serie) === se)) tipos.set(Number(a.TipoAsiento ?? -1), (tipos.get(Number(a.TipoAsiento ?? -1)) ?? 0) + 1)
+    for (const [t, n] of tipos) sale(`asientos.s${se}.tipo${t < 0 ? 'x' : t}`, n)
+  }
+  for (const se of Object.keys(HUECOS)) if (!porSerieOct.has(se)) sale(`asientos.s${se}.n`, 0)
+  // El último número de cada serie en todo 2026 (para ver si Diez reutiliza números).
+  const ultimo = new Map<string, number>()
+  for (const a of diez.values()) ultimo.set(String(a.Serie), Math.max(ultimo.get(String(a.Serie)) ?? 0, Number(a.Documento ?? 0)))
+  for (const [se, d] of [...ultimo].sort()) sale(`ultimo_2026.s${se}`, d)
+  // Las facturas de octubre.
+  let fact: Record<string, unknown>[] = []
+  try { fact = await c.facturasDelMes('202610') } catch (x) { if (!(x instanceof ErrorDiez && x.status >= 500)) throw x; sale('facturas_500', 1) }
+  const keysOct = new Set(deOctubre.map((a) => `${a.Serie}/${a.Documento}`))
+  const porSerieF = new Map<string, number[]>()
+  for (const f of fact) porSerieF.set(String(f.Serie), [...(porSerieF.get(String(f.Serie)) ?? []), Number(f.Documento ?? 0)])
+  for (const [se, ds] of [...porSerieF].sort()) {
+    ds.sort((x, y) => x - y)
+    sale(`facturas.s${se}.n`, ds.length); sale(`facturas.s${se}.primero`, ds[0]); sale(`facturas.s${se}.ultimo`, ds[ds.length - 1])
+    sale(`facturas.s${se}.doc_es_de_un_asiento`, ds.filter((d) => keysOct.has(`${se}/${d}`)).length)
+    const h = HUECOS[se]
+    if (h) sale(`facturas.s${se}.en_el_hueco_api`, ds.filter((d) => d >= h[0] && d <= h[1]).length)
+  }
+  // Las emitidas del Excel (serie 1) por tramos de 20, para ver si hay huecos.
+  const s1 = (porSerieF.get('1') ?? []).slice().sort((x, y) => x - y)
+  let huecos = 0; for (let i = 1; i < s1.length; i++) if (s1[i] !== s1[i - 1] + 1) huecos++
+  sale('facturas.s1.saltos', huecos)
+  const s2 = (porSerieF.get('2') ?? []).slice().sort((x, y) => x - y)
+  let huecos2 = 0; for (let i = 1; i < s2.length; i++) if (s2[i] !== s2[i - 1] + 1) huecos2++
+  sale('facturas.s2.saltos', huecos2)
+
   const envios = s.envios.filter((e) => (e.status === 'enviado' || e.status === 'enlazado') && e.ext)
   sale('sumied.envios_en_diez', envios.length)
   const usados = new Set<string>()
