@@ -52,7 +52,7 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
     try {
       const r = await crearSubcuentasEnDiez(companyId, mes)
       setCrear(false)
-      setHecho(`Creadas en Diez (${r.base}): ${r.creadas.map((c) => `${c.codigo} ${c.nombre}`).join(', ') || 'ninguna'}.${r.faltan.length ? ` Siguen faltando ${n(r.faltan.length)}.` : ''}`)
+      setHecho(`Creadas en Diez (${r.base}): ${r.creadas.map((c) => `${c.codigo} ${c.nombre}`).join(', ') || 'ninguna'}.${r.faltan.length ? ` Siguen faltando ${n(r.faltan.length)}.` : ''}${r.otra_vez ? ` ${n(r.otra_vez)} ${r.otra_vez === 1 ? 'asiento que esperaba vuelve' : 'asientos que esperaban vuelven'} al traspaso: pulsa «Seguir traspasando ${nombre}».` : ''}`)
       await preparar()
     } catch (e) { setError(`No se han creado: ${mensajeDe(e)}`); setOcupado(null) }
   }
