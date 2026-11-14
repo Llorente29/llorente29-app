@@ -191,6 +191,8 @@ jobs:
             '[prueba-c0009:traspaso]'*) S=scripts/conta/diez/prueba-c0009-traspaso.ts ;;
             # B01r26 (14/11): SOLO LEE qué subcuentas de la C0009 dan 500 al GET y si están en su lista (escribir: false).
             '[prueba-c0009:subcuentas-leer]'*) S=scripts/conta/diez/prueba-c0009-subcuentas-leer.ts ;;
+            # B01r26 (14/11): SOLO LEE qué consulta de facturas da 500 en la C0009 (el mes, páginas cortas, día a día).
+            '[prueba-c0009:facturas-leer]'*) S=scripts/conta/diez/prueba-c0009-facturas-leer.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac

@@ -41,10 +41,19 @@ import { esLaMisma, facturasDelTraspaso, filasDeLosExcel, porExcel, type Factura
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-/** Por tanda: Diez tarda unos segundos por asiento. */
-const POR_TANDA = 12;
-/** Si se acerca el tope de la función, lo que quede va en la tanda siguiente. */
-const TOPE_MS = 100_000;
+/** Por tanda: Diez tarda unos segundos por asiento. B01r26 (14/11): 8, no 12 (el ensayo de la C0009 dio 504). */
+const POR_TANDA = 8;
+/** Si se acerca el tope de la función, lo que quede va en la tanda siguiente. B01r26 (14/11): 45 s, lejos del 504. */
+const TOPE_MS = 45_000;
+/** B01r26 (14/11): lo que va por Excel, por traspaso, 10 minutos (antes se recalculaba en cada tanda, unas 260 consultas). */
+const EXCEL_DEL_TRASPASO = new Map<string, { en: number; ids: Set<string> }>();
+async function idsPorExcel(srv: ReturnType<typeof createClient>, t: Traspaso): Promise<Set<string>> {
+  const c = EXCEL_DEL_TRASPASO.get(t.id);
+  if (c && Date.now() - c.en < 600_000) return c.ids;
+  const ids = new Set(porExcel(await facturasDelTraspaso(srv, t, () => "https://excel.invalid/pdf")).map((x) => x.entry_id));
+  EXCEL_DEL_TRASPASO.set(t.id, { en: Date.now(), ids });
+  return ids;
+}
 
 type Fallo = { entry_id: string; numero: number | null; motivo: string };
 
@@ -99,7 +108,7 @@ async function tanda(srv: ReturnType<typeof createClient>, t: Traspaso): Promise
   ]);
   if (e1 || e2) return json({ error: `no se ha podido leer lo que va: ${(e1 ?? e2)!.message}` }, 500);
   // B01r26: las facturas que van por Excel con su PDF no se mandan aquí (las enlaza «Ya lo he importado»).
-  const excelSet = new Set(porExcel(await facturasDelTraspaso(srv, t, () => "https://excel.invalid/pdf")).map((x) => x.entry_id));
+  const excelSet = await idsPorExcel(srv, t);
   const todos = ((lista ?? []) as { entry_id: string; orden: number; tipo: string }[]).filter((x) => !excelSet.has(x.entry_id));
   // B01r26 (14/11): lo que se cortó por el 500 de Diez a una subcuenta que no existe se vuelve a
   // intentar: ahora eso es «no está en Diez», con su «Crearlas en Diez» (sinLosDelQuinientos).
@@ -276,7 +285,11 @@ async function importado(srv: ReturnType<typeof createClient>, t: Traspaso): Pro
     // Diez lista por la fecha del asiento: el mes del traspaso y el siguiente (por si alguna entra con otra fecha).
     const m = aaaammDelMes(t.mes);
     const sig = m.slice(4) === "12" ? `${Number(m.slice(0, 4)) + 1}01` : `${m.slice(0, 4)}${String(Number(m.slice(4)) + 1).padStart(2, "0")}`;
-    const enDiez = [...(await c.cliente.facturasDelMes(m)), ...(await c.cliente.facturasDelMes(sig))];
+    // B01r26 (ensayo del 14/11): «GET /api/facturas» del mes dio 500 en la C0009 después de importar con PDF.
+    // Como se pueda: el mes, en páginas más cortas o día a día; los días que Diez no deja leer se dicen.
+    const leidos = [await c.cliente.facturasDelMesComoSePueda(m), await c.cliente.facturasDelMesComoSePueda(sig)];
+    const enDiez = leidos.flatMap((l) => l.facturas);
+    const diasSinLeer = leidos.flatMap((l) => l.diasSinLeer);
     let enlazadas = 0; const faltan: { entry_id: string; numero: string }[] = []; const dobles: string[] = [];
     for (const x of xs) {
       const iguales = [...new Map(enDiez.filter((f) => esLaMisma(x, f)).map((f) => [`${f.Ejercicio}/${f.Serie}/${f.Documento}`, f])).values()];
@@ -293,8 +306,8 @@ async function importado(srv: ReturnType<typeof createClient>, t: Traspaso): Pro
       if (error) return json({ error: `no se ha podido enlazar ${x.numero}: ${error.message}`, enlazadas }, 500);
       enlazadas++;
     }
-    console.log(`conta-diez-traspaso · ${t.id} · importado · enlazadas ${enlazadas} · faltan ${faltan.length} · dobles ${dobles.length}`);
-    return json({ van_por_excel: xs.length, enlazadas, faltan, dobles });
+    console.log(`conta-diez-traspaso · ${t.id} · importado · leído ${leidos.map((l) => l.como).join("+")} · enlazadas ${enlazadas} · faltan ${faltan.length} · dobles ${dobles.length} · días sin leer ${diasSinLeer.length}`);
+    return json({ van_por_excel: xs.length, enlazadas, faltan, dobles, dias_sin_leer: diasSinLeer });
   } catch (x) {
     return json({ error: x instanceof Error ? x.message : String(x) }, 500);
   }

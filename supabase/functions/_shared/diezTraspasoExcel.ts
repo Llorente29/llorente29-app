@@ -18,7 +18,6 @@ import { correspondenciaDeEmpresa } from './diezAnalitica.ts'
 import { emitidaDeVentas, filaEmitida, filaRecibida, recibidaDeAsiento, ingresosAgrupados, type Emitida, type Fila, type Recibida, type RecibidaAsiento } from './diezExcel.ts'
 import { XML_EMITIDAS, XML_RECIBIDAS } from './diezExcelConfig.ts'
 import { resumenDeAsiento, type ResumenBD } from './resumenDeAsiento.ts'
-import { numeroDeLaVez } from './diezFactura.ts'
 
 export type Traspaso = { id: string; account_id: string; company_id: string; mes: string }
 export type FacturaDelTraspaso = {
@@ -45,6 +44,17 @@ export async function facturasDelTraspaso(srv: SupabaseClient, t: Traspaso, url:
   const { data: lista, error } = await srv.rpc('conta_traspaso_lista', { p_company: t.company_id, p_mes: t.mes })
   if (error) throw new Error(`no se ha podido leer lo que va: ${error.message}`)
   const corr = correspondenciaDeEmpresa(t.company_id)
+  // B01r26 (ensayo del 14/11): el número de la factura de ventas es el de su factura (customer_invoice,
+  // «UBR-2026/00016», el del PDF), no el que calcula la API («UBR-CAM-20261031»).
+  const numeroDeFactura = new Map<string, string>()
+  {
+    const ids = ((lista ?? []) as { entry_id: string; tipo: string }[]).filter((x) => x.tipo === 'ventas').map((x) => x.entry_id)
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data, error: e0 } = await srv.from('customer_invoice').select('entry_id, number_text').eq('company_id', t.company_id).in('entry_id', ids.slice(i, i + 200))
+      if (e0) throw new Error(`no se han podido leer los números de las facturas de ventas: ${e0.message}`)
+      for (const f of (data ?? []) as { entry_id: string; number_text: string | null }[]) if (f.number_text) numeroDeFactura.set(f.entry_id, f.number_text)
+    }
+  }
   const out: FacturaDelTraspaso[] = []
   for (const x of (lista ?? []) as { entry_id: string; tipo: string }[]) {
     if (x.tipo === 'ventas') {
@@ -54,9 +64,9 @@ export async function facturasDelTraspaso(srv: SupabaseClient, t: Traspaso, url:
       let f: ReturnType<typeof resumenDeAsiento>['factura'] = null; let porque: string | null = null
       try { const listo = resumenDeAsiento(r, { correspondencia: corr, generado: new Date(), hoy: hoyMadrid() }); f = listo.factura; porque = listo.sinFactura } catch (z) { porque = z instanceof Error ? z.message : String(z) }
       if (!f || !corr) { out.push({ entry_id: x.entry_id, excel: 'emitidas', numero: String(r.numero ?? ''), cuenta: '', porLaApi: porque ?? 'sin factura de Diez', subcuentas: [] }); continue }
-      const base = String(f.factura.NumeroFactura)
-      const { data: vez } = await srv.rpc('conta_diez_numero_vez', { p_entry: x.entry_id, p_base: base })
-      const fd = { ...f.factura, NumeroFactura: numeroDeLaVez(base, Number(vez ?? 1)) } as unknown as Parameters<typeof emitidaDeVentas>[0]['factura']
+      const deSuFactura = numeroDeFactura.get(x.entry_id)
+      if (!deSuFactura) { out.push({ entry_id: x.entry_id, excel: 'emitidas', numero: String(r.numero ?? ''), cuenta: '', porLaApi: 'no tiene su factura de ventas (con número) en Sumied', subcuentas: [] }); continue }
+      const fd = { ...f.factura, NumeroFactura: deSuFactura } as unknown as Parameters<typeof emitidaDeVentas>[0]['factura']
       const u = r.documento ? url(x.entry_id) : null
       const emitida = emitidaDeVentas({ factura: fd, fecha: r.fecha, nombreCliente: '', url: u ?? '', local: r.local?.nombre ?? null, canal: r.canal?.slug ?? null, correspondencia: corr })
       const ing = ingresosAgrupados(emitida.ingresos)

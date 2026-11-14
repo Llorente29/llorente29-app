@@ -186,3 +186,14 @@ describe('los abonos de proveedor (12 en octubre y noviembre)', () => {
     expect('porLaApi' in filaRecibida(r, XML_RECIBIDAS)).toBe(false)
   })
 })
+
+describe('el IVA no deducible (ensayo del 14/11: Orange y Anthropic)', () => {
+  it('no va al Excel ni como exenta ni como deducible: fuera, con su porqué', () => {
+    const r = recibidaDeAsiento({
+      fecha: '2026-10-05', factura: { numero: 'S11/0177416578', fecha: '2026-10-05' }, proveedor: { nombre: 'P', nif: 'B00000000' },
+      lineas: [{ cuenta: '62800000', debe: 28.89, haber: 0, tipoIva: null, baseIva: null }, { cuenta: '62800000', debe: 6.07, haber: 0, tipoIva: 21, baseIva: 28.89 },
+        { cuenta: '41000043', debe: 0, haber: 34.96, tipoIva: null, baseIva: null }],
+    }, URL)
+    expect(r).toMatchObject({ porLaApi: expect.stringContaining('IVA no deducible') })
+  })
+})

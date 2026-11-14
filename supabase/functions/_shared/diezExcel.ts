@@ -259,6 +259,9 @@ export function recibidaDeAsiento(r: RecibidaAsiento, url: string): Recibida | N
   const prov = new Map<string, number>(); const ret = new Map<string, number>()
   for (const l of r.lineas) {
     const neto = n(l.debe) - n(l.haber)
+    // B01r26 (ensayo del 14/11): IVA NO DEDUCIBLE (la cuota a la cuenta de gasto, con su tipo y su base):
+    // el Excel lo pondría como deducible (472) o, sin él, como exenta. Fuera, con su porqué.
+    if (/^[26]/.test(l.cuenta) && l.tipoIva != null) return { porLaApi: 'lleva IVA no deducible: ni el Excel ni la API de Diez lo guardan como tal; se mete a mano en Diez' }
     if (/^[26]/.test(l.cuenta)) gastos.set(l.cuenta, (gastos.get(l.cuenta) ?? 0) + neto)
     else if (/^472/.test(l.cuenta)) {
       if (l.tipoIva == null || l.baseIva == null) return { porLaApi: `la ${l.cuenta} no lleva su tipo y su base` }
