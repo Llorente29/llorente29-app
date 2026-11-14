@@ -59,7 +59,7 @@ export type PorLaApi = { entry_id: string; numero: string; motivo: string }
 /** Una fila del Excel tal como llega (las fechas, en texto ISO: las convierte el libro). */
 export type FilaExcel = (string | number)[]
 export type ResultadoExcel = { base: string; faltan: SubcuentaQueFalta[]; comprobadas: number; emitidas?: FilaExcel[]; recibidas?: FilaExcel[]; por_la_api: PorLaApi[] }
-export type ResultadoSubcuentas = { base: string; creadas: SubcuentaQueFalta[]; faltan: SubcuentaQueFalta[] }
+export type ResultadoSubcuentas = { base: string; creadas: SubcuentaQueFalta[]; faltan: SubcuentaQueFalta[]; otra_vez?: number }
 export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string }[]; dobles: string[] }
 
 /** «2 · Descarga los dos Excel»: comprueba las subcuentas en Diez y, si están todas, da las filas. */

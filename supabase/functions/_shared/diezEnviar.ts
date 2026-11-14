@@ -810,7 +810,7 @@ async function enviarContraasientoRecibida(c: ContraasientoBD, p: PuertoEnvio & 
 
 /** Lo que el envío de un asiento general usa del cliente de Diez (ClienteDiez lo cumple). */
 export interface ClienteDiezApuntes {
-  apuntesDelMes(aaaamm: string): Promise<Apunte[]>
+  apuntesDelMes(aaaamm: string, o?: { fresco?: boolean }): Promise<Apunte[]>
   enviarAsiento(a: ApunteSimplificado): Promise<Apunte>
   subcuenta(codigo: string): Promise<Record<string, unknown> | null>
 }
@@ -903,7 +903,7 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
     serie = String(creado?.Serie ?? ap.Serie); documento = Number(creado?.Documento ?? 0)
     if (!documento) {
       // Diez lo ha aceptado sin decir su número: se busca el que acaba de escribir.
-      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes, { fresco: true })).filter(esElMismo))
       if (vuelta.length !== 1) return apuntar('Diez lo ha aceptado pero no dice su número y no se encuentra uno solo: al reintentar se busca antes y se enlaza, no se escribe otro')
       ej = String(vuelta[0].Ejercicio ?? ej); serie = String(vuelta[0].Serie); documento = Number(vuelta[0].Documento)
     }
