@@ -107,7 +107,7 @@ begin
         jsonb_build_object('cuenta', '41000002', 'debe', -r.total, 'haber', 0, 'local_id', r.loc, 'comun', false, 'tercero_id', v_glovo, 'documento', r.num),
         jsonb_build_object('cuenta', '62300001', 'debe', 0, 'haber', -r.base, 'local_id', r.loc, 'comun', false),
         jsonb_build_object('cuenta', '47200021', 'debe', 0, 'haber', -r.iva, 'local_id', r.loc, 'comun', false,
-          'iva', jsonb_build_object('tipo_id', v_t21, 'base', r.base, 'libro', 'received', 'deducible', 'yes', 'facturas', 1)))
+          'iva', jsonb_build_object('tipo_id', v_t21, 'base', -r.base, 'libro', 'received', 'deducible', 'yes', 'facturas', 1)))
       else jsonb_build_array(
         jsonb_build_object('cuenta', '62300001', 'debe', r.base, 'haber', 0, 'local_id', r.loc, 'comun', false),
         jsonb_build_object('cuenta', '47200021', 'debe', r.iva, 'haber', 0, 'local_id', r.loc, 'comun', false,
