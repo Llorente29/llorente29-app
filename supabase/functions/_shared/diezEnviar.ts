@@ -822,6 +822,14 @@ export interface PuertoApunte extends Pick<PuertoEnvio, 'envio' | 'guardar' | 'c
    * mismas líneas) son dos asientos en Diez: el del primero no es el del segundo.
    */
   enlazados?(companyId: string, menosEntry: string): Promise<Set<string>>
+  /**
+   * B01r26 (14/11) · En el traspaso del mes, un asiento igual que ya está en Diez y no
+   * viene de Sumied NO se enlaza: después de borrar el mes en Diez no debería haber
+   * ninguno, y si lo hay es que el borrado no está hecho (o no ha terminado). El
+   * traspaso de octubre enlazó así 275 asientos con documentos que Diez borró
+   * después. Se para ese asiento, con el documento de Diez en el motivo.
+   */
+  noEnlazarAjenos?: boolean
 }
 
 export async function enviarApunteADiez(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnvio> {
@@ -895,6 +903,11 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
   const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(ap)))
   const comun = { entry_id: a.id, account_id: a.account_id, company_id: a.company_id, account_connector_id: con.id, kind: 'asiento' as const, ext_invoice_number: null, payload_hash: hash, document_id: null, document_status: null, document_error: null, document_attached_at: null }
   let serie: string, documento: number, enlazada: boolean
+  // Un igual en Diez que no viene de Sumied, dentro del traspaso: no se enlaza (salvo que
+  // sea el nuestro, cortado escribiendo: entonces sí es el que escribió Sumied).
+  if (ya.length === 1 && p.noEnlazarAjenos && !cortado) {
+    return apuntar(`en Diez ya hay un asiento igual que no viene de Sumied (${ya[0].Serie}/${ya[0].Documento}): no se enlaza ni se escribe otro. ¿Está hecho el borrado del mes en Diez? Si ese asiento es bueno, se enlaza a mano`, { account_connector_id: con.id })
+  }
   if (ya.length === 1) {
     serie = String(ya[0].Serie); documento = Number(ya[0].Documento); enlazada = true
     previo = await p.guardar({ ...(previo ?? fila0(a)), ...comun, status: 'enlazado', ext_year: String(ya[0].Ejercicio ?? ap.Ejercicio), ext_series: serie, ext_number: documento, last_error: null, sent_at: iso(p.ahora()), next_try_at: null })

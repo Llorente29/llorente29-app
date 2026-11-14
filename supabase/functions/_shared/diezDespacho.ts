@@ -126,6 +126,8 @@ async function despachar(lector: SupabaseClient, srv: SupabaseClient, j: Cabecer
     const p: PuertoApunte = {
       ...comun, clienteApuntes: (c, op) => clienteDiez(srv, c, op),
       enlazados: (companyId, menosEntry) => enlazadosEnDiez(srv, j.account_id, companyId, menosEntry),
+      // B01r26 (14/11): dentro del traspaso del mes, un igual de Diez que no es de Sumied no se enlaza.
+      noEnlazarAjenos: !!traspaso,
     }
     return enviarApunteADiez(asiento, p)
   }

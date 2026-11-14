@@ -36,6 +36,7 @@ import { aaaammDelMes, cuadrarAgrupado, ES_EL_QUINIENTOS, ES_SUBCUENTA_QUE_FALTA
 import { claveDelCuadre } from "../_shared/diezExcel.ts";
 import { nombreParaDiez } from "../_shared/diezSubcuentas.ts";
 import { alEscribir } from "../_shared/diezEnviar.ts";
+import { olvidarLosMeses } from "../_shared/diezCliente.ts";
 import { esLaMisma, facturasDelTraspaso, filasDeLosExcel, porExcel, type FacturaDelTraspaso } from "../_shared/diezTraspasoExcel.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -117,6 +118,8 @@ async function tanda(srv: ReturnType<typeof createClient>, t: Traspaso): Promise
 }
 
 async function tandaConCerrojo(srv: ReturnType<typeof createClient>, t: Traspaso): Promise<Response> {
+  // B01r26 (14/11): cada tanda lee el mes de Diez de nuevo (no se fía de lo leído en una tanda anterior).
+  olvidarLosMeses();
   const t0 = Date.now();
   const [{ data: lista, error: e1 }, { data: fila, error: e2 }] = await Promise.all([
     srv.rpc("conta_traspaso_lista", { p_company: t.company_id, p_mes: t.mes }),
