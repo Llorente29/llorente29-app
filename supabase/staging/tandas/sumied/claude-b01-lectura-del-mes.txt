@@ -1,0 +1,5 @@
+# B01r26 · 2256: el token de la C0009 fuera de la conexión de Foodint y los 333
+# envíos parados por «iguales» (banco, liquidaciones y a mano), otra vez al
+# traspaso. No añade objetos. Su prueba (ROLLBACK): sin Foodint no hace nada.
+supabase/migrations/20261114T2256_b01r26_token_de_la_c0009.sql
+supabase/staging/sql/20261114_b01r26_token_de_la_c0009_prueba.sql

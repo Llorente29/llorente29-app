@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · el token de la C0009 · contexto de producción, medido en SOLO LECTURA el 14/11 a las 21:57Z: la 2256 no añade ni cambia objetos. En Foodint: quita token_ref y token_expires_at de su conexión de Diez (account_connector 860fcb61…, token guardado el 13/11 a las 23:05Z con la conexión en la C0009, caduca el 27/11); deja sin last_error 333 filas de external_send («pendiente», asiento; banco, liquidaciones y a mano) parados por «iguales», y las quita del detalle del traspaso de octubre («traspasando», 354 fallos → 21). external_send no tiene disparadores. Nada en el camino del pedido; la 2256 no está en el historial.",
+ "medido": "2026-11-14T21:57Z",
+ "tanda": {
+  "supabase/migrations/20261114T2256_b01r26_token_de_la_c0009.sql": "257dc424099703efe88fb96cb2e2c288"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

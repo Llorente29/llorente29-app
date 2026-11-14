@@ -27,7 +27,8 @@
 //     Hierro: no es un local abierto), ni un subgrupo vetado (el 9: Lovers
 //     Burgers va siempre con el 11). Ver GRUPOS_VETADOS y SUBGRUPOS_VETADOS.
 //
-// El TOKEN dura 14 días. Se guarda fuera (Vault, por connector_token_save) y
+// El TOKEN dura 14 días y es de UNA base (la que abre al entrar). Se guarda fuera
+// (Vault, por connector_token_save) con esa base, solo vale para ella (B01r26), y
 // se renueva cuando le quedan menos de 2 días. Renovar es UN intento: si falla,
 // la conexión pasa a «caída» (connector_mark_down) y se para. No hay bucles.
 //
@@ -188,6 +189,19 @@ export const siguienteDia = (d: number) => d + 1
 const VIDA_CACHE_MS = 10 * 60 * 1000
 type Cache = { subcuentas?: { en: number; m: Map<string, Record<string, unknown>> }; meses: Map<string, { en: number; filas: Apunte[] }> }
 const CACHES = new Map<string, Cache>()
+/** B01r26 (14/11): el token se guarda con la base que abrió. */
+const PREFIJO_BD = 'diez-bd:'
+export const tokenConLaBase = (bd: string, token: string) => `${PREFIJO_BD}${bd.trim().toUpperCase()}|${token}`
+/** La base y el token de lo guardado; null si es de antes (sin base): no se sabe para qué base se sacó. */
+export function tokenDeLaBase(guardado: string): { bd: string; token: string } | null {
+  if (!guardado.startsWith(PREFIJO_BD)) return null
+  const i = guardado.indexOf('|')
+  if (i < 0) return null
+  const bd = guardado.slice(PREFIJO_BD.length, i).trim().toUpperCase()
+  const token = guardado.slice(i + 1)
+  return bd && token ? { bd, token } : null
+}
+
 /** Para las pruebas: empezar sin nada leído. */
 export function olvidarLoLeido() { CACHES.clear() }
 /**
@@ -304,14 +318,22 @@ export class ClienteDiez {
     return { token: j.access_token, expiresAt }
   }
 
-  /** El token vigente; si caduca en menos de 2 días, uno nuevo (un intento). */
+  /**
+   * El token vigente; si caduca en menos de 2 días, uno nuevo (un intento).
+   * B01r26 (14/11): el token de Diez va ligado a la base que abrió (nombre_bd al
+   * entrar). Se guarda con ella («diez-bd:C0008|…») y solo se reutiliza si es de la
+   * base que se pide: el de la C0009 del ensayo siguió guardado cuando la conexión
+   * volvió a la C0008, y el traspaso de octubre leyó y escribió en la C0009. Uno
+   * sin base (de antes de esto) o de otra base no se usa: se entra de nuevo.
+   */
   async asegurarToken(): Promise<string> {
     if (this.token) return this.token
     const g = await this.cfg.almacen.leer()
-    if (g && Date.parse(g.expiresAt) - this.ahora() > MARGEN_RENOVAR_MS) return (this.token = g.token)
+    const deLaBase = g ? tokenDeLaBase(g.token) : null
+    if (g && deLaBase && deLaBase.bd === this.nombreBd && Date.parse(g.expiresAt) - this.ahora() > MARGEN_RENOVAR_MS) return (this.token = deLaBase.token)
     try {
       const n = await this.entrar()
-      await this.cfg.almacen.guardar(n.token, n.expiresAt)
+      await this.cfg.almacen.guardar(tokenConLaBase(this.nombreBd, n.token), n.expiresAt)
       return (this.token = n.token)
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e)
