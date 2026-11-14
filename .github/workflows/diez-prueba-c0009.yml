@@ -166,14 +166,14 @@ jobs:
               raise SystemExit(1)
           PY
           command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
-          # Foodint, anclado por su empresa y su cuenta (regla 9): cada asiento con sus líneas y sus números de factura.
+          # Foodint, anclado por su empresa y su cuenta (regla 9): cada asiento con sus líneas y el número de las recibidas
+          # (customer_invoice no la lee conta_lectura: las ventas casan por sus líneas o por la fecha y el total).
           PGOPTIONS='-c default_transaction_read_only=on' psql "$RO_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
             select coalesce(json_agg(json_build_object('id', e.id, 'fecha', e.entry_date::text, 'origen', e.source_type, 'estado', e.status,
               'lineas', (select json_agg(json_build_object('c', a.code, 'd', l.debit, 'h', l.credit))
                            from public.journal_line l join public.company_account a on a.id = l.company_account_id and a.company_id = e.company_id
                           where l.entry_id = e.id),
               'nums', array_remove(array[
-                (select ci.number_text from public.customer_invoice ci where ci.entry_id = e.id and ci.account_id = e.account_id limit 1),
                 (select si.invoice_number from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id limit 1)], null))), '[]'::json)
               from public.journal_entry e
              where e.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and e.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
