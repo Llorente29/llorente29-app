@@ -31227,6 +31227,57 @@ end $$;
 
 
 --
+-- Name: compras_lo_factura_otro(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.compras_lo_factura_otro(p_proveedor uuid, p_otro uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare s supplier; o supplier; r record; v_n int := 0;
+begin
+  select * into s from supplier where id = p_proveedor;
+  if s.id is null then raise exception 'Ese proveedor no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_or_manager_of(s.account_id) then
+    raise exception 'No puedes cambiar esta ficha.' using errcode = '42501';
+  end if;
+  select * into o from supplier where id = p_otro and account_id = s.account_id;
+  if o.id is null then raise exception 'Ese contacto no es de tu cuenta.' using errcode = 'P0002'; end if;
+  if o.id = s.id then raise exception 'No puede facturarse a sí mismo: elige quién te lo factura.' using errcode = '22023'; end if;
+  if o.archived_at is not null then raise exception '% está archivado: elige uno que siga vivo.', o.name using errcode = '22023'; end if;
+  if o.invoiced_by_supplier_id is not null then
+    raise exception 'A % también se lo factura otro: elige el que factura de verdad.', o.name using errcode = '22023';
+  end if;
+  if exists (select 1 from supplier x where x.invoiced_by_supplier_id = s.id and x.archived_at is null) then
+    raise exception '% factura lo de otros proveedores: no puede facturárselo otro a él.', s.name using errcode = '22023';
+  end if;
+
+  update supplier set invoiced_by_supplier_id = o.id, invoicing_mode = null, invoicing_per_location = null, invoicing_frequency = null
+   where id = s.id;
+  -- Sus recepciones abiertas (y las que esperaban una pregunta de la ficha), como _compras_forma_facturar.
+  for r in select p.goods_receipt_id from goods_receipt_path p join goods_receipt g on g.id = p.goods_receipt_id
+            where p.account_id = s.account_id
+              and (p.consumed_at is null or p.question in ('ficha_sin_forma', 'papel_y_ficha'))
+              and (g.supplier_id = s.id or p.supplier_id = s.id
+                   or (p.question = 'a_nombre_de' and (p.question_detail->>'proveedor')::uuid = s.id)) loop
+    perform public._compras_camino_guarda(r.goods_receipt_id); v_n := v_n + 1;
+  end loop;
+  return jsonb_build_object('proveedor', s.id, 'otro', o.id, 'otro_nombre', o.name, 'recepciones', v_n,
+    'mensaje', format('Guardado: lo de %s lo factura %s en su factura de género. No espero ninguna factura de %s.%s',
+                      s.name, o.name, s.name,
+                      case when v_n = 1 then ' He vuelto a mirar su recepción abierta.'
+                           when v_n > 1 then format(' He vuelto a mirar sus %s recepciones abiertas.', v_n) else '' end));
+end $$;
+
+
+--
+-- Name: FUNCTION compras_lo_factura_otro(p_proveedor uuid, p_otro uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.compras_lo_factura_otro(p_proveedor uuid, p_otro uuid) IS 'S01p·20·2. «Me lo factura otro»: el proveedor p_otro factura lo que trae p_proveedor. Vuelve a decidir sus recepciones abiertas y lo dice.';
+
+
+--
 -- Name: compras_mirar(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -58011,6 +58062,25 @@ $$;
 
 
 --
+-- Name: conta_traspaso_soltar_tanda(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_traspaso_soltar_tanda(p_traspaso uuid) RETURNS void
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  update public.conta_diez_traspaso set tanda_hasta = null where id = p_traspaso;
+$$;
+
+
+--
+-- Name: FUNCTION conta_traspaso_soltar_tanda(p_traspaso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_traspaso_soltar_tanda(p_traspaso uuid) IS 'B01r26 · Suelta el cerrojo de la tanda del traspaso. Solo el servidor (conta-diez-traspaso).';
+
+
+--
 -- Name: conta_traspaso_terminar(uuid, jsonb, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -58052,6 +58122,34 @@ begin
   return jsonb_build_object('mes_cerrado', v_cerrado, 'motivo', v_motivo);
 end
 $$;
+
+
+--
+-- Name: conta_traspaso_tomar_tanda(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_traspaso_tomar_tanda(p_traspaso uuid, p_segundos integer) RETURNS boolean
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_n int;
+begin
+  if p_segundos is null or p_segundos < 10 or p_segundos > 600 then
+    raise exception 'El cerrojo de la tanda va de 10 a 600 segundos.' using errcode = '22023';
+  end if;
+  update public.conta_diez_traspaso
+     set tanda_hasta = now() + make_interval(secs => p_segundos)
+   where id = p_traspaso and (tanda_hasta is null or tanda_hasta < now());
+  get diagnostics v_n = row_count;
+  return v_n = 1;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_traspaso_tomar_tanda(p_traspaso uuid, p_segundos integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_traspaso_tomar_tanda(p_traspaso uuid, p_segundos integer) IS 'B01r26 · Toma el traspaso para una tanda (true) o dice que ya lo tiene otra (false). Caduca solo. Solo el servidor (conta-diez-traspaso).';
 
 
 --
@@ -111416,6 +111514,7 @@ CREATE TABLE public.conta_diez_traspaso (
     mes_cerrado boolean DEFAULT false NOT NULL,
     cierre_motivo text,
     terminado_en timestamp with time zone,
+    tanda_hasta timestamp with time zone,
     CONSTRAINT conta_diez_traspaso_estado_check CHECK ((estado = ANY (ARRAY['confirmado'::text, 'traspasando'::text, 'terminado'::text, 'con_fallos'::text]))),
     CONSTRAINT conta_diez_traspaso_mes_check CHECK ((mes = (date_trunc('month'::text, (mes)::timestamp with time zone))::date))
 );
@@ -111426,6 +111525,13 @@ CREATE TABLE public.conta_diez_traspaso (
 --
 
 COMMENT ON TABLE public.conta_diez_traspaso IS 'C12 (24/10). El traspaso a Diez de un mes: quién lo confirmó y cuándo (autorización escrita de Julio para Diez real), qué faltaba, cuántos llegaron, el cuadre y el cierre.';
+
+
+--
+-- Name: COLUMN conta_diez_traspaso.tanda_hasta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_diez_traspaso.tanda_hasta IS 'B01r26 · Hasta cuándo lo tiene una tanda de conta-diez-traspaso (el cerrojo: una a la vez). Nulo: libre. Ver 20261114T0757.';
 
 
 --
@@ -123426,6 +123532,7 @@ CREATE TABLE public.supplier (
     delivers_goods boolean,
     default_common boolean DEFAULT false NOT NULL,
     justificante_al_pagar boolean,
+    invoiced_by_supplier_id uuid,
     CONSTRAINT supplier_country_code_check CHECK ((country_code ~ '^[A-Z]{2}$'::text)),
     CONSTRAINT supplier_created_from_check CHECK ((created_from = 'factura'::text)),
     CONSTRAINT supplier_currency_check CHECK ((currency ~ '^[A-Z]{3}$'::text)),
@@ -123604,6 +123711,13 @@ COMMENT ON COLUMN public.supplier.default_common IS 'S01o·3 · Su gasto es com�
 --
 
 COMMENT ON COLUMN public.supplier.justificante_al_pagar IS 'B01 · Cola 1e · «Mandar el justificante al pagar»: con true, cuando el banco confirma un pago a este proveedor, Sumied le manda por correo su justificante. Nula o false: no se manda solo.';
+
+
+--
+-- Name: COLUMN supplier.invoiced_by_supplier_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier.invoiced_by_supplier_id IS 'S01p·20·2. «Me lo factura otro»: el proveedor que factura lo que trae éste, en su factura de género. Con él, no se espera ninguna factura de éste.';
 
 
 --
@@ -152087,6 +152201,14 @@ ALTER TABLE ONLY public.supplier_invoice
 
 
 --
+-- Name: supplier supplier_invoiced_by_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier
+    ADD CONSTRAINT supplier_invoiced_by_supplier_id_fkey FOREIGN KEY (invoiced_by_supplier_id) REFERENCES public.supplier(id) ON DELETE SET NULL;
+
+
+--
 -- Name: supplier_learning supplier_learning_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -170286,6 +170408,15 @@ GRANT ALL ON FUNCTION public.compras_liquidaciones(p_cuenta uuid, p_mes date) TO
 
 
 --
+-- Name: FUNCTION compras_lo_factura_otro(p_proveedor uuid, p_otro uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.compras_lo_factura_otro(p_proveedor uuid, p_otro uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.compras_lo_factura_otro(p_proveedor uuid, p_otro uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.compras_lo_factura_otro(p_proveedor uuid, p_otro uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION compras_mirar(p_cuenta uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -175548,11 +175679,27 @@ GRANT ALL ON FUNCTION public.conta_traspaso_saldos(p_company uuid, p_mes date) T
 
 
 --
+-- Name: FUNCTION conta_traspaso_soltar_tanda(p_traspaso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_traspaso_soltar_tanda(p_traspaso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_traspaso_soltar_tanda(p_traspaso uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_traspaso_terminar(p_traspaso uuid, p_cuadre jsonb, p_cuadra boolean); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_traspaso_terminar(p_traspaso uuid, p_cuadre jsonb, p_cuadra boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_traspaso_terminar(p_traspaso uuid, p_cuadre jsonb, p_cuadra boolean) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_traspaso_tomar_tanda(p_traspaso uuid, p_segundos integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_traspaso_tomar_tanda(p_traspaso uuid, p_segundos integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_traspaso_tomar_tanda(p_traspaso uuid, p_segundos integer) TO service_role;
 
 
 --
