@@ -82,22 +82,27 @@ begin
        or exists (select 1 from public.journal_entry j where j.company_id = v_e and j.status <> 'anulado' and j.series in (2, 4) and j.concept like '%' || r.num || '%') then
       raise exception 'DL1 Glovo facturas 1T/2T: la % ya está (factura o asiento): no se apunta nada.', r.num;
     end if;
+    begin
     insert into public.supplier_invoice (account_id, company_id, supplier_id, location_id, doc_kind, invoice_number, invoice_date, status, source,
                                          arrival_channel, tax_base_total, tax_total, grand_total, needs_review, notes, approved_at, approved_by_name, created_by_name)
     values (v_acc, v_e, v_prov, r.loc, case when v_abono then 'credit_note' else 'invoice' end, r.num, r.fecha, 'aprobada', 'manual', 'portal',
             r.base, r.iva, r.total, false, 'DL1·26: ' || case when v_abono then 'nota de crédito' else 'factura de comisión' end || ' de Glovo del ' || r.periodo
             || ', del zip de liquidaciones de Glovo; se apunta a 01/10 (el 1T y el 2T están presentados).', now(), 'Julio (tanda DL1)', 'Julio (tanda DL1)')
     returning id into v_inv;
+    exception when others then raise exception using errcode = 'DGA01', message = sqlerrm; end;
+    begin
     insert into public.supplier_invoice_line (supplier_invoice_id, raw_text, qty, unit_price, line_amount, vat_pct, expense_account_code, position)
     values (v_inv, 'Servicios de la plataforma de Glovo (' || r.periodo || ')', 1, r.base, r.base, 21, '62300001', 1);
     insert into public.supplier_invoice_tax (account_id, supplier_invoice_id, tax_rate_id, vat_pct, base, vat_amount)
     values (v_acc, v_inv, v_t21, 21, r.base, r.iva);
+    exception when others then raise exception using errcode = 'DGB01', message = sqlerrm; end;
+    begin
     v_res := public._journal_entry_proponer(v_e,
       jsonb_build_object('series', 2, 'fecha', '2026-10-01', 'concepto', 'Factura GLOVOAPP SPAIN PLATFORM · ' || r.num || ' (' || r.periodo || ')',
         'source_type', 'supplier_invoice', 'source_id', v_inv, 'confianza', 'seguro',
         'porque', 'DL1·26 (Julio, 13/11): ' || case when v_abono then 'nota de crédito' else 'factura de comisión' end || ' de Glovo del ' || r.periodo
           || ' que no estaba en los libros; a 01/10 porque el trimestre está presentado.',
-        'razones', '[]'::jsonb, 'party_id', v_glovo, 'documento', r.num, 'fecha_documento', r.fecha),
+        'razones', '[]'::jsonb, 'party_id', v_glovo, 'documento', r.num),
       case when v_abono then jsonb_build_array(
         jsonb_build_object('cuenta', '41000002', 'debe', -r.total, 'haber', 0, 'local_id', r.loc, 'comun', false, 'tercero_id', v_glovo, 'documento', r.num),
         jsonb_build_object('cuenta', '62300001', 'debe', 0, 'haber', -r.base, 'local_id', r.loc, 'comun', false),
@@ -109,6 +114,7 @@ begin
           'iva', jsonb_build_object('tipo_id', v_t21, 'base', r.base, 'libro', 'received', 'deducible', 'yes', 'facturas', 1)),
         jsonb_build_object('cuenta', '41000002', 'debe', 0, 'haber', r.total, 'local_id', r.loc, 'comun', false, 'tercero_id', v_glovo, 'documento', r.num)) end,
       null, 'Julio (tanda DL1)', null);
+    exception when others then raise exception using errcode = 'DGC01', message = sqlerrm; end;
     v_id := (v_res->>'id')::uuid;
     if v_id is null or coalesce((v_res->>'existente')::boolean, false) then
       raise exception using errcode = format('DG%s', lpad(v_k::text, 3, '0')), message = format('DL1 Glovo facturas 1T/2T: el asiento de la %s no ha salido nuevo (%s).', r.num, v_res);
@@ -116,6 +122,7 @@ begin
     update public.supplier_invoice set journal_entry_id = v_id, updated_at = now() where id = v_inv;
     v_ids := v_ids || jsonb_build_object('id', v_id, 'importe', abs(r.total));
     -- Su compensación con lo que Glovo debe.
+    begin
     v_id := public._dl1_asiento_iva(v_e, date '2026-10-01', 4,
       'Glovo · ' || r.num || ' (' || r.periodo || ') compensada con lo que Glovo debe',
       'DL1·26 (Julio, 13/11): Glovo la descontó de su liquidación; a 01/10 porque el trimestre está presentado.',
@@ -125,9 +132,12 @@ begin
       else jsonb_build_array(
         jsonb_build_object('cuenta', '41000002', 'debe', r.total, 'tercero', v_glovo, 'local', r.loc, 'documento', r.num),
         jsonb_build_object('cuenta', '43000001', 'haber', r.total, 'tercero', v_glovo, 'local', r.loc)) end);
+    exception when others then raise exception using errcode = 'DGD01', message = sqlerrm; end;
     v_ids := v_ids || jsonb_build_object('id', v_id, 'importe', abs(r.total));
   end loop;
   if v_k <> 39 then raise exception 'DL1 Glovo facturas 1T/2T: % documentos, no 39.', v_k; end if;
+  begin
   v_n := public._dl1_validar(v_e, v_julio, 'Julio', v_ids);
+  exception when others then raise exception using errcode = 'DGE01', message = sqlerrm; end;
   raise notice 'DL1 Glovo facturas 1T/2T: % asientos validados como Julio.', v_n;
 end $$;
