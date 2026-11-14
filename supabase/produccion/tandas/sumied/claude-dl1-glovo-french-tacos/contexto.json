@@ -1,0 +1,8 @@
+{
+ "_que": "DL1·26 · Glovo French Tacos · contexto de producción, medido en SOLO LECTURA el 14/11 a las 07:00Z: la 0815 no crea ni cambia ningún objeto; crea dos subcuentas (70000012, 70800012), apunta con _dl1_asiento_iva y _journal_entry_proponer, inserta la factura I170326000585810, pone la nota en 12 liquidaciones y lo valida con _dl1_validar (en producción). Borra la propuesta de la pasada de noche de la 551592. Nada en el camino del pedido; la 0815 no está en el historial.",
+ "medido": "2026-11-14T07:00Z",
+ "tanda": {
+  "supabase/migrations/20261114T0815_dl1_glovo_french_tacos.sql": "dbd815a871da44578c22e5f8fefa2b8d"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
