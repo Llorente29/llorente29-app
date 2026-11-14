@@ -142,6 +142,51 @@ try {
     if (ts) sale(`${p}.total_milesimas`, Math.round((td / ts) * 1000))
   }
   for (const [m, v] of [...relaciones].sort()) sale(`relacion.${m}`, v)
+
+  // Tercera pasada (14/11): las de Diez sin pareja, por su lado. Su subcuenta, sus fechas y, contra TODAS
+  // las de Sumied, si casa su NIF, su número (con o sin la subcuenta), su total o su fecha.
+  seccion('diez_sueltas')
+  const ctaSumied = new Set(sumied.map((x) => digitos(x.cta)))
+  let z = 0
+  const resumenSueltas = new Map<string, number>()
+  for (const f of diez.filter((d) => !usadas.has(d))) {
+    z++
+    const p = `d${z}`
+    const dn = norm(f.NumeroFactura); const nif = normNif(f.CifCliente); const cta = digitos(f.CuentaCliente)
+    const mismoNif = sumied.filter((x) => normNif(x.nif) === nif && nif)
+    const mismoNum = sumied.filter((x) => norm(x.n) === dn && dn)
+    const numDentro = sumied.filter((x) => dn && norm(x.n) !== dn && (norm(x.n).startsWith(dn) || norm(x.n).endsWith(dn) || dn.includes(norm(x.n))))
+    const mismoTotal = sumied.filter((x) => cent(x.t) === cent(f.TotalFactura))
+    const mismoTotalNif = mismoNif.filter((x) => cent(x.t) === cent(f.TotalFactura))
+    const noEstanNif = noEstan.filter((x) => normNif(x.nif) === nif && nif)
+    sale(`${p}.doc`, Number(f.Documento ?? 0))
+    sale(`${p}.cta`, Number(cta || 0))
+    sale(`${p}.cta_en_sumied`, ctaSumied.has(cta) ? 1 : 0)
+    sale(`${p}.fecha`, Number(f.Fecha ?? 0))
+    sale(`${p}.ff`, Number(f.FechaFactura ?? 0))
+    sale(`${p}.len`, dn.length)
+    sale(`${p}.con_nif`, nif ? 1 : 0)
+    sale(`${p}.total_cero`, cent(f.TotalFactura) === 0 ? 1 : 0)
+    sale(`${p}.total_negativo`, cent(f.TotalFactura) < 0 ? 1 : 0)
+    sale(`${p}.sumied_mismo_nif`, mismoNif.length)
+    sale(`${p}.sumied_mismo_nif_y_total`, mismoTotalNif.length)
+    sale(`${p}.no_estan_mismo_nif`, noEstanNif.length)
+    sale(`${p}.sumied_mismo_numero`, mismoNum.length)
+    sale(`${p}.sumied_numero_dentro`, numDentro.length)
+    sale(`${p}.sumied_mismo_total`, mismoTotal.length)
+    if (noEstanNif.length) sale(`${p}.no_estan_cta`, Number(digitos(noEstanNif[0].cta) || 0))
+    if (mismoTotalNif.length) {
+      const x = mismoTotalNif[0]
+      sale(`${p}.pareja_cta`, Number(digitos(x.cta) || 0))
+      sale(`${p}.pareja_fc`, dia(x.fc))
+      sale(`${p}.pareja_ff`, dia(x.ff))
+      sale(`${p}.pareja_len`, norm(x.n).length)
+      sale(`${p}.pareja_prefijo_comun`, prefijo(dn, norm(x.n)))
+    }
+    const r = `${ctaSumied.has(cta) ? 'cta_de_sumied' : 'cta_ajena'}.${mismoTotalNif.length ? 'nif_y_total' : mismoNif.length ? 'nif' : 'nada'}`
+    resumenSueltas.set(r, (resumenSueltas.get(r) ?? 0) + 1)
+  }
+  for (const [m, v] of [...resumenSueltas].sort()) sale(`sueltas.${m}`, v)
   sale('diez_sueltas_sin_pareja', sueltasDiez.length)
 
   seccion('cuantas')
