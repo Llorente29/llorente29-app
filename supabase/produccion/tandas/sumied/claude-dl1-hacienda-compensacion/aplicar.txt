@@ -3,7 +3,7 @@
 # (Julio, 13/11). Rama claude/dl1-hacienda-compensacion. Se ensaya y se aplica
 # desde main nombrando esta rama, antes de fusionar.
 #
-#   1155  Dos asientos sin IVA, validados como Julio: la compensación a 21/07 y
+#   1155  Dos asientos sin IVA, validados como Julio: la compensación a 01/10 (efectos 21/07) y
 #         el embargo a 10/11. La 47090000 queda a 0. No crea objetos.
 #
 # Nada en el camino del pedido. El real lo lanza Julio.

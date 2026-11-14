@@ -2,7 +2,7 @@
  "_que": "DL1·27 · Hacienda compensación · contexto de producción, medido en SOLO LECTURA el 14/11 a las 10:50Z: la 1155 no crea ni cambia ningún objeto; apunta dos asientos con _dl1_asiento_iva y los valida con _dl1_validar (en producción). La 47090000 está en 1.126,10 (solo la apertura) y el 4/3306 existe. Nada en el camino del pedido; la 1155 no está en el historial.",
  "medido": "2026-11-14T10:50Z",
  "tanda": {
-  "supabase/migrations/20261114T1155_dl1_hacienda_compensacion.sql": "ec349bc23d6aa8485e0c0270404327d4"
+  "supabase/migrations/20261114T1155_dl1_hacienda_compensacion.sql": "1136f0e9e3ee9922a49a61e92fa8a823"
  },
  "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
 }
