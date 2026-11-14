@@ -1,0 +1,3 @@
+# B01r26 · la vuelta atrás de la 0757: quita las dos funciones y la columna del cerrojo.
+cuenta: scripts/conta/produccion/cuentas/b01r26-traspaso-cerrojo.sql
+supabase/vuelta-atras/20261114T0757_b01r26_traspaso_cerrojo.down.sql

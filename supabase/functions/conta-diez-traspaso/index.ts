@@ -46,6 +46,9 @@ const POR_TANDA = 8;
 /** Si se acerca el tope de la función, lo que quede va en la tanda siguiente. B01r26 (14/11): 45 s, lejos del 504. */
 const TOPE_MS = 45_000;
 /** B01r26 (14/11): lo que va por Excel, por traspaso, 10 minutos (antes se recalculaba en cada tanda, unas 260 consultas). */
+/** B01r26 (14/11): el cerrojo de la tanda, en segundos (la tanda para a los 45 s; un 504 corta a los 150 s). */
+const CERROJO_S = 90;
+const EN_MARCHA_OTRA = "Ya hay una tanda de este traspaso en marcha (otra pestaña u otro clic): espera a que acabe.";
 const EXCEL_DEL_TRASPASO = new Map<string, { en: number; ids: Set<string> }>();
 async function idsPorExcel(srv: ReturnType<typeof createClient>, t: Traspaso): Promise<Set<string>> {
   const c = EXCEL_DEL_TRASPASO.get(t.id);
@@ -101,6 +104,19 @@ async function tanda(srv: ReturnType<typeof createClient>, t: Traspaso): Promise
   if (t.estado !== "confirmado" && t.estado !== "traspasando") {
     return json({ error: t.estado === "terminado" ? "Ese mes ya está traspasado." : "Ese traspaso terminó con fallos: vuelve a revisarlo y confirmarlo." }, 409);
   }
+  // B01r26 (14/11): una tanda a la vez. En el ensayo de la C0009 corrieron dos juntas (dos clics,
+  // o una después de un 504) y mandaban lo mismo dos veces. El cerrojo caduca solo (CERROJO_S).
+  const { data: tomado, error: eC } = await srv.rpc("conta_traspaso_tomar_tanda", { p_traspaso: t.id, p_segundos: CERROJO_S });
+  if (eC) return json({ error: `no se ha podido tomar el traspaso para la tanda: ${eC.message}` }, 500);
+  if (tomado !== true) return json({ error: EN_MARCHA_OTRA, en_marcha: true }, 409);
+  try {
+    return await tandaConCerrojo(srv, t);
+  } finally {
+    await srv.rpc("conta_traspaso_soltar_tanda", { p_traspaso: t.id });
+  }
+}
+
+async function tandaConCerrojo(srv: ReturnType<typeof createClient>, t: Traspaso): Promise<Response> {
   const t0 = Date.now();
   const [{ data: lista, error: e1 }, { data: fila, error: e2 }] = await Promise.all([
     srv.rpc("conta_traspaso_lista", { p_company: t.company_id, p_mes: t.mes }),

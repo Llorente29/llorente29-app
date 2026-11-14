@@ -1,0 +1,10 @@
+# B01r26 · los arreglos del ensayo de la C0009 (14/11). Rama claude/b01-ensayo-arreglos.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   0757  Añade la columna tanda_hasta (admite nulos) a conta_diez_traspaso y dos
+#         funciones nuevas (conta_traspaso_tomar_tanda y conta_traspaso_soltar_tanda):
+#         una tanda del traspaso a la vez. No cambia ningún traspaso.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01r26-traspaso-cerrojo.sql
+supabase/migrations/20261114T0757_b01r26_traspaso_cerrojo.sql
