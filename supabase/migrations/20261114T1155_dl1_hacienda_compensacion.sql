@@ -25,7 +25,7 @@ declare
   v_acc constant uuid := '51ad1792-6629-4ef7-833a-b57b09a86710';
   v_e constant uuid := '658728c0-fcd7-46ef-a860-d4e5e6eb21d9';
   v_julio constant uuid := '673fca49-f6b5-40ed-a8f7-558390acce10';
-  v_saldo numeric; v_id1 uuid; v_id2 uuid; v_n int;
+  v_saldo numeric; v_id1 uuid; v_id2 uuid; v_n int; v_r jsonb;
 begin
   if not exists (select 1 from public.accounts where id = v_acc) then
     raise notice 'DL1 Hacienda compensación: sin la cuenta de Foodint, no hay nada que apuntar.';
@@ -47,13 +47,20 @@ begin
   end if;
 
   begin
-  v_id1 := public._dl1_asiento_iva(v_e, date '2026-10-01', 4,
-    'AEAT compensación de oficio 282630448208C: 111 del 2T de 2026 con la devolución del IS 2025 (efectos 21/07/2026; a 01/10 porque el 3T está cerrado)',
-    'DL1·27 (Julio, 13/11): el 111 del 2T no se ingresó (falló la domiciliación) y entró en ejecutiva; Hacienda se lo cobra de la devolución del IS 2025. Principal 661,33, de él 354,34 ya compensados (4/3306); recargo ejecutivo del 5 %, 33,07.',
+  -- Por _journal_entry_proponer: la línea de la 4751 lleva su modelo y su periodo de retención (111, 2026-2T), como el 4/3306.
+  v_r := public._journal_entry_proponer(v_e,
+    jsonb_build_object('series', 4, 'fecha', '2026-10-01', 'source_type', 'manual', 'source_id', null, 'confianza', 'seguro',
+      'concepto', 'AEAT compensación de oficio 282630448208C: 111 del 2T de 2026 con la devolución del IS 2025 (efectos 21/07/2026; a 01/10 porque el 3T está cerrado)',
+      'porque', 'DL1·27 (Julio, 13/11): el 111 del 2T no se ingresó (falló la domiciliación) y entró en ejecutiva; Hacienda se lo cobra de la devolución del IS 2025. Principal 661,33, de él 354,34 ya compensados (4/3306); recargo ejecutivo del 5 %, 33,07.',
+      'razones', '[]'::jsonb, 'party_id', null, 'documento', '282630448208C'),
     jsonb_build_array(
-      jsonb_build_object('cuenta', '47510000', 'debe', 306.99, 'concepto', '111 del 2T de 2026, lo que quedaba del principal (661,33 − 354,34)'),
-      jsonb_build_object('cuenta', '67800000', 'debe', 33.07, 'concepto', 'Recargo ejecutivo del 5 % del 111 del 2T de 2026'),
-      jsonb_build_object('cuenta', '47090000', 'haber', 340.06, 'concepto', 'Devolución del IS 2025, compensada')));
+      jsonb_build_object('cuenta', '47510000', 'debe', 306.99, 'haber', 0, 'comun', true, 'concepto', '111 del 2T de 2026, lo que quedaba del principal (661,33 − 354,34)',
+        'retencion', jsonb_build_object('modelo', '111', 'periodo', '2026-2T')),
+      jsonb_build_object('cuenta', '67800000', 'debe', 33.07, 'haber', 0, 'comun', true, 'concepto', 'Recargo ejecutivo del 5 % del 111 del 2T de 2026'),
+      jsonb_build_object('cuenta', '47090000', 'debe', 0, 'haber', 340.06, 'comun', true, 'concepto', 'Devolución del IS 2025, compensada')),
+    null, 'Julio (tanda DL1)', null);
+  v_id1 := (v_r->>'id')::uuid;
+  if v_id1 is null or coalesce((v_r->>'existente')::boolean, false) then raise exception 'DL1 Hacienda compensación: la compensación no ha salido nueva (%).', v_r; end if;
   exception when others then raise exception using errcode = format('DH1%s', left(sqlstate, 2)), message = sqlerrm; end;
 
   begin
