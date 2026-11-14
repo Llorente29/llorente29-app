@@ -1,0 +1,8 @@
+{
+ "_que": "S01p·21 · la liquidación de IVA apuntada dos veces · contexto medido en SOLO LECTURA el 2026-11-13 (17:20Z): en Foodint, la liquidación del 1T de 2026 está en 4/1016 y 9/2 y la del 2T en 4/1194 y 9/3, las cuatro traídas de Diez y validadas, cada pareja con los mismos apuntes; los 303 del 1T y del 2T presentados y sin liquidation_entry_id; el primer día abierto después de los dos trimestres es el 01/10/2026 y octubre no está cerrado. Las cuatro funciones que cambian son, por su md5, las de 20261105T0830 (conta_motivos_para_validar, c58628d9eb1e48a0a70c23ea9eafe9c0), 20261125T0300 (conta_impuesto_303_calcular, 14472f8105d082e907bf32796717c689), 20261122T0180 (conta_impuesto_303_contabilizar, 0d49306fdb28a7d3cb09589c30426fe1) y 20261104T1720 (conta_cierre_bloque_iva, 4ad220d1f83f20e134c9000894b1065c); el trozo de cada una está una sola vez. No existen conta_liquidacion_repetida, conta_liquidaciones_repetidas ni conta_liquidacion_dejar_esta. Nada de la tanda en el historial.",
+ "medido": "2026-11-13T17:20Z",
+ "tanda": {
+  "supabase/migrations/20261113T1822_s01p_liquidacion_repetida.sql": "ff926f1b6218ea0d09b6ceabcd1a46d9"
+ },
+ "contexto": {"tablas": ["public.journal_entry", "public.tax_return"], "funciones": ["public.conta_motivos_para_validar(uuid)", "public.conta_impuesto_303_calcular(uuid,integer,text)", "public.conta_impuesto_303_contabilizar(uuid)", "public.conta_cierre_bloque_iva(uuid,date)"], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}

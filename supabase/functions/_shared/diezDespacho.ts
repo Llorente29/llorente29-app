@@ -235,6 +235,18 @@ export async function clienteDiezParaLeer(srv: SupabaseClient, accountId: string
   return { cliente: await clienteDiez(srv, c, { real: false, escribir: false }), nombreBd: c.nombreBd }
 }
 
+/**
+ * B01r26 · El cliente de Diez de una empresa para el traspaso con Excel: crear
+ * las subcuentas que faltan (solo cuando un administrador lo confirma en la
+ * pantalla, con el traspaso del mes confirmado: la autorización de Julio del
+ * C12) y leer las facturas importadas. Sin conexión, null.
+ */
+export async function clienteDiezDelTraspaso(srv: SupabaseClient, accountId: string, companyId: string): Promise<{ cliente: ClienteDiez; nombreBd: string } | null> {
+  const c = await puertoComun(srv, accountId).conexion(companyId)
+  if (!c) return null
+  return { cliente: await clienteDiez(srv, c, { real: true, escribir: true }), nombreBd: c.nombreBd }
+}
+
 /** El cliente de Diez de una conexión (escribir: sí; escribirEnReal solo con autorización, que el núcleo ya ha mirado). */
 async function clienteDiez(srv: SupabaseClient, c: ConexionDiez, o: { real: boolean; escribir?: boolean }): Promise<ClienteDiez> {
   const { data: s, error } = await srv.rpc('connector_secret_read', { p_account_connector_id: c.id })

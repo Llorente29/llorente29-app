@@ -40,7 +40,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "npm:xlsx@0.18.5";
 import { corsHeaders } from "../_shared/cors.ts";
-import { comprobarFirma, recibirCorreo, releerCorreos, resumenReleidos, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PuertoEntrada, type QueEs, type Sobre } from "../_shared/facturasEntrada.ts";
+import { jsPDF } from "npm:jspdf@4.2.1";
+import { nombrePdfCorreo, pdfDelCorreo, type PdfMinimo } from "../_shared/correoPdf.ts";
+import { comprobarFirma, ponerPapelesDelCorreo, recibirCorreo, releerCorreos, resumenPapeles, resumenReleidos, type AdjuntoResend, type ClaseDireccion, type CorreoResend, type PuertoEntrada, type QueEs, type Sobre } from "../_shared/facturasEntrada.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICIO = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -157,6 +159,16 @@ function puertoDe(sb: any): PuertoEntrada {
       });
       return { id: r.id, yaEstaba: r.ya_estaba };
     },
+    // S01p·20 · 1b · El PDF de la factura escrita en el correo (Just Eat): se hace del correo, se guarda
+    // en receipt-uploads junto a lo demás que llegó por correo y queda como el papel de su factura.
+    papelDelCorreo: async (x) => {
+      const bytes = pdfDelCorreo(jsPDF as unknown as new (o?: Record<string, unknown>) => PdfMinimo, { asunto: x.asunto, de: x.de, recibido: x.recibido, html: x.html, text: x.text });
+      const ruta = `${x.accountId}/_correo/${x.emailId.replace(/[^A-Za-z0-9-]/g, "")}/${nombrePdfCorreo(x.numero, x.asunto)}`;
+      const { error } = await sb.storage.from(BUCKET).upload(ruta, bytes, { contentType: "application/pdf", upsert: true });
+      if (error) throw new Error(`no se ha podido guardar el PDF: ${error.message}`);
+      const r = await rpc<{ puesto: boolean; texto: string }>("conta_factura_papel_del_correo", { p_invoice: x.facturaId, p_ruta: ruta });
+      return { puesto: r.puesto, texto: r.texto };
+    },
     // S01p·20 · 1 · Al volver a leer el correo y entrar, su fila sale de «Por aclarar».
     sinFacturaResuelta: async (companyId, emailId) => {
       await rpc("conta_entrada_sin_factura_resuelta", { p_company: companyId, p_email_id: emailId, p_texto: null });
@@ -206,14 +218,40 @@ async function releer(req: Request): Promise<Response> {
   return json(200, { texto: resumenReleidos(rs), correos: rs });
 }
 
+// S01p·20 · 1b · «Poner el PDF a las facturas de Just Eat que no lo tienen» (POST ?pdfs=1), desde
+// Correo de facturas, con la sesión de la persona. La base dice cuáles (conta_correo_papeles_que_faltan:
+// administración o encargado; solo las que entraron por correo como liquidación y siguen sin papel).
+// Cada correo se pide otra vez a Resend; solo se pone el PDF, nada más.
+async function papeles(req: Request): Promise<Response> {
+  const jwt = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
+  if (!jwt) return json(401, { error: "Falta la sesión." });
+  let b: { company_id?: string };
+  try { b = await req.json(); } catch { return json(400, { error: "cuerpo no es JSON" }); }
+  const comoPersona = createClient(SUPABASE_URL, ANON, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${jwt}` } } });
+  const { data, error } = await comoPersona.rpc("conta_correo_papeles_que_faltan", { p_company: b.company_id ?? null });
+  if (error) return json(error.code === "42501" ? 403 : 400, { error: error.message });
+  const filas = (data as { email_id: string; factura_id: string; numero: string | null; account_id: string }[] | null) ?? [];
+  const puerto = puertoDe(createClient(SUPABASE_URL, SERVICIO, { auth: { persistSession: false } }));
+  const rs = await ponerPapelesDelCorreo(filas.map((f) => ({ emailId: f.email_id, facturaId: f.factura_id, numero: f.numero })),
+    { accountId: filas[0]?.account_id ?? "", companyId: b.company_id ?? "" }, puerto, async (id) => {
+      const r = await fetch(`https://api.resend.com/emails/receiving/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${RESEND}` } });
+      if (r.status === 404 || r.status === 410) return null;
+      if (!r.ok) throw new Error(`Resend contesta ${r.status}`);
+      return { ...(await r.json() as CorreoResend & Sobre), email_id: id };
+    });
+  return json(200, { texto: resumenPapeles(rs), facturas: rs });
+}
+
 Deno.serve(async (req) => {
   // S01j · «Volver a leer» llega de la pantalla (?releer=1), con su CORS; el aviso de Resend, sin él.
-  const esReleer = new URL(req.url).searchParams.get("releer") === "1";
+  // S01p·20 · 1b · Y «Poner el PDF…» (?pdfs=1), igual.
+  const esPapeles = new URL(req.url).searchParams.get("pdfs") === "1";
+  const esReleer = new URL(req.url).searchParams.get("releer") === "1" || esPapeles;
   if (esReleer && req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "usa POST" });
   if (!SECRETO || !RESEND || !SERVICIO) return json(500, { error: "falta configurar el secreto del webhook, la clave de Resend o la de servicio" });
   if (esReleer) {
-    const r = await releer(req);
+    const r = esPapeles ? await papeles(req) : await releer(req);
     return new Response(r.body, { status: r.status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 

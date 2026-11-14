@@ -810,7 +810,7 @@ async function enviarContraasientoRecibida(c: ContraasientoBD, p: PuertoEnvio & 
 
 /** Lo que el envío de un asiento general usa del cliente de Diez (ClienteDiez lo cumple). */
 export interface ClienteDiezApuntes {
-  apuntesDelMes(aaaamm: string): Promise<Apunte[]>
+  apuntesDelMes(aaaamm: string, o?: { fresco?: boolean }): Promise<Apunte[]>
   enviarAsiento(a: ApunteSimplificado): Promise<Apunte>
   subcuenta(codigo: string): Promise<Record<string, unknown> | null>
 }
@@ -886,7 +886,11 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
   const mes = String(ap.Fecha).slice(0, 6)
   const usados = p.enlazados ? await p.enlazados(a.company_id, a.id) : new Set<string>()
   const esElMismo = (d: Apunte) => esElMismoApunte(ap)(d) && !usados.has(`${d.Serie}/${d.Documento}`)
-  const ya = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+  // B01r26 (14/11): si el intento anterior se cortó escribiendo («enviando», p. ej. un 504), Diez se
+  // lee de nuevo, sin la copia de 10 minutos: la copia es de antes del corte y no ve lo que
+  // escribió, y se mandaba otra vez (los duplicados del ensayo de la C0009).
+  const cortado = previo?.last_error === 'enviando'
+  const ya = unoPorAsiento((await diez.apuntesDelMes(mes, { fresco: cortado })).filter(esElMismo))
   if (ya.length > 1) return apuntar(`hay ${ya.length} asientos iguales en Diez ese día (${ya.map((d) => `${d.Serie}/${d.Documento}`).join(', ')}): no se toca nada`, { account_connector_id: con.id }, false)
   const hash = await p.sha256(new TextEncoder().encode(JSON.stringify(ap)))
   const comun = { entry_id: a.id, account_id: a.account_id, company_id: a.company_id, account_connector_id: con.id, kind: 'asiento' as const, ext_invoice_number: null, payload_hash: hash, document_id: null, document_status: null, document_error: null, document_attached_at: null }
@@ -903,7 +907,7 @@ async function enviarApunte(a: AsientoBD, p: PuertoApunte): Promise<ResultadoEnv
     serie = String(creado?.Serie ?? ap.Serie); documento = Number(creado?.Documento ?? 0)
     if (!documento) {
       // Diez lo ha aceptado sin decir su número: se busca el que acaba de escribir.
-      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes)).filter(esElMismo))
+      const vuelta = unoPorAsiento((await diez.apuntesDelMes(mes, { fresco: true })).filter(esElMismo))
       if (vuelta.length !== 1) return apuntar('Diez lo ha aceptado pero no dice su número y no se encuentra uno solo: al reintentar se busca antes y se enlaza, no se escribe otro')
       ej = String(vuelta[0].Ejercicio ?? ej); serie = String(vuelta[0].Serie); documento = Number(vuelta[0].Documento)
     }

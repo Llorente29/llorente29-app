@@ -1,0 +1,3 @@
+# B01r26 · las subcuentas creadas: la vuelta atrás de la 1850 quita la tabla (las subcuentas de Diez se quedan allí).
+cuenta: scripts/conta/produccion/cuentas/b01r26-subcuentas-creadas.sql
+supabase/vuelta-atras/20261113T1850_b01r26_subcuentas_creadas.down.sql

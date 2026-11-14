@@ -4,6 +4,7 @@
 // Nombres dentro de cadenas (regla 40), los de 20261024T1250_c12_traspaso_mensual
 // y la función conta-diez-traspaso: conta_traspaso_revisar, conta_traspaso_confirmar,
 // conta_diez_traspaso (detalle y cuadre) y conta-diez-traspaso (tanda y comprobar).
+// B01r26: y las acciones excel, crear_subcuentas e importado de conta-diez-traspaso.
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
@@ -30,7 +31,7 @@ export async function leerTraspaso(companyId: string, mes: string): Promise<Tras
   return (data as Traspaso | null) ?? null
 }
 
-export type ResultadoTanda = { llegaron: number; llegaron_total: number; van: number; no_llegaron: number; fallaron: FalloTraspaso[]; quedan: number }
+export type ResultadoTanda = { llegaron: number; llegaron_total: number; van: number; no_llegaron: number; fallaron: FalloTraspaso[]; quedan: number; por_excel?: number }
 export type ResultadoComprobar = { cuadra: boolean | null; cuadre: Cuadre; mes_cerrado: boolean; motivo: string | null }
 
 async function llamar<T>(body: Record<string, unknown>): Promise<T> {
@@ -50,3 +51,20 @@ async function llamar<T>(body: Record<string, unknown>): Promise<T> {
 export const traspasarTanda = (companyId: string, mes: string) => llamar<ResultadoTanda>({ company_id: companyId, mes, accion: 'tanda' })
 /** El cuadre con Diez y, si llegó todo y cuadra, el mes cerrado. */
 export const comprobarConDiez = (companyId: string, mes: string) => llamar<ResultadoComprobar>({ company_id: companyId, mes, accion: 'comprobar' })
+
+// ── B01r26 · Las facturas por Excel, con su PDF ──────────────────────────────
+
+export type SubcuentaQueFalta = { codigo: string; nombre: string }
+export type PorLaApi = { entry_id: string; numero: string; motivo: string }
+/** Una fila del Excel tal como llega (las fechas, en texto ISO: las convierte el libro). */
+export type FilaExcel = (string | number)[]
+export type ResultadoExcel = { base: string; faltan: SubcuentaQueFalta[]; comprobadas: number; emitidas?: FilaExcel[]; recibidas?: FilaExcel[]; por_la_api: PorLaApi[] }
+export type ResultadoSubcuentas = { base: string; intentadas?: number; creadas: (SubcuentaQueFalta & { recortado?: boolean })[]; no_creadas?: (SubcuentaQueFalta & { porque: string })[]; faltan: SubcuentaQueFalta[]; otra_vez?: number }
+export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string }[]; dobles: string[]; dias_sin_leer?: string[] }
+
+/** «2 · Descarga los dos Excel»: comprueba las subcuentas en Diez y, si están todas, da las filas. */
+export const prepararExcel = (companyId: string, mes: string) => llamar<ResultadoExcel>({ company_id: companyId, mes, accion: 'excel' })
+/** «Crearlas en Diez»: las subcuentas que faltan, con el nombre de Sumied (queda quién y cuándo). */
+export const crearSubcuentasEnDiez = (companyId: string, mes: string) => llamar<ResultadoSubcuentas>({ company_id: companyId, mes, accion: 'crear_subcuentas' })
+/** «3 · Ya lo he importado»: lee las facturas del mes en Diez y enlaza cada una con la suya. */
+export const yaLoHeImportado = (companyId: string, mes: string) => llamar<ResultadoImportado>({ company_id: companyId, mes, accion: 'importado' })

@@ -1,0 +1,5 @@
+# S01p·22 · Subir el PDF a una recibida ya apuntada sin PDF (0831: cambia conta_recibida_papel_poner). Su prueba (ROLLBACK,
+# cuenta A, una recibida sin documento con su asiento validado): sin la 0831 falla con «Ya está contabilizada»; con ella se
+# pone, lo dice y el asiento no cambia; cambiar el PDF de una apuntada sigue sin dejarse; la vuelta atrás.
+supabase/migrations/20261114T0831_s01p_pdf_en_apuntada.sql
+supabase/staging/sql/20261114_s01p_pdf_en_apuntada_prueba.sql
