@@ -181,6 +181,43 @@ jobs:
           [ -s /tmp/sumied.json ] || { echo "::error::No se ha leído Sumied."; exit 1; }
           echo "Sumied leído ($(wc -c < /tmp/sumied.json) bytes; no se publica)."
 
+      - name: B01r26 · las recibidas de octubre de Sumied, leídas en producción con conta_lectura (solo lectura)
+        timeout-minutes: 10
+        # B01r26 (14/11, segundo ensayo): para «[prueba-c0009:recibidas-casar]». No se publica nada de aquí.
+        if: startsWith(inputs.etiqueta, '[prueba-c0009:recibidas-casar]')
+        env:
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${RO_DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["RO_DB_URL"])
+          for parte in (os.environ["RO_DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura.")
+              raise SystemExit(1)
+          if "xzmpnchlguibclvxyynt" not in os.environ["RO_DB_URL"]:
+              print("::error::PROD_CONTA_RO_DB_URL no es la de producción.")
+              raise SystemExit(1)
+          PY
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          # Foodint, anclado por su empresa y su cuenta (regla 9): las recibidas validadas de octubre, con la subcuenta del proveedor, su NIF y su envío.
+          PGOPTIONS='-c default_transaction_read_only=on' psql "$RO_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select coalesce(json_agg(json_build_object('n', si.invoice_number, 'fc', e.entry_date::text, 'ff', si.invoice_date::text, 't', si.grand_total,
+              'cta', (select a.code from public.journal_line jl join public.company_account a on a.id = jl.company_account_id and a.company_id = e.company_id
+                       where jl.entry_id = e.id and a.code ~ '^4[01]' order by jl.credit desc limit 1),
+              'nif', (select s.tax_id from public.supplier s where s.id = si.supplier_id and s.account_id = si.account_id),
+              'es', (select x.status from public.external_send x where x.entry_id = e.id and x.account_id = e.account_id and x.status <> 'rechazado' limit 1),
+              'doc', (select x.ext_number from public.external_send x where x.entry_id = e.id and x.account_id = e.account_id and x.status <> 'rechazado' limit 1))), '[]'::json)
+              from public.supplier_invoice si join public.journal_entry e on e.id = si.journal_entry_id and e.account_id = si.account_id
+             where si.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and e.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9'
+               and e.status = 'validado' and e.entry_date between '2026-10-01' and '2026-10-31'" > /tmp/recibidas.json
+          [ -s /tmp/recibidas.json ] || { echo "::error::No se ha leído Sumied."; exit 1; }
+          echo "Sumied leído ($(wc -c < /tmp/recibidas.json) bytes; no se publica)."
+
       - name: R14 · jspdf para el PDF del día (la versión del package-lock)
         if: startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]') || startsWith(inputs.etiqueta, '[prueba-c0009:adjunto]')
         run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund jspdf@4.2.1
@@ -233,6 +270,8 @@ jobs:
             '[prueba-c0009:facturas-leer]'*) S=scripts/conta/diez/prueba-c0009-facturas-leer.ts ;;
             # B01r26 (14/11): SOLO LEE la C0009 después del ensayo: líneas sin subcuenta, duplicados y subcuentas de prueba, casado con Sumied.
             '[prueba-c0009:revision]'*) S=scripts/conta/diez/prueba-c0009-revision.ts ;;
+            # B01r26 (14/11, segundo ensayo): SOLO LEE por qué no casan las recibidas importadas por Excel (número, subcuenta, NIF, fechas, total).
+            '[prueba-c0009:recibidas-casar]'*) S=scripts/conta/diez/prueba-c0009-recibidas-casar.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
