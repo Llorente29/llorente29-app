@@ -21,7 +21,7 @@ const seccion = (t: string) => console.log(`@@ # ${t}`)
 const cred = JSON.parse(process.env.DIEZ_LECTURA || 'null')
 if (!cred) { sale('sin_secreto', 1); process.exit(1) }
 
-type Rec = { n: string | null; cta: string | null; fc: string; ff: string | null; t: number | string | null; nif: string | null; es: string | null; doc: number | null }
+type Rec = { n: string | null; cta: string | null; fc: string; ff: string | null; t: number | string | null; b?: number | string | null; iva?: number | string | null; nif: string | null; es: string | null; doc: number | null }
 let sumied: Rec[] = []
 try { sumied = JSON.parse(readFileSync(process.env.RECIBIDAS_JSON || '/tmp/recibidas.json', 'utf8')) ?? [] } catch { sale('sin_sumied', 1); process.exit(1) }
 
@@ -63,6 +63,7 @@ try {
   const usadas = new Set<Factura>()
   const motivos = new Map<string, number>()
   let casan = 0, k = 0
+  const noEstan: Rec[] = []
   seccion('no_casan')
   for (const s of sumied) {
     const n = norm(s.n)
@@ -83,7 +84,7 @@ try {
     sale(`${p}.sumied_ff`, dia(s.ff))
     sale(`${p}.sumied_len`, n.length)
     sale(`${p}.sumied_nf`, huella(n))
-    if (!f) { sale(`${p}.en_diez`, 0); motivos.set('no_esta', (motivos.get('no_esta') ?? 0) + 1); continue }
+    if (!f) { sale(`${p}.en_diez`, 0); motivos.set('no_esta', (motivos.get('no_esta') ?? 0) + 1); noEstan.push(s); continue }
     usadas.add(f)
     const dn = norm(f.NumeroFactura)
     const r = {
@@ -104,6 +105,45 @@ try {
     const m = Object.entries(r).filter(([, v]) => v === 0).map(([kk]) => kk).join('_') || 'nada'
     motivos.set(m, (motivos.get(m) ?? 0) + 1)
   }
+  // Segunda pasada (14/11): las de Sumied que no están y las de Diez que no tienen pareja, por subcuenta y fecha.
+  // Del total, solo cómo se relaciona (igual, la base, la cuota, cambiado de signo, cuántas milésimas), nunca el importe.
+  seccion('parejas')
+  const sueltasDiez = diez.filter((f) => !usadas.has(f))
+  let q = 0
+  const relaciones = new Map<string, number>()
+  for (const s of noEstan) {
+    const cta = digitos(s.cta)
+    const cand = sueltasDiez.filter((d) => digitos(d.CuentaCliente) === cta)
+    const f = cand.find((d) => Number(d.Fecha) === dia(s.fc)) ?? cand.find((d) => Number(d.FechaFactura) === dia(s.ff)) ?? cand[0]
+    q++
+    const p = `p${q}`
+    sale(`${p}.cta`, Number(cta || 0))
+    sale(`${p}.sumied_estado`, s.es === 'pendiente' ? 3 : s.es ? 1 : 0)
+    sale(`${p}.candidatas_misma_cta`, cand.length)
+    if (!f) { relaciones.set('sin_candidata', (relaciones.get('sin_candidata') ?? 0) + 1); continue }
+    sueltasDiez.splice(sueltasDiez.indexOf(f), 1)
+    const n = norm(s.n); const dn = norm(f.NumeroFactura)
+    const td = cent(f.TotalFactura), ts = cent(s.t), bs = cent(s.b), is_ = cent(s.iva)
+    const rel = td === ts ? 'total' : td === bs ? 'base' : td === is_ ? 'cuota' : td === -ts ? 'menos_total' : td === -bs ? 'menos_base' : 'otro'
+    relaciones.set(rel, (relaciones.get(rel) ?? 0) + 1)
+    sale(`${p}.doc`, Number(f.Documento ?? 0))
+    sale(`${p}.misma_fecha_contable`, Number(f.Fecha) === dia(s.fc) ? 1 : 0)
+    sale(`${p}.misma_fecha_factura`, Number(f.FechaFactura) === dia(s.ff) ? 1 : 0)
+    sale(`${p}.diez_fecha`, Number(f.Fecha ?? 0))
+    sale(`${p}.sumied_fc`, dia(s.fc))
+    sale(`${p}.sumied_len`, n.length)
+    sale(`${p}.diez_len`, dn.length)
+    sale(`${p}.prefijo_comun`, prefijo(dn, n))
+    sale(`${p}.diez_es_el_principio`, n.startsWith(dn) && dn.length < n.length ? 1 : 0)
+    sale(`${p}.diez_es_el_final`, n.endsWith(dn) && dn.length < n.length ? 1 : 0)
+    sale(`${p}.sumied_dentro_de_diez`, dn.includes(n) && dn.length > n.length ? 1 : 0)
+    sale(`${p}.mismo_nif`, normNif(f.CifCliente) === normNif(s.nif) ? 1 : 0)
+    sale(`${p}.total_${rel}`, 1)
+    if (ts) sale(`${p}.total_milesimas`, Math.round((td / ts) * 1000))
+  }
+  for (const [m, v] of [...relaciones].sort()) sale(`relacion.${m}`, v)
+  sale('diez_sueltas_sin_pareja', sueltasDiez.length)
+
   seccion('cuantas')
   sale('casan', casan)
   sale('no_casan', k)
