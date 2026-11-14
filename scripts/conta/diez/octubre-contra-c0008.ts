@@ -78,7 +78,6 @@ try {
     const h = HUECOS[se]
     if (h) sale(`asientos.s${se}.en_el_hueco_api`, ds.filter((d) => d >= h[0] && d <= h[1]).length)
     const tipos = new Map<number, number>()
-  const terceroIgual = new Map<number, number>()
     for (const a of deOctubre.filter((x) => String(x.Serie) === se)) tipos.set(Number(a.TipoAsiento ?? -1), (tipos.get(Number(a.TipoAsiento ?? -1)) ?? 0) + 1)
     for (const [t, n] of tipos) sale(`asientos.s${se}.tipo${t < 0 ? 'x' : t}`, n)
   }
