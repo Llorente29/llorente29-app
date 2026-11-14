@@ -18,6 +18,11 @@ import { Guardado } from '@/modules/conta/ui/piezas'
 import { bajarXlsx, libroXlsx } from '@/modules/conta/lib/traspasoExcelLibro'
 import { crearSubcuentasEnDiez, mandarPorLaApi, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado, type ResultadoSubcuentas } from '@/modules/conta/services/traspasoService'
 
+// B01r26 (14/11): lo último de «Ya lo he importado», por empresa y mes. Al acabar, la pantalla vuelve a
+// comprobar con Diez y se recarga entera (este componente se desmonta): sin esto, la lista de las que
+// no están en Diez desaparecía y quedaba solo la cifra.
+const ULTIMO_IMPORTADO = new Map<string, ResultadoImportado>()
+
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '')
 const n = (x: number) => x.toLocaleString('es-ES')
 
@@ -30,7 +35,8 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
   alImportar: () => Promise<void>
 }) {
   const [x, setX] = useState<ResultadoExcel | null>(null)
-  const [imp, setImp] = useState<ResultadoImportado | null>(null)
+  const [imp, setImpEstado] = useState<ResultadoImportado | null>(() => ULTIMO_IMPORTADO.get(`${companyId}|${mes}`) ?? null)
+  const setImp = (r: ResultadoImportado | null) => { if (r) ULTIMO_IMPORTADO.set(`${companyId}|${mes}`, r); else ULTIMO_IMPORTADO.delete(`${companyId}|${mes}`); setImpEstado(r) }
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [hecho, setHecho] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -107,6 +113,11 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       }
       setMandar(false)
       setNoLlegaron(fallos)
+      // Si se han hecho todas, en la lista quedan solo las que no han llegado (lo que llegó ya está en Diez).
+      if (imp && llegan + fallos.length === ids.length) {
+        const no = new Set(fallos.map((f) => f.entry_id))
+        setImp({ ...imp, faltan: imp.faltan.filter((f) => no.has(f.entry_id)) })
+      }
       setHecho(`Por la API: ${n(llegan)} ${llegan === 1 ? 'factura ha llegado' : 'facturas han llegado'} a Diez${fallos.length ? `; ${n(fallos.length)} no (abajo, por qué)` : ''}${fuera ? `; ${n(fuera)} ya no estaban pendientes (enviadas o enlazadas antes)` : ''}. Después, «Volver a comprobar con Diez».`)
     } catch (e) { setError(`Se ha parado al mandarlas por la API: ${mensajeDe(e)}. Lo que llegó está en Diez; al volver a pulsar sigue con las que faltan.`) } finally { setOcupado(null) }
   }

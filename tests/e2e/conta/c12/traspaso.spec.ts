@@ -245,5 +245,8 @@ test('A · B01r26 · plan B: las que no casan, con su porqué, y «Mandarlas por
   await expect(excel.getByText(/Por la API: 1 factura ha llegado a Diez; 1 no \(abajo, por qué\)/)).toBeVisible()
   await expect(excel.getByLabel('Las que no han llegado por la API').getByText(/Asiento 12: falta el documento/)).toBeVisible()
   expect(llamadas).toBe(2)
+  // La lista se queda con la que no ha llegado.
+  await expect(faltan.getByText(/PRUEBA-0002/)).toBeVisible()
+  await expect(faltan.getByText(/PRUEBA-0001/)).toHaveCount(0)
   await capturar(page, 'b01r26-plan-b')
 })
