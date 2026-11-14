@@ -1,0 +1,13 @@
+# B01r·26 · El ensayo general del traspaso de octubre en la C0009 (Julio, 13/11:
+# «la A»). Rama claude/b01-ensayo-c0009.
+#
+#   2005  Guarda los 242 envíos de Foodint a Diez; aparta los 215 de octubre que
+#         la C0008 ya tiene (para que viajen en el ensayo) y apunta la conexión
+#         de Foodint a la C0009. Después Julio pulsa «Traspasar a Diez» en
+#         octubre y todo va a la C0009.
+#
+# LA LIMPIEZA ES SU VUELTA ATRÁS: Julio la lanza en modo «vuelta_atras» cuando
+# termina el ensayo, y Sumied queda como antes (la C0009 se queda como está).
+# Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/b01r26-ensayo-c0009.sql
+supabase/migrations/20261113T2005_b01r26_ensayo_c0009.sql

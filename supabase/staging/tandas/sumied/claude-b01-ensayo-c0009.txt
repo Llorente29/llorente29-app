@@ -1,0 +1,5 @@
+# B01r26 · 2005: el ensayo del traspaso en la C0009 y su limpieza (la vuelta
+# atrás). En staging no está Foodint: su prueba (ROLLBACK) mira que no toca nada
+# y que la limpieza quita la tabla y se puede repetir.
+supabase/migrations/20261113T2005_b01r26_ensayo_c0009.sql
+supabase/staging/sql/20261113_b01r26_ensayo_c0009_prueba.sql
