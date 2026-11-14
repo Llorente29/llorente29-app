@@ -34,6 +34,8 @@ import { cuentaPuedeSalir } from "../_shared/puerta.ts";
 import { clienteDiezDelTraspaso, clienteDiezParaLeer, despacharADiez, EN_LA_DEMO_DIEZ } from "../_shared/diezDespacho.ts";
 import { aaaammDelMes, cuadrarAgrupado, ES_EL_QUINIENTOS, ES_SUBCUENTA_QUE_FALTA, lineasDeApuntes, siguientes, type Saldo } from "../_shared/diezTraspaso.ts";
 import { claveDelCuadre } from "../_shared/diezExcel.ts";
+import { nombreParaDiez } from "../_shared/diezSubcuentas.ts";
+import { alEscribir } from "../_shared/diezEnviar.ts";
 import { esLaMisma, facturasDelTraspaso, filasDeLosExcel, porExcel, type FacturaDelTraspaso } from "../_shared/diezTraspasoExcel.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -208,6 +210,8 @@ async function excel(srv: ReturnType<typeof createClient>, t: Traspaso): Promise
     const c = await clienteDiezParaLeer(srv, t.account_id, t.company_id);
     if (!c) return json({ error: "la empresa no tiene la conexión con Diez" }, 409);
     // Antes de nada, las subcuentas: si falta alguna, no se genera ningún Excel (Julio, 24/10).
+    // B01r26 (14/11): con la lista de Diez leída ahora, no la de hace un rato.
+    c.cliente.olvidarSubcuentas();
     const s = await subcuentasQueFaltan(srv, t, xs, c.cliente);
     const porLaApi = xs.filter((x) => x.porLaApi).map((x) => ({ entry_id: x.entry_id, numero: x.numero, motivo: x.porLaApi }));
     if (s.faltan.length) return json({ base: c.nombreBd, faltan: s.faltan, comprobadas: s.codigos.length, por_la_api: porLaApi });
@@ -225,17 +229,28 @@ async function crearSubcuentas(srv: ReturnType<typeof createClient>, t: Traspaso
     const xs = await facturasDelTraspaso(srv, t, () => "https://excel.invalid/pdf");
     const c = await clienteDiezDelTraspaso(srv, t.account_id, t.company_id);
     if (!c) return json({ error: "la empresa no tiene la conexión con Diez" }, 409);
+    // B01r26 (14/11): solo las que faltan DE VERDAD, con la lista de Diez leída ahora (en el ensayo,
+    // la segunda vez se intentó otra vez una ya creada, Diez dio 400 y paró todo).
+    c.cliente.olvidarSubcuentas();
     const s = await subcuentasQueFaltan(srv, t, xs, c.cliente);
-    const sinNombre = s.faltan.filter((f) => !f.nombre);
-    if (sinNombre.length) return json({ error: `No se crea ninguna: ${sinNombre.map((f) => f.codigo).join(", ")} no tiene nombre en Sumied.` }, 409);
-    const creadas: { codigo: string; nombre: string }[] = [];
+    const creadas: { codigo: string; nombre: string; recortado?: boolean }[] = [];
+    const noCreadas: { codigo: string; nombre: string; porque: string }[] = [];
+    // Una a una: la que falla no para a las demás, y se dice por qué.
     for (const f of s.faltan) {
-      await c.cliente.crearSubcuenta({ Codigo: f.codigo, Descripcion: f.nombre });
-      const { error } = await srv.from("conta_diez_subcuenta_creada").insert({ account_id: t.account_id, company_id: t.company_id, traspaso_id: t.id, base: c.nombreBd, codigo: f.codigo, nombre: f.nombre, creada_por: quien.id, creada_por_nombre: quien.nombre });
-      if (error) return json({ error: `creada ${f.codigo} en Diez, pero no se ha podido apuntar: ${error.message}`, creadas: [...creadas, f] }, 500);
-      creadas.push(f);
+      if (!f.nombre.trim()) { noCreadas.push({ codigo: f.codigo, nombre: "", porque: "no tiene nombre en Sumied" }); continue; }
+      const { nombre, recortado } = nombreParaDiez(f.nombre);
+      try {
+        await c.cliente.crearSubcuenta({ Codigo: f.codigo, Descripcion: nombre });
+      } catch (x) {
+        noCreadas.push({ codigo: f.codigo, nombre, porque: alEscribir("la subcuenta", x) });
+        continue;
+      }
+      const { error } = await srv.from("conta_diez_subcuenta_creada").insert({ account_id: t.account_id, company_id: t.company_id, traspaso_id: t.id, base: c.nombreBd, codigo: f.codigo, nombre, creada_por: quien.id, creada_por_nombre: quien.nombre });
+      if (error) noCreadas.push({ codigo: f.codigo, nombre, porque: `creada en Diez, pero no se ha podido apuntar en Sumied: ${error.message}` });
+      creadas.push({ codigo: f.codigo, nombre, ...(recortado ? { recortado } : {}) });
     }
-    // Y se vuelve a comprobar.
+    // Y se vuelve a comprobar, con la lista de Diez otra vez leída.
+    c.cliente.olvidarSubcuentas();
     const despues = await subcuentasQueFaltan(srv, t, xs, c.cliente);
     // B01r26 (14/11): lo que no llegó porque le faltaba una subcuenta (o se cortó por el 500 de Diez)
     // vuelve a la cola del traspaso: «Seguir traspasando» lo manda.
@@ -244,10 +259,10 @@ async function crearSubcuentas(srv: ReturnType<typeof createClient>, t: Traspaso
     const quedan = antes.filter((f) => !ES_EL_QUINIENTOS.test(f.motivo) && !ES_SUBCUENTA_QUE_FALTA.test(f.motivo));
     if (quedan.length !== antes.length) {
       const { error: e4 } = await srv.rpc("conta_traspaso_apuntar", { p_traspaso: t.id, p_llegaron: 0, p_no_llegaron: quedan.length, p_detalle: quedan });
-      if (e4) return json({ error: `creadas, pero no se han podido volver a poner en el traspaso los que esperaban: ${e4.message}`, creadas }, 500);
+      if (e4) return json({ error: `creadas, pero no se han podido volver a poner en el traspaso los que esperaban: ${e4.message}`, creadas, no_creadas: noCreadas }, 500);
     }
-    console.log(`conta-diez-traspaso · ${t.id} · subcuentas creadas ${creadas.length} · faltan ${despues.faltan.length}`);
-    return json({ base: c.nombreBd, creadas, faltan: despues.faltan, otra_vez: antes.length - quedan.length });
+    console.log(`conta-diez-traspaso · ${t.id} · subcuentas: faltaban ${s.faltan.length} · creadas ${creadas.length} · no ${noCreadas.length} · faltan ${despues.faltan.length}`);
+    return json({ base: c.nombreBd, intentadas: s.faltan.length, creadas, no_creadas: noCreadas, faltan: despues.faltan, otra_vez: antes.length - quedan.length });
   } catch (x) {
     return json({ error: x instanceof Error ? x.message : String(x) }, 500);
   }

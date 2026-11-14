@@ -385,6 +385,9 @@ export class ClienteDiez {
     return r.json as Record<string, unknown>
   }
 
+  /** B01r26 (14/11) · Que la próxima consulta de subcuentas lea la lista de Diez otra vez (antes y después de crear). */
+  olvidarSubcuentas() { this.cache.subcuentas = undefined }
+
   /** Las subcuentas de la base, por código; una lectura cada 10 minutos (B01r26). */
   private async listaDeSubcuentas(): Promise<Map<string, Record<string, unknown>>> {
     const c = this.cache.subcuentas

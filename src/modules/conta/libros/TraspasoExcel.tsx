@@ -16,7 +16,7 @@ import { rutaAsiento } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Guardado } from '@/modules/conta/ui/piezas'
 import { bajarXlsx, libroXlsx } from '@/modules/conta/lib/traspasoExcelLibro'
-import { crearSubcuentasEnDiez, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado } from '@/modules/conta/services/traspasoService'
+import { crearSubcuentasEnDiez, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado, type ResultadoSubcuentas } from '@/modules/conta/services/traspasoService'
 
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '')
 const n = (x: number) => x.toLocaleString('es-ES')
@@ -35,24 +35,28 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
   const [hecho, setHecho] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [crear, setCrear] = useState(false)
+  const [creacion, setCreacion] = useState<ResultadoSubcuentas | null>(null)
 
   async function preparar() {
-    setOcupado('Comprobando las subcuentas en Diez…'); setError(null); setHecho(null)
+    setOcupado('Comprobando las subcuentas en Diez…'); setError(null)
     try {
       const r = await prepararExcel(companyId, mes)
       setX(r)
-      setHecho(r.faltan.length
+      setHecho((antes) => (antes && antes.startsWith('En Diez (') ? `${antes} ` : '') + (r.faltan.length
         ? `Faltan ${n(r.faltan.length)} ${r.faltan.length === 1 ? 'subcuenta' : 'subcuentas'} en Diez (${r.base}): sin ellas no se prepara ningún Excel.`
-        : `Las ${n(r.comprobadas)} subcuentas están en Diez (${r.base}). Listos: ${n(r.emitidas?.length ?? 0)} emitidas y ${n(r.recibidas?.length ?? 0)} recibidas.`)
+        : `Las ${n(r.comprobadas)} subcuentas están en Diez (${r.base}). Listos: ${n(r.emitidas?.length ?? 0)} emitidas y ${n(r.recibidas?.length ?? 0)} recibidas.`))
     } catch (e) { setError(`No se han podido preparar los Excel: ${mensajeDe(e)}`) } finally { setOcupado(null) }
   }
 
   async function crearlas() {
-    setOcupado('Creando las subcuentas en Diez…'); setError(null)
+    const cuantas = x?.faltan.length ?? 0
+    setOcupado(`Creando ${n(cuantas)} ${cuantas === 1 ? 'subcuenta' : 'subcuentas'} en Diez, una a una… (unos segundos cada una)`); setError(null); setCreacion(null)
     try {
       const r = await crearSubcuentasEnDiez(companyId, mes)
       setCrear(false)
-      setHecho(`Creadas en Diez (${r.base}): ${r.creadas.map((c) => `${c.codigo} ${c.nombre}`).join(', ') || 'ninguna'}.${r.faltan.length ? ` Siguen faltando ${n(r.faltan.length)}.` : ''}${r.otra_vez ? ` ${n(r.otra_vez)} ${r.otra_vez === 1 ? 'asiento que esperaba vuelve' : 'asientos que esperaban vuelven'} al traspaso: pulsa «Seguir traspasando ${nombre}».` : ''}`)
+      setCreacion(r)
+      const no = r.no_creadas ?? []
+      setHecho(`En Diez (${r.base}): ${r.creadas.length ? `creadas ${n(r.creadas.length)}` : 'no se ha creado ninguna'}${no.length ? `; ${n(no.length)} no (abajo, por qué)` : ''}.${r.faltan.length ? ` Siguen faltando ${n(r.faltan.length)}.` : ' Ya están todas.'}${r.otra_vez ? ` ${n(r.otra_vez)} ${r.otra_vez === 1 ? 'asiento que esperaba vuelve' : 'asientos que esperaban vuelven'} al traspaso: pulsa «Seguir traspasando ${nombre}».` : ''}`)
       await preparar()
     } catch (e) { setError(`No se han creado: ${mensajeDe(e)}`); setOcupado(null) }
   }
@@ -93,6 +97,16 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
           <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => setCrear(true)}>Crearlas en Diez</button>
         </div>
       )}
+      {creacion && (creacion.creadas.length > 0 || (creacion.no_creadas?.length ?? 0) > 0) && (
+        <ul className="cxl-lista-estado" aria-label="Lo que se ha hecho en Diez" data-testid="traspaso-subcuentas-creadas">
+          {creacion.creadas.map((c) => (
+            <li key={c.codigo} className="cxl-mes"><span className="cxl-mes-que"><span className="cxl-punto cxl-punto-verde" aria-hidden="true" /><span><strong>{c.codigo}</strong> {c.nombre}: creada{c.recortado ? ' (con el nombre recortado: Diez admite 60 caracteres)' : ''}</span></span></li>
+          ))}
+          {(creacion.no_creadas ?? []).map((c) => (
+            <li key={c.codigo} className="cxl-mes"><span className="cxl-mes-que"><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /><span><strong>{c.codigo}</strong> {c.nombre}: no se ha creado. {c.porque}</span></span></li>
+          ))}
+        </ul>
+      )}
       {x && x.por_la_api.length > 0 && (
         <details>
           <summary>{n(x.por_la_api.length)} {x.por_la_api.length === 1 ? 'factura va' : 'facturas van'} por la API, sin PDF en Diez</summary>
@@ -129,9 +143,10 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
         <Dialogo titulo="Crear las subcuentas en Diez" alCerrar={() => { if (!ocupado) setCrear(false) }}>
           <p>Se crean en Diez ({x.base}) con el nombre que tienen en Sumied:</p>
           <ul>{x.faltan.map((f) => <li key={f.codigo}><strong>{f.codigo}</strong> {f.nombre}</li>)}</ul>
-          <p className="cxl-apoyo">Queda apuntado quién las ha creado y cuándo.</p>
+          <p className="cxl-apoyo">Queda apuntado quién las ha creado y cuándo. Si un nombre pasa de 60 caracteres, va recortado por la última palabra entera.</p>
+          {ocupado && <p className="cxl-apoyo" role="status" data-testid="traspaso-creando">{ocupado}</p>}
           <div className="cxl-herramientas">
-            <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void crearlas()}>{ocupado ?? 'Crearlas'}</button>
+            <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void crearlas()}>{ocupado ? 'Creando…' : 'Crearlas'}</button>
             <button type="button" className="cx-boton-sec" disabled={!!ocupado} onClick={() => setCrear(false)}>Cancelar</button>
           </div>
         </Dialogo>

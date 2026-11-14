@@ -84,3 +84,15 @@ describe('lo que vuelve al traspaso después de «Crearlas en Diez»', () => {
     }
   })
 })
+
+describe('el nombre con el que se crea una subcuenta en Diez (máximo 60)', async () => {
+  const { nombreParaDiez } = await import('../../../supabase/functions/_shared/diezSubcuentas')
+  it('la 62300004 del ensayo (61 caracteres) va recortada por la última palabra entera; las cortas, tal cual', () => {
+    expect(nombreParaDiez('CATCHER MARKETPLACE SERVICIOS DE PROFESIONALES INDEPENDIENTES')).toEqual({ nombre: 'CATCHER MARKETPLACE SERVICIOS DE PROFESIONALES', recortado: true })
+    expect(nombreParaDiez('PROMOCIONES UBER EATS')).toEqual({ nombre: 'PROMOCIONES UBER EATS', recortado: false })
+    expect(nombreParaDiez('  PROMOCIONES   JUST EAT ')).toEqual({ nombre: 'PROMOCIONES JUST EAT', recortado: false })
+    const largo = 'X'.repeat(70)
+    expect(nombreParaDiez(largo).nombre).toHaveLength(60)
+    expect(nombreParaDiez('A'.repeat(60)).recortado).toBe(false)
+  })
+})
