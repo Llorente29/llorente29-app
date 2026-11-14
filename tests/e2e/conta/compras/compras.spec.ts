@@ -51,7 +51,14 @@ function vigilar(page: Page) {
   page.on('console', (m) => { if (m.type() === 'error') console.log(`[consola] ${m.text().slice(0, 300)}`) })
 }
 
+// Compras enseña las liquidaciones del mes en curso y del anterior (ComprasPage, primeroDeMes(hoy)), y
+// la semilla trae la de SEPTIEMBRE de Aurora. Con el reloj de verdad, desde noviembre ya no salía y las
+// dos pruebas que la miran caían (13/11, en la noche sobre main): el navegador va a mediados de octubre,
+// el mes en que se escribieron, como en i01h/en-vivo.spec.ts.
+const OCTUBRE = new Date('2026-10-15T10:00:00+02:00')
+
 test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones', async ({ page }) => {
+  await page.clock.setFixedTime(OCTUBRE)
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/compras')
@@ -124,7 +131,8 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
     // S02: «Favoritos» también es un .s-barra-item, pero es un botón: se cuentan los apartados (enlaces).
     await expect(menu.locator('a.s-barra-item .s-barra-nombre')).toHaveText(['Inicio', 'Contabilidad', 'Ventas', 'Compras y gastos', 'Bancos', 'Contactos', 'Ajustes'])
   }
-  await expect(page.getByRole('table', { name: 'Qué está esperando factura' }).getByText('Carnes Prueba del Valle, S.L.').first()).toBeVisible()
+  // S01c (#396): «Qué está esperando factura» es una lista, albarán a albarán, ya no una tabla.
+  await expect(page.getByRole('list', { name: 'Qué está esperando factura' }).getByText(/Carnes Prueba del Valle, S\.L\./).first()).toBeVisible()
   await expect(page.getByText('Ha llegado: falta mirarla y confirmarla.')).toBeVisible()
   await expect(page.getByRole('link', { name: 'Subir sus documentos' })).toBeVisible()
   await capturar(page, 'compras')
@@ -157,6 +165,7 @@ test('Compras: lo que hay que mirar, lo que espera factura y las liquidaciones',
 })
 
 test('La liquidación de septiembre y su contraste (N19)', async ({ page }) => {
+  await page.clock.setFixedTime(OCTUBRE)
   await entrarComo(page, CUENTA_A.email)
   vigilar(page)
   await page.goto('/conta/compras')
