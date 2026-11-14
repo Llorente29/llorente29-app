@@ -1,0 +1,5 @@
+# DL1·26 · Glovo facturas 1T/2T (1210: no añade objetos; en Foodint apunta 39
+# facturas con sus asientos). Su prueba (ROLLBACK, cuenta A): sin Foodint no
+# hace nada; un asiento de tres líneas se valida.
+supabase/migrations/20261114T1210_dl1_glovo_facturas_1t2t.sql
+supabase/staging/sql/20261114_dl1_glovo_facturas_1t2t_prueba.sql
