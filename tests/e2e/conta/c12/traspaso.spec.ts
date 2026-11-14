@@ -158,7 +158,11 @@ test('A · B01r26 · los pasos 2 y 3: las subcuentas, los dos Excel y «Ya lo he
         ? { base: 'C0009', faltan: [], comprobadas: 14, emitidas: [fila('UBR-FLO-1'), fila('UBR-FLO-2')], recibidas: [fila('F-1')], por_la_api: [{ entry_id: '00000000-0000-0000-0000-000000000001', numero: 'F-9', motivo: 'lleva 3 tipos de IVA y el Excel admite 2 (Julio, 13/11: estas, por la API)' }] }
         : { base: 'C0009', faltan: [{ codigo: '47200010', nombre: 'IVA soportado 10 %' }, { codigo: '62300004', nombre: 'Servicios profesionales' }], comprobadas: 14, por_la_api: [] })
     }
-    if (b.accion === 'crear_subcuentas') { creadas = true; return json(r, { base: 'C0009', creadas: [{ codigo: '47200010', nombre: 'IVA soportado 10 %' }, { codigo: '62300004', nombre: 'Servicios profesionales' }], faltan: [] }) }
+    if (b.accion === 'crear_subcuentas') {
+      creadas = true
+      return json(r, { base: 'C0009', intentadas: 3, creadas: [{ codigo: '47200010', nombre: 'IVA soportado 10 %' }, { codigo: '62300004', nombre: 'CATCHER MARKETPLACE SERVICIOS DE PROFESIONALES', recortado: true }],
+        no_creadas: [{ codigo: '70009001', nombre: 'PROMOCIONES UBER EATS', porque: 'Diez no ha aceptado la subcuenta: 400 · La subcuenta ya existe' }], faltan: [], otra_vez: 47 })
+    }
     if (b.accion === 'importado') return json(r, { van_por_excel: 3, enlazadas: 3, faltan: [], dobles: [] })
     if (b.accion === 'comprobar') return json(r, { cuadra: true, cuadre: { cuadra: true, cuentas: 21, diferencias: [], solo_en_diez: [] }, mes_cerrado: false, motivo: null })
     return r.fulfill({ status: 400, body: '{}' })
@@ -178,6 +182,11 @@ test('A · B01r26 · los pasos 2 y 3: las subcuentas, los dos Excel y «Ya lo he
   const dialogo = page.getByRole('dialog')
   await expect(dialogo.getByText('Queda apuntado quién las ha creado y cuándo.')).toBeVisible()
   await dialogo.getByRole('button', { name: 'Crearlas' }).click()
+  // Regla 8: lo que ha hecho, una a una, y lo que espera vuelve al traspaso.
+  const hechas = excel.getByTestId('traspaso-subcuentas-creadas')
+  await expect(hechas.getByText(/62300004.*creada \(con el nombre recortado: Diez admite 60 caracteres\)/)).toBeVisible()
+  await expect(hechas.getByText(/70009001.*no se ha creado\. Diez no ha aceptado la subcuenta: 400/)).toBeVisible()
+  await expect(excel.getByText(/En Diez \(C0009\): creadas 2; 1 no \(abajo, por qué\)\. Ya están todas\. 47 asientos que esperaban vuelven al traspaso: pulsa «Seguir traspasando \w+»\./)).toBeVisible()
   await expect(excel.getByText(/Listos: 2 emitidas y 1 recibidas\./)).toBeVisible()
   await expect(excel.getByRole('button', { name: 'Descargar emitidas (2)' })).toBeVisible()
   await expect(excel.getByRole('button', { name: 'Descargar recibidas (1)' })).toBeVisible()
