@@ -13,7 +13,8 @@
 -- mismos), 18 a un documento que no existe y 2 a otro mes. Y ocupan los números
 -- de la C0008: «Ya lo he importado» paró a las 23:55 con external_send_ext_uq.
 -- Los 332 asientos que el traspaso escribió en la C0008 esta noche (desde las
--- 22:24 UTC) no se tocan.
+-- 22:24 UTC) no se tocan. Ojo: 283 de las facturas no llevan la conexión
+-- (account_connector_id nulo: «Ya lo he importado» no la rellena al enlazar).
 --
 -- Esta tanda:
 --   1. Los 301 vuelven a «pendiente», sin la referencia de Diez y con la de
@@ -48,7 +49,7 @@ begin
          count(*) filter (where status = 'enviado')
     into v_f, v_a, v_v
     from public.external_send
-   where company_id = v_e and account_id = v_acc and account_connector_id = v_con and status in ('enlazado', 'enviado') and sent_at < v_corte;
+   where company_id = v_e and account_id = v_acc and (account_connector_id = v_con or account_connector_id is null) and status in ('enlazado', 'enviado') and sent_at < v_corte;
   select array_agg(x.id) into v_aj
     from public.external_send x join public.journal_entry e on e.id = x.entry_id and e.account_id = x.account_id
    where x.company_id = v_e and x.account_id = v_acc and x.status = 'pendiente' and x.kind = 'asiento'
@@ -63,7 +64,7 @@ begin
          last_error = format('Enlace a la C0009: el traspaso del 14/11 leyó la C0009 (token de la C0009) y lo dio por %s %s/%s/%s; en la C0008 no es ese (lectura octubre-contra-c0008, %s). Vuelve al traspaso de octubre (B01r26).',
                              s.status, s.ext_year, s.ext_series, s.ext_number, v_hoy),
          ext_year = null, ext_series = null, ext_number = null, ext_invoice_number = null
-   where s.company_id = v_e and s.account_id = v_acc and s.account_connector_id = v_con and s.status in ('enlazado', 'enviado') and s.sent_at < v_corte;
+   where s.company_id = v_e and s.account_id = v_acc and (s.account_connector_id = v_con or s.account_connector_id is null) and s.status in ('enlazado', 'enviado') and s.sent_at < v_corte;
   get diagnostics v_n = row_count;
   if v_n <> 301 then raise exception 'B01r26: se han cambiado % envíos y tenían que ser 301.', v_n; end if;
 
