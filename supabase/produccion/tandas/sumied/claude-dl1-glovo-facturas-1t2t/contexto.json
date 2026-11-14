@@ -2,7 +2,7 @@
  "_que": "DL1·26 · Glovo facturas 1T/2T · contexto de producción, medido en SOLO LECTURA el 14/11 a las 11:10Z: la 1210 no crea ni cambia ningún objeto; inserta 39 facturas de Glovo, apunta sus asientos con _journal_entry_proponer y _dl1_asiento_iva y los valida con _dl1_validar (en producción). Ninguna de las 39 está en Sumied ni tiene liquidación en channel_settlement. Nada en el camino del pedido; la 1210 no está en el historial.",
  "medido": "2026-11-14T11:10Z",
  "tanda": {
-  "supabase/migrations/20261114T1210_dl1_glovo_facturas_1t2t.sql": "bc70f3e70252beeab77e9fadde732cdc"
+  "supabase/migrations/20261114T1210_dl1_glovo_facturas_1t2t.sql": "3bd0d79385ed96f20774e8272af21c7a"
  },
  "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
 }

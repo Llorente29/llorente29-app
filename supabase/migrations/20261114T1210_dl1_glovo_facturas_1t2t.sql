@@ -136,8 +136,14 @@ begin
     v_ids := v_ids || jsonb_build_object('id', v_id, 'importe', abs(r.total));
   end loop;
   if v_k <> 39 then raise exception 'DL1 Glovo facturas 1T/2T: % documentos, no 39.', v_k; end if;
-  begin
-  v_n := public._dl1_validar(v_e, v_julio, 'Julio', v_ids);
-  exception when others then raise exception using errcode = 'DGE01', message = sqlerrm; end;
+  -- Uno a uno, con su código: F + su número (2 cifras) + las 2 primeras del error.
+  v_n := 0;
+  for v_k in 0 .. jsonb_array_length(v_ids) - 1 loop
+    begin
+      v_n := v_n + public._dl1_validar(v_e, v_julio, 'Julio', jsonb_build_array(v_ids->v_k));
+    exception when others then
+      raise exception using errcode = format('F%s%s', lpad(((v_k % 100) + 0)::text, 2, '0'), left(sqlstate, 2)), message = sqlerrm;
+    end;
+  end loop;
   raise notice 'DL1 Glovo facturas 1T/2T: % asientos validados como Julio.', v_n;
 end $$;
