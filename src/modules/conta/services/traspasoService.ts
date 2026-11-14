@@ -60,7 +60,7 @@ export type PorLaApi = { entry_id: string; numero: string; motivo: string }
 export type FilaExcel = (string | number)[]
 export type ResultadoExcel = { base: string; faltan: SubcuentaQueFalta[]; comprobadas: number; emitidas?: FilaExcel[]; recibidas?: FilaExcel[]; por_la_api: PorLaApi[] }
 export type ResultadoSubcuentas = { base: string; intentadas?: number; creadas: (SubcuentaQueFalta & { recortado?: boolean })[]; no_creadas?: (SubcuentaQueFalta & { porque: string })[]; faltan: SubcuentaQueFalta[]; otra_vez?: number }
-export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string }[]; dobles: string[] }
+export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string }[]; dobles: string[]; dias_sin_leer?: string[] }
 
 /** «2 · Descarga los dos Excel»: comprueba las subcuentas en Diez y, si están todas, da las filas. */
 export const prepararExcel = (companyId: string, mes: string) => llamar<ResultadoExcel>({ company_id: companyId, mes, accion: 'excel' })

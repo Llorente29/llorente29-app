@@ -169,6 +169,8 @@ export function limitesMes(aaaamm: string): [number, number] {
   const ultimo = new Date(Date.UTC(y, m, 0)).getUTCDate()
   return [y * 10000 + m * 100 + 1, y * 10000 + m * 100 + ultimo]
 }
+/** El día siguiente de un AAAAMMDD numérico, dentro del mismo mes (para recorrer un mes día a día). */
+export const siguienteDia = (d: number) => d + 1
 
 /**
  * B01r26 (14/11) · LO QUE SE LEE DE DIEZ UNA VEZ Y SE REAPROVECHA, por servidor y
@@ -322,13 +324,13 @@ export class ClienteDiez {
   }
 
   /** Todas las filas de un listado paginado, con las tres rarezas cubiertas. */
-  async todas<T>(ruta: string): Promise<T[]> {
+  async todas<T>(ruta: string, tam = TAM_PAGINA): Promise<T[]> {
     const sep = ruta.includes('?') ? '&' : '?'
     const filas: T[] = []
     const vistas = new Set<string>()
     let total: number | null = null
     for (let pag = 0; pag < 5000; pag++) {
-      const j = await this.get<Paginada<T> | T[]>(`${ruta}${sep}${q({ $top: TAM_PAGINA, $skip: pag })}`)
+      const j = await this.get<Paginada<T> | T[]>(`${ruta}${sep}${q({ $top: tam, $skip: pag })}`)
       const d = Array.isArray(j) ? j : j?.Datos
       if (!Array.isArray(d)) throw new ErrorDiez(`${ruta.split('?')[0]}: forma inesperada`, 200, null)
       if (!Array.isArray(j) && typeof j.ResultadosTotales === 'number') total = j.ResultadosTotales
@@ -337,7 +339,7 @@ export class ClienteDiez {
       if (vistas.has(primero)) break // Diez ha vuelto al principio
       vistas.add(primero)
       filas.push(...d)
-      if (total != null ? filas.length >= total : d.length < TAM_PAGINA) break
+      if (total != null ? filas.length >= total : d.length < tam) break
     }
     if (total != null && filas.length !== total) {
       throw new ErrorDiez(`${ruta.split('?')[0]}: Diez dice ${total} y se han leído ${filas.length}`, 200, null)
@@ -358,6 +360,26 @@ export class ClienteDiez {
     return filas
   }
   facturasDelMes(aaaamm: string) { return this.todas<Factura>(`/api/facturas?${this.filtroMes(aaaamm)}`) }
+
+  /**
+   * B01r26 (ensayo del 14/11) · Las facturas del mes como se pueda: en la C0009,
+   * después de importar el Excel con los PDF, «GET /api/facturas» del mes dio 500.
+   * Primero el mes en páginas de 200; si Diez da 500, en páginas de 25; si aún falla,
+   * día a día (en páginas de 10). Los días que Diez no deje leer se devuelven
+   * aparte: quien llama los dice, no los da por vacíos (regla 7).
+   */
+  async facturasDelMesComoSePueda(aaaamm: string): Promise<{ facturas: Factura[]; diasSinLeer: string[]; como: 'mes' | 'mes_25' | 'dia' }> {
+    const ruta = `/api/facturas?${this.filtroMes(aaaamm)}`
+    const es500 = (x: unknown) => x instanceof ErrorDiez && x.status >= 500
+    try { return { facturas: await this.todas<Factura>(ruta), diasSinLeer: [], como: 'mes' } } catch (x) { if (!es500(x)) throw x }
+    try { return { facturas: await this.todas<Factura>(ruta, 25), diasSinLeer: [], como: 'mes_25' } } catch (x) { if (!es500(x)) throw x }
+    const [a, b] = limitesMes(aaaamm)
+    const facturas: Factura[] = []; const diasSinLeer: string[] = []
+    for (let d = a; d <= b; d = siguienteDia(d)) {
+      try { facturas.push(...await this.todas<Factura>(`/api/facturas?${q({ $filter: `Fecha ge ${d} and Fecha le ${d}` })}`, 10)) } catch (x) { if (!es500(x)) throw x; diasSinLeer.push(String(d)) }
+    }
+    return { facturas, diasSinLeer, como: 'dia' }
+  }
   subcuentas() { return this.todas<Record<string, unknown>>('/api/subcuentas') }
   series() { return this.todas<{ Codigo: string; Descripcion: string }>('/api/series') }
 

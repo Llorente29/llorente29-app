@@ -75,10 +75,26 @@ export function TraspasoADiez({ companyId, meses, cerrados, hoy, vuelta, alCambi
   /** Las tandas hasta que no queda nada, y después el cuadre. */
   async function traspasar() {
     setError(null); setHecho(null)
+    // Regla 8 (ensayo de la C0009, 14/11): dice algo desde el primer momento, no al acabar la primera tanda.
+    setOcupado(`Traspasando ${nombre}: mandando la primera tanda a Diez (unos segundos por asiento)…`)
     try {
-      let quedan = 1; let ultima: Awaited<ReturnType<typeof traspasarTanda>> | null = null
+      let quedan = 1; let ultima: Awaited<ReturnType<typeof traspasarTanda>> | null = null; let cortes = 0; let esperas = 0
       while (quedan > 0) {
-        ultima = await traspasarTanda(companyId, mes)
+        try {
+          ultima = await traspasarTanda(companyId, mes)
+          cortes = 0
+        } catch (e) {
+          // B01r26 (14/11): si otra tanda lo tiene (otra pestaña, o la de antes de un corte), se espera a que acabe.
+          if (/tanda de este traspaso en marcha/.test(mensajeDe(e)) && ++esperas <= 20) {
+            setOcupado(`Traspasando ${nombre}: hay otra tanda en marcha; espero a que acabe…`)
+            await new Promise((ok) => setTimeout(ok, 6000))
+            continue
+          }
+          // Un corte de la función (504) no pierde nada: lo que llegó está apuntado y la tanda siguiente sigue por donde iba.
+          if (++cortes > 2 || !/504|tiempo|timeout|Failed to fetch/i.test(mensajeDe(e))) throw e
+          setOcupado(`Traspasando ${nombre}: la función se ha cortado (${mensajeDe(e)}); sigo con la tanda siguiente…`)
+          continue
+        }
         quedan = ultima.quedan
         setOcupado(`Traspasando ${nombre}: ${ultima.llegaron_total.toLocaleString('es-ES')} de ${ultima.van.toLocaleString('es-ES')} en Diez${ultima.no_llegaron ? ` · ${ultima.no_llegaron} sin llegar` : ''}…`)
       }

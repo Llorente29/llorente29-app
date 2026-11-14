@@ -226,3 +226,28 @@ describe('autorizacionCubre: los asientos generales van aparte', () => {
     expect(autorizacionCubre([{ ...emp, incluye_asientos: true }], 'x', '2026-10-07', 'recibidas')).toBe(false)
   })
 })
+
+describe('B01r26 (14/11) · cortado escribiendo: se busca en Diez sin la copia', () => {
+  it('con «enviando», lee el mes fresco, lo encuentra y lo enlaza: no escribe otro', async () => {
+    const ap = apunteDeAsiento(banco())
+    const yaEscrito: Apunte = { Ejercicio: '2026', Serie: '4', Documento: 4001, TipoAsiento: 0, Fecha: 20261007, Detalles: ap.Detalles }
+    const d = diez()
+    const frescos: boolean[] = []
+    // La copia (de antes del corte) no lo tiene; Diez, leído de nuevo, sí.
+    d.apuntesDelMes = async (_m: string, o?: { fresco?: boolean }) => { frescos.push(!!o?.fresco); return o?.fresco ? [yaEscrito] : [] }
+    const t = puerto({ d, envios: { b1: { ...enviadoDe('b1'), status: 'pendiente', ext_series: null, ext_number: null, ext_year: null, sent_at: null, last_error: 'enviando' } } })
+    const r = await enviarApunteADiez(banco(), t.p)
+    expect(r).toMatchObject({ estado: 'en_diez', documento: 4001, enlazada: true })
+    expect(d.altas).toHaveLength(0)
+    expect(frescos).toEqual([true])
+  })
+  it('sin corte, la copia vale (no se relee el mes por cada asiento)', async () => {
+    const d = diez()
+    const frescos: boolean[] = []
+    const antes = d.apuntesDelMes.bind(d)
+    d.apuntesDelMes = async (m: string, o?: { fresco?: boolean }) => { frescos.push(!!o?.fresco); return antes(m) }
+    const t = puerto({ d })
+    expect(await enviarApunteADiez(banco(), t.p)).toMatchObject({ estado: 'en_diez', enlazada: false })
+    expect(frescos).toEqual([false])
+  })
+})

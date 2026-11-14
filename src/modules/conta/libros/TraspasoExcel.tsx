@@ -74,7 +74,7 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
     try {
       const r = await yaLoHeImportado(companyId, mes)
       setImp(r)
-      setHecho(`${n(r.enlazadas)} de ${n(r.van_por_excel)} facturas encontradas en Diez y enlazadas.${r.faltan.length ? ` Faltan ${n(r.faltan.length)}.` : ''}${r.dobles.length ? ` ${n(r.dobles.length)} están dos veces en Diez y no se enlazan: ${r.dobles.join(', ')}.` : ''}`)
+      setHecho(`${n(r.enlazadas)} de ${n(r.van_por_excel)} facturas encontradas en Diez y enlazadas.${r.faltan.length ? ` Faltan ${n(r.faltan.length)}.` : ''}${r.dobles.length ? ` ${n(r.dobles.length)} están dos veces en Diez y no se enlazan: ${r.dobles.join(', ')}.` : ''}${r.dias_sin_leer?.length ? ` Diez no ha dejado leer ${n(r.dias_sin_leer.length)} ${r.dias_sin_leer.length === 1 ? 'día' : 'días'} (${r.dias_sin_leer.join(', ')}): las facturas de esos días salen como que faltan; vuelve a pulsar en un rato.` : ''}`)
       setOcupado('Comprobando con Diez…')
       await alImportar()
     } catch (e) { setError(`No se ha podido comprobar lo importado: ${mensajeDe(e)}`) } finally { setOcupado(null) }
@@ -124,8 +124,9 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       <h4 className="cxl-subtitulo">3 · Ya lo he importado</h4>
       <p className="cxl-apoyo">Cuando los dos estén importados en Diez, Sumied busca cada factura allí, la enlaza con la suya y comprueba si cuadra.</p>
       <div className="cxl-herramientas">
-        <button type="button" className="cx-boton" disabled={!!ocupado || !listos} onClick={() => void importado()}>Ya lo he importado</button>
+        <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void importado()}>Ya lo he importado</button>
       </div>
+      {!x && <p className="cxl-apoyo">No hace falta volver a preparar los Excel: Sumied lee directamente lo que hay en Diez.</p>}
       {imp && imp.faltan.length > 0 && (
         <ul className="cxl-lista-estado" aria-label="Las que no están en Diez">
           {imp.faltan.map((f) => (
