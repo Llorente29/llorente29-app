@@ -147,6 +147,13 @@ export function PanelMovimiento(p: PanelProps) {
             <strong>{m.propuesta.que}</strong>
           </p>
           {m.porque && <p className="cx-ayuda">{m.porque}</p>}
+          {/* B01·22 · El nivel y su porqué: lo que diría «Para hoy». */}
+          {m.propuesta.nivel && (
+            <p className="cxn-nivel-linea" data-testid="nivel-panel">
+              <span className={`cxn-nivel cxn-nivel-${m.propuesta.nivel.clave}`}>{m.propuesta.nivel.etiqueta}</span>
+              <span className="cx-ayuda">{m.propuesta.nivel.porque}</span>
+            </p>
+          )}
           {m.propuesta.facturaSinAprobar && <p className="cxn-ambar-texto">Factura sin aprobar: confirmar el pago no la aprueba.</p>}
           {/* S01c · Falta la factura que nombra el banco: se sube (o llega por correo) y se casa con este pago. */}
           {m.propuesta.que.startsWith('Falta la factura') && (

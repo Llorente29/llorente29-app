@@ -58,6 +58,15 @@ test.describe('B01·21 · «¿Es otra cosa?»', () => {
     await abrirOtraCosa('Pago a un proveedor…')
     await expect(panel.getByRole('button', { name: 'Pago a un proveedor…' })).toBeVisible()
     await expect(panel.getByRole('button', { name: 'Cobro de un cliente…' })).toHaveCount(0)
+
+    // La captura del #634 salió con el bloque plegado aunque se acababa de abrir. Dos sondas
+    // (runs 43322033550 y 43323243030) no lo reprodujeron: el bloque siguió abierto tras 5 s y
+    // tras una captura de página entera, y la pantalla no se volvió a montar sola. Por si acaso,
+    // la captura se saca con la ventana tan alta como la página y el bloque comprobado abierto.
+    const alto = await page.evaluate(() => document.documentElement.scrollHeight)
+    await page.setViewportSize({ width: page.viewportSize()?.width ?? 1440, height: alto })
+    await abrirOtraCosa('Pago a un proveedor…')
+    await expect(panel.locator('details.cxn-otra-cosa')).toHaveAttribute('open', '')
     await capturar(page, 'otra-cosa-pago')
     await (await abrirOtraCosa('Pago a un proveedor…')).click()
     const dialogo = page.getByRole('dialog', { name: 'Pago a un proveedor' })

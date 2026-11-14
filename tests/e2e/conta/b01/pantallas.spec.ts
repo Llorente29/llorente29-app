@@ -153,6 +153,10 @@ test.describe('B01 · Bancos, las pantallas', () => {
       await expect(page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).getByRole('button', { name: 'Sí', exact: true })).toHaveClass('cx-boton')
       await expect(page.locator('.cxn-fila', { hasText: 'Transferencia recibida' }).getByRole('button', { name: 'Decirlo yo' })).toHaveClass('cx-boton')
       await expect(page.locator('.cxn-fila', { hasText: 'GLOVO' }).getByRole('button', { name: 'Ver' })).toHaveClass('cx-boton-sec')
+      // B01·22 · El nivel de lo que se propone, en la fila: lo que está para confirmar lleva el suyo, y lo que
+      // está por aclarar dice «No lo sé».
+      await expect(page.locator('.cxn-fila', { hasText: 'Comision mantenimiento' }).locator('.cxn-nivel')).toHaveText(/^(Seguro|Míralo|Nunca sola)/)
+      await expect(page.locator('.cxn-fila', { hasText: 'Transferencia recibida' }).locator('.cxn-nivel')).toHaveText('No lo sé')
       await expect(page.getByTestId('pasada-agente')).toContainText(/^Mi última pasada por todos tus bancos y todos los meses, hoy a las \d\d:\d\d \(al subir un extracto\): He casado yo \d+; te propongo \d+ y quedan \d+ por aclarar\.$/)
       // Con la apertura de la semilla, lo que falta por casar es exactamente lo que queda sin casar.
       await expect(page.getByTestId('cuadre')).toContainText('2.175,50 €')
@@ -239,7 +243,9 @@ test.describe('B01 · Bancos, las pantallas', () => {
       // S02 · PR 2: el cierre del mes del banco se mudó a Contabilidad › Cierre y Registro › Cerrar
       // el mes, junto al de la contabilidad; la dirección de antes lleva allí con su mes y su banco.
       await irAlCierreDelBanco(page)
-      await expect(page.getByText('Octubre aún no ha terminado: el banco se cierra a partir del día 1 del mes siguiente.')).toBeVisible()
+      // La banda depende de la fecha: «aún no ha terminado» hasta el 31/10; desde el 01/11, cuántos bancos
+      // sin cerrar cuadran (o «cerrado en todos»). La prueba se escribió en octubre y daba por hecho lo primero.
+      await expect(page.getByText(/^Octubre( aún no ha terminado: el banco se cierra a partir del día 1 del mes siguiente\.|: \d+ de \d+ bancos sin cerrar cuadran al céntimo\.| está cerrado en todos los bancos\.)$/)).toBeVisible()
       await expect(page.getByRole('article', { name: 'Cierre de Banco B01 · Norte' })).toContainText('la explican los movimientos sin casar')
       // El banco por el que se llega va el primero.
       await expect(page.getByTestId('cierre-bancos').getByRole('article').first()).toHaveAttribute('aria-label', 'Cierre de Banco B01 · Norte')

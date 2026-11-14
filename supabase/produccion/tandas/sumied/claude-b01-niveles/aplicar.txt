@@ -1,0 +1,15 @@
+# B01·22 · El nivel de cada propuesta del banco (Julio, B01r_22, 12/11 y 13/11).
+# Rama claude/b01-niveles. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   0027  Solo añade: dos columnas que admiten nulos en bank_settings (el
+#         interruptor seguro_solo, que se queda apagado, y el límite
+#         seguro_limite), la tabla bank_nivel_veredicto (si la persona casó una
+#         propuesta tal cual o la cambió) con su función para apuntarlo, y
+#         bank_historial_validado (lo validado contra una cuenta, en orden y con
+#         si se corrigió: la racha de «confirmado 3 veces»). No cambia ningún
+#         movimiento, propuesta ni casado.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01r22-niveles.sql
+supabase/migrations/20261113T0027_b01r22_niveles.sql

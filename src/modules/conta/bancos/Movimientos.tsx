@@ -42,7 +42,7 @@ import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { ErrorConReintento, Hueso } from '@/modules/conta/ui/piezas'
 import { diaMesCorto, eurosExactos, fechaLarga, hoyEnMadrid } from '@/modules/conta/lib/formato'
 import { useLeerConservando } from '@/modules/conta/bancos/useLeerConservando'
-import { PROPUESTA_RECALCULADA, TEXTO_BOTON, filaDe, limitesMes, nombreMes, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
+import { PROPUESTA_RECALCULADA, TEXTO_BOTON, filaDe, limitesMes, nombreMes, propuestaDe, tarjetaPorAclarar, type Boton, type MovimientoBanco } from '@/modules/conta/lib/bancosVista'
 import { MOTOR_BANCOS, type Destino } from '@/modules/conta/lib/conciliacion'
 import {
   BANDEJAS, PILDORA, coincide, enBandeja, confirmable, cuadreDe, diaConNombre, porDia, preseleccionado, puntoDePartida, quienEs, textoBloque, textoDelBanco, type Bandeja, type Grupo,
@@ -172,7 +172,7 @@ export function Movimientos() {
       recargar(); lectura.recargar()
       throw new Error(PROPUESTA_RECALCULADA)
     }
-    await nucleo.confirmar(m.id, m.porque ?? p.que ?? 'Confirmado', p.destino as unknown as Destino, (m.confianza ?? 'probable'), p.reglaId ?? null)
+    await nucleo.confirmar(m.id, m.porque ?? p.que ?? 'Confirmado', p.destino as unknown as Destino, (m.confianza ?? 'probable'), p.reglaId ?? null, propuestaDe(m))
   }
 
   /** Confirmar varios: cada uno igual que si fuera solo; lo que falle se dice uno a uno. */
@@ -276,7 +276,7 @@ export function Movimientos() {
       ...(l.concepto ? { concepto: l.concepto } : {}), ...(l.modelo && l.periodo ? { modelo: l.modelo, periodo: l.periodo } : {}) })) }
     const nombreDe = (c: string) => `${ctx.datos.nombres[c] ?? c} · ${c}`
     const nombre = e.lineas.length === 1 ? nombreDe(e.lineas[0].cuenta) : e.lineas.map((l) => `${nombreDe(l.cuenta)} (${euros(l.importeCent)})`).join(' + ')
-    await nucleo.confirmar(m.id, `Lo dijiste tú: ${nombre}.`, destino, 'probable', null)
+    await nucleo.confirmar(m.id, `Lo dijiste tú: ${nombre}.`, destino, 'probable', null, propuestaDe(m))
     if (e.regla) {
       await guardarRegla(companyId, { palabras: `Cuando el concepto tenga «${e.regla}» → ${e.lineas.length === 1 ? nombre : `repartir en ${e.lineas.map((l) => l.cuenta).join(' + ')}`}`,
         contiene: e.regla, cuenta: e.lineas[0].cuenta, signo: m.importeCent < 0 ? -1 : 1, origen: 'persona', lineas: e.paraRegla })
@@ -287,7 +287,7 @@ export function Movimientos() {
   const elegirTercero = (m: MovimientoBanco) => async (e: Eleccion) => {
     const l = e.lineas[0]
     const destino: Destino = { tipo: 'cuenta', concepto: e.concepto, lineas: [{ cuenta: l.cuenta, importe: l.importeCent / 100 }] }
-    await nucleo.confirmar(m.id, `Lo dijiste tú: ${e.concepto.toLowerCase()} · ${l.cuenta}.`, destino, 'probable', null)
+    await nucleo.confirmar(m.id, `Lo dijiste tú: ${e.concepto.toLowerCase()} · ${l.cuenta}.`, destino, 'probable', null, propuestaDe(m))
     hecho(`Casado: ${e.concepto.charAt(0).toLowerCase()}${e.concepto.slice(1)} · ${l.cuenta} (${quien(m)}). Su asiento espera en «Por validar».`)
   }
   const apartar = (m: MovimientoBanco) => async (motivo: string) => {
@@ -298,7 +298,7 @@ export function Movimientos() {
     const importe = Math.min(Math.abs(m.importeCent), f.pendienteCent) / 100
     const concepto = `Pago de la factura ${f.numero ?? ''} de ${f.proveedor}`.replace(/\s+/g, ' ')
     const destino: Destino = { tipo: 'factura_recibida', facturas: [{ id: f.id, importe }], cuenta_tercero: f.cuentaTercero ?? '', tercero_id: f.terceroId, concepto }
-    await nucleo.confirmar(m.id, `Lo dijiste tú: paga la factura ${f.numero ?? ''} de ${f.proveedor}.`, destino, 'probable', null)
+    await nucleo.confirmar(m.id, `Lo dijiste tú: paga la factura ${f.numero ?? ''} de ${f.proveedor}.`, destino, 'probable', null, propuestaDe(m))
     hecho(`Casado: ${concepto} (${quien(m)}). ${importe * 100 < f.pendienteCent ? `A la factura le quedan ${euros(f.pendienteCent - importe * 100)} por pagar.` : 'La factura queda pagada.'}`)
   }
 
@@ -338,7 +338,7 @@ export function Movimientos() {
       ocupado={ocupado === elegidoM.id}
       alConfirmarPropuesta={() => pulsar(elegidoM, 'si')}
       alConfirmar={(d, porque, que) => con(elegidoM.id, async () => {
-        await nucleo.confirmar(elegidoM.id, porque, d, 'probable', null)
+        await nucleo.confirmar(elegidoM.id, porque, d, 'probable', null, propuestaDe(elegidoM))
         hecho(`Casado: ${que} (${quien(elegidoM)}). Su asiento espera en «Por validar».`)
       })}
       alCasarRemesa={(remesaId, lineas) => con(elegidoM.id, async () => { hecho((await casarRemesa(elegidoM.id, remesaId, lineas)).frase) })}
@@ -527,6 +527,7 @@ function FilaMovimiento({ g, movil, enfocada, elegida, ocupado, marcadas, marcab
           <span className={`cxb-punto cxb-punto-${tono === 'casado' ? 'verde' : tono}`} title={verde ? 'Lo casaría solo' : f.estado} /><span className="cx-oculto">{verde ? 'Lo casaría solo' : f.estado}</span>
           {origen && <span className="cxn-pildora">{origen}</span>}
           {m.estado === 'ignorado' ? <span className="cxn-pildora cxn-pildora-apartado" data-testid={`apartado-${m.id}`}>{f.titulo}</span> : <strong>{f.titulo}</strong>}
+          {f.nivel && <span className={`cxn-nivel cxn-nivel-${f.nivel.clave}`} data-testid={`nivel-${m.id}`}>{f.nivel.etiqueta}</span>}
           {m.propuesta?.facturaSinAprobar && m.estado !== 'casado' && <span className="cxn-pildora cxn-pildora-ambar">factura sin aprobar</span>}
         </span>
         <span className="cxn-porque">{f.porque}</span>

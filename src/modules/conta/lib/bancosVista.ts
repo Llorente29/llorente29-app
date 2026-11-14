@@ -10,6 +10,7 @@
 // mes; «Para confirmar» y «Por aclarar» solo filtran a petición.
 
 import { MOTIVO_ANULADO } from '@/modules/conta/lib/cargoAnulado'
+import type { Destino } from '@/modules/conta/lib/conciliacion'
 
 export type Tono = 'verde' | 'ambar' | 'gris'
 export type Boton = 'ver' | 'deshacer' | 'si' | 'otra-cosa' | 'subir-foto' | 'si-sin-ticket' | 'buscar-factura' | 'decirlo-yo' | 'alta-tarjeta' | 'es-el-mismo' | 'son-dos' | 'desapartar'
@@ -46,6 +47,8 @@ export interface PropuestaGuardada {
   facturaSinAprobar?: boolean
   /** S01d · Las cuentas de una regla con reparto cuyo importe no cuadró: la ventana abre con ellas. */
   reparto?: { cuenta: string; importeCent: number | null; concepto: string | null; modelo?: string | null; periodo?: string | null }[] | null
+  /** B01·22 · El nivel y su porqué (supabase/functions/_shared/bancos/nivel.ts). Sin él, de antes del 13/11. */
+  nivel?: { clave: 'centimo' | 'confirmado' | 'camino' | 'nunca' | 'nose'; etiqueta: string; porque: string; seguro: boolean; veces?: number } | null
 }
 
 export interface MovimientoBanco {
@@ -85,6 +88,8 @@ export interface Fila {
    */
   principal: Boton | null
   grupo: 'casado' | 'confirmar' | 'aclarar' | 'otro'
+  /** B01·22 · La etiqueta del nivel de lo que se propone («Seguro · confirmado 3 veces», «Míralo · 2 de 3»…), si aún no está casado. */
+  nivel?: { clave: string; etiqueta: string } | null
 }
 
 const sinPunto = (s: string) => s.trim().replace(/\.$/, '')
@@ -100,6 +105,12 @@ export function filaDe(m: MovimientoBanco): Fila {
 }
 
 function filaSinPrincipal(m: MovimientoBanco): Omit<Fila, 'principal'> {
+  const f = filaSinNivel(m)
+  const n = m.propuesta?.nivel
+  return n && (m.estado === 'propuesto' || m.estado === 'por_aclarar') ? { ...f, nivel: { clave: n.clave, etiqueta: n.etiqueta } } : f
+}
+
+function filaSinNivel(m: MovimientoBanco): Omit<Fila, 'principal' | 'nivel'> {
   if (m.estado === 'casado' && m.casado) {
     const porque = quitarCasadoSolo(m.casado.porque)
     const titulo = m.casado.asientoConcepto ?? m.propuesta?.que ?? 'Casado'
@@ -272,3 +283,13 @@ export function textoExtractoDeshecho(r: ExtractoDeshecho): string {
   const repetidos = r.posiblesRepetidos > 0 ? `, ${r.posiblesRepetidos} de ellos como «¿es el mismo?»` : ''
   return `Extracto ${r.fichero ? `«${r.fichero}» ` : ''}deshecho: quitados ${cuantos}${repetidos}. Ya puedes subir el bueno.`
 }
+
+/**
+ * B01·22 · Lo que «confirmar» necesita de la propuesta para apuntar si la persona la casó tal cual
+ * o la cambió (bank_nivel_veredicto): su nivel, su destino y el motor que la calculó. Sin nivel, nada.
+ */
+export function propuestaDe(m: Pick<MovimientoBanco, 'propuesta'>): { nivel: NonNullable<PropuestaGuardada['nivel']>; destino: Destino | null; motor: string | null } | null {
+  const p = m.propuesta
+  return p?.nivel ? { nivel: p.nivel, destino: (p.destino ?? null) as unknown as Destino | null, motor: p.motor ?? null } : null
+}
+
