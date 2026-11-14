@@ -1,0 +1,16 @@
+# DL1·27 · Hacienda: la devolución del IS 2025 (1.126,10) compensada de oficio
+# con el 111 del 2T (21/07) y lo que sobraba embargado por la TGSS (10/11)
+# (Julio, 13/11). Rama claude/dl1-hacienda-compensacion. Se ensaya y se aplica
+# desde main nombrando esta rama, antes de fusionar.
+#
+#   1155  Dos asientos sin IVA, validados como Julio: la compensación a 01/10 (efectos 21/07) y
+#         el embargo a 10/11. La 47090000 queda a 0. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-hacienda-compensacion.sql
+supabase/migrations/20261114T1155_dl1_hacienda_compensacion.sql
+sin-vuelta-atras: supabase/migrations/20261114T1155_dl1_hacienda_compensacion.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-hacienda-compensacion · 47090000 a 31/12/2026 = 0.00
+esperado: dl1-hacienda-compensacion · 47510000 del acuerdo 282630448208C, menos 306,99 = 0.00
+esperado: dl1-hacienda-compensacion · 67800000 del acuerdo 282630448208C, menos 33,07 = 0.00
+esperado: dl1-hacienda-compensacion · 47600000 del embargo 28 01 25 01471259, menos 786,04 = 0.00
