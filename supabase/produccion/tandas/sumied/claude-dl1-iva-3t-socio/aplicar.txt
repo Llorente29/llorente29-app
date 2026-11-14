@@ -1,0 +1,15 @@
+# DL1·28 · el 4/3155 de Diez (28,00 a la 55100001) y la liquidación del IVA del
+# 3T de 2026 por conta_impuesto_303_contabilizar (Julio, 13/11). Rama
+# claude/dl1-iva-3t-socio. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1220  Dos asientos validados como Julio. No crea objetos.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/dl1-iva-3t-socio.sql
+supabase/migrations/20261114T1220_dl1_iva_3t_socio.sql
+sin-vuelta-atras: supabase/migrations/20261114T1220_dl1_iva_3t_socio.sql · motivo: un asiento validado se anula con un contraasiento.
+esperado: dl1-iva-3t-socio · 55100001 del 4/3155, más 28,00 = 0.00
+esperado: dl1-iva-3t-socio · 477 de la liquidación del 3T, menos 9.855,66 = 0.00
+esperado: dl1-iva-3t-socio · 472 de la liquidación del 3T, menos 13.579,10 = 0.00
+esperado: dl1-iva-3t-socio · 4700 de la liquidación del 3T, menos 3.723,44 = 0.00
