@@ -189,6 +189,43 @@ try {
   for (const [m, v] of [...resumenSueltas].sort()) sale(`sueltas.${m}`, v)
   sale('diez_sueltas_sin_pareja', sueltasDiez.length)
 
+  // Cuarta pasada (14/11): con lo que ENLAZÓ «Ya lo he importado» (external_send.ext_number), no con mi casado.
+  // Las facturas de Diez que no son de ningún enlace, contra las recibidas de Sumied sin enlazar ni enviar.
+  seccion('sin_enlace')
+  const enlazados = new Set(sumied.filter((x) => x.doc != null).map((x) => Number(x.doc)))
+  const diezSin = diez.filter((f) => !enlazados.has(Number(f.Documento)))
+  const sumiedSin = sumied.filter((x) => x.es == null)
+  sale('diez_sin_enlace', diezSin.length)
+  sale('sumied_sin_enlace', sumiedSin.length)
+  const tomadas = new Set<Rec>()
+  const resumen4 = new Map<string, number>()
+  let w = 0
+  for (const f of diezSin) {
+    const dn = norm(f.NumeroFactura); const nif = normNif(f.CifCliente); const cta = digitos(f.CuentaCliente)
+    const puntos = (x: Rec) => (norm(x.n) === dn ? 8 : 0) + (normNif(x.nif) === nif && nif ? 4 : 0) + (cent(x.t) === cent(f.TotalFactura) ? 2 : 0) + (dia(x.fc) === Number(f.Fecha) ? 1 : 0)
+    const x = sumiedSin.filter((y) => !tomadas.has(y)).sort((a, b) => puntos(b) - puntos(a))[0]
+    w++
+    const p = `e${w}`
+    sale(`${p}.doc`, Number(f.Documento ?? 0))
+    sale(`${p}.diez_cta`, Number(cta || 0))
+    sale(`${p}.diez_fecha`, Number(f.Fecha ?? 0))
+    sale(`${p}.diez_ff`, Number(f.FechaFactura ?? 0))
+    sale(`${p}.diez_len`, dn.length)
+    if (!x || puntos(x) === 0) { sale(`${p}.pareja`, 0); resumen4.set('sin_pareja', (resumen4.get('sin_pareja') ?? 0) + 1); continue }
+    tomadas.add(x)
+    const n = norm(x.n)
+    const r = { num: n === dn ? 1 : 0, nif: normNif(x.nif) === nif ? 1 : 0, total: cent(x.t) === cent(f.TotalFactura) ? 1 : 0, fc: dia(x.fc) === Number(f.Fecha) ? 1 : 0, ff: dia(x.ff) === Number(f.FechaFactura) ? 1 : 0, cta: digitos(x.cta) === cta ? 1 : 0 }
+    sale(`${p}.sumied_cta`, Number(digitos(x.cta) || 0))
+    sale(`${p}.sumied_fc`, dia(x.fc))
+    sale(`${p}.sumied_ff`, dia(x.ff))
+    sale(`${p}.sumied_len`, n.length)
+    sale(`${p}.prefijo_comun`, prefijo(dn, n))
+    for (const [kk, v] of Object.entries(r)) sale(`${p}.igual_${kk}`, v)
+    const m = Object.entries(r).filter(([, v]) => v === 0).map(([kk]) => kk).join('_') || 'nada'
+    resumen4.set(m, (resumen4.get(m) ?? 0) + 1)
+  }
+  for (const [m, v] of [...resumen4].sort()) sale(`sin_enlace.distinto.${m}`.slice(0, 48), v)
+
   seccion('cuantas')
   sale('casan', casan)
   sale('no_casan', k)
