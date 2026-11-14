@@ -44,7 +44,7 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       setX(r)
       setHecho((antes) => (antes && antes.startsWith('En Diez (') ? `${antes} ` : '') + (r.faltan.length
         ? `Faltan ${n(r.faltan.length)} ${r.faltan.length === 1 ? 'subcuenta' : 'subcuentas'} en Diez (${r.base}): sin ellas no se prepara ningún Excel.`
-        : `Las ${n(r.comprobadas)} subcuentas están en Diez (${r.base}). Listos: ${n(r.emitidas?.length ?? 0)} emitidas y ${n(r.recibidas?.length ?? 0)} recibidas.`))
+        : `Las ${n(r.comprobadas)} subcuentas están en Diez (${r.base}). Listos: ${n(r.emitidas?.length ?? 0)} emitidas y ${n(r.recibidas?.length ?? 0)} recibidas${r.sin_pdf?.length ? ` (${n(r.sin_pdf.length)} sin PDF: van sin el enlace y se adjunta después)` : ''}.`))
     } catch (e) { setError(`No se han podido preparar los Excel: ${mensajeDe(e)}`) } finally { setOcupado(null) }
   }
 
@@ -65,7 +65,8 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
     const filas = x?.[cual] ?? []
     try {
       bajarXlsx(await libroXlsx(filas, cual === 'emitidas' ? 'Emitidas' : 'Recibidas'), `diez-${cual}-${mes.slice(0, 7)}.xlsx`)
-      setHecho(`Descargado el Excel de ${cual}: ${n(filas.length)} ${filas.length === 1 ? 'factura' : 'facturas'}, cada una con el enlace a su PDF.`)
+      const sinPdf = cual === 'recibidas' ? (x?.sin_pdf?.length ?? 0) : 0
+      setHecho(`Descargado el Excel de ${cual}: ${n(filas.length)} ${filas.length === 1 ? 'factura' : 'facturas'}, ${sinPdf ? `${n(filas.length - sinPdf)} con el enlace a su PDF y ${n(sinPdf)} sin él (se adjunta después)` : 'cada una con el enlace a su PDF'}.`)
     } catch (e) { setError(`No se ha podido hacer el Excel: ${mensajeDe(e)}`) }
   }
 
@@ -106,6 +107,19 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
             <li key={c.codigo} className="cxl-mes"><span className="cxl-mes-que"><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /><span><strong>{c.codigo}</strong> {c.nombre}: no se ha creado. {c.porque}</span></span></li>
           ))}
         </ul>
+      )}
+      {x && (x.sin_pdf?.length ?? 0) > 0 && (
+        <div className="cxl-aviso-ambar" role="note" data-testid="traspaso-sin-pdf">
+          <p>{n(x.sin_pdf!.length)} {x.sin_pdf!.length === 1 ? 'recibida va' : 'recibidas van'} en el Excel sin su PDF (Sumied no lo tiene): llegan a Diez sin el enlace y el PDF se adjunta después.</p>
+          <ul className="cxl-lista-estado">
+            {x.sin_pdf!.map((f) => (
+              <li key={f.entry_id} className="cxl-mes">
+                <span className="cxl-mes-que"><span className="cxl-punto cxl-punto-ambar" aria-hidden="true" /><span>{f.numero || 'Sin número'}: sin PDF, para adjuntar después</span></span>
+                <Link to={rutaAsiento(f.entry_id)} className="cx-enlace">Ver el asiento</Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       {x && x.por_la_api.length > 0 && (
         <details>

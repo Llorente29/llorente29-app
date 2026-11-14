@@ -8,8 +8,9 @@
 //   · Ventas del día (tipo «ventas»): la factura de Sumied, la del PDF
 //     (resumenDeAsiento → facturaDeVentas), con el número de la vez.
 //   · Recibidas (tipo «recibidas»): lo que conta_recibida_envio devuelve.
-//   · Las dos solo si tienen su PDF guardado: sin PDF no van por Excel (y por
-//     la API tampoco: «sin documento no se envía»; la pantalla lo dice).
+//   · Con su PDF guardado, con el enlace en «Url documento». Una venta sin PDF
+//     no va por el Excel. Una recibida sin PDF va igual, sin el enlace, y la
+//     pantalla la cuenta aparte para adjuntarla después (Julio, 14/11, 17:44).
 //   · Lo demás (banco, manuales, liquidaciones, anulaciones) va por la API, como
 //     hasta hoy.
 
@@ -28,6 +29,8 @@ export type FacturaDelTraspaso = {
   cuenta: string
   /** Si va por la API, por qué (y entonces no lleva fila). */
   porLaApi?: string
+  /** B01r26 (Julio, 14/11, 17:44): una recibida sin su PDF va igual por el Excel, sin «Url documento», y se adjunta después. */
+  sinPdf?: boolean
   emitida?: Emitida
   recibida?: Recibida
   /** Las subcuentas que usa su fila (cliente o proveedor, ingresos o gastos, retención). */
@@ -86,7 +89,8 @@ export async function facturasDelTraspaso(srv: SupabaseClient, t: Traspaso, url:
       const fila = filaRecibida(r, XML_RECIBIDAS)
       out.push({
         entry_id: x.entry_id, excel: 'recibidas', numero: r.numero, cuenta: r.proveedor.subcuenta, recibida: r,
-        ...(!u ? { porLaApi: 'no tiene su PDF guardado' } : 'porLaApi' in fila ? { porLaApi: fila.porLaApi } : {}),
+        // Sin PDF no se queda fuera: va por el Excel sin «Url documento» y se cuenta aparte (Julio, 14/11, 17:44).
+        ...('porLaApi' in fila ? { porLaApi: fila.porLaApi } : {}), ...(!u ? { sinPdf: true } : {}),
         subcuentas: [r.proveedor.subcuenta, ...r.gastos.map((g) => g.cuenta), ...(r.retencion ? [r.retencion.subcuenta] : [])],
       })
     }
