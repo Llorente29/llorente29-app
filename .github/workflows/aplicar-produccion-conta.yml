@@ -151,10 +151,63 @@ jobs:
           RAMA: ${{ inputs.rama }}
         run: node scripts/ci/esperar-e2e.mjs 45
 
+  # B01r26 (13/11) · LA GUARDA DE DIEZ. Una tanda que solo puede ir cuando Diez
+  # está de una forma (la 1745: la C0008 sin nada desde el 01/10, que Julio ha
+  # borrado) lo dice en guarda-diez.json, en su carpeta. Este job lee Diez SOLO
+  # con GET, en el entorno «lectura» (el único con DIEZ_LECTURA: «produccion» no
+  # lo tiene y no se duplica), y el job que aplica depende de él:
+  #   · en el REAL, si no cuadra o no se puede leer, sale en rojo y no se aplica nada;
+  #   · en el ENSAYO solo lo dice (aviso): el ensayo mide la tanda, no Diez;
+  #   · una tanda sin guarda-diez.json no lee nada y sigue.
+  guarda-diez:
+    if: inputs.modo != 'vuelta_atras'
+    runs-on: ubuntu-latest
+    environment: lectura
+    timeout-minutes: 20
+    env:
+      MODO: ${{ inputs.modo }}
+      TANDA_PEDIDA: ${{ inputs.tanda }}
+      RAMA: ${{ inputs.rama || github.ref_name }}
+      COMMIT: ${{ inputs.commit || github.sha }}
+      RAMA_PEDIDA: ${{ inputs.rama }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: La guarda de la tanda (de la rama, solo sus datos)
+        run: |
+          set -euo pipefail
+          if [ -n "${RAMA_PEDIDA:-}" ]; then
+            git fetch -q --depth=1 origin "$COMMIT"
+            git checkout "$COMMIT" -- supabase/produccion/tandas
+          fi
+          if [ -n "${TANDA_PEDIDA:-}" ] && ! [[ "$TANDA_PEDIDA" =~ ^[A-Za-z0-9._/-]+$ ]]; then echo "::error::«tanda» es el nombre de una carpeta de supabase/produccion/tandas."; exit 1; fi
+          node scripts/conta/produccion/tanda.mjs workflow "${TANDA_PEDIDA:-$RAMA}" > /tmp/tanda-error.txt 2>&1 || { echo "::error::No hay tanda para esta rama."; exit 1; }
+          cp "$(cat /tmp/tanda-dir.txt)/guarda-diez.json" /tmp/guarda-diez.json 2>/dev/null || true
+      - name: Leer Diez (solo GET) y comprobar
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          if [ ! -f /tmp/guarda-diez.json ]; then echo "La tanda no trae guarda de Diez."; exit 0; fi
+          if [ -n "${DIEZ_LECTURA:-}" ]; then jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done; fi
+          set +e
+          GUARDA=/tmp/guarda-diez.json npx --yes tsx@4.19.2 scripts/conta/diez/guarda-desde.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
+          r=${PIPESTATUS[0]}
+          set -e
+          if [ "$r" = 0 ]; then exit 0; fi
+          if [ "$MODO" = real ]; then
+            echo "::error::Guarda de Diez: Diez no está como la tanda necesita (o no se ha podido leer). No se aplica nada. Ver guarda-diez.json de la tanda."
+            exit 1
+          fi
+          echo "::warning::Guarda de Diez: hoy no cuadra (o no se ha podido leer). En el ENSAYO solo se dice; el REAL pararía aquí."
+
   aplicar:
-    needs: [espera-e2e]
-    # Sigue si la espera ha ido bien o no tocaba (saltada).
-    if: always() && !cancelled() && needs.espera-e2e.result != 'failure'
+    needs: [espera-e2e, guarda-diez]
+    # Sigue si la espera ha ido bien o no tocaba (saltada), y si la guarda de Diez
+    # no ha parado (B01r26: en el real, Diez no está como la tanda necesita).
+    if: always() && !cancelled() && needs.espera-e2e.result != 'failure' && needs.guarda-diez.result != 'failure'
     runs-on: ubuntu-latest
     # W12 · Regla T10 y W12b (30/10): los secretos de producción solo existen en
     # dos entornos, y los dos solo admiten ejecuciones de main. El ensayo, en

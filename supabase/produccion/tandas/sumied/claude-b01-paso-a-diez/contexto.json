@@ -1,0 +1,8 @@
+{
+ "_que": "B01r26 · liberar octubre · contexto de producción, medido en SOLO LECTURA el 13/11 a las 16:35Z: la 1745 no añade ni cambia objetos; en Foodint cambia el estado de 215 filas de external_send (213 enviado y 2 enlazado, de asientos del 01/10 al 24/10) a rechazado. external_send no tiene disparadores. Foodint en modo mensual (conta_diez_envio_empresa) y 0 traspasos en conta_diez_traspaso: nada sale solo. Nada en el camino del pedido; la 1745 no está en el historial.",
+ "medido": "2026-11-13T16:35Z",
+ "tanda": {
+  "supabase/migrations/20261113T1745_b01r26_liberar_octubre.sql": "59b15e6c544a117978e04daf2ac9d542"
+ },
+ "contexto": {"tablas": [], "funciones": [], "filas": {}, "otras": {}, "camino": {"tablas": [], "funciones": []}, "usos": {}, "registro": []}
+}
