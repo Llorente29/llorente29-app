@@ -87,7 +87,7 @@ jobs:
     environment: lectura
     if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, '[prueba-c0009]') || startsWith(github.event.head_commit.message, '[prueba-c0009:')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -143,6 +143,44 @@ jobs:
           [ -s /tmp/asiento.json ] || { echo "::error::No se ha leído el asiento."; exit 1; }
           echo "Asiento leído ($(wc -c < /tmp/asiento.json) bytes; no se publica)."
 
+      - name: B01r26 · los asientos de Sumied desde enero, leídos en producción con conta_lectura (solo lectura)
+        timeout-minutes: 10
+        # B01r26 (14/11): para casar la C0009 con Sumied en «[prueba-c0009:revision]». No se publica nada de aquí.
+        if: startsWith(inputs.etiqueta, '[prueba-c0009:revision]')
+        env:
+          RO_DB_URL: ${{ secrets.PROD_CONTA_RO_DB_URL }}
+        run: |
+          set -euo pipefail
+          [ -n "${RO_DB_URL:-}" ] || { echo "::error::Falta el secreto PROD_CONTA_RO_DB_URL."; exit 1; }
+          python3 - <<'PY'
+          import os, urllib.parse
+          u = urllib.parse.urlsplit(os.environ["RO_DB_URL"])
+          for parte in (os.environ["RO_DB_URL"], u.password, u.hostname):
+              if parte:
+                  print(f"::add-mask::{parte}")
+          if (u.username or "").split(".")[0] != "conta_lectura":
+              print("::error::El usuario de PROD_CONTA_RO_DB_URL no es conta_lectura.")
+              raise SystemExit(1)
+          if "xzmpnchlguibclvxyynt" not in os.environ["RO_DB_URL"]:
+              print("::error::PROD_CONTA_RO_DB_URL no es la de producción.")
+              raise SystemExit(1)
+          PY
+          command -v psql >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client >/dev/null; }
+          # Foodint, anclado por su empresa y su cuenta (regla 9): cada asiento con sus líneas y el número de las recibidas
+          # (customer_invoice no la lee conta_lectura: las ventas casan por sus líneas o por la fecha y el total).
+          PGOPTIONS='-c default_transaction_read_only=on' psql "$RO_DB_URL" -X -A -t -v ON_ERROR_STOP=1 -c "
+            select coalesce(json_agg(json_build_object('id', e.id, 'fecha', e.entry_date::text, 'origen', e.source_type, 'estado', e.status,
+              'lineas', (select json_agg(json_build_object('c', a.code, 'd', l.debit, 'h', l.credit))
+                           from public.journal_line l join public.company_account a on a.id = l.company_account_id and a.company_id = e.company_id
+                          where l.entry_id = e.id),
+              'nums', array_remove(array[
+                (select si.invoice_number from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id limit 1)], null))), '[]'::json)
+              from public.journal_entry e
+             where e.company_id = '658728c0-fcd7-46ef-a860-d4e5e6eb21d9' and e.account_id = '51ad1792-6629-4ef7-833a-b57b09a86710'
+               and e.entry_date >= '2026-01-01'" > /tmp/sumied.json
+          [ -s /tmp/sumied.json ] || { echo "::error::No se ha leído Sumied."; exit 1; }
+          echo "Sumied leído ($(wc -c < /tmp/sumied.json) bytes; no se publica)."
+
       - name: R14 · jspdf para el PDF del día (la versión del package-lock)
         if: startsWith(github.event.head_commit.message, '[prueba-c0009:adjunto]') || startsWith(inputs.etiqueta, '[prueba-c0009:adjunto]')
         run: npm install --no-save --no-package-lock --ignore-scripts --no-audit --no-fund jspdf@4.2.1
@@ -193,6 +231,8 @@ jobs:
             '[prueba-c0009:subcuentas-leer]'*) S=scripts/conta/diez/prueba-c0009-subcuentas-leer.ts ;;
             # B01r26 (14/11): SOLO LEE qué consulta de facturas da 500 en la C0009 (el mes, páginas cortas, día a día).
             '[prueba-c0009:facturas-leer]'*) S=scripts/conta/diez/prueba-c0009-facturas-leer.ts ;;
+            # B01r26 (14/11): SOLO LEE la C0009 después del ensayo: líneas sin subcuenta, duplicados y subcuentas de prueba, casado con Sumied.
+            '[prueba-c0009:revision]'*) S=scripts/conta/diez/prueba-c0009-revision.ts ;;
             '[prueba-c0009:'*) echo "::error::Etiqueta de prueba desconocida: ${MENSAJE%%]*}]"; exit 1 ;;
             *) S=scripts/conta/diez/prueba-c0009.ts ;;
           esac
