@@ -54930,7 +54930,8 @@ begin
   if v_f.status in ('anulada', 'descartada') then
     raise exception 'Está %: no se cambia.', v_f.status using errcode = '22023';
   end if;
-  if exists (select 1 from public.journal_entry e where e.account_id = v_f.account_id and e.source_type = 'supplier_invoice'
+  -- S01p·22: una apuntada SIN documento sí admite su PDF (no cambia el asiento); cambiarlo, no.
+  if v_f.raw_document_url is not null and exists (select 1 from public.journal_entry e where e.account_id = v_f.account_id and e.source_type = 'supplier_invoice'
                 and e.source_id = v_f.id and e.status = 'validado') then
     raise exception 'Ya está contabilizada: su documento va con el asiento. Para cambiarlo, anula su asiento.' using errcode = '22023';
   end if;
