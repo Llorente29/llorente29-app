@@ -91,6 +91,7 @@ import {
   ACEPTA_PAPEL, COMO_SE_GUARDA, ETIQUETAS, aManoDeLoGuardado, asientoVistaPrevia, retencionLeidaSinTipo, cuentaDelGastoEnAsiento, borradorDe, cambiosParaLaBase, lineasConMasDecimales, contraElPdf, cuentasDeLaPropuesta, deDondeVino, fechaEs, formatoCampo, historialDe, importeEs, partirCambios,
   textoDelGuardado, totalesDe, type BorradorFicha,
 } from '@/modules/conta/documentos/fichaRecibida'
+import { accionPdf } from '@/modules/conta/lib/pdfDeLaRecibida'
 import {
   BloqueGasto, BloqueHistorial, BloqueImportesIva, BloquePago, BloqueProveedorFactura, EditarAsientoAMano, HuecoPapel,
 } from '@/modules/conta/documentos/FichaRecibidaBloques'
@@ -455,6 +456,20 @@ export default function RevisarFacturaPage() {
   const cuentaPago = (cuentasPago.datos ?? [])[0] ?? null
   const [pagarAqui, setPagarAqui] = useState(false)
   const [avisoPago, setAvisoPago] = useState<{ tono: 'ok' | 'duda' | 'falta'; texto: string } | null>(null)
+  // S01p·22 · «Subir el PDF» en una ya apuntada que no lo tiene: no hay barra de guardar (es de solo
+  // lectura), así que se pone al elegirlo y lo dice (regla 8). Poner el PDF no cambia el asiento (0831).
+  const inputPdfApuntada = useRef<HTMLInputElement>(null)
+  const [pdfApuntada, setPdfApuntada] = useState<{ id: string; texto: string; tono: 'seguro' | 'falta' } | null>(null)
+  const [subiendoPdf, setSubiendoPdf] = useState(false)
+  async function subirPdfApuntada(file: File) {
+    if (!fac) return
+    setSubiendoPdf(true); setPdfApuntada(null)
+    try {
+      const x = await ponerPapelRecibida(fac, file, userName)
+      if (x.hecho) { setPdfApuntada({ id: fac.id, texto: `${x.texto} El asiento no cambia.`, tono: 'seguro' }); setVuelta((v) => v + 1) }
+      else setPdfApuntada({ id: fac.id, texto: `No se ha puesto el PDF: ${x.texto}.`, tono: 'falta' })
+    } finally { setSubiendoPdf(false) }
+  }
 
   if (f.error && !fac) {
     return (
@@ -543,10 +558,15 @@ export default function RevisarFacturaPage() {
     ? [...(!validada && !descartada ? [{ etiqueta: 'Por revisar', a: rutaRecibidaEnAsientos() }] : []), { etiqueta: `Abono${fac.numero ? ` ${fac.numero}` : ''}` }]
     : [{ etiqueta: `${proveedor}${fac.numero ? ` ${fac.numero}` : ''}` }]
   const tienePapel = !!papel.datos?.url
+  // Qué ofrece «Más acciones» con el PDF: la regla está en accionPdf (S01p·22).
+  const accPdf = accionPdf({ validada: !!validada, descartada: !!descartada, papelLeido: !!papel.datos, tienePapel })
   const mas: GrupoDeAcciones[] = [{
     titulo: '',
     acciones: [
-      ...(!yaApuntada ? [{ id: 'cambiar-pdf', etiqueta: tienePapel ? 'Cambiar el PDF' : 'Subir el PDF', dato: 'Un PDF o una foto, que se guarda como PDF', alPulsar: () => inputCambiar.current?.click(), grupo: '' }] : []),
+      // S01p·22: también en una apuntada sin PDF (ponerlo no cambia el asiento); cambiar el de una apuntada, no.
+      ...(accPdf ? [{ id: 'cambiar-pdf', etiqueta: accPdf.que === 'subir_apuntada' && subiendoPdf ? 'Subiendo el PDF…' : accPdf.etiqueta,
+        dato: accPdf.que === 'subir_apuntada' ? 'Un PDF o una foto, que se guarda como PDF. El asiento no cambia' : 'Un PDF o una foto, que se guarda como PDF',
+        alPulsar: () => (accPdf.que === 'subir_apuntada' ? inputPdfApuntada : inputCambiar).current?.click(), grupo: '' }] : []),
       ...(!descartada ? [{ id: 'duplicada', etiqueta: 'Marcar como duplicada', dato: 'Ya la tienes: sale de «Por revisar»', alPulsar: () => setNoEs('Está repetida'), grupo: '' }] : []),
       ...(!descartada ? [{ id: 'no-es', etiqueta: 'Descartar con motivo', dato: 'Un albarán, un presupuesto, un extracto…', alPulsar: () => setNoEs(''), grupo: '' }] : []),
       // Sin la tanda 0790 (la base aún no guarda los importes desde aquí), se corrigen donde se aprobó.
@@ -762,6 +782,9 @@ export default function RevisarFacturaPage() {
         secundarios={botonPagar && !movil ? botonValidar || undefined : undefined}
         principal={botonPagar || botonValidar || <Link to={volver} className="s-boton s-boton-secundario">Volver a la lista</Link>}
       />
+      {pdfApuntada?.id === invoiceId && <p className="s-aviso-lista" data-tono={pdfApuntada.tono} role={pdfApuntada.tono === 'falta' ? 'alert' : 'status'} data-prueba="pdf-apuntada">{pdfApuntada.texto}</p>}
+      <input ref={inputPdfApuntada} type="file" accept={ACEPTA_PAPEL} hidden aria-label="Subir el PDF de la factura apuntada"
+        onChange={(e) => { const x = e.target.files?.[0]; if (x) void subirPdfApuntada(x); e.target.value = '' }} />
       {avisoPago && <p className="s-aviso-lista" data-tono={avisoPago.tono === 'ok' ? 'seguro' : avisoPago.tono} role={avisoPago.tono === 'falta' ? 'alert' : 'status'} data-prueba="aviso-pagar-ficha">{avisoPago.texto}</p>}
       {pagarAqui && cuentaPago && fac.company_id && (
         <DialogoPagarVarias empresaId={fac.company_id} cuenta={cuentaPago} facturas={[{ id: fac.id, proveedor: fac.proveedor?.nombre ?? 'el proveedor', numero: fac.numero }]}

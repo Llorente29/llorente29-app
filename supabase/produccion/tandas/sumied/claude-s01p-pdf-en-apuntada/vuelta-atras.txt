@@ -1,0 +1,3 @@
+# S01p·22 · la vuelta atrás: conta_recibida_papel_poner desde su respaldo.
+cuenta: scripts/conta/produccion/cuentas/s01p-pdf-en-apuntada.sql
+supabase/vuelta-atras/20261114T0831_s01p_pdf_en_apuntada.down.sql
