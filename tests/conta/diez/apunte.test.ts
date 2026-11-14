@@ -251,3 +251,30 @@ describe('B01r26 (14/11) · cortado escribiendo: se busca en Diez sin la copia',
     expect(frescos).toEqual([false])
   })
 })
+
+describe('B01r26 (14/11) · en el traspaso, un igual de Diez que no viene de Sumied no se enlaza', () => {
+  const igualEnDiez = (): Apunte => { const ap = apunteDeAsiento(banco()); return { Ejercicio: '2026', Serie: '4', Documento: 3442, TipoAsiento: 0, Fecha: 20261007, Detalles: ap.Detalles } }
+  it('dentro del traspaso: ni se enlaza ni se escribe otro, y el motivo dice el documento de Diez', async () => {
+    const d = diez({ apuntes: [igualEnDiez()] })
+    const t = puerto({ d })
+    t.p.noEnlazarAjenos = true
+    const r = await enviarApunteADiez(banco(), t.p)
+    expect(r).toMatchObject({ estado: 'no_llega' })
+    expect(r.motivo).toMatch(/en Diez ya hay un asiento igual que no viene de Sumied \(4\/3442\).*¿Está hecho el borrado del mes en Diez\?/)
+    expect(d.altas).toHaveLength(0)
+    expect(t.envios.b1?.status).not.toBe('enlazado')
+    expect(t.envios.b1?.ext_number ?? null).toBeNull()
+  })
+  it('si el igual es el nuestro, cortado escribiendo («enviando»), sí se enlaza', async () => {
+    const d = diez({ apuntes: [igualEnDiez()] })
+    const t = puerto({ d, envios: { b1: { ...enviadoDe('b1'), status: 'pendiente', ext_series: null, ext_number: null, ext_year: null, sent_at: null, last_error: 'enviando' } } })
+    t.p.noEnlazarAjenos = true
+    expect(await enviarApunteADiez(banco(), t.p)).toMatchObject({ estado: 'en_diez', documento: 3442, enlazada: true })
+    expect(d.altas).toHaveLength(0)
+  })
+  it('fuera del traspaso (al validar), como siempre: se enlaza', async () => {
+    const d = diez({ apuntes: [igualEnDiez()] })
+    const t = puerto({ d })
+    expect(await enviarApunteADiez(banco(), t.p)).toMatchObject({ estado: 'en_diez', documento: 3442, enlazada: true })
+  })
+})

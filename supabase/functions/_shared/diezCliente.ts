@@ -190,6 +190,12 @@ type Cache = { subcuentas?: { en: number; m: Map<string, Record<string, unknown>
 const CACHES = new Map<string, Cache>()
 /** Para las pruebas: empezar sin nada leído. */
 export function olvidarLoLeido() { CACHES.clear() }
+/**
+ * B01r26 (14/11): olvidar los apuntes de los meses ya leídos (todas las bases); las
+ * subcuentas se quedan. El traspaso lo llama al empezar cada tanda: cada tanda lee el
+ * mes de Diez de nuevo una vez, y lo que cambie en Diez entre tanda y tanda se ve.
+ */
+export function olvidarLosMeses() { for (const c of CACHES.values()) c.meses.clear() }
 
 export class ClienteDiez {
   private readonly base: string
