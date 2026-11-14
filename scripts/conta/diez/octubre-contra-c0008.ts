@@ -78,6 +78,7 @@ try {
     const h = HUECOS[se]
     if (h) sale(`asientos.s${se}.en_el_hueco_api`, ds.filter((d) => d >= h[0] && d <= h[1]).length)
     const tipos = new Map<number, number>()
+  const terceroIgual = new Map<number, number>()
     for (const a of deOctubre.filter((x) => String(x.Serie) === se)) tipos.set(Number(a.TipoAsiento ?? -1), (tipos.get(Number(a.TipoAsiento ?? -1)) ?? 0) + 1)
     for (const [t, n] of tipos) sale(`asientos.s${se}.tipo${t < 0 ? 'x' : t}`, n)
   }
@@ -111,6 +112,7 @@ try {
   sale('sumied.envios_en_diez', envios.length)
   const usados = new Set<string>()
   const tipos = new Map<number, number>()
+  const terceroIgual = new Map<number, number>()
   const porCuenta = new Map<string, number>()
   seccion('distintos')
   let k = 0
@@ -131,6 +133,16 @@ try {
       else if (firmaCruda(ls) !== firmaCruda(ld)) tipo = 4
     }
     tipos.set(tipo, (tipos.get(tipo) ?? 0) + 1)
+    // B01r26 (14/11): ¿es la misma factura o asiento aunque Diez reparta el IVA y los gastos en sus
+    // subcuentas? La línea del tercero (43/40/41, sin las 47) suma lo mismo y la fecha es la misma.
+    let tercero = 0
+    if (d) {
+      const esTercero = (cc: string) => /^4[0134]/.test(cc) && !/^47/.test(cc)
+      const ts = [...netos(ls)].filter(([cc]) => esTercero(cc)).sort().join('|')
+      const td = [...netos((d.Detalles ?? []).map((l) => ({ c: String(l.Cuenta ?? '').trim(), d: cent(l.Debe), h: cent(l.Haber) })))].filter(([cc]) => esTercero(cc)).sort().join('|')
+      tercero = ts !== '' && ts === td && Number(d.Fecha ?? 0) === Number(a.fecha.replace(/-/g, '')) ? 1 : 0
+    }
+    if (tipo === 3) terceroIgual.set(tercero, (terceroIgual.get(tercero) ?? 0) + 1)
     if (tipo === 0) continue
     for (const cc of difs) porCuenta.set(cc, (porCuenta.get(cc) ?? 0) + 1)
     if (tipo === 4) continue // solo forma: se cuenta, no se lista
@@ -138,6 +150,7 @@ try {
     const p = `e${k}`
     const [, serie, doc] = e.ext!.split('/')
     sale(`${p}.tipo`, tipo)
+    sale(`${p}.tercero_igual`, tercero)
     sale(`${p}.sumied_serie`, a.serie)
     sale(`${p}.sumied_numero`, a.numero ?? 0)
     sale(`${p}.sumied_fecha`, Number(a.fecha.replace(/-/g, '')))
@@ -148,6 +161,7 @@ try {
   }
   seccion('por_tipo')
   for (const [t, n] of [...tipos].sort()) sale(`tipo${t}`, n)
+  for (const [t, n] of [...terceroIgual].sort()) sale(`tipo3.tercero_igual${t}`, n)
   seccion('cuentas_con_diferencia')
   for (const [cc, n] of [...porCuenta].sort()) if (/^\d{1,15}$/.test(cc)) sale(`c${cc}`, n)
 
