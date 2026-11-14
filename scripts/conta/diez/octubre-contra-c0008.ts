@@ -121,7 +121,38 @@ try {
   const conEnvio = new Set(envios.map((e) => e.entry_id))
   const sinViajar = s.asientos.filter((a) => mes(a.fecha) === '202610' && a.estado === 'validado' && !a.anulado && !conEnvio.has(a.id))
   sale('n', sinViajar.length)
-  sinViajar.slice(0, 80).forEach((a, i) => { sale(`v${i + 1}.serie`, a.serie); sale(`v${i + 1}.numero`, a.numero ?? 0) })
+  // Cada una, buscada en TODO 2026 de Diez entre lo que no es de ningún envío: por sus cuentas e
+  // importes (igual) o, si no, por la línea del proveedor o cliente (4xx) con el mismo importe.
+  // Dónde está (fecha y documento), o que no está.
+  const libres = [...diez.entries()].filter(([ref]) => !usados.has(ref))
+  const tomados = new Set<string>()
+  const como = new Map<string, number>()
+  const mesesDeDiez = new Map<string, number>()
+  sinViajar.slice(0, 120).forEach((a, i) => {
+    const p = `v${i + 1}`
+    sale(`${p}.serie`, a.serie); sale(`${p}.numero`, a.numero ?? 0); sale(`${p}.fecha`, Number(a.fecha.replace(/-/g, '')))
+    const ls = (a.lineas ?? []).map(([cc, de, ha]) => ({ c: cc, d: de, h: ha }))
+    const ns = netos(ls)
+    const clave = [...ns].sort(([x], [y]) => x.localeCompare(y)).map(([cc, v]) => `${cc}:${v}`).join('|')
+    const ter = [...ns].find(([cc]) => /^4[0134]/.test(cc) && !/^47/.test(cc))
+    let hallado = libres.find(([ref, d]) => !tomados.has(ref) && [...netos((d.Detalles ?? []).map((l) => ({ c: String(l.Cuenta ?? '').trim(), d: cent(l.Debe), h: cent(l.Haber) })))].sort(([x], [y]) => x.localeCompare(y)).map(([cc, v]) => `${cc}:${v}`).join('|') === clave)
+    let forma = 1
+    if (!hallado && ter) {
+      forma = 2
+      hallado = libres.find(([ref, d]) => !tomados.has(ref) && netos((d.Detalles ?? []).map((l) => ({ c: String(l.Cuenta ?? '').trim(), d: cent(l.Debe), h: cent(l.Haber) }))).get(ter[0]) === ter[1])
+    }
+    if (!hallado) { sale(`${p}.en_diez`, 0); como.set('no_esta', (como.get('no_esta') ?? 0) + 1); return }
+    const [ref, d] = hallado
+    tomados.add(ref)
+    const [, serie, doc] = ref.split('/')
+    sale(`${p}.en_diez`, forma)
+    sale(`${p}.diez_serie`, Number(serie)); sale(`${p}.diez_doc`, Number(doc)); sale(`${p}.diez_fecha`, Number(d.Fecha ?? 0))
+    const m = mes(d.Fecha ?? 0)
+    mesesDeDiez.set(m, (mesesDeDiez.get(m) ?? 0) + 1)
+    como.set(forma === 1 ? 'igual' : 'por_el_tercero', (como.get(forma === 1 ? 'igual' : 'por_el_tercero') ?? 0) + 1)
+  })
+  for (const [k2, v] of [...como].sort()) sale(`sin_viajar.${k2}`, v)
+  for (const [k2, v] of [...mesesDeDiez].sort()) sale(`sin_viajar.en_diez_m${k2}`, v)
 } catch (e) {
   sale('parado', e instanceof ErrorDiez ? e.status : 1)
   process.exit(1)
