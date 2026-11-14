@@ -200,3 +200,50 @@ test('A · B01r26 · los pasos 2 y 3: las subcuentas, los dos Excel y «Ya lo he
   await expect(zona.getByText(/Cuadra: 21 cuentas tienen en Diez lo mismo que en Sumied\./).first()).toBeVisible()
   await capturar(page, 'b01r26-importado')
 })
+
+test('A · B01r26 · plan B: las que no casan, con su porqué, y «Mandarlas por la API»', async ({ page }) => {
+  const mes = mesAnterior()
+  await conRevision(page, revision({
+    traspaso: { id: 't1', mes, estado: 'traspasando', confirmado_por_nombre: 'Julio', confirmado_en: `${mes.slice(0, 7)}-28T09:00:00Z`, faltaba: [], van: 120, llegaron: 30, no_llegaron: 0,
+      cuadre: null, cuadra: null, mes_cerrado: false, cierre_motivo: null, terminado_en: null },
+  }))
+  const E1 = '00000000-0000-0000-0000-0000000000b1'
+  const E2 = '00000000-0000-0000-0000-0000000000b2'
+  let llamadas = 0
+  await page.route(/\/functions\/v1\/conta-diez-traspaso/, async (r) => {
+    const b = JSON.parse(r.request().postData() ?? '{}') as { accion?: string; entry_ids?: string[] }
+    if (b.accion === 'importado') {
+      return json(r, { van_por_excel: 4, enlazadas: 2, dobles: [], faltan: [
+        { entry_id: E1, numero: 'PRUEBA-0001', porque: 'En Diez hay una de la misma subcuenta y el mismo importe con otro número, «OTRO-1» (documento 2026.2.9001): mírala antes de mandarla.', en_diez: '2026.2.9001' },
+        { entry_id: E2, numero: 'PRUEBA-0002', porque: 'No está en Diez: ni con su número ni con su subcuenta y su importe.', en_diez: null },
+      ], sin_enlace_en_diez: [{ ref: '2026.2.9001', serie: '2', documento: 9001, numero: 'OTRO-1', cuenta: '41000099', fecha: 20261020, total: 37.6 }] })
+    }
+    if (b.accion === 'por_la_api') {
+      llamadas++
+      // La primera vuelta manda una y queda otra; la segunda, la que queda falla con su motivo.
+      return json(r, llamadas === 1
+        ? { llegaron: 1, fallaron: [], quedan: 1, fuera_de_la_lista: 0 }
+        : { llegaron: 0, fallaron: [{ entry_id: E2, numero: 12, motivo: 'falta el documento' }], quedan: 0, fuera_de_la_lista: 1 })
+    }
+    if (b.accion === 'comprobar') return json(r, { cuadra: false, cuadre: { cuadra: false, cuentas: 21, diferencias: [], solo_en_diez: [] }, mes_cerrado: false, motivo: null })
+    return r.fulfill({ status: 400, body: '{}' })
+  })
+  await entrarComo(page, CUENTA_A.email)
+  await page.goto(RUTA)
+  const zona = await elegirMesAnterior(page)
+  const excel = zona.getByLabel('Las facturas, por Excel')
+  await excel.getByRole('button', { name: 'Ya lo he importado' }).click()
+  const faltan = excel.getByTestId('traspaso-faltan')
+  await expect(faltan.getByText(/PRUEBA-0001: En Diez hay una de la misma subcuenta y el mismo importe con otro número, «OTRO-1»/)).toBeVisible()
+  await expect(faltan.getByText(/PRUEBA-0002: No está en Diez/)).toBeVisible()
+  await expect(excel.getByTestId('traspaso-sin-enlace')).toContainText('1 factura está en Diez sin enlace con Sumied')
+  await excel.getByRole('button', { name: 'Mandarlas por la API (2)' }).click()
+  const dialogo = page.getByRole('dialog')
+  await expect(dialogo.getByText(/Si alguna es una de estas con otro número, bórrala antes en Diez/)).toBeVisible()
+  await dialogo.getByRole('button', { name: 'Mandarlas' }).click()
+  // Regla 8: lo que ha llegado, lo que no y por qué.
+  await expect(excel.getByText(/Por la API: 1 factura ha llegado a Diez; 1 no \(abajo, por qué\)/)).toBeVisible()
+  await expect(excel.getByLabel('Las que no han llegado por la API').getByText(/Asiento 12: falta el documento/)).toBeVisible()
+  expect(llamadas).toBe(2)
+  await capturar(page, 'b01r26-plan-b')
+})

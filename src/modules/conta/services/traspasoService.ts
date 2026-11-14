@@ -4,7 +4,7 @@
 // Nombres dentro de cadenas (regla 40), los de 20261024T1250_c12_traspaso_mensual
 // y la función conta-diez-traspaso: conta_traspaso_revisar, conta_traspaso_confirmar,
 // conta_diez_traspaso (detalle y cuadre) y conta-diez-traspaso (tanda y comprobar).
-// B01r26: y las acciones excel, crear_subcuentas e importado de conta-diez-traspaso.
+// B01r26: y las acciones excel, crear_subcuentas, importado y por_la_api de conta-diez-traspaso.
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, rpc, tabla } from '@/modules/conta/services/bd'
@@ -60,7 +60,10 @@ export type PorLaApi = { entry_id: string; numero: string; motivo: string }
 export type FilaExcel = (string | number)[]
 export type ResultadoExcel = { base: string; faltan: SubcuentaQueFalta[]; comprobadas: number; emitidas?: FilaExcel[]; recibidas?: FilaExcel[]; por_la_api: PorLaApi[] }
 export type ResultadoSubcuentas = { base: string; intentadas?: number; creadas: (SubcuentaQueFalta & { recortado?: boolean })[]; no_creadas?: (SubcuentaQueFalta & { porque: string })[]; faltan: SubcuentaQueFalta[]; otra_vez?: number }
-export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string }[]; dobles: string[]; dias_sin_leer?: string[] }
+/** Una factura de Diez de las series 1 y 2 que no es de ningún enlace de Sumied. */
+export type SinEnlaceEnDiez = { ref: string; serie: string; documento: number; numero: string; cuenta: string; fecha: number; total: number }
+export type ResultadoImportado = { van_por_excel: number; enlazadas: number; faltan: { entry_id: string; numero: string; porque?: string; en_diez?: string | null }[]; dobles: string[]; dias_sin_leer?: string[]; sin_enlace_en_diez?: SinEnlaceEnDiez[] }
+export type ResultadoPorLaApi = { llegaron: number; fallaron: FalloTraspaso[]; quedan: number; fuera_de_la_lista: number }
 
 /** «2 · Descarga los dos Excel»: comprueba las subcuentas en Diez y, si están todas, da las filas. */
 export const prepararExcel = (companyId: string, mes: string) => llamar<ResultadoExcel>({ company_id: companyId, mes, accion: 'excel' })
@@ -68,3 +71,5 @@ export const prepararExcel = (companyId: string, mes: string) => llamar<Resultad
 export const crearSubcuentasEnDiez = (companyId: string, mes: string) => llamar<ResultadoSubcuentas>({ company_id: companyId, mes, accion: 'crear_subcuentas' })
 /** «3 · Ya lo he importado»: lee las facturas del mes en Diez y enlaza cada una con la suya. */
 export const yaLoHeImportado = (companyId: string, mes: string) => llamar<ResultadoImportado>({ company_id: companyId, mes, accion: 'importado' })
+/** B01r26 (14/11) · Plan B: las que fueron en el Excel y Diez no tiene, por la API (unas pocas cada vez: se repite hasta que no quedan). */
+export const mandarPorLaApi = (companyId: string, mes: string, entryIds: string[]) => llamar<ResultadoPorLaApi>({ company_id: companyId, mes, accion: 'por_la_api', entry_ids: entryIds })

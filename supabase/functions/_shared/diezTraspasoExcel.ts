@@ -118,3 +118,43 @@ export function esLaMisma(x: FacturaDelTraspaso, f: { Serie?: unknown; NumeroFac
   const serie = x.excel === 'emitidas' ? '1' : '2'
   return String(f.Serie) === serie && norm(f.NumeroFactura) === norm(x.numero) && String(f.CuentaCliente ?? '').replace(/\D/g, '') === x.cuenta
 }
+
+// ── B01r26 (14/11) · Plan B: las que «Ya lo he importado» no encuentra ───────
+
+type FacturaDiez = { Ejercicio?: unknown; Serie?: unknown; Documento?: unknown; NumeroFactura?: unknown; CuentaCliente?: unknown; Fecha?: unknown; FechaFactura?: unknown; TotalFactura?: unknown }
+const normNum = (s: unknown) => String(s ?? '').toUpperCase().replace(/[\s.\-/]/g, '')
+const soloDigitos = (s: unknown) => String(s ?? '').replace(/\D/g, '')
+const enCent = (x: unknown) => Math.round(Number(x ?? 0) * 100)
+const totalDe = (x: FacturaDelTraspaso) => x.recibida?.total ?? x.emitida?.total ?? null
+const refDiez = (f: FacturaDiez) => `${f.Ejercicio ?? ''}.${f.Serie}.${f.Documento}`
+
+/**
+ * Por qué una factura que fue en el Excel no está enlazada: lo que hay en Diez con su
+ * número (en otra subcuenta), o de su subcuenta y su importe (con otro número), o nada.
+ * `libres`: las de Diez que no son de ningún enlace (las únicas que pueden ser ella).
+ */
+export function porQueNoCasa(x: FacturaDelTraspaso, enDiez: readonly FacturaDiez[], libres: readonly FacturaDiez[]): { porque: string; en_diez: string | null } {
+  const serie = x.excel === 'emitidas' ? '1' : '2'
+  const n = normNum(x.numero)
+  const mismoNumero = enDiez.filter((f) => String(f.Serie) === serie && normNum(f.NumeroFactura) === n)
+  if (mismoNumero.length) {
+    const f = mismoNumero[0]
+    return { porque: `En Diez está con su número, pero en la subcuenta ${soloDigitos(f.CuentaCliente) || '(sin subcuenta)'} y no en la ${x.cuenta} (documento ${refDiez(f)}).`, en_diez: refDiez(f) }
+  }
+  const t = totalDe(x)
+  const parecida = t == null ? undefined : libres.find((f) => String(f.Serie) === serie && soloDigitos(f.CuentaCliente) === x.cuenta && enCent(f.TotalFactura) === enCent(t))
+  if (parecida) {
+    return { porque: `En Diez hay una de la misma subcuenta y el mismo importe con otro número, «${String(parecida.NumeroFactura ?? '')}» (documento ${refDiez(parecida)}): mírala antes de mandarla.`, en_diez: refDiez(parecida) }
+  }
+  return { porque: 'No está en Diez: ni con su número ni con su subcuenta y su importe.', en_diez: null }
+}
+
+/** Las facturas de Diez de esas series que no son de ningún enlace de Sumied (ni de los de esta vez ni de antes). */
+export function sinEnlaceEnDiez(enDiez: readonly FacturaDiez[], enlazadas: ReadonlySet<string>, series: readonly string[] = ['1', '2']) {
+  const vistas = new Map<string, FacturaDiez>()
+  for (const f of enDiez) if (series.includes(String(f.Serie)) && !enlazadas.has(`${f.Serie}/${f.Documento}`)) vistas.set(refDiez(f), f)
+  return [...vistas.values()].map((f) => ({
+    ref: refDiez(f), serie: String(f.Serie), documento: Number(f.Documento ?? 0), numero: String(f.NumeroFactura ?? ''),
+    cuenta: soloDigitos(f.CuentaCliente), fecha: Number(f.Fecha ?? 0), total: Number(f.TotalFactura ?? 0),
+  })).sort((a, b) => a.serie.localeCompare(b.serie) || a.documento - b.documento)
+}
