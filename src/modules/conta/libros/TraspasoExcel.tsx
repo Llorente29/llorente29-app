@@ -16,7 +16,12 @@ import { rutaAsiento } from '@/config/navegacion'
 import { Dialogo } from '@/modules/conta/proveedor/piezas'
 import { Guardado } from '@/modules/conta/ui/piezas'
 import { bajarXlsx, libroXlsx } from '@/modules/conta/lib/traspasoExcelLibro'
-import { crearSubcuentasEnDiez, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado, type ResultadoSubcuentas } from '@/modules/conta/services/traspasoService'
+import { crearSubcuentasEnDiez, mandarPorLaApi, prepararExcel, yaLoHeImportado, type ResultadoExcel, type ResultadoImportado, type ResultadoSubcuentas } from '@/modules/conta/services/traspasoService'
+
+// B01r26 (14/11): lo último de «Ya lo he importado», por empresa y mes. Al acabar, la pantalla vuelve a
+// comprobar con Diez y se recarga entera (este componente se desmonta): sin esto, la lista de las que
+// no están en Diez desaparecía y quedaba solo la cifra.
+const ULTIMO_IMPORTADO = new Map<string, ResultadoImportado>()
 
 const mensajeDe = (e: unknown) => (e instanceof Error ? e.message : String(e)).replace(/^[a-z_]+: /, '')
 const n = (x: number) => x.toLocaleString('es-ES')
@@ -30,12 +35,15 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
   alImportar: () => Promise<void>
 }) {
   const [x, setX] = useState<ResultadoExcel | null>(null)
-  const [imp, setImp] = useState<ResultadoImportado | null>(null)
+  const [imp, setImpEstado] = useState<ResultadoImportado | null>(() => ULTIMO_IMPORTADO.get(`${companyId}|${mes}`) ?? null)
+  const setImp = (r: ResultadoImportado | null) => { if (r) ULTIMO_IMPORTADO.set(`${companyId}|${mes}`, r); else ULTIMO_IMPORTADO.delete(`${companyId}|${mes}`); setImpEstado(r) }
   const [ocupado, setOcupado] = useState<string | null>(null)
   const [hecho, setHecho] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [crear, setCrear] = useState(false)
   const [creacion, setCreacion] = useState<ResultadoSubcuentas | null>(null)
+  const [mandar, setMandar] = useState(false)
+  const [noLlegaron, setNoLlegaron] = useState<{ entry_id: string; numero: number | null; motivo: string }[]>([])
 
   async function preparar() {
     setOcupado('Comprobando las subcuentas en Diez…'); setError(null)
@@ -78,6 +86,40 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       setOcupado('Comprobando con Diez…')
       await alImportar()
     } catch (e) { setError(`No se ha podido comprobar lo importado: ${mensajeDe(e)}`) } finally { setOcupado(null) }
+  }
+
+  // B01r26 (14/11) · Plan B: las que Diez no tiene, por la API, unas pocas cada vez hasta que no quedan.
+  async function porLaApi() {
+    const ids = (imp?.faltan ?? []).map((f) => f.entry_id)
+    if (!ids.length) return
+    setError(null); setHecho(null); setNoLlegaron([])
+    setOcupado(`Mandando por la API ${n(ids.length)} ${ids.length === 1 ? 'factura' : 'facturas'} a Diez, unas pocas cada vez…`)
+    let llegan = 0; const fallos: { entry_id: string; numero: number | null; motivo: string }[] = []; let fuera: number | null = null
+    try {
+      // Cada vuelta, todas menos las que ya han fallado: el servidor se salta lo que ya llegó (sale de la lista).
+      for (let vuelta = 0; vuelta < 200; vuelta++) {
+        const falladas = new Set(fallos.map((f) => f.entry_id))
+        const pendientes = ids.filter((id) => !falladas.has(id))
+        if (!pendientes.length) break
+        let r
+        try { r = await mandarPorLaApi(companyId, mes, pendientes) } catch (e) {
+          if (/tanda de este traspaso en marcha/.test(mensajeDe(e))) { setOcupado('Hay otra tanda en marcha; espero a que acabe…'); await new Promise((ok) => setTimeout(ok, 6000)); continue }
+          throw e
+        }
+        if (fuera === null) fuera = r.fuera_de_la_lista
+        llegan += r.llegaron; fallos.push(...r.fallaron)
+        if (r.quedan === 0 || r.llegaron + r.fallaron.length === 0) break
+        setOcupado(`Mandando por la API: ${n(llegan)} en Diez${fallos.length ? `, ${n(fallos.length)} no` : ''}; quedan ${n(r.quedan)}…`)
+      }
+      setMandar(false)
+      setNoLlegaron(fallos)
+      // Si se han hecho todas, en la lista quedan solo las que no han llegado (lo que llegó ya está en Diez).
+      if (imp && llegan + fallos.length === ids.length) {
+        const no = new Set(fallos.map((f) => f.entry_id))
+        setImp({ ...imp, faltan: imp.faltan.filter((f) => no.has(f.entry_id)) })
+      }
+      setHecho(`Por la API: ${n(llegan)} ${llegan === 1 ? 'factura ha llegado' : 'facturas han llegado'} a Diez${fallos.length ? `; ${n(fallos.length)} no (abajo, por qué)` : ''}${fuera ? `; ${n(fuera)} ya no estaban pendientes (enviadas o enlazadas antes)` : ''}. Después, «Volver a comprobar con Diez».`)
+    } catch (e) { setError(`Se ha parado al mandarlas por la API: ${mensajeDe(e)}. Lo que llegó está en Diez; al volver a pulsar sigue con las que faltan.`) } finally { setOcupado(null) }
   }
 
   const listos = x && x.faltan.length === 0
@@ -128,10 +170,35 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       </div>
       {!x && <p className="cxl-apoyo">No hace falta volver a preparar los Excel: Sumied lee directamente lo que hay en Diez.</p>}
       {imp && imp.faltan.length > 0 && (
-        <ul className="cxl-lista-estado" aria-label="Las que no están en Diez">
-          {imp.faltan.map((f) => (
+        <>
+          <ul className="cxl-lista-estado" aria-label="Las que no están en Diez" data-testid="traspaso-faltan">
+            {imp.faltan.map((f) => (
+              <li key={f.entry_id} className="cxl-mes">
+                <span className="cxl-mes-que"><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /><span>{f.numero}: {f.porque ?? 'no está en Diez'}</span></span>
+                <Link to={rutaAsiento(f.entry_id)} className="cx-enlace">Ver el asiento</Link>
+              </li>
+            ))}
+          </ul>
+          <div className="cxl-herramientas">
+            <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => setMandar(true)}>Mandarlas por la API ({n(imp.faltan.length)})</button>
+          </div>
+        </>
+      )}
+      {imp && (imp.sin_enlace_en_diez?.length ?? 0) > 0 && (
+        <details data-testid="traspaso-sin-enlace">
+          <summary>{n(imp.sin_enlace_en_diez!.length)} {imp.sin_enlace_en_diez!.length === 1 ? 'factura está' : 'facturas están'} en Diez sin enlace con Sumied</summary>
+          <ul className="cxl-lista-estado">
+            {imp.sin_enlace_en_diez!.map((f) => (
+              <li key={f.ref} className="cxl-mes"><span className="cxl-mes-que"><span className="cxl-punto cxl-punto-ambar" aria-hidden="true" /><span>{f.ref} · {f.numero || 'sin número'} · subcuenta {f.cuenta || '—'} · {f.total.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span></span></li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {noLlegaron.length > 0 && (
+        <ul className="cxl-lista-estado" aria-label="Las que no han llegado por la API">
+          {noLlegaron.map((f) => (
             <li key={f.entry_id} className="cxl-mes">
-              <span className="cxl-mes-que"><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /><span>{f.numero}: no está en Diez</span></span>
+              <span className="cxl-mes-que"><span className="cxl-punto cxl-punto-rojo" aria-hidden="true" /><span>{f.numero ? `Asiento ${f.numero}` : 'Un asiento'}: {f.motivo}</span></span>
               <Link to={rutaAsiento(f.entry_id)} className="cx-enlace">Ver el asiento</Link>
             </li>
           ))}
@@ -139,6 +206,20 @@ export function TraspasoExcel({ companyId, mes, nombre, alImportar }: {
       )}
       <Guardado texto={ocupado ?? hecho} />
       {error && <p className="cxl-sin-sitio" role="alert">{error}</p>}
+
+      {mandar && imp && (
+        <Dialogo titulo="Mandarlas por la API" alCerrar={() => { if (!ocupado) setMandar(false) }}>
+          <p>Se mandan a Diez por la API, sin PDF, las {n(imp.faltan.length)} que «Ya lo he importado» no ha encontrado. Antes de escribir, cada una se busca en Diez por su número y su NIF: si ya está, se enlaza y no se escribe otra.</p>
+          {(imp.sin_enlace_en_diez?.length ?? 0) > 0 && (
+            <p className="cxl-aviso-ambar" role="note">En Diez hay {n(imp.sin_enlace_en_diez!.length)} sin enlace con Sumied (la lista de arriba). Si alguna es una de estas con otro número, bórrala antes en Diez: si no, quedará dos veces.</p>
+          )}
+          {ocupado && <p className="cxl-apoyo" role="status" data-testid="traspaso-mandando">{ocupado}</p>}
+          <div className="cxl-herramientas">
+            <button type="button" className="cx-boton" disabled={!!ocupado} onClick={() => void porLaApi()}>{ocupado ? 'Mandando…' : 'Mandarlas'}</button>
+            <button type="button" className="cx-boton-sec" disabled={!!ocupado} onClick={() => setMandar(false)}>Cancelar</button>
+          </div>
+        </Dialogo>
+      )}
 
       {crear && x && (
         <Dialogo titulo="Crear las subcuentas en Diez" alCerrar={() => { if (!ocupado) setCrear(false) }}>

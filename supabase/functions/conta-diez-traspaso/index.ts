@@ -36,7 +36,7 @@ import { aaaammDelMes, cuadrarAgrupado, ES_EL_QUINIENTOS, ES_SUBCUENTA_QUE_FALTA
 import { claveDelCuadre } from "../_shared/diezExcel.ts";
 import { nombreParaDiez } from "../_shared/diezSubcuentas.ts";
 import { alEscribir } from "../_shared/diezEnviar.ts";
-import { esLaMisma, facturasDelTraspaso, filasDeLosExcel, porExcel, type FacturaDelTraspaso } from "../_shared/diezTraspasoExcel.ts";
+import { esLaMisma, facturasDelTraspaso, filasDeLosExcel, porExcel, porQueNoCasa, sinEnlaceEnDiez, type FacturaDelTraspaso } from "../_shared/diezTraspasoExcel.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
@@ -70,11 +70,11 @@ Deno.serve(async (req) => {
   const { data: u } = await sb.auth.getUser();
   if (!u?.user) return json({ error: "no autenticado" }, 401);
 
-  let b: { company_id?: unknown; mes?: unknown; accion?: unknown } = {};
+  let b: { company_id?: unknown; mes?: unknown; accion?: unknown; entry_ids?: unknown } = {};
   try { b = await req.json(); } catch { /* vacío */ }
   const companyId = typeof b.company_id === "string" && /^[0-9a-f-]{36}$/i.test(b.company_id) ? b.company_id : "";
   const mes = typeof b.mes === "string" && /^\d{4}-\d{2}-01$/.test(b.mes) ? b.mes : "";
-  const ACCIONES = ["tanda", "comprobar", "excel", "crear_subcuentas", "importado"] as const;
+  const ACCIONES = ["tanda", "comprobar", "excel", "crear_subcuentas", "importado", "por_la_api"] as const;
   const accion = (ACCIONES as readonly unknown[]).includes(b.accion) ? b.accion as (typeof ACCIONES)[number] : "";
   if (!companyId || !mes || !accion) return json({ error: "faltan company_id, mes (AAAA-MM-01) o accion (tanda, excel, crear_subcuentas, importado o comprobar)" }, 400);
 
@@ -95,6 +95,11 @@ Deno.serve(async (req) => {
   const quien = { id: u.user.id, nombre: String(u.user.user_metadata?.full_name ?? u.user.email ?? "administrador") };
   if (accion === "excel") return excel(srv, t);
   if (accion === "crear_subcuentas") return crearSubcuentas(srv, t, quien);
+  if (accion === "por_la_api") {
+    const ids = Array.isArray(b.entry_ids) ? b.entry_ids.filter((x): x is string => typeof x === "string" && /^[0-9a-f-]{36}$/i.test(x)).slice(0, 500) : [];
+    if (!ids.length) return json({ error: "faltan entry_ids: las facturas que se mandan por la API" }, 400);
+    return porLaApi(srv, t, ids);
+  }
   return importado(srv, t);
 });
 
@@ -293,6 +298,42 @@ async function crearSubcuentas(srv: ReturnType<typeof createClient>, t: Traspaso
   }
 }
 
+/**
+ * B01r26 (14/11) · Plan B: mandar por la API las facturas que fueron en el Excel y Diez no
+ * tiene (las que «Ya lo he importado» lista). Solo las de la lista del traspaso que van
+ * por Excel y no están enlazadas; con el cerrojo de la tanda y como mucho POR_TANDA por
+ * llamada (la pantalla repite hasta que no quedan). El envío busca antes en Diez por
+ * número y NIF: si ya está, la enlaza y no escribe otra.
+ */
+async function porLaApi(srv: ReturnType<typeof createClient>, t: Traspaso, ids: string[]): Promise<Response> {
+  const { data: tomado, error: eC } = await srv.rpc("conta_traspaso_tomar_tanda", { p_traspaso: t.id, p_segundos: CERROJO_S });
+  if (eC) return json({ error: `no se ha podido tomar el traspaso: ${eC.message}` }, 500);
+  if (tomado !== true) return json({ error: EN_MARCHA_OTRA, en_marcha: true }, 409);
+  try {
+    const t0 = Date.now();
+    const { data: lista, error: e1 } = await srv.rpc("conta_traspaso_lista", { p_company: t.company_id, p_mes: t.mes });
+    if (e1) return json({ error: `no se ha podido leer lo que va: ${e1.message}` }, 500);
+    const enLista = new Set(((lista ?? []) as { entry_id: string }[]).map((x) => x.entry_id));
+    const excel = await idsPorExcel(srv, t);
+    // Solo lo que sigue en la lista (lo enviado o enlazado ya no sale) y fue en el Excel.
+    const validos = ids.filter((id) => enLista.has(id) && excel.has(id));
+    const fuera = ids.length - validos.length;
+    let llegan = 0; const fallos: Fallo[] = []; let hechos = 0;
+    for (const id of validos) {
+      if (hechos >= POR_TANDA || Date.now() - t0 > TOPE_MS) break;
+      hechos++;
+      const r = await despacharADiez({ lector: srv, srv, entryId: id, traspaso: enLista });
+      if (r.estado === "en_diez") llegan++;
+      else fallos.push({ entry_id: id, numero: r.cabecera?.number ?? null, motivo: r.motivo ?? "no ha llegado" });
+    }
+    const quedan = validos.length - hechos;
+    console.log(`conta-diez-traspaso · ${t.id} · por la API · en Diez ${llegan} · no ${fallos.length} · quedan ${quedan} · fuera de la lista ${fuera}`);
+    return json({ llegaron: llegan, fallaron: fallos, quedan, fuera_de_la_lista: fuera });
+  } finally {
+    await srv.rpc("conta_traspaso_soltar_tanda", { p_traspaso: t.id });
+  }
+}
+
 async function importado(srv: ReturnType<typeof createClient>, t: Traspaso): Promise<Response> {
   try {
     const xs = porExcel(await facturasDelTraspaso(srv, t, () => "https://excel.invalid/pdf"));
@@ -306,10 +347,11 @@ async function importado(srv: ReturnType<typeof createClient>, t: Traspaso): Pro
     const leidos = [await c.cliente.facturasDelMesComoSePueda(m), await c.cliente.facturasDelMesComoSePueda(sig)];
     const enDiez = leidos.flatMap((l) => l.facturas);
     const diasSinLeer = leidos.flatMap((l) => l.diasSinLeer);
-    let enlazadas = 0; const faltan: { entry_id: string; numero: string }[] = []; const dobles: string[] = [];
+    let enlazadas = 0; const faltan: { entry_id: string; numero: string; porque?: string; en_diez?: string | null }[] = []; const dobles: string[] = [];
+    const faltanX: FacturaDelTraspaso[] = [];
     for (const x of xs) {
       const iguales = [...new Map(enDiez.filter((f) => esLaMisma(x, f)).map((f) => [`${f.Ejercicio}/${f.Serie}/${f.Documento}`, f])).values()];
-      if (iguales.length === 0) { faltan.push({ entry_id: x.entry_id, numero: x.numero }); continue; }
+      if (iguales.length === 0) { faltanX.push(x); continue; }
       if (iguales.length > 1) { dobles.push(x.numero); continue; }
       const f = iguales[0];
       const fila = { account_id: t.account_id, company_id: t.company_id, entry_id: x.entry_id, kind: "factura", ext_year: String(f.Ejercicio), ext_series: String(f.Serie), ext_number: Number(f.Documento),
@@ -322,8 +364,16 @@ async function importado(srv: ReturnType<typeof createClient>, t: Traspaso): Pro
       if (error) return json({ error: `no se ha podido enlazar ${x.numero}: ${error.message}`, enlazadas }, 500);
       enlazadas++;
     }
+    // B01r26 (14/11) · Plan B: las que no casan, con su porqué, y lo que Diez tiene sin enlace (de las series 1 y 2).
+    const { data: ya, error: eYa } = await srv.from("external_send").select("ext_series, ext_number").eq("company_id", t.company_id).eq("account_id", t.account_id)
+      .in("status", ["enviado", "enlazado"]).in("ext_series", ["1", "2"]).not("ext_number", "is", null);
+    if (eYa) return json({ error: `no se han podido leer los enlaces de Sumied: ${eYa.message}`, enlazadas }, 500);
+    const enlazados = new Set(((ya ?? []) as { ext_series: string; ext_number: number }[]).map((x) => `${x.ext_series}/${x.ext_number}`));
+    const sinEnlace = sinEnlaceEnDiez(enDiez, enlazados);
+    for (const x of faltanX) faltan.push({ entry_id: x.entry_id, numero: x.numero, ...porQueNoCasa(x, enDiez, sinEnlace.map((f) => enDiez.find((d) => `${d.Serie}/${d.Documento}` === `${f.serie}/${f.documento}`)!)) });
+    console.log(`conta-diez-traspaso · ${t.id} · importado · sin enlace en Diez ${sinEnlace.length}`);
     console.log(`conta-diez-traspaso · ${t.id} · importado · leído ${leidos.map((l) => l.como).join("+")} · enlazadas ${enlazadas} · faltan ${faltan.length} · dobles ${dobles.length} · días sin leer ${diasSinLeer.length}`);
-    return json({ van_por_excel: xs.length, enlazadas, faltan, dobles, dias_sin_leer: diasSinLeer });
+    return json({ van_por_excel: xs.length, enlazadas, faltan, dobles, dias_sin_leer: diasSinLeer, sin_enlace_en_diez: sinEnlace });
   } catch (x) {
     return json({ error: x instanceof Error ? x.message : String(x) }, 500);
   }
