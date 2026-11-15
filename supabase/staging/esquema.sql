@@ -57895,8 +57895,9 @@ begin
   if v_acc is null or not public.current_user_is_admin_of(v_acc) then
     raise exception 'Solo un administrador de la cuenta puede traspasar el mes a Diez.' using errcode = '42501';
   end if;
-  if v_mes >= date_trunc('month', (now() at time zone 'Europe/Madrid'))::date then
-    raise exception 'El mes aún no ha terminado: se traspasa cuando acaba.' using errcode = '23514';
+  -- SP·traspaso (15/11): el mes en curso se puede traspasar; uno que aún no ha empezado, no.
+  if v_mes > date_trunc('month', (now() at time zone 'Europe/Madrid'))::date then
+    raise exception 'Ese mes aún no ha empezado: no hay nada que traspasar.' using errcode = '23514';
   end if;
   select * into v_t from public.conta_diez_traspaso where company_id = p_company and mes = v_mes for update;
   if v_t.id is not null and v_t.estado in ('terminado', 'traspasando') then
@@ -58098,6 +58099,9 @@ begin
   elsif p_cuadra is not true then
     v_motivo := case when p_cuadra is null then 'No se cierra el mes: no se ha podido comprobar con Diez.'
                      else 'No se cierra el mes: Diez no cuadra con Sumied.' end;
+  -- SP·traspaso (15/11): el mes en curso se traspasa, pero no se cierra (lo que llegue después iría al mes siguiente).
+  elsif v_t.mes >= date_trunc('month', (now() at time zone 'Europe/Madrid'))::date then
+    v_motivo := 'No se cierra el mes: aún no ha terminado. Lo que entre después con fecha de este mes no viaja a Diez.';
   elsif exists (select 1 from public.fiscal_period_lock k where k.company_id = v_t.company_id and k.month = v_t.mes and k.reopened_at is null) then
     v_cerrado := true; v_motivo := 'El mes ya estaba cerrado.';
   else
