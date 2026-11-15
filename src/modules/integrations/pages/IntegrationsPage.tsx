@@ -8,46 +8,54 @@
 // (ConnectorAvatar, con fallback a inicial+color de marca). Tokens del sistema,
 // cabecera con icono lucide, tarjetas rounded-xl border bg-card.
 //
-// Honestidad: LISTA las conexiones reales y su estado. La configuración/edición
-// con credenciales y el pausar/reanudar se cablean al construir cada conector.
-// Si no hay conexiones, invita a ir al Marketplace.
+// Honestidad: LISTA las conexiones reales y su estado. Si no hay conexiones,
+// invita a ir al Marketplace.
+//
+// B01r26 (15/11): cualquier estado se pinta (estadoConexion.ts) — `down`, que
+// deja una renovación fallida del token de Diez, rompía la página entera — y
+// cada conexión abre SU detalle para configurarla o volver a guardar sus
+// credenciales (el Marketplace abre la primera del conector, y Catcher tiene
+// una por local).
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plug, Loader2, CheckCircle2, Clock, AlertTriangle, PauseCircle, Store } from 'lucide-react'
+import { Plug, Loader2, CheckCircle2, Clock, AlertTriangle, PauseCircle, Store, Unplug, HelpCircle, KeyRound } from 'lucide-react'
 import { useActiveAccount } from '@/modules/multitenancy/hooks/useActiveAccount'
+import { useLocationScope } from '@/modules/multitenancy/hooks/useLocationScope'
+import { useApp } from '@/context/AppContext'
 import {
   listConnectors,
   listAccountConnectors,
 } from '@/modules/integrations/services/connectorService'
 import ConnectorAvatar from '@/modules/integrations/components/ConnectorAvatar'
+import ConnectorDetailPage from '@/modules/integrations/pages/ConnectorDetailPage'
+import { presentacionDeEstado, type IconoEstado, type Tono } from '@/modules/integrations/lib/estadoConexion'
 import type {
   Connector,
   AccountConnector,
-  AccountConnectorStatus,
 } from '@/types/integrations'
 
 // Presentación de cada estado (texto + color + icono), lenguaje de color del sistema.
-const STATUS_PRESENTATION: Record<
-  AccountConnectorStatus,
-  { label: string; tone: string; icon: React.ComponentType<{ size?: number; className?: string }> }
-> = {
-  available:  { label: 'Disponible',        tone: 'text-text-secondary', icon: Plug },
-  requested:  { label: 'Solicitada',        tone: 'text-warning',        icon: Clock },
-  connecting: { label: 'Conectando…',       tone: 'text-warning',        icon: Loader2 },
-  connected:  { label: 'Conectada',         tone: 'text-success',        icon: CheckCircle2 },
-  paused:     { label: 'En pausa',          tone: 'text-text-secondary', icon: PauseCircle },
-  error:      { label: 'Error de conexión', tone: 'text-danger',         icon: AlertTriangle },
+const ICONO: Record<IconoEstado, React.ComponentType<{ size?: number; className?: string }>> = {
+  enchufe: Plug, reloj: Clock, cargando: Loader2, bien: CheckCircle2,
+  alerta: AlertTriangle, pausa: PauseCircle, caida: Unplug, duda: HelpCircle,
+}
+const TONO: Record<Tono, string> = {
+  neutro: 'text-text-secondary', aviso: 'text-warning', bien: 'text-success', mal: 'text-danger',
 }
 
 export default function IntegrationsPage() {
   const { activeAccountId } = useActiveAccount()
+  const { resolvedLocationId } = useLocationScope()
+  const { userProfile, authUserId } = useApp()
   const navigate = useNavigate()
 
   const [connectors, setConnectors] = useState<Connector[]>([])
   const [connections, setConnections] = useState<AccountConnector[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [abierta, setAbierta] = useState<string | null>(null)
+  const [vuelta, setVuelta] = useState(0)
 
   useEffect(() => {
     if (!activeAccountId) return
@@ -70,10 +78,28 @@ export default function IntegrationsPage() {
         setLoading(false)
       })
     return () => { cancelled = true }
-  }, [activeAccountId])
+  }, [activeAccountId, vuelta])
 
   function connectorOf(connectorId: string): Connector | undefined {
     return connectors.find(c => c.id === connectorId)
+  }
+
+  const abiertaConn = abierta ? connections.find(c => c.id === abierta) ?? null : null
+  const abiertaConnector = abiertaConn ? connectorOf(abiertaConn.connectorId) : undefined
+  if (abiertaConn && abiertaConnector) {
+    return (
+      <ConnectorDetailPage
+        connector={abiertaConnector}
+        accountConnector={abiertaConn}
+        accountId={activeAccountId ?? ''}
+        locationId={resolvedLocationId ?? null}
+        createdBy={authUserId ?? null}
+        createdByName={userProfile?.displayName ?? null}
+        onBack={() => setAbierta(null)}
+        backLabel="Tus integraciones"
+        onChanged={() => setVuelta(v => v + 1)}
+      />
+    )
   }
 
   return (
@@ -127,12 +153,12 @@ export default function IntegrationsPage() {
         <div className="space-y-2">
           {connections.map(conn => {
             const connector = connectorOf(conn.connectorId)
-            const pres = STATUS_PRESENTATION[conn.status]
-            const Icon = pres.icon
+            const pres = presentacionDeEstado(conn.status)
+            const Icon = ICONO[pres.icono]
             return (
               <div
                 key={conn.id}
-                className="flex items-center gap-3 p-4 rounded-xl border border-border-default bg-card"
+                className="flex flex-wrap items-center gap-3 p-4 rounded-xl border border-border-default bg-card"
               >
                 <ConnectorAvatar
                   name={connector?.name ?? 'Conector'}
@@ -144,14 +170,24 @@ export default function IntegrationsPage() {
                   <p className="text-sm font-medium text-text-primary truncate">
                     {connector?.name ?? 'Conector'}
                   </p>
-                  {conn.lastError && conn.status === 'error' && (
-                    <p className="text-xs text-danger truncate">{conn.lastError}</p>
+                  {conn.lastError && pres.rota && (
+                    <p className="text-xs text-danger break-words">{conn.lastError}</p>
                   )}
                 </div>
-                <span className={`inline-flex items-center gap-1.5 text-sm ${pres.tone}`}>
+                <span className={`inline-flex items-center gap-1.5 text-sm ${TONO[pres.tono]}`}>
                   <Icon size={15} className={conn.status === 'connecting' ? 'animate-spin' : ''} />
-                  {pres.label}
+                  {pres.etiqueta}
                 </span>
+                {connector && (
+                  <button
+                    type="button"
+                    onClick={() => setAbierta(conn.id)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md font-medium transition-base shrink-0 ${pres.rota ? 'bg-accent text-text-on-accent hover:opacity-90' : 'border border-border-default text-text-primary hover:bg-page'}`}
+                  >
+                    <KeyRound size={15} />
+                    {pres.rota ? 'Volver a guardar las credenciales' : 'Configurar'}
+                  </button>
+                )}
               </div>
             )
           })}
