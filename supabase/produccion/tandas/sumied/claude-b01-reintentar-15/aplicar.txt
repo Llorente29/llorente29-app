@@ -1,0 +1,15 @@
+# B01r26 · Los 15 de la caída (15/11). Rama claude/b01-reintentar-15. Se ensaya
+# y se aplica desde main nombrando esta rama, antes de fusionar y antes de
+# «Seguir traspasando octubre», con la conexión de Diez ya levantada.
+#
+#   0825  Deja los 15 envíos de octubre parados por la caída de la conexión
+#         (14 asientos y la factura de Supabase) en «pendiente» sin el motivo,
+#         fuera del detalle del traspaso (20 fallos → 5). Solo esos 15: si no
+#         son ellos, no cambia nada. Los 5 de a mano en Diez se quedan.
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/b01r26-los-15-de-la-caida.sql
+supabase/migrations/20261115T0825_b01r26_los_15_de_la_caida.sql
+sin-vuelta-atras: supabase/migrations/20261115T0825_b01r26_los_15_de_la_caida.sql · motivo: el motivo que se quita dice que la conexión no estaba; devolverlo volvería a parar 15 envíos por una caída que ya pasó.
+esperado: b01r26-los-15-de-la-caida · Envíos parados por la caída de la conexión = 0
+esperado: b01r26-los-15-de-la-caida · Fallos en el detalle del traspaso de octubre, menos 5 = 0

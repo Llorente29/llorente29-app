@@ -1,0 +1,5 @@
+# B01r26 · 0825: los 15 envíos de octubre parados por la caída de la conexión de
+# Diez (14/11, 23:56 UTC), otra vez al traspaso. No añade objetos. Su prueba
+# (ROLLBACK): sin Foodint no hace nada.
+supabase/migrations/20261115T0825_b01r26_los_15_de_la_caida.sql
+supabase/staging/sql/20261115_b01r26_los_15_de_la_caida_prueba.sql
