@@ -1,0 +1,2 @@
+# DL1 · Glovo 430: la 0916 no tiene vuelta atrás (se declara en aplicar.txt): un asiento validado se anula con un contraasiento.
+cuenta: scripts/conta/produccion/cuentas/dl1-glovo-430.sql
