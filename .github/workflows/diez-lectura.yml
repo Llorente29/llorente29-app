@@ -28,11 +28,11 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'swagger (público, sin credenciales), lectura (con el secreto DIEZ_LECTURA, solo recuentos), sumied-contra-diez (B01r25, solo lectura) u octubre-contra-c0008 (B01r26, solo lectura)'
+        description: 'swagger (público, sin credenciales), lectura (con el secreto DIEZ_LECTURA, solo recuentos), sumied-contra-diez (B01r25, solo lectura) u octubre-contra-c0008 y fecha-introduccion-c0008 (B01r26, solo lectura)'
         required: true
         default: 'swagger'
         type: choice
-        options: ['swagger', 'lectura', 'sumied-contra-diez', 'octubre-contra-c0008']
+        options: ['swagger', 'lectura', 'sumied-contra-diez', 'octubre-contra-c0008', 'fecha-introduccion-c0008']
 
 concurrency:
   group: diez-lectura
@@ -361,3 +361,35 @@ jobs:
           set -euo pipefail
           SUMIED=/tmp/sumied.json npx --yes tsx@4.19.2 scripts/conta/diez/octubre-contra-c0008.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
           rm -f /tmp/sumied.json
+
+  fecha-introduccion-c0008:
+    # B01r26 (15/11): las recibidas de octubre de la C0008 importadas por Excel con
+    # fecha de factura anterior al 01/10 tienen FechaIntroduccionFactura = fecha de
+    # factura. Cuáles son, con todas sus fechas; la 2/3443 por nombres de campo y
+    # lo que cambiaría con solo FechaIntroduccionFactura = 20261001; y qué
+    # operaciones del Swagger público cambian una factura y qué campos piden
+    # (scripts/conta/diez/fecha-introduccion-c0008.ts). Diez solo GET
+    # (escribir: false); no lee Sumied. Todo por la puerta de salida (claves y
+    # enteros). A mano y desde main: el entorno «lectura» no admite otra rama.
+    environment: lectura
+    if: github.event_name == 'workflow_dispatch' && inputs.modo == 'fecha-introduccion-c0008'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Guarda · el secreto de Diez enmascarado
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          [ -n "${DIEZ_LECTURA:-}" ] || { echo "::error::Falta DIEZ_LECTURA."; exit 1; }
+          jq -r '.[] | tostring' <<<"$DIEZ_LECTURA" | while IFS= read -r v; do [ -n "$v" ] && echo "::add-mask::$v"; done
+      - name: Diez · las recibidas de octubre y su fecha de introducción (solo GET), por la puerta de salida
+        env:
+          DIEZ_LECTURA: ${{ secrets.DIEZ_LECTURA }}
+        run: |
+          set -euo pipefail
+          npx --yes tsx@4.19.2 scripts/conta/diez/fecha-introduccion-c0008.ts 2>&1 | node scripts/conta/salida-segura.mjs | tee -a "$GITHUB_STEP_SUMMARY"
