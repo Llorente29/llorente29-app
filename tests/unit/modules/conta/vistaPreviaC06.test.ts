@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { indexDeMarca } from '../../../../build/indexDeMarca'
-import { MARCAS, urlBaseDeMarca } from '../../../../supabase/functions/_shared/marcas'
+import { MARCAS, direccionDeFacturas, urlBaseDeMarca } from '../../../../supabase/functions/_shared/marcas'
 
 const INDEX = readFileSync('index.html', 'utf8')
 const VERCEL = JSON.parse(readFileSync('vercel.json', 'utf8')) as { rewrites: Array<Record<string, unknown>> }
@@ -65,4 +65,18 @@ describe('vercel.json sirve el index de la marca', () => {
       })
     }
   }
+})
+
+describe('la dirección a la que se reenvían las facturas', () => {
+  it('Folvy: facturas-<empresa>@entrada.folvy.app', () => {
+    expect(direccionDeFacturas(MARCAS.folvy, 'Foodint')).toBe('facturas-foodint@entrada.folvy.app')
+    expect(direccionDeFacturas(MARCAS.folvy, 'Taberna de Prueba Norte, S.L.')).toBe('facturas-taberna-de-prueba-norte-s-l@entrada.folvy.app')
+    expect(direccionDeFacturas(MARCAS.folvy, 'Panadería Luna')).toBe('facturas-panaderia-luna@entrada.folvy.app')
+  })
+  it('una marca sin dominio de entrada no recibe correo: null, no una dirección de Folvy', () => {
+    expect(direccionDeFacturas(MARCAS.contabilidad, 'Foodint')).toBeNull()
+  })
+  it('un identificador que se queda en nada: null', () => {
+    expect(direccionDeFacturas(MARCAS.folvy, ' ·· ')).toBeNull()
+  })
 })
