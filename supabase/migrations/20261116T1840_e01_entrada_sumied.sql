@@ -31,7 +31,19 @@
 --      usa el dominio de la regla; Correo de facturas (conta_correo_facturas),
 --      Documentos (conta_puerta) y Documentos recibidos
 --      (conta_documentos_recibidos) leen la dirección de _conta_direccion_empresa.
--- Misma firma, sobre la definición VIVA, con su respaldo. No toca datos.
+--   6. Las direcciones de los clientes de Sumied (al final de este fichero):
+--      cada empresa cuyo dominio es entrada.sumied.com y tiene una dirección en
+--      entrada.folvy.app recibe la MISMA (misma clase, nombre, empresa y
+--      cuenta) en entrada.sumied.com, encendida. La de entrada.folvy.app no se
+--      toca: sigue encendida y ya no se enseña. Medido el 16/11: son las 3 de
+--      Piri Piri (facturas-piripiri-espana, facturas-frango-takeaway y
+--      facturas-piripiri-prosperidad), cuyas sociedades lleva un despacho de
+--      marca Sumied con permiso vivo. Las 2 de Foodint (cuenta Folvy, sin
+--      despacho) quedan fuera por la regla, y además se comprueba. Solo añade
+--      filas; si ya están, no hace nada. Va en este fichero, no en otro, porque
+--      depende de la regla: en staging, lo que solo añade se aplica de verdad
+--      desde la rama, y sin la regla no se puede pasar.
+-- Misma firma, sobre la definición VIVA, con su respaldo. Los datos, solo el 6 (añade filas).
 -- Nada en el camino del pedido. Vuelta atrás:
 -- supabase/vuelta-atras/20261116T1840_e01_entrada_sumied.down.sql
 
@@ -160,4 +172,22 @@ begin
     v_def := replace(v_def, x->>1, x->>2);
   end loop;
   if v_def is not null then execute v_def; end if;
+end $$;
+
+-- 6 · Las direcciones de los clientes de Sumied, en @entrada.sumied.com.
+insert into public.company_inbound_address (account_id, company_id, kind, local_part, domain, active, created_by_name)
+select f.account_id, f.company_id, f.kind, f.local_part, 'entrada.sumied.com', true, 'Tanda E01 · entrada.sumied.com'
+  from public.company_inbound_address f
+ where lower(f.domain) = 'entrada.folvy.app'
+   and public._conta_dominio_entrada(f.company_id) = 'entrada.sumied.com'
+   and not exists (select 1 from public.company_inbound_address x
+                    where (x.company_id = f.company_id and x.kind = f.kind and lower(x.domain) = 'entrada.sumied.com')
+                       or (lower(x.local_part) = lower(f.local_part) and lower(x.domain) = 'entrada.sumied.com'));
+
+-- Foodint (cuenta Folvy, sin despacho) no puede tener ninguna en entrada.sumied.com.
+do $$ begin
+  if exists (select 1 from public.company_inbound_address
+              where account_id = '51ad1792-6629-4ef7-833a-b57b09a86710' and lower(domain) <> 'entrada.folvy.app') then
+    raise exception 'E01 · 1840: Foodint tiene una dirección fuera de entrada.folvy.app. No se toca nada.';
+  end if;
 end $$;

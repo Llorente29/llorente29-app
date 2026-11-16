@@ -2,10 +2,9 @@
 # company_inbound_address y seis funciones): en staging, solo en ROLLBACK.
 # Su prueba (ROLLBACK): la regla del dominio con los tres casos (Folvy sin
 # despacho, cuenta Sumied, Folvy con despacho Sumied; revocado vuelve a Folvy);
-# la 1850 dos veces (nuevas una vez, no dos; las de Folvy encendidas; las de
-# Folvy sin despacho intactas); las tres pantallas enseñan la misma, la de su
-# dominio; crear nace en su dominio; la cuenta de Resend de cada correo; y la
-# vuelta atrás y otra vez delante.
+# las direcciones de la 1840 dos veces (nuevas una vez, no dos; las de Folvy
+# encendidas; las de Folvy sin despacho intactas); las tres pantallas enseñan
+# la misma, la de su dominio; crear nace en su dominio; la cuenta de Resend de
+# cada correo; y la vuelta atrás y otra vez delante.
 supabase/migrations/20261116T1840_e01_entrada_sumied.sql
-supabase/migrations/20261116T1850_e01_direcciones_sumied.sql
 supabase/staging/sql/20261116_e01_entrada_sumied_prueba.sql

@@ -1,6 +1,6 @@
 -- supabase/staging/sql/20261116_e01_entrada_sumied_prueba.sql
 --
--- SOLO STAGING. Prueba del E01 (20261116T1840 y 1850). Todo en una transacción
+-- SOLO STAGING. Prueba del E01 (20261116T1840). Todo en una transacción
 -- con ROLLBACK. Datos inventados, en las cuentas de prueba A, B y la del
 -- despacho de prueba (C01 y Sumied de prueba).
 -- Prueba lo que cambia en caliente: public.company_inbound_address,
@@ -11,7 +11,7 @@
 --   1. La regla del dominio, los tres casos: cuenta Folvy sin despacho
 --      (folvy), cuenta Sumied (sumied), cuenta Folvy con despacho Sumied con
 --      permiso vivo (sumied); y con el permiso revocado, otra vez folvy.
---   2. La 1850 dos veces: una dirección nueva por cada una de Folvy de una
+--   2. Las direcciones de la 1840 (su paso 6), dos veces: una dirección nueva por cada una de Folvy de una
 --      empresa de dominio Sumied, no dos; la de Folvy sigue encendida; las de
 --      la cuenta Folvy sin despacho, intactas.
 --   3. Las pantallas: Correo de facturas, Documentos y Documentos recibidos
@@ -63,7 +63,7 @@ begin
   raise notice 'PRUEBA E01 · 1: Folvy sin despacho → %, cuenta Sumied → %, Folvy con despacho Sumied → % (revocado → folvy).', a, s, b;
 end $$;
 
--- 2 · La 1850, dos veces.
+-- 2 · Las direcciones de la 1840, dos veces.
 delete from public.company_inbound_address where company_id in (select v from e01 where k in ('a', 'b', 's'));
 insert into public.company_inbound_address (account_id, company_id, kind, local_part, domain, active, created_by_name) values
   ('c01a0000-0000-4000-8000-00000000000a', (select v from e01 where k = 'a'), 'facturas', 'facturas-e01-prueba-a', 'entrada.folvy.app', true, 'Prueba E01'),
@@ -71,13 +71,13 @@ insert into public.company_inbound_address (account_id, company_id, kind, local_
   ('d5ac0000-0000-4000-8000-00000000c010', (select v from e01 where k = 's'), 'facturas', 'facturas-e01-prueba-s', 'entrada.folvy.app', true, 'Prueba E01');
 create temp table e01_antes on commit drop as
   select company_id, kind, local_part, domain, active from public.company_inbound_address where company_id not in (select v from e01 where k in ('b', 's'));
-\i supabase/migrations/20261116T1850_e01_direcciones_sumied.sql
-\i supabase/migrations/20261116T1850_e01_direcciones_sumied.sql
+\i supabase/migrations/20261116T1840_e01_entrada_sumied.sql
+\i supabase/migrations/20261116T1840_e01_entrada_sumied.sql
 do $$
 declare n int; m int;
 begin
   select count(*) into n from public.company_inbound_address where created_by_name = 'Tanda E01 · entrada.sumied.com' and company_id in (select v from e01 where k in ('b', 's'));
-  if n <> 2 then raise exception 'PRUEBA E01 · 2: la 1850 dos veces deja % direcciones nuevas en B y el hostal, y debían ser 2.', n; end if;
+  if n <> 2 then raise exception 'PRUEBA E01 · 2: la 1840 dos veces deja % direcciones nuevas en B y el hostal, y debían ser 2.', n; end if;
   if exists (select 1 from public.company_inbound_address where company_id in (select v from e01 where k in ('b', 's')) and lower(domain) = 'entrada.folvy.app' and not active) then
     raise exception 'PRUEBA E01 · 2: una de entrada.folvy.app se ha apagado.';
   end if;
@@ -87,7 +87,7 @@ begin
   select count(*) into m from (select company_id, kind, local_part, domain, active from public.company_inbound_address where company_id not in (select v from e01 where k in ('b', 's'))
                                 except select * from e01_antes) x;
   if m <> 0 or exists (select 1 from public.company_inbound_address where company_id = (select v from e01 where k = 'a') and domain <> 'entrada.folvy.app') then
-    raise exception 'PRUEBA E01 · 2: la 1850 ha tocado direcciones de empresas que no son de Sumied (%).', m;
+    raise exception 'PRUEBA E01 · 2: la 1840 ha tocado direcciones de empresas que no son de Sumied (%).', m;
   end if;
   raise notice 'PRUEBA E01 · 2: dos pasadas, % nuevas (no %), las de Folvy encendidas, A intacta.', n, n * 2;
 end $$;
@@ -158,20 +158,19 @@ begin
 end $$;
 reset role;
 
--- 6 · La vuelta atrás, y otra vez delante (sin los correos de la prueba: con ellos, la de la 1850 para, y así debe).
+-- 6 · La vuelta atrás, y otra vez delante (sin los correos de la prueba: con ellos, la vuelta atrás para, y así debe).
 delete from public.inbound_email_log where email_id like 'e01-prueba-%';
-\i supabase/vuelta-atras/20261116T1850_e01_direcciones_sumied.down.sql
 \i supabase/vuelta-atras/20261116T1840_e01_entrada_sumied.down.sql
 do $$ begin
   if to_regprocedure('public._conta_dominio_entrada(uuid)') is not null
      or exists (select 1 from information_schema.columns where table_name = 'inbound_email_log' and column_name = 'resend_account')
      or not exists (select 1 from pg_constraint where conname = 'company_inbound_address_company_id_kind_key')
-     or position('E01 ·' in pg_get_functiondef('public.conta_puerta(uuid,integer)'::regprocedure)) > 0 then
+     or position('E01 ·' in pg_get_functiondef('public.conta_puerta(uuid,integer)'::regprocedure)) > 0
+     or exists (select 1 from public.company_inbound_address where created_by_name = 'Tanda E01 · entrada.sumied.com') then
     raise exception 'PRUEBA E01 · 6: la vuelta atrás no deja las cosas como estaban.';
   end if;
-  raise notice 'PRUEBA E01 · 6: la vuelta atrás quita la 1850 y la 1840.';
+  raise notice 'PRUEBA E01 · 6: la vuelta atrás quita la 1840 y sus direcciones.';
 end $$;
 \i supabase/migrations/20261116T1840_e01_entrada_sumied.sql
-\i supabase/migrations/20261116T1850_e01_direcciones_sumied.sql
 
 rollback;

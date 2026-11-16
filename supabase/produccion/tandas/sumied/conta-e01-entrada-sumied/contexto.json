@@ -1,9 +1,8 @@
 {
- "_que": "E01 · contexto de producción de la tanda (1840 y 1850), medido en SOLO LECTURA el 16/11 a las 17:15Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen company_inbound_address (5 filas, reltuples 0) e inbound_email_log (381; reltuples 363); no existen _conta_dominio_entrada ni _conta_direccion_empresa (ni otra firma con su nombre); nada en el camino del pedido y nada en el historial. Las seis funciones que la 1840 cambia en caliente (dentro de un DO, sobre la definición viva y con respaldo): conta_entrada_correo 091081f0, conta_direccion_entrada 5f935310, conta_direccion_facturas 642916ec, conta_correo_facturas 1e68de85, conta_puerta d00f36c2, conta_documentos_recibidos e1ff6fea (md5 de prosrc), las mismas en la base local del W09.",
+ "_que": "E01 · contexto de producción de la tanda (1840; la 1850 se juntó con ella, mismas tablas), medido en SOLO LECTURA el 16/11 a las 17:15Z con la consulta de analizar.mjs sql-contexto y el CAMINO del workflow: existen company_inbound_address (5 filas, reltuples 0) e inbound_email_log (381; reltuples 363); no existen _conta_dominio_entrada ni _conta_direccion_empresa (ni otra firma con su nombre); nada en el camino del pedido y nada en el historial. Las seis funciones que la 1840 cambia en caliente (dentro de un DO, sobre la definición viva y con respaldo): conta_entrada_correo 091081f0, conta_direccion_entrada 5f935310, conta_direccion_facturas 642916ec, conta_correo_facturas 1e68de85, conta_puerta d00f36c2, conta_documentos_recibidos e1ff6fea (md5 de prosrc), las mismas en la base local del W09.",
  "medido": "2026-11-16T17:15Z",
  "tanda": {
-  "supabase/migrations/20261116T1840_e01_entrada_sumied.sql": "54b45d90929ea7a61a515d1949ab9bf6",
-  "supabase/migrations/20261116T1850_e01_direcciones_sumied.sql": "0e4b6c42a14ad813403eb58d83f4599e"
+  "supabase/migrations/20261116T1840_e01_entrada_sumied.sql": "fc0339387193592b673885b80cdf1e68"
  },
  "contexto": {
   "tablas": [
