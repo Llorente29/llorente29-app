@@ -1,0 +1,24 @@
+# E01 · Las facturas de los clientes de Sumied entran por @entrada.sumied.com.
+# Rama conta/e01-entrada-sumied. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1. 1840 — AÑADE la regla del dominio (_conta_dominio_entrada) y la
+#      dirección de cada empresa (_conta_direccion_empresa), la columna
+#      inbound_email_log.resend_account (por qué cuenta de Resend entró), y
+#      CAMBIA EN CALIENTE el único de company_inbound_address (empresa + clase
+#      → empresa + clase + dominio) y seis funciones con la misma firma y su
+#      respaldo: conta_entrada_correo, conta_direccion_entrada,
+#      conta_direccion_facturas, conta_correo_facturas, conta_puerta y
+#      conta_documentos_recibidos. No toca datos.
+#   2. 1850 — AÑADE filas: la misma dirección en entrada.sumied.com, encendida,
+#      de cada empresa de dominio Sumied que la tiene en entrada.folvy.app
+#      (medido el 16/11: las 3 de Piri Piri). Las de entrada.folvy.app no se
+#      tocan; Foodint, tampoco (se comprueba).
+#   Nada en el camino del pedido.
+#
+# AUTORIZO: lo que diga el analizador (quitar el único de antes). Sin aplicar:
+# lo lanza Julio.
+# Vuelta atrás: vuelta-atras.txt de esta carpeta.
+supabase/migrations/20261116T1840_e01_entrada_sumied.sql
+supabase/migrations/20261116T1850_e01_direcciones_sumied.sql
+cuenta: scripts/conta/produccion/cuentas/e01-entrada-sumied.sql

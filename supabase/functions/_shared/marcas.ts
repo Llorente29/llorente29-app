@@ -75,12 +75,6 @@ export interface Marca {
   /** A dónde van las respuestas a sus correos. */
   responderA: string | null
   /**
-   * El dominio que RECIBE correo (las facturas que el cliente reenvía): la
-   * dirección de cada empresa es `facturas-<empresa>@<este dominio>`
-   * (direccionDeFacturas). Null: la marca aún no recibe correo (sin MX).
-   */
-  dominioEntradaCorreo: string | null
-  /**
    * Lo que enseña un enlace compartido (WhatsApp, correo, buscadores), que
    * leen el HTML sin ejecutar nada: descripción e imagen de vista previa
    * (1200 × 630, ruta del sitio). El título es el nombre.
@@ -120,7 +114,6 @@ export const MARCAS: Record<IdMarca, Marca> = {
     manifiesto: '/manifest.json',
     remitente: 'Folvy <no-reply@folvy.app>',
     responderA: 'jgcolon@idasal.com',
-    dominioEntradaCorreo: 'entrada.folvy.app',
     // La de index.html, tal cual: el index de Folvy no cambia.
     descripcion: 'Folvy - Hosteleria profesional. Software profesional.',
     imagenVistaPrevia: null,
@@ -153,7 +146,6 @@ export const MARCAS: Record<IdMarca, Marca> = {
     manifiesto: '/marcas/contabilidad/manifest.json',
     remitente: null,
     responderA: null,
-    dominioEntradaCorreo: null,
     descripcion: 'Tu contabilidad al día, sin saber de cuentas.',
     imagenVistaPrevia: '/marcas/contabilidad/vista-previa.png',
     logoCorreo: null,
@@ -216,8 +208,6 @@ export const MARCAS: Record<IdMarca, Marca> = {
     // correo (el de la asesoría, en el resumen del trimestre).
     remitente: 'Sumied <impuestos@sumied.com>',
     responderA: null,
-    // Null hasta que entrada.sumied.com reciba correo (su MX en Resend).
-    dominioEntradaCorreo: null,
     descripcion: 'Tu contabilidad al día, sin saber de cuentas.',
     imagenVistaPrevia: '/marcas/sumied/vista-previa.png',
     logoCorreo: 'https://app.sumied.com/marcas/sumied/logo-correo.png',
@@ -313,16 +303,6 @@ export function enlaceDeMarca(m: Marca, ruta: string, params: Record<string, str
   return `${base.replace(/\/+$/, '')}${ruta}?${q.toString()}`
 }
 
-/**
- * La dirección a la que una empresa reenvía sus facturas:
- * `facturas-<empresa>@<dominio de entrada>` (Julio, C06 respuesta 2). <empresa>
- * es el identificador corto que decida quien la use (frente A), pasado a
- * minúsculas, sin acentos y solo con letras, cifras y guiones. Null si la marca
- * aún no recibe correo o el identificador queda vacío.
- */
-export function direccionDeFacturas(m: Marca, empresa: string): string | null {
-  if (!m.dominioEntradaCorreo) return null
-  const corto = empresa.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  return corto ? `facturas-${corto}@${m.dominioEntradaCorreo}` : null
-}
+// E01 (16/11): el dominio de entrada de cada empresa ya no es de la marca que
+// se enseña: lo dice la base (_conta_dominio_entrada) y las pantallas leen la
+// dirección de la base. Por eso aquí no hay dominio de entrada.

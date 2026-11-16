@@ -1,0 +1,6 @@
+# E01 · vuelta atrás: primero quita las direcciones de entrada.sumied.com de la
+# tanda (para si ya les ha llegado un correo); después las seis funciones como
+# estaban (desde su respaldo, byte a byte), el único de antes, sin la columna
+# de la cuenta de Resend ni las dos funciones nuevas.
+supabase/vuelta-atras/20261116T1850_e01_direcciones_sumied.down.sql
+supabase/vuelta-atras/20261116T1840_e01_entrada_sumied.down.sql
