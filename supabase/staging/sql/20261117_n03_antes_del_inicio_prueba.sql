@@ -3,8 +3,10 @@
 -- SOLO STAGING. Prueba del N03 (20261117T0955_n03_respuesta_antes_del_inicio y
 -- 20261117T0956_n03_parar_y_preguntar), que el ensayo de staging pone delante en la misma
 -- sesión. Todo en una transacción con ROLLBACK: staging no cambia. Datos INVENTADOS en la
--- empresa de la cuenta A, con día de inicio el 01/11/2026 (corte del banco) y el programa de
--- antes ERP10 (una lectura de ERP10). Nombra los tres objetos que cambian:
+-- empresa de la cuenta A, con día de inicio el 01/11/2026 (corte del banco) y una lectura de
+-- ERP10. El programa de antes es el que diga la base para esa empresa (_conta_programa_de_antes:
+-- sus ejercicios traídos mandan sobre las lecturas; en staging, la cuenta A ya trae uno), y los
+-- textos se comparan con él: «en ERP10», «en Diez» o «en el programa de antes». Nombra los tres objetos que cambian:
 -- public._conta_recibida_no_antes_de_entrar, public.conta_documentos_recibidos y
 -- public.conta_pagos_lista.
 --
@@ -67,6 +69,9 @@ begin
   r := public.conta_diez_subcuentas(c, v_run, '[{"code":"60000000","nombre":"Compras"},{"code":"40000000","nombre":"Proveedores"}]');
   if jsonb_array_length(r -> 'rechazadas') <> 0 then raise exception 'PRUEBA N03: las subcuentas de la prueba no entran: %.', r; end if;
   update public.import_run set status = 'en_prueba', finished_at = now() where id = v_run;
+  -- El programa de antes que dirá la base, y cómo lo dice la pantalla.
+  perform set_config('n03.prog', coalesce(public._conta_programa_de_antes(c), ''), true);
+  perform set_config('n03.en', coalesce('en ' || public._conta_programa_de_antes(c), 'en el programa de antes'), true);
   insert into public.bank_settings (company_id, account_id, cutover_date) values (c, v_acc, '2026-11-01')
   on conflict (company_id) do update set cutover_date = excluded.cutover_date;
 
@@ -112,7 +117,8 @@ do $$
 declare r jsonb; v_hint text; v_msg text;
 begin
   r := public.conta_recibida_antes_del_inicio(pg_temp.factura('N03-YA-ESTABA'));
-  if not (r->>'preguntar')::boolean or r->>'fecha' <> '2026-10-14' or r->>'dia_inicio' <> '2026-11-01' or r->>'programa' <> 'ERP10' then
+  if (r->>'preguntar')::boolean is distinct from true or r->>'fecha' is distinct from '2026-10-14' or r->>'dia_inicio' is distinct from '2026-11-01'
+     or r->>'programa' is distinct from nullif(current_setting('n03.prog'), '') then
     raise exception 'PRUEBA N03 · 2: lo que necesita la pantalla para preguntar no está: %.', r;
   end if;
   begin
@@ -121,7 +127,8 @@ begin
   exception when check_violation then
     get stacked diagnostics v_hint = pg_exception_hint, v_msg = message_text;
   end;
-  if v_hint is distinct from 'antes_del_inicio' or v_msg not like 'Esta factura es del 14/10/2026, y esta empresa empezó en Sumied el 01/11/2026.%ERP10.' then
+  if v_hint is distinct from 'antes_del_inicio' or v_msg is distinct from
+       'Esta factura es del 14/10/2026, y esta empresa empezó en Sumied el 01/11/2026. Antes de contabilizarla, di si ya estaba contabilizada ' || current_setting('n03.en') || '.' then
     raise exception 'PRUEBA N03 · 2: no para con la pregunta (hint %, «%»).', v_hint, v_msg;
   end if;
   if pg_temp.asientos('N03-YA-ESTABA') <> 0 then raise exception 'PRUEBA N03 · 2: ha dejado un asiento.'; end if;
@@ -133,7 +140,7 @@ declare
   c uuid := current_setting('n03.empresa')::uuid; r jsonb; v_hint text; f jsonb; v_id uuid := pg_temp.factura('N03-YA-ESTABA');
 begin
   r := public.conta_recibida_responder_antes_del_inicio(v_id, 'ya_estaba', 'Prueba N03');
-  if r->>'texto' <> 'Hecho. No se contabiliza: ya estaba en ERP10.' then raise exception 'PRUEBA N03 · 3: el texto es «%».', r->>'texto'; end if;
+  if r->>'texto' is distinct from 'Hecho. No se contabiliza: ya estaba ' || current_setting('n03.en') || '.' then raise exception 'PRUEBA N03 · 3: el texto es «%».', r->>'texto'; end if;
   begin
     perform pg_temp.proponer('N03-YA-ESTABA');
     raise exception 'PRUEBA N03 · 3: una factura que ya estaba en ERP10 se ha contabilizado.';
@@ -145,7 +152,8 @@ begin
   r := public.conta_documentos_recibidos(c, '2026-10-01', '2026-10-31');
   select x into f from jsonb_array_elements(r->'filas') x where x->>'id' = v_id::text;
   if f is null then raise exception 'PRUEBA N03 · 3: la marcada no sale en la lista.'; end if;
-  if f->>'estado' <> 'ya_contabilizada' or f->>'programa_antes' <> 'ERP10' or f->>'porque' not like 'Ya estaba contabilizada en ERP10: no se contabiliza en Sumied (Prueba N03, %).' then
+  if f->>'estado' is distinct from 'ya_contabilizada' or f->>'programa_antes' is distinct from nullif(current_setting('n03.prog'), '')
+     or coalesce(f->>'porque', '') not like 'Ya estaba contabilizada ' || current_setting('n03.en') || ': no se contabiliza en Sumied (Prueba N03, %).' then
     raise exception 'PRUEBA N03 · 3: en la lista sale %.', f;
   end if;
   if (select count(*) from jsonb_array_elements(r->'filas') x where x->>'estado' = 'para_mirar' and x->>'id' = v_id::text) <> 0 then
@@ -175,8 +183,8 @@ do $$
 declare r jsonb; v_hint text;
 begin
   r := public.conta_recibida_responder_antes_del_inicio(pg_temp.factura('N03-YA-ESTABA'), null, 'Prueba N03');
-  if (r->>'texto') not like 'Hecho. Vuelve a estar sin contabilizar%' then raise exception 'PRUEBA N03 · 4: el texto es «%».', r->>'texto'; end if;
-  if not (public.conta_recibida_antes_del_inicio(pg_temp.factura('N03-YA-ESTABA'))->>'preguntar')::boolean then
+  if coalesce(r->>'texto', '') not like 'Hecho. Vuelve a estar sin contabilizar%' then raise exception 'PRUEBA N03 · 4: el texto es «%».', r->>'texto'; end if;
+  if (public.conta_recibida_antes_del_inicio(pg_temp.factura('N03-YA-ESTABA'))->>'preguntar')::boolean is distinct from true then
     raise exception 'PRUEBA N03 · 4: deshecha, no vuelve a preguntar.';
   end if;
   begin
@@ -192,7 +200,7 @@ do $$
 declare r jsonb; v_e public.journal_entry;
 begin
   r := public.conta_recibida_responder_antes_del_inicio(pg_temp.factura('N03-ES-NUEVA'), 'es_nueva', 'Prueba N03');
-  if r->>'respuesta' <> 'es_nueva' then raise exception 'PRUEBA N03 · 5: %.', r; end if;
+  if r->>'respuesta' is distinct from 'es_nueva' then raise exception 'PRUEBA N03 · 5: %.', r; end if;
   r := pg_temp.proponer('N03-ES-NUEVA');
   select * into v_e from public.journal_entry where id = (r->>'id')::uuid;
   if v_e.id is null or v_e.entry_date < date '2026-11-01' then
@@ -210,7 +218,7 @@ do $$
 declare r jsonb;
 begin
   r := public.conta_recibida_antes_del_inicio(pg_temp.factura('N03-TRAIDA'));
-  if (r->>'preguntar')::boolean or r->'traida' is null or r->'traida'->>'numero' <> 'N03/TRAIDA' then
+  if (r->>'preguntar')::boolean is distinct from false or r->'traida'->>'numero' is distinct from 'N03/TRAIDA' then
     raise exception 'PRUEBA N03 · 6: la traída no se encuentra: %.', r;
   end if;
 end $$;
