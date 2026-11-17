@@ -1,0 +1,3 @@
+# X05 · las facturas emitidas salen a ERP10.
+# Primero, la medida de qué emitidas hay en staging (solo lee, ROLLBACK).
+supabase/staging/sql/20261117_x05_emitidas_medida.sql
