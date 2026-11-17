@@ -1,0 +1,17 @@
+# R05 · Un día del TPV se propone y se valida como uno de Folvy. Rama
+# conta/r05-dia-del-tpv. Se ensaya y se aplica desde main nombrando esta rama,
+# antes de fusionar.
+#
+#   1601  conta_tpv_dia.entry_id (admite nulos) y su índice. Solo añade.
+#   1602  _conta_tpv_propuesta, conta_tpv_dias, conta_tpv_dia_para_validar y
+#         conta_tpv_dia_validar. Solo añade.
+#   1603  Un disparador nuevo en journal_entry (CAMBIA, declarado, con su prueba):
+#         al anular el asiento de un día del TPV, el día vuelve a «guardado».
+#         journal_entry no está en el camino del pedido.
+#
+# Nada de sale ni del camino del pedido; ninguna función que exista cambia.
+# El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/r05-dia-tpv.sql
+supabase/migrations/20261117T1601_r05_dia_tpv_asiento.sql
+supabase/migrations/20261117T1602_r05_dia_tpv_funciones.sql
+supabase/migrations/20261117T1603_r05_dia_tpv_anulado.sql
