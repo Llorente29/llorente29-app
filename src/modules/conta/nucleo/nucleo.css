@@ -155,27 +155,59 @@ html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
 .k-modulo[aria-current='true'] .k-modulo-icono { background: var(--k-azul); color: var(--k-blanco); }
 .k-modulo[aria-current='true'] .k-modulo-nombre { color: var(--k-azul); font-weight: 700; }
 .k-modulos button:focus-visible { outline: 2px solid var(--k-azul); outline-offset: -2px; }
+/* K03 · Plegados: el nombre de cada módulo, al pasar el ratón y al llegar con el teclado. */
+.k-modulos[data-plegados='si'] { overflow: visible; position: relative; z-index: 20; }
+.k-modulos[data-plegados='si'] .k-modulo { position: relative; }
+.k-modulos[data-plegados='si'] .k-modulo::after {
+  content: attr(data-nombre); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); display: none;
+  padding: 4px 8px; border-radius: 6px; background: var(--k-noche); color: var(--k-blanco); font-size: 12px; font-weight: 600; white-space: nowrap;
+  pointer-events: none; z-index: 30;
+}
+.k-modulos[data-plegados='si'] .k-modulo:hover::after, .k-modulos[data-plegados='si'] .k-modulo:focus-visible::after { display: block; }
 
 /* ── 4 · Las pestañas de trabajo y el panel ─────────────────────────── */
 .k-trabajo { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px 0 4px; }
-.k-trabajo-pestanas { flex-shrink: 0; height: 32px; display: flex; align-items: flex-end; gap: 4px; }
+.k-trabajo-fila { flex-shrink: 0; height: 32px; display: flex; align-items: flex-end; gap: 12px; min-width: 0; }
+.k-trabajo-pestanas { flex: 1; min-width: 0; height: 32px; display: flex; align-items: flex-end; gap: 4px; position: relative; }
 .k-trabajo-pestana {
-  height: 30px; max-width: 320px; display: inline-flex; align-items: center; gap: 10px; padding: 0 12px;
-  background: var(--k-gris-pestana); border: 0; border-top: 2px solid transparent; border-radius: 6px 6px 0 0;
-  color: var(--k-tinta); font-size: 14px; cursor: pointer;
+  height: 30px; max-width: 280px; min-width: 0; flex-shrink: 0; display: inline-flex; align-items: center; gap: 2px; padding: 0 6px 0 0;
+  background: var(--k-gris-pestana); border-top: 2px solid transparent; border-radius: 6px 6px 0 0; color: var(--k-tinta); font-size: 14px;
 }
-.k-trabajo-pestana[aria-selected='true'] { background: var(--k-blanco); border-top-color: var(--k-azul); font-weight: 600; cursor: default; }
+/* K03 · Las que no caben, fuera del flujo pero medibles (se reparten con su ancho de verdad). */
+.k-trabajo-pestana[data-en-menu] { position: absolute; visibility: hidden; pointer-events: none; }
+.k-trabajo-pestana[data-activa='si'] { background: var(--k-blanco); border-top-color: var(--k-azul); font-weight: 600; }
+.k-trabajo-ir {
+  height: 100%; min-width: 0; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 12px;
+  background: none; border: 0; color: inherit; font: inherit; cursor: pointer;
+}
+.k-trabajo-pestana[data-activa='si'] .k-trabajo-ir { cursor: default; }
 .k-trabajo-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* K03 · Cambios sin guardar: el punto ámbar delante del nombre (el ámbar de «mira esto»). */
+.k-trabajo-punto { width: 8px; height: 8px; border-radius: 50%; background: var(--k-mira); flex-shrink: 0; display: inline-block; margin-right: 6px; }
+.k-trabajo-ir .k-trabajo-punto { margin-right: 0; }
 .k-trabajo-cerrar { display: inline-flex; padding: 2px; background: none; border: 0; border-radius: 4px; color: var(--k-apoyo); cursor: pointer; }
 .k-trabajo-cerrar:hover { background: var(--k-gris); color: var(--k-tinta); }
-.k-trabajo-mas { height: 30px; padding: 0 10px; background: none; border: 0; color: var(--k-azul); cursor: pointer; display: inline-flex; align-items: center; }
-.k-trabajo-pestanas button:focus-visible { outline: 2px solid var(--k-azul); outline-offset: -2px; }
+.k-trabajo-mas { height: 30px; padding: 0 10px; background: none; border: 0; color: var(--k-azul); cursor: pointer; display: inline-flex; align-items: center; flex-shrink: 0; }
+.k-trabajo-mas-pestanas {
+  height: 30px; padding: 0 10px; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0;
+  background: var(--k-gris-pestana); border: 0; border-radius: 6px 6px 0 0; color: var(--k-tinta); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.k-menu-fila { display: flex; align-items: center; gap: 4px; }
+.k-trabajo-mayor {
+  flex-shrink: 0; height: 26px; margin-bottom: 3px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px;
+  background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 6px; color: var(--k-tinta); font-size: 13px; cursor: pointer;
+}
+.k-trabajo-mayor svg { color: var(--k-azul); }
+.k-tecla { padding: 0 4px; border: 1px solid var(--k-borde); border-radius: 3px; background: var(--k-gris); color: var(--k-apoyo); font: inherit; font-size: 11px; }
+.k-trabajo-fila button:focus-visible { outline: 2px solid var(--k-azul); outline-offset: -2px; }
 .k-panel {
   flex: 1; min-height: 0; display: flex; flex-direction: column;
   background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 0 6px 6px 6px; overflow: hidden;
 }
 /* La zona de la pantalla: la única que rueda. Con el aspecto de hoy por dentro (cx-principal). */
 .cx.cxm .k-zona.cx-principal { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 16px 24px; }
+.cx.cxm .k-zona.cx-principal[hidden] { display: none; }
+.k-zona:focus { outline: none; }
 .k-periodo { display: flex; align-items: center; gap: 8px; }
 .k-periodo:empty { display: none; }
 

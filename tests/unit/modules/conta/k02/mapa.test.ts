@@ -10,7 +10,8 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { CONTA, INDICE_AJUSTES } from '@/config/navegacion'
 import { AREAS_LIBROS } from '@/modules/conta/libros/navegacion'
-import { cintaVisible, MENU_PERSONA, MODULOS, modulosVisibles, nombreDePestana, sitioDe, TODOS_LOS_BOTONES } from '@/modules/conta/nucleo/mapa'
+import { cintaVisible, MENU_PERSONA, menuPersonaVisible, MODULOS, modulosVisibles, nombreDePestana, sitioDe, TODOS_LOS_BOTONES } from '@/modules/conta/nucleo/mapa'
+import { PRODUCTOS, pestanasVisibles } from '@/modules/conta/esqueleto/productos'
 import type { Contexto } from '@/modules/conta/esqueleto/productos'
 
 const R = CONTA.rutas as Record<string, string>
@@ -94,7 +95,9 @@ describe('K02 · el mapa del núcleo', () => {
       const s = sitioDe(d)
       expect(s?.tipo === 'cinta' && [s.pestana.id, s.boton.id.length > 0], d).toEqual(['definiciones', true])
     }
-    expect(MENU_PERSONA.some((e) => e.id === 'ajustes.empresa')).toBe(false)
+    // K03 · arreglo 2: Tu empresa y Ejercicio, ADEMÁS en el menú de la persona.
+    expect(MENU_PERSONA.some((e) => e.id === 'ajustes.empresa')).toBe(true)
+    expect(MENU_PERSONA.some((e) => e.id === 'ajustes.ejercicio')).toBe(true)
   })
 
   it('las palabras de la maqueta: la cinta de Contabilidad, en su orden', () => {
@@ -141,5 +144,34 @@ describe('K02 · Ventas del día sigue a la barra de hoy (R05, decisión 9)', ()
     expect(botones(base)).not.toContain('ventasDia')
     expect(botones({ ...base, ventasPorDia: true })).toContain('ventasDia')
     expect(botones({ ...base, hosteleria: true })).toContain('ventasDia')
+  })
+})
+
+describe('K03 · el menú de la persona trae todo Ajustes de hoy (respuesta K02 · 2, arreglo 2)', () => {
+  const ajustes = PRODUCTOS.find((p) => p.id === 'ajustes')!
+  const casos: [string, Contexto][] = [
+    ['con Folvy', { hosteleria: false, diez: false, interruptores: new Set(), solo: false }],
+    ['vendido solo (Sumied)', { hosteleria: false, diez: false, interruptores: new Set(), solo: true }],
+    ['cuenta de demostración', { hosteleria: false, diez: false, interruptores: new Set(), solo: true, demo: true }],
+  ]
+  for (const [nombre, ctx] of casos) {
+    it(`${nombre}: las mismas entradas, en el mismo orden, que el apartado Ajustes de hoy`, () => {
+      const hoy = pestanasVisibles(ajustes, ctx).map((t) => t.ruta)
+      const menu = menuPersonaVisible(ctx).filter((e) => e.id !== 'novedades').map((e) => e.ruta)
+      expect(menu).toEqual(hoy)
+    })
+  }
+  it('Tu empresa y Ejercicio están en el menú y también en Definiciones › Empresa (decisión 5)', () => {
+    const def = MODULOS[0].pestanas.find((p) => p.id === 'definiciones')!.grupos.find((g) => g.titulo === 'Empresa')!
+    expect(def.botones.map((b) => b.etiqueta)).toEqual(['Tu empresa', 'Ejercicio'])
+    const menu = menuPersonaVisible({ hosteleria: false, diez: false, interruptores: new Set(), solo: true }).map((e) => e.etiqueta)
+    expect(menu).toContain('Tu empresa')
+    expect(menu).toContain('Ejercicio')
+  })
+  it('Certificados y accesos: con Folvy sale; vendido solo, no (es un hueco, como hoy en la barra)', () => {
+    const con = menuPersonaVisible({ hosteleria: false, diez: false, interruptores: new Set(), solo: false }).map((e) => e.etiqueta)
+    const sin = menuPersonaVisible({ hosteleria: false, diez: false, interruptores: new Set(), solo: true }).map((e) => e.etiqueta)
+    expect(con).toContain('Certificados y accesos')
+    expect(sin).not.toContain('Certificados y accesos')
   })
 })

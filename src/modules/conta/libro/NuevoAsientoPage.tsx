@@ -55,6 +55,7 @@ import { useIsMobile } from '@/shell/useIsMobile'
 import { TextoConImpuesto } from '@/modules/conta/ui/TextoConImpuesto'
 import { useIvaPresentado } from '@/modules/conta/hooks/useIvaPresentado'
 import { mensajePresentado, presentadoDe } from '@/modules/conta/lib/ivaPresentado'
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 
 const vacia = (localId: string | null): LineaMano => ({ cuenta: '', debe: '', haber: '', localId, comun: false, concepto: '' })
 /** Los totales del pie, como se escriben en la hoja («1.234,56»). */
@@ -230,15 +231,17 @@ export default function NuevoAsientoPage({ tipo }: { tipo?: string } = {}) {
   // La función cambia en cada pintada; el oyente lee siempre la última.
   const validarConTecla = useRef<() => void>(() => undefined)
   useEffect(() => { validarConTecla.current = () => { if (!ocupado && base) void guardar(true) } })
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const oir = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
+      if (!seVe() || e.key !== 'Enter' || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
       e.preventDefault()
       validarConTecla.current()
     }
     window.addEventListener('keydown', oir)
     return () => window.removeEventListener('keydown', oir)
-  }, [])
+  }, [seVe])
 
   const textoPrincipal = adjuntando ? 'Adjuntando la factura…' : ocupado ? 'Guardando…' : 'Guardar y validar'
   const principal = (

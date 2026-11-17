@@ -156,12 +156,17 @@ describe('formulario por bloques · teclas', () => {
     expect(accionDeTecla({ key: 'PageDown' })).toBe('documento-siguiente')
     expect(accionDeTecla({ key: 'PageUp' })).toBe('documento-anterior')
   })
-  it('ninguna de las del navegador (F5, F10, F11, F12), ni sola ni con Ctrl', () => {
-    expect([...TECLAS_DEL_NAVEGADOR]).toEqual(['F5', 'F10', 'F11', 'F12'])
+  it('ninguna de las del navegador (F10, F11, F12), ni sola ni con Ctrl', () => {
+    expect([...TECLAS_DEL_NAVEGADOR]).toEqual(['F10', 'F11', 'F12'])
     for (const key of TECLAS_DEL_NAVEGADOR) {
       expect(accionDeTecla({ key })).toBeNull()
       expect(accionDeTecla({ key, ctrlKey: true })).toBeNull()
     }
+  })
+  it('K03 (decisión 10): F5 abre el mayor; con Ctrl o Mayúsculas, sigue siendo del navegador (recargar)', () => {
+    expect(accionDeTecla({ key: 'F5' })).toBe('mayor')
+    expect(accionDeTecla({ key: 'F5', ctrlKey: true })).toBeNull()
+    expect(accionDeTecla({ key: 'F5', shiftKey: true })).toBeNull()
   })
   it('lo demás no lo toca (las letras se escriben; Ctrl con otra cosa es del navegador)', () => {
     expect(accionDeTecla({ key: 'a' })).toBeNull()
