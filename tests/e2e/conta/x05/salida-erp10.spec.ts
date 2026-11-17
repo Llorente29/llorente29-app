@@ -184,11 +184,12 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
     const wb = XLSX.read(readFileSync(await d.path()), { type: 'buffer', cellDates: true })
     return wb.Sheets[wb.SheetNames[0]]
   }
+  // Por la celda I de cada fila (el número): la hoja no empieza en la A (no se escriben las celdas vacías).
   const filaCon = (ws: XLSX.WorkSheet, numero: string) => {
-    const filas = XLSX.utils.sheet_to_json<(string | number | Date)[]>(ws, { header: 1, raw: true })
-    const i = filas.findIndex((f) => f[8] === numero)
-    expect(i, `la fila de ${numero}`).toBeGreaterThanOrEqual(0)
-    return i + 1
+    const hasta = XLSX.utils.decode_range(ws['!ref'] ?? 'A1').e.r + 1
+    const n = Array.from({ length: hasta }, (_, k) => k + 1).find((r) => ws[`I${r}`]?.v === numero)
+    expect(n, `la fila de ${numero}`).toBeDefined()
+    return n!
   }
   // Una fila de expedidas: fecha (E), cliente (G), número (I), IVA 1 (J, K, L), PDF (Z), ingreso (AA, AC) y total (AB).
   const ex = await hoja('expedidas.xlsx')
@@ -203,8 +204,10 @@ test('X05 · contra staging: encender, mirar las emitidas y las recibidas, desca
   const m = filaCon(re, hecho.recibida)
   expect([re[`AB${m}`].v, re[`AM${m}`].v, re[`J${m}`].v, re[`K${m}`].v, re[`L${m}`].v]).toEqual([121, 'OI', 100, 21, 21])
   // La cuenta del cliente, en subcuentas, con su NIF.
-  const sub = XLSX.utils.sheet_to_json<string[]>(await hoja('subcuentas.xlsx'), { header: 1 })
-  expect(sub.some((f) => f[0] === ex[`G${n}`].v && f[2] === 'B00000000'), 'la 430 del cliente, con su NIF').toBe(true)
+  const sub = await hoja('subcuentas.xlsx')
+  const filasSub = XLSX.utils.decode_range(sub['!ref'] ?? 'A1').e.r + 1
+  expect(Array.from({ length: filasSub }, (_, k) => k + 1).some((r) => sub[`A${r}`]?.v === ex[`G${n}`].v && sub[`C${r}`]?.v === 'B00000000'),
+    'la 430 del cliente, con su NIF').toBe(true)
 
   // 4 · El paso 2: los cuatro ficheros, en el orden en que se importan.
   const orden = page.getByRole('table', { name: 'Los ficheros, en el orden en que se importan' })

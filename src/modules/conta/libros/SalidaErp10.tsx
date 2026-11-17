@@ -200,7 +200,7 @@ export function SalidaErp10() {
               </div>
               <div className="cxe-pie">
                 <strong>Sale solo lo que todavía no ha salido.</strong>
-                <span className="cxe-pie-gris">{ultima ? `Última salida: ${fechaLarga(ultima.cuando)}, ${mesEnPalabras(ultima.mes)}.` : 'Todavía no ha salido nada.'}</span>
+                <span className="cxe-pie-gris">{ultima ? `Última salida: ${fechaLarga(hoyEnMadrid(new Date(ultima.cuando)))}, ${mesEnPalabras(ultima.mes)}.` : 'Todavía no ha salido nada.'}</span>
                 <button type="button" className="cxe-enlace" aria-expanded={verLotes} onClick={() => setVerLotes((v) => !v)}>{verLotes ? 'Ocultar lo que ya salió' : 'Ver lo que ya salió'}</button>
               </div>
               {verLotes && datos.datos && (
@@ -210,7 +210,7 @@ export function SalidaErp10() {
                     <tbody>
                       {datos.datos.lotes.length === 0 && <tr><td colSpan={6}>Todavía no ha salido nada.</td></tr>}
                       {datos.datos.lotes.map((l) => (
-                        <tr key={l.id}><td>{fechaLarga(l.cuando)}</td><td>{mesEnPalabras(l.mes)}</td><td>{l.quien ?? '—'}</td><td className="cxe-num">{l.cuentasNuevas}</td><td className="cxe-num">{l.emitidas}</td><td className="cxe-num">{l.recibidas}</td></tr>
+                        <tr key={l.id}><td>{fechaLarga(hoyEnMadrid(new Date(l.cuando)))}</td><td>{mesEnPalabras(l.mes)}</td><td>{l.quien ?? '—'}</td><td className="cxe-num">{l.cuentasNuevas}</td><td className="cxe-num">{l.emitidas}</td><td className="cxe-num">{l.recibidas}</td></tr>
                       ))}
                     </tbody>
                   </table>
