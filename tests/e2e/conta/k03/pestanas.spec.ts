@@ -55,7 +55,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     // 1 · Tres pantallas, y se escribe en una.
     await boton(page, 'Asientos', 'recibidas')
     await cargada(page, 'Recibidas')
-    const buscar = zonaActiva(page).getByRole('textbox', { name: 'Buscar factura' }).first()
+    const buscar = zonaActiva(page).getByLabel('Buscar factura').first()
     await buscar.fill('Distribuciones')
     await boton(page, 'Asientos', 'bancos')
     await abierta(page, 'Bancos')
@@ -69,13 +69,13 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await pestana(page, 'Facturas recibidas').click()
     await expect(page).toHaveURL(/\/conta\/documentos/)
     await expect(zonaActiva(page)).toHaveAttribute('data-k03-viva', 'si')
-    await expect(zonaActiva(page).getByRole('textbox', { name: 'Buscar factura' }).first()).toHaveValue('Distribuciones')
+    await expect(zonaActiva(page).getByLabel('Buscar factura').first()).toHaveValue('Distribuciones')
     await noRueda(page, 'de vuelta en Recibidas')
     if (alto >= 800) {
       await cargada(page, 'Recibidas, de vuelta')
       await page.screenshot({ path: `${DIR}/pestanas-vuelta-${ancho}.png` })
     }
-    await zonaActiva(page).getByRole('textbox', { name: 'Buscar factura' }).first().fill('')
+    await zonaActiva(page).getByLabel('Buscar factura').first().fill('')
 
     // 3 · F5 desde una fila con cuenta: el plan contable (cada fila enlaza con su mayor).
     await boton(page, 'Definiciones', 'plan')
