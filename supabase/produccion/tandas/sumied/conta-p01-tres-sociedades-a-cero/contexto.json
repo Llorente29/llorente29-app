@@ -1,0 +1,19 @@
+{
+ "_que": "P01 · las tres sociedades a cero · contexto de producción, medido en SOLO LECTURA el 17/11 hacia las 09:25Z: la 1015 añade tres funciones que no existen (_p01_dentro, _p01_fuera, _p01_a_cero) y, dentro de la última, borra lo entrado por correo de las tres sociedades del P01, cambia su trade_name, abre un ejercicio y fija el corte con conta_fijar_corte. Nada en el camino del pedido; la 1015 no está en el historial. Los 77 PDF quedan (protect_objects_delete).",
+ "medido": "2026-11-17T09:25Z",
+ "tanda": {
+  "supabase/migrations/20261117T1015_p01_tres_sociedades_a_cero.sql": "8035f9ba92b7e4f657a07f56750c725f"
+ },
+ "contexto": {
+  "tablas": [],
+  "funciones": [],
+  "filas": {},
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}
