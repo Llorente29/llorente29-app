@@ -21,6 +21,11 @@ export interface CorteEmpresa {
   historicoTraido: boolean
   /** N05c · «Empezar a trabajar ya» sin lo anterior: cuándo y quién. Nulo si no se ha decidido. */
   sinHistorico: { el: string; por: string | null } | null
+  /**
+   * N06a · El día de inicio, LEÍDO DE LA BASE (conta_dia_de_inicio, la misma que usan la carga y
+   * las paradas), no calculado aquí: cuenta también el corte de Bancos (respuesta N05c · 1).
+   */
+  diaDeInicio: string | null
 }
 
 /**
@@ -36,11 +41,12 @@ export function nombrePrograma(programa: string | null | undefined): string | nu
 }
 
 export async function leerCorte(accountId: string, companyId: string): Promise<CorteEmpresa> {
-  const [ej, tr] = await Promise.all([
+  const [ej, tr, di] = await Promise.all([
     tabla('fiscal_year').select('code, starts_on, ends_on, origin, origin_program, imported_until, history_imported_at, works_without_history_at, works_without_history_by_name')
       .eq('account_id', accountId).eq('company_id', companyId).order('starts_on', { ascending: false }),
     tabla('journal_entry').select('id', { count: 'exact', head: true })
       .eq('account_id', accountId).eq('company_id', companyId).eq('source_type', 'migrated'),
+    rpc<string | null>('conta_empresa_dia_de_inicio', { p_company: companyId }),
   ])
   if (ej.error) throw new Error(mensaje('No se ha podido leer el ejercicio', ej.error))
   if (tr.error) throw new Error(mensaje('No se han podido contar los asientos traídos', tr.error))
@@ -58,6 +64,7 @@ export async function leerCorte(accountId: string, companyId: string): Promise<C
     sinHistorico: f?.works_without_history_at
       ? { el: String(f.works_without_history_at), por: f.works_without_history_by_name ? String(f.works_without_history_by_name) : null }
       : null,
+    diaDeInicio: typeof di === 'string' && di ? di : null,
   }
 }
 
