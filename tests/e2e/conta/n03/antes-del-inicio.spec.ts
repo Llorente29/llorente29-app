@@ -170,15 +170,20 @@ test('N03 · 2 · la lista: la marcada sale en «Apartadas», con «Ya contabili
     })
     await page.goto('/conta/documentos?ver=otras', { waitUntil: 'load' })
     await expect(page.getByRole('heading', { name: 'Facturas recibidas', level: 1 })).toBeVisible({ timeout: 40_000 })
-    // En «Apartadas», con su propia opción en «Qué es» (y no en «Por revisar»).
-    const que = page.getByRole('group', { name: 'Qué es' })
-    const opcion = que.getByRole('button', { name: 'Ya contabilizada en ERP10 · 1' })
-    await expect(opcion).toBeVisible({ timeout: 40_000 })
-    await opcion.click()
-    await expect(opcion).toHaveAttribute('aria-pressed', 'true')
-    await expect(page.getByText(numero)).toBeVisible({ timeout: 20_000 })
+    // En «Apartadas» (y no en «Por revisar»): la fila, con su etiqueta gris.
+    const suNumero = page.getByText(numero).first()
+    await expect(suNumero).toBeVisible({ timeout: 40_000 })
     await expect(page.getByText('Ya contabilizada en ERP10', { exact: true }).first()).toBeVisible()
-    await page.getByText(numero).scrollIntoViewIfNeeded()
+    // «Qué es» solo sale con más de un tipo en «Apartadas»: si sale, la suya está y la deja sola.
+    const que = page.getByRole('group', { name: 'Qué es' })
+    if (await que.count()) {
+      const opcion = que.getByRole('button', { name: /^Ya contabilizada en ERP10 · \d+$/ })
+      await expect(opcion).toBeVisible()
+      await opcion.click()
+      await expect(opcion).toHaveAttribute('aria-pressed', 'true')
+      await expect(suNumero).toBeVisible()
+    }
+    await suNumero.scrollIntoViewIfNeeded()
     await page.screenshot({ path: `${DIR}/lista-${lado(page)}.png`, fullPage: true })
     expect(errores).toEqual([])
   } finally {
