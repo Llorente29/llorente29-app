@@ -1,0 +1,15 @@
+# N02 · La carga, abierta a otros programas y en dos tiempos, y el día de
+# inicio. Rama conta/n02-carga-y-dia-de-inicio. Se ensaya y se aplica desde
+# main nombrando esta rama, antes de fusionar.
+#
+#   0832  Amplía cinco CHECK (import_run.program, kind y status;
+#         supplier_invoice.source; customer_invoice.origin). Cambia en caliente,
+#         con su prueba de staging. No cambia ni una fila.
+#   0833  Añade import_run_id (admite nulos) en supplier_invoice,
+#         customer_invoice y vat_book_entry, y conta_dia_de_inicio (solo lee;
+#         no la llama nadie todavía).
+#
+# Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n02-carga.sql
+supabase/migrations/20261117T0832_n02_carga_abierta.sql
+supabase/migrations/20261117T0833_n02_dia_de_inicio.sql

@@ -1,0 +1,5 @@
+# N02 · la vuelta atrás, en orden inverso: la 0833 (quita la función y las tres
+# columnas) y la 0832 (los cinco CHECK como estaban).
+cuenta: scripts/conta/produccion/cuentas/n02-carga.sql
+supabase/vuelta-atras/20261117T0833_n02_dia_de_inicio.down.sql
+supabase/vuelta-atras/20261117T0832_n02_carga_abierta.down.sql
