@@ -26,7 +26,7 @@ import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useIsMobile } from '@/shell/useIsMobile'
 import { useLeer } from '@/modules/conta/libros/contexto'
-import { useVentasPorDia } from '@/modules/conta/marco/nuevo/contexto'
+import { useVentasPorDia, useVentasPorDiaEncendido } from '@/modules/conta/marco/nuevo/contexto'
 import { useVendePorPlataformas } from '@/modules/conta/services/plataformasCuenta'
 import { diaMes, eurosExactos } from '@/modules/conta/lib/formato'
 import { BotonPulgar, EncabezadoPagina } from '@/modules/conta/marco/EncabezadoPagina'
@@ -37,6 +37,9 @@ import {
 } from '@/modules/conta/lib/cierres'
 import { leerCierres, validarCierre, validarCierreTpv } from '@/modules/conta/services/cierresService'
 import { LoQueDejaElCierre } from './LoQueDejaElCierre'
+import { SubirVentasTpv } from './tpv/SubirVentasTpv'
+import { FormasDePago } from './tpv/FormasDePago'
+import { faltaPorSubir, ultimaSubida } from '@/modules/conta/lib/subirTpv'
 import { LoQueNoHePodido } from '@/modules/conta/ui/LoQueNoHePodido'
 import { DONDE } from '@/modules/conta/lib/noPropuesto'
 
@@ -52,6 +55,9 @@ export default function CierresPage() {
   const { activa } = useEmpresas()
   // R05 (decisión 9): la ve una empresa de hostelería o con «ventas por día» encendido.
   const hosteleria = useVentasPorDia()
+  // R06 · «Subir las ventas del TPV», si tiene «ventas por día» encendido o ya hay días del TPV.
+  const tpvEncendido = useVentasPorDiaEncendido()
+  const [ventana, setVentana] = useState<null | { cual: 'subir' } | { cual: 'formas'; dia: string | null }>(null)
   const vende = useVendePorPlataformas()
   const movil = useIsMobile()
   const navegar = useNavigate()
@@ -74,9 +80,16 @@ export default function CierresPage() {
       {validando ? `Validando ${validando.hecho} de ${validando.total}…` : preparados.length ? `Validar los ${preparados.length} listos` : 'Validar los listos'}
     </Boton>
   )
+  const hoyTpv = hoyMadrid()
+  const diasTpv = todos.filter((x) => x.fuente === 'tpv' && x.tpv).map((x) => ({ dia: x.dia, subido_en: x.tpv!.subidoEn }))
+  const conSubir = tpvEncendido || diasTpv.length > 0
+  const ultima = ultimaSubida(diasTpv, hoyTpv)
+  const falta = faltaPorSubir(diasTpv, hoyTpv)
   const encabezado = (
     <EncabezadoPagina titulo="Cierres del día"
       frase="Lo que vendes cada día en cada local y canal. Al validarlo se hace su factura resumen, su PDF y su asiento, y entra en el traspaso del mes."
+      derecha={conSubir && ultima ? <span className="s-apoyo" data-prueba="ultima-subida">{ultima}</span> : undefined}
+      secundarios={conSubir ? <Boton variante="secundario" icono="subir" onClick={() => setVentana({ cual: 'subir' })}>Subir las ventas del TPV</Boton> : undefined}
       principal={principal} />
   )
   if (!accountId && !cargando) return <div className="s-pagina">{encabezado}<p className="s-apoyo">No hay cuenta activa: elige una cuenta para ver sus cierres.</p></div>
@@ -102,15 +115,21 @@ export default function CierresPage() {
 
   const estado = (x: Cierre) => {
     const e = NOMBRE_ESTADO_CIERRE[x.estado]
-    return <Chip tono={e.tono}>{e.texto}</Chip>
+    // R06 (maqueta 1): un día del TPV que se puede validar dice «Listo para validar».
+    return <Chip tono={e.tono}>{x.fuente === 'tpv' && x.estado === 'por_validar' ? 'Listo para validar' : e.texto}</Chip>
   }
+  // R06 · El motivo de un día del TPV sin cuenta lleva a «A qué cuenta va cada forma de pago».
+  const motivoTpv = (x: Cierre) => x.motivo && /^Falta decir a qué cuenta va/.test(x.motivo) && x.tpv
+    ? <button type="button" className="s-boton s-boton-enlace s-tarjeta-apoyo" data-tono="duda"
+        onClick={(e) => { e.stopPropagation(); setVentana({ cual: 'formas', dia: x.tpv!.diaId }) }}>{x.motivo} Elegir la cuenta</button>
+    : <span className="s-tarjeta-apoyo" data-tono="duda">{x.motivo}</span>
   // R05 · Con días del TPV, las columnas de la maqueta (De dónde, Facturas, Numeración, Base, IVA, Cobrado).
   // Sin ninguno, la lista sale como siempre.
   const conTpv = todos.some((x) => x.fuente === 'tpv')
   const hoy = hoyMadrid()
   const lineaTpv = (t: NonNullable<Cierre['tpv']>) => [subidoTpv(t, hoy), t.conNif ? plural(t.conNif, 'factura con NIF', 'facturas con NIF') : null].filter(Boolean).join(' · ')
   const apoyoTpv = (x: Cierre) => {
-    if (x.estado === 'en_espera' && x.motivo) return <span className="s-tarjeta-apoyo" data-tono="duda">{x.motivo}</span>
+    if (x.estado === 'en_espera' && x.motivo) return motivoTpv(x)
     const t = x.tpv!
     const linea = lineaTpv(t)
     return (
@@ -165,8 +184,8 @@ export default function CierresPage() {
     <>
       <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{x.canal}</span><strong className="s-cifra">{eurosExactos(x.total)}</strong></span>
       <span className="s-tarjeta-apoyo">{[diaMes(x.dia), plural(x.tpv.facturas, 'factura', 'facturas'), numeracionTpv(x.tpv), cobradoTpv(x.tpv.formas)].join(' · ')}</span>
+      <span className="s-tarjeta-pie">{estado(x)}{x.estado === 'en_espera' && x.motivo && motivoTpv(x)}</span>
       {lineaTpv(x.tpv) && <span className="s-tarjeta-apoyo">{lineaTpv(x.tpv)}</span>}
-      <span className="s-tarjeta-pie">{estado(x)}{x.estado === 'en_espera' && x.motivo && <span className="s-tarjeta-apoyo">{x.motivo}</span>}</span>
       {x.tpv.aviso && <span className="s-tarjeta-apoyo" data-tono="duda">{x.tpv.aviso}</span>}
     </>
   ) : (
@@ -240,8 +259,16 @@ export default function CierresPage() {
             : q
               ? <>Ningún cierre con «{q}». <button type="button" className="s-boton s-boton-enlace" onClick={() => cambiar({ q: null })}>Quitar la búsqueda</button></>
               : pestana === 'por-validar' ? <>Nada por validar: todo al día.</> : <>Ninguno en «{nombrePestana}».</>}
-          pie={<><span>{plural(filas.length, 'cierre', 'cierres')}</span><span className="s-lista-pie-totales"><span>Total <strong className="s-cifra">{eurosExactos(total)}</strong></span></span></>}
+          pie={<><span>{plural(filas.length, 'cierre', 'cierres')}</span><span className="s-lista-pie-totales"><span>Total <strong className="s-cifra">{eurosExactos(total)}</strong></span>{conSubir && falta && <span data-prueba="falta-por-subir">Falta por subir: <strong>{falta}</strong></span>}</span></>}
         />
+      )}
+
+      {ventana?.cual === 'subir' && activa && (
+        <SubirVentasTpv companyId={activa.id} quien={userName} alCerrar={() => setVentana(null)} alGuardar={() => setVuelta((v) => v + 1)}
+          alElegirCuentas={() => setVentana({ cual: 'formas', dia: null })} />
+      )}
+      {ventana?.cual === 'formas' && activa && (
+        <FormasDePago companyId={activa.id} quien={userName} diaId={ventana.dia} alCerrar={() => setVentana(null)} alGuardar={() => setVuelta((v) => v + 1)} />
       )}
 
       {confirmar && (

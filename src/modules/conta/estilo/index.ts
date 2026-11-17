@@ -33,6 +33,7 @@ import './impuestos.css'
 import './despacho.css'
 import './inicio.css'
 import './ventas.css'
+import './tpv.css' // R06 · «Subir las ventas del TPV» y «A qué cuenta va cada forma de pago» (maquetas 2 y 3)
 import './ficha.css'
 import './verifactu.css'
 import './marco.css'

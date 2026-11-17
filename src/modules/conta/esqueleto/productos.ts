@@ -36,7 +36,7 @@ export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'clientesCuota
  * `gestoria` las enciende el sector de la empresa (G03, sectores/sectores.ts);
  * `asesoria` es la CUENTA que lleva clientes (Clientes del despacho).
  */
-export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo' | 'ventas_por_dia'
+export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo' | 'ventas_por_dia' | 'tpv'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
@@ -156,6 +156,7 @@ const PAGINAS_AJUSTES: Pestana[] = INDICE_AJUSTES.flatMap((g) => g.entradas)
     prefijos: e.id === 'empresa' ? [R.empresa, e.ruta] : [e.ruta],
     hueco: !!e.hueco,
     ...(e.soloDemo ? { solo: 'demo' as const } : {}),
+    ...(e.soloVentasPorDia ? { solo: 'tpv' as const } : {}),
   }))
 
 export const PRODUCTOS: Producto[] = [
@@ -319,6 +320,8 @@ export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
     case 'demo': return ctx.demo === true
     // R05 (decisión 9): Cierres del día, si es de hostelería o tiene «ventas por día» encendido.
     case 'ventas_por_dia': return ctx.hosteleria || ctx.ventasPorDia === true
+    // R06 · Ajustes › Ventas por día: solo con el interruptor encendido (sube las ventas de un TPV de fuera).
+    case 'tpv': return ctx.ventasPorDia === true
   }
 }
 
