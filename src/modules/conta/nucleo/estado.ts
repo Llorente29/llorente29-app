@@ -6,8 +6,9 @@
 // movimientos del banco y los asientos por revisar. Lo que no se sabe todavía
 // no se pinta, ni «…» ni verde: «Bancos cuadrados» y «el IVA del trimestre»
 // esperan a que algo los cuente. Un número que no se ha podido contar (null)
-// tampoco sale. Cero, contado, sí: en verde, diciendo que no hay nada. Núcleo
-// puro.
+// tampoco sale. Cero, contado, sí: en verde, «al día». Cada una se lee como
+// una frase (respuesta K02 · 1, arreglo 3): «14 movimientos del banco por
+// revisar», «Bancos al día». Núcleo puro.
 
 import type { CuentasMenu } from '@/modules/conta/marco/useCuentasMenu'
 
@@ -22,19 +23,19 @@ export function frasesDeEstado(c: CuentasMenu, rutas: { recibidas: string; banco
   if (bancos !== null) {
     fuera.push(bancos > 0
       ? { id: 'bancos', tono: 'mira', fuerte: `${bancos} ${plural(bancos, 'movimiento', 'movimientos')}`, resto: 'del banco por revisar', ruta: rutas.bancos }
-      : { id: 'bancos', tono: 'bien', fuerte: 'Bancos', resto: 'sin movimientos por revisar', ruta: rutas.bancos })
+      : { id: 'bancos', tono: 'bien', fuerte: 'Bancos', resto: 'al día', ruta: rutas.bancos })
   }
   const asientos = n(c, 'libros')
   if (asientos !== null) {
     fuera.push(asientos > 0
       ? { id: 'asientos', tono: 'mira', fuerte: `${asientos} ${plural(asientos, 'asiento', 'asientos')}`, resto: 'por revisar', ruta: rutas.asientos }
-      : { id: 'asientos', tono: 'bien', fuerte: 'Asientos', resto: 'sin ninguno por revisar', ruta: rutas.asientos })
+      : { id: 'asientos', tono: 'bien', fuerte: 'Asientos', resto: 'al día', ruta: rutas.asientos })
   }
   const recibidas = n(c, 'recibidas')
   if (recibidas !== null) {
     fuera.push(recibidas > 0
       ? { id: 'recibidas', tono: 'mira', fuerte: `${recibidas} ${plural(recibidas, 'factura', 'facturas')}`, resto: 'por revisar', ruta: rutas.recibidas }
-      : { id: 'recibidas', tono: 'bien', fuerte: 'Facturas', resto: 'ninguna por revisar', ruta: rutas.recibidas })
+      : { id: 'recibidas', tono: 'bien', fuerte: 'Facturas', resto: 'al día', ruta: rutas.recibidas })
   }
   return fuera
 }

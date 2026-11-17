@@ -60,12 +60,14 @@ describe('K02 · la línea de estado (decisión 8)', () => {
     expect(frasesDeEstado({}, rutas)).toEqual([])
     expect(frasesDeEstado({ recibidas: null, bancos: null, libros: null }, rutas)).toEqual([])
   })
-  it('lo contado sale: en ámbar lo que espera, en verde el cero', () => {
-    const f = frasesDeEstado({ recibidas: 9, bancos: 0, libros: 1 }, rutas)
-    expect(f.map((x) => [x.id, x.tono, `${x.fuerte} ${x.resto}`])).toEqual([
-      ['bancos', 'bien', 'Bancos sin movimientos por revisar'],
-      ['asientos', 'mira', '1 asiento por revisar'],
-      ['recibidas', 'mira', '9 facturas por revisar'],
+  it('lo contado sale como una frase: en ámbar lo que espera, en verde «al día» (arreglo 3)', () => {
+    const frase = (c: Parameters<typeof frasesDeEstado>[0]) => frasesDeEstado(c, rutas).map((x) => [x.tono, `${x.fuerte} ${x.resto}`])
+    expect(frase({ recibidas: 9, bancos: 14, libros: 3 })).toEqual([
+      ['mira', '14 movimientos del banco por revisar'], ['mira', '3 asientos por revisar'], ['mira', '9 facturas por revisar'],
+    ])
+    expect(frase({ recibidas: 0, bancos: 0, libros: 0 })).toEqual([['bien', 'Bancos al día'], ['bien', 'Asientos al día'], ['bien', 'Facturas al día']])
+    expect(frase({ recibidas: 1, bancos: 1, libros: 1 })).toEqual([
+      ['mira', '1 movimiento del banco por revisar'], ['mira', '1 asiento por revisar'], ['mira', '1 factura por revisar'],
     ])
   })
   it('no dice nada de lo que hoy no se cuenta: ni bancos cuadrados ni el IVA', () => {

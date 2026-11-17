@@ -10,8 +10,10 @@
 //     (el alto del documento es el de la ventana);
 //   · por debajo de 800 de alto, los botones nacen plegados;
 //   · en el móvil sale el marco de hoy.
-// Las capturas, a 1456 × 816: con Inicio, con una lista (Recibidas) y con los
-// botones plegados.
+// Las capturas, con la pantalla cargada y la empresa de gestoría abierta (la
+// que tiene datos): a 1456 × 816, Inicio, una lista (Recibidas), los botones
+// plegados, los dos menús de arriba, los módulos plegados y «Más ▾»; a 1366 ×
+// 768, el marco con los botones desplegados (respuesta K02 · 1).
 
 import { test, expect, type Page } from '@playwright/test'
 import { correoDePrueba, enCarril, entrarComo } from '../sesion'
@@ -33,6 +35,20 @@ async function abierta(page: Page, donde: string) {
   await expect(page.locator('.k-zona')).toBeVisible({ timeout: 30_000 })
   await expect(page.locator('.k-zona .cx-hueso').first()).toHaveCount(0, { timeout: 30_000 })
   await noRueda(page, donde)
+}
+
+/**
+ * Arreglo 1 (respuesta K02 · 1): la captura, con la pantalla CARGADA. Sin
+ * peticiones en vuelo y, si es una lista, con sus filas o con su frase de que
+ * no hay ninguna (nunca a medias: las pestañas con «—» y la tabla en gris).
+ */
+async function cargada(page: Page, donde: string) {
+  await abierta(page, donde)
+  await page.waitForLoadState('networkidle', { timeout: 20_000 }).catch(() => { /* lo que siga abierto (un canal en vivo) no cuenta */ })
+  const zona = page.locator('.k-zona')
+  if (await zona.locator('table').count()) {
+    await expect(zona.locator('tbody tr').first().or(zona.getByText(/no hay|ninguna|todavía no/i).first())).toBeVisible({ timeout: 30_000 })
+  }
 }
 
 async function verBotones(page: Page) {
@@ -68,11 +84,36 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(page.locator('.k-marca')).toHaveText('Sumied')
     await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}, ejercicio 2026`) })).toBeVisible()
     await abierta(page, 'Inicio')
+    const modulos = page.getByRole('navigation', { name: 'Módulos' })
+
+    // El ejercicio, arriba, en la empresa general (la que tiene 2025 y 2026): se cambia y queda escrito en la dirección.
+    await elegirEnArriba(page, /^Ejercicio 2025/)
+    await expect(page).toHaveURL(/ejercicio=2025/)
+    await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}, ejercicio 2025`) })).toBeVisible()
+    await elegirEnArriba(page, /^Ejercicio 2026/)
+    await expect(page).toHaveURL(/ejercicio=2026/)
+    // En la general no hay Despacho: lo enciende el sector de la empresa (o una cuenta que es asesoría).
+    await expect(modulos.getByRole('button')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal'])
+
+    // Cambiar de empresa: la de gestoría, como la verá una gestoría. Trae Despacho (arreglo 4) y los datos de la semilla.
+    await elegirEnArriba(page, new RegExp(`^${GESTORIA}`))
+    await expect(page.getByRole('button', { name: new RegExp(`^${GESTORIA}`) })).toBeVisible({ timeout: 30_000 })
+    await expect(modulos.getByRole('button')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal', 'Despacho'], { timeout: 30_000 })
+    await cargada(page, 'Inicio')
 
     // Por debajo de 800 de alto, los botones nacen plegados (decisión 13).
     if (alto < 800) await expect(page.getByRole('button', { name: 'Ver los botones' })).toBeVisible()
     await verBotones(page)
-    if (alto >= 800) await page.screenshot({ path: `${DIR}/marco-inicio-${ancho}.png` })
+
+    // Los contadores de la cinta y la línea de estado, con número (arreglos 2 y 3).
+    await expect(page.locator('[data-boton="recibidas"] .k-contador')).toHaveText('9', { timeout: 30_000 })
+    await expect(page.locator('[data-boton="bancos"] .k-contador')).toHaveText('14', { timeout: 30_000 })
+    const estado = page.getByRole('contentinfo', { name: 'Cómo va la empresa' })
+    await expect(estado).toContainText('14 movimientos del banco por revisar')
+    await expect(estado).toContainText('Asientos al día')
+    await expect(estado).toContainText('9 facturas por revisar')
+    // A 1366 × 768, además, es la del marco con los botones desplegados (arreglo 5).
+    await page.screenshot({ path: `${DIR}/marco-inicio-${ancho}.png` })
 
     // Cambiar de pestaña de la cinta enseña sus botones, sin cambiar de pantalla.
     await cinta.getByRole('tab', { name: 'Listados' }).click()
@@ -85,7 +126,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(page).toHaveURL(/\/conta\/documentos/)
     await expect(page.getByRole('tab', { name: /Facturas recibidas/ })).toHaveAttribute('aria-selected', 'true')
     await expect(page.locator('[data-boton="recibidas"]')).toHaveAttribute('aria-current', 'page')
-    await abierta(page, 'Recibidas')
+    await cargada(page, 'Recibidas')
     if (alto >= 800) await page.screenshot({ path: `${DIR}/marco-recibidas-${ancho}.png` })
 
     // Plegar los botones, y se recuerda (a 816 de alto; por debajo de 800 nacen plegados siempre).
@@ -97,32 +138,42 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
       await page.reload()
       await expect(page.locator('.k-nucleo')).toBeVisible({ timeout: 30_000 })
       await expect(page.getByRole('button', { name: 'Ver los botones' })).toBeVisible({ timeout: 30_000 })
+      await cargada(page, 'Recibidas, recargada')
     }
     await verBotones(page)
 
-    // El ejercicio, arriba: se cambia y queda escrito en la dirección.
-    await elegirEnArriba(page, /^Ejercicio 2025/)
-    await expect(page).toHaveURL(/ejercicio=2025/)
-    await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}, ejercicio 2025`) })).toBeVisible()
-    await elegirEnArriba(page, /^Ejercicio 2026/)
-    await expect(page).toHaveURL(/ejercicio=2026/)
+    // Arreglo 5 · lo diseñado sin maqueta, a 1456 × 816: los dos menús de arriba, los módulos plegados y «Más ▾».
+    if (alto >= 800) {
+      await page.getByRole('button', { name: /Cambiar de empresa o de ejercicio/ }).click()
+      await expect(page.getByRole('group', { name: 'Empresa y ejercicio' })).toBeVisible()
+      await page.screenshot({ path: `${DIR}/marco-menu-empresa-${ancho}.png` })
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: /Ajustes, Novedades, Favoritos y tus preferencias/ }).click()
+      await expect(page.getByRole('list', { name: 'Ajustes' })).toBeVisible()
+      await page.screenshot({ path: `${DIR}/marco-menu-persona-${ancho}.png` })
+      await page.keyboard.press('Escape')
+      await page.getByRole('button', { name: 'Plegar los módulos' }).click()
+      await expect(page.getByRole('button', { name: 'Desplegar los módulos' })).toBeVisible()
+      await page.screenshot({ path: `${DIR}/marco-modulos-plegados-${ancho}.png` })
+      await page.getByRole('button', { name: 'Desplegar los módulos' }).click()
+      await expect(page.getByRole('button', { name: 'Plegar los módulos' })).toBeVisible()
+      await cinta.getByRole('tab', { name: 'Listados' }).click()
+      await page.getByRole('button', { name: 'Más', exact: true }).click()
+      await expect(page.getByRole('group', { name: 'Más botones' })).toBeVisible()
+      await page.screenshot({ path: `${DIR}/marco-mas-listados-${ancho}.png` })
+      await page.keyboard.press('Escape')
+      await cinta.getByRole('tab', { name: 'Asientos' }).click()
+    }
 
-    // Una pantalla de cada módulo (los de la empresa general).
-    for (const [modulo, url] of [['Facturación', /\/conta\/ventas\/facturas/], ['Impuestos', /\/conta\/impuestos/], ['Personal', /\/conta\/laboral/], ['Contabilidad', /\/conta\/libros\/diario/]] as const) {
-      await page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: modulo }).click()
+    // Una pantalla de cada módulo (en la gestoría, Despacho lleva a Clientes y cuotas).
+    for (const [modulo, url] of [['Facturación', /\/conta\/ventas\/facturas/], ['Impuestos', /\/conta\/impuestos/], ['Personal', /\/conta\/laboral/], ['Despacho', /\/conta\/ventas\/clientes-y-cuotas/], ['Contabilidad', /\/conta\/libros\/diario/]] as const) {
+      await modulos.getByRole('button', { name: modulo }).click()
       await expect(page).toHaveURL(url)
-      await expect(page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: modulo })).toHaveAttribute('aria-current', 'true')
+      await expect(modulos.getByRole('button', { name: modulo })).toHaveAttribute('aria-current', 'true')
       await abierta(page, modulo)
     }
 
-    // Cambiar de empresa: la de gestoría trae el módulo Despacho; se abre y se vuelve.
-    await elegirEnArriba(page, new RegExp(`^${GESTORIA}`))
-    await expect(page.getByRole('button', { name: new RegExp(`^${GESTORIA}`) })).toBeVisible({ timeout: 30_000 })
-    const despacho = page.getByRole('navigation', { name: 'Módulos' }).getByRole('button', { name: 'Despacho' })
-    await expect(despacho).toBeVisible({ timeout: 30_000 })
-    await despacho.click()
-    await expect(page).toHaveURL(/\/conta\/ventas\/clientes-y-cuotas/)
-    await abierta(page, 'Despacho')
+    // Y se vuelve a la general.
     await elegirEnArriba(page, new RegExp(`^${EMPRESA}`))
     await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}`) })).toBeVisible({ timeout: 30_000 })
 
