@@ -5082,6 +5082,18 @@ COMMENT ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total nume
 
 
 --
+-- Name: _conta_de_programa(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_de_programa(p_programa text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public'
+    AS $$
+  select case lower(coalesce(p_programa, '')) when 'erp10' then 'de ERP10' when 'diez' then 'de Diez' else 'del programa de antes' end
+$$;
+
+
+--
 -- Name: _conta_despachos_de_quien_llama(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5629,6 +5641,48 @@ end $$;
 
 
 --
+-- Name: _conta_falta_historico_motivo(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_falta_historico_motivo(p_entry uuid) RETURNS text
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_e public.journal_entry; v_y public.fiscal_year; v_inicio date; v_de text; v_dia text;
+begin
+  select * into v_e from public.journal_entry where id = p_entry;
+  if v_e.id is null or v_e.source_type = 'migrated' then return null; end if;
+  -- La pantalla lo pregunta como usuario: solo de su cuenta.
+  if auth.uid() is not null and not public.belongs_to_account(v_e.account_id) then return null; end if;
+  select * into v_y from public.fiscal_year where id = v_e.fiscal_year_id;
+  if v_y.id is null or v_y.origin not in ('mixed', 'migrated') or v_y.origin_program is null or v_y.history_imported_at is not null then
+    return null;
+  end if;
+  v_inicio := public._conta_inicio_del_ejercicio(v_y);
+  v_de := public._conta_de_programa(v_y.origin_program);
+  v_dia := to_char(v_inicio, 'DD/MM/YYYY');
+  if v_y.works_without_history_at is null then
+    return format('Lo anterior al %s todavía no se ha traído %s. Tráelo, o decide empezar a trabajar ya en Ajustes › Ejercicio.', v_dia, v_de);
+  end if;
+  if v_e.source_type in ('closing', 'opening') then
+    return format('Para cerrar el ejercicio hace falta lo anterior al %s, que todavía no se ha traído %s. Tráelo antes de cerrar.', v_dia, v_de);
+  end if;
+  if v_e.entry_date < v_inicio then
+    return format('Este asiento es del %s y lo anterior al %s todavía no se ha traído %s: no se contabiliza hasta traerlo.',
+                  to_char(v_e.entry_date, 'DD/MM/YYYY'), v_dia, v_de);
+  end if;
+  return null;
+end $$;
+
+
+--
+-- Name: FUNCTION _conta_falta_historico_motivo(p_entry uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) IS 'N05c: el motivo de no validar un asiento de un ejercicio traído a medias sin el histórico. Sin decidir, no se valida nada. Con «empezar a trabajar ya», se valida desde el día de inicio, salvo el cierre y la apertura. Nulo: se puede validar. Lo usa conta_motivos_para_validar.';
+
+
+--
 -- Name: _conta_gestoria_apuntar(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5787,6 +5841,123 @@ CREATE FUNCTION public._conta_hoja(p_company uuid, p_template text) RETURNS text
     AS $$
   select ca.code from public.company_account ca where ca.company_id = p_company and ca.kind = 'template'
      and ca.status is distinct from 'cerrada' and ca.template_code = p_template order by ca.code limit 1
+$$;
+
+
+--
+-- Name: fiscal_year; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fiscal_year (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    code text NOT NULL,
+    starts_on date NOT NULL,
+    ends_on date NOT NULL,
+    previous_year_id uuid,
+    status text DEFAULT 'open'::text NOT NULL,
+    closed_at timestamp with time zone,
+    closed_by uuid,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    average_staff_fixed numeric(9,2),
+    average_staff_temporary numeric(9,2),
+    is_audited boolean,
+    auditor_name text,
+    auditor_tax_id text,
+    audit_opinion text,
+    origin text DEFAULT 'folvy'::text NOT NULL,
+    origin_program text,
+    imported_until date,
+    history_imported_at timestamp with time zone,
+    works_without_history_at timestamp with time zone,
+    works_without_history_by uuid,
+    works_without_history_by_name text,
+    CONSTRAINT fiscal_year_auditoria_coherente CHECK (((is_audited IS TRUE) OR ((auditor_name IS NULL) AND (auditor_tax_id IS NULL) AND (audit_opinion IS NULL)))),
+    CONSTRAINT fiscal_year_fechas CHECK ((ends_on >= starts_on)),
+    CONSTRAINT fiscal_year_hasta_doce_meses CHECK ((ends_on < ((starts_on + '1 year'::interval))::date)),
+    CONSTRAINT fiscal_year_opinion_valida CHECK (((audit_opinion IS NULL) OR (audit_opinion = ANY (ARRAY['favorable'::text, 'con_salvedades'::text, 'desfavorable'::text, 'denegada'::text])))),
+    CONSTRAINT fiscal_year_origin_check CHECK ((origin = ANY (ARRAY['folvy'::text, 'migrated'::text, 'mixed'::text]))),
+    CONSTRAINT fiscal_year_plantilla_positiva CHECK (((COALESCE(average_staff_fixed, (0)::numeric) >= (0)::numeric) AND (COALESCE(average_staff_temporary, (0)::numeric) >= (0)::numeric))),
+    CONSTRAINT fiscal_year_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text]))),
+    CONSTRAINT fiscal_year_traido_coherente CHECK ((((origin = 'folvy'::text) AND (imported_until IS NULL)) OR ((origin = 'migrated'::text) AND (origin_program IS NOT NULL) AND ((imported_until IS NULL) OR (imported_until = ends_on))) OR ((origin = 'mixed'::text) AND (origin_program IS NOT NULL) AND ((imported_until >= starts_on) AND (imported_until <= (ends_on - 1))))))
+);
+
+
+--
+-- Name: TABLE fiscal_year; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.fiscal_year IS 'C00. Ejercicios de una empresa: sin solapes ni huecos entre uno y el anterior.';
+
+
+--
+-- Name: COLUMN fiscal_year.average_staff_fixed; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.average_staff_fixed IS 'Plantilla media fija del ejercicio (modelo 200 y depósito).';
+
+
+--
+-- Name: COLUMN fiscal_year.average_staff_temporary; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.average_staff_temporary IS 'Plantilla media no fija del ejercicio.';
+
+
+--
+-- Name: COLUMN fiscal_year.is_audited; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.is_audited IS 'Si las cuentas del ejercicio están auditadas; null = sin decir.';
+
+
+--
+-- Name: COLUMN fiscal_year.origin; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.origin IS 'C04. folvy: todo lo asienta Folvy. migrated: traído entero de otro programa (C04b). mixed: traído hasta imported_until y Folvy desde el día siguiente (Foodint 2026, corte 30/09).';
+
+
+--
+-- Name: COLUMN fiscal_year.origin_program; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.origin_program IS 'C04. De qué programa se trajo («diez»).';
+
+
+--
+-- Name: COLUMN fiscal_year.imported_until; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.imported_until IS 'C04. Último día traído. Desde el día siguiente asienta Folvy.';
+
+
+--
+-- Name: COLUMN fiscal_year.history_imported_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.history_imported_at IS 'Cuándo quedó traído el histórico de un ejercicio mixto o traído. Hasta entonces no se valida nada de Folvy en él (Folvy numera detrás de lo traído).';
+
+
+--
+-- Name: COLUMN fiscal_year.works_without_history_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fiscal_year.works_without_history_at IS 'N05c: cuándo se decidió trabajar en Sumied sin haber traído todavía lo anterior al día de inicio (un ejercicio traído a medias sin history_imported_at). Nulo: sin decidir; entonces no se valida nada hasta traerlo.';
+
+
+--
+-- Name: _conta_inicio_del_ejercicio(public.fiscal_year); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_inicio_del_ejercicio(p_y public.fiscal_year) RETURNS date
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(public.conta_dia_de_inicio(p_y.company_id),
+                  case when p_y.imported_until is not null then p_y.imported_until + 1 else p_y.ends_on + 1 end)
 $$;
 
 
@@ -40693,6 +40864,168 @@ COMMENT ON FUNCTION public.conta_erp10_por_salir(p_company uuid, p_mes date) IS 
 
 
 --
+-- Name: conta_erp10_recibidas_por_salir(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_recibidas_por_salir(p_company uuid, p_mes date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_ps jsonb;
+  v_ids uuid[];
+  v_r jsonb;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if auth.uid() is not null and not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  -- Las mismas reglas que enseña la pantalla: solo las recibidas que salen.
+  v_ps := public.conta_erp10_por_salir(v_c.id, p_mes);
+  select coalesce(array_agg((p ->> 'entry_id')::uuid), '{}') into v_ids
+    from jsonb_array_elements(v_ps -> 'partidas') p
+   where p ->> 'clase' = 'recibida' and (p ->> 'sale')::boolean;
+
+  with e as (
+    select e.* from public.journal_entry e
+     where e.id = any (v_ids) and e.company_id = v_c.id and e.account_id = v_c.account_id
+  ),
+  si as (
+    select distinct on (e.id) e.id as entry_id, i.invoice_number, i.invoice_date, i.issuer_name, i.issuer_tax_id, s.legal_name, s.name as s_name, s.tax_id
+      from e
+      join public.supplier_invoice i on i.account_id = e.account_id
+                                    and ((e.source_type = 'supplier_invoice' and i.id = e.source_id) or i.journal_entry_id = e.id)
+      left join public.supplier s on s.id = i.supplier_id and s.account_id = e.account_id
+     order by e.id, (i.id = e.source_id) desc
+  ),
+  libro as (
+    select v.entry_id, min(v.number) as numero, min(v.issue_date) as fecha, min(v.counterpart_tax_id) as nif, min(v.counterpart_name) as nombre
+      from public.vat_book_entry v join e on e.id = v.entry_id
+     where v.account_id = v_c.account_id and v.voided_at is null and v.book in ('received', 'investment')
+     group by v.entry_id
+  ),
+  lineas as (
+    select l.entry_id, l.position, a.code, a.template_code, l.debit, l.credit, t.rate, t.treatment, l.tax_base, l.vat_deductible, l.withholding_model,
+           (select v.surcharge_rate from public.vat_book_entry v
+             where v.line_id = l.id and v.account_id = l.account_id and v.voided_at is null and coalesce(v.surcharge_amount, 0) <> 0 limit 1) as recargo
+      from public.journal_line l
+      join e on e.id = l.entry_id
+      join public.company_account a on a.id = l.company_account_id and a.account_id = l.account_id
+      left join public.tax_rate t on t.id = l.tax_rate_id
+     where l.account_id = v_c.account_id
+  ),
+  doc as (
+    select distinct on (d.entry_id) d.entry_id, d.storage_path, d.file_name
+      from public.journal_entry_document d join e on e.id = d.entry_id
+     where d.account_id = v_c.account_id
+     order by d.entry_id, (d.kind = 'factura_recibida') desc, d.created_at desc
+  ),
+  cuentas as (
+    select distinct a.id, a.code, a.template_code, a.name
+      from lineas l join public.company_account a on a.company_id = v_c.id and a.account_id = v_c.account_id and a.code = l.code
+  ),
+  terceros as (
+    -- La ficha del proveedor enlazado a la cuenta: su NIF y su cuenta de gasto habitual.
+    select distinct on (c.id) c.id, s.tax_id, coalesce(nullif(btrim(s.legal_name), ''), s.name) as nombre_fiscal,
+           (select g.code from public.company_account_link kg join public.company_account g on g.id = kg.company_account_id
+             where kg.company_id = v_c.id and kg.account_id = v_c.account_id and kg.entity = 'supplier'
+               and kg.entity_id = k.entity_id and kg.role = 'gasto' order by kg.created_at limit 1) as gasto
+      from cuentas c
+      join public.company_account_link k on k.company_account_id = c.id and k.company_id = v_c.id and k.account_id = v_c.account_id
+                                        and k.entity = 'supplier' and k.role = 'principal'
+      join public.supplier s on s.id::text = k.entity_id and s.account_id = v_c.account_id
+     order by c.id, k.created_at
+  )
+  select jsonb_build_object(
+    'mes', v_ps -> 'mes', 'codigo', v_ps -> 'codigo', 'largo', v_ps -> 'largo',
+    'recibidas', coalesce((select jsonb_agg(jsonb_build_object(
+        'entryId', e.id, 'fecha', e.entry_date,
+        'factura', jsonb_build_object('numero', coalesce(nullif(btrim(si.invoice_number), ''), lb.numero, e.document_ref),
+                                      'fecha', coalesce(si.invoice_date, lb.fecha, e.document_date, e.entry_date)),
+        'proveedor', jsonb_build_object(
+            'nombre', coalesce(nullif(btrim(si.issuer_name), ''), nullif(btrim(si.legal_name), ''), si.s_name, lb.nombre, e.concept),
+            'nif', coalesce(nullif(btrim(si.issuer_tax_id), ''), nullif(btrim(si.tax_id), ''), lb.nif)),
+        'operacion', case
+            when exists (select 1 from lineas l where l.entry_id = e.id and l.treatment = 'reverse_charge') then 'isp'
+            when exists (select 1 from lineas l where l.entry_id = e.id and l.treatment = 'intra_eu') then
+              case when exists (select 1 from lineas l where l.entry_id = e.id and l.code like '60%') then 'intra_bienes' else 'intra_servicios' end
+            else 'interior' end,
+        'lineas', (select jsonb_agg(jsonb_build_object('cuenta', l.code, 'plantilla', l.template_code, 'debe', l.debit, 'haber', l.credit,
+                      'tipoIva', l.rate, 'baseIva', l.tax_base, 'deducible', l.vat_deductible, 'recargo', l.recargo, 'modeloRetencion', l.withholding_model)
+                      order by l.position) from lineas l where l.entry_id = e.id),
+        'tienePdf', d.entry_id is not null,
+        'pdf', case when d.entry_id is null then null else jsonb_build_object('ruta', d.storage_path, 'nombre', d.file_name) end)
+        order by e.entry_date, e.series, e.number)
+      from e left join si on si.entry_id = e.id left join libro lb on lb.entry_id = e.id left join doc d on d.entry_id = e.id), '[]'::jsonb),
+    'cuentas', coalesce((select jsonb_agg(jsonb_build_object('codigo', c.code, 'plantilla', c.template_code, 'nombre', c.name,
+        'nif', t.tax_id, 'gastoHabitual', t.gasto) order by c.code)
+      from cuentas c left join terceros t on t.id = c.id), '[]'::jsonb),
+    'yaSalidas', coalesce((select jsonb_object_agg(s.codigo_erp10, s.codigo)
+      from public.conta_erp10_subcuenta_salida s where s.company_id = v_c.id and s.account_id = v_c.account_id), '{}'::jsonb)
+  ) into v_r;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_recibidas_por_salir(p_company uuid, p_mes date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_recibidas_por_salir(p_company uuid, p_mes date) IS 'X04 · De cada factura recibida que sale a ERP10 ese mes (las de conta_erp10_por_salir que salen), lo que necesita su fila: fecha, factura, proveedor, líneas (plantilla, IVA, deducible, recargo, retención), la operación ya decidida y su PDF; las cuentas que usan con el NIF y la cuenta de gasto habitual de su proveedor; y las ya salidas. Solo lee.';
+
+
+--
+-- Name: conta_erp10_salida_carpeta(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_z public.conta_erp10_salida_empresa;
+  v_carpeta text := nullif(btrim(coalesce(p_carpeta, '')), '');
+  v_quien text;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_of(v_c.account_id) then
+    raise exception 'Solo un administrador de la cuenta cambia la salida a ERP10.' using errcode = '42501';
+  end if;
+  select * into v_z from public.conta_erp10_salida_empresa where company_id = v_c.id for update;
+  if v_z.company_id is null then
+    raise exception 'Primero enciende la salida a ERP10 con el código de la empresa.' using errcode = '23514';
+  end if;
+  if v_carpeta is not null and (length(v_carpeta) > 200 or v_carpeta ~ '[[:cntrl:]<>"|?*]') then
+    raise exception 'Esa carpeta no vale: como mucho 200 caracteres y sin < > " | ? *.' using errcode = '22023';
+  end if;
+  if v_z.carpeta_pdf is distinct from v_carpeta then
+    v_quien := nullif(btrim(coalesce(p_quien_nombre, public.conta_nombre_actor(), '')), '');
+    update public.conta_erp10_salida_empresa
+       set carpeta_pdf = v_carpeta, cambiado_por = auth.uid(), cambiado_por_nombre = v_quien, cambiado_en = now()
+     where company_id = v_c.id
+    returning * into v_z;
+  end if;
+  return jsonb_build_object('carpeta', v_z.carpeta_pdf,
+    'texto', case when v_z.carpeta_pdf is null
+      then format('Los PDF irán a la carpeta de siempre, C:\Sumied\%s\.', v_z.codigo_erp10)
+      else format('Los PDF irán a la carpeta %s.', v_z.carpeta_pdf) end);
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text) IS 'X04 · Pone (o quita, con nulo o vacío) la carpeta del ordenador de ERP10 donde se descomprimen los PDF de la salida. Solo un administrador y con la salida ya configurada. Devuelve cómo ha quedado.';
+
+
+--
 -- Name: conta_erp10_salida_poner(uuid, boolean, text, integer, date, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -49908,9 +50241,11 @@ begin
       orden := 4; codigo := 'ejercicio_cerrado'; motivo := format('El ejercicio %s está cerrado.', v_y.code); return next;
     end if;
     if v_y.origin in ('mixed', 'migrated') and v_y.origin_program is not null and v_y.history_imported_at is null then
-      orden := 5; codigo := 'falta_historico';
-      motivo := format('Primero hay que traer el histórico de %s de %s.',
-        case lower(v_y.origin_program) when 'diez' then 'Diez' else v_y.origin_program end, v_y.code); return next;
+      -- N05c · Sin decidir, nada; con «empezar a trabajar ya», desde el día de inicio (salvo cierre y apertura).
+      motivo := public._conta_falta_historico_motivo(v_e.id);
+      if motivo is not null then
+        orden := 5; codigo := 'falta_historico'; return next;
+      end if;
     end if;
     -- S01p·13: un periodo cerrado (el corte con Diez, un mes cerrado por un
     -- impuesto, un trimestre con el 303 presentado) admite lo que no lleva IVA
@@ -59212,6 +59547,86 @@ $$;
 --
 
 COMMENT ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) IS 'R05: los días del TPV de una empresa para Cierres del día: por validar, en espera con su motivo, o validados, y el aviso de un salto de numeración. Solo lee.';
+
+
+--
+-- Name: conta_trabajar_sin_historico(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_y public.fiscal_year; v_inicio date; v_quien text;
+begin
+  select * into v_y from public.fiscal_year where company_id = p_company and code = p_ejercicio for update;
+  if v_y.id is null then raise exception 'Ese ejercicio no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_of(v_y.account_id) then
+    raise exception 'Esto lo decide un administrador de la empresa.' using errcode = '42501';
+  end if;
+  if v_y.origin not in ('mixed', 'migrated') or v_y.origin_program is null then
+    raise exception 'En el ejercicio % no hay nada que traer de otro programa: ya se puede contabilizar.', v_y.code using errcode = '23514';
+  end if;
+  if v_y.history_imported_at is not null then
+    raise exception 'Lo anterior ya está traído: ya se puede contabilizar.' using errcode = '23514';
+  end if;
+  v_inicio := public._conta_inicio_del_ejercicio(v_y);
+  if v_y.works_without_history_at is not null then
+    return jsonb_build_object('desde', v_inicio, 'yaEstaba', true,
+      'texto', format('Ya estaba decidido: se trabaja sin lo anterior al %s desde el %s.', to_char(v_inicio, 'DD/MM/YYYY'),
+                      to_char(v_y.works_without_history_at at time zone 'Europe/Madrid', 'DD/MM/YYYY')));
+  end if;
+  v_quien := coalesce(nullif(trim(p_quien_nombre), ''), public.conta_nombre_actor());
+  update public.fiscal_year set works_without_history_at = now(), works_without_history_by = auth.uid(), works_without_history_by_name = v_quien
+   where id = v_y.id;
+  return jsonb_build_object('desde', v_inicio, 'yaEstaba', false,
+    'texto', format('Hecho. Ya puedes contabilizar desde el %s. Lo anterior lo traes cuando lo tengas.', to_char(v_inicio, 'DD/MM/YYYY')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text) IS 'N05c: «Empezar a trabajar ya» en un ejercicio traído a medias sin el histórico. Solo un administrador. Desde entonces se valida desde el día de inicio (salvo el cierre y la apertura).';
+
+
+--
+-- Name: conta_trabajar_sin_historico_retirar(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_y public.fiscal_year; v_inicio date; v_n int;
+begin
+  select * into v_y from public.fiscal_year where company_id = p_company and code = p_ejercicio for update;
+  if v_y.id is null then raise exception 'Ese ejercicio no existe.' using errcode = 'P0002'; end if;
+  if not public.current_user_is_admin_of(v_y.account_id) then
+    raise exception 'Esto lo decide un administrador de la empresa.' using errcode = '42501';
+  end if;
+  if v_y.works_without_history_at is null then
+    return jsonb_build_object('retirada', false, 'texto', 'No había nada que retirar: no se había decidido empezar sin lo anterior.');
+  end if;
+  v_inicio := public._conta_inicio_del_ejercicio(v_y);
+  select count(*) into v_n from public.journal_entry
+   where company_id = p_company and fiscal_year_id = v_y.id and source_type <> 'migrated' and status = 'validado' and entry_date >= v_inicio;
+  if v_n > 0 then
+    raise exception 'No se puede retirar: ya hay % contabilizado% desde el %.', v_n || case when v_n = 1 then ' asiento' else ' asientos' end,
+      case when v_n = 1 then '' else 's' end, to_char(v_inicio, 'DD/MM/YYYY') using errcode = '23514';
+  end if;
+  update public.fiscal_year set works_without_history_at = null, works_without_history_by = null, works_without_history_by_name = null where id = v_y.id;
+  return jsonb_build_object('retirada', true,
+    'texto', format('Retirado: hasta traer lo anterior al %s, no se puede contabilizar.', to_char(v_inicio, 'DD/MM/YYYY')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text) IS 'N05c: retira «Empezar a trabajar ya», mientras no haya ningún asiento de Sumied validado desde el día de inicio. Solo un administrador.';
 
 
 --
@@ -113116,6 +113531,7 @@ CREATE TABLE public.conta_erp10_salida_empresa (
     cambiado_por uuid,
     cambiado_por_nombre text,
     cambiado_en timestamp with time zone DEFAULT now() NOT NULL,
+    carpeta_pdf text,
     CONSTRAINT conta_erp10_salida_empresa_codigo_erp10_check CHECK ((codigo_erp10 ~ '^[A-Za-z0-9]{1,10}$'::text)),
     CONSTRAINT conta_erp10_salida_empresa_largo_subcuenta_check CHECK (((largo_subcuenta >= 6) AND (largo_subcuenta <= 12)))
 );
@@ -113140,6 +113556,13 @@ COMMENT ON COLUMN public.conta_erp10_salida_empresa.codigo_erp10 IS 'El código 
 --
 
 COMMENT ON COLUMN public.conta_erp10_salida_empresa.largo_subcuenta IS 'Cuántas cifras tiene la subcuenta en ERP10 (6 a 12). Las de Sumied se rellenan con ceros por el medio; la que no cabe no sale.';
+
+
+--
+-- Name: COLUMN conta_erp10_salida_empresa.carpeta_pdf; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_erp10_salida_empresa.carpeta_pdf IS 'X04 · La carpeta del ordenador de ERP10 donde se descomprimen los PDF (va en «Ruta documento» de cada factura). Nulo: C:\Sumied\<código>\. Se pone con conta_erp10_salida_carpeta.';
 
 
 --
@@ -118164,100 +118587,6 @@ COMMENT ON TABLE public.fiscal_period_lock IS 'C00. Meses cerrados. Reabrir no b
 --
 
 COMMENT ON COLUMN public.fiscal_period_lock.kind IS 'C04. manual: lo cerró una persona. tax_filed: se presentó el impuesto de ese periodo (lo pondrá Impuestos). migrated: es un mes traído de otro programa y no se reabre.';
-
-
---
--- Name: fiscal_year; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.fiscal_year (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    account_id uuid NOT NULL,
-    company_id uuid NOT NULL,
-    code text NOT NULL,
-    starts_on date NOT NULL,
-    ends_on date NOT NULL,
-    previous_year_id uuid,
-    status text DEFAULT 'open'::text NOT NULL,
-    closed_at timestamp with time zone,
-    closed_by uuid,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    average_staff_fixed numeric(9,2),
-    average_staff_temporary numeric(9,2),
-    is_audited boolean,
-    auditor_name text,
-    auditor_tax_id text,
-    audit_opinion text,
-    origin text DEFAULT 'folvy'::text NOT NULL,
-    origin_program text,
-    imported_until date,
-    history_imported_at timestamp with time zone,
-    CONSTRAINT fiscal_year_auditoria_coherente CHECK (((is_audited IS TRUE) OR ((auditor_name IS NULL) AND (auditor_tax_id IS NULL) AND (audit_opinion IS NULL)))),
-    CONSTRAINT fiscal_year_fechas CHECK ((ends_on >= starts_on)),
-    CONSTRAINT fiscal_year_hasta_doce_meses CHECK ((ends_on < ((starts_on + '1 year'::interval))::date)),
-    CONSTRAINT fiscal_year_opinion_valida CHECK (((audit_opinion IS NULL) OR (audit_opinion = ANY (ARRAY['favorable'::text, 'con_salvedades'::text, 'desfavorable'::text, 'denegada'::text])))),
-    CONSTRAINT fiscal_year_origin_check CHECK ((origin = ANY (ARRAY['folvy'::text, 'migrated'::text, 'mixed'::text]))),
-    CONSTRAINT fiscal_year_plantilla_positiva CHECK (((COALESCE(average_staff_fixed, (0)::numeric) >= (0)::numeric) AND (COALESCE(average_staff_temporary, (0)::numeric) >= (0)::numeric))),
-    CONSTRAINT fiscal_year_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text]))),
-    CONSTRAINT fiscal_year_traido_coherente CHECK ((((origin = 'folvy'::text) AND (imported_until IS NULL)) OR ((origin = 'migrated'::text) AND (origin_program IS NOT NULL) AND ((imported_until IS NULL) OR (imported_until = ends_on))) OR ((origin = 'mixed'::text) AND (origin_program IS NOT NULL) AND ((imported_until >= starts_on) AND (imported_until <= (ends_on - 1))))))
-);
-
-
---
--- Name: TABLE fiscal_year; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.fiscal_year IS 'C00. Ejercicios de una empresa: sin solapes ni huecos entre uno y el anterior.';
-
-
---
--- Name: COLUMN fiscal_year.average_staff_fixed; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.average_staff_fixed IS 'Plantilla media fija del ejercicio (modelo 200 y depósito).';
-
-
---
--- Name: COLUMN fiscal_year.average_staff_temporary; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.average_staff_temporary IS 'Plantilla media no fija del ejercicio.';
-
-
---
--- Name: COLUMN fiscal_year.is_audited; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.is_audited IS 'Si las cuentas del ejercicio están auditadas; null = sin decir.';
-
-
---
--- Name: COLUMN fiscal_year.origin; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.origin IS 'C04. folvy: todo lo asienta Folvy. migrated: traído entero de otro programa (C04b). mixed: traído hasta imported_until y Folvy desde el día siguiente (Foodint 2026, corte 30/09).';
-
-
---
--- Name: COLUMN fiscal_year.origin_program; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.origin_program IS 'C04. De qué programa se trajo («diez»).';
-
-
---
--- Name: COLUMN fiscal_year.imported_until; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.imported_until IS 'C04. Último día traído. Desde el día siguiente asienta Folvy.';
-
-
---
--- Name: COLUMN fiscal_year.history_imported_at; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fiscal_year.history_imported_at IS 'Cuándo quedó traído el histórico de un ejercicio mixto o traído. Hasta entonces no se valida nada de Folvy en él (Folvy numera detrás de lo traído).';
 
 
 --
@@ -167534,6 +167863,15 @@ GRANT ALL ON FUNCTION public._conta_cuotas_y_redondeo(p_lineas jsonb, p_total nu
 
 
 --
+-- Name: FUNCTION _conta_de_programa(p_programa text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_de_programa(p_programa text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_de_programa(p_programa text) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_de_programa(p_programa text) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_despachos_de_quien_llama(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -167658,6 +167996,15 @@ GRANT ALL ON FUNCTION public._conta_facturas_apuntar_todas() TO service_role;
 
 
 --
+-- Name: FUNCTION _conta_falta_historico_motivo(p_entry uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) TO authenticated;
+GRANT ALL ON FUNCTION public._conta_falta_historico_motivo(p_entry uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_gestoria_apuntar(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -167705,6 +168052,22 @@ GRANT ALL ON FUNCTION public._conta_gestoria_puede(p_company uuid) TO service_ro
 
 REVOKE ALL ON FUNCTION public._conta_hoja(p_company uuid, p_template text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._conta_hoja(p_company uuid, p_template text) TO service_role;
+
+
+--
+-- Name: TABLE fiscal_year; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.fiscal_year TO authenticated;
+GRANT ALL ON TABLE public.fiscal_year TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_inicio_del_ejercicio(p_y public.fiscal_year); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_inicio_del_ejercicio(p_y public.fiscal_year) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_inicio_del_ejercicio(p_y public.fiscal_year) TO service_role;
 
 
 --
@@ -174647,6 +175010,24 @@ GRANT ALL ON FUNCTION public.conta_erp10_por_salir(p_company uuid, p_mes date) T
 
 
 --
+-- Name: FUNCTION conta_erp10_recibidas_por_salir(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_recibidas_por_salir(p_company uuid, p_mes date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_recibidas_por_salir(p_company uuid, p_mes date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_recibidas_por_salir(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_salida_carpeta(p_company uuid, p_carpeta text, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_salida_poner(p_company uuid, p_encender boolean, p_codigo text, p_largo integer, p_desde date, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -178116,6 +178497,24 @@ GRANT ALL ON FUNCTION public.conta_tpv_dia_validar(p_dia uuid, p_entry uuid, p_n
 REVOKE ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_tpv_dias(p_company uuid, p_desde date, p_hasta date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_trabajar_sin_historico(p_company uuid, p_ejercicio text, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_trabajar_sin_historico_retirar(p_company uuid, p_ejercicio text) TO service_role;
 
 
 --
@@ -189332,14 +189731,6 @@ GRANT ALL ON TABLE public.feature_flags TO service_role;
 
 GRANT ALL ON TABLE public.fiscal_period_lock TO authenticated;
 GRANT ALL ON TABLE public.fiscal_period_lock TO service_role;
-
-
---
--- Name: TABLE fiscal_year; Type: ACL; Schema: public; Owner: -
---
-
-GRANT ALL ON TABLE public.fiscal_year TO authenticated;
-GRANT ALL ON TABLE public.fiscal_year TO service_role;
 
 
 --
