@@ -111838,7 +111838,7 @@ CREATE TABLE public.customer_invoice (
     CONSTRAINT customer_invoice_correction_kind_check CHECK ((correction_kind = ANY (ARRAY['importes'::text, 'anular'::text, 'datos'::text]))),
     CONSTRAINT customer_invoice_doc_type_check CHECK ((doc_type = ANY (ARRAY['factura'::text, 'rectificativa'::text]))),
     CONSTRAINT customer_invoice_numero_al_emitir CHECK (((status = 'borrador'::text) OR ((number IS NOT NULL) AND (number_text IS NOT NULL) AND (fiscal_year IS NOT NULL)))),
-    CONSTRAINT customer_invoice_origin_check CHECK ((origin = ANY (ARRAY['a_mano'::text, 'recurrente'::text, 'presupuesto'::text, 'cierre_dia'::text, 'tienda'::text, 'automatica'::text]))),
+    CONSTRAINT customer_invoice_origin_check CHECK ((origin = ANY (ARRAY['a_mano'::text, 'recurrente'::text, 'presupuesto'::text, 'cierre_dia'::text, 'tienda'::text, 'automatica'::text, 'traida'::text]))),
     CONSTRAINT customer_invoice_pdf_sha256_check CHECK (((pdf_sha256 IS NULL) OR (pdf_sha256 ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT customer_invoice_rectificativa CHECK (((doc_type = 'rectificativa'::text) = ((corrects_id IS NOT NULL) AND (correction_kind IS NOT NULL)))),
     CONSTRAINT customer_invoice_series_code_check CHECK ((series_code ~ '^[A-Z0-9][A-Z0-9-]{0,9}$'::text)),
@@ -113555,7 +113555,7 @@ END, ''::text)) STORED,
     CONSTRAINT supplier_invoice_read_iban_format_check CHECK (((read_iban IS NULL) OR (read_iban ~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$'::text))),
     CONSTRAINT supplier_invoice_reading_confidence_check CHECK ((reading_confidence = ANY (ARRAY['seguro'::text, 'probable'::text, 'duda'::text]))),
     CONSTRAINT supplier_invoice_retencion_completa CHECK ((((withholding_rate_id IS NULL) = (withholding_amount IS NULL)) AND ((withholding_amount IS NULL) OR (withholding_amount >= (0)::numeric)))),
-    CONSTRAINT supplier_invoice_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'ocr'::text, 'lote'::text, 'liquidacion'::text]))),
+    CONSTRAINT supplier_invoice_source_check CHECK ((source = ANY (ARRAY['manual'::text, 'ocr'::text, 'lote'::text, 'liquidacion'::text, 'traida'::text]))),
     CONSTRAINT supplier_invoice_status_check CHECK ((status = ANY (ARRAY['borrador'::text, 'en_revision'::text, 'aprobada'::text, 'con_discrepancias'::text, 'pagada'::text, 'anulada'::text, 'descartada'::text]))),
     CONSTRAINT supplier_invoice_vat_non_deductible_reason_check CHECK (((vat_non_deductible_reason IS NULL) OR (vat_non_deductible_reason = ANY (ARRAY['no_a_nombre'::text, 'ticket_sin_nif'::text, 'otro'::text, 'sin_roi'::text]))))
 );
@@ -117348,9 +117348,9 @@ CREATE TABLE public.import_run (
     CONSTRAINT import_run_check CHECK (((period_to IS NULL) OR (period_from IS NULL) OR (period_to >= period_from))),
     CONSTRAINT import_run_check1 CHECK (((status = 'en_curso'::text) = (finished_at IS NULL))),
     CONSTRAINT import_run_counts_check CHECK ((jsonb_typeof(counts) = 'object'::text)),
-    CONSTRAINT import_run_kind_check CHECK ((kind = ANY (ARRAY['historico'::text, 'al_dia'::text, 'documentos'::text, 'sumas_saldos'::text]))),
-    CONSTRAINT import_run_program_check CHECK ((program = 'diez'::text)),
-    CONSTRAINT import_run_status_check CHECK ((status = ANY (ARRAY['en_curso'::text, 'hecho'::text, 'fallido'::text])))
+    CONSTRAINT import_run_kind_check CHECK ((kind = ANY (ARRAY['historico'::text, 'al_dia'::text, 'documentos'::text, 'sumas_saldos'::text, 'plan_cuentas'::text, 'terceros'::text, 'inmovilizado'::text, 'diario'::text, 'recibidas'::text, 'emitidas'::text, 'declaraciones'::text]))),
+    CONSTRAINT import_run_program_check CHECK ((program = ANY (ARRAY['diez'::text, 'erp10'::text, 'otro'::text]))),
+    CONSTRAINT import_run_status_check CHECK ((status = ANY (ARRAY['en_curso'::text, 'hecho'::text, 'fallido'::text, 'en_prueba'::text, 'dada_por_buena'::text, 'deshecha'::text])))
 );
 
 
@@ -117359,6 +117359,13 @@ CREATE TABLE public.import_run (
 --
 
 COMMENT ON TABLE public.import_run IS 'Cada lectura de un programa externo (Diez): qué trajo y qué falló.';
+
+
+--
+-- Name: COLUMN import_run.status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.import_run.status IS 'en_curso → (hecho | fallido) en las lecturas de Diez de antes del N02; en_curso → en_prueba → (dada_por_buena | deshecha) en la carga en dos tiempos (N02). «hecho» se lee como dada por buena, de antes.';
 
 
 --
