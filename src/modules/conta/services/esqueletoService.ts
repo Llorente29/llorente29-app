@@ -74,9 +74,14 @@ export async function leerContexto(accountId: string, companyId: string | null):
   const demo = ((await tabla('accounts').select('is_demo').eq('id', accountId).maybeSingle()).data as { is_demo?: unknown } | null)?.is_demo === true
   // G03 · El sector de la empresa (company.sector; sin la columna, lo de hoy) y lo que enciende su paquete.
   const { sector, hosteleria, gestoria } = loQueEnciendeLaEmpresa(companyId ? fila : null, asesoria)
+  // R05 · «Ventas por día» de la empresa (company_tax_profile.ventas_por_dia, R03). Sin leer, apagado: decide solo el sector.
+  const ventasPorDia = companyId
+    ? ((await tabla('company_tax_profile').select('ventas_por_dia').eq('account_id', accountId).eq('company_id', companyId).maybeSingle()).data as { ventas_por_dia?: unknown } | null)?.ventas_por_dia === true
+    : false
   return {
     hosteleria,
     gestoria,
+    ventasPorDia,
     sector,
     diez: !!diez.data && enviaADiez,
     erp10,

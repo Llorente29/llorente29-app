@@ -1,0 +1,5 @@
+# N05c · la vuelta atrás, en orden inverso: la 1656 (conta_motivos_para_validar desde su
+# respaldo) y la 1655 (quita las cinco funciones y la decisión).
+cuenta: scripts/conta/produccion/cuentas/n05c-sin-historico.sql
+supabase/vuelta-atras/20261117T1656_n05c_sin_historico_validar.down.sql
+supabase/vuelta-atras/20261117T1655_n05c_sin_historico_decision.down.sql

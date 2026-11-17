@@ -1,0 +1,6 @@
+# R05 · la vuelta atrás, en orden inverso: la 1603 (el disparador y su función),
+# la 1602 (las cuatro funciones) y la 1601 (el enlace; para si ya hay días validados).
+cuenta: scripts/conta/produccion/cuentas/r05-dia-tpv.sql
+supabase/vuelta-atras/20261117T1603_r05_dia_tpv_anulado.down.sql
+supabase/vuelta-atras/20261117T1602_r05_dia_tpv_funciones.down.sql
+supabase/vuelta-atras/20261117T1601_r05_dia_tpv_asiento.down.sql
