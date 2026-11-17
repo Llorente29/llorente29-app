@@ -228,6 +228,7 @@ export function MarcoNucleo({ children, sinPregunta = false }: { children: React
     ponerDatosCinta: setDatosCinta,
     ponerEntradasCinta: setEntradasCinta,
     hosteleria: ctxListo ? ctx.hosteleria : null,
+    ventasPorDia: ctxListo ? ctx.ventasPorDia === true : null,
     gestoria: ctxListo ? ctx.gestoria === true : null,
     analitica: ctxListo ? ctx.analitica ?? null : null,
     nivel: prefs.nivel,
@@ -238,7 +239,7 @@ export function MarcoNucleo({ children, sinPregunta = false }: { children: React
     abrirBuscador,
     colorEmpresa: ctx.colorEmpresa ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, listaEjercicios, abrirBuscador])
+  }), [prefs.nivel, prefs.densidad, prefs.documentoOculto, cambiar, huecoAcciones, huecoPeriodo, ctxListo, ctx.hosteleria, ctx.ventasPorDia, ctx.gestoria, ctx.analitica, ctx.diez, ctx.colorEmpresa, clave, listaEjercicios, abrirBuscador])
 
   const enInicio = sitio?.tipo === 'inicio'
   const avisoVisible = aviso ?? (errorCtx ? { texto: `${errorCtx}. Mientras, no sale lo que depende de la empresa (hostelería, Diez).`, tono: 'falta' as const } : null)

@@ -132,3 +132,14 @@ describe('K02 · el mapa del núcleo', () => {
     expect(cintaVisible(conta, TODO).flatMap((p) => p.grupos.flatMap((g) => g.botones.map((x) => x.id)))).toContain('diseno')
   })
 })
+
+describe('K02 · Ventas del día sigue a la barra de hoy (R05, decisión 9)', () => {
+  it('sale con hostelería o con «ventas por día» encendido', () => {
+    const conta = MODULOS[0]
+    const botones = (ctx: Contexto) => cintaVisible(conta, ctx).flatMap((p) => p.grupos.flatMap((g) => g.botones.map((x) => x.id)))
+    const base: Contexto = { hosteleria: false, diez: false, interruptores: new Set() }
+    expect(botones(base)).not.toContain('ventasDia')
+    expect(botones({ ...base, ventasPorDia: true })).toContain('ventasDia')
+    expect(botones({ ...base, hosteleria: true })).toContain('ventasDia')
+  })
+})
