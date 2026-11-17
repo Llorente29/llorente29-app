@@ -231,7 +231,8 @@ export const MODULOS: Modulo[] = [
   },
   {
     id: 'personal', etiqueta: 'Personal', icono: 'personal', interruptor: 'conta_laboral',
-    pestanas: [{ id: 'laboral', etiqueta: 'Laboral', grupos: gruposDeLaboral() }],
+    // Una pestaña por bloque de Laboral (Equipo, Tiempo, Turnos, Personas, Llega pronto): en una sola, sus 24 páginas no caben.
+    pestanas: gruposDeLaboral().map((g) => ({ id: `laboral-${g.titulo.toLowerCase().replace(/\s+/g, '-')}`, etiqueta: g.titulo, grupos: [g] })),
   },
   {
     id: 'despacho', etiqueta: 'Despacho', icono: 'despacho', soloAlguna: ['asesoria', 'gestoria'],

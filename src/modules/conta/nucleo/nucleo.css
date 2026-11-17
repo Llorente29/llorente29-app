@@ -113,7 +113,7 @@ html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
 .k-cinta-plegar { align-self: center; display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; color: var(--k-blanco); font-size: 13px; cursor: pointer; }
 .k-cinta-pestanas button:focus-visible { outline: 2px solid var(--k-blanco); outline-offset: -2px; }
 .k-cinta-botones {
-  height: 36px; display: flex; align-items: center; gap: 0; padding: 0 12px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  height: 36px; display: flex; align-items: center; gap: 0; padding: 0 12px; overflow: visible; position: relative; z-index: 5;
   background: var(--k-blanco); border-bottom: 1px solid var(--k-borde);
 }
 .k-cinta-grupo { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -126,6 +126,8 @@ html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
 .k-boton:hover { background: var(--k-gris); }
 .k-boton[aria-current='page'] { background: var(--k-azul-boton); font-weight: 600; }
 .k-boton:focus-visible { outline: 2px solid var(--k-azul); outline-offset: 0; }
+.k-cinta-mas { margin-left: auto; }
+.k-boton-menu { width: 100%; justify-content: flex-start; }
 .k-contador {
   min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
   background: var(--k-azul); color: var(--k-blanco); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
