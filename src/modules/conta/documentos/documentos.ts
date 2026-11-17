@@ -14,6 +14,7 @@
 
 import { calcularVencimiento } from '@/modules/conta/lib/cifras'
 import { MARCA } from '@/modules/conta/cuenta/marca'
+import { etiquetaYaContabilizada } from './antesDelInicio'
 
 /**
  * R6 · 'en_diez': una recepción de antes del corte cuyo papel es una factura. La
@@ -22,7 +23,8 @@ import { MARCA } from '@/modules/conta/cuenta/marca'
  */
 /** S01 (0160) · 'descartada': «No es una factura», con su motivo; sale en «Todas» y se deshace. */
 /** S01g (0931) · 'soporte': una recepción que es soporte de la liquidación mensual de un socio (CTB): no se apunta como compra. */
-export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte'
+/** N03 (0956) · 'ya_contabilizada': de antes del día de inicio, y alguien dijo «Sí, ya estaba» en el programa de antes. Sale (regla 7), no se contabiliza ni cuenta en lo pendiente. */
+export type Estado = 'para_mirar' | 'por_aclarar' | 'apuntada' | 'repetida' | 'en_diez' | 'descartada' | 'soporte' | 'ya_contabilizada'
 export type Canal = 'correo' | 'subida' | 'cocina' | 'portal' | 'compras' | 'a_mano'
 export type Confianza = 'seguro' | 'probable' | 'duda'
 
@@ -58,6 +60,8 @@ export interface FilaDocumento {
   archivo?: string | null
   /** S01p·20 · 1 · Si es un correo de plataforma del que no salió nada: su correo y su asunto (lo pone la pantalla). */
   correo?: { id: string; asunto: string | null } | null
+  /** N03 · Solo las «ya_contabilizada»: el programa de antes («ERP10», «Diez»), o nulo. */
+  programa_antes?: string | null
 }
 
 /** S01g · El soporte de una liquidación mensual (conta_documentos_recibidos, 0931). */
@@ -225,6 +229,7 @@ export function entendido(f: FilaDocumento, solo = false): { titulo: string; por
     const titulo = f.estado === 'en_diez' ? (f.diez ? `Ya en Diez · asiento ${f.diez.serie}/${f.diez.numero}` : 'De antes del corte · la llevó Diez') : 'Leída por la recepción · aún no es factura'
     return { titulo, porque: f.porque ?? 'La leyó la recepción.' }
   }
+  if (f.estado === 'ya_contabilizada') return { titulo: etiquetaYaContabilizada(f.programa_antes), porque: f.porque ?? null }
   if (!f.proveedor.id) return { titulo: 'No reconozco el emisor', porque: f.porque ?? 'No reconozco el emisor: dime quién es.' }
   const e = f.entendido
   const cuenta = e ? `${e.nombre} · ${e.cuenta}${e.sin_confirmar ? ' · sin confirmar' : ''}` : 'Sin cuenta de gasto todavía'
@@ -286,7 +291,7 @@ export const faltaElPdf = (f: Pick<FilaDocumento, 'tipo' | 'porque'>) => f.tipo 
 export function punto(f: FilaDocumento): 'verde' | 'ambar' | 'gris' | 'rojo' {
   if (f.estado === 'apuntada') return 'verde'
   if (f.estado === 'en_diez') return f.diez ? 'verde' : 'gris'
-  if (f.estado === 'repetida' || f.estado === 'descartada') return 'gris'
+  if (f.estado === 'repetida' || f.estado === 'descartada' || f.estado === 'ya_contabilizada') return 'gris'
   if (f.confianza === 'duda' || f.tipo === 'llegada') return 'gris'
   return 'ambar'
 }
