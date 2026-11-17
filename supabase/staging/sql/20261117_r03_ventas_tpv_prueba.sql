@@ -319,8 +319,9 @@ begin
     raise exception 'PRUEBA R03 · 2: las facturas con NIF no son la 5007 y la 5020.';
   end if;
   r := public.conta_tpv_dia_leer(e1, date '2026-11-09');
-  if (select jsonb_agg(jsonb_build_object('canal', x ->> 'canal', 'total', (x ->> 'total')::numeric)) from jsonb_array_elements(r -> 'por_canal') x)
-       <> '[{"canal":"Glovo","total":300.00},{"canal":"UberEats","total":200.00},{"canal":"local","total":600.00}]'::jsonb then
+  -- Sin depender del orden: staging y la base local ordenan el texto distinto («local» y «UberEats»).
+  if (select jsonb_object_agg(x ->> 'canal', (x ->> 'total')::numeric) from jsonb_array_elements(r -> 'por_canal') x)
+       <> '{"Glovo":300.00,"UberEats":200.00,"local":600.00}'::jsonb then
     raise exception 'PRUEBA R03 · 2: por canal sale %', r -> 'por_canal';
   end if;
   if r -> 'por_tipo' <> '[{"tipo":10.00,"base":999.99,"cuota":100.01}]'::jsonb or jsonb_array_length(r -> 'facturas') <> 48 or jsonb_array_length(r -> 'cobros') <> 49 then
