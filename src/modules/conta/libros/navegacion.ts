@@ -87,6 +87,8 @@ export const AREAS_LIBROS: Area[] = [
     { etiqueta: 'Cierre', acciones: [
       { id: 'ejercicios', nombre: 'Ejercicios', sinonimos: ['años', 'abrir ejercicio'] },
       { id: 'cerrar-mes', nombre: 'Cerrar el mes', sinonimos: ['bloquear mes', 'cierre del mes', 'cierre del banco', 'cuadrar el banco'] },
+      // X04: solo la ve la empresa con la salida a ERP10 encendida (esqueleto/ordenes.ts, «solo: 'erp10'»).
+      { id: 'salida-erp10', nombre: 'Salida a ERP10', sinonimos: ['erp10', 'cegid', 'erp despacho', 'exportar a erp10', 'importación desde fichero'] },
       { id: 'cierre-ejercicio', nombre: 'Regularización, cierre y apertura', sinonimos: ['cerrar el ejercicio', 'asiento de apertura', 'regularización'] },
     ] },
   ] },

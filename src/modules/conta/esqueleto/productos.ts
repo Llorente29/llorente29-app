@@ -36,7 +36,7 @@ export type IdProducto = 'despacho' | 'inicio' | 'contabilidad' | 'clientesCuota
  * `gestoria` las enciende el sector de la empresa (G03, sectores/sectores.ts);
  * `asesoria` es la CUENTA que lleva clientes (Clientes del despacho).
  */
-export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo'
+export type Condicion = 'hosteleria' | 'gestoria' | 'diez' | 'asesoria' | 'demo' | 'erp10'
 
 export type Interruptor = 'conta_facturacion' | 'conta_laboral' | 'conta_impuestos'
 export const INTERRUPTORES: readonly Interruptor[] = ['conta_facturacion', 'conta_laboral', 'conta_impuestos']
@@ -95,6 +95,8 @@ export interface Contexto {
   /** G03 · El sector de la empresa activa; sin leer, no hay. No decide nada por sí solo: deciden hosteleria y gestoria. */
   sector?: Sector | null
   diez: boolean
+  /** X04 · La empresa tiene encendida la salida a ERP10 (conta_erp10_salida_empresa). Sin leer, no. */
+  erp10?: boolean
   interruptores: ReadonlySet<string>
   /** S01 · El logo de la empresa (URL firmada del bucket company-logos), o null. No decide qué sale. */
   logoEmpresa?: string | null
@@ -309,6 +311,7 @@ export function cumple(c: Condicion | undefined, ctx: Contexto): boolean {
     case 'diez': return ctx.diez
     case 'asesoria': return ctx.asesoria === true
     case 'demo': return ctx.demo === true
+    case 'erp10': return ctx.erp10 === true
   }
 }
 
