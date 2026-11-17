@@ -5121,6 +5121,61 @@ $_$;
 
 
 --
+-- Name: company_inbound_address; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.company_inbound_address (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    kind text DEFAULT 'facturas'::text NOT NULL,
+    local_part text NOT NULL,
+    domain text DEFAULT 'entrada.folvy.app'::text NOT NULL,
+    active boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    created_by uuid,
+    created_by_name text,
+    CONSTRAINT company_inbound_address_domain_check CHECK ((domain ~ '^[a-z0-9.-]+$'::text)),
+    CONSTRAINT company_inbound_address_kind_check CHECK ((kind = ANY (ARRAY['facturas'::text, 'liquidaciones'::text, 'documentos'::text]))),
+    CONSTRAINT company_inbound_address_local_part_check CHECK (
+CASE
+    WHEN (kind = 'documentos'::text) THEN (local_part ~ '^[a-z0-9][a-z0-9-]{1,40}$'::text)
+    ELSE (local_part ~ (('^'::text || kind) || '-[a-z0-9][a-z0-9-]{1,40}$'::text))
+END)
+);
+
+
+--
+-- Name: TABLE company_inbound_address; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.company_inbound_address IS 'D01 · Las direcciones propias de cada empresa: facturas-<empresa>@entrada.folvy.app (facturas) y liquidaciones-<empresa>@ (los resúmenes de pagos de las plataformas). Nacen apagadas: se encienden cuando el dominio está dado de alta en Resend.';
+
+
+--
+-- Name: _conta_direccion_empresa(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_direccion_empresa(p_company uuid) RETURNS public.company_inbound_address
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select a.* from public.company_inbound_address a
+   where a.company_id = p_company and a.kind in ('documentos', 'facturas')
+     and lower(a.domain) = public._conta_dominio_entrada(p_company)
+   order by (a.kind = 'documentos') desc
+   limit 1
+$$;
+
+
+--
+-- Name: FUNCTION _conta_direccion_empresa(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_direccion_empresa(p_company uuid) IS 'E01 · La dirección de entrada que se enseña de una empresa: la de su dominio (_conta_dominio_entrada), la de documentos si la tiene y si no la de facturas. Las de otro dominio siguen recibiendo y no se enseñan.';
+
+
+--
 -- Name: _conta_dni_nie_valido(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5131,6 +5186,30 @@ CREATE FUNCTION public._conta_dni_nie_valido(p_doc text) RETURNS boolean
      and substr('TRWAGMYFPDXBNJZSQVHLCKE',
                 ((translate(left(p_doc, 1), 'XYZ', '012') || substr(p_doc, 2, 7))::bigint % 23 + 1)::int, 1) = right(p_doc, 1)
 $_$;
+
+
+--
+-- Name: _conta_dominio_entrada(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_dominio_entrada(p_company uuid) RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select case
+    when exists (select 1 from public.company c join public.accounts a on a.id = c.account_id
+                  where c.id = p_company and a.product_brand is not null)
+      or exists (select 1 from public.company_tax_presenter t join public.accounts d on d.id = t.advisor_account_id
+                  where t.company_id = p_company and t.revoked_at is null and d.product_brand is not null)
+    then 'entrada.sumied.com' else 'entrada.folvy.app' end
+$$;
+
+
+--
+-- Name: FUNCTION _conta_dominio_entrada(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_dominio_entrada(p_company uuid) IS 'E01 · El dominio de entrada de una empresa: entrada.sumied.com si su cuenta es de marca Sumied o la lleva un despacho de marca Sumied con permiso vivo; si no, entrada.folvy.app. La única regla: de ella beben la creación de direcciones y todas las pantallas.';
 
 
 --
@@ -36935,7 +37014,7 @@ begin
   if not exists (select 1 from company c where c.id = p_company and public.belongs_to_account(c.account_id)) then
     raise exception 'Esa empresa no está.' using errcode = 'P0002';
   end if;
-  select * into a from company_inbound_address where company_id = p_company and kind = 'facturas';
+  a := public._conta_direccion_empresa(p_company); -- E01 · la dirección de esta empresa (una sola fuente)
   if a.id is null then return jsonb_build_object('direccion', null); end if;
   select max(received_at) into v_ult from inbound_email_log
    where company_id = p_company and lower(split_part(to_address, '@', 1)) = lower(a.local_part);
@@ -38210,6 +38289,30 @@ COMMENT ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) IS 'S01
 
 
 --
+-- Name: conta_dia_de_inicio(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_dia_de_inicio(p_company uuid) RETURNS date
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select coalesce(
+    (select s.cutover_date from public.bank_settings s where s.company_id = p_company),
+    (select greatest(max(y.imported_until) + 1,
+                     max(y.ends_on) filter (where y.origin = 'migrated' and y.imported_until is null) + 1)
+       from public.fiscal_year y
+      where y.company_id = p_company and y.origin in ('migrated', 'mixed')))
+$$;
+
+
+--
+-- Name: FUNCTION conta_dia_de_inicio(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_dia_de_inicio(p_company uuid) IS 'N02: el primer día que la empresa lleva la contabilidad en Sumied (el corte del banco o el día después de lo traído, también si el corte cae el último día de un ejercicio). Nulo si no viene de otro programa ni tiene corte. Solo lee.';
+
+
+--
 -- Name: conta_dias_por_asentar(uuid, date, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -38980,7 +39083,8 @@ begin
   if p_tipo not in ('facturas', 'liquidaciones', 'documentos') then raise exception 'Una dirección es de documentos, de facturas o de liquidaciones.' using errcode = '22023'; end if;
   select * into v_c from public.company where id = p_company;
   if v_c.id is null or not public.belongs_to_account(v_c.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
-  select * into v_x from public.company_inbound_address where company_id = p_company and kind = p_tipo;
+  select * into v_x from public.company_inbound_address where company_id = p_company and kind = p_tipo
+     and lower(domain) = public._conta_dominio_entrada(p_company); -- E01 · la de su dominio
   if v_x.id is not null then return to_jsonb(v_x) || jsonb_build_object('direccion', v_x.local_part || '@' || v_x.domain, 'ya_estaba', true); end if;
   if not public.current_user_is_admin_or_manager_of(v_c.account_id) then
     raise exception 'Solo un administrador o un encargado de la cuenta crea las direcciones de entrada.' using errcode = '42501';
@@ -38992,11 +39096,11 @@ begin
   if length(v_base) < 2 then v_base := 'empresa'; end if;
   -- V02: la de documentos va sin prefijo («foodint@»); las de antes, con el suyo.
   v_lp := case when p_tipo = 'documentos' then v_base else p_tipo || '-' || v_base end;
-  while exists (select 1 from public.company_inbound_address where lower(local_part) = v_lp and domain = 'entrada.folvy.app') loop
+  while exists (select 1 from public.company_inbound_address where lower(local_part) = v_lp and lower(domain) = public._conta_dominio_entrada(p_company)) loop
     v_i := v_i + 1; v_lp := case when p_tipo = 'documentos' then v_base else p_tipo || '-' || v_base end || '-' || v_i;
   end loop;
-  insert into public.company_inbound_address (account_id, company_id, kind, local_part, created_by, created_by_name)
-  values (v_c.account_id, v_c.id, p_tipo, v_lp, auth.uid(), p_quien_nombre) returning * into v_x;
+  insert into public.company_inbound_address (account_id, company_id, kind, local_part, domain, created_by, created_by_name)
+  values (v_c.account_id, v_c.id, p_tipo, v_lp, public._conta_dominio_entrada(p_company), auth.uid(), p_quien_nombre) returning * into v_x;
   return to_jsonb(v_x) || jsonb_build_object('direccion', v_x.local_part || '@' || v_x.domain, 'ya_estaba', false);
 end $_$;
 
@@ -39016,7 +39120,8 @@ declare
 begin
   select * into v_c from public.company where id = p_company;
   if v_c.id is null or not public.belongs_to_account(v_c.account_id) then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
-  select * into v_x from public.company_inbound_address where company_id = p_company and kind = 'facturas';
+  select * into v_x from public.company_inbound_address where company_id = p_company and kind = 'facturas'
+     and lower(domain) = public._conta_dominio_entrada(p_company); -- E01 · la de su dominio
   if v_x.id is not null then return to_jsonb(v_x) || jsonb_build_object('direccion', v_x.local_part || '@' || v_x.domain, 'ya_estaba', true); end if;
   if not public.current_user_is_admin_or_manager_of(v_c.account_id) then
     raise exception 'Solo un administrador o un encargado de la cuenta crea la dirección de facturas.' using errcode = '42501';
@@ -39027,11 +39132,11 @@ begin
   v_base := left(regexp_replace(v_base, '-(s-?l-?u?|s-?a|s-?c-?p|s-?l-?l)$', ''), 30);
   if length(v_base) < 2 then v_base := 'empresa'; end if;
   v_lp := 'facturas-' || v_base;
-  while exists (select 1 from public.company_inbound_address where lower(local_part) = v_lp and domain = 'entrada.folvy.app') loop
+  while exists (select 1 from public.company_inbound_address where lower(local_part) = v_lp and lower(domain) = public._conta_dominio_entrada(p_company)) loop
     v_i := v_i + 1; v_lp := 'facturas-' || v_base || '-' || v_i;
   end loop;
-  insert into public.company_inbound_address (account_id, company_id, local_part, created_by, created_by_name)
-  values (v_c.account_id, v_c.id, v_lp, auth.uid(), p_quien_nombre) returning * into v_x;
+  insert into public.company_inbound_address (account_id, company_id, local_part, domain, created_by, created_by_name)
+  values (v_c.account_id, v_c.id, v_lp, public._conta_dominio_entrada(p_company), auth.uid(), p_quien_nombre) returning * into v_x;
   return to_jsonb(v_x) || jsonb_build_object('direccion', v_x.local_part || '@' || v_x.domain, 'ya_estaba', false);
 end $_$;
 
@@ -39458,7 +39563,7 @@ begin
     from public.conta_esperadas_no_llegadas(p_company, least(v_hoy, p_hasta + 1)) x;
 
   select a.local_part || '@' || a.domain as direccion, a.active into v_correo
-    from public.company_inbound_address a where a.company_id = p_company and a.account_id = v_acc
+    from public._conta_direccion_empresa(p_company) a where a.id is not null and a.account_id = v_acc -- E01 · una sola fuente
    -- V02: la dirección única de la empresa, si la tiene; si no, la de facturas.
    order by (a.kind = 'documentos') desc, (a.kind = 'facturas') desc limit 1;
 
@@ -39762,10 +39867,13 @@ CREATE FUNCTION public.conta_entrada_correo(p jsonb) RETURNS void
     SET search_path TO 'public'
     AS $$
 begin
-  insert into public.inbound_email_log (email_id, to_address, from_address, subject, company_id, account_id, outcome, detail)
+  insert into public.inbound_email_log (email_id, to_address, from_address, subject, company_id, account_id, outcome, detail, resend_account)
   values (p->>'email_id', p->>'to', p->>'from', left(p->>'subject', 500), nullif(p->>'company_id', '')::uuid,
-          (select account_id from public.company where id = nullif(p->>'company_id', '')::uuid), p->>'resultado', coalesce(p->'detalle', '{}'::jsonb))
-  on conflict (email_id) do update set outcome = excluded.outcome, detail = excluded.detail;
+          (select account_id from public.company where id = nullif(p->>'company_id', '')::uuid), p->>'resultado', coalesce(p->'detalle', '{}'::jsonb),
+          -- E01 · Por qué cuenta de Resend entró (folvy o sumied).
+          nullif(p->>'cuenta_resend', ''))
+  on conflict (email_id) do update set outcome = excluded.outcome, detail = excluded.detail,
+    resend_account = coalesce(inbound_email_log.resend_account, excluded.resend_account);
 end $$;
 
 
@@ -42414,6 +42522,7 @@ CREATE TABLE public.vat_book_entry (
     deduction_year smallint,
     deduction_period text,
     deduction_reason text,
+    import_run_id uuid,
     CONSTRAINT vat_book_entry_book_check CHECK ((book = ANY (ARRAY['issued'::text, 'received'::text, 'investment'::text, 'not_subject'::text]))),
     CONSTRAINT vat_book_entry_counterpart_id_type_check CHECK (((counterpart_id_type IS NULL) OR (counterpart_id_type = ANY (ARRAY['02'::text, '03'::text, '04'::text, '05'::text, '06'::text])))),
     CONSTRAINT vat_book_entry_deducida_en CHECK ((((deduction_year IS NULL) AND (deduction_period IS NULL) AND (deduction_reason IS NULL)) OR (((deduction_year >= 2000) AND (deduction_year <= 2100)) AND (deduction_period ~ '^([1-4]T|0[1-9]|1[0-2])$'::text) AND (book = ANY (ARRAY['received'::text, 'investment'::text])) AND (deduction_reason IS NOT NULL) AND (btrim(deduction_reason) <> ''::text)))),
@@ -42437,6 +42546,13 @@ COMMENT ON TABLE public.vat_book_entry IS 'C05. Libro registro del IVA (RIVA art
 --
 
 COMMENT ON COLUMN public.vat_book_entry.deduction_period IS 'I01c (0290) · «Deducida en»: el periodo (1T…4T o 01…12) del 303 en que se dedujo esta recibida, si no es el de su fecha de recepción. Vacío: el de su fecha.';
+
+
+--
+-- Name: COLUMN vat_book_entry.import_run_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.vat_book_entry.import_run_id IS 'N02: la carga de otro programa de la que vino esta anotación. Nulo si nació en Sumied o se trajo antes del N02.';
 
 
 --
@@ -53861,7 +53977,11 @@ declare v_acc uuid := public._conta_puerta_cuenta(p_company); v_desde timestampt
 begin
   return jsonb_build_object(
     'direcciones', coalesce((select jsonb_agg(jsonb_build_object('tipo', a.kind, 'direccion', a.local_part || '@' || a.domain, 'activa', a.active) order by a.kind)
-                              from public.company_inbound_address a where a.company_id = p_company), '[]'::jsonb),
+                              from public.company_inbound_address a where a.company_id = p_company
+                               and lower(a.domain) = public._conta_dominio_entrada(p_company)), '[]'::jsonb),
+    -- E01 · La dirección de esta empresa (una sola fuente, la misma que Correo de facturas).
+    'direccion', (select case when d.id is not null then jsonb_build_object('tipo', d.kind, 'direccion', d.local_part || '@' || d.domain, 'activa', d.active) end
+                    from public._conta_direccion_empresa(p_company) d),
     'conectados', jsonb_build_object(
        'bancos', coalesce((select jsonb_agg(jsonb_build_object('proveedor', l.provider, 'estado', l.status, 'ultima', l.last_sync_at))
                             from public.bank_aggregator_link l where l.company_id = p_company), '[]'::jsonb),
@@ -103770,6 +103890,7 @@ CREATE TABLE auth.one_time_tokens (
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone,
+    link_token_hash text,
     CONSTRAINT one_time_tokens_token_hash_check CHECK ((char_length(token_hash) > 0))
 );
 
@@ -103831,6 +103952,7 @@ CREATE TABLE auth.saml_providers (
     created_at timestamp with time zone,
     updated_at timestamp with time zone,
     name_id_format text,
+    dedicated_scope boolean,
     CONSTRAINT "entity_id not empty" CHECK ((char_length(entity_id) > 0)),
     CONSTRAINT "metadata_url not empty" CHECK (((metadata_url = NULL::text) OR (char_length(metadata_url) > 0))),
     CONSTRAINT "metadata_xml not empty" CHECK ((char_length(metadata_xml) > 0))
@@ -108833,38 +108955,6 @@ COMMENT ON TABLE public.company_doubt IS 'C00. Lo que la persona contestó «No 
 
 
 --
--- Name: company_inbound_address; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.company_inbound_address (
-    id uuid DEFAULT gen_random_uuid() NOT NULL,
-    account_id uuid NOT NULL,
-    company_id uuid NOT NULL,
-    kind text DEFAULT 'facturas'::text NOT NULL,
-    local_part text NOT NULL,
-    domain text DEFAULT 'entrada.folvy.app'::text NOT NULL,
-    active boolean DEFAULT false NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL,
-    created_by uuid,
-    created_by_name text,
-    CONSTRAINT company_inbound_address_domain_check CHECK ((domain ~ '^[a-z0-9.-]+$'::text)),
-    CONSTRAINT company_inbound_address_kind_check CHECK ((kind = ANY (ARRAY['facturas'::text, 'liquidaciones'::text, 'documentos'::text]))),
-    CONSTRAINT company_inbound_address_local_part_check CHECK (
-CASE
-    WHEN (kind = 'documentos'::text) THEN (local_part ~ '^[a-z0-9][a-z0-9-]{1,40}$'::text)
-    ELSE (local_part ~ (('^'::text || kind) || '-[a-z0-9][a-z0-9-]{1,40}$'::text))
-END)
-);
-
-
---
--- Name: TABLE company_inbound_address; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.company_inbound_address IS 'D01 · Las direcciones propias de cada empresa: facturas-<empresa>@entrada.folvy.app (facturas) y liquidaciones-<empresa>@ (los resúmenes de pagos de las plataformas). Nacen apagadas: se encienden cuando el dominio está dado de alta en Resend.';
-
-
---
 -- Name: company_inbound_sender; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -111744,6 +111834,7 @@ CREATE TABLE public.customer_invoice (
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     issued_at timestamp with time zone,
     issued_by_name text,
+    import_run_id uuid,
     CONSTRAINT customer_invoice_correction_kind_check CHECK ((correction_kind = ANY (ARRAY['importes'::text, 'anular'::text, 'datos'::text]))),
     CONSTRAINT customer_invoice_doc_type_check CHECK ((doc_type = ANY (ARRAY['factura'::text, 'rectificativa'::text]))),
     CONSTRAINT customer_invoice_numero_al_emitir CHECK (((status = 'borrador'::text) OR ((number IS NOT NULL) AND (number_text IS NOT NULL) AND (fiscal_year IS NOT NULL)))),
@@ -111760,6 +111851,13 @@ CREATE TABLE public.customer_invoice (
 --
 
 COMMENT ON TABLE public.customer_invoice IS 'V01 · La factura de venta: borrador (se cambia y se borra) o emitida (número, asiento, PDF y envío a Diez; no se borra nunca: se corrige con su rectificativa).';
+
+
+--
+-- Name: COLUMN customer_invoice.import_run_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.customer_invoice.import_run_id IS 'N02: la carga de otro programa de la que vino esta factura (origin = traida). Nulo si nació en Sumied.';
 
 
 --
@@ -113445,6 +113543,7 @@ END, ''::text)) STORED,
     withholding_base numeric(14,2),
     vat_non_deductible_reason text,
     vat_non_deductible_note text,
+    import_run_id uuid,
     CONSTRAINT supplier_invoice_arrival_channel_check CHECK ((arrival_channel = ANY (ARRAY['subida'::text, 'correo'::text, 'cocina'::text, 'portal'::text]))),
     CONSTRAINT supplier_invoice_descartada_con_motivo CHECK (((status = 'descartada'::text) = ((discarded_at IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(discard_reason, ''::text))) > 0) AND (status_before_discard IS NOT NULL)))),
     CONSTRAINT supplier_invoice_doc_kind_check CHECK ((doc_kind = ANY (ARRAY['invoice'::text, 'credit_note'::text]))),
@@ -113642,6 +113741,13 @@ COMMENT ON COLUMN public.supplier_invoice.vat_non_deductible_reason IS 'D07 (085
 --
 
 COMMENT ON COLUMN public.supplier_invoice.vat_non_deductible_note IS 'D07 (0850). El texto del motivo «otro».';
+
+
+--
+-- Name: COLUMN supplier_invoice.import_run_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.supplier_invoice.import_run_id IS 'N02: la carga de otro programa de la que vino esta factura (source = traida). Nulo si nació en Sumied.';
 
 
 --
@@ -117270,7 +117376,9 @@ CREATE TABLE public.inbound_email_log (
     outcome text NOT NULL,
     detail jsonb DEFAULT '{}'::jsonb NOT NULL,
     received_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT inbound_email_log_outcome_check CHECK ((outcome = ANY (ARRAY['recibido'::text, 'sin_facturas'::text, 'sin_destino'::text, 'apagada'::text, 'error'::text, 'liquidacion'::text, 'confirmacion'::text, 'no_es_liquidacion'::text])))
+    resend_account text,
+    CONSTRAINT inbound_email_log_outcome_check CHECK ((outcome = ANY (ARRAY['recibido'::text, 'sin_facturas'::text, 'sin_destino'::text, 'apagada'::text, 'error'::text, 'liquidacion'::text, 'confirmacion'::text, 'no_es_liquidacion'::text]))),
+    CONSTRAINT inbound_email_log_resend_account_check CHECK (((resend_account IS NULL) OR (resend_account = ANY (ARRAY['folvy'::text, 'sumied'::text]))))
 );
 
 
@@ -117279,6 +117387,13 @@ CREATE TABLE public.inbound_email_log (
 --
 
 COMMENT ON TABLE public.inbound_email_log IS 'D01 · Cada correo que llega a una dirección de facturas, también el que no es de nadie: nada se pierde sin rastro. Solo el servidor.';
+
+
+--
+-- Name: COLUMN inbound_email_log.resend_account; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.inbound_email_log.resend_account IS 'E01 · La cuenta de Resend por la que entró el correo (folvy o sumied): «Volver a leer» y «Poner el PDF» lo piden otra vez a esa. Vacío: los de antes del E01, de la de Folvy.';
 
 
 --
@@ -128021,11 +128136,11 @@ ALTER TABLE ONLY public.company_doubt
 
 
 --
--- Name: company_inbound_address company_inbound_address_company_id_kind_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: company_inbound_address company_inbound_address_company_kind_domain_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.company_inbound_address
-    ADD CONSTRAINT company_inbound_address_company_id_kind_key UNIQUE (company_id, kind);
+    ADD CONSTRAINT company_inbound_address_company_kind_domain_key UNIQUE (company_id, kind, domain);
 
 
 --
@@ -133493,6 +133608,13 @@ CREATE INDEX oauth_consents_active_user_client_idx ON auth.oauth_consents USING 
 --
 
 CREATE INDEX oauth_consents_user_order_idx ON auth.oauth_consents USING btree (user_id, granted_at DESC);
+
+
+--
+-- Name: one_time_tokens_link_token_hash_hash_idx; Type: INDEX; Schema: auth; Owner: -
+--
+
+CREATE INDEX one_time_tokens_link_token_hash_hash_idx ON auth.one_time_tokens USING hash (link_token_hash);
 
 
 --
@@ -146719,6 +146841,14 @@ ALTER TABLE ONLY public.customer_invoice_event
 
 
 --
+-- Name: customer_invoice customer_invoice_import_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.customer_invoice
+    ADD CONSTRAINT customer_invoice_import_run_id_fkey FOREIGN KEY (import_run_id) REFERENCES public.import_run(id) ON DELETE SET NULL;
+
+
+--
 -- Name: customer_invoice_line customer_invoice_line_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -151998,6 +152128,14 @@ ALTER TABLE ONLY public.supplier_invoice_expense
 
 
 --
+-- Name: supplier_invoice supplier_invoice_import_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier_invoice
+    ADD CONSTRAINT supplier_invoice_import_run_id_fkey FOREIGN KEY (import_run_id) REFERENCES public.import_run(id) ON DELETE SET NULL;
+
+
+--
 -- Name: supplier_invoice supplier_invoice_inbox_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -153099,6 +153237,14 @@ ALTER TABLE ONLY public.vat_book_entry
 
 ALTER TABLE ONLY public.vat_book_entry
     ADD CONSTRAINT vat_book_entry_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES public.journal_entry(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: vat_book_entry vat_book_entry_import_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.vat_book_entry
+    ADD CONSTRAINT vat_book_entry_import_run_id_fkey FOREIGN KEY (import_run_id) REFERENCES public.import_run(id) ON DELETE SET NULL;
 
 
 --
@@ -165228,12 +165374,37 @@ GRANT ALL ON FUNCTION public._conta_dir_coincide(p_texto text, p_dir text) TO se
 
 
 --
+-- Name: TABLE company_inbound_address; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.company_inbound_address TO anon;
+GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.company_inbound_address TO authenticated;
+GRANT ALL ON TABLE public.company_inbound_address TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_direccion_empresa(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_direccion_empresa(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_direccion_empresa(p_company uuid) TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_dni_nie_valido(p_doc text); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public._conta_dni_nie_valido(p_doc text) TO anon;
 GRANT ALL ON FUNCTION public._conta_dni_nie_valido(p_doc text) TO authenticated;
 GRANT ALL ON FUNCTION public._conta_dni_nie_valido(p_doc text) TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_dominio_entrada(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_dominio_entrada(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_dominio_entrada(p_company uuid) TO service_role;
 
 
 --
@@ -171859,6 +172030,14 @@ GRANT ALL ON FUNCTION public.conta_devoluciones_del_dia(p_company uuid, p_locati
 GRANT ALL ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) TO anon;
 GRANT ALL ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_dia_abierto(p_company uuid, p_dia date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_dia_de_inicio(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_dia_de_inicio(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_dia_de_inicio(p_company uuid) TO service_role;
 
 
 --
@@ -184351,15 +184530,6 @@ GRANT SELECT ON TABLE public.company_chart_import TO authenticated;
 
 GRANT ALL ON TABLE public.company_doubt TO authenticated;
 GRANT ALL ON TABLE public.company_doubt TO service_role;
-
-
---
--- Name: TABLE company_inbound_address; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.company_inbound_address TO anon;
-GRANT SELECT,REFERENCES,TRIGGER,MAINTAIN ON TABLE public.company_inbound_address TO authenticated;
-GRANT ALL ON TABLE public.company_inbound_address TO service_role;
 
 
 --
