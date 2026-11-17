@@ -27,6 +27,15 @@
 --      asiento inventado (conta_diez_ejercicio, conta_diez_subcuentas,
 --      conta_diez_importar), validado y con su import_run_id; y después el día
 --      de inicio es el de _conta_corte.
+--   7. Las dos vueltas atrás, sobre estos datos: quitada la carga de ERP10 de
+--      la sección 3 (lo único con un valor nuevo), la 0833 y la 0832 dejan los
+--      cinco CHECK como estaban, sin las tres columnas ni la función, y un
+--      valor nuevo vuelve a fallar.
+--
+-- sin usuario: lo que se prueba no lo llama el navegador. conta_dia_de_inicio
+-- es solo de service_role (la sección 1 lo comprueba) y los CHECK son de la
+-- tabla, valen igual para cualquiera. conta_fijar_corte, que pide un
+-- administrador, se llama con el usuario a1 de la cuenta A en request.jwt.claims.
 
 begin;
 do $$ begin
@@ -127,6 +136,7 @@ begin
   -- Y una carga de ERP10 de verdad, en la tabla: se crea y pasa a «en prueba».
   insert into public.import_run (account_id, company_id, program, kind, period_from, period_to)
   values (v_acc, c, 'erp10', 'recibidas', '2026-01-01', '2026-12-31') returning id into v_run;
+  perform set_config('n02.carga_erp10', v_run::text, true);
   update public.import_run set status = 'en_prueba', finished_at = now() where id = v_run;
   if (select status from public.import_run where id = v_run) <> 'en_prueba' then
     raise exception 'PRUEBA N02 · 3: la carga de ERP10 no quedó en prueba.';
@@ -239,7 +249,34 @@ begin
     raise exception 'PRUEBA N02 · 6: después de traer 2019 de Diez, _conta_corte da % y conta_dia_de_inicio %.',
       public._conta_corte(c), public.conta_dia_de_inicio(c);
   end if;
-  raise notice 'PRUEBA N02: 6 de 6 bien.';
+end $$;
+
+-- 7 · Las vueltas atrás, sobre estos datos ----------------------------------------------
+delete from public.import_run where id = current_setting('n02.carga_erp10')::uuid;
+\i supabase/vuelta-atras/20261117T0833_n02_dia_de_inicio.down.sql
+\i supabase/vuelta-atras/20261117T0832_n02_carga_abierta.down.sql
+do $$
+declare v_ok boolean; c uuid;
+begin
+  if to_regprocedure('public.conta_dia_de_inicio(uuid)') is not null then
+    raise exception 'PRUEBA N02 · 7: la vuelta atrás no quitó conta_dia_de_inicio.';
+  end if;
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and column_name = 'import_run_id'
+               and table_name in ('supplier_invoice', 'customer_invoice', 'vat_book_entry')) then
+    raise exception 'PRUEBA N02 · 7: la vuelta atrás dejó alguna columna import_run_id.';
+  end if;
+  if (select pg_get_constraintdef(oid) from pg_constraint where conname = 'import_run_program_check' and conrelid = 'public.import_run'::regclass) <> 'CHECK ((program = ''diez''::text))'
+     or (select pg_get_constraintdef(oid) from pg_constraint where conname = 'supplier_invoice_source_check' and conrelid = 'public.supplier_invoice'::regclass)
+        <> 'CHECK ((source = ANY (ARRAY[''manual''::text, ''ocr''::text, ''lote''::text, ''liquidacion''::text])))' then
+    raise exception 'PRUEBA N02 · 7: los CHECK no quedaron como estaban.';
+  end if;
+  select company_id into c from public.import_run order by started_at desc limit 1;
+  v_ok := false;
+  begin
+    insert into public.import_run (account_id, company_id, program, kind) select account_id, id, 'erp10', 'diario' from public.company where id = c;
+  exception when check_violation then v_ok := true; end;
+  if not v_ok then raise exception 'PRUEBA N02 · 7: después de la vuelta atrás, una carga de ERP10 sigue entrando.'; end if;
+  raise notice 'PRUEBA N02: 7 de 7 bien.';
 end $$;
 
 rollback;
