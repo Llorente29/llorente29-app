@@ -198,3 +198,28 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: node scripts/ci/datos-personales.mjs "$BASE" "$HEAD"
+
+  # Q02 (17/11): cada PR enseña cómo salió la última noche REAL de main (la que
+  # corrió pruebas, no el disparo que se salta): la fecha, cuántos ficheros en
+  # rojo y el enlace. Así, si una e2e del PR falla en algo que ya fallaba en
+  # main, se ve sin ir a buscarlo. NO BLOQUEA (Julio, 17/11): con 14 noches de
+  # 14 en rojo pararía todo; el bloqueo llegará cuando la noche esté en verde.
+  la-noche:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/e2e
+      - name: La última noche real de main (no bloquea)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          node scripts/e2e/ultima-noche.mjs pr > "$RUNNER_TEMP/noche.md" || echo "No se ha podido leer la última noche de main." > "$RUNNER_TEMP/noche.md"
+          cat "$RUNNER_TEMP/noche.md" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=La última noche real de main::$(head -1 "$RUNNER_TEMP/noche.md" | sed 's/\*\*//g; s/`//g')"

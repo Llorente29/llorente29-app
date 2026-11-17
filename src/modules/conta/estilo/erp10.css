@@ -1,0 +1,86 @@
+/* src/modules/conta/estilo/erp10.css
+ *
+ * X04 · «Salida a ERP10» (la maqueta aprobada, maqueta_salida_paso1/2.png): los
+ * tres pasos arriba con el botón grande a la derecha; la tabla a la izquierda y
+ * «Qué mirar» a la derecha. La página no se mueve: lo que no cabe rueda dentro de
+ * su zona (la tabla, la lista de una fila, «Qué mirar»).
+ */
+
+.cxe { display: flex; flex-direction: column; gap: 0; background: var(--cx-blanco); border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-tarjeta);
+  /* El alto lo pone la pantalla (lo que queda debajo de su borde de arriba); este es el de antes de medir. */
+  height: calc(100dvh - 180px); min-height: 480px; overflow: hidden; }
+
+/* Cabecera: título, mes, pasos y el botón */
+.cxe-cabeza { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--cx-linea); flex-wrap: nowrap; }
+.cxe-titulo { font-size: 1.15rem; font-weight: 700; margin: 0; color: var(--cx-texto); white-space: nowrap; flex-shrink: 0; }
+.cxe-mes { flex-shrink: 0; height: 34px; padding: 0 10px; border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-boton); background: var(--cx-blanco); font: inherit; }
+.cxe-pasos { display: flex; align-items: center; gap: 8px; list-style: none; margin: 0 0 0 2px; padding: 0; color: var(--cx-apoyo); font-size: .88rem; min-width: 0; }
+.cxe-paso { display: flex; align-items: center; gap: 6px; white-space: nowrap; min-width: 0; }
+.cxe-paso + .cxe-paso::before { content: ''; display: inline-block; width: 18px; border-top: 1px solid var(--cx-linea); margin-right: 2px; }
+.cxe-paso-num { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--cx-borde-control); font-size: .75rem; font-weight: 700; }
+.cxe-paso[aria-current='step'] { color: var(--cx-azul); font-weight: 700; }
+.cxe-paso[aria-current='step'] .cxe-paso-num { background: var(--cx-azul); border-color: var(--cx-azul); color: var(--cx-blanco); }
+.cxe-paso-hecho .cxe-paso-num { border-color: var(--cx-verde-oscuro); color: var(--cx-verde-oscuro); background: var(--cx-verde-suave); }
+.cxe-paso-apagado { opacity: .55; }
+.cxe-paso-texto { display: flex; flex-direction: column; line-height: 1.15; }
+.cxe-paso-luego { font-size: .7rem; font-weight: 400; }
+.cxe-botones { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.cxe-botones button { white-space: nowrap; }
+.cxe-grande { height: 40px; padding: 0 22px; font-size: 1rem; font-weight: 700; border: 0; border-radius: var(--cx-radio-boton); background: var(--cx-azul); color: var(--cx-blanco); cursor: pointer; }
+.cxe-grande:disabled { opacity: .55; cursor: default; }
+.cxe-sec { height: 40px; padding: 0 16px; border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-boton); background: var(--cx-blanco); font: inherit; cursor: pointer; }
+
+/* Cuerpo: dos columnas */
+.cxe-cuerpo { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr); }
+.cxe-izq { min-height: 0; display: flex; flex-direction: column; padding: 12px 16px; gap: 8px; }
+.cxe-der { min-height: 0; border-left: 1px solid var(--cx-linea); background: var(--cx-fondo); display: flex; flex-direction: column; }
+.cxe-der-titulo { margin: 0; padding: 14px 16px; font-size: .95rem; font-weight: 700; border-bottom: 1px solid var(--cx-linea); }
+.cxe-der-cuerpo { flex: 1; min-height: 0; overflow: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+/* La tabla de «Qué sale» y su lista */
+.cxe-marco { flex: 1; min-height: 0; border: 1px solid var(--cx-linea); border-radius: var(--cx-radio-caja); display: flex; flex-direction: column; overflow: hidden; }
+.cxe-rueda { flex: 1; min-height: 0; overflow: auto; }
+.cxe-tabla { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.cxe-tabla th { position: sticky; top: 0; background: var(--cx-blanco); text-align: left; font-weight: 400; color: var(--cx-apoyo); padding: 8px 10px; border-bottom: 1px solid var(--cx-linea); }
+.cxe-tabla td { padding: 6px 10px; border-bottom: 1px solid var(--cx-linea); }
+.cxe-tabla .cxe-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cxe-fila { cursor: pointer; }
+.cxe-fila:hover { background: var(--cx-neutro-suave); }
+.cxe-fila[aria-selected='true'] { background: var(--cx-ambar-fila); box-shadow: inset 3px 0 0 var(--cx-ambar); }
+.cxe-fila td:first-child { font-weight: 700; white-space: nowrap; }
+.cxe-sub { font-size: .85rem; }
+.cxe-sub th { font-size: .8rem; }
+.cxe-lista-titulo { margin: 0; padding: 8px 10px; font-size: .85rem; font-weight: 700; border-top: 1px solid var(--cx-linea); background: var(--cx-neutro-suave); }
+.cxe-pie { display: flex; gap: 12px; align-items: baseline; padding: 10px 14px; border-top: 2px solid var(--cx-texto); font-size: .9rem; }
+.cxe-pie-gris { color: var(--cx-apoyo); }
+.cxe-pie a, .cxe-pie button.cxe-enlace { margin-left: auto; }
+.cxe-enlace { background: none; border: 0; padding: 0; color: var(--cx-azul); text-decoration: underline; cursor: pointer; font: inherit; }
+.cxe-comprobaciones { display: flex; flex-wrap: wrap; gap: 4px 18px; list-style: none; margin: 0; padding: 0; color: var(--cx-verde-oscuro); font-size: .88rem; }
+.cxe-comprobaciones li::before { content: '✓ '; }
+
+/* Las etiquetas de «Cómo está» */
+.cxe-etq { display: inline-block; padding: 1px 8px; border-radius: 4px; font-size: .78rem; font-weight: 700; margin-right: 6px; white-space: nowrap; }
+.cxe-etq-listo { background: var(--cx-verde-suave); color: var(--cx-verde-oscuro); }
+.cxe-etq-mira { background: var(--cx-ambar-suave); color: var(--cx-ambar); }
+.cxe-etq-gris { background: var(--cx-neutro-suave); color: var(--cx-neutro-texto); }
+.cxe-otro-mes { margin-left: 6px; font-size: .75rem; color: var(--cx-ambar); }
+
+/* «Qué mirar» */
+.cxe-aviso { border: 1px solid var(--cx-linea); border-left: 4px solid var(--cx-ambar); background: var(--cx-ambar-suave); border-radius: var(--cx-radio-caja); padding: 10px 12px; font-size: .9rem; }
+.cxe-aviso p { margin: 0 0 8px; }
+.cxe-aviso ul { margin: 6px 0 0; padding-left: 18px; }
+.cxe-aviso li { margin: 2px 0; }
+.cxe-aviso-botones { display: flex; gap: 8px; flex-wrap: wrap; }
+.cxe-ambar { height: 32px; padding: 0 14px; border: 0; border-radius: var(--cx-radio-boton); background: var(--cx-ambar); color: var(--cx-blanco); font: inherit; font-weight: 700; cursor: pointer; }
+.cxe-ambar-sec { height: 32px; padding: 0 14px; border: 1px solid var(--cx-ambar); border-radius: var(--cx-radio-boton); background: var(--cx-blanco); color: var(--cx-ambar); font: inherit; cursor: pointer; }
+.cxe-nota { border: 1px solid var(--cx-linea); background: var(--cx-blanco); border-radius: var(--cx-radio-caja); padding: 10px 12px; font-size: .9rem; }
+.cxe-nota p { margin: 0; }
+.cxe-chips { display: flex; flex-wrap: wrap; gap: 6px; border: 1px solid var(--cx-borde-control); border-radius: var(--cx-radio-caja); padding: 8px; margin-top: 6px; }
+.cxe-chip { padding: 2px 8px; border-radius: 4px; background: var(--cx-neutro-suave); font-size: .82rem; font-weight: 700; }
+.cxe-chip-si { background: var(--cx-azul-suave); color: var(--cx-azul); }
+.cxe-chips small { flex-basis: 100%; font-size: .7rem; color: var(--cx-apoyo); letter-spacing: .04em; }
+
+/* Lo que está haciendo y lo que ha pasado (regla 8) */
+.cxe-estado { padding: 8px 16px; font-size: .9rem; border-top: 1px solid var(--cx-linea); }
+.cxe-hecho { color: var(--cx-verde-oscuro); font-weight: 700; }
+.cxe-mal { color: var(--cx-rojo); font-weight: 700; }

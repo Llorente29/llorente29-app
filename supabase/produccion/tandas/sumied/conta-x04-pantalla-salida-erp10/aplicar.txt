@@ -1,0 +1,12 @@
+# X04 · La pantalla de la salida a ERP10 (encargo X04, 17/11). Rama
+# conta/x04-pantalla-salida-erp10. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar.
+#
+#   1530  Añade carpeta_pdf (admite nulos) en conta_erp10_salida_empresa y dos
+#         funciones nuevas: conta_erp10_salida_carpeta (la pone) y
+#         conta_erp10_recibidas_por_salir (solo lee: las recibidas que salen, con
+#         lo que necesita su fila). No cambia la firma de ninguna de la X02.
+#
+# Solo añade. Nada de Diez ni del camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x04-pantalla-erp10.sql
+supabase/migrations/20261117T1530_x04_salida_erp10_pantalla.sql

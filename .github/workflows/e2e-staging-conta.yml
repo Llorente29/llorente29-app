@@ -1,5 +1,5 @@
 name: Pruebas e2e en staging-conta
-run-name: "e2e · ${{ github.event_name == 'schedule' && 'entera de la noche' || github.event_name == 'workflow_dispatch' && inputs.repite != '' && 'repetición de la noche' || github.event_name == 'workflow_dispatch' && (inputs.pruebas == '' && 'entera' || inputs.pruebas) || 'frente' }} · ${{ github.ref_name }} · ${{ github.sha }}"
+run-name: "e2e · ${{ github.event_name == 'schedule' && (github.event.schedule == '0 1 * * *' && 'entera de la noche · disparo de las 01:00 UTC, solo vale en verano' || 'entera de la noche · disparo de las 02:00 UTC, solo vale en invierno') || github.event_name == 'workflow_dispatch' && inputs.repite != '' && 'repetición de la noche' || github.event_name == 'workflow_dispatch' && (inputs.pruebas == '' && 'entera' || inputs.pruebas) || 'frente' }} · ${{ github.ref_name }} · ${{ github.sha }}"
 
 # QUÉ HACE
 # Pasa las pruebas de extremo a extremo del módulo de contabilidad
@@ -251,6 +251,30 @@ jobs:
             echo "Disparo «$DISPARO», Madrid en $desfase: corre = $toca."
           fi
           echo "toca=$toca" >> "$GITHUB_OUTPUT"
+
+      # Q02 (17/11): el disparo que no toca NO acaba en verde. Hasta el Q02
+      # salía «success» en 10 s sin pasar ni una prueba, y en la lista de
+      # Actions no se distinguía de una noche que había pasado: el 17/11 se
+      # tomó por «la entera de las 09:39 en verde». GitHub no deja ponerle otro
+      # nombre al run después de empezar (el nombre se decide al dispararse, y
+      # entonces no se sabe si en Madrid es verano), así que se cancela: queda
+      # en gris, «cancelado», con el porqué en el resumen.
+      - name: No toca · este disparo se cancela (no es una noche en verde)
+        if: steps.hora.outputs.toca == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPARO: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### No toca: esta no es la noche"
+            echo
+            echo "Disparo «$DISPARO» con Madrid en $(TZ=Europe/Madrid date +%z): aquí no son las 03:00. La noche de verdad es el otro disparo de hoy. Este run se cancela para que no parezca una entera en verde: no ha pasado ninguna prueba."
+          } >> "$GITHUB_STEP_SUMMARY"
+          gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+          # Lo que tarda GitHub en cancelarlo; si no llega, el paso falla (rojo, nunca verde).
+          for _ in $(seq 1 60); do sleep 5; done
+          echo "::error::No se ha podido cancelar el disparo que no toca."; exit 1
 
       - uses: actions/checkout@v4
         with:
@@ -646,6 +670,19 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      # Q02: la entera lanzada a mano dice qué es de la rama y qué ya fallaba
+      # en la última noche real de main (el 17/11 hubo que hacerlo a mano con
+      # el run 44124387355). No cambia el color del run: solo lo explica.
+      - name: Entera a mano · lo que es de la rama y lo que ya fallaba en main
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.repite == '' && inputs.pruebas == ''
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          [ -f "$RUNNER_TEMP/informe.json" ] || { echo "Sin informe: no hay con qué comparar."; exit 0; }
+          node scripts/e2e/ultima-noche.mjs comparar "$RUNNER_TEMP/informe.json" | tee -a "$GITHUB_STEP_SUMMARY"
+
       # El mismo informe en JSON: lo lee el aviso de la noche (qué prueba, qué fichero).
       - name: Informe en JSON (para el aviso de la noche)
         if: always() && (github.event_name == 'schedule' || inputs.repite != '')
@@ -774,28 +811,50 @@ jobs:
           name: informe-json
           path: ${{ runner.temp }}/informe
 
+      # Q02: con qué se compara. La noche REAL anterior (la que corrió pruebas,
+      # no el disparo que se salta: scripts/e2e/ultima-noche.mjs), y, si esto
+      # es la repetición, el informe de la noche que se repite: lo que no se
+      # repitió sigue en rojo aunque lo repetido pase.
+      - name: La noche real anterior (y, en la repetición, la de esta noche)
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          node scripts/e2e/ultima-noche.mjs anterior --antes-de "${REPITE:-$GITHUB_RUN_ID}" --salida "$RUNNER_TEMP/anterior.json" || echo null > "$RUNNER_TEMP/anterior.json"
+          if [ -n "${REPITE:-}" ]; then
+            gh run download "$REPITE" --repo "$GITHUB_REPOSITORY" -n informe-json -D "$RUNNER_TEMP/noche" || echo "::warning::No se ha podido leer el informe de la noche $REPITE."
+          fi
+
       - name: Verde, repetir o avisar
+        env:
+          REPETIDOS: ${{ inputs.pruebas }}
         run: |
           set -euo pipefail
           export ENLACE="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
           export ENLACE_NOCHE="${REPITE:+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$REPITE}"
           export ASUNTO="$(git log -1 --format=%s "$GITHUB_SHA" 2>/dev/null || true)"
           INFORME="$RUNNER_TEMP/informe/informe.json"; [ -f "$INFORME" ] || INFORME=-
-          node scripts/e2e/noche.mjs "$INFORME" --trozos "$TROZOS" --repeticion "${REPITE:-}" --cuerpo "$RUNNER_TEMP/aviso.md" > "$RUNNER_TEMP/decision.txt"
+          NOCHE="$RUNNER_TEMP/noche/informe.json"; [ -f "$NOCHE" ] || NOCHE=-
+          ANTERIOR="$RUNNER_TEMP/anterior.json"; [ -f "$ANTERIOR" ] || ANTERIOR=-
+          mkdir -p "$RUNNER_TEMP/resumen"
+          node scripts/e2e/noche.mjs "$INFORME" --trozos "$TROZOS" --repeticion "${REPITE:-}" \
+            --noche "$NOCHE" --repetidos "${REPETIDOS:-}" --anterior "$ANTERIOR" \
+            --cuerpo "$RUNNER_TEMP/aviso.md" --resumen "$RUNNER_TEMP/resumen/noche-resumen.json" > "$RUNNER_TEMP/decision.txt"
           cat "$RUNNER_TEMP/decision.txt"
           ACCION=$(sed -n 's/^accion=//p' "$RUNNER_TEMP/decision.txt")
           FICHEROS=$(sed -n 's/^ficheros=//p' "$RUNNER_TEMP/decision.txt")
           PORQUE=$(sed -n 's/^porque=//p' "$RUNNER_TEMP/decision.txt")
+          LINEA=$(sed -n 's/^linea=//p' "$RUNNER_TEMP/decision.txt")
           n=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$TITULO\" in:title" --json number -q '.[0].number')
           case "$ACCION" in
             verde)
-              msg="La entera de la noche sobre main (\`${GITHUB_SHA::7}\`) en verde${REPITE:+, después de repetir lo que falló por staging en $ENLACE_NOCHE}."
-              echo "$msg" | tee -a "$GITHUB_STEP_SUMMARY"
+              cat "$RUNNER_TEMP/aviso.md" >> "$GITHUB_STEP_SUMMARY"
               if [ -n "$n" ]; then
-                gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body "Vuelve a verde. $msg $ENLACE"
+                { echo "Vuelve a verde."; echo; cat "$RUNNER_TEMP/aviso.md"; } > "$RUNNER_TEMP/verde.md"
+                gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/verde.md"
                 gh issue close "$n" --repo "$GITHUB_REPOSITORY"
               fi ;;
             repetir)
+              # El aviso no se da aún: lo da la repetición, con lo de la noche y lo repetido juntos.
               echo "Se repite una vez, porque $PORQUE: ${FICHEROS:-la suite entera}." | tee -a "$GITHUB_STEP_SUMMARY"
               { echo; cat "$RUNNER_TEMP/aviso.md"; } >> "$GITHUB_STEP_SUMMARY"
               gh workflow run e2e-staging-conta.yml --repo "$GITHUB_REPOSITORY" --ref "$GITHUB_REF_NAME" -f pruebas="$FICHEROS" -f repite="$GITHUB_RUN_ID" ;;
@@ -803,7 +862,17 @@ jobs:
               cat "$RUNNER_TEMP/aviso.md" >> "$GITHUB_STEP_SUMMARY"
               if [ -n "$n" ]; then gh issue comment "$n" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/aviso.md"
               else gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITULO" --body-file "$RUNNER_TEMP/aviso.md"; fi
-              echo "::error::La entera de la noche no ha salido en verde: aviso en la incidencia «$TITULO»."
+              echo "::error::La entera de la noche no ha salido en verde ($LINEA): aviso en la incidencia «$TITULO»."
               exit 1 ;;
             *) echo "::error::noche.mjs no ha decidido nada."; exit 1 ;;
           esac
+
+      # Q02: lo que la noche deja para la siguiente y para los PR (ultima-noche.mjs).
+      - name: El resumen de la noche (para la siguiente y para los PR)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: noche-resumen
+          path: ${{ runner.temp }}/resumen/noche-resumen.json
+          retention-days: 30
+          if-no-files-found: ignore
