@@ -1,0 +1,15 @@
+# X02 · La base de la salida a ERP10 (encargo X01·1, 17/11). Rama
+# conta/x02-base-salida-erp10. Se ensaya y se aplica desde main nombrando esta
+# rama, antes de fusionar.
+#
+#   1010  Añade las cuatro tablas (empresa, lote, partida y subcuenta salida),
+#         con RLS de lectura para la cuenta y el índice único de las partidas
+#         vivas.
+#   1011  Añade cinco funciones nuevas (conversión del largo, encender, por salir,
+#         cambiadas y apuntar un lote). No las llama nadie todavía (la pantalla
+#         es el 1B).
+#
+# Solo añade. Nada de Diez ni del camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/x02-salida-erp10.sql
+supabase/migrations/20261117T1010_x02_salida_erp10_tablas.sql
+supabase/migrations/20261117T1011_x02_salida_erp10_funciones.sql
