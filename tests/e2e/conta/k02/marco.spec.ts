@@ -93,12 +93,12 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await elegirEnArriba(page, /^Ejercicio 2026/)
     await expect(page).toHaveURL(/ejercicio=2026/)
     // En la general no hay Despacho: lo enciende el sector de la empresa (o una cuenta que es asesoría).
-    await expect(modulos.getByRole('button')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal'])
+    await expect(modulos.locator('.k-modulo')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal'])
 
     // Cambiar de empresa: la de gestoría, como la verá una gestoría. Trae Despacho (arreglo 4) y los datos de la semilla.
     await elegirEnArriba(page, new RegExp(`^${GESTORIA}`))
     await expect(page.getByRole('button', { name: new RegExp(`^${GESTORIA}`) })).toBeVisible({ timeout: 30_000 })
-    await expect(modulos.getByRole('button')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal', 'Despacho'], { timeout: 30_000 })
+    await expect(modulos.locator('.k-modulo')).toHaveText(['Contabilidad', 'Facturación', 'Impuestos', 'Personal', 'Despacho'], { timeout: 30_000 })
     await cargada(page, 'Inicio')
 
     // Por debajo de 800 de alto, los botones nacen plegados (decisión 13).
