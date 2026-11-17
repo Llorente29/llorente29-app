@@ -17,11 +17,27 @@ export interface CorteEmpresa {
   programa: string | null
   /** Asientos traídos del programa anterior: con alguno, el corte ya no cambia. */
   traidos: number
+  /** N05c · Lo anterior al corte ya está traído (history_imported_at). Sin corte, true. */
+  historicoTraido: boolean
+  /** N05c · «Empezar a trabajar ya» sin lo anterior: cuándo y quién. Nulo si no se ha decidido. */
+  sinHistorico: { el: string; por: string | null } | null
+}
+
+/**
+ * N05c · El nombre del programa de antes, como en el N03: «ERP10», «Diez» o, con otro
+ * o sin programa, nulo («el programa de antes»). Así ya no se ve «erp10» en minúsculas.
+ */
+export function nombrePrograma(programa: string | null | undefined): string | null {
+  switch ((programa ?? '').trim().toLowerCase()) {
+    case 'erp10': return 'ERP10'
+    case 'diez': return 'Diez'
+    default: return null
+  }
 }
 
 export async function leerCorte(accountId: string, companyId: string): Promise<CorteEmpresa> {
   const [ej, tr] = await Promise.all([
-    tabla('fiscal_year').select('code, starts_on, ends_on, origin, origin_program, imported_until')
+    tabla('fiscal_year').select('code, starts_on, ends_on, origin, origin_program, imported_until, history_imported_at, works_without_history_at, works_without_history_by_name')
       .eq('account_id', accountId).eq('company_id', companyId).order('starts_on', { ascending: false }),
     tabla('journal_entry').select('id', { count: 'exact', head: true })
       .eq('account_id', accountId).eq('company_id', companyId).eq('source_type', 'migrated'),
@@ -38,7 +54,17 @@ export async function leerCorte(accountId: string, companyId: string): Promise<C
     hasta: mixto ? String(mixto.imported_until) : traido ? String(traido.ends_on) : null,
     programa: f?.origin_program ? String(f.origin_program) : null,
     traidos: tr.count ?? 0,
+    historicoTraido: !f || !f.origin_program || f.history_imported_at != null,
+    sinHistorico: f?.works_without_history_at
+      ? { el: String(f.works_without_history_at), por: f.works_without_history_by_name ? String(f.works_without_history_by_name) : null }
+      : null,
   }
+}
+
+/** N05c · «Empezar a trabajar ya»: se contabiliza desde el día de inicio sin lo anterior. Devuelve el texto de la base (regla 8). */
+export async function empezarSinHistorico(companyId: string, ejercicio: string, quien: string | null): Promise<string> {
+  const r = (await rpc('conta_trabajar_sin_historico', { p_company: companyId, p_ejercicio: ejercicio, p_quien_nombre: quien })) as { texto?: string } | null
+  return r?.texto ?? 'Hecho.'
 }
 
 /** Fija (o quita, con hasta = null) la fecha de corte. Devuelve cuántos meses ha cerrado como traídos. */
