@@ -110,6 +110,12 @@ begin
   perform set_config('n06b.no_cuadra', jsonb_set(d, '{sumas}', (select jsonb_agg(case when s->>'cuenta' = '57200001'
     then s || jsonb_build_object('debe', (s->>'debe')::int + 1000) else s end) from jsonb_array_elements(d->'sumas') s))::text, true);
   perform set_config('n06b.sin_sumas', jsonb_set(d, '{sumas}', '[]'::jsonb)::text, true);
+  -- Staging lo usan las e2e: si alguna cuenta de terceros del ejemplo ya es de otro tercero en esta empresa,
+  -- se suelta aquí (dentro de la transacción, que acaba en ROLLBACK), para que la prueba no dependa de ello.
+  -- Ese caso (la cuenta ya es de otro) lo prueba el N06a.
+  delete from public.company_account_link l using public.company_account a
+   where a.id = l.company_account_id and l.company_id = c and l.role = 'principal'
+     and a.code in ('40000000', '40000001', '40000002', '41000001', '43000001');
   -- Una recibida que entró por correo SIN PROVEEDOR, con el NIF del 40000001 del ejemplo.
   insert into public.supplier_invoice (account_id, company_id, invoice_number, invoice_date, status, source, grand_total, tax_base_total, tax_total,
                                        created_by_name, reading)
@@ -204,9 +210,15 @@ begin
     raise exception 'PRUEBA N06b · 3: dar por bueno solo las cuentas: «%».', r->>'texto';
   end if;
   select i.supplier_id into v_s from public.supplier_invoice i where i.id = current_setting('n06b.sin_proveedor')::uuid;
-  if v_s is null or not exists (select 1 from public.company_account_link l join public.company_account a on a.id = l.company_account_id
-                                  where l.entity = 'supplier' and l.entity_id = v_s::text and l.role = 'principal' and a.code = '40000001') then
-    raise exception 'PRUEBA N06b · 3: la recibida sin proveedor no ha encontrado el suyo, con su cuenta 40000001.';
+  if v_s is null or (select public.party_nif(tax_id) from public.supplier where id = v_s) is distinct from 'B00000000' then
+    raise exception 'PRUEBA N06b · 3: la recibida sin proveedor no ha encontrado el suyo por el NIF.';
+  end if;
+  -- Con su cuenta 40000001; o, si en esta base la 40000001 ya es de otro tercero, dicho en «Mira esto».
+  if not exists (select 1 from public.company_account_link l join public.company_account a on a.id = l.company_account_id
+                  where l.entity = 'supplier' and l.entity_id = v_s::text and l.role = 'principal' and a.code = '40000001')
+     and not exists (select 1 from public.import_run r, jsonb_array_elements(r.detail->'mirar') m
+                      where r.id = v_carga and m->>'cuenta' = '40000001' and m->>'frase' like 'La cuenta 40000001 ya es de % en Sumied: % se ha traído sin enlazarla.') then
+    raise exception 'PRUEBA N06b · 3: el proveedor de la recibida no tiene su cuenta 40000001 ni se dice por qué.';
   end if;
   if not exists (select 1 from public.document_activity d where d.supplier_invoice_id = current_setting('n06b.sin_proveedor')::uuid
                    and d.text like 'Sumied le ha puesto su proveedor, %, al dar por bueno lo traído de ERP10: tienen el mismo NIF.') then
