@@ -116,6 +116,8 @@ begin
   delete from public.company_account_link l using public.company_account a
    where a.id = l.company_account_id and l.company_id = c and l.role = 'principal'
      and a.code in ('40000000', '40000001', '40000002', '41000001', '43000001');
+  -- Los meses que ya tenga cerrados (en staging, los que dejan las e2e): darlo por bueno no los cambia.
+  perform set_config('n06b.cierres', (select coalesce(jsonb_agg(l.id order by l.id), '[]') from public.fiscal_period_lock l where l.company_id = c)::text, true);
   -- Una recibida que entró por correo SIN PROVEEDOR, con el NIF del 40000001 del ejemplo.
   insert into public.supplier_invoice (account_id, company_id, invoice_number, invoice_date, status, source, grand_total, tax_base_total, tax_total,
                                        created_by_name, reading)
@@ -224,7 +226,8 @@ begin
                    and d.text like 'Sumied le ha puesto su proveedor, %, al dar por bueno lo traído de ERP10: tienen el mismo NIF.') then
     raise exception 'PRUEBA N06b · 3: la recibida no dice por qué tiene proveedor.';
   end if;
-  if public.conta_dia_de_inicio(c) is not null or exists (select 1 from public.fiscal_period_lock where company_id = c)
+  if public.conta_dia_de_inicio(c) is not null
+     or (select coalesce(jsonb_agg(l.id order by l.id), '[]') from public.fiscal_period_lock l where l.company_id = c) is distinct from current_setting('n06b.cierres')::jsonb
      or exists (select 1 from public.fiscal_year where company_id = c and history_imported_at is not null) then
     raise exception 'PRUEBA N06b · 3: dar por buenas solo las cuentas ha fijado, cerrado o marcado algo.';
   end if;
@@ -371,7 +374,8 @@ begin
   end if;
   -- El historial, traído; los meses de antes, cerrados; la decisión de trabajar sin lo anterior, escrita y ya sin efecto.
   if (select history_imported_at is null or works_without_history_at is null from public.fiscal_year where company_id = c and code = '2026')
-     or (select count(*) from public.fiscal_period_lock where company_id = c and kind = 'migrated' and reopened_at is null) <> 3 then
+     or (select count(*) from public.fiscal_period_lock where company_id = c and kind = 'migrated' and reopened_at is null
+           and month between '2026-01-01' and '2026-03-01') <> 3 then
     raise exception 'PRUEBA N06b · 6: el historial no queda traído o los tres meses de antes no siguen cerrados.';
   end if;
   -- Los saldos de las tres cuentas, antes y después: lo de Sumied más lo traído.
