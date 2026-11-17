@@ -68,7 +68,17 @@ async function preparar(s: Sesion): Promise<void> {
   }
 }
 
-const sinRodar = async (page: Page) => expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight + 1 && document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true)
+/** La ventana cabe entera: no se sale de la pantalla, no rueda de lado y su pie (la frase y los botones) se ve. Rueda, si acaso, lo de dentro. */
+const sinRodar = async (page: Page) => {
+  const m = await page.evaluate(() => {
+    const v = document.querySelector('.tpv-ventana') as HTMLElement | null
+    const pie = document.querySelector('.tpv-pie') as HTMLElement | null
+    if (!v || !pie) return 'sin ventana'
+    const r = v.getBoundingClientRect(), p = pie.getBoundingClientRect()
+    return [r.top >= 0, r.bottom <= innerHeight + 1, r.right <= innerWidth + 1, v.scrollWidth <= v.clientWidth + 1, p.bottom <= innerHeight + 1].join(',')
+  })
+  expect(m, 'arriba, abajo, derecha, sin rodar de lado, pie a la vista').toBe('true,true,true,true,true')
+}
 
 test('subir los ficheros del TPV: lo que cuadra se guarda, lo que no lo dice; y a qué cuenta va la forma de pago nueva', async ({ page }, info) => {
   test.skip(info.project.name === 'movil', 'Las ventanas del TPV son de ordenador; el móvil lo prueba la lista (R05)')
