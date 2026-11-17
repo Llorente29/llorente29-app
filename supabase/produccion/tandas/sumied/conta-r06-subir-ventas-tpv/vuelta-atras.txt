@@ -1,0 +1,3 @@
+# R06 · la vuelta atrás: quita las cinco funciones de la 2130.
+cuenta: scripts/conta/produccion/cuentas/r06-formas-de-pago.sql
+supabase/vuelta-atras/20261117T2130_r06_formas_de_pago.down.sql
