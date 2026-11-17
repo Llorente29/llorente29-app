@@ -68,6 +68,8 @@ export interface DatosDeLaCarga {
   /** Los terceros cuyo saldo no cuadra exacto con sus facturas (decisión 3): solo estos se enseñan. */
   pendientesNoExactos: { codigo: string; nombre: string; saldo: number; frase: string }[]
   raros: { que: string; cuentas: string[]; nif: string | null; frase: string }[]
+  /** N06b · El sumas y saldos de allí, por subcuenta (céntimos): se compara al darlo por bueno. Vacío si no se trajo. */
+  sumas: { cuenta: string; nombre: string; debe: number; haber: number }[]
   /** El inmovilizado, tal cual se leyó: Sumied no tiene todavía dónde escribirlo. */
   inmovilizado: Carga['inmovilizado']
   /** Todo lo que no cuadra al leer (N04), en frases. */
@@ -154,6 +156,7 @@ export function paraLaBase(carga: Carga, programa = 'erp10'): DatosDeLaCarga {
     aprendido: carga.aprendido.proveedores.map((a) => ({ codigo: a.codigo, gasto: a.gasto ? { cuenta: a.gasto.cuenta, nombre: a.gasto.nombre } : null, tiposIva: a.tiposIva, retencion: a.retencion, porque: a.porque })),
     pendientesNoExactos: carga.aprendido.pendientes.filter((p) => !p.cuadraExacto).map((p) => ({ codigo: p.codigo, nombre: p.nombre, saldo: p.saldo, frase: p.frase })),
     raros: carga.comprobado.tercerosRaros.map((r) => ({ que: r.que, cuentas: r.cuentas, nif: r.nif, frase: r.frase })),
+    sumas: (carga.sumas?.filas ?? []).map((x) => ({ cuenta: x.subcuenta, nombre: x.nombre, debe: x.debe, haber: x.haber })),
     inmovilizado: carga.inmovilizado,
     frases: carga.comprobado.frases,
   }
