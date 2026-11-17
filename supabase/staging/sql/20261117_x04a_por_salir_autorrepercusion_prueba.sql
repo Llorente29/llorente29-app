@@ -16,6 +16,12 @@
 --      salir, con el aviso de antes (la prueba de que el arreglo es lo que cambia).
 --
 -- Sin datos reales (T11): nombres inventados, que se ven inventados.
+--
+-- sin usuario: lo que se prueba es la regla de una función security definer que ya
+-- probó la X02 como usuario (RLS y cuenta ajena, en 20261117_x02_salida_erp10_prueba.sql),
+-- y esta no cambia quién la puede llamar. Se llama con el usuario a1 de la cuenta A en
+-- request.jwt.claims. La sección 3 toca una anotación del libro para descuadrarla, y eso
+-- un usuario no lo puede hacer: por eso va sin «set local role authenticated».
 
 begin;
 do $$ begin
