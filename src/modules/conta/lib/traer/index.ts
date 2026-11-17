@@ -31,6 +31,7 @@ export * from './reconocer'
 export * from './leer'
 export * from './comprobar'
 export * from './aprender'
+export * from './paraLaBase'
 
 /** Cómo está cada fichero en la lista de la maqueta: «Leído», «Mira esto» o «Falta». */
 export type Estado = 'leido' | 'mira' | 'falta'

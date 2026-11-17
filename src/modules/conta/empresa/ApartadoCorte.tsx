@@ -47,7 +47,8 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
   const elPrograma = nombreProg ?? 'el programa de antes'
   const dePrograma = nombreProg ? `de ${nombreProg}` : 'del programa de antes'
   // N05c · Traído a medias y sin lo anterior: o no se puede contabilizar, o se decidió empezar ya.
-  const inicio = c.hasta ? diaSiguiente(c.hasta) : null
+  // N06a · El día de inicio lo dice la base (conta_dia_de_inicio), no se calcula aquí.
+  const inicio = c.diaDeInicio
   const faltaLoAnterior = !!inicio && !c.historicoTraido
   const empezarYa = () => {
     if (!c.ejercicio || !inicio) return
@@ -77,7 +78,7 @@ export function ApartadoCorte({ quien, movil, alCambiar }: { quien: Quien; movil
       {!editando && (
         <p style={{ margin: 0 }} data-testid="corte-actual">
           {c.hasta
-            ? <>Hasta el <strong>{fechaLarga(c.hasta)}</strong> lo trae {elPrograma}; desde el <strong>{fechaLarga(diaSiguiente(c.hasta))}</strong> asienta {MARCA.nombre}.</>
+            ? <>Hasta el <strong>{fechaLarga(c.hasta)}</strong> lo trae {elPrograma}; desde el <strong>{fechaLarga(c.diaDeInicio ?? diaSiguiente(c.hasta))}</strong> asienta {MARCA.nombre}.</>
             : <>Sin fecha de corte: {MARCA.nombre} asienta el ejercicio entero.</>}
         </p>
       )}
