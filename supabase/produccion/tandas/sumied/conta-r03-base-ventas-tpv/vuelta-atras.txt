@@ -1,0 +1,5 @@
+# R03 · la vuelta atrás, en orden inverso: la 0951 (quita las tres funciones) y
+# la 0950 (las cinco tablas y el interruptor; para si ya hay días guardados).
+cuenta: scripts/conta/produccion/cuentas/r03-ventas-tpv.sql
+supabase/vuelta-atras/20261117T0951_r03_ventas_tpv_funciones.down.sql
+supabase/vuelta-atras/20261117T0950_r03_ventas_tpv_tablas.down.sql

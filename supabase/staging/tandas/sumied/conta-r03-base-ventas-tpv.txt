@@ -1,0 +1,7 @@
+# R03 · la base de las ventas de un TPV de fuera (0950 crea cinco tablas y el
+# interruptor; 0951, las funciones de guardar y leer un día). Las dos migraciones
+# y su prueba (ROLLBACK: dos empresas en una cuenta, el día del ejemplo inventado
+# de Revo, sustituirlo, cada empresa lo suyo y las cuatro paradas).
+supabase/migrations/20261117T0950_r03_ventas_tpv_tablas.sql
+supabase/migrations/20261117T0951_r03_ventas_tpv_funciones.sql
+supabase/staging/sql/20261117_r03_ventas_tpv_prueba.sql
