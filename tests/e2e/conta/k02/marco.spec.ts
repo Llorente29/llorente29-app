@@ -61,7 +61,8 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(page.locator('.s-barra')).toHaveCount(0)
     const cinta = page.getByRole('tablist', { name: 'La cinta' })
     await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
-    await expect(page.getByRole('tab', { name: 'Inicio' })).toHaveAttribute('aria-selected', 'true')
+    // exact: «Inicio» está dentro de «Definiciones», y Playwright busca por trozo.
+    await expect(page.getByRole('tab', { name: 'Inicio', exact: true })).toHaveAttribute('aria-selected', 'true')
     await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}, ejercicio 2026`) })).toBeVisible()
     await abierta(page, 'Inicio')
 

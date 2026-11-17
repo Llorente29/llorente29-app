@@ -41,6 +41,9 @@ html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
 .min-h-screen:has(.k-nucleo) { min-height: 0; }
 
 .k-nucleo button { font: inherit; }
+/* Los enlaces del marco con su color, no con el azul de los enlaces de las pantallas (.cx a). */
+.k-nucleo a.k-marca, .k-nucleo a.k-empresa { color: var(--k-blanco); }
+.k-nucleo a.k-menu-item { color: var(--k-tinta); }
 .k-oculto { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ── 1 · La barra de arriba ─────────────────────────────────────────── */
