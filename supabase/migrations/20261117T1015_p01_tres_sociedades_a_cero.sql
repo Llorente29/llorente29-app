@@ -42,8 +42,10 @@
 -- SIN VUELTA ATRÁS, a propósito: se pide partir de cero. Los originales siguen en el
 -- correo de quien los reenvió.
 --
--- Las tres funciones se quedan en la base, sin permisos para nadie (como la
--- _b01r_ignorar_anulados): la prueba de staging las llama con sociedades inventadas.
+-- Las tres funciones son de un solo uso: al final de este mismo fichero, en la misma
+-- transacción y después de usarlas, se borran (Julio, 17/11: no se dejan restos). Solo
+-- la prueba de staging, en su transacción con ROLLBACK, las conserva para llamarlas con
+-- sociedades inventadas (p01.prueba_conserva = 'si', un ajuste local de la transacción).
 
 -- ── Lo que hay DENTRO: lo que se va a borrar, tabla a tabla ─────────────────────
 create or replace function public._p01_dentro(p_cuenta uuid, p_empresas uuid[])
@@ -263,4 +265,19 @@ begin
       'supplier_expected_invoice', 2, 'supplier', 1, 'supplier_contact', 1, 'party_role', 1,
       'company_account_link_proveedor', 1));
   raise notice 'P01 a cero: hecho. %', v_r;
+end $$;
+
+-- ── No se dejan restos: las tres funciones, fuera ──────────────────────────────
+do $$
+begin
+  if coalesce(current_setting('p01.prueba_conserva', true), '') = 'si' then
+    raise notice 'P01 a cero: la prueba conserva las funciones (solo dentro de su ROLLBACK).';
+    return;
+  end if;
+  drop function public._p01_a_cero(uuid, uuid[], uuid, date, text, jsonb);
+  drop function public._p01_fuera(uuid, uuid[]);
+  drop function public._p01_dentro(uuid, uuid[]);
+  if exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname like '\_p01\_%') then
+    raise exception 'P01 a cero: quedan funciones _p01_ en la base.';
+  end if;
 end $$;

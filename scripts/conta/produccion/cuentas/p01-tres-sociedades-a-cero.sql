@@ -8,6 +8,7 @@
 --   3. Fuera de las tres, cada tabla tocada: como antes. Corte fijo (el #241): lo creado antes del
 --      17/11/2026 a las 00:00 de Madrid, para que lo que entre a mitad del ensayo no lo pare sin culpa.
 --   4. Los ficheros de la cuenta en el almacén: como antes (SQL no puede borrarlos; los borra Julio).
+--   5. Las funciones _p01_ de la tanda: 0 después (son de un solo uso; el fichero las borra).
 with tres(id) as (values ('328360db-736f-4d45-b4ee-ecf1ca96fa15'::uuid), ('bd73d3ae-2a43-4896-a70a-73f92b62c065'::uuid),
                          ('86d8022d-7a92-4f9d-9cf9-d53729e96ef1'::uuid))
 select clave, valor from (
@@ -145,4 +146,8 @@ select clave, valor from (
   -- quieta: los ficheros de su cuenta (SQL no puede borrarlos; los borra Julio desde el almacén)
   select 401, 'Su cuenta · ficheros en receipt-uploads', count(*)::text from storage.objects
    where bucket_id = 'receipt-uploads' and name like 'a175c0b8-2eaf-4285-9688-53042910a86e/%'
+  union all
+  -- quieta: el catálogo de funciones, por su nombre
+  select 501, 'Funciones _p01_ en la base', count(*)::text from pg_proc
+   where pronamespace = 'public'::regnamespace and proname like '\_p01\_%'
 ) t order by o;

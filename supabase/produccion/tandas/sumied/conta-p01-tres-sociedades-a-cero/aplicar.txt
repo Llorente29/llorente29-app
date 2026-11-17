@@ -12,7 +12,8 @@
 #         cifras del ensayo, corte de Bancos vacío, administrador activo) y
 #         comprobaciones después (dentro a 0, fuera igual, _conta_corte =
 #         2026-11-01). El analizador no ve dentro de las funciones: por eso va
-#         escrito aquí. Los PDF (77, receipt-uploads) no se borran desde SQL:
+#         escrito aquí. Al final, en la misma transacción, borra las tres
+#         funciones: no deja restos (la cuenta lo mide: 0 funciones _p01_). Los PDF (77, receipt-uploads) no se borran desde SQL:
 #         los borra Julio desde el almacén, con la lista del parte.
 #
 # No toca ninguna otra empresa ni cuenta. Nada en el camino del pedido.
@@ -53,3 +54,4 @@ esperado: p01-tres-sociedades-a-cero · Fuera de las tres · company · huella d
 esperado: p01-tres-sociedades-a-cero · Fuera de las tres · fiscal_year · huella = como antes
 esperado: p01-tres-sociedades-a-cero · Fuera de las tres · fiscal_period_lock = como antes
 esperado: p01-tres-sociedades-a-cero · Su cuenta · ficheros en receipt-uploads = como antes
+esperado: p01-tres-sociedades-a-cero · Funciones _p01_ en la base = 0

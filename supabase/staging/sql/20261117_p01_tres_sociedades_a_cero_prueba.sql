@@ -3,7 +3,9 @@
 -- SOLO STAGING (y la base local del W09). Prueba del P01 · las tres sociedades a cero
 -- (20261117T1015). Todo en una transacción con ROLLBACK. Sociedades INVENTADAS.
 --
---   1. Sin la cuenta de las tres sociedades del P01, la migración no toca nada.
+--   1. Sin la cuenta de las tres sociedades del P01, la migración no toca nada, y no deja
+--      ninguna función _p01_. Después se vuelve a pasar conservándolas (p01.prueba_conserva,
+--      solo en esta transacción) para llamarlas con las sociedades inventadas.
 --   2. Una cuenta inventada con tres sociedades (la segunda, sin ejercicio) y una cuarta
 --      sociedad de control en OTRA cuenta, cada una con lo que entra por correo.
 --   3. Las guardas paran sin dejar nada: cifras distintas de las esperadas, un asiento puesto
@@ -34,7 +36,12 @@ do $$ begin
      or (select md5(string_agg(id::text || coalesce(trade_name, ''), '|' order by id)) from public.company) <> (select n from prueba_antes) then
     raise exception 'PRUEBA P01 1: sin la cuenta del P01 la migración ha tocado algo.';
   end if;
+  if exists (select 1 from pg_proc where pronamespace = 'public'::regnamespace and proname like '\_p01\_%') then
+    raise exception 'PRUEBA P01 1: la migración ha dejado funciones _p01_.';
+  end if;
 end $$;
+select set_config('p01.prueba_conserva', 'si', true);
+\i supabase/migrations/20261117T1015_p01_tres_sociedades_a_cero.sql
 
 -- 2 · Las sociedades inventadas. Cuenta A (tres) y cuenta B (la cuarta, de control).
 do $$
