@@ -1,0 +1,29 @@
+[
+ {
+  "id": "713-1",
+  "pr": 713,
+  "fecha": "2026-11-17T21:04:29Z",
+  "producto": "sumied",
+  "apartado": "Traer de otro programa",
+  "frase": "lo leído de ERP10 se trae en prueba de una vez: asientos en borrador con su número de allí, facturas traídas y terceros, sin validar nada.",
+  "ruta": null
+ },
+ {
+  "id": "713-2",
+  "pr": 713,
+  "fecha": "2026-11-17T21:04:29Z",
+  "producto": "sumied",
+  "apartado": "Traer de otro programa",
+  "frase": "«Deshacer el traspaso» quita solo lo de esa carga y deja la empresa como estaba; «Dejarlas fuera» marca facturas sin quitarlas.",
+  "ruta": null
+ },
+ {
+  "id": "713-3",
+  "pr": 713,
+  "fecha": "2026-11-17T21:04:29Z",
+  "producto": "sumied",
+  "apartado": "Empresa › Corte",
+  "frase": "el día de inicio que enseña la pantalla es el de la base, también con el corte de Bancos.",
+  "ruta": null
+ }
+]
