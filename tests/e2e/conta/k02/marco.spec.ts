@@ -54,7 +54,9 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     page.on('pageerror', (e) => errores.push(`${page.url()}: ${e.message}`))
     await page.setViewportSize({ width: ancho, height: alto })
     await entrarComo(page, NUCLEO.email)
-    await page.goto('/conta/inicio', { timeout: 30_000 })
+    // Con la marca Sumied (fuera de producción se pide con ?marca=, y se recuerda en la sesión):
+    // así lo ve una gestoría en app.sumied.com, y así salen las capturas.
+    await page.goto('/conta/inicio?marca=sumied', { timeout: 30_000 })
 
     // El marco del núcleo, no el de hoy.
     await expect(page.locator('.k-nucleo')).toBeVisible({ timeout: 30_000 })
@@ -63,6 +65,7 @@ for (const [ancho, alto] of [[1456, 816], [1366, 768]] as const) {
     await expect(cinta.getByRole('tab')).toHaveText(['Definiciones', 'Asientos', 'Importaciones', 'Listados', 'Utilidades', 'Impuestos'])
     // exact: «Inicio» está dentro de «Definiciones», y Playwright busca por trozo.
     await expect(page.getByRole('tab', { name: 'Inicio', exact: true })).toHaveAttribute('aria-selected', 'true')
+    await expect(page.locator('.k-marca')).toHaveText('Sumied')
     await expect(page.getByRole('button', { name: new RegExp(`^${EMPRESA}, ejercicio 2026`) })).toBeVisible()
     await abierta(page, 'Inicio')
 
