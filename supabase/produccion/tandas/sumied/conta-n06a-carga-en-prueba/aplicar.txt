@@ -1,0 +1,20 @@
+# N06a · Traer de otro programa: la carga en prueba y deshacerla. Rama conta/n06a-carga-en-prueba.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1806  Añade columnas que admiten nulos: import_run.parent_id y detail (una carga es una, con
+#         una lectura por fichero), supplier.import_run_id y party.import_run_id (lo que creó una
+#         carga), y en las facturas import_mark e import_pending (sin casar / fuera, y lo pendiente).
+#   1807  Cambia en caliente, con la misma firma, su respaldo y su trozo exacto: el embudo
+#         (_journal_entry_proponer: lo traído entra en borrador con su número de allí y su carga; a
+#         una traída no se le propone asiento), conta_motivos_para_validar (lo de una carga en
+#         prueba no se valida a mano), _conta_facturas_apuntar y tg_s01o2_iva_no_deducible (no tocan
+#         las traídas) y customer_invoice_inalterable (una emitida traída en prueba se borra al
+#         deshacer). Y import_run.kind admite «carga» (el CHECK solo amplía).
+#   1808  Añade siete funciones nuevas: traer en prueba, deshacer, dejar fuera, el día de inicio
+#         para la pantalla y tres ayudantes.
+#
+# No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/n06a-carga.sql
+supabase/migrations/20261117T1806_n06a_carga_columnas.sql
+supabase/migrations/20261117T1807_n06a_carga_embudo.sql
+supabase/migrations/20261117T1808_n06a_carga_funciones.sql

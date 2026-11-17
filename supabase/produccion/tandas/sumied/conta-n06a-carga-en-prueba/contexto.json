@@ -1,0 +1,35 @@
+{
+ "_que": "N06a · la carga en prueba y deshacerla · contexto medido en la BASE LOCAL con la estructura de staging (origin/estructura/staging 500afdc, 17/11 15:45Z, más las migraciones del N05c), sin el N06a (quitado con sus vueltas atrás) y en SOLO LECTURA: no en producción (esta sesión no lee producción). Las filas son las de la base local; el contexto de verdad lo mide el workflow en el ensayo. Nada en el camino del pedido.",
+ "medido": "2026-11-17T17:30Z",
+ "tanda": {
+  "supabase/migrations/20261117T1806_n06a_carga_columnas.sql": "df0c73e035dfdd261e879e955595a68a",
+  "supabase/migrations/20261117T1807_n06a_carga_embudo.sql": "6005b82a1a289c46a4d761c5640e2593",
+  "supabase/migrations/20261117T1808_n06a_carga_funciones.sql": "a74e1cf050a9555566e7a789eab3845c"
+ },
+ "contexto": {
+  "tablas": [
+   "public.customer_invoice",
+   "public.import_run",
+   "public.journal_entry",
+   "public.party",
+   "public.supplier",
+   "public.supplier_invoice"
+  ],
+  "funciones": [],
+  "filas": {
+   "public.customer_invoice": 0,
+   "public.import_run": 0,
+   "public.journal_entry": 0,
+   "public.party": 8,
+   "public.supplier": 8,
+   "public.supplier_invoice": 0
+  },
+  "otras": {},
+  "camino": {
+   "tablas": [],
+   "funciones": []
+  },
+  "usos": {},
+  "registro": []
+ }
+}

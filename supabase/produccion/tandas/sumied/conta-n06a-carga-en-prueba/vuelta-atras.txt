@@ -1,0 +1,7 @@
+# N06a · la vuelta atrás, en orden inverso: la 1808 (quita las siete funciones), la 1807 (las cinco
+# funciones desde su respaldo y el CHECK sin «carga»; para si ya hay alguna carga) y la 1806 (quita
+# las columnas).
+cuenta: scripts/conta/produccion/cuentas/n06a-carga.sql
+supabase/vuelta-atras/20261117T1808_n06a_carga_funciones.down.sql
+supabase/vuelta-atras/20261117T1807_n06a_carga_embudo.down.sql
+supabase/vuelta-atras/20261117T1806_n06a_carga_columnas.down.sql
