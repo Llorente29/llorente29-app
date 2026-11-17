@@ -1,0 +1,4 @@
+# X04a · el arreglo de conta_erp10_por_salir (1550, cambia con la misma firma) y su
+# prueba (ROLLBACK, una empresa inventada de la cuenta A, con su vuelta atrás).
+supabase/migrations/20261117T1550_x04a_por_salir_autorrepercusion.sql
+supabase/staging/sql/20261117_x04a_por_salir_autorrepercusion_prueba.sql
