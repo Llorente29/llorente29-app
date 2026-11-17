@@ -13,15 +13,16 @@
 --   Facturación, Laboral e Impuestos encendidos, y dos empresas:
 --     · «Empresa de Ejemplo Núcleo, S.L.» (general), con los ejercicios 2025
 --       (cerrado) y 2026 (abierto): para cambiar de ejercicio arriba;
---     · «Gestoría de Ejemplo Núcleo, S.L.» (gestoría): para cambiar de
---       empresa.
---   La cuenta es una ASESORÍA (accounts.tax_advisor_since): así sale el
---   módulo Despacho en todas sus empresas, como lo verá una gestoría
---   (respuesta K02 · 1, arreglo 4).
---   Y, para que la cinta y la línea de estado salgan con número (arreglo 2),
---   en la empresa general: un proveedor inventado con 9 facturas por revisar,
---   y un banco con un extracto sin saldo y 14 movimientos sin casar (9
---   propuestos y 5 por aclarar). Todo inventado (T11): el IBAN, del banco 9999.
+--     · «Gestoría de Ejemplo Núcleo, S.L.» (gestoría): su sector enciende el
+--       módulo Despacho (respuesta K02 · 1, arreglo 4), y es la empresa con
+--       la que se ve el marco en las capturas, como lo verá una gestoría.
+--   Para que la cinta y la línea de estado salgan con número (arreglo 2), en
+--   la de gestoría: un proveedor inventado con 9 facturas por revisar, y un
+--   banco con un extracto sin saldo y 14 movimientos sin casar (9 propuestos
+--   y 5 por aclarar). Todo inventado (T11): el IBAN, del banco 9999.
+--   Que la CUENTA sea asesoría (accounts.tax_advisor_since, Despacho en todas
+--   sus empresas) pediría cambiar una fila que ya existe: una semilla solo
+--   añade (W07), así que no se hace aquí.
 --
 -- La contraseña NO vive aquí: el carril le pone la de un solo uso de cada
 -- ejecución (scripts/e2e/carril/comun.sql la lleva en la lista de la
@@ -89,17 +90,13 @@ begin
     ('c0e20000-0000-4000-8000-0000000000f7', k_cuenta, k_emp2, '2026', '2026-01-01', '2026-12-31', 'open', null, cuando)
   on conflict (id) do nothing;
 
-  -- K02 · arreglo 4: la cuenta es una asesoría (Despacho sale en todas sus empresas).
-  update public.accounts set tax_advisor_since = date '2026-11-17'
-   where id = k_cuenta and tax_advisor_since is distinct from date '2026-11-17';
-
   -- K02 · arreglo 2: un proveedor con 9 facturas por revisar (en revisión, sin asiento).
   insert into public.supplier (id, account_id, name, legal_name, created_by_name)
   values ('c0e20000-0000-4000-8000-0000000000a0', k_cuenta, 'Distribuciones Ejemplo', 'Distribuciones Ejemplo, S.L.', 'Semilla K02')
   on conflict (id) do nothing;
   insert into public.supplier_invoice (id, account_id, company_id, supplier_id, invoice_number, invoice_date, status,
     tax_base_total, tax_total, grand_total, source, created_by_name, created_at, updated_at)
-  select ('c0e20000-0000-4000-8000-0000000002' || lpad(n::text, 2, '0'))::uuid, k_cuenta, k_emp1, 'c0e20000-0000-4000-8000-0000000000a0',
+  select ('c0e20000-0000-4000-8000-0000000002' || lpad(n::text, 2, '0'))::uuid, k_cuenta, k_emp2, 'c0e20000-0000-4000-8000-0000000000a0',
          'F-2026/04' || lpad((10 + n)::text, 2, '0'), date '2026-10-01' + (n * 4), 'en_revision',
          round(100 + n * 23.17, 2), round((100 + n * 23.17) * 0.21, 2), round((100 + n * 23.17) * 1.21, 2), 'manual', 'Semilla K02', cuando, cuando
     from generate_series(1, 9) n
@@ -107,20 +104,20 @@ begin
 
   -- K02 · arreglo 2: un banco, un extracto sin saldo y 14 movimientos sin casar.
   insert into public.treasury_account (id, account_id, company_id, kind, name, iban, pgc_hint, is_default, is_active)
-  values ('c0e20000-0000-4000-8000-0000000000b0', k_cuenta, k_emp1, 'bank', 'Banco principal', 'ES7699990000000000000001', '572', true, true)
+  values ('c0e20000-0000-4000-8000-0000000000b0', k_cuenta, k_emp2, 'bank', 'Banco principal', 'ES7699990000000000000001', '572', true, true)
   on conflict (id) do nothing;
   insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-  select k_cuenta, k_emp1, a.id, 'bank_account', 'c0e20000-0000-4000-8000-0000000000b0', 'principal', 'manual'
-    from public.company_account a where a.company_id = k_emp1 and a.code = '57200001'
+  select k_cuenta, k_emp2, a.id, 'bank_account', 'c0e20000-0000-4000-8000-0000000000b0', 'principal', 'manual'
+    from public.company_account a where a.company_id = k_emp2 and a.code = '57200001'
   on conflict (company_id, entity, entity_id, role) do nothing;
   insert into public.bank_statement (id, account_id, company_id, treasury_account_id, source, format, file_name, period_from, period_to,
     movements_count, new_count, repeated_count, continuity, unchecked_reason, imported_at, imported_by_name)
-  values ('c0e20000-0000-4000-8000-0000000000b1', k_cuenta, k_emp1, 'c0e20000-0000-4000-8000-0000000000b0', 'fichero', 'n43', 'extracto-ejemplo.n43',
+  values ('c0e20000-0000-4000-8000-0000000000b1', k_cuenta, k_emp2, 'c0e20000-0000-4000-8000-0000000000b0', 'fichero', 'n43', 'extracto-ejemplo.n43',
     date '2026-10-01', date '2026-10-31', 14, 14, 0, 'sin_saldo', 'Semilla K02: extracto sin saldos.', cuando, 'Semilla K02')
   on conflict (id) do nothing;
   insert into public.bank_movement (id, account_id, company_id, treasury_account_id, statement_id, op_date, value_date, amount,
     bank_concept, clean_concept, fingerprint, soft_fingerprint, status, reason, created_at, updated_at)
-  select ('c0e20000-0000-4000-8000-0000000003' || lpad(n::text, 2, '0'))::uuid, k_cuenta, k_emp1, 'c0e20000-0000-4000-8000-0000000000b0',
+  select ('c0e20000-0000-4000-8000-0000000003' || lpad(n::text, 2, '0'))::uuid, k_cuenta, k_emp2, 'c0e20000-0000-4000-8000-0000000000b0',
          'c0e20000-0000-4000-8000-0000000000b1', date '2026-10-01' + (n * 2), date '2026-10-01' + (n * 2),
          case when n % 3 = 0 then round(45 + n * 11.5, 2) else -round(29.99 + n * 17.3, 2) end,
          'Movimiento de ejemplo ' || n, 'Movimiento de ejemplo ' || n, 'k02-semilla-' || n, 'k02-semilla-suave-' || n,
