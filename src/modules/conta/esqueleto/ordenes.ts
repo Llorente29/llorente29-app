@@ -102,7 +102,8 @@ const DE_LIBROS: Orden[] = AREAS_LIBROS.flatMap((area) => area.grupos.flatMap((g
   .map((x): Orden => ({
     id: `libros.${x.id}`, etiqueta: x.nombre, producto: 'contabilidad',
     pestana: x.id === 'pendientes-diez' ? 'importar' : PESTANA_DE_AREA[area.id],
-    a: { ruta: sinModulo(rutaLibros(area.id, x.id)) }, sinonimos: x.sinonimos, solo: x.id === 'pendientes-diez' ? 'diez' : undefined,
+    a: { ruta: sinModulo(rutaLibros(area.id, x.id)) }, sinonimos: x.sinonimos,
+    solo: x.id === 'pendientes-diez' ? 'diez' : x.id === 'salida-erp10' ? 'erp10' : undefined,
   }))))
 
 /**
@@ -155,7 +156,8 @@ export const CINTAS: Record<string, GrupoCinta[]> = {
     { titulo: 'Retenciones', ordenes: ['libros.retenciones'], ver: true },
   ],
   'contabilidad.cierre': [
-    { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.cierre-ejercicio'], ver: true },
+    // X04: «Salida a ERP10», al lado de «Cerrar el mes» (donde está «Traspasar a Diez»); solo con la salida encendida.
+    { titulo: 'Cierre', ordenes: ['libros.ejercicios', 'libros.cerrar-mes', 'libros.salida-erp10', 'libros.cierre-ejercicio'], ver: true },
     { titulo: 'Cuentas anuales', ordenes: ['libros.cuentas-anuales', 'libros.mapeo'], ver: true },
   ],
   // Paso 3: Definiciones, que no tenía cinta: el plan, las tablas y la analítica.

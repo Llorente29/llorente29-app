@@ -38,6 +38,7 @@ import './verifactu.css'
 import './marco.css'
 import './piezas.css'
 import './libroMarco.css'
+import './erp10.css' // X04 · «Salida a ERP10» (la maqueta aprobada del 17/11)
 import '../diseno/diseno.css'
 import '../marco/marco.css' // S02 · el marco del patrón único (barra, cabecera, encabezado)
 import '../diseno/plantillas/plantillas.css' // S02 · las seis plantillas
