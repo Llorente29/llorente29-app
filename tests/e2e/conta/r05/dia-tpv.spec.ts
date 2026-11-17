@@ -99,11 +99,11 @@ test('el día del TPV sale en Cierres del día, una fila por día, y se valida c
   await boton.click()
   const dialogo = page.getByRole('dialog')
   // La lista del diálogo enseña como mucho 8, los del TPV primero.
-  await expect(dialogo.getByText(/TPV · Revo · 09\/11/).first()).toBeVisible()
+  await expect(dialogo.getByText(/TPV · Revo · 9 nov/).first()).toBeVisible()
   await expect(dialogo.getByText(/Los días del TPV no llevan factura de Sumied/)).toBeVisible()
   await dialogo.getByRole('button', { name: /^Validar \d+ cierres?$/ }).click()
   const resultado = page.locator('[data-prueba="resultado-validar"]')
-  await expect(resultado.getByText(/^✓ TPV · Revo · 09\/11: validado con su PDF y el asiento nº [\d.]+ · 48 facturas, 5001 a 5048 \(1\.100,00 €\)\.$/)).toBeVisible({ timeout: 200_000 })
+  await expect(resultado.getByText(/^✓ TPV · Revo · 9 nov: validado con su PDF y el asiento nº [\d.]+ · 48 facturas, 5001 a 5048 \(1\.100,00 €\)\.$/)).toBeVisible({ timeout: 200_000 })
   await expect(page.getByText('Validado').first()).toBeVisible({ timeout: 30_000 })
   await foto(page, 'cierres-tpv-validado')
   expect(errores).toEqual([])
