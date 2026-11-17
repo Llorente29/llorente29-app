@@ -10,8 +10,8 @@
 #         prueba no se valida a mano), _conta_facturas_apuntar y tg_s01o2_iva_no_deducible (no tocan
 #         las traídas) y customer_invoice_inalterable (una emitida traída en prueba se borra al
 #         deshacer). Y import_run.kind admite «carga» (el CHECK solo amplía).
-#   1808  Añade siete funciones nuevas: traer en prueba, deshacer, dejar fuera, el día de inicio
-#         para la pantalla y tres ayudantes.
+#   1808  Añade ocho funciones nuevas: traer en prueba, deshacer, dejar fuera, el día de inicio
+#         para la pantalla y cuatro ayudantes.
 #
 # No cambia ni una fila. Nada en el camino del pedido. El real lo lanza Julio.
 cuenta: scripts/conta/produccion/cuentas/n06a-carga.sql

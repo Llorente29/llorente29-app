@@ -7,5 +7,6 @@ drop function if exists public.conta_traer_dejar_fuera(uuid, uuid[], boolean);
 drop function if exists public.conta_traer_deshacer(uuid, text);
 drop function if exists public.conta_traer_cargar(uuid, text, jsonb, text);
 drop function if exists public._conta_traer_kind(text);
+drop function if exists public._conta_traer_ocupada(uuid, text, uuid);
 drop function if exists public._conta_traer_cuantos(int, text, text);
 drop function if exists public._conta_traer_euros(numeric);

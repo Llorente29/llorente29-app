@@ -4,7 +4,7 @@
  "tanda": {
   "supabase/migrations/20261117T1806_n06a_carga_columnas.sql": "df0c73e035dfdd261e879e955595a68a",
   "supabase/migrations/20261117T1807_n06a_carga_embudo.sql": "6005b82a1a289c46a4d761c5640e2593",
-  "supabase/migrations/20261117T1808_n06a_carga_funciones.sql": "a74e1cf050a9555566e7a789eab3845c"
+  "supabase/migrations/20261117T1808_n06a_carga_funciones.sql": "891540e8a9991fed6757706b6680a6c2"
  },
  "contexto": {
   "tablas": [

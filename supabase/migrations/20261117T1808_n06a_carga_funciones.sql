@@ -25,6 +25,9 @@
 --     base con conta_dia_de_inicio, no lo calcula: respuesta N05c · 1, punto 1).
 --
 -- Nada en el camino del pedido.
+--
+-- sin hueco: al aplicarse no retira ningún asiento ni resumen del día; solo crea funciones. El único borrado
+-- de asientos es el de «Deshacer el traspaso», y solo de los borradores traídos de esa carga en prueba.
 
 -- Un número en céntimos, en euros con coma, como se lee: 11499,00 → «11.499,00».
 create or replace function public._conta_traer_euros(p_cent numeric)
@@ -51,6 +54,22 @@ returns text language sql immutable set search_path = public as $$
 $$;
 revoke all on function public._conta_traer_kind(text) from public, anon, authenticated;
 grant execute on function public._conta_traer_kind(text) to service_role;
+
+-- Si la subcuenta ya es de OTRO tercero (y no es la común), su nombre; si no, nulo. Un tercero, una
+-- subcuenta (company_account_misma_cuenta): la carga no enlaza ahí, lo apunta.
+create or replace function public._conta_traer_ocupada(p_cta uuid, p_entity text, p_id uuid)
+returns text language sql stable set search_path = public as $$
+  select coalesce(s.name, p.name, 'otro tercero')
+    from public.company_account_link l
+    join public.company_account a on a.id = l.company_account_id
+    left join public.supplier s on l.entity = 'supplier' and s.id::text = l.entity_id
+    left join public.party p on l.entity = 'customer' and p.id::text = l.entity_id
+   where l.company_account_id = p_cta and l.role = 'principal' and l.entity in ('supplier', 'customer', 'bank_account')
+     and not a.is_common and (l.entity, l.entity_id) is distinct from (p_entity, p_id::text)
+   limit 1
+$$;
+revoke all on function public._conta_traer_ocupada(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public._conta_traer_ocupada(uuid, text, uuid) to service_role;
 
 create or replace function public.conta_traer_cargar(p_company uuid, p_ejercicio text, p_datos jsonb, p_quien_nombre text default null)
 returns jsonb
@@ -244,9 +263,14 @@ begin
         n_prov := n_prov + 1;
       end if;
       select party_id into v_party from public.party_role where account_id = v_cuenta and role = 'supplier' and supplier_id = v_sup;
-      insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-      values (v_cuenta, p_company, v_cta, 'supplier', v_sup::text, 'principal', 'migrated')
-      on conflict do nothing returning id into v_link;
+      if public._conta_traer_ocupada(v_cta, 'supplier', v_sup) is not null then
+        v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'cuenta', v_code, 'frase',
+          format('La cuenta %s ya es de %s en Sumied: %s se ha traído sin enlazarla.', v_code, public._conta_traer_ocupada(v_cta, 'supplier', v_sup), v_nombre));
+      else
+        insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+        values (v_cuenta, p_company, v_cta, 'supplier', v_sup::text, 'principal', 'migrated')
+        on conflict do nothing returning id into v_link;
+      end if;
     else
       if v_nif is not null then
         select p.id into v_party from public.party p where p.account_id = v_cuenta and p.tax_id = v_nif;
@@ -268,13 +292,18 @@ begin
         insert into public.customer_fiscal (party_id, account_id) values (v_party, v_cuenta);
         v_deshacer := jsonb_set(v_deshacer, '{fiscales}', (v_deshacer->'fiscales') || to_jsonb(v_party));
       end if;
-      insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
-      values (v_cuenta, p_company, v_cta, 'customer', v_party::text, 'principal', 'migrated')
-      on conflict do nothing returning id into v_link;
+      if public._conta_traer_ocupada(v_cta, 'customer', v_party) is not null then
+        v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'cuenta', v_code, 'frase',
+          format('La cuenta %s ya es de %s en Sumied: %s se ha traído sin enlazarla.', v_code, public._conta_traer_ocupada(v_cta, 'customer', v_party), v_nombre));
+      else
+        insert into public.company_account_link (account_id, company_id, company_account_id, entity, entity_id, role, source)
+        values (v_cuenta, p_company, v_cta, 'customer', v_party::text, 'principal', 'migrated')
+        on conflict do nothing returning id into v_link;
+      end if;
     end if;
     if v_link is not null then
       v_deshacer := jsonb_set(v_deshacer, '{enlaces}', (v_deshacer->'enlaces') || to_jsonb(v_link));
-    elsif not exists (select 1 from public.company_account_link k where k.company_id = p_company and k.company_account_id = v_cta
+    elsif public._conta_traer_ocupada(v_cta, case when v_sup is not null then 'supplier' else 'customer' end, coalesce(v_sup, v_party)) is null and not exists (select 1 from public.company_account_link k where k.company_id = p_company and k.company_account_id = v_cta
                         and k.entity_id = coalesce(v_sup, v_party)::text and k.role = 'principal') then
       v_mirar := v_mirar || jsonb_build_object('que', 'tercero', 'cuenta', v_code,
         'frase', format('%s ya tenía otra cuenta principal en Sumied; la de %s es la %s. Se queda la de Sumied.', v_nombre, v_nombre_prog, v_code));
