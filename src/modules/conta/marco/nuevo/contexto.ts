@@ -43,6 +43,8 @@ export interface Marco {
    * hasta saberlo.
    */
   hosteleria: boolean | null
+  /** R05 · «Ventas por día» encendido en la empresa activa (company_tax_profile.ventas_por_dia). Null mientras no se sabe. */
+  ventasPorDia?: boolean | null
   /**
    * G03 · ¿El sector de la empresa activa es Gestoría? (sectores/sectores.ts).
    * Null mientras no se sabe: lo de gestoría no sale hasta saberlo.
@@ -176,6 +178,15 @@ export function useNivel(): Nivel {
 export function useHosteleria(): boolean {
   const marco = useContext(MarcoContexto)
   return marco ? marco.hosteleria === true : true
+}
+
+/**
+ * R05 (decisión 9) · ¿La empresa activa ve Cierres del día? Si es de hostelería
+ * o tiene «ventas por día» encendido. Fuera del marco, sí (como useHosteleria).
+ */
+export function useVentasPorDia(): boolean {
+  const marco = useContext(MarcoContexto)
+  return marco ? marco.hosteleria === true || marco.ventasPorDia === true : true
 }
 
 /**
