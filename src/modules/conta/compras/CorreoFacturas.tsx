@@ -19,7 +19,7 @@ import { useEmpresas } from '@/modules/conta/empresa/contexto'
 import { useLeer } from '@/modules/conta/libros/contexto'
 import { eurosExactos } from '@/modules/conta/lib/formato'
 import { crearCorreoFacturas, leerCorreoFacturas, leerLineasFactura, ponerPdfsJustEat, releerCorreos, type ComparacionLineas, type LlegadaCorreo } from '@/modules/conta/services/comprasService'
-import { accionesDeLlegada, cuandoEnPalabras, lineaEnPalabras, nombrePlataforma, queSalio, resumenLineas } from '@/modules/conta/lib/correoFacturas'
+import { NOTA_DIRECCION, accionesDeLlegada, cuandoEnPalabras, lineaEnPalabras, nombrePlataforma, queSalio, resumenLineas } from '@/modules/conta/lib/correoFacturas'
 import { useCuentaConta } from '@/modules/conta/cuenta/contratoCuenta'
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
@@ -61,6 +61,7 @@ export function CorreoFacturasAjustes() {
             catch { setAviso({ ok: false, texto: 'No se ha podido copiar: selecciónala y cópiala a mano.' }) }
           }}>Copiar</Boton>
         </div>
+        <p className="cx-ayuda" data-prueba="direccion-nota" style={{ marginTop: 0 }}>{NOTA_DIRECCION}</p>
         <p className="cx-ayuda" data-prueba="estado">
           {d.activa === false ? 'Apagada: lo que llegue no se lee.'
             : d.ultimo ? `Recibiendo · último correo ${cuandoEnPalabras(d.ultimo, hoy)}.` : 'Aún no ha llegado ningún correo.'}
