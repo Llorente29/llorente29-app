@@ -1,0 +1,2 @@
+# P01 · las tres sociedades a cero: la 1015 no tiene vuelta atrás (se declara en aplicar.txt): se pide partir de cero.
+cuenta: scripts/conta/produccion/cuentas/p01-tres-sociedades-a-cero.sql
