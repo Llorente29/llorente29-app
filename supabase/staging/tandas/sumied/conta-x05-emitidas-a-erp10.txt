@@ -1,3 +1,8 @@
 # X05 · las facturas emitidas salen a ERP10.
-# Primero, la medida de qué emitidas hay en staging (solo lee, ROLLBACK).
+# Primero, la medida de qué emitidas hay en staging (solo lee, ROLLBACK); después
+# 2230 (cambia por_salir), 2231 (añade las emitidas por salir) y su prueba
+# (ROLLBACK, empresas inventadas en las cuentas A y B, con su vuelta atrás).
 supabase/staging/sql/20261117_x05_emitidas_medida.sql
+supabase/migrations/20261117T2230_x05_por_salir_emitidas.sql
+supabase/migrations/20261117T2231_x05_emitidas_por_salir.sql
+supabase/staging/sql/20261117_x05_emitidas_a_erp10_prueba.sql
