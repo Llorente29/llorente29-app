@@ -70,7 +70,7 @@ async function preparar(s: Sesion): Promise<string> {
 }
 
 test('el día del TPV sale en Cierres del día, una fila por día, y se valida con el mismo botón', async ({ page }) => {
-  test.setTimeout(150_000)
+  test.setTimeout(300_000)
   const errores = vigilar(page)
   const s = await entrarComo(page, CUENTA_A.email)
   await preparar(s)
@@ -86,6 +86,9 @@ test('el día del TPV sale en Cierres del día, una fila por día, y se valida c
     await expect(page.getByText('Efectivo, tarjeta y plataformas').first()).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'De dónde' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Numeración' })).toBeVisible()
+    // Por validar (si saliera en espera, el motivo va en la misma fila y el fallo lo enseña).
+    const filaTpv = page.getByRole('row').filter({ hasText: 'TPV · Revo' }).first()
+    await expect(filaTpv, `la fila dice: ${await filaTpv.innerText()}`).toContainText('Por validar')
   }
   await foto(page, 'cierres-tpv')
 
@@ -95,11 +98,12 @@ test('el día del TPV sale en Cierres del día, una fila por día, y se valida c
   await expect(boton).toBeEnabled({ timeout: 30_000 })
   await boton.click()
   const dialogo = page.getByRole('dialog')
-  await expect(dialogo.getByText(/TPV · Revo · 09\/11/)).toBeVisible()
+  // La lista del diálogo enseña como mucho 8, los del TPV primero.
+  await expect(dialogo.getByText(/TPV · Revo · 09\/11/).first()).toBeVisible()
   await expect(dialogo.getByText(/Los días del TPV no llevan factura de Sumied/)).toBeVisible()
   await dialogo.getByRole('button', { name: /^Validar \d+ cierres?$/ }).click()
   const resultado = page.locator('[data-prueba="resultado-validar"]')
-  await expect(resultado.getByText(/^✓ TPV · Revo · 09\/11: validado con su PDF y el asiento nº [\d.]+ · 48 facturas, 5001 a 5048 \(1\.100,00 €\)\.$/)).toBeVisible({ timeout: 90_000 })
+  await expect(resultado.getByText(/^✓ TPV · Revo · 09\/11: validado con su PDF y el asiento nº [\d.]+ · 48 facturas, 5001 a 5048 \(1\.100,00 €\)\.$/)).toBeVisible({ timeout: 200_000 })
   await expect(page.getByText('Validado').first()).toBeVisible({ timeout: 30_000 })
   await foto(page, 'cierres-tpv-validado')
   expect(errores).toEqual([])

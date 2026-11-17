@@ -108,10 +108,11 @@ export default function CierresPage() {
   // Sin ninguno, la lista sale como siempre.
   const conTpv = todos.some((x) => x.fuente === 'tpv')
   const hoy = hoyMadrid()
+  const lineaTpv = (t: NonNullable<Cierre['tpv']>) => [subidoTpv(t, hoy), t.conNif ? plural(t.conNif, 'factura con NIF', 'facturas con NIF') : null].filter(Boolean).join(' · ')
   const apoyoTpv = (x: Cierre) => {
     if (x.estado === 'en_espera' && x.motivo) return <span className="s-tarjeta-apoyo" data-tono="duda">{x.motivo}</span>
     const t = x.tpv!
-    const linea = [subidoTpv(t, hoy), t.conNif ? plural(t.conNif, 'factura con NIF', 'facturas con NIF') : null].filter(Boolean).join(' · ')
+    const linea = lineaTpv(t)
     return (
       <>
         {linea && <span className="s-tarjeta-apoyo">{linea}</span>}
@@ -164,6 +165,7 @@ export default function CierresPage() {
     <>
       <span className="s-tarjeta-cabeza"><span className="s-lista-principal">{x.canal}</span><strong className="s-cifra">{eurosExactos(x.total)}</strong></span>
       <span className="s-tarjeta-apoyo">{[diaMes(x.dia), plural(x.tpv.facturas, 'factura', 'facturas'), numeracionTpv(x.tpv), cobradoTpv(x.tpv.formas)].join(' · ')}</span>
+      {lineaTpv(x.tpv) && <span className="s-tarjeta-apoyo">{lineaTpv(x.tpv)}</span>}
       <span className="s-tarjeta-pie">{estado(x)}{x.estado === 'en_espera' && x.motivo && <span className="s-tarjeta-apoyo">{x.motivo}</span>}</span>
       {x.tpv.aviso && <span className="s-tarjeta-apoyo" data-tono="duda">{x.tpv.aviso}</span>}
     </>
@@ -251,7 +253,7 @@ export default function CierresPage() {
             <Boton variante="secundario" onClick={() => setConfirmar(false)}>Cancelar</Boton>
             <Boton variante="principal" onClick={() => void validarListos()}>Validar {plural(preparados.length, 'cierre', 'cierres')}</Boton>
           </>}>
-          <ul className="s-apoyo">{preparados.slice(0, 8).map((x) => <li key={x.id ?? x.localId}>{nombreCierre(x)} · {eurosExactos(x.total)}</li>)}{preparados.length > 8 && <li>y {preparados.length - 8} más</li>}</ul>
+          <ul className="s-apoyo">{[...preparados.filter((x) => x.fuente === 'tpv'), ...preparados.filter((x) => x.fuente !== 'tpv')].slice(0, 8).map((x) => <li key={x.id ?? x.localId}>{nombreCierre(x)} · {eurosExactos(x.total)}</li>)}{preparados.length > 8 && <li>y {preparados.length - 8} más</li>}</ul>
         </Dialogo>
       )}
       <BotonPulgar>{principal}</BotonPulgar>
