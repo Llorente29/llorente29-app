@@ -1,0 +1,57 @@
+# P01 · Las tres sociedades del P01 vuelven a cero (Julio, 17/11). Rama
+# conta/p01-tres-sociedades-a-cero. Se ensaya y se aplica desde main nombrando
+# esta rama, antes de fusionar. El real lo lanza Julio.
+#
+#   1015  Añade tres funciones sin permisos para nadie (_p01_dentro, _p01_fuera y
+#         _p01_a_cero) y llama a la última con las tres sociedades: borra lo
+#         entrado por correo (recibidas con sus hijas, bandeja y actividad,
+#         correos, propuestas, esperadas y el proveedor de la cuenta), pone
+#         trade_name = legal_name, abre el ejercicio 2026 que falta y fija el
+#         corte al 31/10/2026 (ERP10) con conta_fijar_corte, como el
+#         administrador que lo ha decidido. Guardas antes (nada contabilizado,
+#         cifras del ensayo, corte de Bancos vacío, administrador activo) y
+#         comprobaciones después (dentro a 0, fuera igual, _conta_corte =
+#         2026-11-01). El analizador no ve dentro de las funciones: por eso va
+#         escrito aquí. Al final, en la misma transacción, borra las tres
+#         funciones: no deja restos (la cuenta lo mide: 0 funciones _p01_). Los PDF (77, receipt-uploads) no se borran desde SQL:
+#         los borra Julio desde el almacén, con la lista del parte.
+#
+# No toca ninguna otra empresa ni cuenta. Nada en el camino del pedido.
+cuenta: scripts/conta/produccion/cuentas/p01-tres-sociedades-a-cero.sql
+supabase/migrations/20261117T1015_p01_tres_sociedades_a_cero.sql
+sin-vuelta-atras: supabase/migrations/20261117T1015_p01_tres_sociedades_a_cero.sql · motivo: se pide partir de cero; lo borrado no estaba contabilizado y sus originales siguen en el correo de quien lo reenvió.
+esperado: p01-tres-sociedades-a-cero · Las tres · supplier_invoice = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · supplier_invoice_line = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · supplier_invoice_tax = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · supplier_invoice_change = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · document_inbox = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · document_activity = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · inbound_email_log = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · conta_propuesta_pendiente = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · supplier_expected_invoice = 0
+esperado: p01-tres-sociedades-a-cero · Su cuenta · supplier = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · company_account_link de proveedor = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · con trade_name distinto de legal_name = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · sin el ejercicio del 01/11/2026 = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · con _conta_corte distinto de 2026-11-01 = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · sin sus 10 meses cerrados como traídos = 0
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice_line = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice_tax = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice_change = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · document_inbox = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · document_activity = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · inbound_email_log = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · conta_propuesta_pendiente = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_expected_invoice = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de su cuenta · supplier = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de su cuenta · supplier_contact = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de su cuenta · party_role = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de su cuenta · party = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · company_account_link = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · company_account_log = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · company · huella de trade_name = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · fiscal_year · huella = como antes
+esperado: p01-tres-sociedades-a-cero · Fuera de las tres · fiscal_period_lock = como antes
+esperado: p01-tres-sociedades-a-cero · Su cuenta · ficheros en receipt-uploads = como antes
+esperado: p01-tres-sociedades-a-cero · Funciones _p01_ en la base = 0
