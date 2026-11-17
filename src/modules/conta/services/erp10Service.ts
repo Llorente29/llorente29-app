@@ -1,8 +1,9 @@
 // src/modules/conta/services/erp10Service.ts
 //
 // X04 · La salida a ERP10, contra la base: el interruptor de la empresa, lo que
-// sale de un mes, las recibidas con lo que necesita su fila, lo que salió y ha
-// cambiado, los lotes ya apuntados, apuntar uno nuevo y bajar los PDF.
+// sale de un mes, las recibidas (y, X05, las emitidas) con lo que necesita su
+// fila, lo que salió y ha cambiado, los lotes ya apuntados, apuntar uno nuevo y
+// bajar los PDF.
 //
 // Nombres dentro de cadenas (regla 40), comprobados contra la estructura de
 // staging (estructura/staging 5c8707d5, con la X02) y la migración del X04:
@@ -13,12 +14,16 @@
 //     creado_en);
 //   · funciones: conta_erp10_salida_poner, conta_erp10_salida_carpeta,
 //     conta_erp10_por_salir, conta_erp10_recibidas_por_salir,
-//     conta_erp10_cambiadas, conta_erp10_lote_apuntar;
-//   · el almacén: conta-documentos (el de los PDF de los asientos).
+//     conta_erp10_cambiadas, conta_erp10_lote_apuntar; y la del X05,
+//     conta_erp10_emitidas_por_salir (migración 20261117T2231), con sus campos
+//     (emitidas: entryId, fecha, factura, cliente, origen, rectificativa,
+//     tipoFactura, operacion, recargo, retencion, lineas, tienePdf, pdf;
+//     cuentas; yaSalidas; corregidas), cruzados con la e2e contra staging;
+//   · el almacén: conta-documentos (el de los PDF de los asientos y de las facturas de venta).
 
 import { supabase } from '@/lib/supabase'
 import { hayBase, mensaje, rpc, tabla } from '@/modules/conta/services/bd'
-import type { Operacion, LineaRecibida } from '@/modules/conta/erp10/ficheros'
+import type { EmitidaParaErp10, LineaRecibida, Operacion, OperacionEmitida } from '@/modules/conta/erp10/ficheros'
 
 const s = (v: unknown): string | null => (v === null || v === undefined || v === '' ? null : String(v))
 const n = (v: unknown): number => (v === null || v === undefined || v === '' ? 0 : Number(v))
@@ -162,6 +167,50 @@ export function aRecibidas(r: Record<string, unknown>): RecibidasPorSalir {
 
 export async function leerRecibidasPorSalir(companyId: string, mes: string): Promise<RecibidasPorSalir> {
   return aRecibidas(await rpc<Record<string, unknown>>('conta_erp10_recibidas_por_salir', { p_company: companyId, p_mes: mes }))
+}
+
+// ── Las emitidas, con lo que necesita su fila (X05) ──────────────────────────────────────────
+
+export interface EmitidaDeLaBase extends EmitidaParaErp10 {
+  /** De dónde viene: customer_invoice.origin (a_mano, recurrente, cierre_dia…), o nulo si es un asiento a mano. */
+  origen: string | null
+  lineas: (EmitidaParaErp10['lineas'][number] & { plantilla: string })[]
+  pdf: { ruta: string; nombre: string } | null
+}
+/** Una emitida que salió y después se corrigió con una rectificativa: ERP10 tiene la de antes. */
+export interface Corregida { entryId: string; numero: string; rectificativa: string; fecha: string; queHacer: string }
+export interface EmitidasPorSalir { emitidas: EmitidaDeLaBase[]; cuentas: CuentaDeLaBase[]; yaSalidas: Map<string, string>; corregidas: Corregida[] }
+
+export function aEmitidas(r: Record<string, unknown>): EmitidasPorSalir {
+  const es = (r.emitidas ?? []) as Record<string, unknown>[]
+  return {
+    emitidas: es.map((x) => {
+      const f = (x.factura ?? {}) as Record<string, unknown>
+      const c = (x.cliente ?? {}) as Record<string, unknown>
+      const pdf = x.pdf as Record<string, unknown> | null
+      return {
+        entryId: String(x.entryId), fecha: String(x.fecha), factura: { numero: s(f.numero), fecha: String(f.fecha) },
+        cliente: { nombre: String(c.nombre ?? ''), nif: s(c.nif) }, origen: s(x.origen), rectificativa: x.rectificativa === true,
+        tipoFactura: s(x.tipoFactura), operacion: String(x.operacion) as OperacionEmitida, recargo: n(x.recargo), retencion: n(x.retencion),
+        lineas: ((x.lineas ?? []) as Record<string, unknown>[]).map((l) => ({
+          cuenta: String(l.cuenta), plantilla: String(l.plantilla), debe: n(l.debe), haber: n(l.haber),
+          tipoIva: l.tipoIva == null ? null : Number(l.tipoIva), baseIva: l.baseIva == null ? null : Number(l.baseIva),
+        })),
+        tienePdf: x.tienePdf === true, pdf: pdf ? { ruta: String(pdf.ruta), nombre: String(pdf.nombre) } : null,
+      }
+    }),
+    cuentas: ((r.cuentas ?? []) as Record<string, unknown>[]).map((c) => ({
+      codigo: String(c.codigo), plantilla: String(c.plantilla), nombre: String(c.nombre ?? ''), nif: s(c.nif), gastoHabitual: s(c.gastoHabitual),
+    })),
+    yaSalidas: new Map(Object.entries((r.yaSalidas ?? {}) as Record<string, unknown>).map(([k, v]) => [k, String(v)])),
+    corregidas: ((r.corregidas ?? []) as Record<string, unknown>[]).map((x) => ({
+      entryId: String(x.entryId), numero: String(x.numero ?? ''), rectificativa: String(x.rectificativa ?? ''), fecha: String(x.fecha), queHacer: String(x.queHacer),
+    })),
+  }
+}
+
+export async function leerEmitidasPorSalir(companyId: string, mes: string): Promise<EmitidasPorSalir> {
+  return aEmitidas(await rpc<Record<string, unknown>>('conta_erp10_emitidas_por_salir', { p_company: companyId, p_mes: mes }))
 }
 
 // ── Lo que salió ─────────────────────────────────────────────────────────────────
