@@ -18999,6 +18999,30 @@ end $_$;
 
 
 --
+-- Name: _tg_conta_tpv_dia_anulado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._tg_conta_tpv_dia_anulado() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+begin
+  update public.conta_tpv_dia
+     set estado = 'guardado', entry_id = null
+   where entry_id = new.id and account_id = new.account_id;
+  return null;
+end
+$$;
+
+
+--
+-- Name: FUNCTION _tg_conta_tpv_dia_anulado(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._tg_conta_tpv_dia_anulado() IS 'R05: al anular el asiento de un día del TPV, el día vuelve a «guardado» y sin asiento (se puede subir corregido y validar otra vez).';
+
+
+--
 -- Name: _tg_factura_anulada_descasa(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -143671,6 +143695,13 @@ CREATE TRIGGER trg_journal_entry_no_antes_del_corte BEFORE INSERT OR UPDATE OF e
 
 
 --
+-- Name: journal_entry trg_journal_entry_tpv_anulado; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_journal_entry_tpv_anulado AFTER UPDATE OF status ON public.journal_entry FOR EACH ROW WHEN (((new.status = 'anulado'::text) AND (old.status IS DISTINCT FROM 'anulado'::text) AND (new.source_type = 'sales_day'::text))) EXECUTE FUNCTION public._tg_conta_tpv_dia_anulado();
+
+
+--
 -- Name: journal_entry trg_journal_entry_valida_con_pdf; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -171511,6 +171542,14 @@ GRANT ALL ON FUNCTION public._supplier_merge(p_queda uuid, p_se_va uuid, p_quien
 
 REVOKE ALL ON FUNCTION public._supplier_merge_undo(p_merge uuid, p_quien_nombre text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public._supplier_merge_undo(p_merge uuid, p_quien_nombre text) TO service_role;
+
+
+--
+-- Name: FUNCTION _tg_conta_tpv_dia_anulado(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._tg_conta_tpv_dia_anulado() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._tg_conta_tpv_dia_anulado() TO service_role;
 
 
 --
