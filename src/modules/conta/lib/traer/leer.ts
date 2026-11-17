@@ -218,6 +218,9 @@ export interface TramoIva { base: number; tipo: number | null; cuota: number }
 export interface Factura {
   /** «A-10» (recibidas: la serie-número del que la expide; expedidas: serie y número juntos, «F-1»). */
   numero: string
+  /** N06a · Expedidas: la serie («F») y el número («1») por separado, como los trae el libro. Recibidas: nulos. */
+  serie: string | null
+  numeroSolo: string | null
   expedicion: string
   operacion: string | null
   /** El trimestre que dice el libro («1T») y su ejercicio. */
@@ -274,7 +277,8 @@ export function leerLibro(h: Hoja, fila: number, libro: 'recibidas' | 'expedidas
     let x = facturas.get(k)
     if (!x) {
       x = {
-        numero, expedicion: expedicion ?? '', operacion: fecha(celda(f, cols.operacion)), periodo: texto(celda(f, cols.periodo)) || null,
+        numero, serie: rec ? null : texto(celda(f, cols.serie)) || null, numeroSolo: rec ? null : texto(celda(f, cols.num)) || null,
+        expedicion: expedicion ?? '', operacion: fecha(celda(f, cols.operacion)), periodo: texto(celda(f, cols.periodo)) || null,
         ejercicio: texto(celda(f, cols.ejercicio)) || null, nif, nombre: limpiar(texto(celda(f, cols.nombre))),
         tipoFactura: texto(celda(f, cols.tipoFactura)) || null, tramos: [], base: 0, cuota: 0, total: 0, retencion: null,
       }
