@@ -8678,6 +8678,26 @@ CREATE FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entr
 declare v_fecha date := (p_entry->>'fecha')::date; v_nueva date; v_p jsonb; v_aviso text;
 begin
   if p_entry->>'source_type' is distinct from 'supplier_invoice' or v_fecha is null then return p_entry; end if;
+  -- N03 · Una factura de antes del día de inicio: para y pregunta (sin respuesta, no se contabiliza;
+  -- con «ya estaba», nunca). Con «es nueva», al primer día abierto DESDE el día de inicio: la fecha
+  -- de la propuesta, nunca la de la factura.
+  if p_entry->>'source_id' is not null then
+    declare v_inicio date := public._conta_recibida_antes_del_inicio_para(p_company, (p_entry->>'source_id')::uuid);
+    begin
+      if v_inicio is not null and v_fecha < v_inicio then
+        v_nueva := public.conta_primer_dia_iva_abierto(p_company, v_inicio);
+        if v_nueva is null then
+          raise exception 'No hay ningún día abierto desde el % para contabilizar esta factura.', to_char(v_inicio, 'DD/MM/YYYY') using errcode = '23514';
+        end if;
+        v_aviso := format('Es nueva: esta factura del %s, de antes de que la empresa empezara en Sumied (el %s), se contabiliza el %s, el primer día abierto. Su fecha de factura no cambia.',
+                          to_char(v_fecha, 'DD/MM/YYYY'), to_char(v_inicio, 'DD/MM/YYYY'), to_char(v_nueva, 'DD/MM/YYYY'));
+        return p_entry || jsonb_build_object('fecha', v_nueva, 'aviso', v_aviso,
+          'razones', coalesce(p_entry->'razones', '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+            'decision', v_aviso,
+            'porque', 'Una factura de antes de que la empresa empezara en Sumied se contabiliza solo si quien la mira dice que no estaba ya en el programa de antes; entonces, el primer día abierto. Su fecha de factura no cambia.')));
+      end if;
+    end;
+  end if;
   -- S01p·4: su fecha, salvo que no esté abierta (303 presentado, corte con Diez, ejercicio cerrado).
   v_nueva := public.conta_primer_dia_iva_abierto(p_company, v_fecha);
   if v_nueva is null or v_nueva = v_fecha then return p_entry; end if;
@@ -8698,7 +8718,7 @@ end $$;
 -- Name: FUNCTION _conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) IS 'S01p·4 (2210; antes V04, 1350). La propuesta de una factura recibida va con su fecha de factura, salvo que su trimestre tenga el 303 presentado o su día no esté abierto: entonces, al primer día abierto (conta_primer_dia_iva_abierto), con su aviso y su razón. Un mes cerrado por una persona no frena. La usa _journal_entry_proponer.';
+COMMENT ON FUNCTION public._conta_recibida_no_antes_de_entrar(p_company uuid, p_entry jsonb) IS 'S01p·4 (2210; antes V04, 1350). La propuesta de una factura recibida va con su fecha de factura, salvo que su trimestre tenga el 303 presentado o su día no esté abierto: entonces, al primer día abierto (conta_primer_dia_iva_abierto), con su aviso y su razón. Un mes cerrado por una persona no frena. N03: una de antes del día de inicio no se contabiliza sin respuesta (_conta_recibida_antes_del_inicio_para). Solo cambia la fecha de la propuesta, nunca la de la factura. La usa _journal_entry_proponer.';
 
 
 --
@@ -39703,6 +39723,7 @@ begin
       'id', f.id, 'tipo', 'factura',
       -- S01 (0160): la descartada sale, con su estado y su porqué (regla 7: no se esconde).
       'estado', case when f.status = 'descartada' then 'descartada'
+                     when f.asiento is null and f.before_start_answer = 'ya_estaba' then 'ya_contabilizada'  -- N03
                      when f.asiento is null and f.diez is not null then 'en_diez'
                      when f.asiento->>'estado' = 'validado' then 'apuntada'
                      when f.supplier_id is null or f.reading_confidence = 'duda' or f.status = 'con_discrepancias' then 'por_aclarar'
@@ -39713,9 +39734,14 @@ begin
       -- de su recepción (Cocina), leída en Compras, o escrita a mano.
       'canal', coalesce(f.arrival_channel, case when f.source = 'ocr' and f.recepcion is not null then 'cocina' when f.source = 'ocr' then 'compras' else 'a_mano' end),
       'llegada_tipo', f.llegada_tipo,
+      'programa_antes', case when f.asiento is null and f.before_start_answer = 'ya_estaba' then public._conta_programa_de_antes(p_company) end,  -- N03
       'previas', f.previas,
       'confianza', f.reading_confidence,
-      'porque', case when f.asiento is null and f.diez is not null
+      'porque', case when f.asiento is null and f.before_start_answer = 'ya_estaba'  -- N03
+                  then 'Ya estaba contabilizada ' || coalesce('en ' || public._conta_programa_de_antes(p_company), 'en el programa de antes')
+                       || ': no se contabiliza en Sumied (' || coalesce(f.before_start_answered_by_name, 'una persona') || ', '
+                       || to_char(f.before_start_answered_at at time zone 'Europe/Madrid', 'DD/MM/YYYY') || ').'
+                  when f.asiento is null and f.diez is not null
                   then 'Ya contabilizada en Diez (asiento ' || (f.diez->>'serie') || '/' || (f.diez->>'numero') || ', ' || to_char((f.diez->>'fecha')::date, 'DD/MM/YYYY') || '): no se vuelve a apuntar.'
                   when f.status = 'descartada'
                   then 'No es una factura: ' || coalesce(f.discard_reason, 'sin motivo') || ' (' || coalesce(f.discarded_by_name, 'una persona') || ', ' || to_char(f.discarded_at at time zone 'Europe/Madrid', 'DD/MM/YYYY') || ').'
@@ -51109,6 +51135,7 @@ CREATE FUNCTION public.conta_pagos_lista(p_company uuid, p_mes date) RETURNS jso
      where si.account_id = (select c.account_id from public.company c where c.id = p_company and public.belongs_to_account(c.account_id))
        and coalesce(si.company_id, p_company) = p_company
        and si.status in ('aprobada', 'pagada')
+       and si.before_start_answer is distinct from 'ya_estaba'  -- N03 · ya estaba en el programa de antes: no se paga aquí
        -- S01i · Lo que se compensa (comisiones de plataformas, abonos) no se paga por banco: no sale en Pagos.
        and si.payment_method is distinct from 'compensation' and si.paid_method is distinct from 'compensation'
   )
