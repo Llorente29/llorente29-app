@@ -1,0 +1,8 @@
+# K02 · El marco del núcleo (rama conta/k02-marco-nucleo). Sin tanda de
+# producción: solo una semilla de staging.
+#
+# La cuenta de prueba del núcleo: una persona inventada, administradora de una
+# cuenta con el interruptor `conta_nucleo` encendido y dos empresas, para la
+# e2e del marco nuevo (tests/e2e/conta/k02). Solo añade, con fechas fijas: se
+# puede aplicar dos veces igual (W07).
+supabase/seeds/conta/seed_k02_nucleo_staging.sql

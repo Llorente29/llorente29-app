@@ -70,7 +70,8 @@ insert into _plantilla_usuarios values
   ('d5ac0000-0000-4000-8000-0000000000a2'),  -- p01.marta@p01-prueba.test       · la asesoría, encargada que presenta
   ('d5ac0000-0000-4000-8000-0000000000a3'),  -- p01.jorge@p01-prueba.test       · la asesoría, encargado sin permiso
   ('d5ac0000-0000-4000-8000-00000000c02a'),  -- p01.talleres@p01-prueba.test    · administración de un cliente (el resumen va a ella)
-  ('d5ac0000-0000-4000-8000-00000000c08a');  -- p01.bar@p01-prueba.test         · administración de otro cliente
+  ('d5ac0000-0000-4000-8000-00000000c08a'),  -- p01.bar@p01-prueba.test         · administración de otro cliente
+  ('c0e20000-0000-4000-8000-0000000000e1');  -- nucleo@prueba.folvy.test        · Cuenta de Prueba Núcleo, con el núcleo encendido (K02, 17/11)
 
 create temp table _plantilla_cuentas (id uuid primary key) on commit drop;
 insert into _plantilla_cuentas values

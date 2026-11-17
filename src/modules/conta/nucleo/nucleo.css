@@ -1,0 +1,189 @@
+/* src/modules/conta/nucleo/nucleo.css
+ *
+ * K02 · El marco del núcleo, medido sobre la maqueta aprobada (nucleo_1 y
+ * nucleo_3, a 1456 × 816): la barra de arriba oscura de 42 px, la cinta azul
+ * de 42 con sus botones en una fila blanca de 36, los módulos a la izquierda
+ * en 112 px, las pestañas de trabajo sobre gris y la línea de estado de 28.
+ * Los colores, como tokens del núcleo (--k-*), en un solo sitio: los de la
+ * maqueta, no los del marco de hoy.
+ *
+ * La página no rueda: el marco ocupa el alto de la ventana (MarcoNucleo le da
+ * su alto) y solo rueda la zona de la pantalla.
+ */
+
+.cx.cxm.s-esqueleto.k-nucleo {
+  --k-noche: #1d242d;
+  --k-noche-caja: #2c343e;
+  --k-noche-borde: #3c4652;
+  --k-noche-apoyo: #9aa4ae;
+  --k-azul: #0b5281;
+  --k-azul-claro: #dce9f5;
+  --k-azul-boton: #e3eef8;
+  --k-tinta: #1f2933;
+  --k-apoyo: #5b6670;
+  --k-gris: #eef1f4;
+  --k-gris-pestana: #dde2e7;
+  --k-borde: #dfe3e8;
+  --k-raya: #d3d9df;
+  --k-blanco: #ffffff;
+  --k-bien: #2e8b57;
+  --k-mira: #c27c0e;
+  --k-rojo: #b42318;
+  --k-letra: var(--s-letra, 'Inter Variable', Inter, system-ui, sans-serif);
+
+  display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  background: var(--k-gris); background-image: none; color: var(--k-tinta); font-family: var(--k-letra);
+  /* Lo pegajoso de las pantallas de hoy se pega arriba de SU zona, que es la que rueda. */
+  --cxm-alto-arriba: 0px;
+}
+html.k-sin-rueda, html.k-sin-rueda body { overflow: hidden; }
+/* El contenedor del Shell (min-h-screen) no puede sumar alto por debajo del marco. */
+.min-h-screen:has(.k-nucleo) { min-height: 0; }
+
+.k-nucleo button { font: inherit; }
+/* Los enlaces del marco con su color, no con el azul de los enlaces de las pantallas (.cx a). */
+.k-nucleo a.k-marca, .k-nucleo a.k-empresa { color: var(--k-blanco); }
+.k-nucleo a.k-menu-item { color: var(--k-tinta); }
+.k-oculto { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ── 1 · La barra de arriba ─────────────────────────────────────────── */
+.k-arriba {
+  flex-shrink: 0; height: 42px; display: flex; align-items: center; gap: 16px; padding: 0 16px;
+  background: var(--k-noche); color: var(--k-blanco);
+}
+.k-arriba-izquierda { display: flex; align-items: center; gap: 22px; min-width: 0; flex-shrink: 1; }
+.k-marca { color: var(--k-blanco); font-size: 17px; font-weight: 700; text-decoration: none; letter-spacing: -0.01em; }
+.k-nucleo .k-marca:focus-visible { outline: 2px solid var(--k-blanco); outline-offset: 2px; }
+.k-empresa {
+  display: inline-flex; align-items: center; gap: 8px; height: 28px; max-width: 420px; padding: 0 10px;
+  background: var(--k-noche); border: 1px solid var(--k-noche-borde); border-radius: 6px; color: var(--k-blanco);
+  font-size: 13px; cursor: pointer; text-decoration: none;
+}
+.k-empresa:hover { background: var(--k-noche-caja); }
+.k-empresa-nombre { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-empresa-ejercicio { color: var(--k-noche-apoyo); }
+.k-buscador {
+  flex: 0 1 584px; margin-left: auto; height: 28px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
+  background: var(--k-noche-caja); border: 1px solid var(--k-noche-caja); border-radius: 6px; color: var(--k-noche-apoyo);
+  font-size: 13px; cursor: text; text-align: left; min-width: 0;
+}
+.k-buscador span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-buscador:hover { border-color: var(--k-noche-borde); }
+.k-persona { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 2px; background: none; border: 0; color: var(--k-blanco); cursor: pointer; font-size: 14px; }
+.k-persona-inicial {
+  width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--k-azul); color: var(--k-blanco); font-weight: 700; font-size: 13px;
+}
+.k-arriba button:focus-visible, .k-arriba a:focus-visible { outline: 2px solid var(--k-blanco); outline-offset: 2px; }
+
+/* Los menús de la barra de arriba (empresa y ejercicio; la persona). */
+.k-desplegable { position: relative; display: inline-flex; }
+.k-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60; display: flex; gap: 0; min-width: 260px; max-height: calc(100dvh - 80px); overflow-y: auto;
+  background: var(--k-blanco); color: var(--k-tinta); border: 1px solid var(--k-borde); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(16, 24, 32, 0.16); font-size: 14px;
+}
+.k-menu-derecha { left: auto; right: 0; }
+.k-menu-columna { display: flex; flex-direction: column; gap: 2px; padding: 10px; min-width: 240px; }
+.k-menu-columna + .k-menu-columna { border-left: 1px solid var(--k-borde); }
+.k-menu-titulo { padding: 8px 8px 4px; font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--k-apoyo); }
+.k-menu-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.k-menu-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 32px; padding: 4px 8px;
+  background: none; border: 0; border-radius: 6px; color: var(--k-tinta); text-align: left; text-decoration: none; cursor: pointer; font-size: 14px;
+}
+.k-menu-item:hover { background: var(--k-gris); }
+.k-menu-item[aria-current='true'], .k-menu-item[aria-pressed='true'] { background: var(--k-azul-claro); color: var(--k-azul); font-weight: 600; }
+.k-menu-item[aria-disabled='true'] { color: var(--k-apoyo); cursor: default; flex-direction: column; align-items: flex-start; }
+.k-menu-nota { color: var(--k-apoyo); font-size: 12px; font-weight: 400; }
+.k-menu-buscar { height: 30px; margin: 0 0 4px; padding: 0 8px; border: 1px solid var(--k-borde); border-radius: 6px; font: inherit; font-size: 13px; }
+.k-menu-separador { height: 1px; margin: 6px 0; background: var(--k-borde); }
+.k-menu-empresa .s-barra-lista { list-style: none; margin: 0; padding: 0; }
+
+/* ── 2 · La cinta ───────────────────────────────────────────────────── */
+.k-cinta { flex-shrink: 0; }
+.k-cinta-pestanas { height: 42px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 16px; background: var(--k-azul); }
+.k-cinta-lista { display: flex; align-items: flex-end; gap: 2px; height: 100%; }
+.k-cinta-pestana {
+  height: 36px; padding: 0 16px; background: none; border: 0; border-radius: 6px 6px 0 0; color: var(--k-blanco);
+  font-size: 15px; cursor: pointer; white-space: nowrap;
+}
+.k-cinta-pestana:hover { background: rgba(255, 255, 255, 0.1); }
+.k-cinta-pestana[aria-selected='true'] { background: var(--k-blanco); color: var(--k-azul); font-weight: 600; }
+.k-cinta-plegar { align-self: center; display: inline-flex; align-items: center; gap: 4px; background: none; border: 0; color: var(--k-blanco); font-size: 13px; cursor: pointer; }
+.k-cinta-pestanas button:focus-visible { outline: 2px solid var(--k-blanco); outline-offset: -2px; }
+.k-cinta-botones {
+  height: 36px; display: flex; align-items: center; gap: 0; padding: 0 12px; overflow: visible; position: relative; z-index: 5;
+  background: var(--k-blanco); border-bottom: 1px solid var(--k-borde);
+}
+.k-cinta-grupo { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.k-cinta-grupo + .k-cinta-grupo { margin-left: 12px; padding-left: 12px; border-left: 1px solid var(--k-raya); }
+.k-boton {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; background: none; border: 0; border-radius: 6px;
+  color: var(--k-tinta); font-size: 14px; white-space: nowrap; cursor: pointer;
+}
+.k-boton svg { color: var(--k-azul); flex-shrink: 0; }
+.k-boton:hover { background: var(--k-gris); }
+.k-boton[aria-current='page'] { background: var(--k-azul-boton); font-weight: 600; }
+.k-boton:focus-visible { outline: 2px solid var(--k-azul); outline-offset: 0; }
+.k-cinta-mas { margin-left: auto; }
+.k-boton-menu { width: 100%; justify-content: flex-start; }
+.k-contador {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--k-azul); color: var(--k-blanco); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.k-contador[data-tono='vence'] { background: var(--k-rojo); }
+.k-contador[data-tono='llega'] { background: var(--k-gris); color: var(--k-apoyo); font-weight: 600; }
+
+/* ── 3 · Los módulos, a la izquierda ────────────────────────────────── */
+.k-cuerpo { flex: 1; min-height: 0; display: flex; }
+.k-modulos { flex-shrink: 0; width: 112px; display: flex; flex-direction: column; align-items: stretch; padding: 8px 8px; background: var(--k-gris); overflow-y: auto; }
+.k-modulos[data-plegados='si'] { width: 60px; }
+.k-modulos-plegar { height: 32px; margin-bottom: 4px; background: none; border: 0; color: var(--k-apoyo); font-size: 13px; cursor: pointer; }
+.k-modulos-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.k-modulo {
+  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 2px 8px; background: none; border: 0; border-radius: 10px;
+  color: var(--k-tinta); cursor: pointer;
+}
+.k-modulo:hover { background: var(--k-gris-pestana); }
+.k-modulo-icono {
+  width: 32px; height: 32px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--k-gris-pestana); color: var(--k-tinta);
+}
+.k-modulo-nombre { font-size: 12px; line-height: 1.2; text-align: center; }
+.k-modulo[aria-current='true'] { background: var(--k-azul-claro); }
+.k-modulo[aria-current='true'] .k-modulo-icono { background: var(--k-azul); color: var(--k-blanco); }
+.k-modulo[aria-current='true'] .k-modulo-nombre { color: var(--k-azul); font-weight: 700; }
+.k-modulos button:focus-visible { outline: 2px solid var(--k-azul); outline-offset: -2px; }
+
+/* ── 4 · Las pestañas de trabajo y el panel ─────────────────────────── */
+.k-trabajo { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 10px 12px 0 4px; }
+.k-trabajo-pestanas { flex-shrink: 0; height: 32px; display: flex; align-items: flex-end; gap: 4px; }
+.k-trabajo-pestana {
+  height: 30px; max-width: 320px; display: inline-flex; align-items: center; gap: 10px; padding: 0 12px;
+  background: var(--k-gris-pestana); border: 0; border-top: 2px solid transparent; border-radius: 6px 6px 0 0;
+  color: var(--k-tinta); font-size: 14px; cursor: pointer;
+}
+.k-trabajo-pestana[aria-selected='true'] { background: var(--k-blanco); border-top-color: var(--k-azul); font-weight: 600; cursor: default; }
+.k-trabajo-nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.k-trabajo-cerrar { display: inline-flex; padding: 2px; background: none; border: 0; border-radius: 4px; color: var(--k-apoyo); cursor: pointer; }
+.k-trabajo-cerrar:hover { background: var(--k-gris); color: var(--k-tinta); }
+.k-trabajo-mas { height: 30px; padding: 0 10px; background: none; border: 0; color: var(--k-azul); cursor: pointer; display: inline-flex; align-items: center; }
+.k-trabajo-pestanas button:focus-visible { outline: 2px solid var(--k-azul); outline-offset: -2px; }
+.k-panel {
+  flex: 1; min-height: 0; display: flex; flex-direction: column;
+  background: var(--k-blanco); border: 1px solid var(--k-borde); border-radius: 0 6px 6px 6px; overflow: hidden;
+}
+/* La zona de la pantalla: la única que rueda. Con el aspecto de hoy por dentro (cx-principal). */
+.cx.cxm .k-zona.cx-principal { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 16px 24px; }
+.k-periodo { display: flex; align-items: center; gap: 8px; }
+.k-periodo:empty { display: none; }
+
+/* ── 5 · La línea de estado ─────────────────────────────────────────── */
+.k-estado { flex-shrink: 0; height: 28px; display: flex; align-items: center; gap: 24px; padding: 0 16px; background: var(--k-gris); font-size: 13px; color: var(--k-tinta); }
+.k-estado-frase { display: inline-flex; align-items: center; gap: 6px; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; white-space: nowrap; }
+.k-estado-frase strong { font-weight: 600; }
+.k-estado-frase:hover { text-decoration: underline; }
+.k-estado-punto { width: 8px; height: 8px; border-radius: 50%; background: var(--k-bien); }
+.k-estado-frase[data-tono='mira'] .k-estado-punto { background: var(--k-mira); }
+.k-estado-frase:focus-visible { outline: 2px solid var(--k-azul); outline-offset: 2px; }
