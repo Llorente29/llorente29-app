@@ -30,10 +30,10 @@ esperado: p01-tres-sociedades-a-cero · Las tres · conta_propuesta_pendiente = 
 esperado: p01-tres-sociedades-a-cero · Las tres · supplier_expected_invoice = 0
 esperado: p01-tres-sociedades-a-cero · Su cuenta · supplier = 0
 esperado: p01-tres-sociedades-a-cero · Las tres · company_account_link de proveedor = 0
-esperado: p01-tres-sociedades-a-cero · Las tres · nombres distintos en el desplegable = 3
-esperado: p01-tres-sociedades-a-cero · Las tres · con el ejercicio del 01/11/2026 = 3
-esperado: p01-tres-sociedades-a-cero · Las tres · _conta_corte = 2026-11-01 = 3
-esperado: p01-tres-sociedades-a-cero · Las tres · meses cerrados como traídos = 30
+esperado: p01-tres-sociedades-a-cero · Las tres · con trade_name distinto de legal_name = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · sin el ejercicio del 01/11/2026 = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · con _conta_corte distinto de 2026-11-01 = 0
+esperado: p01-tres-sociedades-a-cero · Las tres · sin sus 10 meses cerrados como traídos = 0
 esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice = como antes
 esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice_line = como antes
 esperado: p01-tres-sociedades-a-cero · Fuera de las tres · supplier_invoice_tax = como antes

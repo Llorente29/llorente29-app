@@ -2,8 +2,9 @@
 --
 -- P01 · Las tres sociedades del P01 a cero (1015) · LO QUE CUENTA LA TANDA, antes y después. SOLO LEE.
 --   1. Dentro de las tres (y del proveedor de su cuenta): cada tabla que se borra → 0.
---   2. Las tres: nombres distintos (3), ejercicio del día de inicio (3), _conta_corte = 2026-11-01 (3)
---      y meses cerrados como traídos (30: de enero a octubre en cada una).
+--   2. Las tres, contadas como LO QUE FALTA (0 después; y 0 también donde no existen, como en staging):
+--      con trade_name distinto de legal_name, sin el ejercicio del 01/11/2026, con _conta_corte distinto
+--      de 2026-11-01, y sin sus 10 meses (enero a octubre) cerrados como traídos.
 --   3. Fuera de las tres, cada tabla tocada: como antes. Corte fijo (el #241): lo creado antes del
 --      17/11/2026 a las 00:00 de Madrid, para que lo que entre a mitad del ensayo no lo pare sin culpa.
 --   4. Los ficheros de la cuenta en el almacén: como antes (SQL no puede borrarlos; los borra Julio).
@@ -48,19 +49,23 @@ select clave, valor from (
    where company_id in (select id from tres) and entity = 'supplier'
   union all
   -- quieta: las tres por su id
-  select 201, 'Las tres · nombres distintos en el desplegable', count(distinct coalesce(trade_name, legal_name))::text
-    from public.company where id in (select id from tres)
+  select 201, 'Las tres · con trade_name distinto de legal_name', count(*)::text
+    from public.company where id in (select id from tres) and trade_name is distinct from legal_name
   union all
   -- quieta: las tres por su id
-  select 202, 'Las tres · con el ejercicio del 01/11/2026', count(distinct company_id)::text from public.fiscal_year
-   where company_id in (select id from tres) and date '2026-11-01' between starts_on and ends_on
+  select 202, 'Las tres · sin el ejercicio del 01/11/2026', count(*)::text from public.company c
+   where c.id in (select id from tres)
+     and not exists (select 1 from public.fiscal_year f where f.company_id = c.id and date '2026-11-01' between f.starts_on and f.ends_on)
   union all
   -- quieta: las tres por su id
-  select 203, 'Las tres · _conta_corte = 2026-11-01', count(*)::text from tres where public._conta_corte(id) = date '2026-11-01'
+  select 203, 'Las tres · con _conta_corte distinto de 2026-11-01', count(*)::text from public.company c
+   where c.id in (select id from tres) and public._conta_corte(c.id) is distinct from date '2026-11-01'
   union all
   -- quieta: las tres por su id
-  select 204, 'Las tres · meses cerrados como traídos', count(*)::text from public.fiscal_period_lock
-   where company_id in (select id from tres) and kind = 'migrated' and reopened_at is null
+  select 204, 'Las tres · sin sus 10 meses cerrados como traídos', count(*)::text from public.company c
+   where c.id in (select id from tres)
+     and (select count(*) from public.fiscal_period_lock l where l.company_id = c.id and l.kind = 'migrated' and l.reopened_at is null
+           and l.month between date '2026-01-01' and date '2026-10-01') <> 10
   union all
   -- corte: facturas recibidas creadas antes del 17/11 a las 00:00
   select 301, 'Fuera de las tres · supplier_invoice', count(*)::text from public.supplier_invoice
