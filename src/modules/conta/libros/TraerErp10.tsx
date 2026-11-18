@@ -92,8 +92,7 @@ export function TraerErp10() {
         const c = getComputedStyle(x)
         debajo += (parseFloat(c.paddingBottom) || 0) + (parseFloat(c.borderBottomWidth) || 0) + (parseFloat(c.marginBottom) || 0)
       }
-      // Sin el mínimo de 480 de la salida: con el marco de hoy, a 1366 × 768 queda menos y la página rodaba (e2e 44251205621).
-      setAlto(Math.max(320, Math.floor(window.innerHeight - el.getBoundingClientRect().top - window.scrollY - debajo - 4)))
+      setAlto(Math.max(480, Math.floor(window.innerHeight - el.getBoundingClientRect().top - window.scrollY - debajo - 4)))
     }
     medir()
     window.addEventListener('resize', medir)
