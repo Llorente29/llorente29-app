@@ -1,0 +1,15 @@
+# E04 · La factura de otra sociedad del grupo se pasa sola. Rama conta/e04-otra-sociedad-sola.
+# Se ensaya y se aplica desde main nombrando esta rama, antes de fusionar.
+#
+#   1950  Solo añade: mover (lo de «Pasarla», común), pasarla sola, «Deshacer»,
+#         la línea verde y lo que cuenta Inicio.
+#   1951  Cambia en caliente: el disparador (diferido) que la pasa sola al leerla,
+#         y «Pasarla» del E03 sobre lo común (con su respaldo).
+#   1952  Las que hoy esperan la pregunta «va a nombre de otra sociedad», sin
+#         asiento validado ni trabas, se pasan al aplicar. UPDATE: «autorizo».
+#
+# Nada del camino del pedido. El real lo lanza Julio.
+cuenta: scripts/conta/produccion/cuentas/e04-otra-sociedad-sola.sql
+supabase/migrations/20261118T1950_e04_pasar_sola.sql
+supabase/migrations/20261118T1951_e04_pasar_sola_al_leer.sql
+supabase/migrations/20261118T1952_e04_las_que_esperan_se_pasan.sql
