@@ -35,10 +35,13 @@ begin
     insert into public.company (id, account_id, legal_name, trade_name, tax_id, tax_id_type, entity_kind,
       fiscal_street_type, fiscal_street, fiscal_number, fiscal_postal_code, fiscal_city, fiscal_province, fiscal_country, setup_step, setup_completed_at)
     values (emp2, a, 'Prueba Segunda Takeaway, S.L.', 'Prueba Segunda Takeaway', 'B00000000', 'nif_es', 'company',
-      'Calle', 'de la Prueba', '14', '28001', 'Madrid', 'Madrid', 'ES', 'hecho', '2026-11-18 00:00:00+00');
-    insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
-    values (emp2, a, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['303', '347', '390'], 'iva_reducido');
+      'Calle', 'de la Prueba', '14', '28001', 'Madrid', 'Madrid', 'ES', 'hecho', '2026-11-18 00:00:00+00')
+    on conflict (id) do nothing;
   end if;
+  insert into public.company_tax_profile (company_id, account_id, tax_territory, vat_period, chart_kind, account_digits, tax_forms, sales_tax_rate_code)
+  select x.id, a, 'peninsula_baleares', 'quarterly', 'pymes', 8, array['303', '347', '390'], 'iva_reducido'
+    from public.company x where x.account_id = a and x.tax_id = 'B00000000'
+  on conflict (company_id) do nothing;
 end $$;
 
 create or replace function public.e2e_e03_preparar(p_lado text)
