@@ -116,6 +116,7 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
   const setCompleta = (si: boolean) => setCompletaDe(si ? invoiceId : null)
   const [textoProv, setTextoProv] = useState<string | null>(null)
   const [textoCuenta, setTextoCuenta] = useState<Record<number, string>>({})
+  const [textoTotal, setTextoTotal] = useState<string | null>(null)
 
   // ── Lo que se lee: lo mismo que la ficha de hoy ──
   const id = aMano ? '' : invoiceId
@@ -455,8 +456,16 @@ export default function FichaRecibida({ aMano = false }: { aMano?: boolean }) {
                 <div className="kf-total-arriba">
                   <span>Total factura</span>
                   {aMano
-                    ? <input className="kf-total-cifra" data-casilla aria-label="Total factura" placeholder="0,00" key={`t-${vuelta}`}
-                        defaultValue="" onBlur={(e) => { const n = num(e.target.value); if (n === null) return; const r = desdeElTotal(b, n); if (r) { ed.poner('iva', r.iva); ed.poner('retencion', r.retencion) } e.target.value = importeEs(n) }} />
+                    ? <input className="kf-total-cifra" data-casilla aria-label="Total factura" placeholder="0,00"
+                        value={textoTotal ?? (totales.total ? importeEs(totales.total) : '')}
+                        onFocus={(e) => { setTextoTotal(totales.total ? importeEs(totales.total) : ''); e.target.select() }}
+                        onChange={(e) => setTextoTotal(e.target.value)}
+                        onBlur={() => {
+                          const n = textoTotal !== null ? num(textoTotal) : null
+                          // Solo si se ha escrito otro total: sale la base (desdeElTotal); si no, lo que suman las bases.
+                          if (n !== null && Math.round(n * 100) !== Math.round(totales.total * 100)) { const r = desdeElTotal(b, n); if (r) { ed.poner('iva', r.iva); ed.poner('retencion', r.retencion) } }
+                          setTextoTotal(null)
+                        }} />
                     : <span className="kf-total-cifra" data-prueba="total">{cifra(totales.total)}</span>}
                 </div>
                 {aMano && <span className="kf-total-ayuda">Escríbelo y sale la base</span>}
