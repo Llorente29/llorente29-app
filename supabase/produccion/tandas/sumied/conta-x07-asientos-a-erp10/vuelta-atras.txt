@@ -1,0 +1,5 @@
+# X07 · la vuelta atrás, en orden inverso: quita la función nueva y deja
+# conta_erp10_por_salir como la dejó el X05.
+cuenta: scripts/conta/produccion/cuentas/x07-asientos-erp10.sql
+supabase/vuelta-atras/20261118T0746_x07_asientos_por_salir.down.sql
+supabase/vuelta-atras/20261118T0745_x07_por_salir_asientos.down.sql
