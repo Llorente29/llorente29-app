@@ -47932,7 +47932,7 @@ begin
   if not public.current_user_is_admin() then
     raise exception 'Solo un administrador de la plataforma enciende o apaga Sumied en una cuenta.' using errcode = '42501';
   end if;
-  if p_clave is null or p_clave not in ('conta', 'conta_impuestos', 'conta_laboral') then
+  if p_clave is null or p_clave not in ('conta', 'conta_impuestos', 'conta_laboral', 'conta_nucleo') then
     raise exception 'Ese interruptor no es de Sumied: %.', coalesce(p_clave, '(ninguno)') using errcode = '22023';
   end if;
   if p_encender is null then
@@ -47951,9 +47951,9 @@ begin
     raise exception 'Enciende antes la contabilidad.' using errcode = '22023';
   end if;
 
-  -- Apagar la contabilidad apaga las tres; lo demás, solo la suya.
+  -- Apagar la contabilidad apaga las cuatro (Q05: también «Pantallas nuevas»); lo demás, solo la suya.
   v_claves := case when not p_encender and p_clave = 'conta'
-                   then array['conta', 'conta_impuestos', 'conta_laboral'] else array[p_clave] end;
+                   then array['conta', 'conta_impuestos', 'conta_laboral', 'conta_nucleo'] else array[p_clave] end;
 
   foreach v_clave in array v_claves loop
     select enabled into v_antes from feature_flags where account_id = p_account and feature_key = v_clave;
@@ -47982,7 +47982,7 @@ $$;
 -- Name: FUNCTION conta_interruptor_cambiar(p_account uuid, p_clave text, p_encender boolean, p_motivo text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_interruptor_cambiar(p_account uuid, p_clave text, p_encender boolean, p_motivo text) IS 'S01f · Enciende o apaga un interruptor de Sumied (conta, conta_impuestos, conta_laboral) con su motivo y su apunte en platform_audit_log. Apagar conta apaga los tres. Solo administrador de la plataforma.';
+COMMENT ON FUNCTION public.conta_interruptor_cambiar(p_account uuid, p_clave text, p_encender boolean, p_motivo text) IS 'S01f · Q05 · Enciende o apaga un interruptor de Sumied (conta, conta_impuestos, conta_laboral, conta_nucleo) con su motivo y su apunte en platform_audit_log. Apagar conta apaga los cuatro. Solo administrador de la plataforma.';
 
 
 --
@@ -48010,7 +48010,7 @@ begin
            'motivo', nullif(trim(f.grant_reason), '')
          ) order by c.orden), '[]'::jsonb)
     into v_lista
-    from (values ('conta', 1), ('conta_impuestos', 2), ('conta_laboral', 3)) as c(clave, orden)
+    from (values ('conta', 1), ('conta_impuestos', 2), ('conta_laboral', 3), ('conta_nucleo', 4)) as c(clave, orden)
     left join feature_flags f on f.account_id = p_account and f.feature_key = c.clave
     left join lateral (select full_name from platform_admins where user_id = f.granted_by order by active desc limit 1) pa on true;
 
@@ -48030,7 +48030,7 @@ $$;
 -- Name: FUNCTION conta_interruptores_de_cuenta(p_account uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.conta_interruptores_de_cuenta(p_account uuid) IS 'S01f · Los interruptores de Sumied de una cuenta (encendido, desde cuándo, quién y por qué) y lo que tiene dentro. Solo administrador de la plataforma.';
+COMMENT ON FUNCTION public.conta_interruptores_de_cuenta(p_account uuid) IS 'S01f · Q05 · Los cuatro interruptores de Sumied de una cuenta (con «Pantallas nuevas», conta_nucleo), encendido, desde cuándo, quién y por qué, y lo que tiene dentro. Solo administrador de la plataforma.';
 
 
 --
