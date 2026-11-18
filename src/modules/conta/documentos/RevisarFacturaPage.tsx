@@ -30,6 +30,7 @@
 //   · «1 de N» sale de la misma cola que la barra (recibidas.colaPorRevisar),
 //     y la barra se vuelve a contar al validar, descartar o guardar.
 
+import { useSeVe } from '@/modules/conta/diseno/plantillas/pestana'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { rutaAsiento, rutaCompras, rutaDocumentos, rutaRecibidaEnAsientos, rutaRevisarFactura } from '@/config/navegacion'
@@ -490,9 +491,11 @@ export default function RevisarFacturaPage() {
   }
 
   // El teclado de la cola: Intro valida y pasa (no con cambios sin guardar: el botón está apagado); ← y → mueven; Esc vuelve a la lista. Con cambios, avisa antes.
+  // K03 · En una pestaña escondida del núcleo, esta pantalla no escucha el teclado.
+  const seVe = useSeVe()
   useEffect(() => {
     const alPulsar = (e: KeyboardEvent) => {
-      if (!teclaDeLaFicha(e)) return
+      if (!seVe() || !teclaDeLaFicha(e)) return
       if (e.key === 'Enter') {
         const boton = document.querySelector<HTMLButtonElement>('[data-validar-y-siguiente]')
         if (!boton || boton.disabled) return
@@ -503,7 +506,7 @@ export default function RevisarFacturaPage() {
     }
     window.addEventListener('keydown', alPulsar)
     return () => window.removeEventListener('keydown', alPulsar)
-  }, [siguiente, anterior, ir, navegar, volver, pedirSalir])
+  }, [siguiente, anterior, ir, navegar, volver, pedirSalir, seVe])
 
   const inputCambiar = useRef<HTMLInputElement>(null)
 

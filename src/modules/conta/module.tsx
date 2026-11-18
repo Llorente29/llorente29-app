@@ -15,6 +15,7 @@ import type { ModuleDefinition } from '@/shell/types'
 import { CONTA, rutaConta } from '@/config/navegacion'
 import '@/modules/conta/estilo'
 import { MarcoSegun } from '@/modules/conta/nucleo/MarcoSegun'
+import { registrarRutasDelNucleo } from '@/modules/conta/nucleo/rutas'
 import { EmpresasProveedor } from '@/modules/conta/empresa/EmpresasProveedor'
 import AjustesPage from '@/modules/conta/pages/AjustesPage'
 import PlanContablePage from '@/modules/conta/pages/PlanContablePage'
@@ -222,3 +223,6 @@ export const contaModule: ModuleDefinition = {
     items: [{ id: 'conta_ajustes', label: 'Ajustes', icon: Calculator, path: CONTA.rutas.empresa, requiredRole: 'admin' }],
   },
 }
+
+// K03 · Las mismas rutas, para que el marco del núcleo pinte cada pestaña de trabajo con su dirección.
+registrarRutasDelNucleo(contaModule.routes)
