@@ -192,7 +192,7 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
   }
 
   // ── Guardar y validar (lo de hoy) ──
-  async function guardar(): Promise<boolean> {
+  async function guardar(): Promise<{ quedo: 'validado' | 'borrador'; id: string; texto: string } | false> {
     setIntentado(true); setFallo(null)
     if (!accountId || !activa || !base) return false
     if (!ejercicio) { setFallo(`No hay ejercicio para el ${ddmmaaaa(fecha)}: ábrelo en Ajustes › Ejercicio.`); return false }
@@ -201,11 +201,13 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
     try {
       const id = await guardarAMano(accountId, activa.id, ejercicio.id, serie, fecha, concepto, conLocal(usadas), base.cuentas, userName)
       let texto: string
+      let quedo: 'validado' | 'borrador' = 'validado'
       try {
         const v = await validar(id, userName)
         texto = `Guardado y validado: ${v.serie} / ${String(v.numero).padStart(4, '0')} · ${concepto.trim()} · ${cifra(t.debe)} al debe y al haber.`
       } catch (e) {
         texto = `Guardado como borrador, sin validar: ${e instanceof Error ? e.message : 'no ha contestado'}`
+        quedo = 'borrador'
       }
       if (pdf) {
         if (serie !== 1) texto += ` El justificante (${pdf.fichero.name}) no se ha guardado: hoy solo lo lleva un asiento de la serie ${NOMBRE_SERIE[1]}.`
@@ -215,11 +217,18 @@ export function FichaAsiento({ entryId }: { entryId?: string }) {
         }
       }
       setHecho({ texto, id })
-      return true
+      return { quedo, id, texto }
     } catch (e) { setFallo(e instanceof Error ? e.message : 'No se ha guardado.'); return false }
     finally { setOcupado(false) }
   }
-  async function guardarYSiguiente() { if (await guardar()) nuevoVacio() }
+  async function guardarYSiguiente() {
+    const r = await guardar()
+    if (!r) return
+    if (r.quedo === 'validado') { nuevoVacio(); return }
+    // Sin validar, no se pasa a uno en blanco: se abre ese borrador, con lo que ha dicho la base.
+    nuevoVacio()
+    navegar(rutaAsiento(r.id), { state: { hecho: { texto: r.texto, id: r.id } } })
+  }
   async function validarPropuesto() {
     if (!asiento) return
     setOcupado(true); setFallo(null)

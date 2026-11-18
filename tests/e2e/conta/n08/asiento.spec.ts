@@ -23,7 +23,7 @@ test.skip(CARRIL === null, 'Escribe y valida asientos en una empresa de la cuent
 const DIR = 'docs/conta/capturas/n08'
 const NUEVO = '/conta/libros/diario/nuevo'
 
-interface Empresa { id: string; gasto: string; iva: string; banco: string }
+interface Empresa { id: string; gasto: string; otro: string; banco: string }
 
 /** Una empresa de la cuenta del núcleo para esta prueba, con su plan activado; y tres cuentas de él. */
 async function crearEmpresa(s: Sesion, que: string): Promise<Empresa> {
@@ -42,9 +42,11 @@ async function crearEmpresa(s: Sesion, que: string): Promise<Empresa> {
   const c = await rest<{ code: string }[]>(s, 'GET', `company_account?select=code&company_id=eq.${id}&order=code`)
   const codigos = (c.datos ?? []).map((x) => x.code)
   const deApunte = (pre: string) => codigos.find((k) => k.startsWith(pre) && !codigos.some((o) => o !== k && o.startsWith(k)))
-  const [gasto, iva, banco] = ['621', '472', '572'].map(deApunte)
-  expect([gasto, iva, banco], `el plan activado tiene una 621, una 472 y una 572 de apunte: ${codigos.join(' ')}`).not.toContain(undefined)
-  return { id, gasto: gasto!, iva: iva!, banco: banco! }
+  // Sin IVA: un apunte de la 472 pide base, tipo y libro registro para validarse (e2e 1523).
+  const [gasto, banco] = ['621', '572'].map(deApunte)
+  const otro = ['629', '623', '622', '628', '627'].map(deApunte).find(Boolean)
+  expect([gasto, otro, banco], `el plan activado tiene una 621, una de servicios (629, 623, 622, 628 o 627) y una 572 de apunte: ${codigos.join(' ')}`).not.toContain(undefined)
+  return { id, gasto: gasto!, otro: otro!, banco: banco! }
 }
 
 /** El atajo de ERP10 de una subcuenta: «621.0» para la 62100000, «572.1» para la 57200001. */
@@ -97,7 +99,7 @@ test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, Intro guard
   const escribe = async (t: string) => { await page.keyboard.type(t); await page.keyboard.press('Enter') }
   // Línea 1: la cuenta con su atajo, Intro (concepto, que ya trae el de la cabecera), el debe.
   await escribe(atajo(e.gasto)); await page.keyboard.press('Enter'); await escribe('1.000,00')
-  await escribe(atajo(e.iva)); await page.keyboard.press('Enter'); await escribe('210')
+  await escribe(atajo(e.otro)); await page.keyboard.press('Enter'); await escribe('210')
   // La tercera: solo la cuenta. El haber lo pone Sumied.
   await escribe(atajo(e.banco))
   await expect(zona.getByLabel('Haber de la línea 3')).toHaveValue('1.210,00')
@@ -137,7 +139,7 @@ test('N08 · 1 · a mano con el teclado: la tercera cuadra sola, F5, Intro guard
   await page.goto(NUEVO, { waitUntil: 'load' })
   await expect(page.getByRole('heading', { name: 'Nuevo asiento' }).first()).toBeVisible({ timeout: 40_000 })
   await page.getByPlaceholder('Ej.: Alquiler del local de octubre').fill('Alquiler de octubre')
-  const hoy: [string, string, string][] = [[e.gasto, '1.000,00', ''], [e.iva, '210', ''], [e.banco, '', '1.210,00']]
+  const hoy: [string, string, string][] = [[e.gasto, '1.000,00', ''], [e.otro, '210', ''], [e.banco, '', '1.210,00']]
   for (let i = 0; i < hoy.length; i++) {
     const n = i + 1
     if (i >= 2) await page.getByRole('button', { name: 'Añadir línea' }).click()
@@ -167,7 +169,7 @@ test('N08 · 2 · uno propuesto por Sumied se valida con Intro', async ({ page }
     p_entry: { series: 4, fecha: '2026-07-31', concepto: 'Alquiler de julio', source_type: 'manual', confianza: 'seguro', porque: 'El alquiler de cada mes, con las cuentas del de junio.', razones: [] },
     p_lines: [
       { cuenta: e.gasto, debe: 1000, haber: 0, concepto: null, local_id: null, comun: true },
-      { cuenta: e.iva, debe: 210, haber: 0, concepto: null, local_id: null, comun: true },
+      { cuenta: e.otro, debe: 210, haber: 0, concepto: null, local_id: null, comun: true },
       { cuenta: e.banco, debe: 0, haber: 1210, concepto: null, local_id: null, comun: true },
     ],
   })
