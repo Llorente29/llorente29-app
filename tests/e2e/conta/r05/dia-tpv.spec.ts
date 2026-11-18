@@ -11,7 +11,7 @@
 //
 //   1. La fila: «TPV · Revo», quién lo subió, «2 facturas con NIF», 48
 //      facturas, «5001 a 5048», base, IVA y total, «Efectivo, tarjeta y
-//      plataformas» y «Por validar».
+//      plataformas» y «Listo para validar».
 //   2. «Validar los N listos»: el día del TPV se valida con su PDF y su asiento,
 //      y lo dice; después sale «Validado».
 // Las capturas, en docs/conta/capturas/r05 (van al artefacto del run).
@@ -86,9 +86,9 @@ test('el día del TPV sale en Cierres del día, una fila por día, y se valida c
     await expect(page.getByText('Efectivo, tarjeta y plataformas').first()).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'De dónde' })).toBeVisible()
     await expect(page.getByRole('columnheader', { name: 'Numeración' })).toBeVisible()
-    // Por validar (si saliera en espera, el motivo va en la misma fila y el fallo lo enseña).
+    // Listo para validar (si saliera en espera, el motivo va en la misma fila y el fallo lo enseña).
     const filaTpv = page.getByRole('row').filter({ hasText: 'TPV · Revo' }).first()
-    await expect(filaTpv, `la fila dice: ${await filaTpv.innerText()}`).toContainText('Por validar')
+    await expect(filaTpv, `la fila dice: ${await filaTpv.innerText()}`).toContainText('Listo para validar')
   }
   await foto(page, 'cierres-tpv')
 

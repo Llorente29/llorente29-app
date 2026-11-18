@@ -29,6 +29,7 @@ import { Sugerencias } from '@/modules/conta/ia/PiezasIA'
 import type { DatosPlan } from '@/modules/conta/services/planService'
 import { MARCA, CON_MARCA } from '../cuenta/marca'
 import { useProductoSolo } from '../cuenta/useProductoSolo'
+import { useVentasPorDiaEncendido } from '@/modules/conta/marco/nuevo/contexto'
 
 function EtiquetaListo({ d, hoy }: { d: DatosEmpresa; hoy: string }) {
   const falta = loQueFalta(d, hoy)
@@ -50,9 +51,11 @@ function Indice({ actual, d, plan, hoy, lista, series }: { actual: string | null
   // C06: en el producto vendido solo, el índice no enseña lo que dice «aún no».
   const solo = useProductoSolo()
   const { esDemo } = useCuentaConta()
+  // R06 · «Ventas por día», solo en una empresa con «ventas por día» encendido.
+  const ventasPorDia = useVentasPorDiaEncendido()
   return (
     <nav aria-label="Ajustes" className={lista ? 'cx-ajustes-lista' : 'cx-tarjeta cx-ajustes-indice'}>
-      {indiceAjustes(solo, esDemo).map((g) => (
+      {indiceAjustes(solo, esDemo, ventasPorDia).map((g) => (
         <div key={g.grupo} className="cx-ajustes-grupo">
           <h2 className="cx-ajustes-grupo-titulo">{g.grupo}</h2>
           <div className={lista ? 'cx-lista' : undefined}>
