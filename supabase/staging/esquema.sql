@@ -6350,6 +6350,89 @@ $$;
 
 
 --
+-- Name: _conta_lectura_caida(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_lectura_caida() RETURNS jsonb
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  with buena as (
+    select max(created_at) as en from public.goods_receipt_ai_session where status <> 'failed' and created_at > now() - interval '24 hours'
+  ), fallos as (
+    select d.read_failure_at as en, d.read_failure_cause as causa
+      from public.document_inbox d, buena b
+     where d.read_failure = 'caida' and d.status = 'error'
+       and d.read_failure_at > greatest(coalesce(b.en, '-infinity'::timestamptz), now() - interval '24 hours')
+  ), r as (
+    select exists (select 1 from fallos where causa = 'tope_gasto') as tope,
+           exists (select 1 from fallos f1 where (select count(*) from fallos f2 where f2.en >= f1.en and f2.en < f1.en + interval '15 minutes') >= 3) as rafaga,
+           (select count(*) from fallos) as n,
+           (select min(en) from fallos) as desde,
+           (select max(en) from fallos) as ultima,
+           (select causa from fallos group by causa order by (causa = 'tope_gasto') desc, count(*) desc, causa limit 1) as causa
+  )
+  select jsonb_build_object('caida', r.tope or r.rafaga, 'causa', case when r.tope or r.rafaga then r.causa end,
+                            'fallos', r.n, 'desde', r.desde, 'ultima', r.ultima)
+    from r
+$$;
+
+
+--
+-- Name: FUNCTION _conta_lectura_caida(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_lectura_caida() IS 'E02: si la lectura de facturas está caída para todos (tope de gasto a la primera; otra caída, 3 en 15 minutos), hasta la primera lectura buena. Interna, solo lee.';
+
+
+--
+-- Name: _conta_lectura_vigia(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public._conta_lectura_vigia() RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_c jsonb; v_e public.conta_lectura_estado; v_caida boolean; v_causa text; v_hecho text := 'nada';
+  v_que constant jsonb := '{"tope_gasto": "se ha alcanzado el tope de gasto de la clave de lectura", "clave": "la clave de lectura no vale (401/403)", "limite": "demasiadas peticiones (429)", "proveedor": "el proveedor de la lectura falla (5xx/529)", "tiempo": "la lectura no contesta a tiempo"}';
+begin
+  insert into public.conta_lectura_estado (id) values (1) on conflict (id) do nothing;
+  select * into v_e from public.conta_lectura_estado where id = 1 for update;
+  v_c := public._conta_lectura_caida();
+  v_caida := coalesce((v_c ->> 'caida')::boolean, false);
+  v_causa := v_c ->> 'causa';
+  if v_caida and v_e.caida_desde is null then
+    perform public._queue_system_alert(
+      'conta_lectura_caida',
+      'Sumied no puede leer facturas',
+      format('Desde las %s (hora de Madrid) no se lee ninguna factura de ninguna cuenta: %s. Llevan %s sin leer por esto. Las llegadas están guardadas; cuando vuelva, se leen con «Leerla».',
+             to_char((v_c ->> 'desde')::timestamptz at time zone 'Europe/Madrid', 'DD/MM HH24:MI'), coalesce(v_que ->> v_causa, v_causa), v_c ->> 'fallos'),
+      'conta_lectura_caida', interval '6 hours');
+    update public.conta_lectura_estado set caida_desde = (v_c ->> 'desde')::timestamptz, causa = v_causa, avisada_en = now(), vuelta_en = null, updated_at = now() where id = 1;
+    v_hecho := 'aviso de caída';
+  elsif not v_caida and v_e.caida_desde is not null then
+    perform public._queue_system_alert(
+      'conta_lectura_vuelta',
+      'Sumied vuelve a leer facturas',
+      format('La lectura de facturas vuelve a funcionar (estaba caída desde las %s, hora de Madrid: %s). Las que llegaron mientras tanto siguen sin leer: se leen con «Leerla».',
+             to_char(v_e.caida_desde at time zone 'Europe/Madrid', 'DD/MM HH24:MI'), coalesce(v_que ->> v_e.causa, v_e.causa)),
+      'conta_lectura_vuelta', interval '1 hour');
+    update public.conta_lectura_estado set caida_desde = null, causa = null, vuelta_en = now(), updated_at = now() where id = 1;
+    v_hecho := 'aviso de vuelta';
+  end if;
+  return v_c || jsonb_build_object('hecho', v_hecho);
+end
+$$;
+
+
+--
+-- Name: FUNCTION _conta_lectura_vigia(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public._conta_lectura_vigia() IS 'E02: el vigía de la lectura (cron cada 10 minutos): avisa de la caída una vez y de la vuelta.';
+
+
+--
 -- Name: _conta_linea_no_se_deshace(uuid, uuid, timestamp with time zone, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -40726,6 +40809,54 @@ COMMENT ON FUNCTION public.conta_envio_aclarar(p_sale uuid, p_decision text, p_m
 
 
 --
+-- Name: conta_erp10_a_mano_poner(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_e public.journal_entry;
+  v_x public.conta_erp10_a_mano;
+  v_quien text;
+  v_que text;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_of(v_c.account_id) then
+    raise exception 'Solo un administrador de la cuenta apunta lo que se ha metido a mano en ERP10.' using errcode = '42501';
+  end if;
+  select * into v_e from public.journal_entry where id = p_entry and company_id = v_c.id and account_id = v_c.account_id;
+  if v_e.id is null or v_e.status not in ('validado', 'anulado') then
+    raise exception 'Ese asiento no es de esta empresa o no está validado.' using errcode = '23514';
+  end if;
+  v_quien := nullif(btrim(coalesce(p_quien_nombre, public.conta_nombre_actor(), '')), '');
+  insert into public.conta_erp10_a_mano (account_id, company_id, entry_id, metida_por, metida_por_nombre)
+  values (v_c.account_id, v_c.id, v_e.id, auth.uid(), v_quien)
+  on conflict (entry_id) do nothing
+  returning * into v_x;
+  if v_x.id is null then select * into v_x from public.conta_erp10_a_mano where entry_id = v_e.id; end if;
+  v_que := coalesce((select 'la ' || min(v.number) from public.vat_book_entry v where v.entry_id = v_e.id and v.voided_at is null),
+                    format('el asiento %s/%s', v_e.series, v_e.number));
+  return jsonb_build_object('entry', v_e.id, 'quien', v_x.metida_por_nombre, 'cuando', v_x.metida_en,
+    'texto', format('Apuntado: %s la metió a mano en ERP10 %s el %s. Ya no cuenta como diferencia.',
+                    v_que, coalesce(v_x.metida_por_nombre, 'alguien de la cuenta'),
+                    to_char(v_x.metida_en at time zone 'Europe/Madrid', 'DD/MM/YYYY "a las" HH24:MI')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text) IS 'X06 · «Ya la he metido a mano»: apunta quién y cuándo metió a mano en ERP10 una factura o un asiento. Deja de contar como diferencia. Solo un administrador. Devuelve la frase de lo apuntado.';
+
+
+--
 -- Name: conta_erp10_cambiadas(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -40760,6 +40891,98 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_erp10_cambiadas(p_company uuid) IS 'X02 · Lo que salió a ERP10 y cuyo asiento está ahora anulado en Sumied: va a la hoja aparte para corregirlo a mano en ERP10 (no se vuelve a mandar). La otra mitad de «ha cambiado», la huella de la fila, la compara el navegador. Solo lee.';
+
+
+--
+-- Name: conta_erp10_comprobar(uuid, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_z public.conta_erp10_salida_empresa;
+  v_y public.fiscal_year;
+  v_r jsonb;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null then raise exception 'Esa empresa no está.' using errcode = 'P0002'; end if;
+  if auth.uid() is not null and not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if p_fecha is null then raise exception 'Falta la fecha.' using errcode = '22023'; end if;
+  select * into v_z from public.conta_erp10_salida_empresa where company_id = v_c.id;
+  if v_z.company_id is null or not v_z.encendida then
+    raise exception 'La salida a ERP10 no está encendida en esta empresa.' using errcode = '23514';
+  end if;
+  select * into v_y from public.fiscal_year where company_id = v_c.id and p_fecha between starts_on and ends_on order by starts_on desc limit 1;
+  if v_y.id is null then
+    raise exception 'No hay ejercicio en Sumied para el %.', to_char(p_fecha, 'DD/MM/YYYY') using errcode = '23514';
+  end if;
+
+  with saldos as (
+    -- Como journal_ledger: lo validado y lo anulado (que lleva su contraasiento validado).
+    select a.id, a.code, a.template_code, a.name, sum(l.debit - l.credit) as saldo
+      from public.journal_line l
+      join public.journal_entry e on e.id = l.entry_id and e.account_id = l.account_id
+      join public.company_account a on a.id = l.company_account_id and a.account_id = l.account_id
+     where l.account_id = v_c.account_id and l.company_id = v_c.id
+       and e.status in ('validado', 'anulado') and e.entry_date between v_y.starts_on and p_fecha
+     group by a.id, a.code, a.template_code, a.name
+  ),
+  mov as (
+    -- Cada asiento desde que sale, menos lo traído de otro programa (que ya está en ERP10).
+    select e.*
+      from public.journal_entry e
+     where e.company_id = v_c.id and e.account_id = v_c.account_id
+       and e.status in ('validado', 'anulado')
+       and e.entry_date >= greatest(v_z.desde, v_y.starts_on) and e.entry_date <= p_fecha
+       and e.external_program is null and e.import_run_id is null
+       and not exists (select 1 from public.vat_book_entry v where v.entry_id = e.id and v.account_id = e.account_id and v.import_run_id is not null)
+       and not exists (select 1 from public.supplier_invoice si where si.journal_entry_id = e.id and si.account_id = e.account_id and si.source = 'traida')
+       and not exists (select 1 from public.customer_invoice ci where ci.entry_id = e.id and ci.company_id = e.company_id
+                         and (ci.origin = 'traida' or ci.import_run_id is not null))
+  )
+  select jsonb_build_object(
+    'fecha', p_fecha, 'ejercicio', jsonb_build_object('desde', v_y.starts_on, 'hasta', v_y.ends_on),
+    'desde', v_z.desde, 'codigo', v_z.codigo_erp10, 'largo', v_z.largo_subcuenta,
+    'saldos', coalesce((select jsonb_agg(jsonb_build_object(
+        'codigo', s.code, 'plantilla', s.template_code, 'nombre', s.name, 'saldo', s.saldo,
+        'erp', coalesce((select x.codigo_erp10 from public.conta_erp10_subcuenta_salida x where x.company_id = v_c.id and x.company_account_id = s.id),
+                        public.conta_erp10_subcuenta(s.code, s.template_code, v_z.largo_subcuenta)))
+        order by s.code) from saldos s), '[]'::jsonb),
+    'asientos', coalesce((select jsonb_agg(jsonb_build_object(
+        'entryId', m.id, 'serie', m.series, 'numero', m.number, 'fecha', m.entry_date, 'concepto', m.concept,
+        'origen', m.source_type, 'estado', m.status, 'deshace', m.reverses_entry_id,
+        'factura', coalesce((select min(v.number) from public.vat_book_entry v where v.entry_id = m.id and v.account_id = m.account_id and v.voided_at is null), m.document_ref),
+        'tercero', (select min(v.counterpart_name) from public.vat_book_entry v where v.entry_id = m.id and v.account_id = m.account_id and v.voided_at is null),
+        'salida', (select jsonb_build_object('lote', p.lote_id, 'mes', l.mes, 'salioEn', l.creado_en, 'clase', p.clase)
+                     from public.conta_erp10_salida_partida p join public.conta_erp10_salida_lote l on l.id = p.lote_id
+                    where p.entry_id = m.id and p.company_id = v_c.id and p.estado = 'salida'),
+        'aMano', (select jsonb_build_object('quien', x.metida_por_nombre, 'cuando', x.metida_en)
+                    from public.conta_erp10_a_mano x where x.entry_id = m.id and x.company_id = v_c.id),
+        'lineas', (select jsonb_agg(jsonb_build_object('cuenta', q.code, 'importe', q.importe) order by q.code)
+                     from (select a.code, sum(l.debit - l.credit) as importe
+                             from public.journal_line l join public.company_account a on a.id = l.company_account_id and a.account_id = l.account_id
+                            where l.entry_id = m.id and l.account_id = m.account_id
+                            group by a.code having sum(l.debit - l.credit) <> 0) q))
+        order by m.entry_date, m.series, m.number) from mov m), '[]'::jsonb),
+    'lotes', coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'mes', l.mes, 'creadoEn', l.creado_en, 'quien', l.creado_por_nombre) order by l.creado_en)
+        from public.conta_erp10_salida_lote l where l.company_id = v_c.id and l.account_id = v_c.account_id), '[]'::jsonb),
+    'igualado', (select jsonb_build_object('mes', g.mes, 'fichero', g.fichero, 'fechaSaldos', g.fecha_saldos, 'quien', g.igualado_por_nombre, 'cuando', g.igualado_en)
+        from public.conta_erp10_igualado g where g.company_id = v_c.id and g.account_id = v_c.account_id order by g.igualado_en desc limit 1)
+  ) into v_r;
+  return v_r;
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_comprobar(p_company uuid, p_fecha date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) IS 'X06 · Lo que necesita la comparación con el sumas y saldos de ERP10: los saldos de Sumied a esa fecha en su ejercicio (con el código de cada cuenta en ERP10), cada asiento desde que sale (menos lo traído) con si salió, si está metido a mano y lo que pone en cada cuenta, las tandas y lo último igualado. Solo lee.';
 
 
 --
@@ -40899,6 +41122,57 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_mes date) IS 'X05 · De cada factura emitida que sale a ERP10 ese mes (las de conta_erp10_por_salir que salen, sin los días del TPV), lo que necesita su fila: factura, cliente, origen, si es rectificativa, la operación decidida, las líneas con su IVA, recargo, retención y su PDF; las cuentas que usan con el NIF de su cliente; las ya salidas; y las que salieron y después se corrigieron. Solo lee.';
+
+
+--
+-- Name: conta_erp10_igualado_poner(uuid, date, text, date, integer, integer, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_ini date := date_trunc('month', p_mes)::date;
+  v_lote uuid;
+  v_g public.conta_erp10_igualado;
+  v_quien text;
+  v_meses text[] := array['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_of(v_c.account_id) then
+    raise exception 'Solo un administrador de la cuenta da un mes por igualado con ERP10.' using errcode = '42501';
+  end if;
+  if p_mes is null or p_fecha is null or coalesce(btrim(p_fichero), '') = '' or p_cuentas is null or p_cuentas < 0
+     or p_con_diferencia is null or p_con_diferencia < 0 then
+    raise exception 'Falta con qué fichero, a qué fecha o cuántas cuentas se compararon.' using errcode = '22023';
+  end if;
+  select l.id into v_lote from public.conta_erp10_salida_lote l
+   where l.company_id = v_c.id and l.account_id = v_c.account_id and l.mes <= v_ini order by l.creado_en desc limit 1;
+  if v_lote is null then
+    raise exception 'Todavía no ha salido nada a ERP10 en esta empresa: no hay nada que dar por igualado.' using errcode = '23514';
+  end if;
+  v_quien := nullif(btrim(coalesce(p_quien_nombre, public.conta_nombre_actor(), '')), '');
+  insert into public.conta_erp10_igualado (account_id, company_id, mes, lote_id, fichero, fecha_saldos, cuentas, con_diferencia, igualado_por, igualado_por_nombre)
+  values (v_c.account_id, v_c.id, v_ini, v_lote, btrim(p_fichero), p_fecha, p_cuentas, p_con_diferencia, auth.uid(), v_quien)
+  returning * into v_g;
+  return jsonb_build_object('id', v_g.id, 'lote', v_lote,
+    'texto', format('Igualado: %s de %s queda igual en Sumied y en ERP10 (%s, a %s; %s cuentas). Lo dio por igualado %s el %s.',
+                    v_meses[extract(month from v_ini)::int], extract(year from v_ini)::int, v_g.fichero, to_char(p_fecha, 'DD/MM'),
+                    p_cuentas, coalesce(v_quien, 'alguien de la cuenta'),
+                    to_char(v_g.igualado_en at time zone 'Europe/Madrid', 'DD/MM/YYYY "a las" HH24:MI')));
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text) IS 'X06 · «Darlo por igualado»: apunta en la última tanda del mes quién, cuándo, con qué fichero de sumas y saldos y a qué fecha se dio por igualado con ERP10, y cuántas cuentas (y cuántas con diferencia, todas explicadas). Lo de no dejar ninguna sin explicar lo comprueba la pantalla, que es la que lee el fichero. Solo un administrador.';
 
 
 --
@@ -41496,6 +41770,48 @@ end $_$;
 --
 
 COMMENT ON FUNCTION public.conta_erp10_subcuenta(p_codigo text, p_plantilla text, p_largo integer) IS 'X02 · El código de una subcuenta de Sumied en ERP10: igual si tiene ese largo; si no, la plantilla y lo de detrás sin sus ceros, rellenando con ceros por el medio. Nulo si no cabe.';
+
+
+--
+-- Name: conta_erp10_volver_a_sacar(uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_c public.company;
+  v_p public.conta_erp10_salida_partida;
+  v_e public.journal_entry;
+begin
+  select * into v_c from public.company where id = p_company;
+  if v_c.id is null or not public.belongs_to_account(v_c.account_id) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  if not public.current_user_is_admin_of(v_c.account_id) then
+    raise exception 'Solo un administrador de la cuenta saca los ficheros para ERP10.' using errcode = '42501';
+  end if;
+  select * into v_p from public.conta_erp10_salida_partida
+   where entry_id = p_entry and company_id = v_c.id and account_id = v_c.account_id and estado = 'salida' for update;
+  if v_p.id is null then
+    raise exception 'Ese asiento no ha salido a ERP10: no hay nada que volver a sacar.' using errcode = '23514';
+  end if;
+  select * into v_e from public.journal_entry where id = p_entry;
+  if v_e.status <> 'validado' then
+    raise exception 'Ese asiento está anulado en Sumied: no se vuelve a sacar. Corrígelo a mano en ERP10.' using errcode = '23514';
+  end if;
+  update public.conta_erp10_salida_partida set estado = 'retirada' where id = v_p.id;
+  return jsonb_build_object('entry', v_e.id, 'clase', v_p.clase, 'lote', v_p.lote_id,
+    'texto', 'Vuelve a lo que sale: se prepara un fichero solo con ella.');
+end $$;
+
+
+--
+-- Name: FUNCTION conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text) IS 'X06 · «Volver a sacar solo esa»: una partida que salió y no está en ERP10 pasa a «retirada» (estado de la X02) y el asiento vuelve a lo que sale, para sacarlo solo en un fichero (que se apunta con conta_erp10_lote_apuntar, como una salida más). Solo un administrador.';
 
 
 --
@@ -47757,6 +48073,36 @@ CREATE FUNCTION public.conta_justificante_publico(p_clave text) RETURNS jsonb
     left join public.supplier_invoice si on si.id = j.invoice_id
    where p_clave ~ '^[A-Za-z0-9_-]{43}(-c[0-9]+)?$' and j.clave = p_clave
 $_$;
+
+
+--
+-- Name: conta_lectura_estado(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.conta_lectura_estado(p_company uuid) RETURNS jsonb
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+declare v_acc uuid; v_c jsonb; v_n int;
+begin
+  select account_id into v_acc from public.company where id = p_company;
+  if v_acc is null or not (coalesce(auth.role(), '') = 'service_role' or public.belongs_to_account(v_acc)) then
+    raise exception 'Esa empresa no está.' using errcode = 'P0002';
+  end if;
+  v_c := public._conta_lectura_caida();
+  -- Las suyas que esperan: las de esta empresa que no se han leído porque la lectura no funcionaba.
+  select count(*) into v_n from public.document_inbox
+   where account_id = v_acc and company_id = p_company and status = 'error' and read_failure = 'caida';
+  return jsonb_build_object('caida', coalesce((v_c ->> 'caida')::boolean, false), 'esperando', v_n);
+end
+$$;
+
+
+--
+-- Name: FUNCTION conta_lectura_estado(p_company uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.conta_lectura_estado(p_company uuid) IS 'E02: la franja de arriba de Documentos y Facturas recibidas: si la lectura está caída (común) y cuántas de esta empresa esperan. Solo lee.';
 
 
 --
@@ -114873,6 +115219,59 @@ COMMENT ON TABLE public.conta_envio_aclarado IS 'C06b (16/10): el envío de un p
 
 
 --
+-- Name: conta_erp10_a_mano; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_erp10_a_mano (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    entry_id uuid NOT NULL,
+    metida_por uuid,
+    metida_por_nombre text,
+    metida_en timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE conta_erp10_a_mano; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_erp10_a_mano IS 'X06 · Lo que alguien dice que metió a mano en ERP10 («Ya la he metido a mano»): quién y cuándo. En la comparación con el sumas y saldos deja de contar como diferencia de Sumied. Lo escribe conta_erp10_a_mano_poner.';
+
+
+--
+-- Name: conta_erp10_igualado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_erp10_igualado (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    account_id uuid NOT NULL,
+    company_id uuid NOT NULL,
+    mes date NOT NULL,
+    lote_id uuid,
+    fichero text NOT NULL,
+    fecha_saldos date NOT NULL,
+    cuentas integer NOT NULL,
+    con_diferencia integer NOT NULL,
+    igualado_por uuid,
+    igualado_por_nombre text,
+    igualado_en timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_erp10_igualado_con_diferencia_check CHECK ((con_diferencia >= 0)),
+    CONSTRAINT conta_erp10_igualado_cuentas_check CHECK ((cuentas >= 0)),
+    CONSTRAINT conta_erp10_igualado_fichero_check CHECK ((btrim(fichero) <> ''::text)),
+    CONSTRAINT conta_erp10_igualado_mes_check CHECK ((mes = (date_trunc('month'::text, (mes)::timestamp with time zone))::date))
+);
+
+
+--
+-- Name: TABLE conta_erp10_igualado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_erp10_igualado IS 'X06 · Cada vez que un mes se da por igualado con ERP10 («Darlo por igualado»): la tanda, el fichero de sumas y saldos con el que se comparó y a qué fecha, cuántas cuentas y cuántas tenían diferencia (todas explicadas), quién y cuándo. Lo escribe conta_erp10_igualado_poner.';
+
+
+--
 -- Name: conta_erp10_salida_empresa; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -115562,6 +115961,28 @@ CREATE TABLE public.conta_gestoria_union (
 --
 
 COMMENT ON TABLE public.conta_gestoria_union IS 'G01b · Cada vez que la unión de Bitrix24 junta dos clientes de Sumied (el mismo NIF): cuál queda, cuál se retira (archivado), qué se movió fila a fila (moved, con las filas como estaban), lo que se quedó en el retirado y por qué.';
+
+
+--
+-- Name: conta_lectura_estado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_lectura_estado (
+    id integer DEFAULT 1 NOT NULL,
+    caida_desde timestamp with time zone,
+    causa text,
+    avisada_en timestamp with time zone,
+    vuelta_en timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT conta_lectura_estado_una CHECK ((id = 1))
+);
+
+
+--
+-- Name: TABLE conta_lectura_estado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_lectura_estado IS 'E02: si el vigía de la lectura ha avisado de una caída que aún no ha vuelto. Una sola fila. Solo la escribe _conta_lectura_vigia.';
 
 
 --
@@ -118978,6 +119399,9 @@ CREATE TABLE public.document_inbox (
     doc_kind_by text,
     expected_id uuid,
     licensed_settlement_id uuid,
+    read_failure text,
+    read_failure_cause text,
+    read_failure_at timestamp with time zone,
     CONSTRAINT document_inbox_channel_check CHECK ((channel = ANY (ARRAY['subida'::text, 'correo'::text, 'cocina'::text, 'portal'::text]))),
     CONSTRAINT document_inbox_check CHECK (((channel <> 'correo'::text) OR (email_id IS NOT NULL))),
     CONSTRAINT document_inbox_check1 CHECK (((status <> 'falta_pdf'::text) OR ((file_path IS NULL) AND (link_url IS NOT NULL)))),
@@ -118986,6 +119410,8 @@ CREATE TABLE public.document_inbox (
     CONSTRAINT document_inbox_check4 CHECK (((file_path IS NULL) OR (file_path ~~ ((account_id)::text || '/%'::text)))),
     CONSTRAINT document_inbox_doc_kind_by_check CHECK (((doc_kind_by IS NULL) OR (doc_kind_by = ANY (ARRAY['regla'::text, 'lectura'::text, 'persona'::text])))),
     CONSTRAINT document_inbox_doc_kind_check CHECK (((doc_kind IS NULL) OR (doc_kind = ANY (ARRAY['factura'::text, 'ticket'::text, 'liquidacion'::text, 'extracto'::text, 'nomina'::text, 'riders'::text, 'otro'::text])))),
+    CONSTRAINT document_inbox_e02_clase CHECK ((read_failure = ANY (ARRAY['caida'::text, 'documento'::text]))),
+    CONSTRAINT document_inbox_e02_par CHECK (((read_failure IS NULL) = (read_failure_cause IS NULL))),
     CONSTRAINT document_inbox_file_bucket_check CHECK ((file_bucket = ANY (ARRAY['receipt-uploads'::text, 'conta-entrada'::text]))),
     CONSTRAINT document_inbox_sha256_check CHECK (((sha256 IS NULL) OR (sha256 ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT document_inbox_size_bytes_check CHECK (((size_bytes IS NULL) OR (size_bytes > 0))),
@@ -119012,6 +119438,27 @@ COMMENT ON COLUMN public.document_inbox.doc_kind IS 'V02 · Qué es el documento
 --
 
 COMMENT ON COLUMN public.document_inbox.licensed_settlement_id IS 'S01p·18 · 4 · La liquidación del socio con la que quedan los PDF de su cierre del mes (llegados por correo). Nulo: el cierre espera en Ventas › Liquidaciones › Socios de marca.';
+
+
+--
+-- Name: COLUMN document_inbox.read_failure; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.document_inbox.read_failure IS 'E02: por qué no se ha leído esta llegada: caida (la lectura no funcionaba, para todos) o documento (este documento). Null si se leyó o si es de antes del E02.';
+
+
+--
+-- Name: COLUMN document_inbox.read_failure_cause; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.document_inbox.read_failure_cause IS 'E02: la causa corta (tope_gasto, clave, limite, proveedor, tiempo | cortada, no_json, sin_minimo, rechazo, fichero).';
+
+
+--
+-- Name: COLUMN document_inbox.read_failure_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.document_inbox.read_failure_at IS 'E02: cuándo falló la lectura.';
 
 
 --
@@ -131980,6 +132427,30 @@ ALTER TABLE ONLY public.conta_envio_aclarado
 
 
 --
+-- Name: conta_erp10_a_mano conta_erp10_a_mano_entry_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_a_mano
+    ADD CONSTRAINT conta_erp10_a_mano_entry_id_key UNIQUE (entry_id);
+
+
+--
+-- Name: conta_erp10_a_mano conta_erp10_a_mano_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_a_mano
+    ADD CONSTRAINT conta_erp10_a_mano_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_erp10_igualado conta_erp10_igualado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_igualado
+    ADD CONSTRAINT conta_erp10_igualado_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: conta_erp10_salida_empresa conta_erp10_salida_empresa_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -132169,6 +132640,14 @@ ALTER TABLE ONLY public.conta_gestoria_lectura
 
 ALTER TABLE ONLY public.conta_gestoria_union
     ADD CONSTRAINT conta_gestoria_union_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: conta_lectura_estado conta_lectura_estado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_lectura_estado
+    ADD CONSTRAINT conta_lectura_estado_pkey PRIMARY KEY (id);
 
 
 --
@@ -138111,6 +138590,20 @@ CREATE INDEX conta_enlace_pago_sesion_idx ON public.conta_enlace_pago USING btre
 
 
 --
+-- Name: conta_erp10_a_mano_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_erp10_a_mano_empresa_idx ON public.conta_erp10_a_mano USING btree (company_id);
+
+
+--
+-- Name: conta_erp10_igualado_empresa_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX conta_erp10_igualado_empresa_idx ON public.conta_erp10_igualado USING btree (company_id, igualado_en DESC);
+
+
+--
 -- Name: conta_erp10_salida_lote_empresa_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -138930,6 +139423,13 @@ CREATE UNIQUE INDEX document_inbox_huella_uq ON public.document_inbox USING btre
 
 
 --
+-- Name: document_inbox_lectura_caida_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX document_inbox_lectura_caida_idx ON public.document_inbox USING btree (read_failure_at DESC) WHERE ((read_failure = 'caida'::text) AND (status = 'error'::text));
+
+
+--
 -- Name: documents_employee_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -139095,6 +139595,13 @@ CREATE INDEX folvy_map_node_layer_idx ON public.folvy_map_node USING btree (laye
 --
 
 CREATE INDEX folvy_map_node_parent_idx ON public.folvy_map_node USING btree (parent_id);
+
+
+--
+-- Name: goods_receipt_ai_session_buena_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX goods_receipt_ai_session_buena_idx ON public.goods_receipt_ai_session USING btree (created_at DESC) WHERE (status <> 'failed'::text);
 
 
 --
@@ -148275,6 +148782,54 @@ ALTER TABLE ONLY public.conta_envio_aclarado
 
 ALTER TABLE ONLY public.conta_envio_aclarado
     ADD CONSTRAINT conta_envio_aclarado_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_a_mano conta_erp10_a_mano_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_a_mano
+    ADD CONSTRAINT conta_erp10_a_mano_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_a_mano conta_erp10_a_mano_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_a_mano
+    ADD CONSTRAINT conta_erp10_a_mano_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_a_mano conta_erp10_a_mano_entry_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_a_mano
+    ADD CONSTRAINT conta_erp10_a_mano_entry_id_fkey FOREIGN KEY (entry_id) REFERENCES public.journal_entry(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: conta_erp10_igualado conta_erp10_igualado_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_igualado
+    ADD CONSTRAINT conta_erp10_igualado_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_igualado conta_erp10_igualado_company_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_igualado
+    ADD CONSTRAINT conta_erp10_igualado_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.company(id) ON DELETE CASCADE;
+
+
+--
+-- Name: conta_erp10_igualado conta_erp10_igualado_lote_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_erp10_igualado
+    ADD CONSTRAINT conta_erp10_igualado_lote_id_fkey FOREIGN KEY (lote_id) REFERENCES public.conta_erp10_salida_lote(id) ON DELETE RESTRICT;
 
 
 --
@@ -160388,6 +160943,32 @@ CREATE POLICY conta_envio_aclarado_select ON public.conta_envio_aclarado FOR SEL
 
 
 --
+-- Name: conta_erp10_a_mano; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_erp10_a_mano ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_erp10_a_mano conta_erp10_a_mano_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_erp10_a_mano_leer ON public.conta_erp10_a_mano FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
+-- Name: conta_erp10_igualado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_erp10_igualado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_erp10_igualado conta_erp10_igualado_leer; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_erp10_igualado_leer ON public.conta_erp10_igualado FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
+
+
+--
 -- Name: conta_erp10_salida_empresa; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -160646,6 +161227,12 @@ ALTER TABLE public.conta_gestoria_union ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY conta_gestoria_union_leer ON public.conta_gestoria_union FOR SELECT TO authenticated USING (public.belongs_to_account(account_id));
 
+
+--
+-- Name: conta_lectura_estado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_lectura_estado ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: conta_linea; Type: ROW SECURITY; Schema: public; Owner: -
@@ -169680,6 +170267,22 @@ GRANT ALL ON FUNCTION public._conta_iva_tolerancia(p_entry uuid, p_tipo numeric)
 
 
 --
+-- Name: FUNCTION _conta_lectura_caida(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_lectura_caida() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_lectura_caida() TO service_role;
+
+
+--
+-- Name: FUNCTION _conta_lectura_vigia(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public._conta_lectura_vigia() FROM PUBLIC;
+GRANT ALL ON FUNCTION public._conta_lectura_vigia() TO service_role;
+
+
+--
 -- Name: FUNCTION _conta_linea_no_se_deshace(p_company uuid, p_party uuid, p_cuando timestamp with time zone, p_tipo text, p_filas jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -176536,6 +177139,15 @@ GRANT ALL ON FUNCTION public.conta_envio_aclarar(p_sale uuid, p_decision text, p
 
 
 --
+-- Name: FUNCTION conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_a_mano_poner(p_company uuid, p_entry uuid, p_quien_nombre text) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_cambiadas(p_company uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -176545,12 +177157,30 @@ GRANT ALL ON FUNCTION public.conta_erp10_cambiadas(p_company uuid) TO service_ro
 
 
 --
+-- Name: FUNCTION conta_erp10_comprobar(p_company uuid, p_fecha date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_comprobar(p_company uuid, p_fecha date) TO service_role;
+
+
+--
 -- Name: FUNCTION conta_erp10_emitidas_por_salir(p_company uuid, p_mes date); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_mes date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_mes date) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_erp10_emitidas_por_salir(p_company uuid, p_mes date) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_igualado_poner(p_company uuid, p_mes date, p_fichero text, p_fecha date, p_cuentas integer, p_con_diferencia integer, p_quien_nombre text) TO service_role;
 
 
 --
@@ -176605,6 +177235,15 @@ GRANT ALL ON FUNCTION public.conta_erp10_salida_poner(p_company uuid, p_encender
 GRANT ALL ON FUNCTION public.conta_erp10_subcuenta(p_codigo text, p_plantilla text, p_largo integer) TO anon;
 GRANT ALL ON FUNCTION public.conta_erp10_subcuenta(p_codigo text, p_plantilla text, p_largo integer) TO authenticated;
 GRANT ALL ON FUNCTION public.conta_erp10_subcuenta(p_codigo text, p_plantilla text, p_largo integer) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_erp10_volver_a_sacar(p_company uuid, p_entry uuid, p_quien_nombre text) TO service_role;
 
 
 --
@@ -177707,6 +178346,15 @@ GRANT ALL ON FUNCTION public.conta_json_seguro(p text) TO service_role;
 
 REVOKE ALL ON FUNCTION public.conta_justificante_publico(p_clave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.conta_justificante_publico(p_clave text) TO service_role;
+
+
+--
+-- Name: FUNCTION conta_lectura_estado(p_company uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.conta_lectura_estado(p_company uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.conta_lectura_estado(p_company uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.conta_lectura_estado(p_company uuid) TO service_role;
 
 
 --
@@ -189490,6 +190138,22 @@ GRANT ALL ON TABLE public.conta_envio_aclarado TO service_role;
 
 
 --
+-- Name: TABLE conta_erp10_a_mano; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_erp10_a_mano TO service_role;
+GRANT SELECT ON TABLE public.conta_erp10_a_mano TO authenticated;
+
+
+--
+-- Name: TABLE conta_erp10_igualado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_erp10_igualado TO service_role;
+GRANT SELECT ON TABLE public.conta_erp10_igualado TO authenticated;
+
+
+--
 -- Name: TABLE conta_erp10_salida_empresa; Type: ACL; Schema: public; Owner: -
 --
 
@@ -189617,6 +190281,13 @@ GRANT SELECT ON TABLE public.conta_gestoria_ficha TO authenticated;
 
 GRANT ALL ON TABLE public.conta_gestoria_union TO service_role;
 GRANT SELECT ON TABLE public.conta_gestoria_union TO authenticated;
+
+
+--
+-- Name: TABLE conta_lectura_estado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.conta_lectura_estado TO service_role;
 
 
 --
